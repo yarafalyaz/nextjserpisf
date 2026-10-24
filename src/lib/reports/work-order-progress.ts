@@ -32,6 +32,8 @@ export interface WorkOrderOperationInput {
   assignedEmployeeId: number | null
   estimatedHours: number | null
   notes: string | null
+  /** Stasiun kerja tahap (F-2026-10-22-090-S); null = ember "Belum ada stasiun". */
+  workCenterId: number | null
 }
 
 export interface WorkOrderOperationRow extends WorkOrderOperationInput {
@@ -117,6 +119,21 @@ export function evaluateWorkOrderOperationTransition(input: {
     }
   }
   return { ok: true }
+}
+
+/**
+ * Vonis auto-close WO (F-020 lanjutan): WO boleh ditutup otomatis hanya bila
+ * ada tahap (denominator>0 sesudah skipped disisihkan — WO semua-skipped
+ * tidak punya dasar progres, sama seperti percent null di builder) dan semua
+ * tahap sudah completed/skipped. Status lain (pending/in_progress) menahan.
+ * Pure — dipakai aksi server sesudah update tahap dalam tx yang sama.
+ */
+export function shouldAutoCompleteWorkOrder(input: {
+  operations: Array<{ status: string }>
+}): boolean {
+  const skipped = input.operations.filter((o) => o.status === "skipped").length
+  if (input.operations.length - skipped <= 0) return false
+  return input.operations.every((o) => isClosed(o.status))
 }
 
 export function buildWorkOrderProgress(input: {

@@ -111,6 +111,7 @@ describe("issueWithholdingCertificate guards", () => {
     const data = mocks.certCreate.mock.calls[0][0].data
     expect(data.article).toBe("PPh23")
     expect(data.objectCode).toBe("24-104-01")
+    expect(data.objectName).toBeNull()
     expect(Number(data.tariff)).toBe(2)
     expect(Number(data.withheldAmount)).toBe(200_000)
     expect(data.taxPeriod).toBe("2026-01")
@@ -174,6 +175,8 @@ describe("issueWithholdingCertificate PPH42-SEWA fail-closed (F47-1)", () => {
     expect(r.success).toBe(true)
     const data = mocks.certCreate.mock.calls[0][0].data
     expect(data.objectCode).toBe("28-403-02")
+    expect(data.objectName).toBe("Persewaan Tanah dan/atau Bangunan")
+    expect(data.rentObjectEvidence).toBeNull()
     expect(Number(data.tariff)).toBe(10)
     expect(Number(data.withheldAmount)).toBe(10_000_000)
     expect(Number(data.dpp) - Number(data.withheldAmount)).toBe(90_000_000)
@@ -233,7 +236,7 @@ describe("issueWithholdingCertificate PPH42-SEWA fail-closed (F47-1)", () => {
     expect(mocks.certCreate).not.toHaveBeenCalled()
   })
 
-  it("F51-3: jenis PPH42-SEWA-PP (28-403-04) tanpa bukti ditolak; dengan bukti terbit 10%", async () => {
+  it("F51-3+F55-V §1: jenis PPH42-SEWA-PP (28-403-04) tanpa bukti/format bebas ditolak; bukti terstruktur terbit 10% + snapshot persists", async () => {
     mocks.typeFindUniqueOrThrow.mockResolvedValue({
       ...sewaType, id: 5, code: "PPH42-SEWA-PP", objectCode: "28-403-04",
     })
@@ -247,18 +250,30 @@ describe("issueWithholdingCertificate PPH42-SEWA fail-closed (F47-1)", () => {
       withholdingTypeId: 5, dpp: 100_000_000, idempotencyKey: key(),
     })
     expect(tanpa.success).toBe(false)
-    expect(String(tanpa.error)).toMatch(/bukti dokumen/)
     expect(mocks.certCreate).not.toHaveBeenCalled()
 
-    const dengan = await issueWithholdingCertificate({
+    const bebas = await issueWithholdingCertificate({
       direction: "we_withhold", certificateNumber: "BP-SEWA-7",
       withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Properti",
       withholdingTypeId: 5, dpp: 100_000_000, idempotencyKey: key(),
       rentObjectEvidence: "Kontrak proyek pemerintah No. 12/2026",
     })
+    expect(bebas.success).toBe(false)
+    expect(String(bebas.error)).toMatch(/wajib format/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+
+    const bukti = "Kontrak | 12/2026 | 2026-01-05 | Kementerian X | https://contoh/dok"
+    const dengan = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-SEWA-8",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Properti",
+      withholdingTypeId: 5, dpp: 100_000_000, idempotencyKey: key(),
+      rentObjectEvidence: bukti,
+    })
     expect(dengan.success).toBe(true)
     const data = mocks.certCreate.mock.calls[0][0].data
     expect(data.objectCode).toBe("28-403-04")
+    expect(data.objectName).toContain("Proyek Pemerintah")
+    expect(data.rentObjectEvidence).toBe(bukti)
     expect(Number(data.withheldAmount)).toBe(10_000_000)
   })
 })

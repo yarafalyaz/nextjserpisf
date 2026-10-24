@@ -18,6 +18,8 @@ interface CurrencyInputProps {
   "aria-describedby"?: string
   required?: boolean
   disabled?: boolean
+  /** Field opsional: tampil kosong dikirim sebagai string kosong (skema memetakannya ke null), bukan "0". */
+  emptyAsNull?: boolean
   min?: number
   max?: number
   prefix?: string
@@ -42,6 +44,7 @@ export function CurrencyInput({
   "aria-describedby": ariaDescribedBy,
   required,
   disabled,
+  emptyAsNull,
   min,
   max,
   prefix,
@@ -61,6 +64,11 @@ export function CurrencyInput({
     const cleaned = str.replace(/\./g, "").replace(",", ".")
     const n = Number.parseFloat(cleaned)
     return Number.isNaN(n) ? 0 : n
+  }
+
+  // "0"/"0,0" yang diketik eksplisit bukan kosong — hanya tanpa digit berarti kosong.
+  function displayValueIsEmpty(str: string): boolean {
+    return !/\d/.test(str)
   }
 
   const [prevControlledValue, setPrevControlledValue] = useState<number | string | null | undefined>(controlledValue)
@@ -104,11 +112,11 @@ export function CurrencyInput({
 
       const numericValue = parseInput(display)
       if (hiddenRef.current) {
-        hiddenRef.current.value = String(numericValue)
+        hiddenRef.current.value = emptyAsNull && displayValueIsEmpty(display) ? "" : String(numericValue)
       }
       onChange?.(numericValue)
     },
-    [onChange]
+    [onChange, emptyAsNull]
   )
 
   const handleBlur = useCallback(
@@ -118,16 +126,17 @@ export function CurrencyInput({
       let clamped = numericValue
       if (min !== undefined && clamped < min) clamped = min
       if (max !== undefined && clamped > max) clamped = max
-      setDisplayValue(formatDisplay(clamped))
+      setDisplayValue(emptyAsNull && displayValueIsEmpty(displayValue) ? "" : formatDisplay(clamped))
       if (hiddenRef.current) {
-        hiddenRef.current.value = String(clamped)
+        hiddenRef.current.value =
+          emptyAsNull && displayValueIsEmpty(displayValue) ? "" : String(clamped)
       }
       if (clamped !== numericValue) {
         onChange?.(clamped)
       }
       onBlur?.(e)
     },
-    [displayValue, onChange, onBlur, min, max]
+    [displayValue, onChange, onBlur, min, max, emptyAsNull]
   )
 
   const handleFocus = useCallback(
@@ -170,7 +179,7 @@ export function CurrencyInput({
           ref={hiddenRef}
           type="hidden"
           name={name}
-          value={numericValue}
+          value={emptyAsNull && displayValueIsEmpty(displayValue) ? "" : numericValue}
         />
       )}
     </div>
