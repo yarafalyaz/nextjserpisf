@@ -20,6 +20,12 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
 import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import {
+  LateCostL3Field,
+  parseL3TagClient,
+  upsertL3Tag,
+  removeL3Tag,
+} from "./late-cost-l3-field"
 
 // P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
 function newIdempotencyKey(): string {
@@ -71,6 +77,15 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
       referenceNo: "",
       receiptImage: "",
     }})
+
+  // L3 (F-133-V): penanda hidup di baris pertama description; field
+  // terstruktur di bawah hanya menulis/menghapus baris itu lewat setValue,
+  // server pemilik vonis akhir.
+  const descriptionValue = watch("description") ?? ""
+  const initialL3 = parseL3TagClient(expense?.description)
+  const [l3Enabled, setL3Enabled] = useState(Boolean(initialL3))
+  const [l3WorkOrderNo, setL3WorkOrderNo] = useState(initialL3?.workOrderNo ?? "")
+  const [l3Reason, setL3Reason] = useState(initialL3?.reason ?? "")
 
   function onSubmit(data: ExpenseInput, event?: React.BaseSyntheticEvent) {
     startTransition(async () => {
@@ -272,6 +287,36 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
         <FormGroup full>
           <Label htmlFor="description">Deskripsi</Label>
           <Textarea id="description" {...register("description")} rows={3} placeholder="Deskripsi pengeluaran..." />
+          <p className="text-xs text-muted-foreground">
+            Baris penanda L3 dikelola lewat isian di bawah; jangan ketik atau ubah frasa penanda dengan tangan.
+          </p>
+        </FormGroup>
+
+        <FormGroup full>
+          <LateCostL3Field
+            idPrefix="description"
+            enabled={l3Enabled}
+            onEnabledChange={(enabled) => {
+              setL3Enabled(enabled)
+              setValue(
+                "description",
+                enabled
+                  ? upsertL3Tag(descriptionValue, l3WorkOrderNo, l3Reason)
+                  : removeL3Tag(descriptionValue),
+                { shouldDirty: true },
+              )
+            }}
+            workOrderNo={l3WorkOrderNo}
+            onWorkOrderNoChange={(value) => {
+              setL3WorkOrderNo(value)
+              setValue("description", upsertL3Tag(descriptionValue, value, l3Reason), { shouldDirty: true })
+            }}
+            reason={l3Reason}
+            onReasonChange={(value) => {
+              setL3Reason(value)
+              setValue("description", upsertL3Tag(descriptionValue, l3WorkOrderNo, value), { shouldDirty: true })
+            }}
+          />
         </FormGroup>
       </FormGrid>
 
