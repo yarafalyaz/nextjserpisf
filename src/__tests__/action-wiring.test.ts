@@ -81,12 +81,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "jalur publik (mengakhiri sesi); keluar memakai signOut next-auth di src/components/layout/nav-user.tsx dan header.tsx",
   // Bacaan yang belum punya pemanggil. Dibiarkan tercatat, bukan disembunyikan:
   // keputusan "hapus atau sambungkan" milik pemilik repo.
-  // F-2026-10-24-096-S: konsumen UI panel foto per tahap kartu Frontend
-  // t_96ef204d (parent t_98976cbe); server tetap penegak izin.
-  "src/actions/attachment-photo.actions.ts::verifyPhotoAttachment":
-    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
-  "src/actions/attachment-photo.actions.ts::publishPhotoAttachment":
-    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":
