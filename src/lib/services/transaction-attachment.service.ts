@@ -90,3 +90,76 @@ export async function removeAttachmentFiles(
     }
   }
 }
+
+/**
+ * F-2026-10-24-096-S — verifikasi & tandai-terbit foto (BR-PHOTO-06/08).
+ * Dipakai server action; fungsi ini murni logika atas TxClient supaya bisa
+ * diuji tanpa DB. Izin ditegakkan pemanggil (manage_qc_inspections untuk
+ * verifikasi, complete_work_orders untuk terbit) — di sini hanya aturan
+ * transisi yang dijaga:
+ * - verifikasi: foto belum terverifikasi; pengunggah TIDAK boleh
+ *   memverifikasi foto `handover` miliknya sendiri (vonis default §3);
+ *   kategori lain self-verify diperbolehkan.
+ * - terbit: hanya foto terverifikasi + kategori intake/progress/handover
+ *   (BR-PHOTO-08); defect/other tidak pernah terbit.
+ */
+
+export interface PhotoTransitionRow {
+  id: number
+  photoCategory: string | null
+  uploadedBy: number | null
+  verifiedBy: number | null
+  publishedBy: number | null
+}
+
+type PhotoTx = {
+  transactionAttachment: {
+    findUnique: (args: unknown) => Promise<PhotoTransitionRow | null>
+    update: (args: unknown) => Promise<unknown>
+  }
+}
+
+async function loadPhoto(tx: PhotoTx, attachmentId: number): Promise<PhotoTransitionRow> {
+  if (!Number.isSafeInteger(attachmentId) || attachmentId <= 0) {
+    throw new Error("ID lampiran tidak valid")
+  }
+  const row = await tx.transactionAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { id: true, photoCategory: true, uploadedBy: true, verifiedBy: true, publishedBy: true },
+  })
+  if (!row) throw new Error("Lampiran tidak ditemukan")
+  return row
+}
+
+export async function verifyPhotoAttachmentTx(
+  tx: PhotoTx,
+  input: { attachmentId: number; verifiedBy: number; now?: Date },
+): Promise<void> {
+  const row = await loadPhoto(tx, input.attachmentId)
+  if (row.verifiedBy != null) throw new Error("Foto sudah terverifikasi")
+  const category = row.photoCategory ?? "other"
+  if (category === "handover" && row.uploadedBy != null && row.uploadedBy === input.verifiedBy) {
+    throw new Error("Foto serah terima tidak boleh diverifikasi oleh pengunggahnya sendiri")
+  }
+  await tx.transactionAttachment.update({
+    where: { id: row.id },
+    data: { verifiedBy: input.verifiedBy, verifiedAt: input.now ?? new Date() },
+  })
+}
+
+export async function publishPhotoAttachmentTx(
+  tx: PhotoTx,
+  input: { attachmentId: number; publishedBy: number; now?: Date },
+): Promise<void> {
+  const row = await loadPhoto(tx, input.attachmentId)
+  if (row.publishedBy != null) throw new Error("Foto sudah ditandai terbit")
+  if (row.verifiedBy == null) throw new Error("Foto harus terverifikasi sebelum ditandai terbit")
+  const category = row.photoCategory ?? "other"
+  if (category !== "intake" && category !== "progress" && category !== "handover") {
+    throw new Error("Kategori foto ini tidak boleh ditandai terbit")
+  }
+  await tx.transactionAttachment.update({
+    where: { id: row.id },
+    data: { publishedBy: input.publishedBy, publishedAt: input.now ?? new Date() },
+  })
+}
