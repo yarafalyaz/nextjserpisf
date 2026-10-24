@@ -16780,3 +16780,356 @@ Status: **PARSIAL-BERTENTANGAN**, bukan kekurangan fitur baru.
 Pemilik berikutnya: BOT 1 (merge PR vonis) -> BOT 3 (loader konvergen)
 -> BOT 2 (label legacy) -> BOT 6 (E96-1..6). BOT 4: riset
 `USULAN-RANTAI-RETUR` §5 siklus berikut, bukan penahan §2.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-084-V tahap 3 komisi: syarat buka jurnal + perlakuan PPh (lanjutan F-2026-10-22-056-V)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Kartu: t_6284b0f7.
+Menjawab sisa terbuka F-056-V (PR #440 OPEN): "tahap 3 jurnal/bayar
+komisi + perlakuan PPh atas komisi" dinyatakan BUTUH-VONIS lanjutan,
+jangan dibangun. Dokumen saja; tanpa kode/schema/migrasi; PR terbuka
+TANPA merge (merge = Lead).
+
+### Anti-duplikat + bukti live (2026-10-22)
+
+- origin/main `6fc3aa92`. ID -V terpakai maks 083-V (PR #531 OPEN);
+  084-V bebas per grep backlog origin/main + `gh pr list` live.
+  F-084-S (PR #532 OPEN) BEDA wilayah: snapshot estimasi job,
+  eksplisit "BOT 4 tidak diminta vonis baru" (Q-EST-6 masa depan) —
+  vonis ini tidak menyentuhnya.
+- Hormati tertutup: 081-V #529, 082-V #530, 083-V #531, 080/079/078/
+  077/075/074/066/062-V, 058-V #443, REK-1..5 milik t_1f126c6e.
+- Kode terverifikasi origin/main `6fc3aa92`: tahap 1-2 F-016 LIVE —
+  snapshot `salesEmployeeId` Quotation->SO->Invoice (schema
+  SalesInvoice.salesEmployeeId), builder `sales-commission.ts` +
+  loader `sales-commission-data.ts` paid-only grandTotal, persen
+  loader 0 jujur (histori tarif F-056-V BELUM dibangun); UI #435
+  MERGED. CoA: 600002 Beban Komisi ADA (base-data.ts:792); akun
+  Utang Komisi = 0 hasil; setting komisi = 0 hasil; jurnal komisi =
+  0 hasil. Payroll jurnal existing: Dr salaryExpense / Cr
+  payrollBank + Cr salariesPayable (statutori) pola
+  `onPayrollPaid` accounting.hook.ts — komisi karyawan kelak masuk
+  pola ini, bukan jalur bayar kedua.
+- PUTUSAN Lead 2026-10-21 (commit 6fc7021e): F-016 tahap 3
+  DITUNDA-TEKNIS, syarat buka = snapshot penjual + akun kewajiban +
+  setting fail-closed. Snapshot kini ADA; dua syarat lain belum.
+  Vonis ini TIDAK membuka inti — membuka inti = PUTUSAN Lead
+  sesudah syarat §1 terpenuhi.
+
+### 0. Putusan ringkas
+
+1. Tahap 3 TETAP TERTUTUP sampai: (a) PUTUSAN Lead buka inti,
+   (b) histori tarif + snapshot persen F-056-V live, (c) akun +
+   mapping §2 live. Vonis ini memutus PERLAKUAN bila dibuka —
+   bukan izin bangun.
+2. Akrual: Dr 600002 Beban Komisi / Cr Utang Komisi (akun baru
+   §2) pada transisi faktur ke `paid`, sebesar snapshot F-056-V
+   (DPP x persen snapshot, sen). Bukan saat terbit, bukan saat
+   rekap dibaca.
+3. Penerima = Employee snapshot faktur (salesEmployeeId). Bukan
+   pegawai / bukan Employee = DI LUAR tahap 3 ini (§5).
+4. Bayar komisi karyawan = lewat payroll sebagai komponen
+   earning tidak teratur (T2 F-027), PPh 21 TER gabungan se-masa
+   (PMK 168/2023). Jalur bayar tunai terpisah di luar payroll
+   DILARANG untuk karyawan.
+5. Retur completed sesudah akrual = jurnal lawan (reversal)
+   pengurang di masa retur, BUKAN edit jurnal akrual asal.
+
+### 1. Syarat buka (gerbang, semua wajib sebelum BOT 3 bangun)
+
+G1. PUTUSAN Lead buka inti tahap 3 tertulis (pola G1 F-021).
+    Tanpa itu BOT 3 dilarang sentuh schema/jurnal komisi.
+G2. Inti F-056-V live lebih dulu: histori persen per kategori
+    (rentang tak tumpang tindih) + snapshot persen/kategori di
+    SalesInvoice pada transisi paid + basis loader DPP
+    (grandTotal - taxAmount). Akrual membaca SNAPSHOT itu;
+    snapshot kosong = akrual 0 dan tidak lahir jurnal (bukan
+    tebak tarif berjalan).
+G3. Akun + mapping §2 ter-seed dan terkonfigurasi; mapping
+    kosong = posting ditolak berisik (fail-closed), nol jurnal
+    setengah.
+G4. Titik akrual idempoten teruji: satu jurnal akrual per
+    (faktur, kejadian paid) — referenceType/referenceId unik
+    pola jurnal repo; retry/klik ulang tidak dobel.
+G5. Tes falsifikasi §7 hijau di head inti persis + gate repo.
+    BOT 6 audit sebelum Lead merge.
+
+### 2. Akun dan mapping (final)
+
+1. Debit: 600002 Beban Komisi (EXPS, existing base-data.ts:792).
+    Bukan akun baru; dilarang membuat Beban Komisi kedua.
+2. Kredit: akun BARU 210207 "Utang Komisi Penjualan" (anak 2102
+    OCLY, sesudah 210206). Verifikasi live: 210201-210206 terpakai
+    (210205 Provisi Garansi, 210206 Utang PPh 4(2) Sewa — keduanya
+    DILARANG dipakai ulang). 210207 bebas di COA bawaan.
+3. Mapping: SystemSetting baru `commissionExpenseAccountId` +
+    `commissionPayableAccountId` (nullable, tanpa default tebak),
+    pola mapping F-021. Seed menunjuk 600002 / 210207; instalasi
+    berjalan tanpa seed = mapping diisi admin, kosong = fail-closed.
+    Dilarang fallback ke Hutang Gaji 210204 (komisi belum tentu
+    dibayar lewat siklus gaji berjalan; mencampur = rekonsiliasi
+    gaji tercemar) dan dilarang fallback akun beban lain.
+4. Jurnal bayar (karyawan, lewat payroll): komponen komisi pada
+    slip membayar Dr Utang Komisi / Cr komponen payroll — BUKAN
+    Dr 600002 kedua kali. Beban diakui SEKALI di akrual.
+
+### 3. Akrual: titik, rumus, tanggal
+
+1. Titik: transisi SalesInvoice -> paid (lunas penuh). Faktur
+   partial/posted/draft/cancelled: nol akrual. Nilai dibekukan =
+   hasil resolusi F-056-V per TANGGAL FAKTUR (persen snapshot),
+   ditulis pada transisi paid persis seperti titik snapshot
+   F-056-V putusan 1(d) — satu titik, satu tx dengan perubahan
+   status.
+2. Rumus per faktur: komisi = safeRound(DPP x persen/100) sen;
+   DPP = grandTotal - taxAmount snapshot faktur. Contoh mengikat
+   F-056-V: DPP 11.000.000, 2% -> 220.000 (bukan 246.400).
+3. Tanggal jurnal akrual = tanggal transisi paid (tanggal kas
+   pelunasan terakhir), `assertPeriodOpen(tanggal, tx)`. Periode
+   terkunci = posting ditolak, tanggal TIDAK digeser diam-diam.
+4. Penjual null (ember unattributed): nol akrual walau faktur
+   paid — tanpa penerima tidak ada utang. Dilarang atribusi
+   dari createdBy.
+
+### 4. Koreksi: retur, batal, reversal
+
+1. Retur completed tertaut faktur yang sudah diakru: jurnal
+   LAWAN Dr Utang Komisi / Cr 600002 sebesar returnDpp snapshot
+   x persen snapshot faktur asal, di MASA RETUR (F-056-V putusan
+   3), tanggal retur completed + assertPeriodOpen. Jurnal akrual
+   asal TIDAK diubah/dihapus.
+2. Kumulatif lawan per faktur <= akrual faktur itu (guard
+   kumulatif retur existing menahan di sumber; loader/jurnal
+   tidak memotong diam-diam).
+3. Faktur dibatalkan sesudah paid (jalur koreksi existing):
+   reversal penuh akrual lewat mekanisme reversal jurnal repo
+   (jurnal lawan + asal REVERSED), bukan hapus baris.
+4. Komisi sudah TERBAYAR lewat payroll lalu retur lahir: lawan
+   akrual tetap terbit; utang komisi penjual boleh negatif
+   sebagai SALDO tercatat, ditagih/dipotong dari komisi/payroll
+   berikutnya oleh proses payroll — sistem TIDAK menarik kas
+   otomatis dan TIDAK meng-clamp 0. Penagihan manual berizin
+   di luar sistem = catatan, bukan jurnal karangan.
+
+### 5. Pajak atas komisi (PPh)
+
+Dasar: PMK 168/2023 (berlaku 1 Jan 2024; PDF resmi DJP
+https://pajak.go.id/sites/default/files/2024-02/PMK%20168%20Tahun%202023%20Tentang%20PPh%20Pasal%2021%20TER.pdf,
+diakses 2026-10-22): Pasal 5 ayat (1) huruf a (Pegawai Tetap:
+teratur maupun tidak teratur), huruf e angka 2 (Bukan Pegawai:
+komisi), Pasal 8/10 (TER + hitung ulang masa terakhir).
+
+1. Penerima KARYAWAN (Pegawai Tetap): komisi = penghasilan
+   tidak teratur; digabung bruto masa diterima/dibayar lalu
+   TER se-masa (basis F-027 T2, F-026). Bukan tarif sendiri,
+   bukan dipisah dari gaji masa sama. Wajib masuk slip payroll
+   masa bayar sebagai komponen earning; PPh 21 dipotong pemberi
+   kerja saat bayar.
+2. Penerima karyawan TIDAK tetap: ikut rezim payroll existing
+   statusnya (F-077-V); komisi tidak menciptakan rezim baru.
+3. Penerima BUKAN pegawai (agen/perantara non-Employee):
+   PMK 168/2023 Pasal 5 ayat (1) huruf e — PPh 21 Bukan Pegawai
+   (50% x bruto x Pasal 17), BUKAN PPh 23 (jasa yang sudah
+   dipotong PPh 21 dikecualikan dari PPh 23). Tahap 3 ini
+   DILARANG membayar penerima non-Employee: model penerima
+   tahap 3 = Employee saja. Agen eksternal = kartu/vonis
+   terpisah (master penerima + bupot non-pegawai) bila bisnis
+   membuktikan kebutuhan.
+4. PPh 21 atas komisi TIDAK dipotong saat akrual — akrual =
+   bruto penuh ke Utang Komisi. Potong hanya saat bayar lewat
+   payroll. Mengkredit utang neto-PPh saat akrual = DILARANG
+   (utang tercatat bukan hak penerima sebenarnya).
+5. Komisi BUKAN objek PPN (penghasilan orang pribadi, bukan
+   penyerahan jasa kena pajak oleh PKP OP dalam konteks ini);
+   jangan buat TaxInvoice dari pembayaran komisi karyawan.
+
+### 6. Yang TIDAK diputus / dilarang
+
+- Split komisi multi-penjual per faktur (Accurate bisa bagi):
+  schema 1 salesEmployeeId per faktur; split = inti model
+  terpisah, jangan karang persen pembagi.
+- Pembayaran komisi di luar payroll untuk karyawan, tunai
+  langsung dari kas tanpa slip: DILARANG (memutus rantai
+  PPh 21 + BPJS bila komponen terkait).
+- Pertanyaan BPJS atas komisi: komisi karyawan sebagai upah
+  komponen BPJS mengikuti definisi basis upah F-083-V
+  (tunjangan tetap vs tidak tetap) — komisi tidak tetap TIDAK
+  masuk basis rutin; bila kelak ada komisi bersifat tetap
+  berkala, itu BUTUH-VONIS baru, jangan simpulkan di sini.
+- Backfill akrual faktur paid historis sebelum snapshot
+  F-056-V ada: DILARANG (persen 0 jujur; mengarang tarif
+  mundur = utang karangan).
+
+### 7. Draf acceptance BOT 6 (falsifikasi; cabut penjaga -> MERAH)
+
+KOM3-1. Faktur DPP 11.000.000 PPN 1.320.000 tarif snapshot 2%
+  mencapai paid -> satu jurnal Dr 600002 / Cr 210207 220.000.
+  Basis grandTotal (246.400) atau jurnal dobel saat retry =
+  MERAH.
+KOM3-2. Mapping commissionPayableAccountId dikosongkan ->
+  transisi paid menolak jurnal berisik, nol jurnal setengah;
+  fallback ke 210204/210205/210206 terbit = MERAH.
+KOM3-3. Faktur partial lalu paid: akrual hanya sekali saat
+  paid penuh; akrual saat partial = MERAH.
+KOM3-4. Retur completed masa berikut returnDpp 1.000.000 atas
+  faktur KOM3-1 -> jurnal lawan 20.000 di masa retur; jurnal
+  akrual asal berubah/dihapus = MERAH.
+KOM3-5. Slip payroll memuat komponen komisi 220.000: PPh 21 =
+  TER atas gabungan bruto masa itu (bukan tarif komisi
+  sendiri); jurnal slip Dr Utang Komisi (bukan 600002 kedua).
+  Beban ganda = MERAH.
+KOM3-6. Penerima non-Employee diajukan ke jalur bayar tahap 3
+  -> ditolak; terbayar tanpa vonis terpisah = MERAH.
+KOM3-7. Faktur paid tanpa penjual / tanpa snapshot persen ->
+  nol akrual, nol utang karangan; akrual dari tarif berjalan
+  hari baca = MERAH.
+
+### 8. Batas build per bot
+
+- BOT 1: PUTUSAN buka inti (G1) sesudah G2-G3 siap dinilai;
+  merge PR vonis ini milikmu. Vonis ini bukan izin bangun.
+- BOT 3: inti hanya sesudah G1-G4 — seed 210207 + 2 mapping +
+  hook akrual di tx transisi paid + jurnal lawan di complete
+  retur + komponen payroll pembayar utang. Klaim
+  schema.prisma di board sebelum edit; jangan bangun sebelum
+  inti F-056-V (histori+snapshot) merged.
+- BOT 5: workflow bayar komisi = run payroll existing (komponen
+  T2); jangan rancang jalur bayar terpisah. Sinkronkan spec
+  bila menyentuh komisi non-karyawan: berhenti, vonis terpisah.
+- BOT 2: tampilkan saldo Utang Komisi + riwayat dari loader apa
+  adanya sesudah kontrak BOT 3; UI tidak hitung PPh/komisi.
+- BOT 6: KOM3-1..7 di atas atas head inti persis.
+
+Label bukti: TERVERIFIKASI-KODE (rujukan berkas/schema origin/
+main 6fc3aa92); REGULASI (PMK 168/2023 Pasal 5/8/10, URL DJP di
+atas, berlaku 1 Jan 2024); KEBIJAKAN INTERNAL (titik akrual,
+akun 210207, larangan jalur bayar kedua — bukan klaim regulasi).
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-091-S antrean penawaran terkirim belum dijawab (masa berlaku menipis/kedaluwarsa)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Gap BARU domain (d) penjualan — bukan F-ID lama: penawaran berstatus `sent` yang belum dijawab pelanggan tidak terbaca sebagai antrean kerja sales; sales membuka daftar penawaran dan menebak mana yang perlu dikejar sebelum masa berlaku habis. Spec ini = F-2026-10-22-091-S. Anti-duplikat run ini: maks -S di main = 090-S (PR #547 OPEN), PR terbuka maks 090-V (PR #548); grep `QuotationFollow` di origin/main = 0; grep backlog+board untuk "antrean penawaran/kedaluwarsa penawaran" = 0. Bukan F-037 (antrean follow-up LEAD — objek beda: lead pra-penawaran), bukan F-089-S (antrean penagihan PIUTANG — objek beda: faktur terbit), bukan F-065-S (ambang DP).
+
+### 0. Verifikasi live origin/main c1f77729 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Masa berlaku penawaran: `Quotation.validUntil DateTime?` (prisma/schema.prisma:1237) + guard server `assertQuotationNotExpired` (src/actions/sales.actions.ts:104-109) — accept/convert lewat masa berlaku DITOLAK ("Masa berlaku penawaran sudah lewat. Revisi atau perpanjang masa berlaku terlebih dahulu."); validUntil sendiri (hari kalender WIB) masih berlaku. Tes existing sales.actions.test.ts:345-372 (lewat = tolak, hari ini = hijau).
+- Siklus status Quotation (string): `draft -> sent -> accepted/rejected`; `sendQuotation` (sales.actions.ts:277, status: "sent" :300), `acceptQuotation` (:329), `reviseQuotation` (:412, snapshot QuotationHistory dari `sent`).
+- Pola antrean terjadwal existing: builder murni `lead-followups.ts` (F-037) + loader `lead-followups-data.ts` (satu query massal, tanpa N+1) + kartu `lead-followups-card.tsx` di halaman crm/leads — pola ini ditiru, bukan dibuat ulang.
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:155-160): view/create/edit/delete/approve/confirm_quotations.
+- Jejak klik WA: `WhatsappButton` (whatsapp-button.tsx:22) + pola F-2026-10-21-036 (klik tercatat, bukan tindak lanjut).
+
+Belum ada (bukti grep run ini = 0):
+- Builder/loader/halaman antrean penawaran `sent` belum dijawab yang mengurutkan dari masa berlaku (`validUntil`) dan umur terkirim: grep `QuotationFollow|followUpQuotation` di prisma+src = 0. Daftar penawaran existing (quotation-table.tsx) menampilkan baris tanpa tahap urgensi masa berlaku.
+- Penawaran `sent` TANPA validUntil tidak punya acuan urgensi apa pun — hari ini tidak ada yang menandai kelompok ini.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Sales/Admin Penjualan (pemilik penawaran), Supervisor Penjualan, Admin (lihat semua).
+Dokumen masuk: Quotation (status `sent`, deletedAt null) + Customer (nama/kontak) + Employee penjual (salesEmployeeId, F-016 tahap 1).
+Dokumen keluar: baris antrean turunan (read-model, TANPA dokumen baru tahap 1). Tahap 2 (opsional, sesudah Q-QF-2): catatan tindak lanjut penawaran append-only.
+
+Alur:
+1. Sistem menurunkan tahap urgensi per penawaran `sent` dari `validUntil` vs hari kalender WIB (pola tanggal guard existing, sales.actions.ts:104-109):
+   - `KEDALUWARSA`: validUntil terisi DAN hari WIB hari ini > validUntil. Penawaran ini sudah tidak bisa di-accept/convert (guard existing menolak) — antrean menampilkannya agar sales merevisi/mem-perpanjang, bukan agar dikejar untuk diterima apa adanya.
+   - `MENIPIS`: validUntil terisi DAN validUntil - hari ini <= ambang hari (default usulan 3 hari, Q-QF-1) DAN belum kedaluwarsa.
+   - `TERBUKA`: validUntil terisi DAN sisa hari > ambang. Tampil hanya bila filter "semua" dipilih sales (default antrean = MENIPIS + KEDALUWARSA + TANPA_BATAS).
+   - `TANPA_BATAS`: validUntil KOSONG. Tahap jujur terpisah — TIDAK diberi sisa hari karangan, tidak masuk MENIPIS/KEDALUWARSA.
+2. Sales membuka antrean terurut: KEDALUWARSA paling lama dulu, lalu MENIPIS sisa-hari terkecil, lalu TANPA_BATAS dari tanggal kirim tertua (urutan final Q-QF-3 BOT 1).
+3. Dari baris, sales: buka detail penawaran (existing), revisi/perpanjang masa berlaku (reviseQuotation existing — snapshot histori), hubungi pelanggan via WhatsappButton existing (klik tercatat pola F-036; klik saja BUKAN tindak lanjut).
+4. Penawaran yang di-accept/convert/reject sales atau pelanggan keluar antrean otomatis (status bukan `sent` lagi) — tanpa tulis status oleh antrean.
+5. Antrean TIDAK mengubah status penawaran, TIDAK memperpanjang validUntil diam-diam, TIDAK mengirim pesan otomatis ke pelanggan.
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+Tahap 1: NOL migrasi. Builder murni + loader (pola lead-followups persis): input quotation sent + customer ringkas; output baris {quotationId, slug, documentNo, customerId/Name, phone/contactPerson (tampil hanya di antrean berizin, Q-QF-4), salesEmployeeId/Name|null, date, validUntil|null, tahap (KEDALUWARSA/MENIPIS/TERBUKA/TANPA_BATAS), sisaHari|null (negatif = hari lewat), umurTerkirimHari}. Hari kalender WIB memakai pola `getWibTodayUtcDate` existing — dilarang hitung tanggal kedua di UI.
+Tahap 2 (hanya bila Q-QF-2 diputus perlu): model usulan `QuotationFollowUp`: id, quotationId (FK, index), followedUpAt, channel (teks tervalidasi, kosakata Q-QF-2), outcome (terhubung_masih_menimbang / terhubung_minta_revisi / tidak_terhubung / lainnya — final Q-QF-2), notes, createdBy, createdAt, deletedAt (soft). Tanpa kolom status tersimpan di Quotation.
+
+### 3. Status-transition matrix (turunan, bukan kolom)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| TERBUKA | sisa hari validUntil <= ambang (Q-QF-1) | MENIPIS | turunan builder, tanpa tulis |
+| MENIPIS/TERBUKA | hari WIB melewati validUntil | KEDALUWARSA | turunan builder; guard accept/convert existing menolak |
+| KEDALUWARSA | reviseQuotation memperpanjang validUntil | MENIPIS/TERBUKA (sesuai sisa baru) | aksi revisi existing + snapshot QuotationHistory |
+| tahap apa pun | acceptQuotation / convert / reject | keluar antrean | aksi existing berizin |
+| TANPA_BATAS | updateQuotation mengisi validUntil | tahap berbasis sisa hari | aksi edit existing |
+| tahap apa pun | quotation deletedAt terisi | keluar antrean | soft-delete existing |
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat antrean | `view_quotations` (:155) | loader menegakkan di server, fail-closed |
+| Lihat kontak pelanggan di baris | turunan izin di atas | phone hanya di antrean, bukan ekspor (Q-QF-4) |
+| Buka detail / revisi / perpanjang | `edit_quotations` (:157) existing | tombol hanya tampil bila berizin |
+| Terima / konversi dari antrean | TIDAK ada tombol baru | tetap lewat detail penawaran existing (approve/confirm_quotations) |
+| Catat tindak lanjut (tahap 2) | usulan key baru `create_quotation_followups` (Q-QF-2 BOT 1) | jangan pinjam edit_quotations — beda tugas |
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-QF-01 | Tahap urgensi selalu turunan builder dari status `sent` + validUntil vs hari kalender WIB; tidak ada kolom tahap tersimpan tahap 1-2 | USULAN |
+| BR-QF-02 | Semantik kedaluwarsa persis guard existing: lewat bila hari WIB hari ini > validUntil; validUntil sendiri masih berlaku (sales.actions.ts:104-109) | TERVERIFIKASI-KODE |
+| BR-QF-03 | validUntil kosong = tahap TANPA_BATAS; dilarang mengarang sisa hari/ambang untuk kelompok ini | USULAN |
+| BR-QF-04 | Penawaran KEDALUWARSA tidak bisa di-accept/convert (guard existing); antrean mengarahkan ke revisi/perpanjang, bukan penerimaan | TERVERIFIKASI-KODE (guard) + USULAN (arah UI) |
+| BR-QF-05 | Antrean tidak mengubah status/validUntil penawaran, tidak menerbitkan dokumen, tidak membuat jurnal/DP/invoice | USULAN |
+| BR-QF-06 | Klik WA bukan tindak lanjut; tahap 2 tindak lanjut wajib simpan eksplisit (pola F-036) | USULAN (pola TERVERIFIKASI-KODE F-036) |
+| BR-QF-07 | Ambang MENIPIS default 3 hari kalender; boleh terkonfigurasi hanya bila BOT 1 putus di Q-QF-1 — tanpa putusan, konstanta builder bernama, bukan setting baru | USULAN — Q-QF-1 |
+| BR-QF-08 | Satu penawaran satu baris; revisi terakhir yang menentukan validUntil acuan (kolom berjalan, bukan snapshot histori) | USULAN |
+| BR-QF-09 | Kontak pelanggan hanya tampil ke pemegang izin antrean; ekspor tahap 1 tanpa kolom kontak | USULAN — Q-QF-4 |
+| BR-QF-10 | Pengiriman pengingat otomatis ke pelanggan (WA/email) tidak dibangun spec ini | BUTUH-VONIS BOT 1 (kanal keluar) |
+| BR-QF-11 | Diskon/persetujuan harga dari tindak lanjut mengikuti gerbang approval existing (F-100 informatif); antrean tidak memberi diskon | TERVERIFIKASI-KODE (pola) |
+| BR-QF-12 | Penawaran draft/accepted/rejected/converted/deleted tidak pernah masuk antrean | USULAN |
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+Judul: "Antrean Penawaran Belum Dijawab". Kolom: Pelanggan | No. Penawaran | Penjual | Terkirim | Masa Berlaku | Sisa Hari | Nilai | Tahap | Aksi.
+Label tahap persis: `Kedaluwarsa`, `Masa Berlaku Menipis`, `Terbuka`, `Tanpa Masa Berlaku`. Sisa hari kosong (TANPA_BATAS): `—`. Tombol: `Buka Penawaran`, `Hubungi via WhatsApp` (bila phone ada). Notice jujur wajib: "Tahap dihitung dari masa berlaku penawaran terkirim. Penawaran kedaluwarsa tidak dapat diterima sebelum direvisi atau diperpanjang masa berlakunya." Penawaran tanpa penjual tercatat: Penjual `—` (ember jujur, pola F-053-S).
+
+### 7. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Penawaran penjualan + masa berlaku | Ada dokumen penawaran penjualan — https://help.accurate.id/product/penawaran-penjualan/ ; kedaluwarsa tautan bayar diatur dari syarat pembayaran — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/tanggal-kadaluarsa-xendit/ | Ada Transaksi Penawaran Harga (belum jurnal) — https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-penawaran-harga-penjualan-zahir-online-v2 | validUntil + guard accept/convert ada; antrean urgensi belum |
+| Antrean tindak lanjut penawaran belum dijawab | Tidak diverifikasi run ini (jangan klaim) | Tidak diverifikasi run ini | ABSEN (spec ini) |
+
+### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+| ID | Skenario |
+|---|---|
+| AC-QF-1 | Penawaran sent validUntil besok tampil MENIPIS (ambang 3); sent validUntil +10 hari tampil TERBUKA dan tidak tampil di filter default |
+| AC-QF-2 | validUntil kemarin tampil KEDALUWARSA dan acceptQuotation atasnya tetap ditolak guard existing; cabut validUntil dari builder = baris salah tahap (tes merah) |
+| AC-QF-3 | validUntil kosong tampil TANPA_BATAS dengan Sisa Hari `—`; tidak pernah masuk MENIPIS/KEDALUWARSA walau umur terkirim lama |
+| AC-QF-4 | validUntil = hari ini WIB: masih berlaku (bukan KEDALUWARSA), sisa 0, tahap MENIPIS — cocok semantik guard existing |
+| AC-QF-5 | Accept/convert/reject/soft-delete mengeluarkan baris dari antrean tanpa tulis antrean |
+| AC-QF-6 | Revisi memperpanjang validUntil: tahap baris berubah sesuai sisa baru pada muat ulang; snapshot QuotationHistory bertambah (existing) |
+| AC-QF-7 | Tanpa view_quotations antrean tertutup fail-closed; ekspor tanpa kolom phone |
+| AC-QF-8 | Buka antrean: Quotation/Jurnal/DP/Invoice sebelum-sesudah SAMA (nol mutasi) |
+| AC-QF-9 | Klik WA saja tidak membuat catatan tahap 2; simpan tindak lanjut manual yang membuat (tahap 2, bila Q-QF-2 dibuka) |
+| AC-QF-10 | UI tidak menghitung ulang tahap/sisa hari: ganti label builder = UI mengikuti; dua penawaran pelanggan sama tampil dua baris |
+| AC-QF-11 | Penawaran tanpa salesEmployeeId tampil Penjual `—`, tetap terhitung di total antrean |
+| AC-QF-12 | Batas hari WIB: validUntil tengah malam UTC hari kalender WIB diperlakukan persis pola sales.actions.test.ts:355-364 (hari ini hijau) |
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-QF-1 | Ambang MENIPIS final (usulan 3 hari) + konstanta builder vs setting terkonfigurasi | BOT 1 |
+| Q-QF-2 | Tahap 2 catatan tindak lanjut perlu/tidak + key izin baru vs tunda; kosakata channel/outcome bila dibuka | BOT 1 |
+| Q-QF-3 | Urutan final + rute persis (usulan kartu di daftar penawaran vs halaman /penjualan/antrean-penawaran) | BOT 1 |
+| Q-QF-4 | Kontak tampil di antrean saja vs boleh ekspor berizin khusus | BOT 1 |
+| Q-QF-5 | Fisik builder/loader tahap 1 + ambang sebagai konstanta bernama | BOT 3 |
+| — | Pengingat otomatis ke pelanggan | BOT 1 (kanal) — tidak menahan tahap 1 |
+| — | Angka/diskon dari tindak lanjut | gerbang approval existing; BOT 4 hanya bila aturan diskon baru diusulkan |
+
+### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-091-S)
+
+1. BOT 1: putus Q-QF-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): tahap 1 builder murni + loader antrean (NOL migrasi, pola lead-followups) sesudah Q-QF-1/3/5; tahap 2 model QuotationFollowUp append-only HANYA bila Q-QF-2 dibuka (klaim schema.prisma di board dulu). Effort S (tahap 1) / M (tahap 2).
+3. BOT 2 (@frontend-ui-ux-next-js): permukaan antrean SESUDAH kontrak BOT 3, kata §6 verbatim, tombol Buka/WhatsApp bersyarat izin+tahap, nol hitung tahap/sisa di UI. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-QF-1..12 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta (BR-QF-05/11) — antrean tanpa jurnal/dokumen uang.
+
+### Yang TIDAK diusulkan run ini
+- Pengingat otomatis WA/email ke pelanggan, perpanjangan validUntil otomatis, status tindak lanjut tersimpan di Quotation, diskon dari antrean, antrean untuk penawaran draft (belum terkirim = pekerjaan daftar penawaran existing).
