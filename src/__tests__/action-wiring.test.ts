@@ -135,11 +135,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-22-085-S inti (t_7b33102f): read-model daftar perhatian
-  // siklus hidup backend dulu; field master + daftar perhatian menyusul
-  // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
-  "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
-    "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
+  // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
+  // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
   // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
   // — entri beku dibuang.
@@ -176,6 +173,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // reversal. 4 aksi lain kini dirujuk SalesLateFeePanel (t_c2d2dce1).
   "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
     "F-2026-10-22-093-V penjaga tolak-edit nominal posted by design (E93-6); UI sengaja tidak menyediakan edit nominal",
+  // F-2026-10-22-070-S inti backend (PR #694): panel Stok minimum per gudang
+  // di detail barang + label sumber laporan menyusul di kartu frontend
+  // t_0fc24ddc (buang entri ini saat UI memanggilnya).
+  "src/actions/item-warehouse-setting.actions.ts::setItemWarehouseMinStock":
+    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
+  "src/actions/item-warehouse-setting.actions.ts::removeItemWarehouseMinStock":
+    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
+  "src/actions/item-warehouse-setting.actions.ts::listItemWarehouseSettings":
+    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
 }
 
 describe("keterhubungan aksi server", () => {
