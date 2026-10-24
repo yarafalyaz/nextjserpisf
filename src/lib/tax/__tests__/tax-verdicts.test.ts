@@ -116,11 +116,12 @@ describe("F-038/F-041 PPh 4(2) final sewa: 10% tetap, kode objek wajib, bukan ta
     }
   })
 
-  it("F51-3: kode katalog bersyarat bukti wajib bukti dokumen non-kosong", () => {
+  it("F51-3: kode katalog bersyarat bukti wajib bukti non-kosong; F55-V §1: wajib format terstruktur", () => {
     const katalogPP = [...katalogUmum, { objectCode: "28-403-04", rate: 10, requiresEvidence: true }]
-    expect(() => resolvePph42RentRate("28-403-04", katalogPP)).toThrow(/bukti dokumen/)
-    expect(() => resolvePph42RentRate("28-403-04", katalogPP, { evidence: "  " })).toThrow(/bukti dokumen/)
-    expect(resolvePph42RentRate("28-403-04", katalogPP, { evidence: "Kontrak proyek pemerintah No. 12/2026" })).toBe(10)
+    expect(() => resolvePph42RentRate("28-403-04", katalogPP)).toThrow()
+    expect(() => resolvePph42RentRate("28-403-04", katalogPP, { evidence: "  " })).toThrow()
+    expect(() => resolvePph42RentRate("28-403-04", katalogPP, { evidence: "Kontrak proyek pemerintah No. 12/2026" })).toThrow(/wajib format/)
+    expect(resolvePph42RentRate("28-403-04", katalogPP, { evidence: "Kontrak | 12/2026 | 2026-01-05 | Kementerian X" })).toBe(10)
   })
 
   it("F51-6: tarif master menyimpang dari 10 ditolak, tidak dipakai diam-diam", () => {
