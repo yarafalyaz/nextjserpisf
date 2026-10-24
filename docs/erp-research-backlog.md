@@ -17813,3 +17813,380 @@ BOT 2 (tampilkan snapshot backend apa adanya) ->
 BOT 6 E87-1..8.
 
 ---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-086-V: Q-EMP-4/5 uang kompensasi PKWT + pesangon/UPMK PHK + PPh 21-nya + jalur bayar (spec F-2026-10-22-085-S PR #535)
+
+Pemutus: BOT 4 (accounting-finance-tax). Kartu: t_4800fa73 (buffer
+kondektur sesudah t_6284b0f7 / F-084-V PR #534). Tertulis saja —
+tanpa kode/schema/migrasi, tanpa merge oleh BOT 4. Menjawab
+Q-EMP-4/Q-EMP-5 spec BOT 5 F-2026-10-22-085-S (PR #535 OPEN);
+inti F-085-S tetap menunggu Q-EMP-1/2/3 BOT 1 + Q-EMP-6 BOT 3,
+vonis ini TIDAK membuka inti.
+
+### 0. Anti-duplikat + bukti live (2026-10-22)
+
+- origin/main `9d5ea988`. ID -V terpakai maks 084-V (PR #534 OPEN);
+  085-S = spec BOT 5 PR #535; 086-V bebas per grep backlog
+  origin/main + `gh pr list` live (all-state grep "086" = 0).
+- Hormati tertutup: 084-V #534, 083-V #531, 082-V #530, 081-V
+  #529, 080/079/078/077/075/074/066/062-V, F-058-V #443,
+  t_be0445cb duplikat-selesai (PR #521) tidak disentuh,
+  REK-1..5 milik t_1f126c6e.
+- Kode terverifikasi origin/main `9d5ea988`:
+  - Employee (schema.prisma model Employee): `baseSalary`
+    Decimal(15,2), `joinDate`, `paymentFrequency` WEEKLY/MONTHLY,
+    `isActive`; employmentStatus/contractEndDate/employmentEndedAt
+    = 0 hasil (spec F-085-S benar).
+  - COA bawaan (base-data.ts): `600005` "Beban Bonus, Pesangon &
+    Kompensasi" EXPS/6000 ADA; keluarga 2102: 210201-210206
+    terpakai (210204 Hutang Gaji, 210205 Provisi Garansi — DILARANG
+    reuse, 210206 Utang PPh 4(2) Sewa); 210207 sudah dipesan
+    F-084-V (PR #534) untuk Utang Komisi Penjualan — DILARANG
+    pakai ulang di vonis ini; 210208 bebas.
+  - Setting payroll existing (schema SystemSetting:229-231):
+    salaryExpenseAccountId / salariesPayableAccountId /
+    payrollBankAccountId; jurnal `onPayrollPaid`
+    (accounting.hook.ts): Dr salaryExpense (gross penuh) /
+    Cr payrollBank (neto) / Cr salariesPayable (statutori
+    BPJS+PPh21) / Cr piutang karyawan / Cr salariesPayable
+    (potongan lain), idempoten referenceType "Payroll" +
+    assertPeriodOpen(paymentDate). Komponen payroll F-027:
+    PayrollComponent + EmployeePayrollComponent bertanggal
+    efektif + baris beku PayrollComponentLine; klasifikasi T2
+    (earning tidak teratur, TERGABUNG bruto masa — vonis
+    F-026 §2 / F-027, PMK 168/2023 Pasal 5 ayat (3) huruf b).
+  - Basis upah BPJS: F-083-V (PR #531) = baseSalary + Sigma
+    tunjangan tetap — basis itu untuk BPJS, BUKAN otomatis basis
+    kompensasi/pesangon (basis kompensasi diputus §1.2 di bawah
+    dari PP 35/2021 langsung, bukan pinjam basis BPJS).
+
+### 1. Uang kompensasi PKWT (Q-EMP-4a)
+
+Dasar: PP No. 35 Tahun 2021 Pasal 15-17 (ditetapkan 2021,
+diumumkan peraturan.go.id / JDIH Kemnaker
+https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf, teks
+resmi peraturan.go.id/files/pp35-2021bt.pdf; diakses 2026-10-22).
+
+1.1 Syarat hak. Karyawan PKWT dengan masa kerja >= 1 bulan terus
+    menerus berhak uang kompensasi SAAT PKWT berakhir (Pasal 15
+    ayat (1)-(3)). Masa kerja < 1 bulan = hak NOL (bukan
+    proporsional kecil — nol). Diperpanjang: kompensasi diberikan
+    saat jangka waktu SEBELUM perpanjangan selesai, lalu masa
+    perpanjangan dihitung sendiri saat berakhir (Pasal 15 ayat
+    (4)) — dua peristiwa bayar terpisah, jangan digabung jadi
+    satu akrual akhir. TKA: PP 35/2021 Pasal 15 ayat (5) semula
+    mengecualikan; Perppu 2/2022 (UU 6/2023) mengubah — TKA PKWT
+    ikut berhak. ISF: status TKA belum ada di master (Q-EMP-1
+    BOT 1); selama belum ada penanda TKA terverifikasi, perlakuan
+    default = ikut berhak (mengikuti teks sesudah perubahan);
+    membedakan TKA = BUTUH penanda master dulu, jangan tebak
+    dari nama/kewarganegaraan bebas.
+1.2 Rumus (Pasal 16 ayat (1)): kompensasi = (masa kerja bulan /
+    12) x 1 bulan Upah, untuk semua rentang (12 bulan penuh = 1
+    bulan Upah persis). Masa kerja dihitung dari tanggal mulai
+    PKWT sampai tanggal berakhir PKWT (atau sampai pekerjaan
+    selesai lebih cepat — Pasal 16 ayat (5): dihitung sampai saat
+    selesainya pekerjaan). Pecahan bulan: PP tidak memberi rumus
+    hari; vonis ini: masa kerja dalam bulan = jumlah bulan penuh
+    + (sisa hari / jumlah hari bulan terakhir) dibulatkan
+    safeRound 2 desimal di komponen bulan, LALU nominal
+    safeRound sen. Menghitung masa kerja dari joinDate Employee
+    mentah DILARANG bila karyawan pernah PKWTT/pernah putus —
+    masa PKWT = rentang kontrak PKWT berjalan (field kontrak
+    F-085-S), bukan umur karyawan.
+1.3 Basis Upah (Pasal 16 ayat (2)-(4)): Upah pokok + tunjangan
+    TETAP. Struktur ISF tidak memakai komponen upah pokok/
+    tunjangan tetap terpisah -> Pasal 16 ayat (3): Upah tanpa
+    tunjangan. Struktur = upah pokok + tunjangan tidak tetap ->
+    ayat (4): upah pokok saja. Pemetaan ISF (mengikat): basis =
+    baseSalary master + Sigma penugasan komponen earning
+    recurrence=fixed yang efektif pada tanggal berakhir kontrak
+    (bentuk data sama dengan basis F-083-V, SUMBER REGULASI
+    BERBEDA — jangan rujuk F-083-V sebagai dasar kompensasi).
+    Snapshot basis + rincian komponen dibekukan di dokumen/slip
+    peristiwa berhenti; edit master sesudahnya tidak mengubah
+    hak yang sudah lahir. Komponen tidak tetap (lembur, komisi,
+    transport harian) DILARANG masuk basis.
+1.4 Contoh mengikat. Upah basis Rp6.000.000, PKWT 7 bulan:
+    kompensasi = 7/12 x 6.000.000 = Rp3.500.000. PKWT 12 bulan =
+    Rp6.000.000. PKWT 26 bulan = 26/12 x 6.000.000 =
+    Rp13.000.000. Masa 20 hari (< 1 bulan) = Rp0.
+
+### 2. Pesangon + UPMK + penggantian hak PHK (Q-EMP-4b)
+
+Dasar: PP 35/2021 Pasal 40 (sumber sama §1) + pengali per alasan
+PHK Pasal 41-52 PP 35/2021.
+
+2.1 Tabel dasar (Pasal 40 ayat (2)-(3)), basis Upah sama §1.3:
+    Pesangon (bulan Upah): <1th=1; 1-<2=2; 2-<3=3; 3-<4=4; 4-<5=5;
+    5-<6=6; 6-<7=7; 7-<8=8; >=8th=9.
+    UPMK (bulan Upah): <3th=0; 3-<6=2; 6-<9=3; 9-<12=4; 12-<15=5;
+    15-<18=6; 18-<21=7; 21-<24=8; >=24th=10.
+    Penggantian hak (Pasal 40 ayat (4)): (a) cuti tahunan belum
+    diambil & belum gugur — dinilai sebesar upah harian/bulanan
+    menurut PK/PP/PKB perusahaan (PP tidak menetapkan nilai per
+    hari cuti; nilai = aturan internal tertulis, BUKAN karangan
+    sistem; tanpa aturan internal tertulis, komponen ini DITUNDA
+    per kasus = BUTUH-VONIS-AKUNTAN/keputusan pemilik, jangan
+    dihitung 1/30 atau 1/25 diam-diam); (b) ongkos pulang sesuai
+    bukti/biaya nyata; (c) hal lain di PK/PP/PKB (termasuk
+    penggantian perumahan/pengobatan bila dijanjikan — persennya
+    dari PK/PP/PKB, bukan dari PP).
+2.2 Pengali alasan. Nominal §2.1 adalah tabel DASAR (1x). Alasan
+    PHK mengubah pengali (mis. efisiensi, perusahaan tutup,
+    pailit, pekerja mangkir, kesalahan berat, pensiun, meninggal,
+    pengunduran diri, berakhirnya PKWT bukan PHK) per Pasal
+    41-52 PP 35/2021 (0x / 0,5x / 1x / 1,75x / 2x per komponen,
+    berbeda per komponen pesangon vs UPMK). Vonis ini TIDAK
+    menetapkan tabel pengali per alasan: kosakata endReason final
+    = Q-EMP-1/2 BOT 1, dan pengali per alasan adalah keputusan
+    hukum ketenagakerjaan per kasus dokumen. Penjaga mengikat
+    untuk build: sistem DILARANG menerapkan pengali default 1x
+    diam-diam; dokumen peristiwa berhenti wajib menyimpan alasan
+    + pengali pesangon + pengali UPMK sebagai snapshot eksplisit
+    yang diisi/disetujui manusia berwenang; tanpa snapshot
+    pengali = hitung DITOLAK. Tabel pengali lengkap per Pasal
+    41-52 = vonis lanjutan BOT 4 sesudah Q-EMP-2 diputus BOT 1 —
+    jangan dibangun dari vonis ini.
+2.3 Yang BUKAN pesangon: berakhirnya PKWT bukan PHK — haknya
+    hanya uang kompensasi §1, BUKAN pesangon/UPMK. Mengundurkan
+    diri: bukan pesangon Pasal 40 (uang pisah hanya bila diatur
+    PK/PP/PKB — sumbernya dokumen itu, bukan PP; tandai per
+    kasus). Meninggal/pensiun: ikut jalur Pasal 47/48 PP 35/2021
+    lewat pengali §2.2, jangan jalur kompensasi PKWT.
+
+### 3. PPh 21 atas kompensasi & pesangon (Q-EMP-4c)
+
+3.1 Uang kompensasi PKWT = objek PPh 21 penghasilan pegawai
+    (PMK 168/2023 Pasal 5 ayat (1) huruf a: penghasilan Pegawai
+    Tetap teratur maupun tidak teratur; PKWT yang masih dalam
+    hubungan kerja saat dibayar = tidak teratur, DIGABUNG bruto
+    masa bayar lalu TER masa itu — pola T2 F-026/F-027, TANPA
+    tarif final tersendiri). Ia BUKAN "uang pesangon" PMK
+    16/PMK.03/2010 karena hubungan kerja tidak berakhir karena
+    PHK — kontrak berakhir demi hukum dan kompensasi adalah hak
+    kontraktual akhir masa PKWT; memaksakan tarif final pesangon
+    ke kompensasi PKWT = BUTUH-VONIS-AKUNTAN per kasus bila ada
+    yang mengusulkan, jangan diputus diam-diam di kode. Bila
+    orang yang sama langsung menandatangani PKWT baru/
+    diangkat PKWTT tanpa putus hubungan kerja nyata, kompensasi
+    tetap dibayar & dipotong sebagai tidak teratur pada masa
+    bayar itu (PP 35/2021 Pasal 15 ayat (4) untuk perpanjangan).
+3.2 Pesangon/UPMK/penggantian hak yang MEMENUHI definisi uang
+    pesangon (PMK No. 16/PMK.03/2010 Pasal 1 angka 4: dibayar
+    sehubungan berakhirnya masa kerja/PHK, termasuk UPMK dan
+    penggantian hak) dan dibayarkan SEKALIGUS (sebagian/seluruh
+    pembayaran dalam <= 2 tahun kalender, Pasal 2 ayat (2)):
+    PPh 21 FINAL Pasal 3 PMK 16/2010 (dasar PP 68/2009):
+    0% atas bruto s.d. Rp50.000.000; 5% atas >50jt-100jt; 15%
+    atas >100jt-500jt; 25% atas >500jt — diterapkan atas jumlah
+    KUMULATIF dalam jendela 2 tahun kalender. Terutang saat
+    dibayar (Pasal 2 ayat (4)). Bagian yang dibayar tahun ke-3+
+    keluar dari rezim final: tarif Pasal 17 atas bruto tahun itu,
+    tidak final, bisa kredit (Pasal 5 PMK 16/2010). Bukti potong
+    wajib walau tarif 0% (Pasal 9 ayat (6)).
+    Contoh mengikat: pesangon+UPMK bruto Rp48.000.000 dibayar
+    sekaligus -> PPh final Rp0, neto Rp48.000.000. Bruto
+    Rp120.000.000 -> 0 + 5% x 50jt + 15% x 20jt = Rp5.500.000,
+    neto Rp114.500.000.
+3.3 Batas definisi (fail-closed): pembayaran bernama "pesangon"
+    yang tidak memenuhi definisi §3.2 (mis. bonus akhir tahun ke
+    mantan pegawai, jasa produksi/tantiem mantan pegawai) BUKAN
+    tarif final — ikut PPh 21 mantan pegawai PMK 168/2023 Pasal 5
+    ayat (1) huruf h (tarif Pasal 17 x bruto se-masa). Sistem
+    wajib menyimpan snapshot klasifikasi (kompensasi-PKWT /
+    pesangon-final / imbalan-mantan-pegawai) per dokumen bayar;
+    klasifikasi tidak diturunkan dari nama komponen bebas.
+    Kode objek pajak & KJS setor final (keluarga 21-401/401 dsb.)
+    = dari katalog Coretax/DJP berjalan saat build, dikonfirmasi
+    BOT 3/BOT 4 saat wiring — vonis ini tidak mengunci nomor kode
+    objek karena katalog kode DJP berubah lewat PER/Pengumuman
+    DJP; hardcode kode objek di service DILARANG (pola tax rules
+    register: kode hidup di master bertanggal efektif).
+3.4 BPJS: kompensasi PKWT & pesangon/UPMK/penggantian hak BUKAN
+    upah rutin basis BPJS (di luar basis F-083-V: bukan baseSalary
+    dan bukan tunjangan tetap berjalan) — tidak ada iuran BPJS
+    atas komponen ini dan tidak masuk agregator se-masa F-081-V.
+    Memasukkan ke basis BPJS = penyimpangan, eskalasi BOT 4.
+
+### 4. Akun, jurnal, titik akui (Q-EMP-4d + Q-EMP-5 separuh)
+
+4.1 Akun beban: 600005 "Beban Bonus, Pesangon & Kompensasi"
+    (existing, EXPS) untuk SEMUA komponen §1-§2. Dilarang akun
+    beban baru dan dilarang memakai 600004 Beban Gaji (mencampur
+    beban akhir hubungan kerja ke beban gaji rutin mengotori
+    rekonsiliasi payroll). Pemisahan kompensasi vs pesangon =
+    lewat komponen/dimensi dokumen, bukan akun GL kedua, selama
+    belum ada kebutuhan laporan terpisah yang diputus Lead.
+4.2 Akun kewajiban: akun BARU 210208 "Utang Kompensasi &
+    Pesangon" (anak 2102 OCLY) — BUKAN 210204 Hutang Gaji
+    (salariesPayable setting existing): kewajiban berhenti
+    dibayar tidak selalu lewat siklus gaji berjalan dan bisa
+    lintas periode; mencampur ke Hutang Gaji = rekonsiliasi
+    payroll tercemar (pola sama larangan F-084-V §2.3 untuk
+    komisi). 210207 sudah dipesan komisi (F-084-V) — dilarang
+    tabrakan. Mapping SystemSetting baru nullable (pola F-021/
+    F-084-V): terminationPayableAccountId; expense tetap dibaca
+    dari salaryExpense mapping? TIDAK — beban §4.1 bukan beban
+    gaji: mapping kedua terminationExpenseAccountId nullable,
+    seed menunjuk 600005/210208, instalasi berjalan tanpa seed =
+    diisi admin, kosong = posting DITOLAK berisik fail-closed.
+    Dilarang fallback ke akun lain.
+4.3 Titik akui & jurnal. Hak lahir saat hubungan kerja berakhir
+    (tanggal employmentEndedAt F-085-S / tanggal selesai kontrak),
+    BUKAN saat dibayar dan bukan saat slip final digenerate:
+    (a) Akrual pada tanggal berakhir (periode terbuka,
+        assertPeriodOpen dalam tx yang menetapkan status
+        berhenti): Dr 600005 / Cr 210208 sebesar hak bruto penuh
+        (snapshot §1.3/§2). Periode terkunci = penetapan status
+        berhenti untuk tujuan akrual DITOLAK, tanggal tidak
+        digeser diam-diam.
+    (b) Bayar: Dr 210208 / Cr payrollBank (neto) / Cr Utang PPh 21
+        (akun liabilitas PPh 21 payroll existing yang dipakai
+        jalur setor payroll — BUKAN 210206 PPh 4(2) sewa, BUKAN
+        akun pajak baru) sebesar PPh terpotong. PPh TIDAK dipotong
+        saat akrual (akrual bruto penuh; pola F-084-V §5.4).
+    (c) Idempotensi: satu jurnal akrual per (karyawan, peristiwa
+        berhenti) — referenceType bernama per dokumen peristiwa
+        (BOT 3 tetapkan nama persis, unik referenceType/
+        referenceId pola jurnal repo); retry tidak dobel.
+        Perpanjangan PKWT = peristiwa berhenti kontraktual
+        terpisah per Pasal 15 ayat (4) -> akrual sendiri per
+        segmen kontrak.
+    (d) Koreksi: hak yang ternyata keliru sesudah akrual =
+        jurnal lawan/koreksi di periode terbuka; jurnal akrual
+        asal tidak diubah/dihapus. Hak batal (orang dipekerjakan
+        kembali sebelum bayar dengan kesepakatan tertulis hak
+        gugur) = reversal penuh Dr 210208 / Cr 600005 masa
+        kesepakatan, wajib dokumen pendukung — tanpa dokumen,
+        reversal DILARANG.
+4.4 Deductibility fiskal: beban kompensasi/pesangon = biaya
+    sehubungan pekerjaan (uji 3M Pasal 6 UU PPh) pada tahun
+    terutang menurut akuntansi ini; vonis ini tidak mengklaim
+    posisi SPT final per kasus sengketa (mis. pesangon tanpa
+    dokumen PHK sah) — kasus sengketa = BUTUH-VONIS-AKUNTAN.
+    Provisi estimasi massal sebelum peristiwa berhenti (akrual
+    statistik per portofolio karyawan) TIDAK diputus vonis ini
+    dan DILARANG dibangun dari vonis ini (pola provisi = vonis
+    terpisah seperti F-021).
+
+### 5. Jalur bayar (Q-EMP-5)
+
+5.1 Kompensasi PKWT saat berakhir TANPA putus hubungan kerja
+    nyata berikutnya (perpanjangan / lanjut PKWTT orang sama):
+    bayar sebagai komponen earning tidak teratur (T2) pada slip
+    payroll masa bayar orang itu — komponen PayrollComponent
+    existing (F-027), snapshot klasifikasi §3.3 = kompensasi-PKWT;
+    PPh ikut TER gabungan slip itu. Jurnal mengikuti onPayrollPaid
+    existing TETAPI kaki beban komponen ini wajib ke 600005
+    (mapping §4.2), bukan salaryExpense generik — BOT 3: jangan
+    paksa lewat onPayrollPaid apa adanya bila ia mendebit semua
+    gross ke satu akun beban; perluas pemetaan akun per komponen
+    atau jurnal peristiwa terpisah §5.2. Memutuskan perluasan itu
+    = fisik BOT 3 dalam batas vonis ini.
+5.2 Pesangon/UPMK/penggantian hak PHK dan kompensasi PKWT saat
+    hubungan kerja BENAR-BENAR berakhir: dokumen bayar peristiwa
+    berhenti TERPISAH dari slip gaji reguler (bukan baris slip
+    biasa), karena (a) PPh-nya rezim final §3.2 berbeda dari TER
+    slip, (b) penerima sudah bukan populasi run reguler (BR-EMP-06
+    spec), (c) masa pajak terakhir PPh 21 orang itu (hitung ulang
+    F-026) harus ditutup oleh slip final gaji, bukan dicampur
+    dokumen pesangon. Dokumen terpisah tetap memakai akun §4 +
+    bupot sendiri; pembayaran lewat payrollBank existing.
+    Dilarang jalur kas terpisah tanpa dokumen (tunai langsung
+    tanpa slip/dokumen = memutus rantai bupot & jurnal).
+5.3 Urutan masa terakhir: slip final gaji (masa terakhir, hitung
+    ulang PPh 21 tahunan F-026) diselesaikan/dibayar terpisah
+    dari dokumen §5.2; keduanya boleh masa sama, tidak boleh
+    digabung satu slip, dan bupot pesangon final tidak masuk
+    hitung ulang masa terakhir (final = di luar TER/Pasal 17
+    masa itu, kecuali porsi tahun ke-3+ per §3.2 yang justru
+    tidak final dan masuk kredit — porsi itu diperlakukan
+    sebagai penghasilan tahun bayarnya, tangani per kasus,
+    jangan otomatis).
+
+### 6. Larangan
+
+L1. Hitung kompensasi/pesangon dari joinDate mentah / dari
+    isActive / dari flag FormData client. Sumber = rentang
+    kontrak + tanggal berhenti terstruktur (F-085-S) + snapshot
+    basis §1.3. Tanpa field itu live: hitung DITOLAK.
+L2. Pengali alasan PHK default 1x diam-diam; nilai cuti per hari
+    karangan (1/25, 1/30) tanpa aturan internal tertulis.
+L3. Tarif final pesangon untuk kompensasi PKWT, atau TER untuk
+    pesangon-final yang memenuhi §3.2 (klasifikasi snapshot §3.3
+    menentukan; tertukar = temuan).
+L4. Jurnal akrual massal/provisi statistik dari vonis ini;
+    backfill hak untuk berhenti historis sebelum field kontrak
+    live (hak historis = penilaian manual per dokumen, bukan
+    generate massal).
+L5. Akun fallback: 210204/210207/210205 untuk kewajiban ini;
+    600004 untuk bebannya; akun pajak baru untuk PPh-nya.
+L6. BPJS atas komponen §1-§2 (§3.4).
+
+### 7. Syarat buka inti pembayaran (gerbang, sebelum BOT 3 bangun jalur bayar)
+
+G1. Q-EMP-1/2/3 diputus BOT 1 + field kontrak/berhenti F-085-S
+    live (BOT 3, Q-EMP-6) — tanpa tanggal terstruktur tidak ada
+    peristiwa akrual.
+G2. Tabel pengali alasan Pasal 41-52 = vonis lanjutan BOT 4
+    (sesudah Q-EMP-2) terbit; sebelum itu build hanya boleh
+    kompensasi PKWT §1 (tanpa pengali) + pencatatan snapshot.
+G3. Akun 210208 + dua mapping §4.2 ter-seed/terkonfigurasi;
+    kosong = fail-closed.
+G4. Klasifikasi pajak snapshot §3.3 + katalog kode objek dari
+    master pajak bertanggal efektif (bukan hardcode).
+G5. Tes falsifikasi §8 hijau di head inti persis; BOT 6 audit
+    sebelum Lead merge.
+
+### 8. Draf acceptance BOT 6 (falsifikasi; cabut penjaga -> MERAH)
+
+E45-1. PKWT 7 bulan basis 6.000.000 -> kompensasi 3.500.000
+  persis sen; 20 hari -> 0 dan nol jurnal; cabut syarat >=1 bulan
+  -> MERAH.
+E45-2. Edit baseSalary/komponen fixed sesudah snapshot berhenti
+  -> hak tidak berubah; hitung dari joinDate karyawan yang pernah
+  putus -> ditolak/MERAH.
+E45-3. Perpanjangan: segmen-1 diakru saat segmen-1 selesai walau
+  orang lanjut bekerja; digabung ke akhir segmen-2 -> MERAH.
+E45-4. Pesangon bruto 120.000.000 sekaligus -> PPh final
+  5.500.000, neto 114.500.000, bupot terbit walau lapis 0%
+  (kasus 48.000.000 -> PPh 0 tetap bupot); terapkan TER ke
+  dokumen final -> MERAH; terapkan final ke kompensasi PKWT ->
+  MERAH.
+E45-5. Mapping termination* kosong + ada hak -> akrual ditolak,
+  nol jurnal parsial; ganti fallback ke 210204 -> MERAH.
+E45-6. Retry penetapan berhenti -> satu akrual; jurnal akrual
+  asal diedit/dihapus -> ditolak (hanya reversal periode terbuka).
+E45-7. Komponen §1-§2 masuk basis/agregator BPJS -> MERAH (§3.4);
+  komponen kompensasi lanjut-kerja terpotong TER gabungan slip
+  masa bayar, bukan tarif sendiri (E45-4 pasangan).
+E45-8. Pengali alasan kosong pada dokumen PHK -> hitung ditolak;
+  isi default 1x diam-diam -> MERAH (L2).
+
+### 9. Klaim kepatuhan
+
+REGULASI (bukan fitur software): PP 35/2021 Pasal 15-17 & 40
+(JDIH Kemnaker https://jdih.kemnaker.go.id/asset/data_puu/
+PP352021.pdf; peraturan.go.id/files/pp35-2021bt.pdf; diakses
+2026-10-22) untuk hak/rumus/basis; PMK 168/2023 Pasal 5 ayat
+(1) huruf a/h (PDF resmi DJP pajak.go.id, diakses 2026-10-22)
+untuk objek TER-gabungan & mantan pegawai; PMK No.
+16/PMK.03/2010 Pasal 1-3,5,9 (pajak.go.id/id/peraturan/
+tata-cara-pemotongan-pajak-penghasilan-pasal-21-atas-penghasilan-
+berupa-uang-pesangon, diakses 2026-10-22; dasar PP 68/2009)
+untuk final pesangon sekaligus <= 2 tahun kalender. Cakupan:
+kompensasi PKWT, pesangon/UPMK/penggantian hak dasar, PPh-nya,
+akun/jalur bayar ISF. Di luar cakupan: tabel pengali per alasan
+Pasal 41-52 (vonis lanjutan sesudah Q-EMP-2), nilai hari cuti
+tanpa aturan internal, kasus sengketa/deductibility per kasus,
+TKA tanpa penanda master — semua BUTUH-VONIS lanjutan/AKUNTAN,
+jangan diputus diam-diam (pola BUTUH-VONIS-AKUNTAN backlog).
+
+ID vonis ini **F-2026-10-22-086-V** (086 bebas: 085-S spec BOT 5
+PR #535, 084-V PR #534, 084-S PR #532). Pemilik berikutnya: BOT 1
+(merge PR vonis + PR #535; putus Q-EMP-1/2/3) -> BOT 4 (vonis
+lanjutan tabel pengali sesudah Q-EMP-2) -> BOT 3 (inti F-085-S +
+jalur bayar §5/G1-G4) -> BOT 2 -> BOT 6 E45-1..8.
+
+---
