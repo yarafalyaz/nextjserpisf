@@ -23422,3 +23422,133 @@ BOT 1 (merge PR vonis + PR #519/#521, putus Q-PF-1/5) ->
 BOT 3 (kartu turunan agregator V-B1..V-B7, ajukan bentuk
 slip koreksi) -> BOT 2 -> BOT 6 AC-B1..B7. Peminta: BOT 5
 (spec F-076-S) + BOT 3 (kartu turunan yang diminta F-077-V).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-001-S: masa berlaku daftar harga pelanggan (tanggal berakhir + antrean harga segera berakhir)
+
+> **Slot**: F-2026-10-25-001-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`8e28a8bb`): grep `F-2026-10-25` di `docs/erp-research-backlog.md` = 0; PR Business terbuka beda topik (#743 F-2026-10-24-135-S SLA tiket, #746 F-2026-10-24-141-S duplikat prospek). ID 001 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Induk**: F-2026-10-21-018 (d) P2 harga bertingkat kuantitas — cabang tingkat sudah terbangun (BR-TIER-01..14, spec 2026-10-22 01:33). Spec ini TIDAK menyentuh aturan tingkat; ia menutup celah ortogonal: **masa berlaku** baris harga. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Harga promosi/kontrak per kategori pelanggan saat ini tidak bisa berakhir otomatis: sekali `effectiveDate` lewat, baris menang selamanya sampai operator ingat menonaktifkan manual. Celah ini membuat harga promo basi terus terpakai di faktur baru tanpa penanda apa pun. Spec ini membekukan: (A) satu kolom tanggal berakhir opsional di baris daftar harga + syarat resolver menghormatinya, (B) status turunan baca-saja (berlaku / segera berakhir / sudah berakhir / tanpa batas) tanpa menulis status baru, (C) antrean tinjau di halaman kelola existing. Angka jendela antrean = `USULAN`, bukan fakta; gerbang inti dibuka Lead.
+
+### 1. Inventarisasi terverifikasi (origin/main 8e28a8bb, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `CustomerPriceList` (`prisma/schema.prisma:574-594`): `customerCategoryId?`, `itemId`, `price`, `minQty` default 1.00, `effectiveDate DateTime?` (:580), `notes`, `isActive` default true (:582). Unique `[customerCategoryId, itemId, minQty, effectiveDate]` (:589). **Tidak ada kolom tanggal akhir/berakhir.**
+- Resolver murni `pickPriceListRow` (`src/lib/services/customer-price-list.service.ts:82-104`): syarat kandidat hanya `isActive` (:88), `qty >= minQty`, kategori cocok, dan `(effectiveDate === null || effectiveDate <= tanggal dokumen)` (:91). Urutan pemenang: kategori spesifik > minQty terbesar > `effectiveDate` terbaru (:95-102). **Tidak ada syarat batas akhir.**
+- Loader `loadPriceListRows` (service yang sama :206-224): memuat baris `isActive: true` per item+kategori, tanpa saringan tanggal; penyaringan tanggal murni di resolver.
+- Konsumen tunggal resolver: `src/actions/sales.actions.ts:41-42,70-75` (`loadPriceListRows` + `pickPriceListRow` saat baris faktur dibuat). Sumber harga terpersist di baris faktur existing (priceSource/priceListId, keluarga BR-TIER-09).
+- Kelola master existing: halaman `src/app/(dashboard)/penjualan/harga-pelanggan/page.tsx:16` gerbang `view_customer_price_lists`, muat maks 500 baris urut kategori/item/minQty/effectiveDate; tabel kolom "Berlaku Sejak" (`_components/customer-price-table.tsx:39-40`); aksi create/edit/delete di `src/actions/customer-price-list.actions.ts` (izin `create/edit/delete_customer_price_lists`, cek duplikat aplikasi :44-53 pola dipertahankan); skema Zod `src/lib/validations/price-list.schemas.ts` (`effectiveDate: optionalDateOnly`, tanpa tanggal akhir).
+- Katalog izin nyata (`src/lib/auth/module-catalog.generated.ts:141-144`): `view/create/edit/delete_customer_price_lists`. Tidak ada izin approve daftar harga (sudah diputus tidak ditambah di spec tingkat, backlog Q9 keluarga F-018).
+
+Belum ada / gap (bukti grep run ini):
+- Kolom berakhir: grep `expiresAt|validTo|endDate` pada model CustomerPriceList = 0. Baris harga tanpa batas akhir berlaku tanpa batas waktu.
+- Resolver batas akhir: syarat `effectiveDate <= docDate` satu-satunya gerbang tanggal (:91); tidak ada padanan `docDate <= tanggalBerakhir`.
+- Antrean/peringatan harga berakhir: grep antrean harga berakhir di `src/lib/reports/` dan halaman harga-pelanggan = 0. Halaman kelola tidak menandai baris yang sudah lewat masa atau segera berakhir; satu-satunya cara memberhentikan harga = edit manual `isActive`/hapus baris.
+
+### 2. Workflow specification
+
+Aktor: Admin Penjualan / Admin Master Data (kelola baris), Sales (konsumen harga di faktur, baca-saja), Lead (putus gerbang inti + angka jendela).
+
+Dokumen masuk: baris `CustomerPriceList` existing (kategori?, item, price, minQty, effectiveDate?). Dokumen keluar: faktur penjualan existing yang sumber harganya terpilih resolver; antrean tinjau baca-saja di halaman kelola.
+
+Alur:
+1. Admin membuat/mengubah baris harga; boleh mengisi tanggal berakhir (opsional). Kosong = tanpa batas (perilaku hari ini, dipertahankan).
+2. Resolver memilih harga per baris faktur: kandidat wajib aktif, sudah efektif, DAN belum berakhir pada tanggal dokumen. Dokumen bertanggal sebelum berakhir tetap memakai harga itu; dokumen sesudah berakhir jatuh ke kandidat berikutnya atau fallback `Item.price` (perilaku fallback existing BR-TIER-14).
+3. Halaman kelola menandai tiap baris dengan status masa turunan + antrean "segera berakhir" dalam jendela terpilih; admin memperpanjang (ubah tanggal berakhir), mengganti (baris baru), atau membiarkan berakhir.
+4. Tidak ada cron/notifikasi tahap 1; tidak ada perubahan harga dokumen yang sudah terbit.
+
+### 3. Status-transition matrix (status turunan, BUKAN kolom baru)
+
+Status di bawah diturunkan dari (effectiveDate, tanggalBerakhir, isActive, tanggal acuan) pada saat baca. Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (baris dibuat, tanggalBerakhir kosong) | — | tanpa_batas | — |
+| tanpa_batas / belum_berlaku | tanggal acuan mencapai effectiveDate | berlaku | resolver: effectiveDate <= tgl dokumen |
+| berlaku | sisa hari <= jendela antrean | segera_berakhir | jendela tetap terpilih (Q-PX-2) |
+| berlaku / segera_berakhir | tanggal acuan > tanggalBerakhir | sudah_berakhir | resolver menolak kandidat |
+| semua | isActive=false (edit/delete existing) | nonaktif | izin edit/delete existing |
+| sudah_berakhir | admin ubah tanggalBerakhir ke masa depan | berlaku/segera_berakhir (turunan ulang) | izin edit; tanpa "menghidupkan" dokumen lama |
+
+### 4. Role/permission matrix (key nyata katalog :141-144)
+
+| Aksi | Admin Penjualan/Master | Sales | Peran lain |
+|---|---|---|---|
+| Lihat daftar harga + status masa + antrean | `view_customer_price_lists` | `view_customer_price_lists` (bila diberi) | ditolak |
+| Buat baris + tanggal berakhir | `create_customer_price_lists` | ditolak | ditolak |
+| Ubah tanggal berakhir / perpanjang | `edit_customer_price_lists` | ditolak | ditolak |
+| Nonaktifkan/hapus | `edit/delete_customer_price_lists` | ditolak | ditolak |
+| Pakai harga di faktur | resolver server (izin faktur existing) | izin faktur existing | — |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-PX-1 Lead). Tidak ada gerbang approve perubahan harga (konsisten putusan keluarga F-018 Q9).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-PX-01 | Tanggal berakhir OPSIONAL; kosong = tanpa batas, perilaku resolver hari ini tidak berubah untuk baris tanpa tanggal berakhir. | USULAN | service.ts:91 (hanya batas bawah) |
+| BR-PX-02 | Semantik batas INKLUSIF diusulkan: baris berlaku pada tanggal dokumen `t` bila `effectiveDate <= t` (null effectiveDate = selalu) DAN (`tanggalBerakhir` null ATAU `t <= tanggalBerakhir`). Tanggal dokumen, bukan tanggal hari ini, yang menentukan — faktur backdate memakai harga masa dokumennya. | USULAN (fisik Backend Q-PX-3) | pola BR-TIER-03 tanggal dokumen |
+| BR-PX-03 | Bila kandidat teratas sudah berakhir, resolver turun ke kandidat berikutnya menurut urutan pemenang existing (kategori spesifik > minQty terbesar > effectiveDate terbaru), lalu fallback Item.price. Dilarang "harga terakhir menang selamanya". | USULAN | service.ts:95-102; BR-TIER-14 |
+| BR-PX-04 | Dokumen sudah terbit TIDAK berubah: harga terpilih sudah terpersist sebagai unitPrice + sumber (priceListId) di baris faktur; mengubah/menghapus tanggal berakhir tidak menulis ulang dokumen mana pun. | TERVERIFIKASI-KODE (persist) + USULAN (larangan tulis ulang) | keluarga BR-TIER-09 |
+| BR-PX-05 | Status masa adalah TURUNAN baca-saja (tanpa kolom status, tanpa cron yang menulis isActive=false). Menonaktifkan tetap aksi edit/delete manual existing. | USULAN | schema:582 isActive manual |
+| BR-PX-06 | Validasi simpan: tanggalBerakhir (bila diisi) wajib >= effectiveDate (bila keduanya diisi); ditolak dengan pesan menyebut kedua tanggal. tanggalBerakhir di masa lalu saat simpan DITOLAK (mencegah baris lahir langsung mati tanpa jejak) — perpanjangan baris sudah berakhir hanya lewat edit yang menghasilkan masa depan atau tetap kosong. | USULAN | pola pesan duplikat actions:44-53 |
+| BR-PX-07 | Keunikan existing `[customerCategoryId, itemId, minQty, effectiveDate]` TIDAK diubah tahap 1; dua baris setara penuh dengan tanggal berakhir beda tetap error data existing, bukan pilihan diam-diam. | TERVERIFIKASI-KODE + USULAN | schema:589; BR-TIER-03 butir 8 |
+| BR-PX-08 | Antrean segera berakhir hanya menampilkan baris aktif dengan tanggalBerakhir terisi dalam jendela terpilih; baris tanpa batas dan baris nonaktif tidak masuk antrean. Urutan: tanggal berakhir naik, seri id naik. | USULAN | pola urutan deterministik repo |
+| BR-PX-09 | UI menampilkan tanggal berakhir + label status masa APA ADANYA dari server; UI dilarang menghitung sisa hari/status sendiri dan dilarang menyembunyikan baris sudah berakhir (tampil berlabel, supaya riwayat master terbaca). | USULAN | pola konsumen read-model repo |
+| BR-PX-10 | Tidak ada notifikasi/cron/WA tahap 1; antrean pasif di halaman kelola. Menambah pengingat aktif = putusan Lead Q-PX-4. | USULAN | — |
+| BR-PX-11 | Harga berakhir BUKAN peristiwa akuntansi: nol jurnal, nol ubah HPP/diskon dokumen berjalan. Diskon/pajak baris tetap aturan vonis tahap 1 price-list (sebelum subtotal/pajak). | TERVERIFIKASI-KODE (jalur harga) | service.ts:1-16 header vonis |
+| BR-PX-12 | VendorItemPrice (harga pemasok) TIDAK disentuh spec ini; masa berlaku harga beli = spec terpisah bila dibutuhkan. | USULAN (scope) | schema VendorItemPrice :552-573 tanpa tanggal akhir juga — dicatat, tidak diangkat |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Tanggal mulai berlaku harga | Ada "Mulai Berlaku" pada Penyesuaian Harga/Diskon (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penyesuaian-harga-diskon/mengenal-fitur-penyesuaian-harga-diskon/) | Belum terverifikasi di help resmi yang diakses run ini (pencarian help.zahironline.com hanya memunculkan penawaran harga/faktur; ditulis belum terverifikasi, bukan diklaim absen) | Ada `effectiveDate` (TERVERIFIKASI-KODE schema:580) |
+| Harga mendatang terlihat sebelum berlaku | Ada kolom Harga Berlaku Saat Ini vs Harga Jual Mendatang (BENCHMARK: https://help.accurate.id/product/accurate-online/accurate-insight/cek-harga-jual-sebelum-berubah/) | Belum terverifikasi | Parsial: baris masa depan tersimpan tapi resolver baru memakainya saat tanggal dokumen tiba; tanpa label mendatang di halaman kelola |
+| Tanggal berakhir harga otomatis | Tidak ditemukan di dua halaman Accurate di atas (hanya mulai berlaku) — ditulis tidak ditemukan, bukan diklaim tidak ada | Belum terverifikasi | ABSEN (gap spec ini) |
+| Antrean harga segera berakhir | Tidak ditemukan di halaman di atas | Belum terverifikasi | ABSEN (gap spec ini) |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-PX-B1: dokumen bertanggal tepat pada tanggalBerakhir memakai harga baris itu; dokumen +1 hari TIDAK memakainya (turun kandidat/fallback). Membalik perbandingan batas = tes MERAH.
+- AC-PX-B2: baris tanpa tanggalBerakhir berperilaku byte-sama dengan resolver hari ini (regresi BR-TIER existing hijau).
+- AC-PX-B3: kandidat teratas berakhir -> kandidat berikutnya terpilih; mencabut syarat berakhir dari resolver = MERAH.
+- AC-PX-B4: simpan tanggalBerakhir < effectiveDate ditolak; tanggalBerakhir lampau saat buat ditolak.
+- AC-PX-B5: mengubah tanggalBerakhir sesudah faktur terbit tidak mengubah unitPrice/sumber faktur itu (snapshot byte-sama).
+- AC-PX-B6: antrean hanya baris aktif bertanggal berakhir dalam jendela; baris tanpa batas/nonaktif bocor = MERAH.
+
+Frontend (konsumen):
+- AC-PX-F1: kolom "Berlaku Sampai" + label status masa tampil verbatim server; UI menghitung sisa hari sendiri = MERAH (grep hitung tanggal di komponen).
+- AC-PX-F2: baris sudah berakhir tetap tampil berlabel, tidak hilang dari tabel.
+
+QA: AC-PX-B1..B6 + AC-PX-F1..F2 atas head Backend/Frontend persis; tambahan: resolver menerima tanggal dokumen (bukan now) dibuktikan dokumen backdate.
+
+Edge cases: EC-1 effectiveDate null + tanggalBerakhir terisi (berlaku sejak dulu s.d. berakhir). EC-2 tanggalBerakhir = effectiveDate (berlaku satu hari). EC-3 dua kandidat, yang spesifik berakhir dan yang umum belum -> umum menang. EC-4 qty tingkat: baris minQty besar berakhir, baris minQty kecil belum -> tingkat kecil menang (bukan fallback master). EC-5 zona waktu: tanggal dokumen WIB (date-only existing `wibDateToUtcMidnight`), perbandingan date-only bukan timestamp mentah. EC-6 baris berakhir di tengah periode laporan harga — laporan existing tidak berubah (master, bukan laporan).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-PX-1 (Lead): buka inti kolom tanggal berakhir sekarang? Key izin baru vs reuse view/create/edit/delete existing (spec usul reuse, tanpa key baru).
+- Q-PX-2 (Lead): jendela antrean segera berakhir — usul pilihan tetap 7/30/90 hari seperti pola antrean garansi F-2026-10-22-094-S, tanpa konfigurasi bebas. Angka ini USULAN sampai diputus.
+- Q-PX-3 (Backend): fisik kolom (nama/map/index), perbandingan date-only resolver, dan apakah loader perlu menyaring di query atau tetap saring murni di resolver (spec usul resolver murni, loader tidak berubah makna).
+- Q-PX-4 (Lead): pengingat aktif (cron/notifikasi) ditunda tahap 1 — sahkan.
+- Q-PX-5 (Accountant): TIDAK diminta tahap ini — harga berakhir tidak mengubah perlakuan pajak/diskon dokumen terbit (BR-PX-11). Dipanggil lagi hanya bila ada usul harga berlaku surut mengubah dokumen berjalan (spec ini melarangnya).
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-001-S | Spec ini (dokumen) | Business | — |
+| (turunan) inti tanggal berakhir + resolver + antrean loader | Backend | Q-PX-1/2/3 diputus Lead; klaim schema.prisma di board | — |
+| (turunan) UI kolom/label/antrean halaman harga-pelanggan | Frontend | kontrak Backend stabil; kata §7 verbatim | — |
+| (turunan) falsifikasi AC-PX-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Masa berlaku VendorItemPrice (harga beli): celah sama ada, tapi dampaknya rujukan manual (schema VendorItemPrice komentar "murni rujukan, belum mengikat transaksi") — YAGNI sampai harga beli mengikat dokumen.
+- Perpanjangan massal / salin baris harga: belum ada bukti kebutuhan; edit per baris cukup tahap 1.
+- Notifikasi WA/cron harga berakhir: ditunda Q-PX-4, antrean pasif dulu.
