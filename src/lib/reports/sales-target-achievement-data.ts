@@ -13,8 +13,22 @@
  * sales_target_updated terakhir per target yang jatuh sesudah
  * periodStart target itu — laporan memakai nilai target terkini.
  * Read-only: tanpa migrasi/jurnal/mutasi.
+ *
+ * Izin (LOW-2 audit #583, pola collection-queue-data): kedua fungsi
+ * loader memegang gerbangnya sendiri, fail-closed sebelum query:
+ * - getSalesTargetAchievement: laporan baca = view_reports.
+ *   Pemanggil lama getSalesTargetAchievementReport menegakkan izin
+ *   yang sama lebih dulu di lapisan aksi; gerbang ganda berhenti di
+ *   lapisan pemanggil, loader aman dipanggil langsung.
+ * - listSalesTargets: daftar kelola = approve_sales_invoices,
+ *   ditegakkan juga sebelum query. Satu-satunya pemanggil saat ini
+ *   (page laporan, PR #604) sudah menyeleksi canManage dan hanya
+ *   memanggil saat true — jadi tanpa izin tidak pernah terpicu di
+ *   jalur lama; gerbang ini menutup pemanggil masa depan yang lupa
+ *   menyeleksi.
  */
 
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import {
   buildSalesTargetAchievement,
@@ -25,6 +39,7 @@ export async function getSalesTargetAchievement(range: {
   start: Date
   end: Date
 }): Promise<SalesTargetAchievement> {
+  await requirePermission("view_reports")
   const targets = await prisma.salesTarget.findMany({
     where: {
       deletedAt: null,
@@ -117,8 +132,13 @@ export async function getSalesTargetAchievement(range: {
   })
 }
 
-/** Daftar target aktif untuk form kelola (gerbang di pemanggil). */
+/**
+ * Daftar target aktif untuk form kelola.
+ * Gerbang: approve_sales_invoices (LOW-2 audit #583) ditegakkan di
+ * loader sebelum query.
+ */
 export async function listSalesTargets() {
+  await requirePermission("approve_sales_invoices")
   return prisma.salesTarget.findMany({
     where: { deletedAt: null },
     select: {
