@@ -75,10 +75,47 @@ describe("ProjectBudgetCard F-2026-10-21-030", () => {
     expect(text).toContain("Rp 1.500.000")
     expect(text).toContain("Rp 14.500.000")
     expect(text).toContain("Rp 6.000.000")
-    expect(text).toContain("belum tersedia")
+    expect(text).toContain("belum terukur")
   })
 
-  it("kolom F1: realisasi hanya di baris belum-teralokasi + total; per tahap '-'", () => {
+  it("F-030(c): realisasi per tahap null tampil 'Belum terukur', DILARANG Rp 0 per tahap", () => {
+    const { text } = renderBudgetText(budgetFixture())
+    expect(text).toContain("Belum terukur")
+    // baris tahap Persiapan: anggaran tampil, realisasi bukan Rp 0
+    const stageRow = text.slice(text.indexOf("Persiapan"), text.indexOf("Material"))
+    expect(stageRow).toContain("Rp 13.000.000")
+    expect(stageRow).not.toContain("Rp 0")
+  })
+
+  it("F-030(c): tahap tanpa baris RAB tetap tampil dari perStageRealized", () => {
+    const { text } = renderBudgetText(
+      budgetFixture({
+        stages: [
+          { id: 10, name: "Persiapan", sortOrder: 1 },
+          { id: 11, name: "Finishing", sortOrder: 2 },
+        ],
+      }),
+    )
+    expect(text).toContain("Finishing")
+    const row = text.slice(text.indexOf("Finishing"), text.indexOf("Belum Teralokasi"))
+    expect(row).toContain("Belum terukur")
+    expect(row).not.toContain("Rp 0")
+  })
+
+  it("F-030(c): realisasi terukur tampil angka builder + selisih + %", () => {
+    const budget = budgetFixture()
+    budget.perStageRealized = [
+      { projectStageId: 10, stageName: "Persiapan", realized: 5_000_000, hasStageAllocation: true },
+    ]
+    budget.unallocatedRealized = 1_000_000
+    const { text } = renderBudgetText(budget)
+    const row = text.slice(text.indexOf("Persiapan"), text.indexOf("Material"))
+    expect(row).toContain("Rp 5.000.000")
+    expect(row).toContain("Rp 8.000.000")
+    expect(row).toContain("38.5%")
+  })
+
+  it("kolom F1: realisasi angka hanya di baris belum-teralokasi + total; per tahap 'Belum terukur'", () => {
     const { text, found } = renderBudgetText(budgetFixture())
     expect(found.stages).toBe(true)
     expect(text).toContain("Anggaran vs Realisasi per Tahap")

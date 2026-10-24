@@ -102,6 +102,29 @@ export interface ProductionVarianceTotals {
   varianceDrift: number
 }
 
+export interface ProductionRecalibrationCandidate {
+  itemId: number
+  consecutivePeriods: number
+  periodsOverThreshold: number
+  maxAbsVariancePct: number
+  suggestedStandardCost: number
+}
+
+export interface ProductionVarianceMeta {
+  periodCount: number
+  thresholdPct: number
+  consecutivePeriods: number
+}
+
+export interface ProductionVarianceDataInput {
+  orders: ProductionVarianceOrderInput[]
+  start: Date
+  end: Date
+  recalibrationCandidates?: ProductionRecalibrationCandidate[]
+  itemNames?: Map<number, string>
+  recalibrationMeta?: ProductionVarianceMeta
+}
+
 export interface ProductionVarianceResult {
   table: { columns: TableColumn[]; rows: TableRow[] }
   orders: ProductionVarianceOrderLine[]
@@ -110,6 +133,7 @@ export interface ProductionVarianceResult {
   orderCount: number
   /** Order yang memuat minimal satu baris bahan tanpa standar terkalibrasi. */
   uncalibratedOrders: number
+  recalibrationCandidates: ProductionRecalibrationCandidate[]
 }
 
 function round2(value: number): number {
@@ -161,12 +185,106 @@ export function splitMaterialVariance(
   }
 }
 
-export function buildProductionVariance(input: {
-  orders: ProductionVarianceOrderInput[]
-  start: Date
-  end: Date
-}): ProductionVarianceResult {
+
+/**
+ * F-2026-10-21-010 — Kandidat re-cost dari varians harga bahan beruntun.
+ *
+ * Satu item jadi kandidat bila |selisih harga| / biaya standar baris
+ * melampaui `thresholdPct` dalam `consecutivePeriods` periode beruntun
+ * (periode tanpa baris item itu MEMUTUS rantai — jeda bukan persetujuan
+ * diam-diam). Baris `uncalibrated` (standar nol) tidak pernah jadi
+ * kandidat: tanpa standar, persen tak terdefinisi. Standar usulan =
+ * rata-rata tertimbang qty harga aktual/unit seluruh baris kandidat —
+ * angka untuk ditinjau manual lewat `calculateStandardCost` existing,
+ * BUKAN tulisan otomatis ke master.
+ */
+export function findRecalibrationCandidates(input: {
+  /** Satu entri per periode, urut kronologis. */
+  periods: ProductionVarianceOrderInput[][]
+  thresholdPct: number
+  consecutivePeriods: number
+}): ProductionRecalibrationCandidate[] {
+  const { periods, thresholdPct, consecutivePeriods } = input
+  if (periods.length === 0 || consecutivePeriods < 1) return []
+
+  // Agregat per item per periode: total |priceVariance| vs total standar.
+  const byItem = new Map<number, { pct: number | null; actualUnitWeighted: number; qtySum: number }[]>()
+  periods.forEach((orders, periodIndex) => {
+    const agg = new Map<number, { absPrice: number; standardTotal: number; weighted: number; qty: number }>()
+    for (const order of orders) {
+      for (const material of order.materials) {
+        const line = splitMaterialVariance(material)
+        if (line.uncalibrated) continue
+        const cur = agg.get(material.itemId) ?? { absPrice: 0, standardTotal: 0, weighted: 0, qty: 0 }
+        const actualQty = material.actualQty ?? 0
+        cur.absPrice = round2(cur.absPrice + Math.abs(line.priceVariance))
+        cur.standardTotal = round2(cur.standardTotal + material.standardCost * material.qty)
+        if (actualQty > 0) {
+          cur.weighted += material.actualCost
+          cur.qty += actualQty
+        }
+        agg.set(material.itemId, cur)
+      }
+    }
+    // Pad items absent this period with null so consecutive runs break.
+    for (const [itemId, list] of byItem) {
+      if (!agg.has(itemId)) {
+        while (list.length < periodIndex) list.push({ pct: null, actualUnitWeighted: 0, qtySum: 0 })
+        list.push({ pct: null, actualUnitWeighted: 0, qtySum: 0 })
+      }
+    }
+    for (const [itemId, a] of agg) {
+      const list = byItem.get(itemId) ?? []
+      while (list.length < periodIndex) list.push({ pct: null, actualUnitWeighted: 0, qtySum: 0 })
+      list.push({
+        pct: a.standardTotal > 0 ? round2((a.absPrice / a.standardTotal) * 100) : null,
+        actualUnitWeighted: a.qty > 0 ? a.weighted / a.qty : 0,
+        qtySum: a.qty,
+      })
+      byItem.set(itemId, list)
+    }
+  })
+
+  const candidates: ProductionRecalibrationCandidate[] = []
+  for (const [itemId, series] of byItem) {
+    // Rantai terpanjang beruntun dengan pct > threshold.
+    let run = 0
+    let bestRun = 0
+    let bestEnd = -1
+    let over = 0
+    series.forEach((entry, idx) => {
+      if (entry.pct !== null && entry.pct > thresholdPct) {
+        run += 1
+        over += 1
+        if (run > bestRun) {
+          bestRun = run
+          bestEnd = idx
+        }
+      } else {
+        run = 0
+      }
+    })
+    if (bestRun < consecutivePeriods || bestEnd < 0) continue
+    const windowEntries = series.slice(bestEnd - bestRun + 1, bestEnd + 1)
+    const qtySum = windowEntries.reduce((s, e) => s + e.qtySum, 0)
+    const weightedSum = windowEntries.reduce((s, e) => s + e.actualUnitWeighted * e.qtySum, 0)
+    candidates.push({
+      itemId,
+      consecutivePeriods: bestRun,
+      periodsOverThreshold: over,
+      maxAbsVariancePct: Math.max(...windowEntries.map((e) => e.pct ?? 0)),
+      suggestedStandardCost: qtySum > 0 ? round2(weightedSum / qtySum) : 0,
+    })
+  }
+  return candidates.sort((a, b) => b.maxAbsVariancePct - a.maxAbsVariancePct || a.itemId - b.itemId)
+}
+
+export function buildProductionVariance(
+  input: ProductionVarianceDataInput,
+): ProductionVarianceResult {
   const { orders, start, end } = input
+  const recalibrationCandidates = input.recalibrationCandidates ?? []
+  const itemNames = input.itemNames
   const inPeriod = (date: Date) => date.getTime() >= start.getTime() && date.getTime() <= end.getTime()
 
   const visible = orders
@@ -281,6 +399,23 @@ export function buildProductionVariance(input: {
         `periksa order yang rilis parsialnya belum final.`,
     })
   }
+  if (recalibrationCandidates.length > 0) {
+    const meta = input.recalibrationMeta
+    const thresholdLabel = meta ? `>${meta.thresholdPct}% selama ${meta.consecutivePeriods} periode beruntun` : "ambang beruntun"
+    rows.push({
+      kind: "notice",
+      text:
+        `Kandidat re-cost standar (F-2026-10-21-010, |varians harga| ${thresholdLabel}): ` +
+        recalibrationCandidates
+          .map((c) => {
+            const name = itemNames?.get(c.itemId)
+            const label = name ? `${name} (#${c.itemId})` : `Barang #${c.itemId}`
+            return `${label} maks ${c.maxAbsVariancePct}% — usulan standar ${formatCurrency(c.suggestedStandardCost)} (tinjau manual, bukan tulisan otomatis)`
+          })
+          .join("; ") +
+        ".",
+    })
+  }
 
   return {
     table: { columns: COLUMNS, rows },
@@ -289,6 +424,7 @@ export function buildProductionVariance(input: {
     totals,
     orderCount: lines.length,
     uncalibratedOrders,
+    recalibrationCandidates,
   }
 }
 

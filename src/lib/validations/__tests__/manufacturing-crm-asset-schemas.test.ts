@@ -10,6 +10,7 @@ import {
   assetTransferSchema,
   assetSchema,
   assetDisposalSchema,
+  assetUsageRecordSchema,
 } from "@/lib/validations/asset.schemas";
 
 describe("validations/manufacturing.schemas", () => {
@@ -85,8 +86,79 @@ describe("validations/asset.schemas", () => {
   it("assetSchema rejects negative purchasePrice", () => {
     expect(assetSchema.safeParse({ name: "X", purchasePrice: -100 }).success).toBe(false);
   });
+  it("F62-4: string metode penyusutan ngawur ditolak Zod; metode terdaftar diterima", () => {
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "metode_ngawur" }).success,
+    ).toBe(false);
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "straight_line" }).success,
+    ).toBe(true);
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "declining_balance" }).success,
+    ).toBe(true);
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "units_of_production" }).success,
+    ).toBe(true);
+  });
   it("assetDisposalSchema requires assetId", () => {
     expect(assetDisposalSchema.safeParse({ assetId: 1 }).success).toBe(true);
     expect(assetDisposalSchema.safeParse({}).success).toBe(false);
+  });
+  it("F118-V: assetSchema accepts frozen analytical params; rejects invalid ones", () => {
+    expect(
+      assetSchema.safeParse({
+        name: "Kompresor",
+        depreciationMethod: "units_of_production",
+        totalEstimatedUnits: 10000,
+        productionUnitName: "jam",
+        usefulLifeMonths: 48,
+      }).success,
+    ).toBe(true);
+    expect(
+      assetSchema.safeParse({ name: "X", totalEstimatedUnits: -1 }).success,
+    ).toBe(false);
+    expect(
+      assetSchema.safeParse({ name: "X", usefulLifeMonths: 3.5 }).success,
+    ).toBe(false);
+    expect(
+      assetSchema.safeParse({ name: "X", usefulLifeMonths: 0 }).success,
+    ).toBe(false);
+  });
+  it("F118-V: assetUsageRecordSchema requires named document per period", () => {
+    expect(
+      assetUsageRecordSchema.safeParse({
+        assetId: 1,
+        periodYear: 2026,
+        periodMonth: 10,
+        actualUnits: 120,
+        sourceName: "Laporan produksi Oktober",
+      }).success,
+    ).toBe(true);
+    expect(
+      assetUsageRecordSchema.safeParse({
+        assetId: 1,
+        periodYear: 2026,
+        periodMonth: 13,
+        actualUnits: 120,
+        sourceName: "X",
+      }).success,
+    ).toBe(false);
+    expect(
+      assetUsageRecordSchema.safeParse({
+        assetId: 1,
+        periodYear: 2026,
+        periodMonth: 10,
+        actualUnits: 120,
+      }).success,
+    ).toBe(false);
+    expect(
+      assetUsageRecordSchema.safeParse({
+        assetId: 1,
+        periodYear: 2026,
+        periodMonth: 10,
+        actualUnits: -5,
+        sourceName: "X",
+      }).success,
+    ).toBe(false);
   });
 });

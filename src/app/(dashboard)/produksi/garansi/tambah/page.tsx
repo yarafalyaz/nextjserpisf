@@ -6,7 +6,9 @@ import { listWarrantyCoveragesByVehicle } from "@/actions/warranty.actions"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
+import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { WarrantyClaimForm, type WarrantyCoverageOption } from "../_components/warranty-claim-form"
 
 export const metadata: Metadata = { title: "Buat Klaim Garansi" }
@@ -28,35 +30,89 @@ export default async function WarrantyClaimCreatePage({
 }) {
   await requirePermission("create_warranty_claims")
   const params = await searchParams
-  const vehicleId = params.kendaraan ? Number(params.kendaraan) : Number.NaN
+  const vehicleSegment = params.kendaraan?.trim() || null
 
   let coverageOptions: WarrantyCoverageOption[] = []
   let vehicleLabel: string | null = null
-  if (Number.isInteger(vehicleId) && vehicleId > 0) {
-    const result = await listWarrantyCoveragesByVehicle(vehicleId)
-    if (result.success && result.coverages) {
-      coverageOptions = result.coverages.map((c) => {
-        const serial = c.serialNumber?.trim()
-          ? `Seri ${c.serialNumber}`
-          : "Belum ada nomor serial tercatat"
-        return {
-          value: String(c.id),
-          label: `${c.item.name} — ${serial} — berakhir ${formatDate(c.expiresAt)}`,
-        }
-      })
+  if (vehicleSegment) {
+    const vehicle = await resolveEntity(
+      { segment: vehicleSegment, fallbackWhere: { isActive: true } },
+      {
+        bySlug: (s, where) =>
+          prisma.customerVehicle.findFirst({
+            where: { slug: s, ...where },
+            select: {
+              id: true,
+              plateNumber: true,
+              color: true,
+              customer: { select: { name: true } },
+              vehicle: {
+                select: {
+                  year: true,
+                  variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } },
+                },
+              },
+            },
+          }),
+        byId: (id, where) =>
+          prisma.customerVehicle.findFirst({
+            where: { id, ...where },
+            select: {
+              id: true,
+              plateNumber: true,
+              color: true,
+              customer: { select: { name: true } },
+              vehicle: {
+                select: {
+                  year: true,
+                  variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } },
+                },
+              },
+            },
+          }),
+      },
+    )
+    if (vehicle) {
+      const result = await listWarrantyCoveragesByVehicle(vehicle.id)
+      if (result.success && result.coverages) {
+        coverageOptions = result.coverages.map((c) => {
+          const serial = c.serialNumber?.trim()
+            ? `Seri ${c.serialNumber}`
+            : "Belum ada nomor serial tercatat"
+          return {
+            value: String(c.id),
+            label: `${c.item.name} — ${serial} — berakhir ${formatDate(c.expiresAt)}`,
+          }
+        })
+      }
+      const brand = vehicle.vehicle?.variant?.model?.brand?.name
+      const model = vehicle.vehicle?.variant?.model?.name
+      const variant = vehicle.vehicle?.variant?.name
+      const unit = [brand, model, variant ? `(${variant})` : null].filter(Boolean).join(" ")
+      vehicleLabel = [vehicle.plateNumber ?? "Tanpa pelat", unit || null, vehicle.customer?.name ? `— ${vehicle.customer.name}` : null]
+        .filter(Boolean)
+        .join(" ")
     }
-    const vehicle = await prisma.customerVehicle.findUnique({
-      where: { id: vehicleId },
-      select: { plateNumber: true },
-    })
-    vehicleLabel = vehicle?.plateNumber ?? `Kendaraan #${vehicleId}`
   }
 
   const vehicles = await prisma.customerVehicle.findMany({
     where: { isActive: true },
     orderBy: { plateNumber: "asc" },
     take: 200,
-    select: { id: true, plateNumber: true },
+    select: {
+      id: true,
+      slug: true,
+      plateNumber: true,
+      color: true,
+      customer: { select: { name: true } },
+      vehicle: {
+        select: {
+          year: true,
+          variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } },
+        },
+      },
+      _count: { select: { warrantyCoverages: true } },
+    },
   })
 
   return (
@@ -83,19 +139,53 @@ export default async function WarrantyClaimCreatePage({
           {vehicles.length === 0 ? (
             <p className="mt-4 text-muted-foreground">Belum ada kendaraan aktif tercatat.</p>
           ) : (
-            <ul className="mt-4 flex flex-col divide-y divide-default">
-              {vehicles.map((v) => (
-                <li key={v.id} className="py-3">
-                  <a
-                    href={`/produksi/garansi/tambah?kendaraan=${v.id}`}
-                    className="font-mono text-sm text-primary hover:underline"
-                    aria-label={`Pilih kendaraan ${v.plateNumber ?? v.id} untuk klaim garansi`}
-                  >
-                    {v.plateNumber ?? `Kendaraan #${v.id}`}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm" aria-label="Daftar kendaraan aktif">
+                <thead>
+                  <tr className="border-b border-default text-left">
+                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Plat Nomor</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Unit</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Pelanggan</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Cakupan</th>
+                    <th scope="col" className="px-4 py-2.5 font-medium text-muted-foreground">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-default">
+                  {vehicles.map((v) => {
+                    const brand = v.vehicle?.variant?.model?.brand?.name
+                    const model = v.vehicle?.variant?.model?.name
+                    const variant = v.vehicle?.variant?.name
+                    const unit = [brand, model, variant ? `(${variant})` : null].filter(Boolean).join(" ") || "-"
+                    return (
+                      <tr key={v.id}>
+                        <td className="px-4 py-2.5 font-mono text-foreground">{v.plateNumber ?? "-"}</td>
+                        <td className="px-4 py-2.5 text-foreground">{unit}</td>
+                        <td className="px-4 py-2.5 text-foreground">{v.customer?.name ?? "-"}</td>
+                        <td className="px-4 py-2.5">
+                          <StatusChip
+                            status={v._count.warrantyCoverages > 0 ? "active" : "closed"}
+                            customLabel={
+                              v._count.warrantyCoverages > 0
+                                ? `${v._count.warrantyCoverages} cakupan`
+                                : "Tanpa cakupan"
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <a
+                            href={`/produksi/garansi/tambah?kendaraan=${v.slug ?? v.id}`}
+                            className="font-medium text-primary hover:underline"
+                            aria-label={`Pilih kendaraan ${v.plateNumber ?? unit} untuk klaim garansi`}
+                          >
+                            Pilih
+                          </a>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       ) : coverageOptions.length === 0 ? (
