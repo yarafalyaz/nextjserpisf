@@ -22184,6 +22184,305 @@ sebagai rujukan, bukan klaim benchmark baru.
 - Menyentuh PR #409: sync konfliknya bukan milik kartu ini;
   batas §0 menjaga isinya tidak diduplikasi di sini.
 
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-091-V: tabel pengali alasan PHK Pasal 41-57 PP 35/2021 (vonis lanjutan F-2026-10-22-086-V §2.2/G2)
+
+> **Slot**: F-2026-10-22-091-V. Diperiksa bentrok 2026-10-22 live vs
+> `origin/main` (`c1f77729`, PR #549 merged) + `gh pr list` all-state
+> + kanban: 090-V PR #548 OPEN (CKPN), 090-S PR #547, 091-S spec BOT 5
+> di worktree `bot5-f091-quote-followup` dari basis sama — 091-V
+> bebas. Anti-duplikat: kandidat lain ditolak terbukti — Q-EMP-4/5
+> sudah F-086-V (PR #536), Q-DP65-2 sudah F-073-V (#525 merged),
+> Q-SC-5 sudah F-080-V, Q-TGT-1 sudah F-089-V, Q-F015-D F-088-V,
+> BR-EMP-12 F-087-V, serial F-077..F-090-V terbit semua. Kandidat
+> ini SATU-SATUNYA sisa BOT 4 berlabel eksplisit "vonis lanjutan
+> sesudah Q-EMP-2" yang prasyaratnya BARU terpenuhi: Q-EMP-2 DIPUTUS
+> BOT 1 di PR #550 OPEN (head branch `hermes/lead-putusan-qemp-qcol`,
+> §9A: `endReason` = contract_completed|resigned|terminated|retired|
+> deceased|other). Dokumen vonis saja — tanpa kode/schema/migrasi,
+> tanpa merge oleh BOT 4.
+>
+> Koreksi rujukan warisan (bukti primer mengalahkan catatan F-086-V):
+> F-086-V §2.3 menulis meninggal/pensiun = "Pasal 47/48". PDF resmi
+> PP 35/2021 membuktikan: Pasal 47 = perusahaan pailit; pensiun =
+> Pasal 56; meninggal = Pasal 57; permohonan pekerja (Pasal 36 g) =
+> Pasal 48. Vonis ini memakai nomor pasal PDF resmi.
+
+### 0. Yang diputus, batasnya
+
+Memutus: tabel pengali pesangon & UPMK per alasan PHK (rincian
+alasan di dalam `terminated`, plus retired/deceased/resigned/
+contract_completed) untuk dipakai BOT 3 saat membangun dokumen
+peristiwa berhenti F-085-S/F-086-V, dan syarat snapshot multi-pasal.
+
+Tidak diputus: rumus dasar Pasal 40 (sudah F-086-V §2.1), basis
+Upah (§1.3 F-086-V), nilai hari cuti & ongkos pulang & uang pisah
+nominal (sumbernya PK/PP/PKB per kasus, §2.1 F-086-V tetap),
+klasifikasi & tarif PPh (F-086-V §3 tetap mengikat: pesangon
+memenuhi definisi + sekaligus <=2 tahun kalender = FINAL PMK
+16/2010 atas TOTAL bruto hasil pengali; kompensasi PKWT tetap
+bukan pesangon), akun/jalur bayar (F-086-V §4-§5), kasus sengketa
+PHK yang belum berkekuatan hukum (BUTUH-VONIS-AKUNTAN per kasus).
+
+`endReason` kasar TIDAK cukup menentukan pengali: satu
+`terminated` memuat pengali 0x/0,5x/0,75x/1x/2x. Karena itu dokumen
+berhenti WAJIB snapshot rincian alasan Pasal 36 + pasal hak
+(41-57) + pengali pesangon + pengali UPMK + teks dasar bukti.
+Rincian alasan di bawah = kosakata teknis snapshot dokumen, BUKAN
+kosakata UI master (Q-EMP-2 BOT 1 tetap 6 nilai).
+
+### 1. Tabel pengali (sumber: PP 35/2021 Pasal 41-57, PDF resmi)
+
+Pengali dikalikan ke tabel dasar Pasal 40 ayat (2)/(3) F-086-V
+§2.1. Penggantian hak Pasal 40 ayat (4) TIDAK dikali (kolom PHak:
+"penuh" = sesuai ayat (4) per kasus; "pisah" = uang pisah PK/PP/PKB
+menggantikan pesangon+UPMK; "-" = tidak ada).
+
+| Kode | Rincian alasan (Pasal 36) | Pasal hak | Pesangon | UPMK | PHak |
+|---|---|---|---|---|---|
+| T-01 | merger/peleburan/pemisahan, pekerja atau pengusaha menolak lanjut (36a) | 41 | 1 | 1 | penuh |
+| T-02 | pengambilalihan, syarat kerja tetap (36a) | 42(1) | 1 | 1 | penuh |
+| T-03 | pengambilalihan + syarat berubah, pekerja menolak (36a) | 42(2) | 0,5 | 1 | penuh |
+| T-04 | efisiensi karena rugi (36b) | 43(1) | 0,5 | 1 | penuh |
+| T-05 | efisiensi mencegah rugi (36b) | 43(2) | 1 | 1 | penuh |
+| T-06 | perusahaan tutup karena rugi (36c) | 44(1) | 0,5 | 1 | penuh |
+| T-07 | perusahaan tutup bukan karena rugi | 44(2) | 1 | 1 | penuh |
+| T-08 | force majeure, perusahaan tutup (36d) | 45(1) | 0,5 | 1 | penuh |
+| T-09 | force majeure, tidak tutup (36d) | 45(2) | 0,75 | 1 | penuh |
+| T-10 | PKPU karena rugi (36e) | 46(1) | 0,5 | 1 | penuh |
+| T-11 | PKPU bukan karena rugi (36e) | 46(2) | 1 | 1 | penuh |
+| T-12 | perusahaan pailit (36f) | 47 | 0,5 | 1 | penuh |
+| T-13 | permohonan pekerja, pengusaha terbukti perbuatan 36g (36g) | 48 | 1 | 1 | penuh |
+| T-14 | putusan LPPHI: pengusaha TIDAK terbukti 36g (36h) | 49 | 0 | 0 | penuh + pisah |
+| T-15 | mangkir >=5 hari + 2x panggilan patut (36j) | 51 | 0 | 0 | penuh + pisah |
+| T-16 | pelanggaran PK/PP/PKB sesudah SP1-3 (36k) | 52(1) | 0,5 | 1 | penuh |
+| T-17 | pelanggaran mendesak PK/PP/PKB (36k) | 52(2) | 0 | 0 | penuh + pisah |
+| T-18 | ditahan pidana, perusahaan rugi (36l) | 54(1)/(4) | 0 | 0 | penuh + pisah |
+| T-19 | ditahan pidana, perusahaan tidak rugi (36l) | 54(2)/(5) | 0 | 1 | penuh |
+| T-20 | sakit berkepanjangan/cacat KK >12 bulan (36m) | 55 | 2 | 1 | penuh |
+| R-01 | pensiun (36n) | 56 | 1,75 | 1 | penuh |
+| D-01 | meninggal dunia, ke ahli waris (36o) | 57 | 2 | 1 | penuh |
+| S-01 | mengundurkan diri memenuhi syarat 36i (resigned) | 50 | 0 | 0 | penuh + pisah |
+| C-01 | PKWT berakhir (contract_completed) | 15/17 | BUKAN pesangon — kompensasi F-086-V §1 | — | — |
+
+Catatan pasal yang mengubah angka, jangan diratakan:
+- Pasal 58: manfaat program pensiun yang iurannya dibayar
+  pengusaha DIPERHITUNGKAN terhadap pesangon/UPMK/pisah Pasal
+  41-52 & 54-57; manfaat < kewajiban -> selisih dibayar pengusaha.
+  Dokumen berhenti wajib snapshot manfaat pensiun terhitung (boleh
+  Rp0 dengan keterangan tidak ikut program); tanpa kolom ini,
+  dokumen R-01/T-* berisiko bayar dobel. Nilai manfaat = bukti
+  penyelenggara, bukan hitungan sistem.
+- Pasal 59: usaha mikro/kecil = besaran kesepakatan tertulis, tabel
+  ini tidak berlaku otomatis. Penanda skala usaha = BUTUH keputusan
+  pemilik proses; sistem dilarang menebak dari jumlah karyawan.
+- Pasal 53 (bantuan keluarga masa tahanan 25/35/45/50% maks 6
+  bulan) = kewajiban masa tahanan, BUKAN komponen dokumen berhenti;
+  di luar vonis ini, jangan dicampur ke T-18/T-19.
+
+### 2. Pemetaan endReason -> rincian (mengikat BOT 3)
+
+- `contract_completed` -> C-01 saja. Pesangon/UPMK = dilarang
+  lahir; yang lahir kompensasi PKWT F-086-V §1.
+- `resigned` -> S-01 saja, dan hanya bila syarat Pasal 36i terpenuhi
+  (tertulis <=30 hari, tidak ikatan dinas, tetap bekerja s.d.
+  tanggal). Syarat tidak terpenuhi -> bukan S-01; perlakuan =
+  BUTUH-VONIS-AKUNTAN/HR per kasus, jangan dipaksa T-15.
+- `retired` -> R-01. `deceased` -> D-01 (penerima = ahli waris,
+  identitas penerima snapshot di dokumen bayar).
+- `terminated` -> wajib pilih tepat satu T-01..T-20; tanpa rincian
+  = hitung DITOLAK (ini penutup E45-8 F-086-V).
+- `other` -> pengali tidak diturunkan sistem; dokumen hanya boleh
+  terbit dengan pengali eksplisit manusia berwenang + dasar tertulis
+  = BUTUH-VONIS-AKUNTAN per kasus. Default 1x tetap DILARANG.
+
+### 3. Contoh mengikat (basis Upah Rp6.000.000, F-086-V §1.3)
+
+- T-01, masa kerja 5 tahun: dasar pesangon 6 bln, UPMK 2 bln ->
+  6x6jt + 2x6jt = Rp48.000.000 (+ PHak per kasus).
+- T-04, masa kerja 7 tahun: 8 bln x 0,5 = Rp24.000.000; UPMK
+  3 bln x 1 = Rp18.000.000; total Rp42.000.000.
+- R-01, masa kerja 24 tahun: 9 x 1,75 x 6jt = Rp94.500.000; UPMK
+  10 x 6jt = Rp60.000.000; total Rp154.500.000 sebelum offset
+  Pasal 58 & PHak.
+- D-01, masa kerja 3 tahun: 4 x 2 x 6jt = Rp48.000.000; UPMK
+  2 x 6jt = Rp12.000.000; total Rp60.000.000 ke ahli waris.
+- S-01/T-14/T-15/T-17: pesangon Rp0 + UPMK Rp0 bukan "dokumen
+  kosong" — PHak + uang pisah (bila PK/PP/PKB mengatur) tetap
+  dinilai per kasus; sistem menampilkan Rp0 eksplisit, bukan
+  menyembunyikan baris.
+
+### 4. Penjaga build (BOT 3, dalam batas F-086-V G1-G5)
+
+S1. Pengali dibaca dari snapshot dokumen (kode rincian + pasal +
+   pengali pesangon + pengali UPMK), dibekukan saat dokumen
+   ditetapkan; edit tabel master/kode sesudahnya tidak mengubah
+   dokumen terbit. Tabel §1 hidup sebagai data referensi
+   bertanggal efektif bila dibangun master — jangan hardcode
+   pengali di service tanpa snapshot.
+S2. Kombinasi (endReason, rincian) di luar §2 ditolak server.
+   `contract_completed` + pengali pesangon apa pun = ditolak.
+S3. Pengali hanya himpunan {0; 0,5; 0,75; 1; 1,75; 2} untuk
+   pesangon dan {0; 1} untuk UPMK pada rincian T/R/D di atas;
+   nilai lain hanya lewat jalur `other` BUTUH-VONIS-AKUNTAN §2.
+S4. PPh mengikuti F-086-V §3 atas bruto FINAL hasil pengali
+   (bukan atas dasar 1x). Berkas bayar Pasal 58: bruto kewajiban
+   tabel dikurangi manfaat pensiun terhitung -> selisih = dasar
+   bayar & dasar potong snapshot; manfaat >= kewajiban -> bayar
+   pengusaha Rp0, dokumen tetap terbit sebagai bukti.
+S5. Jurnal tetap F-086-V §4: Dr 600005 / Cr 210208 atas bruto
+   kewajiban dokumen (neto sesudah offset Pasal 58 bila ada bukti
+   manfaat; offset tanpa bukti penyelenggara = ditolak). Tidak
+   ada akun baru dari vonis ini.
+
+### 5. Draf acceptance BOT 6 (falsifikasi; cabut penjaga -> MERAH)
+
+E91-1. T-04 contoh §3 = Rp42.000.000 persis sen; ganti pengali
+  T-04 ke 1 -> selisih tampil/MERAH terhadap fixture.
+E91-2. `terminated` tanpa rincian T-* -> hitung ditolak; isi
+  rincian lalu ubah endReason ke `other` tanpa dasar tertulis ->
+  ditolak.
+E91-3. `contract_completed` diminta pesangon -> ditolak; hanya
+  kompensasi F-086-V §1 lahir.
+E91-4. R-01 tanpa snapshot manfaat Pasal 58 -> dokumen tidak bisa
+  final; manfaat Rp100.000.000 pada contoh R-01 -> dasar bayar
+  Rp54.500.000 (154,5jt - 100jt, PHak di luar contoh), bukan
+  Rp154.500.000.
+E91-5. S-01: pesangon/UPMK tampil Rp0 eksplisit + baris PHak/pisah
+  per kasus; sistem mengisi pisah dari PP (bukan PK/PP/PKB) ->
+  MERAH.
+E91-6. Pengali di luar himpunan S3 lewat rincian T-* (mis. 1,5)
+  -> ditolak; edit pengali dokumen terbit -> ditolak (hanya
+  reversal/koreksi periode terbuka, pola F-086-V §4.3d).
+
+### 6. Klaim kepatuhan
+
+REGULASI (bukan fitur software): PP No. 35 Tahun 2021 Pasal 36,
+40-59 (penetapan 2 Feb 2021; JDIH Kemnaker
+https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf dan
+peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021; diakses
+2026-10-22) untuk rincian alasan, pengali, offset pensiun, dan
+pengecualian mikro/kecil. PMK 16/PMK.03/2010 + PP 68/2009 untuk
+PPh final = rujukan F-086-V §3/§9, tidak diputus ulang di sini.
+Cakupan: pengali pesangon/UPMK per alasan PHK PKWTT pada dokumen
+berhenti ISF. Di luar cakupan: uang pisah & nilai PHak nominal
+(PK/PP/PKB), sengketa PHK, skala mikro/kecil Pasal 59 tanpa
+keputusan pemilik, TKA, bantuan Pasal 53 — BUTUH-VONIS lanjutan/
+AKUNTAN per kasus.
+
+ID vonis ini **F-2026-10-22-091-V** (091 bebas all-state saat
+ditulis; 090-V PR #548, 090-S PR #547, 091-S BOT 5 worktree).
+Pemilik berikutnya: BOT 1 (merge PR #536 F-086-V + PR #550 putusan
+Q-EMP-1/2/3 + PR vonis ini; urutan: F-086-V & putusan dulu, vonis
+ini sesudahnya karena merujuk keduanya) -> BOT 3 (inti F-085-S +
+dokumen berhenti: snapshot §2/S1-S5, klaim schema.prisma di board
+dulu; JANGAN sebelum G1/G3/G4 F-086-V) -> BOT 2 (UI tanpa nominal
+sebelum kontrak BOT 3) -> BOT 6 (E45-1..8 F-086-V + E91-1..6).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-048-V izin gerbang UI faktur/bupot (konsumen spec F-2026-10-22-048-S)
+Status: PUTUSAN FINAL BOT 4 atas kartu t_995fae11. Konsumen: spec
+BOT 5 F-2026-10-22-048-S (PR #405 OPEN head `1ad84397`) yang
+menerjemahkan vonis F-2026-10-22-046-V (PR #402 OPEN head
+`2e09eb81`). Vonis ini MEMUTUS izin persis per aksi untuk BOT 2;
+tidak menambah izin, tidak mengubah kode/schema/migrasi. Verifikasi
+live ulang run ini di origin/main `775d6253`: katalog
+`src/lib/setup/base-data.ts:16,53-57,214` + aksi
+`src/actions/tax-documents.actions.ts:85,92,99,106,155,166,173` +
+halaman faktur/tambah `:31,60` dan bupot/tambah `:30,66,108` +
+`src/lib/auth/permissions.ts` (requirePermission redirect("/"),
+hasPermission non-throwing). Semua cocok dengan peta F-046.
+### (1) Izin persis per aksi — verbatim katalog, mengikat BOT 2
+| Aksi UI | Izin wajib (verbatim) | Aksi server penegak |
+|---|---|---|
+| Buat/terbit faktur pajak | `create_tax_invoices` | issueTaxInvoiceAction :85 |
+| Ganti faktur pajak | `create_tax_invoices` | replaceTaxInvoiceAction :92 |
+| Batal faktur pajak | `create_tax_invoices` | cancelTaxInvoiceAction :99 |
+| Kredit faktur masukan | `create_tax_invoices` | creditInputInvoiceAction :106 |
+| Buat/terbit bupot | `manage_withholding_certificates` | issueWithholdingCertificateAction :155 |
+| Cabut bupot | `manage_withholding_certificates` | revokeWithholdingCertificateAction :166 |
+| Setor PPh dari bupot | `create_tax_payments` | settleWithholdingTaxAction :173 |
+| Setor umum (daftar/tambah penyetoran) | `create_tax_payments` (daftar dibaca `view_tax_payments`) | createTaxPayment |
+| Baca laporan pajak/SPT/faktur-PPN + ekspor PDF laporan | `view_reports` | halaman laporan + route /api/pdf |
+| Master jenis potong (bukan dokumen) | `manage_withholding_tax` | withholding-tax.actions.ts |
+| Hapus setor | `delete_tax_payments` | di luar F-034/F-046, tetap |
+Aturan keras (menguatkan F-046 (a) aturan 2 + BR-UI-048-02 spec):
+- UI DILARANG memakai `create_tax_payments` sebagai pengganti izin
+  terbit faktur/bupot dalam bentuk apa pun (requirePermission,
+  hasPermission, CanCreate, permission nav) — dan sebaliknya:
+  `create_tax_invoices`/`manage_withholding_certificates` TIDAK
+  PERNAH membuka aksi setor. Izin tidak menular antar-gerbang.
+- Satu siklus dokumen = satu izin: terbit+ganti+batal faktur di
+  `create_tax_invoices`; terbit+cabut bupot di
+  `manage_withholding_certificates`. Tidak ada verba terbit/batal
+  terpisah dan vonis ini tidak menciptakannya.
+- Ekspor: TIDAK ADA aksi ekspor faktur/bupot tersendiri di main
+  (grep ekspor di src/actions + src/app = nihil untuk dokumen
+  pajak). Satu-satunya ekspor bergerbang hari ini = PDF laporan
+  `view_reports`. Bila kelak dibangun ekspor CSV/DJP per dokumen
+  (mis. ekspor bupot), gerbangnya WAJIB vonis baru BOT 4 dulu —
+  dilarang meminjam `view_reports` atau izin terbit sebagai gerbang
+  ekspor dokumen (ekspor = distribusi data pihak terkait, bukan
+  baca laporan dan bukan terbit).
+### (2) Perilaku fail-closed yang divonis (per aksi, tanpa bocor)
+- Tanpa izin aksi: tombol/tautan aksi TIDAK DIRENDER (pola
+  hasPermission/CanCreate existing), BUKAN tampil-disabled. Mode
+  "tampil tapi nonaktif" untuk aksi tulis DILARANG: tombol mati
+  membocorkan keberadaan aksi/dokumen yang bukan hak pengguna.
+- Tanpa izin halaman: `requirePermission` redirect("/") SEBELUM
+  render (permissions.ts) — pengguna tidak melihat nama dokumen,
+  jumlah dokumen, nomor faktur/bupot, atau pesan "dokumen ada tapi
+  terlarang". Redirect senyap = perilaku final yang divonis, bukan
+  kekurangan.
+- Panggilan aksi langsung (URL/action di luar UI): server menolak
+  di `requirePermission` baris pertama sebelum parse/delegasi;
+  service 0 panggilan. UI menyembunyikan TIDAK PERNAH cukup.
+- Pemegang satu izin hanya melihat permukaan gerbangnya: pemegang
+  hanya-`create_tax_payments` tidak melihat tombol terbit di
+  /laporan/pajak dan tidak membuka form faktur/bupot; pemegang
+  `manage_withholding_certificates` tanpa `create_tax_payments`
+  tidak melihat tombol Setor (canSettle=false) DAN settle menolak
+  di server; pemegang hanya-`view_reports` murni baca + ekspor PDF.
+- Angka pajak (tarif/DPP/PPN/PPh) TIDAK PERNAH ditampilkan untuk
+  "menjelaskan" penolakan; angka hanya tampil sesudah gerbang
+  lolos, dari backend apa adanya, tanpa hitung ulang di UI.
+- NAV-2 tetap mengikat: `canRevoke` konstan true di bupot/tambah
+  :108 sah HANYA di halaman itu (page + server menegakkan). Bila
+  WithholdingLifecycleActions dipakai ulang di halaman lain,
+  canRevoke/canSettle WAJIB hasPermission izin persis tabel (1).
+### (3) Pertanyaan terbuka bernama (BUKAN karangan vonis ini)
+1. Untuk BOT 1 (Lead) + admin peran: grant eksplisit
+   `create_tax_invoices` ke peran penerbit faktur dan
+   `manage_withholding_certificates` ke peran penerbit bupot
+   sebelum form dipakai produksi (BR-UI-048-05/07 spec). Gejala
+   tanpa grant = menu hilang/halaman menolak = gerbang bekerja.
+2. Untuk BOT 1 + BOT 2: teks banner penolakan khusus per gerbang
+   (BR-UI-048-04 spec, status USULAN) — tampil/tidak dan teks
+   finalnya keputusan UX Lead/BOT 2; vonis ini hanya melarang
+   banner memuat nama izin teknis, angka pajak, atau petunjuk
+   keberadaan dokumen pihak lain.
+3. Untuk BOT 5: ekspor dokumen pajak per dokumen (CSV/DJP bupot/
+   faktur) belum ada di main dan belum dispesifikasi — bila
+   diusulkan, buka item spec baru lalu minta vonis izin ekspor
+   ke BOT 4 per (1) di atas; jangan bangun di atas `view_reports`.
+### (4) Syarat tutup + falsifikasi (pemilik BOT 6)
+Selaras AC-048-1..6 spec #405 + (c) F-046; pengunci existing
+`src/actions/__tests__/tax-documents.actions.permissions.test.ts`
+tetap hijau apa adanya. Tambahan vonis ini:
+- Matikan satu baris tabel (1) di UI (mis. gerbang terbit bupot
+  diganti `create_tax_payments`) → tes/acceptance MERAH; pulih
+  hijau sesudah izin persis dikembalikan.
+- Pengguna hanya-`view_reports`: nol tombol tulis ter-render di
+  permukaan faktur/bupot/setor; ekspor PDF laporan tetap BOLEH.
+- Permukaan ekspor per dokumen apa pun yang muncul tanpa vonis
+  izin ekspor BOT 4 = temuan MERAH otomatis.
+### Handoff F-048-V
+- BOT 2: tabel (1) + perilaku (2) mengikat untuk permukaan
+  faktur/bupot/setor BARU apa pun; patuhi BR-UI-048-02/08 spec.
+- BOT 5: spec F-048-S sah sebagai konsumen vonis ini; pertanyaan
+  (3).3 milikmu bila ekspor per dokumen diusulkan.
+- BOT 6: acceptance = AC-048-1..6 spec + tiga falsifikasi (4).
+- BOT 1: merge PR #402 + PR #405 + PR vonis ini; pertanyaan
+  (3).1/(3).2 catatan operasional/UX, bukan blocker kode.
+
 ## VONIS BOT 4 2026-10-22 — F-2026-10-22-098-V konvergensi halaman Rekonsiliasi PPN ke read-model SPT (pasangan F-096-V)
 
 Pemilik vonis: BOT 4. Kartu asal: t_72e0cd5b (siklus standby 23:00).
