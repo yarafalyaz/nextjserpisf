@@ -64,6 +64,9 @@ export default async function RemnantPage() {
                 <DetailTableTh>Item</DetailTableTh>
                 <DetailTableTh>Qty</DetailTableTh>
                 <DetailTableTh>Dimensi</DetailTableTh>
+                <DetailTableTh>Ukuran Terukur</DetailTableTh>
+                <DetailTableTh>Sumber Baris Issue</DetailTableTh>
+                <DetailTableTh>Besi Tua (kg)</DetailTableTh>
                 <DetailTableTh>Status</DetailTableTh>
                 <DetailTableTh align="right">Aksi</DetailTableTh>
               </DetailTableHead>
@@ -74,6 +77,13 @@ export default async function RemnantPage() {
                     <DetailTableTd>{r.item.sku} — {r.item.name}</DetailTableTd>
                     <DetailTableTd>{String(r.qty)} {r.uom ?? ""}</DetailTableTd>
                     <DetailTableTd>{r.dimensions ?? "—"}</DetailTableTd>
+                    <DetailTableTd>{r.measuredSize != null ? String(r.measuredSize) : "—"}</DetailTableTd>
+                    <DetailTableTd>
+                      {r.sourceType
+                        ? `${r.sourceType === "material_issue_item" ? "Baris Material Issue" : r.sourceType === "production_order_material" ? "Baris Material Perintah Produksi" : r.sourceType}${r.sourceId != null ? ` #${r.sourceId}` : ""}`
+                        : "—"}
+                    </DetailTableTd>
+                    <DetailTableTd>{r.scrapWeightKg != null ? String(r.scrapWeightKg) : "—"}</DetailTableTd>
                     <DetailTableTd>{r.status}</DetailTableTd>
                     <DetailTableTd align="right">
                       {r.status === "usable" && (
