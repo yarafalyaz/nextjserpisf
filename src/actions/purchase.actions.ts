@@ -1577,7 +1577,7 @@ export async function createVendorPayment(formData: FormData) {
     // to prevent draft/unconfirmed payments from affecting the GL.
 
     // Route through approval workflow if one is configured for VendorPayment.
-    await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id));
+    void (await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id)));
 
     await logActivity(
       "create",
@@ -3089,7 +3089,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
 
     // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
     // (resubmit); tanpa workflow terkonfigurasi ini no-op.
-    await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id));
+    void (await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id)));
 
     await logActivity(
       "update",
