@@ -21111,3 +21111,120 @@ ID vonis ini **F-2026-10-22-082-V** (turunan Q-TP-1 spec
 F-2026-10-22-081-S PR #528; induk F-2026-10-21-015). Pemilik
 berikutnya: BOT 1 (Q-TP-5/4) -> BOT 3 (inti Q-TP-2/3 dengan
 V-T1..V-T5) -> BOT 2 (tampil tanggal kejadian) -> BOT 6 §6.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-078-V: persetujuan kode akun beban scrap abnormal 510105 + syarat flip flag jurnal P2(b) (gerbang inti F-2026-10-21-008 / F-2026-10-22-071-S)
+
+Pemutus: BOT 4 (accounting-finance-tax). Kartu: t_f603e56b
+(buffer kondektur sesudah F-077-V PR #521). Tertulis saja —
+tanpa kode/schema/migrasi dari BOT 4. Vonis ini menjawab satu-
+satunya gerbang BOT 4 yang masih terbuka dan terbukti live:
+kartu inti BOT 3 t_38dfd895 mewajibkan "kode akun keluarga 5101
+disetujui BOT 4" SEBELUM migrasi, dan vonis F-2026-10-22-066-V
+P2(b) sengaja TIDAK menetapkan nomor akun ("Seed COA akun baru
+= keputusan BOT 3 mengusulkan kode di keluarga 5101 ke BOT 4/
+Lead sebelum migrasi"). Q-SC-5 (deductibility fiskal, PR #512)
+BUKAN vonis ini: ia kondisional "hanya bila kasus nyata muncul"
+dan tetap BUTUH-VONIS-AKUNTAN per kasus (§3 di bawah).
+
+### 0. Bukti live (origin/main 209e89e1, 2026-10-22)
+
+- COA seed `src/lib/setup/base-data.ts:803,866-876`: induk
+  `5101` Beban Pokok Penjualan (COGS); anak terpakai: `510102`
+  Beban Material, `510103` Penyesuaian Persediaan (terlarang
+  untuk garansi), `510104` Beban Garansi, `210205` Provisi
+  Garansi, `210206` Utang PPh 4(2) Sewa, `110508` Piutang Klaim
+  Supplier. Kode `510105` TIDAK terpakai di COA (grep hanya
+  data alamat) → bebas, tidak tabrakan.
+- `SystemSetting` (schema.prisma:222-223, 246-252): TIDAK ada
+  kolom `abnormalScrapExpenseAccountId`; pola mapping fail-
+  closed nullable sudah baku (garansi F-021, `productionVariance
+  AccountId` F-006 `standardCostingEnabled` default false).
+- Pola migrasi akun instalasi berjalan sudah terbukti:
+  `prisma/migrations/20261022030000_warranty_journal_mapping/
+  migration.sql` menyisipkan akun COA idempoten per kode unik
+  hanya bila induk tersedia; instalasi baru dari CHART_OF_
+  ACCOUNTS. Pola sama WAJIB dipakai BOT 3 untuk 510105.
+- Gerbang flip di kartu t_38dfd895 (PUTUSAN Lead): flag OFF =
+  catat-dulu (nol jurnal P2(b), complete tidak ditolak, scrap
+  abnormal = temuan laporan S8); flag ON = P2(b) penuh fail-
+  closed. Kartu itu `todo` menunggu t_260d7a7f (merge PR #504
+  — SUDAH MERGED 2026-10-22T05:22:42Z, live terverifikasi run
+  ini) → gerbang akun ini satu-satunya sisa prasyarat BOT 4.
+
+### 1. Putusan (mengikat)
+
+A1. Kode DISETUJUI: `510105` — nama persis "Beban Kerugian
+    Produksi Abnormal", type EXPENSE, report_group COGS,
+    induk `5101`. Alasan klasifikasi: kerugian scrap abnormal
+    adalah biaya produksi periode berjalan (PSAK 14 par. 16(a)
+    jo vonis 066-V P2), satu keluarga dengan `510104` Beban
+    Garansi di COGS — BUKAN beban operasional 6000xx (sifatnya
+    melekat proses produksi, bukan administrasi) dan DILARANG
+    memakai `510103` Penyesuaian Persediaan (penyesuaian stok
+    ≠ kerugian produksi; reuse mengaburkan rekonsiliasi S8)
+    atau `510102` Beban Material (itu jalur issue normal).
+A2. Mapping setting: kolom baru `abnormalScrapExpenseAccountId`
+    nullable TANPA default tebak di `SystemSetting`; jurnal
+    P2(b) membaca kolom ini saja. Akun nonaktif/kosong saat
+    flag ON + ada scrap abnormal → complete DITOLAK berisik
+    (mempertegas 066-V P2(b)/S4; flag OFF tidak terpengaruh).
+    Automap nama ("kerugian", "produksi", "abnormal") BOLEH
+    sebagai saran wizard pola `account-automap.ts:176`, DILARANG
+    jadi fallback posting diam-diam.
+A3. Seed dua jalur (pola migrasi garansi, wajib keduanya):
+    (i) baris CHART_OF_ACCOUNTS instalasi baru; (ii) migrasi
+    INSERT idempoten instalasi berjalan (NOT EXISTS per kode,
+    JOIN induk 5101; induk absen = lewati diam-diam di migrasi,
+    kegagalan muncul saat posting fail-closed, bukan saat
+    migrasi). Dilarang UPDATE/rename akun existing.
+A4. Syarat flip flag jurnal (nama flag fisik milik BOT 3,
+    pola gerbang mati F-006, default OFF) — flip hanya oleh
+    Lead sesudah SEMUA terbukti: (1) 510105 terseed + mapping
+    A2 terisi akun AKTIF; (2) allowance BOM item aktif sudah
+    terkalibrasi untuk item yang discrap (066-V P1: allowance
+    0 = abnormal penuh — flip tanpa kalibrasi = gelombang
+    beban abnormal palsu); (3) BOT 6 S1-S9 vonis 066-V hijau
+    di head inti persis; (4) flip eksplisit Lead tercatat di
+    board. Baris issue completed SEBELUM flip TIDAK dijurnal
+    mundur (konsisten usulan Q-SC-1 PR #512; hanya baris yang
+    complete sesudah flag aktif).
+A5. Perlakuan pajak TIDAK berubah oleh akun ini: jurnal P2(b)
+    murni akuntansi PSAK 14. Deductibility fiskal kerugian
+    scrap abnormal = uji Pasal 6 ayat (1) UU PPh (biaya 3M:
+    mendapatkan, menagih, memelihara penghasilan) per kasus
+    dokumen nyata — BUKAN aturan sistem, TIDAK diputus vonis
+    ini (Q-SC-5 tetap terbuka kondisional, label
+    BUTUH-VONIS-AKUNTAN bila kasus/sengketa nyata muncul).
+    Dasar: UU No. 7/1983 tentang PPh sebagaimana diubah
+    terakhir UU No. 6/2023, Pasal 6 ayat (1) dan Pasal 9 —
+    sumber resmi: https://peraturan.go.id/ (diakses
+    2026-10-22). Klaim terbatas pada rujukan pasal; bukan
+    klaim kepatuhan SPT.
+
+### 2. Batas build
+
+- BOT 3 (t_38dfd895, sesudah klaim schema di board): usulan
+  nama flag + referenceType P2(b) disampaikan ke Lead/BOT 4
+  di komentar kartu itu SEBELUM migrasi (perintah kartu tetap
+  berlaku); migrasi akun pola A3; penjaga A2/A4 di tx complete
+  issue yang sama dengan 066-V P2/P4. TIDAK ada perubahan
+  rumus 066-V oleh vonis ini.
+- BOT 2: tidak ada pekerjaan dari vonis ini (status kalibrasi
+  + temuan S8 sudah cakupan 066-V P5).
+- BOT 6: tambah falsifikasi F8-1..3 di bawah ke S1-S9.
+
+### 3. Acceptance tambahan (BOT 6 — MERAH bila penjaga dicabut)
+
+- F8-1: migrasi dijalankan dua kali → tepat satu baris 510105;
+  cabut NOT EXISTS → baris kedua/duplikat MERAH.
+- F8-2: flag ON + mapping menunjuk akun NONAKTIF + scrap
+  abnormal → complete ditolak, nol jurnal parsial (perluasan
+  S4 ke akun nonaktif).
+- F8-3: flip flag ON lalu complete baris issue yang completed
+  SEBELUM flip → nol jurnal P2(b) mundur; jurnal hanya untuk
+  complete sesudah flip.
+
+ID vonis ini **F-2026-10-22-078-V** (078 bebas: maks -V terbit
+077-V PR #521; 063-S..077-S/-V terverifikasi backlog+PR live).
+Pemilik berikutnya: BOT 1 (merge vonis ini + flip flag A4) →
+BOT 3 t_38dfd895 (inti scrap) → BOT 6 (S1-S9 + F8-1..3).
