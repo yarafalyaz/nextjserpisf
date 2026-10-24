@@ -34,6 +34,13 @@ import {
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInstalledPartsForMaterialIssue } from "@/lib/services/installed-part.service";
 import { validateScrapInput } from "@/lib/services/scrap-classification";
+import {
+  SCRAP_REVIEW_STATUS_DONE,
+  SCRAP_REVIEW_STATUS_PENDING,
+  validateScrapReview,
+  validateScrapWeightKg,
+  validateUsableRemnant,
+} from "@/lib/services/scrap-physical";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
@@ -2641,7 +2648,10 @@ export async function createRemnant(formData: FormData) {
     if (qty === null || qty <= 0) throw new Error("Qty sisa harus > 0");
     await assertWarehouseIdInScope(user, warehouseId);
     const [item, warehouse] = await Promise.all([
-      prisma.item.findUnique({ where: { id: itemId }, select: { id: true } }),
+      prisma.item.findUnique({
+        where: { id: itemId },
+        select: { id: true, category: { select: { remnantMinMeasure: true } } },
+      }),
       prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } }),
     ]);
     if (!item) throw new Error("Barang tidak ditemukan");
@@ -2657,6 +2667,24 @@ export async function createRemnant(formData: FormData) {
       const s = ((v as string | null) ?? "").trim().slice(0, n);
       return s || null;
     };
+    // F-098-S BR-SCRAP-03/04/05: usable wajib dimensi+ukuran+tautan issue dan
+    // lolos ambang kategori (snapshot dibekukan; null = belum ditetapkan).
+    const dimensions = cap(formData.get("dimensions"), 255);
+    const sourceType = cap(formData.get("sourceType"), 64);
+    const measuredRaw = formData.get("measuredSize");
+    const measuredSize = measuredRaw ? parseStrictQty(measuredRaw) : null;
+    const minMeasureSnapshot =
+      (item as { category?: { remnantMinMeasure?: unknown } | null }).category?.remnantMinMeasure != null
+        ? Number((item as { category?: { remnantMinMeasure?: unknown } | null }).category?.remnantMinMeasure)
+        : null;
+    const usableError = validateUsableRemnant({
+      dimensions,
+      measuredSize,
+      minMeasureSnapshot,
+      sourceType,
+      sourceId,
+    });
+    if (usableError) throw new Error(usableError);
     const documentNo = await generateDocumentNumber("RMN");
     const remnant = await prisma.remnant.create({
       data: {
@@ -2665,11 +2693,13 @@ export async function createRemnant(formData: FormData) {
         warehouseId,
         qty,
         uom: cap(formData.get("uom"), 32),
-        dimensions: cap(formData.get("dimensions"), 255),
-        sourceType: cap(formData.get("sourceType"), 64),
+        dimensions,
+        sourceType,
         sourceId,
         unitCost: unitCostRaw,
         status: "usable",
+        remnantMinMeasureSnapshot: minMeasureSnapshot,
+        measuredSize,
         createdBy: Number(user.id),
       },
     });
@@ -2712,7 +2742,7 @@ export async function consumeRemnant(id: number, formData: FormData) {
   }
 }
 
-/** Tandai remnant sebagai scrap (alasan wajib — scrap bukan stok usable). */
+/** Tandai remnant sebagai scrap (alasan + berat kg besi tua wajib — F-098-S AC-SCRAP-7). */
 export async function scrapRemnant(id: number, formData: FormData) {
   try {
     const user = await requirePermission("create_material_issues");
@@ -2721,9 +2751,13 @@ export async function scrapRemnant(id: number, formData: FormData) {
     await assertWarehouseIdInScope(user, remnant.warehouseId);
     const reason = ((formData.get("scrapReason") as string | null) ?? "").trim();
     if (!reason) throw new Error("Alasan scrap wajib diisi");
+    const weightRaw = formData.get("scrapWeightKg");
+    const scrapWeightKg = weightRaw ? parseStrictQty(weightRaw) : null;
+    const weightError = validateScrapWeightKg(scrapWeightKg);
+    if (weightError) throw new Error(weightError);
     const updated = await prisma.remnant.updateMany({
       where: { id, status: "usable" },
-      data: { status: "scrap", scrapReason: reason.slice(0, 500) },
+      data: { status: "scrap", scrapReason: reason.slice(0, 500), scrapWeightKg },
     });
     if (updated.count === 0) {
       const cur = await prisma.remnant.findUnique({ where: { id }, select: { status: true } });
@@ -2737,6 +2771,54 @@ export async function scrapRemnant(id: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[scrapRemnant]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Disposisi tinjau foreman atas scrap abnormal (F-2026-10-24-098-S D-S98-04).
+ * Izin default-aman spec: reuse `complete_work_orders` (key khusus
+ * approve_scrap_reviews belum diputus LEAD). Tinjau operasional saja —
+ * updateMany dibatasi kolom tinjau; snapshot klasifikasi/nilai/jurnal
+ * 066-V tidak disentuh (BR-SCRAP-08, AC-SCRAP-6).
+ */
+export async function reviewAbnormalScrap(input: {
+  source: "MI" | "PO";
+  lineId: number;
+  disposition: string;
+  note?: string | null;
+}) {
+  try {
+    const user = await requirePermission("complete_work_orders");
+    const reviewError = validateScrapReview({ disposition: input.disposition, note: input.note });
+    if (reviewError) throw new Error(reviewError);
+    if (!Number.isSafeInteger(input.lineId) || input.lineId <= 0) throw new Error("Baris scrap tidak valid");
+    const data = {
+      scrapReviewStatus: SCRAP_REVIEW_STATUS_DONE,
+      scrapReviewDisposition: input.disposition,
+      scrapReviewNote: input.disposition === "kelalaian" ? (input.note ?? "").trim().slice(0, 500) : ((input.note ?? "").trim().slice(0, 500) || null),
+      scrapReviewedBy: Number(user.id),
+      scrapReviewedAt: new Date(),
+    };
+    const updated =
+      input.source === "MI"
+        ? await prisma.materialIssueItem.updateMany({
+            where: { id: input.lineId, scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING },
+            data,
+          })
+        : await prisma.productionOrderMaterial.updateMany({
+            where: { id: input.lineId, scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING },
+            data,
+          });
+    if (updated.count === 0) {
+      throw new Error("Baris scrap tidak ditemukan atau tidak sedang menunggu tinjau");
+    }
+    await logActivity("update", input.source === "MI" ? "MaterialIssueItem" : "ProductionOrderMaterial", input.lineId, `Tinjau scrap abnormal: ${input.disposition}`);
+    revalidatePath("/laporan/scrap-material");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reviewAbnormalScrap]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
