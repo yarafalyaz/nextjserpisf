@@ -5,6 +5,7 @@ import { NextRequest } from "next/server"
 const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn(),
   readBackupFile: vi.fn(),
+  isValidBackupName: vi.fn(),
   logActivity: vi.fn(),
 }))
 
@@ -22,6 +23,7 @@ vi.mock("@/lib/auth/permissions", () => ({
 
 vi.mock("@/lib/db/backup", () => ({
   readBackupFile: (...a: unknown[]) => mocks.readBackupFile(...a),
+  isValidBackupName: (...a: unknown[]) => mocks.isValidBackupName(...a),
 }))
 
 vi.mock("@/lib/services/activity-log.service", () => ({
@@ -33,6 +35,9 @@ vi.spyOn(console, "error").mockImplementation(() => {})
 describe("GET /api/backup/download", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default: nama lolos allowlist (perilaku modul nyata untuk nama sah);
+    // tes penolakan meng-override per kasus.
+    mocks.isValidBackupName.mockReturnValue(true)
   })
 
   it("returns 403 when user lacks manage_settings", async () => {
@@ -59,6 +64,17 @@ describe("GET /api/backup/download", () => {
     expect(res.status).toBe(400)
   })
 
+  it.each(["dump.sql", "backup-evil.sh"])(
+    "returns 400 when filename %s is not an allowlisted backup name",
+    async (file) => {
+      mocks.hasPermission.mockResolvedValue(true)
+      mocks.isValidBackupName.mockReturnValue(false)
+      const res = await GET(new NextRequest(`http://localhost/api/backup/download?file=${file}`))
+      expect(res.status).toBe(400)
+      expect(mocks.readBackupFile).not.toHaveBeenCalled()
+    },
+  )
+
   it("returns 200 with file stream and audit log on success", async () => {
     mocks.hasPermission.mockResolvedValue(true)
     mocks.readBackupFile.mockResolvedValue({ path: "/tmp/backup-2026-06-12.sql", size: 1024 })
@@ -81,10 +97,17 @@ describe("GET /api/backup/download", () => {
     expect(res.status).toBe(200)
   })
 
-  it("returns 500 when readBackupFile throws", async () => {
+  it("returns 404 when allowlisted backup file is missing", async () => {
     mocks.hasPermission.mockResolvedValue(true)
-    mocks.readBackupFile.mockRejectedValue(new Error("not found"))
-    const res = await GET(new NextRequest("http://localhost/api/backup/download?file=missing.sql"))
+    mocks.readBackupFile.mockRejectedValue(new Error("File backup tidak ditemukan"))
+    const res = await GET(new NextRequest("http://localhost/api/backup/download?file=backup-2026-06-12.sql"))
+    expect(res.status).toBe(404)
+  })
+
+  it("returns 500 on unexpected read failure", async () => {
+    mocks.hasPermission.mockResolvedValue(true)
+    mocks.readBackupFile.mockRejectedValue(new Error("disk I/O failure"))
+    const res = await GET(new NextRequest("http://localhost/api/backup/download?file=backup-2026-06-12.sql"))
     expect(res.status).toBe(500)
   })
 })
