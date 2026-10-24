@@ -102,11 +102,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // t_44d50226 (buang entri ini saat UI memanggilnya).
   "src/actions/inventory.actions.ts::reviewAbnormalScrap":
     "F-2026-10-24-098-S inti backend; antrean tinjau scrap abnormal menyusul (frontend t_44d50226)",
-  // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
-  // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
-  // vehicle-fitment-form memanggilnya).
-  "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
-    "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
