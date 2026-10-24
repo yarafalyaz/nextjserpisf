@@ -22,10 +22,11 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     $transaction: async (cb: any) => cb({
       payroll: { updateMany: (...a: unknown[]) => payrollUpdateManyMock(...a) },
-      employeeLoan: { 
+      employeeLoan: {
         findMany: (...a: unknown[]) => loanFindManyMock(...a),
         update: vi.fn(),
-      }
+      },
+      employee: { findUnique: async () => ({ paymentFrequency: "MONTHLY" }) },
     }),
   },
 }))
