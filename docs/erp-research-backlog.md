@@ -13243,3 +13243,285 @@ lampiran saat posting — bukti hilang = E3 menolak).
   kanal keluar tidak ada; pencatatan manual berjejak cukup.
 - Status `paid/lunas` di klaim supplier: penyelesaian piutang =
   dokumen pembayaran existing + vonis BOT 4 (BR-SUPP-12).
+
+---
+
+## SPEC BOT 5 2026-10-24 — F-2026-10-24-096-S alur dokumentasi foto progres kendaraan & inspeksi WO per tahap (PRD VEH-02A/FAB-13, induk P1-1(g) 2026-10-20)
+
+Kartu t_74beb0ba. Spec DOKUMEN SAJA, tanpa kode produksi/schema/migrasi.
+Anti-duplikat run ini (basis origin/main f627b52b): grep `F-2026-10-24-096`
+di backlog+board main = 0 hasil; `-S` tertinggi terbit di main =
+F-2026-10-22-094-S; F-2026-10-24-095-S di PR #693 terbuka (bukan main).
+Induk gap: P1-1(g) backlog 2026-10-20 baris "Foto/dokumentasi progres per
+kendaraan tidak terstruktur" + PRD `docs/prd-erp-fabrikasi-offroad.md`
+VEH-02A (:126), FAB-13 (:462), INT-04C (:859). Temuan utama run ini:
+sebagian usul P1-1(g) SUDAH live (lampiran WO + gate intake QC), tetapi
+pengaitan foto per tahap + kategori foto + publikasi pelanggan BELUM
+ada kolom/tipe referensinya — spec ini membekukan kontraknya supaya
+BOT Backend tidak mengarang skema dan BOT Frontend tidak mengarang
+label tahap. Dilarang membuat tabel foto baru.
+
+### 0. Rekonsiliasi ruang lingkup kartu vs kode live
+
+| Klaim/istilah kartu | Fakta kode live (TERVERIFIKASI-KODE) |
+|---|---|
+| "TransactionAttachment sudah ada (referenceType, referenceId, fileUrl, mimeType)" | Benar: `prisma/schema.prisma:4847-4862` — kolom hanya id/referenceType/referenceId/filename/originalName/fileUrl/fileSize/mimeType/uploadedBy/createdAt. TIDAK ada kolom tahap, kategori, keterangan, status verifikasi, atau visibilitas pelanggan. |
+| "pakai referenceType=CustomerVehicle, WorkOrder, ProjectStage" | TIDAK bisa hari ini: whitelist unggah/list `src/app/api/upload/attachments/route.ts:128-137,220-229` hanya memuat `work_order` dan `project` (snake_case); `customer_vehicle`, `project_stage`, `qc_inspection`, `work_order_operation` ABSEN. Peta izin `src/lib/auth/attachment-permission-maps.ts:28-29,53-54` hanya memetakan `work_order`->view/edit_work_orders dan `project`->view/edit_projects. `WorkOrder` kapital adalah kosakata QcInspection.referenceType, BUKAN kosakata lampiran — mencampur keduanya = bug IDOR/404 senyap. |
+| "render TransactionAttachments di detail WO" (usul P1-1(g)) | SUDAH live: `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:756` `referenceType="work_order"`. Jangan dibangun ulang. |
+| "checklist inspeksi awal/akhir tinggal seed incoming/final" (usul P1-1(g)) | Sebagian usang: tipe live adalah `vehicle_intake`/`vehicle_handover`/`final`, bukan incoming generik — `QC_INSPECTION_TYPES` (`src/lib/services/qc.service.ts:8`), form QC `qc-inspection-form.tsx:43-44`. Seed checklist per jenis pekerjaan tetap urusan data/master, bukan spec ini. |
+| "foto per tahap WO/ProjectStage" | Dua lapis tahap berbeda dan TIDAK boleh disamakan: (a) proyek: `ProjectStage`+`ProjectStageProgress` (`schema.prisma:4597-4634`, progres persen+catatan saja); (b) WO tanpa proyek: `WorkOrderOperation` (rute/stasiun, dibaca `getWorkOrderProgress` `src/lib/reports/work-order-progress-data.ts:9-41`). Foto tahap proyek menempel ke ProjectStage; foto operasi WO menempel ke WorkOrderOperation. Satu foto TIDAK ditempel ke dua-duanya. |
+| "pelanggan (tampilan read-model)" | Portal pelanggan INT-04C BELUM ada di repo (grep portal/published/customerVisible di origin/main = 0 hasil relevan). Spec ini hanya membekukan kontrak read-model + status publikasi; portalnya sendiri tetap P2 di luar spec (backlog 2026-10-20: "portal pelanggan, e-sign — P2"). DILARANG mengklaim foto bisa dilihat pelanggan dari spec ini. |
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main f627b52b, 2026-10-24)
+
+Sudah ada (kuat, JANGAN diduplikasi):
+- Lampiran generik: model di atas; unggah `POST /api/upload/attachments`
+  (validasi MIME allowlist + signature biner + batas 50MB server,
+  route.ts:56-145), list `GET` (route.ts:214-280, take 200, select
+  terbatas), sajian berkas terotentikasi `src/app/api/attachments/
+  [...path]/route.ts` (cek `canAccessAttachment`, CSP sandbox), hapus
+  dua fase `deleteTransactionAttachmentsTx`/`removeAttachmentFiles`
+  (`src/lib/services/transaction-attachment.service.ts`), klaim pending
+  `attachPendingTransactionAttachments` (referenceId=0 -> id dokumen).
+- Penjagaan izin lampiran fail-closed: `canAccessAttachment`/
+  `canModifyAttachment` (`src/lib/auth/attachment-permissions.ts`);
+  tipe tak dikenal = ditolak; model Prisma dipetakan eksplisit
+  (`ATTACHMENT_MODEL`). Komponen `TransactionAttachments`
+  (`src/components/ui/transaction-attachments.tsx`) menyembunyikan
+  tombol unggah/hapus tanpa izin tulis; klien membatasi 10MB (server
+  50MB — beda batas ini fakta live, bukan aturan spec).
+- Gate QC kendaraan live: mulai WO kendaraan wajib inspeksi
+  `vehicle_intake` tercatat (`assertWorkOrderVehicleIntakeRecorded`,
+  qc.service.ts:42-61, dipanggil manufacturing.actions.ts:1531);
+  selesai WO digerbang `assertWorkOrderQcCleared` (NCR terbuka +
+  inspeksi `final` terakhir harus passed, qc.service.ts:25,76-105);
+  detail WO menampilkan status intake + handover (page.tsx:161-180)
+  dan tautan buat inspeksi prefill (page.tsx:324,422,441).
+  `vehicle_handover` saat ini display-only, TIDAK dibaca gate backend
+  mana pun (komentar page.tsx:169-172) — fakta, bukan celah baru.
+- Inspeksi lahir langsung berstatus passed/failed dari hasil checklist
+  (`createQcInspection`, qc.actions.ts:232-335): required item wajib
+  dinilai, checklist wajib released + jenis cocok, referensi wajib ada,
+  fail -> NCR otomatis se-transaksi. Izin: `manage_qc_inspections`.
+- Progres tahap proyek: `updateProjectStageProgress` (project.actions
+  .ts:250) — izin edit_projects, urutan tahap dijaga (tahap sebelum
+  wajib completed/skipped), status+progress+sync proyek/WO se-transaksi.
+- Halaman kendaraan pelanggan: `master/pelanggan/[slug]/kendaraan/
+  [vehicleSlug]/page.tsx` (izin view_customers) — riwayat WO/proyek/
+  garansi/part terpasang sudah tampil; panel foto BELUM ada.
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN tipe lampiran `customer_vehicle`/`project_stage`/
+  `qc_inspection`/`work_order_operation` di whitelist route, peta izin,
+  dan `ATTACHMENT_MODEL` (grep ketiganya = hanya work_order/project).
+- ABSEN kolom kategori/tahap/verifikasi/publikasi di
+  TransactionAttachment (schema:4847-4862 dibaca utuh). Akibatnya foto
+  intake, foto progres tahap, foto cacat awal, dan foto serah terima
+  yang sama-sama menempel ke WO tidak bisa dibedakan mesin — hanya
+  bisa ditebak dari nama berkas. Ini inti gap F-096-S.
+- ABSEN penanda foto terverifikasi QC/foreman dan foto terbit ke
+  pelanggan (PRD INT-04C: foto dipublikasikan harus disaring/disetejui
+  kepala bengkel, setiap publikasi tercatat penyetujunya). Tanpa kolom
+  ini, portal masa depan tidak punya sumber kebenaran "foto mana yang
+  boleh tayang".
+- PARSIAL: lampiran menempel ke `project` (id proyek) sudah bisa, tapi
+  tidak bisa menunjuk tahap proyek tertentu; halaman proyek dan halaman
+  kendaraan pelanggan belum merender panel lampiran per tahap (grep
+  TransactionAttachments di src/app/(dashboard)/proyek/** = 0).
+- BELUM TERVERIFIKASI run ini: apakah seed master QcChecklist jenis
+  vehicle_intake/vehicle_handover sudah terisi di DB produksi (dulu
+  dicatat seed master = 0 di board 2026-10-20). Status data, bukan
+  kode; jangan klaim dari spec ini.
+
+### 2. Workflow specification (alur + aktor + dokumen masuk/keluar)
+
+Aktor: SA = service advisor/admin bengkel; MK = mekanik/staf bengkel
+pelaksana; QC = pemeriksa QC/foreman (pemegang manage_qc_inspections);
+KB = kepala bengkel (penyetuju publikasi + pelepasan unit);
+PLG = pelanggan (kelak, read-only lewat portal INT-04C).
+
+Tahap foto (kosakata kategori di BR-PHOTO-02):
+1. Intake / check-in (VEH-02A): SA/MK buat inspeksi `vehicle_intake`
+   tertaut WorkOrder; foto kondisi awal (kategori `intake`) diunggah
+   menempel ke inspeksi itu; cacat awal per butir checklist tercatat di
+   QcInspectionResult + foto cacat menempel ke inspeksi yang sama.
+   Dokumen keluar: inspeksi intake tercatat = syarat gate mulai WO.
+2. Per tahap pengerjaan: MK unggah foto progres (kategori `progress`)
+   menempel ke ProjectStage (bila job berproyek) ATAU
+   WorkOrderOperation (bila WO langsung); unggah foto TIDAK mengubah
+   persen/status tahap — persen tetap lewat updateProjectStageProgress
+   / status operasi existing. Foto bukan bukti persen.
+3. Temuan/cacat tengah pekerjaan: foto kategori `defect` menempel ke
+   inspeksi `in_process`/`final` yang melahirkannya atau ke NCR;
+   status mutu tetap diputus hasil checklist + NCR existing, bukan foto.
+4. Serah terima (FAB-13): QC jalankan inspeksi `final` +
+   `vehicle_handover`; foto hasil akhir kategori `handover` menempel
+   ke inspeksi handover; perbandingan awal-vs-akhir dibaca dari
+   pasangan inspeksi intake vs handover pada WO yang sama.
+5. Publikasi pelanggan (kelak INT-04C): KB menandai foto
+   intake/progress/handover terpilih sebagai terbit; read-model
+   pelanggan hanya membaca foto bertanda terbit milik kendaraannya.
+   Sampai portal ada, penandaan ini hanya tampil internal sebagai
+   status "siap terbit" — bukan klaim pelanggan sudah bisa melihat.
+
+Dokumen masuk: berkas JPG/PNG/WebP/GIF/PDF lewat endpoint existing.
+Dokumen keluar: daftar foto terkelompok tahap+kategori per WO/kendaraan,
+pasangan before/after per WO, daftar foto siap-terbit. Nol jurnal,
+nol dokumen finansial baru dari spec ini.
+
+### 3. Keputusan fisik yang diminta ke BOT Backend (BUTUH-VONIS teknis)
+
+Spec ini sengaja TIDAK memilih skema; tiga opsi dicatat dengan
+rekomendasi, keputusan milik BOT Backend + BOT Lead (satu kartu inti,
+bukan dua jalur paralel):
+- Opsi A (USULAN, direkomendasikan): tambah kolom aditif nullable di
+  TransactionAttachment: `photoCategory` (intake|progress|defect|
+  handover|other), `verifiedBy/verifiedAt`, `publishedAt/publishedBy`.
+  Tahap ditunjuk oleh referenceType+referenceId yang menempel
+  (project_stage/work_order_operation/qc_inspection), jadi kolom
+  tahap terpisah tidak perlu. Migrasi aditif, baris lama nullable =
+  kategori `other`/belum terverifikasi/belum terbit (fail-closed).
+- Opsi B: tabel pasangan baru (attachmentId, stageType, stageId,
+  kategori, ...) — DITOLAK spec ini: menggandakan sumber kebenaran
+  lampiran dan memecah jalur hapus dua fase existing.
+- Opsi C: tanpa kolom, kategori dari awalan originalName — DITOLAK:
+  nama berkas kiriman klien bukan data terpercaya dan tidak bisa
+  digerbang server.
+Yang WAJIB apa pun opsinya: (i) referenceType baru masuk whitelist
+route + ATTACHMENT_MODEL + peta izin di PR yang sama; (ii) foto
+qc_inspection digerbang izin QC, bukan izin WO generik buta — pemetaan
+persisnya (mis. baca=view_qc, tulis=manage_qc_inspections) diputus
+BOT Backend mengikuti pola peta existing; (iii) tidak ada FK Prisma
+baru dari TransactionAttachment ke tahap (pola polimorfik existing
+dipertahankan; eksistensi referensi divalidasi aksi, pola
+assertQcReferenceExists).
+
+### 4. Role/permission matrix (permission key nyata katalog)
+
+Key nyata: view_work_orders/edit_work_orders/complete_work_orders,
+view_projects/edit_projects, view_qc/manage_qc_inspections/
+manage_qc_checklists/manage_nonconformances, view_customers
+(module-catalog.generated.ts:254-266,389-394; base-data.ts ROLES:
+super_admin, admin, staff, ga, kepala_bengkel, karyawan, purchasing,
+warehouse, finance). Role->izin persis adalah data seed peran, bukan
+dijanjikan spec ini; matriks di bawah = izin yang DITUNTUT aksi.
+
+| Aksi | Izin dituntut | Aktor lazim | Catatan |
+|---|---|---|---|
+| Lihat foto WO/tahap (internal) | view_work_orders / view_projects sesuai referensi | SA, MK, QC, KB | lewat canAccessAttachment; tipe tak dikenal ditolak |
+| Unggah/hapus foto progres tahap | edit_work_orders / edit_projects sesuai referensi | MK, SA | foto pending referenceId=0 hanya pemilik unggah |
+| Unggah foto intake/handover/defect | manage_qc_inspections (usulan pemetaan §3) | MK unggah, QC pemilik inspeksi | inspeksi sendiri tetap aksi QC existing |
+| Verifikasi foto (verifiedBy) | manage_qc_inspections | QC/foreman | pemisahan: pengunggah != pewajib verifikasi bila KB menuntut (BUTUH-VONIS BOT Lead, BR-PHOTO-06) |
+| Tandai foto siap terbit/terbit | complete_work_orders (usulan) atau manage_qc_inspections — satu dipilih BOT Lead | KB | INT-04C: publikasi di bawah kendali KB/admin; jejak publishedBy wajib |
+| Buat/jalankan inspeksi intake/final/handover | manage_qc_inspections | QC | existing, tidak berubah |
+| Selesaikan WO / serah terima | complete_work_orders + gate QC existing | KB/SA | gate tidak diubah spec ini |
+| Lihat foto terbit (pelanggan) | (portal) grant per kendaraan, BUKAN permission staf | PLG | hanya publishedAt terisi + kendaraan milik grant; biaya/margin/foto internal tidak pernah ikut |
+
+Dilarang: permission key baru (mis. upload_photos) tanpa putusan
+BOT Lead; foto kendaraan tidak boleh bisa dibaca hanya karena login
+(IDOR lampiran sudah ditutup pola existing — jangan dibuka lagi).
+
+### 5. Status-transition matrix
+
+Foto bukan dokumen berstatus sendiri di kode live; transisi di bawah
+adalah transisi DOKUMEN INDUK + keadaan foto sebagai syarat/jejak.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| WO kendaraan draft, intake belum ada | inspeksi vehicle_intake tercatat | intake tercatat (foto intake menempel ke inspeksi) | createQcInspection manage_qc_inspections; gate mulai assertWorkOrderVehicleIntakeRecorded |
+| WO belum mulai | mulai pekerjaan | in_progress | gate intake di atas (WO tanpa kendaraan: tidak berlaku) |
+| Tahap pending | progres pertama | in_progress (+foto progress boleh menempel) | updateProjectStageProgress edit_projects; urutan tahap dijaga server |
+| Tahap in_progress | progres 100% | completed | persen dari aksi progres, BUKAN dari jumlah foto |
+| Inspeksi dibuat | hasil dinilai | passed / failed (langsung final) | required item wajib; fail -> NCR otomatis se-tx |
+| Foto terunggah | verifikasi QC | terverifikasi (verifiedBy/At terisi) | manage_qc_inspections (USULAN §3) |
+| Foto terverifikasi | tandai terbit KB | siap terbit/terbit (publishedBy/At) | izin §4; hanya kategori intake/progress/handover |
+| Semua tahap selesai + final passed + NCR tertutup | serah terima | WO completed + inspeksi vehicle_handover tercatat | assertWorkOrderQcCleared existing; handover tetap display-only sampai BOT Lead memutus menjadikannya gate |
+
+Tidak ada transisi hapus foto yang mengubah status dokumen induk;
+hapus lampiran mengikuti jalur hapus dua fase existing dan tidak
+boleh menghapus satu-satunya bukti foto pada inspeksi yang sudah
+dipakai gate tanpa jejak audit (BR-PHOTO-07).
+
+### 6. Business rules register (BR-PHOTO-01..10)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PHOTO-01 | Foto menempel ke SATU induk sah saja: qc_inspection (intake/handover/defect mutu), project_stage atau work_order_operation (progress), work_order/customer_vehicle (umum). Dilarang menempel ke dua induk atau menebak kendaraan dari plat teks. | USULAN (pola referensi TERVERIFIKASI-KODE: qc.service assertQcReferenceExists) |
+| BR-PHOTO-02 | Kategori foto tertutup: intake, progress, defect, handover, other. Kategori bebas teks dari klien DILARANG. Baris lama tanpa kategori dibaca `other`, tidak ditebak ulang dari nama berkas. | USULAN (kolom belum ada, §3) |
+| BR-PHOTO-03 | Gate mulai WO kendaraan tetap kehadiran inspeksi vehicle_intake, BUKAN jumlah foto. Spec ini TIDAK menambah syarat "minimal N foto" sebagai gate keras. | TERVERIFIKASI-KODE gate-nya (qc.service.ts:42-61); penolakan gate-foto = USULAN |
+| BR-PHOTO-04 | Foto progres tidak pernah mengubah persen tahap, status tahap, status WO, biaya, atau earned value. Progres fisik tetap dari ProjectStageProgress/operasi. | USULAN (konsisten kontrak EV repo: persen dari rekod progres terbaru) |
+| BR-PHOTO-05 | Perbandingan kondisi awal-vs-akhir hanya sah dari pasangan inspeksi intake+handover pada WO yang sama; foto tanpa inspeksi induk tidak bisa diklaim sebagai bukti kondisi awal/akhir untuk sengketa garansi. | USULAN (pasangan inspeksi TERVERIFIKASI-KODE dibaca page.tsx:161-180) |
+| BR-PHOTO-06 | Verifikasi foto (QC/foreman) terpisah dari unggah; apakah pengunggah boleh memverifikasi fotonya sendiri diputus BOT Lead (default USULAN: tidak boleh untuk foto handover). | BUTUH-VONIS (BOT Lead, perilaku inti) |
+| BR-PHOTO-07 | Foto pada inspeksi yang sudah tercatat tidak dihapus senyap: hapus mengikuti jalur existing + tercatat di activity log; foto terverifikasi/terbit yang dihapus wajib alasan (pola reopenReason dokumen repo). | USULAN |
+| BR-PHOTO-08 | Yang boleh terbit ke pelanggan hanya foto bertanda terbit oleh KB/admin, kategori intake/progress/handover, milik kendaraan grant itu. Foto defect internal, foto memuat kendaraan lain/wajah/dokumen harga: DILARANG terbit (PRD INT-04C). | USULAN (sumber PRD :859; portal belum ada) |
+| BR-PHOTO-09 | Tidak ada kolom tahap/kategori/publikasi = tidak ada klaim UI "foto per tahap". UI wajib menampilkan ember eksplisit "belum berkategori" untuk baris lama, bukan menyembunyikan atau mengarang tahap dari tanggal unggah. | USULAN |
+| BR-PHOTO-10 | Nol dampak uang: foto/QC tahap ini tidak memposting jurnal, tidak mengubah HPP/biaya aktual; biaya aktual tetap MaterialIssue/ProductionCost/Timesheet. Klaim garansi yang memakai foto sebagai bukti tetap lewat alur WarrantyClaim existing. | TERVERIFIKASI-KODE batasnya (lampiran tanpa jurnal di semua pemakai live) |
+
+### 7. Feature matrix Accurate/Zahir/ISF (benchmark akses 2026-10-24)
+
+| Kemampuan | Accurate | Zahir | ISF (live) |
+|---|---|---|---|
+| Lampiran berkas/foto menempel ke transaksi | Ada: ikon dokumen/lampiran per transaksi, foto dari mobile (https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penerimaan-penjualan/mengenal-fitur-penerimaan-penjualan/) | Ada: "Lampiran File" bukti fisik per transaksi, bisa diunduh dari transaksinya (https://www.zahironline.com/transaksi-penjualan/ ; https://help.zahironline.com/portal/id/kb/articles/jurnal-umum) | Ada: TransactionAttachment + unggah tervalidasi signature (TERVERIFIKASI-KODE §1) |
+| Lampiran wajib sebagai syarat simpan/posting | Ada pengaturan lampiran wajib per modul (benchmark sekunder; bukan help resmi — perlakukan BENCHMARK lemah) | Belum terverifikasi run ini | Tidak ada untuk foto WO; gate ISF berupa inspeksi QC, bukan hitungan lampiran (BR-PHOTO-03) |
+| Foto per tahap pekerjaan + inspeksi awal/akhir kendaraan | Tidak ditemukan di help resmi run ini (bukan produk bengkel fabrikasi) | Tidak ditemukan run ini | BELUM: kategori/tahap foto absen (§1) — justru keunggulan yang dibangun spec ini dari QcInspection+ProjectStage existing |
+| Publikasi foto progres ke pelanggan | Tidak ditemukan run ini | Tidak ditemukan run ini | BELUM: portal INT-04C absen; kontrak tandai-terbit dibekukan BR-PHOTO-08 |
+
+Benchmark hanya pola lampiran generik; tidak ada benchmark yang
+menjustifikasi meniru "lampiran wajib per transaksi" untuk foto tahap
+bengkel — gate ISF tetap inspeksi (BR-PHOTO-03).
+
+### 8. Acceptance criteria (AC-PHOTO-1..8) + edge cases
+
+- AC-PHOTO-1 (Backend): unggah dengan referenceType customer_vehicle/
+  project_stage/work_order_operation/qc_inspection (kosakata persis
+  yang diputus §3) diterima hanya bila induk ada + izin §4 lolos;
+  tipe di luar whitelist, induk tidak ada, dan pengguna tanpa izin
+  ditolak fail-closed (tes meniru attachment-permissions.test.ts).
+- AC-PHOTO-2 (Backend): foto berkategori intake yang menempel ke
+  inspeksi vehicle_intake terbaca dari detail WO bersama status
+  inspeksi; WO kendaraan tanpa intake tetap tertolak mulai (regresi
+  gate existing tidak berubah oleh spec ini).
+- AC-PHOTO-3 (Backend+Frontend): daftar foto per WO terkelompok
+  tahap+kategori; foto lama tanpa kategori tampil di ember "belum
+  berkategori" (BR-PHOTO-09), tidak hilang dan tidak berpindah tahap.
+- AC-PHOTO-4 (Backend): unggah/verifikasi/tandai-terbit foto tidak
+  mengubah persen tahap, status WO/proyek, biaya, atau jurnal apa pun
+  (tes falsifikasi: ubah foto -> progres & biaya tetap; BR-PHOTO-04/10).
+- AC-PHOTO-5 (Frontend): panel foto di detail WO + detail kendaraan
+  pelanggan memakai kosakata kategori BR-PHOTO-02 persis; tombol
+  unggah/verifikasi/terbit hanya tampil ke pemegang izin §4 dan server
+  tetap penegak (pola komponen existing).
+- AC-PHOTO-6 (Backend): foto terbit hanya yang publishedAt/publishedBy
+  terisi oleh pemegang izin terbit; read-model pelanggan (bila portal
+  dibangun) menolak foto internal/defect dan foto kendaraan lain
+  walau ID ditebak (IDOR).
+- AC-PHOTO-7 (QA): pasangan before/after satu WO: intake dan handover
+  pada WO sama tampil berpasangan; WO tanpa handover menampilkan
+  keadaan "belum serah terima", bukan memasangkan foto WO lain.
+- AC-PHOTO-8 (QA): hapus foto terverifikasi/terbit tercatat beralasan;
+  berkas yatim hasil hapus mengikuti sapuan orphan existing; kegagalan
+  muat daftar foto tampil sebagai gagal-muat, bukan "belum ada foto"
+  (pola komponen existing dipertahankan).
+
+Edge cases wajib diuji BOT QA: WO tanpa customerVehicleId (gate
+intake tidak berlaku, foto progress tetap boleh); job berproyek vs WO
+langsung (induk foto tahap tidak tertukar); tahap skipped (foto boleh
+ada, persen tetap dari aksi progres); inspeksi failed -> NCR terbuka
+memblokir serah terima walau foto handover lengkap; unggah pending
+referenceId=0 ditinggalkan (sweep orphan); berkas >10MB ditolak klien
+dan >50MB ditolak server; MIME terdeklarasi beda dari signature
+ditolak; foto kendaraan pelanggan A tidak terbaca dari kendaraan B;
+baris lampiran lama (pra-kolom) di WO berjalan.
+
+### 9. Handoff & urutan
+
+Urutan: (1) BOT Lead putus BR-PHOTO-06 + izin terbit §4; (2) BOT
+Backend satu kartu inti: kolom aditif + referenceType/peta izin +
+read-model pengelompokan (§3 Opsi A kecuali divonis lain), tanpa
+tabel foto baru; (3) BOT Frontend panel per tahap di detail WO +
+kendaraan (konsumen read-model saja); (4) BOT QA AC-PHOTO-1..8.
+Tidak butuh vonis BOT Accountant (nol jurnal/uang, BR-PHOTO-10);
+bila kelak foto dipakai syarat pelepasan pembayaran termin, itu spec
+terpisah dengan vonis akuntansi. Yang TIDAK diusulkan run ini: portal
+pelanggan penuh, e-sign checklist, pengaburan wajah otomatis, syarat
+minimal jumlah foto sebagai gate, tabel foto baru.
