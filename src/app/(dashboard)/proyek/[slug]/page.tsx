@@ -15,9 +15,11 @@ import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { ProjectPlDetailCard } from "@/components/reports/project-pl-detail-card"
 import { ProjectBudgetCard } from "@/components/reports/project-budget-card"
+import { ProjectEarnedValueCard } from "@/components/reports/project-earned-value-card"
 import { ProjectBudgetEditor } from "./_components/project-budget-editor"
 import { loadProjectPlForProject } from "@/lib/reports/project-pl-data"
 import { loadProjectBudgetForProject } from "@/lib/reports/project-budget-data"
+import { loadProjectEarnedValueForProject } from "@/lib/reports/project-earned-value-data"
 
 import type { Metadata } from "next"
 
@@ -94,7 +96,7 @@ export default async function ProjectDetailPage({
   // (bukan lagi semua quotation pelanggan yang tercampur antar proyek).
   // Ringkasan uang proyek dibaca dari builder tunggal `loadProjectPlForProject`
   // — UI tidak mengagregasi invoice/material/beban sendiri.
-  const [quotations, invoices, projectPl, projectBudget] = await Promise.all([
+  const [quotations, invoices, projectPl, projectBudget, projectEarnedValue] = await Promise.all([
     prisma.quotation.findMany({
       where: { projectId: project.id, deletedAt: null },
       take: 10,
@@ -107,6 +109,7 @@ export default async function ProjectDetailPage({
     }),
     loadProjectPlForProject(project.id),
     loadProjectBudgetForProject(project.id),
+    loadProjectEarnedValueForProject(project.id),
   ])
 
   // Usulan revisi terbuka: log rab_revision_proposed terbaru yang belum
@@ -363,6 +366,7 @@ export default async function ProjectDetailPage({
             content: projectBudget ? (
               <>
                 <ProjectBudgetCard budget={projectBudget} />
+                <ProjectEarnedValueCard earnedValue={projectEarnedValue} />
                 <ProjectBudgetEditor
                   projectId={project.id}
                   items={project.items.map((it) => ({ id: it.id, projectStageId: it.projectStageId, category: it.category, description: it.description, qty: Number(it.qty), cost: Number(it.cost), sortOrder: it.sortOrder }))}
