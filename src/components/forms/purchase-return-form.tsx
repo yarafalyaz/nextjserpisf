@@ -8,12 +8,12 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Combobox } from "@/components/ui/combobox"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
-import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason } from "@/components/forms/return-items-section"
+import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason, ReturnTaxNoteFields } from "@/components/forms/return-items-section"
 
 interface PurchaseReturnFormProps {
   purchaseOrders: { id: number; documentNo: string
 }[]
-  returnData?: { id: number; purchaseOrderId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
+  returnData?: { id: number; purchaseOrderId: number; date: string; reason?: string | null; taxReturnNoteNumber?: string | null; taxReturnNoteDate?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
   items: { id: number; sku: string; name: string }[]
 }
 
@@ -28,6 +28,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
+  const [taxReturnNoteDate, setTaxReturnNoteDate] = useState(returnData?.taxReturnNoteDate ?? "")
   const [purchaseOrderId, setPurchaseOrderId] = useState(returnData?.purchaseOrderId ? String(returnData.purchaseOrderId) : "")
   // Seed returnItems from returnData on edit so updating a return doesn't
   // silently wipe all existing line items to a single empty row.
@@ -89,6 +90,12 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
         </div>
 
         <ReturnDateAndReason date={date} setDate={setDate} reasonPlaceholder="Alasan pengembalian barang ke pemasok..." reasonDefault={returnData?.reason ?? ""} />
+
+        <ReturnTaxNoteFields
+          taxReturnNoteNumberDefault={returnData?.taxReturnNoteNumber ?? ""}
+          taxReturnNoteDate={taxReturnNoteDate}
+          setTaxReturnNoteDate={setTaxReturnNoteDate}
+        />
       </div>
 
       <ReturnItemsSection
