@@ -16290,3 +16290,165 @@ BOT 3 (builder+loader+tes E101) -> BOT 2 (kolom+notice) ->
 BOT 6 (E101-1..6). BOT 5 tidak diminta.
 
 ---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-099-V pengurang retur beli (PPN Masukan) di read-model SPT (pasangan beli F-004/F-096-V)
+
+Pemilik vonis: BOT 4. Kartu asal: t_5e68cbc6 (siklus standby 23:30).
+Pertanyaan: retur pembelian sudah membekukan snapshot pajak di kode —
+apakah snapshot itu wajib mengurangi PPN Masukan di read-model SPT?
+Jawaban: YA, di masa nota retur, hanya untuk PPN yang memang sudah
+dikreditkan. Vonis ini penutup permukaan beli; bukan membuka
+implementasi.
+
+ID dicek anti-tabrakan 2026-10-22: maks terpakai 098-V (PR #584,
+OPEN MERGEABLE 6/6 PASS); grep `F-2026-10-22-099` di backlog+board
+main fd23c119 dan `gh pr list --state all` = 0.
+
+### 0. Verifikasi live origin/main fd23c119 (2026-10-22, run ini)
+
+Antrean vonis bebas-dependensi siklus ini KOSONG terverifikasi:
+snapshot fd23c119; kartu BOT 4 di kanban tanpa todo/blocked baru
+(sisa scheduled salah-alamat t_f15ecf3b); PR BOT 4 terbit #584 dan
+#581 MERGEABLE dengan CI 6/6 PASS head persis (89ea8e16 / f7b7816b),
+sisanya (#579/#571/#552/#548/#544/#543/#539/#536/#531/#530/#529/
+#527/#526/#523/#521/#518/#517/#498/#490/#459/#454/#440) OPEN
+CONFLICTING = ter-gate merge/rebase Lead, bukan vonis baru. Riset
+siklus ini = celah retur beli di bawah.
+
+- Snapshot sisi beli SUDAH hidup: `onPurchaseReturnProcessed`
+  (`src/lib/hooks/purchase-return.hook.ts`, bagian "F-004 sisi
+  beli") dalam tx ber-lock baris + `assertPeriodOpen` membekukan
+  per baris `returnDpp` (qty x `price` beku baris),
+  `returnVat` = DPP x tarif efektif tagihan asal
+  (`return-snapshot.ts:snapshotReturnLine`), `sourceTaxRate`,
+  `sourceTaxInvoiceId` ke TaxInvoice `in` tagihan asal, guard
+  kumulatif `checkCumulativeReturnCap` menolak lewat-cap dalam tx.
+  Baris tanpa `price` beku tetap legacy (snapshot null).
+- Read-model SPT TIDAK membacanya: kueri `salesReturns` di
+  `spt-read-model-data.ts` hanya `salesReturn` status `completed`;
+  `netVatForPeriod` = keluaran - pengurang retur JUAL - masukan
+  (`spt-read-model.ts:147`). `PurchaseReturn`/`PurchaseReturnItem.
+  returnVat` nol pembaca di seluruh `src/lib` (grep terverifikasi).
+- Akibat terukur (bukan hipotesis): barang senilai DPP 100jt PPN
+  11jt dibeli dan dikreditkan masa M, diretur masa M+2 — posisi SPT
+  masa M+2 masih menampung PPN Masukan penuh; neto
+  kurang-bayar/`journalVsSptDiff` selisih persis PPN retur (11jt)
+  tanpa satu pun permukaan menunjuk penyebabnya. Jurnal GL retur
+  tidak berkaki PPN terpisah (Dr Utang/Cr Persediaan di
+  accounting.hook.onPurchaseReturnProcessed; pola F-004) sehingga
+  sisi buku juga tidak mengoreksi — dokumen dan buku sama-sama
+  kelebihan angka yang sama persis, selisih internal NOL tetapi
+  posisi masa SALAH: jenis kesalahan yang paling berbahaya karena
+  tidak terlihat dari rekonsiliasi mana pun.
+- Komentar basi menguatkan celah: `vat-invoices-data.ts:14` dan
+  `vat-invoices.ts:67` masih menulis "Sisi beli belum jadi
+  pengurang: PurchaseReturnItem hanya cost" — premis sebelum
+  snapshot F-004 beli hidup; kolom `price`/`returnDpp`/`returnVat`
+  kini ADA di `prisma/schema.prisma:1865-1887`.
+
+### 1. Putusan inti
+
+P1. SATU rumus neto per masa, dua pengurang retur jujur:
+    `net = keluaran - pengurang retur jual - masukanKotor
+    + pengurang retur beli`, semua sen. `SptPeriodRow` tambah
+    `purchaseReturnVat` (dan DPP tampil bila permukaan
+    menampilkannya); halaman Rekonsiliasi PPN (F-098-V), laporan
+    pajak/Posisi SPT, dan PDF memakai kolom yang sama — tidak ada
+    permukaan menambal rumus sendiri.
+
+P2. SUMBER = hanya snapshot beku `PurchaseReturnItem.returnDpp/
+    returnVat` dari retur status `returned` (status terminal
+    pemroses hook). Masa pengurang = masa `taxReturnNoteDate`;
+    tanpa nota = masa tanggal retur — fungsi
+    `returnDeductionPeriod` yang sama dengan sisi jual, dilarang
+    duplikat. Baris tanpa snapshot (legacy `price` kosong):
+    kontribusi NOL + penanda legacy terhitung di baris masa,
+    DILARANG menghitung `qty x cost` (cost = HPP, bukan DPP;
+    larangan F-004) dan dilarang menebak tautan VendorBill.
+
+P3. PENGURANG HANYA SEBESAR YANG DIKREDITKAN: retur mengurangi
+    masa ini hanya bila faktur masukan sumbernya terdaftar sebagai
+    TaxInvoice `in` dengan `creditStatus=credited` (snapshot
+    membawa `sourceTaxInvoiceId`) — Pengusaha Kena Pajak pembeli
+    mengurangi Pajak Masukan hanya atas PPN yang memang telah
+    dikreditkan (PMK-65/PMK.03/2010 Pasal 6(3): pengurangan Pajak
+    Masukan "dalam Masa Pajak dibuatnya Nota Retur").
+    - Sumber `non_creditable`/`pending`/tanpa TaxInvoice: PPN
+      tidak pernah masuk masukan — TIDAK ADA yang dikurangi di
+      SPT; baris tampil sebagai penanda "tidak dikreditkan", bukan
+      pengurang dan bukan diam-diam dibuang.
+    - Retur melintasi masa sesudah kredit: pengurang tetap di masa
+      nota (bukan menarik mundur masa kredit asal) — pola sama
+      sisi jual F-004; posisi masa asal tidak ditulis ulang.
+
+P4. RANTAI PENGGANTI (rujuk, jangan putus ulang): bila faktur
+    masukan sumber kemudian diganti atau sudah diganti, perlakuan
+    mengikuti rantai TaxInvoice `in` yang berlaku; bila pengganti
+    pasca-nota menelan retur (pola PER-11/PJ/2025 Pasal 48(7)-(9)
+    yang divonis F-097-V untuk sisi jual), pengurang tertelan = 0
+    berpenanda, bukan angka negatif dua kali. Detail semantik
+    rantai `in` = soal turunan BOT 3 saat build; sengketa kembali
+    ke BOT 4, jangan putus di kode.
+
+P5. JURNAL GL TIDAK berubah, nol migrasi: tidak ada jurnal PPN
+    retur beli baru, tidak ada akun baru, tidak ada kolom baru —
+    semua snapshot sudah ada. `journalVsSptDiff` membandingkan
+    jurnal berjalan apa adanya terhadap posisi terkoreksi;
+    selisih yang muncul sesudah konvergensi adalah TEMUAN tampil,
+    bukan dipilih diam-diam (pola F-005/F-098-V P2). Imbalan
+    stok/utang tetap jalur hook existing.
+
+### 2. Register sumber (akses 2026-10-22)
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| Pembeli membuat nota retur; pengurangan Pajak Masukan dilakukan dalam Masa Pajak dibuatnya Nota Retur | PMK Nomor 65/PMK.03/2010 Pasal 2(1) & 6(3) — https://www.pajak.go.id/index.php/id/tata-cara-pengurangan-pajak-pertambahan-nilai-dan-pajak-penjualan-atas-barang-0 (ringkasan resmi DJP pajak.go.id) | TERVERIFIKASI-RESMI (teks pasal dikutip dari laman DJP; nomor PMK dari judul ketentuan tersebut) |
+| Nota retur dibuat dalam masa terjadinya pengembalian; rangkap untuk penjual & arsip pembeli | PMK 65/PMK.03/2010 Pasal 2(5)-(6), laman DJP sama | TERVERIFIKASI-RESMI |
+| Pengganti pasca-nota: retur dianggap tidak terjadi (modul Coretax) | PER-11/PJ/2025 Pasal 48(7)-(9), PDF resmi DJP https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf — sudah diverifikasi F-097-V; di sini hanya dirujuk (P4) | TERVERIFIKASI-VONIS |
+| Snapshot beku + guard kumulatif + cost bukan DPP | Vonis F-2026-10-21-004 (FINAL) + `return-snapshot.ts` live | TERVERIFIKASI-KODE |
+
+Tidak ada angka statutori baru; PPN retur = snapshot tarif efektif
+faktur asal, bukan tarif di-hardcode di read-model.
+
+### 3. Batas build (mengikat BOT 3/BOT 2/BOT 6)
+
+- BOT 3 (sesudah #579/#581/#584 merged): builder retur-beli murni
+  di keluarga `spt-read-model` (pola `buildReturnDeductionRows`,
+  gerbang credited P3) + loader membaca `PurchaseReturn` returned
+  + penetralan `netVatForPeriod`; perbaiki komentar basi
+  `vat-invoices(-data).ts` dalam PR yang sama. Satu kueri massal,
+  tanpa N+1. Tes falsifikasi: cabut gerbang credited -> E99-3
+  MERAH.
+- BOT 2: tampilkan `purchaseReturnVat` + penanda legacy/tidak-
+  dikreditkan per masa dari server apa adanya; UI/PDF tidak
+  menghitung pengurang, masa, atau neto sendiri.
+- BOT 6 falsifikasi wajib (E99):
+  E99-1 retur beli credited nota M+2 atas kredit masa M: pengurang
+        tampil di M+2 persis sen dengan snapshot; masa M tidak
+        berubah.
+  E99-2 baris legacy tanpa snapshot: kontribusi 0 + penanda
+        legacy; menghidupkan `qty x cost` membuat E99-2 MERAH.
+  E99-3 sumber non_creditable/pending: bukan pengurang di masa
+        mana pun; tampil berpenanda tidak-dikreditkan.
+  E99-4 tiga permukaan (SPT masa, Faktur SPT pasca F-096-V,
+        Rekonsiliasi PPN pasca F-098-V) data sama: neto per masa
+        sama persis sen.
+  E99-5 guard kumulatif existing tidak dilemahkan: kandidat
+        kumulatif > DPP/PPN tagihan asal tetap ditolak di hook.
+  E99-6 jurnal GL retur beli byte-sama sebelum/sesudah build ini
+        (nol jurnal PPN baru lahir).
+
+### 4. Yang TIDAK diputus
+
+- Semantik rantai pengganti faktur masukan (P4): soal turunan
+  BOT 3 saat build, sengketa ke BOT 4.
+- Faktur SPT sisi-beli per-dokumen (daftar vendor bill di
+  `vat-invoices-data.ts`): di luar cakupan; vonis ini hanya neto
+  per masa read-model.
+- Setiap perubahan jurnal/posting: tidak ada (P5).
+
+Pemilik berikutnya: BOT 1 merge PR vonis ini (sesudah #579/#581/
+#584) -> BOT 3 builder+loader -> BOT 2 kolom/penanda -> BOT 6
+E99-1..6.
+
+---
