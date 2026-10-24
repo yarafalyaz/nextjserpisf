@@ -127,6 +127,8 @@ interface SettingsFormValues {
   rowCodePrefix?: string | null
   salariesPayableAccountId?: number | null
   salaryExpenseAccountId?: number | null
+  pkwtCompensationExpenseAccountId?: number | null
+  pkwtCompensationPayableAccountId?: number | null
   salesAccountId?: number | null
   salesInvoicePrefix?: string | null
   salesOrderPrefix?: string | null
@@ -283,6 +285,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [payrollBank, setPayrollBank] = useState(settings.payrollBankAccountId ? String(settings.payrollBankAccountId) : "")
   const [employeeReceivable, setEmployeeReceivable] = useState(settings.employeeReceivableAccountId ? String(settings.employeeReceivableAccountId) : "")
   const [payrollJournalType, setPayrollJournalType] = useState(settings.payrollJournalTypeId ? String(settings.payrollJournalTypeId) : "")
+  const [pkwtExpense, setPkwtExpense] = useState(settings.pkwtCompensationExpenseAccountId ? String(settings.pkwtCompensationExpenseAccountId) : "")
+  const [pkwtPayable, setPkwtPayable] = useState(settings.pkwtCompensationPayableAccountId ? String(settings.pkwtCompensationPayableAccountId) : "")
   const [depreciationExpense, setDepreciationExpense] = useState(settings.depreciationExpenseAccountId ? String(settings.depreciationExpenseAccountId) : "")
   const [accumulatedDepreciation, setAccumulatedDepreciation] = useState(settings.accumulatedDepreciationAccountId ? String(settings.accumulatedDepreciationAccountId) : "")
   const [retainedEarnings, setRetainedEarnings] = useState(settings.retainedEarningsAccountId ? String(settings.retainedEarningsAccountId) : "")
@@ -366,6 +370,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "payrollBankAccountId", label: "Bank Penggajian", value: payrollBank, onChange: setPayrollBank },
         { name: "employeeReceivableAccountId", label: "Piutang Karyawan", value: employeeReceivable, onChange: setEmployeeReceivable },
         { name: "payrollJournalTypeId", label: "Tipe Jurnal Penggajian", value: payrollJournalType, onChange: setPayrollJournalType },
+        { name: "pkwtCompensationExpenseAccountId", label: "Beban Kompensasi PKWT (600028)", value: pkwtExpense, onChange: setPkwtExpense },
+        { name: "pkwtCompensationPayableAccountId", label: "Utang Kompensasi PKWT (210207)", value: pkwtPayable, onChange: setPkwtPayable },
       ],
     },
     {
@@ -433,6 +439,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       payrollBankAccountId: setPayrollBank,
       employeeReceivableAccountId: setEmployeeReceivable,
       payrollJournalTypeId: setPayrollJournalType,
+      pkwtCompensationExpenseAccountId: setPkwtExpense,
+      pkwtCompensationPayableAccountId: setPkwtPayable,
       depreciationExpenseAccountId: setDepreciationExpense,
       accumulatedDepreciationAccountId: setAccumulatedDepreciation,
     }
@@ -1060,6 +1068,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <input type="hidden" name="payrollBankAccountId" value={payrollBank} />
             <input type="hidden" name="employeeReceivableAccountId" value={employeeReceivable} />
             <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
+            <input type="hidden" name="pkwtCompensationExpenseAccountId" value={pkwtExpense} />
+            <input type="hidden" name="pkwtCompensationPayableAccountId" value={pkwtPayable} />
             <input type="hidden" name="depreciationExpenseAccountId" value={depreciationExpense} />
             <input type="hidden" name="accumulatedDepreciationAccountId" value={accumulatedDepreciation} />
             <input type="hidden" name="assetFiscalRevaluationTaxPayableAccountId" value={fiscalRevalTaxPayable} />
