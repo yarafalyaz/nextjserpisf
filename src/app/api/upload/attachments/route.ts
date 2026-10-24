@@ -7,6 +7,7 @@ import { randomUUID } from "crypto"
 import path from "path"
 import { apiError } from "@/lib/api-response"
 import { isPhotoCategory } from "@/lib/reports/attachment-photo"
+import { ATTACHMENT_REFERENCE_TYPES, ATTACHMENT_RESPONSE_SELECT } from "@/lib/auth/attachment-route-contract"
 import { assertCSRF } from "@/lib/security/csrf"
 
 /**
@@ -125,16 +126,7 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceType tidak valid")
   }
 
-  // Whitelist allowed reference types (same as GET)
-  const allowedRefTypes = [
-    "sales_invoice", "sales_order", "quotation", "purchase_order",
-    "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
-    "journal", "expense", "material_issue", "work_order", "project",
-    "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
-    // F-2026-10-24-096-S: induk foto tahap/inspeksi (BR-PHOTO-01).
-    "customer_vehicle", "project_stage", "work_order_operation", "qc_inspection",
-  ]
+  const allowedRefTypes: readonly string[] = ATTACHMENT_REFERENCE_TYPES
   if (!allowedRefTypes.includes(safeRefType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
@@ -187,22 +179,7 @@ export async function POST(req: NextRequest) {
         uploadedBy: userId,
         photoCategory,
       },
-      // Kontrak POST sama dengan GET: tanpa select, Prisma create mengembalikan
-      // baris utuh (referenceType/referenceId/uploadedBy internal ikut bocor).
-      select: {
-        id: true,
-        filename: true,
-        originalName: true,
-        fileUrl: true,
-        fileSize: true,
-        mimeType: true,
-        photoCategory: true,
-        verifiedBy: true,
-        verifiedAt: true,
-        publishedBy: true,
-        publishedAt: true,
-        createdAt: true,
-      },
+      select: ATTACHMENT_RESPONSE_SELECT,
     })
   } catch (error) {
     await unlink(filepath).catch(() => undefined)
@@ -233,16 +210,7 @@ export async function GET(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceType dan referenceId wajib diisi")
   }
 
-  // Whitelist allowed reference types to prevent enumeration of arbitrary tables
-  const allowedRefTypes = [
-    "sales_invoice", "sales_order", "quotation", "purchase_order",
-    "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
-    "journal", "expense", "material_issue", "work_order", "project",
-    "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
-    // F-2026-10-24-096-S: induk foto tahap/inspeksi (BR-PHOTO-01).
-    "customer_vehicle", "project_stage", "work_order_operation", "qc_inspection",
-  ]
+  const allowedRefTypes: readonly string[] = ATTACHMENT_REFERENCE_TYPES
   if (!allowedRefTypes.includes(referenceType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
@@ -271,22 +239,7 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { createdAt: "desc" },
     take: 200,
-    // Kontrak GET hanya field yang dipakai TransactionAttachments; tanpa
-    // select, referenceType/referenceId/uploadedBy ikut bocor ke klien.
-    select: {
-      id: true,
-      filename: true,
-      originalName: true,
-      fileUrl: true,
-      fileSize: true,
-      mimeType: true,
-      photoCategory: true,
-      verifiedBy: true,
-      verifiedAt: true,
-      publishedBy: true,
-      publishedAt: true,
-      createdAt: true,
-    },
+    select: ATTACHMENT_RESPONSE_SELECT,
   })
 
   return NextResponse.json(attachments)
