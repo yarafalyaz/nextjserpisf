@@ -279,6 +279,9 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "src/lib/services/activity-log.service.ts": "logging tidak boleh memutus alur utama (niatnya tertulis di blok)",
   "src/lib/services/activity-reference.service.ts": "label referensi yang hilang tak boleh menggagalkan seluruh halaman log; sengaja dicatat agar ada jejak (niatnya tertulis di blok)",
   "src/lib/services/transaction-attachment.service.ts": "hapus berkas disk best-effort (R-10); kegagalan dicatat berkonteks dengan path, baris DB tetap terhapus agar referensi tak menggantung",
+  "src/lib/reports/work-order-material-needs-data.ts": "lazy-expire reservasi (F-2026-10-21-012 BR-RES-06) best-effort saat baca: kegagalan dicatat berkonteks, kartu kebutuhan tetap tampil dan expire dicoba lagi pada baca berikutnya — bukan angka yang ditelan",
+  "src/lib/services/vehicle-fitment.service.ts": "snapshot fitment F-2026-10-22-063-S BR-FIT-09: evaluasi peringatan gagal TIDAK boleh menggagalkan simpan Quotation/WO; kegagalan dicatat berkonteks dan snapshot tetap null (dievaluasi ulang simpan berikutnya)",
+  "src/lib/reports/work-order-reservations-data.ts": "lazy-expire reservasi (F-2026-10-22-057-S BR-RES-06) best-effort saat baca: kegagalan dicatat berkonteks, tabel reservasi tetap tampil dari baris StockReservation dan expire dicoba lagi pada baca berikutnya — bukan angka yang ditelan",
   "scripts/clear-all-data.ts": "skrip sekali-jalan; error dilaporkan ke console sebelum proses keluar",
   "scripts/verify-migrations.mjs": "pembersihan DB scratch best-effort; kegagalan dilaporkan plus instruksi hapus manual",
 }

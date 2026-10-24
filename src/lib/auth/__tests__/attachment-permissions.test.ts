@@ -21,6 +21,7 @@ vi.mock("@/lib/db/prisma", () => ({
     salesInvoice: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     vendorBill: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     stockAdjustment: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
+    warrantyClaim: { findUnique: (...a: unknown[]) => documentFindUniqueMock(...a) },
     userWarehouse: { findMany: (...a: unknown[]) => warehouseAssignmentsMock(...a) },
   },
 }))
@@ -78,6 +79,12 @@ describe("canAccessAttachment", () => {
     authMock.mockResolvedValue({ user: { id: 1, roles: ["warehouse_user"] } })
     warehouseAssignmentsMock.mockResolvedValue([{ warehouseId: 4 }])
     await expect(canAccessAttachment("stock_adjustment", 1)).resolves.toBe(true)
+  })
+
+  it("memakai izin lihat klaim garansi untuk lampiran bukti WarrantyClaim", async () => {
+    hasPermissionMock.mockResolvedValue(true)
+    await expect(canAccessAttachment("WarrantyClaim", 1)).resolves.toBe(true)
+    expect(hasPermissionMock).toHaveBeenCalledWith("view_warranty_claims")
   })
 
   it("maps every reference type to a view_ permission", () => {

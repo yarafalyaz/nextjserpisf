@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     materialIssueItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    // F-2026-10-21-009-V: guard tutup-job membaca status WO pada create MI.
+    workOrder: { findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }) },
   }
   prismaMock.$transaction = vi.fn(async (ops: unknown) =>
     typeof ops === "function" ? (ops as (tx: unknown) => unknown)(prismaMock) : Promise.all(ops as unknown[]),
@@ -55,7 +57,12 @@ vi.mock("@/lib/hooks/inventory-transfer.hook", () => ({
   onTransferProcessed: vi.fn(),
   onTransferReceived: vi.fn(),
 }))
-vi.mock("@/lib/hooks/material-issue.hook", () => ({ onMaterialIssueCompleted: vi.fn() }))
+vi.mock("@/lib/hooks/material-issue.hook", () => ({
+  onMaterialIssueCompleted: vi.fn(),
+  resolveMaterialIssueScrapSnapshots: vi.fn(async (_tx: unknown, rows: { itemId: number }[]) =>
+    new Map(rows.map((r) => [r.itemId, null])),
+  ),
+}))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: vi.fn().mockResolvedValue({ kind: "all" }),
   assertWarehouseAccess: vi.fn(),

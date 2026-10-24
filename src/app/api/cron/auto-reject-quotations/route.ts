@@ -35,6 +35,8 @@ export async function GET(request: Request) {
           { validUntil: null, updatedAt: { lt: cutoffDate } },
         ],
       },
+      // Hanya id yang diteruskan ke transaksi; baris utuh tak pernah dipakai.
+      select: { id: true },
     })
 
     if (staleQuotations.length === 0) {

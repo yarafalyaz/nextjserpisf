@@ -28,8 +28,13 @@ export interface InvoiceExchangeActionResult {
 }
 
 function parseId(raw: FormDataEntryValue | string | null): number | null {
-  const value = Number(String(raw ?? ""))
-  return Number.isInteger(value) && value > 0 ? value : null
+  const str = String(raw ?? "")
+  // ID desimal murni saja — pola repo (/^[0-9]+$/ di route workflow/print/
+  // attachments/notifications). Number() mentah menerima "0x10"->16,
+  // "1e3"->1000, "0b101"->5, " 5"->5: ID tak terduga lolos ke query.
+  if (!/^[0-9]+$/.test(str)) return null
+  const value = Number(str)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
 /**

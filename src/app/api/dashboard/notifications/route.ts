@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { hasPermission, requireAuth } from "@/lib/auth/permissions";
+import { auth } from "@/lib/auth/auth";
+import { hasPermission } from "@/lib/auth/permissions";
 import { apiError } from "@/lib/api-response";
 import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service";
 import { resolveActivityReferenceLabels, resolveActivityReferenceSlugs } from "@/lib/services/activity-reference.service";
@@ -8,7 +9,15 @@ import { activityEntityHref } from "@/lib/utils/activity-href";
 
 export async function GET() {
   try {
-    const user = await requireAuth();
+    // Route API wajib balas 401 JSON saat tanpa sesi — requireAuth() melempar
+    // redirect next/navigation (/login) yang di sini jadi 500/redirect HTML,
+    // bukan kontrak { error: { code } }. Pola auth()+apiError sama dengan
+    // route API lain (activity-logs, notifications, print, workflow).
+    const session = await auth();
+    const user = session?.user;
+    if (!user || user.isActive === false) {
+      return apiError("UNAUTHORIZED", "Tidak terotorisasi");
+    }
     const userId = Number(user.id);
     const [canViewItems, canViewInvoices, canViewAttendance, canViewActivity] =
       await Promise.all([
@@ -131,14 +140,6 @@ export async function GET() {
       })),
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "";
-    if (
-      msg.includes("Unauthorized") ||
-      msg.includes("Silakan login") ||
-      msg.includes("auth")
-    ) {
-      return apiError("UNAUTHORIZED", "Tidak terotorisasi");
-    }
     console.error("Dashboard notifications error:", e);
     return apiError("INTERNAL_ERROR", "Terjadi kesalahan server");
   }

@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   isValidCronRequest: vi.fn().mockReturnValue(true),
 }))
 
+// F-070-S: loader per gudang membaca model baru; default kosong = aman.
+vi.mock("@/lib/reports/min-stock-warehouse-alert", () => ({
+  loadWarehouseLowStock: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: mocks.notificationService }))
 vi.mock("@/lib/security/cron", () => ({ isValidCronRequest: mocks.isValidCronRequest }))
@@ -54,5 +59,20 @@ describe("daily-notifications cron", () => {
     
     // We expect it to FAIL in the buggy version because it will query 2026-03-15
     expect(callArgs.where.date.gte.getTime()).toBe(expectedStart.getTime())
+  })
+
+  it("memuat hanya nama karyawan untuk daftar telat, bukan baris absensi utuh + departemen", async () => {
+    const nowLocal = new Date("2026-03-16T07:00:00+07:00")
+    vi.setSystemTime(nowLocal)
+
+    const req = new NextRequest("http://localhost/api/cron/daily-notifications")
+    await GET(req as unknown as Request)
+
+    expect(mocks.prisma.attendance.findMany).toHaveBeenCalled()
+    const callArgs = mocks.prisma.attendance.findMany.mock.calls[0][0]
+    // Daftar telat hanya merender employee.name (route.ts) — select sempit
+    // mencegah muat kolom absensi/GPS + relasi departemen utuh per baris.
+    expect(callArgs.select).toEqual({ employee: { select: { name: true } } })
+    expect(callArgs.include).toBeUndefined()
   })
 })

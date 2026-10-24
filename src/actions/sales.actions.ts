@@ -4,6 +4,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
+import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
 import { prisma } from "@/lib/db/prisma"
 import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
@@ -19,6 +20,9 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
+import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
@@ -31,12 +35,20 @@ import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, re
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight, getWibTodayUtcDate } from "@/lib/utils/attendance-time"
-import type { Prisma } from "@prisma/client"
+import { parseLocaleNumber } from "@/lib/utils/parse-money"
+import { Prisma } from "@prisma/client"
 import {
   loadPriceListRows,
-  pickPriceListPrice,
+  pickPriceListRow,
   resolveLinePricing,
+  type PriceSource,
 } from "@/lib/services/customer-price-list.service"
+
+export interface PricedLineMeta {
+  priceSource?: PriceSource | null
+  priceListId?: number | null
+  priceListMinQty?: number | null
+}
 
 // F-PRICELIST-01 tahap 1: terapkan daftar harga pelanggan ke baris dokumen
 // yang dibuat LANGSUNG dari form (bukan hasil konversi penawaran/pesanan —
@@ -47,22 +59,43 @@ import {
 // HPP sendiri dan peringatan margin tidak pernah memblokir simpan.
 async function applyPriceListLines<
   T extends { itemId: number | null; qty: number; unitPrice: number; discount?: number },
->(tx: Prisma.TransactionClient, customerId: number, date: Date, lines: readonly T[]): Promise<T[]> {
+>(
+  tx: Prisma.TransactionClient,
+  customerId: number,
+  date: Date,
+  lines: readonly T[],
+): Promise<(T & PricedLineMeta)[]> {
   const itemIds = lines.map((l) => l.itemId).filter((id): id is number => id != null)
   if (itemIds.length === 0) return [...lines]
   const { customerCategoryId, rows } = await loadPriceListRows(tx, { customerId, itemIds, date })
   if (rows.length === 0) return [...lines]
   return lines.map((line) => {
     if (line.itemId == null) return line
-    const priceListPrice = pickPriceListPrice(rows, { itemId: line.itemId, customerCategoryId, date })
-    if (priceListPrice === null) return line
+    // F-018: resolusi qty-aware per baris (BR-TIER-01..06), tanpa agregasi.
+    const winner = pickPriceListRow(rows, {
+      itemId: line.itemId,
+      customerCategoryId,
+      date,
+      qty: line.qty,
+    })
+    if (winner === null) {
+      return { ...line, priceSource: "item_master" as const, priceListId: null, priceListMinQty: null }
+    }
     const r = resolveLinePricing({
       qty: line.qty,
       itemPrice: line.unitPrice,
-      priceListPrice,
+      priceListPrice: winner.price,
+      priceListRow: winner,
       manualDiscount: line.discount,
     })
-    return { ...line, unitPrice: r.unitPrice, discount: r.discount }
+    return {
+      ...line,
+      unitPrice: r.unitPrice,
+      discount: r.discount,
+      priceSource: r.priceSource,
+      priceListId: r.priceListId,
+      priceListMinQty: r.priceListMinQty,
+    }
   })
 }
 
@@ -101,6 +134,49 @@ async function decideQuotation(
       })
     }
   })
+}
+
+/**
+ * F-2026-10-21-016 tahap 1: resolve atribusi penjual opsional.
+ * Nilai kosong -> null (dokumen tanpa penjual sah, komisi tak dihitung).
+ * Nilai terisi wajib menunjuk Employee aktif belum terhapus; selain itu
+ * ditolak agar snapshot tidak menunjuk orang fiktif/nonaktif.
+ */
+async function resolveSalesEmployeeId(
+  tx: Prisma.TransactionClient,
+  raw: unknown,
+): Promise<number | null> {
+  if (raw === null || raw === undefined || raw === "") return null
+  const id = Number(raw)
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Penjual (sales) tidak valid")
+  const emp = await tx.employee.findFirst({
+    where: { id, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (!emp) throw new Error("Penjual (sales) tidak ditemukan atau sudah nonaktif")
+  return emp.id
+}
+
+/**
+ * F-2026-10-22-065-S: snapshot persen ambang invoice dari kategori pelanggan
+ * saat quotation dibuat. Pelanggan/kategori tak ditemukan atau persen
+ * kategori tak sah (0/negatif/>100) → null (helper fail-closed ke 50).
+ * Master kategori yang berubah sesudahnya TIDAK mengubah snapshot ini.
+ */
+async function resolveInvoiceThresholdPercent(
+  tx: Prisma.TransactionClient,
+  customerId: unknown,
+): Promise<number | null> {
+  const id = Number(customerId)
+  if (!Number.isInteger(id) || id <= 0) return null
+  const customer = await tx.customer.findFirst({
+    where: { id },
+    select: { customerCategory: { select: { downPaymentPercent: true } } },
+  })
+  const pct = customer?.customerCategory?.downPaymentPercent
+  if (pct === null || pct === undefined) return null
+  const n = Number(pct)
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null
 }
 
 export async function createQuotation(formData: FormData) {
@@ -146,6 +222,8 @@ export async function createQuotation(formData: FormData) {
         customerVehicleId: data.customerVehicleId
           ? Number(data.customerVehicleId)
           : null,
+        salesEmployeeId: await resolveSalesEmployeeId(tx, data.salesEmployeeId),
+        invoiceThresholdPercent: await resolveInvoiceThresholdPercent(tx, data.customerId),
         date: wibDateToUtcMidnight(data.date),
         validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -172,12 +250,22 @@ export async function createQuotation(formData: FormData) {
       })
     }
 
+    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
+    await stampQuotationFitmentSnapshot(tx, q.id)
+
     return q
   })
 
   await logActivity("create", "Quotation", quotation.id, `Membuat penawaran #${quotation.id}`)
   revalidatePath("/penjualan/penawaran")
-  return { success: true, id: quotation.id, slug }
+  return {
+    success: true,
+    id: quotation.id,
+    slug,
+    invoiceThreshold: buildInvoiceThresholdInfo(
+      quotation.invoiceThresholdPercent == null ? null : Number(quotation.invoiceThresholdPercent),
+    ),
+  }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -428,6 +516,7 @@ export async function convertQuotationToOrder(quotationId: number) {
         customerId: quotation.customerId,
         quotationId: quotation.id,
         customerVehicleId: quotation.customerVehicleId,
+        salesEmployeeId: quotation.salesEmployeeId,
         date: new Date(),
         subtotal: quotation.subtotal,
         discount: quotation.discount ?? 0,
@@ -557,6 +646,9 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
+
+    // F-2026-10-22-063-S: evaluasi ulang snapshot fitment tiap simpan.
+    await stampQuotationFitmentSnapshot(tx, quotationId)
   })
 
   // Re-sync linked SO/Invoice items
@@ -668,44 +760,6 @@ export async function createDownPayment(formData: FormData) {
  * Cap 5MB + whitelist ekstensi + magic-bytes SEBELUM tulis (anti Stored XSS
  * via public/uploads). Return path public atau null bila tak ada file.
  */
-/**
- * AUD-R10-03: recompute total quotation server-side (dedup create/update).
- * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
- */
-function computeQuotationTotals(data: any): {
-  computedSubtotal: number
-  headerDiscount: number
-  headerTax: number
-  computedGrandTotal: number
-} {
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
-    0,
-  )
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
-  return { computedSubtotal, headerDiscount, headerTax, computedGrandTotal }
-}
-
-/**
- * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
- * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
- */
-function computeQuotationLine(item: any): { discountAmount: number; total: number } {
-  const qty = Math.max(0.01, Number(item.qty) || 0)
-  const unitPrice = Number(item.unitPrice) || 0
-  const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-  let discountAmount = Number(item.discount) || 0
-  if (item.discountType === "percent") {
-    const percent = Math.min(100, Math.max(0, discountAmount))
-    discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-  }
-  return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-}
-
 /**
  * AUD-R10-03: helper sections-create quotation (dedup create/update).
  * Cast itemId string→number di boundary + clamp via computeLine pemanggil.
@@ -893,6 +947,7 @@ export async function createSalesOrder(formData: FormData) {
       total: number
     }> = []
     let quotationTaxRate = 0
+    let quotationSalesEmployeeId: number | null = null
 
     if (v.quotationId) {
       const quotation = await tx.quotation.findUnique({
@@ -900,6 +955,7 @@ export async function createSalesOrder(formData: FormData) {
         include: { sections: { include: { items: true } } },
       })
       if (quotation) {
+        quotationSalesEmployeeId = quotation.salesEmployeeId
         // Gerbang yang sama dengan convertQuotationToOrder: jalur form tidak
         // boleh menjadi jalan pintas mengonversi penawaran konsep/ditolak/
         // kedaluwarsa yang jalur resminya menolak.
@@ -937,6 +993,7 @@ export async function createSalesOrder(formData: FormData) {
         slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
+        salesEmployeeId: quotationSalesEmployeeId,
                 date: wibDateToUtcMidnight(v.date),
         deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
         notes: v.notes ?? null,
@@ -1001,6 +1058,14 @@ export async function postInvoice(invoiceId: number) {
 
   // Atomically claim the post and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
+    // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5): WO repair klaim
+    // covered tidak boleh diposting menjadi tagihan pelanggan.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: invoice.quotationId,
+      projectId: invoice.projectId,
+      salesOrderId: invoice.salesOrderId,
+    })
+
     // Claim from EITHER "draft" or "approved". When a SalesInvoice approval
     // workflow is configured, approval.actions sets the document status to
     // "approved" (not "draft"), so a draft-only claim could never match and
@@ -1160,6 +1225,8 @@ export async function createDifferenceInvoice(quotationId: number) {
       // membaca total tertagih lama lalu membuat dua draft selisih.
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
+      await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
+
       const invoices = await collectQuotationInvoices(tx, quotationId)
 
       const candidate = computeDifferenceInvoiceCandidate({
@@ -1233,6 +1300,8 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
 
     const invoice = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
 
       const invoices = await collectQuotationInvoices(tx, quotationId)
       const candidate = computeProgressInvoiceCandidate({
@@ -1385,15 +1454,24 @@ export async function createSalesInvoice(formData: FormData) {
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
 
+    // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5, server): faktur
+    // dari jembatan quotation/sales-order milik WO repair klaim covered
+    // ditolak sebelum lahir.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: v.quotationId ?? null,
+      salesOrderId: v.salesOrderId ?? null,
+    })
+
     // Gerbang status pesanan: tombol di detail pesanan dan daftar pemilih di
     // faktur/tambah membaca DELIVERABLE_ORDER_STATUSES; server menegakkan
     // daftar yang sama supaya URL/form yang ditempel tidak bisa memfakturkan
     // pesanan konsep/ditolak. Faktur langsung dari penawaran (quotationId
     // tanpa salesOrderId) tetap boleh.
+    let inheritedSalesEmployeeId: number | null = null
     if (v.salesOrderId) {
       const so = await tx.salesOrder.findUnique({
         where: { id: v.salesOrderId },
-        select: { status: true },
+        select: { status: true, salesEmployeeId: true, quotationId: true },
       })
       if (!so) throw new Error("Pesanan Penjualan tidak ditemukan")
       if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(so.status)) {
@@ -1401,6 +1479,20 @@ export async function createSalesInvoice(formData: FormData) {
           `Pesanan Penjualan berstatus '${so.status}' belum bisa difaktur (harus ${DELIVERABLE_ORDER_STATUS_LABELS})`,
         )
       }
+      inheritedSalesEmployeeId = so.salesEmployeeId
+      if (inheritedSalesEmployeeId === null && so.quotationId) {
+        const q = await tx.quotation.findUnique({
+          where: { id: so.quotationId },
+          select: { salesEmployeeId: true },
+        })
+        inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
+      }
+    } else if (v.quotationId) {
+      const q = await tx.quotation.findUnique({
+        where: { id: v.quotationId },
+        select: { salesEmployeeId: true },
+      })
+      inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
     }
 
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
@@ -1436,6 +1528,7 @@ export async function createSalesInvoice(formData: FormData) {
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
         quotationId: v.quotationId ?? null,
+        salesEmployeeId: inheritedSalesEmployeeId,
         date: wibDateToUtcMidnight(v.date),
         dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
         taxInvoiceNumber: v.taxInvoiceNumber ?? null,
@@ -1462,6 +1555,14 @@ export async function createSalesInvoice(formData: FormData) {
                     unitPrice: safePrice,
                     discount: safeDiscount,
                     total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+                    // F-018 BR-TIER-09: hanya baris langsung hasil resolver
+                    // yang membawa sumber; konversi SO tetap null (bukan klaim).
+                    priceSource: "priceSource" in item ? (item.priceSource ?? null) : null,
+                    priceListId: "priceListId" in item ? (item.priceListId ?? null) : null,
+                    priceListMinQty:
+                      "priceListMinQty" in item && item.priceListMinQty != null
+                        ? new Prisma.Decimal(Number(item.priceListMinQty).toFixed(2))
+                        : null,
                   }
                 }),
               },
@@ -1664,6 +1765,45 @@ function parseReturnIdentity(value: unknown): string[] | undefined {
   return clean.length ? clean : undefined;
 }
 
+type SalesReturnItemInput = {
+  itemId: number;
+  qty: number;
+  serialNumbers?: string[];
+  batchNumbers?: string[];
+};
+
+/**
+ * Baris retur penjualan dari JSON FormData `items` ([{ itemId, qty, ... }]).
+ * qty bisa string berformat Indonesia dari klien non-form ("2.000" = 2000,
+ * "1,5" = 1.5) — wajib lewat parser repo; Number() mentah membaca "2.000"
+ * jadi 2 dan "abc" jadi NaN yang lolos filter >0 lalu diclamp 0.01 diam-diam,
+ * dan penjaga over-return ikut menilai angka rusak. Baris berkode item dengan
+ * qty tak terbaca ditolak berpesan, bukan dibuang/dinclamp diam-diam. Baris
+ * tanpa item (itemId kosong/0) tetap dibuang (baris kosong form); qty <= 0
+ * pada baris berkode tetap dibuang (perilaku lama: baris belum diisi).
+ * Harga/cost TIDAK dari payload: server resolve dari faktur/master.
+ */
+function parseSalesReturnItems(itemsJson: string | null | undefined): SalesReturnItemInput[] {
+  const rows = safeJsonParse<{ itemId?: unknown; qty?: unknown; serialNumbers?: unknown; batchNumbers?: unknown }[]>(itemsJson ?? null) ?? [];
+  const items: SalesReturnItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(row?.itemId as string | number | null | undefined);
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(row.qty as string | number | null | undefined);
+    if (qty === null) {
+      throw new Error(`Kuantitas retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`);
+    }
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      serialNumbers: parseReturnIdentity(row.serialNumbers),
+      batchNumbers: parseReturnIdentity(row.batchNumbers),
+    });
+  }
+  return items;
+}
+
 export async function createSalesReturn(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_returns")
@@ -1676,9 +1816,8 @@ export async function createSalesReturn(formData: FormData) {
   const slug = await nextSlug("salesReturn", documentNo)
 
   const itemsJson = v.items
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
-  const validItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
-  const returnItemIds = validItems.map((it: any) => Number(it.itemId))
+  const validItems = parseSalesReturnItems(itemsJson)
+  const returnItemIds = validItems.map((it) => it.itemId)
   const returnCostRows = returnItemIds.length
     ? await prisma.item.findMany({ where: { id: { in: returnItemIds } }, select: { id: true, cost: true, price: true } })
     : []
@@ -1746,7 +1885,7 @@ export async function createSalesReturn(formData: FormData) {
       }
 
       const violation = findOverReturn(
-        validItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+        validItems.map((it) => ({ itemId: it.itemId, qty: it.qty })),
         invoicedQtyByItem,
         alreadyReturnedByItem
       )
@@ -1769,21 +1908,21 @@ export async function createSalesReturn(formData: FormData) {
         customerId: v.customerId,
         date: wibDateToUtcMidnight(v.date),
         reason: v.reason ?? null,
+        taxReturnNoteNumber: v.taxReturnNoteNumber ?? null,
+        taxReturnNoteDate: v.taxReturnNoteDate ? wibDateToUtcMidnight(v.taxReturnNoteDate) : null,
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: validItems.map((item: any) => ({
-            itemId: Number(item.itemId),
-            // qty arrives as a string from safeJsonParse; the sales_return_items
-            // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-            // pattern) so a tampered 0/undefined qty is treated as essentially zero
-            // rather than crashing the Prisma insert with a string-to-Int error.
-            qty: Math.max(0.01, Number(item.qty) || 0),
-            cost: returnCostMap.get(Number(item.itemId)) ?? 0,
-            price: resolvePrice(Number(item.itemId)),
+          create: validItems.map((item) => ({
+            itemId: item.itemId,
+            // qty sudah angka ter-parse (helper parseSalesReturnItems):
+            // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+            qty: item.qty,
+            cost: returnCostMap.get(item.itemId) ?? 0,
+            price: resolvePrice(item.itemId),
             // P1-1: identitas fisik yang benar-benar kembali.
-            serialNumbers: parseReturnIdentity(item.serialNumbers),
-            batchNumbers: parseReturnIdentity(item.batchNumbers),
+            serialNumbers: item.serialNumbers,
+            batchNumbers: item.batchNumbers,
           })),
         },
       },
@@ -2669,9 +2808,8 @@ export async function updateSalesReturn(id: number, formData: FormData) {
 
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
   const itemsJson = input.items
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
-  const validReturnItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
-  const updReturnIds = validReturnItems.map((it: any) => Number(it.itemId))
+  const validReturnItems = parseSalesReturnItems(itemsJson)
+  const updReturnIds = validReturnItems.map((it) => it.itemId)
   const updReturnCostRows = updReturnIds.length
     ? await prisma.item.findMany({ where: { id: { in: updReturnIds } }, select: { id: true, cost: true, price: true } })
     : []
@@ -2759,7 +2897,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
       }
 
       const txViolation = findOverReturn(
-        validReturnItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+        validReturnItems.map((it) => ({ itemId: it.itemId, qty: it.qty })),
         txInvoicedQtyByItem,
         txAlreadyReturnedByItem
       )
@@ -2794,20 +2932,20 @@ export async function updateSalesReturn(id: number, formData: FormData) {
         customerId: input.customerId,
         date: wibDateToUtcMidnight(input.date),
         reason: input.reason ?? null,
+        taxReturnNoteNumber: input.taxReturnNoteNumber ?? null,
+        taxReturnNoteDate: input.taxReturnNoteDate ? wibDateToUtcMidnight(input.taxReturnNoteDate) : null,
         items: {
           create: validReturnItems
-            .map((item: any) => ({
-              itemId: Number(item.itemId),
-              // qty arrives as a string from safeJsonParse; the sales_return_items
-              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-              // pattern) so a tampered 0/undefined qty is treated as essentially zero
-              // rather than crashing the Prisma insert with a string-to-Int error.
-              qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: updReturnCostMap.get(Number(item.itemId)) ?? 0,
-              price: resolveUpdPrice(Number(item.itemId)),
+            .map((item) => ({
+              itemId: item.itemId,
+              // qty sudah angka ter-parse (helper parseSalesReturnItems):
+              // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+              qty: item.qty,
+              cost: updReturnCostMap.get(item.itemId) ?? 0,
+              price: resolveUpdPrice(item.itemId),
               // P1-1: identitas fisik yang benar-benar kembali.
-              serialNumbers: parseReturnIdentity(item.serialNumbers),
-              batchNumbers: parseReturnIdentity(item.batchNumbers),
+              serialNumbers: item.serialNumbers,
+              batchNumbers: item.batchNumbers,
             })),
         },
       },

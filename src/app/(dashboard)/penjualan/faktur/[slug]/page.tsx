@@ -6,7 +6,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Faktur Penjualan" }
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -20,6 +20,8 @@ import { VoidButton } from "@/components/ui/void-button"
 import { PrintButton } from "@/components/ui/print-button"
 import { ProcessButton } from "@/components/ui/process-button"
 import { WhatsappButton } from "@/components/reports/whatsapp-button"
+import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note"
+import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data"
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
@@ -32,6 +34,8 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas"
 import { CanCreate } from "@/components/auth/can-create"
+import { SalesLateFeePanel } from "@/components/reports/sales-late-fee-panel"
+import { getSalesLateFeePanelForInvoice } from "@/lib/reports/sales-late-fee-data"
 
 export default async function InvoiceDetailPage({
   params,
@@ -82,6 +86,21 @@ export default async function InvoiceDetailPage({
   )
 
   if (!invoice) notFound()
+
+  // Dokumen denda piutang (F-2026-10-22-093-V): tab hanya untuk pemegang
+  // view_sales_late_fees; loader menegakkan izin yang sama fail-closed.
+  const [canViewLateFees, canCreateLateFee, canReverseLateFee] =
+    await Promise.all([
+      hasPermission("view_sales_late_fees"),
+      hasPermission("create_sales_late_fees"),
+      hasPermission("delete_sales_late_fees"),
+    ])
+  const lateFeeBundle = canViewLateFees
+    ? await getSalesLateFeePanelForInvoice(invoice.id)
+    : null
+
+  // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
+  const whatsappTrail = await getWhatsappTrail("SalesInvoice", invoice.id)
 
   // Custom fabrication: items stay editable until the customer actually pays.
   // A down payment is only an advance (reconciled at the end) — it does NOT lock
@@ -150,6 +169,9 @@ export default async function InvoiceDetailPage({
             )}
             <WhatsappButton
               phone={invoice.customer.phone}
+              modelType="SalesInvoice"
+              modelId={invoice.id}
+              surface="detail"
               message={buildWhatsappMessage({
                 customerName: invoice.customer.name,
                 documentLabel: "Faktur",
@@ -178,6 +200,8 @@ export default async function InvoiceDetailPage({
           </>
         }
       />
+
+      <WhatsappTrailNote trail={whatsappTrail} />
 
       <DetailTabs
         ariaLabel="Tab detail faktur"
@@ -233,6 +257,8 @@ export default async function InvoiceDetailPage({
                   discount: Number(item.discount ?? 0),
                   total: Number(item.total),
                   uom: item.uom ?? null,
+                  priceSource: item.priceSource ?? null,
+                  priceListMinQty: item.priceListMinQty != null ? Number(item.priceListMinQty) : null,
                   serialNumbers: Array.isArray(item.serialNumbers)
                     ? (item.serialNumbers as unknown[]).map((s) => String(s))
                     : [],
@@ -386,6 +412,23 @@ export default async function InvoiceDetailPage({
               </div>
             ),
           },
+          ...(lateFeeBundle
+            ? [
+                {
+                  id: "denda",
+                  label: "Denda",
+                  content: (
+                    <SalesLateFeePanel
+                      panel={lateFeeBundle.panel}
+                      accounts={lateFeeBundle.accounts}
+                      paymentMethods={lateFeeBundle.paymentMethods}
+                      canCreate={canCreateLateFee}
+                      canReverse={canReverseLateFee}
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             id: "lampiran",
             label: "Lampiran",

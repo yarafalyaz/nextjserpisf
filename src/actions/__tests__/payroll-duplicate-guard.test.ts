@@ -2,14 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Regression test for the payroll double-pay race (fix fb0aa99):
 // idempotency was app-level only (findFirst-then-create TOCTOU). A DB unique
-// constraint (employeeId, period) now guards it atomically; the action must
-// translate the resulting P2002 into the same friendly message instead of
-// leaking a raw Prisma error.
+// constraint guards it atomically; the action must translate the resulting
+// P2002 into the same friendly message instead of leaking a raw Prisma error.
+// F-2026-10-22-076-S (BR-PF-03): the unique key moved from (employeeId,
+// period) to (employeeId, startDate, endDate) and the app-level pre-check
+// became the range-overlap guard (findMany + builder) run under an employee
+// row lock inside the create transaction.
 
 const requirePermissionMock = vi.fn()
 const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
-const payrollFindFirstMock = vi.fn()
+const payrollFindManyMock = vi.fn()
 const payrollCreateMock = vi.fn()
 const employeeFindUniqueMock = vi.fn()
 
@@ -23,10 +26,13 @@ vi.mock("@/lib/db/prisma", () => {
   // the P2002 translation regressed silently.
   const txDelegates = () => ({
     payroll: {
-      findFirst: (...a: unknown[]) => payrollFindFirstMock(...a),
+      findMany: (...a: unknown[]) => payrollFindManyMock(...a),
+      // nextSlug (slug-db) memeriksa tabrakan slug lewat delegate findFirst.
+      findFirst: vi.fn().mockResolvedValue(null),
       create: (...a: unknown[]) => payrollCreateMock(...a),
     },
     employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
+    employeeLoan: { findMany: vi.fn().mockResolvedValue([]) },
     approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
     approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
     // requestApprovalIfConfigured locks the workflow row first and bails out when
@@ -37,12 +43,16 @@ vi.mock("@/lib/db/prisma", () => {
   return {
     prisma: {
       payroll: {
-        findFirst: (...a: unknown[]) => payrollFindFirstMock(...a),
-        findMany: vi.fn().mockResolvedValue([]),
+        findMany: (...a: unknown[]) => payrollFindManyMock(...a),
+        findFirst: vi.fn().mockResolvedValue(null),
         create: (...a: unknown[]) => payrollCreateMock(...a),
       },
       payrollTerBracket: { findMany: vi.fn().mockResolvedValue([]) },
+      // F-2026-10-21-027: tanpa penugasan komponen pada fixture ini.
+      employeePayrollComponent: { findMany: vi.fn().mockResolvedValue([]) },
+      payrollComponentLine: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
       employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
+      employeeLoan: { findMany: vi.fn().mockResolvedValue([]) },
       approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
       approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
       $queryRaw: vi.fn().mockResolvedValue([]),
@@ -98,26 +108,30 @@ const baseForm = {
 }
 
 beforeEach(() => {
-  for (const m of [requirePermissionMock, revalidateMock, logActivityMock, payrollFindFirstMock, payrollCreateMock, employeeFindUniqueMock]) m.mockReset()
+  for (const m of [requirePermissionMock, revalidateMock, logActivityMock, payrollFindManyMock, payrollCreateMock, employeeFindUniqueMock]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
-  employeeFindUniqueMock.mockResolvedValue({ maritalStatus: "single" })
-  payrollFindFirstMock.mockResolvedValue(null)
+  employeeFindUniqueMock.mockResolvedValue({ maritalStatus: "single", paymentFrequency: "MONTHLY", employeeLoans: [] })
+  payrollFindManyMock.mockResolvedValue([])
   payrollCreateMock.mockResolvedValue({ id: 99 })
 })
 
 describe("processPayroll duplicate guard", () => {
-  it("rejects via the app-level pre-check when a payroll already exists", async () => {
-    payrollFindFirstMock.mockResolvedValue({ id: 7 })
+  it("rejects via the range-overlap guard when an overlapping slip exists", async () => {
+    // F-076-S AC-PF-3: penabrak disebut nomor slipnya, bukan pesan period lama.
+    payrollFindManyMock.mockResolvedValue([
+      { startDate: new Date("2026-06-01"), endDate: new Date("2026-06-30"), status: "draft", documentNo: "PAY-202606-0007" },
+    ])
     const result = await processPayroll(fd(baseForm))
     expect(result.success).toBe(false)
-    expect(result.error).toContain("sudah ada")
+    expect(result.error).toContain("PAY-202606-0007")
     expect(payrollCreateMock).not.toHaveBeenCalled()
   })
 
   it("returns a friendly message when a concurrent insert wins the race (P2002)", async () => {
-    // Pre-check passes (no existing row) but the DB unique constraint rejects
-    // the create because a parallel request inserted first.
-    payrollFindFirstMock.mockResolvedValue(null)
+    // Pre-check passes (no overlapping row) but the DB unique constraint
+    // (employeeId, startDate, endDate) rejects the create because a parallel
+    // request inserted the same range first.
+    payrollFindManyMock.mockResolvedValue([])
     payrollCreateMock.mockRejectedValue({ code: "P2002" })
     const result = await processPayroll(fd(baseForm))
     expect(result.success).toBe(false)

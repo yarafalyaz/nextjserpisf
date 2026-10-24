@@ -6,6 +6,8 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { EmployeeTable } from "./_components/employee-table"
+import { EmployeeLifecycleAttentionCard } from "./_components/employee-lifecycle-attention-card"
+import { getEmployeeLifecycleAttention } from "@/actions/hrm.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
@@ -52,6 +54,8 @@ export default async function EmployeesPage({
 
   const total = await prisma.employee.count({ where })
 
+  const attention = await getEmployeeLifecycleAttention()
+
   const tableData = toPlain(employees)
 
 
@@ -68,6 +72,11 @@ export default async function EmployeesPage({
       </div>
 
       <EmployeeTable data={tableData} total={total} page={page} pageSize={pageSize} />
+
+      <EmployeeLifecycleAttentionCard
+        rows={attention.success ? attention.rows : []}
+        error={attention.success ? null : attention.error}
+      />
     </div>
   )
 }

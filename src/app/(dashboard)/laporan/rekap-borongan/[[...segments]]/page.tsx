@@ -20,8 +20,8 @@ export const metadata: Metadata = { title: "Rekap Borongan" }
  * Data dari loader read-only `getLaborRecap` (builder `buildLaborRecap`,
  * PR #271): rekap INFORMATIF atas baris ProductionCost labor existing —
  * bukan dasar bayar, bukan dasar jurnal, tanpa tombol bayar. Periode rute
- * hanya mengisi bingkai halaman path-only; isi rekap selalu seluruh baris
- * labor (loader tidak difilter periode agar cocok dengan builder).
+ * path-only disaring menurut Timesheet.date (F-038); baris tanpa tanggal
+ * kerja terbukti tampil di kelompok terpisah di luar total periode.
  */
 export default async function LaborRecapPage({
   params: routeParams,
@@ -37,7 +37,7 @@ export default async function LaborRecapPage({
     end: now,
   }))
 
-  const { report } = await loadLaborRecapReport()
+  const { report } = await loadLaborRecapReport({ start: period.start, end: period.end })
   const periodLabel = formatPeriodLabel(period)
 
   return (
@@ -46,7 +46,7 @@ export default async function LaborRecapPage({
       sheetTitle="Rekap Borongan"
       subtitle="Upah Borongan per Teknisi (Informatif)"
       periodLabel={periodLabel}
-      periodCaption={`${periodLabel} · rekap seluruh baris labor`}
+      periodCaption={`${periodLabel} · disaring menurut tanggal kerja timesheet`}
       printedBy={user.name ?? user.email}
       wide
       filter={

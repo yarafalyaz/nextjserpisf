@@ -124,16 +124,18 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
       submitId="submit-down-payment"
       isPending={isPending}
       isEditing={Boolean(downPayment?.id)}
+      formLabel={downPayment?.id ? "Formulir ubah uang muka" : "Formulir tambah uang muka"}
     >
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="quotationId">Penawaran *</Label>
+          <Label htmlFor="quotationId">Penawaran <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Controller
             name="quotationId"
             control={control}
             render={({ field }) => (
               <Combobox
                 id="quotationId"
+                required
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                 placeholder="Cari penawaran..."
@@ -218,8 +220,8 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
         })()}
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="amount">Jumlah DP (Rp) *</Label>
-          <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" />} />
+          <Label htmlFor="amount">Jumlah DP (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
+          <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" required />} />
           {errors.amount && <span className="text-xs text-danger mt-1">{errors.amount.message}</span>}
         </div>
 
@@ -235,13 +237,14 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="paymentMethod">Metode Pembayaran *</Label>
+          <Label htmlFor="paymentMethod">Metode Pembayaran <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Controller
             name="paymentMethod"
             control={control}
             render={({ field }) => (
               <Combobox
                 id="paymentMethod"
+                required
                 value={field.value || null}
                 onChange={(v) => field.onChange(v ?? "")}
                 placeholder="Pilih / ketik metode..."

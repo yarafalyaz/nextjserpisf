@@ -11,6 +11,10 @@ import { LeadTable } from "./_components/lead-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getStaleLeads } from "@/lib/reports/stale-leads-data"
 import { StaleLeadsCard } from "@/components/reports/stale-leads-card"
+import { getLeadFollowups } from "@/lib/reports/lead-followups-data"
+import { LeadFollowupsCard } from "@/components/reports/lead-followups-card"
+import { getLeadFunnel } from "@/lib/reports/lead-funnel-data"
+import { LeadFunnelCard } from "@/components/reports/lead-funnel-card"
 
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
@@ -54,6 +58,10 @@ export default async function LeadsPage({
 
   const staleLeads = await getStaleLeads()
 
+  const leadFollowups = await getLeadFollowups()
+
+  const leadFunnel = await getLeadFunnel("leads_page")
+
   const data = toPlain(leads)
 
   const statusChips = ["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((dbStatus) => {
@@ -84,6 +92,10 @@ export default async function LeadsPage({
         </Link>
         </CanCreate>
       </div>
+
+      <LeadFollowupsCard followups={leadFollowups} />
+
+      <LeadFunnelCard funnel={leadFunnel} />
 
       <StaleLeadsCard stale={staleLeads} />
 

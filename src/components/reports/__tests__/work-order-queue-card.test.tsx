@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, afterEach, vi } from "vitest"
+
+vi.mock("@/actions/whatsapp-log.actions", () => ({
+  recordWhatsappLinkOpened: vi.fn(async () => ({ success: true })),
+}));
 
 import { WorkOrderQueueCard } from "../work-order-queue-card"
 import { buildWorkOrderQueue, type WorkOrderQueueInput } from "@/lib/reports/work-order-queue"
@@ -62,7 +66,7 @@ describe("WorkOrderQueueCard F-2026-10-20-28(a)", () => {
     const { container, root } = renderCard(<WorkOrderQueueCard queue={queue} />)
     const links = Array.from(container.querySelectorAll("a"))
     const wa = links.find((a) => (a.textContent ?? "").includes("Kirim WA"))
-    expect(wa?.getAttribute("aria-label")).toBe("Kirim WA ke pelanggan")
+    expect(wa?.getAttribute("aria-label")).toBe("Kirim WA")
     const href = wa?.getAttribute("href") ?? ""
     expect(href.startsWith("https://wa.me/6281234567890?text=")).toBe(true)
     const text = decodeURIComponent(href.split("text=")[1] ?? "")

@@ -31,7 +31,7 @@ import {
 } from "@/lib/validations/schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   createLeadSchema,
   updateLeadSchema,
@@ -39,6 +39,42 @@ import {
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
+import {
+  isEmploymentEndReason,
+  isEmploymentStatus,
+} from "@/lib/reports/employee-lifecycle";
+
+/**
+ * Konversi satuan alternatif dari JSON FormData `uomConversions`
+ * ([{ code, factorToBase }]). factorToBase bisa string berformat Indonesia
+ * dari klien non-form ("1.000" = 1000, "1,5" = 1.5) — wajib lewat
+ * parseLocaleNumber; Number() mentah membaca "1.000" jadi 1 dan "abc" jadi
+ * NaN yang lolos filter >0 secara diam-diam. Baris berkode dengan faktor tak
+ * terbaca / tidak > 0 ditolak berpesan, bukan dibuang diam-diam (konversi
+ * hilang = qty transaksi dihitung 1:1 tanpa jejak). Baris tanpa kode tetap
+ * dibuang (baris kosong form).
+ */
+function parseUomConversions(
+  convJson: string | null,
+): { code: string; factorToBase: number }[] {
+  const rows =
+    safeJsonParse<{ code: string; factorToBase: unknown }[]>(convJson) ?? [];
+  const conversions: { code: string; factorToBase: number }[] = [];
+  for (const c of rows) {
+    const code = typeof c?.code === "string" ? c.code.trim() : "";
+    if (!code) continue;
+    const factor = parseLocaleNumber(
+      c.factorToBase as string | number | null | undefined,
+    );
+    if (factor === null || factor <= 0) {
+      throw new Error(
+        `Faktor konversi satuan "${code}" tidak valid — isi angka lebih dari 0 (mis. 12 atau 1.000).`,
+      );
+    }
+    conversions.push({ code, factorToBase: factor });
+  }
+  return conversions;
+}
 
 /**
  * Privilege-escalation guard for Employee → User creation/sync flows.
@@ -472,16 +508,15 @@ export async function createItem(formData: FormData) {
       });
 
       // Multi-UoM alternate unit conversions (JSON: [{ code, factorToBase }])
-      const convJson = formData.get("uomConversions") as string | null;
-      const conversions = (
-        safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
-      ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
+      const conversions = parseUomConversions(
+        formData.get("uomConversions") as string | null,
+      );
       if (conversions.length > 0) {
         await tx.uomConversion.createMany({
           data: conversions.map((c) => ({
             itemId: created.id,
             code: c.code.trim(),
-            factorToBase: Number(c.factorToBase),
+            factorToBase: c.factorToBase,
           })),
           skipDuplicates: true,
         });
@@ -558,16 +593,14 @@ export async function updateItem(itemId: number, formData: FormData) {
       // Replace alternate-unit conversions
       const convJson = formData.get("uomConversions") as string | null;
       if (convJson !== null) {
-        const conversions = (
-          safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
-        ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
+        const conversions = parseUomConversions(convJson);
         await tx.uomConversion.deleteMany({ where: { itemId } });
         if (conversions.length > 0) {
           await tx.uomConversion.createMany({
             data: conversions.map((c) => ({
               itemId,
               code: c.code.trim(),
-              factorToBase: Number(c.factorToBase),
+              factorToBase: c.factorToBase,
             })),
             skipDuplicates: true,
           });
@@ -691,7 +724,14 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
 }
 
 
-/** Baca opsi akun login dari form karyawan (dipakai create + update, identik). */
+/** Baca opsi akun login dari form karyawan (dipakai create + update, identik).
+ * ID peran hanya desimal murni via safeId — pola repo (taxIds, route
+ * workflow/print/attachments/notifications, parseId tukar faktur). Number()
+ * mentah menerima "0x10"->16, "1e3"->1000, " 5"->5: ID tak terduga lolos
+ * ke connect/set lalu meledak P2025/P2003 mentah atau menaut peran salah.
+ * Nilai non-ID dibuang diam-diam (bukan menolak): form hanya mengirim string
+ * ID sah dari checkbox peran, tak ada jalur sah yang mengirim "0" — dan
+ * menolak di sini mengubah respons sukses-menjadi-gagal bagi payload lama. */
 function readEmployeeLoginInput(formData: FormData) {
   return {
     wantsLogin:
@@ -701,8 +741,8 @@ function readEmployeeLoginInput(formData: FormData) {
     loginPass: formData.get("loginPassword") as string | null,
     loginRoleIds: formData
       .getAll("loginRoleIds")
-      .map((v) => Number(v))
-      .filter((n) => Number.isFinite(n)),
+      .map((v) => safeId(v))
+      .filter((n): n is number => n !== null),
   };
 }
 
@@ -741,6 +781,92 @@ function readEmployeeFormFields(
     employeeVillage: formData.get("village") as string | null,
     postalCode: formData.get("postalCode") as string | null,
   };
+}
+
+/**
+ * F-2026-10-22-085-S: field siklus hidup karyawan dari FormData.
+ * Kosakata tertutup Q-EMP-1/2 divalidasi di sini (BR-EMP-02): teks bebas
+ * ditolak. employmentEndedAt dan endReason wajib berpasangan. Tanggal
+ * divalidasi employeeDatesSchema (parsedDates) sebelum fungsi ini jalan.
+ * Field absen dari FormData = tidak disentuh (null) supaya pemanggil lama
+ * (quick-add dsb.) tidak menghapus data siklus hidup tanpa sadar.
+ */
+function readEmployeeLifecycleFields(
+  formData: FormData,
+  dates: {
+    contractStartDate?: string;
+    contractEndDate?: string;
+    employmentEndedAt?: string;
+  },
+) {
+  const rawStatus = (formData.get("employmentStatus") as string | null)?.trim() || null;
+  if (rawStatus !== null && !isEmploymentStatus(rawStatus)) {
+    throw new Error("Status kepegawaian tidak valid");
+  }
+  const rawReason = (formData.get("endReason") as string | null)?.trim() || null;
+  if (rawReason !== null && !isEmploymentEndReason(rawReason)) {
+    throw new Error("Alasan berhenti tidak valid");
+  }
+  const endedAt = dates.employmentEndedAt
+    ? wibDateToUtcMidnight(dates.employmentEndedAt)
+    : null;
+  if ((endedAt === null) !== (rawReason === null)) {
+    throw new Error("Tanggal berhenti dan alasan berhenti wajib diisi bersamaan");
+  }
+  return {
+    employmentStatus: rawStatus,
+    contractStartDate: dates.contractStartDate
+      ? wibDateToUtcMidnight(dates.contractStartDate)
+      : null,
+    contractEndDate: dates.contractEndDate
+      ? wibDateToUtcMidnight(dates.contractEndDate)
+      : null,
+    employmentEndedAt: endedAt,
+    endReason: rawReason,
+  };
+}
+
+function dateOnlyOrNull(value: Date | null | undefined): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
+type EmployeeLifecycleValues = {
+  employmentStatus: string | null;
+  contractStartDate: string | null;
+  contractEndDate: string | null;
+  employmentEndedAt: string | null;
+  endReason: string | null;
+};
+
+/**
+ * BR-EMP-09: satu baris jejak perubahan siklus hidup dengan old/new.
+ * Pola writeWorkOrderEndDateLog (F-035): gagal tulis TIDAK melempar —
+ * update karyawan yang sudah commit tidak dilaporkan gagal gara-gara
+ * jejak; kegagalan dikembalikan sebagai penanda eksplisit { success }.
+ */
+async function writeEmployeeLifecycleLog(args: {
+  userId: number;
+  employeeId: number;
+  oldValues: EmployeeLifecycleValues;
+  newValues: EmployeeLifecycleValues;
+}): Promise<{ success: boolean }> {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId: args.userId,
+        action: "employee_lifecycle_changed",
+        modelType: "Employee",
+        modelId: args.employeeId,
+        description: "Mengubah status kepegawaian karyawan",
+        oldValues: args.oldValues,
+        newValues: args.newValues,
+      },
+    });
+    return { success: true };
+  } catch (logError) {
+    console.error("[writeEmployeeLifecycleLog] gagal menulis jejak", logError);
+    return { success: false };
+  }
 }
 
 // departmentId/positionId hanya divalidasi format oleh safeId; FK fiktif lolos
@@ -821,6 +947,7 @@ export async function createEmployee(formData: FormData) {
     const employeeData = {
       employeeNo,
       ...readEmployeeFormFields(formData, parsedDates.data),
+      ...readEmployeeLifecycleFields(formData, parsedDates.data),
       joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
@@ -901,7 +1028,14 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     // Look up whether this employee already has a linked login account.
     const current = await prisma.employee.findUnique({
       where: { id: employeeId },
-      select: { userId: true },
+      select: {
+        userId: true,
+        employmentStatus: true,
+        contractStartDate: true,
+        contractEndDate: true,
+        employmentEndedAt: true,
+        endReason: true,
+      },
     });
     const trimmedEmail = email?.trim() || null;
 
@@ -969,8 +1103,20 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
 
     const employeeFields = readEmployeeFormFields(formData, parsedDates.data);
     await assertEmployeeRefsExist(employeeFields);
+    // F-085-S: siklus hidup hanya ditulis bila form mengirim field-nya;
+    // form lama tanpa field ini tidak menghapus data yang sudah tercatat.
+    const lifecycleTouched =
+      formData.has("employmentStatus") ||
+      formData.has("contractStartDate") ||
+      formData.has("contractEndDate") ||
+      formData.has("employmentEndedAt") ||
+      formData.has("endReason");
+    const lifecycleFields = lifecycleTouched
+      ? readEmployeeLifecycleFields(formData, parsedDates.data)
+      : null;
     const updateData = {
       ...employeeFields,
+      ...(lifecycleFields ?? {}),
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
       slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
@@ -1024,6 +1170,37 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         ? "Memperbarui karyawan + buat akun login"
         : "Memperbarui karyawan",
     );
+    // BR-EMP-09: perubahan siklus hidup tercatat old/new (pola F-035).
+    // logActivity existing tidak menulis oldValues/newValues -> baris khusus.
+    if (lifecycleFields && current) {
+      const oldValues = {
+        employmentStatus: current.employmentStatus,
+        contractStartDate: dateOnlyOrNull(current.contractStartDate),
+        contractEndDate: dateOnlyOrNull(current.contractEndDate),
+        employmentEndedAt: dateOnlyOrNull(current.employmentEndedAt),
+        endReason: current.endReason,
+      };
+      const newValues = {
+        employmentStatus: lifecycleFields.employmentStatus,
+        contractStartDate: dateOnlyOrNull(lifecycleFields.contractStartDate),
+        contractEndDate: dateOnlyOrNull(lifecycleFields.contractEndDate),
+        employmentEndedAt: dateOnlyOrNull(lifecycleFields.employmentEndedAt),
+        endReason: lifecycleFields.endReason,
+      };
+      if (JSON.stringify(oldValues) !== JSON.stringify(newValues)) {
+        const logged = await writeEmployeeLifecycleLog({
+          userId: Number(actor.id),
+          employeeId,
+          oldValues,
+          newValues,
+        });
+        if (!logged.success) {
+          console.error("[updateEmployee] jejak siklus hidup gagal ditulis", {
+            employeeId,
+          });
+        }
+      }
+    }
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

@@ -35,6 +35,7 @@ export const ATTACHMENT_PERMISSION: Record<string, PermissionName> = {
   inventory_transfer: "view_inventory_transfers",
   stock_adjustment: "view_stock_adjustments",
   petty_cash: "view_petty_cash",
+  WarrantyClaim: "view_warranty_claims",
 }
 
 export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
@@ -62,6 +63,7 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
   inventory_transfer: "edit_inventory_transfers",
   stock_adjustment: "edit_stock_adjustments",
   petty_cash: "edit_petty_cash",
+  WarrantyClaim: "edit_warranty_claims",
 }
 
 export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {
@@ -70,4 +72,18 @@ export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {
   sales_payment: "create_sales_payments",
   vendor_bill: "create_vendor_bills",
   petty_cash: "create_petty_cash",
+}
+
+// F-2026-10-24-096-S: foto tahap/inspeksi. QC digerbang izin QC persis
+// (§3 spec), bukan izin WO generik; tahap proyek/operasi WO mengikuti
+// induk proyek/WO-nya; kendaraan mengikuti izin pelanggan.
+const PHOTO_PARENT_PERMISSIONS: [string, PermissionName, PermissionName][] = [
+  ["customer_vehicle", "view_customers", "edit_customers"],
+  ["project_stage", "view_projects", "edit_projects"],
+  ["work_order_operation", "view_work_orders", "edit_work_orders"],
+  ["qc_inspection", "view_qc", "manage_qc_inspections"],
+]
+for (const [type, view, write] of PHOTO_PARENT_PERMISSIONS) {
+  ATTACHMENT_PERMISSION[type] = view
+  ATTACHMENT_WRITE_PERMISSION[type] = write
 }

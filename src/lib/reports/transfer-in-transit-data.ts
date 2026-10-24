@@ -1,9 +1,12 @@
 /**
  * Pemuatan data untuk laporan pemeriksaan **Persediaan Terkirim Belum Diterima**.
  *
- * Sumbernya pemindahan berstatus `processed` — itu saat stok sudah keluar dari
- * gudang asal tetapi belum masuk gudang tujuan (`processInventoryTransfer` lalu
- * `receiveInventoryTransfer`).
+ * Sumbernya pemindahan berstatus `processed` (belum diterima sama sekali)
+ * atau `partially_received` (F-2026-10-22-081-S) — itu saat stok sudah
+ * keluar dari gudang asal tetapi belum masuk gudang tujuan
+ * (`processInventoryTransfer` lalu `receiveInventoryTransfer`).
+ * Kuantitas yang ditampilkan = SISA per baris (qty - receivedQty),
+ * dinilai pada carried cost pergerakan OUT — bukan qty terkirim penuh.
  *
  * Nilai diambil dari **pergerakan stok OUT** milik pemindahan itu
  * (`StockMove` `referenceType: "InventoryTransfer"`, `impact: "OUT"`, `status: "posted"`),
@@ -21,8 +24,26 @@ import {
   type TransferInTransitResult,
 } from "@/lib/reports/transfer-in-transit"
 
-/** Status pemindahan yang berarti barang masih di jalan. */
-export const IN_TRANSIT_TRANSFER_STATUS = "processed"
+/** Status pemindahan yang berarti barang masih di jalan (penuh / sebagian). */
+export const IN_TRANSIT_TRANSFER_STATUSES = ["processed", "partially_received"] as const
+
+/**
+ * Sisa belum diterima per item (F-2026-10-22-081-S §7): qty terkirim
+ * dikurangi receivedQty kumulatif per BARIS; baris duplikat item yang
+ * sama diagregasi; baris lunas tidak tampil. Inilah angka yang dinilai
+ * pada carried cost OUT — bukan qty terkirim penuh.
+ */
+export function remainingQtyByItem(
+  items: readonly { itemId: number; qty: unknown; receivedQty: unknown }[],
+): Map<number, number> {
+  const remainingByItem = new Map<number, number>()
+  for (const item of items) {
+    const remaining = Math.max(0, safeAdd(Number(item.qty), -Number(item.receivedQty), 2))
+    if (remaining <= 0) continue
+    remainingByItem.set(item.itemId, safeAdd(remainingByItem.get(item.itemId) ?? 0, remaining, 2))
+  }
+  return remainingByItem
+}
 
 /** Akumulasi nilai per pemindahan+barang dari pergerakan stok, persis sen. */
 export function aggregateTransferMoves(
@@ -52,7 +73,7 @@ export async function loadTransferInTransit(period: {
 }): Promise<TransferInTransitReport> {
   const transfers = await prisma.inventoryTransfer.findMany({
     where: {
-      status: IN_TRANSIT_TRANSFER_STATUS,
+      status: { in: [...IN_TRANSIT_TRANSFER_STATUSES] },
       date: { gte: period.start, lte: period.end },
     },
     select: {
@@ -61,7 +82,7 @@ export async function loadTransferInTransit(period: {
       date: true,
       sourceWarehouse: { select: { name: true } },
       destinationWarehouse: { select: { name: true } },
-      items: { select: { itemId: true, qty: true } },
+      items: { select: { itemId: true, qty: true, receivedQty: true } },
     },
     orderBy: { date: "asc" },
   })
@@ -105,15 +126,18 @@ export async function loadTransferInTransit(period: {
         date: transfer.date,
         sourceName: transfer.sourceWarehouse?.name ?? "–",
         destinationName: transfer.destinationWarehouse?.name ?? "–",
-        items: transfer.items.map((item) => {
-          const detail = itemById.get(item.itemId)
-          const moved = valueByKey.get(`${transfer.id}-${item.itemId}`)
+        // Sisa per item (baris duplikat item sama diagregasi): qty yang
+        // tampil & dinilai = terkirim - diterima kumulatif, BUKAN qty
+        // penuh pergerakan OUT (F-2026-10-22-081-S §7).
+        items: [...remainingQtyByItem(transfer.items).entries()].map(([itemId, remaining]) => {
+          const detail = itemById.get(itemId)
+          const moved = valueByKey.get(`${transfer.id}-${itemId}`)
           const unitCost = moved && moved.qty > 0 ? moved.value / moved.qty : detail ? Number(detail.cost ?? 0) : null
           return {
             sku: detail?.sku ?? null,
             name: detail?.name ?? "Barang",
             unit: detail?.unitOfMeasure ?? null,
-            qty: moved ? moved.qty : Number(item.qty),
+            qty: remaining,
             unitCost: moved ? unitCost : detail ? Number(detail.cost ?? 0) : null,
           }
         }),

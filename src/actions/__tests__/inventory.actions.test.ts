@@ -88,6 +88,10 @@ vi.mock("@/lib/hooks/inventory-transfer.hook", () => ({
 }));
 vi.mock("@/lib/hooks/material-issue.hook", () => ({
   onMaterialIssueCompleted: vi.fn().mockResolvedValue({}),
+  // F-008: snapshot resolver — passthrough null (belum kalibrasi) di unit test.
+  resolveMaterialIssueScrapSnapshots: vi.fn(async (_tx: any, rows: any[]) =>
+    new Map(rows.map((r: any) => [r.itemId, null])),
+  ),
 }));
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
@@ -238,6 +242,40 @@ describe("Inventory Transfer Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.inventoryTransfer.create).toHaveBeenCalledTimes(1);
   });
+  it("createInventoryTransfer parses qty string format Indonesia penuh", async () => {
+    mocks.prismaMock.inventoryTransfer.create.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createInventoryTransfer(
+      transferFd({ items: itemsJson([{ itemId: 1, qty: "2.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("createInventoryTransfer menolak qty tak terbaca tanpa create", async () => {
+    const res = await actions.createInventoryTransfer(
+      transferFd({ items: itemsJson([{ itemId: 1, qty: "abc" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Kuantitas tidak valid");
+    expect(mocks.prismaMock.inventoryTransfer.create).not.toHaveBeenCalled();
+  });
+  it("updateInventoryTransfer parses qty string format Indonesia penuh", async () => {
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    mocks.prismaMock.inventoryTransfer.update.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.updateInventoryTransfer(
+      1,
+      transferFd({ items: itemsJson([{ itemId: 1, qty: "2.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
   it("updateInventoryTransfer succeeds", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.updateInventoryTransfer(1, transferFd());
@@ -269,6 +307,46 @@ describe("Material Issue Actions", () => {
     const res = await actions.createMaterialIssue(miFd());
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
+  });
+  it("createMaterialIssue parses qty/unitCost string format Indonesia penuh", async () => {
+    mocks.prismaMock.materialIssue.create.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        expect(data.items.create[0].cost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createMaterialIssue(
+      miFd({
+        items: itemsJson([{ itemId: 1, qty: "2.000", unitCost: "2.000.000" }]),
+      }),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("createMaterialIssue menolak unitCost tak terbaca tanpa create", async () => {
+    const res = await actions.createMaterialIssue(
+      miFd({ items: itemsJson([{ itemId: 1, qty: 5, unitCost: "abc" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
+  });
+  it("updateMaterialIssue parses qty/unitCost string format Indonesia penuh", async () => {
+    seedDraft(mocks.prismaMock.materialIssue);
+    mocks.prismaMock.materialIssue.update.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        expect(data.items.create[0].cost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.updateMaterialIssue(
+      1,
+      miFd({
+        items: itemsJson([{ itemId: 1, qty: "2.000", unitCost: "2.000.000" }]),
+      }),
+    );
+    expect(res?.success).toBe(true);
   });
   it("updateMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue);
@@ -578,6 +656,52 @@ describe("Stock Adjustment Error & Edge Paths", () => {
     );
   });
 
+  it("createStockAdjustment membaca unitCost/newQty format Indonesia penuh, bukan 2", async () => {
+    // Regresi: Number("2.000.000")=2 dan Number("2.000")=2 merusak
+    // unitCost/totalCost/actualQty diam-diam (pola createRemnant).
+    mocks.prismaMock.stockAdjustment.create.mockImplementationOnce(
+      ({ data }: any) => {
+        const item = data.items.create[0];
+        expect(item.actualQty).toBe(2000);
+        expect(item.unitCost).toBe(2000000);
+        // systemQty mock default: groupBy {qty:5} tanpa impact -> -5.
+        expect(item.totalCost).toBe(item.difference * 2000000);
+        expect(item.difference).toBe(2005);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: "2.000", unitCost: "2.000.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+
+  it("createStockAdjustment menolak unitCost tak terbaca, bukan diam-diam 0", async () => {
+    const res = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "bukan-angka" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("updateStockAdjustment membaca unitCost format Indonesia penuh, bukan 2", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ id: 1, status: "draft" });
+    mocks.prismaMock.stockAdjustment.update.mockImplementationOnce(
+      ({ data }: any) => {
+        const item = data.items.create[0];
+        expect(item.unitCost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await (actions as any).updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "2.000.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+
   it("updateStockAdjustment fails if status changed inside transaction", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
@@ -833,6 +957,70 @@ describe("WorkOrder Coverage", () => {
 });
 
 describe("WorkOrder Item Map Coverage", () => {
+  it("createWorkOrder parses qty/cost string format Indonesia penuh", async () => {
+    mocks.prismaMock.workOrder.create.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        expect(data.items.create[0].cost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await (actions as any).createWorkOrder(
+      woFd({}, [{ itemId: 1, qty: "2.000", cost: "2.000.000" }]),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("createWorkOrder menolak qty tak terbaca tanpa create", async () => {
+    const res = await (actions as any).createWorkOrder(
+      woFd({}, [{ itemId: 1, qty: "abc", cost: 100 }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Kuantitas tidak valid");
+    expect(mocks.prismaMock.workOrder.create).not.toHaveBeenCalled();
+  });
+  it("createWorkOrder menolak cost tak terbaca tanpa create", async () => {
+    const res = await (actions as any).createWorkOrder(
+      woFd({}, [{ itemId: 1, qty: 5, cost: "abc" }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.workOrder.create).not.toHaveBeenCalled();
+  });
+  it("updateWorkOrder parses qty/cost string format Indonesia penuh", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    mocks.prismaMock.workOrderItem.createMany.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data[0].qty).toBe(2000);
+        expect(data[0].cost).toBe(2000000);
+        return { count: 1 };
+      },
+    );
+    const res = await (actions as any).updateWorkOrder(
+      1,
+      woFd({}, [{ itemId: 1, qty: "2.000", cost: "2.000.000" }]),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("updateWorkOrder menolak qty tak terbaca tanpa transaksi", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    const res = await (actions as any).updateWorkOrder(
+      1,
+      woFd({}, [{ itemId: 1, qty: "abc", cost: 100 }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Kuantitas tidak valid");
+    expect(mocks.prismaMock.workOrderItem.createMany).not.toHaveBeenCalled();
+  });
+  it("updateWorkOrder menolak cost negatif tanpa transaksi", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    const res = await (actions as any).updateWorkOrder(
+      1,
+      woFd({}, [{ itemId: 1, qty: 5, cost: -1 }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.workOrderItem.createMany).not.toHaveBeenCalled();
+  });
   it("createWorkOrder creates items when valid itemId provided", async () => {
     const res = await (actions as any).createWorkOrder(
       woFd({}, [{ itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" }]),
@@ -1119,9 +1307,26 @@ describe("remnant (P1-5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
-    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 });
+    // F-098-S: usable wajib ambang kategori — fixture lama tanpa dimensi kini
+    // ditolak di guard baru; mock kategori berambang agar jalur sukses lama
+    // (parsing unitCost/uom) tetap teruji apa adanya.
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, category: { remnantMinMeasure: 100 } });
     mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 1 });
   });
+
+  const usableFd = (over: Record<string, string> = {}) => {
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "1500");
+    fd.set("dimensions", "1200x300 mm");
+    fd.set("measuredSize", "1200");
+    fd.set("sourceType", "material_issue_item");
+    fd.set("sourceId", "42");
+    for (const [k, v] of Object.entries(over)) fd.set(k, v);
+    return fd;
+  };
 
   it("createRemnant menolak unitCost negatif bukan diam-diam 0", async () => {
     const fd = new FormData();
@@ -1144,18 +1349,13 @@ describe("remnant (P1-5)", () => {
     expect(badRes.success).toBe(false);
     expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
 
-    const fd = new FormData();
-    fd.set("itemId", "1");
-    fd.set("warehouseId", "1");
-    fd.set("qty", "2");
-    fd.set("uom", "u".repeat(50));
-    fd.set("unitCost", "1500");
+    const fd = usableFd({ uom: "u".repeat(50) });
     const res = await actions.createRemnant(fd);
     expect(res.success).toBe(true);
     const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
     expect(arg.data.uom).toHaveLength(32);
     expect(arg.data.unitCost).toBe(1500);
-    expect(arg.data.sourceId).toBeNull();
+    expect(arg.data.sourceId).toBe(42);
   });
 
   it("createStocktakeSession menolak gudang yang tidak ada (bukan P2003 mentah)", async () => {
@@ -1170,11 +1370,7 @@ describe("remnant (P1-5)", () => {
   });
 
   it("createRemnant membaca unitCost format Indonesia penuh, bukan 2", async () => {
-    const fd = new FormData();
-    fd.set("itemId", "1");
-    fd.set("warehouseId", "1");
-    fd.set("qty", "2");
-    fd.set("unitCost", "2.000.000");
+    const fd = usableFd({ unitCost: "2.000.000" });
     const res = await actions.createRemnant(fd);
     expect(res.success).toBe(true);
     const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
@@ -1234,6 +1430,70 @@ describe("remnant (P1-5)", () => {
     expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
   });
 
+  it("F-098-S createRemnant tanpa dimensi/tautan/ambang ditolak (AC-SCRAP-1)", async () => {
+    const noDims = usableFd();
+    noDims.delete("dimensions");
+    expect((await actions.createRemnant(noDims)).success).toBe(false);
+    const noLink = usableFd();
+    noLink.delete("sourceId");
+    const noLinkRes = await actions.createRemnant(noLink);
+    expect(noLinkRes.success).toBe(false);
+    if (!noLinkRes.success) expect(noLinkRes.error).toMatch(/tertaut/);
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, category: { remnantMinMeasure: null } });
+    const noThresholdRes = await actions.createRemnant(usableFd());
+    expect(noThresholdRes.success).toBe(false);
+    if (!noThresholdRes.success) expect(noThresholdRes.error).toMatch(/belum ditetapkan/);
+    const belowRes = await actions.createRemnant(usableFd({ measuredSize: "50" }));
+    expect(belowRes.success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it("F-098-S createRemnant usable sah membekukan snapshot ambang (AC-SCRAP-1)", async () => {
+    const res = await actions.createRemnant(usableFd());
+    expect(res.success).toBe(true);
+    const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
+    expect(arg.data.remnantMinMeasureSnapshot).toBe(100);
+    expect(arg.data.measuredSize).toBe(1200);
+    expect(arg.data.sourceType).toBe("material_issue_item");
+  });
+
+  it("F-098-S scrapRemnant tanpa kg ditolak; dengan kg tercatat (AC-SCRAP-7)", async () => {
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 1 });
+    const noKg = new FormData();
+    noKg.set("scrapReason", "tak terpakai");
+    expect((await actions.scrapRemnant(4, noKg)).success).toBe(false);
+    expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
+    const fd = new FormData();
+    fd.set("scrapReason", "tak terpakai");
+    fd.set("scrapWeightKg", "12.5");
+    expect((await actions.scrapRemnant(4, fd)).success).toBe(true);
+    expect(mocks.prismaMock.remnant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ scrapWeightKg: 12.5 }) }),
+    );
+  });
+
+  it("F-098-S reviewAbnormalScrap: izin + disposisi + hanya kolom tinjau (AC-SCRAP-5/6)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["admin"] });
+    const res = await actions.reviewAbnormalScrap({ source: "MI", lineId: 5, disposition: "kelalaian", note: "teguran tertulis" });
+    expect(res.success).toBe(true);
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("complete_work_orders");
+    const call = mocks.prismaMock.materialIssueItem.updateMany.mock.calls[0][0];
+    expect(call.where).toEqual({ id: 5, scrapReviewStatus: "menunggu_tinjau" });
+    expect(Object.keys(call.data).sort()).toEqual([
+      "scrapReviewDisposition", "scrapReviewNote", "scrapReviewStatus", "scrapReviewedAt", "scrapReviewedBy",
+    ]);
+    expect(call.data.scrapReviewStatus).toBe("ditinjau");
+
+    const noNote = await actions.reviewAbnormalScrap({ source: "PO", lineId: 6, disposition: "kelalaian", note: " " });
+    expect(noNote.success).toBe(false);
+    expect(mocks.prismaMock.productionOrderMaterial.updateMany).not.toHaveBeenCalled();
+
+    mocks.prismaMock.materialIssueItem.updateMany.mockResolvedValue({ count: 0 });
+    const stale = await actions.reviewAbnormalScrap({ source: "MI", lineId: 5, disposition: "diterima_wajar" });
+    expect(stale.success).toBe(false);
+  });
+
   it("consumeRemnant/scrapRemnant menolak gudang di luar scope user", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["warehouse"] });
     mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 1 }]);
@@ -1245,4 +1505,30 @@ describe("remnant (P1-5)", () => {
     expect((await actions.scrapRemnant(4, fd)).success).toBe(false);
     expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["itemId", "0x10"], ["itemId", "1e3"], ["itemId", "0b101"], ["itemId", " 1"], ["itemId", "+1"], ["itemId", "1.0"],
+    ["warehouseId", "0x10"], ["warehouseId", "1e3"], ["warehouseId", "0b101"], ["warehouseId", " 1"], ["warehouseId", "+1"], ["warehouseId", "1.0"],
+    ["qty", "1e3"], ["qty", "0x2"], ["qty", " 2"], ["qty", "+2 "], ["qty", ""], ["qty", "-2"],
+  ])("createRemnant menolak %s=%j bukan desimal murni", async (field, weird) => {
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "1500");
+    fd.set(field, weird);
+    expect((await actions.createRemnant(fd)).success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["0x10", "1e3", "0b101", " 1", "+1", "1.0"])(
+    "createStocktakeSession menolak warehouseId=%j bukan desimal murni",
+    async (weird) => {
+      const fd = new FormData();
+      fd.set("warehouseId", weird);
+      fd.set("date", "2026-06-13");
+      expect((await actions.createStocktakeSession(fd)).success).toBe(false);
+      expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
+    },
+  );
 });

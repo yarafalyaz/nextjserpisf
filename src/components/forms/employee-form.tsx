@@ -20,6 +20,13 @@ import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import {
+  EMPLOYMENT_STATUSES,
+  EMPLOYMENT_STATUS_LABELS,
+  EMPLOYMENT_STATUS_UNSET_LABEL,
+  EMPLOYMENT_END_REASONS,
+  EMPLOYMENT_END_REASON_LABELS,
+} from "@/lib/reports/employee-lifecycle"
 
 /**
  * Nilai `maritalStatus` sengaja tetap "Single"/"Married"/"Divorced": payroll
@@ -61,6 +68,12 @@ interface EmployeeFormProps {
     postalCode?: string | null
     hasLoginAccount?: boolean
     roleIds?: string[]
+    // F-2026-10-22-085-S: siklus hidup (YYYY-MM-DD | null)
+    employmentStatus?: string | null
+    contractStartDate?: string | null
+    contractEndDate?: string | null
+    employmentEndedAt?: string | null
+    endReason?: string | null
   }
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
@@ -174,6 +187,11 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
       joinDate: toDateInputValue(employee?.joinDate) || toLocalDateOnly(new Date()),
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
+      employmentStatus: employee?.employmentStatus || "",
+      contractStartDate: toDateInputValue(employee?.contractStartDate),
+      contractEndDate: toDateInputValue(employee?.contractEndDate),
+      employmentEndedAt: toDateInputValue(employee?.employmentEndedAt),
+      endReason: employee?.endReason || "",
     },
   })
 
@@ -197,6 +215,14 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             }
           })
         }
+
+        // F-085-S: lifecycle selalu dikirim eksplisit (kosong -> server null);
+        // jangan bergantung iterasi data (field kosong bisa terlewat).
+        formData.set("employmentStatus", data.employmentStatus ?? "")
+        formData.set("contractStartDate", data.contractStartDate ?? "")
+        formData.set("contractEndDate", data.contractEndDate ?? "")
+        formData.set("employmentEndedAt", data.employmentEndedAt ?? "")
+        formData.set("endReason", data.endReason ?? "")
 
         // Optional login account (create, or edit for employees without one)
         if (canOfferLogin && createLogin) {
@@ -226,7 +252,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah karyawan" : "Formulir tambah karyawan"}>
       <FormCard>
         <FormSection title="Data Pribadi">
           <div className="flex flex-col gap-1.5">
@@ -235,8 +261,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             {errors.employeeNo && <span className="text-xs text-danger mt-1">{errors.employeeNo.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama *</Label>
-            <Input id="name" {...register("name")} placeholder="Nama lengkap" />
+            <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
+            <Input id="name" required {...register("name")} placeholder="Nama lengkap" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -374,6 +400,80 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
           </div>
         </FormSection>
 
+        <FormSection title="Status Kepegawaian">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="employmentStatus">Status Kepegawaian</Label>
+            <Controller
+              name="employmentStatus"
+              control={control}
+              render={({ field }) => (
+                <select
+                  id="employmentStatus"
+                  className="form-input"
+                  value={field.value || ""}
+                  onChange={(e) => field.onChange(e.target.value)}
+                  onBlur={field.onBlur}
+                >
+                  <option value="">{EMPLOYMENT_STATUS_UNSET_LABEL}</option>
+                  {EMPLOYMENT_STATUSES.map((s) => (
+                    <option key={s} value={s}>{EMPLOYMENT_STATUS_LABELS[s]}</option>
+                  ))}
+                </select>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              label="Tanggal Mulai Kontrak"
+              name="contractStartDate"
+              value={watch("contractStartDate")}
+              onChange={(val) => setValue("contractStartDate", val)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              label="Tanggal Akhir Kontrak"
+              name="contractEndDate"
+              value={watch("contractEndDate")}
+              onChange={(val) => setValue("contractEndDate", val)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              label="Tanggal Berhenti Bekerja"
+              name="employmentEndedAt"
+              value={watch("employmentEndedAt")}
+              onChange={(val) => setValue("employmentEndedAt", val)}
+            />
+            {errors.employmentEndedAt && <span className="text-xs text-danger mt-1">{errors.employmentEndedAt.message}</span>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="endReason">Alasan Berhenti</Label>
+            <Controller
+              name="endReason"
+              control={control}
+              render={({ field }) => (
+                <select
+                  id="endReason"
+                  className="form-input"
+                  value={field.value || ""}
+                  onChange={(e) => field.onChange(e.target.value)}
+                  onBlur={field.onBlur}
+                >
+                  <option value="">-- Pilih --</option>
+                  {EMPLOYMENT_END_REASONS.map((r) => (
+                    <option key={r} value={r}>{EMPLOYMENT_END_REASON_LABELS[r]}</option>
+                  ))}
+                </select>
+              )}
+            />
+            {errors.endReason && <span className="text-xs text-danger mt-1">{errors.endReason.message}</span>}
+          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Tanggal berhenti dan alasan berhenti wajib diisi bersamaan. Tanggal berhenti tidak otomatis menonaktifkan karyawan dari payroll.
+          </p>
+        </FormSection>
+
         <FormSection title="Identitas & Bank">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="idNumber">NIK</Label>
@@ -444,8 +544,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             {createLogin && (
               <div className="flex flex-col gap-5 pt-2 border-t border-default mt-2">
                 <div className="flex flex-col gap-1.5 max-w-md">
-                  <Label htmlFor="loginPassword">Kata Sandi *</Label>
-                  <Input id="loginPassword" name="loginPassword" type="password" placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
+                  <Label htmlFor="loginPassword">Kata Sandi <span className="text-destructive" aria-hidden="true">*</span></Label>
+                  <Input id="loginPassword" name="loginPassword" type="password" required placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
                   <span className="text-xs text-muted-foreground">Minimal 8 karakter. Pastikan email pada bagian atas sudah terisi.</span>
                 </div>
                 <RolePicker roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} hint="Pilih satu atau lebih peran untuk menentukan hak akses." />

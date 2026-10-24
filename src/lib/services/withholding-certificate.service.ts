@@ -31,6 +31,7 @@ import { getErrorMessage } from "@/lib/utils/error"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import {
   computeWithheld,
+  resolvePph42RentRateEntry,
   type WithholdingArticle,
   WITHHOLDING_ARTICLES,
 } from "@/lib/tax/withholding-certificate"
@@ -110,6 +111,13 @@ export interface IssueWithholdingInput {
   salesPaymentId?: number | null
   facility?: "SKB" | "PP23" | "DTP" | null
   facilityNumber?: string | null
+  /**
+   * Bukti dokumen dasar sewa untuk kode objek bersyarat bukti di katalog
+   * master (vonis BOT 4 F-051-V F51-3, mis. proyek pemerintah hibah/
+   * pinjaman luar negeri). Wajib non-kosong bila kode objek katalog
+   * bertanda syarat bukti; untuk kode umum boleh kosong.
+   */
+  rentObjectEvidence?: string | null
   idempotencyKey: string
   userId?: number
 }
@@ -151,7 +159,39 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       if (dupe) throw definitive(`Nomor bupot "${number}" sudah terbit`)
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
       const article = assertArticle(type.article ?? "")
-      const tariff = Number(type.rate)
+      // F51-1/2/3/5/6 (vonis BOT 4 F-2026-10-22-051-V): bupot sewa
+      // fail-closed terhadap KATALOG master. Katalog dibaca di sini dari
+      // baris master aktif keluarga sewa (code "PPH42-SEWA" dan turunannya,
+      // mis. "PPH42-SEWA-PP") — resolver tidak meng-hardcode daftar kode.
+      // Jenis sewa non-default di katalog = kode bersyarat bukti dokumen.
+      // Jenis lain tak disentuh resolver sewa. Master tanpa tanggal
+      // efektif/histori: nilai berjalan divalidasi lalu dibekukan snapshot.
+      const isRentType = type.code.startsWith("PPH42-SEWA")
+      const rentResolution = isRentType
+        ? await (async () => {
+            const rows = await tx.withholdingTaxType.findMany({
+              where: { code: { startsWith: "PPH42-SEWA" }, isActive: true, deletedAt: null },
+              select: { code: true, objectCode: true, rate: true },
+            })
+            const catalog = rows.flatMap((r) =>
+              r.objectCode ? [{ objectCode: r.objectCode, rate: Number(r.rate), requiresEvidence: r.code !== "PPH42-SEWA" }] : [],
+            )
+            try {
+              const resolved = resolvePph42RentRateEntry(type.objectCode, catalog, input.withholdingDate, {
+                evidence: input.rentObjectEvidence,
+              })
+              return {
+                rate: resolved.rate,
+                objectName: resolved.objectName,
+                rentObjectEvidence:
+                  resolved.evidence != null ? (input.rentObjectEvidence ?? "").trim() || null : null,
+              }
+            } catch (e) {
+              throw definitive(getErrorMessage(e))
+            }
+          })()
+        : null
+      const tariff = rentResolution ? rentResolution.rate : Number(type.rate)
       if (!(tariff >= 0)) throw definitive(`Jenis PPh "${type.code}" bertarif tak valid`)
       if (input.direction === "we_withhold" && type.liabilityAccountId == null) {
         throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`)
@@ -172,6 +212,8 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
           withholdingTypeId: type.id,
           article,
           objectCode: type.objectCode,
+          objectName: rentResolution?.objectName ?? null,
+          rentObjectEvidence: rentResolution?.rentObjectEvidence ?? null,
           dpp: toMoney(computed.dpp),
           tariff: toRate(computed.tariff),
           withheldAmount: toMoney(computed.withheldAmount),
