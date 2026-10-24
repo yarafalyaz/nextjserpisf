@@ -25,9 +25,37 @@ import {
 } from "@/lib/reports/employee-lifecycle"
 import { hasPermission } from "@/lib/auth/permissions"
 import {
+  assertHrEmployeeAccess,
+  getHrScope,
+  hrEmployeeScopeWhere,
+} from "@/lib/auth/hr-scope"
+import {
   getEmployeePayrollComponents,
   getPayrollComponents,
 } from "@/actions/hrm.actions"
+import {
+  getContractDecisionRequests,
+  getProbationOverview,
+} from "@/actions/probation.actions"
+import {
+  CONTRACT_DECISION_KIND_LABELS,
+  probationMilestoneSlots,
+  type ContractDecisionKind,
+} from "@/lib/reports/probation"
+import {
+  ProbationContractPanel,
+  type ContractDecisionRow,
+  type ProbationMilestoneRow,
+} from "../_components/probation-contract-panel"
+
+const CONTRACT_DECISION_STATUS_LABELS: Record<string, string> = {
+  draft: "Draf",
+  submitted: "Diajukan",
+  approved: "Disetujui",
+  rejected: "Ditolak",
+  applied: "Diterapkan",
+  cancelled: "Dibatalkan",
+}
 import { EmployeePayrollComponents, type EmployeePayrollComponentRow } from "@/components/payroll/employee-payroll-components"
 
 import type { Metadata } from "next"
@@ -39,7 +67,7 @@ export default async function EmployeeDetailPage({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  await requirePermission("view_employees")
+  const sessionUser = await requirePermission("view_employees")
   const { slug } = await params
 
   const employee = await resolveEntity(
@@ -115,6 +143,91 @@ export default async function EmployeeDetailPage({
           .filter((c) => c.isActive && c.recurrence === "fixed")
           .map((c) => ({ id: c.id, name: c.name, kind: c.kind }))
       : []
+
+  // F-2026-10-24-099-S: panel masa percobaan & keputusan kontrak.
+  // Fakta turunan (status/titik jatuh tempo) dari loader/builder server
+  // apa adanya; UI tidak menghitung skor/status/tanggal. Ulasan dimuat
+  // sempit (tanpa nominal) hanya untuk merender nilai tersimpan.
+  const canEditProbation = await hasPermission("edit_employees")
+  const canApproveContracts = await hasPermission("approve_contracts")
+  // Baca RSC probation tunduk pada scope HR yang sama dengan aksi server
+  // (assertHrEmployeeAccess + hrScopeWhere/hrEmployeeScopeWhere). Di luar
+  // scope: ulasan + opsi penilai dikosongkan, bukan bocor semua karyawan.
+  const hrScope = await getHrScope(sessionUser)
+  const probationInScope = await assertHrEmployeeAccess(hrScope, employee.id)
+    .then(() => true)
+    .catch(() => false)
+  const [overviewRows, reviewRows, decisionRows, reviewerRows] = await Promise.all([
+    getProbationOverview().catch(() => []),
+    probationInScope
+      ? prisma.probationReview.findMany({
+          where: { employeeId: employee.id },
+          select: {
+            id: true,
+            milestone: true,
+            reviewerEmployeeId: true,
+            technicalScore: true,
+            disciplineScore: true,
+            attendanceScore: true,
+            notes: true,
+            recommendation: true,
+            status: true,
+          },
+        })
+      : Promise.resolve([]),
+    getContractDecisionRequests(employee.id).catch((error) => {
+      // null = penanda gagal eksplisit: panel menampilkan decisionsError.
+      console.error("[Karyawan] Gagal memuat pengajuan keputusan kontrak", error)
+      return null
+    }),
+    canEditProbation && probationInScope
+      ? prisma.employee.findMany({
+          where: {
+            deletedAt: null,
+            isActive: true,
+            id: { not: employee.id },
+            ...hrEmployeeScopeWhere(hrScope),
+          },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+  ])
+  const overviewRow = overviewRows.find((r) => r.employeeId === employee.id) ?? null
+  const probationMilestones: ProbationMilestoneRow[] =
+    employee.probationEndDate == null
+      ? []
+      : probationMilestoneSlots(employee.joinDate, employee.probationEndDate).map((slot) => {
+          const review = reviewRows.find((r) => r.milestone === slot.milestone) ?? null
+          return {
+            milestone: slot.milestone,
+            label: slot.label,
+            dueDate: slot.dueDate.toISOString(),
+            isFinal: slot.isFinal,
+            reviewStatus: review?.status ?? null,
+            reviewId: review?.id ?? null,
+            reviewerEmployeeId: review?.reviewerEmployeeId ?? null,
+            technicalScore: review?.technicalScore ?? null,
+            disciplineScore: review?.disciplineScore ?? null,
+            attendanceScore: review?.attendanceScore ?? null,
+            notes: review?.notes ?? null,
+            recommendation: review?.recommendation ?? null,
+          }
+        })
+  const contractDecisions: ContractDecisionRow[] = (decisionRows ?? []).map((d) => ({
+    id: d.id,
+    kind: d.kind,
+    kindLabel:
+      CONTRACT_DECISION_KIND_LABELS[d.kind as ContractDecisionKind] ?? d.kind,
+    proposedContractEndDate: d.proposedContractEndDate
+      ? new Date(d.proposedContractEndDate).toISOString()
+      : null,
+    reason: d.reason,
+    status: d.status,
+    statusLabel: CONTRACT_DECISION_STATUS_LABELS[d.status] ?? d.status,
+    rejectionReason: d.rejectionReason,
+    createdAt: new Date(d.createdAt).toISOString(),
+  }))
 
   return (
     <div className="flex flex-col gap-6">
@@ -294,6 +407,26 @@ export default async function EmployeeDetailPage({
                   )}
                 </div>
               </div>
+            ),
+          },
+          {
+            id: "probation",
+            label: "Masa Percobaan & Kontrak",
+            content: (
+              <ProbationContractPanel
+                employeeId={employee.id}
+                employmentStatus={employee.employmentStatus}
+                employmentStatusLabel={employmentStatusLabel(employee.employmentStatus)}
+                joinDate={employee.joinDate.toISOString()}
+                probationEndDate={employee.probationEndDate ? employee.probationEndDate.toISOString() : null}
+                derivedStatusLabel={overviewRow?.derivedStatusLabel ?? null}
+                milestones={probationMilestones}
+                decisions={contractDecisions}
+                decisionsError={decisionRows === null ? "Pengajuan keputusan kontrak tidak dapat dimuat." : null}
+                reviewerOptions={reviewerRows}
+                canEdit={canEditProbation}
+                canApprove={canApproveContracts}
+              />
             ),
           },
           {
