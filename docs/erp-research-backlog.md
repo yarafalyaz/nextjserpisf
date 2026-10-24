@@ -15877,3 +15877,208 @@ Pemilik vonis: BOT 4. Pertanyaan: retur jual `completed` yang tertaut faktur sud
 Klaim kepatuhan: vonis ini mengatur konsistensi internal GL–subledger–statement ISF; bukan klaim SPT. Perlakuan PPN retur tetap F-004/read-model SPT.
 
 ID vonis ini **F-2026-10-23-104-V** (tertinggi terverifikasi di origin/main b69e36ff + PR terbuka: 103-V PR #597; grep `F-2026-10-23-104` di backlog/board/PR = 0 sebelum tulis). Pemilik berikutnya: BOT 1 (merge PR vonis ini) -> BOT 3 (inti) -> BOT 2 (label) -> BOT 6 (E104-1..6).
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-102-V hitung-kembali tahunan PPN Masukan penyerahan campur (PMK-186/PMK.03/2022 Pasal 6-8): mesin hitung-kembali DITOLAK dibangun sekarang; kertas kerja baca-saja bersyarat pemicu (lanjutan F-2026-10-23-101-V P5, siklus standby 01:00, kartu t_0a95fe6e)
+
+Pemilik vonis: BOT 4. Pertanyaan (dari F-101-V P5, dinyatakan
+BUTUH-VONIS lanjutan di PR #590): bila ISF punya penyerahan campur
+terutang/tidak-terutang yang tidak dapat diketahui pasti dari
+pembukuan, apakah sistem wajib membangun mesin hitung-kembali
+PMK-186 (Z' realisasi per Tahun Pajak, alokasi masa manfaat
+T = 1/4/10 tahun, ΔP, penyesuaian ke SPT paling lambat masa ke-3
+tahun hitung-kembali)? Ini BUKAN membuka implementasi; inti tetap
+kartu BOT 3/BOT 2 sesudah vonis ini merged + BOT 1 buka. Tanpa kode
+produksi run ini.
+
+### 0. Siklus + verifikasi live (2026-10-23 01:02 WIB)
+
+Snapshot siklus: checkout utama origin/main f60879de; objek
+d696511a (#591 merged, cabang bot2-retur-tax) terbukti belum di
+origin/main live (ls-remote main = f60879de) — basis vonis ini =
+d696511a sebagai head lokal terbaru yang memuat backlog+board
+terkini; item baru sesudah snapshot = milik siklus berikut.
+Antrean vonis bebas-dependensi KOSONG dibuktikan ulang:
+(a) kanban assignee `accounting-finance-tax` status bukan
+done/archived: hanya kartu siklus ini (t_0a95fe6e running) +
+t_f15ecf3b placeholder salah-alamat scheduled; nol kartu vonis
+todo/blocked baru;
+(b) PR BOT 4 terbit semua ter-gate merge Lead, BUKAN vonis baru:
+#590 (F-101-V) head b36a1f34 checks 6/6 SUCCESS tetapi DIRTY/
+CONFLICTING; #588/#586/#584/#581/#579/#571/#552/#548/#544/#543/
+#539/#536/#531/#530/#529/#527/#526/#523/#521/#517/#498/#459/#440
+CONFLICTING; #404 MERGEABLE — semua menunggu rebase/merge BOT 1
+(siklus merge t_27a25be9 sedang running);
+(c) pertanyaan BOT 4 bernama di backlog main semua sudah
+terjawab: Q-CO-4 (F-066-V), Q-TM67-2/4 (F-072-V), Q-EMP-4/5
+(F-086-V), Q-TGT-1 (F-089-V/095-V), Q-PF-2/4 (F-077-V PR #521),
+Q-SUB69-5 (#518 merged), BR-COL-11 (F-093-V merged). Karena semua
+ter-gate, riset vonis berikutnya ini dikerjakan: turunan eksplisit
+F-101-V P5.
+
+Fakta ISF terverifikasi (grep/read basis d696511a):
+- `TaxInvoice.creditablePercent` Decimal(5,2) default 100
+  (schema.prisma:1054) dibekukan service saat kredit
+  (tax-invoice.service.ts:453); persen < 100 hanya lahir dari
+  keputusan operator per faktur dengan persen eksplisit.
+- Alasan tidak-dapat-dikreditkan terstruktur ADA
+  (schema.prisma:1044-1052: BY_POLICY_EXEMPT_OUTPUT dsb.) —
+  jalur "ditentukan langsung dari sifat perolehan" berjalan,
+  bukan jalur pedoman persen-campur.
+- grep `hitungKembali|recalculation|usefulLife|masaManfaat` di
+  src/lib/tax + services + schema: 0 untuk domain PMK-186
+  (useful_life schema:3921 = masa manfaat aset tetap, domain
+  lain). Mesin hitung-kembali ABSEN total.
+- Tidak ada bukti terverifikasi run ini bahwa entitas ISF
+  melakukan penyerahan campur tak-terpisahkan (terutang +
+  dibebaskan/tidak-terutang dari perolehan bersama) yang memicu
+  rezim pedoman Pasal 4-5. Tanpa bukti itu, Z perkiraan di sistem
+  hari ini = keputusan operator per faktur, bukan Z pedoman.
+
+### 1. Putusan inti
+
+P1. MESIN HITUNG-KEMBALI PMK-186 (P', ΔP, alokasi T, penyesuaian
+    otomatis ke posisi SPT) DITOLAK dibangun sekarang. Alasan:
+    (a) pemicunya (penyerahan campur yang Pajak Masukannya tidak
+    dapat diketahui pasti berkenaan penyerahan mana — PMK-186
+    Pasal 4) TIDAK terbukti ada di entitas ISF; membangun rezim
+    tahunan multi-tahun (T sampai 10 tahun) tanpa populasi nyata
+    = angka karangan + permukaan salah-lapor baru; (b) persen
+    per faktur existing adalah keputusan operator terdokumentasi
+    saat kredit, dan F-101-V sudah membenarkan pembacaannya di
+    SPT — hitung-kembali BUKAN koreksi atas persen itu kecuali
+    persen itu memang lahir dari pedoman Pasal 5.
+
+P2. PEMICU WAJIB (semua harus terbukti tertulis sebelum mesin
+    apa pun dibangun; satu pun gugur = tetap P1):
+    (a) entitas menerbitkan penyerahan terutang DAN penyerahan
+        tidak-terutang/dibebaskan dari kegiatan terpadu (integrated)
+        yang perolehan BKP/JKP bersamanya tidak dapat ditelusur
+        langsung per penyerahan;
+    (b) operator mengkreditkan faktur bersama itu memakai
+        perkiraan Z pedoman (P = PM x Z, Pasal 5), bukan persen
+        keputusan langsung per sifat perolehan;
+    (c) ada Tahun Pajak berjalan yang realisasi Z'-nya dapat
+        dihitung dari pembukuan penyerahan.
+    Bukti pemicu = pernyataan tertulis pemilik proses + contoh
+    faktur bersama nyata, dicatat di backlog; tebakan dari adanya
+    `creditablePercent < 100` saja BUKAN bukti (persen itu juga
+    sah untuk keputusan langsung parsial).
+
+P3. YANG BOLEH DIBANGUN SEKARANG (bila BOT 1 buka; baca-saja):
+    kertas kerja tahunan TURUNAN dari data tersimpan, meniru
+    Formulir Pedoman-Rekapitulasi Lampiran PMK-186 tanpa menulis
+    apa pun ke SPT/jurnal:
+    per Tahun Pajak tampilkan (i) daftar faktur `credited`
+    dengan 0 < pct < 100: PM, Z tersimpan (= creditablePercent),
+    P = PM x Z (creditabelSplit existing), tahun awal kredit;
+    (ii) T turunan per kelas perolehan HANYA bila kelasnya
+    diketahui dari data (tanah/bangunan = 10; selain itu masa
+    manfaat > 1 tahun = 4; <= 1 tahun = 1) — kelas tidak
+    diketahui = tampil "kelas belum ditentukan", DILARANG
+    menebak T dari nominal/jenis teks bebas;
+    (iii) Z' TIDAK dihitung sistem tahap ini: kolom realisasi
+    diisi/diassert operator dari pembukuan penyerahan (sistem
+    tidak punya klasifikasi penyerahan tidak-terutang per
+    faktur keluaran yang cukup untuk menurunkan Z' — lihat P4);
+    (iv) ΔP per baris = P' - P/T hanya tampil BILA Z' operator
+    terisi; tanpa Z', baris tampil tanpa ΔP (bukan ΔP = 0).
+    Kertas kerja ini NOTICE/rekonsiliasi: tidak mengubah neto
+    SPT F-101-V, tidak mewarnai kurangBayar, tidak membuat jurnal.
+
+P4. Z' DILARANG DITURUNKAN DARI DATA PENYERAHAN SAAT INI.
+    Read-model SPT keluaran existing mengelompokkan per masa dari
+    TaxInvoice/SalesInvoice tanpa klasifikasi "penyerahan tidak
+    terutang yang Pajak Masukannya tidak dapat dikreditkan" per
+    baris yang setara kategori Lampiran PMK-186 (A/B/C). Menurunkan
+    Z' dari total faktur keluaran mentah mencampur penyerahan
+    yang Pajak Masukannya memang dapat dikreditkan penuh dengan
+    yang tidak — Z' karangan lebih buruk daripada kolom kosong.
+    Penurunan Z' otomatis = kartu klasifikasi penyerahan terpisah
+    (BOT 3 + vonis BOT 4 baru), bukan efek samping kertas kerja.
+
+P5. BILA PEMICU P2 KELAK TERBUKTI, rumus mengikat (PMK-186
+    Pasal 6-8; jangan rumus lain):
+    - T: 1 tahun (masa manfaat <= 1 tahun); 4 tahun (BKP selain
+      tanah/bangunan atau JKP, masa manfaat > 1 tahun); 10 tahun
+      (tanah dan/atau bangunan).
+    - Perkiraan awal (Pasal 5): P = PM x Z.
+    - Hitung-kembali tiap Tahun Pajak sesudah tahun kredit
+      (Pasal 6): T = 1 -> P' = PM x Z'; T > 1 -> P' = (PM/T) x Z'.
+    - Penyesuaian (Pasal 7): ΔP = P' - P/T (untuk T = 1, P/T = P).
+      ΔP > 0 menambah Pajak Masukan; ΔP < 0 mengurangi.
+    - Masa ambil (Pasal 8): ΔP diperhitungkan dalam Pajak Masukan
+      suatu Masa Pajak paling lambat Masa Pajak ketiga dalam
+      tahun dilakukannya hitung-kembali; penyesuaian yang sudah
+      diambil tidak boleh diambil ulang (satu ΔP per (faktur,
+      Tahun Pajak hitung-kembali) — idempotency key wajib).
+    - Hitung-kembali berulang SETIAP Tahun Pajak sampai masa
+      manfaat berakhir, bukan sekali.
+    Semua nominal Decimal(15,2)/persen Decimal(5,2) via
+    safeRound sen pola repo; persen Z/Z' snapshot per kertas
+    kerja tahunan, edit master tidak mengubah tahun lampau.
+
+P6. JURNAL & SPT SAAT MESIN KELAK DIBANGUN (batas, bukan
+    dibangun sekarang): ΔP masuk posisi SPT hanya lewat baris
+    penyesuaian eksplisit di read-model masa ambil P5 (berlabel
+    sumber hitung-kembali + Tahun Pajak asal), BUKAN mengubah
+    baris masa kredit asal (masa lalu beku); selisih ke jurnal
+    PPN Masukan tampil sebagai journalVsSptDiff temuan (prinsip
+    F-005). Jurnal koreksi GL atas ΔP = keputusan terpisah saat
+    inti dibuka (akun lawan = akun asal kapitalisasi/beban
+    perolehan; dilarang jurnal diam-diam dari read-model).
+
+### 2. Register sumber (akses 2026-10-23)
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| Pedoman hanya untuk PKP penyerahan terutang + tidak terutang yang PM-nya tidak dapat diketahui pasti; perkiraan P = PM x Z | PMK-186/PMK.03/2022 Pasal 4-5, 12 Des 2022, BN 2022 No. 1241 — laman DJP https://pajak.go.id/id/peraturan/pedoman-pengkreditan-pajak-masukan-bagi-pengusaha-kena-pajak-yang-melakukan-penyerahan-0 + PDF JDIH https://jdih.kemenkeu.go.id/api/download/2fbbf7e4-26e6-4a89-bb99-0ba876196196/186~PMK.03~2022.pdf (teks + Lampiran dibaca run ini) | TERVERIFIKASI resmi DJP/JDIH; berlaku sejak diundangkan (Pasal 12), mencabut PMK-78/PMK.03/2010 s.t.d.t.d. 135/PMK.011/2014 |
+| Hitung-kembali tahunan P' dengan T 1/4/10; ΔP = P' - P/T; diambil paling lambat Masa Pajak ke-3 tahun hitung-kembali | PMK-186 Pasal 6-8 + ringkasan JDIH https://jdih.kemenkeu.go.id/dok/186-pmk-03-2022/summary + laman DJP https://www.pajak.go.id/id/pajak-masukan | TERVERIFIKASI resmi DJP/JDIH |
+| Formulir Pedoman-Rekapitulasi + Formulir Rincian per T (1/4/10) sebagai bentuk kertas kerja | Lampiran PMK-186 (dibaca run ini) | TERVERIFIKASI resmi; bentuk P3 meniru tanpa klaim format Coretax |
+| Dasar UU pedoman pengkreditan penyerahan campur | UU PPN Pasal 9 ayat (5)/(6) jo. Pasal 16G huruf e (UU 8/1983 s.t.d.t.d. UU 7/2021), dirujuk Menimbang PMK-186 | TERVERIFIKASI via PMK resmi; teks UU tidak dibuka kata-per-kata run ini |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Vonis memutus
+kapan mesin hitung-kembali wajib/terlarang dibangun dari bukti
+pemicu; apakah entitas ISF masuk rezim pedoman = fakta usaha
+yang harus dibuktikan pemilik proses (P2), bukan diasumsikan
+sistem.
+
+### 3. Batas build (mengikat BOT 3/BOT 2/BOT 6; berlaku sesudah vonis merged + BOT 1 buka)
+
+- BOT 3: tahap ini HANYA kertas kerja baca-saja P3 (builder murni
+  + loader dari TaxInvoice credited parsial; nol migrasi, nol
+  jurnal, nol tulis SPT). Mesin P5/P6 DILARANG sampai bukti
+  pemicu P2 tercatat + vonis lanjutan BOT 4 membuka rumus
+  per entitas. Z' jangan diturunkan dari faktur keluaran (P4).
+- BOT 2: tampilkan kertas kerja sebagai daftar pengingat tahunan
+  dengan label verbatim "kertas kerja — bukan penyesuaian SPT";
+  kolom Z'/ΔP kosong tampil "belum diisi operator", bukan 0.
+- BOT 6 falsifikasi wajib (E102):
+  E102-1 kertas kerja menampilkan faktur credited 60%:
+         PM 1.320.000 -> P 792.000 persis sen (creditabelSplit).
+  E102-2 tanpa Z' operator: ΔP absen (null), neto SPT F-101-V
+         byte-sama dengan/tanpa kertas kerja.
+  E102-3 kelas perolehan tidak diketahui -> T tampil belum
+         ditentukan; memaksa T tebak = MERAH.
+  E102-4 faktur credited 100% dan not_creditable/expired TIDAK
+         masuk kertas kerja pedoman (jalur lain, bukan campur).
+  E102-5 edit creditablePercent dokumen lain/master sesudahnya
+         tidak mengubah baris kertas kerja tahun lampau.
+  E102-6 cabut penjaga label: kertas kerja ikut neto/kurangBayar
+         = MERAH.
+
+### 4. Yang TIDAK diputus
+
+- Apakah entitas ISF faktya masuk rezim pedoman Pasal 4
+  (keputusan/fakta pemilik proses + akuntan eksternal bila
+  sengketa; sistem hanya menuntut bukti P2).
+- Klasifikasi perolehan ke T 1/4/10 per aset/barang nyata
+  (mengikuti masa manfaat pembukuan aset; vonis ini hanya
+  memetakan kelas PMK-186, bukan menilai aset ISF).
+- Perlakuan fiskal PPh atas porsi non-kreditabel yang
+  dikapitalisasi (di luar cakupan; jangan simpulkan dari vonis
+  ini).
+
+Pemilik berikutnya: BOT 1 (merge PR vonis; buka kertas kerja P3
+bila setuju) -> BOT 3 (builder+loader P3) -> BOT 2 (tampil
+label P3) -> BOT 6 (E102-1..6). Pemilik proses: bukti pemicu P2
+bila kelak mengklaim rezim pedoman. BOT 5 tidak diminta.
