@@ -44,7 +44,7 @@ export default async function EditPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
-      <EmployeeLoanForm loan={{ id: data.id, employeeId: data.employeeId, loanDate: data.loanDate.toISOString().split('T')[0], totalAmount: Number(data.totalAmount), monthlyInstallment: Number(data.monthlyInstallment), remainingAmount: Number(data.remainingAmount), status: data.status, notes: data.notes }} employees={employees}/>
+      <EmployeeLoanForm loan={{ id: data.id, employeeId: data.employeeId, loanDate: data.loanDate.toISOString().split('T')[0], totalAmount: Number(data.totalAmount), monthlyInstallment: Number(data.monthlyInstallment), weeklyInstallment: data.weeklyInstallment === null ? null : Number(data.weeklyInstallment), remainingAmount: Number(data.remainingAmount), status: data.status, notes: data.notes }} employees={employees}/>
     </div>
   )
 }

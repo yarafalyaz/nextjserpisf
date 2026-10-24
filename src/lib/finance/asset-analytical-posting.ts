@@ -28,7 +28,7 @@ import {
 
 export type AnalyticalAssetStatus =
   | AnalyticalDepreciationResult
-  | { status: "skip"; reason: "held-for-sale" | "already-posted" | "not-started" }
+  | { status: "skip"; reason: "held-for-sale" | "disposed" | "already-posted" | "not-started" }
   | { status: "reject"; reason: "unregistered-status"; method: string }
 
 export interface AnalyticalAssetInput {
@@ -70,8 +70,10 @@ export function analyticalMonthIndex(
 
 /**
  * Status analitis satu aset untuk satu masa — kontrak final ke konsumen
- * (BOT 2): computed / skip{at-residual,unit-nol,held-for-sale,
+ * (BOT 2): computed / skip{at-residual,unit-nol,held-for-sale,disposed,
  * already-posted,not-started} / reject{missing-parameter,unregistered-status}.
+ * `disposed` tidak pernah computed (M-1 audit BOT 6 t_1d595a1e): aset
+ * sudah dilepas tidak menanggung beban analitis masa berjalan.
  */
 export function resolveAnalyticalAssetStatus(
   input: AnalyticalAssetInput,
@@ -81,6 +83,7 @@ export function resolveAnalyticalAssetStatus(
     return { status: "reject", reason: "unregistered-status", method: status }
   }
   if (status === "held_for_sale") return { status: "skip", reason: "held-for-sale" }
+  if (status === "disposed") return { status: "skip", reason: "disposed" }
   if (input.alreadyPosted) return { status: "skip", reason: "already-posted" }
 
   if (input.depreciationMethod === "units_of_production") {

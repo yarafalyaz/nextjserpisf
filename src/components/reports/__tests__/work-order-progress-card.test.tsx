@@ -123,17 +123,34 @@ describe("WorkOrderProgressCard F-2026-10-21-020 Tahap B", () => {
     const text = container.textContent ?? ""
     expect(text).toContain("Selesai")
     expect(text).toContain("3/3 tahap selesai (100,0%)")
+    // LOW #596-1: tone success chip completed ter-assert (emerald),
+    // bukan hanya teks. Sabotase completed->danger di status-chip
+    // wajib MERAH di sini.
+    const chip = container.querySelector('[data-slot="badge"]')
+    expect(chip?.textContent).toContain("Selesai")
+    expect(chip?.className).toContain("bg-emerald-100")
+    expect(chip?.className).toContain("text-emerald-700")
+    expect(chip?.className).not.toContain("bg-red-100")
     unmountCard(root)
   })
 
-  it("satu tahap pending: vonis auto-close menolak, chip completed tetap Selesai", () => {
+  it("satu tahap pending: vonis auto-close menolak, kartu tidak tampil 100%/completed palsu", () => {
+    const ops = [{ status: "completed" }, { status: "pending" }]
     expect(
       shouldAutoCompleteWorkOrder({
-        operations: [{ status: "completed" }, { status: "pending" }],
+        operations: ops.map((o) => ({ status: o.status })),
       }),
     ).toBe(false)
-    const { container, root } = renderCard(<StatusChip status="completed" />)
-    expect(container.textContent ?? "").toContain("Selesai")
+    // LOW #596-2: buktikan lewat kartu utuh, bukan chip mandiri —
+    // WO belum tuntas tidak boleh tampil progres 100%.
+    const progress = progressOf(ops)
+    const { container, root } = renderCard(
+      <WorkOrderProgressCard progress={progress} />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain("1/2 tahap selesai (50,0%)")
+    expect(text).not.toContain("100,0%")
+    expect(text).not.toContain("100%")
     unmountCard(root)
   })
 })

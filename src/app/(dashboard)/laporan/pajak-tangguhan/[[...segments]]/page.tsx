@@ -5,22 +5,40 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DeferredTaxCard } from "@/components/reports/deferred-tax-card"
+import { DeferredTaxValueEventCard } from "@/components/reports/deferred-tax-value-event-card"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { loadDeferredTax } from "@/lib/reports/deferred-tax-data"
+import { loadDeferredTaxValueEventSource } from "@/lib/reports/deferred-tax-value-events-data"
+import { loadDeferredTaxNonAssetSources } from "@/lib/reports/deferred-tax-nonaset-data"
+import { DeferredTaxNonAssetCard } from "@/components/reports/deferred-tax-nonaset-card"
 
 export const metadata: Metadata = { title: "Pajak Tangguhan" }
 
 /**
- * F-2026-10-23-112 tahap stok: laporan Perbedaan Temporer Pajak Tangguhan.
+ * F-2026-10-23-112 tahap stok + konvergensi F-2026-10-23-124-V: laporan
+ * Perbedaan Temporer Pajak Tangguhan.
  *
- * Data dari loader `loadDeferredTax` (PR #628): tabel, totals, verdict, dan
- * notice tampil apa adanya lewat `DeferredTaxCard` — halaman ini tidak
- * menghitung ulang dan tidak menyediakan tombol jurnal. Tarif badan belum
- * punya master bertanggal efektif (F-112-V Putusan 3), jadi dipasok lewat
- * path `tarif/<persen>`; kosong/tidak sah diteruskan apa adanya dan builder
- * menolak menghitung (fail-closed). `asOf` = akhir tahun pajak berjalan.
+ * Data dari loader `loadDeferredTax`: tabel, totals, verdict, dan notice
+ * tampil apa adanya lewat `DeferredTaxCard` — halaman ini tidak menghitung
+ * ulang dan tidak menyediakan tombol jurnal. Tarif badan belum punya master
+ * bertanggal efektif, jadi tarif dari path `tarif/<persen>` adalah pasokan
+ * operator: diteruskan apa adanya (`loadDeferredTax` menandainya
+ * `rateSource: "operator"`) dan caption menyebutnya verbatim dari
+ * `report.rateSourceLabel` — bukan tarif resmi/master. Kosong/tidak sah
+ * diteruskan apa adanya dan builder menolak menghitung (fail-closed).
+ * `asOf` = akhir tahun pajak berjalan.
+ *
+ * Sumber KEDUA F-2026-10-23-125-V (`loadDeferredTaxValueEventSource`):
+ * peristiwa revaluasi/impairment belum terbekukan (inti F-111 belum ada),
+ * jadi kartu kedua tampil notice "belum tersedia" bernama dari builder —
+ * bukan angka nol — dan PPh final tampil terpisah dari indikasi tangguhan.
+ *
+ * Sumber NON-ASET F-2026-10-23-126-V (`loadDeferredTaxNonAssetSources`):
+ * kartu ketiga tampil baris provisi/CKPN/rugi fiskal apa adanya — hari ini
+ * provisi nol terverifikasi/belum terpetakan dari jurnal POSTED, CKPN dan
+ * rugi fiskal belum-tersedia bernama (inti F-090/register belum ada).
  */
 export default async function DeferredTaxPage({
   params: routeParams,
@@ -39,6 +57,8 @@ export default async function DeferredTaxPage({
   const now = new Date()
   const asOf = new Date(Date.UTC(now.getFullYear(), 11, 31))
   const { report } = await loadDeferredTax({ taxRatePercent, asOf })
+  const { report: valueEventReport } = await loadDeferredTaxValueEventSource({ taxRatePercent, asOf })
+  const { report: nonAssetReport } = await loadDeferredTaxNonAssetSources({ taxRatePercent, asOf })
   const periodLabel = `Per 31 Desember ${now.getFullYear()}`
 
   return (
@@ -47,7 +67,13 @@ export default async function DeferredTaxPage({
       sheetTitle="Pajak Tangguhan"
       subtitle="Perbedaan Temporer Pajak Tangguhan (Tahap Stok)"
       periodLabel={periodLabel}
-      periodCaption={`${periodLabel} · tarif badan ${report.taxRatePercent === null ? "belum dipasok" : `${report.taxRatePercent}%`}`}
+      periodCaption={`${periodLabel} · tarif badan ${
+        report.taxRatePercent === null
+          ? "belum dipasok"
+          : report.rateSourceLabel
+            ? `${report.taxRatePercent}% (${report.rateSourceLabel})`
+            : `${report.taxRatePercent}%`
+      } · ${report.totals.fiscalNotFrozen} fiskal belum terbekukan`}
       printedBy={user.name ?? user.email}
       wide
       filter={
@@ -57,7 +83,7 @@ export default async function DeferredTaxPage({
           defaultStartDate=""
           numberField={{
             param: "tarif",
-            label: "Tarif Pajak Badan (%)",
+            label: "Tarif Pajak Badan (%) — pasokan operator",
             value: taxRatePercent === null ? "" : String(taxRatePercent),
             min: 0,
             max: 100,
@@ -67,6 +93,8 @@ export default async function DeferredTaxPage({
       actions={<ExportButtons title="Pajak_Tangguhan" />}
     >
       <DeferredTaxCard report={report} />
+      <DeferredTaxValueEventCard report={valueEventReport} />
+      <DeferredTaxNonAssetCard report={nonAssetReport} />
     </ReportPageShell>
   )
 }

@@ -214,6 +214,12 @@ model SystemSetting {
   // tidak ada pemanggil yang memakainya sampai gerbang data dinilai BOT 4.
   warrantyExpenseAccountId         Int?    @map("warranty_expense_account_id")
   warrantyProvisionAccountId       Int?    @map("warranty_provision_account_id")
+  // F-2026-10-22-093-V (vonis BOT 4 PR #563 P2d/P3): akun pendapatan denda
+  // keterlambatan piutang. Nullable TANPA default tebak; terbit dokumen
+  // denda DITOLAK fail-closed bila kosong (dilarang fallback ke
+  // salesRevenueAccountId). salesLateFeePrefix pola prefix dokumen lain.
+  lateFeeIncomeAccountId           Int?    @map("late_fee_income_account_id")
+  salesLateFeePrefix               String  @default("LF") @map("sales_late_fee_prefix")
   supplierClaimReceivableAccountId Int?    @map("supplier_claim_receivable_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
@@ -264,6 +270,22 @@ model SystemSetting {
    * complete ditolak berisik; DILARANG fallback materialExpense/cogs.
    */
   abnormalScrapExpenseAccountId   Int?    @map("abnormal_scrap_expense_account_id")
+  /**
+   * F-2026-10-23-121-V Putusan 1: akun laba ditahan tujuan jurnal penutup
+   * tahunan (YearEndClosing). Nullable fail-closed: kosong/nonaktif/
+   * non-EQTY/bukan laba ditahan = posting ditolak berisik. TANPA default
+   * tebakan (jangan hardcode 300002); operator memetakan di Pengaturan.
+   */
+  retainedEarningsAccountId       Int?    @map("retained_earnings_account_id")
+  /**
+   * F-2026-10-23-111-V Putusan 2: akun utang PPh final 10% revaluasi fiskal
+   * berpersetujuan DJP + tarifnya sebagai DATA master (bukan konstanta kode).
+   * Keduanya nullable fail-closed: kosong = peristiwa fiskal ditolak berisik
+   * (komersial ditahan sampai jalur komersial-saja dipilih eksplisit).
+   * Ganti tarif sesudahnya tidak mengubah snapshot peristiwa lama (E111-4).
+   */
+  assetFiscalRevaluationTaxPayableAccountId Int?    @map("asset_fiscal_revaluation_tax_payable_account_id")
+  assetFiscalRevaluationFinalTaxRatePercent Decimal? @map("asset_fiscal_revaluation_final_tax_rate_percent") @db.Decimal(5, 2)
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -364,6 +386,8 @@ model Customer {
   workOrders         WorkOrder[]
   customerCategoryId Int?              @map("customer_category_id")
   customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id])
+  lateFeeTerms       CustomerLateFeeTerm[]
+  salesLateFees      SalesLateFee[]
 
   @@index([isActive, deletedAt], map: "idx_customers_active_deleted")
   @@index([name], map: "idx_customers_name")
@@ -1479,6 +1503,7 @@ model SalesInvoice {
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
   collectionFollowUps  InvoiceCollectionFollowUp[]
+  salesLateFees        SalesLateFee[]
   taxInvoices          TaxInvoice[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
@@ -1596,6 +1621,99 @@ model SalesInvoiceItem {
   @@index([salesInvoiceId], map: "sales_invoice_items_sales_invoice_id_fkey")
   @@index([itemId])
   @@map("sales_invoice_items")
+}
+
+/// Syarat denda keterlambatan kontraktual per pelanggan, bertanggal efektif
+/// (F-2026-10-22-093-V P2a, vonis BOT 4 PR #563). Master ini MEKANISME tarif
+/// — nilai tarif = keputusan komersial pemilik proses (backlog §4, BUKAN
+/// diputus vonis/kode). Tepat satu basis wajib terisi: ratePercentPerDay
+/// (%/hari dari sisa piutang) XOR flatAmountPerDay (nominal/hari);
+/// capAmount = plafon opsional. Syarat sah untuk faktur: effectiveFrom
+/// SEBELUM due acuan faktur DAN (effectiveTo null ATAU >= due acuan).
+model CustomerLateFeeTerm {
+  id                Int            @id @default(autoincrement())
+  customerId        Int            @map("customer_id")
+  ratePercentPerDay Decimal?       @map("rate_percent_per_day") @db.Decimal(9, 6)
+  flatAmountPerDay  Decimal?       @map("flat_amount_per_day") @db.Decimal(15, 2)
+  capAmount         Decimal?       @map("cap_amount") @db.Decimal(15, 2)
+  effectiveFrom     DateTime       @map("effective_from")
+  effectiveTo       DateTime?      @map("effective_to")
+  notes             String?        @db.Text
+  createdBy         Int?           @map("created_by")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  customer          Customer       @relation(fields: [customerId], references: [id])
+  salesLateFees     SalesLateFee[]
+
+  @@index([customerId, effectiveFrom])
+  @@map("customer_late_fee_terms")
+}
+
+/// Dokumen tagih denda keterlambatan TERPISAH (F-2026-10-22-093-V P1/P3).
+/// TIDAK PERNAH mengubah grandTotal/paidAmount/taxAmount faktur asal.
+/// Snapshot tarif+basis+hari dibekukan saat terbit; jurnal akrual
+/// D Piutang Usaha / K Pendapatan Denda lewat hook. Status string
+/// tervalidasi di builder (draft|posted|partial|paid|reversed pola repo).
+/// Edit nominal posted DILARANG — koreksi/waiver hanya reversal dokumen
+/// (reversesId menunjuk dokumen asal, P6). idempotencyKey unik per terbit.
+/// Tanpa PPN, tanpa faktur pajak baru (P4).
+model SalesLateFee {
+  id                Int                   @id @default(autoincrement())
+  documentNo        String                @unique @map("document_no")
+  salesInvoiceId    Int                   @map("sales_invoice_id")
+  customerId        Int                   @map("customer_id")
+  termId            Int                   @map("term_id")
+  date              DateTime
+  dueReferenceDate  DateTime              @map("due_reference_date")
+  overdueDays       Int                   @map("overdue_days")
+  basisAmount       Decimal               @map("basis_amount") @db.Decimal(15, 2)
+  ratePercentPerDay Decimal?              @map("rate_percent_per_day") @db.Decimal(9, 6)
+  flatAmountPerDay  Decimal?              @map("flat_amount_per_day") @db.Decimal(15, 2)
+  capAmount         Decimal?              @map("cap_amount") @db.Decimal(15, 2)
+  amount            Decimal               @db.Decimal(15, 2)
+  paidAmount        Decimal               @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
+  status            String                @default("posted")
+  idempotencyKey    String                @unique @map("idempotency_key")
+  reversesId        Int?                  @unique @map("reverses_id")
+  journalId         Int?                  @map("journal_id")
+  notes             String?               @db.Text
+  createdBy         Int?                  @map("created_by")
+  deletedAt         DateTime?             @map("deleted_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+  salesInvoice      SalesInvoice          @relation(fields: [salesInvoiceId], references: [id])
+  customer          Customer              @relation(fields: [customerId], references: [id])
+  term              CustomerLateFeeTerm   @relation(fields: [termId], references: [id])
+  reverses          SalesLateFee?         @relation("SalesLateFeeReversal", fields: [reversesId], references: [id])
+  reversedBy        SalesLateFee?         @relation("SalesLateFeeReversal")
+  payments          SalesLateFeePayment[]
+
+  @@index([salesInvoiceId])
+  @@index([customerId, status])
+  @@index([deletedAt])
+  @@map("sales_late_fees")
+}
+
+/// Alokasi pembayaran ke dokumen denda (P3/E93-7): mengurangi saldo dokumen
+/// denda SAJA, tidak pernah sisa faktur asal. Jurnal kas lewat hook
+/// pembayaran denda (D Kas / K Piutang).
+model SalesLateFeePayment {
+  id             Int          @id @default(autoincrement())
+  documentNo     String       @unique @map("document_no")
+  salesLateFeeId Int          @map("sales_late_fee_id")
+  amount         Decimal      @db.Decimal(15, 2)
+  paymentDate    DateTime     @map("payment_date")
+  paymentMethod  String       @map("payment_method")
+  accountId      Int?         @map("account_id")
+  referenceNo    String?      @map("reference_no")
+  notes          String?      @db.Text
+  createdBy      Int?         @map("created_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  salesLateFee   SalesLateFee @relation(fields: [salesLateFeeId], references: [id])
+
+  @@index([salesLateFeeId])
+  @@map("sales_late_fee_payments")
 }
 
 model SalesPayment {
@@ -3949,6 +4067,14 @@ model AssetCategory {
   accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
   depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
   gainLossAccountId                Int?     @map("gain_loss_account_id")
+  /// Mapping peristiwa penyesuaian nilai (vonis BOT 4 F-2026-10-23-128-V
+  /// Putusan 2, gerbang inti F-2026-10-23-111-V). Nullable TANPA default dan
+  /// TANPA backfill tebakan: NULL memicu fail-closed per peristiwa (P3) —
+  /// surplus wajib EQTY, beban penurunan nilai wajib EXPS, akumulasi
+  /// penurunan nilai wajib DEPR kontra. Bukan SystemSetting global.
+  revaluationSurplusAccountId      Int?     @map("revaluation_surplus_account_id")
+  impairmentLossAccountId          Int?     @map("impairment_loss_account_id")
+  accumulatedImpairmentAccountId   Int?     @map("accumulated_impairment_account_id")
   createdAt                        DateTime @default(now()) @map("created_at")
   updatedAt                        DateTime @updatedAt @map("updated_at")
   assets                           Asset[]
@@ -3957,6 +4083,9 @@ model AssetCategory {
   @@index([accumulatedDepreciationAccountId])
   @@index([depreciationExpenseAccountId])
   @@index([gainLossAccountId])
+  @@index([revaluationSurplusAccountId])
+  @@index([impairmentLossAccountId])
+  @@index([accumulatedImpairmentAccountId])
   @@index([createdAt])
   @@map("asset_categories")
 }
@@ -4035,6 +4164,7 @@ model Asset {
   histories          AssetHistory[]
   transfers          AssetTransfer[]
   usageRecords       AssetUsageRecord[]
+  changeEvents       AssetChangeEvent[]
   category           AssetCategory?  @relation(fields: [categoryId], references: [id])
   group              AssetGroup?     @relation(fields: [groupId], references: [id])
 
@@ -4070,6 +4200,141 @@ model AssetUsageRecord {
   @@index([assetId], map: "asset_usage_records_asset_id_fkey")
   @@index([createdAt])
   @@map("asset_usage_records")
+}
+
+/// Peristiwa perubahan aset terbekukan — inti gabungan vonis BOT 4
+/// F-2026-10-23-111-V (revaluasi + impairment) dan F-2026-10-23-115-V
+/// (reklasifikasi + perubahan metode/estimasi). SATU model, SATU migrasi,
+/// SATU owner schema (BOT 3) supaya dua kartu tidak melahirkan dua tabel
+/// peristiwa yang bertabrakan.
+///
+/// Pembekuan (F-111-V Putusan 4 + F-115-V): nilai sebelum dari jurnal POSTED
+/// (bukan `Asset.currentValue`), akun snapshot id+kode per peristiwa,
+/// dokumen sumber unik idempoten (`sourceDocumentKey` unik — replay dokumen
+/// sama ditolak DB), satu peristiwa satu jurnal POSTED bila berjurnal
+/// (`journalId`, null bila peristiwa tanpa jurnal: ganti metode/estimasi).
+/// Koreksi HANYA reversal di periode terbuka: `reversesEventId` menunjuk
+/// peristiwa asal, peristiwa asal jadi REVERSED lewat jurnal pasangannya;
+/// baris peristiwa tidak pernah diedit/dihapus sesudah POSTED.
+/// Fiskal hanya bergerak lewat peristiwa berpersetujuan DJP terstruktur
+/// (nomor+tanggal): tanpa itu kolom fiskal peristiwa ini wajib kosong dan
+/// basis/saldo fiskal byte-sama (E111-3/E115-4).
+model AssetChangeEvent {
+  id        Int      @id @default(autoincrement())
+  assetId   Int      @map("asset_id")
+  /// REVALUATION_UP | REVALUATION_DOWN | IMPAIRMENT | IMPAIRMENT_REVERSAL |
+  /// FISCAL_REVALUATION_APPROVED (F-111-V) | RECLASSIFICATION |
+  /// COMMERCIAL_METHOD_CHANGE | FISCAL_METHOD_CHANGE | ESTIMATE_CHANGE (F-115-V)
+  kind      String   @db.VarChar(40)
+  /// POSTED | REVERSED
+  status    String   @default("POSTED") @db.VarChar(20)
+  /// Tanggal efektif bulan peristiwa (awal bulan, pola jurnal penyusutan).
+  effectiveDate DateTime @map("effective_date")
+  /// Kunci dokumen sumber (laporan penilai / keputusan DJP / berita acara).
+  /// Unik = replay dokumen yang sama ditolak fisik (E111-10/E115-8).
+  sourceDocumentKey String @unique @map("source_document_key") @db.VarChar(200)
+  sourceDocumentRef String? @map("source_document_ref") @db.VarChar(200)
+  /// Jurnal pasangan POSTED; null bila peristiwa tanpa jurnal.
+  journalId Int?     @map("journal_id")
+  /// Peristiwa asal yang dibalik peristiwa ini (reversal), bila ada.
+  reversesEventId Int? @unique @map("reverses_event_id")
+
+  /// Nilai tercatat jurnal POSTED sebelum/sesudah (sen persis).
+  carryingBefore Decimal? @map("carrying_before") @db.Decimal(15, 2)
+  carryingAfter  Decimal? @map("carrying_after") @db.Decimal(15, 2)
+  /// Bruto + akumulasi jurnal POSTED sebelum peristiwa (dasar jurnal revaluasi).
+  grossBefore          Decimal? @map("gross_before") @db.Decimal(15, 2)
+  accumulatedBefore    Decimal? @map("accumulated_before") @db.Decimal(15, 2)
+  accumulatedImpairmentBefore Decimal? @map("accumulated_impairment_before") @db.Decimal(15, 2)
+  /// Surplus revaluasi per-aset sebelum/sesudah peristiwa (snapshot; tidak
+  /// boleh negatif, tidak boleh memakan surplus aset lain — E111-2). Before
+  /// dibekukan supaya reversal menulis surplus sesudah = before peristiwa
+  /// asal persis (mirror), tanpa menurunkan ulang dari rantai.
+  revaluationSurplusBefore Decimal? @map("revaluation_surplus_before") @db.Decimal(15, 2)
+  revaluationSurplusAfter Decimal? @map("revaluation_surplus_after") @db.Decimal(15, 2)
+
+  /// Penilai/dasar terstruktur: nama penilai/penelaah + rujukan laporan.
+  appraiserName String? @map("appraiser_name") @db.VarChar(200)
+  /// Kelas aset yang direvaluasi (F-111-V: per kelas, bukan cherry-pick aset).
+  revaluedClassName String? @map("revalued_class_name") @db.VarChar(200)
+  /// Indikator impairment terdaftar + dasar terpulihkan terstruktur.
+  impairmentIndicator String? @map("impairment_indicator") @db.VarChar(60)
+  /// FAIR_VALUE_LESS_COSTS | VALUE_IN_USE
+  recoverableBasis String? @map("recoverable_basis") @db.VarChar(40)
+  recoverableAmount Decimal? @map("recoverable_amount") @db.Decimal(15, 2)
+  /// Plafon pembalikan: nilai tercatat seandainya tanpa impairment (E111-8).
+  carryingWithoutImpairment Decimal? @map("carrying_without_impairment") @db.Decimal(15, 2)
+  /// Goodwill/tak berwujud tanpa amortisasi: pembalikan DILARANG (PSAK 48).
+  isGoodwillOrNonAmortizing Boolean @default(false) @map("is_goodwill_or_non_amortizing")
+
+  /// Reklasifikasi (F-115-V Putusan 1).
+  fromCategoryId Int? @map("from_category_id")
+  toCategoryId   Int? @map("to_category_id")
+  reasonCode     String? @map("reason_code") @db.VarChar(60)
+  reasonNote     String? @map("reason_note") @db.Text
+  approvedByName String? @map("approved_by_name") @db.VarChar(200)
+
+  /// Perubahan metode/estimasi (F-115-V Putusan 2/3/4) — prospektif, nol jurnal.
+  oldMethod String? @map("old_method") @db.VarChar(40)
+  newMethod String? @map("new_method") @db.VarChar(40)
+  oldUsefulLifeMonths Int? @map("old_useful_life_months")
+  newUsefulLifeMonths Int? @map("new_useful_life_months")
+  oldResidualValue Decimal? @map("old_residual_value") @db.Decimal(15, 2)
+  newResidualValue Decimal? @map("new_residual_value") @db.Decimal(15, 2)
+
+  /// Fiskal berpersetujuan DJP (F-111-V Putusan 2 / F-115-V Putusan 3).
+  /// Kosong = fiskal tidak bergerak oleh peristiwa ini.
+  djpApprovalNumber String? @map("djp_approval_number") @db.VarChar(100)
+  djpApprovalDate   DateTime? @map("djp_approval_date")
+  fiscalBaseBefore  Decimal? @map("fiscal_base_before") @db.Decimal(15, 2)
+  fiscalBaseAfter   Decimal? @map("fiscal_base_after") @db.Decimal(15, 2)
+  fiscalSurplusAmount Decimal? @map("fiscal_surplus_amount") @db.Decimal(15, 2)
+  /// Snapshot tarif PPh final master saat peristiwa (E111-4).
+  finalTaxRatePercent Decimal? @map("final_tax_rate_percent") @db.Decimal(5, 2)
+  finalTaxAmount    Decimal? @map("final_tax_amount") @db.Decimal(15, 2)
+  /// Masa manfaat fiskal PENUH kelompok sesudah reset (bulan).
+  fiscalUsefulLifeMonthsAfter Int? @map("fiscal_useful_life_months_after")
+  fiscalGroupCode   String? @map("fiscal_group_code") @db.VarChar(30)
+  fiscalMethodBefore String? @map("fiscal_method_before") @db.VarChar(40)
+  fiscalMethodAfter  String? @map("fiscal_method_after") @db.VarChar(40)
+
+  /// Snapshot akun terpakai (id + kode) — pembalikan membaca ini, bukan
+  /// mapping kategori berjalan (F-128-V Putusan 3, E128-4).
+  surplusAccountId Int? @map("surplus_account_id")
+  surplusAccountCode String? @map("surplus_account_code") @db.VarChar(20)
+  impairmentLossAccountId Int? @map("impairment_loss_account_id")
+  impairmentLossAccountCode String? @map("impairment_loss_account_code") @db.VarChar(20)
+  accumulatedImpairmentAccountId Int? @map("accumulated_impairment_account_id")
+  accumulatedImpairmentAccountCode String? @map("accumulated_impairment_account_code") @db.VarChar(20)
+  fixedAssetAccountId Int? @map("fixed_asset_account_id")
+  fixedAssetAccountCode String? @map("fixed_asset_account_code") @db.VarChar(20)
+  accumulatedDepreciationAccountId Int? @map("accumulated_depreciation_account_id")
+  accumulatedDepreciationAccountCode String? @map("accumulated_depreciation_account_code") @db.VarChar(20)
+  taxPayableAccountId Int? @map("tax_payable_account_id")
+  taxPayableAccountCode String? @map("tax_payable_account_code") @db.VarChar(20)
+  /// Reklasifikasi: akun kelas tujuan (snapshot lawan jurnal pindah).
+  toFixedAssetAccountId Int? @map("to_fixed_asset_account_id")
+  toFixedAssetAccountCode String? @map("to_fixed_asset_account_code") @db.VarChar(20)
+  toAccumulatedDepreciationAccountId Int? @map("to_accumulated_depreciation_account_id")
+  toAccumulatedDepreciationAccountCode String? @map("to_accumulated_depreciation_account_code") @db.VarChar(20)
+  toAccumulatedImpairmentAccountId Int? @map("to_accumulated_impairment_account_id")
+  toAccumulatedImpairmentAccountCode String? @map("to_accumulated_impairment_account_code") @db.VarChar(20)
+
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  asset         Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  reversesEvent AssetChangeEvent?  @relation("AssetChangeEventReversal", fields: [reversesEventId], references: [id])
+  reversedBy    AssetChangeEvent?  @relation("AssetChangeEventReversal")
+
+  @@index([assetId])
+  @@index([kind])
+  @@index([status])
+  @@index([effectiveDate])
+  @@index([journalId])
+  @@index([createdAt])
+  @@map("asset_change_events")
 }
 
 model AssetHistory {
