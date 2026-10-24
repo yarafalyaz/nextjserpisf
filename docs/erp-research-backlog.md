@@ -24520,6 +24520,70 @@ Alur:
 | Koreksi identitas di form terbit sebelum simpan | — | `create_tax_invoices` | ditolak |
 
 Tidak ada key izin baru tahap 1 (USULAN; Q-TX-2 Lead). Identitas pajak pelanggan adalah data master bisnis, BUKAN data gaji — tidak memakai hr-scope; tetap hanya tampil ke pemegang `view_customers`.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-TX-01 | Blok identitas pajak master semua OPSIONAL; pelanggan tanpa NPWP tetap sah dan tetap bisa bertransaksi seperti hari ini. Kelengkapan hanya penanda, bukan gerbang penjualan tahap 1. | USULAN | taxId opsional form.schemas.ts:47 |
+| BR-TX-02 | `taxId` existing DIPERTAHANKAN sebagai NPWP pelanggan (tidak diganti namanya, tidak dimigrasi maknanya); field baru hanya nama WP, alamat pajak, NITKU, status PKP. | USULAN (fisik Backend Q-TX-3) | schema.prisma:376 |
+| BR-TX-03 | Snapshot saat terbit: counterparty dokumen = salinan identitas master pada momen penerbitan (sesudah koreksi petugas). Edit master kemudian TIDAK menulis ulang dokumen terbit; koreksi dokumen = faktur pengganti existing. | USULAN | pola snapshot repo (QuotationHistory, replacesTaxInvoiceId) |
+| BR-TX-04 | Prefill hanya bila dokumen tertaut ke faktur penjualan/tagihan yang pelanggannya jelas. Terbit tanpa tautan = isian manual seperti hari ini (tidak ditebak dari nama). | USULAN | issueSchema salesInvoiceId optional tax-documents.actions.ts:53 |
+| BR-TX-05 | Nama WP boleh beda dari nama dagang `Customer.name`; yang masuk faktur pajak = nama WP. Kosong nama WP → fallback nama pelanggan DITANDAI sebagai fallback di penanda kelengkapan (bukan diam-diam dianggap nama WP). | USULAN | BENCHMARK tab Pajak pelanggan Accurate (URL §6) |
+| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TIDAK diputus spec ini. Sampai vonis Accountant, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | BUTUH-VONIS (Accountant Q-TX-1) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
+| BR-TX-07 | Status PKP tersimpan sebagai fakta master bertanggal-efektif atau nilai kini sederhana = fisik Backend + vonis Accountant; spec hanya mewajibkan nilai yang tertera di dokumen adalah snapshot saat terbit, bukan nilai master terkini. | BUTUH-VONIS (Accountant Q-TX-1) + USULAN | — |
+| BR-TX-08 | Penanda kelengkapan = turunan baca-saja (nama WP terisi DAN NPWP terisi = siap; selain itu kurang + daftar kosongnya). Tanpa kolom status, tanpa cron penagih kelengkapan tahap 1. | USULAN | pola turunan F-2026-10-25-001-S |
+| BR-TX-09 | Vendor: `Vendor.npwp` existing adalah padanan sisi beli; spec ini TIDAK mengubah vendor. Penjajaran bentuk field vendor = spec terpisah bila faktur masukan membuktikan perlu. | USULAN (scope) | schema.prisma:485 (Vendor.npwp) |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Tab Pajak di master pelanggan (NPWP, kode transaksi, data pajak) | Ada tab "Pajak" formulir pelanggan (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pelanggan/mengenal-fitur-pelanggan/) | Belum terverifikasi di help resmi yang diakses run ini — ditulis belum terverifikasi, bukan diklaim absen | ABSEN parsial: hanya `taxId` bebas (TERVERIFIKASI-KODE) |
+| NPWP + NITKU + alamat pajak perusahaan/pelanggan terstruktur | Ada preferensi pajak NPWP/NITKU/alamat terdaftar (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-isi-data-pajak-perusahaan/) | Belum terverifikasi | ABSEN (gap spec ini) |
+| Identitas lawan otomatis ke faktur pajak | Data pajak transaksi tampil otomatis dari preferensi/master (BENCHMARK halaman preferensi di atas) | Belum terverifikasi | ABSEN: counterparty manual per dokumen (tax-invoice-form.tsx:132-140) |
+| Snapshot identitas di dokumen terbit | Tidak ditemukan eksplisit di halaman di atas — ditulis tidak ditemukan | Belum terverifikasi | WAJIB snapshot per BR-TX-03 (USULAN) |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah vonis Accountant + gerbang Lead):
+- AC-TX-B1: terbit faktur pajak dari faktur penjualan pelanggan beridentitas lengkap → counterparty dokumen byte-sama identitas master saat terbit. Tanpa salinan server (tetap kosong/manual) = MERAH.
+- AC-TX-B2: edit NPWP/nama WP master sesudah terbit → dokumen terbit byte-sama (snapshot). Master live tertarik ke dokumen = MERAH.
+- AC-TX-B3: terbit tanpa tautan faktur → perilaku manual existing persis, nol tebakan pelanggan dari nama.
+- AC-TX-B4: penanda kelengkapan: nama WP kosong → `kurang` menyebut nama WP; NPWP kosong → menyebut NPWP; keduanya terisi → `siap`. Fallback nama dagang tertanda fallback (BR-TX-05).
+- AC-TX-B5: pelanggan tanpa identitas apa pun tetap bisa dibuat faktur penjualan dan faktur pajak manual seperti hari ini (regresi jalur existing hijau).
+
+Frontend (konsumen):
+- AC-TX-F1: form terbit menampilkan counterparty terisi dari server apa adanya; UI mengosongkan/menghitung ulang identitas sendiri = MERAH.
+- AC-TX-F2: penanda kelengkapan tampil verbatim server di daftar/detail pelanggan; pelanggan kurang tetap bisa dibuka/diedit (tanpa blokir UI karangan).
+
+QA: AC-TX-B1..B5 + AC-TX-F1..F2 atas head Backend/Frontend persis.
+
+Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallback. EC-2 pelanggan PKP berubah non-PKP di tengah tahun: dokumen lama snapshot lama, dokumen baru snapshot baru (BR-TX-07 menunggu vonis bentuk efektif). EC-3 NPWP terisi tetapi nama WP kosong → kurang; perilaku snapshot final menunggu Q-TX-1, spec melarang diam-diam. EC-4 faktur penjualan pelanggan terhapus-lembut (deletedAt) → tautan SetNull existing berlaku, snapshot dokumen tidak ikut hilang. EC-5 dua pelanggan bernama sama, identitas beda → snapshot mengikuti customerId faktur, bukan nama.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-TX-1 (Accountant, BUTUH-VONIS — memblokir validasi): (a) validasi format NPWP 16 digit vs terima 15 digit lama; (b) bentuk NITKU yang disimpan; (c) status PKP: nilai kini vs bertanggal efektif, dan apakah status PKP master boleh memengaruhi kode transaksi default faktur (spec usul TIDAK tahap 1); (d) EC-3 snapshot nama dagang tertanda vs tolak terbit.
+- Q-TX-2 (Lead): buka inti field master + snapshot sekarang? Izin reuse vs baru (spec usul reuse existing).
+- Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
+- Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-004-S | Spec ini (dokumen) | Business | — |
+| (turunan) vonis format NPWP/NITKU/status PKP | Accountant | Q-TX-1 | — |
+| (turunan) field master + snapshot penerbitan + penanda loader | Backend | Q-TX-1 + Q-TX-2/3; klaim schema.prisma di board | — |
+| (turunan) UI blok pajak master + form terbit konsumen | Frontend | kontrak Backend stabil | — |
+| (turunan) falsifikasi AC-TX-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+
+- Validasi NPWP online ke DJP / cek PKP otomatis: butuh kontrak/akses DJP; vonis Accountant + keputusan Lead terpisah.
+- Mengubah Vendor.npwp atau menyelaraskan master vendor: scope pelanggan dulu (BR-TX-09).
+- Menjadikan kelengkapan identitas sebagai gerbang penjualan/faktur: pelanggan ritel tanpa NPWP adalah arus sah bengkel; penanda dulu, gerbang hanya lewat vonis.
+- Ekspor XML Coretax dari snapshot: jalur P0-1 existing; snapshot ini menyuplainya, tidak membangun eksportir kedua.
 ---
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-002-S: antrean penawaran diterima belum dikonversi (accepted/approved tanpa SO/WO/faktur)
