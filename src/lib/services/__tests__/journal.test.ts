@@ -236,6 +236,27 @@ describe("JournalService", () => {
       await expect(service.reverseJournal(1, "REV-1")).rejects.toThrow("sudah di-reverse");
     });
 
+    it("E121-6: jalur generik menolak jurnal penutup tahun, nol reversal ditulis", async () => {
+      const { service, spies } = buildService();
+      spies.journalFindUniqueOrThrow.mockResolvedValue({
+        id: 1,
+        journalNumber: "JRN-1",
+        status: "POSTED",
+        referenceType: "YearEndClosing",
+        referenceId: 2025,
+        type: "GENERAL",
+        totalDebit: 100,
+        totalCredit: 100,
+        entries: [{ accountId: 1, debit: 100, credit: 0, memo: "Penutup", costCenterId: null }],
+      });
+
+      await expect(service.reverseJournal(1, "REV-1")).rejects.toThrow(
+        "hanya boleh di-reversal lewat reversal penutup tahun"
+      );
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+      expect(spies.journalUpdate).not.toHaveBeenCalled();
+    });
+
     it("creates a reversal journal with swapped debit/credit", async () => {
       const { service, spies } = buildService();
       spies.journalFindUniqueOrThrow.mockResolvedValue({

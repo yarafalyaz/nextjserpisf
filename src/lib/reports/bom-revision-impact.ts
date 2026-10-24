@@ -145,6 +145,8 @@ export interface BomRevisionDeltaLine {
   newQtyPerUnit: number
   /** Kebutuhan genuinely-new: max(new×planned − max(old×planned, issued), 0). */
   newNeededQty: number
+  /** Qty item ini sudah keluar untuk dokumen pemilik (dari issuedByItem builder, per item). */
+  issuedQty: number
   coverage: "tercakup" | "kurang" | "perlu-tinjau"
 }
 
@@ -177,7 +179,7 @@ export function buildBomRevisionDelta(input: {
     else if (availableByItem.has(m.itemId)) {
       coverage = (availableByItem.get(m.itemId) ?? 0) >= newNeededQty ? "tercakup" : "kurang"
     }
-    lines.push({ itemId: m.itemId, oldQtyPerUnit, newQtyPerUnit, newNeededQty, coverage })
+    lines.push({ itemId: m.itemId, oldQtyPerUnit, newQtyPerUnit, newNeededQty, issuedQty: issued, coverage })
   }
   return { lines, hasGenuinelyNew: lines.some((l) => l.oldQtyPerUnit === 0 && l.newNeededQty > 0) }
 }

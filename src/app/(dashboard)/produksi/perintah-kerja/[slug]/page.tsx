@@ -23,6 +23,8 @@ import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
+import { WorkOrderSubstituteSuggestionsPanel } from "@/components/reports/work-order-substitute-suggestions-panel";
+import { getWorkOrderSubstituteSuggestions } from "@/lib/reports/item-substitute-suggestions-data";
 import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { WorkOrderReservationsCard } from "@/components/reports/work-order-reservations-card";
@@ -33,6 +35,8 @@ import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actio
 import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
 import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions";
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel";
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card";
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data";
 import { auth } from "@/lib/auth/auth";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
@@ -61,46 +65,34 @@ export default async function WorkOrderDetailPage({
   await requirePermission("view_work_orders");
   const { slug } = await params;
 
+  const workOrderInclude = {
+    customer: true,
+    quotation: true,
+    customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+    project: { select: { id: true, name: true, slug: true } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    items: true,
+    purchaseOrders: {
+      where: { status: { notIn: ["cancelled"] } },
+      select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
+    },
+    productionOrders: {
+      select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
+    },
+  };
+
   const wo = await resolveEntity(
     { segment: slug },
     {
       bySlug: (s) =>
         prisma.workOrder.findFirst({
           where: { slug: s },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
-            },
-          },
+          include: workOrderInclude,
         }),
       byId: (id) =>
         prisma.workOrder.findUnique({
           where: { id },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
-            },
-          },
+          include: workOrderInclude,
         }),
     },
   );
@@ -193,6 +185,13 @@ export default async function WorkOrderDetailPage({
   // F-105: status part turunan read-only per baris WO (builder Bara PR #275).
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
   const partStatus = await getWorkOrderPartStatus(wo.id);
+
+  // F-2026-10-22-069-S: saran substitusi read-only dari loader BOT 3 —
+  // tampil verbatim; terapkan digerbang edit_work_orders (server menegakkan).
+  const [substituteSuggestions, canApplySubstitute] = await Promise.all([
+    getWorkOrderSubstituteSuggestions(wo.id),
+    hasPermission("edit_work_orders"),
+  ]);
 
   // F-057-S §2/§3: tabel reservasi stok — baris StockReservation passthrough
   // loader (status/sisa builder, jejak rilis apa adanya). Izin view_work_orders
@@ -562,6 +561,21 @@ export default async function WorkOrderDetailPage({
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
 
+      {substituteSuggestions ? (
+        <WorkOrderSubstituteSuggestionsPanel
+          workOrderId={wo.id}
+          report={substituteSuggestions}
+          canApply={canApplySubstitute}
+        />
+      ) : null}
+
+      {wo.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(wo.bomRevision.id)}
+          currentRevisionNo={wo.bomRevision.revisionNo}
+        />
+      ) : null}
+
       <BomRevisionChangePanel
         owner={{ workOrderId: wo.id }}
         documentStatus={wo.status}
@@ -573,6 +587,11 @@ export default async function WorkOrderDetailPage({
         itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
         canManage={canManageBomChange}
         currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+        pairedPins={wo.productionOrders.flatMap((po) =>
+          po.bomRevision
+            ? [{ label: "order produksi", documentNo: po.documentNo, revisionNo: po.bomRevision.revisionNo }]
+            : [],
+        )}
       />
 
       <JobChangeOrderPanel

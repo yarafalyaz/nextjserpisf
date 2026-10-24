@@ -206,6 +206,60 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (bulk payroll concurrency, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP tanpa
+        # INTEGRATION_DB_URL, hijau semu dilarang. Gap LOW audit #672
+        # (t_31eab0e0 -> t_44b6862a): konkurensi irisan generateBulkPayroll
+        # wajib terbukti di dua transaksi MySQL nyata, bukan mock.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/bulk-payroll-concurrency.integration.test.ts 2>&1 | tee bulk-payroll-concurrency.log
+          if grep -qi 'skipped' bulk-payroll-concurrency.log; then
+            echo "::error::bulk-payroll-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' bulk-payroll-concurrency.log; then
+            echo "::error::bulk-payroll-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (JobChangeOrder apply atomicity, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP tanpa
+        # INTEGRATION_DB_URL, hijau semu dilarang. Audit #515 gap MEDIUM-3.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/job-change-order-apply-atomicity.integration.test.ts 2>&1 | tee jco-apply-atomicity.log
+          if grep -qi 'skipped' jco-apply-atomicity.log; then
+            echo "::error::job-change-order-apply-atomicity.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' jco-apply-atomicity.log; then
+            echo "::error::job-change-order-apply-atomicity.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (journal active-reference unique, MySQL nyata)
+        # Anti-skip sama seperti bank statement. Bukti fisik E127-8/E127-8b
+        # (F-2026-10-23-127-V Putusan 4, PR #664): re-post sesudah reversal
+        # lolos unik aktif-saja, jurnal aktif kedua tetap P2002.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/hooks/__tests__/journal-active-reference.integration.test.ts 2>&1 | tee journal-active-reference.log
+          if grep -qi 'skipped' journal-active-reference.log; then
+            echo "::error::journal-active-reference.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' journal-active-reference.log; then
+            echo "::error::journal-active-reference.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
 
   docker:
     name: Docker Image Build

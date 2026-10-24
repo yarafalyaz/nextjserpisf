@@ -22,6 +22,8 @@ import { buildProductionVariance } from "@/lib/reports/production-variance"
 import { CanCreate } from "@/components/auth/can-create"
 import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions"
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel"
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card"
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -35,50 +37,38 @@ export default async function ProductionOrderDetailPage({
 
   const { slug } = await params
 
+  const workOrderPinSelect = { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } }
+
+  const productionOrderInclude = {
+    product: { include: { inventoryItem: { select: { trackSerial: true } } } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    workOrder: { select: workOrderPinSelect },
+    materials: true,
+    costs: {
+      orderBy: { createdAt: "asc" as const },
+      include: {
+        vendor: { select: { name: true } },
+        purchaseOrder: { select: { id: true, documentNo: true, slug: true } },
+        nonconformance: { select: { id: true, documentNo: true, slug: true } },
+      },
+    },
+    genealogy: {
+      include: { materials: true },
+    },
+  }
+
   const order = await resolveEntity(
     { segment: slug },
     {
       bySlug: (s) =>
         prisma.productionOrder.findFirst({
           where: { slug: s },
-          include: {
-            product: { include: { inventoryItem: { select: { trackSerial: true } } } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true } },
-            materials: true,
-            costs: {
-              orderBy: { createdAt: "asc" },
-              include: {
-                vendor: { select: { name: true } },
-                purchaseOrder: { select: { id: true, documentNo: true, slug: true } },
-                nonconformance: { select: { id: true, documentNo: true, slug: true } },
-              },
-            },
-            genealogy: {
-              include: { materials: true },
-            },
-          },
+          include: productionOrderInclude,
         }),
       byId: (id) =>
         prisma.productionOrder.findUnique({
           where: { id },
-          include: {
-            product: { include: { inventoryItem: { select: { trackSerial: true } } } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true } },
-            materials: true,
-            costs: {
-              orderBy: { createdAt: "asc" },
-              include: {
-                vendor: { select: { name: true } },
-                purchaseOrder: { select: { id: true, documentNo: true, slug: true } },
-                nonconformance: { select: { id: true, documentNo: true, slug: true } },
-              },
-            },
-            genealogy: {
-              include: { materials: true },
-            },
-          },
+          include: productionOrderInclude,
         }),
     },
   )
@@ -102,7 +92,7 @@ export default async function ProductionOrderDetailPage({
     ?? (order.product.inventoryItemId
       ? await prisma.workOrder.findFirst({
           where: { items: { some: { itemId: order.product.inventoryItemId } } },
-          select: { id: true, documentNo: true, projectId: true, slug: true },
+          select: workOrderPinSelect,
           orderBy: { createdAt: "desc" },
         })
       : null)
@@ -367,6 +357,13 @@ export default async function ProductionOrderDetailPage({
         </div>
       </div>
 
+      {order.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(order.bomRevision.id)}
+          currentRevisionNo={order.bomRevision.revisionNo}
+        />
+      ) : null}
+
       <BomRevisionChangePanel
         owner={{ productionOrderId: order.id }}
         documentStatus={order.status}
@@ -378,6 +375,11 @@ export default async function ProductionOrderDetailPage({
         itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
         canManage={canManageBomChange}
         currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+        pairedPins={
+          linkedWorkOrder?.bomRevision
+            ? [{ label: "perintah kerja", documentNo: linkedWorkOrder.documentNo, revisionNo: linkedWorkOrder.bomRevision.revisionNo }]
+            : []
+        }
       />
 
       {/* Non-material costs (labor / overhead / subcontract / service) */}
