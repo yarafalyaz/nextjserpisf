@@ -200,6 +200,7 @@ function journalEntryBranch() {
 function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
   return {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+    downPayment: { findMany: vi.fn().mockResolvedValue([]) },
     salesInvoice: {
       findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
       findUnique: mocks.invoiceFindUnique,
@@ -1642,7 +1643,7 @@ describe("onDownPaymentReceived", () => {
         systemSetting: {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
-        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow },
+        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow, update: vi.fn().mockResolvedValue({}) },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
