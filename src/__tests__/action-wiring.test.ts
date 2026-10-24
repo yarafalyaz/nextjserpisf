@@ -190,15 +190,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // reversal. 4 aksi lain kini dirujuk SalesLateFeePanel (t_c2d2dce1).
   "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
     "F-2026-10-22-093-V penjaga tolak-edit nominal posted by design (E93-6); UI sengaja tidak menyediakan edit nominal",
-  // F-2026-10-22-070-S inti backend (PR #694): panel Stok minimum per gudang
-  // di detail barang + label sumber laporan menyusul di kartu frontend
-  // t_0fc24ddc (buang entri ini saat UI memanggilnya).
-  "src/actions/item-warehouse-setting.actions.ts::setItemWarehouseMinStock":
-    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
-  "src/actions/item-warehouse-setting.actions.ts::removeItemWarehouseMinStock":
-    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
-  "src/actions/item-warehouse-setting.actions.ts::listItemWarehouseSettings":
-    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
+  // F-2026-10-22-070-S inti backend (PR #694): 3 aksi stok minimum per
+  // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
+  // (t_0fc24ddc) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
