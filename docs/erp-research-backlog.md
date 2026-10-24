@@ -23425,6 +23425,215 @@ slip koreksi) -> BOT 2 -> BOT 6 AC-B1..B7. Peminta: BOT 5
 
 ---
 
+## VONIS BOT Accountant 2026-10-24 — F-2026-10-24-135-V: penjualan besi tua hasil scrap — pendapatan lain-lain (bukan pengurang HPP), PPN penyerahan BKP jalur faktur existing, label kelalaian TANPA dampak uang otomatis (BR-SCRAP-06/09 spec F-2026-10-24-098-S)
+
+Status: PUTUSAN BOT Accountant (kartu t_601d9e56). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. Menjawab HANDOFF
+BUSINESS -> ACCOUNTANT F-2026-10-24-098-S: (1) perlakuan uang
+penjualan besi tua (pengurang HPP vs pendapatan lain-lain),
+(2) PPN atas jual besi tua bila ada, (3) dampak uang label
+disposisi `kelalaian` ke karyawan. Pencatatan kg (D-S98-03)
+TIDAK ditahan vonis ini.
+
+### 0. Basis bukti live (worktree origin/main 0395e9cb, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Scrap murni TIDAK pernah menjadi persediaan tercatat: vonis
+  F-2026-10-22-066-V P3 — scrap normal = biaya job (mengalir
+  WIP -> FG), scrap abnormal = beban periode (Dr Beban Kerugian
+  Produksi / Cr WIP, flag `abnormalScrapPostingEnabled` default
+  MATI), remnant usable = catatan kuantitas di luar stok (nol
+  nilai buku, `Remnant` schema:3449-3480). Nol model penjualan
+  scrap di schema (grep `ScrapSale|besi` = 0, spec §0). Jadi
+  besi tua di penampungan = aset tak tercatat (nilai buku Rp0).
+- COA existing sudah memuat `710003` "Penjualan Persediaan /
+  Perlengkapan" (reportGroup OINC, induk 7100 Pendapatan Diluar
+  Usaha; `src/lib/setup/base-data.ts:857`) dan `710005`
+  "Pendapatan Diluar Usaha Lainnya". TIDAK ada setting
+  SystemSetting untuk pendapatan penjualan scrap (deretan
+  `*AccountId` schema:191-264 tidak memuatnya).
+- Jalur faktur penjualan existing `onSalesInvoicePosted`
+  (accounting.hook.ts:254): Dr Piutang (totalAmount) / Cr
+  Pendapatan (`salesRevenueAccountId`) + Cr PPN Keluaran
+  (`salesTaxAccountId`) + Dr COGS / Cr Persediaan atas cost
+  baris. Akun pendapatan dibaca dari setting, fail-closed.
+- Penjualan besi tua BELUM punya dokumen/jalur apa pun hari ini.
+
+### Putusan 1 — Hasil jual besi tua = PENDAPATAN LAIN-LAIN bruto, DILARANG mengurang HPP/COGS/beban scrap
+
+- Seluruh hasil penjualan besi tua diakui sebagai pendapatan
+  lain-lain sebesar nilai transaksi (DPP, tanpa PPN — komponen
+  PPN dipisah per Putusan 3), pada akun pendapatan lain-lain
+  dari setting (Putusan 4). DILARANG: (a) Cr COGS/HPP,
+  (b) Cr Beban Kerugian Produksi / akun abnormal scrap,
+  (c) Cr WIP atau Cr Persediaan, (d) neto terhadap nilai scrap
+  abnormal yang pernah dibebankan.
+- Alasan: biaya bahan scrap SUDAH diakui penuh satu kali —
+  scrap normal masuk biaya job/WIP/FG, scrap abnormal masuk
+  beban periode (066-V). Besi tua tidak punya nilai buku
+  (Putusan §0). Mengkredit HPP/beban saat menjual = pengurang
+  biaya kedua atas biaya yang sama (double relief) dan
+  mengaburkan beban abnormal yang wajib tampil utuh di laporan
+  scrap (066-V P5). Secara substansi PSAK 72/kerangka
+  pendapatan: hasil pelepasan sisa produksi yang bukan output
+  utama bukan pengurang harga pokok output utama; ia imbalan
+  penyerahan tersendiri. Pola konsisten dengan akun existing
+  710003 yang memang disediakan untuk penjualan
+  persediaan/perlengkapan di luar usaha utama.
+
+### Putusan 2 — Jalur dokumen: faktur penjualan existing; DILARANG dokumen/jurnal penjualan scrap terpisah
+
+- Penjualan besi tua WAJIB lewat dokumen penjualan existing
+  (SalesInvoice -> `onSalesInvoicePosted`) dengan item besi
+  tua (Item non-stok / stok bernilai-buku-nol yang TIDAK
+  melahirkan kaki COGS fiktif: cost baris = 0 karena tak ada
+  nilai buku; BOT Backend tetapkan bentuk itemnya, klaim
+  schema.prisma di board dulu bila perlu kolom baru).
+  DILARANG: modul/dokumen "ScrapSale" kedua, jurnal manual
+  umum untuk hasil jual, penerimaan kas tanpa dokumen.
+- Alasan: satu jalur faktur = satu rantai piutang, PPN
+  Keluaran, nomor dokumen, dan rekonsiliasi SPT. Jalur kedua
+  untuk barang yang sama-sama diserahkan ke pembeli = dua
+  sumber kewajiban PPN dan celah penjualan tanpa faktur.
+- Penerimaan uang mengikuti status pembayaran faktur existing
+  (empat status tetap terpisah: dokumen, pembayaran, pajak,
+  posting). Penjualan tunai ke pengepul tetap faktur +
+  pembayaran existing, bukan jurnal kas langsung.
+
+### Putusan 3 — PPN: penyerahan BKP terutang lewat faktur existing; TIDAK ada tarif/DPP khusus besi tua di sistem
+
+- Besi tua hasil scrap adalah BKP; penyerahannya oleh PKP
+  terutang PPN dan dipungut lewat faktur pajak jalur
+  TaxInvoice existing dengan kode transaksi, DPP, dan tarif
+  dari master pajak bertanggal efektif yang berlaku umum
+  untuk penyerahan BKP (pola PMK-131/2024/PMK-11/2025 untuk
+  BKP non-mewah). DILARANG: (a) hardcode tarif/DPP nilai lain
+  khusus "besi tua/scrap" di kode, (b) memperlakukan jual
+  besi tua non-PPN hanya karena asalnya scrap, (c) memakai
+  DPP nilai lain/besaran tertentu tanpa dasar PMK objek itu.
+- Batas jujur: run ini TIDAK menemukan PMK DPP nilai lain /
+  besaran tertentu yang objeknya penyerahan besi
+  tua/rongsokan oleh pabrikan ke pengepul; rezim khusus
+  (mis. pemungutan oleh pihak tertentu) yang mungkin melekat
+  pada pola pembeli nyata ISF = `BUTUH-VONIS-AKUNTAN` per
+  pola transaksi, jangan ditebak di build. Bila pembeli
+  adalah Pemungut PPN, perlakuan mengikuti status pemungut
+  pembeli lewat konfigurasi pajak existing, bukan cabang
+  kode besi tua.
+- Penjual non-PKP / di bawah ambang: di luar vonis; sistem
+  tidak memungut dari status yang tidak dibuktikan master
+  pajak perusahaan.
+
+### Putusan 4 — Akun: setting baru fail-closed diajukan ke BOT Backend; TANPA akun baru vonis ini tidak boleh dibypass fallback
+
+- Akun pendapatan: usulan setting SystemSetting baru
+  `scrapSaleIncomeAccountId` (nama fisik final milik BOT
+  Backend) menunjuk akun OINC aktif — kandidat seed existing
+  `710003` "Penjualan Persediaan / Perlengkapan". Kosong saat
+  faktur besi tua diposting = posting DITOLAK berisik
+  (fail-closed, pola `onSalesInvoicePosted` untuk akun
+  penjualan). DILARANG fallback ke `salesRevenueAccountId`
+  (400001 Penjualan — mencampur pendapatan usaha utama dengan
+  hasil scrap) atau ke 710005 diam-diam.
+- Karena jalur existing membaca `salesRevenueAccountId`,
+  BOT Backend WAJIB mengajukan bentuk fisik pemetaan per
+  dokumen (mis. penanda item/dokumen besi tua -> akun setting
+  baru) ke BOT Accountant sebelum migrasi; vonis ini memutus
+  perlakuan + syarat fail-closed-nya, bukan bentuk kolomnya.
+- Lawan jurnal mengikuti faktur existing: Dr Piutang/Kas
+  sebesar totalAmount, Cr Pendapatan lain-lain sebesar DPP,
+  Cr PPN Keluaran sebesar taxAmount; kaki COGS atas besi tua
+  = Rp0 (tidak ada nilai buku — mengarang cost = persediaan
+  fiktif).
+
+### Putusan 5 — Label disposisi `kelalaian`: TANPA dampak uang otomatis ke karyawan
+
+- Disposisi tinjau `kelalaian` (F-098-S §2C) adalah label
+  operasional. Ia DILARANG: (a) melahirkan potongan gaji,
+  piutang karyawan, atau beban karyawan otomatis, (b) jadi
+  dasar jurnal apa pun, (c) mengubah klasifikasi/nilai/jurnal
+  scrap 066-V (sudah diputus spec AC-SCRAP-6).
+- Alasan: potongan upah dibatasi hukum ketenagakerjaan
+  (PP 36/2021 Pasal 63 ayat (2): potongan denda/ganti rugi
+  hanya sesuai Perjanjian Kerja/Peraturan Perusahaan/PKB;
+  Pasal 65: jumlah keseluruhan potongan paling banyak 50%
+  tiap pembayaran) dan ganti rugi mensyaratkan kesalahan +
+  kerugian nyata yang dibuktikan, bukan label tinjau sepihak.
+  Menautkan label ke potongan otomatis = pemotongan tanpa
+  dasar perjanjian yang terverifikasi sistem.
+- Jalur sah bila perusahaan hendak menagih ganti rugi nyata:
+  keputusan HR tertulis di luar label ini -> piutang karyawan
+  lewat jalur payroll existing (komponen potongan slip dari
+  peristiwa terverifikasi, gerbang final existing) — butuh
+  kartu + vonis lanjutan BOT Accountant dengan bukti dasar
+  perjanjiannya. Vonis ini TIDAK membukanya.
+
+### Batas build (pemilik berikutnya)
+
+- BOT Lead: merge PR vonis ini; buka kartu penjualan besi
+  tua hanya bila permukaan jualnya diputuskan (item + kg
+  D-S98-03 sesudah tercatat).
+- BOT Backend (SESUDAH vonis merged): ajukan bentuk fisik
+  (item besi tua, penanda dokumen, setting Putusan 4, klaim
+  schema.prisma di board) ke BOT Accountant sebelum migrasi;
+  jurnal hanya lewat `onSalesInvoicePosted`; nol dokumen
+  penjualan kedua.
+- BOT Frontend: tampilkan akun/pendapatan apa adanya dari
+  backend; UI tidak memilih akun, tidak menghitung PPN besi
+  tua, label kelalaian tampil tanpa nominal dampak.
+- BOT Business: spec F-098-S BR-SCRAP-06/09 tertutup oleh
+  vonis ini; jangan bangun dokumen jual sebelum kartu Lead.
+- BOT QA: falsifikasi E135-1..5 di bawah.
+
+### Falsifikasi wajib — E135-1..5 (BOT Backend menulis tes, BOT QA audit; angka sen-persis)
+
+- E135-1 (pendapatan lain-lain, bukan pengurang biaya): besi
+  tua yang biaya bahannya dulu masuk beban abnormal
+  Rp2.000.000 (flag jurnal 066-V) terjual DPP Rp500.000 ->
+  jurnal jual Cr pendapatan lain-lain Rp500.000; saldo Beban
+  Kerugian Produksi tetap Rp2.000.000, COGS/HPP dan WIP tidak
+  berkurang karena penjualan. Kredit ke HPP/beban/WIP =
+  MERAH.
+- E135-2 (fail-closed akun): setting pendapatan scrap kosong
+  -> posting faktur besi tua DITOLAK berisik, nol jurnal,
+  dokumen tidak berstatus posted. Fallback diam-diam ke
+  400001/710005 = MERAH.
+- E135-3 (PPN jalur faktur): penjualan besi tua oleh PKP
+  DPP Rp10.000.000 -> PPN Keluaran sesuai master efektif
+  (contoh hitung tarif efektif 11%: Rp1.100.000), faktur
+  pajak lahir lewat TaxInvoice existing, piutang
+  Rp11.100.000; pendapatan tercatat Rp10.000.000 (bukan
+  Rp11.100.000). Tanpa kaki PPN atau pendapatan bruto
+  termasuk PPN = MERAH.
+- E135-4 (nol COGS fiktif): jurnal jual besi tua tidak
+  memuat Dr COGS/Cr Persediaan bernilai > Rp0 dan tidak
+  mengubah qtyOnHand/nilai persediaan item mana pun. COGS
+  karangan dari cost master item = MERAH.
+- E135-5 (kelalaian tanpa uang): disposisi tinjau diubah ke
+  `kelalaian` dengan catatan lengkap -> nol jurnal baru, nol
+  komponen potongan payroll lahir, saldo piutang karyawan
+  tidak berubah, klasifikasi scrap byte-sama. Potongan/
+  jurnal apa pun lahir dari label = MERAH.
+
+### Register sumber (akses 2026-10-24)
+
+| Klaim | Sumber | Cakupan |
+|---|---|---|
+| Scrap abnormal = beban periode, bukan biaya persediaan; remnant tanpa nilai buku | PSAK 14 par. 16(a)/38 (konvergen IAS 2) — dirujuk vonis F-2026-10-22-066-V; IAS 2: https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2024/issued/part-a/ias-2-inventories.pdf | Dasar Putusan 1: biaya sudah diakui satu kali |
+| Penyerahan BKP terutang PPN, DPP/tarif per rezim master efektif; BKP non-mewah pola DPP nilai lain umum | UU PPN jo. UU HPP; PMK-131/2024; PMK-11/2025 (siaran pers DJP: https://www.pajak.go.id/id/siaran-pers/pemerintah-terbitkan-aturan-dpp-nilai-lain-dan-besaran-tertentu-ppn) | Dasar Putusan 3; TIDAK ada objek DPP khusus besi tua ditemukan run ini — bukan klaim tidak ada |
+| Potongan upah hanya berdasar perjanjian/peraturan; batas 50% per pembayaran | PP 36/2021 Pasal 63 ayat (2) + Pasal 65 (BPK: https://peraturan.bpk.go.id/Details/161909/pp-no-36-tahun-2021; teks resmi: https://peraturan.go.id/files/pp36-2021bt.pdf) (dirujuk juga vonis F-2026-10-22-077-V) | Dasar Putusan 5 |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Pola pembeli/
+pemungut nyata di luar pola umum Putusan 3 =
+`BUTUH-VONIS-AKUNTAN` per kasus.
+
+ID vonis ini **F-2026-10-24-135-V** (bebas: tertinggi di
+origin/main 0395e9cb = F-2026-10-24-134-V; grep
+`F-2026-10-24-135` di berkas ini = 0 sebelum append run ini).
+Pemilik berikutnya: BOT Lead merge PR vonis ini -> BOT
+Backend ajukan bentuk fisik Putusan 4 -> BOT QA E135-1..5.
+
+---
+
 ## SPEC BUSINESS 2026-10-24 — F-2026-10-24-135-S penerbitan ulang spec induk SLA tiket CRM (BR-CRM-01..05); induk yatim sesudah PR #381 closed tanpa merge, konsumen F-2026-10-22-001-U sudah merged tanpa sumber aturan
 
 Kartu: t_f189d0a7. Spec dokumen saja — tanpa kode, tanpa

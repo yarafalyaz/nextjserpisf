@@ -217,4 +217,41 @@ describe("buildDepreciationDifference", () => {
     expect(texts(result)).toContain("Elektronik")
     expect(texts(result)).toContain("Kendaraan")
   })
+
+  it("F109-UI: baris terhitung tampil metode + label sumber, belum-dihitung tampil alasan per baris", () => {
+    const result = buildDepreciationDifference([
+      asset({ code: "A", taxGroupCode: "GROUP_1", fiscalMethod: "declining_balance" }),
+      asset({ code: "B", taxGroupCode: "GROUP_1", fiscalMethod: null }),
+      asset({ code: "C", taxGroupCode: "GROUP_1", purchaseDate: null }),
+    ], YEAR)
+
+    expect(result.table.columns.map((c) => c.header)).toContain("Metode Fiskal")
+    expect(result.table.columns.map((c) => c.header)).toContain("Status Fiskal")
+    const body = texts(result)
+    // A: saldo menurun, angka rekonstruksi tahun berjalan -> label verbatim vonis.
+    expect(body).toContain("Saldo menurun")
+    expect(body).toContain("estimasi-tahun-berjalan")
+    // B: metode belum dipilih tampil per baris, bukan hanya notice agregat.
+    expect(body).toContain("Belum dipilih")
+    expect(body).toContain("Metode fiskal belum dipilih")
+    // C: tanpa tanggal perolehan tampil alasannya per baris.
+    expect(body).toContain("Tanpa tanggal perolehan")
+  })
+
+  it("F109-UI: baris terbekukan berlabel Terbekukan, bukan estimasi", () => {
+    const frozen = buildFiscalYearRows({
+      purchaseCost: 12_000_000,
+      fiscalMethod: "declining_balance",
+      fiscalGroup: fiscalGroupRule("GROUP_1")!,
+      purchaseDate: new Date(Date.UTC(2023, 0, 15)),
+      throughYear: 2024,
+    })
+    if (frozen.rows === null) throw new Error(frozen.reason)
+    const result = buildDepreciationDifference([
+      asset({ taxGroupCode: "GROUP_1", fiscalMethod: "declining_balance", fiscalYearRows: frozen.rows }),
+    ], YEAR)
+
+    expect(texts(result)).toContain("Terbekukan")
+    expect(texts(result)).not.toContain("estimasi-tahun-berjalan")
+  })
 })
