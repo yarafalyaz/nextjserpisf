@@ -65,8 +65,13 @@ jobs:
           set -uo pipefail
 
           if [ -z "${PAT}" ]; then
-            echo "::error::Secret ANTREAN_MERGE_TOKEN belum dipasang. Buat fine-grained PAT (repo ini saja: Contents RW + Pull requests RW), lalu pasang sebagai secret Actions bernama ANTREAN_MERGE_TOKEN. Lihat docs/antrean-merge.md."
-            exit 1
+            # Tanpa PAT, antrean Actions tidak bisa memicu CI pull_request
+            # (lihat blok dua-token di atas). Antrean utama repo ini adalah
+            # skrip lokal scripts/antrean-merge.sh yang dijalankan Lead
+            # dengan login pemilik — jadi run ini selesai wajar, bukan
+            # gagal, supaya PR berlabel tidak kena X merah palsu.
+            echo "Secret ANTREAN_MERGE_TOKEN tidak dipasang: antrean Actions dilewati (antrean lokal Lead yang memproses)."
+            exit 0
           fi
 
           wait_checks() {
