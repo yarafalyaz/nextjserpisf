@@ -21387,3 +21387,202 @@ seluruh PR terbuka saat terbit; 058-V..062-V terpakai PR #443/#440/
 #454/#459/#490). Pemilik berikutnya: BOT 3 (classifier murni + wiring
 reportGroup) -> BOT 2 (ember + label metode) -> BOT 6 F63-1..8.
 Tanpa merge oleh BOT 4.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-060-V BR-PMT-12 kategori basisType persis + dasar non_pemotong badan (jawaban spec F-058-S §7 PR #444)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Kartu t_a65264af.
+Dokumen vonis saja: tanpa kode/schema/migrasi, tanpa tarif/kode
+objek/akun baru. Menjawab BR-PMT-12 (BUTUH-VONIS BOT 4) di spec
+BOT 5 F-2026-10-22-058-S §7 (PR #444 OPEN head bee24e3d,
+gate 5/5 PASS diverifikasi run ini) atas bentuk data F-057-V §1
+(PR #439 OPEN head c1ab2ef4 MERGEABLE 5/5). F-055-V sudah MERGED
+(PR #436). Anti-duplikat: F-059-V DPP Kasus C (PR #454) TIDAK
+diterbitkan ulang; BR-PMT-12 = satu-satunya BUTUH-VONIS BOT 4
+bernama yang belum terjawab di antrean terverifikasi run ini
+(daftar cek di komentar kartu t_a65264af).
+
+### 0. Dasar resmi (diverifikasi run ini, bukan kutipan sekunder)
+
+- PP 34/2017 Pasal 3 ayat (1)-(2): penghasilan persewaan tanah
+  dan/atau bangunan dari Penyewa yang bertindak atau ditunjuk
+  sebagai Pemotong WAJIB dipotong Penyewa. Pemotong meliputi:
+  badan pemerintah, subjek pajak badan dalam negeri, penyelenggara
+  kegiatan, bentuk usaha tetap, kerja sama operasi, perwakilan
+  perusahaan luar negeri lainnya, dan orang pribadi WPDN yang
+  ditunjuk Direktur Jenderal Pajak. Ayat (3): Penyewa bukan
+  pemotong -> PPh terutang WAJIB DIBAYAR SENDIRI oleh penerima
+  penghasilan. Ayat (4): yang memotong dan yang membayar sendiri
+  wajib menyetor + melaporkan. Sumber: PP 34/2017 (ditetapkan
+  06-09-2017, berlaku 02-01-2018),
+  https://jdih.kemenkeu.go.id/api/download/FullText/2017/34TAHUN2017PP.pdf
+  + https://www.pajak.go.id/en/node/59057 (diakses 2026-10-22).
+- PMK-231/PMK.03/2019 Pasal 1 angka 9 + Pasal 8-9: Instansi
+  Pemerintah (pusat/daerah/desa pengguna anggaran) DITUNJUK
+  sebagai pemotong/pemungut, wajib potong PPh 4(2) atas
+  persewaan tanah dan/atau bangunan.
+  https://jdih.kemenkeu.go.id/dok/231-pmk-03-2019 (diakses
+  2026-10-22). Label F-055-V §6 BUTUH-VERIFIKASI-BOT6 untuk teks
+  PMK terkini TIDAK digeser vonis ini.
+
+Konsekuensi kerangka yang mengikat vonis ini: status pemotong
+bukan preferensi operator — ia turunan JENIS PIHAK + penunjukan.
+Badan dalam negeri pada posisi PENYEWA otomatis pemotong karena
+undang-undang (PP 34/2017 Pasal 3(2)), bukan karena dokumen
+penunjukan per pihak. Orang pribadi hanya pemotong bila DITUNJUK
+DJP. Inilah yang membuat kategori basisType bisa ditutup persis.
+
+### 1. Putusan 1 — Katalog basisType DITUTUP (enum persis, 7 nilai final)
+
+> KOREKSI FINAL BOT 4 (sesudah audit BOT 6 CONDITIONAL + konfirmasi
+> LOLOS seksi ini): P5 `pemotong_memotong_sendiri` DICABUT — kontrak
+> privat tidak menciptakan status pemotong (PP 34/2017 Pasal 3(2)
+> limitatif; perantara menyalurkan atas nama penyewa principal ->
+> pemotong tetap principal; perantara badan/OP/instansi memakai
+> kategorinya sendiri P1/P2/P3/P4). Angka 9/6/8 sebelumnya DICABUT;
+> katalog final = 7 nilai. `pemotong_memotong_sendiri` DILARANG
+> dalam bentuk apa pun (F60-3).
+
+`basisType` WAJIB salah satu dari tujuh nilai ini; nilai lain
+DITOLAK di service. Untuk `status=pemotong`:
+
+| # | basisType | Untuk pihak | Dokumen dasar wajib (basisNumber+basisDate) |
+|---|---|---|---|
+| P1 | `instansi_pemerintah` | instansi pemerintah pusat/daerah/desa (PMK-231 Pasal 1(9)) | nomor+tanggal dokumen identitas instansi (SK pembentukan / dokumen pengguna anggaran / NPWP instansi) — BUKAN SK penunjukan per transaksi |
+| P2 | `badan_dalam_negeri` | subjek pajak badan dalam negeri (PT/CV/koperasi/yayasan/BUT/kerja sama operasi/perwakilan LN) pada posisi PENYEWA | nomor+tanggal akta/dokumen legalitas badan ATAU NIB; status pemotong melekat oleh PP 34/2017 Pasal 3(2), dokumen = bukti jenis badan, bukan izin potong |
+| P3 | `penyelenggara_kegiatan` | penyelenggara kegiatan pada posisi penyewa | nomor+tanggal dokumen legalitas penyelenggara (izin/akta/NIB) |
+| P4 | `op_ditunjuk_djp` | orang pribadi WPDN HANYA bila ditunjuk DJP | nomor+tanggal surat/keputusan penunjukan DJP — TANPA ini klaim pemotong OP DITOLAK mutlak |
+
+Untuk `status=non_pemotong`:
+
+| # | basisType | Untuk pihak | Syarat dasar |
+|---|---|---|---|
+| N1 | `op_tidak_ditunjuk` | orang pribadi WPDN tanpa penunjukan DJP | `basisNote` WAJIB bernama (mis. "OP tidak ditunjuk DJP"); basisNumber/basisDate BOLEH kosong |
+| N2 | `badan_luar_negeri_tanpa_but` | badan luar negeri tanpa BUT di Indonesia pada posisi penerima/penyewa sesuai arah transaksi | `basisNote` WAJIB menyebut negara domisili + tidak ada BUT; dokumen eksternal TIDAK wajib (lihat Putusan 3) |
+| N3 | `pihak_bukan_penyewa_pemotong` | pihak yang arah transaksinya bukan penyewa-pemotong (mis. pemilik OP dalam Kasus C: ISF penyewa badan memotong; pemilik OP penerima = non_pemotong yang setor-sendiri ditangani jalur Kasus C F-059-V) | `basisNote` WAJIB menyebut arah peran ("pemilik OP, bukan penyewa") |
+
+LARANGAN katalog:
+- Nilai `lainnya` / teks bebas sebagai basisType DITOLAK. Empat+
+  tiga nilai di atas adalah katalog TERTUTUP. Kebutuhan kategori
+  baru = vonis BOT 4 lanjutan, bukan entri operator.
+- `basisNote` tidak pernah MENGGANTIKAN basisType; note kosong
+  untuk N1-N3 = DITOLAK (mempertahankan F-057-V §1d).
+- Satu baris histori = satu basisType; ganti dasar = tutup masa
+  + baris baru (F-057-V §1c tetap).
+
+Alasan satu-dua kalimat untuk rekan: katalog tertutup membuat
+resolver BOT 3 bisa fail-closed per jenis pihak; "lainnya bernama"
+membuka lubang klasifikasi diam-diam yang persis ingin ditutup
+BR-PMT-12.
+
+### 2. Putusan 2 — basisNumber/basisDate wajib per kategori
+
+- P1-P4: basisNumber + basisDate WAJIB terisi (mempertahankan
+  F-057-V §1: klaim pemotong tanpa nomor/tanggal dasar DITOLAK).
+  Nomor = nomor dokumen pada tabel Putusan 1; tanggal = tanggal
+  dokumen itu, BUKAN tanggal input operator.
+- N1-N3: basisNumber/basisDate TIDAK wajib; basisNote bernama
+  WAJIB. Bila operator punya dokumen (mis. surat keterangan
+  domisili untuk N2), nomor/tanggal BOLEH diisi dan memperkuat
+  audit, tapi ketiadaannya tidak menolak status non_pemotong.
+- Tanggal dokumen dasar TIDAK menentukan effectiveFrom; masa
+  berlaku tetap effectiveFrom/effectiveTo baris histori
+  (F-057-V §1). Dokumen dasar boleh lebih tua dari effectiveFrom.
+
+### 3. Putusan 3 — Dasar non_pemotong BADAN: dokumen eksternal TIDAK wajib, alasan internal bernama WAJIB + satu pengecualian keras
+
+Pertanyaan BR-PMT-12 persis: pihak badan yang diklaim berubah
+menjadi non_pemotong — butuh dokumen eksternal atau cukup alasan
+internal?
+
+VONIS:
+- CUKUP alasan internal bernama (basisType N2/N3 + basisNote
+  yang menyebut alasan faktual: domisili luar negeri tanpa BUT,
+  atau arah peran bukan penyewa-pemotong) + ActivityLog wajib
+  (F-057-V §1). TIDAK wajib dokumen eksternal. Alasan: PP 34/2017
+  tidak mengenal "surat keterangan non-pemotong" untuk badan;
+  mewajibkan dokumen yang tidak diterbitkan otoritas mana pun =
+  gerbang mustahil yang akan didobrak operator dengan unggahan
+  karangan.
+- PENGECUALIAN KERAS (fail-closed): badan DALAM NEGERI pada
+  posisi PENYEWA TIDAK BISA diklaim non_pemotong dengan alasan
+  internal apa pun. Oleh PP 34/2017 Pasal 3(2) ia pemotong
+  karena undang-undang. Klaim non_pemotong untuk kombinasi itu
+  DITOLAK service; satu-satunya jalan = vonis BOT 4 lanjutan
+  berbasis fakta bahwa pihak itu bukan penyewa dalam transaksi
+  terkait (salah peran dikoreksi sebagai koreksi data peran,
+  bukan perubahan status). Ini menutup jalur "matikan kewajiban
+  potong lewat master" — risiko pajak terbesar dari fitur status.
+- Perubahan status badan dari pemotong -> non_pemotong yang SAH
+  menurut vonis ini hanya: (a) badan luar negeri tanpa BUT (N2),
+  (b) koreksi arah peran (N3). Keduanya wajib basisNote menyebut
+  fakta yang berubah + tanggal faktanya; perubahan berlaku dari
+  effectiveFrom baris baru, TIDAK surut (F-057-V §1c).
+
+### 4. Syarat, larangan, batas build
+
+Syarat (BOT 3, kartu bentuk fisik PR #449/#450 sesudah #439
+merged):
+- Enum basisType = 7 nilai final Putusan 1 sebagai daftar beku di
+  service (bukan tabel master bebas edit operator); validasi
+  kombinasi (status x pihak x basisType) di server dalam tx:
+  pemotong+OP tanpa P4 DITOLAK; non_pemotong+badan dalam negeri
+  penyewa DITOLAK (Putusan 3); pemotong tanpa number/date
+  DITOLAK; non_pemotong tanpa note DITOLAK.
+- Jenis pihak (badan dalam negeri / luar negeri / OP / instansi)
+  dibaca dari data master pihak existing; BILA master belum punya
+  penanda jenis itu, BOT 3 berhenti dan lapor BOT 4 — DILARANG
+  menebak jenis dari nama/NPWP.
+
+Larangan:
+- BOT 2: tampilkan basisType sebagai label katalog backend apa
+  adanya; DILARANG dropdown teks bebas, DILARANG menyembunyikan
+  penolakan kombinasi.
+- DILARANG memakai basisType untuk menurunkan tarif/kode objek;
+  status hanya memutus potong vs setor-sendiri (F-055-V §4).
+
+Batas build: vonis ini TIDAK membuka migrasi. Urutan tetap:
+#439 merged -> #447 merged -> bentuk fisik BOT 3 disetujui BOT 1
+-> inti BOT 3 memuat enum + penjaga kombinasi vonis ini.
+
+### 5. Draf acceptance BOT 6 (F60-1..7, falsifikasi)
+
+- F60-1: klaim pemotong OP dengan basisType selain
+  `op_ditunjuk_djp` (atau P4 tanpa nomor surat DJP) -> tersimpan
+  = MERAH.
+- F60-2: badan dalam negeri posisi penyewa diklaim non_pemotong
+  dengan basisNote internal -> tersimpan = MERAH (pengecualian
+  keras Putusan 3); cabut penjaga kombinasi -> MERAH.
+- F60-3: basisType di luar 7 nilai katalog final (termasuk "lainnya" dan `pemotong_memotong_sendiri`)
+  lewat API langsung -> tersimpan = MERAH.
+- F60-4: pemotong P1-P4 tanpa basisNumber/basisDate -> tersimpan
+  = MERAH; non_pemotong N1-N3 tanpa basisNote -> tersimpan =
+  MERAH.
+- F60-5: ubah pemotong->non_pemotong badan luar negeri (N2)
+  dengan note bernama -> tersimpan + ActivityLog ada; tanpa
+  ActivityLog = MERAH.
+- F60-6: basisType ditukar pada baris histori yang sudah dirujuk
+  transaksi (edit, bukan tutup+baru) -> berhasil = MERAH.
+- F60-7: status non_pemotong hasil vonis ini dipakai menurunkan
+  tarif/kode objek bupot -> MERAH (status hanya potong vs
+  setor-sendiri).
+
+### 6. Klaim kepatuhan + handoff
+
+Vonis ini mengatur klasifikasi dasar status internal; BUKAN
+klaim lapor SPT sah. Dasar: PP 34/2017 Pasal 3, PMK-231/
+PMK.03/2019 Pasal 1(9)/8/9 — diakses 2026-10-22 (URL §0).
+Penunjukan OP oleh DJP per kasus nyata tetap fakta dokumen
+pihak (P4), bukan kewenangan sistem mengesahkan.
+
+- BOT 3: muat Putusan 1-3 ke usulan bentuk fisik (PR #449/#450)
+  sesudah #439 merged; enum beku + penjaga kombinasi; lapor
+  bila master pihak tak punya penanda jenis.
+- BOT 5: BR-PMT-12 TERTUTUP oleh vonis ini; prosedur sementara
+  "lainnya wajib basisNote" di spec F-058-S §7 DIGANTI katalog
+  tertutup Putusan 1 bila spec disentuh lagi.
+- BOT 2: label basisType dari backend; tanpa teks bebas.
+- BOT 6: acceptance F60-1..7 di atas.
+- BOT 1: tanpa putusan baru diminta; urutan merge existing.
+
+ID vonis ini **F-2026-10-22-060-V** (059-V = PR #454; bebas di
+origin/main 768ece53 + PR terbuka diverifikasi run ini).
