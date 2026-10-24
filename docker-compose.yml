@@ -44,6 +44,15 @@ services:
     image: mysql:8.0
     container_name: silengkap_dev_db
     restart: unless-stopped
+    # Silence stock-image startup warnings that do not apply to a local dev DB:
+    # deprecated --skip-host-cache (via docker/mysql.cnf below), pid-file in a
+    # world-accessible dir, and the X plugin (Prisma uses the classic
+    # protocol). TLS stays at the image default: disabling it trades the one
+    # self-signed-CA warning for deprecated-syntax warnings instead.
+    command:
+      - --host-cache-size=0
+      - --pid-file=/var/lib/mysql-files/mysqld.pid
+      - --mysqlx=OFF
     # MySQL 8 defaults to caching_sha2_password, which the mariadb driver behind
     # PrismaMariaDb supports. The old `--default-authentication-plugin=mysql_native_password`
     # flag is deprecated (warning MY-013360) and removed in MySQL 9, so it is gone.
@@ -63,6 +72,9 @@ services:
       - "3309:3306"
     volumes:
       - mysql_dev_data:/var/lib/mysql
+      # Same as the image's /etc/my.cnf minus the deprecated skip-host-cache
+      # line (see docker/mysql.cnf); everything else stays identical.
+      - ./docker/mysql.cnf:/etc/my.cnf:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 5s

@@ -78,7 +78,16 @@ export function AppDatePicker({
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
         <Label htmlFor={`${name}-trigger`} className="text-sm font-medium text-foreground">
-          {label}
+          {label.endsWith(" *") ? (
+            <>
+              {label.slice(0, -2)}{" "}
+              <span className="text-destructive" aria-hidden="true">
+                *
+              </span>
+            </>
+          ) : (
+            label
+          )}
         </Label>
       )}
       {/* Hidden input keeps server-action FormData(name) working unchanged.
