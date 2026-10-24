@@ -25829,6 +25829,17 @@ Edge cases: EC-1 bruto 0 (semua baris qty/harga 0) -> persen 0, tetap tampil. EC
 - Q-DX-2 (Lead): izin paparan reuse `view_reports` vs key baru khusus supervisor. Usul spec: reuse view_reports tahap 1.
 - Q-DX-3 (Lead/Backend): status terbit minimum per jenis dokumen untuk populasi (BR-DX-05).
 - Q-DX-4 (Lead): permukaan tahap 1 — halaman laporan baru di grup laporan penjualan + entri registry PDF, atau kartu di halaman existing. Fisik rute mengikuti konvensi URL laporan repo.
+
+### 8A. PUTUSAN LEAD Q-DX-1..4 (2026-10-25 01:51 WIB, pasca PR #769 merged 73798b75)
+
+Bukti live dipakai: spec di atas (origin/main 60011df2); kosakata status kode live — Quotation/SalesOrder `status String @default("draft")` (schema model Quotation/SalesOrder), status quotation terverifikasi di kode: `draft` (sales.actions.ts:236), `sent` (:300), `rejected` (:391), kumpulan diterima existing `CONTRACT_QUOTATION_STATUSES = ["accepted","approved","converted"]` (project.actions.ts:756, dipakai ulang job-estimate-vs-actual-data.ts:40); SalesOrder bisa-difaktur/kirim existing `DELIVERABLE_ORDER_STATUSES = ["approved","confirmed","processing","completed"]` (sales.schemas.ts:171); faktur enum `SalesInvoiceStatus` draft|sent|posted|partial|paid|cancelled|approved (schema :5433-5441) + `RETURNABLE_INVOICE_STATUSES = ["posted","partial","paid"]` (sales.schemas.ts:185); izin `view_reports` module-catalog.generated.ts:421; konvensi rute laporan `src/app/(dashboard)/laporan/<nama>/[[...segments]]/page.tsx` (pola analisis-penjualan/histori-penjualan existing).
+
+- **Q-DX-1 — SAH tahap 1 baca-saja informatif, tanpa penahan.** Meratifikasi BR-DX-03 apa adanya: loader/builder tidak menulis dokumen/status/jurnal/notifikasi dan tidak menahan simpan/kirim/terima/posting. Gerbang menahan ala Accurate = spec terpisah + putusan baru, bukan bagian implementasi ini. Alasan: F-100 sudah memutus informatif (PUTUSAN manager dipertahankan spec §catatan jujur) dan belum ada bukti kebutuhan menahan; paparan per penjual/periode adalah kebutuhan pengawasan yang belum terlayani permukaan mana pun. Accountant TIDAK diminta tahap 1 (sesuai §8 spec) — dipanggil hanya bila tindak lanjut diskon kelak berdampak dokumen bernilai.
+- **Q-DX-2 — REUSE `view_reports` tahap 1, tanpa key baru.** Loader menegakkan `view_reports` di server fail-closed; ekspor PDF memakai izin sama persis; Sales/Admin Penjualan subjek baris tidak mendapat akses agregat tahap 1. Key khusus supervisor ditunda sadar: ditinjau ulang hanya bila ada bukti pemegang view_reports non-supervisor yang memang tidak boleh melihat paparan per penjual (kasus nyata, bukan antisipasi). Alasan: key baru tanpa kebutuhan terbukti = permukaan izin yatim; laporan lain repo berjalan dengan reuse ini.
+- **Q-DX-3 — Status terbit minimum populasi (mengikat, per jenis):** (a) Quotation: `sent`, `accepted`, `approved`, `converted` — `sent` masuk karena diskon penawaran yang benar-benar dikirim ke pelanggan adalah paparan yang harus terlihat supervisor walau belum diterima; `draft`/`rejected` keluar. (b) SalesOrder: `approved`, `confirmed`, `processing`, `completed` (persis `DELIVERABLE_ORDER_STATUSES` existing — jangan buat kosakata kedua). (c) Faktur: `posted`, `partial`, `paid`, `approved`, `sent` (usul spec disahkan; `sent` = faktur sudah terkirim ke pelanggan sehingga diskonnya nyata terpaparkan). Semua jenis: `deletedAt IS NULL` dan bukan `cancelled`. Backend wajib memetakan konstanta ini ke kosakata live dan mengunci dengan tes AC-DX-B5 (satu status draft/cancelled/deleted bocor = MERAH); bila Backend menemukan status live sah di luar daftar ini (string bebas Quotation/SO), laporkan ke Lead sebelum menambah — jangan diam-diam memperluas populasi.
+- **Q-DX-4 — Halaman laporan BARU + entri registry PDF.** Rute fisik mengikuti konvensi laporan repo: halaman baru di grup laporan penjualan (`src/app/(dashboard)/laporan/.../[[...segments]]/page.tsx`, slug rute dipilih Frontend mengikuti nama laporan penjualan existing, judul verbatim spec §6 "Paparan Diskon Penjualan") + satu entri registry PDF existing (BR-DX-11: ekspor payload server sama, tanpa hitung ulang). Kartu di halaman existing DITOLAK untuk tahap 1: paparan lintas tiga jenis dokumen + irisan periode/penjual/pelanggan + daftar dokumen adalah dataset laporan, bukan sisipan halaman transaksi; menempelkannya ke halaman existing mencampur izin dan siklus rilis. Kata/label §6 spec diadopsi verbatim.
+
+Dampak buka-jalan: kartu inti Backend (builder murni + loader agregat) dan kartu UI Frontend (halaman + registry) boleh dibuat sekarang; prasyarat keduanya = putusan ini. Urutan: kontrak Backend stabil dulu, konsumen Frontend kemudian (bukan edit paralel). QA falsifikasi AC-DX-B1..B7 + F1..F2 atas head Backend/Frontend persis.
 - Accountant: TIDAK diminta tahap ini — paparan agregat baca-saja tanpa jurnal/perlakuan uang baru (BR-DX-03/06). Dipanggil hanya bila tindak lanjut diskon hendak berdampak dokumen bernilai.
 ---
 
@@ -26296,8 +26307,8 @@ histori PKP naik kelas (§4) atau flag TKU/fasilitas dimodelkan
 | ID | Pekerjaan | Pemilik | Prasyarat |
 |---|---|---|---|
 | F-2026-10-25-006-S | Spec ini (dokumen) | Business | — |
-| (turunan) builder murni diskon efektif + loader agregat anti-N+1 | Backend | Q-DX-1/2/3 diputus Lead | — |
-| (turunan) UI paparan + entri registry ekspor | Frontend | kontrak Backend stabil; kata §6 verbatim | — |
+| (turunan) builder murni diskon efektif + loader agregat anti-N+1 | Backend | Q-DX-1/2/3 TERPUTUS §8A 2026-10-25 | — |
+| (turunan) UI paparan + entri registry ekspor | Frontend | kontrak Backend stabil; kata §6 verbatim; permukaan Q-DX-4 §8A | — |
 | (turunan) falsifikasi AC-DX-B1..B7 + F1..F2 | QA | head Backend/Frontend persis | — |
 
 ### Yang TIDAK diusulkan run ini (F-2026-10-25-006-S)
@@ -26305,7 +26316,7 @@ histori PKP naik kelas (§4) atau flag TKU/fasilitas dimodelkan
 - Ambang persen/nominal bawaan apa pun: tanpa konfigurasi pemilik proses, label = TANPA_AMBANG.
 - Komisi/insentif dari data diskon, margin/HPP per dokumen, notifikasi real-time ke supervisor, ubah dokumen dari paparan.
 
-F-2026-10-25-006-S — Paparan diskon efektif dokumen penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-DX-1..4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap 1.
+F-2026-10-25-006-S — Paparan diskon efektif dokumen penjualan. Status: SPEC SELESAI; putusan Lead Q-DX-1..4 TERBIT 2026-10-25 (§8A) — SAH baca-saja, reuse view_reports, status populasi terbit minimum per jenis, halaman laporan baru + registry PDF. Implementasi Backend/Frontend dibuka; Accountant TIDAK tahap 1. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap 1.
 
 
 
