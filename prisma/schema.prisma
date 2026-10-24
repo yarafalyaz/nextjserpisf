@@ -586,6 +586,9 @@ model CustomerPriceList {
   price              Decimal           @db.Decimal(15, 2)
   minQty             Decimal           @default(1.00) @map("min_qty") @db.Decimal(15, 2)
   effectiveDate      DateTime?         @map("effective_date")
+  // F-2026-10-25-001-S BR-PX-01/02: tanggal berakhir OPSIONAL, batas INKLUSIF
+  // terhadap tanggal dokumen. NULL = tanpa batas (perilaku lama).
+  expiresAt          DateTime?         @map("expires_at")
   notes              String?           @db.Text
   isActive           Boolean           @default(true) @map("is_active")
   createdBy          Int?              @map("created_by")
@@ -597,6 +600,7 @@ model CustomerPriceList {
   @@unique([customerCategoryId, itemId, minQty, effectiveDate], map: "uq_customer_price_list")
   @@index([itemId], map: "customer_price_lists_item_id_fkey")
   @@index([customerCategoryId], map: "customer_price_lists_category_id_fkey")
+  @@index([expiresAt], map: "idx_customer_price_lists_expires_at")
   @@index([createdAt])
   @@map("customer_price_lists")
 }

@@ -45,5 +45,17 @@ export const customerPriceListSchema = z.object({
       .max(1_000_000_000, "Minimal qty melebihi batas"),
   ),
   effectiveDate: optionalDateOnly,
+  // F-2026-10-25-001-S BR-PX-01/06: tanggal berakhir opsional (date-only sama).
+  expiresAt: optionalDateOnly,
   notes: optionalString(2000),
+}).superRefine((v, ctx) => {
+  // BR-PX-06: tanggalBerakhir >= effectiveDate bila keduanya diisi (date-only
+  // YYYY-MM-DD terurut leksikografis = terurut kalender).
+  if (v.effectiveDate && v.expiresAt && v.expiresAt < v.effectiveDate) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["expiresAt"],
+      message: `Tanggal berakhir (${v.expiresAt}) tidak boleh sebelum tanggal efektif (${v.effectiveDate}).`,
+    })
+  }
 })
