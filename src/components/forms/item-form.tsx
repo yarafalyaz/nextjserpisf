@@ -50,6 +50,7 @@ interface ItemFormProps {
     purchasePrice: number | null
     isProduct: boolean
     isService?: boolean
+    isScrapSaleItem?: boolean
     trackBatch?: boolean
     trackSerial?: boolean
     uomConversions?: { code: string; factorToBase: number | string }[]
@@ -74,6 +75,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(item?.image || null)
   const [isProduct, setIsProduct] = useState(item?.isProduct ?? false)
+  const [isScrapSaleItem, setIsScrapSaleItem] = useState(item?.isScrapSaleItem ?? false)
   const [isService, setIsService] = useState(item?.isService ?? false)
   const [trackBatch, setTrackBatch] = useState(item?.trackBatch ?? false)
   const [trackSerial, setTrackSerial] = useState(item?.trackSerial ?? false)
@@ -207,7 +209,8 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
-        formData.set("isProduct", String(isProduct))
+        formData.set("isProduct", String(isScrapSaleItem ? false : isProduct))
+        formData.set("isScrapSaleItem", String(isScrapSaleItem))
         formData.set("isService", String(isService))
         formData.set("trackBatch", String(trackBatch))
         formData.set("trackSerial", String(trackSerial))
@@ -556,10 +559,37 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                 checked={isProduct}
                 onCheckedChange={setIsProduct}
                 id="isProduct"
+                disabled={isScrapSaleItem}
               />
               <Label htmlFor="isProduct">Tandai sebagai Produk</Label>
             </div>
             <span className="text-xs text-muted-foreground">Aktifkan jika item ini merupakan produk jadi</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={isScrapSaleItem}
+                onCheckedChange={(checked) => {
+                  setIsScrapSaleItem(checked)
+                  if (checked) setIsProduct(false)
+                }}
+                id="isScrapSaleItem"
+                aria-describedby="isScrapSaleItem-hint"
+              />
+              <Label htmlFor="isScrapSaleItem">Tandai sebagai Besi Tua (Scrap)</Label>
+            </div>
+            <span id="isScrapSaleItem-hint" className="text-xs text-muted-foreground">
+              Aktifkan untuk sisa besi tua yang dijual lewat faktur khusus besi tua. Penjualannya tercatat sebagai pendapatan lain-lain, tanpa stok/HPP, tidak boleh digabung dengan barang dagang dalam satu faktur, dan retur penjualannya ditolak.
+            </span>
+            {isScrapSaleItem && (
+              <Alert variant="warning">
+                <AlertCircle />
+                <AlertTitle>Item besi tua</AlertTitle>
+                <AlertDescription>
+                  Faktur berisi item ini hanya boleh berisi item besi tua. Pastikan akun pendapatan besi tua sudah dipetakan di Pengaturan sebelum posting; bila belum, server menolak posting faktur.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
