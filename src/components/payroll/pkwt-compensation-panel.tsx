@@ -57,6 +57,10 @@ export interface PkwtAnomalyView {
 export interface PkwtReportView {
   rows: PkwtReportRowView[]
   glPayableBalance: number
+  /** True bila saldo GL tidak se-cakupan rows (saldo satu perusahaan, loader Backend). */
+  glIsCompanyWide?: boolean
+  /** True bila saldo GL boleh diperbandingkan dengan total scope (scope all). */
+  glComparableToScope?: boolean
   expectedPayableTotal: number
   accrualSubledgerTotal: number
   paidSlipTotal: number
@@ -438,8 +442,16 @@ export function PkwtCompensationPanel({
           <h3 className="mb-3 text-sm font-semibold text-foreground">Rekonsiliasi Kompensasi PKWT</h3>
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
-              <dt className="text-xs text-muted-foreground">Saldo GL Utang Kompensasi (210207)</dt>
+              <dt className="text-xs text-muted-foreground">
+                Saldo GL Utang Kompensasi (210207)
+                {report.glIsCompanyWide && " — saldo perusahaan"}
+              </dt>
               <dd className="text-base font-semibold text-foreground">{formatCurrency(report.glPayableBalance)}</dd>
+              {report.glIsCompanyWide && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Saldo GL mencakup seluruh perusahaan; baris dan total lain di panel ini hanya karyawan dalam cakupan Anda, jadi saldo GL tidak diperbandingkan dengan total panel.
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
               <dt className="text-xs text-muted-foreground">Utang Seharusnya (peristiwa terbekukan − slip terbayar)</dt>

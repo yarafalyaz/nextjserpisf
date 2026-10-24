@@ -181,6 +181,27 @@ describe("PkwtCompensationPanel F-2026-10-24-132-V", () => {
     root.unmount()
   })
 
+  it("label cakupan GL: saldo perusahaan jujur saat glIsCompanyWide, label polos saat bisa dibandingkan", () => {
+    const scoped = renderPanel(
+      report({ glIsCompanyWide: true, glComparableToScope: false, anomalies: [] }),
+    )
+    const scopedText = scoped.container.textContent ?? ""
+    expect(scopedText).toContain("Saldo GL Utang Kompensasi (210207) — saldo perusahaan")
+    expect(scopedText).toContain(
+      "Saldo GL mencakup seluruh perusahaan; baris dan total lain di panel ini hanya karyawan dalam cakupan Anda, jadi saldo GL tidak diperbandingkan dengan total panel.",
+    )
+    scoped.root.unmount()
+
+    const comparable = renderPanel(
+      report({ glIsCompanyWide: false, glComparableToScope: true }),
+    )
+    const comparableText = comparable.container.textContent ?? ""
+    expect(comparableText).toContain("Saldo GL Utang Kompensasi (210207)")
+    expect(comparableText).not.toContain("saldo perusahaan")
+    expect(comparableText).not.toContain("tidak diperbandingkan dengan total panel")
+    comparable.root.unmount()
+  })
+
   it("submit peristiwa: FormData diteruskan, sukses toast + refresh", async () => {
     const { container, root } = renderPanel()
     const form = container.querySelector<HTMLFormElement>(
