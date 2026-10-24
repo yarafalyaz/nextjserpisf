@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
+import { loadWarehouseLowStock } from "@/lib/reports/min-stock-warehouse-alert"
 import { apiError } from "@/lib/api-response"
 import { pruneIdempotencyKeys } from "@/lib/utils/idempotency"
 import { unlink } from "node:fs/promises"
@@ -162,20 +163,41 @@ async function taskLowStockAlert(): Promise<string> {
       AND qty_on_hand <= min_stock
   `
 
-  if (items.length === 0) {
+  // F-2026-10-22-070-S (BR-MS-05): pasangan (barang, gudang) menipis vs
+  // minimum efektif — gudang bengkel kosong tak lagi tertutup stok pusat.
+  // ponytail: kegagalan loader pasangan tidak menggagalkan penilaian
+  // global existing; naikkan ke kegagalan tugas bila kru butuh alert infra.
+  let warehouseLow: Awaited<ReturnType<typeof loadWarehouseLowStock>> = []
+  try {
+    warehouseLow = await loadWarehouseLowStock()
+  } catch (loadError) {
+    console.error("[cron] gagal menilai stok per gudang", loadError)
+  }
+
+  if (items.length === 0 && warehouseLow.length === 0) {
     return "Semua stok aman"
   }
 
-  await notificationService.checkAndNotifyLowStockBatch(
-    items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      qtyOnHand: Number(item.qty_on_hand),
-      minStock: Number(item.min_stock),
-    })),
-  )
+  if (items.length > 0) {
+    await notificationService.checkAndNotifyLowStockBatch(
+      items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        qtyOnHand: Number(item.qty_on_hand),
+        minStock: Number(item.min_stock),
+      })),
+    )
+  }
+  if (warehouseLow.length > 0) {
+    await notificationService.checkAndNotifyWarehouseLowStockBatch(warehouseLow)
+  }
 
-  return `${items.length} item di bawah stok minimum — notifikasi dikirim ke admin`
+  const parts: string[] = []
+  if (items.length > 0) parts.push(`${items.length} item di bawah stok minimum`)
+  if (warehouseLow.length > 0) {
+    parts.push(`${warehouseLow.length} pasangan barang-gudang di bawah minimum efektif`)
+  }
+  return `${parts.join(", ")} — notifikasi dikirim ke admin`
 }
 
 // 3. Overdue Invoice Alert

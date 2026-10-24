@@ -672,7 +672,11 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      aria-busy={isPending}
+      aria-label={quotation?.id ? "Formulir ubah penawaran" : "Formulir tambah penawaran"}
+    >
       <FormCard>
         <FormSection title="Informasi Penawaran">
         {/* Document Number (read-only) */}
@@ -712,13 +716,14 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
 
         {/* Customer */}
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerId">Pelanggan *</Label>
+          <Label htmlFor="customerId">Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Controller
             name="customerId"
             control={control}
             render={({ field }) => (
               <QuickAddSelect
                 id="customerId"
+                required
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => {
                   field.onChange(key ? Number(key) : undefined)

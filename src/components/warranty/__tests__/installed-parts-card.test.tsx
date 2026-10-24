@@ -98,6 +98,18 @@ describe("InstalledPartsCard — status verbatim server, riwayat terpisah, koson
     act(() => root.unmount())
   })
 
+  it("embedded: seksi part terpasang di dalam riwayat kendaraan (AC-IP-9)", () => {
+    const { container, root } = mount(<InstalledPartsCard embedded rows={[row()]} />)
+    const section = container.querySelector('section[aria-label="Part terpasang"]')
+    expect(section).not.toBeNull()
+    expect(section?.className).not.toContain("rounded-xl")
+    expect(section?.querySelector("h3")?.textContent).toBe("Part Terpasang")
+    expect(section?.querySelector("h2")).toBeNull()
+    expect(container.textContent).toContain("Aki 12V 100Ah")
+    expect(container.textContent).toContain("TERPASANG")
+    act(() => root.unmount())
+  })
+
   it("serial string kosong tidak tampil sebagai nomor serial", () => {
     const { container, root } = mount(
       <InstalledPartsCard rows={[row({ serialNumber: "" })]} />,
