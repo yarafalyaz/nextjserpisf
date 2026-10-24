@@ -74,6 +74,9 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/profitabilitas" },
       { href: "/laporan/histori-penjualan" },
       { href: "/laporan/hasil-penawaran" },
+      { href: "/laporan/garansi-segera-berakhir" },
+      { href: "/laporan/aging-klaim-supplier" },
+      { href: "/laporan/corong-prospek" },
       { href: "/laporan/histori-pembelian" },
       { href: "/laporan/pembelian" },
       { href: "/laporan/neraca", family: "Neraca", variant: "Standar" },
@@ -150,6 +153,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/analisis-penjualan" },
       { href: "/laporan/pemenuhan-pesanan" },
       { href: "/laporan/rekap-komisi" },
+      { href: "/laporan/target-penjualan" },
     ],
   },
   {
@@ -174,6 +178,8 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/jurnal-aset" },
       { href: "/laporan/histori-aset" },
       { href: "/laporan/perbedaan-penyusutan" },
+      { href: "/laporan/pajak-tangguhan" },
+      { href: "/laporan/rekonsiliasi-aset" },
     ],
   },
   {
@@ -183,6 +189,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     reports: [
       { href: "/laporan/biaya-pekerjaan" },
       { href: "/laporan/varians-produksi" },
+      { href: "/laporan/scrap-material" },
       { href: "/laporan/estimasi-vs-aktual" },
       { href: "/laporan/penyelesaian-pekerjaan" },
       { href: "/laporan/jurnal-pekerjaan" },

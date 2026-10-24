@@ -28,7 +28,14 @@ import {
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
+import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import {
+  classifyScrapLine,
+  validateScrapInput,
+} from "@/lib/services/scrap-classification";
+import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
@@ -48,9 +55,11 @@ import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-s
 import {
   evaluateWorkOrderOperationTransition,
   parseWorkOrderStageNames,
+  shouldAutoCompleteWorkOrder,
 } from "@/lib/reports/work-order-progress";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { reservationExpiresAt } from "@/lib/reports/stock-reservation";
+import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { Prisma } from "@prisma/client";
 
@@ -367,7 +376,8 @@ export async function updateBomRevision(id: number, formData: FormData) {
 
     const itemIds = formData.getAll("revisionItemId") as string[];
     const qtys = formData.getAll("revisionQty") as string[];
-    const linesParsed = parseRevisionRows(itemIds, qtys);
+    const scrapPercents = formData.getAll("revisionScrapPercent") as string[];
+    const linesParsed = parseRevisionRows(itemIds, qtys, scrapPercents);
     if (!linesParsed.success) return { success: false, error: linesParsed.error };
     const refsError = await bomRefsError(linesParsed.data.map((m) => m.itemId));
     if (refsError) return { success: false, error: refsError };
@@ -392,7 +402,7 @@ export async function updateBomRevision(id: number, formData: FormData) {
           notes: v.notes ?? null,
           materials: {
             deleteMany: {},
-            create: linesParsed.data.map((m) => ({ itemId: m.itemId, qty: m.qty })),
+            create: linesParsed.data.map((m) => ({ itemId: m.itemId, qty: m.qty, scrapPercent: m.scrapPercent })),
           },
         },
       });
@@ -712,6 +722,10 @@ export async function createProductionOrder(formData: FormData) {
             itemId: m.itemId,
             qty: safeMultiply(m.qtyPerUnit, v.qty, 4),
             standardCost: bomCostMap.get(m.itemId) ?? 0,
+            // F-008: beku allowance revisi ter-pin saat PO dibuat (null =
+            // belum kalibrasi). Tanpa kolom ini jalur PO tak pernah bisa
+            // klasifikasi normal — complete dilarang baca BOM hidup.
+            scrapPercentSnapshot: m.scrapPercent ?? null,
           })),
         },
       },
@@ -824,20 +838,63 @@ export async function startProductionOrder(id: number) {
  */
 export async function issueMaterial(
   productionOrderId: number,
-  items: { itemId: number; qty: number }[],
+  items: {
+    itemId: number
+    qty: number
+    /** F-008: scrap kejadian ini per baris (opsional — nol scrap sah). */
+    scrapQty?: number
+    scrapReasonCode?: string | null
+    scrapNote?: string | null
+  }[],
 ) {
   try {
     const user = await requirePermission("edit_production_orders");
     if (!items?.length) throw new Error("Tidak ada material yang dikeluarkan");
 
     const requested = new Map<number, number>();
+    const scrapInputs = new Map<
+      number,
+      { scrapQty: number; scrapReasonCode: string | null; scrapNote: string | null }
+    >();
     for (const row of items) {
       const itemId = Number(row.itemId);
       const qty = Number(row.qty);
       if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isFinite(qty) || qty <= 0) {
         throw new Error("Item dan kuantitas material harus valid dan lebih dari 0");
       }
+      // F-008: validasi scrap kejadian ini SEBELUM stok bergerak. Dua baris
+      // item sama dengan scrap berbeda ditolak — gabungan per item tidak
+      // bisa diputuskan tanpa menebak.
+      const sr = scrapInputs.get(itemId);
+      const rowScrap = {
+        scrapQty: Number(row.scrapQty ?? 0),
+        scrapReasonCode: row.scrapReasonCode ?? null,
+        scrapNote: row.scrapNote ?? null,
+      };
+      if (sr) {
+        const same =
+          sr.scrapQty === rowScrap.scrapQty &&
+          sr.scrapReasonCode === rowScrap.scrapReasonCode &&
+          sr.scrapNote === rowScrap.scrapNote;
+        if (!same) {
+          throw new Error(
+            `Baris duplikat item #${itemId} dengan scrap berbeda — satukan menjadi satu baris per item.`,
+          );
+        }
+      } else {
+        scrapInputs.set(itemId, rowScrap);
+      }
       requested.set(itemId, safeAdd(requested.get(itemId) ?? 0, qty, 2));
+    }
+    for (const [itemId, qty] of requested) {
+      const s = scrapInputs.get(itemId)!;
+      const err = validateScrapInput({
+        issueQty: qty,
+        scrapQty: s.scrapQty,
+        scrapReasonCode: s.scrapReasonCode,
+        scrapNote: s.scrapNote,
+      });
+      if (err) throw new Error(`Item #${itemId}: ${err}`);
     }
     const warehouseScope = await getWarehouseScope(user);
     if (warehouseScope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.");
@@ -917,6 +974,7 @@ export async function issueMaterial(
       const validWarehouseIds = new Set(validDefaultWarehouses.map((warehouse) => warehouse.id));
 
       let runningActual = 0;
+      let runningAbnormalValue = 0;
       const movementLines: { itemId: number; qty: number; cost: number; warehouseId: number }[] = [];
       for (const [itemId, qty] of requested) {
         const itm = itemMap.get(itemId);
@@ -953,8 +1011,55 @@ export async function issueMaterial(
 
         const existing = await tx.productionOrderMaterial.findFirst({
           where: { productionOrderId, itemId },
-          select: { id: true, actualQty: true, actualCost: true, serialNumbers: true, batchNumbers: true },
+          select: {
+            id: true,
+            actualQty: true,
+            actualCost: true,
+            serialNumbers: true,
+            batchNumbers: true,
+            qty: true,
+            scrapPercentSnapshot: true,
+            scrapQty: true,
+            scrapNormalQtySnapshot: true,
+            scrapAbnormalQtySnapshot: true,
+            scrapNormalValueSnapshot: true,
+            scrapAbnormalValueSnapshot: true,
+            scrapReviewStatus: true,
+          },
         });
+        // F-008: klasifikasi scrap kejadian ini dari cost FIFO kejadian
+        // ini (bukan snapshot lama). Allowance dari snapshot PO beku;
+        // baris unplanned qty=0 → seluruh scrap abnormal. Akumulasi
+        // dibekukan per kejadian — PO yang sama terbit berkali-kali.
+        const scrapIn = scrapInputs.get(itemId)!;
+        const classification = classifyScrapLine({
+          issueQty: qty,
+          plannedQty: existing ? Number(existing.qty) : 0,
+          scrapQty: scrapIn.scrapQty,
+          scrapReasonCode: scrapIn.scrapReasonCode,
+          scrapNote: scrapIn.scrapNote,
+          scrapPercentSnapshot:
+            existing?.scrapPercentSnapshot != null ? Number(existing.scrapPercentSnapshot) : null,
+          unitCost,
+        });
+        const cumulativeScrap =
+          scrapIn.scrapQty > 0
+            ? {
+                scrapQty: safeAdd(Number(existing?.scrapQty ?? 0), scrapIn.scrapQty, 2),
+                scrapReasonCode: scrapIn.scrapReasonCode,
+                scrapNote: scrapIn.scrapNote,
+                scrapClassifiedAt: new Date(),
+                scrapNormalQtySnapshot: safeAdd(Number(existing?.scrapNormalQtySnapshot ?? 0), classification.normalQty, 2),
+                scrapAbnormalQtySnapshot: safeAdd(Number(existing?.scrapAbnormalQtySnapshot ?? 0), classification.abnormalQty, 2),
+                scrapUnitCostSnapshot: unitCost,
+                scrapNormalValueSnapshot: safeAdd(Number(existing?.scrapNormalValueSnapshot ?? 0), classification.normalValue, 2),
+                scrapAbnormalValueSnapshot: safeAdd(Number(existing?.scrapAbnormalValueSnapshot ?? 0), classification.abnormalValue, 2),
+                // F-098-S: abnormal kumulatif > 0 masuk antrean; tinjau selesai tidak dibuka ulang oleh issue berikut.
+                scrapReviewStatus: existing?.scrapReviewStatus ?? scrapReviewStatusAfterComplete(
+                  safeAdd(Number(existing?.scrapAbnormalQtySnapshot ?? 0), classification.abnormalQty, 2),
+                ),
+              }
+            : {};
         if (existing) {
           const prevSerials = toStringArray(existing.serialNumbers);
           const prevBatches = toStringArray(existing.batchNumbers);
@@ -965,6 +1070,7 @@ export async function issueMaterial(
               actualCost: safeAdd(Number(existing.actualCost), lineCost, 2),
               serialNumbers: mergeUnique(prevSerials, newSerials),
               batchNumbers: mergeUnique(prevBatches, newBatchNumbers),
+              ...cumulativeScrap,
             },
           });
         } else {
@@ -979,9 +1085,11 @@ export async function issueMaterial(
               actualCost: lineCost,
               serialNumbers: newSerials.length ? newSerials : undefined,
               batchNumbers: newBatchNumbers.length ? newBatchNumbers : undefined,
+              ...cumulativeScrap,
             },
           });
         }
+        runningAbnormalValue = safeAdd(runningAbnormalValue, classification.abnormalValue, 2);
         runningActual = safeAdd(runningActual, lineCost, 2);
       }
 
@@ -1014,6 +1122,16 @@ export async function issueMaterial(
         await stockJournalService.onProductionOrderMaterialIssue(
           tx,
           movementLines,
+          order.documentNo,
+          postedMoves[0].id,
+          Number(user.id),
+        );
+        // F-008 P2(b): jurnal abnormal kejadian ini DALAM tx yang sama —
+        // fail-closed saat flag ON (throw = rollback total). Flag OFF:
+        // no-op, nilai abnormal hidup di snapshot + laporan.
+        await stockJournalService.onProductionOrderAbnormalScrap(
+          tx,
+          runningAbnormalValue,
           order.documentNo,
           postedMoves[0].id,
           Number(user.id),
@@ -1523,68 +1641,12 @@ export async function completeWorkOrder(workOrderId: number) {
     // so simple/legacy jobs stay completable.
     await assertWorkOrderQcCleared(workOrderId);
 
-    // NOTE: Material consumption (stock-out + Dr Material Expense / Cr Inventory) is
-    // performed exclusively by the mandatory Material Issue above. The Work Order
-    // completion must NOT consume stock or credit inventory again, otherwise the
-    // same materials would leave inventory twice and Inventory would be credited
-    // twice. WO completion here is a status/fulfilment milestone only.
-
-    // ATOMICITY: the WO claim + WO item flip + autoCreateDeliveryOrder +
-    // syncProjectStatus must be a single atomic unit. Previously they were
-    // three sequential non-transactional calls — a mid-sequence failure (e.g.
-    // DO creation error) would leave a "completed" WO with no DeliveryOrder
-    // for downstream shipping, and the project's status flip would be missing
-    // even though the WO says it is done. Both helpers accept an optional
-    // txClient and are called below with this transaction's `tx`, so all
-    // four writes commit or roll back together.
-    await prisma.$transaction(async (tx) => {
-      // Atomically claim completion: only the request that flips status away from
-      // in_progress/pending wins. Without this, two concurrent "selesai" clicks
-      // could both pass the status guard above and each run autoCreateDeliveryOrder
-      // → duplicate Delivery Orders. The conditional updateMany serializes it.
-      const claim = await tx.workOrder.updateMany({
-        where: { id: workOrderId, status: { in: ["in_progress", "pending"] } },
-        data: {
-          status: "completed",
-          endDate: new Date(),
-        },
-      });
-      if (claim.count === 0) {
-        throw new Error("Perintah Kerja sudah diselesaikan atau sedang diproses.");
-      }
-
-      // Update all WO items to completed
-      await tx.workOrderItem.updateMany({
-        where: { workOrderId },
-        data: { status: "completed" },
-      });
-
-      // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
-      // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
-      // ikut menggulung pelepasan ini (AC-RES-4).
-      await releaseActiveReservationsForWorkOrderTx(tx, {
-        workOrderId,
-        releasedBy: Number(user.id),
-        reason: "Perintah kerja selesai",
-      });
-
-      // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
-      // dari baris terpasang ber-warrantyMonths (MaterialIssue completed di
-      // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
-      // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
-      await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
-
-      // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
-      // the atomic claim above so only the winning request reaches here).
-      // Accepts txClient so the DO header + items commit in the SAME
-      // transaction as the WO completion: a failure mid-way rolls the WO claim
-      // back instead of leaving a "completed" WO with no Delivery Order.
-      await autoCreateDeliveryOrder(workOrderId, Number(user.id), tx);
-
-      // Sync linked Project status (same tx so status never diverges).
-      if (wo.projectId) {
-        await syncProjectStatus(wo.projectId, tx);
-      }
+    // NOTE: konsumsi material (stok keluar + jurnal) hanya oleh Material
+    // Issue wajib di atas — penyelesaian WO milestone status/fulfilment
+    // saja, tanpa konsumsi stok ganda.
+    const releasedCount = await completeWorkOrderTx(prisma, workOrderId, Number(user.id), {
+      claimStatuses: ["in_progress", "pending"],
+      projectId: wo.projectId,
     });
 
     await logActivity(
@@ -1596,12 +1658,91 @@ export async function completeWorkOrder(workOrderId: number) {
     revalidatePath("/produksi/perintah-kerja");
     revalidatePath("/inventaris/mutasi-stok");
     revalidatePath("/pengiriman");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada sisa aktif.
+    return { success: true, releaseNotice: reservationReleaseNotice("complete", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[completeWorkOrder]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
+}
+
+/**
+ * Inti penyelesaian WO dalam SATU transaksi (dipakai jalur manual
+ * completeWorkOrder dan auto-close tahap F-020 — satu sumber kebenaran,
+ * jangan duplikasi efek turunan di pemanggil lain):
+ * klaim kondisional updateMany (hanya pemenang count===1 yang lanjut;
+ * count===0 melempar supaya pemanggil manual menolak, sedangkan auto-close
+ * menangkapnya sebagai no-op), flip item, lepas reservasi aktif, coverage
+ * garansi, registri part terpasang, DeliveryOrder otomatis, sinkron status
+ * proyek. Semua commit atau
+ * rollback bersama — WO "completed" tanpa DeliveryOrder tidak mungkin lahir.
+ * client boleh prisma global (dibungkus $transaction di sini) atau tx
+ * pemanggil yang sudah memegang kunci baris WO (FOR UPDATE).
+ * NOTE: konsumsi material (stok keluar + jurnal) hanya oleh Material Issue
+ * wajib di pemanggil — penyelesaian WO di sini milestone status/fulfilment
+ * saja, tidak mengonsumsi stok atau mengkredit inventaris kedua kali.
+ */
+async function completeWorkOrderTx(
+  client: TxClient | typeof prisma,
+  workOrderId: number,
+  userId: number,
+  opts: { claimStatuses: string[]; projectId?: number | null },
+): Promise<number> {
+  const run = async (tx: TxClient): Promise<number> => {
+    const claim = await tx.workOrder.updateMany({
+      where: { id: workOrderId, status: { in: opts.claimStatuses } },
+      data: {
+        status: "completed",
+        endDate: new Date(),
+      },
+    });
+    if (claim.count === 0) {
+      throw new Error("Perintah Kerja sudah diselesaikan atau sedang diproses.");
+    }
+
+    // Update all WO items to completed
+    await tx.workOrderItem.updateMany({
+      where: { workOrderId },
+      data: { status: "completed" },
+    });
+
+    // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
+    // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
+    // ikut menggulung pelepasan ini (AC-RES-4).
+    const released = await releaseActiveReservationsForWorkOrderTx(tx, {
+      workOrderId,
+      releasedBy: userId,
+      reason: "Perintah kerja selesai",
+    });
+
+    // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
+    // dari baris terpasang ber-warrantyMonths (MaterialIssue completed di
+    // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
+    // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
+    await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
+
+    // F-2026-10-22-072-S: registri part terpasang lahir di tx yang sama
+    // untuk SEMUA baris issue (bukan hanya bergaransi), menaut coverage
+    // yang baru lahir di atas. Tanpa kendaraan: nol baris (BR-IP-07),
+    // WO tetap completed — hasil skipped tidak menggagalkan klaim ini.
+    await createInstalledPartsForWorkOrder(workOrderId, new Date(), tx);
+
+    // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
+    // the atomic claim above so only the winning request reaches here).
+    await autoCreateDeliveryOrder(workOrderId, userId, tx);
+
+    // Sync linked Project status (same tx so status never diverges).
+    if (opts.projectId) {
+      await syncProjectStatus(opts.projectId, tx);
+    }
+    return released;
+  };
+
+  if (client === prisma) {
+    return prisma.$transaction(run);
+  }
+  return run(client as TxClient);
 }
 
 /**
@@ -1774,6 +1915,16 @@ export async function createMaterialIssueFromWorkOrder(
       // Auto-create MI items from WO items (same tx). F-2026-10-20-39(a):
       // simpan baris WO asal tiap baris issue supaya guard revisi bisa
       // memutuskan per baris WO, bukan menebak dari itemId yang sama.
+      // F-008: beku allowance scrap dari revisi BOM ter-pin WO (bila ada) —
+      // tanpa pin, snapshot null = belum kalibrasi (klasifikasi abnormal
+      // jujur, bukan tebakan dari master hidup saat complete). Snapshot
+      // LENGKAP: baris di luar revisi ikut null.
+      const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
+        tx,
+        wo.items.map((i) => ({ itemId: i.itemId, workOrderItemId: i.id })),
+        workOrderId,
+      );
+
       await tx.materialIssueItem.createMany({
         data: wo.items
           .filter((i) => Number(i.qty) > 0)
@@ -1783,6 +1934,7 @@ export async function createMaterialIssueFromWorkOrder(
             workOrderItemId: i.id,
             qty: i.qty,
             cost: i.cost,
+            scrapPercentSnapshot: snapshotByItem.get(i.itemId) ?? null,
           })),
       });
 
@@ -2226,13 +2378,13 @@ export async function updateWorkOrderOperationStatus(
   notes?: string,
 ) {
   try {
-    await requirePermission("edit_work_orders");
+    const user = await requirePermission("edit_work_orders");
 
-    await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, projectId: true },
       });
       const operation = await tx.workOrderOperation.findUniqueOrThrow({
         where: { id: operationId },
@@ -2270,11 +2422,63 @@ export async function updateWorkOrderOperationStatus(
         where: { id: operationId },
         data: updateData,
       });
+
+      // F-020 lanjutan: auto-close WO saat tahap terakhir tuntas, dalam
+      // transaksi + kunci baris WO yang sama. Vonis guard (butir 2 kartu):
+      // auto-close memakai guard completeWorkOrder PERSIS (items ada,
+      // MaterialIssue completed, QC bersih) — TIDAK melewati guard secara
+      // diam-diam. Guard belum terpenuhi -> WO tetap in_progress dan
+      // transisi tahap tetap sukses; operator menyelesaikan manual lewat
+      // completeWorkOrder sesudah guard beres (pesan guard tampil di sana).
+      const after = operations.map((o) =>
+        o.sortOrder === operation.sortOrder ? { status } : o,
+      );
+      if (!shouldAutoCompleteWorkOrder({ operations: after })) {
+        return { autoCompleted: false };
+      }
+      const items = await tx.workOrderItem.findMany({
+        where: { workOrderId },
+        select: { id: true },
+      });
+      if (items.length === 0) return { autoCompleted: false };
+      const mi = await tx.materialIssue.findFirst({
+        where: { workOrderId, status: "completed" },
+        select: { id: true },
+      });
+      if (!mi) return { autoCompleted: false };
+      await assertWorkOrderQcCleared(workOrderId, tx);
+
+      // Klaim kondisional di completeWorkOrderTx: hanya status in_progress
+      // yang boleh menang; count===0 melempar di sana dan ditangkap di sini
+      // sebagai no-op — WO sudah ditutup proses lain, tanpa error dan tanpa
+      // efek turunan ganda (klaim kalah tidak menyentuh DO/item/reservasi).
+      try {
+        await completeWorkOrderTx(tx, workOrderId, Number(user.id), {
+          claimStatuses: ["in_progress"],
+          projectId: wo.projectId,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("sudah diselesaikan")) {
+          return { autoCompleted: false };
+        }
+        throw e;
+      }
+      return { autoCompleted: true };
     });
 
     await logActivity("update", "WorkOrderOperation", operationId, "Memperbarui progres tahapan perintah kerja");
+    if (outcome.autoCompleted) {
+      await logActivity(
+        "complete",
+        "WorkOrder",
+        workOrderId,
+        `Menyelesaikan perintah kerja #${workOrderId} (otomatis: semua tahap tuntas)`,
+      );
+      revalidatePath("/inventaris/mutasi-stok");
+      revalidatePath("/pengiriman");
+    }
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    return { success: true, autoCompleted: outcome.autoCompleted };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateWorkOrderOperationStatus]", getErrorMessage(e) || e);
@@ -2288,7 +2492,7 @@ export async function closeWorkOrder(workOrderId: number, reason?: string) {
     const parsed = validateCloseReason(reason);
     if (typeof parsed !== "string") return { success: false, error: parsed.error };
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
@@ -2327,16 +2531,18 @@ export async function closeWorkOrder(workOrderId: number, reason?: string) {
       if (claim.count === 0) throw new Error("Perintah kerja sudah ditutup atau sedang diproses pengguna lain.");
       // F-2026-10-21-012 inti (BR-RES-10): tutup job ikut melepas sisa
       // aktif (biasanya sudah released saat complete — updateMany no-op).
-      await releaseActiveReservationsForWorkOrderTx(tx, {
+      const released = await releaseActiveReservationsForWorkOrderTx(tx, {
         workOrderId,
         releasedBy: Number(user.id),
         reason: "Perintah kerja ditutup",
       });
+      return released;
     });
 
     await logActivity("close", "WorkOrder", workOrderId, `Menutup perintah kerja #${workOrderId}: ${parsed}`);
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: no-op lazim sesudah complete → notice null.
+    return { success: true, releaseNotice: reservationReleaseNotice("close", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[closeWorkOrder]", getErrorMessage(e) || e);
@@ -2397,7 +2603,7 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
     const parsed = validateCancelReason(reason);
     if (typeof parsed !== "string") return { success: false, error: parsed.error };
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
@@ -2415,11 +2621,12 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
       if (claim.count === 0) {
         throw new Error("Perintah kerja sudah dibatalkan atau sedang diproses pengguna lain.");
       }
-      await releaseActiveReservationsForWorkOrderTx(tx, {
+      const released = await releaseActiveReservationsForWorkOrderTx(tx, {
         workOrderId,
         releasedBy: Number(user.id),
         reason: `Perintah kerja dibatalkan: ${parsed}`,
       });
+      return released;
     });
 
     await logActivity(
@@ -2429,7 +2636,8 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
       `Membatalkan perintah kerja #${workOrderId}: ${parsed}`,
     );
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada sisa aktif.
+    return { success: true, releaseNotice: reservationReleaseNotice("cancel", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[cancelWorkOrder]", getErrorMessage(e) || e);

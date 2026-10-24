@@ -17,13 +17,15 @@ import {
   type TerBracket,
 } from "@/lib/services/payroll-statutory.service";
 import { prisma } from "@/lib/db/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
   generateDocumentNumber,
   generateDocumentNumberBatch,
 } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { requireId } from "@/lib/utils/safe-parse";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { dateOnly } from "@/lib/validations/finance.schemas";
@@ -57,6 +59,29 @@ import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
+import { evaluatePayrollEmploymentGate } from "@/lib/reports/employee-lifecycle";
+import {
+  assertPayrollPeriodMatchesEndDate,
+  classifyPayrollRunPopulation,
+  countPayrollRunSkips,
+  findPayrollRangeConflict,
+  isPayrollFrequency,
+  type PayrollFrequency,
+  type PayrollRunSkip,
+} from "@/lib/reports/payroll-frequency";
+import {
+  allocateBpjsForPeriod,
+  buildBpjsAggregateSnapshot,
+  capLoanDeductionForFrequency,
+  evaluateDeductionCeiling,
+  hasActiveLoanWithoutWeeklyInstallment,
+  loanInstallmentForFrequency,
+  readBpjsAggregateSnapshot,
+  sumLoanDeductionForFrequency,
+  type BpjsAggregateSnapshot,
+  type BpjsPeriodSlip,
+} from "@/lib/reports/payroll-weekly";
+import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 import { closedWorkOrderError, timesheetContextError } from "@/lib/services/timesheet-context";
@@ -343,7 +368,7 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
     const user = await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const employeeId = Number(formData.get("employeeId"));
     const componentId = Number(formData.get("componentId"));
-    const defaultAmount = Number(formData.get("defaultAmount"));
+    const defaultAmount = parseMoneyAmount(formData.get("defaultAmount")) ?? NaN;
     const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
     const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
@@ -402,7 +427,7 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     if (!existing) throw new Error("Penugasan komponen gaji tidak ditemukan");
     const defaultAmount = formData.get("defaultAmount") == null
       ? Number(existing.defaultAmount)
-      : Number(formData.get("defaultAmount"));
+      : (parseMoneyAmount(formData.get("defaultAmount")) ?? NaN);
     if (!Number.isFinite(defaultAmount) || defaultAmount < 0) {
       throw new Error("Nominal penugasan komponen gaji tidak boleh negatif");
     }
@@ -598,7 +623,7 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
     if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
     await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(payrollId);
     const componentId = Number(formData.get("componentId"));
-    const amount = Number(formData.get("amount"));
+    const amount = parseMoneyAmount(formData.get("amount")) ?? NaN;
     if (!Number.isSafeInteger(componentId) || componentId <= 0) throw new Error("Komponen gaji tidak valid");
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
@@ -641,7 +666,7 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
     await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
-    const amount = Number(formData.get("amount"));
+    const amount = parseMoneyAmount(formData.get("amount")) ?? NaN;
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
     }
@@ -676,6 +701,26 @@ export async function removePayrollComponentLine(lineId: number) {
 // Single payroll write builder shared by create/update slips: loan-deduction
 // cap, statutory ruleset gate (reject fallback, AUD-R3-02), BPJS/PPh21 with
 // snapshot, net floored at 0 (total mirrors net).
+function assertDeductionCeilingOrThrow(o: {
+  gross: number;
+  cappedLoan: number;
+  lateDeduction: number;
+  componentDeductions: number;
+  fallbackLabel: string;
+}): void {
+  const breach = evaluateDeductionCeiling({
+    wageBase: o.gross,
+    loanDeduction: o.cappedLoan,
+    lateDeduction: o.lateDeduction,
+    componentDeductions: o.componentDeductions,
+  });
+  if (breach) {
+    throw new Error(
+      `Total potongan Pasal 63 (cicilan pinjaman + denda + potongan absen + komponen potongan) Rp${breach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${breach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — ${o.fallbackLabel} ditolak. Sesuaikan perjanjian/potongan, jangan dipangkas diam-diam.`,
+    );
+  }
+}
+
 async function buildPayrollWrite(o: {
   employeeId: number | null;
   period?: string;
@@ -701,13 +746,18 @@ async function buildPayrollWrite(o: {
   };
 }) {
   const { v } = o;
-  const cappedLoan = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0);
-  const taxProfile = o.employeeId
+  const period = o.period ?? `${o.endDate.getFullYear()}-${String(o.endDate.getMonth() + 1).padStart(2, "0")}`;
+  // Frekuensi dari master karyawan server (bukan client): WEEKLY memakai
+  // agregator BPJS se-masa + nominal cicilan mingguan tersimpan.
+  const employeeMaster = o.employeeId
     ? await prisma.employee.findUnique({
         where: { id: o.employeeId },
-        select: { maritalStatus: true, dependents: true },
+        select: { maritalStatus: true, dependents: true, paymentFrequency: true },
       })
     : null;
+  const frequency: PayrollFrequency = employeeMaster?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+  const cappedLoan = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0, frequency);
+  const taxProfile = employeeMaster;
   const base = v.baseSalary ?? 0;
   const gross = safeSum([base, v.allowances ?? 0, v.overtimeTotal ?? 0, v.appreciationTotal ?? 0], 0);
   const ruleset = await getStatutoryParams(prisma, o.endDate);
@@ -716,7 +766,26 @@ async function buildPayrollWrite(o: {
       `Ruleset statutori periode ini belum lengkap/valid — ${o.fallbackLabel} ditolak. Minta accountant melengkapi ruleset, lalu hitung ulang.`,
     );
   }
-  const bpjsParts = computeBpjsEmployee(base, ruleset);
+  assertDeductionCeilingOrThrow({
+    gross,
+    cappedLoan,
+    lateDeduction: v.lateDeduction,
+    componentDeductions: v.deductions ?? 0,
+    fallbackLabel: o.fallbackLabel,
+  });
+  // F-103-V agregator BPJS final masa (B1-B6): dipakai SERAGAM semua
+  // frekuensi (B4 — tanpa cabang WEEKLY). Slip se-masa lain aktif dibaca
+  // per period; campuran slip berpenanda + legacy dalam satu masa =
+  // klaim final masa ditolak (B8), bukan dicampur diam-diam.
+  const bpjsComputed = await computeBpjsForPeriod({
+    employeeId: o.employeeId,
+    period,
+    currentBase: base,
+    ruleset,
+    excludePayrollId: o.excludePayrollId,
+  });
+  const bpjsParts = bpjsComputed.bpjs;
+  const bpjsAggregate = bpjsComputed.aggregate;
   // F-026: masa berjalan = TER atas bruto gabungan se-masa; masa terakhir
   // (Des / final-resign) = hitung ulang Pasal 17. Legacy TIDAK lagi dipanggil
   // jalur tulis — dipertahankan hanya reproduksi slip pra-titik-berlaku.
@@ -736,6 +805,7 @@ async function buildPayrollWrite(o: {
   const pph = pphResult.pph21;
   const snapshot = {
     ...buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0, pphResult.ter),
+    ...buildBpjsAggregateSnapshot(bpjsAggregate),
     ...(o.componentLines
       ? { payrollComponents: payrollComponentsSnapshotValue(o.componentLines, gross) }
       : {}),
@@ -760,7 +830,7 @@ async function buildPayrollWrite(o: {
     bpjsHealthEmployee: bpjsParts.health,
     bpjsEmploymentEmployee: bpjsParts.employment,
     pph21: pph,
-    statutorySnapshot: snapshot as Prisma.InputJsonValue,
+    statutorySnapshot: snapshot as unknown as PrismaTypes.InputJsonValue,
     netSalary: net,
     totalAmount: net,
     paymentDate: v.paymentDate ? wibDateToUtcMidnight(v.paymentDate) : null,
@@ -1106,22 +1176,22 @@ async function capLoanDeduction(
   db: typeof prisma,
   employeeId: number | null,
   requested: number,
+  frequency: PayrollFrequency = "MONTHLY",
 ): Promise<number> {
   if (!employeeId || requested <= 0) return Math.max(0, requested || 0);
   const loans = await db.employeeLoan.findMany({
     where: { employeeId, status: "active" },
-    select: { monthlyInstallment: true, remainingAmount: true },
+    select: { monthlyInstallment: true, weeklyInstallment: true, remainingAmount: true },
   });
-  const cap = loans.reduce(
-    (sum, loan) =>
-      safeAdd(
-        sum,
-        Math.min(Number(loan.monthlyInstallment) || 0, Number(loan.remainingAmount) || 0),
-        0,
-      ),
-    0,
+  return capLoanDeductionForFrequency(
+    loans.map((loan) => ({
+      monthlyInstallment: Number(loan.monthlyInstallment) || 0,
+      weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+      remainingAmount: Number(loan.remainingAmount) || 0,
+    })),
+    frequency,
+    requested,
   );
-  return Math.min(requested, cap);
 }
 
 async function computePayrollEstimation(
@@ -1146,6 +1216,7 @@ async function computePayrollEstimation(
           baseSalary: true,
           maritalStatus: true,
           dependents: true,
+          paymentFrequency: true,
           employeeLoans: {
             where: { status: "active" },
           },
@@ -1175,18 +1246,18 @@ async function computePayrollEstimation(
   if (!employee) throw new Error("Karyawan tidak ditemukan");
 
   const baseSalary = Number(employee.baseSalary);
-  // Loan deduction capped to what each loan actually still owes (remaining), so the
-  // final-installment scenario doesn't over-deduct the employee.
-  const loanDeduction = employee.employeeLoans.reduce(
-    (sum, loan) =>
-      sum +
-      safeAdd(
-        0,
-        Math.min(Number(loan.monthlyInstallment), Number(loan.remainingAmount)),
-        0,
-      ),
-    0,
-  );
+  // F-105-V: nominal per frekuensi karyawan dari SATU helper — WEEKLY
+  // hanya weeklyInstallment tersimpan; tanpa nominal = 0 di preview ini
+  // (gerbang tulis/run menahan karyawan itu alasan pinjaman).
+  const frequency: PayrollFrequency = employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+  const loanDeduction = sumLoanDeductionForFrequency(
+    employee.employeeLoans.map((loan) => ({
+      monthlyInstallment: Number(loan.monthlyInstallment),
+      weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+      remainingAmount: Number(loan.remainingAmount),
+    })),
+    frequency,
+  ) ?? 0;
 
   const overtimeTotal = overtimes.reduce(
     (sum, ot) => safeAdd(sum, ot.calculatedValue ?? 0, 0),
@@ -1208,7 +1279,24 @@ async function computePayrollEstimation(
   // Estimasi = PREVIEW non-final (R3-02): tabel TER tersedia → TER atas bruto
   // masa ini; belum tersedia → legacy berlabel LEGACY_PRE_TER di snapshot.
   // Yang fail-closed = tulis-final (bulk/single/update) + approve.
-  const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
+  // F-103-V: preview memakai agregator se-masa yang sama (basis Σ slip
+  // aktif period endDate + slip berjalan); penanda ikut snapshot preview.
+  const estPeriod = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`;
+  const bpjsComputed = await computeBpjsForPeriod({
+    employeeId,
+    period: estPeriod,
+    currentBase: baseSalary,
+    ruleset: statutoryParams,
+  });
+  const bpjs = bpjsComputed.bpjs;
+  // Plafon Pasal 65 TIDAK menolak preview (vonis butir 6: gerbang slip =
+  // generate/finalisasi tulis) — pelampauan tampil di snapshot preview.
+  const ceilingFinding = evaluateDeductionCeiling({
+    wageBase: baseSalary,
+    loanDeduction,
+    lateDeduction: latePenalty.totalPenalty,
+    componentDeductions: 0,
+  });
   const estCategory = terCategoryFor(employee.maritalStatus, employee.dependents ?? 0);
   const estBrackets = await getTerBrackets(prisma as never, estCategory, new Date(endDateStr));
   const estTer = estBrackets ? computePph21Ter(grossSalary, estBrackets) : null;
@@ -1234,13 +1322,14 @@ async function computePayrollEstimation(
     leaveDays: attendance.leaveDays,
     holidayDays: attendance.holidayDays,
     absentDays: attendance.absentDays,
-    dailyRate: attendance.dailyRate,
     absentDeduction: attendance.absentDeduction,
+    dailyRate: attendance.dailyRate,
     grossSalary,
     bpjsHealthEmployee: bpjs.health,
     bpjsEmploymentEmployee: bpjs.employment,
     pph21,
-    statutorySnapshot: buildStatutorySnapshot(
+    statutorySnapshot: {
+      ...buildStatutorySnapshot(
       statutoryParams,
       employee.maritalStatus,
       employee.dependents ?? 0,
@@ -1252,7 +1341,10 @@ async function computePayrollEstimation(
         periodKind: "preview",
         monthsInStint: null,
       }),
-    ),
+      ),
+      ...buildBpjsAggregateSnapshot(bpjsComputed.aggregate),
+      ...(ceilingFinding ? { deductionCeilingFinding: ceilingFinding } : {}),
+    },
   };
 }
 
@@ -1342,6 +1434,48 @@ interface Pph21PeriodComputation {
  *   Σ terpotong final masa sebelumnya; lebih potong → snapshot, bukan negatif.
  * Tabel TER kosong/tidak lengkap → throw (fail-closed, tanpa fallback legacy).
  */
+/**
+ * F-2026-10-23-103-V agregator BPJS final masa (B1-B6 + gerbang B8):
+ * target masa dari basis Σ baseSalary slip aktif se-masa (ceiling SEKALI),
+ * slip berjalan = max(0, target − Σ terpotong slip se-masa lain aktif).
+ * Slip se-masa lain tanpa penanda agregat = masa campuran -> ditolak
+ * berisik (B8); tanpa karyawan -> basis slip berjalan saja (preview).
+ */
+async function computeBpjsForPeriod(o: {
+  employeeId: number | null;
+  period: string;
+  currentBase: number;
+  ruleset: StatutoryParams;
+  excludePayrollId?: number;
+}): Promise<{ bpjs: ReturnType<typeof computeBpjsEmployee>; aggregate: BpjsAggregateSnapshot }> {
+  let others: BpjsPeriodSlip[] = [];
+  if (o.employeeId) {
+    const rows = await prisma.payroll.findMany({
+      where: { employeeId: o.employeeId, period: o.period },
+      select: {
+        id: true, baseSalary: true, bpjsHealthEmployee: true,
+        bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
+      },
+    });
+    others = rows
+      .filter((r) => !(o.excludePayrollId && r.id === o.excludePayrollId))
+      .filter((r) => r.status !== "cancelled" && r.status !== "canceled")
+      .map((r) => ({
+        baseSalary: Number(r.baseSalary),
+        bpjsHealthEmployee: Number(r.bpjsHealthEmployee),
+        bpjsEmploymentEmployee: Number(r.bpjsEmploymentEmployee),
+        status: r.status,
+        statutorySnapshot: r.statutorySnapshot,
+      }));
+    if (others.some((s) => readBpjsAggregateSnapshot(s.statutorySnapshot) == null)) {
+      throw new Error(
+        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat) — klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
+      );
+    }
+  }
+  return allocateBpjsForPeriod({ currentBase: o.currentBase, otherActiveSlips: others, ruleset: o.ruleset });
+}
+
 async function computePph21ForPeriod(o: {
   employeeId: number | null
   period: string
@@ -1609,6 +1743,7 @@ async function computeBulkPayrollEstimations(
         maritalStatus: true,
         dependents: true,
         departmentId: true,
+        paymentFrequency: true,
         employeeLoans: { where: { status: "active" } },
       },
     }),
@@ -1699,22 +1834,43 @@ async function computeBulkPayrollEstimations(
     departmentHolidaySet.set(holiday.departmentId, dates);
   }
 
+  // F-103-V: slip aktif se-masa populasi batch (untuk agregator BPJS) —
+  // satu query per run, bukan per karyawan. Slip batal dikeluarkan (B1).
+  const bulkPeriodSlips = employeeIds.length === 0
+    ? []
+    : await prisma.payroll.findMany({
+        where: { employeeId: { in: employeeIds }, period: bulkPeriod },
+        select: {
+          employeeId: true, baseSalary: true, bpjsHealthEmployee: true,
+          bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
+        },
+      });
+  const bulkSlipsByEmployee = new Map<number, BpjsPeriodSlip[]>();
+  for (const row of bulkPeriodSlips) {
+    if (row.employeeId == null || row.status === "cancelled" || row.status === "canceled") continue;
+    const arr = bulkSlipsByEmployee.get(row.employeeId) ?? [];
+    arr.push({
+      baseSalary: Number(row.baseSalary),
+      bpjsHealthEmployee: Number(row.bpjsHealthEmployee),
+      bpjsEmploymentEmployee: Number(row.bpjsEmploymentEmployee),
+      status: row.status,
+      statutorySnapshot: row.statutorySnapshot,
+    });
+    bulkSlipsByEmployee.set(row.employeeId, arr);
+  }
+
   for (const employee of employees) {
     // 1. Base salary + loan deduction (capped at remaining balance).
     const baseSalary = Number(employee.baseSalary);
-    const loanDeduction = employee.employeeLoans.reduce(
-      (sum, loan) =>
-        sum +
-        safeAdd(
-          0,
-          Math.min(
-            Number(loan.monthlyInstallment),
-            Number(loan.remainingAmount),
-          ),
-          0,
-        ),
-      0,
-    );
+    // F-105-V: nominal per frekuensi karyawan (helper bersama).
+    const loanDeduction = sumLoanDeductionForFrequency(
+      employee.employeeLoans.map((loan) => ({
+        monthlyInstallment: Number(loan.monthlyInstallment),
+        weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+        remainingAmount: Number(loan.remainingAmount),
+      })),
+      employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+    ) ?? 0;
 
     // 2. Overtime total.
     const empOvertimes = overtimeMap.get(employee.id) ?? [];
@@ -1814,7 +1970,20 @@ async function computeBulkPayrollEstimations(
       [baseSalary, componentSummary.allowances, overtimeTotal, appreciationTotal],
       0,
     );
-    const bpjs = computeBpjsEmployee(baseSalary, bulkStatutoryParams);
+    // F-103-V agregator se-masa (basis Σ slip aktif period ini + berjalan).
+    const bulkOthers = bulkSlipsByEmployee.get(employee.id) ?? [];
+    if (bulkOthers.some((slip) => readBpjsAggregateSnapshot(slip.statutorySnapshot) == null)) {
+      throw new Error(
+        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat) — klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
+      );
+    }
+    const bpjsAllocated = allocateBpjsForPeriod({
+      currentBase: baseSalary,
+      otherActiveSlips: bulkOthers,
+      ruleset: bulkStatutoryParams,
+    });
+    const bpjs = bpjsAllocated.bpjs;
+
     // F-026 jalur tulis massal: TER masa berjalan atas bruto karyawan ini
     // (generate melewati karyawan yang sudah ber-slip periode ini, jadi tidak
     // ada slip se-masa lain). Snapshot Desember ditandai pending-final:
@@ -1867,6 +2036,7 @@ async function computeBulkPayrollEstimations(
           }),
         ),
         payrollComponents: payrollComponentsSnapshotValue(componentLines, grossSalary),
+        ...buildBpjsAggregateSnapshot(bpjsAllocated.aggregate),
       },
     });
   }
@@ -1906,10 +2076,39 @@ export async function getBulkPayrollEstimations(
   return computeBulkPayrollEstimations(requestedIds, startDateStr, endDateStr);
 }
 
+/**
+ * F-2026-10-22-076-S (BR-PF-03, Q-PF-3 diputus BOT 3): slip aktif
+ * (status selain cancelled/canceled) karyawan yang rentangnya beririsan
+ * rentang baru, atau null. Query dibatasi jendela kasar ±90 hari
+ * (assertPayrollDateRange membatasi rentang tulis <= 90 hari); keputusan
+ * irisan final oleh builder murni findPayrollRangeConflict.
+ */
+async function findActivePayrollRangeConflict(
+  db: typeof prisma,
+  employeeId: number,
+  startDate: Date,
+  endDate: Date,
+  excludePayrollId?: number,
+) {
+  const windowStart = new Date(startDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const slips = await db.payroll.findMany({
+    where: {
+      employeeId,
+      status: { notIn: ["cancelled", "canceled"] },
+      startDate: { lte: endDate },
+      endDate: { gte: windowStart },
+      ...(excludePayrollId ? { id: { not: excludePayrollId } } : {}),
+    },
+    select: { startDate: true, endDate: true, status: true, documentNo: true },
+  });
+  return findPayrollRangeConflict(slips, startDate, endDate);
+}
+
 export async function generateBulkPayroll(
   period: string,
   startDateStr: string,
   endDateStr: string,
+  paymentFrequency: string = "MONTHLY",
 ) {
   try {
     const user = await requirePermission("create_payroll");
@@ -1917,21 +2116,121 @@ export async function generateBulkPayroll(
     // estimator/guard only checks range length, and `new Date("2026-02-30")`
     // would otherwise persist the rolled-over date (Mar 2) on every slip.
     assertPayrollDateRange(startDateStr, endDateStr);
+    // F-076-S: frekuensi run wajib kosakata master existing; period wajib
+    // "YYYY-MM" bulan endDate (V-PF2-1/V-PF2-5 BOT 4 — karangan "YYYY-MM-Wn"
+    // ditolak tulis, AC-PF2-5).
+    if (!isPayrollFrequency(paymentFrequency)) {
+      throw new Error("Frekuensi run penggajian tidak valid — gunakan MONTHLY atau WEEKLY.");
+    }
+    assertPayrollPeriodMatchesEndDate(period, new Date(endDateStr));
 
     const employees = await prisma.employee.findMany({
       where: { isActive: true, deletedAt: null },
-      select: { id: true },
+      select: {
+        id: true,
+        employmentEndedAt: true,
+        paymentFrequency: true,
+        employeeLoans: {
+          where: { status: "active", remainingAmount: { gt: 0 } },
+          select: { id: true, weeklyInstallment: true, remainingAmount: true },
+        },
+      },
     });
 
-    // Batch: fetch all existing payrolls for this period in one query (eliminates N+1)
-    const existingPayrolls = await prisma.payroll.findMany({
-      where: { period, employeeId: { in: employees.map((e) => e.id) } },
-      select: { employeeId: true },
+    // F-085-S gerbang BR-EMP-06 (Q-EMP-3): karyawan berhenti tidak boleh
+    // menerima slip reguler massal. Periode seluruhnya sesudah berhenti
+    // atau memotong tanpa jalur final -> dikeluarkan dari populasi massal
+    // (slip final dibuat lewat jalur single processPayroll). Tercatat log.
+    const periodStart = new Date(startDateStr);
+    const periodEnd = new Date(endDateStr);
+    const gatedOut: number[] = [];
+    const employmentEligible = employees.filter((e) => {
+      const gate = evaluatePayrollEmploymentGate({
+        employmentEndedAt: e.employmentEndedAt,
+        periodStart,
+        periodEnd,
+        isFinalSlip: false,
+      });
+      if (!gate.allowed) gatedOut.push(e.id);
+      return gate.allowed;
     });
-    const existingSet = new Set(existingPayrolls.map((p) => p.employeeId));
-    const targetIds = employees
-      .filter((e) => !existingSet.has(e.id))
-      .map((e) => e.id);
+    if (gatedOut.length > 0) {
+      console.warn(
+        `[generateBulkPayroll] ${gatedOut.length} karyawan berhenti dikeluarkan dari generate massal periode ${period}: ${gatedOut.join(",")}`,
+      );
+    }
+
+    // F-076-S BR-PF-02 + turunan (F-103-V/F-105-V): populasi run =
+    // karyawan sefrekuensi; frekuensi lain terlewati-terhitung. WEEKLY
+    // kini lolos via agregator BPJS se-masa; sisa gerbang hanya pinjaman
+    // aktif tanpa nominal mingguan tersimpan -> "pinjaman" (F-105-V
+    // butir 3), TANPA slip dan tanpa nominal di hasil (AC-PF-4/5).
+    const classified = classifyPayrollRunPopulation(
+      employmentEligible.map((e) => ({
+        id: e.id,
+        paymentFrequency: e.paymentFrequency ?? "MONTHLY",
+        hasActiveLoanWithoutWeeklyInstallment: hasActiveLoanWithoutWeeklyInstallment(
+          (e.employeeLoans ?? []).map((loan) => ({
+            weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+            remainingAmount: Number(loan.remainingAmount),
+          })),
+        ),
+      })),
+      paymentFrequency,
+    );
+    const runSkips: PayrollRunSkip[] = [
+      ...gatedOut.map((employeeId) => ({
+        employeeId,
+        reason: "berhenti" as const,
+        conflictDocumentNo: null,
+      })),
+      ...classified.skips,
+    ];
+    const eligibleEmployees = employmentEligible.filter((e) =>
+      classified.targetIds.includes(e.id),
+    );
+
+    // Batch: slip aktif populasi pada jendela rentang run (semua periode —
+    // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu
+    // ke-2 dalam bulan sama kini LOLOS, yang beririsan ditolak per karyawan
+    // menyebut documentNo penabrak, karyawan lain tetap terbit AC-PF-3).
+    const rangeStart = new Date(startDateStr);
+    const rangeEnd = new Date(endDateStr);
+    const existingPayrolls = eligibleEmployees.length === 0
+      ? []
+      : await prisma.payroll.findMany({
+          where: {
+            employeeId: { in: eligibleEmployees.map((e) => e.id) },
+            status: { notIn: ["cancelled", "canceled"] },
+            startDate: { lte: rangeEnd },
+            endDate: { gte: new Date(rangeStart.getTime() - 90 * 24 * 60 * 60 * 1000) },
+          },
+          select: { employeeId: true, startDate: true, endDate: true, status: true, documentNo: true },
+        });
+    const slipsByEmployee = new Map<number, typeof existingPayrolls>();
+    for (const slip of existingPayrolls) {
+      if (slip.employeeId == null) continue;
+      const arr = slipsByEmployee.get(slip.employeeId) ?? [];
+      arr.push(slip);
+      slipsByEmployee.set(slip.employeeId, arr);
+    }
+    const targetIds: number[] = [];
+    for (const employee of eligibleEmployees) {
+      const conflict = findPayrollRangeConflict(
+        slipsByEmployee.get(employee.id) ?? [],
+        rangeStart,
+        rangeEnd,
+      );
+      if (conflict) {
+        runSkips.push({
+          employeeId: employee.id,
+          reason: "irisan",
+          conflictDocumentNo: conflict.documentNo,
+        });
+      } else {
+        targetIds.push(employee.id);
+      }
+    }
 
     // Bulk fan-out: instead of calling getPayrollEstimation once per employee
     // (5 round-trips × N employees = 5×N), hoist every read into a single
@@ -1975,7 +2274,7 @@ export async function generateBulkPayroll(
       bpjsHealthEmployee: number;
       bpjsEmploymentEmployee: number;
       pph21: number;
-      statutorySnapshot: Prisma.InputJsonValue;
+      statutorySnapshot: PrismaTypes.InputJsonValue;
       netSalary: number;
       totalAmount: number;
       status: string;
@@ -1985,6 +2284,19 @@ export async function generateBulkPayroll(
       const empId = targetIds[i];
       const est = estimations.get(empId);
       if (!est) continue;
+      // Plafon Pasal 65 run massal (F-105-V butir 6): karyawan pelanggar
+      // terlewati-terhitung, bukan menggagalkan seluruh run / dipangkas.
+      if (
+        evaluateDeductionCeiling({
+          wageBase: est.baseSalary ?? 0,
+          loanDeduction: est.loanDeduction ?? 0,
+          lateDeduction: est.lateDeduction ?? 0,
+          componentDeductions: 0,
+        })
+      ) {
+        runSkips.push({ employeeId: empId, reason: "plafonPotongan", conflictDocumentNo: null });
+        continue;
+      }
       const documentNo = docNumbers[i];
 
       const statutory =
@@ -2044,7 +2356,7 @@ export async function generateBulkPayroll(
         bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
         bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
         pph21: est.pph21 ?? 0,
-        statutorySnapshot: (est.statutorySnapshot ?? {}) as Prisma.InputJsonValue,
+        statutorySnapshot: (est.statutorySnapshot ?? {}) as PrismaTypes.InputJsonValue,
         netSalary: netSalary,
         totalAmount: netSalary,
         status: "draft",
@@ -2052,48 +2364,96 @@ export async function generateBulkPayroll(
       });
     }
 
-    const count = rows.length;
-    if (count > 0) {
-      await prisma.payroll.createMany({
-        data: rows,
-        skipDuplicates: true,
-      });
-      // Baris komponen: createMany tidak mengembalikan ID — baca ulang slip
-      // periode ini, buat baris hanya untuk slip tanpa baris (generate 2x
-      // tidak menggandakan). Slip yang kalah race skipDuplicates tidak ada
-      // di hasil baca, jadi tidak dibuatkan baris yatim.
-      const withLines = rows.filter((r) => (estimations.get(r.employeeId)?.componentLines.length ?? 0) > 0);
-      if (withLines.length > 0) {
-        const created = await prisma.payroll.findMany({
-          where: { period, employeeId: { in: withLines.map((r) => r.employeeId) } },
-          select: { id: true, employeeId: true, componentLines: { select: { id: true } } },
-        });
-        for (const slip of created) {
-          if (slip.componentLines.length > 0 || slip.employeeId == null) continue;
-          const lines = estimations.get(slip.employeeId)?.componentLines ?? [];
-          if (lines.length === 0) continue;
-          await prisma.$transaction(async (tx) => {
-            const fresh = await tx.payroll.findUnique({
-              where: { id: slip.id },
-              select: { status: true, componentLines: { select: { id: true } } },
+    // F-076-S audit t_a92d0da1: cek irisan + createMany WAJIB satu transaksi
+    // dengan kunci baris karyawan populasi target (FOR UPDATE, urutan id
+    // menaik anti-deadlock — pola processPayroll/updatePayroll). Tanpa ini
+    // dua run konkuren rentang beririsan tak identik sama-sama lolos baca
+    // luar lalu sama-sama createMany (kunci DB hanya menolak rentang persis
+    // sama); slip yang masuk sesudah baca luar kini terlewat "irisan" lewat
+    // cek ulang di dalam transaksi, karyawan lain tetap terbit. Nomor
+    // dokumen urutan yang terbuang untuk karyawan kalah race diterima
+    // (celah nomor, bukan dobel bayar). Komponen dibaca ulang dari baris
+    // yang benar-benar terbit di transaksi yang sama.
+    const published = rows.length === 0
+      ? { count: 0, created: [] as { id: number; employeeId: number | null }[] }
+      : await prisma.$transaction(async (tx) => {
+          const lockIds = [...new Set(rows.map((r) => r.employeeId))].sort((a, b) => a - b);
+          await tx.$queryRaw`SELECT id FROM employees WHERE id IN (${Prisma.join(lockIds)}) ORDER BY id FOR UPDATE`;
+          const freshByEmployee = new Map<number, typeof existingPayrolls>();
+          if (lockIds.length > 0) {
+            const fresh = await tx.payroll.findMany({
+              where: {
+                employeeId: { in: lockIds },
+                status: { notIn: ["cancelled", "canceled"] },
+                startDate: { lte: rangeEnd },
+                endDate: { gte: new Date(rangeStart.getTime() - 90 * 24 * 60 * 60 * 1000) },
+              },
+              select: { employeeId: true, startDate: true, endDate: true, status: true, documentNo: true },
             });
-            if (!fresh || fresh.status !== "draft" || fresh.componentLines.length > 0) return;
+            for (const slip of fresh) {
+              if (slip.employeeId == null) continue;
+              const arr = freshByEmployee.get(slip.employeeId) ?? [];
+              arr.push(slip);
+              freshByEmployee.set(slip.employeeId, arr);
+            }
+          }
+          const keptRows: typeof rows = [];
+          for (const row of rows) {
+            const conflict = findPayrollRangeConflict(
+              freshByEmployee.get(row.employeeId) ?? [],
+              rangeStart,
+              rangeEnd,
+            );
+            if (conflict) {
+              runSkips.push({
+                employeeId: row.employeeId,
+                reason: "irisan",
+                conflictDocumentNo: conflict.documentNo,
+              });
+            } else {
+              keptRows.push(row);
+            }
+          }
+          if (keptRows.length === 0) return { count: 0, created: [] as { id: number; employeeId: number | null }[] };
+          await tx.payroll.createMany({ data: keptRows, skipDuplicates: true });
+          const withLines = keptRows.filter(
+            (r) => (estimations.get(r.employeeId)?.componentLines.length ?? 0) > 0,
+          );
+          if (withLines.length === 0) return { count: keptRows.length, created: [] as { id: number; employeeId: number | null }[] };
+          const created = await tx.payroll.findMany({
+            where: {
+              employeeId: { in: withLines.map((r) => r.employeeId) },
+              startDate: rangeStart,
+              endDate: rangeEnd,
+              status: "draft",
+            },
+            select: { id: true, employeeId: true, componentLines: { select: { id: true } } },
+          });
+          for (const slip of created) {
+            if (slip.componentLines.length > 0 || slip.employeeId == null) continue;
+            const lines = estimations.get(slip.employeeId)?.componentLines ?? [];
+            if (lines.length === 0) continue;
             await tx.payrollComponentLine.createMany({
               data: lines.map((l) => ({ ...l, payrollId: slip.id })),
             });
-          });
-        }
-      }
-    }
+          }
+          return { count: keptRows.length, created };
+        });
 
+    const count = published.count;
+
+    const skippedByReason = countPayrollRunSkips(runSkips);
+    const skippedTotal = runSkips.length;
     await logActivity(
       "generate",
       "Payroll",
       0,
-      `Generate massal penggajian periode ${period} (${count} karyawan)`,
+      `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal})`,
     );
     revalidatePath("/sdm/penggajian");
-    return { success: true, count };
+    // AC-PF-5: hasil memuat count terbit + count terlewati per alasan,
+    // TANPA nominal gaji siapa pun.
+    return { success: true, count, skippedTotal, skippedByReason };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[generateBulkPayroll]", getErrorMessage(e) || e);
@@ -2127,17 +2487,84 @@ export async function processPayroll(formData: FormData) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
 
-    // Idempotency: prevent duplicate payroll for same employee+period.
-    if (employeeId && period) {
-      const exists = await prisma.payroll.findFirst({
-        where: { employeeId, period },
-        select: { id: true },
-      });
-      if (exists) {
-        throw new Error(
-          `Penggajian untuk karyawan ini pada periode ${period} sudah ada.`,
-        );
-      }
+    // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
+    // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
+    // hanya sah bila master membuktikan karyawan sudah berhenti; periode
+    // seluruhnya sesudah berhenti tanpa flag = tolak keras pesan §6;
+    // periode memotong tanpa flag = wajib konfirmasi tercatat
+    // (confirmEmploymentEndedCuttingPeriod) atau jalur final.
+    const employeeLifecycle = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: {
+        employmentEndedAt: true,
+        paymentFrequency: true,
+        employeeLoans: {
+          where: { status: "active", remainingAmount: { gt: 0 } },
+          select: { id: true, weeklyInstallment: true, remainingAmount: true },
+        },
+      },
+    });
+    // F-076-S + turunan (F-103-V/F-105-V): period wajib "YYYY-MM" bulan
+    // endDate; slip WEEKLY kini dihitung agregator BPJS se-masa. Sisa
+    // gerbang: pinjaman aktif tanpa nominal mingguan tersimpan.
+    assertPayrollPeriodMatchesEndDate(period, endDate);
+    if (
+      employeeLifecycle?.paymentFrequency === "WEEKLY" &&
+      hasActiveLoanWithoutWeeklyInstallment(
+        (employeeLifecycle.employeeLoans ?? []).map((loan) => ({
+          weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+          remainingAmount: Number(loan.remainingAmount),
+        })),
+      )
+    ) {
+      throw new Error(
+        "Slip mingguan untuk karyawan ini ditahan: ada pinjaman aktif tanpa cicilan mingguan tertulis tersimpan (vonis BOT 4 F-105-V). Isi nominal mingguan dari perjanjian tertulis dulu. Slip tidak dibuat.",
+      );
+    }
+    const wantsFinal = formData.get("resignationFinal") === "true";
+    if (wantsFinal && !employeeLifecycle?.employmentEndedAt) {
+      throw new Error(
+        "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
+          "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
+      );
+    }
+    const employmentGate = evaluatePayrollEmploymentGate({
+      employmentEndedAt: employeeLifecycle?.employmentEndedAt ?? null,
+      periodStart: startDate,
+      periodEnd: endDate,
+      isFinalSlip: wantsFinal,
+      confirmCuttingPeriod:
+        formData.get("confirmEmploymentEndedCuttingPeriod") === "true",
+    });
+    if (!employmentGate.allowed) {
+      throw new Error(employmentGate.message);
+    }
+    if (
+      employeeLifecycle?.employmentEndedAt &&
+      !wantsFinal &&
+      formData.get("confirmEmploymentEndedCuttingPeriod") === "true"
+    ) {
+      await logActivity(
+        "payroll_cutting_period_confirmed",
+        "Employee",
+        employeeId,
+        `Konfirmasi slip periode memotong tanggal berhenti ${employeeLifecycle.employmentEndedAt.toISOString().slice(0, 10)} periode ${period}`,
+      );
+    }
+
+    // F-076-S BR-PF-03: duplikat = irisan rentang slip aktif karyawan sama
+    // (bukan period sama), dijaga di dalam transaksi buat (lock baris
+    // karyawan FOR UPDATE lebih dulu — pola createLeaveRequest) supaya
+    // dua pembuatan bersamaan tidak lolos bersama. Kunci DB pelengkap:
+    // @@unique([employeeId, startDate, endDate]).
+    const rangeConflict = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      return findActivePayrollRangeConflict(tx as typeof prisma, employeeId, startDate, endDate);
+    });
+    if (rangeConflict) {
+      throw new Error(
+        `Rentang slip ini beririsan dengan slip ${rangeConflict.documentNo} karyawan yang sama. Hapus atau ubah rentang slip penabrak terlebih dahulu.`,
+      );
     }
 
     // Auto-calculate late penalty
@@ -2181,6 +2608,7 @@ export async function processPayroll(formData: FormData) {
       employeeId,
       period,
       endDate,
+      resignationFinal: wantsFinal,
       fallbackLabel: "pembuatan slip",
       componentLines,
       v: {
@@ -2192,6 +2620,20 @@ export async function processPayroll(formData: FormData) {
     });
 
     const payroll = await prisma.$transaction(async (tx) => {
+      // Kunci baris karyawan lalu periksa ulang irisan di dalam transaksi
+      // yang sama dengan insert (anti TOCTOU terhadap cek di atas).
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+      const conflictInTx = await findActivePayrollRangeConflict(
+        tx as typeof prisma,
+        employeeId,
+        startDate,
+        endDate,
+      );
+      if (conflictInTx) {
+        throw new Error(
+          `Rentang slip ini beririsan dengan slip ${conflictInTx.documentNo} karyawan yang sama. Hapus atau ubah rentang slip penabrak terlebih dahulu.`,
+        );
+      }
       const created = await tx.payroll.create({
         data: {
         slug: await nextSlug("payroll", documentNo),
@@ -2224,9 +2666,9 @@ export async function processPayroll(formData: FormData) {
     return { success: true, id: payroll.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    // Concurrent insert won the race against the app-level idempotency check
-    // (TOCTOU): the DB unique constraint (employeeId, period) rejected the
-    // duplicate. Surface the same friendly message as the pre-check.
+    // Concurrent insert won the race against the app-level range check
+    // (TOCTOU): the DB unique constraint (employeeId, startDate, endDate)
+    // rejected the duplicate. Surface the same friendly message.
     if (
       e &&
       typeof e === "object" &&
@@ -2235,7 +2677,7 @@ export async function processPayroll(formData: FormData) {
     ) {
       return {
         success: false,
-        error: "Penggajian untuk karyawan ini pada periode tersebut sudah ada.",
+        error: "Penggajian untuk karyawan ini pada rentang tanggal tersebut sudah ada.",
       };
     }
     console.error("[processPayroll]", getErrorMessage(e) || e);
@@ -2263,14 +2705,59 @@ export async function updatePayroll(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    // F-026 MEDIUM (vonis Bot 4): flag client BUKAN bukti berhenti. Belum ada
-    // tanggal berhenti terstruktur di Employee — fail-closed: tolak flag,
-    // jangan diam-diam final Pasal 17 maupun fallback TER seolah tak terjadi.
-    if (formData.get("resignationFinal") === "true") {
+    // F-026 MEDIUM (vonis Bot 4) + F-085-S: flag client BUKAN bukti berhenti.
+    // Bukti = Employee.employmentEndedAt server. Flag tanpa bukti = tolak;
+    // dengan bukti, update slip draft hanya untuk periode tidak sesudah
+    // berhenti (gerbang sama seperti create; slip final lewat processPayroll).
+    const wantsFinalUpdate = formData.get("resignationFinal") === "true";
+    const updateEmployeeId = v.employeeId ?? existing.employeeId ?? null;
+    const updateLifecycle = updateEmployeeId
+      ? await prisma.employee.findUnique({
+          where: { id: updateEmployeeId },
+          select: {
+            employmentEndedAt: true,
+            paymentFrequency: true,
+            employeeLoans: {
+              where: { status: "active", remainingAmount: { gt: 0 } },
+              select: { id: true, weeklyInstallment: true, remainingAmount: true },
+            },
+          },
+        })
+      : null;
+    // F-076-S: period wajib "YYYY-MM" bulan endDate (V-PF2-1/5); slip
+    // karyawan WEEKLY fail-closed sama seperti processPayroll (V-PF2-4(i),
+    // V-PF4-1). Slip draft WEEKLY existing dari masa pra-inti tidak bisa
+    // dihitung ulang per-slip sebelum agregator BPJS se-masa tersedia.
+    assertPayrollPeriodMatchesEndDate(v.period, wibDateToUtcMidnight(v.endDate));
+    if (
+      updateLifecycle?.paymentFrequency === "WEEKLY" &&
+      hasActiveLoanWithoutWeeklyInstallment(
+        (updateLifecycle.employeeLoans ?? []).map((loan) => ({
+          weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+          remainingAmount: Number(loan.remainingAmount),
+        })),
+      )
+    ) {
+      throw new Error(
+        "Slip mingguan untuk karyawan ini ditahan: ada pinjaman aktif tanpa cicilan mingguan tertulis tersimpan (vonis BOT 4 F-105-V). Isi nominal mingguan dari perjanjian tertulis dulu. Slip tidak diubah.",
+      );
+    }
+    if (wantsFinalUpdate && !updateLifecycle?.employmentEndedAt) {
       throw new Error(
         "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
           "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
       );
+    }
+    if (updateEmployeeId) {
+      const gate = evaluatePayrollEmploymentGate({
+        employmentEndedAt: updateLifecycle?.employmentEndedAt ?? null,
+        periodStart: wibDateToUtcMidnight(v.startDate),
+        periodEnd: wibDateToUtcMidnight(v.endDate),
+        isFinalSlip: false,
+        confirmCuttingPeriod:
+          formData.get("confirmEmploymentEndedCuttingPeriod") === "true",
+      });
+      if (!gate.allowed) throw new Error(gate.message);
     }
 
     const employeeId = v.employeeId ?? null;
@@ -2335,17 +2822,37 @@ export async function updatePayroll(id: number, formData: FormData) {
       },
     });
 
-    const payroll = await prisma.payroll.update({
-      where: { id },
-      data: {
-        slug: await nextSlug("payroll", existing.documentNo, { excludeId: id }),
-        employeeId,
-        costCenterId: v.costCenterId ?? null,
-        period: v.period,
-        startDate,
-        endDate,
-        ...w,
-      },
+    const payroll = await prisma.$transaction(async (tx) => {
+      // F-076-S BR-PF-03: kunci baris karyawan + periksa irisan (di luar
+      // slip ini sendiri) di transaksi sama dengan update — rentang hasil
+      // edit tidak boleh menabrak slip aktif lain karyawan sama.
+      if (updateEmployeeId) {
+        await tx.$queryRaw`SELECT id FROM employees WHERE id = ${updateEmployeeId} FOR UPDATE`;
+        const conflictInTx = await findActivePayrollRangeConflict(
+          tx as typeof prisma,
+          updateEmployeeId,
+          startDate,
+          endDate,
+          id,
+        );
+        if (conflictInTx) {
+          throw new Error(
+            `Rentang slip ini beririsan dengan slip ${conflictInTx.documentNo} karyawan yang sama. Hapus atau ubah rentang slip penabrak terlebih dahulu.`,
+          );
+        }
+      }
+      return tx.payroll.update({
+        where: { id },
+        data: {
+          slug: await nextSlug("payroll", existing.documentNo, { excludeId: id }),
+          employeeId,
+          costCenterId: v.costCenterId ?? null,
+          period: v.period,
+          startDate,
+          endDate,
+          ...w,
+        },
+      });
     });
 
     await logActivity(
@@ -2466,11 +2973,25 @@ export async function markPayrollPaid(payrollId: number) {
           where: { employeeId: payroll.employeeId, status: "active" },
           orderBy: { loanDate: "asc" },
         });
+        // F-105-V butir 5: nominal amortisasi = frekuensi SLIP (master
+        // karyawan saat dibayar; snapshot nominal per pinjaman tidak
+        // disimpan — loanDeduction slip adalah budget ter-snapshot).
+        const slipEmployee = await tx.employee.findUnique({
+          where: { id: payroll.employeeId },
+          select: { paymentFrequency: true },
+        });
+        const slipFrequency: PayrollFrequency = slipEmployee?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
         let budget = Number(payroll.loanDeduction);
         const updates: Promise<unknown>[] = [];
         for (const loan of activeLoans) {
           if (budget <= 0) break;
-          const installment = Number(loan.monthlyInstallment);
+          const installment = loanInstallmentForFrequency(
+            {
+              monthlyInstallment: Number(loan.monthlyInstallment),
+              weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+            },
+            slipFrequency,
+          ) ?? 0;
           const remaining = Number(loan.remainingAmount);
           if (remaining <= 0) continue;
           const applied = Math.min(installment, remaining, budget);
@@ -2557,6 +3078,7 @@ export async function createEmployeeLoan(formData: FormData) {
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
+          weeklyInstallment: v.weeklyInstallment ?? null,
           remainingAmount: totalAmount,
           status: "pending",
           notes: v.notes ?? null,
@@ -3671,6 +4193,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
+          weeklyInstallment: v.weeklyInstallment ?? null,
           remainingAmount: newRemaining,
           notes: v.notes ?? null,
         },
@@ -3921,6 +4444,23 @@ export async function deleteStatutoryRule(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteStatutoryRule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * F-2026-10-22-085-S: daftar perhatian siklus hidup karyawan (BR-EMP-08).
+ * Izin view_employees + scope HR; keluaran tanpa field gaji (builder murni).
+ */
+export async function getEmployeeLifecycleAttention() {
+  try {
+    const user = await requirePermission("view_employees");
+    const scope = await getHrScope(user);
+    const rows = await loadEmployeeLifecycleAttention(scope);
+    return { success: true as const, rows };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getEmployeeLifecycleAttention]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

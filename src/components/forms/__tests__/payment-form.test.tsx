@@ -21,6 +21,7 @@ describe("PaymentForm — a11y wiring", () => {
       expect(form.getAttribute("aria-label")).toBe("Formulir tambah pembayaran")
       expect(form.getAttribute("aria-busy")).toBe("false")
       expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(2)
+      expect(container.querySelector("#amount")!.getAttribute("required")).not.toBeNull()
       expect(decorativeStars(form).length).toBe(3)
       expect(labelTexts(form)).toEqual(expect.arrayContaining(["Faktur *", "Metode Bayar *", "Jumlah Bayar (Rp) *"]))
       unmount(root, container)

@@ -94,6 +94,7 @@ const DEFAULT_SYSTEM_SETTINGS = {
   cashBankAccountId: null,
   generalExpenseAccountId: null,
   stockAdjustmentAccountId: null,
+  retainedEarningsAccountId: null,
 };
 
 /**
