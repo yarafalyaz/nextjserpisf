@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Merge queue (diaktifkan dari Settings GitHub; API menolak pembuatan rule
+  # merge_queue untuk repo ini) menjalankan CI pada merge group-nya lewat
+  # event ini — tanpa trigger ini antrean tidak pernah menerima check.
+  merge_group:
+    branches: [main]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
