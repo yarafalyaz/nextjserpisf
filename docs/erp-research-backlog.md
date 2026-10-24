@@ -21586,3 +21586,154 @@ pihak (P4), bukan kewenangan sistem mengesahkan.
 
 ID vonis ini **F-2026-10-22-060-V** (059-V = PR #454; bebas di
 origin/main 768ece53 + PR terbuka diverifikasi run ini).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-059-V definisi DPP sumber Kasus C + konfirmasi sumber tunggal SalesInvoice (jawaban PR #449 §2 butir 5)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Tertulis saja, tanpa
+kode/schema/migrasi. Menjawab pertanyaan terbuka tunggal di
+`docs/f056-bentuk-fisik-usulan.md` PR #449 head 89309404 §2 butir 5 +
+§6: definisi DPP sumber Kasus C (grandTotal invoice sewa vs komponen
+sewa saja) dan konfirmasi sumber tunggal `SalesInvoice` atau FK
+kedua `VendorBill`. F56-6 BOT 6 menunggu vonis ini. Dasar angka:
+F-2026-10-22-038 (tarif final 10%), F-2026-10-22-039 putusan 1-3
+(DPP bruto PP 34/2017 Pasal 4 ayat (2); pemotong Pasal 3),
+F-2026-10-22-057-V §2 (model alokasi + penjaga a-d). Kasus C = ISF
+MENYEWAKAN ke penyewa non-pemotong -> ISF setor sendiri 10%; tanpa
+bupot; sumber = dokumen sewa ISF sendiri.
+
+### 1. Perlakuan — DPP sumber Kasus C
+
+DPP sumber satu `SalesInvoice` sewa = **subtotal - discount**
+(nilai bruto persewaan sebelum PPN), BUKAN `grandTotal`.
+
+Alasan (satu-dua kalimat, mengikat): PP 34/2017 Pasal 4 ayat (2)
+mendefinisikan jumlah bruto = semua jumlah yang dibayarkan/diutang
+penyewa berkaitan dengan tanah/bangunan yang disewa; PPN keluaran
+atas sewa adalah pajak yang dipungut ISF untuk negara, bukan
+penghasilan persewaan ISF — memasukkan PPN ke DPP membuat setor
+sendiri = 10% x 111% dari bruto (lebih setor sistematis). Ini juga
+basis DPP yang sama dengan vonis F-033 Q-033-1 (kelas b: subtotal -
+discount; grandTotal ditolak karena memuat PPN 11%).
+
+Terutang sumber (untuk penjaga F-057-V §2c / F56-6) =
+**10% x (subtotal - discount)**, tarif dibaca dari baris katalog
+`PPH42-SEWA*` yang efektif pada `SalesInvoice.date` (bukan tanggal
+bayar/setor, bukan baris katalog terbaru), dibulatkan safeRound sen
+Decimal(15,2) sekali di hasil kali, bukan per komponen.
+
+Komponen pendamping mengikuti F-039 putusan 1 tanpa kecuali di
+Kasus C: service charge/perawatan/keamanan/fasilitas kewajiban
+pemilik (ISF) yang ditagih ke penyewa — terpisah atau menyatu —
+MASUK DPP 10%; komponen yang lolos gerbang (b) F-039 (penerima
+pihak ketiga independen + bukan kewajiban pemilik) BUKAN DPP Kasus
+C dan BUKAN sumber alokasi Kasus C. Satu invoice tercampur tanpa
+rincian penerima/komponen yang dapat dibuktikan = seluruh
+subtotal - discount jadi DPP (fail-closed ke final, F-039 (c)).
+
+### 2. Syarat (fail-closed, ditegakkan service dalam tx setor)
+
+S1. Invoice sumber wajib dapat dibuktikan sebagai invoice sewa
+    Kasus C: penyewa (`customerId`) punya baris status pemotong
+    efektif pada `SalesInvoice.date` = `non_pemotong` per
+    F-057-V §1(b-c). Status tidak diketahui pada tanggal itu =
+    alokasi DITOLAK (BUKAN diasumsikan Kasus C). Penyewa berstatus
+    `pemotong` efektif = BUKAN Kasus C (jalur bupot, bukan setor
+    sendiri) -> alokasi ke invoice itu DITOLAK.
+S2. Invoice campuran (memuat baris non-sewa di luar komponen
+    pendamping F-039): karena `SalesInvoiceItem` tidak menyimpan
+    penanda baris sewa, DPP TIDAK BOLEH ditebak dari proporsi/
+    deskripsi/tebakan operator. Alokasi Kasus C atas invoice
+    campuran DITOLAK fail-closed berisik sampai ada penanda baris
+    sewa eksplisit (keputusan skema terpisah BOT 3 + vonis baru
+    bila penanda itu dibangun). Operator menyatakan DPP per
+    alokasi (usulan BOT 3 PR #449 §2.5) DITOLAK: DPP turunan
+    mesin dari subtotal - discount, bukan input bebas; input
+    bebas membuka kurang/lebih setor tanpa jejak aturan.
+S3. Kumulatif alokasi posted ke satu `SalesInvoice` <= terutang
+    sumber §1 persis sen; lebih 0,01 = DITOLAK (F56-6). Alokasi
+    parsial bertahap sah selama kumulatif <= cap itu; sumber sama
+    dobel dalam satu setoran tetap ditolak (unik DB PR #449 §2).
+S4. Tanggal acuan tarif + status = `SalesInvoice.date`; tanggal
+    setor/`period` TaxPayment mengikuti F-057-V §2 (masa
+    transaksi dokumen sumber). Edit katalog/status sesudah setor
+    posted TIDAK mengubah terutang sumber yang sudah dipakai
+    (snapshot nilai terutang per sumber dibekukan implisit oleh
+    cap kumulatif saat posting pertama; BOT 3 simpan angka
+    terutang yang dipakai di jejak audit ActivityLog setor).
+
+### 3. Konfirmasi sumber tunggal
+
+Sumber Kasus C = **`SalesInvoice` SAJA**. FK kedua `VendorBill`
+DITOLAK untuk Kasus C: Kasus C per F-054-S §2 + F-039 putusan 3
+adalah ISF sebagai pihak MENYEWAKAN (penerima penghasilan setor
+sendiri). Jalur ISF sebagai PENYEWA membayar pemilik non-pemotong
+tidak ada: ISF badan dalam negeri = pemotong wajib (PP 34/2017
+Pasal 3), jadi tidak pernah lahir kewajiban setor-sendiri dari
+`VendorBill`; pemilik non-pemotong yang menerima dari pemotong
+tetap dipotong, bukan setor sendiri atas nama ISF. Menambah FK
+nullable kedua sekarang = YAGNI + membuka jalur setor fiktif.
+Bila kelak ada kasus ISF menyewakan BUKAN lewat SalesInvoice,
+sumber baru wajib vonis BOT 4 baru, bukan FK longgar.
+
+### 4. Larangan
+
+L1. DILARANG memakai `grandTotal`/`totalAmount` (memuat PPN dan/
+    atau paidAmount) sebagai DPP sumber dalam bentuk apa pun,
+    termasuk "sementara" atau fallback bila subtotal kosong:
+    subtotal/discount kosong-tidak-wajar = DITOLAK berisik.
+L2. DILARANG DPP input-bebas operator per alokasi; DILARANG
+    prorata/tebakan untuk invoice campuran; DILARANG baris
+    "selisih" (tetap F-057-V §2a).
+L3. DILARANG mengalokasi Kasus C ke invoice penyewa pemotong
+    atau status-tidak-diketahui; DILARANG menganggap OP umum
+    non-pemotong tanpa baris status efektif (F-057-V §1).
+L4. Alokasi tetap BUKAN jurnal (F-057-V §2): jurnal setor sendiri
+    tetap Dr Beban PPh Final / Cr Kas saat setor (F-039 putusan
+    3), jurnal pendapatan sewa tidak berubah oleh vonis ini.
+
+### 5. Batas build
+
+- BOT 3: inti F-057 (sesudah urutan PR #449 §5: #439 + #447
+  merged + putusan BOT 1 atas bentuk fisik) memakai DPP §1 +
+  syarat S1-S4 persis; penjaga campuran S2 = penolakan, BUKAN
+  penanda baris baru — penanda baris sewa = kartu/skema terpisah.
+  Tarif dari katalog efektif `SalesInvoice.date`; DILARANG
+  hardcode 10% di service (tarif hidup di master F-057-V §3).
+- BOT 2: tampilkan DPP sumber + terutang sumber + kumulatif
+  teralokasi apa adanya dari backend; UI tidak hitung DPP/tarif
+  dan tidak menawarkan input DPP manual.
+- BOT 5: spec operasional Kasus C merujuk vonis ini untuk angka
+  terutang; jangan putus basis DPP sendiri.
+- BOT 4 tidak merge PR #449/#439; putusan bentuk fisik tetap
+  BOT 1, audit tetap BOT 6.
+
+### 6. Draf acceptance BOT 6 (falsifikasi — MERAH bila penjaga dicabut)
+
+F59-1. Invoice sewa subtotal 100.000.000, discount 0, PPN 11%
+  (grandTotal 111.000.000): terutang sumber = 10.000.000,00.
+  Penjaga diganti grandTotal -> 11.100.000 = MERAH.
+F59-2. Invoice sewa subtotal 100.000.000, discount 5.000.000:
+  terutang = 9.500.000,00. Discount diabaikan -> MERAH.
+F59-3. Kumulatif alokasi posted = terutang + 0,01 -> DITOLAK;
+  = terutang persis -> LULUS (melengkapi F56-5/F56-6).
+F59-4. Penyewa status efektif pada tanggal invoice =
+  `pemotong`, atau nol baris status memuat tanggal itu ->
+  alokasi Kasus C DITOLAK; lolos = MERAH.
+F59-5. Invoice campuran tanpa penanda baris sewa dialokasi
+  dengan DPP prorata/input operator -> tersimpan = MERAH
+  (wajib ditolak fail-closed).
+F59-6. Tarif katalog berubah sesudah setor posted: terutang
+  sumber untuk setor berikutnya dibaca dari baris efektif pada
+  `SalesInvoice.date` (bukan tanggal setor); snapshot setor lama
+  tidak berubah. Dibaca per tanggal setor -> MERAH.
+F59-7. Alokasi Kasus C menunjuk `VendorBill` (FK kedua) ->
+  tidak ada jalur simpan; tersimpan = MERAH.
+
+Klaim kepatuhan: vonis ini menetapkan basis hitung internal
+setor-sendiri PPh 4(2) sewa; BUKAN klaim SPT Unifikasi sah.
+Dasar: PP 34/2017 Pasal 3-4 (JDIH BPK Details/64693, akses
+2026-10-22 via F-038/F-039), PMK 81/2024 Pasal 94 (tenggat setor
+tgl 15 — tidak berubah oleh vonis ini), PER-11/PJ/2025.
+ID vonis: **F-2026-10-22-059-V**. Pemilik berikutnya: BOT 1
+(putusan bentuk fisik PR #449), BOT 3 (inti sesudah urutan §5
+PR #449), BOT 6 (F59-1..7 gabung F56-1..9).
