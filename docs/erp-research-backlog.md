@@ -14843,3 +14843,389 @@ Satu retur mengurangi pencapaian HANYA bila SEMUA syarat berikut terpenuhi:
 - Batas: vonis ini tidak memutus (a) perubahan basis rekap komisi F-016, (b) workflow status retur baru, (c) ikatan pencapaian ke pembayaran apa pun. Ketiganya butuh kartu + vonis sendiri.
 
 ID vonis ini **F-2026-10-24-131-V** (bebas: tertinggi di origin/main c6c4bfb3 = 130-V di PR #696 terbuka; grep `F-2026-10-24-131` di berkas ini = 0 sebelum append run ini). Pemilik berikutnya: BOT 1 merge vonis ini + putus pembukaan kartu tahap 2 → BOT 3 inti builder/loader (Putusan 2/3/5) → BOT 2 kolom komponen + notice baru → BOT 6 audit E131-1..5.
+
+---
+
+## SPEC BOT 5 2026-10-24 — F-2026-10-24-099-S alur evaluasi masa percobaan & perpanjangan kontrak PKWT (HR lifecycle, turunan F-2026-10-22-085-S)
+
+Spec dokumen saja, tanpa kode/schema/migrasi/UI. Basis
+`origin/main` `f7271d05` (2026-10-24, run ini). Anti-duplikat:
+`F-2026-10-24-099-S` bebas di backlog/board/PR terbuka (099 di
+repo terpakai hanya `hermes/bot4-f099-retur-beli` = domain
+pembelian BOT 4, sufiks beda, bukan -099-S); grep
+`probation|masa percobaan|approve_contracts` di
+`prisma/schema.prisma` + `src/` origin/main = 0 hit.
+
+> **KOREKSI PREMIS KARTU (mengikat, bukan catatan kaki).**
+> Kartu tugas menyebut "masa percobaan 3 bulan atau PKWT
+> 1 tahun" seolah keduanya jalur setara. BENCHMARK resmi
+> membantah: PP 35/2021 Pasal 12 ayat (1) "PKWT tidak dapat
+> mensyaratkan adanya masa percobaan kerja"; ayat (2) klausul
+> percobaan pada PKWT batal demi hukum dan masa kerja tetap
+> dihitung. Masa percobaan hanya sah pada PKWTT, paling lama
+> 3 bulan (UU 13/2003 Pasal 60 ayat (1), dipertahankan pasca
+> UU Cipta Kerja). Konsekuensi spec: **evaluasi probation
+> HANYA untuk calon PKWTT**; karyawan PKWT TIDAK punya tahap
+> probation — ia punya evaluasi kinerja biasa (di luar spec
+> ini) dan keputusan perpanjangan/konversi di akhir kontrak.
+> Mencampur keduanya di satu state machine = cacat hukum
+> desain. Dua alur di spec ini sengaja terpisah (§1A vs §1B)
+> dan penjaga server menolak probation pada PKWT (BR-PROB-02,
+> AC-PROB-2). Sumber: https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021
+> dan teks PDF resmi https://peraturan.go.id/files/pp35-2021bt.pdf
+> (Pasal 12); UU 13/2003 Pasal 60 via Accurate help dirujuk §5.
+> Ini fakta regulasi BENCHMARK, bukan vonis gaji/pajak;
+> perlakuan upah selama percobaan (tidak boleh di bawah upah
+> minimum, Pasal 60 ayat (2)) dan segala angka kewajiban tetap
+> wilayah BOT 4 (§8 Q-PROB-5).
+
+### 0. Bukti live (TERVERIFIKASI-KODE, origin/main f7271d05)
+
+Sudah ada — TIDAK diduplikasi spec ini:
+1. Master siklus hidup F-2026-10-22-085-S SUDAH merged:
+   `Employee.employmentStatus` (`PKWTT|PKWT|DAILY|INTERN`,
+   null = belum diatur), `contractStartDate`, `contractEndDate`,
+   `employmentEndedAt`, `endReason`
+   (`prisma/schema.prisma:881-885`, komentar asal :877-880).
+   Validasi enum-teks + jejak ActivityLog old/new di
+   `src/actions/master.actions.ts:798-822,1109-1186`.
+2. Daftar perhatian H-30 SUDAH ada: builder murni
+   `buildEmployeeLifecycleAttention`
+   (`src/lib/reports/employee-lifecycle.ts:119-162`): PKWT
+   `contractEndDate` lewat = `contractOverdue`, <= 30 hari =
+   `contractExpiring` (label persis "Kontrak berakhir <= 30
+   hari"), `endedButActive`, `statusUnset`; loader scope-HR
+   `loadEmployeeLifecycleAttention`
+   (`src/lib/reports/employee-lifecycle-data.ts:17-45`, select
+   TANPA field gaji) + kartu UI
+   `employee-lifecycle-attention-card.tsx`. Kartu tugas butir 3
+   (notifikasi dini H-30) dengan demikian **sudah terlayani
+   sebagai daftar perhatian pasif**; yang belum ada = dorongan
+   aktif terjadwal (§2 butir N, Q-PROB-4) — spec TIDAK mengklaim
+   H-30 absen.
+3. Gerbang payroll karyawan berhenti (Q-EMP-3) sudah ada:
+   `evaluatePayrollEmploymentGate`
+   (`employee-lifecycle.ts:186-210`). Spec ini tidak menyentuh
+   payroll.
+4. Pola evaluasi/approval berkala existing yang dirujuk, bukan
+   dibuat ulang: `LeaveRequest` (status pending->approved,
+   approvedBy, rejectionReason; `schema.prisma:3253`) dan
+   `OvertimeRequest` dua tahap supervisor
+   (`schema.prisma:3275`, `supervisorApprovedAt`). Kehadiran
+   sumber fakta disiplin: `Attendance` (status, lateMinutes,
+   `schema.prisma:3195`).
+5. Izin katalog nyata (`module-catalog.generated.ts:96-99,
+   310-314,421`): `view/create/edit/delete_employees`,
+   `view/create/edit/update/process_payroll`,
+   `view_payroll_reports`. **`approve_contracts` TIDAK ada di
+   katalog (grep = 0)** — nama itu di kartu tugas adalah
+   kandidat USULAN, bukan izin existing (§4, Q-PROB-2).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini = 0):
+- Model/kolom/aksi evaluasi probation apa pun; tanggal mulai/
+  selesai percobaan di `Employee`; status keputusan akhir
+  probation (lulus/perpanjang percobaan/gagal); form review
+  berkala 30/60/90.
+- Dokumen keputusan perpanjangan PKWT sebagai peristiwa
+  tercatat selain menimpa `contractEndDate` di master
+  (BR-EMP-11 F-085-S memang menetapkan perpanjangan = tanggal
+  baru + jejak ActivityLog; spec ini menambah *pengajuan &
+  persetujuan* sebelum tanggal ditimpa, bukan mengganti
+  mekanik itu).
+- Akumulasi masa PKWT kumulatif untuk penjaga batas total
+  5 tahun (PP 35/2021 Pasal 8): master hanya menyimpan kontrak
+  berjalan; riwayat kontrak lama hanya di ActivityLog.
+
+### 1. Workflow specification
+
+**1A. Evaluasi masa percobaan (HANYA calon PKWTT).**
+Aktor: HR (membuka masa percobaan + menetapkan penilai),
+Foreman/Supervisor (penilai: kepala bengkel/foreman teknisi),
+Kepala bengkel/HR (keputusan akhir), Karyawan (membaca hasil
+sendiri, tanpa nominal).
+Dokumen masuk: baris `Employee` PKWTT dengan tanggal mulai
+percobaan terisi (usulan kolom §3); fakta `Attendance` periode
+berjalan (disiplin/kehadiran dibaca, tidak disalin).
+Dokumen keluar: rekod evaluasi per titik (30/60/90 hari,
+USULAN §3), keputusan akhir tercatat, lalu transisi master
+existing (§6): lulus -> tetap PKWTT berjalan normal; tidak
+lulus -> HR mengisi `employmentEndedAt`+`endReason` lewat alur
+F-085-S existing (spec ini TIDAK membuat jalur berhenti kedua).
+
+Alur:
+1. HR membuka percobaan saat karyawan PKWTT mulai bekerja:
+   tanggal mulai = `joinDate` berjalan (sumber tunggal, jangan
+   tanggal kedua yang bisa selisih — Q-PROB-1), tanggal akhir
+   rencana = mulai + durasi disepakati <= 3 bulan.
+2. Titik evaluasi jatuh pada hari ke-30/60/90 kalender WIB
+   sejak mulai (USULAN; jendela isi = titik s.d. +7 hari,
+   Q-PROB-3). Sistem menampilkan daftar jatuh tempo di daftar
+   perhatian (perluasan builder existing, bukan daftar baru).
+3. Penilai mengisi form review (§3): skor teknis, disiplin,
+   kehadiran (tiga sumbu terpisah, bukan satu angka campur),
+   catatan wajib bila ada sumbu di bawah ambang, rekomendasi
+   (lanjut / perhatian khusus / tidak lulus diusulkan).
+4. Evaluasi 30/60 bersifat formatif: tidak mengubah status
+   master; tersimpan sebagai riwayat. Evaluasi 90 (atau titik
+   akhir durasi < 90) bersifat sumatif: wajib sebelum keputusan.
+5. Keputusan akhir oleh pemegang persetujuan (§4): Lulus
+   (percobaan selesai, karyawan tetap berjalan), Perpanjang
+   Percobaan (hanya bila total tetap <= 3 bulan sejak mulai —
+   penjaga keras BR-PROB-04), atau Tidak Lulus (alur berhenti
+   F-085-S; angka kewajiban apa pun = BOT 4, §8).
+6. Lewat tanggal akhir tanpa keputusan = temuan daftar
+   perhatian "Percobaan lewat, belum diputus" — sistem TIDAK
+   meluluskan otomatis (BR-PROB-06; kelulusan diam-diam =
+   cacat audit).
+
+**1B. Keputusan perpanjangan PKWT / konversi ke PKWTT.**
+Aktor: HR (pengaju), Kepala bengkel (rekomendasi kebutuhan
+kerja), Pemegang persetujuan kontrak (§4), Karyawan (penerima
+hasil, baca saja).
+Dokumen masuk: baris PKWT + `contractEndDate` berjalan dari
+daftar perhatian H-30 existing; riwayat kontrak dari
+ActivityLog existing.
+Dokumen keluar: keputusan tercatat (perpanjang / konversi
+PKWTT / selesai tanpa perpanjangan) yang, sesudah disetujui,
+HR terapkan ke master lewat mekanik F-085-S existing
+(`contractEndDate` baru, atau `employmentStatus` -> PKWTT,
+atau `employmentEndedAt`+`endReason=contract_completed`).
+
+Alur:
+1. PKWT masuk daftar perhatian H-30 (existing). HR membuka
+   pengajuan keputusan dari baris itu — bukan form bebas lepas
+   dari konteks kontrak berjalan.
+2. Pengajuan memuat: usulan jenis keputusan, tanggal akhir
+   baru (bila perpanjang), alasan kebutuhan kerja, penilai/
+   pemberi rekomendasi.
+3. Penjaga kumulatif BR-PROB-08 berjalan SEBELUM persetujuan
+   bisa disimpan: total masa PKWT (kontrak berjalan + usulan)
+   tidak boleh melewati 5 tahun (BENCHMARK PP 35/2021 Pasal 8
+   ayat (1)-(2)); sumbu hitung final & sumber riwayat masa
+   kerja sebelumnya = Q-PROB-6 (BOT 3/BOT 1) karena master
+   berjalan tidak menyimpan riwayat penuh. Tanpa penjaga ini
+   lolos, perpanjangan yang melewati batas = cacat (AC-PROB-6).
+4. Persetujuan/penolakan oleh pemegang `approve` (§4);
+   penolakan wajib alasan. Self-approve dilarang (BR-PROB-09).
+5. Sesudah disetujui, penerapan ke master = langkah HR terpisah
+   tercatat (status pengajuan `applied`, menerapkan nilai persis
+   yang disetujui; nilai terapan != nilai disetujui ditolak
+   server, BR-PROB-10). Pengajuan disetujui TIDAK menimpa master
+   diam-diam — dua fakta (keputusan vs penerapan) harus bisa
+   diaudit terpisah.
+6. Selesai tanpa perpanjangan: tidak ada pengajuan pun tetap
+   tampil di daftar perhatian sesudah lewat (existing
+   `contractOverdue`); HR menutup lewat `employmentEndedAt`
+   F-085-S. Uang kompensasi PKWT saat berakhir = kewajiban
+   nyata PP 35/2021 Pasal 15, tetapi rumus/basis/akun/jalur
+   bayarnya tetap **Q-EMP-4/Q-EMP-5 BOT 4 dari F-085-S** —
+   spec ini tidak menghitung, tidak menampilkan nominal, dan
+   tidak membuka vonis uang kedua (BR-PROB-11).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+- Masa percobaan di `Employee` (aditif nullable, pola F-085-S):
+  `probationEndDate` (tanggal akhir rencana; null = tidak
+  dalam percobaan). Tanggal mulai TIDAK dikarang: pakai
+  `joinDate` berjalan, kecuali Q-PROB-1 memutus lain. Status
+  percobaan adalah status TURUNAN dari tanggal + keputusan
+  akhir (§6), bukan kolom status bebas yang bisa tidak sinkron.
+- Rekod `ProbationReview` (model baru, kandidat): id,
+  employeeId, milestone (30|60|90|final), dueDate, penilai
+  (reviewerEmployeeId/userId — final BOT 3), skor teknis/
+  disiplin/kehadiran (skala final Q-PROB-3), catatan, rekomendasi,
+  status (draft|submitted|decided), decidedBy/decidedAt untuk
+  titik final, timestamps. Keputusan akhir boleh di baris final
+  review itu sendiri; tabel keputusan terpisah hanya bila
+  BOT 3 membuktikan perlu (YAGNI).
+- Rekod `ContractDecisionRequest` (model baru, kandidat):
+  id, employeeId, kind (extend_pkwt|convert_pkwtt|end_contract),
+  proposedContractEndDate?, reason, requestedBy, status
+  (draft|submitted|approved|rejected|applied|cancelled),
+  decidedBy/decidedAt, rejectionReason?, appliedAt/appliedBy.
+  Tanpa nominal, tanpa kolom kompensasi.
+- N (notifikasi aktif): perluasan cron `daily-notifications`
+  existing untuk H-30 kontrak & jatuh tempo evaluasi =
+  Q-PROB-4; tahap 1 cukup daftar perhatian pasif existing.
+
+### 3. Form review (isi minimum, USULAN)
+
+Tiga sumbu dinilai terpisah (skala & ambang final Q-PROB-3):
+(a) Teknis — mutu pekerjaan sesuai jabatan (welder: mutu las/
+rework; teknisi: diagnosa & waktu selesai; staf: akurasi
+tugas); (b) Disiplin — kepatuhan jam, SOP, keselamatan kerja;
+(c) Kehadiran — dibaca dari `Attendance` periode titik
+(jumlah hadir/terlambat/alpa ditampilkan server sebagai fakta
+pendamping; penilai tidak mengetik ulang angka kehadiran).
+Catatan teks wajib bila rekomendasi = tidak lulus atau ada
+sumbu di bawah ambang. Skor TIDAK dirata-rata jadi satu angka
+keputusan oleh sistem; keputusan akhir = tindakan manusia
+berwenang (§4) yang tercatat, bukan ambang skor otomatis
+(BR-PROB-05).
+
+### 4. Role / permission matrix
+
+Katalog live TIDAK punya `approve_contracts` (§0 butir 5).
+Dua jalan, diputus Q-PROB-2 (BOT 1): (a) tanpa key baru —
+persetujuan memakai `edit_employees` + scope `all` (lemah:
+semua editor master bisa menyetujui); (b) key baru
+`approve_contracts` di katalog (rekomendasi BOT 5, USULAN:
+pisahkan pengaju dari penyetuju supaya SoD BR-PROB-09 bisa
+ditegakkan per izin, pola `approve_material_requests` di
+F-078-S). Tanpa putusan Q-PROB-2, BOT 3 jangan bangun dengan
+key karangan. `manage_employees` di kartu tugas juga bukan
+key katalog (yang ada view/create/edit/delete terpisah).
+
+| Aksi | Permission (status) | Scope tambahan |
+|---|---|---|
+| Lihat daftar jatuh tempo evaluasi & perhatian kontrak | `view_employees` TERVERIFIKASI | `getHrScope`: self = baris sendiri; daftar lintas orang hanya department/all |
+| Buka/tutup masa percobaan, tetapkan penilai | `edit_employees` TERVERIFIKASI | department/all untuk orang lain; self tidak membuka percobaannya sendiri |
+| Isi/submit review 30/60/90 | `edit_employees` kandidat + penilai tercatat = penyetor (USULAN) | Penilai = foreman/supervisor departemen karyawan (scope department), atau all |
+| Putus akhir percobaan (lulus/perpanjang/gagal) | `approve_contracts` USULAN (Q-PROB-2) | all; bukan penilai titik final yang sama bila BOT 1 memutus SoD penuh (Q-PROB-2) |
+| Ajukan keputusan PKWT (perpanjang/konversi/selesai) | `edit_employees` TERVERIFIKASI | department/all |
+| Setujui/tolak pengajuan kontrak | `approve_contracts` USULAN (Q-PROB-2) | all; self-approve dilarang BR-PROB-09 |
+| Terapkan keputusan disetujui ke master | `edit_employees` TERVERIFIKASI | Nilai terapan harus sama persis dengan disetujui (BR-PROB-10) |
+| Lihat hasil sendiri (karyawan) | `view_employees` TERVERIFIKASI | self; tanpa skor orang lain, tanpa nominal gaji apa pun |
+| Proses payroll | `process_payroll` TERVERIFIKASI | Tidak berubah; spec ini tidak membuka jalur bayar |
+
+Nominal gaji (`baseSalary`/`netSalary`) tidak pernah tampil
+di permukaan spec ini (pola BR-EMP-08 F-085-S).
+
+### 5. Benchmark (BENCHMARK; akses 2026-10-24; bukan aturan ISF)
+
+| Aspek | Sumber resmi | Isi yang dipakai |
+|---|---|---|
+| Larangan percobaan PKWT | PP 35/2021 Pasal 12, https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 ; PDF https://peraturan.go.id/files/pp35-2021bt.pdf | PKWT tanpa masa percobaan; klausul percobaan batal demi hukum |
+| Percobaan hanya PKWTT <= 3 bulan, upah >= minimum | UU 13/2003 Pasal 60; diringkas Accurate https://accurate.id/lifestyle/masa-probation/ (artikel, bukan help produk — labeli artikel) | Batas durasi penjaga BR-PROB-04; angka upah tetap vonis BOT 4 |
+| PKWT berdasarkan jangka waktu maks total 5 tahun termasuk perpanjangan | PP 35/2021 Pasal 8 ayat (1)-(2), teks JDIH Kemenaker https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf | Penjaga kumulatif BR-PROB-08 |
+| Uang kompensasi PKWT saat berakhir/perpanjangan | PP 35/2021 Pasal 15-17 (sumber sama) | Kewajiban ada; rumus/akun = Q-EMP-4/5 BOT 4 (F-085-S), tidak dihitung spec ini |
+| Fitur produk Accurate/Zahir untuk evaluasi probation berkala | help.accurate.id/product/karyawan/ (master karyawan saja) | Tidak ditemukan fitur evaluasi percobaan 30/60/90 bernama di help resmi yang diakses run ini — ditulis belum terverifikasi, tidak diklaim absen permanen |
+
+ISF memilih alur internal berjejak (review berkala + keputusan
+tercatat) melebihi master karyawan benchmark, karena kebutuhan
+bengkel: keputusan angkat tetap teknisi/welder harus bisa
+diaudit siapa menilai apa. Pilihan itu USULAN sampai BOT 1
+memutus Q-PROB-1..4.
+
+### 6. Status-transition matrix (USULAN)
+
+Percobaan (status turunan per karyawan PKWTT):
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| tidak dalam percobaan | HR buka percobaan (probationEndDate terisi, <= mulai+3 bulan) | dalam percobaan, titik 30 menunggu | `edit_employees`; employmentStatus wajib PKWTT (BR-PROB-02) |
+| dalam percobaan | titik 30/60 jatuh tempo | titik terbuka untuk diisi | Sistem (turunan tanggal WIB); penilai tercatat |
+| titik terbuka | penilai submit review | titik tersimpan (formatif) | Catatan wajib sesuai §3; status master tidak berubah |
+| dalam percobaan | review final submitted | menunggu keputusan | Review final wajib ada sebelum putus (BR-PROB-07) |
+| menunggu keputusan | putus Lulus | percobaan selesai (probationEndDate ditutup riwayat) | approve (§4); master tetap PKWTT aktif |
+| menunggu keputusan | putus Perpanjang Percobaan | dalam percobaan, akhir baru | approve; total sejak mulai <= 3 bulan (BR-PROB-04) |
+| menunggu keputusan | putus Tidak Lulus | percobaan selesai-gagal; HR catat berhenti via F-085-S | approve; spec tidak membuat jalur berhenti kedua |
+| dalam percobaan | tanggal akhir lewat tanpa keputusan | temuan perhatian "Percobaan lewat, belum diputus" | Tidak ada transisi otomatis (BR-PROB-06) |
+
+Pengajuan keputusan PKWT:
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (baru) | HR simpan dari baris perhatian/kontrak | draft | `edit_employees`; employee PKWT aktif |
+| draft | ajukan | submitted | Alasan wajib; penjaga kumulatif BR-PROB-08 lulus untuk extend |
+| submitted | setujui | approved | approve (§4); bukan pengaju (BR-PROB-09) |
+| submitted | tolak | rejected | Alasan wajib |
+| approved | HR terapkan ke master | applied | Nilai terapan = nilai disetujui (BR-PROB-10); jejak F-085-S |
+| draft/submitted | batalkan pengaju | cancelled | Alasan wajib; approved tidak bisa dibatalkan, hanya tidak diterapkan dan tampil menua di perhatian |
+
+### 7. Business rules register (BR-PROB-01..10 + 11 batas uang)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PROB-01 | Dua alur terpisah: probation hanya calon PKWTT; PKWT hanya keputusan akhir kontrak. Satu karyawan tidak berada di kedua alur bersamaan. | USULAN bertumpu BENCHMARK PP 35/2021 Pasal 12 |
+| BR-PROB-02 | Penjaga server menolak membuka probation pada employmentStatus != PKWTT (termasuk null/belum diatur). UI menyembunyikan tombol bukan penjaga. | USULAN (penegakan); larangannya BENCHMARK |
+| BR-PROB-03 | Titik evaluasi 30/60 formatif, titik akhir sumatif; tidak ada titik yang mengubah status master dengan sendirinya. | USULAN |
+| BR-PROB-04 | Durasi percobaan total (awal + perpanjangan) <= 3 bulan sejak mulai bekerja; usulan melewati itu ditolak server. | BENCHMARK (UU 13/2003 Pasal 60) untuk batas; penegakan USULAN |
+| BR-PROB-05 | Skor tiga sumbu terpisah; sistem tidak menghitung skor gabungan penentu keputusan; keputusan = tindakan manusia tercatat. | USULAN |
+| BR-PROB-06 | Lewat tanggal akhir tanpa keputusan = temuan perhatian, bukan kelulusan otomatis dan bukan perpanjangan otomatis. | USULAN |
+| BR-PROB-07 | Keputusan akhir probation wajib merujuk review final tersimpan; putus tanpa review final ditolak server. | USULAN |
+| BR-PROB-08 | Perpanjangan PKWT ditolak bila total masa PKWT kumulatif + usulan > 5 tahun. Sumber riwayat kumulatif final = Q-PROB-6. | Batas BENCHMARK PP 35/2021 Pasal 8; fisik hitung BUTUH putusan Q-PROB-6 |
+| BR-PROB-09 | Penyetuju pengajuan kontrak != pengaju (self-approve ditolak server), pola SoD approval repo. | USULAN |
+| BR-PROB-10 | Penerapan keputusan ke master harus sama persis dengan yang disetujui (jenis + tanggal); beda nilai = tolak, buat pengajuan baru. | USULAN |
+| BR-PROB-11 | Spec ini tidak menghitung/menampilkan uang kompensasi PKWT, pesangon, atau kewajiban percobaan apa pun; tidak ada jurnal. Angka = Q-EMP-4/5 BOT 4 (F-085-S) yang masih terbuka. | BUTUH-VONIS BOT 4 (diwarisi F-085-S, bukan vonis baru) |
+
+### 8. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-PROB-1 | Tanggal mulai percobaan: `joinDate` berjalan sebagai sumber tunggal, atau tanggal mulai percobaan tersendiri bila beda dari joinDate (mis. mutasi internal)? Rekomendasi BOT 5: joinDate, kecuali BOT 1 membuktikan kasus beda nyata. | BOT 1 |
+| Q-PROB-2 | Izin persetujuan: key baru `approve_contracts` (rekomendasi) vs reuse `edit_employees`+scope all; plus apakah penyetuju boleh = penilai final. Menghambat inti BOT 3. | BOT 1 |
+| Q-PROB-3 | Skala skor (angka 1-5 vs kategori), ambang "di bawah ambang" per sumbu, jendela isi titik (+7 hari?), dan apakah titik 30/60 wajib atau hanya 90 yang wajib. | BOT 1 (pemilik proses HR) |
+| Q-PROB-4 | Notifikasi aktif terjadwal (perluasan cron daily-notifications: H-30 kontrak, H-7/H-0 titik evaluasi) dibuka tahap 1 atau daftar pasif existing cukup? | BOT 1 |
+| Q-PROB-5 | Upah selama percobaan & perlakuan gagal probation (kewajiban apa pun saat berhenti di masa percobaan) — jangan dibangun dari spec ini. | BOT 4 |
+| Q-PROB-6 | Sumber hitung masa PKWT kumulatif untuk BR-PROB-08: rekonstruksi ActivityLog vs tabel riwayat kontrak baru; masa kerja di perusahaan sebelumnya tidak dihitung (hanya PKWT di ISF). Fisik final BOT 3, makna diputus bersama BOT 1. | BOT 1 + BOT 3 |
+
+### 9. Acceptance criteria AC-PROB-1..8 (falsifikasi BOT 6)
+
+- AC-PROB-1: Buka percobaan pada PKWTT dengan akhir = mulai+3
+  bulan: tersimpan; titik 30/60/90 tampil pada tanggal WIB yang
+  benar. Cabut penjaga durasi -> akhir +4 bulan lolos = MERAH.
+- AC-PROB-2: Buka percobaan pada PKWT / status null: ditolak
+  server (bukan hanya tombol hilang); memaksa lewat payload
+  langsung tetap ditolak (BR-PROB-02).
+- AC-PROB-3: Submit review 30 tanpa catatan saat rekomendasi
+  tidak lulus: ditolak; review 30 tersimpan TIDAK mengubah
+  status master apa pun (BR-PROB-03).
+- AC-PROB-4: Putus Lulus/Tidak Lulus tanpa review final
+  tersimpan: ditolak server (BR-PROB-07). Cabut rujukan review
+  final -> putusan lolos = MERAH.
+- AC-PROB-5: Tanggal akhir percobaan lewat tanpa keputusan:
+  karyawan tampil "Percobaan lewat, belum diputus" dan status
+  tetap dalam percobaan (tidak lulus otomatis) (BR-PROB-06).
+- AC-PROB-6: Pengajuan perpanjang PKWT yang membuat total
+  kumulatif 5 tahun + 1 hari: ditolak sebelum bisa disetujui;
+  tepat 5 tahun: lolos penjaga (BR-PROB-08, batas Q-PROB-6).
+- AC-PROB-7: Pengaju menyetujui pengajuannya sendiri: ditolak;
+  penyetuju sah menyetujui lalu HR menerapkan tanggal berbeda
+  dari disetujui: penerapan ditolak (BR-PROB-09/10).
+- AC-PROB-8: Scope & kebocoran: user self membuka daftar
+  evaluasi hanya melihat barisnya sendiri tanpa skor orang lain;
+  permukaan mana pun dari spec ini tidak memuat
+  baseSalary/netSalary/nominal kompensasi (grep keluaran);
+  role tanpa `view_employees` ditolak aksi langsung.
+
+Edge: karyawan PKWTT tanpa probationEndDate (lama) tidak masuk
+daftar evaluasi; PKWT yang dikonversi ke PKWTT sesudah applied
+baru boleh dibuka percobaannya hanya bila BOT 1 memutus kasus
+itu di Q-PROB-1 (default spec: konversi != mulai kerja baru,
+jangan buka percobaan otomatis); titik evaluasi jatuh pada
+hari libur tetap jatuh tempo kalender (penilai mengisi dalam
+jendela Q-PROB-3); penilai berhenti/keluar departemen sebelum
+titik jatuh: HR menunjuk penilai pengganti tercatat, review
+tidak yatim tanpa pemilik; dua pengajuan kontrak aktif untuk
+karyawan sama ditolak (maksimal satu submitted).
+
+### 10. Backlog implementasi (turunan F-2026-10-24-099-S)
+
+1. BOT 1: putus Q-PROB-1/2/3/4/6 + merge PR spec ini. Tanpa
+   Q-PROB-2, inti persetujuan tidak dibuka.
+2. BOT 4: Q-PROB-5 hanya bila ada kewajiban berhenti masa
+   percobaan hendak dihitung; vonis kompensasi PKWT tetap
+   antrean Q-EMP-4/5 F-085-S milikmu — spec ini tidak menambah
+   angka baru untuk divonis.
+3. BOT 3 (@backend-prisma-inventory-workshop): fisik §2
+   (klaim `prisma/schema.prisma` di board dulu) + penjaga
+   BR-PROB-02/04/07/08/09/10 + perluasan daftar perhatian
+   existing (jangan daftar kedua) + tes falsifikasi AC-PROB.
+4. BOT 2 (@frontend-ui-ux-next-js): form review + daftar jatuh
+   tempo + pengajuan kontrak SESUDAH kontrak BOT 3, kata §3/§6
+   apa adanya dari server, nol hitung skor/status di UI, tanpa
+   nominal. Label UI usulan: "Masa Percobaan", "Evaluasi Hari
+   ke-30/60/90", "Percobaan lewat, belum diputus", "Keputusan
+   Kontrak", "Perpanjang Kontrak (PKWT)", "Angkat Tetap
+   (PKWTT)", "Selesai Tanpa Perpanjangan" — kata final BOT 2
+   sesudah Q-PROB-3, jangan karang label skor sendiri.
+5. BOT 6: AC-PROB-1..8 atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+- Probation untuk PKWT/DAILY/INTERN (dilarang/ tidak ditetapkan
+  regulasi di atas), evaluasi kinerja tahunan umum di luar
+  percobaan & keputusan kontrak, skor otomatis penentu lulus,
+  kelulusan/perpanjangan otomatis lewat tanggal, portal
+  karyawan/e-sign kontrak, hitung/tampil kompensasi &
+  pesangon (BOT 4), notifikasi WA/email keluar (Q-PROB-4 hanya
+  notifikasi internal existing), tabel riwayat kontrak penuh
+  sebelum Q-PROB-6 membutuhkannya.
