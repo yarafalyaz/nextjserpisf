@@ -199,6 +199,9 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   { key: "defaultCashAccountId", groups: [["kas", "utama"], ["kas", "bank"], ["1101"], ["bank"], ["kas"]] },
   { key: "salaryExpenseAccountId", groups: [["beban", "gaji"], ["600004"], ["salary", "expense"]] },
   { key: "salariesPayableAccountId", groups: [["hutang", "gaji"], ["utang", "gaji"], ["210204"], ["salaries", "payable"]] },
+  // F-2026-10-24-132-V: mapping kompensasi PKWT (kode persis didahulukan).
+  { key: "pkwtCompensationExpenseAccountId", groups: [["600028"], ["beban", "kompensasi", "pkwt"], ["pkwt", "compensation", "expense"]] },
+  { key: "pkwtCompensationPayableAccountId", groups: [["210207"], ["utang", "kompensasi", "pkwt"], ["pkwt", "compensation", "payable"]] },
   // Bank payroll didahulukan ke akun "Bank" (110102), bukan "Kas & Bank".
   { key: "payrollBankAccountId", groups: [["110102"], ["bank", "buku"], ["bank"], ["kas", "bank"], ["kas", "utama"]] },
   { key: "employeeReceivableAccountId", groups: [["piutang", "karyawan"], ["110506"], ["employee", "receivable"]] },

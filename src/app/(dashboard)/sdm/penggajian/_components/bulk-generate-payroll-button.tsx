@@ -272,6 +272,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                     <AppDatePicker
                       label="Tanggal Mulai (Senin) *"
                       name="weeklyStartDate"
+                      required
                       value={weeklyStart}
                       onChange={handleWeeklyStartChange}
                     />
@@ -281,6 +282,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                     <AppDatePicker
                       label="Tanggal Selesai *"
                       name="weeklyEndDate"
+                      required
                       value={weeklyEnd}
                       onChange={(d) => setWeeklyEnd(d ? d.toString() : "")}
                     />
