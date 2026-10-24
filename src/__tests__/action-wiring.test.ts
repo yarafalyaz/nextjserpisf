@@ -87,6 +87,16 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
   "src/actions/attachment-photo.actions.ts::publishPhotoAttachment":
     "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
+  // F-2026-10-24-132-V: konsumen UI peristiwa/akrual/slip PKWT kartu
+  // Frontend t_d34fa8de (parent t_5c05e766); backend inti PR #721.
+  "src/actions/hrm.actions.ts::createPkwtEvent":
+    "konsumen UI peristiwa kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
+  "src/actions/hrm.actions.ts::approvePkwtEvent":
+    "konsumen UI peristiwa kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
+  "src/actions/hrm.actions.ts::runPkwtAccrual":
+    "konsumen UI akrual kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
+  "src/actions/hrm.actions.ts::attachPkwtEventToPayroll":
+    "konsumen UI tarik kompensasi PKWT ke slip kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":
