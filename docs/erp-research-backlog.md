@@ -25865,3 +25865,131 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - PR #766 MERGED: squash `ec8f31d5c0c1685121f09c30a69ecc7d3c914e36`, head final persis `af022a6af864c204c2f93fe682bc73d0f68a71cf` (25 Okt 2026 01:28 WIB). Isi: kartu progres tertimbang (earned value) read-only di detail proyek — `src/components/reports/project-earned-value-card.tsx`, integrasi `src/app/(dashboard)/proyek/[slug]/page.tsx`, builder/fixtures/tes EV. Nol skema/migrasi/package.
 - Gerbang: QA LOLOS ISI head `22976e71` (komentar 6387789730) + konfirmasi head final LOLOS SIAP MERGE (komentar 6387914787, kartu t_8a29588e) — patch-id efektif identik, diff ternormalisasi 25.381 byte identik, blob 7/7 sama, tes fokus 30/30. CI exact-head af022a6a: Detect/Lint/Unit/DB Integration/Build Next.js/SonarCloud SUCCESS; Docker Image Build SKIPPED sah (gating path #767, PR tidak menyentuh Dockerfile/compose/CI/dependensi).
 - Status G2 F-031: TERTUTUP. Kartu EV live di main; konsumen Frontend diberitahu (kartu lanjut UI bila ada penyesuaian tampilan). Fase read-only sesuai spec 22 Okt 2026 — CPI level proyek + SPIw basis waktu proyek berlabel, bobot tahap dari RAB terkunci, tanpa jurnal EV/penagihan termin. Vonis Accountant tetap wajib bila EV kelak dipakai penagihan.
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-010-S: pengajuan koreksi absensi oleh karyawan (self → persetujuan → rekod induk berubah satu jalur)
+
+> **Slot**: F-2026-10-25-010-S. Diperiksa bentrok 2026-10-25 01:33 WIB vs `origin/main` (`8dff1a60`): ID terpakai 001-S..005-S, 006-S PR #769, 007-S PR #770, 008-S PR #772, 009-S PR #774 (semua OPEN beda topik). ID 010 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+
+### 0. Ringkasan
+
+Karyawan lupa absen / salah jam hari ini hanya bisa diperbaiki petugas yang mengedit rekod absensi langsung — tanpa jejak bahwa karyawan mengajukan dan atasan menyetujui. Spec ini mendefinisikan pengajuan koreksi absensi: karyawan mengajukan nilai usulan untuk tanggalnya sendiri, penyetuju dalam scope memutuskan, dan HANYA persetujuan yang mengubah rekod `Attendance` — lewat aksi tulis existing, bukan penulis kedua.
+
+### 1. Inventarisasi terverifikasi (origin/main 8dff1a60, 2026-10-25 01:33 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Attendance`: `prisma/schema.prisma:3262` — `employeeId`, `date`, `checkIn/checkOut` + lat/long, `status`, `overtimeMinutes`, `lateMinutes`, `notes`; unik `[employeeId, date]`.
+- Satu-satunya penulis rekod: `createAttendance` (`src/actions/hrm.actions.ts:3676`, izin `create_attendance` + `getHrScope` + `assertHrEmployeeAccess`), `updateAttendance` (:3713, `edit_attendance` + scope pada baris lama & baru), `deleteAttendance` (:3760, `manage_attendance`).
+- Katalog izin absensi: `create_attendance` di `src/lib/auth/module-catalog.generated.ts:282`; pola pengajuan+persetujuan existing untuk objek HR lain: `create_leave_requests` :289 / `approve_leave_requests` :292, model `LeaveRequest` (schema:3320, status default `pending`, `approvedBy`, `rejectionReason`).
+- Penjaga scope fail-closed: `getHrScope`/`assertHrEmployeeAccess` di `src/lib/auth/hr-scope.ts:67`.
+- Halaman absensi operasional + ubah per baris: `src/app/(dashboard)/sdm/absensi/` (daftar, tambah, `[id]/ubah`).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN: objek pengajuan koreksi absensi — grep `attendanceCorrection|correctionRequest|koreksi absensi` di prisma/src = kosong. Tidak ada status pending/approved untuk perubahan absensi; edit petugas langsung mengubah rekod final tanpa rekod pengajuan.
+- PARSIAL: `Attendance` tidak menyimpan siapa mengubah terakhir / alasan ubah pada modelnya; jejak ubah petugas tidak terstruktur sebagai pengajuan karyawan.
+
+### 2. Workflow specification
+
+Aktor: Karyawan (pengaju, self), Penyetuju (atasan/HR dalam `getHrScope` — pola persetujuan cuti/lembur existing), Petugas absensi (pemilik aksi tulis existing).
+
+Alur:
+1. Karyawan membuka absensinya (tanggal dalam jendela yang diputus Q-AC-1), memilih tanggal, mengisi nilai usulan: status usulan dan/atau jam masuk/keluar usulan + alasan wajib.
+2. Sistem menyimpan pengajuan berstatus `pending`. Rekod `Attendance` TIDAK berubah pada tahap ini — nilai berjalan tetap nilai rekod induk.
+3. Bila rekod tanggal itu belum ada (lupa absen total), pengajuan berbentuk usulan rekod baru; tetap tidak membuat rekod sampai disetujui.
+4. Penyetuju dalam scope melihat antrean pending (pola F-2026-10-25-007-S), membandingkan nilai berjalan vs usulan, lalu menyetujui atau menolak beralasan.
+5. Persetujuan menjalankan jalur tulis existing (`updateAttendance`/`createAttendance` semantik) dalam transaksi yang sama dengan flip status pengajuan — tidak ada penulis `Attendance` kedua.
+6. Penolakan menyimpan alasan; karyawan dapat mengajukan baru (pengajuan ditolak tidak bisa diedit jadi pengajuan lain).
+
+Dokumen masuk: rekod `Attendance` berjalan (atau ketiadaannya) + pengajuan. Dokumen keluar: rekod `Attendance` terbarui/terbuat oleh persetujuan + rekod pengajuan final.
+
+### 3. Role/permission matrix
+
+| Aksi | Karyawan (self) | Kepala bengkel / atasan (scope dept/team) | HR/Admin/GA (all) | Di luar scope |
+|---|---|---|---|---|
+| Buat pengajuan tanggal SENDIRI | YA | YA (miliknya) | YA (miliknya) | TIDAK |
+| Lihat pengajuan sendiri | YA | YA | YA | TIDAK |
+| Setujui/tolak pengajuan bawahan dalam scope | TIDAK | YA (Q-AC-2 izin persisnya) | YA | TIDAK |
+| Edit rekod Attendance langsung (jalur petugas existing) | TIDAK | sesuai izin existing | sesuai izin existing | TIDAK |
+| Ubah pengajuan pending milik orang lain | TIDAK | TIDAK | TIDAK | TIDAK |
+
+Izin usulan: key pengajuan mengikuti pola `create_leave_requests`/`approve_leave_requests` (nama final = Backend/Lead, Q-AC-2). Self dibatasi `employeeId` login persis lewat scope, fail-closed tanpa Employee tertaut.
+
+### 4. Status-transition matrix
+
+Pengajuan koreksi (objek BARU, fisik = Backend sesudah putusan):
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| — (belum ada) | Karyawan kirim pengajuan | `pending` | self persis + alasan wajib + jendela Q-AC-1 |
+| `pending` | Penyetuju menyetujui | `approved` + rekod induk berubah dalam transaksi sama | scope penyetuju + izin approve |
+| `pending` | Penyetuju menolak beralasan | `rejected` (final) | scope penyetuju + alasan wajib |
+| `pending` | Karyawan membatalkan sebelum diputus | `cancelled` (final) | hanya pengaju sendiri |
+| `approved/rejected/cancelled` | — | final, tidak berubah | pengajuan baru bila perlu |
+
+Rekod `Attendance` sendiri: status/jamnya hanya berubah pada baris "pending → approved" di atas, atau jalur petugas existing yang tidak diubah spec ini.
+
+### 5. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-AC-01 | Pengajuan TIDAK mengubah rekod induk; yang tampil & terhitung payroll tetap rekod `Attendance` berjalan sampai persetujuan | USULAN | unik [employeeId,date] schema:3281; penulis tunggal hrm.actions.ts:3676/3713 |
+| BR-AC-02 | Persetujuan + perubahan rekod induk = satu transaksi; gagal tulis induk = pengajuan tetap pending | USULAN | pola klaim atomik payroll existing |
+| BR-AC-03 | Satu tanggal hanya boleh punya SATU pengajuan pending per karyawan; pengajuan kedua ditolak sampai yang pertama final | USULAN | cegah dua usulan bersaing untuk kunci unik sama |
+| BR-AC-04 | Alasan pengajuan wajib; alasan penolakan wajib; keduanya tersimpan di rekod pengajuan | USULAN | pola `rejectionReason` LeaveRequest schema:3330 |
+| BR-AC-05 | Koreksi atas tanggal yang slip payroll-nya sudah terbit (approved/paid) TIDAK mengubah slip terbit; perlakuan selisihnya di luar spec ini | BUTUH-VONIS (Accountant bila menyentuh angka slip; Lead untuk perilaku kunci periode) | slip final = rekod Payroll schema:3563; rapel/koreksi periode berikut belum ada di kode (belum terverifikasi ada) |
+| BR-AC-06 | Nilai usulan dibatasi field rekod existing (status, checkIn, checkOut, notes); koordinat lokasi rekod berjalan tidak ditulis ulang oleh koreksi | USULAN | model Attendance schema:3262 |
+| BR-AC-07 | Pengaju = employeeId login persis (fail-closed tanpa Employee tertaut); penyetuju ditentukan scope, bukan pilihan bebas pengaju | USULAN di atas TERVERIFIKASI-KODE | `hr-scope.ts:67` |
+| BR-AC-08 | Edit langsung petugas existing tetap sah untuk koreksi operasional non-pengajuan; spec ini menambah jalur karyawan, tidak menghapus jalur petugas | USULAN | hrm.actions.ts:3713 |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+Benchmark resmi (akses 2026-10-25):
+- Zahir HR — ESS (Employee Self Service) + Approval Management: pengajuan karyawan (cuti, lembur, reimburse, ganti jadwal) berjalan lewat jalur persetujuan atasan berjenjang: https://zahir.co.id/hr/ dan daftar fitur https://zahirerp.com/id/all-features-of-zahir-products/ (akses run ini).
+- Accurate — koreksi absensi mandiri spesifik: BELUM TERVERIFIKASI dari help.accurate.id pada run ini (pencarian hanya menemukan absensi digital POS + hak akses karyawan); tidak diklaim sebagai benchmark.
+
+| Kemampuan | Zahir HR | Accurate | ISF kini | ISF usulan (spec ini) |
+|---|---|---|---|---|
+| Karyawan mengajukan perbaikan kehadiran sendiri | ESS + approval (BENCHMARK, kategori pengajuan) | belum terverifikasi | TIDAK (edit petugas langsung) | YA, pengajuan pending |
+| Rekod berubah hanya sesudah persetujuan | YA (BENCHMARK) | belum terverifikasi | TIDAK berlaku (tidak ada pengajuan) | YA (BR-AC-01/02) |
+| Jejak alasan ajukan/tolak | audit trail (BENCHMARK umum) | belum terverifikasi | TIDAK terstruktur | YA (BR-AC-04) |
+
+### 7. Acceptance criteria + edge cases
+
+AC (falsifikasi QA atas head Backend/Frontend persis):
+- AC-AC-1: Karyawan A mengajukan koreksi tanggal X; rekod Attendance X identik sebelum & sesudah pengajuan (pending tidak mengubah induk).
+- AC-AC-2: Persetujuan oleh penyetuju dalam scope mengubah rekod X ke nilai usulan + pengajuan jadi approved, atomik; kegagalan tulis induk menggagalkan flip status.
+- AC-AC-3: A mengajukan untuk employeeId B (manipulasi payload) → ditolak scope; penyetuju luar scope memutuskan pengajuan A → ditolak.
+- AC-AC-4: Dua pengajuan pending untuk tanggal sama oleh karyawan sama → kedua ditolak (BR-AC-03).
+- AC-AC-5: Penolakan tanpa alasan → ditolak; pengajuan rejected tidak mengubah rekod dan tidak bisa disetujui sesudahnya.
+- AC-AC-6: Pengajuan tanggal tanpa rekod (lupa absen total) yang disetujui membuat tepat satu rekod (kunci unik employeeId+date tidak dobel).
+
+Edge cases:
+- EC-1: Rekod induk diedit petugas saat pengajuan pending — persetujuan menerapkan usulan di atas nilai terbaru atau ditolak konflik; perilaku persisnya Q-AC-3 Backend (spec mewajibkan: tidak menimpa diam-diam tanpa terlihat penyetuju; nilai berjalan tampil di layar putusan).
+- EC-2: Tanggal yang slip payroll-nya sudah approved/paid — pengajuan boleh tercatat, persetujuan TIDAK mengubah slip terbit (BR-AC-05, menunggu vonis).
+- EC-3: Karyawan berhenti di tengah pending — pengajuan tetap bisa diputus penyetuju; tidak terhapus otomatis.
+- EC-4: Usulan jam keluar < jam masuk (lintas tengah malam shift malam) — validasi mengikuti aturan updateAttendance existing; spec tidak membuat aturan jam baru.
+
+### 8. Pertanyaan terbuka (pemilik putusan)
+
+- Q-AC-1 (Lead): jendela pengajuan — berapa hari ke belakang dari hari ini karyawan boleh mengajukan (rekomendasi Business: bulan berjalan + bulan lalu sebelum payroll final; angka persis putusan Lead).
+- Q-AC-2 (Lead + Backend): izin persis pengajuan/persetujuan (key baru pola leave vs reuse izin attendance) + siapa penyetuju sah per scope (atasan langsung vs kepala departemen vs HR).
+- Q-AC-3 (Backend): fisik objek pengajuan (model baru vs pola existing), deteksi konflik EC-1, dan pemetaan persetujuan ke aksi tulis existing tanpa penulis kedua.
+- Q-AC-4 (Accountant): perlakuan koreksi yang disetujui sesudah slip terbit (BR-AC-05) — di luar spec sampai divonis; tahap 1 boleh mengunci persetujuan untuk tanggal berslip final bila vonis belum ada.
+
+### 9. Backlog implementasi (turunan F-2026-10-25-010-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-010-S | Spec ini (dokumen) | Business | — |
+| (turunan) fisik pengajuan + aksi ajukan/putus + penerapan atomik ke rekod induk | Backend | Q-AC-1/2/3 diputus; Q-AC-4 atau kunci tahap 1 | — |
+| (turunan) form pengajuan karyawan + antrean putusan penyetuju (nilai berjalan vs usulan) | Frontend | kontrak Backend stabil | — |
+| (turunan) falsifikasi AC-AC-1..6 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+
+- Absensi mandiri check-in/out oleh karyawan (ESS absen langsung): objek dan risiko lokasi/GPS berbeda; spec ini hanya koreksi atas rekod yang dikelola petugas.
+- Menghapus/membatasi edit langsung petugas: jalur operasional sah tetap diperlukan (BR-AC-08).
+- Rapel/koreksi payroll periode berikut: menunggu vonis Accountant Q-AC-4.
+- Notifikasi WA/email pengajuan: kanal belum ada; antrean dalam aplikasi dulu.
+
+F-2026-10-25-010-S — Pengajuan koreksi absensi karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-AC-1/2, fisik Backend Q-AC-3, vonis Accountant Q-AC-4 untuk kasus slip terbit. Pemilik usulan: Business (spec), Lead (putusan perilaku), Backend (fisik), Frontend (konsumen), QA (falsifikasi), Accountant (kasus slip terbit saja). Butuh putusan accountant: YA terbatas BR-AC-05/Q-AC-4.
