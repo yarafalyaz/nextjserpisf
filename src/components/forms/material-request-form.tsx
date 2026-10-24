@@ -36,6 +36,34 @@ interface RequestItem {
   uid: string
 }
 
+function WarehouseField({ id, label, placeholder, value, options, onCreatedWarehouse, onChange }: {
+  id: string
+  label: string
+  placeholder: string
+  value: string
+  options: { id: number; name: string }[]
+  onCreatedWarehouse: (w: { id: number; name: string }) => void
+  onChange: (key: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label} <span className="text-destructive" aria-hidden="true">*</span></Label>
+      <QuickAddSelect
+        required
+        id={id}
+        options={options.map((w) => ({ value: String(w.id), label: w.name }))}
+        value={value || null}
+        onChange={(key) => onChange(key ? String(key) : "")}
+        placeholder={placeholder}
+        title={QUICK_ADD.warehouse.title}
+        fields={QUICK_ADD.warehouse.fields}
+        action={QUICK_ADD.warehouse.action}
+        onCreated={(created) => { onCreatedWarehouse({ id: created.id, name: created.label }); onChange(String(created.id)) }}
+      />
+    </div>
+  )
+}
+
 export function MaterialRequestForm({ warehouses, items, workOrders, request }: MaterialRequestFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -98,42 +126,8 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} aria-label={request?.id ? "Formulir ubah permintaan antar gudang" : "Formulir tambah permintaan antar gudang"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="requesterWarehouseId">Gudang Tujuan <span className="text-destructive" aria-hidden="true">*</span></Label>
-          <QuickAddSelect
-            required
-            id="requesterWarehouseId"
-            options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
-            value={requesterId || null}
-            onChange={(key) => setRequesterId(key ? String(key) : "")}
-            placeholder="Cari gudang tujuan..."
-            title={QUICK_ADD.warehouse.title}
-            fields={QUICK_ADD.warehouse.fields}
-            action={QUICK_ADD.warehouse.action}
-            onCreated={(created) => {
-              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
-              setRequesterId(String(created.id))
-            }}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="sourceWarehouseId">Gudang Sumber <span className="text-destructive" aria-hidden="true">*</span></Label>
-          <QuickAddSelect
-            required
-            id="sourceWarehouseId"
-            options={warehouseOptions.filter((w) => String(w.id) !== requesterId).map((w) => ({ value: String(w.id), label: w.name }))}
-            value={sourceId || null}
-            onChange={(key) => setSourceId(key ? String(key) : "")}
-            placeholder="Cari gudang sumber..."
-            title={QUICK_ADD.warehouse.title}
-            fields={QUICK_ADD.warehouse.fields}
-            action={QUICK_ADD.warehouse.action}
-            onCreated={(created) => {
-              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
-              setSourceId(String(created.id))
-            }}
-          />
-        </div>
+        <WarehouseField id="requesterWarehouseId" label="Gudang Tujuan" placeholder="Cari gudang tujuan..." value={requesterId} options={warehouseOptions} onCreatedWarehouse={(w) => setWarehouseOptions((prev) => [...prev, w])} onChange={setRequesterId} />
+        <WarehouseField id="sourceWarehouseId" label="Gudang Sumber" placeholder="Cari gudang sumber..." value={sourceId} options={warehouseOptions.filter((w) => String(w.id) !== requesterId)} onCreatedWarehouse={(w) => setWarehouseOptions((prev) => [...prev, w])} onChange={setSourceId} />
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="workOrderId">Perintah Kerja</Label>
           <Combobox
