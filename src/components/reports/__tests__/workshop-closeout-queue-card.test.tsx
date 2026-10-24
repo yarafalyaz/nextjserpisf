@@ -18,7 +18,8 @@ import {
   buildWorkshopCloseoutQueue,
   type CloseoutQueueJobInput,
 } from "@/lib/reports/workshop-closeout-queue"
-import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { renderCard, unmountCard, clearRenderedCards, setFieldValue } from "./card-test-utils"
+import { act } from "react"
 import { closeoutJobInput } from "./workshop-closeout-test-fixtures"
 
 const AS_OF = new Date(2026, 9, 24, 0, 0)
@@ -156,6 +157,84 @@ describe("WorkshopCloseoutQueueCard F-2026-10-24-097-S S3", () => {
     })
     expect(closeWorkOrder).not.toHaveBeenCalled()
     expect(closeProductionOrder).not.toHaveBeenCalled()
+    unmountCard(root)
+  })
+
+  it("konfirmasi WO: closeWorkOrder 1x (id, alasan trim), closeProductionOrder 0x", async () => {
+    const queue = buildWorkshopCloseoutQueue({ jobs: [jobInput({})], asOf: AS_OF })
+    const { container, root } = renderCard(
+      <WorkshopCloseoutQueueCard queue={queue} canCloseWorkOrder canCloseProductionOrder={false} />,
+    )
+    act(() => {
+      ;(container.querySelector('[aria-label="Tutup Job WO-0001"]') as HTMLButtonElement).click()
+    })
+    await vi.waitFor(() => {
+      expect(document.body.querySelector("#closeout-reason")).not.toBeNull()
+    })
+    act(() => {
+      setFieldValue(document.body, "#closeout-reason", "  Rekonsiliasi bersih  ")
+    })
+    const confirm = [...document.body.querySelectorAll("button")].find(
+      (b) => b.textContent === "Ya, Tutup Job",
+    )
+    expect(confirm).toBeDefined()
+    act(() => {
+      confirm!.click()
+    })
+    await vi.waitFor(() => {
+      expect(closeWorkOrder).toHaveBeenCalledTimes(1)
+    })
+    expect(closeWorkOrder).toHaveBeenCalledWith(1, "Rekonsiliasi bersih")
+    expect(closeProductionOrder).not.toHaveBeenCalled()
+    unmountCard(root)
+  })
+
+  it("konfirmasi PO: closeProductionOrder 1x (id, alasan trim), closeWorkOrder 0x", async () => {
+    const queue = buildWorkshopCloseoutQueue({
+      jobs: [
+        jobInput({
+          kind: "production_order",
+          id: 9,
+          slug: "po-9",
+          documentNo: "PO-0009",
+          qty: 2,
+          completedQty: 2,
+          totalActualCost: 0,
+          productName: "Bumper Depan",
+          workOrderDocumentNo: "WO-0001",
+          workOrderId: 1,
+          customerName: null,
+          plateNumber: null,
+          vehicleLabel: null,
+        }),
+      ],
+      asOf: AS_OF,
+    })
+    expect(queue.jobs[0].readyToClose).toBe(true)
+    const { container, root } = renderCard(
+      <WorkshopCloseoutQueueCard queue={queue} canCloseWorkOrder={false} canCloseProductionOrder />,
+    )
+    act(() => {
+      ;(container.querySelector('[aria-label="Tutup Job PO-0009"]') as HTMLButtonElement).click()
+    })
+    await vi.waitFor(() => {
+      expect(document.body.querySelector("#closeout-reason")).not.toBeNull()
+    })
+    act(() => {
+      setFieldValue(document.body, "#closeout-reason", "  WIP nol, QC lolos  ")
+    })
+    const confirm = [...document.body.querySelectorAll("button")].find(
+      (b) => b.textContent === "Ya, Tutup Job",
+    )
+    expect(confirm).toBeDefined()
+    act(() => {
+      confirm!.click()
+    })
+    await vi.waitFor(() => {
+      expect(closeProductionOrder).toHaveBeenCalledTimes(1)
+    })
+    expect(closeProductionOrder).toHaveBeenCalledWith(9, "WIP nol, QC lolos")
+    expect(closeWorkOrder).not.toHaveBeenCalled()
     unmountCard(root)
   })
 })
