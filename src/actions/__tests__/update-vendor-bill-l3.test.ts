@@ -5,126 +5,85 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * yang ada di createVendorBill/confirmVendorBill. Draft non-L3 bisa diedit
  * menjadi bertanda L3 + tertaut PO/GR dan lolos tanpa ActivityLog WO, tanpa
  * guard duplikat, tanpa cek WO-closed. Tes ini mengunci perilaku edit-L3:
- * (1) edit menambah penanda+PO ditolak, (2) edit menambah penanda+GR existing
- * ditolak, (3) edit penanda sah menulis ActivityLog, (4) duplikat via edit
- * ditolak, (5) edit tanpa penanda utuh (non-L3 tidak menulis ActivityLog).
+ * edit+tautan ditolak, edit sah menulis ActivityLog, duplikat ditolak,
+ * edit non-L3 utuh.
  */
 
-const mocks = vi.hoisted(() => {
-  const txMock: any = {
+const h = vi.hoisted(() => {
+  const model = () => ({
+    findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
+    findFirst: vi.fn().mockResolvedValue(null),
+    findMany: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue({}),
+    update: vi.fn(),
+    aggregate: vi.fn().mockResolvedValue({ _sum: { subtotal: 0, grandTotal: 0 } }),
+    deleteMany: vi.fn(),
+    createMany: vi.fn().mockResolvedValue({ count: 0 }),
+  });
+  const tx: Record<string, any> = {
     $executeRaw: vi.fn().mockResolvedValue(1),
-    purchaseOrder: {
-      findUniqueOrThrow: vi.fn(),
-      findUnique: vi.fn().mockResolvedValue(null),
-    },
-    goodsReceipt: {
-      findUnique: vi.fn(),
-      findMany: vi.fn().mockResolvedValue([]),
-    },
-    goodsReceiptItem: { findMany: vi.fn().mockResolvedValue([]) },
-    vendorBill: {
-      create: vi.fn(),
-      update: vi.fn(),
-      aggregate: vi.fn().mockResolvedValue({ _sum: { subtotal: 0, grandTotal: 0 } }),
-      findUnique: vi.fn(),
-      findFirst: vi.fn().mockResolvedValue(null),
-    },
-    vendorBillItem: {
-      createMany: vi.fn().mockResolvedValue({ count: 0 }),
-      deleteMany: vi.fn(),
-      aggregate: vi.fn().mockResolvedValue({ _sum: { subtotal: 0 } }),
-    },
-    item: { findMany: vi.fn().mockResolvedValue([]) },
-    workOrder: { findUnique: vi.fn() },
-    activityLog: {
-      findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn().mockResolvedValue({}),
-    },
-    journal: { findFirst: vi.fn().mockResolvedValue(null) },
+    purchaseOrder: model(),
+    goodsReceipt: model(),
+    goodsReceiptItem: model(),
+    vendorBill: model(),
+    vendorBillItem: model(),
+    item: model(),
+    workOrder: model(),
+    activityLog: model(),
+    journal: model(),
   };
-
-  const prismaMock: any = {
-    vendorBill: {
-      findFirst: vi.fn().mockResolvedValue(null),
-      findUniqueOrThrow: vi.fn(),
-      findUnique: vi.fn(),
-    },
-    $transaction: vi.fn(async (ops: any) => {
-      if (typeof ops === "function") return ops(txMock);
-      return Promise.all(ops);
-    }),
+  const prisma: Record<string, any> = {
+    vendorBill: model(),
+    $transaction: vi.fn(async (fn: any) => fn(tx)),
   };
-
   return {
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1 }),
-    onVendorBillPostedMock: vi.fn().mockResolvedValue(undefined),
-    deleteJournalByReferenceTxMock: vi.fn().mockResolvedValue(undefined),
-    prismaMock,
-    txMock,
+    tx,
+    prisma,
+    user: vi.fn().mockResolvedValue({ id: 1 }),
+    posted: vi.fn().mockResolvedValue(undefined),
+    deleteJournal: vi.fn().mockResolvedValue(undefined),
   };
 });
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }));
-vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermissionMock }));
+vi.mock("@/lib/db/prisma", () => ({ prisma: h.prisma }));
+vi.mock("@/lib/auth/permissions", () => ({ requirePermission: h.user }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }));
 vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onVendorBillPosted: mocks.onVendorBillPostedMock,
+  onVendorBillPosted: h.posted,
   onVendorPaymentCreated: vi.fn().mockResolvedValue(undefined),
   deleteJournalByReference: vi.fn().mockResolvedValue(undefined),
-  deleteJournalByReferenceTx: mocks.deleteJournalByReferenceTxMock,
+  deleteJournalByReferenceTx: h.deleteJournal,
 }));
 
 import { updateVendorBill } from "../purchase.actions";
 
-function fd(payload: Record<string, string | number | null | undefined>): FormData {
+const NOTES_L3 = "BIAYA TELAT NON-JOB L3 | WO: WO-0007 | Alasan: jasa bubut telat";
+
+function form(extra: Record<string, string | number> = {}): FormData {
   const f = new FormData();
-  for (const [k, v] of Object.entries(payload)) {
-    if (v !== null && v !== undefined) f.append(k, String(v));
-  }
-  return f;
-}
-
-const L3_NOTES = "BIAYA TELAT NON-JOB L3 | WO: WO-0007 | Alasan: jasa bubut telat";
-
-function editForm(extra: Record<string, string | number> = {}) {
-  return fd({
+  const payload: Record<string, string | number> = {
     vendorId: 3,
     date: "2026-10-24",
     subtotal: 150000,
     tax: 0,
     grandTotal: 150000,
     ...extra,
-  });
+  };
+  for (const [k, v] of Object.entries(payload)) f.append(k, String(v));
+  return f;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
-  mocks.requirePermissionMock.mockResolvedValue({ id: 1 });
-  mocks.onVendorBillPostedMock.mockResolvedValue(undefined);
-  mocks.deleteJournalByReferenceTxMock.mockResolvedValue(undefined);
-  mocks.prismaMock.vendorBill.findFirst.mockResolvedValue(null);
-  mocks.txMock.$executeRaw.mockResolvedValue(1);
-  mocks.txMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0, grandTotal: 0 } });
-  mocks.txMock.vendorBill.findUnique.mockResolvedValue({ status: "draft" });
-  mocks.txMock.vendorBill.update.mockResolvedValue({
-    id: 900,
-    documentNo: "BILL-900",
-    purchaseOrderId: null,
-    goodsReceiptId: null,
-  });
-  mocks.txMock.workOrder.findUnique.mockResolvedValue({
-    id: 7,
-    documentNo: "WO-0007",
-    status: "closed",
-  });
-  mocks.txMock.activityLog.findMany.mockResolvedValue([]);
-  mocks.txMock.activityLog.create.mockResolvedValue({});
-  mocks.txMock.journal.findFirst.mockResolvedValue(null);
-  // Tagihan existing: draft non-L3 tanpa tautan.
-  mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+  h.user.mockResolvedValue({ id: 1 });
+  h.posted.mockResolvedValue(undefined);
+  h.deleteJournal.mockResolvedValue(undefined);
+  // Tagihan existing: draft non-L3 tanpa tautan; WO L3 closed; tanpa duplikat.
+  h.prisma.vendorBill.findUniqueOrThrow.mockResolvedValue({
     id: 900,
     documentNo: "BILL-900",
     status: "draft",
@@ -132,20 +91,33 @@ beforeEach(() => {
     goodsReceiptId: null,
     paidAmount: 0,
   });
+  h.tx.vendorBill.findFirst.mockResolvedValue(null);
+  h.tx.vendorBill.findUnique.mockResolvedValue({ status: "draft" });
+  h.tx.vendorBill.update.mockResolvedValue({
+    id: 900,
+    documentNo: "BILL-900",
+    purchaseOrderId: null,
+    goodsReceiptId: null,
+  });
+  h.tx.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0, grandTotal: 0 } });
+  h.tx.workOrder.findUnique.mockResolvedValue({ id: 7, documentNo: "WO-0007", status: "closed" });
+  h.tx.activityLog.findMany.mockResolvedValue([]);
+  h.tx.activityLog.create.mockResolvedValue({});
+  h.tx.journal.findFirst.mockResolvedValue(null);
 });
 
 describe("updateVendorBill jalur L3 (temuan QA E133)", () => {
   it("edit menambah penanda L3 + tautan PO ditolak, tagihan tidak ditulis", async () => {
-    const res = await updateVendorBill(900, editForm({ notes: L3_NOTES, purchaseOrderId: 50 }));
+    const res = await updateVendorBill(900, form({ notes: NOTES_L3, purchaseOrderId: 50 }));
 
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/dilarang tertaut PO/);
-    expect(mocks.txMock.vendorBill.update).not.toHaveBeenCalled();
-    expect(mocks.txMock.activityLog.create).not.toHaveBeenCalled();
+    expect(h.tx.vendorBill.update).not.toHaveBeenCalled();
+    expect(h.tx.activityLog.create).not.toHaveBeenCalled();
   });
 
   it("edit menambah penanda L3 pada tagihan bertautan GR existing ditolak", async () => {
-    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+    h.prisma.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 900,
       documentNo: "BILL-900",
       status: "draft",
@@ -154,40 +126,33 @@ describe("updateVendorBill jalur L3 (temuan QA E133)", () => {
       paidAmount: 0,
     });
 
-    const res = await updateVendorBill(900, editForm({ notes: L3_NOTES }));
+    const res = await updateVendorBill(900, form({ notes: NOTES_L3 }));
 
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/dilarang tertaut PO/);
-    expect(mocks.txMock.vendorBill.update).not.toHaveBeenCalled();
-    expect(mocks.txMock.activityLog.create).not.toHaveBeenCalled();
+    expect(h.tx.vendorBill.update).not.toHaveBeenCalled();
+    expect(h.tx.activityLog.create).not.toHaveBeenCalled();
   });
 
-  it("edit menambah penanda L3 sah: WO belum closed ditolak", async () => {
-    mocks.txMock.workOrder.findUnique.mockResolvedValue({
-      id: 7,
-      documentNo: "WO-0007",
-      status: "completed",
-    });
+  it("edit penanda L3 dengan WO belum closed ditolak", async () => {
+    h.tx.workOrder.findUnique.mockResolvedValue({ id: 7, documentNo: "WO-0007", status: "completed" });
 
-    const res = await updateVendorBill(900, editForm({ notes: L3_NOTES }));
+    const res = await updateVendorBill(900, form({ notes: NOTES_L3 }));
 
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/bukan closed/);
-    expect(mocks.txMock.vendorBill.update).not.toHaveBeenCalled();
+    expect(h.tx.vendorBill.update).not.toHaveBeenCalled();
   });
 
   it("edit menambah penanda L3 sah menulis ActivityLog WO dalam tx edit", async () => {
-    const res = await updateVendorBill(900, editForm({ notes: L3_NOTES }));
+    const res = await updateVendorBill(900, form({ notes: NOTES_L3 }));
 
     expect(res.success).toBe(true);
-    expect(mocks.txMock.vendorBill.update).toHaveBeenCalledTimes(1);
-    expect(mocks.txMock.activityLog.create).toHaveBeenCalledTimes(1);
-    const arg = mocks.txMock.activityLog.create.mock.calls[0][0];
-    expect(arg.data.modelType).toBe("WorkOrder");
-    expect(arg.data.modelId).toBe(7);
-    expect(arg.data.action).toBe("late_cost_l3");
-    const meta = JSON.parse(arg.data.metadata);
-    expect(meta).toMatchObject({
+    expect(h.tx.vendorBill.update).toHaveBeenCalledTimes(1);
+    expect(h.tx.activityLog.create).toHaveBeenCalledTimes(1);
+    const data = h.tx.activityLog.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ modelType: "WorkOrder", modelId: 7, action: "late_cost_l3" });
+    expect(JSON.parse(data.metadata)).toMatchObject({
       sourceType: "VendorBill",
       sourceId: 900,
       sourceDocumentNo: "BILL-900",
@@ -198,8 +163,7 @@ describe("updateVendorBill jalur L3 (temuan QA E133)", () => {
   });
 
   it("duplikat L3 via edit ditolak (dokumen L3 aktif lain, vendor+nominal+tanggal sama)", async () => {
-    // ActivityLog L3 milik VendorBill 11 (bukan dokumen ini) masih aktif.
-    mocks.txMock.activityLog.findMany.mockResolvedValue([
+    h.tx.activityLog.findMany.mockResolvedValue([
       {
         metadata: JSON.stringify({
           sourceType: "VendorBill",
@@ -210,22 +174,21 @@ describe("updateVendorBill jalur L3 (temuan QA E133)", () => {
         }),
       },
     ]);
-    mocks.txMock.vendorBill.findUnique.mockImplementation(async (args: any) =>
-      args?.where?.id === 11
-        ? { status: "posted", deletedAt: null }
-        : { status: "draft" },
+    // findUnique id 900 = cek status in-tx; id 11 = cek dokumen duplikat aktif.
+    h.tx.vendorBill.findUnique.mockImplementation(async ({ where }: any) =>
+      where.id === 11 ? { status: "posted", deletedAt: null } : { status: "draft" },
     );
 
-    const res = await updateVendorBill(900, editForm({ notes: L3_NOTES }));
+    const res = await updateVendorBill(900, form({ notes: NOTES_L3 }));
 
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/satu kali/);
-    expect(mocks.txMock.vendorBill.update).not.toHaveBeenCalled();
-    expect(mocks.txMock.activityLog.create).not.toHaveBeenCalled();
+    expect(h.tx.vendorBill.update).not.toHaveBeenCalled();
+    expect(h.tx.activityLog.create).not.toHaveBeenCalled();
   });
 
   it("edit dirinya sendiri tidak dianggap duplikat (excludeSource VendorBill ini)", async () => {
-    mocks.txMock.activityLog.findMany.mockResolvedValue([
+    h.tx.activityLog.findMany.mockResolvedValue([
       {
         metadata: JSON.stringify({
           sourceType: "VendorBill",
@@ -237,17 +200,17 @@ describe("updateVendorBill jalur L3 (temuan QA E133)", () => {
       },
     ]);
 
-    const res = await updateVendorBill(900, editForm({ notes: L3_NOTES }));
+    const res = await updateVendorBill(900, form({ notes: NOTES_L3 }));
 
     expect(res.success).toBe(true);
-    expect(mocks.txMock.activityLog.create).toHaveBeenCalledTimes(1);
+    expect(h.tx.activityLog.create).toHaveBeenCalledTimes(1);
   });
 
   it("edit tanpa penanda L3 utuh: tidak menulis ActivityLog L3", async () => {
-    const res = await updateVendorBill(900, editForm({ notes: "catatan biasa" }));
+    const res = await updateVendorBill(900, form({ notes: "catatan biasa" }));
 
     expect(res.success).toBe(true);
-    expect(mocks.txMock.workOrder.findUnique).not.toHaveBeenCalled();
-    expect(mocks.txMock.activityLog.create).not.toHaveBeenCalled();
+    expect(h.tx.workOrder.findUnique).not.toHaveBeenCalled();
+    expect(h.tx.activityLog.create).not.toHaveBeenCalled();
   });
 });
