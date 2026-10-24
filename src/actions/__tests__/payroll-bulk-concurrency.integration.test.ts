@@ -1,7 +1,12 @@
-import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 import { Prisma, PrismaClient } from "@prisma/client"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, expect, it } from "vitest"
 import { findPayrollRangeConflict } from "@/lib/reports/payroll-frequency"
+import {
+  createTestClient,
+  deferred,
+  describeIntegration,
+  warnIntegrationSkip,
+} from "./integration-concurrency-fixtures"
 
 // ============================================================================
 // Tes konkurensi MySQL 8 NYATA untuk penjaga irisan generateBulkPayroll
@@ -71,34 +76,9 @@ import { findPayrollRangeConflict } from "@/lib/reports/payroll-frequency"
 // payrolls). Engine target: MySQL 8.
 // ============================================================================
 
-const INTEGRATION_DB_URL = process.env.INTEGRATION_DB_URL
-
-const describeIntegration = INTEGRATION_DB_URL ? describe : describe.skip
-
-if (!INTEGRATION_DB_URL) {
-  console.warn(
-    "[payroll-bulk-concurrency] SKIP: INTEGRATION_DB_URL tidak diset — " +
-      "tes konkurensi MySQL 8 nyata tidak dijalankan (bukan lulus). " +
-      "Set INTEGRATION_DB_URL ke DB tes termigrasi untuk menjalankannya.",
-  )
-}
-
-function createTestClient(): PrismaClient {
-  return new PrismaClient({
-    adapter: new PrismaMariaDb(INTEGRATION_DB_URL as string),
-  })
-}
+warnIntegrationSkip("payroll-bulk-concurrency")
 
 type Tx = Prisma.TransactionClient
-
-/** Deferred manual: barrier antar-langkah supaya interleaving deterministik. */
-function deferred() {
-  let resolve!: () => void
-  const promise = new Promise<void>((r) => {
-    resolve = r
-  })
-  return { promise, resolve }
-}
 
 interface BulkRow {
   documentNo: string
