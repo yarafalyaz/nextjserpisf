@@ -13278,3 +13278,852 @@ Status: PUTUSAN BOT 4 (kartu t_4410ee95, siklus standby 13:30). Dokumen saja; TA
 Klaim kepatuhan: perlakuan internal ISF berdasar PSAK 46/16/48 sebagai rujukan standar komersial (bukan dasar fiskal) + UU PPh Pasal 19/17 + PMK 79/PMK.03/2008 dari sumber resmi DJP di atas (akses 2026-10-23). BUKAN klaim laporan keuangan/SPT Tahunan sah, bukan penetapan DJP — pengakuan jurnal tangguhan tetap gerbang kebijakan + `BUTUH-VONIS-AKUNTAN` per kasus (F-112-V/F-124-V).
 
 ID vonis ini **F-2026-10-23-125-V** (tertinggi terverifikasi run ini di origin/main 0ad8f864: F-2026-10-23-121-V merged #637; 122-V PR #640, 123-V PR #643, 124-V PR #646 terbuka; 125 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge + urutan inti F-109 -> F-124 -> F-111 -> BOT 3 sumber tangguhan kedua -> BOT 2 -> BOT 6 E125-1..8.
+
+---
+
+## SPEC BOT 5 2026-10-24 — F-2026-10-24-095-S alur penautan klaim vendor atas part cacat garansi pelanggan (induk F-2026-10-21-022)
+
+Kartu t_b670e9f3. Spec DOKUMEN SAJA, tanpa kode produksi/schema/migrasi.
+Anti-duplikat run ini (basis origin/main 50e3e00b): grep `F-2026-10-24-095`
+di backlog+board main = 0 hasil; `-S` tertinggi terbit di main =
+F-2026-10-22-094-S; `F-2026-10-22-095-V` (vonis BOT 4 Q-TGT-1, PR #571
+terbuka) suffix beda (-V vonis, -S spec) bukan tabrakan. Temuan utama
+run ini: induk F-2026-10-21-022 SUDAH terbangun penuh di main (tautan +
+state machine + panel UI + jurnal recovery tahap 3 bergate) — spec ini
+BUKAN desain kosong; spec ini (a) merekonsiliasi nama status di kartu
+tugas dengan kosakata kode live, (b) membekukan aturan bisnis, gerbang
+bukti, dan batas akuntansi sebagai kontrak resmi, (c) mencatat celah
+sisa yang belum terbukti. Dilarang membangun ulang state machine kedua.
+
+### 0. Rekonsiliasi nama status (kartu tugas vs kode live)
+
+Kartu tugas menyebut: intake -> submitted_to_vendor -> vendor_approved /
+vendor_rejected -> completed / closed. Kosakata SAH di kode live
+BERBEDA dan yang berlaku adalah kode (TERVERIFIKASI-KODE):
+
+| Istilah kartu tugas | Status live yang setara | Bukti |
+|---|---|---|
+| intake (klaim vendor dibuka) | `drafted` (sesudah tautan lahir dari `none`) | warranty.service.ts:48-57,66 |
+| submitted_to_vendor | `sent` | warranty.service.ts:52,67 |
+| vendor_approved | `accepted` | warranty.service.ts:52,68-69 |
+| vendor_rejected | `rejected_supplier` | warranty.service.ts:53,70 |
+| (part fisik sudah kembali) | `returned` (cermin baca-silang PurchaseReturn) | warranty.service.ts:54,69-71 |
+| completed (recovery diterima) | `closed_recovered` (terminal) | warranty.service.ts:55,69,71 |
+| closed (tanpa recovery) | `closed_no_recovery` (terminal) | warranty.service.ts:56,69-70 |
+
+`intake` di kode live adalah status KLAIM PELANGGAN (bukan klaim
+vendor): `WARRANTY_CLAIM_STATUSES = intake, eligibility, approved,
+rejected, in_repair, closed` (warranty.service.ts:30-37). Memakai
+`intake` untuk klaim vendor = tabrakan makna; DILARANG. Bila BOT 1
+hendak mengganti kosakata vendor, itu migrasi data + perubahan service
+terpisah — BUKAN bagian spec ini; default spec: kosakata live dipertahankan.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main 50e3e00b, 2026-10-24)
+
+Sudah ada (kuat, JANGAN diduplikasi):
+- Schema: `WarrantyClaim.supplierClaimVendorId/purchaseReturnId/
+  supplierClaimStatus` (default `none`) `/supplierClaimRefNo/
+  supplierClaimNotes/supplierClaimBy/supplierClaimAt` + relasi
+  `supplierClaimVendor` (Vendor, onDelete SetNull) dan `purchaseReturn`
+  (PurchaseReturn, onDelete SetNull) + index keduanya
+  (prisma/schema.prisma:4989-5009). Komentar schema sendiri menegaskan:
+  tautan saja tanpa jurnal prematur; status supplier TERPISAH dari
+  status klaim pelanggan (schema.prisma baris komentar F-2026-10-21-022
+  di atas kolom supplier).
+- State machine: `WARRANTY_SUPPLIER_CLAIM_STATUSES` +
+  `WARRANTY_SUPPLIER_CLAIM_TRANSITIONS` (R1–R8) +
+  `assertSupplierClaimTransition` (warranty.service.ts:48-74,402-408).
+  Terminal hanya `closed_recovered`/`closed_no_recovery`.
+- Lahir tautan: `linkSupplierClaim` (dengan PurchaseReturn draft) dan
+  `linkSupplierClaimVendorOnly` (tanpa PO asal) (warranty.service.ts:
+  479-590). Gerbang S0: klaim pelanggan wajib `approved/in_repair/
+  closed` DAN `resolutionType = replace` (:450-457). Guard retur:
+  retur wajib `draft`, vendor PO retur = vendor klaim, retur memuat
+  `coverage.itemId`, serial cocok bila `coverage.serialNumber` terisi,
+  retur belum tertaut klaim lain yang recovery-nya non-terminal
+  (:496-532). Vendor wajib ada + aktif (:459-471).
+- Transisi + bukti server: `transitionSupplierClaim` (warranty.service
+  .ts:607-688) — `sent` wajib refNo/resi + >=1 foto TransactionAttachment
+  referenceType `WarrantyClaim` + penyetuju != pembuat tautan;
+  `accepted` wajib refNo atau catatan bukti respons; `rejected_supplier`
+  wajib alasan; `returned` wajib PurchaseReturn tertaut sudah
+  `returned`; `closed_recovered` wajib retur `returned` ATAU catatan
+  nomor goods receipt pengganti; `closed_no_recovery` dari `accepted`
+  wajib admin + alasan, dari `rejected_supplier` wajib catatan
+  disposisi; lepas tautan ke `none` hanya dari `drafted` + alasan, dan
+  retur draft existing TIDAK ikut terhapus. Fungsi ini TIDAK PERNAH
+  mengubah status klaim pelanggan (:605 komentar + tidak ada tulis
+  `status` klaim di :675-687).
+- Aksi + izin: `linkSupplierClaimAction` gerbang `edit_warranty_claims`;
+  `transitionSupplierClaimAction`: `sent`/`closed_no_recovery` gerbang
+  `approve_warranty_claims`, langkah lain `edit_warranty_claims`;
+  actorIsAdmin dari role admin/super_admin (src/actions/
+  warranty.actions.ts:117-195). Permission nyata katalog:
+  view/create/edit/approve_warranty_claims
+  (src/lib/auth/module-catalog.generated.ts:257-260). TIDAK ada key
+  izin supplier-claim terpisah — dipakai ulang, jangan karang key baru
+  tanpa putusan BOT 1.
+- UI: panel `warranty-supplier-claim-panel.tsx` label + target transisi
+  disalin dari service (komentar ponytail di berkas: perbarui di PR yang
+  sama bila service berubah; tes panel mengunci); tombol `sent`/
+  `closed_no_recovery` hanya tampil ke pemegang approve. Kata label
+  live: Belum ditautkan / Draf klaim supplier / Terkirim ke supplier /
+  Diterima supplier / Ditolak supplier / Part sudah diretur / Tutup —
+  recovery diterima / Tutup — tanpa recovery.
+- PurchaseReturn: model existing (prisma/schema.prisma:1992),
+  `purchaseOrderId` NOT NULL (karena itu retur tanpa PO asal mustahil
+  lahir — jalur vendor-only §6 service adalah jawaban sah, PO/retur
+  dummy DILARANG); proses retur existing `processPurchaseReturn`
+  (src/actions/purchase.actions.ts:1870) menggerakkan stok/jurnal retur
+  dan mengeset status `returned` — klaim supplier hanya MEMBACA status
+  itu (baca-silang), tidak memproses retur dari panel garansi.
+- Jurnal tahap 3 SUDAH ada dan bergate: `postWarrantySupplierRecovery
+  Journal` E3 (src/lib/services/warranty-journal.service.ts:249-330):
+  hanya status `accepted`/`closed_recovered` + bukti lampiran + WO
+  repair tertaut + nominal > 0 dan <= biaya klaim terverifikasi + akun
+  110508/510104 ter-mapping (fail-closed) + periode terbuka +
+  anti-dobel jurnal per klaim. Jurnal: Dr Piutang Klaim Supplier
+  (110508) / Cr Beban Garansi (510104) — pemulihan biaya, BUKAN
+  pendapatan. UI gate `canPostWarrantySupplierRecovery` (accepted/
+  closed_recovered + repairWorkOrderId) di warranty-journal-route-
+  status.ts:99-110. Vonis dasar: warranty-accounting.ts:31-35,58
+  (PSAK 57: aset recovery hanya bila hampir pasti/virtually certain;
+  belum hampir pasti = tanpa jurnal, cukup pengungkapan kontinjensi).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN spec resmi -S untuk alur ini sebelum spec ini (hanya komentar
+  kode "spec F-022-S §3/§6" dirujuk warranty.service.ts:60,593 tanpa
+  dokumen backlog) — celah yang ditutup spec ini.
+- PARSIAL yang belum terverifikasi run ini (jangan klaim selesai):
+  apakah ada daftar/laporan lintas klaim "recovery supplier masih
+  berjalan" (aging klaim vendor terbuka) — grep run ini tidak menelusur
+  read-model laporan supplier-claim; panel per klaim sudah ada.
+  Status: BELUM TERVERIFIKASI, bukan ABSEN terbukti.
+
+### 2. Workflow specification (alur + aktor + dokumen)
+
+Aktor: Staf garansi/purnajual (edit), Pejabat penilai klaim (approve,
+pihak yang memutus klaim pelanggan), Admin (tutup tanpa recovery dari
+accepted), Gudang/pembelian (pemilik PurchaseReturn + proses retur),
+Akuntansi (posting E3, gerbang approve).
+
+Dokumen masuk: WarrantyClaim pelanggan berstatus approved/in_repair/
+closed + resolutionType replace; WarrantyCoverage (itemId +
+serialNumber acuan); Vendor aktif; PurchaseReturn draft existing
+(dibuat terpisah lewat jalur pembelian existing) ATAU tanpa retur
+(vendor-only). Dokumen keluar: SATU baris WarrantyClaim diperbarui
+(kolom supplier*), PurchaseReturn yang sama diproses jalur existing,
+jurnal E3 (bila syarat tahap 3 terpenuhi, aksi akuntansi terpisah).
+
+Alur:
+1. Klaim pelanggan diputus approved + replace (jalur F-021 existing).
+   Tanpa itu tautan vendor DITOLAK server (S0).
+2. Staf menautkan: pilih vendor aktif + (a) PurchaseReturn draft milik
+   vendor itu yang memuat item+serial cakupan, status supplier jadi
+   `drafted`; atau (b) vendor-only + catatan wajib alasan tanpa PO
+   asal, purchaseReturnId tetap NULL.
+3. Pejabat mengirim (`sent`): nomor klaim/resi + foto bukti part cacat
+   wajib; pengirim != pembuat tautan (pemisahan tugas server).
+4. Respons vendor dicatat: `accepted` (bukti respons wajib) atau
+   `rejected_supplier` (alasan wajib).
+5. Bila vendor meminta part fisik kembali: PurchaseReturn diproses
+   jalur pembelian existing sampai `returned`; staf mencatat
+   `returned` (server baca-silang menolak bila retur belum returned).
+   Bila vendor tidak meminta fisik kembali, langkah ini dilewati sah.
+6. Penutup: `closed_recovered` (retur returned ATAU catatan nomor GR
+   pengganti) atau `closed_no_recovery` (dari rejected: catatan
+   disposisi; dari accepted: hanya admin + alasan).
+7. Akuntansi (terpisah, opsional per klaim): sesudah `accepted`,
+   posting E3 memunculkan piutang klaim supplier sebesar nominal
+   hampir pasti (<= biaya klaim). Penagihan/penyelesaian piutang itu
+   di luar state machine ini (dokumen pembayaran existing; jangan
+   menambah status `paid` di klaim supplier tanpa vonis BOT 4).
+
+### 3. Role/permission matrix (TERVERIFIKASI-KODE, katalog live)
+
+| Aksi | view_warranty_claims | edit_warranty_claims | approve_warranty_claims | Admin (role) |
+|---|---|---|---|---|
+| Lihat klaim + panel supplier | Ya | Ya | Ya | Ya |
+| Tautkan vendor (+retur draft / vendor-only) | Tidak | Ya | Ya | Ya |
+| Lepas tautan (drafted -> none, alasan wajib) | Tidak | Ya | Ya | Ya |
+| Kirim ke vendor (sent) | Tidak | Tidak | Ya (+ != pembuat tautan) | Ya bila approve |
+| Catat accepted / rejected_supplier / returned | Tidak | Ya | Ya | Ya |
+| Tutup recovered | Tidak | Ya | Ya | Ya |
+| Tutup tanpa recovery | Tidak | Tidak | Ya | Dari accepted: wajib admin |
+| Posting jurnal E3 recovery | Tidak | Tidak | Ya (aksi jurnal existing) | Ya bila approve |
+
+Tanpa izin di atas: fail-closed (requirePermission melempar). Tidak
+ada izin supplier-claim baru diusulkan tahap ini (USULAN ditolak:
+key baru = migrasi izin + seed peran, YAGNI selama katalog existing
+mengekspresikan pemisahan edit/approve yang dibutuhkan).
+
+### 4. Status-transition matrix (supplier, TERVERIFIKASI-KODE R1–R8)
+
+| Dari | Pemicu | Ke | Penjaga server |
+|---|---|---|---|
+| none | Tautkan (retur draft / vendor-only) | drafted | Klaim approved/in_repair/closed + replace; vendor aktif; guard item/serial/vendor retur; retur belum tertaut klaim aktif lain |
+| drafted | Kirim | sent | approve; refNo/resi + >=1 foto; pengirim != pembuat tautan |
+| drafted | Lepas tautan | none | edit; alasan wajib; purchaseReturnId dikosongkan di klaim, retur draft existing tidak dihapus |
+| sent | Vendor menerima | accepted | Bukti respons (refNo atau catatan) wajib |
+| sent | Vendor menolak | rejected_supplier | Alasan wajib |
+| accepted | Part fisik sudah diretur | returned | PurchaseReturn tertaut berstatus returned (baca-silang) |
+| accepted | Recovery diterima tanpa retur fisik | closed_recovered | Catatan nomor GR pengganti wajib bila retur belum returned |
+| accepted | Tutup tanpa recovery | closed_no_recovery | approve + admin + alasan wajib |
+| rejected_supplier | Disposisi selesai | closed_no_recovery | Catatan disposisi wajib |
+| returned | Recovery diterima | closed_recovered | (retur sudah returned) |
+| closed_recovered / closed_no_recovery | — | (terminal) | Tidak ada transisi keluar |
+
+Matriks klaim pelanggan TIDAK berubah dan berjalan independen:
+intake -> eligibility -> approved/rejected -> in_repair -> closed
+(warranty.service.ts:77-84). Klaim pelanggan BOLEH `closed` sementara
+klaim supplier masih `drafted/sent/accepted/returned` — tidak ada
+penjaga yang menahan penutupan klaim pelanggan demi recovery supplier,
+dan transisi supplier tidak pernah menulis status klaim pelanggan
+(BR-SUPP-02).
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SUPP-01 | Tautan supplier hanya lahir dari klaim pelanggan approved/in_repair/closed beresolusi replace; repair/reject tidak melahirkan klaim vendor | TERVERIFIKASI-KODE warranty.service.ts:450-457 |
+| BR-SUPP-02 | Status supplier dan status pelanggan dua state machine terpisah; pelanggan boleh closed duluan; supplier tidak pernah mengubah status pelanggan | TERVERIFIKASI-KODE schema komentar F-022 + warranty.service.ts:605-688 |
+| BR-SUPP-03 | PurchaseReturn ditautkan hanya saat masih draft; vendor PO retur = vendor klaim; retur memuat item cakupan; serial cocok bila cakupan berserial; satu retur tidak melayani dua klaim aktif bersamaan | TERVERIFIKASI-KODE warranty.service.ts:496-532 |
+| BR-SUPP-04 | Vendor meminta part fisik kembali -> alur retur existing yang memproses sampai returned; status supplier `returned` adalah cermin baca-silang, bukan input bebas dan bukan proses retur dari panel garansi | TERVERIFIKASI-KODE warranty.service.ts:60-61,644-653; purchase.actions.ts:1870 |
+| BR-SUPP-05 | Tanpa PO asal: jalur vendor-only sah (vendor + ref manual + catatan wajib); PO/retur dummy DILARANG karena PurchaseReturn.purchaseOrderId NOT NULL | TERVERIFIKASI-KODE warranty.service.ts:552-590; schema.prisma:1992 PurchaseReturn |
+| BR-SUPP-06 | Bukti per langkah ditegakkan server (foto+resi+SoD di sent; bukti respons di accepted; alasan di rejected/lepas; GR/disposisi/admin di penutup) — UI menyembunyikan tombol tanpa izin tetapi server penjaga final | TERVERIFIKASI-KODE warranty.service.ts:624-673; warranty.actions.ts:158-181 |
+| BR-SUPP-07 | TIDAK ada jurnal piutang/recovery pada none/drafted/sent/rejected_supplier/returned. Jurnal E3 hanya accepted/closed_recovered + bukti + nominal <= biaya klaim terverifikasi + akun ter-mapping + periode terbuka + anti-dobel. Dr 110508 / Cr 510104 (pemulihan biaya, bukan pendapatan) | TERVERIFIKASI-KODE warranty-journal.service.ts:249-330; vonis dasar warranty-accounting.ts:31-35 PSAK 57 hampir pasti — angka/akun final tetap milik BOT 4, spec ini tidak mengubahnya |
+| BR-SUPP-08 | Recovery melebihi biaya klaim terverifikasi DITOLAK (plafon biaya); nilai part pengganti/gratifikasi vendor di luar biaya klaim bukan recovery garansi — perlakuan selisihnya BUTUH-VONIS BOT 4 sebelum dicatat apa pun | Plafon: TERVERIFIKASI-KODE warranty-journal.service.ts:273-277; selisih: BUTUH-VONIS |
+| BR-SUPP-09 | Lepas tautan hanya dari drafted + alasan; melepaskan klaim tidak menghapus/mengubah PurchaseReturn draft existing (dokumen pembelian berdiri sendiri) | TERVERIFIKASI-KODE warranty.service.ts:671-673,683 |
+| BR-SUPP-10 | Kata tampil memakai label live panel (Terkirim ke supplier, Diterima supplier, dst.); istilah kartu tugas submitted_to_vendor/vendor_approved TIDAK dipakai di UI/dokumen | TERVERIFIKASI-KODE warranty-supplier-claim-panel.tsx label live; rekonsiliasi §0 spec ini |
+| BR-SUPP-11 | Daftar aging "klaim vendor masih terbuka" lintas klaim (untuk tindak lanjut distributor) BELUM terverifikasi ada; bila dibangun: baca-saja, populasi = supplierClaimStatus non-terminal dan bukan none, tanpa jurnal/tanpa mutasi | USULAN (gap belum terbukti ABSEN; verifikasi BOT 3 dulu) |
+| BR-SUPP-12 | Penyelesaian piutang E3 (pelunasan vendor: part pengganti masuk GR / nota kredit / kas) tidak menambah status baru di klaim supplier tanpa vonis BOT 4; closed_recovered menutup alur klaim, penyelesaian piutang hidup di dokumen pembayaran/GR existing | USULAN batas + BUTUH-VONIS untuk bentuk penyelesaian |
+
+### 6. Batas akuntansi (mengikat, PSAK 57)
+
+- Sebelum `accepted`: recovery = aset kontinjensi (PSAK 57 par 31-35
+  via warranty-accounting.ts) — tanpa jurnal, tanpa piutang, tanpa
+  net-off ke provisi/beban garansi. Status operasional selain
+  accepted/closed_recovered TIDAK PERNAH memicu jurnal (E3 menolak
+  berisik, bukan diam).
+- `accepted` = ambang hampir pasti yang dipakai implementasi live.
+  Apakah bukti respons vendor tertentu (email vs surat resmi vs GR
+  pengganti) cukup sebagai "hampir pasti" per kasus = penilaian BOT 4
+  saat audit, BUKAN diubah spec ini. Tahap 3 di kartu tugas ("butuh
+  vonis BOT Accountant") secara kode SUDAH terimplementasi bergate di
+  E3; yang masih terbuka untuk BOT 4: (a) konfirmasi ambang bukti
+  hampir pasti, (b) perlakuan selisih recovery > biaya (BR-SUPP-08),
+  (c) bentuk penyelesaian piutang (BR-SUPP-12), (d) PPN atas nota
+  retur/kredit vendor mengikuti jalur PurchaseReturn existing
+  (taxReturnNoteNumber F-004) — jangan buat perlakuan pajak kedua di
+  klaim supplier.
+
+### 7. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF hari ini (TERVERIFIKASI-KODE) | Spec 095-S |
+|---|---|---|---|---|
+| Klaim pelanggan/garansi | Ada Klaim Pelanggan https://help.accurate.id/product/penjualan/ | Tanpa modul garansi resmi (fasilitas https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang) | Ada F-021 coverage+claim | Tidak diubah |
+| Retur pembelian ke supplier | Ada (retur pembelian penjualan/pembelian umum) | Ada retur umum | Ada PurchaseReturn + proses returned | Dipakai apa adanya, ditautkan |
+| Klaim vendor tertaut klaim pelanggan per serial | Tidak ditemukan sebagai rantai garansi-serial di help resmi yang dirujuk backlog F-021/F-022 | Tidak ada modul setara | ADA: tautan vendor+retur+serial guard F-022 | Dibekukan spec ini |
+| State machine recovery vendor terpisah dari klaim pelanggan | Tidak diteliti sebagai fitur bernama | Tidak ada | ADA R1-R8 | Kontrak §4 |
+| Jurnal recovery hanya saat hampir pasti | Perlakuan akuntansi internal produk, tidak diklaim | Tidak diklaim | ADA E3 bergate PSAK 57 | Batas §6, vonis lanjutan BOT 4 |
+
+Benchmark di atas BENCHMARK terbatas pada URL yang sudah dirujuk
+backlog F-021/F-022 (akses 2026-10-21); run ini tidak mengakses ulang
+help Accurate/Zahir — jangan kutip sebagai verifikasi live 2026-10-24.
+
+### 8. Acceptance criteria AC-SUPP-1..8 (falsifikasi BOT 6)
+
+- AC-SUPP-1: Klaim pelanggan rejected / beresolusi repair / masih
+  intake-eligibility TIDAK bisa ditautkan vendor (server menolak);
+  membuka gerbang S0 = MERAH (BR-SUPP-01).
+- AC-SUPP-2: Retur non-draft, retur vendor lain, retur tanpa item
+  cakupan, serial retur != serial cakupan (bila berserial), retur yang
+  sudah melayani klaim aktif lain: masing-masing ditolak server saat
+  tautan; melonggarkan satu guard = MERAH (BR-SUPP-03).
+- AC-SUPP-3: Sent tanpa refNo/resi, tanpa foto bukti, atau oleh pembuat
+  tautan sendiri: ditolak; accepted tanpa bukti respons, rejected
+  tanpa alasan: ditolak (BR-SUPP-06).
+- AC-SUPP-4: Status supplier `returned` mustahil dicatat saat
+  PurchaseReturn tertaut belum `returned`; memalsukan returned tanpa
+  retur = MERAH (BR-SUPP-04).
+- AC-SUPP-5: Klaim pelanggan ditutup (closed) saat supplier masih
+  sent/accepted BERHASIL dan tidak mengubah status supplier; transisi
+  supplier tidak mengubah status pelanggan (dua arah dibuktikan)
+  (BR-SUPP-02).
+- AC-SUPP-6: Jurnal E3 pada drafted/sent/rejected_supplier/returned
+  DITOLAK dan nol jurnal lahir; pada accepted dengan akun 110508/
+  510104 kosong DITOLAK fail-closed; nominal > biaya klaim DITOLAK;
+  posting kedua untuk klaim sama DITOLAK anti-dobel (BR-SUPP-07/08).
+- AC-SUPP-7: Tanpa edit_warranty_claims tautan/transisi pencatatan
+  ditolak; tanpa approve_warranty_claims sent + closed_no_recovery
+  ditolak; closed_no_recovery dari accepted oleh non-admin ditolak
+  (matriks §3).
+- AC-SUPP-8: Lepas tautan dari drafted mengosongkan purchaseReturnId
+  klaim tetapi PurchaseReturn draft existing tetap ada utuh;
+  closed_recovered/closed_no_recovery terminal (transisi keluar apa
+  pun ditolak); vendor-only tanpa catatan ditolak dan nol PO/retur
+  dummy lahir (BR-SUPP-05/09).
+
+Edge cases tercatat: klaim berserial kosong (guard serial dilewati
+sah, hanya item dicocokkan); vendor dinonaktifkan sesudah tautan
+(tautan existing tidak dicabut otomatis — transisi lanjut memakai
+vendor tersimpan; penggantian vendor = lepas + taut ulang dari
+drafted, di luar drafted tidak ada ganti vendor); retur tertaut
+dibatalkan jalur pembelian (status supplier tidak ikut berubah
+otomatis — staf menutup no_recovery/lepas sesuai bukti, server
+baca-silang saat returned/closed_recovered akan menolak retur yang
+tidak returned); foto bukti dihapus sesudah sent (E3 menghitung ulang
+lampiran saat posting — bukti hilang = E3 menolak).
+
+### 9. Backlog implementasi (turunan spec F-2026-10-24-095-S)
+
+1. BOT 1: terima rekonsiliasi kosakata §0 (live dipertahankan) +
+   putus BR-SUPP-11 (aging klaim vendor dibuka/tidak) bila spec merged.
+2. BOT 3 (@backend-prisma-inventory-workshop): TIDAK ada inti baru
+   untuk state machine/tautan/E3 (sudah live). Satu-satunya verifikasi
+   diminta: telusur read-model laporan klaim supplier terbuka untuk
+   BR-SUPP-11 (ada/belum + file:line), laporkan sebelum UI apa pun.
+3. BOT 2 (@frontend-ui-ux-next-js): TIDAK ada UI baru dari spec ini
+   (panel live). Hanya bila BR-SUPP-11 dibuka BOT 1: tampilkan daftar
+   apa adanya dari read-model BOT 3, label §5/BR-SUPP-10, nol hitung
+   status di UI.
+4. BOT 6: AC-SUPP-1..8 atas implementasi live (falsifikasi guard
+   server, bukan hanya tes panel).
+5. BOT 4 (@accounting-finance-tax): vonis lanjutan §6 (a)-(d) —
+   ambang bukti hampir pasti, selisih > biaya, bentuk penyelesaian
+   piutang E3, konfirmasi jalur pajak retur existing cukup. Spec ini
+   tidak membuka jurnal baru.
+
+### Yang TIDAK diusulkan run ini
+- State machine / kosakata status kedua (submitted_to_vendor dst.):
+  duplikasi makna dengan kode live; rekonsiliasi §0 menutupnya.
+- Izin supplier-claim baru, kolom schema baru, tabel klaim vendor
+  terpisah: model existing mengekspresikan seluruh alur; YAGNI.
+- Auto-buat PurchaseReturn dari panel garansi: retur adalah dokumen
+  pembelian ber-jurnal/stok; lahirnya tetap jalur pembelian existing.
+- Portal/klaim otomatis ke vendor (email/API distributor keluar):
+  kanal keluar tidak ada; pencatatan manual berjejak cukup.
+- Status `paid/lunas` di klaim supplier: penyelesaian piutang =
+  dokumen pembayaran existing + vonis BOT 4 (BR-SUPP-12).
+
+---
+
+## SPEC BOT 5 2026-10-24 — F-2026-10-24-096-S alur dokumentasi foto progres kendaraan & inspeksi WO per tahap (PRD VEH-02A/FAB-13, induk P1-1(g) 2026-10-20)
+
+Kartu t_74beb0ba. Spec DOKUMEN SAJA, tanpa kode produksi/schema/migrasi.
+Anti-duplikat run ini (basis origin/main f627b52b): grep `F-2026-10-24-096`
+di backlog+board main = 0 hasil; `-S` tertinggi terbit di main =
+F-2026-10-22-094-S; F-2026-10-24-095-S di PR #693 terbuka (bukan main).
+Induk gap: P1-1(g) backlog 2026-10-20 baris "Foto/dokumentasi progres per
+kendaraan tidak terstruktur" + PRD `docs/prd-erp-fabrikasi-offroad.md`
+VEH-02A (:126), FAB-13 (:462), INT-04C (:859). Temuan utama run ini:
+sebagian usul P1-1(g) SUDAH live (lampiran WO + gate intake QC), tetapi
+pengaitan foto per tahap + kategori foto + publikasi pelanggan BELUM
+ada kolom/tipe referensinya — spec ini membekukan kontraknya supaya
+BOT Backend tidak mengarang skema dan BOT Frontend tidak mengarang
+label tahap. Dilarang membuat tabel foto baru.
+
+### 0. Rekonsiliasi ruang lingkup kartu vs kode live
+
+| Klaim/istilah kartu | Fakta kode live (TERVERIFIKASI-KODE) |
+|---|---|
+| "TransactionAttachment sudah ada (referenceType, referenceId, fileUrl, mimeType)" | Benar: `prisma/schema.prisma:4847-4862` — kolom hanya id/referenceType/referenceId/filename/originalName/fileUrl/fileSize/mimeType/uploadedBy/createdAt. TIDAK ada kolom tahap, kategori, keterangan, status verifikasi, atau visibilitas pelanggan. |
+| "pakai referenceType=CustomerVehicle, WorkOrder, ProjectStage" | TIDAK bisa hari ini: whitelist unggah/list `src/app/api/upload/attachments/route.ts:128-137,220-229` hanya memuat `work_order` dan `project` (snake_case); `customer_vehicle`, `project_stage`, `qc_inspection`, `work_order_operation` ABSEN. Peta izin `src/lib/auth/attachment-permission-maps.ts:28-29,53-54` hanya memetakan `work_order`->view/edit_work_orders dan `project`->view/edit_projects. `WorkOrder` kapital adalah kosakata QcInspection.referenceType, BUKAN kosakata lampiran — mencampur keduanya = bug IDOR/404 senyap. |
+| "render TransactionAttachments di detail WO" (usul P1-1(g)) | SUDAH live: `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:756` `referenceType="work_order"`. Jangan dibangun ulang. |
+| "checklist inspeksi awal/akhir tinggal seed incoming/final" (usul P1-1(g)) | Sebagian usang: tipe live adalah `vehicle_intake`/`vehicle_handover`/`final`, bukan incoming generik — `QC_INSPECTION_TYPES` (`src/lib/services/qc.service.ts:8`), form QC `qc-inspection-form.tsx:43-44`. Seed checklist per jenis pekerjaan tetap urusan data/master, bukan spec ini. |
+| "foto per tahap WO/ProjectStage" | Dua lapis tahap berbeda dan TIDAK boleh disamakan: (a) proyek: `ProjectStage`+`ProjectStageProgress` (`schema.prisma:4597-4634`, progres persen+catatan saja); (b) WO tanpa proyek: `WorkOrderOperation` (rute/stasiun, dibaca `getWorkOrderProgress` `src/lib/reports/work-order-progress-data.ts:9-41`). Foto tahap proyek menempel ke ProjectStage; foto operasi WO menempel ke WorkOrderOperation. Satu foto TIDAK ditempel ke dua-duanya. |
+| "pelanggan (tampilan read-model)" | Portal pelanggan INT-04C BELUM ada di repo (grep portal/published/customerVisible di origin/main = 0 hasil relevan). Spec ini hanya membekukan kontrak read-model + status publikasi; portalnya sendiri tetap P2 di luar spec (backlog 2026-10-20: "portal pelanggan, e-sign — P2"). DILARANG mengklaim foto bisa dilihat pelanggan dari spec ini. |
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main f627b52b, 2026-10-24)
+
+Sudah ada (kuat, JANGAN diduplikasi):
+- Lampiran generik: model di atas; unggah `POST /api/upload/attachments`
+  (validasi MIME allowlist + signature biner + batas 50MB server,
+  route.ts:56-145), list `GET` (route.ts:214-280, take 200, select
+  terbatas), sajian berkas terotentikasi `src/app/api/attachments/
+  [...path]/route.ts` (cek `canAccessAttachment`, CSP sandbox), hapus
+  dua fase `deleteTransactionAttachmentsTx`/`removeAttachmentFiles`
+  (`src/lib/services/transaction-attachment.service.ts`), klaim pending
+  `attachPendingTransactionAttachments` (referenceId=0 -> id dokumen).
+- Penjagaan izin lampiran fail-closed: `canAccessAttachment`/
+  `canModifyAttachment` (`src/lib/auth/attachment-permissions.ts`);
+  tipe tak dikenal = ditolak; model Prisma dipetakan eksplisit
+  (`ATTACHMENT_MODEL`). Komponen `TransactionAttachments`
+  (`src/components/ui/transaction-attachments.tsx`) menyembunyikan
+  tombol unggah/hapus tanpa izin tulis; klien membatasi 10MB (server
+  50MB — beda batas ini fakta live, bukan aturan spec).
+- Gate QC kendaraan live: mulai WO kendaraan wajib inspeksi
+  `vehicle_intake` tercatat (`assertWorkOrderVehicleIntakeRecorded`,
+  qc.service.ts:42-61, dipanggil manufacturing.actions.ts:1531);
+  selesai WO digerbang `assertWorkOrderQcCleared` (NCR terbuka +
+  inspeksi `final` terakhir harus passed, qc.service.ts:25,76-105);
+  detail WO menampilkan status intake + handover (page.tsx:161-180)
+  dan tautan buat inspeksi prefill (page.tsx:324,422,441).
+  `vehicle_handover` saat ini display-only, TIDAK dibaca gate backend
+  mana pun (komentar page.tsx:169-172) — fakta, bukan celah baru.
+- Inspeksi lahir langsung berstatus passed/failed dari hasil checklist
+  (`createQcInspection`, qc.actions.ts:232-335): required item wajib
+  dinilai, checklist wajib released + jenis cocok, referensi wajib ada,
+  fail -> NCR otomatis se-transaksi. Izin: `manage_qc_inspections`.
+- Progres tahap proyek: `updateProjectStageProgress` (project.actions
+  .ts:250) — izin edit_projects, urutan tahap dijaga (tahap sebelum
+  wajib completed/skipped), status+progress+sync proyek/WO se-transaksi.
+- Halaman kendaraan pelanggan: `master/pelanggan/[slug]/kendaraan/
+  [vehicleSlug]/page.tsx` (izin view_customers) — riwayat WO/proyek/
+  garansi/part terpasang sudah tampil; panel foto BELUM ada.
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN tipe lampiran `customer_vehicle`/`project_stage`/
+  `qc_inspection`/`work_order_operation` di whitelist route, peta izin,
+  dan `ATTACHMENT_MODEL` (grep ketiganya = hanya work_order/project).
+- ABSEN kolom kategori/tahap/verifikasi/publikasi di
+  TransactionAttachment (schema:4847-4862 dibaca utuh). Akibatnya foto
+  intake, foto progres tahap, foto cacat awal, dan foto serah terima
+  yang sama-sama menempel ke WO tidak bisa dibedakan mesin — hanya
+  bisa ditebak dari nama berkas. Ini inti gap F-096-S.
+- ABSEN penanda foto terverifikasi QC/foreman dan foto terbit ke
+  pelanggan (PRD INT-04C: foto dipublikasikan harus disaring/disetejui
+  kepala bengkel, setiap publikasi tercatat penyetujunya). Tanpa kolom
+  ini, portal masa depan tidak punya sumber kebenaran "foto mana yang
+  boleh tayang".
+- PARSIAL: lampiran menempel ke `project` (id proyek) sudah bisa, tapi
+  tidak bisa menunjuk tahap proyek tertentu; halaman proyek dan halaman
+  kendaraan pelanggan belum merender panel lampiran per tahap (grep
+  TransactionAttachments di src/app/(dashboard)/proyek/** = 0).
+- BELUM TERVERIFIKASI run ini: apakah seed master QcChecklist jenis
+  vehicle_intake/vehicle_handover sudah terisi di DB produksi (dulu
+  dicatat seed master = 0 di board 2026-10-20). Status data, bukan
+  kode; jangan klaim dari spec ini.
+
+### 2. Workflow specification (alur + aktor + dokumen masuk/keluar)
+
+Aktor: SA = service advisor/admin bengkel; MK = mekanik/staf bengkel
+pelaksana; QC = pemeriksa QC/foreman (pemegang manage_qc_inspections);
+KB = kepala bengkel (penyetuju publikasi + pelepasan unit);
+PLG = pelanggan (kelak, read-only lewat portal INT-04C).
+
+Tahap foto (kosakata kategori di BR-PHOTO-02):
+1. Intake / check-in (VEH-02A): SA/MK buat inspeksi `vehicle_intake`
+   tertaut WorkOrder; foto kondisi awal (kategori `intake`) diunggah
+   menempel ke inspeksi itu; cacat awal per butir checklist tercatat di
+   QcInspectionResult + foto cacat menempel ke inspeksi yang sama.
+   Dokumen keluar: inspeksi intake tercatat = syarat gate mulai WO.
+2. Per tahap pengerjaan: MK unggah foto progres (kategori `progress`)
+   menempel ke ProjectStage (bila job berproyek) ATAU
+   WorkOrderOperation (bila WO langsung); unggah foto TIDAK mengubah
+   persen/status tahap — persen tetap lewat updateProjectStageProgress
+   / status operasi existing. Foto bukan bukti persen.
+3. Temuan/cacat tengah pekerjaan: foto kategori `defect` menempel ke
+   inspeksi `in_process`/`final` yang melahirkannya atau ke NCR;
+   status mutu tetap diputus hasil checklist + NCR existing, bukan foto.
+4. Serah terima (FAB-13): QC jalankan inspeksi `final` +
+   `vehicle_handover`; foto hasil akhir kategori `handover` menempel
+   ke inspeksi handover; perbandingan awal-vs-akhir dibaca dari
+   pasangan inspeksi intake vs handover pada WO yang sama.
+5. Publikasi pelanggan (kelak INT-04C): KB menandai foto
+   intake/progress/handover terpilih sebagai terbit; read-model
+   pelanggan hanya membaca foto bertanda terbit milik kendaraannya.
+   Sampai portal ada, penandaan ini hanya tampil internal sebagai
+   status "siap terbit" — bukan klaim pelanggan sudah bisa melihat.
+
+Dokumen masuk: berkas JPG/PNG/WebP/GIF/PDF lewat endpoint existing.
+Dokumen keluar: daftar foto terkelompok tahap+kategori per WO/kendaraan,
+pasangan before/after per WO, daftar foto siap-terbit. Nol jurnal,
+nol dokumen finansial baru dari spec ini.
+
+### 3. Keputusan fisik yang diminta ke BOT Backend (BUTUH-VONIS teknis)
+
+Spec ini sengaja TIDAK memilih skema; tiga opsi dicatat dengan
+rekomendasi, keputusan milik BOT Backend + BOT Lead (satu kartu inti,
+bukan dua jalur paralel):
+- Opsi A (USULAN, direkomendasikan): tambah kolom aditif nullable di
+  TransactionAttachment: `photoCategory` (intake|progress|defect|
+  handover|other), `verifiedBy/verifiedAt`, `publishedAt/publishedBy`.
+  Tahap ditunjuk oleh referenceType+referenceId yang menempel
+  (project_stage/work_order_operation/qc_inspection), jadi kolom
+  tahap terpisah tidak perlu. Migrasi aditif, baris lama nullable =
+  kategori `other`/belum terverifikasi/belum terbit (fail-closed).
+- Opsi B: tabel pasangan baru (attachmentId, stageType, stageId,
+  kategori, ...) — DITOLAK spec ini: menggandakan sumber kebenaran
+  lampiran dan memecah jalur hapus dua fase existing.
+- Opsi C: tanpa kolom, kategori dari awalan originalName — DITOLAK:
+  nama berkas kiriman klien bukan data terpercaya dan tidak bisa
+  digerbang server.
+Yang WAJIB apa pun opsinya: (i) referenceType baru masuk whitelist
+route + ATTACHMENT_MODEL + peta izin di PR yang sama; (ii) foto
+qc_inspection digerbang izin QC, bukan izin WO generik buta — pemetaan
+persisnya (mis. baca=view_qc, tulis=manage_qc_inspections) diputus
+BOT Backend mengikuti pola peta existing; (iii) tidak ada FK Prisma
+baru dari TransactionAttachment ke tahap (pola polimorfik existing
+dipertahankan; eksistensi referensi divalidasi aksi, pola
+assertQcReferenceExists).
+
+### 4. Role/permission matrix (permission key nyata katalog)
+
+Key nyata: view_work_orders/edit_work_orders/complete_work_orders,
+view_projects/edit_projects, view_qc/manage_qc_inspections/
+manage_qc_checklists/manage_nonconformances, view_customers
+(module-catalog.generated.ts:254-266,389-394; base-data.ts ROLES:
+super_admin, admin, staff, ga, kepala_bengkel, karyawan, purchasing,
+warehouse, finance). Role->izin persis adalah data seed peran, bukan
+dijanjikan spec ini; matriks di bawah = izin yang DITUNTUT aksi.
+
+| Aksi | Izin dituntut | Aktor lazim | Catatan |
+|---|---|---|---|
+| Lihat foto WO/tahap (internal) | view_work_orders / view_projects sesuai referensi | SA, MK, QC, KB | lewat canAccessAttachment; tipe tak dikenal ditolak |
+| Unggah/hapus foto progres tahap | edit_work_orders / edit_projects sesuai referensi | MK, SA | foto pending referenceId=0 hanya pemilik unggah |
+| Unggah foto intake/handover/defect | manage_qc_inspections (usulan pemetaan §3) | MK unggah, QC pemilik inspeksi | inspeksi sendiri tetap aksi QC existing |
+| Verifikasi foto (verifiedBy) | manage_qc_inspections | QC/foreman | pemisahan: pengunggah != pewajib verifikasi bila KB menuntut (BUTUH-VONIS BOT Lead, BR-PHOTO-06) |
+| Tandai foto siap terbit/terbit | complete_work_orders (usulan) atau manage_qc_inspections — satu dipilih BOT Lead | KB | INT-04C: publikasi di bawah kendali KB/admin; jejak publishedBy wajib |
+| Buat/jalankan inspeksi intake/final/handover | manage_qc_inspections | QC | existing, tidak berubah |
+| Selesaikan WO / serah terima | complete_work_orders + gate QC existing | KB/SA | gate tidak diubah spec ini |
+| Lihat foto terbit (pelanggan) | (portal) grant per kendaraan, BUKAN permission staf | PLG | hanya publishedAt terisi + kendaraan milik grant; biaya/margin/foto internal tidak pernah ikut |
+
+Dilarang: permission key baru (mis. upload_photos) tanpa putusan
+BOT Lead; foto kendaraan tidak boleh bisa dibaca hanya karena login
+(IDOR lampiran sudah ditutup pola existing — jangan dibuka lagi).
+
+### 5. Status-transition matrix
+
+Foto bukan dokumen berstatus sendiri di kode live; transisi di bawah
+adalah transisi DOKUMEN INDUK + keadaan foto sebagai syarat/jejak.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| WO kendaraan draft, intake belum ada | inspeksi vehicle_intake tercatat | intake tercatat (foto intake menempel ke inspeksi) | createQcInspection manage_qc_inspections; gate mulai assertWorkOrderVehicleIntakeRecorded |
+| WO belum mulai | mulai pekerjaan | in_progress | gate intake di atas (WO tanpa kendaraan: tidak berlaku) |
+| Tahap pending | progres pertama | in_progress (+foto progress boleh menempel) | updateProjectStageProgress edit_projects; urutan tahap dijaga server |
+| Tahap in_progress | progres 100% | completed | persen dari aksi progres, BUKAN dari jumlah foto |
+| Inspeksi dibuat | hasil dinilai | passed / failed (langsung final) | required item wajib; fail -> NCR otomatis se-tx |
+| Foto terunggah | verifikasi QC | terverifikasi (verifiedBy/At terisi) | manage_qc_inspections (USULAN §3) |
+| Foto terverifikasi | tandai terbit KB | siap terbit/terbit (publishedBy/At) | izin §4; hanya kategori intake/progress/handover |
+| Semua tahap selesai + final passed + NCR tertutup | serah terima | WO completed + inspeksi vehicle_handover tercatat | assertWorkOrderQcCleared existing; handover tetap display-only sampai BOT Lead memutus menjadikannya gate |
+
+Tidak ada transisi hapus foto yang mengubah status dokumen induk;
+hapus lampiran mengikuti jalur hapus dua fase existing dan tidak
+boleh menghapus satu-satunya bukti foto pada inspeksi yang sudah
+dipakai gate tanpa jejak audit (BR-PHOTO-07).
+
+### 6. Business rules register (BR-PHOTO-01..10)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PHOTO-01 | Foto menempel ke SATU induk sah saja: qc_inspection (intake/handover/defect mutu), project_stage atau work_order_operation (progress), work_order/customer_vehicle (umum). Dilarang menempel ke dua induk atau menebak kendaraan dari plat teks. | USULAN (pola referensi TERVERIFIKASI-KODE: qc.service assertQcReferenceExists) |
+| BR-PHOTO-02 | Kategori foto tertutup: intake, progress, defect, handover, other. Kategori bebas teks dari klien DILARANG. Baris lama tanpa kategori dibaca `other`, tidak ditebak ulang dari nama berkas. | USULAN (kolom belum ada, §3) |
+| BR-PHOTO-03 | Gate mulai WO kendaraan tetap kehadiran inspeksi vehicle_intake, BUKAN jumlah foto. Spec ini TIDAK menambah syarat "minimal N foto" sebagai gate keras. | TERVERIFIKASI-KODE gate-nya (qc.service.ts:42-61); penolakan gate-foto = USULAN |
+| BR-PHOTO-04 | Foto progres tidak pernah mengubah persen tahap, status tahap, status WO, biaya, atau earned value. Progres fisik tetap dari ProjectStageProgress/operasi. | USULAN (konsisten kontrak EV repo: persen dari rekod progres terbaru) |
+| BR-PHOTO-05 | Perbandingan kondisi awal-vs-akhir hanya sah dari pasangan inspeksi intake+handover pada WO yang sama; foto tanpa inspeksi induk tidak bisa diklaim sebagai bukti kondisi awal/akhir untuk sengketa garansi. | USULAN (pasangan inspeksi TERVERIFIKASI-KODE dibaca page.tsx:161-180) |
+| BR-PHOTO-06 | Verifikasi foto (QC/foreman) terpisah dari unggah; apakah pengunggah boleh memverifikasi fotonya sendiri diputus BOT Lead (default USULAN: tidak boleh untuk foto handover). | BUTUH-VONIS (BOT Lead, perilaku inti) |
+| BR-PHOTO-07 | Foto pada inspeksi yang sudah tercatat tidak dihapus senyap: hapus mengikuti jalur existing + tercatat di activity log; foto terverifikasi/terbit yang dihapus wajib alasan (pola reopenReason dokumen repo). | USULAN |
+| BR-PHOTO-08 | Yang boleh terbit ke pelanggan hanya foto bertanda terbit oleh KB/admin, kategori intake/progress/handover, milik kendaraan grant itu. Foto defect internal, foto memuat kendaraan lain/wajah/dokumen harga: DILARANG terbit (PRD INT-04C). | USULAN (sumber PRD :859; portal belum ada) |
+| BR-PHOTO-09 | Tidak ada kolom tahap/kategori/publikasi = tidak ada klaim UI "foto per tahap". UI wajib menampilkan ember eksplisit "belum berkategori" untuk baris lama, bukan menyembunyikan atau mengarang tahap dari tanggal unggah. | USULAN |
+| BR-PHOTO-10 | Nol dampak uang: foto/QC tahap ini tidak memposting jurnal, tidak mengubah HPP/biaya aktual; biaya aktual tetap MaterialIssue/ProductionCost/Timesheet. Klaim garansi yang memakai foto sebagai bukti tetap lewat alur WarrantyClaim existing. | TERVERIFIKASI-KODE batasnya (lampiran tanpa jurnal di semua pemakai live) |
+
+### 7. Feature matrix Accurate/Zahir/ISF (benchmark akses 2026-10-24)
+
+| Kemampuan | Accurate | Zahir | ISF (live) |
+|---|---|---|---|
+| Lampiran berkas/foto menempel ke transaksi | Ada: ikon dokumen/lampiran per transaksi, foto dari mobile (https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penerimaan-penjualan/mengenal-fitur-penerimaan-penjualan/) | Ada: "Lampiran File" bukti fisik per transaksi, bisa diunduh dari transaksinya (https://www.zahironline.com/transaksi-penjualan/ ; https://help.zahironline.com/portal/id/kb/articles/jurnal-umum) | Ada: TransactionAttachment + unggah tervalidasi signature (TERVERIFIKASI-KODE §1) |
+| Lampiran wajib sebagai syarat simpan/posting | Ada pengaturan lampiran wajib per modul (benchmark sekunder; bukan help resmi — perlakukan BENCHMARK lemah) | Belum terverifikasi run ini | Tidak ada untuk foto WO; gate ISF berupa inspeksi QC, bukan hitungan lampiran (BR-PHOTO-03) |
+| Foto per tahap pekerjaan + inspeksi awal/akhir kendaraan | Tidak ditemukan di help resmi run ini (bukan produk bengkel fabrikasi) | Tidak ditemukan run ini | BELUM: kategori/tahap foto absen (§1) — justru keunggulan yang dibangun spec ini dari QcInspection+ProjectStage existing |
+| Publikasi foto progres ke pelanggan | Tidak ditemukan run ini | Tidak ditemukan run ini | BELUM: portal INT-04C absen; kontrak tandai-terbit dibekukan BR-PHOTO-08 |
+
+Benchmark hanya pola lampiran generik; tidak ada benchmark yang
+menjustifikasi meniru "lampiran wajib per transaksi" untuk foto tahap
+bengkel — gate ISF tetap inspeksi (BR-PHOTO-03).
+
+### 8. Acceptance criteria (AC-PHOTO-1..8) + edge cases
+
+- AC-PHOTO-1 (Backend): unggah dengan referenceType customer_vehicle/
+  project_stage/work_order_operation/qc_inspection (kosakata persis
+  yang diputus §3) diterima hanya bila induk ada + izin §4 lolos;
+  tipe di luar whitelist, induk tidak ada, dan pengguna tanpa izin
+  ditolak fail-closed (tes meniru attachment-permissions.test.ts).
+- AC-PHOTO-2 (Backend): foto berkategori intake yang menempel ke
+  inspeksi vehicle_intake terbaca dari detail WO bersama status
+  inspeksi; WO kendaraan tanpa intake tetap tertolak mulai (regresi
+  gate existing tidak berubah oleh spec ini).
+- AC-PHOTO-3 (Backend+Frontend): daftar foto per WO terkelompok
+  tahap+kategori; foto lama tanpa kategori tampil di ember "belum
+  berkategori" (BR-PHOTO-09), tidak hilang dan tidak berpindah tahap.
+- AC-PHOTO-4 (Backend): unggah/verifikasi/tandai-terbit foto tidak
+  mengubah persen tahap, status WO/proyek, biaya, atau jurnal apa pun
+  (tes falsifikasi: ubah foto -> progres & biaya tetap; BR-PHOTO-04/10).
+- AC-PHOTO-5 (Frontend): panel foto di detail WO + detail kendaraan
+  pelanggan memakai kosakata kategori BR-PHOTO-02 persis; tombol
+  unggah/verifikasi/terbit hanya tampil ke pemegang izin §4 dan server
+  tetap penegak (pola komponen existing).
+- AC-PHOTO-6 (Backend): foto terbit hanya yang publishedAt/publishedBy
+  terisi oleh pemegang izin terbit; read-model pelanggan (bila portal
+  dibangun) menolak foto internal/defect dan foto kendaraan lain
+  walau ID ditebak (IDOR).
+- AC-PHOTO-7 (QA): pasangan before/after satu WO: intake dan handover
+  pada WO sama tampil berpasangan; WO tanpa handover menampilkan
+  keadaan "belum serah terima", bukan memasangkan foto WO lain.
+- AC-PHOTO-8 (QA): hapus foto terverifikasi/terbit tercatat beralasan;
+  berkas yatim hasil hapus mengikuti sapuan orphan existing; kegagalan
+  muat daftar foto tampil sebagai gagal-muat, bukan "belum ada foto"
+  (pola komponen existing dipertahankan).
+
+Edge cases wajib diuji BOT QA: WO tanpa customerVehicleId (gate
+intake tidak berlaku, foto progress tetap boleh); job berproyek vs WO
+langsung (induk foto tahap tidak tertukar); tahap skipped (foto boleh
+ada, persen tetap dari aksi progres); inspeksi failed -> NCR terbuka
+memblokir serah terima walau foto handover lengkap; unggah pending
+referenceId=0 ditinggalkan (sweep orphan); berkas >10MB ditolak klien
+dan >50MB ditolak server; MIME terdeklarasi beda dari signature
+ditolak; foto kendaraan pelanggan A tidak terbaca dari kendaraan B;
+baris lampiran lama (pra-kolom) di WO berjalan.
+
+### 9. Handoff & urutan
+
+Urutan: (1) BOT Lead putus BR-PHOTO-06 + izin terbit §4; (2) BOT
+Backend satu kartu inti: kolom aditif + referenceType/peta izin +
+read-model pengelompokan (§3 Opsi A kecuali divonis lain), tanpa
+tabel foto baru; (3) BOT Frontend panel per tahap di detail WO +
+kendaraan (konsumen read-model saja); (4) BOT QA AC-PHOTO-1..8.
+Tidak butuh vonis BOT Accountant (nol jurnal/uang, BR-PHOTO-10);
+bila kelak foto dipakai syarat pelepasan pembayaran termin, itu spec
+terpisah dengan vonis akuntansi. Yang TIDAK diusulkan run ini: portal
+pelanggan penuh, e-sign checklist, pengaburan wajah otomatis, syarat
+minimal jumlah foto sebagai gate, tabel foto baru.
+## SPEC BUSINESS 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
+
+Spec dokumen saja, TANPA kode produksi/schema/migrasi/UI. ID bebas
+F-2026-10-24-098-S (terverifikasi belum terpakai di origin/main
+c6c4bfb3; serial -S BUSINESS terakhir 097-S PR #698).
+
+### 0. Anti-duplikat — apa yang SUDAH merged, dilarang dispec ulang
+
+- `TERVERIFIKASI-KODE`: inti scrap F-071-S sudah hidup di main.
+  `BomRevisionMaterial.scrapPercent` (prisma/schema.prisma:2682,
+  null/0 = belum dikalibrasi); `MaterialIssueItem.scrapQty/
+  scrapReasonCode/scrapNote` + snapshot beku lengkap (:2567-2577);
+  `ProductionOrderMaterial` kolom scrap sejajar (:2753-2762);
+  `src/lib/services/scrap-classification.ts` (`classifyScrapLine`,
+  `validateScrapInput`, `SCRAP_REASON_CODES` 5 kode);
+  `src/lib/reports/scrap-material{,-data}.ts` + halaman
+  `laporan/scrap-material`; gerbang jurnal
+  `Setting.abnormalScrapPostingEnabled` default MATI +
+  `abnormalScrapExpenseAccountId` fail-closed (:266-272).
+  Klasifikasi normal/abnormal, jurnal, koreksi reversal = vonis
+  ACCOUNTANT F-2026-10-22-066-V — spec ini TIDAK memutus ulang.
+- `TERVERIFIKASI-KODE`: `Remnant` (:3335-3359) = catatan sisa di
+  luar stok (status default `usable`, `dimensions` teks bebas,
+  `sourceType/sourceId` generik nullable); aksi
+  `createRemnant/consumeRemnant/scrapRemnant`
+  (src/actions/inventory.actions.ts:2633/2687/2716) semua berizin
+  `create_material_issues`; `scrapRemnant` wajib alasan teks.
+  TIDAK ada: ambang dimensi usable, tautan wajib ke baris issue,
+  berat (kg), penampungan besi tua, penjualan scrap.
+- `TERVERIFIKASI-KODE`: `Item.categoryId -> ItemCategory` (:603)
+  tanpa atribut bentuk bahan (plat/profil). Nol model penjualan
+  scrap/besi tua di schema (grep `ScrapSale|besi` = 0).
+
+Delta spec ini HANYA tiga hal yang belum ada di F-071-S:
+(A) standar allowance acuan per kategori bentuk bahan sebagai
+BANTUAN kalibrasi (bukan default sistem), (B) klasifikasi fisik
+sisa potong: remnant usable vs scrap murni besi tua + ambang
+dimensi terukur, (C) approval foreman untuk scrap abnormal
+sebagai gerbang operasional (bukan gerbang jurnal).
+
+### 1. Benchmark resmi (akses 2026-10-24)
+
+- Zahir Manufacturing: BOM multi-level memuat "Waste allowance"
+  eksplisit; formula menyesuaikan yield/waste/shrinkage:
+  https://zahirerp.com/en/zahir-manufacturing/
+- Accurate Online Formula Produksi: bahan baku + biaya per
+  formula sebagai dasar Perintah Kerja & standar biaya:
+  https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/formula-produksi/buat-formula-produksi/
+  Kontrol kelebihan ambil per hak akses grup ("Mengambil barang
+  melebihi perintah kerja"): https://help.accurate.id/product/Manufaktur/
+- Rujukan praktik fabrikasi baja (BUKAN vendor ERP, label
+  `BENCHMARK-PRAKTIK`): allowance potong plat/profil umumnya
+  dinyatakan terpisah dari berat bersih takeoff; sisa potong
+  hanya kembali ke stok bila dimensi/grade/identitas lot tercatat
+  dan lolos kriteria pakai-ulang; rekonsiliasi wajib:
+  qty issue = qty terpasang + remnant kembali + scrap tercatat.
+  https://aican.co.in/our-blog/track-raw-material-consumption-fabrikasi
+  (URL apa adanya dari hasil akses; jangan dikutip sebagai
+  standar resmi — angka persen di sumber praktik 2-5% cutting
+  waste TIDAK diadopsi sebagai angka ISF, lihat BR-SCRAP-02.)
+
+### 2. Workflow specification
+
+Aktor: staf cutting/operator (catat sisa saat issue), foreman/
+kepala bengkel (kalibrasi allowance, approval abnormal, vonis
+fisik remnant vs besi tua), gudang (terima remnant/besi tua),
+finance (penjualan besi tua — wilayah ACCOUNTANT, di luar spec).
+
+Alur A — kalibrasi allowance per kategori bahan (sebelum job):
+1. Tabel acuan kalibrasi (USULAN, bantuan estimator, BUKAN
+   default sistem): plat lembaran (nesting 2D, sisa bentuk tak
+   beraturan) acuan awal lebih tinggi dari profil pipa/hollow
+   (potong lurus 1D, sisa masih sebatang). Angka persen acuan
+   per kategori = `BUTUH-VONIS` pemilik proses (kepala bengkel)
+   — spec ini sengaja TIDAK menulis angka; mengarang persen
+   melanggar BR-SC-02 F-071-S (dilarang default global).
+2. Estimator tetap mengisi `scrapPercent` per baris revisi BOM
+   (mekanisme merged); acuan kategori hanya tampil sebagai teks
+   pembanding di form BOM. Deviasi dari acuan sah tanpa approval
+   tambahan; yang wajib = baris terkalibrasi eksplisit, bukan
+   angka sama dengan acuan.
+3. Bentuk bahan dibaca dari kategori item existing
+   (`ItemCategory`) — kebutuhan data D-S98-01 hanya bila LEAD
+   menyetujui penanda bentuk di kategori; tanpa itu acuan tampil
+   per kategori item apa adanya dan pemetaan plat/profil manual
+   oleh estimator (jujur: belum terstruktur).
+
+Alur B — pencatatan fisik saat cutting/issue (titik existing):
+4. Sesudah potong, operator memilah fisik tiap sisa menjadi:
+   (a) REMNANT USABLE: dimensi terukur memenuhi ambang minimum
+   kategori (D-S98-02) -> buat `Remnant` existing status usable,
+   wajib `dimensions` + tautan sumber baris issue (sourceType=
+   material_issue_item / production_order_material + sourceId);
+   (b) SCRAP MURNI: di bawah ambang / bentuk tak terpakai /
+   serbuk & gram -> masuk qty scrap baris issue existing
+   (`scrapQty` + `scrapReasonCode`), BUKAN Remnant.
+   Satu sisa fisik = satu kelas; dilarang catat ganda
+   (remnant + scrap untuk potongan sama).
+5. Berat timbang (kg) dicatat untuk scrap murni yang masuk
+   penampungan besi tua (D-S98-03) — satuan issue (lembar/batang)
+   tidak bisa rekonsiliasi ke penjualan timbang tanpa kg.
+   Rekonsiliasi per baris issue: qty issue = qty terpasang +
+   qty remnant (satuan sama) + qty scrap; selisih tampil temuan
+   di laporan scrap existing, bukan nol diam-diam.
+
+Alur C — approval abnormal (gerbang operasional baru):
+6. Saat complete issue menghasilkan `abnormalQty > 0` (snapshot
+   merged), baris masuk antrean approval foreman. Approval TIDAK
+   mengubah klasifikasi/nilai/jurnal vonis 066-V; fungsinya =
+   pengakuan operasional penyebab (kelalaian vs kondisi bahan)
+   + tindak lanjut (teguran/pelatihan/kalibrasi ulang allowance).
+   Tanpa approval, laporan scrap menandai baris "abnormal belum
+   ditinjau" — complete TIDAK ditahan (menahan dokumen =
+   `BUTUH-VONIS` LEAD, pola BR-SC-11 F-071-S).
+7. Foreman memilih disposisi tinjau: `diterima_wajar` (kondisi
+   bahan/proses) atau `kelalaian` (wajib catatan + tindak lanjut
+   teks). Disposisi tercatat (D-S98-04), klasifikasi uang tetap
+   vonis 066-V apa pun disposisinya — label kelalaian TIDAK
+   otomatis memindah beban ke karyawan (potongan gaji =
+   wilayah HR/payroll + `BUTUH-VONIS` accountant, di luar spec).
+
+Alur D — besi tua (penampungan -> jual timbang):
+8. Scrap murni terakumulasi di penampungan per gudang (catatan
+   kg per kejadian dari langkah 5). Penjualan ke pengepul =
+   dokumen penjualan existing? BELUM terverifikasi ada jalur
+   jual scrap; perlakuan akuntansi hasil jual besi tua (pengurang
+   HPP vs pendapatan lain) = `BUTUH-VONIS` ACCOUNTANT. Spec ini hanya
+   menetapkan kebutuhan data kg + tautan kejadian (D-S98-03);
+   TIDAK mengusulkan dokumen penjualan baru sebelum vonis.
+
+Dokumen masuk: revisi BOM, MaterialIssue/issue PO, Remnant
+existing. Keluar: snapshot klasifikasi (merged) + status tinjau
+foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
+
+### 3. Role / permission matrix (izin nyata module-catalog.generated.ts:228-278,420)
+
+| Aksi | Staf cutting/operator | Foreman/kepala bengkel | Gudang | Finance |
+|---|---|---|---|---|
+| Isi scrapQty+alasan baris issue (draft) | `edit_material_issues`/`edit_production_orders` (reuse merged) | sama | — | — |
+| Buat Remnant usable + dimensi + tautan issue | `create_material_issues` (reuse existing :2633) | sama | `create_material_issues` | — |
+| Ubah remnant usable -> scrap (besi tua) | — (usulan: dicabut dari operator) | `create_material_issues` + alasan (reuse, penjaga status existing) | — | — |
+| Kalibrasi scrapPercent baris BOM | — | `manage_bom_revisions` + setujui `approve_bom_revisions` (reuse) | — | — |
+| Approval/disposisi scrap abnormal | — | key baru `approve_scrap_reviews` (USULAN D-S98-05; default-aman: reuse `complete_work_orders` sampai LEAD putus) | — | — |
+| Catat kg penampungan besi tua | `create_material_issues` (reuse) | sama | `create_material_issues` | — |
+| Lihat laporan scrap + status tinjau | `view_reports` | `view_reports` | `view_reports` | `view_reports` |
+| Jual besi tua + jurnal hasil jual | — | — | — | di luar spec — `BUTUH-VONIS` ACCOUNTANT |
+
+### 4. Status-transition matrix
+
+| Objek | Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|---|
+| Sisa fisik | belum tercatat | sortir sesudah potong + ukur dimensi | remnant `usable` / scrap baris issue | ambang D-S98-02; satu sisa satu kelas; tautan issue wajib utk remnant |
+| Remnant | usable | dipakai job berikut | consumed (existing) | klaim atomik existing; tanpa movement stok |
+| Remnant | usable | foreman nilai tak terpakai + alasan | scrap (existing) | alasan wajib (existing); kg besi tua dicatat saat transisi ini (D-S98-03) |
+| Baris issue abnormal | terklasifikasi (merged) | complete dgn abnormalQty>0 | menunggu_tinjau | otomatis server dari snapshot; operator tak bisa memilih |
+| Tinjau abnormal | menunggu_tinjau | foreman disposisi + catatan bila kelalaian | ditinjau | izin §3; klasifikasi/nilai/jurnal TIDAK berubah |
+| Allowance kategori | belum ada acuan | kepala bengkel tetapkan acuan (BUTUH-VONIS angka) | acuan_aktif (teks pembanding form) | acuan tidak pernah mengisi scrapPercent otomatis |
+
+### 5. Business rules register (BR-SCRAP-*; BR-SC-* F-071-S tetap berlaku penuh)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SCRAP-01 | Spec ini delta: dilarang membangun ulang allowance per baris BOM, klasifikasi, snapshot, laporan, atau jurnal scrap — semua sudah merged (F-071-S/066-V) | TERVERIFIKASI-KODE §0 |
+| BR-SCRAP-02 | Angka persen acuan allowance per kategori bahan (plat vs profil) TIDAK ditetapkan spec ini; acuan bukan default dan tidak pernah auto-isi `scrapPercent` | BUTUH-VONIS pemilik proses (kepala bengkel); angka praktik luar tidak diadopsi |
+| BR-SCRAP-03 | Satu sisa fisik = satu kelas (remnant usable ATAU scrap); catat ganda untuk potongan sama ditolak | USULAN |
+| BR-SCRAP-04 | Remnant usable wajib dimensi terukur + tautan baris issue asal; tanpa dimensi/tautan, sisa tidak boleh berstatus usable | USULAN (mengetatkan Remnant existing; bentuk pengetatan BACKEND) |
+| BR-SCRAP-05 | Ambang minimum usable per kategori (mis. panjang/diameter/luas minimum) = data terkonfigurasi per kategori item, bukan konstanta kode; nilai ambang belum ditetapkan | USULAN bentuk; BUTUH-VONIS kepala bengkel utk nilai |
+| BR-SCRAP-06 | Scrap murni penampungan besi tua wajib berat kg terpisah dari satuan issue; penjualan & perlakuan uangnya di luar spec | USULAN pencatatan; BUTUH-VONIS ACCOUNTANT utk jual/jurnal |
+| BR-SCRAP-07 | Rekonsiliasi baris: issue = terpasang + remnant + scrap (satuan sama); selisih = temuan laporan, bukan penyesuaian diam-diam | USULAN |
+| BR-SCRAP-08 | Approval foreman atas abnormal = tinjau operasional saja; tidak mengubah klasifikasi, nilai, jurnal (066-V), dan tidak menahan complete | USULAN; menahan complete = BUTUH-VONIS LEAD |
+| BR-SCRAP-09 | Disposisi `kelalaian` wajib catatan + tindak lanjut; TIDAK otomatis jadi potongan gaji/beban karyawan | USULAN; sanksi uang = BUTUH-VONIS accountant+HR |
+| BR-SCRAP-10 | Serbuk/gram/sisa tak berbentuk: selalu scrap murni (tidak pernah remnant), masuk kg penampungan | USULAN |
+
+### 6. Kebutuhan data (untuk BACKEND — kebutuhan, BUKAN skema final)
+
+- D-S98-01 (opsional, sesudah putusan LEAD): penanda bentuk
+  bahan di `ItemCategory` (plat/profil/lain) utk acuan per bentuk.
+- D-S98-02: ambang dimensi minimum usable terkonfigurasi per
+  kategori + snapshot ambang terpakai saat remnant dibuat.
+- D-S98-03: berat kg pada kejadian scrap besi tua (di Remnant
+  transisi scrap dan/atau catatan penampungan per gudang) +
+  tautan kejadian issue/remnant asal.
+- D-S98-04: rekod tinjau abnormal per baris issue terklasifikasi:
+  status tinjau, disposisi, catatan, peninjau, waktu; menempel ke
+  snapshot merged, tidak mengubahnya.
+- D-S98-05: permission `approve_scrap_reviews` bila LEAD tidak
+  menyetujui reuse `complete_work_orders`.
+- Laporan: perluas read-model scrap existing (bukan laporan
+  kedua): kolom status tinjau, kg besi tua per periode/gudang,
+  temuan rekonsiliasi BR-SCRAP-07.
+
+### 7. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Delta spec ini |
+|---|---|---|---|---|
+| Waste allowance per bahan BOM | Formula Produksi (BENCHMARK §1) | ADA waste allowance (BENCHMARK §1) | ADA per baris revisi (merged) | acuan per kategori sbg pembanding kalibrasi (D-S98-01) |
+| Klasifikasi normal/abnormal + beban periode | tidak diklaim | tidak diklaim | ADA (066-V, flag catat-dulu) | tidak diubah; + tinjau foreman (D-S98-04) |
+| Remnant usable berdimensi tertaut issue | tidak diklaim | tidak diklaim | PARSIAL (Remnant ada; dimensi bebas, tautan nullable) | ambang usable + tautan wajib (D-S98-02) |
+| Scrap besi tua kg + jual timbang | tidak diklaim | tidak diklaim | ABSEN | catat kg (D-S98-03); jual = BUTUH-VONIS ACCOUNTANT |
+| Approval abnormal operasional | kontrol ambil berlebih per hak akses (BENCHMARK) | tidak diklaim | ABSEN | antrean tinjau foreman §2C |
+
+### 8. Acceptance criteria (AC-SCRAP-1..8)
+
+- AC-SCRAP-1: remnant dibuat tanpa dimensi/tautan issue ->
+  ditolak; dengan keduanya -> usable, nol StockMove, nol jurnal.
+- AC-SCRAP-2: sisa sama dicatat remnant + scrap -> kedua ditolak
+  (satu sisa satu kelas, BR-SCRAP-03).
+- AC-SCRAP-3: baris issue selisih rekonsiliasi (issue != pasang+
+  remnant+scrap) -> temuan tampil di laporan, angka tidak diubah.
+- AC-SCRAP-4: complete dgn abnormalQty>0 -> baris masuk
+  menunggu_tinjau; complete tetap berhasil (flag jurnal apa pun).
+- AC-SCRAP-5: operator tanpa izin tinjau -> disposisi ditolak;
+  disposisi kelalaian tanpa catatan -> ditolak.
+- AC-SCRAP-6: disposisi apa pun -> snapshot klasifikasi, nilai
+  normal/abnormal, jurnal 066-V byte-sama sebelum/sesudah.
+- AC-SCRAP-7: remnant usable -> scrap oleh foreman -> kg besi
+  tua tercatat tertaut remnant+issue asal; tanpa kg -> ditolak.
+- AC-SCRAP-8: acuan kategori tampil di form BOM sebagai teks;
+  simpan revisi tanpa scrapPercent eksplisit -> baris tetap
+  belum-kalibrasi (acuan tidak mengisi otomatis).
+
+Edge: scrapQty baris dari serbuk (tanpa sisa fisik) sah tanpa
+remnant; remnant profil sebatang diukur panjang, plat diukur
+panjang×lebar (+ketebalan dari item); remnant antar-gudang ikut
+konvensi existing (bukan stok, tanpa movement).
+
+### 9. Yang TIDAK diusulkan
+
+- Jalur issue/form scrap kedua; laporan scrap kedua; angka
+  allowance karangan; dokumen penjualan besi tua sebelum vonis
+  ACCOUNTANT; potongan gaji dari label kelalaian; nesting otomatis.
+
+### 10. Urutan implementasi
+
+LEAD putus: reuse izin vs `approve_scrap_reviews` + apakah
+complete kelak boleh ditahan tinjau (default spec: TIDAK) ->
+kepala bengkel tetapkan angka acuan+ambang (BR-SCRAP-02/05) ->
+BACKEND inti D-S98-02..04 (klaim schema di board) -> FRONTEND UI
+(form BOM acuan, sortir sisa, antrean tinjau) -> QA
+AC-SCRAP-1..8. ACCOUNTANT hanya untuk penjualan besi tua (BR-SCRAP-06).
