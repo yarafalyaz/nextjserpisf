@@ -1,6 +1,11 @@
-import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 import { Prisma, PrismaClient } from "@prisma/client"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, expect, it } from "vitest"
+import {
+  createTestClient,
+  deferred,
+  describeIntegration,
+  warnIntegrationSkip,
+} from "./integration-concurrency-fixtures"
 
 // ============================================================================
 // Tes konkurensi MySQL 8 NYATA (audit v5 gate 1-3, audit v6 poin 3-4) —
@@ -63,36 +68,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 // caching_sha2_password MySQL 8 lewat adapter-mariadb di koneksi pertama.
 // ============================================================================
 
-const INTEGRATION_DB_URL = process.env.INTEGRATION_DB_URL
-
-const describeIntegration = INTEGRATION_DB_URL ? describe : describe.skip
-
-if (!INTEGRATION_DB_URL) {
-  console.warn(
-    "[bank-statement-concurrency] SKIP: INTEGRATION_DB_URL tidak diset — " +
-      "tes konkurensi MySQL 8 nyata tidak dijalankan (bukan lulus). " +
-      "Set INTEGRATION_DB_URL ke DB tes termigrasi untuk menjalankannya.",
-  )
-}
-
-// Prisma 7 MariaDB adapter menerima connection string / config; bentuk
-// string sama dengan yang dipakai src/lib/db/prisma.ts (DATABASE_URL).
-function createTestClient(): PrismaClient {
-  return new PrismaClient({
-    adapter: new PrismaMariaDb(INTEGRATION_DB_URL as string),
-  })
-}
+warnIntegrationSkip("bank-statement-concurrency")
 
 type Tx = Prisma.TransactionClient
-
-/** Deferred manual: barrier antar-langkah supaya interleaving deterministik. */
-function deferred() {
-  let resolve!: () => void
-  const promise = new Promise<void>((r) => {
-    resolve = r
-  })
-  return { promise, resolve }
-}
 
 const isDeadlock = (e: unknown): boolean => {
   const msg = e instanceof Error ? e.message : String(e)
