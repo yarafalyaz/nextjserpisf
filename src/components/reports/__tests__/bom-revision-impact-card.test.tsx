@@ -57,7 +57,16 @@ describe("BomRevisionImpactCard F-2026-10-22-068-S AC-BOM68-8", () => {
     expect(text).toContain("Rev. 2 terpasang")
     expect(text).toContain("WO-001")
     expect(text).toContain("Dalam Proses")
-    // angka verbatim builder: keluar 3, belum keluar (5-3)+2=4, baris ter-issue 1
+    // angka verbatim builder per baris (sel persis, bukan substring ringkasan):
+    // WO-001 keluar 3, belum keluar (5-3)+2=4, baris ter-issue 1
+    // WO-002 keluar 0, belum keluar 4, baris ter-issue 0
+    const rows = [...container.querySelectorAll("tbody tr")].map((r) =>
+      [...r.querySelectorAll("td")].map((c) => (c.textContent ?? "").trim()),
+    )
+    expect(rows).toEqual([
+      ["WO-001", "Dalam Proses", "3", "4", "1", "Sudah ter-issue — terkunci"],
+      ["WO-002", "Konsep", "0", "4", "0", "Belum ada material keluar"],
+    ])
     expect(text).toContain("Sudah ter-issue — terkunci")
     expect(text).toContain("WO-002")
     expect(text).toContain("Belum ada material keluar")
