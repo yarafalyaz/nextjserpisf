@@ -13526,10 +13526,11 @@ terpisah dengan vonis akuntansi. Yang TIDAK diusulkan run ini: portal
 pelanggan penuh, e-sign checklist, pengaburan wajah otomatis, syarat
 minimal jumlah foto sebagai gate, tabel foto baru.
 ## SPEC BOT 5 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
+## SPEC BUSINESS 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
 
 Spec dokumen saja, TANPA kode produksi/schema/migrasi/UI. ID bebas
 F-2026-10-24-098-S (terverifikasi belum terpakai di origin/main
-c6c4bfb3; serial -S Bot 5 terakhir 097-S PR #698).
+c6c4bfb3; serial -S BUSINESS terakhir 097-S PR #698).
 
 ### 0. Anti-duplikat — apa yang SUDAH merged, dilarang dispec ulang
 
@@ -13545,7 +13546,7 @@ c6c4bfb3; serial -S Bot 5 terakhir 097-S PR #698).
   `Setting.abnormalScrapPostingEnabled` default MATI +
   `abnormalScrapExpenseAccountId` fail-closed (:266-272).
   Klasifikasi normal/abnormal, jurnal, koreksi reversal = vonis
-  BOT 4 F-2026-10-22-066-V — spec ini TIDAK memutus ulang.
+  ACCOUNTANT F-2026-10-22-066-V — spec ini TIDAK memutus ulang.
 - `TERVERIFIKASI-KODE`: `Remnant` (:3335-3359) = catatan sisa di
   luar stok (status default `usable`, `dimensions` teks bebas,
   `sourceType/sourceId` generik nullable); aksi
@@ -13591,7 +13592,7 @@ sebagai gerbang operasional (bukan gerbang jurnal).
 Aktor: staf cutting/operator (catat sisa saat issue), foreman/
 kepala bengkel (kalibrasi allowance, approval abnormal, vonis
 fisik remnant vs besi tua), gudang (terima remnant/besi tua),
-finance (penjualan besi tua — wilayah BOT 4, di luar spec).
+finance (penjualan besi tua — wilayah ACCOUNTANT, di luar spec).
 
 Alur A — kalibrasi allowance per kategori bahan (sebelum job):
 1. Tabel acuan kalibrasi (USULAN, bantuan estimator, BUKAN
@@ -13607,7 +13608,7 @@ Alur A — kalibrasi allowance per kategori bahan (sebelum job):
    tambahan; yang wajib = baris terkalibrasi eksplisit, bukan
    angka sama dengan acuan.
 3. Bentuk bahan dibaca dari kategori item existing
-   (`ItemCategory`) — kebutuhan data D-S98-01 hanya bila BOT 1
+   (`ItemCategory`) — kebutuhan data D-S98-01 hanya bila LEAD
    menyetujui penanda bentuk di kategori; tanpa itu acuan tampil
    per kategori item apa adanya dan pemetaan plat/profil manual
    oleh estimator (jujur: belum terstruktur).
@@ -13638,7 +13639,7 @@ Alur C — approval abnormal (gerbang operasional baru):
    + tindak lanjut (teguran/pelatihan/kalibrasi ulang allowance).
    Tanpa approval, laporan scrap menandai baris "abnormal belum
    ditinjau" — complete TIDAK ditahan (menahan dokumen =
-   `BUTUH-VONIS` BOT 1, pola BR-SC-11 F-071-S).
+   `BUTUH-VONIS` LEAD, pola BR-SC-11 F-071-S).
 7. Foreman memilih disposisi tinjau: `diterima_wajar` (kondisi
    bahan/proses) atau `kelalaian` (wajib catatan + tindak lanjut
    teks). Disposisi tercatat (D-S98-04), klasifikasi uang tetap
@@ -13651,7 +13652,7 @@ Alur D — besi tua (penampungan -> jual timbang):
    kg per kejadian dari langkah 5). Penjualan ke pengepul =
    dokumen penjualan existing? BELUM terverifikasi ada jalur
    jual scrap; perlakuan akuntansi hasil jual besi tua (pengurang
-   HPP vs pendapatan lain) = `BUTUH-VONIS` BOT 4. Spec ini hanya
+   HPP vs pendapatan lain) = `BUTUH-VONIS` ACCOUNTANT. Spec ini hanya
    menetapkan kebutuhan data kg + tautan kejadian (D-S98-03);
    TIDAK mengusulkan dokumen penjualan baru sebelum vonis.
 
@@ -13667,10 +13668,10 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | Buat Remnant usable + dimensi + tautan issue | `create_material_issues` (reuse existing :2633) | sama | `create_material_issues` | — |
 | Ubah remnant usable -> scrap (besi tua) | — (usulan: dicabut dari operator) | `create_material_issues` + alasan (reuse, penjaga status existing) | — | — |
 | Kalibrasi scrapPercent baris BOM | — | `manage_bom_revisions` + setujui `approve_bom_revisions` (reuse) | — | — |
-| Approval/disposisi scrap abnormal | — | key baru `approve_scrap_reviews` (USULAN D-S98-05; default-aman: reuse `complete_work_orders` sampai BOT 1 putus) | — | — |
+| Approval/disposisi scrap abnormal | — | key baru `approve_scrap_reviews` (USULAN D-S98-05; default-aman: reuse `complete_work_orders` sampai LEAD putus) | — | — |
 | Catat kg penampungan besi tua | `create_material_issues` (reuse) | sama | `create_material_issues` | — |
 | Lihat laporan scrap + status tinjau | `view_reports` | `view_reports` | `view_reports` | `view_reports` |
-| Jual besi tua + jurnal hasil jual | — | — | — | di luar spec — `BUTUH-VONIS` BOT 4 |
+| Jual besi tua + jurnal hasil jual | — | — | — | di luar spec — `BUTUH-VONIS` ACCOUNTANT |
 
 ### 4. Status-transition matrix
 
@@ -13690,17 +13691,17 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | BR-SCRAP-01 | Spec ini delta: dilarang membangun ulang allowance per baris BOM, klasifikasi, snapshot, laporan, atau jurnal scrap — semua sudah merged (F-071-S/066-V) | TERVERIFIKASI-KODE §0 |
 | BR-SCRAP-02 | Angka persen acuan allowance per kategori bahan (plat vs profil) TIDAK ditetapkan spec ini; acuan bukan default dan tidak pernah auto-isi `scrapPercent` | BUTUH-VONIS pemilik proses (kepala bengkel); angka praktik luar tidak diadopsi |
 | BR-SCRAP-03 | Satu sisa fisik = satu kelas (remnant usable ATAU scrap); catat ganda untuk potongan sama ditolak | USULAN |
-| BR-SCRAP-04 | Remnant usable wajib dimensi terukur + tautan baris issue asal; tanpa dimensi/tautan, sisa tidak boleh berstatus usable | USULAN (mengetatkan Remnant existing; bentuk pengetatan BOT 3) |
+| BR-SCRAP-04 | Remnant usable wajib dimensi terukur + tautan baris issue asal; tanpa dimensi/tautan, sisa tidak boleh berstatus usable | USULAN (mengetatkan Remnant existing; bentuk pengetatan BACKEND) |
 | BR-SCRAP-05 | Ambang minimum usable per kategori (mis. panjang/diameter/luas minimum) = data terkonfigurasi per kategori item, bukan konstanta kode; nilai ambang belum ditetapkan | USULAN bentuk; BUTUH-VONIS kepala bengkel utk nilai |
-| BR-SCRAP-06 | Scrap murni penampungan besi tua wajib berat kg terpisah dari satuan issue; penjualan & perlakuan uangnya di luar spec | USULAN pencatatan; BUTUH-VONIS BOT 4 utk jual/jurnal |
+| BR-SCRAP-06 | Scrap murni penampungan besi tua wajib berat kg terpisah dari satuan issue; penjualan & perlakuan uangnya di luar spec | USULAN pencatatan; BUTUH-VONIS ACCOUNTANT utk jual/jurnal |
 | BR-SCRAP-07 | Rekonsiliasi baris: issue = terpasang + remnant + scrap (satuan sama); selisih = temuan laporan, bukan penyesuaian diam-diam | USULAN |
-| BR-SCRAP-08 | Approval foreman atas abnormal = tinjau operasional saja; tidak mengubah klasifikasi, nilai, jurnal (066-V), dan tidak menahan complete | USULAN; menahan complete = BUTUH-VONIS BOT 1 |
+| BR-SCRAP-08 | Approval foreman atas abnormal = tinjau operasional saja; tidak mengubah klasifikasi, nilai, jurnal (066-V), dan tidak menahan complete | USULAN; menahan complete = BUTUH-VONIS LEAD |
 | BR-SCRAP-09 | Disposisi `kelalaian` wajib catatan + tindak lanjut; TIDAK otomatis jadi potongan gaji/beban karyawan | USULAN; sanksi uang = BUTUH-VONIS accountant+HR |
 | BR-SCRAP-10 | Serbuk/gram/sisa tak berbentuk: selalu scrap murni (tidak pernah remnant), masuk kg penampungan | USULAN |
 
-### 6. Kebutuhan data (untuk BOT 3 — kebutuhan, BUKAN skema final)
+### 6. Kebutuhan data (untuk BACKEND — kebutuhan, BUKAN skema final)
 
-- D-S98-01 (opsional, sesudah putusan BOT 1): penanda bentuk
+- D-S98-01 (opsional, sesudah putusan LEAD): penanda bentuk
   bahan di `ItemCategory` (plat/profil/lain) utk acuan per bentuk.
 - D-S98-02: ambang dimensi minimum usable terkonfigurasi per
   kategori + snapshot ambang terpakai saat remnant dibuat.
@@ -13710,7 +13711,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 - D-S98-04: rekod tinjau abnormal per baris issue terklasifikasi:
   status tinjau, disposisi, catatan, peninjau, waktu; menempel ke
   snapshot merged, tidak mengubahnya.
-- D-S98-05: permission `approve_scrap_reviews` bila BOT 1 tidak
+- D-S98-05: permission `approve_scrap_reviews` bila LEAD tidak
   menyetujui reuse `complete_work_orders`.
 - Laporan: perluas read-model scrap existing (bukan laporan
   kedua): kolom status tinjau, kg besi tua per periode/gudang,
@@ -13723,7 +13724,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | Waste allowance per bahan BOM | Formula Produksi (BENCHMARK §1) | ADA waste allowance (BENCHMARK §1) | ADA per baris revisi (merged) | acuan per kategori sbg pembanding kalibrasi (D-S98-01) |
 | Klasifikasi normal/abnormal + beban periode | tidak diklaim | tidak diklaim | ADA (066-V, flag catat-dulu) | tidak diubah; + tinjau foreman (D-S98-04) |
 | Remnant usable berdimensi tertaut issue | tidak diklaim | tidak diklaim | PARSIAL (Remnant ada; dimensi bebas, tautan nullable) | ambang usable + tautan wajib (D-S98-02) |
-| Scrap besi tua kg + jual timbang | tidak diklaim | tidak diklaim | ABSEN | catat kg (D-S98-03); jual = BUTUH-VONIS BOT 4 |
+| Scrap besi tua kg + jual timbang | tidak diklaim | tidak diklaim | ABSEN | catat kg (D-S98-03); jual = BUTUH-VONIS ACCOUNTANT |
 | Approval abnormal operasional | kontrol ambil berlebih per hak akses (BENCHMARK) | tidak diklaim | ABSEN | antrean tinjau foreman §2C |
 
 ### 8. Acceptance criteria (AC-SCRAP-1..8)
@@ -13755,13 +13756,13 @@ konvensi existing (bukan stok, tanpa movement).
 
 - Jalur issue/form scrap kedua; laporan scrap kedua; angka
   allowance karangan; dokumen penjualan besi tua sebelum vonis
-  BOT 4; potongan gaji dari label kelalaian; nesting otomatis.
+  ACCOUNTANT; potongan gaji dari label kelalaian; nesting otomatis.
 
 ### 10. Urutan implementasi
 
-BOT 1 putus: reuse izin vs `approve_scrap_reviews` + apakah
+LEAD putus: reuse izin vs `approve_scrap_reviews` + apakah
 complete kelak boleh ditahan tinjau (default spec: TIDAK) ->
 kepala bengkel tetapkan angka acuan+ambang (BR-SCRAP-02/05) ->
-BOT 3 inti D-S98-02..04 (klaim schema di board) -> BOT 2 UI
-(form BOM acuan, sortir sisa, antrean tinjau) -> BOT 6
-AC-SCRAP-1..8. BOT 4 hanya untuk penjualan besi tua (BR-SCRAP-06).
+BACKEND inti D-S98-02..04 (klaim schema di board) -> FRONTEND UI
+(form BOM acuan, sortir sisa, antrean tinjau) -> QA
+AC-SCRAP-1..8. ACCOUNTANT hanya untuk penjualan besi tua (BR-SCRAP-06).
