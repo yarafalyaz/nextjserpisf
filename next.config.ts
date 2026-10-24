@@ -11,6 +11,14 @@ const isDev = process.env.NODE_ENV === "development";
 
 const nextConfig: NextConfig = {
   ...(isDev ? { distDir: ".next-dev" } : {}),
+  // Docker Desktop di macOS tidak meneruskan event filesystem host→VM dengan
+  // andal (flyer: file pindah/hapus tidak terdeteksi sampai container restart,
+  // lihat AGENTS.md). Polling adalah jalan terakhir menurut docs Next (CPU/IO
+  // lebih tinggi), jadi hanya dinyalakan di dalam container dev lewat env
+  // WATCH_POLLING_MS dari docker-compose — dev di host tetap event-driven.
+  ...(process.env.WATCH_POLLING_MS
+    ? { watchOptions: { pollIntervalMs: Number(process.env.WATCH_POLLING_MS) } }
+    : {}),
   // `next dev` rewrites tsconfig.json to also include its own distDir
   // (`.next-dev/**`). The production build then type-checked that dev cache,
   // so a half-written or stale generated file under `.next-dev` failed the

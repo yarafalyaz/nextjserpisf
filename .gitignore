@@ -101,3 +101,4 @@ USER.md
 
 # Loose scratch assets at repo root (manuals, sample dumps — keep out of git)
 /Sample/
+backups/

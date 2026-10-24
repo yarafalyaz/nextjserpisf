@@ -61,6 +61,7 @@ export default async function AccountMappingPage() {
         { label: "PPN Keluaran", value: accountName(settings?.salesTaxAccountId) },
         { label: "Retur Penjualan", value: accountName(settings?.salesReturnAccountId) },
         { label: "Akun Penjualan", value: accountName(settings?.salesAccountId) },
+        { label: "Pendapatan Besi Tua Scrap (kandidat 710003)", value: accountName(settings?.scrapSaleIncomeAccountId) },
       ],
     },
     {
