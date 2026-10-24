@@ -35,7 +35,12 @@ import { loadVehicleMarginReport } from "../vehicle-margin-data"
 const PERIOD = { start: new Date("2026-10-01T00:00:00"), end: new Date("2026-10-31T23:59:59") }
 
 function resetMocks() {
-  vi.clearAllMocks()
+  // mockReset (bukan clearAllMocks): antrean mockResolvedValueOnce sisa tes
+  // yang gagal di tengah wajib dibuang, kalau tidak bocor ke tes berikut.
+  for (const model of Object.values(mocks.prismaMock)) {
+    for (const fn of Object.values(model)) fn.mockReset()
+  }
+  mocks.projectPlReport.mockReset()
   const p = mocks.prismaMock
   mocks.projectPlReport.mockResolvedValue({
     rows: [],
@@ -224,7 +229,11 @@ describe("loadVehicleMarginReport — rantai loader F-2026-10-21-033", () => {
       periodLabel: "Periode",
       periodCaption: "Periode",
     })
-    mocks.prismaMock.project.findMany.mockResolvedValue([{ id: 1, customerVehicleId: 7 }])
+    mocks.prismaMock.project.findMany.mockImplementation(async (args: { select?: Record<string, unknown> }) =>
+      args?.select?.customer
+        ? [{ id: 1, customerVehicleId: 7, customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 1" } }]
+        : [{ id: 1, customerVehicleId: 7 }],
+    )
 
     const r = await loadVehicleMarginReport(PERIOD)
 
@@ -235,5 +244,151 @@ describe("loadVehicleMarginReport — rantai loader F-2026-10-21-033", () => {
       projectCount: 1,
     })
     expect(r.label).toBe("margin job kendaraan")
+  })
+})
+
+describe("loadVehicleMarginReport — memo unbilled E129-4", () => {
+  const FORTY = 40_000_000
+
+  it("(b-memo) WO non-proyek invoice draft DPP 40jt: revenue 0, memo 40jt; cancelled+deleted 0", async () => {
+    const p = mocks.prismaMock
+    p.workOrder.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 50, date: new Date("2026-10-05"), documentNo: "WO-0050",
+          quotationId: 100, customerVehicleId: 7,
+          customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 7" },
+          productionOrders: [],
+        },
+      ])
+      .mockResolvedValue([])
+    const bridge = [
+      { id: 900, quotationId: 100, salesOrderId: null, projectId: null, customerVehicleId: null, status: "draft", subtotal: FORTY, discount: 0, deletedAt: null },
+      { id: 901, quotationId: 100, salesOrderId: null, projectId: null, customerVehicleId: null, status: "cancelled", subtotal: FORTY, discount: 0, deletedAt: null },
+      { id: 902, quotationId: 100, salesOrderId: null, projectId: null, customerVehicleId: null, status: "approved", subtotal: FORTY, discount: 0, deletedAt: new Date("2026-10-09") },
+    ]
+    p.salesInvoice.findMany
+      .mockResolvedValueOnce(bridge) // (b) quotation bridge (billed+memo)
+      .mockResolvedValueOnce([]) // (c) billed langsung
+      .mockResolvedValueOnce([]) // (c-memo) langsung
+      .mockResolvedValueOnce([]) // (a-memo) direct project
+      .mockResolvedValueOnce([]) // (a-memo) bridge project
+    p.project.findMany.mockResolvedValue([
+      { id: 3, customerVehicleId: 7, customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 7" } },
+    ])
+
+    const r = await loadVehicleMarginReport(PERIOD)
+    const row = r.rows.find((x) => x.customerVehicleId === 7)
+    expect(row?.revenue).toBe(0)
+    expect(row?.profit).toBe(0)
+    expect(row?.marginPercent).toBe(0)
+    expect(row?.unbilledMemo).toBe(FORTY)
+    expect(row?.unbilledByStatus).toEqual({ draft: FORTY, approved: 0, sent: 0 })
+    expect(r.totals.unbilledMemo).toBe(FORTY)
+    expect(r.totals.revenue).toBe(0)
+  })
+
+  it("(b-memo) invoice memo sama dua jembatan + basis DPP (grandTotal/PPN tidak masuk), diskon kurangi", async () => {
+    const p = mocks.prismaMock
+    p.workOrder.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 50, date: new Date("2026-10-05"), documentNo: "WO-0050",
+          quotationId: 100, customerVehicleId: 7,
+          customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 7" },
+          productionOrders: [],
+        },
+      ])
+      .mockResolvedValue([])
+    p.salesOrder.findMany.mockResolvedValue([{ id: 300, quotationId: 100 }])
+    const shared = {
+      id: 900, quotationId: 100, salesOrderId: 300, projectId: null, customerVehicleId: null,
+      status: "sent", grandTotal: 111_000_000, subtotal: 100_000_000, discount: 5_000_000,
+      taxAmount: 11_000_000, totalAmount: 111_000_000, paidAmount: 0, deletedAt: null,
+    }
+    p.salesInvoice.findMany
+      .mockResolvedValueOnce([shared]) // quotation bridge
+      .mockResolvedValueOnce([shared]) // SO bridge — invoice sama
+      .mockResolvedValueOnce([]) // (c) billed langsung
+      .mockResolvedValue([])
+
+    const r = await loadVehicleMarginReport(PERIOD)
+    const row = r.rows.find((x) => x.customerVehicleId === 7)
+    expect(row?.unbilledMemo).toBe(95_000_000)
+    expect(row?.unbilledByStatus.sent).toBe(95_000_000)
+    expect(r.totals.unbilledMemo).toBe(95_000_000)
+    expect(row?.revenue).toBe(0)
+  })
+
+  it("(a)+(b)+(c) kendaraan sama tidak dobel; invoice ber-projectId milik proyek bukan WO", async () => {
+    const p = mocks.prismaMock
+    mocks.projectPlReport.mockResolvedValue({
+      rows: [
+        {
+          projectId: 3, revenue: 0, materialCost: 0, productionCost: 0,
+          expenseCost: 0, pettyCashCost: 0, vendorBillCost: 0, totalCost: 0,
+          profit: 0, marginPercent: 0, revenueInvoiceIds: [],
+          materialIssueIds: [], vendorBillIds: [], unpulledTimesheetHours: 0,
+          unpulledTimesheetCount: 0, projectDocumentNo: "PRJ-3", projectName: "P3",
+          customerName: "PT A", vehiclePlate: "B 7", projectStatus: "active",
+        },
+      ],
+      periodLabel: "Periode", periodCaption: "Periode",
+    })
+    p.project.findMany.mockImplementation(async (args: { select?: Record<string, unknown> }) =>
+      args?.select?.customer
+        ? [{ id: 3, customerVehicleId: 7, customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 7" } }]
+        : [{ id: 3, customerVehicleId: 7 }],
+    )
+    p.workOrder.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 50, date: new Date("2026-10-05"), documentNo: "WO-0050",
+          quotationId: 100, customerVehicleId: 7,
+          customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 7" },
+          productionOrders: [],
+        },
+      ]) // (b) WO non-proyek
+      .mockResolvedValueOnce([{ projectId: 3, quotationId: 200 }]) // (a-memo) WO proyek
+    const invProject = { id: 900, quotationId: 100, salesOrderId: null, projectId: 3, customerVehicleId: null, status: "draft", subtotal: 10_000_000, discount: 0, deletedAt: null }
+    const invBridgeProject = { id: 901, quotationId: 200, salesOrderId: null, projectId: null, customerVehicleId: null, status: "approved", subtotal: 20_000_000, discount: 0, deletedAt: null }
+    const invDirect = { id: 902, customerVehicleId: 7, status: "sent", subtotal: 30_000_000, discount: 0, customer: { name: "PT A" } }
+    p.salesInvoice.findMany
+      .mockResolvedValueOnce([invProject]) // (b) bridge — ber-projectId, bukan WO
+      .mockResolvedValueOnce([]) // (c) billed langsung
+      .mockResolvedValueOnce([invDirect]) // (c-memo) langsung
+      .mockResolvedValueOnce([invProject]) // (a-memo) direct project
+      .mockResolvedValueOnce([invBridgeProject]) // (a-memo) bridge quotation WO proyek
+    p.customerVehicle.findMany.mockResolvedValue([{ id: 7, plateNumber: "B 7" }])
+
+    const r = await loadVehicleMarginReport(PERIOD)
+    expect(r.rows).toHaveLength(1)
+    expect(r.rows[0].customerVehicleId).toBe(7)
+    expect(r.rows[0].revenue).toBe(0)
+    expect(r.rows[0].unbilledMemo).toBe(60_000_000)
+    expect(r.rows[0].unbilledByStatus).toEqual({ draft: 10_000_000, approved: 20_000_000, sent: 30_000_000 })
+    expect(r.totals.unbilledMemo).toBe(60_000_000)
+    const memoWhere = p.salesInvoice.findMany.mock.calls[3][0].where
+    expect(memoWhere).toMatchObject({ projectId: { in: [3] }, status: { in: ["draft", "approved", "sent"] }, deletedAt: null })
+  })
+
+  it("(c-memo) invoice langsung memo saja: baris tampil revenue 0; where persis kelas (c) + status memo", async () => {
+    const p = mocks.prismaMock
+    p.salesInvoice.findMany
+      .mockResolvedValueOnce([]) // (c) billed
+      .mockResolvedValueOnce([
+        { id: 950, customerVehicleId: 9, status: "draft", subtotal: 2_500_000, discount: 500_000, customer: { name: "PT C" } },
+      ])
+    p.customerVehicle.findMany.mockResolvedValue([{ id: 9, plateNumber: "D 9" }])
+
+    const r = await loadVehicleMarginReport(PERIOD)
+    expect(r.rows).toHaveLength(1)
+    expect(r.rows[0]).toMatchObject({ customerVehicleId: 9, revenue: 0, unbilledMemo: 2_000_000 })
+    expect(r.rows[0].unbilledByStatus.draft).toBe(2_000_000)
+    const memoWhere = p.salesInvoice.findMany.mock.calls[1][0].where
+    expect(memoWhere).toMatchObject({
+      customerVehicleId: { not: null }, quotationId: null, salesOrderId: null,
+      projectId: null, deletedAt: null, status: { in: ["draft", "approved", "sent"] },
+    })
   })
 })
