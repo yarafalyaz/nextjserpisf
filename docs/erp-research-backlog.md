@@ -13081,6 +13081,8 @@ NCR atas job closed mengikuti L2/reopen, bukan bypass QC).
   sah jalur L3 (biaya telat bukan-biaya-job) + apakah tautan referensi
   ke WO closed cukup catatan ActivityLog/dokumen jurnal existing.
   Sampai terbit: L3 tidak dibangun, hanya L1/L2.
+  **TERJAWAB: vonis F-2026-10-24-133-V di bawah (BOT 4, kartu
+  t_8831021b) — L3 dibuka bersyarat vonis itu; S4 boleh dibangun.**
 - Q-CLOSE-3 (BOT 3, fisik): acuan tanggal "completed sejak" untuk
   umur antrean S2 (updatedAt? jejak ActivityLog complete? kolom
   aditif completedAt?) — fisik milik Backend; builder tidak boleh
@@ -13093,6 +13095,246 @@ F-2026-10-21-009 dinyatakan SELESAI-INTI oleh spec ini; sisa = S1-S3
 (+S4 bersyarat Q-CLOSE-2). Pemilik berikutnya: BOT 1 (Q-CLOSE-1 +
 merge PR docs ini) -> BOT 3 (S1/S2 + Q-CLOSE-3) -> BOT 2 (S3) ->
 BOT 6 (AC-CLOSE-1..8); BOT 4 hanya Q-CLOSE-2.
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-133-V: jalur L3 biaya telat non-job sesudah WO closed — akun beban periode berjalan, dokumen sumber sah, dan tautan referensi WO (Q-CLOSE-2 spec F-2026-10-24-097-S §5/§12, induk F-2026-10-21-009-V Keputusan 1f/4c)
+
+Kartu t_8831021b. Dokumen saja; TANPA kode aplikasi/schema/migrasi di
+kartu ini. Menjawab Q-CLOSE-2 spec F-2026-10-24-097-S (PR #698 merged
+b2d55482): (1) akun beban jalur L3, (2) dokumen sumber sahnya,
+(3) apakah tautan referensi ke WO closed cukup catatan
+ActivityLog/dokumen jurnal existing. Vonis ini MEMUTUS perlakuan;
+bentuk fisik S4 (aksi/UI penanda L3) milik BOT Backend/BOT Frontend
+sesudah vonis merged, klaim file di board dulu. L1/L2 TIDAK dibuka
+ulang (vonis 009-V Keputusan 1f/2/4 tetap mengikat utuh).
+
+Status: PUTUSAN BOT 4. Pemilik berikutnya: BOT Lead terima + merge PR
+vonis ini -> BOT Backend inti S4 (Putusan 1-5, tanpa schema baru) ->
+BOT Frontend tampil snapshot/notice backend apa adanya -> BOT QA
+falsifikasi E133-1..7.
+
+### 0. Basis bukti live (origin/main e4d71833, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Inti tutup live: status `closed` terpisah, guard
+  `assertJobCostMutable` (`job-closeout.service.ts`), skip+notice
+  tagihan subkontrak telat (`production-cost.service.ts:95-122`,
+  `purchase.actions.ts` syncServicePoCostFromBills) — persis spec
+  F-097-S §0/§1. Biaya telat non-PO-jasa hari ini hanya: ditolak,
+  reopen (L2), atau jurnal umum manual tanpa tautan job. Celah itu
+  yang diputus di sini.
+- Dokumen biaya existing SUDAH lengkap untuk L3, tanpa model baru:
+  (a) `VendorBill` tanpa goods receipt = tagihan jasa/biaya:
+  `onVendorBillPosted` (`accounting.hook.ts:1675`) posting
+  Dr `purchaseExpenseAccountId` / Cr `purchasePayableAccountId`
+  (neto sesudah potongan PPh lewat `withholdingType.liabilityAccountId`
+  existing), fail-closed bila setting kosong, idempoten
+  (referenceType `VendorBill`), `assertPeriodOpen(bill.date)` dalam tx;
+  PPN masukan terpisah HANYA jalur goods-based
+  (`purchaseTaxAccountId`), jalur non-GR mendebit `grandTotal` penuh.
+  (b) `Expense` approved: `onExpenseApproved` (`accounting.hook.ts:929`)
+  posting Dr `Expense.accountId` (dipilih operator dari COA aktif) /
+  Cr `paidFromAccountId`, fail-closed akun kosong, idempoten
+  (referenceType `Expense`), `assertPeriodOpen` dalam tx.
+  (c) Jurnal umum manual (`JournalService.createJournal`) membolehkan
+  referenceType/ReferenceId bebas — TAPI tanpa dokumen sumber,
+  tanpa utang vendor, tanpa jejak bukti; vonis ini melarangnya
+  sebagai jalur L3 (Putusan 2).
+- Akun beban existing: automap `purchaseExpenseAccountId` ->
+  `600020 Beban Operasional Lainnya` [EXPS/6000]
+  (`account-automap.ts:184`, komentar kode: COA Accurate tidak punya
+  akun khusus beban pembelian). Keluarga COGS `5101` (510102 Beban
+  Material, 510104 Beban Garansi) dan WIP `110404` adalah akun BIAYA
+  JOB — memakainya untuk L3 mengotori HPP/margin job dan WIP.
+  `Expense.accountId` bebas COA aktif; kategori `ExpenseCategory`
+  existing. TIDAK ada setting/akun khusus "biaya telat" dan vonis
+  ini TIDAK membuat akun/setting baru (konsisten larangan 009-V
+  Keputusan 5.1: akun COA baru dilarang).
+- Tautan existing: `Journal.referenceType/referenceId` menunjuk
+  dokumen POSTING-nya (VendorBill/Expense) dan unik jurnal aktif per
+  referensi (F-2026-10-23-127-V) — kolom itu TIDAK bisa sekaligus
+  menunjuk WorkOrder tanpa merusak idempotency/klaim jurnal.
+  `VendorBill`/`Expense` TIDAK punya kolom workOrderId (schema live);
+  `ActivityLog` (modelType/modelId/description/metadata) + kolom
+  notes/description dokumen + memo jurnal adalah permukaan tautan
+  yang sudah ada. `WorkOrder.documentNo` unik terbaca manusia.
+
+### Dasar resmi/standar (akses 2026-10-24, label jujur)
+
+- PSAK 1/PSAK 25 kerangka penyajian + kebijakan akuntansi (label
+  standar komersial, bukan dasar fiskal): beban diakui periode
+  terjadinya; perubahan perlakuan biaya job yang sudah ditutup final
+  = koreksi periode berjalan bila job tidak dibuka kembali, bukan
+  restatement diam-diam angka job. Akuntansi ISF untuk L3 mengikuti
+  garis itu: pengakuan di periode dokumen telat tiba/terverifikasi,
+  BUKAN backdate ke periode pengerjaan job.
+- Accurate Penyelesaian Pesanan ke akun (benchmark produk, akses
+  spec F-097-S): penyelesaian pekerjaan ke akun periode berjalan
+  lewat dokumen baru — pola dokumen-baru-periode-berjalan, bukan
+  edit order selesai. URL di spec F-097-S §Benchmark. Label:
+  BENCHMARK produk, bukan kewajiban hukum.
+- PPh 23 atas jasa + PPN masukan: perlakuan mengikuti jalur
+  VendorBill existing (withholdingType bertanggal efektif di master
+  pajak + faktur pajak masukan vendor); vonis ini TIDAK menetapkan
+  tarif/kode baru dan TIDAK mengklaim kepatuhan per transaksi —
+  tarif hidup di master existing, bukan konstanta L3.
+
+### Putusan 1 — Akun beban L3: akun beban PERIODE dari setting/dokumen existing; dilarang akun biaya job
+
+- Biaya L3 diakui sebagai beban periode berjalan, BUKAN biaya job:
+  jurnal L3 DILARANG mendebit WIP (`110404`/setting `wipAccountId`),
+  keluarga COGS job (`5101`, `510102`, `510104`), akun persediaan,
+  atau akun absorption (`materialExpenseAccountId`/
+  `materialIssueExpenseAccountId`/`cogsAccountId` sebagai kredit
+  serapan WIP). Alasan: debit ke akun-akun itu terbaca sistem sebagai
+  HPP/biaya job dan merusak rekonsiliasi margin job closed yang
+  sudah final (009-V Keputusan 2/4d).
+- Akun debit sah SATU per jalur dokumen (Putusan 2), dari setting
+  existing, fail-closed kosong = tolak berisik:
+  (a) jalur VendorBill: `purchaseExpenseAccountId` (automap seed
+  `600020 Beban Operasional Lainnya` [EXPS]) — akun yang SAMA dengan
+  tagihan jasa non-job existing; jangan buat setting L3 terpisah.
+  (b) jalur Expense: `Expense.accountId` yang dipilih operator WAJIB
+  akun COA aktif bertipe EXPS/OEXP; Backend S4 menolak akun bertipe
+  COGS/INTR/OCAS-WIP untuk dokumen bertanda L3 (penjaga tipe, bukan
+  tebakan nama akun).
+- Bila perusahaan kelak menuntut pisah-laporan "beban biaya telat
+  job tertutup" dari beban operasional lain: itu akun EXPS anak baru
+  lewat prosedur COA existing (usulan BOT Backend -> vonis susulan),
+  BUKAN syarat S4 dan BUKAN diputus di sini. Default S4 = `600020`
+  lewat setting existing di atas.
+
+### Putusan 2 — Dokumen sumber sah: VendorBill (utama) atau Expense (tunai); jurnal umum polos DILARANG
+
+- Jalur utama (jasa pihak ketiga belum dibayar, mis. tagihan bubut
+  tanpa PO jasa tiba sesudah WO closed): **VendorBill tanpa PO jasa
+  tertaut job dan tanpa goods receipt** atas vendor nyata, tanggal =
+  tanggal tagihan/periode berjalan terbuka. Posting existing berlaku
+  apa adanya: Dr beban Putusan 1(a) / Cr utang usaha (neto PPh
+  dipotong bila withholdingType terisi), `assertPeriodOpen`, idempoten
+  per VendorBill. Mirror HPP TIDAK terjadi karena tidak ada PO jasa
+  WO yang disync — dan S4 DILARANG menautkan VendorBill L3 ke
+  PurchaseOrder jasa WO closed (tautan itu memicu jalur L1/notice,
+  bukan L3; campur jalur = temuan).
+- Jalur tunai (sudah dibayar langsung kas/bank, nominal operasional
+  berjalan): **Expense approved** dengan `accountId` lolos Putusan
+  1(b) + `paidFromAccountId` terisi; posting existing apa adanya.
+- **Jurnal umum manual tanpa dokumen sumber DILARANG sebagai L3.**
+  Alasan: tanpa VendorBill/Expense tidak ada bukti vendor, tidak ada
+  utang/piutang terbaca, tidak ada gerbang periode/idempotency per
+  dokumen, dan tautan WO hanya teks bebas — persis celah "jurnal
+  manual tanpa tautan job" yang dikeluhkan spec. Jurnal umum tetap
+  sah untuk koreksi akuntansi lain di luar L3 (bukan diblokir global).
+- Satu biaya telat = SATU dokumen sumber. Biaya yang sama DILARANG
+  dicatat dua kali (VendorBill + Expense, atau L3 + reopen L2);
+  S4 menolak dokumen L3 kedua untuk vendor+nominal+tanggal tagihan
+  yang sama tertaut WO yang sama kecuali dokumen pertama batal/
+  ter-reversal (pola penjaga duplikat repo, fisik milik Backend).
+
+### Putusan 3 — Klasifikasi L3 vs L2: keputusan tercatat beralasan; part/material TIDAK pernah L3
+
+- L3 HANYA untuk biaya jasa/biaya non-material yang diputus BUKAN
+  biaya job, dengan alasan tertulis pada dokumen sumber (kolom
+  notes/description existing) oleh pembuat + tercatat ActivityLog
+  (Putusan 4). Contoh sah: jasa bubut telat untuk pekerjaan yang
+  sudah ditagih final dan perusahaan menanggungnya (contoh spec).
+- WAJIB L2 (reopen), DILARANG L3, bila: biaya adalah biaya job nyata
+  yang salah-tinggal/salah-catat dan harus masuk margin job; ATAU
+  pelanggan masih akan ditagih atas biaya itu; ATAU biaya berbentuk
+  part/material/stok apa pun (BR-CLOSE-05 spec tetap mutlak:
+  MaterialIssue ke WO closed ditolak; mengeluarkan part ke beban
+  umum untuk pekerjaan pelanggan tertutup = biaya job bocor).
+- TIDAK ada ambang rupiah L3. Klasifikasi adalah keputusan
+  perlakuan (biaya job vs beban periode), bukan materialitas —
+  konsisten 009-V Keputusan 2e (tanpa ambang). Nominal besar yang
+  salah masuk L3 tetap salah klasifikasi dan wajib dikoreksi
+  Putusan 5, bukan dilegalkan ambang.
+
+### Putusan 4 — Tautan referensi ke WO closed: CUKUP dokumen sumber + ActivityLog; kolom FK baru DITOLAK
+
+- Tautan L3 ke WO closed bersifat REFERENSI NON-POSTING dan WAJIB
+  tiga lapis dari permukaan existing (tanpa schema baru):
+  (1) teks terstruktur di dokumen sumber: notes/description memuat
+  nomor dokumen WO (`WorkOrder.documentNo`) + frasa penanda biaya
+  telat non-job sesudah tutup (kata persis S4 dibakukan Backend,
+  satu frasa tunggal — bukan teks bebas bervariasi);
+  (2) `ActivityLog` pada WorkOrder itu (modelType WorkOrder,
+  modelId WO) mencatat: nomor dokumen sumber (VendorBill/Expense),
+  vendor, nominal sen persis, alasan Putusan 3, pembuat — ditulis
+  dalam tx yang sama dengan pembuatan dokumen sumber;
+  (3) memo baris jurnal debit menyebut nomor WO (memo jurnal lahir
+  dari dokumen; S4 meneruskan penanda itu, UI tidak mengarang).
+- `Journal.referenceType/referenceId` jurnal L3 TETAP menunjuk
+  dokumen sumbernya (`VendorBill`/`Expense`). DILARANG menggantinya
+  ke WorkOrder: merusak klaim unik jurnal aktif (F-127-V), memutus
+  idempotency posting dokumen, dan membuat jurnal terbaca sebagai
+  jurnal job.
+- Kolom `workOrderId` baru di VendorBill/Expense, tabel tautan baru,
+  dan read-model margin kedua DITOLAK: tautan analitis "biaya telat
+  terkait job X" dibaca dari ActivityLog + dokumen sumber; margin job
+  closed TIDAK berubah dan TIDAK ditambah kolom selisih L3 (009-V
+  Keputusan 4d: dilarang membekukan salinan margin kedua). Laporan
+  biaya L3 per periode = laporan jurnal/dokumen existing tersaring
+  penanda Putusan 4(1); laporan baru khusus L3 bukan syarat S4.
+- ActivityLog GAGAL tulis sesudah dokumen terposting mengikuti pola
+  repo `reportPostCommitAuditFailure` (peringatan terbaca, bukan
+  sukses senyap, bukan rollback uang) — fisik mengikuti pola
+  existing, bukan mekanisme baru.
+
+### Putusan 5 — Periode, pajak dokumen, koreksi, dan larangan
+
+- Periode: tanggal dokumen sumber = periode BERJALAN pertama yang
+  terbuka; `assertPeriodOpen` existing menolak periode terkunci.
+  Backdate ke periode pengerjaan/tutup job DILARANG (itu membuka
+  kembali periode job secara ekonomi walau status tetap closed).
+- Pajak mengikuti dokumennya, bukan aturan L3 baru: VendorBill jasa
+  PKP dengan faktur pajak masukan -> PPN/PPN-masukan dan PPh potong
+  lewat field/withholdingType existing pada VendorBill itu; tanpa
+  faktur pajak masukan tidak ada kredit PPN terpisah (nominal penuh
+  beban mengikuti perilaku jurnal non-GR existing). Tarif/kode dari
+  master pajak bertanggal efektif existing; L3 DILARANG hardcode
+  tarif. Klaim patuh per transaksi = fakta dokumen vendor itu,
+  bukan vonis ini.
+- Koreksi L3 salah klasifikasi/salah nominal: reversal dokumen/
+  jurnal existing di periode terbuka lalu dokumen benar (L3 ulang
+  atau L2 reopen) — jurnal terposting TIDAK diedit diam-diam.
+  Biaya yang telanjur L3 tetapi ternyata biaya job: reverse L3,
+  lalu L2; DILARANG jurnal penyeimbang kedua yang membiarkan kedua
+  sisi hidup.
+- Larangan S4 eksplisit: ProductionCost/MaterialIssue/timesheet-pull
+  ke job closed lewat jalur L3; mengubah totalActualCost/releasedCost/
+  WIP/margin job closed; akun COA/setting baru tanpa vonis susulan;
+  fallback akun diam-diam; hitung pajak/margin di UI; dokumen L3
+  tanpa alasan Putusan 3 atau tanpa ActivityLog Putusan 4.
+
+### Acceptance falsifikasi untuk BOT QA (E133-1..7)
+
+- E133-1: VendorBill jasa tanpa PO/GR atas WO closed + penanda L3 ->
+  terposting Dr `purchaseExpenseAccountId` / Cr utang; WIP, COGS job,
+  totalActualCost/releasedCost job byte-sama; ActivityLog WO memuat
+  dokumen+nominal+alasan. Cabut penanda -> perlakuan L3 tidak lahir.
+- E133-2: VendorBill L3 ditautkan PO jasa WO closed -> ditolak jalur
+  L3 (tetap perilaku L1 skip+notice); Expense L3 berakun COGS/WIP ->
+  ditolak menyebut tipe akun.
+- E133-3: jurnal umum manual bertanda L3 tanpa VendorBill/Expense ->
+  tidak ada jalur UI/aksi L3 yang menerimanya; dokumen L3 tanpa
+  alasan -> ditolak berisik.
+- E133-4: dokumen L3 kedua vendor+nominal+tanggal sama ke WO sama ->
+  ditolak duplikat; sesudah reversal pertama -> boleh dokumen benar.
+- E133-5: part/material diajukan L3 -> ditolak, diarahkan L2/reopen;
+  biaya job nyata salah masuk L3 lalu dikoreksi -> reversal L3 +
+  reopen L2, margin berubah HANYA lewat L2 dan jejak reopen terbaca.
+- E133-6: tanggal dokumen L3 di periode terkunci -> ditolak
+  `assertPeriodOpen`; backdate periode job ditolak sama.
+- E133-7: setting `purchaseExpenseAccountId` kosong -> VendorBill L3
+  gagal berisik, nol jurnal, nol ActivityLog sukses-senyap
+  (kegagalan audit mengikuti pola peringatan repo).
+
+ID vonis ini **F-2026-10-24-133-V** (bebas: tertinggi `-V` di
+origin/main e4d71833 = 130-V merged #709; 131-V PR #702, 132-V PR
+#708, 129-V PR #692 terbuka; 133 belum terpakai di main maupun PR
+terbuka yang dicek run ini). Pemilik berikutnya: BOT 1 merge vonis
+ini -> BOT 3 inti S4 (Putusan 1-5, klaim file board; TANPA schema/
+migrasi) -> BOT 2 tampil snapshot backend -> BOT 6 E133-1..7.
+Q-CLOSE-2 TERTUTUP oleh vonis ini; S4 F-097-S TERBUKA.
 ## VONIS BOT 4 2026-10-23 — F-2026-10-23-123-V: aset dalam penyelesaian / pengerjaan sendiri (akumulasi biaya CIP, kapitalisasi bunga pinjaman, reklasifikasi siap pakai, proyek terbengkalai/dibatalkan) (lanjutan terbuka F-2026-10-23-107-V Kelas B + F-2026-10-22-062-V Putusan 4)
 
 Status: PUTUSAN BOT 4 (kartu t_79d88fb0, siklus standby 12:30). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. F-107-V (PR #611) memutus SAAT MULAI Kelas B (bulan selesai pengerjaan, nol penyusutan selama pengerjaan, tanggal selesai terstruktur) tetapi SENGAJA tidak memutus bagaimana biaya selama pengerjaan diakumulasi, biaya apa saja yang boleh masuk harga perolehan, apa yang terjadi pada bunga pinjaman selama konstruksi, dan nasib proyek yang terbengkalai/dibatalkan sebelum selesai. F-108-V Putusan 4 butir ketiga menegaskan perbaikan atas aset Kelas B belum selesai = bagian harga perolehan pengerjaan, bukan Pasal 7 — tanpa vonis akumulasi ini, jalur itu tidak punya rumah. Vonis ini menutupnya.
@@ -14127,3 +14369,87 @@ kepala bengkel tetapkan angka acuan+ambang (BR-SCRAP-02/05) ->
 BACKEND inti D-S98-02..04 (klaim schema di board) -> FRONTEND UI
 (form BOM acuan, sortir sisa, antrean tinjau) -> QA
 AC-SCRAP-1..8. ACCOUNTANT hanya untuk penjualan besi tua (BR-SCRAP-06).
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-131-V: basis neto retur pada pencapaian target penjualan tahap 2 (Q-TGT-1 dari F-2026-10-22-088-S)
+
+Status: PUTUSAN BOT 4 (kartu t_534e3e63). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menjawab Q-TGT-1 yang di §9A PUTUSAN BOT 1 2026-10-22 dinyatakan "TIDAK dibuka tahap 1 (tetap wilayah BOT 4 + Lead bila tahap 2 dibuka)". Vonis ini membuka tahap 2 untuk basis retur SAJA; ia TIDAK mengubah basis tahap 1 yang sudah live, TIDAK mengubah rekap komisi, dan TIDAK membuka ikatan pencapaian ke bonus/komisi berbayar (gerbang F-2026-10-21-016 tahap 3 tetap tertutup).
+
+### 0. Bukti live (TERVERIFIKASI-KODE, origin/main c6c4bfb3, verifikasi run ini)
+
+- Tahap 1 SUDAH LIVE (bukan lagi spec): model `SalesTarget` (prisma/schema.prisma:5461), builder murni `src/lib/reports/sales-target-achievement.ts` (`buildSalesTargetAchievement`: pencapaian = Σ `grandTotal` faktur `paid`, `deletedAt:null`, `date` dalam periode target, per snapshot `salesEmployeeId`; `SALES_TARGET_NOTICE` verbatim memuat "Retur penjualan tidak mengurangi pencapaian pada laporan ini"), loader `sales-target-achievement-data.ts` (filter identik loader komisi, AC-TGT-10), aksi `src/actions/sales-target.actions.ts`, halaman `laporan/target-penjualan`. Jadi tahap 2 = perubahan basis builder/loader existing, BUKAN fitur baru.
+- Basis bruto existing: `SalesInvoice.grandTotal = subtotal - discount + taxAmount` (sales.actions.ts:988, pola sama di jalur faktur) — grandTotal SUDAH neto diskon header dan SUDAH termasuk PPN. Karena itu pengurang retur wajib memakai basis komersial yang sama (inklusif PPN), bukan DPP saja (lihat Putusan 2).
+- Retur: `SalesReturn.status` teks bebas default `draft` (schema:1793); satu-satunya status selesai = `completed`, diset HANYA oleh hook stok di dalam tx `completeSalesReturn` (sales.actions.ts:1693-1742; sales-return.hook.ts:229 `Status.COMPLETED`). TIDAK ADA status `approved` pada SalesReturn (kosakata persetujuan retur tidak ada di kode — yang ada: draft → completed; edit dikunci non-draft di updateSalesReturn, hapus ditolak bila completed). Jadi pertanyaan kartu "approved vs completed" terjawab oleh kode: hanya `completed` yang pernah ada sebagai keadaan final.
+- Saat complete, dalam SATU tx yang sama: stok masuk kembali + jurnal GL `onSalesReturnCompleted` (accounting.hook.ts:1178 dst.: Dr Retur Penjualan harga-jual / Cr Piutang harga-jual bila tertaut faktur + Dr Persediaan cost / Cr Retur Penjualan cost; idempoten per (referenceType=SalesReturn, referenceId)) + snapshot pajak per baris dibekukan: `returnDpp = safeRound(qty × price,2)`, `returnVat = returnDpp × taxAmount/(subtotal−discount)` faktur asal, `sourceTaxRate` (src/lib/tax/return-snapshot.ts, vonis F-2026-10-21-004) + guard kumulatif keras Σ snapshot retur completed ≤ DPP/PPN faktur asal (tolak saat complete, bukan potong diam-diam). `price` baris retur = harga jual beku baris faktur asal; `cost` DILARANG jadi DPP (F-004, ditegaskan lagi di Putusan 2).
+- Atribusi penjual retur: SalesReturn TIDAK punya kolom penjual; satu-satunya tautan = `salesInvoiceId` → `SalesInvoice.salesEmployeeId` (snapshot faktur asal). Retur tanpa faktur (`salesInvoiceId` null, retur komersial murni) tidak punya penjual dan tidak punya faktur paid tertaut.
+- Tanggal retur: `SalesReturn.date` adalah tanggal dokumen retur; hook GL memakai tanggal itu sebagai `transactionDate` jurnal dan `assertPeriodOpen(salesReturn.date)` — tanggal complete yang sebenarnya tidak disimpan terpisah (hanya `updatedAt`). Ini menentukan aturan tanggal di Putusan 3.
+
+### Putusan 1 — Basis tahap 2: NETO (paidAmount bruto dikurangi retur completed), BUKAN bruto selamanya
+
+Pencapaian target tahap 2 per penjual per periode target:
+
+  achievedAmount = Σ grandTotal faktur paid (basis tahap 1, tidak berubah)
+                   − Σ nilai retur completed yang memenuhi Putusan 2, diatribusikan
+                     ke penjual snapshot faktur asal, dibukukan pada periode
+                     menurut Putusan 3
+
+- Alasan akuntansi: grandTotal faktur paid adalah harga transaksi bruto yang diakui sebagai pendapatan (PSAK 72: pendapatan diukur sebesar harga transaksi; retur penjualan adalah imbalan variabel yang mengurangi harga transaksi — entitas mengakui pendapatan hanya sebesar yang sangat mungkin tidak dibalik). Retur completed adalah peristiwa yang SUDAH pasti (barang kembali, stok masuk, piutang/pendapatan sudah dikoreksi di GL lewat jurnal retur): membiarkan pencapaian tetap bruto sesudah retur completed berarti laporan target menyatakan penjualan yang secara akuntansi sudah dibatalkan sebagian. Itu bukan "konservatif", itu salah saji untuk laporan yang dipakai menilai penjual.
+- Alasan konsistensi internal (menjawab keberatan BR-TGT-06 tahap 1): BR-TGT-06 menahan retur di tahap 1 karena "basis komisi existing juga tidak mengurangi retur; dua laporan wajib satu basis". Vonis ini TIDAK melanggar alasan itu, karena cakupannya dibatasi tegas: (a) yang berubah HANYA laporan target; rekap komisi F-016 TIDAK diubah oleh vonis ini — komisi punya gerbang tahap 3 sendiri (jurnal komisi DITUNDA-TEKNIS) dan mengubah basis komisi adalah vonis terpisah yang harus diputus bersama pemilik F-016 bila tahap 3 dibuka; (b) konsekuensinya, AC-TGT-10 ("angka pencapaian target PERSIS sama dengan paidBase komisi") BERAKHIR masa berlakunya pada saat tahap 2 dinyalakan: sesudah itu pencapaian target = paidBase komisi − retur, dan kesamaan yang wajib dibuktikan tes bersama berubah menjadi rekonsiliasi dua baris (lihat Putusan 5 + E131-1). Menyembunyikan divergensi ini demi mempertahankan AC-TGT-10 = memilih satu basis secara diam-diam, dilarang. BOT 3 wajib mengganti kunci AC-TGT-10 menjadi kunci rekonsiliasi di PR tahap 2 yang sama, dan label laporan wajib berubah (Putusan 5).
+- Yang TIDAK berubah: gerbang faktur tetap `paid` saja (posted/partial tetap tidak menaikkan pencapaian — retur atas faktur posted/partial tidak relevan karena fakturnya sendiri belum masuk basis); ember `unattributed` untuk faktur tanpa penjual tetap; persen hanya periode target utuh (BR-TGT-05, tanpa prorata); target 0/tanpa target persen kosong (BR-TGT-04); persen perusahaan tertimbang nilai atas baris dinilai utuh (BR-TGT-11) — kini dari angka NETO.
+
+### Putusan 2 — Pengurang yang sah: hanya retur `completed`, tertaut faktur paid, sebesar nilai komersial beku (DPP+PPN snapshot)
+
+Satu retur mengurangi pencapaian HANYA bila SEMUA syarat berikut terpenuhi:
+
+1. `SalesReturn.status = "completed"`. Retur `draft` (atau status teks lain apa pun) TIDAK mengurangi — belum ada stok kembali, belum ada jurnal, masih dapat diedit/dihapus. Tidak ada status `approved` pada SalesReturn (Bukti §0); bila suatu hari workflow persetujuan retur ditambah, status antara itu tetap TIDAK mengurangi sampai completed, karena peristiwa akuntansinya (jurnal + stok) hanya lahir saat complete. Menambah status antara = perubahan workflow milik BOT 3/BOT 5 dengan vonis lanjutan, bukan tafsir bebas atas vonis ini.
+2. `salesInvoiceId` TIDAK null DAN faktur asal itu sendiri masuk basis bruto pada suatu periode (status `paid`, `deletedAt:null`). Retur tanpa faktur asal tidak mengurangi penjual mana pun (tidak ada atribusi yang sah — menebak penjual dari `createdBy`/pelanggan DILARANG, pola BR-TGT-02). Retur atas faktur yang tidak pernah `paid` tidak mengurangi (tidak ada yang pernah ditambahkan).
+3. Besaran pengurang per retur = nilai komersial bruto yang konsisten dengan basis grandTotal:
+
+     nilaiRetur = Σ baris ( returnDpp + returnVat )   [snapshot beku saat complete, sen-persis]
+
+   BUKAN `qty × cost` (cost = HPP, mengurangi pencapaian sebesar harga pokok = salah basis), BUKAN DPP saja (basis bruto grandTotal termasuk PPN; mengurangi DPP saja menyisakan PPN retur di dalam pencapaian — selisih sistematis sebesar tarif efektif), BUKAN hitung-ulang dari harga master berjalan.
+4. Baris legacy tanpa snapshot (`returnDpp`/`returnVat` null — retur completed sebelum F-004): nilaiRetur diturunkan ulang dari baris beku retur itu sendiri, `qty × price` baris retur (price = harga jual beku saat retur dibuat, BUKAN harga master hari ini) + PPN proporsional dengan tarif efektif faktur asal `taxAmount/(subtotal−discount)` pola `snapshotReturnLine`, dan baris itu WAJIB berlabel `legacy` di read-model (pola isLegacyReturnLine F-004). Dilarang memperlakukan turunan legacy sebagai snapshot, dilarang memakai `cost`.
+5. Plafon per faktur: Σ pengurang semua retur completed atas satu faktur asal ≤ grandTotal faktur asal itu. Guard kumulatif F-004 sudah menjamin Σ DPP/PPN snapshot ≤ DPP/PPN faktur asal sehingga plafon ini terpenuhi untuk baris bersnapshot; untuk campuran legacy, loader wajib membatasi (clamp) pengurang kumulatif pada grandTotal faktur asal dan menampilkan selisih ter-clamp sebagai temuan rekonsiliasi bernama — bukan memotong diam-diam (prinsip rekonsiliasi vonis ini §Putusan 5).
+
+### Putusan 3 — Retur beda periode: mengurangi periode TANGGAL RETUR, periode asal TIDAK ditulis ulang
+
+- Pengurang dibukukan pada periode target yang memuat `SalesReturn.date` (tanggal dokumen retur), pada penjual snapshot faktur asal. Periode tempat faktur asal dihitung sebagai pencapaian bruto TIDAK dikurangi belakangan dan TIDAK di-restated.
+- Alasan: (a) tanggal retur adalah satu-satunya tanggal peristiwa retur yang terstruktur dan yang dipakai jurnal GL retur (`transactionDate = salesReturn.date`, `assertPeriodOpen` pada tanggal itu) — laporan manajerial mengikuti tanggal peristiwa akuntansi yang sama supaya dapat direkonsiliasi ke jurnal retur periode itu; (b) menulis ulang periode lampau yang sudah dinilai (target sudah diberi persen final, BR-TGT §2 "persen final terbaca") menghancurkan jejak penilaian: persen yang pernah dilaporkan berubah tanpa peristiwa di periode itu. Pola yang sama berlaku di GL: jurnal retur terposting di periode tanggal retur, bukan membalik jurnal faktur di periode asal.
+- Konsekuensi yang wajib diterima eksplisit (bukan disembunyikan): pencapaian satu periode dapat menjadi NEGATIF bila retur lintas-periode melebihi faktur paid periode itu. Angka negatif tampil apa adanya (pola gap negatif BR-TGT §2), persen dihitung dari angka neto itu (dapat negatif), dan loader TIDAK boleh mem-floor ke 0. Mem-floor = menyembunyikan retur. Ember khusus "retur lintas periode" sebagai kolom memo terpisah BOLEH ditambah BOT 3/BOT 2 (memudahkan baca), tetapi angka neto utama tetap satu angka di atas.
+- Retur yang tanggalnya jatuh di periode yang tidak punya target untuk penjual itu: pengurang tampil pada baris "tanpa target" penjual tersebut di periode tanggal retur (mengurangi achievedAmount baris itu, persen tetap kosong pola BR-TGT-04), dan masuk total perusahaan. Ia tidak hilang hanya karena tidak ada target.
+- Koreksi retur: retur completed tidak dapat diedit/dihapus (terkunci di kode); pembatalan retur completed hanya lewat reversal/dokumen koreksi di periode terbuka (prinsip jurnal terposting beku). Read-model membaca status apa adanya: bila suatu hari status completed dibatalkan lewat jalur koreksi sah, pengurang hilang dari periode tanggal retur pada pembacaan berikutnya dan perubahan itu tampil sebagai selisih rekonsiliasi periode berjalan — bukan suntingan diam-diam atas angka periode lampau yang sudah dibekukan di luar sistem.
+
+### Putusan 4 — Batasan akuntansi: laporan target tetap analitis, NOL jurnal, NOL kewajiban
+
+- Laporan target (tahap 1 maupun tahap 2) adalah laporan analitis/manajerial. Menghitung pengurang retur di read-model TIDAK menerbitkan, mengubah, atau membalik jurnal apa pun: jurnal retur yang sah sudah terposting satu kali oleh `onSalesReturnCompleted` saat retur completed (idempoten per retur). Menambah jurnal penyesuaian dari laporan target = dobel koreksi pendapatan/piutang, DILARANG.
+- Laporan ini BUKAN dasar bonus, insentif, komisi berbayar, potongan gaji, atau slip gaji (BR-TGT-07 tetap penuh). Angka neto tahap 2 tidak mengubah status itu: "pencapaian neto" bukan "komisi terutang". Mengikat angka ini ke pembayaran tetap gerbang F-2026-10-21-016 tahap 3 + vonis BOT 4 terpisah.
+- Empat status tetap terpisah: status dokumen target, status pembayaran faktur (`paid` adalah gerbang basis, bukan bukti kas untuk keperluan lain), status pajak (snapshot PPN retur hanya dipakai sebagai komponen nilai komersial di sini; masa pengurang SPT tetap masa tanggal nota retur/tanggal retur pola F-004 — laporan target TIDAK mengubah masa SPT apa pun), status posting (hanya jurnal retur existing). Satu flag tidak mewakili yang lain.
+- Tidak ada akun COA baru, tidak ada account mapping baru, tidak ada migrasi: semua sumber (grandTotal, snapshot retur, salesInvoiceId, salesEmployeeId, SalesReturn.date/status) sudah ada di schema berjalan.
+
+### Putusan 5 — Rekonsiliasi dan label (wajib menyertai penyalaan tahap 2)
+
+- Read-model tahap 2 wajib mengeluarkan, per penjual per periode dan total perusahaan, TIGA angka terpisah yang dapat direkonsiliasi: `grossPaidAmount` (Σ grandTotal paid), `returnDeductionAmount` (Σ pengurang Putusan 2), `achievedAmount = grossPaidAmount − returnDeductionAmount` (sen-persis, helper `src/lib/utils/math`). Menampilkan hanya neto tanpa dua komponennya DILARANG — selisih terhadap rekap komisi harus dapat ditelusur baris per baris.
+- Rekonsiliasi tiga arah wajib: (i) `grossPaidAmount` target == `paidBase` rekap komisi untuk periode+penjual sama (pengganti AC-TGT-10); (ii) `returnDeductionAmount` == Σ (returnDpp+returnVat) retur completed tertaut pada periode tanggal retur dari query sumber independen; (iii) total jurnal retur POSTED periode itu (referenceType SalesReturn) direkonsiliasi sebagai temuan — selisih antara pengurang read-model dan nilai jurnal retur tampil bernama (penyebab sah yang sudah dikenal: retur tanpa faktur asal punya jurnal stok/cost tanpa kaki harga, baris legacy, clamp Putusan 2 butir 5). Selisih tidak pernah dipilih diam-diam salah satu.
+- Label §6 WAJIB berubah pada saat tahap 2 dinyalakan, verbatim usulan mengikat BOT 2: "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur." `SALES_TARGET_NOTICE` existing yang menyatakan retur TIDAK mengurangi menjadi salah saji bila basis berubah tanpa label berubah — PR tahap 2 yang mengubah builder tanpa mengubah notice = cacat (E131-5 mengunci ini).
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1 (Lead): merge PR vonis ini; putus pembukaan tahap 2 (kartu implementasi) berdasar vonis ini. Q-TGT-2/3/4 sudah diputus §9A, tidak dibuka ulang.
+- BOT 3 (@backend-prisma-inventory-workshop), SESUDAH vonis ini merged: ubah `sales-target-achievement.ts` + `-data.ts` saja (tanpa migrasi/schema): loader tambah satu query massal retur `status="completed"`, `salesInvoiceId in (faktur paid dalam cakupan)`, `date` dalam cakupan gabungan periode, beserta baris snapshotnya; builder kurangi per Putusan 2/3; keluarkan tiga komponen Putusan 5; ganti kunci AC-TGT-10 menjadi kunci rekonsiliasi (i); jaga BR-TGT-01..05, 08..12 selain yang diubah vonis ini. UI tidak hitung ulang.
+- BOT 2 (@frontend-ui-ux-next-js), SESUDAH kontrak BOT 3: tampilkan kolom komponen (Bruto Lunas / Retur / Pencapaian Neto) + notice baru verbatim Putusan 5; angka negatif tampil negatif; UI tidak memilih status retur dan tidak menghitung pengurang.
+- BOT 5/BOT Business: tidak ada perubahan workflow retur dari vonis ini; status antara retur (bila diinginkan proses) = usulan terpisah, bukan bagian tahap 2 ini.
+- BOT 6 (QA): audit E131-1..5 di bawah atas head BOT 3/BOT 2.
+
+### Falsifikasi wajib — E131-1..5 (BOT 3 menulis tes, BOT 6 audit; semua angka sen-persis)
+
+- E131-1 (neto periode sama + rekonsiliasi komisi): penjual A, target Rp20.000.000 periode P. Faktur paid grandTotal Rp10.000.000 di P; retur completed tertaut faktur itu di P, baris snapshot returnDpp Rp1.500.000 + returnVat Rp0 (faktur tanpa PPN) → grossPaidAmount Rp10.000.000, returnDeductionAmount Rp1.500.000, achievedAmount Rp8.500.000, persen 42,50%. `paidBase` komisi periode+penjual sama tetap Rp10.000.000 dan selisih target-vs-komisi persis Rp1.500.000 tertelusur. Cabut pengurang dari builder → achievedAmount terbaca Rp10.000.000 (100% basis lama) = MERAH; kunci lama AC-TGT-10 "pencapaian == paidBase" yang masih menuntut sama persis sesudah tahap 2 = MERAH (wajib sudah diganti kunci rekonsiliasi).
+- E131-2 (beda periode, periode asal tidak ditulis ulang): faktur paid Rp12.000.000 tanggal Oktober (target Oktober Rp10.000.000 → pencapaian Oktober Rp12.000.000, 120,00%). Retur completed Rp3.000.000 (DPP+PPN snapshot) tanggal November atas faktur Oktober itu; faktur paid November Rp5.000.000, target November Rp10.000.000 → pencapaian November Rp2.000.000 (20,00%), pencapaian Oktober tetap Rp12.000.000 pada pembacaan ulang sesudah retur ada. Mengurangi Oktober menjadi Rp9.000.000 = MERAH; mengurangi November sebesar 0 (retur hilang karena faktur beda periode) = MERAH.
+- E131-3 (besaran pengurang = DPP+PPN snapshot, bukan cost, bukan DPP saja): faktur paid subtotal Rp10.000.000, discount Rp0, taxAmount Rp1.100.000, grandTotal Rp11.100.000. Retur completed 1 baris qty 1, price beku Rp5.000.000, cost Rp3.000.000 → snapshot returnDpp Rp5.000.000, returnVat Rp550.000, nilaiRetur Rp5.550.000, achievedAmount Rp5.550.000. Pengurang terbaca Rp3.000.000 (cost) = MERAH; terbaca Rp5.000.000 (DPP saja) = MERAH; hitung-ulang dari harga master yang sudah berubah = MERAH.
+- E131-4 (status gerbang + atribusi): (a) retur `draft` Rp2.000.000 tertaut faktur paid → pengurang Rp0; retur yang sama sesudah completed → pengurang Rp2.000.000. Mengurangi sejak draft = MERAH. (b) retur completed Rp4.000.000 tanpa `salesInvoiceId` pada periode yang faktur paid penjual mana pun Rp1.000.000 → tidak ada penjual yang berkurang; retur completed Rp4.000.000 tertaut faktur paid milik penjual B yang tanggal retur-nya jatuh periode ini, sementara faktur paid periode ini hanya Rp1.000.000 (penjual B) → achievedAmount penjual B Rp−3.000.000 tampil negatif, persen terhadap target Rp10.000.000 = −30,00%, tidak di-floor ke 0. Floor ke 0 atau atribusi retur tanpa faktur ke penjual mana pun = MERAH.
+- E131-5 (nol jurnal + label + plafon): menjalankan loader tahap 2 atas fixture E131-1..4: jumlah jurnal baru = 0, jurnal retur existing tidak berubah, tidak ada baris bonus/kewajiban lahir; `notice` memuat kalimat retur-mengurangi Putusan 5 dan TIDAK lagi memuat klaim "tidak mengurangi". Retur completed kedua atas faktur E131-3 dengan snapshot DPP Rp6.000.000 (kumulatif DPP Rp11.000.000 > DPP asal Rp10.000.000) ditolak saat complete oleh guard F-004 sehingga pengurang read-model atas faktur itu tetap ≤ Rp11.100.000; memaksa baris itu masuk read-model (bypass guard) → plafon Putusan 2 butir 5 menahan pengurang pada Rp11.100.000 dan selisih tampil sebagai temuan bernama. Jurnal lahir dari read-model, notice lama bertahan, atau pengurang melampaui grandTotal faktur asal tanpa temuan = MERAH.
+
+### Klaim kepatuhan dan batas vonis
+
+- Dasar akuntansi: PSAK 72 (pendapatan = harga transaksi; retur = imbalan variabel yang mengurangi harga transaksi dan hanya diakui sebesar yang sangat mungkin tidak dibalik) — prinsip yang sama yang menjadi dasar basis DPP F-2026-10-24-129-V Putusan 1 (teks final PSAK 72 di SAK Online IAI; bahan resmi IAI ED PSAK 72: https://web.iaiglobal.or.id/assets/files/file_sak/exposure-draft/ED%20PSAK%2072_Pendapatan%20dari%20Kontrak%20Pelanggan.pdf, akses awal 2026-10-22, dirujuk juga di F-129-V; run ini tidak mengakses ulang full-text SAK berbayar — klaim terbatas pada prinsip harga transaksi/imbalan variabel). Vonis ini perlakuan read-model manajerial internal: BUKAN SPT, bukan faktur pajak, tidak mengubah DPP/PPN terutang, masa SPT, atau jurnal dokumen mana pun. Tarif dalam falsifikasi hanya contoh hitung (tarif hidup di master bertanggal efektif).
+- Batas: vonis ini tidak memutus (a) perubahan basis rekap komisi F-016, (b) workflow status retur baru, (c) ikatan pencapaian ke pembayaran apa pun. Ketiganya butuh kartu + vonis sendiri.
+
+ID vonis ini **F-2026-10-24-131-V** (bebas: tertinggi di origin/main c6c4bfb3 = 130-V di PR #696 terbuka; grep `F-2026-10-24-131` di berkas ini = 0 sebelum append run ini). Pemilik berikutnya: BOT 1 merge vonis ini + putus pembukaan kartu tahap 2 → BOT 3 inti builder/loader (Putusan 2/3/5) → BOT 2 kolom komponen + notice baru → BOT 6 audit E131-1..5.
