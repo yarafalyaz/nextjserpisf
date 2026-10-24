@@ -25857,3 +25857,131 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Validasi NPWP online/format pajak, NITKU, status PKP: keluarga identitas pajak existing, perlu vonis Accountant + sumber resmi DJP; bukan kunci banding sederhana spec ini.
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-009-S: slip gaji mandiri karyawan (self-service baca-saja, scope fail-closed)
+
+> **Slot**: F-2026-10-25-009-S. Diperiksa bentrok 2026-10-25 01:26 WIB vs `origin/main` (`4c3d2c8b`): grep `F-2026-10-25` di backlog = 001-S..005-S terpakai, 006-S di PR #769 OPEN, 007-S di PR #770 OPEN, 008-S di PR #772 OPEN (semua beda topik). ID 009 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+
+### 0. Ringkasan
+
+Karyawan yang login hari ini TIDAK bisa melihat slip gajinya sendiri kecuali diberi izin operasional `view_payroll`. Spec ini mendefinisikan permukaan baca-saja "Slip Gaji Saya": daftar + detail slip MILIK karyawan yang login saja, hanya status final, dijaga `getHrScope` fail-closed. Tanpa izin baru untuk melihat data orang lain, tanpa jalur tulis, tanpa nominal gaji di board/log/notifikasi.
+
+### 1. Inventarisasi terverifikasi (origin/main 4c3d2c8b, 2026-10-25 01:26 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Payroll` lengkap untuk tampil slip: `prisma/schema.prisma:3563` — `documentNo`, `employeeId`, `period`, `startDate/endDate`, komponen agregat (`baseSalary`, `allowances`, `deductions`, `overtimeTotal`, `appreciationTotal`, `loanDeduction`, `lateDeduction`, `grossSalary`, `bpjsHealthEmployee`, `bpjsEmploymentEmployee`, `pph21`, `netSalary`), `paymentDate`, `status` string default `draft`, relasi `componentLines` (PayrollComponentLine).
+- Status final existing: `FINAL_PAYROLL_STATUSES = ["approved", "paid"]` di `src/actions/hrm.actions.ts:1420`; transisi bayar `approved -> paid` + `paymentDate` di `hrm.actions.ts:2967`.
+- Penjaga scope existing: `getHrScope` fail-closed di `src/lib/auth/hr-scope.ts:67` (roles rusak/hilang → `self employeeId -1`); `hrScopeWhere(scope)` di file sama menghasilkan filter `employeeId` untuk self/team/department.
+- Halaman operasional penggajian sudah scope-gated: daftar `src/app/(dashboard)/sdm/penggajian/[[...segments]]/page.tsx:51` (`requirePermission("view_payroll")` + `hrScopeWhere` :88) dan detail `src/app/(dashboard)/sdm/penggajian/[slug]/page.tsx` (`requirePermission("view_payroll")` + `hrScopeWhere` pada resolveEntity).
+- Tautan user→karyawan existing: `Employee.userId` (`prisma/schema.prisma:885`), dipakai `getHrScope` untuk memetakan login ke employeeId.
+- Katalog izin: `view_payroll` di `src/lib/auth/module-catalog.generated.ts:315`; izin laporan terpisah `view_payroll_reports` :427. TIDAK ada izin "lihat slip sendiri" terpisah.
+- Permukaan profil existing: `src/app/(dashboard)/profil/page.tsx` hanya form nama/email/avatar + daftar role; tidak ada data HR/gaji. Tautan nav ke `/profil` di `src/components/layout/nav-user.tsx:73`.
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN: rute/permukaan slip mandiri. `find src/app -type d -iname "*saya*"/"*self*"` = kosong; grep `payslip` di `src/app`/`src/lib/reports` = kosong. Satu-satunya jalan karyawan melihat slip = diberi `view_payroll` (izin operasional modul penggajian) — melanggar prinsip hak minimum: izin itu membuka permukaan operasional modul, bukan hanya slip sendiri.
+- PARSIAL: detail slip operasional menampilkan slip berstatus apa pun dalam scope (termasuk `draft`) — perilaku benar untuk HR, SALAH bila disalin mentah ke karyawan (draft belum final, bisa berubah/dibatalkan).
+
+### 2. Workflow specification
+
+Aktor: Karyawan (login, tertaut Employee.userId), HR/Finance (pemilik proses existing, tidak berubah).
+
+Alur:
+1. Karyawan membuka "Slip Gaji Saya" dari area profil/nav user.
+2. Sistem memetakan login → Employee via `getHrScope`; scope BUKAN self murni (mis. role all/department/team karena jabatan) TIDAK memperluas permukaan ini — permukaan mandiri selalu memfilter `employeeId = employeeId login` persis (BR-PS-02).
+3. Daftar menampilkan slip karyawan itu dengan `status IN (approved, paid)` saja, urut periode terbaru dulu: nomor dokumen, periode, tanggal bayar (bila paid), status. Nominal bersih di daftar = USULAN tampil (BR-PS-05).
+4. Detail menampilkan rincian slip final apa adanya dari rekod Payroll + componentLines: komponen pendapatan, potongan (termasuk potongan pinjaman sebagai angka slip, tanpa rincian pinjaman), BPJS karyawan, PPh21, bersih, paymentDate bila paid.
+5. Slip draft/cancelled tidak pernah muncul — bukan disembunyikan UI, melainkan tidak lolos filter server.
+
+Dokumen masuk: rekod `Payroll` final existing. Dokumen keluar: tampilan baca-saja; cetak/unduh PDF = tahap lanjutan terpisah (BR-PS-08), bukan tahap 1.
+
+### 3. Role/permission matrix
+
+| Aksi | Karyawan (self) | Kepala bengkel | HR/Finance/Admin/GA | Role tanpa Employee tertaut |
+|---|---|---|---|---|
+| Lihat daftar slip SENDIRI (final saja) | YA (login + tertaut) | YA (hanya miliknya di permukaan ini) | YA (hanya miliknya di permukaan ini) | TIDAK (fail-closed, daftar kosong) |
+| Lihat detail slip SENDIRI (final saja) | YA | YA (miliknya) | YA (miliknya) | TIDAK (404/kosong) |
+| Lihat slip orang lain | TIDAK | Lewat permukaan operasional existing (department scope), BUKAN permukaan ini | Lewat permukaan operasional existing (all scope) | TIDAK |
+| Lihat slip draft/cancelled | TIDAK (termasuk milik sendiri) | Operasional existing | Operasional existing | TIDAK |
+| Buat/ubah/setujui/bayar slip | TIDAK | TIDAK dari permukaan ini | Operasional existing (`create/edit/process_payroll`) | TIDAK |
+
+Izin: tahap 1 TIDAK menambah permission key baru — gerbang = login terautentikasi + Employee tertaut + filter self persis (USULAN, Q-PS-1 untuk Lead: apakah perlu key eksplisit mis. `view_own_payslip` agar bisa dimatikan per role; default spec = tanpa key baru supaya tidak menunggu seed parity, permukaan tidak memberi akses lintas orang apa pun).
+
+### 4. Status-transition matrix
+
+Permukaan ini baca-saja: TIDAK ada transisi yang dipicu karyawan.
+
+| Status slip | Terlihat karyawan? | Penjaga |
+|---|---|---|
+| `draft` | TIDAK | filter server `status IN (approved, paid)` |
+| `approved` | YA (tertanda "disetujui", paymentDate boleh kosong) | filter server + self persis |
+| `paid` | YA (dengan paymentDate) | filter server + self persis |
+| `cancelled`/`canceled` | TIDAK | di luar himpunan final existing (`hrm.actions.ts:1420`) |
+
+Perubahan status tetap milik alur existing: `draft -> approved` (approve menolak snapshot fallback), `approved -> paid` (klaim atomik + jurnal satu transaksi). Spec ini tidak mengubahnya.
+
+### 5. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-PS-01 | Slip tampil ke karyawan hanya bila `status IN (approved, paid)` — himpunan final existing, bukan himpunan baru | USULAN (di atas fakta TERVERIFIKASI-KODE) | `hrm.actions.ts:1420` FINAL_PAYROLL_STATUSES |
+| BR-PS-02 | Permukaan mandiri selalu `employeeId = employeeId login` persis, apa pun scope jabatan user; akses lintas orang tetap hanya lewat permukaan operasional | USULAN | pola `hrScopeWhere` self, `hr-scope.ts:67` |
+| BR-PS-03 | Login tanpa Employee tertaut / roles rusak = fail-closed: daftar kosong, detail 404; tidak pernah jatuh ke akses semua | TERVERIFIKASI-KODE (perilaku penjaga) + USULAN (penerapan di permukaan ini) | `hr-scope.ts:67` (self employeeId -1) |
+| BR-PS-04 | Angka tampil = rekod Payroll final apa adanya (termasuk componentLines); permukaan ini tidak menghitung ulang gaji/pajak/BPJS | USULAN | model `Payroll` schema:3563; hitung ulang = domain proses existing |
+| BR-PS-05 | Nominal bersih boleh tampil di daftar slip sendiri; nominal TIDAK pernah masuk board, log, notifikasi, atau judul dokumen bersama | USULAN | aturan keras charter Business (gaji dilindungi) |
+| BR-PS-06 | Potongan pinjaman tampil sebagai angka potongan slip saja; rincian/sisa pinjaman tidak dibuka dari permukaan slip | USULAN | `loanDeduction` schema:3574; pinjaman = permukaan HR existing |
+| BR-PS-07 | Karyawan nonaktif/berhenti yang masih punya login + Employee tertaut tetap bisa melihat slip final historisnya tahap 1 | USULAN — Q-PS-2 Lead | tanpa bukti kebijakan pemutusan akses di kode |
+| BR-PS-08 | Cetak/unduh PDF slip = tahap lanjutan; tahap 1 layar baca-saja saja | USULAN | YAGNI tahap 1 |
+| BR-PS-09 | Tidak ada izin baru untuk melihat slip orang lain; `view_payroll` tidak diberikan ke karyawan hanya demi slip sendiri | USULAN | katalog `module-catalog.generated.ts:315` |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+Benchmark resmi (akses 2026-10-25):
+- Accurate Online — fitur gaji & tunjangan menekankan slip gaji digital agar karyawan mengecek rincian gajinya sendiri: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/mengenal-fitur-gaji-dan-tunjangan/ (hasil pencarian resmi help.accurate.id run ini; ekstrak halaman penuh gagal 404 via perantara — klaim dibatasi pada kutipan hasil pencarian resmi itu).
+- Zahir — hasil run payroll menghasilkan slip gaji yang dapat diakses semua karyawan (Zahir HR/payroll): https://zahirerp.com/id/all-features-of-zahir-products/ (akses run ini).
+
+| Kemampuan | Accurate | Zahir | ISF kini | ISF usulan (spec ini) |
+|---|---|---|---|---|
+| Slip digital bisa dicek karyawan sendiri | YA (BENCHMARK) | YA (BENCHMARK) | TIDAK (hanya via izin operasional) | YA — permukaan self final-saja |
+| Rincian komponen pada slip | YA | YA | YA di permukaan operasional | YA, rekod final apa adanya |
+| Karyawan melihat draft slip | tidak terverifikasi | tidak terverifikasi | YA bila pegang view_payroll (berlebihan) | TIDAK pernah |
+
+### 7. Acceptance criteria + edge cases
+
+AC (falsifikasi QA atas head Backend/Frontend persis):
+- AC-PS-1: Login karyawan A (tertaut, tanpa view_payroll) membuka daftar: hanya slip A berstatus approved/paid; slip draft A dan semua slip B tidak ada di respons server (bukan sekadar tersembunyi).
+- AC-PS-2: Detail slip B diakses lewat URL/id oleh A → 404/gagal; detail slip draft milik A sendiri → 404/gagal.
+- AC-PS-3: Login tanpa Employee tertaut → daftar kosong + tidak ada nominal apa pun ter-render; tidak error bocor data.
+- AC-PS-4: User berperan HR yang juga karyawan: permukaan mandiri tetap hanya slip miliknya; slip bawahannya tidak muncul di permukaan ini.
+- AC-PS-5: Angka detail identik dengan rekod Payroll final (gross, potongan, BPJS karyawan, PPh21, net) — tidak ada hitung ulang (bandingkan ke permukaan operasional untuk slip sama).
+- AC-PS-6: Tidak ada aksi tulis dari permukaan ini (tidak ada tombol/proses yang mengubah Payroll).
+
+Edge cases:
+- EC-1: Karyawan punya >1 slip final seperiode (koreksi/revisi existing) — semua rekod final tampil apa adanya dengan nomor dokumen pembeda; permukaan tidak memilih "yang benar".
+- EC-2: `employeeId` slip null (rekod yatim existing dibolehkan skema) — tidak pernah cocok filter self, tidak tampil ke siapa pun di permukaan ini.
+- EC-3: Slip approved belum paid: tampil tanpa tanggal bayar karangan; label status jujur "disetujui".
+- EC-4: Employee tertaut dihapus lunak (deletedAt) — perlakuan mengikuti pemetaan getHrScope existing; tidak ada jalur khusus tahap 1 (catat perilaku aktual saat implementasi).
+
+### 8. Pertanyaan terbuka (pemilik putusan)
+
+- Q-PS-1 (Lead): izin eksplisit baru `view_own_payslip` vs cukup login+tertaut. Rekomendasi Business: tanpa key baru tahap 1 (akses hanya ke data sendiri, bisa dicabut lewat penautan/login), key ditambah hanya bila ada kebutuhan mematikan per role.
+- Q-PS-2 (Lead): karyawan berhenti/nonaktif tetap boleh lihat slip historis selama login aktif? Rekomendasi: YA tahap 1 (slip historis = hak karyawan atas bukti penghasilan masa kerja), putusan akses login sendiri di luar spec.
+- Q-PS-3 (Accountant): TIDAK diminta — permukaan ini tidak mengubah angka, pajak, jurnal, atau perlakuan statutori apa pun (BR-PS-04).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-009-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-009-S | Spec ini (dokumen) | Business | — |
+| (turunan) loader slip mandiri: filter self persis + status final, daftar + detail baca-saja | Backend | Q-PS-1 diputus Lead | — |
+| (turunan) permukaan "Slip Gaji Saya" dari profil/nav user, kata status verbatim server | Frontend | kontrak Backend stabil | — |
+| (turunan) falsifikasi AC-PS-1..6 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+
+- Portal/aplikasi karyawan terpisah, notifikasi slip terbit via WA/email: kanal + kebutuhan belum terbukti; permukaan web existing cukup tahap 1.
+- Cetak/PDF slip mandiri: ditunda BR-PS-08 sampai permukaan baca terbukti dipakai.
+- Mengubah alur proses/approve/bayar payroll atau angka statutori: domain existing + vonis Accountant; permukaan ini murni baca.
+- Memberi `view_payroll` massal ke karyawan: ditolak BR-PS-09 (hak berlebihan).
+
+F-2026-10-25-009-S — Slip gaji mandiri karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-PS-1/2 + kontrak Backend. Pemilik usulan: Business (spec), Lead (putusan), Backend (loader), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (baca-saja, tanpa perubahan angka/pajak/jurnal).
