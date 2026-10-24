@@ -87,6 +87,9 @@ export const itemSchema = z.object({
   standardCost: z.number().min(0).optional(),
   purchasePrice: z.number().min(0).optional(),
   costingMethod: z.string().optional(),
+  // F-2026-10-24-135-V: penanda besi tua; server (schemas.ts) sudah terima,
+  // form wajib meneruskan supaya toggle benar-benar tersimpan.
+  isScrapSaleItem: z.boolean().optional(),
 }).refine((data) => data.price >= data.cost, {
   message: "Harga jual tidak boleh lebih rendah dari harga beli (modal). Diskon diterapkan saat penawaran/penjualan, bukan di master.",
   path: ["price"],

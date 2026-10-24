@@ -177,6 +177,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-22-070-S inti backend (PR #694): 3 aksi stok minimum per
   // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
   // (t_0fc24ddc) — entri beku dibuang.
+  // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
+  // pelanggan backend dulu; daftar bergrup di halaman kelola pelanggan
+  // menyusul (frontend t_1f97c2ea — buang entri ini saat UI memanggilnya).
+  "src/actions/master.actions.ts::listCustomerDuplicateCandidates":
+    "F-2026-10-25-003-S inti backend PR #791; UI daftar kandidat duplikat di master pelanggan menyusul (frontend t_1f97c2ea)",
 }
 
 describe("keterhubungan aksi server", () => {
