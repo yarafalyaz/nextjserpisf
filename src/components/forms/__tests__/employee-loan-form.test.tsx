@@ -57,8 +57,8 @@ describe("EmployeeLoanForm — a11y wiring", () => {
       expect(input.getAttribute("aria-describedby")).toBe("weeklyInstallment-hint")
       const hint = container.querySelector("#weeklyInstallment-hint")!
       expect(hint.textContent).toContain("WEEKLY")
-      // Tetap 3 bintang: mingguan bukan field wajib.
-      expect(decorativeStars(form).length).toBe(3)
+      // Total 4 bintang (termasuk AppDatePicker wajib); mingguan sendiri tanpa bintang.
+      expect(decorativeStars(form).length).toBe(4)
       // Hidden submit field kosong: skema memetakan "" -> null (HIGH-1).
       expect(container.querySelector<HTMLInputElement>('input[name="weeklyInstallment"]')!.value).toBe("")
       unmount(root, container)

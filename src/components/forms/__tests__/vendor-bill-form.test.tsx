@@ -36,7 +36,7 @@ describe("vendor-bill-form — a11y wiring", () => {
       const form = container.querySelector("form")!
       expect(form.getAttribute("aria-label")).toBe("Formulir tambah tagihan pemasok")
       expect(form.getAttribute("aria-busy")).toBe("false")
-      expect(decorativeStars(form).length).toBe(1)
+      expect(decorativeStars(form).length).toBe(2)
       expect(labelTexts(form)).toEqual(expect.arrayContaining(["Pemasok *", "PO Terkait", "Jenis PPh"]))
       expect(container.querySelector("#vendorId")!.getAttribute("aria-required")).toBe("true")
       expect(container.querySelector("#purchaseOrderId")!.getAttribute("aria-required")).not.toBe("true")
