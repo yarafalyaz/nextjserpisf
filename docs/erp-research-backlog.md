@@ -22626,3 +22626,146 @@ BOT 3 (builder+tes E100) -> BOT 2 (kolom+label) -> BOT 6 (E100-1..6).
 BOT 5 tidak diminta.
 
 ---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-098-V konvergensi halaman Rekonsiliasi PPN ke read-model SPT (pasangan F-096-V)
+
+Pemilik vonis: BOT 4. Kartu asal: t_72e0cd5b (siklus standby 23:00).
+Pertanyaan: sesudah F-2026-10-22-096-V memutus loader Faktur SPT
+konvergen ke snapshot F-2026-10-21-004, apakah halaman Rekonsiliasi
+PPN boleh tetap memakai definisi dokumen pra-vonis sendiri? Jawaban:
+TIDAK. Vonis ini penutup permukaan ketiga; bukan membuka implementasi.
+
+ID dicek anti-tabrakan 2026-10-22: maks terpakai 097-V (PR #581);
+grep `F-2026-10-22-098` di backlog+board+`gh pr list --state all` = 0.
+
+### 0. Verifikasi live origin/main 5b65b7e5 (2026-10-22, run ini)
+
+Antrean vonis bebas-dependensi siklus ini KOSONG terverifikasi:
+kartu BOT 4 di kanban tanpa todo/blocked baru; PR BOT 4 terbit
+(#581 MERGEABLE BEHIND; #579/#571/#552/#548/#544/#543/#539/#536/
+#531/#530/#529/#527/#526/#523/#521/#518/#517/#498/#490/#459/#454/
+#440 OPEN CONFLICTING) = ter-gate merge/rebase Lead, bukan vonis
+baru. Riset siklus ini = celah konvergensi tersisa di bawah.
+
+- Halaman `laporan/rekonsiliasi-ppn/[[...segments]]/page.tsx`
+  menghitung sisi dokumen mentah: `docOutput = Σ SalesInvoice.
+  taxAmount` (status posted/partial/paid, jendela `date` faktur) dan
+  `docInput = Σ VendorBill.tax` (jendela tanggal tagihan). Tanpa
+  TaxInvoice, tanpa creditPeriod/creditStatus, tanpa pengurang
+  retur, tanpa label legacy. `buildVatPosition(bookOutput,
+  bookInput)` dari jurnal saja menentukan status kurang/lebih bayar.
+- Loader PDF `loadVatReconciliation` di `src/lib/reports/
+  tax-summary-data.ts:52` (dipakai `report-registry.ts:911-916`
+  slug `rekonsiliasi-ppn`) menduplikasi query+definisi yang sama —
+  layar dan PDF konsisten satu sama lain, tetapi keduanya menyimpang
+  dari read-model SPT untuk data yang sama.
+- Read-model kanonik `loadSptPeriodRowsForRange`
+  (`spt-read-model-data.ts`): keluaran = kepala rantai TaxInvoice
+  pada masa faktur asal (pengganti ikut masa asal, PER-11/PJ/2025);
+  masukan hanya `creditStatus=credited` pada `creditPeriod`;
+  pengurang retur snapshot `returnDpp/returnVat` pada masa nota
+  (F-004; nol berlabel bila legacy tanpa snapshot, sesudah #579/#581
+  merged juga tertelan rantai pengganti = 0 berpenanda); fallback
+  komersial hanya masa tanpa dokumen TaxInvoice, berlabel `legacy`/
+  `mixed`; `netVatForPeriod` = keluaran − retur − masukan;
+  `journalLiability` dari jurnal POSTED per masa direkonsiliasi
+  (`journalVsSptDiff` tampil, tidak dipilih diam-diam) — persis
+  vonis F-2026-10-21-005 butir 1.
+- Akibat terukur (bukan hipotesis): (a) faktur diganti lintas masa —
+  halaman rekonsiliasi menaruh PPN di masa tanggal faktur komersial,
+  SPT di masa faktur pajak asal; (b) faktur masukan dikreditkan masa
+  berikutnya (jendela maks 3 masa, UU PPN 9(9)) — halaman menghitung
+  di masa tagihan, SPT di masa kredit; (c) retur completed — halaman
+  tidak mengurangi sama sekali, SPT mengurangi pada masa nota;
+  (d) tagihan tanpa faktur pajak / PPN tidak dapat dikreditkan
+  (UU PPN 9(8)) — halaman ikut menjumlah `VendorBill.tax`, SPT
+  mengecualikan. Empat selisih ini tampil sebagai "selisih buku vs
+  dokumen" palsu dan menyesatkan operator saat tutup masa.
+
+### 1. Putusan inti
+
+P1. SATU definisi posisi PPN per masa untuk semua permukaan:
+    `loadSptPeriodRowsForRange` (keluaran rantai, masukan masa
+    kredit, pengurang retur snapshot, legacy berlabel, neto
+    `netVatForPeriod`). Halaman Rekonsiliasi PPN + loader PDF
+    `rekonsiliasi-ppn` WAJIB membaca baris per-masa dari read-model
+    ini. Loader lama `loadVatReconciliation` diganti panggilannya
+    (bukan jalur paralel kedua), pola sama dengan F-096-V untuk
+    `vat-invoices-data.ts`.
+
+P2. MAKNA halaman tidak berubah, sumbernya yang konvergen:
+    Rekonsiliasi PPN tetap membandingkan BUKU vs POSISI SPT per
+    masa — buku = `journalLiability` read-model (jurnal POSTED
+    akun PPN Keluaran/Masukan dari setting; akun belum dipetakan =
+    `null` tampil sebagai temuan pemetaan, BUKAN nol diam-diam),
+    dokumen = `net` read-model, selisih = `journalVsSptDiff` apa
+    adanya. Status kurang/lebih bayar/nihil diturunkan dari `net`
+    SPT per masa (`kurangBayar`), BUKAN dari `buildVatPosition`
+    atas agregat jurnal jendela bebas. Filter rentang tanggal
+    halaman dipetakan ke himpunan masa `YYYY-MM` yang tercakup;
+    tidak ada lagi penjumlahan dokumen berdasar tanggal faktur/
+    tagihan di permukaan ini.
+
+P3. Yang DILARANG sesudah konvergensi: query `SalesInvoice.
+    taxAmount` / `VendorBill.tax` mentah di halaman rekonsiliasi
+    maupun `tax-summary-data.ts` untuk posisi PPN; label `legacy`/
+    `mixed` dari read-model wajib diteruskan ke layar/PDF (masa
+    legacy tidak boleh tampil seolah posisi faktur pajak final);
+    UI/PDF tidak menghitung ulang PPN, retur, atau neto sendiri.
+
+P4. Jurnal GL TIDAK berubah. Nol migrasi, nol kolom, nol akun
+    baru — semua kolom sumber (rantai TaxInvoice, creditPeriod,
+    snapshot retur, period TaxPayment) sudah ada di schema.
+    Perubahan murni pemakai read-model (BOT 3 loader + BOT 2
+    label), sesudah PR #579 + #581 merged agar semantik rantai
+    retur final.
+
+### 2. Register sumber
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| Masa pengkreditan faktur masukan maks 3 masa sesudah masa faktur | UU PPN Pasal 9 ayat (2)/(9) — vonis F-2026-10-21-001/002 (FINAL, backlog 2026-10-21) | TERVERIFIKASI-VONIS |
+| PPN tidak dapat dikreditkan dikecualikan dari PPN Masukan | UU PPN Pasal 9 ayat (8) + kolom `creditStatus`/`nonCreditableReason` schema live | TERVERIFIKASI-KODE |
+| Pengganti ikut masa faktur diganti; pengurang retur pada masa nota | PER-11/PJ/2025 (PDF resmi DJP, diverifikasi F-096-V/F-097-V) + F-2026-10-21-004 | TERVERIFIKASI-VONIS |
+| Kewajiban per masa dari jurnal POSTED direkonsiliasi ke SPT, selisih = temuan | Vonis F-2026-10-21-005 butir 1 | TERVERIFIKASI-VONIS |
+
+Tidak ada angka statutori baru dan tidak ada klaim kepatuhan baru
+di vonis ini; ia hanya menyeragamkan sumber angka yang sudah
+divonis.
+
+### 3. Batas build (mengikat BOT 3/BOT 2/BOT 6)
+
+- BOT 3: arahkan `loadVatReconciliation` (atau penggantinya di
+  registry slug `rekonsiliasi-ppn`) ke `loadSptPeriodRowsForRange`;
+  hapus query dokumen mentah dari jalur itu; pertahankan bentuk
+  `TaxSimpleReport` agar registry/PDF tidak berubah kontrak.
+  Prasyarat: PR #579 + #581 merged.
+- BOT 2: halaman `rekonsiliasi-ppn` konsumsi baris per-masa yang
+  sama (buku/dokumen/selisih/status + label legacy/mixed dari
+  server); nol hitung PPN di komponen/halaman.
+- BOT 6 falsifikasi wajib (E98):
+  E98-1 faktur masukan `credited` masa M+1: posisi dokumen masa M
+        tidak memuatnya, masa M+1 memuatnya; definisi lama (masa
+        tagihan) membuat E98-1 MERAH bila dihidupkan kembali.
+  E98-2 retur completed bernota lintas bulan: pengurang tampil di
+        masa nota di rekonsiliasi, persis sen dengan laporan SPT.
+  E98-3 masa hanya-legacy: baris tampil berlabel legacy/mixed,
+        tidak berlabel faktur pajak.
+  E98-4 tiga permukaan (SPT masa, Faktur SPT, Rekonsiliasi PPN)
+        untuk data sama: neto per masa sama persis sen.
+  E98-5 akun PPN belum dipetakan di setting: halaman tampil
+        temuan pemetaan, bukan angka buku 0.
+  E98-6 jurnal POSTED vs posisi SPT beda sen: selisih tampil apa
+        adanya di kedua arah tanda; tidak dipaksa nol.
+
+### 4. Yang TIDAK diputus
+
+- Isi/wording final label legacy di layar (BOT 2, mengikuti pola
+  F-096-V/F-097-V yang merged).
+- Rekonsiliasi bank dan laporan pajak non-PPN: di luar cakupan.
+- Setiap perubahan jurnal/posting: tidak ada (P4).
+
+Pemilik berikutnya: BOT 1 merge PR vonis ini (sesudah #579/#581)
+-> BOT 3 loader konvergen -> BOT 2 label -> BOT 6 E98-1..6.
+
+---
