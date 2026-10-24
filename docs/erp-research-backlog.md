@@ -23425,6 +23425,135 @@ slip koreksi) -> BOT 2 -> BOT 6 AC-B1..B7. Peminta: BOT 5
 
 ---
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-001-S: masa berlaku daftar harga pelanggan (tanggal berakhir + antrean harga segera berakhir)
+
+> **Slot**: F-2026-10-25-001-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`8e28a8bb`): grep `F-2026-10-25` di `docs/erp-research-backlog.md` = 0; PR Business terbuka beda topik (#743 F-2026-10-24-135-S SLA tiket, #746 F-2026-10-24-141-S duplikat prospek). ID 001 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Induk**: F-2026-10-21-018 (d) P2 harga bertingkat kuantitas — cabang tingkat sudah terbangun (BR-TIER-01..14, spec 2026-10-22 01:33). Spec ini TIDAK menyentuh aturan tingkat; ia menutup celah ortogonal: **masa berlaku** baris harga. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Harga promosi/kontrak per kategori pelanggan saat ini tidak bisa berakhir otomatis: sekali `effectiveDate` lewat, baris menang selamanya sampai operator ingat menonaktifkan manual. Celah ini membuat harga promo basi terus terpakai di faktur baru tanpa penanda apa pun. Spec ini membekukan: (A) satu kolom tanggal berakhir opsional di baris daftar harga + syarat resolver menghormatinya, (B) status turunan baca-saja (berlaku / segera berakhir / sudah berakhir / tanpa batas) tanpa menulis status baru, (C) antrean tinjau di halaman kelola existing. Angka jendela antrean = `USULAN`, bukan fakta; gerbang inti dibuka Lead.
+
+### 1. Inventarisasi terverifikasi (origin/main 8e28a8bb, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `CustomerPriceList` (`prisma/schema.prisma:574-594`): `customerCategoryId?`, `itemId`, `price`, `minQty` default 1.00, `effectiveDate DateTime?` (:580), `notes`, `isActive` default true (:582). Unique `[customerCategoryId, itemId, minQty, effectiveDate]` (:589). **Tidak ada kolom tanggal akhir/berakhir.**
+- Resolver murni `pickPriceListRow` (`src/lib/services/customer-price-list.service.ts:82-104`): syarat kandidat hanya `isActive` (:88), `qty >= minQty`, kategori cocok, dan `(effectiveDate === null || effectiveDate <= tanggal dokumen)` (:91). Urutan pemenang: kategori spesifik > minQty terbesar > `effectiveDate` terbaru (:95-102). **Tidak ada syarat batas akhir.**
+- Loader `loadPriceListRows` (service yang sama :206-224): memuat baris `isActive: true` per item+kategori, tanpa saringan tanggal; penyaringan tanggal murni di resolver.
+- Konsumen tunggal resolver: `src/actions/sales.actions.ts:41-42,70-75` (`loadPriceListRows` + `pickPriceListRow` saat baris faktur dibuat). Sumber harga terpersist di baris faktur existing (priceSource/priceListId, keluarga BR-TIER-09).
+- Kelola master existing: halaman `src/app/(dashboard)/penjualan/harga-pelanggan/page.tsx:16` gerbang `view_customer_price_lists`, muat maks 500 baris urut kategori/item/minQty/effectiveDate; tabel kolom "Berlaku Sejak" (`_components/customer-price-table.tsx:39-40`); aksi create/edit/delete di `src/actions/customer-price-list.actions.ts` (izin `create/edit/delete_customer_price_lists`, cek duplikat aplikasi :44-53 pola dipertahankan); skema Zod `src/lib/validations/price-list.schemas.ts` (`effectiveDate: optionalDateOnly`, tanpa tanggal akhir).
+- Katalog izin nyata (`src/lib/auth/module-catalog.generated.ts:141-144`): `view/create/edit/delete_customer_price_lists`. Tidak ada izin approve daftar harga (sudah diputus tidak ditambah di spec tingkat, backlog Q9 keluarga F-018).
+
+Belum ada / gap (bukti grep run ini):
+- Kolom berakhir: grep `expiresAt|validTo|endDate` pada model CustomerPriceList = 0. Baris harga tanpa batas akhir berlaku tanpa batas waktu.
+- Resolver batas akhir: syarat `effectiveDate <= docDate` satu-satunya gerbang tanggal (:91); tidak ada padanan `docDate <= tanggalBerakhir`.
+- Antrean/peringatan harga berakhir: grep antrean harga berakhir di `src/lib/reports/` dan halaman harga-pelanggan = 0. Halaman kelola tidak menandai baris yang sudah lewat masa atau segera berakhir; satu-satunya cara memberhentikan harga = edit manual `isActive`/hapus baris.
+
+### 2. Workflow specification
+
+Aktor: Admin Penjualan / Admin Master Data (kelola baris), Sales (konsumen harga di faktur, baca-saja), Lead (putus gerbang inti + angka jendela).
+
+Dokumen masuk: baris `CustomerPriceList` existing (kategori?, item, price, minQty, effectiveDate?). Dokumen keluar: faktur penjualan existing yang sumber harganya terpilih resolver; antrean tinjau baca-saja di halaman kelola.
+
+Alur:
+1. Admin membuat/mengubah baris harga; boleh mengisi tanggal berakhir (opsional). Kosong = tanpa batas (perilaku hari ini, dipertahankan).
+2. Resolver memilih harga per baris faktur: kandidat wajib aktif, sudah efektif, DAN belum berakhir pada tanggal dokumen. Dokumen bertanggal sebelum berakhir tetap memakai harga itu; dokumen sesudah berakhir jatuh ke kandidat berikutnya atau fallback `Item.price` (perilaku fallback existing BR-TIER-14).
+3. Halaman kelola menandai tiap baris dengan status masa turunan + antrean "segera berakhir" dalam jendela terpilih; admin memperpanjang (ubah tanggal berakhir), mengganti (baris baru), atau membiarkan berakhir.
+4. Tidak ada cron/notifikasi tahap 1; tidak ada perubahan harga dokumen yang sudah terbit.
+
+### 3. Status-transition matrix (status turunan, BUKAN kolom baru)
+
+Status di bawah diturunkan dari (effectiveDate, tanggalBerakhir, isActive, tanggal acuan) pada saat baca. Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (baris dibuat, tanggalBerakhir kosong) | — | tanpa_batas | — |
+| tanpa_batas / belum_berlaku | tanggal acuan mencapai effectiveDate | berlaku | resolver: effectiveDate <= tgl dokumen |
+| berlaku | sisa hari <= jendela antrean | segera_berakhir | jendela tetap terpilih (Q-PX-2) |
+| berlaku / segera_berakhir | tanggal acuan > tanggalBerakhir | sudah_berakhir | resolver menolak kandidat |
+| semua | isActive=false (edit/delete existing) | nonaktif | izin edit/delete existing |
+| sudah_berakhir | admin ubah tanggalBerakhir ke masa depan | berlaku/segera_berakhir (turunan ulang) | izin edit; tanpa "menghidupkan" dokumen lama |
+
+### 4. Role/permission matrix (key nyata katalog :141-144)
+
+| Aksi | Admin Penjualan/Master | Sales | Peran lain |
+|---|---|---|---|
+| Lihat daftar harga + status masa + antrean | `view_customer_price_lists` | `view_customer_price_lists` (bila diberi) | ditolak |
+| Buat baris + tanggal berakhir | `create_customer_price_lists` | ditolak | ditolak |
+| Ubah tanggal berakhir / perpanjang | `edit_customer_price_lists` | ditolak | ditolak |
+| Nonaktifkan/hapus | `edit/delete_customer_price_lists` | ditolak | ditolak |
+| Pakai harga di faktur | resolver server (izin faktur existing) | izin faktur existing | — |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-PX-1 Lead). Tidak ada gerbang approve perubahan harga (konsisten putusan keluarga F-018 Q9).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-PX-01 | Tanggal berakhir OPSIONAL; kosong = tanpa batas, perilaku resolver hari ini tidak berubah untuk baris tanpa tanggal berakhir. | USULAN | service.ts:91 (hanya batas bawah) |
+| BR-PX-02 | Semantik batas INKLUSIF diusulkan: baris berlaku pada tanggal dokumen `t` bila `effectiveDate <= t` (null effectiveDate = selalu) DAN (`tanggalBerakhir` null ATAU `t <= tanggalBerakhir`). Tanggal dokumen, bukan tanggal hari ini, yang menentukan — faktur backdate memakai harga masa dokumennya. | USULAN (fisik Backend Q-PX-3) | pola BR-TIER-03 tanggal dokumen |
+| BR-PX-03 | Bila kandidat teratas sudah berakhir, resolver turun ke kandidat berikutnya menurut urutan pemenang existing (kategori spesifik > minQty terbesar > effectiveDate terbaru), lalu fallback Item.price. Dilarang "harga terakhir menang selamanya". | USULAN | service.ts:95-102; BR-TIER-14 |
+| BR-PX-04 | Dokumen sudah terbit TIDAK berubah: harga terpilih sudah terpersist sebagai unitPrice + sumber (priceListId) di baris faktur; mengubah/menghapus tanggal berakhir tidak menulis ulang dokumen mana pun. | TERVERIFIKASI-KODE (persist) + USULAN (larangan tulis ulang) | keluarga BR-TIER-09 |
+| BR-PX-05 | Status masa adalah TURUNAN baca-saja (tanpa kolom status, tanpa cron yang menulis isActive=false). Menonaktifkan tetap aksi edit/delete manual existing. | USULAN | schema:582 isActive manual |
+| BR-PX-06 | Validasi simpan: tanggalBerakhir (bila diisi) wajib >= effectiveDate (bila keduanya diisi); ditolak dengan pesan menyebut kedua tanggal. tanggalBerakhir di masa lalu saat simpan DITOLAK (mencegah baris lahir langsung mati tanpa jejak) — perpanjangan baris sudah berakhir hanya lewat edit yang menghasilkan masa depan atau tetap kosong. | USULAN | pola pesan duplikat actions:44-53 |
+| BR-PX-07 | Keunikan existing `[customerCategoryId, itemId, minQty, effectiveDate]` TIDAK diubah tahap 1; dua baris setara penuh dengan tanggal berakhir beda tetap error data existing, bukan pilihan diam-diam. | TERVERIFIKASI-KODE + USULAN | schema:589; BR-TIER-03 butir 8 |
+| BR-PX-08 | Antrean segera berakhir hanya menampilkan baris aktif dengan tanggalBerakhir terisi dalam jendela terpilih; baris tanpa batas dan baris nonaktif tidak masuk antrean. Urutan: tanggal berakhir naik, seri id naik. | USULAN | pola urutan deterministik repo |
+| BR-PX-09 | UI menampilkan tanggal berakhir + label status masa APA ADANYA dari server; UI dilarang menghitung sisa hari/status sendiri dan dilarang menyembunyikan baris sudah berakhir (tampil berlabel, supaya riwayat master terbaca). | USULAN | pola konsumen read-model repo |
+| BR-PX-10 | Tidak ada notifikasi/cron/WA tahap 1; antrean pasif di halaman kelola. Menambah pengingat aktif = putusan Lead Q-PX-4. | USULAN | — |
+| BR-PX-11 | Harga berakhir BUKAN peristiwa akuntansi: nol jurnal, nol ubah HPP/diskon dokumen berjalan. Diskon/pajak baris tetap aturan vonis tahap 1 price-list (sebelum subtotal/pajak). | TERVERIFIKASI-KODE (jalur harga) | service.ts:1-16 header vonis |
+| BR-PX-12 | VendorItemPrice (harga pemasok) TIDAK disentuh spec ini; masa berlaku harga beli = spec terpisah bila dibutuhkan. | USULAN (scope) | schema VendorItemPrice :552-573 tanpa tanggal akhir juga — dicatat, tidak diangkat |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Tanggal mulai berlaku harga | Ada "Mulai Berlaku" pada Penyesuaian Harga/Diskon (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penyesuaian-harga-diskon/mengenal-fitur-penyesuaian-harga-diskon/) | Belum terverifikasi di help resmi yang diakses run ini (pencarian help.zahironline.com hanya memunculkan penawaran harga/faktur; ditulis belum terverifikasi, bukan diklaim absen) | Ada `effectiveDate` (TERVERIFIKASI-KODE schema:580) |
+| Harga mendatang terlihat sebelum berlaku | Ada kolom Harga Berlaku Saat Ini vs Harga Jual Mendatang (BENCHMARK: https://help.accurate.id/product/accurate-online/accurate-insight/cek-harga-jual-sebelum-berubah/) | Belum terverifikasi | Parsial: baris masa depan tersimpan tapi resolver baru memakainya saat tanggal dokumen tiba; tanpa label mendatang di halaman kelola |
+| Tanggal berakhir harga otomatis | Tidak ditemukan di dua halaman Accurate di atas (hanya mulai berlaku) — ditulis tidak ditemukan, bukan diklaim tidak ada | Belum terverifikasi | ABSEN (gap spec ini) |
+| Antrean harga segera berakhir | Tidak ditemukan di halaman di atas | Belum terverifikasi | ABSEN (gap spec ini) |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-PX-B1: dokumen bertanggal tepat pada tanggalBerakhir memakai harga baris itu; dokumen +1 hari TIDAK memakainya (turun kandidat/fallback). Membalik perbandingan batas = tes MERAH.
+- AC-PX-B2: baris tanpa tanggalBerakhir berperilaku byte-sama dengan resolver hari ini (regresi BR-TIER existing hijau).
+- AC-PX-B3: kandidat teratas berakhir -> kandidat berikutnya terpilih; mencabut syarat berakhir dari resolver = MERAH.
+- AC-PX-B4: simpan tanggalBerakhir < effectiveDate ditolak; tanggalBerakhir lampau saat buat ditolak.
+- AC-PX-B5: mengubah tanggalBerakhir sesudah faktur terbit tidak mengubah unitPrice/sumber faktur itu (snapshot byte-sama).
+- AC-PX-B6: antrean hanya baris aktif bertanggal berakhir dalam jendela; baris tanpa batas/nonaktif bocor = MERAH.
+
+Frontend (konsumen):
+- AC-PX-F1: kolom "Berlaku Sampai" + label status masa tampil verbatim server; UI menghitung sisa hari sendiri = MERAH (grep hitung tanggal di komponen).
+- AC-PX-F2: baris sudah berakhir tetap tampil berlabel, tidak hilang dari tabel.
+
+QA: AC-PX-B1..B6 + AC-PX-F1..F2 atas head Backend/Frontend persis; tambahan: resolver menerima tanggal dokumen (bukan now) dibuktikan dokumen backdate.
+
+Edge cases: EC-1 effectiveDate null + tanggalBerakhir terisi (berlaku sejak dulu s.d. berakhir). EC-2 tanggalBerakhir = effectiveDate (berlaku satu hari). EC-3 dua kandidat, yang spesifik berakhir dan yang umum belum -> umum menang. EC-4 qty tingkat: baris minQty besar berakhir, baris minQty kecil belum -> tingkat kecil menang (bukan fallback master). EC-5 zona waktu: tanggal dokumen WIB (date-only existing `wibDateToUtcMidnight`), perbandingan date-only bukan timestamp mentah. EC-6 baris berakhir di tengah periode laporan harga — laporan existing tidak berubah (master, bukan laporan).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-PX-1 (Lead): buka inti kolom tanggal berakhir sekarang? Key izin baru vs reuse view/create/edit/delete existing (spec usul reuse, tanpa key baru).
+- Q-PX-2 (Lead): jendela antrean segera berakhir — usul pilihan tetap 7/30/90 hari seperti pola antrean garansi F-2026-10-22-094-S, tanpa konfigurasi bebas. Angka ini USULAN sampai diputus.
+- Q-PX-3 (Backend): fisik kolom (nama/map/index), perbandingan date-only resolver, dan apakah loader perlu menyaring di query atau tetap saring murni di resolver (spec usul resolver murni, loader tidak berubah makna).
+- Q-PX-4 (Lead): pengingat aktif (cron/notifikasi) ditunda tahap 1 — sahkan.
+- Q-PX-5 (Accountant): TIDAK diminta tahap ini — harga berakhir tidak mengubah perlakuan pajak/diskon dokumen terbit (BR-PX-11). Dipanggil lagi hanya bila ada usul harga berlaku surut mengubah dokumen berjalan (spec ini melarangnya).
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-001-S | Spec ini (dokumen) | Business | — |
+| (turunan) inti tanggal berakhir + resolver + antrean loader | Backend | Q-PX-1/2/3 diputus Lead; klaim schema.prisma di board | — |
+| (turunan) UI kolom/label/antrean halaman harga-pelanggan | Frontend | kontrak Backend stabil; kata §7 verbatim | — |
+| (turunan) falsifikasi AC-PX-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Masa berlaku VendorItemPrice (harga beli): celah sama ada, tapi dampaknya rujukan manual (schema VendorItemPrice komentar "murni rujukan, belum mengikat transaksi") — YAGNI sampai harga beli mengikat dokumen.
+- Perpanjangan massal / salin baris harga: belum ada bukti kebutuhan; edit per baris cukup tahap 1.
+- Notifikasi WA/cron harga berakhir: ditunda Q-PX-4, antrean pasif dulu.
+---
+
 ## VONIS BOT Accountant 2026-10-24 — F-2026-10-24-135-V: penjualan besi tua hasil scrap — pendapatan lain-lain (bukan pengurang HPP), PPN penyerahan BKP jalur faktur existing, label kelalaian TANPA dampak uang otomatis (BR-SCRAP-06/09 spec F-2026-10-24-098-S)
 
 Status: PUTUSAN BOT Accountant (kartu t_601d9e56). Dokumen saja;
@@ -23973,3 +24102,517 @@ usulan: Business (spec), Lead (putusan angka/jam kerja),
 Backend (builder), Frontend (konsumen 001-U), QA
 (falsifikasi). Butuh putusan accountant: TIDAK (tanpa
 uang/pajak/jurnal).
+
+## SPEC BUSINESS 2026-10-24 — F-2026-10-24-141-S peringatan duplikat lead saat createLead + daftar kandidat duplikat read-only (CRM leads)
+
+Spec dokumen saja, tanpa kode/schema/migrasi/UI. Basis
+`origin/main` `0395e9cb` (2026-10-24, run ini). Anti-tabrakan:
+grep `F-2026-10-24-141` di backlog+board origin/main = 0;
+tertinggi `-S` terbit di main = F-2026-10-24-099-S; tertinggi
+-S di PR saat spec ditulis = F-2026-10-24-135-S (PR #743 kala
+itu OPEN head c4b10f27; kini MERGED head akhir 595f817e —
+penanda waktu-tulis, diperbarui saat penggabungan kanonik
+2026-10-24, bukan klaim head berjalan);
+136-140 tidak terpakai di main/PR terbuka yang dicek run ini.
+ID spec ini **F-2026-10-24-141-S** bebas. Grep
+`duplikat lead|lead duplikat|peringatan duplikat` di
+backlog origin/main = 0 sebelum append ini — belum ada spec
+duplikat lead; spec ini bukan duplikasi spec lain.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, origin/main 0395e9cb)
+
+Sudah ada — TIDAK diduplikasi spec ini:
+1. `createLead` (`src/actions/master.actions.ts:1557`):
+   `requirePermission("create_leads")` -> `parseFormData(createLeadSchema)`
+   -> `generateDocumentNumber("LEAD")` -> `prisma.lead.create`
+   langsung. Nol query kandidat, nol peringatan, nol blokir.
+   Status awal selalu `"new"`. Redirect `/crm/leads` sesudah sukses.
+2. `updateLead` (`master.actions.ts:1600`): `edit_leads` +
+   ownership guard (non-admin hanya lead `assignedTo` sendiri;
+   reassign hanya admin/`manage_leads`) + transaksi update +
+   `LeadActivity status_change` bila status berubah. Nol cek
+   duplikat phone/email/company juga di jalur edit.
+3. Skema lead (`src/lib/validations/crm.schemas.ts:61-85`):
+   `createLeadSchema` — `name` wajib, `email/phone/company`
+   `optionalString` nullable; `updateLeadSchema` = extend +
+   `status` enum `LEAD_STATUSES`
+   (`new/contacted/qualified/proposal/negotiation/won/lost`).
+   Nol normalisasi phone/email di schema.
+4. Model `Lead` (`prisma/schema.prisma:4163-4193`): `email`,
+   `phone`, `company` nullable TANPA `@unique`; hanya
+   `slug`+`leadNumber` unique. Index: status, customerId,
+   assignedTo, createdBy, createdAt. Soft-delete `deletedAt`
+   ada. Konsekuensi: unique constraint DB untuk phone/email
+   TIDAK mungkin tanpa migrasi + keputusan data kotor existing
+   — spec ini TIDAK mengusulkan unique DB (lihat §9).
+5. `convertLead` (`src/actions/crm.actions.ts:201-245`):
+   guard `edit_leads` + ownership + status >= qualified +
+   `lead.customerId` sudah terisi -> tolak; transaksi
+   `FOR UPDATE` + re-check customerId cegah customer ganda
+   konkuren. Guard ini cegah duplikat KONVERSI, bukan duplikat
+   LEAD: dua lead berbeda untuk orang sama tetap bisa dibuat,
+   dan lead kedua baru tertahan di convert (sesudah kerja sales
+   terlanjur ganda).
+6. Pola repo tetangga: `createCustomer`
+   (`master.actions.ts:182-195`) quick-add upsert diam-diam —
+   name+phone cocok customer aktif non-deleted -> return baris
+   existing TANPA memberi tahu user bahwa data sudah ada.
+   Pola "reuse senyap" ini TIDAK diterapkan ke lead dan TIDAK
+   cocok untuk lead: lead punya pipeline/status/owner sendiri;
+   reuse senyap akan menyembunyikan kepemilikan sales lain.
+   Spec ini memilih peringatan eksplisit (§2), bukan reuse.
+7. Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts:362-366`):
+   `view_leads`, `create_leads`, `edit_leads`, `delete_leads`,
+   `manage_leads` (label "Prospek"). Halaman:
+   `crm/leads/page.tsx:31` `view_leads`,
+   `crm/leads/tambah/page.tsx:12` `create_leads`,
+   `crm/leads/[slug]/page.tsx:34` `view_leads`. TIDAK ada izin
+   `override_duplicate_lead` / `view_all_leads` di katalog
+   (grep run ini) — izin baru TIDAK dipakai; putusan Q-DUP-2
+   reuse izin asal + `manage_leads` (§4/§11).
+8. Normalisasi nomor existing: `normalizeWhatsappPhone`
+   (`src/lib/utils/whatsapp.ts:11-19`): strip non-digit,
+   `0...` -> `62...`, wajib prefix `62` + panjang >= 11, selain
+   itu null. Ini SATU-SATUNYA normalisasi phone di repo
+   (grep `normalizePhone` lain = 0 untuk keperluan matching).
+   Kontrak matching §3 mewajibkan Backend memutuskan reuse
+   helper ini vs helper matching baru — JANGAN karang aturan
+   normalisasi kedua yang bisa selisih dari wa.me.
+9. Daftar lead existing (`crm/leads/page.tsx:44-60`): query
+   `deletedAt: null` + cari name/email/company `contains`;
+   kartu read-model existing di halaman sama: stale leads
+   (hanya `new/contacted`, `deletedAt: null` —
+   `src/lib/reports/stale-leads-data.ts:19`), follow-ups,
+   funnel. Daftar kandidat duplikat spec ini = permukaan
+   read-only BARU saat create (bukan kartu laporan keempat)
+   kecuali putusan tahap 2 Q-DUP-5 (§11: tahap 1 panel saja).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini = 0):
+- Query kandidat duplikat apa pun di createLead/updateLead;
+  peringatan/banner duplikat di form tambah lead; daftar
+  "kemungkinan duplikat" read-only; alasan override tercatat;
+  pencocokan lintas `Customer` dari form lead.
+
+### 1. Workflow specification
+
+Aktor: Sales rep pembuat (pemegang `create_leads`), Sales rep
+pemilik lead existing (tidak bertindak; datanya tampil terbatas
+§4), Admin/`manage_leads` (melihat semua kandidat + memutuskan
+override bila model blokir dipilih), Sistem (cek pra-simpan).
+
+Dokumen masuk: form tambah lead (name wajib; email/phone/
+company opsional). Dokumen keluar: (a) lead baru status `new`
+seperti existing, atau (b) peringatan kandidat + keputusan user
+tercatat, atau (c) penolakan tersimpan-batal dengan alasan —
+sesuai putusan Q-DUP-1 = Model C (§11). TIDAK ada dokumen/status baru.
+
+Alur usulan (USULAN; perilaku inti diputus Lead Q-DUP-1 = Model C, §11):
+1. User isi form tambah lead, tekan simpan. Validasi schema
+   existing berjalan dulu (identik; error schema tetap error).
+2. SEBELUM `prisma.lead.create`, server normalisasi kunci
+   kontak (§3) dan query kandidat: lead `deletedAt: null`
+   dengan phone ternormalisasi sama ATAU email ternormalisasi
+   sama; company cocok-saja TIDAK cukup berdiri sendiri (§3).
+3. Nol kandidat: simpan persis jalur existing (satu query
+   tambah; latency create bertambah satu findMany terindeks
+   sempit — Backend ukur, jangan klaim angka).
+4. Ada kandidat: server TIDAK menyimpan dulu. User menerima
+   daftar kandidat read-only (§6 kata tampil): leadNumber,
+   name, company, status label, pemilik (nama assignee),
+   tanggal buat, jenis cocok (Telepon sama / Email sama),
+   tautan buka lead (hanya bila user boleh melihat lead itu —
+   §4). Nilai phone/email kandidat TIDAK ditampilkan penuh
+   ke user yang tidak berhak atas lead itu (§4 privasi kontak).
+5. Keputusan user:
+   a. "Buka lead existing" — batal buat, navigasi ke existing.
+   b. "Tetap buat baru" — Model C terpilih (Q-DUP-1, §11);
+      alasan wajib teks (min. ditetapkan Lead, usul 10 karakter)
+      tersimpan (§3 BR-DUP-06).
+   c. Model blokir TIDAK terpilih (Q-DUP-1 = C, §11) — baris
+      ini historis perbandingan §2, bukan perilaku tahap 1.
+6. Bila lanjut: create berjalan dalam transaksi yang RE-CHECK
+   kandidat (pola FOR UPDATE convertLead tidak berlaku persis
+   untuk create tanpa baris kunci — Backend putuskan mekanik
+   anti-TOCTOU: re-query di dalam transaksi + terima sisa risiko
+   konkuren terdokumentasi, ATAU advisory lock per kunci
+   ternormalisasi; JANGAN klaim atomik tanpa mekanik terbukti).
+7. Jejak: `logActivity` existing tetap; override tercatat
+   (§3 BR-DUP-06 — permukaan fisik = keputusan Backend:
+   ActivityLog LeadActivity type baru vs kolom; spec melarang
+   alasan hanya di log server/console).
+8. updateLead: cek di edit DIPUTUS ya (Q-DUP-3, §11). Default spec:
+   cek berjalan dengan kandidat mengecualikan lead itu sendiri,
+   HANYA bila phone/email BERUBAH dari nilai tersimpan; status-
+   only edit tidak memicu peringatan.
+
+### 2. Pilihan perilaku inti (DIPUTUS Lead Q-DUP-1 = Model C, §11)
+
+| Model | Perilaku | Risiko |
+|---|---|---|
+| A. Blokir keras | cocok phone/email = simpan ditolak | lead sah beda orang satu nomor kantor (114/ växel, nomor admin perusahaan) terkunci; sales buat jalan pintas data kotor |
+| B. Peringatkan + boleh lanjut tanpa alasan | banner + "Tetap buat" | peringatan diabaikan massal; tidak ada jejak audit keputusan |
+| C. Peringatkan + lanjut wajib alasan tercatat | banner + alasan wajib + jejak | gesekan kecil; audit lengkap; nomor kantor sah tetap bisa dibuat dengan alasan "nomor sentral perusahaan" |
+
+Rekomendasi Business (USULAN): **C**. Alasan: phone perusahaan
+bersama & email generik (`info@`, `admin@`) nyata di bengkel/
+fleet; blokir keras memindahkan duplikat jadi data kotor
+(phone diubah satu digit supaya lolos — lebih buruk dari
+duplikat terang). Model B tanpa alasan = audit kosong.
+Vonis final Lead 2026-10-24: Model C terpilih (§11).
+
+### 3. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-DUP-01 | createLead existing langsung create tanpa cek duplikat; status awal `new` | TERVERIFIKASI-KODE master.actions.ts:1557 |
+| BR-DUP-02 | Lead.phone/email/company nullable tanpa unique DB; duplikat fisik mungkin hari ini | TERVERIFIKASI-KODE schema.prisma:4168-4170 |
+| BR-DUP-03 | Kandidat kuat = phone ternormalisasi sama ATAU email ternormalisasi sama, pada lead `deletedAt: null`; company-saja = cocok lemah, TIDAK memicu peringatan sendiri | USULAN |
+| BR-DUP-04 | Normalisasi phone: strip non-digit; `08...`->`628...`; `+62...`/`62...`->`62...`; bandingkan string digit ternormalisasi penuh. Email: trim + lowercase penuh. String kosong/null TIDAK pernah cocok (dua lead tanpa phone BUKAN duplikat) | USULAN (reuse `normalizeWhatsappPhone` whatsapp.ts:11 = keputusan Backend; perhatikan helper itu return null untuk nomor <11 digit / non-62 — nomor pendek/asing gagal normalisasi = tidak cocok, bukan error) |
+| BR-DUP-05 | Cakupan status kandidat: sertakan `new/contacted/qualified/proposal/negotiation` + `won` berlabel "Sudah dikonversi"; `lost` tampil terpisah label "Pernah lost" bukan pemicu utama | DIPUTUS Lead Q-DUP-4 (§11) |
+| BR-DUP-06 | Bila lanjut sesudah peringatan: alasan wajib + tercatat menempel ke lead baru (siapa, kapan, kandidat yang dilewati ID-nya); alasan tidak terhapus saat lead diedit | USULAN (fisik Backend) |
+| BR-DUP-07 | Kandidat tidak pernah auto-merge, auto-delete, atau auto-assign; daftar murni read-only; membuka existing = navigasi, bukan mutasi | USULAN |
+| BR-DUP-08 | Cek lintas Customer (phone/email cocok Customer aktif) = fase terpisah; BUKAN fase 1. Bila kelak disetujui: label kandidat "Sudah pelanggan", tanpa tampil data customer di luar hak `view_customers` user | DITUNDA Lead Q-DUP-6 (§11) |
+| BR-DUP-09 | Tidak ada unique constraint phone/email Lead di spec ini; penegakan = peringatan server, bukan DB. Unique = migrasi + kurasi data kotor = keputusan terpisah Lead/Backend bila duplikat terbukti tetap lolos | USULAN |
+| BR-DUP-10 | Peringatan TIDAK mengubah status lead mana pun, TIDAK membuat LeadActivity di lead EXISTING (lead orang lain tidak boleh tercemar jejak percobaan duplikat); jejak hanya di lead baru yang jadi dibuat | USULAN |
+
+### 4. Role / permission matrix
+
+Izin existing dari katalog (TERVERIFIKASI-KODE §0.7). Baris
+bertanda * = perilaku DIPUTUS Lead Q-DUP-2 (§11): tanpa izin
+baru; override = pembuat berizin asal + alasan wajib;
+lihat-penuh lintas-sales hanya `manage_leads`.
+
+| Aksi | Sales rep (create_leads) | Sales rep pemilik existing | manage_leads / super_admin | Tanpa view_leads |
+|---|---|---|---|---|
+| Buat lead, nol kandidat | create_leads: ya | — | ya | tidak |
+| Terima peringatan + lihat kandidat milik sendiri | ya, kontak penuh | — | ya | tidak |
+| Lihat kandidat milik sales LAIN | terbatas: leadNumber/name/company/status/pemilik/jenis cocok; phone/email kandidat DIMASK (2 digit akhir phone, domain email saja) * | — | penuh | tidak |
+| Tetap buat sesudah peringatan (Model C) | create_leads + alasan wajib * | — | ya | tidak |
+| Override blokir (Model A TIDAK terpilih, Q-DUP-1 = C) | n/a tahap 1 | n/a | n/a | tidak |
+| Buka detail lead kandidat | hanya bila lolos view halaman existing (view_leads + aturan tampil existing; spec TIDAK melonggarkan ownership buka-detail) | ya | ya | tidak |
+
+Catatan privasi kontak: menampilkan phone/email penuh lead
+milik sales lain ke pembuat baru = kebocoran buku kontak antar
+sales. Masking di atas = USULAN minimum; Backend/Frontend
+dilarang menampilkan kontak penuh kandidat lintas-pemilik
+tanpa putusan Lead eksplisit. Jumlah kandidat lintas-pemilik
+tetap boleh tampil ("1 lead lain cocok") tanpa identitas kontak.
+
+### 5. Status-transition matrix
+
+Tidak ada transisi status baru. Peringatan = gerbang pra-simpan.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada lead) | submit form valid, nol kandidat | Lead `new` (existing) | create_leads |
+| (belum ada lead) | submit form valid, ada kandidat | TETAP belum tersimpan; peringatan tampil | create_leads; server re-check saat lanjut |
+| (belum ada lead) | user pilih buka existing | batal buat; nol baris baru | — |
+| (belum ada lead) | tetap buat + alasan (Model C) | Lead `new` + jejak override | create_leads + alasan wajib (BR-DUP-06) |
+| Lead existing kandidat | percobaan duplikat orang lain | TIDAK BERUBAH (status/owner/aktivitas utuh) | BR-DUP-07/10 |
+| Lead `won` (customerId terisi) | jadi kandidat | TIDAK BERUBAH; tampil label konversi | convertLead guard existing tidak disentuh |
+
+### 6. Feature matrix Accurate / Zahir / ISF
+
+Benchmark diakses 2026-10-24. Jujur terbatas: TIDAK ditemukan
+dokumentasi resmi Accurate/Zahir tentang peringatan duplikat
+LEAD/prospek — keduanya tidak mempublikasikan modul lead
+setara pipeline ISF pada sumber resmi yang diakses; fitur
+terdekat = master Pelanggan. Jangan klaim "Accurate punya
+duplicate lead warning".
+
+| Kemampuan | Accurate Online (BENCHMARK) | Zahir Online (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | ISF spec ini (USULAN) |
+|---|---|---|---|---|
+| Master pelanggan terstruktur (kontak, alamat, NPWP, limit) | Ada — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pelanggan/mengenal-fitur-pelanggan/ | Ada (Data Nama & Alamat untuk pelanggan/pemasok/karyawan) — https://help.zahironline.com/portal/id/kb/customer-support/zahir-online/guidance/master-data | Ada (Customer + quick-add reuse senyap master.actions.ts:182-195) | tidak diubah |
+| Peringatan duplikat saat buat pelanggan | Tidak terdokumentasi di help resmi yang diakses | Tidak terdokumentasi; KB Zahir hanya kenal peringatan nomor referensi transaksi terpakai (domain transaksi, bukan master lead) | ABSEN untuk lead; reuse senyap untuk customer | peringatan kandidat lead §1-§3 |
+| Pipeline lead/prospek (new->won/lost) | Tidak ditemukan modul setara di help resmi yang diakses | Tidak ditemukan modul setara di help resmi yang diakses | Ada penuh (LEAD_STATUSES crm.schemas.ts:88) | tidak diubah |
+| Daftar kandidat duplikat read-only + alasan override tercatat | Tidak terdokumentasi | Tidak terdokumentasi | ABSEN | USULAN fase 1 |
+
+### 7. Kata tampil (usul Frontend, verbatim untuk diadopsi/diubah Lead)
+
+- Judul: "Kemungkinan lead duplikat"
+- Isi: "Kontak ini cocok dengan lead yang sudah ada. Periksa
+  dulu — membuat ganda membagi tindak lanjut antar sales."
+- Per kandidat: "{leadNumber} — {name} ({company}) · Status:
+  {statusLabel} · Pemilik: {assigneeName} · {jenisCocok} ·
+  Dibuat {tanggal}"
+- Jenis cocok: "Nomor telepon sama" / "Email sama" /
+  "Telepon dan email sama" / "Sudah menjadi pelanggan" (fase 2)
+- Tombol: "Buka lead existing" / "Tetap buat lead baru"
+- Alasan (Model C): label "Alasan tetap membuat lead baru
+  (wajib, tercatat)"; placeholder contoh: "Nomor sentral
+  perusahaan, kontak orang berbeda"
+- Won: "Sudah dikonversi menjadi pelanggan"
+- Lost (bila tampil): "Lead lama berstatus lost — bukan
+  duplikat aktif"
+
+### 8. Acceptance criteria + edge cases
+
+AC-DUP-1: createLead phone `0812-3456-7890` saat existing
+aktif phone `+6281234567890`: peringatan muncul, nol baris
+baru sebelum keputusan user. Cabut normalisasi -> MERAH.
+AC-DUP-2: email `Budi@Mail.com` vs existing `budi@mail.com`:
+kandidat cocok. Bedakan huruf besar/kecil -> MERAH.
+AC-DUP-3: dua lead sama-sama tanpa phone/email (null/kosong),
+name sama: TIDAK ada peringatan (BR-DUP-04). Name-saja memicu
+-> MERAH.
+AC-DUP-4: company sama persis, phone+email beda: TIDAK ada
+peringatan pemicu (BR-DUP-03). Company-saja memblokir ->
+MERAH.
+AC-DUP-5: kandidat existing `deletedAt` terisi: tidak tampil,
+create berjalan normal. Lead terhapus tampil -> MERAH.
+AC-DUP-6: kandidat milik sales lain: kontak termask per §4;
+phone/email penuh bocor di respons server/UI -> MERAH.
+AC-DUP-7 (Model C): "Tetap buat" tanpa alasan ditolak server
+(bukan hanya tombol mati di UI); alasan + ID kandidat tercatat
+di lead baru. Alasan hanya di console/log server -> MERAH.
+AC-DUP-8: dua submit konkuren phone sama: maksimal satu
+peringatan-terlewati tanpa jejak; mekanik Backend §1.6 diuji —
+klaim "nol duplikat konkuren" tanpa mekanik terbukti -> MERAH.
+AC-DUP-9: lead existing kandidat tidak berubah byte status/
+assignedTo/activities sesudah percobaan duplikat (BR-DUP-10).
+Baris LeadActivity baru di existing -> MERAH.
+AC-DUP-10: create tanpa kandidat identik perilaku existing:
+status `new`, leadNumber terbit, redirect, logActivity.
+AC-DUP-11: updateLead mengubah phone ke phone lead aktif lain:
+perilaku sesuai putusan Q-DUP-3 = ya (§11); edit status-saja nomor sama
+dengan dirinya sendiri TIDAK memicu (self-exclusion). Edit
+memperingatkan diri sendiri -> MERAH.
+AC-DUP-12: nomor non-Indonesia / pendek yang gagal normalisasi
+(`normalizeWhatsappPhone` null): tidak cocok, create berjalan,
+bukan error validasi baru. Nomor asing valid diblokir paksa
+aturan 62 -> MERAH atas keputusan BR-DUP-04 terdokumentasi.
+
+Edge: phone berisi spasi/strip/parens; email plus-addressing
+(`budi+sales@mail.com`) TIDAK disetarakan fase 1 (fase 1 =
+lowercase persis; plus-strip = keputusan terpisah, jangan
+diam-diam); satu kandidat cocok phone DAN lead lain cocok
+email -> dua kandidat tampil, dedup per lead ID; kandidat
+`won` tampil berlabel konversi (DIPUTUS Q-DUP-4, §11);
+existing sudah punya customerId tapi status bukan won (data
+warisan) -> label konversi ditentukan customerId, bukan status
+teks; user tanpa view_leads tapi punya create_leads (peran
+sempit): peringatan tampil termask penuh (tidak ada tautan
+buka yang akan 403 diam-diam — tautan disembunyikan).
+
+### 9. Yang TIDAK diusulkan run ini
+
+- Unique constraint DB phone/email Lead (migrasi + kurasi data
+  kotor; BR-DUP-09) — YAGNI sampai bukti peringatan bocor.
+- Auto-merge lead, auto-delete kandidat, deduplikasi massal
+  data existing, impor lead — tidak ada permukaan impor lead
+  terverifikasi run ini; jangan bangun di atas asumsi.
+- Fuzzy/name-similarity matching (Levenshtein dsb.): name
+  Indonesia berulang tinggi; false-positive menggerus percaya
+  ke peringatan. Cocok persis ternormalisasi saja fase 1.
+- Cek duplikat di convertLead (sudah terjaga customerId) dan
+  perubahan quick-add customer senyap (domain customer;
+  temuan terpisah bila Lead mau peringatan di sana juga).
+
+### 10. Backlog implementasi (turunan spec F-2026-10-24-141-S)
+
+Urutan: putusan Lead Q-DUP-1..6 SUDAH terbit (§11) -> Backend inti
+-> Frontend -> QA. ID turunan diberikan saat kartu dibuat (cegah tabrakan
+dengan memeriksa maks ID berjalan saat itu); spec ini tidak
+mengklaim nomor turunan di muka selain induk 141-S.
+
+- DUP-B1 (Backend, P1): helper pencocokan kandidat lead
+  read-only (normalisasi §3/BR-DUP-04, reuse-vs-baru
+  `normalizeWhatsappPhone` diputus tertulis) + query kandidat
+  `deletedAt: null`, dedup per ID, masking lintas-pemilik di
+  server (bukan hanya UI). Tanpa schema/migrasi fase 1 kecuali
+  fisik jejak BR-DUP-06 menuntutnya — laporkan dulu ke Lead.
+- DUP-B2 (Backend, P1): integrasi createLead pra-simpan +
+  re-check transaksi §1.6 + penolakan alasan kosong di server;
+  updateLead termasuk (Q-DUP-3 = ya, §11).
+- DUP-F1 (Frontend, P1, SESUDAH kontrak B1/B2): panel peringatan
+  di form tambah lead, kata §7, daftar kandidat read-only,
+  field alasan; UI nol normalisasi/matching sendiri — tampilkan
+  putusan server apa adanya.
+- DUP-Q1 (QA, P2): falsifikasi AC-DUP-1..12 atas head Backend+
+  Frontend (normalisasi dicabut MERAH, masking bocor MERAH,
+  alasan kosong lolos MERAH, self-match edit MERAH).
+- Fase 2 (DITUNDA Q-DUP-6, §11): kandidat lintas Customer.
+
+### 11. PUTUSAN LEAD 2026-10-24 (Q-DUP-1..6 DIPUTUS — bukan Q terbuka lagi)
+
+Dicabut/digabung 2026-10-24: spec ini = satu-satunya spec
+kanonik F-2026-10-24-141-S (Spec-A pendahulu di PR sama
+dicabut utuh atas putusan Lead; register tunggal
+BR-DUP-01..10 / AC-DUP-1..12 versi spec ini). Putusan Lead
+2026-10-24 (PR #746, komentar triase Lead + kartu
+t_9b62a5fd), berlaku untuk Backend SESUDAH spec kanonik ini
+merged — Backend tidak menunggu putusan ulang:
+
+- Q-DUP-1 = **C**: peringatkan + alasan wajib tercatat
+  (Model C §2; bukan blokir keras, bukan lanjut-tanpa-alasan).
+- Q-DUP-2: override oleh pembuat berizin `create_leads`/
+  `edit_leads` asal (dengan alasan wajib per Q-DUP-1);
+  lihat-penuh kandidat lintas-sales hanya `manage_leads`;
+  kontak kandidat lintas-pemilik default tersamar per §4.
+- Q-DUP-3 = **ya**: cek duplikat juga di `updateLead`,
+  self-excluded, hanya saat phone/email berubah.
+- Q-DUP-4: kandidat `won` disertakan berlabel "Sudah
+  dikonversi"; `lost` tampil terpisah, bukan pemicu utama.
+- Q-DUP-5: tahap 1 hanya panel saat create/update; daftar
+  kandidat di halaman leads = tahap 2, DITUNDA.
+- Q-DUP-6: lintas-Customer DITUNDA sampai tahap 1 terbukti
+  (BR-DUP-08 tetap fase terpisah; bukan kontrak tahap 1).
+
+Pemilik berikutnya: Lead (merge PR docs ini sesudah
+konfirmasi QA head final) -> Backend (DUP-B1/B2) ->
+Frontend (DUP-F1) -> QA (DUP-Q1). Accountant: TIDAK
+dilibatkan — nol uang/pajak/jurnal di spec ini.
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-002-S: antrean penawaran diterima belum dikonversi (accepted/approved tanpa SO/WO/faktur)
+
+> **Slot**: F-2026-10-25-002-S. Diperiksa bentrok 2026-10-24 23:55 WIB vs `origin/main` (`a482589c`): grep `F-2026-10-25-002` di backlog+board = 0; PR Business terbuka beda topik (#746 F-2026-10-24-141-S duplikat prospek, #747 F-2026-10-25-001-S masa berlaku harga sudah merged a482589c). ID 002 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (d) penjualan** — bukan F-ID lama. Bukan duplikat F-2026-10-22-091-S (antrean penawaran `sent` belum dijawab, masa berlaku menipis/kedaluwarsa — objek pra-keputusan pelanggan), bukan F-2026-10-20-101 (alasan kalah penawaran), bukan F-2026-10-22-089-S (antrean penagihan piutang — objek faktur terbit), bukan F-2026-10-22-092-S (corong prospek lead). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Pelanggan sudah menyetujui penawaran (status `accepted`/`approved`), tetapi belum ada satu pun permukaan kerja yang menjawab: "penawaran mana yang sudah disetujui pelanggan tetapi belum menjadi pekerjaan/tagihan, dan sudah berapa lama menunggu?" Hari ini staf membuka daftar penawaran dan menebak per baris. Akibat nyata bengkel: persetujuan pelanggan mengendap — kendaraan tidak dijadwalkan, DP tidak diminta, masa berlaku (`validUntil`) terlewat sehingga konversi ditolak penjaga existing dan penawaran harus direvisi dari awal. Spec ini membekukan: (A) builder baca-saja status turunan untuk penawaran accepted/approved tanpa dokumen turunan, (B) antrean kerja di permukaan penawaran existing, (C) kata UI verbatim. Angka ambang umur antrean = `USULAN`, bukan fakta; gerbang inti dibuka Lead.
+
+### 1. Inventarisasi terverifikasi (origin/main a482589c, 2026-10-24)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Status Quotation String bebas (`prisma/schema.prisma` model `Quotation` :1319, `status String @default("draft")`); konstanta `SalesStatus` (`src/lib/constants/status.ts:20-29`): SENT/ACCEPTED/CONFIRMED/CONVERTED/POSTED/PAID/PARTIAL di atas Status dasar.
+- Transisi terima: `acceptQuotation` (`src/actions/sales.actions.ts:329-360`) — izin `confirm_quotations`, hanya dari `sent` (:338-340), `assertQuotationNotExpired` (:342), `assertApproved` opt-in (:344), lalu `decideQuotation` menulis status `accepted` (:345) + `QuotationHistory` + notifikasi admin. Persetujuan pelanggan dicatat sebagai keputusan user internal; timestamp persetujuan pelanggan per revisi tidak ada sebagai kolom terpisah (keluarga F-2026-10-20-103, dicatat apa adanya).
+- Transisi konversi: `convertQuotationToOrder` (`sales.actions.ts:478-565`) — izin `create_sales_orders`, hanya status `accepted`/`approved` (:487-489), `assertQuotationNotExpired` (:491), kunci baris `FOR UPDATE` + tolak bila SO sudah ada (:502-508), SO lahir status `draft`, quotation menjadi `converted` (:546-549). Sesudah titik ini penawaran keluar dari cakupan spec ini.
+- Kendaraan/turunan lain: WorkOrder dan SalesInvoice juga tertaut quotation (`Quotation.workOrders`/`salesInvoices`, schema model Quotation); DP per quotation `DownPayment` (status default `pending`, `confirmDownPayment` sales.actions.ts:873) — DP adalah uang muka, BUKAN bukti pekerjaan dimulai; spec ini tidak menyamakan DP dengan konversi.
+- Antrean tetangga yang sudah live dan TIDAK diduplikasi: builder+loader+ kartu antrean penawaran `sent` (`src/lib/reports/quotation-followup-queue.ts` header F-2026-10-22-091-S — filter loader `status: "sent"` persis di `quotation-followup-queue-data.ts`; tahap KEDALUWARSA/MENIPIS/TERBUKA/TANPA_BATAS dari validUntil); cron `auto-reject-quotations` hanya menolak `sent` (validUntil lewat ATAU tanpa validUntil + updatedAt > 14 hari) — penawaran `accepted` TIDAK disentuh cron ini (terverifikasi route.ts).
+- Revisi hanya dari `sent`: `reviseQuotation` menolak status lain ("Hanya penawaran terkirim yang dapat direvisi") — penawaran accepted yang validUntil-nya lewat TIDAK bisa direvisi lewat jalur ini; jalan keluarnya = putusan Lead Q-AQ-4, jangan ditebak builder.
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:158-163,181-185`): `view/create/edit/delete/approve/confirm_quotations`, `view/create/edit/delete/confirm_down_payments`. Daftar penawaran digerbang `view_quotations` (page.tsx daftar penawaran).
+
+Belum ada / gap (bukti grep run ini):
+- Builder/antrean accepted-belum-konversi: grep `status: "accepted"` di `src/lib/reports/*` hanya menyentuh tes job-estimate/quotation-outcome, bukan builder antrean; loader followup memfilter `sent` persis. Nol permukaan menjawab daftar accepted/approved tanpa SO.
+- Umur sejak diterima: `QuotationHistory` (schema model QuotationHistory: action/description/createdAt) menyimpan peristiwa `accepted`, tetapi tidak ada read-model yang menghitung umur terima -> sekarang untuk antrean; `updatedAt` quotation berubah oleh edit apa pun, bukan penanda terima yang stabil (fisik sumber umur = putusan Backend Q-AQ-3).
+
+Benchmark resmi (akses 2026-10-24):
+- Accurate Online Penawaran Penjualan: status penawaran terlacak "sudah diterima, ditolak, atau masih dalam proses negosiasi"; penawaran yang belum diproses ke tahap berikutnya (pesanan/invoice) tampil berstatus "menunggu diproses" (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/).
+- Accurate Online Pesanan Penjualan dari Penawaran: penawaran yang sudah disetujui pelanggan diubah menjadi pesanan tanpa input ulang (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pesanan-penjualan/pesanan-penjualan-dari-penawaran-penjualan/).
+- Zahir: belum terverifikasi di help resmi yang diakses run ini untuk antrean penawaran-diterima-belum-dikonversi (ditulis belum terverifikasi, bukan diklaim absen).
+
+### 2. Workflow specification
+
+Aktor: Sales/Admin Penjualan (pemilik tindak lanjut), Admin Master (baca), Lead (putus gerbang + angka ambang).
+
+Dokumen masuk: Quotation berstatus `accepted`/`approved` existing + QuotationHistory peristiwa terima + relasi turunan existing (SalesOrder/WorkOrder/SalesInvoice per quotation). Dokumen keluar: tidak ada dokumen baru tahap 1; antrean baca-saja + tautan ke aksi existing (konversi ke SO, buat DP, buka detail penawaran).
+
+Alur:
+1. Pelanggan menyetujui penawaran -> staf menjalankan `acceptQuotation` existing; penawaran masuk status `accepted` (atau `approved` lewat jalur persetujuan existing).
+2. Selama belum ada SO untuk quotation itu, penawaran tampil di antrean spec ini dengan umur sejak terima + sisa masa berlaku. DP `pending`/`confirmed` tampil sebagai fakta pendamping apa adanya, tidak mengubah tahap antrean.
+3. Tindak lanjut memakai aksi existing: `convertQuotationToOrder` (membuat SO), `createDownPayment` (meminta DP), atau membuka detail. Antrean tidak membuat dokumen apa pun.
+4. Sesudah SO lahir (quotation `converted`) penawaran keluar antrean permanen. Bila validUntil lewat sebelum konversi, baris tertanda masa-berlaku-lewat; jalan keluarnya mengikuti putusan Q-AQ-4 (bukan tebakan antrean).
+
+### 3. Status-transition matrix (status turunan, BUKAN kolom baru)
+
+Status antrean diturunkan dari (status quotation, keberadaan SO tertaut, validUntil, waktu terima, tanggal acuan WIB). Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| sent | acceptQuotation existing | accepted (masuk antrean: MENUNGGU_TINDAK_LANJUT) | confirm_quotations; assertQuotationNotExpired existing |
+| accepted/approved, tanpa SO | umur terima melewati ambang terpilih (Q-AQ-2) | MENGENDAP (tahap antrean) | ambang tetap terpilih; turunan baca saja |
+| accepted/approved, tanpa SO | tanggal acuan WIB > validUntil | MASA_BERLAKU_LEWAT | semantik assertQuotationNotExpired existing (hari validUntil sendiri masih berlaku) |
+| accepted/approved | convertQuotationToOrder existing berhasil | converted (keluar antrean) | create_sales_orders; SO unik per quotation existing |
+| accepted/approved | reject/cancel lewat jalur existing bila ada | keluar antrean | izin existing; antrean tidak menambah jalur batal |
+| semua tahap | DP dibuat/dikonfirmasi | tahap TIDAK berubah; fakta DP pendamping berubah | create/confirm_down_payments existing |
+
+Catatan jujur: tahap MASA_BERLAKU_LEWAT bukan status dokumen; dokumen tetap `accepted`. Konversi sesudah itu ditolak penjaga existing sampai putusan Q-AQ-4 memberi jalan resmi.
+
+### 4. Role/permission matrix (key nyata katalog :158-163)
+
+| Aksi | Sales/Admin Penjualan | Peran lain |
+|---|---|---|
+| Lihat antrean + umur + sisa masa berlaku | `view_quotations` | ditolak |
+| Buka detail penawaran dari antrean | `view_quotations` | ditolak |
+| Terima penawaran (masuk antrean) | `confirm_quotations` (existing) | ditolak |
+| Konversi ke SO dari antrean | `create_sales_orders` (existing, aksi konversi) | ditolak |
+| Buat DP dari antrean | `create_down_payments` (existing) | ditolak |
+| Setujui angka ambang umur | — (keputusan pemilik proses di luar sistem) | Lead |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-AQ-1 Lead). Kontak pelanggan di antrean hanya untuk pemegang `view_quotations` (pola loader followup 091-S); ekspor tanpa kontak sampai diputus terpisah.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-AQ-01 | Cakupan antrean tahap 1 = quotation `accepted`/`approved`, `deletedAt` kosong, dan TANPA SalesOrder tertaut. `draft`/`sent` milik antrean 091-S; `converted` keluar permanen. | USULAN | convert guard sales.actions.ts:487-489; followup loader filter `sent` |
+| BR-AQ-02 | Keberadaan SO ditentukan relasi `SalesOrder.quotationId` existing (satu query massal anti-N+1), termasuk SO `cancelled` apa adanya sebagai fakta "pernah dikonversi" — baris dengan SO cancelled TIDAK kembali ke antrean diam-diam; ia tertanda terpisah supaya manusia memutuskan (buat SO baru tidak bisa: penjaga existing menolak SO kedua). | USULAN | convertQuotationToOrder :502-508; komentar void-and-reissue di aksi yang sama |
+| BR-AQ-03 | WorkOrder/SalesInvoice langsung tertaut quotation (tanpa SO) tampil sebagai fakta pendamping "sudah ada pekerjaan/faktur tertaut", BUKAN bukti konversi SO; baris tetap di antrean sampai SO ada atau Lead memutus cakupan Q-AQ-5. Dilarang menebak ekuivalensi WO/invoice = SO. | USULAN | relasi Quotation.workOrders/salesInvoices schema |
+| BR-AQ-04 | Umur antrean = hari kalender WIB sejak peristiwa terima (sumber fisik Q-AQ-3 Backend: baris QuotationHistory `accepted` terakhir per revisi berjalan, fallback jujur tertanda bila tidak ditemukan — BUKAN `updatedAt` yang berubah oleh edit apa pun). | USULAN | model QuotationHistory (action/createdAt); pola WIB quotation-followup-queue.ts |
+| BR-AQ-05 | Sisa masa berlaku memakai semantik penjaga existing: lewat bila hari WIB hari ini > validUntil; hari validUntil sendiri masih berlaku; validUntil kosong = TANPA_BATAS (sisa null, dilarang mengarang). | TERVERIFIKASI-KODE (semantik) + USULAN (tampilan) | assertQuotationNotExpired; BR-QF-02/03 spec 091-S |
+| BR-AQ-06 | Tahap antrean turunan murni: MENUNGGU_TINDAK_LANJUT -> MENGENDAP (umur > ambang Q-AQ-2) dan/atau MASA_BERLAKU_LEWAT (pendamping, bisa bersamaan; urutan tampil paling parah: MASA_BERLAKU_LEWAT dulu, lalu MENGENDAP umur terbesar, lalu MENUNGGU umur terbesar; seri documentNo lalu id). Builder/loader DILARANG menulis status/timestamp/dokumen apa pun. | USULAN | pola builder lead-followups/quotation-followup |
+| BR-AQ-07 | DP bukan konversi: DP `pending` maupun `confirmed` tidak mengeluarkan penawaran dari antrean dan tidak mengubah tahap; nominal/status DP tampil apa adanya dari server sebagai fakta pendamping. Ambang DP% terkonfigurasi existing TIDAK disentuh spec ini. | TERVERIFIKASI-KODE (model DP terpisah) + USULAN | model DownPayment; create/confirmDownPayment existing |
+| BR-AQ-08 | Antrean TIDAK menolak, membatalkan, merevisi, atau memperpanjang penawaran apa pun. Cron auto-reject existing hanya menyentuh `sent` — spec ini tidak memperluasnya ke `accepted`. Jalan keluar accepted yang masa berlakunya lewat = Q-AQ-4 Lead. | TERVERIFIKASI-KODE (cakupan cron) + USULAN (larangan) | auto-reject-quotations/route.ts filter SENT |
+| BR-AQ-09 | UI menampilkan tahap/umur/sisa/fakta DP verbatim server; UI dilarang menghitung umur/sisa hari sendiri, dilarang menyembunyikan baris MASA_BERLAKU_LEWAT, dan dilarang memberi label "sudah dikonversi" dari fakta WO/invoice/DP. | USULAN | pola konsumen read-model repo |
+| BR-AQ-10 | Tidak ada notifikasi/cron pengingat tahap 1; antrean pasif di permukaan penawaran existing. Pengingat aktif = putusan Lead Q-AQ-6. | USULAN | — |
+| BR-AQ-11 | Nol dampak uang/jurnal tahap 1: antrean tidak membuat SO/DP/faktur/jurnal; angka grandTotal tampil apa adanya sebagai nilai penawaran, bukan piutang/pendapatan. | TERVERIFIKASI-KODE (jalur dokumen terpisah) | convert/DP aksi existing |
+| BR-AQ-12 | Penjual tampil dari `salesEmployeeId` quotation existing; kosong tampil `—` (jujur), bukan ditebak dari createdBy. Kontak pelanggan hanya di antrean berizin `view_quotations`; ekspor tahap 1 tanpa kontak. | TERVERIFIKASI-KODE (kolom ada) + USULAN | schema Quotation.salesEmployeeId; pola Q-QF-4 spec 091-S |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Status penawaran diterima terlacak | Ya — diterima/ditolak/negosiasi (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/) | Belum terverifikasi run ini | Ada status `accepted` (TERVERIFIKASI-KODE sales.actions.ts:345) |
+| Penawaran disetujui -> pesanan tanpa input ulang | Ya (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pesanan-penjualan/pesanan-penjualan-dari-penawaran-penjualan/) | Belum terverifikasi | Ada convertQuotationToOrder (TERVERIFIKASI-KODE :478) |
+| Daftar "menunggu diproses" sesudah disetujui | Ya — status menunggu diproses untuk yang belum ke tahap berikutnya (BENCHMARK URL pertama) | Belum terverifikasi | ABSEN (gap spec ini): followup existing hanya `sent` |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-AQ-B1: fixture quotation accepted tanpa SO muncul di antrean; sesudah convertQuotationToOrder berhasil, baris hilang. Membalik saringan SO = tes MERAH.
+- AC-AQ-B2: quotation `sent`/`draft`/`converted` bocor ke antrean = MERAH (tetangga 091-S tidak tercampur).
+- AC-AQ-B3: baris dengan SO cancelled TIDAK kembali sebagai MENUNGGU biasa; tertanda pernah-dikonversi (BR-AQ-02). Mengabaikan SO cancelled = MERAH.
+- AC-AQ-B4: umur dihitung dari peristiwa terima (Q-AQ-3), bukan updatedAt: edit penawaran accepted (updatedAt berubah) tidak mengnolkan umur. Memakai updatedAt = MERAH.
+- AC-AQ-B5: validUntil kemarin WIB -> MASA_BERLAKU_LEWAT; validUntil hari ini -> belum lewat; validUntil kosong -> TANPA_BATAS sisa null. Membalik perbandingan = MERAH.
+- AC-AQ-B6: DP pending/confirmed pada baris tidak mengubah tahap/keanggotaan antrean; loader/builder menulis quotation apa pun = MERAH.
+- AC-AQ-B7: WO/invoice tertaut tanpa SO tampil sebagai fakta pendamping, baris tetap di antrean (BR-AQ-03); melabeli terkonversi dari fakta itu = MERAH.
+
+Frontend (konsumen):
+- AC-AQ-F1: tahap/umur/sisa/fakta DP tampil verbatim server; aritmetika tanggal di komponen antrean = MERAH (grep hitung tanggal).
+- AC-AQ-F2: baris MASA_BERLAKU_LEWAT tetap tampil tertanda; tombol aksi hanya memanggil aksi existing (konversi/DP/detail) — UI membuat dokumen sendiri = MERAH. Sebelum commit: grep e2e selector penawaran terdampak, sinkronkan commit yang sama.
+
+QA: AC-AQ-B1..B7 + AC-AQ-F1..F2 atas head Backend/Frontend persis; tambahan: dua panggilan antrean bersamaan tidak mengubah data (baca murni), pemegang tanpa `view_quotations` tertolak.
+
+Edge cases: EC-1 accepted lalu SO dibuat lalu SO cancelled (BR-AQ-02, tertanda, bukan hilang/bukan menunggu biasa). EC-2 accepted tanpa validUntil (TANPA_BATAS; hanya tahap umur yang berlaku). EC-3 accepted dengan DP confirmed penuh tapi tanpa SO (tetap di antrean, BR-AQ-07 — uang masuk bukan pekerjaan). EC-4 validUntil lewat di hari yang sama dengan accept (accept lolos penjaga hari itu; besoknya MASA_BERLAKU_LEWAT). EC-5 riwayat terima tidak ditemukan untuk data lama (umur null tertanda "tidak tercatat", bukan 0 hari). EC-6 quotation accepted milik pelanggan dengan kendaraan kosong (baris tetap tampil; kendaraan `—`). EC-7 revisi: peristiwa terima revisi lama tidak dipakai untuk revisi berjalan (Q-AQ-3 memutus pasangan revisi).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-AQ-1 (Lead): buka inti antrean tahap 1 sekarang dengan izin reuse `view_quotations` (tanpa key baru)?
+- Q-AQ-2 (Lead): ambang MENGENDAP — usul tetap 3 hari kalender sejak terima (sejajar ambang menipis 091-S Q-QF-1), tanpa konfigurasi bebas. Angka USULAN sampai diputus.
+- Q-AQ-3 (Backend): fisik sumber waktu terima (QuotationHistory `accepted` per revisionNumber berjalan vs sumber lain), pasangan revisi, dan bentuk loader massal anti-N+1 (SO/WO/invoice/DP per quotation).
+- Q-AQ-4 (Lead): jalan keluar accepted yang validUntil-nya lewat — perpanjang masa berlaku (aksi baru), revisi dari accepted (ubah penjaga existing), atau biarkan manual di luar sistem? Spec ini tidak memilih; antrean hanya menandai.
+- Q-AQ-5 (Lead): baris ber-WO/invoice tanpa SO (BR-AQ-03) tetap di antrean atau keluar dengan labelnya sendiri? Default spec: tetap, tertanda fakta pendamping.
+- Q-AQ-6 (Lead): pengingat aktif (notifikasi/cron) ditunda tahap 1 — sahkan.
+- Accountant: TIDAK diminta tahap ini — nol jurnal/uang baru (BR-AQ-11). Dipanggil hanya bila Q-AQ-4 memilih jalur yang mengubah dokumen berjalan bernilai.
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-002-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni + loader massal antrean accepted | Backend | Q-AQ-1/2/3 diputus Lead | — |
+| (turunan) UI antrean di permukaan penawaran existing | Frontend | kontrak Backend stabil; kata §3/§5 verbatim | — |
+| (turunan) falsifikasi AC-AQ-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Auto-konversi accepted -> SO/WO/faktur: konversi tetap keputusan manusia lewat aksi existing; antrean tidak membuat dokumen.
+- Memperluas cron auto-reject ke accepted, auto-batal, atau auto-perpanjang validUntil: merusak persetujuan pelanggan yang sudah tercatat; Q-AQ-4 dulu.
+- Notifikasi WA/email ke pelanggan soal persetujuan mengendap: kanal keluar tidak ada; pengingat internal pun ditunda Q-AQ-6.
+- Kolom timestamp persetujuan pelanggan baru: sumber existing (QuotationHistory) dinilai dulu oleh Backend Q-AQ-3; migrasi hanya bila terbukti tidak cukup.
+
+F-2026-10-25-002-S — Antrean penawaran diterima belum dikonversi. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-AQ-1/2/4/5/6 + fisik Backend Q-AQ-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+
+### 12. PUTUSAN LEAD 2026-10-25 (Q-AQ-1/2/4/5/6 DIPUTUS — bukan Q terbuka lagi)
+
+Putusan Lead 2026-10-25 00:37 WIB (kartu t_f7d6f608, spec merged PR #753 e82859f1, verifikasi ulang origin/main 61d526ac). Berlaku untuk Backend SESUDAH seksi ini merged — Backend tidak menunggu putusan ulang. Q-AQ-3 tetap milik Backend (fisik).
+
+- Q-AQ-1 = **BUKA**: inti antrean tahap 1 dibangun sekarang. Izin reuse `view_quotations`, TANPA key izin baru, TANPA migrasi tahap 1. Alasan: daftar penawaran existing sudah digerbang `view_quotations`; antrean adalah read-model turunan di permukaan yang sama — key baru memecah otorisasi tanpa menambah perlindungan. Ekspor tahap 1 tanpa kontak (BR-AQ-12 tetap).
+- Q-AQ-2 = **3 hari kalender WIB sejak peristiwa terima**, konstanta builder bernama (pola `QUOTATION_EXPIRY_WARNING_DAYS` 091-S), TANPA konfigurasi bebas/setting baru tahap 1. Tahap: umur ≤3 = MENUNGGU_TINDAK_LANJUT; umur >3 = MENGENDAP. Alasan: sejajar ambang MENIPIS 091-S yang sudah live; angka dapat ditinjau sesudah data antrean nyata terbaca, bukan ditebak sekarang.
+- Q-AQ-4 = **manual di luar sistem tahap 1**: antrean hanya menandai MASA_BERLAKU_LEWAT (BR-AQ-05/06/08 tetap); konversi tetap ditolak penjaga existing `assertQuotationNotExpired`. TIDAK ada aksi perpanjang masa berlaku baru dan TIDAK ada pelonggaran `reviseQuotation` dari `accepted` tahap 1. Alasan: memperpanjang/merevisi penawaran yang sudah disetujui pelanggan mengubah dokumen berjalan yang sudah jadi dasar persetujuan — keputusan itu butuh jalur persetujuan ulang tersendiri, bukan disisipkan ke antrean baca-saja. Jalan keluar operasional hari ini: penawaran baru lewat alur existing (draft→sent→accepted) bila pelanggan menyetujui ulang. Bila jalur perpanjang/revisi-dari-accepted diusulkan kelak: spec terpisah + vonis Accountant dipanggil saat itu juga (mengubah dokumen bernilai), bukan sekarang.
+- Q-AQ-5 = **TETAP di antrean, tertanda fakta pendamping** (default spec BR-AQ-03 disahkan): baris ber-WorkOrder dan/atau SalesInvoice tertaut langsung ke quotation tanpa SO tetap anggota antrean sampai SO ada; WO/invoice tampil sebagai fakta pendamping verbatim, DILARANG dilabeli "sudah dikonversi". Alasan terverifikasi-kode: `WorkOrder.quotationId` dan `SalesInvoice.quotationId` memang bisa tertaut tanpa SO (schema origin/main 61d526ac), tetapi konversi resmi satu-satunya adalah `convertQuotationToOrder` (sales.actions.ts:478) — mengeluarkan baris hanya karena ada WO/invoice menyembunyikan penawaran yang belum pernah jadi SO.
+- Q-AQ-6 = **SAH ditunda**: nol notifikasi/cron pengingat tahap 1 (BR-AQ-10 tetap). Cron `auto-reject-quotations` TIDAK diperluas ke `accepted` (BR-AQ-08). Pengingat aktif dinilai ulang hanya sesudah antrean pasif terbaca pemakaiannya; membangun cron di atas antrean yang belum ada = menebak kebutuhan.
+
+Pemilik berikutnya: Backend (builder murni + loader massal + fisik Q-AQ-3: sumber waktu terima dari QuotationHistory `accepted` per revisionNumber berjalan, fallback jujur EC-5, loader massal anti-N+1 SO/WO/invoice/DP) -> Frontend (UI di permukaan penawaran existing, verbatim server) -> QA (falsifikasi AC-AQ-B1..B7 + F1..F2). Accountant: TIDAK dilibatkan tahap 1 — nol uang/pajak/jurnal (BR-AQ-11); dipanggil hanya bila Q-AQ-4 dibuka ulang kelak.
