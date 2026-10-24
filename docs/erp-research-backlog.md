@@ -24462,3 +24462,254 @@ Pemilik berikutnya: Lead (merge PR docs ini sesudah
 konfirmasi QA head final) -> Backend (DUP-B1/B2) ->
 Frontend (DUP-F1) -> QA (DUP-Q1). Accountant: TIDAK
 dilibatkan — nol uang/pajak/jurnal di spec ini.
+
+---
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-004-V: PPN uang muka DP/termin — faktur pajak saat penerimaan pembayaran terverifikasi, snapshot DPP/PPN per DP, reklas kewajiban DP anti-PPN-dobel
+
+Status: PUTUSAN BOT Accountant (kartu t_5d1418ea). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. ID bebas
+terverifikasi live: grep `F-2026-10-25-004` di `origin/main`
+(7505a7d7) = 0 hasil sebelum tulis.
+
+### 0. Basis bukti live (worktree origin/main 7505a7d7, 2026-10-25 00:08 WIB) — TERVERIFIKASI-KODE
+
+- `onDownPaymentReceived` (`src/lib/hooks/accounting.hook.ts:1587`):
+  Dr Kas/bank (`cashBankAccountId`) / Cr Kewajiban Uang Muka
+  Penjualan 210102 (`customerDownPaymentAccountId`) sebesar
+  `dp.amount` PENUH dalam satu jurnal POSTED, idempoten via
+  `referenceType="DownPayment"` + cek dalam-tx. Nol kaki PPN,
+  nol snapshot pajak, nol dokumen pajak.
+- Pemicu = `confirmDownPayment` (`src/actions/sales.actions.ts:873`,
+  izin `confirm_down_payments`): satu tx memanggil
+  `onDownPaymentReceived` lalu `onDownPaymentConfirmed`.
+  DP lahir sebagai draft (`status` default `pending`,
+  schema:1445); kas diakui hanya saat confirm. Create DP
+  TIDAK memposting jurnal.
+- `onDownPaymentConfirmed` (`src/lib/hooks/down-payment.hook.ts:39`):
+  faktur konversi lahir SEKALI sebagai DRAFT hanya bila kumulatif
+  DP CONFIRMED mencapai ambang snapshot quotation
+  (`invoiceThresholdPercent`, fail-closed default 50%); nilai
+  faktur = quotation PENUH (`taxAmount = quotation.tax`).
+  PPN faktur penuh baru terposting saat faktur itu diposting
+  manual (`onSalesInvoicePosted`: Dr Piutang / Cr Pendapatan /
+  Cr PPN Keluaran `salesTaxAccountId` 210201 sebesar taxAmount).
+  Akibat: DP di bawah ambang / belum konversi / faktur konversi
+  masih draft = kas sudah diterima, peristiwa pajak NOL di sistem.
+- Alokasi DP ke faktur existing (down-payment.hook.ts, AUD-FIN-04):
+  Dr 210102 / Cr Piutang sebesar alokasi (dibatasi sisa faktur);
+  kelebihan DP di atas faktur menjadi CustomerCredit
+  (`sourceType="DownPayment"`). Kas tidak dijurnal ulang.
+- Schema `TaxInvoice` (schema:1074): taut hanya `salesInvoiceId`,
+  `vendorBillId`, `vendorId`, `replacesId`. TIDAK ada
+  `downPaymentId` — faktur pajak uang muka tidak dapat dicatat
+  tertaut DP, tidak dapat dibedakan dari faktur pelunasan, dan
+  read-model SPT (`src/lib/tax/spt-read-model.ts`) tidak punya
+  sumber PPN masa penerimaan DP.
+- Pola DPP repo: `computeVatFromSellingPrice`
+  (`src/lib/tax/tax-invoice.ts:126`) — kode transaksi default
+  repo "04": DPP = 11/12 x nilai, PPN = tarif nominal (default
+  parameter 12) x DPP, dibulatkan safeRound sen. Tarif hidup
+  sebagai parameter/master, bukan konstanta di hook jurnal.
+
+### 0.1 Register sumber resmi (tax rules register)
+
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis ini |
+|---|---|---|---|
+| FP wajib dibuat saat penerimaan pembayaran sebelum penyerahan BKP/JKP, dan saat penerimaan pembayaran termin untuk penyerahan bertahap | PER-11/PJ/2025 Pasal 31 ayat (2) huruf b dan c; artikel DJP "Cara Membuat Faktur Pajak Uang Muka dan Pelunasan di Coretax DJP", pajak.go.id (diakses 2026-10-25): https://www.pajak.go.id/id/artikel/cara-membuat-faktur-pajak-uang-muka-dan-pelunasan-di-coretax-djp | PER-11/PJ/2025 berlaku sejak 22 Mei 2025 (JDIH Kemenkeu) | Saat terutang FP uang muka (FP UM) per penerimaan DP/termin oleh PKP penjual |
+| Kolom BKP/JKP pada FP atas uang muka/termin/angsuran ditambah keterangan "uang muka"/"termin"/"angsuran"; FP pelunasan berketerangan "pelunasan"; DPP FP UM diisi total nilai uang muka diterima pada kolom Uang Muka Coretax | Artikel DJP yang sama (pajak.go.id, diakses 2026-10-25) | Sejalan PER-11/PJ/2025 | Isi snapshot FP UM per DP + FP pelunasan menarik data FP UM (fitur centang UM/pelunasan Coretax) |
+| FP dibuat oleh PKP; FP terlambat melewati saat terutang = kategori FP terlambat | PER-11/PJ/2025 Pasal 31 ayat (1)-(2) via artikel DJP yang sama | 22 Mei 2025 | Hanya PKP yang wajib FP UM; keterlambatan adalah temuan kepatuhan, bukan alasan menunda pengakuan PPN |
+
+Batas jujur: vonis tidak mengutip PER-03/PJ/2022 sebagai dasar
+berlaku — rezim faktur saat ini dibaca dari PER-11/PJ/2025 +
+artikel resmi DJP di atas. Ketentuan masa pengkreditan FP UM
+oleh PEMBELI di luar cakupan (sisi keluaran ISF).
+
+### Putusan 1 — Saat terutang: per DP CONFIRMED, bukan draft, bukan ambang konversi
+
+- Peristiwa pajak FP UM lahir pada saat DP berstatus CONFIRMED
+  lewat `confirmDownPayment` (penerimaan pembayaran
+  terverifikasi sebelum penyerahan), per DP satu per satu —
+  termasuk DP pertama di bawah ambang 50% dan setiap DP/termin
+  berikutnya. DILARANG menautkan saat terutang ke: (a) create
+  DP draft, (b) tercapainya ambang konversi faktur, (c) posting
+  faktur konversi/pelunasan.
+- Satu DP confirmed terutang = satu FP UM. DP lanjutan/termin
+  atas quotation yang sama = FP UM berikutnya atas nilai DP itu
+  sendiri, bukan pengganti FP UM sebelumnya dan bukan FP
+  gabungan, kecuali operator menerbitkan FP gabungan sesuai
+  ketentuan DJP di luar sistem (sistem tetap snapshot per DP).
+- Tanggal FP UM = tanggal penerimaan (`paymentDate` DP);
+  masa pajak diturunkan dari tanggal itu
+  (`taxPeriodFromDate`), bukan input bebas. Nomor seri FP =
+  nomor dari DJP/Coretax dicatat apa adanya; sistem dilarang
+  mengarang nomor.
+- Keterlambatan terbit FP UM sesudah confirm tidak menghapus
+  kewajiban: snapshot tetap dihitung dari nilai saat confirm;
+  status pajak DP tampil "terutang-belum-terbit" sebagai temuan
+  sampai FP UM diterbitkan (lihat Putusan 5 soal status).
+
+### Putusan 2 — DPP/PPN snapshot DP: `amount` = nilai diterima inklusif pola kode 04; tarif dari master efektif
+
+- DIPUTUS: `DownPayment.amount` adalah nilai kas diterima atas
+  harga penyerahan yang terutang PPN (quotation grandTotal
+  memang dibangun dari subtotal + tax), jadi snapshot FP UM
+  dihitung dengan pola kode 04 repo PERSIS:
+  `snap = computeVatFromSellingPrice(amount, kodeTransaksi, tarifEfektif)`
+  menghasilkan `dppUangMuka = safeRound(11/12 x amount)` dan
+  `ppnUangMuka = safeRound(tarif% x dppUangMuka)`. Untuk kode
+  transaksi non-04, fungsi yang sama memberi DPP penuh —
+  vonis tidak membuat rumus kedua.
+- Tarif WAJIB dibaca dari master/konfigurasi pajak bertanggal
+  efektif yang berlaku pada `paymentDate` DP dan dibekukan ke
+  snapshot. DILARANG: hardcode `11`, `12`, `11/12`, atau tarif
+  efektif apa pun di hook/action DP; faktor DPP nilai lain
+  hanya sah lewat `computeVatFromSellingPrice` untuk kode
+  transaksi yang memang DPP nilai lain.
+- Snapshot yang dibekukan per DP (sumber SPT, tidak hitung
+  ulang saat baca): kode transaksi, tarif nominal, DPP,
+  PPN, tanggal FP, masa, nomor FP (saat terbit), taut DP.
+  Edit master pajak sesudah confirm TIDAK mengubah snapshot.
+- DP atas quotation tanpa PPN (tax quotation = 0), penyerahan
+  tidak terutang, atau fasilitas tanpa pungutan PPN: snapshot
+  PPN = 0 tanpa FP UM (Putusan 4); dilarang memaksakan rumus
+  kode 04 ke transaksi yang master pajaknya menyatakan tidak
+  terutang.
+- Contoh sen-persis (kode 04, tarif nominal 12) untuk QA:
+  (a) amount 12.000.000 -> DPP 11.000.000,00, PPN 1.320.000,00;
+  (b) amount 100.000 -> DPP 91.666,67, PPN 11.000,00
+  (pembulatan sen di DPP dulu, lalu PPN dari DPP terbulatkan).
+
+### Putusan 3 — Jurnal: DP memecah kewajiban vs PPN Keluaran; pelunasan reklas anti-dobel
+
+Posting matrix (akun dari setting/COA aktif; kosong = fail-closed
+berisik, pola existing):
+
+| # | Peristiwa | Debit | Kredit | Syarat |
+|---|---|---|---|---|
+| J-DP1 | DP confirmed, terutang PPN | Kas/bank `cashBankAccountId` = amount A | 210102 `customerDownPaymentAccountId` = A - ppnUangMuka; 210201 PPN Keluaran `salesTaxAccountId` = ppnUangMuka | Satu tx dengan confirm; `assertPeriodOpen(paymentDate)`; idempoten scope DownPayment (J-DP1 menggantikan jurnal DP bruto existing, bukan jurnal kedua) |
+| J-DP2 | DP confirmed, tidak terutang / non-PKP / PPN 0 | Kas/bank = A | 210102 = A penuh | Tanpa FP UM; jurnal existing berlaku apa adanya |
+| J-PL1 | Faktur pelunasan terposting | Piutang = grandTotal; PPN Keluaran 210201 = Sigma ppnUangMuka FP UM tertaut quotation ini | Pendapatan = kredit pendapatan jurnal faktur existing (totalAmount - taxAmount dokumen); PPN Keluaran 210201 = PPN dokumen penuh; Piutang = Sigma ppnUangMuka tertaut | Reklas PPN UM diperhitungkan dalam jurnal posting faktur yang sama (atau jurnal reklas tertaut SalesInvoice dalam tx sama); hasil PPN dokumen < Sigma ppnUangMuka = fail-closed |
+| J-PL2 | Alokasi DP ke faktur terposting | 210102 = A - ppnUangMuka per DP teralokasi | Piutang = A - ppnUangMuka | Menggantikan kaki alokasi bruto AUD-FIN-04 untuk DP bersnapshot; DP pra-snapshot (legacy) tetap bruto berlabel legacy |
+| J-RF1 | DP batal/refund sesudah FP UM | 210102 = A - ppnUangMuka; 210201 = ppnUangMuka | Kas/bank = A | Hanya sesudah FP UM dibatalkan di Coretax (Putusan 4); reversal di periode terbuka |
+
+- Bukti anti-dobel (wajib lolos sebagai identitas, bukan klaim):
+  neto kredit GL 210201 lintas masa = ppnUangMuka (J-DP1)
+  + PPN dokumen penuh (J-PL1) - ppnUangMuka (reklas J-PL1)
+  = PPN dokumen penuh, tepat satu kali. SPT: FP UM (masa DP)
+  + FP pelunasan bersnapshot SELISIH (Putusan 5) menjumlah ke
+  DPP/PPN dokumen penuh yang sama. Contoh: harga total
+  120.000.000 kode 04 -> DPP total 110.000.000, PPN total
+  13.200.000; DP 12.000.000 -> FP UM DPP 11.000.000 / PPN
+  1.320.000; FP pelunasan DPP 99.000.000 / PPN 11.880.000;
+  jumlah kedua FP = total, nol dobel di SPT maupun GL.
+- Saldo 210102 sesudah J-DP1 = kewajiban penyerahan NETO PPN
+  (A - ppnUangMuka). Ini disengaja: PPN bukan kewajiban
+  penyerahan ke pelanggan, ia kewajiban ke negara di 210201.
+  Selisih DPP FP UM (11/12 x A, rezim DPP nilai lain) terhadap
+  kredit 210102 adalah sifat DPP nilai lain dan WAJIB tampil
+  apa adanya di rekonsiliasi, dilarang "diselaraskan" diam-diam.
+- Pendapatan TIDAK diakui saat DP dalam bentuk apa pun:
+  tidak ada kaki pendapatan/HPP/stok di J-DP1/J-DP2.
+  Pendapatan tetap lahir satu kali di posting faktur pelunasan.
+- Empat status tetap terpisah: status dokumen DP
+  (pending/confirmed), status pajak DP (bukan-subjek /
+  terutang-belum-terbit / fp-um-terbit / fp-um-batal),
+  status posting jurnal DP (belum/POSTED/reversed), status
+  pembayaran faktur (unpaid/partial/paid). Satu status dilarang
+  diturunkan dari status lain; FP UM draft di Coretax tidak
+  mengubah status pajak menjadi terbit.
+
+### Putusan 4 — Tanpa FP UM: non-PKP, tidak terutang, batal/refund
+
+- Perusahaan penjual non-PKP (dari master pajak perusahaan,
+  bukan flag per transaksi dari client): tidak ada FP UM, tidak
+  ada kaki PPN (J-DP2). Sistem dilarang memungut dari status
+  yang tidak dibuktikan master.
+- Penyerahan tidak terutang PPN / dibebaskan / fasilitas lain:
+  mengikuti kode transaksi + fasilitas dari master pajak
+  bertanggal efektif per sifat penyerahan; tanpa pungutan =
+  tanpa FP UM terutang (J-DP2). Pilihan fasilitas per transaksi
+  yang belum punya master = `BUTUH-VONIS-AKUNTAN` per pola,
+  jangan ditebak default.
+- DP batal SEBELUM FP UM terbit: reversal jurnal DP di periode
+  terbuka (`assertPeriodOpen` dalam tx sama), status pajak
+  kembali bukan-subjek; dilarang hapus jurnal terposting.
+- DP batal/refund (kas dikembalikan) SESUDAH FP UM terbit:
+  FP UM WAJIB dibatalkan dulu di Coretax (nomor batal tidak
+  dipakai ulang); J-RF1 hanya boleh posting dengan rujukan FP
+  batal itu tercatat. Tanpa bukti batal FP, refund kas atas DP
+  terutang DITOLAK berisik — mengembalikan kas tanpa membatalkan
+  FP menyisakan PPN terutang fiktif di SPT. Kelebihan DP di
+  atas faktur (CustomerCredit existing) yang berasal dari DP
+  bersnapshot mengikuti aturan sama per porsi yang direfund.
+- Koreksi nilai DP confirmed: dilarang edit amount DP
+  terposting diam-diam; jalur sah = reversal + DP koreksi,
+  FP UM mengikuti jalur pengganti/batal DJP (pengganti ikut
+  masa faktur diganti, pola vonis FP existing).
+
+### Putusan 5 — Batas build (pemilik berikutnya; kartu ini tanpa kode/schema/migrasi)
+
+- BOT Backend (sesudah merge vonis ini, klaim schema di board
+  dulu): (a) taut TaxInvoice -> DownPayment (kolom nullable;
+  bentuk fisik Backend, satu FP UM aktif per DP ditegakkan
+  unik parsial/setara service), snapshot DPP/PPN/tarif/kode
+  transaksi/tanggal/masa dibekukan di dokumen pajak;
+  (b) FP pelunasan tertaut faktur WAJIB snapshot selisih:
+  DPP/PPN dokumen penuh dikurangi Sigma FP UM approved
+  tertaut pada quotation/faktur yang sama, negatif =
+  fail-closed; read-model SPT memperlakukan FP UM sebagai
+  baris keluaran masa penerimaan dan menekan baris legacy
+  faktur komersial tertaut agar tidak dobel (pola anti-dobel
+  read-model existing); (c) jurnal J-DP1/J-PL1/J-PL2/J-RF1
+  lewat hook existing, idempotency key scope `(DownPayment)`
+  untuk jurnal + pembuatan FP UM (replay confirm = nol jurnal
+  kedua, nol FP kedua); (d) akun dari setting existing
+  (`cashBankAccountId`, `customerDownPaymentAccountId`,
+  `salesTaxAccountId`), kosong = fail-closed; TANPA kolom
+  akun baru dan TANPA setting akun tebakan; (e) status pajak
+  DP adalah turunan read-model dari dokumen pajak tertaut,
+  bukan flag bebas di form.
+- BOT Frontend (sesudah kontrak Backend stabil): tampilkan
+  snapshot DPP/PPN/FP UM/status pajak DP verbatim dari backend;
+  UI dilarang hitung ulang DPP/PPN, dilarang menurunkan status
+  pajak dari status dokumen/pembayaran.
+- BOT QA: falsifikasi E-DP-PPN sen-persis minimum:
+  (1) DP 12.000.000 kode 04 -> jurnal seimbang Dr Kas
+  12.000.000 / Cr 210102 10.680.000 / Cr 210201 1.320.000;
+  mutasi cabut kaki PPN -> MERAH. (2) DP 100.000 -> PPN
+  11.000,00 persis (pembulatan dua tahap). (3) Pelunasan contoh
+  Putusan 3: Sigma FP UM + FP pelunasan = DPP 110.000.000 /
+  PPN 13.200.000 di SPT dan neto GL 210201 = 13.200.000;
+  mutasi posting faktur tanpa reklas J-PL1 -> MERAH (dobel
+  1.320.000 terbaca). (4) Replay confirm DP sama -> jurnal/FP
+  kedua tidak lahir. (5) DP draft -> nol jurnal, nol snapshot.
+  (6) Non-PKP/tidak terutang -> J-DP2 bruto, nol FP.
+  (7) Refund DP ber-FP tanpa bukti batal FP -> ditolak;
+  sesudah batal -> J-RF1 seimbang dan SPT masa koreksi bersih.
+  (8) Edit tarif master sesudah confirm -> snapshot DP lama
+  tidak berubah. (9) DP confirmed periode tertutup -> ditolak
+  `assertPeriodOpen`. (10) Pendapatan saat DP = 0 (tidak ada
+  kaki pendapatan di jurnal DP).
+
+### Larangan (mengikat semua build turunan)
+
+1. PPN dobel dalam bentuk apa pun: FP UM + FP pelunasan
+   bersnapshot penuh, atau GL 210201 tanpa reklas J-PL1.
+2. Mengakui pendapatan/HPP/stok saat penerimaan DP.
+3. Hardcode tarif/faktor DPP di luar `computeVatFromSellingPrice`
+   + master bertanggal efektif.
+4. Mengarang nomor seri FP, memakai ulang nomor batal, atau
+   menurunkan masa pajak dari input bebas.
+5. Mengubah jurnal DP/faktur terposting diam-diam; koreksi
+   hanya reversal/dokumen koreksi di periode terbuka.
+6. Menurunkan status pajak dari status dokumen, pembayaran,
+   atau posting.
+
+Pemilik berikutnya: BOT Lead (merge PR vonis ini) -> BOT
+Backend (build Putusan 5, koordinasi schema tertulis dulu) ->
+BOT Frontend -> BOT QA (E-DP-PPN). Risiko terbuka: pola DP
+untuk penyerahan berfasilitas khusus (pemungut, dibebaskan,
+DTP) belum diputus per pola transaksi nyata ISF — muncul saat
+build wajib kembali sebagai `BUTUH-VONIS-AKUNTAN`, bukan
+default kode.
