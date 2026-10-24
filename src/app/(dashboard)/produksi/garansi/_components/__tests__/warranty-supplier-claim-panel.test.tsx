@@ -214,6 +214,58 @@ describe("WarrantySupplierClaimPanel — recovery terpisah dari klaim pelanggan"
     act(() => root.unmount())
   })
 
+  it("E130-1: label refNo netral — tidak mengesankan resi = persetujuan; accepted = persetujuan vendor", () => {
+    const { container, root } = mount(
+      <WarrantySupplierClaimPanel
+        facts={facts({ supplierClaimStatus: "sent", vendorName: "PT Sumber Part" })}
+        vendorOptions={vendors}
+        purchaseReturnOptions={returns}
+        canLink={true}
+        canApprove={true}
+      />,
+    )
+    expect(container.textContent).toContain("Nomor Referensi Klaim Supplier")
+    expect(container.textContent).not.toContain("Nomor Referensi / Resi")
+    const combobox = container.querySelector<HTMLElement>("[aria-label='Langkah klaim supplier berikutnya']")!
+    act(() => {
+      combobox.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }))
+      combobox.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }))
+      combobox.click()
+    })
+    const option = Array.from(document.body.querySelectorAll<HTMLElement>("[cmdk-item]")).find((el) =>
+      el.textContent?.includes("Diterima Supplier"),
+    )
+    expect(option).toBeDefined()
+    act(() => option!.click())
+    const label = container.querySelector<HTMLLabelElement>("label[for='supplierClaimRefNoTransition']")
+    expect(label?.textContent).toContain("Nomor Referensi Persetujuan Vendor")
+    expect(container.textContent).toContain("Nomor resi pengiriman bukan referensi persetujuan vendor")
+    const input = container.querySelector<HTMLInputElement>("#supplierClaimRefNoTransition")!
+    expect(input.placeholder).toContain("bukan nomor resi pengiriman")
+    act(() => root.unmount())
+  })
+
+  it("E130-1: penanda resi di Catatan Klaim Supplier diberi penjelasan bukan persetujuan", () => {
+    const { container, root } = mount(
+      <WarrantySupplierClaimPanel
+        facts={facts({
+          supplierClaimStatus: "sent",
+          vendorName: "PT Sumber Part",
+          supplierClaimNotes: "Kirim via ekspedisi\n[Resi pengiriman klaim supplier: RESI-77]",
+        })}
+        vendorOptions={vendors}
+        purchaseReturnOptions={returns}
+        canLink={false}
+        canApprove={false}
+      />,
+    )
+    expect(container.textContent).toContain("[Resi pengiriman klaim supplier: RESI-77]")
+    expect(container.textContent).toContain(
+      "mencatat nomor resi pengiriman, bukan nomor referensi persetujuan vendor",
+    )
+    act(() => root.unmount())
+  })
+
   it("refNo kosong dinyatakan eksplisit, bukan nilai kosong", () => {
     const { container, root } = mount(
       <WarrantySupplierClaimPanel

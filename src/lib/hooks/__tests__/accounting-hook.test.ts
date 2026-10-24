@@ -482,6 +482,36 @@ describe("onSalesInvoicePosted", () => {
     await expect(onSalesInvoicePosted(1)).rejects.toThrow(/Akun penjualan belum dipetakan/);
   });
 
+  it("E127-8: re-post sesudah reversal — jurnal REVERSED tidak memblokir jurnal baru", async () => {
+    // F-2026-10-23-127-V Putusan 4: unik DB kini aktif-saja, dan penjaga
+    // aplikasi hook adalah `status: { not: "REVERSED" }`. Simulasi DB jujur:
+    // hanya jurnal REVERSED se-reference yang ada, jadi findFirst dengan
+    // filter aktif mengembalikan null (bukan baris lama) dan create jalan.
+    // Baris REVERSED itu sendiri dibuktikan fisik di
+    // journal-active-reference.integration.test.ts — di sini kontrak query.
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, []);
+    mocks.journalCreate.mockResolvedValue({ id: 51 });
+    mocks.journalFindFirst.mockImplementation(async (args: any) => {
+      // Baris lama REVERSED hanya lolos bila filter TIDAK mengecualikannya.
+      if (args?.where?.status?.not === "REVERSED") return null;
+      return { id: 99, status: "REVERSED" };
+    });
+
+    await onSalesInvoicePosted(1, 999);
+
+    expect(mocks.journalFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          referenceType: "SalesInvoice",
+          referenceId: 1,
+          status: { not: "REVERSED" },
+        }),
+      }),
+    );
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
   it("returns early if journal already exists (idempotency)", async () => {
     mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
       id: 1,

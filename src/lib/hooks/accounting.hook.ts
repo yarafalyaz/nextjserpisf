@@ -6,6 +6,7 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
+import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -1006,7 +1007,14 @@ export async function onExpenseApproved(
           accountId: expense.accountId!,
           debit: expense.amount,
           credit: 0,
-          memo: `Biaya: ${expense.description ?? ""}`,
+          // F-133-V Putusan 4(3): memo debit L3 menyebut nomor WO;
+          // referenceType tetap Expense (F-127-V).
+          memo: (() => {
+            const tag = parseL3Tag(expense.description);
+            return tag
+              ? `Biaya: biaya telat non-job L3 ${tag.workOrderNo} — ${expense.description ?? ""}`
+              : `Biaya: ${expense.description ?? ""}`;
+          })(),
           costCenterId: expense.costCenterId ?? null,
         },
         {
@@ -1793,6 +1801,7 @@ export async function onVendorBillPosted(
         tax: true,
         date: true,
         documentNo: true,
+        notes: true,
         withholdingAmount: true,
         withholdingType: { select: { name: true, liabilityAccountId: true } },
       },
@@ -1856,11 +1865,16 @@ export async function onVendorBillPosted(
           "Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya",
         );
       }
+      // F-2026-10-24-133-V Putusan 4(3): memo debit jurnal L3 menyebut
+      // nomor WO; referenceType tetap VendorBill (F-127-V).
+      const l3BillTag = parseL3Tag(b.notes);
       latestDebitEntries.push({
         accountId: settings.purchaseExpenseAccountId,
         debit: latestGrandTotal,
         credit: 0,
-        memo: "Purchase expense",
+        memo: l3BillTag
+          ? `Purchase expense — biaya telat non-job L3 ${l3BillTag.workOrderNo}`
+          : "Purchase expense",
       });
     }
 

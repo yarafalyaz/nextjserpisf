@@ -127,4 +127,29 @@ describe("InstalledPartRemovalForm — kontrak aksi + error verbatim", () => {
     expect(container.querySelector('label[for="qty-removed-5"]')).not.toBeNull()
     act(() => root.unmount())
   })
+
+  it("aria-busy false saat diam, true saat submit pending", async () => {
+    let resolveAction!: (v: { success: boolean; id: number }) => void
+    removalAction.mockReturnValue(
+      new Promise((r) => {
+        resolveAction = r
+      }),
+    )
+    const { container, root } = mount(
+      <InstalledPartRemovalForm
+        installedPartId={3}
+        qtyRemaining={1}
+        replacementOptions={[]}
+        onDone={vi.fn()}
+      />,
+    )
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    setValue(container.querySelector('textarea[name="removalReason"]')!, "Rusak")
+    await submit(container)
+    expect(form.getAttribute("aria-busy")).toBe("true")
+    await act(async () => resolveAction({ success: true, id: 3 }))
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    act(() => root.unmount())
+  })
 })

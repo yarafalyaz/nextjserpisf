@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   findInvoices: vi.fn(),
   findExchangeItems: vi.fn(),
   findFollowUps: vi.fn(),
+  findLateFees: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -29,6 +30,9 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     invoiceCollectionFollowUp: {
       findMany: (...a: unknown[]) => mocks.findFollowUps(...a),
+    },
+    salesLateFee: {
+      findMany: (...a: unknown[]) => mocks.findLateFees(...a),
     },
   },
 }))
@@ -330,6 +334,7 @@ describe("collection-queue-data loader (AC-COL-7)", () => {
     mocks.findInvoices.mockResolvedValue([])
     mocks.findExchangeItems.mockResolvedValue([])
     mocks.findFollowUps.mockResolvedValue([])
+    mocks.findLateFees.mockResolvedValue([])
   })
 
   it("kedua izin ditegakkan sebelum query", async () => {
@@ -374,5 +379,35 @@ describe("collection-queue-data loader (AC-COL-7)", () => {
     expect(q.rows).toHaveLength(1)
     expect(q.rows[0].sisa).toBe(750000.5)
     expect(q.rows[0].customerPhone).toBe("081")
+    expect(mocks.findLateFees).toHaveBeenCalledTimes(1)
+  })
+
+  it("loader memetakan denda terbit ke indikator baris (F-093-V)", async () => {
+    mocks.findInvoices.mockResolvedValue([
+      {
+        id: 9,
+        documentNo: "INV-9",
+        status: "posted",
+        deletedAt: null,
+        date: day(-5),
+        dueDate: day(3),
+        grandTotal: 750000.5,
+        paidAmount: 0,
+        customerId: 3,
+        customer: { name: "PT Uji", phone: "081", contactPerson: null },
+      },
+    ])
+    mocks.findLateFees.mockResolvedValue([
+      {
+        salesInvoiceId: 9,
+        amount: 50000,
+        paidAmount: 10000,
+        status: "partial",
+        reversesId: null,
+      },
+    ])
+    const q = await getCollectionQueue({ now: NOW })
+    expect(q.rows[0].lateFeeOutstanding).toBe(40000)
+    expect(q.rows[0].hasOutstandingLateFee).toBe(true)
   })
 })

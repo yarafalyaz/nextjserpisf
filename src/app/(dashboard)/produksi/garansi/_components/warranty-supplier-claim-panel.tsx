@@ -179,7 +179,7 @@ export function WarrantySupplierClaimPanel({
           </div>
           <div className="flex flex-col gap-1">
             <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Nomor Referensi / Resi
+              Nomor Referensi Klaim Supplier
             </dt>
             <dd className="text-[0.9375rem] text-foreground font-medium">
               {facts.supplierClaimRefNo ? (
@@ -213,6 +213,12 @@ export function WarrantySupplierClaimPanel({
               <dd className="whitespace-pre-wrap text-[0.9375rem] text-foreground">
                 {facts.supplierClaimNotes}
               </dd>
+              {facts.supplierClaimNotes.includes("[Resi pengiriman klaim supplier:") && (
+                <p className="text-xs text-muted-foreground">
+                  Baris [Resi pengiriman klaim supplier: ...] mencatat nomor resi pengiriman, bukan
+                  nomor referensi persetujuan vendor.
+                </p>
+              )}
             </div>
           )}
         </dl>
@@ -271,11 +277,13 @@ export function WarrantySupplierClaimPanel({
               </p>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="supplierClaimRefNoLink">Nomor Referensi / Resi (opsional)</Label>
+              <Label htmlFor="supplierClaimRefNoLink">
+                Nomor Referensi Klaim Supplier / Nomor Resi Pengiriman (opsional)
+              </Label>
               <Input
                 id="supplierClaimRefNoLink"
                 name="supplierClaimRefNo"
-                placeholder="Nomor klaim supplier atau resi"
+                placeholder="Nomor klaim supplier atau nomor resi pengiriman"
               />
             </div>
             <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -317,12 +325,29 @@ export function WarrantySupplierClaimPanel({
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="supplierClaimRefNoTransition">Nomor Referensi / Resi</Label>
+              <Label htmlFor="supplierClaimRefNoTransition">
+                {transitionTo === "sent"
+                  ? "Nomor Referensi Klaim Supplier / Nomor Resi Pengiriman"
+                  : transitionTo === "accepted"
+                    ? "Nomor Referensi Persetujuan Vendor"
+                    : "Nomor Referensi Klaim Supplier / Nomor Resi Pengiriman"}
+              </Label>
               <Input
                 id="supplierClaimRefNoTransition"
                 name="supplierClaimRefNo"
-                placeholder="Nomor klaim supplier atau resi pengiriman"
+                placeholder={
+                  transitionTo === "accepted"
+                    ? "Nomor referensi persetujuan vendor (bukan nomor resi pengiriman)"
+                    : "Nomor klaim supplier atau nomor resi pengiriman"
+                }
               />
+              {transitionTo === "accepted" && (
+                <p className="text-xs text-muted-foreground">
+                  Nomor resi pengiriman bukan referensi persetujuan vendor. Recovery dijurnal hanya sesudah
+                  nomor referensi persetujuan vendor terisi dan lampiran persetujuan sesudah pengiriman
+                  terunggah.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <Label htmlFor="supplierClaimNotesTransition">Catatan / Alasan</Label>
