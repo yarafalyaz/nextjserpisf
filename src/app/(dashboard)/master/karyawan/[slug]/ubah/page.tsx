@@ -71,6 +71,11 @@ export default async function EditEmployeePage({
     postalCode: data.postalCode,
     hasLoginAccount: data.userId != null,
     roleIds: data.user?.roles.map((r) => String(r.id)) ?? [],
+    employmentStatus: data.employmentStatus ?? null,
+    contractStartDate: data.contractStartDate?.toISOString().split("T")[0] ?? null,
+    contractEndDate: data.contractEndDate?.toISOString().split("T")[0] ?? null,
+    employmentEndedAt: data.employmentEndedAt?.toISOString().split("T")[0] ?? null,
+    endReason: data.endReason ?? null,
   };
 
   const [departments, positions, roles] = await Promise.all([
