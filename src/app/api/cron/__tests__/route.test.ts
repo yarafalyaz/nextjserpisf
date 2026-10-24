@@ -79,10 +79,16 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("@/lib/services/notification.service", () => ({
   notificationService: {
     checkAndNotifyLowStockBatch: (...a: unknown[]) => mocks.notificationLowStock(...a),
+    checkAndNotifyWarehouseLowStockBatch: vi.fn(async () => 0),
     notifyAdmins: (...a: unknown[]) => mocks.notificationNotifyAdmins(...a),
     notifyLateCheckIn: (...a: unknown[]) => mocks.notificationLateCheckIn(...a),
     notifyLateCheckInBatch: (...a: unknown[]) => mocks.notificationLateCheckInBatch(...a),
   },
+}))
+
+// F-070-S: loader per gudang membaca model baru; default kosong = aman.
+vi.mock("@/lib/reports/min-stock-warehouse-alert", () => ({
+  loadWarehouseLowStock: vi.fn(async () => []),
 }))
 
 // Spy on console.error so we don't pollute test output

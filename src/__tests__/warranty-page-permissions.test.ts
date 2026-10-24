@@ -77,4 +77,34 @@ describe("pemetaan izin halaman garansi", () => {
     expect(source.match(new RegExp(EDIT, "g"))).toHaveLength(1)
     expect(source).not.toContain(APPROVE)
   })
+
+  it("halaman kendaraan: panel part terpasang terkunci gate canViewWarranty (render + loader)", () => {
+    const source = read(CUSTOMER_VEHICLE_PAGE)
+
+    // Gate render: InstalledPartsCard hanya boleh muncul di dalam blok
+    // {canViewWarranty && ( ... )} terdekat sebelumnya. Cabut gate ->
+    // jangkar terakhir sebelum kartu hilang/bergeser -> merah.
+    const cardIdx = source.indexOf("<InstalledPartsCard")
+    expect(cardIdx).toBeGreaterThanOrEqual(0)
+    const gateStart = source.lastIndexOf("{canViewWarranty && (", cardIdx)
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    const gateEnd = source.indexOf(")}", cardIdx)
+    expect(gateEnd).toBeGreaterThan(cardIdx)
+    const gateBlock = source.slice(gateStart, gateEnd)
+    expect(gateBlock).toContain("history.installedParts.rows")
+    expect(gateBlock).toContain("canRecordRemoval={canRecordRemoval}")
+    // Blok harus ramping: jangkar yang bergeser ke gate kartu garansi di
+    // atasnya akan menyeret VehicleWarrantyCard + seksi Penawaran ke dalam
+    // irisan — itu tanda gate panel sendiri sudah dicabut.
+    expect(gateBlock).not.toContain("VehicleWarrantyCard")
+    expect(gateBlock).not.toContain("Penawaran")
+    expect(gateBlock.length).toBeLessThan(400)
+    // InstalledPartsCard dirender tepat satu kali (bukan salinan tanpa gate).
+    expect(source.match(/<InstalledPartsCard/g)).toHaveLength(1)
+
+    // Defense-in-depth loader: page meneruskan izin yang sama ke loader
+    // riwayat supaya registri tak ditanyakan ke DB tanpa izin lihat.
+    expect(source).toContain("includeInstalledParts: canViewWarranty")
+    expect(source).toContain("getCustomerVehicleHistory(cv.id, 20, {")
+  })
 })

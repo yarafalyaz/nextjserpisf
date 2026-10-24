@@ -6,7 +6,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Faktur Penjualan" }
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -34,6 +34,8 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas"
 import { CanCreate } from "@/components/auth/can-create"
+import { SalesLateFeePanel } from "@/components/reports/sales-late-fee-panel"
+import { getSalesLateFeePanelForInvoice } from "@/lib/reports/sales-late-fee-data"
 
 export default async function InvoiceDetailPage({
   params,
@@ -84,6 +86,18 @@ export default async function InvoiceDetailPage({
   )
 
   if (!invoice) notFound()
+
+  // Dokumen denda piutang (F-2026-10-22-093-V): tab hanya untuk pemegang
+  // view_sales_late_fees; loader menegakkan izin yang sama fail-closed.
+  const [canViewLateFees, canCreateLateFee, canReverseLateFee] =
+    await Promise.all([
+      hasPermission("view_sales_late_fees"),
+      hasPermission("create_sales_late_fees"),
+      hasPermission("delete_sales_late_fees"),
+    ])
+  const lateFeeBundle = canViewLateFees
+    ? await getSalesLateFeePanelForInvoice(invoice.id)
+    : null
 
   // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
   const whatsappTrail = await getWhatsappTrail("SalesInvoice", invoice.id)
@@ -398,6 +412,23 @@ export default async function InvoiceDetailPage({
               </div>
             ),
           },
+          ...(lateFeeBundle
+            ? [
+                {
+                  id: "denda",
+                  label: "Denda",
+                  content: (
+                    <SalesLateFeePanel
+                      panel={lateFeeBundle.panel}
+                      accounts={lateFeeBundle.accounts}
+                      paymentMethods={lateFeeBundle.paymentMethods}
+                      canCreate={canCreateLateFee}
+                      canReverse={canReverseLateFee}
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             id: "lampiran",
             label: "Lampiran",

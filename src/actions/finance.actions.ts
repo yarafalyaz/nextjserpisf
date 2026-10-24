@@ -28,8 +28,17 @@ import {
   dateOnly,
 } from "@/lib/validations/finance.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
+import {
+  parseL3Tag,
+  resolveL3WorkOrder,
+  assertExpenseL3AccountAllowed,
+  assertNoDuplicateL3,
+  writeL3ActivityLog,
+} from "@/lib/services/late-cost-l3.service";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { YEAR_END_CLOSING_REFERENCE_TYPE } from "@/lib/reports/year-end-closing";
+import { YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
   requestApprovalIfConfigured,
   assertApproved,
@@ -707,6 +716,22 @@ export async function createExpense(formData: FormData) {
       // P2 idempotency UI: guard dalam transaksi yang sama (pola createPettyCash).
       await checkIdempotency(idempotencyKey, tx, user.id);
 
+      // F-2026-10-24-133-V Putusan 1(b)/3/4: penanda L3 pada description
+      // menjadikan expense ini biaya telat NON-JOB sesudah WO closed —
+      // akun wajib EXPS/OEXP (tolak COGS/INTR/WIP), alasan wajib, guard
+      // duplikat, ActivityLog WO dalam tx sama.
+      const l3 = await resolveL3WorkOrder(tx, v.description, "Pengeluaran");
+      if (l3) {
+        await assertExpenseL3AccountAllowed(tx, v.accountId);
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3.workOrder.id,
+          workOrderNo: l3.workOrder.documentNo,
+          vendorKey: `vendor:${v.vendorId ?? "-"}`,
+          amount: Number(v.amount),
+          date: wibDateToUtcMidnight(v.date),
+        });
+      }
+
       const created = await tx.expense.create({
       data: {
         documentNo,
@@ -731,6 +756,20 @@ export async function createExpense(formData: FormData) {
       if (attachmentIds) {
         await attachPendingTransactionAttachments(tx, {
           attachmentIds, referenceType: "expense", referenceId: created.id, uploadedBy: Number(user.id),
+        });
+      }
+      // Putusan 4(2): jejak L3 pada WO dalam tx yang sama dengan dokumen.
+      if (l3) {
+        await writeL3ActivityLog(tx, {
+          workOrder: l3.workOrder,
+          sourceType: "Expense",
+          sourceId: created.id,
+          sourceDocumentNo: created.documentNo,
+          vendorKey: `vendor:${v.vendorId ?? "-"}`,
+          amount: Number(v.amount),
+          date: wibDateToUtcMidnight(v.date),
+          reason: l3.tag.reason,
+          userId: Number(user.id),
         });
       }
       return created;
@@ -873,6 +912,15 @@ export async function markExpensePaid(expenseId: number) {
         throw new Error(
           "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
         );
+      }
+
+      // F-2026-10-24-133-V Putusan 1(b): expense bertanda L3 yang akunnya
+      // diganti sesudah create wajib lolos penjaga tipe lagi di titik
+      // jurnal — akun COGS/INTR/WIP ditolak sebelum jurnal lahir.
+      const l3Paid = parseL3Tag(locked.description);
+      if (l3Paid) {
+        await resolveL3WorkOrder(tx, locked.description, "Pengeluaran");
+        await assertExpenseL3AccountAllowed(tx, locked.accountId);
       }
 
       // Post the accounting journal FIRST inside the same tx (Laravel parity: GL
@@ -2032,6 +2080,13 @@ export async function reverseJournal(journalId: number) {
         );
       }
 
+      // F-121-V Putusan 3: jurnal penutup tahun tidak boleh lewat jalur
+      // generik ini (izin post_journals, tanpa gerbang penutup) — arahkan ke
+      // reverseYearEndClosing (manage_settings + approval penutup).
+      if (journal.referenceType === YEAR_END_CLOSING_REFERENCE_TYPE) {
+        throw new Error(YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR);
+      }
+
       // Atomic conditional claim — serialize concurrent reverse requests so only one
       // reversal journal is created; duplicates get a clean error instead of
       // corrupting the GL with two reversals. Runs INSIDE the same tx after the
@@ -2142,6 +2197,20 @@ export async function updateExpense(id: number, formData: FormData) {
     // berjalan tanpa tx lalu klaim di tx terpisah — klaim gagal = perubahan
     // sudah commit tapi action menjawab gagal.
     const expense = await prisma.$transaction(async (tx) => {
+      // F-133-V: edit draft bertanda L3 mengulang penjaga yang sama
+      // (akun/WO closed/alasan/duplikat selain dirinya) sebelum tulis.
+      const l3 = await resolveL3WorkOrder(tx, v.description, "Pengeluaran");
+      if (l3) {
+        await assertExpenseL3AccountAllowed(tx, v.accountId);
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3.workOrder.id,
+          workOrderNo: l3.workOrder.documentNo,
+          vendorKey: `vendor:${v.vendorId ?? "-"}`,
+          amount: Number(v.amount),
+          date: wibDateToUtcMidnight(v.date),
+          excludeSource: { sourceType: "Expense", sourceId: id },
+        });
+      }
       const updated = await tx.expense.update({
         where: { id },
         data: {

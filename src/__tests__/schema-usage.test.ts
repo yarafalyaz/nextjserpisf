@@ -436,3 +436,30 @@ describe("skema: model yang dibaca tetapi tidak punya jalur tulis di produk", ()
     20_000,
   )
 })
+
+/**
+ * F-2026-10-22-069-S: ItemSubstitute = master relasi substitusi part
+ * (satu baris per arah; @see ../actions/item-substitute.actions menilai
+ * pasangan; @see ../lib/reports/item-substitute-suggestions-data
+ * membaca relasi aktif untuk saran WO read-only). __EVAL_MODELS__
+ * menilai model dari nama model nyata di prisma client — nama ini
+ * diverifikasi ADA: prisma/schema.prisma:model ItemSubstitute +
+ * client ter-generate itemSubstitute (relasi balik Item.substitutes /
+ * Item.substitutedFor).
+ */
+describe("ItemSubstitute (digunakan aksi master + loader saran)", () => {
+  it("model ItemSubstitute dipakai actions + loader (bukan seed-only)", async () => {
+    const fs = await import("fs")
+    const path = await import("path")
+    const actionsSrc = fs.readFileSync(
+      path.join(ROOT, "src", "actions", "item-substitute.actions.ts"),
+      "utf8",
+    )
+    const loaderSrc = fs.readFileSync(
+      path.join(ROOT, "src", "lib", "reports", "item-substitute-suggestions-data.ts"),
+      "utf8",
+    )
+    expect(actionsSrc).toContain("prisma.itemSubstitute")
+    expect(loaderSrc).toContain("prisma.itemSubstitute.findMany")
+  })
+})

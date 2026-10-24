@@ -646,6 +646,18 @@ describe("Sales Invoice Actions", () => {
     const res = await actions.postInvoice(1)
     expect(res?.success).toBe(false)
   })
+  it("E127-8b: postInvoice menolak faktur cancelled (batal permanen) sebelum hook posting", async () => {
+    // F-2026-10-23-127-V Putusan 4: unik jurnal aktif-saja membuka kunci
+    // FISIK re-post, tetapi gerbang status dokumen tetap menolak faktur
+    // batal-permanen. Gerbang ini wajib berjalan sebelum klaim atomik dan
+    // sebelum onSalesInvoicePosted dipanggil.
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
+    const res = await actions.postInvoice(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("draft atau approved")
+    expect(mocks.prismaMock.salesInvoice.updateMany).not.toHaveBeenCalled()
+    expect(mocks.onSalesInvoicePostedMock).not.toHaveBeenCalled()
+  })
   it("postInvoice fails if no items", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     mocks.prismaMock.salesInvoiceItem.count.mockResolvedValue(0)
