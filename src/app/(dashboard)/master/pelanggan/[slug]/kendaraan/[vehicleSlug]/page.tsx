@@ -14,6 +14,13 @@ import { VehicleWarrantyCard } from "@/components/warranty/vehicle-warranty-card
 import { prisma } from "@/lib/db/prisma"
 import { getCustomerVehicleHistory, type CustomerVehicleHistoryKind } from "@/lib/reports/customer-vehicle-history-data"
 import { InstalledPartsCard } from "@/components/warranty/installed-parts-card"
+import { getCustomerVehiclePhotos } from "@/lib/reports/attachment-photo-data"
+import {
+  CustomerVehiclePhotoPanel,
+  isPublishableCategory,
+} from "@/components/reports/work-order-photo-panel"
+import { PhotoUploadField } from "@/components/reports/photo-upload-field"
+import { PhotoVerifyPublishButtons } from "@/components/reports/photo-verify-publish-button"
 
 import type { Metadata } from "next"
 
@@ -42,6 +49,15 @@ export default async function CustomerVehicleDetailPage({
   const canViewWarranty = await hasPermission("view_warranty_claims")
   const canRecordRemoval = await hasPermission("edit_warranty_claims")
   const canCreateWarrantyClaim = await hasPermission("create_warranty_claims")
+
+  // F-2026-10-24-096-S: foto kendaraan berkategori dari loader backend.
+  const [vehiclePhotos, canEditVehicle, canVerifyPhoto, canPublishPhoto] =
+    await Promise.all([
+      getCustomerVehiclePhotos(cv.id),
+      hasPermission("edit_customers"),
+      hasPermission("manage_qc_inspections"),
+      hasPermission("complete_work_orders"),
+    ])
 
   const history = await getCustomerVehicleHistory(cv.id, 20, {
     includeInstalledParts: canViewWarranty,
@@ -141,6 +157,38 @@ export default async function CustomerVehicleDetailPage({
           )}
         </div>
       </div>
+
+      {/* F-2026-10-24-096-S: foto kendaraan berkategori (loader backend) */}
+      <CustomerVehiclePhotoPanel
+        photos={vehiclePhotos}
+        actions={Object.fromEntries(
+          vehiclePhotos.groups.flatMap((g) =>
+            g.photos.map((p) => [
+              p.id,
+              <PhotoVerifyPublishButtons
+                key={p.id}
+                attachmentId={p.id}
+                photoName={p.originalName}
+                isVerified={p.isVerified}
+                canVerify={canVerifyPhoto}
+                canPublish={canPublishPhoto}
+                publishable={isPublishableCategory(p.category)}
+              />,
+            ]),
+          ),
+        )}
+        uploads={
+          canEditVehicle ? (
+            <div className="border-t border-default pt-4">
+              <PhotoUploadField
+                referenceType="customer_vehicle"
+                referenceId={cv.id}
+                parentLabel="Kendaraan pelanggan"
+              />
+            </div>
+          ) : undefined
+        }
+      />
 
       {/* Work Orders */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

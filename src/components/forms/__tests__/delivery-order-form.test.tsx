@@ -19,6 +19,7 @@ describe("DeliveryOrderForm — a11y wiring", () => {
       assertOrderComboboxA11yAdd(container.querySelector("form")!, container, {
         addLabel: "Formulir tambah surat jalan",
         requiredLabel: "Pesanan Penjualan *",
+        decorativeStarCount: 2,
       })
       unmount(root, container)
     })

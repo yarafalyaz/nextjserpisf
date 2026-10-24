@@ -24,7 +24,7 @@ describe("VendorPaymentForm — a11y wiring", () => {
       // trigger-nya tetap wajib (paymentDate-trigger) di daftar aria-required.
       assertMoneyFormA11yAdd(form, container, {
         addLabel: "Formulir tambah pembayaran pemasok",
-        starCount: 3,
+        starCount: 4,
         labels: ["Pemasok *", "Metode Pembayaran *", "Jumlah (Rp) *", "No. Referensi", "No. Rekening", "Catatan"],
         ariaRequiredIds: ["vendorId", "paymentMethod", "paymentDate-trigger"],
         requiredIds: ["amount"],

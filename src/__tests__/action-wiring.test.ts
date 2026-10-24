@@ -81,12 +81,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "jalur publik (mengakhiri sesi); keluar memakai signOut next-auth di src/components/layout/nav-user.tsx dan header.tsx",
   // Bacaan yang belum punya pemanggil. Dibiarkan tercatat, bukan disembunyikan:
   // keputusan "hapus atau sambungkan" milik pemilik repo.
-  // F-2026-10-24-096-S: konsumen UI panel foto per tahap kartu Frontend
-  // t_96ef204d (parent t_98976cbe); server tetap penegak izin.
-  "src/actions/attachment-photo.actions.ts::verifyPhotoAttachment":
-    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
-  "src/actions/attachment-photo.actions.ts::publishPhotoAttachment":
-    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":
@@ -97,11 +91,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-24-098-S inti backend (t_1ddef452): aksi tinjau scrap abnormal
-  // backend dulu; antrean tinjau + disposisi menyusul di kartu frontend
-  // t_44d50226 (buang entri ini saat UI memanggilnya).
-  "src/actions/inventory.actions.ts::reviewAbnormalScrap":
-    "F-2026-10-24-098-S inti backend; antrean tinjau scrap abnormal menyusul (frontend t_44d50226)",
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":

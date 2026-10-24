@@ -18,7 +18,7 @@ describe("QuotationForm — a11y wiring", () => {
       const form = container.querySelector("form")!
       expect(form.getAttribute("aria-label")).toBe("Formulir tambah penawaran")
       expect(form.getAttribute("aria-busy")).toBe("false")
-      expect(decorativeStars(form).length).toBe(1)
+      expect(decorativeStars(form).length).toBe(2)
       expect(labelTexts(form)).toEqual(expect.arrayContaining(["Pelanggan *", "Kendaraan", "Metode Pembayaran"]))
       expect(container.querySelector("#customerId")!.getAttribute("aria-required")).toBe("true")
       expect(container.querySelector("#customerVehicleId")!.getAttribute("aria-required")).not.toBe("true")
