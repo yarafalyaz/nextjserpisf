@@ -145,6 +145,64 @@ describe("Customer Actions", () => {
   })
 })
 
+describe("F-2026-10-25-003-S duplikat pelanggan (AC-CD-B4/B5/B7)", () => {
+  it("AC-CD-B7: quick-add reuse menyatakan reused + identitas; id sama perilaku existing", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 42, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0042" })
+    const res: any = await actions.createCustomer(fdMap({ name: "PT Sinar", phone: "0812-3456-7890" }))
+    expect(res.success).toBe(true)
+    expect(res.id).toBe(42)
+    expect(res.reused).toBe(true)
+    expect(res.reusedCustomer).toEqual({ id: 42, name: "PT Sinar", code: "CUST-0042", slug: "pt-sinar" })
+    expect(typeof res.message).toBe("string")
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+
+  it("AC-CD-B4: simpan tetap sukses + duplicateWarning kandidat telepon ternormalisasi (AC-CD-B1)", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 99, slug: "baru" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 11, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0011", phone: "0812-3456-7890", email: null, taxId: null },
+    ])
+    const res: any = await actions.createCustomer(fdMap({ name: "Pelanggan Baru", phone: "+62 812-3456-7890" }))
+    expect(res.success).toBe(true)
+    expect(res.id).toBe(99)
+    expect(res.duplicateWarning?.candidates).toHaveLength(1)
+    expect(res.duplicateWarning.candidates[0]).toMatchObject({ id: 11, matchKind: "phone" })
+  })
+
+  it("AC-CD-B4: tanpa kecocokan -> duplicateWarning null, perilaku simpan tak berubah", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 100, slug: "baru2" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([])
+    const res: any = await actions.createCustomer(fdMap({ name: "Benar Baru", phone: "0857-1111-2222" }))
+    expect(res.success).toBe(true)
+    expect(res.duplicateWarning).toBeNull()
+  })
+
+  it("AC-CD-B5: updateCustomer kandidat memuat B, excludeId diri diteruskan", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 12, slug: "b", name: "Pelanggan B", code: "CUST-0012", phone: "+6281234567890", email: null, taxId: null },
+    ])
+    const res: any = await actions.updateCustomer(11, fdMap({ name: "Pelanggan A", phone: "0812-3456-7890" }))
+    expect(res.success).toBe(true)
+    expect(res.duplicateWarning?.candidates.map((c: any) => c.id)).toEqual([12])
+    expect(mocks.prismaMock.customer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { not: 11 } }) }),
+    )
+  })
+
+  it("listCustomerDuplicateCandidates: grup >=2 saja lewat izin view_customers", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 11, slug: "a", name: "PT Sinar", code: "C1", phone: "0812-3456-7890", email: null, taxId: null },
+      { id: 12, slug: "b", name: "PT Sinar 2", code: "C2", phone: "+6281234567890", email: null, taxId: null },
+      { id: 13, slug: "c", name: "Unik", code: "C3", phone: "0857-0000-9999", email: null, taxId: null },
+    ])
+    const res: any = await actions.listCustomerDuplicateCandidates()
+    expect(res.success).toBe(true)
+    expect(res.groups).toHaveLength(1)
+    expect(res.groups[0].members.map((m: any) => m.id)).toEqual([11, 12])
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("view_customers")
+  })
+})
+
 describe("Vendor Actions", () => {
   it("createVendor succeeds", async () => {
     const res = await actions.createVendor(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
