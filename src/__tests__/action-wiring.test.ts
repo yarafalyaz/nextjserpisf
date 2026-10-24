@@ -160,12 +160,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
   // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
   // — entri beku dibuang.
-  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): aksi tindak lanjut
-  // penagihan backend dulu; halaman antrean + form Catat Tindak Lanjut
-  // menyusul di kartu frontend t_6f73907a (buang entri ini saat UI
-  // memanggilnya).
-  "src/actions/invoice-collection.actions.ts::createInvoiceCollectionFollowUp":
-    "F-2026-10-22-089-S inti backend; form Catat Tindak Lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): createInvoiceCollectionFollowUp
+  // kini dirujuk CollectionFollowUpForm di antrean penagihan (t_6f73907a) —
+  // entri beku dibuang. deleteInvoiceCollectionFollowUp tetap beku: loader
+  // antrean belum menampilkan daftar jejak per faktur untuk dipilih.
   "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
     "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
   // F-2026-10-22-068-S: 3 aksi ganti revisi BOM + aksi pratinjau delta
@@ -183,14 +181,24 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
-  // F-2026-10-23-113-V inti backend (t_0abc55bf): aksi ekspor XML Coretax
-  // faktur keluaran; permukaan unduh + daftar tertolak menyusul di kartu
-  // frontend BOT 2 (buang entri ini saat UI memanggilnya).
-  "src/actions/tax-documents.actions.ts::exportCoretaxOutputXmlAction":
-    "F-2026-10-23-113-V inti backend; UI unduh XML Coretax menyusul (frontend BOT 2)",
+  // F-2026-10-23-113-V: aksi ekspor XML Coretax kini dirujuk CoretaxExportPanel
+  // di page faktur tambah (t_4cba1a22) — entri beku dibuang.
   // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
   // peristiwa perubahan aset kini dirujuk AssetChangeEventPanel di detail
   // aset (t_311cfc07) — entri beku dibuang.
+  // F-2026-10-22-093-V inti (t_bdc81ed6): 5 aksi dokumen denda piutang
+  // backend dulu; panel dokumen denda di antrean penagihan menyusul
+  // (frontend BOT 2; buang entri ini saat UI memanggilnya).
+  "src/actions/sales-late-fee.actions.ts::createCustomerLateFeeTerm":
+    "F-2026-10-22-093-V inti backend; form syarat denda menyusul (frontend BOT 2)",
+  "src/actions/sales-late-fee.actions.ts::issueSalesLateFee":
+    "F-2026-10-22-093-V inti backend; tombol terbit dokumen denda menyusul (frontend BOT 2)",
+  "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
+    "F-2026-10-22-093-V inti backend; penjaga tolak-edit nominal posted untuk pemanggil masa depan (frontend BOT 2)",
+  "src/actions/sales-late-fee.actions.ts::paySalesLateFee":
+    "F-2026-10-22-093-V inti backend; form pembayaran denda menyusul (frontend BOT 2)",
+  "src/actions/sales-late-fee.actions.ts::reverseSalesLateFee":
+    "F-2026-10-22-093-V inti backend; tombol pembalikan/waiver denda menyusul (frontend BOT 2)",
 }
 
 describe("keterhubungan aksi server", () => {
