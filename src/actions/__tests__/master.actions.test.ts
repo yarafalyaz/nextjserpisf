@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     department: buildModelMock(),
     position: buildModelMock(),
     lead: buildModelMock(),
+    leadActivity: buildModelMock(),
     bank: buildModelMock(),
     bankStatement: buildModelMock(),
     tax: {
@@ -461,6 +462,99 @@ describe("Lead Actions", () => {
     const res = await actions.updateLead(1, fdMap({ name: "test", expectedCloseDate: "invalid-date" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("expectedCloseDate")
+  })
+})
+
+describe("F-2026-10-24-141-S duplikat lead (Model C)", () => {
+  const dupRow = {
+    id: 11, leadNumber: "LEAD-0011", slug: "budi", name: "Budi",
+    company: "PT Sinar", status: "new", customerId: null, assignedTo: 1,
+    phone: "+6281234567890", email: "budi@mail.com",
+    createdAt: new Date("2026-10-20T00:00:00Z"),
+  }
+
+  it("createLead kandidat cocok tanpa alasan -> peringatan, nol baris baru (AC-DUP-1/7)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    const res: any = await actions.createLead(fdMap({ name: "Budi Baru", phone: "0812-3456-7890" }))
+    expect(res?.success).toBe(false)
+    expect(res?.duplicateWarning?.candidates?.map((c: any) => c.id)).toEqual([11])
+    expect(mocks.prismaMock.lead.create).not.toHaveBeenCalled()
+  })
+
+  it("createLead kandidat cocok + alasan sah -> buat + jejak duplicate_override di lead baru (BR-DUP-06/10)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    mocks.prismaMock.lead.create.mockResolvedValue({ id: 55 })
+    try {
+      await actions.createLead(fdMap({
+        name: "Budi Baru", phone: "0812-3456-7890",
+        duplicateOverrideReason: "Nomor sentral perusahaan, orang berbeda",
+      }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          leadId: 55, type: "duplicate_override",
+          description: expect.stringContaining("11"),
+        }),
+      }),
+    )
+  })
+
+  it("createLead tanpa kandidat -> perilaku existing, tanpa jejak override (AC-DUP-10)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([])
+    try {
+      await actions.createLead(fdMap({ name: "Unik", phone: "081299998888" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+
+  it("createLead company-saja sama -> TIDAK peringatan (AC-DUP-4)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([
+      { ...dupRow, phone: "081200001111", email: "lain@mail.com" },
+    ])
+    try {
+      await actions.createLead(fdMap({ name: "Budi", company: "PT Sinar", phone: "081277778888" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+  })
+
+  it("updateLead ubah phone ke phone lead lain tanpa alasan -> ditolak, nol update (AC-DUP-11)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+      phone: "081211110000", email: null, status: "new",
+    })
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    const res: any = await actions.updateLead(1, fdMap({ name: "Saya", phone: "0812-3456-7890" }))
+    expect(res?.success).toBe(false)
+    expect(res?.duplicateWarning?.candidates?.[0]?.id).toBe(11)
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
+  it("updateLead nomor sama format beda (self) -> TIDAK memicu, update jalan (AC-DUP-11)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+      phone: "+6281234567890", email: null, status: "new",
+    })
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", phone: "0812-3456-7890" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
+    expect(mocks.prismaMock.lead.findMany).not.toHaveBeenCalled()
+  })
+
+  it("updateLead status-saja nomor tetap -> TIDAK query kandidat (AC-DUP-11)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+      phone: "081211110000", email: null, status: "new",
+    })
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", phone: "081211110000", status: "contacted" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
+    expect(mocks.prismaMock.lead.findMany).not.toHaveBeenCalled()
   })
 })
 
