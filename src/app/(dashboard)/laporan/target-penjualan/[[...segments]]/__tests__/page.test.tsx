@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   hasPermission: vi.fn(),
   getSalesTargetAchievementReport: vi.fn(),
+  getSalesTargetPeriodReconciliation: vi.fn(),
   listSalesTargets: vi.fn(),
   employeeFindMany: vi.fn(),
 }))
@@ -28,6 +29,7 @@ vi.mock("@/actions/sales-target.actions", () => ({
 }))
 
 vi.mock("@/lib/reports/sales-target-achievement-data", () => ({
+  getSalesTargetPeriodReconciliation: mocks.getSalesTargetPeriodReconciliation,
   listSalesTargets: mocks.listSalesTargets,
 }))
 
@@ -55,7 +57,10 @@ vi.mock("@/components/reports/export-buttons", () => ({
 }))
 
 import SalesTargetPage from "../page"
-import { buildSalesTargetAchievement } from "@/lib/reports/sales-target-achievement"
+import {
+  buildSalesTargetAchievement,
+  buildSalesTargetPeriodReconciliation,
+} from "@/lib/reports/sales-target-achievement"
 import { renderPageNode } from "@/components/reports/__tests__/card-test-utils"
 
 function source(rel: string): string {
@@ -95,6 +100,15 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue(undefined)
   mocks.hasPermission.mockResolvedValue(false)
   mocks.getSalesTargetAchievementReport.mockResolvedValue(REPORT)
+  mocks.getSalesTargetPeriodReconciliation.mockResolvedValue(
+    buildSalesTargetPeriodReconciliation({
+      achievement: REPORT,
+      invoices: [],
+      commissionRows: [],
+      independentReturns: [],
+      postedJournalReturn: null,
+    }),
+  )
   mocks.listSalesTargets.mockResolvedValue([])
   mocks.employeeFindMany.mockResolvedValue([])
 })
@@ -108,9 +122,11 @@ describe("F-2026-10-22-088-S halaman target vs pencapaian", () => {
     const { container, root } = await renderPage()
     expect(mocks.requirePermission).toHaveBeenCalledWith("view_reports")
     expect(mocks.getSalesTargetAchievementReport).toHaveBeenCalledTimes(1)
+    expect(mocks.getSalesTargetPeriodReconciliation).toHaveBeenCalledTimes(1)
     expect(mocks.listSalesTargets).not.toHaveBeenCalled()
     const text = container.textContent ?? ""
     expect(text).toContain("Target vs Pencapaian Penjualan")
+    expect(text).toContain("Rekonsiliasi Target Penjualan")
     expect(text).not.toContain("Kelola Target Penjualan")
     act(() => root.unmount())
   })
@@ -124,6 +140,7 @@ describe("F-2026-10-22-088-S halaman target vs pencapaian", () => {
       }),
     ).rejects.toThrow("redirect:/")
     expect(mocks.getSalesTargetAchievementReport).not.toHaveBeenCalled()
+    expect(mocks.getSalesTargetPeriodReconciliation).not.toHaveBeenCalled()
   })
 
   it("dengan approve_sales_invoices: panel kelola + daftar target dimuat", async () => {
@@ -150,6 +167,10 @@ describe("F-2026-10-22-088-S halaman target vs pencapaian", () => {
   it("kontrak statis: nol hitung persen di page/kartu/panel", () => {
     const page = source("src/app/(dashboard)/laporan/target-penjualan/[[...segments]]/page.tsx")
     const card = source("src/components/reports/sales-target-achievement-card.tsx")
+    const reconCard = source("src/components/reports/sales-target-reconciliation-card.tsx")
+    expect(page).toContain("getSalesTargetPeriodReconciliation")
+    expect(reconCard).toContain("reconciliation.totals")
+    expect(reconCard).not.toMatch(/grossPaidAmount\s*[-+]|returnDeductionAmount\s*[-+]/)
     const panel = source("src/components/reports/sales-target-manage-panel.tsx")
     expect(page).toContain('requirePermission("view_reports")')
     expect(page).toContain("getSalesTargetAchievementReport")
