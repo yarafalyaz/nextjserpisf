@@ -34,7 +34,7 @@ export default async function AssetCategoriesPage({
   const categories = await prisma.assetCategory.findMany({
     where,
     orderBy: { name: "asc" },
-    select: { id: true, slug: true, name: true, depreciationRate: true, usefulLife: true },
+    select: { id: true, slug: true, name: true, depreciationRate: true, usefulLife: true, taxGroupCode: true, taxTypeListed: true, taxDjpDetermination: true },
     take,
     skip: (page - 1) * pageSize,
   })
@@ -47,6 +47,9 @@ export default async function AssetCategoriesPage({
     name: cat.name,
     depreciationRate: cat.depreciationRate ? Number(cat.depreciationRate) : null,
     usefulLife: cat.usefulLife,
+    taxGroupCode: cat.taxGroupCode,
+    taxTypeListed: cat.taxTypeListed,
+    taxDjpDetermination: cat.taxDjpDetermination,
   }))
 
   return (

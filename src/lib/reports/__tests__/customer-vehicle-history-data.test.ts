@@ -151,6 +151,14 @@ describe("getCustomerVehicleHistory", () => {
     expect(h.installedParts).toMatchObject({ rows: [], total: 0, activeCount: 0 })
   })
 
+  it("includeInstalledParts=false: registri tidak ditanyakan ke DB, seksi kosong", async () => {
+    const h = await getCustomerVehicleHistory(42, 20, { includeInstalledParts: false })
+    expect(mocks.prismaMock.installedPart.findMany).not.toHaveBeenCalled()
+    expect(h.installedParts).toEqual({ rows: [], total: 0, activeCount: 0 })
+    // Linimasa lain tetap dimuat.
+    expect(h.entries).toEqual([])
+  })
+
   it("limit diklamp 1..100 dan diteruskan sebagai take", async () => {
     await getCustomerVehicleHistory(42, 999)
     expect(mocks.prismaMock.quotation.findMany.mock.calls[0][0].take).toBe(100)

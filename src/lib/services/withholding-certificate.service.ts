@@ -31,7 +31,7 @@ import { getErrorMessage } from "@/lib/utils/error"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import {
   computeWithheld,
-  resolvePph42RentRate,
+  resolvePph42RentRateEntry,
   type WithholdingArticle,
   WITHHOLDING_ARTICLES,
 } from "@/lib/tax/withholding-certificate"
@@ -167,7 +167,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       // Jenis lain tak disentuh resolver sewa. Master tanpa tanggal
       // efektif/histori: nilai berjalan divalidasi lalu dibekukan snapshot.
       const isRentType = type.code.startsWith("PPH42-SEWA")
-      const tariff = isRentType
+      const rentResolution = isRentType
         ? await (async () => {
             const rows = await tx.withholdingTaxType.findMany({
               where: { code: { startsWith: "PPH42-SEWA" }, isActive: true, deletedAt: null },
@@ -177,12 +177,21 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
               r.objectCode ? [{ objectCode: r.objectCode, rate: Number(r.rate), requiresEvidence: r.code !== "PPH42-SEWA" }] : [],
             )
             try {
-              return resolvePph42RentRate(type.objectCode, catalog, { evidence: input.rentObjectEvidence })
+              const resolved = resolvePph42RentRateEntry(type.objectCode, catalog, input.withholdingDate, {
+                evidence: input.rentObjectEvidence,
+              })
+              return {
+                rate: resolved.rate,
+                objectName: resolved.objectName,
+                rentObjectEvidence:
+                  resolved.evidence != null ? (input.rentObjectEvidence ?? "").trim() || null : null,
+              }
             } catch (e) {
               throw definitive(getErrorMessage(e))
             }
           })()
-        : Number(type.rate)
+        : null
+      const tariff = rentResolution ? rentResolution.rate : Number(type.rate)
       if (!(tariff >= 0)) throw definitive(`Jenis PPh "${type.code}" bertarif tak valid`)
       if (input.direction === "we_withhold" && type.liabilityAccountId == null) {
         throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`)
@@ -203,6 +212,8 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
           withholdingTypeId: type.id,
           article,
           objectCode: type.objectCode,
+          objectName: rentResolution?.objectName ?? null,
+          rentObjectEvidence: rentResolution?.rentObjectEvidence ?? null,
           dpp: toMoney(computed.dpp),
           tariff: toRate(computed.tariff),
           withheldAmount: toMoney(computed.withheldAmount),
