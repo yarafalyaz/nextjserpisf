@@ -25961,6 +25961,7 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Validasi NPWP online/format pajak, NITKU, status PKP: keluarga identitas pajak existing, perlu vonis Accountant + sumber resmi DJP; bukan kunci banding sederhana spec ini.
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
+
 ### 9. Backlog implementasi (F-2026-10-25-006-S)
 
 | ID | Pekerjaan | Pemilik | Prasyarat |
