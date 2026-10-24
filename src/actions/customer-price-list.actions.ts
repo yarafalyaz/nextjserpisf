@@ -9,7 +9,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { customerPriceListSchema } from "@/lib/validations/price-list.schemas"
-import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { getWibTodayUtcDate, wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/penjualan/harga-pelanggan"
 
@@ -32,6 +32,8 @@ function priceListData(v: PriceListForm) {
     price: toMoney(v.price),
     minQty: toMoney(v.minQty),
     effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
+    // F-2026-10-25-001-S BR-PX-01: tanggal berakhir opsional, konvensi date-only sama.
+    expiresAt: v.expiresAt ? wibDateToUtcMidnight(v.expiresAt) : null,
     notes: v.notes ?? null,
   }
 }
@@ -50,6 +52,14 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
     const parsed = parseFormData(customerPriceListSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const data = priceListData(parsed.data)
+
+    // BR-PX-06: tanggal berakhir lampau saat BUAT ditolak (baris lahir mati).
+    if (data.expiresAt && data.expiresAt < getWibTodayUtcDate()) {
+      return {
+        success: false,
+        error: "Tanggal berakhir sudah lewat. Isi tanggal berakhir di masa depan atau kosongkan untuk tanpa batas.",
+      }
+    }
 
     const duplicate = await prisma.customerPriceList.findFirst({
       where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate },
