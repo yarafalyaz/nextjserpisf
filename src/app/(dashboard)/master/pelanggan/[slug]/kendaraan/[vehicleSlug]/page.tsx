@@ -37,13 +37,15 @@ export default async function CustomerVehicleDetailPage({
 
   const { customer, customerKey, cv } = await loadCustomerVehicleContext(slug, vehicleSlug)
 
-  const history = await getCustomerVehicleHistory(cv.id)
-
   // Kartu garansi: cakupan dibaca lewat action existing (izin view terpisah);
   // tanpa izin itu kartu tidak dirender sama sekali, bukan dirender kosong.
   const canViewWarranty = await hasPermission("view_warranty_claims")
   const canRecordRemoval = await hasPermission("edit_warranty_claims")
   const canCreateWarrantyClaim = await hasPermission("create_warranty_claims")
+
+  const history = await getCustomerVehicleHistory(cv.id, 20, {
+    includeInstalledParts: canViewWarranty,
+  })
   const warrantyResult = canViewWarranty ? await listWarrantyCoveragesByVehicle(cv.id) : null
   const warrantyCoverages =
     warrantyResult?.success && warrantyResult.coverages ? warrantyResult.coverages : []

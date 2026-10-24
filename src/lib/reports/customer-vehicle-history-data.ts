@@ -134,10 +134,17 @@ function toInvoiceEntry(inv: InvoiceRow): CustomerVehicleHistoryEntry {
 export async function getCustomerVehicleHistory(
   customerVehicleId: number,
   limitPerKind = 20,
+  opts: { includeInstalledParts?: boolean } = {},
 ): Promise<CustomerVehicleHistory> {
   const take = Math.max(1, Math.min(100, Math.trunc(limitPerKind) || 20))
 
-  const installedPartsPromise = getInstalledParts(customerVehicleId)
+  // Defense-in-depth: tanpa izin lihat garansi, registri part terpasang
+  // tidak pernah ditanyakan ke DB (panel juga tidak dirender).
+  const includeInstalledParts = opts.includeInstalledParts ?? true
+  const installedPartsPromise: Promise<InstalledPartsRegistry> =
+    includeInstalledParts
+      ? getInstalledParts(customerVehicleId)
+      : Promise.resolve({ rows: [], total: 0, activeCount: 0 })
   const [quotations, salesOrders, workOrders, directProjects, directInvoices] =
     await Promise.all([
       prisma.quotation.findMany({
