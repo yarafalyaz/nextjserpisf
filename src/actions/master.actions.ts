@@ -439,6 +439,12 @@ export async function createItem(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // F-2026-10-24-135-V syarat 1: item besi tua TIDAK boleh isProduct=true.
+    // Kombinasi itu masuk jalur stok/COGS dan melanggar nilai buku scrap Rp0.
+    if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
+      return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
+    }
+
     const itemSettings = await getSystemSettings();
     let sku = v.sku || null;
     if (itemSettings.enableAutoItemCode !== false || !sku) {
@@ -501,6 +507,7 @@ export async function createItem(formData: FormData) {
           purchasePrice: v.purchasePrice ?? undefined,
           isProduct: v.isProduct ?? false,
           isService: v.isService ?? false,
+          isScrapSaleItem: v.isScrapSaleItem ?? false,
           trackBatch: v.trackBatch ?? false,
           trackSerial: v.trackSerial ?? false,
           isActive: true,
@@ -546,6 +553,12 @@ export async function updateItem(itemId: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // F-2026-10-24-135-V syarat 1: item besi tua TIDAK boleh isProduct=true.
+    // Kombinasi itu masuk jalur stok/COGS dan melanggar nilai buku scrap Rp0.
+    if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
+      return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
+    }
+
     if (v.price < v.cost) {
       return {
         success: false,
@@ -585,6 +598,7 @@ export async function updateItem(itemId: number, formData: FormData) {
           purchasePrice: v.purchasePrice ?? undefined,
           isProduct: v.isProduct ?? false,
           isService: v.isService ?? false,
+          isScrapSaleItem: v.isScrapSaleItem ?? false,
           trackBatch: v.trackBatch ?? false,
           trackSerial: v.trackSerial ?? false,
         },
