@@ -26137,3 +26137,40 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
 
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-014-V: angka K2 lembur/cuti (PP 35/2021) + gerbang K4 approval dokumen uang (Muse, kartu Lead t_d2259fd0 / vonis t_f3e4fa16)
+
+> Slot: F-2026-10-25-014-V. Diperiksa bentrok 2026-10-25 03:37 WIB: grep `F-2026-10-25-014` di `origin/main` (`7507b596`) = 0; PR terbuka beda topik; 013-V terpakai PR #795. ID bebas.
+> Bukti baca LIVE (bukan checkout utama): `/tmp/business-muse-hr-rules/src/lib/services/overtime-pay.service.ts`, `leave-quota.service.ts`, `src/actions/hrm.actions.ts`; `/tmp/lead-muse-approval-layout/src/lib/services/approval-workflow.service.ts`, `src/actions/approval.actions.ts`, `finance.actions.ts`, `purchase.actions.ts`, `prisma/seed.ts`. Gate: `vitest overtime-pay.service.test.ts` 6/6 hijau di checkout utama (isi file sama dengan worktree).
+> Rujukan resmi: PP 35/2021 Pasal 26 ayat (1) & Pasal 31 (jo. Kepmenakertrans 102/MEN/VI/2004); UU 13/2003 Pasal 79 ayat (2), Pasal 81, Pasal 93 ayat (2)–(4). Prinsip akuntansi: jurnal terposting beku; status dokumen/pembayaran/pajak/posting terpisah; gerbang approval sebelum posting, bukan penulis GL.
+
+### A. K2 Aturan SDM — LOLOS BERSYARAT
+
+Yang lolos:
+- A1 Tarif `computeOvertimePay` persis Pasal 31: upah sejam = upah sebulan / 173; hari kerja jam ke-1 1,5x lalu 2x; istirahat/libur pola 5 hari 8 jam pertama 2x, jam ke-9 3x, jam ke-10–11 4x; pola 6 hari 7 jam pertama 2x, jam ke-8 3x, jam ke-9–10 4x. Bukti tes: gaji 3.460.000 (sejam 20.000) -> 1 jam kerja 30.000; 10 jam rest_5day 460.000; 9 jam rest_6day 420.000.
+- A2 Batas 4 jam/hari & 18 jam/minggu hanya hari kerja; lembur istirahat/libur di luar batas (Pasal 26 ayat (1)); status pending+approved sama-sama dihitung sehingga pengajuan ganda tidak lolos.
+- A3 9 tipe cuti khusus + batas persis Pasal 81/93 (menikah 3, menikahkan anak 2, khitan 2, baptis 2, istri melahirkan 2, keluarga inti wafat 2, serumah wafat 1, haid maks 2, haji `null` sekali seumur hubungan kerja); gerbang di create DAN update.
+- A4 Kelayakan cuti tahunan dinilai per tanggal mulai cuti, jangkar `leaveEligibilityStartDate`, INTERN tanpa hak, banding tanggal kalender WIB — Pasal 79 ayat (2).
+- A5 Payroll hanya menjumlah `calculatedValue` lembur approved; nilai dihitung dari `baseSalary` saat approve; tidak ada jalur payroll membaca tarif flat lama.
+
+Syarat sebelum merge K2:
+- K2-S1: `updateOvertimeRequest` mengubah date/hours TANPA gerbang 4 jam/18 jam (gerbang hanya di create). Wajib gerbang sama di update dengan self-exclusion + tes falsifikasi (edit ke 5 jam hari kerja sama DITOLAK; cabut gerbang MERAH). Pemilik: Business.
+- K2-S2: Dasar upah lembur WAJIB upah pokok + tunjangan tetap (dasar 100%); bila ada tunjangan tidak tetap, dasar = 75% dari (pokok + tunjangan tetap) — Pasal 31. Kode kini membaca `baseSalary` saja. Wajib: nyatakan tertulis apakah `baseSalary` ISF sudah = pokok+tetap; bila belum, perbaiki dasar + tes pengunci. Pemilik: Business, vonis angka Accountant.
+- K2-S3: Jam istirahat di luar tabel (>11 pola 5 hari / >10 pola 6 hari) dibayar tarif tertinggi 4x: kebijakan perusahaan yang LOLOS, wajib tercatat; penahanan jam ekstra = keputusan approval manusia, bukan penolakan sistem. Bukan blocker.
+
+### B. K4 Approval dokumen uang — LOLOS BERSYARAT
+
+Yang lolos:
+- B1 Gate-only benar: `GATE_ONLY_REFERENCE_TYPES={Journal,VendorPayment}` (`approval.actions.ts:36`); approveStep tidak menulis status workflow ke dokumen; kosakata Journal DRAFT->POSTED & VendorPayment draft->completed aman; tidak ada status approved bocor ke GL.
+- B2 `assertApproved` sebelum efek GL: `postJournal` (`finance.actions.ts:620`, sebelum klaim posting) dan `confirmVendorPayment` (`purchase.actions.ts:1709`, sebelum tx konfirmasi+jurnal). Jurnal pembayaran vendor lahir hanya saat confirm; draft tidak menyentuh GL.
+- B3 Seed 2 workflow bawaan (Journal, VendorPayment) idempoten `NOT EXISTS`; langkah hanya bila workflow belum punya langkah — konfigurasi tenant tidak ditimpa.
+- B4 Izin `approve_journals` + `approve_vendor_payments` terdaftar. Catatan: `approve_vendor_payments` juga izin konfirmasi (`purchase.actions.ts:1698`) — pemisahan tugas approve-vs-confirm lemah; lolos tahap ini, pecah verba hanya bila peran nyata berbeda.
+
+Syarat sebelum merge K4:
+- K4-S1: `postJournal` menolak jurnal tidak seimbang dengan toleransi nol sebelum GL. Wajib tes falsifikasi: selisih 1 sen DITOLAK; mutasi approveStep menulis status ke Journal membuat tes pengunci gate-only MERAH. Pemilik: Lead (penulis K4), falsifikasi QA.
+- K4-S2: Perilaku no-op `requestApprovalIfConfigured` tanpa workflow DISETUJUI dengan syarat pendamping: (a) penonaktifan/penghapusan workflow Journal/VendorPayment tercatat di activity log (bukan senyap); (b) mematikan workflow itu butuh izin kelola approval + peringatan UI "gerbang uang mati". Alasan: seed memastikan workflow selalu ada; no-op sesudah itu = keputusan konfigurasi tenant yang disengaja, bukan lubang diam-diam. Tanpa (a), no-op TIDAK disetujui.
+
+Catatan lanjutan (bukan penahan merge K4 — kartu Backend terpisah):
+- C1: Edit dokumen yang approval terakhirnya `approved` (jurnal belum posting / pembayaran masih draft) TIDAK membuka approval baru — hanya status `rejected` yang resubmit. Edit materiil sesudah approve dengan demikian lolos tanpa approve ulang. Vonis: edit semacam itu WAJIB membuka approval baru (`requestApprovalIfConfigured` diperluas ke status approved-belum-terposting). Bukan penahan karena jurnal belum masuk GL & pembayaran masih draft.
+
+F-2026-10-25-014-V — Vonis K2/K4. Status: LOLOS BERSYARAT dua kelompok; penentu merge K2 = K2-S1/K2-S2 (Business), K4 = K4-S1/K4-S2 (Lead); C1 kartu lanjutan Backend. Tanpa edit kode run ini; tanpa merge (Lead).
+
