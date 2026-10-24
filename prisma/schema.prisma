@@ -700,6 +700,7 @@ model Item {
   materialRequestItems MaterialRequestItem[]
   substitutes          ItemSubstitute[]     @relation("ItemSubstitutes")
   substitutedFor       ItemSubstitute[]     @relation("ItemSubstitutedFor")
+  warehouseSettings    ItemWarehouseSetting[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -740,11 +741,34 @@ model Warehouse {
   userWarehouses    UserWarehouse[]
   stocktakeSessions StocktakeSession[]
   remnants          Remnant[]
+  itemWarehouseSettings ItemWarehouseSetting[]
 
   @@index([isActive, deletedAt])
   @@index([name])
   @@index([createdAt])
   @@map("warehouses")
+}
+
+/// F-2026-10-22-070-S (induk F-2026-10-21-013): override stok minimum per
+/// (barang, gudang). Baris ada = minimum efektif pasangan itu; baris tidak
+/// ada = warisi Item.minStock global (BR-MS-02). Pengaturan murni master:
+/// tidak pernah menulis StockMove/jurnal/reservasi (BR-MS-09).
+model ItemWarehouseSetting {
+  id          Int      @id @default(autoincrement())
+  itemId      Int      @map("item_id")
+  warehouseId Int      @map("warehouse_id")
+  minStock    Decimal  @map("min_stock") @db.Decimal(15, 2)
+  createdBy   Int?     @map("created_by")
+  updatedBy   Int?     @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, warehouseId], map: "item_warehouse_settings_pair_key")
+  @@index([warehouseId])
+  @@map("item_warehouse_settings")
 }
 
 model Rack {
