@@ -19982,3 +19982,231 @@ hanya-salah-satu izin dokumen (NAV-1) = perilaku BENAR, bukan bug.
   relevan, tidak dikarang.
 - Perubahan kode, seed, matriks izin, atau halaman mana pun —
   spec konsumen saja sesuai batas kartu.
+
+## 2026-10-22 02:52 WIB — Domain (d) Spec konsumen UI paparan kredit F-017 advisory (F-2026-10-22-043-S)
+
+Kartu: t_35754cac. Pemilik: BOT 5. Spec konsumen UI saja: tanpa kode,
+tanpa schema, tanpa migrasi, tanpa jurnal baru. Melengkapi (bukan
+menulis ulang) spec read-model F-2026-10-21-017-S (PR #396 head
+91b050bc, OPEN MERGEABLE — worktree t_e5e0ce2b) dan backlog
+F-2026-10-21-017 (backlog:1160). Angka/pajak tidak divonis spec ini.
+
+### Keadaan prasyarat (jujur, terverifikasi live run ini)
+
+- F-017-S SELESAI (t_e5e0ce2b done 02:40): komponen K1-K5,
+  PaparanBersih = max(0, K1+K2+K5-K3-K4), titik tampil T1-T3,
+  BR-CR-01..10, AC-CR-01..15. Kontrak builder untuk UI ini =
+  §2/§3 spec itu; spec konsumen ini TIDAK mendefinisikan ulang rumus.
+- Vonis BOT 4 F-2026-10-22-042-V BELUM TERBIT (cek live run ini:
+  worktree /private/tmp/bot4-f042 bersih di origin/main 389b2705,
+  `gh pr list --search "042"` = 0 hasil, grep backlog/board
+  "F-2026-10-22-042" = 0). Sesuai acceptance kartu ini: spec
+  konsumen berhenti di kontrak tampil TANPA angka/ambang final.
+  Butir menunggu vonis ditandai eksplisit §7; JANGAN tebak ambang
+  baru dari spec ini.
+- Builder merged di main hari ini HANYA lapis aman #283:
+  `buildCustomerCreditExposure` (customer-receivables.ts:67-78)
+  status `unset|ok|warning|over` (limit <= 0 = unset; warning
+  >= 80%; over >= 100%). Pengurang DP confirmed (K3) = PR #334
+  OPEN MERGEABLE head 205ddbb4 belum merged. K4/K5 = kartu BOT 3
+  t_9b2fd1eb (ready, menunggu #334 merged). Inti gate = PR #351
+  OPEN CONFLICTING, DITUNDA.
+- Teks status VERBATIM existing (sumber kebenaran UI, jangan
+  karang ulang): page piutang-pelanggan
+  `({ unset: "Limit belum diatur", ok: "Aman", warning:
+  "Mendekati batas", over: "Lewat batas" })` — konsumen UI wajib
+  pakai peta persis ini; status mentah builder tetap
+  `unset|ok|warning|over`, bukan label bebas.
+- Titik tampil form hari ini ABSEN (TERVERIFIKASI-KODE): grep
+  `buildCustomerCreditExposure` di luar laporan = hanya
+  page.tsx piutang-pelanggan; `creditOverLimitLabel`
+  (customer-receivables.ts:40) hanya dipakai ledger-cash-data.ts:
+  420. Form tambah SO (pesanan/tambah page.tsx:39-65) dan form
+  tambah Invoice (faktur/tambah page.tsx:59-236) memuat daftar
+  `customers` TANPA status kredit — di situlah lencana advisory
+  §2 dipasang, bukan komponen baru hitung uang.
+
+### 1. Aktor + role/permission matrix (permission nyata)
+
+| Aksi konsumen | Finance/penagihan | Admin penjualan | Admin master | Permission nyata (module-catalog.generated.ts) |
+|---|---|---|---|---|
+| Lihat daftar piutang + status (T1) | YA | tidak perlu | tidak perlu | view_reports (:411) |
+| Lihat ringkasan di detail pelanggan (T2) | YA | YA (baca) | YA | view_customers (:125) |
+| Lihat lencana di form SO (T3a) | — | YA | — | view_sales_orders/create_sales_orders (:161-162) |
+| Lihat lencana di form Invoice (T3b) | — | YA | — | view_sales_invoices/create_sales_invoices (:145-146) |
+| Atur creditLimit (sumber ambang) | tidak | tidak | YA | edit_customers (:127) existing |
+| Simpan SO/Invoice saat status apa pun | — | YA selalu (advisory) | — | create_* di atas; TIDAK ada permission kredit baru di lapis ini |
+
+Tidak ada permission key baru diusulkan. Key kredit khusus =
+bagian gate (§7), butuh persetujuan BOT 1, BUKAN lapis ini.
+
+### 2. Titik tampil per peran (kontrak konsumen)
+
+Satu sumber angka: builder paparan yang sama (BOT 3). UI TIDAK
+menghitung ulang paparan/utilization/sisa di komponen — menampilkan
+field builder apa adanya (status, exposure/PaparanBersih,
+remainingCredit, utilization, creditLimit) + teks verbatim §atas.
+
+| ID | Titik | Isi tampil persis | Perilaku simpan |
+|---|---|---|---|
+| T1 | Daftar piutang per pelanggan (existing, page.tsx) | Kolom existing (SO Terbuka, Paparan Kredit, Status Kredit) + sesudah BOT 3: DP Terkonfirmasi (K3), Kredit Terbuka (K4), Job Berjalan (K5), Paparan Bersih; baris SO-only/WO-only ikut tampil | n/a (laporan) |
+| T2 | Detail pelanggan (master/pelanggan/[slug]) | Satu baris ringkas: Limit, Paparan Bersih, status verbatim, sisa kredit (boleh negatif tampil apa adanya — builder existing tidak menjepit remainingCredit); tautan ke T1 | n/a |
+| T3a | Form SO tambah/ubah — saat pelanggan dipilih | Lencana status verbatim + Paparan Bersih + sisa kredit; warning/over tampil menonjol (warna), BUKAN modal pemblokir | Tombol simpan TIDAK pernah disabled oleh status; tidak ada dialog konfirmasi wajib |
+| T3b | Form Invoice tambah/ubah — saat pelanggan dipilih (termasuk default dari SO/quotation) | Sama seperti T3a; lencana mengikuti pelanggan terpilih saat itu, berubah bila pelanggan diganti | Sama: simpan selalu bisa |
+
+Aturan tampil umum (wajib semua titik):
+- `unset` (limit <= 0 / belum diatur): teks persis "Limit belum
+  diatur", utilization tampil "–" (pola narration existing
+  page.tsx), Paparan Bersih tetap tampil nominalnya. JANGAN
+  tampilkan sebagai "Aman" dan JANGAN sebagai error/blokir.
+- Pelanggan tanpa transaksi: T1 tidak memunculkan baris (atau
+  baris 0 bila dibuka dari master) — status efektif unset/ok
+  sesuai limitnya; tidak error, tidak dianggap lewat-batas.
+- Ganti pelanggan di form: lencana memuat ulang untuk pelanggan
+  baru; pelanggan belum dipilih = lencana tidak tampil (bukan
+  placeholder angka 0 yang menyesatkan).
+- Angka builder belum tersedia (K3-K5 belum merged): titik tampil
+  yang field-nya belum ada DITUNDA per §7, bukan diisi hitungan
+  UI darurat.
+
+### 3. Status advisory + perilaku per keadaan (label dari builder)
+
+| Status builder | Teks verbatim | Arti tampil | Blokir simpan? |
+|---|---|---|---|
+| unset | Limit belum diatur | Limit <= 0; utilization null → "–" | TIDAK |
+| ok | Aman | utilization < 80 | TIDAK |
+| warning | Mendekati batas | utilization >= 80 dan < 100 | TIDAK |
+| over | Lewat batas | utilization >= 100; sisa kredit boleh negatif | TIDAK — eskalasi §4, bukan gate |
+
+Keadaan tepi (kontrak konsumen, rumus milik F-017-S):
+- Limit 0/unset dengan paparan besar: tetap `unset` + nominal
+  paparan tampil; saran bisnis tampil = "atur limit di master
+  pelanggan" (tautan T2), bukan peringatan lewat-batas.
+- DP melebihi nilai job: PaparanBersih dijepit 0 oleh builder
+  (AC-CR-03 F-017-S) → status ok, sisa = limit penuh; UI tidak
+  menampilkan paparan negatif.
+- WO berjalan tanpa invoice: nilai masuk lewat K5 (F-017-S §2)
+  hanya di T1/T2; di form (T3) angka yang sama tampil sebagai
+  bagian Paparan Bersih — UI tidak memisahkan sumbernya sendiri.
+  WO tanpa quotationId: kontribusi 0 + bendera "WO tanpa nilai
+  jual" hanya relevan T1 (rincian), bukan lencana form.
+- Pelanggan SO-only (belum ada invoice): WAJIB tampil di T1
+  sesudah perbaikan cakupan BOT 3 (hari ini hilang — buckets dari
+  invoice saja, page.tsx:69-86); di T2/T3 paparannya tampil dari
+  builder yang sama.
+
+### 4. Alur eskalasi bisnis bila lewat-batas (BUKAN gate keras)
+
+USULAN BOT 5 (alur operasional, tanpa angka baru):
+1. `warning`: lencana kuning di titik aktif; admin penjualan
+   boleh lanjut simpan; tidak ada pemberitahuan keluar. Finance
+   melihatnya di T1 saat review berkala.
+2. `over`: lencana merah + teks verbatim "Lewat batas" + nominal
+   kelebihan (Paparan Bersih − limit, dari field builder). Admin
+   tetap bisa simpan. Langkah bisnis sesudahnya (di luar sistem
+   atau manual): admin memberi tahu finance/penagihan lewat kanal
+   operasional existing; finance menindaklanjuti di T1 (tagih,
+   minta DP tambahan via alur uang-muka existing, atau admin
+   master menaikkan limit via edit_customers sesudah persetujuan
+   pemilik proses — persetujuan itu proses manusia, belum
+   workflow approval sistem).
+3. TIDAK diusulkan di lapis ini: notifikasi WA/email otomatis,
+   log override, antrean approval kredit. Itu prasyarat/
+   pendamping gate (§7), YAGNI sampai T1-T3 dipakai.
+
+### 5. Business rules register (konsumen; rumus tetap F-017-S)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-CU-01 | Teks status = peta verbatim existing ("Limit belum diatur"/"Aman"/"Mendekati batas"/"Lewat batas"); status mentah builder `unset|ok|warning|over` | TERVERIFIKASI-KODE (page piutang-pelanggan; customer-receivables.ts:64,74) |
+| BR-CU-02 | Tidak ada status advisory yang men-disable simpan SO/Invoice | TERVERIFIKASI-KODE (komentar builder "Advisory only — never blocks saving", customer-receivables.ts:38-39,53) |
+| BR-CU-03 | UI tidak menghitung ulang uang; satu builder untuk T1-T3 | USULAN BOT 5 (pola spec F-017-S §4 T3) |
+| BR-CU-04 | Limit <= 0 tampil unset + "–", bukan Aman/blokir | TERVERIFIKASI-KODE (BR-CR-02 F-017-S) |
+| BR-CU-05 | Ambang warning 80%/over 100% existing TIDAK digeser spec ini | TERVERIFIKASI-KODE (customer-receivables.ts:74); perubahan = BUTUH-VONIS BOT 4 F-042 |
+| BR-CU-06 | K4 pengurang + K5 jembatan tampil di UI hanya sesudah builder BOT 3 + label USULAN-nya jelas | USULAN (BR-CR-05/06 F-017-S) — pengesahan inti BUTUH-VONIS BOT 4 |
+| BR-CU-07 | Eskalasi over = peringatan + pemberitahuan manusia (§4), bukan penahan dokumen | USULAN BOT 5; gate keras = BUTUH-VONIS BOT 4 + PUTUSAN BOT 1 (§7) |
+
+### 6. Acceptance per titik tampil (input -> hasil terharap, BOT 6)
+
+Basis: builder F-017-S (limit 100 satuan bebas bila tidak disebut).
+
+| ID | Input | Hasil terharap |
+|---|---|---|
+| AC-CU-01 | T1, pelanggan status over (AC-CR-01) | Baris tampil teks "Lewat batas", Paparan Bersih 110, sisa −10 tampil negatif apa adanya |
+| AC-CU-02 | T1, limit 0 paparan 1000 | Status "Limit belum diatur", Pemakaian "–"; bukan "Aman", bukan error |
+| AC-CU-03 | T3a: pilih pelanggan over lalu simpan SO | Lencana "Lewat batas" tampil; tombol simpan aktif; SO tersimpan (nomor dokumen terbit) |
+| AC-CU-04 | T3b: buka form Invoice dari SO pelanggan warning | Lencana "Mendekati batas" untuk pelanggan default SO itu; ganti pelanggan ke limit 0 → lencana berubah "Limit belum diatur" |
+| AC-CU-05 | T3a/T3b sebelum pelanggan dipilih | Tidak ada lencana/angka paparan tampil |
+| AC-CU-06 | T2 pelanggan tanpa transaksi, limit 50 | Ringkasan tampil Limit 50, Paparan Bersih 0, status "Aman", tautan T1 berfungsi; tanpa transaksi bukan error |
+| AC-CU-07 | T1 pelanggan SO-only (SO 100, tanpa invoice) sesudah cakupan BOT 3 | Baris tampil, Paparan memuat SO itu (tidak hilang seperti perilaku hari ini) |
+| AC-CU-08 | DP melebihi job (AC-CR-03) di T2/T3 | Paparan Bersih 0, status "Aman"; tidak ada angka negatif paparan |
+| AC-CU-09 | Pelanggan WO-only (AC-CR-07) di T1/T2 | Tampil dengan kontribusi K5; di form T3 angka gabung di Paparan Bersih (tanpa rincian sumber di lencana) |
+| AC-CU-10 | Falsifikasi BOT 6: paksa status over me-disable simpan (sabotase uji) -> AC-CU-03 MERAH; teks status diganti karangan ("Over Limit!") -> AC-CU-01/04 MERAH; pulih hijau sesudah dikembalikan | Merah saat disabotase, hijau sesudah pulih |
+
+Catatan BOT 6: AC-CU-03/04 membuktikan advisory di jalur simpan
+nyata (server action menerima), bukan hanya render lencana. Gate
+penahan TIDAK dinilai (DITUNDA §7).
+
+### 7. DITUNDA sadar + butir menunggu vonis BOT 4 (F-042)
+
+DITUNDA (jangan dibangun dari spec ini):
+1. Gate blokir kredit (tolak SO/Invoice saat over). Syarat buka
+   SEKALIGUS (warisan F-017-S §7, ditegaskan ulang): (a) PUTUSAN
+   BOT 1; (b) vonis BOT 4 F-042 atas definisi paparan inti —
+   apakah K5 WO ikut gate, apakah K4 sah pengurang gate,
+   perlakuan DP pending untuk gate; (c) aturan limit-0 untuk
+   gate tertulis (usulan default aman F-017-S: tidak memblokir);
+   (d) permission override baru + log override teraudit disetujui
+   BOT 1; (e) tes falsifikasi penahan di server action.
+2. Field K3 di T1/T2/T3 tampil penuh: menunggu PR #334 merged
+   (BOT 1/git-keeper) — bukan vonis, antrean merge.
+3. Field K4/K5 + baris SO-only/WO-only: menunggu builder BOT 3
+   t_9b2fd1eb (sesudah #334) — bukan vonis untuk advisory;
+   pengesahan K4 sebagai pengurang INTI tetap butir (b).
+4. Notifikasi otomatis perubahan status + snapshot historis
+   paparan: YAGNI (F-017-S §7 butir 2-3), tanpa ID.
+
+Butir eksplisit MENUNGGU VONIS BOT 4 F-2026-10-22-042-V (bila
+terbit, spec ini dibaca ulang pada butir ini saja): ambang
+warning/over final (80/100 existing hanya dipertahankan, bukan
+disahkan), definisi paparan inti untuk gate, perlakuan K4/K5
+untuk inti, perlakuan DP pending. Sampai terbit: tidak ada
+angka final di kontrak UI selain field builder existing.
+
+### 8. Urutan implementasi (pemilik)
+
+1. BOT 1/git-keeper: merge PR #334 -> kunci K3.
+2. BOT 3 (t_9b2fd1eb): builder K4/K5 + cakupan baris; kontrak
+   field final diumumkan ke BOT 2 (nama field persis, jangan
+   tebak dari spec ini bila builder berubah — laporkan balik).
+3. BOT 2: T2 lalu T3a/T3b memakai teks verbatim §atas + AC-CU;
+   UI tanpa hitung uang (BR-CU-03).
+4. BOT 6: AC-CU-01..10 + falsifikasi AC-CU-10 (kartu QA F-017-S
+   t_7417e4d1 tetap untuk AC-CR builder; AC-CU kartu tersendiri
+   sesudah UI ada).
+5. BOT 4: vonis F-042 bila diajukan; BOT 5 perbarui §7 butir
+   menunggu sesudahnya (bukan menulis ulang seluruh spec).
+
+### Feature matrix ringkas (benchmark warisan run (d), akses 2026-10-21)
+
+- Accurate/Zahir: peringatan/blokir melewati limit = standar
+  pasar (backlog:1161-1163, help.zahironline.com fasilitas).
+  ISF lapis konsumen ini = peringatan di titik keputusan (form),
+  selisih blokir tercatat sadar §7 — bukan kelalaian.
+
+### Yang TIDAK diusulkan run ini
+
+- Mengubah teks status/ambang, creditLimit wajib isi, paparan
+  per kendaraan sebagai lencana form: tanpa kebutuhan tertulis
+  pemilik proses (selaras F-017-S "tidak diusulkan").
+
+### Handoff F-2026-10-22-043-S
+
+- BOT 2 (UI): §2/§3/§6 — kerjakan SESUDAH kontrak builder BOT 3
+  final (langkah §8.2); teks verbatim, tanpa hitung ulang.
+- BOT 3 (builder t_9b2fd1eb): umumkan nama field K3/K4/K5 final
+  ke BOT 2; bendera "WO tanpa nilai jual" hanya rincian T1.
+- BOT 4: butir §7 menunggu F-042 — tidak ada vonis diminta untuk
+  tampil advisory itu sendiri.
+- BOT 1: PUTUSAN hanya §7 butir 1 (gate) bila diajukan.
+- BOT 6: AC-CU-01..10 sesudah UI BOT 2 ada.
