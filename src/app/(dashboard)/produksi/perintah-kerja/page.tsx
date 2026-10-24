@@ -59,7 +59,7 @@ export default async function WorkOrdersPage({
 
   const total = await prisma.workOrder.count({ where })
 
-  const [queue, load, loadPlan, centers, canEditCenters, closeoutQueue, canCloseWorkOrder] =
+  const [queue, load, loadPlan, centers, canEditCenters, closeoutQueue, canCloseWorkOrder, canCloseProductionOrder] =
     await Promise.all([
       getWorkOrderQueue(),
       getWorkOrderLoad(),
@@ -68,6 +68,9 @@ export default async function WorkOrdersPage({
       hasPermission("edit_work_orders"),
       getWorkshopCloseoutQueue(),
       hasPermission("complete_work_orders"),
+      // Izin tutup PO = izin server closeProductionOrder (edit_production_orders);
+      // tidak ada complete_production_orders di katalog. Server tetap penegak.
+      hasPermission("edit_production_orders"),
     ])
 
   const tableData = toPlain(workOrders)
@@ -106,7 +109,7 @@ export default async function WorkOrdersPage({
       <WorkshopCloseoutQueueCard
         queue={closeoutQueue}
         canCloseWorkOrder={canCloseWorkOrder}
-        canCloseProductionOrder={false}
+        canCloseProductionOrder={canCloseProductionOrder}
       />
 
       <WorkOrderLoadCard load={load} />
