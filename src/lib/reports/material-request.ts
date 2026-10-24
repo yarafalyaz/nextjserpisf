@@ -7,10 +7,10 @@
  * - Status permintaan TIDAK ditulis bebas: turunan pemenuhan di sini
  *   dari qty DITERIMA kumulatif per item atas transfer tertaut
  *   berstatus received (BR-MR-04). Transfer lahir/dikirim saja TIDAK
- *   mengubah status (AC-MR-3). Tanpa receivedQty per baris transfer
- *   (F-2026-10-21-015 belum live), satu transfer diterima = seluruh
- *   barisnya diterima penuh; pemenuhan bertahap antar-transfer tetap
- *   menghasilkan terpenuhi_sebagian.
+ *   mengubah status (AC-MR-3). Sejak F-2026-10-22-081-S live, qty
+ *   diterima = receivedQty per baris transfer (termasuk parsial dari
+ *   transfer processed/partially_received), dibaca loader/service —
+ *   builder ini tetap murni atas angka yang diteruskan itu.
  * - Permintaan bukan dokumen nilai: tanpa harga/biaya/jurnal (BR-MR-12).
  * - Kata status UI di §6 spec diekspor verbatim; UI menempel apa adanya.
  *

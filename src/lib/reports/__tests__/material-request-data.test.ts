@@ -10,11 +10,18 @@ const mocks = vi.hoisted(() => ({
     materialRequest: { findMany: vi.fn() },
     userWarehouse: { findMany: vi.fn() },
   },
+  requirePermissionMock: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/auth/permissions", () => ({
+  requirePermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
+}))
 
-import { getMaterialRequestQueue } from "../material-request-data"
+import {
+  getMaterialRequestByWorkOrder,
+  getMaterialRequestQueue,
+} from "../material-request-data"
 
 function row(over: Record<string, unknown> = {}) {
   return {
@@ -43,8 +50,8 @@ function row(over: Record<string, unknown> = {}) {
       },
     ],
     transfers: [
-      { status: "draft", items: [{ itemId: 1, qty: 10 }] },
-      { status: "received", items: [{ itemId: 1, qty: 4 }] },
+      { status: "draft", items: [{ itemId: 1, qty: 10, receivedQty: 0 }] },
+      { status: "received", items: [{ itemId: 1, qty: 4, receivedQty: 4 }] },
     ],
     ...over,
   }
@@ -54,6 +61,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.prismaMock.materialRequest.findMany.mockResolvedValue([row()])
   mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 1 }])
+  mocks.requirePermissionMock.mockResolvedValue({ id: "7", roles: ["warehouse"] })
 })
 
 describe("getMaterialRequestQueue", () => {
@@ -79,6 +87,45 @@ describe("getMaterialRequestQueue", () => {
     mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([])
     const q = await getMaterialRequestQueue({ id: "7", roles: ["warehouse"] })
     expect(q).toEqual({ incoming: [], outgoing: [] })
+    expect(mocks.prismaMock.materialRequest.findMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("getMaterialRequestByWorkOrder (M-2: gerbang izin + scope)", () => {
+  it("menerapkan izin view + scope kedua gudang pada where", async () => {
+    const rows = await getMaterialRequestByWorkOrder(42)
+    expect(rows).toHaveLength(1)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("view_material_requests")
+    const arg = mocks.prismaMock.materialRequest.findMany.mock.calls[0][0]
+    expect(arg.where).toEqual({
+      workOrderId: 42,
+      OR: [
+        { requesterWarehouseId: { in: [1] } },
+        { sourceWarehouseId: { in: [1] } },
+      ],
+    })
+  })
+
+  it("scope all: tanpa filter OR, izin tetap ditegakkan", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: "7", roles: ["super_admin"] })
+    const rows = await getMaterialRequestByWorkOrder(42)
+    expect(rows).toHaveLength(1)
+    const arg = mocks.prismaMock.materialRequest.findMany.mock.calls[0][0]
+    expect(arg.where).toEqual({ workOrderId: 42 })
+    expect(mocks.prismaMock.userWarehouse.findMany).not.toHaveBeenCalled()
+  })
+
+  it("kind none: kosong fail-closed, query permintaan tidak jalan", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: "7", roles: ["warehouse"] })
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([])
+    const rows = await getMaterialRequestByWorkOrder(42)
+    expect(rows).toEqual([])
+    expect(mocks.prismaMock.materialRequest.findMany).not.toHaveBeenCalled()
+  })
+
+  it("workOrderId tidak valid: kosong tanpa izin/DB", async () => {
+    expect(await getMaterialRequestByWorkOrder(0)).toEqual([])
+    expect(mocks.requirePermissionMock).not.toHaveBeenCalled()
     expect(mocks.prismaMock.materialRequest.findMany).not.toHaveBeenCalled()
   })
 })
