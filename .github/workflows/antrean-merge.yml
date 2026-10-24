@@ -42,6 +42,10 @@ jobs:
     timeout-minutes: 170
     env:
       GH_TOKEN: ${{ github.token }}
+      # Tanpa checkout, gh tidak bisa menebak repo dari git remote ("fatal:
+      # not a git repository") — tunjukkan eksplisit. Kegagalan pertama
+      # antrean (run 40122122702) persis karena ini.
+      GH_REPO: ${{ github.repository }}
       TZ: Asia/Jakarta
     steps:
       - name: Proses PR berlabel antrean-merge (FIFO)
