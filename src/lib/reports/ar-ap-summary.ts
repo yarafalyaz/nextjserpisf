@@ -11,13 +11,16 @@ function addTo(map: Map<string, PartyMoney>, name: string, billed: number, paid:
   map.set(name, e)
 }
 
-/** Agregasi AR per pelanggan, presisi sen. */
-export function buildArByCustomer(invoices: readonly { customerName: string; grandTotal: SafeMathInput; paidAmount: SafeMathInput }[]): Map<string, PartyMoney> {
+/** Agregasi AR per pelanggan, presisi sen. `returnCreditAmount` opsional
+ * (F-104-V): pengurang outstanding per faktur dari jurnal SalesReturn
+ * POSTED — BUKAN bagian `paid` (kolom Sudah Dibayar tetap murni). */
+export function buildArByCustomer(invoices: readonly { customerName: string; grandTotal: SafeMathInput; paidAmount: SafeMathInput; returnCreditAmount?: SafeMathInput }[]): Map<string, PartyMoney> {
   const m = new Map<string, PartyMoney>()
   for (const inv of invoices) {
     const billed = safeSubtract(inv.grandTotal, 0, 2)
     const paid = safeSubtract(inv.paidAmount, 0, 2)
-    addTo(m, inv.customerName, billed, paid, safeSubtract(billed, paid, 2))
+    const settled = safeAdd(paid, safeSubtract(inv.returnCreditAmount ?? 0, 0, 2), 2)
+    addTo(m, inv.customerName, billed, paid, safeSubtract(billed, settled, 2))
   }
   return m
 }
