@@ -18,6 +18,7 @@ interface AssetCategoryData {
   taxGroupCode: string | null
   taxTypeListed: boolean | null
   taxDjpDetermination: boolean
+  fiscalMethod: string | null
 }
 
 const columnHelper = createColumnHelper<AssetCategoryData>()

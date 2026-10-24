@@ -41,4 +41,17 @@ describe("AssetFiscalStatus — label backend apa adanya", () => {
       unmount(root, container)
     })
   })
+
+  it("metode fiskal F-109-V tampil apa adanya: saldo menurun / belum dipilih", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <AssetFiscalStatus taxGroupCode="GROUP_2" taxTypeListed taxDjpDetermination={false} fiscalMethod="declining_balance" />)
+      expect(container.textContent).toContain("Metode fiskal: Saldo Menurun")
+      unmount(root, container)
+    })
+    withContainer((container) => {
+      const root = mountInto(container, <AssetFiscalStatus taxGroupCode="GROUP_2" taxTypeListed taxDjpDetermination={false} fiscalMethod={null} />)
+      expect(container.textContent).toContain("Metode fiskal: Metode fiskal belum dipilih")
+      unmount(root, container)
+    })
+  })
 })
