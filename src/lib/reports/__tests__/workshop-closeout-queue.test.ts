@@ -36,36 +36,18 @@ import {
 const AS_OF = new Date("2026-10-24T00:00:00Z")
 const daysAgo = (days: number) => new Date(AS_OF.getTime() - days * 86_400_000)
 
+import { closeoutJobInput } from "@/components/reports/__tests__/workshop-closeout-test-fixtures"
+
 function job(over: Partial<CloseoutQueueJobInput>): CloseoutQueueJobInput {
-  return {
-    kind: "work_order",
-    id: 1,
+  return closeoutJobInput(AS_OF, {
     slug: null,
     documentNo: "WO-1",
-    status: "completed",
     endDate: daysAgo(10),
     updatedAt: daysAgo(2),
     customerName: "Budi",
     plateNumber: "B1234CD",
     vehicleLabel: "Avanza",
-    productName: null,
-    workOrderDocumentNo: null,
-    workOrderId: null,
-    openProductionOrderCount: 0,
-    firstOpenProductionOrder: null,
-    openMaterialIssueCount: 0,
-    firstOpenMaterialIssue: null,
-    unpostedCostCount: 0,
-    firstUnpostedCostId: null,
-    qty: null,
-    completedQty: null,
-    totalActualCost: null,
-    childWipResidualCount: 0,
-    firstChildWipResidual: null,
-    qcBlocked: false,
     qcDetail: "Inspeksi akhir terakhir passed.",
-    periodClosed: false,
-    periodLockDate: null,
     manual: {
       purchaseOrderCount: 0,
       purchaseOrdersWithoutBillCount: 0,
@@ -75,7 +57,7 @@ function job(over: Partial<CloseoutQueueJobInput>): CloseoutQueueJobInput {
       c8Detail: "manual C8",
     },
     ...over,
-  }
+  })
 }
 
 describe("konstanta kata verbatim antrean", () => {
