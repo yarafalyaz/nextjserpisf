@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Push baru di branch PR yang sama membatalkan run lama yang belum selesai:
+# antrean kemarin penuh run basi dari branch yang sudah di-push ulang berkali-kali.
+# Push ke main TIDAK dibatalkan (cancel-in-progress=false di sana) supaya
+# verifikasi main selalu jalan sampai selesai.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # Mirror the deployment timezone (docker-compose sets TZ=Asia/Jakarta for the app
