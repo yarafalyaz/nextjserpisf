@@ -17,12 +17,21 @@
  * dan saldo akhir statement = outstanding piutang untuk fixture sama.
  * `creditDocumentNo` diisi loader dari notes payment ("Alokasi kredit
  * pelanggan <docNo> …") bila terbaca; builder tidak mengarangnya.
+ *
+ * F-2026-10-23-104-V Putusan 2 (BR-RET-02): baris retur penjualan terpisah
+ * dari baris kredit. `returnCredit` per faktur asal diturunkan loader dari
+ * kaki Cr Piutang jurnal SalesReturn POSTED (bukan REVERSED) atas retur
+ * `completed` ber-`salesInvoiceId` — BUKAN dari `paidAmount` (definisi
+ * paidAmount tetap murni pembayaran, F-104 Putusan 2) dan BUKAN dari
+ * CustomerCredit (sumber JUMLAH kredit formal, domain terpisah). Retur
+ * tanpa faktur asal tidak punya kaki Cr Piutang (priceTotal = 0 di hook)
+ * sehingga tidak pernah diteruskan loader ke sini.
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
 
-export type CustomerStatementEntryKind = "invoice" | "payment" | "credit"
+export type CustomerStatementEntryKind = "invoice" | "payment" | "credit" | "return"
 
 /** Satu faktur recognised milik pelanggan (status sudah difilter loader). */
 export interface CustomerStatementInvoiceInput {
@@ -45,6 +54,22 @@ export interface CustomerStatementPaymentInput {
   paymentMethod: string
   /** Nomor dokumen CustomerCredit sumber alokasi, bila terbaca dari notes. */
   creditDocumentNo?: string | null
+}
+
+/**
+ * Satu retur penjualan `completed` ber-faktur asal (F-104-V Putusan 2).
+ * `returnCredit` = Σ kaki Cr Piutang jurnal SalesReturn POSTED (bukan
+ * REVERSED) retur ini — dihitung loader; builder tidak membaca jurnal.
+ * Retur tanpa faktur asal / tanpa jurnal POSTED tidak diteruskan (Cr 0).
+ */
+export interface CustomerStatementReturnInput {
+  id: number
+  documentNo: string
+  salesInvoiceId: number
+  salesInvoiceDocumentNo: string
+  /** Tanggal retur (SalesReturn.date) — momen Cr piutang. */
+  date: Date
+  returnCredit: number
 }
 
 export interface CustomerStatementEntry {
@@ -96,6 +121,8 @@ function byDateThenKindThenId(
  * sendiri supaya saldo awal dan saldo akhir konsisten dari sumber sama.
  * Payment atas faktur di luar himpunan invoice (mis. faktur cancelled)
  * diabaikan — piutangnya tidak pernah diakui, jadi tidak boleh meng-Cr.
+ * `returns` opsional (F-104-V): baris retur Cr per faktur asal; tanpa arg
+ * ini perilaku identik versi sebelumnya.
  */
 export function buildCustomerStatement(input: {
   customerId: number
@@ -103,12 +130,14 @@ export function buildCustomerStatement(input: {
   periodEnd: Date
   invoices: readonly CustomerStatementInvoiceInput[]
   payments: readonly CustomerStatementPaymentInput[]
+  returns?: readonly CustomerStatementReturnInput[]
 }): CustomerStatement {
   const { customerId, periodStart, periodEnd } = input
   const startMs = periodStart.getTime()
   const endMs = periodEnd.getTime()
   const invoiceIds = new Set(input.invoices.map((inv) => inv.id))
   const payments = input.payments.filter((p) => invoiceIds.has(p.salesInvoiceId))
+  const returns = (input.returns ?? []).filter((r) => invoiceIds.has(r.salesInvoiceId))
 
   let openingBalance = 0
   type Raw = {
@@ -166,6 +195,25 @@ export function buildCustomerStatement(input: {
     }
   }
 
+  for (const ret of returns) {
+    if (ret.returnCredit <= 0) continue
+    const t = ret.date.getTime()
+    if (t < startMs) {
+      openingBalance = safeSubtract(openingBalance, ret.returnCredit, 2)
+    } else if (t <= endMs) {
+      raw.push({
+        id: ret.id,
+        kind: "return",
+        date: ret.date,
+        documentNo: ret.documentNo,
+        referenceDocumentNo: ret.salesInvoiceDocumentNo,
+        description: `Retur penjualan ${ret.documentNo} atas faktur ${ret.salesInvoiceDocumentNo}`,
+        debit: 0,
+        credit: safeAdd(0, ret.returnCredit, 2),
+      })
+    }
+  }
+
   raw.sort(byDateThenKindThenId)
 
   let balance = openingBalance
@@ -205,10 +253,13 @@ export function buildCustomerStatement(input: {
  * periodenya menutup di akhir data, dan dengan agregasi
  * `customer-receivables.ts` (Σ receivableOutstanding per faktur, termasuk
  * faktur lunas yang di sana ter-skip karena sisa ≤ 0 — kontribusi 0).
+ * `returns` opsional (F-104-V Putusan 2): kurangi `returnCredit` per faktur
+ * asal (grandTotal − paid − returnCredit); tanpa arg ini rumus lama persis.
  */
 export function customerStatementOutstanding(input: {
   invoices: readonly CustomerStatementInvoiceInput[]
   payments: readonly CustomerStatementPaymentInput[]
+  returns?: readonly CustomerStatementReturnInput[]
 }): number {
   const invoiceIds = new Set(input.invoices.map((inv) => inv.id))
   const paidByInvoice = new Map<number, number>()
@@ -219,9 +270,22 @@ export function customerStatementOutstanding(input: {
       safeAdd(paidByInvoice.get(pay.salesInvoiceId) ?? 0, safeAdd(pay.amount, pay.withholdingAmount, 2), 2),
     )
   }
+  const returnCreditByInvoice = new Map<number, number>()
+  for (const ret of input.returns ?? []) {
+    if (!invoiceIds.has(ret.salesInvoiceId) || ret.returnCredit <= 0) continue
+    returnCreditByInvoice.set(
+      ret.salesInvoiceId,
+      safeAdd(returnCreditByInvoice.get(ret.salesInvoiceId) ?? 0, ret.returnCredit, 2),
+    )
+  }
   let total = 0
   for (const inv of input.invoices) {
-    total = safeAdd(total, receivableOutstanding(inv.grandTotal, paidByInvoice.get(inv.id) ?? 0), 2)
+    const settled = safeAdd(
+      paidByInvoice.get(inv.id) ?? 0,
+      returnCreditByInvoice.get(inv.id) ?? 0,
+      2,
+    )
+    total = safeAdd(total, receivableOutstanding(inv.grandTotal, settled), 2)
   }
   return total
 }
