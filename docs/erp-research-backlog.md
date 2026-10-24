@@ -23442,7 +23442,7 @@ TIDAK ditahan vonis ini.
   WIP -> FG), scrap abnormal = beban periode (Dr Beban Kerugian
   Produksi / Cr WIP, flag `abnormalScrapPostingEnabled` default
   MATI), remnant usable = catatan kuantitas di luar stok (nol
-  nilai buku, `Remnant` schema:3335-3359). Nol model penjualan
+  nilai buku, `Remnant` schema:3449-3480). Nol model penjualan
   scrap di schema (grep `ScrapSale|besi` = 0, spec §0). Jadi
   besi tua di penampungan = aset tak tercatat (nilai buku Rp0).
 - COA existing sudah memuat `710003` "Penjualan Persediaan /
@@ -23553,13 +23553,13 @@ TIDAK ditahan vonis ini.
   dasar jurnal apa pun, (c) mengubah klasifikasi/nilai/jurnal
   scrap 066-V (sudah diputus spec AC-SCRAP-6).
 - Alasan: potongan upah dibatasi hukum ketenagakerjaan
-  (PP 36/2021 Pasal 63: potongan hanya untuk hal yang diatur
-  perjanjian/peraturan perusahaan/PKB, ganti rugi termasuk
-  yang diperjanjikan, dengan batas 50% tiap pembayaran) dan
-  ganti rugi mensyaratkan kesalahan + kerugian nyata yang
-  dibuktikan, bukan label tinjau sepihak. Menautkan label ke
-  potongan otomatis = pemotongan tanpa dasar perjanjian yang
-  terverifikasi sistem.
+  (PP 36/2021 Pasal 63 ayat (2): potongan denda/ganti rugi
+  hanya sesuai Perjanjian Kerja/Peraturan Perusahaan/PKB;
+  Pasal 65: jumlah keseluruhan potongan paling banyak 50%
+  tiap pembayaran) dan ganti rugi mensyaratkan kesalahan +
+  kerugian nyata yang dibuktikan, bukan label tinjau sepihak.
+  Menautkan label ke potongan otomatis = pemotongan tanpa
+  dasar perjanjian yang terverifikasi sistem.
 - Jalur sah bila perusahaan hendak menagih ganti rugi nyata:
   keputusan HR tertulis di luar label ini -> piutang karyawan
   lewat jalur payroll existing (komponen potongan slip dari
@@ -23620,7 +23620,7 @@ TIDAK ditahan vonis ini.
 |---|---|---|
 | Scrap abnormal = beban periode, bukan biaya persediaan; remnant tanpa nilai buku | PSAK 14 par. 16(a)/38 (konvergen IAS 2) — dirujuk vonis F-2026-10-22-066-V; IAS 2: https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2024/issued/part-a/ias-2-inventories.pdf | Dasar Putusan 1: biaya sudah diakui satu kali |
 | Penyerahan BKP terutang PPN, DPP/tarif per rezim master efektif; BKP non-mewah pola DPP nilai lain umum | UU PPN jo. UU HPP; PMK-131/2024; PMK-11/2025 (siaran pers DJP: https://www.pajak.go.id/id/siaran-pers/pemerintah-terbitkan-aturan-dpp-nilai-lain-dan-besaran-tertentu-ppn) | Dasar Putusan 3; TIDAK ada objek DPP khusus besi tua ditemukan run ini — bukan klaim tidak ada |
-| Potongan upah hanya berdasar perjanjian/peraturan + batas 50% per pembayaran | PP 36/2021 Pasal 63 (dirujuk juga vonis F-2026-10-22-077-V) | Dasar Putusan 5 |
+| Potongan upah hanya berdasar perjanjian/peraturan; batas 50% per pembayaran | PP 36/2021 Pasal 63 ayat (2) + Pasal 65 (BPK: https://peraturan.bpk.go.id/Details/161909/pp-no-36-tahun-2021; teks resmi: https://peraturan.go.id/files/pp36-2021bt.pdf) (dirujuk juga vonis F-2026-10-22-077-V) | Dasar Putusan 5 |
 
 Tidak ada klaim "patuh pajak" di vonis ini. Pola pembeli/
 pemungut nyata di luar pola umum Putusan 3 =
