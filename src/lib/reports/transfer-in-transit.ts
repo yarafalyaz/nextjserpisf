@@ -4,8 +4,15 @@
  * Pemindahan barang antar gudang di sistem ini dua langkah: **Kirim**
  * (`processInventoryTransfer`) mengeluarkan stok dari gudang asal — lapisan FIFO
  * di sana benar-benar berkurang — lalu **Terima** (`receiveInventoryTransfer`)
- * baru menambahkannya di gudang tujuan. Selama statusnya `processed`, barang itu
- * **ada di jalan**: sudah keluar dari satu gudang, belum masuk gudang lain.
+ * baru menambahkannya di gudang tujuan. Selama statusnya `processed`
+ * (belum diterima sama sekali) atau `partially_received` (diterima
+ * sebagian, F-2026-10-22-081-S), barang itu **ada di jalan**: sudah
+ * keluar dari satu gudang, belum masuk gudang lain. Kuantitas yang
+ * dilaporkan per item = SISA belum diterima (terkirim dikurangi
+ * diterima kumulatif per baris), sehingga laporan tak pernah
+ * menghitung barang yang sudah tiba; transfer yang ditutup selisihnya
+ * menjadi `received` dan keluar dari daftar, dengan selisihnya
+ * berpindah ke akun penyesuaian lewat jurnal dokumen penutupan.
  *
  * Itu sebabnya laporan ini ada: selisih antara "stok menurut gudang asal" dan
  * "stok menurut gudang tujuan" punya penjelasan sah — barang dalam perjalanan —

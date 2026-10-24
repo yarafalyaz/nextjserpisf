@@ -63,14 +63,48 @@ describe("pemetaan izin halaman garansi", () => {
     expect(source).not.toContain(APPROVE)
   })
 
-  it("kartu garansi kendaraan hanya memakai view untuk tampil dan create untuk tombol klaim", () => {
+  it("halaman kendaraan: kartu garansi view+create; edit hanya untuk catat-lepas part terpasang", () => {
     const source = read(CUSTOMER_VEHICLE_PAGE)
 
     expect(source).toContain(`hasPermission("${VIEW}")`)
     expect(source).toContain(`hasPermission("${CREATE}")`)
     expect(source).toContain("const canViewWarranty = await hasPermission")
     expect(source).toContain("const canCreateWarrantyClaim = await hasPermission")
-    expect(source).not.toContain(EDIT)
+    // F-072-S: edit_warranty_claims sah SATU pemakaian — gerbang tombol
+    // catat-lepas registri InstalledPart (kontrak aksi BOT 3), bukan kartu garansi.
+    expect(source).toContain(`const canRecordRemoval = await hasPermission("${EDIT}")`)
+    expect(source).toContain("canRecordRemoval={canRecordRemoval}")
+    expect(source.match(new RegExp(EDIT, "g"))).toHaveLength(1)
     expect(source).not.toContain(APPROVE)
+  })
+
+  it("halaman kendaraan: panel part terpasang terkunci gate canViewWarranty (render + loader)", () => {
+    const source = read(CUSTOMER_VEHICLE_PAGE)
+
+    // Gate render: InstalledPartsCard hanya boleh muncul di dalam blok
+    // {canViewWarranty && ( ... )} terdekat sebelumnya. Cabut gate ->
+    // jangkar terakhir sebelum kartu hilang/bergeser -> merah.
+    const cardIdx = source.indexOf("<InstalledPartsCard")
+    expect(cardIdx).toBeGreaterThanOrEqual(0)
+    const gateStart = source.lastIndexOf("{canViewWarranty && (", cardIdx)
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    const gateEnd = source.indexOf(")}", cardIdx)
+    expect(gateEnd).toBeGreaterThan(cardIdx)
+    const gateBlock = source.slice(gateStart, gateEnd)
+    expect(gateBlock).toContain("history.installedParts.rows")
+    expect(gateBlock).toContain("canRecordRemoval={canRecordRemoval}")
+    // Blok harus ramping: jangkar yang bergeser ke gate kartu garansi di
+    // atasnya akan menyeret VehicleWarrantyCard + seksi Penawaran ke dalam
+    // irisan — itu tanda gate panel sendiri sudah dicabut.
+    expect(gateBlock).not.toContain("VehicleWarrantyCard")
+    expect(gateBlock).not.toContain("Penawaran")
+    expect(gateBlock.length).toBeLessThan(400)
+    // InstalledPartsCard dirender tepat satu kali (bukan salinan tanpa gate).
+    expect(source.match(/<InstalledPartsCard/g)).toHaveLength(1)
+
+    // Defense-in-depth loader: page meneruskan izin yang sama ke loader
+    // riwayat supaya registri tak ditanyakan ke DB tanpa izin lihat.
+    expect(source).toContain("includeInstalledParts: canViewWarranty")
+    expect(source).toContain("getCustomerVehicleHistory(cv.id, 20, {")
   })
 })
