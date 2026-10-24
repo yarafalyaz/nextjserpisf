@@ -6,10 +6,9 @@ import { createMaterialRequest, updateMaterialRequest } from "@/actions/material
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Plus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/shadcn/label"
+import { WarehouseSelectField } from "./warehouse-select-field"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
-import { QuickAddSelect } from "@/components/ui/quick-add-select"
-import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
 import { nextItemUid } from "@/lib/utils/item-uid"
@@ -34,34 +33,6 @@ interface RequestItem {
   notes: string
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string
-}
-
-function WarehouseField({ id, label, placeholder, value, options, onCreatedWarehouse, onChange }: {
-  id: string
-  label: string
-  placeholder: string
-  value: string
-  options: { id: number; name: string }[]
-  onCreatedWarehouse: (w: { id: number; name: string }) => void
-  onChange: (key: string) => void
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label} <span className="text-destructive" aria-hidden="true">*</span></Label>
-      <QuickAddSelect
-        required
-        id={id}
-        options={options.map((w) => ({ value: String(w.id), label: w.name }))}
-        value={value || null}
-        onChange={(key) => onChange(key ? String(key) : "")}
-        placeholder={placeholder}
-        title={QUICK_ADD.warehouse.title}
-        fields={QUICK_ADD.warehouse.fields}
-        action={QUICK_ADD.warehouse.action}
-        onCreated={(created) => { onCreatedWarehouse({ id: created.id, name: created.label }); onChange(String(created.id)) }}
-      />
-    </div>
-  )
 }
 
 export function MaterialRequestForm({ warehouses, items, workOrders, request }: MaterialRequestFormProps) {
@@ -126,8 +97,8 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} aria-label={request?.id ? "Formulir ubah permintaan antar gudang" : "Formulir tambah permintaan antar gudang"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <WarehouseField id="requesterWarehouseId" label="Gudang Tujuan" placeholder="Cari gudang tujuan..." value={requesterId} options={warehouseOptions} onCreatedWarehouse={(w) => setWarehouseOptions((prev) => [...prev, w])} onChange={setRequesterId} />
-        <WarehouseField id="sourceWarehouseId" label="Gudang Sumber" placeholder="Cari gudang sumber..." value={sourceId} options={warehouseOptions.filter((w) => String(w.id) !== requesterId)} onCreatedWarehouse={(w) => setWarehouseOptions((prev) => [...prev, w])} onChange={setSourceId} />
+        <WarehouseSelectField id="requesterWarehouseId" label="Gudang Tujuan" placeholder="Cari gudang tujuan..." value={requesterId} options={warehouseOptions} onCreatedWarehouse={(w) => setWarehouseOptions((prev) => [...prev, w])} onChange={setRequesterId} />
+        <WarehouseSelectField id="sourceWarehouseId" label="Gudang Sumber" placeholder="Cari gudang sumber..." value={sourceId} options={warehouseOptions.filter((w) => String(w.id) !== requesterId)} onCreatedWarehouse={(w) => setWarehouseOptions((prev) => [...prev, w])} onChange={setSourceId} />
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="workOrderId">Perintah Kerja</Label>
           <Combobox
