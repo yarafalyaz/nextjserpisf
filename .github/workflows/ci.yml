@@ -15,8 +15,44 @@ env:
   TZ: Asia/Jakarta
 
 jobs:
+  # Perubahan cuma Markdown (di mana pun, termasuk docs/) tidak menyentuh kode,
+  # skema, atau konfigurasi build — job berat di bawah di-skip untuk diff begitu.
+  # Skip di level job (bukan paths-ignore workflow) disengaja: check wajib
+  # branch protection tetap dilaporkan sebagai skipped (= lulus), bukan hilang
+  # tanpa kabar yang bikin PR nyangkut BLOCKED selamanya.
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+          else
+            RANGE="HEAD~1..HEAD"
+          fi
+          FILES="$(git diff --name-only $RANGE)"
+          echo "Changed files:"
+          echo "$FILES"
+          # Baris kosong dari diff kosong tidak dihitung sebagai file.
+          if [ -z "$FILES" ] || ! printf '%s\n' "$FILES" | grep -qvE '\.md$'; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Docs-only: job berat di-skip."
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -39,6 +75,8 @@ jobs:
 
   unit:
     name: Unit Tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,7 +101,8 @@ jobs:
   build:
     name: Build Next.js
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [changes, lint]
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.changes.outputs.code == 'true' }}
     # Keputusan pemilik: E2E browser dijalankan lokal, GitHub Actions hanya
     # lint + unit + integrasi DB + build produksi. Build tetap memakai service
     # MySQL + `migrate deploy` (tanpa seed). Tidak semua halaman terbukti
@@ -129,7 +168,8 @@ jobs:
   db-integration:
     name: DB Integration Tests
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [changes, lint]
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.changes.outputs.code == 'true' }}
     services:
       mysql:
         image: mysql:8.0
@@ -264,7 +304,8 @@ jobs:
   docker:
     name: Docker Image Build
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [changes, lint]
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.changes.outputs.code == 'true' }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
