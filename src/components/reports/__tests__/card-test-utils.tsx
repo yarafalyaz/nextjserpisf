@@ -25,6 +25,16 @@ export function clearRenderedCards() {
   document.body.replaceChildren()
 }
 
+export function renderPageNode(node: React.ReactNode) {
+  const container = document.createElement("div")
+  document.body.appendChild(container)
+  const root: Root = createRoot(container)
+  act(() => {
+    root.render(node)
+  })
+  return { container, root }
+}
+
 /** Isi input/textarea React terkontrol di jsdom (setter native + event input). */
 export function setFieldValue(container: HTMLElement, selector: string, value: string) {
   const el = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)

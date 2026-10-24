@@ -35,6 +35,7 @@ import {
   classifyScrapLine,
   validateScrapInput,
 } from "@/lib/services/scrap-classification";
+import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
@@ -1023,6 +1024,7 @@ export async function issueMaterial(
             scrapAbnormalQtySnapshot: true,
             scrapNormalValueSnapshot: true,
             scrapAbnormalValueSnapshot: true,
+            scrapReviewStatus: true,
           },
         });
         // F-008: klasifikasi scrap kejadian ini dari cost FIFO kejadian
@@ -1052,6 +1054,10 @@ export async function issueMaterial(
                 scrapUnitCostSnapshot: unitCost,
                 scrapNormalValueSnapshot: safeAdd(Number(existing?.scrapNormalValueSnapshot ?? 0), classification.normalValue, 2),
                 scrapAbnormalValueSnapshot: safeAdd(Number(existing?.scrapAbnormalValueSnapshot ?? 0), classification.abnormalValue, 2),
+                // F-098-S: abnormal kumulatif > 0 masuk antrean; tinjau selesai tidak dibuka ulang oleh issue berikut.
+                scrapReviewStatus: existing?.scrapReviewStatus ?? scrapReviewStatusAfterComplete(
+                  safeAdd(Number(existing?.scrapAbnormalQtySnapshot ?? 0), classification.abnormalQty, 2),
+                ),
               }
             : {};
         if (existing) {
