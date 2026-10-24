@@ -79,4 +79,14 @@ describe("VehicleWarrantyCard — serialKey kosong & snapshot verbatim", () => {
     ).not.toBeNull()
     act(() => root.unmount())
   })
+
+  it("tautan klaim memakai slug bila tersedia", () => {
+    const { container, root } = mount(
+      <VehicleWarrantyCard coverages={[coverage()]} vehicleId={31} vehicleSlug="b-1234-xyz" canCreateClaim={true} />,
+    )
+    expect(
+      container.querySelector('a[href="/produksi/garansi/tambah?kendaraan=b-1234-xyz"]'),
+    ).not.toBeNull()
+    act(() => root.unmount())
+  })
 })
