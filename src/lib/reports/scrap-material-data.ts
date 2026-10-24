@@ -40,20 +40,20 @@ export interface ScrapReviewQueueLine {
  * tidak baca Prisma langsung). Angka snapshot beku apa adanya, urut tanggal.
  */
 export async function loadScrapReviewQueue(start: Date, end: Date): Promise<ScrapReviewQueueLine[]> {
+  const pendingSelect = {
+    id: true,
+    itemId: true,
+    scrapReasonCode: true,
+    scrapAbnormalQtySnapshot: true,
+    scrapAbnormalValueSnapshot: true,
+  } as const
   const [pendingMi, pendingPo] = await Promise.all([
     prisma.materialIssueItem.findMany({
       where: {
         scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
         materialIssue: { date: { gte: start, lte: end } },
       },
-      select: {
-        id: true,
-        itemId: true,
-        scrapReasonCode: true,
-        scrapAbnormalQtySnapshot: true,
-        scrapAbnormalValueSnapshot: true,
-        materialIssue: { select: { documentNo: true, date: true } },
-      },
+      select: { ...pendingSelect, materialIssue: { select: { documentNo: true, date: true } } },
       orderBy: { id: "asc" },
     }),
     prisma.productionOrderMaterial.findMany({
@@ -61,14 +61,7 @@ export async function loadScrapReviewQueue(start: Date, end: Date): Promise<Scra
         scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
         productionOrder: { createdAt: { gte: start, lte: end } },
       },
-      select: {
-        id: true,
-        itemId: true,
-        scrapReasonCode: true,
-        scrapAbnormalQtySnapshot: true,
-        scrapAbnormalValueSnapshot: true,
-        productionOrder: { select: { documentNo: true, createdAt: true } },
-      },
+      select: { ...pendingSelect, productionOrder: { select: { documentNo: true, createdAt: true } } },
       orderBy: { id: "asc" },
     }),
   ])
@@ -80,37 +73,35 @@ export async function loadScrapReviewQueue(start: Date, end: Date): Promise<Scra
       })
     : []
   const pendingItemById = new Map(pendingItems.map((i) => [i.id, i]))
+  type PendingRow = {
+    id: number
+    itemId: number
+    scrapReasonCode: string | null
+    scrapAbnormalQtySnapshot: unknown
+    scrapAbnormalValueSnapshot: unknown
+  }
+  const toLine = (
+    source: ScrapReviewQueueLine["source"],
+    r: PendingRow,
+    doc: { documentNo: string; date: Date },
+  ): ScrapReviewQueueLine => {
+    const item = pendingItemById.get(r.itemId)
+    return {
+      source,
+      lineId: r.id,
+      documentNo: doc.documentNo,
+      date: doc.date,
+      itemName: item?.name ?? null,
+      abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
+      abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
+      scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
+      allowanceNote: item?.category?.scrapAllowanceNote ?? null,
+      materialShape: item?.category?.materialShape ?? null,
+    }
+  }
   const rows: ScrapReviewQueueLine[] = [
-    ...pendingMi.map((r): ScrapReviewQueueLine => {
-      const item = pendingItemById.get(r.itemId)
-      return {
-        source: "MI",
-        lineId: r.id,
-        documentNo: r.materialIssue.documentNo,
-        date: r.materialIssue.date,
-        itemName: item?.name ?? null,
-        abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
-        abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
-        scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
-        allowanceNote: item?.category?.scrapAllowanceNote ?? null,
-        materialShape: item?.category?.materialShape ?? null,
-      }
-    }),
-    ...pendingPo.map((r): ScrapReviewQueueLine => {
-      const item = pendingItemById.get(r.itemId)
-      return {
-        source: "PO",
-        lineId: r.id,
-        documentNo: r.productionOrder.documentNo,
-        date: r.productionOrder.createdAt,
-        itemName: item?.name ?? null,
-        abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
-        abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
-        scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
-        allowanceNote: item?.category?.scrapAllowanceNote ?? null,
-        materialShape: item?.category?.materialShape ?? null,
-      }
-    }),
+    ...pendingMi.map((r) => toLine("MI", r, r.materialIssue)),
+    ...pendingPo.map((r) => toLine("PO", r, { documentNo: r.productionOrder.documentNo, date: r.productionOrder.createdAt })),
   ]
   return rows.sort((a, b) => a.date.getTime() - b.date.getTime())
 }
