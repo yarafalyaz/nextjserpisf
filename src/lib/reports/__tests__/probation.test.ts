@@ -80,6 +80,16 @@ describe("evaluateOpenProbation (BR-PROB-02/04)", () => {
       }).allowed,
     ).toBe(false)
   })
+
+  it("F-6: akhir == mulai (durasi 0) ditolak", () => {
+    expect(
+      evaluateOpenProbation({
+        employmentStatus: "PKWTT",
+        joinDate: d("2026-01-05"),
+        probationEndDate: d("2026-01-05"),
+      }).allowed,
+    ).toBe(false)
+  })
 })
 
 describe("evaluateExtendProbation (BR-PROB-04)", () => {

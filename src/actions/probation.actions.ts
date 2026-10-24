@@ -162,10 +162,14 @@ export async function saveProbationReviewDraft(input: ProbationReviewFormInput):
     const { employeeId, milestone, reviewerEmployeeId } = input
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid")
     if (!Number.isSafeInteger(reviewerEmployeeId) || reviewerEmployeeId <= 0) throw new Error("Penilai tidak valid")
+    if (reviewerEmployeeId === employeeId) throw new Error("Penilai tidak boleh karyawan yang dievaluasi")
     const scope = await getHrScope(user)
     await assertHrEmployeeAccess(scope, employeeId)
     const employee = await loadEmployeeForProbation(employeeId)
     assertEmployeeUsable(employee)
+    const reviewer = await loadEmployeeForProbation(reviewerEmployeeId)
+    assertEmployeeUsable(reviewer)
+    if (reviewer.employmentEndedAt != null) throw new Error("Penilai sudah berhenti bekerja")
     if (employee.probationEndDate == null) throw new Error("Karyawan ini tidak dalam masa percobaan")
     const slot = probationMilestoneSlots(employee.joinDate, employee.probationEndDate).find(
       (s) => s.milestone === milestone,
@@ -275,14 +279,7 @@ export async function decideProbation(
     assertEmployeeUsable(employee)
     if (employee.probationEndDate == null) throw new Error("Karyawan ini tidak dalam masa percobaan")
 
-    const slots = probationMilestoneSlots(employee.joinDate, employee.probationEndDate)
-    const finalSlot = slots.find((s) => s.isFinal)
-    const finalReview = finalSlot
-      ? await prisma.probationReview.findFirst({
-          where: { employeeId, milestone: finalSlot.milestone },
-          select: { id: true, status: true, reviewerEmployeeId: true },
-        })
-      : null
+    const finalReview = await loadFinalReview(employeeId, employee)
     if (!finalReview || (finalReview.status !== "submitted" && finalReview.status !== "decided")) {
       throw new Error("Keputusan akhir masa percobaan wajib merujuk evaluasi final yang sudah dikirim")
     }
@@ -326,6 +323,17 @@ export interface ContractDecisionFormInput {
   kind: string
   proposedContractEndDate: string | null
   reason: string
+}
+
+/** Review final karyawan (Q-PROB-2): slot final dari masa percobaan berjalan. */
+async function loadFinalReview(employeeId: number, employee: { joinDate: Date; probationEndDate: Date | null }) {
+  if (employee.probationEndDate == null) return null
+  const finalSlot = probationMilestoneSlots(employee.joinDate, employee.probationEndDate).find((s) => s.isFinal)
+  if (!finalSlot) return null
+  return prisma.probationReview.findFirst({
+    where: { employeeId, milestone: finalSlot.milestone },
+    select: { id: true, status: true, reviewerEmployeeId: true },
+  })
 }
 
 async function appliedPkwtSegments(employeeId: number) {
@@ -376,6 +384,15 @@ export async function createContractDecisionRequest(input: ContractDecisionFormI
       }
     }
 
+    // F-2: rujuk review final submitted/decided agar SoD penilai-final
+    // hidup di approve/reject kontrak (finalReviewId tak pernah ditulis
+    // sebelumnya). Belum ada review final sah -> null (tak ada penilai).
+    const finalReview = await loadFinalReview(employeeId, employee)
+    const finalReviewId =
+      finalReview && (finalReview.status === "submitted" || finalReview.status === "decided")
+        ? finalReview.id
+        : null
+
     // Maks 1 pengajuan submitted per karyawan (spec §9 edge) — draft bebas.
     await prisma.contractDecisionRequest.create({
       data: {
@@ -385,6 +402,7 @@ export async function createContractDecisionRequest(input: ContractDecisionFormI
         reason,
         requestedBy: me,
         status: "draft",
+        finalReviewId,
       },
     })
     await logActivity("create", "ContractDecisionRequest", employeeId, `Membuat pengajuan keputusan kontrak ${kind}`)

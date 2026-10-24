@@ -266,8 +266,8 @@ export function evaluateOpenProbation(input: {
   if (input.employmentStatus !== "PKWTT") {
     return deny("Masa percobaan hanya dapat dibuka untuk karyawan Tetap (PKWTT)")
   }
-  if (wibDayNumber(input.probationEndDate) < wibDayNumber(input.joinDate)) {
-    return deny("Tanggal akhir masa percobaan tidak boleh sebelum tanggal mulai bekerja")
+  if (wibDayNumber(input.probationEndDate) <= wibDayNumber(input.joinDate)) {
+    return deny("Tanggal akhir masa percobaan harus sesudah tanggal mulai bekerja")
   }
   if (wibDayNumber(input.probationEndDate) > wibDayNumber(addCalendarMonthsWib(input.joinDate, 3))) {
     return deny("Durasi masa percobaan tidak boleh melebihi 3 bulan sejak tanggal mulai bekerja")

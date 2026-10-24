@@ -66,6 +66,8 @@ import {
   createContractDecisionRequest,
   decideProbation,
   openProbation,
+  rejectContractDecisionRequest,
+  saveProbationReviewDraft,
   submitContractDecisionRequest,
 } from "../probation.actions"
 
@@ -208,6 +210,54 @@ describe("decideProbation", () => {
   })
 })
 
+describe("saveProbationReviewDraft (F-5)", () => {
+  const draftInput = {
+    employeeId: 1,
+    milestone: "30",
+    reviewerEmployeeId: 7,
+    technicalScore: null,
+    disciplineScore: null,
+    attendanceScore: null,
+    notes: null,
+    recommendation: null,
+  }
+
+  function setupDraft() {
+    mocks.employeeFindUnique
+      .mockResolvedValueOnce(employeeRow({ probationEndDate: d("2026-04-05") }))
+      .mockResolvedValueOnce(employeeRow({ id: 7, name: "Penilai" }))
+    mocks.reviewFindFirst.mockResolvedValue(null)
+    mocks.reviewCreate.mockResolvedValue({})
+  }
+
+  it("penilai = diri sendiri ditolak", async () => {
+    const r = await saveProbationReviewDraft({ ...draftInput, reviewerEmployeeId: 1 })
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/Penilai tidak boleh/)
+    expect(mocks.reviewCreate).not.toHaveBeenCalled()
+  })
+
+  it("penilai sudah berhenti ditolak", async () => {
+    setupDraft()
+    mocks.employeeFindUnique
+      .mockReset()
+      .mockResolvedValueOnce(employeeRow({ probationEndDate: d("2026-04-05") }))
+      .mockResolvedValueOnce(employeeRow({ id: 7, employmentEndedAt: d("2026-02-01") }))
+    const r = await saveProbationReviewDraft(draftInput)
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/Penilai sudah berhenti/)
+    expect(mocks.reviewCreate).not.toHaveBeenCalled()
+  })
+
+  it("penilai aktif lolos simpan draft", async () => {
+    setupDraft()
+    expect(await saveProbationReviewDraft(draftInput)).toEqual({ success: true })
+    expect(mocks.reviewCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ reviewerEmployeeId: 7, status: "draft" }) }),
+    )
+  })
+})
+
 describe("createContractDecisionRequest + kumulatif", () => {
   function pkwtEmployee() {
     return employeeRow({
@@ -274,6 +324,88 @@ describe("submit + approve + apply", () => {
       ...overrides,
     }
   }
+
+  it("F-2: create menurunkan finalReviewId dari review final submitted", async () => {
+    mocks.employeeFindUnique.mockResolvedValue(
+      employeeRow({
+        employmentStatus: "PKWT",
+        probationEndDate: d("2026-04-05"),
+        contractStartDate: d("2025-03-01"),
+        contractEndDate: d("2026-02-28"),
+      }),
+    )
+    mocks.requestFindMany.mockResolvedValue([])
+    mocks.reviewFindFirst.mockResolvedValue({ id: 5, status: "submitted", reviewerEmployeeId: 7 })
+    mocks.requestCreate.mockResolvedValue({})
+    const r = await createContractDecisionRequest({
+      employeeId: 1,
+      kind: "extend_pkwt",
+      proposedContractEndDate: "2027-02-28",
+      reason: "Kebutuhan proyek berlanjut",
+    })
+    expect(r).toEqual({ success: true })
+    expect(mocks.requestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ finalReviewId: 5 }) }),
+    )
+  })
+
+  it("F-2: review final masih draft -> finalReviewId null", async () => {
+    mocks.employeeFindUnique.mockResolvedValue(
+      employeeRow({
+        employmentStatus: "PKWT",
+        probationEndDate: d("2026-04-05"),
+        contractStartDate: d("2025-03-01"),
+        contractEndDate: d("2026-02-28"),
+      }),
+    )
+    mocks.requestFindMany.mockResolvedValue([])
+    mocks.reviewFindFirst.mockResolvedValue({ id: 5, status: "draft", reviewerEmployeeId: 7 })
+    mocks.requestCreate.mockResolvedValue({})
+    const r = await createContractDecisionRequest({
+      employeeId: 1,
+      kind: "extend_pkwt",
+      proposedContractEndDate: "2027-02-28",
+      reason: "Kebutuhan proyek berlanjut",
+    })
+    expect(r).toEqual({ success: true })
+    expect(mocks.requestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ finalReviewId: null }) }),
+    )
+  })
+
+  it("F-2: approver = penilai final yang dirujuk ditolak approve dan reject", async () => {
+    mocks.requestFindUnique.mockResolvedValue(
+      submittedRequest({ requestedBy: 8, finalReviewId: 5, finalReview: { reviewerEmployeeId: 7 } }),
+    )
+    mocks.employeeFindFirst.mockResolvedValue({ id: 7 })
+    const rApprove = await approveContractDecisionRequest(3)
+    expect(rApprove.success).toBe(false)
+    if (!rApprove.success) expect(rApprove.error).toMatch(/penilai evaluasi final/)
+    expect(mocks.requestUpdateMany).not.toHaveBeenCalled()
+
+    const rReject = await rejectContractDecisionRequest(3, "Tidak disetujui")
+    expect(rReject.success).toBe(false)
+    if (!rReject.success) expect(rReject.error).toMatch(/penilai evaluasi final/)
+    expect(mocks.requestUpdateMany).not.toHaveBeenCalled()
+  })
+
+  it.each(["submitted", "draft"])("F-3: apply dari status %s ditolak", async (status) => {
+    mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status }))
+    const r = await applyContractDecisionRequest(3)
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/sesudah disetujui/)
+    expect(mocks.requestUpdateMany).not.toHaveBeenCalled()
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+  })
+
+  it("F-3: klaim atomik apply count=0 ditolak walau status terbaca approved", async () => {
+    mocks.requestFindUnique.mockResolvedValue(submittedRequest({ status: "approved" }))
+    mocks.requestUpdateMany.mockResolvedValue({ count: 0 })
+    const r = await applyContractDecisionRequest(3)
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/sesudah disetujui/)
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+  })
 
   it("submit: maks 1 submitted per karyawan", async () => {
     mocks.requestFindUnique.mockResolvedValue({ ...submittedRequest({ status: "draft" }), reason: "Perlu" })
