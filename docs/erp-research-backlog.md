@@ -13525,7 +13525,6 @@ bila kelak foto dipakai syarat pelepasan pembayaran termin, itu spec
 terpisah dengan vonis akuntansi. Yang TIDAK diusulkan run ini: portal
 pelanggan penuh, e-sign checklist, pengaburan wajah otomatis, syarat
 minimal jumlah foto sebagai gate, tabel foto baru.
-## SPEC BOT 5 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
 ## SPEC BUSINESS 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
 
 Spec dokumen saja, TANPA kode produksi/schema/migrasi/UI. ID bebas
