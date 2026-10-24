@@ -1,6 +1,10 @@
-import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 import { Prisma, PrismaClient } from "@prisma/client"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, expect, it } from "vitest"
+import {
+  createTestClient,
+  describeIntegration,
+  warnIntegrationSkip,
+} from "./integration-concurrency-fixtures"
 
 import { findPayrollRangeConflict } from "@/lib/reports/payroll-frequency"
 
@@ -63,21 +67,7 @@ import { findPayrollRangeConflict } from "@/lib/reports/payroll-frequency"
 // caching_sha2_password MySQL 8 lewat adapter-mariadb di koneksi pertama.
 // ============================================================================
 
-const INTEGRATION_DB_URL = process.env.INTEGRATION_DB_URL
-
-const describeIntegration = INTEGRATION_DB_URL ? describe : describe.skip
-
-if (!INTEGRATION_DB_URL) {
-  console.warn(
-    "[bulk-payroll-concurrency] SKIP: INTEGRATION_DB_URL tidak diset — " +
-      "tes konkurensi MySQL 8 nyata tidak dijalankan (bukan lulus). " +
-      "Set INTEGRATION_DB_URL ke DB tes termigrasi untuk menjalankannya.",
-  )
-}
-
-function makeClient() {
-  return new PrismaClient({ adapter: new PrismaMariaDb(INTEGRATION_DB_URL!) })
-}
+warnIntegrationSkip("bulk-payroll-concurrency")
 
 const STAMP = `${Date.now()}`
 const DOC_PREFIX = `PAY-BPC-${STAMP}`
@@ -190,8 +180,8 @@ describeIntegration("generateBulkPayroll konkurensi DB nyata: irisan tak identik
   }
 
   beforeAll(async () => {
-    clientA = makeClient()
-    clientB = makeClient()
+    clientA = createTestClient()
+    clientB = createTestClient()
     overlapId = await createEmployee(clientA, "overlap")
     onlyAId = await createEmployee(clientA, "only-a")
     onlyBId = await createEmployee(clientA, "only-b")
