@@ -73,7 +73,7 @@ import {
   receiveInventoryTransfer,
 } from "../inventory.actions"
 
-function wireClosure(opts: { status?: string; journalId?: number | null } = {}) {
+function wireClosure(opts: { status?: string; journalId?: number | null; reason?: string } = {}) {
   const spies = {
     adjustmentUpdate: vi.fn().mockResolvedValue({}),
     transferUpdate: vi.fn().mockResolvedValue({}),
@@ -87,7 +87,7 @@ function wireClosure(opts: { status?: string; journalId?: number | null } = {}) 
       status: "draft",
       warehouseId: 2,
       date: new Date(2026, 9, 22),
-      reason: "selisih transfer",
+      reason: opts.reason ?? "selisih transfer",
       inventoryTransferId: 100,
       items: [],
     }),
@@ -173,6 +173,19 @@ describe("processStockAdjustment — cabang penutupan selisih transfer (F-081-S)
     const res = await processStockAdjustment(9)
     expect(res.success).toBe(false)
     expect(spies.transferUpdate).not.toHaveBeenCalled()
+  })
+
+  it("rejects linked-transfer adjustment with reason other than shortage reason (LOW-1)", async () => {
+    const spies = wireClosure({ reason: "stock opname" })
+    const res = await processStockAdjustment(9)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("selisih transfer")
+    expect(mocks.journalOnStockAdjustmentMock).not.toHaveBeenCalled()
+    expect(mocks.stockAdjustmentHookMock).not.toHaveBeenCalled()
+    expect(spies.transferUpdate).not.toHaveBeenCalled()
+    expect(spies.adjustmentUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "processed" }) }),
+    )
   })
 })
 
