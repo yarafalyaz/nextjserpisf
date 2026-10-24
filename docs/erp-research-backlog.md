@@ -16605,3 +16605,178 @@ Status: **PARSIAL-BERTENTANGAN** (celah dobel-kurang nyata, belum ada penjaga).
 
 Pemilik berikutnya: BOT 1 (merge PR vonis ini + #579) -> BOT 3 (resolusi
 rantai pengurang) -> BOT 2 (label telan/putus) -> BOT 6 (E97-1..6).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-096-V konvergensi pengurang retur PPN (FINAL, dokumen saja)
+
+Pemutus: `accounting-finance-tax` (BOT 4). Tanpa kode produksi kartu ini.
+Snapshot bukti: `origin/main` `a04f57ad` (2026-10-22 20:11 WIB).
+
+### 1. Temuan terverifikasi — dua definisi pengurang retur hidup bersamaan
+
+Status: **PARSIAL-BERTENTANGAN**, bukan kekurangan fitur baru.
+
+- **Read-model SPT (kanonik baru) benar.** `src/lib/reports/spt-read-model-data.ts`
+  memakai snapshot beku per baris (`items.returnDpp`/`returnVat`) dan masa
+  pengurang `returnDeductionPeriod(ret.date, ret.taxReturnNoteDate)` =
+  masa tanggal nota retur, tanpa nota masa tanggal retur. Baris tanpa
+  snapshot dihitung 0 dan ditandai `snapshot=false`/`legacyCount` oleh
+  `buildReturnDeductionRows` (`src/lib/tax/spt-read-model.ts`). Ini persis
+  vonis FINAL F-2026-10-21-004 butir 1–3.
+- **Laporan Faktur SPT Masa PPN (lama) masih definisi pra-vonis.**
+  `src/lib/reports/vat-invoices-data.ts` query `salesReturn` hanya
+  `date in period` + `status=completed` + `salesInvoiceId not null`, lalu
+  per baris memanggil `computeReturnDeduction` dari `qty`/`price` hidup dan
+  tarif efektif faktur asal **saat laporan dibaca**
+  (`src/lib/reports/vat-invoices.ts`). Tiga penyimpangan terhadap
+  F-2026-10-21-004:
+  (a) hitung-ulang saat baca — edit harga/qty/faktur asal sesudah retur
+      completed mengubah pengurang masa lalu diam-diam;
+  (b) masa pengurang = masa `SalesReturn.date`, mengabaikan
+      `taxReturnNoteDate` — retur Maret ber-nota April mengurangi Maret
+      di laporan ini, April di read-model SPT;
+  (c) baris legacy tanpa snapshot masuk sebagai angka penuh tanpa label
+      `legacy`, sedangkan read-model SPT menghitungnya 0 berlabel —
+      dua laporan menampilkan posisi PPN berbeda untuk data sama.
+- Header `vat-invoices.ts` sendiri masih menulis perlakuan retur
+  "menunggu vonis accountant (F-33(b))" dan notice "menunggu vonis masa
+  & dasar hitung" — vonis itu sudah terbit (F-61 Salsa 2026-10-20 18:41,
+  ditegaskan F-2026-10-21-004). Teks basi wajib diganti, bukan dibiarkan
+  mengklaim keputusan belum ada.
+- Gudang data sudah cukup: `SalesReturn.taxReturnNoteNumber`,
+  `taxReturnNoteDate`, `sourceTaxInvoiceId` dan
+  `SalesReturnItem.returnDpp/returnVat/sourceTaxRate/sourceTaxInvoiceId`
+  ADA di `prisma/schema.prisma`. Tidak perlu migrasi, tidak perlu field
+  baru. Ini pekerjaan loader/builder saja.
+- Belum ada model nota kredit berjurnal (`SalesCreditNote` grep = 0),
+  jadi syarat anti-dobel F-2026-10-21-004 butir 4 saat ini vakum —
+  lihat §5.
+
+### 2. Keputusan (mengikat)
+
+1. **Satu-satunya sumber pengurang retur PPN = snapshot F-004.**
+   Setiap permukaan laporan PPN (read-model SPT, Laporan Faktur SPT
+   Masa PPN, rekonsiliasi PPN, ekspor) WAJIB membaca
+   `SalesReturnItem.returnDpp`/`returnVat` beku dan masa
+   `returnDeductionPeriod(tanggal retur, tanggal nota retur)`.
+   Definisi kedua atas objek sama DILARANG.
+2. **Loader lama diganti, bukan ditambah jalur paralel.**
+   `loadVatInvoices` berhenti memanggil `computeReturnDeduction` dari
+   `qty`/`price` hidup: query retur memilih `returnDpp`, `returnVat`,
+   `taxReturnNoteDate`; bucket masa dari `returnDeductionPeriod`, bukan
+   `where date in period` atas tanggal retur saja. Urutan dua langkah:
+   (i) ambil retur completed yang masa pengurangnya (nota ?? retur)
+   jatuh pada periode — karena masa diturunkan dari dua tanggal,
+   saringan tanggal tunggal di SQL tidak cukup; ambil kandidat
+   `completed` lalu saring masa di memori lewat builder murni;
+   (ii) builder murni menerima baris `{period, dpp, vat, snapshot}`
+   sejajar `buildReturnDeductionRows` agar satu rumus agregasi.
+3. **Legacy tanpa snapshot: satu perlakuan di semua laporan.**
+   Baris `returnDpp == null || returnVat == null` TIDAK mengurangi
+   posisi PPN (nilai 0) dan WAJIB tampil sebagai hitungan terpisah
+   berlabel `legacy` (jumlah baris + DPP/PPN hasil hitung-ulang
+   ditampilkan sebagai informasi rekonstruksi, bukan pengurang).
+   Alasan: vonis F-004 mengizinkan hitung-ulang legacy **berlabel di
+   read-model**; menjadikannya pengurang penuh tanpa label (perilaku
+   laporan lama) menciptakan angka SPT yang tidak dapat ditelusur ke
+   dokumen beku. Angka rekonstruksi boleh ditampilkan untuk migrasi
+   data, tidak boleh masuk `outputNetVat`/`netVat`.
+4. **Retur tanpa faktur asal tetap di luar pengurang** (PPN-retur 0,
+   vonis F-004 butir 3 kalimat terakhir; tidak ada PPN asal yang
+   dikurangi). Saringan `salesInvoiceId not null` sekarang benar dan
+   dipertahankan, tetapi alasan yang tampil ke pengguna adalah itu —
+   bukan "belum diputus".
+5. **Faktur asal pada masa lain tetap mengurangi masa nota/retur**,
+   tidak pernah mengubah masa faktur asal dan tidak pernah masuk masa
+   tanggal faktur asal. Baris faktur asal tidak diubah (pengurang baris
+   terpisah) — bagian ini dari perilaku lama sudah benar dan dikunci.
+6. **Jurnal GL tidak berubah.** `onSalesReturnCompleted` tetap tanpa
+   kaki PPN; pengurang tetap lapisan laporan dari snapshot
+   (F-2026-10-21-004 butir 4). Tidak ada jurnal baru, tidak ada akun
+   baru, tidak ada setting baru dalam cakupan vonis ini.
+7. **Angka uang tetap presisi sen** lewat `safeAdd`/`safeRound` dan
+   nilai `Decimal(15,2)` dibaca apa adanya; dilarang mengalikan ulang
+   `qty × price` atau menurunkan tarif dari dokumen asal di lapisan
+   laporan mana pun sesudah snapshot ada.
+
+### 3. Dasar pajak (rujukan, bukan klaim kepatuhan baru)
+
+- PMK tentang tata cara pengurangan PPN atas BKP yang dikembalikan
+  (halaman peraturan resmi DJP, diakses 2026-10-22,
+  https://www.pajak.go.id/id/peraturan/tata-cara-pengurangan-pajak-pertambahan-nilai-atau-pajak-pertambahan-nilai-dan-pajak):
+  Pasal 2 ayat (1) PPN BKP retur mengurangi Pajak Keluaran penjual;
+  Pasal 6 ayat (1) pengurangan dilakukan pada Masa Pajak saat
+  terjadinya pengembalian. Ini menopang pilihan masa peristiwa retur
+  (yang di Coretax terwujud sebagai tanggal retur/nota pada SPT A.2).
+- Coretaxpedia DJP "Retur barang" (terakhir diperbarui 17 Sep 2025,
+  https://www.pajak.go.id/coretaxpedia/retur-barang): nilai retur
+  penjual masuk SPT Masa PPN A.2 pada masa dilakukannya retur
+  (tanggal retur), sesudah persetujuan penjual di Retur Pajak Keluaran.
+- PER-11/PJ/2025 (JDIH Kemenkeu, berlaku 22 Mei 2025,
+  https://jdih.kemenkeu.go.id/dok/per-11pj2025): tata cara faktur
+  pengganti sesudah nota retur memperhitungkan nota retur dimaksud —
+  relevan hanya untuk §5, bukan untuk rumus pengurang.
+- Catatan kejujuran: PMK di atas ditetapkan 18 Maret 2010 (era sebelum
+  Coretax); ia dipakai hanya sebagai dasar "pengurang pada masa
+  peristiwa retur", bukan sebagai bukti tata cara Coretax. Vonis ini
+  tidak memperluas klaim kepatuhan apa pun di luar cakupan itu.
+
+### 4. Paket eksekusi
+
+- **BOT 3** (`@backend-prisma-inventory-workshop`), sesudah PR vonis
+  ini merged: ubah `loadVatInvoices` + `VatReturnDeductionInput`
+  mengikuti §2 butir 2–3; builder murni sejajar
+  `buildReturnDeductionRows` (satu agregasi, dipakai kedua loader);
+  perbarui header/notice `vat-invoices.ts` yang masih "menunggu vonis"
+  menjadi rujukan F-004/F-096-V. Nol migrasi, nol schema, nol jurnal.
+  Klaim file di board sebelum edit; `vat-invoices-data.ts` hotspot
+  laporan — jangan digabung PR lain.
+- **BOT 2** (`@frontend-ui-ux-next-js`), sesudah kontrak BOT 3:
+  tampilkan snapshot/notice dari backend apa adanya; hitungan baris
+  `legacy` tampil sebagai label, bukan angka pengurang; UI tidak
+  menghitung ulang DPP/PPN retur.
+- **BOT 6** (`@qa-security-reporting-release-auditor`): falsifikasi §6
+  atas head BOT 3 persis.
+
+### 5. Yang TIDAK diputus / ditunda sadar
+
+- **Faktur pengganti sesudah nota retur** (PER-11/PJ/2025 Pasal 48):
+  bila faktur asal yang sudah diretur kemudian diganti, pengurang
+  retur atas rantai itu harus dihitung sekali terhadap kepala rantai
+  efektif. Read-model SPT saat ini mengelompokkan rantai keluaran,
+  tetapi baris pengurang retur tidak menautkan `sourceTaxInvoiceId`
+  ke rantai. Ini celah nyata berikutnya, BUKAN bagian vonis ini:
+  butuh verifikasi perilaku Coretax (apakah nota retur menempel ke
+  faktur diganti atau pengganti) sebelum diputus. Tandai
+  `USULAN-RANTAI-RETUR`, pemilik riset BOT 4 siklus berikutnya.
+- **Nota kredit berjurnal** (inti F-59, tetap ditunda-teknis): selama
+  modelnya belum ada, syarat "builder abaikan retur yang sudah masuk
+  nota kredit" tidak dapat dieksekusi dan tidak boleh disimulasikan
+  dengan flag. Bila model itu lahir, gerbang anti-dobel wajib ditambah
+  sebelum nota kredit pertama boleh posted.
+- **Sisi beli** tetap di luar: `PurchaseReturnItem.cost` dilarang jadi
+  DPP (F-004 butir 5); pengurang Pajak Masukan dari nota retur beli
+  menunggu tautan VendorBill/TaxInvoice masukan eksplisit (F-34 inti),
+  tidak ditebak dari PurchaseOrder.
+
+### 6. Falsifikasi wajib (BOT 6, atas head BOT 3)
+
+- E96-1 retur completed bersnapshot, lalu harga/qty item retur dan
+  subtotal/discount/taxAmount faktur asal diubah: pengurang pada
+  Laporan Faktur SPT dan read-model SPT byte-sama dengan snapshot;
+  cabut pemakaian snapshot di satu loader → tes selisih merah.
+- E96-2 retur tanggal 31 Maret, `taxReturnNoteDate` 2 April: pengurang
+  muncul HANYA pada masa April di kedua laporan; nol pengurang Maret.
+- E96-3 baris legacy (`returnDpp`/`returnVat` null): posisi PPN kedua
+  laporan tidak berkurang; hitungan `legacy` tampil; menghilangkan
+  label → merah.
+- E96-4 jumlah pengurang DPP/PPN per faktur asal di kedua laporan sama
+  persis sen untuk fixture sama (retur parsial dua kali + satu retur
+  tanpa faktur asal yang wajib nol).
+- E96-5 teks "menunggu vonis" soal masa/dasar retur tidak lagi muncul
+  di output laporan; grep teks basi = 0.
+- E96-6 jurnal atas retur contoh tidak berubah (snapshot jurnal
+  sebelum/sesudah byte-sama) — vonis ini lapisan laporan saja.
+
+Pemilik berikutnya: BOT 1 (merge PR vonis) -> BOT 3 (loader konvergen)
+-> BOT 2 (label legacy) -> BOT 6 (E96-1..6). BOT 4: riset
+`USULAN-RANTAI-RETUR` §5 siklus berikut, bukan penahan §2.
