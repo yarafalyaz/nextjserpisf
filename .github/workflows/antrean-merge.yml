@@ -150,7 +150,13 @@ jobs:
             git fetch origin "pull/$pr/head:refs/antrean/pr-$pr" "main:refs/antrean/main" --quiet
             files=$(git diff --name-only "refs/antrean/main...refs/antrean/pr-$pr")
             if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '\.md$'; then docs_only=true; else docs_only=false; fi
-            if printf '%s\n' "$files" | grep -qE '^(Dockerfile|Dockerfile\.dev|docker/|\.dockerignore|docker-compose[^/]*\.ya?ml|\.github/workflows/|package(-lock)?\.json|prisma/|next\.config\.)'; then docker_req=true; else docker_req=false; fi
+            # Pola docker_req HARUS sama persis dengan pola output `docker`
+            # di Detect Changes ci.yml: jalur yang tidak memicu job Docker
+            # di CI tidak boleh dituntut pass oleh antrean (job itu akan
+            # skipping selamanya dan antrean timeout). Perubahan workflow
+            # .github/ sendiri divalidasi CI lewat Lint/Unit/Build, bukan
+            # job Docker.
+            if printf '%s\n' "$files" | grep -qE '^(Dockerfile|docker/|\.dockerignore|docker-compose|package(-lock)?\.json|prisma/|next\.config\.)'; then docker_req=true; else docker_req=false; fi
             echo "PR #$pr: docs_only=$docs_only docker_wajib=$docker_req berkas=$(printf '%s' "$files" | wc -l)"
 
             # Update sebagai pemilik (PAT) supaya event pull_request
