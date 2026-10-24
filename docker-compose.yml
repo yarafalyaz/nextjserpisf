@@ -22,6 +22,10 @@ services:
       # Deliberately NOT setting TRUSTED_PROXY: the dev app is reached directly on
       # :3005 with no proxy in front, so client-IP headers must stay untrusted.
       # See .env.example for the production guidance.
+      # Polling watcher (1s): Docker Desktop di macOS menghilangkan event
+      # filesystem host→VM, terutama hapus/pindah file — tanpa ini route lama
+      # terus disajikan sampai container restart. Lihat next.config.ts.
+      - WATCH_POLLING_MS=1000
     ports:
       - "3005:3001"
     volumes:

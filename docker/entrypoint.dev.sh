@@ -58,6 +58,22 @@ if [ -f /app/prisma/schema.prisma ]; then
   fi
 fi
 
+# Cache hygiene: `.next-dev` (Turbopack) tumbuh sampai ~10 GB; saat volume
+# penuh `next dev` keluar dengan kode 0 tanpa pesan dan restart-loop menyajikan
+# halaman setengah mati (lihat AGENTS.md). Bersihkan di sini — sebelum server
+# start — hanya bila melewati 8 GB, supaya start normal tidak membayar harga
+# cache dingin setiap kali.
+if [ -d /app/.next-dev ]; then
+  cache_mb="$(du -sm /app/.next-dev 2>/dev/null | cut -f1)"
+  case "$cache_mb" in
+    ''|*[!0-9]*) cache_mb=0 ;;
+  esac
+  if [ "$cache_mb" -gt 8192 ]; then
+    echo "[entrypoint] WARNING: .next-dev cache ${cache_mb} MB > 8 GB; clearing before start…" >&2
+    rm -rf /app/.next-dev/* 2>/dev/null || true
+  fi
+fi
+
 # Drop privileges for the actual dev server.
 if [ "$(id -u)" = "0" ]; then
   exec su-exec nextjs "$@"

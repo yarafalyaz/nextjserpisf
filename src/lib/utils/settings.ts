@@ -107,6 +107,21 @@ const DEFAULT_SYSTEM_SETTINGS = {
  * Cached per-request in RSC — avoids redundant DB queries within a single render.
  * Creates default settings if none exist.
  */
+/**
+ * Schema drift (Prisma P2021/P2022: tabel/kolom belum ada di DB) bukan gangguan
+ * sesaat — itu error deployment: client lebih baru daripada database. Fallback
+ * memori pada kasus itu menyembunyikan masalah sambil menyajikan nilai default
+ * yang salah (kejadian 24 Okt 2026: kolom `late_fee_income_account_id` belum
+ * ter-push, aplikasi tetap 200 dengan settings karangan). Lempar keras supaya
+ * gagalnya terlihat; entrypoint dev sekarang menjalankan `db push` saat start,
+ * jadi drift ini seharusnya tidak pernah sampai ke runtime.
+ */
+function isSchemaDriftError(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  if (code === "P2021" || code === "P2022") return true;
+  return /does not exist in the current database/.test(getErrorMessage(err));
+}
+
 export const getSystemSettings = cache(async () => {
   let settings = null;
   try {
@@ -122,6 +137,13 @@ export const getSystemSettings = cache(async () => {
       });
     }
   } catch (err) {
+    if (isSchemaDriftError(err)) {
+      console.error(
+        "System settings gagal dimuat: skema DB tertinggal dari Prisma schema (drift). Jalankan `npx prisma db push`:",
+        getErrorMessage(err) || err,
+      );
+      throw err;
+    }
     // Include the cause. This fallback also fires when the database is
     // unreachable, and without the error detail a total outage looked like a
     // harmless "used defaults" notice (the app silently served hardcoded company
