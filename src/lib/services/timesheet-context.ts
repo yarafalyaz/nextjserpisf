@@ -20,12 +20,17 @@ export function timesheetContextError(v: {
   return null
 }
 
-/** WO selesai/batal tidak menerima catatan jam maupun tarikan biaya baru. */
+/**
+ * WO selesai/batal/ditutup tidak menerima catatan jam maupun tarikan biaya
+ * baru. `closed` (F-2026-10-24-097-S S1/BR-CLOSE-04): WO closed juga bukan
+ * `completed`, jadi tanpa baris ini timesheet susulan lolos guard konteks
+ * dan hanya tertahan belakangan saat PULL ke ProductionCost.
+ */
 export function closedWorkOrderError(
   status: string,
   verb: "dicatat" | "ditarik",
 ): string | null {
-  if (status === "completed" || status === "cancelled") {
+  if (status === "completed" || status === "cancelled" || status === "closed") {
     return `Lembar waktu tidak dapat ${verb} pada perintah kerja berstatus '${status}'.`
   }
   return null

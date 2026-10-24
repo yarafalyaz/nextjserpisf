@@ -54,7 +54,7 @@ describe("WhatsappButton", () => {
     );
     expect(link?.getAttribute("target")).toBe("_blank");
     expect(link?.getAttribute("rel")).toContain("noopener");
-    expect(link?.getAttribute("aria-label")).toBe("Kirim WA ke pelanggan");
+    expect(link?.getAttribute("aria-label")).toBe("Kirim WA");
     expect(link?.textContent).toContain("Kirim WA");
   });
 

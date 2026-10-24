@@ -71,6 +71,7 @@ export default async function EmployeeLoanDetailPage({
         <DetailField label="Tanggal Pinjaman" value={formatDate(loan.loanDate)} />
         <DetailField label="Jumlah Pinjaman" value={formatCurrency(Number(loan.totalAmount))} />
         <DetailField label="Angsuran/Bulan" value={formatCurrency(Number(loan.monthlyInstallment))} />
+        <DetailField label="Cicilan Mingguan (Perjanjian Tertulis)" value={loan.weeklyInstallment === null ? "-" : formatCurrency(Number(loan.weeklyInstallment))} />
         <DetailField label="Sisa Pinjaman" value={formatCurrency(Number(loan.remainingAmount))} />
         <DetailField label="Status" value={<StatusChip status={loan.status} />} />
         {loan.notes && (

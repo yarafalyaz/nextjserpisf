@@ -33,9 +33,11 @@ vi.mock("next/navigation", () => ({
 
 // Mock server actions so the form does not pull next-auth (which needs
 // `next/server` and breaks under pure jsdom unit tests).
+const createSalesReturnMock = vi.fn().mockResolvedValue({ success: true })
+const updateSalesReturnMock = vi.fn().mockResolvedValue({ success: true })
 vi.mock("@/actions/sales.actions", () => ({
-  createSalesReturn: vi.fn().mockResolvedValue({ success: true }),
-  updateSalesReturn: vi.fn().mockResolvedValue({ success: true }),
+  createSalesReturn: (...args: unknown[]) => createSalesReturnMock(...args),
+  updateSalesReturn: (...args: unknown[]) => updateSalesReturnMock(...args),
 }))
 
 // QuickAddSelect resolves its target via the registry, which statically imports
@@ -126,6 +128,77 @@ describe("SalesReturnForm", () => {
     })
 
     expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah retur penjualan")
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("nota retur pajak: nilai tersimpan tampil di mode ubah", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <SalesReturnForm
+          invoices={mockInvoices}
+          customers={mockCustomers}
+          items={mockItems}
+          returnData={{
+            id: 5,
+            salesInvoiceId: 1,
+            date: "2026-06-16",
+            taxReturnNoteNumber: "NR-2026-001",
+            taxReturnNoteDate: "2026-06-10",
+          }}
+        />
+      )
+    })
+
+    const numberInput = container.querySelector<HTMLInputElement>("#taxReturnNoteNumber")!
+    expect(numberInput.value).toBe("NR-2026-001")
+    expect(numberInput.required).toBe(false)
+    expect(container.querySelector<HTMLInputElement>("input[name='taxReturnNoteDate']")!.value).toBe("2026-06-10")
+    expect(labelTexts(container.querySelector("form")!)).toEqual(
+      expect.arrayContaining(["Nomor Nota Retur Pajak (Opsional)", "Tanggal Nota Retur Pajak (Opsional)"]),
+    )
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("nota retur pajak: submit mengirim nomor + tanggal; kosong tetap terkirim kosong", async () => {
+    createSalesReturnMock.mockClear()
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <SalesReturnForm
+          invoices={mockInvoices}
+          customers={mockCustomers}
+          items={mockItems}
+          returnData={{ id: 0, salesInvoiceId: 1, date: "2026-06-16", taxReturnNoteDate: "2026-06-10" }}
+        />
+      )
+    })
+
+    const numberInput = container.querySelector<HTMLInputElement>("#taxReturnNoteNumber")!
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+    act(() => {
+      setter.call(numberInput, "NR-2026-002")
+      numberInput.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+
+    expect(createSalesReturnMock).toHaveBeenCalledTimes(1)
+    const formData = createSalesReturnMock.mock.calls[0][0] as FormData
+    expect(formData.get("taxReturnNoteNumber")).toBe("NR-2026-002")
+    expect(formData.get("taxReturnNoteDate")).toBe("2026-06-10")
 
     unmount(root)
     container.remove()

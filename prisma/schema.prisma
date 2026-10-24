@@ -214,6 +214,12 @@ model SystemSetting {
   // tidak ada pemanggil yang memakainya sampai gerbang data dinilai BOT 4.
   warrantyExpenseAccountId         Int?    @map("warranty_expense_account_id")
   warrantyProvisionAccountId       Int?    @map("warranty_provision_account_id")
+  // F-2026-10-22-093-V (vonis BOT 4 PR #563 P2d/P3): akun pendapatan denda
+  // keterlambatan piutang. Nullable TANPA default tebak; terbit dokumen
+  // denda DITOLAK fail-closed bila kosong (dilarang fallback ke
+  // salesRevenueAccountId). salesLateFeePrefix pola prefix dokumen lain.
+  lateFeeIncomeAccountId           Int?    @map("late_fee_income_account_id")
+  salesLateFeePrefix               String  @default("LF") @map("sales_late_fee_prefix")
   supplierClaimReceivableAccountId Int?    @map("supplier_claim_receivable_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
@@ -250,6 +256,36 @@ model SystemSetting {
    * fallback itu hanya utk selisih PEMBULATAN < ambang).
    */
   productionVarianceAccountId     Int?    @map("production_variance_account_id")
+  /**
+   * F-2026-10-21-008 (vonis BOT 4 F-2026-10-22-066-V, putusan flag Lead
+   * MODE CATAT-DULU): gerbang jurnal scrap abnormal P2(b). Default MATI —
+   * klasifikasi + snapshot + laporan scrap jalan penuh tanpa jurnal;
+   * complete TIDAK ditolak karena akun kosong. ON = jurnal Dr
+   * abnormalScrapExpenseAccountId / Cr WIP dalam tx issue yang sama.
+   */
+  abnormalScrapPostingEnabled     Boolean @default(false) @map("abnormal_scrap_posting_enabled")
+  /**
+   * Akun Beban Kerugian Produksi (usulan BOT 3: kode 510105, anak 5101;
+   * menunggu persetujuan BOT 4). Fail-closed saat flag ON: kosong =
+   * complete ditolak berisik; DILARANG fallback materialExpense/cogs.
+   */
+  abnormalScrapExpenseAccountId   Int?    @map("abnormal_scrap_expense_account_id")
+  /**
+   * F-2026-10-23-121-V Putusan 1: akun laba ditahan tujuan jurnal penutup
+   * tahunan (YearEndClosing). Nullable fail-closed: kosong/nonaktif/
+   * non-EQTY/bukan laba ditahan = posting ditolak berisik. TANPA default
+   * tebakan (jangan hardcode 300002); operator memetakan di Pengaturan.
+   */
+  retainedEarningsAccountId       Int?    @map("retained_earnings_account_id")
+  /**
+   * F-2026-10-23-111-V Putusan 2: akun utang PPh final 10% revaluasi fiskal
+   * berpersetujuan DJP + tarifnya sebagai DATA master (bukan konstanta kode).
+   * Keduanya nullable fail-closed: kosong = peristiwa fiskal ditolak berisik
+   * (komersial ditahan sampai jalur komersial-saja dipilih eksplisit).
+   * Ganti tarif sesudahnya tidak mengubah snapshot peristiwa lama (E111-4).
+   */
+  assetFiscalRevaluationTaxPayableAccountId Int?    @map("asset_fiscal_revaluation_tax_payable_account_id")
+  assetFiscalRevaluationFinalTaxRatePercent Decimal? @map("asset_fiscal_revaluation_final_tax_rate_percent") @db.Decimal(5, 2)
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -350,6 +386,8 @@ model Customer {
   workOrders         WorkOrder[]
   customerCategoryId Int?              @map("customer_category_id")
   customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id])
+  lateFeeTerms       CustomerLateFeeTerm[]
+  salesLateFees      SalesLateFee[]
 
   @@index([isActive, deletedAt], map: "idx_customers_active_deleted")
   @@index([name], map: "idx_customers_name")
@@ -569,6 +607,13 @@ model ItemCategory {
   description   String?
   parentId      Int?           @map("parent_id")
   costingMethod String         @default("average") @map("costing_method")
+  // F-2026-10-24-098-S D-S98-01/02: penanda bentuk bahan + ambang remnant +
+  // teks acuan allowance per kategori. Semua nullable: null = belum
+  // ditetapkan kepala bengkel (BR-SCRAP-02/05 — dilarang default/auto-isi;
+  // teks acuan hanya pembanding kalibrasi, tidak pernah mengisi scrapPercent).
+  materialShape       String? @map("material_shape") @db.VarChar(32)
+  remnantMinMeasure   Decimal? @map("remnant_min_measure") @db.Decimal(15, 2)
+  scrapAllowanceNote  String? @map("scrap_allowance_note") @db.VarChar(500)
   createdBy     Int?           @map("created_by")
   updatedBy     Int?           @map("updated_by")
   createdAt     DateTime       @default(now()) @map("created_at")
@@ -658,6 +703,11 @@ model Item {
   vendorPrices         VendorItemPrice[]
   customerPrices       CustomerPriceList[]
   warrantyCoverages    WarrantyCoverage[]
+  installedParts       InstalledPart[]
+  materialRequestItems MaterialRequestItem[]
+  substitutes          ItemSubstitute[]     @relation("ItemSubstitutes")
+  substitutedFor       ItemSubstitute[]     @relation("ItemSubstitutedFor")
+  warehouseSettings    ItemWarehouseSetting[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -685,6 +735,8 @@ model Warehouse {
   goodsReceipts     GoodsReceipt[]
   transfersIn       InventoryTransfer[] @relation("TransferDest")
   transfersOut      InventoryTransfer[] @relation("TransferSource")
+  materialRequestsAsRequester MaterialRequest[] @relation("MaterialRequestRequester")
+  materialRequestsAsSource    MaterialRequest[] @relation("MaterialRequestSource")
   itemBatches       ItemBatch[]
   itemSerials       ItemSerial[]
   defaultItems      Item[]              @relation("ItemDefaultWarehouse")
@@ -696,11 +748,34 @@ model Warehouse {
   userWarehouses    UserWarehouse[]
   stocktakeSessions StocktakeSession[]
   remnants          Remnant[]
+  itemWarehouseSettings ItemWarehouseSetting[]
 
   @@index([isActive, deletedAt])
   @@index([name])
   @@index([createdAt])
   @@map("warehouses")
+}
+
+/// F-2026-10-22-070-S (induk F-2026-10-21-013): override stok minimum per
+/// (barang, gudang). Baris ada = minimum efektif pasangan itu; baris tidak
+/// ada = warisi Item.minStock global (BR-MS-02). Pengaturan murni master:
+/// tidak pernah menulis StockMove/jurnal/reservasi (BR-MS-09).
+model ItemWarehouseSetting {
+  id          Int      @id @default(autoincrement())
+  itemId      Int      @map("item_id")
+  warehouseId Int      @map("warehouse_id")
+  minStock    Decimal  @map("min_stock") @db.Decimal(15, 2)
+  createdBy   Int?     @map("created_by")
+  updatedBy   Int?     @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, warehouseId], map: "item_warehouse_settings_pair_key")
+  @@index([warehouseId])
+  @@map("item_warehouse_settings")
 }
 
 model Rack {
@@ -805,6 +880,16 @@ model Employee {
   departmentId        Int?              @map("department_id")
   positionId          Int?              @map("position_id")
   joinDate            DateTime          @map("join_date")
+  // F-2026-10-22-085-S: status kepegawaian master (kosakata Q-EMP-1/2 putusan
+  // BOT 1 §9A). employmentStatus: PKWTT|PKWT|DAILY|INTERN, null = belum diatur
+  // (tanpa backfill). endReason: contract_completed|resigned|terminated|
+  // retired|deceased|other, wajib pasangan employmentEndedAt. Validasi
+  // enum-teks di aksi (pola WarrantyClaim.supplierClaimStatus).
+  employmentStatus    String?           @map("employment_status")
+  contractStartDate   DateTime?         @map("contract_start_date")
+  contractEndDate     DateTime?         @map("contract_end_date")
+  employmentEndedAt   DateTime?         @map("employment_ended_at")
+  endReason           String?           @map("end_reason")
   paymentFrequency    String            @default("MONTHLY") @map("payment_frequency")
   baseSalary          Decimal           @default(0.00) @map("base_salary") @db.Decimal(15, 2)
   isActive            Boolean           @default(true) @map("is_active")
@@ -827,6 +912,7 @@ model Employee {
   salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
   salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
   salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
+  salesTargets         SalesTarget[]
   workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
@@ -1078,6 +1164,14 @@ model WithholdingCertificate {
    */
   article              String
   objectCode           String?             @map("object_code")
+  /**
+   * Nama resmi kode objek katalog SATU sumber (F-055-V §2) — snapshot saat terbit.
+   */
+  objectName           String?             @map("object_name")
+  /**
+   * Bukti dokumen dasar terstruktur kode bersyarat bukti (F-055-V §1) — snapshot saat terbit.
+   */
+  rentObjectEvidence   String?             @map("rent_object_evidence") @db.Text
   dpp                  Decimal             @db.Decimal(15, 2)
   tariff               Decimal             @map("tariff") @db.Decimal(5, 2)
   withheldAmount       Decimal             @map("withheld_amount") @db.Decimal(15, 2)
@@ -1214,6 +1308,11 @@ model Quotation {
   // F-2026-10-21-016 tahap 1: atribusi penjual (snapshot; diwariskan
   // SO -> Invoice). Tanpa jurnal komisi (tahap 3 ditunda vonis Lead).
   salesEmployeeId   Int?               @map("sales_employee_id")
+  // F-2026-10-22-065-S (inti F-2026-10-20-108): snapshot persen ambang
+  // konversi DP → invoice dari CustomerCategory.downPaymentPercent saat
+  // quotation dibuat. Nullable; null/0/korup = fail-closed default 50 di
+  // helper invoice-threshold (bukan baca master berjalan — AC-DP65-4).
+  invoiceThresholdPercent Decimal?     @map("invoice_threshold_percent") @db.Decimal(5, 2)
   date              DateTime
   validUntil        DateTime?          @map("valid_until")
   subtotal          Decimal            @default(0.00) @db.Decimal(15, 2)
@@ -1237,6 +1336,8 @@ model Quotation {
   salesInvoices     SalesInvoice[]
   salesOrders       SalesOrder[]
   workOrders        WorkOrder[]
+  changeOrders      JobChangeOrder[]
+  paymentSchedules  JobPaymentSchedule[]
   contractProjects  Project[]          @relation("ProjectContractQuotation")
 
   @@index([customerId], map: "quotations_customer_id_fkey")
@@ -1432,6 +1533,8 @@ model SalesInvoice {
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
+  collectionFollowUps  InvoiceCollectionFollowUp[]
+  salesLateFees        SalesLateFee[]
   taxInvoices          TaxInvoice[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
@@ -1499,6 +1602,34 @@ model InvoiceExchangeItem {
   @@map("invoice_exchange_items")
 }
 
+/// Jejak tindak lanjut penagihan per faktur (F-2026-10-22-089-S tahap 2,
+/// PUTUSAN BOT 1 Q-COL-1/2 + fisik Q-COL-5 BOT 3). Append-only: koreksi =
+/// catatan baru; hapus hanya soft-delete berizin + ActivityLog (BR-COL-06).
+/// Channel/outcome = teks tervalidasi kosakata Q-COL-2 di aksi (pola repo
+/// string tervalidasi, bukan enum Prisma). Tanpa slug: jejak sub-dokumen
+/// pola InvoiceExchangeItem. TANPA jurnal, tanpa ubah paidAmount/status
+/// faktur (BR-COL-07). Nominal janji informatif saja (BR-COL-09).
+model InvoiceCollectionFollowUp {
+  id             Int          @id @default(autoincrement())
+  salesInvoiceId Int          @map("sales_invoice_id")
+  followedUpAt   DateTime     @map("followed_up_at")
+  channel        String
+  outcome        String
+  promisedDate   DateTime?    @map("promised_date")
+  promisedAmount Decimal?     @map("promised_amount") @db.Decimal(15, 2)
+  notes          String?      @db.Text
+  createdBy      Int?         @map("created_by")
+  deletedAt      DateTime?    @map("deleted_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+
+  @@index([salesInvoiceId])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("invoice_collection_followups")
+}
+
 model SalesInvoiceItem {
   id             Int          @id @default(autoincrement())
   salesInvoiceId Int          @map("sales_invoice_id")
@@ -1521,6 +1652,99 @@ model SalesInvoiceItem {
   @@index([salesInvoiceId], map: "sales_invoice_items_sales_invoice_id_fkey")
   @@index([itemId])
   @@map("sales_invoice_items")
+}
+
+/// Syarat denda keterlambatan kontraktual per pelanggan, bertanggal efektif
+/// (F-2026-10-22-093-V P2a, vonis BOT 4 PR #563). Master ini MEKANISME tarif
+/// — nilai tarif = keputusan komersial pemilik proses (backlog §4, BUKAN
+/// diputus vonis/kode). Tepat satu basis wajib terisi: ratePercentPerDay
+/// (%/hari dari sisa piutang) XOR flatAmountPerDay (nominal/hari);
+/// capAmount = plafon opsional. Syarat sah untuk faktur: effectiveFrom
+/// SEBELUM due acuan faktur DAN (effectiveTo null ATAU >= due acuan).
+model CustomerLateFeeTerm {
+  id                Int            @id @default(autoincrement())
+  customerId        Int            @map("customer_id")
+  ratePercentPerDay Decimal?       @map("rate_percent_per_day") @db.Decimal(9, 6)
+  flatAmountPerDay  Decimal?       @map("flat_amount_per_day") @db.Decimal(15, 2)
+  capAmount         Decimal?       @map("cap_amount") @db.Decimal(15, 2)
+  effectiveFrom     DateTime       @map("effective_from")
+  effectiveTo       DateTime?      @map("effective_to")
+  notes             String?        @db.Text
+  createdBy         Int?           @map("created_by")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  customer          Customer       @relation(fields: [customerId], references: [id])
+  salesLateFees     SalesLateFee[]
+
+  @@index([customerId, effectiveFrom])
+  @@map("customer_late_fee_terms")
+}
+
+/// Dokumen tagih denda keterlambatan TERPISAH (F-2026-10-22-093-V P1/P3).
+/// TIDAK PERNAH mengubah grandTotal/paidAmount/taxAmount faktur asal.
+/// Snapshot tarif+basis+hari dibekukan saat terbit; jurnal akrual
+/// D Piutang Usaha / K Pendapatan Denda lewat hook. Status string
+/// tervalidasi di builder (draft|posted|partial|paid|reversed pola repo).
+/// Edit nominal posted DILARANG — koreksi/waiver hanya reversal dokumen
+/// (reversesId menunjuk dokumen asal, P6). idempotencyKey unik per terbit.
+/// Tanpa PPN, tanpa faktur pajak baru (P4).
+model SalesLateFee {
+  id                Int                   @id @default(autoincrement())
+  documentNo        String                @unique @map("document_no")
+  salesInvoiceId    Int                   @map("sales_invoice_id")
+  customerId        Int                   @map("customer_id")
+  termId            Int                   @map("term_id")
+  date              DateTime
+  dueReferenceDate  DateTime              @map("due_reference_date")
+  overdueDays       Int                   @map("overdue_days")
+  basisAmount       Decimal               @map("basis_amount") @db.Decimal(15, 2)
+  ratePercentPerDay Decimal?              @map("rate_percent_per_day") @db.Decimal(9, 6)
+  flatAmountPerDay  Decimal?              @map("flat_amount_per_day") @db.Decimal(15, 2)
+  capAmount         Decimal?              @map("cap_amount") @db.Decimal(15, 2)
+  amount            Decimal               @db.Decimal(15, 2)
+  paidAmount        Decimal               @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
+  status            String                @default("posted")
+  idempotencyKey    String                @unique @map("idempotency_key")
+  reversesId        Int?                  @unique @map("reverses_id")
+  journalId         Int?                  @map("journal_id")
+  notes             String?               @db.Text
+  createdBy         Int?                  @map("created_by")
+  deletedAt         DateTime?             @map("deleted_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+  salesInvoice      SalesInvoice          @relation(fields: [salesInvoiceId], references: [id])
+  customer          Customer              @relation(fields: [customerId], references: [id])
+  term              CustomerLateFeeTerm   @relation(fields: [termId], references: [id])
+  reverses          SalesLateFee?         @relation("SalesLateFeeReversal", fields: [reversesId], references: [id])
+  reversedBy        SalesLateFee?         @relation("SalesLateFeeReversal")
+  payments          SalesLateFeePayment[]
+
+  @@index([salesInvoiceId])
+  @@index([customerId, status])
+  @@index([deletedAt])
+  @@map("sales_late_fees")
+}
+
+/// Alokasi pembayaran ke dokumen denda (P3/E93-7): mengurangi saldo dokumen
+/// denda SAJA, tidak pernah sisa faktur asal. Jurnal kas lewat hook
+/// pembayaran denda (D Kas / K Piutang).
+model SalesLateFeePayment {
+  id             Int          @id @default(autoincrement())
+  documentNo     String       @unique @map("document_no")
+  salesLateFeeId Int          @map("sales_late_fee_id")
+  amount         Decimal      @db.Decimal(15, 2)
+  paymentDate    DateTime     @map("payment_date")
+  paymentMethod  String       @map("payment_method")
+  accountId      Int?         @map("account_id")
+  referenceNo    String?      @map("reference_no")
+  notes          String?      @db.Text
+  createdBy      Int?         @map("created_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  salesLateFee   SalesLateFee @relation(fields: [salesLateFeeId], references: [id])
+
+  @@index([salesLateFeeId])
+  @@map("sales_late_fee_payments")
 }
 
 model SalesPayment {
@@ -2119,9 +2343,18 @@ model StockAdjustment {
   deletedAt   DateTime?             @map("deleted_at")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
+  // F-2026-10-22-081-S (Q-TP-3 BOT 3): penutupan selisih transfer tertaut.
+  // Adjustment alasan persis "selisih transfer" dengan kolom ini terisi =
+  // jurnal-saja (nol StockMove): sisa sudah OUT dari sumber & tak pernah
+  // masuk tujuan, jadi tak ada stok fisik yang dipotong di gudang mana pun.
+  // TANPA @unique: penutupan ditolak/batal boleh diajukan ulang (spec §3) —
+  // "satu penutupan aktif per transfer" dijaga server (status draft saja).
+  inventoryTransferId Int?            @map("inventory_transfer_id")
+  inventoryTransfer   InventoryTransfer? @relation(fields: [inventoryTransferId], references: [id], onDelete: SetNull)
   items       StockAdjustmentItem[]
   warehouse   Warehouse             @relation(fields: [warehouseId], references: [id])
 
+  @@index([inventoryTransferId])
   @@index([warehouseId], map: "stock_adjustments_warehouse_id_fkey")
   @@index([status])
   @@index([approvedBy])
@@ -2154,12 +2387,66 @@ model StockAdjustmentItem {
   @@map("stock_adjustment_items")
 }
 
+// F-2026-10-22-078-S inti (induk F-2026-10-21-014): permintaan barang
+// antar gudang. Dokumen pendahulu InventoryTransfer — permintaan TIDAK
+// menggerakkan stok, TIDAK membuat StockMove/jurnal/issue (BR-MR-02);
+// satu-satunya gerak stok = InventoryTransfer tertaut lewat kolom
+// materialRequestId di sisi transfer (Q-MR-4 BOT 3). Status internal
+// sederhana pola PurchaseRequest (Q-MR-2); self-approve dilarang
+// (Q-MR-3). Tanpa harga/biaya: permintaan bukan dokumen nilai.
+model MaterialRequest {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  documentNo           String    @unique @map("document_no")
+  requesterWarehouseId Int       @map("requester_warehouse_id")
+  sourceWarehouseId    Int       @map("source_warehouse_id")
+  workOrderId          Int?      @map("work_order_id")
+  neededBy             DateTime? @map("needed_by")
+  status               String    @default("draft")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  approvedBy           Int?      @map("approved_by")
+  approvedAt           DateTime? @map("approved_at")
+  createdBy            Int?      @map("created_by")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  items              MaterialRequestItem[]
+  transfers          InventoryTransfer[]
+  requesterWarehouse Warehouse @relation("MaterialRequestRequester", fields: [requesterWarehouseId], references: [id])
+  sourceWarehouse    Warehouse @relation("MaterialRequestSource", fields: [sourceWarehouseId], references: [id])
+  workOrder          WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@index([status], map: "idx_material_requests_status")
+  @@index([requesterWarehouseId])
+  @@index([sourceWarehouseId])
+  @@index([workOrderId])
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("material_requests")
+}
+
+model MaterialRequestItem {
+  id                Int             @id @default(autoincrement())
+  materialRequestId Int             @map("material_request_id")
+  itemId            Int             @map("item_id")
+  qty               Decimal         @db.Decimal(15, 2)
+  notes             String?
+  materialRequest   MaterialRequest @relation(fields: [materialRequestId], references: [id], onDelete: Cascade)
+  item              Item            @relation(fields: [itemId], references: [id])
+
+  @@index([materialRequestId], map: "material_request_items_material_request_id_fkey")
+  @@index([itemId])
+  @@map("material_request_items")
+}
+
 model InventoryTransfer {
   slug                   String?                 @unique
   id                     Int                     @id @default(autoincrement())
   documentNo             String                  @unique @map("document_no")
   sourceWarehouseId      Int                     @map("source_warehouse_id")
   destinationWarehouseId Int                     @map("destination_warehouse_id")
+  materialRequestId      Int?                    @map("material_request_id")
   date                   DateTime
   notes                  String?                 @db.Text
   status                 String                  @default("draft")
@@ -2167,11 +2454,15 @@ model InventoryTransfer {
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   items                  InventoryTransferItem[]
+  receipts               InventoryTransferReceipt[]
+  shortageAdjustments    StockAdjustment[]
+  materialRequest        MaterialRequest?        @relation(fields: [materialRequestId], references: [id], onDelete: SetNull)
   destinationWarehouse   Warehouse               @relation("TransferDest", fields: [destinationWarehouseId], references: [id])
   sourceWarehouse        Warehouse               @relation("TransferSource", fields: [sourceWarehouseId], references: [id])
 
   @@index([destinationWarehouseId], map: "inventory_transfers_destination_warehouse_id_fkey")
   @@index([sourceWarehouseId], map: "inventory_transfers_source_warehouse_id_fkey")
+  @@index([materialRequestId])
   @@index([status])
   @@index([createdBy])
   @@index([createdAt])
@@ -2183,6 +2474,10 @@ model InventoryTransferItem {
   inventoryTransferId Int               @map("inventory_transfer_id")
   itemId              Int               @map("item_id")
   qty                 Decimal           @db.Decimal(15, 2)
+  // F-2026-10-22-081-S: qty diterima kumulatif per BARIS (pola
+  // PurchaseOrderItem.receivedQty, vonis BOT 4 V-5(e)). Server menjaga
+  // 0 <= receivedQty <= qty; sisa = qty - receivedQty.
+  receivedQty         Decimal           @default(0) @map("received_qty") @db.Decimal(15, 2)
   // FIFO lot/serial attribution captured at process time. A transfer is a MOVE,
   // not a sale: the batch lots and serials consumed from the source warehouse must
   // be re-created/revived in the destination warehouse on receive. Without these
@@ -2191,10 +2486,47 @@ model InventoryTransferItem {
   serialNumbers       Json?             @map("serial_numbers")
   batchAllocations    Json?             @map("batch_allocations")
   inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
+  receiptItems        InventoryTransferReceiptItem[]
 
   @@index([inventoryTransferId], map: "inventory_transfer_items_inventory_transfer_id_fkey")
   @@index([itemId])
   @@map("inventory_transfer_items")
+}
+
+// F-2026-10-22-081-S (Q-TP-2 BOT 3): SATU baris per KEJADIAN terima.
+// Idempotency per kejadian (BR-TP-06): idempotencyKey unik per submit —
+// retry submit yang sama menabrak unique, bukan menggandakan StockMove IN.
+// receivedDate = tanggal kejadian sendiri (Q-TP-1 BOT 1): assertPeriodOpen
+// dinilai per tanggal ini, bukan tanggal kirim transfer.
+model InventoryTransferReceipt {
+  id                  Int      @id @default(autoincrement())
+  inventoryTransferId Int      @map("inventory_transfer_id")
+  receivedDate        DateTime @map("received_date")
+  receivedBy          Int?     @map("received_by")
+  idempotencyKey      String   @unique @map("idempotency_key")
+  createdAt           DateTime @default(now()) @map("created_at")
+  inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
+  items               InventoryTransferReceiptItem[]
+
+  @@index([inventoryTransferId])
+  @@index([receivedBy])
+  @@index([receivedDate])
+  @@map("inventory_transfer_receipts")
+}
+
+model InventoryTransferReceiptItem {
+  id                      Int     @id @default(autoincrement())
+  receiptId               Int     @map("receipt_id")
+  inventoryTransferItemId Int     @map("inventory_transfer_item_id")
+  qty                     Decimal @db.Decimal(15, 2)
+  serialNumbers           Json?   @map("serial_numbers")
+  batchAllocations        Json?   @map("batch_allocations")
+  receipt                 InventoryTransferReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  transferItem            InventoryTransferItem @relation(fields: [inventoryTransferItemId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@index([inventoryTransferItemId])
+  @@map("inventory_transfer_receipt_items")
 }
 
 model MaterialIssue {
@@ -2234,12 +2566,38 @@ model MaterialIssueItem {
   workOrderItemId Int?          @map("work_order_item_id")
   qty             Decimal       @db.Decimal(15, 2)
   cost            Decimal       @default(0.00) @db.Decimal(15, 2)
+  // F-2026-10-21-008: scrap terstruktur per baris (vonis BOT 4
+  // F-2026-10-22-066-V). scrapQty/scrapReasonCode/scrapNote = input operator
+  // di draft; scrapPercentSnapshot = allowance BOM (%) dibekukan saat baris
+  // issue dibuat (dilarang baca master hidup saat complete); kolom
+  // *Snapshot lain dibekukan saat complete dari cost FIFO baris.
+  scrapQty             Decimal  @default(0.00) @map("scrap_qty") @db.Decimal(15, 2)
+  scrapReasonCode      String?  @map("scrap_reason_code") @db.VarChar(32)
+  scrapNote            String?  @map("scrap_note") @db.VarChar(500)
+  scrapPercentSnapshot Decimal? @map("scrap_percent_snapshot") @db.Decimal(5, 2)
+  scrapClassifiedAt    DateTime? @map("scrap_classified_at")
+  scrapPlannedQtySnapshot Decimal? @map("scrap_planned_qty_snapshot") @db.Decimal(15, 2)
+  scrapNormalQtySnapshot  Decimal? @map("scrap_normal_qty_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalQtySnapshot Decimal? @map("scrap_abnormal_qty_snapshot") @db.Decimal(15, 2)
+  scrapUnitCostSnapshot   Decimal? @map("scrap_unit_cost_snapshot") @db.Decimal(15, 2)
+  scrapNormalValueSnapshot Decimal? @map("scrap_normal_value_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalValueSnapshot Decimal? @map("scrap_abnormal_value_snapshot") @db.Decimal(15, 2)
+  // F-2026-10-24-098-S D-S98-04: tinjau operasional foreman atas scrap
+  // abnormal. scrapReviewStatus null = belum masuk antrean; nilai sah
+  // menunggu_tinjau|ditinjau. Disposisi TIDAK mengubah snapshot klasifikasi
+  // /nilai/jurnal 066-V di atas (BR-SCRAP-08).
+  scrapReviewStatus      String?   @map("scrap_review_status") @db.VarChar(32)
+  scrapReviewDisposition String?   @map("scrap_review_disposition") @db.VarChar(32)
+  scrapReviewNote        String?   @map("scrap_review_note") @db.VarChar(500)
+  scrapReviewedBy        Int?      @map("scrap_reviewed_by")
+  scrapReviewedAt        DateTime? @map("scrap_reviewed_at")
   serialNumbers   Json?         @map("serial_numbers")
   // Batch/lot yang benar-benar ter-konsumsi FIFO saat complete (dari
   // consumedBatches hook); null sampai baris ter-issue.
   batchNumbers    Json?         @map("batch_numbers")
   materialIssue   MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
   workOrderItem   WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
+  installedParts  InstalledPart[]
 
   @@index([materialIssueId], map: "material_issue_items_material_issue_id_fkey")
   @@index([itemId])
@@ -2317,6 +2675,8 @@ model BomRevision {
   productionOrders ProductionOrder[]
   workOrders       WorkOrder[]
   fitmentRules     VehicleFitmentRule[]
+  changeRequestsFrom BomRevisionChangeRequest[] @relation("ChangeFromRevision")
+  changeRequestsTo   BomRevisionChangeRequest[] @relation("ChangeToRevision")
 
   @@unique([productId, revisionNo], map: "bom_revisions_product_revision_unique")
   @@index([productId], map: "bom_revisions_product_id_fkey")
@@ -2331,6 +2691,11 @@ model BomRevisionMaterial {
   bomRevisionId Int         @map("bom_revision_id")
   itemId        Int         @map("item_id")
   qty           Decimal     @db.Decimal(15, 2)
+  // F-2026-10-21-008: allowance scrap normal per baris BOM (%), vonis BOT 4
+  // F-2026-10-22-066-V P1. Null/0 = BELUM dikalibrasi → seluruh scrap baris
+  // terbaca abnormal; dilarang default global. Dibekukan ke baris issue
+  // (scrapPercentSnapshot) saat issue dibuat.
+  scrapPercent  Decimal?    @map("scrap_percent") @db.Decimal(5, 2)
   bomRevision   BomRevision @relation(fields: [bomRevisionId], references: [id], onDelete: Cascade)
 
   @@index([bomRevisionId], map: "bom_revision_materials_bom_revision_id_fkey")
@@ -2375,6 +2740,7 @@ model ProductionOrder {
   product           Product                   @relation(fields: [productId], references: [id])
   bomRevision       BomRevision?              @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
   workOrder         WorkOrder?                @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  bomChangeRequests BomRevisionChangeRequest[]
 
   @@index([productId], map: "production_orders_product_id_fkey")
   @@index([bomRevisionId])
@@ -2393,6 +2759,29 @@ model ProductionOrderMaterial {
   actualQty         Decimal?        @map("actual_qty") @db.Decimal(15, 2)
   standardCost      Decimal         @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
   actualCost        Decimal         @default(0.00) @map("actual_cost") @db.Decimal(15, 2)
+  // F-2026-10-21-008: scrap terstruktur jalur PO (vonis BOT 4
+  // F-2026-10-22-066-V). scrapPercentSnapshot dibekukan saat PO dibuat dari
+  // revisi BOM ter-pin (createProductionOrder); scrapQty/scrapReasonCode/
+  // scrapNote input operator per kejadian issueMaterial; kolom *Snapshot
+  // klasifikasi KUMULATIF dibekukan/diakumulasi saat issue dari cost FIFO
+  // kejadian itu (baris PO terbit berkali-kali — beda MaterialIssueItem
+  // yang terklasifikasi sekali saat complete).
+  scrapPercentSnapshot Decimal? @map("scrap_percent_snapshot") @db.Decimal(5, 2)
+  scrapQty             Decimal  @default(0.00) @map("scrap_qty") @db.Decimal(15, 2)
+  scrapReasonCode      String?  @map("scrap_reason_code") @db.VarChar(32)
+  scrapNote            String?  @map("scrap_note") @db.VarChar(500)
+  scrapClassifiedAt    DateTime? @map("scrap_classified_at")
+  scrapNormalQtySnapshot  Decimal? @map("scrap_normal_qty_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalQtySnapshot Decimal? @map("scrap_abnormal_qty_snapshot") @db.Decimal(15, 2)
+  scrapUnitCostSnapshot   Decimal? @map("scrap_unit_cost_snapshot") @db.Decimal(15, 2)
+  scrapNormalValueSnapshot Decimal? @map("scrap_normal_value_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalValueSnapshot Decimal? @map("scrap_abnormal_value_snapshot") @db.Decimal(15, 2)
+  // F-2026-10-24-098-S D-S98-04: tinjau operasional foreman (sejajar MI).
+  scrapReviewStatus      String?   @map("scrap_review_status") @db.VarChar(32)
+  scrapReviewDisposition String?   @map("scrap_review_disposition") @db.VarChar(32)
+  scrapReviewNote        String?   @map("scrap_review_note") @db.VarChar(500)
+  scrapReviewedBy        Int?      @map("scrap_reviewed_by")
+  scrapReviewedAt        DateTime? @map("scrap_reviewed_at")
   // Lot/serial attribution of the material actually issued (PRD line 369 / REP-13).
   // Captured at issue time from the FIFO consumption so the production genealogy
   // can answer "which source serials/lots went into this finished unit".
@@ -2667,6 +3056,9 @@ model WorkOrder {
   bomRevision       BomRevision?      @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
   warrantyCoverages WarrantyCoverage[] @relation("WorkOrderWarrantyCoverages")
   warrantyRepairClaims WarrantyClaim[] @relation("WarrantyClaimRepairWorkOrder")
+  changeOrders      JobChangeOrder[]
+  materialRequests  MaterialRequest[]
+  bomChangeRequests BomRevisionChangeRequest[]
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -2699,6 +3091,7 @@ model WorkOrderItem {
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   materialIssueItems MaterialIssueItem[]
   stockReservations StockReservation[]
+  changeOrderItems JobChangeOrderItem[]
 
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
@@ -2750,9 +3143,38 @@ model StockReservation {
 // Urutan SEQUENSIAL-KERAS (vonis Lead Q1): tahap hanya boleh maju bila
 // semua tahap ber-sortOrder lebih kecil sudah completed/skipped.
 // skipped WAJIB notes (vonis Q2) dan keluar dari denominator progres.
+// F-2026-10-22-090-S inti (Q-LP-1 BOT 1): master stasiun kerja untuk papan
+// beban rencana. Nama unik hanya di antara stasiun AKTIF (Q-LP-5 fisik BOT 3):
+// MySQL tanpa partial-unique, jadi `normalizedName` (trim+lowercase) dicek
+// server di tx saat buat/ubah/aktifkan (pola PayrollComponent); nama sama
+// dengan stasiun nonaktif boleh. Stasiun dirujuk tahap tidak bisa dihapus
+// (WorkOrderOperation.workCenter Restrict) — hanya dinonaktifkan.
+model WorkCenter {
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  normalizedName      String               @map("normalized_name")
+  capacityHoursPerDay Decimal              @map("capacity_hours_per_day") @db.Decimal(15, 2)
+  parallelStations    Int                  @default(1) @map("parallel_stations")
+  isActive            Boolean              @default(true) @map("is_active")
+  sortOrder           Int                  @default(0) @map("sort_order")
+  createdBy           Int?                 @map("created_by")
+  updatedBy           Int?                 @map("updated_by")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  operations          WorkOrderOperation[]
+
+  @@index([normalizedName, isActive])
+  @@index([isActive, sortOrder])
+  @@index([createdAt])
+  @@map("work_centers")
+}
+
 model WorkOrderOperation {
-  id                 Int       @id @default(autoincrement())
-  workOrderId        Int       @map("work_order_id")
+  id                 Int         @id @default(autoincrement())
+  workOrderId        Int         @map("work_order_id")
+  // F-2026-10-22-090-S: stasiun tahap, nullable — tahap tanpa stasiun masuk
+  // ember "Belum ada stasiun", tidak ditebak dari nama teks tahap (BR-LP-03).
+  workCenterId       Int?        @map("work_center_id")
   name               String
   sortOrder          Int       @default(0) @map("sort_order")
   status             String    @default("pending")
@@ -2764,10 +3186,12 @@ model WorkOrderOperation {
   createdBy          Int?      @map("created_by")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
-  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  assignedEmployee   Employee? @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  workOrder          WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCenter         WorkCenter? @relation(fields: [workCenterId], references: [id], onDelete: Restrict)
+  assignedEmployee   Employee?   @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
 
   @@index([workOrderId], map: "work_order_operations_work_order_id_fkey")
+  @@index([workCenterId])
   @@index([workOrderId, sortOrder], map: "work_order_operations_wo_sort_idx")
   @@index([status])
   @@index([assignedEmployeeId])
@@ -2943,6 +3367,12 @@ model Remnant {
   unitCost    Decimal   @default(0) @map("unit_cost") @db.Decimal(15, 2)
   status      String    @default("usable") @db.VarChar(32)
   scrapReason String?   @map("scrap_reason") @db.VarChar(500)
+  // F-2026-10-24-098-S D-S98-02: snapshot ambang usable kategori saat remnant
+  // dibuat (null = kategori belum berambang; pembacaan master hidup dilarang).
+  remnantMinMeasureSnapshot Decimal? @map("remnant_min_measure_snapshot") @db.Decimal(15, 2)
+  measuredSize              Decimal? @map("measured_size") @db.Decimal(15, 2)
+  // F-2026-10-24-098-S D-S98-03: berat besi tua (kg) wajib saat transisi scrap.
+  scrapWeightKg Decimal?  @map("scrap_weight_kg") @db.Decimal(15, 2)
   consumedBy  String?   @map("consumed_by") @db.VarChar(128)
   consumedAt  DateTime? @map("consumed_at")
   createdBy   Int?      @map("created_by")
@@ -3051,7 +3481,7 @@ model Payroll {
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
-  @@unique([employeeId, period], map: "uq_payroll_employee_period")
+  @@unique([employeeId, startDate, endDate], map: "uq_payroll_employee_range")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
   @@index([costCenterId])
@@ -3151,6 +3581,10 @@ model EmployeeLoan {
   loanDate           DateTime @map("loan_date")
   totalAmount        Decimal  @map("total_amount") @db.Decimal(15, 2)
   monthlyInstallment Decimal  @map("monthly_installment") @db.Decimal(15, 2)
+  // F-2026-10-23-105-V (vonis BOT 4): nominal cicilan mingguan dari
+  // perjanjian tertulis; NULL = tanpa jadwal mingguan (gerbang WEEKLY
+  // menahan karyawan). Dilarang auto-fill monthlyInstallment/4.
+  weeklyInstallment  Decimal? @map("weekly_installment") @db.Decimal(15, 2)
   remainingAmount    Decimal  @map("remaining_amount") @db.Decimal(15, 2)
   status             String   @default("active")
   notes              String?  @db.Text
@@ -3209,12 +3643,16 @@ model Journal {
   totalCredit     Decimal        @map("total_credit") @db.Decimal(15, 2)
   createdBy       Int?           @map("created_by")
   deletedAt       DateTime?      @map("deleted_at")
+  // F-2026-10-23-127-V: kolom generated di DB — jangan ditulis client.
+  // MySQL hitung dari status/deletedAt/reference; unik di bawah hanya
+  // mengikat jurnal aktif (status <> 'REVERSED' AND deleted_at IS NULL).
+  activeReferenceKey String?    @map("active_reference_key")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
   entries         JournalEntry[]
   creator         User?          @relation(fields: [createdBy], references: [id])
 
-  @@unique([referenceType, referenceId], map: "journals_reference_unique")
+  @@unique([activeReferenceKey], map: "journals_active_reference_unique")
   @@index([createdBy], map: "journals_created_by_fkey")
   @@index([status], map: "idx_journals_status")
   @@index([transactionDate], map: "idx_journals_transaction_date")
@@ -3673,10 +4111,32 @@ model AssetCategory {
   /// Terpisah dari tarif/umur akuntansi supaya keduanya bisa dibandingkan.
   taxDepreciationRate              Decimal? @map("tax_depreciation_rate") @db.Decimal(5, 2)
   taxUsefulLife                    Int?     @map("tax_useful_life")
+  /// Kelompok fiskal PMK 72/2023 (vonis F-2026-10-22-062-V Putusan 2):
+  /// GROUP_1..GROUP_4 / BUILDING_PERMANENT / BUILDING_NON_PERMANENT.
+  /// Tarif statutoris hidup di tabel validasi `asset-fiscal-groups.ts`.
+  taxGroupCode                     String?  @map("tax_group_code") @db.VarChar(30)
+  /// Jenis harta tercantum di lampiran PMK 72/2023? null = belum dinyatakan.
+  taxTypeListed                    Boolean? @map("tax_type_listed")
+  /// Ada penetapan DJP (mengalahkan default kelompok 3 jenis tak tercantum).
+  taxDjpDetermination              Boolean  @default(false) @map("tax_djp_determination")
+  /// Metode fiskal terpilih (vonis BOT 4 F-2026-10-23-109-V P1):
+  /// `straight_line`|`declining_balance`; NULL = belum dipilih -> fiskal
+  /// belum-dihitung, DILARANG fallback garis lurus. Terpisah dari
+  /// `Asset.depreciationMethod` komersial. Bangunan + saldo menurun
+  /// ditolak saat simpan dan di read-model.
+  fiscalMethod                     String?  @map("fiscal_method") @db.VarChar(30)
   assetAccountId                   Int?     @map("asset_account_id")
   accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
   depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
   gainLossAccountId                Int?     @map("gain_loss_account_id")
+  /// Mapping peristiwa penyesuaian nilai (vonis BOT 4 F-2026-10-23-128-V
+  /// Putusan 2, gerbang inti F-2026-10-23-111-V). Nullable TANPA default dan
+  /// TANPA backfill tebakan: NULL memicu fail-closed per peristiwa (P3) —
+  /// surplus wajib EQTY, beban penurunan nilai wajib EXPS, akumulasi
+  /// penurunan nilai wajib DEPR kontra. Bukan SystemSetting global.
+  revaluationSurplusAccountId      Int?     @map("revaluation_surplus_account_id")
+  impairmentLossAccountId          Int?     @map("impairment_loss_account_id")
+  accumulatedImpairmentAccountId   Int?     @map("accumulated_impairment_account_id")
   createdAt                        DateTime @default(now()) @map("created_at")
   updatedAt                        DateTime @updatedAt @map("updated_at")
   assets                           Asset[]
@@ -3685,6 +4145,9 @@ model AssetCategory {
   @@index([accumulatedDepreciationAccountId])
   @@index([depreciationExpenseAccountId])
   @@index([gainLossAccountId])
+  @@index([revaluationSurplusAccountId])
+  @@index([impairmentLossAccountId])
+  @@index([accumulatedImpairmentAccountId])
   @@index([createdAt])
   @@map("asset_categories")
 }
@@ -3751,10 +4214,20 @@ model Asset {
   location           String?
   status             String          @default("active")
   notes              String?         @db.Text
+  /// Parameter komersial terbekukan per aset (vonis BOT 4 F-2026-10-23-118-V
+  /// Putusan 2a): UOP = total estimasi unit seumur aset; SYD = masa manfaat
+  /// komersial dalam bulan. NULL = belum dibekukan, mesin wajib menolak
+  /// berisik; DILARANG menebak dari kategori fiskal.
+  totalEstimatedUnits Decimal?       @map("total_estimated_units") @db.Decimal(15, 2)
+  productionUnitName String?         @map("production_unit_name") @db.VarChar(50)
+  usefulLifeMonths   Int?            @map("useful_life_months")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
   histories          AssetHistory[]
   transfers          AssetTransfer[]
+  usageRecords       AssetUsageRecord[]
+  fiscalYearRows     AssetFiscalYearRow[]
+  changeEvents       AssetChangeEvent[]
   category           AssetCategory?  @relation(fields: [categoryId], references: [id])
   group              AssetGroup?     @relation(fields: [groupId], references: [id])
 
@@ -3766,6 +4239,193 @@ model Asset {
   @@index([assetBrandId])
   @@index([createdAt])
   @@map("assets")
+}
+
+/// Dokumen unit aktual bernama per (aset, masa) — vonis BOT 4
+/// F-2026-10-23-118-V Putusan 2b. Sumber `actualUnits` UOP; tanpa baris
+/// untuk masa itu, mesin menolak `missing-parameter:actualUnits`.
+/// Unik per (assetId, periodYear, periodMonth) = satu dokumen per masa;
+/// koreksi = timpa baris ini (belum ada jurnal) atau reversal jurnal.
+model AssetUsageRecord {
+  id          Int      @id @default(autoincrement())
+  assetId     Int      @map("asset_id")
+  periodYear  Int      @map("period_year")
+  periodMonth Int      @map("period_month")
+  actualUnits Decimal  @map("actual_units") @db.Decimal(15, 2)
+  sourceName  String   @map("source_name") @db.VarChar(200)
+  sourceRef   String?  @map("source_ref") @db.VarChar(200)
+  createdBy   Int?     @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, periodYear, periodMonth], map: "asset_usage_records_asset_period_unique")
+  @@index([assetId], map: "asset_usage_records_asset_id_fkey")
+  @@index([createdAt])
+  @@map("asset_usage_records")
+}
+
+/// Baris tahun saldo fiskal terbekukan per aset (vonis BOT 4
+/// F-2026-10-23-109-V P4). Snapshot method/groupCode/ratePercent saat
+/// baris dibuat; edit master kategori tidak mengubah baris terbit.
+/// BUKAN jurnal — tidak memposting GL apa pun. Unik (assetId, taxYear):
+/// generate tahunan idempoten, replay = nol baris baru/nol ubah.
+model AssetFiscalYearRow {
+  id             Int      @id @default(autoincrement())
+  assetId        Int      @map("asset_id")
+  taxYear        Int      @map("tax_year")
+  yearIndex      Int      @map("year_index")
+  openingBalance Decimal  @map("opening_balance") @db.Decimal(15, 2)
+  depreciation   Decimal  @db.Decimal(15, 2)
+  closingBalance Decimal  @map("closing_balance") @db.Decimal(15, 2)
+  method         String   @db.VarChar(30)
+  groupCode      String   @map("group_code") @db.VarChar(30)
+  ratePercent    Decimal  @map("rate_percent") @db.Decimal(5, 2)
+  /// computed | opening | estimasi-tahun-berjalan (snapshot builder).
+  source         String   @db.VarChar(30)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, taxYear], map: "asset_fiscal_year_rows_asset_year_unique")
+  @@index([assetId], map: "asset_fiscal_year_rows_asset_id_fkey")
+  @@index([createdAt])
+  @@map("asset_fiscal_year_rows")
+}
+
+/// Peristiwa perubahan aset terbekukan — inti gabungan vonis BOT 4
+/// F-2026-10-23-111-V (revaluasi + impairment) dan F-2026-10-23-115-V
+/// (reklasifikasi + perubahan metode/estimasi). SATU model, SATU migrasi,
+/// SATU owner schema (BOT 3) supaya dua kartu tidak melahirkan dua tabel
+/// peristiwa yang bertabrakan.
+///
+/// Pembekuan (F-111-V Putusan 4 + F-115-V): nilai sebelum dari jurnal POSTED
+/// (bukan `Asset.currentValue`), akun snapshot id+kode per peristiwa,
+/// dokumen sumber unik idempoten (`sourceDocumentKey` unik — replay dokumen
+/// sama ditolak DB), satu peristiwa satu jurnal POSTED bila berjurnal
+/// (`journalId`, null bila peristiwa tanpa jurnal: ganti metode/estimasi).
+/// Koreksi HANYA reversal di periode terbuka: `reversesEventId` menunjuk
+/// peristiwa asal, peristiwa asal jadi REVERSED lewat jurnal pasangannya;
+/// baris peristiwa tidak pernah diedit/dihapus sesudah POSTED.
+/// Fiskal hanya bergerak lewat peristiwa berpersetujuan DJP terstruktur
+/// (nomor+tanggal): tanpa itu kolom fiskal peristiwa ini wajib kosong dan
+/// basis/saldo fiskal byte-sama (E111-3/E115-4).
+model AssetChangeEvent {
+  id        Int      @id @default(autoincrement())
+  assetId   Int      @map("asset_id")
+  /// REVALUATION_UP | REVALUATION_DOWN | IMPAIRMENT | IMPAIRMENT_REVERSAL |
+  /// FISCAL_REVALUATION_APPROVED (F-111-V) | RECLASSIFICATION |
+  /// COMMERCIAL_METHOD_CHANGE | FISCAL_METHOD_CHANGE | ESTIMATE_CHANGE (F-115-V)
+  kind      String   @db.VarChar(40)
+  /// POSTED | REVERSED
+  status    String   @default("POSTED") @db.VarChar(20)
+  /// Tanggal efektif bulan peristiwa (awal bulan, pola jurnal penyusutan).
+  effectiveDate DateTime @map("effective_date")
+  /// Kunci dokumen sumber (laporan penilai / keputusan DJP / berita acara).
+  /// Unik = replay dokumen yang sama ditolak fisik (E111-10/E115-8).
+  sourceDocumentKey String @unique @map("source_document_key") @db.VarChar(200)
+  sourceDocumentRef String? @map("source_document_ref") @db.VarChar(200)
+  /// Jurnal pasangan POSTED; null bila peristiwa tanpa jurnal.
+  journalId Int?     @map("journal_id")
+  /// Peristiwa asal yang dibalik peristiwa ini (reversal), bila ada.
+  reversesEventId Int? @unique @map("reverses_event_id")
+
+  /// Nilai tercatat jurnal POSTED sebelum/sesudah (sen persis).
+  carryingBefore Decimal? @map("carrying_before") @db.Decimal(15, 2)
+  carryingAfter  Decimal? @map("carrying_after") @db.Decimal(15, 2)
+  /// Bruto + akumulasi jurnal POSTED sebelum peristiwa (dasar jurnal revaluasi).
+  grossBefore          Decimal? @map("gross_before") @db.Decimal(15, 2)
+  accumulatedBefore    Decimal? @map("accumulated_before") @db.Decimal(15, 2)
+  accumulatedImpairmentBefore Decimal? @map("accumulated_impairment_before") @db.Decimal(15, 2)
+  /// Surplus revaluasi per-aset sebelum/sesudah peristiwa (snapshot; tidak
+  /// boleh negatif, tidak boleh memakan surplus aset lain — E111-2). Before
+  /// dibekukan supaya reversal menulis surplus sesudah = before peristiwa
+  /// asal persis (mirror), tanpa menurunkan ulang dari rantai.
+  revaluationSurplusBefore Decimal? @map("revaluation_surplus_before") @db.Decimal(15, 2)
+  revaluationSurplusAfter Decimal? @map("revaluation_surplus_after") @db.Decimal(15, 2)
+
+  /// Penilai/dasar terstruktur: nama penilai/penelaah + rujukan laporan.
+  appraiserName String? @map("appraiser_name") @db.VarChar(200)
+  /// Kelas aset yang direvaluasi (F-111-V: per kelas, bukan cherry-pick aset).
+  revaluedClassName String? @map("revalued_class_name") @db.VarChar(200)
+  /// Indikator impairment terdaftar + dasar terpulihkan terstruktur.
+  impairmentIndicator String? @map("impairment_indicator") @db.VarChar(60)
+  /// FAIR_VALUE_LESS_COSTS | VALUE_IN_USE
+  recoverableBasis String? @map("recoverable_basis") @db.VarChar(40)
+  recoverableAmount Decimal? @map("recoverable_amount") @db.Decimal(15, 2)
+  /// Plafon pembalikan: nilai tercatat seandainya tanpa impairment (E111-8).
+  carryingWithoutImpairment Decimal? @map("carrying_without_impairment") @db.Decimal(15, 2)
+  /// Goodwill/tak berwujud tanpa amortisasi: pembalikan DILARANG (PSAK 48).
+  isGoodwillOrNonAmortizing Boolean @default(false) @map("is_goodwill_or_non_amortizing")
+
+  /// Reklasifikasi (F-115-V Putusan 1).
+  fromCategoryId Int? @map("from_category_id")
+  toCategoryId   Int? @map("to_category_id")
+  reasonCode     String? @map("reason_code") @db.VarChar(60)
+  reasonNote     String? @map("reason_note") @db.Text
+  approvedByName String? @map("approved_by_name") @db.VarChar(200)
+
+  /// Perubahan metode/estimasi (F-115-V Putusan 2/3/4) — prospektif, nol jurnal.
+  oldMethod String? @map("old_method") @db.VarChar(40)
+  newMethod String? @map("new_method") @db.VarChar(40)
+  oldUsefulLifeMonths Int? @map("old_useful_life_months")
+  newUsefulLifeMonths Int? @map("new_useful_life_months")
+  oldResidualValue Decimal? @map("old_residual_value") @db.Decimal(15, 2)
+  newResidualValue Decimal? @map("new_residual_value") @db.Decimal(15, 2)
+
+  /// Fiskal berpersetujuan DJP (F-111-V Putusan 2 / F-115-V Putusan 3).
+  /// Kosong = fiskal tidak bergerak oleh peristiwa ini.
+  djpApprovalNumber String? @map("djp_approval_number") @db.VarChar(100)
+  djpApprovalDate   DateTime? @map("djp_approval_date")
+  fiscalBaseBefore  Decimal? @map("fiscal_base_before") @db.Decimal(15, 2)
+  fiscalBaseAfter   Decimal? @map("fiscal_base_after") @db.Decimal(15, 2)
+  fiscalSurplusAmount Decimal? @map("fiscal_surplus_amount") @db.Decimal(15, 2)
+  /// Snapshot tarif PPh final master saat peristiwa (E111-4).
+  finalTaxRatePercent Decimal? @map("final_tax_rate_percent") @db.Decimal(5, 2)
+  finalTaxAmount    Decimal? @map("final_tax_amount") @db.Decimal(15, 2)
+  /// Masa manfaat fiskal PENUH kelompok sesudah reset (bulan).
+  fiscalUsefulLifeMonthsAfter Int? @map("fiscal_useful_life_months_after")
+  fiscalGroupCode   String? @map("fiscal_group_code") @db.VarChar(30)
+  fiscalMethodBefore String? @map("fiscal_method_before") @db.VarChar(40)
+  fiscalMethodAfter  String? @map("fiscal_method_after") @db.VarChar(40)
+
+  /// Snapshot akun terpakai (id + kode) — pembalikan membaca ini, bukan
+  /// mapping kategori berjalan (F-128-V Putusan 3, E128-4).
+  surplusAccountId Int? @map("surplus_account_id")
+  surplusAccountCode String? @map("surplus_account_code") @db.VarChar(20)
+  impairmentLossAccountId Int? @map("impairment_loss_account_id")
+  impairmentLossAccountCode String? @map("impairment_loss_account_code") @db.VarChar(20)
+  accumulatedImpairmentAccountId Int? @map("accumulated_impairment_account_id")
+  accumulatedImpairmentAccountCode String? @map("accumulated_impairment_account_code") @db.VarChar(20)
+  fixedAssetAccountId Int? @map("fixed_asset_account_id")
+  fixedAssetAccountCode String? @map("fixed_asset_account_code") @db.VarChar(20)
+  accumulatedDepreciationAccountId Int? @map("accumulated_depreciation_account_id")
+  accumulatedDepreciationAccountCode String? @map("accumulated_depreciation_account_code") @db.VarChar(20)
+  taxPayableAccountId Int? @map("tax_payable_account_id")
+  taxPayableAccountCode String? @map("tax_payable_account_code") @db.VarChar(20)
+  /// Reklasifikasi: akun kelas tujuan (snapshot lawan jurnal pindah).
+  toFixedAssetAccountId Int? @map("to_fixed_asset_account_id")
+  toFixedAssetAccountCode String? @map("to_fixed_asset_account_code") @db.VarChar(20)
+  toAccumulatedDepreciationAccountId Int? @map("to_accumulated_depreciation_account_id")
+  toAccumulatedDepreciationAccountCode String? @map("to_accumulated_depreciation_account_code") @db.VarChar(20)
+  toAccumulatedImpairmentAccountId Int? @map("to_accumulated_impairment_account_id")
+  toAccumulatedImpairmentAccountCode String? @map("to_accumulated_impairment_account_code") @db.VarChar(20)
+
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  asset         Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  reversesEvent AssetChangeEvent?  @relation("AssetChangeEventReversal", fields: [reversesEventId], references: [id])
+  reversedBy    AssetChangeEvent?  @relation("AssetChangeEventReversal")
+
+  @@index([assetId])
+  @@index([kind])
+  @@index([status])
+  @@index([effectiveDate])
+  @@index([journalId])
+  @@index([createdAt])
+  @@map("asset_change_events")
 }
 
 model AssetHistory {
@@ -3898,6 +4558,7 @@ model CustomerVehicle {
   workOrders    WorkOrder[]
   warrantyCoverages WarrantyCoverage[]
   warrantyClaims    WarrantyClaim[]
+  installedParts    InstalledPart[]
 
   @@index([customerId], map: "customer_vehicles_customer_id_fkey")
   @@index([vehicleId], map: "customer_vehicles_vehicle_id_fkey")
@@ -4236,16 +4897,27 @@ model CronLog {
 }
 
 model TransactionAttachment {
-  id            Int      @id @default(autoincrement())
-  referenceType String   @map("reference_type")
-  referenceId   Int      @map("reference_id")
+  id            Int       @id @default(autoincrement())
+  referenceType String    @map("reference_type")
+  referenceId   Int       @map("reference_id")
   filename      String
-  originalName  String   @map("original_name")
-  fileUrl       String   @map("file_url")
-  fileSize      Int      @map("file_size")
-  mimeType      String   @map("mime_type")
-  uploadedBy    Int?     @map("uploaded_by")
-  createdAt     DateTime @default(now()) @map("created_at")
+  originalName  String    @map("original_name")
+  fileUrl       String    @map("file_url")
+  fileSize      Int       @map("file_size")
+  mimeType      String    @map("mime_type")
+  uploadedBy    Int?      @map("uploaded_by")
+  // F-2026-10-24-096-S Opsi A (vonis Backend §3): kolom foto aditif nullable.
+  // photoCategory: intake|progress|defect|handover|other (BR-PHOTO-02);
+  // null baris lama dibaca `other` (BR-PHOTO-09), tidak ditebak ulang.
+  // verified*/published*: jejak QC (manage_qc_inspections) & terbit
+  // (complete_work_orders) — BR-PHOTO-06/08. Tanpa FK tahap baru: tahap
+  // ditunjuk referenceType+referenceId polimorfik existing.
+  photoCategory String?   @map("photo_category")
+  verifiedBy    Int?      @map("verified_by")
+  verifiedAt    DateTime? @map("verified_at")
+  publishedBy   Int?      @map("published_by")
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   @@index([referenceType, referenceId])
   @@index([uploadedBy])
@@ -4282,6 +4954,7 @@ model WarrantyCoverage {
   workOrder         WorkOrder       @relation("WorkOrderWarrantyCoverages", fields: [workOrderId], references: [id])
   item              Item            @relation(fields: [itemId], references: [id])
   claims            WarrantyClaim[]
+  installedParts    InstalledPart[]
 
   @@unique([workOrderId, itemId, serialKey], map: "warranty_coverages_wo_item_serial_key_key")
   @@index([customerVehicleId])
@@ -4290,6 +4963,65 @@ model WarrantyCoverage {
   @@index([status])
   @@index([expiresAt])
   @@map("warranty_coverages")
+}
+
+// F-2026-10-22-072-S (inti F-2026-10-21-024) — registri part terpasang per
+// kendaraan. Lahir OTOMATIS (satu-satunya jalan masuk; form bebas dilarang,
+// BR-IP-01) dari baris MaterialIssue completed: di tx completeWorkOrder
+// untuk MI taut WO, dan di tx completeMaterialIssue untuk MI taut proyek
+// tanpa WO bila Project.customerVehicleId terisi (putusan BOT 1 Q-IP-1).
+// MI bebas tidak pernah ditebak kendaraannya (BR-IP-07: tanpa kendaraan =
+// tidak lahir + terhitung skipped, dokumen sumber tetap selesai).
+//
+// Q-IP-3 (fisik BOT 3): serial-tracked = 1 baris per unit, qty selalu 1,
+// dari MaterialIssueItem.serialNumbers ter-konsumsi; non-serial = 1 baris
+// per baris issue dengan qty = MaterialIssueItem.qty. serialKey =
+// serialNumber ?? "" (pola WarrantyCoverage F-021-HARDEN: MySQL tidak
+// menganggap NULL unik) ikut @@unique(materialIssueItemId, serialKey)
+// menahan duplikat retry complete (BR-IP-04); pelanggar kedua = P2002
+// ditelan service sebagai "sudah ada". Nilai "" bukan serial asli.
+//
+// Status TIDAK disimpan: diturunkan dari qtyRemoved — TERPASANG (0),
+// SEBAGIAN_DILEPAS (0 < qtyRemoved < qty), DILEPAS (qtyRemoved = qty)
+// (BR-IP-05). removedAt/removedById/removalReason merekam kejadian lepas
+// TERAKHIR (removedAt hanya terisi saat DILEPAS penuh). Catat lepas TIDAK
+// membuat StockMove/jurnal/retur (BR-IP-06) — pengembalian fisik part =
+// dokumen inventory existing. warrantyCoverageId menaut coverage garansi
+// baris yang sama bila lahir (BR-IP-08: klaim tetap lewat coverage).
+// Q-IP-4: tanpa backfill historis. Q-IP-5: baris tidak pernah dihapus;
+// penanda batal sumber diturunkan pembaca dari status dokumen sumber.
+model InstalledPart {
+  id                        Int       @id @default(autoincrement())
+  customerVehicleId         Int       @map("customer_vehicle_id")
+  itemId                    Int       @map("item_id")
+  materialIssueItemId       Int       @map("material_issue_item_id")
+  serialNumber              String?   @map("serial_number")
+  serialKey                 String    @default("") @map("serial_key")
+  qty                       Decimal   @db.Decimal(15, 2)
+  qtyRemoved                Decimal   @default(0.00) @map("qty_removed") @db.Decimal(15, 2)
+  installedAt               DateTime  @map("installed_at")
+  warrantyCoverageId        Int?      @map("warranty_coverage_id")
+  removedAt                 DateTime? @map("removed_at")
+  removedById               Int?      @map("removed_by")
+  removalReason             String?   @map("removal_reason") @db.Text
+  replacedByInstalledPartId Int?      @map("replaced_by_installed_part_id")
+  notes                     String?   @db.Text
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  customerVehicle   CustomerVehicle   @relation(fields: [customerVehicleId], references: [id])
+  item              Item              @relation(fields: [itemId], references: [id])
+  materialIssueItem MaterialIssueItem @relation(fields: [materialIssueItemId], references: [id], onDelete: Cascade)
+  warrantyCoverage  WarrantyCoverage? @relation(fields: [warrantyCoverageId], references: [id], onDelete: SetNull)
+  replacedBy        InstalledPart?    @relation("InstalledPartReplacement", fields: [replacedByInstalledPartId], references: [id], onDelete: SetNull)
+  replacements      InstalledPart[]   @relation("InstalledPartReplacement")
+
+  @@unique([materialIssueItemId, serialKey], map: "installed_parts_issue_item_serial_key_key")
+  @@index([customerVehicleId])
+  @@index([itemId])
+  @@index([warrantyCoverageId])
+  @@index([replacedByInstalledPartId])
+  @@map("installed_parts")
 }
 
 // F-2026-10-21-021 tahap 2 — klaim garansi. State machine:
@@ -4563,4 +5295,294 @@ model IdempotencyKey {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("idempotency_keys")
+}
+
+// F-2026-10-22-066-S inti (induk F-2026-10-20-103; putusan BOT 1 §5A +
+// vonis BOT 4 F-2026-10-22-066-V): dokumen persetujuan pelanggan untuk
+// perubahan tengah-job pada WorkOrder yang tertaut Quotation. Sumber
+// nilai kontrak TUNGGAL tetap Quotation.grandTotal (BR-CO-01): dokumen
+// ini TIDAK membuat jurnal/piutang/payment dan TIDAK menyimpan nilai
+// kontrak kedua — selisihNilai hanya snapshot informasi persetujuan
+// saat kirim (sen Decimal). Status ditegakkan server:
+// draft -> menunggu_pelanggan -> disetujui -> diterapkan; cabang
+// ditolak (dari menunggu_pelanggan) dan dibatalkan (dari draft/
+// menunggu_pelanggan) terminal. Terapkan satu tx: klaim kondisional
+// disetujui->diterapkan, kunci baris dibaca ulang, revisi grandTotal
+// lewat computeQuotationTotals server, lalu uang keluar HANYA lewat
+// createDifferenceInvoice/createRevisionDownCredit existing (BR-CO-02).
+// Baris WorkOrderItem yang sudah punya MaterialIssueItem
+// (workOrderItemId terisi, SEMUA status MaterialIssue) TERKUNCI
+// total (BR-CO-03); penggantian part terpasang lewat jalur
+// MaterialIssue/retur existing. Satu CO aktif (draft/menunggu_
+// pelanggan/disetujui) per WO dijaga service di dalam tx (BR-CO-06;
+// unique parsial tak tersedia di MySQL). CO TIDAK menyentuh
+// bomRevisionId (Q-CO-5; F-104 terpisah). CO pada WO tanpa
+// quotationId ditolak (BR-CO-10).
+model JobChangeOrder {
+  id        Int      @id @default(autoincrement())
+  slug      String?  @unique
+  // Nomor urut per WO (CO-001, CO-002, ...) dari nomor dokumen CO
+  // sendiri (BR-CO-06) — bukan DocumentSequenceService (tak ada prefix CO).
+  documentNo String  @unique @map("document_no")
+  sequence   Int
+  // FK denormal dari WO (WO.quotationId) disimpan sekali saat buat
+  // supaya jalur terapkan/riwayat tak menerka ulang (BR-CO-10: WO tanpa
+  // quotationId ditolak sebelum baris ini lahir).
+  workOrderId Int     @map("work_order_id")
+  quotationId Int     @map("quotation_id")
+  status      String  @default("draft")
+  // Alasan perubahan WAJIB sejak draf (penjaga kirim §3).
+  reason      String  @db.Text
+  // Timestamp snapshot terkirim (null sebelum kirim). Isi snapshot
+  // adalah baris items CO itu sendiri; baca ulang di tx terapkan.
+  sentAt  DateTime? @map("sent_at")
+  sentBy  Int?      @map("sent_by")
+  // Nilai informasi persetujuan saat kirim; snapshot quote saat kirim.
+  // BUKAN dasar jurnal (BR-CO-01) — uang selalu dari grandTotal berjalan.
+  selisihNilai       Decimal? @map("selisih_nilai") @db.Decimal(15, 2)
+  grandTotalSebelum  Decimal? @map("grand_total_sebelum") @db.Decimal(15, 2)
+  grandTotalSesudah  Decimal? @map("grand_total_sesudah") @db.Decimal(15, 2)
+  // Bukti persetujuan pelanggan dicatat staf (Q-CO-2/BR-CO-07): referensi
+  // bebas WAJIB non-kosong sesudah trim + timestamp + pencatat. Sistem
+  // TIDAK mengklaim pelanggan menyetujui langsung di sistem (tanpa portal).
+  approvalReference        String?   @map("approval_reference") @db.Text
+  disetujuiOlehPelangganAt DateTime? @map("disetujui_oleh_pelanggan_at")
+  disetujuiDicatatOleh     Int?      @map("disetujui_dicatat_oleh")
+  // Lampiran/tautan bukti opsional (Q-CO-2: bukan syarat).
+  approvalAttachmentUrl    String?   @map("approval_attachment_url")
+  // Jejak penolakan/pembatalan (alasan wajib; §3).
+  rejectionReason String? @map("rejection_reason") @db.Text
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectedBy      Int?      @map("rejected_by")
+  cancelReason    String?  @map("cancel_reason") @db.Text
+  cancelledAt     DateTime? @map("cancelled_at")
+  cancelledBy     Int?      @map("cancelled_by")
+  // Hasil terapkan: status diterapkan + jejak dokumen uang existing yang
+  // menjadi konsekuensi (bukan jurnal dari CO — BR-CO-02).
+  appliedAt          DateTime? @map("applied_at")
+  appliedBy          Int?      @map("applied_by")
+  appliedGrandTotal  Decimal?  @map("applied_grand_total") @db.Decimal(15, 2)
+  appliedInvoiceId   Int?      @map("applied_invoice_id")
+  appliedCreditId    Int?      @map("applied_credit_id")
+  appliedNote        String?   @map("applied_note") @db.Text
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  quotation Quotation @relation(fields: [quotationId], references: [id])
+  items     JobChangeOrderItem[]
+
+  @@unique([workOrderId, sequence], map: "job_change_orders_wo_sequence_unique")
+  @@index([workOrderId, status])
+  @@index([quotationId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("job_change_orders")
+}
+
+// Baris perubahan CO. action: tambah | ubah | hapus (BR-CO-04). Untuk
+// tambah: workOrderItemId null (baris WO lahir saat terapkan), before*
+// null, after* dari input. Untuk ubah/hapus: workOrderItemId menunjuk
+// baris WO existing; before* = snapshot nilai WO saat draf dibuat,
+// after* = nilai sesudah (hapus: after* menggemakan before* — jejak
+// audit, bukan hard-delete baris WO; baris WO ditandai status replaced
+// saat terapkan, pola reviseWorkOrderItems existing). costBefore/
+// costAfter = WorkOrderItem.cost snapshot (biaya baris WO, BUKAN
+// ProductionCost — AC-CO-3: ProductionCost/totalActualCost tak berubah
+// oleh perubahan nilai tagih).
+model JobChangeOrderItem {
+  id              Int  @id @default(autoincrement())
+  changeOrderId   Int  @map("change_order_id")
+  workOrderItemId Int? @map("work_order_item_id")
+  // Item stok baris (0 = jasa/custom pola WorkOrderItem AUD-NEXT-07).
+  itemId      Int
+  action      String
+  description String?
+  uom         String?
+  qtyBefore   Decimal? @map("qty_before") @db.Decimal(15, 2)
+  qtyAfter    Decimal? @map("qty_after") @db.Decimal(15, 2)
+  costBefore  Decimal? @map("cost_before") @db.Decimal(15, 2)
+  costAfter   Decimal? @map("cost_after") @db.Decimal(15, 2)
+  // Nilai tagih per baris (basis QuotationItem.unitPrice/discount) —
+  // sumber revisi grandTotal di tx terapkan.
+  unitPriceBefore Decimal? @map("unit_price_before") @db.Decimal(15, 2)
+  unitPriceAfter  Decimal? @map("unit_price_after") @db.Decimal(15, 2)
+  discountBefore  Decimal? @map("discount_before") @db.Decimal(15, 2)
+  discountAfter   Decimal? @map("discount_after") @db.Decimal(15, 2)
+  discountType    String?  @map("discount_type")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  changeOrder JobChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  workOrderItem WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
+
+  @@index([changeOrderId])
+  @@index([workOrderItemId])
+  @@index([itemId])
+  @@map("job_change_order_items")
+}
+
+// F-2026-10-22-067-S inti (induk F-2026-10-20-106) + putusan BOT 1
+// Q-TM67-1/3/5 (kartu t_40805adc) + vonis BOT 4 F-2026-10-22-072-V:
+// jadwal termin per Quotation. Jadwal = RENCANA komersial saja:
+// TIDAK menerbitkan invoice/DP/pembayaran/jurnal/faktur pajak, dan
+// dueDate baris TIDAK dipakai aging/denda/provisi (aging tetap dari
+// dueDate invoice, src/lib/reports/aging.ts). Basis persen = persen
+// kumulatif × Quotation.grandTotal berjalan TERMASUK PPN, satu basis,
+// tanpa kolom basis DPP. Status per termin = turunan server dari
+// dueDate + billedAmountExcludingCancelled (bukan DP, bukan ketik
+// manual) di src/lib/reports/job-payment-schedule.ts. Satu jadwal
+// aktif per Quotation dijaga di tx aksi (bukan partial-unique: MySQL
+// tak punya partial index; penjaga = lock baris quotation + cek
+// status aktif di tx yang sama). Amendemen baris sesudah termin
+// pertama terpenuhi wajib alasan tercatat (BR-TM67-06); alasan
+// terakhir + pencatat disimpan di header sebagai jejak.
+model JobPaymentSchedule {
+  id          Int      @id @default(autoincrement())
+  quotationId Int      @map("quotation_id")
+  // aktif | dibatalkan (selesai = turunan builder, bukan nilai simpan)
+  status      String   @default("aktif")
+  // Jejak amendemen terakhir (BR-TM67-06): alasan wajib bila ubah
+  // baris sesudah ada termin terpenuhi; null sebelum amendemen pertama.
+  amendmentReason String?   @map("amendment_reason") @db.Text
+  amendedBy       Int?      @map("amended_by")
+  amendedAt       DateTime? @map("amended_at")
+  cancelReason    String?   @map("cancel_reason") @db.Text
+  cancelledBy     Int?      @map("cancelled_by")
+  cancelledAt     DateTime? @map("cancelled_at")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  quotation Quotation                 @relation(fields: [quotationId], references: [id])
+  terms     JobPaymentScheduleTerm[]
+
+  @@index([quotationId, status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("job_payment_schedules")
+}
+
+// Baris termin. cumulativePercent Decimal(5,2) naik ketat, baris
+// terakhir persis 100 (validasi builder+aksi). Target nominal TIDAK
+// disimpan: selalu dihitung ulang dari persen × grandTotal berjalan
+// supaya revisi/CO otomatis mengubah termin belum-terpenuhi dan
+// termin terpenuhi tidak ditulis ulang (vonis F-072-V butir 3).
+// milestoneLabel = label teks bebas + referensi tahap/WO sebagai
+// LABEL saja (Q-TM67-1: bukan FK penentu status; Q-TM67-3: milestone
+// tidak memicu status tahap ini).
+model JobPaymentScheduleTerm {
+  id                Int      @id @default(autoincrement())
+  scheduleId        Int      @map("schedule_id")
+  name              String
+  cumulativePercent Decimal  @map("cumulative_percent") @db.Decimal(5, 2)
+  dueDate           DateTime @map("due_date")
+  milestoneLabel    String?  @map("milestone_label")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  schedule JobPaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, sortOrder])
+  @@map("job_payment_schedule_terms")
+}
+
+// F-2026-10-22-088-S tahap 1 (Q-TGT-5): master target penjualan per
+// penjual-periode. Bentuk fisik milik BOT 3 per spec §9. Pencapaian
+// TIDAK disimpan di sini: selalu diturunkan dari faktur paid snapshot
+// salesEmployeeId (basis IDENTIK rekap komisi F-2026-10-21-016,
+// loader sales-target-achievement-data.ts). Penjaga mengikat di aksi:
+// periode penjual sama tidak bertumpukan (BR-TGT-03), targetAmount > 0
+// (BR-TGT-04), target baru hanya karyawan isActive (BR-TGT-12),
+// perubahan tercatat ActivityLog old/new (BR-TGT-09), nonaktif =
+// soft-delete deletedAt bukan hapus fisik (BR-TGT-10). Laporan ini
+// informatif: bukan dasar bonus/jurnal/pembayaran (BR-TGT-07).
+model SalesTarget {
+  id              Int       @id @default(autoincrement())
+  salesEmployeeId Int       @map("sales_employee_id")
+  // Periode bebas inklusif dua ujung (Q-TGT-4); disimpan tengah malam
+  // UTC hari kalender WIB (pola wibDateToUtcMidnight).
+  periodStart     DateTime  @map("period_start")
+  periodEnd       DateTime  @map("period_end")
+  targetAmount    Decimal   @map("target_amount") @db.Decimal(15, 2)
+  notes           String?   @db.Text
+  createdBy       Int?      @map("created_by")
+  updatedBy       Int?      @map("updated_by")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  salesEmployee Employee @relation(fields: [salesEmployeeId], references: [id])
+
+  @@index([salesEmployeeId, periodStart, periodEnd])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("sales_targets")
+}
+
+// F-2026-10-22-068-S (Q-BOM68-3 fisik BOT 3): pengajuan ganti revisi BOM
+// pada order berjalan — perubahan terkendali, bukan revisi diam-diam.
+// Status bebas: menunggu | disetujui | ditolak | diterapkan_langsung.
+// Penjaga mengikat di aksi bom-revision-change.actions, BUKAN skema:
+// belum ter-issue = langsung diterapkan dalam satu transaksi
+// (BR-BOM68-02); sudah ter-issue = usulan wajib diputus, penyetuju !=
+// pengaju (SoD BR-BOM68-05), tolak wajib alasan, pin dokumen diganti di
+// transaksi persetujuan yang sama (BR-BOM68-06). Semua aksi TIDAK
+// PERNAH membuat StockMove/MaterialIssue/ProductionCost/jurnal (vonis
+// F-074-V dirujuk BR-BOM68-09). Satu dokumen pemilik per pengajuan
+// (BR-BOM68-07): workOrderId ATAU productionOrderId.
+model BomRevisionChangeRequest {
+  id                Int       @id @default(autoincrement())
+  workOrderId       Int?      @map("work_order_id")
+  productionOrderId Int?      @map("production_order_id")
+  fromRevisionId    Int       @map("from_revision_id")
+  toRevisionId      Int       @map("to_revision_id")
+  reason            String    @db.Text
+  status            String    @default("menunggu") @db.VarChar(30)
+  requestedBy       Int?      @map("requested_by")
+  decidedBy         Int?      @map("decided_by")
+  decidedAt         DateTime? @map("decided_at")
+  decisionReason    String?   @map("decision_reason") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  workOrder       WorkOrder?       @relation(fields: [workOrderId], references: [id])
+  productionOrder ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  fromRevision    BomRevision      @relation("ChangeFromRevision", fields: [fromRevisionId], references: [id])
+  toRevision      BomRevision      @relation("ChangeToRevision", fields: [toRevisionId], references: [id])
+
+  @@index([workOrderId, status])
+  @@index([productionOrderId, status])
+  @@index([createdAt])
+  @@map("bom_revision_change_requests")
+}
+
+// F-2026-10-22-069-S inti (spec BOT 5 + PUTUSAN BOT 1 Q-SUB69-1..4 +
+// vonis BOT 4 F-2026-10-22-075-V): relasi substitusi part SATU ARAH di
+// master barang. Satu baris = satu arah; arah balik wajib baris sendiri;
+// TIDAK ada inferensi transitif (BR-SUB69-02). Penjaga mengikat hidup di
+// aksi item-substitute.actions (bukan skema): asal != pengganti, kedua
+// item stok aktif & satuan dasar sama, pasangan aktif ganda ditolak
+// (@@unique pasangan sebagai jaring DB). Nonaktifkan = isActive=false —
+// baris tidak dihapus supaya riwayat saran/log utuh (BR-SUB69-10).
+// Penerapan ke WO TIDAK memakai tabel ini untuk menulis: hanya lewat
+// reviseWorkOrderItems existing; tabel ini sumber saran read-only
+// (BR-SUB69-04/06, vonis Q-SUB69-5: nol harga/biaya khusus substitusi).
+model ItemSubstitute {
+  id               Int      @id @default(autoincrement())
+  itemId           Int      @map("item_id")
+  substituteItemId Int      @map("substitute_item_id")
+  notes            String?  @db.Text
+  isActive         Boolean  @default(true) @map("is_active")
+  createdBy        Int?     @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  item           Item @relation("ItemSubstitutes", fields: [itemId], references: [id], onDelete: Cascade)
+  substituteItem Item @relation("ItemSubstitutedFor", fields: [substituteItemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, substituteItemId], map: "item_substitutes_pair_key")
+  @@index([itemId, isActive])
+  @@index([substituteItemId])
+  @@map("item_substitutes")
 }
