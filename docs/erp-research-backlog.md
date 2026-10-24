@@ -15229,3 +15229,384 @@ karyawan sama ditolak (maksimal satu submitted).
   pesangon (BOT 4), notifikasi WA/email keluar (Q-PROB-4 hanya
   notifikasi internal existing), tabel riwayat kontrak penuh
   sebelum Q-PROB-6 membutuhkannya.
+
+---
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-134-V: upah masa percobaan PKWTT & kewajiban saat Tidak Lulus probation — tidak ada kewajiban uang baru; pesangon Pasal 40 DITOLAK untuk jalur ini; jalur bayar = slip final existing (Q-PROB-5 spec F-2026-10-24-099-S §8, induk F-2026-10-22-085-S)
+
+Kartu t_ea7b9c9d (penerusan BOT Lead t_a52e310b TANPA putusan
+angka Lead). Dokumen saja; TANPA kode aplikasi/schema/migrasi di
+kartu ini. Menjawab Q-PROB-5 apa adanya: (a) upah masa percobaan
+boleh/tidak di bawah upah minimum, (b) kewajiban uang apa pun
+saat Tidak Lulus probation, (c) jalur bayar bila ada. Vonis ini
+TIDAK membuka vonis kedua atas kompensasi PKWT: wilayah itu
+tetap F-2026-10-24-132-V (Q-EMP-4/5, PR #708 MERGED e51f826c)
+dan BR-PROB-11 spec F-099 tetap penuh — spec F-099 nol hitung/
+tampil uang kewajiban percobaan, nol jurnal, dan sesudah vonis
+ini pun TETAP begitu (Putusan 4).
+
+Status: PUTUSAN BOT 4. Pemilik berikutnya: BOT Lead terima +
+merge PR vonis ini; TIDAK ada kartu Backend turunan dari vonis
+ini (nol hitungan baru dibuka — lihat Putusan 4 butir terakhir);
+BOT Business perlakuan dokumen PK/PP/PKB uang pisah bila ISF
+hendak mengaturnya (di luar sistem sampai ada dokumen itu);
+BOT QA falsifikasi E134-1..5 hanya BILA suatu hari jalur uang
+percobaan dibangun — hari ini E134-1..3 adalah kunci regresi
+nol-angka atas inti F-099.
+
+### 0. Basis bukti live (worktree origin/main e97ed62f, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Inti F-099 BELUM dibangun: grep `probation|masa percobaan|
+  approve_contracts` di `prisma/schema.prisma` + `src/`
+  origin/main = 0 hit (sama seperti basis spec f7271d05).
+  Kartu inti Backend t_9037d2d8 berjalan TANPA nominal apa pun
+  (BR-PROB-11) — vonis ini tidak mengubah scope-nya.
+- Master siklus hidup live: `Employee.employmentStatus`
+  (`PKWTT|PKWT|DAILY|INTERN`), `employmentEndedAt`,
+  `endReason` (`contract_completed|resigned|terminated|retired|
+  deceased|other`) (schema.prisma model Employee; kosakata
+  tertutup di `src/lib/reports/employee-lifecycle.ts:26-33`).
+  TIDAK ada nilai endReason "tidak lulus percobaan" dan TIDAK
+  ada field masa percobaan — konsekuensi Putusan 4 butir 3.
+- Gerbang payroll berhenti live: `evaluatePayrollEmploymentGate`
+  (`employee-lifecycle.ts:186-210`): slip final selalu lolos;
+  periode mulai sesudah `employmentEndedAt` ditolak keras;
+  periode memotong wajib konfirmasi. Jalur bayar Putusan 3
+  memakai gerbang persis ini, tanpa gerbang kedua.
+- Mesin PPh 21 live (F-026, dirujuk F-132-V §0): slip final
+  berhenti terbukti dari `Employee.employmentEndedAt` server
+  diklasifikasi Masa Pajak Terakhir oleh `resolveTerPeriod`,
+  hitung ulang `computePph21FinalPeriod`. Vonis ini tidak
+  menambah jalur pajak apa pun di luar itu.
+- F-132-V (merged) Putusan 2 melarang akun `600005` Beban
+  Bonus, Pesangon & Kompensasi untuk kompensasi PKWT dan
+  memesan `600028`/`210207` khusus PKWT. Vonis ini tidak
+  memesan akun baru apa pun (Putusan 4).
+
+### Dasar resmi (akses 2026-10-24)
+
+- UU 13/2003 Pasal 60 (teks resmi peraturan.go.id
+  https://peraturan.go.id/files/UU+13-2003.pdf ; metadata BPK
+  https://peraturan.bpk.go.id/Details/43013 ): ayat (1)
+  PKWTT dapat mensyaratkan masa percobaan paling lama 3 bulan;
+  ayat (2) "Dalam masa percobaan kerja sebagaimana dimaksud
+  dalam ayat (1), pengusaha dilarang membayar upah di bawah
+  upah minimum yang berlaku." Pasal 60 TIDAK diubah UU Cipta
+  Kerja (UU 6/2023); spec F-099 §pembuka memperlakukannya sama.
+- PP 36/2021 Pengupahan (teks resmi peraturan.go.id
+  https://peraturan.go.id/files/pp36-2021bt.pdf ; metadata BPK
+  https://peraturan.bpk.go.id/Details/161909/pp-no-36-tahun-2021,
+  berlaku 2 Feb 2021, diubah PP 51/2023): Pasal 23 ayat (1)
+  upah minimum = upah bulanan terendah (upah tanpa tunjangan,
+  atau upah pokok + tunjangan tetap); ayat (2) bila komponen =
+  pokok + tunjangan TIDAK tetap, upah pokok paling sedikit
+  sebesar upah minimum; ayat (3) pengusaha dilarang membayar
+  upah lebih rendah dari upah minimum. Pasal 24 ayat (1): upah
+  minimum berlaku bagi pekerja bermasa kerja KURANG dari 1
+  tahun — masa percobaan (maks 3 bulan) selalu di dalam
+  kelompok ini. Pasal 53-57: upah wajib dibayar kepada pekerja,
+  dengan bukti rincian, dalam rupiah, seluruhnya per periode,
+  pada waktu diperjanjikan, jangka waktu pembayaran tidak
+  boleh lebih dari 1 bulan, boleh lewat bank.
+- PP 35/2021 (teks resmi peraturan.go.id
+  https://peraturan.go.id/files/pp35-2021bt.pdf ; metadata BPK
+  https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021,
+  berlaku 2 Feb 2021): Pasal 12 ayat (1)-(2) PKWT tidak dapat
+  mensyaratkan masa percobaan; klausul percobaan pada PKWT
+  batal demi hukum, masa kerja tetap dihitung (probation hanya
+  PKWTT — koreksi premis spec F-099, diwarisi vonis ini).
+  Pasal 37 ayat (4): PHK dalam masa percobaan — surat
+  pemberitahuan paling lama 7 hari kerja sebelum PHK (umum:
+  14 hari kerja, ayat (3)). Pasal 40 ayat (1)-(4): "Dalam hal
+  terjadi Pemutusan Hubungan Kerja" pengusaha wajib membayar
+  pesangon dan/atau uang penghargaan masa kerja dan uang
+  penggantian hak; tabel pesangon ayat (2) huruf a: masa kerja
+  kurang dari 1 tahun = 1 bulan Upah; uang penghargaan ayat
+  (3) mulai masa kerja 3 tahun. Pasal 41-57 mengatur hak per
+  ALASAN PHK (penggabungan, efisiensi, tutup, pailit,
+  permohonan pekerja, putusan lembaga, mengundurkan diri
+  Pasal 50, mangkir Pasal 51, pelanggaran Pasal 52, ditahan
+  Pasal 54, sakit Pasal 55, pensiun Pasal 56, meninggal
+  Pasal 57) — TIDAK satu pun alasan itu bernama atau
+  diartikan "tidak lulus masa percobaan". Pasal 50/51/52 ayat
+  (2)/54: untuk alasan-alasan non-pesangon itu haknya = uang
+  penggantian hak Pasal 40 ayat (4) + uang pisah yang
+  besarannya diatur Perjanjian Kerja/Peraturan Perusahaan/
+  Perjanjian Kerja Bersama.
+- UU 13/2003 Pasal 154 huruf a sebagaimana disisipkan ulang
+  sebagai Pasal 154A ayat (1) huruf a oleh UU Cipta Kerja:
+  penetapan lembaga penyelesaian perselisihan TIDAK diperlukan
+  bila "pekerja/buruh masih dalam masa percobaan kerja,
+  bilamana telah dipersyaratkan secara tertulis sebelumnya"
+  (teks Pasal 154 terbaca di UU 13/2003 resmi di atas;
+  penomoran 154A terkonfirmasi JDIH Kemnaker
+  https://jdih.kemnaker.go.id/berita/detail/bagaimana-ketentuan-pemberian-pesangon-bila-terjadi-pemutusan-hubungan-kerja-phk-sesuai-dengan-peraturan-perundang-undangan-yang-berlaku-saat-ini ).
+  Rezim percobaan dengan demikian jalur PHK yang sengaja
+  diringankan prosedurnya oleh pembentuk undang-undang.
+- PMK 168/2023 (JDIH Kemenkeu
+  https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023 , berlaku
+  1 Jan 2024): pegawai tetap (termasuk yang berhenti) dipotong
+  TER bulanan selain Masa Pajak Terakhir, dan Masa Pajak
+  Terakhir tarif Pasal 17 atas neto setahun/bagian tahun;
+  imbalan mantan pegawai yang bersifat tidak teratur (jasa
+  produksi/tantiem/bonus/gratifikasi) = tarif Pasal 17 x bruto
+  (Pasal 12/13 jo. lampiran petunjuk mantan pegawai). Mesin
+  live F-026 sudah menjalankan jalur pegawai-tetap ini.
+
+### Putusan 1 — Upah masa percobaan: TIDAK BOLEH di bawah upah minimum yang berlaku; lantai diuji pada komponen Pasal 23 PP 36/2021, BUKAN pada total slip
+
+- Selama masa percobaan PKWTT, upah DILARANG di bawah upah
+  minimum yang berlaku di wilayah tempat bekerja (UU 13/2003
+  Pasal 60 ayat (2) jo. PP 36/2021 Pasal 23 ayat (3)). Tidak
+  ada pengecualian "sedang percobaan", "belum tetap", atau
+  "upah pelatihan" di kedua pasal itu. Masa percobaan selalu
+  masa kerja < 1 tahun sehingga rujukan lantainya adalah upah
+  minimum itu sendiri (PP 36/2021 Pasal 24 ayat (1)), bukan
+  struktur-skala (yang baru menjadi pedoman pada masa kerja
+  1 tahun atau lebih).
+- Lantai diuji pada komponen pembentuk upah minimum Pasal 23
+  ayat (1)-(2): (a) upah tanpa tunjangan: nominal upah itu
+  >= UM; (b) pokok + tunjangan tetap: pokok + tetap >= UM;
+  (c) pokok + tunjangan tidak tetap: POKOK saja >= UM.
+  Menguji pada total slip (termasuk tunjangan tidak tetap,
+  lembur, insentif) = cacat uji: slip dapat tampak lolos
+  padahal komponen lantainya di bawah UM.
+- "Upah minimum per jabatan" pada kartu TIDAK dikenal
+  regulasi: yang ada UM wilayah (UMP/UMK) sebagai lantai dan
+  struktur-skala perusahaan sebagai pedoman di atas lantai.
+  Sistem DILARANG mengarang lantai per jabatan dari jabatan/
+  posisi master. Skala internal perusahaan boleh lebih tinggi
+  dari UM; bila dokumen skala itu ada, ia urusan kebijakan
+  perusahaan (PK/PP/PKB), bukan angka yang dihitung mesin ini.
+- Perlakuan sistem (bila suatu hari dibangun): upah pokok/
+  komponen lantai karyawan PKWTT dalam masa percobaan yang
+  terbaca di bawah UM wilayah berlaku = temuan kepatuhan
+  berisik bernama di daftar perhatian (patok tanggal efektif
+  UM), BUKAN koreksi otomatis menaikkan gaji dan BUKAN blokir
+  payroll diam-diam tanpa temuan — menaikkan upah adalah
+  tindakan kontraktual manusia. Hari ini: TIDAK DIBANGUN
+  (Putusan 4); payroll berjalan tidak ditambah penjaga UM
+  oleh vonis ini. Tarif UM hidup di master bertanggal efektif
+  bila kelak dibangun — dilarang hardcode (prinsip tax rules
+  register berlaku sama untuk angka statutori upah).
+
+### Putusan 2 — Tidak Lulus probation: TIDAK ADA kewajiban pesangon/kompensasi statutori baru; tabel Pasal 40 PP 35/2021 DITOLAK untuk jalur ini; yang wajib hanya hak yang sudah terutang
+
+- Berhenti karena Tidak Lulus masa percobaan adalah PHK di
+  dalam jendela percobaan yang dipersyaratkan tertulis pada
+  PKWTT. Untuk peristiwa INI diputus: pengusaha TIDAK wajib
+  uang pesangon, TIDAK wajib uang penghargaan masa kerja,
+  TIDAK wajib uang kompensasi model PKWT (F-132-V tetap
+  khusus akhir segmen PKWT dan tidak menular ke PKWTT
+  percobaan). Dasar baca: (i) rezim Pasal 40 ayat (1)
+  PP 35/2021 dioperasikan oleh Pasal 41-57 per alasan;
+  tidak ada alasan "tidak lulus percobaan" di daftar itu,
+  dan alasan-alasan terdekat yang TANPA pesangon (Pasal
+  49/50/51/52 ayat (2)/54) semuanya menghakimi pekerja pada
+  uang penggantian hak + uang pisah PK/PP/PKB — pola
+  pembentuk undang-undang: peristiwa keluar tanpa kesalahan
+  berat/permohonan tidak otomatis pesangon penuh; (ii)
+  Pasal 154A ayat (1) huruf a memberi PHK masa percobaan
+  keringanan prosedural khusus (tanpa penetapan) — membaca
+  peristiwa yang sama sebagai pesangon 1x tabel Pasal 40
+  ayat (2) huruf a (masa kerja < 1 tahun) akan membuat
+  jendela percobaan tidak berbeda ekonomis dari PHK biasa
+  PKWTT bulan ke-4, meniadakan maksud jendela itu.
+  **Kejujuran batas:** Pasal 40 ayat (1) berteks umum
+  ("dalam hal terjadi PHK") sehingga bacaan lawan (pesangon
+  1 bulan untuk masa kerja < 1 tahun) dapat dipertahankan
+  pihak pekerja di PHI. Vonis ini memilih bacaan sistematis
+  di atas sebagai perlakuan SISTEM (yang dihitung/ditampilkan
+  mesin = nol kewajiban baru), BUKAN janji hasil sengketa.
+  Bila ISF sebagai pengusaha memilih kebijakan lebih aman/
+  lebih baik (mis. tetap memberi 1 bulan atau uang pisah
+  tertulis), itu keputusan kebijakan perusahaan yang ditulis
+  di PK/PP/PKB — sistem menampilkannya hanya sesudah ada
+  dokumen kebijakan itu dan vonis lanjutan BOT Accountant;
+  TANPA dokumen itu angka tersebut TIDAK dihitung, TIDAK
+  ditampilkan, TIDAK diakrual. Sengketa nyata per orang =
+  `BUTUH-VONIS-AKUNTAN` per kasus, di luar hitungan mesin.
+- Yang TETAP wajib dibayar (bukan kewajiban baru, melainkan
+  hak yang sudah terutang dan tidak gugur oleh status
+  percobaan): (a) upah atas hari kerja yang sudah dijalani
+  sampai tanggal berhenti efektif, termasuk proporsional
+  bulan berjalan; (b) upah kerja lembur yang sudah terjadi
+  dan belum dibayar; (c) uang penggantian hak Pasal 40 ayat
+  (4) SEPANJANG komponennya nyata ada dan belum diterima:
+  cuti tahunan yang belum diambil dan belum gugur (proporsional
+  masa kerja berjalan — perhitungan hak cutinya mengikuti
+  aturan cuti berjalan, vonis ini tidak membuka rumus cuti
+  baru), biaya/ongkos pulang hanya bila fakta "diterima
+  bekerja dari tempat lain" itu ada, dan hal lain yang
+  ditetapkan PK/PP/PKB perusahaan; (d) uang pisah HANYA bila
+  PK/PP/PKB ISF menetapkannya (Pola Pasal 50) — tanpa
+  penetapan tertulis, uang pisah = nol dan bukan temuan
+  kekurangan. Komponen (a)-(c) adalah penyelesaian slip
+  final, bukan peristiwa uang baru (Putusan 3).
+- Pengunduran diri DI DALAM masa percobaan diperlakukan sama
+  untuk uang: tanpa pesangon/kompensasi; hak terutang (a)-(c)
+  sama; uang pisah hanya dari PK/PP/PKB (Pasal 50 persis).
+  Meninggal/pensiun/sakit berkepanjangan di masa percobaan
+  BUKAN "tidak lulus": masing-masing Pasal 57/56/55 dengan
+  haknya sendiri — sistem dilarang menyamaratakan semua
+  berhenti-di-percobaan ke perlakuan putusan ini; klasifikasi
+  mengikuti alasan berhenti terstruktur nyata, dan alasan di
+  luar tidak-lulus/resign di masa percobaan = di luar vonis
+  ini (`BUTUH-VONIS-AKUNTAN` bila hendak dihitung mesin).
+- Pemberitahuan: PHK masa percobaan paling lama 7 hari kerja
+  sebelumnya (PP 35/2021 Pasal 37 ayat (4)). Ini syarat
+  proses HR (pemilik BOT Business/BOT Lead), BUKAN angka;
+  sistem F-099 cukup mencatat tanggal keputusan/tanggal
+  efektif apa adanya — menghitung denda keterlambatan
+  pemberitahuan DITOLAK (tidak ada tarif statutori untuk itu
+  di pasal tersebut).
+
+### Putusan 3 — Jalur bayar: TIDAK ADA jalur baru; semua lewat slip final payroll existing; jurnal agregat existing; nol akun/setting baru
+
+- Satu-satunya jalur bayar kewajiban Putusan 2 butir (a)-(d)
+  adalah slip gaji FINAL karyawan berhenti lewat payroll
+  berjalan: status berhenti dibuktikan server dari
+  `employmentEndedAt` + keputusan Tidak Lulus tersimpan
+  (gerbang `evaluatePayrollEmploymentGate`: slip final selalu
+  lolos; slip reguler periode sesudah berhenti ditolak).
+  Dilarang: dokumen pembayaran kewajiban percobaan tersendiri,
+  slip kedua se-rentang (melanggar `Payroll @@unique([employeeId,
+  startDate, endDate])` dan pola F-132-V Putusan 5), pembayaran
+  kas langsung di luar payroll untuk komponen upah, dan jurnal
+  manual "pesangon percobaan".
+- Jurnal: TIDAK ADA jurnal baru dan TIDAK ADA peristiwa
+  akrual. Upah/lembur bulan final masuk bruto slip dan ter-
+  jurnal agregat oleh `onPayrollPaid` existing (Dr beban gaji
+  setting existing / Cr bank payroll / Cr utang gaji untuk
+  potongan statutori) persis karyawan berhenti biasa. Karena
+  Putusan 2 memutus nol kewajiban statutori baru, TIDAK ada
+  saldo utang percobaan yang perlu diakrual selama 3 bulan
+  masa percobaan — mengakrual "cadangan pesangon percobaan"
+  generik DITOLAK (PSAK 57: tidak ada kewajiban kini statutori
+  yang probable-terukur dari vonis ini; cadangan karangan
+  menggelembungkan liabilitas). Bila kelak PK/PP/PKB ISF
+  menetapkan uang pisah percobaan, akrual/jurnalnya wajib
+  vonis lanjutan SEBELUM dibangun — akun `600005` DILARANG
+  dipinjam diam-diam untuk itu (konsisten larangan F-132-V).
+- PPh 21: TANPA jalur pajak baru. Slip final = Masa Pajak
+  Terakhir (mesin F-026: TER berhenti terbukti server, hitung
+  ulang Pasal 17 bagian tahun). Uang penggantian hak/uang
+  pisah BILA benar-benar dibayar lewat slip final masuk bruto
+  slip masa itu dan ikut hitung ulang masa terakhir sebagai
+  penghasilan pegawai tetap — BUKAN tarif final pesangon
+  PP 68/2009 (itu rezim uang pesangon statutori; vonis ini
+  memutus tidak ada pesangon di jalur ini, jadi tidak ada
+  objek finalnya), dan BUKAN jalur mantan-pegawai PMK
+  168/2023 Pasal 17 x bruto kecuali pembayarannya benar-benar
+  terjadi SESUDAH hubungan kerja berakhir sebagai imbalan
+  mantan pegawai tidak teratur (mis. bonus susulan) — kasus
+  itu pola F-132-V/existing, bukan peristiwa percobaan.
+  Membayar komponen final LEWAT slip final (bukan susulan)
+  adalah syarat supaya klasifikasi ini bersih; pembayaran
+  susulan pasca-berhenti tanpa vonis lanjutan = ditolak.
+- Empat status tetap terpisah: keputusan Tidak Lulus (dokumen
+  HR F-099), pembayaran (slip final paid), pajak (masa terakhir
+  slip final), posting (jurnal agregat slip). Keputusan HR
+  TIDAK dengan sendirinya menerbitkan slip/jurnal; slip final
+  tidak mengubah keputusan; tidak ada flag tunggal.
+
+### Putusan 4 — Batas build: nol; BR-PROB-11 tetap; yang dilarang dibangun dari vonis ini
+
+- Vonis ini TIDAK membuka hitungan, tampilan nominal,
+  komponen payroll, akun, setting, atau jurnal baru apa pun.
+  Inti F-099 (t_9037d2d8) dan Frontend-nya berjalan persis
+  scope spec: tanpa nominal kompensasi/pesangon/kewajiban
+  percobaan (BR-PROB-11 UTUH). Karena itu TIDAK dibuat kartu
+  turunan Backend dari kartu ini — acceptance kartu ("bila
+  vonis membuka hitungan baru, buat kartu turunan lewat Lead")
+  tidak terpicu; menyatakan sebaliknya (membuat kartu untuk
+  membangun nol) = scope karangan.
+- Nilai endReason baru "tidak lulus percobaan" TIDAK diputus
+  vonis ini: kosakata berhenti adalah keputusan proses HR
+  (BOT Lead/BOT Business di inti F-099). Bila inti memilih
+  mencatatnya lewat `terminated`/`other` + keputusan probation
+  tersimpan di model F-099, gerbang payroll Putusan 3 tetap
+  bekerja (ia membaca `employmentEndedAt`, bukan alasan).
+  Menambah nilai enum demi pajak TIDAK diperlukan — Masa
+  Pajak Terakhir diturunkan dari fakta berhenti, bukan label.
+- Yang secara eksplisit DILARANG dibangun berdasar vonis ini:
+  (1) field/komponen "pesangon percobaan", "kompensasi gagal
+  probation", "uang pisah percobaan" (termasuk nullable
+  "untuk nanti"); (2) penjaga UM otomatis di payroll dan
+  koreksi gaji otomatis (Putusan 1 hanya memutus lantai hukum
+  + bentuk temuan BILA kelak dibangun lewat kartu sendiri);
+  (3) akrual/cadangan kewajiban percobaan; (4) label UI yang
+  menyiratkan nominal terutang ("berhak pesangon 1 bulan");
+  (5) memakai ulang rumus/akun kompensasi PKWT F-132-V
+  (600028/210207, masa kerja/12) untuk orang PKWTT percobaan.
+- Satu-satunya pemicu membuka kembali: (a) PK/PP/PKB ISF
+  tertulis menetapkan uang pisah/benefit berhenti masa
+  percobaan, atau (b) ISF memutuskan menghitung penegakan
+  lantai UM di sistem, atau (c) putusan/kebijakan memaksa
+  perlakuan pesangon jalur ini. Ketiganya = kartu baru ke
+  BOT Accountant dulu (angka + akun + PPh-nya vonis
+  lanjutan), BUKAN implementasi langsung dari vonis ini.
+
+### Falsifikasi wajib — E134-1..5 (E134-1..3 kunci regresi atas inti F-099 berjalan hari ini; E134-4..5 mengunci BILA jalur uang kelak dibuka)
+
+- E134-1 (nol nominal di permukaan F-099): bangun inti F-099
+  lalu grep keluaran daftar evaluasi/keputusan + payload aksi:
+  tidak ada `baseSalary`/`netSalary`/nominal kompensasi/
+  pesangon/uang pisah (perluasan AC-PROB-8). Menambah field
+  nominal "cadangan" apa pun = MERAH.
+- E134-2 (nol jurnal dari keputusan probation): putus Tidak
+  Lulus pada fixture PKWTT percobaan -> jumlah jurnal baru 0,
+  tidak ada baris 600028/210207/600005 lahir, tidak ada slip
+  terbit otomatis. Keputusan HR yang menerbitkan jurnal/slip
+  = MERAH.
+- E134-3 (jalur final existing tidak berubah makna): karyawan
+  berhenti (employmentEndedAt terisi) dibuat slip final ->
+  lolos gerbang sebagai Masa Pajak Terakhir; slip reguler
+  periode mulai sesudah berhenti -> ditolak keras. Slip final
+  yang terklasifikasi TER bulanan biasa, atau slip reguler
+  pasca-berhenti yang lolos, = MERAH (regresi F-026/Q-EMP-3,
+  bukan fitur baru).
+- E134-4 (lantai UM, hanya bila penjaga kelak dibangun):
+  PKWTT percobaan pokok Rp2.000.000 + tunjangan tidak tetap
+  Rp1.500.000, UM berlaku Rp3.000.000 -> temuan kepatuhan
+  bernama lahir (pokok < UM walau total slip Rp3.500.000);
+  gaji TIDAK berubah otomatis. Uji pada total slip (lolos)
+  atau koreksi otomatis = MERAH.
+- E134-5 (uang pisah dokumen, hanya bila kelak dibuka):
+  tanpa dokumen PK/PP/PKB tertaut, peristiwa uang pisah
+  percobaan ditolak berisik; dengan dokumen + nominal dokumen,
+  bayar hanya lewat slip final dan PPh ikut masa terakhir.
+  Nominal input bebas tanpa dokumen, atau bayar susulan
+  pasca-berhenti sebagai slip biasa, = MERAH.
+
+### Klaim kepatuhan dan batas vonis
+
+- Klaim upah minimum: UU 13/2003 Pasal 60 ayat (2) + PP
+  36/2021 Pasal 23-24 (sumber resmi + tanggal akses 2026-10-24
+  di Dasar resmi) — cakupan PKWTT masa percobaan; UM wilayah/
+  tahun berjalan dibaca dari ketetapan UM yang berlaku,
+  vonis ini tidak menetapkan nominal UM mana pun.
+- Klaim tanpa-pesangon adalah PERLAKUAN SISTEM berdasar
+  bacaan sistematis PP 35/2021 Pasal 37 ayat (4), 40-57 +
+  UU 154A ayat (1) huruf a seperti diuraikan Putusan 2,
+  dengan risiko bacaan lawan dinyatakan eksplisit di sana.
+  Ia BUKAN kepastian hasil PHI dan BUKAN nasihat hukum untuk
+  kasus orang tertentu; sengketa/kasus nyata = eskalasi
+  profesional (`BUTUH-VONIS-AKUNTAN` per kasus), tidak
+  diputus mesin. Label register pajak: perlakuan ini
+  `PUTUSAN-SISTEM`, dasar sengketa `BELUM-UJI`.
+- Vonis ini tidak memutus: hak cuti proporsional rinci,
+  BPJS masa percobaan (mengikuti keanggotaan berjalan),
+  perlakuan DAILY/INTERN (di luar probation PKWTT), probation
+  yang dipersyaratkan lisan/tidak tertulis (secara hukum
+  dianggap tidak ada masa percobaan — karyawan PKWTT penuh;
+  perlakuan berhentinya di luar vonis ini), dan konversi
+  PKWT->PKWTT (F-132-V segmen terakhir tetap berlaku).
+
+ID vonis ini **F-2026-10-24-134-V** (bebas: tertinggi `-V` di
+origin/main e97ed62f = 133-V; grep `F-2026-10-24-134` di
+backlog/board/PR terbuka = 0 sebelum append run ini).
+Pemilik berikutnya: BOT 1 terima + merge PR vonis ini ->
+Q-PROB-5 TERTUTUP; inti F-099 t_9037d2d8 TIDAK berubah scope;
+BOT 6 kunci E134-1..3 sebagai regresi inti, E134-4..5 parkir
+sampai pemicu Putusan 4 ada. Tanpa kartu turunan Backend.
