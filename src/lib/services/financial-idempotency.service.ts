@@ -13,6 +13,9 @@
 export type IdemScope =
   | "customer_credit_allocate"
   | "customer_credit_refund"
+  | "sales_late_fee_issue"
+  | "sales_late_fee_pay"
+  | "sales_late_fee_reverse"
   | "tax_invoice_issue"
   | "tax_invoice_replace"
   | "tax_invoice_cancel"
@@ -72,6 +75,9 @@ export function payloadFingerprint(parts: Record<string, string | number>): stri
 const EXPECTED_REF_TYPE: Record<IdemScope, string> = {
   customer_credit_allocate: "SalesPayment",
   customer_credit_refund: "Journal",
+  sales_late_fee_issue: "SalesLateFee",
+  sales_late_fee_pay: "SalesLateFeePayment",
+  sales_late_fee_reverse: "SalesLateFee",
   tax_invoice_issue: "TaxInvoice",
   tax_invoice_replace: "TaxInvoice",
   tax_invoice_cancel: "TaxInvoice",

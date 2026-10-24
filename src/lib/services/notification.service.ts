@@ -8,6 +8,15 @@ export interface LowStockItem {
   minStock: number
 }
 
+export interface WarehouseLowStockItem {
+  itemId: number
+  itemName: string
+  warehouseId: number
+  warehouseName: string
+  qtyAtWarehouse: number
+  minStock: number
+}
+
 interface OverdueInvoice {
   id: number
   documentNo: string
@@ -165,6 +174,38 @@ export const notificationService = {
         userId: admin.id,
         title: `Stok ${item.name} Menipis`,
         body: `Stok saat ini: ${item.qtyOnHand} (Minimum: ${item.minStock}). Segera lakukan pembelian.`,
+        type: 'warning' as const,
+        readAt: null,
+      })),
+    )
+
+    await prisma.notification.createMany({ data: notifications })
+    return notifications.length
+  },
+
+  /**
+   * F-2026-10-22-070-S (BR-MS-05): peringatan menipis per (barang, gudang)
+   * dengan minimum efektif. Judul menyebut gudang supaya pasangan sama di
+   * gudang beda tidak tertukar; dedupe pemanggil (cron) per judul ini.
+   */
+  async checkAndNotifyWarehouseLowStockBatch(items: WarehouseLowStockItem[]): Promise<number> {
+    const low = items.filter((i) => i.minStock > 0 && i.qtyAtWarehouse <= i.minStock)
+    if (low.length === 0) return 0
+
+    const admins = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        roles: { some: { name: { in: ['super_admin', 'admin'] } } },
+      },
+      select: { id: true },
+    })
+    if (admins.length === 0) return 0
+
+    const notifications = admins.flatMap((admin) =>
+      low.map((item) => ({
+        userId: admin.id,
+        title: `Stok ${item.itemName} Menipis di ${item.warehouseName}`,
+        body: `Stok di ${item.warehouseName}: ${item.qtyAtWarehouse} (Minimum: ${item.minStock}). Segera lakukan pembelian atau transfer antar gudang.`,
         type: 'warning' as const,
         readAt: null,
       })),

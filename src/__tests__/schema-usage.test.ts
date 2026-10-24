@@ -45,14 +45,10 @@ const KNOWN_UNUSED: string[] = [
   // ketiganya 0 rujukan kode produk; `cleared` tetap dipakai matematika
   // outstanding `completeReconciliation`; guard berarah dua memerah saat
   // pembuangan mendarat.)
-  // (F-2026-10-21-001..006, 2026-10-21) `SalesReturn.taxReturnNoteNumber` +
-  // `PurchaseReturn.taxReturnNoteNumber`: nomor nota retur pajak dicatat apa
-  // adanya dari nota DJP; masa pengurang dibaca dari `taxReturnNoteDate`
-  // (dipakai read-model SPT), nomornya bukti dokumen untuk rekonsiliasi —
-  // ditulis jalur retur berikutnya (UI nota retur belum ada), bukan kolom mati
-  // tanpa keputusan. Guard berarah dua memerah saat penulisan mendarat.
-  "PurchaseReturn.taxReturnNoteNumber",
-  "SalesReturn.taxReturnNoteNumber",
+  // (`SalesReturn.taxReturnNoteNumber` + `PurchaseReturn.taxReturnNoteNumber`
+  // PERNAH di sini — ditutup F-004 §3: create/update kedua retur kini menulis
+  // nomor + tanggal nota retur apa adanya; guard berarah dua memerah saat
+  // entri basi ini dibiarkan sesudah penulisan mendarat.)
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
@@ -439,4 +435,31 @@ describe("skema: model yang dibaca tetapi tidak punya jalur tulis di produk", ()
     },
     20_000,
   )
+})
+
+/**
+ * F-2026-10-22-069-S: ItemSubstitute = master relasi substitusi part
+ * (satu baris per arah; @see ../actions/item-substitute.actions menilai
+ * pasangan; @see ../lib/reports/item-substitute-suggestions-data
+ * membaca relasi aktif untuk saran WO read-only). __EVAL_MODELS__
+ * menilai model dari nama model nyata di prisma client — nama ini
+ * diverifikasi ADA: prisma/schema.prisma:model ItemSubstitute +
+ * client ter-generate itemSubstitute (relasi balik Item.substitutes /
+ * Item.substitutedFor).
+ */
+describe("ItemSubstitute (digunakan aksi master + loader saran)", () => {
+  it("model ItemSubstitute dipakai actions + loader (bukan seed-only)", async () => {
+    const fs = await import("fs")
+    const path = await import("path")
+    const actionsSrc = fs.readFileSync(
+      path.join(ROOT, "src", "actions", "item-substitute.actions.ts"),
+      "utf8",
+    )
+    const loaderSrc = fs.readFileSync(
+      path.join(ROOT, "src", "lib", "reports", "item-substitute-suggestions-data.ts"),
+      "utf8",
+    )
+    expect(actionsSrc).toContain("prisma.itemSubstitute")
+    expect(loaderSrc).toContain("prisma.itemSubstitute.findMany")
+  })
 })
