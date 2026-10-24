@@ -6,14 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-# Push baru di branch PR yang sama membatalkan run lama yang belum selesai:
-# antrean kemarin penuh run basi dari branch yang sudah di-push ulang berkali-kali.
-# Push ke main TIDAK dibatalkan (cancel-in-progress=false di sana) supaya
-# verifikasi main selalu jalan sampai selesai.
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # Mirror the deployment timezone (docker-compose sets TZ=Asia/Jakarta for the app
@@ -33,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      docker: ${{ steps.filter.outputs.docker }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,6 +48,16 @@ jobs:
             echo "Docs-only: job berat di-skip."
           else
             echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+          # Job Docker Image Build (buildx + smoke, job terberat) di PR hanya
+          # bila file yang memengaruhi image berubah; di push main selalu jalan
+          # sebagai gerbang akhir. Build Next.js sudah memvalidasi kode, jadi
+          # nilai unik job ini adalah kebenaran Dockerfile & kemasan standalone.
+          if printf '%s\n' "$FILES" | grep -qE '^(Dockerfile|docker/|\.dockerignore|docker-compose|package(-lock)?\.json|prisma/|next\.config\.)'; then
+            echo "docker=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docker=false" >> "$GITHUB_OUTPUT"
+            echo "Tidak ada perubahan terkait Docker: Docker Image Build di-skip untuk PR ini."
           fi
 
   lint:
@@ -313,7 +316,10 @@ jobs:
     name: Docker Image Build
     runs-on: ubuntu-latest
     needs: [changes, lint]
-    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.changes.outputs.code == 'true' }}
+    # Push ke main: selalu (gerbang akhir). PR: hanya bila file terkait image
+    # berubah (output `docker` dari Detect Changes) — job ini bukan check
+    # wajib branch protection, jadi skip di sini tidak menyangkut PR.
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.changes.outputs.code == 'true' && (github.event_name == 'push' || needs.changes.outputs.docker == 'true') }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
