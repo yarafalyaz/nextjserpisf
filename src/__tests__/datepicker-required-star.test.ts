@@ -9,7 +9,7 @@ import { join } from "node:path"
  * (aria-hidden); makna wajib untuk teknologi bantu hanya datang dari
  * `aria-required` di trigger, yang muncul bila prop `required` diteruskan.
  * Konsumen yang menampilkan bintang tetapi lupa `required` kehilangan
- * makna wajib itu. Tes ini mengunci 7 titik yang diperbaiki dan mencegah
+ * makna wajib itu. Tes ini mengunci 9 titik yang diperbaiki dan mencegah
  * regresi di berkas yang sama.
  */
 
@@ -24,7 +24,12 @@ const CASES: Array<{ file: string; labels: string[] }> = [
   { file: "src/app/(dashboard)/penjualan/tukar-faktur/_components/invoice-exchange-form.tsx", labels: ["Tanggal Penyerahan *"] },
   {
     file: "src/app/(dashboard)/sdm/penggajian/_components/bulk-generate-payroll-button.tsx",
-    labels: ["Tanggal Mulai Cut-off *", "Tanggal Selesai Cut-off *"],
+    labels: [
+      "Tanggal Mulai Cut-off *",
+      "Tanggal Selesai Cut-off *",
+      "Tanggal Mulai (Senin) *",
+      "Tanggal Selesai *",
+    ],
   },
 ]
 
