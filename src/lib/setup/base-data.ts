@@ -891,6 +891,10 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   ["300004", "Surplus Revaluasi Aset Tetap", "EQTY", "3000"],
   ["120007", "Akumulasi Penurunan Nilai Aset Tetap", "DEPR", "1200"],
   ["600027", "Beban Penurunan Nilai Aset", "EXPS", "6000"],
+  // F-2026-10-24-132-V (vonis BOT 4): kompensasi PKWT. 210204 = utang gaji
+  // berjalan & 600005 rumah pesangon DILARANG untuk jalur ini.
+  ["600028", "Beban Kompensasi PKWT", "EXPS", "6000"],
+  ["210207", "Utang Kompensasi PKWT", "OCLY", "2102"],
 ]
 
 /**

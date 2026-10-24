@@ -17,6 +17,13 @@ import {
   type TerBracket,
 } from "@/lib/services/payroll-statutory.service";
 import { prisma } from "@/lib/db/prisma";
+import {
+  approvePkwtCompensationEvent,
+  buildPkwtPayrollLineData,
+  createPkwtCompensationEvent,
+  markPkwtEventPaid,
+  runPkwtMonthlyAccrual,
+} from "@/lib/services/pkwt-compensation.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -3020,6 +3027,19 @@ export async function markPayrollPaid(payrollId: number) {
       // the tx means a failed post rolls back the status flip and loan amortization,
       // so the action can simply be retried.
       await onPayrollPaid(payrollId, undefined, tx);
+
+      // F-2026-10-24-132-V Putusan 5: peristiwa kompensasi PKWT yang barisnya
+      // ada di slip ini menjadi paid dalam tx yang sama (satu peristiwa satu
+      // baris terbayar; status peristiwa terpisah dari status slip).
+      const pkwtLineRows = await tx.payrollComponentLine.findMany({
+        where: { payrollId, pkwtEventId: { not: null } },
+        select: { pkwtEventId: true },
+      });
+      for (const row of pkwtLineRows) {
+        if (row.pkwtEventId != null) {
+          await markPkwtEventPaid(tx, row.pkwtEventId, payrollId);
+        }
+      }
     });
 
     await logActivity(
@@ -4461,5 +4481,112 @@ export async function getEmployeeLifecycleAttention() {
     if (isNextRedirectError(e)) throw e;
     console.error("[getEmployeeLifecycleAttention]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== PKWT COMPENSATION (F-2026-10-24-132-V) ====================
+// Peristiwa per segmen terbekukan (Putusan 1) + akrual bulanan (Putusan 3) +
+// baris slip khusus (Putusan 5). Pajak mengikuti mesin PPh 21 existing
+// (Putusan 4) — gaji pokok/segmen tidak diubah di sini.
+
+function parsePkwtDate(value: FormDataEntryValue | null, label: string): Date {
+  const s = typeof value === "string" ? value.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error(`Tanggal ${label} peristiwa PKWT wajib YYYY-MM-DD`);
+  return wibDateToUtcMidnight(s);
+}
+
+export async function createPkwtEvent(formData: FormData) {
+  try {
+    const user = await requirePermission("edit_payroll");
+    const employeeId = Number(formData.get("employeeId"));
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
+    const segmentStart = parsePkwtDate(formData.get("segmentStart"), "mulai segmen");
+    const segmentEnd = parsePkwtDate(formData.get("segmentEnd"), "akhir segmen");
+    const agreementRaw = formData.get("agreementAmount");
+    const agreementAmount =
+      agreementRaw == null || String(agreementRaw).trim() === "" ? null : Number(agreementRaw);
+    if (agreementAmount != null && !Number.isFinite(agreementAmount)) {
+      throw new Error("Nominal kesepakatan PKWT tidak valid");
+    }
+    const event = await createPkwtCompensationEvent(prisma, {
+      employeeId,
+      segmentStart,
+      segmentEnd,
+      agreementAmount,
+      agreementDocumentRef:
+        typeof formData.get("agreementDocumentRef") === "string"
+          ? String(formData.get("agreementDocumentRef"))
+          : null,
+      isLegacy: formData.get("isLegacy") === "1" || formData.get("isLegacy") === "true",
+      correctsEventId: formData.get("correctsEventId")
+        ? Number(formData.get("correctsEventId"))
+        : null,
+      createdBy: Number((user as { id: unknown }).id) || null,
+    });
+    await logActivity("create", "PkwtCompensationEvent", event.id, "Membuat peristiwa kompensasi PKWT");
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: event.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createPkwtEvent]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function approvePkwtEvent(eventId: number) {
+  try {
+    const user = await requirePermission("process_payroll");
+    if (!Number.isSafeInteger(eventId) || eventId <= 0) throw new Error("Peristiwa PKWT tidak valid");
+    await approvePkwtCompensationEvent(prisma, eventId, Number((user as { id: unknown }).id));
+    await logActivity("approve", "PkwtCompensationEvent", eventId, "Menyetujui peristiwa kompensasi PKWT");
+    revalidatePath("/sdm/penggajian");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[approvePkwtEvent]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function runPkwtAccrual(period: string) {
+  try {
+    const user = await requirePermission("process_payroll");
+    const result = await runPkwtMonthlyAccrual(prisma, period, Number((user as { id: unknown }).id) || null);
+    await logActivity("create", "Journal", result.journalId ?? 0, `Akrual kompensasi PKWT ${period}: ${result.accruedCount} karyawan Rp${result.totalAmount}`);
+    revalidatePath("/sdm/penggajian");
+    return { success: true, data: result };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[runPkwtAccrual]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function attachPkwtEventToPayroll(payrollId: number, formData: FormData) {
+  try {
+    if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
+    await requirePermission("edit_payroll");
+    await assertDraftPayrollLineAccess(payrollId);
+    const eventId = Number(formData.get("eventId"));
+    if (!Number.isSafeInteger(eventId) || eventId <= 0) throw new Error("Peristiwa PKWT tidak valid");
+    const payroll = await prisma.payroll.findUniqueOrThrow({
+      where: { id: payrollId },
+      select: { employeeId: true },
+    });
+    const lineData = await buildPkwtPayrollLineData(prisma, {
+      eventId,
+      payrollEmployeeId: payroll.employeeId,
+    });
+    const created = await prisma.payrollComponentLine.create({
+      data: { payrollId, ...lineData },
+    });
+    await recalcDraftPayrollFromLines(payrollId);
+    await logActivity("create", "PayrollComponentLine", created.id, "Menarik kompensasi PKWT ke slip gaji");
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: created.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[attachPkwtEventToPayroll]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

@@ -286,6 +286,15 @@ model SystemSetting {
    */
   assetFiscalRevaluationTaxPayableAccountId Int?    @map("asset_fiscal_revaluation_tax_payable_account_id")
   assetFiscalRevaluationFinalTaxRatePercent Decimal? @map("asset_fiscal_revaluation_final_tax_rate_percent") @db.Decimal(5, 2)
+  /**
+   * F-2026-10-24-132-V Putusan 2 (vonis BOT 4): mapping kompensasi PKWT.
+   * Nullable TANPA default tebak; akrual/peristiwa berharga DITOLAK
+   * fail-closed bila kosong/nonaktif. Akun standar: 600028 Beban
+   * Kompensasi PKWT / 210207 Utang Kompensasi PKWT. 600005/210204
+   * DILARANG untuk jalur ini.
+   */
+  pkwtCompensationExpenseAccountId Int?    @map("pkwt_compensation_expense_account_id")
+  pkwtCompensationPayableAccountId Int?    @map("pkwt_compensation_payable_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -898,6 +907,8 @@ model Employee {
   updatedAt           DateTime          @updatedAt @map("updated_at")
   appreciations       Appreciation[]
   attendances         Attendance[]
+  pkwtCompensationEvents PkwtCompensationEvent[]
+  pkwtCompensationAccruals PkwtCompensationAccrual[]
   employeeLoans       EmployeeLoan[]
   employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
@@ -3559,6 +3570,13 @@ model PayrollComponentLine {
   isTaxableSnapshot      Boolean  @default(false) @map("is_taxable_snapshot")
   source                 String
   assignmentId           Int?     @map("assignment_id")
+  // F-2026-10-24-132-V Putusan 5: baris khusus kompensasi PKWT. pkwtEventId =
+  // idempotency key peristiwa (unik: satu peristiwa paling banyak satu baris
+  // slip); pkwtSettledViaAccrual dibekukan saat baris dibuat — kaki debit
+  // jurnal payroll membaca snapshot ini (210207 bila terakrual, 600028 bila
+  // tidak), BUKAN tebakan hook.
+  pkwtEventId            Int?     @unique @map("pkwt_event_id")
+  pkwtSettledViaAccrual  Boolean? @map("pkwt_settled_via_accrual")
   accountIdSnapshot      Int?     @map("account_id_snapshot")
   amount                 Decimal  @default(0.00) @db.Decimal(15, 2)
   createdAt              DateTime @default(now()) @map("created_at")
@@ -3566,12 +3584,80 @@ model PayrollComponentLine {
   payroll                Payroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
   component              PayrollComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
   assignment             EmployeePayrollComponent? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  pkwtEvent              PkwtCompensationEvent? @relation(fields: [pkwtEventId], references: [id], onDelete: SetNull)
 
   @@index([payrollId])
   @@index([componentId])
   @@index([assignmentId])
   @@index([createdAt])
   @@map("payroll_component_lines")
+}
+
+/// F-2026-10-24-132-V (vonis BOT 4): peristiwa kompensasi akhir kontrak PKWT
+/// PP 35/2021 per SEGMEN kontrak/perpanjangan. Dokumen SUMBER terbekukan
+/// (masa kerja 4-desimal, snapshot basis komponen, nominal) — slip gaji
+/// adalah dokumen BAYAR (Q-EMP-5). Snapshot tidak diedit sesudah disetujui;
+/// koreksi = peristiwa koreksi tertaut (correctsEventId).
+/// status: draft | approved | paid | cancelled. isLegacy = segmen lampau
+/// diakui sekaligus terlabel (Putusan 3 pengecualian).
+model PkwtCompensationEvent {
+  id                  Int       @id @default(autoincrement())
+  employeeId          Int       @map("employee_id")
+  segmentStart        DateTime  @map("segment_start")
+  segmentEnd          DateTime  @map("segment_end")
+  serviceMonths       Decimal   @map("service_months") @db.Decimal(10, 4)
+  baseSalarySnapshot  Decimal   @map("base_salary_snapshot") @db.Decimal(15, 2)
+  fixedAllowanceSnapshot Decimal @default(0.00) @map("fixed_allowance_snapshot") @db.Decimal(15, 2)
+  basisMonthly        Decimal   @map("basis_monthly") @db.Decimal(15, 2)
+  amount              Decimal   @db.Decimal(15, 2)
+  status              String    @default("draft")
+  isLegacy            Boolean   @default(false) @map("is_legacy")
+  agreementDocumentRef String?  @map("agreement_document_ref")
+  correctsEventId     Int?      @map("corrects_event_id")
+  approvedBy          Int?      @map("approved_by")
+  approvedAt          DateTime? @map("approved_at")
+  paidPayrollId       Int?      @map("paid_payroll_id")
+  createdBy           Int?      @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  employee            Employee  @relation(fields: [employeeId], references: [id])
+  correctsEvent       PkwtCompensationEvent? @relation("PkwtEventCorrection", fields: [correctsEventId], references: [id], onDelete: SetNull)
+  corrections         PkwtCompensationEvent[] @relation("PkwtEventCorrection")
+  accruals            PkwtCompensationAccrual[]
+  payrollLine         PayrollComponentLine?
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([segmentStart, segmentEnd])
+  @@index([correctsEventId])
+  @@index([createdAt])
+  @@map("pkwt_compensation_events")
+}
+
+/// Subledger akrual bulanan kompensasi PKWT per karyawan-segmen-bulan
+/// (Putusan 3). Saldo per karyawan hidup di sini, BUKAN baris jurnal per
+/// karyawan (jurnal akrual agregat satu per bulan). Unik
+/// (employeeId, segmentStart, period) = anti-dobel akrual.
+model PkwtCompensationAccrual {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int      @map("employee_id")
+  eventId      Int?     @map("event_id")
+  segmentStart DateTime @map("segment_start")
+  period       String
+  amount       Decimal  @db.Decimal(15, 2)
+  basisMonthly Decimal  @map("basis_monthly") @db.Decimal(15, 2)
+  journalId    Int?     @map("journal_id")
+  createdBy    Int?     @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  employee     Employee @relation(fields: [employeeId], references: [id])
+  event        PkwtCompensationEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, segmentStart, period], map: "uq_pkwt_accrual_emp_segment_period")
+  @@index([employeeId])
+  @@index([eventId])
+  @@index([period])
+  @@index([createdAt])
+  @@map("pkwt_compensation_accruals")
 }
 
 model EmployeeLoan {

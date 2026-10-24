@@ -44,6 +44,8 @@ const mocks = vi.hoisted(() => ({
     payrollBankAccountId: 105 as number | null,
     salariesPayableAccountId: 230 as number | null,
     employeeReceivableAccountId: 140 as number | null,
+    pkwtCompensationExpenseAccountId: 631 as number | null,
+    pkwtCompensationPayableAccountId: 231 as number | null,
   },
   assertPeriodOpen: vi.fn(),
   fifoConsume: vi.fn(),
@@ -144,6 +146,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findUniqueOrThrow: (...a: unknown[]) =>
         mocks.payrollFindUniqueOrThrow(...a),
     },
+    payrollComponentLine: { findMany: (...a: unknown[]) => pkwtLinesMock.findMany(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
   },
 }));
@@ -171,6 +174,8 @@ function mockAllAccountsExist() {
 }
 
 /** Pasang `mocks.transaction` agar callback menerima `tx` rakitan pemanggil. */
+const pkwtLinesMock = vi.hoisted(() => ({ findMany: vi.fn().mockResolvedValue([] as unknown[]) }))
+
 function wireTransaction(buildTx: () => Record<string, unknown>) {
   mocks.transaction.mockImplementation((fn: any) => fn(buildTx()));
 }
@@ -1834,12 +1839,15 @@ describe("onPayrollPaid", () => {
     mocks.systemSettings.payrollBankAccountId = 105;
     mocks.systemSettings.salariesPayableAccountId = 230;
     mocks.systemSettings.employeeReceivableAccountId = 140;
+    (mocks.systemSettings as any).pkwtCompensationExpenseAccountId = 631;
+    (mocks.systemSettings as any).pkwtCompensationPayableAccountId = 231;
     mocks.transaction.mockImplementation((fn: any) =>
       fn({
         systemSetting: {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         payroll: { findUniqueOrThrow: mocks.payrollFindUniqueOrThrow },
+        payrollComponentLine: { findMany: (...a: unknown[]) => pkwtLinesMock.findMany(...a) },
         account: {
           findMany: mocks.accountFindMany,
         },
@@ -2074,5 +2082,70 @@ describe("assertAccountsExist (akun bare-int fail-closed)", () => {
     });
     mocks.journalFindFirst.mockResolvedValue(null);
     await expect(onExpenseApproved(1)).rejects.toThrow(/tidak ditemukan/);
+  });
+});
+
+describe("onPayrollPaid — kaki kompensasi PKWT (F-2026-10-24-132-V Putusan 5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAllAccountsExist();
+    pkwtLinesMock.findMany.mockResolvedValue([]);
+  });
+
+  function basePayroll() {
+    return {
+      id: 1,
+      grossSalary: 3000,
+      netSalary: 2400,
+      bpjsHealthEmployee: 100,
+      bpjsEmploymentEmployee: 50,
+      pph21: 50,
+      loanDeduction: 200,
+      lateDeduction: 100,
+      absentDeduction: 100,
+      deductions: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-PKWT-1",
+    };
+  }
+
+  function paymentEntries() {
+    const call = mocks.journalCreate.mock.calls[0][0];
+    return call.data.entries.create as Array<{ accountId: number; debit: number; credit: number }>;
+  }
+
+  it("E132-3a terakrual: Dr 210207 atas bagian kompensasi, salary bersih, jurnal seimbang", async () => {
+    pkwtLinesMock.findMany.mockResolvedValue([
+      { pkwtEventId: 9, pkwtSettledViaAccrual: true, amount: 500, accountIdSnapshot: 231 },
+    ]);
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue(basePayroll());
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(1);
+    const entries = paymentEntries();
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 630, debit: 2500 }));
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 231, debit: 500, credit: 0 }));
+    expect(entries.reduce((s, e) => s + e.debit, 0)).toBe(entries.reduce((s, e) => s + e.credit, 0));
+  });
+
+  it("E132-3b belum terakrual: Dr 600028 atas bagian kompensasi", async () => {
+    pkwtLinesMock.findMany.mockResolvedValue([
+      { pkwtEventId: 9, pkwtSettledViaAccrual: false, amount: 500, accountIdSnapshot: 631 },
+    ]);
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue(basePayroll());
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(1);
+    const entries = paymentEntries();
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 631, debit: 500, credit: 0 }));
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 630, debit: 2500 }));
+  });
+
+  it("E132-3c snapshot baris tak cocok mapping berjalan: jurnal ditolak", async () => {
+    pkwtLinesMock.findMany.mockResolvedValue([
+      { pkwtEventId: 9, pkwtSettledViaAccrual: true, amount: 500, accountIdSnapshot: 631 },
+    ]);
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue(basePayroll());
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await expect(onPayrollPaid(1)).rejects.toThrow("Snapshot akun baris kompensasi PKWT");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 });
