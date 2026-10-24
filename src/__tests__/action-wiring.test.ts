@@ -81,17 +81,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "jalur publik (mengakhiri sesi); keluar memakai signOut next-auth di src/components/layout/nav-user.tsx dan header.tsx",
   // Bacaan yang belum punya pemanggil. Dibiarkan tercatat, bukan disembunyikan:
   // keputusan "hapus atau sambungkan" milik pemilik repo.
-  // F-2026-10-24-132-V: konsumen UI peristiwa/akrual/slip PKWT kartu
-  // Frontend t_d34fa8de (parent t_5c05e766); backend inti PR #721.
-  // (entri verify/publish foto F-096 di main sudah dirujuk UI #717/#718 — beku gugur)
-  "src/actions/hrm.actions.ts::createPkwtEvent":
-    "konsumen UI peristiwa kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
-  "src/actions/hrm.actions.ts::approvePkwtEvent":
-    "konsumen UI peristiwa kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
-  "src/actions/hrm.actions.ts::runPkwtAccrual":
-    "konsumen UI akrual kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
-  "src/actions/hrm.actions.ts::attachPkwtEventToPayroll":
-    "konsumen UI tarik kompensasi PKWT ke slip kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
+  // F-2026-10-24-132-V: 4 aksi PKWT kini dirujuk UI panel kompensasi
+  // (pkwt-compensation-panel.tsx, PR #724) — entri beku dibuang.
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":

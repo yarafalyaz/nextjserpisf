@@ -105,6 +105,8 @@ export default async function AccountMappingPage() {
         { label: "Bank Penggajian", value: accountName(settings?.payrollBankAccountId) },
         { label: "Piutang Karyawan", value: accountName(settings?.employeeReceivableAccountId) },
         { label: "Tipe Jurnal Penggajian", value: accountName(settings?.payrollJournalTypeId) },
+        { label: "Beban Kompensasi PKWT (600028)", value: accountName(settings?.pkwtCompensationExpenseAccountId) },
+        { label: "Utang Kompensasi PKWT (210207)", value: accountName(settings?.pkwtCompensationPayableAccountId) },
       ],
     },
     {

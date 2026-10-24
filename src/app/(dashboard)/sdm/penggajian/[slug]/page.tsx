@@ -255,6 +255,7 @@ export default async function PayrollDetailPage({
         status={payroll.status}
         lines={payroll.componentLines.map((l) => ({
           id: l.id,
+          pkwtEventId: l.pkwtEventId,
           componentId: l.componentId,
           componentNameSnapshot: l.componentNameSnapshot,
           kindSnapshot: l.kindSnapshot,

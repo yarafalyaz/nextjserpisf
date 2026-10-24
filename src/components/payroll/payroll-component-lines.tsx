@@ -17,6 +17,7 @@ import { kindLabel, recurrenceLabel, taxableLabel } from "./payroll-component-ma
 
 export interface PayrollComponentLineRow {
   id: number
+  pkwtEventId?: number | null
   componentId: number | null
   componentNameSnapshot: string
   kindSnapshot: string
@@ -36,6 +37,9 @@ export interface LineComponentOption {
 const SOURCE_LABEL: Record<string, string> = {
   fixed_assignment: "Penugasan tetap",
   manual: "Manual",
+  // F-2026-10-24-132-V: baris kompensasi PKWT dari peristiwa terbekukan;
+  // nominal penuh non-parsial dikunci server, UI tidak boleh ubah/hapus.
+  pkwt_compensation: "Kompensasi PKWT",
 }
 
 export function PayrollComponentLines({
@@ -110,7 +114,7 @@ export function PayrollComponentLines({
                   <td className="px-3 py-2">{taxableLabel(l.isTaxableSnapshot, l.kindSnapshot)}</td>
                   <td className="px-3 py-2">{SOURCE_LABEL[l.source] ?? l.source}</td>
                   <td className="px-3 py-2 text-right">{formatCurrency(l.amount)}</td>
-                  {editable && (
+                  {editable && l.source !== "pkwt_compensation" && (
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap items-end gap-2">
                         <form
@@ -158,6 +162,13 @@ export function PayrollComponentLines({
           <dd className="text-base font-semibold text-foreground">{formatCurrency(deductions)}</dd>
         </div>
       </dl>
+
+      {lines.some((l) => l.source === "pkwt_compensation") && (
+        <p className="mt-4 rounded-lg border border-default bg-surface-secondary/40 p-3 text-sm text-muted-foreground">
+          Baris Kompensasi PKWT berasal dari peristiwa terbekukan dan dibayar
+          penuh (non-parsial) — nominal tidak dapat diubah atau dihapus dari slip.
+        </p>
+      )}
 
       {editable ? (
         <form

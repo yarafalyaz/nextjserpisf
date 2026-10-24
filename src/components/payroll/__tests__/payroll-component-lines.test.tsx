@@ -138,6 +138,34 @@ describe("PayrollComponentLines", () => {
     act(() => root.unmount())
   })
 
+  it("baris PKWT: label sumber persis, tanpa form ubah/hapus, notice non-parsial", () => {
+    const { container, root } = mount(
+      <PayrollComponentLines
+        payrollId={7}
+        status="draft"
+        lines={[
+          line({
+            id: 9,
+            componentId: null,
+            componentNameSnapshot: "Kompensasi PKWT",
+            source: "pkwt_compensation",
+            pkwtEventId: 12,
+            amount: 2400000,
+          }),
+        ]}
+        components={options}
+        allowances={2400000}
+        deductions={0}
+        canEdit={true}
+      />,
+    )
+    expect(container.textContent).toContain("Kompensasi PKWT")
+    expect(container.textContent).toContain("nominal tidak dapat diubah atau dihapus dari slip")
+    expect(container.querySelector('form[aria-label="Ubah nominal Kompensasi PKWT"]')).toBeNull()
+    expect(container.querySelector("[data-delete-id='9']")).toBeNull()
+    act(() => root.unmount())
+  })
+
   it("empty lines state", () => {
     const { container, root } = mount(
       <PayrollComponentLines

@@ -13,6 +13,9 @@ import { PayrollFilterForm } from "../_components/payroll-filter-form";
 import { buildPathFilterHref, parsePathFilterSegments } from "@/lib/utils/path-filters";
 
 import { BulkGeneratePayrollButton } from "../_components/bulk-generate-payroll-button";
+import { getPkwtCompensationReport } from "@/lib/reports/pkwt-compensation-data";
+import { hasPermission } from "@/lib/auth/permissions";
+import { PkwtCompensationPanel } from "@/components/payroll/pkwt-compensation-panel";
 import { CanCreate } from "@/components/auth/can-create";
 
 import type { Metadata } from "next";
@@ -133,6 +136,33 @@ export default async function PayrollPage({
   const settings = await prisma.systemSetting.findFirst();
   const cutoffDay = settings?.payrollCutoffDay ?? 25;
 
+  // F-2026-10-24-132-V: panel kompensasi PKWT (read-model server murni).
+  const [pkwtReport, pkwtEmployees, pkwtDraftSlips, canCreatePkwt, canApprovePkwt, canProcessPkwt, canAttachPkwt] =
+    await Promise.all([
+      getPkwtCompensationReport(),
+      prisma.employee.findMany({
+        where: { employmentStatus: "PKWT", isActive: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, employeeNumber: true },
+      }),
+      prisma.payroll.findMany({
+        where: { status: "draft", ...hrScopeWhere(scope) },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: {
+          id: true,
+          documentNo: true,
+          employeeId: true,
+          period: true,
+          employee: { select: { name: true } },
+        },
+      }),
+      hasPermission("edit_payroll"),
+      hasPermission("process_payroll"),
+      hasPermission("process_payroll"),
+      hasPermission("edit_payroll"),
+    ]);
+
   const filterPath = buildPathFilterHref("/sdm/penggajian", {
     tahun: filters.tahun,
     bulan: filters.bulan,
@@ -179,6 +209,22 @@ export default async function PayrollPage({
           </CanCreate>
         </div>
       </div>
+
+      <PkwtCompensationPanel
+        report={pkwtReport}
+        employees={pkwtEmployees}
+        draftSlips={pkwtDraftSlips.map((slip) => ({
+          id: slip.id,
+          documentNo: slip.documentNo,
+          employeeId: slip.employeeId,
+          employeeName: slip.employee?.name ?? null,
+          period: slip.period,
+        }))}
+        canCreate={canCreatePkwt}
+        canApprove={canApprovePkwt}
+        canRunAccrual={canProcessPkwt}
+        canAttach={canAttachPkwt}
+      />
 
       <PayrollTable
         data={data}
