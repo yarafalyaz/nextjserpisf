@@ -25,6 +25,14 @@ const baseProps = {
   rackRows: [],
 }
 
+const scrapItem = (id: number, sku: string, name: string, unitOfMeasure: string) => ({
+  id, sku, name, description: null, image: "img.png",
+  categoryId: 1, brandId: 1, vendorId: 1, defaultWarehouseId: 1, defaultRackId: 1,
+  defaultRackRowId: null, unitOfMeasure, minStock: 0, cost: 100, price: 200,
+  standardCost: null, costingMethod: null, purchasePrice: null, isProduct: false,
+  isScrapSaleItem: true,
+})
+
 describe("ItemForm — a11y wiring", () => {
   it("aria-label tambah + busy false; 9 bintang dekoratif; kontrol wajib required, opsional bersih", () => {
     withContainer((container) => {
@@ -59,16 +67,7 @@ describe("ItemForm — a11y wiring", () => {
   it("mode ubah: besi tua tampil saat isScrapSaleItem, tanpa nominal", () => {
     withContainer((container) => {
       const root = mountInto(container, (
-        <ItemForm
-          {...baseProps}
-          item={{
-            id: 7, sku: "SKU-1", name: "Besi Tua A", description: null, image: "img.png",
-            categoryId: 1, brandId: 1, vendorId: 1, defaultWarehouseId: 1, defaultRackId: 1,
-            defaultRackRowId: null, unitOfMeasure: "PCS", minStock: 0, cost: 100, price: 200,
-            standardCost: null, costingMethod: null, purchasePrice: null, isProduct: false,
-            isScrapSaleItem: true,
-          }}
-        />
+        <ItemForm {...baseProps} item={scrapItem(7, "SKU-1", "Besi Tua A", "PCS")} />
       ))
       const form = container.querySelector("form")!
       expect(form.textContent).toContain("Tandai sebagai Besi Tua")
@@ -85,16 +84,7 @@ describe("ItemForm — a11y wiring", () => {
   it("mode ubah besi tua: toggle tercentang, peringatan tampil, Produk nonaktif", () => {
     withContainer((container) => {
       const root = mountInto(container, (
-        <ItemForm
-          {...baseProps}
-          item={{
-            id: 8, sku: "SCR-1", name: "Besi Tua", description: null, image: "img.png",
-            categoryId: 1, brandId: 1, vendorId: 1, defaultWarehouseId: 1, defaultRackId: 1,
-            defaultRackRowId: null, unitOfMeasure: "KG", minStock: 0, cost: 100, price: 200,
-            standardCost: null, costingMethod: null, purchasePrice: null, isProduct: false,
-            isScrapSaleItem: true,
-          }}
-        />
+        <ItemForm {...baseProps} item={scrapItem(8, "SCR-1", "Besi Tua", "KG")} />
       ))
       const scrap = container.querySelector("#isScrapSaleItem")!
       expect(scrap.getAttribute("data-state")).toBe("checked")
