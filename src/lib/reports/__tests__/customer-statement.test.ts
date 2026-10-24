@@ -4,6 +4,7 @@ import {
   customerStatementOutstanding,
   type CustomerStatementInvoiceInput,
   type CustomerStatementPaymentInput,
+  type CustomerStatementReturnInput,
 } from "../customer-statement"
 import { buildCustomerReceivables } from "../customer-receivables"
 
@@ -164,5 +165,67 @@ describe("buildCustomerStatement", () => {
     })
     expect(s.entries.map((e) => e.kind)).toEqual(["invoice", "payment"])
     expect(s.closingBalance).toBe(0)
+  })
+})
+
+/**
+ * F-2026-10-23-104-V Putusan 2 — baris retur + returnCredit:
+ * 1. Retur linked tampil kind "return" Cr menurunkan saldo; closing =
+ *    outstanding baru (grandTotal − paid − returnCredit).
+ * 2. Retur returnCredit 0 (tanpa jurnal POSTED / unlinked di hook) tidak
+ *    buat baris dan tidak ubah saldo.
+ * 3. Retur sebelum periode mengurangi saldo awal.
+ * 4. Tanpa arg returns: rumus lama persis (backward-compat).
+ */
+describe("buildCustomerStatement returns (F-104-V)", () => {
+  const ret = (over: Partial<CustomerStatementReturnInput> = {}): CustomerStatementReturnInput => ({
+    id: 21,
+    documentNo: "RET-001",
+    salesInvoiceId: 2,
+    salesInvoiceDocumentNo: "INV-002",
+    date: D("2026-02-15"),
+    returnCredit: 100_000,
+    ...over,
+  })
+
+  it("retur linked: baris return Cr, closing = outstanding baru", () => {
+    const s = buildCustomerStatement({
+      customerId: 7, ...PERIOD, invoices: invoices(), payments: payments(), returns: [ret()],
+    })
+    const row = s.entries.find((e) => e.kind === "return")
+    expect(row).toMatchObject({ documentNo: "RET-001", credit: 100_000, referenceDocumentNo: "INV-002" })
+    // 1.080.000 (fixture lama) − 100.000 retur
+    expect(s.closingBalance).toBe(980_000)
+    expect(
+      customerStatementOutstanding({ invoices: invoices(), payments: payments(), returns: [ret()] }),
+    ).toBe(980_000)
+  })
+
+  it("retur returnCredit 0 tidak buat baris, saldo tidak berubah", () => {
+    const s = buildCustomerStatement({
+      customerId: 7, ...PERIOD, invoices: invoices(), payments: payments(),
+      returns: [ret({ returnCredit: 0 })],
+    })
+    expect(s.entries.some((e) => e.kind === "return")).toBe(false)
+    expect(s.closingBalance).toBe(1_080_000)
+  })
+
+  it("retur sebelum periode mengurangi saldo awal", () => {
+    const s = buildCustomerStatement({
+      customerId: 7, ...PERIOD, invoices: invoices(), payments: payments(),
+      returns: [ret({ id: 22, salesInvoiceId: 1, salesInvoiceDocumentNo: "INV-001", date: D("2026-01-20"), returnCredit: 50_000 })],
+    })
+    expect(s.entries.some((e) => e.kind === "return")).toBe(false)
+    expect(s.openingBalance).toBe(680_000 - 50_000)
+    expect(s.closingBalance).toBe(1_080_000 - 50_000)
+  })
+
+  it("retur atas faktur di luar himpunan diabaikan; tanpa returns rumus lama", () => {
+    const orphan = buildCustomerStatement({
+      customerId: 7, ...PERIOD, invoices: invoices(), payments: payments(),
+      returns: [ret({ salesInvoiceId: 999, salesInvoiceDocumentNo: "INV-CXL" })],
+    })
+    expect(orphan.closingBalance).toBe(1_080_000)
+    expect(customerStatementOutstanding({ invoices: invoices(), payments: payments() })).toBe(1_080_000)
   })
 })
