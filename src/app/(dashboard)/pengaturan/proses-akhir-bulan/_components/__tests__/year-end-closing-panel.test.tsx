@@ -145,6 +145,55 @@ describe("YearEndClosingPanel", () => {
     expect(successMock).not.toHaveBeenCalled()
   })
 
+  // E121-8 (inti F-2026-10-23-127-V, PR #664 merged): sesudah reversal,
+  // loader hanya menghitung jurnal POSTED aktif -> alreadyClosed kembali
+  // false. Panel HARUS menawarkan posting ulang (dulu tertahan unik fisik
+  // REVERSED) lewat tombol posting existing — tanpa tombol jurnal tambahan.
+  it("E121-8: sesudah reversal (alreadyClosed=false) posting ulang ditawarkan, jurnal tambahan nol", async () => {
+    await render(preview({ alreadyClosed: false }))
+    expect(btn("Posting penutup 2025").disabled).toBe(false)
+    expect(btn("Ajukan persetujuan").disabled).toBe(false)
+    expect(buttons().some((b) => b.textContent?.includes("Reversal penutup"))).toBe(false)
+    expect(container!.textContent).not.toContain("Jurnal penutup tahun fiskal ini sudah terposting")
+  })
+
+  it("E121-8: posting ulang sesudah reversal sukses — FormData tahun sama, toast pesan backend + refresh", async () => {
+    postMock.mockResolvedValueOnce({
+      success: true,
+      message: "Jurnal penutup tahun fiskal 2025 terposting (JRN-2025-0101).",
+      journalId: 101,
+      journalNumber: "JRN-2025-0101",
+    })
+    await render(preview({ alreadyClosed: false }))
+    await click(btn("Posting penutup 2025"))
+    await click(confirmBtn("Posting penutup"))
+    expect(postMock).toHaveBeenCalledTimes(1)
+    const fd = postMock.mock.calls[0][0] as FormData
+    expect(fd.get("fiscalYear")).toBe("2025")
+    expect(successMock).toHaveBeenCalledWith("Jurnal penutup tahun fiskal 2025 terposting (JRN-2025-0101).")
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(refreshMock).toHaveBeenCalled()
+  })
+
+  it("E121-8: error pre-check server posting ulang tampil verbatim (pesan F-127-V, bukan P2002 mentah)", async () => {
+    const pesanServer = [
+      "Tahun fiskal 2025 sudah ditutup oleh jurnal penutup aktif lain. Koreksi hanya lewat reversal jurnal penutup.",
+      "Tahun fiskal 2025 sudah ditutup oleh jurnal JRN-2025-0099. Koreksi hanya lewat reversal jurnal penutup.",
+      "Jurnal penutup tahun 2025 tidak seimbang (selisih 5000); posting dibatalkan, tidak ada jurnal dibuat.",
+    ]
+    for (const error of pesanServer) {
+      postMock.mockResolvedValueOnce({ success: false, error })
+      await render(preview({ alreadyClosed: false }))
+      await click(btn("Posting penutup 2025"))
+      await click(confirmBtn("Posting penutup"))
+      expect(errorMock).toHaveBeenCalledWith(error)
+    }
+    expect(errorMock).toHaveBeenCalledTimes(3)
+    expect(errorMock.mock.calls.flat().join(" ")).not.toMatch(/P2002|Unique constraint/i)
+    expect(successMock).not.toHaveBeenCalled()
+    expect(postMock).toHaveBeenCalledTimes(3)
+  })
+
   it("sukses reversal: toast pesan backend + refresh", async () => {
     await render(preview({ alreadyClosed: true }))
     await click(btn("Reversal penutup 2025"))
