@@ -21,17 +21,19 @@ export interface ScrapMaterialReport {
 }
 
 export async function loadScrapMaterialReport(start: Date, end: Date): Promise<ScrapMaterialReport> {
-  const [miRows, poRows, journals] = await Promise.all([
+  const [miRows, poRows, journals, remnants] = await Promise.all([
     prisma.materialIssueItem.findMany({
       where: {
         scrapQty: { gt: 0 },
         materialIssue: { date: { gte: start, lte: end } },
       },
       select: {
+        id: true,
         itemId: true, qty: true, scrapQty: true, scrapReasonCode: true,
         scrapPercentSnapshot: true, scrapPlannedQtySnapshot: true,
         scrapNormalQtySnapshot: true, scrapAbnormalQtySnapshot: true,
         scrapNormalValueSnapshot: true, scrapAbnormalValueSnapshot: true,
+        scrapReviewStatus: true, scrapReviewDisposition: true,
         materialIssue: { select: { documentNo: true, date: true } },
       },
     }),
@@ -41,10 +43,12 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
         productionOrder: { createdAt: { gte: start, lte: end } },
       },
       select: {
+        id: true,
         itemId: true, actualQty: true, qty: true, scrapQty: true, scrapReasonCode: true,
         scrapPercentSnapshot: true,
         scrapNormalQtySnapshot: true, scrapAbnormalQtySnapshot: true,
         scrapNormalValueSnapshot: true, scrapAbnormalValueSnapshot: true,
+        scrapReviewStatus: true, scrapReviewDisposition: true,
         productionOrder: { select: { documentNo: true, createdAt: true } },
       },
     }),
@@ -56,16 +60,41 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
       },
       select: { totalDebit: true },
     }),
+    prisma.remnant.findMany({
+      where: { createdAt: { gte: start, lte: end } },
+      select: { sourceType: true, sourceId: true, qty: true, status: true, scrapWeightKg: true },
+    }),
   ])
 
   const itemIds = [...new Set([...miRows.map((r) => r.itemId), ...poRows.map((r) => r.itemId)])]
   const items = itemIds.length
-    ? await prisma.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, name: true } })
+    ? await prisma.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, name: true, category: { select: { scrapAllowanceNote: true, materialShape: true } } },
+      })
     : []
   const itemNames = new Map(items.map((i) => [i.id, i.name]))
+  const allowanceNotes = new Map(
+    items.map((i) => [i.id, (i as { category?: { scrapAllowanceNote?: string | null } | null }).category?.scrapAllowanceNote ?? null]),
+  )
+  const materialShapes = new Map(
+    items.map((i) => [i.id, (i as { category?: { materialShape?: string | null } | null }).category?.materialShape ?? null]),
+  )
+  // Agregasi remnant per baris issue asal: usable -> remnantQty, scrap -> kg.
+  const remnantBySource = new Map<string, { remnantQty: number; scrapWeightKg: number }>()
+  for (const r of remnants) {
+    if (!r.sourceType || r.sourceId == null) continue
+    const key = `${r.sourceType}:${r.sourceId}`
+    const cur = remnantBySource.get(key) ?? { remnantQty: 0, scrapWeightKg: 0 }
+    if (r.status === "usable" || r.status === "consumed") cur.remnantQty += Number(r.qty)
+    if (r.status === "scrap") cur.scrapWeightKg += Number(r.scrapWeightKg ?? 0)
+    remnantBySource.set(key, cur)
+  }
 
   const lines: ScrapReportLineInput[] = [
-    ...miRows.map((r): ScrapReportLineInput => ({
+    ...miRows.map((r): ScrapReportLineInput => {
+      const agg = remnantBySource.get(`material_issue_item:${r.id}`) ?? { remnantQty: 0, scrapWeightKg: 0 }
+      return {
       source: "MI",
       documentNo: r.materialIssue.documentNo,
       date: r.materialIssue.date,
@@ -80,8 +109,18 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
       normalValue: Number(r.scrapNormalValueSnapshot ?? 0),
       abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
       uncalibrated: r.scrapPercentSnapshot == null || Number(r.scrapPercentSnapshot) <= 0,
-    })),
-    ...poRows.map((r): ScrapReportLineInput => ({
+      reviewStatus: r.scrapReviewStatus ?? null,
+      reviewDisposition: r.scrapReviewDisposition ?? null,
+      remnantQty: agg.remnantQty,
+      installedQty: null,
+      scrapWeightKg: agg.scrapWeightKg,
+      allowanceNote: allowanceNotes.get(r.itemId) ?? null,
+      materialShape: materialShapes.get(r.itemId) ?? null,
+      }
+    }),
+    ...poRows.map((r): ScrapReportLineInput => {
+      const agg = remnantBySource.get(`production_order_material:${r.id}`) ?? { remnantQty: 0, scrapWeightKg: 0 }
+      return {
       source: "PO",
       documentNo: r.productionOrder.documentNo,
       date: r.productionOrder.createdAt,
@@ -96,7 +135,15 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
       normalValue: Number(r.scrapNormalValueSnapshot ?? 0),
       abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
       uncalibrated: r.scrapPercentSnapshot == null || Number(r.scrapPercentSnapshot) <= 0,
-    })),
+      reviewStatus: r.scrapReviewStatus ?? null,
+      reviewDisposition: r.scrapReviewDisposition ?? null,
+      remnantQty: agg.remnantQty,
+      installedQty: null,
+      scrapWeightKg: agg.scrapWeightKg,
+      allowanceNote: allowanceNotes.get(r.itemId) ?? null,
+      materialShape: materialShapes.get(r.itemId) ?? null,
+      }
+    }),
   ].sort((a, b) => a.date.getTime() - b.date.getTime())
 
   const abnormalJournalValue = journals.reduce((a, j) => a + Number(j.totalDebit), 0)

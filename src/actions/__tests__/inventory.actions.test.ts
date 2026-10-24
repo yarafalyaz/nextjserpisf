@@ -1261,9 +1261,26 @@ describe("remnant (P1-5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
-    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 });
+    // F-098-S: usable wajib ambang kategori — fixture lama tanpa dimensi kini
+    // ditolak di guard baru; mock kategori berambang agar jalur sukses lama
+    // (parsing unitCost/uom) tetap teruji apa adanya.
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, category: { remnantMinMeasure: 100 } });
     mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 1 });
   });
+
+  const usableFd = (over: Record<string, string> = {}) => {
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "1500");
+    fd.set("dimensions", "1200x300 mm");
+    fd.set("measuredSize", "1200");
+    fd.set("sourceType", "material_issue_item");
+    fd.set("sourceId", "42");
+    for (const [k, v] of Object.entries(over)) fd.set(k, v);
+    return fd;
+  };
 
   it("createRemnant menolak unitCost negatif bukan diam-diam 0", async () => {
     const fd = new FormData();
@@ -1286,18 +1303,13 @@ describe("remnant (P1-5)", () => {
     expect(badRes.success).toBe(false);
     expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
 
-    const fd = new FormData();
-    fd.set("itemId", "1");
-    fd.set("warehouseId", "1");
-    fd.set("qty", "2");
-    fd.set("uom", "u".repeat(50));
-    fd.set("unitCost", "1500");
+    const fd = usableFd({ uom: "u".repeat(50) });
     const res = await actions.createRemnant(fd);
     expect(res.success).toBe(true);
     const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
     expect(arg.data.uom).toHaveLength(32);
     expect(arg.data.unitCost).toBe(1500);
-    expect(arg.data.sourceId).toBeNull();
+    expect(arg.data.sourceId).toBe(42);
   });
 
   it("createStocktakeSession menolak gudang yang tidak ada (bukan P2003 mentah)", async () => {
@@ -1312,11 +1324,7 @@ describe("remnant (P1-5)", () => {
   });
 
   it("createRemnant membaca unitCost format Indonesia penuh, bukan 2", async () => {
-    const fd = new FormData();
-    fd.set("itemId", "1");
-    fd.set("warehouseId", "1");
-    fd.set("qty", "2");
-    fd.set("unitCost", "2.000.000");
+    const fd = usableFd({ unitCost: "2.000.000" });
     const res = await actions.createRemnant(fd);
     expect(res.success).toBe(true);
     const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
@@ -1374,6 +1382,70 @@ describe("remnant (P1-5)", () => {
     const res = await actions.scrapRemnant(4, new FormData());
     expect(res.success).toBe(false);
     expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("F-098-S createRemnant tanpa dimensi/tautan/ambang ditolak (AC-SCRAP-1)", async () => {
+    const noDims = usableFd();
+    noDims.delete("dimensions");
+    expect((await actions.createRemnant(noDims)).success).toBe(false);
+    const noLink = usableFd();
+    noLink.delete("sourceId");
+    const noLinkRes = await actions.createRemnant(noLink);
+    expect(noLinkRes.success).toBe(false);
+    if (!noLinkRes.success) expect(noLinkRes.error).toMatch(/tertaut/);
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1, category: { remnantMinMeasure: null } });
+    const noThresholdRes = await actions.createRemnant(usableFd());
+    expect(noThresholdRes.success).toBe(false);
+    if (!noThresholdRes.success) expect(noThresholdRes.error).toMatch(/belum ditetapkan/);
+    const belowRes = await actions.createRemnant(usableFd({ measuredSize: "50" }));
+    expect(belowRes.success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it("F-098-S createRemnant usable sah membekukan snapshot ambang (AC-SCRAP-1)", async () => {
+    const res = await actions.createRemnant(usableFd());
+    expect(res.success).toBe(true);
+    const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
+    expect(arg.data.remnantMinMeasureSnapshot).toBe(100);
+    expect(arg.data.measuredSize).toBe(1200);
+    expect(arg.data.sourceType).toBe("material_issue_item");
+  });
+
+  it("F-098-S scrapRemnant tanpa kg ditolak; dengan kg tercatat (AC-SCRAP-7)", async () => {
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 1 });
+    const noKg = new FormData();
+    noKg.set("scrapReason", "tak terpakai");
+    expect((await actions.scrapRemnant(4, noKg)).success).toBe(false);
+    expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
+    const fd = new FormData();
+    fd.set("scrapReason", "tak terpakai");
+    fd.set("scrapWeightKg", "12.5");
+    expect((await actions.scrapRemnant(4, fd)).success).toBe(true);
+    expect(mocks.prismaMock.remnant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ scrapWeightKg: 12.5 }) }),
+    );
+  });
+
+  it("F-098-S reviewAbnormalScrap: izin + disposisi + hanya kolom tinjau (AC-SCRAP-5/6)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["admin"] });
+    const res = await actions.reviewAbnormalScrap({ source: "MI", lineId: 5, disposition: "kelalaian", note: "teguran tertulis" });
+    expect(res.success).toBe(true);
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("complete_work_orders");
+    const call = mocks.prismaMock.materialIssueItem.updateMany.mock.calls[0][0];
+    expect(call.where).toEqual({ id: 5, scrapReviewStatus: "menunggu_tinjau" });
+    expect(Object.keys(call.data).sort()).toEqual([
+      "scrapReviewDisposition", "scrapReviewNote", "scrapReviewStatus", "scrapReviewedAt", "scrapReviewedBy",
+    ]);
+    expect(call.data.scrapReviewStatus).toBe("ditinjau");
+
+    const noNote = await actions.reviewAbnormalScrap({ source: "PO", lineId: 6, disposition: "kelalaian", note: " " });
+    expect(noNote.success).toBe(false);
+    expect(mocks.prismaMock.productionOrderMaterial.updateMany).not.toHaveBeenCalled();
+
+    mocks.prismaMock.materialIssueItem.updateMany.mockResolvedValue({ count: 0 });
+    const stale = await actions.reviewAbnormalScrap({ source: "MI", lineId: 5, disposition: "diterima_wajar" });
+    expect(stale.success).toBe(false);
   });
 
   it("consumeRemnant/scrapRemnant menolak gudang di luar scope user", async () => {
