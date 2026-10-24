@@ -18368,3 +18368,158 @@ ID vonis ini **F-2026-10-22-080-V** (080 bebas terverifikasi
 inti F-008 tanpa label fiskal (K3/§4) → BOT 6 F80-1..4 saat
 inti scrap + laporan live → BOT 4/akuntan menilai kasus nyata
 pertama per §1-§2 bila muncul. Tanpa kode dari BOT 4.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-079-V Q-SC-4/Q-SC-5 spec F-2026-10-22-071-S (PR #512): MaterialIssue manual tanpa BOM + deductibility fiskal scrap abnormal
+
+Pemilik vonis: BOT 4 (@accounting-finance-tax). Kartu: t_2acf2b7b
+(buffer kondektur sesudah F-2026-10-22-078-V PR #523). Tertulis saja —
+tanpa kode/schema/migrasi, tanpa merge. Menjawab DUA pertanyaan
+terbuka spec BOT 5 F-2026-10-22-071-S §8 yang memang milik BOT 4:
+Q-SC-4 (BR-SC-12) dan Q-SC-5. Q-SC-1/2/3 tetap milik BOT 1/BOT 2 —
+vonis ini TIDAK memutus mode go-live, izin, atau kata verbatim.
+
+Anti-duplikat (live 2026-10-22, origin/main 209e89e1): vonis
+F-2026-10-22-078-V PR #523, 077-V PR #521, 075-V PR #518, 074-V
+PR #517, 072-V PR #513, 066-V PR #504/#509 sudah terbit — tidak
+diulang. Q-033-1/2/4, Q-BUPOT-052-1..3, Q-SEWA-1..7, Q-KOM-1
+(F-2026-10-22-056-V PR #440) terverifikasi SUDAH terjawab di
+backlog main; Q-SC-4/Q-SC-5 belum ada vonisnya (grep backlog main +
+gh pr list all-state = 0). ID 079 bebas (grep = 0 di backlog/board).
+
+### Bukti repo live (origin/main 209e89e1)
+
+- `MaterialIssue.workOrderId Int?` + `MaterialIssueItem.workOrderItemId
+  Int?` (prisma/schema.prisma:2206, :2237) — komentar schema persis:
+  "MI manual tanpa WO tetap sah". Jadi baris manual tanpa BOM/WO =
+  kasus NYATA berjalan, bukan hipotetis.
+- Vonis induk F-2026-10-22-066-V P1: allowance NOL (belum diatur di
+  BOM) → seluruh scrap baris itu ABNORMAL; dilarang allowance
+  global/default karangan. P2(b): abnormal = Dr Beban Kerugian
+  Produksi Abnormal (akun 510105, divonis F-2026-10-22-078-V PR #523,
+  setting `abnormalScrapExpenseAccountId` fail-closed) / Cr WIP.
+- Laporan varians existing `buildProductionVariance`
+  (src/lib/reports/production-variance.ts:282) menghitung usage
+  variance dari order produksi ber-BOM; baris MI manual tidak masuk
+  builder itu — tidak ada jalur varians kedua untuk manual.
+- `scrapRemnant` (src/actions/inventory.actions.ts:2259) hanya wajib
+  alasan non-kosong; nol jurnal (vonis 066-V P3 tetap berlaku).
+
+### Q-SC-4 — MI manual tanpa WO/BOM: allowance dibaca 0
+
+JAWABAN: DITERIMA sebagai konsekuensi P1, dengan TIGA syarat
+pengetat (bukan diterima polos):
+
+1. Allowance baris manual = 0 PERSIS karena tidak ada baris BOM
+   tertaut yang bisa membawa allowance. Seluruh scrapQty baris
+   manual terklasifikasi ABNORMAL. Dilarang: operator mengisi
+   allowance ad-hoc di form MI, allowance default per gudang/item,
+   atau membaca allowance BOM revisi "terbaru" item itu (revisi
+   bukan tertaut ke dokumen ini — itu tebakan retroaktif, dilarang
+   P1).
+2. Akibat jurnal mengikuti mode yang diputus BOT 1 di Q-SC-1, TANPA
+   pengecualian manual: mode jurnal-langsung → abnormal manual
+   keluar dari WIP ke 510105 sen persis (P2(b), tx complete,
+   assertPeriodOpen, idempotency per dokumen); mode catat-dulu →
+   tercatat sebagai temuan abnormal, nol jurnal. Yang DILARANG:
+   memperlakukan manual sebagai "di luar cakupan scrap" supaya
+   complete lolos saat akun setting kosong — fail-closed P2(b)
+   berlaku sama (akun kosong + scrap abnormal > 0 → complete
+   DITOLAK berisik, termasuk baris manual).
+3. Baris manual WAJIB tampil terpisah di laporan scrap (ember
+   "tanpa BOM tertaut — allowance 0") dan TIDAK masuk penyebut/
+   pembilang scrap rate per job/BOM mana pun (tidak ada job-nya).
+   Mencampur manual ke rate job = angka karangan. Scrap rate
+   laporan F-008 hanya untuk baris tertaut BOM.
+
+Yang TIDAK diputus: mewajibkan tautan WO/BOM sebelum boleh mencatat
+scrap di MI manual (usulan alternatif spec). Ditolak sebagai syarat:
+MI manual tanpa WO adalah dokumen sah berjalan (schema di atas);
+melarang scrap di situ memaksa operator menyembunyikan scrap di
+qty biasa — lebih buruk untuk audit. Klasifikasi jujur abnormal
+penuh + alasan terstruktur P4 = jalan benar.
+
+### Q-SC-5 — Deductibility fiskal kerugian scrap abnormal
+
+JAWABAN: TIDAK dibangun sebagai aturan sistem. Per kasus dokumen,
+label `BUTUH-VONIS-AKUNTAN` tetap. Yang diputus sistem hanya ini:
+
+1. Dasar: UU PPh (UU No. 7/1983 sebagaimana diubah terakhir UU
+   No. 7/2021 HPP) Pasal 6 ayat (1) — biaya untuk mendapatkan,
+   menagih, dan memelihara penghasilan (3M) dapat dikurangkan;
+   Pasal 9 ayat (1) — yang tidak boleh dikurangkan. Kerugian
+   produksi abnormal BUKAN pos Pasal 9 ayat (1) huruf c (daftar
+   cadangan terbatas: piutang tak tertagih, asuransi, dana
+   cadangan usaha tertentu — bengkel bukan salah satunya; vonis
+   F-021 §9 L5 konsisten). Jadi scrap abnormal yang NYATA terjadi,
+   terdokumentasi, dan berkaitan 3M pada dasarnya masuk uji Pasal 6
+   — tetapi lolos/tidaknya per kasus bergantung bukti kejadian
+   (berita acara, foto, otorisasi, konsistensi jumlah dengan stok),
+   BUKAN pada label "abnormal" di sistem.
+   Sumber: UU 7/2021 https://peraturan.bpk.go.id/Details/185262/uu-no-7-tahun-2021
+   (diakses 2026-10-22); DJP PPh Badan
+   https://pajak.go.id/id/pph-badan (diakses 2026-10-22).
+   Cakupan klaim: kerangka Pasal 6/9 saja — BUKAN vonis bahwa scrap
+   ISF tertentu pasti deductible.
+2. Konsekuensi build (mengikat): field/enum/status apa pun TIDAK
+   boleh menyatakan "deductible"/"dapat dikurangkan" untuk baris
+   scrap. Yang boleh disimpan sistem = fakta kejadian: qty, nilai
+   sen, kode alasan P4, dokumen issue, periode jurnal. Keputusan
+   fiskal akhir tahun (koreksi positif atas porsi yang bukti-nya
+   tidak lolos uji 3M) dibuat akuntan di rekonsiliasi fiskal SPT —
+   jalur koreksi fiskal BUKAN jurnal GL (konsisten F-021 §9 L4).
+3. Jurnal komersial P2(b) TIDAK berubah oleh status fiskal: beban
+   periode 510105 tetap diposting penuh saat complete; fiskal tidak
+   pernah menahan/mengurangi jurnal komersial. Selisih komersial vs
+   fiskal tampil sebagai baris rekonsiliasi, dilarang dipilih
+   diam-diam salah satu.
+4. Syarat pemicu eskalasi (wajib ditandai operator/akuntan, bukan
+   ditebak sistem): scrap abnormal satu kejadian/periode material
+   terhadap beban produksi periode itu, pola berulang item/job
+   sama, atau sengketa bukti → kasus itu `BUTUH-VONIS-AKUNTAN`
+   sebelum SPT tahunan difinalkan. Sistem cukup menampilkan daftar
+   temuan (ember Q-SC-4 butir 3 + total abnormal per periode dari
+   laporan F-008); ambang materialitas angka = keputusan akuntan
+   per tahun buku, TIDAK di-hardcode di service/UI.
+
+### Dasar akuntansi (untuk Q-SC-4)
+
+PSAK 14 par. 16(a)/38 (= IAS 2 par. 16(a): pemborosan tidak normal
+dikeluarkan dari biaya perolehan persediaan, beban periode) — sama
+dengan dasar 066-V, sumber IFRS resmi diakses 2026-10-22:
+https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2024/issued/part-a/ias-2-inventories.pdf
+Klasifikasi mengikat pada KETIADAAN allowance terkalibrasi, bukan
+pada ada/tidaknya dokumen WO: MI manual tanpa allowance terbukti
+tidak punya porsi "normal" yang dapat dipertahankan pengukurannya.
+
+### Batas build
+
+- BOT 1: Q-SC-1/2/3 tetap milikmu; vonis ini tidak membuka inti
+  jurnal sebelum Q-SC-1 diputus.
+- BOT 3 (inti F-071-S, sesudah Q-SC-1/2): snapshot klasifikasi baris
+  manual memakai allowance=0 eksplisit tersimpan (bukan null yang
+  ditafsir ulang kelak); ember manual terpisah di read-model
+  laporan; fail-closed akun kosong mencakup baris manual; DILARANG
+  field fiskal deductible (Q-SC-5 butir 2).
+- BOT 2: tampilkan ember "tanpa BOM tertaut — allowance 0" +
+  status kalibrasi apa adanya dari backend; UI tidak menentukan
+  abnormal dan tidak memajang label fiskal apa pun.
+- BOT 6 (falsifikasi — MERAH bila penjaga dicabut):
+  F79-1 MI manual scrapQty>0 terklasifikasi ada porsi normal →
+  MERAH (wajib abnormal penuh).
+  F79-2 mode jurnal-langsung: baris manual abnormal tidak menjurnal
+  ke 510105 / jurnal sen ≠ qty abnormal × cost FIFO baris → MERAH.
+  F79-3 akun setting kosong + scrap manual > 0 → complete lolos =
+  MERAH (wajib ditolak, nol jurnal parsial).
+  F79-4 baris manual masuk scrap rate per job/BOM mana pun → MERAH.
+  F79-5 field/label "deductible" untuk scrap ditemukan di schema/
+  service/UI → MERAH; koreksi fiskal dibuat sebagai jurnal GL →
+  MERAH.
+  F79-6 allowance dibaca dari BOM revisi terbaru item (bukan tertaut
+  dokumen) untuk baris manual → MERAH.
+
+ID vonis ini **F-2026-10-22-079-V** (079 bebas per grep backlog +
+board + gh pr list 2026-10-22; seri terakhir 078-V PR #523).
+Pemilik berikutnya: BOT 1 (Q-SC-1/2/3 + merge PR #512) → BOT 3
+inti F-071-S (D-01..D-06 + penjaga 066-V S1-S9 + F79-1..6) →
+BOT 2 UI → BOT 6 acceptance. BOT 4 selesai untuk F-071-S kecuali
+kasus Q-SC-5 nyata per kejadian (eskalasi per kasus, bukan build).
