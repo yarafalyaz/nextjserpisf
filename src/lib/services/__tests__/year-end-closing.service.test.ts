@@ -158,13 +158,42 @@ describe("postYearEndClosing", () => {
     expect(result).toMatchObject({ totalDebit: 1000, totalCredit: 1000 })
   })
 
-  it("P2002 unik reference diterjemahkan berisik (posting ulang sesudah reversal pra-vonis)", async () => {
+  it("E127-1/E121-8: posting ulang sesudah reversal berhasil — REVERSED tidak memegang kunci aktif", async () => {
+    // findFirst anti-dobel hanya POSTED aktif -> REVERSED lama tak terlihat;
+    // journal.create kini lolos karena unik aktif (F-127-V) mengabaikan
+    // baris REVERSED. Ini titik yang dulu PASTI P2002 journals_reference_unique.
+    mocks.journalFindFirst.mockResolvedValue(null)
+    const result = await postYearEndClosing(2025, 3)
+    expect(result).toMatchObject({ journalId: 99, fiscalYear: 2025 })
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceType: "YearEndClosing",
+          referenceId: 2025,
+          status: "POSTED",
+        }),
+      }),
+    )
+  })
+
+  it("E127-2: P2002 unik AKTIF (balapan posting ganda) diterjemahkan pesan-tahun, bukan mentah", async () => {
     const p2002 = Object.assign(new Error("Unique constraint failed"), {
       code: "P2002",
-      meta: { target: "journals_reference_unique" },
+      meta: { target: "journals_active_reference_unique" },
     })
     mocks.journalCreate.mockRejectedValue(p2002)
-    await expect(postYearEndClosing(2025, 3)).rejects.toThrow("sudah pernah dibuat (termasuk yang sudah di-reversal)")
+    await expect(postYearEndClosing(2025, 3)).rejects.toThrow(
+      "Tahun fiskal 2025 sudah ditutup oleh jurnal penutup aktif lain",
+    )
+  })
+
+  it("P2002 bukan unik reference -> diteruskan apa adanya (tidak ditelan)", async () => {
+    const lain = Object.assign(new Error("Unique constraint failed on journal_number"), {
+      code: "P2002",
+      meta: { target: "journals_journal_number_key" },
+    })
+    mocks.journalCreate.mockRejectedValue(lain)
+    await expect(postYearEndClosing(2025, 3)).rejects.toBe(lain)
   })
 })
 
