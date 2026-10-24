@@ -6143,6 +6143,48 @@ accountant untuk UI ini: TIDAK (tidak ada angka baru; Q-KOM-1 terpisah).
   per penjual (F-2026-10-21-018 wilayahnya), slip/komisi perorangan
   untuk karyawan, jurnal/pembayaran komisi — ditolak/ditunda dengan
   alasan di §3/§5; bukan hilang, tercatat di sini.
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-047-V Kode objek + akun final PPh 4(2) sewa (syarat buka BOT 3 t_c70095d5)
+
+Status: FINAL untuk angka/kode/akun domain ini. Pelengkap F-038/F-039/F-041/F-042-V. Tanpa kode/schema/migrasi. Tanpa angka pajak baru.
+
+### Bukti resmi (akses 2026-10-22)
+
+- Kode objek `28-403-02` "Persewaan Tanah dan/atau Bangunan", tarif 10,0 — file referensi BPPU resmi DJP `BPPU Excel to XML v.2.xlsx` (pajak.go.id/sites/default/files/2025-01/), baris `28-403-02,Persewaan Tanah dan/atau Bangunan,10.0`. Konsisten PER-24/PJ/2021 Lampiran B (F-039) dan era Coretax PER-11/PJ/2025 (berlaku 22-05-2025; kode objek diisi dari Lampiran B PER-11/PJ/2025; PDF resmi pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf).
+- KJS setor `411128-403` "PPh Final Pasal 4 ayat (2) atas Persewaan Tanah dan/atau Bangunan" — halaman resmi DJP Kode Akun Pajak dan Kode Jenis Setoran Pajak (pajak.go.id/id/kode-akun-pajak-dan-kode-jenis-setoran-pajak, akses 2026-10-22).
+- Tarif 10% bruto: PP 34/2017 + halaman DJP PPh Pasal 4 ayat (2) (pajak.go.id/id/pph-pasal-4-ayat-2, akses 2026-10-22).
+- Tenggat: setor maks tgl 15 bulan berikutnya (PMK 81/2024 Pasal 94 ayat (2), berlaku 01-01-2025); lapor SPT Masa PPh Unifikasi maks 20 hari sesudah Masa Pajak berakhir (PER-11/PJ/2025). Tetap F-039/F-042-V.
+
+### Putusan 1 — kode objek: master bertanggal efektif, BUKAN pin di kode
+
+Nilai final saat ini: `28-403-02`. Bupot PPh 4(2) sewa WAJIB membawa kode objek ini dari master jenis pajak (field kode objek pada `WithholdingTaxType`/seed `WITHHOLDING_TAX_TYPES` pola F-003), bertanggal efektif, disnapshot beku ke bupot saat terbit. Resolver/service DILARANG hardcode string `28-403-02` sebagai konstanta logika; nilai referensi ini hanya isi seed/master awal. Bila lampiran DJP berlaku berubah, operator ubah master efektif baru — dokumen terbit lama tidak berubah. Kode objek kosong/nonaktif pada jenis PPH42-SEWA = fail-closed berisik, dilarang fallback ke kode objek PPh 23 (24-100-02 sewa non-tanah/bangunan) atau konstruksi 28-409-xx.
+
+Alasan satu kalimat: F-003 sudah menetapkan kode objek dipilih per jenis dari master, dan PER-11/PJ/2025 mengikat kode ke lampiran yang berlaku — pin di kode membuat perubahan lampiran menjadi rilis kode dan membekukan kode kedaluwarsa ke bupot baru.
+
+### Putusan 2 — akun liabilitas final: 210206 terkonfirmasi
+
+`210206` Utang PPh 4(2) Sewa Tanah/Bangunan FINAL (F-041, PR #394 head 43bc0cd7). Mapping `WITHHOLDING_TAX_TYPES`: jenis `PPH42-SEWA` membawa `liabilityAccountCode: "210206"`, pola sama PPH23-BELI -> 210202. Akun 210206 kosong/nonaktif/bukan anak 2102 = jurnal GAGAL fail-closed. Dilarang fallback 210202/210205. `210205` tetap Provisi Garansi F-021, tidak disentuh kartu ini.
+
+### Ceklis prasyarat buka BOT 3 t_c70095d5 (semua WAJIB)
+
+1. PR #394 (F-041) merged ATAU vonis ini + F-041 terbaca BOT 3 dari backlog; seed akun 210206 anak 2102 sesudah itu.
+2. Seed jenis `PPH42-SEWA`: tarif 10 Decimal(5,2) di master bertanggal efektif, `article` PPh 4(2), kode objek master `28-403-02` (referensi Putusan 1), `liabilityAccountCode: "210206"`.
+3. Snapshot beku ke bupot/dokumen saat terbit: tarif, DPP bruto, kode objek, pasal, akun liabilitas. Edit master sesudah terbit tidak mengubah dokumen lama.
+4. Resolver cicil DITOLAK (F-039 putusan 2): sewa dibayar di muka multi-bulan dipotong SEKALI 10% x total termin saat terutang lebih dulu; cicil potong per masa = tolak berisik.
+5. Gerbang komponen F-039 putusan 1 + Q-SEWA-1/2 (F-042-V) utuh: kewajiban pemilik masuk DPP final 10%; PPh 23 2% hanya penerima pihak ketiga independen terbukti; campur tanpa rincian = 10% total.
+6. Status pemotong terverifikasi per pihak (F-039 putusan 3); OP non-pemotong tidak dipotongkan — jalur setor-sendiri pemilik Q-SEWA-7.
+7. Master tenggat bertanggal efektif: setor tgl 15 (PMK 81/2024), lapor 20 hari (PER-11/PJ/2025); bukan konstanta kode.
+8. Empat status terpisah (dokumen/pembayaran/pajak/posting); idempotency key mutasi potong/setor; `assertPeriodOpen` dalam tx posting.
+
+### Falsifikasi wajib BOT 6
+
+- F47-1: kode objek master PPH42-SEWA dikosongkan -> terbit bupot GAGAL; lolos = MERAH.
+- F47-2: hardcode `28-403-02` ditemukan di service/resolver di luar seed/master = MERAH (grep).
+- F47-3: akun 210206 nonaktif -> jurnal potong GAGAL; kredit jatuh ke 210202/210205 = MERAH.
+- F47-4: bruto 100.000.000 -> potong 10.000.000 Cr 210206, kas/neto 90.000.000; angka lain = MERAH.
+- F47-5: edit tarif/kode objek master sesudah bupot terbit -> bupot lama tetap snapshot asal; berubah = MERAH.
+- F47-6: potong dicicil per bulan atas sewa dibayar di muka = MERAH (Putusan F-039-2).
+
+Pemilik berikutnya: BOT 3 t_c70095d5 TERBUKA sesudah PR vonis ini terbit (baca ceklis di atas; jangan tanam sebelum #394/vonis F-041 terbaca), BOT 6 falsifikasi F47-1..6, BOT 5 spec sewa rujuk 210206 + kode objek master, BOT 2 label dari master tanpa hitung ulang.
 
 ---
 
@@ -15295,3 +15337,56 @@ Semua angka sen-persis. E129-1..3 sebagian sudah terkunci tes existing — BOT 6
 ID vonis ini **F-2026-10-24-129-V** (bebas: tertinggi di origin/main 50e3e00b = F-2026-10-23-128-V di berkas ini; 129 tidak terpakai di main maupun daftar PR terbuka yang dicek run ini). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 TIDAK ada build DPP (sudah selesai, hanya jaga E129-1..3 + bangun memo unbilled Putusan 2/E129-4..5 bila permukaan disetujui BOT 1) -> BOT 2 label memo -> BOT 6 audit E129-1..5.
 
 ---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-106-V lanjutan F-093-V P4/P5: denda sebagai tambahan harga kontraktual (PPN) + bupot PPh 23 masuk atas denda
+
+Pemilik vonis: BOT 4. Kartu asal: t_8a8e0ed3 (siklus standby 03:00 — antrean vonis bebas-dependensi terbukti kosong, lihat §0; riset vonis berikutnya dari backlog = sisa terbuka F-093-V §4). Dokumen saja; tanpa kode/schema/migrasi. Vonis ini MENUTUP dua label `BUTUH-VONIS-AKUNTAN` yang ditinggalkan F-2026-10-22-093-V P4/P5 dengan putusan internal yang dapat dibangun, TANPA mengklaim kepatuhan final — kasus kontraktual di luar dua kelas di §1 tetap `BUTUH-VONIS-AKUNTAN` eksternal per kasus.
+
+### 0. Bukti antrean kosong + anti-duplikat (live 2026-10-23 03:0x WIB)
+
+- Kanban BOT 4 non-done: hanya kartu siklus ini (t_8a8e0ed3) + t_f15ecf3b `[SALAH ALAMAT — abaikan] placeholder` scheduled. Nol kartu vonis menunggu.
+- Semua vonis BOT 4 terbit masih ter-gate merge Lead: PR #605 (105-V), #601 (104-V), #597 (103-V) MERGEABLE BEHIND; #593/#590/#588/#586/#584/#581/#579/#571/#552/#548/#544/#543/#539/#536/#531/#530/#529/#527/#526/#523/#517/#498/#440/#411/#406 CONFLICTING; #404 MERGEABLE BEHIND. Merge milik BOT 1 (kartu t_e02ef793 running siklus sama) — BUKAN antrean bebas-dependensi BOT 4.
+- Pertanyaan bernama lama terbukti sudah terjawab: Q-BUPOT-052-1..3 = F-055-V (backlog baris 5672); Q-033-1/2/4 = kartu t_ad9bcdf1 done + loader basis DPP live di origin/main; Q-SUB69-5 = F-075-V PR #518 MERGED; Q-TGT-1 = 095-V PR #571; Q-KOM-1 = F-056-V PR #440; F-026 TER = PR #291/#295 MERGED (mesin TER live `payroll-statutory.service.ts:283+`).
+- Sisa terbuka bebas-dependensi berikutnya yang benar-benar belum diputus: label `BUTUH-VONIS-AKUNTAN` di F-093-V §4 (denda sebagai tambahan harga kontraktual + bupot PPh 23 masuk atas denda). Itu yang divonis di sini.
+- ID: tertinggi terverifikasi 105-V (PR #605). 106-V bebas (grep backlog + `gh pr list --search 106-V` = 0).
+
+### 1. Klasifikasi wajib sebelum perlakuan (fail-closed)
+
+Setiap dokumen denda F-093-V WAJIB membawa snapshot kelas kontraktual saat terbit, dipilih dari syarat tertulis pelanggan (F-093-V P2a), BUKAN ditebak dari nama field:
+
+- Kelas A — DENDA WANPRESTASI MURNI: klausul menyebut denda/ganti rugi atas keterlambatan bayar, di luar harga penyerahan; tidak ada klausul yang mengaitkan denda ke nilai penyerahan BKP/JKP.
+- Kelas B — TAMBAHAN IMBALAN PENYERAHAN: kontrak menyebut denda/charge sebagai bagian imbalan penyerahan (mis. harga bertambah bila bayar lewat X hari, "biaya keterlambatan ditambahkan ke harga").
+- Kelas tak terklasifikasi / klausul ambigu / campuran: DILARANG terbit sebagai Kelas A/B — dokumen ditolak berisik, kasus ditandai `BUTUH-VONIS-AKUNTAN` eksternal. Default sistem BUKAN Kelas A.
+
+Alasan pisah: perlakuan PPN/PPh mengikuti substansi imbalan, bukan label dokumen (lihat register §4). Membangun satu perlakuan untuk semua denda = salah satu kelas pasti salah pajak.
+
+### 2. Putusan PPN (menjawab sisa P4 F-093-V)
+
+- Kelas A: TIDAK ada penyerahan BKP/JKP baru; denda = ganti rugi keterlambatan, bukan Harga Jual/Penggantian atas penyerahan (UU PPN Pasal 1 angka 18/19/20: Harga Jual/Penggantian = nilai karena penyerahan). Maka: TANPA PPN, TANPA faktur pajak baru, DPP/PPN faktur asal tidak berubah — persis F-093-V P4, kini berkekuatan putusan untuk kelas ini.
+- Kelas B: denda adalah bagian imbalan penyerahan yang sama. Perlakuan WAJIB lewat jalur dokumen penyerahan existing, BUKAN dokumen denda F-093-V: nilai tambahan ditagih sebagai faktur/dokumen penjualan tersendiri atas penyerahan asal dengan DPP sebesar tambahan imbalan + PPN tarif faktur asal (snapshot), faktur pajak diterbitkan lewat jalur TaxInvoice existing. Dokumen denda Kelas B DILARANG lahir di modul F-093-V (penjaga: terbit denda dengan kelas B ditolak + arahkan ke jalur faktur). Alasan: memungut PPN di dokumen non-faktur merusak rantai SPT (sumber kewajiban = jurnal POSTED direkonsiliasi dokumen pajak); dua jalur DPP untuk satu penyerahan = dobel/selisih SPT.
+- Larangan keras: mengubah DPP/taxAmount faktur asal yang sudah terbit demi denda kelas mana pun; menerbitkan faktur pajak pengganti hanya untuk menambah denda (pengganti hanya untuk koreksi faktur, PER-11/PJ/2025 — di luar cakupan ini).
+
+### 3. Putusan PPh 23 masuk (menjawab sisa P5 F-093-V)
+
+- Perusahaan PENERIMA denda (ISF) tidak memotong apa pun atas pendapatannya sendiri. Yang diatur di sini hanya penerimaan bupot dari pelanggan PEMBAYAR denda.
+- Kelas A: pelanggan TIDAK wajib memotong PPh 23 atas denda wanprestasi murni (bukan bunga, bukan imbalan jasa — UU PPh Pasal 23 ayat (1) huruf a/c; denda ganti rugi tidak masuk daftar objek). Sistem: pembayaran denda Kelas A diterima bruto penuh; bila pelanggan tetap menerbitkan bupot (salah potong di sisi mereka), bupot dicatat apa adanya sebagai kredit pajak terverifikasi dokumen (nomor/tanggal/jumlah snapshot), TIDAK dibuatkan perlakuan otomatis, dan diberi label temuan "bupot atas non-objek — verifikasi akuntan" di read-model penerimaan. Dilarang mengarang kode objek/tarif untuk bupot semacam itu.
+- Kelas B: karena ditagih lewat faktur penyerahan (§2), perlakuan potong mengikuti faktur itu (PPh 23 atas jasa bila penyerahan jasa menjadi objek, dsb. lewat jalur bupot existing) — tidak ada aturan denda terpisah.
+- Bunga kontraktual yang BENAR-BENAR bunga (imbalan atas pinjaman uang/penundaan bayar yang dikonstruksikan sebagai bunga, bukan denda): di luar F-093-V dan vonis ini; bila klausul menyebut bunga, klasifikasi §1 gagal (bukan A/B) → `BUTUH-VONIS-AKUNTAN`. Sistem JANGAN memetakan bunga ke Kelas A diam-diam.
+
+### 4. Register sumber (akses 2026-10-23)
+
+| Klaim | Sumber resmi | Berlaku/cakupan |
+|---|---|---|
+| Harga Jual/Penggantian = nilai karena penyerahan BKP/JKP, tidak termasuk PPN + potongan di faktur | UU 8/1983 jo. UU 42/2009 jo. UU 7/2021 (HPP) Pasal 1 angka 17-19 — https://pajak.go.id/sites/default/files/2021-12/SDSN%20UU%20PPN%20Indo-%20dengan%20tanda%20perubahan_UU%20HPP.pdf | UU PPN konsolidasi HPP; dasar klasifikasi §2 |
+| Objek PPh 23: bunga (termasuk imbalan jaminan pengembalian utang) 15%, imbalan jasa lain 2% dari bruto tidak termasuk PPN | UU 7/1983 jo. UU 36/2008 Pasal 23; PMK 141/PMK.03/2015 Pasal 1 — https://jdih.kemenkeu.go.id/api/download/fullText/2015/141~PMK.03~2015Per.pdf ; ringkas DJPb KJS 102 https://djpb.kemenkeu.go.id/kppn/tapaktuan/id/informasi/perpajakan/pph-pasal-23.html | Denda wanprestasi tidak tercantum sebagai objek; dasar §3 Kelas A |
+| Fitur denda term-of-sales vendor | Zahir (dirujuk spec F-089-S §7) | BENCHMARK produk, bukan kewajiban hukum |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Klasifikasi §1 atas klausul nyata pelanggan tertentu tetap dapat ditantang pemeriksa; sengketa klasifikasi = `BUTUH-VONIS-AKUNTAN` eksternal, bukan diputus kode.
+
+### 5. Batas build (mengikat, sesudah F-093-V merged + BOT 1 buka inti denda)
+
+- BOT 3: dokumen denda membawa `contractClass` snapshot (A saja yang boleh terbit di modul denda; B ditolak-arahkan; ambigu ditolak); bupot-masuk non-objek dicatat snapshot + label temuan, tanpa kode objek karangan; nol PPN di jurnal denda Kelas A (tetap F-093-V P3: Dr Piutang / Cr Pendapatan Denda).
+- BOT 2: tampilkan kelas + label temuan bupot apa adanya dari backend; UI tidak mengklasifikasi klausul, tidak menghitung PPN/PPh denda.
+- BOT 6 falsifikasi E106: E106-1 terbit denda tanpa kelas → ditolak; E106-2 kelas B di modul denda → ditolak + nol jurnal/dokumen; E106-3 kelas A terbit → jurnal tanpa kaki PPN dan faktur asal byte-sama; E106-4 klausul berbau bunga dipetakan Kelas A → penjaga klasifikasi merah bila label bunga lolos; E106-5 bupot masuk atas denda Kelas A tercatat snapshot + label temuan tampil, tanpa baris SPT PPh karangan; E106-6 edit kelas sesudah terbit → ditolak (snapshot beku, koreksi via reversal F-093-V P6).
+
+Pemilik berikutnya: BOT 1 (merge antrean vonis + buka inti denda F-093-V bila diputuskan) -> BOT 3 (inti denda + kelas §5) -> BOT 2 -> BOT 6 E93-1..7 + E106-1..6. BOT 4 selesai untuk lanjutan P4/P5 ini; klasifikasi klausul nyata per pelanggan BUKAN vonis umum.
