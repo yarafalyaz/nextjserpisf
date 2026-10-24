@@ -39,6 +39,7 @@ import {
   salesTargetPeriodsOverlap,
   validateSalesTargetInput,
   SALES_TARGET_NOTICE,
+  SALES_TARGET_LEGACY_LABEL,
   SALES_TARGET_UNATTRIBUTED_LABEL,
 } from "../sales-target-achievement"
 import { buildSalesCommissionRecap } from "../sales-commission"
@@ -302,6 +303,9 @@ describe("E131-1..5 falsifikasi vonis F-131-V (builder)", () => {
     })
     expect(achievement.rows[0].returnDeductionAmount).toBe(5_550_000)
     expect(achievement.rows[0].achievedAmount).toBe(5_550_000)
+    expect(achievement.rows[0].hasLegacyReturnLines).toBe(false)
+    expect(achievement.rows[0].legacyReturnDeductionAmount).toBe(0)
+    expect(achievement.legacyReturns).toEqual([])
   })
 
   it("E131-3b: baris legacy tanpa snapshot diturunkan qty×price + PPN tarif asal", () => {
@@ -323,6 +327,13 @@ describe("E131-1..5 falsifikasi vonis F-131-V (builder)", () => {
     })
     expect(achievement.rows[0].returnDeductionAmount).toBe(5_550_000)
     expect(achievement.rows[0].achievedAmount).toBe(5_550_000)
+    // MEDIUM-1 (Putusan 2.4): baris legacy WAJIB berlabel `legacy` di read-model.
+    expect(achievement.rows[0].hasLegacyReturnLines).toBe(true)
+    expect(achievement.rows[0].legacyReturnDeductionAmount).toBe(5_550_000)
+    expect(achievement.legacyReturns).toEqual([
+      { returnId: 504, salesInvoiceId: 302, salesEmployeeId: 7, label: "legacy", deductionAmount: 5_550_000 },
+    ])
+    expect(achievement.legacyReturns[0].label).toBe(SALES_TARGET_LEGACY_LABEL)
   })
 
   it("E131-4b: negatif tampil apa adanya, tidak di-floor; retur tanpa target masuk baris tanpa target", () => {
@@ -460,12 +471,90 @@ describe("loader getSalesTargetAchievement", () => {
     const r = await getSalesTargetAchievement(OCT)
     const retWhere = mocks.prismaMock.salesReturn.findMany.mock.calls[0][0].where
     expect(retWhere.status).toBe("completed")
-    expect(retWhere.salesInvoiceId).toEqual({ in: [11] })
+    // HIGH-1: query berdasar tanggal retur, BUKAN saringan faktur cakupan.
+    expect(retWhere.salesInvoiceId).toEqual({ not: null })
+    expect(retWhere.salesInvoiceId).not.toHaveProperty("in")
     expect(r.rows[0].grossPaidAmount).toBe(10_000_000)
     expect(r.rows[0].returnDeductionAmount).toBe(2_000_000)
     expect(r.rows[0].achievedAmount).toBe(8_000_000)
     // E131-5: loader read-only — tidak ada mock tulis jurnal dipanggil.
     expect(mocks.prismaMock.journal.findMany).not.toHaveBeenCalled()
+  })
+
+  it("E131-2 loader (HIGH-1): retur Nov atas faktur Oct mengurangi Nov (range tunggal), Oct utuh — mock semantik DB", async () => {
+    const NOV = { start: new Date(Date.UTC(2026, 10, 1)), end: new Date(Date.UTC(2026, 10, 30)) }
+    // "DB" termock: mock menerapkan semantik where Prisma (in / not:null /
+    // rentang tanggal / status) seperti probe QA t_aecc5bed — bukan hasil
+    // olahan tangan per panggilan.
+    const dbTargets = [
+      { id: 1, salesEmployeeId: 7, periodStart: OCT.start, periodEnd: OCT.end, targetAmount: 10_000_000, notes: null, salesEmployee: { name: "Rina" } },
+      { id: 2, salesEmployeeId: 7, periodStart: NOV.start, periodEnd: NOV.end, targetAmount: 10_000_000, notes: null, salesEmployee: { name: "Rina" } },
+    ]
+    const dbInvoices = [
+      { id: 201, salesEmployeeId: 7, date: new Date(Date.UTC(2026, 9, 10)), grandTotal: 12_000_000, subtotal: 12_000_000, discount: 0, taxAmount: 0, salesEmployee: { name: "Rina" }, status: "paid", deletedAt: null as Date | null },
+      { id: 202, salesEmployeeId: 7, date: new Date(Date.UTC(2026, 10, 5)), grandTotal: 5_000_000, subtotal: 5_000_000, discount: 0, taxAmount: 0, salesEmployee: { name: "Rina" }, status: "paid", deletedAt: null as Date | null },
+    ]
+    const dbReturns = [
+      { id: 502, date: new Date(Date.UTC(2026, 10, 12)), salesInvoiceId: 201 as number | null, status: "completed", items: [{ qty: 1, price: 3_000_000, returnDpp: 3_000_000, returnVat: 0 }] },
+    ]
+    const inWindow = (d: Date, w: { gte: Date; lte: Date }) => d.getTime() >= w.gte.getTime() && d.getTime() <= w.lte.getTime()
+    mocks.prismaMock.salesTarget.findMany.mockImplementation(async ({ where }: any) =>
+      dbTargets.filter((t) => t.periodStart.getTime() <= where.periodStart.lte.getTime() && t.periodEnd.getTime() >= where.periodEnd.gte.getTime()),
+    )
+    mocks.prismaMock.salesInvoice.findMany.mockImplementation(async ({ where }: any) => {
+      let rows = dbInvoices.filter((i) => i.deletedAt === null)
+      if (where.status) rows = rows.filter((i) => i.status === where.status)
+      if (where.id?.in) rows = rows.filter((i) => where.id.in.includes(i.id))
+      if (where.date) rows = rows.filter((i) => inWindow(i.date, where.date))
+      return rows
+    })
+    mocks.prismaMock.salesReturn.findMany.mockImplementation(async ({ where }: any) => {
+      let rows = dbReturns.filter((r) => r.status === where.status)
+      if (where.date) rows = rows.filter((r) => inWindow(r.date, where.date))
+      if (where.salesInvoiceId?.in) rows = rows.filter((r) => r.salesInvoiceId !== null && where.salesInvoiceId.in.includes(r.salesInvoiceId))
+      if (where.salesInvoiceId?.not === null) rows = rows.filter((r) => r.salesInvoiceId !== null)
+      return rows
+    })
+    mocks.prismaMock.activityLog.findMany.mockResolvedValue([])
+
+    // Range bulan tunggal November = default halaman (jalur page nyata).
+    const nov = await getSalesTargetAchievement(NOV)
+    const novRow = nov.rows.find((r) => r.targetId === 2)!
+    expect(novRow.grossPaidAmount).toBe(5_000_000)
+    expect(novRow.returnDeductionAmount).toBe(3_000_000)
+    expect(novRow.achievedAmount).toBe(2_000_000)
+    expect(novRow.achievementPercent).toBe(20)
+
+    // Periode tanpa faktur paid tetap bisa punya retur pengurang:
+    // retur Nov atas faktur Oct tampil sebagai pengurang walau Nov kosong
+    // dari sisi asal — di sini dibuktikan lewat baris Nov di atas; baca
+    // ulang Oktober: retur Nov tidak menulis ulang periode asal.
+    const oct = await getSalesTargetAchievement(OCT)
+    const octRow = oct.rows.find((r) => r.targetId === 1)!
+    expect(octRow.grossPaidAmount).toBe(12_000_000)
+    expect(octRow.returnDeductionAmount).toBe(0)
+    expect(octRow.achievedAmount).toBe(12_000_000)
+  })
+
+  it("loader: periode tanpa faktur paid dalam cakupan tetap mengurangi lewat retur (gerbang lama dilepas)", async () => {
+    const NOV = { start: new Date(Date.UTC(2026, 10, 1)), end: new Date(Date.UTC(2026, 10, 30)) }
+    mocks.prismaMock.salesTarget.findMany.mockResolvedValue([
+      { id: 2, salesEmployeeId: 7, periodStart: NOV.start, periodEnd: NOV.end, targetAmount: 10_000_000, notes: null, salesEmployee: { name: "Rina" } },
+    ])
+    // Panggilan 1 (cakupan): nol faktur. Panggilan 2 (faktur asal): Oct paid.
+    mocks.prismaMock.salesInvoice.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 201, salesEmployeeId: 7, date: new Date(Date.UTC(2026, 9, 10)), grandTotal: 12_000_000, subtotal: 12_000_000, discount: 0, taxAmount: 0, salesEmployee: { name: "Rina" } },
+      ])
+    mocks.prismaMock.salesReturn.findMany.mockResolvedValue([
+      { id: 502, date: new Date(Date.UTC(2026, 10, 12)), salesInvoiceId: 201, items: [{ qty: 1, price: 3_000_000, returnDpp: 3_000_000, returnVat: 0 }] },
+    ])
+    mocks.prismaMock.activityLog.findMany.mockResolvedValue([])
+    const nov = await getSalesTargetAchievement(NOV)
+    expect(nov.rows[0].grossPaidAmount).toBe(0)
+    expect(nov.rows[0].returnDeductionAmount).toBe(3_000_000)
+    expect(nov.rows[0].achievedAmount).toBe(-3_000_000)
   })
 
   // LOW-2 audit #583: loader menolak sebelum query bila izin tiada.
