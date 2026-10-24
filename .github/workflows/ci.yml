@@ -10,6 +10,11 @@ on:
   # event ini — tanpa trigger ini antrean tidak pernah menerima check.
   merge_group:
     branches: [main]
+  # Dipakai antrean merge buatan sendiri (.github/workflows/antrean-merge.yml):
+  # sesudah update-branch oleh token GitHub Actions — push token tidak memicu
+  # workflow — CI dipicu ulang manual pada branch PR supaya check wajib lapor
+  # untuk commit head terbaru.
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"

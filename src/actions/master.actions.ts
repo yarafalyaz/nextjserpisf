@@ -36,6 +36,16 @@ import {
   createLeadSchema,
   updateLeadSchema,
 } from "@/lib/validations/crm.schemas";
+import {
+  findLeadDuplicateCandidates,
+  buildDuplicateWarning,
+  validateDuplicateOverrideReason,
+  buildDuplicateOverrideDescription,
+  leadContactKeys,
+  DUPLICATE_OVERRIDE_ACTIVITY_TYPE,
+  DUPLICATE_OVERRIDE_SUBJECT,
+  type LeadDuplicateWarning,
+} from "@/lib/services/lead-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
@@ -1570,13 +1580,37 @@ function leadExpectedCloseDate(
 
 export async function createLead(formData: FormData) {
   try {
-    await requirePermission("create_leads");
+    const actor = await requirePermission("create_leads");
+    const viewer = {
+      userId: Number(actor.id),
+      canManageLeads:
+        actor.permissions.includes("manage_leads") ||
+        actor.roles.includes("super_admin"),
+    };
 
     const parsed = parseFormData(createLeadSchema, formData);
     if (!parsed.success) {
       throw new Error(parsed.error);
     }
     const v = parsed.data;
+
+    // F-2026-10-24-141-S Model C (Q-DUP-1): kandidat cocok -> TIDAK simpan
+    // dulu; kembalikan peringatan. Alasan wajib divalidasi server (BR-DUP-06).
+    const reasonCheck = validateDuplicateOverrideReason(
+      v.duplicateOverrideReason,
+    );
+    const preFound = await findLeadDuplicateCandidates(
+      { phone: v.phone ?? null, email: v.email ?? null },
+      viewer,
+    );
+    const preWarning = buildDuplicateWarning(preFound);
+    if (preWarning && !reasonCheck.ok) {
+      return {
+        success: false as const,
+        duplicateWarning: preWarning,
+        error: reasonCheck.error,
+      };
+    }
 
     const leadNumber = await generateDocumentNumber("LEAD", "simple");
 
@@ -1599,7 +1633,52 @@ export async function createLead(formData: FormData) {
       status: "new",
     };
 
-    const lead = await prisma.lead.create({ data });
+    // Re-check kandidat di dalam transaksi (§1.6) + jejak override atomik
+    // pada lead baru (BR-DUP-06/10). Risiko konkuren sisa terdokumentasi
+    // di lead-duplicate.service — tanpa klaim atomik penuh.
+    const lead = await prisma.$transaction(async (tx) => {
+      const txFound = await findLeadDuplicateCandidates(
+        { phone: v.phone ?? null, email: v.email ?? null },
+        viewer,
+        tx,
+      );
+      const txWarning = buildDuplicateWarning(txFound);
+      if (txWarning && !reasonCheck.ok) {
+        return null;
+      }
+      const created = await tx.lead.create({ data });
+      const effective = txWarning ?? preWarning;
+      if (effective && reasonCheck.ok) {
+        await tx.leadActivity.create({
+          data: {
+            leadId: created.id,
+            userId: Number(actor.id),
+            type: DUPLICATE_OVERRIDE_ACTIVITY_TYPE,
+            subject: DUPLICATE_OVERRIDE_SUBJECT,
+            description: buildDuplicateOverrideDescription(reasonCheck.reason, [
+              ...effective.candidates.map((c) => c.id),
+              ...effective.lostCandidates.map((c) => c.id),
+            ]),
+          },
+        });
+      }
+      return created;
+    });
+    if (!lead) {
+      const lateWarning = buildDuplicateWarning(
+        await findLeadDuplicateCandidates(
+          { phone: v.phone ?? null, email: v.email ?? null },
+          viewer,
+        ),
+      );
+      return {
+        success: false as const,
+        duplicateWarning: lateWarning ?? preWarning,
+        error: reasonCheck.ok
+          ? "Kemungkinan lead duplikat ditemukan. Periksa kandidat dulu."
+          : reasonCheck.error,
+      };
+    }
     revalidatePath("/crm/leads");
     await logActivity("create", "Lead", lead.id, "Membuat lead");
     redirect("/crm/leads");
@@ -1616,6 +1695,7 @@ export async function updateLead(id: number, formData: FormData) {
     const isAdmin =
       actor.permissions.includes("manage_leads") ||
       actor.roles.includes("super_admin");
+    const viewer = { userId: Number(actor.id), canManageLeads: isAdmin };
 
     const parsed = parseFormData(updateLeadSchema, formData);
     if (!parsed.success) {
@@ -1641,12 +1721,60 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
+    // F-2026-10-24-141-S Q-DUP-3: cek duplikat di edit — self-excluded,
+    // HANYA bila phone/email berubah dari nilai tersimpan (normalisasi
+    // dibandingkan; format-saja bukan perubahan). Status-saja tidak memicu.
+    const oldKeys = leadContactKeys(existing);
+    const newKeys = leadContactKeys({
+      phone: v.phone ?? null,
+      email: v.email ?? null,
+    });
+    const contactChanged =
+      oldKeys.phoneKey !== newKeys.phoneKey ||
+      oldKeys.emailKey !== newKeys.emailKey;
+    const reasonCheck = validateDuplicateOverrideReason(
+      v.duplicateOverrideReason,
+    );
+    let preWarning: LeadDuplicateWarning | null = null;
+    if (contactChanged) {
+      preWarning = buildDuplicateWarning(
+        await findLeadDuplicateCandidates(
+          { phone: v.phone ?? null, email: v.email ?? null, excludeLeadId: id },
+          viewer,
+        ),
+      );
+      if (preWarning && !reasonCheck.ok) {
+        return {
+          success: false as const,
+          duplicateWarning: preWarning,
+          error: reasonCheck.error,
+        };
+      }
+    }
+
     // Log a status_change activity when status actually changes (mirrors
     // YaraERP LeadController::update). Status + activity write atomically.
     const statusChanged =
       v.status != null && v.status !== existing.status;
 
-    await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
+      // Re-check di dalam transaksi (§1.6); bila kandidat muncul tanpa
+      // alasan sah -> batalkan seluruh edit (return null, tanpa mutasi).
+      let txWarning: LeadDuplicateWarning | null = null;
+      if (contactChanged) {
+        txWarning = buildDuplicateWarning(
+          await findLeadDuplicateCandidates(
+            {
+              phone: v.phone ?? null,
+              email: v.email ?? null,
+              excludeLeadId: id,
+            },
+            viewer,
+            tx,
+          ),
+        );
+        if (txWarning && !reasonCheck.ok) return null;
+      }
       await tx.lead.update({
         where: { id },
         data: {
@@ -1667,6 +1795,21 @@ export async function updateLead(id: number, formData: FormData) {
           ...(v.status != null ? { status: v.status } : {}),
         },
       });
+      const effective = txWarning ?? preWarning;
+      if (effective && reasonCheck.ok) {
+        await tx.leadActivity.create({
+          data: {
+            leadId: id,
+            userId: Number(actor.id),
+            type: DUPLICATE_OVERRIDE_ACTIVITY_TYPE,
+            subject: DUPLICATE_OVERRIDE_SUBJECT,
+            description: buildDuplicateOverrideDescription(reasonCheck.reason, [
+              ...effective.candidates.map((c) => c.id),
+              ...effective.lostCandidates.map((c) => c.id),
+            ]),
+          },
+        });
+      }
       if (statusChanged) {
         await tx.leadActivity.create({
           data: {
@@ -1679,7 +1822,23 @@ export async function updateLead(id: number, formData: FormData) {
           },
         });
       }
+      return true;
     });
+    if (!updated) {
+      const lateWarning = buildDuplicateWarning(
+        await findLeadDuplicateCandidates(
+          { phone: v.phone ?? null, email: v.email ?? null, excludeLeadId: id },
+          viewer,
+        ),
+      );
+      return {
+        success: false as const,
+        duplicateWarning: lateWarning ?? preWarning,
+        error: reasonCheck.ok
+          ? "Kemungkinan lead duplikat ditemukan. Periksa kandidat dulu."
+          : reasonCheck.error,
+      };
+    }
 
     revalidatePath("/crm/leads");
     await logActivity("update", "Lead", id, "Memperbarui lead");
