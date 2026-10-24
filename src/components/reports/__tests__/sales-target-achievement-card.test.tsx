@@ -54,7 +54,7 @@ describe("SalesTargetAchievementCard F-2026-10-22-088-S", () => {
     const text = container.textContent ?? ""
     expect(text).toContain(SALES_TARGET_NOTICE)
     expect(text).toContain(
-      "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan tidak mengurangi pencapaian pada laporan ini.",
+      "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur.",
     )
     expect(
       container.querySelector("[data-report-narration]")?.getAttribute("data-report-narration"),

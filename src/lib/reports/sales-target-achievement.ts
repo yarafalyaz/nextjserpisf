@@ -1,38 +1,56 @@
 /**
- * Builder murni target vs pencapaian penjualan (F-2026-10-22-088-S tahap 1,
- * induk F-2026-10-21-018; spec BOT 5 + PUTUSAN BOT 1 §9A).
+ * Builder murni target vs pencapaian penjualan (F-2026-10-22-088-S tahap 1
+ * + F-2026-10-24-131-V tahap 2, basis NETO Q-TGT-1).
  *
- * Pencapaian MEMAKAI basis yang IDENTIK dengan rekap komisi
+ * Komponen bruto MEMAKAI basis yang IDENTIK dengan rekap komisi
  * F-2026-10-21-016 tahap 2: faktur status `paid`, `deletedAt:null`,
  * `date` dalam jendela, dikelompokkan per snapshot `salesEmployeeId`;
- * tanpa penjual masuk ember `unattributed` (BR-TGT-01/02). Dilarang
- * basis kedua — loader pencapaian dan loader komisi membaca faktur
- * yang sama; tes bersama AC-TGT-10 mengunci angka pencapaian ==
- * paidBase rekap komisi untuk periode+penjual sama.
+ * tanpa penjual masuk ember `unattributed` (BR-TGT-01/02). Rekap komisi
+ * TIDAK berubah oleh tahap 2 — kunci AC-TGT-10 lama ("pencapaian ==
+ * paidBase") diganti kunci rekonsiliasi F-131-V Putusan 5:
+ * grossPaidAmount == paidBase komisi, dan achievedAmount ==
+ * grossPaidAmount − returnDeductionAmount.
  *
- * Aturan mengikat tahap 1:
+ * Aturan mengikat:
+ * - Pencapaian (achievedAmount) = grossPaidAmount − returnDeductionAmount
+ *   per penjual per periode; persen/gap dari angka NETO itu (dapat
+ *   negatif, tidak di-floor).
+ * - Pengurang SAH (Putusan 2): retur status completed, tertaut faktur
+ *   paid, sebesar returnDpp+returnVat snapshot beku. Baris legacy tanpa
+ *   snapshot diturunkan dari qty × price beku baris retur + PPN proporsional
+ *   tarif efektif faktur asal (label legacy di read-model) — bukan cost,
+ *   bukan harga master berjalan.
+ * - Plafon per faktur (Putusan 2 butir 5): Σ pengurang per faktur asal
+ *   ≤ grandTotal faktur asal; selisih ter-clamp tampil sebagai temuan
+ *   bernama `invoiceDeductionClampFindings`, tidak dipotong diam-diam.
+ * - Retur beda periode (Putusan 3): pengurang dibukukan pada periode
+ *   TANGGAL RETUR (SalesReturn.date) ke penjual snapshot faktur asal;
+ *   periode asal tidak ditulis ulang. Retur tanpa salesInvoiceId tidak
+ *   mengurangi penjual mana pun (tidak ada atribusi sah).
+ * - Loader menjamin hanya retur completed tertaut faktur paid yang
+ *   diteruskan ke builder (filter massal); builder tetap membaca nilai
+ *   per baris apa adanya (snapshot vs legacy dari null-nya).
  * - Persen HANYA untuk periode target yang termuat PENUH dalam rentang
  *   laporan; periode bersinggungan sebagian tampil dengan lencana
  *   tidak-utuh dan persen null — prorata DILARANG (BR-TGT-05).
- * - Retur penjualan TIDAK mengurangi pencapaian tahap 1 (BR-TGT-06;
- *   Q-TGT-1 tahap 2 belum dibuka §9A).
- * - Penjual berfaktur tanpa target tampil "tanpa target", persen null
- *   (bukan 0%) (BR-TGT-04).
+ * - Penjual berfaktur/beretur tanpa target tampil "tanpa target",
+ *   persen null (bukan 0%) (BR-TGT-04).
  * - Persen perusahaan = Σ achieved ÷ Σ target baris yang dinilai utuh
  *   (tertimbang nilai, BR-TGT-11), bukan rata-rata persen.
- * - Pencapaian per baris target dihitung dari faktur dalam PERIODE
- *   TARGET itu sendiri (bukan rentang laporan), supaya pencapaian
- *   satu-satunya angka yang bergerak hanya oleh faktur.
- * - Label §6 verbatim diekspor di sini dan selalu terisi (`notice`,
- *   `modifiedBadgePrefix`); UI menempel apa adanya (BR-TGT-07).
+ * - Pencapaian per baris target dihitung dari faktur/retur dalam PERIODE
+ *   TARGET itu sendiri (bukan rentang laporan, kecuali ember rentang).
+ * - Label §6 verbatim F-131-V diekspor di sini dan selalu terisi
+ *   (`notice`, `modifiedBadgePrefix`); UI menempel apa adanya
+ *   (BR-TGT-07). Laporan analitis: NOL jurnal, NOL kewajiban (Putusan 4).
  * Pure (tanpa Prisma/DOM).
  */
 
-import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { safeAdd, safeRound, safeSubtract } from "@/lib/utils/math"
+import { isLegacyReturnLine, snapshotReturnLine } from "@/lib/tax/return-snapshot"
 
-/** Label informatif §6 verbatim — UI wajib menempel apa adanya. */
+/** Label informatif §6 verbatim F-131-V Putusan 5 — UI wajib menempel apa adanya. */
 export const SALES_TARGET_NOTICE =
-  "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan tidak mengurangi pencapaian pada laporan ini."
+  "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan selesai (completed) mengurangi pencapaian pada periode tanggal retur."
 
 export const SALES_TARGET_UNATTRIBUTED_LABEL = "Tanpa penjual (dokumen lama)"
 export const SALES_TARGET_NO_TARGET_LABEL = "Tanpa target"
@@ -54,11 +72,34 @@ export interface SalesTargetInput {
 }
 
 export interface SalesTargetPaidInvoiceInput {
+  /** Id faktur paid (plaafon pengurang per faktur asal). Loader selalu mengisi; fixture lama tanpa id tidak pernah jadi asal retur. */
+  id?: number
   salesEmployeeId: number | null
   salesEmployeeName: string | null
   /** Tanggal faktur paid (basis jendela sama dengan loader komisi). */
   date: Date
   grandTotal: number
+  /** DPP faktur asal = subtotal − discount; dipakai hanya tarif legacy. Opsional utk fixture lama. */
+  subtotal?: number
+  discount?: number
+  taxAmount?: number
+}
+
+/** Satu baris retur completed tertaut faktur paid (loader sudah memfilter). */
+export interface SalesTargetReturnLineInput {
+  qty: number
+  /** Harga jual beku baris retur; DILARANG cost (F-004). */
+  price: number
+  returnDpp: number | null
+  returnVat: number | null
+}
+
+export interface SalesTargetReturnInput {
+  id: number
+  /** Tanggal dokumen retur — periode pengurang (Putusan 3). */
+  date: Date
+  salesInvoiceId: number
+  lines: readonly SalesTargetReturnLineInput[]
 }
 
 export interface SalesTargetRange {
@@ -74,22 +115,48 @@ export interface SalesTargetAchievementRow {
   periodEnd: Date | null
   targetAmount: number | null
   notes: string | null
+  /** Σ grandTotal faktur paid periode ini (komponen bruto, Putusan 5). */
+  grossPaidAmount: number
+  /** Σ pengurang retur completed periode ini, sesudah plafon per faktur. */
+  returnDeductionAmount: number
+  /** Neto: grossPaidAmount − returnDeductionAmount (dapat negatif). */
   achievedAmount: number
   /** Null bila periode tidak utuh dalam rentang atau tanpa target (BR-TGT-05/04). */
   achievementPercent: number | null
   /** Null bila persen tidak dihitung; selain itu achieved − target (boleh negatif). */
   gapAmount: number | null
   invoiceCount: number
+  /** Retur completed yang mengurangi baris ini (per tanggal retur). */
+  returnCount: number
   periodFullyContained: boolean
   hasTarget: boolean
   modifiedAfterPeriodStartAt: Date | null
 }
 
+/** Temuan plafon: pengurang satu faktur asal ditahan pada grandTotal-nya. */
+export interface SalesTargetDeductionClampFinding {
+  salesInvoiceId: number
+  salesEmployeeId: number | null
+  grandTotal: number
+  rawDeductionAmount: number
+  clampedDeductionAmount: number
+}
+
 export interface SalesTargetAchievement {
   rows: SalesTargetAchievementRow[]
-  /** Baris penjual berfaktur paid dalam rentang tanpa target dinilai. */
+  /** Baris penjual berfaktur paid / beretur dalam rentang tanpa target dinilai. */
   noTargetRows: SalesTargetAchievementRow[]
-  unattributed: { label: string; invoiceCount: number; achievedAmount: number }
+  unattributed: {
+    label: string
+    invoiceCount: number
+    grossPaidAmount: number
+    returnDeductionAmount: number
+    achievedAmount: number
+  }
+  /** Σ komponen bruto baris target dinilai utuh + unattributed dalam rentang. */
+  totalGrossPaidAmount: number
+  /** Σ pengurang baris target dinilai utuh + unattributed (rentang). */
+  totalReturnDeductionAmount: number
   /** Σ achieved baris target dinilai utuh (di periode targetnya) + unattributed dalam rentang. */
   totalAchievedAmount: number
   /** Σ target baris yang dinilai utuh (persen perusahaan tertimbang, BR-TGT-11). */
@@ -97,6 +164,8 @@ export interface SalesTargetAchievement {
   /** Pencapaian baris dinilai utuh saja (tanpa unattributed) untuk persen perusahaan. */
   totalAchievedForPercent: number
   companyPercent: number | null
+  /** Pengurang mentah per faktur melampaui grandTotal faktur asal (Putusan 2.5). */
+  invoiceDeductionClampFindings: SalesTargetDeductionClampFinding[]
   notice: string
 }
 
@@ -104,17 +173,62 @@ function inRange(d: Date, start: Date, end: Date): boolean {
   return d.getTime() >= start.getTime() && d.getTime() <= end.getTime()
 }
 
+/** Inklusif akhir hari (pola invoiceEnd loader komisi). */
+function inDayRange(d: Date, start: Date, end: Date): boolean {
+  return inRange(d, start, new Date(end.getTime() + 24 * 3_600_000 - 1))
+}
+
 function percent(achieved: number, target: number): number {
   return target > 0 ? Math.round((achieved / target) * 100 * 100) / 100 : 0
+}
+
+/** Nilai komersial satu retur: Σ baris (returnDpp+returnVat) snapshot; legacy diturunkan. */
+function returnCommercialValue(
+  ret: SalesTargetReturnInput,
+  invoice: SalesTargetPaidInvoiceInput | undefined,
+): number {
+  if (!invoice) return 0
+  let amount = 0
+  for (const line of ret.lines) {
+    if (!isLegacyReturnLine(line)) {
+      amount = safeAdd(amount, safeRound(safeAdd(line.returnDpp!, line.returnVat!, 2), 2), 2)
+      continue
+    }
+    const snap = snapshotReturnLine({
+      qty: line.qty,
+      price: line.price,
+      source: {
+        subtotal: invoice.subtotal ?? 0,
+        discount: invoice.discount ?? 0,
+        taxAmount: invoice.taxAmount ?? 0,
+      },
+    })
+    amount = safeAdd(amount, safeRound(safeAdd(snap.returnDpp, snap.returnVat, 2), 2), 2)
+  }
+  return amount
+}
+
+function invoiceMap(
+  invoices: readonly SalesTargetPaidInvoiceInput[],
+): Map<number, SalesTargetPaidInvoiceInput> {
+  const map = new Map<number, SalesTargetPaidInvoiceInput>()
+  for (const inv of invoices) {
+    if (inv.id !== undefined) map.set(inv.id, inv)
+  }
+  return map
 }
 
 export function buildSalesTargetAchievement(args: {
   targets: readonly SalesTargetInput[]
   /** Faktur paid rentang LUASAN: cakupan gabungan periode target + rentang laporan. */
   invoices: readonly SalesTargetPaidInvoiceInput[]
+  /** Retur completed tertaut faktur paid dalam invoices (loader memfilter). */
+  returns?: readonly SalesTargetReturnInput[]
   range: SalesTargetRange
 }): SalesTargetAchievement {
   const { targets, invoices, range } = args
+  const returns = args.returns ?? []
+  const invoiceById = invoiceMap(invoices)
   const nameOf = new Map<number, string>()
   for (const t of targets) nameOf.set(t.salesEmployeeId, t.salesEmployeeName)
   for (const inv of invoices) {
@@ -123,17 +237,77 @@ export function buildSalesTargetAchievement(args: {
     }
   }
 
-  // Pencapaian per (penjual) di jendela arbitrer — basis komisi sama.
-  const achievedIn = (employeeId: number, start: Date, end: Date) => {
-    let amount = 0
-    let count = 0
+  // Plafon per faktur asal (Putusan 2.5): tahan Σ pengurang pada grandTotal.
+  const rawByInvoice = new Map<number, number>()
+  for (const ret of returns) {
+    const inv = invoiceById.get(ret.salesInvoiceId)
+    if (!inv) continue
+    rawByInvoice.set(ret.salesInvoiceId, safeAdd(rawByInvoice.get(ret.salesInvoiceId) ?? 0, returnCommercialValue(ret, inv), 2))
+  }
+  const capByInvoice = new Map<number, number>()
+  const invoiceDeductionClampFindings: SalesTargetDeductionClampFinding[] = []
+  for (const [invoiceId, raw] of rawByInvoice) {
+    const inv = invoiceById.get(invoiceId)!
+    const clamped = safeRound(Math.min(raw, Math.max(inv.grandTotal, 0)), 2)
+    capByInvoice.set(invoiceId, clamped)
+    if (clamped < raw) {
+      invoiceDeductionClampFindings.push({
+        salesInvoiceId: invoiceId,
+        salesEmployeeId: inv.salesEmployeeId,
+        grandTotal: inv.grandTotal,
+        rawDeductionAmount: raw,
+        clampedDeductionAmount: clamped,
+      })
+    }
+  }
+  invoiceDeductionClampFindings.sort((a, b) => a.salesInvoiceId - b.salesInvoiceId)
+
+  // Skala per faktur dari plafon; retur diratakan pro-rata ke allowed.
+  const factorByInvoice = new Map<number, number>()
+  for (const [invoiceId, raw] of rawByInvoice) {
+    if (raw > 0) factorByInvoice.set(invoiceId, (capByInvoice.get(invoiceId) ?? 0) / raw)
+  }
+  const effectiveReturns = returns
+    .map((ret) => {
+      const inv = invoiceById.get(ret.salesInvoiceId)
+      if (!inv) return null
+      const raw = returnCommercialValue(ret, inv)
+      const scaled = safeRound(raw * (factorByInvoice.get(ret.salesInvoiceId) ?? 1), 2)
+      return {
+        ret,
+        invoice: inv,
+        deduction: scaled,
+        isUnattributed: inv.salesEmployeeId === null,
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+
+  // Komponen per (penjual) di jendela arbitrer — basis komisi sama.
+  const componentsIn = (employeeId: number, start: Date, end: Date) => {
+    let grossPaidAmount = 0
+    let invoiceCount = 0
     for (const inv of invoices) {
       if (inv.salesEmployeeId !== employeeId) continue
-      if (!inRange(inv.date, start, end)) continue
-      amount = safeAdd(amount, inv.grandTotal, 2)
-      count += 1
+      if (!inDayRange(inv.date, start, end)) continue
+      grossPaidAmount = safeAdd(grossPaidAmount, inv.grandTotal, 2)
+      invoiceCount += 1
     }
-    return { amount, count }
+    let returnDeductionAmount = 0
+    let returnCount = 0
+    for (const er of effectiveReturns) {
+      if (er.isUnattributed) continue
+      if (er.invoice.salesEmployeeId !== employeeId) continue
+      if (!inDayRange(er.ret.date, start, end)) continue
+      returnDeductionAmount = safeAdd(returnDeductionAmount, er.deduction, 2)
+      returnCount += 1
+    }
+    return {
+      grossPaidAmount,
+      returnDeductionAmount,
+      achievedAmount: safeSubtract(grossPaidAmount, returnDeductionAmount, 2),
+      invoiceCount,
+      returnCount,
+    }
   }
 
   const sortedTargets = [...targets].sort((a, b) => {
@@ -146,7 +320,7 @@ export function buildSalesTargetAchievement(args: {
     const contained =
       t.periodStart.getTime() >= range.start.getTime() &&
       t.periodEnd.getTime() <= range.end.getTime()
-    const achieved = achievedIn(t.salesEmployeeId, t.periodStart, t.periodEnd)
+    const c = componentsIn(t.salesEmployeeId, t.periodStart, t.periodEnd)
     return {
       targetId: t.id,
       salesEmployeeId: t.salesEmployeeId,
@@ -155,10 +329,13 @@ export function buildSalesTargetAchievement(args: {
       periodEnd: t.periodEnd,
       targetAmount: t.targetAmount,
       notes: t.notes,
-      achievedAmount: achieved.amount,
-      achievementPercent: contained ? percent(achieved.amount, t.targetAmount) : null,
-      gapAmount: contained ? safeSubtract(achieved.amount, t.targetAmount, 2) : null,
-      invoiceCount: achieved.count,
+      grossPaidAmount: c.grossPaidAmount,
+      returnDeductionAmount: c.returnDeductionAmount,
+      achievedAmount: c.achievedAmount,
+      achievementPercent: contained ? percent(c.achievedAmount, t.targetAmount) : null,
+      gapAmount: contained ? safeSubtract(c.achievedAmount, t.targetAmount, 2) : null,
+      invoiceCount: c.invoiceCount,
+      returnCount: c.returnCount,
       periodFullyContained: contained,
       hasTarget: true,
       modifiedAfterPeriodStartAt: t.modifiedAfterPeriodStartAt,
@@ -168,35 +345,61 @@ export function buildSalesTargetAchievement(args: {
   const targetedIds = new Set(sortedTargets.map((t) => t.salesEmployeeId))
   const noTargetById = new Map<number, SalesTargetAchievementRow>()
   let unattrCount = 0
-  let unattrAmount = 0
-  for (const inv of invoices) {
-    if (!inRange(inv.date, range.start, range.end)) continue
-    if (inv.salesEmployeeId === null) {
-      unattrCount += 1
-      unattrAmount = safeAdd(unattrAmount, inv.grandTotal, 2)
-      continue
-    }
-    if (targetedIds.has(inv.salesEmployeeId)) continue
-    const row = noTargetById.get(inv.salesEmployeeId) ?? {
+  let unattrGross = 0
+  let unattrDeduction = 0
+  const ensureNoTargetRow = (employeeId: number): SalesTargetAchievementRow => {
+    const existing = noTargetById.get(employeeId)
+    if (existing) return existing
+    const row: SalesTargetAchievementRow = {
       targetId: null,
-      salesEmployeeId: inv.salesEmployeeId,
-      salesEmployeeName: nameOf.get(inv.salesEmployeeId) ?? "",
+      salesEmployeeId: employeeId,
+      salesEmployeeName: nameOf.get(employeeId) ?? "",
       periodStart: null,
       periodEnd: null,
       targetAmount: null,
       notes: null,
+      grossPaidAmount: 0,
+      returnDeductionAmount: 0,
       achievedAmount: 0,
       achievementPercent: null,
       gapAmount: null,
       invoiceCount: 0,
+      returnCount: 0,
       periodFullyContained: false,
       hasTarget: false,
       modifiedAfterPeriodStartAt: null,
     }
-    row.achievedAmount = safeAdd(row.achievedAmount, inv.grandTotal, 2)
+    noTargetById.set(employeeId, row)
+    return row
+  }
+  for (const inv of invoices) {
+    if (!inRange(inv.date, range.start, range.end)) continue
+    if (inv.salesEmployeeId === null) {
+      unattrCount += 1
+      unattrGross = safeAdd(unattrGross, inv.grandTotal, 2)
+      continue
+    }
+    if (targetedIds.has(inv.salesEmployeeId)) continue
+    const row = ensureNoTargetRow(inv.salesEmployeeId)
+    row.grossPaidAmount = safeAdd(row.grossPaidAmount, inv.grandTotal, 2)
     row.invoiceCount += 1
     if (!row.salesEmployeeName && inv.salesEmployeeName) row.salesEmployeeName = inv.salesEmployeeName
-    noTargetById.set(inv.salesEmployeeId, row)
+  }
+  for (const er of effectiveReturns) {
+    if (!inRange(er.ret.date, range.start, range.end)) continue
+    if (er.isUnattributed) {
+      unattrDeduction = safeAdd(unattrDeduction, er.deduction, 2)
+      continue
+    }
+    const employeeId = er.invoice.salesEmployeeId
+    if (employeeId === null || targetedIds.has(employeeId)) continue
+    const row = ensureNoTargetRow(employeeId)
+    row.returnDeductionAmount = safeAdd(row.returnDeductionAmount, er.deduction, 2)
+    row.returnCount += 1
+    if (!row.salesEmployeeName && er.invoice.salesEmployeeName) row.salesEmployeeName = er.invoice.salesEmployeeName
+  }
+  for (const row of noTargetById.values()) {
+    row.achievedAmount = safeSubtract(row.grossPaidAmount, row.returnDeductionAmount, 2)
   }
 
   const noTargetRows = [...noTargetById.values()].sort(
@@ -206,7 +409,18 @@ export function buildSalesTargetAchievement(args: {
   const assessed = rows.filter((r) => r.periodFullyContained)
   const totalAchievedForPercent = assessed.reduce((s, r) => safeAdd(s, r.achievedAmount, 2), 0)
   const totalTargetAmount = assessed.reduce((s, r) => safeAdd(s, r.targetAmount ?? 0, 2), 0)
-  const totalAchievedAmount = safeAdd(totalAchievedForPercent, unattrAmount, 2)
+  const unattrAchieved = safeSubtract(unattrGross, unattrDeduction, 2)
+  const totalGrossPaidAmount = safeAdd(
+    assessed.reduce((s, r) => safeAdd(s, r.grossPaidAmount, 2), 0),
+    unattrGross,
+    2,
+  )
+  const totalReturnDeductionAmount = safeAdd(
+    assessed.reduce((s, r) => safeAdd(s, r.returnDeductionAmount, 2), 0),
+    unattrDeduction,
+    2,
+  )
+  const totalAchievedAmount = safeAdd(totalAchievedForPercent, unattrAchieved, 2)
 
   return {
     rows,
@@ -214,8 +428,12 @@ export function buildSalesTargetAchievement(args: {
     unattributed: {
       label: SALES_TARGET_UNATTRIBUTED_LABEL,
       invoiceCount: unattrCount,
-      achievedAmount: unattrAmount,
+      grossPaidAmount: unattrGross,
+      returnDeductionAmount: unattrDeduction,
+      achievedAmount: unattrAchieved,
     },
+    totalGrossPaidAmount,
+    totalReturnDeductionAmount,
     totalAchievedAmount,
     totalTargetAmount,
     totalAchievedForPercent,
@@ -223,7 +441,219 @@ export function buildSalesTargetAchievement(args: {
       assessed.length > 0 && totalTargetAmount > 0
         ? percent(totalAchievedForPercent, totalTargetAmount)
         : null,
+    invoiceDeductionClampFindings,
     notice: SALES_TARGET_NOTICE,
+  }
+}
+
+export interface SalesTargetCommissionCrosscheckInput {
+  salesEmployeeId: number | null
+  /** paidBase rekap komisi dari builder komisi (bukan hitung ulang target). */
+  paidBase: number
+}
+
+export interface SalesTargetIndependentReturnLine {
+  returnDpp: number | null
+  returnVat: number | null
+  qty: number
+  price: number
+}
+
+export interface SalesTargetIndependentReturnInput {
+  salesInvoiceId: number
+  salesEmployeeId: number | null
+  lines: readonly SalesTargetIndependentReturnLine[]
+}
+
+export interface SalesTargetJournalReturnLineInput {
+  /** Kaki debit akun Retur Penjualan pada jurnal retur POSTED; null = akun belum dipetakan. */
+  debitAmount: number | null
+}
+
+export interface SalesTargetPeriodReconciliationFinding {
+  code: "GROSS_VS_COMMISSION_MISMATCH" | "INDEPENDENT_RETURN_MISMATCH" | "JOURNAL_RETURN_DIFF"
+  message: string
+}
+
+export interface SalesTargetPeriodReconciliationRow {
+  salesEmployeeId: number | null
+  grossPaidAmount: number
+  commissionPaidBase: number | null
+  commissionDifference: number | null
+  returnDeductionAmount: number
+  independentReturnDeductionAmount: number | null
+  independentDifference: number | null
+  postedJournalReturnAmount: number | null
+  journalDifference: number | null
+  achievedAmount: number
+  findings: SalesTargetPeriodReconciliationFinding[]
+}
+
+export interface SalesTargetPeriodReconciliation {
+  rows: SalesTargetPeriodReconciliationRow[]
+  /** Finding non-baris: plafon per faktur asal (Putusan 2.5). */
+  invoiceDeductionClampFindings: SalesTargetDeductionClampFinding[]
+  totals: {
+    grossPaidAmount: number
+    commissionPaidBase: number
+    commissionDifference: number
+    returnDeductionAmount: number
+    independentReturnDeductionAmount: number
+    independentDifference: number
+    postedJournalReturnAmount: number | null
+    journalDifference: number | null
+    achievedAmount: number
+  }
+  findings: SalesTargetPeriodReconciliationFinding[]
+}
+
+function independentReturnValue(
+  ret: SalesTargetIndependentReturnInput,
+  invoiceById: ReadonlyMap<number, SalesTargetPaidInvoiceInput>,
+): number {
+  const inv = invoiceById.get(ret.salesInvoiceId)
+  return returnCommercialValue(
+    { id: 0, date: new Date(0), salesInvoiceId: ret.salesInvoiceId, lines: ret.lines },
+    inv,
+  )
+}
+
+/**
+ * Rekonsiliasi tiga arah satu periode (F-131-V Putusan 5):
+ * (i) grossPaidAmount target vs paidBase komisi (pengganti kunci lama
+ *     AC-TGT-10 — komisi tidak diubah, hanya dibandingkan);
+ * (ii) returnDeductionAmount read-model vs Σ snapshot query sumber
+ *     independen (baris legacy diturunkan dengan tarif faktur asal sama);
+ * (iii) total kaki Retur Penjualan jurnal retur POSTED sebagai temuan
+ *     bernama — penyebab sah: jurnal berbahan qty×price (bukan
+ *     DPP+PPN), retur tanpa kaki harga, clamp. Selisih tidak dipilih
+ *     diam-diam salah satu.
+ * Retur dengan salesEmployeeId null pada query independen diatribusikan
+ * lewat snapshot faktur asal di `invoices` (bukan ditebak).
+ */
+export function buildSalesTargetPeriodReconciliation(args: {
+  achievement: SalesTargetAchievement
+  invoices: readonly SalesTargetPaidInvoiceInput[]
+  commissionRows: readonly SalesTargetCommissionCrosscheckInput[]
+  independentReturns: readonly SalesTargetIndependentReturnInput[]
+  /** null = akun Retur Penjualan belum dipetakan; kaki jurnal tak terukur. */
+  postedJournalReturn: SalesTargetJournalReturnLineInput | null
+}): SalesTargetPeriodReconciliation {
+  const { achievement, invoices, commissionRows, independentReturns, postedJournalReturn } = args
+  const invoiceById = invoiceMap(invoices)
+  const employeeOfInvoice = (invoiceId: number) => invoiceById.get(invoiceId)?.salesEmployeeId ?? null
+
+  const commissionByEmployee = new Map<number | null, number>()
+  for (const row of commissionRows) {
+    commissionByEmployee.set(
+      row.salesEmployeeId,
+      safeAdd(commissionByEmployee.get(row.salesEmployeeId) ?? 0, row.paidBase, 2),
+    )
+  }
+  const indepByEmployee = new Map<number | null, number>()
+  for (const ret of independentReturns) {
+    const employeeId = ret.salesEmployeeId ?? employeeOfInvoice(ret.salesInvoiceId)
+    indepByEmployee.set(
+      employeeId,
+      safeAdd(indepByEmployee.get(employeeId) ?? 0, independentReturnValue(ret, invoiceById), 2),
+    )
+  }
+
+  type Agg = { gross: number; deduction: number; achieved: number }
+  const targetByEmployee = new Map<number | null, Agg>()
+  const addAgg = (id: number | null, gross: number, deduction: number, achieved: number) => {
+    const cur = targetByEmployee.get(id) ?? { gross: 0, deduction: 0, achieved: 0 }
+    cur.gross = safeAdd(cur.gross, gross, 2)
+    cur.deduction = safeAdd(cur.deduction, deduction, 2)
+    cur.achieved = safeAdd(cur.achieved, achieved, 2)
+    targetByEmployee.set(id, cur)
+  }
+  for (const row of achievement.rows) {
+    if (!row.periodFullyContained) continue
+    addAgg(row.salesEmployeeId, row.grossPaidAmount, row.returnDeductionAmount, row.achievedAmount)
+  }
+  for (const row of achievement.noTargetRows) {
+    addAgg(row.salesEmployeeId, row.grossPaidAmount, row.returnDeductionAmount, row.achievedAmount)
+  }
+  addAgg(null, achievement.unattributed.grossPaidAmount, achievement.unattributed.returnDeductionAmount, achievement.unattributed.achievedAmount)
+
+  const ids = new Set<number | null>([
+    ...targetByEmployee.keys(),
+    ...commissionByEmployee.keys(),
+    ...indepByEmployee.keys(),
+  ])
+  const rows: SalesTargetPeriodReconciliationRow[] = [...ids].map((employeeId) => {
+    const agg = targetByEmployee.get(employeeId) ?? { gross: 0, deduction: 0, achieved: 0 }
+    const commission = commissionByEmployee.get(employeeId) ?? null
+    const commissionDifference =
+      commission === null ? null : safeSubtract(agg.gross, commission, 2)
+    const independent = indepByEmployee.get(employeeId) ?? 0
+    const independentDifference = safeSubtract(agg.deduction, independent, 2)
+    const findings: SalesTargetPeriodReconciliationFinding[] = []
+    if (commissionDifference !== null && commissionDifference !== 0) {
+      findings.push({
+        code: "GROSS_VS_COMMISSION_MISMATCH",
+        message:
+          `Komponen bruto target penjual ${employeeId ?? "tanpa penjual"} berbeda dari paidBase komisi sebesar Rp ${commissionDifference.toLocaleString("id-ID")} pada periode sama.`,
+      })
+    }
+    if (independentDifference !== 0) {
+      findings.push({
+        code: "INDEPENDENT_RETURN_MISMATCH",
+        message:
+          `Pengurang retur read-model penjual ${employeeId ?? "tanpa penjual"} berbeda dari query sumber independen sebesar Rp ${independentDifference.toLocaleString("id-ID")}.`,
+      })
+    }
+    return {
+      salesEmployeeId: employeeId,
+      grossPaidAmount: agg.gross,
+      commissionPaidBase: commission,
+      commissionDifference,
+      returnDeductionAmount: agg.deduction,
+      independentReturnDeductionAmount: independent,
+      independentDifference,
+      // Jurnal direkonsiliasi di level periode (total), bukan per penjual:
+      // jurnal tidak membawa snapshot penjual.
+      postedJournalReturnAmount: null,
+      journalDifference: null,
+      achievedAmount: agg.achieved,
+      findings,
+    }
+  })
+  rows.sort((a, b) => (a.salesEmployeeId ?? -1) - (b.salesEmployeeId ?? -1))
+
+  const totalGross = rows.reduce((s, r) => safeAdd(s, r.grossPaidAmount, 2), 0)
+  const totalCommission = rows.reduce((s, r) => safeAdd(s, r.commissionPaidBase ?? 0, 2), 0)
+  const totalDeduction = rows.reduce((s, r) => safeAdd(s, r.returnDeductionAmount, 2), 0)
+  const totalIndependent = rows.reduce((s, r) => safeAdd(s, r.independentReturnDeductionAmount ?? 0, 2), 0)
+  const totalAchieved = rows.reduce((s, r) => safeAdd(s, r.achievedAmount, 2), 0)
+  const journalAmount = postedJournalReturn?.debitAmount ?? null
+  const journalDifference =
+    journalAmount === null ? null : safeSubtract(totalDeduction, journalAmount, 2)
+  const findings: SalesTargetPeriodReconciliationFinding[] = []
+  if (journalDifference !== null && journalDifference !== 0) {
+    findings.push({
+      code: "JOURNAL_RETURN_DIFF",
+      message:
+        `Pengurang retur read-model berbeda dari total kaki Retur Penjualan jurnal retur POSTED sebesar Rp ${journalDifference.toLocaleString("id-ID")}; penyebab sah antara lain jurnal memakai nilai qty × harga, retur tanpa faktur asal, baris legacy, atau plafon per faktur asal.`,
+    })
+  }
+
+  return {
+    rows,
+    invoiceDeductionClampFindings: achievement.invoiceDeductionClampFindings,
+    totals: {
+      grossPaidAmount: totalGross,
+      commissionPaidBase: totalCommission,
+      commissionDifference: safeSubtract(totalGross, totalCommission, 2),
+      returnDeductionAmount: totalDeduction,
+      independentReturnDeductionAmount: totalIndependent,
+      independentDifference: safeSubtract(totalDeduction, totalIndependent, 2),
+      postedJournalReturnAmount: journalAmount,
+      journalDifference,
+      achievedAmount: totalAchieved,
+    },
+    findings,
   }
 }
 
