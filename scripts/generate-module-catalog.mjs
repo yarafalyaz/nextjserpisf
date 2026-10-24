@@ -66,6 +66,10 @@ const RESOURCES = [
   ["currencies", "master", "Mata Uang"],
   ["warehouses", "master", "Gudang"],
   ["employees", "master", "Karyawan"],
+  // F-2026-10-24-099-S Q-PROB-2: resource persetujuan kontrak agar
+  // approve_contracts lolos fail-closed generator (permission tanpa
+  // resource di sini = process.exit(1)).
+  ["contracts", "hrm", "Kontrak Karyawan"],
   ["departments", "master", "Departemen"],
   ["positions", "master", "Jabatan"],
   ["accounts", "master", "Akun (COA)"],

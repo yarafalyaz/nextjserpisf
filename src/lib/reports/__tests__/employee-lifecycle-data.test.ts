@@ -10,10 +10,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   employeeFindMany: vi.fn(),
+  probationReviewFindMany: vi.fn(),
+  contractDecisionRequestFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { employee: { findMany: mocks.employeeFindMany } },
+  prisma: {
+    employee: { findMany: mocks.employeeFindMany },
+    probationReview: { findMany: mocks.probationReviewFindMany },
+    contractDecisionRequest: { findMany: mocks.contractDecisionRequestFindMany },
+  },
 }))
 
 import { loadEmployeeLifecycleAttention } from "../employee-lifecycle-data"
@@ -31,6 +37,8 @@ function empRow(overrides: Record<string, unknown> = {}) {
     employmentEndedAt: null,
     endReason: null,
     isActive: true,
+    joinDate: d("2026-08-24"),
+    probationEndDate: null,
     ...overrides,
   }
 }
@@ -38,6 +46,8 @@ function empRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.employeeFindMany.mockResolvedValue([])
+  mocks.probationReviewFindMany.mockResolvedValue([])
+  mocks.contractDecisionRequestFindMany.mockResolvedValue([])
 })
 
 describe("loadEmployeeLifecycleAttention — rantai loader F-085-S", () => {
@@ -92,6 +102,8 @@ describe("loadEmployeeLifecycleAttention — rantai loader F-085-S", () => {
         employmentEndedAt: true,
         endReason: true,
         isActive: true,
+        joinDate: true,
+        probationEndDate: true,
       },
       orderBy: { id: "asc" },
     })
@@ -132,5 +144,49 @@ describe("loadEmployeeLifecycleAttention — rantai loader F-085-S", () => {
 
   it("tanpa baris karyawan -> daftar kosong", async () => {
     await expect(loadEmployeeLifecycleAttention({ kind: "self", employeeId: 9 }, TODAY)).resolves.toEqual([])
+  })
+})
+
+describe("loadEmployeeLifecycleAttention perluasan F-099-S Q-PROB-4", () => {
+  it("probationDue turunan dari titik belum submitted; submitted menggeser titik", async () => {
+    mocks.employeeFindMany.mockResolvedValue([
+      empRow({ joinDate: d("2026-08-24"), probationEndDate: d("2026-11-22") }),
+    ])
+    const due = await loadEmployeeLifecycleAttention({ kind: "all" }, TODAY)
+    expect(due.map((r) => r.kind)).toEqual(["probationDue"])
+
+    mocks.probationReviewFindMany.mockResolvedValue([
+      { employeeId: 1, milestone: "30", dueDate: d("2026-09-23"), status: "submitted", finalDecision: null },
+      { employeeId: 1, milestone: "60", dueDate: d("2026-10-23"), status: "submitted", finalDecision: null },
+      { employeeId: 1, milestone: "90", dueDate: d("2026-11-22"), status: "draft", finalDecision: null },
+    ])
+    const notDue = await loadEmployeeLifecycleAttention({ kind: "all" }, TODAY)
+    expect(notDue).toEqual([])
+  })
+
+  it("contractDecisionPending: approved selalu; submitted hanya bila >7 hari", async () => {
+    mocks.employeeFindMany.mockResolvedValue([
+      empRow({ id: 1, employmentStatus: null }),
+      empRow({ id: 2, employmentStatus: null }),
+      empRow({ id: 3, employmentStatus: null }),
+    ])
+    mocks.contractDecisionRequestFindMany.mockResolvedValue([
+      { employeeId: 1, status: "approved", createdAt: d("2026-10-21") },
+      { employeeId: 2, status: "submitted", createdAt: d("2026-10-10") },
+      { employeeId: 3, status: "submitted", createdAt: d("2026-10-21") },
+    ])
+    const rows = await loadEmployeeLifecycleAttention({ kind: "all" }, TODAY)
+    const pending = rows.filter((r) => r.kind === "contractDecisionPending").map((r) => r.employeeId)
+    expect(pending).toEqual([1, 2])
+  })
+
+  it("select review/keputusan tanpa gaji; where scope diterapkan ke ketiganya", async () => {
+    await loadEmployeeLifecycleAttention({ kind: "department", departmentId: 7, employeeId: 5 }, TODAY)
+    for (const mock of [mocks.probationReviewFindMany, mocks.contractDecisionRequestFindMany]) {
+      expect(mock).toHaveBeenCalledTimes(1)
+      const arg = mock.mock.calls[0][0]
+      expect(arg.where).toEqual({ employee: { departmentId: 7 } })
+      expect(JSON.stringify(arg.select)).not.toMatch(/salary|gaji/i)
+    }
   })
 })

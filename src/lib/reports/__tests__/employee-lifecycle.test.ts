@@ -154,3 +154,59 @@ describe("evaluatePayrollEmploymentGate (Q-EMP-3)", () => {
     ).toBe(true)
   })
 })
+
+describe("buildEmployeeLifecycleAttention perluasan F-099-S Q-PROB-4", () => {
+  it("probationDue: titik evaluasi lewat dan probation belum berakhir", () => {
+    const rows = buildEmployeeLifecycleAttention(
+      [
+        emp({
+          probationEndDate: d("2026-11-20"),
+          probationNextDueDate: d("2026-10-20"),
+          probationFinalDecision: null,
+        }),
+      ],
+      today,
+    )
+    expect(rows.map((r) => r.kind)).toEqual(["probationDue"])
+    expect(rows[0].label).toBe("Evaluasi percobaan jatuh tempo")
+  })
+
+  it("AC-PROB-5: probationOverdue menang atas probationDue, maks 1 baris", () => {
+    const rows = buildEmployeeLifecycleAttention(
+      [
+        emp({
+          probationEndDate: d("2026-10-21"),
+          probationNextDueDate: d("2026-08-23"),
+          probationFinalDecision: null,
+        }),
+      ],
+      today,
+    )
+    expect(rows.map((r) => r.kind)).toEqual(["probationOverdue"])
+    expect(rows[0].label).toBe("Percobaan lewat, belum diputus")
+  })
+
+  it("sesudah diputus final tidak ada baris probation", () => {
+    const rows = buildEmployeeLifecycleAttention(
+      [
+        emp({
+          probationEndDate: d("2026-10-21"),
+          probationNextDueDate: d("2026-08-23"),
+          probationFinalDecision: "passed",
+        }),
+      ],
+      today,
+    )
+    expect(rows).toEqual([])
+  })
+
+  it("contractDecisionPending label verbatim", () => {
+    const rows = buildEmployeeLifecycleAttention([emp({ contractDecisionPending: true })], today)
+    expect(rows.map((r) => r.kind)).toEqual(["contractDecisionPending"])
+    expect(rows[0].label).toBe("Keputusan kontrak menunggu penerapan")
+  })
+
+  it("tanpa field F-099-S perilaku lama utuh (tidak ada baris baru)", () => {
+    expect(buildEmployeeLifecycleAttention([emp({})], today)).toEqual([])
+  })
+})

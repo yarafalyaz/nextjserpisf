@@ -86,6 +86,7 @@ export const PERMISSIONS = [
       "create_employees",
       "edit_employees",
       "delete_employees",
+      "approve_contracts",
       "view_accounts",
       "create_accounts",
       "edit_accounts",
