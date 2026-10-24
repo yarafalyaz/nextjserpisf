@@ -24462,3 +24462,362 @@ Pemilik berikutnya: Lead (merge PR docs ini sesudah
 konfirmasi QA head final) -> Backend (DUP-B1/B2) ->
 Frontend (DUP-F1) -> QA (DUP-Q1). Accountant: TIDAK
 dilibatkan — nol uang/pajak/jurnal di spec ini.
+
+---
+
+## SPEC BOT 5 2026-10-25 — F-2026-10-25-005-S alur surat peringatan & disiplin karyawan (SP berurutan, turunan PP 35/2021 Pasal 52)
+
+Spec dokumen saja, tanpa kode/schema/migrasi/UI. Basis
+`origin/main` `7505a7d7` (2026-10-25 00:14 WIB, run ini).
+Anti-duplikat terverifikasi run ini: grep
+`disciplinary|surat peringatan|warning letter|DisciplineRecord`
+di `prisma/schema.prisma` + `src/` origin/main = 0 hit; grep
+`surat peringatan|disiplin` di backlog = 0 spec. ID
+`F-2026-10-25-005-S` bebas: main memuat terakhir
+`F-2026-10-25-001-S` (PR #747 merged), PR terbuka Business
+memakai 002-S (#753), 003-S (#755), 004-S (#758) — 005-S tidak
+bertabrakan.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, origin/main 7505a7d7)
+
+Sudah ada — TIDAK diduplikasi spec ini:
+1. Master karyawan lengkap: `Employee.employmentStatus`
+   (`PKWTT|PKWT|DAILY|INTERN`, null = belum diatur),
+   `contractStartDate/contractEndDate`, `employmentEndedAt` +
+   `endReason` (`contract_completed|resigned|terminated|
+   retired|deceased|other`) — `prisma/schema.prisma` model
+   `Employee` (mulai :863). Jalur berhenti existing = HR mengisi
+   `employmentEndedAt`+`endReason`; spec ini TIDAK membuat
+   jalur berhenti kedua.
+2. Fakta kehadiran sumber disiplin sudah tercatat:
+   `Attendance` dibaca gate cuti & payroll; `LeaveRequest`
+   (status `pending` default, `approvedBy`, `rejectionReason`)
+   dan `OvertimeRequest` dua tahap (`supervisorApprovedAt`,
+   schema :3389-3415) = pola approval berkala yang dirujuk,
+   bukan dibuat ulang. `ProbationReview` (schema :3324) =
+   evaluasi masa percobaan PKWTT — domain berbeda (kinerja
+   masa percobaan), disiplin spec ini berlaku semua status
+   kepegawaian dan TIDAK menumpang model itu.
+3. Izin katalog nyata (`module-catalog.generated.ts:96-99,
+   292,306,310`): `view/create/edit/delete_employees`,
+   `approve_leave_requests`, `approve_overtime_requests`.
+   Izin khusus disiplin TIDAK ada (grep = 0) — kandidat izin
+   baru = USULAN §4, fisik seed milik Backend sesudah putusan
+   Lead.
+4. Scope HR fail-closed: `getHrScope`
+   (`src/lib/auth/hr-scope.ts`): role HR/finance/admin/ga =
+   `all`; `kepala_bengkel` = se-departemen; lainnya = `self`;
+   roles rusak/hilang = `self` employeeId -1 (tidak melihat
+   apa pun). Spec ini WAJIB tunduk scope itu (§4).
+5. Lampiran generik `TransactionAttachment`
+   (`referenceType`+`referenceId` polimorfik, schema :5066)
+   sudah dipakai bukti dokumen lain — bukti pelanggaran/
+   persetujuan memakai pola ini, tanpa tabel lampiran baru.
+6. Kebalikan disiplin sudah ada setengahnya: `Appreciation`
+   (penghargaan, `type` default `bonus`, ada `amount`) —
+   disiplin TIDAK boleh menumpang model penghargaan dan
+   TIDAK membawa nominal uang apa pun (BR-DISC-08).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini = 0):
+- Model/kolom/aksi/izin/halaman surat peringatan atau rekod
+  disiplin apa pun. Jenjang SP1→SP2→SP3, masa berlaku per SP,
+  dan status "SP aktif" tidak bisa dibaca dari sistem sama
+  sekali hari ini — HR bengkel mencatat di luar sistem
+  (kertas/ spreadsheet), tidak tertaut karyawan, tidak ada
+  daftar SP yang mendekati kedaluwarsa.
+
+### 1. Workflow specification
+
+Aktor: HR (penerbit SP, pemegang rekod), Atasan langsung/
+Kepala bengkel (pengaju pelanggaran + penilai perbaikan),
+Karyawan bersangkutan (menerima SP, membaca rekod dirinya,
+memberi tanggapan tertulis), Pemegang persetujuan akhir
+(§4 — penerbitan SP3 & SP pertama-dan-terakhir).
+Dokumen masuk: baris `Employee` aktif; fakta pendukung
+pelanggaran (baris `Attendance`/`LeaveRequest` ditautkan
+sebagai rujukan baca, TIDAK disalin nilainya); lampiran bukti
+via `TransactionAttachment` existing.
+Dokumen keluar: rekod peringatan tercatat (USULAN §3) dengan
+jenjang turunan (§2), tanggal terbit, tanggal kedaluwarsa
+turunan, dasar peraturan perusahaan yang dilanggar (teks
+bebas terstruktur), tanggapan karyawan, dan jejak
+penerbit/penyetuju. BUKAN dokumen bayar; nol nominal.
+
+Alur:
+1. Pengaju (atasan/HR) membuka pengajuan peringatan dari
+   konteks karyawan: jenis pelanggaran, tanggal kejadian,
+   uraian, rujukan fakta (tautan baris kehadiran/cuti bila
+   relevan), bukti lampiran. Pengajuan bukan SP — belum
+   berakibat apa pun ke karyawan.
+2. HR memeriksa: pelanggaran yang sama dalam masa berlaku SP
+   berjalan menentukan jenjang usulan (§2, dihitung server
+   dari rekod terbit, bukan dipilih bebas pengaju). Jenjang
+   usulan tampil ke penyetuju; penyetuju boleh menurunkan
+   ke teguran lisan tercatat (bukan SP) dengan alasan, tidak
+   boleh menaikkan melewati jenjang turunan.
+3. Persetujuan (§4): SP1/SP2 oleh HR; SP3 dan SP
+   pertama-dan-terakhir wajib penyetuju kedua berbeda orang
+   dari pengaju (SoD, BR-DISC-06). Penolakan wajib alasan;
+   pengajuan ditolak tidak menjadi rekod disiplin.
+4. Penerbitan: SP terbit dengan nomor dokumen (pola nomor
+   dokumen repo), tanggal terbit WIB, masa berlaku turunan
+   6 bulan (§2). Karyawan menandatangani penerimaan
+   (tanda terima tercatat: tanggal + cara terima; menolak
+   tanda tangan = dicatat sebagai fakta, SP tetap terbit —
+   penolakan tanda tangan bukan veto, BR-DISC-07).
+5. Tanggapan karyawan (opsional, jendela USULAN 7 hari
+   kalender — Q-DISC-3): teks tanggapan menempel ke rekod,
+   tidak mengubah jenjang; HR boleh menambahkan catatan
+   tindak lanjut. Tanggapan tidak menghapus SP.
+6. Selama masa berlaku: pelanggaran baru yang disetujui
+   menaikkan jenjang per §2. Lewat masa berlaku tanpa
+   pelanggaran baru: SP kedaluwarsa otomatis sebagai status
+   TURUNAN tanggal (bukan tugas cron, bukan kolom status
+   yang bisa tidak sinkron — §2).
+7. Daftar perhatian HR: SP aktif per karyawan, SP
+   kedaluwarsa <= 30 hari, SP3 aktif (risiko tertinggi).
+   Daftar ini read-only turunan rekod; HR tidak mengedit
+   status kedaluwarsa manual.
+8. Kaitan berhenti: SP BUKAN jalur PHK. Bila pelanggaran
+   terjadi dalam masa berlaku SP3 (atau SP pertama-dan-
+   terakhir), sistem hanya menandai rekod "layak kajian
+   berhenti" untuk HR; keputusan berhenti, dasar hukum, dan
+   seluruh angka kewajiban (pesangon/UPMK/PPh) berjalan
+   lewat alur `employmentEndedAt` F-085-S existing dan
+   vonis Accountant — spec ini TIDAK menetapkan karyawan
+   boleh di-PHK dari layar SP (BR-DISC-09, §8).
+
+### 2. Jenjang & masa berlaku (BENCHMARK regulasi)
+
+Sumber resmi (akses 2026-10-25):
+- PP 35/2021 Pasal 52 + Penjelasan: SP diterbitkan BERURUTAN
+  SP1→SP2→SP3, masing-masing berlaku paling lama 6 bulan;
+  pelanggaran ulang dalam masa berlaku menaikkan jenjang;
+  lewat 6 bulan, peringatan berikutnya kembali SP1;
+  perjanjian kerja/peraturan perusahaan boleh memuat
+  pelanggaran tertentu ber-SP pertama-dan-terakhir.
+  https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf
+  dan metadata berlaku
+  https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021
+- Accurate/Zahir: help resmi Accurate memuat artikel konsep
+  SP (https://accurate.id/marketing-manajemen/surat-peringatan-karyawan/)
+  tetapi TIDAK ditemukan fitur rekod SP/disiplin di menu
+  karyawan help.accurate.id maupun fitur Zahir — keduanya
+  diperlakukan ABSEN-fitur di matriks §5; jangan mengklaim
+  benchmark produk untuk perilaku sistem di luar regulasi.
+
+Konsekuensi desain (mengikat spec):
+- Jenjang rekod berikutnya = TURUNAN: hitung SP terbit
+  terakhir karyawan yang masih dalam masa berlaku pada
+  tanggal kejadian baru. Tidak ada SP aktif → SP1. SP1
+  aktif → SP2. SP2 aktif → SP3. SP3 aktif → bukan SP4:
+  tanda kajian berhenti (§1.8). SP pertama-dan-terakhir =
+  jalur terpisah yang hanya boleh dipilih bila kategori
+  pelanggaran terdaftar sebagai berat di peraturan
+  perusahaan (daftar kategori = data master teks yang
+  diputus Lead, Q-DISC-1; tanpa daftar itu, pilihan ini
+  tidak tampil).
+- Masa berlaku per SP = tanggal terbit + 6 bulan kalender
+  WIB, TURUNAN murni (dihitung saat baca), BUKAN kolom
+  `expiresAt` tersimpan yang bisa selisih dari aturan —
+  kecuali Backend memutuskan fisik lain dengan alasan
+  tertulis di kartu inti (klaim tetap: satu sumber hitung).
+- Kedaluwarsa memutus rantai: SP terbit sesudah SP
+  sebelumnya kedaluwarsa selalu mulai SP1, walau riwayat
+  lama ada. Riwayat kedaluwarsa tetap terbaca (audit),
+  tidak terhapus.
+
+### 3. Bentuk data usulan (USULAN — fisik final Backend)
+
+- Model baru kandidat `EmployeeDisciplinaryRecord` (nama
+  final Backend): id, employeeId, jenjang turunan saat
+  terbit (snapshot teks: `sp1|sp2|sp3|sp_first_final|
+  verbal` — snapshot SAH di sini karena jenjang adalah
+  fakta historis saat terbit, bukan status berjalan),
+  violationCategory (teks dari daftar Q-DISC-1),
+  violationDate, issuedAt, description, peraturan yang
+  dilanggar (teks), status alur (`draft|pending_approval|
+  issued|rejected`), approvedBy/approvedAt, rejectedReason,
+  acknowledgmentAt + acknowledgmentMethod +
+  acknowledgmentRefused (Boolean), employeeResponse +
+  employeeResponseAt, createdBy, timestamps, deletedAt
+  (soft, pola repo); slug bila pola repo mewajibkan.
+  Masa berlaku TIDAK disimpan sebagai status; pembaca
+  menurunkan `active|expired` dari issuedAt + 6 bulan.
+- Bukti & tanda terima: `TransactionAttachment` existing
+  referenceType kandidat `EmployeeDisciplinaryRecord`
+  (final Backend). Tanpa tabel lampiran kedua.
+- TANPA kolom: nominal uang, potongan gaji, status PHK,
+  status karyawan turunan. Disiplin tidak menulis ke
+  `Employee` sama sekali selain tautan baca.
+
+### 4. Role/permission matrix (izin nyata + usulan)
+
+Izin existing dipakai apa adanya; kandidat baru ditandai
+USULAN dan baru berlaku sesudah Lead putus + Backend seed
+(permission-seed-parity wajib hijau):
+
+| Aksi | Izin | Scope HR |
+|---|---|---|
+| Lihat daftar/rekod disiplin | `view_employees` existing (fase 1) / kandidat `view_disciplinary_records` (USULAN, Q-DISC-2) | all: semua; department: se-departemen; self: hanya dirinya |
+| Buat pengajuan | kandidat `create_disciplinary_records` (USULAN) | pengaju atasan hanya se-departemennya (turunan scope department) |
+| Setujui SP1/SP2 | kandidat `approve_disciplinary_records` (USULAN) | all (HR) |
+| Setujui SP3 / SP pertama-dan-terakhir | kandidat sama + SoD dua orang (BR-DISC-06) | all (HR) + penyetuju kedua != pengaju |
+| Terbitkan/ubah rekod terbit | kandidat `create_disciplinary_records`; rekod `issued` TIDAK bisa diedit isi — koreksi = rekod pembatal baru (USULAN, Q-DISC-4) | all |
+| Tanggapan karyawan | login karyawan tertaut (`Employee.userId`) | self saja, hanya rekod dirinya berstatus issued |
+| Lihat nominal gaji di layar disiplin | TIDAK ADA — dilarang menampilkan `baseSalary`/komponen gaji di permukaan disiplin mana pun | — |
+
+Kegagalan scope = fail-closed pola `getHrScope` (roles
+rusak → self -1 → kosong), bukan all.
+
+### 5. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan |
+|---|---|---|---|---|
+| Rekod SP berjenjang per karyawan | Tidak ditemukan di help resmi (artikel konsep saja, URL §2) | Tidak ditemukan | ABSEN (grep 0) | §3 |
+| Masa berlaku 6 bulan turunan + reset jenjang | n/a | n/a | ABSEN | §2 |
+| Tanda terima + tanggapan karyawan | n/a | n/a | ABSEN | §1.4-1.5 |
+| Daftar SP aktif/kedaluwarsa | n/a | n/a | ABSEN | §1.7 |
+| Bukti lampiran per rekod | generik | generik | ADA (TransactionAttachment) | reuse |
+| Jalur PHK dari SP | n/a | n/a | Ada jalur berhenti F-085-S (bukan dari SP) | TIDAK dibuat; tanda kajian saja |
+
+### 6. Status-transition matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada) | pengaju simpan | draft | izin create + scope |
+| draft | ajukan | pending_approval | jenjang turunan dihitung server |
+| pending_approval | setujui (SP1/2: HR; SP3/first-final: +penyetuju kedua) | issued | SoD BR-DISC-06; issuedAt terisi |
+| pending_approval | tolak + alasan wajib | rejected | alasan kosong ditolak server |
+| issued | tanggal baca > issuedAt+6 bulan | expired (TURUNAN, bukan transisi tersimpan) | hitung baca tunggal §2 |
+| issued | karyawan kirim tanggapan | issued (tanggapan menempel) | self-scope; jendela Q-DISC-3 |
+| issued | pelanggaran baru disetujui dalam masa berlaku | rekod BARU jenjang+1 (rekod lama tetap issued→expired alami) | rantai §2 |
+| issued (SP3/first-final aktif) | pelanggaran baru disetujui | rekod baru DITOLAK sebagai SP; tanda kajian berhenti di rekod aktif | BR-DISC-09; alur berhenti = F-085-S |
+
+### 7. Business rules register
+
+- BR-DISC-01 (BENCHMARK, PP 35/2021 Pasal 52): jenjang
+  berurutan SP1→SP2→SP3; tidak ada lompat jenjang manual.
+- BR-DISC-02 (BENCHMARK, idem): masa berlaku tiap SP
+  paling lama 6 bulan; sesudah lewat, jenjang reset SP1.
+- BR-DISC-03 (USULAN): masa berlaku diturunkan saat baca
+  dari issuedAt; tidak ada kolom status kedaluwarsa manual.
+- BR-DISC-04 (USULAN): jenjang usulan dihitung server dari
+  rekod issued terakhir yang aktif pada violationDate;
+  pilihan bebas pengaju ditolak.
+- BR-DISC-05 (USULAN): SP pertama-dan-terakhir hanya untuk
+  kategori pada daftar berat Q-DISC-1; tanpa daftar, opsi
+  tidak tersedia.
+- BR-DISC-06 (USULAN): SoD — pengaju != penyetuju; SP3 &
+  first-final wajib penyetuju kedua.
+- BR-DISC-07 (USULAN): menolak tanda tangan dicatat, bukan
+  membatalkan SP; tanda terima bukan persetujuan isi.
+- BR-DISC-08 (TERVERIFIKASI-KODE): disiplin tanpa nominal —
+  permukaan disiplin dilarang membaca/menampilkan field
+  gaji (pola select tanpa gaji di employee-lifecycle-data).
+- BR-DISC-09 (BUTUH-VONIS Lead + Accountant): tanda kajian
+  berhenti BUKAN keputusan PHK; dasar berhenti, uang
+  kompensasi/pesangon/UPMK dan PPh-nya mengikuti vonis
+  F-085-S (Q-EMP-4/5) dan alur employmentEndedAt existing.
+- BR-DISC-10 (USULAN): rekod issued immutable isi;
+  kesalahan terbit diperbaiki lewat rekod pembatal
+  tertaut, bukan edit/hapus (soft-delete admin saja,
+  berjejak ActivityLog pola repo).
+- BR-DISC-11 (TERVERIFIKASI-KODE): scope baca mengikuti
+  getHrScope fail-closed; karyawan self hanya rekod
+  dirinya, tanpa rekod rekan se-departemen.
+- BR-DISC-12 (USULAN): tanggapan karyawan tidak mengubah
+  jenjang/status; hanya menempel + memicu catatan HR.
+
+### 8. Acceptance criteria + edge (untuk QA)
+
+- AC-DISC-1: terbit SP1 tanpa SP aktif → jenjang sp1;
+  pelanggaran kedua 2 bulan kemudian → usulan server sp2,
+  pengaju memilih sp3 manual DITOLAK.
+- AC-DISC-2: SP1 terbit > 6 bulan lalu → pelanggaran baru
+  menghasilkan sp1 lagi (rantai putus), riwayat lama tetap
+  terbaca expired.
+- AC-DISC-3: SP3 aktif + pelanggaran baru disetujui →
+  tidak ada rekod SP4; tanda kajian berhenti muncul;
+  tidak ada perubahan employmentEndedAt otomatis.
+- AC-DISC-4: self-approve pengajuan sendiri DITOLAK;
+  SP3 dengan penyetuju kedua = pengaju DITOLAK.
+- AC-DISC-5: role self membuka rekod rekan (URL langsung)
+  → kosong/403 fail-closed; department hanya se-departemen.
+- AC-DISC-6: tanggapan karyawan menempel tanpa mengubah
+  jenjang; tanggapan untuk rekod karyawan lain DITOLAK.
+- AC-DISC-7: tolak pengajuan tanpa alasan DITOLAK server;
+  pengajuan rejected tidak tampil sebagai disiplin aktif.
+- AC-DISC-8: layar daftar/detail disiplin dirender tanpa
+  field gaji (grep UI + payload loader: baseSalary absen).
+- AC-DISC-9: SP first-final untuk kategori di luar daftar
+  berat DITOLAK; daftar kosong → opsi tidak tampil.
+- AC-DISC-10: edit isi rekod issued DITOLAK; pembatalan
+  membuat rekod pembatal tertaut dan jenjang turunan
+  sesudahnya menghitung ulang tanpa rekod batal itu.
+Edge: violationDate sebelum SP aktif terbit (kejadian lama
+baru dilaporkan) → jenjang dihitung per violationDate,
+bukan tanggal pengajuan; dua pengajuan bersamaan untuk
+karyawan sama → re-check jenjang di dalam transaksi
+(pola gate cuti existing); karyawan berhenti di tengah
+masa berlaku SP → rekod tetap terbaca, tidak terhapus;
+karyawan DAILY/INTERN tetap bisa ber-SP (regulasi tidak
+membatasi spec ini pada PKWTT — bedakan dari probation
+F-099-S); tanggal terbit akhir bulan + 6 bulan (31 Agu →
+28/29 Feb) memakai tambah-bulan kalender WIB, bukan +180
+hari tetap.
+
+### 9. Yang TIDAK diusulkan run ini
+
+- Jalur PHK otomatis/skorsing/potongan gaji dari SP —
+  BUTUH-VONIS (BR-DISC-09); skorsing & potongan menyentuh
+  upah = wilayah Accountant, tidak dispec angkanya di sini.
+- Portal banding formal / tanda tangan elektronik — tanda
+  terima tercatat + lampiran cukup fase 1 (YAGNI).
+- Notifikasi push ke karyawan (WA/email) — daftar perhatian
+  pasif dulu, pola H-30 existing; dorongan aktif = fase 2.
+- Rekod pelanggaran dari Attendance otomatis (auto-SP) —
+  fakta kehadiran = rujukan manusia, bukan pemicu otomatis.
+
+### 10. Backlog implementasi (turunan F-2026-10-25-005-S)
+
+Urutan: putusan Lead Q-DISC-1..4 → vonis Accountant hanya
+bila tanda kajian berhenti hendak dilanjutkan (BR-DISC-09)
+→ Backend inti → Frontend → QA. ID turunan diberikan saat
+kartu dibuat.
+
+- DISC-B1 (Backend, P1, SESUDAH Q-DISC-1/2): model + aksi
+  (klaim schema.prisma di board dulu) pengajuan→setujui→
+  terbit dengan jenjang turunan §2 dihitung dalam transaksi,
+  izin kandidat + seed parity, lampiran TransactionAttachment,
+  tes falsifikasi AC-DISC-1..5,9,10.
+- DISC-F1 (Frontend, P1, SESUDAH kontrak B1): daftar
+  perhatian SP aktif/kedaluwarsa + form pengajuan + panel
+  tanggapan karyawan; UI nol hitung jenjang/masa berlaku —
+  tampilkan turunan server apa adanya; tanpa field gaji.
+- DISC-Q1 (QA, P2): falsifikasi AC-DISC-1..10 atas head
+  Backend+Frontend (jenjang dilompat MERAH, scope bocor
+  MERAH, SP4 tercipta MERAH, gaji tampil MERAH).
+
+### 11. Pertanyaan putusan (bukan pertanyaan ke owner)
+
+- Q-DISC-1 (Lead): daftar kategori pelanggaran berat untuk
+  SP pertama-dan-terakhir + daftar kategori umum fase 1 —
+  ditetapkan sebagai data master teks atau konstanta
+  tervalidasi? Spec tidak mengarang isi daftar perusahaan.
+- Q-DISC-2 (Lead): izin khusus disiplin baru (kandidat §4)
+  atau fase 1 cukup izin employees existing? Rekomendasi
+  spec: izin khusus, karena disiplin lebih sensitif dari
+  master karyawan biasa.
+- Q-DISC-3 (Lead): jendela tanggapan karyawan 7 hari
+  kalender — sahkan atau ubah; lewat jendela tanggapan
+  ditolak atau diterima berlabel terlambat?
+- Q-DISC-4 (Lead): koreksi rekod issued lewat rekod
+  pembatal (BR-DISC-10) — sahkan pola immutable ini.
+- Q-DISC-5 (Accountant, hanya bila dilanjutkan): perlakuan
+  berhenti sesudah SP3/first-final (dasar, kompensasi,
+  PPh) — vonis terpisah, spec ini tidak membuka angka.
+
+Pemilik berikutnya: Lead (merge PR docs ini + putus
+Q-DISC-1..4) → Backend (DISC-B1) → Frontend (DISC-F1) →
+QA (DISC-Q1). Accountant hanya Q-DISC-5 kondisional.
