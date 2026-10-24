@@ -13,10 +13,11 @@
  * pencapaian == paidBase.
  *
  * Retur (Putusan 2/3 F-131-V): hanya status "completed", salesInvoiceId
- * tidak null, faktur asal paid (query di-scope ke id faktur paid yang
- * sudah dimuat), `date` retur dalam cakupan gabungan yang sama — supaya
- * retur lintas-periode yang faktur asalnya di luar semua periode tetap
- * masuk baris tanpa-target periode tanggal retur. Nilai per retur =
+ * tidak null, `date` retur dalam cakupan gabungan yang sama — retur
+ * di-query berdasar tanggal retur (BUKAN disaring ke faktur paid dalam
+ * cakupan), lalu faktur asal paid-nya dimuat walau tanggal faktur di
+ * luar cakupan, supaya retur lintas-periode tetap mengurangi periode
+ * tanggal retur (E131-2) dan periode asal tidak berubah. Nilai per retur =
  * Σ (returnDpp+returnVat) snapshot; legacy diturunkan builder.
  *
  * Lencana "Target diubah" (BR-TGT-09) diturunkan dari ActivityLog
@@ -105,29 +106,56 @@ export async function getSalesTargetAchievement(range: {
     orderBy: [{ date: "asc" }, { id: "asc" }],
   })
 
-  // Retur pengurang (F-131-V Putusan 2/3): satu query massal completed
-  // tertaut faktur paid yang sudah dimuat, tanggal retur dalam cakupan
-  // gabungan yang sama (bukan tanggal faktur asal).
-  const paidInvoiceIds = invoices.map((i) => i.id)
-  const returns =
-    paidInvoiceIds.length > 0
-      ? await prisma.salesReturn.findMany({
-          where: {
-            status: "completed",
-            salesInvoiceId: { in: paidInvoiceIds },
-            date: { gte: coverageStart, lte: invoiceEnd },
-          },
+  // Retur pengurang (F-131-V Putusan 2/3, HIGH-1 t_4079da4f): query
+  // berdasar TANGGAL RETUR dalam cakupan gabungan — tanpa gerbang
+  // faktur paid dalam cakupan, supaya retur atas faktur paid periode
+  // sebelumnya tetap masuk. Faktur asal paid di luar cakupan dimuat
+  // sesudahnya (pola sourceInvoices rekonsiliasi di bawah); retur yang
+  // faktur asalnya tidak paid/terhapus dibuang builder (tak ada di map).
+  const returns = await prisma.salesReturn.findMany({
+    where: {
+      status: "completed",
+      salesInvoiceId: { not: null },
+      date: { gte: coverageStart, lte: invoiceEnd },
+    },
+    select: {
+      id: true,
+      date: true,
+      salesInvoiceId: true,
+      items: {
+        select: { qty: true, price: true, returnDpp: true, returnVat: true },
+      },
+    },
+    orderBy: [{ date: "asc" }, { id: "asc" }],
+  })
+  const coverageInvoiceIds = new Set(invoices.map((i) => i.id))
+  const sourceInvoiceIds = [
+    ...new Set(
+      returns
+        .map((r) => r.salesInvoiceId)
+        .filter((id): id is number => id !== null && !coverageInvoiceIds.has(id)),
+    ),
+  ]
+  const sourceInvoices =
+    sourceInvoiceIds.length > 0
+      ? await prisma.salesInvoice.findMany({
+          where: { id: { in: sourceInvoiceIds }, deletedAt: null, status: "paid" },
           select: {
             id: true,
+            salesEmployeeId: true,
             date: true,
-            salesInvoiceId: true,
-            items: {
-              select: { qty: true, price: true, returnDpp: true, returnVat: true },
-            },
+            grandTotal: true,
+            subtotal: true,
+            discount: true,
+            taxAmount: true,
+            salesEmployee: { select: { name: true } },
           },
-          orderBy: [{ date: "asc" }, { id: "asc" }],
         })
       : []
+  // Faktur asal lintas-periode hanya bahan atribusi/plafon/tarif legacy
+  // builder; tanggalnya di luar periode dinilai sehingga tidak terhitung
+  // sebagai bruto periode mana pun (builder menyaring per tanggal).
+  const allInvoices = [...invoices, ...sourceInvoices]
 
   // BR-TGT-09: perubahan terakhir per target. Query massal tunggal.
   const targetIds = targets.map((t) => t.id)
@@ -167,7 +195,7 @@ export async function getSalesTargetAchievement(range: {
             : null,
       }
     }),
-    invoices: invoices.map((inv) => ({
+    invoices: allInvoices.map((inv) => ({
       id: inv.id,
       salesEmployeeId: inv.salesEmployeeId,
       salesEmployeeName: inv.salesEmployee?.name ?? null,
@@ -180,7 +208,7 @@ export async function getSalesTargetAchievement(range: {
     returns: returns.map((ret) => ({
       id: ret.id,
       date: ret.date,
-      // Query menjamin tidak null (salesInvoiceId in paidInvoiceIds).
+      // Query menjamin tidak null (salesInvoiceId: { not: null }).
       salesInvoiceId: ret.salesInvoiceId as number,
       lines: ret.items.map((line) => ({
         qty: Number(line.qty),
@@ -258,23 +286,20 @@ export async function getSalesTargetPeriodReconciliation(range: {
   const paidIds = invoiceInputs.map((i) => i.id)
   // Faktur asal lintas-periode perlu tarif + grandTotal untuk legacy/clamp:
   // muat faktur asal retur periode ini yang tidak ada di daftar periode.
-  const periodReturns =
-    paidIds.length > 0
-      ? await prisma.salesReturn.findMany({
-          where: {
-            status: "completed",
-            date: { gte: range.start, lte: periodEnd },
-            salesInvoiceId: { not: null },
-          },
-          select: {
-            id: true,
-            date: true,
-            salesInvoiceId: true,
-            items: { select: { qty: true, price: true, returnDpp: true, returnVat: true } },
-          },
-          orderBy: [{ date: "asc" }, { id: "asc" }],
-        })
-      : []
+  const periodReturns = await prisma.salesReturn.findMany({
+    where: {
+      status: "completed",
+      date: { gte: range.start, lte: periodEnd },
+      salesInvoiceId: { not: null },
+    },
+    select: {
+      id: true,
+      date: true,
+      salesInvoiceId: true,
+      items: { select: { qty: true, price: true, returnDpp: true, returnVat: true } },
+    },
+    orderBy: [{ date: "asc" }, { id: "asc" }],
+  })
   const sourceInvoiceIds = [
     ...new Set(
       periodReturns

@@ -21,6 +21,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
+import {
+  LateCostL3Field,
+  parseL3TagClient,
+  upsertL3Tag,
+  removeL3Tag,
+} from "./late-cost-l3-field";
 
 interface BillItem {
   itemId: string;
@@ -99,6 +105,13 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
   const [withholdingAmount, setWithholdingAmount] = useState<number>(
     bill?.withholdingAmount ?? 0,
   );
+  // L3 (F-133-V): penanda hidup di baris pertama notes; field terstruktur di
+  // bawah hanya menulis/menghapus baris itu, server pemilik vonis akhir.
+  const [notes, setNotes] = useState(bill?.notes ?? "");
+  const initialL3 = parseL3TagClient(bill?.notes);
+  const [l3Enabled, setL3Enabled] = useState(Boolean(initialL3));
+  const [l3WorkOrderNo, setL3WorkOrderNo] = useState(initialL3?.workOrderNo ?? "");
+  const [l3Reason, setL3Reason] = useState(initialL3?.reason ?? "");
   // POs offered for settlement: only the selected vendor's POs (keeps the bill
   // and PO vendor consistent) — service POs are included and tagged "Jasa".
   const vendorPurchaseOrders = vendorId
@@ -357,9 +370,35 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
               name="notes"
               rows={2}
               placeholder="Catatan..."
-              defaultValue={bill?.notes ?? ""}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Baris penanda L3 dikelola lewat isian di bawah; jangan ketik atau ubah frasa penanda dengan tangan.
+            </p>
           </div>
+          <LateCostL3Field
+            idPrefix="notes"
+            enabled={l3Enabled}
+            onEnabledChange={(enabled) => {
+              setL3Enabled(enabled);
+              setNotes((prev) =>
+                enabled
+                  ? upsertL3Tag(prev, l3WorkOrderNo, l3Reason)
+                  : removeL3Tag(prev),
+              );
+            }}
+            workOrderNo={l3WorkOrderNo}
+            onWorkOrderNoChange={(value) => {
+              setL3WorkOrderNo(value);
+              setNotes((prev) => upsertL3Tag(prev, value, l3Reason));
+            }}
+            reason={l3Reason}
+            onReasonChange={(value) => {
+              setL3Reason(value);
+              setNotes((prev) => upsertL3Tag(prev, l3WorkOrderNo, value));
+            }}
+          />
         </FormSection>
 
         <FormSection title="Item" columns={1}>

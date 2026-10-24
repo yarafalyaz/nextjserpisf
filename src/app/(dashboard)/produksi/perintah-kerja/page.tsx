@@ -10,6 +10,8 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { WorkOrderTable } from "./_components/work-order-table"
 import { WorkOrderQueueCard } from "@/components/reports/work-order-queue-card"
 import { getWorkOrderQueue } from "@/lib/reports/work-order-queue-data"
+import { WorkshopCloseoutQueueCard } from "@/components/reports/workshop-closeout-queue-card"
+import { getWorkshopCloseoutQueue } from "@/lib/reports/workshop-closeout-queue-data"
 import { WorkOrderLoadCard } from "@/components/reports/work-order-load-card"
 import { getWorkOrderLoad } from "@/lib/reports/work-order-load-data"
 import { WorkCenterLoadPlanCard } from "@/components/reports/work-center-load-plan-card"
@@ -57,13 +59,16 @@ export default async function WorkOrdersPage({
 
   const total = await prisma.workOrder.count({ where })
 
-  const [queue, load, loadPlan, centers, canEditCenters] = await Promise.all([
-    getWorkOrderQueue(),
-    getWorkOrderLoad(),
-    getWorkCenterLoadPlan(),
-    getWorkCenters(),
-    hasPermission("edit_work_orders"),
-  ])
+  const [queue, load, loadPlan, centers, canEditCenters, closeoutQueue, canCloseWorkOrder] =
+    await Promise.all([
+      getWorkOrderQueue(),
+      getWorkOrderLoad(),
+      getWorkCenterLoadPlan(),
+      getWorkCenters(),
+      hasPermission("edit_work_orders"),
+      getWorkshopCloseoutQueue(),
+      hasPermission("complete_work_orders"),
+    ])
 
   const tableData = toPlain(workOrders)
 
@@ -97,6 +102,12 @@ export default async function WorkOrdersPage({
       </div>
 
       <WorkOrderQueueCard queue={queue} />
+
+      <WorkshopCloseoutQueueCard
+        queue={closeoutQueue}
+        canCloseWorkOrder={canCloseWorkOrder}
+        canCloseProductionOrder={false}
+      />
 
       <WorkOrderLoadCard load={load} />
 
