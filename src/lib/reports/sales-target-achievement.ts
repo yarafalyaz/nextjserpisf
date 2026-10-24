@@ -58,6 +58,8 @@ export const SALES_TARGET_PARTIAL_PERIOD_LABEL =
   "Periode target tidak utuh — persen tidak dihitung"
 /** Awalan lencana target diubah; tanggal dd/mm/yyyy ditambah pemanggil. */
 export const SALES_TARGET_MODIFIED_BADGE_PREFIX = "Target diubah"
+/** Label wajib baris legacy tanpa snapshot (Putusan 2 butir 4 F-131-V). */
+export const SALES_TARGET_LEGACY_LABEL = "legacy" as const
 
 export interface SalesTargetInput {
   id: number
@@ -128,6 +130,10 @@ export interface SalesTargetAchievementRow {
   invoiceCount: number
   /** Retur completed yang mengurangi baris ini (per tanggal retur). */
   returnCount: number
+  /** True bila sebagian pengurang baris ini dari baris retur legacy (Putusan 2.4). */
+  hasLegacyReturnLines: boolean
+  /** Σ pengurang dari baris legacy saja (sesudah plafon), berlabel `legacy`. */
+  legacyReturnDeductionAmount: number
   periodFullyContained: boolean
   hasTarget: boolean
   modifiedAfterPeriodStartAt: Date | null
@@ -142,6 +148,16 @@ export interface SalesTargetDeductionClampFinding {
   clampedDeductionAmount: number
 }
 
+/** Satu retur yang memuat baris legacy — berlabel `legacy` (Putusan 2.4). */
+export interface SalesTargetLegacyReturn {
+  returnId: number
+  salesInvoiceId: number
+  salesEmployeeId: number | null
+  label: typeof SALES_TARGET_LEGACY_LABEL
+  /** Pengurang dari baris legacy retur ini saja (sesudah plafon per faktur). */
+  deductionAmount: number
+}
+
 export interface SalesTargetAchievement {
   rows: SalesTargetAchievementRow[]
   /** Baris penjual berfaktur paid / beretur dalam rentang tanpa target dinilai. */
@@ -152,6 +168,8 @@ export interface SalesTargetAchievement {
     grossPaidAmount: number
     returnDeductionAmount: number
     achievedAmount: number
+    hasLegacyReturnLines: boolean
+    legacyReturnDeductionAmount: number
   }
   /** Σ komponen bruto baris target dinilai utuh + unattributed dalam rentang. */
   totalGrossPaidAmount: number
@@ -166,6 +184,8 @@ export interface SalesTargetAchievement {
   companyPercent: number | null
   /** Pengurang mentah per faktur melampaui grandTotal faktur asal (Putusan 2.5). */
   invoiceDeductionClampFindings: SalesTargetDeductionClampFinding[]
+  /** Retur berbaris legacy, masing-masing berlabel `legacy` (Putusan 2.4). */
+  legacyReturns: SalesTargetLegacyReturn[]
   notice: string
 }
 
@@ -183,15 +203,16 @@ function percent(achieved: number, target: number): number {
 }
 
 /** Nilai komersial satu retur: Σ baris (returnDpp+returnVat) snapshot; legacy diturunkan. */
-function returnCommercialValue(
+function returnLineValues(
   ret: SalesTargetReturnInput,
   invoice: SalesTargetPaidInvoiceInput | undefined,
-): number {
-  if (!invoice) return 0
-  let amount = 0
+): { total: number; legacy: number } {
+  if (!invoice) return { total: 0, legacy: 0 }
+  let total = 0
+  let legacy = 0
   for (const line of ret.lines) {
     if (!isLegacyReturnLine(line)) {
-      amount = safeAdd(amount, safeRound(safeAdd(line.returnDpp!, line.returnVat!, 2), 2), 2)
+      total = safeAdd(total, safeRound(safeAdd(line.returnDpp!, line.returnVat!, 2), 2), 2)
       continue
     }
     const snap = snapshotReturnLine({
@@ -203,9 +224,18 @@ function returnCommercialValue(
         taxAmount: invoice.taxAmount ?? 0,
       },
     })
-    amount = safeAdd(amount, safeRound(safeAdd(snap.returnDpp, snap.returnVat, 2), 2), 2)
+    const value = safeRound(safeAdd(snap.returnDpp, snap.returnVat, 2), 2)
+    total = safeAdd(total, value, 2)
+    legacy = safeAdd(legacy, value, 2)
   }
-  return amount
+  return { total, legacy }
+}
+
+function returnCommercialValue(
+  ret: SalesTargetReturnInput,
+  invoice: SalesTargetPaidInvoiceInput | undefined,
+): number {
+  return returnLineValues(ret, invoice).total
 }
 
 function invoiceMap(
@@ -271,16 +301,27 @@ export function buildSalesTargetAchievement(args: {
     .map((ret) => {
       const inv = invoiceById.get(ret.salesInvoiceId)
       if (!inv) return null
-      const raw = returnCommercialValue(ret, inv)
-      const scaled = safeRound(raw * (factorByInvoice.get(ret.salesInvoiceId) ?? 1), 2)
+      const values = returnLineValues(ret, inv)
+      const factor = factorByInvoice.get(ret.salesInvoiceId) ?? 1
       return {
         ret,
         invoice: inv,
-        deduction: scaled,
+        deduction: safeRound(values.total * factor, 2),
+        legacyDeduction: safeRound(values.legacy * factor, 2),
         isUnattributed: inv.salesEmployeeId === null,
       }
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
+  const legacyReturns: SalesTargetLegacyReturn[] = effectiveReturns
+    .filter((er) => er.legacyDeduction > 0)
+    .map((er) => ({
+      returnId: er.ret.id,
+      salesInvoiceId: er.ret.salesInvoiceId,
+      salesEmployeeId: er.invoice.salesEmployeeId,
+      label: SALES_TARGET_LEGACY_LABEL,
+      deductionAmount: er.legacyDeduction,
+    }))
+    .sort((a, b) => a.returnId - b.returnId)
 
   // Komponen per (penjual) di jendela arbitrer — basis komisi sama.
   const componentsIn = (employeeId: number, start: Date, end: Date) => {
@@ -293,17 +334,21 @@ export function buildSalesTargetAchievement(args: {
       invoiceCount += 1
     }
     let returnDeductionAmount = 0
+    let legacyReturnDeductionAmount = 0
     let returnCount = 0
     for (const er of effectiveReturns) {
       if (er.isUnattributed) continue
       if (er.invoice.salesEmployeeId !== employeeId) continue
       if (!inDayRange(er.ret.date, start, end)) continue
       returnDeductionAmount = safeAdd(returnDeductionAmount, er.deduction, 2)
+      legacyReturnDeductionAmount = safeAdd(legacyReturnDeductionAmount, er.legacyDeduction, 2)
       returnCount += 1
     }
     return {
       grossPaidAmount,
       returnDeductionAmount,
+      legacyReturnDeductionAmount,
+      hasLegacyReturnLines: legacyReturnDeductionAmount > 0,
       achievedAmount: safeSubtract(grossPaidAmount, returnDeductionAmount, 2),
       invoiceCount,
       returnCount,
@@ -336,6 +381,8 @@ export function buildSalesTargetAchievement(args: {
       gapAmount: contained ? safeSubtract(c.achievedAmount, t.targetAmount, 2) : null,
       invoiceCount: c.invoiceCount,
       returnCount: c.returnCount,
+      hasLegacyReturnLines: c.hasLegacyReturnLines,
+      legacyReturnDeductionAmount: c.legacyReturnDeductionAmount,
       periodFullyContained: contained,
       hasTarget: true,
       modifiedAfterPeriodStartAt: t.modifiedAfterPeriodStartAt,
@@ -347,6 +394,7 @@ export function buildSalesTargetAchievement(args: {
   let unattrCount = 0
   let unattrGross = 0
   let unattrDeduction = 0
+  let unattrLegacyDeduction = 0
   const ensureNoTargetRow = (employeeId: number): SalesTargetAchievementRow => {
     const existing = noTargetById.get(employeeId)
     if (existing) return existing
@@ -365,6 +413,8 @@ export function buildSalesTargetAchievement(args: {
       gapAmount: null,
       invoiceCount: 0,
       returnCount: 0,
+      hasLegacyReturnLines: false,
+      legacyReturnDeductionAmount: 0,
       periodFullyContained: false,
       hasTarget: false,
       modifiedAfterPeriodStartAt: null,
@@ -389,12 +439,15 @@ export function buildSalesTargetAchievement(args: {
     if (!inRange(er.ret.date, range.start, range.end)) continue
     if (er.isUnattributed) {
       unattrDeduction = safeAdd(unattrDeduction, er.deduction, 2)
+      unattrLegacyDeduction = safeAdd(unattrLegacyDeduction, er.legacyDeduction, 2)
       continue
     }
     const employeeId = er.invoice.salesEmployeeId
     if (employeeId === null || targetedIds.has(employeeId)) continue
     const row = ensureNoTargetRow(employeeId)
     row.returnDeductionAmount = safeAdd(row.returnDeductionAmount, er.deduction, 2)
+    row.legacyReturnDeductionAmount = safeAdd(row.legacyReturnDeductionAmount, er.legacyDeduction, 2)
+    row.hasLegacyReturnLines = row.legacyReturnDeductionAmount > 0
     row.returnCount += 1
     if (!row.salesEmployeeName && er.invoice.salesEmployeeName) row.salesEmployeeName = er.invoice.salesEmployeeName
   }
@@ -431,6 +484,8 @@ export function buildSalesTargetAchievement(args: {
       grossPaidAmount: unattrGross,
       returnDeductionAmount: unattrDeduction,
       achievedAmount: unattrAchieved,
+      hasLegacyReturnLines: unattrLegacyDeduction > 0,
+      legacyReturnDeductionAmount: unattrLegacyDeduction,
     },
     totalGrossPaidAmount,
     totalReturnDeductionAmount,
@@ -442,6 +497,7 @@ export function buildSalesTargetAchievement(args: {
         ? percent(totalAchievedForPercent, totalTargetAmount)
         : null,
     invoiceDeductionClampFindings,
+    legacyReturns,
     notice: SALES_TARGET_NOTICE,
   }
 }
