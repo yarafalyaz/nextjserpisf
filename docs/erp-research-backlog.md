@@ -19339,3 +19339,125 @@ BOT 6 (audit):
   bila pemilik proses meminta.
 - Mengubah nama/alur PurchaseRequest atau tombol stok minimum
   existing (BR-MR-16).
+
+## VONIS BOT 4 F-2026-10-22-050-V — Pengalihan hak atas tanah dan/atau bangunan PP 34/2016 (2026-10-22)
+Status: PUTUSAN FINAL BOT 4 (kartu t_ea2fc2ec). Menutup label
+BUTUH-VONIS-AKUNTAN di vonis F-038 putusan 6. Dokumen saja; tanpa
+kode/schema/migrasi. TIDAK ada fitur pengalihan hak di repo saat ini
+— vonis ini mengikat SEBELUM BOT 3/BOT 5 membangun, supaya tarif,
+akun, dan pihak penyetor tidak ditebak.
+### Sumber resmi (akses 2026-10-22)
+- PP Nomor 34 Tahun 2016 (berlaku, status Aktif di DJP):
+  https://pajak.go.id/id/peraturan/pajak-penghasilan-atas-penghasilan-dari-pengalihan-hak-atas-tanah-danatau-bangunan-dan
+  — Pasal 1 objek, Pasal 2 tarif+DPP, Pasal 3 setor sendiri,
+  Pasal 4 dipungut ke pemerintah, Pasal 6 pengecualian.
+- DJP, halaman Pemotongan PPh Pasal 4 ayat (2):
+  https://www.pajak.go.id/id/pemotongan-pajak-penghasilan-pasal-4-ayat-2-1
+  — setor sendiri 2,5% KJS 411128-402 SEBELUM akta ditandatangani;
+  penelitian formal PER-26/PJ/2018.
+- DJP, artikel pengecualian <Rp60 juta + SKB (pegawai DJP, pendapat
+  pribadi penulis — pendukung, bukan norma):
+  https://www.pajak.go.id/id/artikel/jual-beli-tanah-dibawah-rp60-juta-free-pph-asal
+  — PP 34/2016 Pasal 6 huruf a + PMK 261/PMK.03/2016 Pasal 10(2) SKB.
+- DJP, Kode Akun Pajak dan KJS:
+  https://pajak.go.id/id/kode-akun-pajak-dan-kode-jenis-setoran-pajak
+  — KJS 402 = PPh Final 4(2) Pengalihan Hak; KJS 403 = sewa (F-038).
+- File resmi DJP BPPU Excel-to-XML (pajak.go.id, 2025-01): master kode
+  objek bupot memuat 28-402-01 (2,5%), 28-402-02 (1%), 28-402-03 (0%).
+  Kode objek = snapshot dari master ini saat terbit, JANGAN pin
+  hardcode ke jenis (pola F-047); verifikasi ulang ke master Coretax
+  berlaku saat implementasi (Q-050-2).
+### Putusan
+1. REZIM: penghasilan pengalihan hak atas tanah dan/atau bangunan
+   (penjualan, tukar-menukar, pelepasan/penyerahan hak, lelang, hibah,
+   waris, cara lain disepakati) + PPJB beserta perubahannya = PPh
+   final PP 34/2016, TERPISAH dari sewa PP 34/2017 (F-038, 210206)
+   dan dari jasa konstruksi (28-409-xx, KJS 411128-409). Uji rezim:
+   ada peralihan HAK (kepemilikan/hak atas tanah berpindah) -> F-050;
+   hanya hak pakai berkala tanpa peralihan hak -> sewa F-038.
+2. TARIF x DPP (jumlah bruto nilai pengalihan, snapshot Decimal(15,2)
+   saat dokumen terbit; nilai per Pasal 2(2): keputusan pejabat /
+   risalah lelang / seharusnya diterima bila hubungan istimewa /
+   sesungguhnya diterima / harga pasar utk non-jual-beli):
+   2,5% umum (28-402-01); 1% Rumah Sederhana/Rusun Sederhana oleh WP
+   usaha pokok pengalihan (28-402-02); 0% ke pemerintah/BUMN/BUMD
+   penugasan khusus pengadaan tanah kepentingan umum (28-402-03).
+   Tarif hidup di master bertanggal efektif, BUKAN konstanta kode.
+3. PIHAK PEMBAYAR: prinsip SETOR SENDIRI oleh pihak yang mengalihkan
+   (pengalih/penjual), sebelum akta/keputusan/kesepakatan/risalah
+   lelang ditandatangani pejabat berwenang (Pasal 3 + halaman DJP).
+   Pengecualian pungut: pengalihan KEPADA pemerintah dipungut
+   bendahara/pejabat pembayar (Pasal 4), setor atas nama pengalih
+   sebelum pembayaran. WP usaha pokok: terutang saat pembayaran
+   diterima sebagian/seluruhnya, setor paling lambat tgl 15 bulan
+   berikutnya (Pasal 3 ayat (2)/(4) PP 34/2016). Karena setor-sendiri
+   = BUKAN potongan lawan transaksi, sistem JANGAN menerbitkan bupot
+   unifikasi atas nama sendiri untuk jalur setor-sendiri; bukti =
+   billing/NTPN KAP-KJS 411128-402 + hasil penelitian formal. Bupot
+   hanya relevan bila ISF memungut sebagai bendahara/pembayar
+   (jalur Pasal 4) — edge itu Q-050-1.
+4. AKUN: akun baru 210207 "Utang PPh 4(2) Pengalihan Hak
+   Tanah/Bangunan" (anak 2102 OCLY; bebas terverifikasi live run ini:
+   210201-210206 terisi, 210207 nol hasil grep base-data.ts).
+   DILARANG fallback ke 210202 (PPh 23) atau 210206 (sewa). Jenis
+   potong baru diusulkan `PPH42-ALIH` di WITHHOLDING_TAX_TYPES dengan
+   liabilityAccountCode "210207", tarif dari master bertanggal
+   efektif. Akun 210207 tidak ada/tidak aktif = jurnal GAGAL
+   fail-closed berisik (pola F-041).
+5. JURNAL sisi PENGALIH (ISF menjual/mengalihkan, setor sendiri):
+   pajak final = beban pengalih, mengurangi hasil bersih:
+   saat kewajiban lahir (penerimaan pembayaran / sebelum akta):
+   Dr Beban PPh Final Pengalihan Hak (akun beban pajak final
+   existing dari setting; kosong = fail-closed, JANGAN tebak kode)
+   / Cr 210207 sebesar tarif x DPP bruto snapshot.
+   Saat setor: Dr 210207 / Cr Kas-Bank sebesar NTPN terverifikasi.
+   Pendapatan penjualan aset + pelepasan nilai buku aset mengikuti
+   jurnal disposisi aset existing — vonis ini hanya mengatur kaki
+   pajaknya; DILARANG mengurangi DPP dengan nilai buku (DPP = bruto).
+6. JURNAL sisi PENERIMA (ISF membeli): PPh pengalihan adalah pajak
+   PENGALIH — pembeli TIDAK memotong dan TIDAK membebankan pajak
+   penjual sebagai biaya perolehan kecuali kontrak tertulis
+   menyatakan harga ditanggung pembeli (ditanggung = tambah harga
+   perolehan aset, bukan beban pajak ISF). Syarat bayar wajib sistem:
+   bukti setor penjual (NTPN/penelitian formal) terlampir sebelum
+   akta — tanpa bukti, pembayaran tahap akta DITAHAN (gerbang
+   dokumen, bukan jurnal). Bila ISF memungut sebagai bendahara
+   (Pasal 4): Dr Utang ke pengalih / Cr 210207 saat pungut, lalu
+   Dr 210207 / Cr Kas-Bank saat setor atas nama pengalih.
+7. PENGECUALIAN Pasal 6 (OP di bawah PTKP + bruto <Rp60.000.000 tidak
+   dipecah-pecah, hibah keluarga sedarah lurus satu derajat/badan
+   keagamaan-pendidikan-sosial-UMK tanpa hubungan usaha, waris,
+   pemerintah): pajak TIDAK terutang, tetapi status bebas wajib
+   dibuktikan SKB DJP tersimpan di dokumen; tanpa SKB sistem
+   menghitung normal (fail-closed), JANGAN bebas dari flag client.
+8. BATAS vs CAMPURAN: jual + sewa-kembali (sale-and-leaseback),
+   bangun-guna-serah, dan PPJB bertahap dengan perubahan pihak =
+   PERTANYAAN TERBUKA Q-050-3, di luar vonis ini; jangan dipaksakan
+   masuk 210206/210207 sebelum vonis lanjutan. BPHTB pembeli =
+   pajak daerah, BUKAN PPh 4(2), di luar cakupan (jangan campur KJS).
+### Falsifikasi wajib BOT 6
+- Jual tanah Rp1.000.000.000 umum -> pajak Rp25.000.000 kredit
+  210207 (bukan 210202/210206); ganti liabilityAccountCode ke 210206
+  = MERAH.
+- Rumah Sederhana oleh WP usaha pokok -> 1% (28-402-02); paksa tarif
+  master diubah sesudah dokumen terbit -> dokumen lama tetap
+  snapshot (edit master = MERAH bila mengubah dokumen terbit).
+- Setor-sendiri: sistem menerbitkan bupot unifikasi atas nama ISF
+  sendiri = MERAH; tanpa NTPN, jurnal setor lolos = MERAH.
+- Nonaktifkan 210207 -> jurnal pengakuan GAGAL fail-closed.
+- Klaim bebas <Rp60 juta tanpa SKB tersimpan -> pajak tetap dihitung;
+  bebas dari flag client saja = MERAH.
+- DPP dikurangi nilai buku aset -> MERAH (DPP bruto).
+### Pertanyaan terbuka bernama
+- Q-050-1 (Lead/BOT 3): apakah ISF akan pernah memungut sebagai
+  bendahara pemerintah (Pasal 4)? Tanpa kebutuhan nyata, bangun
+  hanya jalur setor-sendiri + gerbang bukti sisi beli.
+- Q-050-2 (BOT 3 saat implementasi): verifikasi master kode objek
+  Coretax berlaku (28-402-xx di atas dari file DJP 2025-01) +
+  perlakuan PPJB KJS 432 terpisah di manual Coretax DJP 2024 —
+  jangan satukan PPJB ke 402 tanpa verifikasi master saat build.
+- Q-050-3 (BOT 4 lanjutan): sale-and-leaseback / bangun-guna-serah /
+  perubahan pihak PPJB — vonis terpisah bila transaksi nyata muncul.
+Pemilik berikutnya: BOT 3 (seed 210207 + jenis PPH42-ALIH hanya
+sesudah Q-050-1 diputus Lead), BOT 6 (falsifikasi di atas), BOT 1
+(PUTUSAN Q-050-1). Tanpa implementasi dari vonis ini saja.
