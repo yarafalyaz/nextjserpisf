@@ -4869,16 +4869,27 @@ model CronLog {
 }
 
 model TransactionAttachment {
-  id            Int      @id @default(autoincrement())
-  referenceType String   @map("reference_type")
-  referenceId   Int      @map("reference_id")
+  id            Int       @id @default(autoincrement())
+  referenceType String    @map("reference_type")
+  referenceId   Int       @map("reference_id")
   filename      String
-  originalName  String   @map("original_name")
-  fileUrl       String   @map("file_url")
-  fileSize      Int      @map("file_size")
-  mimeType      String   @map("mime_type")
-  uploadedBy    Int?     @map("uploaded_by")
-  createdAt     DateTime @default(now()) @map("created_at")
+  originalName  String    @map("original_name")
+  fileUrl       String    @map("file_url")
+  fileSize      Int       @map("file_size")
+  mimeType      String    @map("mime_type")
+  uploadedBy    Int?      @map("uploaded_by")
+  // F-2026-10-24-096-S Opsi A (vonis Backend §3): kolom foto aditif nullable.
+  // photoCategory: intake|progress|defect|handover|other (BR-PHOTO-02);
+  // null baris lama dibaca `other` (BR-PHOTO-09), tidak ditebak ulang.
+  // verified*/published*: jejak QC (manage_qc_inspections) & terbit
+  // (complete_work_orders) — BR-PHOTO-06/08. Tanpa FK tahap baru: tahap
+  // ditunjuk referenceType+referenceId polimorfik existing.
+  photoCategory String?   @map("photo_category")
+  verifiedBy    Int?      @map("verified_by")
+  verifiedAt    DateTime? @map("verified_at")
+  publishedBy   Int?      @map("published_by")
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   @@index([referenceType, referenceId])
   @@index([uploadedBy])
