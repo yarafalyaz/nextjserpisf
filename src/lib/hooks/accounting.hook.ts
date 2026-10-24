@@ -7,6 +7,13 @@ import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
+import { DEFAULT_TRANSACTION_CODE, NOMINAL_VAT_RATE } from "@/lib/tax/tax-invoice";
+import {
+  buildDownPaymentReceiptLines,
+  buildSettlementReclass,
+  computeDownPaymentVatSnapshot,
+  snapshotFromDownPaymentRow,
+} from "@/lib/tax/down-payment-vat";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -301,9 +308,38 @@ export async function onSalesInvoicePosted(
         taxAmount: true,
         date: true,
         documentNo: true,
+        quotationId: true,
       },
     });
     if (!inv) throw new Error("Invoice tidak ditemukan");
+
+    // F-2026-10-25-004-V J-PL1: reklas PPN uang muka anti-dobel. Sigma
+    // snapshot DP confirmed tertaut quotation faktur ini; PPN dokumen
+    // lebih kecil dari Sigma = fail-closed (buildSettlementReclass).
+    // Tanpa DP bersnapshot (termasuk faktur tanpa quotation) = nol,
+    // jurnal existing persis seperti sebelumnya.
+    const dpVatRows =
+      inv.quotationId != null
+        ? await tx.downPayment.findMany({
+            where: { quotationId: inv.quotationId, status: "confirmed", vatAmount: { gt: 0 } },
+            select: { vatDpp: true, vatAmount: true },
+          })
+        : [];
+    const settlementReclass = buildSettlementReclass({
+      documentPpn: Number(inv.taxAmount ?? 0),
+      uangMuka: dpVatRows.map((r) => ({
+        dppUangMuka: Number(r.vatDpp ?? 0),
+        ppnUangMuka: Number(r.vatAmount ?? 0),
+      })),
+    });
+    const sigmaPpnUangMuka = settlementReclass.length
+      ? settlementReclass[0].debit
+      : 0;
+    if (sigmaPpnUangMuka > 0 && !settings.salesTaxAccountId) {
+      throw new Error(
+        "Akun PPN Keluaran (210201) harus dikonfigurasi untuk reklas PPN uang muka faktur pelunasan",
+      );
+    }
 
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
@@ -421,8 +457,8 @@ export async function onSalesInvoicePosted(
         description: `Invoice Posting ${inv.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: inv.totalAmount,
-        totalCredit: inv.totalAmount,
+        totalDebit: safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2),
+        totalCredit: safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2),
         createdBy: userId ?? null,
       },
     });
@@ -464,6 +500,23 @@ export async function onSalesInvoicePosted(
         credit: taxAmount,
         memo: "PPN Keluaran",
       });
+    }
+    // J-PL1 reklas: Dr 210201 Sigma PPN UM / Cr Piutang Sigma PPN UM —
+    // dalam jurnal yang sama, total kedua sisi naik berpasangan.
+    if (settlementReclass.length === 2) {
+      const accountByKey = {
+        salesTax: settings.salesTaxAccountId!,
+        receivable: settings.salesReceivableAccountId!,
+      } as const;
+      for (const line of settlementReclass) {
+        invoiceEntries.push({
+          journalId: journal.id,
+          accountId: accountByKey[line.account as "salesTax" | "receivable"],
+          debit: line.debit,
+          credit: line.credit,
+          memo: line.memo,
+        });
+      }
     }
     await tx.journalEntry.createMany({ data: invoiceEntries });
 
@@ -1710,6 +1763,7 @@ export async function onDownPaymentReceived(
 
   const dp = await db.downPayment.findUniqueOrThrow({
     where: { id: dpId },
+    include: { quotation: { select: { tax: true } } },
   });
 
   const existing = await db.journal.findFirst({
@@ -1743,6 +1797,43 @@ export async function onDownPaymentReceived(
 
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
+    // F-2026-10-25-004-V (vonis PR #760): bekukan snapshot PPN uang muka
+    // SEKALI saat jurnal terima lahir. DP yang sudah terjurnal (replay /
+    // legacy pra-fitur) tidak dibekukan belakangan — return awal di atas
+    // sudah menangani replay. Tarif/kode = default master existing
+    // (computeVatFromSellingPrice), dibekukan ke kolom DP.
+    let snapshot = snapshotFromDownPaymentRow(dp as never);
+    if (!snapshot) {
+      snapshot = computeDownPaymentVatSnapshot({
+        amount: Number(dp.amount),
+        quotationTax: Number((dp as { quotation?: { tax?: unknown } }).quotation?.tax ?? 0),
+        paymentDate: dp.paymentDate || new Date(),
+        transactionCode: DEFAULT_TRANSACTION_CODE,
+        nominalRate: NOMINAL_VAT_RATE,
+      });
+      await tx.downPayment.update({
+        where: { id: dpId },
+        data: {
+          vatTransactionCode: snapshot.transactionCode,
+          vatRate: snapshot.nominalRate,
+          vatDpp: snapshot.dppUangMuka,
+          vatAmount: snapshot.ppnUangMuka,
+          vatTaxPeriod: snapshot.taxPeriod,
+        },
+      });
+    }
+    if (snapshot.ppnUangMuka > 0 && !settings.salesTaxAccountId) {
+      throw new Error(
+        "Akun PPN Keluaran (210201) harus dikonfigurasi sebelum uang muka terutang PPN diterima",
+      );
+    }
+    const accountByKey = {
+      cashBank: settings.cashBankAccountId!,
+      downPaymentLiability: dpLiabilityAccountId!,
+      salesTax: settings.salesTaxAccountId ?? 0,
+      receivable: settings.salesReceivableAccountId ?? 0,
+    } as const;
+
     await tx.journal.create({
       data: {
         journalNumber,
@@ -1756,23 +1847,12 @@ export async function onDownPaymentReceived(
         totalCredit: dp.amount,
         createdBy: userId,
         entries: {
-          create: [
-            // Fix #27: Dr. Bank/Cash (bukan Piutang)
-            {
-              accountId: settings.cashBankAccountId!,
-              debit: dp.amount,
-              credit: 0,
-              memo: "Bank/Cash received",
-            },
-            // AUD-FIN-01: Cr. Kewajiban Uang Muka Penjualan 210102 (bukan
-            // Piutang 1103, bukan Revenue). DP = kewajiban sampai faktur posting.
-            {
-              accountId: dpLiabilityAccountId!,
-              debit: 0,
-              credit: dp.amount,
-              memo: "Uang Muka Penjualan",
-            },
-          ],
+          create: buildDownPaymentReceiptLines({ amount: Number(dp.amount), snapshot }).map((line) => ({
+            accountId: accountByKey[line.account],
+            debit: line.debit,
+            credit: line.credit,
+            memo: line.memo,
+          })),
         },
       },
     });

@@ -1119,6 +1119,12 @@ model TaxInvoice {
   vendorBillId         Int?         @map("vendor_bill_id")
   vendorId             Int?         @map("vendor_id")
   /**
+   * F-2026-10-25-004-V: FP uang muka (FP UM) tertaut DownPayment.
+   * Snapshot DPP/PPN FP UM hidup di baris ini (dpp/taxAmount/taxRate);
+   * snapshot DP asal dibekukan di DownPayment.vat*. SetNull pola existing.
+   */
+  downPaymentId        Int?         @map("down_payment_id")
+  /**
    * Self-FK ke faktur diganti; unik (satu pengganti per faktur).
    */
   replacesId           Int?         @unique @map("replaces_id")
@@ -1155,6 +1161,7 @@ model TaxInvoice {
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
   salesInvoice         SalesInvoice? @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+  downPayment          DownPayment? @relation(fields: [downPaymentId], references: [id], onDelete: SetNull)
   vendorBill           VendorBill?  @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
   vendor               Vendor?      @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   replaces             TaxInvoice?  @relation("TaxInvoiceReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
@@ -1168,6 +1175,7 @@ model TaxInvoice {
   @@index([creditPeriod], map: "idx_tax_invoices_credit_period")
   @@index([creditStatus], map: "idx_tax_invoices_credit_status")
   @@index([salesInvoiceId], map: "idx_tax_invoices_sales_invoice")
+  @@index([downPaymentId], map: "idx_tax_invoices_down_payment")
   @@index([vendorBillId], map: "idx_tax_invoices_vendor_bill")
   @@index([vendorId], map: "idx_tax_invoices_vendor")
   @@index([direction, creditStatus, creditPeriod], map: "idx_tax_invoices_spt_input")
@@ -1463,11 +1471,23 @@ model DownPayment {
   proofImage    String?   @map("proof_image")
   status        String    @default("pending")
   notes         String?   @db.Text
+  /**
+   * F-2026-10-25-004-V: snapshot PPN uang muka dibekukan saat confirm
+   * (vonis PR #760). Null = DP legacy pra-fitur / belum confirmed.
+   * vatAmount > 0 = terutang FP UM; kredit 210102 = amount - vatAmount.
+   * Edit master pajak sesudah confirm TIDAK mengubah snapshot ini.
+   */
+  vatTransactionCode String? @map("vat_transaction_code") @db.VarChar(2)
+  vatRate            Decimal? @map("vat_rate") @db.Decimal(5, 2)
+  vatDpp             Decimal? @map("vat_dpp") @db.Decimal(15, 2)
+  vatAmount          Decimal? @map("vat_amount") @db.Decimal(15, 2)
+  vatTaxPeriod       String? @map("vat_tax_period") @db.VarChar(7)
   createdBy     Int?      @map("created_by")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   customer      Customer  @relation(fields: [customerId], references: [id])
   quotation     Quotation @relation(fields: [quotationId], references: [id])
+  taxInvoices   TaxInvoice[]
 
   @@index([customerId], map: "down_payments_customer_id_fkey")
   @@index([quotationId], map: "down_payments_quotation_id_fkey")

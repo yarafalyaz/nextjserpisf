@@ -9,6 +9,10 @@ import {
   computeInvoiceThresholdSen,
   resolveInvoiceThresholdPercent,
 } from "@/lib/sales/invoice-threshold";
+import {
+  computeAllocationNet,
+  snapshotFromDownPaymentRow,
+} from "@/lib/tax/down-payment-vat";
 
 /**
  * Down Payment Hook - Observer pattern replacement.
@@ -179,6 +183,32 @@ export async function onDownPaymentConfirmed(
           if (!existingAllocJournal) {
             const allocJournalNo = await generateDocumentNumber("JRN");
             const allocAmount = allocSen / 100;
+            // F-2026-10-25-004-V J-PL2: alokasi DP terutang = reklas NETO
+            // PPN proporsional (snapshot DP beku). Kumulatif teralokasi
+            // termasuk alokasi ini (prePaid + alloc) -> penutup menyerap
+            // residu sen persis. DP non-kena / legacy (snapshot PPN 0)
+            // memakai proporsional yang sama dan menghasilkan kaki lama
+            // persis (net = bruto karena PPN snapshot nol).
+            const dpSnapshot = snapshotFromDownPaymentRow(dp as never);
+            const netAlloc = dpSnapshot
+              ? computeAllocationNet({
+                  allocAmount,
+                  previouslyAllocated: prePaidSen / 100,
+                  snapshot: dpSnapshot,
+                  dpAmount: Number(dp.amount),
+                })
+              : { netAmount: allocAmount, ppnPortion: 0 };
+            const dpTaxId = (dpSettings as { salesTaxAccountId?: number | null } | null)?.salesTaxAccountId ?? null;
+            if (netAlloc.ppnPortion > 0 && !dpTaxId) {
+              throw new Error(
+                "Akun PPN Keluaran (210201) belum dikonfigurasi — alokasi DP terutang ditolak",
+              );
+            }
+            const allocEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [
+              { accountId: dpLiabilityId, debit: allocAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
+              { accountId: dpTaxId ?? 0, debit: 0, credit: netAlloc.ppnPortion, memo: "Reklas PPN uang muka alokasi" },
+              { accountId: dpArId, debit: 0, credit: netAlloc.netAmount, memo: "Pelunasan piutang via uang muka" },
+            ].filter((e) => e.debit > 0 || e.credit > 0);
             await tx.journal.create({
               data: {
                 journalNumber: allocJournalNo,
@@ -192,10 +222,7 @@ export async function onDownPaymentConfirmed(
                 totalCredit: allocAmount,
                 createdBy: userId ?? null,
                 entries: {
-                  create: [
-                    { accountId: dpLiabilityId, debit: allocAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
-                    { accountId: dpArId, debit: 0, credit: allocAmount, memo: "Pelunasan piutang via uang muka" },
-                  ],
+                  create: allocEntries,
                 },
               },
             });
