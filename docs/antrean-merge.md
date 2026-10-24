@@ -15,7 +15,9 @@ terpenuhi. Tanpa secret, workflow itu selesai wajar tanpa memproses apa pun.
 ## Cara pakai
 
 1. Pastikan PR siap: tidak draft, tidak konflik.
-2. Beri label **`antrean-merge`**.
+2. Beri label **`antrean-merge`** — hanya sesudah verdict manusia/QA
+   tercatat di PR. Label ini adalah izin merge de-facto: siapa pun yang
+   bisa memasang label (izin triage/write) bisa memicu merge.
 3. Selesai — Lead menjalankan `scripts/antrean-merge.sh` (atau panggil
    dengan nomor PR: `scripts/antrean-merge.sh 780`). Jangan merge manual
    selama PR berlabel.
@@ -27,12 +29,20 @@ PR berlabel diproses satu per satu menurut urutan pembuatan (FIFO):
 1. `update-branch` **sebagai pemilik** menyamakan branch PR dengan `main`
    terbaru — karena aktornya pemilik, event `pull_request` terbit dan CI
    berjalan pada head termutakhir (syarat *strict* branch protection).
-2. Antrean menunggu 4 check wajib hijau dari rollup PR: Lint, Unit Tests,
-   Build Next.js, DB Integration Tests (batas tunggu 40 menit per PR).
-3. Squash merge + hapus branch dengan `--admin` — pola merge Lead selama
-   ini: penulis PR dan pemilik adalah akun yang sama, jadi syarat
-   1 approval memang hanya bisa dipenuhi lewat bypass admin, dan itu hanya
-   dilakukan sesudah check pada head termutakhir hijau.
+2. Antrean menunggu gerbang hijau di head yang terikat sesudah update:
+   4 check wajib protection (Lint, Unit Tests, Build Next.js, DB
+   Integration Tests) masing-masing lulus — atau ter-skip hanya bila diff
+   PR terbukti docs-only (semua berkas `.md` dari merge-base) — ditambah
+   SonarCloud lulus, dan Docker Image Build lulus bila diff menyentuh
+   jalur Docker yang sama dengan gating Detect Changes di `ci.yml`
+   (batas tunggu 40 menit per PR). Penilaian per nama check; head yang
+   bergerak di tengah penantian membatalkan putaran itu.
+3. Antrean memverifikasi ulang head sama dengan SHA yang lolos, lalu
+   squash merge + hapus branch dengan `--admin --match-head-commit` —
+   pola merge Lead selama ini: penulis PR dan pemilik adalah akun yang
+   sama, jadi syarat 1 approval memang hanya bisa dipenuhi lewat bypass
+   admin, dan itu hanya dilakukan sesudah check pada head termutakhir
+   hijau. `--match-head-commit` mengunci SHA yang benar-benar dicek.
 4. Lanjut ke PR berikutnya.
 
 Bila check gagal/timeout atau merge ditolak protection, label dicabut dan
