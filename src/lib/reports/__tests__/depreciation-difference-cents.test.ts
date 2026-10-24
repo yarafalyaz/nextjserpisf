@@ -15,13 +15,19 @@ function senAsset(index: number): DepreciationAssetInput {
     name: "Laptop",
     categoryName: "Elektronik",
     purchaseCost: 1.2,
-    currentValue: 1.2,
+    bookValue: 1.2,
     residualValue: 0,
     depreciationMethod: "straight_line",
     categoryDepreciationRate: null,
     categoryUsefulLife: 5,
     taxDepreciationRate: null,
-    taxUsefulLife: 4,
+    taxUsefulLife: null,
+    // Kelompok 1 eksplisit: fiskal 1.2/4thn/tahun = 0.30.
+    taxGroupCode: "GROUP_1",
+    taxTypeListed: true,
+    taxDjpDetermination: false,
+    fiscalMethod: "straight_line",
+    purchaseDate: new Date(Date.UTC(2023, 0, 15)),
   }
 }
 
@@ -29,6 +35,7 @@ describe("buildDepreciationDifference presisi sen", () => {
   it("total akuntansi/fiskal/selisih 17 aset sen persis, bukan float mentah", () => {
     const result = buildDepreciationDifference(
       Array.from({ length: 17 }, (_, i) => senAsset(i)),
+      2024,
     )
 
     expect(result.totals.accountingAnnual).toBe(4.08)

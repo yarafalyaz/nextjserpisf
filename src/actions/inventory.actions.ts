@@ -9,6 +9,7 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
 import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
+import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -20,7 +21,26 @@ import {
   onTransferReceived as onInventoryTransferReceived,
 } from "@/lib/hooks/inventory-transfer.hook";
 import { onMaterialIssueCompleted as onMaterialIssueStock, resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import { refreshMaterialRequestFulfillmentTx } from "@/lib/services/material-request.service";
+import {
+  TRANSFER_SHORTAGE_REASON,
+  buildShortageLines,
+  carriedCostMapFromOutMoves,
+  groupReceivedSerialsByLine,
+  parseStoredSerials,
+  type ReceiptLineInput,
+  type TransferLineState,
+} from "@/lib/services/inventory-transfer-receipt.service";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { createInstalledPartsForMaterialIssue } from "@/lib/services/installed-part.service";
 import { validateScrapInput } from "@/lib/services/scrap-classification";
+import {
+  SCRAP_REVIEW_STATUS_DONE,
+  SCRAP_REVIEW_STATUS_PENDING,
+  validateScrapReview,
+  validateScrapWeightKg,
+  validateUsableRemnant,
+} from "@/lib/services/scrap-physical";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
@@ -77,6 +97,47 @@ function normalizeQtyItems(
     .filter((it) => it.itemId > 0);
 }
 
+type WorkOrderItemInput = QtyItemInput & {
+  cost?: number | string;
+  description?: string;
+  status?: string;
+};
+
+/**
+ * Daftar baris perintah kerja dari JSON `items` (create+update, satu sumber).
+ * `qty` -> `parseLocaleNumber`, `cost` (nominal uang) -> `parseMoneyAmount`;
+ * cost kosong tetap 0, tak terbaca/negatif ditolak berpesan. Placeholder
+ * itemId <= 0 tetap dibuang; description/status diteruskan apa adanya.
+ */
+function normalizeWorkOrderItems(
+  raw: string | null | undefined,
+): {
+  itemId: number;
+  qty: number;
+  cost: number;
+  description?: string;
+  status?: string;
+}[] {
+  return (safeJsonParse<WorkOrderItemInput[]>(raw) ?? []).flatMap((it) => {
+    const base = normalizeQtyItem(it);
+    if (base.itemId === 0) return [];
+    const cost =
+      it.cost === undefined || it.cost === null || it.cost === ""
+        ? 0
+        : parseMoneyAmount(it.cost as string | number);
+    if (cost === null || cost < 0)
+      throw new Error("Biaya satuan tidak valid");
+    return [
+      {
+        ...base,
+        cost,
+        ...(it.description !== undefined ? { description: it.description } : {}),
+        ...(it.status !== undefined ? { status: it.status } : {}),
+      },
+    ];
+  });
+}
+
 async function warehouseScopeFor(user: WarehouseActionUser) {
   return getWarehouseScope({ id: String(user.id), roles: user.roles });
 }
@@ -121,7 +182,6 @@ function assertUniqueAdjustmentItems(items: { itemId: number }[]) {
   }
 }
 
-
 // ID desimal murni saja — pola repo (/^[0-9]+$/ di route workflow/print/
 // attachments/notifications + invoice-exchange.actions.ts parseId). Number()
 // mentah menerima "0x10"->16, "1e3"->1000, "0b101"->5, " 5"->5: ID tak
@@ -140,6 +200,54 @@ function parseStrictQty(raw: FormDataEntryValue | null): number | null {
   if (!/^[0-9]+(\.[0-9]+)?$/.test(str)) return null;
   const value = Number(str);
   return Number.isFinite(value) ? value : null;
+}
+
+type AdjustmentItemInput = {
+  itemId: number;
+  currentQty?: number | string;
+  newQty: number | string;
+  unitCost?: number | string;
+  reason?: string;
+  serialNumbers?: string[];
+};
+
+/**
+ * Normalisasi satu baris item penyesuaian stok dari JSON `items`.
+ * `unitCost` nominal uang + `newQty` qty: wajib parser repo
+ * (`parseMoneyAmount`/`parseLocaleNumber`) — `Number("2.000.000")` = 2 dan
+ * `Number("2.000")` = 2 merusak `unitCost`/`totalCost`/`actualQty` diam-diam
+ * (pola sama createRemnant di file ini). Kosong/tak terbaca/negatif ditolak
+ * berpesan, bukan diam-diam 0; kosong `unitCost` tetap 0 (biaya opsional).
+ */
+function normalizeAdjustmentItem(it: AdjustmentItemInput): {
+  itemId: number;
+  actualQty: number;
+  unitCost: number;
+  reason?: string;
+  serialNumbers?: string[];
+} {
+  // Baris tanpa newQty (fixture/klien lama qty/cost) berperilaku lama: 0.
+  const actualQty =
+    it.newQty === undefined || it.newQty === null || it.newQty === ""
+      ? 0
+      : parseLocaleNumber(it.newQty as string | number);
+  if (actualQty === null)
+    throw new Error("Kuantitas fisik (actual) tidak valid");
+  if (actualQty < 0)
+    throw new Error("Kuantitas fisik (actual) tidak boleh negatif");
+  const unitCost =
+    it.unitCost === undefined || it.unitCost === null || it.unitCost === ""
+      ? 0
+      : parseMoneyAmount(it.unitCost as string | number);
+  if (unitCost === null || unitCost < 0)
+    throw new Error("Biaya satuan tidak valid");
+  return {
+    itemId: Number(it.itemId),
+    actualQty,
+    unitCost,
+    reason: it.reason,
+    serialNumbers: it.serialNumbers,
+  };
 }
 
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
@@ -161,24 +269,15 @@ export async function createStockAdjustment(formData: FormData) {
     const documentNo = await generateDocumentNumber("ADJ");
 
     const adjItems = (
-      safeJsonParse<
-        {
-          itemId: number;
-          currentQty: number;
-          newQty: number;
-          unitCost: number;
-          reason?: string;
-          serialNumbers?: string[];
-        }[]
-      >(v.items ?? null) ?? []
+      safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
     assertUniqueAdjustmentItems(adjItems);
-
+    const adjRows = adjItems.map(normalizeAdjustmentItem);
 
     // Fetch latest system quantity for each item in the warehouse to prevent
     // client-side tampering of 'currentQty'.
     // Since Silengkap calculates stock dynamically from StockMove:
-    const itemIds = adjItems.map((it) => Number(it.itemId));
+    const itemIds = adjRows.map((it) => it.itemId);
     const stockMoves = await prisma.stockMove.groupBy({
       by: ["itemId", "impact"],
       where: {
@@ -210,20 +309,17 @@ export async function createStockAdjustment(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: adjItems.map((it) => {
-            const systemQty = Number(stockMap.get(Number(it.itemId)) || 0);
-            const actualQty = Number(it.newQty || 0);
-            if (actualQty < 0)
-              throw new Error("Kuantitas fisik (actual) tidak boleh negatif");
-            const difference = safeSubtract(actualQty, systemQty, 0);
+          create: adjRows.map((it) => {
+            const systemQty = Number(stockMap.get(it.itemId) || 0);
+            const difference = safeSubtract(it.actualQty, systemQty, 0);
             return {
-              itemId: Number(it.itemId),
+              itemId: it.itemId,
               serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
               systemQty,
-              actualQty,
+              actualQty: it.actualQty,
               difference,
-              unitCost: Number(it.unitCost || 0),
-              totalCost: safeMultiply(difference, Number(it.unitCost || 0), 0),
+              unitCost: it.unitCost,
+              totalCost: safeMultiply(difference, it.unitCost, 0),
               notes: it.reason || null,
             };
           }),
@@ -297,6 +393,89 @@ export async function processStockAdjustment(adjustmentId: number) {
 
     try {
       await prisma.$transaction(async (tx) => {
+        // F-2026-10-22-081-S cabang penutupan selisih transfer (Q-TP-3):
+        // adjustment tertaut transfer diproses sebagai JURNAL SAJA lewat
+        // service existing (akun kosong = throw = rollback, AC-TP-5).
+        // Sisa dihitung ULANG server-side dari baris transfer + carried
+        // cost OUT di dalam tx — angka baris adjustment tidak dipercaya.
+        // Nol StockMove/layer: stok sisa sudah OUT dari sumber dan tidak
+        // pernah masuk tujuan. Transfer menjadi received di tx yang sama.
+        if (adjustment.inventoryTransferId != null) {
+          if (adjustment.reason !== TRANSFER_SHORTAGE_REASON) {
+            throw new Error("Penyesuaian tertaut transfer wajib beralasan \"selisih transfer\".");
+          }
+          const transferId = adjustment.inventoryTransferId;
+          await tx.$queryRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
+          const transfer = await tx.inventoryTransfer.findUniqueOrThrow({
+            where: { id: transferId },
+            include: { items: true },
+          });
+          if (transfer.status !== "processed" && transfer.status !== "partially_received") {
+            throw new Error("Transfer tertaut sudah tertutup; penutupan selisih tidak bisa diproses.");
+          }
+          const [receiptItems, outMoves] = await Promise.all([
+            tx.inventoryTransferReceiptItem.findMany({
+              where: { receipt: { inventoryTransferId: transferId } },
+              select: { inventoryTransferItemId: true, serialNumbers: true },
+            }),
+            tx.stockMove.findMany({
+              where: {
+                referenceType: "InventoryTransfer",
+                referenceId: transferId,
+                impact: "OUT",
+                status: "posted",
+              },
+              select: { itemId: true, cost: true },
+            }),
+          ]);
+          const shortage = buildShortageLines(
+            transfer.items.map((it) => ({
+              id: it.id,
+              itemId: it.itemId,
+              qty: Number(it.qty),
+              receivedQty: Number(it.receivedQty),
+              serialNumbers: parseStoredSerials(it.serialNumbers),
+            })),
+            groupReceivedSerialsByLine(receiptItems),
+            carriedCostMapFromOutMoves(outMoves),
+          );
+          if (shortage.length === 0) {
+            throw new Error("Transfer tertaut tidak lagi memiliki sisa untuk ditutup.");
+          }
+          await stockJournalService.onStockAdjustment(
+            tx,
+            shortage.map((line) => ({
+              qty: -line.remainingQty,
+              cost: line.unitCost,
+              difference: -line.remainingQty,
+            })),
+            adjustment.documentNo,
+            adjustmentId,
+            Number(user.id),
+            adjustment.date,
+          );
+          const closureJournal = await tx.journal.findFirst({
+            where: { referenceType: "StockAdjustment", referenceId: adjustmentId, deletedAt: null },
+            orderBy: { id: "desc" },
+            select: { id: true },
+          });
+          if (!closureJournal) {
+            throw new Error("Jurnal penutupan selisih tidak terbentuk; penutupan dibatalkan.");
+          }
+          await tx.stockAdjustment.update({
+            where: { id: adjustmentId },
+            data: { status: "processed", journalId: closureJournal.id },
+          });
+          await tx.inventoryTransfer.update({
+            where: { id: transferId },
+            data: { status: "received" },
+          });
+          if (transfer.materialRequestId) {
+            await refreshMaterialRequestFulfillmentTx(tx, transfer.materialRequestId);
+          }
+          return;
+        }
+
         // Hook creates Stock Moves IN/OUT per item + Accounting journal
         await onStockAdjustmentStock(adjustmentId, Number(user.id), tx);
 
@@ -478,29 +657,118 @@ export async function processInventoryTransfer(transferId: number) {
   }
 }
 
-export async function receiveInventoryTransfer(transferId: number) {
+/**
+ * Payload kejadian terima parsial (F-2026-10-22-081-S). FormData kosong /
+ * tanpa field items = perilaku lama terima penuh (kompatibel pemanggil
+ * existing). Field: receivedDate (dateOnly, default hari ini),
+ * idempotencyKey (wajib per submit), items JSON
+ * [{transferItemId, qty, serialNumbers?, batchAllocations?}].
+ */
+function parseReceiptFormData(formData: FormData | undefined): {
+  receivedDate: Date;
+  idempotencyKey: string;
+  lines: ReceiptLineInput[];
+} | null {
+  if (!formData) return null;
+  const rawItems = formData.get("items");
+  const rawKey = formData.get("idempotencyKey");
+  if ((rawItems === null || rawItems === "") && (rawKey === null || rawKey === "")) return null;
+
+  const idempotencyKey = String(rawKey ?? "").trim();
+  if (idempotencyKey.length < 8 || idempotencyKey.length > 191) {
+    throw new Error("Kunci idempotency penerimaan wajib diisi (8-191 karakter).");
+  }
+  const rawDate = formData.get("receivedDate");
+  let receivedDate = new Date();
+  if (rawDate !== null && rawDate !== "") {
+    const parsedDate = dateOnly.safeParse(String(rawDate));
+    if (!parsedDate.success) throw new Error("Tanggal terima tidak valid.");
+    receivedDate = wibDateToUtcMidnight(parsedDate.data);
+  }
+  const parsedItems = safeJsonParse<
+    {
+      transferItemId?: number | string;
+      qty?: number | string;
+      serialNumbers?: unknown;
+      batchAllocations?: unknown;
+    }[]
+  >(rawItems === null ? null : String(rawItems));
+  if (!Array.isArray(parsedItems)) throw new Error("Baris penerimaan tidak valid.");
+  const lines: ReceiptLineInput[] = parsedItems.map((it) => {
+    const transferItemId = parseLocaleNumber(it.transferItemId as string | number);
+    if (transferItemId === null || !Number.isInteger(transferItemId) || transferItemId <= 0) {
+      throw new Error("Baris transfer tidak valid.");
+    }
+    const qty = parseLocaleNumber(it.qty as string | number);
+    if (qty === null) throw new Error("Qty diterima tidak valid.");
+    const serialNumbers = Array.isArray(it.serialNumbers)
+      ? it.serialNumbers.map((s) => String(s))
+      : undefined;
+    const batchAllocations = Array.isArray(it.batchAllocations)
+      ? it.batchAllocations.map((b) => {
+          const alloc = (b ?? {}) as { batchNumber?: unknown; qty?: unknown };
+          const batchQty = parseLocaleNumber(alloc.qty as string | number);
+          if (batchQty === null) throw new Error("Qty alokasi batch tidak valid.");
+          return { batchNumber: String(alloc.batchNumber ?? ""), qty: batchQty };
+        })
+      : undefined;
+    return {
+      transferItemId,
+      qty,
+      ...(serialNumbers ? { serialNumbers } : {}),
+      ...(batchAllocations ? { batchAllocations } : {}),
+    };
+  });
+  return { receivedDate, idempotencyKey, lines };
+}
+
+export async function receiveInventoryTransfer(transferId: number, formData?: FormData) {
   try {
     const user = await requirePermission("edit_inventory_transfers");
+
+    const receiptInput = parseReceiptFormData(formData);
 
     const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
     });
 
-    // Lapis-2: gagal terlihat bila tanggal dokumen di periode tertutup.
-    await assertPeriodOpen(transfer.date);
+    // Retry submit yang sama (BR-TP-06): kejadian sudah tercatat -> sukses
+    // idempoten tanpa mutasi ulang. Kunci milik transfer lain = tabrakan.
+    if (receiptInput) {
+      const prior = await prisma.inventoryTransferReceipt.findUnique({
+        where: { idempotencyKey: receiptInput.idempotencyKey },
+        select: { inventoryTransferId: true },
+      });
+      if (prior) {
+        if (prior.inventoryTransferId !== transferId) {
+          throw new Error("Kunci idempotency sudah dipakai penerimaan transfer lain.");
+        }
+        return { success: true, idempotent: true };
+      }
+    }
+
+    // Lapis-2: gagal terlihat bila tanggal KEJADIAN terima (parsial) atau
+    // tanggal dokumen (penuh, perilaku existing) di periode tertutup.
+    await assertPeriodOpen(receiptInput ? receiptInput.receivedDate : transfer.date);
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, transfer.destinationWarehouseId);
 
-    if (transfer.status !== "processed") {
-      throw new Error("Transfer hanya bisa di-receive dari status processed");
+    const receivableStatuses = receiptInput ? ["processed", "partially_received"] : ["processed"];
+    if (!receivableStatuses.includes(transfer.status)) {
+      throw new Error(
+        receiptInput
+          ? "Transfer hanya bisa diterima dari status processed atau partially_received"
+          : "Transfer hanya bisa di-receive dari status processed",
+      );
     }
+    const priorStatus = transfer.status;
 
     // Atomic conditional claim — serialize concurrent receive requests; only one
     // caller creates IN stock moves; duplicates get a clean error instead of
     // silently doubling the inbound movement.
     const claim = await prisma.inventoryTransfer.updateMany({
-      where: { id: transferId, status: "processed" },
+      where: { id: transferId, status: priorStatus },
       data: { status: "receiving" },
     });
     if (claim.count === 0) {
@@ -517,25 +785,50 @@ export async function receiveInventoryTransfer(transferId: number) {
 
     try {
       await prisma.$transaction(async (tx) => {
-        // Hook creates IN stock moves/layers (idempotent); action owns status received.
-        // Both run in one tx so a failed status update rolls back the inbound stock —
-        // otherwise stock could be added while the transfer stays "receiving" and gets
-        // restored to "processed" below, allowing a re-receive to double the inbound.
-        await onInventoryTransferReceived(transferId, Number(user.id), tx);
+        // Hook creates IN stock moves/layers; action owns the final status.
+        // Both run in one tx so a failed status update rolls back the inbound
+        // stock — otherwise stock could be added while the transfer stays
+        // "receiving" and gets restored below, allowing a re-receive to
+        // double the inbound.
+        const nextStatus = await onInventoryTransferReceived(
+          transferId,
+          Number(user.id),
+          tx,
+          receiptInput ?? undefined,
+        );
 
         await tx.inventoryTransfer.update({
           where: { id: transferId },
-          data: { status: "received" },
+          data: { status: nextStatus ?? "received" },
         });
+
+        // F-078-S BR-MR-04: permintaan tertaut dihitung ulang dari qty
+        // DITERIMA kumulatif dalam tx yang sama (bukan dari transfer lahir).
+        if (transfer.materialRequestId) {
+          await refreshMaterialRequestFulfillmentTx(tx, transfer.materialRequestId);
+        }
       });
     } catch (e) {
-      // Receiving failed after the claim flipped processed -> receiving. Restore
-      // the claim so the receiving can be retried instead of being stranded in
-      // "receiving".
+      // Receiving failed after the claim flipped to "receiving". Restore the
+      // claim so the receiving can be retried instead of being stranded in
+      // "receiving" (F-081-S: pulihkan ke status sebelum kejadian ini).
       await prisma.inventoryTransfer.updateMany({
         where: { id: transferId, status: "receiving" },
-        data: { status: "processed" },
+        data: { status: priorStatus },
       });
+      // Balapan retry: unique idempotencyKey menabrak di dalam tx berarti
+      // kejadian yang sama sudah tercatat oleh request pemenang.
+      if (
+        receiptInput &&
+        e instanceof Error &&
+        /idempotency/i.test(e.message) &&
+        (await prisma.inventoryTransferReceipt.findUnique({
+          where: { idempotencyKey: receiptInput.idempotencyKey },
+          select: { inventoryTransferId: true },
+        }))?.inventoryTransferId === transferId
+      ) {
+        return { success: true, idempotent: true };
+      }
       throw e;
     }
 
@@ -551,6 +844,144 @@ export async function receiveInventoryTransfer(transferId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[receiveInventoryTransfer]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/** Keadaan baris + serial sudah diterima + carried cost OUT untuk penutupan. */
+async function loadTransferShortageState(transferId: number) {
+  const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
+    where: { id: transferId },
+    include: { items: true },
+  });
+  const [receiptItems, outMoves] = await Promise.all([
+    prisma.inventoryTransferReceiptItem.findMany({
+      where: { receipt: { inventoryTransferId: transferId } },
+      select: { inventoryTransferItemId: true, serialNumbers: true },
+    }),
+    prisma.stockMove.findMany({
+      where: {
+        referenceType: "InventoryTransfer",
+        referenceId: transferId,
+        impact: "OUT",
+        status: "posted",
+      },
+      select: { itemId: true, cost: true },
+    }),
+  ]);
+  const lineStates: TransferLineState[] = transfer.items.map((it) => ({
+    id: it.id,
+    itemId: it.itemId,
+    qty: Number(it.qty),
+    receivedQty: Number(it.receivedQty),
+    serialNumbers: parseStoredSerials(it.serialNumbers),
+  }));
+  return {
+    transfer,
+    shortage: buildShortageLines(lineStates, groupReceivedSerialsByLine(receiptItems), carriedCostMapFromOutMoves(outMoves)),
+  };
+}
+
+/**
+ * Tutup Selisih (F-2026-10-22-081-S §1 langkah 4): lahirkan DRAF
+ * StockAdjustment alasan persis "selisih transfer" tertaut transfer ini
+ * di gudang tujuan. Transfer menjadi received HANYA saat draf itu
+ * diproses (lihat cabang penutupan di processStockAdjustment); jurnal
+ * lahir di titik itu saja (BR-TP-05). Satu draf aktif per transfer.
+ */
+export async function closeInventoryTransferShortage(transferId: number) {
+  try {
+    const user = await requirePermission("create_stock_adjustments");
+
+    const { transfer, shortage } = await loadTransferShortageState(transferId);
+
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, transfer.destinationWarehouseId);
+
+    if (transfer.status !== "processed" && transfer.status !== "partially_received") {
+      throw new Error("Tutup selisih hanya untuk transfer yang masih dalam perjalanan.");
+    }
+    if (shortage.length === 0) {
+      throw new Error("Transfer ini tidak memiliki sisa belum diterima untuk ditutup.");
+    }
+
+    const activeClosure = await prisma.stockAdjustment.findFirst({
+      where: {
+        inventoryTransferId: transferId,
+        status: { in: ["draft", "processing", "processed"] },
+        deletedAt: null,
+      },
+      select: { id: true, documentNo: true, status: true },
+    });
+    if (activeClosure) {
+      throw new Error(
+        `Penutupan selisih untuk transfer ini sudah ada (${activeClosure.documentNo}, status ${activeClosure.status}).`,
+      );
+    }
+
+    const date = new Date();
+    await assertPeriodOpen(date);
+
+    // Agregasi per item (penjaga baris adjustment: satu baris per item).
+    const byItem = new Map<number, { qty: number; received: number; unitCost: number; serials: string[] }>();
+    for (const line of shortage) {
+      const agg = byItem.get(line.itemId) ?? { qty: 0, received: 0, unitCost: line.unitCost, serials: [] };
+      agg.qty += line.remainingQty;
+      agg.serials.push(...line.serialNumbers);
+      byItem.set(line.itemId, agg);
+    }
+    const sentByItem = new Map<number, { qty: number; receivedQty: number }>();
+    for (const it of transfer.items) {
+      const agg = sentByItem.get(it.itemId) ?? { qty: 0, receivedQty: 0 };
+      agg.qty += Number(it.qty);
+      agg.receivedQty += Number(it.receivedQty);
+      sentByItem.set(it.itemId, agg);
+    }
+
+    const documentNo = await generateDocumentNumber("ADJ");
+    const adjustment = await prisma.stockAdjustment.create({
+      data: {
+        documentNo,
+        slug: await nextSlug("stockAdjustment", documentNo),
+        warehouseId: transfer.destinationWarehouseId,
+        date,
+        reason: TRANSFER_SHORTAGE_REASON,
+        type: "decrease",
+        notes: `Penutupan selisih transfer ${transfer.documentNo}`,
+        status: "draft",
+        createdBy: Number(user.id),
+        inventoryTransferId: transferId,
+        items: {
+          create: Array.from(byItem.entries()).map(([itemId, agg]) => {
+            const sent = sentByItem.get(itemId) ?? { qty: agg.qty, receivedQty: 0 };
+            return {
+              itemId,
+              systemQty: sent.qty,
+              actualQty: sent.receivedQty,
+              difference: -agg.qty,
+              unitCost: agg.unitCost,
+              totalCost: -agg.qty * agg.unitCost,
+              serialNumbers: agg.serials.length > 0 ? agg.serials : undefined,
+              notes: TRANSFER_SHORTAGE_REASON,
+            };
+          }),
+        },
+      },
+    });
+
+    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
+    await logActivity(
+      "create",
+      "StockAdjustment",
+      adjustment.id,
+      `Membuat penutupan selisih transfer #${transferId}`,
+    );
+    revalidatePath("/inventaris/penyesuaian");
+    revalidatePath("/inventaris/transfer");
+    return { success: true, id: adjustment.id, slug: adjustment.slug };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[closeInventoryTransferShortage]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -765,6 +1196,11 @@ export async function completeMaterialIssue(issueId: number) {
       await prisma.$transaction(async (tx) => {
         // Hook creates Stock Moves OUT per item + Accounting journal
         await onMaterialIssueStock(issueId, Number(user.id), tx);
+        // F-2026-10-22-072-S (Q-IP-1): MI proyek tanpa WO melahirkan
+        // registri part di tx yang sama bila proyek ber-kendaraan; MI
+        // taut WO dilewati service (lahir saat WO selesai), MI bebas
+        // tidak ditebak kendaraannya.
+        await createInstalledPartsForMaterialIssue(issueId, tx);
       });
     } catch (e) {
       // Complete failed after the claim flipped draft -> processing. The hook
@@ -811,17 +1247,7 @@ export async function createWorkOrder(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("WO");
-    const itemsJson = v.items ?? null;
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          cost: number;
-          description?: string;
-          status?: string;
-        }[]
-      >(itemsJson) ?? [];
+    const items = normalizeWorkOrderItems(v.items ?? null);
 
     const wo = await prisma.workOrder.create({
       data: {
@@ -839,15 +1265,13 @@ export async function createWorkOrder(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              itemId: i.itemId,
-              qty: i.qty,
-              cost: i.cost || 0,
-              description: i.description || null,
-              status: i.status || "pending",
-            })),
+          create: items.map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
         },
       },
     });
@@ -997,17 +1421,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       if (reasonError) return { success: false, error: reasonError };
     }
 
-    const itemsJson = v.items ?? null;
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          cost: number;
-          description?: string;
-          status?: string;
-        }[]
-      >(itemsJson) ?? [];
+    const items = normalizeWorkOrderItems(v.items ?? null);
 
     await prisma.$transaction(async (tx) => {
       // Re-verify status inside the transaction (TOCTOU guard): two concurrent
@@ -1041,16 +1455,14 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       await tx.workOrderItem.deleteMany({ where: { workOrderId: id } });
       if (items.length > 0) {
         await tx.workOrderItem.createMany({
-          data: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              workOrderId: id,
-              itemId: i.itemId,
-              qty: i.qty,
-              cost: i.cost || 0,
-              description: i.description || null,
-              status: i.status || "pending",
-            })),
+          data: items.map((i) => ({
+            workOrderId: id,
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
         });
       }
 
@@ -1159,7 +1571,7 @@ export async function reviseWorkOrderItems(input: {
       };
     }
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       // Klaim kondisional: serialkan revisi konkuren pada WO yang sama.
       const claim = await tx.workOrder.updateMany({
         where: { id: v.workOrderId, status: "in_progress" },
@@ -1172,6 +1584,7 @@ export async function reviseWorkOrderItems(input: {
         throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
       }
 
+      let released = 0;
       if (replacedIds.length > 0) {
         const targets = await tx.workOrderItem.findMany({
           where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
@@ -1219,7 +1632,7 @@ export async function reviseWorkOrderItems(input: {
         // F-2026-10-21-012 inti (AC-RES-8): baris diganti → sisa reservasi
         // aktif baris itu released sejumlah belum terpakai; yang sudah
         // consumed tak berubah (guard di atas menolak baris ter-issue).
-        await releaseReservationsForReplacedItemsTx(tx, {
+        released = await releaseReservationsForReplacedItemsTx(tx, {
           workOrderId: v.workOrderId,
           workOrderItemIds: replacedIds,
         });
@@ -1240,6 +1653,7 @@ export async function reviseWorkOrderItems(input: {
 
       // F-2026-10-22-063-S: snapshot fitment baris baru revisi.
       await stampWorkOrderFitmentSnapshot(tx, v.workOrderId);
+      return released;
     });
 
     // Q-LEAD-3: geser endDate di WO berjalan → baris histori yang sama persis
@@ -1262,7 +1676,8 @@ export async function reviseWorkOrderItems(input: {
       `Merevisi item perintah kerja #${v.workOrderId}: ${replacedIds.length} diganti, ${v.newItems.length} baru`,
     );
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada baris terdampak terlepas.
+    return { success: true, releaseNotice: reservationReleaseNotice("revise", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[reviseWorkOrderItems]", getErrorMessage(e) || e);
@@ -1580,21 +1995,13 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
     // Fix #2: Jangan generate documentNo baru saat update
     const adjItems = (
-      safeJsonParse<
-        {
-          itemId: number;
-          currentQty: number;
-          newQty: number;
-          unitCost: number;
-          reason?: string;
-          serialNumbers?: string[];
-        }[]
-      >(v.items ?? null) ?? []
+      safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
     assertUniqueAdjustmentItems(adjItems);
+    const adjRows = adjItems.map(normalizeAdjustmentItem);
 
     const warehouseId = v.warehouseId;
-    const itemIds = adjItems.map((it) => Number(it.itemId));
+    const itemIds = adjRows.map((it) => it.itemId);
     const stockMoves = await prisma.stockMove.groupBy({
       by: ["itemId", "impact"],
       where: { warehouseId, itemId: { in: itemIds }, status: "posted" },
@@ -1634,24 +2041,17 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
           type: v.type || "increase",
           notes: v.notes ?? null,
           items: {
-            create: adjItems.map((it) => {
-              const systemQty = Number(stockMap.get(Number(it.itemId)) || 0);
-              const actualQty = Number(it.newQty || 0);
-              if (actualQty < 0)
-                throw new Error("Kuantitas fisik (actual) tidak boleh negatif");
-              const difference = safeSubtract(actualQty, systemQty, 0);
+            create: adjRows.map((it) => {
+              const systemQty = Number(stockMap.get(it.itemId) || 0);
+              const difference = safeSubtract(it.actualQty, systemQty, 0);
               return {
-                itemId: Number(it.itemId),
+                itemId: it.itemId,
                 systemQty,
-                actualQty,
+                actualQty: it.actualQty,
                 difference,
-                unitCost: Number(it.unitCost || 0),
+                unitCost: it.unitCost,
                 serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
-                totalCost: safeMultiply(
-                  difference,
-                  Number(it.unitCost || 0),
-                  0,
-                ),
+                totalCost: safeMultiply(difference, it.unitCost, 0),
                 notes: it.reason || null,
               };
             }),
@@ -2268,7 +2668,10 @@ export async function createRemnant(formData: FormData) {
     if (qty === null || qty <= 0) throw new Error("Qty sisa harus > 0");
     await assertWarehouseIdInScope(user, warehouseId);
     const [item, warehouse] = await Promise.all([
-      prisma.item.findUnique({ where: { id: itemId }, select: { id: true } }),
+      prisma.item.findUnique({
+        where: { id: itemId },
+        select: { id: true, category: { select: { remnantMinMeasure: true } } },
+      }),
       prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } }),
     ]);
     if (!item) throw new Error("Barang tidak ditemukan");
@@ -2284,6 +2687,24 @@ export async function createRemnant(formData: FormData) {
       const s = ((v as string | null) ?? "").trim().slice(0, n);
       return s || null;
     };
+    // F-098-S BR-SCRAP-03/04/05: usable wajib dimensi+ukuran+tautan issue dan
+    // lolos ambang kategori (snapshot dibekukan; null = belum ditetapkan).
+    const dimensions = cap(formData.get("dimensions"), 255);
+    const sourceType = cap(formData.get("sourceType"), 64);
+    const measuredRaw = formData.get("measuredSize");
+    const measuredSize = measuredRaw ? parseStrictQty(measuredRaw) : null;
+    const minMeasureSnapshot =
+      (item as { category?: { remnantMinMeasure?: unknown } | null }).category?.remnantMinMeasure != null
+        ? Number((item as { category?: { remnantMinMeasure?: unknown } | null }).category?.remnantMinMeasure)
+        : null;
+    const usableError = validateUsableRemnant({
+      dimensions,
+      measuredSize,
+      minMeasureSnapshot,
+      sourceType,
+      sourceId,
+    });
+    if (usableError) throw new Error(usableError);
     const documentNo = await generateDocumentNumber("RMN");
     const remnant = await prisma.remnant.create({
       data: {
@@ -2292,11 +2713,13 @@ export async function createRemnant(formData: FormData) {
         warehouseId,
         qty,
         uom: cap(formData.get("uom"), 32),
-        dimensions: cap(formData.get("dimensions"), 255),
-        sourceType: cap(formData.get("sourceType"), 64),
+        dimensions,
+        sourceType,
         sourceId,
         unitCost: unitCostRaw,
         status: "usable",
+        remnantMinMeasureSnapshot: minMeasureSnapshot,
+        measuredSize,
         createdBy: Number(user.id),
       },
     });
@@ -2339,7 +2762,7 @@ export async function consumeRemnant(id: number, formData: FormData) {
   }
 }
 
-/** Tandai remnant sebagai scrap (alasan wajib — scrap bukan stok usable). */
+/** Tandai remnant sebagai scrap (alasan + berat kg besi tua wajib — F-098-S AC-SCRAP-7). */
 export async function scrapRemnant(id: number, formData: FormData) {
   try {
     const user = await requirePermission("create_material_issues");
@@ -2348,9 +2771,13 @@ export async function scrapRemnant(id: number, formData: FormData) {
     await assertWarehouseIdInScope(user, remnant.warehouseId);
     const reason = ((formData.get("scrapReason") as string | null) ?? "").trim();
     if (!reason) throw new Error("Alasan scrap wajib diisi");
+    const weightRaw = formData.get("scrapWeightKg");
+    const scrapWeightKg = weightRaw ? parseStrictQty(weightRaw) : null;
+    const weightError = validateScrapWeightKg(scrapWeightKg);
+    if (weightError) throw new Error(weightError);
     const updated = await prisma.remnant.updateMany({
       where: { id, status: "usable" },
-      data: { status: "scrap", scrapReason: reason.slice(0, 500) },
+      data: { status: "scrap", scrapReason: reason.slice(0, 500), scrapWeightKg },
     });
     if (updated.count === 0) {
       const cur = await prisma.remnant.findUnique({ where: { id }, select: { status: true } });
@@ -2364,6 +2791,54 @@ export async function scrapRemnant(id: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[scrapRemnant]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Disposisi tinjau foreman atas scrap abnormal (F-2026-10-24-098-S D-S98-04).
+ * Izin default-aman spec: reuse `complete_work_orders` (key khusus
+ * approve_scrap_reviews belum diputus LEAD). Tinjau operasional saja —
+ * updateMany dibatasi kolom tinjau; snapshot klasifikasi/nilai/jurnal
+ * 066-V tidak disentuh (BR-SCRAP-08, AC-SCRAP-6).
+ */
+export async function reviewAbnormalScrap(input: {
+  source: "MI" | "PO";
+  lineId: number;
+  disposition: string;
+  note?: string | null;
+}) {
+  try {
+    const user = await requirePermission("complete_work_orders");
+    const reviewError = validateScrapReview({ disposition: input.disposition, note: input.note });
+    if (reviewError) throw new Error(reviewError);
+    if (!Number.isSafeInteger(input.lineId) || input.lineId <= 0) throw new Error("Baris scrap tidak valid");
+    const data = {
+      scrapReviewStatus: SCRAP_REVIEW_STATUS_DONE,
+      scrapReviewDisposition: input.disposition,
+      scrapReviewNote: input.disposition === "kelalaian" ? (input.note ?? "").trim().slice(0, 500) : ((input.note ?? "").trim().slice(0, 500) || null),
+      scrapReviewedBy: Number(user.id),
+      scrapReviewedAt: new Date(),
+    };
+    const updated =
+      input.source === "MI"
+        ? await prisma.materialIssueItem.updateMany({
+            where: { id: input.lineId, scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING },
+            data,
+          })
+        : await prisma.productionOrderMaterial.updateMany({
+            where: { id: input.lineId, scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING },
+            data,
+          });
+    if (updated.count === 0) {
+      throw new Error("Baris scrap tidak ditemukan atau tidak sedang menunggu tinjau");
+    }
+    await logActivity("update", input.source === "MI" ? "MaterialIssueItem" : "ProductionOrderMaterial", input.lineId, `Tinjau scrap abnormal: ${input.disposition}`);
+    revalidatePath("/laporan/scrap-material");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reviewAbnormalScrap]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

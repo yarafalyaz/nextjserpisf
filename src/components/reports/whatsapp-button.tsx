@@ -25,12 +25,14 @@ export function WhatsappButton({
   modelType,
   modelId,
   surface,
+  label = "Kirim WA",
 }: Readonly<{
   phone: string | null | undefined;
   message: string;
   modelType: WhatsappDocumentType;
   modelId: number;
   surface: "queue" | "detail";
+  label?: string;
 }>) {
   const href = buildWhatsappUrl(phone, message);
   if (!href) return null;
@@ -40,13 +42,13 @@ export function WhatsappButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Kirim WA ke pelanggan"
+      aria-label={label}
       className={cn(buttonVariants({ variant: "secondary" }), "gap-1.5")}
       onClick={() => {
         void recordWhatsappLinkOpened({ modelType, modelId, surface });
       }}
     >
-      <MessageCircle size={14} aria-hidden="true" /> Kirim WA
+      <MessageCircle size={14} aria-hidden="true" /> {label}
     </a>
   );
 }

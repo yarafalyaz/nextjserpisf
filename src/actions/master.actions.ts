@@ -39,6 +39,10 @@ import {
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
+import {
+  isEmploymentEndReason,
+  isEmploymentStatus,
+} from "@/lib/reports/employee-lifecycle";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -779,6 +783,92 @@ function readEmployeeFormFields(
   };
 }
 
+/**
+ * F-2026-10-22-085-S: field siklus hidup karyawan dari FormData.
+ * Kosakata tertutup Q-EMP-1/2 divalidasi di sini (BR-EMP-02): teks bebas
+ * ditolak. employmentEndedAt dan endReason wajib berpasangan. Tanggal
+ * divalidasi employeeDatesSchema (parsedDates) sebelum fungsi ini jalan.
+ * Field absen dari FormData = tidak disentuh (null) supaya pemanggil lama
+ * (quick-add dsb.) tidak menghapus data siklus hidup tanpa sadar.
+ */
+function readEmployeeLifecycleFields(
+  formData: FormData,
+  dates: {
+    contractStartDate?: string;
+    contractEndDate?: string;
+    employmentEndedAt?: string;
+  },
+) {
+  const rawStatus = (formData.get("employmentStatus") as string | null)?.trim() || null;
+  if (rawStatus !== null && !isEmploymentStatus(rawStatus)) {
+    throw new Error("Status kepegawaian tidak valid");
+  }
+  const rawReason = (formData.get("endReason") as string | null)?.trim() || null;
+  if (rawReason !== null && !isEmploymentEndReason(rawReason)) {
+    throw new Error("Alasan berhenti tidak valid");
+  }
+  const endedAt = dates.employmentEndedAt
+    ? wibDateToUtcMidnight(dates.employmentEndedAt)
+    : null;
+  if ((endedAt === null) !== (rawReason === null)) {
+    throw new Error("Tanggal berhenti dan alasan berhenti wajib diisi bersamaan");
+  }
+  return {
+    employmentStatus: rawStatus,
+    contractStartDate: dates.contractStartDate
+      ? wibDateToUtcMidnight(dates.contractStartDate)
+      : null,
+    contractEndDate: dates.contractEndDate
+      ? wibDateToUtcMidnight(dates.contractEndDate)
+      : null,
+    employmentEndedAt: endedAt,
+    endReason: rawReason,
+  };
+}
+
+function dateOnlyOrNull(value: Date | null | undefined): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
+type EmployeeLifecycleValues = {
+  employmentStatus: string | null;
+  contractStartDate: string | null;
+  contractEndDate: string | null;
+  employmentEndedAt: string | null;
+  endReason: string | null;
+};
+
+/**
+ * BR-EMP-09: satu baris jejak perubahan siklus hidup dengan old/new.
+ * Pola writeWorkOrderEndDateLog (F-035): gagal tulis TIDAK melempar —
+ * update karyawan yang sudah commit tidak dilaporkan gagal gara-gara
+ * jejak; kegagalan dikembalikan sebagai penanda eksplisit { success }.
+ */
+async function writeEmployeeLifecycleLog(args: {
+  userId: number;
+  employeeId: number;
+  oldValues: EmployeeLifecycleValues;
+  newValues: EmployeeLifecycleValues;
+}): Promise<{ success: boolean }> {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId: args.userId,
+        action: "employee_lifecycle_changed",
+        modelType: "Employee",
+        modelId: args.employeeId,
+        description: "Mengubah status kepegawaian karyawan",
+        oldValues: args.oldValues,
+        newValues: args.newValues,
+      },
+    });
+    return { success: true };
+  } catch (logError) {
+    console.error("[writeEmployeeLifecycleLog] gagal menulis jejak", logError);
+    return { success: false };
+  }
+}
+
 // departmentId/positionId hanya divalidasi format oleh safeId; FK fiktif lolos
 // ke Prisma (P2003 mentah / karyawan yatim). Cek eksistensi pra-tulis.
 async function assertEmployeeRefsExist(fields: { departmentId: number | null; positionId: number | null }) {
@@ -857,6 +947,7 @@ export async function createEmployee(formData: FormData) {
     const employeeData = {
       employeeNo,
       ...readEmployeeFormFields(formData, parsedDates.data),
+      ...readEmployeeLifecycleFields(formData, parsedDates.data),
       joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
@@ -937,7 +1028,14 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     // Look up whether this employee already has a linked login account.
     const current = await prisma.employee.findUnique({
       where: { id: employeeId },
-      select: { userId: true },
+      select: {
+        userId: true,
+        employmentStatus: true,
+        contractStartDate: true,
+        contractEndDate: true,
+        employmentEndedAt: true,
+        endReason: true,
+      },
     });
     const trimmedEmail = email?.trim() || null;
 
@@ -1005,8 +1103,20 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
 
     const employeeFields = readEmployeeFormFields(formData, parsedDates.data);
     await assertEmployeeRefsExist(employeeFields);
+    // F-085-S: siklus hidup hanya ditulis bila form mengirim field-nya;
+    // form lama tanpa field ini tidak menghapus data yang sudah tercatat.
+    const lifecycleTouched =
+      formData.has("employmentStatus") ||
+      formData.has("contractStartDate") ||
+      formData.has("contractEndDate") ||
+      formData.has("employmentEndedAt") ||
+      formData.has("endReason");
+    const lifecycleFields = lifecycleTouched
+      ? readEmployeeLifecycleFields(formData, parsedDates.data)
+      : null;
     const updateData = {
       ...employeeFields,
+      ...(lifecycleFields ?? {}),
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
       slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
@@ -1060,6 +1170,37 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         ? "Memperbarui karyawan + buat akun login"
         : "Memperbarui karyawan",
     );
+    // BR-EMP-09: perubahan siklus hidup tercatat old/new (pola F-035).
+    // logActivity existing tidak menulis oldValues/newValues -> baris khusus.
+    if (lifecycleFields && current) {
+      const oldValues = {
+        employmentStatus: current.employmentStatus,
+        contractStartDate: dateOnlyOrNull(current.contractStartDate),
+        contractEndDate: dateOnlyOrNull(current.contractEndDate),
+        employmentEndedAt: dateOnlyOrNull(current.employmentEndedAt),
+        endReason: current.endReason,
+      };
+      const newValues = {
+        employmentStatus: lifecycleFields.employmentStatus,
+        contractStartDate: dateOnlyOrNull(lifecycleFields.contractStartDate),
+        contractEndDate: dateOnlyOrNull(lifecycleFields.contractEndDate),
+        employmentEndedAt: dateOnlyOrNull(lifecycleFields.employmentEndedAt),
+        endReason: lifecycleFields.endReason,
+      };
+      if (JSON.stringify(oldValues) !== JSON.stringify(newValues)) {
+        const logged = await writeEmployeeLifecycleLog({
+          userId: Number(actor.id),
+          employeeId,
+          oldValues,
+          newValues,
+        });
+        if (!logged.success) {
+          console.error("[updateEmployee] jejak siklus hidup gagal ditulis", {
+            employeeId,
+          });
+        }
+      }
+    }
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

@@ -25,6 +25,7 @@ interface LoanFormProps {
     loanDate: string;
     totalAmount: number;
     monthlyInstallment: number;
+    weeklyInstallment?: number | null;
     remainingAmount: number;
     status: string;
     notes?: string | null;
@@ -131,6 +132,23 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
               defaultValue={loan?.monthlyInstallment}
               prefix="Rp"
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="weeklyInstallment">Cicilan Mingguan (Perjanjian Tertulis, Rp)</Label>
+            <CurrencyInput
+              id="weeklyInstallment"
+              name="weeklyInstallment"
+              placeholder="Opsional"
+              defaultValue={loan?.weeklyInstallment}
+              prefix="Rp"
+              emptyAsNull
+              aria-describedby="weeklyInstallment-hint"
+            />
+            <p id="weeklyInstallment-hint" className="text-xs text-muted-foreground">
+              Opsional. Kosongkan bila belum diatur dalam perjanjian tertulis — pinjaman
+              tanpa nominal mingguan menahan karyawan dari run gaji WEEKLY. Nilai tidak
+              dihitung otomatis dari cicilan bulanan.
+            </p>
           </div>
         </FormSection>
         <FormSection title="Lainnya" columns={1}>

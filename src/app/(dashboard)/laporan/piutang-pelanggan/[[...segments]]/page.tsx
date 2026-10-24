@@ -42,6 +42,13 @@ export default async function CustomerReceivablesPage({
 
   const { rows, totalOutstanding, totalOverdue, totalCreditLimit, totalExposure, totalRemainingCredit, portfolioDso } =
     await loadCustomerCreditExposure({ start: startDate, end: endDate })
+  // Baris TOTAL wajib 14 sel sejajar header; total per kolom dihitung dari
+  // baris yang sama dengan layar (pola sama dengan ekspor PDF di loader).
+  const totalInvoiceCount = rows.reduce((sum, row) => sum + row.invoiceCount, 0)
+  const totalOpenOrder = rows.reduce((sum, row) => sum + row.openOrderAmount, 0)
+  const totalWoUnrepresented = rows.reduce((sum, row) => sum + (row.woUnrepresented ?? 0), 0)
+  const totalConfirmedDp = rows.reduce((sum, row) => sum + (row.confirmedDownPayment ?? 0), 0)
+  const totalOpenCredit = rows.reduce((sum, row) => sum + (row.openCustomerCredit ?? 0), 0)
   const periodLabel = `Pembayaran ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
@@ -112,7 +119,8 @@ export default async function CustomerReceivablesPage({
             )}
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
+                <DetailTableTd>TOTAL</DetailTableTd>
+                <DetailTableTd align="right">{totalInvoiceCount.toLocaleString('id-ID')}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalCreditLimit)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOverdue)}</DetailTableTd>
@@ -120,6 +128,12 @@ export default async function CustomerReceivablesPage({
                 <DetailTableTd align="right">
                   {totalCreditLimit > 0 ? `${((totalExposure / totalCreditLimit) * 100).toFixed(1)}%` : "–"}
                 </DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalOpenOrder)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalWoUnrepresented)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalConfirmedDp)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalOpenCredit)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalExposure)}</DetailTableTd>
+                <DetailTableTd align="right">{""}</DetailTableTd>
                 <DetailTableTd align="right">{portfolioDso === null ? "–" : portfolioDso.toFixed(1)}</DetailTableTd>
               </DetailTableRow>
             )}
