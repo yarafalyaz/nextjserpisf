@@ -16,6 +16,17 @@ name: Antrean Merge
 #
 # Jadwal cron adalah jaring pengaman: trigger `labeled` bisa tertelan batas
 # concurrency (1 running + 1 pending), jadi antrean disapu berkala juga.
+#
+# Dua token, dua aktor (penting):
+# - `ANTREAN_MERGE_TOKEN` (PAT pemilik, secret repo) hanya untuk
+#   `update-branch`. Push/update oleh GITHUB_TOKEN bawaan tidak memicu
+#   workflow `pull_request`, dan check dari `workflow_dispatch` tidak masuk
+#   rollup PR sehingga tidak dihitung branch protection (pelajaran run
+#   40123035523: check dispatch hijau semua tapi PR tetap REVIEW_REQUIRED/
+#   BEHIND). Dengan PAT, update memicu CI `pull_request` biasa.
+# - GITHUB_TOKEN (github-actions[bot]) untuk sisanya: membaca check dari
+#   rollup, memberi approve (aktor berbeda dari penulis PR, jadi syarat
+#   1 approval sah), dan merge.
 
 on:
   pull_request:
@@ -46,11 +57,17 @@ jobs:
       # not a git repository") — tunjukkan eksplisit. Kegagalan pertama
       # antrean (run 40122122702) persis karena ini.
       GH_REPO: ${{ github.repository }}
+      PAT: ${{ secrets.ANTREAN_MERGE_TOKEN }}
       TZ: Asia/Jakarta
     steps:
       - name: Proses PR berlabel antrean-merge (FIFO)
         run: |
           set -uo pipefail
+
+          if [ -z "${PAT}" ]; then
+            echo "::error::Secret ANTREAN_MERGE_TOKEN belum dipasang. Buat fine-grained PAT (repo ini saja: Contents RW + Pull requests RW), lalu pasang sebagai secret Actions bernama ANTREAN_MERGE_TOKEN. Lihat docs/antrean-merge.md."
+            exit 1
+          fi
 
           wait_checks() {
             pr=$1
@@ -84,15 +101,16 @@ jobs:
               echo "::endgroup::"
               continue
             fi
-            branch=$(gh pr view "$pr" --json headRefName --jq .headRefName)
             before=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
 
-            gh pr update-branch "$pr" || true
+            # Update sebagai pemilik (PAT) supaya event pull_request
+            # synchronize terbit dan CI jalan pada head terbaru; check-nya
+            # lalu masuk rollup PR dan dihitung branch protection.
+            GH_TOKEN="${PAT}" gh pr update-branch "$pr" || true
             sleep 5
             after=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
             if [ "$before" != "$after" ]; then
-              echo "Branch diperbarui ke $after; memicu CI manual (push token tidak memicu workflow)."
-              gh workflow run ci.yml --ref "$branch" || true
+              echo "Branch diperbarui $before -> $after oleh PAT; menunggu CI pull_request."
               sleep 10
             fi
 
