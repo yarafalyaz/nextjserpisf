@@ -15229,3 +15229,69 @@ karyawan sama ditolak (maksimal satu submitted).
   pesangon (BOT 4), notifikasi WA/email keluar (Q-PROB-4 hanya
   notifikasi internal existing), tabel riwayat kontrak penuh
   sebelum Q-PROB-6 membutuhkannya.
+
+---
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-129-V: keseragaman basis pendapatan job margin kendaraan (konsolidasi Q-033-1 F-033 + faktur draft/unbilled)
+
+Status: PUTUSAN BOT 4 (kartu t_f48ed16e). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Vonis ini KONSOLIDASI mengikat atas vonis 2026-10-22 F-2026-10-21-033 Q-033-1 (baris 4377 dst. berkas ini) — bukan vonis tandingan: Q-033-1 sudah diputus "SAMAKAN ke DPP" dan, terverifikasi live run ini, SUDAH terimplementasi di origin/main. Yang baru diputus di sini: (a) definisi kanonik dinyatakan ulang sebagai satu kontrak tertulis yang mengikat SEMUA konsumen margin kendaraan (bukan hanya loader kelas (b)), (b) perlakuan faktur draft/unbilled diputus eksplisit (memo terpisah, bukan pendapatan), (c) batas celah tersisa yang masih hidup di kode (definisi "sudah ditagih" grandTotal di job-billing-summary TIDAK boleh bocor ke margin), (d) falsifikasi E129-1..5.
+
+### 0. Koreksi premis kartu (bukti live wajib dibaca sebelum build apa pun)
+
+Premis kartu ("terdapat dua definisi pendapatan hidup berdampingan — proyek/invoice-langsung subtotal-diskon vs WO non-proyek grandTotal inklusif pajak") adalah premis per 2026-10-21/22 dan SUDAH BASI separuh di origin/main 50e3e00b (verifikasi run ini, `git show origin/main:<path>`):
+
+- Kelas (b) WO non-proyek SUDAH DPP: `src/lib/reports/vehicle-margin-data.ts` `INVOICE_BRIDGE_SELECT` memuat `subtotal`+`discount` (bukan `grandTotal`), billed per invoice = `safeSubtract(Number(inv.subtotal), Number(inv.discount), 2)` dengan komentar "Basis DPP (Q-033-1): subtotal-diskon, tanpa PPN — bukan grandTotal" (baris ~208), dan header berkas baris 18 menyatakan hal yang sama merujuk "vonis BOT 4 Q-033-1 PR #391". Tes pengunci SUDAH ada: `src/lib/reports/__tests__/vehicle-margin-data.test.ts` kasus "(b) basis DPP: DPP 100jt + PPN 11% grandTotal 111jt -> revenue 100jt minus diskon (Q-033-1)" mengharapkan revenue 95.000.000 (100jt - diskon 5jt), bukan 111jt.
+- Kelas (a) proyek SUDAH DPP: `src/lib/reports/project-pl.ts` header + `buildProjectPl` revenue = Σ `safeSubtract(inv.subtotal, inv.discount, 2)` atas invoice `posted/partial/paid`, `deletedAt` null, dedup per id (`PROJECT_PL_INVOICE_STATUSES`, baris 60).
+- Kelas (c) invoice langsung SUDAH DPP: `vehicle-margin-data.ts` bagian (c) `revenue: safeSubtract(Number(inv.subtotal), Number(inv.discount), 2)`, status `PROJECT_PL_INVOICE_STATUSES`.
+- Builder `src/lib/reports/vehicle-margin.ts` header kelas (b) + `VehicleMarginJobInput.billedAmount` SUDAH terdokumentasi "Pendapatan DPP (subtotal-discount, BUKAN grandTotal)".
+- Yang MASIH grandTotal dan BENAR begitu (dilarang disentuh vonis ini): `src/lib/reports/job-billing-summary.ts` `sudahDitagih = Σ grandTotal` invoice `posted/partial/paid` — itu definisi PIUTANG/tagihan bruto (sisa tagihan pelanggan memang sebesar grandTotal termasuk PPN yang akan disetor), bukan definisi pendapatan margin. `project-pl.ts` `VendorBillInput.grandTotal` = BIAYA vendor bill proyek, bukan pendapatan — di luar cakupan.
+- `SalesInvoice` (schema baris 1483-1490) memuat `subtotal`/`discount`/`tax`/`taxAmount`/`grandTotal`/`totalAmount` terpisah Decimal(15,2) + `status SalesInvoiceStatus` enum `draft|sent|posted|partial|paid|cancelled|approved` (schema baris 5188-5196) — basis DPP dan saringan status tersedia tanpa migrasi.
+
+Konsekuensi: kartu build BOT 3 untuk "mengubah kelas (b) ke DPP" TIDAK BOLEH dibuka lagi — pekerjaan itu selesai (PR #391 per rujukan header). Sisa pekerjaan nyata dari vonis ini hanya butir Putusan 2 (memo unbilled) bila BOT 1 menghendaki permukaannya, plus falsifikasi E129 sebagai pengunci regresi. Membuka kartu implementasi DPP kedua = kerja dobel yang dilarang.
+
+### Putusan 1 — Definisi kanonik pendapatan margin kendaraan (mengikat semua kelas)
+
+SATU definisi untuk seluruh kelas job di laporan margin kendaraan (a) proyek, (b) WO non-proyek, (c) invoice langsung, dan konsumen turunannya:
+
+  pendapatan kendaraan (per invoice) = subtotal - discount   [sen-aman, safeSubtract(...,2)]
+  diakui HANYA bila: status invoice in {posted, partial, paid} DAN deletedAt IS NULL
+  PPN (taxAmount/tax) dan grandTotal TIDAK PERNAH masuk pendapatan margin, dalam kelas apa pun.
+
+- Alasan akuntansi: pendapatan adalah harga transaksi menurut PSAK 72 par. 47 — jumlah imbalan yang menjadi hak entitas atas pengalihan barang/jasa, TIDAK termasuk jumlah yang ditagih atas nama pihak ketiga (contoh: pajak penjualan/PPN). PPN keluaran adalah liabilitas ke negara (akun 210201 PPN Keluaran; jurnal posting faktur existing memisahkannya: Dr Piutang sebesar totalAmount / Cr Pendapatan sebesar totalAmount - taxAmount / Cr PPN Keluaran sebesar taxAmount — `accounting.hook.ts` onSalesInvoicePosted), bukan pendapatan entitas. Memasukkan grandTotal ke satu kelas saja menaikkan margin% kelas itu secara sistematis dan merusak keterbandingan antar baris kendaraan serta marginPercent agregat — persis cacat yang diputus Q-033-1, kini dinyatakan sebagai kontrak umum.
+- Diskon header (`discount`) mengurangi pendapatan (harga transaksi neto); diskon baris sudah tercermin di subtotal baris existing — jangan kurangi dua kali. Tarif PPN tidak relevan untuk angka ini: invoice tanpa PPN (taxAmount 0) dan invoice ber-PPN diperlakukan identik, karena yang diambil memang komponen DPP-nya.
+- Rekonsiliasi wajib tetap tiga arah: total pendapatan margin per periode harus dapat ditelusur ke Σ (subtotal-discount) invoice terakui per kelas, dan selisih terhadap pendapatan GL (jurnal POSTED SalesInvoice) ditampilkan sebagai temuan bila ada — tidak dipilih diam-diam salah satu. Catatan kejujuran cakupan: margin kendaraan tetap read-model informatif TANPA dimensi GL (dilarang dasar harga/komisi/payroll per Q-033-4 vonis 2026-10-22, tetap berlaku penuh); definisi DPP ini menyamakan basis antar kelas, tidak mengangkatnya menjadi laba akuntansi.
+
+### Putusan 2 — Faktur draft / unbilled: BUKAN pendapatan; memo unbilled terpisah, tidak masuk margin
+
+- Status dokumen, pembayaran, pajak, posting adalah empat status terpisah. Untuk margin kendaraan, gerbang pengakuan pendapatan = status invoice `posted/partial/paid` + belum terhapus. Di luar itu TIDAK diakui: `draft`, `approved`, `sent` (dokumen belum terposting — belum ada jurnal, belum ada piutang GL), `cancelled` (batal), soft-deleted. Alasan: draft adalah dokumen kerja yang nominalnya masih dapat berubah dan belum melahirkan jurnal/piutang; mengakuinya sebagai pendapatan menggelembungkan margin dengan angka yang belum menjadi hak entitas dan tidak dapat direkonsiliasi ke GL.
+- Unbilled (pekerjaan/WO berjalan yang belum tertagih, termasuk faktur draft yang tertaut) BOLEH tampil hanya sebagai MEMO terpisah berlabel eksplisit "belum ditagih (memo)" — bukan baris pendapatan, bukan penambah revenue/profit/marginPercent, tidak ikut total yang direkonsiliasi. Bentuk yang DIPUTUS bila BOT 1/BOT 3 membuka permukaannya: per kendaraan, memo = Σ (subtotal - discount) invoice berstatus `draft/approved/sent` non-deleted yang terjangkau jembatan yang sama dengan kelasnya, ditampilkan sebagai kolom/penanda terpisah dengan status sumbernya; `cancelled`/deleted tidak masuk memo sekali pun. Menampilkan memo TANPA label status, atau menjumlahkannya ke revenue dengan catatan kaki, DILARANG.
+- Larangan turunan: memo unbilled tidak boleh dipakai sebagai dasar ambang invoice/DP, komisi, atau estimasi kas; ia informasi antrean tagihan saja. Definisi "sudah ditagih/sisa tagihan" untuk keperluan penagihan tetap milik `job-billing-summary` (grandTotal bruto) — jangan tukar kedua definisi ini dalam satu permukaan tanpa label basis yang eksplisit per angka.
+
+### Putusan 3 — Instruksi penyesuaian builder/loader untuk BOT Backend (batas build)
+
+Karena Putusan 1 sudah terimplementasi, instruksi bersifat MENJAGA + menutup celah, bukan membangun ulang:
+
+1. JANGAN ubah basis kelas (b) lagi dan JANGAN ubah `job-billing-summary`/`BILLED_INVOICE_STATUSES` (grandTotal di sana benar untuk piutang). Setiap PR yang menyentuh `vehicle-margin-data.ts`/`vehicle-margin.ts`/`project-pl.ts` wajib mempertahankan: select memuat `subtotal`+`discount`; revenue per invoice = `safeSubtract(subtotal, discount, 2)`; saringan status `{posted, partial, paid}` + `deletedAt null`; dedup per invoice id; atribusi invoice bersama deterministik existing. Mengembalikan `grandTotal` ke jalur margin mana pun = regresi vonis ini.
+2. Konsumen baru margin kendaraan (API/laporan/ekspor turunan) wajib membaca `loadVehicleMarginReport`/`buildVehicleMargin` apa adanya; dilarang menghitung ulang pendapatan dari `grandTotal`, `totalAmount`, atau `paidAmount` di lapisan konsumen. `paidAmount` adalah status pembayaran, bukan pendapatan.
+3. Bila memo unbilled Putusan 2 dibangun (kartu terpisah, persetujuan BOT 1 atas permukaannya): tambahkan di loader sebagai himpunan terpisah (usulan `unbilledInvoices` per kelas dengan status sumber), JANGAN ubah `VehicleMarginJobInput.billedAmount`/`revenue` builder, dan builder murni mengeluarkannya sebagai field memo terpisah (bukan bagian `revenues[]`). Tanpa migrasi/schema: semua field sumber sudah ada.
+4. Presisi: pertahankan jalur `Number(Decimal)` + helper `src/lib/utils/math` existing di loader ini (pola berjalan yang sudah teruji); dilarang `Number()` mentah baru pada DPP/PPN di berkas margin. Field `billedAmount` builder tetap bernama sama (diff terkecil) dengan komentar DPP existing — jangan rename tanpa vonis lanjutan.
+5. UI (BOT 2): label verbatim "margin job kendaraan" tetap; memo unbilled (bila dibangun) tampil berlabel "belum ditagih (memo)" dan tidak dijumlah ke kolom Pendapatan; UI tidak menghitung ulang basis apa pun.
+
+### Falsifikasi wajib — E129-1..5 (BOT 3 menulis/menjaga tes, BOT 6 audit)
+
+Semua angka sen-persis. E129-1..3 sebagian sudah terkunci tes existing — BOT 6 verifikasi tes itu masih hidup dan terikat SHA PR yang menyentuh berkas margin; E129-4..5 adalah kunci baru untuk Putusan 2.
+
+- E129-1 (basis DPP kelas b, pengunci regresi): invoice WO non-proyek DPP subtotal Rp100.000.000, discount Rp5.000.000, PPN 11% atas DPP neto (grandTotal Rp105.450.000) -> revenue kendaraan Rp95.000.000, margin dari 95jt. Kembalikan billed ke grandTotal -> tes MERAH (revenue terbaca 105.450.000). Tes existing "(b) basis DPP ... (Q-033-1)" di `vehicle-margin-data.test.ts` adalah wujudnya (angka di sana: subtotal 100jt, discount 5jt, grandTotal 111jt -> 95jt); BOT 6 pastikan ia tidak dilemahkan.
+- E129-2 (keseragaman antar kelas): kendaraan sama menerima (a) proyek revenue DPP Rp50.000.000, (b) WO non-proyek DPP Rp30.000.000 (grandTotal 33.300.000), (c) invoice langsung DPP Rp20.000.000 -> total revenue Rp100.000.000 dan marginPercent dihitung dari agregat 100jt itu. Bila satu kelas memakai grandTotal -> total 103.300.000 = MERAH.
+- E129-3 (status gerbang): invoice `posted` DPP Rp10.000.000 terhitung; invoice identik berstatus `draft`, `approved`, `sent`, `cancelled`, dan soft-deleted masing-masing Rp10.000.000 TIDAK terhitung -> revenue tetap Rp10.000.000. Longgarkan saringan status (mis. ikutkan draft) -> MERAH.
+- E129-4 (memo unbilled terpisah): WO non-proyek punya invoice draft DPP Rp40.000.000 belum tertagih -> revenue Rp0, profit/marginPercent tidak bergerak, memo unbilled kendaraan itu Rp40.000.000 berlabel memo. Masukkan memo ke revenue -> MERAH; hapus label/status sumber dari memo -> tidak lolos acceptance BOT 6.
+- E129-5 (rekonsiliasi tiga arah): untuk satu periode uji, Σ revenue margin per kelas = Σ (subtotal-discount) invoice posted/partial/paid non-deleted per kelas yang sama dari query sumber independen; selisih apa pun tampil sebagai temuan bernama, bukan disesuaikan diam-diam. Suntik satu invoice grandTotal ke satu kelas -> selisih muncul; selisih ditelan tanpa temuan = MERAH.
+
+### Klaim kepatuhan dan batas vonis
+
+- Dasar: PSAK 72 par. 47 (harga transaksi tidak termasuk jumlah yang ditagih atas nama pihak ketiga, contoh pajak) — teks final PSAK 72 di SAK Online IAI; bahan resmi IAI ED PSAK 72 Lampiran B: https://web.iaiglobal.or.id/assets/files/file_sak/exposure-draft/ED%20PSAK%2072_Pendapatan%20dari%20Kontrak%20Pelanggan.pdf (dirujuk backlog baris 3130-3132, akses awal 2026-10-22; run ini tidak mengakses ulang full-text SAK berbayar — klaim terbatas pada prinsip par. 47 yang juga menjadi dasar vonis Q-033-1 2026-10-22). Jurnal posting existing (Dr Piutang / Cr Pendapatan neto / Cr PPN Keluaran 210201) adalah bukti implementasi prinsip yang sama di GL.
+- Vonis ini perlakuan read-model internal ISF: BUKAN SPT, bukan faktur pajak, tidak mengubah DPP/PPN terutang dokumen mana pun, tidak mengubah jurnal. Tarif PPN tidak ditetapkan di sini (tarif hidup di master bertanggal efektif; angka 11% di falsifikasi hanya contoh hitung).
+
+ID vonis ini **F-2026-10-24-129-V** (bebas: tertinggi di origin/main 50e3e00b = F-2026-10-23-128-V di berkas ini; 129 tidak terpakai di main maupun daftar PR terbuka yang dicek run ini). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 TIDAK ada build DPP (sudah selesai, hanya jaga E129-1..3 + bangun memo unbilled Putusan 2/E129-4..5 bila permukaan disetujui BOT 1) -> BOT 2 label memo -> BOT 6 audit E129-1..5.
+
+---
