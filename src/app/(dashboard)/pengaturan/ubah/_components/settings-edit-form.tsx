@@ -129,6 +129,7 @@ interface SettingsFormValues {
   salaryExpenseAccountId?: number | null
   pkwtCompensationExpenseAccountId?: number | null
   pkwtCompensationPayableAccountId?: number | null
+  scrapSaleIncomeAccountId?: number | null
   salesAccountId?: number | null
   salesInvoicePrefix?: string | null
   salesOrderPrefix?: string | null
@@ -254,6 +255,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   // Account Mapping States
   const [salesReceivable, setSalesReceivable] = useState(settings.salesReceivableAccountId ? String(settings.salesReceivableAccountId) : "")
   const [salesRevenue, setSalesRevenue] = useState(settings.salesRevenueAccountId ? String(settings.salesRevenueAccountId) : "")
+  const [scrapSaleIncome, setScrapSaleIncome] = useState(settings.scrapSaleIncomeAccountId ? String(settings.scrapSaleIncomeAccountId) : "")
   const [salesTax, setSalesTax] = useState(settings.salesTaxAccountId ? String(settings.salesTaxAccountId) : "")
   const [salesReturn, setSalesReturn] = useState(settings.salesReturnAccountId ? String(settings.salesReturnAccountId) : "")
   const [salesAcc, setSalesAcc] = useState(settings.salesAccountId ? String(settings.salesAccountId) : "")
@@ -323,6 +325,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       items: [
         { name: "salesReceivableAccountId", label: "Piutang Usaha", value: salesReceivable, onChange: setSalesReceivable },
         { name: "salesRevenueAccountId", label: "Pendapatan Penjualan", value: salesRevenue, onChange: setSalesRevenue },
+        { name: "scrapSaleIncomeAccountId", label: "Pendapatan Besi Tua Scrap (kandidat 710003)", value: scrapSaleIncome, onChange: setScrapSaleIncome },
         { name: "salesTaxAccountId", label: "PPN Keluaran", value: salesTax, onChange: setSalesTax },
         { name: "salesReturnAccountId", label: "Retur Penjualan", value: salesReturn, onChange: setSalesReturn },
         { name: "salesAccountId", label: "Akun Penjualan", value: salesAcc, onChange: setSalesAcc },
@@ -412,6 +415,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     const setters: Record<string, (value: string) => void> = {
       salesReceivableAccountId: setSalesReceivable,
       salesRevenueAccountId: setSalesRevenue,
+      scrapSaleIncomeAccountId: setScrapSaleIncome,
       salesTaxAccountId: setSalesTax,
       salesReturnAccountId: setSalesReturn,
       salesAccountId: setSalesAcc,
@@ -1041,6 +1045,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             {/* Hidden inputs to pass account mapping data */}
             <input type="hidden" name="salesReceivableAccountId" value={salesReceivable} />
             <input type="hidden" name="salesRevenueAccountId" value={salesRevenue} />
+            <input type="hidden" name="scrapSaleIncomeAccountId" value={scrapSaleIncome} />
             <input type="hidden" name="salesTaxAccountId" value={salesTax} />
             <input type="hidden" name="salesReturnAccountId" value={salesReturn} />
             <input type="hidden" name="salesAccountId" value={salesAcc} />
