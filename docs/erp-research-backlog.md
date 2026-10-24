@@ -13925,9 +13925,11 @@ sini dan tidak boleh memakai akun/rumus vonis ini.
     bekerja Jan-Jun (6 bulan bagian tahun), kompensasi 6 bulan
     Rp3.000.000 dibayar di slip final Juni (bruto Juni Rp9.000.000,
     bruto tahun Rp39.000.000, iuran pensiun karyawan 0): hitung ulang
-    masa terakhir menghasilkan pajak tahun Rp502.500 (biaya jabatan
-    Rp1.950.000; neto Rp37.050.000; disetahunkan Rp74.100.000; PKP
-    Rp20.100.000; 5%) dan PPh masa final = Rp502.500 − terpotong
+    masa terakhir menghasilkan pajak disetahunkan Rp1.005.000
+    (biaya jabatan Rp1.950.000; neto Rp37.050.000; disetahunkan
+    Rp74.100.000; PKP Rp20.100.000; 5% × Rp20.100.000); pajak
+    proporsional masa kerja 6/12 bagian tahun Rp502.500
+    (6/12 × Rp1.005.000) dan PPh masa final = Rp502.500 − terpotong
     sebelumnya; kompensasi dikeluarkan dari bruto, dikenai TER
     harian/tarif final pesangon, atau masa perpanjangan ditandai
     final = MERAH.
