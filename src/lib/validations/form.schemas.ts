@@ -124,7 +124,24 @@ export const employeeSchema = z.object({
   // (email + password + roles) so they can sign in (e.g. for self-attendance).
   createLoginAccount: z.boolean().optional(),
   loginPassword: z.string().optional(),
+  // F-2026-10-22-085-S (Q-EMP-1/2): status kepegawaian + tanggal siklus
+  // hidup. Kosakata ditolak server bila di luar daftar; di sini hanya
+  // pasangan tanggal+alasan berhenti yang dijaga, pesan persis server.
+  employmentStatus: z.string().optional(),
+  contractStartDate: z.string().optional(),
+  contractEndDate: z.string().optional(),
+  employmentEndedAt: z.string().optional(),
+  endReason: z.string().optional(),
 }).superRefine((data, ctx) => {
+  const hasEndedAt = !!data.employmentEndedAt?.trim()
+  const hasEndReason = !!data.endReason?.trim()
+  if (hasEndedAt !== hasEndReason) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [hasEndedAt ? "endReason" : "employmentEndedAt"],
+      message: "Tanggal berhenti dan alasan berhenti wajib diisi bersamaan",
+    })
+  }
   if (data.createLoginAccount) {
     if (!data.email || data.email.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Email wajib diisi untuk akun login" })

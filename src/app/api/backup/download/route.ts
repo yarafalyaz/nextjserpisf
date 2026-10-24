@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/auth/permissions"
 import { apiError } from "@/lib/api-response"
-import { readBackupFile } from "@/lib/db/backup"
+import { isValidBackupName, readBackupFile } from "@/lib/db/backup"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { createReadStream } from "fs"
 import { Readable } from "stream"
@@ -16,6 +16,13 @@ export async function GET(req: NextRequest) {
   const filename = rawFilename.replace(/^.*[\\/]/, "").replace(/\.\./g, "")
   if (!filename || filename !== rawFilename) {
     return apiError("BAD_REQUEST", "Nama file tidak valid")
+  }
+  // Allowlist: hanya nama hasil createBackup (backup-*.sql). Tanpa ini,
+  // nama bebas ("missing.sql", "dump.sql") lolos sanitasi lalu gagal di
+  // readBackupFile sebagai 500 — padahal itu salah input klien = 400.
+  // Bentuk kontrak sama dengan restore/delete (isValidBackupName).
+  if (!isValidBackupName(filename)) {
+    return apiError("BAD_REQUEST", "Nama file backup tidak valid")
   }
 
   try {
@@ -42,6 +49,12 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch (e) {
+    // Berkas allowlist tapi tak ada (terhapus/cloud gagal) = 404, bukan 500:
+    // server sehat, yang diminta yang hilang. Pesan readBackupFile
+    // ("tidak ditemukan") memang untuk kasus ini, jadi kenali polanya.
+    if (e instanceof Error && e.message.includes("tidak ditemukan")) {
+      return apiError("NOT_FOUND", "File backup tidak ditemukan")
+    }
     console.error("Backup download failed:", e)
     return apiError("INTERNAL_ERROR", "Gagal mengunduh backup")
   }

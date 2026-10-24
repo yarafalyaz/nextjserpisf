@@ -13,6 +13,7 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   SO: 'salesOrderPrefix',
   INV: 'salesInvoicePrefix',
   PAY: 'salesPaymentPrefix',
+  LF: 'salesLateFeePrefix',
   SR: 'salesReturnPrefix',
   PR: 'purchaseRequestPrefix',
   PO: 'purchaseOrderPrefix',
@@ -38,6 +39,7 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   MO: 'manufacturingOrderPrefix',
   SM: 'stockMovementPrefix',
   CC: undefined as string | undefined, // Customer credit number (auto, not configurable)
+  CO: undefined as string | undefined, // Change order WO (auto, penomoran urut per WO di service)
   QCL: undefined as string | undefined, // QC checklist code (auto, not configurable)
   QCI: undefined as string | undefined, // QC inspection document number
   NCR: undefined as string | undefined, // Nonconformance report number
@@ -84,6 +86,7 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   SO: { model: 'salesOrder', field: 'documentNo', softDelete: true },
   INV: { model: 'salesInvoice', field: 'documentNo', softDelete: true },
   PAY: { model: 'salesPayment', field: 'documentNo' },
+  LF: { model: 'salesLateFee', field: 'documentNo', softDelete: true },
   SR: { model: 'salesReturn', field: 'documentNo' },
   DP: { model: 'downPayment', field: 'documentNo' },
   DO: { model: 'deliveryOrder', field: 'documentNo' },
@@ -96,6 +99,7 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   ADJ: { model: 'stockAdjustment', field: 'documentNo' },
   TRF: { model: 'inventoryTransfer', field: 'documentNo' },
   MI: { model: 'materialIssue', field: 'documentNo' },
+  CO: { model: 'jobChangeOrder', field: 'documentNo' },
   WO: { model: 'workOrder', field: 'documentNo' },
   MO: { model: 'productionOrder', field: 'documentNo' },
   JRN: { model: 'journal', field: 'journalNumber' },
