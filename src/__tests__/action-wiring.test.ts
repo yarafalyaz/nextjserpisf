@@ -102,6 +102,29 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
+  // F-2026-10-24-099-S inti backend (t_9037d2d8): aksi probation & keputusan
+  // kontrak backend dulu; konsumen UI kartu frontend t_4fcb24a1 (buang entri
+  // ini saat UI memanggilnya).
+  ...Object.fromEntries(
+    [
+      "openProbation",
+      "closeProbation",
+      "saveProbationReviewDraft",
+      "submitProbationReview",
+      "decideProbation",
+      "createContractDecisionRequest",
+      "submitContractDecisionRequest",
+      "approveContractDecisionRequest",
+      "rejectContractDecisionRequest",
+      "cancelContractDecisionRequest",
+      "applyContractDecisionRequest",
+      "getProbationOverview",
+      "getContractDecisionRequests",
+    ].map((name) => [
+      `src/actions/probation.actions.ts::${name}`,
+      "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
+    ]),
+  ),
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":

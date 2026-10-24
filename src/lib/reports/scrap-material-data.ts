@@ -15,9 +15,95 @@ import {
   isScrapReasonCode,
 } from "@/lib/services/scrap-classification"
 import { PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE } from "@/lib/services/stock-journal.service"
+import { SCRAP_REVIEW_STATUS_PENDING } from "@/lib/services/scrap-physical"
 
 export interface ScrapMaterialReport {
   report: ScrapReportResult
+}
+
+/** Baris antrean tinjau scrap abnormal — bentuk sama dengan yang dikonsumsi komponen antrean. */
+export interface ScrapReviewQueueLine {
+  source: "MI" | "PO"
+  lineId: number
+  documentNo: string
+  date: Date
+  itemName: string | null
+  abnormalQty: number
+  abnormalValue: number
+  scrapReasonLabel: string | null
+  allowanceNote: string | null
+  materialShape: string | null
+}
+
+/**
+ * Antrean tinjau abnormal periode (dipindah dari page laporan agar page
+ * tidak baca Prisma langsung). Angka snapshot beku apa adanya, urut tanggal.
+ */
+export async function loadScrapReviewQueue(start: Date, end: Date): Promise<ScrapReviewQueueLine[]> {
+  const pendingSelect = {
+    id: true,
+    itemId: true,
+    scrapReasonCode: true,
+    scrapAbnormalQtySnapshot: true,
+    scrapAbnormalValueSnapshot: true,
+  } as const
+  const [pendingMi, pendingPo] = await Promise.all([
+    prisma.materialIssueItem.findMany({
+      where: {
+        scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
+        materialIssue: { date: { gte: start, lte: end } },
+      },
+      select: { ...pendingSelect, materialIssue: { select: { documentNo: true, date: true } } },
+      orderBy: { id: "asc" },
+    }),
+    prisma.productionOrderMaterial.findMany({
+      where: {
+        scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
+        productionOrder: { createdAt: { gte: start, lte: end } },
+      },
+      select: { ...pendingSelect, productionOrder: { select: { documentNo: true, createdAt: true } } },
+      orderBy: { id: "asc" },
+    }),
+  ])
+  const pendingItemIds = [...new Set([...pendingMi.map((r) => r.itemId), ...pendingPo.map((r) => r.itemId)])]
+  const pendingItems = pendingItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: pendingItemIds } },
+        select: { id: true, name: true, category: { select: { scrapAllowanceNote: true, materialShape: true } } },
+      })
+    : []
+  const pendingItemById = new Map(pendingItems.map((i) => [i.id, i]))
+  type PendingRow = {
+    id: number
+    itemId: number
+    scrapReasonCode: string | null
+    scrapAbnormalQtySnapshot: unknown
+    scrapAbnormalValueSnapshot: unknown
+  }
+  const toLine = (
+    source: ScrapReviewQueueLine["source"],
+    r: PendingRow,
+    doc: { documentNo: string; date: Date },
+  ): ScrapReviewQueueLine => {
+    const item = pendingItemById.get(r.itemId)
+    return {
+      source,
+      lineId: r.id,
+      documentNo: doc.documentNo,
+      date: doc.date,
+      itemName: item?.name ?? null,
+      abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
+      abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
+      scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
+      allowanceNote: item?.category?.scrapAllowanceNote ?? null,
+      materialShape: item?.category?.materialShape ?? null,
+    }
+  }
+  const rows: ScrapReviewQueueLine[] = [
+    ...pendingMi.map((r) => toLine("MI", r, r.materialIssue)),
+    ...pendingPo.map((r) => toLine("PO", r, { documentNo: r.productionOrder.documentNo, date: r.productionOrder.createdAt })),
+  ]
+  return rows.sort((a, b) => a.date.getTime() - b.date.getTime())
 }
 
 export async function loadScrapMaterialReport(start: Date, end: Date): Promise<ScrapMaterialReport> {
@@ -91,59 +177,78 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
     remnantBySource.set(key, cur)
   }
 
+  // installedQty sengaja null di kedua jalur (keputusan t_4c0eebfc):
+  // BR-SCRAP-07 masih USULAN dan schema tidak punya qty terpasang fabrikasi
+  // per baris (InstalledPart = sparepart kendaraan, domain lain).
+  // Rekonsiliasi tidak dinilai daripada ditebak issue-scrap-remnant;
+  // nyalakan hanya bila sumber terpasang eksplisit per baris tersedia.
+  type SnapshotRow = {
+    id: number
+    itemId: number
+    scrapQty: unknown
+    scrapReasonCode: string | null
+    scrapPercentSnapshot: unknown
+    scrapNormalQtySnapshot: unknown
+    scrapAbnormalQtySnapshot: unknown
+    scrapNormalValueSnapshot: unknown
+    scrapAbnormalValueSnapshot: unknown
+    scrapReviewStatus: string | null
+    scrapReviewDisposition: string | null
+  }
+  const toReportLine = (
+    source: ScrapReportLineInput["source"],
+    r: SnapshotRow,
+    doc: { documentNo: string; date: Date },
+    qty: { issueQty: number; plannedQty: number },
+    aggKey: string,
+  ): ScrapReportLineInput => {
+    const agg = remnantBySource.get(aggKey) ?? { remnantQty: 0, scrapWeightKg: 0 }
+    return {
+      source,
+      documentNo: doc.documentNo,
+      date: doc.date,
+      itemName: itemNames.get(r.itemId) ?? null,
+      issueQty: qty.issueQty,
+      plannedQty: qty.plannedQty,
+      scrapQty: Number(r.scrapQty),
+      scrapReasonCode: r.scrapReasonCode,
+      scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
+      normalQty: Number(r.scrapNormalQtySnapshot ?? 0),
+      abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
+      normalValue: Number(r.scrapNormalValueSnapshot ?? 0),
+      abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
+      uncalibrated: r.scrapPercentSnapshot == null || Number(r.scrapPercentSnapshot) <= 0,
+      reviewStatus: r.scrapReviewStatus ?? null,
+      reviewDisposition: r.scrapReviewDisposition ?? null,
+      remnantQty: agg.remnantQty,
+      installedQty: null,
+      scrapWeightKg: agg.scrapWeightKg,
+      allowanceNote: allowanceNotes.get(r.itemId) ?? null,
+      materialShape: materialShapes.get(r.itemId) ?? null,
+    }
+  }
   const lines: ScrapReportLineInput[] = [
-    ...miRows.map((r): ScrapReportLineInput => {
-      const agg = remnantBySource.get(`material_issue_item:${r.id}`) ?? { remnantQty: 0, scrapWeightKg: 0 }
-      return {
-      source: "MI",
-      documentNo: r.materialIssue.documentNo,
-      date: r.materialIssue.date,
-      itemName: itemNames.get(r.itemId) ?? null,
-      issueQty: Number(r.qty),
-      plannedQty: r.scrapPlannedQtySnapshot != null ? Number(r.scrapPlannedQtySnapshot) : 0,
-      scrapQty: Number(r.scrapQty),
-      scrapReasonCode: r.scrapReasonCode,
-      scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
-      normalQty: Number(r.scrapNormalQtySnapshot ?? 0),
-      abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
-      normalValue: Number(r.scrapNormalValueSnapshot ?? 0),
-      abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
-      uncalibrated: r.scrapPercentSnapshot == null || Number(r.scrapPercentSnapshot) <= 0,
-      reviewStatus: r.scrapReviewStatus ?? null,
-      reviewDisposition: r.scrapReviewDisposition ?? null,
-      remnantQty: agg.remnantQty,
-      installedQty: null,
-      scrapWeightKg: agg.scrapWeightKg,
-      allowanceNote: allowanceNotes.get(r.itemId) ?? null,
-      materialShape: materialShapes.get(r.itemId) ?? null,
-      }
-    }),
-    ...poRows.map((r): ScrapReportLineInput => {
-      const agg = remnantBySource.get(`production_order_material:${r.id}`) ?? { remnantQty: 0, scrapWeightKg: 0 }
-      return {
-      source: "PO",
-      documentNo: r.productionOrder.documentNo,
-      date: r.productionOrder.createdAt,
-      itemName: itemNames.get(r.itemId) ?? null,
-      issueQty: Number(r.actualQty ?? 0),
-      plannedQty: Number(r.qty),
-      scrapQty: Number(r.scrapQty),
-      scrapReasonCode: r.scrapReasonCode,
-      scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
-      normalQty: Number(r.scrapNormalQtySnapshot ?? 0),
-      abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
-      normalValue: Number(r.scrapNormalValueSnapshot ?? 0),
-      abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
-      uncalibrated: r.scrapPercentSnapshot == null || Number(r.scrapPercentSnapshot) <= 0,
-      reviewStatus: r.scrapReviewStatus ?? null,
-      reviewDisposition: r.scrapReviewDisposition ?? null,
-      remnantQty: agg.remnantQty,
-      installedQty: null,
-      scrapWeightKg: agg.scrapWeightKg,
-      allowanceNote: allowanceNotes.get(r.itemId) ?? null,
-      materialShape: materialShapes.get(r.itemId) ?? null,
-      }
-    }),
+    ...miRows.map((r) =>
+      toReportLine(
+        "MI",
+        r,
+        r.materialIssue,
+        {
+          issueQty: Number(r.qty),
+          plannedQty: r.scrapPlannedQtySnapshot != null ? Number(r.scrapPlannedQtySnapshot) : 0,
+        },
+        `material_issue_item:${r.id}`,
+      ),
+    ),
+    ...poRows.map((r) =>
+      toReportLine(
+        "PO",
+        r,
+        { documentNo: r.productionOrder.documentNo, date: r.productionOrder.createdAt },
+        { issueQty: Number(r.actualQty ?? 0), plannedQty: Number(r.qty) },
+        `production_order_material:${r.id}`,
+      ),
+    ),
   ].sort((a, b) => a.date.getTime() - b.date.getTime())
 
   const abnormalJournalValue = journals.reduce((a, j) => a + Number(j.totalDebit), 0)

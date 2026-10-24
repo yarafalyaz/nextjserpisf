@@ -154,3 +154,37 @@ describe("evaluatePayrollEmploymentGate (Q-EMP-3)", () => {
     ).toBe(true)
   })
 })
+
+describe("buildEmployeeLifecycleAttention perluasan F-099-S Q-PROB-4", () => {
+  const kindsOf = (over: Partial<EmployeeLifecycleInput>) =>
+    buildEmployeeLifecycleAttention([emp(over)], today)
+
+  it.each([
+    // probationDue: titik evaluasi lewat dan probation belum berakhir
+    [
+      { probationEndDate: d("2026-11-20"), probationNextDueDate: d("2026-10-20"), probationFinalDecision: null },
+      ["probationDue"],
+      "Evaluasi percobaan jatuh tempo",
+    ],
+    // AC-PROB-5: probationOverdue menang atas probationDue, maks 1 baris
+    [
+      { probationEndDate: d("2026-10-21"), probationNextDueDate: d("2026-08-23"), probationFinalDecision: null },
+      ["probationOverdue"],
+      "Percobaan lewat, belum diputus",
+    ],
+    // sesudah diputus final tidak ada baris probation
+    [
+      { probationEndDate: d("2026-10-21"), probationNextDueDate: d("2026-08-23"), probationFinalDecision: "passed" },
+      [],
+      null,
+    ],
+    // contractDecisionPending label verbatim
+    [{ contractDecisionPending: true }, ["contractDecisionPending"], "Keputusan kontrak menunggu penerapan"],
+    // tanpa field F-099-S perilaku lama utuh (tidak ada baris baru)
+    [{}, [], null],
+  ] as const)("kasus %o", (over, kinds, label) => {
+    const rows = kindsOf(over)
+    expect(rows.map((r) => r.kind)).toEqual(kinds)
+    if (label !== null) expect(rows[0].label).toBe(label)
+  })
+})

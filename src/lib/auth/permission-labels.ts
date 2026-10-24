@@ -71,6 +71,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   items: "Barang",
   journals: "Jurnal",
   leads: "Prospek",
+  contracts: "Kontrak Karyawan",
   leave_requests: "Pengajuan Cuti",
   loans: "Pinjaman",
   material_issues: "Pengeluaran Material",

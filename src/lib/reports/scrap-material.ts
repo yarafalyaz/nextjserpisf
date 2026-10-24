@@ -77,6 +77,7 @@ export interface ScrapReportResult {
     pendingReviewLines: number
     reviewedLines: number
     scrapWeightKgTotal: number
+    remnantQtyTotal: number
     reconciliationFindingLines: number
   }
 }
@@ -135,6 +136,7 @@ export function buildScrapMaterialReport(input: {
       pendingReviewLines: lines.filter((l) => l.reviewStatus === "menunggu_tinjau").length,
       reviewedLines: lines.filter((l) => l.reviewStatus === "ditinjau").length,
       scrapWeightKgTotal: sum((l) => l.scrapWeightKg ?? 0),
+      remnantQtyTotal: sum((l) => l.remnantQty ?? 0),
       reconciliationFindingLines: lines.filter((l) => l.reconciliationFinding).length,
     },
   }
@@ -143,19 +145,29 @@ export function buildScrapMaterialReport(input: {
 import { formatAccounting, formatDate, formatNumber } from "@/lib/utils/format"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 
+/** Label bentuk bahan kategori — sama verbatim dengan antrean tinjau UI. */
+const MATERIAL_SHAPE_LABELS: Record<string, string> = {
+  plat: "Plat",
+  profil: "Profil",
+  lain: "Lain",
+}
+
 export function buildScrapMaterialTable(report: ScrapReportResult): TableDocument["table"] {
   const columns: TableDocument["table"]["columns"] = [
     { header: "Dokumen", align: "left", width: 30 },
     { header: "Tanggal", align: "left", width: 24 },
     { header: "Barang", align: "left", width: 36 },
+    { header: "Bentuk", align: "left", width: 18 },
     { header: "Qty Issue", align: "right", width: 20 },
     { header: "Qty Scrap", align: "right", width: 20 },
+    { header: "Remnant", align: "right", width: 20 },
     { header: "Alasan Scrap", align: "left", width: 30 },
     { header: "Normal", align: "right", width: 20 },
     { header: "Abnormal", align: "right", width: 20 },
     { header: "Nilai Abnormal", align: "right", width: 28 },
     { header: "Scrap %", align: "right", width: 18 },
     { header: "Kalibrasi", align: "left", width: 21 },
+    { header: "Acuan Allowance", align: "left", width: 36 },
     { header: "Tinjau", align: "left", width: 21 },
     { header: "Besi Tua (kg)", align: "right", width: 20 },
     { header: "Rekonsiliasi", align: "left", width: 24 },
@@ -171,14 +183,17 @@ export function buildScrapMaterialTable(report: ScrapReportResult): TableDocumen
         `${l.source} ${l.documentNo}`,
         formatDate(l.date, { format: "numeric" }),
         l.itemName ?? "-",
+        l.materialShape ? (MATERIAL_SHAPE_LABELS[l.materialShape] ?? l.materialShape) : "Belum ditetapkan",
         formatNumber(l.issueQty, 2),
         formatNumber(l.scrapQty, 2),
+        formatNumber(l.remnantQty, 2),
         l.scrapReasonLabel ?? l.scrapReasonCode ?? "-",
         formatNumber(l.normalQty, 2),
         formatNumber(l.abnormalQty, 2),
         formatAccounting(l.abnormalValue, { zeroDash: false }),
         l.lineRatePct == null ? "-" : `${formatNumber(l.lineRatePct, 2)}%`,
         l.uncalibrated ? "Belum kalibrasi" : "Terkalibrasi",
+        l.allowanceNote ?? "Belum ditetapkan",
         l.reviewStatus === "menunggu_tinjau"
           ? "Abnormal belum ditinjau"
           : l.reviewStatus === "ditinjau"
@@ -193,10 +208,10 @@ export function buildScrapMaterialTable(report: ScrapReportResult): TableDocumen
       ],
     })),
     { kind: "total", label: `Total (${t.lineCount} baris)`, grand: true, cells: [
-      formatNumber(t.issueQty, 2), formatNumber(t.scrapQty, 2), "",
+      "", formatNumber(t.issueQty, 2), formatNumber(t.scrapQty, 2), formatNumber(t.remnantQtyTotal, 2),
       formatNumber(t.normalQty, 2), formatNumber(t.abnormalQty, 2),
       formatAccounting(t.abnormalValue, { zeroDash: false }),
-      t.aggregateRatePct == null ? "-" : `${formatNumber(t.aggregateRatePct, 2)}%`, "",
+      t.aggregateRatePct == null ? "-" : `${formatNumber(t.aggregateRatePct, 2)}%`, "", "",
       `${t.pendingReviewLines} belum ditinjau`,
       formatNumber(t.scrapWeightKgTotal, 2),
       t.reconciliationFindingLines > 0 ? `${t.reconciliationFindingLines} temuan selisih` : "Sesuai",
