@@ -24706,6 +24706,20 @@ berisik, pola existing):
 6. Menurunkan status pajak dari status dokumen, pembayaran,
    atau posting.
 
+### Lampiran hitung kemandirian DPP FP UM vs kewajiban 210102 (sen)
+
+- DPP FP UM (kolom DPP nilai lain snapshot dokumen pajak) =
+  11/12 x A. Kaki GL sengaja TIDAK menyamakan DPP dengan
+  kredit 210102: PPN = tarif% x DPP, kredit 210102 = A - PPN.
+  Untuk tarif nominal 12, PPN = 11% x A efektif dan
+  210102 = 89% x A, sedangkan DPP = 91,6667% x A. Selisih
+  2,6667% x A antara DPP dan kredit 210102 adalah konsekuensi
+  rezim DPP nilai lain (DPP bukan nilai penyerahan neto kas),
+  tampil di rekonsiliasi sebagai baris penjelasan DPP-nilai-
+  lain, BUKAN selisih temuan. QA WAJIB membedakan baris ini
+  dari selisih jurnal-vs-SPT yang sesungguhnya (PPN GL neto
+  vs PPN SPT tetap harus nol selisih per Putusan 3).
+
 Pemilik berikutnya: BOT Lead (merge PR vonis ini) -> BOT
 Backend (build Putusan 5, koordinasi schema tertulis dulu) ->
 BOT Frontend -> BOT QA (E-DP-PPN). Risiko terbuka: pola DP
