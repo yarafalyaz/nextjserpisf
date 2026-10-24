@@ -259,7 +259,16 @@ export interface PkwtAnomaly {
 
 export interface PkwtCompensationReport {
   rows: PkwtCompensationRow[]
+  /**
+   * Saldo GL utang kompensasi. Bila input `glIsCompanyWide` true, saldo ini
+   * satu perusahaan sedangkan rows/totals adalah cakupan scope HR pemanggil:
+   * perbedaan cakupan BUKAN temuan GL_VS_EVENT_DIFF.
+   */
   glPayableBalance: number
+  /** True bila glPayableBalance tidak se-cakupan dengan rows (scope HR). */
+  glIsCompanyWide?: boolean
+  /** True bila glPayableBalance dikomparkan apa adanya (scope `all`). */
+  glComparableToScope?: boolean
   expectedPayableTotal: number
   accrualSubledgerTotal: number
   paidSlipTotal: number
@@ -272,6 +281,13 @@ export function buildPkwtCompensationReport(input: {
   events: readonly PkwtEventReportInput[]
   glPayableBalance: number
   mappingMissing: boolean
+  /**
+   * True bila glPayableBalance adalah saldo satu perusahaan sedangkan
+   * events sudah terfilter scope HR terbatas (self/department). Dalam mode
+   * itu selisih GL vs total ter-scope adalah artefak cakupan, BUKAN temuan
+   * rekonsiliasi: GL_VS_EVENT_DIFF tidak diterbitkan.
+   */
+  glIsCompanyWide?: boolean
 }): PkwtCompensationReport {
   const rows: PkwtCompensationRow[] = input.events.map((e) => ({
     ...e,
@@ -288,8 +304,9 @@ export function buildPkwtCompensationReport(input: {
     2,
   )
   const anomalies: PkwtAnomaly[] = []
+  const glIsCompanyWide = input.glIsCompanyWide ?? false
   const glDiff = safeRound(input.glPayableBalance - expectedPayableTotal, 2)
-  if (!input.mappingMissing && glDiff !== 0 && frozen.length > 0) {
+  if (!input.mappingMissing && !glIsCompanyWide && glDiff !== 0 && frozen.length > 0) {
     anomalies.push({
       code: "GL_VS_EVENT_DIFF",
       label: "GL vs peristiwa",
@@ -327,6 +344,8 @@ export function buildPkwtCompensationReport(input: {
   return {
     rows,
     glPayableBalance: input.glPayableBalance,
+    glIsCompanyWide,
+    glComparableToScope: !glIsCompanyWide,
     expectedPayableTotal,
     accrualSubledgerTotal,
     paidSlipTotal,
