@@ -41,6 +41,14 @@ import {
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
+import {
+  L3_MSG,
+  parseL3Tag,
+  resolveL3WorkOrder,
+  assertNoDuplicateL3,
+  writeL3ActivityLog,
+} from "@/lib/services/late-cost-l3.service";
+import { getSystemSettings } from "@/lib/utils/settings";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import { PurchaseStatus, Status } from "@/lib/constants";
@@ -1298,6 +1306,24 @@ export async function createVendorBill(formData: FormData) {
     };
 
     const bill = await prisma.$transaction(async (tx) => {
+      // F-2026-10-24-133-V Putusan 2/4: penanda L3 pada notes menjadikan
+      // tagihan ini biaya telat NON-JOB sesudah WO closed. Wajib tanpa
+      // tautan PO/GR (tautan = jalur L1/L2), WO closed, alasan tertulis,
+      // dan lolos guard duplikat; ActivityLog WO ditulis dalam tx sama.
+      const l3 = await resolveL3WorkOrder(tx, v.notes, "Tagihan vendor");
+      if (l3 && (v.purchaseOrderId || v.goodsReceiptId)) {
+        throw new Error(L3_MSG.vendorBillLinked());
+      }
+      if (l3) {
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3.workOrder.id,
+          workOrderNo: l3.workOrder.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date: wibDateToUtcMidnight(v.date),
+        });
+      }
+
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
 
@@ -1421,6 +1447,21 @@ export async function createVendorBill(formData: FormData) {
       // Each line also links back to its goods-receipt line when the bill came
       // from a receipt.
       await persistVendorBillItems(tx, created.id, v.items, grLineQueues);
+
+      // Putusan 4(2): jejak L3 pada WO dalam tx yang sama dengan dokumen.
+      if (l3) {
+        await writeL3ActivityLog(tx, {
+          workOrder: l3.workOrder,
+          sourceType: "VendorBill",
+          sourceId: created.id,
+          sourceDocumentNo: created.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date: wibDateToUtcMidnight(v.date),
+          reason: l3.tag.reason,
+          userId: Number(user.id),
+        });
+      }
 
       // Associate uploaded attachments with the new vendor bill
       const attachmentIds = v.attachmentIds;
@@ -1577,6 +1618,32 @@ export async function confirmVendorBill(billId: number) {
       });
       if (fresh.status !== "draft") {
         throw new Error("Tagihan hanya bisa diposting dari status draft");
+      }
+
+      // F-2026-10-24-133-V Putusan 1(a)/4: tagihan L3 wajib (masih) tanpa
+      // tautan PO/GR, WO closed, tidak duplikat, dan akun beban dari
+      // setting existing — fail-closed SEBELUM jurnal lahir (E133-7:
+      // nol jurnal, nol sukses senyap).
+      const l3Post = parseL3Tag(fresh.notes);
+      if (l3Post) {
+        if (fresh.purchaseOrderId || fresh.goodsReceiptId) {
+          throw new Error(L3_MSG.vendorBillLinked());
+        }
+        const l3Resolved = await resolveL3WorkOrder(tx, fresh.notes, "Tagihan vendor");
+        const settings = await getSystemSettings();
+        if (!settings.purchaseExpenseAccountId) {
+          throw new Error(
+            "Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya",
+          );
+        }
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3Resolved!.workOrder.id,
+          workOrderNo: l3Resolved!.workOrder.documentNo,
+          vendorKey: `vendor:${fresh.vendorId}`,
+          amount: Number(fresh.grandTotal),
+          date: fresh.date,
+          excludeSource: { sourceType: "VendorBill", sourceId: billId },
+        });
       }
 
       // 3-way match (PO ↔ GR ↔ Bill) before posting

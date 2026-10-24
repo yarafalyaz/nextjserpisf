@@ -207,4 +207,23 @@ describe("onVendorBillPosted - PPh withholding", () => {
     expect(entries).toHaveLength(2)
     expect(entries[1]).toMatchObject({ accountId: PAYABLE, credit: 1_000_000 })
   })
+
+  // F-2026-10-24-133-V Putusan 4(3): memo debit L3 menyebut nomor WO,
+  // referenceType tetap VendorBill; tanpa penanda memo lama utuh.
+  it("memo debit menyebut nomor WO bila notes bertanda L3", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      notes: "BIAYA TELAT NON-JOB L3 | WO: WO-0007 | Alasan: jasa bubut telat",
+      withholdingAmount: 0,
+      withholdingType: null,
+    })
+
+    await onVendorBillPosted(1, 42)
+
+    const arg = mocks.journalCreate.mock.calls[0][0]
+    expect(arg.data.referenceType).toBe("VendorBill")
+    const entries = arg.data.entries.create as { accountId: number; memo: string }[]
+    expect(entries[0].memo).toContain("WO-0007")
+    expect(entries[0].accountId).toBe(EXPENSE)
+  })
 })
