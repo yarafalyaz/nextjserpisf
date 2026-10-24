@@ -63,7 +63,7 @@ export default async function EditBomRevisionPage({
           productId: revision.productId,
           effectiveDate: revision.effectiveDate.toISOString(),
           notes: revision.notes,
-          materials: revision.materials.map((m) => ({ itemId: m.itemId, qty: Number(m.qty) })),
+          materials: revision.materials.map((m) => ({ itemId: m.itemId, qty: Number(m.qty), scrapPercent: m.scrapPercent != null ? Number(m.scrapPercent) : null })),
         }}
       />
     </div>

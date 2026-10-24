@@ -43,6 +43,74 @@ describe("EmployeeForm — a11y wiring", () => {
     })
   })
 
+  it("form tambah: seksi Status Kepegawaian §6 verbatim + kosong = Belum diatur", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <EmployeeForm {...baseProps} />)
+      const text = container.textContent ?? ""
+      expect(text).toContain("Status Kepegawaian")
+      expect(container.querySelector("#employmentStatus")).not.toBeNull()
+      const status = container.querySelector<HTMLSelectElement>("#employmentStatus")!
+      expect(status.value).toBe("")
+      expect(Array.from(status.options).map((o) => o.text)).toEqual([
+        "Belum diatur",
+        "Tetap (PKWTT)",
+        "Kontrak (PKWT)",
+        "Harian Lepas",
+        "Magang",
+      ])
+      expect(container.querySelector("#contractStartDate-trigger")).not.toBeNull()
+      expect(container.querySelector("#contractEndDate-trigger")).not.toBeNull()
+      expect(container.querySelector("#employmentEndedAt-trigger")).not.toBeNull()
+      const reason = container.querySelector<HTMLSelectElement>("#endReason")!
+      expect(Array.from(reason.options).map((o) => o.text)).toEqual([
+        "-- Pilih --",
+        "Kontrak Selesai",
+        "Mengundurkan Diri",
+        "Diberhentikan",
+        "Pensiun",
+        "Meninggal Dunia",
+        "Lainnya",
+      ])
+      expect(text).toContain("Tanggal berhenti dan alasan berhenti wajib diisi bersamaan")
+      unmount(root, container)
+    })
+  })
+
+  it("form ubah: nilai lifecycle karyawan tampil di kontrol", () => {
+    withContainer((container) => {
+      const root = mountInto(
+        container,
+        <EmployeeForm
+          {...baseProps}
+          employee={{
+            id: 7,
+            employeeNo: "K-007",
+            name: "Budi Uji",
+            email: null,
+            phone: null,
+            gender: null,
+            dateOfBirth: null,
+            maritalStatus: null,
+            dependents: null,
+            departmentId: null,
+            positionId: null,
+            joinDate: "2026-01-05",
+            paymentFrequency: "MONTHLY",
+            baseSalary: 5000000,
+            employmentStatus: "PKWT",
+            contractStartDate: "2026-01-05",
+            contractEndDate: "2026-12-31",
+            employmentEndedAt: null,
+            endReason: null,
+          }}
+        />,
+      )
+      expect(container.querySelector<HTMLSelectElement>("#employmentStatus")!.value).toBe("PKWT")
+      expect(container.querySelector<HTMLInputElement>('input[name="contractEndDate"]')!.value).toBe("2026-12-31")
+      unmount(root, container)
+    })
+  })
+
   it("form ubah: aria-label ubah karyawan", () => {
     withContainer((container) => {
       const root = mountInto(

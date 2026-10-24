@@ -156,6 +156,10 @@ export const purchaseReturnSchema = z.object({
   purchaseOrderId: z.coerce.number().min(1, "PO wajib dipilih"),
   date: dateOnly,
   reason: optionalString(1000),
+  // F-004 §3: nomor/tanggal nota retur pajak dicatat apa adanya (simetris
+  // retur penjualan); opsional, tanpa nota masa pengurang = tanggal retur.
+  taxReturnNoteNumber: optionalString(100),
+  taxReturnNoteDate: optionalDateOnly,
   items: optionalString(50000), // JSON string, parsed separately
 })
 
