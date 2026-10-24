@@ -85,7 +85,7 @@ export function PurchaseAdvanceForm({
       className="flex flex-col gap-5 rounded-xl border border-default bg-surface p-6 shadow-sm"
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <AppDatePicker label="Tanggal *" name="date" value={date} onChange={setDate} />
+        <AppDatePicker label="Tanggal *" name="date" value={date} onChange={setDate} required />
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Jumlah Uang Muka *</Label>
