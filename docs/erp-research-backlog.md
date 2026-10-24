@@ -24462,3 +24462,132 @@ Pemilik berikutnya: Lead (merge PR docs ini sesudah
 konfirmasi QA head final) -> Backend (DUP-B1/B2) ->
 Frontend (DUP-F1) -> QA (DUP-Q1). Accountant: TIDAK
 dilibatkan — nol uang/pajak/jurnal di spec ini.
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-003-S: peringatan duplikat pelanggan saat buat/ubah + daftar kandidat duplikat baca-saja (master pelanggan)
+
+> **Slot**: F-2026-10-25-003-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`161c69b4`): grep `F-2026-10-25` di `docs/erp-research-backlog.md` origin/main = hanya 001-S (PR #747 merged a482589c); 002-S di PR #753 OPEN beda topik (antrean penawaran diterima). ID 003 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Saudara, bukan duplikat**: F-2026-10-24-141-S (PR #746 OPEN) = peringatan duplikat LEAD pra-penawaran di `createLead`. Spec ini objek berbeda: `Customer` master pasca-transaksi (sudah punya penawaran/faktur/kendaraan/piutang). Pola kandidat baca-saja diselaraskan, aturan tidak disalin mentah — pelanggan duplikat merusak statement/piutang/histori kendaraan, lead duplikat hanya merusak corong.
+
+### 0. Ringkasan putusan yang diminta
+
+Master pelanggan bisa lahir ganda tanpa satu pun penanda: form penuh `createCustomer` tidak memeriksa kemiripan apa pun, dan satu-satunya penjaga existing (quick-add upsert nama+telepon persis, `master.actions.ts:186-193`) justru mengembalikan pelanggan lama SECARA DIAM-DIAM tanpa memberi tahu operator bahwa data sudah ada. Akibat lapangan: pelanggan sama tercatat dua kali (nama beda kapital / telepon beda format `08…` vs `+62…` / NPWP sama), lalu penawaran, faktur, kendaraan, dan piutang terbelah dua master — statement dan aging per pelanggan jadi salah tanpa ada yang salah input menurut sistem. Spec ini membekukan: (A) sinyal kandidat duplikat terstruktur dari server saat buat/ubah (peringatan, BUKAN blokir keras tahap 1), (B) daftar kandidat duplikat baca-saja di halaman kelola pelanggan untuk pembersihan manual existing, (C) normalisasi kunci banding (nama/telepon/NPWP) yang eksplisit dan teruji. Keputusan blokir-keras vs peringatan = `BUTUH-VONIS` Lead (Q-CD-1); penggabungan (merge) dua master TIDAK diusulkan tahap 1.
+
+### 1. Inventarisasi terverifikasi (origin/main 161c69b4, 2026-10-25 00:0x WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Customer` (`prisma/schema.prisma`, model Customer): `name`, `email?`, `phone?`, `taxId?` (`@map("tax_id")`), `code String? @unique`, relasi `quotations/salesInvoices/customerVehicles/salesOrders/workOrders/projects/downPayments/customerCredits/salesReturns`. **Tidak ada unique pada name/phone/taxId/email.**
+- Quick-add upsert `createCustomer` (`src/actions/master.actions.ts:186-193`): bila `name` ter-trim + `phone` ter-trim cocok PERSIS (case-sensitive, tanpa normalisasi format telepon) pada pelanggan aktif non-deleted, aksi mengembalikan `{success, id, slug}` pelanggan lama TANPA pesan bahwa data sudah ada. Telepon kosong = syarat telepon diabaikan (`phone: rawPhoneCust || undefined`) sehingga nama sama persis + telepon kosong pun memicu reuse diam-diam.
+- Jalur form penuh sesudah upsert itu (`master.actions.ts:196` dst.): `parseFormData(customerSchema)` → cek kategori → `prisma.customer.create`. **Nol cek kemiripan** nama/telepon/email/NPWP sebelum create.
+- `updateCustomer(customerId, formData)` (`master.actions.ts:245`): `edit_customers`, update langsung + `nextSlug` excludeId diri. **Nol cek duplikat** — mengubah nama/telepon pelanggan A menjadi persis milik B lolos.
+- Validasi NPWP: `customerSchema.taxId: z.string().max(50).optional()` (`src/lib/validations/form.schemas.ts:47`) — string bebas, tanpa normalisasi titik/strip, tanpa cek format 15/16 digit, tanpa keunikan. (Keluarga identitas pajak terstruktur/validasi NPWP 16 digit sudah tercatat sebagai adaptasi backlog lama ±baris 84-94 — spec ini TIDAK mengarang skema pajak baru; ia hanya memakai taxId existing sebagai kunci banding kandidat.)
+- Izin nyata katalog (`src/lib/auth/module-catalog.generated.ts:125-128`): `view_customers`, `create_customers`, `edit_customers`, `delete_customers`. Tidak ada izin khusus duplikat/merge.
+- Pembersihan existing: `deleteCustomer` (`master.actions.ts:296`) hard-delete-or-soft-delete (`deletedAt` + `isActive=false`); halaman kelola `master/pelanggan` existing. Tidak ada aksi merge/pindah-relasi pelanggan.
+
+Belum ada / gap (bukti grep run ini):
+- Sinyal duplikat terstruktur: grep kandidat duplikat pelanggan di `src/actions/master.actions.ts` + `src/lib/reports/` = 0 di luar upsert diam-diam di atas. Operator tidak pernah diberi tahu "kemungkinan sudah ada".
+- Daftar kandidat duplikat: tidak ada permukaan yang mengelompokkan pelanggan aktif menurut nama/telepon/NPWP ternormalisasi yang sama. Pembersihan hari ini = operator menebak dari daftar urut nama.
+- Normalisasi kunci banding: tidak ada fungsi normalisasi telepon (`+62`/`62`/`0` awalan, spasi/strip) atau NPWP (titik/strip) untuk keperluan banding pelanggan; banding existing = string mentah trim saja.
+
+### 2. Workflow specification
+
+Aktor: Admin Master Data / Admin Penjualan (buat/ubah pelanggan), Sales (quick-add dari form transaksi — konsumen reuse existing), Lead (putus Q-CD-1/2).
+
+Dokumen masuk: FormData pelanggan existing (name, phone?, email?, taxId?, dst.). Dokumen keluar: pelanggan baru existing ATAU sinyal kandidat `{ candidates: [...] }` terstruktur; daftar kandidat duplikat baca-saja di halaman kelola.
+
+Alur:
+1. Operator menyimpan pelanggan baru (form penuh atau quick-add). Server menghitung kandidat dari pelanggan aktif non-deleted dengan kunci ternormalisasi yang cocok (aturan BR-CD-02/03) SEBELUM create.
+2. Tahap 1 (USULAN, menunggu Q-CD-1): BUKAN blokir. Server tetap menyimpan, tetapi respons memuat penanda kandidat terstruktur (id, nama, kode, telepon tampil, kunci yang cocok) dan UI menampilkan peringatan "Kemungkinan pelanggan ganda" sesudah simpan + tautan ke pelanggan kandidat. Quick-add yang me-reuse pelanggan lama WAJIB menyatakan reuse itu di respons/UI (bukan diam-diam).
+3. Admin membuka daftar kandidat duplikat (grup kunci sama, >= 2 pelanggan aktif) di halaman kelola, memeriksa transaksi masing-masing lewat permukaan existing, lalu membersihkan manual: nonaktifkan/hapus yang kosong lewat aksi existing, atau biarkan keduanya bila memang beda entitas (grup tetap tampil — tidak ada status "sudah ditinjau" tahap 1).
+4. Tidak ada merge otomatis, tidak ada pemindahan relasi, tidak ada perubahan dokumen transaksi mana pun.
+
+### 3. Status-transition matrix (keadaan kandidat, BUKAN kolom/status baru)
+
+Keadaan diturunkan saat baca dari kunci ternormalisasi pelanggan aktif non-deleted. Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada pasangan) | pelanggan kedua lahir dengan kunci sama | kandidat_grup (>=2) | penurun kandidat server |
+| kandidat_grup | satu anggota dinonaktifkan/dihapus (aksi existing) | tunggal (keluar grup) | izin delete/edit existing |
+| kandidat_grup | kunci anggota diedit hingga tak lagi sama | tunggal / grup lain | edit existing + penurun ulang |
+| semua | isActive=false / deletedAt terisi | di luar cakupan | aksi existing; kandidat hanya pelanggan aktif |
+
+### 4. Role/permission matrix (key nyata katalog :125-128)
+
+| Aksi | Admin Master/Penjualan | Sales | Peran lain |
+|---|---|---|---|
+| Buat pelanggan + terima sinyal kandidat | `create_customers` | `create_customers` (bila diberi; quick-add existing) | ditolak |
+| Ubah pelanggan + terima sinyal kandidat | `edit_customers` | ditolak | ditolak |
+| Lihat daftar kandidat duplikat | `view_customers` | `view_customers` (bila diberi) | ditolak |
+| Nonaktifkan/hapus anggota grup | `delete_customers` / `edit_customers` | ditolak | ditolak |
+| Merge/pindah relasi | TIDAK ADA tahap 1 | — | — |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-CD-2 Lead). Sinyal kandidat TIDAK memuat data di luar yang sudah terlihat pemegang `view_customers` (nama/kode/telepon pelanggan) — tanpa data gaji/pribadi lain.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-CD-01 | Perilaku hari ini dipertahankan sebagai garis dasar: quick-add nama+telepon persis me-reuse pelanggan lama; form penuh tanpa cek. Spec mengubah KEHENINGAN perilaku itu, bukan semantik reuse-nya tahap 1. | TERVERIFIKASI-KODE | master.actions.ts:186-193 |
+| BR-CD-02 | Kunci banding kandidat (USULAN, fisik Backend Q-CD-3): (a) telepon ternormalisasi — buang non-digit, samakan awalan `62`/`0` ke satu bentuk kanonik; (b) NPWP ternormalisasi — buang titik/strip/spasi, hanya digit; (c) nama ternormalisasi — trim, lipat spasi ganda, banding case-insensitive. String mentah TIDAK dibandingkan langsung. | USULAN | pola normalisasi invoice-collection/job-payment existing (rujuk Backend) |
+| BR-CD-03 | Kandidat lahir bila: telepon ternormalisasi sama DAN terisi, ATAU NPWP ternormalisasi sama DAN terisi, ATAU (nama ternormalisasi sama DAN (email sama terisi ATAU telepon sama)). Nama sama sendirian TANPA kunci kedua = BUKAN kandidat (nama PT/CV generik sah berganda). Ambang ini USULAN sampai Q-CD-1 diputus. | USULAN | — |
+| BR-CD-04 | Tahap 1 = PERINGATAN, bukan blokir: simpan tetap berhasil; respons server memuat kandidat terstruktur dan UI wajib menampilkannya. Blokir keras = Q-CD-1 Lead, tidak ditebak spec. | USULAN (BUTUH-VONIS Lead Q-CD-1) | — |
+| BR-CD-05 | Quick-add reuse WAJIB terucap: respons/UI menyatakan pelanggan existing yang dipakai (nama + kode), bukan sukses generik. Mengubah ini tidak mengubah id yang dikembalikan. | USULAN | master.actions.ts:192 (return tanpa penanda reuse) |
+| BR-CD-06 | Cakupan kandidat: hanya pelanggan `isActive=true AND deletedAt IS NULL`, tidak termasuk pelanggan yang sedang diedit (excludeId diri pada jalur update). | USULAN | pola updateCustomer excludeId slug existing |
+| BR-CD-07 | Daftar kandidat mengelompokkan per kunci cocok; satu pelanggan boleh muncul di >1 grup (telepon sama dengan A, NPWP sama dengan B). Urutan deterministik: jenis kunci (NPWP > telepon > nama+kunci kedua), lalu nama, lalu id. | USULAN | pola urutan deterministik repo |
+| BR-CD-08 | TIDAK ada merge master tahap 1: tidak ada aksi memindah quotation/invoice/kendaraan/piutang antar pelanggan, tidak ada penghapusan otomatis. Pembersihan = aksi edit/delete existing oleh manusia. Merge = spec terpisah sesudah daftar kandidat terbukti dipakai (Q-CD-4). | USULAN (scope) | deleteCustomer existing master.actions.ts:296 |
+| BR-CD-09 | Sinyal kandidat BUKAN peristiwa akuntansi: nol jurnal, nol ubah dokumen, nol ubah statement/aging. Statement per pelanggan tetap membaca relasi existing apa adanya. | TERVERIFIKASI-KODE (jalur master) | — |
+| BR-CD-10 | NPWP di sini hanya kunci banding kandidat. Validasi format/keabsahan NPWP, NITKU, status PKP = keluarga identitas pajak backlog lama, BUKAN spec ini; angka/aturan pajak = vonis Accountant bila diangkat. | TERVERIFIKASI-KODE + scope | backlog ±baris 84-94; form.schemas.ts:47 |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Buat pelanggan + impor master | Ada (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pelanggan/mengenal-fitur-pelanggan/) | Belum terverifikasi di help resmi yang diakses run ini — ditulis belum terverifikasi, bukan diklaim absen | Ada (TERVERIFIKASI-KODE master.actions.ts:182) |
+| Pencarian nama mirip multi-kata untuk menghindari salah pilih | Ada pencarian dua kata kunci `%` untuk pelanggan/pemasok (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-dan-jasa/mencari-data-dua-kata-kunci/) | Belum terverifikasi | Parsial: pencarian daftar existing; tanpa penanda kandidat saat simpan |
+| Peringatan duplikat saat simpan master pelanggan | Tidak ditemukan di dua halaman Accurate di atas — ditulis tidak ditemukan, bukan diklaim tidak ada | Belum terverifikasi | ABSEN (gap spec ini); quick-add me-reuse diam-diam |
+| Daftar kandidat duplikat untuk pembersihan | Tidak ditemukan di halaman di atas | Belum terverifikasi | ABSEN (gap spec ini) |
+| Merge dua master pelanggan | Tidak ditemukan di halaman di atas | Belum terverifikasi | ABSEN — sengaja tidak diusulkan tahap 1 (BR-CD-08) |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-CD-B1: buat pelanggan dengan telepon `+62 812-…` saat existing `0812…` (digit sama) → respons memuat kandidat existing itu. Membandingkan string mentah tanpa normalisasi = tes MERAH.
+- AC-CD-B2: NPWP berformat titik/strip vs digit polos dengan digit sama → kandidat lahir; NPWP beda digit → tidak.
+- AC-CD-B3: nama sama persis (beda kapital) TANPA telepon/email/NPWP cocok → BUKAN kandidat (regresi nama generik sah). Melonggarkan ke nama-saja = MERAH.
+- AC-CD-B4: tahap peringatan — simpan tetap `{success:true}` dan pelanggan terbuat; respons memuat kandidat terstruktur (id/nama/kode/kunci cocok). Menjadikan blokir tanpa putusan Q-CD-1 = MERAH terhadap spec.
+- AC-CD-B5: update pelanggan A ke telepon milik B → sinyal kandidat memuat B, tidak memuat A sendiri (excludeId).
+- AC-CD-B6: pelanggan nonaktif/terhapus dengan kunci sama TIDAK muncul sebagai kandidat; grup daftar hanya >= 2 aktif.
+- AC-CD-B7: quick-add reuse menyatakan reuse (penanda + identitas pelanggan terpakai di respons); id yang dikembalikan byte-sama perilaku existing.
+
+Frontend (konsumen):
+- AC-CD-F1: peringatan kandidat tampil dari respons server apa adanya (nama/kode/kunci), UI tidak menghitung kemiripan sendiri (grep normalisasi di komponen = MERAH).
+- AC-CD-F2: daftar kandidat tampil bergrup dengan anggota + tautan detail existing; grup < 2 tidak tampil.
+
+QA: AC-CD-B1..B7 + AC-CD-F1..F2 atas head Backend/Frontend persis; tambahan: buat pelanggan benar-benar baru (tanpa kecocokan) → nol kandidat, nol perubahan perilaku simpan.
+
+Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci kedua absen). EC-2 telepon sama dipakai dua pelanggan memang beda (kantor pusat vs cabang — nomor sentral sama): tetap kandidat peringatan; manusia yang menilai, sistem tidak memblokir (alasan BR-CD-04). EC-3 NPWP kosong vs "0"/strip saja → dinormalisasi kosong, bukan kandidat. EC-4 satu pelanggan cocok lewat telepon dengan A dan NPWP dengan B → muncul di dua grup. EC-5 nama mengandung spasi ganda/kapital campuran → ternormalisasi sama. EC-6 pelanggan existing hasil quick-add lama (reuse diam-diam) tidak diubah retroaktif; daftar kandidat yang menangkap sisanya.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-CD-1 (Lead, BUTUH-VONIS perilaku inti): peringatan-saja tahap 1 (usul spec) vs blokir keras untuk kecocokan NPWP persis? Rekomendasi spec: NPWP persis boleh blokir bila Lead menyetujui, kunci lain peringatan — tidak diputus di spec.
+- Q-CD-2 (Lead): izin baru vs reuse `view/create/edit/delete_customers` existing (spec usul reuse, tanpa key baru).
+- Q-CD-3 (Backend): fisik normalisasi (fungsi bersama vs lokal master), bentuk respons kandidat yang kompatibel quick-add + form penuh, dan indeks/kueri kandidat tanpa scan penuh tak terbatas.
+- Q-CD-4 (Lead): merge master pelanggan dibuka sebagai spec lanjutan sesudah daftar kandidat terbukti dipakai? Spec ini sengaja berhenti di deteksi.
+- Q-CD-5 (Accountant): TIDAK diminta tahap ini — kandidat duplikat tidak mengubah perlakuan pajak/dokumen (BR-CD-09/10). Dipanggil hanya bila merge master (Q-CD-4) diangkat, karena merge menyentuh histori faktur pajak per pelanggan.
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-003-S | Spec ini (dokumen) | Business | — |
+| (turunan) penurun kandidat + sinyal simpan/ubah + daftar kandidat loader | Backend | Q-CD-1/2/3 diputus Lead | — |
+| (turunan) UI peringatan simpan + daftar kandidat di master pelanggan | Frontend | kontrak Backend stabil; kata §7 verbatim | — |
+| (turunan) falsifikasi AC-CD-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+
+- Merge/gabungkan dua master pelanggan: risiko memindah histori faktur/kendaraan/piutang tanpa bukti kebutuhan terukur; daftar kandidat dulu (BR-CD-08, Q-CD-4).
+- Blokir keras semua kecocokan: nomor telepon sentral yang sah dipakai banyak entitas (EC-2) membuat blokir nama/telepon merusak input sah.
+- Validasi NPWP online/format pajak, NITKU, status PKP: keluarga identitas pajak existing, perlu vonis Accountant + sumber resmi DJP; bukan kunci banding sederhana spec ini.
+- Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
+---
