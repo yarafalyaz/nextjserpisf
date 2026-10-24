@@ -7,6 +7,7 @@ import {
   customerStatementOutstanding,
   type CustomerStatementInvoiceInput,
   type CustomerStatementPaymentInput,
+  type CustomerStatementReturnInput,
 } from "@/lib/reports/customer-statement"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
@@ -28,6 +29,9 @@ const payments: CustomerStatementPaymentInput[] = [
   { id: 11, documentNo: "PAY-011", salesInvoiceId: 1, salesInvoiceDocumentNo: "INV-001", paymentDate: D("2026-01-15"), amount: 300_000, withholdingAmount: 20_000, paymentMethod: "transfer" },
   { id: 12, documentNo: "PAY-012", salesInvoiceId: 2, salesInvoiceDocumentNo: "INV-002", paymentDate: D("2026-02-10"), amount: 200_000, withholdingAmount: 0, paymentMethod: "transfer" },
   { id: 13, documentNo: "PAY-013", salesInvoiceId: 2, salesInvoiceDocumentNo: "INV-002", paymentDate: D("2026-02-12"), amount: 150_000, withholdingAmount: 0, paymentMethod: "customer_credit", creditDocumentNo: "CRD-001" },
+]
+const returns: CustomerStatementReturnInput[] = [
+  { id: 21, documentNo: "RET-021", salesInvoiceId: 2, salesInvoiceDocumentNo: "INV-002", date: D("2026-02-15"), returnCredit: 100_000 },
 ]
 
 describe("CustomerStatementCard F-2026-10-21-032", () => {
@@ -92,6 +96,32 @@ describe("CustomerStatementCard F-2026-10-21-032", () => {
     const { container, root } = renderCard(<CustomerStatementCard statement={statement} />)
     const text = container.textContent ?? ""
     expect(text).toContain("400.000")
+    unmountCard(root)
+  })
+
+  it("baris retur (F-104-V): label 'Retur penjualan' + kredit verbatim builder (BR-RET-02)", () => {
+    const statement = buildCustomerStatement({
+      customerId: 7,
+      periodStart: D("2026-02-01"),
+      periodEnd: D("2026-02-28"),
+      invoices,
+      payments,
+      returns,
+    })
+    const retEntry = statement.entries.find((e) => e.kind === "return")
+    expect(retEntry).toMatchObject({ documentNo: "RET-021", referenceDocumentNo: "INV-002", debit: 0, credit: 100_000 })
+    expect(retEntry?.balance).toBe(730_000)
+    expect(statement.closingBalance).toBe(980_000)
+
+    const { container, root } = renderCard(<CustomerStatementCard statement={statement} />)
+    const rows = [...container.querySelectorAll("tbody tr")].map((r) => r.textContent ?? "")
+    const retRow = rows.find((r) => r.includes("RET-021"))
+    // Sel Jenis (kolom ke-3) persis label kind — bukan substring deskripsi builder.
+    const retRowEl = [...container.querySelectorAll("tbody tr")].find((r) => (r.textContent ?? "").includes("RET-021"))
+    expect(retRowEl?.children[2]?.textContent).toBe("Retur penjualan")
+    expect(retRow).toContain("Retur penjualan RET-021 atas faktur INV-002")
+    expect(retRow).toContain("100.000")
+    expect(retRow).toContain("730.000")
     unmountCard(root)
   })
 
