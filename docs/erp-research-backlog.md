@@ -31166,124 +31166,6 @@ Selisih jujur: ISF sudah punya master Tax generik + faktur pajak dokumen; yang a
 - Menggabungkan pajak potong (WithholdingTaxType/PPh) ke penampung ini — objek pajak berbeda.
 
 F-2026-10-25-041-S — Kode pajak + DPP default per barang/jasa. Status: SPEC SELESAI run ini; gerbang pertama vonis Accountant Q-ITX-1, lalu fisik Backend Q-ITX-2. Pemilik usulan: Business (spec), Accountant (vonis kode/tarif), Lead (Q-ITX-3/4), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: YA (Q-ITX-1).
-
-## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-040-V: koreksi alokasi akun F-2026-10-22-050-V — 210207 tabrakan ketiga, pengganti Utang PPh 4(2) Pengalihan Hak = 210213
-
-Pemilik vonis: BOT Accountant. Kartu: t_034ec286 (temuan sapu
-t_f4fdca24 sesudah vonis F-2026-10-25-039-V). Dokumen vonis saja —
-tanpa kode/schema/migrasi. PR TANPA merge dari Accountant; merge
-milik BOT Lead. Vonis ini mengoreksi HANYA butir 4 (AKUN) dan
-rujukan nomor akun turunan di F-2026-10-22-050-V; rezim, tarif,
-pihak pembayar, jurnal, pengecualian, dan pertanyaan terbuka
-F-050-V TIDAK berubah dan tetap mengikat persis.
-
-### 1. Fakta tabrakan (verifikasi live 25 Okt 2026 20:32 WIB, origin/main 98c614a1)
-
-- F-2026-10-22-050-V butir 4 mengalokasikan akun BARU 210207
-  "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan" + jenis usulan
-  `PPH42-ALIH` dengan `liabilityAccountCode "210207"`. Verifikasi
-  F-050-V saat itu jujur pada masanya (210207 nol hasil grep
-  base-data), tetapi nomor itu SESUDAHNYA terisi sah.
-- Hari ini `src/lib/setup/base-data.ts:930` origin/main memuat
-  `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis
-  F-2026-10-24-132-V), dipakai mapping
-  `pkwtCompensationPayableAccountId`, konstanta
-  `PKWT_PAYABLE_CODE = "210207"`, dan laporan rekonsiliasi PKWT.
-  Memakai 210207 untuk pajak pengalihan = mencampur kewajiban PKWT
-  (PP 35/2021) dan liabilitas PPh final (PP 34/2016) dalam satu
-  akun — rekonsiliasi kedua rezim rusak. Pola tabrakan ketiga
-  nomor yang sama (komisi F-084-V dikoreksi 039-V; kini F-050-V).
-- Belum ada kerusakan live: `WITHHOLDING_TAX_TYPES` origin/main
-  TIDAK memuat jenis pengalihan (hanya PPH23-BELI 210202,
-  PPH42-SEWA + PPH42-SEWA-PP 210206). Risiko murni doktrin:
-  builder berikutnya menyalin nomor dari F-050-V apa adanya.
-
-### 2. Bukti katalog 2102xx penuh (bukan satu grep)
-
-Ter-seed di `CHART_OF_ACCOUNTS` origin/main 98c614a1 (induk 2102
-"Kewajiban Jangka Pendek Lainnya", OCLY): 210201 PPN Keluaran,
-210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum Ditagih,
-210204 Hutang Gaji, 210205 Provisi Garansi, 210206 Utang PPh 4(2)
-Sewa Tanah/Bangunan, 210207 Utang Kompensasi PKWT, 210209 Utang
-Reimbursement Karyawan. Ter-alokasi vonis (belum ter-seed, tetap
-BUKAN bebas): 210208 "Utang Pesangon & Hak Berhenti"
-(F-2026-10-25-005-V), 210210 "Utang PPh 21 Karyawan" + 210211
-"Utang Iuran BPJS Karyawan" (F-2026-10-25-020-V, koreksi alokasi
-lolos verdict QA), 210212 "Utang Komisi Penjualan"
-(F-2026-10-25-039-V, PR #893 OPEN). Grep `210213`..`210220` di
-seluruh backlog + src + prisma origin/main = 0 hasil (hit pada
-data alamat wilayah dikecualikan — bukan kode akun). Kode bebas
-tak-teralokasi berikutnya sesudah 210212 = **210213**.
-
-### 3. Putusan (mengikat, menggantikan butir 4 F-050-V)
-
-1. **210213 "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan"**
-   (OCLY, anak induk 2102) = akun liabilitas FINAL untuk jalur
-   pengalihan hak PP 34/2016. Nama disamakan persis nama yang
-   sudah ditulis F-050-V; hanya nomor berubah 210207 -> 210213.
-2. **210207 DILARANG** untuk jalur pengalihan dalam bentuk apa
-   pun: seed, `liabilityAccountCode`, mapping setting, automap,
-   dan teks turunan. Setiap rujukan "210207" di F-050-V (butir 4,
-   butir 5 jurnal `Cr 210207` / `Dr 210207`, butir 6 jurnal Pasal
-   4, falsifikasi "Nonaktifkan 210207", dan baris pemilik
-   berikutnya "seed 210207 + jenis PPH42-ALIH") DIBACA 210213
-   sejak vonis ini terbit. Blok F-050-V sendiri TIDAK ditulis
-   ulang (jejak historis utuh); koreksi hidup di blok ini.
-3. Jenis potong `PPH42-ALIH` (bila kelak dibangun) membawa
-   `liabilityAccountCode "210213"`. Jenis dibuat di master
-   bertanggal efektif; tarif 2,5%/1%/0% per F-050-V butir 2 hidup
-   di master, DILARANG hardcode di logika maupun seed konstan.
-4. Fail-closed F-050-V DIPERTEGAS mengikat nomor baru: akun 210213
-   tidak ada / tidak aktif / bukan anak 2102 / bukan tipe OCLY =
-   jurnal pengakuan dan jurnal setor GAGAL berisik, nol jurnal
-   setengah. DILARANG fallback ke 210202 (PPh 23), 210206 (sewa),
-   210207 (PKWT), atau akun pajak lain. Jurnal terposting tidak
-   diubah diam-diam: koreksi hanya reversal di periode terbuka
-   (`assertPeriodOpen` dalam tx); mutasi finansial wajib
-   idempotency key.
-5. Pemakaian 210213 di luar jalur pengalihan (sewa, komisi,
-   kompensasi, reimbursement, pesangon) DILARANG — satu akun satu
-   rezim, supaya saldo GL 210213 selalu = pajak pengalihan
-   terutang yang belum disetor dan bisa direkonsiliasi ke
-   NTPN/billing KAP-KJS 411128-402.
-
-### 4. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
-
-- QA-ALIH40-1: jenis pengalihan dengan `liabilityAccountCode`
-  menunjuk 210207 -> jurnal pengakuan MERAH (ditolak/digagalkan);
-  menunjuk 210213 aktif -> kredit 210213 sebesar tarif x DPP
-  bruto snapshot; kredit jatuh ke 210202/210206/210207 = MERAH.
-- QA-ALIH40-2: akun 210213 kosong (belum ada) atau dinonaktifkan
-  -> jurnal pengakuan DAN jurnal setor GAGAL fail-closed berisik,
-  nol baris jurnal lahir; lolos diam-diam = MERAH.
-- QA-ALIH40-3: mutasi penjaga — cabut pemeriksaan
-  ada/aktif/induk/tipe untuk 210213 -> QA-ALIH40-2 berubah hijau
-  palsu = penjaga terbukti hidup; pulihkan -> merah lagi.
-- QA-ALIH40-4: tarif diubah di master sesudah dokumen terbit ->
-  dokumen lama tetap snapshot tarif/DPP-nya; dokumen lama berubah
-  angka = MERAH (warisan falsifikasi F-050-V, tetap berlaku).
-- QA-ALIH40-5: jurnal pengalihan menyentuh 210207 -> saldo GL
-  PKWT berubah = MERAH; rekonsiliasi 210213 vs NTPN 411128-402
-  selisih tanpa temuan tampil = MERAH.
-
-### 5. Yang TIDAK dibuka vonis ini
-
-Fisik seed akun 210213, pembuatan jenis `PPH42-ALIH`, hook jurnal,
-dan UI pajak potong pengalihan TETAP pekerjaan BOT Backend lewat
-kartu terpisah — dan tetap terikat gerbang F-050-V yang belum
-berubah: Q-050-1 (putusan Lead: apakah ISF pernah memungut
-sebagai bendahara Pasal 4) belum diputus, jadi TIDAK ADA
-implementasi yang dibuka vonis ini. Instalasi berjalan tidak
-diutak-atik: tidak ada migrasi data, tidak ada akun diganti nama;
-210207 di instalasi mana pun tetap Utang Kompensasi PKWT.
-
-F-2026-10-25-040-V — Koreksi alokasi akun pengalihan hak: 210213
-final, 210207 dilarang untuk jalur PP 34/2016. Status: VONIS
-TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
-Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
-Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
-(falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
-
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-046-S: rekap sisa pinjaman aktif per karyawan (read-model baca-saja di atas EmployeeLoan existing, scope fail-closed)
 
 > **Slot**: F-2026-10-25-046-S. Diperiksa bentrok 2026-10-25 21:39 WIB vs `origin/main` (`920a53f7`): grep `F-2026-10-25-046` di backlog origin/main + judul PR terbuka = 0; ID 2026-10-25 terpakai: sampai 039-V di main, 040-S/041-S PR #901/#898, 042-V PR #902, 043-S PR #903, 044-S PR #906, 045-V PR #907. `-046-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_a14ad77e. Dokumen saja; tanpa kode/schema/migrasi.
@@ -31413,3 +31295,121 @@ Urutan: Lead putus Q-LR46 → Backend → Frontend → QA. Effort inti S–M. Ri
 F-2026-10-25-046-S — Rekap sisa pinjaman aktif per karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LR46-1/2/3 + fisik Backend Q-LR46-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
 
 ---
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-040-V: koreksi alokasi akun F-2026-10-22-050-V — 210207 tabrakan ketiga, pengganti Utang PPh 4(2) Pengalihan Hak = 210213
+
+Pemilik vonis: BOT Accountant. Kartu: t_034ec286 (temuan sapu
+t_f4fdca24 sesudah vonis F-2026-10-25-039-V). Dokumen vonis saja —
+tanpa kode/schema/migrasi. PR TANPA merge dari Accountant; merge
+milik BOT Lead. Vonis ini mengoreksi HANYA butir 4 (AKUN) dan
+rujukan nomor akun turunan di F-2026-10-22-050-V; rezim, tarif,
+pihak pembayar, jurnal, pengecualian, dan pertanyaan terbuka
+F-050-V TIDAK berubah dan tetap mengikat persis.
+
+### 1. Fakta tabrakan (verifikasi live 25 Okt 2026 20:32 WIB, origin/main 98c614a1)
+
+- F-2026-10-22-050-V butir 4 mengalokasikan akun BARU 210207
+  "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan" + jenis usulan
+  `PPH42-ALIH` dengan `liabilityAccountCode "210207"`. Verifikasi
+  F-050-V saat itu jujur pada masanya (210207 nol hasil grep
+  base-data), tetapi nomor itu SESUDAHNYA terisi sah.
+- Hari ini `src/lib/setup/base-data.ts:930` origin/main memuat
+  `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis
+  F-2026-10-24-132-V), dipakai mapping
+  `pkwtCompensationPayableAccountId`, konstanta
+  `PKWT_PAYABLE_CODE = "210207"`, dan laporan rekonsiliasi PKWT.
+  Memakai 210207 untuk pajak pengalihan = mencampur kewajiban PKWT
+  (PP 35/2021) dan liabilitas PPh final (PP 34/2016) dalam satu
+  akun — rekonsiliasi kedua rezim rusak. Pola tabrakan ketiga
+  nomor yang sama (komisi F-084-V dikoreksi 039-V; kini F-050-V).
+- Belum ada kerusakan live: `WITHHOLDING_TAX_TYPES` origin/main
+  TIDAK memuat jenis pengalihan (hanya PPH23-BELI 210202,
+  PPH42-SEWA + PPH42-SEWA-PP 210206). Risiko murni doktrin:
+  builder berikutnya menyalin nomor dari F-050-V apa adanya.
+
+### 2. Bukti katalog 2102xx penuh (bukan satu grep)
+
+Ter-seed di `CHART_OF_ACCOUNTS` origin/main 98c614a1 (induk 2102
+"Kewajiban Jangka Pendek Lainnya", OCLY): 210201 PPN Keluaran,
+210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum Ditagih,
+210204 Hutang Gaji, 210205 Provisi Garansi, 210206 Utang PPh 4(2)
+Sewa Tanah/Bangunan, 210207 Utang Kompensasi PKWT, 210209 Utang
+Reimbursement Karyawan. Ter-alokasi vonis (belum ter-seed, tetap
+BUKAN bebas): 210208 "Utang Pesangon & Hak Berhenti"
+(F-2026-10-25-005-V), 210210 "Utang PPh 21 Karyawan" + 210211
+"Utang Iuran BPJS Karyawan" (F-2026-10-25-020-V, koreksi alokasi
+lolos verdict QA), 210212 "Utang Komisi Penjualan"
+(F-2026-10-25-039-V, PR #893 OPEN). Grep `210213`..`210220` di
+seluruh backlog + src + prisma origin/main = 0 hasil (hit pada
+data alamat wilayah dikecualikan — bukan kode akun). Kode bebas
+tak-teralokasi berikutnya sesudah 210212 = **210213**.
+
+### 3. Putusan (mengikat, menggantikan butir 4 F-050-V)
+
+1. **210213 "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan"**
+   (OCLY, anak induk 2102) = akun liabilitas FINAL untuk jalur
+   pengalihan hak PP 34/2016. Nama disamakan persis nama yang
+   sudah ditulis F-050-V; hanya nomor berubah 210207 -> 210213.
+2. **210207 DILARANG** untuk jalur pengalihan dalam bentuk apa
+   pun: seed, `liabilityAccountCode`, mapping setting, automap,
+   dan teks turunan. Setiap rujukan "210207" di F-050-V (butir 4,
+   butir 5 jurnal `Cr 210207` / `Dr 210207`, butir 6 jurnal Pasal
+   4, falsifikasi "Nonaktifkan 210207", dan baris pemilik
+   berikutnya "seed 210207 + jenis PPH42-ALIH") DIBACA 210213
+   sejak vonis ini terbit. Blok F-050-V sendiri TIDAK ditulis
+   ulang (jejak historis utuh); koreksi hidup di blok ini.
+3. Jenis potong `PPH42-ALIH` (bila kelak dibangun) membawa
+   `liabilityAccountCode "210213"`. Jenis dibuat di master
+   bertanggal efektif; tarif 2,5%/1%/0% per F-050-V butir 2 hidup
+   di master, DILARANG hardcode di logika maupun seed konstan.
+4. Fail-closed F-050-V DIPERTEGAS mengikat nomor baru: akun 210213
+   tidak ada / tidak aktif / bukan anak 2102 / bukan tipe OCLY =
+   jurnal pengakuan dan jurnal setor GAGAL berisik, nol jurnal
+   setengah. DILARANG fallback ke 210202 (PPh 23), 210206 (sewa),
+   210207 (PKWT), atau akun pajak lain. Jurnal terposting tidak
+   diubah diam-diam: koreksi hanya reversal di periode terbuka
+   (`assertPeriodOpen` dalam tx); mutasi finansial wajib
+   idempotency key.
+5. Pemakaian 210213 di luar jalur pengalihan (sewa, komisi,
+   kompensasi, reimbursement, pesangon) DILARANG — satu akun satu
+   rezim, supaya saldo GL 210213 selalu = pajak pengalihan
+   terutang yang belum disetor dan bisa direkonsiliasi ke
+   NTPN/billing KAP-KJS 411128-402.
+
+### 4. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
+
+- QA-ALIH40-1: jenis pengalihan dengan `liabilityAccountCode`
+  menunjuk 210207 -> jurnal pengakuan MERAH (ditolak/digagalkan);
+  menunjuk 210213 aktif -> kredit 210213 sebesar tarif x DPP
+  bruto snapshot; kredit jatuh ke 210202/210206/210207 = MERAH.
+- QA-ALIH40-2: akun 210213 kosong (belum ada) atau dinonaktifkan
+  -> jurnal pengakuan DAN jurnal setor GAGAL fail-closed berisik,
+  nol baris jurnal lahir; lolos diam-diam = MERAH.
+- QA-ALIH40-3: mutasi penjaga — cabut pemeriksaan
+  ada/aktif/induk/tipe untuk 210213 -> QA-ALIH40-2 berubah hijau
+  palsu = penjaga terbukti hidup; pulihkan -> merah lagi.
+- QA-ALIH40-4: tarif diubah di master sesudah dokumen terbit ->
+  dokumen lama tetap snapshot tarif/DPP-nya; dokumen lama berubah
+  angka = MERAH (warisan falsifikasi F-050-V, tetap berlaku).
+- QA-ALIH40-5: jurnal pengalihan menyentuh 210207 -> saldo GL
+  PKWT berubah = MERAH; rekonsiliasi 210213 vs NTPN 411128-402
+  selisih tanpa temuan tampil = MERAH.
+
+### 5. Yang TIDAK dibuka vonis ini
+
+Fisik seed akun 210213, pembuatan jenis `PPH42-ALIH`, hook jurnal,
+dan UI pajak potong pengalihan TETAP pekerjaan BOT Backend lewat
+kartu terpisah — dan tetap terikat gerbang F-050-V yang belum
+berubah: Q-050-1 (putusan Lead: apakah ISF pernah memungut
+sebagai bendahara Pasal 4) belum diputus, jadi TIDAK ADA
+implementasi yang dibuka vonis ini. Instalasi berjalan tidak
+diutak-atik: tidak ada migrasi data, tidak ada akun diganti nama;
+210207 di instalasi mana pun tetap Utang Kompensasi PKWT.
+
+F-2026-10-25-040-V — Koreksi alokasi akun pengalihan hak: 210213
+final, 210207 dilarang untuk jalur PP 34/2016. Status: VONIS
+TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
+Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
+Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
+(falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
+
