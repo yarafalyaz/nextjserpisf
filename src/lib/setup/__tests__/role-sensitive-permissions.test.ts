@@ -59,6 +59,9 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     "delete_leave_requests",
     "delete_projects",
     "delete_holidays",
+    // F-2026-10-25-005-S DISC-B1 Q-DISC-2: approve disiplin disamakan
+    // pemegang edit_employees fase 1 (putusan Lead), sadar terdaftar.
+    "approve_disciplinary_records",
   ],
   kepala_bengkel: [
     "approve_bom_revisions",

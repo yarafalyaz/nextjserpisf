@@ -73,6 +73,25 @@ function isReferencedElsewhere(action: ExportedAction): boolean {
 
 // Daftar-beku: kunci = "<berkas>::<aksi>", nilai = alasan tertulis.
 const ALLOWED_UNWIRED: Record<string, string> = {
+  // F-2026-10-25-005-S DISC-B1 backend dulu (PR #816): 8 aksi pengajuan/
+  // persetujuan SP dirujuk UI rekod disiplin menyusul di kartu Frontend
+  // t_9977774a (DISC-F1) — buang entri ini saat UI memanggilnya.
+  "src/actions/disciplinary.actions.ts::createDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::submitDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::approveDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::rejectDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::acknowledgeDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::respondDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::recordLateDisciplinaryResponse":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  "src/actions/disciplinary.actions.ts::voidDisciplinaryRecord":
+    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
   // izin (action-guard-coverage.test.ts). UI-nya memakai next-auth langsung.
   "src/actions/auth.actions.ts::loginAction":
@@ -173,10 +192,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
   // (t_0fc24ddc) — entri beku dibuang.
   // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
-  // pelanggan backend dulu; daftar bergrup di halaman kelola pelanggan
-  // menyusul (frontend t_1f97c2ea — buang entri ini saat UI memanggilnya).
-  "src/actions/master.actions.ts::listCustomerDuplicateCandidates":
-    "F-2026-10-25-003-S inti backend PR #791; UI daftar kandidat duplikat di master pelanggan menyusul (frontend t_1f97c2ea)",
+  // pelanggan kini dirujuk halaman kelola pelanggan (frontend
+  // t_1f97c2ea) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
