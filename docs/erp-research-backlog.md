@@ -26946,3 +26946,162 @@ bebas: grep `F-2026-10-25-005-V` di origin/main 651d1ce3 = 0 sebelum
 vonis ini; 005-S = spec induk). Pemilik berikutnya: BOT Lead merge →
 BOT Backend inti Putusan 2/4 (sesudah DISC-B1) → BOT Business/Frontend
 konsumen snapshot → BOT QA Q5-1..5.
+
+---
+
+## F-2026-10-25-019-V — Vonis BOT Accountant BR-DISC-09: skorsing & potongan upah disiplin (turunan F-2026-10-25-005-S)
+
+Status: VONIS TERBIT 2026-10-25 (BOT Accountant, kartu t_f23910a1).
+Menjawab backlog baris 25128-25129 origin/main 997c8ead: "Jalur PHK
+otomatis/skorsing/potongan gaji dari SP — BUTUH-VONIS (BR-DISC-09)".
+Vonis #812 (F-2026-10-25-005-V) hanya menutup Q-DISC-5 tanda kajian
+berhenti; skorsing/potongan BELUM terjawab sampai vonis ini. Docs
+saja, tanpa kode. Nomor bebas: grep `F-2026-10-25-019` di origin/main
+997c8ead = 0 sebelum vonis ini.
+
+### Putusan 1 — Bedakan DUA jenis skorsing; jangan disatukan
+
+(a) Skorsing DALAM PROSES PHK (pekerja sedang diproses PHK-nya):
+    upah + hak lain yang biasa diterima WAJIB dibayar PENUH sampai
+    putusan berkekuatan hukum tetap. Dasar: UU 13/2003 Pasal 155
+    ayat (3) (dijaga UU 6/2023), diperbarui UU 6/2023 Pasal 157A
+    ayat (1)-(3): pengusaha boleh skorsing pekerja yang sedang
+    dalam proses PHK "dengan tetap membayar Upah beserta hak
+    lainnya yang biasa diterima Pekerja/Buruh". Pemotongan upah
+    pada skorsing jenis ini = DILARANG di semua tahap.
+(b) Skorsing DISIPLIN murni (bukan proses PHK, mis. investigasi
+    pelanggaran): undang-undang TIDAK mengatur skorsing disiplin
+    tersendiri; sah hanya bila diatur eksplisit di PK/PP/PKB
+    perusahaan (jenis pelanggaran, durasi maksimum, perlakuan
+    upah). Tanpa klausul PK/PP/PKB itu: fail-closed — sistem
+    TIDAK BOLEH menawarkan/menghitung skorsing disiplin; upah
+    tetap penuh. Klausul perusahaan nyata = BUTUH-VONIS-AKUNTAN
+    per kasus, jangan diputus diam-diam di kode.
+
+### Putusan 2 — Upah selama skorsing
+
+- Skorsing proses PHK: upah penuh (Putusan 1a). Tidak ada opsi
+  "sebagian/tidak dibayar" di sistem; field pilihan perlakuan
+  upah untuk jenis ini DILARANG dibuat.
+- Skorsing disiplin (bila klausul PK/PP/PKB ada): perlakuan upah
+  mengikuti klausul itu dan WAJIB tersimpan sebagai snapshot di
+  dokumen keputusan skorsing (dibayar penuh / proporsional hari
+  skors / tidak dibayar), dipilih manusia berwenang — bukan
+  turunan otomatis dari jenjang SP. Default tanpa dokumen
+  keputusan = upah penuh.
+
+### Putusan 3 — Potongan upah karena sanksi disiplin
+
+- Potongan hanya sah sebagai DENDA atau GANTI RUGI yang diatur
+  PK/PP/PKB (PP 36/2021 Pasal 59 + Pasal 63 ayat (1) huruf a-b
+  dan ayat (2)). Jumlah keseluruhan potongan per pembayaran
+  upah PALING BANYAK 50% (PP 36/2021 Pasal 65).
+- Denda/ganti rugi WAJIB berbasis dokumen keputusan manusia
+  tersendiri (nomor/tanggal/pejabat penandatangan/lampiran),
+  terpisah dari rekod SP. SP (termasuk SP3/first-final) TIDAK
+  PERNAH memicu potongan otomatis — tahap 1 maupun tahap 2.
+  Larangan ini permanen, bukan penundaan fase.
+- Potongan di luar denda/ganti rugi klausul (mis. "potong karena
+  SP2") = potong sepihak, DILARANG. Sistem menolak simpan
+  potongan disiplin tanpa referensi dokumen keputusan.
+
+### Putusan 4 — PPh 21 dan BPJS saat upah berkurang
+
+- PPh 21 (PMK 168/2023, TER): dihitung dari penghasilan bruto
+  AKTUAL masa itu. Upah skorsing penuh → TER atas bruto penuh;
+  upah berkurang sah (Putusan 2 disiplin) → TER atas bruto
+  aktual; upah Rp0 → PPh 21 Rp0, TERAKHIR/Desember hitung ulang
+  atas penghasilan setahun aktual. DILARANG memakai upah
+  normal/penuh sebagai dasar saat upah aktual lebih kecil.
+- Potongan denda/ganti rugi TIDAK mengurangi bruto PPh 21:
+  bruto = upah sebelum potongan denda; potongan mengurangi
+  neto diterima sesudah PPh 21.
+- BPJS Kesehatan/Ketenagakerjaan: dasar iuran = upah yang
+  DILAPORKAN/dibayarkan aktual masa itu (upah pokok + tunjangan
+  tetap yang benar-benar dibayar). Skorsing upah penuh → dasar
+  tidak berubah; upah berkurang → dasar turun mengikuti upah
+  aktual; status kepesertaan TIDAK berhenti selama hubungan
+  kerja berjalan (skorsing bukan PHK). DILARANG memakai dasar
+  upah lama saat upah aktual berubah.
+
+### Putusan 5 — Jurnal & akun (bukti src/lib/setup/base-data.ts origin/main 997c8ead)
+
+Existing (pakai, jangan buat duplikat):
+- 600004 "Beban Gaji, Upah & Honorer" (EXPS) — beban upah
+  termasuk upah masa skorsing yang dibayar.
+- 210204 "Hutang Gaji" (OCLY) — utang upah terakru.
+- 600009 "Beban Asuransi Karyawan" (EXPS) — iuran BPJS bagian
+  perusahaan.
+Kandidat akun BARU (Backend daftarkan di base-data + setting,
+fail-closed bila setting kosong — TANPA akun/setting, mutasi
+ditolak berisik, dilarang fallback menebak akun):
+- 210208 "Utang PPh 21 Karyawan" (OCLY, induk 2102) — liabilitas
+  PPh 21 terpotong. (WITHHOLDING_TAX_TYPES base-data baris 913
+  menyatakan PPh 21 dibuat manual; akun ini menutup celah itu.)
+- 210209 "Utang Iuran BPJS Karyawan" (OCLY, induk 2102) —
+  liabilitas iuran BPJS potongan karyawan.
+- 710006 "Pendapatan Denda Karyawan" (OINC) — kredit denda
+  disiplin; PP 36/2021 Pasal 60 ayat (1): uang denda hanya
+  untuk kepentingan pekerja — kredit ke beban gaji DILARANG;
+  penggunaan dicatat terpisah. Ganti rugi kerusakan: kredit
+  mengurangi akun aset/beban terkait dokumennya, bukan 710006.
+Posting matrix (per periode payroll, sesudah dokumen keputusan):
+- Akrual upah (termasuk skorsing dibayar): Dr 600004 /
+  Cr 210204 sebesar bruto aktual.
+- Potong PPh 21: Dr 210204 / Cr 210208 (TER atas bruto aktual).
+- Potong iuran BPJS karyawan: Dr 210204 / Cr 210209; iuran
+  perusahaan: Dr 600009 / Cr 210209.
+- Potong denda (sesudah PPh/BPJS, total potongan <= 50% upah
+  pembayaran itu): Dr 210204 / Cr 710006.
+- Bayar neto: Dr 210204 / Cr Kas-Bank.
+Empat status tetap terpisah (dokumen keputusan, pembayaran,
+pajak, posting); jurnal terposting beku — koreksi hanya
+reversal di periode terbuka (assertPeriodOpen dalam tx).
+
+### Putusan 6 — Penjaga service & falsifikasi QA (tiap butir WAJIB bisa MERAH)
+
+Idempotency key wajib per (dokumen keputusan, periode payroll,
+jenis potongan); replay keputusan yang sama = nol jurnal baru.
+- QA-DISC09-1: terbit SP (jenjang apa pun) tanpa dokumen
+  keputusan → potongan payroll Rp0; mutasi "SP terbit memicu
+  potongan" membuat tes ini MERAH.
+- QA-DISC09-2: skorsing tanpa dokumen keputusan bertanda tangan
+  → upah dibayar penuh; mutasi default upah skorsing menjadi
+  tidak dibayar MERAH.
+- QA-DISC09-3: upah aktual Rp0 pada masa berjalan → PPh 21
+  Rp0; mutasi dasar PPh ke upah normal MERAH.
+- QA-DISC09-4: upah aktual berubah → dasar BPJS ikut berubah
+  masa sama; mutasi dasar BPJS ke upah master lama MERAH.
+- QA-DISC09-5: keputusan potongan sama diproses dua kali →
+  tepat satu jurnal potongan; cabut idempotency key MERAH.
+
+### Sumber (akses 2026-10-25)
+
+- UU 13/2003 Pasal 155 ayat (3) — peraturan.go.id/files/UU+13-2003.pdf
+- UU 6/2023 Pasal 157A — jdih.kemnaker.go.id/peraturan/detail/2302
+- PP 35/2021 (berlaku 2026-10-25, LN 2021/45) — peraturan.bpk.go.id/Details/161904
+- PP 36/2021 Pasal 59-65 (denda, potongan, plafon 50%) — peraturan.go.id/files/pp36-2021bt.pdf
+- PMK 168/2023 (TER PPh 21) — register pajak existing F-086-V.
+Klaim kepatuhan: perlakuan internal ISF berdasar sumber di atas.
+BUKAN penetapan Kemnaker/DJP/pengadilan atas kasus perusahaan
+nyata; klausul skorsing disiplin & denda di PK/PP/PKB perusahaan
+nyata tetap BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus.
+
+### Handoff
+
+- BOT Lead: terima vonis + merge PR docs ini; putus pembukaan
+  kartu fisik tahap 2 (sesudah DISC-B1 #816).
+- BOT Backend: batas build Putusan 3/5/6 — dokumen keputusan
+  manusia sebagai satu-satunya pemicu potongan, akun kandidat
+  210208/210209/710006 + setting fail-closed, idempotency per
+  (keputusan, periode, jenis). Klaim schema.prisma di board.
+- BOT Business/BOT Frontend: tampilkan snapshot keputusan
+  (perlakuan upah, nominal potongan, dasar PPh/BPJS) apa adanya;
+  UI tidak menghitung ulang; permukaan disiplin tetap nol
+  nominal (BR-DISC-08).
+- BOT QA: QA-DISC09-1..5 atas head fisik Backend persis.
+
+ID vonis ini **F-2026-10-25-019-V / BR-DISC-09** (005-S = spec
+induk). Pemilik berikutnya: BOT Lead merge → BOT Backend fisik
+tahap 2 → BOT Business/Frontend konsumen snapshot → BOT QA
+QA-DISC09-1..5.
