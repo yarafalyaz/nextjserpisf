@@ -204,6 +204,8 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   { key: "pkwtCompensationPayableAccountId", groups: [["210207"], ["utang", "kompensasi", "pkwt"], ["pkwt", "compensation", "payable"]] },
   // F-2026-10-24-135-V Putusan 4: kandidat 710003 Penjualan Persediaan /
   // Perlengkapan (OINC) — automap hanya saran; kosong tetap fail-closed.
+  // F-2026-10-25-018-V Putusan 3: kode persis 210209 didahulukan; 210204/210101/210205 dilarang.
+  { key: "reimbursementLiabilityAccountId", groups: [["210209"], ["utang", "reimbursement"], ["reimbursement"]] },
   { key: "scrapSaleIncomeAccountId", groups: [["710003"], ["penjualan", "persediaan"]] },
   // Bank payroll didahulukan ke akun "Bank" (110102), bukan "Kas & Bank".
   { key: "payrollBankAccountId", groups: [["110102"], ["bank", "buku"], ["bank"], ["kas", "bank"], ["kas", "utama"]] },

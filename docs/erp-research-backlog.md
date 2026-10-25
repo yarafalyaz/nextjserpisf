@@ -28087,6 +28087,124 @@ ID vonis ini **F-2026-10-25-018-V** (jawaban Q-RB-5 spec F-2026-10-25-017-S PR #
 
 ---
 
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-022-V: dasar upah lembur final (Pasal 32 PP 35/2021) — pokok + Σ tunjangan tetap aktif per tanggal lembur; cabang 75% TIDAK dipicu data existing, default 100% (jawaban GAP K2-S2 vonis F-2026-10-25-014-V, kartu t_e7e2bf72)
+
+> **Slot**: F-2026-10-25-022-V. Diperiksa bentrok 2026-10-25 13:33 WIB vs `origin/main` (`5238d218`, fetch segar run ini — maju dari `1978fc26` yang dikutip kartu): grep `F-2026-10-25-022` di backlog origin/main = 0; ID terpakai tanggal ini di main: 001-S..017-S (spec), 004-V, 005-V, 013-V, 014-V, 015-V, 018-V, 019-V, 020-V (PR #824 OPEN); di branch terbuka lain: 021-S (PR #826). ID 022-V bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; **tanpa edit kode aplikasi/schema/migrasi** run ini. Angka final milik BOT Accountant; Lead/Business/Backend tidak memutus angka.
+> **Fakta terverifikasi-kode di `origin/main` (`5238d218`)** (dibaca dari `git show origin/main:<path>`, bukan ingatan):
+> 1. Titik approve lembur `src/actions/hrm.actions.ts` `approveOvertimeRequest` memanggil `computeOvertimePay({ monthlySalary: baseSalary })` — hanya `Employee.baseSalary`. Di atasnya ada komentar yang menegaskan dasar `baseSalary` apa adanya dengan alasan "tidak ada kolom komponen pokok/tetap/tidak-tetap terpisah". **Alasan itu KELIRU** — lihat fakta 2–4.
+> 2. Skema sudah punya komponen gaji terpisah: `PayrollComponent { kind, recurrence ("fixed" | "variable"), isActive, isTaxable }` (`prisma/schema.prisma:3715-3736`) dan penugasannya `EmployeePayrollComponent { defaultAmount Decimal(15,2), effectiveFrom, effectiveTo?, isActive }` (`:3742-3762`). Penugasan **hanya boleh komponen `recurrence: "fixed"`** — penjaga di `createEmployeePayrollComponent` (`hrm.actions.ts:406-408`: "Hanya komponen gaji tetap yang boleh ditugaskan"), pemuat efektif `loadEffectivePayrollAssignments` juga menyaring `component: { isActive: true, recurrence: "fixed" }` (`hrm.actions.ts:254`). Artinya: **SELURUH baris `EmployeePayrollComponent` adalah tunjangan tetap terdaftar**; tidak ada satupun jalur di repo yang menugaskan komponen `variable` ke karyawan.
+> 3. Komponen `variable` di repo memang ada tetapi HANYA sebagai master tak-tertugaskan + baris slip manual per-periode (`PayrollComponentLine.source: "manual"`, misalnya "Bonus"), dan kompensasi PKWT (`recurrenceSnapshot: "variable"`, `pkwt-compensation.service.ts:401`). Keduanya bukan penugasan bulanan berjalan dan bukan bukti tunjangan tidak tetap yang terstruktur per karyawan.
+> 4. Preseden PKWT `src/lib/services/pkwt-compensation.service.ts:116-128` dan `:261-275`: basis = `baseSalary` + Σ `defaultAmount` assignment aktif berjendela `effectiveFrom <= tanggal acuan AND (effectiveTo IS NULL OR effectiveTo >= tanggal acuan) AND isActive (assignment) AND component.isActive AND kind = "earning" AND recurrence = "fixed"`, diakumulasi `safeRound(sum, 2)`, label "pokok + tunjangan tetap".
+> 5. `computeOvertimePay` (`src/lib/services/overtime-pay.service.ts:36-62`) sudah berbentuk uang bulanan umum (`monthlySalary`) dan membulatkan hasil akhir ke rupiah penuh (`Math.round`). Rumus dan pengali di dalamnya sudah LOLOS di vonis 014-V butir A1 — **tidak diubah vonis ini**.
+> **Rujukan resmi** (sumber primer, diakses 2026-10-25): PP No. 35 Tahun 2021 (jdih.kemnaker.go.id, `https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf`), Bagian Keempat Upah Kerja Lembur: **Pasal 31** mengatur pengali jam lembur; **Pasal 32** mengatur dasarnya — ayat (1) perhitungan didasarkan pada Upah bulanan; ayat (2) Upah sejam = 1/173 × Upah sebulan; ayat (3) bila komponen Upah = Upah pokok + tunjangan tetap maka dasar = **100%** dari Upah; ayat (4) bila komponen Upah = Upah pokok + tunjangan tetap + tunjangan tidak tetap, **apabila Upah pokok ditambah tunjangan tetap lebih kecil dari 75% keseluruhan Upah** maka dasar = **75% dari keseluruhan Upah**. Ayat tambahan: Upah sebulan yang lebih rendah dari upah minimum memakai upah minimum setempat sebagai dasar (di luar cakupan vonis ini — lihat Catatan 3 di bawah). Kepenakeran: tunjangan tidak tetap = pembayaran tidak teratur yang dikaitkan dengan kehadiran atau pencapaian prestasi tertentu (tunjangan makan/transport berbasis hadir); tunjangan tetap = pembayaran teratur yang tidak dikaitkan dengan kehadiran/prestasi.
+> **Koreksi sitasi induk (mengikat untuk semua build turunan)**: vonis F-2026-10-25-014-V butir K2-S2 dan kartu pemicu menulis "dasar Pasal 31". Sitasi yang benar adalah **Pasal 32 ayat (3)–(4)**; Pasal 31 hanya mengatur pengali. Rumusan pengganti di Putusan 4 memakai sitasi yang benar. Inti kewajiban 014-V **tidak berubah** — yang dikoreksi nomor pasalnya dan (Putusan 2) bentuk cabang 75%-nya.
+
+### Putusan 1 — (a) Dasar wajib: `baseSalary` + Σ komponen `earning`/`fixed` aktif per TANGGAL LEMBUR
+
+1. **Dasar upah lembur bulanan (dasar 100%) WAJIB** dihitung sebagai:
+
+   `dasarDasar = safeRound( baseSalary + Σ defaultAmount , 2 )`
+
+   dengan Σ atas seluruh baris `EmployeePayrollComponent` karyawan tersebut yang pada **tanggal lembur (`ot.date`)** memenuhi SEMUA syarat berikut (persis pola preseden PKWT `pkwt-compensation.service.ts:116-128`, satu-satunya pola basis berjalan yang teruji di repo):
+
+   - `assignment.isActive = true`;
+   - `assignment.effectiveFrom <= ot.date`;
+   - `assignment.effectiveTo IS NULL OR assignment.effectiveTo >= ot.date`;
+   - `component.isActive = true`;
+   - `component.kind = "earning"`;
+   - `component.recurrence = "fixed"`.
+
+2. **Tanggal acuan = tanggal lembur (`ot.date`), BUKAN tanggal approve.** Alasan: upah sejam adalah hak yang lahir dari pekerjaan pada tanggal lembur; komponen yang mulai/berhenti berlaku di antara tanggal lembur dan tanggal approve adalah keadaan sesudah peristiwa dan tidak boleh mengubah hak yang sudah lahir. Tanggal approve hanya cap audit persetujuan, bukan tanggal ekonomi. (Kontras disadari: PKWT memakai `segmentEnd` karena peristiwa PKWT dinilai pada akhir segmen; lembur dinilai pada tanggal kerjanya. Pola jendela efektifnya sama, tanggal acuannya berbeda sesuai sifat peristiwa.)
+3. **`baseSalary` diterima sebagai Upah pokok.** `Employee.baseSalary` adalah satu-satunya kolom upah pokok di skema; komponen tetap terpisah sejak awal tinggal di tabel penugasan (fakta 2). Tidak ada pemecahan `baseSalary` lebih lanjut yang bisa atau perlu dilakukan tahap ini.
+4. **Nominal yang masuk perhitungan adalah `defaultAmount` penugasan** (nilai rupiah bulanan komponen tetap), BUKAN nilai yang benar-benar dibayarkan pada slip periode itu. Dasar lembur adalah keadaan kontraktual pada tanggal lembur; slip adalah peristiwa kas sesudahnya dan tidak boleh mengubahnya mundur.
+5. **Snapshot saat approve tetap berlaku**: dasar dihitung pada titik approve memakai jendela tanggal lembur, lalu nilai lembur hasil `computeOvertimePay` dibekukan di `calculatedValue` seperti hari ini (idempotensi approve yang ada tidak berubah). Perubahan master komponen sesudah approve **TIDAK** menghitung ulang pengajuan yang sudah disetujui. Koreksi dasar yang keliru sesudah approve hanya boleh lewat jalur koreksi dokumen yang sah di periode terbuka — bukan edit diam-diam `calculatedValue`.
+6. Karyawan tanpa penugasan komponen tetap aktif pada tanggal lembur: Σ = 0, dasar = `baseSalary`. Nilai itu BENAR dan bukan keadaan darurat — jangan difail-closed-kan; banyak karyawan memang hanya bergaji pokok.
+7. `dasarDasar <= 0` (tidak ada gaji pokok dan tidak ada komponen): hasil lembur = 0 mengikuti penjaga existing `computeOvertimePay` (`monthlySalary <= 0 → 0`). Bukan error baru tahap ini.
+
+### Putusan 2 — (b) Cabang 75%: TIDAK diterapkan pada data existing; default 100% — dengan pemicu masa depan yang deterministik
+
+1. **Pernyataan hukum yang benar (Pasal 32 ayat (4))**: cabang 75% BUKAN saklar "ada tunjangan tidak tetap → dasar dikali 75%", dan BUKAN "dasar = 75% × (pokok + tunjangan tetap)". Rumusnya: bila Upah terdiri dari pokok + tunjangan tetap + tunjangan tidak tetap DAN (pokok + tunjangan tetap) < 75% × (keseluruhan Upah), maka **dasar = 75% × keseluruhan Upah** — yaitu dasar dinaikkan dari (pokok + tetap) ke lantai 75% × keseluruhan. Rumusan singkat di vonis induk 014-V ("bila ada tunjangan tidak tetap, dasar = 75% dari (pokok + tunjangan tetap)") adalah parafrase yang menyimpang dari teks pasal; vonis ini menggantikannya. Contoh pengunci: pokok+tetap 3.000.000, keseluruhan Upah 5.000.000 → 3.000.000 < 3.750.000, jadi dasar = 3.750.000 (**lebih besar** dari pokok+tetap, bukan lebih kecil). Sebaliknya pokok+tetap 4.000.000 dari keseluruhan 5.000.000 → 4.000.000 tidak lebih kecil dari 3.750.000 → dasar tetap 100% = 4.000.000.
+2. **Mengapa cabang ini tidak bisa dihitung dari data existing (bukti, bukan dugaan)**:
+   - Penugasan `EmployeePayrollComponent` secara struktural hanya memuat komponen `fixed` (fakta 2) — tidak ada nominal tunjangan tidak tetap per karyawan yang tersimpan sebagai penugasan berjalan.
+   - "Keseluruhan Upah" untuk pembanding 75% tidak terdefinisi dari data yang ada: komponen `variable` hanya muncul sebagai baris manual per slip (bonus, uang makan hadir, dst. bercampur) tanpa frekuensi/kehadiran pembentuknya, dan memakai realisasi slip satu periode sebagai "keseluruhan Upah" akan membuat dasar lembur bergantung pada periode pembayaran yang dipilih — tidak deterministik dan bisa dimanipulasi jadwal approve.
+3. **Vonis implementasi (deterministik, satu-satunya yang disahkan tahap ini)**:
+
+   `dasarLembur = dasarDasar = safeRound( baseSalary + Σ fixed earning aktif per ot.date , 2 )`  — selalu cabang 100% Pasal 32 ayat (3).
+
+   Keberadaan komponen master `variable` yang aktif, baris slip manual `variable` pada periode mana pun, atau komponen `variable` yang "pernah dipakai" **TIDAK memicu** cabang 75% dan **TIDAK mengubah** dasar dalam cara apa pun. Bila spec Build turunan mengusulkan pemicu lain dari data existing, usulan itu DITOLAK oleh vonis ini.
+4. **Catatan kepatuhan jujur (wajib tampil, bukan alasan menunda build)**: bila di dunia nyata perusahaan membayar tunjangan tidak tetap berjalan (mis. uang makan/transport berbasis kehadiran) yang membuat (pokok + tunjangan tetap) karyawan < 75% keseluruhan Upahnya, dasar 100% di atas dapat berada **di bawah lantai Pasal 32 ayat (4)** untuk karyawan itu, dan selisihnya adalah kekurangan bayar lembur perusahaan — bukan kesalahan hitung sistem. Mengitungnya dengan benar butuh master tunjangan tidak tetap berjalan yang belum ada. Jurang ini dicatat sebagai risiko terbuka (Catatan risiko di bawah), **bukan** sebagai alasan membayar 75% × (pokok+tetap) yang salah arah.
+5. **Pemicu implementasi cabang 75% di masa depan (baru boleh dibangun bila SEMUA terpenuhi, dan butuh vonis Accountant baru yang menilai definisi "keseluruhan Upah"-nya)**:
+   - (i) master penugasan tunjangan tidak tetap per karyawan bertanggal-efektif tersimpan (bukan baris slip manual), dan
+   - (ii) definisi keseluruhan Upah per karyawan bertanggal acuan ditetapkan tertulis (komponen apa saja masuk, jendela periode apa), dan
+   - (iii) rumus diterapkan persis: `dasarLembur = (pokok+tetap) < 0,75 × keseluruhan ? 0,75 × keseluruhan : (pokok+tetap)`, dihitung dan dibekukan pada tanggal lembur.
+
+### Putusan 3 — (c) Pembulatan dan Decimal
+
+1. Ikuti preseden PKWT persis: akumulasi Σ `defaultAmount` dengan `safeRound(sum, 2)` per penjumlahan (`pkwt-compensation.service.ts:123-125`), lalu `dasarDasar = safeRound(baseSalary + Σ, 2)` (`:128`). Basis bulanan disimpan/diwakilkan 2 desimal (sen) — selaras uang `Decimal(15,2)`.
+2. Pembulatan berikutnya hanya di ujung: hasil akhir `computeOvertimePay` ke rupiah penuh `Math.round` seperti existing — **tidak diubah**, sudah LOLOS 014-V A1.
+3. Tanpa pembulatan menengah lain: faktor 75% tidak pernah diterapkan tahap ini (Putusan 2), jadi tidak ada pembulatan 75% yang perlu diatur. Bila kelak diterapkan, ia dihitung dari angka 2-desimal dan hasilnya kembali `safeRound(…, 2)` sebelum masuk `computeOvertimePay`.
+4. Nilai yang dibaca dari Prisma adalah `Decimal`; konversi ke number mengikuti preseden (`Number(a.defaultAmount)`); jangan menjumlahkan Decimal mentah sebagai string.
+
+### Putusan 4 — (d) Pernyataan pengganti untuk komentar kode (tempel verbatim oleh Backend)
+
+Pernyataan lama di komentar `approveOvertimeRequest` ("…Skema Employee hanya punya SATU kolom upah bulanan… tidak ada kolom komponen pokok/tetap/tidak-tetap terpisah, jadi dasar yang tersedia dan dipakai di sini adalah baseSalary apa adanya…") **DICABUT**. Gantinya, Backend menempel teks berikut (boleh disesuaikan spasi/baris, tidak boleh disesuaikan isinya):
+
+```
+// Syarat vonis K2-S2 (F-2026-10-25-014-V) sebagaimana dimutakhirkan vonis
+// F-2026-10-25-022-V: dasar upah lembur Pasal 32 PP 35/2021 = Upah pokok
+// (Employee.baseSalary) + seluruh tunjangan tetap terdaftar, yaitu Σ
+// defaultAmount EmployeePayrollComponent aktif (isActive, komponen aktif,
+// kind "earning", recurrence "fixed") yang berjendela efektif pada TANGGAL
+// LEMBUR (ot.date) — bukan tanggal approve. Komponen gaji terpisah memang
+// ada di skema (PayrollComponent + EmployeePayrollComponent); penugasan
+// hanya boleh memuat komponen "fixed", jadi seluruh penugasan aktif adalah
+// tunjangan tetap. Cabang 75% Pasal 32 ayat (4) SENGAJA tidak diterapkan:
+// ia berlaku hanya bila ada tunjangan tidak tetap dan (pokok + tetap)
+// < 75% keseluruhan Upah, dengan dasar 75% x keseluruhan Upah — dan repo
+// tidak menyimpan penugasan tunjangan tidak tetap berjalan, jadi
+// keseluruhan Upah tidak terdefinisi deterministik dari data yang ada.
+// Default yang disahkan vonis: dasar 100% (pokok + tunjangan tetap).
+// Menambah pemicu 75% dari data lain (master variable, baris slip manual)
+// DITOLAK vonis. Bila master tunjangan tidak tetap berjalan kelak ada,
+// dasar ini WAJIB ditinjau ulang oleh vonis Accountant baru.
+```
+
+Bila implementasi Backend memilih menaruh penjelasan panjang di spec/dokumen dan komentar ringkas di kode, baris pertama sampai "— bukan tanggal approve." adalah minimum yang wajib ada di kode; sisanya boleh berupa rujukan ke vonis ini. Yang dilarang: mempertahankan klaim "tidak ada komponen terpisah" dalam bentuk apa pun.
+
+### Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- **BOT Business** (spec turunan, kartu hilir yang sudah menunggu kartu ini): tulis spec implementasi dasar lembur persis Putusan 1–3 — tanggal acuan `ot.date`, jendela efektif per butir 1.1, snapshot saat approve (butir 1.5), Σ kosong = dasar `baseSalary` (butir 1.6), dan **tanpa** cabang 75% (Putusan 2). Spec tidak boleh memutuskan angka/pemicu sendiri; pertanyaan terbuka dikembalikan ke Accountant, bukan dijawab di spec.
+- **BOT Backend** (inti, sesudah spec): (a) bangun pemuat dasar per karyawan persis pola where preseden PKWT namun tanggal acuan `ot.date` dan filter `kind: "earning"` — reuse pola, jangan impor service PKWT utuh (beda domain/peristiwa); (b) masukkan `dasarDasar` sebagai `monthlySalary` ke `computeOvertimePay` tanpa mengubah service itu; (c) ganti komentar lama dengan teks Putusan 4; (d) tanpa migrasi — vonis ini hanya membaca tabel existing.
+- **BOT Frontend**: tidak ada permukaan baru tahap ini. Nilai `calculatedValue` tampil verbatim server seperti hari ini; UI tidak menghitung dasar, tidak menampilkan label "75%" atau "tunjangan tidak tetap" yang menyiratkan cabang itu aktif.
+- **BOT QA**: falsifikasi § Acceptance di bawah atas head inti persis.
+
+### Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-OT-1: karyawan bergaji pokok 3.460.000 + satu komponen `earning/fixed` aktif 540.000 berlaku pada tanggal lembur → dasar = 4.000.000; 1 jam lembur hari kerja = 1,5 × 4.000.000/173 = 34.682,08… → **Rp34.682**. Menghapus filter `kind: "earning"` (komponen `deduction/fixed` ikut terhitung) membuat tes ini MERAH.
+- E-OT-2: komponen `earning/fixed` 540.000 yang `effectiveFrom`-nya SESUDAH tanggal lembur (baru berlaku bulan depan) TIDAK terhitung → dasar = 3.460.000 → 1 jam hari kerja = **Rp30.000**. Memakai tanggal approve sebagai acuan (approve dilakukan sesudah komponen berlaku) membuat tes ini MERAH.
+- E-OT-3: komponen `earning/fixed` yang sudah berakhir (`effectiveTo` < tanggal lembur) atau assignment `isActive = false` atau komponen master `isActive = false` TIDAK terhitung; masing-masing mutasi jendela/flag membuat tesnya MERAH.
+- E-OT-4: karyawan tanpa penugasan komponen apa pun → dasar = `baseSalary`, nilai lembur sama persis dengan perilaku sebelum perubahan (regresi nol untuk populasi tanpa tunjangan).
+- E-OT-5: adanya komponen master `variable` aktif dan/atau baris slip manual `variable` pada karyawan yang sama TIDAK mengubah dasar (tetap 100% pokok + tetap). Implementasi yang memicu pengali 75% dari data itu membuat tes ini MERAH.
+- E-OT-6: sesudah approve, mengubah `defaultAmount`/menonaktifkan komponen tidak mengubah `calculatedValue` yang sudah dibekukan (approve ulang = no-op existing); hitungan ulang diam-diam membuat tes ini MERAH.
+- E-OT-7: gaji pokok 3.460.000 + komponen tetap 540.001 → dasar 4.000.001 (2 desimal utuh, tanpa pembulatan menengah liar); hasil akhir tetap rupiah penuh `Math.round` (regresi `overtime-pay.service.test.ts` existing hijau utuh, termasuk 30.000 / 460.000 / 420.000 dari vonis 014-V A1).
+- E-OT-8: komentar kode di titik dasar lembur memuat rujukan vonis ini dan TIDAK memuat klaim "tidak ada komponen terpisah"; grep klaim lama di `src/` = 0.
+
+### Larangan (mengikat semua build turunan)
+
+- Memakai tanggal approve, tanggal hari ini, atau akhir periode slip sebagai tanggal acuan jendela komponen.
+- Menerapkan pengali/faktor 75% dalam bentuk apa pun dari data existing, atau melabeli hasil hitung sebagai hasil Pasal 32 ayat (4).
+- Menghitung ulang dasar lembur pengajuan yang sudah disetujui ketika master komponen berubah (dasar beku di `calculatedValue`).
+- Memakai nilai realisasi slip (termasuk baris `variable` manual) sebagai dasar atau sebagai "keseluruhan Upah".
+- Mengubah rumus/pengali `computeOvertimePay`, HOURLY_DIVISOR 173, atau membulatkan basis bulanan ke rupiah penuh sebelum perhitungan jam.
+- Mengimpor service PKWT ke jalur lembur (beda peristiwa); pola where boleh disalin, domain tidak dicampur.
+
+### Catatan risiko terbuka (bukan penahan build; untuk Lead/Business pemilik domain)
+
+1. **Tunjangan tidak tetap dunia nyata**: perusahaan yang membayar uang makan/transport kehadiran atau tunjangan kinerja berjalan belum terwakili master berjalan; selama itu belum ada, kekurangan-bayar potensial Pasal 32 ayat (4) tidak bisa dihitung sistem (Putusan 2.4). Langkah berikut yang benar = kartu master tunjangan tidak tetap bertanggal-efektif + vonis Accountant baru atas pemicu Putusan 2.5 — bukan tambalan di jalur lembur.
+2. **Tunjangan tetap yang tidak terdaftar sebagai penugasan** (dibayar manual per slip terus-menerus): secara substansi bisa jadi tunjangan tetap menurut hukum ketenagakerjaan walau tidak masuk Σ dasar lembur. Itu masalah tata kelola master gaji, bukan rumus; temuan seperti ini dinaikkan ke Business/Lead sebagai temuan data, bukan "diperbaiki" dengan memasukkan baris slip ke dasar.
+3. **Lantai upah minimum** (Pasal 32 ayat penutup): Upah sebulan di bawah upah minimum memakai upah minimum setempat. Vonis induk 014-V sudah mencatat batas ini di luar pembahasan pengali; penilaian kepatuhan upah minimum bukan bagian vonis ini dan tidak boleh disimpulkan dari dasar lembur.
+
+ID vonis ini **F-2026-10-25-022-V** (jawaban GAP K2-S2 vonis F-2026-10-25-014-V butir K2-S2; bebas: grep `F-2026-10-25-022` di origin/main `5238d218` = 0 sebelum vonis ini; 020-V = PR #824 OPEN, 021-S = spec PR #826). Pemilik berikutnya: BOT Business (spec turunan, kartu hilir yang sudah ada) → BOT Backend (inti) → BOT QA (E-OT-1..8). BOT Lead merge PR vonis ini bila gate hijau head persis.
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-023-V: pinjaman karyawan — bunga/angsuran/potong gaji/PPh 21 (jawaban Q-LS-5/6/7 + BR-LS-09/10 spec F-2026-10-25-018-S PR #827)
 
 > **Slot**: F-2026-10-25-023-V. Diperiksa bentrok 2026-10-25 13:46 WIB vs `origin/main` (`8dd4590c`): grep `F-2026-10-25-023` di backlog origin/main = 0, di head PR #827 (`0c32d611`) = 0, di judul PR terbuka = 0. ID terpakai tanggal ini: 001-S..022-V (022-V di PR #840 OPEN). 023-V bebas. Catatan alamat: kartu menyebut head PR #827 `ded2559a`; head live saat vonis = `0c32d611` (spec dibaca dari head live itu). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
@@ -28178,6 +28296,166 @@ Akun pendapatan bunga: TIDAK dipakai tahap 1 (tanpa bunga). Dilarang memakai aku
 - Menghapus/menolak-akui sisa piutang karyawan berhenti lewat payroll; reuse akun pendapatan existing sebagai akun bunga pinjaman.
 
 ID vonis ini **F-2026-10-25-023-V** (jawaban Q-LS-5/6/7 + angka BR-LS-09/10 spec F-2026-10-25-018-S PR #827; bebas: grep `F-2026-10-25-023` di origin/main 8dd4590c + head PR #827 0c32d611 + judul PR terbuka = 0 sebelum vonis ini). Pemilik berikutnya: BOT Lead putus Q-LS-1/2/3/4/5-spec + merge PR docs ini → BOT Backend fisik gerbang §5 → BOT Frontend konsumen → BOT QA AC-LSV-1..7. Status kepatuhan PPh 21 manfaat pinjaman tahap 1 = TERBUKA-TERCATAT per Putusan 3C (menunggu penetapan *cost of fund* tertulis pemilik proses pajak atau spec komponen kenikmatan).
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-024-S: penyesuaian dasar upah lembur ke pokok + Σ tunjangan tetap aktif per tanggal lembur (jembatan vonis F-2026-10-25-022-V, GAP K2-S2 pasca PR #800)
+
+> **Slot**: F-2026-10-25-024-S. Diperiksa bentrok 2026-10-25 13:51 WIB vs `origin/main` (`8dd4590c`): grep `F-2026-10-25-024` di backlog+board origin/main dan di head seluruh PR terbuka (termasuk PR #840 vonis 022-V head `3025f7e9`, PR #842 vonis 023-V) = 0. ID terpakai tanggal ini yang terverifikasi: 001-S..021-S, 004-V, 005-V, 013-V, 014-V, 015-V, 018-V, 019-V, 020-V, 022-V (PR #840 OPEN), 023-V (PR #842 OPEN). ID 024-S bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; **tanpa edit kode aplikasi/schema/migrasi** run ini. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+>
+> **Sumber angka satu-satunya**: vonis BOT Accountant **F-2026-10-25-022-V** (PR #840, head terverifikasi run ini `3025f7e998aaaf57662e6a303f0f34d068b8d692`, OPEN MERGEABLE, diff hanya `docs/erp-research-backlog.md`). Spec ini TIDAK memutuskan angka, pemicu, atau pembulatan sendiri; semua angka di bawah mengutip Putusan 1–4 vonis itu. Bila PR #840 belum merged saat Backend mulai, Backend membaca vonis dari head PR itu persis; isi vonis tidak boleh disalin-ulang dengan parafrase yang mengubah makna. Merge PR #840 milik BOT Lead.
+>
+> **Rujukan resmi yang dikutip vonis** (bukan riset ulang spec ini): PP No. 35 Tahun 2021, `https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf` — Pasal 31 mengatur pengali jam lembur; **Pasal 32 ayat (1)–(4)** mengatur dasar upah lembur. Koreksi sitasi mengikat dari vonis: sebutan lama "dasar Pasal 31" di vonis induk F-2026-10-25-014-V butir K2-S2 dan di komentar kode existing adalah keliru nomor pasal; yang benar **Pasal 32**. Inti kewajiban 014-V tidak berubah.
+
+### 0. Ringkasan jembatan
+
+PR #800 (MERGED `beb34c69`) menutup hitung lembur bertingkat tetapi memakai dasar `Employee.baseSalary` saja di titik approve, disertai komentar yang mengklaim skema tidak punya komponen gaji terpisah. Audit Business (kartu t_80201979) menemukan klaim itu keliru: preseden PKWT sudah memakai pokok + Σ tunjangan tetap aktif. Vonis 022-V memutus dasar finalnya. Spec ini menjembatani vonis itu ke satu titik perubahan Backend yang sudah ditunjuk kartu (`approveOvertime` di `src/actions/hrm.actions.ts`), membekukan kasus tepi yang wajib dijaga tes, dan menyerahkan koreksi komentar kode verbatim dari Putusan 4. Tidak ada permukaan Frontend baru, tidak ada migrasi, tidak ada jalur hitung kedua.
+
+### 1. Inventarisasi terverifikasi (origin/main `8dd4590c`, 2026-10-25 13:51 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+
+- Titik approve lembur: `approveOvertime` (`src/actions/hrm.actions.ts:1072`), izin `approve_overtime_requests` (`:1074`, key nyata katalog `src/lib/auth/module-catalog.generated.ts:310`), memuat `ot.employee.baseSalary` (`:1079`), lalu memanggil `computeOvertimePay({ monthlySalary: baseSalary, hours, dayKind })` (`:1127-1131`). Inilah satu-satunya titik perubahan perilaku spec ini.
+- Komentar K2-S2 keliru yang wajib diganti: `src/actions/hrm.actions.ts:1110-1118` — menulis dasar "Pasal 31" dan mengklaim "tidak ada kolom komponen pokok/tetap/tidak-tetap terpisah, jadi dasar yang tersedia ... adalah baseSalary apa adanya". Klaim itu DICABUT vonis 022-V Putusan 4 (lihat §5 spec ini).
+- Idempotensi + snapshot existing yang WAJIB dipertahankan: approve berhenti sebagai no-op bila `calculatedValue` sudah terisi > 0 (`hrm.actions.ts:1101-1103`); nilai hasil ditulis sekali lewat klaim atomik `updateMany` status `pending|approved` (`:1133-1148`). Artinya nilai yang sudah approved memang sudah beku oleh desain existing — spec ini tidak menambah mekanisme bekukan baru.
+- Service hitung existing TIDAK berubah: `computeOvertimePay` (`src/lib/services/overtime-pay.service.ts:36-62`) menerima `monthlySalary` umum, membagi 173, menerapkan pengali bertingkat, membulatkan hasil akhir `Math.round` ke rupiah penuh, dan mengembalikan 0 bila `monthlySalary <= 0`. Rumus/pengali ini sudah LOLOS vonis 014-V A1 dan dilarang diubah vonis 022-V.
+- Preseden pola query basis (pola disalin, domain tidak dicampur): `pkwt-compensation.service.ts:113-128` — `employeePayrollComponent.findMany` dengan `isActive: true` (penugasan), `effectiveFrom <= tanggal acuan`, `(effectiveTo IS NULL OR effectiveTo >= tanggal acuan)`, `component: { isActive: true, recurrence: "fixed", kind: "earning" }`, diakumulasi `safeRound(sum + Number(defaultAmount), 2)`, lalu `basisMonthly = safeRound(baseSalary + Σ, 2)`. Preseden kedua di berkas sama `:258-275` memakai pola identik. Vonis melarang mengimpor service PKWT utuh ke jalur lembur; yang disalin hanya bentuk `where`-nya, dengan tanggal acuan diganti tanggal lembur.
+- Penjaga struktural penugasan: `createEmployeePayrollComponent` menolak komponen non-`fixed` ("Hanya komponen gaji tetap yang boleh ditugaskan", `hrm.actions.ts:406-408` dibaca dari vonis fakta 2; posisi baris diverifikasi run ini di sekitar `:395-415`). Konsekuensi terverifikasi vonis: seluruh baris `EmployeePayrollComponent` adalah tunjangan tetap terdaftar; tidak ada jalur repo yang menugaskan komponen `variable` ke karyawan. Pemuat efektif existing `loadEffectivePayrollAssignments` (`hrm.actions.ts:240-265`) menyaring `recurrence: "fixed"` tetapi TIDAK menyaring `kind: "earning"` — karena itu pemuat lembur tidak boleh memakai pemuat itu apa adanya tanpa filter `kind` (lihat BR-OT-02).
+- Model tanggal lembur: `OvertimeRequest.date` (`prisma/schema.prisma:3513-3538`) adalah tanggal peristiwa lembur (`ot.date`); `approvedAt` cap persetujuan terpisah. Tanggal acuan ekonomi dan tanggal audit memang sudah dua kolom berbeda di skema existing.
+
+Belum ada / gap (bukti grep/baca run ini):
+
+- Dasar lembur belum memuat tunjangan tetap: titik approve di atas memakai `baseSalary` saja (GAP K2-S2). Tidak ada pemuat dasar lembur per tanggal lembur di repo; yang ada hanya pola PKWT untuk peristiwa kompensasi PKWT (tanggal acuan `segmentEnd`, bukan `ot.date`).
+- Cabang 75% Pasal 32 ayat (4) TIDAK bisa dihitung dari data existing (vonis Putusan 2): penugasan hanya memuat komponen `fixed`; komponen `variable` hanya master tak-tertugaskan + baris slip manual per periode, sehingga "keseluruhan Upah" tidak terdefinisi deterministik. Ini BUKAN gap yang ditutup spec ini — ini batas yang dinyatakan eksplisit (§2 BR-OT-05, §7 risiko terbuka).
+
+### 2. Business rules register (semua angka = kutipan vonis 022-V)
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-OT-01 | Dasar upah lembur bulanan WAJIB = `safeRound(baseSalary + Σ defaultAmount, 2)`, dengan Σ atas penugasan karyawan yang pada **tanggal lembur `ot.date`** memenuhi SEMUA: penugasan `isActive=true`; `effectiveFrom <= ot.date`; `effectiveTo IS NULL OR effectiveTo >= ot.date`; komponen `isActive=true`; komponen `kind="earning"`; komponen `recurrence="fixed"`. Hasil dasar ini masuk sebagai `monthlySalary` ke `computeOvertimePay` existing tanpa mengubah service itu. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 1 butir 1; pola PKWT `pkwt-compensation.service.ts:113-128` |
+| BR-OT-02 | Filter `kind="earning"` WAJIB eksplisit di pemuat dasar lembur. Pemuat efektif existing `loadEffectivePayrollAssignments` tidak menyaring `kind`, jadi memakainya apa adanya akan ikut menghitung komponen `deduction/fixed` — itu cacat, bukan penyederhanaan yang sah. Falsifikasinya E-OT-1. | TERVERIFIKASI-KODE | Vonis 022-V E-OT-1; `hrm.actions.ts:240-265` (tanpa filter kind) vs PKWT `:119` (dengan filter kind) |
+| BR-OT-03 | Tanggal acuan jendela komponen = tanggal lembur `ot.date`, BUKAN tanggal approve, bukan hari ini, bukan akhir periode slip. Hak upah sejam lahir dari pekerjaan pada tanggal lembur; komponen yang mulai/berhenti di antara tanggal lembur dan tanggal approve tidak mengubah hak yang sudah lahir. Falsifikasinya E-OT-2. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 1 butir 2; `OvertimeRequest.date` schema `:3513-3538` |
+| BR-OT-04 | Nominal komponen yang masuk = `defaultAmount` penugasan (nilai kontraktual bulanan pada tanggal lembur), BUKAN nilai realisasi slip periode mana pun. Slip adalah peristiwa kas sesudahnya dan tidak boleh mengubah dasar mundur. Memakai baris slip (termasuk baris `variable` manual) sebagai dasar atau sebagai "keseluruhan Upah" DILARANG vonis. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 1 butir 4 + Larangan |
+| BR-OT-05 | Cabang 75% Pasal 32 ayat (4) TIDAK diterapkan tahap ini; dasar selalu cabang 100% Pasal 32 ayat (3) (pokok + Σ tetap). Rumus hukum yang benar (kutipan vonis, BUKAN rumus implementasi tahap ini): cabang itu hanya berlaku bila ada tunjangan tidak tetap DAN (pokok+tetap) < 75% × keseluruhan Upah, dan dasarnya = 75% × keseluruhan Upah (lantai yang menaikkan dasar). Keberadaan master `variable` aktif, baris slip manual `variable`, atau komponen variable yang pernah dipakai TIDAK memicu 75% dan TIDAK mengubah dasar dalam cara apa pun. Usulan pemicu lain dari data existing DITOLAK vonis. Falsifikasinya E-OT-5. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 2 butir 1–3; PP 35/2021 Pasal 32 ayat (4) via vonis |
+| BR-OT-06 | Karyawan tanpa penugasan komponen tetap aktif pada tanggal lembur: Σ = 0, dasar = `baseSalary`. Itu keadaan BENAR, bukan darurat — dilarang fail-closed, dilarang menolak approve karena tidak ada komponen. Falsifikasinya E-OT-4. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 1 butir 6 |
+| BR-OT-07 | Dasar `<= 0` (tanpa gaji pokok dan tanpa komponen): hasil lembur = 0 mengikuti penjaga existing `computeOvertimePay` (`monthlySalary <= 0 → 0`). Bukan error baru tahap ini. | TERVERIFIKASI-KODE | Vonis 022-V Putusan 1 butir 7; `overtime-pay.service.ts:44` |
+| BR-OT-08 | Pembulatan: akumulasi Σ dan dasar akhir memakai `safeRound(..., 2)` persis preseden PKWT (basis bulanan 2 desimal, selaras `Decimal(15,2)`); satu-satunya pembulatan berikutnya adalah hasil akhir rupiah penuh `Math.round` di `computeOvertimePay` existing yang TIDAK diubah. Dilarang pembulatan menengah lain, dilarang membulatkan basis bulanan ke rupiah penuh sebelum hitung jam, dilarang mengubah `HOURLY_DIVISOR` 173. Nilai Prisma `Decimal` dikonversi `Number(...)` mengikuti preseden; dilarang menjumlahkan Decimal mentah sebagai string. Falsifikasinya E-OT-7. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 3; PKWT `:123-128`; `overtime-pay.service.ts:36-62` |
+| BR-OT-09 | Nilai lembur yang sudah approved SEBELUM perubahan ini berlaku: BEKU, tidak dihitung ulang. Dasar baru hanya berlaku untuk approve yang benar-benar menghitung sesudah perubahan terpasang. Sesudah approve, perubahan master komponen (ubah `defaultAmount`, nonaktifkan, ubah jendela) TIDAK mengubah `calculatedValue` yang sudah dibekukan; approve ulang tetap no-op idempoten existing. Koreksi dasar keliru sesudah approve hanya lewat jalur koreksi dokumen yang sah di periode terbuka — bukan edit diam-diam `calculatedValue`, bukan skrip hitung-ulang massal. Ini menegaskan Putusan 1 butir 5 vonis sekaligus menjawab pertanyaan kartu spec ini: default "tidak dihitung ulang" DISAHKAN vonis, bukan usulan Business. Falsifikasinya E-OT-6. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Putusan 1 butir 5; idempotensi `hrm.actions.ts:1101-1103` |
+| BR-OT-10 | Sitasi yang benar untuk dasar adalah Pasal 32 PP 35/2021; Pasal 31 hanya pengali. Setiap komentar/dokumen turunan yang menulis "dasar Pasal 31" wajib dikoreksi; inti kewajiban vonis induk 014-V tidak berubah. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Koreksi sitasi induk + Putusan 4 |
+| BR-OT-11 | Tidak ada permukaan Frontend baru tahap ini: nilai `calculatedValue` tampil verbatim server seperti hari ini; UI tidak menghitung dasar, tidak menampilkan label "75%" atau "tunjangan tidak tetap" yang menyiratkan cabang itu aktif. | TERVERIFIKASI-KODE (vonis) | Vonis 022-V Batas build BOT Frontend |
+| BR-OT-12 | Izin dan scope approve TIDAK berubah: approve tetap `approve_overtime_requests` + `assertApproved("OvertimeRequest", ...)` existing. Spec ini tidak menambah key izin, tidak mengubah `getHrScope`, dan tidak menampilkan data gaji baru ke role mana pun — dasar lembur dihitung server di dalam approve existing, bukan diekspos sebagai data gaji baru. | TERVERIFIKASI-KODE | `hrm.actions.ts:1074-1075`; katalog `:310` |
+
+### 3. Workflow specification (perilaku sesudah perubahan)
+
+Aktor: Approver lembur pemegang `approve_overtime_requests` (alur existing, termasuk penyelesaian ApprovalWorkflow bila terkonfigurasi). Tidak ada aktor baru.
+
+Dokumen masuk: `OvertimeRequest` berstatus `pending` (atau `approved` oleh rantai workflow yang `calculatedValue`-nya belum terhitung — jalur existing `hrm.actions.ts:1081-1095`), memuat `employeeId`, `date` (tanggal lembur), `hours`. Dokumen keluar: baris yang sama berstatus `approved` dengan `calculatedValue` beku hasil dasar baru. Tidak ada dokumen baru.
+
+Alur pada titik approve (perilaku yang ditunjuk untuk Backend — spec menunjuk perilaku, bukan menulis kode):
+
+1. Penjaga existing berjalan persis seperti hari ini: izin, `assertApproved`, status hanya `pending|approved`, dan no-op idempoten bila `calculatedValue` sudah terisi > 0. Pengajuan yang sudah terhitung TIDAK pernah masuk hitung ulang (BR-OT-09).
+2. Untuk pengajuan yang memang harus dihitung: dasar dibaca dari master pada saat approve, tetapi jendela komponennya dinilai pada `ot.date` (BR-OT-03): `baseSalary` karyawan + Σ `defaultAmount` penugasan yang memenuhi enam syarat BR-OT-01 pada tanggal itu, diakumulasi dan dibulatkan per BR-OT-08.
+3. Dasar itu masuk sebagai `monthlySalary` ke `computeOvertimePay` existing (pengali, pembagi 173, dan pembulatan akhir tidak berubah), bersama `hours` dan `dayKind` yang diturunkan seperti hari ini.
+4. Hasil ditulis sekali lewat klaim atomik existing dan beku di `calculatedValue`. Perubahan master sesudah titik ini tidak berpengaruh pada baris ini (BR-OT-09).
+
+Yang secara eksplisit TIDAK terjadi: tidak ada cabang 75% yang dievaluasi (BR-OT-05), tidak ada baca slip payroll untuk dasar (BR-OT-04), tidak ada impor service PKWT (pola `where` disalin, domain tidak dicampur), tidak ada migrasi (hanya membaca tabel existing), tidak ada perubahan rumus/pengali, tidak ada hitung ulang baris lama.
+
+### 4. Status-transition matrix
+
+Status dokumen tidak berubah oleh spec ini; yang berubah hanya nilai yang ditulis pada transisi hitung existing.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| `pending` | approve manual (tanpa workflow terkonfigurasi) | `approved` + `calculatedValue` terhitung dengan dasar BR-OT-01 per `ot.date` | `approve_overtime_requests` + `assertApproved`; dasar per BR-OT-01/03/08 |
+| `approved` (oleh rantai workflow, `calculatedValue` belum terhitung) | panggilan approve domain existing | tetap `approved`, `calculatedValue` kini terhitung dengan dasar baru | jalur existing `hrm.actions.ts:1084-1095`; penjaga sama |
+| `approved` (`calculatedValue` > 0, termasuk yang disetujui SEBELUM perubahan) | approve ulang / klik ganda / perubahan master komponen | tidak berubah (no-op) | idempotensi existing `:1101-1103`; BR-OT-09 — dilarang hitung ulang |
+| status selain `pending`/`approved` | panggilan approve | ditolak, tidak ada hitungan | penjaga existing `:1091-1095` |
+| `pending` karyawan tanpa komponen tetap aktif | approve | `approved` + nilai sama persis dengan perilaku lama (dasar = `baseSalary`) | BR-OT-06; regresi nol E-OT-4 |
+
+### 5. Koreksi pernyataan tertulis K2-S2 (dari vonis Putusan 4 — tempel verbatim oleh Backend)
+
+Pernyataan lama di `src/actions/hrm.actions.ts:1110-1118` (dasar "Pasal 31" + klaim tidak ada komponen terpisah) DICABUT. Backend menggantinya dengan teks Putusan 4 vonis 022-V berikut (boleh disesuaikan spasi/baris, tidak boleh disesuaikan isinya). Teks ini dikutip persis dari vonis; spec tidak mengeditnya:
+
+```
+// Syarat vonis K2-S2 (F-2026-10-25-014-V) sebagaimana dimutakhirkan vonis
+// F-2026-10-25-022-V: dasar upah lembur Pasal 32 PP 35/2021 = Upah pokok
+// (Employee.baseSalary) + seluruh tunjangan tetap terdaftar, yaitu Σ
+// defaultAmount EmployeePayrollComponent aktif (isActive, komponen aktif,
+// kind "earning", recurrence "fixed") yang berjendela efektif pada TANGGAL
+// LEMBUR (ot.date) — bukan tanggal approve. Komponen gaji terpisah memang
+// ada di skema (PayrollComponent + EmployeePayrollComponent); penugasan
+// hanya boleh memuat komponen "fixed", jadi seluruh penugasan aktif adalah
+// tunjangan tetap. Cabang 75% Pasal 32 ayat (4) SENGAJA tidak diterapkan:
+// ia berlaku hanya bila ada tunjangan tidak tetap dan (pokok + tetap)
+// < 75% keseluruhan Upah, dengan dasar 75% x keseluruhan Upah — dan repo
+// tidak menyimpan penugasan tunjangan tidak tetap berjalan, jadi
+// keseluruhan Upah tidak terdefinisi deterministik dari data yang ada.
+// Default yang disahkan vonis: dasar 100% (pokok + tunjangan tetap).
+// Menambah pemicu 75% dari data lain (master variable, baris slip manual)
+// DITOLAK vonis. Bila master tunjangan tidak tetap berjalan kelak ada,
+// dasar ini WAJIB ditinjau ulang oleh vonis Accountant baru.
+```
+
+Minimum wajib bila Backend memilih komentar ringkas + rujukan dokumen: baris pertama sampai "— bukan tanggal approve." harus ada di kode. Yang dilarang dalam bentuk apa pun: mempertahankan klaim "tidak ada komponen terpisah". Verifikasinya E-OT-8 (grep klaim lama di `src/` = 0).
+
+### 6. Role/permission matrix
+
+Tidak ada perubahan izin. Matriks ini mencatat keadaan existing yang wajib tetap berlaku, supaya implementasi tidak diam-diam memperluas akses data gaji:
+
+| Aksi | Pemegang `approve_overtime_requests` | Role lain (termasuk self karyawan) | Tanpa izin |
+|---|---|---|---|
+| Menyetujui lembur (memicu hitung dasar baru server-side) | boleh, dalam penjaga `assertApproved` existing | tidak | ditolak |
+| Melihat `calculatedValue` hasil | verbatim server lewat permukaan existing | sesuai permukaan existing (tidak berubah spec ini) | sesuai permukaan existing |
+| Mengubah dasar lewat master komponen | hanya lewat aksi master gaji existing dengan izinnya sendiri (di luar spec ini); efeknya hanya untuk approve yang belum terhitung | tidak | tidak |
+| Memicu cabang 75% / mengubah pemicu | tidak ada permukaan — dilarang untuk semua role tahap ini (BR-OT-05) | tidak | tidak |
+| Menghitung ulang lembur sudah approved | tidak ada permukaan — dilarang untuk semua role (BR-OT-09) | tidak | tidak |
+
+### 7. Acceptance criteria + edge cases (draf untuk BOT QA — falsifikasi atas head Backend persis)
+
+Kedelapan kriteria vonis E-OT-1..8 berlaku apa adanya; spec ini memetakannya ke kasus tepi wajib kartu dan menambahkan penegasan regresi. QA menjalankan atas head inti Backend persis, bukan atas spec ini.
+
+| ID | Kasus | Hasil wajib | Mutasi yang harus membuat MERAH |
+|---|---|---|---|
+| E-OT-1 (= kasus tepi: komponen fixed aktif) | Pokok 3.460.000 + satu komponen `earning/fixed` aktif 540.000 berlaku pada tanggal lembur | Dasar 4.000.000; 1 jam lembur hari kerja = 1,5 × 4.000.000/173 → **Rp34.682** | Menghapus filter `kind="earning"` (komponen `deduction/fixed` ikut) → MERAH |
+| E-OT-2 (= kasus tepi: komponen mulai sesudah tanggal lembur) | Komponen `earning/fixed` 540.000 dengan `effectiveFrom` SESUDAH tanggal lembur; approve dilakukan sesudah komponen berlaku | Komponen TIDAK terhitung; dasar 3.460.000 → 1 jam hari kerja = **Rp30.000** | Memakai tanggal approve sebagai acuan → MERAH |
+| E-OT-3 (= kasus tepi: komponen berakhir sebelum tanggal lembur) | Komponen `earning/fixed` dengan `effectiveTo` < tanggal lembur; dan varian penugasan `isActive=false`; dan varian komponen master `isActive=false` | Ketiganya TIDAK terhitung | Melonggarkan masing-masing syarat jendela/flag → tesnya MERAH |
+| E-OT-4 (= kasus tepi: tanpa komponen fixed) | Karyawan tanpa penugasan komponen apa pun | Dasar = `baseSalary`; nilai lembur sama persis dengan perilaku sebelum perubahan (regresi nol populasi tanpa tunjangan) | Fail-closed / penolakan approve karena Σ kosong → MERAH |
+| E-OT-5 (= kasus tepi: ada komponen non-fixed) | Karyawan sama memiliki komponen master `variable` aktif dan/atau baris slip manual `variable` | Dasar tetap 100% pokok + tetap; TIDAK ada pengali 75% | Implementasi yang memicu 75% dari data itu → MERAH |
+| E-OT-6 (= kasus tepi: lembur sudah approved sebelum perubahan) | Sesudah approve, `defaultAmount` diubah / komponen dinonaktifkan / jendela digeser; lalu approve dipanggil ulang | `calculatedValue` beku tidak berubah; approve ulang no-op | Hitung ulang diam-diam → MERAH |
+| E-OT-7 (pembulatan) | Pokok 3.460.000 + komponen tetap 540.001 | Dasar 4.000.001 (2 desimal utuh); hasil akhir tetap rupiah penuh `Math.round`; regresi `overtime-pay.service.test.ts` existing hijau utuh (termasuk 30.000 / 460.000 / 420.000 dari vonis 014-V A1) | Pembulatan menengah liar / membulatkan basis sebelum hitung jam → MERAH |
+| E-OT-8 (koreksi tertulis) | Komentar di titik dasar lembur + grep `src/` | Memuat rujukan vonis 022-V dan tanggal acuan; grep klaim lama "tidak ada komponen terpisah" (dan parafrase sitasi "dasar Pasal 31" di titik itu) = 0 | Mempertahankan klaim lama dalam bentuk apa pun → MERAH |
+
+Kasus tepi tambahan yang wajib dijawab implementasi (masih di dalam vonis, bukan aturan baru):
+
+- EC-OT-1 Batas jendela inklusif: komponen dengan `effectiveFrom` persis = `ot.date` ikut; komponen dengan `effectiveTo` persis = `ot.date` ikut (syarat vonis memakai `<=` dan `>=`). Uji kedua batas; jangan menebak eksklusif.
+- EC-OT-2 Banyak komponen: dua/lebih komponen `earning/fixed` aktif bersamaan pada tanggal lembur → dasar memuat jumlah semuanya, masing-masing diakumulasi `safeRound` per penjumlahan pola PKWT.
+- EC-OT-3 Komponen campuran pada karyawan sama: `earning/fixed` aktif + `deduction/fixed` aktif → hanya yang `earning` masuk Σ (pasangan falsifikasi E-OT-1).
+- EC-OT-4 Dasar nol: karyawan tanpa gaji pokok dan tanpa komponen → hasil 0 dari penjaga existing, approve tidak melempar error baru (BR-OT-07).
+- EC-OT-5 Tanggal lembur lampau, approve kini: komponen yang aktif pada tanggal lembur lampau tetapi sudah berakhir hari ini tetap terhitung, karena acuannya `ot.date` (kebalikan E-OT-2; kunci bahwa acuan bukan hari ini/tanggal approve).
+- EC-OT-6 Pengajuan `approved` oleh workflow yang belum terhitung (`calculatedValue` kosong) sesudah perubahan terpasang: dihitung dengan dasar baru pada panggilan approve domain (transisi baris kedua §4), bukan ditolak dan bukan dibiarkan 0.
+
+### 8. Backlog implementasi (turunan spec ini)
+
+| ID turunan | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-024-S | Spec ini (dokumen) | Business | vonis F-2026-10-25-022-V (PR #840) |
+| (kartu Backend existing t_6a69a14b) | Pemuat dasar per karyawan pola PKWT dengan acuan `ot.date` + filter enam syarat BR-OT-01, masuk sebagai `monthlySalary` ke `computeOvertimePay` di titik approve `hrm.actions.ts`; tempel teks §5 menggantikan komentar lama; tes pengunci E-OT-1..8 termasuk falsifikasi cabut-penjumlahan | Backend | spec ini + PR #840 terbaca; tanpa migrasi; tanpa impor service PKWT |
+| (kartu QA existing, hilir Backend) | Falsifikasi E-OT-1..8 + EC-OT-1..6 atas head Backend persis | QA | head Backend |
+| (milik Lead) | Merge PR #840 (vonis) dan, sesudah QA LOLOS, PR inti Backend | Lead | gate hijau head persis masing-masing |
+
+Urutan sah: vonis terbaca (PR #840; merge oleh Lead) → spec ini → inti Backend (kartu existing t_6a69a14b, sudah gated pada kartu spec ini) → falsifikasi QA. Tidak ada kartu turunan baru yang perlu dibuat run ini; rantai kartu sudah dibangun Lead (t_e7e2bf72 → t_04a213fd → t_6a69a14b → kartu QA hilirnya).
+
+### Yang TIDAK diusulkan run ini
+
+- Cabang 75% dari data existing dalam bentuk apa pun (master variable, baris slip manual, "pernah dipakai"): DITOLAK vonis 022-V Putusan 2. Membangunnya butuh master penugasan tunjangan tidak tetap bertanggal-efektif + definisi tertulis "keseluruhan Upah" + vonis Accountant baru (pemicu Putusan 2 butir 5) — dicatat sebagai risiko terbuka, bukan dikerjakan diam-diam di jalur lembur.
+- Hitung ulang massal / backfill `calculatedValue` lembur yang sudah approved sebelum perubahan: dilarang BR-OT-09. Koreksi individual hanya lewat jalur koreksi dokumen sah di periode terbuka.
+- Penilaian lantai upah minimum (Pasal 32 ayat penutup: upah sebulan di bawah upah minimum memakai upah minimum setempat): di luar cakupan vonis 022-V dan spec ini; tidak boleh disimpulkan dari dasar lembur, tidak boleh ditambal di titik approve atas nama spec ini.
+- Tunjangan tetap yang dibayar manual per slip terus-menerus tetapi tidak terdaftar sebagai penugasan: secara substansi bisa jadi tunjangan tetap menurut hukum ketenagakerjaan, tetapi memasukkan baris slip ke dasar DILARANG (BR-OT-04). Temuan seperti itu adalah temuan tata kelola master gaji untuk Business/Lead, bukan tambalan rumus.
+- Permukaan Frontend baru, label "75%"/"tunjangan tidak tetap", key izin baru, perubahan scope HR, perubahan rumus/pengali/pembagi 173: semuanya di luar vonis; menambahnya = scope creep terhadap rantai yang sudah divonis.
+
+### Catatan risiko terbuka (dari vonis 022-V, diteruskan apa adanya — bukan penahan build)
+
+1. Tunjangan tidak tetap dunia nyata (uang makan/transport berbasis kehadiran, tunjangan kinerja berjalan) belum terwakili master berjalan; selama itu belum ada, dasar 100% dapat berada di bawah lantai Pasal 32 ayat (4) untuk karyawan terdampak dan selisihnya adalah kekurangan bayar perusahaan — bukan kesalahan hitung sistem dan bukan alasan menerapkan 75% × (pokok+tetap) yang salah arah. Langkah benar berikutnya = kartu master tunjangan tidak tetap bertanggal-efektif + vonis Accountant baru.
+2. Lantai upah minimum Pasal 32 ayat penutup belum dinilai run rantai ini (lihat "Yang TIDAK diusulkan").
+
+F-2026-10-25-024-S — Spec penyesuaian dasar lembur. Status: SPEC SELESAI run ini; seluruh angka mengutip vonis F-2026-10-25-022-V (PR #840), tanpa angka karangan Business. Pemilik berikutnya: BOT Backend (inti, kartu existing t_6a69a14b) → BOT QA (E-OT-1..8) → BOT Lead (merge). Butuh vonis accountant tambahan: TIDAK untuk tahap ini (vonis 022-V final); vonis baru hanya bila pemicu masa depan Putusan 2 butir 5 kelak dibangun.
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-018-S: pengajuan pinjaman karyawan mandiri (self-service di atas EmployeeLoan existing)
 > **Slot**: F-2026-10-25-018-S. Diperiksa bentrok 2026-10-25 12:50 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-018` di backlog+board = 0 sebelum tulis; 017-S di PR #821 OPEN, 019-S di PR #825 OPEN (beda topik). ID 018-S bebas. Diverifikasi sebelum tulis, bukan slot tetap.
 >
@@ -28349,3 +28627,196 @@ Edge cases: EC-1 pengajuan kedua saat pinjaman pertama masih `pending`/`active` 
 - Pelunasan dipercepat / pembayaran angsuran manual di luar payroll (setor kas karyawan): jalur Accurate ada, tetapi ISF hari ini hanya amortisasi payroll; menambah jalur kas = dokumen uang baru, butuh vonis Accountant + spec tersendiri.
 - Notifikasi pengingat approver/pengaju: antrean pasif tahap 1, mengikuti penundaan yang sama seperti 007-S.
 F-2026-10-25-018-S — Pengajuan pinjaman karyawan mandiri. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LS-1/2/4/5 + fisik Backend Q-LS-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/izin), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA bersyarat — hanya untuk BR-LS-09 (angka uang) dan BR-LS-10 (bunga/pajak/akun); inti pintu pengajuan tahap 1 tanpa vonis baru.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-027-S: antrean prospek mendekati/lampaui target tutup (expectedCloseDate, forecast jujur tanpa probabilitas)
+
+> **Slot**: F-2026-10-25-027-S. Diperiksa bentrok 2026-10-25 14:2x WIB vs `origin/main` (`0805642d`): grep `F-2026-10-25-027` di backlog+board origin/main = 0; ID terpakai tanggal ini di main/PR terbuka: 001-S..026-L (026 di PR #851). ID 027 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_be1e2e84.
+
+### 0. Ringkasan
+
+`Lead.expectedCloseDate` sudah tersimpan dan tervalidasi, tetapi tidak ada permukaan baca yang menjawab: "prospek terbuka mana yang target tutupnya sudah lewat atau dekat, sehingga penjual harus bertindak minggu ini?" Corong prospek existing (F-2026-10-22-092-S) hanya menampilkan posisi saat ini per status dan gerakan kohort periode — tanpa dimensi tanggal target tutup. Spec ini membekukan antrean baca-saja turunan: prospek non-terminal dengan `expectedCloseDate` terisi, dikelompokkan LEWAT_TARGET (hari WIB > expectedCloseDate) dan MENDEKATI (dalam jendela hari terkonfigurasi tampilan, usulan 7 hari), diurutkan paling lewat dulu. Tanpa probabilitas tertimbang, tanpa prediksi pendapatan, tanpa status/migrasi/jurnal baru. Nilai tampil = `estimatedValue` saat ini apa adanya dengan notice jujur warisan BR-LF-08.
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 0805642d)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Kolom `Lead.expectedCloseDate DateTime?` (`prisma/schema.prisma:4301`) + `estimatedValue Decimal?` + `assignedTo` + `status` string default `new`; status kanonik `LEAD_STATUSES = [new, contacted, qualified, proposal, negotiation, won, lost]` (`src/lib/validations/crm.schemas.ts:88`).
+- Validasi server: `expectedCloseDate` dateOnly, ditolak bila tidak ter-parse (`crm.schemas.ts:55,73`); konversi tersimpan tengah malam UTC hari WIB (pola disebut `src/actions/crm.actions.ts:355`).
+- Corong: builder murni `buildLeadFunnel` + `LEAD_FUNNEL_STAGE_LABELS` (`src/lib/reports/lead-funnel.ts:34`), loader `lead-funnel-data.ts` (izin ganda: master `view_leads`, laporan `view_reports`, baris :11-15), halaman `/laporan/corong-prospek` gerbang `requirePermission("view_reports")` (`page.tsx:30`). BR-LF-08 membekukan: TIDAK ada probabilitas tertimbang karena tidak ada tabel probabilitas; Σ nilai = nilai saat ini dengan notice.
+- Pola antrean tanggal existing: `lead-followups.ts` (jadwal aktivitas jatuh tempo, kalender WIB, urut overdue terbesar), `stale-leads.ts` (ambang hari konstan + ember jujur), `quotation-accepted-queue` (validUntil lewat tetap tampil, sisa hari null bila tanpa batas).
+
+Belum ada / gap (bukti grep run ini):
+- Grep `expectedClose` di `src/lib/reports/*.ts` + halaman corong = 0 hit: tidak ada builder/loader/kartu yang membaca `expectedCloseDate` untuk antrean/forecast.
+- Tidak ada pengelompokan prospek terbuka berdasarkan kedekatan target tutup; penjual hanya bisa menemukan target lewat dari daftar lead mentah per baris.
+- `expectedCloseDate` kosong tidak tertanda sebagai temuan data ("tanpa target tutup") di permukaan mana pun.
+
+### 2. Workflow specification
+
+Aktor: penjual (pemegang leads), supervisor/owner (pemegang laporan).
+Dokumen masuk: Lead existing (status non-terminal, `expectedCloseDate` terisi/kosong). Dokumen keluar: tidak ada — antrean baca-saja; tindakan lanjut memakai permukaan existing (buka detail lead, tambah aktivitas terjadwal, ubah status/tanggal lewat form lead existing).
+Alur:
+1. Loader membaca lead `deletedAt IS NULL` + status non-terminal (bukan `won`/`lost`) satu query massal (pola anti-N+1 lead-funnel-data).
+2. Builder murni mengelompokkan per baris: `expectedCloseDate` kosong -> ember TANPA_TARGET (tertanda, tidak masuk urutan urgensi); hari WIB hari ini > expectedCloseDate -> LEWAT_TARGET + `overdueDays`; selisih 0..jendela -> MENDEKATI + `sisaHari`; lebih jauh -> di luar antrean.
+3. Urutan: LEWAT_TARGET (overdue terbesar dulu), lalu MENDEKATI (sisa terkecil dulu); seri diputus leadNumber lalu id (pola lead-followups).
+4. Halaman menampilkan label tahap verbatim `LEAD_FUNNEL_STAGE_LABELS`, penanggung (assignedTo; kosong = label "Belum ditugaskan" warisan funnel), estimatedValue apa adanya + notice nilai saat ini; nol hitung ulang di UI.
+5. Aksi per baris hanya tautan ke detail lead existing; tidak ada tombol ubah status/tanggal di antrean.
+
+### 3. Role/permission matrix
+
+| Aksi | Permission nyata | Penjual | Supervisor | Admin |
+|---|---|---|---|---|
+| Melihat antrean (permukaan laporan) | `view_reports` | bila diberi | ya | ya |
+| Membuka detail lead dari baris | `view_leads` | ya (baris tanpa izin ini = tautan nonaktif/tertanda) | ya | ya |
+| Mengubah tanggal/status (di detail, existing) | `edit_leads` | sesuai existing | sesuai existing | ya |
+| Membuat key izin baru | — | TIDAK tahap 1 (Q-EC-2) | — | — |
+
+Scope baris: mengikuti pola `lead-funnel-data.ts` (report = per penanggung bernama boleh tampil; tanpa scope HR — lead bukan data gaji). Filter penanggung = saring tampil saja, total antrean tidak berubah makna (pola rekap komisi).
+
+### 4. Status-transition matrix
+
+Tidak ada transisi status baru. Antrean adalah turunan baca dari (`status`, `expectedCloseDate`, hari WIB):
+| Keadaan awal (fakta tersimpan) | Pemicu waktu | Tampilan antrean | Penjaga |
+|---|---|---|---|
+| non-terminal + expectedCloseDate > jendela | hari berjalan | tidak tampil | builder |
+| non-terminal + 0<=sisa<=jendela | masuk jendela | MENDEKATI | builder |
+| non-terminal + hari ini > expectedCloseDate | lewat tengah malam WIB | LEWAT_TARGET | builder |
+| won/lost (terminal) | kapan pun | keluar antrean | builder (BR-EC-02) |
+| expectedCloseDate dikosongkan/diundur (edit existing) | simpan lead | baris hilang/pindah ember | tidak ada mutasi antrean |
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-EC-01 | Keanggotaan hanya Lead `deletedAt IS NULL` DAN status non-terminal (`won`/`lost` keluar). Status di luar LEAD_STATUSES masuk ember "Status tidak dikenal" tertanda, tidak dipetakan paksa (warisan BR-LF-01). | USULAN (pola TERVERIFIKASI-KODE funnel) | lead-funnel.ts BR-LF-01 |
+| BR-EC-02 | Lewat target ditentukan per hari kalender WIB: lewat bila hari WIB hari ini > tanggal expectedCloseDate; hari target sendiri masih "hari ini" (sisa 0, MENDEKATI), bukan lewat. Pola semantik guard `assertQuotationNotExpired` + lead-followups. | USULAN (semantik TERVERIFIKASI-KODE di domain tetangga) | quotation-accepted-queue header; lead-followups.ts |
+| BR-EC-03 | DILARANG probabilitas tertimbang, persen peluang per tahap, dan prediksi pendapatan: tidak ada tabel probabilitas di repo; mengarang persen = aturan bisnis karangan. Σ estimatedValue hanya tampil per ember dengan notice "nilai estimasi saat ini, bukan piutang/pendapatan/prediksi" verbatim warisan funnel. | USULAN (mengikat BR-LF-08 TERVERIFIKASI-KODE) | lead-funnel.ts BR-LF-08 |
+| BR-EC-04 | `expectedCloseDate` kosong = ember TANPA_TARGET tertanda terpisah; tidak diberi sisa hari 0, tidak masuk urutan urgensi, tidak disembunyikan (temuan kelengkapan data penjual). | USULAN | pola ember jujur stale-leads/funnel |
+| BR-EC-05 | Jendela MENDEKATI = usulan 7 hari kalender; angka final = Q-EC-1 Lead. Jendela adalah parameter tampilan builder, bukan kolom tersimpan. | BUTUH-VONIS (Lead, perilaku) | — |
+| BR-EC-06 | Urutan deterministik: LEWAT_TARGET overdue desc, MENDEKATI sisa asc, seri leadNumber lalu id. UI dilarang mengurutkan ulang. | USULAN | pola lead-followups.ts |
+| BR-EC-07 | Antrean baca-saja: nol mutasi Lead/status/tanggal, nol notifikasi/cron/email tahap 1. Pengingat aktif = spec terpisah sesudah antrean pasif terbukti dipakai. | USULAN | pola Q-AQ-6 (002-S) |
+| BR-EC-08 | Izin permukaan = `view_reports` (laporan) tanpa key baru; tautan detail mensyaratkan `view_leads` pemakai — baris tetap tampil bagi pemegang laporan walau tanpa izin lead (angka agregat bukan data pribadi), tautan dinonaktifkan tertanda. Bentuk final = Q-EC-2 Lead. | BUTUH-VONIS (Lead) | pola lead-funnel-data.ts:11-15 |
+| BR-EC-09 | estimatedValue kosong tampil sebagai ember "Prospek tanpa nilai estimasi" (label warisan funnel), BUKAN Rp0, dan dikeluarkan dari Σ ember dengan penanda jumlah baris tanpa nilai. | USULAN (label TERVERIFIKASI-KODE) | LEAD_FUNNEL_NO_VALUE_LABEL |
+
+### 6. Feature matrix (benchmark, akses 2026-10-25)
+
+| Kemampuan | Accurate | Zahir CRM | ISF (spec ini) |
+|---|---|---|---|
+| Pipeline prospek per tahap + nilai potensi | Ada (help.accurate.id Accurate Online/Insight) | Ada: Dashboard CRM Total Leads/Potential + rekap pipeline per periode (https://zahirerp.com/id/all-features-of-zahir-products/) | Ada existing: corong prospek F-092-S |
+| Follow-up terjadwal tidak terlewat | — | Ada: "Tidak Ada Lagi Prospek Terlewat", follow-up disiplin terjadwal (https://zahiraccounting.com/id/zahir-crm/) | Ada existing: lead-followups F-037 |
+| Antrean target tutup lewat/dekat per prospek terbuka | Tidak ditemukan permukaan khusus di help resmi (forecast Accurate = metode historis agregat, https://accurate.id/marketing-manajemen/sales-forecast/) | Laporan Potential beserta nilai nominalnya per periode (zahirerp all-features) | Spec ini: antrean per baris LEWAT/MENDEKATI tanpa probabilitas |
+| Probabilitas tertimbang forecast | Metode historis (bukan persen tahap) | Tidak diklaim di sumber resmi di atas | DILARANG tahap 1 (BR-EC-03) |
+
+Catatan jujur: benchmark Zahir/Accurate di atas membuktikan kebutuhan visibilitas pipeline+follow-up, BUKAN bukti keduanya punya antrean expected-close identik; kesetaraan fitur diklaim hanya sejauh tertulis di URL.
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder+loader):
+- AC-EC-B1: lead `won`/`lost`/terhapus-lembut dengan expectedCloseDate lampau TIDAK muncul; muncul satu pun = MERAH.
+- AC-EC-B2: batas hari WIB persis: expectedCloseDate = hari ini -> MENDEKATI sisa 0 (bukan LEWAT); kemarin -> LEWAT overdue 1; menggeser logika ke UTC mentah harus MERAH pada tes lintas tengah malam WIB.
+- AC-EC-B3: expectedCloseDate kosong masuk TANPA_TARGET tanpa sisa/overdue karangan; diberi 0 = MERAH.
+- AC-EC-B4: nol probabilitas/persen/prediksi di keluaran builder (grep keluaran + tes snapshot field); field persen muncul = MERAH.
+- AC-EC-B5: urutan deterministik BR-EC-06 termasuk seri; UI/loader mengurutkan ulang = MERAH.
+- AC-EC-B6: loader satu query massal (tanpa query per baris), nol mutasi Lead/LeadActivity; loader menulis apa pun = MERAH.
+- AC-EC-B7: estimatedValue kosong tidak masuk Σ sebagai 0 dan tertanda per BR-EC-09.
+
+Frontend (konsumen):
+- AC-EC-F1: label tahap/ember/notice verbatim server; UI menghitung sisa hari/overdue sendiri = MERAH (mutasi tanggal builder harus mengubah tampilan tanpa ubah UI).
+- AC-EC-F2: halaman tanpa `view_reports` tertolak (redirect/403 pola laporan existing); baris tampil bagi pemegang tanpa `view_leads` dengan tautan nonaktif tertanda per BR-EC-08.
+- AC-EC-F3: nol tombol ubah status/tanggal/notifikasi di antrean; sebelum commit grep e2e selector lead terdampak.
+
+Edge cases: EC-1 expectedCloseDate di masa depan jauh + status `new` tanpa aktivitas (tetap di luar antrean; stale-leads domain terpisah, jangan digabung). EC-2 lead non-terminal tanpa assignedTo (label "Belum ditugaskan"). EC-3 expectedCloseDate diubah ke lampau oleh edit sesudah antrean dibaca (turunan murni: baca berikutnya langsung LEWAT, tanpa peristiwa tersimpan). EC-4 status liar di luar LEAD_STATUSES (ember tidak dikenal, BR-EC-01). EC-5 dua lead penanggung sama tanggal sama (seri leadNumber/id). EC-6 tahun kabisat/batas bulan pada hitung hari kalender WIB.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-EC-1 (Lead): jendela MENDEKATI final — usulan 7 hari kalender (BR-EC-05); apakah perlu dua tingkat (<=7 dan <=30) tahap 1?
+- Q-EC-2 (Lead): izin permukaan — reuse `view_reports` saja (BR-EC-08) vs wajib `view_leads` juga; spec mengusulkan pola funnel existing.
+- Q-EC-3 (Backend): penempatan fisik — builder baru `lead-expected-close.ts`+loader di `src/lib/reports/` (usulan) vs perluasan funnel; putuskan sebelum konsumen UI, jangan dua agregasi tanggal paralel.
+- Q-EC-4 (Lead): permukaan — halaman laporan baru vs kartu di halaman corong existing; posisi `report-catalog`/navigasi mengikuti putusan ini.
+- Accountant: TIDAK tahap 1 (tanpa uang/pajak/jurnal; estimatedValue bukan pengakuan pendapatan — BR-EC-03).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-027-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-027-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder+loader antrean target tutup | Backend | Q-EC-1/2/3 diputus Lead | — |
+| (turunan) halaman/kartu konsumen verbatim | Frontend | kontrak builder Backend final + Q-EC-4 | — |
+| (turunan) falsifikasi AC-EC-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Probabilitas per tahap / forecast pendapatan tertimbang: dilarang BR-EC-03; butuh tabel probabilitas + pemilik angka (vonis Lead/Accountant bila kelak diusulkan).
+- Notifikasi/cron pengingat target tutup: antrean pasif dulu (BR-EC-07); pengingat servis kendaraan (F-2026-10-25-021-S) domain berbeda.
+- Kolom/status baru di Lead, migrasi, backfill tanggal: data existing cukup.
+- Penggabungan dengan lead basi/follow-up: tiga pertanyaan berbeda (target tutup vs aktivitas terakhir vs jadwal aktivitas).
+
+F-2026-10-25-027-S — Antrean prospek mendekati/lampaui target tutup. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-EC-1/2/4 + fisik Backend Q-EC-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
+## PUTUSAN LEAD 2026-10-25 14:20 WIB — F-2026-10-25-026-L: Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S (PR #827), berdasar vonis F-2026-10-25-023-V merged (PR #842, mergeCommit 2c59d982)
+
+> **Slot**: F-2026-10-25-026-L. Diperiksa bentrok 2026-10-25 14:20 WIB vs `origin/main` (`778735ce`): grep `F-2026-10-25-026` di backlog origin/main = 0, judul PR terbuka = 0 (PR terbaru #849); 024-S/025-S sudah terpakai spec lain — 026-L bebas. Basis verifikasi: backlog main 778735ce (blok 023-V baris 27932-28022), head live PR #827 `f966a0cc` (spec 018-S utuh; kartu menyebut a595edf4 — head bergerak, isi spec dibaca dari head live), kode origin/main di worktree bersih. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Batas putusan**: Lead memutus HANYA arsitektur/izin/alur: Q-LS-1 (bentuk izin), Q-LS-2 (plafon kebijakan di atas rel 023-V), Q-LS-3 dua makna (antrean 018-S §2/§3 + penanda kanal Backend di daftar turunan — keduanya dijawab eksplisit di bawah supaya tidak ambigu), Q-LS-4 (tanpa-workflow + kosakata status), Q-LS-5-spec (bentuk kartu antrean). Angka uang/pajak TIDAK ditebak ulang: tanpa bunga, plafon potong 50% Pasal 65 PP 36/2021, urutan potongan, angsuran bukan pengurang bruto, dan status PPh 21 TERBUKA-TERCATAT mengikuti 023-V apa adanya.
+
+### 0. Basis bukti live (origin/main 778735ce, 2026-10-25 14:20 WIB) — TERVERIFIKASI-KODE
+
+- `create_loans` SATU key menggerbang TIGA aksi: `createEmployeeLoan` (`src/actions/hrm.actions.ts:3109-3111`), `updateEmployeeLoan` (`hrm.actions.ts:4212-4214`, hanya status `pending`, scope self/department ditegakkan di dalamnya), `deleteEmployeeLoan` (`hrm.actions.ts:3903`, requirePermission sama — verifikasi grep run ini). Memberi `create_loans` ke peran karyawan = membuka buat + ubah-pending + hapus dalam scope sekaligus.
+- `KARYAWAN_WHITELIST` (`src/lib/setup/base-data.ts:606-621`) memuat `view_employee_loans` + preseden `create_leave_requests`, TANPA `create_loans`. Katalog (`src/lib/auth/module-catalog.generated.ts:316-319`): `create_loans`/`delete_loans` resource `loans`, `approve_loans` resource `loans`, `view_employee_loans` resource `employee_loans`. Key pengajuan pinjaman khusus: grep `request_employee_loan|apply_for_loan|create_employee_loan` di src+prisma = 0 — BELUM ada.
+- Penolakan pinjaman SUDAH tertutup faktanya: `rejectStep` (`src/actions/approval.actions.ts:296,356-375`) menulis status dokumen sumber persis `rejected` (EmployeeLoan bukan GATE_ONLY, bukan REJECTION_REASON_MODELS — tanpa kolom alasan di dokumen; alasan hidup di ApprovalHistory). Kosakata hidup EmployeeLoan terverifikasi: `pending` (buat, hrm:3147) → `active` (persetujuan final, approval:241) / `rejected` (rejectStep) → `paid_off` (sisa 0, hrm:3058). Q-LS-4 bukan lagi pertanyaan terbuka soal status akhir — tinggal dikunci sebagai kontrak.
+- Tanpa workflow: `requestApprovalIfConfigured` (`src/lib/services/approval-workflow.service.ts:10-52`) no-op mengembalikan `false` bila tidak ada workflow aktif untuk `EmployeeLoan`; pinjaman tertahan `pending` tanpa Approval — tidak ada jalur keputusan langsung di luar rantai hari ini (createEmployeeLoan mengabaikan nilai baliknya; status quo = tertahan, terlihat, nol jurnal).
+- Antrean 007-S: `HR_PENDING_KINDS = ["leave", "overtime"]` (`src/lib/reports/hr-pending-approval.ts:48`); builder murni tanpa nominal gaji (BR-HP-08 file sama). 007-S SUDAH di main (bukan menunggu merge) — syarat "builder stabil" di daftar turunan spec 018-S terpenuhi.
+- Rel 023-V yang mengikat putusan ini: tahap 1 tanpa bunga/denda/biaya admin; total potongan Pasal 63 ≤ 50% upah per pembayaran (kelebihan tidak dipotong, tidak jadi denda, tenor memanjang); WEEKLY hanya dari `weeklyInstallment` perjanjian tertulis; kenikmatan pinjaman = TERBUKA-TERCATAT (dilarang klaim bebas PPh 21, dilarang hardcode *cost of fund*).
+
+### Putusan Q-LS-1 — Bentuk izin: KEY BARU khusus pengajuan mandiri; `create_loans` TIDAK masuk whitelist karyawan
+
+**Diputus: (b) key baru.** Backend membuat satu key izin baru khusus pengajuan pinjaman mandiri (nama fisik key = Backend, satu kata resource konsisten katalog; syarat semantiknya mengikat di sini: key ini BUKAN `create_loans`, BUKAN `approve_loans`), memasukkannya ke `PERMISSIONS` + katalog tergenerasi lewat skrip repo (`scripts/generate-module-catalog.mjs`) + `KARYAWAN_WHITELIST`, dan menggerbang jalur pengajuan mandiri dengan key itu. Alasan:
+
+1. `create_loans` terbukti pintu majemuk (buat + ubah-pending + hapus, bukti §0). Opsi (a) memberi karyawan hak hapus pinjaman pending dalam scope — melebihi kebutuhan "mengajukan" dan melanggar BR-LS-05 spec (izin mengajukan tanpa `create_loans` penuh).
+2. Preseden `create_leave_requests` di whitelist membuktikan pola key-ajukan-terpisah memang idiom repo ini; pinjaman mengikuti pola yang sama, bukan pengecualian.
+3. SoD tetap utuh: key pengajuan tidak memberi `approve_loans`; Maker-Checker rantai existing (approval.actions.ts) tetap menolak pengaju menyetujui pinjamannya sendiri.
+
+Syarat fisik mengikat untuk Backend (pelanggaran = cacat, bukan selera):
+
+- Aksi buat pinjaman menerima key pengajuan BARU untuk pengajuan mandiri (employeeId = employee tertaut user pengaju, ditegakkan server oleh gerbang scope self existing — BUKAN cek UI) dan tetap menerima `create_loans` untuk jalur staf/titipan existing. Satu aksi, dua pintu izin yang dibedakan; perilaku staf existing nol berubah.
+- `updateEmployeeLoan`/`deleteEmployeeLoan` TETAP digerbang `create_loans` saja tahap 1 — key pengajuan baru TIDAK membuka ubah/hapus. Konsekuensi jujur: karyawan belum bisa membetulkan/menarik pengajuan pending-nya sendiri tahap 1; koreksi lewat staf. Itu batas sadar tahap 1 (pengajuan ulang baris baru sah per EC-5 spec), bukan lubang diam-diam. Membuka ubah-pending-sendiri = perluasan izin terpisah sesudah QA membuktikan matriksnya.
+- Peran lama tanpa key baru: tetap `view_employee_loans`, tidak bisa mengajukan (AC-LS-Q1 spec). Seed/whitelist hanya menambah key baru ke peran karyawan; tidak melepas key apa pun dari peran mana pun.
+
+### Putusan Q-LS-2 — Plafon kebijakan: TANPA plafon nominal/jangka/kuota karangan tahap 1; satu-satunya plafon keras = rel 023-V
+
+**Diputus: tahap 1 TIDAK memasang plafon pokok, jangka/cicilan maksimum, batas jumlah pinjaman aktif bersamaan, masa kerja minimum, atau ambang jenjang persetujuan tambahan.** Alasan:
+
+1. Angka-angka itu kebijakan pemilik proses berbasis data gaji/risiko ISF yang tidak ada di repo; memasang persen/bulan karangan = aturan bisnis karangan (dilarang BR-LS-09 spec + mandat Lead). Vonis 023-V sendiri menegaskan plafon nominal tetap keputusan pemilik proses dan melarang menurunkannya dari vonis.
+2. Rel keras yang WAJIB ditegakkan sistem tahap 1 sudah lengkap dari 023-V: cicilan hanya dari perjanjian tertulis tersimpan (WEEKLY tanpa `weeklyInstallment` tertahan), total potongan Pasal 63 ≤ 50% per pembayaran upah dengan tenor memanjang otomatis, tanpa bunga/denda. Itulah plafon sistem tahap 1 — bukan "bebas tanpa rel".
+3. Jenjang persetujuan tambahan per nominal = konfigurasi ApprovalWorkflow existing (multi-langkah per peran), bukan ambang hardcoded baru. Bila pemilik proses kelak menetapkan angka tertulis, ia masuk sebagai perubahan kebijakan terkonfigurasi/tervalidasi lewat kartu lanjutan — bukan konstanta tebakan di kode.
+
+Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 dst.) tidak ditambah diam-diam (EC-4 spec ditegakkan); verifikator manusia + rantai approval adalah penapis nominal tahap 1, dan antrean (Q-LS-5-spec) wajib menampilkan nominal pinjaman pengaju apa adanya supaya penapis itu bisa bekerja.
+
+### Putusan Q-LS-3 — Dua jawaban eksplisit (antrean + penanda kanal)
+
+**Q-LS-3a (antrean, makna §2/§3 spec): permukaan 007-S yang sama, nominal pinjaman tampil penuh dalam scope.** Pinjaman `pending` masuk antrean persetujuan HR gabungan 007-S sebagai kind baru (fisik oleh Backend per Q-LS-5-spec), BUKAN daftar terpisah di sdm/pinjaman. Nominal yang tampil = nominal PINJAMAN pengaju (`totalAmount` + cicilan tersimpan), tampil penuh bagi peninjau dalam scope (self tidak melihat milik orang lain; department hanya departemennya; all semua) — nominal pinjaman bukan nominal gaji, jadi batas BR-HP-08 (tanpa gaji) tidak dilanggar; menyamarkan nominal dari verifikator justru mematikan fungsi verifikasi (Q-LS-2: penapis manusia butuh angka). Di luar gerbang antrean, nominal karyawan lain tetap tidak tampil (BR-LS-12 spec ditegakkan).
+
+**Q-LS-3b (penanda kanal, makna daftar turunan spec — fisik Backend): turunan baca dari data existing tahap 1; kolom penanda sumber DILARANG tahap 1.** Kanal dibedakan murni sebagai turunan baca: pengajuan mandiri ⇔ baris dibuat oleh user yang employee-tertautnya = `employeeId` pinjaman (pembuat memakai key pengajuan baru Q-LS-1 lewat pintu mandiri); selain itu = titipan staf. Fisik pemetaan user→employee memakai tautan existing yang sama dengan scope self (`getHrScope`), tanpa kolom/migrasi baru. Alasan: menambah kolom sumber sekarang = migrasi untuk fakta yang sudah bisa diturunkan persis dari `createdBy` + tautan employee; laporan kanal tahap 1 WAJIB membaca turunan ini dan dilarang mengklaim kanal dari heuristik lain (mis. menebak dari peran pembuat). Bila kelak pintu masuk bertambah (impor/API), penanda tersimpan dinilai ulang lewat kartu bermigrasi tersendiri.
+
+### Putusan Q-LS-4 — Tanpa workflow: status quo tertahan `pending` dikunci; kosakata status ditutup
+
+**Diputus: (1) tahap 1 mempertahankan status quo — tanpa workflow `EmployeeLoan` aktif, pengajuan tertahan `pending`, nol jurnal, TIDAK dibangun jalur keputusan langsung/`approve_loans` langsung di luar rantai.** Alasan: jalur langsung baru = jalur pencairan kedua yang melewati Maker-Checker berjenjang; risiko uangnya tidak sebanding dengan kenyamanannya, dan ketertahanan ini terlihat (antrean menampilkan umur menunggu sejak `createdAt` WIB) bukan senyap. Admin mengaktifkan workflow = konfigurasi existing, bukan kode. Pengajuan tertahan tetap bisa ditolak/diputuskan hanya lewat rantai sesudah workflow aktif; selama belum, antrean menandainya mengendap per tahap turunan 007-S.
+
+**(2) Kosakata status EmployeeLoan DITUTUP untuk konsumen:** `pending` → `active` | `rejected`; `active` → `paid_off`. Status akhir penolakan = persis `rejected` (fakta `rejectStep` §0 — bukan lagi "verifikasi Backend" terbuka). Dilarang menambah status `draft`/batal/versi karyawan (spec §Larangan ditegakkan), dilarang konsumen UI menerjemahkan status di luar pemetaan label existing, dan baris `rejected` adalah riwayat terminal — pengajuan ulang = baris baru (EC-5). Backend mengunci kosakata ini di batas baca/tulis yang ia sentuh tahap ini (tanpa migrasi enum; String existing tetap, kontraknya yang tertutup).
+
+### Putusan Q-LS-5-spec — Perluasan antrean = kartu turunan terpisah dari kartu inti izin, keduanya anak putusan ini
+
+**Diputus: kartu turunan terpisah, bukan digabung ke kartu inti gerbang plafon/izin.** Alasan: builder+loader 007-S (`hr-pending-approval*.ts`) sudah stabil di main, tetapi perluasan kind `loan` menyentuh file yang sama dengan permukaan Frontend 007-S berjalan — menggabungkannya ke kartu inti Backend (izin + gerbang plafon payroll) mencampur dua risiko regresi (izin/potong gaji vs antrean baca) dalam satu head yang harus difalsifikasi QA per bagian. Urutan: inti Backend (Q-LS-1 + rel plafon 023-V + Q-LS-3b + kunci status Q-LS-4) dulu, perluasan antrean (kind pinjaman + Q-LS-3a) sebagai kartu Backend turunan berikutnya, lalu Frontend konsumen, lalu QA gabungan AC-LS-* + AC-LSV-1..7 atas head final. Kartu Backend t_65b97381 (gerbang plafon) tetap induk implementasi yang berjalan lebih dulu; Lead membuat kartu antrean sebagai saudaranya di bawah putusan ini, bukan menunggu kartu ini merged sebagai PR.
+
+### Konsumen & urutan (mengikat)
+
+1. **BOT Backend** — kartu t_65b97381 (sudah ada, menunggu kartu ini done): inti Q-LS-1 (key baru + whitelist + katalog tergenerasi), rel plafon 50% + urutan potongan 023-V di gerbang slip, Q-LS-3b turunan kanal, kunci kosakata Q-LS-4. Tanpa bunga, tanpa klaim bebas PPh 21, tanpa *cost of fund* hardcoded. PR tanpa merge, head SHA dilaporkan.
+2. **BOT Backend (turunan, dibuat Lead bersamaan)** — perluasan antrean 007-S kind pinjaman per Q-LS-3a/Q-LS-5-spec di atas `hr-pending-approval*` existing; builder tetap murni tanpa keputusan, nominal pinjaman bukan gaji.
+3. **BOT Frontend** — konsumen UI pengajuan mandiri + antrean gabungan sesudah kontrak Backend final (kartu dibuat/dikonfirmasi Lead siklus merge Backend; sinyal per PR merged, bukan borongan).
+4. **BOT QA** — kartu t_e78fcd26 (sudah ada di rantai): falsifikasi AC-LS-B1..B8 + F1..F3 + Q1 (spec 018-S, termasuk AC-LS-B8 matriks key baru) dan AC-LSV-1..7 (023-V) atas head persis; matikan gerbang self/SoD/plafon = MERAH.
+
+### Larangan turunan (mengikat semua build di bawah putusan ini)
+
+- Menambah `create_loans` ke `KARYAWAN_WHITELIST`, atau memberi key pengajuan baru akses ubah/hapus/approve.
+- Plafon nominal/jangka/kuota/masa-kerja karangan, ambang jenjang hardcoded, atau validasi kewajaran diam-diam di luar schema existing + rel 023-V.
+- Jalur keputusan/pencairan langsung tanpa workflow, status baru di luar kosakata tertutup Q-LS-4, kolom penanda kanal bermigrasi tahap 1.
+- Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
+
+ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
