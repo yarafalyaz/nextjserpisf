@@ -204,6 +204,10 @@ function journalEntryBranch() {
 function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
   return {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+    downPayment: { findMany: vi.fn().mockResolvedValue([]) },
+    // B4 (PR #785): blok penutup 210102 jalur konversi membaca pembayaran
+    // DP tertaut; default kosong = bukan faktur konversi.
+    salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
     salesInvoice: {
       findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
       findUnique: mocks.invoiceFindUnique,
@@ -498,6 +502,9 @@ describe("onSalesInvoicePosted", () => {
           findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
           findUnique: mocks.invoiceFindUnique,
         },
+        // B4 (PR #785): blok penutup 210102 jalur konversi membaca pembayaran DP.
+        salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
+        downPayment: { findMany: vi.fn().mockResolvedValue([]) },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
@@ -1780,7 +1787,7 @@ describe("onDownPaymentReceived", () => {
         systemSetting: {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
-        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow },
+        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow, update: vi.fn().mockResolvedValue({}) },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
