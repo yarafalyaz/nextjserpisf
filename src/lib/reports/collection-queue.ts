@@ -27,7 +27,12 @@
  * (BR-COL-07). Loader: `collection-queue-data.ts`.
  */
 
-import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import {
+  COLLECTION_SETTLED_EPSILON,
+  receivableOutstanding,
+} from "@/lib/reports/aging-amounts"
+
+export { COLLECTION_SETTLED_EPSILON }
 import { buildLateFeeOutstandingByInvoice } from "@/lib/reports/sales-late-fee"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import { safeAdd } from "@/lib/utils/math"
@@ -107,8 +112,6 @@ export const COLLECTION_OUTCOMES = [
 export type CollectionOutcome = (typeof COLLECTION_OUTCOMES)[number]
 
 const MS_PER_DAY = 86_400_000
-/** Lunas bila sisa <= nilai ini (BR-COL-02, pola exchange existing). */
-export const COLLECTION_SETTLED_EPSILON = 0.005
 
 export interface CollectionInvoiceInput {
   invoiceId: number
