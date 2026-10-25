@@ -13,6 +13,22 @@ export async function requestApprovalIfConfigured(
   requestedBy?: number,
   txClient?: any,
 ): Promise<boolean> {
+  const createApproval = async (db: any, workflowId: number): Promise<true> => {
+    await db.approval.create({
+      data: {
+        workflowId,
+        referenceType,
+        slug: await nextSlug("approval", referenceType),
+        referenceId,
+        currentStep: 1,
+        status: "pending",
+        requestedBy: requestedBy ?? null,
+        requestedAt: new Date(),
+      },
+    })
+    return true
+  }
+
   const request = async (db: any): Promise<boolean> => {
     const [lockedWorkflow] = await db.$queryRaw<Array<{ id: number }>>`
       SELECT id FROM approval_workflows
@@ -28,37 +44,11 @@ export async function requestApprovalIfConfigured(
     })
     if (existing) {
       if (existing.status === "pending") return true
-      if (existing.status === "rejected") {
-        await db.approval.create({
-          data: {
-            workflowId: lockedWorkflow.id,
-            referenceType,
-            slug: await nextSlug("approval", referenceType),
-            referenceId,
-            currentStep: 1,
-            status: "pending",
-            requestedBy: requestedBy ?? null,
-            requestedAt: new Date(),
-          },
-        })
-        return true
-      }
+      if (existing.status === "rejected") return createApproval(db, lockedWorkflow.id)
       return false
     }
 
-    await db.approval.create({
-      data: {
-        workflowId: lockedWorkflow.id,
-        referenceType,
-        slug: await nextSlug("approval", referenceType),
-        referenceId,
-        currentStep: 1,
-        status: "pending",
-        requestedBy: requestedBy ?? null,
-        requestedAt: new Date(),
-      },
-    })
-    return true
+    return createApproval(db, lockedWorkflow.id)
   }
 
   if (txClient) return request(txClient)
