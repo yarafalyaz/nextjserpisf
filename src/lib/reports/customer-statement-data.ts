@@ -24,6 +24,14 @@
  * atas retur itu. Akun belum terkonfigurasi / settings gagal → returnCredit
  * 0 (pola sales-target-achievement-data), statement tetap jalan. Jurnal
  * REVERSED tidak dihitung; retur tanpa faktur asal tak pernah diteruskan.
+ *
+ * F-2026-10-25-038-B1 (Q-SW-2): loader juga memuat phone pelanggan terpilih
+ * + riwayat jejak WA statement untuk permukaan halaman statement. Kedua
+ * bukan bagian payload builder statement (BR-ST-06 beku): `phone` terpisah
+ * dari `customer` existing, jejak adalah baris ActivityLog
+ * `whatsapp_link_opened` jenis `CustomerStatement` berjangkar pelanggan,
+ * terbaru-dulu, dibaca apa adanya (label jujur "Tautan WhatsApp dibuka"
+ * milik UI; loader tidak mengarang status terkirim/dibaca, BR-SW-01).
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -40,9 +48,20 @@ import { loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
+export interface CustomerStatementWhatsappTrailEntry {
+  /** Nama staf yang membuka tautan; null bila baris tak ber-user. */
+  userName: string | null
+  createdAt: Date
+}
+
 export interface CustomerStatementReport {
   statement: CustomerStatement
+  /** Bentuk existing beku (BR-ST-06): id+nama saja; phone ada di field terpisah. */
   customer: { id: number; name: string } | null
+  /** Nomor pelanggan terpilih untuk jalur WA (Customer.phone); null bila kosong. */
+  customerPhone: string | null
+    /** Jejak klik WA statement pelanggan ini, terbaru-dulu (baca-saja). */
+  whatsappTrail: CustomerStatementWhatsappTrailEntry[]
   table: { columns: TableColumn[]; rows: TableRow[] }
   periodLabel: string
   periodCaption: string
@@ -68,15 +87,56 @@ export function creditDocumentNoFromNotes(notes: string | null | undefined): str
   return match ? match[1] : null
 }
 
+/**
+ * Jejak klik WA statement pelanggan (apa adanya, terbaru-dulu) —
+ * ActivityLog `whatsapp_link_opened` jenis `CustomerStatement`, modelId =
+ * ID pelanggan. BR-SW-01: baris hanya membuktikan tautan dibuka; fungsi ini
+ * tidak menghitung status terkirim/dibaca apa pun.
+ */
+async function loadStatementWhatsappTrail(
+  customerId: number,
+): Promise<CustomerStatementWhatsappTrailEntry[]> {
+  const rows = await prisma.activityLog.findMany({
+    where: { modelType: "CustomerStatement", modelId: customerId, action: "whatsapp_link_opened" },
+    orderBy: { createdAt: "desc" },
+    take: 25,
+    select: { userId: true, createdAt: true },
+  })
+
+  const userIds = Array.from(new Set(rows.map((r) => r.userId).filter((id) => id != null)))
+  const users =
+    userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true },
+        })
+      : []
+  const nameById = new Map(users.map((u) => [u.id, u.name]))
+
+  return rows.map((r) => ({
+    userName: r.userId ? (nameById.get(r.userId) ?? null) : null,
+    createdAt: r.createdAt,
+  }))
+}
+
 export async function loadCustomerStatement(
   customerId: number,
   period: { start: Date; end: Date },
 ): Promise<CustomerStatementReport> {
-  const [customer, invoices, payments, salesReturns] = await Promise.all([
+  const [customer, customerPhone, whatsappTrail, invoices, payments, salesReturns] = await Promise.all([
     prisma.customer.findFirst({
       where: { id: customerId, deletedAt: null },
       select: { id: true, name: true },
     }),
+    // Phone menyatakan PELANGGAN TERPILIH, bukan keberadaan statement:
+    // dibaca tanpa filter deleted supaya grup jejak tetap memuat nomor
+    // pelanggan yang sempat tampil (BR-SW-03/BR-SW-09 mengikuti pilihan
+    // halaman existing lewat keberadaan pelanggan di jalur ini).
+    prisma.customer.findFirst({
+      where: { id: customerId },
+      select: { phone: true },
+    }),
+    loadStatementWhatsappTrail(customerId),
     prisma.salesInvoice.findMany({
       where: {
         customerId,
@@ -191,6 +251,8 @@ export async function loadCustomerStatement(
   return {
     statement,
     customer,
+    customerPhone: customerPhone?.phone ?? null,
+    whatsappTrail,
     table: { columns: COLUMNS, rows },
     ...rangePeriodLabels(period),
   }
