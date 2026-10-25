@@ -133,6 +133,9 @@ const RESOURCES = [
   ["timesheets", "hrm", "Lembar Waktu"],
   ["holidays", "hrm", "Hari Libur"],
   ["employee_loans", "hrm", "Pinjaman Karyawan"],
+  // F-2026-10-25-018-S Q-LS-1: resource key pengajuan mandiri
+  // create_employee_loan_requests (label beda dari "Pinjaman" staf).
+  ["employee_loan_requests", "hrm", "Pengajuan Pinjaman Karyawan"],
   ["loans", "hrm", "Pinjaman"],
   ["appreciations", "hrm", "Apresiasi"],
   ["journals", "finance", "Jurnal"],
