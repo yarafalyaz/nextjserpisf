@@ -26589,14 +26589,14 @@ F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-015-V: gerbang PKP perusahaan bertanggal-efektif untuk FP UM (F-2026-10-25-004-V Putusan 4) — nilai kini + tanggal mulai kewajiban di SystemSetting, fail-closed, snapshot beku di DP
 
-> **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-005-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
+> **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-019-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
 
 ### Status verifikasi live (origin/main a5ad6890, 2026-10-25)
 
 - `SystemSetting` (schema.prisma:104-118): `companyTaxId` String? ada (NPWP perusahaan, dipakai Coretax XML `coretax-xml-export-data.ts:45,88`); status PKP perusahaan: **0** (grep `pkp|isPkp` di schema + src = tidak ada kolom status PKP penjual).
 - `Tax` (schema.prisma:4990): `effectiveFrom/effectiveTo/isActive/deletedAt/accountId/rate` ada — pola master bertanggal efektif existing untuk tarif (dipakai B1 Backend di worktree PR #785, belum ter-push).
 - Jalur DP head PR #785 (7fcad3e4): terutang diturunkan hanya dari `quotation.tax > 0` (`computeDownPaymentVatSnapshot`, down-payment-vat.ts:59) — tanpa gerbang PKP perusahaan. Inilah celah Putusan 4 F-004-V: non-PKP yang quotation-nya memuat PPN akan dibekukan snapshot PPN + FP UM fiktif.
-- F-2026-10-25-005-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
+- F-2026-10-25-019-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
 
 ### Register sumber
 
@@ -26608,10 +26608,10 @@ F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI
 ### Putusan 1 — Bentuk: nilai kini + tanggal di SystemSetting, BUKAN model histori baru tahap ini
 
 - Fisik yang disetujui (Backend, migrasi aditif nullable di `SystemSetting`, pola kolom existing schema:104 dst):
-  - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-005-V Putusan 4 untuk lawan).
+  - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-019-V Putusan 4 untuk lawan).
   - `companyPkpEffectiveFrom`: tanggal mulai kewajiban menurut SPPKP/pemberitahuan masa mulai (PMK 164/2023: tanggal terbit SPPKP ≠ tanggal mulai kewajiban).
   - `companyPkpSource`: teks bebas singkat (mis. nomor SPPKP) bila ada.
-- Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-005-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
+- Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-019-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
 - Edit status wajib lewat audit trail master existing; dilarang edit diam. Kolom ini BUKAN akun — mapping akun tidak berubah (`salesTaxAccountId` dll tetap).
 
 ### Putusan 2 — Gerbang terutang DP: tiga syarat kumulatif, fail-closed
@@ -26632,9 +26632,9 @@ Di luar itu:
 - Pencabutan PKP / edit status sesudahnya: nol efek ke DP terbit, FP UM terbit, SPT masa lalu. FP UM yang sudah terbit tetap wajib dilaporkan; refund DP ber-FP tetap wajib batal FP dulu (F-004-V Putusan 4 / J-RF1) walau perusahaan kini non-PKP.
 - DP confirmed SEBELUM tanggal mulai kewajiban PKP (masa transisi pengukuhan): J-DP2 bruto; FP UM tidak dibuat retroaktif untuk DP itu walau penyerahan/pelunasan terjadi sesudah PKP aktif. PPN atas pelunasan mengikuti FP pelunasan dokumen penuh jalur existing — selisih ini tampil di rekonsiliasi sebagai baris masa-transisi-PKP, bukan selisih temuan.
 
-### Putusan 4 — Pisah tegas dari status PKP lawan (F-005-V) dan kode transaksi
+### Putusan 4 — Pisah tegas dari status PKP lawan (F-019-V) dan kode transaksi
 
-- Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-005-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
+- Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-019-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
 - `transactionCode` tetap dari sifat penyerahan/register existing (default "04"); gerbang PKP tidak mengganti kode, hanya memutus terutang/tidak.
 
 ### Putusan 5 — Batas build (pemilik berikutnya; vonis ini tanpa kode)
@@ -27128,3 +27128,95 @@ Edge cases: EC-1 klaim untuk pengeluaran sebelum karyawan bergabung / sesudah no
 - Plafon/batas waktu/kategori otomatis dari benchmark Zahir: benchmark bukan kebijakan ISF (BR-RB-12); tanpa vonis pemilik proses, angka apa pun = karangan.
 - Auto-approve nominal kecil / OCR bukti / deteksi fraud otomatis: tanpa data kebijakan; peringatan dobel manusiawi (BR-RB-10) cukup tahap 1.
 - Mengubah perilaku Expense operasional non-klaim (approve tanpa bukti untuk jurnal staf): regresi di luar gap; AC-RB-B3 menjaga perilaku itu tetap existing.
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-018-V: titik bayar + jurnal akrual klaim reimbursement karyawan (jawaban Q-RB-5 spec F-2026-10-25-017-S PR #821)
+
+> **Slot**: F-2026-10-25-018-V. Diperiksa bentrok 2026-10-25 12:38 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-018` di backlog+board = 0; ID terpakai tanggal ini di main: 001-S..017-S (spec), 004-V, 005-V, 013-V, 014-V, 015-V. 018-V bebas. Renumber Lead 25 Okt 2026 (kartu t_d099cca4): rujukan "005-V" ke vonis identitas pajak lawan (PR #773) kini F-2026-10-25-019-V — 005-V di main = vonis Q-DISC-5 (PR #812 MERGED); 210208 tetap milik terminasi di blok DISC. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Basis bukti live (worktree origin/main 997c8ead, 2026-10-25 12:38 WIB) — TERVERIFIKASI-KODE
+
+- Jurnal Expense SATU peristiwa, lahir HANYA saat bayar: `onExpenseApproved` (`src/lib/hooks/accounting.hook.ts:1015-1110`) memposting Dr `accountId` (beban) / Cr `paidFromAccountId` (kas/bank), total = `expense.amount` penuh, memakai periode `expense.date`, menolak bila `accountId`/`paidFromAccountId` kosong, idempoten via cek `(referenceType="Expense", referenceId)` di luar + dalam tx. Satu-satunya pemanggil = `markExpensePaid` (`src/actions/finance.actions.ts:889-968`, lock `FOR UPDATE`, hanya dari status `approved`, flip ke `paid` dalam tx yang sama).
+- `approveExpense` (`finance.actions.ts:796-850`) TIDAK menjurnal: hanya sinkron kas kecil (`onExpenseApprovedSyncPettyCash`) + flip status ke `approved`. Jadi pengakuan beban dan pengeluaran kas MENYATU di peristiwa bayar; klaim yang sudah disetujui tetapi belum dibayar TIDAK punya jejak GL apa pun — tidak ada liabilitas ke karyawan di neraca.
+- Model `Expense` (`prisma/schema.prisma:4219-4251`): `accountId Int` NOT NULL, `paidFromAccountId Int?`, `employeeId Int?` (yatim di jalur buat), `amount Decimal(15,2)`, `date`, `referenceNo?`, `receiptImage?`, `status` default `draft`. TIDAK ada kolom PPN/pajak/bukti struktural; `expenseSchema` memakai satu `amount` bruto tunggal.
+- COA bawaan (`src/lib/setup/base-data.ts:934-964`): 210101 Utang Usaha IDR, 210102 Uang Muka Penjualan, 210201 PPN Keluaran, 210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum Ditagih, 210204 Hutang Gaji, 210205 Provisi Garansi (DILARANG reuse pajak), 210206 Utang PPh 4(2) Sewa, 210207 Utang Kompensasi PKWT (F-132-V), 210208 terpakai vonis F-2026-10-25-005-V terminasi (Q-DISC-5, PR #812 MERGED di origin/main). Slot liabilitas karyawan berikutnya yang bebas = **210209**.
+- Akun dibaca dari setting/COA aktif pola repo: `SystemSetting` memuat `scrapSaleIncomeAccountId` (schema:305), `warrantyProvisionAccountId` (schema:216); akun hilang = fail-closed berisik di jalur jurnal. Tidak ada `*Reimbursement*` di schema/base-data (grep = 0).
+- Vonis pajak existing yang dirujuk, TIDAK diubah: T3 di F-2026-10-21-027 (backlog baris 4128): reimbursement biaya kerja tunai NON-TAXABLE hanya sebesar nilai terbukti berbukti pihak ketiga; tanpa bukti lengkap = TAXABLE fail-safe; selisih lebih dari pengeluaran nyata = taxable; reimbursement tunai murni di luar penghasilan karena sifat penggantian biaya (bukan pengecualian PMK 66/2023, yang mengatur natura/kenikmatan).
+- Sinkron kas kecil existing bersifat operasional subledger kas kecil; bukan pengakuan liabilitas. Vonis ini tidak mengubahnya.
+
+### 0.1 Register sumber resmi (tax rules register)
+
+| # | Sumber | Tanggal akses | Cakupan yang dipakai |
+|---|---|---|---|
+| 1 | UU PPN Pasal 9 ayat (8) huruf e/f, diringkas DJP di pajak.go.id/id/deemed-tax dan pajak.go.id/id/pajak-masukan | 2026-10-25 | Pajak Masukan tidak dapat dikreditkan bila perolehan tidak berhubungan langsung dengan kegiatan usaha, atau Faktur Pajak tidak mencantumkan nama, alamat, dan NPWP pembeli BKP/penerima JKP. Faktur atas nama karyawan pribadi = bukan FP atas nama perusahaan pembeli. |
+| 2 | PMK 66/2023 (peraturan.bpk.go.id/Details/254106; peraturan.go.id/files/permenkeu-no-66-tahun-2023.pdf), Pasal 3-5 + Lampiran | 2026-10-25 | Natura/kenikmatan = objek PPh Pasal 4 ayat (1) huruf a kecuali kategori Pasal 4; kupon makan/minum dinas luar berbatas Rp2.000.000/bln (Pasal 5 ayat (3)-(5)); biaya natura pemberi kerja dapat dibebankan (3M). Dipakai HANYA untuk menegaskan reimbursement TUNAI berbukti bukan jalur natura. |
+| 3 | Vonis internal F-2026-10-21-027 T3 (backlog:4128) + PMK 168/2023 Pasal 5 ayat (3) yang menjadi dasar tabelnya | sudah vonis, dirujuk 2026-10-25 | Klasifikasi bruto PPh 21: penggantian ≤ nyata berbukti = non-taxable; tanpa bukti/selisih lebih = taxable masa diterima. |
+
+Fitur software ≠ interpretasi ≠ kewajiban hukum: matriks Accurate/Zahir di spec 017-S adalah BENCHMARK produk; putusan di bawah adalah perlakuan akuntansi-pajak ISF.
+
+### Putusan 1 — Titik bayar tetap Expense; payroll DILARANG tahap 1
+
+Pembayaran klaim reimbursement karyawan tahap 1 WAJIB lewat jalur Expense existing (kas kecil/bank sesuai `paidFromAccountId`), BUKAN lewat slip gaji/payroll. Alasan: (a) reimbursement berbukti adalah penggantian biaya, bukan penghasilan — memasukkannya ke bruto slip mencampurkan dokumen biaya dengan dokumen penghasilan dan memaksa klasifikasi T3 bekerja di tempat yang salah; (b) jalur Expense sudah punya jurnal + idempotensi + scope dokumen, payroll belum punya komponen reimbursement berjurnal liabilitas. Titik bayar payroll hanya boleh diusulkan sebagai spec lanjutan DENGAN vonis Accountant baru (klasifikasi T3 per komponen, bupot, masa TER diterima). Selisih lebih bayar dari pengeluaran nyata (BR-RB-05) DILARANG dibayar lewat klaim ini dalam bentuk apa pun tahap 1; selisih itu penghasilan taxable dan hanya sah lewat komponen payroll taxable sesudah vonis lanjutan — jalur klaim menolak nominal disetujui > nominal bukti (lihat Putusan 4).
+
+### Putusan 2 — Jurnal akrual dua peristiwa untuk klaim tertanda pengaju; Expense operasional tidak berubah
+
+Jurnal Expense existing (Dr Beban / Cr Kas-Bank saat `markExpensePaid`) SAH hanya untuk Expense operasional yang pengakuan dan bayarnya memang satu peristiwa. Untuk klaim karyawan tertanda pengaju (penanda fisik = Q-RB-3 Backend), persetujuan dan pembayaran adalah DUA peristiwa ekonomi berbeda — karyawan sudah mengeluarkan uang pribadi sebelum perusahaan mengakui utang. Maka build turunan WAJIB memakai jurnal dua tahap berikut, dan tahap akrual TIDAK memakai `onExpenseApproved` existing apa adanya:
+
+| Peristiwa | Syarat lahir | Debit | Kredit | Tanggal/periode |
+|---|---|---|---|---|
+| J-RB1 akrual saat klaim disetujui (`approveExpense` klaim, sesudah `assertApproved`) | klaim tertanda pengaju; bukti + `referenceNo` lolos BR-RB-04; akun beban terisi; setting akun liabilitas klaim terisi (Putusan 3) | Beban (`Expense.accountId`) sebesar nominal disetujui | Utang Reimbursement Karyawan (setting, Putusan 3) | tanggal persetujuan; `assertPeriodOpen` dalam tx yang sama |
+| J-RB2 bayar saat `markExpensePaid` klaim | status `approved` + J-RB1 sudah terposting; `paidFromAccountId` terisi | Utang Reimbursement Karyawan sebesar nominal dibayar | Kas/Bank (`paidFromAccountId`) | tanggal bayar; `assertPeriodOpen` dalam tx yang sama |
+
+Aturan mengikat J-RB1/J-RB2:
+- Expense operasional NON-klaim: perilaku existing TIDAK berubah (nol jurnal saat approve; Dr Beban / Cr Kas-Bank saat bayar). Mengubahnya = regresi di luar vonis ini (pola AC-RB-B3 spec induk).
+- Klaim WAJIB gagal-closed di `approveExpense` bila setting akun liabilitas klaim kosong (Putusan 3) — DILARANG fallback ke `paidFromAccountId` atau menebak akun kas sebagai kredit akrual; klaim tetap `draft`/belum approved, bukan setengah berjurnal.
+- Idempotensi per (klaim, tahap): J-RB1 satu kali per Expense klaim, J-RB2 satu kali per Expense klaim; kunci `(referenceType, referenceId)` existing ditambah pembeda tahap (fisik penanda tahap = Backend, mis. referenceType tahap atau memo terstruktur — Accountant tidak memutus bentuk kolom, hanya melarang dua jurnal tahap sama untuk satu klaim). Retry approve/bayar tidak menggandakan jurnal (meluas AC-RB-B4).
+- Sinkron kas kecil existing tetap berjalan apa adanya; ia subledger kas, bukan pengganti J-RB1/J-RB2, dan tidak boleh memposting kaki GL kedua.
+- Koreksi klaim sudah berjurnal: jurnal terposting TIDAK diubah/dihapus diam-diam. Koreksi = reversal/jurnal koreksi di periode terbuka (`assertPeriodOpen` dalam tx) atau dokumen klaim baru tertaut nomor lama (EC-6 spec induk); klaim `rejected` yang belum berjurnal tidak memerlukan koreksi GL. Klaim approved yang urung dibayar: liabilitas dilunasi hanya lewat J-RB2 atau reversal beralasan tercatat, bukan hapus baris.
+- Pemisahan status tetap empat: status dokumen (`Expense.status`), status pembayaran (fakta J-RB2/status `paid`), status pajak (klasifikasi bukti Putusan 4), status posting (J-RB1/J-RB2 terposting/belum). Satu flag tidak mewakili empatnya.
+
+### Putusan 3 — Akun liabilitas klaim: 210209 lewat setting, fail-closed
+
+- Akun kredit J-RB1 / debit J-RB2 = kode COA **210209 "Utang Reimbursement Karyawan"**, induk 2102 (Kewajiban Jangka Pendek Lainnya), tipe OCLY — seed di daftar COA bawaan `src/lib/setup/base-data.ts` mengikuti pola baris 210206/210207 (fisik ditulis Backend; vonis ini memutus kode + nama + induk). DILARANG memakai ulang 210204 Hutang Gaji (itu liabilitas upah — mencampurnya mengaburkan rekonsiliasi gaji vs klaim), 210101 Utang Usaha (itu utang ke vendor), atau 210205 (Provisi Garansi, terlarang reuse).
+- Jurnal membaca akun dari setting SystemSetting baru (nama fisik kolom = Backend, pola `scrapSaleIncomeAccountId`/`warrantyProvisionAccountId`), BUKAN hardcode id akun di logika. Setting menunjuk akun aktif berkode 210209; setting kosong/akun nonaktif = fail-closed berisik di `approveExpense` klaim (Putusan 2). Instalasi lama tanpa baris COA 210209: migrasi/seed Backend wajib menambahkannya; sebelum itu klaim tertahan di gerbang approve dengan pesan eksplisit, bukan lolos tanpa liabilitas.
+- Akun beban (`accountId`) tetap ditetapkan keuangan (BR-RB-06 spec induk); vonis ini tidak memutus kategori beban per jenis klaim.
+
+### Putusan 4 — Nominal, bukti, dan klasifikasi pajak di titik klaim
+
+- Nominal disetujui = min(nominal diajukan, nominal terbukti). Bukti wajib lolos BR-RB-04 (minimal satu bukti tertaut + `referenceNo`) SEBELUM J-RB1 lahir; klaim tanpa bukti lengkap boleh hidup sebagai `draft` pengaju tetapi DITOLAK di gerbang approve — selaras fail-safe T3 (tanpa bukti = bukan penggantian yang diakui).
+- Pembayaran J-RB2 ≤ nominal J-RB1. Bayar sebagian: J-RB2 sebesar yang dibayar, sisa liabilitas tetap terbuka dan tampil; klaim tidak ditandai lunas sebelum J-RB2 kumulatif = J-RB1 (tahap DIBAYAR turunan spec induk membaca fakta ini).
+- Klasifikasi PPh 21 mengikuti T3 apa adanya: penggantian berbukti ≤ nyata = non-taxable dan TIDAK masuk bruto slip (konsekuensi Putusan 1: tidak ada baris payroll yang perlu diklasifikasi tahap 1). Bukti yang ternyata natura/kenikmatan (bukan pengeluaran tunai karyawan, mis. fasilitas disediakan perusahaan) keluar dari jalur klaim ini dan dinilai per PMK 66/2023 pada vonis natura existing — jangan dipaksakan sebagai reimbursement tunai.
+- Tanggal acuan pengakuan = tanggal persetujuan untuk J-RB1 dan tanggal bayar untuk J-RB2 (bukan tanggal bukti karyawan, bukan `expense.date` mundur tanpa kendali); selisih periode antara tanggal bukti dan tanggal akrual tampil di rekonsiliasi, bukan dipilih diam-diam.
+
+### Putusan 5 — PPN Masukan atas bukti klaim: tidak kreditabel dari faktur atas nama karyawan; tanpa pecah PPN di Expense tahap 1
+
+- Expense existing tidak punya kolom PPN dan `onExpenseApproved` memposting `amount` bruto penuh ke beban. Untuk klaim tahap 1: nominal beban = nominal bruto terbukti (termasuk PPN yang tercantum di bukti karyawan). DILARANG memecah PPN Masukan dari bukti klaim tahap 1.
+- Dasar: Pajak Masukan hanya kreditabel dari Faktur Pajak yang mencantumkan nama, alamat, dan NPWP perusahaan sebagai pembeli (sumber resmi #1). Nota/faktur atas nama karyawan pribadi tidak memenuhi syarat formal itu bagi perusahaan; mengkreditkannya = temuan SPT. Bila perusahaan menghendaki PPN kreditabel, pengeluaran wajib dibeli atas nama perusahaan sejak awal (jalur pembelian/Expense operasional vendor existing), BUKAN lewat klaim karyawan — jalur itu di luar spec ini dan tidak boleh disimulasikan dengan mengubah nama di bukti klaim.
+- Konsekuensi jujur: beban klaim tahap 1 lebih besar sebesar PPN tak-kreditabel di dalam bukti. Itu biaya kepatuhan yang benar, bukan selisih yang boleh "diperbaiki" UI/Backend dengan memecah PPN diam-diam. Fitur pecah PPN Masukan klaim (faktur atas nama perusahaan yang dititipkan) = `BUTUH-VONIS-AKUNTAN` baru bila kelak diusulkan.
+
+### 6. Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- BOT Lead: putus Q-RB-1/2/4/6 spec induk; merge PR vonis ini bila gate hijau head persis; buka kartu fisik Backend sesudahnya.
+- BOT Backend (sesudah Lead): (a) seed COA 210209 + setting akun liabilitas klaim fail-closed; (b) J-RB1 di jalur approve klaim tertanda pengaju + J-RB2 menggantikan kaki jurnal existing KHUSUS klaim di `markExpensePaid` (klaim tidak boleh juga memposting Dr Beban/Cr Kas existing — satu klaim tepat dua jurnal tahap, nol dobel dengan hook existing; klaim schema.prisma di board sebelum migrasi); (c) gerbang bukti/SoD sesuai spec induk; (d) Expense non-klaim nol perubahan perilaku.
+- BOT Frontend: tampilkan tahap + saldo liabilitas klaim verbatim server; UI tidak menghitung pecah PPN, tahap bayar, atau klasifikasi pajak.
+- BOT QA: falsifikasi §7 atas head fisik persis.
+
+### 7. Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-RB5-1: klaim disetujui → J-RB1 Dr Beban / Cr 210209 (dari setting) terposting sekali; mencabut setting akun liabilitas = approve klaim MERAH dan nol jurnal (mutasi penjaga).
+- E-RB5-2: klaim dibayar → J-RB2 Dr 210209 / Cr Kas-Bank; saldo 210209 per klaim kembali nol; memposting jurnal existing Dr Beban/Cr Kas untuk klaim yang sama = MERAH (dobel pengakuan).
+- E-RB5-3: retry approve/bayar klaim tidak menggandakan J-RB1/J-RB2 (idempotensi per tahap).
+- E-RB5-4: Expense operasional non-klaim tetap nol jurnal saat approve dan Dr Beban/Cr Kas saat bayar (regresi existing hijau).
+- E-RB5-5: klaim tanpa bukti/`referenceNo` disetujui = MERAH; nominal approve > bukti terposting J-RB1 = MERAH; bayar > J-RB1 = MERAH.
+- E-RB5-6: klaim masuk bruto slip gaji/payroll tahap 1 = MERAH; pecah PPN Masukan dari bukti atas nama karyawan = MERAH.
+- E-RB5-7: koreksi klaim berjurnal lewat edit/hapus jurnal asal = MERAH; reversal di periode tertutup = MERAH (`assertPeriodOpen`).
+- E-RB5-8: bayar sebagian menyisakan liabilitas tampil dan klaim belum tahap DIBAYAR; ditandai lunas = MERAH.
+
+### Larangan (mengikat semua build turunan)
+
+- Membayar klaim lewat payroll/slip tahap 1, atau memasukkan reimbursement berbukti ke bruto PPh 21.
+- Memakai jurnal Expense existing apa adanya untuk klaim (mengakui beban + kas keluar sebelum uang benar-benar keluar).
+- Kredit akun kas/bank di J-RB1, kredit 210204/210101/210205 untuk liabilitas klaim, atau hardcode id akun di logika (wajib setting + kode 210209).
+- Memecah/mengkreditkan PPN Masukan dari bukti atas nama karyawan; mengubah nominal bukti di klaim.
+- Mengubah perilaku jurnal Expense operasional non-klaim atas nama vonis ini.
+
+ID vonis ini **F-2026-10-25-018-V** (jawaban Q-RB-5 spec F-2026-10-25-017-S PR #821; bebas: grep `F-2026-10-25-018` di origin/main 997c8ead = 0 sebelum vonis ini; 017-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-RB-1/2/4/6 → BOT Backend fisik Putusan 2/3 → BOT Frontend konsumen → BOT QA E-RB5-1..8.
