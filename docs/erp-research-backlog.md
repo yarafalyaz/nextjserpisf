@@ -28539,3 +28539,95 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-029-S: antrean janji kirim pesanan penjualan (deliveryDate mendekati/lewat, belum terkirim penuh, baca-saja)
+
+Status: SPEC (Business) — KOREKSI ARAH dari premis kartu. Premis awal kartu (antrean penawaran `sent`) GUGUR sesudah verifikasi live: objek itu SUDAH ada — spec F-2026-10-22-091-S + builder `src/lib/reports/quotation-followup-queue.ts` + halaman `penjualan/antrean-penawaran` (TERVERIFIKASI-KODE di origin/main 6bbeca0f 2026-10-25). Objek pengganti di bawah diverifikasi ABSEN dengan cara sama. Spec dokumen saja — tanpa kode/schema/migrasi. Urutan: Business spec ini → **BOT Lead** putusan/kartu turunan (permukaan + ambang) → BOT Backend (builder+loader) → BOT Frontend (konsumen) → BOT QA.
+Pemilik domain: BOT Business (spec) · BOT Lead (putusan) · BOT Backend (eksekusi query) · BOT Frontend (halaman) · BOT QA (acceptance). Vonis angka/jurnal: tidak disentuh (baca-saja, tanpa nominal pajak/jurnal baru — nilai sisa = sisa qty × unitPrice baris existing, pola builder existing).
+
+### 1. Keputusan diminta dari BOT Lead (Q-SD-*)
+
+| ID | Keputusan | Rekomendasi Business | Alasan |
+|---|---|---|---|
+| Q-SD-1 | Permukaan antrean: blok di halaman Pesanan Penjualan existing vs halaman antrean khusus | Halaman antrean khusus pola `penjualan/antrean-penawaran` (rute baru di bawah penjualan, mis. `penjualan/antrean-janji-kirim`) | Pola antrean F-002-S/F-091-S terbukti: satu populasi, satu penjaga izin, terindeks menu. Blok di daftar SO existing akan mencampur populasi umum vs tindak-lanjut |
+| Q-SD-2 | Ambang "mendekati janji": berapa hari sebelum `deliveryDate` | USULAN: 3 hari kalender WIB — konfigurabel konstan builder, BUKAN kolom schema | Tanpa bukti kebijakan pemilik proses; 3 hari = jendela admin sempat menyiapkan pengiriman. Jangan hardcoded diam-diam: tulis sebagai konstan bernama + kutip di spec konsumen |
+| Q-SD-3 | Populasi status SO | `DELIVERABLE_ORDER_STATUSES` = approved/confirmed/processing (existing `src/lib/validations/sales.schemas.ts:171`) TANPA completed | completed = SO ditutup administratif; SO completed bersisa SUDAH jadi temuan laporan Pemenuhan Pesanan existing (order-fulfillment-data.ts:12-14) — duplikasi bila ikut. draft = belum komitmen ke pelanggan |
+| Q-SD-4 | SO tanpa `deliveryDate` (null) | Di luar populasi; hitung terpisah sebagai penanda data ("N pesanan tanpa janji kirim") TANPA baris | Janji kosong tidak bisa dinilai telat; tapi ketiadaannya temuan kualitas data, bukan baris antrean |
+
+### 2. Bukti TERVERIFIKASI-KODE (origin/main 6bbeca0f, 2026-10-25)
+
+1. **Kolom janji ada, tidak dibaca read-model mana pun.** `SalesOrder.deliveryDate DateTime?` (prisma/schema.prisma:1541), diisi `createSalesOrder` (src/actions/sales.actions.ts:998, `wibDateToUtcMidnight`), boleh diubah `updateSalesOrder` (edit_sales_orders). Grep `deliveryDate` di `src/lib/reports/` = **0 hasil**; grep antrean janji kirim di backlog = 0.
+2. **"Belum terkirim penuh" sudah punya definisi sah existing.** Terkirim = Σ `DeliveryOrderItem.qty` per `salesOrderItemId` dari DeliveryOrder status shipped/delivered saja (`src/lib/reports/order-fulfillment-data.ts:20-29,58-74`); draft tidak dihitung. Sisa baris = ordered − delivered (mesin `buildOutstandingLines`, `src/lib/reports/outstanding-lines.ts:91`). Antrean ini WAJIB memakai definisi sama — dilarang definisi terkirim kedua.
+3. **Saudara terdekat BUKAN pengganti.** Laporan Pemenuhan Pesanan (order-fulfillment*) menjawab sisa qty per *periode tanggal dokumen* (filter `date` SO), tanpa `deliveryDate`, tanpa ember waktu janji. Antrean janji kirim menjawab pertanyaan berbeda: "janji ke pelanggan mana yang mau/sudah lewat" — populasi disaring `deliveryDate`, diurut janji terdekat dulu.
+4. **Premis awal kartu gugur (dicatat agar tidak di-spec ulang).** Penawaran `sent`: spec F-2026-10-22-091-S + `quotation-followup-queue.ts` + halaman `penjualan/antrean-penawaran` SUDAH merged. Accept gerbang expired juga sudah ada: `assertQuotationNotExpired` (sales.actions.ts:115-136) dipanggil accept/convert/createSalesOrder.
+5. **Status SO tervalidasi tertutup.** draft → (approved) → confirmed → processing → completed/cancelled; himpunan boleh-kirim existing = approved/confirmed/processing/completed (`DELIVERABLE_ORDER_STATUSES`, sales.schemas.ts:171). Populasi antrean = himpunan itu minus completed (Q-SD-3).
+
+### 3. Kontrak builder diusulkan (USULAN — untuk dieksekusi Backend sesudah putusan Lead)
+
+Pola meniru `buildQuotationAcceptedQueue`/`getQuotationAcceptedQueue` (F-002-S) persis: builder murni + loader Prisma terpisah.
+
+- Input baris (dari loader): `id, slug, documentNo, date, deliveryDate, status, customer{name}, salesEmployee{name}|null, items[{orderedQty, deliveredQty, unitPrice}]` — deliveredQty SUDAH diagregasi loader dari DeliveryOrder shipped/delivered (aturan §2.2).
+- Builder murni: saring populasi (deliveryDate non-null; status ∈ Q-SD-3; sisa total qty > 0 — SO terkirim penuh keluar antrean apa pun tanggalnya), hitung per SO: `daysUntilDue` (selisih hari kalender WIB: deliveryDate − todayWib), ember, `outstandingValue = Σ sisa × unitPrice` (exclude dari total bila negatif/clamp 0, pola F-002-S BR-QA-05), `linesRemaining` (jumlah baris bersisa).
+- Ember tertutup: `overdue` (daysUntilDue < 0) · `due_today` (= 0) · `due_soon` (1..ambang Q-SD-2). Di luar due_soon → bukan populasi. Urut: overdue paling lama dulu, lalu due_today, lalu due_soon terdekat; seri = deliveryDate asc, documentNo asc (deterministik, teruji).
+- Total atas: jumlah dokumen per ember + Σ outstandingValue per ember; penanda Q-SD-4 (count SO populasi-status tanpa deliveryDate) sebagai angka terpisah, BUKAN baris.
+- `todayWib` diinjeksikan (parameter, pola `todayWib` F-002-S) — builder tidak membaca jam sistem, teruji unit.
+- Loader: `requirePermission("view_sales_orders")` di halaman server (pola halaman antrean-penawaran), query `deliveryDate: { not: null, lte: todayWib + ambang }` + status populasi, agregasi delivered per baris dalam 1 query DeliveryOrderItem (dilarang N+1 per SO), `Decimal` → Number di tepi loader.
+- Konsumen: tabel read-only: No SO (tautan detail) · Pelanggan · Penjual (fallback "—") · Tgl janji · Ember · Sisa baris · Nilai sisa. Tanpa tombol/radio/checkbox/form, tanpa ekspor, tanpa pagination server (pola F-002-S).
+
+### 4. Business rules register (BR-SD-*)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SD-01 | Populasi = SO status approved/confirmed/processing + deliveryDate non-null + sisa terkirim > 0 | USULAN (Q-SD-3) |
+| BR-SD-02 | Terkirim hanya dari DeliveryOrder shipped/delivered; draft tidak mengurangi sisa | TERVERIFIKASI-KODE (order-fulfillment-data.ts:28-29) |
+| BR-SD-03 | Ember overdue/due_today/due_soon(≤ ambang); ambang konstan bernama, bukan kolom | USULAN (Q-SD-2) |
+| BR-SD-04 | SO terkirim penuh tidak tampil walau deliveryDate lewat | USULAN |
+| BR-SD-05 | SO completed/cancelled/draft tidak tampil walau bersisa & lewat janji | USULAN (completed bersisa = wilayah Pemenuhan Pesanan existing) |
+| BR-SD-06 | SO tanpa deliveryDate tidak tampil; hanya dihitung penanda kualitas data | USULAN (Q-SD-4) |
+| BR-SD-07 | Nilai sisa per SO = Σ max(sisa,0) × unitPrice baris; qty tidak dijumlahkan lintas satuan (pola outstanding-lines) | TERVERIFIKASI-KODE (outstanding-lines.ts:9-14) |
+| BR-SD-08 | Penjaga halaman = `view_sales_orders`; tanpa permission halaman tertolak, nol baris bocor | USULAN (pola halaman antrean existing) |
+| BR-SD-09 | Baca-saja total: tidak ada aksi kirim/tagih/ubah status dari antrean; tindak lanjut lewat halaman SO/surat jalan existing | USULAN |
+| BR-SD-10 | `salesEmployeeId` kosong tampil "—", tidak mengecualikan SO dari populasi | USULAN |
+
+### 5. Status-transition matrix
+
+Antrean baca-saja: TIDAK ada transisi status ditulis antrean. Transisi relevan (existing, untuk konteks populasi):
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (di luar populasi) draft | approval/konfirmasi SO existing | approved/confirmed → masuk populasi bila deliveryDate terisi & bersisa | edit/confirm SO existing |
+| approved/confirmed/processing | DeliveryOrder shipped/delivered menutup sisa baris terakhir | tetap status, keluar populasi (sisa = 0, BR-SD-04) | create/confirm delivery existing |
+| approved/confirmed/processing | `updateSalesOrder` mengubah deliveryDate | ember dihitung ulang kunjungan berikut | edit_sales_orders |
+| approved/confirmed/processing | SO completed/cancelled existing | keluar populasi (BR-SD-05) | alur SO existing |
+
+### 6. Role/permission matrix
+
+| Aktor | Izin | Boleh |
+|---|---|---|
+| Admin penjualan / sales | view_sales_orders | Lihat antrean |
+| Penjual tanpa view_sales_orders | — | Ditolak halaman (fail-closed) |
+| Peran gudang view_delivery_orders saja | view_delivery_orders | Ditolak halaman antrean ini (penjaga SO, bukan surat jalan) |
+| Siapa pun | — | Tidak ada tulis dari antrean (BR-SD-09) |
+
+### 7. Feature matrix benchmark
+
+| Kemampuan | Accurate Online (BENCHMARK) | Zahir Online (BENCHMARK) | ISF (spec ini) |
+|---|---|---|---|
+| Daftar SO belum terkirim penuh | Pemenuhan Pesanan menampilkan SO belum sepenuhnya dikirim, hilang saat 100% terkirim — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemenuhan-pesanan/pengiriman-pesanan/ | Order penjualan ditarik ke pengiriman/invoice berikutnya — https://help.zahironline.com/portal/id/kb/articles/order-penjualan | Sudah ada (Pemenuhan Pesanan existing) |
+| Antrean berbasis janji kirim (deliveryDate) mendekati/lewat | Tidak ditemukan halaman khusus janji kirim di help Accurate (dicari 2026-10-25) | Tidak ditemukan di help Zahir (dicari 2026-10-25) | USULAN spec ini — nilai tambah ISF di atas benchmark, bukan paritas |
+
+### 8. Acceptance criteria + edge (untuk BOT QA)
+
+- SO processing, deliveryDate kemarin, sisa > 0 → tampil ember overdue, urutan sebelum due_today.
+- SO confirmed, deliveryDate hari ini WIB, sisa > 0 → due_today. Batas WIB: deliveryDate = tengah malam WIB hari ini dihitung due_today, bukan overdue (kalender WIB, bukan UTC).
+- SO approved, deliveryDate +ambang hari → due_soon; +ambang+1 → tidak tampil.
+- SO terkirim penuh (delivered = ordered semua baris), deliveryDate lewat → tidak tampil.
+- DeliveryOrder draft sebesar sisa → sisa tidak berkurang, SO tetap tampil.
+- SO completed bersisa, deliveryDate lewat → tidak tampil (wilayah laporan Pemenuhan Pesanan).
+- SO tanpa deliveryDate status processing → tidak tampil; penanda "tanpa janji" +1.
+- Tanpa view_sales_orders → halaman tertolak; dengan izin → nol aksi tulis di halaman.
+- SalesEmployee null → "—", SO tetap tampil.
+
+### 9. ID & anti-tabrakan
+
+ID **F-2026-10-25-029-S BEKU** untuk spec ini: grep `F-2026-10-25-029` di origin/main (6bbeca0f) + judul PR terbuka = 0 sebelum penulisan; ID 027/028 terpakai PR #857/#858. File disentuh: `docs/erp-research-backlog.md` (spec ini) + `docs/autonomous-board.md` (entri STATUS) saja. Implementasi menunggu putusan Lead Q-SD-1..4 — Business tidak menulis kode/schema/migrasi.
