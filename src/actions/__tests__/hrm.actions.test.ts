@@ -486,6 +486,41 @@ describe("Overtime Request Actions", () => {
     expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 
+  it("approveOvertime locks pay to baseSalary as the Pasal 31 wage base (K2-S2)", async () => {
+    // K2-S2: dasar upah = Employee.baseSalary (satu-satunya kolom upah
+    // bulanan di skema) sebagai upah sebulan. 2026-06-12 = Jumat (hari
+    // kerja fallback Senin-Jumat): 2 jam = 1 jam x1,5 + 1 jam x2
+    // = 3,5 x (5.000.000/173) = 101.156. Mengganti dasar ke angka lain
+    // wajib memerahkan tes ini.
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "pending",
+      hours: 2,
+      date: new Date("2026-06-12T00:00:00Z"),
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.calculatedValue).toBe(101156)
+  })
+
+  it("updateOvertimeRequest rejects an edit beyond the 4h workday limit (K2-S1)", async () => {
+    // Syarat vonis K2-S1: gerbang PP 35/2021 yang sama dengan create wajib
+    // berlaku di update. Edit pengajuan pending ke 5 jam pada hari kerja
+    // yang sama (2026-06-12 Jumat) DITOLAK; mencabut panggilan gerbang di
+    // updateOvertimeRequest memerahkan tes ini.
+    const res = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "5",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("maksimal 4 jam")
+  })
+
   it("updateOvertimeRequest updates record", async () => {
     const res = await actions.updateOvertimeRequest(1, fd({
       employeeId: "1",
