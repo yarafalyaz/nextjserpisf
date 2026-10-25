@@ -233,3 +233,32 @@ describe("getLeaveQuota — usage accounting", () => {
     expect(call?.where?.id).toEqual({ not: 99 })
   })
 })
+
+describe("getLeaveQuota — rincian approved/pending (F-2026-10-25-013-S BR-LVB-12)", () => {
+  it("usedApproved + usedPending = used; penjaga lama tidak berubah (AC-LVB-B2)", async () => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2020-01-01"),
+    } as any)
+    // 2026-06-15..17 (Sen–Rab, 3 hari kerja) approved + 2026-06-18..19 (Kam–Jum, 2) pending.
+    vi.mocked(prisma.leaveRequest.findMany).mockResolvedValue([
+      { startDate: new Date("2026-06-15"), endDate: new Date("2026-06-17"), status: "approved" },
+      { startDate: new Date("2026-06-18"), endDate: new Date("2026-06-19"), status: "pending" },
+    ] as any)
+
+    const q = await getLeaveQuota(1, { year: 2026 })
+    expect(q.usedApproved).toBe(3)
+    expect(q.usedPending).toBe(2)
+    expect(q.used).toBe(5)
+    expect(q.usedApproved + q.usedPending).toBe(q.used)
+    expect(q.remaining).toBe(7)
+  })
+
+  it("tanpa cuti: kedua komponen nol", async () => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2020-01-01"),
+    } as any)
+    const q = await getLeaveQuota(1, { year: 2026 })
+    expect(q.usedApproved).toBe(0)
+    expect(q.usedPending).toBe(0)
+  })
+})
