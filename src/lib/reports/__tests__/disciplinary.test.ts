@@ -7,8 +7,13 @@ import {
   evaluateDisciplinaryApprovalSod,
   evaluateDisciplinaryEmployeeResponse,
   evaluateDisciplinaryRejection,
+  evaluateDisciplinaryResponseWindow,
   evaluateFirstFinalDisciplinary,
   evaluateRequestedDisciplinaryLevel,
+  DISCIPLINARY_GENERAL_CATEGORIES,
+  DISCIPLINARY_SEVERE_CATEGORIES,
+  isDisciplinarySevereCategory,
+  isDisciplinaryViolationCategory,
   isDisciplinaryActiveAt,
   summarizeDisciplinaryAttention,
   type DisciplinaryRecordLike,
@@ -297,5 +302,29 @@ describe("summarizeDisciplinaryAttention (§1.7)", () => {
     expect(s.active.map((r) => r.id)).toEqual([fresh.id, expiring.id, sp3.id])
     expect(s.expiringWithin30Days.map((r) => r.id)).toEqual([expiring.id])
     expect(s.highestRisk.map((r) => r.id)).toEqual([sp3.id])
+  })
+})
+
+describe("kategori resmi Q-DISC-1 & jendela tanggapan Q-DISC-3 (DISC-B1)", () => {
+  it("daftar berat 7 + umum 6 verbatim putusan Lead; kategori bebas ditolak penjaga", () => {
+    expect(DISCIPLINARY_SEVERE_CATEGORIES).toHaveLength(7)
+    expect(DISCIPLINARY_GENERAL_CATEGORIES).toHaveLength(6)
+    expect(DISCIPLINARY_SEVERE_CATEGORIES).toContain("pelecehan seksual")
+    expect(DISCIPLINARY_GENERAL_CATEGORIES).toContain("mangkir tanpa keterangan berulang")
+    expect(isDisciplinaryViolationCategory("lain-lain")).toBe(false)
+    expect(isDisciplinaryViolationCategory(null)).toBe(false)
+    expect(isDisciplinarySevereCategory("pelecehan seksual")).toBe(true)
+    expect(isDisciplinarySevereCategory("mangkir tanpa keterangan berulang")).toBe(false)
+  })
+
+  it("jendela 7 hari kalender: hari ke-7 lolos, hari ke-8 DITOLAK", () => {
+    const issuedAt = d("2026-01-05")
+    expect(evaluateDisciplinaryResponseWindow({ issuedAt, at: d("2026-01-12") })).toEqual({
+      allowed: true,
+    })
+    expect(evaluateDisciplinaryResponseWindow({ issuedAt, at: d("2026-01-13") }).allowed).toBe(false)
+    expect(evaluateDisciplinaryResponseWindow({ issuedAt: null, at: d("2026-01-06") }).allowed).toBe(
+      false,
+    )
   })
 })
