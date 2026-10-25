@@ -24765,8 +24765,8 @@ Tidak ada key izin baru tahap 1 (USULAN; Q-TX-2 Lead). Identitas pajak pelanggan
 | BR-TX-03 | Snapshot saat terbit: counterparty dokumen = salinan identitas master pada momen penerbitan (sesudah koreksi petugas). Edit master kemudian TIDAK menulis ulang dokumen terbit; koreksi dokumen = faktur pengganti existing. | USULAN | pola snapshot repo (QuotationHistory, replacesTaxInvoiceId) |
 | BR-TX-04 | Prefill hanya bila dokumen tertaut ke faktur penjualan/tagihan yang pelanggannya jelas. Terbit tanpa tautan = isian manual seperti hari ini (tidak ditebak dari nama). | USULAN | issueSchema salesInvoiceId optional tax-documents.actions.ts:53 |
 | BR-TX-05 | Nama WP boleh beda dari nama dagang `Customer.name`; yang masuk faktur pajak = nama WP. Kosong nama WP → fallback nama pelanggan DITANDAI sebagai fallback di penanda kelengkapan (bukan diam-diam dianggap nama WP). | USULAN | BENCHMARK tab Pajak pelanggan Accurate (URL §6) |
-| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (NPWP 16 kanonik, 15=legacy tertanda, NITKU 22 digit, PKP tidak menurunkan kode). Sampai fisik Backend live, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
-| BR-TX-07 | Status PKP: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (nilai kini terstruktur pkpStatus+pkpEffectiveFrom tahap 1, histori penuh bersyarat naik kelas); nilai di dokumen tetap snapshot saat terbit, bukan nilai master terkini. | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | — |
+| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-019-V (NPWP 16 kanonik, 15=legacy tertanda, NITKU 22 digit, PKP tidak menurunkan kode). Sampai fisik Backend live, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | TERJAWAB-Q-TX-1 (F-2026-10-25-019-V) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
+| BR-TX-07 | Status PKP: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-019-V (nilai kini terstruktur pkpStatus+pkpEffectiveFrom tahap 1, histori penuh bersyarat naik kelas); nilai di dokumen tetap snapshot saat terbit, bukan nilai master terkini. | TERJAWAB-Q-TX-1 (F-2026-10-25-019-V) | — |
 | BR-TX-08 | Penanda kelengkapan = turunan baca-saja (nama WP terisi DAN NPWP terisi = siap; selain itu kurang + daftar kosongnya). Tanpa kolom status, tanpa cron penagih kelengkapan tahap 1. | USULAN | pola turunan F-2026-10-25-001-S |
 | BR-TX-09 | Vendor: `Vendor.npwp` existing adalah padanan sisi beli; spec ini TIDAK mengubah vendor. Penjajaran bentuk field vendor = spec terpisah bila faktur masukan membuktikan perlu. | USULAN (scope) | schema.prisma:485 (Vendor.npwp) |
 
@@ -24798,7 +24798,7 @@ Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallb
 
 ### 8. Pertanyaan putusan (gerbang)
 
-- Q-TX-1 (Accountant): TERJAWAB-Q-TX-1 oleh vonis F-2026-10-25-005-V — (a) NPWP 16 kanonik, 15 digit peringatan migrasi tertanda; (b) NITKU 22 digit; (c) PKP nilai kini+ tanggal, TIDAK memengaruhi kode transaksi; (d) EC-3 tolak terbit faktur pajak. Fisik = Backend Q-TX-3 dalam batas vonis §8.
+- Q-TX-1 (Accountant): TERJAWAB-Q-TX-1 oleh vonis F-2026-10-25-019-V — (a) NPWP 16 kanonik, 15 digit peringatan migrasi tertanda; (b) NITKU 22 digit; (c) PKP nilai kini+ tanggal, TIDAK memengaruhi kode transaksi; (d) EC-3 tolak terbit faktur pajak. Fisik = Backend Q-TX-3 dalam batas vonis §8.
 - Q-TX-2 (Lead): buka inti field master + snapshot sekarang? Izin reuse vs baru (spec usul reuse existing).
 - Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
 - Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
@@ -25602,8 +25602,8 @@ Tidak ada key izin baru tahap 1 (USULAN; putusan Q-AQ-1 Lead). Kontak pelanggan 
 | BR-TX-03 | Snapshot saat terbit: counterparty dokumen = salinan identitas master pada momen penerbitan (sesudah koreksi petugas). Edit master kemudian TIDAK menulis ulang dokumen terbit; koreksi dokumen = faktur pengganti existing. | USULAN | pola snapshot repo (QuotationHistory, replacesTaxInvoiceId) |
 | BR-TX-04 | Prefill hanya bila dokumen tertaut ke faktur penjualan/tagihan yang pelanggannya jelas. Terbit tanpa tautan = isian manual seperti hari ini (tidak ditebak dari nama). | USULAN | issueSchema salesInvoiceId optional tax-documents.actions.ts:53 |
 | BR-TX-05 | Nama WP boleh beda dari nama dagang `Customer.name`; yang masuk faktur pajak = nama WP. Kosong nama WP → fallback nama pelanggan DITANDAI sebagai fallback di penanda kelengkapan (bukan diam-diam dianggap nama WP). | USULAN | BENCHMARK tab Pajak pelanggan Accurate (URL §6) |
-| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (NPWP 16 kanonik, 15=legacy tertanda, NITKU 22 digit, PKP tidak menurunkan kode). Sampai fisik Backend live, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
-| BR-TX-07 | Status PKP: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (nilai kini terstruktur pkpStatus+pkpEffectiveFrom tahap 1, histori penuh bersyarat naik kelas); nilai di dokumen tetap snapshot saat terbit, bukan nilai master terkini. | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | — |
+| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-019-V (NPWP 16 kanonik, 15=legacy tertanda, NITKU 22 digit, PKP tidak menurunkan kode). Sampai fisik Backend live, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | TERJAWAB-Q-TX-1 (F-2026-10-25-019-V) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
+| BR-TX-07 | Status PKP: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-019-V (nilai kini terstruktur pkpStatus+pkpEffectiveFrom tahap 1, histori penuh bersyarat naik kelas); nilai di dokumen tetap snapshot saat terbit, bukan nilai master terkini. | TERJAWAB-Q-TX-1 (F-2026-10-25-019-V) | — |
 | BR-TX-08 | Penanda kelengkapan = turunan baca-saja (nama WP terisi DAN NPWP terisi = siap; selain itu kurang + daftar kosongnya). Tanpa kolom status, tanpa cron penagih kelengkapan tahap 1. | USULAN | pola turunan F-2026-10-25-001-S |
 | BR-TX-09 | Vendor: `Vendor.npwp` existing adalah padanan sisi beli; spec ini TIDAK mengubah vendor. Penjajaran bentuk field vendor = spec terpisah bila faktur masukan membuktikan perlu. | USULAN (scope) | schema.prisma:485 (Vendor.npwp) |
 | BR-AQ-01 | Cakupan antrean tahap 1 = quotation `accepted`/`approved`, `deletedAt` kosong, dan TANPA SalesOrder tertaut. `draft`/`sent` milik antrean 091-S; `converted` keluar permanen. | USULAN | convert guard sales.actions.ts:487-489; followup loader filter `sent` |
@@ -25647,7 +25647,7 @@ Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallb
 
 ### 8. Pertanyaan putusan (gerbang)
 
-- Q-TX-1 (Accountant): TERJAWAB-Q-TX-1 oleh vonis F-2026-10-25-005-V — (a) NPWP 16 kanonik, 15 digit peringatan migrasi tertanda; (b) NITKU 22 digit; (c) PKP nilai kini+ tanggal, TIDAK memengaruhi kode transaksi; (d) EC-3 tolak terbit faktur pajak. Fisik = Backend Q-TX-3 dalam batas vonis §8.
+- Q-TX-1 (Accountant): TERJAWAB-Q-TX-1 oleh vonis F-2026-10-25-019-V — (a) NPWP 16 kanonik, 15 digit peringatan migrasi tertanda; (b) NITKU 22 digit; (c) PKP nilai kini+ tanggal, TIDAK memengaruhi kode transaksi; (d) EC-3 tolak terbit faktur pajak. Fisik = Backend Q-TX-3 dalam batas vonis §8.
 - Q-TX-2 (Lead): buka inti field master + snapshot sekarang? Izin reuse vs baru (spec usul reuse existing).
 - Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
 - Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
@@ -25973,14 +25973,19 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
 
-## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-005-V: identitas pajak pelanggan — validasi NPWP 16 digit (15 digit = peringatan migrasi, bukan lolos diam), NITKU 22 digit opsional-tervalidasi-bentuk, status PKP nilai-kini + tanggal pengukuhan tanpa histori penuh tahap 1, EC-3 tolak terbit faktur pajak, kode transaksi tidak diturunkan dari status PKP
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-019-V: identitas pajak pelanggan — validasi NPWP 16 digit (15 digit = peringatan migrasi, bukan lolos diam), NITKU 22 digit opsional-tervalidasi-bentuk, status PKP nilai-kini + tanggal pengukuhan tanpa histori penuh tahap 1, EC-3 tolak terbit faktur pajak, kode transaksi tidak diturunkan dari status PKP
 
 Status: PUTUSAN BOT Accountant (kartu t_84aadbad), menjawab
 Q-TX-1 spec Business F-2026-10-25-004-S (BR-TX-06/07, EC-3).
 Dokumen saja; TANPA kode aplikasi/schema/migrasi di kartu ini.
 ID bebas terverifikasi live: grep `F-2026-10-25-005-V` di
 `origin/main` (4c3d2c8b) = 0 sebelum tulis; slot `-V` 2026-10-25
-yang terpakai hanya F-2026-10-25-004-V (PPN uang muka). Spec
+yang terpakai hanya F-2026-10-25-004-V (PPN uang muka). RENUMBER
+Lead 25 Okt 2026 (kartu t_d099cca4, putusan di komentar PR #773):
+ID asal 005-V sudah terpakai PR #812 MERGED untuk vonis Q-DISC-5 di
+origin/main — vonis ini pindah ke F-2026-10-25-019-V (grep 019-V di
+origin/main 87eedbe5 + semua branch vonis terbuka = 0); isi vonis
+tidak berubah. Spec
 004-S ter-append 2x di main (kawasan ±baris 24700 dan ±25600) —
 vonis ini SATU blok; penandaan TERJAWAB-Q-TX-1 diterapkan ke
 kedua salinan agar tidak muncul blok ketiga. Duplikasi spec
@@ -26878,14 +26883,14 @@ F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-015-V: gerbang PKP perusahaan bertanggal-efektif untuk FP UM (F-2026-10-25-004-V Putusan 4) — nilai kini + tanggal mulai kewajiban di SystemSetting, fail-closed, snapshot beku di DP
 
-> **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-005-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
+> **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-019-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
 
 ### Status verifikasi live (origin/main a5ad6890, 2026-10-25)
 
 - `SystemSetting` (schema.prisma:104-118): `companyTaxId` String? ada (NPWP perusahaan, dipakai Coretax XML `coretax-xml-export-data.ts:45,88`); status PKP perusahaan: **0** (grep `pkp|isPkp` di schema + src = tidak ada kolom status PKP penjual).
 - `Tax` (schema.prisma:4990): `effectiveFrom/effectiveTo/isActive/deletedAt/accountId/rate` ada — pola master bertanggal efektif existing untuk tarif (dipakai B1 Backend di worktree PR #785, belum ter-push).
 - Jalur DP head PR #785 (7fcad3e4): terutang diturunkan hanya dari `quotation.tax > 0` (`computeDownPaymentVatSnapshot`, down-payment-vat.ts:59) — tanpa gerbang PKP perusahaan. Inilah celah Putusan 4 F-004-V: non-PKP yang quotation-nya memuat PPN akan dibekukan snapshot PPN + FP UM fiktif.
-- F-2026-10-25-005-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
+- F-2026-10-25-019-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
 
 ### Register sumber
 
@@ -26897,10 +26902,10 @@ F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI
 ### Putusan 1 — Bentuk: nilai kini + tanggal di SystemSetting, BUKAN model histori baru tahap ini
 
 - Fisik yang disetujui (Backend, migrasi aditif nullable di `SystemSetting`, pola kolom existing schema:104 dst):
-  - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-005-V Putusan 4 untuk lawan).
+  - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-019-V Putusan 4 untuk lawan).
   - `companyPkpEffectiveFrom`: tanggal mulai kewajiban menurut SPPKP/pemberitahuan masa mulai (PMK 164/2023: tanggal terbit SPPKP ≠ tanggal mulai kewajiban).
   - `companyPkpSource`: teks bebas singkat (mis. nomor SPPKP) bila ada.
-- Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-005-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
+- Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-019-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
 - Edit status wajib lewat audit trail master existing; dilarang edit diam. Kolom ini BUKAN akun — mapping akun tidak berubah (`salesTaxAccountId` dll tetap).
 
 ### Putusan 2 — Gerbang terutang DP: tiga syarat kumulatif, fail-closed
@@ -26921,9 +26926,9 @@ Di luar itu:
 - Pencabutan PKP / edit status sesudahnya: nol efek ke DP terbit, FP UM terbit, SPT masa lalu. FP UM yang sudah terbit tetap wajib dilaporkan; refund DP ber-FP tetap wajib batal FP dulu (F-004-V Putusan 4 / J-RF1) walau perusahaan kini non-PKP.
 - DP confirmed SEBELUM tanggal mulai kewajiban PKP (masa transisi pengukuhan): J-DP2 bruto; FP UM tidak dibuat retroaktif untuk DP itu walau penyerahan/pelunasan terjadi sesudah PKP aktif. PPN atas pelunasan mengikuti FP pelunasan dokumen penuh jalur existing — selisih ini tampil di rekonsiliasi sebagai baris masa-transisi-PKP, bukan selisih temuan.
 
-### Putusan 4 — Pisah tegas dari status PKP lawan (F-005-V) dan kode transaksi
+### Putusan 4 — Pisah tegas dari status PKP lawan (F-019-V) dan kode transaksi
 
-- Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-005-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
+- Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-019-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
 - `transactionCode` tetap dari sifat penyerahan/register existing (default "04"); gerbang PKP tidak mengganti kode, hanya memutus terutang/tidak.
 
 ### Putusan 5 — Batas build (pemilik berikutnya; vonis ini tanpa kode)
