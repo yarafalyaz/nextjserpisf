@@ -58,6 +58,11 @@ import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
+  normalizeNitku,
+  normalizeNpwp,
+  validateMasterTaxIdentity,
+} from "@/lib/tax/customer-tax-identity";
+import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
@@ -197,6 +202,46 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CUSTOMER ACTIONS ====================
 
+// F-2026-10-25-004-S: validasi bentuk identitas pajak master (longgar-
+// tertanda vonis 019-V §1/§2/§3) + normalisasi simpan digit-saja.
+// Bentuk cacat = tolak simpan; legacy15/unlinked lolos dengan peringatan
+// di respons (advisory, simpan tetap berhasil — pola duplicateWarning).
+function customerTaxIdentityForSave(v: {
+  taxId?: string
+  taxpayerName?: string
+  taxAddress?: string
+  nitku?: string
+  pkpStatus?: string
+  pkpEffectiveFrom?: string
+  pkpSource?: string
+}): { error: string } | { data: Record<string, unknown>; warnings: string[] } {
+  const check = validateMasterTaxIdentity({
+    taxId: v.taxId,
+    taxpayerName: v.taxpayerName,
+    nitku: v.nitku,
+  })
+  if (!check.ok) return { error: check.errors.join("; ") }
+  let pkpEffectiveFrom: Date | null = null
+  if (v.pkpEffectiveFrom) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.pkpEffectiveFrom)) {
+      return { error: "Tanggal pengukuhan PKP tidak valid (format YYYY-MM-DD)" }
+    }
+    pkpEffectiveFrom = wibDateToUtcMidnight(v.pkpEffectiveFrom)
+  }
+  return {
+    warnings: check.warnings,
+    data: {
+      taxId: normalizeNpwp(v.taxId) ?? v.taxId ?? null,
+      taxpayerName: v.taxpayerName ?? null,
+      taxAddress: v.taxAddress ?? null,
+      nitku: normalizeNitku(v.nitku),
+      pkpStatus: v.pkpStatus ?? "unknown",
+      pkpEffectiveFrom,
+      pkpSource: v.pkpSource ?? null,
+    },
+  }
+}
+
 export async function createCustomer(formData: FormData) {
   try {
     const user = await requirePermission("create_customers");
@@ -215,6 +260,9 @@ export async function createCustomer(formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const taxIdentity = customerTaxIdentityForSave(v);
+    if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
     // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
@@ -247,7 +295,7 @@ export async function createCustomer(formData: FormData) {
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
         isActive: true,
-        taxId: v.taxId ?? null,
+        ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
       },
     });
@@ -263,7 +311,11 @@ export async function createCustomer(formData: FormData) {
     );
     const duplicateWarning: CustomerDuplicateWarning | null =
       buildCustomerDuplicateWarning(candidates);
-    return { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
+    // taxWarnings hanya disertakan bila ada peringatan (legacy15 dsb.) —
+    // bentuk respons lama byte-sama bila tidak ada (kontrak tidak berubah diam-diam).
+    return taxIdentity.warnings.length
+      ? { success: true, id: customer.id, slug: customer.slug, duplicateWarning, taxWarnings: taxIdentity.warnings }
+      : { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCustomer]", getErrorMessage(e) || e);
@@ -278,6 +330,9 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const taxIdentity = customerTaxIdentityForSave(v);
+    if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
 
     if (v.customerCategoryId != null) {
       const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
@@ -302,7 +357,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         district: v.district ?? null,
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
-        taxId: v.taxId ?? null,
+        ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
       },
     });
@@ -321,7 +376,9 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     );
     const duplicateWarning: CustomerDuplicateWarning | null =
       buildCustomerDuplicateWarning(candidates);
-    return { success: true, duplicateWarning };
+    return taxIdentity.warnings.length
+      ? { success: true, duplicateWarning, taxWarnings: taxIdentity.warnings }
+      : { success: true, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateCustomer]", getErrorMessage(e) || e);
