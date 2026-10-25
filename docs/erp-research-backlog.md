@@ -28543,7 +28543,7 @@ ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-20
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-029-S: antrean janji kirim pesanan penjualan (deliveryDate mendekati/lewat, belum terkirim penuh, baca-saja)
 
 Status: SPEC (Business) — KOREKSI ARAH dari premis kartu. Premis awal kartu (antrean penawaran `sent`) GUGUR sesudah verifikasi live: objek itu SUDAH ada — spec F-2026-10-22-091-S + builder `src/lib/reports/quotation-followup-queue.ts` + halaman `penjualan/antrean-penawaran` (TERVERIFIKASI-KODE di origin/main 6bbeca0f 2026-10-25). Objek pengganti di bawah diverifikasi ABSEN dengan cara sama. Spec dokumen saja — tanpa kode/schema/migrasi. Urutan: Business spec ini → **BOT Lead** putusan/kartu turunan (permukaan + ambang) → BOT Backend (builder+loader) → BOT Frontend (konsumen) → BOT QA.
-Pemilik domain: BOT Business (spec) · BOT Lead (putusan) · BOT Backend (eksekusi query) · BOT Frontend (halaman) · BOT QA (acceptance). Vonis angka/jurnal: tidak disentuh (baca-saja, tanpa nominal pajak/jurnal baru — nilai sisa = sisa qty × unitPrice baris existing, pola builder existing).
+Pemilik domain: BOT Business (spec) · BOT Lead (putusan) · BOT Backend (eksekusi query) · BOT Frontend (halaman) · BOT QA (acceptance). Vonis angka/jurnal: tidak disentuh (baca-saja, tanpa nominal pajak/jurnal baru — nilai sisa = sisa qty × unitPrice baris existing, pola builder existing). File disentuh spec ini: `docs/erp-research-backlog.md` saja; jejak klaim/STATUS/HANDOFF dipisah ke PR board tersendiri, bukan diff spec.
 
 ### 1. Keputusan diminta dari BOT Lead (Q-SD-*)
 
@@ -28551,7 +28551,7 @@ Pemilik domain: BOT Business (spec) · BOT Lead (putusan) · BOT Backend (ekseku
 |---|---|---|---|
 | Q-SD-1 | Permukaan antrean: blok di halaman Pesanan Penjualan existing vs halaman antrean khusus | Halaman antrean khusus pola `penjualan/antrean-penawaran` (rute baru di bawah penjualan, mis. `penjualan/antrean-janji-kirim`) | Pola antrean F-002-S/F-091-S terbukti: satu populasi, satu penjaga izin, terindeks menu. Blok di daftar SO existing akan mencampur populasi umum vs tindak-lanjut |
 | Q-SD-2 | Ambang "mendekati janji": berapa hari sebelum `deliveryDate` | USULAN: 3 hari kalender WIB — konfigurabel konstan builder, BUKAN kolom schema | Tanpa bukti kebijakan pemilik proses; 3 hari = jendela admin sempat menyiapkan pengiriman. Jangan hardcoded diam-diam: tulis sebagai konstan bernama + kutip di spec konsumen |
-| Q-SD-3 | Populasi status SO | `DELIVERABLE_ORDER_STATUSES` = approved/confirmed/processing (existing `src/lib/validations/sales.schemas.ts:171`) TANPA completed | completed = SO ditutup administratif; SO completed bersisa SUDAH jadi temuan laporan Pemenuhan Pesanan existing (order-fulfillment-data.ts:12-14) — duplikasi bila ikut. draft = belum komitmen ke pelanggan |
+| Q-SD-3 | Populasi status SO | USULAN: `approved` ∪ `FULFILLABLE_ORDER_STATUSES` (`confirmed/processing/completed`, `order-fulfillment-data.ts:26`) minus `completed` = approved/confirmed/processing | completed bersisa SUDAH jadi temuan laporan Pemenuhan Pesanan existing (order-fulfillment-data.ts:12-14) — duplikasi bila ikut. draft = belum komitmen ke pelanggan. Jangan tulis himpunan ini sebagai isi `DELIVERABLE_ORDER_STATUSES`; konstanta itu persis approved/confirmed/processing/completed (`sales.schemas.ts:171`) |
 | Q-SD-4 | SO tanpa `deliveryDate` (null) | Di luar populasi; hitung terpisah sebagai penanda data ("N pesanan tanpa janji kirim") TANPA baris | Janji kosong tidak bisa dinilai telat; tapi ketiadaannya temuan kualitas data, bukan baris antrean |
 
 ### 2. Bukti TERVERIFIKASI-KODE (origin/main 6bbeca0f, 2026-10-25)
@@ -28560,18 +28560,18 @@ Pemilik domain: BOT Business (spec) · BOT Lead (putusan) · BOT Backend (ekseku
 2. **"Belum terkirim penuh" sudah punya definisi sah existing.** Terkirim = Σ `DeliveryOrderItem.qty` per `salesOrderItemId` dari DeliveryOrder status shipped/delivered saja (`src/lib/reports/order-fulfillment-data.ts:20-29,58-74`); draft tidak dihitung. Sisa baris = ordered − delivered (mesin `buildOutstandingLines`, `src/lib/reports/outstanding-lines.ts:91`). Antrean ini WAJIB memakai definisi sama — dilarang definisi terkirim kedua.
 3. **Saudara terdekat BUKAN pengganti.** Laporan Pemenuhan Pesanan (order-fulfillment*) menjawab sisa qty per *periode tanggal dokumen* (filter `date` SO), tanpa `deliveryDate`, tanpa ember waktu janji. Antrean janji kirim menjawab pertanyaan berbeda: "janji ke pelanggan mana yang mau/sudah lewat" — populasi disaring `deliveryDate`, diurut janji terdekat dulu.
 4. **Premis awal kartu gugur (dicatat agar tidak di-spec ulang).** Penawaran `sent`: spec F-2026-10-22-091-S + `quotation-followup-queue.ts` + halaman `penjualan/antrean-penawaran` SUDAH merged. Accept gerbang expired juga sudah ada: `assertQuotationNotExpired` (sales.actions.ts:115-136) dipanggil accept/convert/createSalesOrder.
-5. **Status SO tervalidasi tertutup.** draft → (approved) → confirmed → processing → completed/cancelled; himpunan boleh-kirim existing = approved/confirmed/processing/completed (`DELIVERABLE_ORDER_STATUSES`, sales.schemas.ts:171). Populasi antrean = himpunan itu minus completed (Q-SD-3).
+5. **Himpunan status existing tidak satu.** `DELIVERABLE_ORDER_STATUSES` = approved/confirmed/processing/completed (sales.schemas.ts:171); laporan Pemenuhan memakai `FULFILLABLE_ORDER_STATUSES` = confirmed/processing/completed (order-fulfillment-data.ts:26). Populasi antrean = gabungan minus completed (approved/confirmed/processing) — USULAN Q-SD-3, bukan transisi status baru. Draft/cancelled di luar kedua himpunan.
 
 ### 3. Kontrak builder diusulkan (USULAN — untuk dieksekusi Backend sesudah putusan Lead)
 
-Pola meniru `buildQuotationAcceptedQueue`/`getQuotationAcceptedQueue` (F-002-S) persis: builder murni + loader Prisma terpisah.
+Pola struktur meniru `buildAcceptedQuotationQueue`/`getAcceptedQuotationQueue` (F-002-S): builder murni + loader Prisma terpisah. Konsumen UI accepted-queue belum ditemukan di `src/app/**`/`src/components/**` pada grep run ini; pola halaman yang SUDAH live hanya `antrean-penawaran` F-091-S.
 
 - Input baris (dari loader): `id, slug, documentNo, date, deliveryDate, status, customer{name}, salesEmployee{name}|null, items[{orderedQty, deliveredQty, unitPrice}]` — deliveredQty SUDAH diagregasi loader dari DeliveryOrder shipped/delivered (aturan §2.2).
-- Builder murni: saring populasi (deliveryDate non-null; status ∈ Q-SD-3; sisa total qty > 0 — SO terkirim penuh keluar antrean apa pun tanggalnya), hitung per SO: `daysUntilDue` (selisih hari kalender WIB: deliveryDate − todayWib), ember, `outstandingValue = Σ sisa × unitPrice` (exclude dari total bila negatif/clamp 0, pola F-002-S BR-QA-05), `linesRemaining` (jumlah baris bersisa).
+- Builder murni: saring populasi (deliveryDate non-null; status ∈ Q-SD-3; ada baris sisa > toleransi mesin existing — SO terkirim penuh keluar antrean apa pun tanggalnya), hitung per SO: `daysUntilDue` (selisih hari kalender WIB: deliveryDate − todayWib), ember, `outstandingValue = Σ max(sisa,0) × unitPrice` per baris (baris sisa negatif diperlakukan 0 agar over-delivery satu baris tidak menutup sisa baris lain), `linesRemaining` (jumlah baris bersisa).
 - Ember tertutup: `overdue` (daysUntilDue < 0) · `due_today` (= 0) · `due_soon` (1..ambang Q-SD-2). Di luar due_soon → bukan populasi. Urut: overdue paling lama dulu, lalu due_today, lalu due_soon terdekat; seri = deliveryDate asc, documentNo asc (deterministik, teruji).
 - Total atas: jumlah dokumen per ember + Σ outstandingValue per ember; penanda Q-SD-4 (count SO populasi-status tanpa deliveryDate) sebagai angka terpisah, BUKAN baris.
-- `todayWib` diinjeksikan (parameter, pola `todayWib` F-002-S) — builder tidak membaca jam sistem, teruji unit.
-- Loader: `requirePermission("view_sales_orders")` di halaman server (pola halaman antrean-penawaran), query `deliveryDate: { not: null, lte: todayWib + ambang }` + status populasi, agregasi delivered per baris dalam 1 query DeliveryOrderItem (dilarang N+1 per SO), `Decimal` → Number di tepi loader.
+- `todayWib` diinjeksikan sebagai parameter `Date` tengah-malam-WIB (builder tidak membaca jam sistem); pola injeksi waktu existing = argumen `now` di `buildAcceptedQuotationQueue`/`getAcceptedQuotationQueue`, BUKAN field bernama `todayWib`.
+- Loader: halaman server panggil `requirePermission("view_sales_orders")` SEBELUM loader (pola fail-closed halaman antrean-penawaran:16-27), query `deliveryDate: { not: null, lte: todayWib + ambang }` + status populasi, agregasi delivered per baris dalam 1 query DeliveryOrderItem massal (dilarang N+1 per SO), `Decimal` → Number di tepi loader. Penanda tanpa-janji = query hitung terpisah populasi-status + `deliveryDate: null` (bukan baris loader).
 - Konsumen: tabel read-only: No SO (tautan detail) · Pelanggan · Penjual (fallback "—") · Tgl janji · Ember · Sisa baris · Nilai sisa. Tanpa tombol/radio/checkbox/form, tanpa ekspor, tanpa pagination server (pola F-002-S).
 
 ### 4. Business rules register (BR-SD-*)
@@ -28618,16 +28618,17 @@ Antrean baca-saja: TIDAK ada transisi status ditulis antrean. Transisi relevan (
 
 ### 8. Acceptance criteria + edge (untuk BOT QA)
 
-- SO processing, deliveryDate kemarin, sisa > 0 → tampil ember overdue, urutan sebelum due_today.
-- SO confirmed, deliveryDate hari ini WIB, sisa > 0 → due_today. Batas WIB: deliveryDate = tengah malam WIB hari ini dihitung due_today, bukan overdue (kalender WIB, bukan UTC).
-- SO approved, deliveryDate +ambang hari → due_soon; +ambang+1 → tidak tampil.
-- SO terkirim penuh (delivered = ordered semua baris), deliveryDate lewat → tidak tampil.
-- DeliveryOrder draft sebesar sisa → sisa tidak berkurang, SO tetap tampil.
-- SO completed bersisa, deliveryDate lewat → tidak tampil (wilayah laporan Pemenuhan Pesanan).
-- SO tanpa deliveryDate status processing → tidak tampil; penanda "tanpa janji" +1.
-- Tanpa view_sales_orders → halaman tertolak; dengan izin → nol aksi tulis di halaman.
-- SalesEmployee null → "—", SO tetap tampil.
+- AC-SD-01: SO processing, deliveryDate kemarin, sisa > 0 → tampil ember overdue, urutan sebelum due_today.
+- AC-SD-02: SO confirmed, deliveryDate hari ini WIB, sisa > 0 → due_today. Batas WIB: deliveryDate = tengah malam WIB hari ini dihitung due_today, bukan overdue (kalender WIB, bukan UTC).
+- AC-SD-03: SO approved, deliveryDate tepat +ambang hari → due_soon; +ambang+1 → tidak tampil. (Ambang = hasil Q-SD-2; tes memakai ambang terkonfigurasi, bukan angka tebakan.)
+- AC-SD-04: SO terkirim penuh (delivered = ordered semua baris), deliveryDate lewat → tidak tampil.
+- AC-SD-05: DeliveryOrder draft sebesar sisa → sisa tidak berkurang, SO tetap tampil; DeliveryOrder shipped/delivered sebesar sisa → sisa berkurang persis.
+- AC-SD-06: SO completed/cancelled/draft bersisa, deliveryDate lewat → tidak tampil (completed = wilayah laporan Pemenuhan Pesanan).
+- AC-SD-07: SO tanpa deliveryDate status populasi → tidak tampil; penanda "tanpa janji" +1; SO draft/cancelled tanpa deliveryDate → penanda TIDAK +1.
+- AC-SD-08: Tanpa view_sales_orders → halaman tertolak sebelum loader jalan, nol baris bocor; dengan izin → nol aksi tulis di halaman.
+- AC-SD-09: SalesEmployee null → "—", SO tetap tampil; satu baris over-delivered (delivered > ordered) + satu baris bersisa → SO tampil, nilai sisa hanya dari baris bersisa.
+- AC-SD-10: Dua SO overdue tanggal sama → urut documentNo asc deterministik; ganti deliveryDate via updateSalesOrder → ember kunjungan berikut berubah, tanpa mutasi dari antrean.
 
 ### 9. ID & anti-tabrakan
 
-ID **F-2026-10-25-029-S BEKU** untuk spec ini: grep `F-2026-10-25-029` di origin/main (6bbeca0f) + judul PR terbuka = 0 sebelum penulisan; ID 027/028 terpakai PR #857/#858. File disentuh: `docs/erp-research-backlog.md` (spec ini) + `docs/autonomous-board.md` (entri STATUS) saja. Implementasi menunggu putusan Lead Q-SD-1..4 — Business tidak menulis kode/schema/migrasi.
+ID **F-2026-10-25-029-S BEKU** untuk spec ini: grep `F-2026-10-25-029` di origin/main (6bbeca0f) + judul/badan PR terbuka = 0 sebelum penulisan (pencarian `gh pr list --search F-2026-10-25-029 --state all` hanya memukul substring `030` PR #397 lama — bukan ID ini); ID 027/028 terpakai PR #857/#858. File disentuh PR spec ini: `docs/erp-research-backlog.md` saja. Implementasi menunggu putusan Lead Q-SD-1..4 — Business tidak menulis kode/schema/migrasi. Backlog turunan (ID baru dipesan saat kartu dibuat, jangan karang sekarang): Lead putusan → Backend builder+loader+tes unit → Frontend halaman+konsumen → QA acceptance AC-SD-01..10.
