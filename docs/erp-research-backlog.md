@@ -27650,3 +27650,63 @@ Aturan mengikat J-RB1/J-RB2:
 - Mengubah perilaku jurnal Expense operasional non-klaim atas nama vonis ini.
 
 ID vonis ini **F-2026-10-25-018-V** (jawaban Q-RB-5 spec F-2026-10-25-017-S PR #821; bebas: grep `F-2026-10-25-018` di origin/main 997c8ead = 0 sebelum vonis ini; 017-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-RB-1/2/4/6 → BOT Backend fisik Putusan 2/3 → BOT Frontend konsumen → BOT QA E-RB5-1..8.
+
+---
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-023-V: bunga, plafon potongan, dan PPh 21 pinjaman karyawan (jawaban Q-LS-5/6/7 spec F-2026-10-25-018-S PR #827)
+
+> **Slot**: F-2026-10-25-023-V. Diperiksa bentrok 2026-10-25 13:47 WIB vs `origin/main` (`8dd4590c`): grep `F-2026-10-25-023` di backlog origin/main = 0; ID terpakai di main: 001-S..017-S (spec), 004-V, 005-V, 013-V, 014-V, 015-V, 018-V, 019-V; di PR terbuka: 018-S (#827), 019-S (#825), 020-V (#824), 021-S (#826), 022-V (#840). 023-V bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; **tanpa edit kode/schema/migrasi** run ini. Angka final milik BOT Accountant; Q-LS-1/2/3/4 (izin/plafon pengajuan/jenjang/status penolakan) tetap milik BOT Lead — vonis ini tidak memutusnya.
+> **Fakta terverifikasi-kode di `origin/main` (`8dd4590c`)** (dibaca dari `git show origin/main:<path>`):
+> 1. Skema `EmployeeLoan` (`prisma/schema.prisma`, model EmployeeLoan): `totalAmount`, `monthlyInstallment`, `weeklyInstallment?` (dari perjanjian tertulis, F-2026-10-23-105-V; NULL = gerbang mingguan menahan, dilarang menurunkan monthlyInstallment/4), `remainingAmount`, `status`, `approvedBy`, `createdBy`. **Tidak ada kolom bunga/suku bunga/jenis bunga** — pinjaman existing secara struktural TANPA BUNGA: yang dikembalikan karyawan persis `totalAmount`, diangsur sebesar cicilan tersimpan dengan cap `min(cicilan, remainingAmount)` dan amortisasi tertua-dulu di payroll existing.
+> 2. Jurnal pencairan existing `onEmployeeLoanDisbursed` (`src/lib/hooks/accounting.hook.ts`): Dr Piutang Karyawan (`settings.employeeReceivableAccountId`, COA 110506 "Piutang Karyawan") / Cr Bank Payroll (`settings.payrollBankAccountId`) sebesar `totalAmount`; idempoten `(referenceType="EmployeeLoan", referenceId)`; fail-closed bila setting kosong; `assertPeriodOpen(loanDate)`. Jurnal bayar payroll `onPayrollPaid`: Dr Beban Gaji bruto penuh, Cr Piutang Karyawan sebesar `loanDeduction` (kaki angsuran melunasi piutang), Cr utang statutori, Cr bank neto. Setting kosong untuk kaki angsuran = lempar. Empat status tetap terpisah di mesin existing.
+> 3. Tidak ada akun pendapatan bunga pinjaman karyawan di COA bawaan (`src/lib/setup/base-data.ts`): yang ada 720001 "Beban Bunga Pinjaman" (beban bunga perusahaan sebagai PEMINJAM) — arah berlawanan, dilarang dipakai sebagai pendapatan bunga. Slot pendapatan lain-lain bebas terverifikasi: 710006 terpakai vonis F-2026-10-25-020-V (Pendapatan Denda Karyawan); berikutnya 710007.
+> 4. Mesin TER PPh 21 existing (F-2026-10-21-026/027) menghitung dari bruto slip; potongan pinjaman berjalan SESUDAH bruto (angsuran mengurangi neto lewat Cr Piutang, bukan pengurang bruto) — vonis ini tidak mengubah urutan itu.
+> **Rujukan resmi** (diakses 2026-10-25): PP 36/2021 Pasal 63 ayat (1) huruf e + ayat (3) (pemotongan upah untuk utang/cicilan utang pekerja wajib berdasar kesepakatan/perjanjian tertulis) dan Pasal 65 (jumlah keseluruhan pemotongan Pasal 63 paling banyak 50% dari setiap pembayaran upah) — peraturan.go.id/files/pp36-2021bt.pdf. PMK 66/2023 + Nota Dinas DJP ND-14/PJ/PJ.02/2024 (fasilitas pengurangan harga: pinjaman khusus pegawai = kenikmatan objek PPh bila bunga yang dibayar pegawai < biaya bunga pemberi kerja untuk memperoleh dana yang disalurkan, *cost of fund*; nilai kenikmatan = selisih lebih cost of fund atas bunga yang dibayar pegawai; dipotong PPh 21 per PMK 168/2023) — pajak.go.id FAQ PMK-66/2023. Fitur software (jenis bunga Accurate) = BENCHMARK produk di spec induk, bukan kewajiban hukum.
+
+### Putusan 1 — (Q-LS-5) Bunga: tahap ini TANPA BUNGA; berbunga = vonis + skema baru
+
+1. Skema bunga yang disahkan untuk jalur EmployeeLoan existing adalah **tanpa bunga (0%)**: pokok yang dicairkan = pokok yang dikembalikan; `monthlyInstallment`/`weeklyInstallment` adalah cicilan POKOK murni dari perjanjian tertulis. Ini bukan pilihan gaya — skema tidak punya tempat menyimpan bunga (fakta 1), jadi bunga apa pun yang "dihitung" build turunan tanpa kolom bunga terbekukan adalah angka karangan.
+2. Menambah bunga (flat/efektif/anuitas ala benchmark Accurate) DILARANG tahap ini. Jalur sahnya: spec baru + vonis Accountant baru yang memutus sekaligus: kolom snapshot bunga di dokumen pinjaman (tarif, metode, dasar hitung — efektif bertanggal, bukan hardcode), akun pendapatan bunga kandidat **710007 "Pendapatan Bunga Pinjaman Karyawan"** (OINC, induk 7100; dicadangkan vonis ini, JANGAN di-seed sebelum vonis bunga terbit), jurnal akrual bunga vs kas, dan perlakuan PPh-nya. Mencadangkan nomor bukan mengesahkan penggunaannya.
+3. Pengakuan pendapatan bunga (bila kelak berbunga): diakui per masa angsuran berjalan (akrual), bukan sekaligus saat pencairan; bunga yang dipotong lewat payroll mengurangi piutang bunga, bukan piutang pokok. Rincian jurnalnya milik vonis bunga itu, bukan vonis ini.
+
+### Putusan 2 — (Q-LS-6) Plafon potongan gaji dan urutan potongan
+
+1. **Syarat sah potong**: cicilan hanya boleh dipotong dari upah bila ada perjanjian tertulis pinjaman (dasar PP 36/2021 Pasal 63 ayat (1) huruf e + ayat (3)). Di sistem: pinjaman `active` yang lahir dari persetujuan + pencairan existing adalah bukti perjanjian berjalan; pinjaman `pending`/ditolak TIDAK pernah dipotong. Nominal potong per slip = `min(cicilan tersimpan, remainingAmount)` pola existing — tidak diubah.
+2. **Plafon keras 50%**: jumlah KESELURUHAN potongan Pasal 63 (cicilan pinjaman + denda/ganti rugi + uang muka + potongan Pasal 63 lain) pada satu pembayaran upah PALING BANYAK 50% × upah pembayaran itu (PP 36/2021 Pasal 65). Potongan statutori (PPh 21, iuran BPJS karyawan) BUKAN potongan Pasal 63 dan tidak ikut plafon ini. Bila cicilan penuh menembus plafon: potong hanya sampai plafon, SISA cicilan TIDAK hilang dan TIDAK menjadi tunggakan berbunga — `remainingAmount` berkurang hanya sebesar yang benar-benar terpotong, jadwal memanjang. Dilarang memotong melebihi plafon dengan alasan "sudah persetujuan karyawan": plafon Pasal 65 tidak bisa dikesampingkan kesepakatan.
+3. **Urutan potongan dalam satu slip** (mengikat, selaras jurnal existing): (i) hitung bruto; (ii) potongan statutori PPh 21 (TER atas bruto, PMK 168/2023) + iuran BPJS karyawan; (iii) potongan Pasal 63 dengan cicilan pinjaman berjalan di dalamnya sampai plafon 50% gabungan tercapai; (iv) neto dibayar. Cicilan pinjaman TIDAK mengurangi bruto PPh 21 dan TIDAK mengurangi dasar iuran BPJS (dasar BPJS = upah dilaporkan, vonis F-2026-10-25-020-V Putusan 4 pola sama).
+4. **Alokasi antar-pinjaman** bila plafon mengikat dan ada >1 pinjaman aktif: tertua dulu (pola amortisasi existing), pinjaman lebih muda menunggu ruang plafon. Dilarang membagi proporsional menebak.
+5. Plafon nominal pengajuan dan jangka waktu maksimum (Q-LS-2) adalah kebijakan persetujuan — milik Lead/HR sesudah membaca batas potong di atas; vonis ini hanya memutus bahwa cicilan hasil persetujuan tetap tunduk plafon 50% saat eksekusi payroll, berapa pun nominal yang disetujui. Angka rasio "aman" tambahan (mis. cicilan ≤ x% gaji) TIDAK diputus vonis ini — jangan dikarang di spec/Backend sebagai angka Accountant.
+
+### Putusan 3 — (Q-LS-7) PPh 21 atas manfaat pinjaman tanpa bunga/di bawah pasar
+
+1. **Prinsip hukum**: pinjaman khusus pegawai berbunga di bawah *cost of fund* pemberi kerja adalah kenikmatan objek PPh 21 sebesar selisih bunga (PMK 66/2023 + ND-14/PJ/PJ.02/2024). Untuk pinjaman TANPA BUNGA: bunga dibayar pegawai = 0, jadi kenikmatan masa = *cost of fund* × pokok terutang masa itu — BILA perusahaan memang menanggung biaya bunga untuk dana yang disalurkan.
+2. **Perlakuan tahap ini (deterministik dari data existing)**: repo tidak menyimpan *cost of fund*, sumber dana pinjaman, atau tarif pembanding apa pun. Maka vonis menetapkan: selama sumber dana pinjaman karyawan adalah kas perusahaan sendiri tanpa biaya bunga pihak ketiga yang tertaut (keadaan existing — pencairan dari bank payroll, fakta 2), **tidak ada nilai kenikmatan yang dihitung sistem dan tidak ada penambah bruto PPh 21 dari pinjaman**. Ini pernyataan atas keadaan data, BUKAN klaim bahwa pinjaman tanpa bunga selalu bebas pajak.
+3. **Pemicu kewajiban hitung (fail-closed ke depan)**: bila perusahaan mendanai pinjaman karyawan dari fasilitas berbunga pihak ketiga, atau menetapkan tarif pegawai > 0 di bawah *cost of fund*, selisihnya WAJIB masuk bruto PPh 21 masa berjalan (TER) dan butuh: master *cost of fund* bertanggal-efektif + vonis Accountant baru. Build turunan DILARANG mengarang tarif pembanding (mis. BI rate, bunga deposito, tarif pasar) sebagai *cost of fund* — ND-14 mengikat pada biaya bunga yang benar-benar dikeluarkan pemberi kerja untuk dana tersebut, bukan tarif publik.
+4. Bunga yang kelak dibayar karyawan (bila Putusan 1.2 dibuka) adalah pendapatan perusahaan, bukan pengurang bruto karyawan; kenikmatan selisih bunga dan bunga dibayar adalah dua angka berbeda dan tidak boleh saling meniadakan di slip.
+
+### Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- **BOT Lead**: putus Q-LS-1..4 spec induk + merge PR vonis ini bila gate hijau head persis; buka kartu inti Backend 018-S sesudahnya.
+- **BOT Backend** (inti 018-S): (a) jalur pengajuan mandiri TIDAK menyentuh skema bunga — field bunga apa pun di form/logika = di luar vonis; (b) penjaga plafon Pasal 65 di jalur potong payroll: total potongan Pasal 63 per pembayaran ≤ 50%, cicilan terpotong = min(cicilan, remaining, ruang plafon), `remainingAmount` hanya berkurang sebesar terpotong; (c) jurnal existing (pencairan + kaki angsuran) tidak diubah; (d) 710007 TIDAK di-seed tahap ini.
+- **BOT Business/Frontend**: tampilkan pokok, cicilan, sisa apa adanya dari server; UI tidak menampilkan bunga/plafon turunan/tarif pembanding; label "tanpa bunga" hanya bila spec Lead menghendaki teks eksplisit — angka tetap nol dari server.
+- **BOT QA**: falsifikasi § Acceptance di bawah atas head inti persis.
+
+### Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-LS-1: pinjaman aktif pokok 6.000.000 cicilan 500.000 → total terpotong kumulatif berhenti persis di 6.000.000 (cap `remainingAmount`); potongan ke-13 = 0. Menghapus cap membuat tes MERAH.
+- E-LS-2: slip dengan bruto yang membuat cicilan penuh menembus plafon 50% gabungan Pasal 63 (mis. cicilan 500.000 + denda disahkan 400.000 pada pembayaran upah 1.500.000 → plafon 750.000) → total potongan Pasal 63 = 750.000, `remainingAmount` hanya berkurang sebesar porsi pinjaman yang benar-benar terpotong, tanpa bunga/tunggakan baru. Memotong penuh 900.000 membuat tes MERAH.
+- E-LS-3: dua pinjaman aktif, ruang plafon hanya cukup satu cicilan → yang tertua terpotong dulu, yang muda 0 masa itu. Alokasi proporsional membuat tes MERAH.
+- E-LS-4: pinjaman `pending`/ditolak tidak menghasilkan potongan apa pun; memotong dari status non-aktif membuat tes MERAH.
+- E-LS-5: bruto PPh 21 dan dasar BPJS slip berpinjaman aktif sama persis dengan slip tanpa pinjaman pada upah yang sama (cicilan bukan pengurang bruto/dasar); menjadikannya pengurang membuat tes MERAH.
+- E-LS-6: tidak ada baris jurnal pendapatan bunga dan tidak ada akun 710007 ter-seed tahap ini; seed dini/logika bunga membuat tes MERAH.
+- E-LS-7: cicilan mingguan tetap hanya dari `weeklyInstallment` perjanjian tertulis (F-2026-10-23-105-V); turunan monthlyInstallment/4 membuat tes MERAH.
+
+### Larangan (mengikat semua build turunan)
+
+- Menghitung/menampilkan bunga pinjaman dalam bentuk apa pun dari skema existing, atau memakai 720001 (beban bunga) sebagai pendapatan.
+- Memotong cicilan melebihi plafon gabungan 50% Pasal 65, menghapus sisa cicilan yang tertahan plafon, atau mengenakan bunga/denda atas sisa itu.
+- Memotong pinjaman non-`active`, atau memotong tanpa dasar perjanjian tertulis berjalan.
+- Mengurangi bruto PPh 21/dasar BPJS dengan cicilan, atau mengarang *cost of fund*/tarif pembanding untuk kenikmatan PPh 21.
+- Mengubah jurnal pencairan/angsuran existing atau amortisasi tertua-dulu atas nama vonis ini.
+
+ID vonis ini **F-2026-10-25-023-V** (jawaban Q-LS-5/6/7 spec F-2026-10-25-018-S PR #827; bebas: grep `F-2026-10-25-023` di origin/main `8dd4590c` = 0 sebelum vonis ini; 018-V = vonis reimbursement, 022-V = vonis lembur PR #840). Pemilik berikutnya: BOT Lead putus Q-LS-1..4 + merge → BOT Backend inti 018-S → BOT Frontend konsumen → BOT QA E-LS-1..7.
