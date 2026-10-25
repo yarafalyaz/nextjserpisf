@@ -49,6 +49,65 @@ export const DISCOUNT_EXPOSURE_INVOICE_STATUSES = [
   "sent",
 ] as const
 
+type DocSelectRow = {
+  id: number
+  slug: string | null
+  documentNo: string
+  date: Date
+  status: string
+  customerId: number
+  salesEmployeeId: number | null
+  subtotal: unknown
+  discount: unknown
+  grandTotal: unknown
+  customer: { name: string }
+  salesEmployee: { name: string } | null
+  items: { qty: unknown; unitPrice: unknown; discount: unknown }[]
+}
+
+function toDocInput(
+  docType: DiscountExposureDocType,
+  row: DocSelectRow,
+): DiscountExposureDocInput {
+  return {
+    docType,
+    docId: row.id,
+    slug: row.slug,
+    documentNo: row.documentNo,
+    date: row.date,
+    status: row.status,
+    customerId: row.customerId,
+    customerName: row.customer.name,
+    salesEmployeeId: row.salesEmployeeId,
+    salesEmployeeName: row.salesEmployee?.name ?? null,
+    subtotal: Number(row.subtotal),
+    headerDiscount: Number(row.discount),
+    grandTotal: Number(row.grandTotal),
+    lines: row.items.map((i) => ({
+      qty: Number(i.qty),
+      unitPrice: Number(i.unitPrice),
+      discount: Number(i.discount),
+    })),
+  }
+}
+
+const DOC_SELECT = {
+  id: true,
+  slug: true,
+  documentNo: true,
+  date: true,
+  status: true,
+  customerId: true,
+  salesEmployeeId: true,
+  subtotal: true,
+  discount: true,
+  grandTotal: true,
+  customer: { select: { name: true } },
+  salesEmployee: { select: { name: true } },
+} as const
+
+const LINE_SELECT = { qty: true, unitPrice: true, discount: true } as const
+
 export interface DiscountExposureFilters {
   /** Awal periode inklusif (tanggal dokumen >= start). */
   start: Date
@@ -83,23 +142,8 @@ export async function getDiscountExposure(
             ...customerWhere,
           },
           select: {
-            id: true,
-            slug: true,
-            documentNo: true,
-            date: true,
-            status: true,
-            customerId: true,
-            salesEmployeeId: true,
-            subtotal: true,
-            discount: true,
-            grandTotal: true,
-            customer: { select: { name: true } },
-            salesEmployee: { select: { name: true } },
-            sections: {
-              select: {
-                items: { select: { qty: true, unitPrice: true, discount: true } },
-              },
-            },
+            ...DOC_SELECT,
+            sections: { select: { items: { select: LINE_SELECT } } },
           },
           orderBy: [{ date: "asc" }, { id: "asc" }],
         })
@@ -113,21 +157,7 @@ export async function getDiscountExposure(
             ...sellerWhere,
             ...customerWhere,
           },
-          select: {
-            id: true,
-            slug: true,
-            documentNo: true,
-            date: true,
-            status: true,
-            customerId: true,
-            salesEmployeeId: true,
-            subtotal: true,
-            discount: true,
-            grandTotal: true,
-            customer: { select: { name: true } },
-            salesEmployee: { select: { name: true } },
-            items: { select: { qty: true, unitPrice: true, discount: true } },
-          },
+          select: { ...DOC_SELECT, items: { select: LINE_SELECT } },
           orderBy: [{ date: "asc" }, { id: "asc" }],
         })
       : Promise.resolve([]),
@@ -140,21 +170,7 @@ export async function getDiscountExposure(
             ...sellerWhere,
             ...customerWhere,
           },
-          select: {
-            id: true,
-            slug: true,
-            documentNo: true,
-            date: true,
-            status: true,
-            customerId: true,
-            salesEmployeeId: true,
-            subtotal: true,
-            discount: true,
-            grandTotal: true,
-            customer: { select: { name: true } },
-            salesEmployee: { select: { name: true } },
-            items: { select: { qty: true, unitPrice: true, discount: true } },
-          },
+          select: { ...DOC_SELECT, items: { select: LINE_SELECT } },
           orderBy: [{ date: "asc" }, { id: "asc" }],
         })
       : Promise.resolve([]),
@@ -189,68 +205,15 @@ export async function getDiscountExposure(
   }
 
   const inputs: DiscountExposureDocInput[] = [
-    ...quotations.map((q) => ({
-      docType: "QUOTATION" as const,
-      docId: q.id,
-      slug: q.slug,
-      documentNo: q.documentNo,
-      date: q.date,
-      status: q.status,
-      customerId: q.customerId,
-      customerName: q.customer.name,
-      salesEmployeeId: q.salesEmployeeId,
-      salesEmployeeName: q.salesEmployee?.name ?? null,
-      subtotal: Number(q.subtotal),
-      headerDiscount: Number(q.discount),
-      grandTotal: Number(q.grandTotal),
-      lines: q.sections.flatMap((s) =>
-        s.items.map((i) => ({
-          qty: Number(i.qty),
-          unitPrice: Number(i.unitPrice),
-          discount: Number(i.discount),
-        })),
-      ),
-    })),
-    ...salesOrders.map((so) => ({
-      docType: "SALES_ORDER" as const,
-      docId: so.id,
-      slug: so.slug,
-      documentNo: so.documentNo,
-      date: so.date,
-      status: so.status,
-      customerId: so.customerId,
-      customerName: so.customer.name,
-      salesEmployeeId: so.salesEmployeeId,
-      salesEmployeeName: so.salesEmployee?.name ?? null,
-      subtotal: Number(so.subtotal),
-      headerDiscount: Number(so.discount),
-      grandTotal: Number(so.grandTotal),
-      lines: so.items.map((i) => ({
-        qty: Number(i.qty),
-        unitPrice: Number(i.unitPrice),
-        discount: Number(i.discount),
-      })),
-    })),
-    ...salesInvoices.map((inv) => ({
-      docType: "SALES_INVOICE" as const,
-      docId: inv.id,
-      slug: inv.slug,
-      documentNo: inv.documentNo,
-      date: inv.date,
-      status: String(inv.status),
-      customerId: inv.customerId,
-      customerName: inv.customer.name,
-      salesEmployeeId: inv.salesEmployeeId,
-      salesEmployeeName: inv.salesEmployee?.name ?? null,
-      subtotal: Number(inv.subtotal),
-      headerDiscount: Number(inv.discount),
-      grandTotal: Number(inv.grandTotal),
-      lines: inv.items.map((i) => ({
-        qty: Number(i.qty),
-        unitPrice: Number(i.unitPrice),
-        discount: Number(i.discount),
-      })),
-    })),
+    ...quotations.map((q) =>
+      toDocInput("QUOTATION", {
+        ...q,
+        status: q.status,
+        items: q.sections.flatMap((s) => s.items),
+      }),
+    ),
+    ...salesOrders.map((so) => toDocInput("SALES_ORDER", so)),
+    ...salesInvoices.map((inv) => toDocInput("SALES_INVOICE", { ...inv, status: String(inv.status) })),
   ]
 
   return buildDiscountExposure(inputs, thresholdsByType)
