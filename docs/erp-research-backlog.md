@@ -30538,3 +30538,417 @@ Benchmark run ini tidak mengakses ulang halaman Accurate/Zahir; matrix memakai r
 - Kolom/status dokumen baru untuk tertahan: keputusan simpan turunan cukup (§2).
 
 F-2026-10-25-035-S — Gerbang penegakan batas kredit tahap 2. Status: SPEC SELESAI run ini; implementasi menunggu vonis Accountant Q-CL2-1 + putusan Lead Q-CL2-2..5. Pemilik usulan: Business (spec), Accountant (definisi inti), Lead (izin/aktivasi), Backend (penilaian server), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA (Q-CL2-1 saja).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-036-S: tarif komisi per kategori pelanggan (histori bertanggal + snapshot faktur + loader DPP; kontrak workflow di atas vonis F-2026-10-22-056-V)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. ID induk tetap F-2026-10-21-016; vonis uang induk = F-2026-10-22-056-V (Accountant) + rekonsiliasi F-2026-10-22-058-V + syarat tahap-3 F-2026-10-22-084-V. ID F-2026-10-25-036-S bebas terverifikasi run ini: grep di backlog origin/main 16423ddc = 0; maksimum -S tanggal 25 Okt terpakai = 035-S. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+> Pivot tercatat di kartu t_41dd4af1: topik awal kartu (hitung-ulang sisa termin F-2026-10-20-107) DIBATALKAN — lapis aman F-107 sudah MERGED (builder `quotation-revision-delta` + `job-billing-progress`, PR #347/#355) dan inti termin tercakup BR-TM67-05 spec F-2026-10-22-067-S. Spec ini mengangkat gap terverifikasi berikutnya di domain sama.
+
+### 0. Verifikasi live origin/main 16423ddc (2026-10-25 17:47 WIB, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Tahap 1-2 F-016 LIVE: snapshot `salesEmployeeId` Quotation (schema.prisma:1387) → SalesOrder (:1544) → SalesInvoice (:1601); builder murni `src/lib/reports/sales-commission.ts` (ekspor `SALES_COMMISSION_NOTICE`, `buildSalesCommissionRecap`); loader `src/lib/reports/sales-commission-data.ts` (satu query faktur `paid`, `deletedAt null`, periode tanggal faktur); halaman konsumen `src/app/(dashboard)/laporan/rekap-komisi/[[...segments]]/page.tsx` + entri katalog `src/lib/reports/report-catalog.ts:156`.
+- `SalesInvoice.taxAmount` Decimal beku per faktur (schema.prisma SalesInvoice) — DPP per faktur dapat diturunkan persis `grandTotal − taxAmount` tanpa tarif berjalan.
+- Snapshot retur: `SalesReturnItem.returnDpp/returnVat` (schema.prisma:1938, :2163) diisi saat retur completed — sumber pengurang komisi per vonis.
+- Izin master kategori existing: `create_customers` / `edit_customers` (module-catalog.generated.ts:126-127); izin baca rekap: `view_reports` (:427); `view_sales_invoices` (:148).
+- `CustomerCategory` (schema.prisma:479-491) hanya memuat `downPaymentPercent` Decimal(5,2) — pola presisi persen repo.
+
+Belum ada (gap spec ini, bukti grep run ini):
+- Tarif komisi: `grep -in "commissionPercent|komisi" prisma/schema.prisma` = 0 kolom tarif/histori; loader meneruskan `commissionPercent: 0` untuk SEMUA baris (sales-commission-data.ts:42) — estimasi komisi di rekap terbaca 0 selamanya.
+- Builder menghitung basis dari `grandTotal` (sales-commission.ts:58 `base = safeRound(inv.grandTotal, 2)`) — vonis F-056-V Putusan 2 mewajibkan basis DPP; mengganti angka tanpa mengganti label `paidBase`/"Basis Faktur Lunas" = temuan QA.
+- Vonis F-2026-10-22-056-V sendiri: PR #440 CLOSED tanpa merge (mergeCommit null, terverifikasi `gh pr view 440` run ini) — substansi vonis hidup di rekonsiliasi F-058-V (merged, backlog §K2-K4) + syarat G2 F-084-V (merged); bentuk fisik histori tarif BELUM dibangun oleh siapa pun. Spec ini = kontrak workflow supaya Backend membangun persis vonis, bukan menafsir ulang.
+- Transisi `paid` berjalan: status enum `SalesInvoiceStatus` (schema.prisma:5561-5569: draft/sent/posted/partial/paid/cancelled/approved); pembayaran di `createSalesPayment` (sales.actions.ts:1589) menghitung ulang paidAmount/status dalam tx yang sama — titik tulis snapshot menempel di jalur ini (fisik = Backend, §7).
+
+### 1. Workflow specification
+
+Aktor: (a) Admin Master pemegang `edit_customers` — kelola histori tarif per kategori; (b) sistem (transisi pembayaran) — menulis snapshot; (c) pembaca laporan pemegang `view_reports` — membaca rekap; (d) penjual/karyawan perorangan — BUKAN aktor tulis tarif atas komisinya sendiri (pemisahan tugas, vonis F-056-V Putusan 1b).
+
+Dokumen masuk: baris histori tarif (kategori, persen, masa berlaku); faktur lunas (snapshot penjual + DPP beku); retur completed (snapshot returnDpp).
+Dokumen keluar: rekap komisi informatif existing dengan persen nyata + pengurang retur per masa. TANPA dokumen utang, TANPA jurnal, TANPA slip pembayaran baru.
+
+Alur:
+W1 Admin Master membuka master kategori pelanggan, menambah baris tarif: kategori + persen + `effectiveFrom`. Sistem menolak rentang tumpang tindih untuk kategori sama (berisik, bukan memilih diam-diam).
+W2 Mengganti tarif = tutup masa baris lama (`effectiveTo`) + baris baru; baris yang sudah menjadi sumber snapshot faktur mana pun tidak dapat diedit persen/`effectiveFrom`-nya maupun dihapus (penjaga beku F-058-V K4).
+W3 Faktur mencapai `paid` lewat pembayaran existing: dalam transaksi yang sama, sistem membekukan snapshot persen + kategori acuan di faktur, hasil resolusi per TANGGAL FAKTUR (bukan tarif hari lunas).
+W4 Loader rekap membaca snapshot faktur (persen + DPP), bukan histori berjalan; faktur tanpa snapshot (lama) terbaca 0 jujur berlabel notice existing.
+W5 Retur completed tertaut faktur: pengurang basis tampil di MASA RETUR, teratribusi ke penjual snapshot faktur asal, memakai persen snapshot faktur asal.
+W6 Pembaca laporan membuka rekap per masa: baris per penjual (basis DPP lunas, estimasi, pengurang retur, neto tampil negatif apa adanya bila pengurang melewati basis masa itu).
+
+### 2. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-KT36-01 | Sumber tarif = histori bertanggal efektif per CustomerCategory (persen Decimal(5,2), effectiveFrom, effectiveTo null=terbuka, createdBy); BUKAN kolom tunggal yang ditimpa di CustomerCategory | TERVERIFIKASI-VONIS (F-056-V Putusan 1a) + USULAN bentuk fisik Backend |
+| BR-KT36-02 | Resolusi tarif per TANGGAL FAKTUR dengan masa semi-terbuka `effectiveFrom <= tanggal faktur < effectiveTo`; konvensi ini TIDAK diseragamkan dengan katalog inklusif domain lain | TERVERIFIKASI-VONIS (F-056-V 1c + F-058-V K1) |
+| BR-KT36-03 | Kategori acuan = kategori pelanggan faktur itu; pelanggan tanpa kategori = tarif 0 jujur, tidak ditebak ke kategori lain | TERVERIFIKASI-VONIS (F-056-V 1c) |
+| BR-KT36-04 | Snapshot persen + kategori acuan dibekukan di SalesInvoice pada transisi ke `paid`, NILAI hasil resolusi per tanggal faktur; baca-pertama oleh loader DILARANG sebagai titik tulis | TERVERIFIKASI-VONIS (F-058-V K2) |
+| BR-KT36-05 | Basis komisi per faktur = DPP = `grandTotal − taxAmount` snapshot faktur, sen-aman; faktur tanpa PPN basis = grandTotal penuh; dilarang tarif PPN berjalan / subtotal mentah / `Number()` mentah atas Decimal | TERVERIFIKASI-VONIS (F-056-V Putusan 2) |
+| BR-KT36-06 | Contoh mengikat: DPP 11.000.000 + PPN 1.320.000, tarif 2% → komisi 220.000 (bukan 246.400 basis grandTotal) | TERVERIFIKASI-VONIS (F-056-V 2c) |
+| BR-KT36-07 | Retur completed mengurangi basis sebesar Σ `returnDpp` snapshot baris retur, diakui di MASA RETUR, persen snapshot faktur asal; refund kas/CustomerCredit BUKAN pengurang; neto negatif tampil apa adanya tanpa clamp | TERVERIFIKASI-VONIS (F-056-V Putusan 3) |
+| BR-KT36-08 | Baris histori tarif yang sudah menjadi sumber snapshot faktur DILARANG diedit/dihapus; koreksi = tutup masa + baris baru; penjaga rujukan dicek di service dalam tx | TERVERIFIKASI-VONIS (F-058-V K4) |
+| BR-KT36-09 | Hasil resolusi nol baris di domain ini = tarif 0 jujur + notice (fail-soft berlabel) — rezim ini TIDAK disamakan dengan fail-closed dokumen pajak | TERVERIFIKASI-VONIS (F-058-V K3) |
+| BR-KT36-10 | Penulis tarif = pemegang izin master kategori existing `create_customers`/`edit_customers`; vonis ini TIDAK menciptakan izin baru; penjual tidak menulis tarifnya sendiri. Bila Backend menilai izin terpisah perlu = minta vonis izin Accountant dulu | TERVERIFIKASI-VONIS (F-056-V 1b) |
+| BR-KT36-11 | Rekap tetap INFORMATIF: bukan utang komisi, bukan dasar jurnal/pembayaran/payroll; notice verbatim existing dipertahankan; label basis wajib selaras DPP (bukan "Basis Faktur Lunas" grandTotal) | TERVERIFIKASI-VONIS (F-056-V "Yang TIDAK berubah" + Putusan 2d) |
+| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr 210207, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
+| BR-KT36-13 | Faktur lama tanpa snapshot: loader meneruskan 0 jujur; DILARANG backfill tebakan dari histori berjalan | TERVERIFIKASI-VONIS (F-056-V 1d + F-084-V §6) |
+| BR-KT36-14 | Satu penjual per faktur (snapshot existing); split komisi multi-penjual = model terpisah, tidak dikarang di spec ini | TERVERIFIKASI-VONIS (F-084-V §6) |
+
+### 3. Role/permission matrix (key nyata katalog)
+
+| Aksi | Admin Master | Admin Penjualan | Finance/Laporan | Penjual perorangan | Key |
+|---|---|---|---|---|---|
+| Tambah baris histori tarif | YA | tidak | tidak | TIDAK (SoD) | `create_customers` existing (:126) |
+| Tutup masa / koreksi tarif (baris baru) | YA | tidak | tidak | TIDAK | `edit_customers` existing (:127) |
+| Edit/hapus baris tarif sudah terpakai snapshot | TIDAK (penjaga beku BR-KT36-08) | tidak | tidak | tidak | penjaga server, bukan izin |
+| Baca rekap komisi | YA | YA | YA | tidak tahap ini | `view_reports` existing (:427) |
+| Baca faktur sumber | YA | YA | YA | tidak | `view_sales_invoices` existing (:148) |
+| Tulis snapshot persen | sistem (transisi paid) | — | — | — | tanpa izin manusia; satu tx dengan perubahan status |
+
+### 4. Status-transition matrix
+
+| Objek | Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|---|
+| Baris histori tarif | (tidak ada) | Admin Master tambah baris | aktif (effectiveTo null) | `create_customers`; tolak tumpang tindih |
+| Baris histori tarif | aktif | tarif diganti | tertutup (effectiveTo terisi) + baris baru aktif | `edit_customers`; penjaga beku BR-KT36-08 |
+| SalesInvoice | partial/posted | pembayaran melunasi (createSalesPayment existing) | paid + snapshot persen/kategori beku | satu tx; nilai resolusi per tanggal faktur (BR-KT36-04) |
+| SalesInvoice | paid | histori tarif berubah / pelanggan pindah kategori | paid (snapshot TIDAK berubah) | BR-KT36-04/08 |
+| Baris rekap penjual | basis masa faktur | retur completed masa berjalan | basis masa faktur tetap; pengurang tampil di masa retur | BR-KT36-07; neto negatif tanpa clamp |
+
+Tidak ada status dokumen baru. Tidak ada status tarif yang diketik manual bebas — masa berlaku adalah satu-satunya "status" baris histori.
+
+### 5. Feature matrix Accurate/Zahir/ISF (benchmark akses 2026-10-25)
+
+| Fitur | Accurate | Zahir | ISF sesudah spec ini |
+|---|---|---|---|
+| Komisi persen per golongan/kategori | Skema komisi persen/nilai tetap per penjual/produk: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/mengenal-fitur-komisi-penjualan/ | Persen komisi dari golongan salesman atau Tabel Komisi per golongan × nilai penjualan: https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang (C9) | Histori persen per kategori PELANGGAN bertanggal efektif (pilihan vonis F-056-V; bukan per golongan salesman — dicatat sebagai perbedaan sadar, bukan klaim setara) |
+| Jurnal + utang komisi otomatis | Ada (terintegrasi penjualan) | Ada (jurnal + hutang komisi otomatis, URL sama) | TIDAK tahap ini — rekap informatif saja; tahap 3 tertutup (BR-KT36-12) |
+| Basis hitung | per transaksi penjualan (halaman fitur di atas) | per nilai transaksi pada tabel | DPP faktur lunas (grandTotal − taxAmount), snapshot per tanggal faktur |
+| Histori tarif bertanggal | Tidak diverifikasi run ini — tidak diklaim | Tidak diverifikasi run ini — tidak diklaim | ADA (usul ISF dari vonis; melindungi rekap masa lalu dari perubahan tarif) |
+
+BENCHMARK: kedua kompetitor menghitung komisi otomatis sampai jurnal; ISF tahap ini SENGAJA berhenti di tarif nyata untuk rekap informatif — benchmark bukan alasan membuka jurnal (BR-KT36-12).
+
+### 6. Acceptance criteria + edge cases (draf falsifikasi untuk QA)
+
+- AC-KT-1: Tarif kategori A 2% berlaku per tanggal faktur; faktur DPP 11.000.000 + PPN 1.320.000 lunas → estimasi 220.000. Basis grandTotal (246.400) = MERAH.
+- AC-KT-2: Tarif diganti di antara tanggal faktur dan tanggal lunas → snapshot memakai tarif per tanggal faktur. Tarif hari lunas terpakai = MERAH.
+- AC-KT-3: Dua baris tarif kategori sama rentang tumpang tindih → penulisan kedua ditolak berisik. Satu dipilih diam-diam = MERAH.
+- AC-KT-4: Edit persen/effectiveFrom atau hapus baris tarif yang sudah jadi sumber snapshot → ditolak. Snapshot/rekap masa lalu berubah = MERAH.
+- AC-KT-5: Pelanggan tanpa kategori / histori belum berlaku → tarif 0 + notice; rekap tetap tampil (fail-soft). Rekap tertolak keras = MERAH.
+- AC-KT-6: Faktur lama tanpa snapshot dibaca loader → 0 jujur, snapshot TIDAK tertulis oleh baca. Loader menulis saat baca = MERAH.
+- AC-KT-7: Retur completed Σ returnDpp 1.000.000 atas faktur AC-KT-1 pada masa berikut → pengurang 20.000 di masa retur untuk penjual faktur asal; basis masa faktur ditulis ulang = MERAH.
+- AC-KT-8: Penjual membuka/mengubah tarif komisinya sendiri tanpa izin master → tertolak di server. Lolos = MERAH.
+- AC-KT-9: Neto penjual masa retur negatif → tampil negatif. Di-clamp 0 = MERAH.
+- AC-KT-10: Label basis di UI/ekspor menyebut DPP; label menjanjikan grandTotal sementara angka DPP (atau sebaliknya) = MERAH.
+- Edge: faktur paid sebelum histori ada (snapshot kosong) tetap 0 sesudah tarif dibuat mundur — backfill = MERAH (BR-KT36-13). Faktur tanpa PPN: basis = grandTotal penuh. Retur baris legacy `returnDpp` null: fallback hitung-ulang qty × price beku berlabel `legacy`; `cost` terpakai = MERAH (F-056-V 3c).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-036-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-036-S | Spec kontrak workflow ini (dokumen) | Business | — |
+| (turunan) bentuk fisik histori tarif + snapshot + resolver + penjaga beku + loader DPP | Backend | spec ini; klaim `prisma/schema.prisma` di board dulu; izin terpisah hanya lewat vonis Accountant (BR-KT36-10) | — |
+| (turunan) kelola tarif di master kategori + label basis DPP di rekap | Frontend | kontrak Backend final; kata server verbatim; nol hitung persen di UI | — |
+| (turunan) falsifikasi AC-KT-1..10 | QA | head Backend/Frontend persis | — |
+| (turunan) tahap 3 jurnal/bayar komisi | Lead (putusan buka) → Backend → Accountant | syarat G1-G5 F-084-V; BUKAN bagian spec ini | — |
+
+### 8. Pertanyaan putusan
+
+- Q-KT-1 (Lead): buka inti histori+snapshot tahap ini (rekap informatif saja) — ya/tidak. Spec merekomendasikan YA: prasyarat G2 F-084-V dan satu-satunya jalan persen rekap berhenti 0.
+- Q-KT-2 (Backend, fisik): nama model/kolom histori + titik tempel tulis snapshot persis di jalur pembayaran (createSalesPayment / jalur status paid lain harus konsisten — semua jalur menuju paid wajib membekukan, bukan satu jalur saja).
+- Q-KT-3 (Accountant): TIDAK ada vonis baru diminta — angka/basis/retur sudah divonis F-056-V/F-058-V. Dipanggil lagi hanya bila Backend mengusulkan izin tarif terpisah (BR-KT36-10) atau tahap 3 dibuka.
+
+### Yang TIDAK diusulkan run ini
+
+- Jurnal/utang komisi, pembayaran komisi, komponen payroll komisi: tahap 3 tertutup (F-084-V), tanpa ID turunan baru.
+- Split komisi multi-penjual, komisi per produk/kuantitas ala Accurate, komisi berbasis target: kebutuhan belum terbukti di ISF; target penjualan sudah punya jalurnya sendiri (F-2026-10-22-088-S).
+- Penerima komisi non-Employee (agen eksternal): dilarang tahap ini (F-084-V §5 butir 3); butuh master penerima + bupot non-pegawai terpisah bila bisnis membuktikan kebutuhan.
+- Kolom persen tunggal di CustomerCategory: ditolak vonis (F-056-V 1a) — jangan diusulkan ulang sebagai jalan pintas.
+
+F-2026-10-25-036-S — Tarif komisi per kategori pelanggan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-KT-1 + fisik Backend Q-KT-2. Pemilik usulan: Business (spec), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (vonis F-056-V/F-058-V/F-084-V sudah mengunci angka; izin terpisah = pengecualian BR-KT36-10).
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-037-S: tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll; kontrak workflow di atas vonis F-2026-10-22-084-V)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. ID induk tetap F-2026-10-21-016; vonis uang induk = F-2026-10-22-056-V (tarif/basis/retur) + rekonsiliasi F-2026-10-22-058-V + vonis tahap 3 F-2026-10-22-084-V (syarat buka jurnal + PPh). Spec tarif nyata (histori + snapshot + loader DPP) = F-2026-10-25-036-S (PR #883 OPEN). ID F-2026-10-25-037-S bebas terverifikasi run ini: grep backlog + board origin/main `c90416df` = 0; maksimum terpakai tanggal ini = 036-S (PR #883). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+> Koreksi premis kartu t_dcbd4a8a (2026-10-25 18:54 WIB): kartu menyebut tahap 3 "belum pernah ada spec-nya dan pajak belum divonis". Verifikasi live membuktikan SEBAGIAN LAPUK: vonis Accountant tahap 3 SUDAH ADA sebagai F-2026-10-22-084-V (akrual saat `paid`, Dr 600002 / Cr akun utang baru, PPh 21 via payroll, reversal retur, falsifikasi KOM3-1..7). Yang memang belum ada = (a) spec workflow Business yang membekukan kontrak tahap 3 sebagai alur yang bisa dibangun/diuji lintas bot, dan (b) penyelesaian dua temuan baru run ini (§0). Spec ini TIDAK mengulang pertanyaan yang sudah dijawab Q-KOM-1/F-084-V.
+
+### 0. Verifikasi live origin/main c90416df (2026-10-25 18:54 WIB, run ini)
+
+Sudah divonis (TERVERIFIKASI-VONIS, jangan dibuka ulang tanpa alasan baru):
+- F-056-V: tarif = histori persen bertanggal per CustomerCategory, snapshot persen+kategori di SalesInvoice, basis DPP = `grandTotal − taxAmount`, retur completed mengurangi basis sebesar `returnDpp` di masa retur (bukan restate).
+- F-058-V: titik tulis snapshot = transisi ke `paid`, nilai = resolusi per tanggal faktur; penjaga beku baris histori terpakai; rezim nol-baris komisi = fail-soft berlabel (beda dari fail-closed pajak).
+- F-084-V §0: tahap 3 TETAP TERTUTUP sampai (a) PUTUSAN Lead buka inti, (b) histori tarif + snapshot persen F-056-V live, (c) akun + mapping live. Vonis memutus PERLAKUAN bila dibuka, bukan izin bangun.
+- F-084-V §3: akrual Dr 600002 Beban Komisi / Cr Utang Komisi pada transisi faktur ke `paid` sebesar snapshot (DPP × persen snapshot, sen); bukan saat terbit, bukan saat rekap dibaca. Penjual null = nol akrual. Tanggal jurnal = tanggal transisi paid + `assertPeriodOpen`; periode terkunci = ditolak, tanggal TIDAK digeser.
+- F-084-V §4: retur completed sesudah akrual = jurnal LAWAN di masa retur; jurnal asal tidak diubah/dihapus; kumulatif lawan ≤ akrual; faktur dibatalkan sesudah paid = reversal penuh mekanisme jurnal repo; komisi sudah terbayar lalu retur lahir = saldo utang boleh negatif tercatat, ditagih/dipotong dari komisi/payroll berikutnya oleh proses payroll, TIDAK ditarik kas otomatis, TIDAK di-clamp 0.
+- F-084-V §5 (REGULASI PMK 168/2023 Pasal 5/8/10, URL DJP di blok vonis itu): penerima karyawan = penghasilan tidak teratur, digabung bruto masa dibayar lalu TER se-masa lewat payroll; penerima non-Employee = di luar tahap 3 (PPh 21 Bukan Pegawai, BUKAN PPh 23 — jasa yang dipotong PPh 21 dikecualikan dari PPh 23); PPh TIDAK dipotong saat akrual (akrual bruto penuh); komisi bukan objek PPN. Jalur bayar tunai terpisah di luar payroll untuk karyawan DILARANG.
+
+Sudah ada di kode (TERVERIFIKASI-KODE):
+- Tahap 1-2 F-016 live: snapshot `salesEmployeeId` Quotation→SO→Invoice (schema.prisma:1387/1544/1601), builder `src/lib/reports/sales-commission.ts`, loader `src/lib/reports/sales-commission-data.ts` (paid-only, persen diteruskan 0), halaman rekap konsumen existing.
+- Akun 600002 Beban Komisi ADA (`src/lib/setup/base-data.ts:829`); jurnal repo punya idempotensi referensi aktif: `Journal.activeReferenceKey` generated + `@@unique([activeReferenceKey])` (schema.prisma model Journal) dan penjaga `assertJournalClaimRef` (accounting.hook.ts:51 — referenceType kosong ditolak sebelum klaim); reversal repo = jurnal lawan referenceType `Journal` + asal REVERSED, dengan `assertPeriodOpen` tanggal asal.
+- Izin katalog nyata: `view_sales_invoices`/`edit_sales_invoices`/`approve_sales_invoices` (module-catalog.generated.ts:148-152), `view_payroll`/`process_payroll` (:313-317), `view_payroll_reports` (:428), `view_reports`.
+
+Belum ada / temuan baru run ini:
+- TEMUAN-037-A (BUTUH-VONIS Accountant, koreksi F-084-V §2): nomor akun kredit yang diputus F-084-V — 210207 "Utang Komisi Penjualan" bebas per verifikasi 2026-10-22 — hari ini SUDAH TERPAKAI: `base-data.ts:925` = `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis F-2026-10-24-132-V, merged; juga mapping `pkwtCompensationPayableAccountId` schema SystemSetting + automap `account-automap.ts:204`). Memakai 210207 untuk komisi = mencampur dua kewajiban beda rezim (kompensasi PKWT PP 35/2021 vs komisi penjualan) dalam satu akun — rekonsiliasi keduanya rusak. Nomor pengganti TIDAK ditebak spec ini (lihat Q-KOM3-1). Verifikasi tetangga live run ini: 210201-210206 terpakai, 210207 PKWT, 210209 Reimbursement (F-2026-10-25-018-V); 210208 TIDAK TERVERIFIKASI bebas dari satu grep ini — kelayakan/pemakaiannya wajib dikonfirmasi Accountant dari COA penuh, bukan disimpulkan dari ketiadaan di potongan ini.
+- TEMUAN-037-B (gerbang belum terpenuhi, TERVERIFIKASI-KODE): prasyarat G2 F-084-V belum live — histori tarif + snapshot persen belum dibangun (itulah spec 036-S, PR #883 OPEN); G3 (akun + mapping `commissionExpenseAccountId`/`commissionPayableAccountId`) belum ada di schema/seed; G1 (PUTUSAN Lead buka inti) belum terbit (grep board origin/main run ini: tidak ada PUTUSAN buka inti komisi). Maka tahap 3 TETAP TERTUTUP run ini; spec ini = kontrak supaya urutan buka tidak dibalik.
+- Dokumen komisi per faktur sebagai subledger penerima: belum ada modelnya; jurnal saja tidak menjawab "utang ke penjual siapa, dari faktur mana, sudah dibayar slip mana". §2 membekukan bentuk minimumnya (fisik final Backend sesudah vonis Q-KOM3-1/Q-KOM3-2).
+
+### 1. Workflow specification
+
+Aktor: (a) sistem (transisi pembayaran + retur) — menulis akrual/lawan; (b) Finance pemegang izin jurnal/laporan — membaca saldo utang + riwayat, TIDAK mengedit jurnal komisi manual; (c) HR/penggajian pemegang `process_payroll` — memasukkan komponen komisi tertaut ke slip masa bayar; (d) penjual/karyawan penerima — bukan aktor tulis apa pun di tahap ini.
+
+Dokumen masuk: faktur mencapai `paid` dengan snapshot lengkap (penjual + persen + kategori acuan, warisan 036-S); retur `completed` tertaut faktur terakru; slip payroll masa bayar.
+Dokumen keluar: Jurnal akrual komisi (Dr Beban / Cr Utang), jurnal lawan retur/batal, baris komponen komisi di slip payroll, read-model saldo utang komisi per penjual. TANPA dokumen pembayaran tunai baru, TANPA slip komisi terpisah di luar payroll untuk karyawan.
+
+Alur:
+W1 Faktur bertransisi ke `paid` dalam transaksi pembayaran existing: snapshot persen/kategori dibekukan (kontrak 036-S) DAN, hanya bila gerbang §6 terpenuhi semua, akrual lahir dalam transaksi yang sama.
+W2 Akrual hanya lahir bila: penjual tidak null, snapshot persen ada, nominal hasil hitung > 0, mapping akun lengkap. Satu kondisi gagal = nol akrual berlabel alasan (bukan jurnal setengah, bukan tebak tarif berjalan).
+W3 Retur `completed` tertaut faktur terakru: jurnal lawan lahir di masa retur sebesar pengurang snapshot; jurnal asal tidak disentuh.
+W4 Faktur terakru dibatalkan lewat jalur koreksi existing: reversal penuh mekanisme jurnal repo (asal REVERSED + lawan), bukan hapus baris.
+W5 Masa payroll berjalan: komponen komisi yang dibayar ke penerima ditarik dari saldo utang komisi penerima (utang terlama dulu — pola amortisasi pinjaman repo), masuk slip sebagai komponen earning tidak teratur; PPh 21 dihitung TER atas gabungan bruto masa itu (bukan tarif komisi sendiri); jurnal slip mendebit Utang Komisi, BUKAN 600002 kedua kali (beban diakui sekali di akrual).
+W6 Sesudah slip paid: saldo utang penerima berkurang sebesar komponen terbayar; baris komisi tertaut menunjuk slip pembayarnya; sisa saldo terbaca di read-model §5.
+W7 Komisi terbayar lalu retur lahir (W3 sesudah W6): lawan akrual tetap terbit; saldo penerima boleh negatif tercatat; pemulihan lewat pemotongan komisi/payroll berikutnya oleh proses payroll berizin — sistem tidak menarik kas dan tidak men-clamp 0.
+
+### 2. Dokumen/skema minimum (USULAN bentuk — fisik final Backend, nomor akun menunggu Q-KOM3-1)
+
+Satu baris subledger per (faktur, penjual) — idempoten per pasangan itu:
+- Kunci idempotensi: unik `(salesInvoiceId, salesEmployeeId)` untuk baris akrual asal; percobaan tulis kedua untuk pasangan sama = ditolak/digabung nol (bukan baris kedua). Jurnal akrual menempel lewat referensi jurnal repo (`referenceType`/`referenceId` + `activeReferenceKey`), satu jurnal akrual aktif per baris subledger.
+- Isi minimum per baris: `salesInvoiceId` (faktur asal), `salesEmployeeId` (penerima snapshot), `customerCategoryIdSnapshot` + `commissionPercentSnapshot` (beku dari faktur), `dppSen`/basis snapshot, `commissionAmountSen` (hasil `safeRound(DPP × persen/100)`), `accruedAt` (tanggal transisi paid), `journalId` akrual, status turunan/tersimpan minimum: terakru → sebagian-terbayar/terbayar lewat tautan slip, `paidPayrollId`/`paidComponentLineId` penunjuk pembayaran, `reversalJournalId` (retur/batal, boleh banyak lawan parsial — kumulatif dijaga ≤ akrual), `createdAt`. Koreksi TIDAK mengedit nominal baris asal; lawan = baris/jurnal lawan tertaut.
+- Per baris vs per dokumen: tahap ini SATU penjual per faktur (snapshot existing) maka subledger per (faktur, penjual) = per dokumen secara alami. Split multi-penjual = model terpisah, tidak dikarang (F-084-V §6).
+- Baris retur pengurang bukan baris subledger negatif bebas: ia jurnal lawan tertaut baris akrual asal + retur asal, supaya kumulatif ≤ akrual bisa dijaga di server dalam transaksi.
+- Akun: debit 600002 existing (final, F-084-V §2.1); kredit = akun utang komisi BARU dari vonis Q-KOM3-1 (BUKAN 210207 lagi — TEMUAN-037-A). Mapping `commissionExpenseAccountId` + `commissionPayableAccountId` di SystemSetting, nullable tanpa default tebak; kosong/nonaktif/salah tipe = posting ditolak berisik (fail-closed, pola mapping repo); dilarang fallback ke 210204/210205/210206/210207.
+- Semua tulis akrual/lawan/payroll-link dalam transaksi yang sama dengan pemicunya (transisi paid / retur completed / slip paid) — pola klaim atomik payroll repo; jurnal setengah di luar transaksi = cacat.
+
+### 3. Status-transition matrix
+
+| Objek | Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|---|
+| SalesInvoice | partial/posted | pembayaran melunasi | paid + snapshot beku + akrual lahir (bila §6 lolos) | satu tx; W2; mapping fail-closed |
+| SalesInvoice | partial/posted | pembayaran melunasi, penjual null / snapshot kosong / hasil 0 | paid, NOL akrual berlabel alasan | W2; dilarang tebak tarif berjalan |
+| Baris subledger komisi | terakru | retur completed tertaut (sebagian) | terakru berkurang (lawan parsial tercatat) | kumulatif lawan ≤ akrual; masa retur |
+| Baris subledger komisi | terakru | retur penuh / faktur dibatalkan sesudah paid | terbalik penuh (asal REVERSED + lawan) | mekanisme reversal repo; `assertPeriodOpen` |
+| Baris subledger komisi | terakru (saldo > 0) | slip payroll memuat komponen tertaut lalu slip paid | terbayar (sebagian/penuh per nominal komponen) | `process_payroll` + scope HR; debit Utang Komisi di jurnal slip |
+| Baris subledger komisi | terbayar | retur completed lahir sesudahnya | saldo penerima negatif tercatat | W7; tanpa clamp, tanpa tarik kas otomatis |
+| Jurnal akrual | POSTED | koreksi batal | REVERSED + jurnal lawan POSTED | penjaga periode repo; asal tidak dihapus |
+
+Tidak ada status "komisi disetujui manual" tahap ini: hak lahir dari dokumen (faktur lunas + snapshot), bukan persetujuan bebas. Approval tambahan = perubahan perilaku, BUTUH-VONIS Lead (Q-KOM3-3).
+
+### 4. Role/permission matrix (key nyata katalog, TERVERIFIKASI-KODE)
+
+| Aksi | Finance | HR/Penggajian | Admin Penjualan | Penjual penerima | Key / scope |
+|---|---|---|---|---|---|
+| Lahir akrual/lawan | sistem | — | — | — | tanpa izin manusia; transaksi pemicu |
+| Baca saldo utang + riwayat komisi per penjual | YA | YA (untuk tarik slip) | tidak tahap ini | TIDAK (bukan slip self-service tahap ini) | `view_reports` + cakupan penjual server; nominal komisi = data penghasilan — jangan tampil lintas-penjual tanpa izin laporan |
+| Tarik komponen komisi ke slip | tidak | YA | tidak | tidak | `process_payroll` + `getHrScope` fail-closed (pola HR repo) |
+| Baca slip memuat komisi | sesuai izin jurnal | YA | tidak | hanya slip sendiri lewat scope self existing | `view_payroll` + `getHrScope`; dilarang nominal komisi orang lain di laporan umum |
+| Edit/hapus jurnal komisi manual | TIDAK | tidak | tidak | tidak | koreksi hanya reversal tertaut dokumen |
+| Isi mapping akun komisi | YA (pengaturan) | tidak | tidak | tidak | izin pengaturan existing pemilik mapping repo; kosong = fail-closed |
+
+### 5. Konsumen read-model: rekap existing tidak berubah diam-diam
+
+- Rekap komisi informatif existing (builder/loader/halaman tahap 2 + tarif nyata 036-S) TETAP informatif; tahap 3 TIDAK menulis ulang angka rekap masa lalu. Angka rekap (estimasi dari snapshot) dan angka utang (akrual jurnal) adalah dua lapis yang WAJIB bisa direkonsiliasi baris-per-faktur, bukan disamakan paksa.
+- Read-model tahap 3 BARU (usulan): saldo utang komisi per penjual = Σ akrual − Σ lawan − Σ terbayar-slip, diturunkan dari subledger + jurnal, plus daftar baris (faktur asal, tanggal akrual, lawan, slip pembayar). Loader murni baca; membaca TIDAK menulis snapshot/akrual (pola K2 F-058-V).
+- Label jujur sesudah tahap 3 dibuka: rekap lama tetap berlabel informatif; permukaan saldo utang berlabel terpisah ("utang komisi tercatat dari jurnal") — dilarang mengganti label rekap lama seolah estimasinya kini utang tanpa perubahan angka yang dijelaskan. Selisih rekap-vs-utang (mis. faktur paid tanpa snapshot = estimasi 0 dan akrual 0; retur masa berbeda) tampil sebagai baris rekonsiliasi beralasan, bukan disembunyikan.
+- Tidak ada backfill akrual faktur paid historis sebelum snapshot ada (F-084-V §6): saldo awal tahap 3 = hanya faktur yang bertransisi paid sesudah inti live.
+
+### 6. Gerbang buka (semua wajib, urutan tidak dibalik)
+
+G1 PUTUSAN Lead buka inti tahap 3 tertulis di board (F-084-V G1) — belum ada run ini.
+G2 Inti 036-S live: histori tarif + snapshot persen/kategori di transisi paid + loader DPP (PR #883 spec-nya; implementasi Backend terpisah).
+G3 Vonis koreksi akun Q-KOM3-1 terbit + akun/mapping ter-seed terkonfigurasi; mapping kosong = fail-closed terbukti tes.
+G4 Titik akrual idempoten teruji per §2 (satu jurnal akrual aktif per (faktur, penjual); retry/klik ulang tidak dobel) memakai penjaga referensi repo.
+G5 Falsifikasi §8 hijau di head inti persis + gate repo; QA audit sebelum Lead merge inti.
+
+### 7. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-KOM37-01 | Utang komisi lahir HANYA pada transisi faktur ke `paid` (lunas penuh), sebesar snapshot faktur (DPP × persen snapshot); bukan saat terbit/posted/partial, bukan saat rekap dibaca | TERVERIFIKASI-VONIS (F-084-V §3) |
+| BR-KOM37-02 | Pembayaran sebagian TIDAK melahirkan akrual proporsional; faktur `partial` = nol akrual sampai lunas; sesudah lunas, akrual penuh sekali dari snapshot (bukan akumulasi per cicilan bayar) | TERVERIFIKASI-VONIS (F-084-V §3.1 + KOM3-3) |
+| BR-KOM37-03 | Idempotensi: satu baris subledger + satu jurnal akrual aktif per (salesInvoiceId, salesEmployeeId); retry transisi/klik ulang/loader baca TIDAK menciptakan akrual kedua | USULAN kontrak (mekanisme repo TERVERIFIKASI-KODE: activeReferenceKey + assertJournalClaimRef) |
+| BR-KOM37-04 | Penjual null, snapshot persen kosong, atau hasil hitung 0 → nol akrual berlabel alasan; dilarang atribusi dari createdBy dan dilarang tarif berjalan hari baca | TERVERIFIKASI-VONIS (F-084-V §3.4/§6) |
+| BR-KOM37-05 | Akun debit = 600002 Beban Komisi existing; akun kredit utang komisi = nomor BARU hasil Q-KOM3-1; 210207 DILARANG untuk komisi (sudah Utang Kompensasi PKWT) | debit TERVERIFIKASI-VONIS; kredit BUTUH-VONIS (TEMUAN-037-A) |
+| BR-KOM37-06 | Mapping akun nullable tanpa default tebak; kosong/salah = posting ditolak berisik, nol jurnal setengah; dilarang fallback 210204/210205/210206/210207 | TERVERIFIKASI-VONIS (F-084-V §2.3, diperluas 210207) |
+| BR-KOM37-07 | Retur completed sesudah akrual = jurnal lawan di masa retur (returnDpp snapshot × persen snapshot faktur asal); jurnal asal tidak diedit/dihapus; kumulatif lawan ≤ akrual faktur itu | TERVERIFIKASI-VONIS (F-056-V 3 + F-084-V §4) |
+| BR-KOM37-08 | Faktur dibatalkan sesudah paid = reversal penuh mekanisme jurnal repo; komisi sudah terbayar lalu retur lahir = saldo negatif tercatat, pulih lewat potongan berikutnya oleh proses payroll, tanpa clamp/tarik kas otomatis | TERVERIFIKASI-VONIS (F-084-V §4.3-4) |
+| BR-KOM37-09 | Bayar komisi karyawan HANYA lewat payroll sebagai komponen earning tidak teratur tertaut subledger; jurnal slip Dr Utang Komisi (beban tidak diakui dua kali); jalur tunai terpisah DILARANG | TERVERIFIKASI-VONIS (F-084-V §2.4/§5.1) |
+| BR-KOM37-10 | PPh 21 atas komisi karyawan = TER gabungan bruto masa dibayar (PMK 168/2023); TIDAK dipotong saat akrual (akrual bruto penuh); bukan PPh 23 untuk karyawan; penerima non-Employee di luar tahap 3 | REGULASI via TERVERIFIKASI-VONIS (F-084-V §5) |
+| BR-KOM37-11 | BPJS atas komisi mengikuti definisi basis upah vonis existing (komisi tidak tetap tidak masuk basis rutin); komisi tetap berkala = vonis baru, tidak disimpulkan di sini | TERVERIFIKASI-VONIS (F-084-V §6) |
+| BR-KOM37-12 | Rekap informatif existing tidak berubah angka/label diam-diam oleh tahap 3; saldo utang = read-model terpisah yang merekonsiliasi ke rekap per faktur | USULAN (pola label TERVERIFIKASI-KODE tahap 2) |
+| BR-KOM37-13 | Tanpa backfill akrual historis; tanpa split multi-penjual; tanpa slip komisi di luar payroll untuk karyawan | TERVERIFIKASI-VONIS (F-084-V §6) |
+| BR-KOM37-14 | Nominal komisi per penerima = data penghasilan terlindungi: baca lintas-penjual hanya izin laporan + cakupan server; proses slip hanya `process_payroll` + `getHrScope` fail-closed | TERVERIFIKASI-KODE (katalog + pola HR repo) |
+| BR-KOM37-15 | Periode jurnal terkunci pada tanggal akrual/lawan = ditolak berisik; tanggal TIDAK digeser diam-diam ke periode buka | TERVERIFIKASI-VONIS (F-084-V §3.3/§4) |
+
+### 8. Acceptance criteria + edge cases (draf falsifikasi untuk QA; cabut penjaga → MERAH)
+
+Mewarisi KOM3-1..7 (F-084-V §7) apa adanya; tambahan delta spec ini:
+- AC-KOM37-1: Seed/mapping menunjuk akun kredit hasil Q-KOM3-1; jurnal akrual TIDAK PERNAH menyentuh 210207/210204/210205/210206. Satu jurnal menyentuh 210207 untuk komisi = MERAH (regresi TEMUAN-037-A).
+- AC-KOM37-2: Transisi paid di-retry / pembayaran terakhir diproses ulang idempoten → tetap satu baris subledger + satu jurnal akrual aktif per (faktur, penjual). Dobel = MERAH.
+- AC-KOM37-3: Faktur dibayar 40% lalu 60%: nol akrual pada 40%; tepat satu akrual penuh snapshot pada lunas. Akrual proporsional cicilan = MERAH.
+- AC-KOM37-4: Dua retur parsial completed lintas masa: lawan kumulatif berhenti di akrual; retur ketiga melewati akrual ditolak di sumber/penjaga, bukan dipotong diam-diam di jurnal.
+- AC-KOM37-5: Slip payroll membayar komponen komisi tertaut: saldo subledger berkurang persis nominal komponen; jurnal slip Dr Utang Komisi; mengganti tertaut ke faktur lain sesudah slip paid = tertolak.
+- AC-KOM37-6: Rekap informatif masa sebelum tahap 3 dibuka dibaca ulang sesudah inti live: angka + label identik. Berubah diam-diam = MERAH.
+- AC-KOM37-7: Read-model saldo merekonsiliasi: untuk tiap faktur sampel, akrual − lawan − terbayar = saldo baris; selisih tanpa baris alasan = MERAH.
+- AC-KOM37-8: Penjual login membaca saldo/komisi penjual lain → tertolak server (scope). Nominal komisi tampil di ekspor laporan umum tanpa izin = MERAH.
+- Edge: faktur paid tanpa PPN (taxAmount 0) → basis = grandTotal penuh. Faktur paid tepat di batas tutup periode → akrual tanggal paid ditolak fail-closed, faktur tetap paid berlabel akrual tertunda-alasan (fisik antrean retry = Q-KOM3-4 Backend; menggeser tanggal jurnal = MERAH). Karyawan penerima berhenti sebelum komisi dibayar → saldo utang tetap tercatat atas namanya (pembayaran akhir lewat vonis/proses payroll existing; sistem tidak menghapus utang karena status karyawan berubah — perlakuan final Q-KOM3-5).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-037-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-037-S | Spec kontrak tahap 3 ini (dokumen) | Business | — |
+| (turunan) vonis koreksi akun utang komisi + konfirmasi nomor bebas dari COA penuh | Accountant | TEMUAN-037-A; tanpa nomor ini Backend dilarang seed | Q-KOM3-1 |
+| (turunan) PUTUSAN buka inti tahap 3 | Lead | G2 dinilai + vonis akun terbit | G1 |
+| (turunan) inti: subledger komisi + hook akrual/lawan satu-tx + mapping fail-closed + komponen payroll tertaut + read-model saldo | Backend | G1-G4; klaim `prisma/schema.prisma` di board dulu; implementasi 036-S lebih dulu | — |
+| (turunan) konsumen: saldo utang + riwayat per penjual + label terpisah dari rekap | Frontend | kontrak Backend final; UI tidak hitung komisi/PPh; grep e2e laporan/payroll terdampak sebelum commit | — |
+| (turunan) falsifikasi KOM3-1..7 + AC-KOM37-1..8 | QA | head Backend/Frontend persis | — |
+
+Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti → Frontend konsumen → QA. Effort usulan: inti L (subledger + dua hook jurnal + tautan payroll), UI S-M. Risiko: nomor akun warisan vonis lama terlanjur dipakai PKWT — mitigasi AC-KOM37-1; akrual dobel saat retry bayar — mitigasi BR-KOM37-03; rekap dibaca sebagai utang — mitigasi BR-KOM37-12.
+
+### 10. Pertanyaan terbuka
+
+- Q-KOM3-1 (Accountant, BUTUH-VONIS): nomor + nama akun Utang Komisi Penjualan pengganti 210207 (yang kini Utang Kompensasi PKWT F-132-V), dikonfirmasi dari COA penuh termasuk instalasi berjalan; sekalian tegaskan seed instalasi baru vs penambahan manual instalasi berjalan. Spec ini TIDAK menebak 210208 atau nomor lain.
+- Q-KOM3-2 (Backend, fisik): bentuk fisik subledger (model baru vs baris jurnal + tautan payroll murni) — spec mengikat minimum isi + kunci (faktur, penjual); fisik yang tidak bisa menjaga kumulatif lawan ≤ akrual dalam satu tx = tidak sah.
+- Q-KOM3-3 (Lead): tahap 3 tanpa approval manual (hak lahir dari dokumen) — diterima, atau ada ambang nominal persetujuan sebelum akrual/bayar? Default spec: tanpa approval baru (mengikuti vonis); menambah approval = putusan perilaku Lead.
+- Q-KOM3-4 (Backend): nasib faktur paid yang akrualnya tertolak periode terkunci — antrean retry berlabel vs tolak transisi bayar; pilih satu, kunci di tes (menggeser tanggal jurnal dilarang BR-KOM37-15).
+- Q-KOM3-5 (Accountant + Lead): penerima keluar/resign dengan saldo utang komisi belum terbayar atau negatif — jalur penyelesaian akhir (slip terakhir / penagihan manual berizin); sistem tidak menebak.
+
+### Yang TIDAK diusulkan run ini
+
+- Membuka tahap 3 sekarang: gerbang G1-G3 belum terpenuhi (TEMUAN-037-B); spec ini kontrak, bukan izin bangun.
+- Menjawab PPh 21/23 ulang: sudah divonis F-084-V §5 (karyawan TER via payroll; non-Employee di luar cakupan, bukan PPh 23). Mengulang pertanyaan ke Accountant = duplikasi vonis.
+- Penerima agen non-Employee, split multi-penjual, komisi per baris barang/kuantitas ala Accurate penuh: model terpisah bila kebutuhan bisnis terbukti (F-084-V §6).
+- Mengubah rekap informatif menjadi layar utang: read-model saldo terpisah (BR-KOM37-12).
+
+F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-038-S: pengiriman Statement Pelanggan via WhatsApp manual + jejak kirim (lanjutan eksplisit F-2026-10-25-025-S)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Lanjutan eksplisit dari bagian "Yang TIDAK diusulkan" F-2026-10-25-025-S: "Pengiriman statement ke pelanggan (email/WA/cetak massal terjadwal) — jalur pengiriman + jejak kirim = spec terpisah". Spec ini mengambil HANYA jalur WA manual + jejak kirim; email dan cetak massal terjadwal tetap di luar (lihat bagian terakhir). ID F-2026-10-25-038-S bebas terverifikasi run ini (2026-10-25 19:36 WIB): grep `F-2026-10-25-038` di backlog + board `origin/main` (`1b147d3c`) = 0; judul PR terbuka tertinggi 037-S (PR #887 backend payslip tidak memuat 038); maksimum terpakai tanggal ini = 037-S. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 1b147d3c) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Statement Pelanggan live penuh F-2026-10-21-032: builder murni `buildCustomerStatement` (`src/lib/reports/customer-statement.ts`), loader `loadCustomerStatement` (`src/lib/reports/customer-statement-data.ts`), halaman `src/app/(dashboard)/laporan/statement-pelanggan/[[...segments]]/page.tsx` digerbang `requirePermission("view_reports")`, registry PDF `"statement-pelanggan"` (`src/lib/reports/report-registry.ts`). Loader memilih pelanggan `select: { id, name }` saja — nomor telepon pelanggan TIDAK ikut dimuat halaman statement hari ini.
+- Kanal WA manual existing F-2026-10-20-27(a): `src/lib/utils/whatsapp.ts` — `normalizeWhatsappPhone` (08.. → 628.., tidak valid = null), `buildWhatsappMessage` (salam + status dokumen + plat + estimasi selesai), `buildWhatsappUrl` (wa.me + teks ter-encode; null bila nomor tidak bisa dipakai). API/gateway otomatis = F-27(b) ditunda-teknis, bukan bagian spec ini.
+- Tombol existing `WhatsappButton` (`src/components/reports/whatsapp-button.tsx`): tidak tampil bila URL null (nomor kosong/tidak valid), klik memanggil `recordWhatsappLinkOpened` fire-and-forget tanpa menahan navigasi.
+- Jejak klik existing F-2026-10-21-036: `recordWhatsappLinkOpened` (`src/actions/whatsapp-log.actions.ts`) menulis ActivityLog `whatsapp_link_opened` dengan metadata `{channel, event: "link_opened", surface}` TANPA nomor telepon/isi pesan; penjaga sesi + permission lihat per jenis dokumen; kegagalan catat tidak pernah menggagalkan navigasi. Jenis dokumen terdaftar hari ini HANYA `WorkOrder` (`view_work_orders`), `SalesInvoice` (`view_sales_invoices`), `Quotation` (`view_quotations`) — statement pelanggan BELUM terdaftar, inilah celah inti spec ini.
+- Master pelanggan punya kontak: `Customer.phone String?` + `Customer.email String?` (`prisma/schema.prisma` model Customer :390-391).
+- Aturan warisan yang mengikat spec ini: label jujur F-036 (yang tercatat = "Tautan WhatsApp dibuka", BUKAN pesan terkirim); BR-ST-07 spec 025-S (tanpa angka denda di statement — berlaku juga di isi pesan); definisi saldo statement beku (BR-ST-06 025-S).
+
+Gap terbukti (grep run ini):
+- Grep `WhatsappButton` / `buildWhatsapp` di halaman + kartu statement = 0: tidak ada tombol kirim apa pun di permukaan Statement Pelanggan.
+- `WHATSAPP_DOC_TYPES` tidak memuat jenis statement; memanggil `recordWhatsappLinkOpened` dengan modelType statement hari ini pasti ditolak "Jenis dokumen tidak dikenal" — jejak kirim statement tidak bisa dicatat tanpa perluasan kontrak.
+- Statement terikat PELANGGAN + PERIODE, bukan satu dokumen bernomor: ActivityLog existing berjangkar `(modelType, modelId)` per dokumen. ModelId statement = ID pelanggan adalah pemetaan paling jujur yang tersedia tanpa schema baru; periode kirim masuk metadata (bukan PII). Fisik final = Q-SW-2 Backend.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: admin/keuangan berizin `view_reports` di halaman Statement Pelanggan existing.
+
+1. Staf membuka statement satu pelanggan untuk satu periode (alur existing, tidak berubah).
+2. Bila pelanggan terpilih punya nomor telepon yang lolos `normalizeWhatsappPhone`, tampil tombol "Kirim WA" di kepala halaman/kartu statement dengan label jujur pendamping: tautan dibuka di aplikasi WhatsApp staf; sistem tidak mengirim dan tidak tahu pesan benar-benar terkirim.
+3. Klik tombol: (a) jejak `whatsapp_link_opened` dicatat fire-and-forget untuk statement ini (jenis dokumen baru, lihat BR-SW-02); (b) wa.me terbuka di tab baru dengan teks ringkas ter-isi (isi pesan dibatasi BR-SW-04).
+4. Staf meninjau teks di aplikasi WhatsApp sendiri, boleh mengubah/membatalkan di sana, lalu menekan kirim secara manual. Sistem TIDAK mengklaim terkirim, TIDAK menunggu konfirmasi, TIDAK mengubah status dokumen/piutang apa pun.
+5. Jejak tampil kembali sebagai riwayat baca-saja di halaman statement pelanggan yang sama: "Tautan WhatsApp dibuka — <waktu WIB> oleh <nama staf>" per klik, dihitung dari ActivityLog. Tidak ada status "terkirim/dibaca pelanggan" di mana pun.
+
+Dokumen masuk: statement existing (pelanggan + periode). Dokumen keluar: tautan wa.me ber-teks + baris jejak ActivityLog. Tanpa tulis finansial, tanpa jurnal, tanpa perubahan status faktur/piutang.
+
+### 2. Role/permission matrix (key nyata katalog `module-catalog.generated.ts`)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat statement (prasyarat semua aksi spec ini) | `view_reports` (:428) | TERVERIFIKASI-KODE |
+| Klik "Kirim WA" statement | reuse `view_reports` — halaman sudah digerbang key ini; penjaga jejak memeriksa key yang sama | USULAN (Q-SW-1 Lead bila minta key khusus) |
+| Lihat riwayat jejak kirim di halaman statement | `view_reports` (permukaan sama) | USULAN |
+| Key izin baru | TIDAK diusulkan tahap 1 | USULAN |
+| Kirim massal / terjadwal / via gateway | TIDAK ada — di luar spec | — |
+
+Catatan penjaga: pola existing `recordWhatsappLinkOpened` memeriksa permission LIHAT jenis dokumennya. Untuk statement, "dokumen" induknya adalah laporan pelanggan, jadi key penjaga yang konsisten = `view_reports`, bukan `view_customers`/`view_sales_invoices` (keduanya nyata di katalog :125/:148 tetapi melekat ke objek lain). Memilih key lain = Q-SW-1.
+
+### 3. Status-transition matrix
+
+Tidak ada status tersimpan baru dan tidak ada transisi dokumen: klik WA bukan peristiwa bisnis atas piutang. Satu-satunya "keadaan" adalah jejak turunan baca dari ActivityLog:
+
+| Keadaan tampil | Pemicu | Penjaga |
+|---|---|---|
+| Belum pernah dibuka | belum ada baris `whatsapp_link_opened` untuk pelanggan ini | — |
+| Tautan dibuka (per klik, bisa berulang) | klik tombol oleh staf berizin | sesi + `view_reports`; catat gagal ≠ batalkan navigasi |
+| Terkirim / dibaca pelanggan | TIDAK ADA — dilarang dikarang dari klik wa.me | BR-SW-01 |
+
+Setiap klik = satu baris jejak baru (riwayat, bukan penimpaan), mengikuti pola F-036.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-SW-01 | Label jujur mutlak: UI, jejak, dan laporan hanya boleh menyebut "Tautan WhatsApp dibuka". Klaim "terkirim/terbaca/sudah dihubungi" dari klik wa.me DILARANG di semua permukaan. | TERVERIFIKASI-KODE (warisan F-036) | whatsapp-log.actions.ts kepala kontrak; whatsapp-button.tsx |
+| BR-SW-02 | Jejak statement memakai jalur ActivityLog existing `whatsapp_link_opened`, diperluas SATU jenis dokumen statement: modelType berjangkar pelanggan, modelId = ID pelanggan, metadata `{channel: "whatsapp", event: "link_opened", surface, periodStart, periodEnd}` (tanggal periode, bukan PII). Nomor telepon, isi pesan, dan nama pelanggan TIDAK masuk metadata/deskripsi log. | USULAN | pola whatsapp-log.actions.ts; ActivityLog schema.prisma:5177 |
+| BR-SW-03 | Tombol hanya tampil bila pelanggan terpilih ada DAN `buildWhatsappUrl(phone)` tidak null. Nomor kosong/format tidak valid = tombol tidak tampil sama sekali (bukan tampil-mati), mengikuti perilaku `WhatsappButton` existing. Sistem tidak menebak nomor dari contactPerson/alamat. | TERVERIFIKASI-KODE (pola) + USULAN (penerapan) | whatsapp.ts normalize/buildUrl; whatsapp-button.tsx |
+| BR-SW-04 | Isi pesan WA statement dibatasi: salam + nama pelanggan + label periode statement + saldo akhir periode sesuai payload statement + kalimat penutup netral. DILARANG: angka denda (BR-ST-07 025-S), rincian per faktur di badan pesan, tautan unduh karangan, janji/ancaman penagihan. PDF statement TIDAK bisa dilampirkan lewat wa.me tahap ini — pesan menyatakan statement dapat diminta/dicetak, bukan berpura-pura melampirkan. | USULAN | BR-ST-07 025-S; buildWhatsappMessage pola |
+| BR-SW-05 | Angka di pesan = payload server statement yang sama dengan layar/PDF (saldo akhir + periode), tidak dihitung ulang di komponen/klien. Periode di pesan = periode statement yang sedang dibuka staf, bukan "bulan ini" karangan. | USULAN | BR-ST-06/BR-ST-08 025-S |
+| BR-SW-06 | Kegagalan mencatat jejak tidak pernah menahan/membatalkan pembukaan wa.me (fire-and-forget, pola existing). Sebaliknya tanpa sesi/izin, jejak ditolak tanpa log — dan karena tombol hanya lahir di halaman bergerbang `view_reports`, permukaan tanpa izin memang tidak pernah melihat tombol. | TERVERIFIKASI-KODE (pola) | whatsapp-log.actions.ts; page statement |
+| BR-SW-07 | Klik berulang sah dan tercatat berulang (staf boleh membuka ulang); riwayat menampilkan semua klik terbaru-dulu. Tidak ada dedup/idempotency yang menghapus riwayat klik — jejak adalah catatan percobaan buka, bukan dokumen finansial. | USULAN | pola riwayat F-036 |
+| BR-SW-08 | Tanpa gateway/API otomatis, tanpa antrean kirim, tanpa jadwal, tanpa kirim massal banyak pelanggan dalam tahap ini (F-27(b) ditunda-teknis tetap berlaku). Satu klik = satu pelanggan = satu periode. | TERVERIFIKASI-KODE (keputusan F-27) | whatsapp.ts kepala F-27(a)/(b) |
+| BR-SW-09 | Cakupan pelanggan: pelanggan nonaktif/terhapus mengikuti pilihan halaman existing (daftar aktif); statement pelanggan tanpa mutasi periode tetap boleh dibuka tautannya (saldo awal/akhir tetap bermakna) — tombol mengikuti keberadaan nomor, bukan keberadaan baris mutasi. | USULAN | halaman statement select isActive |
+| BR-SW-10 | Perluasan jenis dokumen jejak TIDAK mengubah perilaku tiga jenis existing (WorkOrder/SalesInvoice/Quotation): label, permission penjaga, dan metadata ketiganya byte-sama. | USULAN (kendala regresi) | WHATSAPP_DOC_TYPES existing |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Kirim tagihan ke WhatsApp pelanggan dari dokumen penjualan | Ada — kirim faktur via WhatsApp (pilih transaksi + kontak, kirim dari Accurate) https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/kirim-faktur-by-whatsapp/ | Tidak ditemukan fitur kirim WA setara pada halaman laporan piutang yang diakses run ini | Parsial: WA manual per dokumen WO/Faktur/Penawaran live (F-27(a)+F-036); statement = gap spec ini |
+| Laporan piutang per pelanggan incl. surat tagihan untuk pelanggan | Ada — Pernyataan Piutang (rujuk 025-S) | Ada — laporan piutang usaha: umur piutang, kartu piutang, mutasi piutang, surat tagihan untuk pelanggan; ekspor Excel/PDF/print https://help.zahironline.com/portal/id/kb/articles/melihat-laporan-piutang-usaha-zahir-online-v2 | Statement per pelanggan live (F-032); surat tagihan formal terpisah tidak diusulkan spec ini |
+| Jejak bahwa staf membuka jalur hubungi pelanggan | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada untuk 3 jenis dokumen (F-036); statement = perluasan spec ini |
+
+Catatan benchmark: kirim Accurate berjalan di dalam layanannya (bukan klik wa.me staf); ISF tahap ini sengaja TIDAK menyamai klaim itu — yang dibangun hanya jalur manual berjejak jujur (BR-SW-01/08).
+
+### 6. Acceptance criteria + edge cases (falsifikasi — untuk Backend/Frontend/QA)
+
+- AC-SW-B1: klik tombol statement menulis tepat satu ActivityLog `whatsapp_link_opened` berjangkar pelanggan dengan metadata berisi periode dan TANPA nomor telepon/isi pesan/nama pelanggan; grep/metadata memuat nomor telepon = MERAH.
+- AC-SW-B2: pemanggil tanpa sesi atau tanpa `view_reports` ditolak `{success:false}` dan tidak ada baris log lahir; mencatat diam-diam = MERAH.
+- AC-SW-B3: tiga jenis existing tidak berubah: klik WO/Faktur/Penawaran tetap memakai permission penjaga dan metadata semula; mengubah label/metadata ketiganya = MERAH.
+- AC-SW-B4: kegagalan tulis log (DB error disimulasikan) tetap mengembalikan jalur navigasi wa.me ke staf — aksi pencatat tidak melempar ke pemanggil; navigasi tertahan karena log = MERAH.
+- AC-SW-B5: dua klik = dua baris jejak (urutan waktu utuh); dedup yang menelan klik kedua = MERAH.
+- AC-SW-F1: pelanggan tanpa nomor / nomor tidak valid → tombol tidak tampil; tombol tampil dengan href mati = MERAH.
+- AC-SW-F2: teks pesan memuat nama pelanggan + label periode + saldo akhir persis payload server; memuat angka denda, rincian faktur karangan, atau saldo hitung-ulang klien = MERAH.
+- AC-SW-F3: tidak ada teks "terkirim/terbaca/sudah dihubungi" di tombol, toast, atau riwayat; label selain "Tautan WhatsApp dibuka" untuk jejak = MERAH.
+- AC-SW-F4: riwayat jejak di halaman statement hanya tampil untuk pemegang `view_reports` dan membaca ActivityLog apa adanya (waktu WIB + nama staf); UI mengarang status kirim dari jumlah klik = MERAH.
+
+Edge cases:
+- EC-SW-1: nomor berformat `08..`, `+62..`, spasi/strip — normalisasi mengikuti `normalizeWhatsappPhone` existing; di luar pola itu tombol hilang, bukan ditebak.
+- EC-SW-2: pelanggan diganti di pemilih sesudah halaman termuat — tombol dan pesan mengikuti pelanggan+periode yang sedang tampil, bukan yang sebelumnya.
+- EC-SW-3: statement periode lampau — pesan menyebut periode lampau itu persis (BR-SW-05); jejak mencatat periode yang sama.
+- EC-SW-4: saldo akhir nol/negatif (kelebihan bayar) — pesan tetap netral tanpa kata "tagihan" yang menekan; wording final = Q-SW-3.
+- EC-SW-5: staf membuka wa.me lalu batal mengirim di aplikasi WA — sistem tetap hanya punya jejak "dibuka"; tidak ada koreksi status apa pun (konsekuensi jujur BR-SW-01).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-038-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-038-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-038-B1 | Perluasan kontrak jejak: satu jenis statement di jalur `recordWhatsappLinkOpened` (jangkar pelanggan, metadata periode tanpa PII, penjaga `view_reports` per Q-SW-1); builder pesan statement murni; loader memuat nomor pelanggan untuk halaman statement; tes AC-SW-B1..B5 | Backend | Q-SW-1 Lead + Q-SW-2 fisik |
+| F-2026-10-25-038-F1 | Tombol "Kirim WA" + label jujur + riwayat jejak di halaman/kartu statement; teks verbatim payload server; AC-SW-F1..F4; grep e2e laporan sebelum commit | Frontend | Kontrak B1 |
+| F-2026-10-25-038-Q1 | Falsifikasi AC-SW-B1..B5 + F1..F4 atas head persis (cabut penjaga MERAH, PII masuk log MERAH, klaim terkirim MERAH) | QA | B1+F1 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SW-1 (Lead, perilaku inti): key penjaga klik statement — reuse `view_reports` (rekomendasi Business, konsisten permukaan laporan) atau key khusus baru? Tanpa putusan ini Backend tidak mulai.
+- Q-SW-2 (Backend, fisik): bentuk perluasan jenis dokumen (entri peta baru vs jalur khusus statement) + cara loader halaman statement memuat `phone` pelanggan terpilih tanpa mengubah payload builder statement.
+- Q-SW-3 (Lead): wording pesan untuk saldo nol/negatif (EC-SW-4) — kalimat netral final disahkan Lead; Business tidak mengarang nada penagihan.
+- Accountant: TIDAK diminta tahap ini (tanpa uang/pajak/jurnal/denda baru; BR-ST-07 tetap menahan angka denda — membuka denda di pesan atau pengiriman massal terjadwal = vonis Accountant + putusan Lead baru, spec terpisah).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-038-S)
+
+- Gateway/API WhatsApp otomatis (F-27(b) ditunda-teknis), kirim terjadwal/berkala, kirim massal ke banyak pelanggan, template pesan terpusat yang bisa diedit admin.
+- Klaim status terkirim/dibaca, tanda terima pelanggan, atau perubahan status piutang akibat pengiriman.
+- Lampiran PDF statement lewat wa.me (wa.me tidak membawa lampiran berkas dari sistem; menjanjikannya = klaim palsu).
+- Pengiriman via email — kanal + jejak berbeda, spec terpisah bila diminta.
+- Angka denda/penalti di pesan maupun statement (BR-ST-07), surat tagihan formal ala Zahir sebagai dokumen tersendiri.
+
+F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---

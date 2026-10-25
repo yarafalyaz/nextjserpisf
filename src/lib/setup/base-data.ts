@@ -379,6 +379,11 @@ export const PERMISSIONS = [
       // Approval permissions terpisah dari edit_* (Separation of Duties).
       "approve_vendor_payments",
       "approve_purchase_returns",
+      // F-2026-10-25-012-S: menyelesaikan retur penjualan (stok+jurnal)
+      // wajib izin khusus ini; edit_sales_returns saja tidak cukup.
+      // Grant mengikuti pola approve_purchase_returns: hanya admin/
+      // super_admin lewat katalog penuh, role lain diberi eksplisit.
+      "approve_sales_returns",
       // Approving/disbursing an employee loan gets its own permission. It used
       // to reuse "create_loans" in both approval.actions.ts and the status
       // workflow route, so whoever could raise a loan could also approve and
