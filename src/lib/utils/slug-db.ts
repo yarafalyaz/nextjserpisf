@@ -98,6 +98,7 @@ const SLUGGED_MODELS = {
   payroll: "payroll",
   employeeLoan: "employeeLoan",
   probationReview: "probationReview",
+  employeeDisciplinaryRecord: "employeeDisciplinaryRecord",
   contractDecisionRequest: "contractDecisionRequest",
   lead: "lead",
   crmTicket: "crmTicket",
