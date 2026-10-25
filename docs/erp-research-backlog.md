@@ -30824,6 +30824,115 @@ Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti �
 
 F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
 
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-039-V: koreksi akun utang komisi Q-KOM3-1 — 210207 gugur (PKWT), nomor final 210212 "Utang Komisi Penjualan"; 210208 DILARANG (jatah terminasi F-005-V); 210210/210211 DILARANG (jatah PPh 21/BPJS F-020-V); mapping fail-closed (jawaban Q-KOM3-1 spec F-2026-10-25-037-S PR #884 merged; Q-KOM3-2 uang/PPh dijawab eksplisit per F-084-V §5)
+
+> **Slot**: F-2026-10-25-039-V. Kartu: t_8aa0c163. Diperiksa bentrok 2026-10-25 19:53-20:05 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-039` di backlog + board origin/main = 0/0; grep `F-2026-10-25-039-V` = 0. Catatan ID: 039-S SUDAH TERPAKAI spec Business riwayat harga penawaran (PR #891 OPEN, `hermes/business-f039-quote-price`) — akhiran beda (-S spec vs -V vonis), pola sama dengan -084-S/-084-V berdampingan. Bila Lead mau renumber demi kerapian, ganti seluruh rujukan blok ini sekaligus, jangan setengah. Dokumen vonis saja; TANPA kode/schema/migrasi; TANPA merge (PR vonis tanpa merge sesuai kartu); tahap 3 tetap TERTUTUP (lihat §7).
+
+### 0. Putusan ringkas
+
+1. **Akun kredit utang komisi penjualan FINAL = `210212` "Utang Komisi Penjualan"** (tipe OCLY, induk `2102` "Kewajiban Jangka Pendek Lainnya"). Nomor ini menggantikan 210207 pada F-2026-10-22-084-V §2 butir 2, yang GUGUR karena 210207 sudah ter-seed sebagai "Utang Kompensasi PKWT" (F-2026-10-24-132-V, merged). F-084-V §2 butir 2 dinyatakan TERKOREKSI oleh vonis ini; sisa F-084-V (titik akrual, rumus, retur, PPh §5, larangan §6) TIDAK berubah.
+2. **210208 DILARANG untuk komisi** — sudah dialokasikan vonis F-2026-10-25-005-V (sudah di main, board 3036dbd3) sebagai "Utang Pesangon & Hak Berhenti" (jalur terminasi Pasal 52; Putusan 2/4 uang berhenti). Belum ter-seed di `base-data.ts` bukan berarti bebas: alokasi vonis mengikat lebih dulu daripada ketiadaan baris seed. Mengambil 210208 untuk komisi mencampur kewajiban berhenti (rezim UU Ketenagakerjaan/PP 35/2021) dengan utang komisi penjualan — pelanggaran yang sama persis dengan kasus 210207.
+3. **210210 dan 210211 DILARANG untuk komisi** — sudah dialokasikan vonis F-2026-10-25-020-V (Putusan 5, koreksi alokasi 2026-10-25 14:04 WIB yang lolos verdict QA sesudah tabrakan 210208/210209 ditolak): 210210 "Utang PPh 21 Karyawan", 210211 "Utang Iuran BPJS Karyawan". Mencuri salah satunya mengulang tabrakan yang baru saja dibayar mahal run ini.
+4. **Mapping fail-closed**: `commissionExpenseAccountId` + `commissionPayableAccountId` di SystemSetting, nullable, tanpa default tebakan; seed instalasi baru menunjuk 600002 / 210212; kosong/nonaktif/salah tipe = posting DITOLAK berisik, nol jurnal setengah. Fallback ke 210204/210205/210206/210207/210208/210209/210210/210211 DILARANG mutlak (§3).
+5. **Q-KOM3-2 (uang/PPh)**: perlakuan sudah divonis F-084-V §5 — akrual bruto penuh, PPh 21 TIDAK dipotong saat akrual, komisi menjadi penghasilan Employee pada masa DIBAYAR lewat payroll (TER gabungan se-masa, PMK 168/2023). Vonis ini menegaskan ulang + menutup celah penamaan (§5). Fisik subledger tetap milik Backend (Q-KOM3-2 spec = fisik, di luar vonis uang).
+6. **Yang TIDAK dibuka vonis ini**: jurnal/akrual komisi tetap DILARANG dibangun sampai PUTUSAN Lead G1 terbit (F-084-V G1 + spec 037-S §6). Vonis ini hanya menutup gerbang (a) Q-KOM3-1; gerbang (b) Lead G1 dan G2 (inti 036-S live) belum terpenuhi. Backend DILARANG menulis hook akrual, seed akun, atau mapping komisi berdasar vonis ini saja — seed 210212 + mapping hanya sah sebagai satu paket dengan inti sesudah G1 (lihat §6), supaya akun yatim tanpa penjaga fail-closed tidak lahir lebih dulu.
+
+### 1. Bukti live origin/main 1b147d3c (2026-10-25 19:53-20:05 WIB, run ini)
+
+TERVERIFIKASI-KODE — katalog `CHART_OF_ACCOUNTS` di `src/lib/setup/base-data.ts`, dibaca penuh pada rentang induk 2102 (baris 845-936), bukan potongan:
+
+| Kode | Nama akun di katalog | Sumber |
+|---|---|---|
+| 210201 | PPN Keluaran | base-data.ts:878 |
+| 210202 | PPh 23 Pembelian | base-data.ts:880 |
+| 210203 | Hutang Pembelian Belum Ditagih | base-data.ts:863 |
+| 210204 | Hutang Gaji | base-data.ts:907 |
+| 210205 | Provisi Garansi | base-data.ts:913 (komentar baris 915: DILARANG reuse untuk pajak) |
+| 210206 | Utang PPh 4(2) Sewa Tanah/Bangunan | base-data.ts:916 (F-041) |
+| 210207 | Utang Kompensasi PKWT | base-data.ts:930 (F-2026-10-24-132-V) |
+| 210208 | — tidak ada baris seed — | dialokasikan F-2026-10-25-005-V "Utang Pesangon & Hak Berhenti" (backlog:18223 "210208 bebas" per vonis itu; :18399/:27842 akun baru 210208; board:72 "seed 210208/termination*" — sudah di main) |
+| 210209 | Utang Reimbursement Karyawan | base-data.ts:934 (F-2026-10-25-018-V) |
+| 210210 | — tidak ada baris seed — | dialokasikan F-2026-10-25-020-V "Utang PPh 21 Karyawan" (backlog:28088-28102, koreksi alokasi lolos verdict QA) |
+| 210211 | — tidak ada baris seed — | dialokasikan F-2026-10-25-020-V "Utang Iuran BPJS Karyawan" (backlog:28105) |
+| **210212** | **— tidak ada di katalog, backlog, src, prisma, migrasi —** | **FINAL vonis ini: "Utang Komisi Penjualan"** |
+
+- Bukti bebas 210212: `grep -rn "210212"` di seluruh worktree origin/main (backlog, board, `src/**/*.ts`, `prisma/**`, migrasi) = 0 hasil kode (hanya nol; satu-satunya pola "2102xx" lain di repo = data alamat CSV wilayah, bukan COA). Pemeriksaan sama untuk 210213/210214 juga 0 — 210212 dipilih sebagai nomor bebas terendah sesudah alokasi terakhir (210211), menjaga urutan kronologis jatah 2102xx tetap terbaca: 208 terminasi, 209 reimbursement, 210 PPh 21, 211 BPJS, 212 komisi.
+- Debit beban: 600002 "Beban Komisi" (EXPS, induk 6000) ADA di base-data.ts:834 — existing, dipakai apa adanya (F-084-V §2 butir 1 tetap). Dilarang membuat akun Beban Komisi kedua.
+- Mapping komisi belum ada: `grep commissionPayable|commissionExpense` di `prisma/schema.prisma` + `src` = 0. Pola acuan yang wajib ditiru: `pkwtCompensationPayableAccountId Int?` nullable (schema.prisma:304) + automap kode-persis-didahulukan (account-automap.ts:204 `pkwtCompensationPayableAccountId` groups `[["210207"],...]`) + reimbursement 210209 (account-automap.ts baris sesudahnya, F-018-V). F-084-V §2 butir 2-3 merujuk nomor lama di tiga tempat (seed 210207, larangan fallback); ketiganya terbaca TERKOREKSI ke 210212 oleh vonis ini.
+- PR #884 (spec 037-S) live MERGED, mergeCommit `0fcd67af` (2026-10-25 19:28 WIB) — premis kartu terkonfirmasi.
+
+### 2. Akun final (keputusan)
+
+| Peran jurnal | Kode | Nama persis (seed) | Tipe | Induk |
+|---|---|---|---|---|
+| Debit akrual | 600002 | Beban Komisi (existing, JANGAN buat ulang) | EXPS | 6000 |
+| Kredit akrual / debit bayar-slip | **210212** | **Utang Komisi Penjualan** | OCLY | 2102 |
+
+Alasan: (a) satu kewajiban satu akun — komisi penjualan adalah utang ke Employee-penjual yang lahir dari faktur `paid`, beda rezim, beda subledger, beda jalur bayar dari kompensasi PKWT (peristiwa berhenti PKWT), pesangon (peristiwa berhenti), reimbursement (klaim biaya), dan utang pajak/BPJS (kewajiban ke negara/badan); mencampur satu pun merusak rekonsiliasi keduanya. (b) Nomor lanjutan 2102xx menjaga semua utang jangka pendek lain-lain tetap satu induk 2102 untuk neraca. (c) Nama "Utang Komisi Penjualan" mempertahankan nama yang sudah diputus F-084-V §2 — yang berubah hanya nomor, supaya rujukan spec 037-S/BR-KOM37-05 tetap terbaca.
+
+Posting matrix (mengikat, warisan F-084-V §2-§4 dengan nomor terkoreksi):
+
+| Event | Debit | Kredit | Nominal | Syarat |
+|---|---|---|---|---|
+| Akrual (faktur transisi ke `paid`, snapshot lengkap, hasil > 0) | 600002 | 210212 | `safeRound(DPP × persenSnapshot/100)` sen; DPP = `grandTotal − taxAmount` snapshot | satu tx dengan transisi paid; `assertPeriodOpen(tanggalPaid, tx)`; idempoten per (salesInvoiceId, salesEmployeeId) |
+| Jurnal lawan retur `completed` | 210212 | 600002 | `returnDpp snapshot × persenSnapshot faktur asal` | masa retur (tanggal retur completed); kumulatif lawan ≤ akrual faktur itu; jurnal asal tidak disentuh |
+| Reversal batal faktur sesudah paid | mekanisme reversal repo (lawan penuh) | — | akrual penuh | asal → REVERSED; periode terbuka |
+| Bayar via slip payroll (komponen komisi tertaut subledger) | 210212 | komponen payroll (pola `onPayrollPaid` existing) | nominal komponen di slip | beban TIDAK diakui kedua kali; PPh 21 TER atas gabungan bruto masa bayar (§5) |
+
+### 3. Aturan mapping (fail-closed, mengikat Backend)
+
+1. Dua field SystemSetting BARU: `commissionExpenseAccountId Int?` + `commissionPayableAccountId Int?`. Nullable. TANPA nilai default di schema, TANPA tebakan di kode.
+2. Seed instalasi BARU: tambahkan baris katalog `["210212", "Utang Komisi Penjualan", "OCLY", "2102"]` di base-data.ts (kelompok 2102xx, sesudah 210209) + seed mapping menunjuk akun hasil resolusi kode 600002 / 210212. Seed TIDAK BOLEH menunjuk nomor selain itu.
+3. Instalasi BERJALAN (sudah live sebelum fitur ini): akun 210212 TIDAK otomatis ada. Jalur sah satu-satunya = admin Finance membuat akun 210212 "Utang Komisi Penjualan" (OCLY/2102) lewat master COA lalu mengisi kedua mapping di Pengaturan, ATAU rilis migrasi/seed idempoten Backend yang menambahkan akun bila kode belum ada (fisik = Backend, wajib idempoten per kode akun, bukan per nama). Selama mapping kosong: fitur komisi tahap 3 dalam keadaan mati-berisik (butir 4), BUKAN mati-diam.
+4. Penjaga posting (di service akrual/lawan/bayar, di dalam tx yang sama): resolusi kedua mapping WAJIB lolos semua — (i) tidak null; (ii) akun ada dan aktif; (iii) akun debit bertipe beban (EXPS) dan akun kredit bertipe kewajiban jangka pendek lain (OCLY); (iv) kedua akun berbeda. Satu gagal = lempar error berisik berisi arahan ("mapping akun komisi belum diatur / tidak valid — isi di Pengaturan sebelum posting komisi"), NOL jurnal tertulis, NOL baris subledger setengah. Empat status tetap terpisah: faktur tetap boleh `paid` (status pembayaran sah), yang ditolak hanya jurnal akrualnya — sesuai pola periode-terkunci BR-KOM37-15/Q-KOM3-4 (fisik antrean retry = Backend, di luar vonis ini).
+5. DILARANG fallback dalam bentuk apa pun: membaca 210204/210205/210206/210207/210208/210209/210210/210211 sebagai pengganti mapping kosong; menebak akun dari nama mirip; memakai akun beban/kewajiban "terdekat". Automap (pola account-automap.ts) BOLEH ditambah untuk dua key ini dengan kode persis didahulukan (`[["600002"],...]` / `[["210212"],...]`) sebagai SARAN pengisian admin — automap bukan izin posting: posting tetap membaca mapping tersimpan, dan automap yang menghasilkan akun nonaktif/salah tipe tetap ditolak butir 4.
+6. Akun 210212 hasil mapping WAJIB divalidasi terhadap katalog berjalan, bukan terhadap nomor hardcode: penjaga memeriksa mapping → akun aktif → tipe, BUKAN `code === "210212"`. Perusahaan yang menomori ulang COA-nya tetap sah selama mapping menunjuk akun OCLY aktif miliknya. (Nomor 210212 mengikat SEED bawaan, bukan logika posting.)
+
+### 4. Koreksi eksplisit atas F-084-V (supaya tidak ada dua kebenaran)
+
+- F-084-V §2 butir 2 ("Kredit: akun BARU 210207") → BATAL, diganti §2 vonis ini (210212). Alasan pembatalan tercatat di backlog:18410/27844 pola sama (alokasi berubah sesudah vonis lain merged lebih dulu) — bukan kesalahan hitung F-084-V; 210207 memang bebas pada 2026-10-22, lalu dipakai sah oleh F-132-V 2026-10-24.
+- KOM3-1 (F-084-V §7, "Cr 210207 220.000") terbaca "Cr 210212" mulai vonis ini. KOM3-2 larangan fallback diperluas: 210204/210205/210206/210207/210208/210209/210210/210211.
+- Spec 037-S BR-KOM37-05/§2/§9 Q-KOM3-1: terjawab oleh vonis ini; rujukan "akun kredit hasil Q-KOM3-1" di spec itu = 210212.
+
+### 5. Q-KOM3-2 — perlakuan uang/PPh bayar via payroll (jawaban eksplisit)
+
+Sudah divonis F-084-V §5 berdasar PMK 168/2023 (berlaku 1 Jan 2024; PDF resmi DJP https://pajak.go.id/sites/default/files/2024-02/PMK%20168%20Tahun%202023%20Tentang%20PPh%20Pasal%2021%20TER.pdf, diakses 2026-10-22 — register pajak existing, tidak di-riset ulang run ini). Vonis ini MENEGASKAN, bukan membuka ulang:
+
+1. **Kapan utang menjadi penghasilan Employee**: bukan saat akrual. Akrual (Dr 600002 / Cr 210212) mencatat beban + utang perusahaan sebesar hak bruto snapshot — belum ada penghasilan terutang pajak di tangan karyawan. Penghasilan lahir pada masa komponen komisi DIBAYARKAN lewat slip payroll masa itu; pada titik itu utang terdebit (Dr 210212) dan nominal komisi masuk bruto slip masa bayar.
+2. **PPh 21**: dipotong pemberi kerja HANYA saat bayar, dihitung TER atas GABUNGAN penghasilan bruto masa bayar (gaji + komisi + komponen teratur/tidak teratur lain se-masa), mengikuti rezim status penerima existing (Pegawai Tetap TER kategori; hitung ulang masa pajak terakhir/Desember per Pasal 8/10 PMK 168/2023 — pola F-027/F-026 payroll existing). Komisi tidak punya tarif sendiri, tidak dipisah dari slip, dan TIDAK dipotong saat akrual — mengkredit utang neto-PPh saat akrual DILARANG (utang tercatat harus hak bruto penerima sebenarnya). Masa pajak PPh 21 = masa slip pembayar, diturunkan dari periode slip terstruktur, bukan tanggal akrual dan bukan input bebas.
+3. **Bukan PPh 23, bukan PPN**: penerima Employee → PPh 21 (PMK 168/2023 Pasal 5 ayat (1) huruf a). Penerima non-Employee (agen) = PPh 21 Bukan Pegawai Pasal 5 ayat (1) huruf e (50% × bruto × Pasal 17) dan DILARANG dibayar lewat tahap 3 ini — model penerima tahap 3 = Employee snapshot saja; kebutuhan agen = vonis/kartu terpisah. Komisi karyawan bukan objek PPN; tidak ada TaxInvoice dari pembayaran komisi.
+4. **BPJS**: mengikuti F-084-V §6 apa adanya — komisi tidak tetap tidak masuk basis upah rutin; komisi bersifat tetap berkala = BUTUH-VONIS baru, tidak diputus di sini.
+5. Konsekuensi subledger (mengikat kontrak spec 037-S §2/W5-W7, fisik Backend): baris komisi tertaut slip pembayar; slip `paid` mengurangi saldo 210212 per penerima persis nominal komponen; retur sesudah terbayar → lawan tetap terbit, saldo penerima boleh negatif tercatat, pulih lewat potongan proses payroll berikutnya berizin — tanpa clamp 0, tanpa tarik kas otomatis. Penerima berhenti sebelum dibayar (Q-KOM3-5 spec): utang TETAP tercatat atas namanya; penyelesaian akhir lewat slip terakhir/proses payroll existing atau penagihan manual berizin di luar sistem — vonis ini tidak mengarang jalur hapus utang; keputusan aktivasi jalur itu = Lead + Accountant pada kartu fisiknya, BUKAN prasyarat nomor akun ini.
+
+### 6. Batas build per bot (sesudah vonis ini)
+
+- **BOT Lead**: vonis ini menutup gerbang (a) Q-KOM3-1 saja. Buka inti (G1) tetap keputusanmu sesudah G2 (inti 036-S) live dinilai. PR vonis ini TANPA merge dari Accountant — merge milik Lead.
+- **BOT Backend**: DILARANG bangun sebelum G1. Sesudah G1, paket fisik minimum: baris katalog 210212 + dua mapping nullable + penjaga §3 butir 4 + automap saran kode-persis + hook akrual/lawan/bayar satu-tx + subledger per (faktur, penjual). Klaim `prisma/schema.prisma` di board sebelum edit. Urutan dalam paket itu bebas, tetapi seed akun/mapping TIDAK BOLEH merged terpisah lebih dulu tanpa penjaga fail-closed-nya (akun yatim yang bisa diposting manual tanpa penjaga = celah).
+- **BOT Business**: workflow tetap spec 037-S; tidak ada jalur bayar komisi di luar payroll untuk karyawan; jangan rancang slip komisi terpisah.
+- **BOT Frontend**: belum ada permukaan baru dari vonis ini. Kelak: saldo utang komisi dari read-model Backend apa adanya; UI tidak hitung komisi/PPh.
+- **BOT QA**: falsifikasi §7 atas head inti persis.
+
+### 7. Falsifikasi wajib BOT QA (syarat buka; tiap butir harus bisa MERAH)
+
+Mewarisi KOM3-1..7 (F-084-V §7, nomor terbaca per §4 vonis ini) + AC-KOM37-1..8 (spec 037-S §8) apa adanya; delta mengikat vonis ini:
+
+- QA-KOM39-1: Katalog seed memuat tepat satu baris 210212 "Utang Komisi Penjualan" (OCLY, induk 2102); mutasi nomor seed ke 210207/210208/210210/210211 atau nama berbeda → MERAH. Grep statis: nol rujukan kode/tsx ke `210207` pada jalur komisi (akrual/lawan/bayar/automap komisi).
+- QA-KOM39-2: `commissionPayableAccountId` null (dan varian: akun nonaktif; akun bertipe bukan OCLY; mapping debit = akun kredit yang sama) → transisi paid menolak jurnal akrual berisik, NOL jurnal, NOL baris subledger; faktur sendiri tetap `paid`. Cabut penjaga mapping → jurnal terbit → MERAH (inilah falsifikasi inti kartu ini).
+- QA-KOM39-3: Mapping diisi paksa menunjuk 210207 (akun PKWT aktif bertipe OCLY — lolos cek tipe!) → akrual komisi TETAP tidak boleh melahirkan jurnal yang mengkredit akun yang sedang dipakai rezim PKWT? TIDAK — penjaga §3 butir 6 sengaja berbasis mapping+tipe, bukan nomor hardcode. Butir uji yang benar: (a) seed + automap default TIDAK PERNAH menghasilkan 210207 untuk key komisi (grep statis pola automap komisi = hanya 210212); (b) jurnal komisi pada instalasi seed-standar mengkredit 210212 persis. Admin yang SENGAJA memetakan ke akun OCLY aktif lain menanggung konfigurasi itu sebagai kebijakan instalasinya — dicatat sebagai keterbatasan sadar vonis ini (pola sama dengan semua mapping repo), BUKAN lubang fallback: fallback = sistem memilih tanpa mapping; di sini sistem tidak memilih apa pun.
+- QA-KOM39-4: Jurnal akrual/lawan/bayar-slip sampel direkonsiliasi: Σ kredit 210212 POSTED − Σ debit 210212 POSTED = Σ saldo subledger per penerima; satu jurnal komisi menyentuh 210204/210205/210206/210207/210208/210209/210210/210211 pada instalasi seed-standar = MERAH (regresi TEMUAN-037-A).
+- QA-KOM39-5: Akrual mengkredit bruto penuh (contoh KOM3-1: DPP 11.000.000 × 2% = 220.000 kredit 210212, PPh terpotong Rp0 pada jurnal akrual); potongan PPh 21 muncul HANYA di jurnal slip masa bayar sebagai bagian TER gabungan — PPh di jurnal akrual atau akrual neto = MERAH.
+- QA-KOM39-6: Instalasi berjalan simulasi (katalog tanpa 210212, mapping kosong): seluruh jalur komisi tahap 3 mati-berisik dengan pesan arahan Pengaturan; nol jurnal, nol utang karangan; sesudah admin membuat akun + mengisi mapping, akrual pertama terbit normal ke akun ter-mapping.
+
+### 8. Yang TIDAK diputus vonis ini
+
+- Buka/tutup tahap 3: tetap TERTUTUP. PUTUSAN Lead G1 belum ada; inti 036-S belum live (G2). Vonis ini bukan izin bangun, bukan izin seed, bukan izin merge inti.
+- Q-KOM3-2 fisik subledger, Q-KOM3-3 approval manual, Q-KOM3-4 antrean retry periode terkunci: tetap pemiliknya masing-masing di spec 037-S §10 (Backend/Lead). Jawaban uang Q-KOM3-2 di §5 vonis ini mengikat perlakuan; bentuk fisik tidak diputus di sini.
+- Tarif/persen komisi, basis DPP, snapshot: F-056-V/F-058-V/036-S — tidak dibuka ulang.
+- Penerima agen non-Employee, split multi-penjual, komisi per baris barang: di luar tahap 3 (F-084-V §6 tetap).
+
+Label bukti: TERVERIFIKASI-KODE (katalog base-data.ts, schema, automap, grep 210212=0 di origin/main `1b147d3c`, run ini); TERVERIFIKASI-VONIS (alokasi 210208 F-005-V, 210210/210211 F-020-V, 210209 F-018-V, 210207 F-132-V — dari backlog origin/main); REGULASI via vonis existing (PMK 168/2023 Pasal 5/8/10, dikutip F-084-V §5 — bukan riset regulasi baru run ini); KEBIJAKAN INTERNAL (nomor 210212, nama akun, aturan mapping fail-closed — keputusan desain ISF, bukan klaim regulasi). Klaim kepatuhan: perlakuan internal ISF berdasar sumber di atas; bukan penetapan DJP atas kasus perusahaan nyata.
+
+F-2026-10-25-039-V — Koreksi akun utang komisi Q-KOM3-1: 210212 "Utang Komisi Penjualan" final; 210207/210208/210210/210211 dilarang untuk komisi; mapping fail-closed tanpa fallback. Status: VONIS TERBIT run ini; tahap 3 TETAP TERTUTUP menunggu PUTUSAN Lead G1 + inti 036-S live (G2). Pemilik berikutnya: Lead (merge PR vonis + G1) → Backend (paket fisik §6 sesudah G1) → Frontend (konsumen) → QA (QA-KOM39-1..6 + KOM3 + AC-KOM37).
 ---
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-038-S: pengiriman Statement Pelanggan via WhatsApp manual + jejak kirim (lanjutan eksplisit F-2026-10-25-025-S)
