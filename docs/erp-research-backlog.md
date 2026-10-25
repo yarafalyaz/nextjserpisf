@@ -32151,3 +32151,243 @@ TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
 Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
 Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
 (falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-047-S: audit keselarasan antrean follow-up lead terjadwal lewat (F-2026-10-21-037 SUDAH live penuh; sisa gap = status terminal + cakupan per-sales)
+
+> **Slot**: F-2026-10-25-047-S. Diperiksa bentrok 2026-10-25 22:04 WIB vs `origin/main` (`702853a1`): grep `F-2026-10-25-047` di backlog + board main = 0/0; loop semua branch remote `hermes/*` = 0; PR terbuka berjudul 047 = 0. ID 047 bebas. Dokumen saja; tanpa kode/schema/migrasi; tanpa merge (merge milik Lead).
+>
+> **Premis kartu terbukti basi live, dicatat jujur**: kartu memerintahkan spec read-model BARU untuk gap F-2026-10-21-037 (k) dengan dugaan builder `lead-followups` ABSEN. Verifikasi run ini membuktikan sebaliknya: builder + loader + kartu UI + tes SUDAH live penuh di main (PR #314), dan jalur tulis penanda selesai (hilir F-037) juga sudah live lewat spec F-2026-10-25-008-S. Menulis ulang spec yang sama = duplikasi terlarang. Entri ini karena itu berbentuk AUDIT KESELARASAN 7 bagian atas implementasi existing (membekukan kontrak yang sudah berjalan supaya tidak ditafsir ulang) + sisa gap yang benar-benar belum diputus. Bukan duplikat F-037 maupun F-008-S.
+
+### 0. Inventarisasi terverifikasi (TERVERIFIKASI-KODE, origin/main 702853a1, 2026-10-25 22:04 WIB)
+
+Sudah live penuh (F-2026-10-21-037 tuntas, bukan PARSIAL lagi — status "PARSIAL" di entri F-037 lama baris ±2871 adalah keadaan saat entri itu ditulis):
+
+- Model `Lead` (`prisma/schema.prisma:4306`): `status String @default("new")`, `assignedTo Int?`, `deletedAt DateTime?`, relasi `activities LeadActivity[]`. Nilai status berjalan di halaman: `new/contacted/qualified/proposal/won/lost` (`crm/leads/page.tsx` statusChips).
+- Model `LeadActivity` (`prisma/schema.prisma:4341`): `leadId Int` (FK wajib, `onDelete: Cascade` — aktivitas tanpa lead TIDAK MUNGKIN secara skema), `scheduledAt DateTime?` (`scheduled_at`), `completedAt DateTime?` (`completed_at`), `type`, `subject`, `userId Int?`.
+- Builder murni `src/lib/reports/lead-followups.ts` (101 baris): `buildLeadFollowups(inputs, now)` — per lead jadwal terawal dengan `scheduledAt` tidak kosong + `completedAt` kosong + hari kalender WIB `scheduledAt <=` hari ini; `overdueDays >= 0`; urut overdue terbesar, seri `leadNumber` lalu `leadId`. Tanpa filter status (status hanya ditampilkan di baris).
+- Loader `src/lib/reports/lead-followups-data.ts`: `getLeadFollowups(now)` — SATU query massal `prisma.lead.findMany({ where: { deletedAt: null } })` lengkap aktivitas (tanpa N+1, tanpa filter status).
+- Kartu UI `src/components/reports/lead-followups-card.tsx`: `aria-label="Jadwal follow-up lewat"`, judul "Jadwal follow-up lewat", sembunyi total bila 0 baris; kolom No. Prospek/Nama/Status/Jadwal Follow-up/Terlambat ("Hari ini" bila 0).
+- Konsumen: `src/app/(dashboard)/crm/leads/page.tsx:14-15,61,96` — halaman di balik `requirePermission("view_leads")`.
+- Tes: `src/lib/reports/__tests__/lead-followups.test.ts` (builder 6 kasus + loader 1 kasus) dan `src/components/reports/__tests__/lead-followups-card.test.tsx`.
+- Jalur tulis hilir (F-2026-10-25-008-S, sudah live): `completeLeadActivity`/`reopenLeadActivity` di `src/actions/crm.actions.ts` — gerbang `edit_leads` + penjaga kepemilikan pola convertLead, klaim atomik `updateMany` bersyarat, hanya aktivitas ber-`scheduledAt` yang bisa ditandai selesai; konsumen tombol di `lead-actions.tsx`. Antrean karena itu BISA dibersihkan secara sah.
+- Penulis `scheduledAt`: `addLeadActivity` (`crm.actions.ts:354-356`) menyimpan dateOnly tervalidasi sebagai tengah-malam UTC WIB (`wibDateToUtcMidnight`); tanggal fiktif (2026-02-30) ditolak tanpa tulis DB (tes `crm.actions.test.ts:202-217`).
+- Saudara yang TIDAK boleh dicampur: `stale-leads.ts` (F-2026-10-20-29(a)) mengukur aktivitas TERAKHIR untuk status `new/contacted` saja, ambang 7 hari — makna "Lead diam", bukan jadwal. `quotation-followup-queue.ts` = antrean follow-up PENAWARAN, objek beda.
+
+Sisa gap terverifikasi (yang dibekukan entri ini sebagai pertanyaan, bukan ditebak):
+
+- GAP-047-A: lead berstatus terminal `won`/`lost` (dan `convertedAt` terisi) TETAP masuk antrean bila punya aktivitas terjadwal belum selesai — perilaku ini DIKUNCI tes existing (`lead-followups.test.ts:119-125` "status apa pun tampil apa adanya"). Belum ada putusan bisnis: antrean kerja sales menampilkan lead yang sudah tutup = derau, tetapi menyembunyikan tanpa putusan bisa menelan janji yang memang masih harus ditunaikan (mis. follow-up purnajual lead won).
+- GAP-047-B: antrean bersifat global — semua pemegang `view_leads` melihat semua lead; kolom `assignedTo` ada di model tetapi tidak dipakai loader/kartu. Filter "punya saya" / per-sales belum ada putusannya.
+- GAP-047-C: tidak ada ekspor/rekap antrean (pola `quotation-followup-export.ts` ada untuk penawaran); kebutuhan belum terbukti — dicatat sebagai TIDAK diusulkan (lihat bagian akhir).
+
+### 1. Workflow specification
+
+- Aktor: sales pemegang lead (aktor utama), admin CRM / kepala sales (pemantau antrean tim).
+- Dokumen masuk: `LeadActivity` terjadwal (`scheduledAt` terisi, ditulis `addLeadActivity`) pada `Lead` belum terhapus (`deletedAt` kosong).
+- Proses baca (read-model, tanpa mutasi): loader satu query massal → builder memilih per lead jadwal belum-selesai terawal yang hari kalender WIB-nya `<=` hari ini → kartu "Jadwal follow-up lewat" di halaman `crm/leads`.
+- Dokumen keluar: baris antrean (lead, status tampil, tanggal jadwal, hari terlambat) + tautan ke detail lead. Tindak lanjut keluar antrean HANYA lewat jalur tulis existing: `completeLeadActivity` (selesai), penjadwalan ulang aktivitas baru, atau perubahan status lead — antrean sendiri tidak menulis apa pun.
+- Di luar alur: pengingat aktif (notifikasi/WA/email terjadwal) — tidak ada infrastruktur pengingat keluar untuk lead; TIDAK diusulkan di sini (lihat bagian akhir).
+
+### 2. Role/permission matrix (key nyata, module-catalog.generated.ts:369-371)
+
+| Aksi | Permission key | Siapa (pola existing) |
+|---|---|---|
+| Melihat halaman prospek + kartu antrean | `view_leads` (`requirePermission` di `crm/leads/page.tsx`) | Role berizin view leads |
+| Membuat lead | `create_leads` (`CanCreate` halaman) | Role berizin create |
+| Menjadwalkan aktivitas follow-up | `edit_leads` (jalur `addLeadActivity`) | Pemilik lead / berizin edit |
+| Menandai selesai / batal-selesai | `edit_leads` + penjaga kepemilikan pola convertLead (`manage_leads`/super_admin dapat melewati kepemilikan) — F-2026-10-25-008-S | Pemilik lead |
+| Mengubah status lead (won/lost dsb.) | `edit_leads` jalur existing | Pemilik lead |
+
+Tidak ada permission key baru diusulkan tahap ini. Antrean TIDAK memakai scope HR (`getHrScope`) — objek ini CRM, bukan data gaji/pribadi karyawan.
+
+### 3. Status-transition matrix (keadaan aktivitas terjadwal terhadap antrean)
+
+| Keadaan awal | Pemicu | Keadaan akhir | Penjaga |
+|---|---|---|---|
+| Aktivitas terjadwal, `scheduledAt` > hari ini WIB | Waktu berjalan (hari kalender WIB berganti) | Belum masuk antrean (jadwal masa depan menutupi — bukan anggota) | Builder: `calendarDay(scheduledAt) > today` dilewati |
+| Belum masuk antrean | `scheduledAt` mencapai hari ini WIB, `completedAt` kosong | Masuk antrean, `overdueDays = 0` ("Hari ini") | Builder murni |
+| Masuk antrean | Hari berganti, belum selesai | Tetap masuk, `overdueDays` bertambah | Builder murni |
+| Masuk antrean | `completeLeadActivity` (F-008-S) | Keluar antrean (`completedAt` terisi); lead tampil lagi hanya bila ada jadwal belum-selesai lain yang sudah jatuh tempo (jadwal terawal berikutnya) | `edit_leads` + kepemilikan + klaim atomik |
+| Keluar (selesai) | `reopenLeadActivity` (F-008-S) | `completedAt` kosong lagi; kembali masuk antrean pada muat berikutnya bila jadwalnya sudah lewat | `edit_leads` + kepemilikan + klaim atomik |
+| Masuk antrean | Lead dihapus lunak (`deletedAt` terisi) | Keluar antrean | Loader `where: { deletedAt: null }` |
+| Masuk antrean | Lead berubah status (termasuk won/lost) | TETAP masuk (perilaku existing terkunci tes) — perubahan perilaku menunggu Q-LFU-1 | — |
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-LFU-01 | Anggota antrean = aktivitas `scheduledAt` tidak kosong + `completedAt` kosong + hari kalender WIB `scheduledAt <=` hari ini; per lead hanya jadwal terawal yang memenuhi | TERVERIFIKASI-KODE | `lead-followups.ts:54-72,74-92` |
+| BR-LFU-02 | Urutan: `overdueDays` terbesar dulu; seri diputus `leadNumber` menaik lalu `leadId` menaik | TERVERIFIKASI-KODE | `lead-followups.ts:93-99`; tes urutan |
+| BR-LFU-03 | Label antrean "Jadwal follow-up lewat" terpisah tegas dari "Lead diam" (`stale-leads`, status new/contacted, ambang 7 hari sejak aktivitas terakhir). Dilarang menggabung makna/kartu: lead bisa diam tanpa jadwal, dan bisa terjadwal lewat tanpa basi | TERVERIFIKASI-KODE | `lead-followups-card.tsx:28-34`; `stale-leads.ts:1-13`; entri F-037 mitigasi dobel makna |
+| BR-LFU-04 | Jadwal masa depan TIDAK menelan kelewatan jadwal lain pada lead sama: pilihan per lead = terawal yang SUDAH jatuh tempo, bukan aktivitas terakhir/terbaru (inilah mitigasi "jadwal masa depan menutupi kebasian" dari catatan backlog F-037) | TERVERIFIKASI-KODE | `lead-followups.ts:58-71`; tes loader (jadwal 25 Okt masa depan tidak menutupi jadwal 18 Okt lewat) |
+| BR-LFU-05 | Antrean read-only: tidak menulis, tidak menghapus, tidak mengubah status; keluar antrean hanya lewat jalur tulis existing (complete/reopen F-008-S, hapus lunak lead) | TERVERIFIKASI-KODE | `lead-followups-data.ts:9-10,15-32` |
+| BR-LFU-06 | Semua hitungan hari = hari kalender WIB (TZ aplikasi Asia/Jakarta), bukan selisih 24 jam UTC; jadwal hari ini tampil sebagai "Hari ini" (overdueDays 0), bukan disembunyikan | TERVERIFIKASI-KODE | `lead-followups.ts:49-52,90`; `crm.actions.ts:354-356` |
+| BR-LFU-07 | Aktivitas tanpa lead tidak mungkin tampil: `LeadActivity.leadId` FK wajib `onDelete: Cascade`; aktivitas tanpa `scheduledAt` bukan jadwal (dilewati builder) | TERVERIFIKASI-KODE | `schema.prisma:4341-4358`; `lead-followups.ts:60` |
+| BR-LFU-08 | Lead status terminal (won/lost/terkonversi) dengan jadwal belum selesai: TETAP tampil pada perilaku existing. Mengeluarkannya dari antrean = perubahan perilaku yang butuh putusan — default aman sampai diputus: tetap tampil (janji tercatat tidak ditelan diam-diam) | BUTUH-VONIS | Tes pengunci `lead-followups.test.ts:119-125`; Q-LFU-1 (Lead) |
+| BR-LFU-09 | Cakupan pandang antrean global per `view_leads` (semua sales terlihat semua). Penambahan filter per-sales berdasar `assignedTo` ("punya saya" / per penanggung jawab) = USULAN belum diputus; jangan dibangun sebagai scope diam-diam | USULAN | `Lead.assignedTo` schema:4306 tak terpakai loader; Q-LFU-2 (Lead) |
+| BR-LFU-10 | Tidak ada ambang hari minimum: jadwal lewat 0 hari pun tampil. Ambang "tampilkan sesudah N hari" tidak diusulkan (beda dari stale-leads yang berambang 7 hari — ambang di sini akan menelan janji hari ini) | USULAN | Kontras `stale-leads.ts` STALE_LEAD_THRESHOLD_DAYS |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+Benchmark resmi (akses live 2026-10-25 22:0x WIB run ini):
+
+- Accurate — fitur Kalender: "Dapatkan notifikasi pengingat untuk aktivitas penting seperti tenggat waktu pembayaran, pengiriman, dan laporan keuangan" (halaman fitur Perusahaan, terverifikasi live run ini): https://accurate.id/online/fitur/perusahaan/ — rujukan yang sama sudah dikutip entri F-037.
+- Zahir — Zahir CRM memasarkan disiplin follow-up terjadwal ("Follow-Up Jadi Disiplin & Terjadwal... Sales tahu harus follow-up siapa, kapan, dan bagaimana") dan histori aktivitas tercatat (telepon, meeting, follow-up, sales visit, proposal): https://zahiraccounting.com/id/zahir-crm/ ; https://zahirerp.com/id/all-features-of-zahir-products/ . Reminder Zahir Online umum (jatuh tempo utang/piutang/giro): https://www.zahironline.com/fitur-lengkap/
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF (TERVERIFIKASI-KODE) |
+|---|---|---|---|
+| Pengingat aktivitas terjadwal | Ada (Kalender + notifikasi pengingat) | Ada (CRM follow-up terjadwal; reminder jatuh tempo) | PARSIAL: antrean baca di halaman prospek ADA; notifikasi aktif TIDAK ada |
+| Antrean follow-up lewat per prospek | Tidak diverifikasi sebagai daftar khusus run ini — tidak diklaim | Tidak diverifikasi sebagai daftar khusus run ini — tidak diklaim | ADA (`lead-followups` + kartu, PR #314) |
+| Jadwal dicatat per aktivitas prospek | (konteks CRM tidak dirinci run ini) | Ada (histori aktivitas follow-up) | ADA (`LeadActivity.scheduledAt`) |
+| Penanda selesai membersihkan antrean | Tidak diverifikasi run ini | Tidak diverifikasi run ini | ADA (F-008-S complete/reopen) |
+
+Selisih jujur: yang tertinggal dari benchmark BUKAN antreannya (sudah ada), melainkan pengingat AKTIF (notifikasi) — dan itu keputusan kanal/ops terpisah, bukan gap read-model (lihat TIDAK diusulkan).
+
+### 6. Acceptance criteria + edge cases (status: terhadap implementasi existing — falsifikasi QA atas head main)
+
+- AC-LFU-1: lead dengan jadwal kemarin belum selesai tampil dengan Terlambat "1 hari"; jadwal hari ini tampil "Hari ini"; jadwal besok TIDAK tampil. Salah satu beda = MERAH.
+- AC-LFU-2: lead dengan jadwal lewat yang sudah `completedAt` terisi TIDAK tampil; sesudah `reopenLeadActivity` tampil lagi pada muat berikutnya. Tidak kembali = MERAH.
+- AC-LFU-3: lead punya jadwal lewat (belum selesai) + jadwal masa depan → tampil memakai jadwal LEWAT (terawal jatuh tempo), bukan tertutup jadwal masa depan (BR-LFU-04). Tertutup = MERAH.
+- AC-LFU-4: dua jadwal lewat belum selesai pada lead sama → tampil satu baris memakai yang terawal. Dua baris untuk lead sama = MERAH.
+- AC-LFU-5: urutan baris overdue terbesar dulu, seri leadNumber lalu leadId (BR-LFU-02). Urutan beda = MERAH.
+- AC-LFU-6: pengguna tanpa `view_leads` tidak dapat membuka halaman/antrean (requirePermission existing). Bocor = MERAH.
+- AC-LFU-7: label kartu persis "Jadwal follow-up lewat" dan tidak tercampur baris "Lead diam" stale-leads (BR-LFU-03). Gabung makna = MERAH.
+- Edge EC-1: lead tanpa aktivitas sama sekali → bukan anggota (bukan error, bukan baris kosong).
+- Edge EC-2: aktivitas tanpa `scheduledAt` (catatan biasa) → bukan anggota walau lead tua (itu wilayah stale-leads, bukan antrean ini).
+- Edge EC-3: aktivitas yatim tanpa lead → tidak mungkin per skema (FK wajib Cascade, BR-LFU-07); bila data warisan menyimpang ditemukan, baris tanpa lead TIDAK boleh tampil tanpa nama — laporkan sebagai temuan data, jangan tampilkan baris hantu.
+- Edge EC-4: lead won/lost berjadwal belum selesai → tampil apa adanya SESUAI perilaku existing sampai Q-LFU-1 diputus; QA mencatatnya sebagai perilaku terkunci, bukan cacat, pada vonis run ini.
+- Edge EC-5: batas tengah malam WIB — jadwal tanggal hari ini pukul berapa pun (tersimpan tengah-malam UTC WIB dari form) dihitung hari ini (overdueDays 0), bukan besok/lusa karena offset UTC.
+- Edge EC-6: antrean kosong → kartu sembunyi total (tidak ada kotak kosong mengganggu halaman).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-047-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-047-S | Audit keselarasan + spec beku ini (dokumen) | Business | — |
+| (turunan Q-LFU-1) putusan perilaku lead terminal di antrean; bila diputus keluar: ubah builder + sesuaikan tes pengunci status | Lead (putusan) → Backend (builder) → QA | Q-LFU-1 | — |
+| (turunan Q-LFU-2) putusan filter per-sales `assignedTo`; bila dibuka: parameter loader + sakelar kartu | Lead (putusan) → Backend/Frontend → QA | Q-LFU-2 | — |
+| (turunan) falsifikasi AC-LFU-1..7 + EC-1..6 atas head main persis | QA | Spec ini merged | — |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-LFU-1 (Lead, BUTUH-VONIS perilaku inti): lead `won`/`lost`/terkonversi dengan jadwal belum selesai — tetap di antrean (default aman existing) atau keluar? Rekomendasi Business: lead `lost` keluar (tidak ada janji hidup), lead `won` TETAP sampai jadwalnya diselesaikan manual (janji purnajual nyata) — tetapi keduanya USULAN sampai diputus; mengubahnya berarti mengubah tes pengunci existing dengan sadar.
+- Q-LFU-2 (Lead): filter per-sales berdasar `assignedTo` dibuka tahap berikut, atau antrean global per `view_leads` cukup untuk ukuran tim saat ini? Business tidak membangun scope diam-diam (BR-LFU-09).
+- Accountant: TIDAK diminta — nol nominal, nol jurnal, nol pajak pada antrean ini.
+
+### Yang TIDAK diusulkan run ini
+
+- Menulis ulang builder/loader/kartu F-037 — sudah live; duplikasi terlarang.
+- Pengingat aktif (notifikasi in-app, WA, email terjadwal) ke sales/pelanggan: kanal keluar untuk lead tidak ada infrastrukturnya; keputusan kanal/ops terpisah (keluarga penundaan F-27(b)), bukan gap read-model.
+- Ekspor/rekap antrean (GAP-047-C): pola ekspor penawaran ada, kebutuhan ekspor lead belum terbukti dari pemakaian — YAGNI tercatat, bukan hilang.
+- Menambah permission key baru atau scope per-sales diam-diam (menunggu Q-LFU-2).
+- Menggabung kartu dengan stale-leads atau memindahkan ambang 7 hari ke antrean jadwal (BR-LFU-03/10).
+
+F-2026-10-25-047-S — Audit keselarasan antrean follow-up lead terjadwal lewat. Status: SPEC/AUDIT SELESAI run ini; F-2026-10-21-037 dinyatakan TUNTAS terverifikasi live (bukan PARSIAL); implementasi turunan menunggu putusan Lead Q-LFU-1/Q-LFU-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder bila Q diputus berubah), QA (falsifikasi AC-LFU). Butuh putusan accountant: TIDAK.
+
+---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-048-S: titik pesan-ulang (reorder point) + saran qty pesan per (barang, gudang) di atas stok minimum efektif existing (sisa induk F-2026-10-21-013)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-013 (c) P1 — stok minimum per gudang SUDAH live (ItemWarehouseSetting + minimum efektif, PR #694); sisa induk yang belum ada = lead time + titik pesan-ulang + saran qty. ID F-2026-10-25-048-S: nomor awal 047-S tabrakan dengan audit 047-S sesi paralel profil sama di branch sama (commit 2008904f); audit mempertahankan 047-S, blok ini renumber 048-S (bebas: grep main + branch = 0, 25 Okt 2026 22:16 WIB). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Catatan pivot kartu t_6e33f048: target awal kartu (follow-up lead F-037, termin F-106, histori endDate F-035, status part F-105, reservasi F-012, transfer parsial F-015) semua terbukti SUDAH LIVE di origin/main sesi ini (bukti di komentar kartu) — spec ini mengambil satu-satunya sisa terverifikasi ABSEN di keluarga itu.
+
+Benchmark resmi (akses 25 Okt 2026):
+- Accurate Barang Stok Minimum: https://help.accurate.id/product/Barang-stok-minimum/ — daftar di bawah minimum diteruskan ke Permintaan Barang / Pesanan Pembelian; qty saran = batas minimum atau selisih stok tersedia vs batas minimum; Minimum Beli per barang mengisi qty PO bila diisi. Accurate TIDAK menetapkan lead time per gudang pada halaman ini — ditulis apa adanya, bukan diklaim.
+- Accurate Permintaan Barang dari stok minimum: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/permintaan-stok-minimum/
+- Accurate Pesanan Pembelian dari stok minimum: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/stok-minimum-po/
+- Zahir: halaman help resmi yang menetapkan lead time / titik pesan-ulang per gudang belum ditemukan pada akses run ini — ditulis "belum terverifikasi", bukan diklaim.
+
+### Inventarisasi terverifikasi (25 Okt 2026, basis origin/main 702853a1)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `ItemWarehouseSetting` (prisma/schema.prisma:811-827): hanya `minStock` per (itemId, warehouseId), unik per pasangan. Tidak ada safetyStock / leadTimeDays / reorderPoint.
+- Minimum efektif: `min-stock-effective.ts` (override pasangan, selain itu warisi Item.minStock global, sumber tertanda "override"|"global"); penilaian per gudang `min-stock-warehouse-alert.ts:25-45` (pasangan tanpa lapisan tidak dinilai); laporan `buildMinStockByWarehouse` (min-stock-data.ts:118) + halaman laporan/stok-minimum digerbang `view_reports` (page.tsx:28).
+- Saran qty existing = kekurangan saja: minStockRequest prefill `min-stock-request.ts` (kekurangan minimum − stok, staf boleh sunting bebas di form Permintaan Pembelian).
+- PO terbuka terbaca pola existing: `OPEN_PURCHASE_ORDER_STATUSES = ["ordered","partial_received"]`, sisa per baris = qty − receivedQty clamp >= 0 (bom-revision-impact.ts:12-16; PurchaseOrderItem schema:2043-2057). Builder stok minimum existing TIDAK mengurangi PO masuk ini (grep incoming di min-stock*.ts = 0).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini):
+- `leadTime` / `leadTimeDays` / `reorderPoint` / `safetyStock` di prisma/schema.prisma + src/ = 0 hit. VendorItemPrice (schema:580-600) tanpa leadTimeDays.
+- Tidak ada konsumsi rata-rata harian / laju pakai per gudang yang dipakai ambang pesan-ulang; tidak ada builder titik pesan-ulang.
+
+### 1. Workflow specification (USULAN di atas mesin TERVERIFIKASI-KODE)
+
+Aktor: Admin gudang/pembelian (pengisi lead time), Staf pembelian (pemakai saran), Sistem (builder baca-saja).
+Dokumen masuk: ItemWarehouseSetting existing + leadTimeDays usulan per (barang, gudang) ATAU per (vendor, barang) — bentuk penampung = Q-ROP-2 Backend; InventoryLayer sisa per gudang; PO terbuka existing.
+Dokumen keluar: baris penilaian per (barang, gudang) berstatus di bawah titik pesan-ulang + saran qty pesan; diteruskan ke prefill Permintaan Pembelian existing (min-stock-request.ts) — BUKAN dokumen PO/jurnal baru.
+Alur: (1) minimum efektif existing menentukan lantai aman; (2) titik pesan-ulang turunan = minimum efektif + kebutuhan selama lead time (rumus BR-ROP-02); (3) stok tersedia per gudang + PO masuk dibandingkan ke titik itu; (4) saran qty = kekurangan ke target pengisian (BR-ROP-04); (5) staf membuka Permintaan Pembelian ter-prefill dan menyunting bebas (perilaku existing dipertahankan).
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key | Pemilik existing |
+|---|---|---|
+| Melihat laporan stok minimum / titik pesan-ulang | `view_reports` | TERVERIFIKASI-KODE laporan/stok-minimum page.tsx:28 |
+| Mengubah minimum per gudang (ItemWarehouseSetting) | key tulis pengaturan barang existing — Backend sebut key persis saat fisik | USULAN verifikasi Backend |
+| Mengisi leadTimeDays | key sama dengan pengisi penampungnya (Q-ROP-2) | BUTUH-VONIS Lead (Q-ROP-3) |
+| Membuat Permintaan Pembelian dari saran | key existing form permintaan pembelian | TERVERIFIKASI-KODE (prefill min-stock-request.ts) |
+
+Tidak ada key baru diusulkan tahap ini; key baru = keputusan Lead, bukan karangan spec.
+
+### 3. Status-transition matrix (turunan baca-saja, tanpa mutasi dokumen)
+
+| Status baris | Pemicu (turunan server) | Penjaga |
+|---|---|---|
+| tidak_dinilai | pasangan tanpa lapisan gudang, atau lead time kosong, atau minimum efektif 0 | tampil di ember terpisah, tidak masuk saran (BR-ROP-05) |
+| aman | tersedia + PO masuk > titik pesan-ulang | — |
+| pesan_sekarang | tersedia + PO masuk <= titik pesan-ulang | saran qty terbit (BR-ROP-04) |
+| kritis | tersedia <= minimum efektif (lantai existing) | tetap tertanda kritis walau PO masuk besar — dua label tidak saling menutupi (BR-ROP-06) |
+
+### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-ROP-01 | Titik pesan-ulang dihitung per (barang, gudang), memakai minimum EFEKTIF existing (override pasangan > global). Dilarang ambang global kedua. | USULAN di atas TERVERIFIKASI-KODE min-stock-effective.ts |
+| BR-ROP-02 | Rumus: titik = minimum efektif + ceil(laju pakai harian × leadTimeDays). Laju pakai = pemakaian MaterialIssue completed per gudang selama jendela hari berjalan. Jendela + sumber laju = Q-ROP-1 (Business usul 90 hari; angka final PUTUSAN Lead). Tanpa laju terbukti (barang baru) → titik = minimum efektif, tertanda "tanpa laju". | USULAN; angka BUTUH-VONIS Lead |
+| BR-ROP-03 | leadTimeDays bilangan bulat >= 0 hari kalender. Kosong = tidak dinilai untuk reorder (bukan dianggap 0 diam-diam). Sumber isi: pengalaman vendor nyata per pasangan; sistem tidak menebak dari tanggal PO lama pada tahap ini. | USULAN |
+| BR-ROP-04 | Saran qty = max(0, target isi − (tersedia + PO masuk)); target isi = titik pesan-ulang + minimum efektif? — DITOLAK sebagai karangan: target isi tahap ini = kekurangan ke titik pesan-ulang saja (selisih, pola Accurate selisih vs minimum). Saran selalu boleh disunting staf di form (existing). | USULAN (pola BENCHMARK Accurate selisih) |
+| BR-ROP-05 | Ember "tidak_dinilai" wajib tampil terhitung (pasangan tanpa lead time / tanpa lapisan / minimum 0) — daftar kosong tidak boleh terbaca "semua aman" (pola jujur min-stock.ts existing). | USULAN pola TERVERIFIKASI-KODE |
+| BR-ROP-06 | Status kritis (lantai minimum) dan pesan_sekarang (titik) adalah dua penilaian terpisah; PO masuk mengurangi urgensi pesan, tidak menghapus label kritis stok fisik. | USULAN |
+| BR-ROP-07 | Satuan tidak dijumlahkan lintas UOM (pola min-stock.ts); saran per baris barang-gudang-UOM-nya sendiri. | TERVERIFIKASI-KODE pola existing |
+| BR-ROP-08 | Builder murni baca-saja: tidak menulis setting, tidak membuat PO/permintaan, tidak menyentuh jurnal. Pembuatan dokumen tetap aksi staf existing. | USULAN |
+
+### 5. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan 047-S |
+|---|---|---|---|---|
+| Minimum per barang | ada (help di atas) | belum terverifikasi run ini | ada global + per gudang (PR #694) | dipertahankan |
+| Saran qty dari minimum | selisih / batas / Minimum Beli | belum terverifikasi | kekurangan saja (prefill) | selisih ke titik pesan-ulang |
+| Lead time per gudang/vendor | tidak ditetapkan halaman di atas | belum terverifikasi | ABSEN (grep 0) | penampung + rumus BR-ROP-02 |
+| Kurangi PO masuk dari saran | tidak dinyatakan halaman di atas | belum terverifikasi | ABSEN di builder minimum | BR-ROP-04 |
+
+### 6. Acceptance criteria + edge cases
+
+- AC-ROP-B1: lead time kosong → baris masuk tidak_dinilai terhitung; tampil sebagai saran = MERAH.
+- AC-ROP-B2: tersedia + PO masuk tepat = titik → pesan_sekarang dengan saran 0 tertanda tertutup PO? Tidak: saran qty 0 = baris tidak diteruskan ke prefill (prefill existing membuang qty <= 0). Baris hilang tanpa ember = MERAH.
+- AC-ROP-B3: mengubah minimum efektif (override vs global) mengubah titik di render berikut tanpa edit lead time. Tidak berubah = MERAH (sumber ganda).
+- AC-ROP-B4: stok kritis + PO masuk besar → label kritis tetap tampil. Hilang = MERAH.
+- AC-ROP-B5: barang jasa / nonaktif tidak dinilai (pola loader existing isService/isActive). Masuk = MERAH.
+- Edge: laju pakai 0 dengan lead time terisi → titik = minimum, tertanda "tanpa laju". Lead time negatif ditolak di penjaga penampung (fisik Backend). Gudang tanpa lapisan: tidak dinilai, bukan 0. Retur pembelian tidak menambah tersedia di builder ini (sisa InventoryLayer = sumber tunggal).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-048-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-048-S | Spec kontrak ini (dokumen) | Business | — |
+| (turunan) putusan jendela laju + sumber laju + key tulis lead time | Lead | Q-ROP-1/Q-ROP-3 | — |
+| (turunan) fisik penampung leadTimeDays + builder titik/saran + loader | Backend | putusan Lead; klaim file di board dulu (schema wilayah Backend) | — |
+| (turunan) tampil kolom titik/saran + ember tidak_dinilai di laporan stok minimum | Frontend | kontrak Backend; grep e2e laporan stok-minimum dulu | — |
+| (turunan) falsifikasi AC-ROP-B1..B5 | QA | head Backend/Frontend persis | — |
+
+### 8. Pertanyaan putusan
+
+- Q-ROP-1 (Lead): jendela laju pakai (usul Business 90 hari kalender WIB) + sumber laju sah (MaterialIssue completed per gudang saja, atau termasuk issue proyek?). Angka tidak diputus Business sendiri sebagai fakta.
+- Q-ROP-2 (Backend sesudah Q-ROP-1): penampung leadTimeDays di ItemWarehouseSetting (per gudang) vs VendorItemPrice.leadTimeDays (per vendor, pola induk awal) vs keduanya bertingkat (vendor default, gudang override)?
+- Q-ROP-3 (Lead): key tulis pengisi lead time — reuse key pengaturan barang existing atau key khusus pembelian?
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-048-S)
+
+- Auto-PO / auto-permintaan tanpa staf (dokumen tetap dibuat manusia; saran hanya prefill existing).
+- safetyStock sebagai kolom/angka terpisah: minimum efektif existing sudah berperan lantai aman; kolom kedua = ambang ganda membingungkan sampai ada bukti kebutuhan.
+- Peramalan musiman / EOQ: tidak ada data laju cukup terbukti; YAGNI tercatat.
+
+F-2026-10-25-048-S — Titik pesan-ulang + saran qty per (barang, gudang). Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-ROP-1/Q-ROP-3, lalu fisik Backend Q-ROP-2. Pemilik usulan: Business (spec), Lead (angka jendela/key), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (kuantitas persediaan, tanpa jurnal/angka uang).
