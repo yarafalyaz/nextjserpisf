@@ -140,6 +140,14 @@ export function TaxInvoiceForm({
           <Label htmlFor="counterpartyNitku">NITKU Lawan Transaksi</Label>
           <Input id="counterpartyNitku" name="counterpartyNitku" maxLength={200} />
         </div>
+        {direction === "out" ? (
+          <div className="flex min-h-11 items-center gap-2 sm:col-span-2">
+            <input id="legacy15Confirmed" name="legacy15Confirmed" type="checkbox" value="true" className="size-4 shrink-0 rounded border-default" />
+            <Label htmlFor="legacy15Confirmed" className="font-normal">
+              NPWP lawan 15 digit (legacy) — saya konfirmasi terbit tetap dilanjutkan dengan NPWP 15 digit
+            </Label>
+          </div>
+        ) : null}
       </div>
       <div className="mt-6 flex flex-wrap gap-3">
         <Button type="submit" isDisabled={isPending}>
