@@ -26949,9 +26949,9 @@ konsumen snapshot → BOT QA Q5-1..5.
 
 ---
 
-## SPEC BUSINESS 2026-10-25 — F-2026-10-25-019-S: pengingat servis berkala per kendaraan (jadwal servis berikutnya berbasis tanggal dan/atau odometer + antrean tindak lanjut baca-saja)
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-021-S: pengingat servis berkala per kendaraan (jadwal servis berikutnya berbasis tanggal dan/atau odometer + antrean tindak lanjut baca-saja)
 
-> **Slot**: F-2026-10-25-019-S. Diperiksa bentrok 2026-10-25 12:46 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-019` di backlog+board = 0; seri 001-S..018-S/V terpakai (017-S PR #821, 018-V PR #822 OPEN beda topik). ID 019 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+> **Slot**: F-2026-10-25-021-S (renumber 25 Okt 13:1x WIB dari 019-S: tabrakan dengan PR #825 histori cicilan yang dibuat 26 detik lebih dulu, 12:47:07 vs 12:47:33 WIB; #825 kanonik 019-S). Diperiksa bentrok 25 Okt 13:1x WIB: grep `F-2026-10-25-021` di `origin/main` (`c5754744`) + judul PR terbuka = 0; 020-V sudah terpakai PR #824, 021 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
 
 ### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 997c8ead)
 
@@ -27051,20 +27051,20 @@ Edge cases: kendaraan berpindah pelanggan (jadwal mengikuti kendaraan, pemilik t
 - Q-SV-3 (Lead): jendela depan daftar tetap 7/30/90 hari + ambang km depan konstanta bernama (angka diputus Lead, bukan karangan Business)?
 - Q-SV-4 (Lead, perilaku inti): penanda tindak-lanjut tersimpan dan/atau penggeseran otomatis oleh WO selesai = tahap 2 terpisah, ditunda?
 
-### 8. Backlog implementasi (turunan F-2026-10-25-019-S)
+### 8. Backlog implementasi (turunan F-2026-10-25-021-S)
 
 | ID | Item | Pemilik | Gerbang |
 |---|---|---|---|
-| F-2026-10-25-019-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-021-S | Spec ini (dokumen) | Business | — |
 | (turunan) fisik jadwal di master kendaraan (bentuk kolom/relasi) + builder antrean + loader anti-N+1 | Backend | Q-SV-1/2/3 terputus Lead | — |
 | (turunan) UI antrean + form pencatatan di detail kendaraan | Frontend | kontrak Backend stabil; kata §3/§6 verbatim | — |
 | (turunan) falsifikasi AC-SV-B1..B7 + F1..F3 | QA | head Backend/Frontend persis | — |
 
-### Yang TIDAK diusulkan run ini (F-2026-10-25-019-S)
+### Yang TIDAK diusulkan run ini (F-2026-10-25-021-S)
 - Pengingat otomatis keluar (WA/email/push) ke pelanggan: kanal keluar belum ada; tahap terpisah sesudah kanal sah.
 - Perkiraan odometer berjalan / prediksi tanggal servis dari laju pakai: tanpa sumber data sah (BR-SV-04).
 - Paket servis berbayar/langganan servis sebagai produk penjualan: penjualan existing cukup; tanpa bukti permintaan, YAGNI.
 - Riwayat seluruh jadwal lama per kendaraan tahap 1: satu jadwal aktif (BR-SV-02); riwayat = kebutuhan terpisah bila terbukti perlu.
 - Mencampur antrean ini ke antrean garansi F-2026-10-22-094-S (BR-SV-10).
 
-F-2026-10-25-019-S — Pengingat servis berkala per kendaraan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SV-1..4 + fisik Backend. Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik+builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+F-2026-10-25-021-S — Pengingat servis berkala per kendaraan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SV-1..4 + fisik Backend. Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik+builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
