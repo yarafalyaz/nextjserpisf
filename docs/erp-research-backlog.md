@@ -26365,3 +26365,75 @@ Urutan: Lead putus Q-SR → Backend → Frontend → QA. Effort inti S–M. Risi
 - Mengubah gerbang retur pembelian (sudah benar) atau jurnal/PPN retur (wilayah Accountant, tidak berubah).
 
 F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (katalog/seed+gerbang), Frontend (tombol sadar-izin), QA (falsifikasi). Butuh putusan accountant: TIDAK (jurnal/PPN tidak berubah).
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-015-V: gerbang PKP perusahaan bertanggal-efektif untuk FP UM (F-2026-10-25-004-V Putusan 4) — nilai kini + tanggal mulai kewajiban di SystemSetting, fail-closed, snapshot beku di DP
+
+> **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-005-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
+
+### Status verifikasi live (origin/main a5ad6890, 2026-10-25)
+
+- `SystemSetting` (schema.prisma:104-118): `companyTaxId` String? ada (NPWP perusahaan, dipakai Coretax XML `coretax-xml-export-data.ts:45,88`); status PKP perusahaan: **0** (grep `pkp|isPkp` di schema + src = tidak ada kolom status PKP penjual).
+- `Tax` (schema.prisma:4990): `effectiveFrom/effectiveTo/isActive/deletedAt/accountId/rate` ada — pola master bertanggal efektif existing untuk tarif (dipakai B1 Backend di worktree PR #785, belum ter-push).
+- Jalur DP head PR #785 (7fcad3e4): terutang diturunkan hanya dari `quotation.tax > 0` (`computeDownPaymentVatSnapshot`, down-payment-vat.ts:59) — tanpa gerbang PKP perusahaan. Inilah celah Putusan 4 F-004-V: non-PKP yang quotation-nya memuat PPN akan dibekukan snapshot PPN + FP UM fiktif.
+- F-2026-10-25-005-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
+
+### Register sumber
+
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis ini |
+|---|---|---|---|
+| FP dibuat oleh PKP; FP UM saat penerimaan pembayaran sebelum penyerahan / termin | PER-11/PJ/2025 Pasal 31 ayat (1)-(2) huruf b-c; artikel DJP "Cara Membuat Faktur Pajak Uang Muka dan Pelunasan di Coretax DJP", pajak.go.id (diakses 2026-10-25): https://www.pajak.go.id/id/artikel/cara-membuat-faktur-pajak-uang-muka-dan-pelunasan-di-coretax-djp ; JDIH: https://jdih.kemenkeu.go.id/dok/per-11pj2025 | PER-11/PJ/2025 sejak 22 Mei 2025 | Hanya PKP penjual wajib FP UM; non-PKP tidak memungut, tidak membuat FP |
+| Saat terbit SPPKP ≠ saat mulai kewajiban pungut/setor/lapor; WP menyampaikan pemberitahuan masa mulai (paling lambat masa pertama tahun buku berikut); pencabutan PKP permohonan/jabatan | PMK 164/2023 (diundangkan 29 Des 2023): https://jdih.kemenkeu.go.id/dok/pmk-164-tahun-2023/summary ; artikel DJP "Solusi Jika Status PKP Kena Suspend", pajak.go.id (diakses 2026-10-25) | 29 Des 2023 | Status PKP perusahaan wajib bertanggal mulai kewajiban, bukan boolean abadi; tanggal SPPKP saja tidak cukup |
+
+### Putusan 1 — Bentuk: nilai kini + tanggal di SystemSetting, BUKAN model histori baru tahap ini
+
+- Fisik yang disetujui (Backend, migrasi aditif nullable di `SystemSetting`, pola kolom existing schema:104 dst):
+  - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-005-V Putusan 4 untuk lawan).
+  - `companyPkpEffectiveFrom`: tanggal mulai kewajiban menurut SPPKP/pemberitahuan masa mulai (PMK 164/2023: tanggal terbit SPPKP ≠ tanggal mulai kewajiban).
+  - `companyPkpSource`: teks bebas singkat (mis. nomor SPPKP) bila ada.
+- Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-005-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
+- Edit status wajib lewat audit trail master existing; dilarang edit diam. Kolom ini BUKAN akun — mapping akun tidak berubah (`salesTaxAccountId` dll tetap).
+
+### Putusan 2 — Gerbang terutang DP: tiga syarat kumulatif, fail-closed
+
+FP UM + kaki PPN (J-DP1) hanya lahir bila KETIGA terpenuhi pada `paymentDate`:
+1. `companyPkpStatus = pkp` DAN `companyPkpEffectiveFrom <= paymentDate` (bila `companyPkpEffectiveFrom` kosong saat status `pkp` = konfigurasi cacat → fail-closed berisik, jangan pakai tanggal SPPKP tebak).
+2. Penyerahan terutang: `quotation.tax > 0` (sinyal existing) — fasilitas/dibebaskan per pola tetap `BUTUH-VONIS-AKUNTAN` per pola (F-004-V Putusan 4), tidak ditebak di sini.
+3. Tarif master Tax efektif `paymentDate` ada (B1 Backend) — nol/ambigu = fail-closed, sudah divonis F-004-V Putusan 2.
+
+Di luar itu:
+- `non_pkp`, atau `pkp` dengan `EffectiveFrom > paymentDate`: J-DP2 bruto penuh, nol FP UM, nol kaki PPN. Bukan error — jalur sah non-PKP.
+- `unknown` (default install lama): **fail-closed berisik saat DP confirmed atas quotation ber-PPN** — tolak dengan pesan arahkan ke Pengaturan Perusahaan ("status PKP perusahaan belum ditetapkan"). Alasan: `unknown` dibaca lolos = FP UM fiktif risiko sama dengan non-PKP lolos; dibaca non-PKP diam-diam = PPN hilang diam-diam. Kedua arah diam dilarang. DP atas quotation tanpa PPN (`tax = 0`) tidak terhalang `unknown` (tidak ada yang dipungut).
+- Gerbang ini berlaku di titik yang sama snapshot dibekukan (`onDownPaymentReceived` dalam tx, sesudah `assertPeriodOpen`) — bukan di UI, bukan flag client.
+
+### Putusan 3 — Snapshot beku; perubahan status kemudian nol efek retroaktif
+
+- Saat DP confirmed terutang: bekukan bersama snapshot F-004-V: `companyPkpStatus` + `companyPkpEffectiveFrom` yang dipakai gerbang (kolom snapshot di DownPayment, bentuk fisik Backend; nullable, baris legacy pra-fitur = null berlabel legacy di read-model).
+- Pencabutan PKP / edit status sesudahnya: nol efek ke DP terbit, FP UM terbit, SPT masa lalu. FP UM yang sudah terbit tetap wajib dilaporkan; refund DP ber-FP tetap wajib batal FP dulu (F-004-V Putusan 4 / J-RF1) walau perusahaan kini non-PKP.
+- DP confirmed SEBELUM tanggal mulai kewajiban PKP (masa transisi pengukuhan): J-DP2 bruto; FP UM tidak dibuat retroaktif untuk DP itu walau penyerahan/pelunasan terjadi sesudah PKP aktif. PPN atas pelunasan mengikuti FP pelunasan dokumen penuh jalur existing — selisih ini tampil di rekonsiliasi sebagai baris masa-transisi-PKP, bukan selisih temuan.
+
+### Putusan 4 — Pisah tegas dari status PKP lawan (F-005-V) dan kode transaksi
+
+- Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-005-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
+- `transactionCode` tetap dari sifat penyerahan/register existing (default "04"); gerbang PKP tidak mengganti kode, hanya memutus terutang/tidak.
+
+### Putusan 5 — Batas build (pemilik berikutnya; vonis ini tanpa kode)
+
+- BOT Backend (di PR #785 atau kartu susulan terpisah — Lead putus penempatan; klaim schema.prisma di board dulu): migrasi 3 kolom nullable di atas + gerbang Putusan 2 di hook DP + snapshot Putusan 3 + seed default `unknown` (tanpa migrasi data menebak status install existing). Pengaturan Perusahaan tampilkan 3 field (Frontend konsumen sesudah kontrak).
+- BOT QA: falsifikasi wajib (head persis):
+  1. `unknown` + quotation ber-PPN → DP confirm ditolak berisik; cabut gerbang → MERAH.
+  2. `non_pkp` → J-DP2 bruto, nol FP UM, nol kaki 210201; paksa kaki PPN → MERAH.
+  3. `pkp` + `EffectiveFrom > paymentDate` → J-DP2; `EffectiveFrom <= paymentDate` → J-DP1 + FP UM; geser tanggal lewati paymentDate → hasil berbalik (tes tanggal, bukan flag).
+  4. Status diubah pkp→non_pkp sesudah DP terbit → snapshot DP + SPT masa DP byte-sama; ikut berubah → MERAH.
+  5. `pkp` tanpa `EffectiveFrom` → fail-closed berisik, bukan lolos.
+  6. DP quotation `tax=0` + status `unknown` → tetap lolos J-DP2 (gerbang tidak memblokir yang tidak dipungut).
+- BOT Lead: putus penempatan fisik (gabung PR #785 vs kartu susulan) — vonis tidak menahan B1-B5 yang sudah berjalan; gerbang ini menahan **merge** PR #785 karena Putusan 4 F-004-V belum aman tanpa-nya (verdict 6388650058 butir 2).
+
+### Larangan (mengikat)
+
+1. Menurunkan status PKP perusahaan dari `companyTaxId` terisi, omzet, atau flag client.
+2. Membaca `unknown` sebagai non-PKP maupun sebagai PKP secara diam-diam.
+3. Membuat FP UM retroaktif untuk DP masa pra-PKP.
+4. Mencampur gerbang ini dengan status PKP lawan / kode transaksi.
+5. Mengubah snapshot DP terbit karena edit status master.
+
+F-2026-10-25-015-V — Status: VONIS SELESAI run ini (docs-only). Pemilik berikutnya: Lead (penempatan fisik) → Backend (migrasi + gerbang + snapshot) → Frontend (field Pengaturan) → QA (falsifikasi 1-6). Re-audit PR #785 (t_8ca73981) menilai gerbang ini sebagai butir B-PKP terpisah dari B1-B5.
