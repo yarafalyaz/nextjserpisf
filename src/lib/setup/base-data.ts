@@ -87,6 +87,14 @@ export const PERMISSIONS = [
       "edit_employees",
       "delete_employees",
       "approve_contracts",
+      // F-2026-10-25-005-S DISC-B1 (Q-DISC-2): izin khusus disiplin.
+      // Pemetaan default-aman putusan Lead: view+create+approve disamakan
+      // pemegang edit_employees fase 1 (lihat whitelist GA di bawah);
+      // admin/super_admin dapat lewat katalog penuh. Dipersempit kelak
+      // hanya lewat perubahan kode bervonis Lead.
+      "view_disciplinary_records",
+      "create_disciplinary_records",
+      "approve_disciplinary_records",
       "view_accounts",
       "create_accounts",
       "edit_accounts",
@@ -531,7 +539,12 @@ export const GA_WHITELIST = [
       "delete_holidays",
       "view_employees",
       "view_departments",
-      "view_positions"
+      "view_positions",
+      // F-2026-10-25-005-S DISC-B1 Q-DISC-2: pemetaan default-aman fase 1 —
+      // izin disiplin disamakan pemegang edit_employees (GA/HR).
+      "view_disciplinary_records",
+      "create_disciplinary_records",
+      "approve_disciplinary_records"
 ];
 
 export const KABENG_WHITELIST = [
