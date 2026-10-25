@@ -332,6 +332,9 @@ export async function getMyReimbursementClaims() {
                 REIMBURSEMENT_PAYMENT_REFERENCE_TYPE,
               ],
             },
+            // Hanya jurnal AKTIF = fakta tahap; J-RB reversed/terhapus tidak menghitung (Putusan 2).
+            status: { not: "REVERSED" },
+            deletedAt: null,
           },
           select: { referenceId: true, referenceType: true },
         })
