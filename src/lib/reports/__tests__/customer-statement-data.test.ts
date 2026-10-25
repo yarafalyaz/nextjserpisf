@@ -235,16 +235,13 @@ describe("loadCustomerStatement", () => {
   it("F-043-B1: email pelanggan dimuat dari select perluasan yang sama — payload builder/customer beku", async () => {
     const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
 
-    expect(report.customer).toEqual({ id: 7, name: "CV Uji" })
-    expect(report.customerEmail).toBe("uji@example.com")
-    expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(1, {
-      where: { id: 7, deletedAt: null },
-      select: { id: true, name: true },
-    })
-    expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(2, {
-      where: { id: 7 },
-      select: { phone: true, email: true },
-    })
+    // Satu query kontak memuat phone+email (bukan query tambahan); identitas
+    // pelanggan tetap hanya id+nama (BR-ST-06) dan email lahir terpisah.
+    expect([report.customer, report.customerEmail]).toEqual([{ id: 7, name: "CV Uji" }, "uji@example.com"])
+    expect(mocks.prismaMock.customer.findFirst.mock.calls).toEqual([
+      [{ where: { id: 7, deletedAt: null }, select: { id: true, name: true } }],
+      [{ where: { id: 7 }, select: { phone: true, email: true } }],
+    ])
   })
 
   it("F-043-B1: email kosong/null → customerEmail null (tombol email tidak lahir di UI)", async () => {

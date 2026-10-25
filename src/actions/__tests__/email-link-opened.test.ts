@@ -57,24 +57,22 @@ describe("recordEmailLinkOpened (F-2026-10-25-043-B1)", () => {
 
     expect(res.success).toBe(true)
     expect(hasPermissionMock).toHaveBeenCalledWith("view_reports")
-    expect(cFindFirst).toHaveBeenCalledWith({
-      where: { id: 7, deletedAt: null },
-      select: { id: true },
-    })
+    expect(cFindFirst).toHaveBeenCalledWith({ where: { id: 7, deletedAt: null }, select: { id: true } })
     expect(logActivityMock).toHaveBeenCalledTimes(1)
-    expect(logActivityMock).toHaveBeenCalledWith(
+    const [action, kind, anchorId, label, meta] = logActivityMock.mock.calls[0]
+    expect([action, kind, anchorId, label]).toEqual([
       "email_link_opened",
       "CustomerStatement",
       7,
       "Tautan Email dibuka untuk Statement Pelanggan",
-      {
-        channel: "email",
-        event: "link_opened",
-        surface: "detail",
-        periodStart: "2026-01-01",
-        periodEnd: "2026-02-28",
-      },
-    )
+    ])
+    expect(meta).toEqual({
+      channel: "email",
+      event: "link_opened",
+      surface: "detail",
+      periodStart: "2026-01-01",
+      periodEnd: "2026-02-28",
+    })
     const payload = JSON.stringify(logActivityMock.mock.calls[0])
     expect(payload).not.toMatch(/uji@example|@|subjek|subject|isi pesan|tagihan|terkirim/i)
     expect(payload).not.toContain("whatsapp")
