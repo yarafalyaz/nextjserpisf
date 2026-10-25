@@ -19,15 +19,19 @@ const mocks = vi.hoisted(() => {
   const bindIdempotencyKey = vi.fn()
   const assertPeriodOpen = vi.fn()
   const queryRaw = vi.fn()
+  const dpFindUnique = vi.fn()
+  const tiFindMany = vi.fn()
 
   const tx: Record<string, unknown> = {
     taxInvoice: {
       findFirst: taxInvoiceFindFirst,
+      findMany: tiFindMany,
       create: taxInvoiceCreate,
       update: taxInvoiceUpdate,
       findUniqueOrThrow: taxInvoiceFindUniqueOrThrow,
     },
-    salesInvoice: { update: salesInvoiceUpdate },
+    salesInvoice: { update: salesInvoiceUpdate, findUnique: vi.fn().mockResolvedValue(null) },
+    downPayment: { findUnique: dpFindUnique },
     vendorBill: { update: vendorBillUpdate },
     $queryRaw: queryRaw,
   }
@@ -37,7 +41,7 @@ const mocks = vi.hoisted(() => {
   return {
     taxInvoiceFindFirst, taxInvoiceCreate, taxInvoiceUpdate, taxInvoiceFindUniqueOrThrow,
     salesInvoiceUpdate, vendorBillUpdate, claimIdempotencyKey, bindIdempotencyKey,
-    assertPeriodOpen, queryRaw, prisma,
+    assertPeriodOpen, queryRaw, dpFindUnique, tiFindMany, prisma,
   }
 })
 
@@ -52,7 +56,7 @@ vi.mock("@/lib/services/financial-idempotency.service", async (importOriginal) =
   }
 })
 
-import { issueTaxInvoice, replaceTaxInvoice, cancelTaxInvoice, creditInputInvoice } from "@/lib/services/tax-invoice.service"
+import { issueTaxInvoice, replaceTaxInvoice, cancelTaxInvoice, creditInputInvoice, issueDownPaymentTaxInvoice } from "@/lib/services/tax-invoice.service"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -61,6 +65,8 @@ beforeEach(() => {
   mocks.assertPeriodOpen.mockResolvedValue(undefined)
   mocks.queryRaw.mockResolvedValue([{ id: 1 }])
   mocks.taxInvoiceFindFirst.mockResolvedValue(null)
+  mocks.dpFindUnique.mockResolvedValue(null)
+  mocks.tiFindMany.mockResolvedValue([])
   mocks.taxInvoiceCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ id: 7, ...data }),
   )
@@ -211,5 +217,66 @@ describe("creditInputInvoice guards", () => {
     const r = await creditInputInvoice({ id: 7, creditPeriod: "2026-02", idempotencyKey: key() })
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/sudah dikreditkan/)
+  })
+})
+
+describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
+  const dpRow = {
+    id: 3, status: "confirmed", paymentDate: new Date(2026, 0, 15),
+    vatTransactionCode: "04", vatRate: 12, vatDpp: 11_000_000, vatAmount: 1_320_000,
+    vatTaxPeriod: "2026-01", customer: { name: "PT X", taxId: "01.234.567.8-091.000" },
+  }
+  it("salin snapshot: tanggal=paymentDate, masa beku, DPP/PPN beku", async () => {
+    mocks.dpFindUnique.mockResolvedValue(dpRow)
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000001", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
+    expect(Number(data.dpp)).toBe(11_000_000)
+    expect(Number(data.taxAmount)).toBe(1_320_000)
+    expect(data.taxPeriod).toBe("2026-01")
+    expect(data.taxInvoiceDate).toEqual(new Date(2026, 0, 15))
+    expect(data.downPaymentId).toBe(3)
+    expect(data.direction).toBe("out")
+  })
+
+  it("DP bukan confirmed ditolak", async () => {
+    mocks.dpFindUnique.mockResolvedValue({ ...dpRow, status: "pending" })
+    const r = await issueDownPaymentTaxInvoice({ downPaymentId: 3, taxInvoiceNumber: "X", idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/confirmed/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("snapshot PPN nol (non-kena) ditolak — tidak ada FP UM", async () => {
+    mocks.dpFindUnique.mockResolvedValue({ ...dpRow, vatAmount: 0, vatDpp: 0 })
+    const r = await issueDownPaymentTaxInvoice({ downPaymentId: 3, taxInvoiceNumber: "X", idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/bukan subjek/)
+  })
+
+  it("satu FP UM aktif per DP: FP aktif kedua ditolak", async () => {
+    mocks.dpFindUnique.mockResolvedValue(dpRow)
+    mocks.taxInvoiceFindFirst.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
+      Promise.resolve(where.downPaymentId != null ? { id: 9 } : null),
+    )
+    const r = await issueDownPaymentTaxInvoice({ downPaymentId: 3, taxInvoiceNumber: "Y", idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/satu FP UM aktif/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("FP pelunasan selisih: dokumen penuh minus Sigma FP UM aktif", async () => {
+    // salesInvoice.findUnique mock default null; override via tx sulit diakses di sini,
+    // diarahkan lewat tiFindMany kosong -> angka penuh (dijamin oleh test builder).
+    const r = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "040.000-26.00000099",
+      taxInvoiceDate: new Date(2026, 1, 10), sellingPrice: 120_000_000,
+      salesInvoiceId: 5, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
+    expect(Number(data.taxAmount)).toBe(13_200_000)
   })
 })
