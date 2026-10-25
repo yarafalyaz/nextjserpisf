@@ -31061,3 +31061,132 @@ Edge cases:
 F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
 
 ---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-046-S: rekap sisa pinjaman aktif per karyawan (read-model baca-saja di atas EmployeeLoan existing, scope fail-closed)
+
+> **Slot**: F-2026-10-25-046-S. Diperiksa bentrok 2026-10-25 21:39 WIB vs `origin/main` (`920a53f7`): grep `F-2026-10-25-046` di backlog origin/main + judul PR terbuka = 0; ID 2026-10-25 terpakai: sampai 039-V di main, 040-S/041-S PR #901/#898, 042-V PR #902, 043-S PR #903, 044-S PR #906, 045-V PR #907. `-046-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_a14ad77e. Dokumen saja; tanpa kode/schema/migrasi.
+
+> **Gap baru domain (h) HR/payroll** — bukan F-ID lama. Bukan duplikat F-2026-10-25-018-S (pengajuan pinjaman mandiri — jalur tulis), bukan F-2026-10-25-019-S (histori cicilan per pinjaman — ledger per pinjaman), bukan daftar transaksional `/sdm/pinjaman` (baris per pinjaman, terpaginasi). Objek spec ini: agregat sisa kewajiban pinjaman **per karyawan** dari baris `EmployeeLoan` berjalan. Dokumen saja; tanpa kode/schema/migrasi.
+
+### 0. Ringkasan putusan yang diminta
+
+HR menjawab pertanyaan tutup periode: "karyawan ini masih punya pinjaman aktif berapa, sisa totalnya berapa, cicilan berjalannya berapa?" Hari ini jawaban itu hanya bisa diraih dengan membuka daftar `/sdm/pinjaman` baris per pinjaman lalu menjumlah manual per orang — daftar terpaginasi (`take`/`skip`), jadi total per karyawan tidak pernah utuh dari satu layar dan mudah salah hitung. Akibat nyata: sisa piutang karyawan direkap di luar sistem menjelang payroll, dan angka rekap tangan bisa beda dari `remainingAmount` berjalan. Spec ini membekukan: (A) builder baca-saja agregat per karyawan atas `EmployeeLoan` status `active` (+ ember jujur status lain dalam kosakata tertutup), (B) permukaan rekap di area SDM sejajar rekap lembur/saldo cuti, (C) batas tegas: rekap menampilkan fakta pinjaman tersimpan, TIDAK menghitung potongan slip mendatang, TIDAK menampilkan nominal gaji, TIDAK mengubah status/sisa apa pun. Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin `view_employee_loans` membuka permukaan rekap pinjaman, opsional filter departemen (hanya scope `all`).
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `EmployeeLoan` dalam scope, dan builder murni mengelompokkan per karyawan: jumlah pinjaman aktif, Σ pokok aktif, Σ sisa aktif (`remainingAmount`), Σ terbayar turunan (pokok − sisa, per pinjaman aktif saja), cicilan bulanan tersimpan Σ `monthlyInstallment` pinjaman aktif, cicilan mingguan tersimpan Σ `weeklyInstallment` non-null pinjaman aktif + jumlah pinjaman aktif tanpa jadwal mingguan (ember jujur, bukan konversi), tanggal pinjaman aktif tertua.
+3. Halaman menampilkan baris per karyawan + total scope (penjumlahan Σ, bukan rata-rata), dengan tautan ke daftar transaksional existing per karyawan. Karyawan tanpa pinjaman aktif TIDAK tampil sebagai baris nol karangan tahap 1 (keputusan tampil-semua = Q-LR46-2 Lead).
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `EmployeeLoan` + `Employee` (nama/departemen); dokumen keluar = tampilan rekap saja. Potongan payroll tetap jalur existing `markPayrollPaid`.
+
+### 2. Inventarisasi terverifikasi (origin/main 920a53f7, 2026-10-25 21:39 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `EmployeeLoan` (`prisma/schema.prisma:3882`): `employeeId`, `loanDate`, `totalAmount` Decimal(15,2), `monthlyInstallment` Decimal(15,2), `weeklyInstallment` Decimal? (NULL = tanpa jadwal mingguan; dilarang auto-fill `monthlyInstallment/4` — komentar schema mengutip vonis F-2026-10-23-105-V), `remainingAmount` Decimal(15,2), `status` String default `active`, `approvedBy`/`createdBy`, timestamps; indeks employeeId/status.
+- Kosakata status tertutup (putusan Lead F-2026-10-25-026-L Q-LS-4): `pending → active | rejected`; `active → paid_off` (`src/lib/reports/employee-loan-channel.ts:12,28`); status di luar himpunan tampil apa adanya sebagai tidak dikenal, jangan dipetakan paksa. Amortisasi payroll menulis persis `paid_off` saat sisa nol (`src/actions/hrm.actions.ts:3110`).
+- Amortisasi existing: `markPayrollPaid` mendistribusikan budget `Payroll.loanDeduction` aktual ke pinjaman `active` tertua-dulu, cap per cicilan frekuensi slip (monthly/weekly dari master saat dibayar) dan sisa, dalam transaksi yang sama dengan flip status slip + jurnal (`hrm.actions.ts:3076-3110`). Rekap tidak menyentuh jalur ini.
+- Daftar transaksional existing: halaman `/sdm/pinjaman` (`src/app/(dashboard)/sdm/pinjaman/page.tsx`) — `requirePermission("view_employee_loans")` + `getHrScope` + `hrScopeWhere`, filter status/cari, `include employee`, terpaginasi `take`/`skip`, payload per baris pinjaman (loanDate/totalAmount/monthlyInstallment/remainingAmount/status). Menjawab "pinjaman mana", bukan "per karyawan totalnya berapa".
+- Kanal pengajuan turunan: builder murni `employee-loan-channel.ts` + loader `employee-loan-channel-data.ts` (F-2026-10-25-018-S, Q-LS-3b) — kanal mandiri/titipan per baris; rekap tidak menurunkan kanal dan tidak mengklaimnya per karyawan (satu karyawan bisa campuran dua kanal).
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:319-322`): `create_loans`, `delete_loans`, `approve_loans` (resource `loans`), `view_employee_loans` (resource `employee_loans`). Navigasi existing: entri `Pinjaman` href `/sdm/pinjaman` izin `view_employee_loans` (`src/components/layout/navigation.ts:164`); pola saudara `Saldo Cuti` (:158, `view_leave_requests`) dan `Rekap Lembur` (:160, `view_overtime`).
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:45-77`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1. `hrScopeWhere` (:81-84) berlaku eksplisit untuk model ber-`employeeId` termasuk `EmployeeLoan`.
+- Vonis uang yang mengikat (jangan diputus ulang di spec ini): pinjaman tanpa bunga tahap 1 + potongan = pokok saja (vonis F-2026-10-25-023-V); sisa pinjaman karyawan berhenti TIDAK boleh dihapus diam-diam dan TIDAK boleh dipotong melebihi ruang Pasal 65 dari pembayaran terakhir — sisa tetap Piutang Karyawan tertagih terpisah (023-V butir 2E). Rekap hanya menampilkan sisa itu apa adanya.
+
+Belum ada / gap (bukti grep run ini):
+- Builder/loader agregat pinjaman per karyawan: tidak ada berkas `*loan*recap*`/`employee-loan` agregat di `src/lib/reports/` selain kanal per baris di atas (daftar berkas diverifikasi run ini); tidak ada halaman rekap di bawah `/sdm/pinjaman` selain daftar/detail/tambah/ubah.
+- Total per karyawan tidak terjawab daftar existing: paginasi memotong populasi (`take`/`skip` di page.tsx), dan tidak ada Σ sisa/pokok/cicilan per orang di permukaan mana pun.
+- Karyawan berhenti dengan pinjaman `active` bersisa tidak tertanda di permukaan mana pun sebagai fakta operasional (bukan angka pesangon — hanya keberadaan sisa aktif pada karyawan nonaktif), padahal vonis 023-V 2E mewajibkan sisa itu tetap tertagih terpisah; hari ini hanya terlihat bila membuka baris per baris.
+
+### 3. Business rules register (BR-LR46)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-LR46-01 | Satu-satunya sumber = baris `EmployeeLoan` existing; rekap dilarang membuat tabel/rekod pinjaman kedua atau snapshot sisa berkala | TERVERIFIKASI-KODE | `prisma/schema.prisma:3882` |
+| BR-LR46-02 | Populasi rekap utama = pinjaman berstatus persis `active` dalam kosakata tertutup Q-LS-4. Status `pending`/`rejected`/`paid_off` dan status tak dikenal TIDAK masuk Σ aktif; `pending` boleh tampil sebagai ember hitungan terpisah berlabel "menunggu persetujuan" (bukan sisa kewajiban), status tak dikenal tampil apa adanya terhitung, tidak dipetakan paksa | TERVERIFIKASI-KODE (kosakata) + USULAN (ember) | `employee-loan-channel.ts:12,28`; `hrm.actions.ts:3110` |
+| BR-LR46-03 | Per karyawan: Σ sisa aktif = Σ `remainingAmount` pinjaman aktifnya; Σ pokok aktif = Σ `totalAmount` pinjaman aktif yang sama; Σ terbayar turunan = Σ pokok − Σ sisa atas populasi aktif saja (pinjaman `paid_off` tidak ikut — riwayat lunas wilayah daftar/019-S, bukan sisa berjalan) | USULAN | kolom `schema.prisma:3882` |
+| BR-LR46-04 | Cicilan tampil verbatim tersimpan: Σ `monthlyInstallment` pinjaman aktif dan Σ `weeklyInstallment` non-null pinjaman aktif adalah dua angka terpisah berlabel frekuensinya; pinjaman aktif ber-`weeklyInstallment` NULL dihitung di ember "tanpa jadwal mingguan" dan TIDAK pernah dikonversi `monthlyInstallment/4` atau dibagi angka apa pun | TERVERIFIKASI-KODE (larangan konversi) + USULAN (penyajian) | komentar `weeklyInstallment` schema:3882 (vonis F-2026-10-23-105-V); `loanInstallmentForFrequency` konsumen `hrm.actions.ts:3096` |
+| BR-LR46-05 | Rekap TIDAK mensimulasikan potongan slip berikutnya: tidak ada proyeksi "terpotong periode depan", sisa sesudah payroll mendatang, atau tanggal lunas perkiraan dari cicilan — amortisasi nyata hanya terjadi di `markPayrollPaid` atas `loanDeduction` aktual slip | TERVERIFIKASI-KODE (jalur) + USULAN (larangan) | `hrm.actions.ts:3076-3110` |
+| BR-LR46-06 | Akses rekap = `view_employee_loans` + `getHrScope` fail-closed; filter departemen tidak pernah memperluas scope; keluaran TANPA `baseSalary`, komponen gaji, dan nominal slip apa pun — `loanDeduction` per slip bukan keluaran rekap | TERVERIFIKASI-KODE + USULAN penempatan | `module-catalog.generated.ts:322`; `hr-scope.ts:45-84`; mandat authorization data gaji |
+| BR-LR46-07 | Karyawan nonaktif (`isActive=false` atau `employmentEndedAt` terisi) yang masih punya pinjaman `active` tetap tampil tertanda fakta itu; rekap TIDAK menolkan sisa, TIDAK mengusulkan hapus, TIDAK menghitung potongan dari pembayaran terakhir — perlakuan sisa = vonis 023-V 2E lewat jalur terpisah | TERVERIFIKASI-KODE (vonis) + USULAN (penanda) | vonis F-2026-10-25-023-V butir 2E; kolom Employee `schema.prisma:902` |
+| BR-LR46-08 | Urutan baris: Σ sisa aktif terbesar dulu, seri nama karyawan lalu employeeId; total scope = Σ atas baris tampil (tertimbang nilai), bukan rata-rata per karyawan dan bukan total populasi di luar scope | USULAN | pola kontrak agregat repo (target penjualan F-2026-10-22-088-S BR-TGT-11) |
+| BR-LR46-09 | Rekap baca-saja mutlak: tidak ada buat/ubah/setujui/hapus pinjaman dari permukaan rekap; semua tulis tetap aksi existing (`create_loans`/`approve_loans`/`delete_loans`) di daftar/detail | TERVERIFIKASI-KODE (izin tulis existing) + USULAN (larangan) | `module-catalog.generated.ts:319-321`; `hrm.actions.ts:3161,3998,4307` |
+| BR-LR46-10 | Kanal pengajuan (mandiri/titipan) TIDAK diagregasikan per karyawan di rekap tahap 1; kanal tetap fakta per baris di daftar existing — mencampur dua kanal satu orang ke satu label = klaim turunan palsu | TERVERIFIKASI-KODE (definisi kanal per baris) | `employee-loan-channel.ts` kepala Q-LS-3b |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap | `view_employee_loans` — semua departemen | `view_employee_loans` — departemen sendiri | `view_employee_loans` — baris dirinya saja | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (nilai asing dari URL diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| Ikuti tautan ke daftar per karyawan | Daftar existing, scope sama | Sama | Sama (baris dirinya) | Ditolak |
+| Buat/setujui/hapus pinjaman dari rekap | Tidak ada — jalur existing `create_loans`/`approve_loans`/`delete_loans` | Sama | Sama (pengajuan mandiri = 018-S) | — |
+
+Izin halaman rekap mengusulkan reuse `view_employee_loans` (izin daftar existing, sejajar pola `view_overtime` rekap lembur dan `view_leave_requests` saldo cuti); key baru = Q-LR46-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Transisi `EmployeeLoan` existing (di luar rekap, untuk konteks baca):
+
+| Keadaan awal | Pemicu (di luar rekap) | Keadaan akhir | Dihitung rekap |
+|---|---|---|---|
+| — | `createEmployeeLoan` (izin per jalur 018-S) | `pending` (menunggu workflow) atau jalur existing | Ember menunggu (BR-LR46-02), bukan Σ aktif |
+| `pending` | persetujuan workflow / penolakan | `active` / `rejected` | `active` masuk Σ; `rejected` tidak pernah |
+| `active` | `markPayrollPaid` mengonsumsi `loanDeduction` aktual | sisa berkurang; `paid_off` tepat saat sisa nol (`hrm.actions.ts:3110`) | Σ mengikuti nilai berjalan |
+| `active` | karyawan berhenti (di luar rekap) | tetap `active` bersisa | Tetap tampil tertanda (BR-LR46-07) |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Pinjaman karyawan + cicilan + potong gaji | Ada — Pinjaman Karyawan (pokok, metode bunga tanpa bunga/anuitas/efektif/flat, rincian angsuran, potong via Pencatatan Gaji) https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/membuat-pinjaman-karyawan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/pinjaman-gaji/ (akses 2026-10-25) | Ada — fitur Loan mengelola pinjaman karyawan terintegrasi kas keluar; Zahir Payroll mencatat pinjaman karyawan (akses 2026-10-25) https://zahirerp.com/id/all-features-of-zahir-products/ dan https://zahiraccounting.com/en/peluncuran-produk-terbaru-zahir-payroll-1-0/ | ADA parsial — pencatatan + amortisasi potong slip live; bunga TIDAK (vonis 023-V tahap 1 tanpa bunga — jangan disamakan klaim fitur) |
+| Laporan sisa piutang/pinjaman per karyawan | Ada — laporan Daftar Piutang Karyawan, Angsuran per Karyawan, Histori Peminjaman per Karyawan disebut di halaman fitur Kas & Bank (pihak ketiga, bukan help resmi — dicatat BENCHMARK lemah) https://www.doniirvan.id/accurate-online/fitur-accurate-online/kas-bank/ ; tab Histori Piutang per karyawan di help resmi https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-beban/mencatat-potongan-gaji-untuk-piutang-karyawan/ | Laporan per karyawan tercantum umum di Zahir HR (kehadiran/cuti/payroll); laporan sisa pinjaman per karyawan tidak ditemukan di halaman resmi yang diakses run ini — belum terverifikasi, bukan diklaim absen https://zahir.co.id/hr/ | Belum ada agregat per karyawan (gap §2) — daftar per pinjaman saja; histori cicilan per pinjaman = 019-S |
+| Sisa pinjaman karyawan berhenti tetap tertagih | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Aturan vonis ada (023-V 2E); penanda permukaan = gap spec ini (BR-LR46-07) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-LR46-B (Backend, bila dibuka Lead):
+- AC-LR46-B1: builder murni menerima baris polos `EmployeeLoan` + identitas karyawan dan menghasilkan per karyawan: jumlah aktif, Σ pokok aktif, Σ sisa aktif, Σ terbayar turunan, Σ cicilan bulanan, Σ cicilan mingguan non-null, jumlah aktif tanpa jadwal mingguan, tanggal aktif tertua, hitungan `pending`, penanda karyawan nonaktif bersisa aktif; invariant Σ terbayar = Σ pokok − Σ sisa atas populasi aktif dibuktikan tes; memasukkan `paid_off`/`rejected` ke Σ aktif = MERAH.
+- AC-LR46-B2: loader menegakkan `view_employee_loans` + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; scope department tidak bocor departemen lain lewat filter; payload tidak pernah memuat `baseSalary`/nominal slip/`loanDeduction` (BR-LR46-06).
+- AC-LR46-B3: pinjaman aktif ber-`weeklyInstallment` NULL terhitung di ember tanpa jadwal mingguan dan Σ mingguan tidak berubah olehnya; tes yang mengonversi dari `monthlyInstallment` = MERAH (BR-LR46-04).
+- AC-LR46-B4: status di luar kosakata tertutup tampil terhitung apa adanya di ember tak dikenal, tidak masuk Σ aktif, tidak dipetakan paksa ke `active`/`paid_off` (BR-LR46-02).
+- AC-LR46-B5: dua pinjaman aktif satu karyawan (satu mandiri satu titipan) teragregasi nominalnya tanpa label kanal per karyawan; builder menulis `EmployeeLoan` apa pun = MERAH (BR-LR46-09/10).
+
+AC-LR46-F (Frontend):
+- AC-LR46-F1: halaman menampilkan angka verbatim payload server berlabel frekuensi cicilan terpisah; UI menjumlah ulang, memproyeksikan potongan/lunas, atau menampilkan nominal gaji = MERAH.
+- AC-LR46-F2: pemilih departemen hanya untuk scope `all`; penanda karyawan nonaktif bersisa tampil dari payload server, bukan ditebak UI dari tanggal.
+- AC-LR46-F3: grep e2e permukaan `sdm/pinjaman` sebelum mengubah label/selector daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 pinjaman `active` bersisa nol belum terflip (data lama sebelum `paid_off` dikenalkan): tetap populasi aktif dengan sisa 0 terhitung — builder tidak menebak lunas. EC-2 karyawan tanpa departemen: ember "tanpa departemen", hanya terlihat scope all. EC-3 karyawan berhenti tengah jalan dengan dua pinjaman aktif: kedua sisa tampil; rekap tidak memilih mana dipotong dari pembayaran terakhir (vonis 023-V 2E, jalur terpisah). EC-4 pinjaman `pending` besar: tampil di ember menunggu, tidak menaikkan Σ sisa kewajiban. EC-5 cicilan bulanan 0 tersimpan (skema hanya menolak < 1 di jalur buat — data lama mungkin beda): tampil apa adanya, builder tidak mengarang cicilan pengganti. EC-6 periode: rekap adalah potret berjalan (tanpa parameter periode tahap 1); memfilter `loanDate` = Q-LR46-4, jangan ditambah diam-diam. EC-7 karyawan self-scope tanpa pinjaman aktif: halaman menyatakan kosong jujur, bukan baris nol. EC-8 `remainingAmount` negatif (anomali data): tampil apa adanya tertanda anomali untuk ditindak HR, tidak di-clamp diam-diam ke 0 oleh builder.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-046-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni agregat pinjaman per karyawan + loader scope fail-closed; ember status BR-LR46-02/04; tes AC-LR46-B1..B5 | Backend | Lead buka Q-LR46-1/3; klaim file di board sebelum edit | — |
+| (turunan) halaman rekap di area SDM + filter departemen + tautan daftar per karyawan | Frontend | kontrak Backend stabil | grep e2e `sdm/pinjaman` dulu |
+| (turunan) falsifikasi AC-LR46-B1..B5 + AC-LR46-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-LR46 → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap dibaca sebagai dasar potong payroll kedua atau proyeksi lunas karangan — mitigasi BR-LR46-05 + label halaman; risiko nominal pinjaman bocor lintas scope — mitigasi BR-LR46-06 (masking = baris tidak tampil, bukan angka disamarkan).
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-LR46-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo (daftar per pinjaman + jumlah manual) diterima?
+- Q-LR46-2 (Lead): populasi baris = hanya karyawan berpinjaman aktif/pending (usul spec) atau semua karyawan dalam scope termasuk tanpa pinjaman (baris nol eksplisit)?
+- Q-LR46-3 (Lead): reuse izin `view_employee_loans` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-LR46-4 (Backend): bentuk loader (agregat `groupBy` DB vs muat baris ter-scope + builder murni) dan apakah filter tanggal `loanDate` dibutuhkan tahap 1 — putus saat fisik, builder wajib murni.
+- Accountant: TIDAK diminta tahap ini — nol angka baru (bunga/potong/pajak sudah divonis 023-V; rekap menampilkan fakta tersimpan). Dipanggil hanya bila ada usul mengubah perlakuan sisa karyawan berhenti di luar 023-V 2E.
+
+### Yang TIDAK diusulkan run ini
+
+- Proyeksi potongan periode depan, sisa sesudah payroll mendatang, atau perkiraan tanggal lunas: simulasi atas budget slip yang belum ada (BR-LR46-05).
+- Menampilkan nominal gaji/potongan slip di rekap: wilayah authorization payroll, bukan permukaan pinjaman (BR-LR46-06).
+- Histori cicilan per pinjaman: sudah terspec F-2026-10-25-019-S (ledger tahap 2); rekap ini potret sisa berjalan, bukan riwayat.
+- Pengajuan/persetujuan/penghapusan pinjaman dari rekap: jalur tulis existing + 018-S (BR-LR46-09).
+- Menghapus/menolkan sisa pinjaman karyawan berhenti dari rekap: dilarang vonis 023-V 2E.
+- Bunga/denda pinjaman: vonis 023-V tahap 1 tanpa bunga; membuka bunga = vonis Accountant baru, bukan spec ini.
+
+F-2026-10-25-046-S — Rekap sisa pinjaman aktif per karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LR46-1/2/3 + fisik Backend Q-LR46-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---
