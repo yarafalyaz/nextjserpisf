@@ -107,49 +107,19 @@ export function creditDocumentNoFromNotes(notes: string | null | undefined): str
 }
 
 /**
- * Jejak klik WA statement pelanggan (apa adanya, terbaru-dulu) —
- * ActivityLog `whatsapp_link_opened` jenis `CustomerStatement`, modelId =
- * ID pelanggan. BR-SW-01: baris hanya membuktikan tautan dibuka; fungsi ini
- * tidak menghitung status terkirim/dibaca apa pun.
+ * Jejak klik tautan statement pelanggan per kanal (apa adanya,
+ * terbaru-dulu) — ActivityLog action kanal (`whatsapp_link_opened` /
+ * `email_link_opened`) jenis `CustomerStatement`, modelId = ID pelanggan.
+ * Baris hanya membuktikan tautan dibuka; fungsi ini tidak menghitung
+ * status terkirim/dibaca apa pun (BR-SW-01/BR-SE-01). Kanal tetap TERPISAH
+ * sebagai field hasil berbeda (BR-SE-10) — hanya mekanik query yang sama.
  */
-async function loadStatementWhatsappTrail(
+async function loadStatementLinkTrail(
   customerId: number,
+  action: "whatsapp_link_opened" | "email_link_opened",
 ): Promise<CustomerStatementWhatsappTrailEntry[]> {
   const rows = await prisma.activityLog.findMany({
-    where: { modelType: "CustomerStatement", modelId: customerId, action: "whatsapp_link_opened" },
-    orderBy: { createdAt: "desc" },
-    take: 25,
-    select: { userId: true, createdAt: true },
-  })
-
-  const userIds = Array.from(new Set(rows.map((r) => r.userId).filter((id) => id != null)))
-  const users =
-    userIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true },
-        })
-      : []
-  const nameById = new Map(users.map((u) => [u.id, u.name]))
-
-  return rows.map((r) => ({
-    userName: r.userId ? (nameById.get(r.userId) ?? null) : null,
-    createdAt: r.createdAt,
-  }))
-}
-
-/**
- * Jejak klik email statement pelanggan (apa adanya, terbaru-dulu) —
- * ActivityLog `email_link_opened` jenis `CustomerStatement`, modelId = ID
- * pelanggan. BR-SE-01: baris hanya membuktikan tautan dibuka; fungsi ini
- * tidak menghitung status terkirim/dibaca apa pun. TERPISAH dari jejak WA
- * (BR-SE-10) — query action berbeda, tidak digabung.
- */
-async function loadStatementEmailTrail(
-  customerId: number,
-): Promise<CustomerStatementEmailTrailEntry[]> {
-  const rows = await prisma.activityLog.findMany({
-    where: { modelType: "CustomerStatement", modelId: customerId, action: "email_link_opened" },
+    where: { modelType: "CustomerStatement", modelId: customerId, action },
     orderBy: { createdAt: "desc" },
     take: 25,
     select: { userId: true, createdAt: true },
@@ -189,8 +159,8 @@ export async function loadCustomerStatement(
       where: { id: customerId },
       select: { phone: true, email: true },
     }),
-    loadStatementWhatsappTrail(customerId),
-    loadStatementEmailTrail(customerId),
+    loadStatementLinkTrail(customerId, "whatsapp_link_opened"),
+    loadStatementLinkTrail(customerId, "email_link_opened"),
     prisma.salesInvoice.findMany({
       where: {
         customerId,
