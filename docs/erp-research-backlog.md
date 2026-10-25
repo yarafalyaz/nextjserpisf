@@ -28820,3 +28820,152 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-032-S: antrean tiket CRM terbuka per prioritas+umur (baca-saja; daftar kerja harian, BUKAN target SLA F-2026-10-24-135-S)
+
+> **Slot**: F-2026-10-25-032-S. Diperiksa bentrok 2026-10-25 15:40 WIB vs `origin/main` (`7bccfb90`): grep `F-2026-10-25-032` di backlog+board origin/main = 0, judul PR terbuka = 0, branch remote `*032*` = 0. ID terpakai tanggal ini terverifikasi: 027-S merged (PR #857), 028-S PR #858, 029-S PR #859, 030-S PR #860, 031-S PR #865 — 032-S bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_41f102c0. Dokumen saja; **tanpa kode/schema/migrasi** run ini. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Ringkasan
+
+Daftar tiket existing menjawab "tiket apa saja ada" (urut `createdAt` terbaru, terpaginasi, filter status), tetapi tidak menjawab pertanyaan kerja pagi staf CRM: "tiket terbuka mana yang dikerjakan lebih dulu hari ini?" Spec ini membekukan **antrean kerja baca-saja**: himpunan global tiket non-terminal terurut (1) tingkat prioritas, lalu (2) umur menunggu sejak `createdAt`, lengkap dengan penanda umur dan penanggung jawab — tanpa target waktu, tanpa ambang "terlambat", tanpa status baru. Beda tegas dari SLA (F-2026-10-24-135-S): SLA menilai tiket terhadap target jam-kerja per prioritas (angka USULAN, masih `BUTUH-VONIS` Lead Q-SLA135-1/2); antrean ini hanya mengurutkan pekerjaan terbuka apa adanya. Antrean TIDAK menunggu putusan SLA dan TIDAK meminjam angkanya; bila SLA kelak diputus, keduanya hidup berdampingan (urutan kerja vs keadaan tenggat).
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 7bccfb90)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `CrmTicket` (`prisma/schema.prisma:4354-4386`): `ticketNumber`, `subject`, `priority String @default("medium")`, `status String @default("open")`, `assignedTo`, `firstResponseAt`, `resolvedAt`, `closedAt`, `deletedAt`, `createdAt`, `updatedAt`; index `[status]`, `[assignedTo]`, `[status, assignedTo]`, `[createdAt]`.
+- Kosakata status tertutup di validasi: `z.enum(["open", "in_progress", "resolved", "closed"])` (`src/lib/validations/crm.schemas.ts:40-44`); `priority` string bebas `optionalString(50)` (`:23,35`) — form hanya menawarkan low/medium/high, nilai liar bisa masuk jalur non-form.
+- Daftar tiket (`src/app/(dashboard)/crm/tickets/page.tsx`): gerbang `view_tickets`, `orderBy: { createdAt: "desc" }`, paginasi server `take/skip`, filter status via chip + cari subjek/pelanggan. Tabel (`_components/ticket-table.tsx`): Subjek / Prioritas / Status / Dibuat / Aksi.
+- Aksi tiket (`src/actions/crm.actions.ts`): `createTicket` status awal persis `open`; `updateTicket` menulis `firstResponseAt` sekali saat keluar `open` dan `resolvedAt` sekali saat masuk `resolved`/`closed`; komentar tidak menyentuh keduanya. `closedAt` tidak pernah ditulis jalur produk.
+- Permission nyata katalog (`src/lib/auth/module-catalog.generated.ts:372-375`): `view_tickets`, `create_tickets`, `edit_tickets`, `delete_tickets`.
+- Saudara antrean baca-saja existing sebagai pola (BUKAN duplikat): kartu antrean pola `StaleLeadsCard`/`WorkOrderQueueCard` (dirujuk spec konsumen SLA F-2026-10-22-001-U), `lead-followups.ts`/`stale-leads.ts` (builder murni + loader massal).
+
+Belum ada / gap (bukti grep run ini):
+- Grep `ticket` di `src/lib/reports/*.ts` = 0 berkas; tidak ada builder/loader antrean tiket, tidak ada permukaan "tiket terbuka terurut prioritas+umur" di `crm/tickets` maupun laporan.
+- Daftar existing mengurutkan terbaru-dulu dan terpaginasi: tiket `high` berumur lama di halaman belakang tidak terlihat sebagai pekerjaan mendesak; tidak ada ringkasan hitungan terbuka per prioritas, tidak ada kolom umur menunggu.
+- SLA ABSEN sebagai kode (grep `sla`/`TicketSla` di `src/lib` + `crm` = 0 relevan; spec F-2026-10-24-135-S masih menunggu Q-SLA135-1/2) — antrean ini sengaja tidak bergantung padanya.
+
+### 2. Workflow specification
+
+Aktor: staf CRM pemegang `view_tickets`, penanggung jawab tiket (`assignedTo`), admin.
+Dokumen masuk: baris `CrmTicket` existing. Dokumen keluar: tidak ada — permukaan baca-saja turunan per baca; nol tulisan ke tiket.
+
+Alur:
+1. Staf membuka permukaan antrean (bentuk permukaan = Q-CTQ-3: kartu di atas daftar tiket existing vs halaman laporan). Permukaan menampilkan himpunan GLOBAL tiket non-terminal (`open`/`in_progress`, `deletedAt IS NULL`), bukan subset halaman tabel berjalan.
+2. Baris terurut deterministik (BR-CTQ-04): tingkat prioritas dulu (high → medium → low → tak-dikenal terakhir tertanda), lalu `createdAt` tertua dulu (menunggu terlama di atas dalam tingkat yang sama), seri `ticketNumber` lalu `id`.
+3. Tiap baris menampilkan: nomor tiket (tautan ke detail existing), subjek, prioritas (label existing Rendah/Sedang/Tinggi; liar tertanda `Prioritas tak dikenal`), status, umur menunggu (turunan `createdAt`, BR-CTQ-05), penanggung jawab (nama atau `Belum ditugaskan`), pelanggan (`customerName` apa adanya).
+4. Ringkasan di kepala permukaan: hitungan terbuka per tingkat prioritas + hitungan belum ditugaskan. Hitungan adalah hitungan baris himpunan yang sama, bukan ambang/kesehatan.
+5. Staf menindaklanjuti lewat detail/aksi tiket existing (`edit_tickets`). Antrean tidak punya tombol ubah status/prioritas/assignee, tidak ada klaim/ambil-alih, tidak ada notifikasi tahap 1.
+
+Beda tegas dari saudara:
+| Permukaan | Pertanyaan | Sifat |
+|---|---|---|
+| Daftar tiket existing | tiket apa saja ada (filter status/cari) | inventaris terpaginasi, urut terbaru |
+| SLA F-2026-10-24-135-S (+ konsumen 001-U) | tiket mana lewat target respons/resolusi jam-kerja | keadaan tenggat; angka `BUTUH-VONIS` Lead |
+| **Spec ini 032-S** | **tiket terbuka mana dikerjakan lebih dulu pagi ini** | **urutan kerja prioritas+umur; tanpa target/ambang** |
+
+Satu permukaan tidak menggantikan yang lain: tiket bisa teratas di antrean ini (high, tertua) tanpa "lewat SLA" apa pun, dan tiket lewat-SLA (bila SLA kelak ada) tetap terlihat di antrean sesuai prioritas+umurnya.
+
+### 3. Role/permission matrix
+
+Permission nyata katalog (`module-catalog.generated.ts:372-375`); tanpa key baru (Q-CTQ-4 hanya bila Lead menuntut permukaan laporan terpisah).
+
+| Aksi | Permission nyata | Staf CRM | Penanggung jawab | Admin |
+|---|---|---|---|---|
+| Melihat antrean + ringkasan hitungan | `view_tickets` | ya | ya | ya |
+| Membuka detail dari antrean | `view_tickets` | ya | ya | ya |
+| Mengubah status/prioritas/assignee (di detail existing) | `edit_tickets` | sesuai existing | sesuai existing | sesuai existing |
+| Membuat tiket baru | `create_tickets` | sesuai existing | sesuai existing | sesuai existing |
+| Tombol aksi tulis apa pun di antrean | — | TIDAK tahap 1 | TIDAK | TIDAK |
+| Key izin baru / permukaan tanpa gerbang | — | TIDAK | — | — |
+
+Tidak ada data gaji/pribadi khusus di permukaan ini; nama pelanggan/penanggung jawab = yang sudah tampil bagi pemegang `view_tickets` di daftar/detail existing.
+
+### 4. Status-transition / population matrix
+
+Tidak ada transisi status baru dan tidak ada tulisan. Yang dibekukan = populasi antrean dan perlakuan tepi:
+
+| Keadaan tiket | Di antrean? | Perlakuan | Penjaga |
+|---|---|---|---|
+| `open` | ya | kelompok "belum direspons" terbaca dari `firstResponseAt` kosong bila kolom itu ditampilkan turunan; tetap satu baris | builder |
+| `in_progress` | ya | tetap di antrean sampai terminal; status bukan alasan keluar | builder |
+| `resolved` / `closed` | TIDAK | terminal — keluar semua hitungan dan baris | builder (falsifikasi AC-CTQ-B1) |
+| `deletedAt` terisi | TIDAK | dikecualikan selalu | query `deletedAt IS NULL` |
+| status liar di luar enum validasi | ya, tertanda | ember `Status tidak dikenal` di urutan sesudah `in_progress` dalam tingkat prioritasnya; tidak dipetakan paksa ke status sah | builder |
+| prioritas `high`/`medium`/`low` persis | ya | tingkat 1/2/3 sesuai urutan itu | builder, pencocokan case-sensitive |
+| prioritas kosong/null/liar (`HIGH`, `urgent`, dst.) | ya, tertanda | tingkat TERAKHIR + label `Prioritas tak dikenal`; TIDAK diperlakukan medium diam-diam (beda sadar dari BR-CRM-02 SLA: di antrean kerja, menyamakan liar ke medium menyembunyikan data rusak dari daftar kerja harian) | builder |
+| tanpa `assignedTo` | ya, tertanda | label `Belum ditugaskan`; ikut hitungan ringkasan belum-ditugaskan | builder |
+| prioritas berubah (edit existing) | ya | baca berikutnya langsung pindah tingkat dari nilai berjalan terhadap `createdAt` yang sama; tidak ada peristiwa/riwayat baru tahap 1 | turunan per baca |
+
+**Keputusan umur (diputus eksplisit di spec ini):** umur menunggu = `now − createdAt` (kalender, ditampilkan sebagai durasi/jumlah hari apa adanya), BUKAN `updatedAt` dan BUKAN jam kerja. Alasan: pertanyaan antrean adalah "sudah berapa lama tiket ini menunggu sejak masuk", dan `updatedAt` bergerak oleh edit apa pun (termasuk edit administratif) sehingga mengecilkan umur semu; jam kerja adalah milik perhitungan SLA (135-S) dan meminjamnya di sini = mencampur dua pertanyaan. Konsekuensi jujur: umur kalender menghitung malam/akhir pekan/libur — itu fakta menunggu pelanggan, bukan klaim keterlambatan; label kolom wajib `Umur sejak dibuat`, dilarang label `Terlambat`.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-CTQ-01 | Gap terbukti ABSEN: tidak ada builder/loader/permukaan antrean tiket terbuka terurut prioritas+umur; daftar existing urut `createdAt desc` terpaginasi. | TERVERIFIKASI-KODE | `crm/tickets/page.tsx` (`orderBy createdAt desc`); grep `src/lib/reports` tiket = 0 |
+| BR-CTQ-02 | Populasi antrean = `status IN (open, in_progress)` DAN `deletedAt IS NULL`, himpunan global (bukan subset halaman tabel). Status terminal keluar tanpa kecuali. | USULAN (populasi dari kosakata TERVERIFIKASI-KODE) | `crm.schemas.ts:40-44`; pola antrean global 001-U |
+| BR-CTQ-03 | Prioritas sah tahap 1 persis `high`/`medium`/`low` case-sensitive. Nilai lain/kosong = tingkat terakhir tertanda `Prioritas tak dikenal`; dilarang normalisasi diam-diam dan dilarang menambah tingkat `urgent` di spec ini. | USULAN | kolom `priority` string bebas `schema.prisma:4362`; BR-CRM-02 sebagai pembanding sadar |
+| BR-CTQ-04 | Urutan deterministik: tingkat prioritas (high, medium, low, tak-dikenal) → `createdAt` asc → `ticketNumber` asc (null terakhir) → `id` asc. Loader/UI dilarang mengurutkan ulang. | USULAN | pola seri builder `lead-*` existing |
+| BR-CTQ-05 | Umur menunggu = turunan `createdAt` kalender, label `Umur sejak dibuat`. Dilarang memakai `updatedAt`, dilarang jam-kerja, dilarang kata `Terlambat`/`Lewat` di permukaan ini. | USULAN (keputusan eksplisit §4) | `CrmTicket.createdAt/updatedAt` `schema.prisma:4373-4374` |
+| BR-CTQ-06 | Baca-saja mutlak: builder/loader/permukaan tidak menulis `CrmTicket`/`CrmTicketComment`, tidak mengubah status/prioritas/assignee, tidak ada aksi klaim/ambil-alih tahap 1. | USULAN | pola builder murni `lead-followups`/`stale-leads` |
+| BR-CTQ-07 | Tanpa target/ambang waktu apa pun: tidak ada batas jam/hari "harus ditangani", tidak ada keadaan lewat/mendekati, tidak ada eskalasi/notifikasi/cron tahap 1. Ambang apa pun kelak = spec terpisah atau putusan SLA 135-S, bukan konstanta di builder ini. | USULAN | pemisah domain §2; F-2026-10-24-135-S Q-SLA135-1/2 |
+| BR-CTQ-08 | Izin permukaan = `view_tickets` existing; tanpa key baru, tanpa permukaan tanpa gerbang. Tautan baris menuju detail existing (gerbang detail yang sama). | USULAN (key TERVERIFIKASI-KODE) | `module-catalog.generated.ts:372` |
+| BR-CTQ-09 | Tiket tanpa penanggung jawab tetap tampil tertanda `Belum ditugaskan` dan terhitung di ringkasan; tidak disembunyikan, tidak ditugaskan otomatis. | USULAN | pola EC-6 spec SLA |
+| BR-CTQ-10 | Ringkasan hitungan per tingkat + belum-ditugaskan dihitung dari himpunan populasi yang sama dengan baris (satu query massal); hitungan halaman tabel terpaginasi dilarang dipakai sebagai ringkasan antrean. | USULAN | batas kontrak antrean global 001-U |
+| BR-CTQ-11 | Kegagalan builder/loader: permukaan antrean disembunyikan/ditandai tidak tersedia; daftar tiket existing tetap dapat dipakai. Dilarang menampilkan antrean kosong karangan sebagai "tidak ada pekerjaan". | USULAN (label jujur) | pola label jujur 001-U |
+| BR-CTQ-12 | `firstResponseAt`/`resolvedAt` tidak dihitung ulang dan tidak ditulis spec ini; bila kolom turunan "belum direspons" ditampilkan, definisinya persis `status=open AND firstResponseAt IS NULL` apa adanya (semantik existing "keluar dari open", bukan klaim balasan pelanggan). | USULAN (semantik TERVERIFIKASI-KODE) | `crm.actions.ts` updateTicket; catatan jujur 135-S BR-CRM-03 |
+
+### 6. Feature matrix (benchmark, akses live 2026-10-25)
+
+| Kemampuan | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Modul tiket/helpdesk CRM dengan antrean kerja prioritas | Tidak ditemukan modul tiket dukungan pelanggan di Help Accurate yang diakses run ini (`https://help.accurate.id/`) — hasil relevan adalah tiket pesanan Kitchen Display POS, domain berbeda, tidak diklaim setara | Tidak ditemukan modul tiket/helpdesk CRM di portal bantuan resmi yang diakses run ini (`https://help.zahironline.com/portal/id/home`) | Spec ini: antrean baca-saja di atas `CrmTicket` existing |
+| Target SLA per prioritas | Tidak ditemukan (sama seperti temuan induk 135-S) | Tidak ditemukan | F-2026-10-24-135-S, angka `BUTUH-VONIS` Lead — BUKAN spec ini |
+| Daftar kerja terbuka terurut prioritas+umur | Tidak ditemukan permukaan setara di sumber resmi di atas | Tidak ditemukan permukaan setara di sumber resmi di atas | Spec ini BR-CTQ-02..05 |
+
+Catatan jujur: benchmark negatif di atas membuktikan antrean ini kebutuhan operasional ISF sendiri (pola antrean kerja internal repo: stale-leads/work-order-queue), bukan paritas vendor. Tidak ada angka/ambang yang disalin dari vendor mana pun (BR-CTQ-07).
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder murni + loader):
+- AC-CTQ-B1: tiket `resolved`/`closed`/terhapus-lembut dengan prioritas `high` dan umur tertua TIDAK muncul di baris maupun hitungan; muncul satu pun = MERAH.
+- AC-CTQ-B2: tiket `high` muda tampil di atas `low` tua; dalam tingkat sama, `createdAt` tertua di atas; seri mengikuti `ticketNumber` lalu `id` persis BR-CTQ-04. UI/loader mengurutkan ulang = MERAH.
+- AC-CTQ-B3: prioritas liar (`HIGH`/`urgent`/kosong) masuk tingkat terakhir tertanda `Prioritas tak dikenal`; terpetakan diam-diam ke medium/high = MERAH.
+- AC-CTQ-B4: umur turunan berubah hanya oleh `createdAt`/`now`: mutasi `updatedAt` pada fixture yang sama tidak mengubah umur/urutan; berubah = MERAH.
+- AC-CTQ-B5: loader satu query massal himpunan global (tiket terbuka di luar halaman pertama daftar tetap masuk), nol mutasi tiket/komentar; loader menulis apa pun = MERAH.
+- AC-CTQ-B6: hitungan ringkasan per tingkat + belum-ditugaskan sama dengan baris keluaran builder pada fixture yang sama; selisih = MERAH.
+
+Frontend (konsumen):
+- AC-CTQ-F1: label tingkat/umur/status verbatim keluaran server; UI menghitung umur/urutan sendiri = MERAH (mutasi builder harus mengubah tampilan tanpa ubah UI).
+- AC-CTQ-F2: permukaan tanpa `view_tickets` tertolak pola existing; nol tombol ubah status/prioritas/assign/klaim di antrean; sebelum commit grep e2e selector tiket terdampak (`aria-label "Daftar tiket dukungan"` dan halaman detail) dan sinkronkan commit yang sama.
+- AC-CTQ-F3: label umur persis `Umur sejak dibuat`; kata `Terlambat`/`Lewat SLA` muncul di permukaan ini = MERAH.
+
+QA (falsifikasi): paksa status terminal masuk populasi → B1 MERAH; balik urutan tingkat → B2 MERAH; normalisasi prioritas liar → B3 MERAH; geser `updatedAt` → B4 harus tetap hijau (gagal = builder salah sumber umur).
+
+Edge cases: EC-CTQ-1 tiket `open` tanpa `assignedTo` dan tanpa pelanggan (`customerName` kosong): tampil `Belum ditugaskan` + pelanggan `—`, tidak disembunyikan. EC-CTQ-2 prioritas diubah `low`→`high` pada tiket tua: baca berikut langsung tingkat atas grup high sesuai `createdAt` asal; tidak ada riwayat/peristiwa baru. EC-CTQ-3 dua tiket tingkat+`createdAt` sama persis: seri `ticketNumber` (null terakhir) lalu `id`. EC-CTQ-4 tiket dibuat tepat tengah malam WIB / batas bulan / tahun kabisat: umur kalender dihitung dari timestamp tersimpan apa adanya (WIB tampil), tanpa preset periode laporan. EC-CTQ-5 status liar historis (`pending` dsb. di luar enum): ember tertanda §4, tidak dihitung sebagai `open`. EC-CTQ-6 antrean kosong sah (nol tiket terbuka): tampil teks kosong jujur `Tidak ada tiket terbuka` — berbeda dari kegagalan loader (BR-CTQ-11 disembunyikan/tertanda tak tersedia). EC-CTQ-7 volume besar: permukaan boleh membatasi jumlah baris tampil hanya bila total himpunan tetap ditampilkan dan batasnya eksplisit tertanda (fisik batas = Q-CTQ-3); memotong diam-diam = MERAH pada AC-CTQ-B5/B6.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-CTQ-1 (Lead): sahkan pemisahan domain ini — antrean kerja prioritas+umur dibangun TANPA menunggu putusan angka SLA Q-SLA135-1/2, dengan larangan ambang BR-CTQ-07. (Rekomendasi spec: ya; keduanya menjawab pertanyaan berbeda.)
+- Q-CTQ-2 (Lead): perlakuan prioritas liar di antrean = tingkat terakhir tertanda (BR-CTQ-03), sengaja beda dari perlakuan medium di BR-CRM-02 SLA. Disahkan atau diseragamkan? Spec merekomendasikan tertanda-terakhir khusus antrean kerja (data rusak terlihat di daftar harian), tanpa mengubah BR-CRM-02.
+- Q-CTQ-3 (Lead + Frontend/Backend): bentuk permukaan — kartu di atas daftar `/crm/tickets` existing (pola kartu antrean repo, rekomendasi spec: satu tempat kerja, tanpa rute baru) vs halaman laporan terpisah; termasuk batas baris tampil EC-CTQ-7.
+- Q-CTQ-4 (Lead): izin cukup `view_tickets` (rekomendasi spec) — key baru hanya bila permukaan laporan terpisah dipilih di Q-CTQ-3 dan Lead menuntut gerbang laporan.
+- Accountant: TIDAK (tanpa uang/pajak/jurnal; tanpa angka target apa pun).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-032-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-032-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni antrean tiket + loader massal | Backend | Q-CTQ-1/2 diputus Lead | — |
+| (turunan) permukaan antrean (kartu/halaman per Q-CTQ-3) | Frontend | kontrak builder Backend final + Q-CTQ-3/4 | — |
+| (turunan) falsifikasi AC-CTQ-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Target SLA, ambang mendekati/lewat, eskalasi, notifikasi/cron pengingat tiket: domain F-2026-10-24-135-S, menunggu vonis Lead di sana (BR-CTQ-07).
+- Status tiket baru (`on_hold`/pause, `urgent`), kolom prioritas ter-enum/migrasi, riwayat perubahan prioritas tiket.
+- Aksi tulis dari antrean (klaim, assign massal, ubah status massal), skor prioritas angka, dan urutan berbasis nilai pelanggan/pendapatan.
+- Mengganti urutan/filter daftar tiket existing; daftar inventaris tetap apa adanya.
+
+F-2026-10-25-032-S — Antrean tiket CRM terbuka per prioritas+umur. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-CTQ-1/2/3/4 + fisik Backend. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
