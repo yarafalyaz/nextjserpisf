@@ -311,6 +311,12 @@ export const PERMISSIONS = [
       "manage_holidays",
       "delete_holidays",
       "create_loans",
+      // F-2026-10-25-018-S Q-LS-1 (Putusan Lead F-2026-10-25-026-L): key
+      // khusus pengajuan pinjaman MANDIRI oleh karyawan untuk dirinya
+      // sendiri. SENGAJA terpisah dari create_loans (yang juga membuka
+      // ubah/hapus pending jalur staf) dan dari approve_loans (SoD).
+      // Hanya masuk KARYAWAN_WHITELIST; update/delete tetap create_loans.
+      "create_employee_loan_requests",
       "delete_loans",
       "create_products",
       "edit_products",
@@ -618,7 +624,11 @@ export const KARYAWAN_WHITELIST = [
       "view_overtime",
       "view_payroll",
       "view_timesheets",
-      "view_employee_loans"
+      "view_employee_loans",
+      // Q-LS-1: pengajuan pinjaman mandiri (hanya diri sendiri, ditegakkan
+      // server di createEmployeeLoan). create_loans TIDAK ikut — key itu
+      // membuka ubah/hapus pending jalur staf.
+      "create_employee_loan_requests"
 ];
 
 export const PURCHASING_WHITELIST = [
