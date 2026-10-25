@@ -51,6 +51,7 @@ function row(extra: Partial<ItemWarehouseSettingRow> = {}): ItemWarehouseSetting
     globalMinStock: 10,
     minStockSource: "override",
     settingId: 7,
+    leadTimeDays: null,
     ...extra,
   }
 }

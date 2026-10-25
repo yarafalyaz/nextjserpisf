@@ -138,7 +138,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol
+  // F-2026-10-25-048-S inti backend (048-B1): aksi lead time penampung
+  // titik pesan-ulang; kontrol lead time di panel stok minimum per gudang
+  // + kolom titik/saran di laporan stok minimum menyusul (frontend
+  // t_c8cc7755, buang 2 entri ini saat UI memanggilnya).
+  "src/actions/item-warehouse-setting.actions.ts::setItemWarehouseLeadTime":
+    "F-2026-10-25-048-S backend; UI lead time panel stok minimum per gudang menyusul (frontend t_c8cc7755)",
+  "src/actions/item-warehouse-setting.actions.ts::removeItemWarehouseLeadTime":
+    "F-2026-10-25-048-S backend; UI hapus lead time panel stok minimum per gudang menyusul (frontend t_c8cc7755)",
+  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol",
   // mailto di halaman statement menyusul di kartu Frontend 043-F1 —
   // buang entri ini saat UI memanggilnya.
   "src/actions/email-log.actions.ts::recordEmailLinkOpened":
