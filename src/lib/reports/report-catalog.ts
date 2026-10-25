@@ -151,6 +151,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     icon: ShoppingCart,
     reports: [
       { href: "/laporan/analisis-penjualan" },
+      { href: "/laporan/riwayat-harga-penawaran" },
       { href: "/laporan/paparan-diskon-penjualan" },
       { href: "/laporan/pemenuhan-pesanan" },
       { href: "/laporan/rekap-komisi" },

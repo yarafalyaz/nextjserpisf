@@ -308,6 +308,7 @@ export const navigation: NavItem[] = [
       { label: "Rekap Komisi Penjualan", href: "/laporan/rekap-komisi", icon: Banknote, permission: "view_reports" },
       { label: "Target vs Pencapaian Penjualan", href: "/laporan/target-penjualan", icon: Target, permission: "view_reports" },
       { label: "Hasil Penawaran", href: "/laporan/hasil-penawaran", icon: BarChart3, permission: "view_reports" },
+      { label: "Riwayat Harga Penawaran", href: "/laporan/riwayat-harga-penawaran", icon: FileText, permission: "view_reports" },
       { label: "Garansi Segera Berakhir", href: "/laporan/garansi-segera-berakhir", icon: ShieldCheck, permission: "view_reports" },
       { label: "Aging Klaim Supplier", href: "/laporan/aging-klaim-supplier", icon: ShieldCheck, permission: "view_reports" },
       { label: "Corong Prospek", href: "/laporan/corong-prospek", icon: BarChart3, permission: "view_reports" },
