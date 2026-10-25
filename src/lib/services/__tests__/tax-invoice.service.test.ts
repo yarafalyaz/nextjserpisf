@@ -319,10 +319,12 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
   it("FP pelunasan selisih: dokumen penuh minus Sigma FP UM aktif", async () => {
     // salesInvoice.findUnique mock default null; override via tx sulit diakses di sini,
     // diarahkan lewat tiFindMany kosong -> angka penuh (dijamin oleh test builder).
+    // F-004-S §8A-5: terbit out wajib identitas — isian manual ditambah (angka PPN tak berubah).
     const r = await issueTaxInvoice({
       direction: "out", taxInvoiceNumber: "040.000-26.00000099",
       taxInvoiceDate: new Date(2026, 1, 10), sellingPrice: 120_000_000,
       salesInvoiceId: 5, idempotencyKey: key(),
+      counterpartyName: "PT Lawan Uji", counterpartyTaxId: "0123456789123456",
     })
     expect(r.success).toBe(true)
     const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
