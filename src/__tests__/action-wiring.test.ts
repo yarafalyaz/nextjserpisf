@@ -199,6 +199,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
   // pelanggan kini dirujuk halaman kelola pelanggan (frontend
   // t_1f97c2ea) — entri beku dibuang.
+  // F-2026-10-25-017-S Backend dulu: aksi klaim reimbursement dirujuk UI
+  // mandiri karyawan menyusul di kartu Frontend sesudah kontrak ini stabil
+  // — buang 3 entri ini saat UI memanggilnya.
+  "src/actions/reimbursement.actions.ts::createReimbursementClaim":
+    "F-2026-10-25-017-S backend; UI klaim mandiri menyusul (frontend)",
+  "src/actions/reimbursement.actions.ts::setReimbursementClaimAccounts":
+    "F-2026-10-25-017-S backend; UI verifikasi keuangan menyusul (frontend)",
+  "src/actions/reimbursement.actions.ts::getMyReimbursementClaims":
+    "F-2026-10-25-017-S backend; UI daftar klaim saya menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {
