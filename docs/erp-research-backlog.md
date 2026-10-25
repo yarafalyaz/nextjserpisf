@@ -26946,3 +26946,122 @@ bebas: grep `F-2026-10-25-005-V` di origin/main 651d1ce3 = 0 sebelum
 vonis ini; 005-S = spec induk). Pemilik berikutnya: BOT Lead merge →
 BOT Backend inti Putusan 2/4 (sesudah DISC-B1) → BOT Business/Frontend
 konsumen snapshot → BOT QA Q5-1..5.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-019-S: histori cicilan per pinjaman karyawan (ledger alokasi potongan slip per pinjaman, scope fail-closed)
+
+> **Slot**: F-2026-10-25-019-S. Diperiksa bentrok 2026-10-25 12:45 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-019` di backlog+board = 0 sebelum tulis; 017-S di PR #821 OPEN, 018-V di PR #822 OPEN (beda topik/sufiks). ID 019-S bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+
+Benchmark resmi (akses 2026-10-25):
+- Accurate Online — Pinjaman Karyawan + Histori Piutang per karyawan: https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/membuat-pinjaman-karyawan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/pinjaman-gaji/ (angsuran via Pencatatan Gaji membentuk transaksi Pembayaran Angsuran per pinjaman; tab Histori Piutang menampilkan histori pinjaman+cicilan per karyawan).
+- Zahir — fitur Loan payroll terintegrasi kas keluar: https://zahirerp.com/id/all-features-of-zahir-products/ (Loan by Custom). Rincian histori cicilan per pinjaman Zahir tidak ditemukan di help resmi yang diakses run ini — ditulis tidak terverifikasi, bukan dikarang.
+
+### 0. Ringkasan
+
+Karyawan/HR kini hanya melihat sisa pinjaman kini (`remainingAmount`). Potongan per slip yang benar-benar diterapkan ke pinjaman TERTENTU tidak tersimpan: `markPayrollPaid` mendistribusikan budget `Payroll.loanDeduction` (agregat per slip) ke pinjaman aktif tertua-dulu di dalam transaksi, lalu hanya memperbarui `remainingAmount`/`status` tiap pinjaman. Sesudah itu tidak ada rekod "slip X memotong pinjaman Y sebesar Z pada tanggal T". Akibatnya histori cicilan per pinjaman (cicilan ke-berapa, slip sumber, nominal diterapkan, sisa sesudahnya) tidak dapat direkonstruksi persis untuk slip lampau — hanya total terbayar kini (`totalAmount - remainingAmount`) yang merupakan fakta. Spec ini membekukan: (1) read-model histori tahap 1 yang JUJUR atas keterbatasan itu, (2) kontrak ledger fisik tahap 2 (keputusan Lead/Backend) supaya potongan mendatang tercatat per pinjaman di transaksi yang sama, (3) larangan menampilkan alokasi karangan untuk masa lampau.
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 997c8ead)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `EmployeeLoan` (`prisma/schema.prisma:3763`): `employeeId`, `loanDate`, `totalAmount`, `monthlyInstallment`, `weeklyInstallment` nullable (perjanjian tertulis, F-2026-10-23-105-V), `remainingAmount`, `status` string default `active`, `approvedBy`/`createdBy`. Status lunas ditulis `paid_off` saat sisa <= 0 (`src/actions/hrm.actions.ts:3013`).
+- Amortisasi atomik: `markPayrollPaid` (`src/actions/hrm.actions.ts:2941`) — klaim kondisional `approved -> paid`, distribusi budget `payroll.loanDeduction` tertua-dulu per `loanInstallmentForFrequency` (`src/lib/reports/payroll-weekly.ts:161`), cap per cicilan+sisa+budget, jurnal `onPayrollPaid` dalam transaksi yang sama.
+- Daftar+detail pinjaman existing scope-aman: `src/app/(dashboard)/sdm/pinjaman/page.tsx` (`requirePermission("view_employee_loans")` + `getHrScope`/`hrScopeWhere`, kolom karyawan disembunyikan untuk scope `self`) dan `.../pinjaman/[slug]/page.tsx` (detail: pokok, cicilan/bln, cicilan mingguan, sisa, status — tanpa histori cicilan).
+- Izin katalog: `view_employee_loans` (`src/lib/auth/module-catalog.generated.ts:319`), `create_loans`/`approve_loans`/`delete_loans` (:316-318). Scope HR fail-closed: `src/lib/auth/hr-scope.ts:40` (roles rusak/hilang -> self employeeId -1).
+
+Belum ada / gap (bukti grep run ini):
+- Tidak ada model/ledger cicilan per pinjaman: grep `LoanInstallment|LoanPayment|histori cicilan|riwayat cicilan` di `prisma/`+`src/` = 0 baris rekod per potongan. `Payroll.loanDeduction` (`schema.prisma:3570`) hanya agregat per slip per karyawan; distribusi antar-pinjaman tidak disimpan di mana pun.
+- Detail pinjaman tidak menampilkan daftar slip yang memotong pinjaman ini, nomor cicilan berjalan, atau sisa sesudah tiap potongan.
+- Rekonstruksi historis persis mustahil dari data kini saja: dua pinjaman aktif bersamaan + satu slip hanya menyisakan dua `remainingAmount` kini; urutan/nominal per slip lampau hilang (distribusi ulang dari cicilan master berjalan = karangan bila cicilan/sisa pernah diubah manual lewat form ubah pinjaman).
+
+### 2. Workflow specification
+
+Aktor: Karyawan (self), Kepala bengkel (departemen), HR/Finance/Admin/GA (all — `getHrScope`), Sistem payroll (penulis ledger tahap 2).
+Dokumen masuk: `EmployeeLoan` existing, `Payroll` berstatus `paid` dengan `loanDeduction > 0`, (tahap 2) baris ledger cicilan per pinjaman.
+Dokumen keluar: tampilan histori cicilan per pinjaman (baca-saja): ringkasan pinjaman + daftar potongan teralokasi (tahap 2) / daftar slip agregat bertanda jujur (tahap 1) + total terbayar terverifikasi + sisa kini.
+Alur:
+1. Pembaca membuka detail pinjaman (permukaan existing diperluas, bukan halaman duplikat).
+2. Server memuat pinjaman di bawah penjaga izin+scope yang sama persis dengan detail existing; di luar scope = tidak ditemukan (pola `resolveEntity` + `hrScopeWhere` existing).
+3. Builder murni menyusun histori dari sumber yang dinyatakan per baris (lihat §3): baris ledger (tahap 2, persis) dan/atau baris slip agregat (tahap 1, bertanda bukan alokasi per pinjaman).
+4. Tidak ada tulis apa pun dari permukaan histori: tanpa tombol bayar cicilan manual, tanpa edit sisa, tanpa ekspor berisi nominal di luar scope.
+
+### 3. Kontrak data (yang boleh dan tidak boleh ditampilkan)
+
+| Angka | Sumber sah | Label tampil wajib |
+|---|---|---|
+| Total terbayar kini | `totalAmount - remainingAmount` (fakta kini) | "Terbayar s.d. kini" |
+| Potongan per pinjaman per slip (tahap 2) | baris ledger tertulis dalam tx `markPayrollPaid` | "Cicilan" + nomor slip + tanggal bayar slip |
+| Potongan agregat slip (tahap 1, lampau) | `Payroll.loanDeduction` slip `paid` karyawan itu | "Potongan gaji periode ini (semua pinjaman)" — DILARANG dialokasikan ke pinjaman ini |
+| Sisa sesudah cicilan ke-n | hanya dari ledger berurutan (tahap 2) | tampil hanya bila ledger lengkap sejak pinjaman dibuat |
+| Perkiraan cicilan berikutnya | cicilan master per frekuensi slip (`loanInstallmentForFrequency`) | "Perkiraan" — bukan janji, bukan angka terhutang baru |
+
+### 4. Role/permission matrix
+
+| Aksi | Karyawan self | Kepala bengkel (dept) | HR/Finance/Admin/GA (all) | Tanpa `view_employee_loans` |
+|---|---|---|---|---|
+| Lihat histori pinjaman sendiri | YA (scope self) | YA dept-nya | YA | TIDAK (redirect fail-closed `requirePermission`) |
+| Lihat histori pinjaman orang lain | TIDAK | hanya se-departemen | YA | TIDAK |
+| Cari lintas karyawan | TIDAK (`canSearchAcrossEmployees` existing) | dept saja | YA | TIDAK |
+| Tulis ledger cicilan | TIDAK (hanya sistem dalam tx bayar slip) | TIDAK | TIDAK manual | TIDAK |
+| Ubah sisa/cicilan master | TIDAK dari histori (form existing + izinnya sendiri) | idem | idem | TIDAK |
+
+Tanpa key izin baru tahap 1 (reuse `view_employee_loans`); key baru = Q-LH-2 ke Lead.
+
+### 5. Status-transition matrix
+
+Pinjaman (existing, tidak diubah spec ini): `active -> paid_off` hanya oleh amortisasi slip terbayar saat sisa <= 0 (TERVERIFIKASI-KODE hrm.actions.ts:3013). Histori sendiri read-model: tanpa status tersimpan, tanpa transisi tulis. Baris histori per sumber: `ledger` (persis, tahap 2) / `agregat-slip` (informatif, tahap 1) / `tak-teralokasi` (selisih terbayar kini yang tidak tertaut baris mana pun — wajib tampil sebagai ember eksplisit bila > 0, tidak boleh disebar karangan).
+
+### 6. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-LH-01 | Histori baca-saja; tidak ada jalur tulis cicilan manual dari permukaan histori | USULAN | spec ini §2 |
+| BR-LH-02 | Gerbang = `view_employee_loans` + `getHrScope` fail-closed persis detail existing; luar scope = tidak ditemukan | TERVERIFIKASI-KODE | pinjaman/[slug]/page.tsx; hr-scope.ts:40 |
+| BR-LH-03 | Total terbayar kini = `totalAmount - remainingAmount`; tidak pernah dari penjumlahan karangan alokasi | USULAN (aritmetika atas field TERVERIFIKASI-KODE schema.prisma:3763) | spec ini §3 |
+| BR-LH-04 | Slip lampau (pra-ledger) hanya tampil agregat per slip bertanda semua-pinjaman; mengalokasikannya ke satu pinjaman = dilarang | USULAN | bukti §1: distribusi tidak tersimpan |
+| BR-LH-05 | Tahap 2: ledger per pinjaman wajib ditulis dalam transaksi yang sama dengan update `remainingAmount` di `markPayrollPaid`; gagal ledger = seluruh bayar rollback (pola jurnal existing) | BUTUH-VONIS (Lead perilaku inti + Backend fisik) | pola tx hrm.actions.ts:2958 dst |
+| BR-LH-06 | Ledger immutable: koreksi hanya lewat slip koreksi periode berjalan (rujuk F-2026-10-25-013-V), tidak edit/hapus baris lampau | BUTUH-VONIS (Accountant bila menyentuh angka slip final) | vonis F-013-V di backlog |
+| BR-LH-07 | Frekuensi cicilan per slip mengikuti frekuensi slip (`loanInstallmentForFrequency`), mingguan tanpa `weeklyInstallment` tertulis tetap terlarang ditebak | TERVERIFIKASI-KODE | payroll-weekly.ts:161; schema.prisma:3768 |
+| BR-LH-08 | Ember `tak-teralokasi` = terbayar kini dikurangi jumlah ledger terverifikasi; > 0 wajib tampil, tidak disembunyikan, tidak dibagi rata | USULAN | spec ini §5 |
+| BR-LH-09 | Nominal pinjaman/gaji karyawan lain tidak pernah bocor lewat histori: payload per pinjaman hanya pinjaman dalam scope; tanpa agregat lintas karyawan di permukaan self | USULAN | aturan keras payroll profile |
+| BR-LH-10 | Backfill ledger dari data lampau DILARANG (tidak ada sumber persis); ledger mulai sejak fisik tahap 2 aktif, baris sebelumnya tetap jalur agregat BR-LH-04 | USULAN | §1 |
+
+### 7. Feature matrix
+
+| Fitur | Accurate | Zahir | ISF kini | Spec ini |
+|---|---|---|---|---|
+| Histori cicilan per pinjaman per karyawan | YA — tab Histori Piutang + transaksi Pembayaran Angsuran per pinjaman (URL §Benchmark) | Loan payroll ada (URL §Benchmark); rincian histori per pinjaman tidak terverifikasi help resmi | TIDAK (sisa kini saja) | Tahap 1 agregat jujur + tahap 2 ledger persis |
+| Potongan otomatis via penggajian mengurangi saldo | YA | tidak terverifikasi run ini | YA (amortisasi tx) | tetap existing, ditambah rekod |
+| Jadwal rincian angsuran sejak pinjaman dibuat | YA (Rincian Angsuran otomatis) | tidak terverifikasi | TIDAK | tidak diusulkan (YAGNI §9) |
+
+### 8. Acceptance criteria + edge cases
+
+AC-LH-B (Backend):
+- B1: Pinjaman 1 aktif, 3 slip paid ber-loanDeduction: tahap 1 menampilkan 3 baris agregat bertanda semua-pinjaman + total terbayar kini benar; mengalokasikan nominal slip ke pinjaman tunggal di payload = MERAH (falsifikasi).
+- B2: Dua pinjaman aktif bersamaan: tidak ada baris per-pinjaman karangan untuk slip pra-ledger; ember tak-teralokasi konsisten dengan BR-LH-08.
+- B3 (tahap 2): `markPayrollPaid` dengan 2 pinjaman menulis 2 baris ledger yang jumlahnya = `loanDeduction` slip, sisa sesudah per baris cocok dengan `remainingAmount` akhir; matikan tulis ledger = MERAH; paksa gagal ledger = status slip tetap `approved`, sisa tidak berubah (rollback).
+- B4: Scope self karyawan A meminta pinjaman karyawan B = tidak ditemukan; roles rusak = kosong (fail-closed).
+- B5: Slip `draft/approved` (belum paid) tidak masuk histori terbayar.
+AC-LH-F (Frontend):
+- F1: Detail pinjaman menampilkan histori verbatim payload server + label §3 persis; UI tidak menjumlah/mengalokasi sendiri.
+- F2: Scope self tidak melihat nama/kolom karyawan lain; tanpa nominal gaji apa pun di permukaan ini.
+Edge: EC-1 pinjaman `paid_off` tetap bisa dibaca historinya. EC-2 cicilan master diubah di tengah jalan: baris ledger lampau tidak berubah (snapshot nominal diterapkan per baris). EC-3 potongan slip melebihi satu pinjaman: distribusi tertua-dulu existing, ledger mengikuti urutan yang sama. EC-4 pinjaman dibuat sebelum tahap 2 lalu dilunasi sesudahnya: campuran baris agregat + ledger + ember tak-teralokasi tampil jujur. EC-5 `weeklyInstallment` null + slip WEEKLY: tidak ada cicilan ditebak (BR-LH-07). EC-6 loanDeduction slip = 0: tanpa baris. EC-7 karyawan tanpa pinjaman: keadaan kosong jujur.
+
+### 9. Backlog implementasi (turunan F-2026-10-25-019-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-019-S | Spec ini (dokumen) | Business | — |
+| (dibuka Lead) LH-B1 | Builder+loader histori tahap 1 atas detail pinjaman existing (agregat jujur + ember tak-teralokasi), tes AC-LH-B1/B2/B4/B5 | Backend | putusan Lead Q-LH-1 |
+| (dibuka Lead) LH-B2 | Ledger fisik tahap 2 + tulis dalam tx `markPayrollPaid` + migrasi (klaim schema.prisma di board) | Backend | Q-LH-1 + Q-LH-3; vonis Accountant BR-LH-06 bila perlu |
+| (dibuka Lead) LH-F1 | Perluasan detail pinjaman existing tampil histori (bukan halaman baru duplikat) | Frontend | kontrak LH-B1 stabil |
+| (dibuka Lead) LH-Q1 | Falsifikasi AC-LH-B/F atas head persis | QA | LH-B/LH-F |
+
+Q terbuka: Q-LH-1 (Lead: buka tahap 1 saja vs langsung ledger tahap 2), Q-LH-2 (Lead: tanpa key izin baru — usulan spec), Q-LH-3 (Backend: bentuk fisik ledger + unik per (loanId, payrollId)), Q-LH-4 (Accountant bersyarat: hanya bila ledger dipakai koreksi slip final — tahap 1 TIDAK butuh vonis).
+
+### Yang TIDAK diusulkan run ini
+- Jadwal angsuran proyeksi sejak pinjaman dibuat (Accurate punya): YAGNI — tidak ada tenor/bunga tersimpan di `EmployeeLoan`; mengarang jadwal = angka karangan.
+- Pembayaran cicilan manual di luar slip (tunai/transfer): mengubah jurnal+kas = BUTUH-VONIS Accountant + inti Backend terpisah; bukan diam-diam di spec histori.
+- Portal/ekspor histori ke karyawan di luar dashboard existing.
+
+F-2026-10-25-019-S — Histori cicilan per pinjaman karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LH-1/2 + fisik Backend Q-LH-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/ledger), Frontend (konsumen detail existing), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap 1; bersyarat BR-LH-06 tahap 2.
