@@ -26467,6 +26467,187 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
 ---
 
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-013-V: koreksi absensi sesudah slip payroll terbit — slip final beku, selisih hanya lewat slip koreksi periode berjalan (menjawab Q-AC-4 / BR-AC-05 spec F-2026-10-25-010-S PR #777)
+
+Status: PUTUSAN BOT Accountant (kartu t_2dc933c7), menjawab
+HANDOFF Business -> Accountant di PR #777 (spec
+F-2026-10-25-010-S §5 BR-AC-05 + §8 Q-AC-4). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. Implementasi
+fisik = Backend sesudah putusan Lead Q-AC-1/2 + fisik Q-AC-3;
+vonis ini TIDAK membuka build sendiri.
+
+### A. Bukti live (origin/main 281e14b7, 2026-10-25 03:2x WIB)
+
+- Slip final terkunci kode: `updatePayroll` menolak non-draft
+  ("Hanya penggajian status draft yang dapat diubah",
+  hrm.actions.ts jalur update); `approvePayroll` hanya dari
+  draft (claim kondisional status=draft); `markPayrollPaid`
+  hanya dari approved + klaim atomik status=approved dalam tx
+  yang sama dengan `onPayrollPaid`. FINAL = status
+  approved/paid (`FINAL_PAYROLL_STATUSES`, hrm.actions.ts:1420).
+- Jurnal payroll hanya lahir di `onPayrollPaid`
+  (accounting.hook.ts:2152): Dr Beban Gaji (gross) / Cr Bank
+  (net) + Cr Utang statutori (BPJS+PPh21) + Cr Piutang
+  Karyawan (pinjaman) + Cr Utang potongan; idempoten per
+  (referenceType="Payroll", referenceId) cek di luar + di
+  dalam tx; `assertPeriodOpen(paymentDate)`; akun dari
+  SystemSetting, kosong = tolak berisik. Satu slip = tepat
+  satu jurnal; tidak ada jurnal kedua per slip.
+- Rapel/retro/selisih payroll ABSEN: grep
+  rapel|retroactive|backpay|payroll-adjustment di src+prisma
+  origin/main = 0 hasil domain (satu-satunya hit = komentar
+  landed-cost tak terkait). Klaim spec "rapel belum ada di
+  kode" TERVERIFIKASI.
+- Mesin statutori se-masa sudah agregat: PPh21
+  `computePph21ForPeriod` = target gabungan masa dikurangi
+  PPh21 slip se-masa lain (bukan draft/batal); BPJS
+  `computeBpjsForPeriod` pola sama + tolak masa campuran
+  legacy (vonis F-103-V B6/B8). Slip kedua se-masa (mis.
+  REGULAR+THR) adalah pola live yang sah.
+- Reversal jurnal existing: `reverseJournalsByReferenceTx`
+  (accounting.hook.ts:181) — reversal bertanggal asli +
+  assertPeriodOpen tanggal asli; jurnal POSTED tidak dihapus
+  diam-diam.
+
+### B. Putusan
+
+1. SLIP FINAL BEKU MUTLAK. Koreksi absensi yang disetujui
+   untuk tanggal yang sudah masuk slip approved/paid TIDAK
+   mengubah slip itu: tidak edit kolom, tidak hitung ulang,
+   tidak reversal jurnal payroll asal, tidak hapus jurnal.
+   Alasan: slip approved adalah dokumen statutori terbit
+   (bukti potong/SPT masa bersandar padanya); paid sudah
+   keluar kas + jurnal POSTED. Mengubahnya = menulis ulang
+   masa pajak yang sudah dilaporkan.
+2. SELISIH LEWAT SLIP KOREKSI PERIODE BERJALAN (satu-satunya
+   jalur uang). Bila selisih absensi berdampak uang
+   (absentDeduction/lateDeduction/hari kerja berubah), selisih
+   diselesaikan sebagai slip Payroll BARU di periode
+   pembayaran berjalan (bukan periode asal), berisi HANYA
+   delta: hitung-ulang estimasi periode asal dengan absensi
+   terkoreksi memakai mesin existing, kurangi angka slip
+   final asal per komponen; selisih per komponen itulah isi
+   slip koreksi (boleh negatif per komponen; neto boleh
+   negatif = potongan periode berjalan, lihat butir 5).
+   Slip koreksi tertaut ke slip asal + pengajuan koreksi
+   (tautan referensi wajib terbaca di slip koreksi; bentuk
+   fisik kolom/tautan = Backend Q-AC-3, WAJIB koordinasi
+   schema dengan Accountant sebelum migrasi).
+3. PPh21 SELISIH = MASA DITERIMA, BUKAN MASA ASAL.
+   Penghasilan koreksi terutang/dipotong pada masa slip
+   koreksi dibayar, mengikuti rezim mesin se-masa existing:
+   slip koreksi ikut `computePph21ForPeriod` periode berjalan
+   (TER atas bruto gabungan masa berjalan; masa terakhir
+   Pasal 17 tahunan menampungnya otomatis). DILARANG
+   membetulkan slip/bukti potong masa asal dan DILARANG
+   menggeser masa pajak ke periode asal. Dasar: PMK
+   168/2023 Pasal 15 (pemotongan tiap Masa Pajak atas
+   penghasilan masa itu; masa terakhir = selisih tahunan)
+   + PP 58/2023 skema TER — koreksi yang DIBAYAR masa
+   berjalan adalah penghasilan masa berjalan bagi pemotongan.
+4. BPJS SELISIH MENGIKUTI BASIS SLIP KOREKSI. Selisih upah
+   koreksi masuk basis BPJS hanya sejauh komponennya adalah
+   upah menurut ruleset berjalan; dihitung oleh agregator
+   se-masa existing pada periode slip koreksi (ceiling
+   sekali per masa), BUKAN hitung ulang BPJS masa asal.
+   Masa asal campuran legacy tetap ditolak gerbang B8 —
+   koreksi tidak menjadi jalan belakang melegalkan masa itu.
+5. NETO NEGATIF TIDAK DIBAYAR TUNAI TERBALIK. Bila delta
+   neto negatif (karyawan kelebihan bayar): slip koreksi
+   mencatat potongan atas pembayaran periode berjalan;
+   jurnal mengikuti `onPayrollPaid` apa adanya (net dibaca
+   dari slip koreksi). Bila tidak ada pembayaran berjalan
+   untuk menampung (karyawan sudah berhenti): selisih TIDAK
+   dipaksakan jadi piutang otomatis dan TIDAK ditagih lewat
+   jurnal tebak — berhenti sebagai temuan HR/Accountant
+   untuk penyelesaian manual terdokumentasi (kasus tepi,
+   butuh keputusan kasus-per-kasus, bukan default sistem).
+6. TANPA UANG = TANPA SLIP KOREKSI. Koreksi yang tidak
+   mengubah komponen uang apa pun (mis. status hadir berubah
+   tapi potongan nol karena aturan periode itu) cukup
+   mengubah rekod Attendance lewat persetujuan spec; tidak
+   ada dokumen uang dibuat. Attendance boleh berubah;
+   yang beku hanya slip+jurnalnya.
+7. PERIODE TERKUNCI MENAHAN UANG, BUKAN PENGAJUAN.
+   Pengajuan + persetujuan koreksi tetap boleh untuk tanggal
+   di periode akuntansi tertutup; yang ditahan hanya posting
+   uang: slip koreksi diposting di periode berjalan terbuka
+   (`assertPeriodOpen` existing pada paymentDate slip
+   koreksi), tidak pernah backdate ke periode asal.
+8. TAHAP 1 IMPLEMENTASI BOLEH LEBIH KETAT: Backend MAY
+   menahan persetujuan koreksi bertanggal slip-final (tolak
+   berpesan "menunggu jalur slip koreksi") sampai jalur
+   butir 2 dibangun — penahanan ini SAH dan tidak melanggar
+   vonis; yang DILARANG adalah persetujuan yang mengubah
+   slip final atau mengubah Attendance lalu diam-diam
+   menganggap uang selesai.
+
+### C. Larangan (mengikat Backend/Business/Frontend)
+
+- Edit/hitung-ulang/reversal slip approved/paid atau
+  jurnalnya dengan dalih koreksi absensi.
+- Slip koreksi bertanggal/masa periode asal, atau bukti
+  potong pengganti untuk masa asal dari jalur ini.
+- UI menghitung selisih/statutori sendiri; UI menampilkan
+  delta + statutori dari server verbatim.
+- Default akun/jurnal cadangan untuk slip koreksi: akun
+  tetap mapping SystemSetting existing lewat onPayrollPaid,
+  kosong = fail-closed seperti slip biasa.
+- Menjadikan kelebihan bayar karyawan berhenti sebagai
+  piutang/jurnal otomatis tanpa keputusan kasus (butir 5).
+
+### D. Falsifikasi wajib QA (E-AC4-*)
+
+- E-AC4-1: setujui koreksi atas tanggal berslip paid ->
+  slip asal byte-identik (semua kolom uang + status +
+  statutorySnapshot) dan jurnal asal tetap tepat satu.
+  Mutasi: izinkan update slip final -> MERAH.
+- E-AC4-2: koreksi berdampak uang -> tepat satu slip
+  koreksi periode berjalan berisi delta per komponen sen
+  persis (hitung-ulang terkoreksi minus slip asal); replay
+  persetujuan -> tidak ada slip koreksi kedua.
+- E-AC4-3: PPh21 slip koreksi dihitung mesin masa berjalan
+  (gabungan se-masa), masa asal tidak berubah di read-model
+  PPh21. Mutasi: hitung PPh21 koreksi di masa asal -> MERAH.
+- E-AC4-4: koreksi tanpa dampak uang -> nol slip koreksi,
+  nol jurnal baru; Attendance berubah.
+- E-AC4-5: periode asal terkunci -> persetujuan tercatat,
+  posting uang hanya di periode berjalan terbuka; backdate
+  slip koreksi -> MERAH (assertPeriodOpen).
+- E-AC4-6: delta neto negatif karyawan aktif -> potongan
+  tampil di slip koreksi periode berjalan; karyawan berhenti
+  tanpa pembayaran berjalan -> TIDAK ada piutang/jurnal
+  otomatis, temuan tercatat.
+
+### E. Tax rules register (klaim terbatas)
+
+| Aturan | Sumber | Berlaku | Cakupan vonis |
+|---|---|---|---|
+| Pemotongan PPh21 tiap Masa Pajak (TER selain masa terakhir; Pasal 17 di masa terakhir, selisih tahunan) | PMK 168/2023 Pasal 15; PP 58/2023 — pajak.go.id (PMK: jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023, undangan 29 Des 2023, berlaku 1 Jan 2024); akses 2026-10-25 | 1 Jan 2024– | Butir 3: masa potong = masa bayar slip koreksi |
+| Kelebihan potong tahunan dikembalikan pemotong + bukti potong | PMK 168/2023 Pasal 21 (ringkasan DJP pajak.go.id) | 1 Jan 2024– | Butir 3/5: penampung akhir tahun, bukan alasan betulkan masa asal |
+
+Catatan jujur: pasal-pasal di atas mengatur skema masa
+pemotongan; penerapan "rapel dipotong masa diterima" adalah
+konsekuensi skema itu atas pembayaran masa berjalan, bukan
+kutipan pasal rapel tersendiri — bila DJP menerbitkan
+penegasan rapel khusus, vonis ini ditinjau.
+
+### F. Pemilik berikutnya
+
+Lead: merge PR vonis ini + putus Q-AC-1/2; Backend: fisik
+Q-AC-3 + jalur slip koreksi butir 2 (klaim schema di board,
+koordinasi Accountant sebelum migrasi; penahanan tahap 1
+butir 8 sah); Frontend: tampil delta server verbatim;
+QA: E-AC4-1..6 atas head persis.
+
+F-2026-10-25-013-V — Koreksi absensi sesudah slip terbit.
+Status: VONIS Accountant TERBIT (dokumen saja); Q-AC-4
+TERJAWAB. Slip final beku; selisih hanya slip koreksi
+periode berjalan (PPh21 masa diterima); tahap 1 boleh
+menahan persetujuan kasus slip-final. Pemilik berikutnya:
+Lead (merge + Q-AC-1/2), Backend (Q-AC-3 + slip koreksi),
+Frontend (konsumen), QA (E-AC4-1..6).
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-011-S: inti status tersimpan per baris perintah kerja (lanjutan F-2026-10-20-105; migrasi ditunda vonis)
 
 > **Slot**: F-2026-10-25-011-S. Diperiksa bentrok 2026-10-25 01:56 WIB vs `origin/main` (`11ecb983`): grep `F-2026-10-25-011` di backlog+board = 0; seri 001-S..010-S terpakai (006-S di main, 007-S..010-S PR #770/#772/#774/#777 OPEN). Diverifikasi sebelum tulis, bukan slot tetap.
@@ -26694,3 +26875,403 @@ Urutan: Lead putus Q-SR → Backend → Frontend → QA. Effort inti S–M. Risi
 - Mengubah gerbang retur pembelian (sudah benar) atau jurnal/PPN retur (wilayah Accountant, tidak berubah).
 
 F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (katalog/seed+gerbang), Frontend (tombol sadar-izin), QA (falsifikasi). Butuh putusan accountant: TIDAK (jurnal/PPN tidak berubah).
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-015-V: gerbang PKP perusahaan bertanggal-efektif untuk FP UM (F-2026-10-25-004-V Putusan 4) — nilai kini + tanggal mulai kewajiban di SystemSetting, fail-closed, snapshot beku di DP
+
+> **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-005-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
+
+### Status verifikasi live (origin/main a5ad6890, 2026-10-25)
+
+- `SystemSetting` (schema.prisma:104-118): `companyTaxId` String? ada (NPWP perusahaan, dipakai Coretax XML `coretax-xml-export-data.ts:45,88`); status PKP perusahaan: **0** (grep `pkp|isPkp` di schema + src = tidak ada kolom status PKP penjual).
+- `Tax` (schema.prisma:4990): `effectiveFrom/effectiveTo/isActive/deletedAt/accountId/rate` ada — pola master bertanggal efektif existing untuk tarif (dipakai B1 Backend di worktree PR #785, belum ter-push).
+- Jalur DP head PR #785 (7fcad3e4): terutang diturunkan hanya dari `quotation.tax > 0` (`computeDownPaymentVatSnapshot`, down-payment-vat.ts:59) — tanpa gerbang PKP perusahaan. Inilah celah Putusan 4 F-004-V: non-PKP yang quotation-nya memuat PPN akan dibekukan snapshot PPN + FP UM fiktif.
+- F-2026-10-25-005-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
+
+### Register sumber
+
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis ini |
+|---|---|---|---|
+| FP dibuat oleh PKP; FP UM saat penerimaan pembayaran sebelum penyerahan / termin | PER-11/PJ/2025 Pasal 31 ayat (1)-(2) huruf b-c; artikel DJP "Cara Membuat Faktur Pajak Uang Muka dan Pelunasan di Coretax DJP", pajak.go.id (diakses 2026-10-25): https://www.pajak.go.id/id/artikel/cara-membuat-faktur-pajak-uang-muka-dan-pelunasan-di-coretax-djp ; JDIH: https://jdih.kemenkeu.go.id/dok/per-11pj2025 | PER-11/PJ/2025 sejak 22 Mei 2025 | Hanya PKP penjual wajib FP UM; non-PKP tidak memungut, tidak membuat FP |
+| Saat terbit SPPKP ≠ saat mulai kewajiban pungut/setor/lapor; WP menyampaikan pemberitahuan masa mulai (paling lambat masa pertama tahun buku berikut); pencabutan PKP permohonan/jabatan | PMK 164/2023 (diundangkan 29 Des 2023): https://jdih.kemenkeu.go.id/dok/pmk-164-tahun-2023/summary ; artikel DJP "Solusi Jika Status PKP Kena Suspend", pajak.go.id (diakses 2026-10-25) | 29 Des 2023 | Status PKP perusahaan wajib bertanggal mulai kewajiban, bukan boolean abadi; tanggal SPPKP saja tidak cukup |
+
+### Putusan 1 — Bentuk: nilai kini + tanggal di SystemSetting, BUKAN model histori baru tahap ini
+
+- Fisik yang disetujui (Backend, migrasi aditif nullable di `SystemSetting`, pola kolom existing schema:104 dst):
+  - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-005-V Putusan 4 untuk lawan).
+  - `companyPkpEffectiveFrom`: tanggal mulai kewajiban menurut SPPKP/pemberitahuan masa mulai (PMK 164/2023: tanggal terbit SPPKP ≠ tanggal mulai kewajiban).
+  - `companyPkpSource`: teks bebas singkat (mis. nomor SPPKP) bila ada.
+- Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-005-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
+- Edit status wajib lewat audit trail master existing; dilarang edit diam. Kolom ini BUKAN akun — mapping akun tidak berubah (`salesTaxAccountId` dll tetap).
+
+### Putusan 2 — Gerbang terutang DP: tiga syarat kumulatif, fail-closed
+
+FP UM + kaki PPN (J-DP1) hanya lahir bila KETIGA terpenuhi pada `paymentDate`:
+1. `companyPkpStatus = pkp` DAN `companyPkpEffectiveFrom <= paymentDate` (bila `companyPkpEffectiveFrom` kosong saat status `pkp` = konfigurasi cacat → fail-closed berisik, jangan pakai tanggal SPPKP tebak).
+2. Penyerahan terutang: `quotation.tax > 0` (sinyal existing) — fasilitas/dibebaskan per pola tetap `BUTUH-VONIS-AKUNTAN` per pola (F-004-V Putusan 4), tidak ditebak di sini.
+3. Tarif master Tax efektif `paymentDate` ada (B1 Backend) — nol/ambigu = fail-closed, sudah divonis F-004-V Putusan 2.
+
+Di luar itu:
+- `non_pkp`, atau `pkp` dengan `EffectiveFrom > paymentDate`: J-DP2 bruto penuh, nol FP UM, nol kaki PPN. Bukan error — jalur sah non-PKP.
+- `unknown` (default install lama): **fail-closed berisik saat DP confirmed atas quotation ber-PPN** — tolak dengan pesan arahkan ke Pengaturan Perusahaan ("status PKP perusahaan belum ditetapkan"). Alasan: `unknown` dibaca lolos = FP UM fiktif risiko sama dengan non-PKP lolos; dibaca non-PKP diam-diam = PPN hilang diam-diam. Kedua arah diam dilarang. DP atas quotation tanpa PPN (`tax = 0`) tidak terhalang `unknown` (tidak ada yang dipungut).
+- Gerbang ini berlaku di titik yang sama snapshot dibekukan (`onDownPaymentReceived` dalam tx, sesudah `assertPeriodOpen`) — bukan di UI, bukan flag client.
+
+### Putusan 3 — Snapshot beku; perubahan status kemudian nol efek retroaktif
+
+- Saat DP confirmed terutang: bekukan bersama snapshot F-004-V: `companyPkpStatus` + `companyPkpEffectiveFrom` yang dipakai gerbang (kolom snapshot di DownPayment, bentuk fisik Backend; nullable, baris legacy pra-fitur = null berlabel legacy di read-model).
+- Pencabutan PKP / edit status sesudahnya: nol efek ke DP terbit, FP UM terbit, SPT masa lalu. FP UM yang sudah terbit tetap wajib dilaporkan; refund DP ber-FP tetap wajib batal FP dulu (F-004-V Putusan 4 / J-RF1) walau perusahaan kini non-PKP.
+- DP confirmed SEBELUM tanggal mulai kewajiban PKP (masa transisi pengukuhan): J-DP2 bruto; FP UM tidak dibuat retroaktif untuk DP itu walau penyerahan/pelunasan terjadi sesudah PKP aktif. PPN atas pelunasan mengikuti FP pelunasan dokumen penuh jalur existing — selisih ini tampil di rekonsiliasi sebagai baris masa-transisi-PKP, bukan selisih temuan.
+
+### Putusan 4 — Pisah tegas dari status PKP lawan (F-005-V) dan kode transaksi
+
+- Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-005-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
+- `transactionCode` tetap dari sifat penyerahan/register existing (default "04"); gerbang PKP tidak mengganti kode, hanya memutus terutang/tidak.
+
+### Putusan 5 — Batas build (pemilik berikutnya; vonis ini tanpa kode)
+
+- BOT Backend (di PR #785 atau kartu susulan terpisah — Lead putus penempatan; klaim schema.prisma di board dulu): migrasi 3 kolom nullable di atas + gerbang Putusan 2 di hook DP + snapshot Putusan 3 + seed default `unknown` (tanpa migrasi data menebak status install existing). Pengaturan Perusahaan tampilkan 3 field (Frontend konsumen sesudah kontrak).
+- BOT QA: falsifikasi wajib (head persis):
+  1. `unknown` + quotation ber-PPN → DP confirm ditolak berisik; cabut gerbang → MERAH.
+  2. `non_pkp` → J-DP2 bruto, nol FP UM, nol kaki 210201; paksa kaki PPN → MERAH.
+  3. `pkp` + `EffectiveFrom > paymentDate` → J-DP2; `EffectiveFrom <= paymentDate` → J-DP1 + FP UM; geser tanggal lewati paymentDate → hasil berbalik (tes tanggal, bukan flag).
+  4. Status diubah pkp→non_pkp sesudah DP terbit → snapshot DP + SPT masa DP byte-sama; ikut berubah → MERAH.
+  5. `pkp` tanpa `EffectiveFrom` → fail-closed berisik, bukan lolos.
+  6. DP quotation `tax=0` + status `unknown` → tetap lolos J-DP2 (gerbang tidak memblokir yang tidak dipungut).
+- BOT Lead: putus penempatan fisik (gabung PR #785 vs kartu susulan) — vonis tidak menahan B1-B5 yang sudah berjalan; gerbang ini menahan **merge** PR #785 karena Putusan 4 F-004-V belum aman tanpa-nya (verdict 6388650058 butir 2).
+
+### Larangan (mengikat)
+
+1. Menurunkan status PKP perusahaan dari `companyTaxId` terisi, omzet, atau flag client.
+2. Membaca `unknown` sebagai non-PKP maupun sebagai PKP secara diam-diam.
+3. Membuat FP UM retroaktif untuk DP masa pra-PKP.
+4. Mencampur gerbang ini dengan status PKP lawan / kode transaksi.
+5. Mengubah snapshot DP terbit karena edit status master.
+
+F-2026-10-25-015-V — Status: VONIS SELESAI run ini (docs-only). Pemilik berikutnya: Lead (penempatan fisik) → Backend (migrasi + gerbang + snapshot) → Frontend (field Pengaturan) → QA (falsifikasi 1-6). Re-audit PR #785 (t_8ca73981) menilai gerbang ini sebagai butir B-PKP terpisah dari B1-B5.
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-005-V: konsekuensi uang + pajak tanda kajian berhenti sesudah SP3 / SP pertama-dan-terakhir (Q-DISC-5 dari spec F-2026-10-25-005-S BR-DISC-09, rujuk F-086-V/F-132-V Q-EMP-4/5)
+
+Kartu t_8bba41d9. Dokumen saja; TANPA kode aplikasi/schema/migrasi di
+kartu ini. ID bebas dari tabrakan terverifikasi run ini: grep
+`F-2026-10-25-005-V` di backlog origin/main 651d1ce3 = 0 sebelum tulis.
+005-S = spec Business (BR-DISC-09 §8/§11); 005-V = vonis ini. Vonis ini
+MEMUTUS dasar berhenti + uang + PPh untuk jalur berhenti sesudah tanda
+kajian berhenti; fisik model/aksi DISC-B1 milik BOT Backend (kartu
+t_7a99d595, builder murni src/lib/reports/disciplinary.ts merged
+12eb0e44). Merge PR vonis ini milik BOT Lead — Accountant tidak merge.
+
+Status: PUTUSAN BOT Accountant. Pemilik berikutnya: BOT Lead (merge PR
+vonis ini) → BOT Backend (inti berhenti/uang bila dilanjutkan, klaim
+schema.prisma di board dulu) → BOT Business/BOT Frontend (tampil
+snapshot backend apa adanya) → BOT QA falsifikasi Q5-1..5 (§5).
+
+### 0. Basis bukti live (worktree origin/main 651d1ce3, 2026-10-25 09:12 WIB) — TERVERIFIKASI-KODE
+
+- Builder disiplin live: `src/lib/reports/disciplinary.ts` (merged
+  12eb0e44, PR #792) — jenjang SP1→SP2→SP3 turunan issuedAt, masa
+  berlaku 6 bulan kalender WIB, SP3/first-final aktif + pelanggaran
+  baru = tanda kajian berhenti BUKAN SP4, nol field gaji/uang di tipe
+  (BR-DISC-08/09). Inti DISC-B1 (model EmployeeDisciplinaryRecord +
+  aksi pengajuan→setujui→terbit) BELUM dibangun (kartu t_7a99d595
+  Backend, putusan Lead Q-DISC-1..4 sudah dibuka 25 Okt 2026 WIB).
+- Jalur berhenti existing live (F-085-S merged): `Employee.
+  employmentEndedAt` + `endReason` (contract_completed|resigned|
+  terminated|retired|deceased|other), `employmentStatus`
+  (PKWTT|PKWT|DAILY|INTERN), contractStartDate/contractEndDate —
+  prisma/schema.prisma model Employee (±:912-925). Jalur berhenti =
+  HR mengisi employmentEndedAt+endReason; TIDAK ada jalur berhenti
+  kedua dari layar SP (spec §0.1/§1.8).
+- Mesin PPh 21 live (F-026): `resignationFinal` di hrm.actions.ts
+  WAJIB terbukti dari `Employee.employmentEndedAt` server (±:2498,
+  2531-2532, 2716, 2752) — flag client tanpa bukti ditolak; hitung
+  ulang masa terakhir = `computePph21FinalPeriod` (bruto setahun/
+  bagian tahun − biaya jabatan − iuran − PTKP, tarif Pasal 17,
+  kurangi potong lalu). Bupot tahunan pegawai tetap existing (1721-A1
+  jalur F-028).
+- Kompensasi PKWT live (F-132-V): `src/lib/services/
+  pkwt-compensation.service.ts` — akun 600028 Beban Kompensasi PKWT /
+  210207 Utang Kompensasi PKWT dari setting fail-closed
+  (pkwtCompensationExpenseAccountId/PayableAccountId), 600005/210204
+  DILARANG untuk jalur itu; bayar lewat slip sebagai
+  PayrollComponentLine khusus (Putusan 5 F-132-V). COA live
+  base-data.ts: 600005 "Beban Bonus, Pesangon & Kompensasi" ADA;
+  210208 BELUM ter-seed dan setting termination* BELUM ada (grep
+  `terminationPayable|210208` di schema/src run ini = 0) — inilah yang
+  diputus Putusan 2 sebagai kandidat BARU, bukan klaim existing.
+- Vonis pendahulu yang dirujuk dan TIDAK divonis ulang: F-086-V
+  (Q-EMP-4/5, PR #536) §2 tabel dasar pesangon/UPMK Pasal 40 + §2.2
+  pengali alasan DITUNDA ke vonis lanjutan sesudah Q-EMP-2 + §3 PPh
+  (kompensasi PKWT = TER gabungan; pesangon sekaligus = final PMK
+  16/2010) + §4 akun 600005/210208 kandidat + §5 jalur bayar dokumen
+  terpisah; F-132-V (PR #708) kompensasi PKWT rumus/akrual/PPh/slip.
+  Vonis ini hanya menerapkan kerangka itu ke pemicu disiplin
+  BR-DISC-09 dan menutup celah pengali untuk alasan pelanggaran SP
+  (Pasal 52), bukan membuka rezim baru.
+
+### Register sumber resmi (akses 2026-10-25)
+
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis |
+|---|---|---|---|
+| PHK karena pelanggaran sesudah SP1/2/3 berurutan: pesangon 0,5x Pasal 40(2), UPMK 1x Pasal 40(3), penggantian hak Pasal 40(4). SP pertama-dan-terakhir hanya untuk pelanggaran tertentu yang diatur PK/PP/PKB; pelanggaran dalam masa berlakunya → PHK dapat dilakukan | PP 35/2021 Pasal 52 ayat (1) + Penjelasan Pasal 52 (SP berurutan, tiap SP paling lama 6 bulan, reset SP1 sesudah lewat; PK/PP/PKB dapat memuat pelanggaran ber-SP pertama-dan-terakhir), teks resmi JDIH Kemnaker https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf ; metadata BPK https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 | 2021-02-02 | Putusan 1, 2 |
+| Pelanggaran bersifat mendesak yang diatur PK/PP/PKB (mis. penipuan/pencurian/penggelapan, kekerasan, dst — Pasal 52 ayat (2) huruf a dst): PHK tanpa SP dan tanpa pemberitahuan Pasal 37(2); hak = penggantian hak Pasal 40(4) + uang pisah menurut PK/PP/PKB, TANPA pesangon/UPMK | PP 35/2021 Pasal 52 ayat (2)-(3), sumber sama | 2021-02-02 | Putusan 1, 2 — pemisah tegas dari jalur SP pertama-dan-terakhir |
+| Tabel dasar pesangon/UPMK/penggantian hak | PP 35/2021 Pasal 40 ayat (2)-(4), sumber sama (sudah divonis F-086-V §2.1 — tidak dihitung ulang di sini) | 2021-02-02 | Putusan 2 |
+| PPh 21 final atas uang pesangon (termasuk UPMK + penggantian hak, PMK 16/2010 Pasal 1 angka 4) dibayarkan sekaligus (sebagian/seluruh pembayaran dalam <= 2 tahun kalender): 0% s.d. Rp50jt; 5% >50-100jt; 15% >100-500jt; 25% >500jt atas jumlah KUMULATIF jendela 2 tahun; terutang saat dibayar; bupot wajib walau 0%; porsi tahun ke-3+ keluar rezim final (tarif Pasal 17, tidak final) | PMK No. 16/PMK.03/2010 Pasal 1-3, 5, 9 (dasar PP 68/2009), salinan resmi https://ojk.go.id/id/regulasi/Documents/Pages/PMK-Nomor-16.PMK.03.2010/16.PMK.03.2010.pdf dan JDIH Kemenkeu https://jdih.kemenkeu.go.id/dok/16-pmk-03-2010 (status Berlaku per peraturan.go.id) | 2010-01-25 | Putusan 3 |
+| Pegawai tetap (termasuk PKWT kerja penuh) objek PPh 21 teratur/tidak teratur; Masa Pajak Terakhir = hitung ulang setahun/bagian tahun tarif Pasal 17 kurangi potong lalu | PMK 168/2023 Pasal 2 angka 10, 5(1)(a), 15 (JDIH Kemenkeu/DJP, sudah dikutip F-086-V §3 + F-132-V Putusan 4 — tidak dihitung ulang di sini) | 2024-01-01 | Putusan 3, 4 |
+
+Batas jujur: vonis ini membaca Pasal 52 dari teks PDF resmi JDIH
+Kemnaker di atas (diakses 2026-10-25). Vonis tidak mengutip putusan
+pengadilan/kasus perusahaan nyata apa pun; apakah pelanggaran konkret
+perusahaan ISF masuk kategori SP pertama-dan-terakhir atau pelanggaran
+mendesak adalah isi PK/PP/PKB perusahaan itu sendiri (daftar kategori
+Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
+
+### Putusan 1 — Dasar berhenti: tanda kajian berhenti BUKAN keputusan PHK; dasar berhenti hanya salah satu dari dua jalur Pasal 52, dibuktikan dokumen PK/PP/PKB — bukan oleh rekod SP sendiri
+
+- DIPUTUS: rekod SP3 aktif / SP pertama-dan-terakhir aktif +
+  pelanggaran baru (tanda kajian berhenti builder existing) adalah
+  SINYAL KAJIAN untuk HR, BUKAN keputusan PHK, BUKAN peristiwa
+  berhenti, dan TIDAK menimbulkan kewajiban uang apa pun dengan
+  sendirinya. Status hukum rekod = dokumen disiplin internal
+  perusahaan. Sistem DILARANG: (a) mengisi employmentEndedAt/
+  endReason otomatis dari tanda itu, (b) menonaktifkan karyawan,
+  (c) melahirkan dokumen uang/jurnal apa pun dari rekod disiplin.
+- Bila HR memutuskan berhenti sesudah kajian, dasar berhentinya wajib
+  salah satu dari dua jalur Pasal 52 — dipilih dan dibuktikan
+  manusia berwenang, disimpan sebagai snapshot di peristiwa berhenti
+  (bukan diturunkan dari jenjang SP oleh kode):
+  - Jalur A — pelanggaran sesudah SP berurutan (Pasal 52 ayat (1)):
+    pelanggaran ketentuan PK/PP/PKB sesudah SP1, SP2, SP3 diberikan
+    berturut-turut dan pelanggaran terjadi dalam masa berlaku SP3.
+  - Jalur B — SP pertama-dan-terakhir (Pasal 52 ayat (1) jo.
+    Penjelasan): pelanggaran yang oleh PK/PP/PKB perusahaan memang
+    ditetapkan ber-SP pertama-dan-terakhir, dan pelanggaran
+    berikutnya terjadi dalam masa berlaku SP itu. Tanpa klausul
+    PK/PP/PKB itu, SP pertama-dan-terakhir TIDAK punya dasar PHK —
+    daftar kategori berat Lead (Q-DISC-1, kartu t_7a99d595) adalah
+    daftar operasional sistem, BUKAN pengganti klausul PK/PP/PKB;
+    sistem wajib menyimpan rujukan dokumen perusahaan (nama/jenis
+    dokumen + pasal) pada peristiwa berhenti, kosong = hitung
+    DITOLAK (Putusan 2).
+- Jalur C terpisah dan TIDAK boleh dicampur: pelanggaran bersifat
+  mendesak yang diatur PK/PP/PKB (Pasal 52 ayat (2)) membolehkan PHK
+  tanpa SP dan tanpa pemberitahuan, dengan hak berbeda (Putusan 2).
+  Sistem DILARANG menyamakan SP pertama-dan-terakhir dengan
+  pelanggaran mendesak: kategori yang sama (mis. pencurian) bisa
+  masuk Jalur B atau C tergantung klausul perusahaan — klasifikasi
+  jalur A/B/C adalah snapshot keputusan manusia, bukan tebakan dari
+  violationCategory.
+- Peristiwa berhenti tetap dicatat lewat alur existing: HR mengisi
+  `employmentEndedAt` + `endReason=terminated` lewat mekanik F-085-S
+  (jejak ActivityLog pola BR-EMP-09). Tanggal berhenti = tanggal
+  keputusan PHK berlaku menurut dokumen PHK perusahaan, BUKAN
+  tanggal terbit SP, BUKAN tanggal tanda kajian berhenti lahir.
+  Sengketa/keberatan karyawan atas PHK di luar sistem; sistem hanya
+  mencatat fakta dokumen yang diberikan HR (kasus sengketa =
+  BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus, jangan ditandai
+  lunas pajaknya diam-diam).
+
+### Putusan 2 — Uang: hak mengikuti jalur Pasal 52 (A: 0,5x pesangon + 1x UPMK + penggantian hak; B: sama dengan A; C: penggantian hak + uang pisah saja); penghitung = peristiwa berhenti terbekukan di payroll, BUKAN modul disiplin; akun kandidat 600005 existing + 210208 BARU fail-closed
+
+- Nominal dasar mengikuti tabel Pasal 40 yang sudah divonis
+  F-086-V §2.1 (pesangon bulan Upah menurut masa kerja; UPMK bulan
+  Upah menurut masa kerja; basis Upah = baseSalary + tunjangan tetap
+  efektif pada tanggal berhenti, snapshot dibekukan — F-086-V §1.3;
+  nilai hari cuti penggantian hak hanya dari aturan internal
+  tertulis, tanpa itu komponen cuti DITUNDA per kasus, jangan
+  karang 1/25 atau 1/30). Vonis ini hanya menetapkan PENGALI per
+  jalur disiplin:
+  | Jalur | Pesangon | UPMK | Penggantian hak | Uang pisah |
+  |---|---|---|---|---|
+  | A (SP1/2/3 → pelanggaran dalam SP3) | 0,5 x tabel Pasal 40(2) | 1 x tabel Pasal 40(3) | Pasal 40(4) | tidak ada dari PP; hanya bila PK/PP/PKB mengatur |
+  | B (SP pertama-dan-terakhir → pelanggaran dalam masa berlaku) | 0,5 x tabel Pasal 40(2) | 1 x tabel Pasal 40(3) | Pasal 40(4) | sama dengan A |
+  | C (mendesak Pasal 52(2), tanpa SP) | 0 | 0 | Pasal 40(4) | menurut PK/PP/PKB; tanpa klausul = 0 dan dicatat 0 eksplisit, bukan dikarang |
+  Jalur B memakai hak Jalur A karena Pasal 52 ayat (1) mengatur
+  akibat PHK-nya dan Penjelasan menempatkan SP pertama-dan-terakhir
+  sebagai pengganti urutan SP untuk pelanggaran tertentu; bila
+  perusahaan bermaksud C untuk pelanggaran yang sama, itu pilihan
+  klausul perusahaan — sistem mengikuti snapshot jalur, bukan
+  kategori. Pengali kosong/tidak dipilih = hitung DITOLAK berisik
+  (menutup larangan L2 F-086-V untuk jalur ini; tabel pengali alasan
+  Pasal 41-51 lain tetap di luar vonis ini).
+- Siapa menghitung: mesin payroll/peristiwa berhenti (BOT Backend,
+  sesudah vonis ini merged) dari snapshot peristiwa berhenti:
+  jalur A/B/C + masa kerja dari rentang kontrak/employmentEndedAt +
+  snapshot basis + pengali tabel di atas + rujukan PK/PP/PKB.
+  Modul disiplin (EmployeeDisciplinaryRecord/DISC-B1) DILARANG
+  menghitung, menampilkan, atau menyimpan nominal apa pun (konsisten
+  BR-DISC-08 + F-086-V L1/L2). Berakhirnya PKWT dalam masa SP bukan
+  PHK: haknya hanya kompensasi PKWT F-132-V (bukan pesangon jalur
+  ini), walau ada SP aktif — endReason=contract_completed tidak
+  boleh ditarik ke dokumen pesangon.
+- Akun (fail-closed, pola F-086-V §4 + F-132-V Putusan 2):
+  - Beban: `600005` Beban Bonus, Pesangon & Kompensasi EXISTING
+    (EXPS/6000, base-data.ts live) untuk pesangon/UPMK/penggantian
+    hak/uang pisah jalur ini. Dilarang 600004 (gaji rutin) dan
+    dilarang 600028 (khusus kompensasi PKWT F-132-V).
+  - Utang: kode BARU kandidat `210208` "Utang Pesangon & Hak
+    Berhenti" [OCLY, induk 2102] — bebas terverifikasi run ini
+    (grep 210208 = 0; 210207 sudah Utang Kompensasi PKWT). BUKAN
+    210204 Hutang Gaji (rumah potongan payroll berjalan) dan BUKAN
+    210207 (kompensasi PKWT). Setting mapping BARU nullable tanpa
+    default tebak: `terminationExpenseAccountId` +
+    `terminationPayableAccountId` (pola F-086-V §4.2); seed boleh
+    menunjuk 600005/210208, instalasi tanpa seed diisi admin —
+    kosong/nonaktif/salah keluarga = posting DITOLAK berisik
+    mengarahkan ke Pengaturan > Mapping Akun. Kode akun berubah
+    sesudah ada jurnal = dilarang.
+  - Posting matrix (semua dalam tx, assertPeriodOpen pada tanggal
+    jurnal, idempoten per peristiwa berhenti):
+    | # | Peristiwa | Debit | Kredit | Syarat |
+    |---|---|---|---|---|
+    | J-DISC-PHK1 | Hak diakui pada tanggal berhenti (employmentEndedAt) | 600005 (setting) = hak bruto penuh | 210208 (setting) = hak bruto penuh | Satu jurnal per (karyawan, peristiwa berhenti); snapshot jalur+pengali+basis terbekukan dulu; periode tertutup = penetapan akrual DITOLAK, tanggal tidak digeser diam-diam |
+    | J-DISC-PHK2 | Bayar lewat dokumen bayar berhenti (Putusan 4) | 210208 = bruto dibayar | payrollBank (existing) = neto; Utang PPh 21 payroll existing = PPh final terpotong (Putusan 3) | PPh dipotong saat bayar, BUKAN saat akrual; akun PPh = liabilitas PPh 21 payroll existing, BUKAN 210206 dan bukan akun pajak baru |
+    | J-DISC-PHK3 | Koreksi hak keliru | reversal lawan J-DISC-PHK1/J-DISC-PHK2 di periode terbuka | — | Jurnal asal tidak diedit/dihapus; hak batal wajib dokumen pendukung (F-086-V §4.3(d)) |
+  - Empat status tetap terpisah: status dokumen peristiwa berhenti,
+    status pembayaran dokumen bayar, status pajak (klasifikasi final
+    snapshot), status posting jurnal — satu flag tidak mewakili
+    yang lain. BPJS: komponen jalur ini BUKAN basis BPJS (F-086-V
+    §3.4) — tidak ada iuran atas pesangon/UPMK/penggantian hak.
+
+### Putusan 3 — PPh: pesangon/UPMK/penggantian hak Jalur A/B (dan penggantian hak + uang pisah Jalur C sepanjang memenuhi definisi uang pesangon) = PPh 21 FINAL PMK 16/2010 bila dibayar sekaligus <= 2 tahun kalender; kompensasi PKWT tetap TER gabungan, BUKAN final
+
+- Klasifikasi pajak dibekukan sebagai snapshot per dokumen bayar
+  (pola F-086-V §3.3), ditentukan dari JENIS hak + pola bayar, bukan
+  dari nama komponen bebas dan bukan dari ada/tidaknya SP:
+  - Pesangon 0,5x + UPMK 1x + penggantian hak (Jalur A/B) memenuhi
+    definisi uang pesangon PMK 16/2010 Pasal 1 angka 4 (dibayar
+    sehubungan berakhirnya masa kerja/PHK, termasuk UPMK dan
+    penggantian hak). Dibayarkan sekaligus (sebagian/seluruhnya
+    dalam <= 2 tahun kalender) → PPh 21 FINAL Pasal 3: 0% s.d.
+    Rp50.000.000; 5% atas >50-100jt; 15% atas >100-500jt; 25% atas
+    >500jt, atas jumlah KUMULATIF dalam jendela 2 tahun kalender.
+    Terutang saat dibayar. Bukti potong wajib terbit walau lapisan
+    0% (Pasal 9 ayat (6) PMK 16/2010; pola F-086-V §3.2). Contoh
+    mengikat (sama F-086-V): bruto Rp48.000.000 sekaligus → PPh
+    final Rp0, neto Rp48.000.000, bupot tetap terbit; bruto
+    Rp120.000.000 → 0 + 5%x50jt + 15%x20jt = Rp5.500.000, neto
+    Rp114.500.000.
+  - Penggantian hak + uang pisah Jalur C: sepanjang dibayar
+    sehubungan PHK dan memenuhi definisi yang sama, perlakuan final
+    yang sama berlaku untuk porsi itu; uang pisah yang hakikatnya
+    bukan sehubungan berakhirnya masa kerja (mis. bonus kinerja
+    mantan pegawai) keluar dari definisi → PPh 21 mantan pegawai
+    tarif Pasal 17 atas bruto masa bayar (PMK 168/2023 Pasal 5(1)(h),
+    F-086-V §3.3). Klasifikasi per komponen dibekukan; tertukar =
+    temuan.
+  - Porsi yang dibayar tahun kalender ke-3 dan seterusnya keluar
+    dari rezim final: tarif Pasal 17 atas bruto tahun itu, tidak
+    final, dapat dikreditkan (Pasal 5 PMK 16/2010) — ditangani per
+    dokumen bayar tahun itu, jangan ditarik otomatis ke hitung
+    ulang masa terakhir.
+  - Kompensasi PKWT (bila kontrak PKWT berakhir bersamaan) tetap
+    rezim F-132-V Putusan 4: penghasilan tidak teratur pegawai
+    tetap digabung bruto masa bayar (TER bulanan / hitung ulang masa
+    terakhir), DILARANG tarif final pesangon. Satu karyawan bisa
+    punya dua dokumen dengan dua rezim berbeda pada masa yang sama
+    — keduanya tidak boleh digabung satu slip/dokumen (Putusan 4).
+- Kode objek pajak/KJS setor untuk PPh final ini diambil dari
+  katalog Coretax/DJP yang berlaku saat build (master pajak
+  bertanggal efektif), dikonfirmasi Backend/Accountant saat wiring;
+  vonis ini TIDAK mengunci nomor kode objek (F-086-V §3.3) dan
+  hardcode kode objek di service DILARANG. Tarif lapisan final di
+  atas hidup sebagai konfigurasi/master bertanggal efektif saat
+  build fisik, bukan konstanta tersebar — snapshot tarif + lapisan
+  dibekukan di dokumen bayar.
+
+### Putusan 4 — Larangan eksplisit + jalur bayar: berhenti hanya lewat employmentEndedAt existing; bayar pesangon lewat dokumen bayar berhenti TERPISAH dari slip gaji final; disiplin tidak pernah memicu uang
+
+- Larangan mengikat (pelanggaran = cacat build):
+  1. Sistem TIDAK boleh menghitung, mengestimasi, menampilkan,
+     atau menyimpan pesangon/UPMK/penggantian hak/uang pisah dari
+     rekod disiplin, tanda kajian berhenti, jenjang SP, atau
+     violationCategory — diam-diam maupun tampil sebagai "estimasi"
+     di permukaan disiplin (BR-DISC-08 dipertegas ke angka turunan).
+  2. Tanda kajian berhenti TIDAK boleh mengubah employmentEndedAt,
+     endReason, isActive, status payroll, atau memicu generate
+     slip/dokumen bayar/jurnal dalam bentuk apa pun.
+  3. Jalur berhenti satu-satunya = alur employmentEndedAt +
+     endReason existing (F-085-S) yang diisi manusia berwenang;
+     tidak ada endpoint/aksi "PHK dari SP" (konsisten spec §1.8/§4
+     baris Jalur PHK dari SP = TIDAK dibuat).
+  4. Pengali default diam-diam DILARANG: tanpa snapshot jalur
+     A/B/C + pengali + rujukan PK/PP/PKB, hitung hak DITOLAK
+     berisik (bukan 1x, bukan 0 yang lolos senyap selain Jalur C
+     yang memang 0 eksplisit).
+  5. Flag/centang client (mis. "final", "pesangon", jenjang pilihan
+     pengaju) BUKAN bukti klasifikasi: klasifikasi pajak final
+     hanya dari snapshot dokumen bayar + pola bayar <= 2 tahun yang
+     dibuktikan tanggal bayar server; penanda Masa Pajak Terakhir
+     hanya dari employmentEndedAt server (gerbang hrm.actions
+     existing), bukan dari rekod SP.
+- Jalur bayar (menerapkan F-086-V §5.2/§5.3 ke jalur ini):
+  dokumen bayar peristiwa berhenti TERPISAH dari slip gaji reguler
+  dan dari slip final gaji — karena (a) PPh-nya rezim final
+  Putusan 3, berbeda dari TER/Pasal 17 slip; (b) penerima sudah di
+  luar populasi run reguler (BR-EMP-06); (c) slip final gaji
+  menutup hitung ulang Masa Pajak Terakhir orang itu dan bupot
+  final pesangon TIDAK masuk hitung ulang itu. Urutan: slip final
+  gaji diselesaikan terpisah; dokumen bayar berhenti memakai akun
+  Putusan 2 + bupot final sendiri; pembayaran lewat payrollBank
+  existing; dilarang tunai tanpa dokumen. Pembayaran parsial lintas
+  tahun mengikuti kumulatif jendela Putusan 3 per tanggal bayar
+  aktual — sistem menyimpan riwayat bayar per peristiwa supaya
+  lapisan kumulatif tidak dihitung ulang dari nol tiap dokumen.
+- Rekonsiliasi wajib tampil (read-model, sesudah fisik dibangun):
+  Σ peristiwa berhenti terbekukan vs saldo GL 210208 POSTED vs
+  Σ dokumen bayar terbayar, per karyawan per peristiwa; selisih =
+  temuan bernama, tidak dipilih diam-diam salah satu. Saldo 210208
+  berhenti belum dibayar masuk daftar perhatian HR/payroll (pola
+  F-132-V Putusan 3 untuk 210207).
+
+### 5. Falsifikasi untuk BOT QA (tiap butir harus bisa dibuat MERAH sesudah fisik dibangun; head persis)
+
+| # | Butir | Cara membuat MERAH |
+|---|---|---|
+| Q5-1 | Tanda kajian berhenti tanpa uang: karyawan SP3 aktif + pelanggaran baru disetujui → tanda kajian berhenti lahir, employmentEndedAt/endReason/isActive TIDAK berubah, nol jurnal, nol dokumen bayar, nol nominal di payload disiplin | Cabut penjaga pemisah disiplin-berhenti (biarkan tanda mengisi employmentEndedAt atau melahirkan estimasi pesangon) → tes berubah MERAH |
+| Q5-2 | Pengali jalur: basis Rp6.000.000, masa kerja 5 tahun (pesangon dasar 6 bulan = Rp36.000.000; UPMK dasar 2 bulan = Rp12.000.000) Jalur A/B → pesangon Rp18.000.000 + UPMK Rp12.000.000 (penggantian hak per dokumen); Jalur C → pesangon/UPMK Rp0 eksplisit | Ganti pengali Jalur A/B ke 1x diam-diam atau isi Jalur C dengan 0,5x → nominal berubah, tes MERAH |
+| Q5-3 | PPh final vs TER tertukar: hak Jalur A bruto Rp120.000.000 dibayar sekaligus → PPh final Rp5.500.000 + bupot terbit; hak bruto Rp48.000.000 → PPh Rp0 + bupot tetap terbit; kompensasi PKWT orang sama dikenai final atau pesangon dikenai TER → MERAH | Terapkan mesin TER/hitung ulang masa terakhir ke dokumen pesangon, atau tarif final ke komponen kompensasi PKWT → angka pajak berubah, tes MERAH |
+| Q5-4 | Fail-closed akun & snapshot: mapping termination* kosong/nonaktif atau rujukan PK/PP/PKB kosong atau jalur belum dipilih → akrual J-DISC-PHK1 DITOLAK, nol jurnal parsial; edit baseSalary/master sesudah snapshot tidak mengubah hak terbekukan | Tambah fallback ke 210204/210207/600004 atau baca ulang master saat bayar → jurnal lahir/snapshot berubah, tes MERAH |
+| Q5-5 | Anti-dobel & status terpisah: retry penetapan berhenti/dokumen bayar → satu jurnal akrual + satu dokumen bayar per peristiwa; bupot final pesangon TIDAK masuk hitung ulang Masa Pajak Terakhir slip final; slip periode sesudah employmentEndedAt tetap ditolak gerbang existing | Hapus idempotency key peristiwa atau masukkan bruto pesangon ke grossYear hitung ulang → jurnal/dobel pajak lahir, tes MERAH |
+
+### 6. Batas build (pemilik berikutnya)
+
+- BOT Lead: merge PR vonis ini bila gate hijau head persis; putus
+  prioritas inti berhenti-uang (dokumen peristiwa berhenti + dokumen
+  bayar) sesudah DISC-B1 — vonis ini tidak membuka inti dengan
+  sendirinya.
+- BOT Backend (inti terpisah, klaim prisma/schema.prisma + folder
+  migrasi di board dulu, koordinasi BOT Accountant sebelum migrasi):
+  (1) seed akun 210208 + setting terminationExpenseAccountId/
+  terminationPayableAccountId fail-closed Putusan 2 (automap saran
+  kode persis saja); (2) entitas peristiwa berhenti terbekukan
+  (jalur A/B/C, pengali, basis, masa kerja, rujukan PK/PP/PKB,
+  taut rekod disiplin SUMBER — baca-saja, disiplin tidak menulis
+  balik) + dokumen bayar berhenti terpisah + riwayat bayar
+  kumulatif jendela 2 tahun; (3) jurnal J-DISC-PHK1..3 +
+  idempotency per peristiwa; (4) klasifikasi pajak snapshot
+  Putusan 3 + bupot final (kode objek dari katalog efektif, bukan
+  hardcode); (5) read-model rekonsiliasi Putusan 4. Tanpa migrasi
+  di kartu vonis ini.
+- BOT Business/BOT Frontend: tampilkan jalur/pengali/nominal/PPh dari
+  snapshot backend apa adanya di permukaan payroll/berhenti; UI
+  tidak menghitung pesangon/PPh, tidak menandai final dari centang
+  lokal, dan permukaan disiplin tetap nol nominal (BR-DISC-08).
+- BOT QA: falsifikasi Q5-1..5 di atas atas head fisik Backend persis
+  (tiap butir dibuat MERAH dengan mutasi yang disebut, lalu pulih
+  hijau); gabung dengan AC-DISC-3 spec (SP3 aktif + pelanggaran baru
+  → tidak ada SP4, tidak ada perubahan employmentEndedAt otomatis).
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PP 35/2021 Pasal 40
++ 52 (JDIH Kemnaker/BPK, akses 2026-10-25) dan PMK 16/PMK.03/2010 +
+PMK 168/2023 (JDIH Kemenkeu/DJP/OJK salinan resmi, akses 2026-10-25),
+diterapkan lewat kerangka F-086-V/F-132-V yang sudah terbit. BUKAN
+penetapan Kemnaker/DJP/pengadilan atas kasus perusahaan nyata:
+isi klausul SP pertama-dan-terakhir/pelanggaran mendesak di PK/PP/PKB
+perusahaan, nilai hari cuti tanpa aturan internal tertulis, dan kasus
+sengketa PHK tetap BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus —
+jangan diputus diam-diam di kode.
+
+ID vonis ini **F-2026-10-25-005-V / Q-DISC-5** (diberikan kartu;
+bebas: grep `F-2026-10-25-005-V` di origin/main 651d1ce3 = 0 sebelum
+vonis ini; 005-S = spec induk). Pemilik berikutnya: BOT Lead merge →
+BOT Backend inti Putusan 2/4 (sesudah DISC-B1) → BOT Business/Frontend
+konsumen snapshot → BOT QA Q5-1..5.
