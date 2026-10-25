@@ -58,9 +58,11 @@ export async function getPkwtCompensationReport(
           payroll:
             scope.kind === "self"
               ? { employeeId: scope.employeeId }
-              : scope.departmentId == null
-                ? { employeeId: scope.employeeId }
-                : { employee: { departmentId: scope.departmentId } },
+              : scope.kind === "team"
+                ? { employeeId: { in: scope.memberIds } }
+                : scope.departmentId == null
+                  ? { employeeId: scope.employeeId }
+                  : { employee: { departmentId: scope.departmentId } },
         }
 
   const [events, accrualAgg, paidLines, glRows, pendingSlips] = await Promise.all([

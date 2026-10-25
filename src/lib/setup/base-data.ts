@@ -384,6 +384,13 @@ export const PERMISSIONS = [
       // Grant mengikuti pola approve_purchase_returns: hanya admin/
       // super_admin lewat katalog penuh, role lain diberi eksplisit.
       "approve_sales_returns",
+      // Field-level masking (server-side): izin modul membuka record, izin
+      // ini menentukan boleh melihat nilainya. view_subordinate_data menyala-
+      // kan scope "tim" dari pohon organisasi (Employee.managerId).
+      "view_salary_amounts",
+      "view_cost_amounts",
+      "view_sensitive_identity",
+      "view_subordinate_data",
       // Approving/disbursing an employee loan gets its own permission. It used
       // to reuse "create_loans" in both approval.actions.ts and the status
       // workflow route, so whoever could raise a loan could also approve and
@@ -550,6 +557,7 @@ export const GA_WHITELIST = [
       "manage_holidays",
       "delete_holidays",
       "view_employees",
+      "view_sensitive_identity",
       "view_departments",
       "view_positions",
       // F-2026-10-25-005-S DISC-B1 Q-DISC-2: pemetaan default-aman fase 1 —
@@ -607,6 +615,7 @@ export const KABENG_WHITELIST = [
       "create_leave_requests",
       "edit_leave_requests",
       "approve_leave_requests",
+      "view_subordinate_data",
       "view_attendance",
       "create_attendance",
       "edit_attendance",
@@ -638,6 +647,7 @@ export const KARYAWAN_WHITELIST = [
 
 export const PURCHASING_WHITELIST = [
       "view_dashboard",
+      "view_cost_amounts",
       "view_items",
       "view_item_categories",
       "view_units",
@@ -662,6 +672,7 @@ export const PURCHASING_WHITELIST = [
 
 export const WAREHOUSE_WHITELIST = [
       "view_dashboard",
+      "view_cost_amounts",
       "view_items",
       "view_item_categories",
       "view_units",
@@ -727,6 +738,9 @@ export const FINANCE_WHITELIST = [
       "confirm_down_payments",
       "delete_down_payments",
       "view_payroll",
+      "view_salary_amounts",
+      "view_cost_amounts",
+      "view_sensitive_identity",
       "create_payroll",
       "edit_payroll",
       "process_payroll",

@@ -26,11 +26,38 @@ const DEPARTMENT_ACCESS_ROLES = ["kepala_bengkel"]
 export type HrScope =
   | { kind: "all" }
   | { kind: "department"; departmentId: number | null; employeeId: number }
+  | { kind: "team"; employeeId: number; memberIds: number[] }
   | { kind: "self"; employeeId: number }
 
 interface ScopeUser {
   id: string
   roles: string[]
+  permissions?: string[]
+}
+
+/**
+ * Seluruh bawahan rekursif dari pohon organisasi (Employee.managerId),
+ * termasuk karyawan itu sendiri. BFS dengan himpunan terlarang supaya
+ * data siklik (yang dicegah di lapisan tulis) tidak mengunci query ini.
+ */
+export async function getSubordinateIds(employeeId: number): Promise<number[]> {
+  const memberIds = [employeeId]
+  const seen = new Set(memberIds)
+  let frontier = [employeeId]
+  for (let depth = 0; depth < 64 && frontier.length > 0; depth++) {
+    const reports = await prisma.employee.findMany({
+      where: { managerId: { in: frontier }, deletedAt: null },
+      select: { id: true },
+    })
+    frontier = []
+    for (const r of reports) {
+      if (seen.has(r.id)) continue
+      seen.add(r.id)
+      memberIds.push(r.id)
+      frontier.push(r.id)
+    }
+  }
+  return memberIds
 }
 
 /**
@@ -65,6 +92,14 @@ export async function getHrScope(user: ScopeUser): Promise<HrScope> {
     return { kind: "department", departmentId: me.departmentId, employeeId: me.id }
   }
 
+  // Otorisasi struktural: izin eksplisit + rantai atasan di pohon organisasi.
+  // Sengaja sesudah departemen supaya akses kepala_bengkel yang sudah ada
+  // tidak menyempit; scope tim untuk peran lain yang diberi izin ini.
+  if ((user.permissions ?? []).includes("view_subordinate_data")) {
+    const memberIds = await getSubordinateIds(me.id)
+    return { kind: "team", employeeId: me.id, memberIds }
+  }
+
   return { kind: "self", employeeId: me.id }
 }
 
@@ -75,6 +110,7 @@ export async function getHrScope(user: ScopeUser): Promise<HrScope> {
  */
 export function hrScopeWhere(scope: HrScope): Record<string, unknown> {
   if (scope.kind === "all") return {}
+  if (scope.kind === "team") return { employeeId: { in: scope.memberIds } }
   if (scope.kind === "self") return { employeeId: scope.employeeId }
   // department: tampilkan semua employee di departemen yang sama.
   // Jika kepala_bengkel tak punya departemen, jatuhkan ke data sendiri saja.
@@ -85,6 +121,7 @@ export function hrScopeWhere(scope: HrScope): Record<string, unknown> {
 /** Fragment Prisma `where` for employee selectors used by HR forms. */
 export function hrEmployeeScopeWhere(scope: HrScope): Record<string, unknown> {
   if (scope.kind === "all") return {}
+  if (scope.kind === "team") return { id: { in: scope.memberIds } }
   if (scope.kind === "self") return { id: scope.employeeId }
   if (scope.departmentId == null) return { id: scope.employeeId }
   return { departmentId: scope.departmentId }
@@ -99,6 +136,12 @@ export async function assertHrEmployeeAccess(
     throw new Error("Karyawan tidak valid")
   }
   if (scope.kind === "all") return
+  if (scope.kind === "team") {
+    if (!scope.memberIds.includes(employeeId)) {
+      throw new Error("Anda tidak memiliki akses ke data karyawan ini")
+    }
+    return
+  }
   if (scope.kind === "self") {
     if (scope.employeeId !== employeeId) {
       throw new Error("Anda tidak memiliki akses ke data karyawan ini")

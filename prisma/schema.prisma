@@ -957,6 +957,12 @@ model Employee {
   employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
+  // Pohon organisasi untuk otorisasi struktural (scope "tim"): atasan
+  // melihat data HR seluruh bawahan rekursifnya. Nullable = puncak/rantai
+  // belum diatur; scope jatuh ke self/departemen seperti sebelumnya.
+  managerId           Int?              @map("manager_id")
+  manager             Employee?         @relation("EmployeeReports", fields: [managerId], references: [id], onDelete: SetNull)
+  reports             Employee[]        @relation("EmployeeReports")
   // Jangkar perhitungan masa kerja untuk hak cuti tahunan. Kosong =
   // dihitung dari joinDate. Terisi otomatis saat status berubah
   // INTERN (magang) -> PKWT/PKWTT: masa magang tidak ikut terhitung,
@@ -985,6 +991,7 @@ model Employee {
   workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
+  @@index([managerId], map: "employees_manager_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
   @@index([isActive, deletedAt])
   @@index([userId])
