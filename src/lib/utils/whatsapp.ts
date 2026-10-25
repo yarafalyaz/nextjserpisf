@@ -1,4 +1,4 @@
-import { formatDate } from "@/lib/utils/format";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 
 /**
@@ -50,4 +50,43 @@ export function buildWhatsappUrl(
   const normalized = normalizeWhatsappPhone(phone);
   if (!normalized) return null;
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+}
+
+export interface StatementWhatsappMessageInput {
+  customerName: string;
+  /** Label periode payload server statement, mis. "Periode 1 Jan 2026 – 15 Okt 2026". */
+  periodLabel: string;
+  /** Saldo akhir payload server statement (buildCustomerStatement). */
+  closingBalance: number;
+}
+
+/**
+ * F-2026-10-25-038-B1: pesan WA statement pelanggan — 3 varian verbatim
+ * PUTUSAN Lead Q-SW-3 (PR #890 issuecomment-6398030628). Angka = payload
+ * server diformat di sini (BR-SW-05: UI tidak hitung ulang); negatif
+ * ditampilkan sebagai nilai absolut "kelebihan bayar ... kredit Anda".
+ * TANPA kata tagihan/menunggak/denda, rincian faktur, atau klaim terkirim
+ * (BR-SW-01/BR-SW-04). Pesan menyatakan statement dapat disediakan/dicetak —
+ * TIDAK berpura-pura melampirkan PDF.
+ */
+export function buildStatementWhatsappMessage(
+  input: StatementWhatsappMessageInput,
+): string {
+  const tail = "Statement lengkap dapat kami sediakan/dicetak bila diperlukan.";
+  let balanceLine: string;
+  if (input.closingBalance > 0) {
+    balanceLine = `Saldo akhir periode: ${formatCurrency(input.closingBalance)}.`;
+  } else if (input.closingBalance === 0) {
+    balanceLine =
+      "Saldo akhir periode: Rp 0 — tidak ada sisa piutang pada akhir periode ini.";
+  } else {
+    balanceLine = `Saldo akhir periode menunjukkan kelebihan bayar sebesar ${formatCurrency(Math.abs(input.closingBalance))} yang tercatat sebagai kredit Anda.`;
+  }
+  return [
+    `Halo ${input.customerName},`,
+    "",
+    `Berikut statement piutang Anda untuk ${input.periodLabel}. ${balanceLine} ${tail}`,
+    "",
+    "Terima kasih.",
+  ].join("\n");
 }
