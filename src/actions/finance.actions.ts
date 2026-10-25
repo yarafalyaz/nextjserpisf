@@ -591,6 +591,9 @@ export async function createJournal(formData: FormData) {
       return j;
     });
 
+    // Route through approval workflow if one is configured for Journal.
+    await requestApprovalIfConfigured("Journal", journal.id, Number(user.id));
+
     return finishJournalMutation(journal, "create", "Membuat jurnal");
   } catch (e: unknown) {
     return journalMutationError(e, "[createJournal]");
@@ -612,6 +615,9 @@ export async function postJournal(journalId: number) {
     if (preview.status !== "DRAFT") {
       throw new Error("Journal hanya bisa di-post dari status DRAFT");
     }
+
+    // Workflow approval must be complete (no-op if no workflow configured).
+    await assertApproved("Journal", journalId);
 
     // Block posting into a closed accounting period
     await assertPeriodOpen(preview.transactionDate);
@@ -2041,6 +2047,10 @@ export async function updateJournal(id: number, formData: FormData) {
 
       return j;
     });
+
+    // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
+    // (resubmit); tanpa workflow terkonfigurasi ini no-op.
+    await requestApprovalIfConfigured("Journal", id, Number(user.id));
 
     return finishJournalMutation(journal, "update", "Memperbarui jurnal");
   } catch (e: unknown) {
