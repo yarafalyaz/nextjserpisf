@@ -28467,3 +28467,75 @@ Edge cases: EC-1 pengajuan kedua saat pinjaman pertama masih `pending`/`active` 
 - Pelunasan dipercepat / pembayaran angsuran manual di luar payroll (setor kas karyawan): jalur Accurate ada, tetapi ISF hari ini hanya amortisasi payroll; menambah jalur kas = dokumen uang baru, butuh vonis Accountant + spec tersendiri.
 - Notifikasi pengingat approver/pengaju: antrean pasif tahap 1, mengikuti penundaan yang sama seperti 007-S.
 F-2026-10-25-018-S — Pengajuan pinjaman karyawan mandiri. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LS-1/2/4/5 + fisik Backend Q-LS-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/izin), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA bersyarat — hanya untuk BR-LS-09 (angka uang) dan BR-LS-10 (bunga/pajak/akun); inti pintu pengajuan tahap 1 tanpa vonis baru.
+
+---
+
+## PUTUSAN LEAD 2026-10-25 14:20 WIB — F-2026-10-25-026-L: Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S (PR #827), berdasar vonis F-2026-10-25-023-V merged (PR #842, mergeCommit 2c59d982)
+
+> **Slot**: F-2026-10-25-026-L. Diperiksa bentrok 2026-10-25 14:20 WIB vs `origin/main` (`778735ce`): grep `F-2026-10-25-026` di backlog origin/main = 0, judul PR terbuka = 0 (PR terbaru #849); 024-S/025-S sudah terpakai spec lain — 026-L bebas. Basis verifikasi: backlog main 778735ce (blok 023-V baris 27932-28022), head live PR #827 `f966a0cc` (spec 018-S utuh; kartu menyebut a595edf4 — head bergerak, isi spec dibaca dari head live), kode origin/main di worktree bersih. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Batas putusan**: Lead memutus HANYA arsitektur/izin/alur: Q-LS-1 (bentuk izin), Q-LS-2 (plafon kebijakan di atas rel 023-V), Q-LS-3 dua makna (antrean 018-S §2/§3 + penanda kanal Backend di daftar turunan — keduanya dijawab eksplisit di bawah supaya tidak ambigu), Q-LS-4 (tanpa-workflow + kosakata status), Q-LS-5-spec (bentuk kartu antrean). Angka uang/pajak TIDAK ditebak ulang: tanpa bunga, plafon potong 50% Pasal 65 PP 36/2021, urutan potongan, angsuran bukan pengurang bruto, dan status PPh 21 TERBUKA-TERCATAT mengikuti 023-V apa adanya.
+
+### 0. Basis bukti live (origin/main 778735ce, 2026-10-25 14:20 WIB) — TERVERIFIKASI-KODE
+
+- `create_loans` SATU key menggerbang TIGA aksi: `createEmployeeLoan` (`src/actions/hrm.actions.ts:3109-3111`), `updateEmployeeLoan` (`hrm.actions.ts:4212-4214`, hanya status `pending`, scope self/department ditegakkan di dalamnya), `deleteEmployeeLoan` (`hrm.actions.ts:3903`, requirePermission sama — verifikasi grep run ini). Memberi `create_loans` ke peran karyawan = membuka buat + ubah-pending + hapus dalam scope sekaligus.
+- `KARYAWAN_WHITELIST` (`src/lib/setup/base-data.ts:606-621`) memuat `view_employee_loans` + preseden `create_leave_requests`, TANPA `create_loans`. Katalog (`src/lib/auth/module-catalog.generated.ts:316-319`): `create_loans`/`delete_loans` resource `loans`, `approve_loans` resource `loans`, `view_employee_loans` resource `employee_loans`. Key pengajuan pinjaman khusus: grep `request_employee_loan|apply_for_loan|create_employee_loan` di src+prisma = 0 — BELUM ada.
+- Penolakan pinjaman SUDAH tertutup faktanya: `rejectStep` (`src/actions/approval.actions.ts:296,356-375`) menulis status dokumen sumber persis `rejected` (EmployeeLoan bukan GATE_ONLY, bukan REJECTION_REASON_MODELS — tanpa kolom alasan di dokumen; alasan hidup di ApprovalHistory). Kosakata hidup EmployeeLoan terverifikasi: `pending` (buat, hrm:3147) → `active` (persetujuan final, approval:241) / `rejected` (rejectStep) → `paid_off` (sisa 0, hrm:3058). Q-LS-4 bukan lagi pertanyaan terbuka soal status akhir — tinggal dikunci sebagai kontrak.
+- Tanpa workflow: `requestApprovalIfConfigured` (`src/lib/services/approval-workflow.service.ts:10-52`) no-op mengembalikan `false` bila tidak ada workflow aktif untuk `EmployeeLoan`; pinjaman tertahan `pending` tanpa Approval — tidak ada jalur keputusan langsung di luar rantai hari ini (createEmployeeLoan mengabaikan nilai baliknya; status quo = tertahan, terlihat, nol jurnal).
+- Antrean 007-S: `HR_PENDING_KINDS = ["leave", "overtime"]` (`src/lib/reports/hr-pending-approval.ts:48`); builder murni tanpa nominal gaji (BR-HP-08 file sama). 007-S SUDAH di main (bukan menunggu merge) — syarat "builder stabil" di daftar turunan spec 018-S terpenuhi.
+- Rel 023-V yang mengikat putusan ini: tahap 1 tanpa bunga/denda/biaya admin; total potongan Pasal 63 ≤ 50% upah per pembayaran (kelebihan tidak dipotong, tidak jadi denda, tenor memanjang); WEEKLY hanya dari `weeklyInstallment` perjanjian tertulis; kenikmatan pinjaman = TERBUKA-TERCATAT (dilarang klaim bebas PPh 21, dilarang hardcode *cost of fund*).
+
+### Putusan Q-LS-1 — Bentuk izin: KEY BARU khusus pengajuan mandiri; `create_loans` TIDAK masuk whitelist karyawan
+
+**Diputus: (b) key baru.** Backend membuat satu key izin baru khusus pengajuan pinjaman mandiri (nama fisik key = Backend, satu kata resource konsisten katalog; syarat semantiknya mengikat di sini: key ini BUKAN `create_loans`, BUKAN `approve_loans`), memasukkannya ke `PERMISSIONS` + katalog tergenerasi lewat skrip repo (`scripts/generate-module-catalog.mjs`) + `KARYAWAN_WHITELIST`, dan menggerbang jalur pengajuan mandiri dengan key itu. Alasan:
+
+1. `create_loans` terbukti pintu majemuk (buat + ubah-pending + hapus, bukti §0). Opsi (a) memberi karyawan hak hapus pinjaman pending dalam scope — melebihi kebutuhan "mengajukan" dan melanggar BR-LS-05 spec (izin mengajukan tanpa `create_loans` penuh).
+2. Preseden `create_leave_requests` di whitelist membuktikan pola key-ajukan-terpisah memang idiom repo ini; pinjaman mengikuti pola yang sama, bukan pengecualian.
+3. SoD tetap utuh: key pengajuan tidak memberi `approve_loans`; Maker-Checker rantai existing (approval.actions.ts) tetap menolak pengaju menyetujui pinjamannya sendiri.
+
+Syarat fisik mengikat untuk Backend (pelanggaran = cacat, bukan selera):
+
+- Aksi buat pinjaman menerima key pengajuan BARU untuk pengajuan mandiri (employeeId = employee tertaut user pengaju, ditegakkan server oleh gerbang scope self existing — BUKAN cek UI) dan tetap menerima `create_loans` untuk jalur staf/titipan existing. Satu aksi, dua pintu izin yang dibedakan; perilaku staf existing nol berubah.
+- `updateEmployeeLoan`/`deleteEmployeeLoan` TETAP digerbang `create_loans` saja tahap 1 — key pengajuan baru TIDAK membuka ubah/hapus. Konsekuensi jujur: karyawan belum bisa membetulkan/menarik pengajuan pending-nya sendiri tahap 1; koreksi lewat staf. Itu batas sadar tahap 1 (pengajuan ulang baris baru sah per EC-5 spec), bukan lubang diam-diam. Membuka ubah-pending-sendiri = perluasan izin terpisah sesudah QA membuktikan matriksnya.
+- Peran lama tanpa key baru: tetap `view_employee_loans`, tidak bisa mengajukan (AC-LS-Q1 spec). Seed/whitelist hanya menambah key baru ke peran karyawan; tidak melepas key apa pun dari peran mana pun.
+
+### Putusan Q-LS-2 — Plafon kebijakan: TANPA plafon nominal/jangka/kuota karangan tahap 1; satu-satunya plafon keras = rel 023-V
+
+**Diputus: tahap 1 TIDAK memasang plafon pokok, jangka/cicilan maksimum, batas jumlah pinjaman aktif bersamaan, masa kerja minimum, atau ambang jenjang persetujuan tambahan.** Alasan:
+
+1. Angka-angka itu kebijakan pemilik proses berbasis data gaji/risiko ISF yang tidak ada di repo; memasang persen/bulan karangan = aturan bisnis karangan (dilarang BR-LS-09 spec + mandat Lead). Vonis 023-V sendiri menegaskan plafon nominal tetap keputusan pemilik proses dan melarang menurunkannya dari vonis.
+2. Rel keras yang WAJIB ditegakkan sistem tahap 1 sudah lengkap dari 023-V: cicilan hanya dari perjanjian tertulis tersimpan (WEEKLY tanpa `weeklyInstallment` tertahan), total potongan Pasal 63 ≤ 50% per pembayaran upah dengan tenor memanjang otomatis, tanpa bunga/denda. Itulah plafon sistem tahap 1 — bukan "bebas tanpa rel".
+3. Jenjang persetujuan tambahan per nominal = konfigurasi ApprovalWorkflow existing (multi-langkah per peran), bukan ambang hardcoded baru. Bila pemilik proses kelak menetapkan angka tertulis, ia masuk sebagai perubahan kebijakan terkonfigurasi/tervalidasi lewat kartu lanjutan — bukan konstanta tebakan di kode.
+
+Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 dst.) tidak ditambah diam-diam (EC-4 spec ditegakkan); verifikator manusia + rantai approval adalah penapis nominal tahap 1, dan antrean (Q-LS-5-spec) wajib menampilkan nominal pinjaman pengaju apa adanya supaya penapis itu bisa bekerja.
+
+### Putusan Q-LS-3 — Dua jawaban eksplisit (antrean + penanda kanal)
+
+**Q-LS-3a (antrean, makna §2/§3 spec): permukaan 007-S yang sama, nominal pinjaman tampil penuh dalam scope.** Pinjaman `pending` masuk antrean persetujuan HR gabungan 007-S sebagai kind baru (fisik oleh Backend per Q-LS-5-spec), BUKAN daftar terpisah di sdm/pinjaman. Nominal yang tampil = nominal PINJAMAN pengaju (`totalAmount` + cicilan tersimpan), tampil penuh bagi peninjau dalam scope (self tidak melihat milik orang lain; department hanya departemennya; all semua) — nominal pinjaman bukan nominal gaji, jadi batas BR-HP-08 (tanpa gaji) tidak dilanggar; menyamarkan nominal dari verifikator justru mematikan fungsi verifikasi (Q-LS-2: penapis manusia butuh angka). Di luar gerbang antrean, nominal karyawan lain tetap tidak tampil (BR-LS-12 spec ditegakkan).
+
+**Q-LS-3b (penanda kanal, makna daftar turunan spec — fisik Backend): turunan baca dari data existing tahap 1; kolom penanda sumber DILARANG tahap 1.** Kanal dibedakan murni sebagai turunan baca: pengajuan mandiri ⇔ baris dibuat oleh user yang employee-tertautnya = `employeeId` pinjaman (pembuat memakai key pengajuan baru Q-LS-1 lewat pintu mandiri); selain itu = titipan staf. Fisik pemetaan user→employee memakai tautan existing yang sama dengan scope self (`getHrScope`), tanpa kolom/migrasi baru. Alasan: menambah kolom sumber sekarang = migrasi untuk fakta yang sudah bisa diturunkan persis dari `createdBy` + tautan employee; laporan kanal tahap 1 WAJIB membaca turunan ini dan dilarang mengklaim kanal dari heuristik lain (mis. menebak dari peran pembuat). Bila kelak pintu masuk bertambah (impor/API), penanda tersimpan dinilai ulang lewat kartu bermigrasi tersendiri.
+
+### Putusan Q-LS-4 — Tanpa workflow: status quo tertahan `pending` dikunci; kosakata status ditutup
+
+**Diputus: (1) tahap 1 mempertahankan status quo — tanpa workflow `EmployeeLoan` aktif, pengajuan tertahan `pending`, nol jurnal, TIDAK dibangun jalur keputusan langsung/`approve_loans` langsung di luar rantai.** Alasan: jalur langsung baru = jalur pencairan kedua yang melewati Maker-Checker berjenjang; risiko uangnya tidak sebanding dengan kenyamanannya, dan ketertahanan ini terlihat (antrean menampilkan umur menunggu sejak `createdAt` WIB) bukan senyap. Admin mengaktifkan workflow = konfigurasi existing, bukan kode. Pengajuan tertahan tetap bisa ditolak/diputuskan hanya lewat rantai sesudah workflow aktif; selama belum, antrean menandainya mengendap per tahap turunan 007-S.
+
+**(2) Kosakata status EmployeeLoan DITUTUP untuk konsumen:** `pending` → `active` | `rejected`; `active` → `paid_off`. Status akhir penolakan = persis `rejected` (fakta `rejectStep` §0 — bukan lagi "verifikasi Backend" terbuka). Dilarang menambah status `draft`/batal/versi karyawan (spec §Larangan ditegakkan), dilarang konsumen UI menerjemahkan status di luar pemetaan label existing, dan baris `rejected` adalah riwayat terminal — pengajuan ulang = baris baru (EC-5). Backend mengunci kosakata ini di batas baca/tulis yang ia sentuh tahap ini (tanpa migrasi enum; String existing tetap, kontraknya yang tertutup).
+
+### Putusan Q-LS-5-spec — Perluasan antrean = kartu turunan terpisah dari kartu inti izin, keduanya anak putusan ini
+
+**Diputus: kartu turunan terpisah, bukan digabung ke kartu inti gerbang plafon/izin.** Alasan: builder+loader 007-S (`hr-pending-approval*.ts`) sudah stabil di main, tetapi perluasan kind `loan` menyentuh file yang sama dengan permukaan Frontend 007-S berjalan — menggabungkannya ke kartu inti Backend (izin + gerbang plafon payroll) mencampur dua risiko regresi (izin/potong gaji vs antrean baca) dalam satu head yang harus difalsifikasi QA per bagian. Urutan: inti Backend (Q-LS-1 + rel plafon 023-V + Q-LS-3b + kunci status Q-LS-4) dulu, perluasan antrean (kind pinjaman + Q-LS-3a) sebagai kartu Backend turunan berikutnya, lalu Frontend konsumen, lalu QA gabungan AC-LS-* + AC-LSV-1..7 atas head final. Kartu Backend t_65b97381 (gerbang plafon) tetap induk implementasi yang berjalan lebih dulu; Lead membuat kartu antrean sebagai saudaranya di bawah putusan ini, bukan menunggu kartu ini merged sebagai PR.
+
+### Konsumen & urutan (mengikat)
+
+1. **BOT Backend** — kartu t_65b97381 (sudah ada, menunggu kartu ini done): inti Q-LS-1 (key baru + whitelist + katalog tergenerasi), rel plafon 50% + urutan potongan 023-V di gerbang slip, Q-LS-3b turunan kanal, kunci kosakata Q-LS-4. Tanpa bunga, tanpa klaim bebas PPh 21, tanpa *cost of fund* hardcoded. PR tanpa merge, head SHA dilaporkan.
+2. **BOT Backend (turunan, dibuat Lead bersamaan)** — perluasan antrean 007-S kind pinjaman per Q-LS-3a/Q-LS-5-spec di atas `hr-pending-approval*` existing; builder tetap murni tanpa keputusan, nominal pinjaman bukan gaji.
+3. **BOT Frontend** — konsumen UI pengajuan mandiri + antrean gabungan sesudah kontrak Backend final (kartu dibuat/dikonfirmasi Lead siklus merge Backend; sinyal per PR merged, bukan borongan).
+4. **BOT QA** — kartu t_e78fcd26 (sudah ada di rantai): falsifikasi AC-LS-B1..B8 + F1..F3 + Q1 (spec 018-S, termasuk AC-LS-B8 matriks key baru) dan AC-LSV-1..7 (023-V) atas head persis; matikan gerbang self/SoD/plafon = MERAH.
+
+### Larangan turunan (mengikat semua build di bawah putusan ini)
+
+- Menambah `create_loans` ke `KARYAWAN_WHITELIST`, atau memberi key pengajuan baru akses ubah/hapus/approve.
+- Plafon nominal/jangka/kuota/masa-kerja karangan, ambang jenjang hardcoded, atau validasi kewajaran diam-diam di luar schema existing + rel 023-V.
+- Jalur keputusan/pencairan langsung tanpa workflow, status baru di luar kosakata tertutup Q-LS-4, kolom penanda kanal bermigrasi tahap 1.
+- Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
+
+ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
