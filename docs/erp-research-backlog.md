@@ -26549,7 +26549,98 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 - Q-HP-3 (Backend): fisik loader massal gabungan dua jenis dokumen (bentuk baris antrean tunggal vs dua sub-antrean per jenis), pemuatan departemen anti-N+1, dan pasangan scope per jenis.
 - Q-HP-4 (Lead): pengingat aktif (notifikasi approver) ditunda tahap 1 — sahkan.
 - Accountant: TIDAK diminta tahap ini — nol nominal/jurnal tampil (BR-HP-08/11). Dipanggil hanya bila kelak nominal lembur diusulkan tampil.
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-008-S: penanda selesai aktivitas lead terjadwal (completedAt LeadActivity yatim — antrean follow-up F-037 tidak pernah bisa dibersihkan)
 
+> **Slot**: F-2026-10-25-008-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`4c3d2c8b`): grep `F-2026-10-25-008` di backlog+board = 0; 001-S..005-S merged, 006-S PR #769, 007-S PR #770 beda topik. ID 008 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Bukan duplikat F-2026-10-21-037**: F-037 = builder+loader+kartu antrean follow-up jatuh-tempo (SUDAH live penuh: `lead-followups.ts`, `lead-followups-data.ts`, `LeadFollowupsCard` di `crm/leads/page.tsx:61,96`). Spec ini menutup lubang di hilirnya: antrean hanya mengeluarkan aktivitas bila `completedAt` terisi, tetapi TIDAK ADA satu pun jalur tulis `completedAt` untuk LeadActivity — aktivitas terjadwal yang sudah dikerjakan tetap menghantui antrean selamanya, dan sales terpaksa menghapus/mengabaikan. Spec ini membekukan aksi penanda selesai (+batal-selesai) yang hilang itu.
+
+### 0. Inventarisasi terverifikasi (TERVERIFIKASI-KODE, origin/main 4c3d2c8b, 2026-10-25)
+
+- Model `LeadActivity` (`prisma/schema.prisma`, model LeadActivity): `scheduledAt DateTime?`, `completedAt DateTime?`, `type`, `subject`, `userId`. Kolom selesai SUDAH ada — tanpa migrasi.
+- Builder antrean `src/lib/reports/lead-followups.ts:55-72` (`earliestDueActivity`): kandidat = `scheduledAt` terisi DAN `completedAt` kosong DAN hari kalender WIB <= hari ini; per lead jadwal terawal. Tes `lead-followups.test.ts:78` mengunci "completedAt terisi tidak terhitung walau scheduledAt lewat".
+- Penjadwalan existing: `addLeadActivity` (`src/actions/crm.actions.ts:340`) menerima `scheduledAt` dateOnly -> `wibDateToUtcMidnight`; skema `leadActivitySchema` (`src/lib/validations/crm.schemas.ts:106-117`) type note/call/email/meeting/task.
+- GAP (bukti grep run ini): `git grep completedAt` di `src/actions`, `src/app`, `src/components` untuk LeadActivity = 0 jalur tulis/UI (hit hanya Project/Approval/Production). Tidak ada `completeLeadActivity`, tidak ada tombol selesai di detail lead (`crm/leads/[slug]/page.tsx:166-175` hanya tabel baca aktivitas), tidak ada di `lead-actions.tsx` (hanya Convert + Add form).
+- Ownership existing: `convertLead` (`crm.actions.ts:201`) menjaga pemilik — non-admin hanya lead `assignedTo === user.id`, kecuali `manage_leads`/`super_admin`. `addLeadActivity` hanya `edit_leads` tanpa guard pemilik (asimetri existing, dicatat bukan diubah diam-diam — lihat Q-LC-2).
+- Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts:362-366`): `view_leads`, `create_leads`, `edit_leads`, `delete_leads`, `manage_leads`.
+- Status lead string bebas (default `new`); konversi hanya dari qualified/proposal/negotiation/won. Penanda selesai aktivitas TIDAK mengubah status lead.
+
+### 1. Workflow specification
+
+Aktor: Sales pemilik lead (pelaksana follow-up), Supervisor/Manajer Sales (`manage_leads`), Lead (putusan gerbang), Backend (aksi), Frontend (tombol + label), QA (falsifikasi).
+Dokumen masuk: LeadActivity terjadwal existing (scheduledAt terisi, completedAt kosong). Dokumen keluar: aktivitas yang sama dengan completedAt terisi (server time) + catatan log aktivitas existing; antrean F-037 membacanya keluar pada muat berikutnya. TANPA dokumen/jurnal/status baru.
+
+Alur:
+1. Sales membuka detail lead atau antrean follow-up, memilih aktivitas terjadwal yang sudah dikerjakan, menekan "Tandai Selesai".
+2. Server memeriksa izin + kepemilikan (BR-LC-02), menolak bila aktivitas sudah selesai / lead terhapus (BR-LC-04), lalu menulis completedAt = waktu server dalam transaksi + logActivity existing.
+3. Aktivitas keluar dari antrean F-037 (builder existing, tanpa perubahan), tampil di riwayat detail lead dengan label selesai + tanggal selesai.
+4. Supervisor dapat membatalkan penanda (completedAt -> kosong) bila salah tandai; aktivitas kembali ke antrean bila scheduledAt sudah jatuh tempo. Batal-selesai tercatat di log, bukan hapus riwayat.
+
+### 2. Status-transition matrix (keadaan turunan aktivitas — tanpa kolom status baru)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| terjadwal-belum-selesai (scheduledAt terisi, completedAt kosong) | Tandai Selesai | selesai (completedAt terisi) | izin + pemilik (BR-LC-01/02); idempoten (BR-LC-04) |
+| selesai | Batalkan Penanda | terjadwal-belum-selesai | izin + pemilik sama; completedAt dikosongkan, baris tidak dihapus |
+| tanpa jadwal (scheduledAt kosong) | Tandai Selesai | DITOLAK tahap 1 (Q-LC-3) | aktivitas catatan biasa bukan follow-up; menolak mencegah riwayat selesai karangan |
+| tahap apa pun | lead di-soft-delete | di luar cakupan | saringan deletedAt existing |
+
+### 3. Role/permission matrix (key nyata katalog :362-366)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat antrean/detail aktivitas | `view_leads` | existing, tidak berubah |
+| Tambah aktivitas terjadwal | `edit_leads` | existing `addLeadActivity` |
+| Tandai Selesai / Batalkan Penanda aktivitas lead sendiri | `edit_leads` + pemilik (USULAN Q-LC-2) | non-pemilik ditolak server, pola convertLead |
+| Tandai Selesai aktivitas lead orang lain | `manage_leads` / super_admin | pengecualian supervisor existing pola convertLead |
+| Hapus aktivitas/lead | `delete_leads` | existing, di luar spec |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-LC-2 Lead).
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-LC-01 | Penanda selesai menulis `completedAt` = waktu server saat aksi; klien tidak mengirim tanggal selesai bebas tahap 1 | USULAN | pola completedAt server di approval.actions.ts:209 |
+| BR-LC-02 | Hanya pemilik lead (assignedTo = user) atau pemegang `manage_leads`/super_admin yang boleh menandai/membatalkan; selain itu ditolak server berpesan | USULAN (BUTUH-VONIS Lead Q-LC-2) | pola convertLead crm.actions.ts:213-222 |
+| BR-LC-03 | Penanda selesai TIDAK mengubah status lead, TIDAK membuat aktivitas baru, TIDAK menyentuh customer/quotation; satu-satunya efek = completedAt + log existing | USULAN | scope |
+| BR-LC-04 | Idempoten: menandai aktivitas yang sudah selesai = ditolak/no-op berpesan "sudah selesai", completedAt pertama tidak ditimpa; membatalkan yang belum selesai = ditolak | USULAN | pola klaim atomik repo |
+| BR-LC-05 | Hanya aktivitas ber-scheduledAt yang bisa ditandai selesai tahap 1; aktivitas tanpa jadwal ditolak (Q-LC-3) | USULAN — Q-LC-3 | builder F-037 hanya membaca berjadwal |
+| BR-LC-06 | Sesudah ditandai, aktivitas keluar antrean F-037 pada muat berikutnya tanpa perubahan builder; sesudah dibatalkan dan scheduledAt sudah lewat, aktivitas kembali ke antrean | TERVERIFIKASI-KODE (konsekuensi builder) | lead-followups.ts:58 |
+| BR-LC-07 | Riwayat menampilkan penanda selesai (tanggal selesai + label) dari completedAt existing; UI tidak menghitung status selesai sendiri | USULAN | konvensi verbatim server |
+| BR-LC-08 | Penanda selesai BUKAN peristiwa akuntansi: nol jurnal, nol dokumen, nol notifikasi keluar tahap 1 | USULAN (scope) | — |
+
+### 5. Feature matrix Accurate / Zahir / ISF (BENCHMARK, akses 2026-10-25)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Aktivitas/follow-up pelanggan & prospek tercatat | ADA — fitur Pelanggan/Kontak memantau aktivitas + follow up: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/mengenal-fitur-pelanggan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/kontak/mengenal-fitur-kontak/ | Modul Leave/Approval HR ada di Zahir ERP (https://zahirerp.com/id/all-features-of-zahir-products/); aktivitas follow-up lead tidak ditemukan eksplisit di halaman itu — ditulis tidak ditemukan, bukan diklaim tidak ada | SEBAGIAN: aktivitas + jadwal + antrean jatuh-tempo ADA (F-037); penanda selesai ABSEN (gap spec ini) |
+| Antrean follow-up jatuh tempo | Tidak ditemukan eksplisit di halaman di atas | Tidak ditemukan eksplisit | ADA (F-037 live) |
+| Tandai aktivitas selesai | Tidak ditemukan eksplisit di halaman di atas | Tidak ditemukan eksplisit | ABSEN — completedAt yatim |
+
+### 6. Kata & label UI (usul Frontend, verbatim untuk diadopsi/diubah Lead)
+
+Tombol: "Tandai Selesai"; batal: "Batalkan Penanda Selesai". Label riwayat: `Selesai <tanggal>`; belum: `Terjadwal <tanggal>`. Pesan tolak server tampil apa adanya. Notice antrean tetap milik F-037, tidak diubah spec ini.
+
+### 7. Acceptance criteria (falsifikasi — QA atas head Backend/Frontend persis)
+
+- AC-LC-B1: tandai selesai aktivitas terjadwal -> completedAt terisi waktu server, baris keluar antrean F-037. Tetap di antrean = MERAH.
+- AC-LC-B2: non-pemilik tanpa manage_leads menandai -> ditolak server, completedAt tetap kosong. Lolos = MERAH.
+- AC-LC-B3: tandai dua kali -> completedAt pertama tidak berubah + penolakan/no-op berpesan. Tertimpa = MERAH.
+- AC-LC-B4: aktivitas tanpa scheduledAt ditandai -> ditolak (Q-LC-3). Terisi completedAt = MERAH terhadap spec.
+- AC-LC-B5: batalkan penanda -> completedAt kosong, aktivitas kembali ke antrean bila sudah jatuh tempo; baris/log tidak terhapus. Hilang baris = MERAH.
+- AC-LC-B6: penanda tidak mengubah status lead/customer/dokumen apa pun (snapshot banding). Berubah = MERAH.
+- AC-LC-F1: tombol hanya tampil untuk aktivitas berjadwal belum selesai pada pengguna berhak; UI tidak menentukan kepemilikan sendiri. Tombol tampil ke non-pemilik lalu server menolak tanpa pesan jelas = MERAH parsial (pesan server wajib tampil verbatim).
+- AC-LC-F2: riwayat menampilkan label selesai dari completedAt server; UI menghitung sendiri = MERAH.
+Edge cases: EC-1 aktivitas jadwal masa depan ditandai lebih awal -> boleh (selesai sebelum jatuh tempo), tidak pernah masuk antrean. EC-2 lead sudah won/converted: aktivitas tetap bisa ditandai (riwayat prospek sah). EC-3 dua penanda bersamaan: satu menang, satu idempoten tertolak (klaim atomik pola repo). EC-4 scheduledAt hari ini WIB ditandai hari sama -> overdueDays 0 tidak lagi tampil.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-LC-1 (Lead): sahkan tahap 1 aksi tandai/batal-selesai tunggal (tanpa alasan wajib, tanpa persetujuan supervisor).
+- Q-LC-2 (Lead): gerbang pemilik pola convertLead (usul spec) vs cukup `edit_leads` sejajar addLeadActivity existing. Asimetri existing dicatat; spec tidak memilih diam-diam.
+- Q-LC-3 (Lead/Backend): hanya aktivitas berjadwal (usul spec) vs semua aktivitas boleh ditandai.
+- Q-LC-4 (Backend): fisik klaim atomik (updateMany bersyarat completedAt kosong) + bentuk respons; tanpa migrasi.
+- Accountant: TIDAK diminta — nol uang/pajak/jurnal (BR-LC-08).
 ### 9. Backlog implementasi
 
 | ID | Pekerjaan | Pemilik | Prasyarat |
@@ -26566,6 +26657,19 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 - Kolom/status dokumen baru: status turunan dari kolom existing cukup; migrasi hanya bila Backend Q-HP-3 membuktikan tidak cukup.
 
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+| F-2026-10-25-008-S | Spec ini (dokumen) | Business | — |
+| (turunan) aksi tandai/batal-selesai atomik + tes kepemilikan/idempoten | Backend | Q-LC-1/2/3 diputus Lead | — |
+| (turunan) tombol + label riwayat verbatim server; grep e2e selector lead sebelum commit | Frontend | kontrak Backend stabil; kata §6 | — |
+| (turunan) falsifikasi AC-LC-B1..B6 + F1..F2 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Pengingat otomatis WA/email untuk follow-up: kanal keluar tidak ada (gap dicatat F-037); bukan penanda selesai.
+- Alasan wajib / persetujuan supervisor untuk menandai selesai: gesekan tanpa bukti kebutuhan; Q-LC-1 dulu.
+- Menghapus aktivitas sebagai jalan keluar antrean: merusak riwayat; penanda selesai adalah jalan sahnya.
+- Perubahan builder F-037 / stale-leads: keduanya benar; yang hilang hanya jalur tulis completedAt.
+
+F-2026-10-25-008-S — Penanda selesai aktivitas lead terjadwal. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LC-1..3 + fisik Backend Q-LC-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (aksi), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK.
+---
 ---
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-014-V: angka K2 lembur/cuti (PP 35/2021) + gerbang K4 approval dokumen uang (Muse, kartu Lead t_d2259fd0 / vonis t_f3e4fa16)
@@ -27685,18 +27789,104 @@ ID vonis ini **F-2026-10-25-018-V** (jawaban Q-RB-5 spec F-2026-10-25-017-S PR #
 
 ---
 
-## SPEC BUSINESS 2026-10-25 — F-2026-10-25-018-S: pengajuan pinjaman karyawan mandiri (self-service di atas EmployeeLoan existing)
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-023-V: pinjaman karyawan — bunga/angsuran/potong gaji/PPh 21 (jawaban Q-LS-5/6/7 + BR-LS-09/10 spec F-2026-10-25-018-S PR #827)
 
+> **Slot**: F-2026-10-25-023-V. Diperiksa bentrok 2026-10-25 13:46 WIB vs `origin/main` (`8dd4590c`): grep `F-2026-10-25-023` di backlog origin/main = 0, di head PR #827 (`0c32d611`) = 0, di judul PR terbuka = 0. ID terpakai tanggal ini: 001-S..022-V (022-V di PR #840 OPEN). 023-V bebas. Catatan alamat: kartu menyebut head PR #827 `ded2559a`; head live saat vonis = `0c32d611` (spec dibaca dari head live itu). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Batas vonis**: vonis ini memutus HANYA uang/pajak: Q-LS-5 (bunga), Q-LS-6 (rasio cicilan + urutan potongan), Q-LS-7 (PPh 21 manfaat pinjaman), dan bagian angka BR-LS-09/10. Q-LS-1/2/3/4/5-spec (izin, plafon kebijakan, antrean, status penolakan, kartu antrean) TETAP milik Lead/Backend — tidak diputus di sini. Plafon nominal/jangka = kebijakan pemilik proses (Lead), bukan angka karangan vonis; yang divonis = gerbang rasio cicilan terhadap upah sebagai syarat sistem.
+
+### 0. Basis bukti live (origin/main 8dd4590c, 2026-10-25 13:46 WIB) — TERVERIFIKASI-KODE
+
+- Model `EmployeeLoan` (`prisma/schema.prisma:3868-3890`): `totalAmount`, `monthlyInstallment`, `weeklyInstallment` (nullable, perjanjian tertulis — vonis F-2026-10-23-105-V), `remainingAmount` — semua `Decimal(15,2)`; `status` String polos. TIDAK ada kolom bunga, denda, biaya admin, tarif, atau jadwal angsuran. Skema bunga apa pun = kolom baru = di luar tahap ini.
+- Jurnal pencairan existing `onEmployeeLoanDisbursed` (`src/lib/hooks/accounting.hook.ts:2821-2895`): Dr `employeeReceivableAccountId` / Cr `payrollBankAccountId` sebesar `totalAmount`, tanggal `loanDate`, idempoten `(referenceType="EmployeeLoan", referenceId)`, `assertPeriodOpen(loanDate)` di dalam tx, fail-closed bila setting akun kosong. Dipanggil hanya pada persetujuan final (approval.actions.ts:241,251 per spec).
+- Jurnal payroll existing `onPayrollPaid` (hook sama): Dr bruto gaji; Cr neto + Cr statutori (BPJS karyawan + PPh 21) ke `salariesPayableAccountId` + Cr `loanDeduction` ke `employeeReceivableAccountId` ("Angsuran Pinjaman Karyawan") + Cr potongan lain ke Hutang Gaji; seimbang ditegakkan (Σdebit = Σkredit, koreksi kaki pertama). `loanDeduction > 0` tanpa `employeeReceivableAccountId` = lempar. Jadi angsuran pinjaman SUDAH mengurangi Piutang Karyawan di GL — bukan piutang menggantung.
+- Amortisasi existing `markPayrollPaid` (`src/actions/hrm.actions.ts:2990-3059`): budget = `payroll.loanDeduction` tersimpan di slip, tertua-dulu (`loanDate asc`), cap per pinjaman = min(cicilan frekuensi slip, sisa, sisa budget); WEEKLY tanpa `weeklyInstallment` tersimpan = cicilan 0 (tertahan, tidak mengarang monthly/4); sisa 0 → `paid_off`; semua dalam tx yang sama dengan jurnal payroll (klaim atomik status slip).
+- Akun existing (katalog `src/lib/setup/base-data.ts:889`): `110506 Piutang Karyawan` (OCAS). Setting: `employeeReceivableAccountId`, `payrollBankAccountId`, `salariesPayableAccountId` (`prisma/schema.prisma:243-245`). TIDAK ada akun Pendapatan Bunga Pinjaman Karyawan di katalog (grep bunga di base-data = 0 untuk akun pendapatan bunga pinjaman). Vonis ini TIDAK mengklaim akun baru; kebutuhan akun baru dicatat sebagai prasyarat bila bunga dipilih (Putusan 1B).
+
+### 0.1 Register sumber resmi (tax rules register)
+
+| # | Sumber | Tanggal akses | Cakupan yang dipakai |
+|---|---|---|---|
+| 1 | PP No. 36/2021 tentang Pengupahan, Pasal 63 ayat (1) huruf e + ayat (3) dan Pasal 65 — teks resmi peraturan.go.id/files/pp36-2021bt.pdf; metadata peraturan.bpk.go.id/Details/161909 (berlaku 02-02-2021; diubah PP 51/2023) | 2026-10-25 | Pemotongan upah untuk utang/cicilan utang pekerja HANYA berdasarkan kesepakatan tertulis atau perjanjian tertulis; jumlah KESELURUHAN pemotongan upah Pasal 63 paling banyak 50% dari setiap pembayaran upah yang diterima pekerja. |
+| 2 | PMK 66/2023 Pasal 4, 5, 23 + PMK 168/2023 Pasal 5, 7 — pajak.go.id/id/naturakenikmatan; siaran pers DJP pajak.go.id/id/siaran-pers/jenis-dan-batasan-natura-kenikmatan-yang-dikecualikan-dari-objek-pph (PMK 66/2023 berlaku 27-06-2023, pemotongan atas natura/kenikmatan objek mulai 01-07-2023) | 2026-10-25 | Natura/kenikmatan sehubungan pekerjaan = objek PPh penerima kecuali kategori dikecualikan (Pasal 4 PMK 66/2023); daftar pengecualian Pasal 5 TIDAK memuat fasilitas pinjaman/bunga rendah; pemberi kerja wajib memotong PPh 21 atas kenikmatan objek (Pasal 23 jo. PMK 168/2023). |
+| 3 | Nota Dinas DJP ND-14/PJ/PJ.02/2024 sebagaimana dikutip DDTCNews 15-08-2024 (news.ddtc.co.id/berita/nasional/1804793) — SUMBER SEKUNDER mengutip nota dinas internal DJP; teks nota dinas sendiri tidak diterbitkan publik | 2026-10-25 | Nilai kenikmatan pinjaman khusus pegawai = selisih lebih *cost of fund* pemberi kerja atas dana yang disalurkan setelah dikurangi bunga yang dibayar pegawai. Dipakai sebagai penegasan interpretasi DJP, BUKAN dasar hukum mandiri; label USULAN-operasional untuk rumus ukurnya (lihat Putusan 3). |
+| 4 | UU PPh Pasal 4 ayat (1) huruf a jo. UU 7/2021 (HPP) via pajak.go.id/id/naturakenikmatan | 2026-10-25 | Penggantian/imbalan dalam bentuk apa pun sehubungan pekerjaan = penghasilan objek pajak sejak tahun pajak 2022. |
+
+Fitur software ≠ interpretasi ≠ kewajiban hukum: jenis bunga Accurate (tanpa bunga/anuitas/efektif/flat) di spec 018-S adalah BENCHMARK produk; putusan di bawah adalah perlakuan akuntansi-pajak ISF.
+
+### Putusan 1 — Bunga: tahap 1 TANPA BUNGA; denda & biaya admin DILARANG (jawaban Q-LS-5)
+
+**1A. Tahap 1 pinjaman karyawan ISF = tanpa bunga, tanpa denda keterlambatan, tanpa biaya admin.** Alasan: (a) mesin existing tidak mengenal bunga — `EmployeeLoan` tanpa kolom tarif/jadwal, amortisasi memotong pokok murni sebesar cicilan tersimpan; menambah bunga berarti kolom + jadwal + jurnal pendapatan baru, bukan konfigurasi; (b) pinjaman berbunga rendah tetap menimbulkan kenikmatan kena PPh 21 (Putusan 3), jadi "berbunga kecil" tidak menghilangkan beban pajaknya — hanya menambah kompleksitas ukur; (c) denda keterlambatan atas pinjaman karyawan tidak punya dasar skema di kode dan berisiko bertabrakan dengan rezim pemotongan upah PP 36/2021. Meniru pilihan bunga Accurate tanpa build penuh = dilarang (BR-LS-10 spec ditegakkan).
+
+**1B. Syarat wajib BILA suatu saat berbunga diusulkan (spec lanjutan + vonis baru, bukan aktif tahap 1):** (i) kolom tarif bertanggal efektif di master (DILARANG hardcode tarif di logika), metode (flat/efektif/anuitas) dipilih tertulis; (ii) akun Pendapatan Bunga Pinjaman Karyawan BARU di katalog COA + setting — akun ini BELUM ADA hari ini, jangan klaim; (iii) jurnal pengakuan pendapatan bunga terpisah dari pokok: Dr Piutang Karyawan (atau Utang Gaji bila dipotong slip) / Cr Pendapatan Bunga, diakui per masa angsuran berjalan (bukan di muka saat cair); (iv) perlakuan PPh atas bunga yang DITERIMA perusahaan dari karyawan: bunga bukan objek potong PPh 21 bagi perusahaan-penerima dalam skema ini (karyawan bukan pemotong); perusahaan mencatat sebagai penghasilan usaha biasa di SPT Tahunan — tanpa bupot; (v) selisih bunga pasar/*cost of fund* tetap diukur sebagai kenikmatan karyawan (Putusan 3) walau bunga kontraktual ada.
+
+### Putusan 2 — Angsuran & potongan gaji: perjanjian tertulis + plafon total potongan 50% + urutan potongan (jawaban Q-LS-6, angka BR-LS-09)
+
+**2A. Syarat sah potong:** angsuran pinjaman hanya boleh dipotong dari upah bila ada kesepakatan tertulis/perjanjian tertulis dengan karyawan (PP 36/2021 Pasal 63 ayat (3)) — fisiknya: `monthlyInstallment`/`weeklyInstallment` tersimpan dari perjanjian (existing, F-2026-10-23-105-V) + dokumen perjanjian tertaut. Sistem DILARANG memotong pinjaman yang cicilannya tidak tersimpan dari perjanjian; WEEKLY tanpa `weeklyInstallment` = tertahan (existing, ditegakkan).
+
+**2B. Plafon keras sistem (bukan kebijakan):** TOTAL seluruh pemotongan upah Pasal 63 dalam satu pembayaran upah — angsuran pinjaman + uang muka + denda + ganti rugi + sewa + kelebihan bayar — TIDAK BOLEH melebihi 50% dari upah yang diterima pada pembayaran itu (PP 36/2021 Pasal 65). Ini batas hukum, bukan angka kebijakan Lead. Build WAJIB menegakkan di gerbang hitung/bayar slip: bila cicilan terjadwal membuat total potongan Pasal 63 menembus 50%, yang dipotong = sisa ruang sampai 50%, kekurangannya TIDAK dipotong paksa dan TIDAK menjadi denda — sisa pokok tetap `remainingAmount`, tenor memanjang. Dilarang memotong melebihi plafon dengan alasan perjanjian; perjanjian tidak mengalahkan Pasal 65.
+
+Catatan cakupan jujur: potongan statutori yang ditetapkan peraturan perundang-undangan (iuran BPJS bagian pekerja, PPh 21) berdiri di rezimnya sendiri; plafon 50% Pasal 65 menunjuk "pemotongan Upah sebagaimana dimaksud dalam Pasal 63". Build menegakkan plafon atas ember Pasal 63; ember statutori tidak dihitung masuk plafon ini, dan vonis tidak memperluas plafon ke statutori.
+
+**2C. Urutan potongan dalam satu slip (mengikat build payroll):** (1) potongan statutori (BPJS karyawan, PPh 21 atas bruto slip); (2) angsuran pinjaman karyawan (ember Pasal 63) sampai ruang 50% habis, tertua-dulu antar-pinjaman (existing); (3) potongan Pasal 63 lain (denda/ganti rugi/manual) memakai sisa ruang. Alasan urutan: statutori adalah kewajiban setor negara yang tidak boleh kalah oleh utang internal; pinjaman didahulukan atas potongan diskresioner karena cicilannya terikat perjanjian tertulis bertanggal. `loanDeduction` slip tetap budget tersimpan yang dibaca amortisasi existing — build tidak mengubah pola budget itu, hanya membatasi besarnya saat slip disusun/dibayar.
+
+**2D. Angsuran BUKAN pengurang bruto PPh 21 dan BUKAN komponen penghasilan:** pelunasan pokok pinjaman adalah pembayaran utang, bukan biaya karyawan dan bukan penghasilan. Maka: angsuran TIDAK mengurangi penghasilan bruto PPh 21, TIDAK masuk bupot sebagai penghasilan, TIDAK mengubah PTKP/TER. Di slip, angsuran tampil sebagai potongan neto sesudah penghitungan pajak (pola jurnal existing: Dr bruto penuh, Cr piutang sebesar `loanDeduction` — ditegakkan, jangan diubah menjadi pengurang beban gaji). Slip yang menampilkan angsuran sebagai pengurang bruto = cacat.
+
+**2E. Sisa pinjaman saat hubungan kerja berakhir:** sisa `remainingAmount` karyawan berhenti TIDAK boleh dipotong dari pesangon/kompensasi melebihi plafon Pasal 65 atas pembayaran terakhir itu, dan TIDAK boleh menghapus piutang diam-diam. Perlakuan: (a) potong dari pembayaran upah terakhir sebatas ruang Pasal 65 dengan perjanjian tertulis yang sudah ada; (b) sisa sesudah itu tetap Piutang Karyawan (110506) tertagih terpisah di luar payroll — penyelesaian/penghapusannya butuh dokumen persetujuan tersendiri; penghapusan piutang (write-off) = jurnal Dr Beban/Kerugian / Cr 110506 lewat jalur jurnal umum berizin, BUKAN efek samping payroll dan BUKAN vonis ini. Interaksi dengan hak terminasi (pesangon/UPMK/kompensasi PKWT) mengikuti vonis terminasi yang sudah ada; vonis ini tidak membuka jalur potong pesangon baru.
+
+### Putusan 3 — PPh 21 atas manfaat pinjaman (jawaban Q-LS-7)
+
+**3A. Pinjaman itu sendiri BUKAN penghasilan:** pokok yang diterima karyawan adalah utang (Dr Kas karyawan / kewajiban bayar kembali), bukan objek PPh 21 saat cair. Yang berpotensi objek = MANFAAT bunga: fasilitas pinjaman tanpa bunga atau bunga di bawah *cost of fund* pemberi kerja adalah kenikmatan sehubungan pekerjaan.
+
+**3B. Kenikmatan bunga = objek PPh 21 (bukan dikecualikan):** dasar UU PPh 4(1)(a) jo. UU HPP + PMK 66/2023 Pasal 4; daftar pengecualian Pasal 5 PMK 66/2023 tidak memuat pinjaman/bunga rendah. Nilai objek per masa = selisih lebih *cost of fund* pemberi kerja atas dana tersalur dikurangi bunga yang benar-benar dibayar karyawan pada masa itu (interpretasi DJP ND-14/PJ/PJ.02/2024, dikutip sekunder — label **USULAN-operasional** untuk rumus ukurnya sampai teks resmi/metode ukur internal ditetapkan tertulis). Karena tahap 1 tanpa bunga (Putusan 1A), nilai kenikmatan masa berjalan = *cost of fund* × pokok tersalur pada masa itu bila *cost of fund* dapat dibuktikan; pemberi kerja memotong PPh 21 atasnya digabung penghasilan bruto masa itu (PMK 168/2023).
+
+**3C. Gerbang fail-closed tahap 1 (mengikat):** ISF hari ini TIDAK punya master *cost of fund* bertanggal efektif, TIDAK punya komponen payroll kenikmatan-pinjaman, dan TIDAK punya snapshot ukur per pinjaman. Maka selama ketiganya absen: (i) DILARANG mengklaim pinjaman tanpa bunga ISF "bebas PPh 21" — klaim itu salah secara aturan; (ii) DILARANG mengarang tarif *benchmark* (mis. BI rate/JISDOR) sebagai *cost of fund* di kode — *cost of fund* adalah biaya dana aktual pemberi kerja, fakta keuangan perusahaan, bukan konstanta publik yang boleh ditebak sistem; (iii) jalur sah tahap 1 = perusahaan menetapkan *cost of fund* tertulis (dokumen kebijakan keuangan bertanggal efektif, di luar kode) dan menghitung kenikmatan per karyawan di luar sistem untuk digabung ke bruto lewat komponen payroll taxable existing, ATAU perusahaan menanggung risiko tercatat dengan keputusan tertulis pemilik proses pajak. Build komponen/snapshot kenikmatan-pinjaman = spec lanjutan dengan vonis ukur baru (sumber *cost of fund*, masa ukur, pembulatan). Sampai build itu ada, status perlakuan = **TERBUKA-TERCATAT**, bukan patuh dan bukan dilanggar diam-diam.
+
+**3D. Yang TIDAK kena:** pinjaman yang dibebani bunga ≥ *cost of fund* terbukti → selisih nol → tidak ada kenikmatan. Pengembalian pokok tidak pernah objek. Bunga yang dibayar karyawan kepada perusahaan tidak dipotong PPh 21 oleh karyawan.
+
+### Putusan 4 — Akun + jurnal: katalog existing SAH, tanpa akun baru tahap 1
+
+| Peristiwa | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| Pencairan (persetujuan final) | 110506 Piutang Karyawan (via `employeeReceivableAccountId`) = pokok | `payrollBankAccountId` = pokok | Existing `onEmployeeLoanDisbursed`; status `pending`/`rejected` nol jurnal; idempoten (EmployeeLoan, id); periode `loanDate` terbuka |
+| Angsuran via payroll | Bruto gaji (beban gaji, existing) | `employeeReceivableAccountId` = `loanDeduction` terpotong aktual | Existing `onPayrollPaid` + amortisasi `markPayrollPaid` satu tx; potongan ≤ ruang Pasal 65 (Putusan 2B); WEEKLY tanpa cicilan tersimpan = 0 |
+| Pelunasan akhir | (baris angsuran terakhir seperti di atas) | — | Sisa 0 → `paid_off` (existing); tidak ada jurnal pelunasan terpisah |
+| Penghapusan piutang tak tertagih | Beban kerugian (akun dari setting/COA aktif — BELUM dimapping untuk keperluan ini; jangan tebak) | 110506 | DI LUAR build tahap 1; butuh persetujuan + dokumen tersendiri, bukan efek payroll |
+
+Akun pendapatan bunga: TIDAK dipakai tahap 1 (tanpa bunga). Dilarang memakai akun pendapatan lain yang ada sebagai proksi bunga pinjaman bila bunga kelak dibangun — akun baru lewat katalog + setting (Putusan 1B-ii).
+
+### 5. Batas build (untuk BOT Backend/Business/Frontend/QA)
+
+- Backend: tidak ada kolom bunga/denda/tarif dibangun tahap 1; gerbang plafon 50% Pasal 63 + urutan Putusan 2C ditegakkan saat slip disusun/dibayar tanpa mengubah pola budget `loanDeduction` existing; angsuran tidak menyentuh bruto PPh 21 (Putusan 2D); jurnal existing tidak diubah.
+- Business: plafon nominal pokok/jangka/jumlah pinjaman aktif (Q-LS-2) tetap keputusan Lead/pemilik proses — vonis ini hanya memasang rel rasio cicilan (2B/2C); jangan turunkan angka plafon dari vonis ini.
+- Frontend: UI menampilkan cicilan/sisa apa adanya dari server; dilarang kalkulator bunga, dilarang label "bebas pajak", dilarang menampilkan manfaat kenikmatan hasil hitung UI.
+- QA: falsifikasi §6.
+
+### 6. Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- AC-LSV-1: pinjaman aktif tanpa bunga terbit jurnal pencairan persis Dr 110506/Cr bank pokok penuh sekali; retry approve tidak menggandakan. Jurnal bunga/denda muncul = MERAH.
+- AC-LSV-2: slip dengan cicilan terjadwal yang membuat total potongan Pasal 63 > 50% upah pembayaran → terpotong hanya sampai 50%, sisa pokok tidak berubah menjadi denda, tenor memanjang. Terpotong penuh menembus 50% = MERAH.
+- AC-LSV-3: bruto PPh 21 slip berisi angsuran identik dengan bruto slip tanpa angsuran (angsuran hanya potongan neto). Angsuran mengecilkan bruto/bupot = MERAH.
+- AC-LSV-4: WEEKLY tanpa `weeklyInstallment` tersimpan → angsuran 0, bukan monthly/4 (regresi F-105-V). Muncul nominal karangan = MERAH.
+- AC-LSV-5: tak ada jalur UI/API mengklaim atau menghitung kenikmatan/*cost of fund* tahap 1; komponen kenikmatan-pinjaman tanpa master bertanggal efektif = MERAH bila dibangun diam-diam.
+- AC-LSV-6: karyawan berhenti dengan sisa pinjaman → potongan pembayaran terakhir ≤ ruang Pasal 65; sisa tetap di 110506 (saldo piutang tidak nol diam-diam). Piutang terhapus otomatis oleh payroll = MERAH.
+- AC-LSV-7: `pending`/`rejected` nol jurnal; jurnal terbit sebelum persetujuan final = MERAH.
+
+### Larangan (mengikat semua build turunan)
+
+- Membangun bunga/denda/biaya admin, kolom tarif, atau jadwal angsuran berbunga atas nama spec 018-S tahap 1.
+- Memotong angsuran tanpa cicilan perjanjian tertulis tersimpan; memotong total Pasal 63 melebihi 50% pembayaran upah; menjadikan kekurangan potongan sebagai denda.
+- Mengurangi bruto PPh 21 dengan angsuran, atau menampilkan angsuran sebagai penghasilan/pengurang di bupot.
+- Mengklaim pinjaman tanpa bunga bebas PPh 21; menghardcode *cost of fund*/tarif acuan apa pun di logika; menghitung kenikmatan di UI.
+- Menghapus/menolak-akui sisa piutang karyawan berhenti lewat payroll; reuse akun pendapatan existing sebagai akun bunga pinjaman.
+
+ID vonis ini **F-2026-10-25-023-V** (jawaban Q-LS-5/6/7 + angka BR-LS-09/10 spec F-2026-10-25-018-S PR #827; bebas: grep `F-2026-10-25-023` di origin/main 8dd4590c + head PR #827 0c32d611 + judul PR terbuka = 0 sebelum vonis ini). Pemilik berikutnya: BOT Lead putus Q-LS-1/2/3/4/5-spec + merge PR docs ini → BOT Backend fisik gerbang §5 → BOT Frontend konsumen → BOT QA AC-LSV-1..7. Status kepatuhan PPh 21 manfaat pinjaman tahap 1 = TERBUKA-TERCATAT per Putusan 3C (menunggu penetapan *cost of fund* tertulis pemilik proses pajak atau spec komponen kenikmatan).
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-018-S: pengajuan pinjaman karyawan mandiri (self-service di atas EmployeeLoan existing)
 > **Slot**: F-2026-10-25-018-S. Diperiksa bentrok 2026-10-25 12:50 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-018` di backlog+board = 0 sebelum tulis; 017-S di PR #821 OPEN, 019-S di PR #825 OPEN (beda topik). ID 018-S bebas. Diverifikasi sebelum tulis, bukan slot tetap.
 >
 > **Gap baru domain (h) HR** — bukan F-ID lama. Saudara F-2026-10-25-007-S (antrean persetujuan HR — cuti+lembur saja, pinjaman belum masuk) dan F-2026-10-25-019-S (histori cicilan per pinjaman — ledger angsuran, bukan pengajuan). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
-
 ### 0. Ringkasan putusan yang diminta
-
 Mesin pinjaman karyawan SUDAH lengkap di server: `EmployeeLoan` berstatus `pending` saat dibuat, rantai ApprovalWorkflow generik memutuskan, langkah final mengubah status menjadi `active` + menjurnal pencairan, dan payroll yang dibayar mengamortisasi sisa sampai `paid_off`. Yang hilang hanya satu pintu: karyawan tidak bisa mengajukan sendiri. `createEmployeeLoan` digerbang izin `create_loans` (`src/actions/hrm.actions.ts:3066`) yang TIDAK dimiliki role karyawan (`KARYAWAN_WHITELIST`, `src/lib/setup/base-data.ts:593-608` — hanya `view_employee_loans` di :607), padahal aksi yang sama sudah menegakkan scope diri-sendiri persis seperti pengajuan cuti. Akibat lapangan: pengajuan dititipkan staf HR, `createdBy` mencatat staf bukan pengaju, dan jejak persetujuan diri (SoD) kehilangan makna. Spec ini membekukan: (A) pola izin pengajuan mandiri meniru preseden cuti/lembur, (B) perluasan antrean 007-S ke pinjaman `pending`, (C) matriks status/izin + AC falsifikasi. Plafon, jangka waktu, jenjang, bunga, dan perlakuan pajak = putusan Lead/Accountant (§8), tidak diputus spec ini.
-
 ### 1. Inventarisasi terverifikasi (origin/main 997c8ead, 2026-10-25)
-
 Sudah ada (TERVERIFIKASI-KODE):
 - Model `EmployeeLoan` (`prisma/schema.prisma:3763-3788`): employeeId, loanDate, totalAmount Decimal(15,2), monthlyInstallment wajib, weeklyInstallment nullable (nominal perjanjian tertulis; NULL = tanpa jadwal mingguan, gerbang WEEKLY menahan — komentar F-2026-10-23-105-V :3768-3770), remainingAmount, status String default `active` (:3775; baris baru dari aksi dibuat eksplisit `pending`), notes, approvedBy, createdBy; indeks employeeId/status/approvedBy/createdBy/createdAt.
 - Buat pinjaman: `createEmployeeLoan` (`src/actions/hrm.actions.ts:3064`) — `requirePermission("create_loans")` (:3066), validasi `employeeLoanSchema` (`src/lib/validations/hrm.schemas.ts:66-79`: employeeId, loanDate, totalAmount >= 1, monthlyInstallment >= 1, weeklyInstallment opsional > 0, notes maks 500), lalu penegakan `getHrScope` persis pola cuti (:3079-3090: self hanya employeeId sendiri, department se-departemen, all bebas), buat baris `status: "pending"` + `remainingAmount = totalAmount` + `createdBy = user.id` dalam satu transaksi, lalu `requestApprovalIfConfigured("EmployeeLoan", ...)` (:3108-3113).
@@ -27708,23 +27898,17 @@ Sudah ada (TERVERIFIKASI-KODE):
 - Halaman existing: daftar `/sdm/pinjaman` digerbang `view_employee_loans` + `hrScopeWhere` (page.tsx:23-31; tombol buat digerbang `CanCreate create_loans` :86), form tambah digerbang `create_loans` + `hrEmployeeScopeWhere` untuk daftar karyawan terpilih (tambah/page.tsx:13-22; scope self -> daftar berisi tepat dirinya, form mengunci employeeId tunggal `employee-loan-form.tsx:78`), detail + ubah pola sama. Navigasi "Pinjaman" digerbang `view_employee_loans` (`src/components/layout/navigation.ts:161`).
 - Preseden mandiri: karyawan SUDAH bisa mengajukan cuti/lembur sendiri — `KARYAWAN_WHITELIST` memuat `create_leave_requests` (:603) dan pola scope self di `createLeaveRequest` (`hrm.actions.ts:849-866`) identik dengan penjaga di `createEmployeeLoan`. Pinjaman satu-satunya pengajuan HR yang belum mandiri.
 - Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:45-76`) — all (HR/finance/admin/ga), department (kepala_bengkel), self; roles hilang/rusak atau user tanpa employee tertaut = self employeeId -1 (tidak cocok apa pun).
-
 Belum ada / gap (bukti grep run ini):
 - Karyawan tidak bisa mengajukan: `create_loans` tidak ada di `KARYAWAN_WHITELIST` (`base-data.ts:593-608`); grep `create_loans` di daftar peran = hanya blok finance/purchasing (`base-data.ts:304,705`). Halaman tambah dan tombol buat tidak terjangkau role karyawan.
 - Antrean approver belum mengenal pinjaman: builder 007-S membaca persis LeaveRequest + OvertimeRequest `pending` (`src/lib/reports/hr-pending-approval.ts:7`, `hr-pending-approval-data.ts:5,20`); grep `EmployeeLoan` di kedua berkas = 0. Pinjaman `pending` hanya terlihat dari daftar transaksional `/sdm/pinjaman` chip status.
 - Tidak ada plafon/jangka/nominal-maksimum per karyawan, tidak ada batas jumlah pinjaman aktif bersamaan, tidak ada gerbang masa kerja: validasi hanya nominal >= 1 (`hrm.schemas.ts:69-70`). Angka kebijakan apa pun hari ini = tidak ada, bukan nol.
 - `createdBy` pada pengajuan titipan mencatat staf HR pembuat, bukan karyawan pengaju; dari data saja pengajuan mandiri vs titipan tidak bisa dibedakan sesudah izin dibuka (kolom pembeda tidak ada).
-
 Benchmark resmi (akses 2026-10-25):
 - Accurate Online — Pinjaman Karyawan: pencatatan pinjaman + jadwal angsuran + pantau cicilan; pencairan dicatat terpisah dan WAJIB mendahului potongan gaji ("Pastikan Kamu sudah melakukan transaksi Pencairan Pinjaman terlebih dahulu"), angsuran bisa lewat Pembayaran Angsuran kas/bank ATAU otomatis lewat Pencatatan Gaji (kolom Potongan Piutang Karyawan) (BENCHMARK: https://help.accurate.id/product/pinjaman-karyawan/ ; https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/membuat-pinjaman-karyawan/ ; https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/pinjaman-gaji/). Metode bunga + denda keterlambatan ada di Accurate (halaman membuat-pinjaman di atas) — ISF tidak punya bunga/denda; memasukkannya = BUTUH-VONIS Accountant, bukan ditiru diam-diam.
 - Zahir: halaman fitur resmi menyebut "Loan — mengelola pinjaman yang diajukan karyawan, terintegrasi dengan pencatatan kas keluar Zahir Online" (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/). Halaman bantuan KB Zahir tentang alur pengajuan mandiri/approval pinjaman karyawan: tidak ditemukan run ini (jujur: belum terverifikasi; tidak diklaim).
-
 ### 2. Workflow specification
-
 Aktor: Karyawan pengaju (self-scope), HR/verifikator (scope all/department), Approver pemegang `approve_loans` dalam rantai ApprovalWorkflow, Finance/penggajian (amortisasi lewat payroll existing), Lead (gerbang + angka kebijakan), Accountant (vonis uang/pajak bila dipanggil §8).
-
 Dokumen masuk: pengajuan EmployeeLoan baru (form existing). Dokumen keluar: EmployeeLoan `active` + jurnal pencairan existing; angsuran = potongan payroll existing; TIDAK ada model/dokumen pinjaman kedua.
-
 Alur:
 1. Karyawan membuka form pinjaman (permukaan existing `/sdm/pinjaman/tambah`), employeeId terkunci dirinya (scope self), mengisi tanggal, pokok, cicilan bulanan (+ cicilan mingguan bila perjanjian tertulis untuk karyawan WEEKLY), catatan keperluan. Simpan -> `createEmployeeLoan` existing membuat baris `pending`, `createdBy` = user karyawan itu sendiri, rantai EmployeeLoan tertaut bila terkonfigurasi.
 2. Pengajuan `pending` tampil di: daftar pinjaman dalam scope masing-masing (existing) DAN antrean persetujuan HR perluasan 007-S (§5 BR-LS-07) bagi verifikator/approver.
@@ -27733,13 +27917,9 @@ Alur:
 5. Selama `pending`, pengaju boleh mengubah nominal/tanggal/cicilan (`updateEmployeeLoan` existing) dan membatalkan lewat hapus (hanya bila ia memegang izin hapus — lihat matriks §4; default usulan: hapus tetap staf).
 6. Sesudah `active`: angsuran berjalan otomatis lewat payroll (`markPayrollPaid` existing, tertua-dulu, cap cicilan per frekuensi); sisa 0 -> `paid_off`. Pinjaman `active` tidak bisa diedit/dihapus (penjaga existing).
 7. Jejak: `createdBy` = pengaju (mandiri) atau staf (titipan); riwayat keputusan di ApprovalHistory + logActivity existing. Membedakan dua kanal dari data = Q-LS-3 (Backend), bukan ditebak.
-
 Status dokumen yang dipakai spec ini persis himpunan existing: `pending`, `active`, `rejected`, `paid_off`. Tidak ada status baru (`draft` tidak dikenal EmployeeLoan; jangan karang).
-
 ### 3. Status-transition matrix (status dokumen existing, bukan kolom baru)
-
 | Dari | Pemicu | Ke | Penjaga |
-|---|---|---|---|
 | (belum ada) | `createEmployeeLoan` (pengaju mandiri / staf) | `pending` | izin pengajuan §4 + schema existing + scope self hanya diri sendiri; rantai tertaut bila terkonfigurasi |
 | `pending` | `updateEmployeeLoan` | `pending` (isi berubah, remaining menyesuaikan delta pokok) | izin `create_loans` existing + scope; hanya selama `pending` |
 | `pending` | langkah final `approveStep` (semua langkah rantai lolos) | `active` (+ jurnal pencairan atomik) | `approve_loans` per langkah + approver langkah + Maker-Checker SoD |
@@ -27748,11 +27928,8 @@ Status dokumen yang dipakai spec ini persis himpunan existing: `pending`, `activ
 | `active` | `markPayrollPaid` dengan `loanDeduction` > 0 | `active` (sisa berkurang) atau `paid_off` (sisa 0) | status slip `approved` klaim atomik + jurnal gaji satu transaksi (existing) |
 | `active` / `paid_off` | edit/hapus | ditolak | penjaga existing (`updateEmployeeLoan`/`deleteEmployeeLoan` hanya `pending`/`rejected`) |
 | `pending` tanpa workflow terkonfigurasi | (tidak ada pemicu) | tertahan `pending` | fakta existing §1 — keputusan langsung tanpa rantai = Q-LS-4 Lead, TIDAK diasumsikan ada |
-
 Catatan jujur: tahap antrean 007-S (MENUNGGU_KEPUTUSAN/MENGENDAP/dst) adalah turunan baca-saja di atas `pending`, bukan status dokumen; pinjaman mewarisi tahap yang sama tanpa menulis DB.
-
 ### 4. Role/permission matrix (key nyata katalog :316-319; key usul ditandai)
-
 | Aksi | Karyawan (self) | Kepala bengkel (department) | HR/Finance/Admin (all) | Approver rantai |
 |---|---|---|---|---|
 | Lihat daftar pinjaman | `view_employee_loans` + scope self (punya sendiri) | `view_employee_loans` + scope department | `view_employee_loans` + scope all | mengikuti izin+scope-nya |
@@ -27762,13 +27939,9 @@ Catatan jujur: tahap antrean 007-S (MENUNGGU_KEPUTUSAN/MENGENDAP/dst) adalah tur
 | Setujui/tolak (keputusan) | TIDAK PERNAH untuk pengajuan sendiri (SoD rantai) | hanya bila ditunjuk langkah rantai + `approve_loans` | hanya bila ditunjuk langkah rantai + `approve_loans` | `approve_loans` + approver langkah + Maker-Checker |
 | Lihat antrean pinjaman `pending` (perluasan 007-S) | tidak (bukan permukaan approver; pengajuan sendiri terlihat di daftar) | `view_employee_loans` + `approve_loans` + scope (mengikuti pola gerbang ganda 007-S) | sama | sama |
 | Proses angsuran | — | — | lewat payroll existing (`process_payroll` + jurnal satu transaksi) | — |
-
 Nominal pinjaman BUKAN data gaji, tetapi data utang pribadi: di luar scope pemanggil tidak tampil (daftar/detail sudah `hrScopeWhere`); nominal tidak masuk board/log publik (mandat profil).
-
 ### 5. Business rules register
-
 | ID | Aturan | Label | Bukti/sumber |
-|---|---|---|---|
 | BR-RB-01 | Klaim karyawan tahap 1 = Expense existing dengan `employeeId` terisi sebagai pengaju + bukti tertaut. Dilarang membuat model/tabel klaim kedua atau dokumen bayar kedua; satu pengeluaran satu dokumen. | USULAN | schema :3887 employeeId yatim; larangan jalur nilai kedua pola repo |
 | BR-RB-02 | Pengaju ditetapkan server dari karyawan tertaut user (`getHrScope` self); klien tidak bisa memilih karyawan lain dalam mode mandiri. Mode titip oleh keuangan mencatat pengaju = karyawan pemilik biaya, pembuat = user keuangan (createdBy existing), dan tertanda titip. | USULAN | hr-scope.ts:40; pola createEmployeeLoan hrm.actions.ts:3064 |
 | BR-RB-03 | Scope fail-closed di loader DAN aksi (bukan UI): self hanya sendiri, department se-departemen, all semua; scope rusak = nol baris/ditolak. Daftar klaim memakai `hrScopeWhere` existing. | TERVERIFIKASI-KODE (pola) + USULAN | hr-scope.ts:40,76; pinjaman page/hrm |
@@ -27781,18 +27954,13 @@ Nominal pinjaman BUKAN data gaji, tetapi data utang pribadi: di luar scope peman
 | BR-RB-10 | Anti-dobel: pengaju + tanggal + nominal + referenceNo yang sama pada klaim belum terminal = peringatan keras server saat ajukan (tampil kandidat), bukan blokir diam-diam dan bukan lolos diam-diam; keputusan lanjut tercatat. Fisik kunci = Q-RB-3 Backend. | USULAN | pola peringatan duplikat F-2026-10-25-003-S/141-S |
 | BR-RB-11 | Klaim tertaut proyek/WO (`projectId` existing) tampil sebagai fakta keperluan; biaya aktual proyek tetap hanya dari transaksi inventory/jurnal sah — klaim approved yang berjurnal adalah fakta keuangan, klaim draft BUKAN biaya proyek. UI proyek tidak menghitung klaim sebagai aktual. | TERVERIFIKASI-KODE (prinsip) + USULAN | mandat material project profil ini; Expense.projectId schema |
 | BR-RB-12 | Tidak ada plafon nominal, batas hari ajukan, atau daftar kategori boleh-klaim yang dikarang spec ini; bila pemilik proses menetapkan, nilainya konfigurasi/kebijakan tertulis (Q-RB-6), bukan konstanta kode dari spec. Zahir mengenal plafon/batas waktu (BENCHMARK §1) — ISF tahap 1 tanpa plafon sampai diputus. | USULAN | zahirerp.com BENCHMARK §1 |
-
 ### 6. Feature matrix
-
 | Kemampuan | Accurate | Zahir HR/ERP | ISF (Silengkap) |
-|---|---|---|---|
 | Pengajuan reimbursement oleh karyawan + persetujuan berjenjang | Elemen form standar: pemohon, rincian, bukti, persetujuan berjenjang, status (BENCHMARK: https://accurate.id/akuntansi/contoh-form-reimbursement/); rincian fitur AOL belum terverifikasi | Ya — Approval Management reimburse satu/multi jenjang + kebijakan plafon/batas waktu per karyawan (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/, https://zahir.co.id/hr/) | ABSEN sebagai alur karyawan (gap spec ini): Expense operasional ada, penanda pengaju yatim |
 | Bukti pengeluaran tertaut dokumen | Bukti pembayaran komponen wajib form (BENCHMARK URL sama) | Terpantau nominal pengajuan (BENCHMARK URL sama) | Parsial: `receiptImage` + lampiran transaksi ada, kewajiban bukti untuk klaim ABSEN |
 | Pembayaran penggantian ke karyawan | Status Dibayarkan sebagai tahap form (BENCHMARK URL sama) | Kebijakan reimbursement terpantau (BENCHMARK URL sama) | Jalur bayar Expense existing ada (jurnal + kas kecil); tahap klaim DIBAYAR turunan ABSEN |
 | Klasifikasi pajak reimbursement | — (di luar cakupan benchmark run ini) | — | Ada sebagai vonis komponen gaji T3 (backlog :4128); integrasi klaim→payroll DITUNDA Q-RB-5 |
-
 ### 7. Acceptance criteria (falsifikasi)
-
 Backend (sesudah gerbang Lead dibuka):
 - AC-RB-B1: karyawan self mengajukan klaim → Expense lahir tertanda pengaju = karyawan tertaut, status draft, bukti tertaut. Memalsukan employeeId karyawan lain lewat payload = MERAH (server menimpa dari scope).
 - AC-RB-B2: klaim karyawan departemen lain bocor ke daftar/verifikasi pemanggil department = MERAH; scope rusak menghasilkan baris = MERAH; pemanggil self melihat klaim orang lain = MERAH.
@@ -27801,33 +27969,24 @@ Backend (sesudah gerbang Lead dibuka):
 - AC-RB-B5: akun beban/bayar kosong saat approve klaim = MERAH dari hook existing, dokumen tetap belum approved (bukan setengah berjurnal).
 - AC-RB-B6: kandidat dobel (pengaju+tanggal+nominal+referenceNo sama, belum terminal) memicu peringatan server tercatat (BR-RB-10); membiarkan lolos tanpa jejak = MERAH.
 - AC-RB-B7: payload daftar klaim memuat field gaji/pinjaman atau nominal luar scope = MERAH (grep payload + uji scope).
-
 Frontend (konsumen):
 - AC-RB-F1: tahap/alasan/nominal tampil verbatim server; UI menghitung tahap/tanggal/plafon sendiri = MERAH.
 - AC-RB-F2: form klaim tidak menawarkan pilihan karyawan lain dalam mode mandiri dan tidak menawarkan pilihan akun GL; menawarkan = MERAH. Sebelum commit: grep e2e selector pengeluaran/sdm terdampak, sinkronkan commit yang sama.
-
 QA: AC-RB-B1..B7 + AC-RB-F1..F2 atas head Backend/Frontend persis.
-
 Edge cases: EC-1 klaim untuk pengeluaran sebelum karyawan bergabung / sesudah nonaktif (server menolak pengaju tidak aktif; klaim lama tetap terbaca pemiliknya). EC-2 bukti berupa satu lampiran untuk banyak baris keperluan (tahap 1 satu klaim satu dokumen Expense; pemecahan baris = di luar spec, jangan karang). EC-3 nominal bukti lebih kecil dari nominal diajukan (yang disetujui ≤ bukti, BR-RB-05; selisih ditolak/dikoreksi sebelum approve, bukan dibayar lalu diklasifikasi). EC-4 rantai ApprovalWorkflow Expense tidak terkonfigurasi (keputusan langsung keuangan; spec tidak mengarang jenjang). EC-5 klaim tertaut WO yang sudah ditutup (tampil sebagai fakta; gerbang biaya telat L3 existing yang memutuskan akun/ditolak — klaim tidak membuka jalur biaya kedua di WO tertutup). EC-6 pengaju mengajukan ulang klaim rejected dengan bukti baru = dokumen baru tertaut nomor lama, bukan membuka rejected. EC-7 pembayaran kas kecil tidak cukup saldo (kegagalan jalur bayar existing tampil; tahap tetap DISETUJUI belum DIBAYAR, bukan ditandai lunas).
-
 ### 8. Pertanyaan putusan (gerbang)
-
 - Q-RB-1 (Lead): izin mengajukan klaim — key baru khusus klaim (seed parity) vs reuse `create_expenses` dengan penjaga penanda pengaju; dan siapa boleh mode titip (keuangan saja?).
 - Q-RB-2 (Lead): jenjang verifikasi — keuangan langsung vs atasan dulu lewat ApprovalWorkflow terkonfigurasi; sahkan tahap 1 memakai rantai existing apa adanya tanpa jenjang paksa baru.
 - Q-RB-3 (Backend): fisik penanda klaim yang membedakan Expense operasional vs klaim karyawan (kolom penanda vs inferensi employeeId terisi), relasi employee untuk loader, kunci kandidat dobel BR-RB-10, dan bentuk tahap DIBAYAR dari fakta bayar existing tanpa kolom status baru.
 - Q-RB-4 (Lead): tahap DIBAYAR cukup turunan fakta bayar existing tahap 1 (tanpa status/dokumen bayar baru) — sahkan atau minta dokumen bayar terpisah sebagai spec lanjutan.
 - Q-RB-5 (Accountant, BUTUH-VONIS hanya bila titik bayar berubah): pembayaran klaim tetap lewat Expense (default spec) — TIDAK diminta vonis tahap 1. Vonis baru wajib hanya bila diusulkan bayar lewat payroll/komponen slip (klasifikasi T3 backlog :4128 berlaku di sana) atau selisih-lebih diperlakukan sebagai penghasilan lewat jalur klaim ini.
 - Q-RB-6 (Lead/pemilik proses): plafon nominal, batas hari pengajuan sejak tanggal bukti, dan daftar kategori boleh-klaim — semua TANPA angka di spec ini (BR-RB-12); tetapkan tertulis bila mau diterapkan, jangan ambil dari benchmark sebagai fakta ISF.
-
 ### 9. Backlog implementasi (turunan F-2026-10-25-017-S)
-
 | ID turunan | Isi | Pemilik | Prasyarat |
-|---|---|---|---|
 | F-2026-10-25-017-S | Spec ini (dokumen) | Business | — |
 | (dibuat Backend sesudah Q-RB-1/3) | Penanda klaim + aksi ajukan self + gerbang bukti/SoD di approve klaim + loader daftar per scope | Backend | Q-RB-1 Lead, Q-RB-3 fisik |
 | (dibuat Frontend sesudah kontrak Backend) | Permukaan mandiri karyawan: form klaim + daftar klaim saya + antrean verifikasi keuangan | Frontend | kontrak Backend stabil |
 | (dibuat QA sesudah head persis) | Falsifikasi AC-RB-B1..B7 + F1..F2 | QA | head Backend/Frontend |
-
 ### Yang TIDAK diusulkan run ini
 - Model/tabel reimbursement baru, dokumen bayar kedua, jurnal baru, komponen payroll reimbursement: YAGNI tercatat — fondasi Expense + hook + rantai existing cukup untuk tahap 1; titik bayar payroll menyentuh klasifikasi T3 dan wajib vonis Accountant dulu (Q-RB-5).
 - Plafon/batas waktu/kategori otomatis dari benchmark Zahir: benchmark bukan kebijakan ISF (BR-RB-12); tanpa vonis pemilik proses, angka apa pun = karangan.
@@ -27845,11 +28004,8 @@ Edge cases: EC-1 klaim untuk pengeluaran sebelum karyawan bergabung / sesudah no
 | BR-LS-10 | Bunga, denda keterlambatan, biaya admin, perlakuan potongan pinjaman terhadap penghasilan kena pajak/PPh 21, dan akun pencairan: TIDAK diputus spec ini; ISF hari ini tanpa bunga/denda. Meniru Accurate (bunga/denda) tanpa vonis = dilarang. | BUTUH-VONIS (Accountant) | §1 benchmark Accurate; schema EmployeeLoan tanpa kolom bunga/denda |
 | BR-LS-11 | `createdBy` mencatat user pembuat baris apa adanya (pengaju mandiri atau staf titipan). Membedakan kanal pengajuan dari data (penanda sumber) = fisik Backend Q-LS-3; tanpa itu laporan dilarang mengklaim kanal. | TERVERIFIKASI-KODE (kolom) + USULAN (penanda) | schema:3780; hrm:3102 |
 | BR-LS-12 | Nominal pinjaman karyawan lain tidak tampil di luar scope dan tidak masuk permukaan antrean selain bagi pemegang gerbang §4; slip gaji tetap menampilkan potongan pinjaman slip itu sendiri lewat jalur payroll existing (bukan permukaan baru spec ini). | TERVERIFIKASI-KODE (scope) + USULAN | hr-scope hrScopeWhere; mandat authorization profil |
-
 ### 6. Feature matrix
-
 | Kemampuan | Accurate Online | Zahir | ISF (Silengkap) |
-|---|---|---|---|
 | Catat pinjaman + jadwal angsuran + sisa saldo | Ya (BENCHMARK §1) | Ya — Loan terintegrasi kas keluar (BENCHMARK §1) | Ada (TERVERIFIKASI-KODE schema:3763; amortisasi hrm:2979) |
 | Pengajuan mandiri oleh karyawan (self-service) | Belum terverifikasi run ini (halaman terambil = pencatatan oleh staf) | Belum terverifikasi run ini (KB alur pengajuan tidak ditemukan) | ABSEN (gap spec ini): `create_loans` di luar whitelist karyawan |
 | Persetujuan berjenjang sebelum cair + SoD | Belum terverifikasi run ini | Approval Management multi-jenjang ada untuk pengajuan HR (BENCHMARK spec 007-S §1) | Ada generik (TERVERIFIKASI-KODE approval:161,241; SoD :219) |
@@ -27857,9 +28013,7 @@ Edge cases: EC-1 klaim untuk pengeluaran sebelum karyawan bergabung / sesudah no
 | Angsuran otomatis potong gaji | Ya (BENCHMARK §1) | Belum terverifikasi run ini | Ada lewat `markPayrollPaid` existing (TERVERIFIKASI-KODE) |
 | Bunga + denda keterlambatan | Ya (BENCHMARK §1) | Belum terverifikasi run ini | ABSEN — BUTUH-VONIS Accountant (BR-LS-10), bukan ditiru |
 | Antrean approver pinjaman pending | Belum terverifikasi run ini | Belum terverifikasi run ini | ABSEN: antrean 007-S hanya cuti+lembur (gap BR-LS-07) |
-
 ### 7. Acceptance criteria (falsifikasi)
-
 Backend (sesudah gerbang Lead Q-LS-1 dibuka):
 - AC-LS-B1: sebagai karyawan self-scope, ajukan pinjaman untuk employeeId sendiri -> baris `pending` + `createdBy` = user pengaju + rantai tertaut bila terkonfigurasi. Mengajukan untuk employeeId orang lain (form dimanipulasi) -> ditolak server. Membalik penjaga scope = tes MERAH.
 - AC-LS-B2: user tanpa employee tertaut / roles rusak (scope -1): pengajuan apa pun ditolak; baris pinjaman orang lain tidak terbaca. Ada baris tercipta/terbaca = MERAH.
@@ -27869,35 +28023,26 @@ Backend (sesudah gerbang Lead Q-LS-1 dibuka):
 - AC-LS-B6: payroll dibayar mengamortisasi pinjaman `active` tertua-dulu dibatasi budget slip + cicilan frekuensi; WEEKLY tanpa `weeklyInstallment` tidak terpotong dan tidak mengarang nominal; sisa 0 -> `paid_off`. Potongan melebihi budget/sisa = MERAH.
 - AC-LS-B7 (perluasan antrean): pinjaman `pending` dalam scope approver muncul di antrean 007-S; pinjaman departemen lain bocor, atau pinjaman `active`/`rejected` tampil sebagai pending = MERAH; loader antrean menulis EmployeeLoan/Approval apa pun = MERAH.
 - AC-LS-B8 (bila Q-LS-1 memilih key baru): key pengajuan memberi hak ajukan+edit-pending-sendiri TANPA membuka form kelola staf untuk orang lain dalam scope department/all; matriks tes peran per aksi §4. Kebocoran satu aksi = MERAH.
-
 Frontend (konsumen, sesudah kontrak izin final):
 - AC-LS-F1: karyawan self melihat form dengan employeeId terkunci dirinya (tanpa pemilih karyawan); pemilih karyawan hanya tampil bagi scope department/all sesuai daftar server. UI memilihkan orang lain untuk self = MERAH.
 - AC-LS-F2: kata status tampil verbatim server (`pending`/`active`/`rejected`/`paid_off` lewat label existing); UI menghitung sisa/cicilan sendiri atau menampilkan bunga/denda = MERAH. Sebelum commit: grep e2e selector pinjaman terdampak, sinkronkan commit yang sama.
 - AC-LS-F3: karyawan WEEKLY melihat peringatan cicilan mingguan perjanjian tertulis sebelum simpan (BR-LS-08); peringatan hilang / nominal mingguan terisi otomatis = MERAH.
-
 QA: AC-LS-B1..B8 + AC-LS-F1..F3 atas head Backend/Frontend persis; tambahan: verifikasi tidak ada model pinjaman kedua dan tidak ada status dokumen baru di diff.
-
 Edge cases: EC-1 pengajuan kedua saat pinjaman pertama masih `pending`/`active` (diizinkan sistem hari ini; pembatasan jumlah = Q-LS-2, antrean menampilkan keduanya terpisah). EC-2 karyawan nonaktif sesudah mengajukan `pending` (baris tetap; keputusan jalur existing; antrean tidak menebak kelayakan). EC-3 tidak ada workflow EmployeeLoan terkonfigurasi (pengajuan tertahan `pending` terlihat di antrean dengan umur; spec tidak mengarang jalur cair langsung — Q-LS-4). EC-4 nominal cicilan melebihi pokok / cicilan sangat kecil (schema hari ini hanya >= 1; validasi kewajaran = Q-LS-2, jangan ditambah diam-diam). EC-5 pengajuan ditolak lalu karyawan mengajukan ulang nominal sama (baris baru sah; `rejected` lama tetap riwayat, tidak dibuka-ulang). EC-6 approver menolak di langkah tengah rantai multi-langkah (dokumen langsung `rejected` oleh `rejectStep` existing; langkah sesudahnya tidak berjalan). EC-7 karyawan berganti frekuensi gaji MONTHLY/WEEKLY saat pinjaman `active` (amortisasi mengikuti frekuensi slip saat dibayar, existing; nominal mingguan kosong menahan potongan mingguan, bukan mengonversi). EC-8 dua payroll bersamaan untuk karyawan sama (klaim atomik status slip existing yang melindungi; antrean/spec tidak menambah kunci).
-
 ### 8. Pertanyaan putusan (gerbang)
-
 - Q-LS-1 (Lead): bentuk izin pengajuan mandiri — (a) `create_loans` ke `KARYAWAN_WHITELIST` meniru preseden cuti (konsekuensi: edit-pending + form staf ikut terbuka dalam scope), atau (b) key baru khusus pengajuan (fisik katalog+seed+gerbang aksi oleh Backend)? Spec tidak memilih (BR-LS-03).
 - Q-LS-2 (Lead; angka uang bersyarat vonis Accountant): plafon pokok, cicilan/jangka maksimum, batas pinjaman aktif bersamaan, masa kerja minimum, ambang nominal yang menambah jenjang persetujuan. Hari ini semua ABSEN (BR-LS-09).
 - Q-LS-3 (Backend): fisik membedakan kanal pengajuan (mandiri vs titipan staf) dari data existing `createdBy` vs employeeId — cukup turunan baca (createdBy menunjuk user karyawan pemilik?) atau penanda tersimpan; putuskan sebelum laporan kanal diklaim.
 - Q-LS-4 (Lead): perilaku bila workflow EmployeeLoan tidak terkonfigurasi — pengajuan tertahan `pending` (status quo existing, antrean menampilkan umur) atau perlu jalur keputusan langsung berizin `approve_loans` tanpa rantai? Spec mengusulkan status quo tahap 1.
 - Q-LS-5 (Lead): perluasan antrean 007-S ke pinjaman digabung kartu ini atau kartu turunan terpisah sesudah 007-S merged? (Builder 007-S sudah ada di main sebagai `hr-pending-approval.ts`; perluasan menyentuh builder+loader yang sama.)
 - Accountant (BUTUH-VONIS, tidak diputus spec): bunga/denda/biaya (BR-LS-10), akun + saat pengakuan pencairan bila pola berubah dari existing, perlakuan potongan pinjaman dalam penghitungan PPh 21/penghasilan neto karyawan, perlakuan sisa pinjaman karyawan berhenti (potong pesangon/penghasilan terakhir atau tagih terpisah — bersinggungan vonis berhenti F-2026-10-25-005-V; jangan diputus diam-diam), batas potongan gaji per periode bila ada ketentuan yang wajib ditegakkan sistem.
-
 ### 9. Backlog implementasi
-
 | ID | Pekerjaan | Pemilik | Prasyarat |
-|---|---|---|---|
 | F-2026-10-25-018-S | Spec ini (dokumen) | Business | — |
 | (turunan) izin pengajuan + gerbang aksi/form sesuai Q-LS-1 (+ katalog/seed/fisik Q-LS-3 bila key baru) | Backend | Q-LS-1 diputus Lead | — |
 | (turunan) perluasan antrean 007-S ke EmployeeLoan `pending` (BR-LS-07) | Backend | Q-LS-5 Lead; builder 007-S stabil | — |
 | (turunan) form mandiri terkunci-self + peringatan WEEKLY | Frontend | kontrak izin Backend final; kata §4/§5 verbatim | — |
 | (turunan) falsifikasi AC-LS-* | QA | head Backend/Frontend persis | — |
-
 ### Yang TIDAK diusulkan run ini
 - Model pinjaman kedua / tabel pengajuan terpisah: mesin EmployeeLoan + rantai sudah lengkap; yang kurang hanya pintu izin.
 - Status `draft` atau status batal khusus karyawan: himpunan status existing cukup (BR-LS-04).
@@ -27905,5 +28050,4 @@ Edge cases: EC-1 pengajuan kedua saat pinjaman pertama masih `pending`/`active` 
 - Plafon/tenor otomatis karangan (mis. persen gaji): angka kebijakan tanpa pemilik = aturan bisnis karangan (BR-LS-09).
 - Pelunasan dipercepat / pembayaran angsuran manual di luar payroll (setor kas karyawan): jalur Accurate ada, tetapi ISF hari ini hanya amortisasi payroll; menambah jalur kas = dokumen uang baru, butuh vonis Accountant + spec tersendiri.
 - Notifikasi pengingat approver/pengaju: antrean pasif tahap 1, mengikuti penundaan yang sama seperti 007-S.
-
 F-2026-10-25-018-S — Pengajuan pinjaman karyawan mandiri. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LS-1/2/4/5 + fisik Backend Q-LS-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/izin), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA bersyarat — hanya untuk BR-LS-09 (angka uang) dan BR-LS-10 (bunga/pajak/akun); inti pintu pengajuan tahap 1 tanpa vonis baru.
