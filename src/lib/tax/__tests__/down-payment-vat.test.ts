@@ -11,7 +11,10 @@ import {
   computeAllocationNet,
   computeDownPaymentVatSnapshot,
   deriveDownPaymentTaxStatus,
+  resolveEffectiveVatRate,
+  snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat"
+import { buildOutputSptRows, withLegacyFallback } from "@/lib/tax/spt-read-model"
 
 const PAY_DATE = new Date(2026, 0, 15)
 
@@ -96,19 +99,76 @@ describe("E-DP-PPN (5)(6)(8) gerbang snapshot", () => {
     expect(deriveDownPaymentTaxStatus({ dpStatus: "confirmed", snapshot: s, linkedTaxInvoiceStatus: null })).toBe("bukan-subjek")
   })
 
-  it("snapshot beku: tarif master berubah sesudah confirm tidak mengubah snapshot tersimpan", () => {
-    const before = snap(12_000_000, 1, 12)
-    const afterMasterEdit = snap(12_000_000, 1, 12)
-    expect(afterMasterEdit).toEqual(before)
-    expect(before.nominalRate).toBe(12)
+  it("E-DP-PPN (8) snapshot beku NON-tautologis: snapshot tersimpan tidak berubah sesudah tarif master berubah", () => {
+    // Snapshot dibekukan saat confirm dengan master efektif 12%.
+    const storedRow = {
+      vatTransactionCode: "04",
+      vatRate: 12,
+      vatDpp: 11_000_000,
+      vatAmount: 1_320_000,
+      vatTaxPeriod: "2026-01",
+      amount: 12_000_000,
+    }
+    // Master berubah sesudah confirm: baris efektif kini 11%.
+    const masterNow = [{ rate: 11, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true }]
+    expect(resolveEffectiveVatRate(masterNow, PAY_DATE)).toBe(11)
+    // Baca snapshot dari baris tersimpan: tetap 12 / 1.320.000, bukan hitung ulang 11.
+    const reread = snapshotFromDownPaymentRow(storedRow)
+    expect(reread?.nominalRate).toBe(12)
+    expect(reread?.ppnUangMuka).toBe(1_320_000)
+    expect(reread?.liabilityAmount).toBe(10_680_000)
+    // DP baru pada master baru memang memakai 11 — beda dari snapshot lama.
+    expect(snap(12_000_000, 1, resolveEffectiveVatRate(masterNow, PAY_DATE)).ppnUangMuka).not.toBe(1_320_000)
   })
 
-  it("status pajak turunan: draft bukan-subjek; confirmed tanpa FP terutang-belum-terbit; terbit; batal", () => {
+  it("status pajak turunan: draft FP BUKAN terbit (Putusan 3); hanya approved terbit; batal", () => {
     const s = snap(12_000_000)
     expect(deriveDownPaymentTaxStatus({ dpStatus: "pending", snapshot: s, linkedTaxInvoiceStatus: null })).toBe("bukan-subjek")
     expect(deriveDownPaymentTaxStatus({ dpStatus: "confirmed", snapshot: s, linkedTaxInvoiceStatus: null })).toBe("terutang-belum-terbit")
-    expect(deriveDownPaymentTaxStatus({ dpStatus: "confirmed", snapshot: s, linkedTaxInvoiceStatus: "draft" })).toBe("fp-um-terbit")
+    expect(deriveDownPaymentTaxStatus({ dpStatus: "confirmed", snapshot: s, linkedTaxInvoiceStatus: "draft" })).toBe("terutang-belum-terbit")
+    expect(deriveDownPaymentTaxStatus({ dpStatus: "confirmed", snapshot: s, linkedTaxInvoiceStatus: "approved" })).toBe("fp-um-terbit")
     expect(deriveDownPaymentTaxStatus({ dpStatus: "confirmed", snapshot: s, linkedTaxInvoiceStatus: "cancelled" })).toBe("fp-um-batal")
+  })
+})
+
+describe("B1: tarif dari master Tax efektif paymentDate (fail-closed)", () => {
+  const rows = [
+    { rate: 11, effectiveFrom: new Date(2025, 0, 1), effectiveTo: new Date(2025, 11, 31), isActive: true },
+    { rate: 12, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true },
+  ]
+  it("paymentDate memilih baris efektifnya: 2025 -> 11, 2026 -> 12", () => {
+    expect(resolveEffectiveVatRate(rows, new Date(2025, 5, 1))).toBe(11)
+    expect(resolveEffectiveVatRate(rows, PAY_DATE)).toBe(12)
+  })
+  it("tidak ada baris efektif = fail-closed (tanpa fallback konstanta)", () => {
+    expect(() => resolveEffectiveVatRate(rows, new Date(2024, 0, 1))).toThrow(/tidak ada baris master Tax/)
+    expect(() => resolveEffectiveVatRate([], PAY_DATE)).toThrow(/tidak ada baris master Tax/)
+  })
+  it("dua tarif beda sama-sama efektif = fail-closed ambigu; baris nonaktif/diarsipkan diabaikan", () => {
+    const ambiguous = [...rows, { rate: 10, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true }]
+    expect(() => resolveEffectiveVatRate(ambiguous, PAY_DATE)).toThrow(/ambigu/)
+    const inactive = [{ rate: 99, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: false }, ...rows]
+    expect(resolveEffectiveVatRate(inactive, PAY_DATE)).toBe(12)
+  })
+})
+
+describe("B5: bukti SPT nol-dobel dua masa (FP UM + FP pelunasan selisih)", () => {
+  it("FP UM masa DP (Jan) + FP pelunasan selisih (Feb) + legacy Feb tertekan = total dokumen satu kali", () => {
+    const um = snap(12_000_000)
+    const settlement = buildSettlementVat({ documentDpp: 110_000_000, documentPpn: 13_200_000, uangMuka: [um] })
+    const rows = buildOutputSptRows([
+      { chain: [{ id: 1, dpp: um.dppUangMuka, taxAmount: um.ppnUangMuka, djpStatus: "approved" }], originPeriod: "2026-01" },
+      { chain: [{ id: 2, dpp: settlement.settlementDpp, taxAmount: settlement.settlementPpn, djpStatus: "approved" }], originPeriod: "2026-02" },
+    ])
+    // Legacy faktur komersial Feb (dokumen penuh) WAJIB tertekan karena
+    // masa Feb sudah punya baris TaxInvoice (FP selisih) — tanpa tekanan
+    // ini SPT Feb dobel.
+    const merged = withLegacyFallback(rows, [{ period: "2026-02", dpp: 110_000_000, vat: 13_200_000, count: 1 }])
+    const totalDpp = merged.reduce((s, r) => s + r.dpp, 0)
+    const totalVat = merged.reduce((s, r) => s + r.vat, 0)
+    expect(totalDpp).toBe(110_000_000)
+    expect(totalVat).toBe(13_200_000)
+    expect(merged.find((r) => r.period === "2026-02")?.source).toBe("tax_invoice")
   })
 })
 

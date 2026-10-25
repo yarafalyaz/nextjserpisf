@@ -80,6 +80,55 @@ export function computeDownPaymentVatSnapshot(input: {
   }
 }
 
+/** Baris master Tax kandidat tarif efektif (bentuk baca hook DP). */
+export interface EffectiveVatTaxRow {
+  rate: number
+  effectiveFrom?: Date | string | null
+  effectiveTo?: Date | string | null
+  isActive?: boolean | null
+  deletedAt?: Date | string | null
+}
+
+function effectiveTime(value: Date | string | null | undefined): number | null {
+  if (value == null) return null
+  const t = value instanceof Date ? value.getTime() : new Date(value).getTime()
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * B1 (re-audit Accountant PR #785): tarif snapshot DP WAJIB dari master
+ * Tax yang efektif pada paymentDate — BUKAN konstanta. Kandidat =
+ * baris aktif, belum dihapus, jendela efektif mencakup paymentDate
+ * (effectiveFrom <= paymentDate; effectiveTo kosong / >= paymentDate).
+ * Tepat satu tarif unik wajib; nol baris atau lebih dari satu tarif
+ * berbeda = fail-closed berisik (operator rapikan master, sistem
+ * tidak menebak). Pemanggil membatasi kandidat ke pajak keluaran
+ * (accountId = akun PPN Keluaran setting).
+ */
+export function resolveEffectiveVatRate(rows: EffectiveVatTaxRow[], paymentDate: Date): number {
+  const at = paymentDate.getTime()
+  const rates = new Set<number>()
+  for (const row of rows) {
+    if (row.isActive === false || row.deletedAt != null) continue
+    const from = effectiveTime(row.effectiveFrom)
+    const to = effectiveTime(row.effectiveTo)
+    if (from != null && from > at) continue
+    if (to != null && to < at) continue
+    rates.add(safeRound(Number(row.rate), 2))
+  }
+  if (rates.size === 0) {
+    throw new Error(
+      "Tarif PPN uang muka ditolak: tidak ada baris master Tax (PPN Keluaran) yang efektif pada tanggal penerimaan DP. Atur master pajak bertanggal efektif dulu — tarif tidak ditebak dari konstanta.",
+    )
+  }
+  if (rates.size > 1) {
+    throw new Error(
+      `Tarif PPN uang muka ditolak: master Tax efektif pada tanggal penerimaan DP ambigu (${[...rates].join(", ")}%). Rapikan jendela efektif master pajak — satu tarif wajib berlaku per tanggal.`,
+    )
+  }
+  return [...rates][0]
+}
+
 /** Snapshot dari baris DownPayment tersimpan (kolom vat* nullable). */
 export function snapshotFromDownPaymentRow(row: {
   vatTransactionCode?: string | null
@@ -304,6 +353,8 @@ export function deriveDownPaymentTaxStatus(input: {
 }): DownPaymentTaxStatus {
   if (input.dpStatus !== "confirmed" || !input.snapshot?.taxable) return "bukan-subjek"
   if (input.linkedTaxInvoiceStatus === "cancelled") return "fp-um-batal"
-  if (input.linkedTaxInvoiceStatus != null) return "fp-um-terbit"
+  // Putusan 3: FP UM draft di Coretax TIDAK mengubah status jadi terbit —
+  // hanya FP berstatus approved yang terbit. Draft/rejected tetap terutang.
+  if (input.linkedTaxInvoiceStatus === "approved") return "fp-um-terbit"
   return "terutang-belum-terbit"
 }

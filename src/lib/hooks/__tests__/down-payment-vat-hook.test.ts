@@ -22,6 +22,10 @@ const mocks = vi.hoisted(() => ({
   dpFindUniqueOrThrow: vi.fn(),
   dpUpdate: vi.fn().mockResolvedValue({}),
   dpFindMany: vi.fn().mockResolvedValue([]),
+  taxFindMany: vi.fn().mockResolvedValue([
+    { rate: 12, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true, deletedAt: null },
+  ]),
+  salesPaymentFindMany: vi.fn().mockResolvedValue([]),
   journalFindFirst: vi.fn().mockResolvedValue(null),
   journalCreate: vi.fn().mockResolvedValue({ id: 9 }),
   entryCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -49,6 +53,7 @@ function dpTx() {
   return {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
     downPayment: { findUniqueOrThrow: mocks.dpFindUniqueOrThrow, update: mocks.dpUpdate },
+    tax: { findMany: mocks.taxFindMany },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
   }
 }
@@ -59,6 +64,10 @@ beforeEach(() => {
   mocks.journalCreate.mockResolvedValue({ id: 9 })
   mocks.dpUpdate.mockResolvedValue({})
   mocks.dpFindMany.mockResolvedValue([])
+  mocks.taxFindMany.mockResolvedValue([
+    { rate: 12, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true, deletedAt: null },
+  ])
+  mocks.salesPaymentFindMany.mockResolvedValue([])
   mocks.settings.salesTaxAccountId = 160
   mocks.transaction.mockImplementation((fn: any) => fn(dpTx()))
 })
@@ -120,6 +129,51 @@ describe("J-DP1: DP terutang membekukan snapshot + jurnal pecah", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.dpUpdate).not.toHaveBeenCalled()
   })
+
+  it("B1: tanpa baris master Tax efektif pada paymentDate = fail-closed, tanpa jurnal/snapshot", async () => {
+    mocks.taxFindMany.mockResolvedValue([])
+    mocks.dpFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "DP-1",
+      amount: 12_000_000,
+      paymentDate: new Date(2026, 0, 15),
+      quotation: { tax: 13_200_000 },
+    })
+    await expect(onDownPaymentReceived(1)).rejects.toThrow(/tidak ada baris master Tax/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.dpUpdate).not.toHaveBeenCalled()
+  })
+
+  it("B1: tarif master efektif yang dipakai snapshot (master 11% -> PPN bukan 1.320.000)", async () => {
+    mocks.taxFindMany.mockResolvedValue([
+      { rate: 11, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true, deletedAt: null },
+    ])
+    mocks.dpFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "DP-1",
+      amount: 12_000_000,
+      paymentDate: new Date(2026, 0, 15),
+      quotation: { tax: 13_200_000 },
+    })
+    await onDownPaymentReceived(1)
+    expect(mocks.dpUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ vatRate: 11, vatAmount: 1_210_000 }) }),
+    )
+  })
+
+  it("E-DP-PPN (9): periode tertutup pada paymentDate = ditolak assertPeriodOpen, tanpa jurnal", async () => {
+    const { assertPeriodOpen } = await import("@/lib/services/period-lock.service")
+    vi.mocked(assertPeriodOpen).mockRejectedValueOnce(new Error("Periode 2026-01 terkunci"))
+    mocks.dpFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "DP-1",
+      amount: 12_000_000,
+      paymentDate: new Date(2026, 0, 15),
+      quotation: { tax: 13_200_000 },
+    })
+    await expect(onDownPaymentReceived(1)).rejects.toThrow(/terkunci/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe("J-PL1: posting faktur pelunasan reklas anti-dobel", () => {
@@ -128,6 +182,7 @@ describe("J-PL1: posting faktur pelunasan reklas anti-dobel", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
       salesInvoice: { findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow, findUnique: mocks.invoiceFindUnique },
       downPayment: { findMany: mocks.dpFindMany },
+      salesPayment: { findMany: mocks.salesPaymentFindMany },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
       journalEntry: { createMany: mocks.entryCreateMany },
       item: { findMany: vi.fn().mockResolvedValue([]) },
@@ -164,5 +219,83 @@ describe("J-PL1: posting faktur pelunasan reklas anti-dobel", () => {
     mocks.dpFindMany.mockResolvedValue([{ vatDpp: 11_000_000, vatAmount: 1_320_000 }])
     await expect(onSalesInvoicePosted(5)).rejects.toThrow(/lebih kecil dari Sigma/)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("B4 jalur konversi: penutup Dr 210102 neto / Cr Piutang neto di jurnal posting; 210102 tertutup, sisa piutang = grandTotal - alokasi bruto", async () => {
+    mocks.transaction.mockImplementation((fn: any) => fn(invoiceTx()))
+    const inv = { id: 5, totalAmount: 120_000_000, taxAmount: 13_200_000, date: new Date(), documentNo: "INV-1", quotationId: 10 }
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inv, items: [] })
+    mocks.invoiceFindUnique.mockResolvedValue(inv)
+    // findMany pertama = baris snapshot Sigma J-PL1; kedua = DP alokasi konversi.
+    mocks.dpFindMany
+      .mockResolvedValueOnce([{ vatDpp: 11_000_000, vatAmount: 1_320_000 }])
+      .mockResolvedValueOnce([
+        {
+          id: 3,
+          documentNo: "DP-0001",
+          status: "confirmed",
+          amount: 12_000_000,
+          vatTransactionCode: "04",
+          vatRate: 12,
+          vatDpp: 11_000_000,
+          vatAmount: 1_320_000,
+          vatTaxPeriod: "2026-01",
+        },
+      ])
+    mocks.salesPaymentFindMany.mockResolvedValue([
+      { id: 21, amount: 12_000_000, notes: "Uang muka dari DP DP-0001" },
+    ])
+    // journalFindFirst: existing (null) -> existingInTx (null) -> jurnal alokasi SalesPayment (null = belum ada)
+    mocks.journalFindFirst.mockResolvedValue(null)
+    await onSalesInvoicePosted(5)
+    const data = mocks.entryCreateMany.mock.calls[0][0].data
+    expect(data).toContainEqual(
+      expect.objectContaining({ accountId: 210102, debit: 10_680_000, credit: 0, memo: expect.stringContaining("Penutup kewajiban UMP") }),
+    )
+    expect(data).toContainEqual(
+      expect.objectContaining({ accountId: 110, debit: 0, credit: 10_680_000, memo: expect.stringContaining("Penutup piutang") }),
+    )
+    const debit = data.reduce((s: number, e: any) => s + Number(e.debit), 0)
+    const credit = data.reduce((s: number, e: any) => s + Number(e.credit), 0)
+    expect(debit).toBe(credit)
+    // Sisa piutang GL: Dr grandTotal - Cr reklas Sigma - Cr penutup neto
+    // = 120.000.000 - 1.320.000 - 10.680.000 = grandTotal - alokasi bruto 12.000.000.
+    const arNet = data
+      .filter((e: any) => e.accountId === 110)
+      .reduce((s: number, e: any) => s + Number(e.debit) - Number(e.credit), 0)
+    expect(arNet).toBe(120_000_000 - 12_000_000)
+  })
+
+  it("B4: DP yang sudah punya jurnal alokasi SalesPayment (jalur existingInv) dilewati — tidak dobel tutup", async () => {
+    mocks.transaction.mockImplementation((fn: any) => fn(invoiceTx()))
+    const inv = { id: 5, totalAmount: 120_000_000, taxAmount: 13_200_000, date: new Date(), documentNo: "INV-1", quotationId: 10 }
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inv, items: [] })
+    mocks.invoiceFindUnique.mockResolvedValue(inv)
+    mocks.dpFindMany
+      .mockResolvedValueOnce([{ vatDpp: 11_000_000, vatAmount: 1_320_000 }])
+      .mockResolvedValueOnce([
+        {
+          id: 3,
+          documentNo: "DP-0001",
+          status: "confirmed",
+          amount: 12_000_000,
+          vatTransactionCode: "04",
+          vatRate: 12,
+          vatDpp: 11_000_000,
+          vatAmount: 1_320_000,
+          vatTaxPeriod: "2026-01",
+        },
+      ])
+    mocks.salesPaymentFindMany.mockResolvedValue([
+      { id: 21, amount: 12_000_000, notes: "Uang muka dari DP DP-0001" },
+    ])
+    // findFirst diskriminasi: jurnal alokasi SalesPayment sudah ada (77),
+    // jurnal posting faktur belum.
+    mocks.journalFindFirst.mockImplementation((args: any) =>
+      Promise.resolve(args?.where?.referenceType === "SalesPayment" ? { id: 77 } : null),
+    )
+    await onSalesInvoicePosted(5)
+    const data = mocks.entryCreateMany.mock.calls[0][0].data
+    expect(data.some((e: any) => String(e.memo).includes("Penutup kewajiban UMP"))).toBe(false)
   })
 })

@@ -7,11 +7,13 @@ import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
-import { DEFAULT_TRANSACTION_CODE, NOMINAL_VAT_RATE } from "@/lib/tax/tax-invoice";
+import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
 import {
   buildDownPaymentReceiptLines,
   buildSettlementReclass,
+  computeAllocationNet,
   computeDownPaymentVatSnapshot,
+  resolveEffectiveVatRate,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat";
 
@@ -341,6 +343,66 @@ export async function onSalesInvoicePosted(
       );
     }
 
+    // B4 re-audit Accountant PR #785: tutup 210102 di jalur KONVERSI.
+    // Invoice yang lahir dari ambang DP (down-payment.hook) menerima
+    // SalesPayment bruto per DP TANPA jurnal alokasi; tanpa penutup ini
+    // Cr 210102 neto J-DP1 menggantung permanen sesudah posting dan
+    // piutang GL tak rekonsiliasi dengan paidAmount bruto. Penutup =
+    // J-PL2 tekstual vonis (Dr 210102 neto / Cr Piutang neto,
+    // computeAllocationNet dari snapshot beku) untuk pembayaran DP
+    // tertaut faktur ini yang BELUM punya jurnal alokasi SalesPayment
+    // (jalur existingInv sudah menutup lewat jurnal alokasinya sendiri
+    // — dilewati supaya tidak dobel). Masuk jurnal posting yang sama:
+    // idempoten inheren dari penjaga jurnal posting di atas.
+    const dpLiabilityAccountId = (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+    const conversionClosingLines: { account: "downPaymentLiability" | "receivable"; debit: number; credit: number; memo: string }[] = [];
+    {
+      const dpPayments = await tx.salesPayment.findMany({
+        where: { salesInvoiceId: invoiceId, paymentMethod: "down_payment" },
+        select: { id: true, amount: true, notes: true },
+      });
+      const dpDocNos = new Set<string>();
+      for (const p of dpPayments) {
+        const m = /Uang muka dari DP\s+(\S+)/.exec(p.notes ?? "");
+        if (m) dpDocNos.add(m[1]);
+      }
+      if (dpDocNos.size > 0 && inv.quotationId != null) {
+        const allocDps = await tx.downPayment.findMany({
+          where: { quotationId: inv.quotationId, documentNo: { in: [...dpDocNos] }, status: "confirmed" },
+        });
+        const dpByDocNo = new Map(allocDps.map((d) => [d.documentNo, d]));
+        for (const p of dpPayments) {
+          const m = /Uang muka dari DP\s+(\S+)/.exec(p.notes ?? "");
+          const allocDp = m ? dpByDocNo.get(m[1]) : undefined;
+          if (!allocDp) continue;
+          const allocJournal = await tx.journal.findFirst({
+            where: { referenceType: "SalesPayment", referenceId: p.id },
+            select: { id: true },
+          });
+          if (allocJournal) continue;
+          const allocSnapshot = snapshotFromDownPaymentRow(allocDp as never);
+          if (!allocSnapshot || allocSnapshot.ppnUangMuka <= 0) continue;
+          const net = computeAllocationNet({
+            allocAmount: Number(p.amount),
+            previouslyAllocated: 0,
+            snapshot: allocSnapshot,
+            dpAmount: Number(allocDp.amount),
+          });
+          if (net.netAmount <= 0) continue;
+          if (!dpLiabilityAccountId) {
+            throw new Error(
+              "Akun kewajiban Uang Muka Penjualan (210102) harus dikonfigurasi untuk menutup alokasi DP faktur konversi",
+            );
+          }
+          conversionClosingLines.push(
+            { account: "downPaymentLiability", debit: net.netAmount, credit: 0, memo: "Penutup kewajiban UMP alokasi DP konversi (J-PL2)" },
+            { account: "receivable", debit: 0, credit: net.netAmount, memo: "Penutup piutang alokasi DP konversi (J-PL2)" },
+          );
+        }
+      }
+    }
+    const conversionClosingTotal = conversionClosingLines.reduce((s, l) => s + l.debit, 0);
+
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
     });
@@ -457,8 +519,8 @@ export async function onSalesInvoicePosted(
         description: `Invoice Posting ${inv.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2),
-        totalCredit: safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2),
+        totalDebit: safeAdd(safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2), conversionClosingTotal, 2),
+        totalCredit: safeAdd(safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2), conversionClosingTotal, 2),
         createdBy: userId ?? null,
       },
     });
@@ -512,6 +574,22 @@ export async function onSalesInvoicePosted(
         invoiceEntries.push({
           journalId: journal.id,
           accountId: accountByKey[line.account as "salesTax" | "receivable"],
+          debit: line.debit,
+          credit: line.credit,
+          memo: line.memo,
+        });
+      }
+    }
+    // B4: penutup 210102 jalur konversi (J-PL2) — jurnal yang sama.
+    if (conversionClosingLines.length > 0) {
+      const closingAccountByKey = {
+        downPaymentLiability: dpLiabilityAccountId!,
+        receivable: settings.salesReceivableAccountId!,
+      } as const;
+      for (const line of conversionClosingLines) {
+        invoiceEntries.push({
+          journalId: journal.id,
+          accountId: closingAccountByKey[line.account],
           debit: line.debit,
           credit: line.credit,
           memo: line.memo,
@@ -1797,19 +1875,41 @@ export async function onDownPaymentReceived(
 
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
-    // F-2026-10-25-004-V (vonis PR #760): bekukan snapshot PPN uang muka
-    // SEKALI saat jurnal terima lahir. DP yang sudah terjurnal (replay /
-    // legacy pra-fitur) tidak dibekukan belakangan — return awal di atas
-    // sudah menangani replay. Tarif/kode = default master existing
-    // (computeVatFromSellingPrice), dibekukan ke kolom DP.
+    // F-2026-10-25-004-V (vonis PR #760) + B1 re-audit Accountant PR #785:
+    // bekukan snapshot PPN uang muka SEKALI saat jurnal terima lahir. DP
+    // yang sudah terjurnal (replay / legacy pra-fitur) tidak dibekukan
+    // belakangan — return awal di atas sudah menangani replay. Tarif
+    // WAJIB dari master Tax efektif pada paymentDate (kandidat dibatasi
+    // accountId = akun PPN Keluaran setting; nol/ambigu = fail-closed
+    // resolveEffectiveVatRate) lalu dibekukan ke kolom DP — edit master
+    // sesudah confirm tidak mengubah snapshot. Kode transaksi: master
+    // Tax tidak menyimpan kode transaksi DJP, jadi tetap
+    // DEFAULT_TRANSACTION_CODE repo ("04") dan dibekukan apa adanya.
     let snapshot = snapshotFromDownPaymentRow(dp as never);
     if (!snapshot) {
+      const quotationTax = Number((dp as { quotation?: { tax?: unknown } }).quotation?.tax ?? 0);
+      let nominalRate = 0;
+      if (quotationTax > 0) {
+        if (!settings.salesTaxAccountId) {
+          throw new Error(
+            "Akun PPN Keluaran (210201) harus dikonfigurasi sebelum uang muka terutang PPN diterima",
+          );
+        }
+        const taxRows = await tx.tax.findMany({
+          where: { accountId: settings.salesTaxAccountId, isActive: true, deletedAt: null },
+          select: { rate: true, effectiveFrom: true, effectiveTo: true, isActive: true, deletedAt: true },
+        });
+        nominalRate = resolveEffectiveVatRate(
+          taxRows.map((r) => ({ ...r, rate: Number(r.rate) })),
+          dp.paymentDate || new Date(),
+        );
+      }
       snapshot = computeDownPaymentVatSnapshot({
         amount: Number(dp.amount),
-        quotationTax: Number((dp as { quotation?: { tax?: unknown } }).quotation?.tax ?? 0),
+        quotationTax,
         paymentDate: dp.paymentDate || new Date(),
         transactionCode: DEFAULT_TRANSACTION_CODE,
-        nominalRate: NOMINAL_VAT_RATE,
+        nominalRate,
       });
       await tx.downPayment.update({
         where: { id: dpId },
