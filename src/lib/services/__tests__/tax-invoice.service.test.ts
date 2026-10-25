@@ -273,7 +273,7 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
   const dpRow = {
     id: 3, status: "confirmed", paymentDate: new Date(2026, 0, 15),
     vatTransactionCode: "04", vatRate: 12, vatDpp: 11_000_000, vatAmount: 1_320_000,
-    vatTaxPeriod: "2026-01", customer: { name: "PT X", taxId: "01.234.567.8-091.000" },
+    vatTaxPeriod: "2026-01", customer: { name: "PT X", taxpayerName: "PT X WP", taxId: "0123456789123456", nitku: "0123456789123456000001" },
   }
   it("salin snapshot: tanggal=paymentDate, masa beku, DPP/PPN beku", async () => {
     mocks.dpFindUnique.mockResolvedValue(dpRow)
@@ -314,6 +314,77 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
     expect(r.success).toBe(false)
     expect(String(r.error)).toMatch(/satu FP UM aktif/)
     expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("B1 t_663509ae probe Accountant: NITKU mismatch vs NPWP16 → tolak, create 0", async () => {
+    mocks.dpFindUnique.mockResolvedValue(dpRow)
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000002", idempotencyKey: key(),
+      counterpartyTaxId: "0123456789123456", counterpartyName: "PT X WP",
+      counterpartyNitku: "9999999999999999000001",
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/NITKU lawan transaksi tidak diawali NPWP/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("B1 t_663509ae probe Accountant: identitas kosong total → tolak, create 0", async () => {
+    mocks.dpFindUnique.mockResolvedValue({
+      ...dpRow, customer: { name: "", taxpayerName: null, taxId: null, nitku: null },
+    })
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000003", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/Nama lawan transaksi wajib/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("B1: NPWP kosong (nama ada) → alasan NPWP kosong, bukan NITKU", async () => {
+    mocks.dpFindUnique.mockResolvedValue({
+      ...dpRow, customer: { name: "PT X", taxpayerName: "PT X WP", taxId: null, nitku: null },
+    })
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000004", idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/NPWP\/NIK lawan transaksi wajib/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("B1: legacy15 + NITKU sah-bentuk + legacy15Confirmed → terbit, snapshot = final (nitkuUnlinked bukan mismatch)", async () => {
+    mocks.dpFindUnique.mockResolvedValue({
+      ...dpRow, customer: { name: "PT Legacy", taxpayerName: "PT Legacy WP", taxId: "123456789012345", nitku: null },
+    })
+    const tanpa = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000005", idempotencyKey: key(),
+      counterpartyNitku: "9999999999999999000001",
+    })
+    expect(tanpa.success).toBe(false)
+    expect(String(tanpa.error)).toMatch(/NPWP 15 digit/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000005", idempotencyKey: key(),
+      counterpartyNitku: "9999999999999999000001", legacy15Confirmed: true,
+    })
+    expect(r.success).toBe(true)
+    const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
+    expect(data.counterpartyTaxId).toBe("123456789012345")
+    expect(data.counterpartyName).toBe("PT Legacy WP")
+    expect(data.counterpartyNitku).toBe("9999999999999999000001")
+  })
+
+  it("B1: override operator menang atas master; NITKU master dipakai bila tak dioverride", async () => {
+    mocks.dpFindUnique.mockResolvedValue(dpRow)
+    const r = await issueDownPaymentTaxInvoice({
+      downPaymentId: 3, taxInvoiceNumber: "040.000-26.00000006", idempotencyKey: key(),
+      counterpartyName: "PT Override",
+    })
+    expect(r.success).toBe(true)
+    const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
+    expect(data.counterpartyName).toBe("PT Override")
+    expect(data.counterpartyTaxId).toBe("0123456789123456")
+    expect(data.counterpartyNitku).toBe("0123456789123456000001")
   })
 
   it("FP pelunasan selisih: dokumen penuh minus Sigma FP UM aktif", async () => {
