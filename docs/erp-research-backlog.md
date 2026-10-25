@@ -26946,3 +26946,64 @@ bebas: grep `F-2026-10-25-005-V` di origin/main 651d1ce3 = 0 sebelum
 vonis ini; 005-S = spec induk). Pemilik berikutnya: BOT Lead merge →
 BOT Backend inti Putusan 2/4 (sesudah DISC-B1) → BOT Business/Frontend
 konsumen snapshot → BOT QA Q5-1..5.
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-019-V: koreksi absensi yang disetujui sesudah slip terbit (jawaban Q-AC-4 spec F-2026-10-25-010-S PR #777)
+
+> **Slot**: F-2026-10-25-019-V. Diperiksa bentrok 2026-10-25 12:47 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-019` di backlog+board = 0; 018-V sedang di PR #822 (topik reimbursement, beda). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Basis bukti live (worktree origin/main 997c8ead, 2026-10-25 12:47 WIB) — TERVERIFIKASI-KODE
+
+- Slip `Payroll` adalah SNAPSHOT BEKU: kolom `lateMinutes`, `presentDays`, `absentDays`, `absentDeduction`, `lateDeduction`, `overtimeTotal` tersimpan di baris slip (`src/actions/hrm.actions.ts:590-620` membangun tulis ulang slip dari nilai tersimpan + `PayrollComponentLine`), bukan dibaca ulang dari `Attendance` saat tampil/bayar. Mengubah `Attendance` sesudah slip lahir tidak mengubah slip apa pun dengan sendirinya.
+- Status final slip = `FINAL_PAYROLL_STATUSES = ["approved", "paid"]` (`hrm.actions.ts:1420`, dipakai agregasi PPh 21 tahunan :1542-1548). Slip `draft` masih bisa dibangun ulang dari data berjalan; slip approved/paid adalah dokumen final.
+- Jurnal gaji lahir SATU kali di `markPayrollPaid` (`hrm.actions.ts:3028-3145`): flip approved→paid + amortisasi pinjaman + `onPayrollPaid(payrollId, tx)` dalam satu transaksi; gagal jurnal = seluruhnya rollback dan bisa di-retry. Tidak ada jurnal kedua untuk slip yang sama.
+- Mekanisme rapel/koreksi slip TIDAK ADA: grep `rapel|arrears|payrollCorrection|PayrollAdjustment` di `src/actions`, `src/lib/services`, `src/lib/hooks`, `prisma/schema.prisma` = 0 hasil. Vonis ini memutus perlakuan TANPA mengarang mesin rapel baru (lihat Putusan 3 untuk batasnya).
+- Pemisahan status yang sudah hidup: status dokumen slip, status pembayaran slip, snapshot komponen, status posting jurnal — vonis ini tidak menyatukannya.
+
+### Putusan 1 — Slip final tidak pernah berubah oleh koreksi absensi; rekod Attendance tetap boleh dikoreksi sebagai fakta kehadiran
+
+Persetujuan koreksi absensi (jalur spec 010-S) atas tanggal yang masuk periode slip berstatus `approved`/`paid`:
+- BOLEH mengubah rekod `Attendance` (fakta kehadiran historis menjadi benar) dengan jejak pengajuan + persetujuan spec induk apa adanya;
+- DILARANG mengubah, membuka ulang, atau menghitung ulang slip final mana pun: nominal slip, baris komponen, PPh 21 slip, jurnal `onPayrollPaid`, dan amortisasi pinjaman dari slip itu tetap persis seperti terbit. Slip terbit = dokumen beku (pola dokumen terposting repo: koreksi lewat dokumen baru, bukan edit dokumen lama).
+- Selisih uang akibat koreksi (mis. potongan telat/absen yang ternyata tidak sah, atau sebaliknya) TIDAK diakui di periode slip asal dan TIDAK diakui sebagai piutang/utang karyawan otomatis; perlakuannya = Putusan 2.
+- Tahap 1 build TIDAK wajib mengunci persetujuan tanggal berslip final (kunci penolak yang diizinkan spec §8): vonis ini membuka persetujuan dengan syarat dampak slip nol di atas + penanda dampak di rekod pengajuan (Putusan 4). Membangun kunci penolak permanen sesudah vonis ini = menyimpang; kunci sementara sebelum fisik Backend siap tetap sah sebagai urutan build, bukan perlakuan final.
+
+### Putusan 2 — Selisih uang hanya lewat komponen slip periode BERIKUTNYA, dari hitung ulang terdokumentasi; tanpa komponen rapel khusus tahap 1
+
+- Selisih koreksi absensi pasca-slip-final diselesaikan HANYA sebagai penyesuaian pada slip periode berikutnya karyawan yang sama, memakai mekanisme komponen slip existing (baris komponen slip berikut bertanda rujukan: nomor pengajuan koreksi + nomor slip asal + tanggal absensi asal). DILARANG: membayar/memotong di luar slip (kas langsung, Expense, pinjaman karyawan disamarkan), mengedit slip final, atau jurnal manual bebas tanpa rujukan dokumen koreksi.
+- Nilai penyesuaian = selisih dari HITUNG ULANG terdokumentasi atas snapshot slip asal dengan fakta absensi terkoreksi (telat/absen/lembur yang berubah), dihitung server dari data terkoreksi — bukan angka ketik bebas. Bila hitung ulang tidak bisa direproduksi dari data (snapshot asal hilang), penyesuaian DILARANG ditebak: tampilkan sebagai temuan rekonsiliasi ke HR/keuangan.
+- Arah dua sisi simetris: kelebihan potong → tambahan penghasilan periode berikut; kekurangan potong → pengurang periode berikut. Keduanya komponen slip periode berikut (klasifikasi pajak Putusan 3), BUKAN pembalikan slip asal.
+- Bila karyawan sudah berhenti dan tidak ada slip berikutnya: selisih TIDAK dipaksakan ke dokumen lain tahap 1; ia tercatat sebagai temuan terbuka di rekod pengajuan (status dampak: belum terselesaikan) untuk diputus lewat jalur penyelesaian akhir hubungan kerja yang berlaku (vonis terminasi F-2026-10-25-005-V bila peristiwa berhenti memenuhi syaratnya) — jangan buat jurnal/piutang karangan di jalur koreksi absensi.
+
+### Putusan 3 — Klasifikasi pajak penyesuaian: penghasilan masa DITERIMA, bukan koreksi masa asal
+
+- Penyesuaian positif/negatif di slip periode berikut adalah penghasilan/ pengurang bruto masa slip BERIKUT (masa diterima), masuk hitung TER masa itu mengikuti vonis PPh 21 existing (PP 58/2023 + PMK 168/2023, vonis F-2026-10-21-026): ia tidak membuka kembali SPT Masa/bupot periode asal, tidak mengubah bupot slip asal, dan tidak diperlakukan sebagai koreksi pembetulan SPT kecuali ketentuan pembetulan memang terpicu oleh sebab lain di luar koreksi ini (kasus begitu = `BUTUH-VONIS-AKUNTAN` per kasus).
+- Natura/aturan TER tidak berubah oleh vonis ini; yang diputus hanya masa pengakuan selisih koreksi absensi.
+
+### Putusan 4 — Penanda dampak wajib di rekod pengajuan; rekonsiliasi, bukan tebakan
+
+Rekod pengajuan koreksi yang disetujui WAJIB membawa penanda dampak server (bentuk fisik = Backend): (a) `na` — tanggal tidak masuk slip final mana pun (dampak slip nol secara alami); (b) `slip_draft` — slip masih draft, dibangun ulang dari fakta terkoreksi oleh jalur payroll existing; (c) `slip_final_disesuaikan` — selisih dibawa ke slip berikut per Putusan 2 (memuat rujukan slip asal + slip penyesuaian sesudah lahir); (d) `slip_final_tanpa_selisih` — hitung ulang = nol; (e) `belum_terselesaikan` — tidak ada slip berikutnya (Putusan 2 alinea terakhir). UI menampilkan penanda + rujukan verbatim server; UI tidak menghitung selisih sendiri. Selisih antara fakta absensi terkoreksi dan snapshot slip final yang belum berpenanda penyesuaian = temuan rekonsiliasi yang ditampilkan, bukan dipilih diam-diam salah satu.
+
+### 5. Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- BOT Lead: merge PR vonis ini bila gate hijau head persis; putus Q-AC-1/2 spec induk.
+- BOT Backend (sesudah Lead): penanda dampak Putusan 4 di jalur persetujuan koreksi + hitung ulang selisih server + baris penyesuaian slip berikut berujukan; penjaga: persetujuan koreksi TIDAK menulis slip final/jurnal slip asal (klaim schema.prisma di board bila ada migrasi penanda).
+- BOT Frontend: tampilkan penanda dampak + nilai berjalan vs usulan + rujukan slip verbatim server.
+- BOT QA: falsifikasi §6 atas head fisik persis.
+
+### 6. Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-AC4-1: koreksi disetujui atas tanggal berslip `paid` → slip asal, baris komponennya, PPh 21, dan jurnalnya byte-identik sebelum/sesudah; berubah satu sen = MERAH.
+- E-AC4-2: selisih muncul HANYA sebagai baris penyesuaian slip periode berikut dengan rujukan pengajuan + slip asal; baris tanpa rujukan / angka ketik bebas = MERAH.
+- E-AC4-3: penyesuaian masuk bruto + TER masa slip berikut, bupot/SPT masa asal tidak berubah; mengubah masa asal = MERAH.
+- E-AC4-4: koreksi tanggal berslip draft → slip dibangun ulang dari fakta terkoreksi; koreksi tanggal tanpa slip → penanda `na` dan nol dokumen uang lahir.
+- E-AC4-5: karyawan berhenti tanpa slip berikut → penanda `belum_terselesaikan`, nol jurnal/piutang/Expense karangan lahir; lolos diam-diam tanpa penanda = MERAH.
+- E-AC4-6: retry persetujuan tidak menggandakan baris penyesuaian (satu pengajuan satu penyesuaian per slip berikut).
+
+### Larangan (mengikat semua build turunan)
+
+- Mengedit/menghitung ulang slip `approved`/`paid`, jurnal gaji terbit, atau amortisasi pinjaman dari koreksi absensi.
+- Membayar/memotong selisih di luar slip periode berikut (kas langsung, Expense, pinjaman).
+- Mengoreksi SPT Masa/bupot periode asal atas nama koreksi absensi ini tanpa vonis per kasus.
+- Menebak selisih yang tidak bisa dihitung ulang dari snapshot asal + fakta terkoreksi.
+
+ID vonis ini **F-2026-10-25-019-V** (jawaban Q-AC-4 / BR-AC-05 spec F-2026-10-25-010-S PR #777; bebas: grep `F-2026-10-25-019` di origin/main 997c8ead = 0 sebelum vonis ini; 010-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-AC-1/2 → BOT Backend penanda dampak Putusan 4 → BOT Frontend konsumen → BOT QA E-AC4-1..6.
