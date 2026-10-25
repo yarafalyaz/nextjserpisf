@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   setMin: vi.fn(async () => ({ success: true, settingId: 7 })),
   remove: vi.fn(async () => ({ success: true, removed: true })),
+  setLeadTime: vi.fn(async () => ({ success: true, settingId: 9 })),
+  removeLeadTime: vi.fn(async () => ({ success: true, removed: true })),
   showError: vi.fn(),
   showSuccess: vi.fn(),
 }))
@@ -18,6 +20,8 @@ vi.mock("@/actions/item-warehouse-setting.actions", () => ({
   listItemWarehouseSettings: (...args: unknown[]) => mocks.list(...(args as [])),
   setItemWarehouseMinStock: (...args: unknown[]) => mocks.setMin(...(args as [])),
   removeItemWarehouseMinStock: (...args: unknown[]) => mocks.remove(...(args as [])),
+  setItemWarehouseLeadTime: (...args: unknown[]) => mocks.setLeadTime(...(args as [])),
+  removeItemWarehouseLeadTime: (...args: unknown[]) => mocks.removeLeadTime(...(args as [])),
 }))
 
 vi.mock("@/lib/utils/toast", () => ({
@@ -54,6 +58,13 @@ function row(extra: Partial<ItemWarehouseSettingRow> = {}): ItemWarehouseSetting
     leadTimeDays: null,
     ...extra,
   }
+}
+
+function clickNthButtonByText(container: HTMLElement, text: string, index: number) {
+  const matches = [...container.querySelectorAll("button")].filter((b) => b.textContent === text)
+  const btn = matches[index]
+  if (!btn) throw new Error(`Tombol ke-${index} tidak ditemukan: ${text}`)
+  btn.click()
 }
 
 async function renderLoaded(rows: ItemWarehouseSettingRow[], canManage = true) {
@@ -139,6 +150,54 @@ describe("ItemWarehouseMinStockPanel F-2026-10-22-070-E", () => {
     })
     expect(mocks.setMin).not.toHaveBeenCalled()
     expect(mocks.showError).toHaveBeenCalledWith("Stok minimum per gudang wajib angka 0 atau lebih")
+    unmountCard(root)
+  })
+
+  it("lead time: nilai server tampil verbatim, simpan + hapus memanggil aksi lead time", async () => {
+    const { container, root } = await renderLoaded([row({ leadTimeDays: 7 })])
+    const text = container.textContent ?? ""
+    expect(text).toContain("Lead time (hari)")
+    expect(container.querySelector('[aria-label="Lead time di Gudang Bengkel"]')).not.toBeNull()
+    const leadCell = [...container.querySelectorAll("td")].map((td) => td.textContent ?? "")
+    expect(leadCell.some((c) => c.trim() === "7")).toBe(true)
+    expect([...container.querySelectorAll("button")].some((b) => b.textContent === "Hapus lead time")).toBe(true)
+
+    setFieldValue(container, "#lead-time-gudang-2", "14")
+    await act(async () => {
+      clickNthButtonByText(container, "Simpan", 1)
+    })
+    expect(mocks.setLeadTime).toHaveBeenCalledWith(100, 2, 14)
+
+    await act(async () => {
+      clickButtonByText(container, "Hapus lead time")
+    })
+    expect(mocks.removeLeadTime).toHaveBeenCalledWith(100, 2)
+    unmountCard(root)
+  })
+
+  it("lead time kosong tampil belum diisi, tanpa tombol hapus lead time", async () => {
+    const { container, root } = await renderLoaded([row({ leadTimeDays: null })])
+    expect(container.textContent ?? "").toContain("belum diisi")
+    expect([...container.querySelectorAll("button")].some((b) => b.textContent === "Hapus lead time")).toBe(false)
+    unmountCard(root)
+  })
+
+  it("lead time tanpa izin edit: nilai tetap tampil, input lead time tidak tampil", async () => {
+    const { container, root } = await renderLoaded([row({ leadTimeDays: 5 })], false)
+    expect(container.textContent ?? "").toContain("Lead time (hari)")
+    expect(container.querySelector('[aria-label="Lead time di Gudang Bengkel"]')).toBeNull()
+    expect(container.querySelector("input")).toBeNull()
+    unmountCard(root)
+  })
+
+  it("lead time pecahan/negatif ditolak di UI tanpa panggil server", async () => {
+    const { container, root } = await renderLoaded([row({ leadTimeDays: null })])
+    setFieldValue(container, "#lead-time-gudang-2", "2.5")
+    await act(async () => {
+      clickNthButtonByText(container, "Simpan", 1)
+    })
+    expect(mocks.setLeadTime).not.toHaveBeenCalled()
+    expect(mocks.showError).toHaveBeenCalledWith("Lead time wajib bilangan bulat 0 hari atau lebih")
     unmountCard(root)
   })
 
