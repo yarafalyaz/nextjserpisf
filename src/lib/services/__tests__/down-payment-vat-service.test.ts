@@ -44,7 +44,7 @@ const DP = {
   vatAmount: 1_320_000,
   vatTaxPeriod: "2026-01",
   customerId: 42,
-  customer: { name: "PT Uji", taxId: "01.234.567.8-901.000" },
+  customer: { name: "PT Uji", taxpayerName: "PT Uji WP", taxId: "0123456789123456", nitku: "0123456789123456000001" },
 }
 
 const INPUT = {

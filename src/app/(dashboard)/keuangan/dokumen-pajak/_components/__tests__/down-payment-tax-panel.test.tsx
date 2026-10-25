@@ -132,6 +132,39 @@ describe("DownPaymentTaxPanel F-2026-10-25-004-V", () => {
     expect(showError).toHaveBeenCalledWith("DP belum confirmed — FP UM ditolak")
   })
 
+  it("galat gerbang identitas tampil verbatim lewat toast error", async () => {
+    issueAction.mockResolvedValue({ success: false, error: "NITKU lawan transaksi tidak diawali NPWP lawan transaksi — periksa apakah NITKU milik entitas lain" })
+    const { container } = mount(<DownPaymentTaxPanel rows={[BASE]} canIssue />)
+    const openBtn = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes("Terbitkan FP Uang Muka"))
+    act(() => {
+      openBtn!.click()
+    })
+    container.querySelector<HTMLInputElement>("#dp-tax-number-42")!.value = "010.000-26.00000042"
+    act(() => {
+      container.querySelector("form")!.requestSubmit()
+    })
+    await flush()
+    expect(showError).toHaveBeenCalledWith("NITKU lawan transaksi tidak diawali NPWP lawan transaksi — periksa apakah NITKU milik entitas lain")
+  })
+
+  it("checkbox konfirmasi NPWP 15 digit terkirim sebagai legacy15Confirmed", async () => {
+    const { container } = mount(<DownPaymentTaxPanel rows={[BASE]} canIssue />)
+    const openBtn = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes("Terbitkan FP Uang Muka"))
+    act(() => {
+      openBtn!.click()
+    })
+    container.querySelector<HTMLInputElement>("#dp-tax-number-42")!.value = "010.000-26.00000042"
+    const cb = container.querySelector<HTMLInputElement>("#dp-tax-legacy15-42")
+    expect(cb).not.toBeNull()
+    cb!.checked = true
+    act(() => {
+      container.querySelector("form")!.requestSubmit()
+    })
+    await flush()
+    const fd = issueAction.mock.calls[0][0] as FormData
+    expect(fd.get("legacy15Confirmed")).toBe("true")
+  })
+
   it("empty state saat belum ada DP", () => {
     const { container } = mount(<DownPaymentTaxPanel rows={[]} canIssue />)
     expect(container.textContent).toContain("Belum ada uang muka tercatat.")

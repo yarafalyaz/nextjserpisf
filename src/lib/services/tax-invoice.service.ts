@@ -284,6 +284,8 @@ export interface IssueDownPaymentTaxInvoiceInput {
   counterpartyTaxId?: string | null
   counterpartyName?: string | null
   counterpartyNitku?: string | null
+  /** Konfirmasi eksplisit operator: terbit dengan NPWP 15 digit (legacy) — vonis 019-V §2. */
+  legacy15Confirmed?: boolean
   idempotencyKey: string
   userId?: number
 }
@@ -321,7 +323,7 @@ export async function issueDownPaymentTaxInvoice(
       }
       const dp = await tx.downPayment.findUnique({
         where: { id: input.downPaymentId },
-        include: { customer: { select: { name: true, taxId: true } } },
+        include: { customer: { select: { name: true, taxId: true, taxpayerName: true, nitku: true } } },
       })
       if (!dp) throw definitive(`Uang muka #${input.downPaymentId} tidak ditemukan`)
       if (dp.status !== "confirmed") {
@@ -345,6 +347,32 @@ export async function issueDownPaymentTaxInvoice(
         select: { id: true },
       })
       if (dupe) throw definitive(`Nomor faktur pajak "${number}" sudah terbit untuk arah out`)
+      // B1 t_663509ae (vonis 019-V Putusan 3/5 + §8A): FP UM wajib gerbang
+      // identitas SAMA dengan issueTaxInvoice — dinilai dari snapshot final
+      // (override operator menang per-field atas master; taxpayerName master
+      // menang atas nama dagang, nama dagang hanya fallback terakhir bila
+      // taxpayerName kosong — pola snapshotCounterpartyFromMaster existing).
+      const cust = dp.customer
+      const finalIdentity: CounterpartySnapshot = cust
+        ? snapshotCounterpartyFromMaster(
+            {
+              taxId: cust.taxId,
+              taxpayerName: cust.taxpayerName ?? cust.name,
+              nitku: cust.nitku,
+            },
+            {
+              counterpartyTaxId: input.counterpartyTaxId ?? undefined,
+              counterpartyName: input.counterpartyName ?? undefined,
+              counterpartyNitku: input.counterpartyNitku ?? undefined,
+            },
+          )
+        : {
+            counterpartyTaxId: input.counterpartyTaxId ?? null,
+            counterpartyName: input.counterpartyName ?? null,
+            counterpartyNitku: input.counterpartyNitku ?? null,
+          }
+      const gate = evaluateTaxInvoiceIssueGate(finalIdentity, { legacy15Confirmed: input.legacy15Confirmed })
+      if (!gate.allowed) throw definitive(gate.error)
       const created = await tx.taxInvoice.create({
         data: {
           slug: await nextTxSlug(tx as never, "taxInvoice", `fp-out-${number}`),
@@ -358,9 +386,9 @@ export async function issueDownPaymentTaxInvoice(
           taxAmount: toMoney(snapshot.ppnUangMuka),
           djpStatus: "draft",
           downPaymentId: dp.id,
-          counterpartyTaxId: input.counterpartyTaxId ?? dp.customer?.taxId ?? null,
-          counterpartyName: input.counterpartyName ?? dp.customer?.name ?? null,
-          counterpartyNitku: input.counterpartyNitku ?? null,
+          counterpartyTaxId: finalIdentity.counterpartyTaxId,
+          counterpartyName: finalIdentity.counterpartyName,
+          counterpartyNitku: finalIdentity.counterpartyNitku,
           createdBy: input.userId ?? null,
         },
       })
