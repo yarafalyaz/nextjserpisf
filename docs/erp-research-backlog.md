@@ -29898,6 +29898,159 @@ BENCHMARK label: Zahir = BENCHMARK terverifikasi URL di atas; Accurate = belum t
 Q-LR-1 (Lead): reuse kamus quotation-outcome 7 kategori vs kamus lead sendiri. Q-LR-2 (Lead): kategori wajib vs opsional saat lost. Q-LR-3 (Lead): agregasi di corong existing vs halaman laporan terpisah; izin baca view_leads cukup? Q-LR-4 (Lead): won→lost koreksi dibuka atau tetap terminal mutlak. Tanpa vonis Accountant (tidak menyentuh uang/pajak/jurnal).
 F-2026-10-25-030-S — Alasan kalah terstruktur lead lost. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LR-1..4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/validasi), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-031-S: skor prioritas lead (manual tahap 1; turunan aktivitas hanya sesudah gerbang Lead, tanpa angka bobot karangan)
+
+> **Slot**: F-2026-10-25-031-S. Diperiksa bentrok 2026-10-25 15:30 WIB vs `origin/main` (`7bccfb90`): grep `F-2026-10-25-031` di backlog+board origin/main = 0, di backlog seluruh head PR terbuka yang ter-fetch = 0, di judul PR terbuka = 0. ID terpakai tanggal ini terverifikasi: 027-S merged di main (PR #857), 028-S PR #858, 029-S PR #859, 030-S PR #860 — 031-S bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_72f8bbb1. Dokumen saja; **tanpa kode/schema/migrasi** run ini. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Ringkasan
+
+Lead punya status, nilai estimasi, sumber, target tutup, dan histori aktivitas — tetapi tidak ada jawaban terstruktur untuk pertanyaan harian penjual: "lead terbuka mana yang paling prioritas dikerjakan lebih dulu, dan siapa yang menetapkan prioritas itu?" Spec ini membekukan dua lapisan yang TIDAK boleh dicampur: (1) **prioritas manual tahap 1** — penanda prioritas yang ditetapkan manusia pemegang lead (kosakata tertutup usulan, tersimpan, tercatat siapa/kapan mengubah), dipakai mengurutkan daftar lead; (2) **skor turunan aktivitas** — HANYA diusulkan sebagai bahan putusan Lead (Q-LSC-1), TIDAK dibekukan angka/bobotnya di spec ini, karena bobot sumber/nilai/kebaruan tanpa data historis konversi bengkel = angka karangan. Skor turunan, bila kelak disetujui, adalah turunan baca murni dari fakta existing (status, sumber, estimatedValue, aktivitas terakhir, expectedCloseDate) — bukan kolom tersimpan, bukan probabilitas, bukan prediksi pendapatan (mengikat BR-LF-08). Lead terminal (`won`/`lost`) keluar dari populasi skor/prioritas aktif.
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 7bccfb90)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Lead` (`prisma/schema.prisma:4297-4330`): `source String?`, `status String @default("new")`, `estimatedValue Decimal?`, `expectedCloseDate DateTime?`, `assignedTo`, `customerId`, `convertedAt`, `deletedAt`. **Tidak ada kolom score/priority/grade di Lead** — grep `leadScore|score|priority` di model Lead = 0 hit. `priority` yang ada di skema adalah milik `CrmTicket` (`prisma/schema.prisma:4365`, default `medium`) — domain tiket, bukan lead.
+- Status kanonik `LEAD_STATUSES = [new, contacted, qualified, proposal, negotiation, won, lost]` (`src/lib/validations/crm.schemas.ts:88-96`); `CONVERTIBLE_STATUSES` qualified+ (`:97-102`). Aksi `convertLead` (`src/actions/crm.actions.ts:201`) wajib `edit_leads` + ownership guard (`assignedTo` sendiri kecuali `manage_leads`/`super_admin`, `:203-220`); `createLead`/`updateLead` di `src/actions/master.actions.ts:1637/1748` dengan guard kepemilikan sejajar.
+- Form lead existing (`src/components/forms/lead-form.tsx:201-224`): Estimasi Nilai, Estimasi Tanggal Penutupan, Sumber (pilihan tertutup website/referral/social_media/cold_call/exhibition/other). Tabel daftar lead (`lead-table.tsx:26-59`) menampilkan Nama/Email/Perusahaan/Sumber/Status/Dibuat — tanpa kolom prioritas/skor dan tanpa urutan prioritas.
+- Permission nyata katalog (`src/lib/auth/module-catalog.generated.ts:367-371`): `view_leads`, `create_leads`, `edit_leads`, `delete_leads`, `manage_leads`. Halaman daftar/detail lead gerbang `view_leads` (`page.tsx:31`, `[slug]/page.tsx:34`).
+- Saudara baca-saja existing (BUKAN skor): `lead-funnel.ts` (posisi tahap + gerakan kohort; BR-LF-08 melarang probabilitas tertimbang), `stale-leads.ts` (kebasahan status new/contacted, ambang 7 hari, aktivitas terakhir), `lead-followups.ts` F-037 (jadwal aktivitas jatuh tempo), F-2026-10-25-027-S (kedekatan expectedCloseDate), F-2026-10-25-030-S PR #860 (alasan kalah lead lost), F-2026-10-25-008-S (penanda selesai aktivitas).
+
+Belum ada / gap (bukti grep run ini):
+- Grep `leadScore|lead.?score|leadPriority|priorityScore` di `prisma/schema.prisma`, `src/lib/reports/`, `src/actions/crm.actions.ts`, `src/app/(dashboard)/crm/` = 0 hit untuk lead. Kata `score` di reports hanya domain probation karyawan dan fitment — bukan lead.
+- Tidak ada penanda prioritas per lead (manual maupun turunan), tidak ada urutan kerja berbasis prioritas di daftar lead, tidak ada riwayat siapa menetapkan prioritas.
+- Sumber lead tersimpan sebagai string pilihan form, tetapi tidak pernah dipakai sebagai sinyal urutan/prioritas di permukaan mana pun (hanya tampil label di tabel/detail).
+
+### 2. Workflow specification
+
+Aktor: penjual pemilik lead (assignedTo), supervisor (manage_leads), admin.
+Dokumen masuk: Lead existing non-terminal. Dokumen keluar tahap 1: penanda prioritas tersimpan per lead + riwayat perubahan (aktor, waktu, nilai lama→baru) — bentuk fisik (kolom + aktivitas vs tabel riwayat) = Q-LSC-3 Backend/Lead. Skor turunan: tanpa dokumen keluar tersimpan; bila disetujui, keluaran builder baca-saja per baca.
+
+Alur tahap 1 (manual):
+1. Penjual membuka daftar/detail lead (gerbang `view_leads`); lead non-terminal menampilkan prioritas saat ini (kosong = "Belum ditetapkan" tertanda, BUKAN prioritas rendah karangan).
+2. Penjual menetapkan/mengubah prioritas lewat aksi existing jalur edit (permission + ownership mengikuti `updateLead`/`convertLead`: pemilik lead sendiri, atau `manage_leads`/`super_admin`) — kosakata tertutup usulan di BR-LSC-02; bentuk final = Q-LSC-2 Lead.
+3. Server menolak perubahan pada lead `won`/`lost`/terkonversi/terhapus-lembut dan pada lead milik orang lain tanpa `manage_leads` (pola guard existing, bukan guard baru karangan).
+4. Daftar lead dapat diurutkan prioritas manual (tinggi dulu; belum ditetapkan terakhir dalam kelompok status yang sama) — urutan deterministik seri diputus expectedCloseDate terdekat lalu leadNumber/id (pola seri lead-followups/027-S). UI tidak menghitung ulang.
+5. Prioritas tampil apa adanya dengan penanda "ditetapkan manual oleh <nama> · <tanggal WIB>"; tidak pernah ditampilkan sebagai skor angka/probabilitas/prediksi.
+
+Alur turunan (HANYA bila Q-LSC-1 disetujui Lead; bukan tahap 1):
+1. Builder murni membaca fakta existing per lead non-terminal: status (tahap funnel), source, estimatedValue (kosong = ember tanpa nilai, bukan Rp0), aktivitas terakhir (semantik stale-leads), kedekatan expectedCloseDate (semantik 027-S).
+2. Keluaran = tingkat prioritas turunan tertanda "turunan — bukan ketetapan penjual", berdampingan (bukan menimpa) prioritas manual; selisih keduanya tampil tertanda, tidak digabung jadi satu angka.
+3. Bobot/ambang per sinyal TIDAK ditulis di spec ini; wajib diputus Lead berdasar data historis konversi bengkel (Q-LSC-1) sebelum Backend menulis satu baris pun. Tanpa putusan itu, turunan tidak dibangun.
+
+Beda tegas dari saudara (anti-duplikasi):
+| Permukaan | Pertanyaan | Sifat |
+|---|---|---|
+| Corong (F-092-S) | lead ada di tahap apa, bergerak bagaimana | posisi/gerakan tahap |
+| Lead basi 29(a) | lead new/contacted mana yang tenggelam tanpa aktivitas | kebasahan (satu sinyal waktu) |
+| Follow-up F-037 | jadwal aktivitas mana jatuh tempo | jadwal aktivitas |
+| Target tutup 027-S | target tutup mana lewat/dekat | kedekatan tanggal |
+| **Spec ini 031-S** | **lead mana prioritas dikerjakan dulu dan siapa menetapkannya** | **ketetapan manusia (tahap 1) + usulan turunan multi-sinyal (gerbang Lead)** |
+
+### 3. Role/permission matrix
+
+Permission nyata dari katalog tergenerasi (`module-catalog.generated.ts:367-371`); tanpa key baru tahap 1 (Q-LSC-4).
+
+| Aksi | Permission nyata | Penjual (pemilik lead) | Penjual lain | Supervisor/Admin |
+|---|---|---|---|---|
+| Melihat prioritas di daftar/detail lead | `view_leads` | ya | ya (tampil baca; ubah ditolak di bawah) | ya |
+| Menetapkan/mengubah prioritas lead sendiri | `edit_leads` + ownership `assignedTo` = aktor | ya | tidak (pola guard updateLead/convertLead) | — |
+| Menetapkan/mengubah prioritas lead siapa pun | `edit_leads` + `manage_leads` (atau `super_admin`) | — | — | ya |
+| Mengurutkan daftar per prioritas | `view_leads` | ya | ya | ya |
+| Melihat riwayat perubahan prioritas | `view_leads` (di detail lead) | ya | ya | ya |
+| Skor turunan (bila Q-LSC-1 lolos) — melihat | mengikuti permukaan tampilnya (Q-LSC-4) | sesuai putusan | sesuai putusan | sesuai putusan |
+| Membuat key izin baru (`*_lead_priority` dsb.) | — | TIDAK tahap 1 | — | — |
+
+Tidak ada scope HR/gaji di spec ini; prioritas lead bukan data pribadi/gaji. Angka `estimatedValue` tampil mengikuti izin lead existing apa adanya (bukan piutang/pendapatan — notice BR-LF-08 warisan).
+
+### 4. Status-transition / population matrix
+
+Tidak ada transisi status lead baru. Yang dibekukan = populasi dan perubahan penanda prioritas:
+
+| Keadaan lead | Prioritas manual | Skor turunan (bila lolos Q-LSC-1) | Penjaga |
+|---|---|---|---|
+| non-terminal, belum ditetapkan | tampil "Belum ditetapkan" (ember sendiri, bukan "rendah") | dihitung dari fakta; tertanda turunan | builder/aksi |
+| non-terminal, ditetapkan manusia | tampil nilai + aktor + waktu tetapan terakhir | tampil berdampingan; selisih tertanda, tidak digabung | aksi edit + ownership |
+| berubah status non-terminal → non-terminal lain | prioritas manual TETAP (tidak direset diam-diam); riwayat mencatat perubahan status terpisah existing | dihitung ulang per baca dari tahap baru | builder |
+| `won` (termasuk hasil convertLead) / `lost` | keluar populasi aktif; penanda lama tampil beku di detail sebagai histori, tidak dapat diubah | TIDAK dihitung/ditampilkan sebagai skor aktif | aksi menolak ubah; builder mengecualikan |
+| terhapus-lembut (`deletedAt`) | keluar semua permukaan | keluar | query `deletedAt IS NULL` |
+| status liar di luar LEAD_STATUSES | tampil ember "Status tidak dikenal" tertanda (warisan BR-LF-01); prioritas manual tetap dapat dilihat, ubah mengikuti guard status valid = Q-LSC-3 | tidak diskors (tidak dipetakan paksa) | builder |
+
+Skor basi (turunan): karena turunan dihitung per baca dari fakta tersimpan, "basi" berarti fakta sumbernya basi (aktivitas terakhir lama, expectedCloseDate lampau, status tidak bergerak) — builder wajib menampilkan umur fakta pemicu (mis. aktivitas terakhir N hari) di samping tingkat turunan; tingkat tanpa penanda umur fakta = dilarang (BR-LSC-07). Prioritas manual basi: manual tidak kedaluwarsa otomatis tahap 1; lead yang prioritas manualnya tidak pernah ditinjau sesudah perubahan status/tanggal tampil tertanda "ditetapkan sebelum perubahan terakhir" — bentuk penanda final = Q-LSC-2.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-LSC-01 | Gap terbukti ABSEN: Lead tidak punya kolom/penanda skor atau prioritas; `priority` di skema hanya milik CrmTicket. | TERVERIFIKASI-KODE | `prisma/schema.prisma:4297-4330,4365`; grep run ini 0 hit leadScore |
+| BR-LSC-02 | Tahap 1 = prioritas MANUAL kosakata tertutup yang ditetapkan manusia. Usulan kosakata: `tinggi/sedang/rendah` + keadaan kosong "Belum ditetapkan". Kosakata final (jumlah tingkat + label) = Q-LSC-2 Lead; spec tidak mengunci label sebagai fakta. | USULAN (bentuk final BUTUH-VONIS Lead) | pola prioritas tiket existing sebagai rujukan kosakata, bukan bukti lead |
+| BR-LSC-03 | Kosong ≠ rendah: lead tanpa ketetapan tampil di ember "Belum ditetapkan" terpisah dan tidak diberi tingkat/skor karangan. | USULAN | pola ember jujur BR-LF-01/04, stale-leads |
+| BR-LSC-04 | Ubah prioritas mensyaratkan `edit_leads` + (pemilik `assignedTo` ATAU `manage_leads`/`super_admin`); penolakan server-side mengikuti pola guard updateLead/convertLead persis. | USULAN (guard TERVERIFIKASI-KODE di tetangga) | `master.actions.ts:1748+`, `crm.actions.ts:207-220` |
+| BR-LSC-05 | Lead `won`/`lost`/terkonversi/terhapus tidak dapat diubah prioritasnya dan keluar dari populasi aktif; penanda terakhirnya hanya histori beku di detail. | USULAN | populasi funnel/stale existing |
+| BR-LSC-06 | Skor turunan TIDAK dibekukan di spec ini: dilarang angka bobot sumber/nilai/tahap/kebaruan, dilarang probabilitas persen per tahap, dilarang prediksi pendapatan. Mengikat BR-LF-08 (tidak ada tabel probabilitas; mengarang persen dilarang). | USULAN (mengikat BR-LF-08 TERVERIFIKASI-KODE) | `lead-funnel.ts` BR-LF-08 |
+| BR-LSC-07 | Bila turunan kelak disetujui: dihitung per baca (bukan kolom tersimpan yang membusuk), selalu berdampingan dengan prioritas manual (tidak menimpa/menggabung), dan wajib menempelkan umur fakta pemicu. Selisih manual vs turunan = tampilan tertanda, bukan konflik yang diselesaikan diam-diam sistem. | USULAN (syarat gerbang Q-LSC-1) | pola builder murni lead-* existing |
+| BR-LSC-08 | Urutan daftar per prioritas deterministik: tingkat manual desc, belum ditetapkan terakhir, seri expectedCloseDate asc (kosong terakhir), lalu leadNumber, lalu id. UI/loader dilarang mengurutkan ulang. | USULAN | pola seri lead-followups/027-S |
+| BR-LSC-09 | Setiap perubahan prioritas tercatat (aktor, waktu WIB, lama→baru) dan terbaca di detail lead oleh pemegang `view_leads`. Fisik catatan (LeadActivity type baru vs kolom audit) = Q-LSC-3; menambah type aktivitas menyentuh kosakata `leadActivitySchema` sehingga wajib putusan itu, bukan asumsi spec. | USULAN (fisik BUTUH-VONIS Lead/Backend) | `crm.schemas.ts` leadActivitySchema; LeadActivity existing |
+| BR-LSC-10 | `estimatedValue` tetap perkiraan peluang dengan notice warisan funnel; prioritas/skor dilarang mengubah, menimbang ulang diam-diam, atau menjumlahkan nilai menjadi "nilai prioritas" rupiah. Σ per tingkat (bila ditampilkan turunan) memakai nilai saat ini apa adanya + notice. | USULAN (notice TERVERIFIKASI-KODE) | LEAD_FUNNEL_VALUE_NOTICE_TEXT |
+| BR-LSC-11 | Sumber lead adalah sinyal tampil apa adanya (label sumber existing form); dilarang memberi bobot sumber (mis. referral > website) tanpa putusan Lead berdasar data konversi historis bengkel. | USULAN (gerbang Q-LSC-1) | `lead-form.tsx:212-224` |
+| BR-LSC-12 | Tanpa key permission baru, tanpa status lead baru, tanpa migrasi tahap manual selain fisik penanda yang diputus Q-LSC-3; tanpa notifikasi/cron pengingat prioritas tahap 1. | USULAN | katalog :367-371; pola BR-EC-07 |
+
+### 6. Feature matrix (benchmark, akses live 2026-10-25)
+
+| Kemampuan | Accurate | Zahir CRM | ISF (spec ini) |
+|---|---|---|---|
+| Dashboard pipeline: total lead/potential/closing, funnel, breakdown per sales/sumber/status/nilai | Panduan resmi yang ditemukan run ini membahas kualifikasi prospek di artikel rencana penjualan, bukan permukaan skor lead (`https://accurate.id/marketing-manajemen/komponen-rencana-penjualan-beserta-template-dan-contohnya/`) | Ada: Dashboard CRM Total Leads/Potential/Closing + breakdown sales person, sumber leads, status pipeline, nilai potensi (`https://zahirerp.com/id/all-features-of-zahir-products/`) | Ada existing: corong F-092-S + daftar lead |
+| Skor/prioritas per lead (lead scoring) | Tidak ditemukan di help/produk resmi yang diakses run ini — artikel sales report Accurate menyebut "opportunity score" sebagai konsep laporan generik (Einstein, produk lain), BUKAN fitur Accurate (`https://accurate.id/bisnis-ukm/mengenal-sales-report/`) — tidak diklaim setara | Tidak ditemukan penyebutan skor/bobot per lead di halaman fitur resmi yang diakses run ini; yang ada status Lead/Potential/Lost + sumber lead terstruktur (URL sama di atas) | Spec ini: prioritas manual tahap 1; turunan multi-sinyal hanya gerbang Lead tanpa bobot karangan |
+| Alasan lost terstruktur | Tidak diverifikasi run ini | Ada: Status Lost dengan alasan (budget, tidak respons, kalah kompetitor, pembatalan) di master CRM (URL sama) | F-2026-10-25-030-S (PR #860) |
+| Follow-up terjadwal anti-terlewat | Tidak diverifikasi run ini | Ada: "Tidak Ada Lagi Prospek Terlewat", follow-up disiplin terjadwal (`https://zahiraccounting.com/id/zahir-crm/`) | Ada existing: lead-followups F-037 + stale 29(a) |
+
+Catatan jujur: benchmark di atas membuktikan kedewasaan pipeline/status/sumber di Zahir dan TIDAK membuktikan Accurate/Zahir punya lead scoring berbobot yang bisa disalin angkanya. Karena itu spec ini sengaja tidak mengimpor bobot dari mana pun (BR-LSC-06/11).
+
+### 7. Acceptance criteria + edge cases
+
+Backend (penanda manual + urutan; turunan hanya bila Q-LSC-1 lolos):
+- AC-LSC-B1: lead `won`/`lost`/terkonversi/terhapus-lembut: ubah prioritas ditolak server DAN tidak muncul di populasi urutan aktif; muncul/berubah satu pun = MERAH.
+- AC-LSC-B2: penjual B mengubah prioritas lead milik penjual A tanpa `manage_leads` ditolak server (matriks guard sejajar updateLead); lolos = MERAH.
+- AC-LSC-B3: lead tanpa ketetapan tampil ember "Belum ditetapkan" dan tidak pernah menerima tingkat/skor default diam-diam saat dibuat/diimpor/dimigrasi; diberi nilai karangan = MERAH.
+- AC-LSC-B4: urutan deterministik BR-LSC-08 termasuk seri tanggal kosong dan leadNumber sama; UI/loader mengurutkan ulang = MERAH.
+- AC-LSC-B5: riwayat perubahan mencatat aktor + waktu + lama→baru dan terbaca via detail; perubahan tanpa catatan = MERAH.
+- AC-LSC-B6 (turunan, kondisional): grep keluaran builder — tidak ada field probabilitas/persen peluang/prediksi rupiah berbobot; bobot hardcoded per sumber/status muncul = MERAH. Tingkat turunan selalu disertai umur fakta pemicu; tanpa penanda umur = MERAH.
+- AC-LSC-B7 (turunan, kondisional): prioritas manual tidak berubah oleh perhitungan turunan dalam keadaan apa pun (tes: hitung turunan → manual tetap); tertimpa = MERAH.
+
+Frontend (konsumen):
+- AC-LSC-F1: label tingkat/ember/notice verbatim server; UI menghitung tingkat/skor/urutan sendiri = MERAH (mutasi builder/aksi harus mengubah tampilan tanpa ubah UI).
+- AC-LSC-F2: permukaan tanpa `view_leads` tertolak pola existing; kontrol ubah prioritas hanya tampil bagi yang lolos `edit_leads`+ownership (server tetap penjaga akhir — kontrol tersembunyi bukan satu-satunya guard).
+- AC-LSC-F3: sebelum commit, grep e2e selector lead terdampak (tabel/detail/form lead) dan sinkronkan commit yang sama; nol tombol skor otomatis/notifikasi tahap 1.
+
+QA (falsifikasi): matikan guard ownership → AC-LSC-B2 harus MERAH; paksa status terminal masuk populasi → B1 MERAH; hapus catatan riwayat → B5 MERAH; (kondisional) suntik bobot sumber → B6 MERAH.
+
+Edge cases: E-LSC-1 lead non-terminal tanpa assignedTo (tampil "Belum ditugaskan"; hanya `manage_leads` yang dapat menetapkan). E-LSC-2 prioritas ditetapkan lalu lead di-reassign ke penjual lain (ketetapan tetap, aktor asal tercatat; pemilik baru dapat mengubah). E-LSC-3 status mundur (negotiation → contacted): manual tetap, turunan (bila ada) hitung ulang dari tahap baru tanpa peristiwa tersimpan. E-LSC-4 expectedCloseDate diubah lampau/jauh sesudah prioritas ditetapkan: penanda "ditetapkan sebelum perubahan terakhir" per §4; sistem tidak mengubah tingkat diam-diam. E-LSC-5 dua perubahan prioritas bersamaan pada lead sama (urutan riwayat deterministik per waktu server; hasil akhir = tulisan terakhir yang lolos guard). E-LSC-6 sumber di luar pilihan form existing (string liar historis): tampil apa adanya tertanda, tidak dipetakan ke bobot/tingkat. E-LSC-7 lead dengan estimatedValue kosong di urutan prioritas: seri tidak memakai Rp0 karangan (BR-LSC-10).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-LSC-1 (Lead, gerbang turunan): apakah skor turunan aktivitas dibangun sama sekali? Bila ya: bobot/ambang per sinyal (status/sumber/nilai/kebaruan/target tutup) diputus berdasar data apa (historis konversi bengkel per sumber/tahap belum pernah diukur di repo — funnel hanya posisi/gerakan)? Spec merekomendasikan: tahap 1 manual saja; turunan ditunda sampai data konversi per sumber/tahap terbaca dari funnel existing. Tanpa putusan ini Backend tidak menulis builder turunan.
+- Q-LSC-2 (Lead): kosakata prioritas manual final — usulan 3 tingkat `tinggi/sedang/rendah` + kosong; perlu tingkat "kritis/darurat"? Label tampil final mengikuti putusan ini. Termasuk bentuk penanda basi manual (§4).
+- Q-LSC-3 (Lead + Backend): fisik penanda — kolom prioritas di Lead (+ kolom aktor/waktu tetapan) vs baris LeadActivity type baru; mencakup perlakuan status liar pada ubah prioritas dan bentuk riwayat (BR-LSC-09). Menyentuh schema = migrasi milik Backend sesudah putusan, bukan spec ini.
+- Q-LSC-4 (Lead): izin permukaan urutan — cukup `view_leads` existing (usulan spec) vs key baru; dan bila turunan lolos, permukaan tampilnya (kolom daftar lead vs halaman laporan `view_reports` pola funnel).
+- Accountant: TIDAK (bukan uang/pajak/jurnal; estimatedValue bukan pengakuan — BR-LSC-10).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-031-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-031-S | Spec ini (dokumen) | Business | — |
+| (turunan) fisik penanda prioritas manual + aksi ubah + riwayat + urutan builder | Backend | Q-LSC-2/3/4 diputus Lead | — |
+| (turunan kondisional) builder skor turunan multi-sinyal | Backend | Q-LSC-1 lolos dengan bobot tertulis Lead | kontrak manual merged |
+| (turunan) kolom/kontrol prioritas di daftar+detail+form lead | Frontend | kontrak Backend final + Q-LSC-2 | — |
+| (turunan) falsifikasi AC-LSC-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Skor angka 0–100, bobot sumber/tahap/nilai, probabilitas per tahap, prediksi pendapatan tertimbang: dilarang BR-LSC-06/11; benchmark resmi yang diakses tidak menyediakan angka yang sah untuk disalin.
+- Menimpa prioritas manual dengan turunan, atau menggabungkan keduanya jadi satu angka: dilarang BR-LSC-07.
+- Notifikasi/cron "lead prioritas menunggu", penetapan prioritas massal/otomatis, dan key permission baru tahap 1.
+- Mengubah semantik stale-leads/follow-ups/027-S menjadi skor: tiga permukaan itu tetap menjawab pertanyaannya masing-masing (§2).
+
+F-2026-10-25-031-S — Skor prioritas lead. Status: SPEC SELESAI run ini; tahap 1 prioritas manual menunggu putusan Lead Q-LSC-2/3/4 + fisik Backend; skor turunan menunggu gerbang Q-LSC-1 (tanpa putusan = tidak dibangun). Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik/aksi/builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
+
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-035-S: gerbang penegakan batas kredit pelanggan tahap 2 (lanjutan advisory F-2026-10-21-017-S; peringatan tetap default, penahan = gerbang vonis)
 
 > **Slot**: F-2026-10-25-035-S (RENUMBER 2026-10-25 16:02 WIB dari 034-S: bentrok live — PR #871 konsumen paparan kredit form SO/Invoice memakai 034-S lebih dulu, 034-S tetap milik #871; 035-S terverifikasi bebas: grep `F-2026-10-25-035` di `origin/main` 733808f2 = 0 dan judul PR terbuka tertinggi 034-S). Pemeriksaan asal 15:54 WIB vs `origin/main` (`4fdb124f`): ID 033-S sudah terpakai (rekap beban tiket, PR #870) — dilarang dipakai ulang. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; tanpa kode/schema/migrasi. Business tidak merge.
