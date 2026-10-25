@@ -70,6 +70,7 @@ interface EmployeeFormProps {
     roleIds?: string[]
     // F-2026-10-22-085-S: siklus hidup (YYYY-MM-DD | null)
     employmentStatus?: string | null
+    leaveEligibilityStartDate?: string | null
     contractStartDate?: string | null
     contractEndDate?: string | null
     employmentEndedAt?: string | null
@@ -188,6 +189,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
       employmentStatus: employee?.employmentStatus || "",
+      leaveEligibilityStartDate: toDateInputValue(employee?.leaveEligibilityStartDate),
       contractStartDate: toDateInputValue(employee?.contractStartDate),
       contractEndDate: toDateInputValue(employee?.contractEndDate),
       employmentEndedAt: toDateInputValue(employee?.employmentEndedAt),
@@ -219,6 +221,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
         // F-085-S: lifecycle selalu dikirim eksplisit (kosong -> server null);
         // jangan bergantung iterasi data (field kosong bisa terlewat).
         formData.set("employmentStatus", data.employmentStatus ?? "")
+        formData.set("leaveEligibilityStartDate", data.leaveEligibilityStartDate ?? "")
         formData.set("contractStartDate", data.contractStartDate ?? "")
         formData.set("contractEndDate", data.contractEndDate ?? "")
         formData.set("employmentEndedAt", data.employmentEndedAt ?? "")
@@ -420,6 +423,14 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                   ))}
                 </select>
               )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              label="Mulai Hitung Masa Kerja Cuti"
+              name="leaveEligibilityStartDate"
+              value={watch("leaveEligibilityStartDate")}
+              onChange={(val) => setValue("leaveEligibilityStartDate", val)}
             />
           </div>
           <div className="flex flex-col gap-1.5">
