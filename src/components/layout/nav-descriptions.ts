@@ -185,4 +185,5 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/sdm/slip-gaji-saya": "Slip gaji final milik sendiri (baca-saja)",
   "/sdm/aturan-statutori": "Tarif BPJS, PTKP & PPh21 berperiode",
   "/sdm/pinjaman": "Pinjaman karyawan",
+  "/sdm/pinjaman/rekap": "Rekap sisa pinjaman per karyawan",
 }
