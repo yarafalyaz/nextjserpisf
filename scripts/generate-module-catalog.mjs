@@ -125,6 +125,7 @@ const RESOURCES = [
   ["nonconformances", "manufacturing", "NCR"],
   ["production_costs", "manufacturing", "Biaya Produksi"],
   ["attendance", "hrm", "Absensi"],
+  ["attendance_corrections", "hrm", "Koreksi Absensi"],
   ["work_schedules", "hrm", "Jadwal Kerja"],
   ["leave_requests", "hrm", "Cuti"],
   ["overtime", "hrm", "Lembur"],

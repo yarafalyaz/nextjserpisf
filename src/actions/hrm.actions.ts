@@ -47,12 +47,14 @@ import {
   departmentHolidaySchema,
   workScheduleSchema,
   attendanceSchema,
+  attendanceCorrectionSchema,
   statutoryRuleSchema,
 } from "@/lib/validations/hrm.schemas";
 import {
   computeLateMinutes,
   computeOvertimeMinutes,
   wibDateToUtcMidnight,
+  wibMinutesOfDay,
   wibTimeToUtcInstant,
 } from "@/lib/utils/attendance-time";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
@@ -99,6 +101,13 @@ import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle
 import { loadLeaveBalanceReport } from "@/lib/reports/leave-balance-data";
 import { buildLeaveBalanceCsv } from "@/lib/reports/leave-balance";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
+import {
+  ATTENDANCE_CORRECTION_CONFLICT_MESSAGE,
+  ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE,
+  ATTENDANCE_CORRECTION_WINDOW_MESSAGE,
+  attendanceCorrectionHasConflict,
+  isWithinAttendanceCorrectionWindow,
+} from "@/lib/reports/attendance-correction";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 import { closedWorkOrderError, timesheetContextError } from "@/lib/services/timesheet-context";
 
@@ -3782,9 +3791,12 @@ export async function deleteWorkSchedule(id: number) {
  * `getDailyAttendanceMetrics`. Tanpa jadwal, keterlambatan tidak bisa dihitung,
  * dan itu harus dikatakan — bukan diam-diam dicatat sebagai 0.
  */
-async function resolveEffectiveSchedule(employeeId: number) {
+async function resolveEffectiveSchedule(
+  employeeId: number,
+  db: PrismaTypes.TransactionClient | typeof prisma = prisma,
+) {
   const select = { startTime: true, endTime: true } as const
-  const employee = await prisma.employee.findUnique({
+  const employee = await db.employee.findUnique({
     where: { id: employeeId },
     select: {
       id: true,
@@ -3800,7 +3812,7 @@ async function resolveEffectiveSchedule(employeeId: number) {
   return (
     employee.workSchedules[0] ??
     employee.department?.workSchedules[0] ??
-    (await prisma.workSchedule.findFirst({
+    (await db.workSchedule.findFirst({
       where: { isActive: true, employees: { none: {} }, departments: { none: {} } },
       orderBy: { id: "asc" },
       select,
@@ -3827,8 +3839,11 @@ type AttendanceInput = {
  * seorang karyawan "present" dengan lateMinutes 60 tetap terbaca terlambat —
  * dan pilihan status milik pengguna tidak diubah diam-diam.
  */
-async function buildAttendanceData(input: AttendanceInput) {
-  const schedule = await resolveEffectiveSchedule(input.employeeId)
+async function buildAttendanceData(
+  input: AttendanceInput,
+  db: PrismaTypes.TransactionClient | typeof prisma = prisma,
+) {
+  const schedule = await resolveEffectiveSchedule(input.employeeId, db)
   if (!schedule && input.checkIn) {
     throw new Error(
       "Karyawan ini belum punya jadwal kerja aktif — buat jadwal kerja lebih dulu " +
@@ -3943,6 +3958,328 @@ export async function deleteAttendance(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteAttendance]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+
+// ==================== ATTENDANCE CORRECTION (F-2026-10-25-010-S) ====================
+// Putusan Lead Q-AC-1/2/3 2026-10-26 + vonis Accountant F-2026-10-25-013-V:
+// pengajuan karyawan TIDAK mengubah rekod Attendance; hanya persetujuan yang
+// menulis rekod induk — dalam SATU $transaction memakai semantik
+// buildAttendanceData existing (bukan penulis kedua; koordinat rekod berjalan
+// tidak ditulis ulang, rekod baru lat/long kosong). Gerbang slip-final tahap 1:
+// persetujuan tanggal yang sudah masuk Payroll approved/paid DITAHAN (pengajuan
+// tetap pending, pesan "menunggu jalur slip koreksi"), slip final tidak diubah.
+
+/** Employee id user pemanggil untuk penjaga self/self-approve (null = tak tertaut). */
+async function callerEmployeeIdForCorrection(userId: string): Promise<number | null> {
+  const me = await prisma.employee.findFirst({
+    where: { userId: Number(userId) },
+    select: { id: true },
+  });
+  return me?.id ?? null;
+}
+
+export async function createAttendanceCorrection(formData: FormData) {
+  try {
+    const user = await requirePermission("create_attendance_corrections");
+    const parsed = parseFormData(attendanceCorrectionSchema, formData);
+    if (!parsed.success)
+      return { success: false as const, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
+    const scope = await getHrScope(user);
+    // BR-AC-07: pengaju = employeeId login persis, fail-closed tanpa tertaut.
+    await assertHrEmployeeAccess(scope, v.employeeId);
+    if (scope.kind === "self" && scope.employeeId !== v.employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengajukan koreksi absensi untuk diri sendiri");
+    }
+
+    const date = wibDateToUtcMidnight(v.date);
+    if (!isWithinAttendanceCorrectionWindow(date)) {
+      throw new Error(ATTENDANCE_CORRECTION_WINDOW_MESSAGE);
+    }
+
+    const correction = await prisma.$transaction(async (tx) => {
+      // Satu pending per (employeeId, date) (BR-AC-03): kunci baris Employee
+      // menserialkan cek + buat untuk karyawan sama (pola createLeaveRequest).
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+
+      const pending = await tx.attendanceCorrection.findFirst({
+        where: { employeeId: v.employeeId, date, status: "pending" },
+        select: { id: true },
+      });
+      if (pending) {
+        throw new Error(
+          "Masih ada pengajuan koreksi yang menunggu untuk tanggal ini — tunggu diputus atau batalkan dulu.",
+        );
+      }
+
+      const current = await tx.attendance.findUnique({
+        where: { employeeId_date: { employeeId: v.employeeId, date } },
+        select: {
+          id: true,
+          updatedAt: true,
+          status: true,
+          checkIn: true,
+          checkOut: true,
+          notes: true,
+        },
+      });
+
+      return tx.attendanceCorrection.create({
+        data: {
+          slug: await nextSlug("attendanceCorrection", `koreksi-absensi-${v.date}`),
+          employeeId: v.employeeId,
+          date,
+          proposedStatus: v.status,
+          proposedCheckIn: v.checkIn ? wibTimeToUtcInstant(v.date, v.checkIn) : null,
+          proposedCheckOut: v.checkOut ? wibTimeToUtcInstant(v.date, v.checkOut) : null,
+          proposedNotes: v.notes ?? null,
+          reason: v.reason,
+          status: "pending",
+          snapshotAttendanceId: current?.id ?? null,
+          snapshotUpdatedAt: current?.updatedAt ?? null,
+          snapshotStatus: current?.status ?? null,
+          snapshotCheckIn: current?.checkIn ?? null,
+          snapshotCheckOut: current?.checkOut ?? null,
+          snapshotNotes: current?.notes ?? null,
+        },
+      });
+    });
+
+    await logActivity(
+      "create",
+      "AttendanceCorrection",
+      correction.id,
+      `Mengajukan koreksi absensi tanggal ${v.date}`,
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const, id: correction.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createAttendanceCorrection]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+async function loadCorrectionForDecision(id: number) {
+  return prisma.attendanceCorrection.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      employeeId: true,
+      date: true,
+      proposedStatus: true,
+      proposedCheckIn: true,
+      proposedCheckOut: true,
+      proposedNotes: true,
+      status: true,
+      snapshotAttendanceId: true,
+      snapshotUpdatedAt: true,
+      snapshotStatus: true,
+      snapshotCheckIn: true,
+      snapshotCheckOut: true,
+      snapshotNotes: true,
+    },
+  });
+}
+
+/** Penyetuju sah: scope department/all atas pengaju + self-approve dilarang. */
+async function assertAttendanceCorrectionApprover(
+  user: { id: string; roles: string[] },
+  correctionEmployeeId: number,
+): Promise<number> {
+  const scope = await getHrScope(user);
+  if (scope.kind === "self") {
+    throw new Error("Anda tidak memiliki akses menyetujui koreksi absensi");
+  }
+  await assertHrEmployeeAccess(scope, correctionEmployeeId);
+  const me = await callerEmployeeIdForCorrection(user.id);
+  if (me == null) throw new Error("Akun Anda tidak terhubung ke data karyawan");
+  if (me === correctionEmployeeId) {
+    throw new Error("Penyetuju tidak boleh menyetujui koreksi absensinya sendiri");
+  }
+  return me;
+}
+
+export async function approveAttendanceCorrection(id: number) {
+  try {
+    const user = await requirePermission("approve_attendance_corrections");
+    const correctionId = requirePositiveId(id, "koreksi absensi");
+    const loaded = await loadCorrectionForDecision(correctionId);
+    if (!loaded) throw new Error("Pengajuan koreksi absensi tidak ditemukan");
+    const approverEmployeeId = await assertAttendanceCorrectionApprover(user, loaded.employeeId);
+    if (loaded.status !== "pending") {
+      throw new Error("Hanya pengajuan koreksi berstatus menunggu yang dapat disetujui");
+    }
+
+    // Tanggal string untuk buildAttendanceData (konvensi WIB = tanggal UTC
+    // tengah malam Attendance.date, lihat attendance-time.ts).
+    const dateStr = loaded.date.toISOString().slice(0, 10);
+    const toTime = (d: Date | null) => {
+      if (!d) return undefined;
+      const minutes = wibMinutesOfDay(d);
+      return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    };
+
+    await prisma.$transaction(async (tx) => {
+      // Klaim atomik pending -> approved lebih dulu: count 0 = sudah diproses.
+      // PENTING: klaim ini di dalam transaksi yang sama dengan semua penjaga di
+      // bawah — lemparan error sesudah klaim me-rollback flip status, jadi
+      // pengajuan TETAP pending pada konflik/gerbang (BR-AC-02).
+      const claim = await tx.attendanceCorrection.updateMany({
+        where: { id: correctionId, status: "pending" },
+        data: {
+          status: "approved",
+          approvedBy: approverEmployeeId,
+          approvedAt: new Date(),
+          rejectionReason: null,
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
+      }
+
+      const current = await tx.attendance.findUnique({
+        where: { employeeId_date: { employeeId: loaded.employeeId, date: loaded.date } },
+        select: {
+          id: true,
+          updatedAt: true,
+          status: true,
+          checkIn: true,
+          checkOut: true,
+          notes: true,
+        },
+      });
+      // EC-1: rekod berubah sesudah snapshot -> tolak persetujuan kali ini,
+      // pengajuan tetap pending (rollback klaim di atas).
+      if (attendanceCorrectionHasConflict(loaded, current)) {
+        throw new Error(ATTENDANCE_CORRECTION_CONFLICT_MESSAGE);
+      }
+
+      // Gerbang slip-final tahap 1 (013-V butir 8): tanggal sudah masuk slip
+      // approved/paid -> tahan persetujuan, slip final tidak diubah.
+      const finalSlip = await tx.payroll.findFirst({
+        where: {
+          employeeId: loaded.employeeId,
+          status: { in: FINAL_PAYROLL_STATUSES },
+          startDate: { lte: loaded.date },
+          endDate: { gte: loaded.date },
+        },
+        select: { id: true },
+      });
+      if (finalSlip) {
+        throw new Error(ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE);
+      }
+
+      const data = await buildAttendanceData(
+        {
+          employeeId: loaded.employeeId,
+          date: dateStr,
+          checkIn: toTime(loaded.proposedCheckIn),
+          checkOut: toTime(loaded.proposedCheckOut),
+          status: loaded.proposedStatus,
+          notes: loaded.proposedNotes ?? undefined,
+        },
+        tx,
+      );
+      if (current) {
+        // Update hanya kolom semantik buildAttendanceData: koordinat rekod
+        // berjalan TIDAK ditulis ulang (BR-AC-06).
+        await tx.attendance.update({ where: { id: current.id }, data });
+      } else {
+        await tx.attendance.create({
+          data: { employeeId: loaded.employeeId, ...data },
+        });
+      }
+    });
+
+    await logActivity(
+      "approve",
+      "AttendanceCorrection",
+      correctionId,
+      "Menyetujui koreksi absensi",
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[approveAttendanceCorrection]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function rejectAttendanceCorrection(id: number, reason: string) {
+  try {
+    const user = await requirePermission("approve_attendance_corrections");
+    const correctionId = requirePositiveId(id, "koreksi absensi");
+    const cleanReason = (reason ?? "").trim();
+    if (!cleanReason) throw new Error("Alasan penolakan wajib diisi");
+    const loaded = await loadCorrectionForDecision(correctionId);
+    if (!loaded) throw new Error("Pengajuan koreksi absensi tidak ditemukan");
+    await assertAttendanceCorrectionApprover(user, loaded.employeeId);
+
+    const claim = await prisma.attendanceCorrection.updateMany({
+      where: { id: correctionId, status: "pending" },
+      data: { status: "rejected", rejectionReason: cleanReason },
+    });
+    if (claim.count === 0) {
+      throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
+    }
+
+    await logActivity(
+      "reject",
+      "AttendanceCorrection",
+      correctionId,
+      "Menolak koreksi absensi",
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[rejectAttendanceCorrection]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function cancelAttendanceCorrection(id: number) {
+  try {
+    const user = await requirePermission("create_attendance_corrections");
+    const correctionId = requirePositiveId(id, "koreksi absensi");
+    const loaded = await prisma.attendanceCorrection.findUnique({
+      where: { id: correctionId },
+      select: { employeeId: true, status: true },
+    });
+    if (!loaded) throw new Error("Pengajuan koreksi absensi tidak ditemukan");
+    const me = await callerEmployeeIdForCorrection(user.id);
+    if (me == null || me !== loaded.employeeId) {
+      throw new Error("Hanya pengaju yang dapat membatalkan pengajuan ini");
+    }
+    if (loaded.status !== "pending") {
+      throw new Error("Hanya pengajuan koreksi berstatus menunggu yang dapat dibatalkan");
+    }
+
+    const claim = await prisma.attendanceCorrection.updateMany({
+      where: { id: correctionId, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
+    }
+
+    await logActivity(
+      "cancel",
+      "AttendanceCorrection",
+      correctionId,
+      "Membatalkan koreksi absensi",
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[cancelAttendanceCorrection]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

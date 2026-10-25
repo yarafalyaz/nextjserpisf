@@ -20,8 +20,13 @@ import { CollectionQueueCard } from "../collection-queue-card"
 import {
   buildCollectionQueue,
   COLLECTION_QUEUE_NOTICE_TEXT,
+  COLLECTION_REMINDER_LEVEL_LABELS,
+  COLLECTION_REMINDER_LEVEL_TITLE,
+  COLLECTION_REMINDER_NOTICE_TEXT,
+  type CollectionFollowUpInput,
   type CollectionInvoiceInput,
 } from "@/lib/reports/collection-queue"
+import { formatCurrency } from "@/lib/utils/format"
 
 const NOW = new Date(Date.UTC(2026, 9, 22, 3, 0))
 
@@ -191,6 +196,166 @@ describe("CollectionQueueCard F-2026-10-22-089-S", () => {
       />,
     )
     expect(container.textContent).toContain(
+      "Belum ada faktur yang perlu ditagih",
+    )
+  })
+})
+
+function followUp(
+  over: Partial<CollectionFollowUpInput>,
+): CollectionFollowUpInput {
+  return {
+    salesInvoiceId: 1,
+    followedUpAt: new Date(Date.UTC(2026, 9, 17)),
+    outcome: "terhubung_janji_bayar",
+    promisedDate: new Date(Date.UTC(2026, 9, 21)),
+    deletedAt: null,
+    ...over,
+  }
+}
+
+function clickButton(container: HTMLElement, text: string) {
+  const button = [...container.querySelectorAll("button")].find((b) =>
+    (b.textContent ?? "").includes(text),
+  )
+  if (!button) throw new Error(`tombol tidak ditemukan: ${text}`)
+  act(() => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+}
+
+describe("CollectionQueueCard tingkat pengingat F-2026-10-26-050-S", () => {
+  function queue050() {
+    return buildCollectionQueue(
+      [
+        invoice({}),
+        invoice({
+          invoiceId: 2,
+          documentNo: "INV-0002",
+          dueDate: null,
+          customerPhone: null,
+          contactPerson: null,
+        }),
+        invoice({ invoiceId: 3, documentNo: "INV-0003" }),
+        invoice({ invoiceId: 4, documentNo: "INV-0004" }),
+        invoice({ invoiceId: 5, documentNo: "INV-0005" }),
+      ],
+      [
+        {
+          salesInvoiceId: 1,
+          exchangeId: 5,
+          exchangeDocumentNo: "TF-0001",
+          exchangeDate: new Date(Date.UTC(2026, 9, 5)),
+          dueDate: new Date(Date.UTC(2026, 9, 25)),
+          exchangeDeletedAt: null,
+        },
+      ],
+      [
+        followUp({ salesInvoiceId: 4 }),
+        followUp({ salesInvoiceId: 5 }),
+        followUp({
+          salesInvoiceId: 5,
+          followedUpAt: new Date(Date.UTC(2026, 9, 21)),
+          outcome: "tidak_terhubung",
+          promisedDate: null,
+        }),
+      ],
+      { now: NOW },
+    )
+  }
+
+  it("kolom + label tingkat + notice kedua + rekap populasi penuh verbatim builder (AC-COLR-10/11)", () => {
+    const queue = queue050()
+    expect(
+      [...queue.rows]
+        .sort((a, b) => a.invoiceId - b.invoiceId)
+        .map((r) => r.tingkatPengingat),
+    ).toEqual([
+      "belum_perlu",
+      "tanpa_acuan",
+      "pengingat_awal",
+      "pengingat_lanjutan",
+      "eskalasi",
+    ])
+    const container = render(
+      <CollectionQueueCard
+        rows={queue.rows}
+        summary={queue.summary}
+        canCreateExchange={false}
+        canFollowUp={false}
+      />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain(COLLECTION_REMINDER_LEVEL_TITLE)
+    expect(text).toContain(COLLECTION_REMINDER_NOTICE_TEXT)
+    // Notice kedua menempel sesudah notice existing.
+    expect(text.indexOf(COLLECTION_QUEUE_NOTICE_TEXT)).toBeGreaterThanOrEqual(0)
+    expect(text.indexOf(COLLECTION_REMINDER_NOTICE_TEXT)).toBeGreaterThan(
+      text.indexOf(COLLECTION_QUEUE_NOTICE_TEXT),
+    )
+    for (const label of Object.values(COLLECTION_REMINDER_LEVEL_LABELS)) {
+      expect(text).toContain(label)
+    }
+    // Rekap per tingkat atas populasi penuh: hitungan + total sisa builder.
+    for (const level of Object.values(queue.summary.reminderLevels)) {
+      expect(level.count).toBe(1)
+    }
+    expect(text).toContain(
+      `Tanpa Acuan Tanggal 1 · ${formatCurrency(750_000)}`,
+    )
+    expect(text).toContain(`Perlu Eskalasi 1 · ${formatCurrency(750_000)}`)
+    // Rekap tanpa kontak (AC-COLR-12): nomor telepon tidak ikut rekap/filter.
+    expect(container.querySelector('[aria-label="Filter tingkat pengingat"]')).not.toBeNull()
+    expect(text).not.toContain("0812-3456-7890 ·")
+  })
+
+  it("filter tampil per tingkat: urutan server utuh, rekap tidak berubah, kosong per tingkat jujur (Q-COLR-4)", () => {
+    const queue = queue050()
+    const container = render(
+      <CollectionQueueCard
+        rows={queue.rows}
+        summary={queue.summary}
+        canCreateExchange={false}
+        canFollowUp={false}
+      />,
+    )
+    const serverOrder = queue.rows.map((r) => r.documentNo)
+    const docNos = () =>
+      [...container.querySelectorAll("td a")]
+        .map((a) => (a.textContent ?? "").trim())
+        .filter((t) => t.startsWith("INV-"))
+    expect(docNos()).toEqual(serverOrder)
+
+    clickButton(container, "Perlu Eskalasi (1)")
+    expect(docNos()).toEqual(["INV-0005"])
+    // Rekap populasi penuh tetap tampil saat filter aktif.
+    expect(container.textContent).toContain("Semua (5)")
+    expect(container.textContent).toContain(
+      `Pengingat Awal 1 · ${formatCurrency(750_000)}`,
+    )
+
+    clickButton(container, "Semua (5)")
+    expect(docNos()).toEqual(serverOrder)
+
+    clickButton(container, "Belum Perlu Diingatkan (1)")
+    expect(docNos()).toEqual(["INV-0001"])
+  })
+
+  it("filter tingkat tanpa baris: pesan kosong per tingkat, bukan empty state antrean", () => {
+    const queue = buildCollectionQueue([invoice({})], [], [], { now: NOW })
+    const container = render(
+      <CollectionQueueCard
+        rows={queue.rows}
+        summary={queue.summary}
+        canCreateExchange={false}
+        canFollowUp={false}
+      />,
+    )
+    clickButton(container, "Perlu Eskalasi (0)")
+    expect(container.textContent).toContain(
+      "Tidak ada faktur pada tingkat pengingat ini.",
+    )
+    expect(container.textContent).not.toContain(
       "Belum ada faktur yang perlu ditagih",
     )
   })
