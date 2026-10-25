@@ -30823,3 +30823,64 @@ Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti �
 - Mengubah rekap informatif menjadi layar utang: read-model saldo terpisah (BR-KOM37-12).
 
 F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
+
+---
+
+## USULAN BUSINESS 2026-10-25 — F-2026-10-25-040-S: paket usulan angka Q-SLA135-1/Q-SLA135-2 (SLA tiket CRM) + Q-CD-1 (duplikat pelanggan: peringatan vs blokir) untuk putusan Lead
+
+> **Slot**: F-2026-10-25-040-S. Diperiksa bentrok 2026-10-25 19:56 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-040` di backlog+board origin/main = 0; ID terpakai tanggal ini 001-S..039-S (038-S PR #889, 039-S PR #891 OPEN). ID 040 bebas. Kartu t_3e8b46a2.
+> **Sifat dokumen**: USULAN untuk diputus Lead — BUKAN vonis, BUKAN perubahan aturan. Dokumen saja; tanpa kode/schema/migrasi. Angka pajak/uang tidak disentuh (bukan domain butir ini; tidak ada angka statutori di sini).
+> **Koreksi jujur atas premis kartu**: kedua butir BUKAN tanpa usulan sama sekali. Verifikasi live run ini: (1) BR-CRM-01 di F-2026-10-24-135-S sudah memuat tabel angka USULAN + jam acuan; yang belum ada = argumentasi per angka + jawaban Q-SLA135-2. (2) F-2026-10-25-003-S BR-CD-04 sudah mengusulkan peringatan tahap 1 + kalimat rekomendasi NPWP-persis-boleh-blokir; yang belum ada = rincian dampak per kunci. Blok ini melengkapi keduanya tanpa menulis ulang spec induk; bila Lead memutus, putusan menempel ke Q-SLA135-1/2 dan Q-CD-1 di spec masing-masing.
+
+### A. Q-SLA135-1 + Q-SLA135-2 — target SLA tiket CRM per prioritas
+
+Fakta terverifikasi (TERVERIFIKASI-KODE, origin/main 1b147d3c):
+- Prioritas tiket existing hanya `low|medium|high` (default `medium`); `firstResponseAt` terisi saat tiket pertama keluar dari `open` (BUKAN balasan pertama — definisi terukur BR-CRM-03, spec 135-S). Angka SLA akan mengukur perilaku existing apa adanya sampai Q-SLA135-4 diputus terpisah.
+- Model `Holiday` (schema :3301) dan `WorkSchedule` (`workDays` CSV 0=Minggu..6=Sabtu, kosong = Senin–Jumat; `startTime`/`endTime` String; terhubung Employee/Department, schema :3341) SUDAH ADA. Pola baca jadwal existing: `work-center-load-plan.ts` (disebut spec 135-S).
+- Benchmark resmi diakses ulang 2026-10-25: Freshdesk SLA Policies — target respons/resolusi per prioritas dihitung jam kerja ATAU jam kalender pilihan admin: https://support.freshdesk.com/support/solutions/articles/37626-understanding-sla-policies . Contoh konfigurasi lapangan Freshdesk yang terpublikasi (terverifikasi 2026-10-25 di https://skladon.freshdesk.com/support/solutions/articles/47001302601-pravidla-pro-nastavov%C3%A1n%C3%AD-priorit-ticket%C5%AF-rules-for-setting-ticket-priorities): low respons ≤8 jam kerja / resolusi ≤64 jam kerja, medium ≤6 / ≤32, high ≤2 / ≤12, urgent ≤1 / ≤6 (jam kerja). Rentang ini acuan nyata satu operator logistik — bukan angka baku vendor — dan kekuatannya di sini: usul spec 135-S (respons/resolusi jam kerja: high 2/9, medium 4/27, low 8/45) dibandingkan contoh ini: respons spec SEJAJAR-LEBIH KETAT (2=2, 4<6, 8=8) dan resolusi spec LEBIH KETAT SEMUA (9<12, 27<32, 45<64). Artinya angka usul bukan tebakan bebas dan bukan salinan benchmark: ia duduk di ujung ketat pita contoh lapangan, karena tiket ISF operasional bengkel ditangani tim kecil yang sama — janji yang lebih ketat lebih mudah dibuktikan pelanggarannya daripada janji longgar yang tidak pernah memicu tindakan.
+
+USULAN Business (mempertahankan tabel BR-CRM-01 apa adanya, dengan alasan per baris):
+
+| Priority | Respons pertama (USULAN) | Resolusi (USULAN) | Alasan |
+|---|---|---|---|
+| high | 2 jam kerja | 1 hari kerja (9 jam kerja) | Tepi ketat rentang benchmark (high ≤2 jam kerja); tiket high di bengkel = pelanggan menunggu kendaraan — respons di hari yang sama adalah janji minimal yang bisa diucapkan admin |
+| medium | 4 jam kerja (setengah hari kerja) | 3 hari kerja | Setengah hari memberi ruang antrean pagi; resolusi 3 hari di bawah contoh benchmark medium (±4 hari) karena tiket ISF operasional bengkel, bukan tiket produk SaaS |
+| low | 8 jam kerja (1 hari kerja) | 5 hari kerja (1 minggu kerja) | Persis contoh benchmark low ≤8 jam kerja; 5 hari = satu siklus minggu kerja penuh, mudah diingat operator |
+
+- Jam kerja acuan (Q-SLA135-2) — USULAN: konstanta Senin–Jumat 08:00–17:00 WIB (9 jam/hari) untuk tahap 1, dikurangi tanggal `Holiday`. Alasan menolak WorkSchedule per departemen tahap 1: tiket CRM tidak terikat departemen pelaksana tunggal (assignedTo = karyawan, tiket bisa lintas fungsi), dan memilih jadwal siapa yang berlaku akan menambah satu keputusan fisik sebelum angka pertama terbukti dipakai. Tanggal `Holiday` tetap dibaca (sudah ada modelnya), jadi hari libur nasional tidak menggerus SLA secara diam-diam.
+- Ambang peringatan "mendekati" 25% sisa (BR-CRM-03, USULAN): pertahankan — satu ambang tunggal, mudah dijelaskan ("sisa seperempat waktu").
+
+Dampak operasional bila diputus:
+- Angka di atas menjadi konstanta builder (bukan konfigurasi per tiket) per spec 135-S; mengubahnya kelak = ubah spec + tes, bukan ubah master. Itu disengaja: SLA adalah janji layanan, bukan preferensi layar.
+- Konsekuensi jujur: karena `firstResponseAt` berarti "keluar dari open", tiket yang langsung di-in_progress tanpa balasan ke pelanggan terhitung "sudah direspons". Lead memutus angka ini dengan tahu definisi itu; memperbaiki definisi = Q-SLA135-4 terpisah, jangan dicampur ke putusan angka.
+- Bila bengkel ternyata buka Sabtu (fakta lapangan di luar bukti kode run ini), konstanta Senin–Jumat membuat tiket Jumat sore terlihat lebih longgar dari janji lisan ke pelanggan. Mitigasi tahap 1 tanpa membuka WorkSchedule: putusan Lead mencantumkan eksplisit "Sabtu bukan hari kerja SLA" ATAU mengoreksi konstanta jadi Senin–Sabtu sebelum builder dibangun — satu kalimat di putusan, bukan tebakan Business.
+
+Rekomendasi Business ke Lead (satu paragraf): SAHKAN tabel di atas + konstanta Senin–Jumat 08:00–17:00 dipotong Holiday sebagai Q-SLA135-1/2, dengan catatan eksplisit soal Sabtu sesuai fakta operasional bengkel; tingkat `urgent` tetap TIDAK (Q-SLA135-3 default spec), dan definisi firstResponseAt dibiarkan apa adanya tahap ini (Q-SLA135-4 terpisah).
+
+### B. Q-CD-1 — duplikat pelanggan: peringatan vs blokir keras
+
+Fakta terverifikasi (TERVERIFIKASI-KODE, origin/main 1b147d3c): tidak ada unique pada name/phone/taxId/email Customer; tahap 1 kandidat duplikat pelanggan SUDAH LIVE di kode (bukan hanya spec): `findCustomerDuplicateCandidates` di `src/lib/services/customer-duplicate.service.ts:206` dipanggil `createCustomer` SESUDAH create di `src/actions/master.actions.ts` — hasil simpan selalu sukses, kandidat diteruskan sebagai `duplicateWarning` di respons. Pencocokan di service itu: `npwp` (normalisasi digit + drop nilai kosong) lebih dulu, lalu `phone` (normalisasi digit dengan awalan 62/0 disamakan), lalu nama+email (`name_secondary`). `customer-duplicate.service.test.ts` existing mengujinya. Baru-baru ini reuse quick-add nama+telepon persis juga dipaksa terucap (`reused:true` + `reusedCustomer` + pesan reuse, `master.actions.ts` `createCustomer`, komentar `F-2026-10-25-003-S BR-CD-05`).
+
+Implikasi langsung untuk Q-CD-1 (ini yang membuat putusan jadi kecil): yang BELUM ada di kode = satu-satunya pengecualian NPWP-persis. Semua kunci lain sudah berperilaku peringatan persis seperti usul spec 003-S tahap 1. Jadi Lead TIDAK lagi memutus "peringatan vs blokir" dari nol — hanya memutus apakah SATU kunci (NPWP ternormalisasi sama persis dan terisi dua-duanya) dinaikkan dari peringatan ke blokir. Biaya implementasi pengecualian itu = gerbang sebelum `prisma.customer.create` di `createCustomer`/`updateCustomer` untuk kunci `npwp` saja, bukan pembangunan ulang mesin kandidat; mesinnya sudah ada dan teruji.
+
+USULAN Business (bertahap per kekuatan kunci — memperkuat rekomendasi satu kalimat di 003-S menjadi tabel yang bisa diputus):
+
+| Kekuatan kecocokan | Perilaku diusulkan | Alasan + dampak |
+|---|---|---|
+| NPWP ternormalisasi sama persis DAN terisi (dua-duanya) | BLOKIR simpan baru; arahkan operator memakai pelanggan existing atau mengoreksi NPWP | NPWP adalah identitas pajak: dua master ber-NPWP sama akan membelah histori faktur pajak satu entitas — kerusakan akuntansi/pajak, bukan sekadar kotor data. Dampak blokir: operator wajib menyelesaikan di tempat; pengecualian sah (NPWP sama dipakai cabang berbeda) diselesaikan lewat koreksi data oleh pemegang edit, bukan dengan membiarkan master ketiga lahir. Risiko salah-blokir rendah karena NPWP ternormalisasi kosong (EC-3 003-S) tidak memicu |
+| Telepon ternormalisasi sama | PERINGATAN (simpan tetap jalan) | Nomor sentral kantor/dealer sah dipakai banyak entitas (EC-2 003-S). Blokir di sini mengunci input sah di lapangan saat pelanggan mendesak — operator akan mengakali dengan mengubah digit, data jadi lebih kotor dari duplikatnya |
+| Nama ternormalisasi sama + email sama | PERINGATAN | Email bersama (admin kantor pelanggan) sah berganda; nama PT/CV generik sah berganda (BR-CD-03) |
+| Nama sama sendirian | BUKAN kandidat (tetap) | Menjaga regresi nama generik; menaikkan ini ke peringatan akan membanjiri operator dengan peringatan palsu sampai peringatan diabaikan |
+
+Dampak operasional per pilihan ekstrem (supaya kontrasnya terlihat):
+- Semua-peringatan (termasuk NPWP): nol gesekan input, tetapi duplikat NPWP — yang paling mahal diperbaiki (menyentuh faktur pajak terbit) — lahir tanpa satu pun hambatan; daftar kandidat 003-S menjadi satu-satunya pertahanan, dibaca belakangan.
+- Semua-blokir: data paling bersih di atas kertas, tetapi setiap kecocokan telepon sentral/nama generik menjadi jalan buntu kasir/admin; perilaku lapangan yang bisa diprediksi = operator memvariasikan ejaan nama/digit telepon agar lolos — duplikat tetap lahir, sekarang dengan data sengaja dikotori dan tidak lagi tertangkap kunci normalisasi.
+
+Rekomendasi Business ke Lead (satu paragraf): PUTUSKAN model bertahap di atas — NPWP persis = blokir, kunci lain = peringatan, nama sendirian = bukan kandidat. Ini mempertahankan tahap 1 003-S untuk semua kunci kecuali satu pengecualian NPWP, dan pengecualian itu yang justru melindungi histori pajak; karena mesin kandidat sudah LIVE, putusan "blokir NPWP saja" adalah perubahan satu titik gerbang, bukan proyek baru. Accountant TIDAK diminta di butir ini (kebijakan perilaku input master, bukan perlakuan pajak); Accountant dipanggil hanya bila kelak merge master diangkat (Q-CD-4 003-S).
+
+### C. Yang TIDAK diusulkan blok ini
+
+- Mengubah angka/tabel di spec 135-S atau 003-S sebelum Lead memutus (blok ini usulan pendamping, bukan revisi diam-diam).
+- Tingkat prioritas `urgent`, pemicu firstResponseAt baru, WorkSchedule per departemen sebagai sumber jam SLA tahap 1, merge master pelanggan, validasi format NPWP online (keluarga identitas pajak, vonis Accountant bila diangkat).
+
+F-2026-10-25-040-S — Paket usulan Q-SLA135-1/2 + Q-CD-1. Status: USULAN SELESAI run ini; menunggu putusan Lead (satu paragraf per butir cukup). Pemilik: Business (usulan), Lead (putusan di Q-SLA135-1/2 spec 135-S dan Q-CD-1 spec 003-S). Butuh Accountant: TIDAK. Butuh kode di blok ini: TIDAK.
