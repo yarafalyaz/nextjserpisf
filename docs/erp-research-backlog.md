@@ -32394,6 +32394,210 @@ F-2026-10-25-048-S — Titik pesan-ulang + saran qty per (barang, gudang). Statu
 
 ---
 
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-050-S: tingkat pengingat penagihan piutang dari antrean F-089 (turunan umur + janji, tanpa angka karang)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Induk: F-2026-10-22-089-S (antrean penagihan piutang, LIVE penuh). Kartu: t_283cc339. ID F-2026-10-26-050-S diverifikasi bebas run ini 2026-10-26 00:04–00:19 WIB: backlog origin/main maks F-2026-10-25-049-V; grep `F-2026-10-26` di backlog + board origin/main = 0; PR terbuka tidak memuat 050/reminder/pengingat sebagai ID spec ini. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras kartu (dipegang spec ini): ambang hari tingkat = USULAN eksplisit untuk putusan Lead (Q-CR-* di bawah memakai awalan Q-COLR supaya tidak tabrakan register paparan kredit), JANGAN ditulis sebagai fakta/kebijakan; selaraskan ember umur existing `aging.ts`, jangan buat ember kedua; tingkat = turunan builder murni dari field existing, nol migrasi tahap 1; nol jurnal, nol denda/bunga baru (BR-COL-11 tetap wilayah vonis Accountant F-2026-10-22-093-V yang SUDAH terbit dan SUDAH terimplementasi sebagai dokumen denda terpisah — spec ini tidak menghitung ulang, tidak menerbitkan, tidak mengubahnya), nol kirim otomatis WA/email (BR-COL-12 tetap tertutup), nol credit-hold otomatis; kontak pelanggan hanya untuk pemegang izin antrean (BR-COL-10/Q-COL-4), ekspor tanpa kontak.
+
+Penamaan register: awalan `BR-CR-*` SUDAH terpakai register paparan kredit F-2026-10-21-017-S (BR-CR-01..10, backlog :4540/:20376) — register spec ini memakai `BR-COLR-*` (collection reminder) dan pertanyaan `Q-COLR-*`, acceptance `AC-COLR-*`. Jangan campur dengan BR-CR paparan kredit.
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_extract):
+- Accurate Syarat Pembayaran: sistem mengatur jangka waktu/jatuh tempo dan "otomatis mengingatkan" jatuh tempo pembayaran — https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/syarat-pembayaran/mengenal-fitur-syarat-pembayaran/ (BENCHMARK: monitoring jatuh tempo otomatis ada di Accurate; kanal/template pengingat ke pelanggan tidak dirinci halaman ini — tidak diklaim lebih dari isi halaman).
+- Accurate Umur Faktur Penjualan: kolom Umur (hr) dengan dasar perhitungan preferensi Tanggal Faktur ATAU Tanggal Jatuh Tempo; belum lunas dihitung jatuh tempo → hari ini — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/umur-faktur-penjualan/ (BENCHMARK: umur berbasis due adalah praktik pembanding; ISF existing memakai due acuan BR-COL-03, dipertahankan).
+- Zahir Reminder: fasilitas reminder mengetahui jatuh tempo piutang usaha, utang usaha, giro masuk, giro keluar; grafik + daftar jatuh tempo piutang usaha — https://www.zahironline.com/reminder/ dan https://www.zahironline.com/reminder/grafik-dan-daftar-jatuh-tempo-piutang-usaha/ (BENCHMARK: Zahir menyajikan daftar/grafik jatuh tempo sebagai permukaan monitoring internal; halaman resmi ini TIDAK menetapkan tingkat urgensi bertingkat, ambang hari eskalasi, denda, atau kirim otomatis ke pelanggan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 9284f262)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Builder antrean: `src/lib/reports/collection-queue.ts` — tahap turunan `COLLECTION_STAGES = [belum_diserahkan, sudah_diserahkan, lewat_janji]` (:34-40), label verbatim (:43-47); kosakata channel/outcome final Q-COL-2 (:50-67); `COLLECTION_SETTLED_EPSILON = 0.005` (:73); input builder membawa `dueDate` faktur (:82), `dueDate` exchange (:100), followUp `followedUpAt/outcome/promisedDate/deletedAt` (:105-111); baris keluar membawa `dueAcuan` (:130), `umurHari` hari kalender WIB sejak due acuan, negatif = belum jatuh tempo (:137-138), `lastFollowUpAt` (:140), `promiseDate` = promisedDate maksimum outcome janji (:141-142, dihitung :249-257); umur dihitung :259-262; tahap lewat_janji :264-278; urutan Q-COL-3 :306-330.
+- Due acuan BR-COL-03 terimplementasi persis: `dueAcuan = exchange ? exchange.dueDate : invoice.dueDate` (collection-queue.ts:237); exchange aktif terakhir per faktur :172-189; followUp terhapus disaring :208-214.
+- Loader fail-closed: `src/lib/reports/collection-queue-data.ts:22-26` mewajibkan `view_reports` DAN `view_sales_invoices` sebelum query; query massal faktur posted/partial belum terhapus + exchange item + followUp tidak terhapus + late fee terbit (:28-101); kontak pelanggan ikut hanya karena izin antrean (komentar :10-11, select :43-45).
+- Halaman + kartu: `src/app/(dashboard)/penjualan/antrean-penagihan/page.tsx:20-24` (izin catat dibaca halaman, loader menegakkan baca); `src/components/reports/collection-queue-card.tsx` menampilkan tahap/umur/sisa apa adanya tanpa hitung ulang (komentar :37-41), indikator "Ada denda terutang" dari dokumen denda SUDAH terbit (:124-128).
+- Denda SUDAH ada sebagai dokumen terpisah (bukan gap spec ini): builder antrean mengimpor `buildLateFeeOutstandingByInvoice` (collection-queue.ts:23) dan baris membawa `lateFeeOutstanding`/`hasOutstandingLateFee` indikator saja (:143-148, :300-302); read-model dokumen denda `src/lib/reports/sales-late-fee.ts:1-12` menegaskan UI tidak menghitung denda dan indikator = agregat dokumen posted/partial yang sudah terbit. Vonis dasar: F-2026-10-22-093-V (BR-COL-11 terjawab; tarif kontraktual per pelanggan, BUKAN ambang spec ini).
+- Model tindak lanjut: `InvoiceCollectionFollowUp` (prisma/schema.prisma:1709-1728) — followedUpAt, channel, outcome, promisedDate nullable, promisedAmount Decimal(15,2) nullable, deletedAt soft; aksi catat `createInvoiceCollectionFollowUp` izin `create_invoice_collection_followups` (src/actions/invoice-collection.actions.ts:51+, requirePermission di badan aksi), append-only, tanpa jurnal/paidAmount berubah (komentar berkas :1-16).
+- Ember umur existing SATU-SATUNYA yang boleh dirujuk: `src/lib/reports/aging.ts:11-36` — `AGING_BUCKETS = [Belum Jatuh Tempo, 1–30 Hari, 31–60 Hari, 61–90 Hari, > 90 Hari]`, `agingBucket(overdueDays)` batas <=0 / <=30 / <=60 / <=90.
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts): `view_sales_invoices` (:148), `create_invoice_collection_followups` (:178), `view_invoice_exchanges` (:179), `create_invoice_exchanges` (:180), `view_reports` (:428).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini di worktree basis 9284f262):
+- Tingkat pengingat/urgensi turunan per baris antrean: grep `reminderLevel|tingkatPengingat|collectionReminder|ReminderLevel` di src/ + prisma/ = 0. Baris antrean hari ini hanya membawa tahap (3 nilai) + `umurHari` mentah + `promiseDate`/`lastFollowUpAt` mentah — staf membaca angka hari sendiri dan menebak mana "diingatkan lembut" vs "dieskalasi"; tidak ada turunan seragam "sudah diingatkan sesudah janji lewat atau belum", tidak ada penanda "janji lewat belum ada tindak lanjut sesudahnya".
+- Pengiriman pengingat otomatis ke pelanggan: tetap ABSEN dan tetap TERTUTUP (BR-COL-12, BUTUH-VONIS Lead) — spec ini tidak membukanya; klik WA existing bukan pengingat tercatat (BR-COL-08).
+
+Bukan duplikasi: bukan F-089-S (tahap antrean — spec ini lapisan tingkat DI ATAS tahap yang sama, populasi dan builder sama, tanpa tahap kedua); bukan F-2026-10-25-025-S/038-S/043-S (statement per pelanggan + kirim manual WA/email statement — objek dokumen statement, bukan tingkat urgensi antrean); bukan F-093-V (dokumen denda — uang, vonis Accountant, sudah live; spec ini nol nominal); bukan paparan kredit F-017 (BR-CR — risiko kredit pelanggan, bukan urgensi penagihan per faktur).
+
+### 1. Workflow specification
+
+Aktor: Petugas Penagihan / Admin Penjualan (pembaca antrean + pencatat tindak lanjut), Supervisor Penjualan (pembaca antrean; penerima eskalasi manual di luar sistem tahap 1 — lihat Yang TIDAK diusulkan), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris `CollectionQueueRow` existing persis (invoiceId, tahap, dueAcuan, umurHari, promiseDate, lastFollowUpAt, sisa, hasOutstandingLateFee sebagai konteks tampil existing) — TIDAK ada dokumen/field masuk baru tahap 1.
+Dokumen keluar: kolom turunan `tingkatPengingat` + label tampil per baris antrean (read-model, dihitung builder saat render) + rekap hitungan per tingkat di ringkasan antrean (turunan dari baris yang sama). TIDAK ada dokumen keluar ke pelanggan tahap 1: tidak ada pesan WA/email yang dihasilkan, disiapkan, atau dikirim oleh tingkat ini.
+
+Alur:
+1. Builder existing membentuk baris antrean (tahap, umurHari, promiseDate, lastFollowUpAt) persis seperti hari ini — urutan dan populasi tidak berubah.
+2. Builder menurunkan `tingkatPengingat` per baris dari (tahap, umurHari, promiseDate, lastFollowUpAt) memakai tabel turunan §3. Tingkat adalah label urgensi internal untuk petugas, bukan status dokumen: tidak disimpan, tidak mengubah tahap, tidak mengubah urutan antrean Q-COL-3 (urutan tetap; tingkat hanya penanda kolom + filter/rekap — mengubah urutan = Q-COLR-4).
+3. Petugas membuka antrean, memakai tingkat untuk memilih faktur yang dihubungi lebih dulu dan nada tindak lanjut manualnya (telepon/WA manual/kunjungan/email manual lewat kanal existing). Menghubungi pelanggan tetap aksi manusia di luar builder; mencatat hasilnya tetap lewat form Catat Tindak Lanjut existing (BR-COL-06/08).
+4. Sesudah tindak lanjut tercatat, render berikut menghitung ulang tingkat dari followUp terakhir yang baru: janji baru yang belum lewat menurunkan baris keluar dari tingkat janji-lewat; tindak lanjut tanpa janji sesudah lewat tidak menghapus fakta pernah lewat — perilaku persisnya di tabel §3 (baris "sesudah dihubungi").
+5. Pembayaran tetap lewat SalesPayment existing; baris lunas keluar antrean (BR-COL-02) dan tingkatnya hilang bersamanya. Tingkat tidak pernah mencatat pembayaran, tidak membuat jurnal, tidak menerbitkan denda (BR-COL-07 tetap).
+6. Eskalasi tahap 1 = petugas/supervisor membaca tingkat tertinggi dan bertindak manual (telepon/kunjungan/catat tindak lanjut bersengketa bila faktual). Sistem tidak menaikkan izin, tidak menahan dokumen lain, tidak memblokir transaksi pelanggan (nol credit-hold), tidak mengirim apa pun otomatis.
+
+Kata tampil usulan (USULAN — verbatim final = Q-COLR-3 Lead bersama putusan ambang):
+- Judul kolom: `Tingkat Pengingat`.
+- Label tingkat (kunci turunan → label): `belum_perlu` → "Belum Perlu Diingatkan"; `pengingat_awal` → "Pengingat Awal"; `pengingat_lanjutan` → "Pengingat Lanjutan"; `eskalasi` → "Perlu Eskalasi"; `tanpa_acuan` → "Tanpa Acuan Tanggal".
+- Notice tambahan usulan (menempel di bawah COLLECTION_QUEUE_NOTICE_TEXT existing, tidak menggantinya): "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean + tingkat pengingat | `view_reports` (katalog:428) DAN `view_sales_invoices` (katalog:148) | loader collection-queue-data.ts:25-26 fail-closed sebelum query | TIDAK ada key baru; tingkat ikut baris yang sama, tidak tampil ke pemegang satu izin saja |
+| Lihat kontak pelanggan di baris | turunan dua izin di atas (Q-COL-4) | loader select phone/contactPerson :43-45 hanya sesudah gerbang | tidak berubah; tingkat tidak menambah/mengurangi akses kontak |
+| Catat tindak lanjut + janji (satu-satunya cara "sudah mengingatkan" tercatat) | `create_invoice_collection_followups` (katalog:178) | aksi invoice-collection.actions.ts requirePermission + validasi kosakata | tidak berubah; tingkat TIDAK bisa diubah manual lewat aksi apa pun tahap 1 |
+| Soft-delete tindak lanjut | `create_invoice_collection_followups` + juga `view_reports` (Q-COL-1) | aksi delete existing | tidak berubah; menghapus followUp terakhir mengubah turunan render berikut (dihitung ulang jujur, AC-COLR-9) |
+| Buat tukar faktur dari antrean | `create_invoice_exchanges` (katalog:180) | halaman page.tsx:22 | tidak berubah |
+| Ekspor antrean | tidak ada permukaan ekspor antrean tahap ini (Q-COL-4: ekspor tanpa kontak) | — | tingkat boleh ikut ekspor masa depan hanya tanpa kolom kontak; ekspor baru = pekerjaan terpisah, bukan spec ini |
+| Kirim pengingat ke pelanggan (WA/email, manual massal / otomatis) | TIDAK ADA key — dilarang tahap 1 | — | BR-COL-12 tetap BUTUH-VONIS Lead; key kirim tidak diciptakan spec ini |
+| Terbitkan dokumen denda | jalur dokumen denda existing F-093-V (di luar antrean) | sales-late-fee existing | tingkat TIDAK memicu, menyarankan nominal, atau membuka form denda |
+
+Tidak ada permission key baru diusulkan. Key baru apa pun = Q-COLR-5 Lead, bukan karangan spec.
+
+### 3. Status-transition matrix (turunan, nol kolom baru tahap 1)
+
+Populasi: hanya baris yang sudah masuk antrean existing (posted/partial, sisa > epsilon, belum terhapus). Di luar antrean tidak ada tingkat.
+
+Definisi sinyal (semua TERVERIFIKASI-KODE dari builder existing): `umurHari` = hari kalender WIB sejak dueAcuan (null tanpa due); `janjiLewat` = promiseDate != null dan hari janji < hari ini WIB (pola collection-queue.ts:264); `dihubungiSesudahJanjiLewat` = lastFollowUpAt != null dan hari lastFollowUpAt >= hari promiseDate (perbandingan hari kalender WIB — fisik persis Backend, Q-COLR-6).
+
+| # | Kondisi baris (turunan) | Tingkat | Arti kerja untuk petugas |
+|---|---|---|---|
+| T0 | umurHari == null (tanpa due acuan dan tanpa janji) | `tanpa_acuan` | tidak ada tanggal untuk menilai urgensi; petugas melengkapi due/janji lewat jalur existing, sistem tidak menebak (BR-COL-03) |
+| T1 | umurHari <= 0 dan tidak janjiLewat | `belum_perlu` | belum jatuh tempo; tidak diingatkan sebagai tunggakan |
+| T2 | umurHari > 0, tidak janjiLewat, bukan T3/T4 | `pengingat_awal` | sudah lewat due, belum ada janji yang dilanggar; ingatkan biasa |
+| T3 | janjiLewat dan TIDAK dihubungiSesudahJanjiLewat | `pengingat_lanjutan` | janji terlewat dan belum ada tindak lanjut tercatat sesudah tanggal janji — hubungi dan catat janji baru/hasilnya |
+| T4 | janjiLewat dan dihubungiSesudahJanjiLewat (sudah dihubungi sesudah janji lewat, sisa masih > 0, belum ada janji baru yang menutup) | `eskalasi` (USULAN nama+ambang, Q-COLR-1/3) | janji sudah dilanggar dan sudah pernah ditindaklanjuti sesudahnya tanpa penyelesaian tercatat — naik ke supervisor secara manual |
+| T5 | janji baru tercatat dengan promisedDate >= hari ini | keluar dari T3/T4; tingkat dinilai ulang dari umurHari (T1/T2) | janji hidup menggantikan janji lewat (konsisten tahap existing yang keluar lewat_janji) |
+
+Transisi terjadi hanya karena render ulang sesudah fakta existing berubah (pembayaran, tindak lanjut baru, janji baru, exchange baru/terhapus, soft-delete followUp). Tidak ada pemicu waktu yang menulis apa pun; tidak ada cron; membuka halaman besok bisa memberi tingkat berbeda untuk fakta yang sama karena `umurHari` bergerak — itu sifat turunan, dinyatakan jujur di notice.
+
+Pertanyaan ambang yang TIDAK diputus spec ini (semua BUTUH-VONIS Lead, dicatat Q-COLR-1): apakah `pengingat_awal` perlu dipecah mengikuti ember aging existing (1–30 / 31–60 / 61–90 / >90 dari aging.ts:31-35) menjadi lebih dari satu tingkat, dan apakah `eskalasi` juga terpicu oleh umur semata (mis. ember >90 tanpa janji) atau hanya oleh janji-lewat-yang-sudah-dihubungi. Default aman spec selama belum diputus: tingkat mengikuti tabel di atas persis (umur hanya membedakan belum_perlu vs pengingat_awal; kedalaman ember aging tetap kolom Umur existing, bukan tingkat kedua) — builder tidak boleh mengarang ambang hari tambahan.
+
+Urutan antrean: TIDAK berubah tahap 1 (Q-COL-3 tetap: lewat_janji tertua > due terdekat > sisa terbesar). Tingkat tampil sebagai kolom + rekap hitungan; filter per tingkat dan/atau urutan berbasis tingkat = Q-COLR-4.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-COLR-01 | Tingkat pengingat selalu turunan builder murni dari field existing baris antrean (tahap, umurHari, promiseDate, lastFollowUpAt); tidak ada kolom tingkat tersimpan di SalesInvoice/InvoiceCollectionFollowUp tahap 1. Kolom tersimpan = keputusan terpisah Backend/Lead (Q-COLR-2). | USULAN di atas TERVERIFIKASI-KODE collection-queue.ts:121-149 |
+| BR-COLR-02 | Ember umur satu-satunya = aging.ts (Belum Jatuh Tempo / 1–30 / 31–60 / 61–90 / >90). Tingkat dilarang mendefinisikan ember hari kedua; pemecahan tingkat berbasis kedalaman umur hanya boleh merujuk batas ember itu dan hanya sesudah Q-COLR-1 diputus. | USULAN di atas TERVERIFIKASI-KODE aging.ts:11-36 |
+| BR-COLR-03 | Due acuan dan umur mengikuti BR-COL-03 existing tanpa tafsir baru: exchange aktif dueDate, selain itu faktur dueDate; keduanya kosong = umur null = tingkat `tanpa_acuan`, tidak ditebak dari tanggal faktur. | TERVERIFIKASI-KODE collection-queue.ts:237,259-262 |
+| BR-COLR-04 | Janji terakhir = promisedDate maksimum dari tindak lanjut tidak terhapus ber-outcome `terhubung_janji_bayar` (definisi existing); janji dari followUp terhapus tidak menghidupkan/mematikan tingkat. | TERVERIFIKASI-KODE collection-queue.ts:249-257,208-214 |
+| BR-COLR-05 | "Sudah dihubungi sesudah janji lewat" hanya terbukti dari InvoiceCollectionFollowUp tercatat (followedUpAt) — klik WhatsApp, klik mailto, membuka halaman, atau membuka detail faktur TIDAK menaikkan/menurunkan tingkat (pola BR-COL-08). | USULAN pola TERVERIFIKASI-KODE BR-COL-08 spec F-089-S |
+| BR-COLR-06 | Tingkat tidak mengirim pesan apa pun ke pelanggan, tidak menyiapkan draf pesan, tidak menjadwalkan kirim. Pengiriman manual per faktur lewat tombol WhatsApp existing dan pengiriman otomatis tetap wilayah BR-COL-12 (BUTUH-VONIS Lead, tertutup). | USULAN menegaskan BR-COL-12 |
+| BR-COLR-07 | Tingkat tidak membuat jurnal, tidak mengubah paidAmount/status/tahap faktur, tidak mencatat pembayaran, tidak menerbitkan/menghitung dokumen denda. Indikator denda terutang existing (dokumen sudah terbit) tampil apa adanya dan bukan masukan rumus tingkat tahap 1 — menjadikannya pemicu eskalasi = aturan baru BUTUH-VONIS (Q-COLR-7). | USULAN menegaskan BR-COL-07 + TERVERIFIKASI-KODE collection-queue.ts:143-148 |
+| BR-COLR-08 | Tingkat tidak menahan dokumen apa pun: tidak ada credit-hold, blokir SO/invoice/penawaran, atau penolakan transaksi yang dipicu tingkat, otomatis maupun manual-dari-tingkat. Penegakan kredit tetap wilayah advisory/gerbang kredit F-017/F-2026-10-25-035-S. | USULAN (nol penahan) |
+| BR-COLR-09 | Kontak pelanggan (phone/contactPerson) hanya tampil ke pemegang izin antrean (dua key §2); tingkat, rekap tingkat, dan ekspor masa depan tidak membawa kontak. Rekap per tingkat hanya hitungan baris + total sisa. | USULAN menegaskan BR-COL-10/Q-COL-4 |
+| BR-COLR-10 | UI menampilkan tingkat + label dari builder apa adanya; UI tidak menghitung ulang umur/janji/tingkat dan tidak mengarang ambang di komponen (pola AC-COL-10). Kata label final verbatim = Q-COLR-3. | USULAN pola TERVERIFIKASI-KODE collection-queue-card.tsx:37-41 |
+| BR-COLR-11 | Ambang/label tingkat adalah kebijakan perilaku inti: nama tingkat, pemecahan ember, dan pemicu eskalasi berbasis umur = BUTUH-VONIS Lead (Q-COLR-1/3), bukan fakta dan bukan konstanta kode yang boleh ditanam Backend sebelum diputus. | BUTUH-VONIS Lead |
+| BR-COLR-12 | Denda/bunga keterlambatan TIDAK dihitung, ditambah, atau disarankan nominalnya oleh tingkat. Perlakuan denda tetap vonis F-2026-10-22-093-V + dokumen denda existing; kebutuhan vonis Accountant baru hanya lahir bila kelak ada usulan nominal/aturan denda baru (BR-COL-11 tidak dibuka ulang spec ini). | BUTUH-VONIS Accountant hanya bersyarat (tidak diminta run ini) |
+
+### 5. Feature matrix (BENCHMARK akses live 2026-10-26)
+
+| Kemampuan | Accurate | Zahir | ISF hari ini (TERVERIFIKASI-KODE) | Usulan 050-S |
+|---|---|---|---|---|
+| Monitoring jatuh tempo piutang | Ada: syarat pembayaran mengatur jatuh tempo + sistem otomatis mengingatkan jatuh tempo (help syarat pembayaran di atas) | Ada: reminder jatuh tempo piutang/utang/giro + grafik dan daftar jatuh tempo piutang (zahironline.com/reminder) | Ada internal: antrean kerja per faktur F-089 (tahap + umur + janji), bukan sekadar laporan | dipertahankan; ditambah tingkat urgensi internal per baris |
+| Umur piutang berbasis jatuh tempo | Ada: Umur (hr) dasar Tanggal Faktur / Tanggal Jatuh Tempo preferensi (help umur faktur di atas) | daftar jatuh tempo piutang (URL di atas); rincian dasar umur tidak dirinci halaman resmi yang diakses — tidak diklaim | Ada: umurHari dari due acuan BR-COL-03 + ember aging.ts untuk laporan | tingkat merujuk ember aging.ts, tanpa ember kedua (BR-COLR-02) |
+| Tingkat urgensi bertingkat per faktur (lembut vs eskalasi) | Tidak ditetapkan halaman help resmi yang diakses run ini — tidak diklaim ada/tidak | Tidak ditetapkan halaman reminder resmi yang diakses — tidak diklaim | ABSEN: hanya tahap 3 nilai + umur mentah (grep tingkat = 0) | turunan §3 (ambang final Q-COLR-1 Lead) |
+| Jejak tindak lanjut + janji bayar per faktur | Tidak diverifikasi run ini — tidak diklaim | Tidak diverifikasi run ini — tidak diklaim | Ada: InvoiceCollectionFollowUp append-only + janji (F-089 tahap 2 live) | menjadi sinyal tingkat (BR-COLR-04/05), tanpa model baru |
+| Pengingat otomatis ke pelanggan | Halaman distributor Accurate (pemasaran, bukan help) menyebut notifikasi otomatis mendekati jatuh tempo — dicatat BENCHMARK pemasaran lemah, bukan dasar bangun | Tidak ditetapkan halaman resmi yang diakses — tidak diklaim | ABSEN dan TERTUTUP (BR-COL-12) | tetap tertutup; tingkat internal saja (BR-COLR-06) |
+| Denda keterlambatan | Tidak dibahas halaman yang diakses — tidak diklaim | term-of-sales/denda dirujuk spec F-089-S §7 (BENCHMARK lama) | Ada dokumen denda terpisah F-093-V (vonis Accountant, indikator di antrean) | tidak disentuh (BR-COLR-07/12) |
+
+### 6. Acceptance criteria + edge cases (QA, falsifikasi)
+
+| ID | Skenario (fakta existing → tingkat wajib) |
+|---|---|
+| AC-COLR-1 | Faktur belum jatuh tempo (umurHari <= 0, tanpa janji lewat) = `belum_perlu`; tampil sebagai tunggakan/tingkat lanjut = MERAH. Cabut dueAcuan dari builder (umur null ikut karang) = tes MERAH. |
+| AC-COLR-2 | Umur > 0 tanpa janji apa pun = `pengingat_awal`; janji masa depan tercatat = tetap dinilai dari umur (tidak meloncat eskalasi) = MERAH bila tingkat naik karena janji yang belum lewat. |
+| AC-COLR-3 | Janji kemarin + sisa > 0 + tidak ada followUp bertanggal >= tanggal janji = `pengingat_lanjutan`. Cabut perbandingan lastFollowUpAt dari turunan = MERAH (baris salah turun tingkat). |
+| AC-COLR-4 | Janji kemarin + followUp tercatat sesudah tanggal janji + sisa masih > 0 + tidak ada janji baru = `eskalasi`. Menambah janji baru >= hari ini = keluar eskalasi pada render berikut (dinilai ulang); tidak berubah = MERAH. |
+| AC-COLR-5 | Tanpa due faktur maupun exchange dan tanpa janji: baris tampil, Umur "—", tingkat `tanpa_acuan`. Sistem menebak due dari tanggal faktur = MERAH. |
+| AC-COLR-6 | Klik tombol WhatsApp saja (tanpa simpan Catat Tindak Lanjut): tingkat render berikut TIDAK berubah. Berubah = MERAH (BR-COLR-05). |
+| AC-COLR-7 | Tingkat tampil tanpa izin lengkap: pemegang hanya `view_reports` atau hanya `view_sales_invoices` tidak mendapat antrean maupun tingkat (loader fail-closed existing). Satu key membuka = MERAH. |
+| AC-COLR-8 | Mencatat tindak lanjut yang mengubah tingkat: Jurnal = 0, paidAmount/status/tahap faktur tidak berubah, dokumen denda tidak terbit. Satu pun berubah = MERAH (BR-COLR-07). |
+| AC-COLR-9 | Soft-delete followUp terakhir yang menjadi bukti "sudah dihubungi": render berikut menghitung ulang dari followUp tersisa (tingkat boleh kembali naik); tingkat tersimpan diam-diam tidak berubah = MERAH untuk klaim turunan tahap 1. |
+| AC-COLR-10 | UI mengarang tingkat: ganti label/ambang turunan di builder = UI mengikuti; komponen menghitung sendiri dari umurHari mentah = MERAH (pola AC-COL-10). |
+| AC-COLR-11 | Rekap per tingkat: jumlah hitungan semua tingkat = total baris antrean; total sisa rekap = totalSisa existing. Selisih = MERAH. Baris lunas/cancelled/deleted tidak berhak tingkat. |
+| AC-COLR-12 | Kontak bocor lewat tingkat: rekap/ekspor/permukaan tanpa izin antrean memuat phone/contactPerson = MERAH (BR-COLR-09). |
+| EC-COLR-1 | Janji dan followUp di hari kalender WIB yang sama dengan tanggal janji: diperlakukan "dihubungi sesudah janji lewat" atau belum — perilaku persis perbandingan hari = Q-COLR-6 Backend putus dalam tes tepi; ambigu diam-diam = MERAH. |
+| EC-COLR-2 | Dua followUp: satu janji terlewat lama, satu janji baru maksimum masa depan — janji terakhir existing (maksimum) yang berlaku: tingkat tidak boleh eskalasi dari janji lama yang sudah tertutup janji baru. Eskalasi = MERAH. |
+| EC-COLR-3 | Exchange aktif berubah (dueDate tukar faktur menggantikan due faktur): umur dan tingkat ikut due acuan baru render berikut; exchange di-soft-delete = kembali ke due faktur. Tingkat basi = MERAH. |
+| EC-COLR-4 | Faktur dengan dokumen denda terutang existing: indikator denda tampil seperti hari ini; tingkat TIDAK naik hanya karena indikator itu (BR-COLR-07). Naik karenanya = MERAH sampai Q-COLR-7 diputus lain. |
+| EC-COLR-5 | Sisa tepat di epsilon lunas (<= 0,005): baris keluar antrean, tidak ada tingkat yatim di rekap. Baris hilang tetapi rekap tetap menghitungnya = MERAH. |
+| EC-COLR-6 | followUp outcome `sengketa` sesudah janji lewat: tetap fakta "dihubungi" untuk turunan waktu, tetapi petugas membaca outcome dari jejak existing — tingkat tidak mengarang label sengketa baru tahap 1. Label karangan = MERAH. |
+
+### 7. Backlog implementasi (turunan spec ini; ID spec F-2026-10-26-050-S)
+
+Urutan mengikat: putusan Lead Q-COLR-1/3 (ambang + kata) lebih dulu — tanpa itu Backend tidak menanam ambang. Semua turunan tahap 1 nol migrasi.
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-26-050-S | Spec kontrak tingkat pengingat ini (dokumen) | Business | — |
+| (turunan) putusan Q-COLR-1 + Q-COLR-3 (+ Q-COLR-4/5 bila dibuka) | Lead | spec ini merged | — |
+| (turunan) turunan `tingkatPengingat` di builder collection-queue + rekap per tingkat + tes AC-COLR-1..5,9,11 (fisik perbandingan hari Q-COLR-6) | Backend | putusan Lead; klaim file builder di board dulu | — |
+| (turunan) kolom Tingkat Pengingat + filter/rekap tampil di kartu antrean, label verbatim server, nol hitung ulang | Frontend | kontrak Backend; grep e2e antrean-penagihan dulu | — |
+| (turunan) falsifikasi AC-COLR-1..12 + EC-COLR-1..6 atas head persis | QA | head Backend/Frontend | — |
+
+### 8. Pertanyaan putusan
+
+- Q-COLR-1 (Lead, BUTUH-VONIS perilaku inti): ambang tingkat final — (a) tabel §3 apa adanya (umur hanya memisah belum_perlu/pengingat_awal; eskalasi hanya dari janji-lewat-sudah-dihubungi), atau (b) pengingat_awal dipecah per ember aging.ts (1–30/31–60/61–90/>90), dan/atau (c) umur ember >90 tanpa janji ikut memicu eskalasi? Business merekomendasikan (a) tahap 1: paling sedikit angka karang, ember tetap terbaca di kolom Umur; pecahan ditambah hanya bila pemakaian nyata menuntut.
+- Q-COLR-2 (Backend sesudah Q-COLR-1, Lead mengesahkan): kolom tersimpan untuk tingkat — tetap turunan murni (rekomendasi tahap 1) atau ada kebutuhan audit historis "tingkat pada tanggal X" yang membenarkan snapshot tersimpan? Tanpa kebutuhan audit yang ditunjuk, kolom baru ditolak (YAGNI + risiko basi).
+- Q-COLR-3 (Lead): kata label final §1 (nama `eskalasi`/`Perlu Eskalasi` termasuk kata supervisor di notice) — verbatim mengikat Frontend.
+- Q-COLR-4 (Lead): filter per tingkat dan/atau perubahan urutan antrean berbasis tingkat dibuka tahap 1 atau ditunda? Default aman: urutan Q-COL-3 tidak berubah; filter tampil saja bila Frontend menilai murah tanpa ubah urutan.
+- Q-COLR-5 (Lead): permission key baru untuk tingkat — tidak diusulkan; dibuka hanya bila ada aktor yang boleh melihat antrean tanpa tingkat (atau sebaliknya) dari kebutuhan nyata.
+- Q-COLR-6 (Backend): persis perbandingan hari WIB untuk "dihubungi sesudah janji lewat" (hari kalender followedUpAt >= hari promiseDate vs timestamp mentah) — putus dalam tes tepi EC-COLR-1, jangan diam-diam.
+- Q-COLR-7 (Lead, bersyarat Accountant): indikator denda terutang existing boleh menjadi pemicu/penambah tingkat? Default TIDAK (BR-COLR-07); mengubahnya menyentuh perilaku dokumen uang F-093-V sehingga butuh Lead + konfirmasi Accountant, bukan keputusan builder.
+
+Accountant: TIDAK diminta vonis run ini — nol nominal, nol jurnal, nol tarif; hanya dipanggil bersyarat lewat Q-COLR-7.
+
+### Yang TIDAK diusulkan run ini
+
+- Pengiriman pengingat otomatis atau massal ke pelanggan via WA/email, penjadwalan kirim, template pesan penagihan, dan jejak "pesan terkirim" sebagai status (BR-COL-12 tetap tertutup, BUTUH-VONIS Lead terpisah).
+- Denda/bunga baru, perubahan dokumen denda F-093-V, nominal janji sebagai tagihan, dan alokasi pembayaran per janji (BR-COL-09/11 tetap).
+- Credit-hold / blokir transaksi pelanggan berbasis tingkat atau umur (BR-COLR-08) — penegakan kredit tetap jalurnya sendiri.
+- Kolom tingkat tersimpan, histori tingkat, tren tingkat per pelanggan, dan skor kolektibilitas pelanggan (menunggu Q-COLR-2 + bukti kebutuhan).
+- Permission key baru, peran "supervisor penagihan" baru, dan penugasan petugas per faktur (assignment) — antrean tetap populasi berizin yang sama.
+- Mengubah tahap, urutan Q-COL-3, aging/statement existing, atau ambang 7 hari antrean lead (domain lain).
+
+F-2026-10-26-050-S — Tingkat pengingat penagihan piutang dari antrean F-089. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-COLR-1/Q-COLR-3, lalu turunan Backend (Q-COLR-6), konsumen Frontend, falsifikasi QA. Pemilik usulan: Business (spec), Lead (ambang/kata), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap ini (bersyarat hanya Q-COLR-7).
+## PUTUSAN LEAD 2026-10-26 00:40 WIB — gerbang inti F-2026-10-25-047-S (Q-LFU-1/2), F-2026-10-25-048-S (Q-ROP-1/2/3), F-2026-10-26-050-S (Q-COLR-1..7)
+
+> **Slot putusan**: kartu Lead `t_befabf3d` (lanjutan spec Business t_6e33f048 + t_283cc339). Bukti live run ini: `origin/main` `c25f04e3` (backlog berisi 047-S baris 32157 + 048-S baris 32289; 050-S masih di PR #928 head `693b55d1` OPEN MERGEABLE, vonis Accountant 26 Okt 2026 00:27 WIB komentar 6400784439); `lead-followups.ts` (builder tanpa filter status, `lead-followups.test.ts:119-125` pengunci "status apa pun tampil"); `collection-queue.ts:237,249-278` (dueAcuan, promiseDate maksimum, janjiLewat); `aging.ts:11-36` (ember 1-30/31-60/61-90/>90); `item-warehouse-setting.actions.ts:111,159` (tulis ItemWarehouseSetting = `edit_items`, baca `view_items`); katalog `view_leads:369`, `edit_items`, `view_reports:428`, `view_sales_invoices:148`, `create_invoice_collection_followups:178`. Tanpa kode/schema/migrasi di putusan ini. Accountant diminta HANYA bersyarat Q-COLR-7 (sudah dijawab tertutup, lihat butir 3g).
+
+### 1. F-2026-10-25-047-S — antrean follow-up lead (Q-LFU)
+
+- **Q-LFU-1 TERPUTUS (terbelah per status, rekomendasi Business disahkan):** lead `lost` KELUAR dari antrean follow-up lewat; lead `won` dan lead ber-`convertedAt` TETAP di antrean sampai aktivitas terjadwalnya diselesaikan lewat jalur existing (`completeLeadActivity` F-2026-10-25-008-S). Kriteria persis Backend: baris disaring hanya bila `status == "lost"` (string persis kosakata halaman `new/contacted/qualified/proposal/won/lost`); `convertedAt` TIDAK menjadi penyaring sendiri (lead terkonversi yang statusnya bukan `lost` tetap tampil — konversi bukan penutup janji purnajual). Alasan: `lost` = tidak ada janji hidup, menampilkannya = derau antrean; `won` = janji purnajual nyata (jadwal tercatat tidak boleh ditelan diam-diam, BR-LFU-08 default aman dipertahankan untuk won). Dampak sadar: tes pengunci existing `lead-followups.test.ts:119-125` WAJIB diubah Backend menjadi kasus terbelah (won tampil, lost absen) — perubahan tes ini disahkan putusan ini, bukan regresi. AC-LFU baru: lead lost berjadwal lewat TIDAK tampil; lead won berjadwal lewat tampil; reopen/complete tetap berlaku untuk yang tampil.
+- **Q-LFU-2 TERPUTUS: filter per-sales `assignedTo` DITUNDA tahap 1 — antrean tetap global per `view_leads`.** Alasan: belum ada bukti kebutuhan per-sales dari pemakaian (satu halaman prospek, tim kecil); filter diam-diam = scope baru tanpa kebutuhan (BR-LFU-09). Loader/kartu TIDAK diubah untuk ini. Dibuka lagi hanya bila ada keluhan/kebutuhan nyata tercatat (sales tidak bisa menemukan lead sendiri di antrean) lewat kartu terpisah — Backend/Frontend dilarang menyiapkan parameter `assignedTo` diam-diam tahap ini.
+
+### 2. F-2026-10-25-048-S — titik pesan-ulang (Q-ROP)
+
+- **Q-ROP-1 TERPUTUS: jendela laju pakai = 90 hari kalender WIB berjalan; sumber laju SAH = `MaterialIssue` berstatus `completed` per gudang SAJA, termasuk issue ber-`projectId`/`workOrderId` terisi.** Rumus mengikat BR-ROP-02: laju harian per (barang, gudang) = total qty `MaterialIssueItem` pada issue `completed` dengan `warehouseId` gudang itu dan tanggal issue dalam 90 hari kalender WIB terakhir (inklusif hari ini), dibagi 90. Issue proyek/bengkel ADALAH pemakaian persediaan ISF yang nyata (inti bisnis fabrikasi) — mengecualikannya mengecilkan laju secara sistematis; penjualan tidak punya jalur issue per gudang terpisah di model ini dan dilarang ditebak sebagai sumber kedua tahap 1. Tanpa issue completed dalam jendela (laju 0 / barang baru): titik = minimum efektif, tertanda persis `"tanpa laju"` (BR-ROP-02). Jendela 90 hari dipilih karena: cukup panjang meredam lonjakan proyek sesaat, cukup pendek mengikuti pola pakai bengkel berjalan; angka ini PUTUSAN Lead (bukan fakta Business) dan hanya diubah lewat putusan baru, bukan konstanta diam-diam.
+- **Q-ROP-3 TERPUTUS: key tulis lead time = reuse `edit_items`, TANPA key baru.** Selaras preseden Q-MS-1 yang sudah live (`item-warehouse-setting.actions.ts:111` — atur override minimum per gudang = `edit_items`, baca `view_items`). Key khusus pembelian/per-gudang = izin mati tahap 1 + perubahan katalog/seed tanpa kebutuhan terbukti. Siapa pun yang boleh mengatur minimum per gudang boleh mengatur lead time penampung yang sama.
+- **Q-ROP-2 ARAH MENGIKAT untuk Backend (fisik tetap milik Backend): penampung = `ItemWarehouseSetting.leadTimeDays` per (barang, gudang) — SATU penampung tahap 1.** Alasan: titik dihitung per (barang, gudang) di atas minimum efektif per pasangan yang sama; dua penampung (`VendorItemPrice` + gudang) = sumber kebenaran ganda untuk satu titik. `VendorItemPrice.leadTimeDays` per vendor DITUNDA sadar: dibuka lagi hanya bila ada bukti lead time nyata berbeda per vendor untuk barang sama DAN staf memilih vendor per saran — tahap ini saran tidak memilih vendor. Fisik persis (nullable, bilangan bulat >= 0, kosong = tidak dinilai BR-ROP-03; penolakan negatif; ActivityLog pola existing; loader/builder titik + saran qty BR-ROP-04 selisih ke titik dengan PO masuk `ordered`/`partial_received` sebagai pengurang) diputus Backend dalam kartu fisiknya, WAJIB dilaporkan balik ke Lead bila bertabrakan dengan skema berjalan. Migrasi schema wilayah Backend — Lead tidak menulis schema di sini.
+
+### 3. F-2026-10-26-050-S — tingkat pengingat penagihan (Q-COLR)
+
+- **Q-COLR-1 TERPUTUS: opsi (a) SAH tahap 1 persis tabel §3 spec 050-S.** `pengingat_awal` TIDAK dipecah per ember aging; eskalasi TIDAK dipicu umur semata (ember >90 tanpa janji tetap `pengingat_awal`). Titik = minimum makna: umur hanya memisah `belum_perlu`/`pengingat_awal`; `pengingat_lanjutan` = janji lewat + belum dihubungi sesudah janji; `eskalasi` = janji lewat + sudah dihubungi sesudahnya tanpa penyelesaian. Kedalaman umur tetap terbaca di kolom Umur/ember `aging.ts` existing — dilarang ember hari kedua (BR-COLR-02). Pecahan per ember hanya lewat putusan baru berdasar pemakaian nyata.
+- **Q-COLR-3 TERPUTUS: kata label FINAL verbatim (mengikat Frontend, dilarang parafrase):** judul kolom `Tingkat Pengingat`; kunci→label: `tanpa_acuan` → `Tanpa Acuan Tanggal`, `belum_perlu` → `Belum Perlu Diingatkan`, `pengingat_awal` → `Pengingat Awal`, `pengingat_lanjutan` → `Pengingat Lanjutan`, `eskalasi` → `Perlu Eskalasi`. Notice tambahan FINAL (menempel di bawah `COLLECTION_QUEUE_NOTICE_TEXT` existing, tidak menggantinya): `Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda.` Makna "tidak membuat jurnal atau denda" dipertahankan sesuai syarat vonis Accountant.
+- **Q-COLR-2 TERPUTUS: tetap turunan murni, TANPA kolom tersimpan tahap 1.** Tidak ada kebutuhan audit historis "tingkat pada tanggal X" yang ditunjuk; kolom snapshot = basi + migrasi tanpa kebutuhan (YAGNI). Turunan dihitung builder saat render dari field existing (BR-COLR-01).
+- **Q-COLR-4 TERPUTUS: urutan antrean Q-COL-3 TIDAK berubah tahap 1; filter per tingkat DIBUKA sebagai filter tampil saja** (klien/server menyaring baris yang sudah diturunkan, tanpa mengubah urutan, populasi, atau rekap total antrean penuh — rekap per tingkat tetap atas populasi penuh, AC-COLR-11). Urutan berbasis tingkat = putusan terpisah kelak.
+- **Q-COLR-5 TERPUTUS: TANPA permission key baru.** Tingkat ikut gerbang existing `view_reports` DAN `view_sales_invoices` (loader fail-closed); tidak ada aktor yang dibedakan akses tingkatnya tahap 1.
+- **Q-COLR-6 ARAH MENGIKAT untuk Backend: perbandingan = hari kalender WIB** — `dihubungiSesudahJanjiLewat` benar bila hari kalender WIB `lastFollowUpAt >=` hari kalender WIB `promiseDate` (bukan timestamp mentah). Follow-up tepat di hari janji TERHITUNG sudah dihubungi (EC-COLR-1 tertutup dengan definisi ini). Backend mengunci dengan tes tepi hari-sama; menyimpang = laporkan ke Lead, jangan diam-diam.
+- **Q-COLR-7 TERTUTUP tahap 1: indikator denda `hasOutstandingLateFee` BUKAN masukan tingkat** — meratifikasi vonis Accountant PR #928 komentar 6400784439 (26 Okt 2026 00:27 WIB). Tingkat tidak menerbitkan/menghitung/menyarankan denda; credit-hold dari tingkat dilarang (BR-COLR-07/08). Dibuka lagi hanya dengan vonis Accountant baru + rekonsiliasi indikator vs dokumen denda posted.
+
+### Dampak buka-jalan (urusan sesudah putusan ini)
+
+Urutan mengikat: (i) putusan ini + PR #928 ter-merge -> (ii) Backend: ubah builder lead-followups untuk Q-LFU-1; fisik 048-S (penampung + builder titik/saran, klaim `prisma/schema.prisma` dulu); builder `tingkatPengingat` collection-queue untuk 050-S -> (iii) Frontend konsumen sesudah kontrak Backend stabil (bukan edit paralel file sama) -> (iv) QA falsifikasi AC-LFU (termasuk kasus terbelah won/lost) + AC-ROP-B1..B5 + AC-COLR-1..12/EC-1..6 atas head persis. Kartu turunan dibuat Lead di board; spec Business tidak diubah putusan ini selain dirujuk.
+
+F-2026-10-25-047-S / F-2026-10-25-048-S / F-2026-10-26-050-S — Status sesudah putusan: Q-LFU-1/2, Q-ROP-1/3 (+ arah Q-ROP-2), Q-COLR-1..7 TERPUTUS Lead 2026-10-26 00:40 WIB. Pemilik berikutnya: Backend (fisik ketiga domain), Frontend (konsumen), QA (falsifikasi). Accountant: Q-COLR-7 sudah tertutup oleh vonisnya; tidak diminta lagi tahap ini.
+
+---
+
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-051-S: antrean verifikasi DP menunggu konfirmasi (umur menunggu + jarak ke ambang invoice turunan, tanpa angka karang)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_16fe0405. ID F-2026-10-26-051-S diverifikasi bebas run ini 2026-10-26 00:37 WIB: backlog origin/main maks F-2026-10-25-049-V; 050-S di PR #928 OPEN (head 693b55d1); grep `F-2026-10-26-051` di backlog + board origin/main dan daftar PR terbuka = 0 sebelum tulis. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
