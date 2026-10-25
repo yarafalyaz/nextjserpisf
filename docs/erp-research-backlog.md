@@ -31166,3 +31166,233 @@ Selisih jujur: ISF sudah punya master Tax generik + faktur pajak dokumen; yang a
 - Menggabungkan pajak potong (WithholdingTaxType/PPh) ke penampung ini — objek pajak berbeda.
 
 F-2026-10-25-041-S — Kode pajak + DPP default per barang/jasa. Status: SPEC SELESAI run ini; gerbang pertama vonis Accountant Q-ITX-1, lalu fisik Backend Q-ITX-2. Pemilik usulan: Business (spec), Accountant (vonis kode/tarif), Lead (Q-ITX-3/4), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: YA (Q-ITX-1).
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-039-S: riwayat harga penawaran per pelanggan×barang (turunan baris QuotationItem; objek PENAWARAN, BUKAN harga transaksi faktur F-2026-10-25-028-S)
+
+> **Slot**: F-2026-10-25-039-S. Diperiksa bentrok 2026-10-25 19:50 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-039` di backlog+board origin/main = 0; judul/head PR terbuka memuat `039` = 0 (PR terbuka tertinggi 038-S di #889/#890); ID 001..037-S terpakai di main, 038-S di PR terbuka. ID 039 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_a5fc0065. Dokumen spec saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Asal topik**: topik tertunda eksplisit F-2026-10-25-028-S §"Yang TIDAK diusulkan" — "Riwayat harga penawaran (QuotationItem belum transaksi): objek berbeda, jangan dicampur ke fakta faktur." Spec ini objek itu, dengan populasi dan label yang WAJIB beda dari 028-S.
+> **Aturan keras spec ini**: harga penawaran BUKAN harga transaksi. Harga di baris penawaran adalah harga yang DITAWARKAN pada satu revisi penawaran — belum tentu terkirim, belum tentu diterima, belum tentu jadi transaksi. Label permukaan, nama builder, dan notice WAJIB membedakan dari riwayat harga faktur 028-S. Dilarang auto-fill/rekomendasi harga ke penawaran baru dari riwayat ini (penolakan yang sama yang berlaku di 028-S untuk faktur, berlaku di sini). Status penawaran menentukan makna harga — lihat BR-QPH-02.
+
+### 0. Ringkasan
+
+Penjual menyusun penawaran baru untuk pelanggan lama hari ini tidak bisa menjawab dari satu permukaan: "barang Y terakhir kami tawarkan ke pelanggan X di harga berapa, di penawaran mana, statusnya apa — diterima, ditolak, atau masih draft?" Harga rencana hidup di `CustomerPriceList` (F-2026-10-25-001-S), harga transaksi aktual hidup di baris faktur terbit (F-2026-10-25-028-S), tetapi harga PENAWARAN historis — termasuk penawaran yang ditolak atau kedaluwarsa, yang justru paling informatif untuk negosiasi berikutnya — hanya bisa dibaca dengan membuka penawaran satu per satu. Spec ini membekukan read-model turunan baca-saja: untuk pasangan (pelanggan, barang), daftar kejadian harga penawaran dari `QuotationItem` lintas status penawaran, terurut tanggal terbaru dulu, lengkap dengan status penawaran pembawa harga itu, nomor dokumen, revisi, masa berlaku, dan penanda makna status. Tanpa kolom baru, tanpa mengubah resolver harga, tanpa rekomendasi harga otomatis, tanpa menulis harga apa pun ke penawaran baru.
+
+Beda tegas tiga permukaan harga (anti-campur):
+
+| Permukaan | Objek sumber | Pertanyaan dijawab | Sifat harga |
+|---|---|---|---|
+| Daftar harga (F-001-S) | `CustomerPriceList` | harga rencana yang berlaku untuk kategori/barang | rencana, berlaku |
+| Riwayat harga faktur (F-028-S) | `SalesInvoiceItem` faktur `posted\|partial\|paid` | harga yang BENAR-BENAR terjadi per transaksi | transaksi, historis final |
+| **Spec ini (F-039-S)** | **`QuotationItem` semua status penawaran non-batal** | **harga yang pernah DITAWARKAN ke pelanggan ini, dan nasib penawarannya** | **penawaran, BELUM transaksi** |
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 1b147d3c)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model penawaran: `Quotation` (`prisma/schema.prisma:1377`) — `customerId`, `documentNo` unik, `date`, `validUntil DateTime?` (:1392), `status String @default("draft")`, `revisionNumber Int @default(0)`, `deletedAt`, `salesEmployeeId?`. Baris lewat seksi: `QuotationSection` (:1431, `quotationId`, cascade) → `QuotationItem` (:1446) — `itemId Int?` (:1449), `description`, `uom`, `qty Decimal(15,2)`, `unitPrice Decimal(15,2)` (:1460), `discount Decimal(15,2)`, `total Decimal(15,2)`, `sortOrder`. **QuotationItem TIDAK punya `priceSource`/`priceListId`** — kontras `SalesInvoiceItem` (:1730, `priceSource` :1744): sumber harga baris penawaran TIDAK tercatat; dilarang mengarang penanda sumber (BR-QPH-07).
+- Status penawaran (string, TERVERIFIKASI-KODE dari aksi `src/actions/sales.actions.ts`): `draft` → `sent` (sendQuotation, hanya dari draft, wajib ≥1 baris); `sent` → `accepted` (acceptQuotation :337, wajib dari sent + `assertQuotationNotExpired`); `sent` → `rejected` (rejectQuotation :383, wajib dari sent); `sent` → `draft` + `revisionNumber` increment (reviseQuotation, snapshot lama ke `QuotationHistory`); `accepted|approved` → `converted` (convertQuotationToOrder :487-548, SO unik per quotation dengan kunci baris). `approved` muncul sebagai status yang diterima jalur konversi (:487, :704) — populasi spec WAJIB memperlakukannya eksplisit, bukan mengasumsikan tidak ada (BR-QPH-03).
+- Masa berlaku: `assertQuotationNotExpired(validUntil)` (sales.actions.ts:106-108) — lewat bila hari WIB hari ini > validUntil; hari validUntil sendiri masih berlaku. Cron `src/app/api/cron/auto-reject-quotations/route.ts` menolak otomatis penawaran `sent` yang lewat masa (histori action `auto_rejected`) — status tersimpan tetap terbaca dari `Quotation.status`; **status `expired` TIDAK ada sebagai nilai tersimpan** — kedaluwarsa adalah turunan dari (status sent + validUntil lewat) atau sudah menjadi `rejected` oleh cron. Spec dilarang mengarang status tersimpan `expired` (BR-QPH-04).
+- Snapshot revisi: `QuotationHistory` (:1474) — `revisionNumber`, `statusAtSnapshot @default("sent")`, `dataSnapshot Json?`, `changeReason`, `action`. Baris berjalan `QuotationItem` hanya memuat revisi TERKINI; harga revisi lama hidup hanya di `dataSnapshot` histori. Tahap 1 spec ini membaca baris berjalan saja; membaca snapshot histori = pertanyaan fisik Backend (Q-QPH-3), bukan asumsi.
+- Laporan penawaran existing (BUKAN riwayat harga per pasangan): `quotation-outcome.ts` (hasil menang/kalah + alasan kalah F-2026-10-20-101), `quotation-accepted-queue.ts` (F-2026-10-25-002-S, penawaran diterima belum konversi), `quotation-followup-queue.ts`, `quotation-revision-delta.ts` (selisih grandTotal revisi, bukan harga baris), `quotation-approval-gate.ts` (F-100, penanda ambang diskon per dokumen). Tidak satu pun menjawab harga satuan per (pelanggan, barang) per kejadian penawaran.
+- Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts`): `view_quotations` (:158), `create_quotations` (:159), `edit_quotations` (:160), `approve_quotations` (:162), `confirm_quotations` (:163); `view_customers` (:125); `view_reports` (:428); `view_sales_invoices` (:148, milik 028-S, TIDAK dipakai spec ini).
+
+Gap (bukti grep run ini):
+- Grep `quotation.*price.*histor|price.*histor.*quotation|riwayat harga penawaran` di `src/` + backlog origin/main = hanya rujukan tertunda 028-S itu sendiri. Tidak ada builder/loader/halaman riwayat harga penawaran per (customerId, itemId).
+- Grep gabungan `customerId.*itemId` di `src/lib/reports/` = 0 builder pasangan pelanggan×barang untuk penawaran (028-S pun masih spec, belum builder).
+- Baris penawaran `itemId IS NULL` (deskripsi bebas) ada secara skema (nullable :1449) dan tidak tertanda di permukaan mana pun sebagai ember terpisah.
+
+Saudara yang TIDAK diduplikasi:
+- F-2026-10-25-028-S: riwayat harga FAKTUR terbit — populasi, label, notice berbeda total (BR-QPH-01). Dua permukaan tidak boleh digabung satu daftar, satu builder, atau satu label "riwayat harga" tanpa kualifikasi objek.
+- F-2026-10-25-001-S: masa berlaku DAFTAR HARGA (`CustomerPriceList`) — objek rencana, bukan kejadian penawaran.
+- F-2026-10-25-002-S: antrean penawaran diterima belum konversi — populasi hanya accepted/approved tanpa SO; spec ini membaca SEMUA status untuk riwayat harga, bukan antrean tindak lanjut.
+- F-2026-10-25-006-S: paparan diskon efektif agregat dokumen (quotation+SO+faktur) per periode/penjual — agregat pengawasan diskon, bukan riwayat harga satuan per pasangan; diskon baris di spec ini tampil apa adanya per kejadian, tidak diagregasi persen efektif (itu wilayah 006-S).
+
+### 2. Workflow specification
+
+Aktor: penjual/admin penjualan (melihat riwayat penawaran sebelum menyusun penawaran baru atau menindaklanjuti negosiasi), supervisor penjualan (tinjau pola penawaran ditolak/kedaluwarsa).
+Dokumen masuk: `Quotation` + `QuotationSection` + `QuotationItem` existing. Dokumen keluar: TIDAK ada; hasil baca menjadi bahan menyusun penawaran manual lewat form existing. Spec ini TIDAK menulis harga ke penawaran mana pun (BR-QPH-09).
+
+Alur:
+1. Pemakai memilih pelanggan (wajib) dan/atau barang (pola filter laporan existing pasangan kunci/nilai URL); tanpa pilihan pasangan, permukaan menampilkan petunjuk memilih, bukan seluruh histori penawaran mentah tanpa batas (Q-QPH-4).
+2. Loader membaca penawaran populasi §4 (`deletedAt IS NULL`) dalam rentang periode laporan, satu query massal (quotation + seksi + baris + resolusi nama item massal, pola anti-N+1 laporan existing), nol mutasi.
+3. Builder mengelompokkan per (customerId, itemId): baris riwayat per kejadian penawaran — tanggal penawaran, documentNo, revisionNumber, qty, uom, unitPrice, discount baris, total baris, status pembawa + label makna status (§4), validUntil, tautan ke detail penawaran existing. Ringkasan pasangan: penawaranTerakhir (baris tanggal terbaru; seri diputus documentNo lalu id quotation), jumlahKejadian, dan rincian hitungan per ember status (terkirim/diterima/ditolak/kedaluwarsa/draft/dikonversi) — hitungan kejadian, BUKAN probabilitas penerimaan, BUKAN rata-rata harga (BR-QPH-05/06).
+4. Baris `itemId IS NULL` masuk ember BARIS_TANPA_BARANG tertanda per pelanggan, tidak dipasangkan paksa ke barang mana pun (BR-QPH-08).
+5. UI menampilkan verbatim dari builder + notice BR-QPH-10; UI tidak menghitung ulang harga/diskon/rata-rata dan tidak menawarkan tombol "pakai harga ini" (itu auto-fill, ditolak BR-QPH-09).
+
+### 3. Role/permission matrix
+
+Key nyata katalog (TERVERIFIKASI-KODE, nomor baris §1). Tanpa key baru tahap 1 (USULAN; kunci final Q-QPH-2).
+
+| Aksi | Permission nyata | Penjual | Supervisor | Admin |
+|---|---|---|---|---|
+| Melihat riwayat harga penawaran (permukaan) | `view_reports` (:428) usulan reuse, ATAU `view_quotations` (:158) — Q-QPH-2 | bila diberi | ya | ya |
+| Membuka detail penawaran dari baris riwayat | `view_quotations` (:158) | sesuai existing | ya | ya |
+| Melihat master pelanggan terkait | `view_customers` (:125) | sesuai existing | ya | ya |
+| Menyusun penawaran baru memakai harga dari riwayat | `create_quotations` (:159) lewat form existing, input manual | ya | ya | ya |
+| Menulis/mengisi otomatis harga ke penawaran dari riwayat | — | TIDAK tahap 1 | TIDAK | TIDAK |
+| Mengubah status/harga penawaran sumber | `edit_quotations`/`confirm_quotations` existing, di luar spec | sesuai existing | sesuai existing | sesuai existing |
+
+Harga penawaran per pelanggan adalah data komersial sensitif (pola BR-PH-09 di 028-S): permukaan TIDAK boleh bocor ke peran tanpa izin terpilih di Q-QPH-2, dan loader menegakkan fail-closed di server, bukan menyembunyikan di UI saja.
+
+### 4. Status-transition / population matrix
+
+Tidak ada status baru, tidak ada kolom baru. Populasi adalah turunan status penawaran existing + masa berlaku:
+
+| Status penawaran tersimpan | Masuk riwayat? | Ember makna (label wajib tampil) | Makna harga |
+|---|---|---|---|
+| `sent` (validUntil belum lewat / kosong) | YA | TERKIRIM | harga sudah sampai ke pelanggan, menunggu keputusan |
+| `sent` + validUntil lewat (turunan, sebelum/sesudah cron) | YA | KEDALUWARSA | harga pernah terkirim, masa tawar habis; BUKAN harga pasar berjalan |
+| `accepted` / `approved` | YA | DITERIMA | harga disepakati pelanggan; tetap BUKAN transaksi sampai faktur terbit (wilayah 028-S sesudahnya) |
+| `converted` | YA | DIKONVERSI | harga penawaran asal konversi; harga transaksi final dibaca di 028-S, bukan di sini |
+| `rejected` (termasuk auto_rejected cron) | YA | DITOLAK | harga yang TIDAK disepakati; informatif negosiasi, dilarang dilabeli harga pasar |
+| `draft` | YA, ember terpisah tertanda | DRAFT — BELUM TERKIRIM | harga internal belum pernah sampai ke pelanggan; dilarang dicampur hitungan harga terkirim |
+
+Aturan populasi turunan:
+- Perubahan status penawaran sesudah dibaca mengubah hasil baca berikutnya (turunan murni, tanpa snapshot riwayat tersimpan). Penawaran `draft` yang kemudian dikirim berpindah ember pada baca berikutnya; penawaran direvisi kembali ke `draft` (reviseQuotation) membawa baris revisi terkini — harga revisi lama TIDAK tampil tahap 1 kecuali Q-QPH-3 memutuskan baca histori.
+- Penawaran `deletedAt IS NOT NULL` keluar populasi seluruhnya.
+- Kedaluwarsa diturunkan persis semantik `assertQuotationNotExpired` (hari WIB > validUntil = lewat; hari validUntil masih berlaku; validUntil kosong = tanpa batas, tidak pernah kedaluwarsa).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-QPH-01 | Pemisahan objek mutlak: populasi spec ini = `QuotationItem` (penawaran); populasi 028-S = `SalesInvoiceItem` faktur diakui. Dilarang satu builder/daftar/label "riwayat harga" menggabungkan keduanya tanpa kualifikasi objek per baris. Nama permukaan/builder wajib memuat kualifikasi "penawaran". | USULAN (kedua populasi TERVERIFIKASI-KODE) | schema :1446 vs :1730; document-status.ts:10 |
+| BR-QPH-02 | Makna harga mengikuti status pembawa per matriks §4. Baris riwayat WAJIB menampilkan label ember statusnya; harga `rejected`/`draft`/kedaluwarsa dilarang tampil tanpa label itu atau dilabeli "harga pasar"/"harga berlaku". | USULAN (kosakata status TERVERIFIKASI-KODE) | sales.actions.ts send/accept/reject/revise/convert |
+| BR-QPH-03 | `approved` diperlakukan setara `accepted` dalam ember DITERIMA (jalur konversi menerima keduanya, sales.actions.ts:487); status string lain di luar kosakata §4 tampil mentah tertanda "status tidak dikenal", tidak dipetakan paksa ke ember mana pun. | USULAN (bukti kode :487, :704) | sales.actions.ts:487 |
+| BR-QPH-04 | Kedaluwarsa = turunan (status `sent` + hari WIB > validUntil), BUKAN status tersimpan. Dilarang menulis status `expired` ke `Quotation.status` atau mengarang kolom status demi spec ini. Sesudah cron auto-reject berjalan, baris yang sama terbaca DITOLAK (status tersimpan menang atas turunan kedaluwarsa). | USULAN (semantik TERVERIFIKASI-KODE) | sales.actions.ts:106-108; cron auto-reject-quotations/route.ts |
+| BR-QPH-05 | "Penawaran terakhir" pasangan = unitPrice baris kejadian penawaran terbaru (date penawaran; seri: documentNo, lalu id quotation), ditampilkan apa adanya per ember statusnya. DILARANG rata-rata, modus, median, atau harga "disarankan" karangan. Diskon baris tampil terpisah, tidak dilebur diam-diam ke harga satuan (agregasi diskon efektif = wilayah 006-S). | USULAN | pola BR-PH-02 (028-S) |
+| BR-QPH-06 | Ringkasan pasangan hanya memuat hitungan faktual: jumlahKejadian, hitungan per ember status, qty per kejadian apa adanya. DILARANG probabilitas penerimaan, skor peluang, persen "kemungkinan diterima", atau proyeksi angka turunan apa pun dari riwayat ini. | USULAN | larangan angka karangan kartu |
+| BR-QPH-07 | QuotationItem tidak menyimpan sumber harga: permukaan DILARANG menampilkan penanda sumber harga (daftar harga/master/manual) untuk baris penawaran. Nilai asal resolver saat penawaran dibuat tidak bisa dibuktikan dari baris tersimpan — mengarangnya = MERAH. | TERVERIFIKASI-KODE (ketiadaan kolom) | schema :1446-1472 vs :1744 |
+| BR-QPH-08 | Baris `itemId IS NULL` hanya masuk ember BARIS_TANPA_BARANG per pelanggan (hitungan + rentang tanggal), tidak dipasangkan ke barang dari kemiripan deskripsi. | USULAN | pola ember jujur BR-PH-04 |
+| BR-QPH-09 | Baca-saja mutlak tahap 1: loader/builder tidak menulis Quotation/QuotationItem/status apa pun; TIDAK ada auto-fill, tombol "pakai harga ini", atau rekomendasi harga ke form penawaran. Penjual menyalin manual lewat form existing berizin `create_quotations` bila memilih memakai angka historis. | USULAN | penolakan auto-fill 028-S, berlaku sama |
+| BR-QPH-10 | Notice wajib verbatim di setiap tampilan: "Harga penawaran lampau — bukan harga transaksi dan bukan harga jual saat ini. Harga draft belum pernah terkirim; harga ditolak/kedaluwarsa tidak disepakati pelanggan. Harga berlaku mengikuti daftar harga/master saat penawaran dibuat." UI dilarang label "harga terakhir berlaku"/"harga pasar" untuk data ini. | USULAN | pemisahan rencana vs penawaran vs aktual |
+| BR-QPH-11 | Harga revisi berjalan saja tahap 1: baris `QuotationItem` terkini per penawaran (dengan revisionNumber pembawa tampil). Harga revisi lama di `QuotationHistory.dataSnapshot` TIDAK dibaca tahap 1 kecuali Q-QPH-3 diputus; permukaan wajib menandai bahwa yang tampil adalah revisi berjalan, bukan seluruh riwayat revisi. | USULAN (wadah histori TERVERIFIKASI-KODE) | schema :1474; reviseQuotation sales.actions.ts |
+| BR-QPH-12 | Batas keluaran: tanpa pasangan terpilih tidak ada keluaran massal tak terbatas; batas baris/kejadian per pasangan + periode wajib mengikuti konvensi laporan existing; angka batas final Q-QPH-4 (Lead/Backend). | BUTUH-VONIS (Lead/Backend) | konvensi laporan; pola BR-PH-08 |
+| BR-QPH-13 | Penawaran yang sama muncul di dua permukaan berbeda TIDAK dihitung dua kali sebagai fakta berbeda: baris `converted` di sini adalah asal konversi; sesudah faktur terbit, fakta transaksinya dibaca di 028-S. Tautan silang label diperbolehkan, penggabungan angka dilarang (BR-QPH-01). | USULAN | — |
+
+### 6. Feature matrix (benchmark resmi, akses 2026-10-25)
+
+| Kemampuan | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Penawaran penjualan tercatat + status terlacak | ADA: fitur Penawaran Penjualan — buat/kirim penawaran, lacak status diterima/ditolak/menunggu diproses (https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/) | ADA: input penawaran harga (penjualan) — belum membentuk jurnal/stok; laporan penawaran harga di modul Laporan > Penjualan dan piutang (https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-penawaran-harga-penjualan-zahir-online-v2) | ADA existing: Quotation draft→sent→accepted/rejected→converted + laporan hasil penawaran |
+| Riwayat harga satuan per kejadian pasangan pelanggan×barang DARI PENAWARAN (lintas status, termasuk ditolak) | Tidak ditemukan sebagai laporan bernama di sumber resmi di atas — ditulis jujur: belum terverifikasi | Tidak ditemukan sebagai laporan bernama di sumber resmi di atas; laporan penawaran harga yang terdokumentasi adalah daftar/rangkuman transaksi penawaran, bukan riwayat harga per pasangan pelanggan×barang — klaim dibatasi pada batas itu | Spec ini: riwayat per kejadian penawaran + penawaran terakhir turunan per ember status |
+| Penanda sumber harga baris penawaran | Tidak diklaim dari sumber di atas | Tidak diklaim dari sumber di atas | TIDAK ADA tersimpan (BR-QPH-07) — permukaan dilarang mengarangnya |
+| Auto-fill harga dari riwayat ke penawaran baru | Tidak diklaim dari sumber di atas | Tidak diklaim dari sumber di atas | DITOLAK tahap 1 (BR-QPH-09) |
+
+Label: Accurate/Zahir = BENCHMARK terbatas pada URL resmi di atas; ketiadaan fitur bernama ditulis "tidak ditemukan/belum terverifikasi", bukan klaim tidak ada.
+
+### 7. Acceptance criteria + edge cases (draf falsifikasi untuk QA; cabut penjaga → MERAH)
+
+Backend (builder+loader):
+- AC-QPH-B1: penawaran `deletedAt` terisi dengan unitPrice berapa pun TIDAK mengubah keluaran; satu pun bocor = MERAH.
+- AC-QPH-B2: setiap baris membawa label ember sesuai status tersimpan saat baca (draft/sent/accepted/approved/rejected/converted + turunan kedaluwarsa); baris `rejected` atau `draft` tampil tanpa label ember atau berlabel harga pasar = MERAH.
+- AC-QPH-B3: penawaran `sent` dengan validUntil kemarin WIB terbaca KEDALUWARSA; validUntil hari ini WIB terbaca TERKIRIM (belum lewat); validUntil kosong tidak pernah kedaluwarsa. Menulis status `expired` ke DB demi ini = MERAH.
+- AC-QPH-B4: penawaran terakhir pasangan = baris tanggal terbaru persis termasuk seri tanggal sama (documentNo, lalu id); mengganti ke rata-rata/modus/mediana harus MERAH.
+- AC-QPH-B5: baris `itemId IS NULL` hanya di ember tanpa-barang; terpasang ke barang terdekat/deskripsi mirip = MERAH.
+- AC-QPH-B6: loader query massal anti-N+1 (quotation+seksi+baris+item), nol mutasi dokumen/harga/status; menulis Quotation/QuotationItem apa pun = MERAH. Menampilkan penanda sumber harga baris penawaran (kolom tidak ada) = MERAH.
+- AC-QPH-B7: status string asing di luar kosakata §4 tampil mentah tertanda tidak dikenal; dipetakan paksa ke ember terdekat = MERAH.
+
+Frontend:
+- AC-QPH-F1: angka/label/notice verbatim builder (BR-QPH-10); UI hitung rata-rata/diskon efektif/probabilitas sendiri = MERAH.
+- AC-QPH-F2: tanpa izin terpilih (Q-QPH-2) permukaan tertolak fail-closed di server pola laporan existing; harga penawaran bocor ke peran tanpa izin = MERAH.
+- AC-QPH-F3: label "harga berlaku"/"harga pasar"/"harga saat ini" untuk data penawaran = MERAH; tombol/aksi "pakai harga ini"/auto-fill ke form penawaran = MERAH; sebelum commit grep e2e selector penawaran/laporan terdampak.
+
+Edge cases:
+- EC-1: pelanggan sama ditawari barang sama di dua penawaran tanggal sama (seri documentNo lalu id quotation).
+- EC-2: penawaran direvisi (sent → draft, revisionNumber naik, baris diubah): baca sesudah revisi menampilkan baris+revisionNumber berjalan; harga revisi lama tidak tampil tahap 1 dan ketiadaannya tertanda (BR-QPH-11).
+- EC-3: penawaran `converted`: harga penawaran tampil di ember DIKONVERSI di sini, dan faktur turunannya (bila terbit) tampil di 028-S — dua baris itu fakta berbeda, tidak digabung, tidak saling menghapus.
+- EC-4: penawaran ditolak dengan alasan kalah "harga terlalu tinggi" (kamus F-2026-10-20-101): riwayat harga menampilkan ember DITOLAK; alasan kalah dibaca dari laporan hasil penawaran existing, tidak diduplikasi/diparse ulang di spec ini.
+- EC-5: qty desimal + uom berbeda antar kejadian penawaran: tidak dikonversi/dijumlahkan lintas uom tanpa label; qty kumulatif lintas uom dilarang.
+- EC-6: baris harga 0 (bonus/contoh) tampil 0 apa adanya tertanda, bukan dibuang atau dianggap kesalahan data.
+- EC-7: periode laporan memotong histori (penawaranTerakhir = terbaru DALAM periode terpilih, tertanda periode).
+- EC-8: penawaran `sent` kedaluwarsa lalu cron auto-reject berjalan di antara dua kali baca: baca pertama KEDALUWARSA (turunan), baca kedua DITOLAK (status tersimpan) — keduanya benar pada waktunya, bukan inkonsistensi builder.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-QPH-1 (Lead): permukaan — halaman laporan baru pasangan pelanggan×barang khusus penawaran vs tab di permukaan penawaran/laporan hasil penawaran existing; posisi report-catalog/navigasi. Syarat: nama permukaan wajib memuat kualifikasi "penawaran" (BR-QPH-01) dan tidak berdampingan menyatu dengan permukaan 028-S tanpa pemisah label.
+- Q-QPH-2 (Lead): izin permukaan tahap 1 — reuse `view_reports` (pola laporan 028-S/006-S) atau `view_quotations` (pola antrean 002-S, PUTUSAN Q-AQ-1). Harga penawaran per pelanggan = data komersial sensitif; pilih satu, tanpa key baru tahap 1 usulan.
+- Q-QPH-3 (Backend, fisik): baca baris berjalan saja (usulan tahap 1, BR-QPH-11) vs ikut membaca `QuotationHistory.dataSnapshot` untuk harga revisi lama. Snapshot berbentuk Json bebas — parser revisi lama hanya sah bila bentuk snapshot terbukti stabil di tes; tanpa bukti itu, tahap 1 baris berjalan saja.
+- Q-QPH-4 (Lead/Backend): batas periode maksimum + paginasi kejadian per pasangan tahap 1 (BR-QPH-12), termasuk apakah ember DRAFT tampil default atau di balik saringan eksplisit (draft belum terkirim — risiko dibaca sebagai harga yang pernah ditawarkan).
+- Q-QPH-5 (Lead): ember BARIS_TANPA_BARANG tampil penuh tahap 1 atau hanya hitungan ringkas (menghindari permukaan mengambang, pola Q-PH-4 di 028-S).
+- Accountant: TIDAK (fakta harga penawaran baca-saja; tidak mengubah jurnal/PPN/pengakuan/DP. Harga diterima yang menjadi DP/invoice mengikuti jalur existing, bukan spec ini).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-039-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-039-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder+loader riwayat harga penawaran pasangan (usulan `src/lib/reports/quotation-price-history.ts` + `-data.ts`, nama final Backend) | Backend | Q-QPH-2/3/4 | — |
+| (turunan) permukaan konsumen verbatim + notice BR-QPH-10 | Frontend | kontrak Backend + Q-QPH-1/5 | — |
+| (turunan) falsifikasi AC-QPH-B1..B7 + AC-QPH-F1..F3 + EC-1..8 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-QPH-1/2/4/5 → Backend builder (Q-QPH-3 fisik) → Frontend konsumen → QA falsifikasi. Effort usulan: builder M (query massal 3 lapis quotation→seksi→baris + turunan kedaluwarsa), UI S-M. Risiko: riwayat penawaran dibaca sebagai harga transaksi/pasar — mitigasi BR-QPH-01/02/10 (nama, ember, notice); draft dibaca sebagai harga yang pernah sampai ke pelanggan — mitigasi label DRAFT — BELUM TERKIRIM + Q-QPH-4; harga revisi lama hilang diam-diam — mitigasi BR-QPH-11 penanda revisi berjalan.
+
+### Yang TIDAK diusulkan run ini
+
+- Menggabungkan riwayat penawaran ini dengan riwayat harga faktur 028-S dalam satu permukaan/builder/label: objek dan makna harga berbeda (BR-QPH-01); penggabungan tanpa kualifikasi = temuan cacat, bukan penyederhanaan.
+- Auto-fill/rekomendasi harga penawaran dari riwayat (harga terakhir/dominan ditawarkan): ditolak BR-QPH-09 — mengubah perilaku penyusunan harga = spec terpisah sesudah riwayat terbukti benar, mengikuti penolakan yang sama di 028-S.
+- Probabilitas penerimaan, skor peluang, atau rata-rata harga penawaran sebagai "harga acuan": angka karangan dari data penawaran mentah (BR-QPH-05/06).
+- Membaca/mem-parsing snapshot revisi lama `QuotationHistory.dataSnapshot` tahap 1 tanpa bukti stabilitas bentuk (Q-QPH-3); menulis status `expired` tersimpan (BR-QPH-04); kolom sumber harga baris penawaran (tidak ada datanya, BR-QPH-07).
+- Mengubah perilaku masa berlaku daftar harga (001-S), antrean diterima (002-S), atau paparan diskon (006-S): spec ini hanya membaca QuotationItem; permukaan saudara tidak disentuh.
+
+F-2026-10-25-039-S — Riwayat harga penawaran per pelanggan×barang (QuotationItem). Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-QPH-1/2/4/5 + fisik Backend Q-QPH-3. Pemilik usulan: Business (spec), Lead (putusan permukaan/izin/batas), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
+
+---
+
+## USULAN BUSINESS 2026-10-25 — F-2026-10-25-040-S: paket usulan angka Q-SLA135-1/Q-SLA135-2 (SLA tiket CRM) + Q-CD-1 (duplikat pelanggan: peringatan vs blokir) untuk putusan Lead
+
+> **Slot**: F-2026-10-25-040-S. Diperiksa bentrok 2026-10-25 19:56 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-040` di backlog+board origin/main = 0; ID terpakai tanggal ini 001-S..039-S (038-S PR #889, 039-S PR #891 OPEN). ID 040 bebas. Kartu t_3e8b46a2.
+> **Sifat dokumen**: USULAN untuk diputus Lead — BUKAN vonis, BUKAN perubahan aturan. Dokumen saja; tanpa kode/schema/migrasi. Angka pajak/uang tidak disentuh (bukan domain butir ini; tidak ada angka statutori di sini).
+> **Koreksi jujur atas premis kartu**: kedua butir BUKAN tanpa usulan sama sekali. Verifikasi live run ini: (1) BR-CRM-01 di F-2026-10-24-135-S sudah memuat tabel angka USULAN + jam acuan; yang belum ada = argumentasi per angka + jawaban Q-SLA135-2. (2) F-2026-10-25-003-S BR-CD-04 sudah mengusulkan peringatan tahap 1 + kalimat rekomendasi NPWP-persis-boleh-blokir; yang belum ada = rincian dampak per kunci. Blok ini melengkapi keduanya tanpa menulis ulang spec induk; bila Lead memutus, putusan menempel ke Q-SLA135-1/2 dan Q-CD-1 di spec masing-masing.
+
+### A. Q-SLA135-1 + Q-SLA135-2 — target SLA tiket CRM per prioritas
+
+Fakta terverifikasi (TERVERIFIKASI-KODE, origin/main 1b147d3c):
+- Prioritas tiket existing hanya `low|medium|high` (default `medium`); `firstResponseAt` terisi saat tiket pertama keluar dari `open` (BUKAN balasan pertama — definisi terukur BR-CRM-03, spec 135-S). Angka SLA akan mengukur perilaku existing apa adanya sampai Q-SLA135-4 diputus terpisah.
+- Model `Holiday` (schema :3301) dan `WorkSchedule` (`workDays` CSV 0=Minggu..6=Sabtu, kosong = Senin–Jumat; `startTime`/`endTime` String; terhubung Employee/Department, schema :3341) SUDAH ADA. Pola baca jadwal existing: `work-center-load-plan.ts` (disebut spec 135-S).
+- Benchmark resmi diakses ulang 2026-10-25: Freshdesk SLA Policies — target respons/resolusi per prioritas dihitung jam kerja ATAU jam kalender pilihan admin: https://support.freshdesk.com/support/solutions/articles/37626-understanding-sla-policies . Contoh konfigurasi lapangan Freshdesk yang terpublikasi (terverifikasi 2026-10-25 di https://skladon.freshdesk.com/support/solutions/articles/47001302601-pravidla-pro-nastavov%C3%A1n%C3%AD-priorit-ticket%C5%AF-rules-for-setting-ticket-priorities): low respons ≤8 jam kerja / resolusi ≤64 jam kerja, medium ≤6 / ≤32, high ≤2 / ≤12, urgent ≤1 / ≤6 (jam kerja). Rentang ini acuan nyata satu operator logistik — bukan angka baku vendor — dan kekuatannya di sini: usul spec 135-S (respons/resolusi jam kerja: high 2/9, medium 4/27, low 8/45) dibandingkan contoh ini: respons spec SEJAJAR-LEBIH KETAT (2=2, 4<6, 8=8) dan resolusi spec LEBIH KETAT SEMUA (9<12, 27<32, 45<64). Artinya angka usul bukan tebakan bebas dan bukan salinan benchmark: ia duduk di ujung ketat pita contoh lapangan, karena tiket ISF operasional bengkel ditangani tim kecil yang sama — janji yang lebih ketat lebih mudah dibuktikan pelanggarannya daripada janji longgar yang tidak pernah memicu tindakan.
+
+USULAN Business (mempertahankan tabel BR-CRM-01 apa adanya, dengan alasan per baris):
+
+| Priority | Respons pertama (USULAN) | Resolusi (USULAN) | Alasan |
+|---|---|---|---|
+| high | 2 jam kerja | 1 hari kerja (9 jam kerja) | Tepi ketat rentang benchmark (high ≤2 jam kerja); tiket high di bengkel = pelanggan menunggu kendaraan — respons di hari yang sama adalah janji minimal yang bisa diucapkan admin |
+| medium | 4 jam kerja (setengah hari kerja) | 3 hari kerja | Setengah hari memberi ruang antrean pagi; resolusi 3 hari di bawah contoh benchmark medium (±4 hari) karena tiket ISF operasional bengkel, bukan tiket produk SaaS |
+| low | 8 jam kerja (1 hari kerja) | 5 hari kerja (1 minggu kerja) | Persis contoh benchmark low ≤8 jam kerja; 5 hari = satu siklus minggu kerja penuh, mudah diingat operator |
+
+- Jam kerja acuan (Q-SLA135-2) — USULAN: konstanta Senin–Jumat 08:00–17:00 WIB (9 jam/hari) untuk tahap 1, dikurangi tanggal `Holiday`. Alasan menolak WorkSchedule per departemen tahap 1: tiket CRM tidak terikat departemen pelaksana tunggal (assignedTo = karyawan, tiket bisa lintas fungsi), dan memilih jadwal siapa yang berlaku akan menambah satu keputusan fisik sebelum angka pertama terbukti dipakai. Tanggal `Holiday` tetap dibaca (sudah ada modelnya), jadi hari libur nasional tidak menggerus SLA secara diam-diam.
+- Ambang peringatan "mendekati" 25% sisa (BR-CRM-03, USULAN): pertahankan — satu ambang tunggal, mudah dijelaskan ("sisa seperempat waktu").
+
+Dampak operasional bila diputus:
+- Angka di atas menjadi konstanta builder (bukan konfigurasi per tiket) per spec 135-S; mengubahnya kelak = ubah spec + tes, bukan ubah master. Itu disengaja: SLA adalah janji layanan, bukan preferensi layar.
+- Konsekuensi jujur: karena `firstResponseAt` berarti "keluar dari open", tiket yang langsung di-in_progress tanpa balasan ke pelanggan terhitung "sudah direspons". Lead memutus angka ini dengan tahu definisi itu; memperbaiki definisi = Q-SLA135-4 terpisah, jangan dicampur ke putusan angka.
+- Bila bengkel ternyata buka Sabtu (fakta lapangan di luar bukti kode run ini), konstanta Senin–Jumat membuat tiket Jumat sore terlihat lebih longgar dari janji lisan ke pelanggan. Mitigasi tahap 1 tanpa membuka WorkSchedule: putusan Lead mencantumkan eksplisit "Sabtu bukan hari kerja SLA" ATAU mengoreksi konstanta jadi Senin–Sabtu sebelum builder dibangun — satu kalimat di putusan, bukan tebakan Business.
+
+Rekomendasi Business ke Lead (satu paragraf): SAHKAN tabel di atas + konstanta Senin–Jumat 08:00–17:00 dipotong Holiday sebagai Q-SLA135-1/2, dengan catatan eksplisit soal Sabtu sesuai fakta operasional bengkel; tingkat `urgent` tetap TIDAK (Q-SLA135-3 default spec), dan definisi firstResponseAt dibiarkan apa adanya tahap ini (Q-SLA135-4 terpisah).
+
+### B. Q-CD-1 — duplikat pelanggan: peringatan vs blokir keras
+
+Fakta terverifikasi (TERVERIFIKASI-KODE, origin/main 1b147d3c): tidak ada unique pada name/phone/taxId/email Customer; tahap 1 kandidat duplikat pelanggan SUDAH LIVE di kode (bukan hanya spec): `findCustomerDuplicateCandidates` di `src/lib/services/customer-duplicate.service.ts:206` dipanggil `createCustomer` SESUDAH create di `src/actions/master.actions.ts` — hasil simpan selalu sukses, kandidat diteruskan sebagai `duplicateWarning` di respons. Pencocokan di service itu: `npwp` (normalisasi digit + drop nilai kosong) lebih dulu, lalu `phone` (normalisasi digit dengan awalan 62/0 disamakan), lalu nama+email (`name_secondary`). `customer-duplicate.service.test.ts` existing mengujinya. Baru-baru ini reuse quick-add nama+telepon persis juga dipaksa terucap (`reused:true` + `reusedCustomer` + pesan reuse, `master.actions.ts` `createCustomer`, komentar `F-2026-10-25-003-S BR-CD-05`).
+
+Implikasi langsung untuk Q-CD-1 (ini yang membuat putusan jadi kecil): yang BELUM ada di kode = satu-satunya pengecualian NPWP-persis. Semua kunci lain sudah berperilaku peringatan persis seperti usul spec 003-S tahap 1. Jadi Lead TIDAK lagi memutus "peringatan vs blokir" dari nol — hanya memutus apakah SATU kunci (NPWP ternormalisasi sama persis dan terisi dua-duanya) dinaikkan dari peringatan ke blokir. Biaya implementasi pengecualian itu = gerbang sebelum `prisma.customer.create` di `createCustomer`/`updateCustomer` untuk kunci `npwp` saja, bukan pembangunan ulang mesin kandidat; mesinnya sudah ada dan teruji.
+
+USULAN Business (bertahap per kekuatan kunci — memperkuat rekomendasi satu kalimat di 003-S menjadi tabel yang bisa diputus):
+
+| Kekuatan kecocokan | Perilaku diusulkan | Alasan + dampak |
+|---|---|---|
+| NPWP ternormalisasi sama persis DAN terisi (dua-duanya) | BLOKIR simpan baru; arahkan operator memakai pelanggan existing atau mengoreksi NPWP | NPWP adalah identitas pajak: dua master ber-NPWP sama akan membelah histori faktur pajak satu entitas — kerusakan akuntansi/pajak, bukan sekadar kotor data. Dampak blokir: operator wajib menyelesaikan di tempat; pengecualian sah (NPWP sama dipakai cabang berbeda) diselesaikan lewat koreksi data oleh pemegang edit, bukan dengan membiarkan master ketiga lahir. Risiko salah-blokir rendah karena NPWP ternormalisasi kosong (EC-3 003-S) tidak memicu |
+| Telepon ternormalisasi sama | PERINGATAN (simpan tetap jalan) | Nomor sentral kantor/dealer sah dipakai banyak entitas (EC-2 003-S). Blokir di sini mengunci input sah di lapangan saat pelanggan mendesak — operator akan mengakali dengan mengubah digit, data jadi lebih kotor dari duplikatnya |
+| Nama ternormalisasi sama + email sama | PERINGATAN | Email bersama (admin kantor pelanggan) sah berganda; nama PT/CV generik sah berganda (BR-CD-03) |
+| Nama sama sendirian | BUKAN kandidat (tetap) | Menjaga regresi nama generik; menaikkan ini ke peringatan akan membanjiri operator dengan peringatan palsu sampai peringatan diabaikan |
+
+Dampak operasional per pilihan ekstrem (supaya kontrasnya terlihat):
+- Semua-peringatan (termasuk NPWP): nol gesekan input, tetapi duplikat NPWP — yang paling mahal diperbaiki (menyentuh faktur pajak terbit) — lahir tanpa satu pun hambatan; daftar kandidat 003-S menjadi satu-satunya pertahanan, dibaca belakangan.
+- Semua-blokir: data paling bersih di atas kertas, tetapi setiap kecocokan telepon sentral/nama generik menjadi jalan buntu kasir/admin; perilaku lapangan yang bisa diprediksi = operator memvariasikan ejaan nama/digit telepon agar lolos — duplikat tetap lahir, sekarang dengan data sengaja dikotori dan tidak lagi tertangkap kunci normalisasi.
+
+Rekomendasi Business ke Lead (satu paragraf): PUTUSKAN model bertahap di atas — NPWP persis = blokir, kunci lain = peringatan, nama sendirian = bukan kandidat. Ini mempertahankan tahap 1 003-S untuk semua kunci kecuali satu pengecualian NPWP, dan pengecualian itu yang justru melindungi histori pajak; karena mesin kandidat sudah LIVE, putusan "blokir NPWP saja" adalah perubahan satu titik gerbang, bukan proyek baru. Accountant TIDAK diminta di butir ini (kebijakan perilaku input master, bukan perlakuan pajak); Accountant dipanggil hanya bila kelak merge master diangkat (Q-CD-4 003-S).
+
+### C. Yang TIDAK diusulkan blok ini
+
+- Mengubah angka/tabel di spec 135-S atau 003-S sebelum Lead memutus (blok ini usulan pendamping, bukan revisi diam-diam).
+- Tingkat prioritas `urgent`, pemicu firstResponseAt baru, WorkSchedule per departemen sebagai sumber jam SLA tahap 1, merge master pelanggan, validasi format NPWP online (keluarga identitas pajak, vonis Accountant bila diangkat).
+
+F-2026-10-25-040-S — Paket usulan Q-SLA135-1/2 + Q-CD-1. Status: USULAN SELESAI run ini; menunggu putusan Lead (satu paragraf per butir cukup). Pemilik: Business (usulan), Lead (putusan di Q-SLA135-1/2 spec 135-S dan Q-CD-1 spec 003-S). Butuh Accountant: TIDAK. Butuh kode di blok ini: TIDAK.
