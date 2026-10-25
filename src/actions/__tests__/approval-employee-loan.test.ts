@@ -17,24 +17,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const buildModelMock = () => ({
-    findFirst: vi.fn().mockResolvedValue(null),
     findUnique: vi.fn().mockResolvedValue(null),
-    findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1 }),
-    findMany: vi.fn().mockResolvedValue([]),
-    count: vi.fn().mockResolvedValue(0),
-    create: vi.fn().mockResolvedValue({ id: 1 }),
-    createMany: vi.fn().mockResolvedValue({ count: 1 }),
     update: vi.fn().mockResolvedValue({}),
-    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    delete: vi.fn().mockResolvedValue({}),
-    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    create: vi.fn().mockResolvedValue({ id: 1 }),
   })
 
   const prismaMock: Record<string, unknown> = {
     approval: buildModelMock(),
-    approvalWorkflow: buildModelMock(),
-    approvalWorkflowStep: buildModelMock(),
-    approvalStep: buildModelMock(),
     approvalHistory: buildModelMock(),
     employeeLoan: buildModelMock(),
     role: buildModelMock(),
