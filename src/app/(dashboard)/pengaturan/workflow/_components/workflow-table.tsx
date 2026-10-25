@@ -9,6 +9,11 @@ import { cn } from "@/lib/utils"
 import { deleteApprovalWorkflow } from "@/actions/approval.actions"
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import {
+  isMoneyGateModelType,
+  moneyGateConfirmBody,
+  moneyGateConfirmTitle,
+} from "./money-gate-warning"
 
 interface WorkflowRow {
   id: number
@@ -64,14 +69,21 @@ const columns = [
     id: "actions",
     header: "Aksi",
     enableSorting: false,
-    cell: (info) => (
-      <ActionDropdown
-        viewHref={entityEditHref("/pengaturan/workflow", info.row.original)}
-        editHref={entityEditHref("/pengaturan/workflow", info.row.original)}
-        deleteAction={deleteApprovalWorkflow}
-        deleteId={info.row.original.id}
-      />
-    ),
+    cell: (info) => {
+      const row = info.row.original
+      // K4-S2(b) vonis 014-V: hapus workflow gerbang uang wajib peringatan eksplisit.
+      const moneyGate = isMoneyGateModelType(row.modelType)
+      return (
+        <ActionDropdown
+          viewHref={entityEditHref("/pengaturan/workflow", row)}
+          editHref={entityEditHref("/pengaturan/workflow", row)}
+          deleteAction={deleteApprovalWorkflow}
+          deleteId={row.id}
+          deleteConfirmTitle={moneyGate ? moneyGateConfirmTitle("delete") : undefined}
+          deleteConfirmBody={moneyGate ? moneyGateConfirmBody("delete", row.modelType) : undefined}
+        />
+      )
+    },
   }),
 ]
 
