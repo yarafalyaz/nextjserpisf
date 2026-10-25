@@ -27247,47 +27247,176 @@ Urutan: Lead putus Q-SR → Backend → Frontend → QA. Effort inti S–M. Risi
 
 F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (katalog/seed+gerbang), Frontend (tombol sadar-izin), QA (falsifikasi). Butuh putusan accountant: TIDAK (jurnal/PPN tidak berubah).
 
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-016-S: rekap lembur per karyawan per periode (read-model baca-saja di atas OvertimeRequest existing)
+
+> **Slot**: F-2026-10-25-016-S. Diperiksa bentrok 2026-10-25 08:12 WIB vs `origin/main` (`a5ad6890`): grep `F-2026-10-25-016` di backlog+board = 0 dan pencarian PR GitHub = kosong; 014/015 terpakai akhiran -V (vonis Accountant PR #798/#802). `-016-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR** — bukan F-ID lama. Bukan duplikat F-2026-10-25-007-S (antrean approver pending — antrean keputusan, bukan rekap periode), bukan halaman saldo cuti F-2026-10-25-013-S (hak cuti, bukan jam lembur). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Kepala bengkel dan HR menjawab pertanyaan berulang tiap tutup periode: "karyawan ini lembur berapa jam bulan ini, berapa yang sudah disetujui, berapa yang masih menggantung, dan kendaraan/proyek mana yang menyerap lembur?" Hari ini jawabannya hanya bisa diraih dari daftar transaksional `/sdm/lembur` baris per baris (saring status manual, jumlah sendiri di luar sistem). Rekap agregat per karyawan per periode tidak ada. Akibat nyata: lembur proyek pelanggan tidak terlihat bebannya per proyek, pengajuan pending menua tanpa pemilik, dan angka jam yang masuk payroll tidak bisa direkonsiliasi sebelum slip terbit. Spec ini membekukan: (A) builder baca-saja agregat lembur per karyawan per periode dari `OvertimeRequest` existing, (B) permukaan rekap di area SDM existing, (C) batas tegas jam (fakta operasional, milik spec ini) vs nilai uang lembur (`calculatedValue` + tarif — wilayah payroll/Accountant, spec hanya merujuk). Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya), approver lembur (pembaca kolom pending; keputusan tetap di aksi existing), payroll (konsumen hilir nilai — bukan konsumen rekap ini).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin melihat rekap membuka permukaan rekap lembur, memilih periode (rentang tanggal/bulan), opsional filter departemen dan status.
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `OvertimeRequest` dalam scope+periode, dan builder murni mengelompokkan per karyawan: jumlah pengajuan, jam diajukan, jam disetujui, jam pending, jam ditolak, jam billable (`billableHours`) — semua dari kolom existing, tanpa menghitung tarif apa pun.
+3. Halaman menampilkan baris per karyawan + total (penjumlahan tertimbang dari jam, bukan rata-rata), dengan penanda pengajuan pending tertua per karyawan.
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `OvertimeRequest` + `Employee` (departemen) + `Project` (label proyek nullable); dokumen keluar = tampilan rekap + (tahap berikut, bila dibuka) CSV pola route ekspor existing.
+
+### 2. Inventarisasi terverifikasi (origin/main a5ad6890, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `OvertimeRequest` (`prisma/schema.prisma:3408-3433`): employeeId, projectId nullable, date, `hours` Decimal(5,2), `totalHours`/`mealHours`/`billableHours` Decimal nullable, `calculatedValue` Decimal(15,2) nullable, reason, rejectionReason, status String default `pending`, approvedBy, approvedAt, supervisorApprovedAt, createdAt/updatedAt. Indeks employeeId ada.
+- Buat: `createOvertimeRequest` (`src/actions/hrm.actions.ts:992`) — status `pending`, lalu `requestApprovalIfConfigured("OvertimeRequest", ...)` menautkan ApprovalWorkflow generik bila terkonfigurasi (referenceType terdaftar `src/actions/approval.actions.ts:36,42`).
+- Setujui: `approveOvertime` (`hrm.actions.ts:1042`) — izin `approve_overtime_requests` + `assertApproved`; menerima status `pending` maupun `approved` (rantai workflow bisa sudah memfinalkan status; panggilan ini tetap wajib menghitung nilai), klaim atomik `updateMany status in [pending, approved]`, idempoten (nilai sudah terhitung → no-op), menulis approvedBy + approvedAt + `calculatedValue`. Nilai existing di main: `jam × baseSalary × multiplier × coefficient` dari `SystemSetting` (default multiplier ≈ 1/173 = 0.00578035, coefficient 1.1) — tarif DATAR, bukan bertingkat.
+- Tolak: jalur ApprovalWorkflow generik menulis status `rejected` pada dokumen sumber (`approval.actions.ts:330-343`); edit hanya saat `pending` (`updateOvertimeRequest` `hrm.actions.ts:4065`, penjaga pending-only :4085); hapus menolak baris approved karena memengaruhi penggajian (`deleteOvertimeRequest` :3774, pesan :3798).
+- Konsumen payroll: pratinjau + generate payroll menjumlahkan `calculatedValue` lembur approved per karyawan ke penghasilan bruto (`hrm.actions.ts:1270` dan :1885, `overtimeTotal = Σ (calculatedValue ?? 0)`) — rekap TIDAK menghitung ulang nilai ini dan TIDAK menjadi jalur bayar kedua.
+- Daftar transaksional existing: halaman `/sdm/lembur` (`src/app/(dashboard)/sdm/lembur/page.tsx`) — `requirePermission("view_overtime")`, `getHrScope` + `hrScopeWhere`, cari nama hanya scope `all` (`canSearchAcrossEmployees`), saring status per baris, urut createdAt desc, paginasi. Menjawab "pengajuan mana", bukan "berapa jam per karyawan per periode".
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:305-310`): `view_overtime`, `approve_overtime` (resource `overtime`), `create/edit/delete/approve_overtime_requests` (resource `overtime_requests`). Tidak ada izin laporan lembur terpisah.
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1.
+- Pola yang dirujuk: builder murni + loader (`src/lib/reports/employee-lifecycle.ts` + `-data.ts`, keluaran tanpa nominal gaji), route ekspor server (`src/app/api/activity-logs/export/route.ts` — auth + permission + select kolom keluaran + batas baris).
+
+Belum ada / gap (bukti grep run ini):
+- Builder rekap lembur: tidak ada berkas `overtime*`/`lembur*` di `src/lib/reports/`; tidak ada agregasi per karyawan/periode di aksi mana pun (grep `getOvertime|summar.*lembur|rekap.*lembur` di `hrm.actions.ts` = 0 fungsi rekap; yang ada hanya penjumlahan `calculatedValue` untuk payroll per karyawan terpilih).
+- Filter departemen/periode agregat: halaman existing menyaring status + cari nama per baris transaksional; tidak ada pengelompokan per departemen maupun total jam per periode.
+- Umur pending lembur: tidak ada penanda pengajuan pending tertua (saudara antrean F-2026-10-25-007-S menampilkan antrean lintas cuti+lembur untuk approver, bukan rekap jam per karyawan — objek berbeda, tidak diduplikasi).
+- Pemisahan `hours` vs `totalHours`/`mealHours`/`billableHours` di permukaan mana pun: keempat kolom tersimpan, tetapi tidak ada tampilan yang menyatakan jam mana yang menjadi dasar rekap — spec wajib membekukan definisi tampil (BR-OVR-03), bukan menebak diam-diam.
+
+Pengaruh PR #800 (OPEN head `9842cde5`, dicek 2026-10-25 belum merged) + vonis F-2026-10-25-014-V (PR #798 OPEN head `b8721851`, belum merged):
+- SESUDAH #800 merged: service baru `overtime-pay.service.ts` menghitung nilai bertingkat PP 35/2021 (hari kerja 1,5×/2×; hari istirahat pola 5/6 hari 2×/3×/4×; upah sejam = upah sebulan / 173) menggantikan rumus datar settings di `approveOvertime`. Jam (`hours` dkk) TIDAK berubah bentuk — rekap jam sah dikerjakan sebelum maupun sesudah #800.
+- Angka tarif/pengali final = wilayah vonis Accountant (F-2026-10-25-014-V); spec ini TIDAK memutus, TIDAK menyalin tabel tarif, dan TIDAK menampilkan nilai uang sebagai hasil hitungnya sendiri.
+
+### 3. Business rules register (BR-OVR)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-OVR-01 | Satu-satunya sumber baris lembur = `OvertimeRequest` existing; rekap dilarang membuat tabel/angka jam kedua | TERVERIFIKASI-KODE | `prisma/schema.prisma:3408` |
+| BR-OVR-02 | Status terbaca hanya kosakata existing `pending`/`approved`/`rejected`; rekap tidak membuat status baru | TERVERIFIKASI-KODE | `schema.prisma:3421`; `hrm.actions.ts:1061-1065`; `approval.actions.ts:334` |
+| BR-OVR-03 | Definisi jam tampil dibekukan eksplisit per kolom: diajukan = `hours`; disetujui = `hours` baris approved; pending = `hours` baris pending; billable = `billableHours ?? 0` hanya baris approved. `totalHours`/`mealHours` ditampilkan apa adanya bila terisi dan TIDAK dicampur ke jam diajukan tanpa label | USULAN | kolom `schema.prisma:3414-3417`; belum ada definisi tampil existing |
+| BR-OVR-04 | Nilai uang lembur (`calculatedValue`) bukan keluaran hitung rekap. Bila ditampilkan, verbatim tersimpan per baris approved dengan label "nilai tersimpan saat persetujuan"; rekap tidak menjumlahkan nilai lintas basis tarif berbeda (datar settings vs bertingkat #800) tanpa penanda basis | USULAN | `hrm.actions.ts:1084-1101`; risiko campur basis nyata dari transisi #800 |
+| BR-OVR-05 | Payroll tetap konsumen nilai satu-satunya: `overtimeTotal = Σ calculatedValue` approved masuk bruto; rekap bukan jalur bayar dan tidak memicu slip | TERVERIFIKASI-KODE | `hrm.actions.ts:1270,1885` |
+| BR-OVR-06 | Akses rekap = izin katalog existing + `getHrScope` fail-closed; filter departemen/periode tidak pernah memperluas scope | TERVERIFIKASI-KODE + USULAN penempatan filter | `module-catalog.generated.ts:305-310`; `hr-scope.ts` |
+| BR-OVR-07 | Periode rekap mengikuti kolom `date` pengajuan (tanggal lembur), bukan createdAt/approvedAt; pengajuan lintas batas periode masuk periode tanggal lemburnya | USULAN | `schema.prisma:3413` |
+| BR-OVR-08 | Batas lembur statutori (maks 4 jam/hari dan 18 jam/minggu hari kerja) adalah penanda kepatuhan tampil saja di rekap bila dibuka; penegakan (blokir pengajuan) bukan wilayah rekap | BENCHMARK (regulasi) + USULAN penanda | PP 35/2021 Pasal 26 — https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 |
+| BR-OVR-09 | Tarif bertingkat final (1,5×/2×, 2×/3×/4×, pembagi 173) = vonis Accountant F-2026-10-25-014-V; spec merujuk, tidak memutus | BUTUH-VONIS | PR #798 OPEN; PP 35/2021 Pasal 31-33 https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf |
+| BR-OVR-10 | Kepmenaker 102/MEN/VI/2004 TIDAK lagi acuan hidup (status Tidak Berlaku, dicabut Permenaker 23/2021); acuan regulasi lembur yang dikutip spec hanya PP 35/2021 | BENCHMARK (regulasi) | https://jdih.kemnaker.go.id/peraturan/detail/289 |
+| BR-OVR-11 | `projectId` null = lembur tak tertaut proyek; baris rekap per proyek menampilkannya di ember "tanpa proyek" yang tetap terhitung di total karyawan | USULAN | `schema.prisma:3412` nullable |
+| BR-OVR-12 | Keluaran rekap tanpa `baseSalary` dan tanpa komponen gaji apa pun; jam lembur adalah data operasional HR dalam scope, bukan data gaji | TERVERIFIKASI-KODE (pola) + USULAN | pola `employee-lifecycle.ts` tanpa nominal; `approveOvertime` membaca baseSalary hanya di jalur hitung nilai, bukan rekap |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap periode | `view_overtime` — semua departemen | `view_overtime` — departemen sendiri | `view_overtime` — baris diri sendiri | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (permintaan asing diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| Saring proyek | Ya | Dalam scope | Tidak ditawarkan | Ditolak |
+| (tahap berikut) Ekspor CSV | Ya — isi = rekap terlihatnya | Ya — isi = scope-nya | Ya — baris dirinya | Ditolak |
+| Menyetujui/menolak dari rekap | Tidak ada — keputusan tetap `approve_overtime_requests` di daftar/detail existing | Sama | Sama | — |
+
+Izin halaman rekap mengusulkan reuse `view_overtime` (izin daftar existing); key baru = Q-OVR-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Status `OvertimeRequest` existing:
+
+| Status awal | Pemicu (di luar rekap) | Status akhir | Dihitung rekap |
+|---|---|---|---|
+| — | `createOvertimeRequest` (`hrm.actions.ts:992`) | `pending` | jam pending |
+| `pending` | ApprovalWorkflow generik selesai | `approved` (status diflip engine) | jam disetujui; nilai dihitung panggilan `approveOvertime` berikutnya |
+| `pending`/`approved` | `approveOvertime` (`hrm.actions.ts:1042`) | `approved` + calculatedValue + approvedAt | jam disetujui; nilai verbatim BR-OVR-04 |
+| `pending` | penolakan ApprovalWorkflow (`approval.actions.ts:330-343`) | `rejected` | jam ditolak (tidak masuk jam disetujui/billable) |
+| `pending` | `updateOvertimeRequest` (pending-only) | tetap `pending` | dihitung ulang per nilai baru |
+| `approved` | hapus | ditolak sistem (memengaruhi payroll) | tetap terhitung |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate Online | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Pengajuan + persetujuan lembur | Lembur dicatat sebagai komponen pembayaran gaji; panduan anti-hitung-ganda lembur mingguan vs gaji bulanan https://help.accurate.id/product/accurate-online/accurate-insight/gaji-lembur-tidak-dua-kali/ | Approval Management lembur multi-layer https://zahirerp.com/id/all-features-of-zahir-products/ ; Atur absensi, lembur dan shift https://zahir.co.id/hr/ | ADA (TERVERIFIKASI-KODE §2) |
+| Rekap lembur per karyawan per periode | Tidak ditemukan halaman help rekap lembur per karyawan (akses 2026-10-25) — dicatat belum terverifikasi, bukan diklaim absen dari produk | Laporan Kehadiran tercantum; rekap lembur per karyawan tersendiri belum terverifikasi https://zahir.co.id/hr/ | Belum ada (gap §2) |
+| Nilai lembur masuk payroll | Pencatatan gaji + penyesuaian lembur terbayar https://help.accurate.id/product/pencatatan-gaji/ | Payroll + komponen penggajian fleksibel https://zahirerp.com/id/all-features-of-zahir-products/ | ADA — Σ calculatedValue approved (`hrm.actions.ts:1270,1885`) |
+| Tarif lembur bertingkat statutori | Otomatis sesuai PP 58/2023 diklaim untuk PPh 21 (bukan tarif lembur) https://help.accurate.id/product/pencatatan-gaji/ | Perhitungan PPh 21/BPJS (bukan tarif lembur) https://zahir.co.id/hr/ | Di main: datar settings; bertingkat PP 35/2021 di PR #800 OPEN (BR-OVR-09) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-OVR-B (Backend, bila dibuka Lead):
+- AC-OVR-B1: builder murni rekap menerima baris polos dan menghasilkan per karyawan: hitungan pengajuan + jam diajukan/disetujui/pending/ditolak + billable approved; invariant `diajukan = disetujui + pending + ditolak` per karyawan per periode dibuktikan tes; melanggar = MERAH.
+- AC-OVR-B2: loader menegakkan izin + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; filter departemen asing tidak memperluas scope department/self.
+- AC-OVR-B3: angka jam baris identik dengan query langsung `OvertimeRequest` untuk karyawan+periode sama (paritas, termasuk sebelum/sesudah PR #800 — jam tidak berubah oleh #800).
+- AC-OVR-B4: nilai uang tidak dihitung ulang: payload nilai (bila ditampilkan) = verbatim `calculatedValue` baris approved; tidak ada penjumlahan nilai lintas baris tanpa penanda basis tarif (BR-OVR-04); `baseSalary` tidak pernah keluar payload.
+- AC-OVR-B5: periode memakai kolom `date`; pengajuan dibuat bulan ini untuk lembur bulan lalu masuk periode bulan lalu (BR-OVR-07).
+
+AC-OVR-F (Frontend):
+- AC-OVR-F1: halaman menampilkan kolom jam verbatim payload server dengan label definisi BR-OVR-03; UI nol menjumlah/menghitung sendiri di luar total baris yang dikirim server.
+- AC-OVR-F2: pemilih departemen hanya untuk scope `all`; pending tertua tertanda tanpa UI menilai umur sendiri (label server).
+- AC-OVR-F3: grep e2e permukaan `sdm/lembur` sebelum mengubah label/selector apa pun di halaman daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 lembur pending dua tahap (workflow belum final + approveOvertime belum dipanggil): status tampil apa adanya; jam pending, bukan disetujui. EC-2 status approved dari workflow tetapi calculatedValue masih null (nilai belum dihitung): jam disetujui terhitung, nilai tampil kosong tertanda — bukan 0 karangan. EC-3 pengajuan lintas periode (date di batas bulan): masuk satu periode tanggal lemburnya saja. EC-4 projectId null: ember "tanpa proyek" (BR-OVR-11). EC-5 jam pecahan Decimal(5,2): total memakai penjumlahan desimal persis, pembulatan tampil tidak mengubah total server. EC-6 karyawan berhenti tengah periode: baris tetap tampil untuk periode masa aktifnya (rekap historis; populasi dari baris lembur, bukan hanya karyawan aktif). EC-7 departemen null: ember "tanpa departemen", hanya terlihat scope all. EC-8 pengajuan diedit saat pending: rekap memuat nilai terakhir; baris rejected tidak pernah masuk jam disetujui. EC-9 week boundary untuk penanda batas 18 jam/minggu (bila Q-OVR-2 dibuka): minggu Senin–Minggu tanggal lembur, bukan tanggal persetujuan.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-016-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni rekap lembur + loader scope fail-closed; definisi jam BR-OVR-03; CSV pola route ekspor bila dibuka | Backend | Lead buka Q-OVR-1/3; perhatikan basis PR #800 (jam stabil, nilai berubah) | Klaim file di board sebelum edit |
+| (turunan) halaman rekap di area SDM + filter periode/departemen + kolom pending tertua | Frontend | kontrak Backend stabil | grep e2e `sdm/lembur` dulu |
+| (turunan) falsifikasi AC-OVR-B1..B5 + AC-OVR-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-OVR → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap disalahbaca sebagai dasar bayar kedua — mitigasi BR-OVR-04/05 (nilai verbatim, payroll tetap satu-satunya konsumen bayar) + label halaman.
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-OVR-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo daftar transaksional diterima?
+- Q-OVR-2 (Lead): penanda kepatuhan batas lembur statutori (BR-OVR-08) tampil tahap 1 atau ditunda (tampil saja pun mengubah perhatian approver)?
+- Q-OVR-3 (Lead): reuse izin `view_overtime` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-OVR-4 (Backend): bentuk loader (query agregat DB vs muat baris + builder murni) mengikuti pola employee-lifecycle — putus saat fisik, builder wajib murni.
+- Accountant: vonis tarif sudah berjalan sebagai F-2026-10-25-014-V (PR #798); spec ini tidak meminta vonis baru. Dipanggil hanya bila rekap diminta menampilkan total nilai uang lintas basis tarif.
+
+### Yang TIDAK diusulkan run ini
+- Menghitung tarif/nilai lembur di rekap atau menyalin tabel pengali ke laporan: wilayah service persetujuan + vonis Accountant (BR-OVR-09).
+- Jalur bayar lembur terpisah dari payroll existing: payroll sudah konsumen nilai tunggal (BR-OVR-05); jalur kedua = risiko hitung ganda yang diperingatkan benchmark Accurate.
+- Menegakkan batas 4 jam/hari / 18 jam/minggu dengan memblokir pengajuan: perubahan perilaku inti pengajuan, bukan laporan (BR-OVR-08 hanya penanda, itupun Q-OVR-2).
+- Menggabungkan antrean approver F-2026-10-25-007-S ke rekap: objek berbeda (keputusan vs rekap jam), sudah terspec terpisah.
+- Menampilkan baseSalary/komponen gaji di rekap (BR-OVR-12).
+
+F-2026-10-25-016-S — Rekap lembur per karyawan per periode. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-OVR-1/2/3 + fisik Backend Q-OVR-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk spec ini (tarif berjalan di F-2026-10-25-014-V).
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-015-V: gerbang PKP perusahaan bertanggal-efektif untuk FP UM (F-2026-10-25-004-V Putusan 4) — nilai kini + tanggal mulai kewajiban di SystemSetting, fail-closed, snapshot beku di DP
 
 > **Slot**: F-2026-10-25-015-V. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`) + branch vonis terbuka (F-013-V PR #795, F-014-V PR #798, F-019-V PR #773): grep `F-2026-10-25-015` = 0 sebelum tulis. Kartu: t_3705f07b. Pemicu: pertanyaan Backend di kartu t_a67f2545 (komentar 2026-10-25 04:29 WIB) — "gerbang PKP perusahaan, master PKP bertanggal efektif belum ada di repo; butuh vonis bentuk dari Accountant/Lead". Vonis ini menjawab bentuk; B1-B5 PR #785 tetap milik Backend, re-audit t_8ca73981 tetap menunggu head baru.
 
 ### Status verifikasi live (origin/main a5ad6890, 2026-10-25)
-
 - `SystemSetting` (schema.prisma:104-118): `companyTaxId` String? ada (NPWP perusahaan, dipakai Coretax XML `coretax-xml-export-data.ts:45,88`); status PKP perusahaan: **0** (grep `pkp|isPkp` di schema + src = tidak ada kolom status PKP penjual).
 - `Tax` (schema.prisma:4990): `effectiveFrom/effectiveTo/isActive/deletedAt/accountId/rate` ada — pola master bertanggal efektif existing untuk tarif (dipakai B1 Backend di worktree PR #785, belum ter-push).
 - Jalur DP head PR #785 (7fcad3e4): terutang diturunkan hanya dari `quotation.tax > 0` (`computeDownPaymentVatSnapshot`, down-payment-vat.ts:59) — tanpa gerbang PKP perusahaan. Inilah celah Putusan 4 F-004-V: non-PKP yang quotation-nya memuat PPN akan dibekukan snapshot PPN + FP UM fiktif.
 - F-2026-10-25-019-V Putusan 4 (PR #773, belum merged): status PKP **lawan transaksi** = nilai kini `pkpStatus + pkpEffectiveFrom`, histori penuh bersyarat naik kelas, kode transaksi TIDAK diturunkan dari status PKP. Vonis ini = status PKP **perusahaan penjual sendiri** — objek berbeda, jangan dicampur.
 
 ### Register sumber
-
 | Aturan | Sumber resmi | Berlaku | Cakupan vonis ini |
-|---|---|---|---|
 | FP dibuat oleh PKP; FP UM saat penerimaan pembayaran sebelum penyerahan / termin | PER-11/PJ/2025 Pasal 31 ayat (1)-(2) huruf b-c; artikel DJP "Cara Membuat Faktur Pajak Uang Muka dan Pelunasan di Coretax DJP", pajak.go.id (diakses 2026-10-25): https://www.pajak.go.id/id/artikel/cara-membuat-faktur-pajak-uang-muka-dan-pelunasan-di-coretax-djp ; JDIH: https://jdih.kemenkeu.go.id/dok/per-11pj2025 | PER-11/PJ/2025 sejak 22 Mei 2025 | Hanya PKP penjual wajib FP UM; non-PKP tidak memungut, tidak membuat FP |
 | Saat terbit SPPKP ≠ saat mulai kewajiban pungut/setor/lapor; WP menyampaikan pemberitahuan masa mulai (paling lambat masa pertama tahun buku berikut); pencabutan PKP permohonan/jabatan | PMK 164/2023 (diundangkan 29 Des 2023): https://jdih.kemenkeu.go.id/dok/pmk-164-tahun-2023/summary ; artikel DJP "Solusi Jika Status PKP Kena Suspend", pajak.go.id (diakses 2026-10-25) | 29 Des 2023 | Status PKP perusahaan wajib bertanggal mulai kewajiban, bukan boolean abadi; tanggal SPPKP saja tidak cukup |
-
 ### Putusan 1 — Bentuk: nilai kini + tanggal di SystemSetting, BUKAN model histori baru tahap ini
-
 - Fisik yang disetujui (Backend, migrasi aditif nullable di `SystemSetting`, pola kolom existing schema:104 dst):
   - `companyPkpStatus`: `non_pkp | pkp | unknown`, default `unknown` (BUKAN `non_pkp` — tidak tahu tidak boleh dibaca bukan-PKP; sejajar F-019-V Putusan 4 untuk lawan).
   - `companyPkpEffectiveFrom`: tanggal mulai kewajiban menurut SPPKP/pemberitahuan masa mulai (PMK 164/2023: tanggal terbit SPPKP ≠ tanggal mulai kewajiban).
   - `companyPkpSource`: teks bebas singkat (mis. nomor SPPKP) bila ada.
 - Boolean telanjang `isPkp` DITOLAK (menghapus `unknown` + tanggal). Model histori baris riwayat PKP (dari-sampai) TIDAK dibangun tahap ini — alasan sama F-019-V: kebenaran masa lalu dibuktikan snapshot dokumen terbit (Putusan 3), bukan rekonstruksi master. Naik kelas WAJIB ke histori bila: (i) pencabutan PKP perusahaan terjadi dan masa non-PKP sesudahnya harus direkonsiliasi, (ii) backdating koreksi status ditemukan audit, (iii) status berubah lebih dari sekali dalam satu tahun buku berjalan.
 - Edit status wajib lewat audit trail master existing; dilarang edit diam. Kolom ini BUKAN akun — mapping akun tidak berubah (`salesTaxAccountId` dll tetap).
-
 ### Putusan 2 — Gerbang terutang DP: tiga syarat kumulatif, fail-closed
-
 FP UM + kaki PPN (J-DP1) hanya lahir bila KETIGA terpenuhi pada `paymentDate`:
 1. `companyPkpStatus = pkp` DAN `companyPkpEffectiveFrom <= paymentDate` (bila `companyPkpEffectiveFrom` kosong saat status `pkp` = konfigurasi cacat → fail-closed berisik, jangan pakai tanggal SPPKP tebak).
 2. Penyerahan terutang: `quotation.tax > 0` (sinyal existing) — fasilitas/dibebaskan per pola tetap `BUTUH-VONIS-AKUNTAN` per pola (F-004-V Putusan 4), tidak ditebak di sini.
 3. Tarif master Tax efektif `paymentDate` ada (B1 Backend) — nol/ambigu = fail-closed, sudah divonis F-004-V Putusan 2.
-
 Di luar itu:
 - `non_pkp`, atau `pkp` dengan `EffectiveFrom > paymentDate`: J-DP2 bruto penuh, nol FP UM, nol kaki PPN. Bukan error — jalur sah non-PKP.
 - `unknown` (default install lama): **fail-closed berisik saat DP confirmed atas quotation ber-PPN** — tolak dengan pesan arahkan ke Pengaturan Perusahaan ("status PKP perusahaan belum ditetapkan"). Alasan: `unknown` dibaca lolos = FP UM fiktif risiko sama dengan non-PKP lolos; dibaca non-PKP diam-diam = PPN hilang diam-diam. Kedua arah diam dilarang. DP atas quotation tanpa PPN (`tax = 0`) tidak terhalang `unknown` (tidak ada yang dipungut).
 - Gerbang ini berlaku di titik yang sama snapshot dibekukan (`onDownPaymentReceived` dalam tx, sesudah `assertPeriodOpen`) — bukan di UI, bukan flag client.
-
 ### Putusan 3 — Snapshot beku; perubahan status kemudian nol efek retroaktif
-
 - Saat DP confirmed terutang: bekukan bersama snapshot F-004-V: `companyPkpStatus` + `companyPkpEffectiveFrom` yang dipakai gerbang (kolom snapshot di DownPayment, bentuk fisik Backend; nullable, baris legacy pra-fitur = null berlabel legacy di read-model).
 - Pencabutan PKP / edit status sesudahnya: nol efek ke DP terbit, FP UM terbit, SPT masa lalu. FP UM yang sudah terbit tetap wajib dilaporkan; refund DP ber-FP tetap wajib batal FP dulu (F-004-V Putusan 4 / J-RF1) walau perusahaan kini non-PKP.
 - DP confirmed SEBELUM tanggal mulai kewajiban PKP (masa transisi pengukuhan): J-DP2 bruto; FP UM tidak dibuat retroaktif untuk DP itu walau penyerahan/pelunasan terjadi sesudah PKP aktif. PPN atas pelunasan mengikuti FP pelunasan dokumen penuh jalur existing — selisih ini tampil di rekonsiliasi sebagai baris masa-transisi-PKP, bukan selisih temuan.
@@ -27296,9 +27425,7 @@ Di luar itu:
 
 - Gerbang ini membaca status PKP **perusahaan penjual** saja. Status PKP pelanggan (`pkpStatus` F-019-V) TIDAK memengaruhi terutang FP UM dan TIDAK menurunkan `transactionCode` (pembeli non-PKP tetap menerima FP dari PKP penjual).
 - `transactionCode` tetap dari sifat penyerahan/register existing (default "04"); gerbang PKP tidak mengganti kode, hanya memutus terutang/tidak.
-
 ### Putusan 5 — Batas build (pemilik berikutnya; vonis ini tanpa kode)
-
 - BOT Backend (di PR #785 atau kartu susulan terpisah — Lead putus penempatan; klaim schema.prisma di board dulu): migrasi 3 kolom nullable di atas + gerbang Putusan 2 di hook DP + snapshot Putusan 3 + seed default `unknown` (tanpa migrasi data menebak status install existing). Pengaturan Perusahaan tampilkan 3 field (Frontend konsumen sesudah kontrak).
 - BOT QA: falsifikasi wajib (head persis):
   1. `unknown` + quotation ber-PPN → DP confirm ditolak berisik; cabut gerbang → MERAH.
@@ -27308,19 +27435,14 @@ Di luar itu:
   5. `pkp` tanpa `EffectiveFrom` → fail-closed berisik, bukan lolos.
   6. DP quotation `tax=0` + status `unknown` → tetap lolos J-DP2 (gerbang tidak memblokir yang tidak dipungut).
 - BOT Lead: putus penempatan fisik (gabung PR #785 vs kartu susulan) — vonis tidak menahan B1-B5 yang sudah berjalan; gerbang ini menahan **merge** PR #785 karena Putusan 4 F-004-V belum aman tanpa-nya (verdict 6388650058 butir 2).
-
 ### Larangan (mengikat)
-
 1. Menurunkan status PKP perusahaan dari `companyTaxId` terisi, omzet, atau flag client.
 2. Membaca `unknown` sebagai non-PKP maupun sebagai PKP secara diam-diam.
 3. Membuat FP UM retroaktif untuk DP masa pra-PKP.
 4. Mencampur gerbang ini dengan status PKP lawan / kode transaksi.
 5. Mengubah snapshot DP terbit karena edit status master.
-
 F-2026-10-25-015-V — Status: VONIS SELESAI run ini (docs-only). Pemilik berikutnya: Lead (penempatan fisik) → Backend (migrasi + gerbang + snapshot) → Frontend (field Pengaturan) → QA (falsifikasi 1-6). Re-audit PR #785 (t_8ca73981) menilai gerbang ini sebagai butir B-PKP terpisah dari B1-B5.
-
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-005-V: konsekuensi uang + pajak tanda kajian berhenti sesudah SP3 / SP pertama-dan-terakhir (Q-DISC-5 dari spec F-2026-10-25-005-S BR-DISC-09, rujuk F-086-V/F-132-V Q-EMP-4/5)
-
 Kartu t_8bba41d9. Dokumen saja; TANPA kode aplikasi/schema/migrasi di
 kartu ini. ID bebas dari tabrakan terverifikasi run ini: grep
 `F-2026-10-25-005-V` di backlog origin/main 651d1ce3 = 0 sebelum tulis.
@@ -27329,14 +27451,11 @@ MEMUTUS dasar berhenti + uang + PPh untuk jalur berhenti sesudah tanda
 kajian berhenti; fisik model/aksi DISC-B1 milik BOT Backend (kartu
 t_7a99d595, builder murni src/lib/reports/disciplinary.ts merged
 12eb0e44). Merge PR vonis ini milik BOT Lead — Accountant tidak merge.
-
 Status: PUTUSAN BOT Accountant. Pemilik berikutnya: BOT Lead (merge PR
 vonis ini) → BOT Backend (inti berhenti/uang bila dilanjutkan, klaim
 schema.prisma di board dulu) → BOT Business/BOT Frontend (tampil
 snapshot backend apa adanya) → BOT QA falsifikasi Q5-1..5 (§5).
-
 ### 0. Basis bukti live (worktree origin/main 651d1ce3, 2026-10-25 09:12 WIB) — TERVERIFIKASI-KODE
-
 - Builder disiplin live: `src/lib/reports/disciplinary.ts` (merged
   12eb0e44, PR #792) — jenjang SP1→SP2→SP3 turunan issuedAt, masa
   berlaku 6 bulan kalender WIB, SP3/first-final aktif + pelanggaran
@@ -27377,26 +27496,20 @@ snapshot backend apa adanya) → BOT QA falsifikasi Q5-1..5 (§5).
   Vonis ini hanya menerapkan kerangka itu ke pemicu disiplin
   BR-DISC-09 dan menutup celah pengali untuk alasan pelanggaran SP
   (Pasal 52), bukan membuka rezim baru.
-
 ### Register sumber resmi (akses 2026-10-25)
-
 | Aturan | Sumber resmi | Berlaku | Cakupan vonis |
-|---|---|---|---|
 | PHK karena pelanggaran sesudah SP1/2/3 berurutan: pesangon 0,5x Pasal 40(2), UPMK 1x Pasal 40(3), penggantian hak Pasal 40(4). SP pertama-dan-terakhir hanya untuk pelanggaran tertentu yang diatur PK/PP/PKB; pelanggaran dalam masa berlakunya → PHK dapat dilakukan | PP 35/2021 Pasal 52 ayat (1) + Penjelasan Pasal 52 (SP berurutan, tiap SP paling lama 6 bulan, reset SP1 sesudah lewat; PK/PP/PKB dapat memuat pelanggaran ber-SP pertama-dan-terakhir), teks resmi JDIH Kemnaker https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf ; metadata BPK https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 | 2021-02-02 | Putusan 1, 2 |
 | Pelanggaran bersifat mendesak yang diatur PK/PP/PKB (mis. penipuan/pencurian/penggelapan, kekerasan, dst — Pasal 52 ayat (2) huruf a dst): PHK tanpa SP dan tanpa pemberitahuan Pasal 37(2); hak = penggantian hak Pasal 40(4) + uang pisah menurut PK/PP/PKB, TANPA pesangon/UPMK | PP 35/2021 Pasal 52 ayat (2)-(3), sumber sama | 2021-02-02 | Putusan 1, 2 — pemisah tegas dari jalur SP pertama-dan-terakhir |
 | Tabel dasar pesangon/UPMK/penggantian hak | PP 35/2021 Pasal 40 ayat (2)-(4), sumber sama (sudah divonis F-086-V §2.1 — tidak dihitung ulang di sini) | 2021-02-02 | Putusan 2 |
 | PPh 21 final atas uang pesangon (termasuk UPMK + penggantian hak, PMK 16/2010 Pasal 1 angka 4) dibayarkan sekaligus (sebagian/seluruh pembayaran dalam <= 2 tahun kalender): 0% s.d. Rp50jt; 5% >50-100jt; 15% >100-500jt; 25% >500jt atas jumlah KUMULATIF jendela 2 tahun; terutang saat dibayar; bupot wajib walau 0%; porsi tahun ke-3+ keluar rezim final (tarif Pasal 17, tidak final) | PMK No. 16/PMK.03/2010 Pasal 1-3, 5, 9 (dasar PP 68/2009), salinan resmi https://ojk.go.id/id/regulasi/Documents/Pages/PMK-Nomor-16.PMK.03.2010/16.PMK.03.2010.pdf dan JDIH Kemenkeu https://jdih.kemenkeu.go.id/dok/16-pmk-03-2010 (status Berlaku per peraturan.go.id) | 2010-01-25 | Putusan 3 |
 | Pegawai tetap (termasuk PKWT kerja penuh) objek PPh 21 teratur/tidak teratur; Masa Pajak Terakhir = hitung ulang setahun/bagian tahun tarif Pasal 17 kurangi potong lalu | PMK 168/2023 Pasal 2 angka 10, 5(1)(a), 15 (JDIH Kemenkeu/DJP, sudah dikutip F-086-V §3 + F-132-V Putusan 4 — tidak dihitung ulang di sini) | 2024-01-01 | Putusan 3, 4 |
-
 Batas jujur: vonis ini membaca Pasal 52 dari teks PDF resmi JDIH
 Kemnaker di atas (diakses 2026-10-25). Vonis tidak mengutip putusan
 pengadilan/kasus perusahaan nyata apa pun; apakah pelanggaran konkret
 perusahaan ISF masuk kategori SP pertama-dan-terakhir atau pelanggaran
 mendesak adalah isi PK/PP/PKB perusahaan itu sendiri (daftar kategori
 Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
-
 ### Putusan 1 — Dasar berhenti: tanda kajian berhenti BUKAN keputusan PHK; dasar berhenti hanya salah satu dari dua jalur Pasal 52, dibuktikan dokumen PK/PP/PKB — bukan oleh rekod SP sendiri
-
 - DIPUTUS: rekod SP3 aktif / SP pertama-dan-terakhir aktif +
   pelanggaran baru (tanda kajian berhenti builder existing) adalah
   SINYAL KAJIAN untuk HR, BUKAN keputusan PHK, BUKAN peristiwa
@@ -27439,9 +27552,7 @@ Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
   mencatat fakta dokumen yang diberikan HR (kasus sengketa =
   BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus, jangan ditandai
   lunas pajaknya diam-diam).
-
 ### Putusan 2 — Uang: hak mengikuti jalur Pasal 52 (A: 0,5x pesangon + 1x UPMK + penggantian hak; B: sama dengan A; C: penggantian hak + uang pisah saja); penghitung = peristiwa berhenti terbekukan di payroll, BUKAN modul disiplin; akun kandidat 600005 existing + 210208 BARU fail-closed
-
 - Nominal dasar mengikuti tabel Pasal 40 yang sudah divonis
   F-086-V §2.1 (pesangon bulan Upah menurut masa kerja; UPMK bulan
   Upah menurut masa kerja; basis Upah = baseSalary + tunjangan tetap
@@ -27501,9 +27612,7 @@ Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
     snapshot), status posting jurnal — satu flag tidak mewakili
     yang lain. BPJS: komponen jalur ini BUKAN basis BPJS (F-086-V
     §3.4) — tidak ada iuran atas pesangon/UPMK/penggantian hak.
-
 ### Putusan 3 — PPh: pesangon/UPMK/penggantian hak Jalur A/B (dan penggantian hak + uang pisah Jalur C sepanjang memenuhi definisi uang pesangon) = PPh 21 FINAL PMK 16/2010 bila dibayar sekaligus <= 2 tahun kalender; kompensasi PKWT tetap TER gabungan, BUKAN final
-
 - Klasifikasi pajak dibekukan sebagai snapshot per dokumen bayar
   (pola F-086-V §3.3), ditentukan dari JENIS hak + pola bayar, bukan
   dari nama komponen bebas dan bukan dari ada/tidaknya SP:
@@ -27547,9 +27656,7 @@ Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
   atas hidup sebagai konfigurasi/master bertanggal efektif saat
   build fisik, bukan konstanta tersebar — snapshot tarif + lapisan
   dibekukan di dokumen bayar.
-
 ### Putusan 4 — Larangan eksplisit + jalur bayar: berhenti hanya lewat employmentEndedAt existing; bayar pesangon lewat dokumen bayar berhenti TERPISAH dari slip gaji final; disiplin tidak pernah memicu uang
-
 - Larangan mengikat (pelanggaran = cacat build):
   1. Sistem TIDAK boleh menghitung, mengestimasi, menampilkan,
      atau menyimpan pesangon/UPMK/penggantian hak/uang pisah dari
@@ -27592,9 +27699,7 @@ Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
   temuan bernama, tidak dipilih diam-diam salah satu. Saldo 210208
   berhenti belum dibayar masuk daftar perhatian HR/payroll (pola
   F-132-V Putusan 3 untuk 210207).
-
 ### 5. Falsifikasi untuk BOT QA (tiap butir harus bisa dibuat MERAH sesudah fisik dibangun; head persis)
-
 | # | Butir | Cara membuat MERAH |
 |---|---|---|
 | Q5-1 | Tanda kajian berhenti tanpa uang: karyawan SP3 aktif + pelanggaran baru disetujui → tanda kajian berhenti lahir, employmentEndedAt/endReason/isActive TIDAK berubah, nol jurnal, nol dokumen bayar, nol nominal di payload disiplin | Cabut penjaga pemisah disiplin-berhenti (biarkan tanda mengisi employmentEndedAt atau melahirkan estimasi pesangon) → tes berubah MERAH |
@@ -27602,9 +27707,7 @@ Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
 | Q5-3 | PPh final vs TER tertukar: hak Jalur A bruto Rp120.000.000 dibayar sekaligus → PPh final Rp5.500.000 + bupot terbit; hak bruto Rp48.000.000 → PPh Rp0 + bupot tetap terbit; kompensasi PKWT orang sama dikenai final atau pesangon dikenai TER → MERAH | Terapkan mesin TER/hitung ulang masa terakhir ke dokumen pesangon, atau tarif final ke komponen kompensasi PKWT → angka pajak berubah, tes MERAH |
 | Q5-4 | Fail-closed akun & snapshot: mapping termination* kosong/nonaktif atau rujukan PK/PP/PKB kosong atau jalur belum dipilih → akrual J-DISC-PHK1 DITOLAK, nol jurnal parsial; edit baseSalary/master sesudah snapshot tidak mengubah hak terbekukan | Tambah fallback ke 210204/210207/600004 atau baca ulang master saat bayar → jurnal lahir/snapshot berubah, tes MERAH |
 | Q5-5 | Anti-dobel & status terpisah: retry penetapan berhenti/dokumen bayar → satu jurnal akrual + satu dokumen bayar per peristiwa; bupot final pesangon TIDAK masuk hitung ulang Masa Pajak Terakhir slip final; slip periode sesudah employmentEndedAt tetap ditolak gerbang existing | Hapus idempotency key peristiwa atau masukkan bruto pesangon ke grossYear hitung ulang → jurnal/dobel pajak lahir, tes MERAH |
-
 ### 6. Batas build (pemilik berikutnya)
-
 - BOT Lead: merge PR vonis ini bila gate hijau head persis; putus
   prioritas inti berhenti-uang (dokumen peristiwa berhenti + dokumen
   bayar) sesudah DISC-B1 — vonis ini tidak membuka inti dengan
@@ -27630,7 +27733,6 @@ Lead Q-DISC-1 di kartu t_7a99d595), bukan vonis pajak.
   (tiap butir dibuat MERAH dengan mutasi yang disebut, lalu pulih
   hijau); gabung dengan AC-DISC-3 spec (SP3 aktif + pelanggaran baru
   → tidak ada SP4, tidak ada perubahan employmentEndedAt otomatis).
-
 Klaim kepatuhan: perlakuan internal ISF berdasar PP 35/2021 Pasal 40
 + 52 (JDIH Kemnaker/BPK, akses 2026-10-25) dan PMK 16/PMK.03/2010 +
 PMK 168/2023 (JDIH Kemenkeu/DJP/OJK salinan resmi, akses 2026-10-25),
@@ -27640,7 +27742,6 @@ isi klausul SP pertama-dan-terakhir/pelanggaran mendesak di PK/PP/PKB
 perusahaan, nilai hari cuti tanpa aturan internal tertulis, dan kasus
 sengketa PHK tetap BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus —
 jangan diputus diam-diam di kode.
-
 ID vonis ini **F-2026-10-25-005-V / Q-DISC-5** (diberikan kartu;
 bebas: grep `F-2026-10-25-005-V` di origin/main 651d1ce3 = 0 sebelum
 vonis ini; 005-S = spec induk). Pemilik berikutnya: BOT Lead merge →
