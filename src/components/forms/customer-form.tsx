@@ -16,6 +16,10 @@ import { FormCard, FormSection, FormActions } from "@/components/ui/form-section
 import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
+import {
+  CustomerDuplicateWarningPanel,
+  type CustomerDuplicateWarningView,
+} from "@/components/forms/customer-duplicate-warning"
 
 interface CustomerFormProps {
   customer?: {
@@ -48,6 +52,11 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
   // Quick-add state for "Kategori Pelanggan": the option list is local so a
   // newly created category appears (and gets selected) without a page reload.
   const [categoryOptions, setCategoryOptions] = useState(categories)
+  // F-2026-10-25-003-S AC-CD-F1: peringatan duplikat dari respons server
+  // (simpan tetap berhasil); panel tampil verbatim, navigasi ditunda
+  // sampai operator menekan lanjut.
+  const [duplicateWarning, setDuplicateWarning] =
+    useState<CustomerDuplicateWarningView | null>(null)
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
@@ -85,7 +94,21 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
         }
         const result = isEdit ? await updateCustomer(customer!.id, formData) : await createCustomer(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        // BR-CD-05: quick-add reuse terucap — pesan server verbatim,
+        // bukan sukses generik.
+        if ("reused" in result && result.reused) {
+          showSuccess(result.message ?? "Data berhasil ditambahkan")
+          router.push("/master/pelanggan")
+          router.refresh()
+          return
+        }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
+        // AC-CD-F1: warning dari server ditampilkan apa adanya; data
+        // sudah tersimpan, jadi jangan navigasi sebelum operator baca.
+        if (result.duplicateWarning) {
+          setDuplicateWarning(result.duplicateWarning)
+          return
+        }
         router.push("/master/pelanggan")
         router.refresh()
       } catch (error) {
@@ -96,6 +119,17 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
 
   return (
     <>
+      {duplicateWarning ? (
+        <div className="mb-6">
+          <CustomerDuplicateWarningPanel
+            warning={duplicateWarning}
+            onContinue={() => {
+              router.push("/master/pelanggan")
+              router.refresh()
+            }}
+          />
+        </div>
+      ) : null}
       <form onSubmit={handleSubmit(onSubmit)} aria-label={isEdit ? "Formulir ubah pelanggan" : "Formulir tambah pelanggan"} aria-busy={isPending}>
         <FormCard>
           <FormSection title="Informasi Umum">
