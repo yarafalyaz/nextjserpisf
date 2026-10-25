@@ -31525,6 +31525,307 @@ Rekomendasi Business ke Lead (satu paragraf): PUTUSKAN model bertahap di atas �
 - Tingkat prioritas `urgent`, pemicu firstResponseAt baru, WorkSchedule per departemen sebagai sumber jam SLA tahap 1, merge master pelanggan, validasi format NPWP online (keluarga identitas pajak, vonis Accountant bila diangkat).
 
 F-2026-10-25-040-S — Paket usulan Q-SLA135-1/2 + Q-CD-1. Status: USULAN SELESAI run ini; menunggu putusan Lead (satu paragraf per butir cukup). Pemilik: Business (usulan), Lead (putusan di Q-SLA135-1/2 spec 135-S dan Q-CD-1 spec 003-S). Butuh Accountant: TIDAK. Butuh kode di blok ini: TIDAK.
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-043-S: pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim (lanjutan eksplisit F-2026-10-25-038-S)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Lanjutan eksplisit dari bagian "Yang TIDAK diusulkan" F-2026-10-25-038-S: "Pengiriman via email — kanal + jejak berbeda, spec terpisah bila diminta". Spec ini mengambil HANYA jalur email manual lewat klien email staf (tautan `mailto:`) + jejak klik; pengiriman server-side (SMTP/API) TIDAK ada infrastrukturnya hari ini dan tetap di luar tahap 1 (lihat §0 + Q-SE-2). ID F-2026-10-25-043-S bebas terverifikasi run ini (2026-10-25 21:06 WIB): grep `F-2026-10-25-043` di backlog + board `origin/main` (`fe281d46`) = 0; ID 042 sudah terpakai PR terbuka vonis Accountant F-2026-10-25-042-V (Q-ITX-1), jadi slot -S berikutnya yang bebas = 043. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` fe281d46) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Statement Pelanggan live penuh F-2026-10-21-032: builder murni `buildCustomerStatement` (`src/lib/reports/customer-statement.ts`), loader `loadCustomerStatement` (`src/lib/reports/customer-statement-data.ts`), halaman `src/app/(dashboard)/laporan/statement-pelanggan/[[...segments]]/page.tsx` digerbang `view_reports`, registry PDF `"statement-pelanggan"` (`src/lib/reports/report-registry.ts:983`). Loader memilih pelanggan `select: { id, name }` saja (`customer-statement-data.ts:78`) — email/telepon pelanggan TIDAK ikut dimuat halaman statement hari ini.
+- Master pelanggan punya kontak: `Customer.email String?` + `Customer.phone String?` (`prisma/schema.prisma` model Customer, `email`/`phone` sesudah `name`).
+- Jejak klik existing F-2026-10-21-036: `recordWhatsappLinkOpened` (`src/actions/whatsapp-log.actions.ts`) menulis ActivityLog `whatsapp_link_opened` metadata `{channel, event: "link_opened", surface}` TANPA alamat/nomor/isi pesan; penjaga sesi + permission lihat per jenis dokumen; kegagalan catat tidak pernah menggagalkan navigasi. Jenis terdaftar hari ini HANYA `WorkOrder`/`SalesInvoice`/`Quotation` (`WHATSAPP_DOC_TYPES` whatsapp-log.actions.ts:21) — statement BELUM terdaftar di kanal mana pun; perluasan statement untuk WA = wilayah 038-S B1, spec ini kanal emailnya.
+- Pola tombol tautan manual existing: `WhatsappButton` (`src/components/reports/whatsapp-button.tsx`) — tidak tampil bila URL null, klik mencatat jejak fire-and-forget tanpa menahan navigasi. Pola yang sama (bukan komponen yang sama) dipakai spec ini untuk email.
+- `logActivity` (`src/lib/services/activity-log.service.ts:10`) menelan error (tidak pernah melempar ke pemanggil); model `ActivityLog` (`prisma/schema.prisma:5385`) berjangkar `(modelType, modelId)` + `metadata` JSON teks.
+
+Gap terbukti (grep run ini):
+- Nol infrastruktur kirim email keluar: grep `nodemailer|createTransport|resend|@sendgrid|mailgun|smtp` di `src/` = 0 hit; `package.json` tanpa library email. Mengklaim "sistem mengirim email" hari ini = klaim palsu.
+- Nol tautan `mailto:` di `src/components`/`src/app`: tidak ada jalur email manual apa pun dari permukaan mana pun.
+- Alamat email pelanggan tidak pernah dimuat loader statement (select id+name saja), jadi tombol email tidak bisa lahir dari payload existing tanpa perluasan loader (fisik Q-SE-3 Backend).
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: admin/keuangan berizin `view_reports` di halaman Statement Pelanggan existing.
+
+1. Staf membuka statement satu pelanggan untuk satu periode (alur existing, tidak berubah).
+2. Bila pelanggan terpilih punya email yang lolos validasi bentuk dasar (§4 BR-SE-03), tampil tombol "Kirim Email" di kepala halaman/kartu statement dengan label jujur pendamping: tautan dibuka di aplikasi email staf; sistem tidak mengirim dan tidak tahu email benar-benar terkirim.
+3. Klik tombol: (a) jejak dibuka dicatat fire-and-forget untuk statement ini (aksi jejak baru kanal email, BR-SE-02); (b) klien email staf terbuka dengan subjek + badan ringkas ter-isi (isi dibatasi BR-SE-04).
+4. Staf meninjau alamat/subjek/isi di aplikasi email sendiri, boleh mengubah/membatalkan di sana, lalu menekan kirim secara manual. Sistem TIDAK mengklaim terkirim, TIDAK menunggu konfirmasi, TIDAK mengubah status dokumen/piutang apa pun.
+5. Jejak tampil kembali sebagai riwayat baca-saja di halaman statement yang sama: "Tautan Email dibuka — <waktu WIB> oleh <nama staf>" per klik, dihitung dari ActivityLog. Tidak ada status "terkirim/dibaca pelanggan" di mana pun.
+
+Dokumen masuk: statement existing (pelanggan + periode). Dokumen keluar: tautan `mailto:` ber-subjek/isi + baris jejak ActivityLog. Tanpa tulis finansial, tanpa jurnal, tanpa perubahan status faktur/piutang, tanpa lampiran berkas (mailto tidak membawa lampiran dari sistem — BR-SE-08).
+
+### 2. Role/permission matrix (key nyata katalog `src/lib/auth/module-catalog.generated.ts`)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat statement (prasyarat semua aksi spec ini) | `view_reports` (:446) | TERVERIFIKASI-KODE |
+| Klik "Kirim Email" statement | reuse `view_reports` — halaman sudah digerbang key ini; penjaga jejak memeriksa key yang sama (konsisten usulan 038-S Q-SW-1) | USULAN (Q-SE-1 Lead bila minta key khusus) |
+| Lihat riwayat jejak email di halaman statement | `view_reports` (permukaan sama) | USULAN |
+| Key izin baru | TIDAK diusulkan tahap 1 | USULAN |
+| Kirim massal / terjadwal / via server (SMTP/API) | TIDAK ada — di luar spec (belum ada infrastruktur) | — |
+
+Catatan penjaga: mengikuti pola `recordWhatsappLinkOpened` yang memeriksa permission LIHAT objek induknya; untuk statement objek induknya laporan pelanggan, jadi key konsisten = `view_reports`, bukan `view_customers` (:126, melekat ke master pelanggan). Memilih key lain = Q-SE-1.
+
+### 3. Status-transition matrix
+
+Tidak ada status tersimpan baru dan tidak ada transisi dokumen: klik email bukan peristiwa bisnis atas piutang. Satu-satunya "keadaan" adalah jejak turunan baca dari ActivityLog:
+
+| Keadaan tampil | Pemicu | Penjaga |
+|---|---|---|
+| Belum pernah dibuka | belum ada baris jejak email untuk pelanggan ini | — |
+| Tautan dibuka (per klik, bisa berulang) | klik tombol oleh staf berizin | sesi + `view_reports`; catat gagal ≠ batalkan navigasi |
+| Terkirim / dibaca pelanggan | TIDAK ADA — dilarang dikarang dari klik mailto | BR-SE-01 |
+
+Setiap klik = satu baris jejak baru (riwayat, bukan penimpaan), mengikuti pola F-036.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-SE-01 | Label jujur mutlak: UI, jejak, dan laporan hanya boleh menyebut "Tautan Email dibuka". Klaim "terkirim/terbaca/sudah dihubungi" dari klik mailto DILARANG di semua permukaan. | TERVERIFIKASI-KODE (warisan F-036) | whatsapp-log.actions.ts kepala kontrak; whatsapp-button.tsx |
+| BR-SE-02 | Jejak statement kanal email memakai jalur ActivityLog existing, diperluas SATU aksi jejak email: modelType berjangkar pelanggan, modelId = ID pelanggan, metadata `{channel: "email", event: "link_opened", surface, periodStart, periodEnd}` (tanggal periode, bukan PII). Alamat email, subjek, dan isi pesan TIDAK masuk metadata/deskripsi log. Nama aksi final (mis. `email_link_opened` vs kanal di `whatsapp_link_opened`) = Q-SE-3 fisik Backend; mencampur kanal email ke aksi bernama whatsapp DILARANG (label log harus jujur per kanal). | USULAN | pola whatsapp-log.actions.ts; ActivityLog schema.prisma:5385 |
+| BR-SE-03 | Tombol hanya tampil bila pelanggan terpilih ada DAN alamat emailnya lolos validasi bentuk dasar (satu `@`, domain bertitik, tanpa spasi). Email kosong/format tidak valid = tombol tidak tampil sama sekali (bukan tampil-mati), mengikuti perilaku tombol WA existing. Sistem tidak menebak alamat dari contactPerson/alamat pos. Fungsi validasi final = Q-SE-3 (reuse validator existing bila ada; jangan karang regex baru tanpa bukti). | TERVERIFIKASI-KODE (pola) + USULAN (penerapan) | Customer.email schema; whatsapp-button.tsx pola sembunyi |
+| BR-SE-04 | Subjek + isi email statement dibatasi: subjek memuat label periode; isi memuat salam + nama pelanggan + label periode + saldo akhir periode sesuai payload statement + kalimat penutup netral. DILARANG: angka denda (BR-ST-07 025-S), rincian per faktur di badan pesan, tautan unduh karangan, janji/ancaman penagihan. PDF statement TIDAK bisa dilampirkan lewat mailto tahap ini — pesan menyatakan statement dapat diminta/dicetak, bukan berpura-pura melampirkan. | USULAN | BR-ST-07 025-S; BR-SW-04 038-S pola |
+| BR-SE-05 | Angka di pesan = payload server statement yang sama dengan layar/PDF (saldo akhir + periode), tidak dihitung ulang di komponen/klien. Periode di pesan = periode statement yang sedang dibuka staf, bukan "bulan ini" karangan. | USULAN | BR-ST-06/BR-ST-08 025-S |
+| BR-SE-06 | Kegagalan mencatat jejak tidak pernah menahan/membatalkan pembukaan klien email (fire-and-forget, pola existing). Sebaliknya tanpa sesi/izin, jejak ditolak tanpa log — dan karena tombol hanya lahir di halaman bergerbang `view_reports`, permukaan tanpa izin memang tidak pernah melihat tombol. | TERVERIFIKASI-KODE (pola) | whatsapp-log.actions.ts; activity-log.service.ts:10 |
+| BR-SE-07 | Klik berulang sah dan tercatat berulang (staf boleh membuka ulang); riwayat menampilkan semua klik terbaru-dulu. Tidak ada dedup/idempotency yang menghapus riwayat klik — jejak adalah catatan percobaan buka, bukan dokumen finansial. | USULAN | pola riwayat F-036 |
+| BR-SE-08 | Tanpa pengiriman server-side tahap ini: tidak ada SMTP/API/template terpusat/antrean/jadwal/kirim massal (infrastruktur email keluar belum ada — §0). Satu klik = satu pelanggan = satu periode. Membuka pengiriman server-side = spec terpisah sesudah Q-SE-2 diputus (pilihan penyedia + kredensial + jejak kirim server adalah keputusan berbeda, bukan perluasan diam-diam tombol ini). | TERVERIFIKASI-KODE (gap §0) | grep email-infra run ini |
+| BR-SE-09 | Cakupan pelanggan: pelanggan nonaktif/terhapus mengikuti pilihan halaman existing (daftar aktif); statement pelanggan tanpa mutasi periode tetap boleh dibuka tautannya (saldo awal/akhir tetap bermakna) — tombol mengikuti keberadaan alamat valid, bukan keberadaan baris mutasi. | USULAN | halaman statement select isActive |
+| BR-SE-10 | Perluasan jejak email TIDAK mengubah perilaku jejak WA existing (tiga jenis dokumen + statement WA 038-S bila sudah lahir): label, permission penjaga, dan metadata semuanya byte-sama. Kanal WA dan email tampil sebagai riwayat terpisah berlabel kanal masing-masing, tidak digabung satu hitungan "pernah dihubungi". | USULAN (kendala regresi) | WHATSAPP_DOC_TYPES existing; 038-S |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Kirim dokumen penjualan via email dari dalam sistem | Ada — Email Faktur Pajak: kirim bukti faktur pajak ke email pelanggan dari dalam Accurate (alamat dari master pelanggan) https://help.accurate.id/product/accurate-online/fitur-aol/smartlink-tax/email-faktur-pajak/email-faktur/ ; penawaran penjualan juga bisa dikirim via email dari tombol cetak https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/ | Ada — kirim faktur via email dari daftar transaksi https://zahir.info/index.php?/Knowledgebase/List/Index/84/tips--solusi ; Zahir Online: "Buat & Kirim invoice ... via email hingga whatsapp" https://zahir.co.id/produk/zahir-online/ | Belum ada jalur email apa pun (grep §0); WA manual per dokumen live (F-27(a)+F-036) |
+| Laporan piutang per pelanggan incl. surat tagihan | Ada — Pernyataan Piutang (rujuk 025-S) | Ada — Surat Tagihan Untuk Pelanggan di Laporan Piutang Usaha https://zahir.info/index.php?/Knowledgebase/List/Index/84/tips--solusi | Statement per pelanggan live (F-032); surat tagihan formal terpisah tidak diusulkan spec ini |
+| Jejak bahwa staf membuka jalur hubungi pelanggan | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada untuk WA 3 jenis dokumen (F-036); statement WA = 038-S; statement email = gap spec ini |
+
+Catatan benchmark: kirim email Accurate/Zahir berjalan server-side di dalam layanannya; ISF tahap ini sengaja TIDAK menyamai klaim itu — yang dibangun hanya jalur manual berjejak jujur (BR-SE-01/08), karena infrastruktur kirim server belum ada.
+
+### 6. Acceptance criteria + edge cases (falsifikasi — untuk Backend/Frontend/QA)
+
+- AC-SE-B1: klik tombol email statement menulis tepat satu ActivityLog jejak email berjangkar pelanggan dengan metadata berisi periode + kanal email dan TANPA alamat email/subjek/isi pesan/nama staf penerima; grep/metadata memuat alamat email = MERAH.
+- AC-SE-B2: pemanggil tanpa sesi atau tanpa `view_reports` ditolak `{success:false}` dan tidak ada baris log lahir; mencatat diam-diam = MERAH.
+- AC-SE-B3: jejak WA existing tidak berubah: klik WA WO/Faktur/Penawaran (dan statement WA bila 038-B1 sudah lahir) tetap memakai aksi/metadata semula; kanal email tertulis ke aksi bernama whatsapp atau sebaliknya = MERAH.
+- AC-SE-B4: kegagalan tulis log (DB error disimulasikan) tetap membuka klien email staf — aksi pencatat tidak melempar ke pemanggil; navigasi tertahan karena log = MERAH.
+- AC-SE-B5: dua klik = dua baris jejak (urutan waktu utuh); dedup yang menelan klik kedua = MERAH.
+- AC-SE-F1: pelanggan tanpa email / email tidak valid bentuk dasar → tombol tidak tampil; tombol tampil dengan href mailto mati = MERAH.
+- AC-SE-F2: subjek + isi memuat nama pelanggan + label periode + saldo akhir persis payload server; memuat angka denda, rincian faktur karangan, alamat karangan, atau saldo hitung-ulang klien = MERAH.
+- AC-SE-F3: tidak ada teks "terkirim/terbaca/sudah dihubungi" di tombol, toast, atau riwayat; label selain "Tautan Email dibuka" untuk jejak = MERAH.
+- AC-SE-F4: riwayat jejak email di halaman statement hanya tampil untuk pemegang `view_reports`, membaca ActivityLog apa adanya (waktu WIB + nama staf + label kanal), dan terpisah dari riwayat WA; UI menggabung kanal jadi satu klaim hubungi = MERAH.
+
+Edge cases:
+- EC-SE-1: email berformat huruf besar/spasi pinggir — normalisasi mengikuti validator final Q-SE-3; di luar bentuk dasar tombol hilang, bukan ditebak/diperbaiki diam-diam.
+- EC-SE-2: pelanggan diganti di pemilih sesudah halaman termuat — tombol dan pesan mengikuti pelanggan+periode yang sedang tampil, bukan yang sebelumnya.
+- EC-SE-3: statement periode lampau — pesan menyebut periode lampau itu persis (BR-SE-05); jejak mencatat periode yang sama.
+- EC-SE-4: saldo akhir nol/negatif (kelebihan bayar) — pesan tetap netral tanpa kata "tagihan" yang menekan; wording final = Q-SE-4 (selaras Q-SW-3 038-S).
+- EC-SE-5: staf membuka klien email lalu batal mengirim di sana — sistem tetap hanya punya jejak "dibuka"; tidak ada koreksi status apa pun (konsekuensi jujur BR-SE-01).
+- EC-SE-6: alamat email sangat panjang / memuat karakter yang memecah URL — href mailto harus ter-encode aman; tombol yang menghasilkan tautan rusak = MERAH (pola encodeURIComponent pola WA).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-043-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-043-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-043-B1 | Kontrak jejak email statement: aksi jejak kanal email berjangkar pelanggan (metadata periode tanpa PII, penjaga `view_reports` per Q-SE-1; nama aksi fisik Q-SE-3); builder subjek+isi email statement murni; loader memuat email pelanggan untuk halaman statement; tes AC-SE-B1..B5 | Backend | Q-SE-1 Lead + Q-SE-3 fisik |
+| F-2026-10-25-043-F1 | Tombol "Kirim Email" + label jujur + riwayat jejak email (terpisah dari WA) di halaman/kartu statement; teks verbatim payload server; AC-SE-F1..F4; grep e2e laporan sebelum commit | Frontend | Kontrak B1 |
+| F-2026-10-25-043-Q1 | Falsifikasi AC-SE-B1..B5 + F1..F4 atas head persis (cabut penjaga MERAH, PII alamat masuk log MERAH, klaim terkirim MERAH, kanal tercampur MERAH) | QA | B1+F1 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SE-1 (Lead, perilaku inti): key penjaga klik email statement — reuse `view_reports` (rekomendasi Business, konsisten 038-S Q-SW-1) atau key khusus baru? Putusan selaras dengan Q-SW-1 supaya dua kanal statement tidak berpenjaga beda tanpa alasan. Tanpa putusan ini Backend tidak mulai.
+- Q-SE-2 (Lead, arah tahap berikutnya — TIDAK menghalangi tahap 1): apakah pengiriman email server-side (SMTP/API) akan dibuka sebagai spec terpisah? Bila ya: pilihan penyedia, pemilik kredensial, dan jejak kirim server diputus di spec itu; spec ini tidak menyiapkan abstraksi untuknya.
+- Q-SE-3 (Backend, fisik): nama aksi jejak email + bentuk perluasannya (aksi baru vs generalisasi pencatat tautan per kanal) + validator bentuk email yang dipakai ulang + cara loader halaman statement memuat `email` pelanggan terpilih tanpa mengubah payload builder statement.
+- Q-SE-4 (Lead): wording pesan untuk saldo nol/negatif (EC-SE-4) — kalimat netral final disahkan Lead, selaras Q-SW-3; Business tidak mengarang nada penagihan.
+- Accountant: TIDAK diminta tahap ini (tanpa uang/pajak/jurnal/denda baru; BR-ST-07 tetap menahan angka denda — membuka denda di pesan, pengiriman massal terjadwal, atau kirim server-side = vonis Accountant + putusan Lead baru, spec terpisah).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-043-S)
+
+- Pengiriman email server-side (SMTP/API/gateway), antrean kirim, jadwal/berkala, kirim massal ke banyak pelanggan, template pesan terpusat yang bisa diedit admin.
+- Klaim status terkirim/dibaca/bounce, tanda terima pelanggan, atau perubahan status piutang akibat pengiriman.
+- Lampiran PDF statement lewat mailto (mailto tidak membawa lampiran berkas dari sistem; menjanjikannya = klaim palsu).
+- Surat tagihan formal ala Zahir sebagai dokumen tersendiri; angka denda/penalti di pesan maupun statement (BR-ST-07).
+- Kanal WA statement (wilayah 038-S), kanal email untuk dokumen lain (WO/faktur/penawaran) — perluasan per dokumen = keputusan terpisah sesudah pola statement terbukti.
+
+F-2026-10-25-043-S — Pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SE-1/Q-SE-4 + fisik Backend Q-SE-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-044-S: rekap kehadiran per karyawan per periode (read-model baca-saja di atas Attendance existing)
+
+> **Slot**: F-2026-10-25-044-S. Diperiksa bentrok 2026-10-25 21:29 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-044` di backlog origin/main = 0; ID 2026-10-25 terpakai di main sampai 038-S (039-S/040-S/041-S di PR terbuka #901/#898, 042-V vonis Accountant PR #902, 043-S PR #903). `-044-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR** — bukan F-ID lama. Bukan duplikat F-2026-10-25-013-S (saldo cuti — hak cuti tahunan), bukan F-2026-10-25-016-S (rekap lembur per karyawan — jam `OvertimeRequest`, sudah live halaman `/sdm/lembur/rekap`), bukan F-2026-10-25-010-S (pengajuan koreksi absensi — jalur tulis persetujuan). Objek spec ini: agregat FAKTA kehadiran dari `Attendance` per karyawan per periode. Dokumen saja; tanpa kode/schema/migrasi.
+
+### 0. Ringkasan putusan yang diminta
+
+HR dan kepala bengkel menjawab pertanyaan berulang tiap tutup periode: "karyawan ini hadir berapa hari bulan ini, berapa izin/sakit/alpa, berapa menit terlambat?" Hari ini satu-satunya agregat kehadiran adalah `calculateAttendanceSummary` — dan ia hanya hidup di dalam hitung payroll per karyawan terpilih, tidak pernah tampil sebagai rekap. Di luar itu hanya daftar transaksional `/sdm/absensi` baris per baris. Akibat nyata: keterlambatan dan alpa terlihat hanya sesudah slip payroll terbit (sebagai potongan), bukan sebagai fakta operasional yang bisa ditindak sebelum periode tutup. Spec ini membekukan: (A) builder baca-saja agregat kehadiran per karyawan per periode dari `Attendance` + cuti approved existing, (B) permukaan rekap di area SDM existing sejajar rekap lembur, (C) batas tegas fakta kehadiran (milik spec ini) vs angka potongan uang (wilayah payroll/Accountant — rekap tidak menghitung, tidak menampilkan nominal potongan). Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya), payroll (konsumen hilir terpisah — bukan konsumen rekap ini).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin membuka permukaan rekap kehadiran, memilih periode (rentang tanggal/bulan), opsional filter departemen.
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `Attendance` + `LeaveRequest` approved dalam scope+periode, dan builder murni mengelompokkan per karyawan: hari kerja terjadwal, hari hadir, hari cuti/izin, hari sakit, hari alpa tercatat, hari tanpa rekod di hari kerja, jumlah kejadian terlambat, total `lateMinutes`, total `overtimeMinutes` tercatat — semua dari kolom existing, tanpa tarif/potongan apa pun.
+3. Halaman menampilkan baris per karyawan + total (penjumlahan dari hitungan hari/menit, bukan rata-rata persen), dengan penanda karyawan tanpa jadwal terikat (definisi hari kerja tidak bisa diturunkan — tampil di ember terpisah, bukan ditebak).
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `Attendance` + `LeaveRequest` + `Employee` (departemen) + `WorkSchedule`/`Holiday`/`DepartmentHoliday` (definisi hari kerja); dokumen keluar = tampilan rekap + (tahap berikut, bila dibuka) CSV pola route ekspor existing.
+
+### 2. Inventarisasi terverifikasi (origin/main fe281d46, 2026-10-25 21:29 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Attendance` (`prisma/schema.prisma:3314-3339`): employeeId, date, checkIn/checkOut + koordinat GPS, status String default `present`, `overtimeMinutes` Int?, `overtimeApproved` Boolean, `lateMinutes` Int default 0, notes; unik `[employeeId, date]`; indeks employeeId/date/status.
+- Kosakata status existing: `AttendanceStatus` (`src/lib/constants/status.ts:66-74`) = present/absent/late/half_day/sick/leave/overtime; label tampil (`src/lib/utils/status-labels.ts:85-92`) = Hadir/Tidak Hadir/Terlambat/Setengah Hari/Sakit/Cuti/Lembur. Rekap memakai kosakata ini persis — status adalah String bebas di DB, nilai di luar kosakata tampil apa adanya (pola `labelFrom`), bukan dibuang.
+- Agregat payroll existing: `calculateAttendanceSummary(employeeId, startDate, endDate)` (`src/lib/services/attendance-summary.service.ts:17-158`) menghasilkan totalWorkingDays/workingDays/presentDays/leaveDays/holidayDays/absentDays + `dailyRate` + `absentDeduction`. Konsumennya HANYA jalur payroll di `src/actions/hrm.actions.ts:1324,2676,2879` (pratinjau/generate per karyawan terpilih). Tidak ada halaman, loader laporan, atau ekspor yang menampilkannya (grep konsumen di `src/app` + `src/components` = 0).
+- Definisi hari kerja di service yang sama (TERVERIFIKASI-KODE, jangan didefinisikan ulang): precedence jadwal karyawan > departemen > global; `workDays` kosong → fallback Senin–Jumat; hari libur = `Holiday` + `DepartmentHoliday` departemen karyawan; hari dievaluasi hanya sampai hari ini (`evalEnd`); hadir diturunkan dari baris `Attendance` dengan `checkIn != null` pada tanggal itu (`attendance-summary.service.ts:105`), cuti dari `LeaveRequest` status `approved` yang tumpang tindih periode; hari kerja tanpa hadir dan tanpa cuti = absentDays versi payroll.
+- Potongan uang payroll (di luar rekap): `lateDeduction = Σ lateMinutes × penaltyPerMinute` dan `absentDeduction` dari service di atas masuk slip (`hrm.actions.ts:1379-1401,1973-1983,2093-2094`). Angka-angka ini wilayah payroll; rekap TIDAK menghitung ulang dan TIDAK menampilkannya (BR-ATT-05).
+- Daftar transaksional existing: halaman `/sdm/absensi` (`src/app/(dashboard)/sdm/absensi/[[...segments]]/page.tsx`) — `requireAnyPermission` + `getHrScope`, filter tanggal/bulan di path, cari/status/paginasi per baris rekod. Menjawab "rekod mana", bukan "berapa hari per karyawan per periode". Navigasi: entri `Absensi` href `/sdm/absensi` izin `view_attendance` (`src/components/layout/navigation.ts:155`).
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:282-285`): `view_attendance`, `create_attendance`, `edit_attendance`, `manage_attendance` (resource `attendance`). Tidak ada izin laporan kehadiran terpisah. `deleteAttendance` menuntut `manage_attendance` (`src/lib/auth/action-perms.ts:88-90`) — katalog memang tanpa `delete_attendance`.
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:45-77`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1. `hrScopeWhere` berlaku untuk model ber-`employeeId` termasuk `Attendance` (disebut eksplisit di komentar `hr-scope.ts:81-84`).
+- Pola saudara yang dirujuk: rekap lembur (builder murni + loader + halaman `/sdm/lembur/rekap`, F-2026-10-25-016-S), rekap saldo cuti (`getAllLeaveBalances` `hrm.actions.ts:3433` + halaman `/sdm/cuti/saldo`), builder laporan tanpa nominal gaji (`employee-lifecycle.ts`).
+
+Belum ada / gap (bukti grep run ini):
+- Builder/loader rekap kehadiran: tidak ada berkas `attendance*` di `src/lib/reports/` (daftar berkas diverifikasi run ini); tidak ada agregasi kehadiran per karyawan/periode di permukaan mana pun selain service internal payroll di atas.
+- Pemisahan "alpa tercatat" (baris `Attendance` status absent) vs "tanpa rekod" (hari kerja terjadwal tanpa baris apa pun): service payroll menggabungkan keduanya ke `absentDays` (hari tanpa checkIn dan tanpa cuti approved dihitung absent) — untuk potongan itu keputusan payroll; untuk rekap operasional keduanya fakta berbeda yang wajib dipisah tampil (BR-ATT-03), karena tanpa rekod bisa berarti belum dicatat petugas, bukan karyawan alpa.
+- Rekap tidak boleh menyalin definisi hadir versi payroll mentah-mentah tanpa label: service menghitung hadir dari `checkIn != null` tanpa membaca kolom `status` — baris status `sick`/`leave`/`half_day` yang punya checkIn akan terhitung hadir oleh service. Untuk payroll itu perilaku berjalan (BUTUH-VONIS bila mau diubah); rekap membekukan definisinya sendiri secara eksplisit (BR-ATT-02) dan menyatakan selisihnya dari angka payroll, bukan menyamakan diam-diam.
+- Filter departemen agregat + total periode: halaman existing menyaring per baris; tidak ada pengelompokan per karyawan/departemen maupun total menit terlambat per periode.
+
+### 3. Business rules register (BR-ATT)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-ATT-01 | Satu-satunya sumber baris kehadiran = `Attendance` existing (+ `LeaveRequest` approved untuk hari cuti); rekap dilarang membuat tabel/rekod kehadiran kedua | TERVERIFIKASI-KODE | `prisma/schema.prisma:3314`; `attendance-summary.service.ts:98-118` |
+| BR-ATT-02 | Definisi ember rekap dibekukan eksplisit per kolom existing: hadir = baris dengan `checkIn != null` DAN status tidak termasuk sick/leave; sakit = status `sick`; cuti/izin = status `leave` ATAU tanggal tercakup `LeaveRequest` approved; alpa tercatat = status `absent`; terlambat = `lateMinutes > 0` (kejadian + total menit); setengah hari = status `half_day` dihitung ember sendiri, tidak dicampur hadir penuh. Selisih definisi dari service payroll (yang mengabaikan status) dinyatakan di label halaman | USULAN | kolom `schema.prisma:3322-3327`; kosakata `status.ts:66-74`; perilaku service `attendance-summary.service.ts:105,141-147` |
+| BR-ATT-03 | Hari kerja terjadwal tanpa baris `Attendance` dan tanpa cuti approved = ember "tanpa rekod", TIDAK digabung ke alpa tercatat dan TIDAK diberi label ketidakhadiran karyawan | USULAN | gap §2; service payroll menggabungkannya ke absentDays untuk potongan — perilaku itu tetap milik payroll, bukan label rekap |
+| BR-ATT-04 | Definisi hari kerja/libur mengikuti precedence existing persis (jadwal karyawan > departemen > global; workDays kosong → Senin–Jumat; Holiday + DepartmentHoliday; evaluasi hanya sampai hari ini). Karyawan tanpa jadwal terikat masuk ember "tanpa jadwal" dengan hari kerja tak diturunkan — fallback Senin–Jumat generik TIDAK diterapkan diam-diam ke orangnya | TERVERIFIKASI-KODE (precedence) + USULAN (ember tanpa jadwal) | `attendance-summary.service.ts:44-80,124-140`. Catatan: service existing justru menerapkan fallback Senin–Jumat bila workDays kosong — rekap mewajibkan penanda itu terlihat, bukan mengubah service |
+| BR-ATT-05 | Rekap TIDAK menghitung dan TIDAK menampilkan nominal uang apa pun: tanpa `dailyRate`, `absentDeduction`, `lateDeduction`, tanpa tarif per menit. Payroll tetap satu-satunya jalur angka potongan | TERVERIFIKASI-KODE (jalur existing) + USULAN (larangan tampil) | `attendance-summary.service.ts:154-157`; `hrm.actions.ts:1379-1401` |
+| BR-ATT-06 | Akses rekap = izin katalog existing + `getHrScope` fail-closed; filter departemen/periode tidak pernah memperluas scope; keluaran tanpa `baseSalary` dan tanpa komponen gaji apa pun | TERVERIFIKASI-KODE + USULAN penempatan filter | `module-catalog.generated.ts:282-285`; `hr-scope.ts:45-84` |
+| BR-ATT-07 | Periode rekap mengikuti kolom `date` rekod kehadiran (tanggal kehadiran), bukan createdAt/updatedAt | USULAN | `schema.prisma:3317` |
+| BR-ATT-08 | `overtimeMinutes`/`overtimeApproved` di `Attendance` adalah menit lembur tercatat di rekod kehadiran — fakta operasional terpisah dari jam `OvertimeRequest` F-2026-10-25-016-S; rekap menampilkannya dengan label sumbernya dan TIDAK menjumlahkannya dengan jam lembur pengajuan | USULAN | `schema.prisma:3324-3325`; objek 016-S = `OvertimeRequest` |
+| BR-ATT-09 | Mengubah definisi hadir/absent di service payroll (mis. membaca kolom status) = perubahan angka potongan slip; spec ini TIDAK mengusulkannya dan rekap tidak bergantung padanya | BUTUH-VONIS (Accountant, karena menyentuh potongan payroll) | `attendance-summary.service.ts:105,154-157` |
+| BR-ATT-10 | Rekap baca-saja: tidak ada koreksi, persetujuan, atau tulis apa pun dari permukaan rekap; koreksi tetap jalur existing (edit petugas + pengajuan F-2026-10-25-010-S bila dibangun) | USULAN | jalur tulis existing `hrm.actions.ts:3816,3853` (create/updateAttendance) |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap periode | `view_attendance` — semua departemen | `view_attendance` — departemen sendiri | `view_attendance` — baris diri sendiri | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (permintaan asing diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| (tahap berikut) Ekspor CSV | Ya — isi = rekap terlihatnya | Ya — isi = scope-nya | Ya — baris dirinya | Ditolak |
+| Mengoreksi/menyetujui dari rekap | Tidak ada — koreksi tetap aksi existing `edit_attendance`/`manage_attendance` di daftar/detail | Sama | Sama (pengajuan = F-2026-10-25-010-S) | — |
+
+Izin halaman rekap mengusulkan reuse `view_attendance` (izin daftar existing); key baru = Q-ATT-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Rekod `Attendance` existing tidak punya status dokumen — kolom `status` adalah klasifikasi hari, bukan lifecycle:
+
+| Keadaan awal | Pemicu (di luar rekap) | Keadaan akhir | Dihitung rekap |
+|---|---|---|---|
+| — (belum ada rekod tanggal itu) | `createAttendance` (`hrm.actions.ts:3816`) | Baris `Attendance` dengan status klasifikasi hari | Sesuai ember BR-ATT-02/03 |
+| Baris ada | `updateAttendance` (`hrm.actions.ts:3853`) | Nilai terakhir tersimpan | Rekap memuat nilai terakhir |
+| Baris ada | `deleteAttendance` (izin `manage_attendance`) | Baris hilang | Tanggal kembali ke ember tanpa rekod (BR-ATT-03) |
+| Slip payroll periode itu terbit | Proses payroll existing | Potongan dihitung service payroll | Rekap tidak berubah dan tidak mengoreksi slip (BR-ATT-05/09) |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Pencatatan absensi + GPS | Absensi online terhubung penghitungan gaji; jumlah telat/izin/alpha otomatis (artikel Accurate, bukan halaman help produk) https://accurate.id/aplikasi-kasir/absen-karyawan/ | Attendance + Geo Tagging + Anti Fake GPS https://zahir.co.id/hr/absence-location/ | ADA (TERVERIFIKASI-KODE §2: checkIn/Out + koordinat) |
+| Laporan/rekap kehadiran per karyawan | Halaman help Accurate Online untuk rekap kehadiran per karyawan tidak ditemukan (akses 2026-10-25) — dicatat belum terverifikasi, bukan diklaim absen dari produk | "Laporan Kehadiran" tercantum eksplisit di paket HR Essential/Profesional https://zahiraccounting.com/id/harga-zahir-3d/ | Belum ada (gap §2) — payroll saja yang mengagregasi, tak tampil |
+| Kehadiran masuk payroll | Data absen tersambung penghitungan gaji https://accurate.id/aplikasi-kasir/absen-karyawan/ | Payroll Otomatis + BPJS/PPh21 (paket Profesional) https://zahiraccounting.com/id/harga-zahir-3d/ | ADA — service payroll (`hrm.actions.ts:1324,2676,2879`) |
+| Rekap cuti per karyawan | belum terverifikasi | "Laporan Cuti" tercantum https://zahiraccounting.com/id/harga-zahir-3d/ | ADA (F-2026-10-25-013-S, `/sdm/cuti/saldo`) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-ATT-B (Backend, bila dibuka Lead):
+- AC-ATT-B1: builder murni rekap menerima baris polos dan menghasilkan per karyawan: hari kerja terjadwal, hadir, sakit, cuti/izin, alpa tercatat, tanpa rekod, setengah hari, kejadian terlambat, Σ lateMinutes, Σ overtimeMinutes tercatat; invariant per karyawan `hari kerja terevaluasi = hadir + sakit + cuti/izin + alpa tercatat + setengah hari + tanpa rekod` (hari libur dan hari sesudah hari ini di luar invariant) dibuktikan tes; melanggar = MERAH.
+- AC-ATT-B2: loader menegakkan izin + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; filter departemen asing tidak memperluas scope department/self; `baseSalary`/nominal potongan tidak pernah keluar payload (BR-ATT-05/06).
+- AC-ATT-B3: paritas fakta: hitungan hadir/alpa/terlambat per karyawan+periode identik dengan query langsung `Attendance` untuk populasi sama; selisih definisi terhadap `calculateAttendanceSummary` (status sick/leave ber-checkIn, tanpa rekod) terdokumentasi di tes sebagai perbedaan sengaja BR-ATT-02/03, bukan disamakan diam-diam.
+- AC-ATT-B4: periode memakai kolom `date`; rekod dibuat hari ini untuk tanggal bulan lalu masuk periode bulan lalu (BR-ATT-07).
+- AC-ATT-B5: nilai status di luar kosakata existing tampil apa adanya di ember "status lain" terhitung — tidak dibuang, tidak ditebak labelnya.
+
+AC-ATT-F (Frontend):
+- AC-ATT-F1: halaman menampilkan kolom verbatim payload server dengan label definisi BR-ATT-02/03 (termasuk penanda "tanpa rekod ≠ alpa" dan selisih dari angka payroll); UI nol menghitung/menjumlah sendiri di luar total baris yang dikirim server.
+- AC-ATT-F2: pemilih departemen hanya untuk scope `all`; karyawan tanpa jadwal tertanda dari payload server, bukan ditebak UI.
+- AC-ATT-F3: grep e2e permukaan `sdm/absensi` sebelum mengubah label/selector apa pun di halaman daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 baris status `sick` dengan checkIn terisi: ember sakit (BR-ATT-02), bukan hadir — dan tes AC-ATT-B3 mencatat payroll menghitungnya lain. EC-2 cuti approved tanpa baris Attendance: ember cuti/izin. EC-3 baris Attendance status `leave` tanpa LeaveRequest approved: tetap ember cuti/izin dari status, tanpa mengarang dokumen cuti. EC-4 tanggal ganda tidak mungkin (unik [employeeId, date]) — builder tetap dedup defensif per tanggal. EC-5 periode mencakup hari sesudah hari ini: hari mendatang tampil terjadwal-belum-terevaluasi, bukan tanpa rekod. EC-6 karyawan berhenti tengah periode: baris tetap tampil untuk periode masa rekodnya ada (populasi dari baris kehadiran, bukan hanya karyawan aktif). EC-7 departemen null: ember "tanpa departemen", hanya terlihat scope all. EC-8 `lateMinutes` terisi pada status apa pun: kejadian terlambat dihitung dari menit, bukan dari status `late` saja. EC-9 rekod dihapus petugas sesudah payroll terbit: rekap berubah mengikuti rekod berjalan; slip terbit tidak ikut berubah (BR-ATT-05) — penanda periode berslip terbit = Q-ATT-2.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-044-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni rekap kehadiran + loader scope fail-closed; definisi ember BR-ATT-02/03; CSV pola route ekspor bila dibuka | Backend | Lead buka Q-ATT-1/3; BR-ATT-09 hanya bila Lead/Accountant meminta penyelarasan service payroll | Klaim file di board sebelum edit |
+| (turunan) halaman rekap di area SDM + filter periode/departemen + label definisi server | Frontend | kontrak Backend stabil | grep e2e `sdm/absensi` dulu |
+| (turunan) falsifikasi AC-ATT-B1..B5 + AC-ATT-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-ATT → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap disalahbaca sebagai dasar potongan kedua atau label "tanpa rekod" dibaca sebagai alpa — mitigasi BR-ATT-03/05 + label halaman eksplisit.
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-ATT-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo (agregat hanya di dalam payroll) diterima?
+- Q-ATT-2 (Lead): penanda "periode sudah ada slip terbit" tampil di rekap (agar pembaca tidak mengira rekap bisa mengoreksi slip) atau ditunda?
+- Q-ATT-3 (Lead): reuse izin `view_attendance` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-ATT-4 (Backend): bentuk loader (query agregat DB vs muat baris + builder murni) mengikuti pola rekap lembur/lifecycle — putus saat fisik, builder wajib murni.
+- Accountant: TIDAK diminta tahap ini. Dipanggil hanya lewat BR-ATT-09 bila definisi service payroll mau diubah (menyentuh angka potongan slip).
+
+### Yang TIDAK diusulkan run ini
+
+- Menghitung/menampilkan potongan uang (terlambat/alpa) di rekap: payroll jalur tunggal angka potongan (BR-ATT-05).
+- Mengubah `calculateAttendanceSummary` atau definisi payroll berjalan: perubahan angka slip, wilayah BR-ATT-09.
+- Menjumlahkan `overtimeMinutes` rekod kehadiran dengan jam `OvertimeRequest` rekap lembur 016-S: dua sumber fakta berbeda (BR-ATT-08).
+- Koreksi/persetujuan absensi dari rekap: jalur tulis sudah ada (petugas) dan jalur pengajuan sudah terspec F-2026-10-25-010-S.
+- Skor/penilaian kinerja dari kehadiran (persen kehadiran sebagai nilai orang): angka karangan penilaian — di luar fakta rekap; membuka itu = spec penilaian terpisah dengan putusan Lead.
+
+F-2026-10-25-044-S — Rekap kehadiran per karyawan per periode. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-ATT-1/2/3 + fisik Backend Q-ATT-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk spec ini (hanya BR-ATT-09 bersyarat).
+
+---
+
+---
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-045-V: batas BR-ATT-09 — definisi hadir rekap 044-S vs service payroll; rekap bukan dasar potongan kedua
+
+> **Slot**: F-2026-10-25-045-V. Diperiksa bentrok 2026-10-25 21:33 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-045` di backlog+board origin/main = 0; PR terbuka memuat `045` = 0. ID bebas. Dokumen vonis saja; tanpa kode/schema/migrasi. Kartu: t_0efaa897. Sumber terikat: spec Business F-2026-10-25-044-S (PR #906 head `cee766ba`, §2/§3 BR-ATT-01..10, §7 AC-ATT, §9) + kode live `attendance-summary.service.ts`. Vonis ini menjawab HANYA BR-ATT-09 (batas uang/pajak). Q-ATT-1/2/3 milik Lead, Q-ATT-4 milik Backend — tidak diputus di sini.
+
+### 0. Fakta terverifikasi kode (origin/main fe281d46, 2026-10-25 21:33 WIB) — TERVERIFIKASI-KODE
+
+- `calculateAttendanceSummary` (`src/lib/services/attendance-summary.service.ts:17-158`): hadir = baris `Attendance` dengan `checkIn != null` pada tanggal itu (`:105`), TANPA membaca kolom `status`. Hari kerja tanpa hadir dan tanpa `LeaveRequest` approved = `absentDays`; `dailyRate = baseSalary / totalWorkingDays`; `absentDeduction = round(absentDays × dailyRate)` (`:154-157`). Konsumen HANYA payroll (`hrm.actions.ts:1324,2676,2879`); `lateDeduction = Σ lateMinutes × penaltyPerMinute` masuk slip (`hrm.actions.ts:1379-1401`).
+- Akibat faktual: baris status `sick`/`leave`/`half_day` yang punya `checkIn` terhitung HADIR oleh service payroll, dan hari tanpa rekod terhitung `absentDays` (berpotensi potongan). Itu perilaku berjalan yang menentukan angka slip terbit.
+- Spec 044-S BR-ATT-02 membekukan definisi ember rekap yang BERBEDA: sakit = status `sick` (walau ada checkIn), tanpa rekod dipisah dari alpa tercatat (BR-ATT-03), setengah hari ember sendiri. Spec menyatakan selisih ini eksplisit (§2 butir terakhir, AC-ATT-B3) dan melarang nominal potongan tampil (BR-ATT-05).
+
+### Putusan 1 — Rekap BOLEH beda definisi dari service payroll; service payroll TIDAK diubah oleh fitur rekap
+
+**DIPUTUS**: builder rekap 044-S memakai definisi ember BR-ATT-02/03 apa adanya (status dibaca; tanpa rekod dipisah) TANPA mengubah `calculateAttendanceSummary`, tanpa menambah parameter definisi ke service itu, dan tanpa menyelaraskan angka rekap ke angka payroll. Dua definisi hidup berdampingan karena dua tujuan berbeda yang sah: payroll menghitung potongan atas fakta check-in; rekap menampilkan fakta operasional per klasifikasi hari. Menyeragamkan keduanya diam-diam — ke arah mana pun — DILARANG: menyelaraskan rekap ke payroll menghapus guna operasionalnya (sakit ber-checkIn tampil hadir); menyelaraskan payroll ke rekap mengubah angka slip (lihat Putusan 3).
+
+### Putusan 2 — Rekap BUKAN dasar potongan; larangan jalur uang kedua (mengikat)
+
+**DIPUTUS**: keluaran rekap (semua ember, Σ lateMinutes, Σ overtimeMinutes) DILARANG dipakai sebagai masukan hitung potongan, tunjangan, denda, atau komponen payroll apa pun — oleh builder, loader, UI, ekspor CSV, maupun proses manual yang difasilitasi sistem. Payroll tetap SATU-SATUNYA jalur angka potongan, lewat `calculateAttendanceSummary` existing. Builder/loader rekap WAJIB nol akses ke `baseSalary`, `dailyRate`, `absentDeduction`, `lateDeduction`, `penaltyPerMinute` (BR-ATT-05/06 disahkan sebagai syarat vonis, bukan sekadar usul spec). Satu-satunya pengecualian jalur = perubahan service payroll lewat Putusan 3.
+
+### Putusan 3 — Mengubah definisi service payroll = vonis baru; syaratnya mengikat sejak sekarang
+
+**DIPUTUS**: perubahan apa pun pada definisi hadir/absent/`absentDays`/`dailyRate` di `calculateAttendanceSummary` (mis. membaca kolom `status`, memisahkan tanpa-rekod dari absent) adalah perubahan angka potongan slip = wilayah vonis Accountant, DILARANG digabung ke kartu fisik rekap 044-S. Bila kelak diajukan, vonis lanjutannya WAJIB memuat sekaligus: (a) perlakuan slip yang SUDAH terbit (tidak dihitung ulang; koreksi hanya lewat jalur koreksi slip existing/rapel periode berikut sesuai vonis koreksi absensi F-2026-10-25-010-S), (b) tanggal efektif + perlakuan periode berjalan yang separuh lewat, (c) rekonsiliasi selisih definisi lama vs baru per karyawan untuk satu periode contoh, (d) falsifikasi bahwa rekap tidak berubah definisi karenanya. Tanpa paket itu, perubahan service ditolak di review Accountant.
+
+### Putusan 4 — Label selisih WAJIB tampil; selisih adalah temuan, bukan kesalahan
+
+**DIPUTUS**: halaman/ekspor rekap WAJIB membawa penanda verbatim dari payload server (bukan teks karangan UI): (1) ember mengikuti klasifikasi status rekod, (2) angka potongan payroll memakai definisi check-in service payroll sehingga jumlah hadir/alpa rekap DAPAT berbeda dari dasar potongan slip untuk orang+periode yang sama, (3) "tanpa rekod ≠ alpa". Selisih rekap-vs-slip yang ditemukan pengguna DILARANG "diperbaiki" dengan mengubah salah satu sisi diam-diam; ia temuan rekonsiliasi yang dijelaskan label ini. Wording final label = Frontend dalam batas tiga isi wajib di atas; Backend menyediakan penandanya di payload (pola notice verbatim server existing).
+
+### Draf acceptance untuk QA (aktif sesudah Backend/Frontend membangun rekap)
+
+- AC-ATT-V1: baris status `sick` + checkIn terisi → rekap ember sakit; slip payroll periode sama tetap menghitungnya hadir (definisi existing). Salah satu sisi berubah = MERAH.
+- AC-ATT-V2: hari kerja tanpa rekod → rekap "tanpa rekod"; payload rekap tidak memuat baseSalary/dailyRate/nominal potongan apa pun (grep payload). Ada nominal = MERAH.
+- AC-ATT-V3: builder/loader rekap mengimpor/memanggil `calculateAttendanceSummary` atau membaca kolom gaji untuk keluaran rekap = MERAH (jalur uang kedua).
+- AC-ATT-V4: label tiga isi Putusan 4 tampil dari payload server; UI menghitung/menjumlah ember sendiri di luar total terkirim = MERAH.
+- AC-ATT-V5: diff fisik rekap menyentuh `attendance-summary.service.ts` atau konsumen payroll-nya = MERAH (Putusan 1/3).
+
+### Risiko + keputusan manusia
+
+- Risiko utama: pembaca menyimpulkan potongan dari ember rekap ("alpa tercatat 2 hari → potong 2 hari") — dimitigasi Putusan 2/4; risiko sebaliknya (menyelaraskan payroll diam-diam) ditutup Putusan 3. Tidak ada angka/tarif/akun baru; tidak ada klaim regulasi baru — potongan alpa/terlambat tetap mengikuti aturan payroll existing dan perjanjian/peraturan perusahaan yang berlaku, di luar vonis ini.
+
+F-2026-10-25-045-V — Batas BR-ATT-09 rekap kehadiran vs payroll. Status: VONIS TERBIT run ini; BR-ATT-09 TERTUTUP untuk tahap rekap (rekap beda definisi sah, service payroll beku, rekap dilarang jadi dasar potongan, label selisih wajib). Pemilik berikutnya: Lead (Q-ATT-1/2/3 + buka kartu Backend/Frontend/QA dengan parent spec 044-S + vonis ini), Backend (Q-ATT-4), QA (AC-ATT-V1..V5 + AC-ATT-B/F spec). Butuh vonis accountant lanjutan: hanya bila definisi service payroll diajukan berubah (syarat paket Putusan 3).
 > KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
 
 > KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
