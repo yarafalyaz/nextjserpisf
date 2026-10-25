@@ -125,6 +125,7 @@ const {
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
+  requireAnyPermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -1201,7 +1202,7 @@ describe("markPayrollPaid edge cases", () => {
   it("amortizes active loans", async () => {
     const payroll = {
       id: 1, status: "approved", netPay: 5000000, employeeId: 1, period: "2026-05",
-      loanDeduction: 500000,
+      loanDeduction: 500000, grossSalary: 5000000, lateDeduction: 0, deductions: 0,
     }
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce(payroll)
     prismaMock.employeeLoan.findMany.mockResolvedValueOnce([
