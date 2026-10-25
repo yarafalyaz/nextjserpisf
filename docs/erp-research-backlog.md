@@ -30668,6 +30668,8 @@ BENCHMARK: kedua kompetitor menghitung komisi otomatis sampai jurnal; ISF tahap 
 - Kolom persen tunggal di CustomerCategory: ditolak vonis (F-056-V 1a) — jangan diusulkan ulang sebagai jalan pintas.
 
 F-2026-10-25-036-S — Tarif komisi per kategori pelanggan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-KT-1 + fisik Backend Q-KT-2. Pemilik usulan: Business (spec), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (vonis F-056-V/F-058-V/F-084-V sudah mengunci angka; izin terpisah = pengecualian BR-KT36-10).
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
+
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-037-S: tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll; kontrak workflow di atas vonis F-2026-10-22-084-V)
 
@@ -30823,6 +30825,8 @@ Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti �
 - Mengubah rekap informatif menjadi layar utang: read-model saldo terpisah (BR-KOM37-12).
 
 F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
+
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-039-V: koreksi akun utang komisi Q-KOM3-1 — 210207 gugur (PKWT), nomor final 210212 "Utang Komisi Penjualan"; 210208 DILARANG (jatah terminasi F-005-V); 210210/210211 DILARANG (jatah PPh 21/BPJS F-020-V); mapping fail-closed (jawaban Q-KOM3-1 spec F-2026-10-25-037-S PR #884 merged; Q-KOM3-2 uang/PPh dijawab eksplisit per F-084-V §5)
 
@@ -31059,6 +31063,8 @@ Edge cases:
 - Angka denda/penalti di pesan maupun statement (BR-ST-07), surat tagihan formal ala Zahir sebagai dokumen tersendiri.
 
 F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #890 sudah MERGED 25a499c0; Q-SW-1 (reuse view_reports) + Q-SW-3 (wording 3 varian verbatim) SUDAH DIPUTUS Lead di komentar PR #890 6398030628 — bukan pertanyaan terbuka lagi; hanya Q-SW-2 fisik Backend tersisa (kartu t_d9ddf496 running). (2) Catatan fisik untuk B1: penjaga existing whatsapp-log.actions.ts:41-43 hanya menerima surface queue|detail dan :51-65 mewajibkan dokumen ber-documentNo — pelanggan tidak punya; builder pesan existing whatsapp.ts:31 berbentuk dokumen, statement butuh builder baru dari closingBalance (customer-statement.ts:98). Kontrak kartu Backend sudah mencakup keduanya. Audit penuh: komentar kartu t_2a314778.
+
 
 ---
 
@@ -31826,12 +31832,118 @@ F-2026-10-25-044-S — Rekap kehadiran per karyawan per periode. Status: SPEC SE
 - Risiko utama: pembaca menyimpulkan potongan dari ember rekap ("alpa tercatat 2 hari → potong 2 hari") — dimitigasi Putusan 2/4; risiko sebaliknya (menyelaraskan payroll diam-diam) ditutup Putusan 3. Tidak ada angka/tarif/akun baru; tidak ada klaim regulasi baru — potongan alpa/terlambat tetap mengikuti aturan payroll existing dan perjanjian/peraturan perusahaan yang berlaku, di luar vonis ini.
 
 F-2026-10-25-045-V — Batas BR-ATT-09 rekap kehadiran vs payroll. Status: VONIS TERBIT run ini; BR-ATT-09 TERTUTUP untuk tahap rekap (rekap beda definisi sah, service payroll beku, rekap dilarang jadi dasar potongan, label selisih wajib). Pemilik berikutnya: Lead (Q-ATT-1/2/3 + buka kartu Backend/Frontend/QA dengan parent spec 044-S + vonis ini), Backend (Q-ATT-4), QA (AC-ATT-V1..V5 + AC-ATT-B/F spec). Butuh vonis accountant lanjutan: hanya bila definisi service payroll diajukan berubah (syarat paket Putusan 3).
-> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
 
-> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
 
-> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #890 sudah MERGED 25a499c0; Q-SW-1 (reuse view_reports) + Q-SW-3 (wording 3 varian verbatim) SUDAH DIPUTUS Lead di komentar PR #890 6398030628 — bukan pertanyaan terbuka lagi; hanya Q-SW-2 fisik Backend tersisa (kartu t_d9ddf496 running). (2) Catatan fisik untuk B1: penjaga existing whatsapp-log.actions.ts:41-43 hanya menerima surface queue|detail dan :51-65 mewajibkan dokumen ber-documentNo — pelanggan tidak punya; builder pesan existing whatsapp.ts:31 berbentuk dokumen, statement butuh builder baru dari closingBalance (customer-statement.ts:98). Kontrak kartu Backend sudah mencakup keduanya. Audit penuh: komentar kartu t_2a314778.
 
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-049-V: bentuk subledger komisi per penerima — YA, dokumen subledger per (faktur, penerima) WAJIB; jurnal agregat per periode DITOLAK sebagai satu-satunya catatan (gap terbuka 037-S §2/§10, sesudah 039-V 210212)
+
+> **Slot**: F-2026-10-25-049-V. Kartu: t_5b447aae. Nomor kartu menyebut 047-V sebagai usulan bersyarat ("nomor menyesuaikan slot bebas — verifikasi grep dulu, jangan menabrak"): 047 TIDAK dipakai — F-2026-10-25-047-S duduk di PR #912 OPEN (Business, audit follow-up lead). Diverifikasi live 2026-10-25 22:31 WIB vs `origin/main` `27b98fe7`: grep `F-2026-10-25-049` di backlog + board origin/main = 0/0; judul PR terbuka memuat `049` = 0; nomor -V tanggal ini terpakai = 035/039/040/042/045-V. Dokumen vonis saja; TANPA kode/schema/migrasi; TANPA merge (PR vonis tanpa merge sesuai kartu, merge milik Lead); tahap 3 tetap TERTUTUP (PUTUSAN Lead G1 ditolak 2026-10-25 22:09 WIB, board aa6eb6dd — vonis ini bukan pembuka gerbang).
+
+### 0. Putusan ringkas
+
+1. **YA — subledger per penerima WAJIB.** Bentuk mengikat: satu dokumen subledger per pasangan (faktur, penerima) yang mencatat utang ke penjual siapa, dari faktur mana, sebesar snapshot berapa, dan dibayar slip payroll mana (§2). Alasan satu kalimat: akun 210212 di buku besar hanya menjawab "berapa total utang komisi perusahaan", sedangkan kewajiban operasionalnya — bayar orang yang benar, cegah bayar dobel, potong retur dari orang yang benar, rekonsiliasi ke jurnal — semuanya pertanyaan per penerima per faktur yang tidak bisa dijawab jurnal agregat.
+2. **Jurnal agregat per periode sebagai SATU-SATUNYA catatan DITOLAK** (§1). Jurnal tetap per peristiwa dokumen (akrual per transisi `paid`, lawan per retur `completed`, debit per slip `paid` — warisan F-084-V/039-V tidak berubah); yang ditolak adalah agregasi yang menghapus tautan faktur→penerima→slip. Agregat BOLEH sebagai penyajian laporan (builder #911), TIDAK BOLEH sebagai sumber kebenaran.
+3. **Titik tulis anti-dobel**: subledger ditulis dalam transaksi yang sama dengan pemicunya (transisi `paid` / retur `completed` / slip `paid`), dengan kunci unik (faktur, penerima) untuk baris akrual asal dan kunci unik baris-slip untuk tautan bayar (§2-§3). Retry/klik ulang/replay idempotensi TIDAK boleh melahirkan baris atau jurnal kedua.
+4. **Pembatalan/retur sesudah akrual TIDAK mengedit baris asal**: lawan = baris lawan tertaut + jurnal lawan di masa retur; kumulatif lawan ≤ akrual ditegakkan di server dalam transaksi; komisi sudah terbayar lalu retur lahir = saldo penerima negatif tercatat, tanpa clamp, tanpa tarik kas otomatis (§4).
+5. **Yang TIDAK dibuka vonis ini**: tahap 3 tetap tertutup (G1 ditolak Lead 22:09 WIB; G2 inti 036-S belum live). Vonis ini memutus BENTUK supaya Backend tidak menebak saat gerbang dibuka; ia bukan izin bangun, bukan izin seed 210212, bukan izin merge inti. Fisik (nama model/kolom final) tetap milik Backend dalam batas minimum §2 — bentuk yang tidak bisa menjaga kunci unik + kumulatif lawan dalam satu transaksi = tidak sah (menjawab Q-KOM3-2 fisik spec 037-S §10).
+
+### 1. Mengapa agregat saja ditolak (justifikasi penolakan opsi TIDAK)
+
+Pertanyaan yang wajib bisa dijawab sistem setiap saat (dari spec 037-S §0/§2 dan F-084-V §4-§5): (a) utang ke penjual siapa, dari faktur mana; (b) baris itu sudah dibayar slip payroll mana, berapa, kapan; (c) retur faktur X mengurangi hak penjual mana sebesar berapa; (d) saldo per penerima = Σ akrual − Σ lawan − Σ terbayar, direkonsiliasi ke saldo akun 210212 POSTED. Jurnal agregat per periode (satu jurnal Dr 600002 / Cr 210212 per periode tanpa rincian per faktur-penerima) menjawab TIDAK SATU PUN dari (a)-(d) — ia hanya membuktikan total. Konsekuensi nyata bila dipaksakan: pembayaran slip tidak bisa ditautkan ke hak yang dibayar (bayar dobel tidak terdeteksi server, hanya terdeteksi manusia membandingkan spreadsheet), retur sesudah bayar tidak bisa ditagih ke penerima yang benar (F-084-V §4 butir 4 mensyaratkan saldo negatif PER PENERIMA), dan pemulihan lewat potongan payroll berikutnya tidak punya objek. Preseden repo searah: kompensasi PKWT memakai subledger per karyawan-segmen-bulan (`PkwtCompensationAccrual`, unik (employeeId, segmentStart, period)) dengan jurnal akrual AGREGAT per bulan di atasnya — komentar schema-nya eksplisit: "Saldo per karyawan hidup di sini, BUKAN baris jurnal per karyawan". Komisi memakai pola cerminnya: hak lahir per faktur (bukan per bulan), maka subledger per (faktur, penerima), jurnal mengikuti peristiwa dokumennya. Rekap informatif tahap 2 juga tidak bisa menggantikan subledger: labelnya sendiri "bukan utang komisi" (sales-commission.ts), dan builder saldo #911 secara eksplisit menolak membangun saldo dari rekap (BR-KOM37-12) — tanpa subledger, `ledgerAvailable` selamanya `false` dan saldo utang selamanya terbaca 0 berlabel jujur. Batas janji laporan bila (hipotetis) subledger ditolak: hanya agregat akun 210212 per periode + rekap informatif; DILARANG menjanjikan rincian per penjual, riwayat bayar per faktur, atau saldo per penerima — vonis ini tidak memilih batas itu.
+
+### 2. Bentuk minimum yang mengikat (fisik final Backend dalam batas ini)
+
+Satu baris subledger akrual asal per (faktur, penerima). Tahap ini satu penjual per faktur (snapshot existing `SalesInvoice.salesEmployeeId`), maka per (faktur, penerima) = per dokumen secara alami; split multi-penjual tetap di luar (F-084-V §6).
+
+Isi minimum per baris akrual asal (nama fisik Backend; makna + tipe mengikat):
+- `salesInvoiceId` (FK faktur asal) + `salesEmployeeId` (FK Employee penerima snapshot) — pasangan subjek baris.
+- Snapshot beku dari faktur: kategori acuan (`customerCategoryIdSnapshot`), `commissionPercentSnapshot` Decimal(5,2), basis `dppAmount` Decimal(15,2) (= grandTotal − taxAmount snapshot), `commissionAmount` Decimal(15,2) (= `safeRound(DPP × persen/100)`). Nominal baris asal TIDAK PERNAH diedit sesudah lahir; edit master tarif sesudah itu tidak menyentuhnya (pola snapshot repo).
+- `accruedAt` (tanggal transisi `paid` = tanggal jurnal akrual) + `journalId` akrual (tautan jurnal POSTED; satu jurnal akrual aktif per baris, referensi jurnal repo `referenceType`/`referenceId` + `activeReferenceKey`).
+- Tautan bayar: penunjuk slip pembayar per pembayaran — karena satu baris akrual boleh dibayar bertahap lewat lebih dari satu slip (W5 spec: utang terlama dulu, nominal komponen per slip bebas), tautan bayar BUKAN satu kolom nullable tunggal di baris akrual: pembayaran dicatat sebagai baris tautan sendiri (§3 butir 3) atau kolom penunjuk di baris slip (pola `PayrollComponentLine.pkwtEventId @unique` F-132-V). Yang mengikat: dari baris akrual dapat ditelusur semua slip pembayarnya; dari baris slip dapat ditelusur baris akrual yang dibayarnya; nominal per tautan tercatat.
+- Status siklus hidup: **turunan, bukan kolom bebas**. Status baris diturunkan server dari angka-angkanya (§3), bukan input operator, bukan ditebak UI. Bila Backend memilih kolom status tersimpan demi query, kolom itu wajib ditulis hanya oleh service akrual/lawan/bayar dalam transaksi pemicunya dan wajib konsisten dengan turunan; tes rekonsiliasi §6 yang memutuskan, bukan kepercayaan.
+
+Kunci unik (anti-dobel, mengikat):
+- Baris akrual asal: unik `(salesInvoiceId, salesEmployeeId)`. Tulis kedua untuk pasangan sama = ditolak constraint (bukan digabung diam-diam, bukan baris kedua).
+- Baris lawan (retur/batal): tertaut `accrualLineId` + dokumen sumber lawan (retur/batal); satu dokumen sumber lawan paling banyak satu baris lawan per baris akrual (pola satu dokumen sumber satu baris, idempoten referenceType/referenceId repo).
+- Baris tautan bayar: unik per baris komponen slip (`payrollComponentLineId` unik) — satu baris slip membayar tepat nominal yang tertaut ke baris akrual yang ditunjuknya; baris slip yang sama tidak bisa menaut dua kali.
+- Jurnal mengikuti penjaga repo existing: satu jurnal akrual aktif per baris subledger lewat `activeReferenceKey`; reversal memakai mekanisme jurnal repo (asal REVERSED + lawan POSTED).
+
+Yang TIDAK wajib tahap ini (cegah over-build): tanpa dokumen nomor urut komisi terpisah (baris subledger bukan dokumen bernomor; nomor dokumen keuangan tetap nomor jurnal + nomor faktur + nomor slip), tanpa approval manual (hak lahir dari dokumen — Q-KOM3-3 tetap milik Lead), tanpa saldo tersimpan (saldo selalu turunan Σ, direkonsiliasi §6; kolom saldo cache hanya bila Backend membuktikan kebutuhan performa, dan tetap kalah dari turunan saat selisih).
+
+### 3. Status siklus hidup + titik tulis (mengikat)
+
+Status turunan per baris akrual asal (dari `commissionAmount` A, kumulatif lawan R, kumulatif terbayar-slip P):
+- `ACCRUED` (terakru): R = 0 dan P = 0.
+- `PARTIALLY_REVERSED` bukan status bernama sendiri: baris dengan 0 < R < A tetap terakru atas sisa (A − R); laporan menampilkan A, R, P terpisah (pola tiga angka builder #911), status diturunkan dari sisa.
+- `PARTIALLY_PAID`: P > 0 dan P < A − R.
+- `PAID`: P = A − R (dan A − R > 0).
+- `REVERSED`: R = A (lawan penuh / batal faktur) — tidak ada sisa hak.
+- `OVERPAID_NEGATIVE`: P > A − R (terjadi hanya bila retur lahir sesudah terbayar) — saldo penerima negatif tercatat (F-084-V §4 butir 4); tampil sebagai baris rekonsiliasi beralasan (pola `saldo-negatif-retur-sesudah-terbayar` builder #911), BUKAN status yang memblokir dan BUKAN di-clamp.
+Status penerima (agregat semua barisnya) selalu turunan penjumlahan; tidak ada status tersimpan per penerima.
+
+Titik tulis (semua dalam transaksi yang sama dengan pemicunya; di luar transaksi = cacat):
+1. **Akrual**: transisi SalesInvoice → `paid`. Satu tx: perubahan status faktur + snapshot persen/kategori (kontrak 036-S) + baris subledger + jurnal Dr 600002 / Cr 210212. Syarat lahir (F-084-V §3): penjual tidak null, snapshot persen ada, hasil hitung > 0, mapping §5 lengkap. Satu syarat gagal = nol baris + nol jurnal, berlabel alasan (faktur tetap `paid` — empat status terpisah). Idempotency key aksi = pasangan (faktur, penerima) + klaim referensi jurnal; retry transisi/replay pembayaran terakhir TIDAK melahirkan baris/jurnal kedua.
+2. **Lawan retur**: retur mencapai `completed`. Satu tx: status retur + baris lawan tertaut baris akrual asal + jurnal Dr 210212 / Cr 600002 di masa retur. Penjaga kumulatif dalam tx yang sama: R sesudah tulis ≤ A baris asal; lawan yang akan melewati A = DITOLAK berisik di server (bukan dipotong diam-diam ke sisa).
+3. **Bayar**: slip payroll yang memuat komponen komisi tertaut mencapai `paid`. Satu tx: status slip + tautan bayar per komponen ke baris akrual + jurnal slip mendebit 210212 (pola `onPayrollPaid` existing; beban TIDAK diakui kedua kali). Komponen komisi pada slip `draft`/belum paid TIDAK mengurangi saldo. Penjaga dalam tx: P sesudah tulis ≤ A − R baris asal, KECUALI kelebihan lahir dari retur sesudah bayar (butir 2 pada baris yang sudah terbayar) — jalur slip dilarang menciptakan overpaid sendiri; overpaid hanya boleh lahir dari urutan retur-sesudah-bayar.
+4. **Batal faktur sesudah `paid`**: reversal penuh lewat mekanisme jurnal repo (asal REVERSED + lawan) + baris lawan penuh tertaut dalam tx koreksinya; baris akrual asal tidak dihapus, tidak diedit nominalnya.
+5. **Baca tidak menulis**: loader/read-model (rekap, saldo, laporan) TIDAK PERNAH menulis baris subledger, snapshot, atau jurnal (pola K2 F-058-V). Saldo awal saat inti live = hanya faktur yang bertransisi `paid` sesudah inti live; backfill historis DILARANG (F-084-V §6).
+
+Urutan penarikan bayar antar baris satu penerima: utang terlama dulu (`accruedAt`, seri faktur) — pola amortisasi repo yang dirujuk W5 spec 037-S; penarikan memilih baris dengan sisa > 0 tertua; satu komponen slip boleh menghabiskan satu baris dan lanjut ke baris berikutnya hanya sebagai tautan bayar terpisah per baris (satu tautan = satu baris akrual + satu nominal), supaya telusur per faktur tidak kabur.
+
+### 4. Pembatalan/retur sesudah komisi terakru (mengikat)
+
+1. Retur `completed` tertaut faktur terakru: jurnal lawan Dr 210212 / Cr 600002 sebesar `returnDpp snapshot retur × persen snapshot faktur asal`, tanggal = tanggal retur `completed`, `assertPeriodOpen` dalam tx; jurnal akrual asal dan baris akrual asal TIDAK diubah/dihapus. Masa pengurang = masa retur (F-056-V putusan 3), bukan restate masa akrual.
+2. Retur parsial berkali-kali lintas masa: tiap retur lawan sendiri; penjaga kumulatif server menahan Σ lawan ≤ akrual; retur yang melewati = ditolak di sumber/penjaga, TIDAK di-clamp di jurnal/subledger (AC-KOM37-4 spec).
+3. Faktur dibatalkan sesudah `paid`: reversal penuh (butir 4 §3). Faktur `cancelled` sebelum pernah `paid`: tidak ada akrual, tidak ada baris — tidak ada yang dibalik.
+4. Komisi sudah terbayar lewat payroll lalu retur lahir: lawan tetap terbit penuh sesuai butir 1 (utang boleh negatif per penerima); pemulihan = potongan dari komisi/payroll berikutnya oleh proses payroll berizin; sistem TIDAK menarik kas otomatis, TIDAK meng-clamp 0, TIDAK menghapus utang karena penerima berhenti (penyelesaian akhir penerima berhenti = Q-KOM3-5 spec, Lead + Accountant pada kartu fisiknya; vonis ini hanya mengunci: saldo tetap tercatat atas namanya sampai diselesaikan lewat jalur itu).
+5. Periode terkunci pada tanggal akrual/lawan: posting ditolak berisik, tanggal TIDAK digeser diam-diam; faktur/retur tetap pada status dokumennya (fisik antrean retry = Q-KOM3-4 Backend; menggeser tanggal jurnal = pelanggaran).
+
+### 5. Matriks akun (mengikat; warisan 039-V, tidak berubah)
+
+| Event | Debit | Kredit | Nominal | Syarat |
+|---|---|---|---|---|
+| Akrual (faktur transisi ke `paid`, snapshot lengkap, hasil > 0) | 600002 Beban Komisi | **210212 Utang Komisi Penjualan** | `safeRound(DPP × persenSnapshot/100)` sen; DPP = `grandTotal − taxAmount` snapshot | satu tx dengan transisi paid + tulis subledger; `assertPeriodOpen(tanggalPaid, tx)`; unik (faktur, penerima) |
+| Jurnal lawan retur `completed` | **210212** | 600002 | `returnDpp snapshot × persenSnapshot faktur asal` | masa retur; kumulatif lawan ≤ akrual; asal tidak disentuh |
+| Reversal batal faktur sesudah paid | mekanisme reversal repo (lawan penuh atas jurnal akrual) | — | akrual penuh | asal → REVERSED; periode terbuka |
+| Bayar via slip payroll (komponen komisi tertaut subledger) | **210212** | komponen payroll (pola `onPayrollPaid` existing) | nominal komponen di slip | satu tx dengan slip `paid` + tautan bayar; PPh 21 TER gabungan masa bayar (F-084-V §5, 039-V §5) |
+
+- 210207 TIDAK disentuh vonis ini selain sebagai larangan: 210207 = Utang Kompensasi PKWT (F-2026-10-24-132-V). Fallback ke 210204/210205/210206/210207/210208/210209/210210/210211 DILARANG mutlak (039-V §3-§4 tetap penuh).
+- Mapping: `commissionExpenseAccountId` + `commissionPayableAccountId` nullable tanpa default tebak; seed instalasi baru menunjuk 600002/210212; kosong/nonaktif/salah tipe/sama = posting ditolak berisik, nol jurnal, nol baris subledger setengah (039-V §3). Penjaga berbasis mapping + tipe akun aktif, BUKAN hardcode `code === "210212"` (039-V §3 butir 6).
+- PPh 21: tidak dipotong saat akrual (akrual bruto penuh); dipotong saat bayar lewat payroll sebagai TER atas gabungan bruto masa bayar (PMK 168/2023 Pasal 5/8/10 via F-084-V §5 — register existing, tidak di-riset ulang run ini). Penerima non-Employee tetap di luar tahap 3; komisi karyawan bukan objek PPN.
+
+### 6. Rekonsiliasi + draf acceptance BOT QA (falsifikasi; cabut penjaga → MERAH)
+
+Rekonsiliasi tiga arah wajib (selisih = temuan tampil bernama, tidak dipilih diam-diam): (i) Σ saldo subledger per penerima (A − R − P per baris, dijumlah) == saldo akun 210212 dari jurnal POSTED (Σ kredit − Σ debit 210212); (ii) per faktur sampel: A baris == nominal jurnal akrual tertautnya, Σ lawan == Σ jurnal lawan tertaut, Σ tautan bayar == Σ debit 210212 dari jurnal slip tertaut; (iii) angka subledger vs rekap informatif per faktur direkonsiliasi sebagai baris beralasan (pola builder #911; rekap tidak disamakan paksa — BR-KOM37-12). Builder #911 (PR OPEN, ditahan Lead) adalah konsumen turunan yang sah untuk (i)-(iii) sesudah inti live; inputnya wajib baris subledger+jurnal nyata, bukan rekap.
+
+Mewarisi KOM3-1..7 (F-084-V §7, nomor akun per koreksi 039-V), AC-KOM37-1..8 (spec 037-S §8), QA-KOM39-1..6 (039-V §7) apa adanya; delta mengikat vonis ini:
+- QA-KOM49-1 (subledger ada + unik): faktur `paid` snapshot lengkap → tepat satu baris akrual (faktur, penerima) + satu jurnal akrual aktif. Cabut kunci unik / tulis baris kedua saat retry transisi → MERAH.
+- QA-KOM49-2 (agregat bukan sumber): jurnal komisi tanpa baris subledger tertaut (atau baris tanpa jurnal) pada instalasi inti live = temuan rekonsiliasi MERAH; saldo per penerima dihitung dari jurnal agregat saja → MERAH.
+- QA-KOM49-3 (tautan bayar telusur dua arah): slip `paid` memuat komponen komisi → dari baris akrual terbaca slip pembayar + nominal per tautan, dari baris slip terbaca baris akrualnya; mengganti tautan sesudah slip `paid` → tertolak; komponen pada slip belum `paid` mengurangi saldo → MERAH.
+- QA-KOM49-4 (kumulatif lawan): dua retur parsial + retur ketiga melewati akrual → retur ketiga ditolak berisik di server dalam tx; lawan ter-clamp diam-diam atau baris asal teredit → MERAH.
+- QA-KOM49-5 (retur sesudah terbayar): baris terbayar penuh lalu retur completed → lawan terbit, saldo penerima negatif tampil beralasan (tanpa clamp/tarik kas); lawan ditahan karena sudah terbayar → MERAH.
+- QA-KOM49-6 (status turunan jujur): status baris dihitung ulang dari A/R/P cocok dengan yang tampil untuk semua keadaan §3 termasuk `REVERSED` dan overpaid; status hasil input manual operator diterima server → MERAH.
+- QA-KOM49-7 (baca tidak menulis): membaca rekap/saldo/loader berulang tidak mengubah jumlah baris subledger/jurnal; backfill baris untuk faktur `paid` sebelum inti live → MERAH.
+
+### 7. Batas build per bot
+
+- **BOT Lead**: merge PR vonis ini milikmu. Vonis ini menutup pertanyaan bentuk (Q-KOM3-2 sisi akuntansi); buka inti (G1) tetap putusanmu dan saat ini DITOLAK (22:09 WIB) — vonis ini tidak mengubah putusan itu. PR #911 tetap ditahan sampai G1/G2.
+- **BOT Backend**: JANGAN bangun sebelum G1 terbit. Sesudah G1: fisik dalam batas §2-§3 (model subledger + kunci unik + hook akrual/lawan/bayar satu-tx + penjaga kumulatif + tautan slip pola F-132-V). Klaim `prisma/schema.prisma` di board sebelum edit; koordinasi schema dengan Accountant sebelum migrasi. Bentuk fisik yang tidak bisa menjaga unik (faktur, penerima) + kumulatif lawan ≤ akrual dalam satu transaksi = tidak sah, kembalikan ke Accountant sebelum membangun jalan pintas.
+- **BOT Business**: workflow tetap spec 037-S W1-W7; tidak ada slip komisi di luar payroll untuk karyawan; penerima non-Employee tetap berhenti di gerbang vonis terpisah.
+- **BOT Frontend**: permukaan saldo/riwayat hanya dari read-model Backend (pola builder #911) apa adanya; UI tidak menurunkan status, tidak hitung komisi/PPh, tidak menampilkan nominal lintas-penjual tanpa izin + scope server (BR-KOM37-14).
+- **BOT QA**: KOM3 + AC-KOM37 + QA-KOM39 + QA-KOM49-1..7 atas head inti persis.
+
+### 8. Pertanyaan terbuka sisa (tidak diputus vonis ini)
+
+- Q-KOM3-3 (Lead): approval manual sebelum akrual/bayar — default tetap tanpa approval baru (hak lahir dari dokumen).
+- Q-KOM3-4 (Backend): fisik antrean retry akrual yang tertolak periode terkunci (antrean berlabel vs tolak transisi); menggeser tanggal jurnal sudah dilarang §4 butir 5.
+- Q-KOM3-5 (Lead + Accountant pada kartu fisiknya): penyelesaian akhir penerima berhenti dengan saldo belum terbayar/negatif; yang sudah dikunci vonis ini hanya: saldo tetap tercatat, tidak dihapus, tidak di-clamp.
+- Fisik penomoran dokumen komisi terpisah: TIDAK diwajibkan vonis ini (§2); bila operasional kelak menuntut nomor dokumen komisi sendiri, itu keputusan Lead/Business pada kartu konsumen — bukan syarat akuntansi.
+- Penerima agen non-Employee, split multi-penjual, komisi tetap berkala (BPJS): tetap di luar / BUTUH-VONIS terpisah (F-084-V §6).
+
+Dasar: dokumen internal repo — F-2026-10-22-084-V (perlakuan tahap 3: titik akrual, rumus, retur, PPh §5, gerbang G1-G5), F-2026-10-25-039-V (akun final 210212, mapping fail-closed, QA-KOM39), spec F-2026-10-25-037-S §2/§5/§10 (bentuk minimum usulan Business + pertanyaan fisik Q-KOM3-2), F-2026-10-22-056-V/F-058-V (tarif/snapshot — tidak dibuka ulang), preseden kode `PkwtCompensationAccrual` + `PayrollComponentLine.pkwtEventId` (F-2026-10-24-132-V), builder saldo PR #911 (lapis aman, ditahan Lead). Label bukti: TERVERIFIKASI-VONIS (084-V/039-V/056-V/058-V di origin/main), TERVERIFIKASI-KODE (schema PKWT + builder #911 head `119d2739`, grep commission schema origin/main = 0), KEBIJAKAN INTERNAL (kewajiban subledger, kunci unik, status turunan — keputusan desain ISF, bukan klaim regulasi). Regulasi dirujuk hanya lewat register existing F-084-V §5 (PMK 168/2023); tidak ada riset/klaim kepatuhan baru run ini.
+
+F-2026-10-25-049-V — Bentuk subledger komisi per penerima: YA wajib per (faktur, penerima); jurnal agregat saja DITOLAK; kunci unik + titik tulis satu-tx + lawan retur tanpa edit asal (akun 210212/600002 per 039-V). Status: VONIS TERBIT run ini; tahap 3 TETAP TERTUTUP (G1 ditolak Lead 2026-10-25 22:09 WIB, G2 belum live). Pemilik berikutnya: Lead (merge PR vonis ini; G1 bila syarat dinilai) → Backend (fisik §2-§3 sesudah G1) → Frontend (konsumen read-model) → QA (QA-KOM49 + warisan KOM3/AC-KOM37/QA-KOM39).
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-042-V: Q-ITX-1 kode pajak/DPP default per barang-jasa (gerbang spec F-2026-10-25-041-S PR #898)
 
@@ -32039,4 +32151,3 @@ TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
 Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
 Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
 (falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
-
