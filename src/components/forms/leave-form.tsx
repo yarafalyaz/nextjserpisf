@@ -25,7 +25,22 @@ interface LeaveFormProps {
   leave?: { id: number; employeeId: number; leaveType: string; startDate: string; endDate: string; reason?: string | null }
 }
 
-const leaveTypes = ["annual", "sick", "personal", "maternity", "unpaid"].map((id) => ({
+const leaveTypes = [
+  "annual",
+  "sick",
+  "personal",
+  "maternity",
+  "unpaid",
+  "marriage",
+  "child_marriage",
+  "child_circumcision",
+  "child_baptism",
+  "spouse_childbirth",
+  "family_death_core",
+  "family_death_household",
+  "menstrual",
+  "pilgrimage",
+].map((id) => ({
   id,
   name: LEAVE_TYPE_LABELS[id],
 }))

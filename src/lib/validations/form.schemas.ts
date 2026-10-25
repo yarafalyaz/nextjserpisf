@@ -131,6 +131,7 @@ export const employeeSchema = z.object({
   // hidup. Kosakata ditolak server bila di luar daftar; di sini hanya
   // pasangan tanggal+alasan berhenti yang dijaga, pesan persis server.
   employmentStatus: z.string().optional(),
+  leaveEligibilityStartDate: z.string().optional(),
   contractStartDate: z.string().optional(),
   contractEndDate: z.string().optional(),
   employmentEndedAt: z.string().optional(),

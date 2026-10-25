@@ -61,7 +61,14 @@ import {
   getLeaveQuota,
   countLeaveWorkingDays,
   QUOTA_LEAVE_TYPES,
+  SPECIAL_LEAVE_DAY_CAPS,
+  resolveDayKind,
 } from "@/lib/services/leave-quota.service";
+import {
+  assertOvertimeWithinWorkdayLimits,
+  computeOvertimePay,
+  type OvertimeDayKind,
+} from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -905,6 +912,20 @@ export async function createLeaveRequest(formData: FormData) {
         );
       }
 
+      // Cuti khusus statutori (Pasal 81 & 93 UU 13/2003): batas hari
+      // kalender per kejadian, ditegakkan di sini karena gerbang jatah
+      // tahunan hanya berlaku untuk tipe "annual".
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       // Annual-leave quota gate (only `annual` draws down the 12-day/calendar-year
       // balance — see QUOTA_LEAVE_TYPES). Two enforced rules:
       //  1. Tenure: employees with < 1 year of service (from joinDate) are not
@@ -1001,12 +1022,21 @@ export async function createOvertimeRequest(formData: FormData) {
     await assertHrEmployeeAccess(scope, v.employeeId);
 
     const overtime = await prisma.$transaction(async (tx) => {
+      // Batas lembur PP 35/2021 Pasal 26 ayat (1) — gerbang bersama create/
+      // update di overtime-pay.service (syarat vonis K2-S1).
+      const otDate = wibDateToUtcMidnight(v.date);
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: otDate,
+        hours: v.hours,
+      });
+
       const created = await tx.overtimeRequest.create({
         data: {
           slug: await nextSlug("overtimeRequest", `lembur-${v.date}`),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
-          date: wibDateToUtcMidnight(v.date),
+          date: otDate,
           hours: v.hours,
           totalHours: v.totalHours ?? null,
           mealHours: v.mealHours ?? null,
@@ -1072,18 +1102,33 @@ export async function approveOvertime(overtimeId: number) {
       return { success: true };
     }
 
-    // Compute overtime value: hours * baseSalary * multiplier * coefficient.
-    // Default: multiplier ≈ 1/173 (monthly-to-hourly), coefficient 1.10 (first-hour rate).
-    const settings = await prisma.systemSetting.findFirst({
-      select: { overtimeMultiplier: true, overtimeCoefficient: true },
-    });
-    const multiplier = Number(settings?.overtimeMultiplier ?? 0.00578035);
-    const coefficient = Number(settings?.overtimeCoefficient ?? 1.1);
+    // Nilai lembur bertingkat menurut PP 35/2021 jo. Kepmenakertrans
+    // 102/2004: upah sejam = gaji/173; hari kerja 1,5x lalu 2x; hari
+    // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
+    // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
+    // lewat Pengaturan) membayar di bawah minimum undang-undang.
+    // Syarat vonis K2-S2 (F-2026-10-25-014-V): dasar upah lembur Pasal 31
+    // = upah pokok + tunjangan tetap (100%), atau 75% darinya bila ada
+    // tunjangan tidak tetap. Skema Employee hanya punya SATU kolom upah
+    // bulanan, `baseSalary` (prisma/schema.prisma Employee.baseSalary) —
+    // tidak ada kolom komponen pokok/tetap/tidak-tetap terpisah, jadi
+    // dasar yang tersedia dan dipakai di sini adalah baseSalary apa
+    // adanya sebagai upah sebulan. Pernyataan tertulis penuh + syarat
+    // perubahan ada di body PR #800; bila master karyawan kelak dipecah
+    // per komponen, dasar ini WAJIB ditinjau ulang oleh vonis Accountant.
     const baseSalary = Number(ot.employee?.baseSalary ?? 0);
     const hours = Number(ot.hours);
-    const calculatedValue = Math.round(
-      hours * baseSalary * multiplier * coefficient,
-    );
+    const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
+    const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
+      ? "workday"
+      : dayProfile.workdaysPerWeek >= 6
+        ? "rest_6day"
+        : "rest_5day";
+    const calculatedValue = computeOvertimePay({
+      monthlySalary: baseSalary,
+      hours,
+      dayKind,
+    });
 
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
@@ -3999,10 +4044,22 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
         );
       }
 
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
         const quotaYear = startDate.getFullYear();
         const quota = await getLeaveQuota(employeeId, {
           year: quotaYear,
+          now: startDate,
           excludeLeaveId: id,
           db: tx,
         });
@@ -4106,6 +4163,16 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
       }
+
+      // Gerbang batas yang sama dengan create (syarat vonis K2-S1):
+      // tanpa ini edit pending 2 jam -> 5 jam hari kerja lolos batas
+      // PP 35/2021. excludeId mengeluarkan baris ini dari hitungannya.
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: wibDateToUtcMidnight(v.date),
+        hours: v.hours,
+        excludeId: id,
+      });
 
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },

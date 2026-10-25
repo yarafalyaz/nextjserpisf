@@ -847,6 +847,7 @@ function readEmployeeLifecycleFields(
     contractStartDate?: string;
     contractEndDate?: string;
     employmentEndedAt?: string;
+    leaveEligibilityStartDate?: string;
   },
 ) {
   const rawStatus = (formData.get("employmentStatus") as string | null)?.trim() || null;
@@ -873,7 +874,15 @@ function readEmployeeLifecycleFields(
       : null,
     employmentEndedAt: endedAt,
     endReason: rawReason,
+    leaveEligibilityStartDate: dates.leaveEligibilityStartDate
+      ? wibDateToUtcMidnight(dates.leaveEligibilityStartDate)
+      : null,
   };
+}
+
+function todayWibMidnightDate(): Date {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  return wibDateToUtcMidnight(today);
 }
 
 function dateOnlyOrNull(value: Date | null | undefined): string | null {
@@ -886,6 +895,7 @@ type EmployeeLifecycleValues = {
   contractEndDate: string | null;
   employmentEndedAt: string | null;
   endReason: string | null;
+  leaveEligibilityStartDate: string | null;
 };
 
 /**
@@ -1081,6 +1091,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       select: {
         userId: true,
         employmentStatus: true,
+        leaveEligibilityStartDate: true,
         contractStartDate: true,
         contractEndDate: true,
         employmentEndedAt: true,
@@ -1160,10 +1171,27 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       formData.has("contractStartDate") ||
       formData.has("contractEndDate") ||
       formData.has("employmentEndedAt") ||
+      formData.has("leaveEligibilityStartDate") ||
       formData.has("endReason");
     const lifecycleFields = lifecycleTouched
       ? readEmployeeLifecycleFields(formData, parsedDates.data)
       : null;
+
+    // Transisi Magang -> Kontrak: jam masa kerja hak cuti mulai dari
+    // tanggal mulai kontrak (masa magang tidak terhitung). Jangkar hanya
+    // diisi otomatis bila belum pernah diatur manual.
+    if (
+      lifecycleFields &&
+      current &&
+      current.employmentStatus === "INTERN" &&
+      (lifecycleFields.employmentStatus === "PKWT" ||
+        lifecycleFields.employmentStatus === "PKWTT") &&
+      current.leaveEligibilityStartDate == null &&
+      lifecycleFields.leaveEligibilityStartDate == null
+    ) {
+      lifecycleFields.leaveEligibilityStartDate =
+        lifecycleFields.contractStartDate ?? todayWibMidnightDate();
+    }
     const updateData = {
       ...employeeFields,
       ...(lifecycleFields ?? {}),
@@ -1229,6 +1257,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(current.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(current.employmentEndedAt),
         endReason: current.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(current.leaveEligibilityStartDate),
       };
       const newValues = {
         employmentStatus: lifecycleFields.employmentStatus,
@@ -1236,6 +1265,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(lifecycleFields.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(lifecycleFields.employmentEndedAt),
         endReason: lifecycleFields.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(lifecycleFields.leaveEligibilityStartDate),
       };
       if (JSON.stringify(oldValues) !== JSON.stringify(newValues)) {
         const logged = await writeEmployeeLifecycleLog({
