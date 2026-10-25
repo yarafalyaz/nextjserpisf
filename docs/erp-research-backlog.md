@@ -29977,6 +29977,75 @@ Tidak ada transisi status lead baru. Yang dibekukan = populasi dan perubahan pen
 
 Skor basi (turunan): karena turunan dihitung per baca dari fakta tersimpan, "basi" berarti fakta sumbernya basi (aktivitas terakhir lama, expectedCloseDate lampau, status tidak bergerak) — builder wajib menampilkan umur fakta pemicu (mis. aktivitas terakhir N hari) di samping tingkat turunan; tingkat tanpa penanda umur fakta = dilarang (BR-LSC-07). Prioritas manual basi: manual tidak kedaluwarsa otomatis tahap 1; lead yang prioritas manualnya tidak pernah ditinjau sesudah perubahan status/tanggal tampil tertanda "ditetapkan sebelum perubahan terakhir" — bentuk penanda final = Q-LSC-2.
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-033-S: rekap beban tiket terbuka per penanggung jawab (agregat populasi F-2026-10-25-032-S, baca-saja; BUKAN penilaian kinerja)
+
+> **Slot**: F-2026-10-25-033-S. Diperiksa bentrok 2026-10-25 15:5x WIB vs `origin/main` (`4fdb124f`): grep `F-2026-10-25-033` di backlog+board origin/main = 0, judul PR terbuka mengandung `033`/`beban tiket` = 0. ID terpakai tanggal ini terverifikasi: 032-S PR #867 OPEN. 033-S bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_485efbb7. Dokumen saja; **tanpa kode/schema/migrasi** run ini. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Ringkasan
+
+Antrean F-2026-10-25-032-S (PR #867, menunggu merge Lead) menjawab "tiket terbuka mana dikerjakan lebih dulu" sebagai daftar baris. Pertanyaan pembagian kerja yang berbeda belum terjawab: "beban tiket terbuka sekarang menumpuk di siapa?" Spec ini membekukan **rekap agregat baca-saja per penanggung jawab** di atas populasi tiket terbuka yang sama persis dengan 032-S: per orang — jumlah terbuka, rincian per prioritas, umur tiket tertua, jumlah belum direspons — plus satu ember `Belum ditugaskan`. Rekap ini alat pembagian beban operasional, **bukan** penilaian kinerja: tanpa target jumlah per orang, tanpa peringkat "terbaik/terburuk", tanpa ambang kelebihan beban karangan, dan tanpa kaitan apa pun ke data HR/gaji (`assignedTo` tiket adalah `User`, bukan rekod karyawan payroll). Populasi dan semantik umur sengaja dirujuk ke 032-S supaya tidak lahir dua definisi "tiket terbuka".
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 4fdb124f)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `CrmTicket` (`prisma/schema.prisma:4354-4386`): `priority String @default("medium")`, `status String @default("open")`, `assignedTo Int?` **tanpa relasi Prisma** di model ini, `firstResponseAt`, `deletedAt`, `createdAt`; index `[assignedTo]`, `[status, assignedTo]`, `[createdAt]`.
+- `assignedTo` tiket merujuk **User**: form tiket mengisi dari daftar `users` (`src/components/forms/ticket-form.tsx:20,127-135`, label `Ditugaskan Ke`); detail tiket me-resolve nama lewat `prisma.user.findUnique({ where: { id: ticket.assignedTo } })` dengan fallback tampil persis `Pengguna #<id>` (`src/app/(dashboard)/crm/tickets/[slug]/page.tsx:66-70,148-151`). Beda dari `Task.assignedTo` yang berelasi `Employee` (`schema.prisma:5496`) — jangan dicampur.
+- Permission nyata katalog (`src/lib/auth/module-catalog.generated.ts:372-375`): `view_tickets`, `create_tickets`, `edit_tickets`, `delete_tickets`. Daftar/detail tiket existing bergerbang `view_tickets`.
+- Saudara agregat per orang existing sebagai pola repo (BUKAN duplikat): rekap lembur per karyawan F-2026-10-25-016-S dan funnel lead per `assignedToName` (`lead-funnel.ts`) — agregat baca murni dari baris sumber, tanpa skor individu.
+- Populasi 032-S (PR #867 head `6ef2c16a`, OPEN): `status IN (open, in_progress)` + `deletedAt IS NULL`; umur = `now − createdAt` kalender berlabel `Umur sejak dibuat` (BR-CTQ-05); prioritas liar = tingkat terakhir tertanda (BR-CTQ-03).
+
+Belum ada / gap (bukti grep run ini):
+- Grep tiket di `src/lib/reports/*.ts` = 0 berkas; tidak ada agregasi/grouping tiket per `assignedTo` di reports, actions, maupun halaman `crm/tickets` (daftar existing menampilkan baris terpaginasi tanpa kolom penanggung jawab sama sekali — `ticket-table.tsx` hanya Subjek/Prioritas/Status/Dibuat/Aksi).
+- Tidak ada ember hitungan `Belum ditugaskan` di permukaan mana pun; tiket tanpa penanggung jawab hanya terlihat satu-satu dari detail/form.
+- Tidak ada ringkasan "tertua per penanggung jawab"; tiket `high` tertua milik seseorang tidak terlihat tanpa membuka daftar penuh dan menyaring manual.
+
+### 2. Workflow specification
+
+Aktor: staf CRM/supervisor pemegang `view_tickets`, admin.
+Dokumen masuk: baris `CrmTicket` populasi 032-S. Dokumen keluar: tidak ada — agregat turunan per baca; nol tulisan.
+
+Alur:
+1. Pemegang `view_tickets` membuka permukaan rekap (bentuk = Q-CTB-3: bagian pada permukaan antrean 032-S yang sama, rekomendasi spec, vs halaman terpisah).
+2. Sistem mengelompokkan himpunan tiket terbuka per `assignedTo`: per kelompok tampil nama penanggung jawab (resolve `User.name`, fallback `Pengguna #<id>` persis pola detail existing), jumlah terbuka total, rincian jumlah per tingkat prioritas (`high`/`medium`/`low`/tak-dikenal tertanda), jumlah belum direspons (`status=open AND firstResponseAt IS NULL`, semantik BR-CTQ-12), dan umur tiket tertua di kelompok itu (turunan `createdAt`, label 032-S).
+3. Kelompok `Belum ditugaskan` (`assignedTo IS NULL`) tampil sebagai ember tersendiri selalu terlihat (bukan disembunyikan karena kosong — keadaan kosongnya justru informasi pembagian kerja), terpisah dari kelompok bernama.
+4. Urutan kelompok deterministik (BR-CTB-05): `Belum ditugaskan` pertama (beban yang belum punya pemilik didahulukan terlihat), lalu jumlah tiket `high` terbanyak, lalu jumlah terbuka total terbanyak, lalu umur tertua paling lama, lalu nama, lalu `assignedTo` id. Urutan ini urutan tampil operasional, **bukan** peringkat kinerja — label permukaan dilarang memakai kata peringkat/nilai (BR-CTB-07).
+5. Dari baris kelompok, staf dapat menelusur ke antrean 032-S terfilter penanggung jawab yang sama (bentuk tautan = kontrak Frontend sesudah builder; filter adalah parameter permukaan antrean, bukan query agregat kedua di sini). Penugasan ulang tetap lewat aksi tiket existing (`edit_tickets`) di detail/form — rekap tidak punya aksi assign/rebalance.
+
+Beda tegas dari saudara:
+| Permukaan | Pertanyaan | Sifat |
+|---|---|---|
+| Antrean 032-S | tiket terbuka mana dikerjakan lebih dulu | daftar baris prioritas+umur |
+| SLA F-2026-10-24-135-S | tiket mana lewat target jam-kerja | keadaan tenggat, angka `BUTUH-VONIS` Lead |
+| **Spec ini 033-S** | **beban terbuka menumpuk di siapa, dan berapa yang belum bertuan** | **agregat per penanggung jawab + ember belum ditugaskan** |
+
+### 3. Role/permission matrix
+
+Permission nyata katalog (`module-catalog.generated.ts:372-375`); tanpa key baru tahap 1 (Q-CTB-4).
+
+| Aksi | Permission nyata | Staf CRM | Supervisor/Admin |
+|---|---|---|---|
+| Melihat rekap beban + ember belum ditugaskan | `view_tickets` | ya | ya |
+| Menelusur ke antrean per penanggung jawab | `view_tickets` | ya | ya |
+| Menugaskan/menugaskan ulang tiket (di detail/form existing) | `edit_tickets` | sesuai existing | sesuai existing |
+| Aksi assign/rebalance massal dari rekap | — | TIDAK tahap 1 | TIDAK |
+| Melihat data HR/gaji penanggung jawab dari rekap | — | TIDAK (di luar domain; `assignedTo` = User) | TIDAK |
+
+Tidak ada data gaji/pribadi khusus: nama yang tampil = `User.name` yang sudah ter-resolve di detail tiket bagi pemegang `view_tickets`.
+
+### 4. Population / grouping matrix
+
+Populasi persis 032-S (BR-CTQ-02): `status IN (open, in_progress)` DAN `deletedAt IS NULL`. Yang dibekukan = pengelompokan dan perlakuan tepi:
+
+| Keadaan | Kelompok | Perlakuan | Penjaga |
+|---|---|---|---|
+| `assignedTo` terisi, User ditemukan | kelompok nama User itu | hitungan + rincian prioritas + tertua | builder |
+| `assignedTo IS NULL` | `Belum ditugaskan` | ember tersendiri, selalu tampil, urutan pertama | builder (falsifikasi AC-CTB-B2) |
+| `assignedTo` terisi, User tidak ditemukan (terhapus/nonaktif tanpa baris) | kelompok tertanda `Pengguna #<id>` | fallback persis detail existing; tidak digabung ke `Belum ditugaskan` (fakta "pernah ditugaskan" tidak dihapus diam-diam), tidak dibuang | builder |
+| tiket `resolved`/`closed`/terhapus-lembut | keluar semua kelompok dan total | total rekap = total antrean 032-S pada himpunan sama | builder (AC-CTB-B1) |
+| prioritas liar/kosong | hitungan kolom `Tak dikenal` di kelompoknya | tertanda, tidak dinormalisasi (BR-CTQ-03 dirujuk) | builder |
+| penanggung jawab berubah (edit existing) | baca berikutnya tiket pindah kelompok penuh | tanpa peristiwa/riwayat baru tahap 1; total global tidak berubah | turunan per baca |
+| orang tanpa tiket terbuka | TIDAK tampil sebagai kelompok nol | rekap hanya menampilkan pemegang beban aktual + ember belum ditugaskan; daftar semua staf = bukan rekap beban (menghindari papan peringkat kosong) | builder |
+
 ### 5. Business rules register
 
 | ID | Aturan | Label | Sumber |
@@ -30050,6 +30119,71 @@ Edge cases: E-LSC-1 lead non-terminal tanpa assignedTo (tampil "Belum ditugaskan
 - Mengubah semantik stale-leads/follow-ups/027-S menjadi skor: tiga permukaan itu tetap menjawab pertanyaannya masing-masing (§2).
 
 F-2026-10-25-031-S — Skor prioritas lead. Status: SPEC SELESAI run ini; tahap 1 prioritas manual menunggu putusan Lead Q-LSC-2/3/4 + fisik Backend; skor turunan menunggu gerbang Q-LSC-1 (tanpa putusan = tidak dibangun). Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik/aksi/builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
+
+| BR-CTB-01 | Gap terbukti ABSEN: tidak ada agregasi tiket per penanggung jawab di reports/actions/halaman; tabel daftar tiket bahkan tidak menampilkan penanggung jawab. | TERVERIFIKASI-KODE | grep run ini; `ticket-table.tsx` kolom existing |
+| BR-CTB-02 | Populasi dan semantik umur/prioritas liar rekap = persis F-2026-10-25-032-S (BR-CTQ-02/03/05). Dilarang definisi "tiket terbuka" kedua; implementasi berbagi builder populasi yang sama (fisik berbaginya = Q-CTB-2 Backend). | USULAN (mengikat 032-S) | PR #867 §5 |
+| BR-CTB-03 | `assignedTo` tiket = id `User` (bukan Employee/payroll). Rekap dilarang menautkan ke data HR, jabatan, atau gaji, dan dilarang menyebut kelompok sebagai "karyawan" — label sah: `Penanggung jawab`. | TERVERIFIKASI-KODE | `ticket-form.tsx:20`; detail `[slug]/page.tsx:66-70`; `schema.prisma:4367` tanpa relasi |
+| BR-CTB-04 | Nama tampil = `User.name`; tidak ditemukan → `Pengguna #<id>` persis fallback existing, kelompoknya terpisah dari `Belum ditugaskan`. | USULAN (fallback TERVERIFIKASI-KODE) | `[slug]/page.tsx:148-151` |
+| BR-CTB-05 | Urutan kelompok: `Belum ditugaskan` → `high` desc → total terbuka desc → umur tertua desc → nama asc → id asc. Satu-satunya urutan; loader/UI dilarang mengurutkan ulang. | USULAN | pola urutan deterministik builder repo |
+| BR-CTB-06 | Baca-saja mutlak: rekap tidak menulis tiket, tidak menugaskan/menugaskan ulang, tidak ada rebalance otomatis atau saran pindah bertulis "wajib". Penugasan tetap aksi existing `edit_tickets`. | USULAN | pola builder murni repo |
+| BR-CTB-07 | Bukan penilaian kinerja: dilarang target/kuota jumlah tiket per orang, dilarang ambang "kelebihan beban", dilarang label peringkat/terbaik/terburuk/rata-rata tim sebagai nilai, dilarang mengekspor rekap sebagai bahan penilaian individu tahap 1. Angka yang tampil = hitungan baris apa adanya. | USULAN | batas domain kartu; tanpa sumber kebijakan beban di repo |
+| BR-CTB-08 | Total seluruh kelompok + `Belum ditugaskan` wajib sama dengan total populasi antrean 032-S pada saat baca yang sama; selisih = cacat (satu query massal, pengelompokan di builder murni). | USULAN | pola satu-sumber `lead-funnel` |
+| BR-CTB-09 | Izin permukaan = `view_tickets`; tanpa key baru, tanpa permukaan tanpa gerbang. Kegagalan loader: rekap disembunyikan/tertanda tidak tersedia, antrean 032-S dan daftar existing tetap dapat dipakai (label jujur). | USULAN (key TERVERIFIKASI-KODE) | katalog :372; pola BR-CTQ-11 |
+| BR-CTB-10 | `Belum ditugaskan` tidak pernah digabung/dibagi rata ke kelompok bernama oleh sistem; pembagian adalah keputusan manusia lewat aksi existing. | USULAN | BR-CTB-06 |
+
+### 6. Feature matrix (benchmark, akses live 2026-10-25)
+
+| Kemampuan | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Modul tiket/helpdesk CRM dengan rekap beban per agen | Tidak ditemukan modul tiket dukungan pelanggan di Help Accurate yang diakses run ini (`https://help.accurate.id/`) | Tidak ditemukan modul tiket/helpdesk CRM di portal bantuan resmi yang diakses run ini (`https://help.zahironline.com/portal/id/home`) | Spec ini: agregat di atas `CrmTicket` existing |
+| Antrean kerja prioritas+umur | Tidak ditemukan permukaan setara | Tidak ditemukan permukaan setara | F-2026-10-25-032-S PR #867 |
+| Target SLA per prioritas | Tidak ditemukan | Tidak ditemukan | F-2026-10-24-135-S, `BUTUH-VONIS` Lead — BUKAN spec ini |
+
+Catatan jujur: benchmark negatif — rekap ini kebutuhan operasional ISF sendiri mengikuti pola agregat repo (`lead-funnel`, rekap lembur 016-S), bukan paritas vendor. Tidak ada ambang beban yang disalin dari mana pun (BR-CTB-07).
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder murni + loader):
+- AC-CTB-B1: tiket terminal/terhapus-lembut tidak masuk kelompok mana pun dan tidak masuk total; total rekap ≠ total populasi 032-S pada fixture sama = MERAH.
+- AC-CTB-B2: tiket tanpa `assignedTo` hanya di ember `Belum ditugaskan`; ember itu tampil walau nol tiket (keadaan kosong tertanda) dan selalu urutan pertama. Tergabung ke nama seseorang = MERAH.
+- AC-CTB-B3: `assignedTo` tanpa baris User tampil `Pengguna #<id>` terpisah dari `Belum ditugaskan`; digabung/dibuang = MERAH.
+- AC-CTB-B4: rincian per prioritas per kelompok menjumlah ke total kelompok, termasuk kolom tak-dikenal untuk prioritas liar; prioritas liar terhitung sebagai medium/high = MERAH.
+- AC-CTB-B5: umur tertua kelompok = `createdAt` tertua di kelompok itu (label `Umur sejak dibuat`); memakai `updatedAt` = MERAH (mutasi `updatedAt` tidak mengubah tertua/urutan).
+- AC-CTB-B6: loader satu query massal populasi yang sama dengan 032-S, nol mutasi; dua definisi populasi (rekap menghitung status lain) = MERAH.
+
+Frontend (konsumen):
+- AC-CTB-F1: semua hitungan/umur/urutan verbatim server; UI mengelompokkan/menghitung sendiri = MERAH.
+- AC-CTB-F2: permukaan tanpa `view_tickets` tertolak pola existing; nol tombol assign/rebalance/peringkat; kata `Terbaik`/`Terburuk`/`Peringkat`/`Kinerja` di permukaan = MERAH.
+- AC-CTB-F3: sebelum commit grep e2e selector tiket/antrean terdampak dan sinkronkan commit yang sama.
+
+QA (falsifikasi): suntik tiket terminal ke populasi → B1 MERAH; gabung ember belum-ditugaskan → B2 MERAH; hapus baris User fixture → B3 harus tetap hijau dengan fallback; geser `updatedAt` → B5 tetap hijau.
+
+Edge cases: EC-CTB-1 semua tiket belum ditugaskan (hanya satu ember tampil + teks kosong kelompok bernama yang jujur). EC-CTB-2 penanggung jawab dengan hanya tiket prioritas liar (kolom tak-dikenal terisi, total tetap benar). EC-CTB-3 penugasan ulang massal manual antar dua orang: baca berikut kelompok bertukar hitungan penuh, total global tetap. EC-CTB-4 dua User bernama sama persis: kelompok dibedakan id (`assignedTo` seri terakhir BR-CTB-05), nama sama tidak digabung. EC-CTB-5 tiket tertua global ada di ember `Belum ditugaskan` (tertampil di ember pertama; tidak disembunyikan ringkasan global). EC-CTB-6 User dinonaktifkan sesudah ditugaskan: selama baris User ditemukan, nama tetap tampil apa adanya — status aktif User bukan populasi rekap tahap 1 (fisik cek aktif = Q-CTB-2).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-CTB-1 (Lead): sahkan rekap sebagai permukaan pembagian beban operasional dengan larangan penilaian kinerja BR-CTB-07. (Rekomendasi spec: ya.)
+- Q-CTB-2 (Lead + Backend): fisik berbagi populasi dengan builder 032-S (satu builder populasi, dua keluaran: baris antrean + agregat) dan perlakuan User nonaktif EC-CTB-6. Implementasi 033 menunggu builder 032 stabil/merged supaya tidak ada populasi kedua.
+- Q-CTB-3 (Lead + Frontend): bentuk permukaan — bagian pada permukaan antrean 032-S (rekomendasi spec) vs halaman terpisah; termasuk bentuk telusur terfilter penanggung jawab.
+- Q-CTB-4 (Lead): izin cukup `view_tickets` (rekomendasi spec).
+- Accountant: TIDAK (tanpa uang/pajak/jurnal; tanpa data gaji/HR — BR-CTB-03).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-033-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-033-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder agregat per penanggung jawab di atas populasi 032-S | Backend | Q-CTB-1/2 diputus Lead + builder F-2026-10-25-032-S stabil | — |
+| (turunan) permukaan rekap + telusur terfilter | Frontend | kontrak builder Backend final + Q-CTB-3/4 | — |
+| (turunan) falsifikasi AC-CTB-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Penilaian kinerja, target/kuota per orang, ambang kelebihan beban, peringkat, ekspor penilaian individu (BR-CTB-07).
+- Assign/rebalance dari rekap, penugasan otomatis/round-robin, notifikasi beban.
+- Tautan ke Employee/HR/payroll dari `assignedTo` tiket (BR-CTB-03), status tiket baru, migrasi relasi `assignedTo`.
+- Definisi populasi tiket terbuka kedua di luar 032-S (BR-CTB-02).
+
+F-2026-10-25-033-S — Rekap beban tiket terbuka per penanggung jawab. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-CTB-1/2/3/4 + builder F-2026-10-25-032-S stabil. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-035-S: gerbang penegakan batas kredit pelanggan tahap 2 (lanjutan advisory F-2026-10-21-017-S; peringatan tetap default, penahan = gerbang vonis)
 
