@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     salesInvoice: { findMany: vi.fn() },
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
+    invoiceExchangeItem: { findMany: vi.fn() },
     journal: { findMany: vi.fn() },
     activityLog: { findMany: vi.fn() },
     user: { findMany: vi.fn() },
@@ -36,6 +37,7 @@ beforeEach(() => {
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.salesPayment.findMany.mockResolvedValue([])
   mocks.prismaMock.salesReturn.findMany.mockResolvedValue([])
+  mocks.prismaMock.invoiceExchangeItem.findMany.mockResolvedValue([])
   mocks.prismaMock.journal.findMany.mockResolvedValue([])
   mocks.prismaMock.activityLog.findMany.mockResolvedValue([])
   mocks.prismaMock.user.findMany.mockResolvedValue([])
@@ -287,5 +289,81 @@ describe("loadCustomerStatement", () => {
     const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
     expect(report.emailTrail).toEqual([])
     expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * F-2026-10-25-025-S loader — AC-ST-B1/B2/B6 di batas DB:
+ * select faktur memuat dueDate; query exchangeItem massal (salesInvoice:
+ * recognised + deletedAt null, exchange aktif) SATU kali; exchange aktif
+ * TERAKHIR per faktur diteruskan sebagai exchangeDueDate; due null DB
+ * diteruskan null; tabel PDF memuat kolom Jatuh Tempo + penanda server.
+ */
+describe("loadCustomerStatement due (F-2026-10-25-025-S)", () => {
+  it("AC-ST-B1/B6: dueDate+exchange terakhir diteruskan; query massal satu kali anti-N+1", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 2, documentNo: "INV-002", date: D("2026-02-05"), grandTotal: 500_000, dueDate: D("2026-02-20") },
+      { id: 3, documentNo: "INV-003", date: D("2026-02-06"), grandTotal: 300_000, dueDate: null },
+    ])
+    mocks.prismaMock.invoiceExchangeItem.findMany.mockResolvedValue([
+      // exchange lama — kalah dari yang lebih baru di bawah
+      { salesInvoiceId: 2, exchange: { id: 41, date: D("2026-02-08"), dueDate: D("2026-03-01"), deletedAt: null } },
+      // exchange aktif terakhir faktur 2
+      { salesInvoiceId: 2, exchange: { id: 42, date: D("2026-02-12"), dueDate: D("2026-03-15"), deletedAt: null } },
+      // exchange terhapus — diabaikan walau terbaru
+      { salesInvoiceId: 2, exchange: { id: 43, date: D("2026-02-18"), dueDate: D("2026-04-01"), deletedAt: D("2026-02-19") } },
+    ])
+
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+
+    expect(mocks.prismaMock.salesInvoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ dueDate: true }),
+      }),
+    )
+    expect(mocks.prismaMock.invoiceExchangeItem.findMany).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.invoiceExchangeItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          salesInvoice: expect.objectContaining({
+            customerId: 7,
+            status: { in: ["posted", "partial", "paid"] },
+            deletedAt: null,
+          }),
+          exchange: { deletedAt: null },
+        }),
+      }),
+    )
+
+    const inv2 = report.statement.entries.find((e) => e.documentNo === "INV-002")
+    // due acuan = exchange terakhir aktif (15 Mar), bukan dueDate faktur (20 Feb)
+    expect(inv2?.dueDate).toEqual(D("2026-03-15"))
+    expect(inv2?.isOverdue).toBe(false)
+    const inv3 = report.statement.entries.find((e) => e.documentNo === "INV-003")
+    expect(inv3).toMatchObject({ dueDate: null, isOverdue: false })
+
+    // BR-ST-08: tabel PDF loader memuat kolom + sel due server apa adanya
+    expect(report.table.columns.map((c) => c.header)).toContain("Jatuh Tempo")
+    const rowInv2 = report.table.rows.find(
+      (r) => r.kind === "data" && r.cells.includes("INV-002"),
+    )
+    expect(rowInv2?.kind === "data" ? rowInv2.cells[2] : undefined).toBe("15 Mar 2026")
+    const rowInv3 = report.table.rows.find(
+      (r) => r.kind === "data" && r.cells.includes("INV-003"),
+    )
+    expect(rowInv3?.kind === "data" ? rowInv3.cells[2] : undefined).toBe("—")
+  })
+
+  it("AC-ST-B3 via loader: faktur belum lunas due lampau → penanda di keterangan PDF server", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 2, documentNo: "INV-002", date: D("2026-02-05"), grandTotal: 500_000, dueDate: D("2026-02-20") },
+    ])
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    const row = report.statement.entries.find((e) => e.kind === "invoice")
+    expect(row?.isOverdue).toBe(true)
+    const pdfRow = report.table.rows.find(
+      (r) => r.kind === "data" && r.cells.includes("INV-002"),
+    )
+    expect(pdfRow?.kind === "data" ? pdfRow.cells[3] : "").toContain("Lewat Jatuh Tempo")
   })
 })
