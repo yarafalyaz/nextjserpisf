@@ -72,6 +72,7 @@ const TABLE_SOURCES = {
   appreciations: "id", leave_requests: "id", timesheets: "id",
   overtime_requests: "id", payrolls: "document_no", employee_loans: "id",
   probation_reviews: "id", contract_decision_requests: "id", employee_disciplinary_records: "id",
+  disciplinary_deduction_decisions: "document_no",
   // crm
   leads: "name", crm_tickets: "subject",
   // pengaturan

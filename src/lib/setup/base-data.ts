@@ -932,6 +932,15 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // 210204 Hutang Gaji / 210101 Utang Usaha / 210205 Provisi Garansi
   // DILARANG reuse untuk jalur ini.
   ["210209", "Utang Reimbursement Karyawan", "OCLY", "2102"],
+  // F-2026-10-25-020-V Putusan 5 (koreksi alokasi 14:04 WIB): liabilitas
+  // statutori payroll. 210208 = Utang Pesangon (005-V) dan 210209 =
+  // Utang Reimbursement (018-V) DILARANG reuse untuk jalur ini.
+  ["210210", "Utang PPh 21 Karyawan", "OCLY", "2102"],
+  ["210211", "Utang Iuran BPJS Karyawan", "OCLY", "2102"],
+  // F-2026-10-25-020-V Putusan 5: denda disiplin kredit ke sini (PP
+  // 36/2021 Pasal 60 — uang denda hanya untuk kepentingan pekerja);
+  // kredit mengurangi beban gaji DILARANG.
+  ["710006", "Pendapatan Denda Karyawan", "OINC", "7100"],
 ]
 
 /**

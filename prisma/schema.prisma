@@ -314,6 +314,15 @@ model SystemSetting {
   // COA 210209) untuk jurnal akrual klaim J-RB1/J-RB2. Nullable TANPA
   // default tebak; kosong = approve klaim ditolak fail-closed.
   reimbursementLiabilityAccountId Int? @map("reimbursement_liability_account_id")
+  /**
+   * F-2026-10-25-020-V Putusan 5: akun potongan disiplin & statutori payroll.
+   * Nullable TANPA default tebak; kosong/nonaktif = mutasi ditolak
+   * fail-closed. Standar: 210210 Utang PPh 21 Karyawan / 210211 Utang
+   * Iuran BPJS Karyawan / 710006 Pendapatan Denda Karyawan.
+   */
+  pph21PayableAccountId Int? @map("pph21_payable_account_id")
+  bpjsEmployeePayableAccountId Int? @map("bpjs_employee_payable_account_id")
+  disciplinaryFineIncomeAccountId Int? @map("disciplinary_fine_income_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -980,6 +989,8 @@ model Employee {
   disciplinaryApproved EmployeeDisciplinaryRecord[] @relation("DisciplinaryApprover")
   disciplinarySecondApproved EmployeeDisciplinaryRecord[] @relation("DisciplinarySecondApprover")
   disciplinaryVoided  EmployeeDisciplinaryRecord[] @relation("DisciplinaryVoider")
+  disciplinaryDecisions DisciplinaryDeductionDecision[] @relation("DisciplinaryDecisionSubject")
+  disciplinaryDecisionsSigned DisciplinaryDeductionDecision[] @relation("DisciplinaryDecisionSigner")
   contractDecisionRequests ContractDecisionRequest[] @relation("ContractDecisionSubject")
   payrolls            Payroll[]
   tasks               Task[]
@@ -1020,6 +1031,7 @@ model Account {
   children       Account[]      @relation("AccountTree")
   journalEntries JournalEntry[]
   payrollComponents PayrollComponent[]
+  disciplinaryCompensationDecisions DisciplinaryDeductionDecision[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -3486,6 +3498,7 @@ model EmployeeDisciplinaryRecord {
   voider               Employee? @relation("DisciplinaryVoider", fields: [voidedBy], references: [id])
   voidOf               EmployeeDisciplinaryRecord? @relation("DisciplinaryVoid", fields: [voidOfId], references: [id])
   voidedByRecord       EmployeeDisciplinaryRecord? @relation("DisciplinaryVoid")
+  deductionDecisions   DisciplinaryDeductionDecision[]
 
   @@index([employeeId], map: "employee_disciplinary_records_employee_id_fkey")
   @@index([workflowStatus], map: "idx_employee_disciplinary_records_status")
@@ -3493,6 +3506,67 @@ model EmployeeDisciplinaryRecord {
   @@index([violationDate], map: "idx_employee_disciplinary_records_violation_date")
   @@index([createdAt])
   @@map("employee_disciplinary_records")
+}
+
+// F-2026-10-25-020-V / BR-DISC-09 tahap 2 (Putusan 3/5/6): dokumen keputusan
+// manusia — SATU-SATUNYA pemicu potongan upah disiplin. Terpisah dari rekod
+// SP; SP tidak pernah memicu potongan (larangan permanen). Snapshot
+// perlakuan upah skorsing + nominal diputuskan tersimpan apa adanya;
+// konsumen menampilkan verbatim, tidak menghitung ulang.
+// kind: denda|ganti_rugi. suspensionKind: proses_phk|disiplin (nullable =
+// keputusan tanpa skorsing). compensationAccountId wajib untuk ganti_rugi
+// (kredit aset/beban terkait dokumen; 710006 khusus denda).
+model DisciplinaryDeductionDecision {
+  slug                  String?   @unique
+  id                    Int       @id @default(autoincrement())
+  documentNo            String    @unique @map("document_no")
+  decidedAt             DateTime  @map("decided_at")
+  employeeId            Int       @map("employee_id")
+  disciplinaryRecordId  Int?      @map("disciplinary_record_id")
+  kind                  String
+  amount                Decimal   @db.Decimal(15, 2)
+  compensationAccountId Int?      @map("compensation_account_id")
+  suspensionKind        String?   @map("suspension_kind")
+  suspensionPayTreatment String?  @map("suspension_pay_treatment")
+  regulationReference   String?   @map("regulation_reference") @db.Text
+  signedBy              Int       @map("signed_by")
+  createdBy             Int?      @map("created_by")
+  deletedAt             DateTime? @map("deleted_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  employee              Employee  @relation("DisciplinaryDecisionSubject", fields: [employeeId], references: [id])
+  signer                Employee  @relation("DisciplinaryDecisionSigner", fields: [signedBy], references: [id])
+  disciplinaryRecord    EmployeeDisciplinaryRecord? @relation(fields: [disciplinaryRecordId], references: [id])
+  compensationAccount   Account?  @relation(fields: [compensationAccountId], references: [id])
+  applications          DisciplinaryDeductionApplication[]
+
+  @@index([employeeId], map: "disciplinary_deduction_decisions_employee_id_fkey")
+  @@index([signedBy], map: "idx_disciplinary_deduction_decisions_signer")
+  @@index([createdAt])
+  @@map("disciplinary_deduction_decisions")
+}
+
+// Penerapan keputusan ke satu periode payroll (Putusan 6). Unik
+// (decisionId, period, kind) = replay keputusan sama menghasilkan NOL
+// jurnal baru; jurnal terhubung 1-1 lewat journalId.
+model DisciplinaryDeductionApplication {
+  id             Int      @id @default(autoincrement())
+  decisionId     Int      @map("decision_id")
+  payrollId      Int?     @map("payroll_id")
+  period         String
+  kind           String
+  amount         Decimal  @db.Decimal(15, 2)
+  idempotencyKey String   @unique @map("idempotency_key")
+  journalId      Int?     @unique @map("journal_id")
+  createdBy      Int?     @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  decision       DisciplinaryDeductionDecision @relation(fields: [decisionId], references: [id])
+  payroll        Payroll? @relation(fields: [payrollId], references: [id])
+  journal        Journal? @relation(fields: [journalId], references: [id])
+
+  @@unique([decisionId, period, kind], map: "uq_disc_deduction_decision_period_kind")
+  @@index([payrollId], map: "idx_disciplinary_deduction_applications_payroll")
+  @@map("disciplinary_deduction_applications")
 }
 
 // F-2026-10-24-099-S (§2, putusan Q-PROB-2/6): pengajuan keputusan kontrak.
@@ -3715,6 +3789,7 @@ model Payroll {
   updatedAt              DateTime    @updatedAt @map("updated_at")
   employee               Employee?   @relation(fields: [employeeId], references: [id])
   componentLines         PayrollComponentLine[]
+  disciplinaryDeductionApplications DisciplinaryDeductionApplication[]
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
@@ -3962,6 +4037,7 @@ model Journal {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
   entries         JournalEntry[]
+  disciplinaryDeductionApplication DisciplinaryDeductionApplication?
   creator         User?          @relation(fields: [createdBy], references: [id])
 
   @@unique([activeReferenceKey], map: "journals_active_reference_unique")
