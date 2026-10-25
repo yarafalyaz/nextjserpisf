@@ -38,6 +38,10 @@ vi.mock("@/lib/db/prisma", () => {
     // requestApprovalIfConfigured locks the workflow row first and bails out when
     // no workflow is configured; an empty result keeps this test on the create path.
     $queryRaw: vi.fn().mockResolvedValue([]),
+    // HCMS K1: applyDueSalaryAdjustments berjalan di dalam $transaction
+    // yang sama ($executeRaw kunci baris + findMany kosong = no-op).
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    salaryAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
   })
 
   return {
@@ -56,6 +60,10 @@ vi.mock("@/lib/db/prisma", () => {
       approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
       approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
       $queryRaw: vi.fn().mockResolvedValue([]),
+      // HCMS K1: applyDueSalaryAdjustments membuka $transaction sendiri di
+      // jalur processPayroll (no-op tanpa baris jatuh tempo).
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      salaryAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(txDelegates()),
     },
   }
