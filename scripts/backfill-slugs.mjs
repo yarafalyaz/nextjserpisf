@@ -72,6 +72,8 @@ const TABLE_SOURCES = {
   appreciations: "id", leave_requests: "id", timesheets: "id",
   overtime_requests: "id", payrolls: "document_no", employee_loans: "id",
   probation_reviews: "id", contract_decision_requests: "id", employee_disciplinary_records: "id",
+  // F-2026-10-25-010-S: pengajuan koreksi absensi ber-slug sejak dibuat.
+  attendance_corrections: "id",
   // crm
   leads: "name", crm_tickets: "subject",
   // pengaturan
