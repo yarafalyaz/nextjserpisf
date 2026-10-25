@@ -947,6 +947,11 @@ model Employee {
   overtimeRequests    OvertimeRequest[]
   probationReviews    ProbationReview[] @relation("ProbationReviewSubject")
   probationReviewsGiven ProbationReview[] @relation("ProbationReviewReviewer")
+  disciplinaryRecords EmployeeDisciplinaryRecord[] @relation("DisciplinarySubject")
+  disciplinaryRequested EmployeeDisciplinaryRecord[] @relation("DisciplinaryRequester")
+  disciplinaryApproved EmployeeDisciplinaryRecord[] @relation("DisciplinaryApprover")
+  disciplinarySecondApproved EmployeeDisciplinaryRecord[] @relation("DisciplinarySecondApprover")
+  disciplinaryVoided  EmployeeDisciplinaryRecord[] @relation("DisciplinaryVoider")
   contractDecisionRequests ContractDecisionRequest[] @relation("ContractDecisionSubject")
   payrolls            Payroll[]
   tasks               Task[]
@@ -3372,6 +3377,66 @@ model ProbationReview {
   @@index([status], map: "idx_probation_reviews_status")
   @@index([dueDate], map: "idx_probation_reviews_due_date")
   @@map("probation_reviews")
+}
+
+// F-2026-10-25-005-S DISC-B1 (spec §3, putusan Lead Q-DISC-1..4 2026-10-25):
+// rekod peringatan disiplin karyawan. level snapshot fakta historis saat
+// terbit {verbal|sp1|sp2|sp3|sp_first_final}; workflowStatus
+// {draft|pending_approval|issued|rejected}. Masa berlaku active|expired =
+// TURUNAN issuedAt + 6 bulan kalender di src/lib/reports/disciplinary.ts
+// (BR-DISC-03), BUKAN kolom. violationCategory = konstanta tervalidasi
+// Q-DISC-1 di builder yang sama (bukan teks bebas). Rekod issued immutable:
+// koreksi lewat rekod pembatal tertaut voidOfId + voidedAt (BR-DISC-10).
+// requestedBy/approvedBy/secondApprovedBy dalam Employee id (SoD BR-DISC-06
+// dibandingkan per Employee). TANPA kolom nominal/gaji/status berhenti
+// (BR-DISC-08/09). Bukti memakai TransactionAttachment existing dengan
+// referenceType "EmployeeDisciplinaryRecord" (spec §3), tanpa tabel kedua.
+model EmployeeDisciplinaryRecord {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  employeeId           Int       @map("employee_id")
+  level                String
+  violationCategory    String    @map("violation_category")
+  violationDate        DateTime  @map("violation_date")
+  description          String    @db.Text
+  regulationReference  String?   @map("regulation_reference") @db.Text
+  workflowStatus       String    @default("draft") @map("workflow_status")
+  requestedBy          Int       @map("requested_by")
+  approvedBy           Int?      @map("approved_by")
+  approvedAt           DateTime? @map("approved_at")
+  secondApprovedBy     Int?      @map("second_approved_by")
+  secondApprovedAt     DateTime? @map("second_approved_at")
+  issuedAt             DateTime? @map("issued_at")
+  documentNo           String?   @unique @map("document_no")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  acknowledgmentAt     DateTime? @map("acknowledgment_at")
+  acknowledgmentMethod String?   @map("acknowledgment_method")
+  acknowledgmentRefused Boolean  @default(false) @map("acknowledgment_refused")
+  employeeResponse     String?   @map("employee_response") @db.Text
+  employeeResponseAt   DateTime? @map("employee_response_at")
+  employeeResponseLate Boolean   @default(false) @map("employee_response_late")
+  voidOfId             Int?      @unique @map("void_of_id")
+  voidedAt             DateTime? @map("voided_at")
+  voidedBy             Int?      @map("voided_by")
+  voidReason           String?   @map("void_reason") @db.Text
+  createdBy            Int?      @map("created_by")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  employee             Employee  @relation("DisciplinarySubject", fields: [employeeId], references: [id])
+  requester            Employee  @relation("DisciplinaryRequester", fields: [requestedBy], references: [id])
+  approver             Employee? @relation("DisciplinaryApprover", fields: [approvedBy], references: [id])
+  secondApprover       Employee? @relation("DisciplinarySecondApprover", fields: [secondApprovedBy], references: [id])
+  voider               Employee? @relation("DisciplinaryVoider", fields: [voidedBy], references: [id])
+  voidOf               EmployeeDisciplinaryRecord? @relation("DisciplinaryVoid", fields: [voidOfId], references: [id])
+  voidedByRecord       EmployeeDisciplinaryRecord? @relation("DisciplinaryVoid")
+
+  @@index([employeeId], map: "employee_disciplinary_records_employee_id_fkey")
+  @@index([workflowStatus], map: "idx_employee_disciplinary_records_status")
+  @@index([requestedBy], map: "idx_employee_disciplinary_records_requested_by")
+  @@index([violationDate], map: "idx_employee_disciplinary_records_violation_date")
+  @@index([createdAt])
+  @@map("employee_disciplinary_records")
 }
 
 // F-2026-10-24-099-S (§2, putusan Q-PROB-2/6): pengajuan keputusan kontrak.

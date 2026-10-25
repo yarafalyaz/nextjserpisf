@@ -37,6 +37,7 @@ const ATTACHMENT_MODEL: Record<string, string> = {
   stock_adjustment: "stockAdjustment",
   petty_cash: "pettyCash",
   WarrantyClaim: "warrantyClaim",
+  EmployeeDisciplinaryRecord: "employeeDisciplinaryRecord",
 }
 
 // F-2026-10-24-096-S: model induk foto tahap/inspeksi.
