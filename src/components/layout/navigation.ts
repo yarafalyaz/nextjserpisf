@@ -153,6 +153,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Absensi", href: "/sdm/absensi", icon: CalendarCheck, permission: "view_attendance" },
       { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, permission: "view_leave_requests" },
+      { label: "Antrean Persetujuan HR", href: "/sdm/persetujuan", icon: ClipboardCheck, permissions: ["approve_leave_requests", "approve_overtime_requests"] },
       { label: "Saldo Cuti", href: "/sdm/cuti/saldo", icon: Palmtree, permission: "view_leave_requests" },
       { label: "Lembur", href: "/sdm/lembur", icon: Timer, permission: "view_overtime" },
       { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote, permission: "view_payroll" },

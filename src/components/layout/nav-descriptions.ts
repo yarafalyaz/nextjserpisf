@@ -173,6 +173,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/sdm/absensi": "Absensi kehadiran karyawan",
   "/sdm/apresiasi": "Apresiasi karyawan",
   "/sdm/cuti": "Cuti karyawan",
+  "/sdm/persetujuan": "Pengajuan cuti dan lembur yang menunggu keputusan approver",
   "/sdm/cuti/saldo": "Saldo cuti karyawan per periode",
   "/sdm/lembar-waktu": "Lembar waktu",
   "/sdm/lembur": "Lembur",
