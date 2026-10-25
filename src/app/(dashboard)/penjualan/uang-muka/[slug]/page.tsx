@@ -25,6 +25,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { CanCreate } from "@/components/auth/can-create";
+import { loadDownPaymentTaxStatusRows } from "@/lib/reports/down-payment-tax-status-data";
 export const metadata: Metadata = { title: "Uang Muka" };
 
 export default async function DownPaymentDetailPage({
@@ -59,6 +60,10 @@ export default async function DownPaymentDetailPage({
   );
 
   if (!dp) notFound();
+
+  // F-2026-10-25-004-V: snapshot PPN per DP dari loader status pajak
+  // (verbatim server — UI tidak menurunkan status/menghitung ulang).
+  const taxRow = (await loadDownPaymentTaxStatusRows()).find((r) => r.downPaymentId === dp.id) ?? null;
 
   const pmMap = await getPaymentMethodMap();
 
@@ -157,6 +162,31 @@ export default async function DownPaymentDetailPage({
         />
         <DetailField label="Dibuat" value={formatDate(dp.createdAt)} />
       </DetailCard>
+
+      {/* F-2026-10-25-004-V: snapshot PPN uang muka beku (verbatim loader). */}
+      {taxRow && (
+        <DetailCard title="Pajak Uang Muka">
+          <DetailField label="Status Pajak" value={taxRow.taxStatusLabel} />
+          <DetailField
+            label="DPP Snapshot"
+            value={taxRow.vatDpp === null ? "—" : formatCurrency(taxRow.vatDpp)}
+          />
+          <DetailField
+            label="PPN Snapshot"
+            value={taxRow.vatAmount === null ? "—" : formatCurrency(taxRow.vatAmount)}
+          />
+          <DetailField label="Masa Pajak" value={taxRow.vatTaxPeriod ?? "—"} />
+          <DetailField
+            label="Status PKP Saat Confirm"
+            value={
+              taxRow.pkpEffectiveFromSnapshot
+                ? `${taxRow.pkpSnapshotLabel} (efektif ${formatDate(taxRow.pkpEffectiveFromSnapshot)})`
+                : taxRow.pkpSnapshotLabel
+            }
+          />
+          <DetailField label="Nomor FP Uang Muka" value={taxRow.taxInvoiceNumber ?? "—"} />
+        </DetailCard>
+      )}
 
       {/* Proof Image */}
       {dp.proofImage && (
