@@ -17,8 +17,10 @@ export const metadata: Metadata = { title: HR_PENDING_APPROVAL_TITLE }
  * F-2026-10-25-007-S: permukaan kerja approver HR (spec §4/BR-HP-03).
  * Gerbang ganda per jenis ditegakkan di sini sebelum loader dipanggil:
  * cuti hanya untuk pemegang view+approve cuti, lembur hanya untuk
- * view+approve lembur. Pemegang satu jenis saja melihat baris jenis itu;
- * tanpa keduanya halaman ditolak. Scope HR fail-closed dari loader.
+ * view+approve lembur, pinjaman hanya untuk view+approve pinjaman
+ * (F-2026-10-25-018-S, syarat LOLOS-BERSYARAT audit PR #876). Pemegang
+ * satu jenis saja melihat baris jenis itu; tanpa ketiganya halaman
+ * ditolak. Scope HR fail-closed dari loader.
  * Keputusan tetap lewat aksi existing per dokumen di halaman detail
  * (BR-HP-06) — halaman ini tidak memutuskan apa pun.
  */
@@ -26,6 +28,7 @@ export default async function HrPendingApprovalPage() {
   const user = await requireAnyPermission([
     "approve_leave_requests",
     "approve_overtime_requests",
+    "approve_loans",
   ])
 
   const isSuperAdmin = user.roles.includes("super_admin")
@@ -38,12 +41,15 @@ export default async function HrPendingApprovalPage() {
     isSuperAdmin ||
     (perms.includes("view_overtime") &&
       perms.includes("approve_overtime_requests"))
+  const canLoan =
+    isSuperAdmin ||
+    (perms.includes("view_employee_loans") && perms.includes("approve_loans"))
 
   const scope = await getHrScope(user)
 
   const allRows = await loadHrPendingApprovalQueue(scope)
   const rows = allRows.filter((row) =>
-    row.kind === "leave" ? canLeave : canOvertime,
+    row.kind === "leave" ? canLeave : row.kind === "loan" ? canLoan : canOvertime,
   )
 
   return (
