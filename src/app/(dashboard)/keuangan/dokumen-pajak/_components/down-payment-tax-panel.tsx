@@ -184,6 +184,16 @@ function FragmentRow({
                 <Label htmlFor={`dp-tax-nitku-${row.downPaymentId}`}>NITKU Lawan Transaksi</Label>
                 <Input id={`dp-tax-nitku-${row.downPaymentId}`} name="counterpartyNitku" maxLength={200} />
               </div>
+              <div className="flex items-end gap-2 pb-1">
+                <input
+                  id={`dp-tax-legacy15-${row.downPaymentId}`}
+                  name="legacy15Confirmed"
+                  type="checkbox"
+                  value="true"
+                  className="h-4 w-4"
+                />
+                <Label htmlFor={`dp-tax-legacy15-${row.downPaymentId}`}>Konfirmasi NPWP 15 digit (format lama)</Label>
+              </div>
               <div className="sm:col-span-2 lg:col-span-4">
                 <Button type="submit" isDisabled={isPending}>
                   {isPending ? "Menerbitkan…" : "Terbitkan Faktur Pajak Uang Muka"}
