@@ -24,4 +24,6 @@ export const APPROVAL_REFERENCE_PERMISSIONS: Record<string, string> = {
   OvertimeRequest: "approve_overtime_requests",
   EmployeeLoan: "approve_loans",
   Expense: "approve_expenses",
+  VendorPayment: "approve_vendor_payments",
+  Journal: "approve_journals",
 }
