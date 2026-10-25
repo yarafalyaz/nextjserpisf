@@ -41,6 +41,35 @@ services:
       db:
         condition: service_healthy
 
+  # Sinkronisasi hari libur nasional: memanggil endpoint cron aplikasi
+  # dari DALAM jaringan compose (tidak ada port publik baru). Endpoint
+  # aplikasi (/api/cron/sync-holidays) sudah berjalan di container app;
+  # service ini hanya pemicunya: sekali saat start (dengan retry sampai
+  # app siap), lalu tiap 30 hari. Sync idempoten dan tidak pernah
+  # menimpa koreksi tanggal yang dibuat HR. Butuh CRON_SECRET yang sama
+  # dengan yang dipakai aplikasi (dari .env, penjaga isValidCronRequest).
+  holiday-sync:
+    image: curlimages/curl:8.10.1
+    container_name: silengkap_holiday_sync
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Jakarta
+    depends_on:
+      - app
+    command:
+      - sh
+      - -c
+      - |
+        for i in $(seq 1 12); do
+          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/sync-holidays && break || sleep 10
+        done
+        while true; do
+          sleep 2592000
+          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/sync-holidays || echo "holiday-sync: panggilan gagal, dicoba lagi siklus berikutnya"
+        done
+
   db:
     image: mysql:8.0
     container_name: silengkap_db

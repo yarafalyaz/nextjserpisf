@@ -5,6 +5,8 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { seedModules } from "../src/lib/setup/modules";
+import { NATIONAL_HOLIDAYS } from "../src/lib/setup/national-holidays";
+import { wibDateToUtcMidnight } from "../src/lib/utils/attendance-time";
 import {
   PERMISSIONS,
   ROLES,
@@ -190,6 +192,18 @@ async function main() {
     }
     console.log("✅ Default approval workflows ensured (Journal, VendorPayment)");
 
+    // Hari libur nasional (SKB 3 Menteri): idempoten per (tanggal, nama),
+    // disimpan tengah malam WIB persis seperti createHoliday. Tanpa baris
+    // ini penghitung cuti menganggap tanggal merah sebagai hari kerja.
+    for (const h of NATIONAL_HOLIDAYS) {
+      await conn.query(
+        `INSERT INTO holidays (name, date, created_at, updated_at)
+         SELECT ?, ?, NOW(), NOW()
+         WHERE NOT EXISTS (SELECT 1 FROM holidays WHERE date = ? AND name = ?)`,
+        [h.name, wibDateToUtcMidnight(h.date), wibDateToUtcMidnight(h.date), h.name],
+      );
+    }
+    console.log(`✅ National holidays ensured (${NATIONAL_HOLIDAYS.length} entries)`);
     // Create system settings
     await conn.query(
       `INSERT IGNORE INTO system_settings (id, company_name, company_email, costing_method, fiscal_year_start_month, currency_code, currency_symbol, created_at, updated_at)
