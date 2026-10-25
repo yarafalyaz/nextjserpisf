@@ -96,6 +96,8 @@ import {
   type BpjsPeriodSlip,
 } from "@/lib/reports/payroll-weekly";
 import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
+import { loadLeaveBalanceReport } from "@/lib/reports/leave-balance-data";
+import { buildLeaveBalanceCsv } from "@/lib/reports/leave-balance";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 import { closedWorkOrderError, timesheetContextError } from "@/lib/services/timesheet-context";
@@ -3426,60 +3428,94 @@ export async function getEmployeeLeaveBalance(
 }
 
 /**
- * Annual-leave balance for active employees inside the caller's HR scope
- * (used by the leave-balance dashboard). One getLeaveQuota call per employee — fine for typical SME
- * headcounts; revisit with a batched query if the roster grows large.
+ * Laporan saldo cuti tahunan karyawan dalam scope HR pemanggil
+ * (F-2026-10-25-013-S). Agregasi di builder murni
+ * `src/lib/reports/leave-balance.ts` lewat loader
+ * `leave-balance-data.ts`; angka kuota tetap dari `getLeaveQuota`.
+ * Filter departemen hanya menyempitkan scope (AC-LVB-B1); komponen
+ * pending terpisah lapis tampil saja (BR-LVB-12); karyawan nonaktif
+ * tahun berjalan tampil tertanda (BR-LVB-13).
  */
-export async function getAllLeaveBalances(year?: number) {
+export async function getAllLeaveBalances(
+  year?: number,
+  opts?: { departmentId?: number | null },
+) {
   try {
     const user = await requirePermission("view_leave_requests");
     const targetYear = year ?? new Date().getFullYear();
     if (!Number.isSafeInteger(targetYear) || targetYear < 1900 || targetYear > 2200) {
       return { success: false as const, error: "Tahun tidak valid", balances: [] };
     }
+    if (
+      opts?.departmentId != null &&
+      (!Number.isSafeInteger(opts.departmentId) || opts.departmentId <= 0)
+    ) {
+      return { success: false as const, error: "Departemen tidak valid", balances: [] };
+    }
     const scope = await getHrScope({
       id: String(user.id),
       roles: Array.isArray(user.roles) ? [...user.roles] : [],
     });
 
-    const employees = await prisma.employee.findMany({
-      where: {
-        isActive: true,
-        deletedAt: null,
-        ...hrEmployeeScopeWhere(scope),
-      },
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        employeeNo: true,
-        joinDate: true,
-        department: { select: { name: true } },
-      },
+    const report = await loadLeaveBalanceReport(scope, targetYear, {
+      departmentId: opts?.departmentId ?? null,
     });
 
-    const balances = await Promise.all(
-      employees.map(async (emp) => {
-        const quota = await getLeaveQuota(emp.id, { year: targetYear });
-        return {
-          employeeId: emp.id,
-          name: emp.name,
-          employeeNo: emp.employeeNo,
-          department: emp.department?.name ?? null,
-          joinDate: emp.joinDate.toISOString().split("T")[0],
-          entitled: quota.entitled,
-          used: quota.used,
-          remaining: quota.remaining,
-          eligible: quota.eligible,
-          tenureMonths: quota.tenureMonths,
-        };
-      }),
-    );
-
-    return { success: true as const, year: targetYear, balances };
+    return {
+      success: true as const,
+      year: targetYear,
+      // Visibilitas kolom identitas mengikuti scope efektif (BR-LVB-14),
+      // bukan izin edit/delete — diputus server, UI tinggal membaca.
+      scopeKind: scope.kind,
+      showIdentityColumns: scope.kind !== "self",
+      totals: report.totals,
+      balances: report.rows,
+    };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[getAllLeaveBalances]", getErrorMessage(e) || e);
+    return {
+      success: false as const,
+      error: getErrorMessage(e, "Terjadi kesalahan"),
+    };
+  }
+}
+
+/**
+ * Ekspor CSV laporan saldo cuti (F-2026-10-25-013-S BR-LVB-11, AC-LVB-B4):
+ * isi persis baris+kolom yang terlihat pemanggil sesudah scope+filter
+ * departemen; gerbang izin sama dengan halaman (`view_leave_requests`).
+ * Mengembalikan teks CSV + nama berkas bertahun; pengunduhan berkas
+ * adalah urusan konsumen (Frontend), server tidak menulis berkas.
+ */
+export async function exportLeaveBalancesCsv(
+  year?: number,
+  opts?: { departmentId?: number | null },
+) {
+  try {
+    const user = await requirePermission("view_leave_requests");
+    const targetYear = year ?? new Date().getFullYear();
+    if (!Number.isSafeInteger(targetYear) || targetYear < 1900 || targetYear > 2200) {
+      return { success: false as const, error: "Tahun tidak valid" };
+    }
+    if (
+      opts?.departmentId != null &&
+      (!Number.isSafeInteger(opts.departmentId) || opts.departmentId <= 0)
+    ) {
+      return { success: false as const, error: "Departemen tidak valid" };
+    }
+    const scope = await getHrScope({
+      id: String(user.id),
+      roles: Array.isArray(user.roles) ? [...user.roles] : [],
+    });
+    const report = await loadLeaveBalanceReport(scope, targetYear, {
+      departmentId: opts?.departmentId ?? null,
+    });
+    const { csv, fileName } = buildLeaveBalanceCsv(report);
+    return { success: true as const, year: targetYear, csv, fileName };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[exportLeaveBalancesCsv]", getErrorMessage(e) || e);
     return {
       success: false as const,
       error: getErrorMessage(e, "Terjadi kesalahan"),
