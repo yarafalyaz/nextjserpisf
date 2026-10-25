@@ -71,6 +71,9 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
   warehouse: ["process_stock_adjustments"],
   finance: [
     "delete_accounts",
+    // approve_journals sadar ditambahkan bersama gerbang K4 (F-2026-10-25-014-V):
+    // role finance = penyetuju jurnal manual 1 langkah (seed APR-JRN).
+    "approve_journals",
     "post_journals",
     "delete_journals",
     "approve_expenses",

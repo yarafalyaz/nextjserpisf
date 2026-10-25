@@ -5,6 +5,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
+import { PRICE_LIST_EXPIRY_STATUS_LABELS } from "@/lib/services/customer-price-list.service"
 import { CustomerPriceForm } from "../_components/customer-price-form"
 import { CustomerPriceTable } from "../_components/customer-price-table"
 
@@ -52,6 +53,7 @@ describe("CustomerPriceForm (AC-B2-1)", () => {
       expect.arrayContaining(["Kategori Pelanggan", "Barang *", "Harga (Rp) *", "Minimal Qty *"]),
     )
     expect(labels.join(" ")).not.toContain("SAK")
+    expect(labels.join(" ")).toContain("Berlaku Sampai")
     expect(container.querySelector("#submit-customer-price")?.textContent).toBe("Simpan")
     act(() => root.unmount())
     container.remove()
@@ -72,6 +74,7 @@ describe("CustomerPriceForm (AC-B2-1)", () => {
           price: "125000",
           minQty: "10",
           effectiveDate: "2026-01-01",
+          expiresAt: "2026-12-31",
           notes: "Promo",
         }}
       />,
@@ -87,6 +90,20 @@ describe("CustomerPriceForm (AC-B2-1)", () => {
 })
 
 describe("CustomerPriceTable (AC-B2-1)", () => {
+  const baseRow = {
+    id: 1,
+    categoryName: "Kontraktor",
+    itemLabel: "BRG-001 — Semen",
+    unit: "SAK",
+    minQty: 10,
+    price: 125000,
+    effectiveDate: "2026-01-15T00:00:00.000Z",
+    expiresAt: null as string | null,
+    expiryStatus: "tanpa_batas",
+    expiryStatusLabel: PRICE_LIST_EXPIRY_STATUS_LABELS.tanpa_batas,
+    notes: null as string | null,
+  }
+
   it("baris: kategori/umum, minQty + satuan, Rupiah, tanggal Indonesia", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
@@ -94,17 +111,9 @@ describe("CustomerPriceTable (AC-B2-1)", () => {
       container,
       <CustomerPriceTable
         data={[
+          baseRow,
           {
-            id: 1,
-            categoryName: "Kontraktor",
-            itemLabel: "BRG-001 — Semen",
-            unit: "SAK",
-            minQty: 10,
-            price: 125000,
-            effectiveDate: "2026-01-15T00:00:00.000Z",
-            notes: null,
-          },
-          {
+            ...baseRow,
             id: 2,
             categoryName: "Umum",
             itemLabel: "BRG-002 — Pasir",
@@ -123,7 +132,54 @@ describe("CustomerPriceTable (AC-B2-1)", () => {
     expect(text).toContain("10 SAK")
     expect(text).toContain("Rp 125.000")
     expect(text).toContain("15 Januari 2026")
+    expect(text).toContain("Berlaku Sampai")
+    expect(text).toContain(PRICE_LIST_EXPIRY_STATUS_LABELS.tanpa_batas)
     expect(container.querySelector('[aria-label="Daftar harga pelanggan"]')).not.toBeNull()
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("AC-PX-F2: baris sudah berakhir tetap tampil berlabel + kolom Berlaku Sampai", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = render(
+      container,
+      <CustomerPriceTable
+        data={[
+          {
+            ...baseRow,
+            expiresAt: "2026-09-30T00:00:00.000Z",
+            expiryStatus: "sudah_berakhir",
+            expiryStatusLabel: PRICE_LIST_EXPIRY_STATUS_LABELS.sudah_berakhir,
+          },
+        ]}
+      />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain("BRG-001 — Semen")
+    expect(text).toContain(PRICE_LIST_EXPIRY_STATUS_LABELS.sudah_berakhir)
+    expect(text).toContain("30 September 2026")
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("antrean segera berakhir tampil bila ada baris", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const expiring = {
+      ...baseRow,
+      id: 3,
+      itemLabel: "BRG-003 — Besi",
+      expiresAt: "2026-11-10T00:00:00.000Z",
+      expiryStatus: "segera_berakhir",
+      expiryStatusLabel: PRICE_LIST_EXPIRY_STATUS_LABELS.segera_berakhir,
+    }
+    const root = render(container, <CustomerPriceTable data={[baseRow]} expiringRows={[expiring]} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Segera Berakhir")
+    expect(text).toContain(PRICE_LIST_EXPIRY_STATUS_LABELS.segera_berakhir)
+    expect(text).toContain("BRG-003 — Besi")
+    expect(container.querySelector('[aria-label="Harga segera berakhir"]')).not.toBeNull()
     act(() => root.unmount())
     container.remove()
   })

@@ -172,6 +172,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-22-070-S inti backend (PR #694): 3 aksi stok minimum per
   // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
   // (t_0fc24ddc) — entri beku dibuang.
+  // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
+  // pelanggan kini dirujuk halaman kelola pelanggan (frontend
+  // t_1f97c2ea) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
