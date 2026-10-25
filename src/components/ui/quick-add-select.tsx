@@ -65,7 +65,15 @@ export interface QuickAddField {
 /** Server action shape the quick-add relies on: returns the new row's id. */
 export type QuickAddAction = (
   formData: FormData,
-) => Promise<{ success: boolean; id?: number; error?: string } | void>
+) => Promise<{
+  success: boolean
+  id?: number
+  error?: string
+  // BR-CD-05 (F-2026-10-25-003-S): action boleh menyatakan data existing
+  // dipakai kembali; pesan server ditampilkan verbatim, bukan generik.
+  reused?: boolean
+  message?: string
+} | void>
 
 export interface QuickAddSelectProps {
   /** Existing options; the caller owns the list so it can append on create. */
@@ -207,7 +215,13 @@ export function QuickAddSelect({
           getLabel?.(formData) ??
           String(formData.get("name") ?? "").trim()
         onCreated({ id: result.id, label })
-        showSuccess(`${title} berhasil ditambahkan`)
+        // BR-CD-05: reuse dinyatakan server -> pesan verbatim; entitas
+        // lain tanpa penanda tetap sukses generik seperti sebelumnya.
+        showSuccess(
+          result.reused && result.message
+            ? result.message
+            : `${title} berhasil ditambahkan`,
+        )
         setOpenDialog(false)
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
