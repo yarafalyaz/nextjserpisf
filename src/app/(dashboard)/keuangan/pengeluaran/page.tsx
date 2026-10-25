@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Pengeluaran" }
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string; halaman?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; klaim?: string }>
 }) {
   await requirePermission("view_expenses")
 
@@ -24,9 +24,11 @@ export default async function ExpensesPage({
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
   const page = Number(params.halaman) || 1
   const perPage = 100
+  const onlyClaims = params.klaim === "1"
 
   const where = {
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(onlyClaims && { isReimbursementClaim: true }),
   }
 
   const [expenses, total] = await Promise.all([
@@ -78,7 +80,17 @@ export default async function ExpensesPage({
       <ExpenseTable
         data={data}
         toolbar={<AppSearchField placeholder="Cari pengeluaran..." action="/keuangan/pengeluaran" />}
-        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+        filters={
+          <div className="flex flex-wrap gap-1.5">
+            {statusChips}
+            <Link
+              href={onlyClaims ? "/keuangan/pengeluaran" : "/keuangan/pengeluaran?klaim=1"}
+              className={`filter-chip ${onlyClaims ? "active" : ""}`}
+            >
+              Klaim Reimbursement
+            </Link>
+          </div>
+        }
       />
 
       {totalPages > 1 && (
