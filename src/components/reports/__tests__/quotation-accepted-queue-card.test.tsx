@@ -3,15 +3,14 @@ import { describe, it, expect, afterEach } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
-
+import type { Root } from "react-dom/client"
 import { AcceptedQuotationQueueCard } from "../quotation-accepted-queue-card"
 import {
   buildAcceptedQuotationQueue,
   ACCEPTED_QUOTATION_QUEUE_NOTICE_TEXT,
   type AcceptedQuotationInput,
 } from "@/lib/reports/quotation-accepted-queue"
+import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 // 2026-10-25 03:00 UTC = 10:00 WIB; hari WIB = 25 Okt 2026.
 const NOW = new Date(Date.UTC(2026, 9, 25, 3, 0))
@@ -41,21 +40,11 @@ function input(over: Partial<AcceptedQuotationInput>): AcceptedQuotationInput {
   }
 }
 
-function render(node: React.ReactNode) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
-
 let roots: Root[] = []
 afterEach(() => {
-  roots.forEach((root) => act(() => root.unmount()))
+  roots.forEach((root) => unmountCard(root))
   roots = []
-  document.body.replaceChildren()
+  clearRenderedCards()
 })
 
 describe("AcceptedQuotationQueueCard F-2026-10-25-002-S", () => {
@@ -100,7 +89,7 @@ describe("AcceptedQuotationQueueCard F-2026-10-25-002-S", () => {
       ],
       NOW,
     )
-    const { container, root } = render(
+    const { container, root } = renderCard(
       <AcceptedQuotationQueueCard
         rows={rows}
         canCreateSalesOrder
@@ -181,7 +170,7 @@ describe("AcceptedQuotationQueueCard F-2026-10-25-002-S", () => {
 
   it("tanpa izin buat: tautan konversi dan uang muka hilang, detail tetap ada", () => {
     const rows = buildAcceptedQuotationQueue([input({})], NOW)
-    const { container, root } = render(
+    const { container, root } = renderCard(
       <AcceptedQuotationQueueCard
         rows={rows}
         canCreateSalesOrder={false}
@@ -196,7 +185,7 @@ describe("AcceptedQuotationQueueCard F-2026-10-25-002-S", () => {
   })
 
   it("kosong: teks kosong jujur tampil", () => {
-    const { container, root } = render(
+    const { container, root } = renderCard(
       <AcceptedQuotationQueueCard
         rows={[]}
         canCreateSalesOrder
