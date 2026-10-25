@@ -6,7 +6,6 @@ import type {
 import { ACCEPTED_QUOTATION_QUEUE_NOTICE_TEXT } from "@/lib/reports/quotation-accepted-queue"
 import { entityHref } from "@/lib/utils/entity-url"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { StatusChip } from "@/components/ui/status-chip"
 import {
   DetailTable,
   DetailTableHead,
@@ -15,6 +14,14 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import {
+  QuotationDocumentCell,
+  QuotationGrandTotalCell,
+  QuotationRemainingDaysCell,
+  QuotationSalesCell,
+  QuotationStageCell,
+  QuotationValidUntilCell,
+} from "./quotation-queue-cells"
 
 const STAGE_TONES: Record<
   AcceptedQuotationStage,
@@ -138,15 +145,12 @@ export function AcceptedQuotationQueueCard({
                           </span>
                         ) : null}
                       </DetailTableTd>
-                      <DetailTableTd>
-                        <Link
-                          href={detailHref}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {row.documentNo}
-                        </Link>
-                      </DetailTableTd>
-                      <DetailTableTd>{row.salesEmployeeName ?? "—"}</DetailTableTd>
+                      <QuotationDocumentCell
+                        quotationId={row.quotationId}
+                        slug={row.slug}
+                        documentNo={row.documentNo}
+                      />
+                      <QuotationSalesCell salesEmployeeName={row.salesEmployeeName} />
                       <DetailTableTd>{row.customerVehicleLabel ?? "—"}</DetailTableTd>
                       <DetailTableTd>
                         {row.acceptedAt ? formatDate(row.acceptedAt) : "—"}
@@ -156,22 +160,14 @@ export function AcceptedQuotationQueueCard({
                           ? row.umurTerimaLabel
                           : `${row.umurTerimaLabel} hari`}
                       </DetailTableTd>
-                      <DetailTableTd>
-                        {row.validUntil ? formatDate(row.validUntil) : "—"}
-                      </DetailTableTd>
-                      <DetailTableTd align="right">
-                        {row.sisaHari === null ? "—" : `${row.sisaHari} hari`}
-                      </DetailTableTd>
-                      <DetailTableTd align="right">
-                        {formatCurrency(row.grandTotal)}
-                      </DetailTableTd>
-                      <DetailTableTd>
-                        <StatusChip
-                          status={row.tahap}
-                          customLabel={row.tahapLabel}
-                          customTone={STAGE_TONES[row.tahap]}
-                        />
-                      </DetailTableTd>
+                      <QuotationValidUntilCell validUntil={row.validUntil} />
+                      <QuotationRemainingDaysCell sisaHari={row.sisaHari} />
+                      <QuotationGrandTotalCell grandTotal={row.grandTotal} />
+                      <QuotationStageCell
+                        tahap={row.tahap}
+                        tahapLabel={row.tahapLabel}
+                        tone={STAGE_TONES[row.tahap]}
+                      />
                       <DetailTableTd>
                         {dpFact || linkedFact ? (
                           <span className="text-xs text-muted-foreground">
