@@ -194,14 +194,13 @@ export type IssueGateDecision =
  * Satu paket: nama kosong → tolak; NPWP kosong → tolak; bentuk cacat
  * → tolak; 15 digit → lolos HANYA dengan konfirmasi eksplisit tercatat;
  * NITKU cacat → tolak, NITKU absen → lolos bertanda nitkuAbsent.
- * `retailRegime` = jalur ritel PER-11 yang benar-benar dipakai operator
- * (identitas boleh absen) — BUKAN pengecualian umum faktur tertaut master.
+ * TANPA pengecualian ritel (putusan Lead §8A butir 5: belum ada jalur
+ * ritel di kode — mengarang pengecualian dilarang).
  */
 export function evaluateTaxInvoiceIssueGate(
   snapshot: CounterpartySnapshot,
-  opts: { legacy15Confirmed?: boolean; retailRegime?: boolean } = {},
+  opts: { legacy15Confirmed?: boolean } = {},
 ): IssueGateDecision {
-  if (opts.retailRegime) return { allowed: true, warnings: [] }
   if (blank(snapshot.counterpartyName)) {
     return { allowed: false, error: "Nama lawan transaksi wajib terisi untuk menerbitkan faktur pajak (identitas pembeli wajib — PER-11/PJ/2025 Pasal 33)" }
   }

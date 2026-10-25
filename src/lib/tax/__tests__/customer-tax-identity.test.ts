@@ -84,8 +84,7 @@ describe("F-2026-10-25-019-V §7.5 EC-3 + gerbang terbit §5", () => {
     expect(ok.allowed).toBe(true)
     if (ok.allowed) expect(ok.warnings.join(" ")).toContain("nitkuAbsent")
   })
-  it("rezim ritel eksplisit = satu-satunya pengecualian identitas absen", () => {
-    expect(evaluateTaxInvoiceIssueGate({}, { retailRegime: true }).allowed).toBe(true)
+  it("tanpa pengecualian ritel karangan — identitas absen tetap tolak (putusan Lead §8A-5)", () => {
     expect(evaluateTaxInvoiceIssueGate({}).allowed).toBe(false)
   })
 })
