@@ -32468,6 +32468,7 @@ Definisi sinyal (semua TERVERIFIKASI-KODE dari builder existing): `umurHari` = h
 | # | Kondisi baris (turunan) | Tingkat | Arti kerja untuk petugas |
 |---|---|---|---|
 | T0 | umurHari == null (tanpa due acuan dan tanpa janji) | `tanpa_acuan` | tidak ada tanggal untuk menilai urgensi; petugas melengkapi due/janji lewat jalur existing, sistem tidak menebak (BR-COL-03) |
+| T0b | umurHari == null (tanpa due acuan) dan janji hidup: promiseDate >= hari ini (tidak janjiLewat) | `belum_perlu` | janji = acuan nyata (bukan tanpa_acuan) dan belum ada tanggal yang lewat (bukan pengingat_awal) — PUTUSAN Lead t_e82c34ad 26 Okt 2026, PR #933 komentar 6401630693; janji lewat tanpa due tetap dinilai T3/T4 dari janji |
 | T1 | umurHari <= 0 dan tidak janjiLewat | `belum_perlu` | belum jatuh tempo; tidak diingatkan sebagai tunggakan |
 | T2 | umurHari > 0, tidak janjiLewat, bukan T3/T4 | `pengingat_awal` | sudah lewat due, belum ada janji yang dilanggar; ingatkan biasa |
 | T3 | janjiLewat dan TIDAK dihubungiSesudahJanjiLewat | `pengingat_lanjutan` | janji terlewat dan belum ada tindak lanjut tercatat sesudah tanggal janji — hubungi dan catat janji baru/hasilnya |
@@ -32516,7 +32517,7 @@ Urutan antrean: TIDAK berubah tahap 1 (Q-COL-3 tetap: lewat_janji tertua > due t
 | AC-COLR-2 | Umur > 0 tanpa janji apa pun = `pengingat_awal`; janji masa depan tercatat = tetap dinilai dari umur (tidak meloncat eskalasi) = MERAH bila tingkat naik karena janji yang belum lewat. |
 | AC-COLR-3 | Janji kemarin + sisa > 0 + tidak ada followUp bertanggal >= tanggal janji = `pengingat_lanjutan`. Cabut perbandingan lastFollowUpAt dari turunan = MERAH (baris salah turun tingkat). |
 | AC-COLR-4 | Janji kemarin + followUp tercatat sesudah tanggal janji + sisa masih > 0 + tidak ada janji baru = `eskalasi`. Menambah janji baru >= hari ini = keluar eskalasi pada render berikut (dinilai ulang); tidak berubah = MERAH. |
-| AC-COLR-5 | Tanpa due faktur maupun exchange dan tanpa janji: baris tampil, Umur "—", tingkat `tanpa_acuan`. Sistem menebak due dari tanggal faktur = MERAH. |
+| AC-COLR-5 | Tanpa due faktur maupun exchange dan tanpa janji: baris tampil, Umur "—", tingkat `tanpa_acuan`. Sistem menebak due dari tanggal faktur = MERAH. Ekstensi T0b: tanpa due + janji masa depan (promiseDate > hari ini) = `belum_perlu`; janji tepat hari ini (promiseDate == hari kalender WIB ini, tidak janjiLewat) = `belum_perlu`. Tingkat `pengingat_awal`/`tanpa_acuan` untuk kedua kasus itu = MERAH. |
 | AC-COLR-6 | Klik tombol WhatsApp saja (tanpa simpan Catat Tindak Lanjut): tingkat render berikut TIDAK berubah. Berubah = MERAH (BR-COLR-05). |
 | AC-COLR-7 | Tingkat tampil tanpa izin lengkap: pemegang hanya `view_reports` atau hanya `view_sales_invoices` tidak mendapat antrean maupun tingkat (loader fail-closed existing). Satu key membuka = MERAH. |
 | AC-COLR-8 | Mencatat tindak lanjut yang mengubah tingkat: Jurnal = 0, paidAmount/status/tahap faktur tidak berubah, dokumen denda tidak terbit. Satu pun berubah = MERAH (BR-COLR-07). |
