@@ -1108,6 +1108,181 @@ export async function onExpenseApproved(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 6b. Klaim reimbursement karyawan (F-2026-10-25-017-S + vonis
+//     F-2026-10-25-018-V Putusan 2): jurnal DUA tahap khusus klaim
+//     tertanda pengaju. Expense operasional NON-klaim TIDAK memakai
+//     jalur ini (tetap onExpenseApproved satu tahap saat bayar).
+//     J-RB1 akrual saat approve: Dr Beban / Cr Utang Reimbursement
+//     Karyawan (setting, kode COA 210209). J-RB2 saat bayar:
+//     Dr Utang Reimbursement / Cr Kas-Bank. Pembedah tahap =
+//     referenceType terpisah karena @@unique jurnal aktif mengikat
+//     (referenceType, referenceId) — satu klaim tepat dua jurnal.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE = "ExpenseReimbursementAccrual"
+export const REIMBURSEMENT_PAYMENT_REFERENCE_TYPE = "ExpenseReimbursementPayment"
+
+async function resolveReimbursementLiabilityAccountId(db: TxClient): Promise<number> {
+  const settings = await getSystemSettings(db)
+  const accountId = settings.reimbursementLiabilityAccountId
+  if (!accountId) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) belum dipetakan di Pengaturan → Mapping Akun. Petakan lebih dulu — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+    )
+  }
+  const account = await db.account.findUnique({
+    where: { id: accountId },
+    select: { id: true, code: true },
+  })
+  if (!account) {
+    throw new Error(
+      `Klaim reimbursement tidak dapat diproses: akun liabilitas klaim (id: ${accountId}) tidak ditemukan. Pilih ulang akun 210209 di Mapping Akun.`,
+    )
+  }
+  if (account.code !== "210209") {
+    throw new Error(
+      `Klaim reimbursement tidak dapat diproses: akun liabilitas klaim wajib berkode 210209 (Utang Reimbursement Karyawan), terpetakan kode ${account.code}. Dilarang memakai 210204/210101/210205 (vonis F-2026-10-25-018-V Putusan 3).`,
+    )
+  }
+  return account.id
+}
+
+async function postReimbursementJournal(
+  tx: TxClient,
+  input: {
+    referenceType: string
+    expenseId: number
+    debitAccountId: number
+    creditAccountId: number
+    amount: Prisma.Decimal
+    transactionDate: Date
+    description: string
+    debitMemo: string
+    creditMemo: string
+    userId?: number
+    costCenterId?: number | null
+  },
+): Promise<void> {
+  assertJournalClaimRef(input.referenceType, input.expenseId)
+  const existing = await tx.journal.findFirst({
+    where: { referenceType: input.referenceType, referenceId: input.expenseId },
+  })
+  if (existing) {
+    console.info(
+      `[accounting.hook] klaim #${input.expenseId} tahap ${input.referenceType} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    )
+    return
+  }
+  await assertPeriodOpen(input.transactionDate, tx)
+  await assertAccountsExist(tx, [input.debitAccountId, input.creditAccountId], "Klaim reimbursement")
+  const journalNumber = await generateJournalNumber(tx, "EXP", input.expenseId)
+  const journal = await tx.journal.create({
+    data: {
+      journalNumber,
+      transactionDate: input.transactionDate,
+      referenceType: input.referenceType,
+      referenceId: input.expenseId,
+      description: input.description,
+      type: "GENERAL",
+      status: "POSTED",
+      totalDebit: input.amount,
+      totalCredit: input.amount,
+      createdBy: input.userId ?? null,
+    },
+  })
+  await tx.journalEntry.createMany({
+    data: [
+      {
+        journalId: journal.id,
+        accountId: input.debitAccountId,
+        debit: input.amount,
+        credit: 0,
+        memo: input.debitMemo,
+        costCenterId: input.costCenterId ?? null,
+      },
+      {
+        journalId: journal.id,
+        accountId: input.creditAccountId,
+        debit: 0,
+        credit: input.amount,
+        memo: input.creditMemo,
+      },
+    ],
+  })
+}
+
+/** J-RB1: akrual klaim saat disetujui. Dipanggil dalam tx approve klaim. */
+export async function onReimbursementClaimApproved(
+  expenseId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma
+  const expense = await db.expense.findUniqueOrThrow({ where: { id: expenseId } })
+  if (!expense.isReimbursementClaim) {
+    throw new Error("Jurnal akrual J-RB1 hanya untuk klaim reimbursement tertanda pengaju.")
+  }
+  const liabilityAccountId = await resolveReimbursementLiabilityAccountId(db)
+  await executeInTx(txClient, async (tx) => {
+    await postReimbursementJournal(tx, {
+      referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+      expenseId,
+      debitAccountId: expense.accountId,
+      creditAccountId: liabilityAccountId,
+      amount: expense.amount,
+      transactionDate: new Date(),
+      description: `Klaim reimbursement disetujui: ${expense.description ?? expense.documentNo}`,
+      debitMemo: `Beban klaim: ${expense.description ?? ""}`,
+      creditMemo: "Utang Reimbursement Karyawan",
+      userId,
+      costCenterId: expense.costCenterId,
+    })
+  })
+}
+
+/** J-RB2: bayar klaim. Dipanggil dalam tx markExpensePaid khusus klaim. */
+export async function onReimbursementClaimPaid(
+  expenseId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma
+  const expense = await db.expense.findUniqueOrThrow({ where: { id: expenseId } })
+  if (!expense.isReimbursementClaim) {
+    throw new Error("Jurnal bayar J-RB2 hanya untuk klaim reimbursement tertanda pengaju.")
+  }
+  if (!expense.paidFromAccountId) {
+    throw new Error(
+      `Klaim ${expense.documentNo} tidak dapat dibayar: akun sumber dana (kas/bank) belum diisi.`,
+    )
+  }
+  const accrued = await db.journal.findFirst({
+    where: { referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE, referenceId: expenseId },
+    select: { id: true },
+  })
+  if (!accrued) {
+    throw new Error(
+      `Klaim ${expense.documentNo} belum punya jurnal akrual J-RB1 — bayar ditolak. Setujui klaim lebih dulu sampai akrual terposting.`,
+    )
+  }
+  const liabilityAccountId = await resolveReimbursementLiabilityAccountId(db)
+  await executeInTx(txClient, async (tx) => {
+    await postReimbursementJournal(tx, {
+      referenceType: REIMBURSEMENT_PAYMENT_REFERENCE_TYPE,
+      expenseId,
+      debitAccountId: liabilityAccountId,
+      creditAccountId: expense.paidFromAccountId!,
+      amount: expense.amount,
+      transactionDate: new Date(),
+      description: `Klaim reimbursement dibayar: ${expense.description ?? expense.documentNo}`,
+      debitMemo: "Pelunasan Utang Reimbursement Karyawan",
+      creditMemo: "Pembayaran klaim dari Kas/Bank",
+      userId,
+    })
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 7. onPettyCashCreated
 //    IN:  Dr. PettyCash Account, Cr. Source Account
 //    OUT: Dr. Expense Account, Cr. PettyCash Account

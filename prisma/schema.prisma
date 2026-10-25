@@ -303,6 +303,10 @@ model SystemSetting {
    * DILARANG fallback ke salesRevenueAccountId/710005.
    */
   scrapSaleIncomeAccountId Int?    @map("scrap_sale_income_account_id")
+  // F-2026-10-25-018-V Putusan 3: akun Utang Reimbursement Karyawan (kode
+  // COA 210209) untuk jurnal akrual klaim J-RB1/J-RB2. Nullable TANPA
+  // default tebak; kosong = approve klaim ditolak fail-closed.
+  reimbursementLiabilityAccountId Int? @map("reimbursement_liability_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -948,6 +952,7 @@ model Employee {
   probationReviews    ProbationReview[] @relation("ProbationReviewSubject")
   probationReviewsGiven ProbationReview[] @relation("ProbationReviewReviewer")
   disciplinaryRecords EmployeeDisciplinaryRecord[] @relation("DisciplinarySubject")
+  expenses            Expense[]
   disciplinaryRequested EmployeeDisciplinaryRecord[] @relation("DisciplinaryRequester")
   disciplinaryApproved EmployeeDisciplinaryRecord[] @relation("DisciplinaryApprover")
   disciplinarySecondApproved EmployeeDisciplinaryRecord[] @relation("DisciplinarySecondApprover")
@@ -3971,6 +3976,10 @@ model Expense {
   referenceNo       String?          @map("reference_no")
   description       String?          @db.Text
   receiptImage      String?          @map("receipt_image")
+  // F-2026-10-25-017-S (Q-RB-3 Backend): penanda fisik klaim reimbursement
+  // karyawan di atas Expense existing (BR-RB-01) — membedakan klaim dari
+  // Expense operasional tanpa model/dokumen kedua. employeeId = pengaju.
+  isReimbursementClaim Boolean       @default(false) @map("is_reimbursement_claim")
   status            String           @default("draft")
   approvedBy        Int?             @map("approved_by")
   costCenterId      Int?             @map("cost_center_id")
@@ -3979,6 +3988,7 @@ model Expense {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   category          ExpenseCategory? @relation(fields: [categoryId], references: [id])
   vendor            Vendor?          @relation(fields: [vendorId], references: [id])
+  employee          Employee?        @relation(fields: [employeeId], references: [id])
 
   @@index([accountId], map: "expenses_account_id_idx")
   @@index([projectId], map: "expenses_project_id_idx")
