@@ -73,25 +73,6 @@ function isReferencedElsewhere(action: ExportedAction): boolean {
 
 // Daftar-beku: kunci = "<berkas>::<aksi>", nilai = alasan tertulis.
 const ALLOWED_UNWIRED: Record<string, string> = {
-  // F-2026-10-25-005-S DISC-B1 backend dulu (PR #816): 8 aksi pengajuan/
-  // persetujuan SP dirujuk UI rekod disiplin menyusul di kartu Frontend
-  // t_9977774a (DISC-F1) — buang entri ini saat UI memanggilnya.
-  "src/actions/disciplinary.actions.ts::createDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::submitDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::approveDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::rejectDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::acknowledgeDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::respondDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::recordLateDisciplinaryResponse":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::voidDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
   // izin (action-guard-coverage.test.ts). UI-nya memakai next-auth langsung.
   "src/actions/auth.actions.ts::loginAction":
