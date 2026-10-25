@@ -13,8 +13,8 @@
  * - BR-DISC-04: jenjang berikutnya dihitung server dari rekod issued aktif
  *   pada violationDate; pilihan bebas pengaju ditolak penjaga.
  * - BR-DISC-05: SP pertama-dan-terakhir hanya untuk kategori pada daftar
- *   berat yang DISUNTIK pemanggil (daftar kosong = opsi tidak tersedia).
- *   Isi daftar = Q-DISC-1 milik Lead; file ini tidak mengarang daftar.
+ *   berat. Daftar resmi = konstanta Q-DISC-1 di bawah (DISC-B1); penjaga
+ *   tetap menerima daftar tersuntik supaya tes dapat memakai daftar lain.
  * - BR-DISC-06: SoD — penyetuju != pengaju; SP3 & pertama-dan-terakhir
  *   wajib penyetuju kedua berbeda dari pengaju dan penyetuju pertama.
  * - BR-DISC-09: pelanggaran dalam masa SP3/pertama-dan-terakhir aktif
@@ -22,6 +22,8 @@
  *   PHK, nol nominal (BR-DISC-08): tipe di file ini tidak membawa field
  *   gaji/uang apa pun.
  * - BR-DISC-12: tanggapan karyawan menempel, tidak mengubah jenjang.
+ *   Jendela 7 hari kalender dari issuedAt (Q-DISC-3) dijaga penjaga
+ *   response window di bawah; lewat jendela ditolak berisik.
  *
  * Rekod `voidedAt != null` (rekod pembatal BR-DISC-10) dikecualikan dari
  * rantai jenjang (AC-DISC-10). Teguran lisan (`verbal`) tercatat tetapi
@@ -48,6 +50,48 @@ export const DISCIPLINARY_WORKFLOW_STATUSES = [
   "rejected",
 ] as const
 export type DisciplinaryWorkflowStatus = (typeof DISCIPLINARY_WORKFLOW_STATUSES)[number]
+
+/* ------------------------------------------------------------------ */
+/* Kategori pelanggaran (Q-DISC-1, putusan Lead 2026-10-25)            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Daftar kategori resmi fase 1 — KONSTANTA TERVALIDASI (Q-DISC-1), bukan
+ * data master bebas-input dan bukan teks bebas/'lain-lain'. Perubahan
+ * daftar = perubahan kode bervonis Lead. Nilai disimpan verbatim sebagai
+ * `violationCategory`; penjaga kategori memakai daftar ini.
+ */
+export const DISCIPLINARY_SEVERE_CATEGORIES = [
+  "pencurian/penggelapan aset perusahaan",
+  "pemalsuan dokumen/data perusahaan",
+  "kekerasan fisik/perkelahian di tempat kerja",
+  "pelecehan seksual",
+  "bekerja di bawah pengaruh narkotika/alkohol",
+  "perusakan aset dengan sengaja",
+  "membocorkan rahasia dagang/data pelanggan",
+] as const
+
+export const DISCIPLINARY_GENERAL_CATEGORIES = [
+  "mangkir tanpa keterangan berulang",
+  "pelanggaran SOP keselamatan kerja/tidak memakai APD",
+  "kelalaian menyebabkan kerusakan aset",
+  "konflik kepentingan tanpa pengungkapan",
+  "perilaku tidak sopan ke pelanggan/rekan kerja",
+  "pelanggaran prosedur administrasi berulang",
+] as const
+
+export const DISCIPLINARY_VIOLATION_CATEGORIES = [
+  ...DISCIPLINARY_GENERAL_CATEGORIES,
+  ...DISCIPLINARY_SEVERE_CATEGORIES,
+] as const
+
+export function isDisciplinaryViolationCategory(value: unknown): value is string {
+  return typeof value === "string" && (DISCIPLINARY_VIOLATION_CATEGORIES as readonly string[]).includes(value)
+}
+
+export function isDisciplinarySevereCategory(value: unknown): boolean {
+  return typeof value === "string" && (DISCIPLINARY_SEVERE_CATEGORIES as readonly string[]).includes(value)
+}
 
 export const DISCIPLINARY_LEVEL_LABELS: Record<DisciplinaryLevel, string> = {
   verbal: "Teguran Lisan Tercatat",
@@ -282,8 +326,7 @@ export function evaluateDisciplinaryRejection(input: { reason: string | null }):
 
 /**
  * BR-DISC-12 + AC-DISC-6: tanggapan karyawan hanya untuk rekod issued
- * miliknya sendiri. Jendela tanggapan (Q-DISC-3) belum diputus Lead —
- * lapisan ini tidak mengarang batas hari.
+ * miliknya sendiri.
  */
 export function evaluateDisciplinaryEmployeeResponse(input: {
   recordEmployeeId: number
@@ -299,6 +342,29 @@ export function evaluateDisciplinaryEmployeeResponse(input: {
   }
   if (input.response == null || input.response.trim() === "") {
     return deny("Tanggapan karyawan wajib diisi")
+  }
+  return ok
+}
+
+/** Jendela tanggapan karyawan: 7 hari kalender dari issuedAt (Q-DISC-3). */
+export const DISCIPLINARY_RESPONSE_WINDOW_DAYS = 7
+
+/**
+ * Q-DISC-3 + BR-DISC-12: jalur self-service karyawan hanya di dalam
+ * jendela 7 hari kalender dari issuedAt (hari terbit = hari ke-0, batas
+ * akhir = issuedAt + 7 hari kalender WIB). Lewat jendela DITOLAK berisik;
+ * tanggapan terlambat hanya lewat aksi HR berlabel terlambat.
+ */
+export function evaluateDisciplinaryResponseWindow(input: {
+  issuedAt: Date | null
+  at: Date
+}): GuardResult {
+  if (input.issuedAt == null) {
+    return deny("Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit")
+  }
+  const lastDay = wibDayNumber(input.issuedAt) + DISCIPLINARY_RESPONSE_WINDOW_DAYS
+  if (wibDayNumber(input.at) > lastDay) {
+    return deny("Jendela tanggapan 7 hari kalender sejak surat peringatan terbit telah berakhir")
   }
   return ok
 }
