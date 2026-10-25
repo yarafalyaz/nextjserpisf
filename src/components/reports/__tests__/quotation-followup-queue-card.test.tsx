@@ -110,6 +110,9 @@ describe("QuotationFollowUpQueueCard F-2026-10-22-091-S", () => {
     expect(text).toContain(QUOTATION_FOLLOWUP_NOTICE_TEXT)
     // Sisa hari + penjual TANPA_BATAS dari builder: `—`, bukan karangan.
     expect(text).toContain("—")
+    // Sisa hari baris MENIPIS (Q-0001, validUntil 23 Okt, hari ini 22 Okt)
+    // tampil angka builder + satuan dari sel bersama.
+    expect(text).toContain("1 hari")
     const detailLinks = Array.from(container.querySelectorAll("a")).filter(
       (a) => a.textContent === "Buka Penawaran",
     )
