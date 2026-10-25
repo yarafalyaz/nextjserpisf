@@ -137,6 +137,7 @@ const RESOURCES = [
   ["appreciations", "hrm", "Apresiasi"],
   ["journals", "finance", "Jurnal"],
   ["expenses", "finance", "Pengeluaran"],
+  ["employee_reimbursements", "hrm", "Klaim Reimbursement"],
   ["petty_cash", "finance", "Kas Kecil"],
   ["cost_centers", "finance", "Pusat Biaya"],
   ["profit_centers", "finance", "Pusat Laba"],
