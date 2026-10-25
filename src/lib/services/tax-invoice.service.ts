@@ -46,6 +46,11 @@ import {
   buildSettlementVat,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat"
+import {
+  evaluateTaxInvoiceIssueGate,
+  snapshotCounterpartyFromMaster,
+  type CounterpartySnapshot,
+} from "@/lib/tax/customer-tax-identity"
 
 const SCOPE_ISSUE: IdemScope = "tax_invoice_issue"
 const SCOPE_DP_ISSUE: IdemScope = "tax_invoice_dp_issue"
@@ -117,6 +122,8 @@ export interface IssueTaxInvoiceInput {
   counterpartyTaxId?: string | null
   counterpartyName?: string | null
   counterpartyNitku?: string | null
+  /** Konfirmasi eksplisit operator: terbit dengan NPWP 15 digit (legacy) — vonis 019-V §2. */
+  legacy15Confirmed?: boolean
   xmlPayload?: string | null
   idempotencyKey: string
   userId?: number
@@ -200,6 +207,32 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
         })
         if (dupeVendor) throw definitive(`Duplikat faktur masukan (vendor #${input.vendorId}, nomor "${number}") ditolak`)
       }
+      // F-2026-10-25-004-S (vonis 019-V §5 + putusan Lead §8A-5): arah out —
+      // snapshot dari master pelanggan faktur penjualan tertaut (koreksi
+      // operator per-field menang), lalu gerbang EC-3 server-side untuk
+      // SEMUA terbit out (tertaut maupun manual). Arah in tidak diubah.
+      let snapshot: CounterpartySnapshot = {
+        counterpartyTaxId: input.counterpartyTaxId ?? null,
+        counterpartyName: input.counterpartyName ?? null,
+        counterpartyNitku: input.counterpartyNitku ?? null,
+      }
+      if (input.direction === "out") {
+        if (input.salesInvoiceId != null) {
+          const si = await tx.salesInvoice.findUnique({
+            where: { id: input.salesInvoiceId },
+            select: { customer: { select: { taxId: true, taxpayerName: true, nitku: true } } },
+          })
+          if (si?.customer) {
+            snapshot = snapshotCounterpartyFromMaster(si.customer, {
+              counterpartyTaxId: input.counterpartyTaxId ?? undefined,
+              counterpartyName: input.counterpartyName ?? undefined,
+              counterpartyNitku: input.counterpartyNitku ?? undefined,
+            })
+          }
+        }
+        const gate = evaluateTaxInvoiceIssueGate(snapshot, { legacy15Confirmed: input.legacy15Confirmed })
+        if (!gate.allowed) throw definitive(gate.error)
+      }
       const created = await tx.taxInvoice.create({
         data: {
           slug: await nextTxSlug(tx as never, "taxInvoice", `fp-${input.direction}-${number}`),
@@ -215,9 +248,9 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
           salesInvoiceId: input.salesInvoiceId ?? null,
           vendorBillId: input.vendorBillId ?? null,
           vendorId: input.vendorId ?? null,
-          counterpartyTaxId: input.counterpartyTaxId ?? null,
-          counterpartyName: input.counterpartyName ?? null,
-          counterpartyNitku: input.counterpartyNitku ?? null,
+          counterpartyTaxId: snapshot.counterpartyTaxId,
+          counterpartyName: snapshot.counterpartyName,
+          counterpartyNitku: snapshot.counterpartyNitku,
           xmlPayload: input.xmlPayload ?? null,
           // Jejak impor XML Coretax: hash isi + waktu impor, untuk rekonsiliasi
           // dobel-impor (dokumen sama tidak diterbitkan dua kali).

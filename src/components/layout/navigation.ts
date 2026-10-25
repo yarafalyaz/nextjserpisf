@@ -8,7 +8,7 @@ import {
   Cog, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck, ClipboardCheck, Percent,
-  Boxes, CalendarCheck,
+  Boxes, CalendarCheck, ReceiptText,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -161,6 +161,7 @@ export const navigation: NavItem[] = [
       { label: "Lembar Waktu", href: "/sdm/lembar-waktu", icon: Clock, permission: "view_timesheets" },
       { label: "Pinjaman", href: "/sdm/pinjaman", icon: PiggyBank, permission: "view_employee_loans" },
       { label: "Apresiasi", href: "/sdm/apresiasi", icon: Gift, permission: "view_appreciations" },
+      { label: "Klaim Reimbursement", href: "/sdm/klaim-reimbursement", icon: ReceiptText, permission: "create_employee_reimbursements" },
       { label: "Kalender Kerja", href: "/sdm/kalender-kerja", icon: CalendarDays, permission: "view_work_schedules" },
     ],
   },
