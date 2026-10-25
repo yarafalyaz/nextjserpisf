@@ -160,6 +160,18 @@ export function assertMoneyFormA11yAdd(
   }
 }
 
+/** Isi #name/#phone lalu submit form pelanggan (flush transition + action). */
+export async function submitFilledForm(container: HTMLElement) {
+  setFieldValue(container.querySelector<HTMLInputElement>("#name")!, "Budi Baru")
+  setFieldValue(container.querySelector<HTMLInputElement>("#phone")!, "0812000111")
+  await act(async () => {
+    container.querySelector("form")!.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    )
+  })
+  await act(async () => {})
+}
+
 /** Set input/textarea value via native setter so React/RHF sees the change (jsdom). */
 export function setFieldValue(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype

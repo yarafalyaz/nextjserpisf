@@ -21,6 +21,7 @@ const base: HrPendingApprovalInput = {
   departmentName: "Bengkel", slug: "budi-cuti", status: "pending",
   createdAt: d("2026-10-20"), eventDate: d("2026-10-26"), endDate: d("2026-10-27"),
   leaveType: "annual", hours: null, reason: "urusan keluarga", projectName: null,
+  loanTotalAmount: null, loanMonthlyInstallment: null, loanWeeklyInstallment: null,
 }
 const overtime: HrPendingApprovalInput = {
   ...base, id: 2, kind: "overtime", employeeName: "Siti Rahma", departmentName: null,

@@ -16,12 +16,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   leaveFindMany: vi.fn(),
   overtimeFindMany: vi.fn(),
+  loanFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     leaveRequest: { findMany: mocks.leaveFindMany },
     overtimeRequest: { findMany: mocks.overtimeFindMany },
+    employeeLoan: { findMany: mocks.loanFindMany },
   },
 }))
 
@@ -63,14 +65,32 @@ function overtimeRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function loanRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 3,
+    slug: "pinjaman-3",
+    status: "pending",
+    employeeId: 12,
+    loanDate: d("2026-10-24"),
+    totalAmount: { toString: () => "5000000.00" },
+    monthlyInstallment: { toString: () => "500000.00" },
+    weeklyInstallment: null,
+    notes: "modal usaha",
+    createdAt: d("2026-10-22"),
+    employee: { name: "Joko", department: { name: "Bengkel" } },
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.leaveFindMany.mockResolvedValue([])
   mocks.overtimeFindMany.mockResolvedValue([])
+  mocks.loanFindMany.mockResolvedValue([])
 })
 
 describe("loadHrPendingApprovalQueue — rantai loader F-007-S", () => {
-  it("kedua query status persis pending + scope all kosong (semua baris dalam wewenang)", async () => {
+  it("ketiga query status persis pending + scope all kosong (semua baris dalam wewenang)", async () => {
     await loadHrPendingApprovalQueue({ kind: "all" }, TODAY)
     expect(mocks.leaveFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: "pending" } }),
@@ -78,15 +98,21 @@ describe("loadHrPendingApprovalQueue — rantai loader F-007-S", () => {
     expect(mocks.overtimeFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: "pending" } }),
     )
+    expect(mocks.loanFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: "pending" } }),
+    )
   })
 
-  it("AC-HP-B2: scope self meneruskan employeeId pemanggil ke where kedua query", async () => {
+  it("AC-HP-B2: scope self meneruskan employeeId pemanggil ke where ketiga query", async () => {
     const scope: HrScope = { kind: "self", employeeId: 42 }
     await loadHrPendingApprovalQueue(scope, TODAY)
     expect(mocks.leaveFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: "pending", employeeId: 42 } }),
     )
     expect(mocks.overtimeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: "pending", employeeId: 42 } }),
+    )
+    expect(mocks.loanFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: "pending", employeeId: 42 } }),
     )
   })
@@ -99,6 +125,9 @@ describe("loadHrPendingApprovalQueue — rantai loader F-007-S", () => {
       expect.objectContaining({ where: deptWhere }),
     )
     expect(mocks.overtimeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: deptWhere }),
+    )
+    expect(mocks.loanFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: deptWhere }),
     )
   })
@@ -151,6 +180,47 @@ describe("loadHrPendingApprovalQueue — rantai loader F-007-S", () => {
       penandaTanggal: "TANGGAL_LEWAT_BELUM_DIPUTUS",
     })
     expect(ot).not.toHaveProperty("calculatedValue")
+  })
+
+  it("AC-LS-B5: pinjaman pending tampil dengan nominal penuh; pinjaman non-pending dibuang builder", async () => {
+    mocks.loanFindMany.mockResolvedValue([
+      loanRow(),
+      loanRow({ id: 4, status: "active", employeeId: 13 }),
+    ])
+    const rows = await loadHrPendingApprovalQueue({ kind: "all" }, TODAY)
+    const loan = rows.find((r) => r.kind === "loan")!
+    expect(loan).toMatchObject({
+      employeeName: "Joko",
+      departmentName: "Bengkel",
+      loanTotalAmount: "5000000.00",
+      loanMonthlyInstallment: "500000.00",
+      loanWeeklyInstallment: null,
+      reason: "modal usaha",
+      eventDate: d("2026-10-24"),
+      umurMenungguHari: 3,
+    })
+    expect(rows.filter((r) => r.kind === "loan")).toHaveLength(1)
+  })
+
+  it("AC-LS-B5: scope department pinjaman lain tidak bocor (where diteruskan ke query pinjaman)", async () => {
+    const scope: HrScope = { kind: "department", departmentId: 9, employeeId: 5 }
+    mocks.loanFindMany.mockImplementation(async (args: { where: { employee?: { departmentId?: number } } }) =>
+      args.where.employee?.departmentId === 3 ? [loanRow()] : [],
+    )
+    const rows = await loadHrPendingApprovalQueue(scope, TODAY)
+    expect(rows.filter((r) => r.kind === "loan")).toEqual([])
+  })
+
+  it("AC-LS-B5: select pinjaman tanpa nominal gaji; nominal pinjaman memang dimuat (Q-LS-3a)", async () => {
+    await loadHrPendingApprovalQueue({ kind: "all" }, TODAY)
+    const select = mocks.loanFindMany.mock.calls[0][0].select
+    expect(JSON.stringify(select)).not.toContain("salary")
+    expect(JSON.stringify(select)).not.toContain("calculatedValue")
+    expect(select).toMatchObject({
+      totalAmount: true,
+      monthlyInstallment: true,
+      weeklyInstallment: true,
+    })
   })
 
   it("AC-HP-B3/B6: baris non-pending dari query pun dibuang builder; loader tanpa mutasi", async () => {
