@@ -5,8 +5,9 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { loadEmployeeLoanChannels } from "@/lib/reports/employee-loan-channel-data"
+import { EMPLOYEE_LOAN_CHANNEL_LABELS } from "@/lib/reports/employee-loan-channel"
 import { Banknote } from "lucide-react"
-import { MyLoanRequestsTable } from "./_components/my-loan-requests-table"
+import { LoanTable } from "../pinjaman/_components/loan-table"
 
 import type { Metadata } from "next"
 
@@ -36,12 +37,14 @@ export default async function MyLoanRequestsPage() {
 
   const data = loans.map((l) => ({
     id: l.id,
+    slug: null,
+    employee: { name: "" },
     loanDate: l.loanDate.toISOString(),
     totalAmount: Number(l.totalAmount),
     monthlyInstallment: Number(l.monthlyInstallment),
     remainingAmount: Number(l.remainingAmount),
     status: l.status,
-    channel: channels.get(l.id) ?? null,
+    channel: channels.get(l.id) ? EMPLOYEE_LOAN_CHANNEL_LABELS[channels.get(l.id)!] : null,
   }))
 
   return (
@@ -62,7 +65,7 @@ export default async function MyLoanRequestsPage() {
           Belum ada pengajuan pinjaman. Gunakan tombol Ajukan Pinjaman untuk membuat pengajuan pertama.
         </div>
       ) : (
-        <MyLoanRequestsTable data={data} />
+        <LoanTable data={data} total={data.length} page={1} pageSize={data.length || 10} showActions={false} showEmployeeColumn={false} readOnly />
       )}
     </div>
   )

@@ -86,9 +86,11 @@ interface LoanTableProps {
   filters?: React.ReactNode
   showActions?: boolean
   showEmployeeColumn?: boolean
+  /** Permukaan baca-saja (mis. pengajuan mandiri): tanpa seleksi massal/hapus. */
+  readOnly?: boolean
 }
 
-export function LoanTable({ data, total, page, pageSize, toolbar, filters, showActions = true, showEmployeeColumn = true }: LoanTableProps) {
+export function LoanTable({ data, total, page, pageSize, toolbar, filters, showActions = true, showEmployeeColumn = true, readOnly = false }: LoanTableProps) {
   const visibleColumns = useMemo(() => {
     let cols = columns
     if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
@@ -102,10 +104,10 @@ export function LoanTable({ data, total, page, pageSize, toolbar, filters, showA
       columns={visibleColumns}
       ariaLabel="Daftar pinjaman"
       serverPagination={{ total, page, pageSize }}
-      selectable={true}
+      selectable={!readOnly}
       toolbar={toolbar}
       filters={filters}
-      onBulkDelete={(ids) => bulkDelete("loan", ids)}
+      onBulkDelete={readOnly ? undefined : (ids) => bulkDelete("loan", ids)}
     />
   )
 }
