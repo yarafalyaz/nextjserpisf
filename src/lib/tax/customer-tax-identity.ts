@@ -214,6 +214,9 @@ export function evaluateTaxInvoiceIssueGate(
   if (!blank(snapshot.counterpartyNitku) && !isValidNitkuShape(snapshot.counterpartyNitku)) {
     return { allowed: false, error: "NITKU lawan transaksi harus tepat 22 digit" }
   }
+  if (nitkuLink({ taxId: snapshot.counterpartyTaxId, nitku: snapshot.counterpartyNitku }) === "mismatch") {
+    return { allowed: false, error: "NITKU lawan transaksi tidak diawali NPWP lawan transaksi — periksa apakah NITKU milik entitas lain" }
+  }
   const warnings: string[] = []
   if (npwpFormat === "legacy15") {
     if (!opts.legacy15Confirmed) {

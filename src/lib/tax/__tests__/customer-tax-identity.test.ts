@@ -84,6 +84,29 @@ describe("F-2026-10-25-019-V §7.5 EC-3 + gerbang terbit §5", () => {
     expect(ok.allowed).toBe(true)
     if (ok.allowed) expect(ok.warnings.join(" ")).toContain("nitkuAbsent")
   })
+  it("NITKU 22 digit awalan beda NPWP 16 (mismatch) → tolak terbit (probe QA PR #834)", () => {
+    const res = evaluateTaxInvoiceIssueGate({
+      counterpartyName: "PT X",
+      counterpartyTaxId: NPWP16,
+      counterpartyNitku: "9999999999999999000001",
+    })
+    expect(res.allowed).toBe(false)
+    if (!res.allowed) expect(res.error).toContain("NITKU")
+  })
+  it("NITKU tertaut awalan sama → lolos; legacy15 + NITKU sah-bentuk bukan mismatch → lolos bertanda (§8A)", () => {
+    const linked = evaluateTaxInvoiceIssueGate({
+      counterpartyName: "PT X",
+      counterpartyTaxId: NPWP16,
+      counterpartyNitku: NITKU_LINKED,
+    })
+    expect(linked.allowed).toBe(true)
+    const legacy = evaluateTaxInvoiceIssueGate(
+      { counterpartyName: "PT X", counterpartyTaxId: "123456789012345", counterpartyNitku: "9999999999999999000001" },
+      { legacy15Confirmed: true },
+    )
+    expect(legacy.allowed).toBe(true)
+    if (legacy.allowed) expect(legacy.warnings.join(" ")).toContain("15 digit")
+  })
   it("tanpa pengecualian ritel karangan — identitas absen tetap tolak (putusan Lead §8A-5)", () => {
     expect(evaluateTaxInvoiceIssueGate({}).allowed).toBe(false)
   })
