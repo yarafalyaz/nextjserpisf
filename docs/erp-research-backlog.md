@@ -28820,3 +28820,142 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-034-S: konsumen peringatan paparan kredit di form SO/Invoice + detail pelanggan (delta atas F-2026-10-21-017 + vonis F-2026-10-22-044-V + spec F-2026-10-22-043-S)
+
+> **Slot**: F-2026-10-25-034-S. Diperiksa bentrok 2026-10-25 15:5x WIB vs `origin/main` (`4fdb124f`): grep `F-2026-10-25-034` di backlog+board origin/main = 0; ID 033-S sudah terpakai spec rekap beban tiket (PR #870 OPEN head `b2510c5b`) — judul kartu t_55f4cb83 menyebut 033-S, nomor itu TIDAK dipakai ulang di sini. Kartu: t_55f4cb83.
+
+> **Anti-duplikat (wajib dibaca dulu)**: topik batas kredit SUDAH punya rantai lengkap di main — gap induk F-2026-10-21-017 (backlog:1160), spec read-model F-2026-10-21-017-S, vonis angka Accountant F-2026-10-22-044-V (komponen K1–K5, ambang advisory 80/100 FINAL lapis ini, gate keras DITUNDA V7), spec konsumen UI F-2026-10-22-043-S (PR #398 MERGED). Spec ini TIDAK mendefinisikan ulang rumus, ambang, teks status, atau definisi paparan. Spec ini hanya membekukan delta yang terbukti BELUM ada di main hari ini: konsumen lencana di titik keputusan (form SO/Invoice + detail pelanggan). Bila butir di sini bertentangan dengan 044-V/043-S, yang menang = 044-V lalu 043-S.
+
+### 0. Ringkasan
+
+Builder paparan kredit dan loader-nya sudah jadi dan terpakai di laporan Piutang per Pelanggan, tetapi admin penjualan tidak melihat status kredit apa pun saat membuat SO/Invoice — titik keputusan justru buta. Spec ini membekukan kontrak konsumen tahap 1: (a) satu loader per-pelanggan read-only di atas loader existing (tanpa rumus kedua), (b) lencana advisory di form SO/Invoice saat pelanggan dipilih, (c) baris ringkas di detail pelanggan. Advisory murni: tidak ada status advisory yang menahan simpan. Gate keras tetap DITUNDA per vonis 044-V V7 — bukan diputus spec ini.
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 4fdb124f)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `Customer.creditLimit Decimal @default(0.00)` (`prisma/schema.prisma:397`).
+- Builder murni `buildCustomerCreditExposure` (`src/lib/reports/customer-receivables.ts:96`): PaparanKasar = K1 piutang terbuka + K2 SO belum tertagih + K5 WO belum terwakili; PaparanBersih (`exposure`) = max(0, kasar − K3 DP confirmed efektif − K4 CustomerCredit open); status turunan `unset|ok|warning|over` dari `creditLimit` + utilization (limit <= 0 = `unset`; >= 100 = `over`; >= 80 = `warning`); peta teks `CREDIT_EXPOSURE_STATUS_LABEL` (`customer-receivables.ts:89`) = persis "Limit belum diatur"/"Aman"/"Mendekati batas"/"Lewat batas". Helper anti-dobel K3/K4/K5 di file sama (`effectiveConfirmedDownPaymentByCustomer`, `openCustomerCreditByCustomer`, `woUnrepresentedByCustomer`).
+- Loader massal `loadCustomerCreditExposure(period)` (`src/lib/reports/ledger-cash-data.ts:404`, tipe hasil :381-402): satu sumber layar laporan + ekspor PDF; baris lahir juga dari pelanggan SO-only/WO-only/pengurang-saja. Konsumen existing: halaman `laporan/piutang-pelanggan` (`page.tsx:8,43,101-113`) + `loadCustomerReceivables` ekspor (`ledger-cash-data.ts:644`).
+- Aksi simpan existing: `createSalesOrder` (`src/actions/sales.actions.ts:902`), `createSalesInvoice` (`:1428`) — tanpa pemeriksaan kredit apa pun (advisory memang belum menahan; lihat gap di bawah soal tidak adanya jejak baca di form).
+- Permission nyata katalog: `view_customers` (`module-catalog.generated.ts:125`), `create_sales_invoices` (:149), `create_sales_orders` (:165), `view_reports` (:426). Tidak ada permission kredit khusus — dan tahap 1 tidak membuat yang baru.
+
+Belum ada / gap (bukti grep run ini, basis 4fdb124f):
+- Grep `buildCustomerCreditExposure` di `src/app` + `src/components` = 0 hit: tidak ada konsumen form/detail. Form SO (`src/components/forms/sales-order-form.tsx:30,37` props `customers: {id,name}`) dan form Invoice (`sales-invoice-form.tsx:43,115`) hanya menerima id+nama pelanggan — status kredit tidak pernah dimuat/ditampilkan di titik keputusan.
+- Detail pelanggan `src/app/(dashboard)/master/pelanggan/[slug]/page.tsx`: grep `credit|piutang` = 0 hit — tidak ada ringkasan paparan/limit di master.
+- Loader existing berbentuk periode-laporan (mengembalikan seluruh portofolio); belum ada jalur baca per-pelanggan untuk satu `customerId` yang bisa dipakai server component form tanpa memuat semua pelanggan.
+
+### 2. Workflow specification
+
+Aktor: admin penjualan (form SO/Invoice), finance/penagihan (laporan + tindak lanjut manusia), admin master (atur `creditLimit`).
+Dokumen masuk: pilihan `customerId` di form existing. Dokumen keluar: tidak ada dokumen baru; SO/Invoice tersimpan lewat aksi existing persis seperti hari ini.
+Alur:
+1. Saat form SO/Invoice dirender (server component halaman tambah/ubah), server memuat paparan untuk pelanggan yang relevan lewat loader per-pelanggan §7-Q-CL-2 (fisik Backend): pada muat awal hanya untuk pelanggan terpilih awal (dari SO/quotation/default bila ada); daftar pilihan pelanggan tetap id+nama seperti hari ini — dilarang memuat paparan seluruh daftar pilihan di server render.
+2. Saat pengguna mengganti pelanggan di form, lencana memuat ulang paparan pelanggan baru (mekanisme fisik = Q-CL-2; hasil kosong/belum dipilih = lencana tidak tampil, bukan angka 0 karangan).
+3. Lencana menampilkan field builder apa adanya: status verbatim `CREDIT_EXPOSURE_STATUS_LABEL`, PaparanBersih (`exposure`), sisa kredit (`remainingCredit`, boleh negatif tampil apa adanya), limit. UI tidak menghitung ulang paparan/utilization/sisa (BR-CL-03).
+4. Simpan berjalan lewat `createSalesOrder`/`createSalesInvoice` existing tanpa perubahan perilaku: status `warning`/`over`/`unset` tidak pernah men-disable tombol, tidak memunculkan modal wajib, tidak menolak di server (BR-CL-02).
+5. Tindak lanjut `over` = proses manusia di luar form (finance menagih / minta DP via alur uang-muka existing / admin master menaikkan limit lewat `edit_customers`) persis §4 spec 043-S — tahap 1 tanpa notifikasi otomatis, tanpa log override.
+
+### 3. Role/permission matrix (permission nyata, tanpa key baru)
+
+| Aksi konsumen | Permission nyata | Admin penjualan | Finance/penagihan | Admin master |
+|---|---|---|---|---|
+| Lihat lencana di form SO | `create_sales_orders` (:165) / `view_sales_orders` untuk ubah | YA | — | — |
+| Lihat lencana di form Invoice | `create_sales_invoices` (:149) / pasangan view-nya | YA | — | — |
+| Lihat ringkas di detail pelanggan | `view_customers` (:125) | YA (baca) | YA | YA |
+| Lihat laporan portofolio (existing) | `view_reports` (:426) | tidak perlu | YA | tidak perlu |
+| Atur `creditLimit` (existing) | `edit_customers` | TIDAK | TIDAK | YA |
+| Simpan SO/Invoice pada status advisory apa pun | `create_*` di atas | YA selalu tahap 1 | — | — |
+
+Data paparan per pelanggan terlihat oleh siapa pun yang sudah berhak membuka form/detail itu — tahap 1 tanpa permission baca-kredit baru (perluasan izin = Q-CL-3 Lead bila kelak diminta). Nominal paparan adalah data piutang pelanggan, bukan data gaji; gerbang HR-scope tidak berlaku di domain ini.
+
+### 4. Status-transition matrix
+
+Tidak ada status dokumen/kolom baru. Status kredit adalah turunan baca murni dari (`creditLimit`, PaparanBersih) per builder existing:
+
+| Keadaan tersimpan | Turunan builder | Teks verbatim tampil | Menahan simpan? | Penjaga |
+|---|---|---|---|---|
+| `creditLimit <= 0` (termasuk default 0 dan negatif data-rusak) | `unset`, utilization null | "Limit belum diatur" + utilization "–" | TIDAK | builder `customer-receivables.ts:107` |
+| limit > 0, utilization < 80 | `ok` | "Aman" | TIDAK | builder |
+| limit > 0, 80 <= utilization < 100 | `warning` | "Mendekati batas" | TIDAK | builder (ambang vonis 044-V V5) |
+| limit > 0, utilization >= 100 | `over` | "Lewat batas" | TIDAK — eskalasi manusia §2.5 | builder |
+| pelanggan belum dipilih di form | — (tidak ada baris) | lencana tidak tampil | n/a | kontrak konsumen BR-CL-06 |
+
+Perubahan `creditLimit`/transaksi mengubah turunan pada baca berikutnya — tanpa peristiwa/transisi tersimpan, tanpa snapshot historis tahap 1.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-CL-01 | Rumus paparan, komponen K1–K5, koreksi anti-dobel K3 (pilihan b: DP confirmed yang quotation-nya sudah punya invoice recognised gugur), dan ambang advisory 80/100 TIDAK didefinisikan ulang spec ini; satu-satunya sumber = builder existing sebagaimana disahkan vonis 044-V V2–V5. | TERVERIFIKASI-KODE + VONIS-ACCOUNTANT | `customer-receivables.ts:52-115`; backlog vonis F-2026-10-22-044-V |
+| BR-CL-02 | Tidak ada status advisory (`unset`/`warning`/`over`) yang menahan, men-disable, atau mewajibkan konfirmasi simpan SO/Invoice tahap 1 — di UI maupun di server action. | TERVERIFIKASI-KODE (niat builder) + USULAN konsumen | komentar builder "Advisory saja — tidak menahan dokumen" (`customer-receivables.ts` header fungsi); 043-S BR-CU-02 |
+| BR-CL-03 | UI menampilkan field builder apa adanya (status, `exposure`, `remainingCredit`, `utilization`, `creditLimit`); UI/loader konsumen dilarang menghitung ulang paparan, utilization, atau sisa dengan rumus lokal. | USULAN | pola 043-S BR-CU-03 |
+| BR-CL-04 | Limit 0/null/negatif = "limit belum diatur" (`unset`): dilarang dibaca "tanpa limit", dilarang dibaca "blokir semua", dilarang ditampilkan "Aman"; PaparanBersih tetap tampil nominalnya dan utilization tampil "–". | TERVERIFIKASI-KODE + VONIS-ACCOUNTANT | `customer-receivables.ts:107`; 044-V V5 |
+| BR-CL-05 | Teks status hanya dari `CREDIT_EXPOSURE_STATUS_LABEL` existing; dilarang label karangan per halaman/komponen. | TERVERIFIKASI-KODE | `customer-receivables.ts:89-94` |
+| BR-CL-06 | Pelanggan belum dipilih = lencana tidak tampil; pelanggan tanpa transaksi = PaparanBersih 0 dengan status per limit-nya (bukan error, bukan lewat-batas). | USULAN | pola 043-S §2 aturan tampil umum |
+| BR-CL-07 | Paparan yang tampil di form adalah paparan SEBELUM dokumen yang sedang dibuat (dokumen berjalan belum masuk K1/K2 sampai tersimpan). Dilarang menjanjikan "paparan sesudah dokumen ini" di lencana tahap 1; penambahan nilai dokumen berjalan ke paparan tampil = Q-CL-4. | USULAN (jujur cakupan) | semantik loader existing (baca tersimpan saja) |
+| BR-CL-08 | Gate keras (tolak/tahan dokumen saat `over`, override berizin + log) TIDAK dibangun dari spec ini. Syarat buka tetap utuh per 044-V V7: putusan Lead + vonis Accountant lanjutan atas definisi paparan inti (K4/K5 untuk gate, perlakuan DP pending, perlakuan limit-unset untuk gate) + permission override + titik tahan di server action + falsifikasi. | BUTUH-PUTUSAN (Lead) + BUTUH-VONIS (Accountant) | 044-V V7; 043-S §7 |
+| BR-CL-09 | Satu pelanggan tepat satu baris paparan di semua titik tampil; pelanggan SO-only/WO-only/pengurang-saja tetap punya paparan dari loader yang sama (bukan hilang seperti bucket invoice-saja lama). | TERVERIFIKASI-KODE | `ledger-cash-data.ts:404` header + F5-2 |
+
+### 6. Feature matrix (benchmark resmi, akses 2026-10-25)
+
+| Kemampuan | Accurate Online | Zahir Online | ISF tahap 1 (spec ini) |
+|---|---|---|---|
+| Limit piutang per pelanggan tersimpan | Ada (tab Lain-Lain pelanggan) | Ada: "Batas kredit" di data nama/alamat | Ada existing: `Customer.creditLimit` |
+| Peringatan saat dokumen baru melewati limit | Ada: piutang berjalan + transaksi baru (SO/Faktur) dibandingkan limit, tampil peringatan https://help.accurate.id/product/accurate-online/accurate-insight/membatasi-piutang-pelanggan/ | Ada: opsi "Tidak Bisa Tersimpan Jika Batas Kredit Telah Terlampaui" + opsi memasukkan Pesanan Penjualan https://help.zahironline.com/portal/id/kb/customer-support/zahir-online/initial-setup/data-and-program-setup | Spec ini: lencana advisory di form SO/Invoice dari paparan K1–K5 (lebih luas dari piutang saja) |
+| Blokir/penolakan dokumen melewati limit | Ada berjenjang: Administrator dapat Lanjutkan, Operator hanya Batal/Edit; izin khusus "Menjual melebihi limit piutang" (URL sama di atas) | Ada: posting penjualan kredit ditolak otomatis bila total piutang melewati batas https://help.zahironline.com/portal/id/kb/articles/membuat-data-nama-alamat | DITUNDA sadar: 044-V V7 (butuh putusan Lead + vonis Accountant + izin override + log) — selisih dari benchmark tercatat, bukan kelalaian |
+| Paparan memuat SO terbuka + DP + kredit pelanggan + WO berjalan | Sebagian (piutang + pesanan pada pengaturan total piutang & pesanan) | Sebagian (pesanan opsional) | Ada di builder existing (K1–K5); tahap 1 hanya menambah titik tampilnya |
+
+Catatan jujur: benchmark membuktikan peringatan/blokir limit adalah standar pasar; ISF tahap 1 sengaja berhenti di peringatan karena definisi paparan inti untuk penahan belum divonis (044-V V7 butir 2-3).
+
+### 7. Acceptance criteria + edge cases
+
+Backend (loader per-pelanggan, fisik Q-CL-2):
+- AC-CL-B1: loader per-pelanggan mengembalikan untuk tepat satu `customerId` field yang sama persis dengan baris pelanggan itu di `loadCustomerCreditExposure` portofolio (uji paritas: `exposure`/`grossExposure`/`remainingCredit`/`utilization`/`status`/K1–K5 byte-sama untuk fixture campuran invoice+SO+DP+CustomerCredit+WO); selisih satu sen = MERAH.
+- AC-CL-B2: loader read-only murni: nol tulis DB, nol jurnal; loader menulis apa pun = MERAH. Query massal terbatas pelanggan diminta — memuat seluruh portofolio lalu membuang sisanya di memori tanpa alasan tertulis = cacat tinjauan Backend (pola anti-N+1 repo).
+- AC-CL-B3: pelanggan tidak ditemukan/terhapus = hasil kosong tertanda (bukan baris Rp0 karangan, bukan error 500); konsumen menampilkan "tidak tampil" per BR-CL-06.
+- AC-CL-B4: falsifikasi anti-dobel warisan vonis tetap hijau pada jalur per-pelanggan: DP confirmed yang sudah teralokasi ke invoice tidak mengurangi dua kali; cabut jepit lantai 0 PaparanBersih = MERAH; CustomerCredit non-open ikut = MERAH.
+
+Frontend (konsumen):
+- AC-CL-F1: form SO: pilih pelanggan `over` -> lencana "Lewat batas" + PaparanBersih + sisa (negatif tampil apa adanya); tombol simpan tetap aktif; SO tersimpan lewat `createSalesOrder` existing (nomor terbit). Status men-disable simpan = MERAH.
+- AC-CL-F2: form Invoice dari SO/quotation pelanggan `warning`: lencana "Mendekati batas" untuk pelanggan default itu; ganti pelanggan ke limit 0 -> lencana berubah "Limit belum diatur" + utilization "–" (bukan "Aman", bukan error).
+- AC-CL-F3: sebelum pelanggan dipilih tidak ada lencana/angka paparan; ganti pelanggan memuat ulang lencana pelanggan baru (angka pelanggan lama tertinggal = MERAH).
+- AC-CL-F4: teks status hanya dari `CREDIT_EXPOSURE_STATUS_LABEL`; label karangan lokal ("Over Limit!" dsb.) = MERAH. UI menghitung ulang utilization/sisa sendiri = MERAH (mutasi ambang builder harus mengubah tampilan tanpa ubah UI).
+- AC-CL-F5: detail pelanggan: baris ringkas Limit + PaparanBersih + status verbatim + tautan ke laporan piutang; pelanggan tanpa transaksi tampil PaparanBersih 0 per BR-CL-06.
+- AC-CL-F6: falsifikasi advisory: paksa status `over` me-disable/menolak simpan (sabotase uji) -> AC-CL-F1 MERAH; pulihkan -> hijau. Sebelum commit: grep e2e selector form penjualan terdampak + sinkronkan commit yang sama (pola repo).
+
+Edge cases:
+- EC-CL-1: limit 0 dengan paparan besar: tetap `unset` + nominal paparan tampil; saran tampil = atur limit di master (tautan detail), bukan peringatan lewat-batas.
+- EC-CL-2: DP/kredit melebihi nilai job: PaparanBersih terjepit 0 oleh builder -> status `ok`, sisa = limit penuh; paparan negatif tidak pernah tampil.
+- EC-CL-3: WO aktif tanpa `quotationId`: kontribusi K5 = 0 + bendera hitungan hanya relevan di laporan/detail (rincian), bukan angka karangan di lencana form.
+- EC-CL-4: dua WO satu quotation tidak menggandakan K5 (hitung per quotation — warisan 044-V V3); tampil ganda = MERAH di AC-CL-B1 fixture.
+- EC-CL-5: pelanggan dihapus-lembut / diganti di tengah pengisian form: baca berikutnya kosong tertanda (AC-CL-B3), form tidak crash.
+- EC-CL-6: dokumen kedua dibuka bersamaan untuk pelanggan sama: kedua lencana membaca paparan tersimpan yang sama; tidak ada klaim kunci/konsistensi antar-form tahap 1 (advisory, bukan gate).
+- EC-CL-7: limit diubah admin master saat form penjualan terbuka: lencana membaca nilai saat muat/ganti pelanggan; tidak ada langganan live tahap 1.
+
+### 8. Pertanyaan terbuka (gerbang — jangan ditebak implementasi)
+
+- Q-CL-1 (Accountant, BUTUH-VONIS): TIDAK ada vonis angka baru diminta untuk lapis advisory ini — definisi paparan (WO berjalan ikut lewat K5, DP confirmed efektif pengurang, CustomerCredit open pengurang) SUDAH divonis 044-V V2–V5 dan sudah terimplementasi. Vonis Accountant baru WAJIB hanya sebelum gate keras: apakah definisi yang sama sah untuk penahan inti (K4/K5 untuk gate, DP pending, limit-unset untuk gate) per 044-V V7. Jangan buka gate dari spec ini.
+- Q-CL-2 (Backend, fisik): bentuk loader per-pelanggan — fungsi baru terbatas `customerId` di `ledger-cash-data.ts`/modul laporan vs parameter saring pada loader existing; serta mekanisme muat-ulang saat ganti pelanggan di form (server action baca khusus vs data tertanam per pilihan). Syarat mengikat: satu rumus (builder existing), paritas AC-CL-B1, tanpa N+1, tanpa memuat portofolio penuh untuk satu pelanggan tanpa alasan tertulis.
+- Q-CL-3 (Lead, BUTUH-PUTUSAN): apakah pemegang `create_sales_*` tanpa `view_reports` boleh melihat nominal paparan penuh di lencana, atau tahap 1 cukup status + sisa tanpa rincian K1–K5? Spec mengusulkan status + PaparanBersih + sisa (tanpa rincian komponen di form; rincian tetap di laporan ber-`view_reports`). Perluasan/pembatasan izin baca-kredit khusus = putusan Lead, bukan spec.
+- Q-CL-4 (Lead + Accountant bila dibuka): apakah lencana kelak menampilkan paparan proyeksi (paparan tersimpan + nilai dokumen sedang dibuat)? Tahap 1 TIDAK (BR-CL-07). Accurate membandingkan termasuk transaksi baru (benchmark §6) — mengadopsinya mengubah semantik angka tampil dan wajib diputus tertulis, bukan ditambah diam-diam Frontend.
+- Q-CL-5 (Lead, BUTUH-PUTUSAN): gate keras dibuka atau tetap ditunda — hanya lewat syarat utuh 044-V V7 (termasuk permission override + log override + titik tahan server action). Spec ini tidak meminta pembukaannya.
+
+### 9. Backlog implementasi (turunan F-2026-10-25-034-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-034-S | Spec delta konsumen ini (dokumen) | Business | — |
+| (turunan) loader paparan per-pelanggan paritas builder | Backend | Q-CL-2 diputus Backend; klaim file laporan di board | — |
+| (turunan) lencana form SO/Invoice + ringkas detail pelanggan | Frontend | kontrak loader Backend final + Q-CL-3 diputus Lead | loader Backend |
+| (turunan) falsifikasi AC-CL-B/F atas head persis | QA | head Backend/Frontend persis | keduanya |
+| (turunan, DITUNDA) gate keras + override | Lead/Accountant/Backend | Q-CL-1 + Q-CL-5 + syarat 044-V V7 utuh | di luar tahap 1 |
+
+### Yang TIDAK diusulkan run ini
+- Gate keras/blokir dokumen, permission override, log override, notifikasi WA/email otomatis, snapshot historis paparan: ditunda sadar per 044-V V7 + 043-S §7 — bukan dibangun dari spec delta ini.
+- Kolom/status/migrasi baru, `creditLimit` wajib isi, ambang nominal absolut kedua: ditolak vonis 044-V V5 (persen saja) / di luar kartu.
+- Paparan proyeksi termasuk dokumen berjalan, rincian K1–K5 di lencana form: Q-CL-4/Q-CL-3 — menunggu putusan, bukan tebakan UI.
+- Menulis ulang spec 017-S/043-S atau vonis 044-V: rantai itu sumber kebenaran; spec ini delta konsumen saja.
+
+F-2026-10-25-034-S — Konsumen peringatan paparan kredit di form SO/Invoice + detail pelanggan. Status: SPEC SELESAI run ini (delta atas F-2026-10-21-017 + vonis F-2026-10-22-044-V + spec F-2026-10-22-043-S; TANPA definisi paparan/ambang baru). Pemilik berikutnya: Lead (Q-CL-3/Q-CL-5 + merge PR docs), Backend (Q-CL-2 loader), Frontend (konsumen), QA (AC-CL). Butuh vonis accountant: TIDAK untuk tahap advisory ini; YA wajib sebelum gate keras (Q-CL-1).
