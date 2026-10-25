@@ -76,3 +76,64 @@ export function endOfWeekSunday(date: Date): Date {
   end.setHours(23, 59, 59, 999)
   return end
 }
+
+type OvertimeLimitDb = {
+  overtimeRequest: {
+    findMany: (args: {
+      where: Record<string, unknown>
+      select: { hours: true; date?: true }
+    }) => Promise<{ hours: unknown; date?: Date }[]>
+  }
+}
+
+/**
+ * Gerbang batas lembur PP 35/2021 Pasal 26 ayat (1) — dipakai create DAN
+ * update (syarat vonis K2-S1): maksimal 4 jam sehari dan 18 jam seminggu
+ * pada HARI KERJA; lembur hari istirahat/libur resmi di luar batas itu.
+ * Baris pending+approved terhitung; `excludeId` mengeluarkan baris yang
+ * sedang diedit dari hitungannya sendiri.
+ */
+export async function assertOvertimeWithinWorkdayLimits(
+  db: OvertimeLimitDb,
+  resolveDay: (employeeId: number, date: Date) => Promise<{ isWorkingDay: boolean }>,
+  input: { employeeId: number; date: Date; hours: number; excludeId?: number },
+): Promise<void> {
+  const { employeeId, date, hours, excludeId } = input
+  const dayProfile = await resolveDay(employeeId, date)
+  if (!dayProfile.isWorkingDay) return
+  const exclude = excludeId ? { id: { not: excludeId } } : {}
+  const sameDay = await db.overtimeRequest.findMany({
+    where: {
+      employeeId,
+      date,
+      status: { in: ["pending", "approved"] },
+      ...exclude,
+    },
+    select: { hours: true },
+  })
+  const dayTotal = sameDay.reduce((s, r) => s + Number(r.hours), 0) + hours
+  if (dayTotal > MAX_OVERTIME_HOURS_PER_WORKDAY) {
+    throw new Error(
+      `Lembur hari kerja maksimal ${MAX_OVERTIME_HOURS_PER_WORKDAY} jam sehari (sudah ada ${dayTotal - hours} jam pada tanggal ini).`,
+    )
+  }
+  const weekRows = await db.overtimeRequest.findMany({
+    where: {
+      employeeId,
+      date: { gte: startOfWeekMonday(date), lte: endOfWeekSunday(date) },
+      status: { in: ["pending", "approved"] },
+      ...exclude,
+    },
+    select: { hours: true, date: true },
+  })
+  let weekWorkdayHours = hours
+  for (const r of weekRows) {
+    const p = await resolveDay(employeeId, r.date as Date)
+    if (p.isWorkingDay) weekWorkdayHours += Number(r.hours)
+  }
+  if (weekWorkdayHours > MAX_OVERTIME_HOURS_PER_WEEK) {
+    throw new Error(
+      `Lembur hari kerja maksimal ${MAX_OVERTIME_HOURS_PER_WEEK} jam seminggu.`,
+    )
+  }
+}

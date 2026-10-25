@@ -65,11 +65,8 @@ import {
   resolveDayKind,
 } from "@/lib/services/leave-quota.service";
 import {
+  assertOvertimeWithinWorkdayLimits,
   computeOvertimePay,
-  endOfWeekSunday,
-  startOfWeekMonday,
-  MAX_OVERTIME_HOURS_PER_WEEK,
-  MAX_OVERTIME_HOURS_PER_WORKDAY,
   type OvertimeDayKind,
 } from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -1025,46 +1022,14 @@ export async function createOvertimeRequest(formData: FormData) {
     await assertHrEmployeeAccess(scope, v.employeeId);
 
     const overtime = await prisma.$transaction(async (tx) => {
-      // Batas lembur PP 35/2021 Pasal 26 ayat (1): maksimal 4 jam dalam
-      // sehari dan 18 jam dalam seminggu pada HARI KERJA. Lembur pada
-      // hari istirahat mingguan/libur resmi tidak termasuk batas itu.
+      // Batas lembur PP 35/2021 Pasal 26 ayat (1) — gerbang bersama create/
+      // update di overtime-pay.service (syarat vonis K2-S1).
       const otDate = wibDateToUtcMidnight(v.date);
-      const dayProfile = await resolveDayKind(v.employeeId, otDate, tx);
-      if (dayProfile.isWorkingDay) {
-        const sameDay = await tx.overtimeRequest.findMany({
-          where: {
-            employeeId: v.employeeId,
-            date: otDate,
-            status: { in: ["pending", "approved"] },
-          },
-          select: { hours: true },
-        });
-        const dayTotal =
-          sameDay.reduce((s, r) => s + Number(r.hours), 0) + v.hours;
-        if (dayTotal > MAX_OVERTIME_HOURS_PER_WORKDAY) {
-          throw new Error(
-            `Lembur hari kerja maksimal ${MAX_OVERTIME_HOURS_PER_WORKDAY} jam sehari (sudah ada ${dayTotal - v.hours} jam pada tanggal ini).`,
-          );
-        }
-        const weekRows = await tx.overtimeRequest.findMany({
-          where: {
-            employeeId: v.employeeId,
-            date: { gte: startOfWeekMonday(otDate), lte: endOfWeekSunday(otDate) },
-            status: { in: ["pending", "approved"] },
-          },
-          select: { hours: true, date: true },
-        });
-        let weekWorkdayHours = v.hours;
-        for (const r of weekRows) {
-          const p = await resolveDayKind(v.employeeId, r.date, tx);
-          if (p.isWorkingDay) weekWorkdayHours += Number(r.hours);
-        }
-        if (weekWorkdayHours > MAX_OVERTIME_HOURS_PER_WEEK) {
-          throw new Error(
-            `Lembur hari kerja maksimal ${MAX_OVERTIME_HOURS_PER_WEEK} jam seminggu.`,
-          );
-        }
-      }
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: otDate,
+        hours: v.hours,
+      });
 
       const created = await tx.overtimeRequest.create({
         data: {
@@ -1142,6 +1107,15 @@ export async function approveOvertime(overtimeId: number) {
     // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
     // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
     // lewat Pengaturan) membayar di bawah minimum undang-undang.
+    // Syarat vonis K2-S2 (F-2026-10-25-014-V): dasar upah lembur Pasal 31
+    // = upah pokok + tunjangan tetap (100%), atau 75% darinya bila ada
+    // tunjangan tidak tetap. Skema Employee hanya punya SATU kolom upah
+    // bulanan, `baseSalary` (prisma/schema.prisma Employee.baseSalary) —
+    // tidak ada kolom komponen pokok/tetap/tidak-tetap terpisah, jadi
+    // dasar yang tersedia dan dipakai di sini adalah baseSalary apa
+    // adanya sebagai upah sebulan. Pernyataan tertulis penuh + syarat
+    // perubahan ada di body PR #800; bila master karyawan kelak dipecah
+    // per komponen, dasar ini WAJIB ditinjau ulang oleh vonis Accountant.
     const baseSalary = Number(ot.employee?.baseSalary ?? 0);
     const hours = Number(ot.hours);
     const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
@@ -4189,6 +4163,16 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
       }
+
+      // Gerbang batas yang sama dengan create (syarat vonis K2-S1):
+      // tanpa ini edit pending 2 jam -> 5 jam hari kerja lolos batas
+      // PP 35/2021. excludeId mengeluarkan baris ini dari hitungannya.
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: wibDateToUtcMidnight(v.date),
+        hours: v.hours,
+        excludeId: id,
+      });
 
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },
