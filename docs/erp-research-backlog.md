@@ -30668,8 +30668,6 @@ BENCHMARK: kedua kompetitor menghitung komisi otomatis sampai jurnal; ISF tahap 
 - Kolom persen tunggal di CustomerCategory: ditolak vonis (F-056-V 1a) — jangan diusulkan ulang sebagai jalan pintas.
 
 F-2026-10-25-036-S — Tarif komisi per kategori pelanggan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-KT-1 + fisik Backend Q-KT-2. Pemilik usulan: Business (spec), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (vonis F-056-V/F-058-V/F-084-V sudah mengunci angka; izin terpisah = pengecualian BR-KT36-10).
-> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
-
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-037-S: tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll; kontrak workflow di atas vonis F-2026-10-22-084-V)
 
@@ -30825,8 +30823,6 @@ Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti �
 - Mengubah rekap informatif menjadi layar utang: read-model saldo terpisah (BR-KOM37-12).
 
 F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
-> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
-
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-039-V: koreksi akun utang komisi Q-KOM3-1 — 210207 gugur (PKWT), nomor final 210212 "Utang Komisi Penjualan"; 210208 DILARANG (jatah terminasi F-005-V); 210210/210211 DILARANG (jatah PPh 21/BPJS F-020-V); mapping fail-closed (jawaban Q-KOM3-1 spec F-2026-10-25-037-S PR #884 merged; Q-KOM3-2 uang/PPh dijawab eksplisit per F-084-V §5)
 
@@ -31063,8 +31059,6 @@ Edge cases:
 - Angka denda/penalti di pesan maupun statement (BR-ST-07), surat tagihan formal ala Zahir sebagai dokumen tersendiri.
 
 F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
-> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #890 sudah MERGED 25a499c0; Q-SW-1 (reuse view_reports) + Q-SW-3 (wording 3 varian verbatim) SUDAH DIPUTUS Lead di komentar PR #890 6398030628 — bukan pertanyaan terbuka lagi; hanya Q-SW-2 fisik Backend tersisa (kartu t_d9ddf496 running). (2) Catatan fisik untuk B1: penjaga existing whatsapp-log.actions.ts:41-43 hanya menerima surface queue|detail dan :51-65 mewajibkan dokumen ber-documentNo — pelanggan tidak punya; builder pesan existing whatsapp.ts:31 berbentuk dokumen, statement butuh builder baru dari closingBalance (customer-statement.ts:98). Kontrak kartu Backend sudah mencakup keduanya. Audit penuh: komentar kartu t_2a314778.
-
 
 ---
 
@@ -31301,3 +31295,9 @@ Urutan: Lead putus Q-LR46 → Backend → Frontend → QA. Effort inti S–M. Ri
 F-2026-10-25-046-S — Rekap sisa pinjaman aktif per karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LR46-1/2/3 + fisik Backend Q-LR46-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
 
 ---
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
+
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
+
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #890 sudah MERGED 25a499c0; Q-SW-1 (reuse view_reports) + Q-SW-3 (wording 3 varian verbatim) SUDAH DIPUTUS Lead di komentar PR #890 6398030628 — bukan pertanyaan terbuka lagi; hanya Q-SW-2 fisik Backend tersisa (kartu t_d9ddf496 running). (2) Catatan fisik untuk B1: penjaga existing whatsapp-log.actions.ts:41-43 hanya menerima surface queue|detail dan :51-65 mewajibkan dokumen ber-documentNo — pelanggan tidak punya; builder pesan existing whatsapp.ts:31 berbentuk dokumen, statement butuh builder baru dari closingBalance (customer-statement.ts:98). Kontrak kartu Backend sudah mencakup keduanya. Audit penuh: komentar kartu t_2a314778.
+
