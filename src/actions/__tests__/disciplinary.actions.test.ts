@@ -258,6 +258,21 @@ describe("rejectDisciplinaryRecord", () => {
     expect(r.success).toBe(false)
     expect(mocks.recUpdateMany).not.toHaveBeenCalled()
   })
+
+  it("klaim kalah count-0: dua penolak bersamaan, klaim kedua gagal konflik tanpa ActivityLog", async () => {
+    // Penjaga lolos (rekod masih pending_approval saat dibaca), tetapi
+    // updateMany atomik kalah klaim (count 0 = penolak lain menang
+    // lebih dulu) -> error konflik, bukan sukses diam-diam.
+    mocks.recFindUnique.mockResolvedValue(recordRow({ workflowStatus: "pending_approval" }))
+    mocks.recUpdateMany.mockResolvedValue({ count: 0 })
+    const r = await rejectDisciplinaryRecord(5, "Bukti tidak cukup")
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error).toMatch(/hanya dapat ditolak dari status menunggu persetujuan/)
+    }
+    expect(mocks.recUpdateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+  })
 })
 
 describe("tanggapan karyawan (Q-DISC-3)", () => {
