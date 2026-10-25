@@ -58,6 +58,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   disciplinary_records: "Rekod Disiplin SP",
   down_payments: "Uang Muka",
   employee_loans: "Pinjaman Karyawan",
+  employee_reimbursements: "Klaim Reimbursement",
   employees: "Karyawan",
   expense_categories: "Kategori Biaya",
   favorite_transactions: "Transaksi Favorit",
