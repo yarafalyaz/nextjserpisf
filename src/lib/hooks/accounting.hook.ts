@@ -4,7 +4,7 @@ import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
-import { safeAdd } from "@/lib/utils/math";
+import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
 
@@ -1269,19 +1269,79 @@ export async function onSalesReturnCompleted(
   const db = txClient || prisma;
   assertJournalClaimRef("SalesReturn", returnId);
   const settings = await getSystemSettings(db);
-  // Sales-return + inventory mappings are always needed. The AR mapping is only
-  // needed when the return is tied to an invoice (see below) — resolved after we
-  // know whether there is a linked invoice.
-  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
-    throw new Error(
-      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
-    );
-  }
-
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   });
+
+  // F-2026-10-24-137-V Putusan 1 (tahap 2): klasifikasi PER-BARIS retur.
+  // Baris scrap = itemId ter-resolve isScrapSaleItem=true. Retur scrap
+  // murni dibukukan jurnal khusus di bawah (Dr scrapSaleIncomeAccountId +
+  // Dr PPN Keluaran snapshot / Cr Piutang|Kas; nol persediaan/COGS).
+  // Retur campuran scrap+dagang ditolak berisik: faktur campuran tak
+  // pernah terposting (E135-6), jadi baris campuran = data tak konsisten.
+  let scrapClass: "none" | "all" | "mixed" = "none";
+  if (salesReturn.salesInvoiceId != null && salesReturn.items.length > 0) {
+    const returnItemIds = [
+      ...new Set(
+        salesReturn.items
+          .map((it) => it.itemId)
+          .filter((id): id is number => typeof id === "number"),
+      ),
+    ];
+    if (returnItemIds.length > 0) {
+      const scrapRows = await db.item.findMany({
+        where: { id: { in: returnItemIds } },
+        select: { id: true, isScrapSaleItem: true },
+      });
+      const isScrap = new Map(
+        (scrapRows as { id: number; isScrapSaleItem: boolean }[]).map((r) => [
+          r.id,
+          r.isScrapSaleItem,
+        ]),
+      );
+      const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0);
+      const scrapCount = activeItems.filter(
+        (it) => typeof it.itemId === "number" && isScrap.get(it.itemId),
+      ).length;
+      if (scrapCount > 0 && scrapCount === activeItems.length) scrapClass = "all";
+      else if (scrapCount > 0) scrapClass = "mixed";
+    }
+  }
+  if (scrapClass === "mixed") {
+    throw new Error(
+      "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang — " +
+        "pendapatan besi tua masuk akun lain-lain dan nilai bukunya Rp0.",
+    );
+  }
+  const isScrapReturn = scrapClass === "all";
+  if (isScrapReturn) {
+    // Fail-closed akun scrap (pola posting faktur besi tua): kosong /
+    // nonaktif / bukan OINC = tolak sebelum jurnal apa pun lahir.
+    if (!settings.scrapSaleIncomeAccountId) {
+      throw new Error(
+        "Akun pendapatan besi tua (scrap) belum dipetakan. " +
+          "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting retur besi tua.",
+      );
+    }
+    const scrapAccount = await db.account.findFirst({
+      where: { id: settings.scrapSaleIncomeAccountId },
+      select: { id: true, isActive: true, reportGroup: true },
+    });
+    if (!scrapAccount || !scrapAccount.isActive || scrapAccount.reportGroup !== "OINC") {
+      throw new Error(
+        "Akun pendapatan besi tua (scrap) tidak valid: wajib akun aktif grup pendapatan lain-lain (OINC). " +
+          "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting retur besi tua.",
+      );
+    }
+  } else if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
+    // Sales-return + inventory mappings are always needed (jalur dagang).
+    // The AR mapping is only needed when the return is tied to an invoice
+    // (see below) — resolved after we know whether there is a linked invoice.
+    throw new Error(
+      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
+    );
+  }
 
   // A return tied to an invoice relieves the customer's receivable. A return
   // NOT tied to any invoice has no receivable to reduce — booking Cr. Piutang
@@ -1293,33 +1353,6 @@ export async function onSalesReturnCompleted(
     throw new Error(
       "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
     );
-  }
-
-  // F-2026-10-24-136-V Putusan 1: retur atas faktur besi tua murni
-  // ditolak berisik (fail-closed) SEBELUM idempotency/journal/stok disentuh.
-  if (salesReturn.salesInvoiceId != null) {
-    const linkedInvoice = await db.salesInvoice.findUnique({
-      where: { id: salesReturn.salesInvoiceId },
-      include: { items: { select: { itemId: true, qty: true } } },
-    });
-    if (linkedInvoice) {
-      const returnItemIds = [...new Set(salesReturn.items.map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
-      const linkedInvoiceItemIds = [...new Set(linkedInvoice.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
-      if (returnItemIds.length > 0) {
-        const scrapRows = await db.item.findMany({
-          where: { id: { in: [...new Set([...returnItemIds, ...linkedInvoiceItemIds])] } },
-          select: { id: true, isScrapSaleItem: true },
-        });
-        const isScrap = new Map((scrapRows as { id: number; isScrapSaleItem: boolean }[]).map((r) => [r.id, r.isScrapSaleItem]));
-        const allScrap = (ids: number[]) => ids.length > 0 && ids.every((id) => isScrap.get(id));
-        if (allScrap(linkedInvoiceItemIds) && allScrap(returnItemIds)) {
-          throw new Error(
-            "Retur penjualan atas faktur besi tua (scrap) ditolak berisik: faktur besi tua punya nilai buku Rp0 dan pendapatannya masuk akun lain-lain, bukan faktur penjualan biasa. " +
-              "Gunakan pembalikan faktur (belum dibayar) atau pengembalian pembayaran melalui jalur existing (sudah dibayar).",
-          );
-        }
-      }
-    }
   }
 
   // Idempotency check
@@ -1337,16 +1370,20 @@ export async function onSalesReturnCompleted(
   // goods come back into inventory at cost. The margin nets into the Sales Return
   // contra-revenue account. This single journal owns all GL for a sales return
   // (the stock hook only moves stock now).
+  // Retur scrap: cost dipaksa 0 oleh konstruksi (nilai buku Rp0) — angka
+  // Item.cost master tidak pernah masuk jurnal scrap (E136-2).
   const priceTotal = linkedToInvoice
     ? salesReturn.items.reduce(
         (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
         0,
       )
     : 0;
-  const costTotal = salesReturn.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
-    0,
-  );
+  const costTotal = isScrapReturn
+    ? 0
+    : salesReturn.items.reduce(
+        (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
+        0,
+      );
   if (priceTotal <= 0 && costTotal <= 0) return;
 
   await assertPeriodOpen(salesReturn.date, txClient);
@@ -1426,6 +1463,171 @@ export async function onSalesReturnCompleted(
           data: { sourceTaxInvoiceId: taxInvoice.id },
         });
       }
+    }
+
+    // F-137-V tahap 2: jurnal retur besi tua dari snapshot F-004 di atas.
+    // Dr scrapSaleIncomeAccountId (DPP retur) + Dr PPN Keluaran (PPN retur,
+    // hanya bila > 0) / Cr Piutang bila faktur asal masih punya outstanding
+    // (grandTotal − returnCredit POSTED existing − paidAmount), selain itu
+    // Cr Kas (sudah dibayar → pengembalian kas). Nol kaki 400003, nol
+    // persediaan/COGS. Idempoten per (SalesReturn, jurnal) dipertahankan.
+    if (isScrapReturn) {
+      const existingInTx = await tx.journal.findFirst({
+        where: { referenceType: "SalesReturn", referenceId: returnId },
+      });
+      if (existingInTx) {
+        console.info(
+          `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        );
+        return;
+      }
+      const dppTotal = safeAdd(
+        salesReturn.items.reduce(
+          (s, it) =>
+            safeAdd(s, Number(it.qty) * Number(it.price ?? 0), 2),
+          0,
+        ),
+        0,
+        2,
+      );
+      const sourceInvoice = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId! },
+        select: { subtotal: true, discount: true, taxAmount: true },
+      });
+      const sourceForSnap = {
+        subtotal: Number(sourceInvoice.subtotal),
+        discount: Number(sourceInvoice.discount),
+        taxAmount: Number(sourceInvoice.taxAmount),
+      };
+      const vatTotal = safeAdd(
+        salesReturn.items.reduce((s, it) => {
+          const snap = snapshotReturnLine({
+            qty: Number(it.qty),
+            price: Number(it.price ?? 0),
+            source: sourceForSnap,
+          });
+          return safeAdd(s, snap.returnVat, 2);
+        }, 0),
+        0,
+        2,
+      );
+      if (vatTotal > 0 && !settings.salesTaxAccountId) {
+        throw new Error(
+          "Retur besi tua ditolak: PPN Keluaran belum dipetakan padahal retur memuat PPN snapshot. " +
+            "Atur salesTaxAccountId di Pengaturan → Akun.",
+        );
+      }
+      const invoiceFull = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId! },
+        select: { grandTotal: true, paidAmount: true },
+      });
+      const priorReturns = await tx.salesReturn.findMany({
+        where: {
+          salesInvoiceId: salesReturn.salesInvoiceId!,
+          status: "completed",
+          id: { not: returnId },
+        },
+        select: { id: true },
+      });
+      let priorReturnCredit = 0;
+      if (priorReturns.length > 0 && settings.salesReceivableAccountId) {
+        const priorJournals = await tx.journal.findMany({
+          where: {
+            referenceType: "SalesReturn",
+            referenceId: { in: priorReturns.map((r) => r.id) },
+            status: "POSTED",
+            deletedAt: null,
+          },
+          select: {
+            entries: {
+              where: { accountId: settings.salesReceivableAccountId },
+              select: { credit: true },
+            },
+          },
+        });
+        for (const j of priorJournals) {
+          for (const e of j.entries) {
+            priorReturnCredit = safeAdd(priorReturnCredit, Number(e.credit), 2);
+          }
+        }
+      }
+      const outstanding = safeSubtract(
+        safeSubtract(
+          Number(invoiceFull.grandTotal),
+          priorReturnCredit,
+          2,
+        ),
+        Number(invoiceFull.paidAmount),
+        2,
+      );
+      const creditTotal = safeAdd(dppTotal, vatTotal, 2);
+      const useReceivable = outstanding > 0;
+      let creditAccountId: number;
+      if (useReceivable) {
+        if (!settings.salesReceivableAccountId) {
+          throw new Error(
+            "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
+          );
+        }
+        creditAccountId = settings.salesReceivableAccountId;
+      } else {
+        if (!settings.cashBankAccountId) {
+          throw new Error(
+            "Akun kas/bank belum dikonfigurasi untuk pengembalian kas retur besi tua (faktur asal sudah dibayar).",
+          );
+        }
+        creditAccountId = settings.cashBankAccountId;
+      }
+      const journalNumber = await generateJournalNumber(tx, "SR", returnId);
+      const journal = await tx.journal.create({
+        data: {
+          journalNumber,
+          transactionDate: salesReturn.date,
+          referenceType: "SalesReturn",
+          referenceId: salesReturn.id,
+          description: `Retur Penjualan Besi Tua ${salesReturn.documentNo}`,
+          type: "GENERAL",
+          status: "POSTED",
+          totalDebit: creditTotal,
+          totalCredit: creditTotal,
+          createdBy: userId ?? null,
+        },
+      });
+      const scrapEntryRows: {
+        journalId: number;
+        accountId: number;
+        debit: number;
+        credit: number;
+        memo: string;
+      }[] = [
+        {
+          journalId: journal.id,
+          accountId: settings.scrapSaleIncomeAccountId!,
+          debit: dppTotal,
+          credit: 0,
+          memo: "Pengurang Pendapatan Lain-lain Besi Tua (Retur)",
+        },
+      ];
+      if (vatTotal > 0) {
+        scrapEntryRows.push({
+          journalId: journal.id,
+          accountId: settings.salesTaxAccountId!,
+          debit: vatTotal,
+          credit: 0,
+          memo: "PPN Keluaran (Retur Besi Tua)",
+        });
+      }
+      scrapEntryRows.push({
+        journalId: journal.id,
+        accountId: creditAccountId,
+        debit: 0,
+        credit: creditTotal,
+        memo: useReceivable
+          ? "Pengurangan Piutang (Retur Besi Tua)"
+          : "Pengembalian Kas (Retur Besi Tua)",
+      });
+      await tx.journalEntry.createMany({ data: scrapEntryRows });
+      return;
     }
 
     // double-check inside tx
