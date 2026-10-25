@@ -31526,123 +31526,6 @@ Rekomendasi Business ke Lead (satu paragraf): PUTUSKAN model bertahap di atas �
 
 F-2026-10-25-040-S — Paket usulan Q-SLA135-1/2 + Q-CD-1. Status: USULAN SELESAI run ini; menunggu putusan Lead (satu paragraf per butir cukup). Pemilik: Business (usulan), Lead (putusan di Q-SLA135-1/2 spec 135-S dan Q-CD-1 spec 003-S). Butuh Accountant: TIDAK. Butuh kode di blok ini: TIDAK.
 
-## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-040-V: koreksi alokasi akun F-2026-10-22-050-V — 210207 tabrakan ketiga, pengganti Utang PPh 4(2) Pengalihan Hak = 210213
-
-Pemilik vonis: BOT Accountant. Kartu: t_034ec286 (temuan sapu
-t_f4fdca24 sesudah vonis F-2026-10-25-039-V). Dokumen vonis saja —
-tanpa kode/schema/migrasi. PR TANPA merge dari Accountant; merge
-milik BOT Lead. Vonis ini mengoreksi HANYA butir 4 (AKUN) dan
-rujukan nomor akun turunan di F-2026-10-22-050-V; rezim, tarif,
-pihak pembayar, jurnal, pengecualian, dan pertanyaan terbuka
-F-050-V TIDAK berubah dan tetap mengikat persis.
-
-### 1. Fakta tabrakan (verifikasi live 25 Okt 2026 20:32 WIB, origin/main 98c614a1)
-
-- F-2026-10-22-050-V butir 4 mengalokasikan akun BARU 210207
-  "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan" + jenis usulan
-  `PPH42-ALIH` dengan `liabilityAccountCode "210207"`. Verifikasi
-  F-050-V saat itu jujur pada masanya (210207 nol hasil grep
-  base-data), tetapi nomor itu SESUDAHNYA terisi sah.
-- Hari ini `src/lib/setup/base-data.ts:930` origin/main memuat
-  `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis
-  F-2026-10-24-132-V), dipakai mapping
-  `pkwtCompensationPayableAccountId`, konstanta
-  `PKWT_PAYABLE_CODE = "210207"`, dan laporan rekonsiliasi PKWT.
-  Memakai 210207 untuk pajak pengalihan = mencampur kewajiban PKWT
-  (PP 35/2021) dan liabilitas PPh final (PP 34/2016) dalam satu
-  akun — rekonsiliasi kedua rezim rusak. Pola tabrakan ketiga
-  nomor yang sama (komisi F-084-V dikoreksi 039-V; kini F-050-V).
-- Belum ada kerusakan live: `WITHHOLDING_TAX_TYPES` origin/main
-  TIDAK memuat jenis pengalihan (hanya PPH23-BELI 210202,
-  PPH42-SEWA + PPH42-SEWA-PP 210206). Risiko murni doktrin:
-  builder berikutnya menyalin nomor dari F-050-V apa adanya.
-
-### 2. Bukti katalog 2102xx penuh (bukan satu grep)
-
-Ter-seed di `CHART_OF_ACCOUNTS` origin/main 98c614a1 (induk 2102
-"Kewajiban Jangka Pendek Lainnya", OCLY): 210201 PPN Keluaran,
-210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum Ditagih,
-210204 Hutang Gaji, 210205 Provisi Garansi, 210206 Utang PPh 4(2)
-Sewa Tanah/Bangunan, 210207 Utang Kompensasi PKWT, 210209 Utang
-Reimbursement Karyawan. Ter-alokasi vonis (belum ter-seed, tetap
-BUKAN bebas): 210208 "Utang Pesangon & Hak Berhenti"
-(F-2026-10-25-005-V), 210210 "Utang PPh 21 Karyawan" + 210211
-"Utang Iuran BPJS Karyawan" (F-2026-10-25-020-V, koreksi alokasi
-lolos verdict QA), 210212 "Utang Komisi Penjualan"
-(F-2026-10-25-039-V, PR #893 OPEN). Grep `210213`..`210220` di
-seluruh backlog + src + prisma origin/main = 0 hasil (hit pada
-data alamat wilayah dikecualikan — bukan kode akun). Kode bebas
-tak-teralokasi berikutnya sesudah 210212 = **210213**.
-
-### 3. Putusan (mengikat, menggantikan butir 4 F-050-V)
-
-1. **210213 "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan"**
-   (OCLY, anak induk 2102) = akun liabilitas FINAL untuk jalur
-   pengalihan hak PP 34/2016. Nama disamakan persis nama yang
-   sudah ditulis F-050-V; hanya nomor berubah 210207 -> 210213.
-2. **210207 DILARANG** untuk jalur pengalihan dalam bentuk apa
-   pun: seed, `liabilityAccountCode`, mapping setting, automap,
-   dan teks turunan. Setiap rujukan "210207" di F-050-V (butir 4,
-   butir 5 jurnal `Cr 210207` / `Dr 210207`, butir 6 jurnal Pasal
-   4, falsifikasi "Nonaktifkan 210207", dan baris pemilik
-   berikutnya "seed 210207 + jenis PPH42-ALIH") DIBACA 210213
-   sejak vonis ini terbit. Blok F-050-V sendiri TIDAK ditulis
-   ulang (jejak historis utuh); koreksi hidup di blok ini.
-3. Jenis potong `PPH42-ALIH` (bila kelak dibangun) membawa
-   `liabilityAccountCode "210213"`. Jenis dibuat di master
-   bertanggal efektif; tarif 2,5%/1%/0% per F-050-V butir 2 hidup
-   di master, DILARANG hardcode di logika maupun seed konstan.
-4. Fail-closed F-050-V DIPERTEGAS mengikat nomor baru: akun 210213
-   tidak ada / tidak aktif / bukan anak 2102 / bukan tipe OCLY =
-   jurnal pengakuan dan jurnal setor GAGAL berisik, nol jurnal
-   setengah. DILARANG fallback ke 210202 (PPh 23), 210206 (sewa),
-   210207 (PKWT), atau akun pajak lain. Jurnal terposting tidak
-   diubah diam-diam: koreksi hanya reversal di periode terbuka
-   (`assertPeriodOpen` dalam tx); mutasi finansial wajib
-   idempotency key.
-5. Pemakaian 210213 di luar jalur pengalihan (sewa, komisi,
-   kompensasi, reimbursement, pesangon) DILARANG — satu akun satu
-   rezim, supaya saldo GL 210213 selalu = pajak pengalihan
-   terutang yang belum disetor dan bisa direkonsiliasi ke
-   NTPN/billing KAP-KJS 411128-402.
-
-### 4. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
-
-- QA-ALIH40-1: jenis pengalihan dengan `liabilityAccountCode`
-  menunjuk 210207 -> jurnal pengakuan MERAH (ditolak/digagalkan);
-  menunjuk 210213 aktif -> kredit 210213 sebesar tarif x DPP
-  bruto snapshot; kredit jatuh ke 210202/210206/210207 = MERAH.
-- QA-ALIH40-2: akun 210213 kosong (belum ada) atau dinonaktifkan
-  -> jurnal pengakuan DAN jurnal setor GAGAL fail-closed berisik,
-  nol baris jurnal lahir; lolos diam-diam = MERAH.
-- QA-ALIH40-3: mutasi penjaga — cabut pemeriksaan
-  ada/aktif/induk/tipe untuk 210213 -> QA-ALIH40-2 berubah hijau
-  palsu = penjaga terbukti hidup; pulihkan -> merah lagi.
-- QA-ALIH40-4: tarif diubah di master sesudah dokumen terbit ->
-  dokumen lama tetap snapshot tarif/DPP-nya; dokumen lama berubah
-  angka = MERAH (warisan falsifikasi F-050-V, tetap berlaku).
-- QA-ALIH40-5: jurnal pengalihan menyentuh 210207 -> saldo GL
-  PKWT berubah = MERAH; rekonsiliasi 210213 vs NTPN 411128-402
-  selisih tanpa temuan tampil = MERAH.
-
-### 5. Yang TIDAK dibuka vonis ini
-
-Fisik seed akun 210213, pembuatan jenis `PPH42-ALIH`, hook jurnal,
-dan UI pajak potong pengalihan TETAP pekerjaan BOT Backend lewat
-kartu terpisah — dan tetap terikat gerbang F-050-V yang belum
-berubah: Q-050-1 (putusan Lead: apakah ISF pernah memungut
-sebagai bendahara Pasal 4) belum diputus, jadi TIDAK ADA
-implementasi yang dibuka vonis ini. Instalasi berjalan tidak
-diutak-atik: tidak ada migrasi data, tidak ada akun diganti nama;
-210207 di instalasi mana pun tetap Utang Kompensasi PKWT.
-
-F-2026-10-25-040-V — Koreksi alokasi akun pengalihan hak: 210213
-final, 210207 dilarang untuk jalur PP 34/2016. Status: VONIS
-TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
-Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
-Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
-(falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
-
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-043-S: pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim (lanjutan eksplisit F-2026-10-25-038-S)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Lanjutan eksplisit dari bagian "Yang TIDAK diusulkan" F-2026-10-25-038-S: "Pengiriman via email — kanal + jejak berbeda, spec terpisah bila diminta". Spec ini mengambil HANYA jalur email manual lewat klien email staf (tautan `mailto:`) + jejak klik; pengiriman server-side (SMTP/API) TIDAK ada infrastrukturnya hari ini dan tetap di luar tahap 1 (lihat §0 + Q-SE-2). ID F-2026-10-25-043-S bebas terverifikasi run ini (2026-10-25 21:06 WIB): grep `F-2026-10-25-043` di backlog + board `origin/main` (`fe281d46`) = 0; ID 042 sudah terpakai PR terbuka vonis Accountant F-2026-10-25-042-V (Q-ITX-1), jadi slot -S berikutnya yang bebas = 043. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
@@ -31943,3 +31826,217 @@ F-2026-10-25-044-S — Rekap kehadiran per karyawan per periode. Status: SPEC SE
 - Risiko utama: pembaca menyimpulkan potongan dari ember rekap ("alpa tercatat 2 hari → potong 2 hari") — dimitigasi Putusan 2/4; risiko sebaliknya (menyelaraskan payroll diam-diam) ditutup Putusan 3. Tidak ada angka/tarif/akun baru; tidak ada klaim regulasi baru — potongan alpa/terlambat tetap mengikuti aturan payroll existing dan perjanjian/peraturan perusahaan yang berlaku, di luar vonis ini.
 
 F-2026-10-25-045-V — Batas BR-ATT-09 rekap kehadiran vs payroll. Status: VONIS TERBIT run ini; BR-ATT-09 TERTUTUP untuk tahap rekap (rekap beda definisi sah, service payroll beku, rekap dilarang jadi dasar potongan, label selisih wajib). Pemilik berikutnya: Lead (Q-ATT-1/2/3 + buka kartu Backend/Frontend/QA dengan parent spec 044-S + vonis ini), Backend (Q-ATT-4), QA (AC-ATT-V1..V5 + AC-ATT-B/F spec). Butuh vonis accountant lanjutan: hanya bila definisi service payroll diajukan berubah (syarat paket Putusan 3).
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
+
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
+
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #890 sudah MERGED 25a499c0; Q-SW-1 (reuse view_reports) + Q-SW-3 (wording 3 varian verbatim) SUDAH DIPUTUS Lead di komentar PR #890 6398030628 — bukan pertanyaan terbuka lagi; hanya Q-SW-2 fisik Backend tersisa (kartu t_d9ddf496 running). (2) Catatan fisik untuk B1: penjaga existing whatsapp-log.actions.ts:41-43 hanya menerima surface queue|detail dan :51-65 mewajibkan dokumen ber-documentNo — pelanggan tidak punya; builder pesan existing whatsapp.ts:31 berbentuk dokumen, statement butuh builder baru dari closingBalance (customer-statement.ts:98). Kontrak kartu Backend sudah mencakup keduanya. Audit penuh: komentar kartu t_2a314778.
+
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-042-V: Q-ITX-1 kode pajak/DPP default per barang-jasa (gerbang spec F-2026-10-25-041-S PR #898)
+
+> **Slot**: F-2026-10-25-042-V. Diperiksa bentrok 2026-10-25 20:55 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-042` di backlog+board origin/main = 0; judul PR terbuka memuat `042` = 0 (terpakai s/d 041-S di PR #898 OPEN head `82a54635`); branch remote `042` = 0. ID 042-V bebas. Dokumen vonis saja; tanpa kode/schema/migrasi. Kartu: t_646057c3. Sumber terikat: spec Business F-2026-10-25-041-S (PR #898, §0/§4 BR-ITX-01..07, §8 Q-ITX-1..4) + vonis F-2026-10-21-001/002 (kode transaksi PER-11/PJ/2025 + DPP nilai lain PMK-131/2024, hidup di `src/lib/tax/tax-invoice.ts`). Vonis ini menjawab HANYA Q-ITX-1. Q-ITX-2 (fisik JSON/kolom/snapshot titik) milik BOT Backend, Q-ITX-3/Q-ITX-4-perilaku (boleh diubah per baris atau terkunci) milik BOT Lead — vonis ini memutus sisi pajaknya saja (Putusan 5/7).
+
+### 0. Fakta terverifikasi kode (origin/main fe281d46, 2026-10-25 20:55 WIB) — TERVERIFIKASI-KODE
+
+- `Item` (`prisma/schema.prisma:692`): nol field pajak — tidak ada FK `Tax`/`TaxGroup`, tidak ada persen DPP, tidak ada kode transaksi default. Penanda khusus existing: `isScrapSaleItem Boolean @default(false)` (:721) dengan komentar vonis F-2026-10-24-135-V.
+- `Product` (:2705): master manufaktur terpisah (`inventoryItemId` unik ke Item); nol field pajak; BUKAN permukaan penampung default pajak (transaksi penjualan membaca Item).
+- `Tax` (:5114): `rate Decimal(5,2)`, `type` (default `percentage`), `scope String?` bebas, `isInclusive/isCompound`, `accountId Int?`, `effectiveFrom/effectiveTo DateTime?`, `isActive`, `deletedAt`. `TaxGroup`+`TaxGroupTax` (:5155/:5167) = komposisi banyak Tax. Halaman `master/pajak` + `master/kelompok-pajak` live; izin `view/create/edit/delete_taxes` (katalog :121-124).
+- Baris dokumen: `SalesInvoiceItem` (:1730) dan `QuotationItem` (:1446) menyimpan qty/harga/diskon/total + `priceSource String?` (pola snapshot sumber harga F-2026-10-21-018); nol snapshot pajak per baris. PPN faktur hidup level dokumen: `TaxInvoice.dpp/taxRate/taxAmount/transactionCode` (:1124), `SalesInvoice.tax/taxAmount` header.
+- Mesin PPN existing FINAL (vonis F-2026-10-21-001/002, `src/lib/tax/tax-invoice.ts`): `TRANSACTION_CODES` = 10 kode PER-11/PJ/2025 (`01`..`10`), `DEFAULT_TRANSACTION_CODE = "04"`, `pickTransactionCode(hint)` prioritas pertama-cocok-menang (pemungut 02/03 → fasilitas 08/07 → 16D 09 → besaran tertentu 05 → turis 06 → tarif non-standar 10 → mewah 01 → nilai lain 04), `usesOtherValueBasis(code)` benar HANYA untuk `04`, `computeVatFromSellingPrice` (kode 04: DPP = 11/12 × harga jual, PPN = 12% × DPP; falsifikasi baku harga 12.000.000 → DPP 11.000.000 / PPN 1.320.000 / pendapatan penuh). Konsumen produksi: `src/lib/services/tax-invoice.service.ts:146-147` (issue), `:464`. Konsumen e-Faktur: `src/lib/tax/coretax-xml-export*.ts` membaca `TaxInvoice` (level dokumen), bukan Item.
+- Izin item nyata: `view_items`/`edit_items` (katalog :70-72; seed `base-data.ts`). Action item existing menolak `isScrapSaleItem && isProduct` (`master.actions.ts:537/651`).
+- Retur: snapshot beku `src/lib/tax/return-snapshot.ts` (F-2026-10-21-004) — DPP retur = qty × harga beku baris asal; baris legacy tanpa snapshot hitung-ulang berlabel `legacy`.
+
+### Putusan 1 — Bentuk penampung: rujuk master `Tax` existing, BUKAN kolom teks/kode baru di Item
+
+**DIPUTUS**: penampung default pajak per Item = rujukan (FK nullable) ke master `Tax` existing, terpisah arah penjualan dan pembelian, mengikuti benchmark Accurate (Pajak Penjualan/Pembelian per barang) dan BR-ITX-03 spec. Nama field + tipe + nullability (kontrak logis; fisik kolom/index/relasi = Q-ITX-2 Backend):
+
+| Field logis di Item | Tipe | Nullable | Arti |
+|---|---|---|---|
+| `defaultSalesTaxId` | FK → `Tax.id` (Int) | YA (null) | Default pajak PENJUALAN baris dokumen jual dari item ini |
+| `defaultPurchaseTaxId` | FK → `Tax.id` (Int) | YA (null) | Default pajak PEMBELIAN baris dokumen beli dari item ini |
+| `defaultDppPercent` | `Decimal(5,2)` (persen, 0.00–100.00) | YA (null) | Persen dasar pengenaan default (Putusan 2) |
+
+**DITOLAK**: (a) FK ke `TaxGroup` — kelompok = komposisi multi-pajak untuk perhitungan dokumen existing; menjadikannya default per item mengaburkan tarif tunggal yang disalin ke baris dan membuka komposisi yang tidak diputus vonis ini. Item merujuk SATU `Tax` per arah; kebutuhan multi-pajak tetap jalur dokumen existing. (b) Kolom teks bebas kode pajak/kode transaksi di Item — kode transaksi adalah sifat FAKTUR (pemungut/fasilitas lawan transaksi/pembeli), bukan sifat barang; menyimpannya per item melanggar vonis F-001 (`pickTransactionCode` dari hint dokumen) dan mengundang kode basi sesudah regulasi berubah. (c) Menyalin `rate` angka ke Item — tarif hidup di `Tax` bertanggal efektif (`effectiveFrom/To`); duplikasi angka = dua sumber kebenaran.
+
+Syarat rujukan sah (penjaga Backend): `Tax` rujukan wajib `isActive=true`, `deletedAt=null`, dan berlaku efektif pada tanggal dokumen konsumen (bukan tanggal isi master). Rujukan ke Tax nonaktif/terhapus/kedaluwarsa TIDAK boleh disalin diam-diam — perlakuan fail-closed di Putusan 3.
+
+### Putusan 2 — Persen DPP: disimpan sebagai persen master; kosong = perilaku existing persis
+
+**DIPUTUS**: `defaultDppPercent` disimpan sebagai persen `Decimal(5,2)` apa adanya (mis. `100.00` = DPP penuh; nilai lain dinyatakan persennya), divalidasi rentang 0.00–100.00 di service (di luar rentang = tolak berisik, bukan clamp diam-diam). Makna persen ini = **persen dari nilai baris (qty × harga − diskon baris) yang menjadi DPP baris**, BUKAN pengganti faktor regulasi.
+
+**Hubungan dengan DPP nilai lain regulasi (mengikat)**: faktor DPP nilai lain yang sah (PMK-131/2024: 11/12 untuk kode transaksi `04`) tetap diputus `computeVatFromSellingPrice` dari kode transaksi DOKUMEN. `defaultDppPercent` TIDAK menggantikan, TIDAK mengalikan ulang, dan TIDAK menumpuk faktor 11/12. Dua rezim dilarang tercampur dalam satu baris: bila persen item dipakai sebagai DPP baris kustom, kode transaksi faktur tetap dipilih `pickTransactionCode` dari hint dokumen — builder dilarang menurunkan kode `04` dari keberadaan persen item, dan dilarang menurunkan persen dari kode `04`. Persen item adalah perangkat alokasi DPP per baris (mis. penyerahan yang hanya sebagian menjadi DPP), bukan pernyataan rezim PMK.
+
+**Kosong (null) = perilaku existing byte-sama**: baris dari item tanpa default diperlakukan persis hari ini — PPN level dokumen existing (`TaxInvoice` via `computeVatFromSellingPrice` atas harga jual dokumen), nol snapshot pajak baris baru terisi, nol perubahan jurnal. Ini mengunci BR-ITX-01 spec sebagai syarat vonis, bukan sekadar usulan.
+
+### Putusan 3 — Interaksi dengan PPN level dokumen existing: dokumen MENANG; snapshot baris beku; tidak ada override diam-diam
+
+**DIPUTUS** (urutan menang, pertama berlaku):
+
+1. **Dokumen terbit/posted selalu menang atas master.** Angka `TaxInvoice.dpp/taxRate/taxAmount/transactionCode` dan jurnal posted TIDAK pernah dihitung ulang dari Item/Tax master sesudah terbit. Edit master (termasuk mengosongkan/menonaktifkan Tax rujukan) hanya memengaruhi baris BARU (BR-ITX-02/03 spec disahkan).
+2. **Saat baris dibuat**: default item tersalin sebagai SNAPSHOT ke baris (rujukan Tax id + tarif efektif saat salin + persen DPP terpakai) mengikuti pola `priceSource`. Snapshot menyimpan nilai AKHIR terpakai di baris itu. Bentuk fisik snapshot (kolom vs JSON) = Q-ITX-2 Backend; kewajiban membekukan ketiga nilai di atas = vonis ini.
+3. **Saat faktur pajak diterbitkan** (`issueTaxInvoice` existing): kode transaksi + DPP + PPN tetap diputus jalur existing (`pickTransactionCode` hint dokumen / kode eksplisit operator + `computeVatFromSellingPrice`). Default item TIDAK menimpa kode transaksi dokumen dan TIDAK menimpa hasil hitung dokumen. Peran default item tahap ini = **bantuan input + penanda alokasi baris**: mengisi usul awal di form baris dan memberi dasar rekonsiliasi per baris (Putusan 6), bukan penentu faktur pajak.
+4. **Konflik default vs dokumen**: bila operator/dokumen memakai perlakuan berbeda dari snapshot baris (mis. kode fasilitas dibebaskan pada dokumen atas baris ber-default tarif umum), yang berlaku = dokumen; snapshot baris TIDAK ditulis ulang; selisih tampil di rekonsiliasi sebagai temuan (Putusan 6), bukan dikoreksi diam-diam.
+5. **Rujukan rusak saat baris dibuat** (Tax nonaktif/terhapus/di luar masa efektif): fail-closed berisik — baris tidak menerima snapshot pajak dan operator diberi pesan arahkan ke master pajak; DILARANG fallback ke Tax lain, tarif konstanta, atau tarif item tetangga.
+
+Diubah per baris oleh operator atau terkunci dari master (Q-ITX-3) = putusan Lead; sisi pajaknya: pilihan mana pun, nilai akhir WAJIB membeku di snapshot baris (butir 2) dan konfliknya mengikuti butir 4.
+
+### Putusan 4 — Legacy (faktur/retur terbit sebelum field ada): snapshot apa adanya; dilarang backfill hitung-ulang
+
+**DIPUTUS**: dokumen dan baris yang terbit sebelum penampung ini ada diperlakukan persis pola retur F-004: angka terbit = snapshot apa adanya; TIDAK ada migrasi/backfill yang mengisi default Item dari tebakan, TIDAK ada hitung-ulang DPP/PPN dokumen lama dari default yang baru diisi, dan read-model yang menyentuh baris tanpa snapshot pajak menandainya `legacy` (tanpa nilai pajak baris tersirat). Retur atas faktur legacy tetap `return-snapshot.ts` existing (DPP = qty × harga beku baris asal; `cost` tetap dilarang jadi DPP). Mengisi default item lama = keputusan data operasional terpisah sesudah builder ada (spec §"Yang TIDAK diusulkan" disahkan), bukan efek samping migrasi.
+
+### Putusan 5 — Konflik penanda khusus existing (`isScrapSaleItem`): penanda khusus MENANG; default pajak pada item scrap ditolak saat simpan
+
+**DIPUTUS** (menjawab BR-ITX-06): `isScrapSaleItem=true` adalah penanda rezim khusus terverifikasi vonis F-2026-10-24-135-V (pendapatan lain-lain, tanpa stok/COGS). Penanda khusus menang atas default umum: item scrap DILARANG membawa `defaultSalesTaxId`/`defaultPurchaseTaxId`/`defaultDppPercent` — penjaga service menolak simpan kombinasi itu berisik (pola existing penolakan `isScrapSaleItem && isProduct` di `master.actions.ts:537/651`), bukan membiarkan keduanya lalu memilih diam-diam di baris. Penjualan scrap tetap jalur existing-nya; perlakuan PPN scrap tidak diputus di vonis ini dan tidak lahir dari default item.
+
+### Putusan 6 — Dampak rekonsiliasi/e-Faktur: murni bantuan input + jejak rekonsiliasi; TIDAK memengaruhi angka faktur pajak
+
+**DIPUTUS**: field ini TIDAK BOLEH memengaruhi angka faktur pajak, SPT, atau jurnal. Sumber angka faktur pajak tetap `TaxInvoice` level dokumen (existing) dan ekspor Coretax tetap membaca `TaxInvoice` — builder dilarang membaca Item/`defaultSalesTaxId`/`defaultDppPercent` di jalur issue/ekspor/SPT. Yang field ini TAMBAHKAN = jejak rekonsiliasi per baris: snapshot baris vs perlakuan dokumen dapat dibandingkan; selisih (baris ber-default X, dokumen memakai Y) tampil sebagai temuan rekonsiliasi, tidak dipilih diam-diam salah satu (prinsip rekonsiliasi mengikat). Mengubah batas ini (default item menjadi penentu DPP faktur per baris) = vonis baru dengan dasar regulasi per-baris, BUKAN kelanjutan vonis ini.
+
+### Putusan 7 — Izin: reuse `edit_items`; TIDAK ada key baru (sisi pajak)
+
+**DIPUTUS**: mengisi/mengubah/mengosongkan default pajak item memakai izin master item existing `edit_items` (lihat `view_items`), konsisten usul spec §2 dan pola repo (field master mengikuti izin masternya). Key izin pajak khusus DITOLAK tahap ini: default ini bantuan input yang tidak menentukan angka pajak (Putusan 6), jadi gerbang terpisah tidak sebanding dengan biayanya; mengelola isi master `Tax`-nya sendiri tetap `edit_taxes` existing. Syarat pendamping: perubahan default pajak item WAJIB tercatat di audit log master existing (siapa/kapan/nilai lama→baru) karena jejaknya dipakai rekonsiliasi Putusan 6 — tanpa jejak itu, selisih baris-vs-dokumen tidak dapat dijelaskan. Bila kelak default ini diusulkan menjadi penentu angka (di luar Putusan 6), izin terpisah wajib divonis ulang.
+
+### Yang TIDAK diputus vonis ini
+
+- Bentuk fisik penampung/snapshot (nama kolom DB, index, JSON vs kolom, titik snapshot penawaran vs faktur) = Q-ITX-2 Backend, dalam batas Putusan 1–3.
+- Boleh-diubah-per-baris vs terkunci (Q-ITX-3) dan pengesahan akhir reuse izin sebagai putusan produk (Q-ITX-4) = Lead; vonis ini memutus sisi pajaknya (Putusan 3 butir 2/4, Putusan 7).
+- Daftar Tax master mana yang diisi operator untuk item tertentu (keputusan data per perusahaan), tarif baru, kode transaksi baru, akun jurnal baru: tidak ada — tarif/kode/akun tetap master + vonis existing (F-001/002).
+- Perlakuan PPN penjualan scrap, PPN per baris sebagai dasar faktur, dan e-Faktur per baris: di luar vonis ini.
+
+### Draf acceptance untuk QA (aktif sesudah Backend membangun; falsifikasi wajib)
+
+- AC-ITX-V1: item tanpa default (ketiga field null) membuat baris + faktur → DPP/PPN/jurnal byte-sama perilaku existing (fixture banding). Beda = MERAH.
+- AC-ITX-V2: item ber-default membuat baris → snapshot baris membekukan (Tax id, tarif efektif saat salin, persen terpakai); edit/hapus master Tax + Item sesudahnya → snapshot dan dokumen terbit tidak berubah. Berubah = MERAH.
+- AC-ITX-V3: `defaultDppPercent` di luar 0–100 disimpan = MERAH (wajib tolak); persen item pada baris TIDAK mengubah faktor kode `04` (harga baris 12.000.000 rezim dokumen existing tetap DPP 11.000.000/PPN 1.320.000 bila persen null; persen terisi hanya mengalokasi DPP baris sesuai Putusan 2 tanpa menumpuk 11/12). Faktor ganda = MERAH.
+- AC-ITX-V4: rujukan Tax nonaktif/terhapus/kedaluwarsa dipakai baris baru → snapshot pajak kosong + pesan fail-closed; fallback tarif lain = MERAH.
+- AC-ITX-V5: `isScrapSaleItem=true` + default pajak terisi dapat disimpan = MERAH.
+- AC-ITX-V6: default item diubah → issue faktur pajak + ekspor Coretax + SPT atas dokumen yang sama menghasilkan angka identik sebelum/sesudah edit master. Beda = MERAH (Putusan 6).
+- AC-ITX-V7: faktur/retur legacy (tanpa snapshot baris) dibaca read-model → bertanda `legacy`, angka terbit tidak berubah, tanpa backfill default. Hitung-ulang diam-diam = MERAH.
+- AC-ITX-V8: ubah default item dengan izin selain `edit_items` (dan bukan admin) berhasil = MERAH; perubahan tanpa jejak audit log = MERAH.
+
+### Risiko + keputusan manusia
+
+- Risiko utama: operator menyangka persen item = persen DPP regulasi (11/12) lalu mengisi 91.67 manual — dimitigasi Putusan 2 (dua rezim dilarang tercampur; label UI wajib membedakan "persen DPP baris" dari rezim kode transaksi; wording final permukaan = Frontend dalam batas vonis ini).
+- Tidak ada angka/kode/tarif baru yang butuh persetujuan manusia di vonis ini; seluruhnya merujuk master `Tax` + vonis F-001/002 existing. Klaim kepatuhan kode transaksi tetap berdasar PER-11/PJ/2025 + PMK-131/2024 sebagaimana tercatat di `src/lib/tax/tax-invoice.ts` (vonis F-2026-10-21-001/002); vonis ini tidak menambah klaim regulasi baru.
+
+F-2026-10-25-042-V — Q-ITX-1 kode pajak/DPP default per barang-jasa. Status: VONIS TERBIT run ini; Q-ITX-1 TERTUTUP (penampung = FK nullable ke `Tax` per arah + `defaultDppPercent Decimal(5,2)` nullable; kosong = existing byte-sama; dokumen menang, snapshot baris beku; legacy tanpa backfill; scrap menang dan menolak default; murni bantuan input + rekonsiliasi, nol pengaruh angka faktur pajak; izin reuse `edit_items` + audit log wajib). Pemilik berikutnya: Lead (buat kartu Backend builder Q-ITX-2 + pasangan UI Frontend + falsifikasi QA dengan parent vonis ini; putus Q-ITX-3/Q-ITX-4 sisi produk). Butuh vonis accountant lanjutan: TIDAK untuk tahap penampung ini.
+
+---
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-040-V: koreksi alokasi akun F-2026-10-22-050-V — 210207 tabrakan ketiga, pengganti Utang PPh 4(2) Pengalihan Hak = 210213
+
+Pemilik vonis: BOT Accountant. Kartu: t_034ec286 (temuan sapu
+t_f4fdca24 sesudah vonis F-2026-10-25-039-V). Dokumen vonis saja —
+tanpa kode/schema/migrasi. PR TANPA merge dari Accountant; merge
+milik BOT Lead. Vonis ini mengoreksi HANYA butir 4 (AKUN) dan
+rujukan nomor akun turunan di F-2026-10-22-050-V; rezim, tarif,
+pihak pembayar, jurnal, pengecualian, dan pertanyaan terbuka
+F-050-V TIDAK berubah dan tetap mengikat persis.
+
+### 1. Fakta tabrakan (verifikasi live 25 Okt 2026 20:32 WIB, origin/main 98c614a1)
+
+- F-2026-10-22-050-V butir 4 mengalokasikan akun BARU 210207
+  "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan" + jenis usulan
+  `PPH42-ALIH` dengan `liabilityAccountCode "210207"`. Verifikasi
+  F-050-V saat itu jujur pada masanya (210207 nol hasil grep
+  base-data), tetapi nomor itu SESUDAHNYA terisi sah.
+- Hari ini `src/lib/setup/base-data.ts:930` origin/main memuat
+  `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis
+  F-2026-10-24-132-V), dipakai mapping
+  `pkwtCompensationPayableAccountId`, konstanta
+  `PKWT_PAYABLE_CODE = "210207"`, dan laporan rekonsiliasi PKWT.
+  Memakai 210207 untuk pajak pengalihan = mencampur kewajiban PKWT
+  (PP 35/2021) dan liabilitas PPh final (PP 34/2016) dalam satu
+  akun — rekonsiliasi kedua rezim rusak. Pola tabrakan ketiga
+  nomor yang sama (komisi F-084-V dikoreksi 039-V; kini F-050-V).
+- Belum ada kerusakan live: `WITHHOLDING_TAX_TYPES` origin/main
+  TIDAK memuat jenis pengalihan (hanya PPH23-BELI 210202,
+  PPH42-SEWA + PPH42-SEWA-PP 210206). Risiko murni doktrin:
+  builder berikutnya menyalin nomor dari F-050-V apa adanya.
+
+### 2. Bukti katalog 2102xx penuh (bukan satu grep)
+
+Ter-seed di `CHART_OF_ACCOUNTS` origin/main 98c614a1 (induk 2102
+"Kewajiban Jangka Pendek Lainnya", OCLY): 210201 PPN Keluaran,
+210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum Ditagih,
+210204 Hutang Gaji, 210205 Provisi Garansi, 210206 Utang PPh 4(2)
+Sewa Tanah/Bangunan, 210207 Utang Kompensasi PKWT, 210209 Utang
+Reimbursement Karyawan. Ter-alokasi vonis (belum ter-seed, tetap
+BUKAN bebas): 210208 "Utang Pesangon & Hak Berhenti"
+(F-2026-10-25-005-V), 210210 "Utang PPh 21 Karyawan" + 210211
+"Utang Iuran BPJS Karyawan" (F-2026-10-25-020-V, koreksi alokasi
+lolos verdict QA), 210212 "Utang Komisi Penjualan"
+(F-2026-10-25-039-V, PR #893 OPEN). Grep `210213`..`210220` di
+seluruh backlog + src + prisma origin/main = 0 hasil (hit pada
+data alamat wilayah dikecualikan — bukan kode akun). Kode bebas
+tak-teralokasi berikutnya sesudah 210212 = **210213**.
+
+### 3. Putusan (mengikat, menggantikan butir 4 F-050-V)
+
+1. **210213 "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan"**
+   (OCLY, anak induk 2102) = akun liabilitas FINAL untuk jalur
+   pengalihan hak PP 34/2016. Nama disamakan persis nama yang
+   sudah ditulis F-050-V; hanya nomor berubah 210207 -> 210213.
+2. **210207 DILARANG** untuk jalur pengalihan dalam bentuk apa
+   pun: seed, `liabilityAccountCode`, mapping setting, automap,
+   dan teks turunan. Setiap rujukan "210207" di F-050-V (butir 4,
+   butir 5 jurnal `Cr 210207` / `Dr 210207`, butir 6 jurnal Pasal
+   4, falsifikasi "Nonaktifkan 210207", dan baris pemilik
+   berikutnya "seed 210207 + jenis PPH42-ALIH") DIBACA 210213
+   sejak vonis ini terbit. Blok F-050-V sendiri TIDAK ditulis
+   ulang (jejak historis utuh); koreksi hidup di blok ini.
+3. Jenis potong `PPH42-ALIH` (bila kelak dibangun) membawa
+   `liabilityAccountCode "210213"`. Jenis dibuat di master
+   bertanggal efektif; tarif 2,5%/1%/0% per F-050-V butir 2 hidup
+   di master, DILARANG hardcode di logika maupun seed konstan.
+4. Fail-closed F-050-V DIPERTEGAS mengikat nomor baru: akun 210213
+   tidak ada / tidak aktif / bukan anak 2102 / bukan tipe OCLY =
+   jurnal pengakuan dan jurnal setor GAGAL berisik, nol jurnal
+   setengah. DILARANG fallback ke 210202 (PPh 23), 210206 (sewa),
+   210207 (PKWT), atau akun pajak lain. Jurnal terposting tidak
+   diubah diam-diam: koreksi hanya reversal di periode terbuka
+   (`assertPeriodOpen` dalam tx); mutasi finansial wajib
+   idempotency key.
+5. Pemakaian 210213 di luar jalur pengalihan (sewa, komisi,
+   kompensasi, reimbursement, pesangon) DILARANG — satu akun satu
+   rezim, supaya saldo GL 210213 selalu = pajak pengalihan
+   terutang yang belum disetor dan bisa direkonsiliasi ke
+   NTPN/billing KAP-KJS 411128-402.
+
+### 4. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
+
+- QA-ALIH40-1: jenis pengalihan dengan `liabilityAccountCode`
+  menunjuk 210207 -> jurnal pengakuan MERAH (ditolak/digagalkan);
+  menunjuk 210213 aktif -> kredit 210213 sebesar tarif x DPP
+  bruto snapshot; kredit jatuh ke 210202/210206/210207 = MERAH.
+- QA-ALIH40-2: akun 210213 kosong (belum ada) atau dinonaktifkan
+  -> jurnal pengakuan DAN jurnal setor GAGAL fail-closed berisik,
+  nol baris jurnal lahir; lolos diam-diam = MERAH.
+- QA-ALIH40-3: mutasi penjaga — cabut pemeriksaan
+  ada/aktif/induk/tipe untuk 210213 -> QA-ALIH40-2 berubah hijau
+  palsu = penjaga terbukti hidup; pulihkan -> merah lagi.
+- QA-ALIH40-4: tarif diubah di master sesudah dokumen terbit ->
+  dokumen lama tetap snapshot tarif/DPP-nya; dokumen lama berubah
+  angka = MERAH (warisan falsifikasi F-050-V, tetap berlaku).
+- QA-ALIH40-5: jurnal pengalihan menyentuh 210207 -> saldo GL
+  PKWT berubah = MERAH; rekonsiliasi 210213 vs NTPN 411128-402
+  selisih tanpa temuan tampil = MERAH.
+
+### 5. Yang TIDAK dibuka vonis ini
+
+Fisik seed akun 210213, pembuatan jenis `PPH42-ALIH`, hook jurnal,
+dan UI pajak potong pengalihan TETAP pekerjaan BOT Backend lewat
+kartu terpisah — dan tetap terikat gerbang F-050-V yang belum
+berubah: Q-050-1 (putusan Lead: apakah ISF pernah memungut
+sebagai bendahara Pasal 4) belum diputus, jadi TIDAK ADA
+implementasi yang dibuka vonis ini. Instalasi berjalan tidak
+diutak-atik: tidak ada migrasi data, tidak ada akun diganti nama;
+210207 di instalasi mana pun tetap Utang Kompensasi PKWT.
+
+F-2026-10-25-040-V — Koreksi alokasi akun pengalihan hak: 210213
+final, 210207 dilarang untuk jalur PP 34/2016. Status: VONIS
+TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
+Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
+Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
+(falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
+
