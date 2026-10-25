@@ -2,6 +2,14 @@
  * Builder murni antrean penagihan piutang (F-2026-10-22-089-S,
  * PUTUSAN BOT 1 Q-COL-1..4 di backlog §9A).
  *
+ * F-2026-10-26-050-S (Q-COLR-1..7 TERPUTUS Lead 2026-10-26 00:40 WIB):
+ * `tingkatPengingat` TURUNAN murni tahap 1 — tanpa kolom tersimpan
+ * (Q-COLR-2), tanpa jurnal/denda (BR-COLR-07/12, Q-COLR-7 indikator
+ * denda BUKAN masukan), tanpa kirim otomatis (BR-COLR-06), tanpa
+ * credit-hold (BR-COLR-08), tanpa key baru (Q-COLR-5), urutan Q-COL-3
+ * tidak berubah (Q-COLR-4). Perbandingan hari kalender WIB (Q-COLR-6).
+ * Ember umur satu-satunya tetap `aging.ts` (BR-COLR-02).
+ *
  * Tahap TURUNAN dari faktur + tukar faktur aktif + janji terakhir —
  * BUKAN kolom tersimpan (BR-COL-01):
  * - `belum_diserahkan`: posted/partial, sisa > 0, tanpa exchange aktif.
@@ -30,6 +38,36 @@ export const COLLECTION_QUEUE_TITLE = "Antrean Penagihan Piutang"
 /** Notice jujur verbatim spec §6 — UI menempel apa adanya. */
 export const COLLECTION_QUEUE_NOTICE_TEXT =
   "Tahap dan umur dihitung dari faktur, tukar faktur, dan janji bayar terakhir. Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal."
+
+/** Judul kolom tingkat — verbatim Q-COLR-3 (Frontend menempel apa adanya). */
+export const COLLECTION_REMINDER_LEVEL_TITLE = "Tingkat Pengingat"
+
+/** Notice tingkat — verbatim Q-COLR-3, menempel DI BAWAH notice antrean. */
+export const COLLECTION_REMINDER_NOTICE_TEXT =
+  "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda."
+
+export const COLLECTION_REMINDER_LEVELS = [
+  "tanpa_acuan",
+  "belum_perlu",
+  "pengingat_awal",
+  "pengingat_lanjutan",
+  "eskalasi",
+] as const
+
+export type CollectionReminderLevel =
+  (typeof COLLECTION_REMINDER_LEVELS)[number]
+
+/** Label tingkat — verbatim Q-COLR-3; UI menempel apa adanya, tanpa hitung ulang. */
+export const COLLECTION_REMINDER_LEVEL_LABELS: Record<
+  CollectionReminderLevel,
+  string
+> = {
+  tanpa_acuan: "Tanpa Acuan Tanggal",
+  belum_perlu: "Belum Perlu Diingatkan",
+  pengingat_awal: "Pengingat Awal",
+  pengingat_lanjutan: "Pengingat Lanjutan",
+  eskalasi: "Perlu Eskalasi",
+}
 
 export const COLLECTION_STAGES = [
   "belum_diserahkan",
@@ -134,6 +172,9 @@ export interface CollectionQueueRow {
   sisa: number
   tahap: CollectionStage
   tahapLabel: string
+  /** Tingkat pengingat turunan F-2026-10-26-050-S (Q-COLR); baca-saja. */
+  tingkatPengingat: CollectionReminderLevel
+  tingkatPengingatLabel: string
   /** Hari kalender WIB sejak due acuan; negatif = belum jatuh tempo. Null tanpa due. */
   umurHari: number | null
   exchangeDocumentNo: string | null
@@ -148,12 +189,35 @@ export interface CollectionQueueRow {
   hasOutstandingLateFee: boolean
 }
 
+export interface CollectionReminderLevelSummary {
+  count: number
+  totalSisa: number
+}
+
 export interface CollectionQueueSummary {
   belumDiserahkan: number
   sudahDiserahkan: number
   lewatJanji: number
   total: number
   totalSisa: number
+  /** Rekap populasi penuh per tingkat (Q-COLR-4/AC-COLR-11); tanpa kontak. */
+  reminderLevels: Record<
+    CollectionReminderLevel,
+    CollectionReminderLevelSummary
+  >
+}
+
+function emptyReminderLevelSummary(): Record<
+  CollectionReminderLevel,
+  CollectionReminderLevelSummary
+> {
+  return {
+    tanpa_acuan: { count: 0, totalSisa: 0 },
+    belum_perlu: { count: 0, totalSisa: 0 },
+    pengingat_awal: { count: 0, totalSisa: 0 },
+    pengingat_lanjutan: { count: 0, totalSisa: 0 },
+    eskalasi: { count: 0, totalSisa: 0 },
+  }
 }
 
 export interface CollectionQueue {
@@ -167,6 +231,50 @@ export interface CollectionQueueOptions {
 
 function dayKey(date: Date): number {
   return getWibTodayUtcDate(date).getTime()
+}
+
+function isValidDate(value: Date | null): value is Date {
+  return value != null && !Number.isNaN(value.getTime())
+}
+
+type ReminderLevelSignals = Pick<
+  CollectionQueueRow,
+  "umurHari" | "promiseDate" | "lastFollowUpAt"
+>
+
+/**
+ * Turunan tingkat pengingat — urutan T0..T5 spec §3 + Q-COLR-6:
+ * T0 umur null TANPA janji hidup/lewat (janji ada = acuan nyata, dinilai
+ * dari janji) | T3 janji lewat belum dihubungi sesudah janji | T4 janji
+ * lewat sudah dihubungi sesudahnya | T1 belum jatuh tempo | T2 lewat due
+ * tanpa janji lewat. Janji baru >= hari ini (promiseDate tidak lewat)
+ * keluar dari T3/T4 lewat cabang T1/T2 (T5). Indikator denda sengaja
+ * BUKAN sinyal (Q-COLR-7).
+ */
+export function deriveCollectionReminderLevel(
+  signals: ReminderLevelSignals,
+  today: number,
+): CollectionReminderLevel {
+  const promiseDate = isValidDate(signals.promiseDate)
+    ? signals.promiseDate
+    : null
+  const promiseLewat =
+    promiseDate != null && dayKey(promiseDate) < today
+  if (signals.umurHari == null && promiseDate == null) {
+    return "tanpa_acuan"
+  }
+  if (promiseLewat) {
+    const lastFollowUpAt = isValidDate(signals.lastFollowUpAt)
+      ? signals.lastFollowUpAt
+      : null
+    const dihubungiSesudahJanji =
+      lastFollowUpAt != null && dayKey(lastFollowUpAt) >= dayKey(promiseDate)
+    return dihubungiSesudahJanji ? "eskalasi" : "pengingat_lanjutan"
+  }
+  if (signals.umurHari == null || signals.umurHari > 0) {
+    return "pengingat_awal"
+  }
+  return "belum_perlu"
 }
 
 /** Exchange aktif terakhir per faktur (BR-COL-04): tanggal terbesar, seri id terbesar. */
@@ -219,6 +327,7 @@ export function buildCollectionQueue(
     lewatJanji: 0,
     total: 0,
     totalSisa: 0,
+    reminderLevels: emptyReminderLevelSummary(),
   }
   const rows: CollectionQueueRow[] = []
 
@@ -278,6 +387,13 @@ export function buildCollectionQueue(
     }
     summary.total += 1
     summary.totalSisa = safeAdd(summary.totalSisa, sisa, 2)
+    const tingkatPengingat = deriveCollectionReminderLevel(
+      { umurHari, promiseDate, lastFollowUpAt },
+      today,
+    )
+    const levelSummary = summary.reminderLevels[tingkatPengingat]
+    levelSummary.count += 1
+    levelSummary.totalSisa = safeAdd(levelSummary.totalSisa, sisa, 2)
 
     rows.push({
       invoiceId: invoice.invoiceId,
@@ -293,6 +409,9 @@ export function buildCollectionQueue(
       sisa,
       tahap,
       tahapLabel: COLLECTION_STAGE_LABELS[tahap],
+      tingkatPengingat,
+      tingkatPengingatLabel:
+        COLLECTION_REMINDER_LEVEL_LABELS[tingkatPengingat],
       umurHari,
       exchangeDocumentNo: exchange?.exchangeDocumentNo ?? null,
       lastFollowUpAt,
