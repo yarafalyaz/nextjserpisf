@@ -241,7 +241,9 @@ export function buildEmployeeLoanRecap(
       oldestActiveLoanDate: acc.oldestActiveLoanDate,
       pendingCount: acc.pendingCount,
       unknownStatusCount: acc.unknownStatusCount,
-      unknownStatuses: [...acc.unknownStatuses].sort(),
+      unknownStatuses: [...acc.unknownStatuses].sort((a, b) =>
+        a.localeCompare(b),
+      ),
       isInactiveWithActiveLoans:
         acc.activeCount > 0 && (!acc.isActive || acc.employmentEndedAt !== null),
       hasNegativeRemaining: acc.negativeRemainingCount > 0,
