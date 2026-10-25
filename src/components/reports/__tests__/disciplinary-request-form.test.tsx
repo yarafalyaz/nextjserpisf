@@ -116,6 +116,12 @@ describe("DisciplinaryRequestForm DISC-F1", () => {
       form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
     })
     expect(createAction).toHaveBeenCalledTimes(1)
+    expect(createAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        employeeId: 10,
+        description: "Mangkir tiga hari",
+      }),
+    )
     expect(showError).toHaveBeenCalledWith(
       "Jenjang peringatan harus mengikuti urutan: usulan yang sah saat ini adalah Surat Peringatan 2 (SP2)",
     )
