@@ -31166,3 +31166,131 @@ Selisih jujur: ISF sudah punya master Tax generik + faktur pajak dokumen; yang a
 - Menggabungkan pajak potong (WithholdingTaxType/PPh) ke penampung ini — objek pajak berbeda.
 
 F-2026-10-25-041-S — Kode pajak + DPP default per barang/jasa. Status: SPEC SELESAI run ini; gerbang pertama vonis Accountant Q-ITX-1, lalu fisik Backend Q-ITX-2. Pemilik usulan: Business (spec), Accountant (vonis kode/tarif), Lead (Q-ITX-3/4), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: YA (Q-ITX-1).
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-043-S: pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim (lanjutan eksplisit F-2026-10-25-038-S)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Lanjutan eksplisit dari bagian "Yang TIDAK diusulkan" F-2026-10-25-038-S: "Pengiriman via email — kanal + jejak berbeda, spec terpisah bila diminta". Spec ini mengambil HANYA jalur email manual lewat klien email staf (tautan `mailto:`) + jejak klik; pengiriman server-side (SMTP/API) TIDAK ada infrastrukturnya hari ini dan tetap di luar tahap 1 (lihat §0 + Q-SE-2). ID F-2026-10-25-043-S bebas terverifikasi run ini (2026-10-25 21:06 WIB): grep `F-2026-10-25-043` di backlog + board `origin/main` (`fe281d46`) = 0; ID 042 sudah terpakai PR terbuka vonis Accountant F-2026-10-25-042-V (Q-ITX-1), jadi slot -S berikutnya yang bebas = 043. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` fe281d46) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Statement Pelanggan live penuh F-2026-10-21-032: builder murni `buildCustomerStatement` (`src/lib/reports/customer-statement.ts`), loader `loadCustomerStatement` (`src/lib/reports/customer-statement-data.ts`), halaman `src/app/(dashboard)/laporan/statement-pelanggan/[[...segments]]/page.tsx` digerbang `view_reports`, registry PDF `"statement-pelanggan"` (`src/lib/reports/report-registry.ts:983`). Loader memilih pelanggan `select: { id, name }` saja (`customer-statement-data.ts:78`) — email/telepon pelanggan TIDAK ikut dimuat halaman statement hari ini.
+- Master pelanggan punya kontak: `Customer.email String?` + `Customer.phone String?` (`prisma/schema.prisma` model Customer, `email`/`phone` sesudah `name`).
+- Jejak klik existing F-2026-10-21-036: `recordWhatsappLinkOpened` (`src/actions/whatsapp-log.actions.ts`) menulis ActivityLog `whatsapp_link_opened` metadata `{channel, event: "link_opened", surface}` TANPA alamat/nomor/isi pesan; penjaga sesi + permission lihat per jenis dokumen; kegagalan catat tidak pernah menggagalkan navigasi. Jenis terdaftar hari ini HANYA `WorkOrder`/`SalesInvoice`/`Quotation` (`WHATSAPP_DOC_TYPES` whatsapp-log.actions.ts:21) — statement BELUM terdaftar di kanal mana pun; perluasan statement untuk WA = wilayah 038-S B1, spec ini kanal emailnya.
+- Pola tombol tautan manual existing: `WhatsappButton` (`src/components/reports/whatsapp-button.tsx`) — tidak tampil bila URL null, klik mencatat jejak fire-and-forget tanpa menahan navigasi. Pola yang sama (bukan komponen yang sama) dipakai spec ini untuk email.
+- `logActivity` (`src/lib/services/activity-log.service.ts:10`) menelan error (tidak pernah melempar ke pemanggil); model `ActivityLog` (`prisma/schema.prisma:5385`) berjangkar `(modelType, modelId)` + `metadata` JSON teks.
+
+Gap terbukti (grep run ini):
+- Nol infrastruktur kirim email keluar: grep `nodemailer|createTransport|resend|@sendgrid|mailgun|smtp` di `src/` = 0 hit; `package.json` tanpa library email. Mengklaim "sistem mengirim email" hari ini = klaim palsu.
+- Nol tautan `mailto:` di `src/components`/`src/app`: tidak ada jalur email manual apa pun dari permukaan mana pun.
+- Alamat email pelanggan tidak pernah dimuat loader statement (select id+name saja), jadi tombol email tidak bisa lahir dari payload existing tanpa perluasan loader (fisik Q-SE-3 Backend).
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: admin/keuangan berizin `view_reports` di halaman Statement Pelanggan existing.
+
+1. Staf membuka statement satu pelanggan untuk satu periode (alur existing, tidak berubah).
+2. Bila pelanggan terpilih punya email yang lolos validasi bentuk dasar (§4 BR-SE-03), tampil tombol "Kirim Email" di kepala halaman/kartu statement dengan label jujur pendamping: tautan dibuka di aplikasi email staf; sistem tidak mengirim dan tidak tahu email benar-benar terkirim.
+3. Klik tombol: (a) jejak dibuka dicatat fire-and-forget untuk statement ini (aksi jejak baru kanal email, BR-SE-02); (b) klien email staf terbuka dengan subjek + badan ringkas ter-isi (isi dibatasi BR-SE-04).
+4. Staf meninjau alamat/subjek/isi di aplikasi email sendiri, boleh mengubah/membatalkan di sana, lalu menekan kirim secara manual. Sistem TIDAK mengklaim terkirim, TIDAK menunggu konfirmasi, TIDAK mengubah status dokumen/piutang apa pun.
+5. Jejak tampil kembali sebagai riwayat baca-saja di halaman statement yang sama: "Tautan Email dibuka — <waktu WIB> oleh <nama staf>" per klik, dihitung dari ActivityLog. Tidak ada status "terkirim/dibaca pelanggan" di mana pun.
+
+Dokumen masuk: statement existing (pelanggan + periode). Dokumen keluar: tautan `mailto:` ber-subjek/isi + baris jejak ActivityLog. Tanpa tulis finansial, tanpa jurnal, tanpa perubahan status faktur/piutang, tanpa lampiran berkas (mailto tidak membawa lampiran dari sistem — BR-SE-08).
+
+### 2. Role/permission matrix (key nyata katalog `src/lib/auth/module-catalog.generated.ts`)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat statement (prasyarat semua aksi spec ini) | `view_reports` (:446) | TERVERIFIKASI-KODE |
+| Klik "Kirim Email" statement | reuse `view_reports` — halaman sudah digerbang key ini; penjaga jejak memeriksa key yang sama (konsisten usulan 038-S Q-SW-1) | USULAN (Q-SE-1 Lead bila minta key khusus) |
+| Lihat riwayat jejak email di halaman statement | `view_reports` (permukaan sama) | USULAN |
+| Key izin baru | TIDAK diusulkan tahap 1 | USULAN |
+| Kirim massal / terjadwal / via server (SMTP/API) | TIDAK ada — di luar spec (belum ada infrastruktur) | — |
+
+Catatan penjaga: mengikuti pola `recordWhatsappLinkOpened` yang memeriksa permission LIHAT objek induknya; untuk statement objek induknya laporan pelanggan, jadi key konsisten = `view_reports`, bukan `view_customers` (:126, melekat ke master pelanggan). Memilih key lain = Q-SE-1.
+
+### 3. Status-transition matrix
+
+Tidak ada status tersimpan baru dan tidak ada transisi dokumen: klik email bukan peristiwa bisnis atas piutang. Satu-satunya "keadaan" adalah jejak turunan baca dari ActivityLog:
+
+| Keadaan tampil | Pemicu | Penjaga |
+|---|---|---|
+| Belum pernah dibuka | belum ada baris jejak email untuk pelanggan ini | — |
+| Tautan dibuka (per klik, bisa berulang) | klik tombol oleh staf berizin | sesi + `view_reports`; catat gagal ≠ batalkan navigasi |
+| Terkirim / dibaca pelanggan | TIDAK ADA — dilarang dikarang dari klik mailto | BR-SE-01 |
+
+Setiap klik = satu baris jejak baru (riwayat, bukan penimpaan), mengikuti pola F-036.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-SE-01 | Label jujur mutlak: UI, jejak, dan laporan hanya boleh menyebut "Tautan Email dibuka". Klaim "terkirim/terbaca/sudah dihubungi" dari klik mailto DILARANG di semua permukaan. | TERVERIFIKASI-KODE (warisan F-036) | whatsapp-log.actions.ts kepala kontrak; whatsapp-button.tsx |
+| BR-SE-02 | Jejak statement kanal email memakai jalur ActivityLog existing, diperluas SATU aksi jejak email: modelType berjangkar pelanggan, modelId = ID pelanggan, metadata `{channel: "email", event: "link_opened", surface, periodStart, periodEnd}` (tanggal periode, bukan PII). Alamat email, subjek, dan isi pesan TIDAK masuk metadata/deskripsi log. Nama aksi final (mis. `email_link_opened` vs kanal di `whatsapp_link_opened`) = Q-SE-3 fisik Backend; mencampur kanal email ke aksi bernama whatsapp DILARANG (label log harus jujur per kanal). | USULAN | pola whatsapp-log.actions.ts; ActivityLog schema.prisma:5385 |
+| BR-SE-03 | Tombol hanya tampil bila pelanggan terpilih ada DAN alamat emailnya lolos validasi bentuk dasar (satu `@`, domain bertitik, tanpa spasi). Email kosong/format tidak valid = tombol tidak tampil sama sekali (bukan tampil-mati), mengikuti perilaku tombol WA existing. Sistem tidak menebak alamat dari contactPerson/alamat pos. Fungsi validasi final = Q-SE-3 (reuse validator existing bila ada; jangan karang regex baru tanpa bukti). | TERVERIFIKASI-KODE (pola) + USULAN (penerapan) | Customer.email schema; whatsapp-button.tsx pola sembunyi |
+| BR-SE-04 | Subjek + isi email statement dibatasi: subjek memuat label periode; isi memuat salam + nama pelanggan + label periode + saldo akhir periode sesuai payload statement + kalimat penutup netral. DILARANG: angka denda (BR-ST-07 025-S), rincian per faktur di badan pesan, tautan unduh karangan, janji/ancaman penagihan. PDF statement TIDAK bisa dilampirkan lewat mailto tahap ini — pesan menyatakan statement dapat diminta/dicetak, bukan berpura-pura melampirkan. | USULAN | BR-ST-07 025-S; BR-SW-04 038-S pola |
+| BR-SE-05 | Angka di pesan = payload server statement yang sama dengan layar/PDF (saldo akhir + periode), tidak dihitung ulang di komponen/klien. Periode di pesan = periode statement yang sedang dibuka staf, bukan "bulan ini" karangan. | USULAN | BR-ST-06/BR-ST-08 025-S |
+| BR-SE-06 | Kegagalan mencatat jejak tidak pernah menahan/membatalkan pembukaan klien email (fire-and-forget, pola existing). Sebaliknya tanpa sesi/izin, jejak ditolak tanpa log — dan karena tombol hanya lahir di halaman bergerbang `view_reports`, permukaan tanpa izin memang tidak pernah melihat tombol. | TERVERIFIKASI-KODE (pola) | whatsapp-log.actions.ts; activity-log.service.ts:10 |
+| BR-SE-07 | Klik berulang sah dan tercatat berulang (staf boleh membuka ulang); riwayat menampilkan semua klik terbaru-dulu. Tidak ada dedup/idempotency yang menghapus riwayat klik — jejak adalah catatan percobaan buka, bukan dokumen finansial. | USULAN | pola riwayat F-036 |
+| BR-SE-08 | Tanpa pengiriman server-side tahap ini: tidak ada SMTP/API/template terpusat/antrean/jadwal/kirim massal (infrastruktur email keluar belum ada — §0). Satu klik = satu pelanggan = satu periode. Membuka pengiriman server-side = spec terpisah sesudah Q-SE-2 diputus (pilihan penyedia + kredensial + jejak kirim server adalah keputusan berbeda, bukan perluasan diam-diam tombol ini). | TERVERIFIKASI-KODE (gap §0) | grep email-infra run ini |
+| BR-SE-09 | Cakupan pelanggan: pelanggan nonaktif/terhapus mengikuti pilihan halaman existing (daftar aktif); statement pelanggan tanpa mutasi periode tetap boleh dibuka tautannya (saldo awal/akhir tetap bermakna) — tombol mengikuti keberadaan alamat valid, bukan keberadaan baris mutasi. | USULAN | halaman statement select isActive |
+| BR-SE-10 | Perluasan jejak email TIDAK mengubah perilaku jejak WA existing (tiga jenis dokumen + statement WA 038-S bila sudah lahir): label, permission penjaga, dan metadata semuanya byte-sama. Kanal WA dan email tampil sebagai riwayat terpisah berlabel kanal masing-masing, tidak digabung satu hitungan "pernah dihubungi". | USULAN (kendala regresi) | WHATSAPP_DOC_TYPES existing; 038-S |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Kirim dokumen penjualan via email dari dalam sistem | Ada — Email Faktur Pajak: kirim bukti faktur pajak ke email pelanggan dari dalam Accurate (alamat dari master pelanggan) https://help.accurate.id/product/accurate-online/fitur-aol/smartlink-tax/email-faktur-pajak/email-faktur/ ; penawaran penjualan juga bisa dikirim via email dari tombol cetak https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/ | Ada — kirim faktur via email dari daftar transaksi https://zahir.info/index.php?/Knowledgebase/List/Index/84/tips--solusi ; Zahir Online: "Buat & Kirim invoice ... via email hingga whatsapp" https://zahir.co.id/produk/zahir-online/ | Belum ada jalur email apa pun (grep §0); WA manual per dokumen live (F-27(a)+F-036) |
+| Laporan piutang per pelanggan incl. surat tagihan | Ada — Pernyataan Piutang (rujuk 025-S) | Ada — Surat Tagihan Untuk Pelanggan di Laporan Piutang Usaha https://zahir.info/index.php?/Knowledgebase/List/Index/84/tips--solusi | Statement per pelanggan live (F-032); surat tagihan formal terpisah tidak diusulkan spec ini |
+| Jejak bahwa staf membuka jalur hubungi pelanggan | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada untuk WA 3 jenis dokumen (F-036); statement WA = 038-S; statement email = gap spec ini |
+
+Catatan benchmark: kirim email Accurate/Zahir berjalan server-side di dalam layanannya; ISF tahap ini sengaja TIDAK menyamai klaim itu — yang dibangun hanya jalur manual berjejak jujur (BR-SE-01/08), karena infrastruktur kirim server belum ada.
+
+### 6. Acceptance criteria + edge cases (falsifikasi — untuk Backend/Frontend/QA)
+
+- AC-SE-B1: klik tombol email statement menulis tepat satu ActivityLog jejak email berjangkar pelanggan dengan metadata berisi periode + kanal email dan TANPA alamat email/subjek/isi pesan/nama staf penerima; grep/metadata memuat alamat email = MERAH.
+- AC-SE-B2: pemanggil tanpa sesi atau tanpa `view_reports` ditolak `{success:false}` dan tidak ada baris log lahir; mencatat diam-diam = MERAH.
+- AC-SE-B3: jejak WA existing tidak berubah: klik WA WO/Faktur/Penawaran (dan statement WA bila 038-B1 sudah lahir) tetap memakai aksi/metadata semula; kanal email tertulis ke aksi bernama whatsapp atau sebaliknya = MERAH.
+- AC-SE-B4: kegagalan tulis log (DB error disimulasikan) tetap membuka klien email staf — aksi pencatat tidak melempar ke pemanggil; navigasi tertahan karena log = MERAH.
+- AC-SE-B5: dua klik = dua baris jejak (urutan waktu utuh); dedup yang menelan klik kedua = MERAH.
+- AC-SE-F1: pelanggan tanpa email / email tidak valid bentuk dasar → tombol tidak tampil; tombol tampil dengan href mailto mati = MERAH.
+- AC-SE-F2: subjek + isi memuat nama pelanggan + label periode + saldo akhir persis payload server; memuat angka denda, rincian faktur karangan, alamat karangan, atau saldo hitung-ulang klien = MERAH.
+- AC-SE-F3: tidak ada teks "terkirim/terbaca/sudah dihubungi" di tombol, toast, atau riwayat; label selain "Tautan Email dibuka" untuk jejak = MERAH.
+- AC-SE-F4: riwayat jejak email di halaman statement hanya tampil untuk pemegang `view_reports`, membaca ActivityLog apa adanya (waktu WIB + nama staf + label kanal), dan terpisah dari riwayat WA; UI menggabung kanal jadi satu klaim hubungi = MERAH.
+
+Edge cases:
+- EC-SE-1: email berformat huruf besar/spasi pinggir — normalisasi mengikuti validator final Q-SE-3; di luar bentuk dasar tombol hilang, bukan ditebak/diperbaiki diam-diam.
+- EC-SE-2: pelanggan diganti di pemilih sesudah halaman termuat — tombol dan pesan mengikuti pelanggan+periode yang sedang tampil, bukan yang sebelumnya.
+- EC-SE-3: statement periode lampau — pesan menyebut periode lampau itu persis (BR-SE-05); jejak mencatat periode yang sama.
+- EC-SE-4: saldo akhir nol/negatif (kelebihan bayar) — pesan tetap netral tanpa kata "tagihan" yang menekan; wording final = Q-SE-4 (selaras Q-SW-3 038-S).
+- EC-SE-5: staf membuka klien email lalu batal mengirim di sana — sistem tetap hanya punya jejak "dibuka"; tidak ada koreksi status apa pun (konsekuensi jujur BR-SE-01).
+- EC-SE-6: alamat email sangat panjang / memuat karakter yang memecah URL — href mailto harus ter-encode aman; tombol yang menghasilkan tautan rusak = MERAH (pola encodeURIComponent pola WA).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-043-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-043-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-043-B1 | Kontrak jejak email statement: aksi jejak kanal email berjangkar pelanggan (metadata periode tanpa PII, penjaga `view_reports` per Q-SE-1; nama aksi fisik Q-SE-3); builder subjek+isi email statement murni; loader memuat email pelanggan untuk halaman statement; tes AC-SE-B1..B5 | Backend | Q-SE-1 Lead + Q-SE-3 fisik |
+| F-2026-10-25-043-F1 | Tombol "Kirim Email" + label jujur + riwayat jejak email (terpisah dari WA) di halaman/kartu statement; teks verbatim payload server; AC-SE-F1..F4; grep e2e laporan sebelum commit | Frontend | Kontrak B1 |
+| F-2026-10-25-043-Q1 | Falsifikasi AC-SE-B1..B5 + F1..F4 atas head persis (cabut penjaga MERAH, PII alamat masuk log MERAH, klaim terkirim MERAH, kanal tercampur MERAH) | QA | B1+F1 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SE-1 (Lead, perilaku inti): key penjaga klik email statement — reuse `view_reports` (rekomendasi Business, konsisten 038-S Q-SW-1) atau key khusus baru? Putusan selaras dengan Q-SW-1 supaya dua kanal statement tidak berpenjaga beda tanpa alasan. Tanpa putusan ini Backend tidak mulai.
+- Q-SE-2 (Lead, arah tahap berikutnya — TIDAK menghalangi tahap 1): apakah pengiriman email server-side (SMTP/API) akan dibuka sebagai spec terpisah? Bila ya: pilihan penyedia, pemilik kredensial, dan jejak kirim server diputus di spec itu; spec ini tidak menyiapkan abstraksi untuknya.
+- Q-SE-3 (Backend, fisik): nama aksi jejak email + bentuk perluasannya (aksi baru vs generalisasi pencatat tautan per kanal) + validator bentuk email yang dipakai ulang + cara loader halaman statement memuat `email` pelanggan terpilih tanpa mengubah payload builder statement.
+- Q-SE-4 (Lead): wording pesan untuk saldo nol/negatif (EC-SE-4) — kalimat netral final disahkan Lead, selaras Q-SW-3; Business tidak mengarang nada penagihan.
+- Accountant: TIDAK diminta tahap ini (tanpa uang/pajak/jurnal/denda baru; BR-ST-07 tetap menahan angka denda — membuka denda di pesan, pengiriman massal terjadwal, atau kirim server-side = vonis Accountant + putusan Lead baru, spec terpisah).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-043-S)
+
+- Pengiriman email server-side (SMTP/API/gateway), antrean kirim, jadwal/berkala, kirim massal ke banyak pelanggan, template pesan terpusat yang bisa diedit admin.
+- Klaim status terkirim/dibaca/bounce, tanda terima pelanggan, atau perubahan status piutang akibat pengiriman.
+- Lampiran PDF statement lewat mailto (mailto tidak membawa lampiran berkas dari sistem; menjanjikannya = klaim palsu).
+- Surat tagihan formal ala Zahir sebagai dokumen tersendiri; angka denda/penalti di pesan maupun statement (BR-ST-07).
+- Kanal WA statement (wilayah 038-S), kanal email untuk dokumen lain (WO/faktur/penawaran) — perluasan per dokumen = keputusan terpisah sesudah pola statement terbukti.
+
+F-2026-10-25-043-S — Pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SE-1/Q-SE-4 + fisik Backend Q-SE-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---
