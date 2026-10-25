@@ -55,6 +55,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   dashboard: "Dasbor",
   delivery_orders: "Surat Jalan",
   departments: "Departemen",
+  disciplinary_records: "Rekod Disiplin SP",
   down_payments: "Uang Muka",
   employee_loans: "Pinjaman Karyawan",
   employees: "Karyawan",
