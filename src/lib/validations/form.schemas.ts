@@ -45,6 +45,15 @@ export const customerSchema = z.object({
   village: z.string().optional(),
   postalCode: z.string().optional(),
   taxId: z.string().max(50).optional(),
+  // F-2026-10-25-004-S: identitas pajak terstruktur. Semua opsional,
+  // tanpa aturan bentuk di klien — validasi bentuk + peringatan
+  // ditegakkan server (customerTaxIdentityForSave), pesan tampil verbatim.
+  taxpayerName: z.string().max(200).optional(),
+  taxAddress: z.string().max(2000).optional(),
+  nitku: z.string().max(50).optional(),
+  pkpStatus: z.string().optional(),
+  pkpEffectiveFrom: z.string().optional(),
+  pkpSource: z.string().max(200).optional(),
   customerCategoryId: z.number().optional().nullable(),
 })
 

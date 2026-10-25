@@ -393,6 +393,15 @@ model Customer {
   city               String?
   gender             String?           @map("gender")
   taxId              String?           @map("tax_id")
+  // F-2026-10-25-004-S (vonis 019-V + putusan Lead §8A): identitas pajak
+  // terstruktur. taxId tetap NPWP; pkpStatus string divalidasi server
+  // (non_pkp|pkp|unknown), default unknown = tidak tahu, bukan bukan-PKP.
+  taxpayerName       String?           @map("taxpayer_name")
+  taxAddress         String?           @map("tax_address") @db.Text
+  nitku              String?           @map("nitku")
+  pkpStatus          String            @default("unknown") @map("pkp_status")
+  pkpEffectiveFrom   DateTime?         @map("pkp_effective_from") @db.Date
+  pkpSource          String?           @map("pkp_source")
   code               String?           @unique @map("code")
   creditLimit        Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
   contactPerson      String?           @map("contact_person")
