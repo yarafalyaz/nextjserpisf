@@ -28823,9 +28823,9 @@ ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-20
 
 ---
 
-## SPEC BUSINESS 2026-10-25 — F-2026-10-25-034-S: gerbang penegakan batas kredit pelanggan tahap 2 (lanjutan advisory F-2026-10-21-017-S; peringatan tetap default, penahan = gerbang vonis)
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-035-S: gerbang penegakan batas kredit pelanggan tahap 2 (lanjutan advisory F-2026-10-21-017-S; peringatan tetap default, penahan = gerbang vonis)
 
-> **Slot**: F-2026-10-25-034-S. Diperiksa bentrok 2026-10-25 15:54 WIB vs `origin/main` (`4fdb124f`): grep `F-2026-10-25-034` di backlog+board origin/main = 0; judul/head PR terbuka memuat `034` = 0 (30 PR terbuka diperiksa); branch remote `034`/kredit = 0. ID 033-S sudah terpakai (rekap beban tiket, PR #870) — dilarang dipakai ulang per koreksi kondektur kartu t_55f4cb83. ID 034-S bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; tanpa kode/schema/migrasi. Business tidak merge.
+> **Slot**: F-2026-10-25-035-S (RENUMBER 2026-10-25 16:02 WIB dari 034-S: bentrok live — PR #871 konsumen paparan kredit form SO/Invoice memakai 034-S lebih dulu, 034-S tetap milik #871; 035-S terverifikasi bebas: grep `F-2026-10-25-035` di `origin/main` 733808f2 = 0 dan judul PR terbuka tertinggi 034-S). Pemeriksaan asal 15:54 WIB vs `origin/main` (`4fdb124f`): ID 033-S sudah terpakai (rekap beban tiket, PR #870) — dilarang dipakai ulang. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; tanpa kode/schema/migrasi. Business tidak merge.
 
 Kartu: t_55f4cb83. Spec LANJUTAN tahap 2 saja — dilarang menduplikasi blok advisory yang sudah ada: spec read-model F-2026-10-21-017-S (BR-CR-01..10, AC-CR-01..15), spec konsumen UI F-2026-10-22-043-S (BR-CU-01..07, AC-CU-01..10, T1–T3), dan vonis Accountant F-2026-10-22-044-V (V1–V7). Spec ini hanya mengisi celah yang oleh vonis 044-V V7 sengaja DITUNDA: syarat, aktor, transisi, override, dan audit gerbang penahan dokumen. Angka paparan/ambang tidak didefinisikan ulang di sini.
 
@@ -28949,11 +28949,11 @@ Benchmark run ini tidak mengakses ulang halaman Accurate/Zahir; matrix memakai r
 - Q-CL2-5 (Lead): aktivasi gerbang — saklar pengaturan perusahaan vs langsung aktif sesudah build; tanggal berlaku + perlakuan dokumen berjalan (BR-CL2-10).
 - Accountant untuk selain Q-CL2-1: TIDAK (override tanpa jurnal; limit adalah kebijakan pemilik proses, bukan angka pajak).
 
-### 10. Backlog implementasi (turunan F-2026-10-25-034-S)
+### 10. Backlog implementasi (turunan F-2026-10-25-035-S)
 
 | ID | Pekerjaan | Pemilik | Prasyarat |
 |---|---|---|---|
-| F-2026-10-25-034-S | Spec tahap 2 ini (dokumen) | Business | — |
+| F-2026-10-25-035-S | Spec tahap 2 ini (dokumen) | Business | — |
 | (turunan) vonis eksposur inti + `unset` | Accountant | Q-CL2-1 diajukan Lead | — |
 | (turunan) putusan izin/override/cakupan/aktivasi | Lead | Q-CL2-2..5 | — |
 | (turunan) penilaian server + override + audit | Backend | Q-CL2-1..5 terputus; klaim `sales.actions.ts`/katalog di board dulu | — |
@@ -28967,4 +28967,4 @@ Benchmark run ini tidak mengakses ulang halaman Accurate/Zahir; matrix memakai r
 - Notifikasi otomatis ke Finance / snapshot historis paparan: YAGNI warisan F-017-S §7, tanpa ID.
 - Kolom/status dokumen baru untuk tertahan: keputusan simpan turunan cukup (§2).
 
-F-2026-10-25-034-S — Gerbang penegakan batas kredit tahap 2. Status: SPEC SELESAI run ini; implementasi menunggu vonis Accountant Q-CL2-1 + putusan Lead Q-CL2-2..5. Pemilik usulan: Business (spec), Accountant (definisi inti), Lead (izin/aktivasi), Backend (penilaian server), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA (Q-CL2-1 saja).
+F-2026-10-25-035-S — Gerbang penegakan batas kredit tahap 2. Status: SPEC SELESAI run ini; implementasi menunggu vonis Accountant Q-CL2-1 + putusan Lead Q-CL2-2..5. Pemilik usulan: Business (spec), Accountant (definisi inti), Lead (izin/aktivasi), Backend (penilaian server), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA (Q-CL2-1 saja).
