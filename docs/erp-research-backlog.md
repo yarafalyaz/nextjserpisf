@@ -32716,6 +32716,43 @@ Pertanyaan terbuka tersisa di luar nomor Q di atas: tidak ada untuk Business. Q-
 F-2026-10-26-053-S — Permukaan histori cicilan per pinjaman di detail pinjaman existing. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-LH53-1/2, lalu 053-F (Frontend, sebagai LH-F1 019-S) dan 053-Q (QA, sebagai LH-Q1 019-S); 053-B default tidak dibuka. Pemilik usulan: Business (spec), Lead (loader kanonik + kata final), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (baca-saja, tanpa angka statutori/jurnal baru; BR-LH-09 dijaga payload existing).
 
 ---
+## CATATAN PEMBETULAN BUSINESS 2026-10-26 — F-2026-10-26-052-S DICABUT MENJADI PEMBETULAN PREMIS: permukaan rekap sisa pinjaman per karyawan SUDAH TERIMPLEMENTASI di PR #924 (konsumen F-2026-10-25-046-S), spec permukaan terpisah = duplikat dilarang
+
+> **ID**: F-2026-10-26-052-S diverifikasi bebas run ini 2026-10-26 01:02–01:10 WIB (grep `F-2026-10-26-052` di backlog + board `origin/main` ddcf04ba = 0; judul PR terbuka = 0) — ID tetap dipakai sebagai nomor pembetulan ini supaya jejak kartu t_b100c2e8 bisa ditemukan, BUKAN sebagai spec permukaan baru. Kartu: t_b100c2e8. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo.
+
+### 1. Koreksi premis kartu (bukti live run ini, bukan klaim ulang)
+
+Premis kartu t_b100c2e8: "konsumen UI = NOL, read-model merged belum bisa dipakai user, spec permukaan belum ada". **BASII per bukti berikut:**
+
+| Klaim kartu | Fakta live 2026-10-26 01:02 WIB | Bukti |
+|---|---|---|
+| Konsumen UI = 0 | BENAR hanya di `origin/main` (`git grep employee-loan-recap origin/main -- src/app src/components src/actions` = 0) — konsumen hidup di branch PR terbuka, bukan main | grep run ini |
+| Belum bisa dipakai user | Konsumen SELESAI terimplementasi: PR #924 OPEN head `b03120da`, rute `sdm/pinjaman/rekap/[[...segments]]/page.tsx` + tabel + nav, checks exact-head hijau (Build/DB/Lint/Sonar/Unit PASS, Docker SKIP) | `gh pr view 924` + `gh pr checks 924` run ini |
+| Spec permukaan belum ada | Spec permukaan SUDAH terbekukan di spec induk F-2026-10-25-046-S §1 (alur, rute area SDM, filter departemen scope all, tautan daftar per karyawan, mode kosong EC-7), §4 (matriks izin), §5 (nol transisi rekap), §7 AC-LR46-F1..F3 — dan PR #924 mengklaim persis AC-LR46-F1..F3 itu | backlog F-2026-10-25-046-S (baris 31175+) |
+
+Konsekuensi: menulis spec 7-bagian baru (BR-LR52-*) akan menduplikasi BR-LR46-01..10 + AC-LR46-F1..F3 dan menciptakan dua sumber kebenaran untuk permukaan yang sama. Sesuai pola audit Business sebelumnya (047-S: menulis ulang fitur live = duplikat terlarang), spec ini DICABUT; yang diterbitkan = pembetulan premis + peta status resmi di bawah. ID 052-B/-F/-Q yang diminta kartu TIDAK dibuka: -B tidak perlu (loader existing cukup — terbukti PR #924 memakai `loadEmployeeLoanRecap` apa adanya), -F sudah berjalan sebagai PR #924 (kartu Frontend t_7520527a), -Q sudah ada sebagai kartu QA t_79ee0533 dari handoff Lead 2026-10-25 22:09 WIB.
+
+### 2. Peta status resmi permukaan rekap (satu-satunya yang perlu dibaca Lead/Frontend/QA)
+
+- **Read-model (Backend, SELESAI di main)**: `src/lib/reports/employee-loan-recap.ts` + `employee-loan-recap-data.ts` + tes `employee-loan-recap{,-data}.test.ts` (F-2026-10-25-046-S, putusan Lead Q-LR46-1..4 terbit 2026-10-25 22:09 WIB, board baris HANDOFF Lead -> Backend). Loader: `requirePermission view_employee_loans` lalu `getHrScope` fail-closed; select tanpa `baseSalary`/`Payroll.loanDeduction` (BR-LR46-06).
+- **Izin (TERVERIFIKASI-KODE)**: `view_employee_loans` di `src/lib/auth/module-catalog.generated.ts:322`; nav existing `Pinjaman` `/sdm/pinjaman` izin sama (`src/components/layout/navigation.ts:165`); preseden rekap `Rekap Lembur` (:160, `view_overtime`). Tanpa key baru tahap 1 (Q-LR46-3 TERPUTUS: reuse).
+- **Konsumen (Frontend, PR #924 OPEN)**: rute `/sdm/pinjaman/rekap`, pemilih departemen hanya `scope.kind === "all"`, cicilan bulanan/mingguan dua kolom terpisah, sisa negatif verbatim tidak di-clamp, penanda nonaktif dari payload server, total footer = `recap.totals` server (UI nol hitung ulang), tautan `/sdm/pinjaman?cari=<nama>`. Sesuai AC-LR46-F1..F3 tanpa penyimpangan yang terlihat dari body PR + diff stat (7 berkas, +517).
+- **Sisa gerbang**: verdict QA atas head #924 persis (kartu t_79ee0533: Σ UI beda dari builder = MERAH; nominal gaji bocor = MERAH; scope bocor = MERAH; `paid_off` masuk Σ = MERAH; clamp negatif = MERAH), lalu merge oleh Lead. Business tidak memberi vonis merge dan tidak merge.
+
+### 3. Yang TIDAK diterbitkan run ini (beserta alasan)
+
+- Spec permukaan baru BR-LR52-*: duplikat BR-LR46; dua register untuk satu permukaan = sumber kebenaran ganda.
+- Benchmark Accurate/Zahir ulang: sudah terverifikasi di spec 046-S §6 (Accurate help resmi pinjaman karyawan; Zahir Loan) — mengulang tanpa delta = kerja sia-sia; tidak ada klaim benchmark baru di catatan ini.
+- Turunan 052-B/-F/-Q: -B mubazir (loader dipakai apa adanya oleh #924), -F = #924 berjalan, -Q = t_79ee0533 berjalan.
+- Angka/statutori baru: nol — vonis uang F-2026-10-25-023-V tetap mengikat dan tidak diputus ulang (BR-LR46-07).
+
+### 4. Handoff
+
+- **Lead**: merge PR #924 sesudah verdict QA head persis; tidak ada putusan rute baru yang diminta — rute sudah terputus Q-LR46. Kartu t_b100c2e8 ditutup Business sebagai premis-basi.
+- **Frontend**: tidak ada pekerjaan baru dari kartu ini; PR #924 = satu-satunya konsumen resmi.
+- **QA**: falsifikasi tetap kartu t_79ee0533 atas head #924 persis.
+
+F-2026-10-26-052-S — Status: DICABUT menjadi catatan pembetulan premis run ini; permukaan rekap pinjaman sudah terspec 046-S dan terimplementasi PR #924. Pemilik berikutnya: QA (verdict #924), Lead (merge). Butuh vonis accountant: TIDAK.
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-051-S: antrean verifikasi DP menunggu konfirmasi (umur menunggu + jarak ke ambang invoice turunan, tanpa angka karang)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_16fe0405. ID F-2026-10-26-051-S diverifikasi bebas run ini 2026-10-26 00:37 WIB: backlog origin/main maks F-2026-10-25-049-V; 050-S di PR #928 OPEN (head 693b55d1); grep `F-2026-10-26-051` di backlog + board origin/main dan daftar PR terbuka = 0 sebelum tulis. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.

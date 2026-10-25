@@ -18,6 +18,11 @@ import type {
  * (`recordWhatsappLinkOpened`, fire-and-forget). Yang tercatat adalah tautan
  * DIBUKA — bukan pesan terkirim. Pencatatan tidak pernah menahan navigasi:
  * tanpa preventDefault, tanpa await.
+ *
+ * F-2026-10-25-038-F1: jenis statement (`CustomerStatement`) WAJIB membawa
+ * periode payload server (`periodStart`/`periodEnd`) — action menolak tanpa
+ * log bila hilang. Tiga jenis lama tidak mengirim prop ini, payload kliknya
+ * byte-sama seperti sebelumnya.
  */
 export function WhatsappButton({
   phone,
@@ -26,6 +31,8 @@ export function WhatsappButton({
   modelId,
   surface,
   label = "Kirim WA",
+  periodStart,
+  periodEnd,
 }: Readonly<{
   phone: string | null | undefined;
   message: string;
@@ -33,6 +40,9 @@ export function WhatsappButton({
   modelId: number;
   surface: "queue" | "detail";
   label?: string;
+  /** Periode statement (payload server); wajib untuk CustomerStatement. */
+  periodStart?: Date;
+  periodEnd?: Date;
 }>) {
   const href = buildWhatsappUrl(phone, message);
   if (!href) return null;
@@ -45,7 +55,7 @@ export function WhatsappButton({
       aria-label={label}
       className={cn(buttonVariants({ variant: "secondary" }), "gap-1.5")}
       onClick={() => {
-        void recordWhatsappLinkOpened({ modelType, modelId, surface });
+        void recordWhatsappLinkOpened({ modelType, modelId, surface, periodStart, periodEnd });
       }}
     >
       <MessageCircle size={14} aria-hidden="true" /> {label}
