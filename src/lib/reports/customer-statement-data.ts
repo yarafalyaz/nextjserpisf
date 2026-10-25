@@ -32,6 +32,14 @@
  * `whatsapp_link_opened` jenis `CustomerStatement` berjangkar pelanggan,
  * terbaru-dulu, dibaca apa adanya (label jujur "Tautan WhatsApp dibuka"
  * milik UI; loader tidak mengarang status terkirim/dibaca, BR-SW-01).
+ *
+ * F-2026-10-25-043-B1 (Q-SE-3): loader juga memuat email pelanggan terpilih
+ * (select perluasan `email`, tanpa PII masuk log — alamat hanya bepergian
+ * di payload halaman bergerbang `view_reports`) + riwayat jejak EMAIL
+ * statement TERPISAH dari WA: baris `email_link_opened` berjangkar
+ * pelanggan, terbaru-dulu, dibaca apa adanya (label jujur "Tautan Email
+ * dibuka" milik UI; loader tidak mengarang status terkirim/dibaca,
+ * BR-SE-01/BR-SE-10). Payload builder statement tetap beku (BR-ST-06).
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -54,14 +62,25 @@ export interface CustomerStatementWhatsappTrailEntry {
   createdAt: Date
 }
 
+/**
+ * Entri jejak tautan email statement (043-B1) — TERPISAH dari jejak WA
+ * (BR-SE-10: kanal tidak digabung jadi satu klaim hubungi). Bentuk sama
+ * dengan entri WA supaya UI bisa me-render pola riwayat yang sama.
+ */
+export type CustomerStatementEmailTrailEntry = CustomerStatementWhatsappTrailEntry
+
 export interface CustomerStatementReport {
   statement: CustomerStatement
   /** Bentuk existing beku (BR-ST-06): id+nama saja; phone ada di field terpisah. */
   customer: { id: number; name: string } | null
   /** Nomor pelanggan terpilih untuk jalur WA (Customer.phone); null bila kosong. */
   customerPhone: string | null
+  /** Alamat email pelanggan terpilih untuk jalur mailto (Customer.email); null bila kosong. */
+  customerEmail: string | null
     /** Jejak klik WA statement pelanggan ini, terbaru-dulu (baca-saja). */
   whatsappTrail: CustomerStatementWhatsappTrailEntry[]
+  /** Jejak klik email statement pelanggan ini, terbaru-dulu (baca-saja, terpisah WA). */
+  emailTrail: CustomerStatementEmailTrailEntry[]
   table: { columns: TableColumn[]; rows: TableRow[] }
   periodLabel: string
   periodCaption: string
@@ -119,24 +138,59 @@ async function loadStatementWhatsappTrail(
   }))
 }
 
+/**
+ * Jejak klik email statement pelanggan (apa adanya, terbaru-dulu) —
+ * ActivityLog `email_link_opened` jenis `CustomerStatement`, modelId = ID
+ * pelanggan. BR-SE-01: baris hanya membuktikan tautan dibuka; fungsi ini
+ * tidak menghitung status terkirim/dibaca apa pun. TERPISAH dari jejak WA
+ * (BR-SE-10) — query action berbeda, tidak digabung.
+ */
+async function loadStatementEmailTrail(
+  customerId: number,
+): Promise<CustomerStatementEmailTrailEntry[]> {
+  const rows = await prisma.activityLog.findMany({
+    where: { modelType: "CustomerStatement", modelId: customerId, action: "email_link_opened" },
+    orderBy: { createdAt: "desc" },
+    take: 25,
+    select: { userId: true, createdAt: true },
+  })
+
+  const userIds = Array.from(new Set(rows.map((r) => r.userId).filter((id) => id != null)))
+  const users =
+    userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true },
+        })
+      : []
+  const nameById = new Map(users.map((u) => [u.id, u.name]))
+
+  return rows.map((r) => ({
+    userName: r.userId ? (nameById.get(r.userId) ?? null) : null,
+    createdAt: r.createdAt,
+  }))
+}
+
 export async function loadCustomerStatement(
   customerId: number,
   period: { start: Date; end: Date },
 ): Promise<CustomerStatementReport> {
-  const [customer, customerPhone, whatsappTrail, invoices, payments, salesReturns] = await Promise.all([
+  const [customer, customerContact, whatsappTrail, emailTrail, invoices, payments, salesReturns] = await Promise.all([
     prisma.customer.findFirst({
       where: { id: customerId, deletedAt: null },
       select: { id: true, name: true },
     }),
-    // Phone menyatakan PELANGGAN TERPILIH, bukan keberadaan statement:
-    // dibaca tanpa filter deleted supaya grup jejak tetap memuat nomor
+    // Kontak menyatakan PELANGGAN TERPILIH, bukan keberadaan statement:
+    // dibaca tanpa filter deleted supaya grup jejak tetap memuat kontak
     // pelanggan yang sempat tampil (BR-SW-03/BR-SW-09 mengikuti pilihan
-    // halaman existing lewat keberadaan pelanggan di jalur ini).
+    // halaman existing lewat keberadaan pelanggan di jalur ini). Email
+    // ikut satu query yang sama (043-B1) — bukan query tambahan.
     prisma.customer.findFirst({
       where: { id: customerId },
-      select: { phone: true },
+      select: { phone: true, email: true },
     }),
     loadStatementWhatsappTrail(customerId),
+    loadStatementEmailTrail(customerId),
     prisma.salesInvoice.findMany({
       where: {
         customerId,
@@ -251,8 +305,10 @@ export async function loadCustomerStatement(
   return {
     statement,
     customer,
-    customerPhone: customerPhone?.phone ?? null,
+    customerPhone: customerContact?.phone ?? null,
+    customerEmail: customerContact?.email ?? null,
     whatsappTrail,
+    emailTrail,
     table: { columns: COLUMNS, rows },
     ...rangePeriodLabels(period),
   }
