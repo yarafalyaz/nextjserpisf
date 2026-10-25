@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/utils/format";
+import { statementBalanceSentence } from "@/lib/utils/whatsapp";
 
 /**
  * F-2026-10-25-043-B1: subjek + isi email statement pelanggan (mailto)
@@ -52,15 +52,8 @@ export function buildStatementEmailMessage(
   input: StatementEmailMessageInput,
 ): string {
   const tail = "Statement lengkap dapat kami sediakan/dicetak bila diperlukan.";
-  let balanceLine: string;
-  if (input.closingBalance > 0) {
-    balanceLine = `Saldo akhir periode: ${formatCurrency(input.closingBalance)}.`;
-  } else if (input.closingBalance === 0) {
-    balanceLine =
-      "Saldo akhir periode: Rp 0 — tidak ada sisa piutang pada akhir periode ini.";
-  } else {
-    balanceLine = `Saldo akhir periode menunjukkan kelebihan bayar sebesar ${formatCurrency(Math.abs(input.closingBalance))} yang tercatat sebagai kredit Anda.`;
-  }
+  // Kalimat saldo identik varian WA (Q-SE-4 = Q-SW-3) — helper bersama.
+  const balanceLine = statementBalanceSentence(input.closingBalance);
   return [
     `Halo ${input.customerName},`,
     "",
