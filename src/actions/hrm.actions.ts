@@ -1,8 +1,8 @@
 "use server";
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
-import { requirePermission } from "@/lib/auth/permissions";
-import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math";
+import { requireAnyPermission, requirePermission } from "@/lib/auth/permissions";
+import { safeAdd, safeRound, safeSubtract, safeSum } from "@/lib/utils/math";
 import {
   computeBpjsEmployee,
   computePph21FinalPeriod,
@@ -61,7 +61,14 @@ import {
   getLeaveQuota,
   countLeaveWorkingDays,
   QUOTA_LEAVE_TYPES,
+  SPECIAL_LEAVE_DAY_CAPS,
+  resolveDayKind,
 } from "@/lib/services/leave-quota.service";
+import {
+  assertOvertimeWithinWorkdayLimits,
+  computeOvertimePay,
+  type OvertimeDayKind,
+} from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -905,6 +912,20 @@ export async function createLeaveRequest(formData: FormData) {
         );
       }
 
+      // Cuti khusus statutori (Pasal 81 & 93 UU 13/2003): batas hari
+      // kalender per kejadian, ditegakkan di sini karena gerbang jatah
+      // tahunan hanya berlaku untuk tipe "annual".
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       // Annual-leave quota gate (only `annual` draws down the 12-day/calendar-year
       // balance — see QUOTA_LEAVE_TYPES). Two enforced rules:
       //  1. Tenure: employees with < 1 year of service (from joinDate) are not
@@ -1001,12 +1022,21 @@ export async function createOvertimeRequest(formData: FormData) {
     await assertHrEmployeeAccess(scope, v.employeeId);
 
     const overtime = await prisma.$transaction(async (tx) => {
+      // Batas lembur PP 35/2021 Pasal 26 ayat (1) — gerbang bersama create/
+      // update di overtime-pay.service (syarat vonis K2-S1).
+      const otDate = wibDateToUtcMidnight(v.date);
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: otDate,
+        hours: v.hours,
+      });
+
       const created = await tx.overtimeRequest.create({
         data: {
           slug: await nextSlug("overtimeRequest", `lembur-${v.date}`),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
-          date: wibDateToUtcMidnight(v.date),
+          date: otDate,
           hours: v.hours,
           totalHours: v.totalHours ?? null,
           mealHours: v.mealHours ?? null,
@@ -1072,18 +1102,62 @@ export async function approveOvertime(overtimeId: number) {
       return { success: true };
     }
 
-    // Compute overtime value: hours * baseSalary * multiplier * coefficient.
-    // Default: multiplier ≈ 1/173 (monthly-to-hourly), coefficient 1.10 (first-hour rate).
-    const settings = await prisma.systemSetting.findFirst({
-      select: { overtimeMultiplier: true, overtimeCoefficient: true },
+    // Nilai lembur bertingkat menurut PP 35/2021 jo. Kepmenakertrans
+    // 102/2004: upah sejam = gaji/173; hari kerja 1,5x lalu 2x; hari
+    // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
+    // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
+    // lewat Pengaturan) membayar di bawah minimum undang-undang.
+    // Syarat vonis K2-S2 (F-2026-10-25-014-V) sebagaimana dimutakhirkan vonis
+    // F-2026-10-25-022-V: dasar upah lembur Pasal 32 PP 35/2021 = Upah pokok
+    // (Employee.baseSalary) + seluruh tunjangan tetap terdaftar, yaitu Σ
+    // defaultAmount EmployeePayrollComponent aktif (isActive, komponen aktif,
+    // kind "earning", recurrence "fixed") yang berjendela efektif pada TANGGAL
+    // LEMBUR (ot.date) — bukan tanggal approve. Komponen gaji terpisah memang
+    // ada di skema (PayrollComponent + EmployeePayrollComponent); penugasan
+    // hanya boleh memuat komponen "fixed", jadi seluruh penugasan aktif adalah
+    // tunjangan tetap. Cabang 75% Pasal 32 ayat (4) SENGAJA tidak diterapkan:
+    // ia berlaku hanya bila ada tunjangan tidak tetap dan (pokok + tetap)
+    // < 75% keseluruhan Upah, dengan dasar 75% x keseluruhan Upah — dan repo
+    // tidak menyimpan penugasan tunjangan tidak tetap berjalan, jadi
+    // keseluruhan Upah tidak terdefinisi deterministik dari data yang ada.
+    // Default yang disahkan vonis: dasar 100% (pokok + tunjangan tetap).
+    // Menambah pemicu 75% dari data lain (master variable, baris slip manual)
+    // DITOLAK vonis. Bila master tunjangan tidak tetap berjalan kelak ada,
+    // dasar ini WAJIB ditinjau ulang oleh vonis Accountant baru.
+    // Pola where disalin dari preseden PKWT (pkwt-compensation.service.ts)
+    // tanpa mengimpor service itu; filter kind "earning" wajib eksplisit —
+    // loadEffectivePayrollAssignments tidak menyaring kind sehingga komponen
+    // deduction/fixed akan ikut terhitung bila pemuat itu dipakai apa adanya.
+    const fixedAssignments = await prisma.employeePayrollComponent.findMany({
+      where: {
+        employeeId: ot.employeeId,
+        isActive: true,
+        effectiveFrom: { lte: ot.date },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
+        component: { isActive: true, recurrence: "fixed", kind: "earning" },
+      },
+      select: { defaultAmount: true },
     });
-    const multiplier = Number(settings?.overtimeMultiplier ?? 0.00578035);
-    const coefficient = Number(settings?.overtimeCoefficient ?? 1.1);
-    const baseSalary = Number(ot.employee?.baseSalary ?? 0);
-    const hours = Number(ot.hours);
-    const calculatedValue = Math.round(
-      hours * baseSalary * multiplier * coefficient,
+    const fixedAllowance = fixedAssignments.reduce(
+      (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
+      0,
     );
+    const baseSalary = safeRound(
+      Number(ot.employee?.baseSalary ?? 0) + fixedAllowance,
+      2,
+    );
+    const hours = Number(ot.hours);
+    const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
+    const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
+      ? "workday"
+      : dayProfile.workdaysPerWeek >= 6
+        ? "rest_6day"
+        : "rest_5day";
+    const calculatedValue = computeOvertimePay({
+      monthlySalary: baseSalary,
+      hours,
+      dayKind,
+    });
 
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
@@ -1298,8 +1372,9 @@ async function computePayrollEstimation(
   const bpjs = bpjsComputed.bpjs;
   // Plafon Pasal 65 TIDAK menolak preview (vonis butir 6: gerbang slip =
   // generate/finalisasi tulis) — pelampauan tampil di snapshot preview.
+  // Basis sama dengan gerbang tulis: upah pembayaran (grossSalary).
   const ceilingFinding = evaluateDeductionCeiling({
-    wageBase: baseSalary,
+    wageBase: grossSalary,
     loanDeduction,
     lateDeduction: latePenalty.totalPenalty,
     componentDeductions: 0,
@@ -2291,14 +2366,18 @@ export async function generateBulkPayroll(
       const empId = targetIds[i];
       const est = estimations.get(empId);
       if (!est) continue;
-      // Plafon Pasal 65 run massal (F-105-V butir 6): karyawan pelanggar
-      // terlewati-terhitung, bukan menggagalkan seluruh run / dipangkas.
+      // Plafon Pasal 65 run massal (F-105-V butir 6, ditegakkan ulang
+      // vonis F-2026-10-25-023-V §5): basis = upah pembayaran slip ini
+      // (grossSalary estimasi: pokok + tunjangan + lembur + apresiasi),
+      // BUKAN baseSalary saja; komponen potongan diskresioner ikut ember
+      // Pasal 63. Karyawan pelanggar terlewati-terhitung, bukan
+      // menggagalkan seluruh run / dipangkas diam-diam.
       if (
         evaluateDeductionCeiling({
-          wageBase: est.baseSalary ?? 0,
+          wageBase: est.grossSalary ?? 0,
           loanDeduction: est.loanDeduction ?? 0,
           lateDeduction: est.lateDeduction ?? 0,
-          componentDeductions: 0,
+          componentDeductions: est.deductions ?? 0,
         })
       ) {
         runSkips.push({ employeeId: empId, reason: "plafonPotongan", conflictDocumentNo: null });
@@ -2956,6 +3035,24 @@ export async function markPayrollPaid(payrollId: number) {
       );
     }
 
+    // Vonis F-2026-10-25-023-V §5 (AC-LSV-2): plafon Pasal 65 ditegakkan
+    // juga SAAT DIBAYAR atas angka slip tersimpan — slip warisan/draft lama
+    // yang lolos sebelum gerbang susun tidak boleh membayar potongan
+    // Pasal 63 menembus 50% upah pembayaran ini. Pelanggaran = tolak
+    // berisik sebelum klaim status: nol jurnal, nol amortisasi pinjaman,
+    // sisa pokok tidak berubah (bukan dipangkas diam-diam, bukan denda).
+    const paidCeilingBreach = evaluateDeductionCeiling({
+      wageBase: Number(payroll.grossSalary),
+      loanDeduction: Number(payroll.loanDeduction),
+      lateDeduction: Number(payroll.lateDeduction),
+      componentDeductions: Number(payroll.deductions),
+    });
+    if (paidCeilingBreach) {
+      throw new Error(
+        `Total potongan Pasal 63 (cicilan pinjaman + denda + komponen potongan) Rp${paidCeilingBreach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${paidCeilingBreach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — pembayaran ditolak. Hitung ulang slip, jangan dibayar menembus plafon.`,
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       // Atomic conditional claim: only the request that flips status away from
       // "approved" wins. Without this, two concurrent "bayar gaji" clicks could
@@ -3063,7 +3160,32 @@ export async function markPayrollPaid(payrollId: number) {
 
 export async function createEmployeeLoan(formData: FormData) {
   try {
-    const user = await requirePermission("create_loans");
+    // F-2026-10-25-018-S Q-LS-1 (Putusan Lead F-2026-10-25-026-L): SATU aksi,
+    // DUA pintu izin. Jalur staf/titipan = create_loans (perilaku existing,
+    // nol berubah). Jalur mandiri = create_employee_loan_requests — pemegang
+    // key ini (tanpa create_loans) HANYA boleh mengajukan untuk employee
+    // tertaut dirinya sendiri; scope self di bawah menegakkannya di server.
+    // update/deleteEmployeeLoan tetap digerbang create_loans saja.
+    const user = await requireAnyPermission([
+      "create_loans",
+      "create_employee_loan_requests",
+    ]);
+    const userPerms: string[] = Array.isArray(
+      (user as { permissions?: unknown }).permissions,
+    )
+      ? [...((user as { permissions: string[] }).permissions)]
+      : [];
+    const userRoles: string[] = Array.isArray(
+      (user as { roles?: unknown }).roles,
+    )
+      ? [...((user as { roles: string[] }).roles)]
+      : [];
+    // super_admin melewati requireAnyPermission tanpa perlu memegang key
+    // mana pun — ia jalur staf, bukan mandiri.
+    const isSelfServiceOnly =
+      !userRoles.includes("super_admin") &&
+      !userPerms.includes("create_loans") &&
+      userPerms.includes("create_employee_loan_requests");
 
     const parsed = parseFormData(employeeLoanSchema, formData);
     if (!parsed.success)
@@ -3073,6 +3195,24 @@ export async function createEmployeeLoan(formData: FormData) {
     const employeeId = v.employeeId;
 
     const scope = await getHrScope(user);
+    // Pintu mandiri: walau peran lain memberi scope department/all, key
+    // pengajuan saja tidak pernah membuka pengajuan untuk orang lain.
+    // Scope `all` tidak membawa employeeId, jadi tautan user→employee
+    // diselesaikan langsung di sini (tautan yang sama dengan getHrScope).
+    if (isSelfServiceOnly) {
+      const ownEmployeeId =
+        scope.kind === "all"
+          ? (
+              await prisma.employee.findFirst({
+                where: { userId: Number(user.id) },
+                select: { id: true },
+              })
+            )?.id ?? -1
+          : scope.employeeId;
+      if (ownEmployeeId !== employeeId) {
+        throw new Error("Pengajuan mandiri hanya untuk diri sendiri");
+      }
+    }
     if (scope.kind === "self" && scope.employeeId !== employeeId) {
       throw new Error("Anda hanya diperbolehkan membuat pinjaman untuk diri sendiri");
     } else if (scope.kind === "department") {
@@ -3999,10 +4139,22 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
         );
       }
 
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
         const quotaYear = startDate.getFullYear();
         const quota = await getLeaveQuota(employeeId, {
           year: quotaYear,
+          now: startDate,
           excludeLeaveId: id,
           db: tx,
         });
@@ -4106,6 +4258,16 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
       }
+
+      // Gerbang batas yang sama dengan create (syarat vonis K2-S1):
+      // tanpa ini edit pending 2 jam -> 5 jam hari kerja lolos batas
+      // PP 35/2021. excludeId mengeluarkan baris ini dari hitungannya.
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: wibDateToUtcMidnight(v.date),
+        hours: v.hours,
+        excludeId: id,
+      });
 
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },

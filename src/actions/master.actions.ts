@@ -58,6 +58,11 @@ import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
+  normalizeNitku,
+  normalizeNpwp,
+  validateMasterTaxIdentity,
+} from "@/lib/tax/customer-tax-identity";
+import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
@@ -197,6 +202,46 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CUSTOMER ACTIONS ====================
 
+// F-2026-10-25-004-S: validasi bentuk identitas pajak master (longgar-
+// tertanda vonis 019-V §1/§2/§3) + normalisasi simpan digit-saja.
+// Bentuk cacat = tolak simpan; legacy15/unlinked lolos dengan peringatan
+// di respons (advisory, simpan tetap berhasil — pola duplicateWarning).
+function customerTaxIdentityForSave(v: {
+  taxId?: string
+  taxpayerName?: string
+  taxAddress?: string
+  nitku?: string
+  pkpStatus?: string
+  pkpEffectiveFrom?: string
+  pkpSource?: string
+}): { error: string } | { data: Record<string, unknown>; warnings: string[] } {
+  const check = validateMasterTaxIdentity({
+    taxId: v.taxId,
+    taxpayerName: v.taxpayerName,
+    nitku: v.nitku,
+  })
+  if (!check.ok) return { error: check.errors.join("; ") }
+  let pkpEffectiveFrom: Date | null = null
+  if (v.pkpEffectiveFrom) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.pkpEffectiveFrom)) {
+      return { error: "Tanggal pengukuhan PKP tidak valid (format YYYY-MM-DD)" }
+    }
+    pkpEffectiveFrom = wibDateToUtcMidnight(v.pkpEffectiveFrom)
+  }
+  return {
+    warnings: check.warnings,
+    data: {
+      taxId: normalizeNpwp(v.taxId) ?? v.taxId ?? null,
+      taxpayerName: v.taxpayerName ?? null,
+      taxAddress: v.taxAddress ?? null,
+      nitku: normalizeNitku(v.nitku),
+      pkpStatus: v.pkpStatus ?? "unknown",
+      pkpEffectiveFrom,
+      pkpSource: v.pkpSource ?? null,
+    },
+  }
+}
+
 export async function createCustomer(formData: FormData) {
   try {
     const user = await requirePermission("create_customers");
@@ -215,6 +260,9 @@ export async function createCustomer(formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const taxIdentity = customerTaxIdentityForSave(v);
+    if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
     // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
@@ -247,7 +295,7 @@ export async function createCustomer(formData: FormData) {
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
         isActive: true,
-        taxId: v.taxId ?? null,
+        ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
       },
     });
@@ -263,7 +311,11 @@ export async function createCustomer(formData: FormData) {
     );
     const duplicateWarning: CustomerDuplicateWarning | null =
       buildCustomerDuplicateWarning(candidates);
-    return { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
+    // taxWarnings hanya disertakan bila ada peringatan (legacy15 dsb.) —
+    // bentuk respons lama byte-sama bila tidak ada (kontrak tidak berubah diam-diam).
+    return taxIdentity.warnings.length
+      ? { success: true, id: customer.id, slug: customer.slug, duplicateWarning, taxWarnings: taxIdentity.warnings }
+      : { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCustomer]", getErrorMessage(e) || e);
@@ -278,6 +330,9 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const taxIdentity = customerTaxIdentityForSave(v);
+    if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
 
     if (v.customerCategoryId != null) {
       const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
@@ -302,7 +357,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         district: v.district ?? null,
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
-        taxId: v.taxId ?? null,
+        ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
       },
     });
@@ -321,7 +376,9 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     );
     const duplicateWarning: CustomerDuplicateWarning | null =
       buildCustomerDuplicateWarning(candidates);
-    return { success: true, duplicateWarning };
+    return taxIdentity.warnings.length
+      ? { success: true, duplicateWarning, taxWarnings: taxIdentity.warnings }
+      : { success: true, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateCustomer]", getErrorMessage(e) || e);
@@ -847,6 +904,7 @@ function readEmployeeLifecycleFields(
     contractStartDate?: string;
     contractEndDate?: string;
     employmentEndedAt?: string;
+    leaveEligibilityStartDate?: string;
   },
 ) {
   const rawStatus = (formData.get("employmentStatus") as string | null)?.trim() || null;
@@ -873,7 +931,15 @@ function readEmployeeLifecycleFields(
       : null,
     employmentEndedAt: endedAt,
     endReason: rawReason,
+    leaveEligibilityStartDate: dates.leaveEligibilityStartDate
+      ? wibDateToUtcMidnight(dates.leaveEligibilityStartDate)
+      : null,
   };
+}
+
+function todayWibMidnightDate(): Date {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  return wibDateToUtcMidnight(today);
 }
 
 function dateOnlyOrNull(value: Date | null | undefined): string | null {
@@ -886,6 +952,7 @@ type EmployeeLifecycleValues = {
   contractEndDate: string | null;
   employmentEndedAt: string | null;
   endReason: string | null;
+  leaveEligibilityStartDate: string | null;
 };
 
 /**
@@ -1081,6 +1148,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       select: {
         userId: true,
         employmentStatus: true,
+        leaveEligibilityStartDate: true,
         contractStartDate: true,
         contractEndDate: true,
         employmentEndedAt: true,
@@ -1160,10 +1228,27 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       formData.has("contractStartDate") ||
       formData.has("contractEndDate") ||
       formData.has("employmentEndedAt") ||
+      formData.has("leaveEligibilityStartDate") ||
       formData.has("endReason");
     const lifecycleFields = lifecycleTouched
       ? readEmployeeLifecycleFields(formData, parsedDates.data)
       : null;
+
+    // Transisi Magang -> Kontrak: jam masa kerja hak cuti mulai dari
+    // tanggal mulai kontrak (masa magang tidak terhitung). Jangkar hanya
+    // diisi otomatis bila belum pernah diatur manual.
+    if (
+      lifecycleFields &&
+      current &&
+      current.employmentStatus === "INTERN" &&
+      (lifecycleFields.employmentStatus === "PKWT" ||
+        lifecycleFields.employmentStatus === "PKWTT") &&
+      current.leaveEligibilityStartDate == null &&
+      lifecycleFields.leaveEligibilityStartDate == null
+    ) {
+      lifecycleFields.leaveEligibilityStartDate =
+        lifecycleFields.contractStartDate ?? todayWibMidnightDate();
+    }
     const updateData = {
       ...employeeFields,
       ...(lifecycleFields ?? {}),
@@ -1229,6 +1314,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(current.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(current.employmentEndedAt),
         endReason: current.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(current.leaveEligibilityStartDate),
       };
       const newValues = {
         employmentStatus: lifecycleFields.employmentStatus,
@@ -1236,6 +1322,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(lifecycleFields.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(lifecycleFields.employmentEndedAt),
         endReason: lifecycleFields.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(lifecycleFields.leaveEligibilityStartDate),
       };
       if (JSON.stringify(oldValues) !== JSON.stringify(newValues)) {
         const logged = await writeEmployeeLifecycleLog({

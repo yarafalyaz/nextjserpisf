@@ -116,6 +116,13 @@ model SystemSetting {
   companyLogoDark              String?   @map("company_logo_dark")
   companyWebsite               String?   @map("company_website")
   companyTaxId                 String?   @map("company_tax_id")
+  // F-2026-10-25-015-V: status PKP perusahaan penjual (nilai kini +
+  // tanggal mulai kewajiban, BUKAN tanggal SPPKP — PMK 164/2023).
+  // Default "unknown": install existing TIDAK ditebak non-PKP/PKP.
+  // Pisah tegas dari pkpStatus lawan transaksi (F-2026-10-25-005-V).
+  companyPkpStatus             String    @default("unknown") @map("company_pkp_status") @db.VarChar(16)
+  companyPkpEffectiveFrom      DateTime? @map("company_pkp_effective_from")
+  companyPkpSource             String?   @map("company_pkp_source")
   companyLatitude              Decimal?  @map("company_latitude") @db.Decimal(10, 8)
   companyLongitude             Decimal?  @map("company_longitude") @db.Decimal(11, 8)
   costingMethod                String    @default("FIFO") @map("costing_method")
@@ -303,6 +310,10 @@ model SystemSetting {
    * DILARANG fallback ke salesRevenueAccountId/710005.
    */
   scrapSaleIncomeAccountId Int?    @map("scrap_sale_income_account_id")
+  // F-2026-10-25-018-V Putusan 3: akun Utang Reimbursement Karyawan (kode
+  // COA 210209) untuk jurnal akrual klaim J-RB1/J-RB2. Nullable TANPA
+  // default tebak; kosong = approve klaim ditolak fail-closed.
+  reimbursementLiabilityAccountId Int? @map("reimbursement_liability_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -382,6 +393,15 @@ model Customer {
   city               String?
   gender             String?           @map("gender")
   taxId              String?           @map("tax_id")
+  // F-2026-10-25-004-S (vonis 019-V + putusan Lead §8A): identitas pajak
+  // terstruktur. taxId tetap NPWP; pkpStatus string divalidasi server
+  // (non_pkp|pkp|unknown), default unknown = tidak tahu, bukan bukan-PKP.
+  taxpayerName       String?           @map("taxpayer_name")
+  taxAddress         String?           @map("tax_address") @db.Text
+  nitku              String?           @map("nitku")
+  pkpStatus          String            @default("unknown") @map("pkp_status")
+  pkpEffectiveFrom   DateTime?         @map("pkp_effective_from") @db.Date
+  pkpSource          String?           @map("pkp_source")
   code               String?           @unique @map("code")
   creditLimit        Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
   contactPerson      String?           @map("contact_person")
@@ -937,11 +957,22 @@ model Employee {
   employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
+  // Jangkar perhitungan masa kerja untuk hak cuti tahunan. Kosong =
+  // dihitung dari joinDate. Terisi otomatis saat status berubah
+  // INTERN (magang) -> PKWT/PKWTT: masa magang tidak ikut terhitung,
+  // jam 1 tahun mulai dari tanggal mulai kontrak.
+  leaveEligibilityStartDate DateTime?   @map("leave_eligibility_start_date")
   user                User?             @relation(fields: [userId], references: [id])
   leaveRequests       LeaveRequest[]
   overtimeRequests    OvertimeRequest[]
   probationReviews    ProbationReview[] @relation("ProbationReviewSubject")
   probationReviewsGiven ProbationReview[] @relation("ProbationReviewReviewer")
+  disciplinaryRecords EmployeeDisciplinaryRecord[] @relation("DisciplinarySubject")
+  expenses            Expense[]
+  disciplinaryRequested EmployeeDisciplinaryRecord[] @relation("DisciplinaryRequester")
+  disciplinaryApproved EmployeeDisciplinaryRecord[] @relation("DisciplinaryApprover")
+  disciplinarySecondApproved EmployeeDisciplinaryRecord[] @relation("DisciplinarySecondApprover")
+  disciplinaryVoided  EmployeeDisciplinaryRecord[] @relation("DisciplinaryVoider")
   contractDecisionRequests ContractDecisionRequest[] @relation("ContractDecisionSubject")
   payrolls            Payroll[]
   tasks               Task[]
@@ -1119,6 +1150,12 @@ model TaxInvoice {
   vendorBillId         Int?         @map("vendor_bill_id")
   vendorId             Int?         @map("vendor_id")
   /**
+   * F-2026-10-25-004-V: FP uang muka (FP UM) tertaut DownPayment.
+   * Snapshot DPP/PPN FP UM hidup di baris ini (dpp/taxAmount/taxRate);
+   * snapshot DP asal dibekukan di DownPayment.vat*. SetNull pola existing.
+   */
+  downPaymentId        Int?         @map("down_payment_id")
+  /**
    * Self-FK ke faktur diganti; unik (satu pengganti per faktur).
    */
   replacesId           Int?         @unique @map("replaces_id")
@@ -1155,6 +1192,7 @@ model TaxInvoice {
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
   salesInvoice         SalesInvoice? @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+  downPayment          DownPayment? @relation(fields: [downPaymentId], references: [id], onDelete: SetNull)
   vendorBill           VendorBill?  @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
   vendor               Vendor?      @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   replaces             TaxInvoice?  @relation("TaxInvoiceReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
@@ -1168,6 +1206,7 @@ model TaxInvoice {
   @@index([creditPeriod], map: "idx_tax_invoices_credit_period")
   @@index([creditStatus], map: "idx_tax_invoices_credit_status")
   @@index([salesInvoiceId], map: "idx_tax_invoices_sales_invoice")
+  @@index([downPaymentId], map: "idx_tax_invoices_down_payment")
   @@index([vendorBillId], map: "idx_tax_invoices_vendor_bill")
   @@index([vendorId], map: "idx_tax_invoices_vendor")
   @@index([direction, creditStatus, creditPeriod], map: "idx_tax_invoices_spt_input")
@@ -1463,11 +1502,31 @@ model DownPayment {
   proofImage    String?   @map("proof_image")
   status        String    @default("pending")
   notes         String?   @db.Text
+  /**
+   * F-2026-10-25-004-V: snapshot PPN uang muka dibekukan saat confirm
+   * (vonis PR #760). Null = DP legacy pra-fitur / belum confirmed.
+   * vatAmount > 0 = terutang FP UM; kredit 210102 = amount - vatAmount.
+   * Edit master pajak sesudah confirm TIDAK mengubah snapshot ini.
+   */
+  vatTransactionCode String? @map("vat_transaction_code") @db.VarChar(2)
+  vatRate            Decimal? @map("vat_rate") @db.Decimal(5, 2)
+  vatDpp             Decimal? @map("vat_dpp") @db.Decimal(15, 2)
+  vatAmount          Decimal? @map("vat_amount") @db.Decimal(15, 2)
+  vatTaxPeriod       String? @map("vat_tax_period") @db.VarChar(7)
+  /**
+   * F-2026-10-25-015-V Putusan 3: snapshot status PKP perusahaan yang
+   * dipakai gerbang saat DP confirmed (beku, nol efek retroaktif dari
+   * edit master). Null = baris legacy pra-fitur, berlabel legacy di
+   * read-model.
+   */
+  companyPkpStatusSnapshot        String?   @map("company_pkp_status_snapshot") @db.VarChar(16)
+  companyPkpEffectiveFromSnapshot DateTime? @map("company_pkp_effective_from_snapshot")
   createdBy     Int?      @map("created_by")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   customer      Customer  @relation(fields: [customerId], references: [id])
   quotation     Quotation @relation(fields: [quotationId], references: [id])
+  taxInvoices   TaxInvoice[]
 
   @@index([customerId], map: "down_payments_customer_id_fkey")
   @@index([quotationId], map: "down_payments_quotation_id_fkey")
@@ -3369,6 +3428,66 @@ model ProbationReview {
   @@map("probation_reviews")
 }
 
+// F-2026-10-25-005-S DISC-B1 (spec §3, putusan Lead Q-DISC-1..4 2026-10-25):
+// rekod peringatan disiplin karyawan. level snapshot fakta historis saat
+// terbit {verbal|sp1|sp2|sp3|sp_first_final}; workflowStatus
+// {draft|pending_approval|issued|rejected}. Masa berlaku active|expired =
+// TURUNAN issuedAt + 6 bulan kalender di src/lib/reports/disciplinary.ts
+// (BR-DISC-03), BUKAN kolom. violationCategory = konstanta tervalidasi
+// Q-DISC-1 di builder yang sama (bukan teks bebas). Rekod issued immutable:
+// koreksi lewat rekod pembatal tertaut voidOfId + voidedAt (BR-DISC-10).
+// requestedBy/approvedBy/secondApprovedBy dalam Employee id (SoD BR-DISC-06
+// dibandingkan per Employee). TANPA kolom nominal/gaji/status berhenti
+// (BR-DISC-08/09). Bukti memakai TransactionAttachment existing dengan
+// referenceType "EmployeeDisciplinaryRecord" (spec §3), tanpa tabel kedua.
+model EmployeeDisciplinaryRecord {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  employeeId           Int       @map("employee_id")
+  level                String
+  violationCategory    String    @map("violation_category")
+  violationDate        DateTime  @map("violation_date")
+  description          String    @db.Text
+  regulationReference  String?   @map("regulation_reference") @db.Text
+  workflowStatus       String    @default("draft") @map("workflow_status")
+  requestedBy          Int       @map("requested_by")
+  approvedBy           Int?      @map("approved_by")
+  approvedAt           DateTime? @map("approved_at")
+  secondApprovedBy     Int?      @map("second_approved_by")
+  secondApprovedAt     DateTime? @map("second_approved_at")
+  issuedAt             DateTime? @map("issued_at")
+  documentNo           String?   @unique @map("document_no")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  acknowledgmentAt     DateTime? @map("acknowledgment_at")
+  acknowledgmentMethod String?   @map("acknowledgment_method")
+  acknowledgmentRefused Boolean  @default(false) @map("acknowledgment_refused")
+  employeeResponse     String?   @map("employee_response") @db.Text
+  employeeResponseAt   DateTime? @map("employee_response_at")
+  employeeResponseLate Boolean   @default(false) @map("employee_response_late")
+  voidOfId             Int?      @unique @map("void_of_id")
+  voidedAt             DateTime? @map("voided_at")
+  voidedBy             Int?      @map("voided_by")
+  voidReason           String?   @map("void_reason") @db.Text
+  createdBy            Int?      @map("created_by")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  employee             Employee  @relation("DisciplinarySubject", fields: [employeeId], references: [id])
+  requester            Employee  @relation("DisciplinaryRequester", fields: [requestedBy], references: [id])
+  approver             Employee? @relation("DisciplinaryApprover", fields: [approvedBy], references: [id])
+  secondApprover       Employee? @relation("DisciplinarySecondApprover", fields: [secondApprovedBy], references: [id])
+  voider               Employee? @relation("DisciplinaryVoider", fields: [voidedBy], references: [id])
+  voidOf               EmployeeDisciplinaryRecord? @relation("DisciplinaryVoid", fields: [voidOfId], references: [id])
+  voidedByRecord       EmployeeDisciplinaryRecord? @relation("DisciplinaryVoid")
+
+  @@index([employeeId], map: "employee_disciplinary_records_employee_id_fkey")
+  @@index([workflowStatus], map: "idx_employee_disciplinary_records_status")
+  @@index([requestedBy], map: "idx_employee_disciplinary_records_requested_by")
+  @@index([violationDate], map: "idx_employee_disciplinary_records_violation_date")
+  @@index([createdAt])
+  @@map("employee_disciplinary_records")
+}
+
 // F-2026-10-24-099-S (§2, putusan Q-PROB-2/6): pengajuan keputusan kontrak.
 // kind: extend_pkwt|convert_pkwtt|end_contract. Segmen PKWT kumulatif
 // (BR-PROB-08) dihitung dari baris APPLIED model ini (appliedFromStartDate..
@@ -3901,6 +4020,10 @@ model Expense {
   referenceNo       String?          @map("reference_no")
   description       String?          @db.Text
   receiptImage      String?          @map("receipt_image")
+  // F-2026-10-25-017-S (Q-RB-3 Backend): penanda fisik klaim reimbursement
+  // karyawan di atas Expense existing (BR-RB-01) — membedakan klaim dari
+  // Expense operasional tanpa model/dokumen kedua. employeeId = pengaju.
+  isReimbursementClaim Boolean       @default(false) @map("is_reimbursement_claim")
   status            String           @default("draft")
   approvedBy        Int?             @map("approved_by")
   costCenterId      Int?             @map("cost_center_id")
@@ -3909,6 +4032,7 @@ model Expense {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   category          ExpenseCategory? @relation(fields: [categoryId], references: [id])
   vendor            Vendor?          @relation(fields: [vendorId], references: [id])
+  employee          Employee?        @relation(fields: [employeeId], references: [id])
 
   @@index([accountId], map: "expenses_account_id_idx")
   @@index([projectId], map: "expenses_project_id_idx")

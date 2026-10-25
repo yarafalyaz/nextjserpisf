@@ -70,6 +70,8 @@ const RESOURCES = [
   // approve_contracts lolos fail-closed generator (permission tanpa
   // resource di sini = process.exit(1)).
   ["contracts", "hrm", "Kontrak Karyawan"],
+  // F-2026-10-25-005-S DISC-B1 Q-DISC-2: izin khusus disiplin.
+  ["disciplinary_records", "hrm", "Rekod Disiplin"],
   ["departments", "master", "Departemen"],
   ["positions", "master", "Jabatan"],
   ["accounts", "master", "Akun (COA)"],
@@ -131,10 +133,14 @@ const RESOURCES = [
   ["timesheets", "hrm", "Lembar Waktu"],
   ["holidays", "hrm", "Hari Libur"],
   ["employee_loans", "hrm", "Pinjaman Karyawan"],
+  // F-2026-10-25-018-S Q-LS-1: resource key pengajuan mandiri
+  // create_employee_loan_requests (label beda dari "Pinjaman" staf).
+  ["employee_loan_requests", "hrm", "Pengajuan Pinjaman Karyawan"],
   ["loans", "hrm", "Pinjaman"],
   ["appreciations", "hrm", "Apresiasi"],
   ["journals", "finance", "Jurnal"],
   ["expenses", "finance", "Pengeluaran"],
+  ["employee_reimbursements", "hrm", "Klaim Reimbursement"],
   ["petty_cash", "finance", "Kas Kecil"],
   ["cost_centers", "finance", "Pusat Biaya"],
   ["profit_centers", "finance", "Pusat Laba"],

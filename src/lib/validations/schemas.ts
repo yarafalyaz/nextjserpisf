@@ -25,6 +25,14 @@ export const customerSchema = z.object({
   gender: z.enum(["male", "female"]).optional(),
   code: optionalString(50),
   taxId: optionalString(50),
+  // F-2026-10-25-004-S: blok identitas pajak (semua opsional; bentuk
+  // NPWP/NITKU divalidasi service-layer builder, bukan di skema ini).
+  taxpayerName: optionalString(200),
+  taxAddress: optionalString(2000),
+  nitku: optionalString(50),
+  pkpStatus: z.enum(["non_pkp", "pkp", "unknown"]).optional(),
+  pkpEffectiveFrom: optionalString(10),
+  pkpSource: optionalString(200),
   customerCategoryId: optionalNumber(),
 })
 
@@ -142,6 +150,7 @@ export const employeeDatesSchema = z.object({
   contractStartDate: optionalDateOnly,
   contractEndDate: optionalDateOnly,
   employmentEndedAt: optionalDateOnly,
+  leaveEligibilityStartDate: optionalDateOnly,
 })
 
 export const uomServerSchema = z.object({
