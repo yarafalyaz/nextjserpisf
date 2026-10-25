@@ -31061,6 +31061,111 @@ Edge cases:
 F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
 
 ---
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-041-S: kode pajak + dasar pengenaan default per barang/jasa di master Item (kontrak bisnis; vonis kode/tarif milik Accountant)
+
+> **Slot**: F-2026-10-25-041-S. Diperiksa bentrok 2026-10-25 20:16 WIB vs `origin/main` (`98c614a1`): grep `F-2026-10-25-041` di backlog+board origin/main = 0; ID terpakai tanggal ini 001-S..040-S (040-S di PR #894 OPEN). ID 041 bebas. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Sumber gap**: riset awal backlog (baris ±84) mencatat "`Item`/`Product` tanpa kode pajak/DPP default per barang-jasa". Klaim itu diverifikasi ulang live run ini (bisa basi sejak 2026-10-20) — hasil: MASIH TERBUKTI (lihat §0). Bukan duplikat: F-2026-10-25-004-S/019-V mengatur identitas pajak PELANGGAN + faktur pajak; `TaxInvoice.transactionCode` adalah kode transaksi dokumen, bukan kode pajak per barang; `WithholdingTaxType` adalah pajak potong (PPh), bukan PPN per barang. Tidak ada spec existing yang menampung default pajak per item.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 98c614a1) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Master pajak generik live: `Tax` (rate/type/scope/isInclusive/isCompound/accountId/effectiveFrom-To), `TaxGroup`+`TaxGroupTax`, halaman `master/pajak` + `master/kelompok-pajak`, izin `view/create/edit/delete_taxes` (`module-catalog.generated.ts:121-124`).
+- Master barang live: `Item` (sku/name/isProduct/isService/harga/biaya, penanda khusus existing seperti `isScrapSaleItem` dengan pola komentar vonis) dan `Product` — keduanya TANPA field kode pajak/rujukan pajak/DPP default (dibaca utuh run ini).
+- Baris dokumen: `SalesInvoiceItem`/`QuotationItem` menyimpan harga/qty/diskon snapshot + `priceSource` (sumber HARGA), tetapi nol rujukan/snapshot pajak per baris dari item; PPN faktur hidup di level dokumen (`TaxInvoice.dpp/taxRate/taxAmount`, `SalesInvoice` header).
+- Izin barang nyata: `view_items`/`edit_items` (katalog :70-72).
+
+Gap terbukti (grep run ini):
+- Item yang secara bisnis bebas PPN / kena DPP nilai lain / jasa kena perlakuan khusus tidak bisa menyatakan itu di master; operator memilih perlakuan pajak manual per dokumen tanpa acuan item — risiko salah perlakuan berulang per transaksi, dan tidak ada penanda terstruktur untuk konsumen faktur pajak/e-Faktur kelak.
+
+### 1. Workflow specification
+
+Aktor: admin master data pemegang `edit_items` mengisi (opsional) pada master Item: rujukan kode pajak penjualan + pembelian ke master `Tax`/`TaxGroup` existing dan persen dasar pengenaan (berapa persen dari nilai baris yang menjadi dasar kena pajak). Saat baris dokumen dibuat dari item itu, nilai default TERSALIN sebagai snapshot ke baris/dokumen mengikuti pola snapshot repo; edit master sesudahnya TIDAK menulis ulang dokumen terbit.
+
+Dokumen masuk: master Item + master Tax existing. Dokumen keluar: default terbaca di form baris dokumen (boleh diubah operator per baris bila kebijakan membolehkan — Q-ITX-3), snapshot tersimpan di baris. Tanpa jurnal baru di spec ini; jurnal PPN tetap perilaku existing sampai Accountant memutus lain.
+
+Batas tegas: spec ini membekukan KONTRAK PENAMPUNG + perilaku snapshot. Kode pajak mana yang sah, kode transaksi/DPP nilai lain mana yang berlaku, tarif, dan akun = vonis Accountant dari sumber resmi DJP (Q-ITX-1). Business tidak menetapkan satu pun kode/tarif di dokumen ini.
+
+### 2. Role/permission matrix (key nyata katalog, TERVERIFIKASI-KODE)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat default pajak item | `view_items` (:70) / `view_taxes` untuk master pajaknya | USULAN (field baru di permukaan existing) |
+| Isi/ubah default pajak item | `edit_items` (:72); kelola master Tax tetap `edit_taxes` | USULAN |
+| Key izin baru | TIDAK diusulkan; Lead putus Q-ITX-4 bila dituntut | USULAN |
+| Menetapkan kode/tarif sah | Bukan permission aplikasi — vonis Accountant (Q-ITX-1) | BUTUH-VONIS |
+
+### 3. Status-transition matrix
+
+Tidak ada status dokumen baru. Keadaan default per item:
+
+| Keadaan item | Arti | Pemicu berubah |
+|---|---|---|
+| tanpa default (kosong) | Perilaku existing persis: perlakuan pajak diputus di dokumen seperti hari ini | admin mengisi default |
+| ber-default aktif | Baris baru dari item ini menyalin snapshot default | admin mengubah/mengosongkan → hanya baris BARU terpengaruh |
+| item nonaktif/terhapus | Default tidak terbaca permukaan baru; dokumen lama tidak berubah | aksi master existing |
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-ITX-01 | Default bersifat OPSIONAL per item; kosong = perilaku existing byte-sama (tanpa default tidak boleh mengubah hitungan dokumen apa pun) | USULAN | §0 gap |
+| BR-ITX-02 | Nilai berlaku sebagai SNAPSHOT saat baris dibuat; edit master tidak menulis ulang baris/dokumen terbit (pola snapshot harga `priceSource`/dokumen repo) | TERVERIFIKASI-KODE (pola) | SalesInvoiceItem; pola repo |
+| BR-ITX-03 | Rujukan menunjuk master `Tax`/`TaxGroup` EXISTING (bukan teks bebas kode pajak di item) supaya satu sumber tarif terkelola; kode referensi DJP per barang bila dibutuhkan e-Faktur = field terpisah yang bentuknya diputus Q-ITX-2 | USULAN | model Tax existing |
+| BR-ITX-04 | Persen dasar pengenaan (mis. nilai lain) disimpan sebagai angka master apa adanya; rumus pemakaiannya di dokumen TIDAK dibekukan di sini — menunggu vonis Accountant | BUTUH-VONIS | Q-ITX-1 |
+| BR-ITX-05 | Kode pajak/kode transaksi/tarif yang sah TIDAK ditetapkan Business; daftar nilai yang boleh dipilih = vonis Accountant dari regulasi resmi berjalan | BUTUH-VONIS | mandat domain |
+| BR-ITX-06 | Penanda khusus existing per item (mis. `isScrapSaleItem`) TIDAK digantikan default ini; konflik penanda vs default di baris yang sama = diputus Accountant (Q-ITX-1), bukan ditebak builder | USULAN | schema Item |
+| BR-ITX-07 | Baris bebas tanpa item (`itemId` null) tidak punya default; perlakuan pajaknya tetap jalur dokumen existing | USULAN | baris dokumen existing |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+Benchmark resmi (akses 2026-10-25):
+- Accurate — Ref. Kode Pajak + Pajak Penjualan/Pembelian + persen dasar pengenaan diatur PER BARANG di Barang/Jasa (tab Penjualan/Pembelian), lalu terbaca di detail transaksi & cetakan faktur (`$F{salesInvoiceDetail.item.codeItemTax}`): https://help.accurate.id/product/accurate-online/fitur-aol/tutorial-penyesuaian-tarif-ppn/ ; https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/desain-cetakan/ref-kode-pajak/
+- Mekari Jurnal — produk punya kolom Pajak beli/Pajak jual (boleh kosong mengikuti akun pajak): https://help.kasirpintar.co.id/knowledge-base/cara-memetakan-produk-ke-jurnal/ (panduan pemetaan resmi mitra Mekari; halaman help Jurnal langsung tidak diakses run ini — ditulis apa adanya)
+
+| Fitur | Accurate (BENCHMARK) | Mekari Jurnal (BENCHMARK) | ISF |
+|---|---|---|---|
+| Kode pajak per barang/jasa di master | Ada (Ref. Kode Pajak DJP per barang) | Parsial (pajak beli/jual per produk) | ABSEN (gap §0) |
+| Persen dasar pengenaan per barang | Ada | Tidak diverifikasi run ini — tidak diklaim | ABSEN |
+| Default terbaca ke baris transaksi | Ada | Ada (pajak produk) | ABSEN; perlakuan per dokumen manual |
+
+Selisih jujur: ISF sudah punya master Tax generik + faktur pajak dokumen; yang absen hanya penampung per item + penyalinan snapshotnya.
+
+### 6. Acceptance criteria + edge cases (draf falsifikasi untuk QA, aktif sesudah vonis Accountant)
+
+- AC-ITX-B1: item tanpa default membuat baris dokumen → perilaku/hasil pajak identik perilaku existing (fixture banding). Beda = MERAH.
+- AC-ITX-B2: item ber-default membuat baris → snapshot baris memuat rujukan+persen default verbatim; mengubah master sesudahnya lalu membaca dokumen lama → snapshot tidak berubah. Berubah = MERAH.
+- AC-ITX-B3: mengosongkan default item → baris lama tetap, baris baru kembali perilaku existing. Baris lama ikut kosong = MERAH.
+- AC-ITX-B4: baris bebas (tanpa item) tidak menerima default apa pun dari item terakhir dipilih. Menerima = MERAH.
+- AC-ITX-B5: nilai kode/tarif di luar daftar vonis Accountant dapat disimpan master = MERAH (daftar sah dari Q-ITX-1; bentuk penjaganya fisik Backend).
+- Edge: item jasa vs produk diperlakukan sama oleh penampung (yang membedakan = isi defaultnya, bukan jenis item). Item nonaktif ber-default → default tidak terbaca. Penanda scrap + default terisi bersamaan → perilaku mengikuti putusan Q-ITX-1; builder menebak sendiri = MERAH terhadap spec ini.
+
+### 7. Backlog implementasi (turunan F-2026-10-25-041-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-041-S | Spec kontrak ini (dokumen) | Business | — |
+| (turunan) vonis daftar kode/tarif/DPP nilai lain + rumus pakai + konflik penanda scrap | Accountant | Q-ITX-1 (gerbang pertama) | — |
+| (turunan) fisik penampung master + snapshot baris + penjaga daftar sah | Backend | vonis Accountant; klaim file di board dulu (schema wilayah Backend) | — |
+| (turunan) field master Item + pembacaan default di form baris | Frontend | kontrak Backend final; grep e2e master barang + faktur terdampak sebelum commit | — |
+| (turunan) falsifikasi AC-ITX-B1..B5 | QA | head Backend/Frontend persis | — |
+
+### 8. Pertanyaan putusan
+
+- Q-ITX-1 (Accountant, BUTUH-VONIS — gerbang pertama): daftar kode pajak/kode transaksi yang sah dipilih per item, perlakuan DPP nilai lain (persen + rumusnya di dokumen), tarif, akun, dan konflik vs penanda khusus item existing. Business tidak mengusulkan angka/kode di sini.
+- Q-ITX-2 (Backend sesudah Q-ITX-1): bentuk fisik — FK ke `Tax`/`TaxGroup` vs tambahan kode referensi DJP per item vs keduanya; titik snapshot (baris penawaran? faktur? keduanya).
+- Q-ITX-3 (Lead): default boleh diubah operator per baris dokumen atau terkunci dari master? Rekomendasi Business: boleh diubah per baris dengan snapshot menyimpan nilai AKHIR terpakai (keputusan transaksi tetap di dokumen, master hanya titik awal).
+- Q-ITX-4 (Lead): reuse `edit_items` atau key khusus untuk mengubah default pajak item (menyentuh perlakuan pajak tidak langsung).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-041-S)
+
+- Menetapkan kode transaksi/kode pajak/tarif/DPP nilai lain apa pun (vonis Accountant), mengubah rumus PPN existing, atau menjadikan default item sebagai penentu jurnal tanpa vonis.
+- Migrasi mengisi default untuk item lama secara massal/tebakan; pengisian awal = keputusan data terpisah sesudah daftar sah divonis.
+- Menggabungkan pajak potong (WithholdingTaxType/PPh) ke penampung ini — objek pajak berbeda.
+
+F-2026-10-25-041-S — Kode pajak + DPP default per barang/jasa. Status: SPEC SELESAI run ini; gerbang pertama vonis Accountant Q-ITX-1, lalu fisik Backend Q-ITX-2. Pemilik usulan: Business (spec), Accountant (vonis kode/tarif), Lead (Q-ITX-3/4), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: YA (Q-ITX-1).
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-046-S: rekap sisa pinjaman aktif per karyawan (read-model baca-saja di atas EmployeeLoan existing, scope fail-closed)
 
 > **Slot**: F-2026-10-25-046-S. Diperiksa bentrok 2026-10-25 21:39 WIB vs `origin/main` (`920a53f7`): grep `F-2026-10-25-046` di backlog origin/main + judul PR terbuka = 0; ID 2026-10-25 terpakai: sampai 039-V di main, 040-S/041-S PR #901/#898, 042-V PR #902, 043-S PR #903, 044-S PR #906, 045-V PR #907. `-046-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_a14ad77e. Dokumen saja; tanpa kode/schema/migrasi.
