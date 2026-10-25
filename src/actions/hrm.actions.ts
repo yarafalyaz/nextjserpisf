@@ -2,7 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
-import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math";
+import { safeAdd, safeRound, safeSubtract, safeSum } from "@/lib/utils/math";
 import {
   computeBpjsEmployee,
   computePph21FinalPeriod,
@@ -1107,16 +1107,45 @@ export async function approveOvertime(overtimeId: number) {
     // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
     // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
     // lewat Pengaturan) membayar di bawah minimum undang-undang.
-    // Syarat vonis K2-S2 (F-2026-10-25-014-V): dasar upah lembur Pasal 31
-    // = upah pokok + tunjangan tetap (100%), atau 75% darinya bila ada
-    // tunjangan tidak tetap. Skema Employee hanya punya SATU kolom upah
-    // bulanan, `baseSalary` (prisma/schema.prisma Employee.baseSalary) —
-    // tidak ada kolom komponen pokok/tetap/tidak-tetap terpisah, jadi
-    // dasar yang tersedia dan dipakai di sini adalah baseSalary apa
-    // adanya sebagai upah sebulan. Pernyataan tertulis penuh + syarat
-    // perubahan ada di body PR #800; bila master karyawan kelak dipecah
-    // per komponen, dasar ini WAJIB ditinjau ulang oleh vonis Accountant.
-    const baseSalary = Number(ot.employee?.baseSalary ?? 0);
+    // Syarat vonis K2-S2 (F-2026-10-25-014-V) sebagaimana dimutakhirkan vonis
+    // F-2026-10-25-022-V: dasar upah lembur Pasal 32 PP 35/2021 = Upah pokok
+    // (Employee.baseSalary) + seluruh tunjangan tetap terdaftar, yaitu Σ
+    // defaultAmount EmployeePayrollComponent aktif (isActive, komponen aktif,
+    // kind "earning", recurrence "fixed") yang berjendela efektif pada TANGGAL
+    // LEMBUR (ot.date) — bukan tanggal approve. Komponen gaji terpisah memang
+    // ada di skema (PayrollComponent + EmployeePayrollComponent); penugasan
+    // hanya boleh memuat komponen "fixed", jadi seluruh penugasan aktif adalah
+    // tunjangan tetap. Cabang 75% Pasal 32 ayat (4) SENGAJA tidak diterapkan:
+    // ia berlaku hanya bila ada tunjangan tidak tetap dan (pokok + tetap)
+    // < 75% keseluruhan Upah, dengan dasar 75% x keseluruhan Upah — dan repo
+    // tidak menyimpan penugasan tunjangan tidak tetap berjalan, jadi
+    // keseluruhan Upah tidak terdefinisi deterministik dari data yang ada.
+    // Default yang disahkan vonis: dasar 100% (pokok + tunjangan tetap).
+    // Menambah pemicu 75% dari data lain (master variable, baris slip manual)
+    // DITOLAK vonis. Bila master tunjangan tidak tetap berjalan kelak ada,
+    // dasar ini WAJIB ditinjau ulang oleh vonis Accountant baru.
+    // Pola where disalin dari preseden PKWT (pkwt-compensation.service.ts)
+    // tanpa mengimpor service itu; filter kind "earning" wajib eksplisit —
+    // loadEffectivePayrollAssignments tidak menyaring kind sehingga komponen
+    // deduction/fixed akan ikut terhitung bila pemuat itu dipakai apa adanya.
+    const fixedAssignments = await prisma.employeePayrollComponent.findMany({
+      where: {
+        employeeId: ot.employeeId,
+        isActive: true,
+        effectiveFrom: { lte: ot.date },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
+        component: { isActive: true, recurrence: "fixed", kind: "earning" },
+      },
+      select: { defaultAmount: true },
+    });
+    const fixedAllowance = fixedAssignments.reduce(
+      (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
+      0,
+    );
+    const baseSalary = safeRound(
+      Number(ot.employee?.baseSalary ?? 0) + fixedAllowance,
+      2,
+    );
     const hours = Number(ot.hours);
     const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
     const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
