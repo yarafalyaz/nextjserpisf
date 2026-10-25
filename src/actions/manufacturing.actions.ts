@@ -2446,8 +2446,14 @@ export async function updateWorkOrderOperationStatus(
         select: { id: true },
       });
       if (!mi) return { autoCompleted: false };
-      await assertWorkOrderQcCleared(workOrderId, tx);
-
+      // QC belum bersih = guard belum terpenuhi (sama items/MaterialIssue):
+      // tahap tetap commit, WO tetap in_progress, operator menyelesaikan
+      // manual lewat completeWorkOrder (pesan guard tampil di sana).
+      try {
+        await assertWorkOrderQcCleared(workOrderId, tx);
+      } catch {
+        return { autoCompleted: false };
+      }
       // Klaim kondisional di completeWorkOrderTx: hanya status in_progress
       // yang boleh menang; count===0 melempar di sana dan ditangkap di sini
       // sebagai no-op — WO sudah ditutup proses lain, tanpa error dan tanpa
