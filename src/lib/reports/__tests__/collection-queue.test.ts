@@ -562,12 +562,19 @@ describe("collection-reminder-level (F-2026-10-26-050-S, Q-COLR-1..7)", () => {
     expect(q.rows[0].umurHari).toBeNull()
     expect(q.rows[0].tingkatPengingat).toBe("tanpa_acuan")
     // Tanpa due tetapi JANJI hidup/lewat ada: acuan janji nyata, bukan tanpa_acuan.
+    // T0b (PR #939): janji masa depan dan janji tepat hari ini = belum_perlu.
     expect(
       deriveCollectionReminderLevel(
         { umurHari: null, promiseDate: day(2), lastFollowUpAt: null },
         today,
       ),
-    ).toBe("pengingat_awal")
+    ).toBe("belum_perlu")
+    expect(
+      deriveCollectionReminderLevel(
+        { umurHari: null, promiseDate: day(0), lastFollowUpAt: null },
+        today,
+      ),
+    ).toBe("belum_perlu")
     expect(
       deriveCollectionReminderLevel(
         { umurHari: null, promiseDate: day(-1), lastFollowUpAt: null },

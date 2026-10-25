@@ -244,12 +244,13 @@ type ReminderLevelSignals = Pick<
 
 /**
  * Turunan tingkat pengingat — urutan T0..T5 spec §3 + Q-COLR-6:
- * T0 umur null TANPA janji hidup/lewat (janji ada = acuan nyata, dinilai
- * dari janji) | T3 janji lewat belum dihubungi sesudah janji | T4 janji
- * lewat sudah dihubungi sesudahnya | T1 belum jatuh tempo | T2 lewat due
- * tanpa janji lewat. Janji baru >= hari ini (promiseDate tidak lewat)
- * keluar dari T3/T4 lewat cabang T1/T2 (T5). Indikator denda sengaja
- * BUKAN sinyal (Q-COLR-7).
+ * T0 umur null TANPA janji (janji ada = acuan nyata) | T0b umur null +
+ * janji hidup (promiseDate >= hari ini, tidak janjiLewat) = belum_perlu
+ * (PUTUSAN Lead PR #939) | T3 janji lewat belum dihubungi sesudah janji |
+ * T4 janji lewat sudah dihubungi sesudahnya | T1 belum jatuh tempo | T2
+ * lewat due tanpa janji lewat. Janji baru >= hari ini (promiseDate tidak
+ * lewat) keluar dari T3/T4 lewat cabang T1/T2 (T5). Indikator denda
+ * sengaja BUKAN sinyal (Q-COLR-7).
  */
 export function deriveCollectionReminderLevel(
   signals: ReminderLevelSignals,
@@ -271,10 +272,12 @@ export function deriveCollectionReminderLevel(
       lastFollowUpAt != null && dayKey(lastFollowUpAt) >= dayKey(promiseDate)
     return dihubungiSesudahJanji ? "eskalasi" : "pengingat_lanjutan"
   }
-  if (signals.umurHari == null || signals.umurHari > 0) {
-    return "pengingat_awal"
+  // T0b: umur null tetapi janji hidup adalah acuan nyata dan belum ada
+  // tanggal lewat — belum_perlu, BUKAN pengingat_awal/tanpa_acuan.
+  if (signals.umurHari == null) {
+    return "belum_perlu"
   }
-  return "belum_perlu"
+  return signals.umurHari > 0 ? "pengingat_awal" : "belum_perlu"
 }
 
 /** Exchange aktif terakhir per faktur (BR-COL-04): tanggal terbesar, seri id terbesar. */
