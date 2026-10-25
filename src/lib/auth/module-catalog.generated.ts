@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 351 permission dikelompokkan per modul (15 modul). */
+/** 352 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -170,6 +170,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "sales_returns", permissionKey: "create_sales_returns", label: "Retur Penjualan" },
     { key: "edit", resource: "sales_returns", permissionKey: "edit_sales_returns", label: "Retur Penjualan" },
     { key: "delete", resource: "sales_returns", permissionKey: "delete_sales_returns", label: "Retur Penjualan" },
+    { key: "approve", resource: "sales_returns", permissionKey: "approve_sales_returns", label: "Retur Penjualan" },
     { key: "view", resource: "delivery_orders", permissionKey: "view_delivery_orders", label: "Surat Jalan" },
     { key: "create", resource: "delivery_orders", permissionKey: "create_delivery_orders", label: "Surat Jalan" },
     { key: "edit", resource: "delivery_orders", permissionKey: "edit_delivery_orders", label: "Surat Jalan" },

@@ -1692,15 +1692,25 @@ export async function createSalesPayment(formData: FormData) {
 
 export async function completeSalesReturn(returnId: number) {
   try {
-  const user = await requirePermission("edit_sales_returns")
+  // F-2026-10-25-012-S (BR-SR-01/03/04): menyelesaikan retur = stok masuk +
+  // jurnal, jadi wajib izin khusus approve_sales_returns (edit_sales_returns
+  // saja tidak cukup), hanya dari status draft, dan penyelesai != pembuat
+  // (SoD). createdBy null (baris legacy) boleh diselesaikan penyetuju
+  // berizin (EC-2). Semua gerbang dievaluasi SEBELUM transaksi dibuka;
+  // hook stok/jurnal/snapshot pajak tidak diubah.
+  const user = await requirePermission("approve_sales_returns")
 
   const salesReturn = await prisma.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   })
 
-  if (salesReturn.status === "completed") {
-    throw new Error("Sales return sudah completed")
+  if (salesReturn.status !== "draft") {
+    throw new Error("Retur penjualan hanya bisa diselesaikan dari status draft")
+  }
+
+  if (salesReturn.createdBy != null && Number(salesReturn.createdBy) === Number(user.id)) {
+    throw new Error("Retur penjualan tidak boleh diselesaikan oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_sales_returns.")
   }
 
   // P1-1: identitas fisik wajib untuk item tracked. Tanpa serial/batch
