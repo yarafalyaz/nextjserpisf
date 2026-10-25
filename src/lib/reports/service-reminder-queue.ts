@@ -262,7 +262,7 @@ export function buildServiceReminderQueue(
       status,
       statusLabel: SERVICE_REMINDER_STATUS_LABELS[status],
       nextServiceDate,
-      nextServiceKm: kmInvalid ? nextServiceKm : nextServiceKm,
+      nextServiceKm,
       nextServiceNote: input.nextServiceNote,
       lastOdometerKm: input.lastOdometerKm,
       sisaHari: sisaHariRaw,
