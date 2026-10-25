@@ -141,6 +141,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol
+  // mailto di halaman statement menyusul di kartu Frontend 043-F1 —
+  // buang entri ini saat UI memanggilnya.
+  "src/actions/email-log.actions.ts::recordEmailLinkOpened":
+    "F-2026-10-25-043-B1 backend; UI tombol email statement menyusul (frontend 043-F1)",
   // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
   // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
