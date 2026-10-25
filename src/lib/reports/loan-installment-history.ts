@@ -49,6 +49,15 @@ export const LOAN_INSTALLMENT_UNALLOCATED_LABEL =
   "Terbayar belum teralokasi per pinjaman (pra-ledger)"
 export const LOAN_INSTALLMENT_NEXT_LABEL = "Perkiraan cicilan berikutnya"
 export const LOAN_INSTALLMENT_UNKNOWN_STATUS_LABEL = "Status tidak dikenal"
+/**
+ * Teks kosong verbatim BR-LH53-05(a) spec F-2026-10-26-053-S, kata final
+ * putusan Lead Q-LH53-2 (t_1f5489bd, PR #938 komentar 6401860137):
+ * "Belum ada cicilan terbayar tercatat." — kata datang dari server lewat
+ * payload `emptyLabel`, UI dilarang mengarang/menukar kata sendiri
+ * (AC-LH53-F1: ganti kata di payload wajib mengubah tampil).
+ */
+export const LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL =
+  "Belum ada cicilan terbayar tercatat."
 
 export interface LoanInstallmentHistoryLoanInput {
   id: number
@@ -107,6 +116,8 @@ export interface LoanInstallmentLedgerRow {
 
 export interface LoanInstallmentHistory {
   notice: string
+  /** Teks kosong BR-LH53-05(a): tampil verbatim UI bila tanpa baris. */
+  emptyLabel: string
   loan: {
     id: number
     employeeId: number
@@ -214,6 +225,7 @@ export function buildLoanInstallmentHistory(
 
   return {
     notice: LOAN_INSTALLMENT_HISTORY_NOTICE,
+    emptyLabel: LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL,
     loan: {
       id: loan.id,
       employeeId: loan.employeeId,

@@ -981,6 +981,8 @@ model Employee {
   user                User?             @relation(fields: [userId], references: [id])
   leaveRequests       LeaveRequest[]
   overtimeRequests    OvertimeRequest[]
+  attendanceCorrections AttendanceCorrection[] @relation("AttendanceCorrectionSubject")
+  attendanceCorrectionsApproved AttendanceCorrection[] @relation("AttendanceCorrectionApprover")
   probationReviews    ProbationReview[] @relation("ProbationReviewSubject")
   probationReviewsGiven ProbationReview[] @relation("ProbationReviewReviewer")
   disciplinaryRecords EmployeeDisciplinaryRecord[] @relation("DisciplinarySubject")
@@ -3355,6 +3357,46 @@ model Attendance {
   @@index([status], map: "idx_attendances_status")
   @@index([createdAt])
   @@map("attendances")
+}
+
+// F-2026-10-25-010-S (putusan Lead Q-AC-1/2/3 2026-10-26): pengajuan koreksi
+// absensi karyawan. Pengajuan TIDAK mengubah Attendance; hanya persetujuan
+// atomik di hrm.actions.ts yang menulis rekod induk lewat semantik
+// buildAttendanceData existing. Snapshot* = nilai rekod berjalan saat
+// pengajuan dibuat (attendanceId null = rekod belum ada); snapshot dipakai
+// deteksi konflik EC-1 saat persetujuan. approvedBy = Employee penyetuju.
+// Koordinat rekod berjalan tidak pernah disalin/ditulis ulang (BR-AC-06).
+model AttendanceCorrection {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  employeeId           Int       @map("employee_id")
+  date                 DateTime
+  proposedStatus       String    @map("proposed_status")
+  proposedCheckIn      DateTime? @map("proposed_check_in")
+  proposedCheckOut     DateTime? @map("proposed_check_out")
+  proposedNotes        String?   @map("proposed_notes")
+  reason               String    @db.Text
+  status               String    @default("pending")
+  snapshotAttendanceId Int?      @map("snapshot_attendance_id")
+  snapshotUpdatedAt    DateTime? @map("snapshot_updated_at")
+  snapshotStatus       String?   @map("snapshot_status")
+  snapshotCheckIn      DateTime? @map("snapshot_check_in")
+  snapshotCheckOut     DateTime? @map("snapshot_check_out")
+  snapshotNotes        String?   @map("snapshot_notes")
+  approvedBy           Int?      @map("approved_by")
+  approvedAt           DateTime? @map("approved_at")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  employee             Employee  @relation("AttendanceCorrectionSubject", fields: [employeeId], references: [id])
+  approver             Employee? @relation("AttendanceCorrectionApprover", fields: [approvedBy], references: [id])
+
+  @@index([employeeId], map: "attendance_corrections_employee_id_fkey")
+  @@index([status], map: "idx_attendance_corrections_status")
+  @@index([date], map: "idx_attendance_corrections_date")
+  @@index([approvedBy])
+  @@index([createdAt])
+  @@map("attendance_corrections")
 }
 
 model WorkSchedule {

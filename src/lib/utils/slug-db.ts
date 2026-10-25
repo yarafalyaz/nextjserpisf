@@ -95,6 +95,7 @@ const SLUGGED_MODELS = {
   leaveRequest: "leaveRequest",
   timesheet: "timesheet",
   overtimeRequest: "overtimeRequest",
+  attendanceCorrection: "attendanceCorrection",
   payroll: "payroll",
   employeeLoan: "employeeLoan",
   probationReview: "probationReview",
