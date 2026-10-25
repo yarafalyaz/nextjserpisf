@@ -1,22 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-// Radix/DataTable pakai observer + matchMedia; jsdom tidak punya (pola repo).
-globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as typeof ResizeObserver
-globalThis.matchMedia ??= ((query: string) => ({
-  matches: false,
-  media: query,
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  addListener: () => {},
-  removeListener: () => {},
-  onchange: null,
-  dispatchEvent: () => false,
-})) as typeof window.matchMedia
+import { setupJsdomTableStubs, mountTable as mount, unmountTable as unmount } from "@/components/ui/__tests__/data-table-test-utils"
 
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
+setupJsdomTableStubs()
 
 vi.mock("next/navigation", () => ({
   useRouter() {
@@ -28,19 +15,6 @@ vi.mock("next/navigation", () => ({
 
 import { MyReimbursementClaimsTable, type MyReimbursementClaimRow } from "../my-reimbursement-claims-table"
 import { formatCurrency } from "@/lib/utils/format"
-
-function mount(element: React.ReactElement) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => { root.render(element) })
-  return { container, root }
-}
-
-function unmount(root: Root, container: HTMLElement) {
-  act(() => root.unmount())
-  container.remove()
-}
 
 const row = (over: Partial<MyReimbursementClaimRow> = {}): MyReimbursementClaimRow => ({
   id: 42,
