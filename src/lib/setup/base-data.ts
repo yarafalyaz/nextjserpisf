@@ -221,6 +221,7 @@ export const PERMISSIONS = [
       "delete_journals",
       "view_expenses",
       "create_expenses",
+      "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
       "delete_expenses",
@@ -310,6 +311,12 @@ export const PERMISSIONS = [
       "manage_holidays",
       "delete_holidays",
       "create_loans",
+      // F-2026-10-25-018-S Q-LS-1 (Putusan Lead F-2026-10-25-026-L): key
+      // khusus pengajuan pinjaman MANDIRI oleh karyawan untuk dirinya
+      // sendiri. SENGAJA terpisah dari create_loans (yang juga membuka
+      // ubah/hapus pending jalur staf) dan dari approve_loans (SoD).
+      // Hanya masuk KARYAWAN_WHITELIST; update/delete tetap create_loans.
+      "create_employee_loan_requests",
       "delete_loans",
       "create_products",
       "edit_products",
@@ -372,6 +379,11 @@ export const PERMISSIONS = [
       // Approval permissions terpisah dari edit_* (Separation of Duties).
       "approve_vendor_payments",
       "approve_purchase_returns",
+      // F-2026-10-25-012-S: menyelesaikan retur penjualan (stok+jurnal)
+      // wajib izin khusus ini; edit_sales_returns saja tidak cukup.
+      // Grant mengikuti pola approve_purchase_returns: hanya admin/
+      // super_admin lewat katalog penuh, role lain diberi eksplisit.
+      "approve_sales_returns",
       // Approving/disbursing an employee loan gets its own permission. It used
       // to reuse "create_loans" in both approval.actions.ts and the status
       // workflow route, so whoever could raise a loan could also approve and
@@ -617,7 +629,11 @@ export const KARYAWAN_WHITELIST = [
       "view_overtime",
       "view_payroll",
       "view_timesheets",
-      "view_employee_loans"
+      "view_employee_loans",
+      // Q-LS-1: pengajuan pinjaman mandiri (hanya diri sendiri, ditegakkan
+      // server di createEmployeeLoan). create_loans TIDAK ikut — key itu
+      // membuka ubah/hapus pending jalur staf.
+      "create_employee_loan_requests"
 ];
 
 export const PURCHASING_WHITELIST = [
@@ -686,6 +702,7 @@ export const FINANCE_WHITELIST = [
       "delete_journals",
       "view_expenses",
       "create_expenses",
+      "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
       "delete_expenses",
@@ -911,6 +928,10 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // berjalan & 600005 rumah pesangon DILARANG untuk jalur ini.
   ["600028", "Beban Kompensasi PKWT", "EXPS", "6000"],
   ["210207", "Utang Kompensasi PKWT", "OCLY", "2102"],
+  // F-2026-10-25-018-V Putusan 3: liabilitas klaim reimbursement karyawan.
+  // 210204 Hutang Gaji / 210101 Utang Usaha / 210205 Provisi Garansi
+  // DILARANG reuse untuk jalur ini.
+  ["210209", "Utang Reimbursement Karyawan", "OCLY", "2102"],
 ]
 
 /**

@@ -55,11 +55,7 @@ const KNOWN_UNREAD_FORM_FIELDS: Array<[field: string, reason: string]> = [
   ],
   [
     "violationDate",
-    "Form pengajuan surat peringatan (DISC-F1): AppDatePicker mengisi state React violationDate, lalu onSubmit membaca state itu ke createDisciplinaryRecord — input tersembunyi AppDatePicker tidak dipakai sebagai FormData.",
-  ],
-  [
-    "regulationReference",
-    "Form pengajuan surat peringatan (DISC-F1): dibaca formData.get(\"regulationReference\") di onSubmit form yang sama lalu diteruskan ke createDisciplinaryRecord — pemindai penjaga hanya memanen literal di luar berkas form pengirim, jadi dicatat eksplisit di sini.",
+    "Form pengajuan surat peringatan (DISC-F1) terkendali: AppDatePicker mengisi state React violationDate, lalu onSubmit membaca state itu ke createDisciplinaryRecord — input tersembunyi AppDatePicker tidak dipakai sebagai FormData.",
   ],
   [
     "sampaiTanggal",

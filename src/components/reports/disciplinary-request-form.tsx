@@ -35,15 +35,14 @@ export function DisciplinaryRequestForm({
   const [category, setCategory] = useState("")
   const [level, setLevel] = useState("sp1")
   const [violationDate, setViolationDate] = useState("")
+  const [description, setDescription] = useState("")
+  const [regulationReference, setRegulationReference] = useState("")
 
   const severe = isDisciplinarySevereCategory(category)
   const visibleLevels = levels.filter((l) => severe || l.value !== "sp_first_final")
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const description = String(formData.get("description") ?? "")
-    const regulationReference = String(formData.get("regulationReference") ?? "").trim()
     startTransition(async () => {
       const result = await createDisciplinaryRecord({
         employeeId: Number(employeeId),
@@ -51,7 +50,7 @@ export function DisciplinaryRequestForm({
         violationCategory: category,
         violationDate,
         description,
-        regulationReference: regulationReference || null,
+        regulationReference: regulationReference.trim() || null,
       })
       if (!result.success) {
         showError(result.error)
@@ -135,8 +134,9 @@ export function DisciplinaryRequestForm({
           </Label>
           <Textarea
             id="description"
-            name="description"
             rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             required
             placeholder="Uraian kejadian pelanggaran..."
           />
@@ -145,8 +145,9 @@ export function DisciplinaryRequestForm({
           <Label htmlFor="regulationReference">Dasar Peraturan yang Dilanggar</Label>
           <Textarea
             id="regulationReference"
-            name="regulationReference"
             rows={2}
+            value={regulationReference}
+            onChange={(e) => setRegulationReference(e.target.value)}
             placeholder="Contoh: Peraturan Perusahaan Bab III Pasal 12"
           />
         </div>

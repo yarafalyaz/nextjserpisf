@@ -46,6 +46,11 @@ import {
   buildSettlementVat,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat"
+import {
+  evaluateTaxInvoiceIssueGate,
+  snapshotCounterpartyFromMaster,
+  type CounterpartySnapshot,
+} from "@/lib/tax/customer-tax-identity"
 
 const SCOPE_ISSUE: IdemScope = "tax_invoice_issue"
 const SCOPE_DP_ISSUE: IdemScope = "tax_invoice_dp_issue"
@@ -117,6 +122,8 @@ export interface IssueTaxInvoiceInput {
   counterpartyTaxId?: string | null
   counterpartyName?: string | null
   counterpartyNitku?: string | null
+  /** Konfirmasi eksplisit operator: terbit dengan NPWP 15 digit (legacy) — vonis 019-V §2. */
+  legacy15Confirmed?: boolean
   xmlPayload?: string | null
   idempotencyKey: string
   userId?: number
@@ -200,6 +207,32 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
         })
         if (dupeVendor) throw definitive(`Duplikat faktur masukan (vendor #${input.vendorId}, nomor "${number}") ditolak`)
       }
+      // F-2026-10-25-004-S (vonis 019-V §5 + putusan Lead §8A-5): arah out —
+      // snapshot dari master pelanggan faktur penjualan tertaut (koreksi
+      // operator per-field menang), lalu gerbang EC-3 server-side untuk
+      // SEMUA terbit out (tertaut maupun manual). Arah in tidak diubah.
+      let snapshot: CounterpartySnapshot = {
+        counterpartyTaxId: input.counterpartyTaxId ?? null,
+        counterpartyName: input.counterpartyName ?? null,
+        counterpartyNitku: input.counterpartyNitku ?? null,
+      }
+      if (input.direction === "out") {
+        if (input.salesInvoiceId != null) {
+          const si = await tx.salesInvoice.findUnique({
+            where: { id: input.salesInvoiceId },
+            select: { customer: { select: { taxId: true, taxpayerName: true, nitku: true } } },
+          })
+          if (si?.customer) {
+            snapshot = snapshotCounterpartyFromMaster(si.customer, {
+              counterpartyTaxId: input.counterpartyTaxId ?? undefined,
+              counterpartyName: input.counterpartyName ?? undefined,
+              counterpartyNitku: input.counterpartyNitku ?? undefined,
+            })
+          }
+        }
+        const gate = evaluateTaxInvoiceIssueGate(snapshot, { legacy15Confirmed: input.legacy15Confirmed })
+        if (!gate.allowed) throw definitive(gate.error)
+      }
       const created = await tx.taxInvoice.create({
         data: {
           slug: await nextTxSlug(tx as never, "taxInvoice", `fp-${input.direction}-${number}`),
@@ -215,9 +248,9 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
           salesInvoiceId: input.salesInvoiceId ?? null,
           vendorBillId: input.vendorBillId ?? null,
           vendorId: input.vendorId ?? null,
-          counterpartyTaxId: input.counterpartyTaxId ?? null,
-          counterpartyName: input.counterpartyName ?? null,
-          counterpartyNitku: input.counterpartyNitku ?? null,
+          counterpartyTaxId: snapshot.counterpartyTaxId,
+          counterpartyName: snapshot.counterpartyName,
+          counterpartyNitku: snapshot.counterpartyNitku,
           xmlPayload: input.xmlPayload ?? null,
           // Jejak impor XML Coretax: hash isi + waktu impor, untuk rekonsiliasi
           // dobel-impor (dokumen sama tidak diterbitkan dua kali).
@@ -251,6 +284,8 @@ export interface IssueDownPaymentTaxInvoiceInput {
   counterpartyTaxId?: string | null
   counterpartyName?: string | null
   counterpartyNitku?: string | null
+  /** Konfirmasi eksplisit operator: terbit dengan NPWP 15 digit (legacy) — vonis 019-V §2. */
+  legacy15Confirmed?: boolean
   idempotencyKey: string
   userId?: number
 }
@@ -288,7 +323,7 @@ export async function issueDownPaymentTaxInvoice(
       }
       const dp = await tx.downPayment.findUnique({
         where: { id: input.downPaymentId },
-        include: { customer: { select: { name: true, taxId: true } } },
+        include: { customer: { select: { name: true, taxId: true, taxpayerName: true, nitku: true } } },
       })
       if (!dp) throw definitive(`Uang muka #${input.downPaymentId} tidak ditemukan`)
       if (dp.status !== "confirmed") {
@@ -312,6 +347,32 @@ export async function issueDownPaymentTaxInvoice(
         select: { id: true },
       })
       if (dupe) throw definitive(`Nomor faktur pajak "${number}" sudah terbit untuk arah out`)
+      // B1 t_663509ae (vonis 019-V Putusan 3/5 + §8A): FP UM wajib gerbang
+      // identitas SAMA dengan issueTaxInvoice — dinilai dari snapshot final
+      // (override operator menang per-field atas master; taxpayerName master
+      // menang atas nama dagang, nama dagang hanya fallback terakhir bila
+      // taxpayerName kosong — pola snapshotCounterpartyFromMaster existing).
+      const cust = dp.customer
+      const finalIdentity: CounterpartySnapshot = cust
+        ? snapshotCounterpartyFromMaster(
+            {
+              taxId: cust.taxId,
+              taxpayerName: cust.taxpayerName ?? cust.name,
+              nitku: cust.nitku,
+            },
+            {
+              counterpartyTaxId: input.counterpartyTaxId ?? undefined,
+              counterpartyName: input.counterpartyName ?? undefined,
+              counterpartyNitku: input.counterpartyNitku ?? undefined,
+            },
+          )
+        : {
+            counterpartyTaxId: input.counterpartyTaxId ?? null,
+            counterpartyName: input.counterpartyName ?? null,
+            counterpartyNitku: input.counterpartyNitku ?? null,
+          }
+      const gate = evaluateTaxInvoiceIssueGate(finalIdentity, { legacy15Confirmed: input.legacy15Confirmed })
+      if (!gate.allowed) throw definitive(gate.error)
       const created = await tx.taxInvoice.create({
         data: {
           slug: await nextTxSlug(tx as never, "taxInvoice", `fp-out-${number}`),
@@ -325,9 +386,9 @@ export async function issueDownPaymentTaxInvoice(
           taxAmount: toMoney(snapshot.ppnUangMuka),
           djpStatus: "draft",
           downPaymentId: dp.id,
-          counterpartyTaxId: input.counterpartyTaxId ?? dp.customer?.taxId ?? null,
-          counterpartyName: input.counterpartyName ?? dp.customer?.name ?? null,
-          counterpartyNitku: input.counterpartyNitku ?? null,
+          counterpartyTaxId: finalIdentity.counterpartyTaxId,
+          counterpartyName: finalIdentity.counterpartyName,
+          counterpartyNitku: finalIdentity.counterpartyNitku,
           createdBy: input.userId ?? null,
         },
       })

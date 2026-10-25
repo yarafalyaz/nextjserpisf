@@ -54,6 +54,11 @@ const issueSchema = z.object({
   counterpartyTaxId: optionalText,
   counterpartyName: optionalText,
   counterpartyNitku: optionalText,
+  // Vonis 019-V §2: NPWP 15 digit hanya terbit dengan konfirmasi eksplisit.
+  legacy15Confirmed: z.preprocess(
+    (v) => (v === "on" || v === "true" || v === true ? true : undefined),
+    z.boolean().optional(),
+  ),
   idempotencyKey: z.string().trim().min(8, "Idempotency key wajib"),
 })
 
@@ -96,6 +101,11 @@ const issueDpSchema = z.object({
   counterpartyTaxId: optionalText,
   counterpartyName: optionalText,
   counterpartyNitku: optionalText,
+  // Vonis 019-V §2: NPWP 15 digit hanya terbit dengan konfirmasi eksplisit (sama gerbang issueTaxInvoice).
+  legacy15Confirmed: z.preprocess(
+    (v) => (v === "on" || v === "true" || v === true ? true : undefined),
+    z.boolean().optional(),
+  ),
   idempotencyKey: z.string().trim().min(8, "Idempotency key wajib"),
 })
 

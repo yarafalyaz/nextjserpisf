@@ -30,6 +30,9 @@ function row(partial: Partial<HrPendingApprovalInput>): HrPendingApprovalInput {
     hours: null,
     reason: "urusan keluarga",
     projectName: null,
+    loanTotalAmount: null,
+    loanMonthlyInstallment: null,
+    loanWeeklyInstallment: null,
     ...partial,
   }
 }
@@ -168,5 +171,64 @@ describe("bentuk baris jujur (BR-HP-07/08/12)", () => {
     expect(r.leaveType).toBe("sick")
     expect(r.reason).toBe("opname")
     expect(r.endDate).toEqual(d("2026-11-12"))
+  })
+})
+
+describe("kind loan (F-2026-10-25-018-S BR-LS-06, Q-LS-3a, AC-LS-B5)", () => {
+  const loanRow = (partial: Partial<HrPendingApprovalInput>) =>
+    row({
+      kind: "loan",
+      leaveType: null,
+      endDate: null,
+      hours: null,
+      reason: null,
+      projectName: null,
+      loanTotalAmount: "5000000.00",
+      loanMonthlyInstallment: "500000.00",
+      loanWeeklyInstallment: null,
+      ...partial,
+    })
+
+  it("pending lolos; active/rejected/paid_off dibuang (hanya PERSIS pending)", () => {
+    const rows = buildHrPendingApprovalQueue(
+      [
+        loanRow({ id: 41, status: "pending" }),
+        loanRow({ id: 42, status: "active" }),
+        loanRow({ id: 43, status: "rejected" }),
+        loanRow({ id: 44, status: "paid_off" }),
+      ],
+      TODAY,
+    )
+    expect(rows.map((r) => r.id)).toEqual([41])
+  })
+
+  it("tanpa pendamping tanggal walau loanDate lewat; umur menunggu dari createdAt tetap jalan", () => {
+    const [r] = buildHrPendingApprovalQueue(
+      [loanRow({ id: 45, createdAt: d("2026-10-20"), eventDate: d("2026-10-20") })],
+      TODAY,
+    )
+    expect(r.penandaTanggal).toBeNull()
+    expect(r.umurMenungguHari).toBe(5)
+    expect(r.tahapDasar).toBe("MENGENDAP")
+  })
+
+  it("nominal pinjaman verbatim; cicilan cuti/lembur tetap null; baris loan tanpa field gaji", () => {
+    const rows = buildHrPendingApprovalQueue(
+      [
+        loanRow({ id: 46, loanWeeklyInstallment: "125000.00" }),
+        row({ id: 47 }),
+      ],
+      TODAY,
+    )
+    const loan = rows.find((r) => r.kind === "loan")!
+    expect(loan.loanTotalAmount).toBe("5000000.00")
+    expect(loan.loanMonthlyInstallment).toBe("500000.00")
+    expect(loan.loanWeeklyInstallment).toBe("125000.00")
+    expect(loan).not.toHaveProperty("salary")
+    expect(JSON.stringify(loan)).not.toContain("salary")
+    const leave = rows.find((r) => r.kind === "leave")!
+    expect(leave.loanTotalAmount).toBeNull()
+    expect(leave.loanMonthlyInstallment).toBeNull()
+    expect(leave.loanWeeklyInstallment).toBeNull()
   })
 })
