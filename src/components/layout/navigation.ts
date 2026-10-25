@@ -163,6 +163,7 @@ export const navigation: NavItem[] = [
       { label: "Aturan Statutori", href: "/sdm/aturan-statutori", icon: BookOpenCheck, permission: "view_payroll" },
       { label: "Lembar Waktu", href: "/sdm/lembar-waktu", icon: Clock, permission: "view_timesheets" },
       { label: "Pinjaman", href: "/sdm/pinjaman", icon: PiggyBank, permission: "view_employee_loans" },
+      { label: "Pinjaman Saya", href: "/sdm/pinjaman-saya", icon: PiggyBank, permission: "create_employee_loan_requests" },
       { label: "Rekap Pinjaman", href: "/sdm/pinjaman/rekap", icon: PiggyBank, permission: "view_employee_loans" },
       { label: "Apresiasi", href: "/sdm/apresiasi", icon: Gift, permission: "view_appreciations" },
       { label: "Surat Peringatan", href: "/sdm/disiplin", icon: ShieldAlert, permission: "view_disciplinary_records" },

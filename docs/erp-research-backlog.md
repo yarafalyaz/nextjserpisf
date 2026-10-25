@@ -29839,6 +29839,8 @@ Edge: EC-1 pelanggan sama membeli barang sama di dua faktur tanggal sama (seri d
 - Kolom harga historis tersimpan/snapshot nama barang: data baris existing cukup tahap 1.
 - Riwayat harga penawaran (QuotationItem belum transaksi): objek berbeda, jangan dicampur ke fakta faktur.
 F-2026-10-25-028-S — Riwayat harga jual per pelanggan×barang. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-PH-1/3/4 + fisik Backend Q-PH-2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
+
+> **FISIK BACKEND 2026-10-26 (Backend, kartu t_c6e63ad3)**: builder `src/lib/reports/sales-price-history.ts` + loader `src/lib/reports/sales-price-history-data.ts` (`getSalesPriceHistory`, izin `view_reports` fail-closed di loader, populasi query `RECOGNISED_AR_STATUSES` + `deletedAt: null`, anti-N+1 2 query). Q-PH-2 fisik DIPUTUS Backend: nama `sales-price-history*` (usulan spec), tautan baris `/penjualan/faktur/<slug|id>` gerbang `view_sales_invoices` existing. Label sumber: reuse `priceSourceLabel` existing; null/asing/tier-tanpa-minQty = "Sumber harga tidak tercatat" (nilai mentah tetap di field `priceSource`). Q-PH-3/4 diambil sejajar putusan Lead 039-S PR #901 komentar 6399637522: periode maks 365 hari, maks 50 kejadian/pasangan ditandai `terpotong`, ember BARIS_TANPA_BARANG hitungan+rentang saja — Q-PH-1/3/4 permukaan tetap milik Lead untuk kartu UI t_b6bcb2ee. Tanpa kolom/migrasi/UI. Tes 13/13 + tetangga 53/53, falsifikasi rata-rata-tertimbang→MERAH + cabut saring status→MERAH pulih hijau, tsc 0, eslint 0.
 ## SPEC BUSINESS F-2026-10-25-030-S — Alasan kalah terstruktur lead `lost` (kamus sejajar F-2026-10-20-101, tanpa migrasi tahap 1)
 > **Slot**: F-2026-10-25-030-S. Diperiksa bentrok 2026-10-25 15:09 WIB vs `origin/main` (`e9932fdc`): grep `F-2026-10-25-030` di backlog = 0, judul PR terbuka memuat `030` = 0; 027-S (PR #857), 028-S (PR #858), 029-S (PR #859) terpakai spec lain — 030-S bebas. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
 > **Batas spec**: Business membekukan alur + label aturan. Keputusan reuse kamus vs kamus lead sendiri, kewajiban alasan, dan bentuk validasi server = gerbang Lead (Q-LR-*). Bukan uang/pajak: tanpa vonis Accountant.
@@ -32599,6 +32601,160 @@ F-2026-10-25-047-S / F-2026-10-25-048-S / F-2026-10-26-050-S — Status sesudah 
 
 ---
 
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-053-S: permukaan histori cicilan per pinjaman di detail pinjaman existing (konsumen read-model F-2026-10-25-019-S tahap 1)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Induk: F-2026-10-25-019-S (histori cicilan per pinjaman, spec PR #825 merged 16c6c9eb; read-model tahap 1 fisik PR #922 + #923 merged). Kartu: t_fe980c6e. ID F-2026-10-26-053-S diverifikasi bebas run ini 2026-10-26 01:11–01:13 WIB: grep `F-2026-10-26-053` di backlog + board `origin/main` (`6c5539cd`) = 0; judul/isi PR terbuka memuat 053 = 0; 052 sudah terpakai catatan pivot PR #934 (topik rekap 046-S, beda permukaan). Pelajaran 052 diterapkan: konsumen diperiksa juga di PR terbuka — tidak ada PR terbuka menyentuh `sdm/pinjaman/[slug]` atau mengimpor builder histori (PR #924 rekap 046-S hanya `sdm/pinjaman/rekap/**` + nav, terverifikasi daftar berkasnya). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Spec ini TIDAK menulis ulang yang sudah dibekukan 019-S: workflow induk §2, kontrak data §3, matriks izin §4, BR-LH-01..10 §6, AC-LH-B1..B5/F1..F2 §8 tetap berlaku apa adanya dan dirujuk, bukan disalin. Isi 053-S hanya kontrak permukaan final yang belum dibekukan 019-S: loader kanonik tunggal untuk permukaan, penempatan persis di detail existing, label verbatim final per jenis baris dari konstanta builder terpilih, perilaku kosong, urut/paginasi, dan pertanyaan terbuka tersisa. Bila spec ini bertabrakan dengan 019-S, 019-S menang untuk aturan data/izin dan tabrakan dilaporkan ke Lead, bukan diam-diam dipilih.
+
+Benchmark resmi (akses ulang live 2026-10-26 01:15 WIB, bukan salinan buta 019-S):
+- Accurate Online — Pinjaman Karyawan: https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/membuat-pinjaman-karyawan/ (detail pinjaman: pokok, metode bunga, rincian angsuran per periode, status pembayaran angsuran terpantau) dan https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/pinjaman-gaji/ (angsuran via Pencatatan Gaji membentuk transaksi Pembayaran Angsuran per pinjaman yang mengurangi saldo; terakses penuh run ini).
+- Zahir — fitur Loan payroll terintegrasi kas keluar: https://zahirerp.com/id/all-features-of-zahir-products/ (baris "Loan by Custom — mengelola pinjaman karyawan, terintegrasi pencatatan kas keluar", terakses run ini). Rincian histori cicilan per pinjaman Zahir TIDAK ditemukan di help resmi yang diakses run ini — ditulis tidak terverifikasi, bukan dikarang (sama seperti catatan 019-S, diverifikasi ulang).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, origin/main 6c5539cd)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- DUA read-model tahap 1 fisik di main, keduanya header F-2026-10-25-019-S BR-LH-01..10, keduanya tahap 1 selalu tanpa baris ledger (ledger fisik = LH-B2 tahap 2, belum ada):
+  - Jalur A (PR #922, c25f04e3): builder `src/lib/reports/employee-loan-history.ts:127` `buildEmployeeLoanHistory` (entries campuran agregat-slip+ledger dalam satu daftar terurut :165-171; label :36-47) + loader `src/lib/reports/employee-loan-history-data.ts:30` `loadEmployeeLoanHistory(loanId)` mengembalikan `{scope, history} | null`.
+  - Jalur B (PR #923, ddcf04ba): builder `src/lib/reports/loan-installment-history.ts:155` `buildLoanInstallmentHistory` (ledgerRows dan aggregateSlipRows sebagai daftar TERPISAH :124-129; label :41-51) + loader `src/lib/reports/loan-installment-history-data.ts:40` `loadLoanInstallmentHistory(loanId)` mengembalikan `{scope, history: LoanInstallmentHistory | null}` (history null = tidak ada/di luar scope, tidak dibedakan :36).
+  - Keduanya: gerbang `requirePermission("view_employee_loans")` + `getHrScope` fail-closed + `hrScopeWhere` sebelum muat (loan-installment-history-data.ts:43-51; employee-loan-history-data.ts:33-37); slip hanya `paid` + `loanDeduction > 0` milik karyawan pemilik (loan-installment-history-data.ts:66-82; employee-loan-history-data.ts:51-66); select slip tanpa baseSalary/komponen gaji (BR-LH-09); tes menyertai (`__tests__/loan-installment-history*.test.ts`, `__tests__/employee-loan-history*.test.ts`).
+- Detail pinjaman existing: `src/app/(dashboard)/sdm/pinjaman/[slug]/page.tsx:27-28` `requirePermission("view_employee_loans")` + `getHrScope`, `:32-40` `resolveEntity` + `hrScopeWhere`, `:68-80` satu `DetailCard` tanpa judul berisi 8 field (Karyawan, No. Karyawan, Tanggal Pinjaman, Jumlah Pinjaman, Angsuran/Bulan, Cicilan Mingguan, Sisa Pinjaman, Status) — TANPA seksi histori. Izin katalog `view_employee_loans` (`src/lib/auth/module-catalog.generated.ts:322`).
+- Preseden penempatan seksi kedua di halaman detail existing: `src/app/(dashboard)/sdm/penggajian/[slug]/page.tsx:106` `DetailCard title="Informasi Penggajian"` lalu `:130-133` blok seksi kedua `bg-surface rounded-xl border ...` + `<h2>` "Rincian Gaji" + tabel rincian. Komponen bersama: `DetailCard`/`DetailField`/`DetailSection` (`src/components/ui/detail-card.tsx:17,54,77`; `DetailSection` = Card bertajuk uppercase dengan aria-labelledby :77-92).
+
+Belum ada / gap (bukti grep run ini):
+- Konsumen permukaan = NOL: grep `loan-installment-history|employee-loan-history|LoanInstallmentHistory|EmployeeLoanHistory|buildLoanInstallment|buildEmployeeLoanHistory` di `src/app` + `src/components` = 0 hit. Tidak ada PR terbuka yang membangunnya (daftar berkas PR #924/#929/#932/#933 diperiksa; tidak satu pun menyentuh detail pinjaman atau mengimpor builder histori).
+- Loader ganda belum diputus mana yang kanonik untuk permukaan detail: payload keduanya setara makna tahap 1 tetapi bentuk dan himpunan label berbeda (lihat §1 butir 2) — permukaan tidak boleh mengonsumsi keduanya.
+
+### 1. Workflow permukaan di detail pinjaman
+
+Aktor, dokumen masuk/keluar, dan alur induk: persis 019-S §2 (dirujuk, tidak disalin). Tambahan permukaan yang dibekukan spec ini:
+
+1. Penempatan: detail `src/app/(dashboard)/sdm/pinjaman/[slug]/page.tsx` diperluas SATU seksi histori di bawah `DetailCard` ringkasan existing (pola preseden penggajian/[slug]:106,130 — kartu ringkasan dulu, seksi rincian sesudahnya). Bukan halaman baru, bukan tab baru, bukan rute baru (019-S §2 langkah 1: "permukaan existing diperluas, bukan halaman duplikat", TERVERIFIKASI-KODE tidak ada tab di detail existing — page.tsx:44-82 hanya PageHeader + satu DetailCard). Judul seksi verbatim: `Histori Cicilan` (USULAN kata judul; Lead mengesahkan di Q-LH53-1 bersama putusan loader).
+2. Loader kanonik permukaan = `loadLoanInstallmentHistory(loanId)` (jalur B, loan-installment-history-data.ts:40) — USULAN dengan alasan tercatat: (a) daftar ledger dan agregat terpisah per jenis (:124-129) membuat UI mustahil mencampur label antar-jenis baris; (b) hasil `history: null` eksplisit untuk tidak-ada/di-luar-scope (:36) selaras semantik `notFound()` detail existing (page.tsx:42); (c) memuat `nextInstallment` tunggal per frekuensi slip karyawan (:139, BR-LH-07) sehingga UI tidak memilih bulanan vs mingguan sendiri. Jalur A (`loadEmployeeLoanHistory`) TIDAK dikonsumsi permukaan ini; nasibnya (tetap sebagai API laporan lain / didepresiasi) = Q-LH53-1 ke Lead — Business tidak memutus penghapusan kode Backend. Frontend dilarang mengimpor keduanya.
+3. Sumber loanId: detail existing menyelesaikan pinjaman lewat `resolveEntity` slug/id (page.tsx:32-40); permukaan memakai `loan.id` hasil resolusi itu untuk memanggil loader. Loader memuat ulang pinjaman di bawah `hrScopeWhere` yang sama (loan-installment-history-data.ts:50-51) — pemuatan ganda tahap 1 diterima apa adanya (baca-saja, tanpa tulis); mengoptimalkannya (loader menerima pinjaman tersaring) = penyesuaian Backend hanya bila Lead meminta, bukan syarat permukaan (lihat §7: 053-B default TIDAK dibuka).
+4. Alur tampil: server memanggil loader sesudah pinjaman detail teresolusi; `history === null` pada pinjaman yang barusan teresolusi = perlakukan sebagai tidak ditemukan (`notFound()`), bukan seksi kosong — selisih hanya mungkin bila scope berubah antar-muat, dan menampilkan seksi kosong untuk pinjaman luar-scope = bocor keberadaan. Selain itu seksi selalu tampil (termasuk keadaan kosong §4 BR-LH53-05), supaya absennya seksi tidak menjadi sinyal tersembunyi.
+5. Baca-saja mutlak di permukaan: tanpa tombol/aksi tulis apa pun di seksi histori (tanpa bayar cicilan manual, tanpa edit, tanpa ekspor nominal) — BR-LH-01 019-S berlaku; permukaan ini tidak menambah aksi.
+
+### 2. Role/permission matrix
+
+Persis 019-S §4 (dirujuk): reuse `view_employee_loans` (`module-catalog.generated.ts:322`, TERVERIFIKASI-KODE), tanpa key izin baru tahap 1, scope `getHrScope` self/department/all fail-closed (`hr-scope.ts`, pola page.tsx:27-28 + loan-installment-history-data.ts:43-44). Tambahan permukaan saja:
+
+| Aksi permukaan | Karyawan self | Kepala bengkel (dept) | HR/Finance/Admin/GA (all) | Tanpa `view_employee_loans` |
+|---|---|---|---|---|
+| Lihat seksi Histori Cicilan di detail | YA, hanya pinjaman sendiri (luar scope = halaman tidak ditemukan) | YA se-departemen | YA | TIDAK (detail existing sudah menolak di page.tsx:27) |
+| Membedakan "tidak ada" vs "di luar scope" dari respons loader | TIDAK (keduanya null → notFound) | TIDAK | TIDAK | TIDAK |
+
+Tidak ada kolom karyawan yang ditambah permukaan ini di luar yang sudah tampil di DetailCard existing; scope self tidak memperoleh nama/kolom lintas karyawan apa pun dari seksi histori (payload loader memang per-pinjaman dalam scope, BR-LH-09).
+
+### 3. Status-transition matrix
+
+Permukaan baca-saja: tanpa status tersimpan, tanpa transisi tulis (019-S §5 berlaku). Konteks status pinjaman existing terhadap permukaan:
+
+| Status pinjaman (tersimpan) | Perkiraan cicilan berikutnya di seksi | Baris histori | Dasar |
+|---|---|---|---|
+| `active` | Tampil bila `nextInstallment.amount` tidak null; null (WEEKLY tanpa `weeklyInstallment` tertulis) = baris perkiraan tampil dengan label tanpa-nominal per BR-LH53-04, bukan ditebak | agregat-slip tahap 1 (+ ledger tahap 2 kelak) | builder :200-213 (perkiraan hanya status persis `active`); BR-LH-07 |
+| `paid_off` | TIDAK tampil (`nextInstallment === null`) | tetap terbaca penuh (EC-1 019-S) | builder :200-213; tes loan-installment-history.test.ts:137 |
+| Di luar kosakata tertutup (`isUnknownStatus`) | TIDAK tampil (bukan `active`) | tetap tampil; status pinjaman tampil apa adanya tertanda `Status tidak dikenal` bila permukaan menampilkan status dari payload histori | builder :51,116-117,223 |
+
+Transisi `active -> paid_off` tetap hanya oleh amortisasi slip terbayar existing (019-S §5, hrm.actions.ts) — permukaan tidak memicu, tidak menahan, dan tidak menulis transisi apa pun.
+
+### 4. Business rules register — kontrak permukaan baru (BR-LH53)
+
+Hanya aturan permukaan yang belum dibekukan 019-S. BR-LH-01..10 tidak diulang dan tidak diubah.
+
+| ID | Aturan permukaan | Status | Sumber |
+|---|---|---|---|
+| BR-LH53-01 | Seksi tunggal bertajuk `Histori Cicilan` di bawah DetailCard detail existing; bukan halaman/tab/rute baru; seksi selalu tampil untuk pinjaman dalam scope (termasuk kosong) | USULAN (penempatan pola TERVERIFIKASI-KODE penggajian/[slug]:106,130; kata judul menunggu Q-LH53-1) | §1 butir 1 |
+| BR-LH53-02 | UI menempel verbatim dari payload loader kanonik: `notice`, label tiap baris, `paidLabel`, `unallocatedLabel`, label perkiraan — UI TIDAK menulis ulang kata, TIDAK menjumlah, TIDAK mengalokasi, TIDAK menghitung sisa sesudah cicilan | USULAN (mengikat AC-LH-F1 019-S) | loader/builder §0 |
+| BR-LH53-03 | Label verbatim final per jenis baris (konstanta builder jalur B, loan-installment-history.ts:41-51): notice = `LOAN_INSTALLMENT_HISTORY_NOTICE` (:41-43); baris `agregat-slip` = "Potongan gaji periode ini (semua pinjaman)" (:45-46); baris `ledger` = "Cicilan" (:47, tahap 2); ember tak-teralokasi = "Terbayar belum teralokasi per pinjaman (pra-ledger)" (:48-49); terbayar kini = "Terbayar s.d. kini" (:44); perkiraan = "Perkiraan cicilan berikutnya" (:50). Label jalur A (employee-loan-history.ts:36-47) TIDAK dipakai permukaan ini | TERVERIFIKASI-KODE (konstanta ada) + USULAN (pemilihan jalur B, Q-LH53-1) | loan-installment-history.ts:41-51 |
+| BR-LH53-04 | Perkiraan cicilan berikutnya: tampil hanya dari `nextInstallment` payload; `amount === null` (WEEKLY tanpa jadwal tertulis) tampil sebagai label perkiraan tanpa nominal dan tanpa angka konversi dari bulanan; pinjaman non-`active` tanpa baris perkiraan sama sekali | TERVERIFIKASI-KODE perilaku builder (:200-213) + USULAN bentuk tampil tanpa-nominal | BR-LH-07 019-S |
+| BR-LH53-05 | Perilaku kosong: (a) pinjaman tanpa slip `paid` berpotongan (`aggregateSlipRows` kosong, `unallocatedAmount` 0) → seksi tampil dengan notice verbatim + terbayar kini + teks kosong verbatim usulan `Belum ada cicilan terbayar tercatat.` (kata final Q-LH53-2); (b) pinjaman `paid_off` → histori tetap tampil penuh, tanpa baris perkiraan; (c) `hasUnallocated === false` → baris ember tidak tampil (bukan tampil Rp0 bertanda utang) | USULAN | builder :130-133,232-234 |
+| BR-LH53-06 | Ember tak-teralokasi tampil sebagai baris penutup sesudah daftar baris bila `hasUnallocated` benar, dengan `unallocatedLabel` + `unallocatedAmount` verbatim; tidak dibagi ke baris mana pun, tidak dijumlah UI ke total baris | USULAN | BR-LH-08 019-S; builder :194-198 |
+| BR-LH53-07 | Urut baris = urut payload persis (builder: tanggal bayar, lalu awal periode, lalu id slip — loan-installment-history.ts:142-153,192; loader orderBy sama :81); UI tidak mengurutkan ulang. Pagination: tahap 1 TANPA pagination permukaan — seluruh baris payload tampil (satu pinjaman, slip paid berpotongan saja); memotong diam-diam (mis. 10 teratas) dilarang; batas/pagination = keputusan Lead kelak berdasar volume nyata (Q-LH53-3), bukan karangan tahap 1 | TERVERIFIKASI-KODE urut builder/loader + USULAN tanpa-pagination | :142-153,192; data :81 |
+| BR-LH53-08 | Kolom baris agregat-slip maksimal: label baris, nomor dokumen slip (`documentNo`), periode (`period`), tanggal bayar (`paymentDate`, null tampil `-` tanpa tanggal karangan), nominal `loanDeduction` bertanda label itu. Dilarang kolom: sisa sesudah cicilan, nomor cicilan ke-n, nominal per-pinjaman, nama karyawan lain, kolom gaji apa pun (baseSalary/komponen/net tidak ada di payload — BR-LH-09) | USULAN (himpunan field TERVERIFIKASI-KODE dari tipe builder :86-97) | loan-installment-history.ts:86-97 |
+| BR-LH53-09 | `paymentDate === null` pada baris: tampil `-`; UI tidak mengganti dengan startDate/periode sebagai "tanggal bayar" (builder menaruh null terakhir dalam urut :146-147 — posisi baris tetap urut payload) | TERVERIFIKASI-KODE + USULAN tampil | :142-153 |
+| BR-LH53-10 | Nominal di seksi hanya: totalAmount/remainingAmount/totalPaidToDate pinjaman ini, loanDeduction agregat per slip, unallocatedAmount, nextInstallment.amount — semua verbatim payload, format mata uang pola existing `formatCurrency` (page.tsx:4,72-75). Penghitungan ulang di UI atas field mentah (termasuk totalPaidToDate dari total−sisa) = di luar kontrak | USULAN | page.tsx:72-75; builder :108-140 |
+
+### 5. Feature matrix (ringkas)
+
+| Fitur | Accurate | Zahir | ISF kini | Permukaan spec ini |
+|---|---|---|---|---|
+| Histori cicilan per pinjaman di detail pinjaman | YA — Pembayaran Angsuran per pinjaman mengurangi saldo, rincian angsuran + status terpantau di fitur Pinjaman Karyawan (URL benchmark) | Loan payroll ada; rincian histori per pinjaman tidak terverifikasi help resmi run ini | Read-model tahap 1 ada (2 loader), permukaan NOL | Seksi Histori Cicilan di detail existing atas loader kanonik tahap 1 |
+| Baris cicilan lampau persis per pinjaman | YA (transaksi angsuran per pinjaman) | tidak terverifikasi | TIDAK tahap 1 (agregat jujur + ember; persis = tahap 2 LH-B2) | tampil apa adanya tahap 1, label BR-LH53-03 |
+| Sisa sesudah tiap cicilan | YA (saldo berjalan) | tidak terverifikasi | TIDAK tahap 1 (dilarang karang, 019-S §3) | TIDAK ditampilkan tahap 1 (MERAH bila tampil) |
+
+### 6. Acceptance criteria + edge cases permukaan
+
+Melengkapi AC-LH-F1/F2 019-S (tetap berlaku); nomor permukaan baru:
+
+- AC-LH53-F1: Detail pinjaman dalam scope menampilkan seksi `Histori Cicilan` di bawah DetailCard dengan notice + label persis konstanta BR-LH53-03; mengganti satu kata label/notice di payload harus terbukti mengubah tampil (verbatim), dan parafrase hardcoded di UI = MERAH.
+- AC-LH53-F2: UI menjumlah/mengalokasi sendiri = MERAH: tidak ada penjumlahan loanDeduction antarbaris, tidak ada alokasi nominal slip ke pinjaman ini, tidak ada kolom sisa-sesudah-cicilan atau nomor cicilan tahap 1 di DOM.
+- AC-LH53-F3: Bocor gaji = MERAH: payload maupun DOM seksi tidak memuat baseSalary/grossSalary/netSalary/komponen slip selain `loanDeduction` agregat bertanda; scope self membuka pinjaman karyawan lain = halaman tidak ditemukan (sama seperti tanpa seksi).
+- AC-LH53-F4: Kosong jujur: pinjaman tanpa slip paid berpotongan menampilkan seksi + teks kosong BR-LH53-05(a) dan terbayar kini verbatim; pinjaman `paid_off` menampilkan histori tanpa baris perkiraan; `hasUnallocated` salah → tanpa baris ember.
+- AC-LH53-F5: Perkiraan: pinjaman `active` MONTHLY tampil nominal monthlyInstallment tersimpan via payload; WEEKLY tanpa `weeklyInstallment` tampil perkiraan tanpa nominal (tanpa angka konversi); non-`active` tanpa perkiraan.
+- AC-LH53-F6: Urut tampil = urut payload (tanggal bayar → awal periode → id slip; paymentDate null terakhir bertanda `-`); seluruh baris tampil tanpa potongan pagination tahap 1.
+Edge permukaan: EC-LH53-1 pinjaman dibuat lalu langsung `paid_off` tanpa slip paid (pelunasan di luar slip tidak tercatat tahap 1): terbayar kini dari field tersimpan tetap tampil, daftar kosong, ember mengikuti BR-LH-08 apa adanya — tidak dikarang barisnya. EC-LH53-2 status di luar kosakata: seksi tetap tampil, perkiraan absen, status dari payload histori tertanda. EC-LH53-3 banyak slip (puluhan): tetap tampil penuh urut payload tahap 1; keluhan performa/paginasi dicatat sebagai masukan Q-LH53-3, bukan dipotong diam-diam. EC-LH53-4 loader mengembalikan null untuk pinjaman yang teresolusi detail: permukaan = notFound, bukan seksi kosong.
+
+### 7. Backlog implementasi (turunan spec ini; ID spec F-2026-10-26-053-S)
+
+| ID turunan | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-26-053-S | Spec permukaan ini (dokumen) | Business | — |
+| Q-LH53-1 (Lead) | Putus loader kanonik permukaan (usulan: jalur B `loadLoanInstallmentHistory`) + nasib jalur A + kata judul seksi `Histori Cicilan` | Lead | spec ini ter-merge |
+| Q-LH53-2 (Lead) | Kata teks kosong final BR-LH53-05(a) | Lead | Q-LH53-1 |
+| Q-LH53-3 (Lead, ditunda sadar) | Pagination/batas baris permukaan hanya bila volume nyata menuntut; tahap 1 tanpa pagination | Lead | pemakaian nyata |
+| 053-F (dibuka Lead sebagai LH-F1 019-S) | Frontend: perluasan detail pinjaman existing — panggil loader kanonik dari loan.id teresolusi, seksi Histori Cicilan verbatim BR-LH53, tes AC-LH53-F1..F6 + AC-LH-F1/F2 | Frontend | Q-LH53-1/2 terputus; kontrak loader tahap 1 final |
+| 053-Q (dibuka Lead sebagai LH-Q1 019-S) | QA: falsifikasi AC-LH-F1/F2 + AC-LH53-F1..F6 atas head Frontend persis (UI hitung/alokasi = MERAH; sisa sesudah cicilan tampil tahap 1 = MERAH; nominal gaji bocor = MERAH; label parafrase = MERAH) | QA | 053-F |
+| 053-B | Backend penyesuaian presentasi loader — default TIDAK dibuka: payload jalur B cukup untuk permukaan §1–§6 apa adanya; dibuka hanya bila Q-LH53-1 memilih jalur A atau Lead meminta pemuatan tunggal | Backend | hanya via Q-LH53-1 |
+
+Pertanyaan terbuka tersisa di luar nomor Q di atas: tidak ada untuk Business. Q-LH-1/Q-LH-2 019-S secara fisik sudah terjawab tahap 1 (kedua loader reuse `view_employee_loans` tanpa key baru dan sudah merged) — Lead cukup meratifikasi/merujuk jawaban fisik itu saat memutus Q-LH53-1, bukan membuka izin baru. Q-LH-3/Q-LH-4 tetap wilayah tahap 2 (LH-B2), tidak disentuh permukaan tahap 1.
+
+### Yang TIDAK diusulkan run ini
+- Halaman/tab/rute histori terpisah: dilarang pola 019-S §2 (duplikat permukaan).
+- Pagination, filter periode, ekspor/CSV histori tahap 1: tanpa kebutuhan terbukti; volume per pinjaman kecil dan pemotongan diam-diam mengarang kelengkapan (BR-LH53-07).
+- Menampilkan sisa sesudah cicilan / nomor cicilan ke-n tahap 1: hanya sah dari ledger tahap 2 (019-S §3); tampil tahap 1 = MERAH.
+- Menghapus/menggabung dua loader di spec ini: keputusan kode Backend lewat Q-LH53-1 Lead.
+
+F-2026-10-26-053-S — Permukaan histori cicilan per pinjaman di detail pinjaman existing. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-LH53-1/2, lalu 053-F (Frontend, sebagai LH-F1 019-S) dan 053-Q (QA, sebagai LH-Q1 019-S); 053-B default tidak dibuka. Pemilik usulan: Business (spec), Lead (loader kanonik + kata final), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (baca-saja, tanpa angka statutori/jurnal baru; BR-LH-09 dijaga payload existing).
+
+---
+## CATATAN PEMBETULAN BUSINESS 2026-10-26 — F-2026-10-26-052-S DICABUT MENJADI PEMBETULAN PREMIS: permukaan rekap sisa pinjaman per karyawan SUDAH TERIMPLEMENTASI di PR #924 (konsumen F-2026-10-25-046-S), spec permukaan terpisah = duplikat dilarang
+
+> **ID**: F-2026-10-26-052-S diverifikasi bebas run ini 2026-10-26 01:02–01:10 WIB (grep `F-2026-10-26-052` di backlog + board `origin/main` ddcf04ba = 0; judul PR terbuka = 0) — ID tetap dipakai sebagai nomor pembetulan ini supaya jejak kartu t_b100c2e8 bisa ditemukan, BUKAN sebagai spec permukaan baru. Kartu: t_b100c2e8. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo.
+
+### 1. Koreksi premis kartu (bukti live run ini, bukan klaim ulang)
+
+Premis kartu t_b100c2e8: "konsumen UI = NOL, read-model merged belum bisa dipakai user, spec permukaan belum ada". **BASII per bukti berikut:**
+
+| Klaim kartu | Fakta live 2026-10-26 01:02 WIB | Bukti |
+|---|---|---|
+| Konsumen UI = 0 | BENAR hanya di `origin/main` (`git grep employee-loan-recap origin/main -- src/app src/components src/actions` = 0) — konsumen hidup di branch PR terbuka, bukan main | grep run ini |
+| Belum bisa dipakai user | Konsumen SELESAI terimplementasi: PR #924 OPEN head `b03120da`, rute `sdm/pinjaman/rekap/[[...segments]]/page.tsx` + tabel + nav, checks exact-head hijau (Build/DB/Lint/Sonar/Unit PASS, Docker SKIP) | `gh pr view 924` + `gh pr checks 924` run ini |
+| Spec permukaan belum ada | Spec permukaan SUDAH terbekukan di spec induk F-2026-10-25-046-S §1 (alur, rute area SDM, filter departemen scope all, tautan daftar per karyawan, mode kosong EC-7), §4 (matriks izin), §5 (nol transisi rekap), §7 AC-LR46-F1..F3 — dan PR #924 mengklaim persis AC-LR46-F1..F3 itu | backlog F-2026-10-25-046-S (baris 31175+) |
+
+Konsekuensi: menulis spec 7-bagian baru (BR-LR52-*) akan menduplikasi BR-LR46-01..10 + AC-LR46-F1..F3 dan menciptakan dua sumber kebenaran untuk permukaan yang sama. Sesuai pola audit Business sebelumnya (047-S: menulis ulang fitur live = duplikat terlarang), spec ini DICABUT; yang diterbitkan = pembetulan premis + peta status resmi di bawah. ID 052-B/-F/-Q yang diminta kartu TIDAK dibuka: -B tidak perlu (loader existing cukup — terbukti PR #924 memakai `loadEmployeeLoanRecap` apa adanya), -F sudah berjalan sebagai PR #924 (kartu Frontend t_7520527a), -Q sudah ada sebagai kartu QA t_79ee0533 dari handoff Lead 2026-10-25 22:09 WIB.
+
+### 2. Peta status resmi permukaan rekap (satu-satunya yang perlu dibaca Lead/Frontend/QA)
+
+- **Read-model (Backend, SELESAI di main)**: `src/lib/reports/employee-loan-recap.ts` + `employee-loan-recap-data.ts` + tes `employee-loan-recap{,-data}.test.ts` (F-2026-10-25-046-S, putusan Lead Q-LR46-1..4 terbit 2026-10-25 22:09 WIB, board baris HANDOFF Lead -> Backend). Loader: `requirePermission view_employee_loans` lalu `getHrScope` fail-closed; select tanpa `baseSalary`/`Payroll.loanDeduction` (BR-LR46-06).
+- **Izin (TERVERIFIKASI-KODE)**: `view_employee_loans` di `src/lib/auth/module-catalog.generated.ts:322`; nav existing `Pinjaman` `/sdm/pinjaman` izin sama (`src/components/layout/navigation.ts:165`); preseden rekap `Rekap Lembur` (:160, `view_overtime`). Tanpa key baru tahap 1 (Q-LR46-3 TERPUTUS: reuse).
+- **Konsumen (Frontend, PR #924 OPEN)**: rute `/sdm/pinjaman/rekap`, pemilih departemen hanya `scope.kind === "all"`, cicilan bulanan/mingguan dua kolom terpisah, sisa negatif verbatim tidak di-clamp, penanda nonaktif dari payload server, total footer = `recap.totals` server (UI nol hitung ulang), tautan `/sdm/pinjaman?cari=<nama>`. Sesuai AC-LR46-F1..F3 tanpa penyimpangan yang terlihat dari body PR + diff stat (7 berkas, +517).
+- **Sisa gerbang**: verdict QA atas head #924 persis (kartu t_79ee0533: Σ UI beda dari builder = MERAH; nominal gaji bocor = MERAH; scope bocor = MERAH; `paid_off` masuk Σ = MERAH; clamp negatif = MERAH), lalu merge oleh Lead. Business tidak memberi vonis merge dan tidak merge.
+
+### 3. Yang TIDAK diterbitkan run ini (beserta alasan)
+
+- Spec permukaan baru BR-LR52-*: duplikat BR-LR46; dua register untuk satu permukaan = sumber kebenaran ganda.
+- Benchmark Accurate/Zahir ulang: sudah terverifikasi di spec 046-S §6 (Accurate help resmi pinjaman karyawan; Zahir Loan) — mengulang tanpa delta = kerja sia-sia; tidak ada klaim benchmark baru di catatan ini.
+- Turunan 052-B/-F/-Q: -B mubazir (loader dipakai apa adanya oleh #924), -F = #924 berjalan, -Q = t_79ee0533 berjalan.
+- Angka/statutori baru: nol — vonis uang F-2026-10-25-023-V tetap mengikat dan tidak diputus ulang (BR-LR46-07).
+
+### 4. Handoff
+
+- **Lead**: merge PR #924 sesudah verdict QA head persis; tidak ada putusan rute baru yang diminta — rute sudah terputus Q-LR46. Kartu t_b100c2e8 ditutup Business sebagai premis-basi.
+- **Frontend**: tidak ada pekerjaan baru dari kartu ini; PR #924 = satu-satunya konsumen resmi.
+- **QA**: falsifikasi tetap kartu t_79ee0533 atas head #924 persis.
+
+F-2026-10-26-052-S — Status: DICABUT menjadi catatan pembetulan premis run ini; permukaan rekap pinjaman sudah terspec 046-S dan terimplementasi PR #924. Pemilik berikutnya: QA (verdict #924), Lead (merge). Butuh vonis accountant: TIDAK.
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-051-S: antrean verifikasi DP menunggu konfirmasi (umur menunggu + jarak ke ambang invoice turunan, tanpa angka karang)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_16fe0405. ID F-2026-10-26-051-S diverifikasi bebas run ini 2026-10-26 00:37 WIB: backlog origin/main maks F-2026-10-25-049-V; 050-S di PR #928 OPEN (head 693b55d1); grep `F-2026-10-26-051` di backlog + board origin/main dan daftar PR terbuka = 0 sebelum tulis. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
