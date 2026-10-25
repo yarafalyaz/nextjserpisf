@@ -36,6 +36,7 @@ export const ATTACHMENT_PERMISSION: Record<string, PermissionName> = {
   stock_adjustment: "view_stock_adjustments",
   petty_cash: "view_petty_cash",
   WarrantyClaim: "view_warranty_claims",
+  EmployeeDisciplinaryRecord: "view_disciplinary_records",
 }
 
 export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
@@ -64,6 +65,8 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
   stock_adjustment: "edit_stock_adjustments",
   petty_cash: "edit_petty_cash",
   WarrantyClaim: "edit_warranty_claims",
+  // F-2026-10-25-005-S DISC-B1: bukti pelanggaran rekod disiplin (spec §3).
+  EmployeeDisciplinaryRecord: "create_disciplinary_records",
 }
 
 export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {
