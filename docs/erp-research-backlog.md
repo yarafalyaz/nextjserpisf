@@ -24803,13 +24803,109 @@ Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallb
 - Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
 - Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
 
+### 8A. PUTUSAN LEAD 2026-10-25 — Q-TX-2/Q-TX-4 + izin schema + penanda beku + gerbang EC-3 (kartu t_ee57ea3b, diminta Backend t_02c3d96e)
+
+Basis live diverifikasi Lead 25 Okt 2026 13:10 WIB: origin/main
+5c8935a7; spec ini di main; vonis Accountant F-2026-10-25-019-V
+(Q-TX-1) di PR #773 head b8e48af9 OPEN — isi vonis dibaca Lead dari
+head itu (TERJAWAB-Q-TX-1 konsisten), merge docs #773 terpisah dan
+TIDAK menjadi gerbang putusan ini. Bukti kode: Customer kini hanya
+`taxId String?` (prisma/schema.prisma model Customer); TaxInvoice
+sudah punya counterpartyTaxId/Name/Nitku; `issueTaxInvoice`
+(tax-invoice.service.ts) menerima counterparty kosong semua arah;
+izin katalog nyata view/create/edit_customers +
+create_tax_invoices (module-catalog.generated.ts:125-127,326).
+
+1. **Q-TX-2: BUKA inti sekarang. Izin REUSE existing, TANPA key
+   baru.** Lihat identitas+penanda = `view_customers`; isi/ubah
+   master = `create_customers` (buat) / `edit_customers` (ubah);
+   terbit faktur = `create_tax_invoices`. Alasan: identitas pajak
+   pelanggan = data master bisnis (bukan gaji, bukan peran pajak
+   baru); key baru memecah seed/parity tanpa pemisahan tugas nyata
+   tahap 1. Penjaga izin wajib dites per aksi (izin persis + 0
+   delegasi saat ditolak), bukan hanya penjaga keberadaan.
+2. **Q-TX-4: penanda kelengkapan CUKUP di master tahap 1** (usul
+   spec diterima). Turunan baca-saja siap/kurang + daftar kosongnya
+   + penanda legacy15/nitkuUnlinked; TANPA antrean kerja petugas
+   pajak, TANPA kolom status, TANPA cron penagih. Naik kelas ke
+   antrean hanya bila ada bukti operasional antrean dibutuhkan.
+3. **Izin klaim prisma/schema.prisma + migrasi DIBERIKAN** ke
+   Backend (kartu t_02c3d96e) untuk model Customer SAJA, kolom
+   aditif nullable/default-aman: `taxpayerName String?`
+   (nama WP), `taxAddress String? @db.Text` (alamat pajak),
+   `nitku String?`, `pkpStatus String @default("unknown")`
+   (nilai sah non_pkp|pkp|unknown — divalidasi server, enum Prisma
+   DITOLAK tahap ini agar konsisten pola string repo + migrasi
+   ramping), `pkpEffectiveFrom DateTime? @db.Date`,
+   `pkpSource String?` (sumber/SPPKP). `taxId` TETAP NPWP — tanpa
+   rename, tanpa migrasi makna, tanpa backfill karangan; baris lama
+   = kolom baru null/unknown. Nama map DB snake_case mengikuti
+   konvensi model Customer existing. Di luar Customer: schema lain
+   TIDAK diizinkan di kartu ini.
+4. **Penanda beku dokumen: TANPA kolom dokumen baru.** Penanda
+   legacy15/nitkuAbsent/nitkuUnlinked DITURUNKAN dari nilai
+   counterparty beku saat baca/saat terbit (sesuai vonis 019-V §6:
+   penanda turunan baca-saja, dilarang kolom status kelima yang
+   bisa basi). Karena diturunkan dari snapshot, penanda otomatis
+   beku bersama snapshot. Kolom eksplisit hanya dibuka kartu
+   lanjutan bila ada bukti kebutuhan kueri massal atas penanda.
+   Catatan jujur di luar 5 kolom master: alamat pajak master
+   (butir 3) belum punya kolom alamat di TaxInvoice existing dan
+   ekspor Coretax hari ini membaca alamat pembeli LIVE dari
+   Customer.address — perbaikan itu BUKAN bagian putusan ini;
+   dilarang menambah kolom dokumen diam-diam; bila Backend/QA
+   membuktikan alamat pajak wajib beku, ajukan kartu lanjutan ke
+   Lead (snapshot alamat = kandidat kolom dokumen terpisah).
+5. **Gerbang terbit EC-3: SEMUA arah `out`, server-side di service
+   penerbitan** (bukan hanya tertaut pelanggan master, bukan hanya
+   form). Nama lawan kosong → tolak; NPWP/NIK kosong → tolak;
+   bentuk NPWP cacat → tolak; NPWP 15 digit → hanya lolos dengan
+   konfirmasi eksplisit tercatat (peringatan keras vonis §2);
+   NITKU bentuk cacat → tolak, NITKU absen → lolos bertanda
+   nitkuAbsent. Penyalinan snapshot dari master hanya bila faktur
+   penjualan tertaut (ikuti customerId faktur, koreksi operator
+   per-field menang); terbit manual tanpa tautan memakai isian
+   manualnya dan tunduk gerbang sama. Arah `in` dan bupot TIDAK
+   diubah gerbang ini. Pengecualian ritel: TIDAK ada jalur ritel
+   terpisah di kode hari ini (TRANSACTION_CODES/pickTransactionCode
+   tanpa rezim ritel) — gerbang berlaku tanpa pengecualian sampai
+   Accountant memvonis jalur ritel nyata; mengarang pengecualian
+   DILARANG. Konsekuensi disadari dan diterima: AC-TX-B3/B5 spec
+   ditafsir ulang — "manual seperti hari ini" berarti alur manual
+   tetap ada, tetapi terbit `out` dengan identitas kosong yang
+   hari ini lolos kini DITOLAK (ini memang vonis EC-3); tes lama
+   yang mengandalkan terbit `out` kosong wajib diperbarui Backend
+   di PR yang sama, bukan dilonggarkan. Koreksi identitas faktur
+   terbit tetap batal + faktur baru untuk kesalahan identitas
+   (Pasal 48 PER-11/PJ/2025); replaceTaxInvoice menyalin snapshot
+   lama apa adanya dan TIDAK boleh dipakai membetulkan identitas.
+6. **Urutan eksekusi Backend (satu PR inti)**: (a) builder murni
+   validasi/penurun di src/lib/tax/ — SUDAH terbit sebagai PR #834
+   head 8388588a (lapis murni 2 berkas, diverifikasi Lead: isi
+   builder sesuai batas vonis; JANGAN merge terpisah — fisik
+   dilanjutkan di branch yang sama sesudah putusan ini),
+   (b) kolom Customer + migrasi butir 3, (c) validasi master di
+   jalur create/update pelanggan existing tanpa mengubah kontrak
+   selain field baru, (d) salin snapshot + gerbang butir 5 di
+   service penerbitan, (e) penanda kelengkapan untuk konsumen
+   Frontend. Tes falsifikasi vonis §7 + AC-TX-B1..B5 yang
+   disesuaikan butir 5; tsc+lint+vitest terkait hijau; grep e2e
+   untuk teks/kontrak terdampak. Frontend = konsumen sesudah
+   kontrak Backend stabil (kartu terpisah); QA falsifikasi atas
+   head persis.
+
+Pemilik berikutnya: Backend (t_02c3d96e, fisik penuh dalam batas
+ini) -> Frontend (konsumen penanda/snapshot) -> QA (falsifikasi
+§7 vonis + AC-TX). Accountant dipanggil lagi hanya pada dua
+pemicu vonis §8 (histori PKP naik kelas / flag TKU-fasilitas).
+
 ### 9. Backlog implementasi
 
 | ID | Pekerjaan | Pemilik | Prasyarat |
 |---|---|---|---|
 | F-2026-10-25-004-S | Spec ini (dokumen) | Business | — |
 | (turunan) vonis format NPWP/NITKU/status PKP | Accountant | Q-TX-1 | — |
-| (turunan) field master + snapshot penerbitan + penanda loader | Backend | Q-TX-1 + Q-TX-2/3; klaim schema.prisma di board | — |
+| (turunan) field master + snapshot penerbitan + penanda loader | Backend | Q-TX-1 + PUTUSAN LEAD §8A (Q-TX-2/3/4, izin schema, gerbang EC-3) | — |
 | (turunan) UI blok pajak master + form terbit konsumen | Frontend | kontrak Backend stabil | — |
 | (turunan) falsifikasi AC-TX-* | QA | head Backend/Frontend persis | — |
 
