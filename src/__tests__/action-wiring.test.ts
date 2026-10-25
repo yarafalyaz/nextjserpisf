@@ -98,11 +98,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-25-013-S backend dulu (PR #914): ekspor CSV saldo cuti;
-  // tombol ekspor di UI laporan cuti menyusul (frontend t_4c259ed3) —
-  // buang entri ini saat UI memanggilnya.
-  "src/actions/hrm.actions.ts::exportLeaveBalancesCsv":
-    "F-2026-10-25-013-S backend; UI tombol ekspor CSV saldo cuti menyusul (frontend t_4c259ed3)",
+  // F-2026-10-25-013-S: exportLeaveBalancesCsv kini dirujuk tombol ekspor
+  // di UI saldo cuti (leave-balance-export-button.tsx, PR #921) — entri beku dibuang.
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
