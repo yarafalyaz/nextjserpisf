@@ -29,6 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+KLAIM Frontend t_43ac8c90 | src/app/(dashboard)/laporan/stok-minimum/** + src/components/reports/reorder-point-card.tsx (baru) + src/components/reports/__tests__/reorder-point-card.test.tsx (baru) + src/components/items/item-warehouse-min-stock-panel.tsx + src/components/items/__tests__/item-warehouse-min-stock-panel.test.tsx + docs/autonomous-board.md (baris sendiri) | branch hermes/frontend-f048-reorder-consumer, worktree /tmp/frontend-f048-reorder-consumer | 2026-10-26 03:07 WIB
 KLAIM Backend t_241ba782 | src/lib/reports/lead-followups.ts + src/lib/reports/lead-followups-data.ts + src/lib/reports/__tests__/lead-followups.test.ts (Q-LFU-1 saring `lost`, worktree /tmp/backend-f047-lfu-terminal branch hermes/backend-f047-lfu-terminal) + docs/autonomous-board.md (baris klaim sendiri) | 2026-10-26 01:37 WIB — klaim dilepas sesudah PR dibuat
 KLAIM Business t_fe980c6e | docs/erp-research-backlog.md (entri F-2026-10-26-053-S) + docs/autonomous-board.md (baris sendiri) | branch hermes/business-f053-loan-history-surface | 2026-10-26 01:13 WIB
 KLAIM Business t_283cc339 | docs/erp-research-backlog.md (entri F-2026-10-26-050-S) + docs/autonomous-board.md (baris sendiri) | branch hermes/business-f050-collection-reminder | 2026-10-26 00:19 WIB
