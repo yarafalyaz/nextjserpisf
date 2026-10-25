@@ -29,6 +29,10 @@ import { loadFinancialRatios } from "@/lib/reports/financial-ratios-data"
 import { buildRatiosTable } from "@/lib/reports/ratios-table"
 import { loadProfitability } from "@/lib/reports/profitability-data"
 import { loadSalesProcessHistory } from "@/lib/reports/sales-process-history-data"
+import {
+  buildDiscountExposureTable,
+  loadDiscountExposureReport,
+} from "@/lib/reports/discount-exposure-export"
 import { loadPurchaseProcessHistory } from "@/lib/reports/purchase-process-history-data"
 import { loadPurchasesByDimension } from "@/lib/reports/purchase-by-dimension-data"
 import { loadPayrollRows } from "@/lib/reports/payroll-reports-data"
@@ -951,6 +955,20 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
         : "barang"
       const report = await loadSalesAnalytics(period, dimension)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "paparan-diskon-penjualan": {
+    title: "Paparan Diskon Penjualan",
+    subtitle: "Diskon Efektif Dokumen Penjualan per Periode",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period }) {
+      const report = await loadDiscountExposureReport(period)
+      return {
+        kind: "table",
+        table: buildDiscountExposureTable(report),
+        periodCaption: report.periodCaption,
+        landscape: true,
+      }
     },
   },
   "buku-besar": {
