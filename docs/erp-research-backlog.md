@@ -31166,3 +31166,134 @@ Selisih jujur: ISF sudah punya master Tax generik + faktur pajak dokumen; yang a
 - Menggabungkan pajak potong (WithholdingTaxType/PPh) ke penampung ini — objek pajak berbeda.
 
 F-2026-10-25-041-S — Kode pajak + DPP default per barang/jasa. Status: SPEC SELESAI run ini; gerbang pertama vonis Accountant Q-ITX-1, lalu fisik Backend Q-ITX-2. Pemilik usulan: Business (spec), Accountant (vonis kode/tarif), Lead (Q-ITX-3/4), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: YA (Q-ITX-1).
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-044-S: rekap kehadiran per karyawan per periode (read-model baca-saja di atas Attendance existing)
+
+> **Slot**: F-2026-10-25-044-S. Diperiksa bentrok 2026-10-25 21:29 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-044` di backlog origin/main = 0; ID 2026-10-25 terpakai di main sampai 038-S (039-S/040-S/041-S di PR terbuka #901/#898, 042-V vonis Accountant PR #902, 043-S PR #903). `-044-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR** — bukan F-ID lama. Bukan duplikat F-2026-10-25-013-S (saldo cuti — hak cuti tahunan), bukan F-2026-10-25-016-S (rekap lembur per karyawan — jam `OvertimeRequest`, sudah live halaman `/sdm/lembur/rekap`), bukan F-2026-10-25-010-S (pengajuan koreksi absensi — jalur tulis persetujuan). Objek spec ini: agregat FAKTA kehadiran dari `Attendance` per karyawan per periode. Dokumen saja; tanpa kode/schema/migrasi.
+
+### 0. Ringkasan putusan yang diminta
+
+HR dan kepala bengkel menjawab pertanyaan berulang tiap tutup periode: "karyawan ini hadir berapa hari bulan ini, berapa izin/sakit/alpa, berapa menit terlambat?" Hari ini satu-satunya agregat kehadiran adalah `calculateAttendanceSummary` — dan ia hanya hidup di dalam hitung payroll per karyawan terpilih, tidak pernah tampil sebagai rekap. Di luar itu hanya daftar transaksional `/sdm/absensi` baris per baris. Akibat nyata: keterlambatan dan alpa terlihat hanya sesudah slip payroll terbit (sebagai potongan), bukan sebagai fakta operasional yang bisa ditindak sebelum periode tutup. Spec ini membekukan: (A) builder baca-saja agregat kehadiran per karyawan per periode dari `Attendance` + cuti approved existing, (B) permukaan rekap di area SDM existing sejajar rekap lembur, (C) batas tegas fakta kehadiran (milik spec ini) vs angka potongan uang (wilayah payroll/Accountant — rekap tidak menghitung, tidak menampilkan nominal potongan). Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya), payroll (konsumen hilir terpisah — bukan konsumen rekap ini).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin membuka permukaan rekap kehadiran, memilih periode (rentang tanggal/bulan), opsional filter departemen.
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `Attendance` + `LeaveRequest` approved dalam scope+periode, dan builder murni mengelompokkan per karyawan: hari kerja terjadwal, hari hadir, hari cuti/izin, hari sakit, hari alpa tercatat, hari tanpa rekod di hari kerja, jumlah kejadian terlambat, total `lateMinutes`, total `overtimeMinutes` tercatat — semua dari kolom existing, tanpa tarif/potongan apa pun.
+3. Halaman menampilkan baris per karyawan + total (penjumlahan dari hitungan hari/menit, bukan rata-rata persen), dengan penanda karyawan tanpa jadwal terikat (definisi hari kerja tidak bisa diturunkan — tampil di ember terpisah, bukan ditebak).
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `Attendance` + `LeaveRequest` + `Employee` (departemen) + `WorkSchedule`/`Holiday`/`DepartmentHoliday` (definisi hari kerja); dokumen keluar = tampilan rekap + (tahap berikut, bila dibuka) CSV pola route ekspor existing.
+
+### 2. Inventarisasi terverifikasi (origin/main fe281d46, 2026-10-25 21:29 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Attendance` (`prisma/schema.prisma:3314-3339`): employeeId, date, checkIn/checkOut + koordinat GPS, status String default `present`, `overtimeMinutes` Int?, `overtimeApproved` Boolean, `lateMinutes` Int default 0, notes; unik `[employeeId, date]`; indeks employeeId/date/status.
+- Kosakata status existing: `AttendanceStatus` (`src/lib/constants/status.ts:66-74`) = present/absent/late/half_day/sick/leave/overtime; label tampil (`src/lib/utils/status-labels.ts:85-92`) = Hadir/Tidak Hadir/Terlambat/Setengah Hari/Sakit/Cuti/Lembur. Rekap memakai kosakata ini persis — status adalah String bebas di DB, nilai di luar kosakata tampil apa adanya (pola `labelFrom`), bukan dibuang.
+- Agregat payroll existing: `calculateAttendanceSummary(employeeId, startDate, endDate)` (`src/lib/services/attendance-summary.service.ts:17-158`) menghasilkan totalWorkingDays/workingDays/presentDays/leaveDays/holidayDays/absentDays + `dailyRate` + `absentDeduction`. Konsumennya HANYA jalur payroll di `src/actions/hrm.actions.ts:1324,2676,2879` (pratinjau/generate per karyawan terpilih). Tidak ada halaman, loader laporan, atau ekspor yang menampilkannya (grep konsumen di `src/app` + `src/components` = 0).
+- Definisi hari kerja di service yang sama (TERVERIFIKASI-KODE, jangan didefinisikan ulang): precedence jadwal karyawan > departemen > global; `workDays` kosong → fallback Senin–Jumat; hari libur = `Holiday` + `DepartmentHoliday` departemen karyawan; hari dievaluasi hanya sampai hari ini (`evalEnd`); hadir diturunkan dari baris `Attendance` dengan `checkIn != null` pada tanggal itu (`attendance-summary.service.ts:105`), cuti dari `LeaveRequest` status `approved` yang tumpang tindih periode; hari kerja tanpa hadir dan tanpa cuti = absentDays versi payroll.
+- Potongan uang payroll (di luar rekap): `lateDeduction = Σ lateMinutes × penaltyPerMinute` dan `absentDeduction` dari service di atas masuk slip (`hrm.actions.ts:1379-1401,1973-1983,2093-2094`). Angka-angka ini wilayah payroll; rekap TIDAK menghitung ulang dan TIDAK menampilkannya (BR-ATT-05).
+- Daftar transaksional existing: halaman `/sdm/absensi` (`src/app/(dashboard)/sdm/absensi/[[...segments]]/page.tsx`) — `requireAnyPermission` + `getHrScope`, filter tanggal/bulan di path, cari/status/paginasi per baris rekod. Menjawab "rekod mana", bukan "berapa hari per karyawan per periode". Navigasi: entri `Absensi` href `/sdm/absensi` izin `view_attendance` (`src/components/layout/navigation.ts:155`).
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:282-285`): `view_attendance`, `create_attendance`, `edit_attendance`, `manage_attendance` (resource `attendance`). Tidak ada izin laporan kehadiran terpisah. `deleteAttendance` menuntut `manage_attendance` (`src/lib/auth/action-perms.ts:88-90`) — katalog memang tanpa `delete_attendance`.
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:45-77`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1. `hrScopeWhere` berlaku untuk model ber-`employeeId` termasuk `Attendance` (disebut eksplisit di komentar `hr-scope.ts:81-84`).
+- Pola saudara yang dirujuk: rekap lembur (builder murni + loader + halaman `/sdm/lembur/rekap`, F-2026-10-25-016-S), rekap saldo cuti (`getAllLeaveBalances` `hrm.actions.ts:3433` + halaman `/sdm/cuti/saldo`), builder laporan tanpa nominal gaji (`employee-lifecycle.ts`).
+
+Belum ada / gap (bukti grep run ini):
+- Builder/loader rekap kehadiran: tidak ada berkas `attendance*` di `src/lib/reports/` (daftar berkas diverifikasi run ini); tidak ada agregasi kehadiran per karyawan/periode di permukaan mana pun selain service internal payroll di atas.
+- Pemisahan "alpa tercatat" (baris `Attendance` status absent) vs "tanpa rekod" (hari kerja terjadwal tanpa baris apa pun): service payroll menggabungkan keduanya ke `absentDays` (hari tanpa checkIn dan tanpa cuti approved dihitung absent) — untuk potongan itu keputusan payroll; untuk rekap operasional keduanya fakta berbeda yang wajib dipisah tampil (BR-ATT-03), karena tanpa rekod bisa berarti belum dicatat petugas, bukan karyawan alpa.
+- Rekap tidak boleh menyalin definisi hadir versi payroll mentah-mentah tanpa label: service menghitung hadir dari `checkIn != null` tanpa membaca kolom `status` — baris status `sick`/`leave`/`half_day` yang punya checkIn akan terhitung hadir oleh service. Untuk payroll itu perilaku berjalan (BUTUH-VONIS bila mau diubah); rekap membekukan definisinya sendiri secara eksplisit (BR-ATT-02) dan menyatakan selisihnya dari angka payroll, bukan menyamakan diam-diam.
+- Filter departemen agregat + total periode: halaman existing menyaring per baris; tidak ada pengelompokan per karyawan/departemen maupun total menit terlambat per periode.
+
+### 3. Business rules register (BR-ATT)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-ATT-01 | Satu-satunya sumber baris kehadiran = `Attendance` existing (+ `LeaveRequest` approved untuk hari cuti); rekap dilarang membuat tabel/rekod kehadiran kedua | TERVERIFIKASI-KODE | `prisma/schema.prisma:3314`; `attendance-summary.service.ts:98-118` |
+| BR-ATT-02 | Definisi ember rekap dibekukan eksplisit per kolom existing: hadir = baris dengan `checkIn != null` DAN status tidak termasuk sick/leave; sakit = status `sick`; cuti/izin = status `leave` ATAU tanggal tercakup `LeaveRequest` approved; alpa tercatat = status `absent`; terlambat = `lateMinutes > 0` (kejadian + total menit); setengah hari = status `half_day` dihitung ember sendiri, tidak dicampur hadir penuh. Selisih definisi dari service payroll (yang mengabaikan status) dinyatakan di label halaman | USULAN | kolom `schema.prisma:3322-3327`; kosakata `status.ts:66-74`; perilaku service `attendance-summary.service.ts:105,141-147` |
+| BR-ATT-03 | Hari kerja terjadwal tanpa baris `Attendance` dan tanpa cuti approved = ember "tanpa rekod", TIDAK digabung ke alpa tercatat dan TIDAK diberi label ketidakhadiran karyawan | USULAN | gap §2; service payroll menggabungkannya ke absentDays untuk potongan — perilaku itu tetap milik payroll, bukan label rekap |
+| BR-ATT-04 | Definisi hari kerja/libur mengikuti precedence existing persis (jadwal karyawan > departemen > global; workDays kosong → Senin–Jumat; Holiday + DepartmentHoliday; evaluasi hanya sampai hari ini). Karyawan tanpa jadwal terikat masuk ember "tanpa jadwal" dengan hari kerja tak diturunkan — fallback Senin–Jumat generik TIDAK diterapkan diam-diam ke orangnya | TERVERIFIKASI-KODE (precedence) + USULAN (ember tanpa jadwal) | `attendance-summary.service.ts:44-80,124-140`. Catatan: service existing justru menerapkan fallback Senin–Jumat bila workDays kosong — rekap mewajibkan penanda itu terlihat, bukan mengubah service |
+| BR-ATT-05 | Rekap TIDAK menghitung dan TIDAK menampilkan nominal uang apa pun: tanpa `dailyRate`, `absentDeduction`, `lateDeduction`, tanpa tarif per menit. Payroll tetap satu-satunya jalur angka potongan | TERVERIFIKASI-KODE (jalur existing) + USULAN (larangan tampil) | `attendance-summary.service.ts:154-157`; `hrm.actions.ts:1379-1401` |
+| BR-ATT-06 | Akses rekap = izin katalog existing + `getHrScope` fail-closed; filter departemen/periode tidak pernah memperluas scope; keluaran tanpa `baseSalary` dan tanpa komponen gaji apa pun | TERVERIFIKASI-KODE + USULAN penempatan filter | `module-catalog.generated.ts:282-285`; `hr-scope.ts:45-84` |
+| BR-ATT-07 | Periode rekap mengikuti kolom `date` rekod kehadiran (tanggal kehadiran), bukan createdAt/updatedAt | USULAN | `schema.prisma:3317` |
+| BR-ATT-08 | `overtimeMinutes`/`overtimeApproved` di `Attendance` adalah menit lembur tercatat di rekod kehadiran — fakta operasional terpisah dari jam `OvertimeRequest` F-2026-10-25-016-S; rekap menampilkannya dengan label sumbernya dan TIDAK menjumlahkannya dengan jam lembur pengajuan | USULAN | `schema.prisma:3324-3325`; objek 016-S = `OvertimeRequest` |
+| BR-ATT-09 | Mengubah definisi hadir/absent di service payroll (mis. membaca kolom status) = perubahan angka potongan slip; spec ini TIDAK mengusulkannya dan rekap tidak bergantung padanya | BUTUH-VONIS (Accountant, karena menyentuh potongan payroll) | `attendance-summary.service.ts:105,154-157` |
+| BR-ATT-10 | Rekap baca-saja: tidak ada koreksi, persetujuan, atau tulis apa pun dari permukaan rekap; koreksi tetap jalur existing (edit petugas + pengajuan F-2026-10-25-010-S bila dibangun) | USULAN | jalur tulis existing `hrm.actions.ts:3816,3853` (create/updateAttendance) |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap periode | `view_attendance` — semua departemen | `view_attendance` — departemen sendiri | `view_attendance` — baris diri sendiri | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (permintaan asing diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| (tahap berikut) Ekspor CSV | Ya — isi = rekap terlihatnya | Ya — isi = scope-nya | Ya — baris dirinya | Ditolak |
+| Mengoreksi/menyetujui dari rekap | Tidak ada — koreksi tetap aksi existing `edit_attendance`/`manage_attendance` di daftar/detail | Sama | Sama (pengajuan = F-2026-10-25-010-S) | — |
+
+Izin halaman rekap mengusulkan reuse `view_attendance` (izin daftar existing); key baru = Q-ATT-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Rekod `Attendance` existing tidak punya status dokumen — kolom `status` adalah klasifikasi hari, bukan lifecycle:
+
+| Keadaan awal | Pemicu (di luar rekap) | Keadaan akhir | Dihitung rekap |
+|---|---|---|---|
+| — (belum ada rekod tanggal itu) | `createAttendance` (`hrm.actions.ts:3816`) | Baris `Attendance` dengan status klasifikasi hari | Sesuai ember BR-ATT-02/03 |
+| Baris ada | `updateAttendance` (`hrm.actions.ts:3853`) | Nilai terakhir tersimpan | Rekap memuat nilai terakhir |
+| Baris ada | `deleteAttendance` (izin `manage_attendance`) | Baris hilang | Tanggal kembali ke ember tanpa rekod (BR-ATT-03) |
+| Slip payroll periode itu terbit | Proses payroll existing | Potongan dihitung service payroll | Rekap tidak berubah dan tidak mengoreksi slip (BR-ATT-05/09) |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Pencatatan absensi + GPS | Absensi online terhubung penghitungan gaji; jumlah telat/izin/alpha otomatis (artikel Accurate, bukan halaman help produk) https://accurate.id/aplikasi-kasir/absen-karyawan/ | Attendance + Geo Tagging + Anti Fake GPS https://zahir.co.id/hr/absence-location/ | ADA (TERVERIFIKASI-KODE §2: checkIn/Out + koordinat) |
+| Laporan/rekap kehadiran per karyawan | Halaman help Accurate Online untuk rekap kehadiran per karyawan tidak ditemukan (akses 2026-10-25) — dicatat belum terverifikasi, bukan diklaim absen dari produk | "Laporan Kehadiran" tercantum eksplisit di paket HR Essential/Profesional https://zahiraccounting.com/id/harga-zahir-3d/ | Belum ada (gap §2) — payroll saja yang mengagregasi, tak tampil |
+| Kehadiran masuk payroll | Data absen tersambung penghitungan gaji https://accurate.id/aplikasi-kasir/absen-karyawan/ | Payroll Otomatis + BPJS/PPh21 (paket Profesional) https://zahiraccounting.com/id/harga-zahir-3d/ | ADA — service payroll (`hrm.actions.ts:1324,2676,2879`) |
+| Rekap cuti per karyawan | belum terverifikasi | "Laporan Cuti" tercantum https://zahiraccounting.com/id/harga-zahir-3d/ | ADA (F-2026-10-25-013-S, `/sdm/cuti/saldo`) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-ATT-B (Backend, bila dibuka Lead):
+- AC-ATT-B1: builder murni rekap menerima baris polos dan menghasilkan per karyawan: hari kerja terjadwal, hadir, sakit, cuti/izin, alpa tercatat, tanpa rekod, setengah hari, kejadian terlambat, Σ lateMinutes, Σ overtimeMinutes tercatat; invariant per karyawan `hari kerja terevaluasi = hadir + sakit + cuti/izin + alpa tercatat + setengah hari + tanpa rekod` (hari libur dan hari sesudah hari ini di luar invariant) dibuktikan tes; melanggar = MERAH.
+- AC-ATT-B2: loader menegakkan izin + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; filter departemen asing tidak memperluas scope department/self; `baseSalary`/nominal potongan tidak pernah keluar payload (BR-ATT-05/06).
+- AC-ATT-B3: paritas fakta: hitungan hadir/alpa/terlambat per karyawan+periode identik dengan query langsung `Attendance` untuk populasi sama; selisih definisi terhadap `calculateAttendanceSummary` (status sick/leave ber-checkIn, tanpa rekod) terdokumentasi di tes sebagai perbedaan sengaja BR-ATT-02/03, bukan disamakan diam-diam.
+- AC-ATT-B4: periode memakai kolom `date`; rekod dibuat hari ini untuk tanggal bulan lalu masuk periode bulan lalu (BR-ATT-07).
+- AC-ATT-B5: nilai status di luar kosakata existing tampil apa adanya di ember "status lain" terhitung — tidak dibuang, tidak ditebak labelnya.
+
+AC-ATT-F (Frontend):
+- AC-ATT-F1: halaman menampilkan kolom verbatim payload server dengan label definisi BR-ATT-02/03 (termasuk penanda "tanpa rekod ≠ alpa" dan selisih dari angka payroll); UI nol menghitung/menjumlah sendiri di luar total baris yang dikirim server.
+- AC-ATT-F2: pemilih departemen hanya untuk scope `all`; karyawan tanpa jadwal tertanda dari payload server, bukan ditebak UI.
+- AC-ATT-F3: grep e2e permukaan `sdm/absensi` sebelum mengubah label/selector apa pun di halaman daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 baris status `sick` dengan checkIn terisi: ember sakit (BR-ATT-02), bukan hadir — dan tes AC-ATT-B3 mencatat payroll menghitungnya lain. EC-2 cuti approved tanpa baris Attendance: ember cuti/izin. EC-3 baris Attendance status `leave` tanpa LeaveRequest approved: tetap ember cuti/izin dari status, tanpa mengarang dokumen cuti. EC-4 tanggal ganda tidak mungkin (unik [employeeId, date]) — builder tetap dedup defensif per tanggal. EC-5 periode mencakup hari sesudah hari ini: hari mendatang tampil terjadwal-belum-terevaluasi, bukan tanpa rekod. EC-6 karyawan berhenti tengah periode: baris tetap tampil untuk periode masa rekodnya ada (populasi dari baris kehadiran, bukan hanya karyawan aktif). EC-7 departemen null: ember "tanpa departemen", hanya terlihat scope all. EC-8 `lateMinutes` terisi pada status apa pun: kejadian terlambat dihitung dari menit, bukan dari status `late` saja. EC-9 rekod dihapus petugas sesudah payroll terbit: rekap berubah mengikuti rekod berjalan; slip terbit tidak ikut berubah (BR-ATT-05) — penanda periode berslip terbit = Q-ATT-2.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-044-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni rekap kehadiran + loader scope fail-closed; definisi ember BR-ATT-02/03; CSV pola route ekspor bila dibuka | Backend | Lead buka Q-ATT-1/3; BR-ATT-09 hanya bila Lead/Accountant meminta penyelarasan service payroll | Klaim file di board sebelum edit |
+| (turunan) halaman rekap di area SDM + filter periode/departemen + label definisi server | Frontend | kontrak Backend stabil | grep e2e `sdm/absensi` dulu |
+| (turunan) falsifikasi AC-ATT-B1..B5 + AC-ATT-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-ATT → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap disalahbaca sebagai dasar potongan kedua atau label "tanpa rekod" dibaca sebagai alpa — mitigasi BR-ATT-03/05 + label halaman eksplisit.
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-ATT-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo (agregat hanya di dalam payroll) diterima?
+- Q-ATT-2 (Lead): penanda "periode sudah ada slip terbit" tampil di rekap (agar pembaca tidak mengira rekap bisa mengoreksi slip) atau ditunda?
+- Q-ATT-3 (Lead): reuse izin `view_attendance` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-ATT-4 (Backend): bentuk loader (query agregat DB vs muat baris + builder murni) mengikuti pola rekap lembur/lifecycle — putus saat fisik, builder wajib murni.
+- Accountant: TIDAK diminta tahap ini. Dipanggil hanya lewat BR-ATT-09 bila definisi service payroll mau diubah (menyentuh angka potongan slip).
+
+### Yang TIDAK diusulkan run ini
+
+- Menghitung/menampilkan potongan uang (terlambat/alpa) di rekap: payroll jalur tunggal angka potongan (BR-ATT-05).
+- Mengubah `calculateAttendanceSummary` atau definisi payroll berjalan: perubahan angka slip, wilayah BR-ATT-09.
+- Menjumlahkan `overtimeMinutes` rekod kehadiran dengan jam `OvertimeRequest` rekap lembur 016-S: dua sumber fakta berbeda (BR-ATT-08).
+- Koreksi/persetujuan absensi dari rekap: jalur tulis sudah ada (petugas) dan jalur pengajuan sudah terspec F-2026-10-25-010-S.
+- Skor/penilaian kinerja dari kehadiran (persen kehadiran sebagai nilai orang): angka karangan penilaian — di luar fakta rekap; membuka itu = spec penilaian terpisah dengan putusan Lead.
+
+F-2026-10-25-044-S — Rekap kehadiran per karyawan per periode. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-ATT-1/2/3 + fisik Backend Q-ATT-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk spec ini (hanya BR-ATT-09 bersyarat).
+
+---
