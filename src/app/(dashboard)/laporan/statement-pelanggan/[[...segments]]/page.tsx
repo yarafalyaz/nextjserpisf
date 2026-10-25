@@ -8,6 +8,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { CustomerStatementCard } from "@/components/reports/customer-statement-card"
+import { WhatsappStatementSection } from "@/components/reports/whatsapp-statement-section"
 import { loadCustomerStatement } from "@/lib/reports/customer-statement-data"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -26,6 +27,11 @@ export const metadata: Metadata = { title: "Statement Pelanggan" }
  * diseragamkan diam-diam. Statement dari loader `loadCustomerStatement`
  * (builder murni `buildCustomerStatement`) ditampilkan apa adanya: UI tidak
  * menghitung ulang saldo, pelunasan, atau outstanding.
+ *
+ * F-2026-10-25-038-F1: kepala kartu statement memuat tombol "Kirim WA" +
+ * riwayat jejak baca-saja (`WhatsappStatementSection`, konsumen kontrak
+ * Backend 038-B1) — pesan dari payload server, klik tercatat jujur sebagai
+ * "Tautan WhatsApp dibuka", tanpa klaim terkirim.
  */
 export default async function CustomerStatementPage({
   params: routeParams,
@@ -93,7 +99,18 @@ export default async function CustomerStatementPage({
       }
     >
       {report ? (
-        <CustomerStatementCard statement={report.statement} />
+        <>
+          <WhatsappStatementSection
+            customer={report.customer}
+            customerPhone={report.customerPhone}
+            closingBalance={report.statement.closingBalance}
+            periodLabel={report.periodLabel}
+            periodStart={period.start}
+            periodEnd={period.end}
+            whatsappTrail={report.whatsappTrail}
+          />
+          <CustomerStatementCard statement={report.statement} />
+        </>
       ) : (
         <section aria-label="Statement pelanggan" className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">

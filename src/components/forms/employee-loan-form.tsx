@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 
 interface LoanFormProps {
   employees: { id: number; name: string }[];
+  /** Tujuan sesudah simpan berhasil. Default daftar staf existing. */
+  redirectTo?: string;
   loan?: {
     id: number;
     employeeId: number;
@@ -32,7 +34,7 @@ interface LoanFormProps {
   };
 }
 
-export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
+export function EmployeeLoanForm({ employees, loan, redirectTo = "/sdm/pinjaman" }: LoanFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [employeeId, setEmployeeId] = useState(
@@ -55,7 +57,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
         showSuccess(
           loan?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );
-        router.push("/sdm/pinjaman");
+        router.push(redirectTo);
         router.refresh();
       } catch (error) {
         showError(

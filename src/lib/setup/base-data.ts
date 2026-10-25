@@ -197,6 +197,9 @@ export const PERMISSIONS = [
       "create_attendance",
       "edit_attendance",
       "manage_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
+      "approve_attendance_corrections",
       "view_leave_requests",
       "create_leave_requests",
       "edit_leave_requests",
@@ -535,6 +538,9 @@ export const GA_WHITELIST = [
       "create_attendance",
       "edit_attendance",
       "manage_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
+      "approve_attendance_corrections",
       "view_leave_requests",
       "create_leave_requests",
       "edit_leave_requests",
@@ -610,6 +616,9 @@ export const KABENG_WHITELIST = [
       "view_attendance",
       "create_attendance",
       "edit_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
+      "approve_attendance_corrections",
       "view_purchase_requests",
       "create_purchase_requests",
       "edit_purchase_requests"
@@ -623,6 +632,8 @@ export const KARYAWAN_WHITELIST = [
       "view_projects",
       "view_work_orders",
       "view_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
       "view_work_schedules",
       "view_leave_requests",
       "create_leave_requests",
@@ -932,6 +943,15 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // 210204 Hutang Gaji / 210101 Utang Usaha / 210205 Provisi Garansi
   // DILARANG reuse untuk jalur ini.
   ["210209", "Utang Reimbursement Karyawan", "OCLY", "2102"],
+  // F-2026-10-25-020-V Putusan 5 (koreksi alokasi 14:04 WIB): liabilitas
+  // statutori payroll. 210208 = Utang Pesangon (005-V) dan 210209 =
+  // Utang Reimbursement (018-V) DILARANG reuse untuk jalur ini.
+  ["210210", "Utang PPh 21 Karyawan", "OCLY", "2102"],
+  ["210211", "Utang Iuran BPJS Karyawan", "OCLY", "2102"],
+  // F-2026-10-25-020-V Putusan 5: denda disiplin kredit ke sini (PP
+  // 36/2021 Pasal 60 — uang denda hanya untuk kepentingan pekerja);
+  // kredit mengurangi beban gaji DILARANG.
+  ["710006", "Pendapatan Denda Karyawan", "OINC", "7100"],
 ]
 
 /**

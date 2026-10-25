@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest"
 import {
   buildLoanInstallmentHistory,
   LOAN_INSTALLMENT_AGGREGATE_LABEL,
+  LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL,
   LOAN_INSTALLMENT_LEDGER_LABEL,
   LOAN_INSTALLMENT_PAID_LABEL,
   LOAN_INSTALLMENT_UNALLOCATED_LABEL,
@@ -122,6 +123,24 @@ describe("buildLoanInstallmentHistory — AC-LH-B2 dua pinjaman aktif bersamaan"
     ])
     expect(h.unallocatedAmount).toBe(0)
     expect(h.hasUnallocated).toBe(false)
+  })
+})
+
+describe("buildLoanInstallmentHistory — teks kosong permukaan (F-2026-10-26-053-S)", () => {
+  it("AC-LH53-F4: tanpa slip paid → emptyLabel verbatim Q-LH53-2 dari payload, baris kosong, terbayar kini tetap ada", () => {
+    const h = buildLoanInstallmentHistory(loan(), [])
+    expect(h.emptyLabel).toBe("Belum ada cicilan terbayar tercatat.")
+    expect(h.emptyLabel).toBe(LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL)
+    expect(h.aggregateSlipRows).toEqual([])
+    expect(h.ledgerRows).toEqual([])
+    expect(h.hasUnallocated).toBe(true)
+    expect(h.loan.totalPaidToDate).toBe(4_000_000)
+  })
+
+  it("emptyLabel selalu kata final yang sama walau ada baris (UI menempel payload, bukan karang kata)", () => {
+    const h = buildLoanInstallmentHistory(loan(), [slip()])
+    expect(h.emptyLabel).toBe(LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL)
+    expect(h.aggregateSlipRows).toHaveLength(1)
   })
 })
 
