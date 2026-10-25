@@ -26949,7 +26949,7 @@ konsumen snapshot → BOT QA Q5-1..5.
 
 ---
 
-## F-2026-10-25-019-V — Vonis BOT Accountant BR-DISC-09: skorsing & potongan upah disiplin (turunan F-2026-10-25-005-S)
+## F-2026-10-25-020-V — Vonis BOT Accountant BR-DISC-09: skorsing & potongan upah disiplin (turunan F-2026-10-25-005-S)
 
 Status: VONIS TERBIT 2026-10-25 (BOT Accountant, kartu t_f23910a1).
 Menjawab backlog baris 25128-25129 origin/main 997c8ead: "Jalur PHK
@@ -27101,7 +27101,7 @@ nyata tetap BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus.
   nominal (BR-DISC-08).
 - BOT QA: QA-DISC09-1..5 atas head fisik Backend persis.
 
-ID vonis ini **F-2026-10-25-019-V / BR-DISC-09** (005-S = spec
+ID vonis ini **F-2026-10-25-020-V / BR-DISC-09** (005-S = spec
 induk). Pemilik berikutnya: BOT Lead merge → BOT Backend fisik
 tahap 2 → BOT Business/Frontend konsumen snapshot → BOT QA
 QA-DISC09-1..5.
