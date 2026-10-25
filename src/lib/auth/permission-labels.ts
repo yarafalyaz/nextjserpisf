@@ -33,6 +33,12 @@ export const PERMISSION_VERBS: Record<string, string> = {
 export const PERMISSION_SUBJECTS: Record<string, string> = {
   accounts: "Akun",
   appreciations: "Apresiasi",
+  recruitments: "Rekrutmen",
+  salary_amounts: "Nominal Gaji",
+  performance: "Penilaian Kinerja",
+  competencies: "Kompetensi",
+  trainings: "Pelatihan",
+  succession: "Perencanaan Suksesi",
   asset_brands: "Merek Aset",
   asset_groups: "Grup Aset",
   asset_categories: "Kategori Aset",
