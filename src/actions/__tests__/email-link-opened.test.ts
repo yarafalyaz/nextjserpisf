@@ -9,13 +9,14 @@ import { recordWhatsappLinkOpened } from "../whatsapp-log.actions"
 
 const m = await vi.hoisted(async () => {
   const { vi: v } = await import("vitest")
+  const fn = () => v.fn()
   return {
-    hasPermissionMock: v.fn(),
-    logActivityMock: v.fn(),
-    cFindFirst: v.fn(),
-    woFindUnique: v.fn(),
-    siFindUnique: v.fn(),
-    qFindUnique: v.fn(),
+    hasPermissionMock: fn(),
+    logActivityMock: fn(),
+    cFindFirst: fn(),
+    woFindUnique: fn(),
+    siFindUnique: fn(),
+    qFindUnique: fn(),
   }
 })
 const { hasPermissionMock, logActivityMock, cFindFirst } = m
@@ -33,12 +34,17 @@ vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: m.logActivi
 
 beforeEach(() => {
   vi.clearAllMocks()
-  hasPermissionMock.mockResolvedValue(true)
-  logActivityMock.mockResolvedValue(undefined)
-  cFindFirst.mockResolvedValue({ id: 7 })
-  m.woFindUnique.mockResolvedValue({ documentNo: "WO-001" })
-  m.siFindUnique.mockResolvedValue({ documentNo: "INV-001" })
-  m.qFindUnique.mockResolvedValue({ documentNo: "QUO-001" })
+  // Default: berizin + pelanggan ada + log sukses; tes menimpa per kasus.
+  for (const [mock, value] of [
+    [hasPermissionMock, true],
+    [logActivityMock, undefined],
+    [cFindFirst, { id: 7 }],
+    [m.woFindUnique, { documentNo: "WO-001" }],
+    [m.siFindUnique, { documentNo: "INV-001" }],
+    [m.qFindUnique, { documentNo: "QUO-001" }],
+  ] as const) {
+    mock.mockResolvedValue(value)
+  }
 })
 
 const STMT_PERIOD = {
