@@ -1,5 +1,10 @@
 /**
  * F-2026-10-25-007-S tahap 1 — antrean persetujuan HR tertunda.
+ * F-2026-10-25-018-S (BR-LS-06, Putusan Lead 026-L Q-LS-3a/Q-LS-5-spec):
+ * kind `loan` bergabung — EmployeeLoan PERSIS `pending`, umur menunggu
+ * sejak createdAt, nominal pinjaman (BUKAN gaji) tampil penuh dalam
+ * scope; tanpa pendamping tanggal (loanDate masa lalu bukan tanggal
+ * lewat keputusan).
  *
  * Lapisan ini SENGAJA tanpa Prisma/aksi/izin/schema: spec §9 menetapkan
  * inti sesudah putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Yang
@@ -45,7 +50,7 @@ export const HR_PENDING_LEAVE_NEAR_START_DAYS = 3
 /* Kosakata tertutup                                                   */
 /* ------------------------------------------------------------------ */
 
-export const HR_PENDING_KINDS = ["leave", "overtime"] as const
+export const HR_PENDING_KINDS = ["leave", "overtime", "loan"] as const
 export type HrPendingKind = (typeof HR_PENDING_KINDS)[number]
 
 export const HR_PENDING_BASE_STAGES = ["MENUNGGU_KEPUTUSAN", "MENGENDAP"] as const
@@ -76,7 +81,7 @@ export const HR_PENDING_NOTICE_TEXT =
 /* ------------------------------------------------------------------ */
 
 export interface HrPendingApprovalInput {
-  /** Id dokumen sumber (LeaveRequest.id / OvertimeRequest.id). */
+  /** Id dokumen sumber (LeaveRequest.id / OvertimeRequest.id / EmployeeLoan.id). */
   id: number
   kind: HrPendingKind
   employeeId: number
@@ -88,18 +93,27 @@ export interface HrPendingApprovalInput {
   /** Status dokumen APA ADANYA; hanya `pending` yang lolos (BR-HP-01/02). */
   status: string
   createdAt: Date
-  /** Cuti: startDate. Lembur: date. Acuan tahap tanggal. */
+  /** Cuti: startDate. Lembur: date. Pinjaman: loanDate. Acuan tahap tanggal. */
   eventDate: Date
-  /** Cuti saja: endDate. Lembur: null. */
+  /** Cuti saja: endDate. Lembur/pinjaman: null. */
   endDate: Date | null
-  /** Cuti: type verbatim. Lembur: null. */
+  /** Cuti: type verbatim. Lembur/pinjaman: null. */
   leaveType: string | null
-  /** Lembur saja: hours decimal string apa adanya. Cuti: null. */
+  /** Lembur saja: hours decimal string apa adanya. Cuti/pinjaman: null. */
   hours: string | null
-  /** Cuti/lembur: reason verbatim bila ada. */
+  /** Cuti/lembur: reason verbatim bila ada. Pinjaman: notes apa adanya. */
   reason: string | null
-  /** Lembur saja: label proyek tertaut (fakta, bukan biaya). Cuti: null. */
+  /** Lembur saja: label proyek tertaut (fakta, bukan biaya). Cuti/pinjaman: null. */
   projectName: string | null
+  /**
+   * Pinjaman saja (Q-LS-3a 026-L): nominal pinjaman pengaju apa adanya —
+   * totalAmount + cicilan tersimpan (bulanan; mingguan bila perjanjian
+   * tertulis ada). Nominal PINJAMAN, bukan gaji — BR-HP-08 (tanpa nominal
+   * gaji) tetap utuh. Cuti/lembur: null.
+   */
+  loanTotalAmount: string | null
+  loanMonthlyInstallment: string | null
+  loanWeeklyInstallment: string | null
 }
 
 export interface HrPendingApprovalRow extends HrPendingApprovalInput {
@@ -140,7 +154,12 @@ export function deriveHrPendingStage(
     umurMenungguHari > staleDays ? "MENGENDAP" : "MENUNGGU_KEPUTUSAN"
 
   let penandaTanggal: HrPendingDateFlag | null = null
-  if (input.kind === "overtime") {
+  if (input.kind === "loan") {
+    // Pinjaman (BR-LS-06/026-L): TIDAK ada pendamping tanggal — loanDate
+    // masa lalu bukan "tanggal lewat belum diputus" (pinjaman pending
+    // memang menunggu keputusan; umur menunggu sudah ditangkap tahapDasar).
+    penandaTanggal = null
+  } else if (input.kind === "overtime") {
     if (sisaHariKeTanggal < 0) penandaTanggal = "TANGGAL_LEWAT_BELUM_DIPUTUS"
   } else if (sisaHariKeTanggal < 0 || sisaHariKeTanggal <= nearStartDays) {
     // Cuti mulai sudah lewat tanpa keputusan (EC-1) = pendamping paling

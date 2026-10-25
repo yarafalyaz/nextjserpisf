@@ -147,6 +147,34 @@ describe("createEmployeeLoan dua pintu izin (Q-LS-1)", () => {
     expect(mocks.txDelegates.employeeLoan.create).not.toHaveBeenCalled()
   })
 
+  it("AC-LS-B2: pengajuan sah lahir pending + SATU permintaan approval dalam satu transaksi, nol hook jurnal pencairan", async () => {
+    mocks.requireAnyPermissionMock.mockResolvedValue({
+      id: 42,
+      roles: ["karyawan"],
+      permissions: ["create_employee_loan_requests", "view_employee_loans"],
+    })
+    mocks.requestApprovalMock.mockResolvedValue(true)
+
+    const res = await createEmployeeLoan(loanForm("7"))
+
+    expect(res.success).toBe(true)
+    // Satu transaksi membungkus lahirnya pinjaman + permintaan approval.
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.txDelegates.employeeLoan.create).toHaveBeenCalledTimes(1)
+    expect(mocks.txDelegates.employeeLoan.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: "pending" }),
+    })
+    // Tepat satu permintaan ApprovalWorkflow, di dalam transaksi yang sama
+    // (argumen ke-4 = klien tx), untuk pinjaman yang baru lahir.
+    expect(mocks.requestApprovalMock).toHaveBeenCalledTimes(1)
+    expect(mocks.requestApprovalMock).toHaveBeenCalledWith(
+      "EmployeeLoan",
+      11,
+      42,
+      mocks.txDelegates,
+    )
+  })
+
   it("regresi staf: pemegang create_loans tetap bisa titipan dalam scope (all)", async () => {
     mocks.requireAnyPermissionMock.mockResolvedValue({
       id: 1,
