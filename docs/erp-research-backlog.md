@@ -26946,3 +26946,125 @@ bebas: grep `F-2026-10-25-005-V` di origin/main 651d1ce3 = 0 sebelum
 vonis ini; 005-S = spec induk). Pemilik berikutnya: BOT Lead merge →
 BOT Backend inti Putusan 2/4 (sesudah DISC-B1) → BOT Business/Frontend
 konsumen snapshot → BOT QA Q5-1..5.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-019-S: pengingat servis berkala per kendaraan (jadwal servis berikutnya berbasis tanggal dan/atau odometer + antrean tindak lanjut baca-saja)
+
+> **Slot**: F-2026-10-25-019-S. Diperiksa bentrok 2026-10-25 12:46 WIB vs `origin/main` (`997c8ead`): grep `F-2026-10-25-019` di backlog+board = 0; seri 001-S..018-S/V terpakai (017-S PR #821, 018-V PR #822 OPEN beda topik). ID 019 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 997c8ead)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `CustomerVehicle` (`prisma/schema.prisma:4722-4754`): `customerId`, `vehicleId`, `plateNumber`, `lastOdometerKm Int?` (:4734, snapshot check-in/serah terima WO, null = belum pernah tercatat), `isActive`, `deletedAt`; relasi `workOrders`, `warrantyCoverages`, `installedParts`. TANPA kolom jadwal servis berikutnya (tanggal maupun km target).
+- Antrean garansi segera berakhir terbangun penuh sebagai pola acuan: builder murni `src/lib/reports/warranty-expiry-queue.ts:1-30` (ember turunan dari status tersimpan + tanggal vs hari kalender WIB, BUKAN kolom baru, BUKAN mutasi status), loader massal anti-N+1 `warranty-expiry-queue-data.ts:1-25`, halaman `src/app/(dashboard)/laporan/garansi-segera-berakhir/page.tsx:24` (`requirePermission("view_reports")`), jendela tetap 7/30/90 hari.
+- Linimasa kendaraan `src/lib/reports/customer-vehicle-history-data.ts:1-25` (F-2026-10-20-15): lima sumber existing per kendaraan + seksi part terpasang; baca-saja.
+- Izin nyata katalog: `view_customers` (`module-catalog.generated.ts:125`), `view_warranty_claims` (:257), `view_work_orders` (:262), `view_vehicles` (:378), `view_reports` (:422).
+
+Belum ada / gap (TERVERIFIKASI-KODE, bukti grep run ini):
+- `grep -rn "nextService|serviceReminder|ServiceReminder|servis berikutnya" prisma/schema.prisma src/` = 0 hit. Jadwal servis berikutnya per kendaraan ABSEN total: tidak ada tanggal target, tidak ada km target, tidak ada antrean kendaraan mendekati jadwal servis.
+- Spec antrean garansi F-2026-10-22-094-S secara eksplisit MENUNDA topik ini ("Yang TIDAK diusulkan run ini: Pengingat servis berkala berbasis odometer/tanggal servis berikutnya: tidak ada kolom jadwal servis berikutnya di schema — domain berbeda dari berakhirnya cakupan garansi, jangan dicampur ke antrean ini"). Spec ini mengambil topik yang ditunda itu sebagai domain terpisah, BUKAN memperluas antrean garansi.
+- Odometer berjalan hari ini TIDAK ada sumbernya: `lastOdometerKm` hanya snapshot saat WO tercatat (`warranty.service.ts:322`). Perkiraan km hari ini dari laju pakai = karangan tanpa data; spec ini melarangnya (BR-SV-04).
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Admin/SA bengkel (pemilik tindak lanjut pelanggan), Kepala Bengkel (peninjau antrean), Pelanggan (penerima pengingat manual di luar sistem tahap 1).
+
+Alur tahap 1 (baca-saja di atas jadwal yang dicatat manual):
+1. Saat WO selesai/serah terima (atau kapan pun dari detail kendaraan), staf yang berizin mencatat jadwal servis berikutnya per kendaraan: tanggal target dan/atau km target + catatan jenis servis dianjurkan (teks bebas tahap 1). Pencatatan = mutasi master kendaraan, BUKAN dokumen transaksi; tanpa jurnal, tanpa status dokumen.
+2. Sistem menurunkan status pengingat per kendaraan dari jadwal tersimpan vs hari kalender WIB (tanggal) dan vs `lastOdometerKm` terakhir tercatat (km) — turunan baca-saja, pola antrean garansi BR-WX-01.
+3. Antrean pengingat servis menampilkan kendaraan yang masuk jendela (mendekati/terlewat jadwal) + ember cacat data; staf menindaklanjuti pelanggan secara manual di luar sistem (telepon/WA manual existing). Klik kontak dicatat hanya sebagai tautan dibuka bila pola F-2026-10-21-036 dipakai ulang — bukan pesan terkirim.
+4. Jadwal yang sudah ditindaklanjuti diganti jadwal berikutnya oleh staf (catat ulang), atau dikosongkan. Tidak ada penutupan otomatis oleh WO baru tahap 1 (BR-SV-07, BUTUH-VONIS perilaku inti bila kelak diusulkan).
+
+Dokumen masuk: WO selesai (konteks pencatatan), master kendaraan. Dokumen keluar: tidak ada dokumen baru tahap 1; keluaran = antrean baca-saja + (opsional tahap 2) ekspor daftar.
+
+### 2. Role/permission matrix (key nyata katalog; pemetaan USULAN)
+
+| Aksi | Admin/SA | Kepala Bengkel | Mekanik | Tanpa izin |
+|---|---|---|---|---|
+| Lihat antrean pengingat (permukaan laporan) | `view_reports` | `view_reports` | — | ditolak server |
+| Lihat jadwal di detail kendaraan | `view_customers` / `view_vehicles` | sama | `view_work_orders` (konteks WO saja, tanpa telepon di permukaan WO) | ditolak server |
+| Catat/ubah/kosongkan jadwal servis berikutnya | izin ubah master kendaraan existing (key persis diverifikasi Backend saat fisik; tanpa key baru tahap 1 = USULAN Q-SV-2) | sama | — | ditolak server |
+| Telepon pelanggan tampil | hanya permukaan kerja staf (bukan laporan) — pola Q-WX-1 | sama | — | tidak pernah dipilih dari DB |
+
+Tidak ada key izin baru diusulkan tahap 1 (Q-SV-2 untuk Lead). Nominal uang tidak tampil di antrean ini sama sekali.
+
+### 3. Status-transition matrix (status TURUNAN baca-saja; bukan kolom)
+
+| Status turunan | Syarat (dari jadwal tersimpan) | Pemicu berubah | Penjaga |
+|---|---|---|---|
+| `belum_terjadwal` | tanggal target DAN km target keduanya kosong | staf mencatat jadwal | — (di luar antrean utama, terhitung) |
+| `terjadwal` | ada jadwal, belum masuk jendela | waktu berjalan / odometer tercatat naik | turunan, tanpa tulis |
+| `mendekati` | sisa hari <= jendela depan ATAU sisa km <= ambang km depan (dari `lastOdometerKm` terakhir) | sama | turunan |
+| `terlewat` | tanggal target < hari ini WIB ATAU `lastOdometerKm` >= km target | sama | turunan |
+| `jadwal_rusak` | tanggal/km target tidak valid (mis. km target <= odometer terakhir saat dicatat tanpa konfirmasi) | pencatatan | penjaga cacat data, selalu terhitung, tidak pernah dibuang diam-diam |
+
+Jendela depan: daftar tetap (USULAN mengikuti pola Q-WX-2: 7/30/90 hari; ambang km depan konstanta bernama, Q-SV-3). Status tersimpan TIDAK ditambah tahap 1; penanda tindak-lanjut tersimpan (sudah dihubungi/dijadwalkan ulang) = tahap 2 BUTUH-VONIS (Q-SV-4).
+
+### 4. Business rules register (BR-SV-*)
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-SV-01 | Status pengingat = turunan baca-saja dari jadwal tersimpan; antrean tidak pernah menulis jadwal/status kendaraan | USULAN | pola TERVERIFIKASI-KODE antrean garansi `warranty-expiry-queue.ts:1-30` |
+| BR-SV-02 | Satu kendaraan maksimal satu jadwal servis berikutnya aktif tahap 1 (jadwal berikutnya menimpa sesudah dicatat ulang, riwayat jadwal lama di luar cakupan tahap 1) | USULAN | YAGNI tahap 1; riwayat = tahap terpisah |
+| BR-SV-03 | Jadwal boleh berbasis tanggal saja, km saja, atau keduanya; kendaraan masuk `mendekati`/`terlewat` bila SALAH SATU basis yang terisi terpenuhi | USULAN | praktik bengkel: servis berkala tanggal ATAU km, mana tercapai dulu |
+| BR-SV-04 | Sisa km dihitung HANYA dari `lastOdometerKm` terakhir tercatat; dilarang memperkirakan odometer hari ini dari laju pakai/rata-rata | USULAN (larangan keras) | `lastOdometerKm` snapshot `schema.prisma:4731-4734`; tanpa sumber odometer berjalan |
+| BR-SV-05 | Kendaraan nonaktif/terhapus keluar baris antrean, masuk ember terhitung `kendaraan_nonaktif`; jadwal rusak masuk `jadwal_rusak` terhitung — tidak ada baris hilang diam-diam | USULAN | pola BR-WX-08 antrean garansi |
+| BR-SV-06 | Telepon pelanggan hanya tampil di permukaan kerja staf berizin; permukaan laporan tanpa telepon (loader tidak memilih kolom telepon) | USULAN | pola Q-WX-1 `warranty-expiry-queue-data.ts:14-25` |
+| BR-SV-07 | WO baru/selesai TIDAK otomatis menggeser/menghapus jadwal servis berikutnya tahap 1; penggeseran hanya pencatatan ulang manual staf | USULAN | otomatisasi = perubahan perilaku inti, BUTUH-VONIS Lead (Q-SV-4) |
+| BR-SV-08 | Pencatatan jadwal = mutasi master berizin + tercatat pelakunya (pola audit master existing); tanpa jurnal, tanpa dokumen transaksi, tanpa nominal | USULAN | tanpa uang/pajak tahap 1 |
+| BR-SV-09 | Pengingat keluar otomatis (WA/email gateway) TIDAK diusulkan tahap 1; tindak lanjut manual di luar sistem | USULAN | kanal keluar belum ada (F-27(b) ditunda-teknis, dicatat spec garansi) |
+| BR-SV-10 | Antrean pengingat servis domain TERPISAH dari antrean garansi; dilarang mencampur ember/jadwal servis ke builder garansi | TERVERIFIKASI-KODE (pemisahan dinyatakan spec F-2026-10-22-094-S) | backlog seksi F-2026-10-22-094-S "Yang TIDAK diusulkan" |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Pengingat jatuh tempo pembayaran terjadwal | Ada — Syarat Pembayaran memantau jatuh tempo + mengingatkan (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/mengenal-fitur-syarat-pembayaran/) | Reminder tampil saat membuka data, modul Dashboard (BENCHMARK: https://help.zahironline.com/portal/id/kb/articles/setup-program) | Antrean penagihan piutang ada (F-2026-10-22-089-S) TERVERIFIKASI-KODE |
+| Pengingat servis berkala kendaraan per pelanggan (tanggal/km) | Tidak ditemukan di help resmi (akses 2026-10-25) — ditulis tidak ditemukan, bukan tidak ada | Tidak ditemukan di help resmi (akses 2026-10-25) — ditulis tidak ditemukan, bukan tidak ada | ABSEN (grep 0 hit, §0) — spec ini |
+| Riwayat kendaraan sebagai dasar jadwal | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada: linimasa kendaraan F-2026-10-20-15 TERVERIFIKASI-KODE |
+
+Catatan jujur benchmark: Accurate/Zahir adalah ERP akuntansi umum; pengingat servis kendaraan adalah kebutuhan vertikal bengkel (pola sama seperti jadwal termin F-2026-10-22-067-S yang juga tanpa padanan kompetitor). Ketiadaan di kompetitor BUKAN alasan membatalkan; alasan membangun = retensi servis berkala bengkel ISF.
+
+### 6. Acceptance criteria + edge cases (draf untuk Backend/Frontend/QA)
+
+AC-SV-B (Backend, builder murni + loader):
+- AC-SV-B1: kendaraan tanpa jadwal tidak masuk antrean utama dan terhitung di ember `belum_terjadwal` (atau di luar populasi antrean dengan hitungan eksplisit — bentuk dipilih Backend, hitungan wajib ada).
+- AC-SV-B2: basis tanggal saja / km saja / keduanya masing-masing menghasilkan status turunan benar; salah satu basis terpenuhi = `mendekati`/`terlewat` (BR-SV-03).
+- AC-SV-B3: sisa km hanya dari `lastOdometerKm`; fixture odometer null + km target terisi = tidak bisa dinilai km, masuk penanda jujur (bukan 0, bukan terlewat karangan).
+- AC-SV-B4: kendaraan nonaktif/terhapus dan jadwal rusak terhitung di embernya, nol baris hilang diam-diam (BR-SV-05).
+- AC-SV-B5: antrean baca-saja — dua panggilan bersamaan dan panggilan berulang nol mutasi jadwal/status (pola AC antrean existing).
+- AC-SV-B6: loader massal anti-N+1 (satu query jadwal+kendaraan+pelanggan lewat relasi), permukaan laporan tidak pernah memilih telepon (BR-SV-06).
+- AC-SV-B7: hari acuan = hari kalender WIB (`getWibTodayUtcDate`, pola builder garansi), bukan UTC server.
+
+AC-SV-F (Frontend):
+- AC-SV-F1: UI menampilkan status/sisa hari/sisa km verbatim payload server; UI tidak menghitung sisa sendiri.
+- AC-SV-F2: tanpa izin permukaan tertolak server (bukan hanya tombol disembunyikan); label ember kata spec verbatim.
+- AC-SV-F3: form pencatatan jadwal memvalidasi tanggal/km target (km target <= odometer terakhir = peringatan eksplisit, bukan simpan diam-diam → `jadwal_rusak` dicegah di pintu masuk bila Lead menyetujui Q-SV-3).
+
+Edge cases: kendaraan berpindah pelanggan (jadwal mengikuti kendaraan, pemilik tampil = pelanggan kini); dua WO selesai berurutan tanpa pencatatan ulang (jadwal lama tetap, status memburuk jujur — BR-SV-07); odometer tercatat mundur (data rusak → penanda, bukan sisa km negatif karangan); jadwal tanggal lampau saat dicatat (langsung `terlewat`, sah); pelanggan tanpa telepon (baris tetap tampil, aksi kontak absen).
+
+### 7. Pertanyaan putusan (gerbang)
+
+- Q-SV-1 (Lead): sahkan tahap 1 baca-saja + pencatatan master manual, tanpa pengingat otomatis dan tanpa penanda tindak-lanjut tersimpan?
+- Q-SV-2 (Lead): tanpa key izin baru tahap 1 (reuse `view_reports` + izin ubah master existing), atau key khusus pencatatan jadwal?
+- Q-SV-3 (Lead): jendela depan daftar tetap 7/30/90 hari + ambang km depan konstanta bernama (angka diputus Lead, bukan karangan Business)?
+- Q-SV-4 (Lead, perilaku inti): penanda tindak-lanjut tersimpan dan/atau penggeseran otomatis oleh WO selesai = tahap 2 terpisah, ditunda?
+
+### 8. Backlog implementasi (turunan F-2026-10-25-019-S)
+
+| ID | Item | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-25-019-S | Spec ini (dokumen) | Business | — |
+| (turunan) fisik jadwal di master kendaraan (bentuk kolom/relasi) + builder antrean + loader anti-N+1 | Backend | Q-SV-1/2/3 terputus Lead | — |
+| (turunan) UI antrean + form pencatatan di detail kendaraan | Frontend | kontrak Backend stabil; kata §3/§6 verbatim | — |
+| (turunan) falsifikasi AC-SV-B1..B7 + F1..F3 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-019-S)
+- Pengingat otomatis keluar (WA/email/push) ke pelanggan: kanal keluar belum ada; tahap terpisah sesudah kanal sah.
+- Perkiraan odometer berjalan / prediksi tanggal servis dari laju pakai: tanpa sumber data sah (BR-SV-04).
+- Paket servis berbayar/langganan servis sebagai produk penjualan: penjualan existing cukup; tanpa bukti permintaan, YAGNI.
+- Riwayat seluruh jadwal lama per kendaraan tahap 1: satu jadwal aktif (BR-SV-02); riwayat = kebutuhan terpisah bila terbukti perlu.
+- Mencampur antrean ini ke antrean garansi F-2026-10-22-094-S (BR-SV-10).
+
+F-2026-10-25-019-S — Pengingat servis berkala per kendaraan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SV-1..4 + fisik Backend. Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik+builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
