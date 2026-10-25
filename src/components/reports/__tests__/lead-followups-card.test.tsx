@@ -63,6 +63,25 @@ describe("LeadFollowupsCard F-2026-10-21-037", () => {
     act(() => root.unmount())
   })
 
+  it("Q-LFU-1: lead lost absen dari kartu (builder tak kirim); won + terkonversi-bukan-lost tampil verbatim", () => {
+    const followups = buildLeadFollowups(
+      [
+        input({ id: 3, name: "Lestari", status: "lost" }),
+        input({ id: 4, name: "Wawan", status: "won" }),
+        input({ id: 5, name: "Tania", status: "qualified", convertedAt: new Date(2026, 9, 19) }),
+      ],
+      NOW,
+    )
+    const { container, root } = render(<LeadFollowupsCard followups={followups} />)
+    const text = container.textContent ?? ""
+    expect(followups.rows.map((r) => r.name)).toEqual(["Wawan", "Tania"])
+    expect(text).not.toContain("Lestari")
+    expect(text).toContain("Wawan")
+    expect(text).toContain("Tania")
+    expect(text).toContain("2 prospek dengan jadwal follow-up sudah lewat")
+    act(() => root.unmount())
+  })
+
   it("sembunyi total bila 0 baris", () => {
     const { container, root } = render(<LeadFollowupsCard followups={buildLeadFollowups([], NOW)} />)
     expect(container.querySelector('[aria-label="Jadwal follow-up lewat"]')).toBeNull()
