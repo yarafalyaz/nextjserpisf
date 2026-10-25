@@ -30668,6 +30668,8 @@ BENCHMARK: kedua kompetitor menghitung komisi otomatis sampai jurnal; ISF tahap 
 - Kolom persen tunggal di CustomerCategory: ditolak vonis (F-056-V 1a) — jangan diusulkan ulang sebagai jalan pintas.
 
 F-2026-10-25-036-S — Tarif komisi per kategori pelanggan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-KT-1 + fisik Backend Q-KT-2. Pemilik usulan: Business (spec), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (vonis F-056-V/F-058-V/F-084-V sudah mengunci angka; izin terpisah = pengecualian BR-KT36-10).
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #883 sudah MERGED 5c29e4f7 — bukan OPEN. (2) Q-KT-1 sudah DIBUKA Lead (kartu Backend t_73a60989); tahap 3 tetap tertutup. (3) Drift nomor baris katalog: view_reports :428 (bukan :427), view_payroll/process_payroll :314/:318, view_payroll_reports :429 — isi key benar. (4) Titik tempel snapshot Q-KT-2: status paid dihitung recalcCore src/lib/hooks/sales-payment.hook.ts:41-55 untuk semua pemanggil (create/update/delete pembayaran), BUKAN hanya badan createSalesPayment; konversi DP hanya menyentuh paymentStatus (down-payment.hook.ts:276-283) — gerbang snapshot = transisi status dokumen ke paid. Audit penuh: komentar kartu t_2a314778.
+
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-037-S: tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll; kontrak workflow di atas vonis F-2026-10-22-084-V)
 
@@ -30823,6 +30825,8 @@ Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti �
 - Mengubah rekap informatif menjadi layar utang: read-model saldo terpisah (BR-KOM37-12).
 
 F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) Q-KOM3-1 SUDAH DIJAWAB Accountant — vonis F-2026-10-25-039-V (PR #893 OPEN head e17b5310) memutus akun kredit 210212 "Utang Komisi Penjualan" menggantikan 210207; berlaku untuk pembangunan sesudah PR #893 MERGED. Blok vonis Accountant TIDAK diubah baris ini. (2) Drift nomor baris: base-data.ts 600002 :834 (bukan :829), 210207 :930 (bukan :925); automap = src/lib/utils/account-automap.ts:204. (3) Gerbang tetap: G2 inti 036 belum live (loader sales-commission-data.ts:42 masih persen 0), G1 PUTUSAN buka tahap 3 belum terbit — persiapan Backend t_b1fed223 dibatasi builder/loader murni + tes, tanpa seed/mapping/jurnal hidup, sampai #893 + inti 036 merged + G1 tertulis. Audit penuh: komentar kartu t_2a314778.
+
 
 ## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-039-V: koreksi akun utang komisi Q-KOM3-1 — 210207 gugur (PKWT), nomor final 210212 "Utang Komisi Penjualan"; 210208 DILARANG (jatah terminasi F-005-V); 210210/210211 DILARANG (jatah PPh 21/BPJS F-020-V); mapping fail-closed (jawaban Q-KOM3-1 spec F-2026-10-25-037-S PR #884 merged; Q-KOM3-2 uang/PPh dijawab eksplisit per F-084-V §5)
 
@@ -31059,6 +31063,8 @@ Edge cases:
 - Angka denda/penalti di pesan maupun statement (BR-ST-07), surat tagihan formal ala Zahir sebagai dokumen tersendiri.
 
 F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+> KOREKSI AUDIT Business t_2a314778 (2026-10-25 21:15 WIB, basis origin/main fe281d46): (1) PR spec #890 sudah MERGED 25a499c0; Q-SW-1 (reuse view_reports) + Q-SW-3 (wording 3 varian verbatim) SUDAH DIPUTUS Lead di komentar PR #890 6398030628 — bukan pertanyaan terbuka lagi; hanya Q-SW-2 fisik Backend tersisa (kartu t_d9ddf496 running). (2) Catatan fisik untuk B1: penjaga existing whatsapp-log.actions.ts:41-43 hanya menerima surface queue|detail dan :51-65 mewajibkan dokumen ber-documentNo — pelanggan tidak punya; builder pesan existing whatsapp.ts:31 berbentuk dokumen, statement butuh builder baru dari closingBalance (customer-statement.ts:98). Kontrak kartu Backend sudah mencakup keduanya. Audit penuh: komentar kartu t_2a314778.
+
 
 ---
 
@@ -31166,3 +31172,1426 @@ Selisih jujur: ISF sudah punya master Tax generik + faktur pajak dokumen; yang a
 - Menggabungkan pajak potong (WithholdingTaxType/PPh) ke penampung ini — objek pajak berbeda.
 
 F-2026-10-25-041-S — Kode pajak + DPP default per barang/jasa. Status: SPEC SELESAI run ini; gerbang pertama vonis Accountant Q-ITX-1, lalu fisik Backend Q-ITX-2. Pemilik usulan: Business (spec), Accountant (vonis kode/tarif), Lead (Q-ITX-3/4), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: YA (Q-ITX-1).
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-046-S: rekap sisa pinjaman aktif per karyawan (read-model baca-saja di atas EmployeeLoan existing, scope fail-closed)
+
+> **Slot**: F-2026-10-25-046-S. Diperiksa bentrok 2026-10-25 21:39 WIB vs `origin/main` (`920a53f7`): grep `F-2026-10-25-046` di backlog origin/main + judul PR terbuka = 0; ID 2026-10-25 terpakai: sampai 039-V di main, 040-S/041-S PR #901/#898, 042-V PR #902, 043-S PR #903, 044-S PR #906, 045-V PR #907. `-046-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_a14ad77e. Dokumen saja; tanpa kode/schema/migrasi.
+
+> **Gap baru domain (h) HR/payroll** — bukan F-ID lama. Bukan duplikat F-2026-10-25-018-S (pengajuan pinjaman mandiri — jalur tulis), bukan F-2026-10-25-019-S (histori cicilan per pinjaman — ledger per pinjaman), bukan daftar transaksional `/sdm/pinjaman` (baris per pinjaman, terpaginasi). Objek spec ini: agregat sisa kewajiban pinjaman **per karyawan** dari baris `EmployeeLoan` berjalan. Dokumen saja; tanpa kode/schema/migrasi.
+
+### 0. Ringkasan putusan yang diminta
+
+HR menjawab pertanyaan tutup periode: "karyawan ini masih punya pinjaman aktif berapa, sisa totalnya berapa, cicilan berjalannya berapa?" Hari ini jawaban itu hanya bisa diraih dengan membuka daftar `/sdm/pinjaman` baris per pinjaman lalu menjumlah manual per orang — daftar terpaginasi (`take`/`skip`), jadi total per karyawan tidak pernah utuh dari satu layar dan mudah salah hitung. Akibat nyata: sisa piutang karyawan direkap di luar sistem menjelang payroll, dan angka rekap tangan bisa beda dari `remainingAmount` berjalan. Spec ini membekukan: (A) builder baca-saja agregat per karyawan atas `EmployeeLoan` status `active` (+ ember jujur status lain dalam kosakata tertutup), (B) permukaan rekap di area SDM sejajar rekap lembur/saldo cuti, (C) batas tegas: rekap menampilkan fakta pinjaman tersimpan, TIDAK menghitung potongan slip mendatang, TIDAK menampilkan nominal gaji, TIDAK mengubah status/sisa apa pun. Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin `view_employee_loans` membuka permukaan rekap pinjaman, opsional filter departemen (hanya scope `all`).
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `EmployeeLoan` dalam scope, dan builder murni mengelompokkan per karyawan: jumlah pinjaman aktif, Σ pokok aktif, Σ sisa aktif (`remainingAmount`), Σ terbayar turunan (pokok − sisa, per pinjaman aktif saja), cicilan bulanan tersimpan Σ `monthlyInstallment` pinjaman aktif, cicilan mingguan tersimpan Σ `weeklyInstallment` non-null pinjaman aktif + jumlah pinjaman aktif tanpa jadwal mingguan (ember jujur, bukan konversi), tanggal pinjaman aktif tertua.
+3. Halaman menampilkan baris per karyawan + total scope (penjumlahan Σ, bukan rata-rata), dengan tautan ke daftar transaksional existing per karyawan. Karyawan tanpa pinjaman aktif TIDAK tampil sebagai baris nol karangan tahap 1 (keputusan tampil-semua = Q-LR46-2 Lead).
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `EmployeeLoan` + `Employee` (nama/departemen); dokumen keluar = tampilan rekap saja. Potongan payroll tetap jalur existing `markPayrollPaid`.
+
+### 2. Inventarisasi terverifikasi (origin/main 920a53f7, 2026-10-25 21:39 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `EmployeeLoan` (`prisma/schema.prisma:3882`): `employeeId`, `loanDate`, `totalAmount` Decimal(15,2), `monthlyInstallment` Decimal(15,2), `weeklyInstallment` Decimal? (NULL = tanpa jadwal mingguan; dilarang auto-fill `monthlyInstallment/4` — komentar schema mengutip vonis F-2026-10-23-105-V), `remainingAmount` Decimal(15,2), `status` String default `active`, `approvedBy`/`createdBy`, timestamps; indeks employeeId/status.
+- Kosakata status tertutup (putusan Lead F-2026-10-25-026-L Q-LS-4): `pending → active | rejected`; `active → paid_off` (`src/lib/reports/employee-loan-channel.ts:12,28`); status di luar himpunan tampil apa adanya sebagai tidak dikenal, jangan dipetakan paksa. Amortisasi payroll menulis persis `paid_off` saat sisa nol (`src/actions/hrm.actions.ts:3110`).
+- Amortisasi existing: `markPayrollPaid` mendistribusikan budget `Payroll.loanDeduction` aktual ke pinjaman `active` tertua-dulu, cap per cicilan frekuensi slip (monthly/weekly dari master saat dibayar) dan sisa, dalam transaksi yang sama dengan flip status slip + jurnal (`hrm.actions.ts:3076-3110`). Rekap tidak menyentuh jalur ini.
+- Daftar transaksional existing: halaman `/sdm/pinjaman` (`src/app/(dashboard)/sdm/pinjaman/page.tsx`) — `requirePermission("view_employee_loans")` + `getHrScope` + `hrScopeWhere`, filter status/cari, `include employee`, terpaginasi `take`/`skip`, payload per baris pinjaman (loanDate/totalAmount/monthlyInstallment/remainingAmount/status). Menjawab "pinjaman mana", bukan "per karyawan totalnya berapa".
+- Kanal pengajuan turunan: builder murni `employee-loan-channel.ts` + loader `employee-loan-channel-data.ts` (F-2026-10-25-018-S, Q-LS-3b) — kanal mandiri/titipan per baris; rekap tidak menurunkan kanal dan tidak mengklaimnya per karyawan (satu karyawan bisa campuran dua kanal).
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:319-322`): `create_loans`, `delete_loans`, `approve_loans` (resource `loans`), `view_employee_loans` (resource `employee_loans`). Navigasi existing: entri `Pinjaman` href `/sdm/pinjaman` izin `view_employee_loans` (`src/components/layout/navigation.ts:164`); pola saudara `Saldo Cuti` (:158, `view_leave_requests`) dan `Rekap Lembur` (:160, `view_overtime`).
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:45-77`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1. `hrScopeWhere` (:81-84) berlaku eksplisit untuk model ber-`employeeId` termasuk `EmployeeLoan`.
+- Vonis uang yang mengikat (jangan diputus ulang di spec ini): pinjaman tanpa bunga tahap 1 + potongan = pokok saja (vonis F-2026-10-25-023-V); sisa pinjaman karyawan berhenti TIDAK boleh dihapus diam-diam dan TIDAK boleh dipotong melebihi ruang Pasal 65 dari pembayaran terakhir — sisa tetap Piutang Karyawan tertagih terpisah (023-V butir 2E). Rekap hanya menampilkan sisa itu apa adanya.
+
+Belum ada / gap (bukti grep run ini):
+- Builder/loader agregat pinjaman per karyawan: tidak ada berkas `*loan*recap*`/`employee-loan` agregat di `src/lib/reports/` selain kanal per baris di atas (daftar berkas diverifikasi run ini); tidak ada halaman rekap di bawah `/sdm/pinjaman` selain daftar/detail/tambah/ubah.
+- Total per karyawan tidak terjawab daftar existing: paginasi memotong populasi (`take`/`skip` di page.tsx), dan tidak ada Σ sisa/pokok/cicilan per orang di permukaan mana pun.
+- Karyawan berhenti dengan pinjaman `active` bersisa tidak tertanda di permukaan mana pun sebagai fakta operasional (bukan angka pesangon — hanya keberadaan sisa aktif pada karyawan nonaktif), padahal vonis 023-V 2E mewajibkan sisa itu tetap tertagih terpisah; hari ini hanya terlihat bila membuka baris per baris.
+
+### 3. Business rules register (BR-LR46)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-LR46-01 | Satu-satunya sumber = baris `EmployeeLoan` existing; rekap dilarang membuat tabel/rekod pinjaman kedua atau snapshot sisa berkala | TERVERIFIKASI-KODE | `prisma/schema.prisma:3882` |
+| BR-LR46-02 | Populasi rekap utama = pinjaman berstatus persis `active` dalam kosakata tertutup Q-LS-4. Status `pending`/`rejected`/`paid_off` dan status tak dikenal TIDAK masuk Σ aktif; `pending` boleh tampil sebagai ember hitungan terpisah berlabel "menunggu persetujuan" (bukan sisa kewajiban), status tak dikenal tampil apa adanya terhitung, tidak dipetakan paksa | TERVERIFIKASI-KODE (kosakata) + USULAN (ember) | `employee-loan-channel.ts:12,28`; `hrm.actions.ts:3110` |
+| BR-LR46-03 | Per karyawan: Σ sisa aktif = Σ `remainingAmount` pinjaman aktifnya; Σ pokok aktif = Σ `totalAmount` pinjaman aktif yang sama; Σ terbayar turunan = Σ pokok − Σ sisa atas populasi aktif saja (pinjaman `paid_off` tidak ikut — riwayat lunas wilayah daftar/019-S, bukan sisa berjalan) | USULAN | kolom `schema.prisma:3882` |
+| BR-LR46-04 | Cicilan tampil verbatim tersimpan: Σ `monthlyInstallment` pinjaman aktif dan Σ `weeklyInstallment` non-null pinjaman aktif adalah dua angka terpisah berlabel frekuensinya; pinjaman aktif ber-`weeklyInstallment` NULL dihitung di ember "tanpa jadwal mingguan" dan TIDAK pernah dikonversi `monthlyInstallment/4` atau dibagi angka apa pun | TERVERIFIKASI-KODE (larangan konversi) + USULAN (penyajian) | komentar `weeklyInstallment` schema:3882 (vonis F-2026-10-23-105-V); `loanInstallmentForFrequency` konsumen `hrm.actions.ts:3096` |
+| BR-LR46-05 | Rekap TIDAK mensimulasikan potongan slip berikutnya: tidak ada proyeksi "terpotong periode depan", sisa sesudah payroll mendatang, atau tanggal lunas perkiraan dari cicilan — amortisasi nyata hanya terjadi di `markPayrollPaid` atas `loanDeduction` aktual slip | TERVERIFIKASI-KODE (jalur) + USULAN (larangan) | `hrm.actions.ts:3076-3110` |
+| BR-LR46-06 | Akses rekap = `view_employee_loans` + `getHrScope` fail-closed; filter departemen tidak pernah memperluas scope; keluaran TANPA `baseSalary`, komponen gaji, dan nominal slip apa pun — `loanDeduction` per slip bukan keluaran rekap | TERVERIFIKASI-KODE + USULAN penempatan | `module-catalog.generated.ts:322`; `hr-scope.ts:45-84`; mandat authorization data gaji |
+| BR-LR46-07 | Karyawan nonaktif (`isActive=false` atau `employmentEndedAt` terisi) yang masih punya pinjaman `active` tetap tampil tertanda fakta itu; rekap TIDAK menolkan sisa, TIDAK mengusulkan hapus, TIDAK menghitung potongan dari pembayaran terakhir — perlakuan sisa = vonis 023-V 2E lewat jalur terpisah | TERVERIFIKASI-KODE (vonis) + USULAN (penanda) | vonis F-2026-10-25-023-V butir 2E; kolom Employee `schema.prisma:902` |
+| BR-LR46-08 | Urutan baris: Σ sisa aktif terbesar dulu, seri nama karyawan lalu employeeId; total scope = Σ atas baris tampil (tertimbang nilai), bukan rata-rata per karyawan dan bukan total populasi di luar scope | USULAN | pola kontrak agregat repo (target penjualan F-2026-10-22-088-S BR-TGT-11) |
+| BR-LR46-09 | Rekap baca-saja mutlak: tidak ada buat/ubah/setujui/hapus pinjaman dari permukaan rekap; semua tulis tetap aksi existing (`create_loans`/`approve_loans`/`delete_loans`) di daftar/detail | TERVERIFIKASI-KODE (izin tulis existing) + USULAN (larangan) | `module-catalog.generated.ts:319-321`; `hrm.actions.ts:3161,3998,4307` |
+| BR-LR46-10 | Kanal pengajuan (mandiri/titipan) TIDAK diagregasikan per karyawan di rekap tahap 1; kanal tetap fakta per baris di daftar existing — mencampur dua kanal satu orang ke satu label = klaim turunan palsu | TERVERIFIKASI-KODE (definisi kanal per baris) | `employee-loan-channel.ts` kepala Q-LS-3b |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap | `view_employee_loans` — semua departemen | `view_employee_loans` — departemen sendiri | `view_employee_loans` — baris dirinya saja | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (nilai asing dari URL diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| Ikuti tautan ke daftar per karyawan | Daftar existing, scope sama | Sama | Sama (baris dirinya) | Ditolak |
+| Buat/setujui/hapus pinjaman dari rekap | Tidak ada — jalur existing `create_loans`/`approve_loans`/`delete_loans` | Sama | Sama (pengajuan mandiri = 018-S) | — |
+
+Izin halaman rekap mengusulkan reuse `view_employee_loans` (izin daftar existing, sejajar pola `view_overtime` rekap lembur dan `view_leave_requests` saldo cuti); key baru = Q-LR46-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Transisi `EmployeeLoan` existing (di luar rekap, untuk konteks baca):
+
+| Keadaan awal | Pemicu (di luar rekap) | Keadaan akhir | Dihitung rekap |
+|---|---|---|---|
+| — | `createEmployeeLoan` (izin per jalur 018-S) | `pending` (menunggu workflow) atau jalur existing | Ember menunggu (BR-LR46-02), bukan Σ aktif |
+| `pending` | persetujuan workflow / penolakan | `active` / `rejected` | `active` masuk Σ; `rejected` tidak pernah |
+| `active` | `markPayrollPaid` mengonsumsi `loanDeduction` aktual | sisa berkurang; `paid_off` tepat saat sisa nol (`hrm.actions.ts:3110`) | Σ mengikuti nilai berjalan |
+| `active` | karyawan berhenti (di luar rekap) | tetap `active` bersisa | Tetap tampil tertanda (BR-LR46-07) |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Pinjaman karyawan + cicilan + potong gaji | Ada — Pinjaman Karyawan (pokok, metode bunga tanpa bunga/anuitas/efektif/flat, rincian angsuran, potong via Pencatatan Gaji) https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/membuat-pinjaman-karyawan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/pinjaman-gaji/ (akses 2026-10-25) | Ada — fitur Loan mengelola pinjaman karyawan terintegrasi kas keluar; Zahir Payroll mencatat pinjaman karyawan (akses 2026-10-25) https://zahirerp.com/id/all-features-of-zahir-products/ dan https://zahiraccounting.com/en/peluncuran-produk-terbaru-zahir-payroll-1-0/ | ADA parsial — pencatatan + amortisasi potong slip live; bunga TIDAK (vonis 023-V tahap 1 tanpa bunga — jangan disamakan klaim fitur) |
+| Laporan sisa piutang/pinjaman per karyawan | Ada — laporan Daftar Piutang Karyawan, Angsuran per Karyawan, Histori Peminjaman per Karyawan disebut di halaman fitur Kas & Bank (pihak ketiga, bukan help resmi — dicatat BENCHMARK lemah) https://www.doniirvan.id/accurate-online/fitur-accurate-online/kas-bank/ ; tab Histori Piutang per karyawan di help resmi https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-beban/mencatat-potongan-gaji-untuk-piutang-karyawan/ | Laporan per karyawan tercantum umum di Zahir HR (kehadiran/cuti/payroll); laporan sisa pinjaman per karyawan tidak ditemukan di halaman resmi yang diakses run ini — belum terverifikasi, bukan diklaim absen https://zahir.co.id/hr/ | Belum ada agregat per karyawan (gap §2) — daftar per pinjaman saja; histori cicilan per pinjaman = 019-S |
+| Sisa pinjaman karyawan berhenti tetap tertagih | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Aturan vonis ada (023-V 2E); penanda permukaan = gap spec ini (BR-LR46-07) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-LR46-B (Backend, bila dibuka Lead):
+- AC-LR46-B1: builder murni menerima baris polos `EmployeeLoan` + identitas karyawan dan menghasilkan per karyawan: jumlah aktif, Σ pokok aktif, Σ sisa aktif, Σ terbayar turunan, Σ cicilan bulanan, Σ cicilan mingguan non-null, jumlah aktif tanpa jadwal mingguan, tanggal aktif tertua, hitungan `pending`, penanda karyawan nonaktif bersisa aktif; invariant Σ terbayar = Σ pokok − Σ sisa atas populasi aktif dibuktikan tes; memasukkan `paid_off`/`rejected` ke Σ aktif = MERAH.
+- AC-LR46-B2: loader menegakkan `view_employee_loans` + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; scope department tidak bocor departemen lain lewat filter; payload tidak pernah memuat `baseSalary`/nominal slip/`loanDeduction` (BR-LR46-06).
+- AC-LR46-B3: pinjaman aktif ber-`weeklyInstallment` NULL terhitung di ember tanpa jadwal mingguan dan Σ mingguan tidak berubah olehnya; tes yang mengonversi dari `monthlyInstallment` = MERAH (BR-LR46-04).
+- AC-LR46-B4: status di luar kosakata tertutup tampil terhitung apa adanya di ember tak dikenal, tidak masuk Σ aktif, tidak dipetakan paksa ke `active`/`paid_off` (BR-LR46-02).
+- AC-LR46-B5: dua pinjaman aktif satu karyawan (satu mandiri satu titipan) teragregasi nominalnya tanpa label kanal per karyawan; builder menulis `EmployeeLoan` apa pun = MERAH (BR-LR46-09/10).
+
+AC-LR46-F (Frontend):
+- AC-LR46-F1: halaman menampilkan angka verbatim payload server berlabel frekuensi cicilan terpisah; UI menjumlah ulang, memproyeksikan potongan/lunas, atau menampilkan nominal gaji = MERAH.
+- AC-LR46-F2: pemilih departemen hanya untuk scope `all`; penanda karyawan nonaktif bersisa tampil dari payload server, bukan ditebak UI dari tanggal.
+- AC-LR46-F3: grep e2e permukaan `sdm/pinjaman` sebelum mengubah label/selector daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 pinjaman `active` bersisa nol belum terflip (data lama sebelum `paid_off` dikenalkan): tetap populasi aktif dengan sisa 0 terhitung — builder tidak menebak lunas. EC-2 karyawan tanpa departemen: ember "tanpa departemen", hanya terlihat scope all. EC-3 karyawan berhenti tengah jalan dengan dua pinjaman aktif: kedua sisa tampil; rekap tidak memilih mana dipotong dari pembayaran terakhir (vonis 023-V 2E, jalur terpisah). EC-4 pinjaman `pending` besar: tampil di ember menunggu, tidak menaikkan Σ sisa kewajiban. EC-5 cicilan bulanan 0 tersimpan (skema hanya menolak < 1 di jalur buat — data lama mungkin beda): tampil apa adanya, builder tidak mengarang cicilan pengganti. EC-6 periode: rekap adalah potret berjalan (tanpa parameter periode tahap 1); memfilter `loanDate` = Q-LR46-4, jangan ditambah diam-diam. EC-7 karyawan self-scope tanpa pinjaman aktif: halaman menyatakan kosong jujur, bukan baris nol. EC-8 `remainingAmount` negatif (anomali data): tampil apa adanya tertanda anomali untuk ditindak HR, tidak di-clamp diam-diam ke 0 oleh builder.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-046-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni agregat pinjaman per karyawan + loader scope fail-closed; ember status BR-LR46-02/04; tes AC-LR46-B1..B5 | Backend | Lead buka Q-LR46-1/3; klaim file di board sebelum edit | — |
+| (turunan) halaman rekap di area SDM + filter departemen + tautan daftar per karyawan | Frontend | kontrak Backend stabil | grep e2e `sdm/pinjaman` dulu |
+| (turunan) falsifikasi AC-LR46-B1..B5 + AC-LR46-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-LR46 → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap dibaca sebagai dasar potong payroll kedua atau proyeksi lunas karangan — mitigasi BR-LR46-05 + label halaman; risiko nominal pinjaman bocor lintas scope — mitigasi BR-LR46-06 (masking = baris tidak tampil, bukan angka disamarkan).
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-LR46-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo (daftar per pinjaman + jumlah manual) diterima?
+- Q-LR46-2 (Lead): populasi baris = hanya karyawan berpinjaman aktif/pending (usul spec) atau semua karyawan dalam scope termasuk tanpa pinjaman (baris nol eksplisit)?
+- Q-LR46-3 (Lead): reuse izin `view_employee_loans` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-LR46-4 (Backend): bentuk loader (agregat `groupBy` DB vs muat baris ter-scope + builder murni) dan apakah filter tanggal `loanDate` dibutuhkan tahap 1 — putus saat fisik, builder wajib murni.
+- Accountant: TIDAK diminta tahap ini — nol angka baru (bunga/potong/pajak sudah divonis 023-V; rekap menampilkan fakta tersimpan). Dipanggil hanya bila ada usul mengubah perlakuan sisa karyawan berhenti di luar 023-V 2E.
+
+### Yang TIDAK diusulkan run ini
+
+- Proyeksi potongan periode depan, sisa sesudah payroll mendatang, atau perkiraan tanggal lunas: simulasi atas budget slip yang belum ada (BR-LR46-05).
+- Menampilkan nominal gaji/potongan slip di rekap: wilayah authorization payroll, bukan permukaan pinjaman (BR-LR46-06).
+- Histori cicilan per pinjaman: sudah terspec F-2026-10-25-019-S (ledger tahap 2); rekap ini potret sisa berjalan, bukan riwayat.
+- Pengajuan/persetujuan/penghapusan pinjaman dari rekap: jalur tulis existing + 018-S (BR-LR46-09).
+- Menghapus/menolkan sisa pinjaman karyawan berhenti dari rekap: dilarang vonis 023-V 2E.
+- Bunga/denda pinjaman: vonis 023-V tahap 1 tanpa bunga; membuka bunga = vonis Accountant baru, bukan spec ini.
+
+F-2026-10-25-046-S — Rekap sisa pinjaman aktif per karyawan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LR46-1/2/3 + fisik Backend Q-LR46-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-039-S: riwayat harga penawaran per pelanggan×barang (turunan baris QuotationItem; objek PENAWARAN, BUKAN harga transaksi faktur F-2026-10-25-028-S)
+
+> **Slot**: F-2026-10-25-039-S. Diperiksa bentrok 2026-10-25 19:50 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-039` di backlog+board origin/main = 0; judul/head PR terbuka memuat `039` = 0 (PR terbuka tertinggi 038-S di #889/#890); ID 001..037-S terpakai di main, 038-S di PR terbuka. ID 039 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_a5fc0065. Dokumen spec saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Asal topik**: topik tertunda eksplisit F-2026-10-25-028-S §"Yang TIDAK diusulkan" — "Riwayat harga penawaran (QuotationItem belum transaksi): objek berbeda, jangan dicampur ke fakta faktur." Spec ini objek itu, dengan populasi dan label yang WAJIB beda dari 028-S.
+> **Aturan keras spec ini**: harga penawaran BUKAN harga transaksi. Harga di baris penawaran adalah harga yang DITAWARKAN pada satu revisi penawaran — belum tentu terkirim, belum tentu diterima, belum tentu jadi transaksi. Label permukaan, nama builder, dan notice WAJIB membedakan dari riwayat harga faktur 028-S. Dilarang auto-fill/rekomendasi harga ke penawaran baru dari riwayat ini (penolakan yang sama yang berlaku di 028-S untuk faktur, berlaku di sini). Status penawaran menentukan makna harga — lihat BR-QPH-02.
+
+### 0. Ringkasan
+
+Penjual menyusun penawaran baru untuk pelanggan lama hari ini tidak bisa menjawab dari satu permukaan: "barang Y terakhir kami tawarkan ke pelanggan X di harga berapa, di penawaran mana, statusnya apa — diterima, ditolak, atau masih draft?" Harga rencana hidup di `CustomerPriceList` (F-2026-10-25-001-S), harga transaksi aktual hidup di baris faktur terbit (F-2026-10-25-028-S), tetapi harga PENAWARAN historis — termasuk penawaran yang ditolak atau kedaluwarsa, yang justru paling informatif untuk negosiasi berikutnya — hanya bisa dibaca dengan membuka penawaran satu per satu. Spec ini membekukan read-model turunan baca-saja: untuk pasangan (pelanggan, barang), daftar kejadian harga penawaran dari `QuotationItem` lintas status penawaran, terurut tanggal terbaru dulu, lengkap dengan status penawaran pembawa harga itu, nomor dokumen, revisi, masa berlaku, dan penanda makna status. Tanpa kolom baru, tanpa mengubah resolver harga, tanpa rekomendasi harga otomatis, tanpa menulis harga apa pun ke penawaran baru.
+
+Beda tegas tiga permukaan harga (anti-campur):
+
+| Permukaan | Objek sumber | Pertanyaan dijawab | Sifat harga |
+|---|---|---|---|
+| Daftar harga (F-001-S) | `CustomerPriceList` | harga rencana yang berlaku untuk kategori/barang | rencana, berlaku |
+| Riwayat harga faktur (F-028-S) | `SalesInvoiceItem` faktur `posted\|partial\|paid` | harga yang BENAR-BENAR terjadi per transaksi | transaksi, historis final |
+| **Spec ini (F-039-S)** | **`QuotationItem` semua status penawaran non-batal** | **harga yang pernah DITAWARKAN ke pelanggan ini, dan nasib penawarannya** | **penawaran, BELUM transaksi** |
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 1b147d3c)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model penawaran: `Quotation` (`prisma/schema.prisma:1377`) — `customerId`, `documentNo` unik, `date`, `validUntil DateTime?` (:1392), `status String @default("draft")`, `revisionNumber Int @default(0)`, `deletedAt`, `salesEmployeeId?`. Baris lewat seksi: `QuotationSection` (:1431, `quotationId`, cascade) → `QuotationItem` (:1446) — `itemId Int?` (:1449), `description`, `uom`, `qty Decimal(15,2)`, `unitPrice Decimal(15,2)` (:1460), `discount Decimal(15,2)`, `total Decimal(15,2)`, `sortOrder`. **QuotationItem TIDAK punya `priceSource`/`priceListId`** — kontras `SalesInvoiceItem` (:1730, `priceSource` :1744): sumber harga baris penawaran TIDAK tercatat; dilarang mengarang penanda sumber (BR-QPH-07).
+- Status penawaran (string, TERVERIFIKASI-KODE dari aksi `src/actions/sales.actions.ts`): `draft` → `sent` (sendQuotation, hanya dari draft, wajib ≥1 baris); `sent` → `accepted` (acceptQuotation :337, wajib dari sent + `assertQuotationNotExpired`); `sent` → `rejected` (rejectQuotation :383, wajib dari sent); `sent` → `draft` + `revisionNumber` increment (reviseQuotation, snapshot lama ke `QuotationHistory`); `accepted|approved` → `converted` (convertQuotationToOrder :487-548, SO unik per quotation dengan kunci baris). `approved` muncul sebagai status yang diterima jalur konversi (:487, :704) — populasi spec WAJIB memperlakukannya eksplisit, bukan mengasumsikan tidak ada (BR-QPH-03).
+- Masa berlaku: `assertQuotationNotExpired(validUntil)` (sales.actions.ts:106-108) — lewat bila hari WIB hari ini > validUntil; hari validUntil sendiri masih berlaku. Cron `src/app/api/cron/auto-reject-quotations/route.ts` menolak otomatis penawaran `sent` yang lewat masa (histori action `auto_rejected`) — status tersimpan tetap terbaca dari `Quotation.status`; **status `expired` TIDAK ada sebagai nilai tersimpan** — kedaluwarsa adalah turunan dari (status sent + validUntil lewat) atau sudah menjadi `rejected` oleh cron. Spec dilarang mengarang status tersimpan `expired` (BR-QPH-04).
+- Snapshot revisi: `QuotationHistory` (:1474) — `revisionNumber`, `statusAtSnapshot @default("sent")`, `dataSnapshot Json?`, `changeReason`, `action`. Baris berjalan `QuotationItem` hanya memuat revisi TERKINI; harga revisi lama hidup hanya di `dataSnapshot` histori. Tahap 1 spec ini membaca baris berjalan saja; membaca snapshot histori = pertanyaan fisik Backend (Q-QPH-3), bukan asumsi.
+- Laporan penawaran existing (BUKAN riwayat harga per pasangan): `quotation-outcome.ts` (hasil menang/kalah + alasan kalah F-2026-10-20-101), `quotation-accepted-queue.ts` (F-2026-10-25-002-S, penawaran diterima belum konversi), `quotation-followup-queue.ts`, `quotation-revision-delta.ts` (selisih grandTotal revisi, bukan harga baris), `quotation-approval-gate.ts` (F-100, penanda ambang diskon per dokumen). Tidak satu pun menjawab harga satuan per (pelanggan, barang) per kejadian penawaran.
+- Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts`): `view_quotations` (:158), `create_quotations` (:159), `edit_quotations` (:160), `approve_quotations` (:162), `confirm_quotations` (:163); `view_customers` (:125); `view_reports` (:428); `view_sales_invoices` (:148, milik 028-S, TIDAK dipakai spec ini).
+
+Gap (bukti grep run ini):
+- Grep `quotation.*price.*histor|price.*histor.*quotation|riwayat harga penawaran` di `src/` + backlog origin/main = hanya rujukan tertunda 028-S itu sendiri. Tidak ada builder/loader/halaman riwayat harga penawaran per (customerId, itemId).
+- Grep gabungan `customerId.*itemId` di `src/lib/reports/` = 0 builder pasangan pelanggan×barang untuk penawaran (028-S pun masih spec, belum builder).
+- Baris penawaran `itemId IS NULL` (deskripsi bebas) ada secara skema (nullable :1449) dan tidak tertanda di permukaan mana pun sebagai ember terpisah.
+
+Saudara yang TIDAK diduplikasi:
+- F-2026-10-25-028-S: riwayat harga FAKTUR terbit — populasi, label, notice berbeda total (BR-QPH-01). Dua permukaan tidak boleh digabung satu daftar, satu builder, atau satu label "riwayat harga" tanpa kualifikasi objek.
+- F-2026-10-25-001-S: masa berlaku DAFTAR HARGA (`CustomerPriceList`) — objek rencana, bukan kejadian penawaran.
+- F-2026-10-25-002-S: antrean penawaran diterima belum konversi — populasi hanya accepted/approved tanpa SO; spec ini membaca SEMUA status untuk riwayat harga, bukan antrean tindak lanjut.
+- F-2026-10-25-006-S: paparan diskon efektif agregat dokumen (quotation+SO+faktur) per periode/penjual — agregat pengawasan diskon, bukan riwayat harga satuan per pasangan; diskon baris di spec ini tampil apa adanya per kejadian, tidak diagregasi persen efektif (itu wilayah 006-S).
+
+### 2. Workflow specification
+
+Aktor: penjual/admin penjualan (melihat riwayat penawaran sebelum menyusun penawaran baru atau menindaklanjuti negosiasi), supervisor penjualan (tinjau pola penawaran ditolak/kedaluwarsa).
+Dokumen masuk: `Quotation` + `QuotationSection` + `QuotationItem` existing. Dokumen keluar: TIDAK ada; hasil baca menjadi bahan menyusun penawaran manual lewat form existing. Spec ini TIDAK menulis harga ke penawaran mana pun (BR-QPH-09).
+
+Alur:
+1. Pemakai memilih pelanggan (wajib) dan/atau barang (pola filter laporan existing pasangan kunci/nilai URL); tanpa pilihan pasangan, permukaan menampilkan petunjuk memilih, bukan seluruh histori penawaran mentah tanpa batas (Q-QPH-4).
+2. Loader membaca penawaran populasi §4 (`deletedAt IS NULL`) dalam rentang periode laporan, satu query massal (quotation + seksi + baris + resolusi nama item massal, pola anti-N+1 laporan existing), nol mutasi.
+3. Builder mengelompokkan per (customerId, itemId): baris riwayat per kejadian penawaran — tanggal penawaran, documentNo, revisionNumber, qty, uom, unitPrice, discount baris, total baris, status pembawa + label makna status (§4), validUntil, tautan ke detail penawaran existing. Ringkasan pasangan: penawaranTerakhir (baris tanggal terbaru; seri diputus documentNo lalu id quotation), jumlahKejadian, dan rincian hitungan per ember status (terkirim/diterima/ditolak/kedaluwarsa/draft/dikonversi) — hitungan kejadian, BUKAN probabilitas penerimaan, BUKAN rata-rata harga (BR-QPH-05/06).
+4. Baris `itemId IS NULL` masuk ember BARIS_TANPA_BARANG tertanda per pelanggan, tidak dipasangkan paksa ke barang mana pun (BR-QPH-08).
+5. UI menampilkan verbatim dari builder + notice BR-QPH-10; UI tidak menghitung ulang harga/diskon/rata-rata dan tidak menawarkan tombol "pakai harga ini" (itu auto-fill, ditolak BR-QPH-09).
+
+### 3. Role/permission matrix
+
+Key nyata katalog (TERVERIFIKASI-KODE, nomor baris §1). Tanpa key baru tahap 1 (USULAN; kunci final Q-QPH-2).
+
+| Aksi | Permission nyata | Penjual | Supervisor | Admin |
+|---|---|---|---|---|
+| Melihat riwayat harga penawaran (permukaan) | `view_reports` (:428) usulan reuse, ATAU `view_quotations` (:158) — Q-QPH-2 | bila diberi | ya | ya |
+| Membuka detail penawaran dari baris riwayat | `view_quotations` (:158) | sesuai existing | ya | ya |
+| Melihat master pelanggan terkait | `view_customers` (:125) | sesuai existing | ya | ya |
+| Menyusun penawaran baru memakai harga dari riwayat | `create_quotations` (:159) lewat form existing, input manual | ya | ya | ya |
+| Menulis/mengisi otomatis harga ke penawaran dari riwayat | — | TIDAK tahap 1 | TIDAK | TIDAK |
+| Mengubah status/harga penawaran sumber | `edit_quotations`/`confirm_quotations` existing, di luar spec | sesuai existing | sesuai existing | sesuai existing |
+
+Harga penawaran per pelanggan adalah data komersial sensitif (pola BR-PH-09 di 028-S): permukaan TIDAK boleh bocor ke peran tanpa izin terpilih di Q-QPH-2, dan loader menegakkan fail-closed di server, bukan menyembunyikan di UI saja.
+
+### 4. Status-transition / population matrix
+
+Tidak ada status baru, tidak ada kolom baru. Populasi adalah turunan status penawaran existing + masa berlaku:
+
+| Status penawaran tersimpan | Masuk riwayat? | Ember makna (label wajib tampil) | Makna harga |
+|---|---|---|---|
+| `sent` (validUntil belum lewat / kosong) | YA | TERKIRIM | harga sudah sampai ke pelanggan, menunggu keputusan |
+| `sent` + validUntil lewat (turunan, sebelum/sesudah cron) | YA | KEDALUWARSA | harga pernah terkirim, masa tawar habis; BUKAN harga pasar berjalan |
+| `accepted` / `approved` | YA | DITERIMA | harga disepakati pelanggan; tetap BUKAN transaksi sampai faktur terbit (wilayah 028-S sesudahnya) |
+| `converted` | YA | DIKONVERSI | harga penawaran asal konversi; harga transaksi final dibaca di 028-S, bukan di sini |
+| `rejected` (termasuk auto_rejected cron) | YA | DITOLAK | harga yang TIDAK disepakati; informatif negosiasi, dilarang dilabeli harga pasar |
+| `draft` | YA, ember terpisah tertanda | DRAFT — BELUM TERKIRIM | harga internal belum pernah sampai ke pelanggan; dilarang dicampur hitungan harga terkirim |
+
+Aturan populasi turunan:
+- Perubahan status penawaran sesudah dibaca mengubah hasil baca berikutnya (turunan murni, tanpa snapshot riwayat tersimpan). Penawaran `draft` yang kemudian dikirim berpindah ember pada baca berikutnya; penawaran direvisi kembali ke `draft` (reviseQuotation) membawa baris revisi terkini — harga revisi lama TIDAK tampil tahap 1 kecuali Q-QPH-3 memutuskan baca histori.
+- Penawaran `deletedAt IS NOT NULL` keluar populasi seluruhnya.
+- Kedaluwarsa diturunkan persis semantik `assertQuotationNotExpired` (hari WIB > validUntil = lewat; hari validUntil masih berlaku; validUntil kosong = tanpa batas, tidak pernah kedaluwarsa).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-QPH-01 | Pemisahan objek mutlak: populasi spec ini = `QuotationItem` (penawaran); populasi 028-S = `SalesInvoiceItem` faktur diakui. Dilarang satu builder/daftar/label "riwayat harga" menggabungkan keduanya tanpa kualifikasi objek per baris. Nama permukaan/builder wajib memuat kualifikasi "penawaran". | USULAN (kedua populasi TERVERIFIKASI-KODE) | schema :1446 vs :1730; document-status.ts:10 |
+| BR-QPH-02 | Makna harga mengikuti status pembawa per matriks §4. Baris riwayat WAJIB menampilkan label ember statusnya; harga `rejected`/`draft`/kedaluwarsa dilarang tampil tanpa label itu atau dilabeli "harga pasar"/"harga berlaku". | USULAN (kosakata status TERVERIFIKASI-KODE) | sales.actions.ts send/accept/reject/revise/convert |
+| BR-QPH-03 | `approved` diperlakukan setara `accepted` dalam ember DITERIMA (jalur konversi menerima keduanya, sales.actions.ts:487); status string lain di luar kosakata §4 tampil mentah tertanda "status tidak dikenal", tidak dipetakan paksa ke ember mana pun. | USULAN (bukti kode :487, :704) | sales.actions.ts:487 |
+| BR-QPH-04 | Kedaluwarsa = turunan (status `sent` + hari WIB > validUntil), BUKAN status tersimpan. Dilarang menulis status `expired` ke `Quotation.status` atau mengarang kolom status demi spec ini. Sesudah cron auto-reject berjalan, baris yang sama terbaca DITOLAK (status tersimpan menang atas turunan kedaluwarsa). | USULAN (semantik TERVERIFIKASI-KODE) | sales.actions.ts:106-108; cron auto-reject-quotations/route.ts |
+| BR-QPH-05 | "Penawaran terakhir" pasangan = unitPrice baris kejadian penawaran terbaru (date penawaran; seri: documentNo, lalu id quotation), ditampilkan apa adanya per ember statusnya. DILARANG rata-rata, modus, median, atau harga "disarankan" karangan. Diskon baris tampil terpisah, tidak dilebur diam-diam ke harga satuan (agregasi diskon efektif = wilayah 006-S). | USULAN | pola BR-PH-02 (028-S) |
+| BR-QPH-06 | Ringkasan pasangan hanya memuat hitungan faktual: jumlahKejadian, hitungan per ember status, qty per kejadian apa adanya. DILARANG probabilitas penerimaan, skor peluang, persen "kemungkinan diterima", atau proyeksi angka turunan apa pun dari riwayat ini. | USULAN | larangan angka karangan kartu |
+| BR-QPH-07 | QuotationItem tidak menyimpan sumber harga: permukaan DILARANG menampilkan penanda sumber harga (daftar harga/master/manual) untuk baris penawaran. Nilai asal resolver saat penawaran dibuat tidak bisa dibuktikan dari baris tersimpan — mengarangnya = MERAH. | TERVERIFIKASI-KODE (ketiadaan kolom) | schema :1446-1472 vs :1744 |
+| BR-QPH-08 | Baris `itemId IS NULL` hanya masuk ember BARIS_TANPA_BARANG per pelanggan (hitungan + rentang tanggal), tidak dipasangkan ke barang dari kemiripan deskripsi. | USULAN | pola ember jujur BR-PH-04 |
+| BR-QPH-09 | Baca-saja mutlak tahap 1: loader/builder tidak menulis Quotation/QuotationItem/status apa pun; TIDAK ada auto-fill, tombol "pakai harga ini", atau rekomendasi harga ke form penawaran. Penjual menyalin manual lewat form existing berizin `create_quotations` bila memilih memakai angka historis. | USULAN | penolakan auto-fill 028-S, berlaku sama |
+| BR-QPH-10 | Notice wajib verbatim di setiap tampilan: "Harga penawaran lampau — bukan harga transaksi dan bukan harga jual saat ini. Harga draft belum pernah terkirim; harga ditolak/kedaluwarsa tidak disepakati pelanggan. Harga berlaku mengikuti daftar harga/master saat penawaran dibuat." UI dilarang label "harga terakhir berlaku"/"harga pasar" untuk data ini. | USULAN | pemisahan rencana vs penawaran vs aktual |
+| BR-QPH-11 | Harga revisi berjalan saja tahap 1: baris `QuotationItem` terkini per penawaran (dengan revisionNumber pembawa tampil). Harga revisi lama di `QuotationHistory.dataSnapshot` TIDAK dibaca tahap 1 kecuali Q-QPH-3 diputus; permukaan wajib menandai bahwa yang tampil adalah revisi berjalan, bukan seluruh riwayat revisi. | USULAN (wadah histori TERVERIFIKASI-KODE) | schema :1474; reviseQuotation sales.actions.ts |
+| BR-QPH-12 | Batas keluaran: tanpa pasangan terpilih tidak ada keluaran massal tak terbatas; batas baris/kejadian per pasangan + periode wajib mengikuti konvensi laporan existing; angka batas final Q-QPH-4 (Lead/Backend). | BUTUH-VONIS (Lead/Backend) | konvensi laporan; pola BR-PH-08 |
+| BR-QPH-13 | Penawaran yang sama muncul di dua permukaan berbeda TIDAK dihitung dua kali sebagai fakta berbeda: baris `converted` di sini adalah asal konversi; sesudah faktur terbit, fakta transaksinya dibaca di 028-S. Tautan silang label diperbolehkan, penggabungan angka dilarang (BR-QPH-01). | USULAN | — |
+
+### 6. Feature matrix (benchmark resmi, akses 2026-10-25)
+
+| Kemampuan | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Penawaran penjualan tercatat + status terlacak | ADA: fitur Penawaran Penjualan — buat/kirim penawaran, lacak status diterima/ditolak/menunggu diproses (https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/) | ADA: input penawaran harga (penjualan) — belum membentuk jurnal/stok; laporan penawaran harga di modul Laporan > Penjualan dan piutang (https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-penawaran-harga-penjualan-zahir-online-v2) | ADA existing: Quotation draft→sent→accepted/rejected→converted + laporan hasil penawaran |
+| Riwayat harga satuan per kejadian pasangan pelanggan×barang DARI PENAWARAN (lintas status, termasuk ditolak) | Tidak ditemukan sebagai laporan bernama di sumber resmi di atas — ditulis jujur: belum terverifikasi | Tidak ditemukan sebagai laporan bernama di sumber resmi di atas; laporan penawaran harga yang terdokumentasi adalah daftar/rangkuman transaksi penawaran, bukan riwayat harga per pasangan pelanggan×barang — klaim dibatasi pada batas itu | Spec ini: riwayat per kejadian penawaran + penawaran terakhir turunan per ember status |
+| Penanda sumber harga baris penawaran | Tidak diklaim dari sumber di atas | Tidak diklaim dari sumber di atas | TIDAK ADA tersimpan (BR-QPH-07) — permukaan dilarang mengarangnya |
+| Auto-fill harga dari riwayat ke penawaran baru | Tidak diklaim dari sumber di atas | Tidak diklaim dari sumber di atas | DITOLAK tahap 1 (BR-QPH-09) |
+
+Label: Accurate/Zahir = BENCHMARK terbatas pada URL resmi di atas; ketiadaan fitur bernama ditulis "tidak ditemukan/belum terverifikasi", bukan klaim tidak ada.
+
+### 7. Acceptance criteria + edge cases (draf falsifikasi untuk QA; cabut penjaga → MERAH)
+
+Backend (builder+loader):
+- AC-QPH-B1: penawaran `deletedAt` terisi dengan unitPrice berapa pun TIDAK mengubah keluaran; satu pun bocor = MERAH.
+- AC-QPH-B2: setiap baris membawa label ember sesuai status tersimpan saat baca (draft/sent/accepted/approved/rejected/converted + turunan kedaluwarsa); baris `rejected` atau `draft` tampil tanpa label ember atau berlabel harga pasar = MERAH.
+- AC-QPH-B3: penawaran `sent` dengan validUntil kemarin WIB terbaca KEDALUWARSA; validUntil hari ini WIB terbaca TERKIRIM (belum lewat); validUntil kosong tidak pernah kedaluwarsa. Menulis status `expired` ke DB demi ini = MERAH.
+- AC-QPH-B4: penawaran terakhir pasangan = baris tanggal terbaru persis termasuk seri tanggal sama (documentNo, lalu id); mengganti ke rata-rata/modus/mediana harus MERAH.
+- AC-QPH-B5: baris `itemId IS NULL` hanya di ember tanpa-barang; terpasang ke barang terdekat/deskripsi mirip = MERAH.
+- AC-QPH-B6: loader query massal anti-N+1 (quotation+seksi+baris+item), nol mutasi dokumen/harga/status; menulis Quotation/QuotationItem apa pun = MERAH. Menampilkan penanda sumber harga baris penawaran (kolom tidak ada) = MERAH.
+- AC-QPH-B7: status string asing di luar kosakata §4 tampil mentah tertanda tidak dikenal; dipetakan paksa ke ember terdekat = MERAH.
+
+Frontend:
+- AC-QPH-F1: angka/label/notice verbatim builder (BR-QPH-10); UI hitung rata-rata/diskon efektif/probabilitas sendiri = MERAH.
+- AC-QPH-F2: tanpa izin terpilih (Q-QPH-2) permukaan tertolak fail-closed di server pola laporan existing; harga penawaran bocor ke peran tanpa izin = MERAH.
+- AC-QPH-F3: label "harga berlaku"/"harga pasar"/"harga saat ini" untuk data penawaran = MERAH; tombol/aksi "pakai harga ini"/auto-fill ke form penawaran = MERAH; sebelum commit grep e2e selector penawaran/laporan terdampak.
+
+Edge cases:
+- EC-1: pelanggan sama ditawari barang sama di dua penawaran tanggal sama (seri documentNo lalu id quotation).
+- EC-2: penawaran direvisi (sent → draft, revisionNumber naik, baris diubah): baca sesudah revisi menampilkan baris+revisionNumber berjalan; harga revisi lama tidak tampil tahap 1 dan ketiadaannya tertanda (BR-QPH-11).
+- EC-3: penawaran `converted`: harga penawaran tampil di ember DIKONVERSI di sini, dan faktur turunannya (bila terbit) tampil di 028-S — dua baris itu fakta berbeda, tidak digabung, tidak saling menghapus.
+- EC-4: penawaran ditolak dengan alasan kalah "harga terlalu tinggi" (kamus F-2026-10-20-101): riwayat harga menampilkan ember DITOLAK; alasan kalah dibaca dari laporan hasil penawaran existing, tidak diduplikasi/diparse ulang di spec ini.
+- EC-5: qty desimal + uom berbeda antar kejadian penawaran: tidak dikonversi/dijumlahkan lintas uom tanpa label; qty kumulatif lintas uom dilarang.
+- EC-6: baris harga 0 (bonus/contoh) tampil 0 apa adanya tertanda, bukan dibuang atau dianggap kesalahan data.
+- EC-7: periode laporan memotong histori (penawaranTerakhir = terbaru DALAM periode terpilih, tertanda periode).
+- EC-8: penawaran `sent` kedaluwarsa lalu cron auto-reject berjalan di antara dua kali baca: baca pertama KEDALUWARSA (turunan), baca kedua DITOLAK (status tersimpan) — keduanya benar pada waktunya, bukan inkonsistensi builder.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-QPH-1 (Lead): permukaan — halaman laporan baru pasangan pelanggan×barang khusus penawaran vs tab di permukaan penawaran/laporan hasil penawaran existing; posisi report-catalog/navigasi. Syarat: nama permukaan wajib memuat kualifikasi "penawaran" (BR-QPH-01) dan tidak berdampingan menyatu dengan permukaan 028-S tanpa pemisah label.
+- Q-QPH-2 (Lead): izin permukaan tahap 1 — reuse `view_reports` (pola laporan 028-S/006-S) atau `view_quotations` (pola antrean 002-S, PUTUSAN Q-AQ-1). Harga penawaran per pelanggan = data komersial sensitif; pilih satu, tanpa key baru tahap 1 usulan.
+- Q-QPH-3 (Backend, fisik): baca baris berjalan saja (usulan tahap 1, BR-QPH-11) vs ikut membaca `QuotationHistory.dataSnapshot` untuk harga revisi lama. Snapshot berbentuk Json bebas — parser revisi lama hanya sah bila bentuk snapshot terbukti stabil di tes; tanpa bukti itu, tahap 1 baris berjalan saja.
+- Q-QPH-4 (Lead/Backend): batas periode maksimum + paginasi kejadian per pasangan tahap 1 (BR-QPH-12), termasuk apakah ember DRAFT tampil default atau di balik saringan eksplisit (draft belum terkirim — risiko dibaca sebagai harga yang pernah ditawarkan).
+- Q-QPH-5 (Lead): ember BARIS_TANPA_BARANG tampil penuh tahap 1 atau hanya hitungan ringkas (menghindari permukaan mengambang, pola Q-PH-4 di 028-S).
+- Accountant: TIDAK (fakta harga penawaran baca-saja; tidak mengubah jurnal/PPN/pengakuan/DP. Harga diterima yang menjadi DP/invoice mengikuti jalur existing, bukan spec ini).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-039-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-039-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder+loader riwayat harga penawaran pasangan (usulan `src/lib/reports/quotation-price-history.ts` + `-data.ts`, nama final Backend) | Backend | Q-QPH-2/3/4 | — |
+| (turunan) permukaan konsumen verbatim + notice BR-QPH-10 | Frontend | kontrak Backend + Q-QPH-1/5 | — |
+| (turunan) falsifikasi AC-QPH-B1..B7 + AC-QPH-F1..F3 + EC-1..8 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-QPH-1/2/4/5 → Backend builder (Q-QPH-3 fisik) → Frontend konsumen → QA falsifikasi. Effort usulan: builder M (query massal 3 lapis quotation→seksi→baris + turunan kedaluwarsa), UI S-M. Risiko: riwayat penawaran dibaca sebagai harga transaksi/pasar — mitigasi BR-QPH-01/02/10 (nama, ember, notice); draft dibaca sebagai harga yang pernah sampai ke pelanggan — mitigasi label DRAFT — BELUM TERKIRIM + Q-QPH-4; harga revisi lama hilang diam-diam — mitigasi BR-QPH-11 penanda revisi berjalan.
+
+### Yang TIDAK diusulkan run ini
+
+- Menggabungkan riwayat penawaran ini dengan riwayat harga faktur 028-S dalam satu permukaan/builder/label: objek dan makna harga berbeda (BR-QPH-01); penggabungan tanpa kualifikasi = temuan cacat, bukan penyederhanaan.
+- Auto-fill/rekomendasi harga penawaran dari riwayat (harga terakhir/dominan ditawarkan): ditolak BR-QPH-09 — mengubah perilaku penyusunan harga = spec terpisah sesudah riwayat terbukti benar, mengikuti penolakan yang sama di 028-S.
+- Probabilitas penerimaan, skor peluang, atau rata-rata harga penawaran sebagai "harga acuan": angka karangan dari data penawaran mentah (BR-QPH-05/06).
+- Membaca/mem-parsing snapshot revisi lama `QuotationHistory.dataSnapshot` tahap 1 tanpa bukti stabilitas bentuk (Q-QPH-3); menulis status `expired` tersimpan (BR-QPH-04); kolom sumber harga baris penawaran (tidak ada datanya, BR-QPH-07).
+- Mengubah perilaku masa berlaku daftar harga (001-S), antrean diterima (002-S), atau paparan diskon (006-S): spec ini hanya membaca QuotationItem; permukaan saudara tidak disentuh.
+
+F-2026-10-25-039-S — Riwayat harga penawaran per pelanggan×barang (QuotationItem). Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-QPH-1/2/4/5 + fisik Backend Q-QPH-3. Pemilik usulan: Business (spec), Lead (putusan permukaan/izin/batas), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
+
+---
+
+## USULAN BUSINESS 2026-10-25 — F-2026-10-25-040-S: paket usulan angka Q-SLA135-1/Q-SLA135-2 (SLA tiket CRM) + Q-CD-1 (duplikat pelanggan: peringatan vs blokir) untuk putusan Lead
+
+> **Slot**: F-2026-10-25-040-S. Diperiksa bentrok 2026-10-25 19:56 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-040` di backlog+board origin/main = 0; ID terpakai tanggal ini 001-S..039-S (038-S PR #889, 039-S PR #891 OPEN). ID 040 bebas. Kartu t_3e8b46a2.
+> **Sifat dokumen**: USULAN untuk diputus Lead — BUKAN vonis, BUKAN perubahan aturan. Dokumen saja; tanpa kode/schema/migrasi. Angka pajak/uang tidak disentuh (bukan domain butir ini; tidak ada angka statutori di sini).
+> **Koreksi jujur atas premis kartu**: kedua butir BUKAN tanpa usulan sama sekali. Verifikasi live run ini: (1) BR-CRM-01 di F-2026-10-24-135-S sudah memuat tabel angka USULAN + jam acuan; yang belum ada = argumentasi per angka + jawaban Q-SLA135-2. (2) F-2026-10-25-003-S BR-CD-04 sudah mengusulkan peringatan tahap 1 + kalimat rekomendasi NPWP-persis-boleh-blokir; yang belum ada = rincian dampak per kunci. Blok ini melengkapi keduanya tanpa menulis ulang spec induk; bila Lead memutus, putusan menempel ke Q-SLA135-1/2 dan Q-CD-1 di spec masing-masing.
+
+### A. Q-SLA135-1 + Q-SLA135-2 — target SLA tiket CRM per prioritas
+
+Fakta terverifikasi (TERVERIFIKASI-KODE, origin/main 1b147d3c):
+- Prioritas tiket existing hanya `low|medium|high` (default `medium`); `firstResponseAt` terisi saat tiket pertama keluar dari `open` (BUKAN balasan pertama — definisi terukur BR-CRM-03, spec 135-S). Angka SLA akan mengukur perilaku existing apa adanya sampai Q-SLA135-4 diputus terpisah.
+- Model `Holiday` (schema :3301) dan `WorkSchedule` (`workDays` CSV 0=Minggu..6=Sabtu, kosong = Senin–Jumat; `startTime`/`endTime` String; terhubung Employee/Department, schema :3341) SUDAH ADA. Pola baca jadwal existing: `work-center-load-plan.ts` (disebut spec 135-S).
+- Benchmark resmi diakses ulang 2026-10-25: Freshdesk SLA Policies — target respons/resolusi per prioritas dihitung jam kerja ATAU jam kalender pilihan admin: https://support.freshdesk.com/support/solutions/articles/37626-understanding-sla-policies . Contoh konfigurasi lapangan Freshdesk yang terpublikasi (terverifikasi 2026-10-25 di https://skladon.freshdesk.com/support/solutions/articles/47001302601-pravidla-pro-nastavov%C3%A1n%C3%AD-priorit-ticket%C5%AF-rules-for-setting-ticket-priorities): low respons ≤8 jam kerja / resolusi ≤64 jam kerja, medium ≤6 / ≤32, high ≤2 / ≤12, urgent ≤1 / ≤6 (jam kerja). Rentang ini acuan nyata satu operator logistik — bukan angka baku vendor — dan kekuatannya di sini: usul spec 135-S (respons/resolusi jam kerja: high 2/9, medium 4/27, low 8/45) dibandingkan contoh ini: respons spec SEJAJAR-LEBIH KETAT (2=2, 4<6, 8=8) dan resolusi spec LEBIH KETAT SEMUA (9<12, 27<32, 45<64). Artinya angka usul bukan tebakan bebas dan bukan salinan benchmark: ia duduk di ujung ketat pita contoh lapangan, karena tiket ISF operasional bengkel ditangani tim kecil yang sama — janji yang lebih ketat lebih mudah dibuktikan pelanggarannya daripada janji longgar yang tidak pernah memicu tindakan.
+
+USULAN Business (mempertahankan tabel BR-CRM-01 apa adanya, dengan alasan per baris):
+
+| Priority | Respons pertama (USULAN) | Resolusi (USULAN) | Alasan |
+|---|---|---|---|
+| high | 2 jam kerja | 1 hari kerja (9 jam kerja) | Tepi ketat rentang benchmark (high ≤2 jam kerja); tiket high di bengkel = pelanggan menunggu kendaraan — respons di hari yang sama adalah janji minimal yang bisa diucapkan admin |
+| medium | 4 jam kerja (setengah hari kerja) | 3 hari kerja | Setengah hari memberi ruang antrean pagi; resolusi 3 hari di bawah contoh benchmark medium (±4 hari) karena tiket ISF operasional bengkel, bukan tiket produk SaaS |
+| low | 8 jam kerja (1 hari kerja) | 5 hari kerja (1 minggu kerja) | Persis contoh benchmark low ≤8 jam kerja; 5 hari = satu siklus minggu kerja penuh, mudah diingat operator |
+
+- Jam kerja acuan (Q-SLA135-2) — USULAN: konstanta Senin–Jumat 08:00–17:00 WIB (9 jam/hari) untuk tahap 1, dikurangi tanggal `Holiday`. Alasan menolak WorkSchedule per departemen tahap 1: tiket CRM tidak terikat departemen pelaksana tunggal (assignedTo = karyawan, tiket bisa lintas fungsi), dan memilih jadwal siapa yang berlaku akan menambah satu keputusan fisik sebelum angka pertama terbukti dipakai. Tanggal `Holiday` tetap dibaca (sudah ada modelnya), jadi hari libur nasional tidak menggerus SLA secara diam-diam.
+- Ambang peringatan "mendekati" 25% sisa (BR-CRM-03, USULAN): pertahankan — satu ambang tunggal, mudah dijelaskan ("sisa seperempat waktu").
+
+Dampak operasional bila diputus:
+- Angka di atas menjadi konstanta builder (bukan konfigurasi per tiket) per spec 135-S; mengubahnya kelak = ubah spec + tes, bukan ubah master. Itu disengaja: SLA adalah janji layanan, bukan preferensi layar.
+- Konsekuensi jujur: karena `firstResponseAt` berarti "keluar dari open", tiket yang langsung di-in_progress tanpa balasan ke pelanggan terhitung "sudah direspons". Lead memutus angka ini dengan tahu definisi itu; memperbaiki definisi = Q-SLA135-4 terpisah, jangan dicampur ke putusan angka.
+- Bila bengkel ternyata buka Sabtu (fakta lapangan di luar bukti kode run ini), konstanta Senin–Jumat membuat tiket Jumat sore terlihat lebih longgar dari janji lisan ke pelanggan. Mitigasi tahap 1 tanpa membuka WorkSchedule: putusan Lead mencantumkan eksplisit "Sabtu bukan hari kerja SLA" ATAU mengoreksi konstanta jadi Senin–Sabtu sebelum builder dibangun — satu kalimat di putusan, bukan tebakan Business.
+
+Rekomendasi Business ke Lead (satu paragraf): SAHKAN tabel di atas + konstanta Senin–Jumat 08:00–17:00 dipotong Holiday sebagai Q-SLA135-1/2, dengan catatan eksplisit soal Sabtu sesuai fakta operasional bengkel; tingkat `urgent` tetap TIDAK (Q-SLA135-3 default spec), dan definisi firstResponseAt dibiarkan apa adanya tahap ini (Q-SLA135-4 terpisah).
+
+### B. Q-CD-1 — duplikat pelanggan: peringatan vs blokir keras
+
+Fakta terverifikasi (TERVERIFIKASI-KODE, origin/main 1b147d3c): tidak ada unique pada name/phone/taxId/email Customer; tahap 1 kandidat duplikat pelanggan SUDAH LIVE di kode (bukan hanya spec): `findCustomerDuplicateCandidates` di `src/lib/services/customer-duplicate.service.ts:206` dipanggil `createCustomer` SESUDAH create di `src/actions/master.actions.ts` — hasil simpan selalu sukses, kandidat diteruskan sebagai `duplicateWarning` di respons. Pencocokan di service itu: `npwp` (normalisasi digit + drop nilai kosong) lebih dulu, lalu `phone` (normalisasi digit dengan awalan 62/0 disamakan), lalu nama+email (`name_secondary`). `customer-duplicate.service.test.ts` existing mengujinya. Baru-baru ini reuse quick-add nama+telepon persis juga dipaksa terucap (`reused:true` + `reusedCustomer` + pesan reuse, `master.actions.ts` `createCustomer`, komentar `F-2026-10-25-003-S BR-CD-05`).
+
+Implikasi langsung untuk Q-CD-1 (ini yang membuat putusan jadi kecil): yang BELUM ada di kode = satu-satunya pengecualian NPWP-persis. Semua kunci lain sudah berperilaku peringatan persis seperti usul spec 003-S tahap 1. Jadi Lead TIDAK lagi memutus "peringatan vs blokir" dari nol — hanya memutus apakah SATU kunci (NPWP ternormalisasi sama persis dan terisi dua-duanya) dinaikkan dari peringatan ke blokir. Biaya implementasi pengecualian itu = gerbang sebelum `prisma.customer.create` di `createCustomer`/`updateCustomer` untuk kunci `npwp` saja, bukan pembangunan ulang mesin kandidat; mesinnya sudah ada dan teruji.
+
+USULAN Business (bertahap per kekuatan kunci — memperkuat rekomendasi satu kalimat di 003-S menjadi tabel yang bisa diputus):
+
+| Kekuatan kecocokan | Perilaku diusulkan | Alasan + dampak |
+|---|---|---|
+| NPWP ternormalisasi sama persis DAN terisi (dua-duanya) | BLOKIR simpan baru; arahkan operator memakai pelanggan existing atau mengoreksi NPWP | NPWP adalah identitas pajak: dua master ber-NPWP sama akan membelah histori faktur pajak satu entitas — kerusakan akuntansi/pajak, bukan sekadar kotor data. Dampak blokir: operator wajib menyelesaikan di tempat; pengecualian sah (NPWP sama dipakai cabang berbeda) diselesaikan lewat koreksi data oleh pemegang edit, bukan dengan membiarkan master ketiga lahir. Risiko salah-blokir rendah karena NPWP ternormalisasi kosong (EC-3 003-S) tidak memicu |
+| Telepon ternormalisasi sama | PERINGATAN (simpan tetap jalan) | Nomor sentral kantor/dealer sah dipakai banyak entitas (EC-2 003-S). Blokir di sini mengunci input sah di lapangan saat pelanggan mendesak — operator akan mengakali dengan mengubah digit, data jadi lebih kotor dari duplikatnya |
+| Nama ternormalisasi sama + email sama | PERINGATAN | Email bersama (admin kantor pelanggan) sah berganda; nama PT/CV generik sah berganda (BR-CD-03) |
+| Nama sama sendirian | BUKAN kandidat (tetap) | Menjaga regresi nama generik; menaikkan ini ke peringatan akan membanjiri operator dengan peringatan palsu sampai peringatan diabaikan |
+
+Dampak operasional per pilihan ekstrem (supaya kontrasnya terlihat):
+- Semua-peringatan (termasuk NPWP): nol gesekan input, tetapi duplikat NPWP — yang paling mahal diperbaiki (menyentuh faktur pajak terbit) — lahir tanpa satu pun hambatan; daftar kandidat 003-S menjadi satu-satunya pertahanan, dibaca belakangan.
+- Semua-blokir: data paling bersih di atas kertas, tetapi setiap kecocokan telepon sentral/nama generik menjadi jalan buntu kasir/admin; perilaku lapangan yang bisa diprediksi = operator memvariasikan ejaan nama/digit telepon agar lolos — duplikat tetap lahir, sekarang dengan data sengaja dikotori dan tidak lagi tertangkap kunci normalisasi.
+
+Rekomendasi Business ke Lead (satu paragraf): PUTUSKAN model bertahap di atas — NPWP persis = blokir, kunci lain = peringatan, nama sendirian = bukan kandidat. Ini mempertahankan tahap 1 003-S untuk semua kunci kecuali satu pengecualian NPWP, dan pengecualian itu yang justru melindungi histori pajak; karena mesin kandidat sudah LIVE, putusan "blokir NPWP saja" adalah perubahan satu titik gerbang, bukan proyek baru. Accountant TIDAK diminta di butir ini (kebijakan perilaku input master, bukan perlakuan pajak); Accountant dipanggil hanya bila kelak merge master diangkat (Q-CD-4 003-S).
+
+### C. Yang TIDAK diusulkan blok ini
+
+- Mengubah angka/tabel di spec 135-S atau 003-S sebelum Lead memutus (blok ini usulan pendamping, bukan revisi diam-diam).
+- Tingkat prioritas `urgent`, pemicu firstResponseAt baru, WorkSchedule per departemen sebagai sumber jam SLA tahap 1, merge master pelanggan, validasi format NPWP online (keluarga identitas pajak, vonis Accountant bila diangkat).
+
+F-2026-10-25-040-S — Paket usulan Q-SLA135-1/2 + Q-CD-1. Status: USULAN SELESAI run ini; menunggu putusan Lead (satu paragraf per butir cukup). Pemilik: Business (usulan), Lead (putusan di Q-SLA135-1/2 spec 135-S dan Q-CD-1 spec 003-S). Butuh Accountant: TIDAK. Butuh kode di blok ini: TIDAK.
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-043-S: pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim (lanjutan eksplisit F-2026-10-25-038-S)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Lanjutan eksplisit dari bagian "Yang TIDAK diusulkan" F-2026-10-25-038-S: "Pengiriman via email — kanal + jejak berbeda, spec terpisah bila diminta". Spec ini mengambil HANYA jalur email manual lewat klien email staf (tautan `mailto:`) + jejak klik; pengiriman server-side (SMTP/API) TIDAK ada infrastrukturnya hari ini dan tetap di luar tahap 1 (lihat §0 + Q-SE-2). ID F-2026-10-25-043-S bebas terverifikasi run ini (2026-10-25 21:06 WIB): grep `F-2026-10-25-043` di backlog + board `origin/main` (`fe281d46`) = 0; ID 042 sudah terpakai PR terbuka vonis Accountant F-2026-10-25-042-V (Q-ITX-1), jadi slot -S berikutnya yang bebas = 043. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` fe281d46) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Statement Pelanggan live penuh F-2026-10-21-032: builder murni `buildCustomerStatement` (`src/lib/reports/customer-statement.ts`), loader `loadCustomerStatement` (`src/lib/reports/customer-statement-data.ts`), halaman `src/app/(dashboard)/laporan/statement-pelanggan/[[...segments]]/page.tsx` digerbang `view_reports`, registry PDF `"statement-pelanggan"` (`src/lib/reports/report-registry.ts:983`). Loader memilih pelanggan `select: { id, name }` saja (`customer-statement-data.ts:78`) — email/telepon pelanggan TIDAK ikut dimuat halaman statement hari ini.
+- Master pelanggan punya kontak: `Customer.email String?` + `Customer.phone String?` (`prisma/schema.prisma` model Customer, `email`/`phone` sesudah `name`).
+- Jejak klik existing F-2026-10-21-036: `recordWhatsappLinkOpened` (`src/actions/whatsapp-log.actions.ts`) menulis ActivityLog `whatsapp_link_opened` metadata `{channel, event: "link_opened", surface}` TANPA alamat/nomor/isi pesan; penjaga sesi + permission lihat per jenis dokumen; kegagalan catat tidak pernah menggagalkan navigasi. Jenis terdaftar hari ini HANYA `WorkOrder`/`SalesInvoice`/`Quotation` (`WHATSAPP_DOC_TYPES` whatsapp-log.actions.ts:21) — statement BELUM terdaftar di kanal mana pun; perluasan statement untuk WA = wilayah 038-S B1, spec ini kanal emailnya.
+- Pola tombol tautan manual existing: `WhatsappButton` (`src/components/reports/whatsapp-button.tsx`) — tidak tampil bila URL null, klik mencatat jejak fire-and-forget tanpa menahan navigasi. Pola yang sama (bukan komponen yang sama) dipakai spec ini untuk email.
+- `logActivity` (`src/lib/services/activity-log.service.ts:10`) menelan error (tidak pernah melempar ke pemanggil); model `ActivityLog` (`prisma/schema.prisma:5385`) berjangkar `(modelType, modelId)` + `metadata` JSON teks.
+
+Gap terbukti (grep run ini):
+- Nol infrastruktur kirim email keluar: grep `nodemailer|createTransport|resend|@sendgrid|mailgun|smtp` di `src/` = 0 hit; `package.json` tanpa library email. Mengklaim "sistem mengirim email" hari ini = klaim palsu.
+- Nol tautan `mailto:` di `src/components`/`src/app`: tidak ada jalur email manual apa pun dari permukaan mana pun.
+- Alamat email pelanggan tidak pernah dimuat loader statement (select id+name saja), jadi tombol email tidak bisa lahir dari payload existing tanpa perluasan loader (fisik Q-SE-3 Backend).
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: admin/keuangan berizin `view_reports` di halaman Statement Pelanggan existing.
+
+1. Staf membuka statement satu pelanggan untuk satu periode (alur existing, tidak berubah).
+2. Bila pelanggan terpilih punya email yang lolos validasi bentuk dasar (§4 BR-SE-03), tampil tombol "Kirim Email" di kepala halaman/kartu statement dengan label jujur pendamping: tautan dibuka di aplikasi email staf; sistem tidak mengirim dan tidak tahu email benar-benar terkirim.
+3. Klik tombol: (a) jejak dibuka dicatat fire-and-forget untuk statement ini (aksi jejak baru kanal email, BR-SE-02); (b) klien email staf terbuka dengan subjek + badan ringkas ter-isi (isi dibatasi BR-SE-04).
+4. Staf meninjau alamat/subjek/isi di aplikasi email sendiri, boleh mengubah/membatalkan di sana, lalu menekan kirim secara manual. Sistem TIDAK mengklaim terkirim, TIDAK menunggu konfirmasi, TIDAK mengubah status dokumen/piutang apa pun.
+5. Jejak tampil kembali sebagai riwayat baca-saja di halaman statement yang sama: "Tautan Email dibuka — <waktu WIB> oleh <nama staf>" per klik, dihitung dari ActivityLog. Tidak ada status "terkirim/dibaca pelanggan" di mana pun.
+
+Dokumen masuk: statement existing (pelanggan + periode). Dokumen keluar: tautan `mailto:` ber-subjek/isi + baris jejak ActivityLog. Tanpa tulis finansial, tanpa jurnal, tanpa perubahan status faktur/piutang, tanpa lampiran berkas (mailto tidak membawa lampiran dari sistem — BR-SE-08).
+
+### 2. Role/permission matrix (key nyata katalog `src/lib/auth/module-catalog.generated.ts`)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat statement (prasyarat semua aksi spec ini) | `view_reports` (:446) | TERVERIFIKASI-KODE |
+| Klik "Kirim Email" statement | reuse `view_reports` — halaman sudah digerbang key ini; penjaga jejak memeriksa key yang sama (konsisten usulan 038-S Q-SW-1) | USULAN (Q-SE-1 Lead bila minta key khusus) |
+| Lihat riwayat jejak email di halaman statement | `view_reports` (permukaan sama) | USULAN |
+| Key izin baru | TIDAK diusulkan tahap 1 | USULAN |
+| Kirim massal / terjadwal / via server (SMTP/API) | TIDAK ada — di luar spec (belum ada infrastruktur) | — |
+
+Catatan penjaga: mengikuti pola `recordWhatsappLinkOpened` yang memeriksa permission LIHAT objek induknya; untuk statement objek induknya laporan pelanggan, jadi key konsisten = `view_reports`, bukan `view_customers` (:126, melekat ke master pelanggan). Memilih key lain = Q-SE-1.
+
+### 3. Status-transition matrix
+
+Tidak ada status tersimpan baru dan tidak ada transisi dokumen: klik email bukan peristiwa bisnis atas piutang. Satu-satunya "keadaan" adalah jejak turunan baca dari ActivityLog:
+
+| Keadaan tampil | Pemicu | Penjaga |
+|---|---|---|
+| Belum pernah dibuka | belum ada baris jejak email untuk pelanggan ini | — |
+| Tautan dibuka (per klik, bisa berulang) | klik tombol oleh staf berizin | sesi + `view_reports`; catat gagal ≠ batalkan navigasi |
+| Terkirim / dibaca pelanggan | TIDAK ADA — dilarang dikarang dari klik mailto | BR-SE-01 |
+
+Setiap klik = satu baris jejak baru (riwayat, bukan penimpaan), mengikuti pola F-036.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-SE-01 | Label jujur mutlak: UI, jejak, dan laporan hanya boleh menyebut "Tautan Email dibuka". Klaim "terkirim/terbaca/sudah dihubungi" dari klik mailto DILARANG di semua permukaan. | TERVERIFIKASI-KODE (warisan F-036) | whatsapp-log.actions.ts kepala kontrak; whatsapp-button.tsx |
+| BR-SE-02 | Jejak statement kanal email memakai jalur ActivityLog existing, diperluas SATU aksi jejak email: modelType berjangkar pelanggan, modelId = ID pelanggan, metadata `{channel: "email", event: "link_opened", surface, periodStart, periodEnd}` (tanggal periode, bukan PII). Alamat email, subjek, dan isi pesan TIDAK masuk metadata/deskripsi log. Nama aksi final (mis. `email_link_opened` vs kanal di `whatsapp_link_opened`) = Q-SE-3 fisik Backend; mencampur kanal email ke aksi bernama whatsapp DILARANG (label log harus jujur per kanal). | USULAN | pola whatsapp-log.actions.ts; ActivityLog schema.prisma:5385 |
+| BR-SE-03 | Tombol hanya tampil bila pelanggan terpilih ada DAN alamat emailnya lolos validasi bentuk dasar (satu `@`, domain bertitik, tanpa spasi). Email kosong/format tidak valid = tombol tidak tampil sama sekali (bukan tampil-mati), mengikuti perilaku tombol WA existing. Sistem tidak menebak alamat dari contactPerson/alamat pos. Fungsi validasi final = Q-SE-3 (reuse validator existing bila ada; jangan karang regex baru tanpa bukti). | TERVERIFIKASI-KODE (pola) + USULAN (penerapan) | Customer.email schema; whatsapp-button.tsx pola sembunyi |
+| BR-SE-04 | Subjek + isi email statement dibatasi: subjek memuat label periode; isi memuat salam + nama pelanggan + label periode + saldo akhir periode sesuai payload statement + kalimat penutup netral. DILARANG: angka denda (BR-ST-07 025-S), rincian per faktur di badan pesan, tautan unduh karangan, janji/ancaman penagihan. PDF statement TIDAK bisa dilampirkan lewat mailto tahap ini — pesan menyatakan statement dapat diminta/dicetak, bukan berpura-pura melampirkan. | USULAN | BR-ST-07 025-S; BR-SW-04 038-S pola |
+| BR-SE-05 | Angka di pesan = payload server statement yang sama dengan layar/PDF (saldo akhir + periode), tidak dihitung ulang di komponen/klien. Periode di pesan = periode statement yang sedang dibuka staf, bukan "bulan ini" karangan. | USULAN | BR-ST-06/BR-ST-08 025-S |
+| BR-SE-06 | Kegagalan mencatat jejak tidak pernah menahan/membatalkan pembukaan klien email (fire-and-forget, pola existing). Sebaliknya tanpa sesi/izin, jejak ditolak tanpa log — dan karena tombol hanya lahir di halaman bergerbang `view_reports`, permukaan tanpa izin memang tidak pernah melihat tombol. | TERVERIFIKASI-KODE (pola) | whatsapp-log.actions.ts; activity-log.service.ts:10 |
+| BR-SE-07 | Klik berulang sah dan tercatat berulang (staf boleh membuka ulang); riwayat menampilkan semua klik terbaru-dulu. Tidak ada dedup/idempotency yang menghapus riwayat klik — jejak adalah catatan percobaan buka, bukan dokumen finansial. | USULAN | pola riwayat F-036 |
+| BR-SE-08 | Tanpa pengiriman server-side tahap ini: tidak ada SMTP/API/template terpusat/antrean/jadwal/kirim massal (infrastruktur email keluar belum ada — §0). Satu klik = satu pelanggan = satu periode. Membuka pengiriman server-side = spec terpisah sesudah Q-SE-2 diputus (pilihan penyedia + kredensial + jejak kirim server adalah keputusan berbeda, bukan perluasan diam-diam tombol ini). | TERVERIFIKASI-KODE (gap §0) | grep email-infra run ini |
+| BR-SE-09 | Cakupan pelanggan: pelanggan nonaktif/terhapus mengikuti pilihan halaman existing (daftar aktif); statement pelanggan tanpa mutasi periode tetap boleh dibuka tautannya (saldo awal/akhir tetap bermakna) — tombol mengikuti keberadaan alamat valid, bukan keberadaan baris mutasi. | USULAN | halaman statement select isActive |
+| BR-SE-10 | Perluasan jejak email TIDAK mengubah perilaku jejak WA existing (tiga jenis dokumen + statement WA 038-S bila sudah lahir): label, permission penjaga, dan metadata semuanya byte-sama. Kanal WA dan email tampil sebagai riwayat terpisah berlabel kanal masing-masing, tidak digabung satu hitungan "pernah dihubungi". | USULAN (kendala regresi) | WHATSAPP_DOC_TYPES existing; 038-S |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Kirim dokumen penjualan via email dari dalam sistem | Ada — Email Faktur Pajak: kirim bukti faktur pajak ke email pelanggan dari dalam Accurate (alamat dari master pelanggan) https://help.accurate.id/product/accurate-online/fitur-aol/smartlink-tax/email-faktur-pajak/email-faktur/ ; penawaran penjualan juga bisa dikirim via email dari tombol cetak https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/ | Ada — kirim faktur via email dari daftar transaksi https://zahir.info/index.php?/Knowledgebase/List/Index/84/tips--solusi ; Zahir Online: "Buat & Kirim invoice ... via email hingga whatsapp" https://zahir.co.id/produk/zahir-online/ | Belum ada jalur email apa pun (grep §0); WA manual per dokumen live (F-27(a)+F-036) |
+| Laporan piutang per pelanggan incl. surat tagihan | Ada — Pernyataan Piutang (rujuk 025-S) | Ada — Surat Tagihan Untuk Pelanggan di Laporan Piutang Usaha https://zahir.info/index.php?/Knowledgebase/List/Index/84/tips--solusi | Statement per pelanggan live (F-032); surat tagihan formal terpisah tidak diusulkan spec ini |
+| Jejak bahwa staf membuka jalur hubungi pelanggan | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada untuk WA 3 jenis dokumen (F-036); statement WA = 038-S; statement email = gap spec ini |
+
+Catatan benchmark: kirim email Accurate/Zahir berjalan server-side di dalam layanannya; ISF tahap ini sengaja TIDAK menyamai klaim itu — yang dibangun hanya jalur manual berjejak jujur (BR-SE-01/08), karena infrastruktur kirim server belum ada.
+
+### 6. Acceptance criteria + edge cases (falsifikasi — untuk Backend/Frontend/QA)
+
+- AC-SE-B1: klik tombol email statement menulis tepat satu ActivityLog jejak email berjangkar pelanggan dengan metadata berisi periode + kanal email dan TANPA alamat email/subjek/isi pesan/nama staf penerima; grep/metadata memuat alamat email = MERAH.
+- AC-SE-B2: pemanggil tanpa sesi atau tanpa `view_reports` ditolak `{success:false}` dan tidak ada baris log lahir; mencatat diam-diam = MERAH.
+- AC-SE-B3: jejak WA existing tidak berubah: klik WA WO/Faktur/Penawaran (dan statement WA bila 038-B1 sudah lahir) tetap memakai aksi/metadata semula; kanal email tertulis ke aksi bernama whatsapp atau sebaliknya = MERAH.
+- AC-SE-B4: kegagalan tulis log (DB error disimulasikan) tetap membuka klien email staf — aksi pencatat tidak melempar ke pemanggil; navigasi tertahan karena log = MERAH.
+- AC-SE-B5: dua klik = dua baris jejak (urutan waktu utuh); dedup yang menelan klik kedua = MERAH.
+- AC-SE-F1: pelanggan tanpa email / email tidak valid bentuk dasar → tombol tidak tampil; tombol tampil dengan href mailto mati = MERAH.
+- AC-SE-F2: subjek + isi memuat nama pelanggan + label periode + saldo akhir persis payload server; memuat angka denda, rincian faktur karangan, alamat karangan, atau saldo hitung-ulang klien = MERAH.
+- AC-SE-F3: tidak ada teks "terkirim/terbaca/sudah dihubungi" di tombol, toast, atau riwayat; label selain "Tautan Email dibuka" untuk jejak = MERAH.
+- AC-SE-F4: riwayat jejak email di halaman statement hanya tampil untuk pemegang `view_reports`, membaca ActivityLog apa adanya (waktu WIB + nama staf + label kanal), dan terpisah dari riwayat WA; UI menggabung kanal jadi satu klaim hubungi = MERAH.
+
+Edge cases:
+- EC-SE-1: email berformat huruf besar/spasi pinggir — normalisasi mengikuti validator final Q-SE-3; di luar bentuk dasar tombol hilang, bukan ditebak/diperbaiki diam-diam.
+- EC-SE-2: pelanggan diganti di pemilih sesudah halaman termuat — tombol dan pesan mengikuti pelanggan+periode yang sedang tampil, bukan yang sebelumnya.
+- EC-SE-3: statement periode lampau — pesan menyebut periode lampau itu persis (BR-SE-05); jejak mencatat periode yang sama.
+- EC-SE-4: saldo akhir nol/negatif (kelebihan bayar) — pesan tetap netral tanpa kata "tagihan" yang menekan; wording final = Q-SE-4 (selaras Q-SW-3 038-S).
+- EC-SE-5: staf membuka klien email lalu batal mengirim di sana — sistem tetap hanya punya jejak "dibuka"; tidak ada koreksi status apa pun (konsekuensi jujur BR-SE-01).
+- EC-SE-6: alamat email sangat panjang / memuat karakter yang memecah URL — href mailto harus ter-encode aman; tombol yang menghasilkan tautan rusak = MERAH (pola encodeURIComponent pola WA).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-043-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-043-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-043-B1 | Kontrak jejak email statement: aksi jejak kanal email berjangkar pelanggan (metadata periode tanpa PII, penjaga `view_reports` per Q-SE-1; nama aksi fisik Q-SE-3); builder subjek+isi email statement murni; loader memuat email pelanggan untuk halaman statement; tes AC-SE-B1..B5 | Backend | Q-SE-1 Lead + Q-SE-3 fisik |
+| F-2026-10-25-043-F1 | Tombol "Kirim Email" + label jujur + riwayat jejak email (terpisah dari WA) di halaman/kartu statement; teks verbatim payload server; AC-SE-F1..F4; grep e2e laporan sebelum commit | Frontend | Kontrak B1 |
+| F-2026-10-25-043-Q1 | Falsifikasi AC-SE-B1..B5 + F1..F4 atas head persis (cabut penjaga MERAH, PII alamat masuk log MERAH, klaim terkirim MERAH, kanal tercampur MERAH) | QA | B1+F1 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SE-1 (Lead, perilaku inti): key penjaga klik email statement — reuse `view_reports` (rekomendasi Business, konsisten 038-S Q-SW-1) atau key khusus baru? Putusan selaras dengan Q-SW-1 supaya dua kanal statement tidak berpenjaga beda tanpa alasan. Tanpa putusan ini Backend tidak mulai.
+- Q-SE-2 (Lead, arah tahap berikutnya — TIDAK menghalangi tahap 1): apakah pengiriman email server-side (SMTP/API) akan dibuka sebagai spec terpisah? Bila ya: pilihan penyedia, pemilik kredensial, dan jejak kirim server diputus di spec itu; spec ini tidak menyiapkan abstraksi untuknya.
+- Q-SE-3 (Backend, fisik): nama aksi jejak email + bentuk perluasannya (aksi baru vs generalisasi pencatat tautan per kanal) + validator bentuk email yang dipakai ulang + cara loader halaman statement memuat `email` pelanggan terpilih tanpa mengubah payload builder statement.
+- Q-SE-4 (Lead): wording pesan untuk saldo nol/negatif (EC-SE-4) — kalimat netral final disahkan Lead, selaras Q-SW-3; Business tidak mengarang nada penagihan.
+- Accountant: TIDAK diminta tahap ini (tanpa uang/pajak/jurnal/denda baru; BR-ST-07 tetap menahan angka denda — membuka denda di pesan, pengiriman massal terjadwal, atau kirim server-side = vonis Accountant + putusan Lead baru, spec terpisah).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-043-S)
+
+- Pengiriman email server-side (SMTP/API/gateway), antrean kirim, jadwal/berkala, kirim massal ke banyak pelanggan, template pesan terpusat yang bisa diedit admin.
+- Klaim status terkirim/dibaca/bounce, tanda terima pelanggan, atau perubahan status piutang akibat pengiriman.
+- Lampiran PDF statement lewat mailto (mailto tidak membawa lampiran berkas dari sistem; menjanjikannya = klaim palsu).
+- Surat tagihan formal ala Zahir sebagai dokumen tersendiri; angka denda/penalti di pesan maupun statement (BR-ST-07).
+- Kanal WA statement (wilayah 038-S), kanal email untuk dokumen lain (WO/faktur/penawaran) — perluasan per dokumen = keputusan terpisah sesudah pola statement terbukti.
+
+F-2026-10-25-043-S — Pengiriman Statement Pelanggan via email manual (mailto) + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SE-1/Q-SE-4 + fisik Backend Q-SE-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-044-S: rekap kehadiran per karyawan per periode (read-model baca-saja di atas Attendance existing)
+
+> **Slot**: F-2026-10-25-044-S. Diperiksa bentrok 2026-10-25 21:29 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-044` di backlog origin/main = 0; ID 2026-10-25 terpakai di main sampai 038-S (039-S/040-S/041-S di PR terbuka #901/#898, 042-V vonis Accountant PR #902, 043-S PR #903). `-044-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR** — bukan F-ID lama. Bukan duplikat F-2026-10-25-013-S (saldo cuti — hak cuti tahunan), bukan F-2026-10-25-016-S (rekap lembur per karyawan — jam `OvertimeRequest`, sudah live halaman `/sdm/lembur/rekap`), bukan F-2026-10-25-010-S (pengajuan koreksi absensi — jalur tulis persetujuan). Objek spec ini: agregat FAKTA kehadiran dari `Attendance` per karyawan per periode. Dokumen saja; tanpa kode/schema/migrasi.
+
+### 0. Ringkasan putusan yang diminta
+
+HR dan kepala bengkel menjawab pertanyaan berulang tiap tutup periode: "karyawan ini hadir berapa hari bulan ini, berapa izin/sakit/alpa, berapa menit terlambat?" Hari ini satu-satunya agregat kehadiran adalah `calculateAttendanceSummary` — dan ia hanya hidup di dalam hitung payroll per karyawan terpilih, tidak pernah tampil sebagai rekap. Di luar itu hanya daftar transaksional `/sdm/absensi` baris per baris. Akibat nyata: keterlambatan dan alpa terlihat hanya sesudah slip payroll terbit (sebagai potongan), bukan sebagai fakta operasional yang bisa ditindak sebelum periode tutup. Spec ini membekukan: (A) builder baca-saja agregat kehadiran per karyawan per periode dari `Attendance` + cuti approved existing, (B) permukaan rekap di area SDM existing sejajar rekap lembur, (C) batas tegas fakta kehadiran (milik spec ini) vs angka potongan uang (wilayah payroll/Accountant — rekap tidak menghitung, tidak menampilkan nominal potongan). Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya), payroll (konsumen hilir terpisah — bukan konsumen rekap ini).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin membuka permukaan rekap kehadiran, memilih periode (rentang tanggal/bulan), opsional filter departemen.
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `Attendance` + `LeaveRequest` approved dalam scope+periode, dan builder murni mengelompokkan per karyawan: hari kerja terjadwal, hari hadir, hari cuti/izin, hari sakit, hari alpa tercatat, hari tanpa rekod di hari kerja, jumlah kejadian terlambat, total `lateMinutes`, total `overtimeMinutes` tercatat — semua dari kolom existing, tanpa tarif/potongan apa pun.
+3. Halaman menampilkan baris per karyawan + total (penjumlahan dari hitungan hari/menit, bukan rata-rata persen), dengan penanda karyawan tanpa jadwal terikat (definisi hari kerja tidak bisa diturunkan — tampil di ember terpisah, bukan ditebak).
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `Attendance` + `LeaveRequest` + `Employee` (departemen) + `WorkSchedule`/`Holiday`/`DepartmentHoliday` (definisi hari kerja); dokumen keluar = tampilan rekap + (tahap berikut, bila dibuka) CSV pola route ekspor existing.
+
+### 2. Inventarisasi terverifikasi (origin/main fe281d46, 2026-10-25 21:29 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Attendance` (`prisma/schema.prisma:3314-3339`): employeeId, date, checkIn/checkOut + koordinat GPS, status String default `present`, `overtimeMinutes` Int?, `overtimeApproved` Boolean, `lateMinutes` Int default 0, notes; unik `[employeeId, date]`; indeks employeeId/date/status.
+- Kosakata status existing: `AttendanceStatus` (`src/lib/constants/status.ts:66-74`) = present/absent/late/half_day/sick/leave/overtime; label tampil (`src/lib/utils/status-labels.ts:85-92`) = Hadir/Tidak Hadir/Terlambat/Setengah Hari/Sakit/Cuti/Lembur. Rekap memakai kosakata ini persis — status adalah String bebas di DB, nilai di luar kosakata tampil apa adanya (pola `labelFrom`), bukan dibuang.
+- Agregat payroll existing: `calculateAttendanceSummary(employeeId, startDate, endDate)` (`src/lib/services/attendance-summary.service.ts:17-158`) menghasilkan totalWorkingDays/workingDays/presentDays/leaveDays/holidayDays/absentDays + `dailyRate` + `absentDeduction`. Konsumennya HANYA jalur payroll di `src/actions/hrm.actions.ts:1324,2676,2879` (pratinjau/generate per karyawan terpilih). Tidak ada halaman, loader laporan, atau ekspor yang menampilkannya (grep konsumen di `src/app` + `src/components` = 0).
+- Definisi hari kerja di service yang sama (TERVERIFIKASI-KODE, jangan didefinisikan ulang): precedence jadwal karyawan > departemen > global; `workDays` kosong → fallback Senin–Jumat; hari libur = `Holiday` + `DepartmentHoliday` departemen karyawan; hari dievaluasi hanya sampai hari ini (`evalEnd`); hadir diturunkan dari baris `Attendance` dengan `checkIn != null` pada tanggal itu (`attendance-summary.service.ts:105`), cuti dari `LeaveRequest` status `approved` yang tumpang tindih periode; hari kerja tanpa hadir dan tanpa cuti = absentDays versi payroll.
+- Potongan uang payroll (di luar rekap): `lateDeduction = Σ lateMinutes × penaltyPerMinute` dan `absentDeduction` dari service di atas masuk slip (`hrm.actions.ts:1379-1401,1973-1983,2093-2094`). Angka-angka ini wilayah payroll; rekap TIDAK menghitung ulang dan TIDAK menampilkannya (BR-ATT-05).
+- Daftar transaksional existing: halaman `/sdm/absensi` (`src/app/(dashboard)/sdm/absensi/[[...segments]]/page.tsx`) — `requireAnyPermission` + `getHrScope`, filter tanggal/bulan di path, cari/status/paginasi per baris rekod. Menjawab "rekod mana", bukan "berapa hari per karyawan per periode". Navigasi: entri `Absensi` href `/sdm/absensi` izin `view_attendance` (`src/components/layout/navigation.ts:155`).
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:282-285`): `view_attendance`, `create_attendance`, `edit_attendance`, `manage_attendance` (resource `attendance`). Tidak ada izin laporan kehadiran terpisah. `deleteAttendance` menuntut `manage_attendance` (`src/lib/auth/action-perms.ts:88-90`) — katalog memang tanpa `delete_attendance`.
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:45-77`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1. `hrScopeWhere` berlaku untuk model ber-`employeeId` termasuk `Attendance` (disebut eksplisit di komentar `hr-scope.ts:81-84`).
+- Pola saudara yang dirujuk: rekap lembur (builder murni + loader + halaman `/sdm/lembur/rekap`, F-2026-10-25-016-S), rekap saldo cuti (`getAllLeaveBalances` `hrm.actions.ts:3433` + halaman `/sdm/cuti/saldo`), builder laporan tanpa nominal gaji (`employee-lifecycle.ts`).
+
+Belum ada / gap (bukti grep run ini):
+- Builder/loader rekap kehadiran: tidak ada berkas `attendance*` di `src/lib/reports/` (daftar berkas diverifikasi run ini); tidak ada agregasi kehadiran per karyawan/periode di permukaan mana pun selain service internal payroll di atas.
+- Pemisahan "alpa tercatat" (baris `Attendance` status absent) vs "tanpa rekod" (hari kerja terjadwal tanpa baris apa pun): service payroll menggabungkan keduanya ke `absentDays` (hari tanpa checkIn dan tanpa cuti approved dihitung absent) — untuk potongan itu keputusan payroll; untuk rekap operasional keduanya fakta berbeda yang wajib dipisah tampil (BR-ATT-03), karena tanpa rekod bisa berarti belum dicatat petugas, bukan karyawan alpa.
+- Rekap tidak boleh menyalin definisi hadir versi payroll mentah-mentah tanpa label: service menghitung hadir dari `checkIn != null` tanpa membaca kolom `status` — baris status `sick`/`leave`/`half_day` yang punya checkIn akan terhitung hadir oleh service. Untuk payroll itu perilaku berjalan (BUTUH-VONIS bila mau diubah); rekap membekukan definisinya sendiri secara eksplisit (BR-ATT-02) dan menyatakan selisihnya dari angka payroll, bukan menyamakan diam-diam.
+- Filter departemen agregat + total periode: halaman existing menyaring per baris; tidak ada pengelompokan per karyawan/departemen maupun total menit terlambat per periode.
+
+### 3. Business rules register (BR-ATT)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-ATT-01 | Satu-satunya sumber baris kehadiran = `Attendance` existing (+ `LeaveRequest` approved untuk hari cuti); rekap dilarang membuat tabel/rekod kehadiran kedua | TERVERIFIKASI-KODE | `prisma/schema.prisma:3314`; `attendance-summary.service.ts:98-118` |
+| BR-ATT-02 | Definisi ember rekap dibekukan eksplisit per kolom existing: hadir = baris dengan `checkIn != null` DAN status tidak termasuk sick/leave; sakit = status `sick`; cuti/izin = status `leave` ATAU tanggal tercakup `LeaveRequest` approved; alpa tercatat = status `absent`; terlambat = `lateMinutes > 0` (kejadian + total menit); setengah hari = status `half_day` dihitung ember sendiri, tidak dicampur hadir penuh. Selisih definisi dari service payroll (yang mengabaikan status) dinyatakan di label halaman | USULAN | kolom `schema.prisma:3322-3327`; kosakata `status.ts:66-74`; perilaku service `attendance-summary.service.ts:105,141-147` |
+| BR-ATT-03 | Hari kerja terjadwal tanpa baris `Attendance` dan tanpa cuti approved = ember "tanpa rekod", TIDAK digabung ke alpa tercatat dan TIDAK diberi label ketidakhadiran karyawan | USULAN | gap §2; service payroll menggabungkannya ke absentDays untuk potongan — perilaku itu tetap milik payroll, bukan label rekap |
+| BR-ATT-04 | Definisi hari kerja/libur mengikuti precedence existing persis (jadwal karyawan > departemen > global; workDays kosong → Senin–Jumat; Holiday + DepartmentHoliday; evaluasi hanya sampai hari ini). Karyawan tanpa jadwal terikat masuk ember "tanpa jadwal" dengan hari kerja tak diturunkan — fallback Senin–Jumat generik TIDAK diterapkan diam-diam ke orangnya | TERVERIFIKASI-KODE (precedence) + USULAN (ember tanpa jadwal) | `attendance-summary.service.ts:44-80,124-140`. Catatan: service existing justru menerapkan fallback Senin–Jumat bila workDays kosong — rekap mewajibkan penanda itu terlihat, bukan mengubah service |
+| BR-ATT-05 | Rekap TIDAK menghitung dan TIDAK menampilkan nominal uang apa pun: tanpa `dailyRate`, `absentDeduction`, `lateDeduction`, tanpa tarif per menit. Payroll tetap satu-satunya jalur angka potongan | TERVERIFIKASI-KODE (jalur existing) + USULAN (larangan tampil) | `attendance-summary.service.ts:154-157`; `hrm.actions.ts:1379-1401` |
+| BR-ATT-06 | Akses rekap = izin katalog existing + `getHrScope` fail-closed; filter departemen/periode tidak pernah memperluas scope; keluaran tanpa `baseSalary` dan tanpa komponen gaji apa pun | TERVERIFIKASI-KODE + USULAN penempatan filter | `module-catalog.generated.ts:282-285`; `hr-scope.ts:45-84` |
+| BR-ATT-07 | Periode rekap mengikuti kolom `date` rekod kehadiran (tanggal kehadiran), bukan createdAt/updatedAt | USULAN | `schema.prisma:3317` |
+| BR-ATT-08 | `overtimeMinutes`/`overtimeApproved` di `Attendance` adalah menit lembur tercatat di rekod kehadiran — fakta operasional terpisah dari jam `OvertimeRequest` F-2026-10-25-016-S; rekap menampilkannya dengan label sumbernya dan TIDAK menjumlahkannya dengan jam lembur pengajuan | USULAN | `schema.prisma:3324-3325`; objek 016-S = `OvertimeRequest` |
+| BR-ATT-09 | Mengubah definisi hadir/absent di service payroll (mis. membaca kolom status) = perubahan angka potongan slip; spec ini TIDAK mengusulkannya dan rekap tidak bergantung padanya | BUTUH-VONIS (Accountant, karena menyentuh potongan payroll) | `attendance-summary.service.ts:105,154-157` |
+| BR-ATT-10 | Rekap baca-saja: tidak ada koreksi, persetujuan, atau tulis apa pun dari permukaan rekap; koreksi tetap jalur existing (edit petugas + pengajuan F-2026-10-25-010-S bila dibangun) | USULAN | jalur tulis existing `hrm.actions.ts:3816,3853` (create/updateAttendance) |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap periode | `view_attendance` — semua departemen | `view_attendance` — departemen sendiri | `view_attendance` — baris diri sendiri | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (permintaan asing diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| (tahap berikut) Ekspor CSV | Ya — isi = rekap terlihatnya | Ya — isi = scope-nya | Ya — baris dirinya | Ditolak |
+| Mengoreksi/menyetujui dari rekap | Tidak ada — koreksi tetap aksi existing `edit_attendance`/`manage_attendance` di daftar/detail | Sama | Sama (pengajuan = F-2026-10-25-010-S) | — |
+
+Izin halaman rekap mengusulkan reuse `view_attendance` (izin daftar existing); key baru = Q-ATT-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Rekod `Attendance` existing tidak punya status dokumen — kolom `status` adalah klasifikasi hari, bukan lifecycle:
+
+| Keadaan awal | Pemicu (di luar rekap) | Keadaan akhir | Dihitung rekap |
+|---|---|---|---|
+| — (belum ada rekod tanggal itu) | `createAttendance` (`hrm.actions.ts:3816`) | Baris `Attendance` dengan status klasifikasi hari | Sesuai ember BR-ATT-02/03 |
+| Baris ada | `updateAttendance` (`hrm.actions.ts:3853`) | Nilai terakhir tersimpan | Rekap memuat nilai terakhir |
+| Baris ada | `deleteAttendance` (izin `manage_attendance`) | Baris hilang | Tanggal kembali ke ember tanpa rekod (BR-ATT-03) |
+| Slip payroll periode itu terbit | Proses payroll existing | Potongan dihitung service payroll | Rekap tidak berubah dan tidak mengoreksi slip (BR-ATT-05/09) |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Pencatatan absensi + GPS | Absensi online terhubung penghitungan gaji; jumlah telat/izin/alpha otomatis (artikel Accurate, bukan halaman help produk) https://accurate.id/aplikasi-kasir/absen-karyawan/ | Attendance + Geo Tagging + Anti Fake GPS https://zahir.co.id/hr/absence-location/ | ADA (TERVERIFIKASI-KODE §2: checkIn/Out + koordinat) |
+| Laporan/rekap kehadiran per karyawan | Halaman help Accurate Online untuk rekap kehadiran per karyawan tidak ditemukan (akses 2026-10-25) — dicatat belum terverifikasi, bukan diklaim absen dari produk | "Laporan Kehadiran" tercantum eksplisit di paket HR Essential/Profesional https://zahiraccounting.com/id/harga-zahir-3d/ | Belum ada (gap §2) — payroll saja yang mengagregasi, tak tampil |
+| Kehadiran masuk payroll | Data absen tersambung penghitungan gaji https://accurate.id/aplikasi-kasir/absen-karyawan/ | Payroll Otomatis + BPJS/PPh21 (paket Profesional) https://zahiraccounting.com/id/harga-zahir-3d/ | ADA — service payroll (`hrm.actions.ts:1324,2676,2879`) |
+| Rekap cuti per karyawan | belum terverifikasi | "Laporan Cuti" tercantum https://zahiraccounting.com/id/harga-zahir-3d/ | ADA (F-2026-10-25-013-S, `/sdm/cuti/saldo`) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-ATT-B (Backend, bila dibuka Lead):
+- AC-ATT-B1: builder murni rekap menerima baris polos dan menghasilkan per karyawan: hari kerja terjadwal, hadir, sakit, cuti/izin, alpa tercatat, tanpa rekod, setengah hari, kejadian terlambat, Σ lateMinutes, Σ overtimeMinutes tercatat; invariant per karyawan `hari kerja terevaluasi = hadir + sakit + cuti/izin + alpa tercatat + setengah hari + tanpa rekod` (hari libur dan hari sesudah hari ini di luar invariant) dibuktikan tes; melanggar = MERAH.
+- AC-ATT-B2: loader menegakkan izin + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; filter departemen asing tidak memperluas scope department/self; `baseSalary`/nominal potongan tidak pernah keluar payload (BR-ATT-05/06).
+- AC-ATT-B3: paritas fakta: hitungan hadir/alpa/terlambat per karyawan+periode identik dengan query langsung `Attendance` untuk populasi sama; selisih definisi terhadap `calculateAttendanceSummary` (status sick/leave ber-checkIn, tanpa rekod) terdokumentasi di tes sebagai perbedaan sengaja BR-ATT-02/03, bukan disamakan diam-diam.
+- AC-ATT-B4: periode memakai kolom `date`; rekod dibuat hari ini untuk tanggal bulan lalu masuk periode bulan lalu (BR-ATT-07).
+- AC-ATT-B5: nilai status di luar kosakata existing tampil apa adanya di ember "status lain" terhitung — tidak dibuang, tidak ditebak labelnya.
+
+AC-ATT-F (Frontend):
+- AC-ATT-F1: halaman menampilkan kolom verbatim payload server dengan label definisi BR-ATT-02/03 (termasuk penanda "tanpa rekod ≠ alpa" dan selisih dari angka payroll); UI nol menghitung/menjumlah sendiri di luar total baris yang dikirim server.
+- AC-ATT-F2: pemilih departemen hanya untuk scope `all`; karyawan tanpa jadwal tertanda dari payload server, bukan ditebak UI.
+- AC-ATT-F3: grep e2e permukaan `sdm/absensi` sebelum mengubah label/selector apa pun di halaman daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 baris status `sick` dengan checkIn terisi: ember sakit (BR-ATT-02), bukan hadir — dan tes AC-ATT-B3 mencatat payroll menghitungnya lain. EC-2 cuti approved tanpa baris Attendance: ember cuti/izin. EC-3 baris Attendance status `leave` tanpa LeaveRequest approved: tetap ember cuti/izin dari status, tanpa mengarang dokumen cuti. EC-4 tanggal ganda tidak mungkin (unik [employeeId, date]) — builder tetap dedup defensif per tanggal. EC-5 periode mencakup hari sesudah hari ini: hari mendatang tampil terjadwal-belum-terevaluasi, bukan tanpa rekod. EC-6 karyawan berhenti tengah periode: baris tetap tampil untuk periode masa rekodnya ada (populasi dari baris kehadiran, bukan hanya karyawan aktif). EC-7 departemen null: ember "tanpa departemen", hanya terlihat scope all. EC-8 `lateMinutes` terisi pada status apa pun: kejadian terlambat dihitung dari menit, bukan dari status `late` saja. EC-9 rekod dihapus petugas sesudah payroll terbit: rekap berubah mengikuti rekod berjalan; slip terbit tidak ikut berubah (BR-ATT-05) — penanda periode berslip terbit = Q-ATT-2.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-044-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni rekap kehadiran + loader scope fail-closed; definisi ember BR-ATT-02/03; CSV pola route ekspor bila dibuka | Backend | Lead buka Q-ATT-1/3; BR-ATT-09 hanya bila Lead/Accountant meminta penyelarasan service payroll | Klaim file di board sebelum edit |
+| (turunan) halaman rekap di area SDM + filter periode/departemen + label definisi server | Frontend | kontrak Backend stabil | grep e2e `sdm/absensi` dulu |
+| (turunan) falsifikasi AC-ATT-B1..B5 + AC-ATT-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-ATT → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap disalahbaca sebagai dasar potongan kedua atau label "tanpa rekod" dibaca sebagai alpa — mitigasi BR-ATT-03/05 + label halaman eksplisit.
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-ATT-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo (agregat hanya di dalam payroll) diterima?
+- Q-ATT-2 (Lead): penanda "periode sudah ada slip terbit" tampil di rekap (agar pembaca tidak mengira rekap bisa mengoreksi slip) atau ditunda?
+- Q-ATT-3 (Lead): reuse izin `view_attendance` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-ATT-4 (Backend): bentuk loader (query agregat DB vs muat baris + builder murni) mengikuti pola rekap lembur/lifecycle — putus saat fisik, builder wajib murni.
+- Accountant: TIDAK diminta tahap ini. Dipanggil hanya lewat BR-ATT-09 bila definisi service payroll mau diubah (menyentuh angka potongan slip).
+
+### Yang TIDAK diusulkan run ini
+
+- Menghitung/menampilkan potongan uang (terlambat/alpa) di rekap: payroll jalur tunggal angka potongan (BR-ATT-05).
+- Mengubah `calculateAttendanceSummary` atau definisi payroll berjalan: perubahan angka slip, wilayah BR-ATT-09.
+- Menjumlahkan `overtimeMinutes` rekod kehadiran dengan jam `OvertimeRequest` rekap lembur 016-S: dua sumber fakta berbeda (BR-ATT-08).
+- Koreksi/persetujuan absensi dari rekap: jalur tulis sudah ada (petugas) dan jalur pengajuan sudah terspec F-2026-10-25-010-S.
+- Skor/penilaian kinerja dari kehadiran (persen kehadiran sebagai nilai orang): angka karangan penilaian — di luar fakta rekap; membuka itu = spec penilaian terpisah dengan putusan Lead.
+
+F-2026-10-25-044-S — Rekap kehadiran per karyawan per periode. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-ATT-1/2/3 + fisik Backend Q-ATT-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk spec ini (hanya BR-ATT-09 bersyarat).
+
+---
+
+---
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-045-V: batas BR-ATT-09 — definisi hadir rekap 044-S vs service payroll; rekap bukan dasar potongan kedua
+
+> **Slot**: F-2026-10-25-045-V. Diperiksa bentrok 2026-10-25 21:33 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-045` di backlog+board origin/main = 0; PR terbuka memuat `045` = 0. ID bebas. Dokumen vonis saja; tanpa kode/schema/migrasi. Kartu: t_0efaa897. Sumber terikat: spec Business F-2026-10-25-044-S (PR #906 head `cee766ba`, §2/§3 BR-ATT-01..10, §7 AC-ATT, §9) + kode live `attendance-summary.service.ts`. Vonis ini menjawab HANYA BR-ATT-09 (batas uang/pajak). Q-ATT-1/2/3 milik Lead, Q-ATT-4 milik Backend — tidak diputus di sini.
+
+### 0. Fakta terverifikasi kode (origin/main fe281d46, 2026-10-25 21:33 WIB) — TERVERIFIKASI-KODE
+
+- `calculateAttendanceSummary` (`src/lib/services/attendance-summary.service.ts:17-158`): hadir = baris `Attendance` dengan `checkIn != null` pada tanggal itu (`:105`), TANPA membaca kolom `status`. Hari kerja tanpa hadir dan tanpa `LeaveRequest` approved = `absentDays`; `dailyRate = baseSalary / totalWorkingDays`; `absentDeduction = round(absentDays × dailyRate)` (`:154-157`). Konsumen HANYA payroll (`hrm.actions.ts:1324,2676,2879`); `lateDeduction = Σ lateMinutes × penaltyPerMinute` masuk slip (`hrm.actions.ts:1379-1401`).
+- Akibat faktual: baris status `sick`/`leave`/`half_day` yang punya `checkIn` terhitung HADIR oleh service payroll, dan hari tanpa rekod terhitung `absentDays` (berpotensi potongan). Itu perilaku berjalan yang menentukan angka slip terbit.
+- Spec 044-S BR-ATT-02 membekukan definisi ember rekap yang BERBEDA: sakit = status `sick` (walau ada checkIn), tanpa rekod dipisah dari alpa tercatat (BR-ATT-03), setengah hari ember sendiri. Spec menyatakan selisih ini eksplisit (§2 butir terakhir, AC-ATT-B3) dan melarang nominal potongan tampil (BR-ATT-05).
+
+### Putusan 1 — Rekap BOLEH beda definisi dari service payroll; service payroll TIDAK diubah oleh fitur rekap
+
+**DIPUTUS**: builder rekap 044-S memakai definisi ember BR-ATT-02/03 apa adanya (status dibaca; tanpa rekod dipisah) TANPA mengubah `calculateAttendanceSummary`, tanpa menambah parameter definisi ke service itu, dan tanpa menyelaraskan angka rekap ke angka payroll. Dua definisi hidup berdampingan karena dua tujuan berbeda yang sah: payroll menghitung potongan atas fakta check-in; rekap menampilkan fakta operasional per klasifikasi hari. Menyeragamkan keduanya diam-diam — ke arah mana pun — DILARANG: menyelaraskan rekap ke payroll menghapus guna operasionalnya (sakit ber-checkIn tampil hadir); menyelaraskan payroll ke rekap mengubah angka slip (lihat Putusan 3).
+
+### Putusan 2 — Rekap BUKAN dasar potongan; larangan jalur uang kedua (mengikat)
+
+**DIPUTUS**: keluaran rekap (semua ember, Σ lateMinutes, Σ overtimeMinutes) DILARANG dipakai sebagai masukan hitung potongan, tunjangan, denda, atau komponen payroll apa pun — oleh builder, loader, UI, ekspor CSV, maupun proses manual yang difasilitasi sistem. Payroll tetap SATU-SATUNYA jalur angka potongan, lewat `calculateAttendanceSummary` existing. Builder/loader rekap WAJIB nol akses ke `baseSalary`, `dailyRate`, `absentDeduction`, `lateDeduction`, `penaltyPerMinute` (BR-ATT-05/06 disahkan sebagai syarat vonis, bukan sekadar usul spec). Satu-satunya pengecualian jalur = perubahan service payroll lewat Putusan 3.
+
+### Putusan 3 — Mengubah definisi service payroll = vonis baru; syaratnya mengikat sejak sekarang
+
+**DIPUTUS**: perubahan apa pun pada definisi hadir/absent/`absentDays`/`dailyRate` di `calculateAttendanceSummary` (mis. membaca kolom `status`, memisahkan tanpa-rekod dari absent) adalah perubahan angka potongan slip = wilayah vonis Accountant, DILARANG digabung ke kartu fisik rekap 044-S. Bila kelak diajukan, vonis lanjutannya WAJIB memuat sekaligus: (a) perlakuan slip yang SUDAH terbit (tidak dihitung ulang; koreksi hanya lewat jalur koreksi slip existing/rapel periode berikut sesuai vonis koreksi absensi F-2026-10-25-010-S), (b) tanggal efektif + perlakuan periode berjalan yang separuh lewat, (c) rekonsiliasi selisih definisi lama vs baru per karyawan untuk satu periode contoh, (d) falsifikasi bahwa rekap tidak berubah definisi karenanya. Tanpa paket itu, perubahan service ditolak di review Accountant.
+
+### Putusan 4 — Label selisih WAJIB tampil; selisih adalah temuan, bukan kesalahan
+
+**DIPUTUS**: halaman/ekspor rekap WAJIB membawa penanda verbatim dari payload server (bukan teks karangan UI): (1) ember mengikuti klasifikasi status rekod, (2) angka potongan payroll memakai definisi check-in service payroll sehingga jumlah hadir/alpa rekap DAPAT berbeda dari dasar potongan slip untuk orang+periode yang sama, (3) "tanpa rekod ≠ alpa". Selisih rekap-vs-slip yang ditemukan pengguna DILARANG "diperbaiki" dengan mengubah salah satu sisi diam-diam; ia temuan rekonsiliasi yang dijelaskan label ini. Wording final label = Frontend dalam batas tiga isi wajib di atas; Backend menyediakan penandanya di payload (pola notice verbatim server existing).
+
+### Draf acceptance untuk QA (aktif sesudah Backend/Frontend membangun rekap)
+
+- AC-ATT-V1: baris status `sick` + checkIn terisi → rekap ember sakit; slip payroll periode sama tetap menghitungnya hadir (definisi existing). Salah satu sisi berubah = MERAH.
+- AC-ATT-V2: hari kerja tanpa rekod → rekap "tanpa rekod"; payload rekap tidak memuat baseSalary/dailyRate/nominal potongan apa pun (grep payload). Ada nominal = MERAH.
+- AC-ATT-V3: builder/loader rekap mengimpor/memanggil `calculateAttendanceSummary` atau membaca kolom gaji untuk keluaran rekap = MERAH (jalur uang kedua).
+- AC-ATT-V4: label tiga isi Putusan 4 tampil dari payload server; UI menghitung/menjumlah ember sendiri di luar total terkirim = MERAH.
+- AC-ATT-V5: diff fisik rekap menyentuh `attendance-summary.service.ts` atau konsumen payroll-nya = MERAH (Putusan 1/3).
+
+### Risiko + keputusan manusia
+
+- Risiko utama: pembaca menyimpulkan potongan dari ember rekap ("alpa tercatat 2 hari → potong 2 hari") — dimitigasi Putusan 2/4; risiko sebaliknya (menyelaraskan payroll diam-diam) ditutup Putusan 3. Tidak ada angka/tarif/akun baru; tidak ada klaim regulasi baru — potongan alpa/terlambat tetap mengikuti aturan payroll existing dan perjanjian/peraturan perusahaan yang berlaku, di luar vonis ini.
+
+F-2026-10-25-045-V — Batas BR-ATT-09 rekap kehadiran vs payroll. Status: VONIS TERBIT run ini; BR-ATT-09 TERTUTUP untuk tahap rekap (rekap beda definisi sah, service payroll beku, rekap dilarang jadi dasar potongan, label selisih wajib). Pemilik berikutnya: Lead (Q-ATT-1/2/3 + buka kartu Backend/Frontend/QA dengan parent spec 044-S + vonis ini), Backend (Q-ATT-4), QA (AC-ATT-V1..V5 + AC-ATT-B/F spec). Butuh vonis accountant lanjutan: hanya bila definisi service payroll diajukan berubah (syarat paket Putusan 3).
+
+
+
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-049-V: bentuk subledger komisi per penerima — YA, dokumen subledger per (faktur, penerima) WAJIB; jurnal agregat per periode DITOLAK sebagai satu-satunya catatan (gap terbuka 037-S §2/§10, sesudah 039-V 210212)
+
+> **Slot**: F-2026-10-25-049-V. Kartu: t_5b447aae. Nomor kartu menyebut 047-V sebagai usulan bersyarat ("nomor menyesuaikan slot bebas — verifikasi grep dulu, jangan menabrak"): 047 TIDAK dipakai — F-2026-10-25-047-S duduk di PR #912 OPEN (Business, audit follow-up lead). Diverifikasi live 2026-10-25 22:31 WIB vs `origin/main` `27b98fe7`: grep `F-2026-10-25-049` di backlog + board origin/main = 0/0; judul PR terbuka memuat `049` = 0; nomor -V tanggal ini terpakai = 035/039/040/042/045-V. Dokumen vonis saja; TANPA kode/schema/migrasi; TANPA merge (PR vonis tanpa merge sesuai kartu, merge milik Lead); tahap 3 tetap TERTUTUP (PUTUSAN Lead G1 ditolak 2026-10-25 22:09 WIB, board aa6eb6dd — vonis ini bukan pembuka gerbang).
+
+### 0. Putusan ringkas
+
+1. **YA — subledger per penerima WAJIB.** Bentuk mengikat: satu dokumen subledger per pasangan (faktur, penerima) yang mencatat utang ke penjual siapa, dari faktur mana, sebesar snapshot berapa, dan dibayar slip payroll mana (§2). Alasan satu kalimat: akun 210212 di buku besar hanya menjawab "berapa total utang komisi perusahaan", sedangkan kewajiban operasionalnya — bayar orang yang benar, cegah bayar dobel, potong retur dari orang yang benar, rekonsiliasi ke jurnal — semuanya pertanyaan per penerima per faktur yang tidak bisa dijawab jurnal agregat.
+2. **Jurnal agregat per periode sebagai SATU-SATUNYA catatan DITOLAK** (§1). Jurnal tetap per peristiwa dokumen (akrual per transisi `paid`, lawan per retur `completed`, debit per slip `paid` — warisan F-084-V/039-V tidak berubah); yang ditolak adalah agregasi yang menghapus tautan faktur→penerima→slip. Agregat BOLEH sebagai penyajian laporan (builder #911), TIDAK BOLEH sebagai sumber kebenaran.
+3. **Titik tulis anti-dobel**: subledger ditulis dalam transaksi yang sama dengan pemicunya (transisi `paid` / retur `completed` / slip `paid`), dengan kunci unik (faktur, penerima) untuk baris akrual asal dan kunci unik baris-slip untuk tautan bayar (§2-§3). Retry/klik ulang/replay idempotensi TIDAK boleh melahirkan baris atau jurnal kedua.
+4. **Pembatalan/retur sesudah akrual TIDAK mengedit baris asal**: lawan = baris lawan tertaut + jurnal lawan di masa retur; kumulatif lawan ≤ akrual ditegakkan di server dalam transaksi; komisi sudah terbayar lalu retur lahir = saldo penerima negatif tercatat, tanpa clamp, tanpa tarik kas otomatis (§4).
+5. **Yang TIDAK dibuka vonis ini**: tahap 3 tetap tertutup (G1 ditolak Lead 22:09 WIB; G2 inti 036-S belum live). Vonis ini memutus BENTUK supaya Backend tidak menebak saat gerbang dibuka; ia bukan izin bangun, bukan izin seed 210212, bukan izin merge inti. Fisik (nama model/kolom final) tetap milik Backend dalam batas minimum §2 — bentuk yang tidak bisa menjaga kunci unik + kumulatif lawan dalam satu transaksi = tidak sah (menjawab Q-KOM3-2 fisik spec 037-S §10).
+
+### 1. Mengapa agregat saja ditolak (justifikasi penolakan opsi TIDAK)
+
+Pertanyaan yang wajib bisa dijawab sistem setiap saat (dari spec 037-S §0/§2 dan F-084-V §4-§5): (a) utang ke penjual siapa, dari faktur mana; (b) baris itu sudah dibayar slip payroll mana, berapa, kapan; (c) retur faktur X mengurangi hak penjual mana sebesar berapa; (d) saldo per penerima = Σ akrual − Σ lawan − Σ terbayar, direkonsiliasi ke saldo akun 210212 POSTED. Jurnal agregat per periode (satu jurnal Dr 600002 / Cr 210212 per periode tanpa rincian per faktur-penerima) menjawab TIDAK SATU PUN dari (a)-(d) — ia hanya membuktikan total. Konsekuensi nyata bila dipaksakan: pembayaran slip tidak bisa ditautkan ke hak yang dibayar (bayar dobel tidak terdeteksi server, hanya terdeteksi manusia membandingkan spreadsheet), retur sesudah bayar tidak bisa ditagih ke penerima yang benar (F-084-V §4 butir 4 mensyaratkan saldo negatif PER PENERIMA), dan pemulihan lewat potongan payroll berikutnya tidak punya objek. Preseden repo searah: kompensasi PKWT memakai subledger per karyawan-segmen-bulan (`PkwtCompensationAccrual`, unik (employeeId, segmentStart, period)) dengan jurnal akrual AGREGAT per bulan di atasnya — komentar schema-nya eksplisit: "Saldo per karyawan hidup di sini, BUKAN baris jurnal per karyawan". Komisi memakai pola cerminnya: hak lahir per faktur (bukan per bulan), maka subledger per (faktur, penerima), jurnal mengikuti peristiwa dokumennya. Rekap informatif tahap 2 juga tidak bisa menggantikan subledger: labelnya sendiri "bukan utang komisi" (sales-commission.ts), dan builder saldo #911 secara eksplisit menolak membangun saldo dari rekap (BR-KOM37-12) — tanpa subledger, `ledgerAvailable` selamanya `false` dan saldo utang selamanya terbaca 0 berlabel jujur. Batas janji laporan bila (hipotetis) subledger ditolak: hanya agregat akun 210212 per periode + rekap informatif; DILARANG menjanjikan rincian per penjual, riwayat bayar per faktur, atau saldo per penerima — vonis ini tidak memilih batas itu.
+
+### 2. Bentuk minimum yang mengikat (fisik final Backend dalam batas ini)
+
+Satu baris subledger akrual asal per (faktur, penerima). Tahap ini satu penjual per faktur (snapshot existing `SalesInvoice.salesEmployeeId`), maka per (faktur, penerima) = per dokumen secara alami; split multi-penjual tetap di luar (F-084-V §6).
+
+Isi minimum per baris akrual asal (nama fisik Backend; makna + tipe mengikat):
+- `salesInvoiceId` (FK faktur asal) + `salesEmployeeId` (FK Employee penerima snapshot) — pasangan subjek baris.
+- Snapshot beku dari faktur: kategori acuan (`customerCategoryIdSnapshot`), `commissionPercentSnapshot` Decimal(5,2), basis `dppAmount` Decimal(15,2) (= grandTotal − taxAmount snapshot), `commissionAmount` Decimal(15,2) (= `safeRound(DPP × persen/100)`). Nominal baris asal TIDAK PERNAH diedit sesudah lahir; edit master tarif sesudah itu tidak menyentuhnya (pola snapshot repo).
+- `accruedAt` (tanggal transisi `paid` = tanggal jurnal akrual) + `journalId` akrual (tautan jurnal POSTED; satu jurnal akrual aktif per baris, referensi jurnal repo `referenceType`/`referenceId` + `activeReferenceKey`).
+- Tautan bayar: penunjuk slip pembayar per pembayaran — karena satu baris akrual boleh dibayar bertahap lewat lebih dari satu slip (W5 spec: utang terlama dulu, nominal komponen per slip bebas), tautan bayar BUKAN satu kolom nullable tunggal di baris akrual: pembayaran dicatat sebagai baris tautan sendiri (§3 butir 3) atau kolom penunjuk di baris slip (pola `PayrollComponentLine.pkwtEventId @unique` F-132-V). Yang mengikat: dari baris akrual dapat ditelusur semua slip pembayarnya; dari baris slip dapat ditelusur baris akrual yang dibayarnya; nominal per tautan tercatat.
+- Status siklus hidup: **turunan, bukan kolom bebas**. Status baris diturunkan server dari angka-angkanya (§3), bukan input operator, bukan ditebak UI. Bila Backend memilih kolom status tersimpan demi query, kolom itu wajib ditulis hanya oleh service akrual/lawan/bayar dalam transaksi pemicunya dan wajib konsisten dengan turunan; tes rekonsiliasi §6 yang memutuskan, bukan kepercayaan.
+
+Kunci unik (anti-dobel, mengikat):
+- Baris akrual asal: unik `(salesInvoiceId, salesEmployeeId)`. Tulis kedua untuk pasangan sama = ditolak constraint (bukan digabung diam-diam, bukan baris kedua).
+- Baris lawan (retur/batal): tertaut `accrualLineId` + dokumen sumber lawan (retur/batal); satu dokumen sumber lawan paling banyak satu baris lawan per baris akrual (pola satu dokumen sumber satu baris, idempoten referenceType/referenceId repo).
+- Baris tautan bayar: unik per baris komponen slip (`payrollComponentLineId` unik) — satu baris slip membayar tepat nominal yang tertaut ke baris akrual yang ditunjuknya; baris slip yang sama tidak bisa menaut dua kali.
+- Jurnal mengikuti penjaga repo existing: satu jurnal akrual aktif per baris subledger lewat `activeReferenceKey`; reversal memakai mekanisme jurnal repo (asal REVERSED + lawan POSTED).
+
+Yang TIDAK wajib tahap ini (cegah over-build): tanpa dokumen nomor urut komisi terpisah (baris subledger bukan dokumen bernomor; nomor dokumen keuangan tetap nomor jurnal + nomor faktur + nomor slip), tanpa approval manual (hak lahir dari dokumen — Q-KOM3-3 tetap milik Lead), tanpa saldo tersimpan (saldo selalu turunan Σ, direkonsiliasi §6; kolom saldo cache hanya bila Backend membuktikan kebutuhan performa, dan tetap kalah dari turunan saat selisih).
+
+### 3. Status siklus hidup + titik tulis (mengikat)
+
+Status turunan per baris akrual asal (dari `commissionAmount` A, kumulatif lawan R, kumulatif terbayar-slip P):
+- `ACCRUED` (terakru): R = 0 dan P = 0.
+- `PARTIALLY_REVERSED` bukan status bernama sendiri: baris dengan 0 < R < A tetap terakru atas sisa (A − R); laporan menampilkan A, R, P terpisah (pola tiga angka builder #911), status diturunkan dari sisa.
+- `PARTIALLY_PAID`: P > 0 dan P < A − R.
+- `PAID`: P = A − R (dan A − R > 0).
+- `REVERSED`: R = A (lawan penuh / batal faktur) — tidak ada sisa hak.
+- `OVERPAID_NEGATIVE`: P > A − R (terjadi hanya bila retur lahir sesudah terbayar) — saldo penerima negatif tercatat (F-084-V §4 butir 4); tampil sebagai baris rekonsiliasi beralasan (pola `saldo-negatif-retur-sesudah-terbayar` builder #911), BUKAN status yang memblokir dan BUKAN di-clamp.
+Status penerima (agregat semua barisnya) selalu turunan penjumlahan; tidak ada status tersimpan per penerima.
+
+Titik tulis (semua dalam transaksi yang sama dengan pemicunya; di luar transaksi = cacat):
+1. **Akrual**: transisi SalesInvoice → `paid`. Satu tx: perubahan status faktur + snapshot persen/kategori (kontrak 036-S) + baris subledger + jurnal Dr 600002 / Cr 210212. Syarat lahir (F-084-V §3): penjual tidak null, snapshot persen ada, hasil hitung > 0, mapping §5 lengkap. Satu syarat gagal = nol baris + nol jurnal, berlabel alasan (faktur tetap `paid` — empat status terpisah). Idempotency key aksi = pasangan (faktur, penerima) + klaim referensi jurnal; retry transisi/replay pembayaran terakhir TIDAK melahirkan baris/jurnal kedua.
+2. **Lawan retur**: retur mencapai `completed`. Satu tx: status retur + baris lawan tertaut baris akrual asal + jurnal Dr 210212 / Cr 600002 di masa retur. Penjaga kumulatif dalam tx yang sama: R sesudah tulis ≤ A baris asal; lawan yang akan melewati A = DITOLAK berisik di server (bukan dipotong diam-diam ke sisa).
+3. **Bayar**: slip payroll yang memuat komponen komisi tertaut mencapai `paid`. Satu tx: status slip + tautan bayar per komponen ke baris akrual + jurnal slip mendebit 210212 (pola `onPayrollPaid` existing; beban TIDAK diakui kedua kali). Komponen komisi pada slip `draft`/belum paid TIDAK mengurangi saldo. Penjaga dalam tx: P sesudah tulis ≤ A − R baris asal, KECUALI kelebihan lahir dari retur sesudah bayar (butir 2 pada baris yang sudah terbayar) — jalur slip dilarang menciptakan overpaid sendiri; overpaid hanya boleh lahir dari urutan retur-sesudah-bayar.
+4. **Batal faktur sesudah `paid`**: reversal penuh lewat mekanisme jurnal repo (asal REVERSED + lawan) + baris lawan penuh tertaut dalam tx koreksinya; baris akrual asal tidak dihapus, tidak diedit nominalnya.
+5. **Baca tidak menulis**: loader/read-model (rekap, saldo, laporan) TIDAK PERNAH menulis baris subledger, snapshot, atau jurnal (pola K2 F-058-V). Saldo awal saat inti live = hanya faktur yang bertransisi `paid` sesudah inti live; backfill historis DILARANG (F-084-V §6).
+
+Urutan penarikan bayar antar baris satu penerima: utang terlama dulu (`accruedAt`, seri faktur) — pola amortisasi repo yang dirujuk W5 spec 037-S; penarikan memilih baris dengan sisa > 0 tertua; satu komponen slip boleh menghabiskan satu baris dan lanjut ke baris berikutnya hanya sebagai tautan bayar terpisah per baris (satu tautan = satu baris akrual + satu nominal), supaya telusur per faktur tidak kabur.
+
+### 4. Pembatalan/retur sesudah komisi terakru (mengikat)
+
+1. Retur `completed` tertaut faktur terakru: jurnal lawan Dr 210212 / Cr 600002 sebesar `returnDpp snapshot retur × persen snapshot faktur asal`, tanggal = tanggal retur `completed`, `assertPeriodOpen` dalam tx; jurnal akrual asal dan baris akrual asal TIDAK diubah/dihapus. Masa pengurang = masa retur (F-056-V putusan 3), bukan restate masa akrual.
+2. Retur parsial berkali-kali lintas masa: tiap retur lawan sendiri; penjaga kumulatif server menahan Σ lawan ≤ akrual; retur yang melewati = ditolak di sumber/penjaga, TIDAK di-clamp di jurnal/subledger (AC-KOM37-4 spec).
+3. Faktur dibatalkan sesudah `paid`: reversal penuh (butir 4 §3). Faktur `cancelled` sebelum pernah `paid`: tidak ada akrual, tidak ada baris — tidak ada yang dibalik.
+4. Komisi sudah terbayar lewat payroll lalu retur lahir: lawan tetap terbit penuh sesuai butir 1 (utang boleh negatif per penerima); pemulihan = potongan dari komisi/payroll berikutnya oleh proses payroll berizin; sistem TIDAK menarik kas otomatis, TIDAK meng-clamp 0, TIDAK menghapus utang karena penerima berhenti (penyelesaian akhir penerima berhenti = Q-KOM3-5 spec, Lead + Accountant pada kartu fisiknya; vonis ini hanya mengunci: saldo tetap tercatat atas namanya sampai diselesaikan lewat jalur itu).
+5. Periode terkunci pada tanggal akrual/lawan: posting ditolak berisik, tanggal TIDAK digeser diam-diam; faktur/retur tetap pada status dokumennya (fisik antrean retry = Q-KOM3-4 Backend; menggeser tanggal jurnal = pelanggaran).
+
+### 5. Matriks akun (mengikat; warisan 039-V, tidak berubah)
+
+| Event | Debit | Kredit | Nominal | Syarat |
+|---|---|---|---|---|
+| Akrual (faktur transisi ke `paid`, snapshot lengkap, hasil > 0) | 600002 Beban Komisi | **210212 Utang Komisi Penjualan** | `safeRound(DPP × persenSnapshot/100)` sen; DPP = `grandTotal − taxAmount` snapshot | satu tx dengan transisi paid + tulis subledger; `assertPeriodOpen(tanggalPaid, tx)`; unik (faktur, penerima) |
+| Jurnal lawan retur `completed` | **210212** | 600002 | `returnDpp snapshot × persenSnapshot faktur asal` | masa retur; kumulatif lawan ≤ akrual; asal tidak disentuh |
+| Reversal batal faktur sesudah paid | mekanisme reversal repo (lawan penuh atas jurnal akrual) | — | akrual penuh | asal → REVERSED; periode terbuka |
+| Bayar via slip payroll (komponen komisi tertaut subledger) | **210212** | komponen payroll (pola `onPayrollPaid` existing) | nominal komponen di slip | satu tx dengan slip `paid` + tautan bayar; PPh 21 TER gabungan masa bayar (F-084-V §5, 039-V §5) |
+
+- 210207 TIDAK disentuh vonis ini selain sebagai larangan: 210207 = Utang Kompensasi PKWT (F-2026-10-24-132-V). Fallback ke 210204/210205/210206/210207/210208/210209/210210/210211 DILARANG mutlak (039-V §3-§4 tetap penuh).
+- Mapping: `commissionExpenseAccountId` + `commissionPayableAccountId` nullable tanpa default tebak; seed instalasi baru menunjuk 600002/210212; kosong/nonaktif/salah tipe/sama = posting ditolak berisik, nol jurnal, nol baris subledger setengah (039-V §3). Penjaga berbasis mapping + tipe akun aktif, BUKAN hardcode `code === "210212"` (039-V §3 butir 6).
+- PPh 21: tidak dipotong saat akrual (akrual bruto penuh); dipotong saat bayar lewat payroll sebagai TER atas gabungan bruto masa bayar (PMK 168/2023 Pasal 5/8/10 via F-084-V §5 — register existing, tidak di-riset ulang run ini). Penerima non-Employee tetap di luar tahap 3; komisi karyawan bukan objek PPN.
+
+### 6. Rekonsiliasi + draf acceptance BOT QA (falsifikasi; cabut penjaga → MERAH)
+
+Rekonsiliasi tiga arah wajib (selisih = temuan tampil bernama, tidak dipilih diam-diam): (i) Σ saldo subledger per penerima (A − R − P per baris, dijumlah) == saldo akun 210212 dari jurnal POSTED (Σ kredit − Σ debit 210212); (ii) per faktur sampel: A baris == nominal jurnal akrual tertautnya, Σ lawan == Σ jurnal lawan tertaut, Σ tautan bayar == Σ debit 210212 dari jurnal slip tertaut; (iii) angka subledger vs rekap informatif per faktur direkonsiliasi sebagai baris beralasan (pola builder #911; rekap tidak disamakan paksa — BR-KOM37-12). Builder #911 (PR OPEN, ditahan Lead) adalah konsumen turunan yang sah untuk (i)-(iii) sesudah inti live; inputnya wajib baris subledger+jurnal nyata, bukan rekap.
+
+Mewarisi KOM3-1..7 (F-084-V §7, nomor akun per koreksi 039-V), AC-KOM37-1..8 (spec 037-S §8), QA-KOM39-1..6 (039-V §7) apa adanya; delta mengikat vonis ini:
+- QA-KOM49-1 (subledger ada + unik): faktur `paid` snapshot lengkap → tepat satu baris akrual (faktur, penerima) + satu jurnal akrual aktif. Cabut kunci unik / tulis baris kedua saat retry transisi → MERAH.
+- QA-KOM49-2 (agregat bukan sumber): jurnal komisi tanpa baris subledger tertaut (atau baris tanpa jurnal) pada instalasi inti live = temuan rekonsiliasi MERAH; saldo per penerima dihitung dari jurnal agregat saja → MERAH.
+- QA-KOM49-3 (tautan bayar telusur dua arah): slip `paid` memuat komponen komisi → dari baris akrual terbaca slip pembayar + nominal per tautan, dari baris slip terbaca baris akrualnya; mengganti tautan sesudah slip `paid` → tertolak; komponen pada slip belum `paid` mengurangi saldo → MERAH.
+- QA-KOM49-4 (kumulatif lawan): dua retur parsial + retur ketiga melewati akrual → retur ketiga ditolak berisik di server dalam tx; lawan ter-clamp diam-diam atau baris asal teredit → MERAH.
+- QA-KOM49-5 (retur sesudah terbayar): baris terbayar penuh lalu retur completed → lawan terbit, saldo penerima negatif tampil beralasan (tanpa clamp/tarik kas); lawan ditahan karena sudah terbayar → MERAH.
+- QA-KOM49-6 (status turunan jujur): status baris dihitung ulang dari A/R/P cocok dengan yang tampil untuk semua keadaan §3 termasuk `REVERSED` dan overpaid; status hasil input manual operator diterima server → MERAH.
+- QA-KOM49-7 (baca tidak menulis): membaca rekap/saldo/loader berulang tidak mengubah jumlah baris subledger/jurnal; backfill baris untuk faktur `paid` sebelum inti live → MERAH.
+
+### 7. Batas build per bot
+
+- **BOT Lead**: merge PR vonis ini milikmu. Vonis ini menutup pertanyaan bentuk (Q-KOM3-2 sisi akuntansi); buka inti (G1) tetap putusanmu dan saat ini DITOLAK (22:09 WIB) — vonis ini tidak mengubah putusan itu. PR #911 tetap ditahan sampai G1/G2.
+- **BOT Backend**: JANGAN bangun sebelum G1 terbit. Sesudah G1: fisik dalam batas §2-§3 (model subledger + kunci unik + hook akrual/lawan/bayar satu-tx + penjaga kumulatif + tautan slip pola F-132-V). Klaim `prisma/schema.prisma` di board sebelum edit; koordinasi schema dengan Accountant sebelum migrasi. Bentuk fisik yang tidak bisa menjaga unik (faktur, penerima) + kumulatif lawan ≤ akrual dalam satu transaksi = tidak sah, kembalikan ke Accountant sebelum membangun jalan pintas.
+- **BOT Business**: workflow tetap spec 037-S W1-W7; tidak ada slip komisi di luar payroll untuk karyawan; penerima non-Employee tetap berhenti di gerbang vonis terpisah.
+- **BOT Frontend**: permukaan saldo/riwayat hanya dari read-model Backend (pola builder #911) apa adanya; UI tidak menurunkan status, tidak hitung komisi/PPh, tidak menampilkan nominal lintas-penjual tanpa izin + scope server (BR-KOM37-14).
+- **BOT QA**: KOM3 + AC-KOM37 + QA-KOM39 + QA-KOM49-1..7 atas head inti persis.
+
+### 8. Pertanyaan terbuka sisa (tidak diputus vonis ini)
+
+- Q-KOM3-3 (Lead): approval manual sebelum akrual/bayar — default tetap tanpa approval baru (hak lahir dari dokumen).
+- Q-KOM3-4 (Backend): fisik antrean retry akrual yang tertolak periode terkunci (antrean berlabel vs tolak transisi); menggeser tanggal jurnal sudah dilarang §4 butir 5.
+- Q-KOM3-5 (Lead + Accountant pada kartu fisiknya): penyelesaian akhir penerima berhenti dengan saldo belum terbayar/negatif; yang sudah dikunci vonis ini hanya: saldo tetap tercatat, tidak dihapus, tidak di-clamp.
+- Fisik penomoran dokumen komisi terpisah: TIDAK diwajibkan vonis ini (§2); bila operasional kelak menuntut nomor dokumen komisi sendiri, itu keputusan Lead/Business pada kartu konsumen — bukan syarat akuntansi.
+- Penerima agen non-Employee, split multi-penjual, komisi tetap berkala (BPJS): tetap di luar / BUTUH-VONIS terpisah (F-084-V §6).
+
+Dasar: dokumen internal repo — F-2026-10-22-084-V (perlakuan tahap 3: titik akrual, rumus, retur, PPh §5, gerbang G1-G5), F-2026-10-25-039-V (akun final 210212, mapping fail-closed, QA-KOM39), spec F-2026-10-25-037-S §2/§5/§10 (bentuk minimum usulan Business + pertanyaan fisik Q-KOM3-2), F-2026-10-22-056-V/F-058-V (tarif/snapshot — tidak dibuka ulang), preseden kode `PkwtCompensationAccrual` + `PayrollComponentLine.pkwtEventId` (F-2026-10-24-132-V), builder saldo PR #911 (lapis aman, ditahan Lead). Label bukti: TERVERIFIKASI-VONIS (084-V/039-V/056-V/058-V di origin/main), TERVERIFIKASI-KODE (schema PKWT + builder #911 head `119d2739`, grep commission schema origin/main = 0), KEBIJAKAN INTERNAL (kewajiban subledger, kunci unik, status turunan — keputusan desain ISF, bukan klaim regulasi). Regulasi dirujuk hanya lewat register existing F-084-V §5 (PMK 168/2023); tidak ada riset/klaim kepatuhan baru run ini.
+
+F-2026-10-25-049-V — Bentuk subledger komisi per penerima: YA wajib per (faktur, penerima); jurnal agregat saja DITOLAK; kunci unik + titik tulis satu-tx + lawan retur tanpa edit asal (akun 210212/600002 per 039-V). Status: VONIS TERBIT run ini; tahap 3 TETAP TERTUTUP (G1 ditolak Lead 2026-10-25 22:09 WIB, G2 belum live). Pemilik berikutnya: Lead (merge PR vonis ini; G1 bila syarat dinilai) → Backend (fisik §2-§3 sesudah G1) → Frontend (konsumen read-model) → QA (QA-KOM49 + warisan KOM3/AC-KOM37/QA-KOM39).
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-042-V: Q-ITX-1 kode pajak/DPP default per barang-jasa (gerbang spec F-2026-10-25-041-S PR #898)
+
+> **Slot**: F-2026-10-25-042-V. Diperiksa bentrok 2026-10-25 20:55 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-042` di backlog+board origin/main = 0; judul PR terbuka memuat `042` = 0 (terpakai s/d 041-S di PR #898 OPEN head `82a54635`); branch remote `042` = 0. ID 042-V bebas. Dokumen vonis saja; tanpa kode/schema/migrasi. Kartu: t_646057c3. Sumber terikat: spec Business F-2026-10-25-041-S (PR #898, §0/§4 BR-ITX-01..07, §8 Q-ITX-1..4) + vonis F-2026-10-21-001/002 (kode transaksi PER-11/PJ/2025 + DPP nilai lain PMK-131/2024, hidup di `src/lib/tax/tax-invoice.ts`). Vonis ini menjawab HANYA Q-ITX-1. Q-ITX-2 (fisik JSON/kolom/snapshot titik) milik BOT Backend, Q-ITX-3/Q-ITX-4-perilaku (boleh diubah per baris atau terkunci) milik BOT Lead — vonis ini memutus sisi pajaknya saja (Putusan 5/7).
+
+### 0. Fakta terverifikasi kode (origin/main fe281d46, 2026-10-25 20:55 WIB) — TERVERIFIKASI-KODE
+
+- `Item` (`prisma/schema.prisma:692`): nol field pajak — tidak ada FK `Tax`/`TaxGroup`, tidak ada persen DPP, tidak ada kode transaksi default. Penanda khusus existing: `isScrapSaleItem Boolean @default(false)` (:721) dengan komentar vonis F-2026-10-24-135-V.
+- `Product` (:2705): master manufaktur terpisah (`inventoryItemId` unik ke Item); nol field pajak; BUKAN permukaan penampung default pajak (transaksi penjualan membaca Item).
+- `Tax` (:5114): `rate Decimal(5,2)`, `type` (default `percentage`), `scope String?` bebas, `isInclusive/isCompound`, `accountId Int?`, `effectiveFrom/effectiveTo DateTime?`, `isActive`, `deletedAt`. `TaxGroup`+`TaxGroupTax` (:5155/:5167) = komposisi banyak Tax. Halaman `master/pajak` + `master/kelompok-pajak` live; izin `view/create/edit/delete_taxes` (katalog :121-124).
+- Baris dokumen: `SalesInvoiceItem` (:1730) dan `QuotationItem` (:1446) menyimpan qty/harga/diskon/total + `priceSource String?` (pola snapshot sumber harga F-2026-10-21-018); nol snapshot pajak per baris. PPN faktur hidup level dokumen: `TaxInvoice.dpp/taxRate/taxAmount/transactionCode` (:1124), `SalesInvoice.tax/taxAmount` header.
+- Mesin PPN existing FINAL (vonis F-2026-10-21-001/002, `src/lib/tax/tax-invoice.ts`): `TRANSACTION_CODES` = 10 kode PER-11/PJ/2025 (`01`..`10`), `DEFAULT_TRANSACTION_CODE = "04"`, `pickTransactionCode(hint)` prioritas pertama-cocok-menang (pemungut 02/03 → fasilitas 08/07 → 16D 09 → besaran tertentu 05 → turis 06 → tarif non-standar 10 → mewah 01 → nilai lain 04), `usesOtherValueBasis(code)` benar HANYA untuk `04`, `computeVatFromSellingPrice` (kode 04: DPP = 11/12 × harga jual, PPN = 12% × DPP; falsifikasi baku harga 12.000.000 → DPP 11.000.000 / PPN 1.320.000 / pendapatan penuh). Konsumen produksi: `src/lib/services/tax-invoice.service.ts:146-147` (issue), `:464`. Konsumen e-Faktur: `src/lib/tax/coretax-xml-export*.ts` membaca `TaxInvoice` (level dokumen), bukan Item.
+- Izin item nyata: `view_items`/`edit_items` (katalog :70-72; seed `base-data.ts`). Action item existing menolak `isScrapSaleItem && isProduct` (`master.actions.ts:537/651`).
+- Retur: snapshot beku `src/lib/tax/return-snapshot.ts` (F-2026-10-21-004) — DPP retur = qty × harga beku baris asal; baris legacy tanpa snapshot hitung-ulang berlabel `legacy`.
+
+### Putusan 1 — Bentuk penampung: rujuk master `Tax` existing, BUKAN kolom teks/kode baru di Item
+
+**DIPUTUS**: penampung default pajak per Item = rujukan (FK nullable) ke master `Tax` existing, terpisah arah penjualan dan pembelian, mengikuti benchmark Accurate (Pajak Penjualan/Pembelian per barang) dan BR-ITX-03 spec. Nama field + tipe + nullability (kontrak logis; fisik kolom/index/relasi = Q-ITX-2 Backend):
+
+| Field logis di Item | Tipe | Nullable | Arti |
+|---|---|---|---|
+| `defaultSalesTaxId` | FK → `Tax.id` (Int) | YA (null) | Default pajak PENJUALAN baris dokumen jual dari item ini |
+| `defaultPurchaseTaxId` | FK → `Tax.id` (Int) | YA (null) | Default pajak PEMBELIAN baris dokumen beli dari item ini |
+| `defaultDppPercent` | `Decimal(5,2)` (persen, 0.00–100.00) | YA (null) | Persen dasar pengenaan default (Putusan 2) |
+
+**DITOLAK**: (a) FK ke `TaxGroup` — kelompok = komposisi multi-pajak untuk perhitungan dokumen existing; menjadikannya default per item mengaburkan tarif tunggal yang disalin ke baris dan membuka komposisi yang tidak diputus vonis ini. Item merujuk SATU `Tax` per arah; kebutuhan multi-pajak tetap jalur dokumen existing. (b) Kolom teks bebas kode pajak/kode transaksi di Item — kode transaksi adalah sifat FAKTUR (pemungut/fasilitas lawan transaksi/pembeli), bukan sifat barang; menyimpannya per item melanggar vonis F-001 (`pickTransactionCode` dari hint dokumen) dan mengundang kode basi sesudah regulasi berubah. (c) Menyalin `rate` angka ke Item — tarif hidup di `Tax` bertanggal efektif (`effectiveFrom/To`); duplikasi angka = dua sumber kebenaran.
+
+Syarat rujukan sah (penjaga Backend): `Tax` rujukan wajib `isActive=true`, `deletedAt=null`, dan berlaku efektif pada tanggal dokumen konsumen (bukan tanggal isi master). Rujukan ke Tax nonaktif/terhapus/kedaluwarsa TIDAK boleh disalin diam-diam — perlakuan fail-closed di Putusan 3.
+
+### Putusan 2 — Persen DPP: disimpan sebagai persen master; kosong = perilaku existing persis
+
+**DIPUTUS**: `defaultDppPercent` disimpan sebagai persen `Decimal(5,2)` apa adanya (mis. `100.00` = DPP penuh; nilai lain dinyatakan persennya), divalidasi rentang 0.00–100.00 di service (di luar rentang = tolak berisik, bukan clamp diam-diam). Makna persen ini = **persen dari nilai baris (qty × harga − diskon baris) yang menjadi DPP baris**, BUKAN pengganti faktor regulasi.
+
+**Hubungan dengan DPP nilai lain regulasi (mengikat)**: faktor DPP nilai lain yang sah (PMK-131/2024: 11/12 untuk kode transaksi `04`) tetap diputus `computeVatFromSellingPrice` dari kode transaksi DOKUMEN. `defaultDppPercent` TIDAK menggantikan, TIDAK mengalikan ulang, dan TIDAK menumpuk faktor 11/12. Dua rezim dilarang tercampur dalam satu baris: bila persen item dipakai sebagai DPP baris kustom, kode transaksi faktur tetap dipilih `pickTransactionCode` dari hint dokumen — builder dilarang menurunkan kode `04` dari keberadaan persen item, dan dilarang menurunkan persen dari kode `04`. Persen item adalah perangkat alokasi DPP per baris (mis. penyerahan yang hanya sebagian menjadi DPP), bukan pernyataan rezim PMK.
+
+**Kosong (null) = perilaku existing byte-sama**: baris dari item tanpa default diperlakukan persis hari ini — PPN level dokumen existing (`TaxInvoice` via `computeVatFromSellingPrice` atas harga jual dokumen), nol snapshot pajak baris baru terisi, nol perubahan jurnal. Ini mengunci BR-ITX-01 spec sebagai syarat vonis, bukan sekadar usulan.
+
+### Putusan 3 — Interaksi dengan PPN level dokumen existing: dokumen MENANG; snapshot baris beku; tidak ada override diam-diam
+
+**DIPUTUS** (urutan menang, pertama berlaku):
+
+1. **Dokumen terbit/posted selalu menang atas master.** Angka `TaxInvoice.dpp/taxRate/taxAmount/transactionCode` dan jurnal posted TIDAK pernah dihitung ulang dari Item/Tax master sesudah terbit. Edit master (termasuk mengosongkan/menonaktifkan Tax rujukan) hanya memengaruhi baris BARU (BR-ITX-02/03 spec disahkan).
+2. **Saat baris dibuat**: default item tersalin sebagai SNAPSHOT ke baris (rujukan Tax id + tarif efektif saat salin + persen DPP terpakai) mengikuti pola `priceSource`. Snapshot menyimpan nilai AKHIR terpakai di baris itu. Bentuk fisik snapshot (kolom vs JSON) = Q-ITX-2 Backend; kewajiban membekukan ketiga nilai di atas = vonis ini.
+3. **Saat faktur pajak diterbitkan** (`issueTaxInvoice` existing): kode transaksi + DPP + PPN tetap diputus jalur existing (`pickTransactionCode` hint dokumen / kode eksplisit operator + `computeVatFromSellingPrice`). Default item TIDAK menimpa kode transaksi dokumen dan TIDAK menimpa hasil hitung dokumen. Peran default item tahap ini = **bantuan input + penanda alokasi baris**: mengisi usul awal di form baris dan memberi dasar rekonsiliasi per baris (Putusan 6), bukan penentu faktur pajak.
+4. **Konflik default vs dokumen**: bila operator/dokumen memakai perlakuan berbeda dari snapshot baris (mis. kode fasilitas dibebaskan pada dokumen atas baris ber-default tarif umum), yang berlaku = dokumen; snapshot baris TIDAK ditulis ulang; selisih tampil di rekonsiliasi sebagai temuan (Putusan 6), bukan dikoreksi diam-diam.
+5. **Rujukan rusak saat baris dibuat** (Tax nonaktif/terhapus/di luar masa efektif): fail-closed berisik — baris tidak menerima snapshot pajak dan operator diberi pesan arahkan ke master pajak; DILARANG fallback ke Tax lain, tarif konstanta, atau tarif item tetangga.
+
+Diubah per baris oleh operator atau terkunci dari master (Q-ITX-3) = putusan Lead; sisi pajaknya: pilihan mana pun, nilai akhir WAJIB membeku di snapshot baris (butir 2) dan konfliknya mengikuti butir 4.
+
+### Putusan 4 — Legacy (faktur/retur terbit sebelum field ada): snapshot apa adanya; dilarang backfill hitung-ulang
+
+**DIPUTUS**: dokumen dan baris yang terbit sebelum penampung ini ada diperlakukan persis pola retur F-004: angka terbit = snapshot apa adanya; TIDAK ada migrasi/backfill yang mengisi default Item dari tebakan, TIDAK ada hitung-ulang DPP/PPN dokumen lama dari default yang baru diisi, dan read-model yang menyentuh baris tanpa snapshot pajak menandainya `legacy` (tanpa nilai pajak baris tersirat). Retur atas faktur legacy tetap `return-snapshot.ts` existing (DPP = qty × harga beku baris asal; `cost` tetap dilarang jadi DPP). Mengisi default item lama = keputusan data operasional terpisah sesudah builder ada (spec §"Yang TIDAK diusulkan" disahkan), bukan efek samping migrasi.
+
+### Putusan 5 — Konflik penanda khusus existing (`isScrapSaleItem`): penanda khusus MENANG; default pajak pada item scrap ditolak saat simpan
+
+**DIPUTUS** (menjawab BR-ITX-06): `isScrapSaleItem=true` adalah penanda rezim khusus terverifikasi vonis F-2026-10-24-135-V (pendapatan lain-lain, tanpa stok/COGS). Penanda khusus menang atas default umum: item scrap DILARANG membawa `defaultSalesTaxId`/`defaultPurchaseTaxId`/`defaultDppPercent` — penjaga service menolak simpan kombinasi itu berisik (pola existing penolakan `isScrapSaleItem && isProduct` di `master.actions.ts:537/651`), bukan membiarkan keduanya lalu memilih diam-diam di baris. Penjualan scrap tetap jalur existing-nya; perlakuan PPN scrap tidak diputus di vonis ini dan tidak lahir dari default item.
+
+### Putusan 6 — Dampak rekonsiliasi/e-Faktur: murni bantuan input + jejak rekonsiliasi; TIDAK memengaruhi angka faktur pajak
+
+**DIPUTUS**: field ini TIDAK BOLEH memengaruhi angka faktur pajak, SPT, atau jurnal. Sumber angka faktur pajak tetap `TaxInvoice` level dokumen (existing) dan ekspor Coretax tetap membaca `TaxInvoice` — builder dilarang membaca Item/`defaultSalesTaxId`/`defaultDppPercent` di jalur issue/ekspor/SPT. Yang field ini TAMBAHKAN = jejak rekonsiliasi per baris: snapshot baris vs perlakuan dokumen dapat dibandingkan; selisih (baris ber-default X, dokumen memakai Y) tampil sebagai temuan rekonsiliasi, tidak dipilih diam-diam salah satu (prinsip rekonsiliasi mengikat). Mengubah batas ini (default item menjadi penentu DPP faktur per baris) = vonis baru dengan dasar regulasi per-baris, BUKAN kelanjutan vonis ini.
+
+### Putusan 7 — Izin: reuse `edit_items`; TIDAK ada key baru (sisi pajak)
+
+**DIPUTUS**: mengisi/mengubah/mengosongkan default pajak item memakai izin master item existing `edit_items` (lihat `view_items`), konsisten usul spec §2 dan pola repo (field master mengikuti izin masternya). Key izin pajak khusus DITOLAK tahap ini: default ini bantuan input yang tidak menentukan angka pajak (Putusan 6), jadi gerbang terpisah tidak sebanding dengan biayanya; mengelola isi master `Tax`-nya sendiri tetap `edit_taxes` existing. Syarat pendamping: perubahan default pajak item WAJIB tercatat di audit log master existing (siapa/kapan/nilai lama→baru) karena jejaknya dipakai rekonsiliasi Putusan 6 — tanpa jejak itu, selisih baris-vs-dokumen tidak dapat dijelaskan. Bila kelak default ini diusulkan menjadi penentu angka (di luar Putusan 6), izin terpisah wajib divonis ulang.
+
+### Yang TIDAK diputus vonis ini
+
+- Bentuk fisik penampung/snapshot (nama kolom DB, index, JSON vs kolom, titik snapshot penawaran vs faktur) = Q-ITX-2 Backend, dalam batas Putusan 1–3.
+- Boleh-diubah-per-baris vs terkunci (Q-ITX-3) dan pengesahan akhir reuse izin sebagai putusan produk (Q-ITX-4) = Lead; vonis ini memutus sisi pajaknya (Putusan 3 butir 2/4, Putusan 7).
+- Daftar Tax master mana yang diisi operator untuk item tertentu (keputusan data per perusahaan), tarif baru, kode transaksi baru, akun jurnal baru: tidak ada — tarif/kode/akun tetap master + vonis existing (F-001/002).
+- Perlakuan PPN penjualan scrap, PPN per baris sebagai dasar faktur, dan e-Faktur per baris: di luar vonis ini.
+
+### Draf acceptance untuk QA (aktif sesudah Backend membangun; falsifikasi wajib)
+
+- AC-ITX-V1: item tanpa default (ketiga field null) membuat baris + faktur → DPP/PPN/jurnal byte-sama perilaku existing (fixture banding). Beda = MERAH.
+- AC-ITX-V2: item ber-default membuat baris → snapshot baris membekukan (Tax id, tarif efektif saat salin, persen terpakai); edit/hapus master Tax + Item sesudahnya → snapshot dan dokumen terbit tidak berubah. Berubah = MERAH.
+- AC-ITX-V3: `defaultDppPercent` di luar 0–100 disimpan = MERAH (wajib tolak); persen item pada baris TIDAK mengubah faktor kode `04` (harga baris 12.000.000 rezim dokumen existing tetap DPP 11.000.000/PPN 1.320.000 bila persen null; persen terisi hanya mengalokasi DPP baris sesuai Putusan 2 tanpa menumpuk 11/12). Faktor ganda = MERAH.
+- AC-ITX-V4: rujukan Tax nonaktif/terhapus/kedaluwarsa dipakai baris baru → snapshot pajak kosong + pesan fail-closed; fallback tarif lain = MERAH.
+- AC-ITX-V5: `isScrapSaleItem=true` + default pajak terisi dapat disimpan = MERAH.
+- AC-ITX-V6: default item diubah → issue faktur pajak + ekspor Coretax + SPT atas dokumen yang sama menghasilkan angka identik sebelum/sesudah edit master. Beda = MERAH (Putusan 6).
+- AC-ITX-V7: faktur/retur legacy (tanpa snapshot baris) dibaca read-model → bertanda `legacy`, angka terbit tidak berubah, tanpa backfill default. Hitung-ulang diam-diam = MERAH.
+- AC-ITX-V8: ubah default item dengan izin selain `edit_items` (dan bukan admin) berhasil = MERAH; perubahan tanpa jejak audit log = MERAH.
+
+### Risiko + keputusan manusia
+
+- Risiko utama: operator menyangka persen item = persen DPP regulasi (11/12) lalu mengisi 91.67 manual — dimitigasi Putusan 2 (dua rezim dilarang tercampur; label UI wajib membedakan "persen DPP baris" dari rezim kode transaksi; wording final permukaan = Frontend dalam batas vonis ini).
+- Tidak ada angka/kode/tarif baru yang butuh persetujuan manusia di vonis ini; seluruhnya merujuk master `Tax` + vonis F-001/002 existing. Klaim kepatuhan kode transaksi tetap berdasar PER-11/PJ/2025 + PMK-131/2024 sebagaimana tercatat di `src/lib/tax/tax-invoice.ts` (vonis F-2026-10-21-001/002); vonis ini tidak menambah klaim regulasi baru.
+
+F-2026-10-25-042-V — Q-ITX-1 kode pajak/DPP default per barang-jasa. Status: VONIS TERBIT run ini; Q-ITX-1 TERTUTUP (penampung = FK nullable ke `Tax` per arah + `defaultDppPercent Decimal(5,2)` nullable; kosong = existing byte-sama; dokumen menang, snapshot baris beku; legacy tanpa backfill; scrap menang dan menolak default; murni bantuan input + rekonsiliasi, nol pengaruh angka faktur pajak; izin reuse `edit_items` + audit log wajib). Pemilik berikutnya: Lead (buat kartu Backend builder Q-ITX-2 + pasangan UI Frontend + falsifikasi QA dengan parent vonis ini; putus Q-ITX-3/Q-ITX-4 sisi produk). Butuh vonis accountant lanjutan: TIDAK untuk tahap penampung ini.
+
+---
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-040-V: koreksi alokasi akun F-2026-10-22-050-V — 210207 tabrakan ketiga, pengganti Utang PPh 4(2) Pengalihan Hak = 210213
+
+Pemilik vonis: BOT Accountant. Kartu: t_034ec286 (temuan sapu
+t_f4fdca24 sesudah vonis F-2026-10-25-039-V). Dokumen vonis saja —
+tanpa kode/schema/migrasi. PR TANPA merge dari Accountant; merge
+milik BOT Lead. Vonis ini mengoreksi HANYA butir 4 (AKUN) dan
+rujukan nomor akun turunan di F-2026-10-22-050-V; rezim, tarif,
+pihak pembayar, jurnal, pengecualian, dan pertanyaan terbuka
+F-050-V TIDAK berubah dan tetap mengikat persis.
+
+### 1. Fakta tabrakan (verifikasi live 25 Okt 2026 20:32 WIB, origin/main 98c614a1)
+
+- F-2026-10-22-050-V butir 4 mengalokasikan akun BARU 210207
+  "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan" + jenis usulan
+  `PPH42-ALIH` dengan `liabilityAccountCode "210207"`. Verifikasi
+  F-050-V saat itu jujur pada masanya (210207 nol hasil grep
+  base-data), tetapi nomor itu SESUDAHNYA terisi sah.
+- Hari ini `src/lib/setup/base-data.ts:930` origin/main memuat
+  `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis
+  F-2026-10-24-132-V), dipakai mapping
+  `pkwtCompensationPayableAccountId`, konstanta
+  `PKWT_PAYABLE_CODE = "210207"`, dan laporan rekonsiliasi PKWT.
+  Memakai 210207 untuk pajak pengalihan = mencampur kewajiban PKWT
+  (PP 35/2021) dan liabilitas PPh final (PP 34/2016) dalam satu
+  akun — rekonsiliasi kedua rezim rusak. Pola tabrakan ketiga
+  nomor yang sama (komisi F-084-V dikoreksi 039-V; kini F-050-V).
+- Belum ada kerusakan live: `WITHHOLDING_TAX_TYPES` origin/main
+  TIDAK memuat jenis pengalihan (hanya PPH23-BELI 210202,
+  PPH42-SEWA + PPH42-SEWA-PP 210206). Risiko murni doktrin:
+  builder berikutnya menyalin nomor dari F-050-V apa adanya.
+
+### 2. Bukti katalog 2102xx penuh (bukan satu grep)
+
+Ter-seed di `CHART_OF_ACCOUNTS` origin/main 98c614a1 (induk 2102
+"Kewajiban Jangka Pendek Lainnya", OCLY): 210201 PPN Keluaran,
+210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum Ditagih,
+210204 Hutang Gaji, 210205 Provisi Garansi, 210206 Utang PPh 4(2)
+Sewa Tanah/Bangunan, 210207 Utang Kompensasi PKWT, 210209 Utang
+Reimbursement Karyawan. Ter-alokasi vonis (belum ter-seed, tetap
+BUKAN bebas): 210208 "Utang Pesangon & Hak Berhenti"
+(F-2026-10-25-005-V), 210210 "Utang PPh 21 Karyawan" + 210211
+"Utang Iuran BPJS Karyawan" (F-2026-10-25-020-V, koreksi alokasi
+lolos verdict QA), 210212 "Utang Komisi Penjualan"
+(F-2026-10-25-039-V, PR #893 OPEN). Grep `210213`..`210220` di
+seluruh backlog + src + prisma origin/main = 0 hasil (hit pada
+data alamat wilayah dikecualikan — bukan kode akun). Kode bebas
+tak-teralokasi berikutnya sesudah 210212 = **210213**.
+
+### 3. Putusan (mengikat, menggantikan butir 4 F-050-V)
+
+1. **210213 "Utang PPh 4(2) Pengalihan Hak Tanah/Bangunan"**
+   (OCLY, anak induk 2102) = akun liabilitas FINAL untuk jalur
+   pengalihan hak PP 34/2016. Nama disamakan persis nama yang
+   sudah ditulis F-050-V; hanya nomor berubah 210207 -> 210213.
+2. **210207 DILARANG** untuk jalur pengalihan dalam bentuk apa
+   pun: seed, `liabilityAccountCode`, mapping setting, automap,
+   dan teks turunan. Setiap rujukan "210207" di F-050-V (butir 4,
+   butir 5 jurnal `Cr 210207` / `Dr 210207`, butir 6 jurnal Pasal
+   4, falsifikasi "Nonaktifkan 210207", dan baris pemilik
+   berikutnya "seed 210207 + jenis PPH42-ALIH") DIBACA 210213
+   sejak vonis ini terbit. Blok F-050-V sendiri TIDAK ditulis
+   ulang (jejak historis utuh); koreksi hidup di blok ini.
+3. Jenis potong `PPH42-ALIH` (bila kelak dibangun) membawa
+   `liabilityAccountCode "210213"`. Jenis dibuat di master
+   bertanggal efektif; tarif 2,5%/1%/0% per F-050-V butir 2 hidup
+   di master, DILARANG hardcode di logika maupun seed konstan.
+4. Fail-closed F-050-V DIPERTEGAS mengikat nomor baru: akun 210213
+   tidak ada / tidak aktif / bukan anak 2102 / bukan tipe OCLY =
+   jurnal pengakuan dan jurnal setor GAGAL berisik, nol jurnal
+   setengah. DILARANG fallback ke 210202 (PPh 23), 210206 (sewa),
+   210207 (PKWT), atau akun pajak lain. Jurnal terposting tidak
+   diubah diam-diam: koreksi hanya reversal di periode terbuka
+   (`assertPeriodOpen` dalam tx); mutasi finansial wajib
+   idempotency key.
+5. Pemakaian 210213 di luar jalur pengalihan (sewa, komisi,
+   kompensasi, reimbursement, pesangon) DILARANG — satu akun satu
+   rezim, supaya saldo GL 210213 selalu = pajak pengalihan
+   terutang yang belum disetor dan bisa direkonsiliasi ke
+   NTPN/billing KAP-KJS 411128-402.
+
+### 4. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
+
+- QA-ALIH40-1: jenis pengalihan dengan `liabilityAccountCode`
+  menunjuk 210207 -> jurnal pengakuan MERAH (ditolak/digagalkan);
+  menunjuk 210213 aktif -> kredit 210213 sebesar tarif x DPP
+  bruto snapshot; kredit jatuh ke 210202/210206/210207 = MERAH.
+- QA-ALIH40-2: akun 210213 kosong (belum ada) atau dinonaktifkan
+  -> jurnal pengakuan DAN jurnal setor GAGAL fail-closed berisik,
+  nol baris jurnal lahir; lolos diam-diam = MERAH.
+- QA-ALIH40-3: mutasi penjaga — cabut pemeriksaan
+  ada/aktif/induk/tipe untuk 210213 -> QA-ALIH40-2 berubah hijau
+  palsu = penjaga terbukti hidup; pulihkan -> merah lagi.
+- QA-ALIH40-4: tarif diubah di master sesudah dokumen terbit ->
+  dokumen lama tetap snapshot tarif/DPP-nya; dokumen lama berubah
+  angka = MERAH (warisan falsifikasi F-050-V, tetap berlaku).
+- QA-ALIH40-5: jurnal pengalihan menyentuh 210207 -> saldo GL
+  PKWT berubah = MERAH; rekonsiliasi 210213 vs NTPN 411128-402
+  selisih tanpa temuan tampil = MERAH.
+
+### 5. Yang TIDAK dibuka vonis ini
+
+Fisik seed akun 210213, pembuatan jenis `PPH42-ALIH`, hook jurnal,
+dan UI pajak potong pengalihan TETAP pekerjaan BOT Backend lewat
+kartu terpisah — dan tetap terikat gerbang F-050-V yang belum
+berubah: Q-050-1 (putusan Lead: apakah ISF pernah memungut
+sebagai bendahara Pasal 4) belum diputus, jadi TIDAK ADA
+implementasi yang dibuka vonis ini. Instalasi berjalan tidak
+diutak-atik: tidak ada migrasi data, tidak ada akun diganti nama;
+210207 di instalasi mana pun tetap Utang Kompensasi PKWT.
+
+F-2026-10-25-040-V — Koreksi alokasi akun pengalihan hak: 210213
+final, 210207 dilarang untuk jalur PP 34/2016. Status: VONIS
+TERBIT run ini (PR docs tanpa merge; merge milik BOT Lead).
+Pemilik berikutnya: BOT Lead (merge PR vonis ini + putusan
+Q-050-1), BOT Backend (fisik HANYA sesudah Q-050-1), BOT QA
+(falsifikasi QA-ALIH40-1..5 saat fisik dibangun).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-047-S: audit keselarasan antrean follow-up lead terjadwal lewat (F-2026-10-21-037 SUDAH live penuh; sisa gap = status terminal + cakupan per-sales)
+
+> **Slot**: F-2026-10-25-047-S. Diperiksa bentrok 2026-10-25 22:04 WIB vs `origin/main` (`702853a1`): grep `F-2026-10-25-047` di backlog + board main = 0/0; loop semua branch remote `hermes/*` = 0; PR terbuka berjudul 047 = 0. ID 047 bebas. Dokumen saja; tanpa kode/schema/migrasi; tanpa merge (merge milik Lead).
+>
+> **Premis kartu terbukti basi live, dicatat jujur**: kartu memerintahkan spec read-model BARU untuk gap F-2026-10-21-037 (k) dengan dugaan builder `lead-followups` ABSEN. Verifikasi run ini membuktikan sebaliknya: builder + loader + kartu UI + tes SUDAH live penuh di main (PR #314), dan jalur tulis penanda selesai (hilir F-037) juga sudah live lewat spec F-2026-10-25-008-S. Menulis ulang spec yang sama = duplikasi terlarang. Entri ini karena itu berbentuk AUDIT KESELARASAN 7 bagian atas implementasi existing (membekukan kontrak yang sudah berjalan supaya tidak ditafsir ulang) + sisa gap yang benar-benar belum diputus. Bukan duplikat F-037 maupun F-008-S.
+
+### 0. Inventarisasi terverifikasi (TERVERIFIKASI-KODE, origin/main 702853a1, 2026-10-25 22:04 WIB)
+
+Sudah live penuh (F-2026-10-21-037 tuntas, bukan PARSIAL lagi — status "PARSIAL" di entri F-037 lama baris ±2871 adalah keadaan saat entri itu ditulis):
+
+- Model `Lead` (`prisma/schema.prisma:4306`): `status String @default("new")`, `assignedTo Int?`, `deletedAt DateTime?`, relasi `activities LeadActivity[]`. Nilai status berjalan di halaman: `new/contacted/qualified/proposal/won/lost` (`crm/leads/page.tsx` statusChips).
+- Model `LeadActivity` (`prisma/schema.prisma:4341`): `leadId Int` (FK wajib, `onDelete: Cascade` — aktivitas tanpa lead TIDAK MUNGKIN secara skema), `scheduledAt DateTime?` (`scheduled_at`), `completedAt DateTime?` (`completed_at`), `type`, `subject`, `userId Int?`.
+- Builder murni `src/lib/reports/lead-followups.ts` (101 baris): `buildLeadFollowups(inputs, now)` — per lead jadwal terawal dengan `scheduledAt` tidak kosong + `completedAt` kosong + hari kalender WIB `scheduledAt <=` hari ini; `overdueDays >= 0`; urut overdue terbesar, seri `leadNumber` lalu `leadId`. Tanpa filter status (status hanya ditampilkan di baris).
+- Loader `src/lib/reports/lead-followups-data.ts`: `getLeadFollowups(now)` — SATU query massal `prisma.lead.findMany({ where: { deletedAt: null } })` lengkap aktivitas (tanpa N+1, tanpa filter status).
+- Kartu UI `src/components/reports/lead-followups-card.tsx`: `aria-label="Jadwal follow-up lewat"`, judul "Jadwal follow-up lewat", sembunyi total bila 0 baris; kolom No. Prospek/Nama/Status/Jadwal Follow-up/Terlambat ("Hari ini" bila 0).
+- Konsumen: `src/app/(dashboard)/crm/leads/page.tsx:14-15,61,96` — halaman di balik `requirePermission("view_leads")`.
+- Tes: `src/lib/reports/__tests__/lead-followups.test.ts` (builder 6 kasus + loader 1 kasus) dan `src/components/reports/__tests__/lead-followups-card.test.tsx`.
+- Jalur tulis hilir (F-2026-10-25-008-S, sudah live): `completeLeadActivity`/`reopenLeadActivity` di `src/actions/crm.actions.ts` — gerbang `edit_leads` + penjaga kepemilikan pola convertLead, klaim atomik `updateMany` bersyarat, hanya aktivitas ber-`scheduledAt` yang bisa ditandai selesai; konsumen tombol di `lead-actions.tsx`. Antrean karena itu BISA dibersihkan secara sah.
+- Penulis `scheduledAt`: `addLeadActivity` (`crm.actions.ts:354-356`) menyimpan dateOnly tervalidasi sebagai tengah-malam UTC WIB (`wibDateToUtcMidnight`); tanggal fiktif (2026-02-30) ditolak tanpa tulis DB (tes `crm.actions.test.ts:202-217`).
+- Saudara yang TIDAK boleh dicampur: `stale-leads.ts` (F-2026-10-20-29(a)) mengukur aktivitas TERAKHIR untuk status `new/contacted` saja, ambang 7 hari — makna "Lead diam", bukan jadwal. `quotation-followup-queue.ts` = antrean follow-up PENAWARAN, objek beda.
+
+Sisa gap terverifikasi (yang dibekukan entri ini sebagai pertanyaan, bukan ditebak):
+
+- GAP-047-A: lead berstatus terminal `won`/`lost` (dan `convertedAt` terisi) TETAP masuk antrean bila punya aktivitas terjadwal belum selesai — perilaku ini DIKUNCI tes existing (`lead-followups.test.ts:119-125` "status apa pun tampil apa adanya"). Belum ada putusan bisnis: antrean kerja sales menampilkan lead yang sudah tutup = derau, tetapi menyembunyikan tanpa putusan bisa menelan janji yang memang masih harus ditunaikan (mis. follow-up purnajual lead won).
+- GAP-047-B: antrean bersifat global — semua pemegang `view_leads` melihat semua lead; kolom `assignedTo` ada di model tetapi tidak dipakai loader/kartu. Filter "punya saya" / per-sales belum ada putusannya.
+- GAP-047-C: tidak ada ekspor/rekap antrean (pola `quotation-followup-export.ts` ada untuk penawaran); kebutuhan belum terbukti — dicatat sebagai TIDAK diusulkan (lihat bagian akhir).
+
+### 1. Workflow specification
+
+- Aktor: sales pemegang lead (aktor utama), admin CRM / kepala sales (pemantau antrean tim).
+- Dokumen masuk: `LeadActivity` terjadwal (`scheduledAt` terisi, ditulis `addLeadActivity`) pada `Lead` belum terhapus (`deletedAt` kosong).
+- Proses baca (read-model, tanpa mutasi): loader satu query massal → builder memilih per lead jadwal belum-selesai terawal yang hari kalender WIB-nya `<=` hari ini → kartu "Jadwal follow-up lewat" di halaman `crm/leads`.
+- Dokumen keluar: baris antrean (lead, status tampil, tanggal jadwal, hari terlambat) + tautan ke detail lead. Tindak lanjut keluar antrean HANYA lewat jalur tulis existing: `completeLeadActivity` (selesai), penjadwalan ulang aktivitas baru, atau perubahan status lead — antrean sendiri tidak menulis apa pun.
+- Di luar alur: pengingat aktif (notifikasi/WA/email terjadwal) — tidak ada infrastruktur pengingat keluar untuk lead; TIDAK diusulkan di sini (lihat bagian akhir).
+
+### 2. Role/permission matrix (key nyata, module-catalog.generated.ts:369-371)
+
+| Aksi | Permission key | Siapa (pola existing) |
+|---|---|---|
+| Melihat halaman prospek + kartu antrean | `view_leads` (`requirePermission` di `crm/leads/page.tsx`) | Role berizin view leads |
+| Membuat lead | `create_leads` (`CanCreate` halaman) | Role berizin create |
+| Menjadwalkan aktivitas follow-up | `edit_leads` (jalur `addLeadActivity`) | Pemilik lead / berizin edit |
+| Menandai selesai / batal-selesai | `edit_leads` + penjaga kepemilikan pola convertLead (`manage_leads`/super_admin dapat melewati kepemilikan) — F-2026-10-25-008-S | Pemilik lead |
+| Mengubah status lead (won/lost dsb.) | `edit_leads` jalur existing | Pemilik lead |
+
+Tidak ada permission key baru diusulkan tahap ini. Antrean TIDAK memakai scope HR (`getHrScope`) — objek ini CRM, bukan data gaji/pribadi karyawan.
+
+### 3. Status-transition matrix (keadaan aktivitas terjadwal terhadap antrean)
+
+| Keadaan awal | Pemicu | Keadaan akhir | Penjaga |
+|---|---|---|---|
+| Aktivitas terjadwal, `scheduledAt` > hari ini WIB | Waktu berjalan (hari kalender WIB berganti) | Belum masuk antrean (jadwal masa depan menutupi — bukan anggota) | Builder: `calendarDay(scheduledAt) > today` dilewati |
+| Belum masuk antrean | `scheduledAt` mencapai hari ini WIB, `completedAt` kosong | Masuk antrean, `overdueDays = 0` ("Hari ini") | Builder murni |
+| Masuk antrean | Hari berganti, belum selesai | Tetap masuk, `overdueDays` bertambah | Builder murni |
+| Masuk antrean | `completeLeadActivity` (F-008-S) | Keluar antrean (`completedAt` terisi); lead tampil lagi hanya bila ada jadwal belum-selesai lain yang sudah jatuh tempo (jadwal terawal berikutnya) | `edit_leads` + kepemilikan + klaim atomik |
+| Keluar (selesai) | `reopenLeadActivity` (F-008-S) | `completedAt` kosong lagi; kembali masuk antrean pada muat berikutnya bila jadwalnya sudah lewat | `edit_leads` + kepemilikan + klaim atomik |
+| Masuk antrean | Lead dihapus lunak (`deletedAt` terisi) | Keluar antrean | Loader `where: { deletedAt: null }` |
+| Masuk antrean | Lead berubah status (termasuk won/lost) | TETAP masuk (perilaku existing terkunci tes) — perubahan perilaku menunggu Q-LFU-1 | — |
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-LFU-01 | Anggota antrean = aktivitas `scheduledAt` tidak kosong + `completedAt` kosong + hari kalender WIB `scheduledAt <=` hari ini; per lead hanya jadwal terawal yang memenuhi | TERVERIFIKASI-KODE | `lead-followups.ts:54-72,74-92` |
+| BR-LFU-02 | Urutan: `overdueDays` terbesar dulu; seri diputus `leadNumber` menaik lalu `leadId` menaik | TERVERIFIKASI-KODE | `lead-followups.ts:93-99`; tes urutan |
+| BR-LFU-03 | Label antrean "Jadwal follow-up lewat" terpisah tegas dari "Lead diam" (`stale-leads`, status new/contacted, ambang 7 hari sejak aktivitas terakhir). Dilarang menggabung makna/kartu: lead bisa diam tanpa jadwal, dan bisa terjadwal lewat tanpa basi | TERVERIFIKASI-KODE | `lead-followups-card.tsx:28-34`; `stale-leads.ts:1-13`; entri F-037 mitigasi dobel makna |
+| BR-LFU-04 | Jadwal masa depan TIDAK menelan kelewatan jadwal lain pada lead sama: pilihan per lead = terawal yang SUDAH jatuh tempo, bukan aktivitas terakhir/terbaru (inilah mitigasi "jadwal masa depan menutupi kebasian" dari catatan backlog F-037) | TERVERIFIKASI-KODE | `lead-followups.ts:58-71`; tes loader (jadwal 25 Okt masa depan tidak menutupi jadwal 18 Okt lewat) |
+| BR-LFU-05 | Antrean read-only: tidak menulis, tidak menghapus, tidak mengubah status; keluar antrean hanya lewat jalur tulis existing (complete/reopen F-008-S, hapus lunak lead) | TERVERIFIKASI-KODE | `lead-followups-data.ts:9-10,15-32` |
+| BR-LFU-06 | Semua hitungan hari = hari kalender WIB (TZ aplikasi Asia/Jakarta), bukan selisih 24 jam UTC; jadwal hari ini tampil sebagai "Hari ini" (overdueDays 0), bukan disembunyikan | TERVERIFIKASI-KODE | `lead-followups.ts:49-52,90`; `crm.actions.ts:354-356` |
+| BR-LFU-07 | Aktivitas tanpa lead tidak mungkin tampil: `LeadActivity.leadId` FK wajib `onDelete: Cascade`; aktivitas tanpa `scheduledAt` bukan jadwal (dilewati builder) | TERVERIFIKASI-KODE | `schema.prisma:4341-4358`; `lead-followups.ts:60` |
+| BR-LFU-08 | Lead status terminal (won/lost/terkonversi) dengan jadwal belum selesai: TETAP tampil pada perilaku existing. Mengeluarkannya dari antrean = perubahan perilaku yang butuh putusan — default aman sampai diputus: tetap tampil (janji tercatat tidak ditelan diam-diam) | BUTUH-VONIS | Tes pengunci `lead-followups.test.ts:119-125`; Q-LFU-1 (Lead) |
+| BR-LFU-09 | Cakupan pandang antrean global per `view_leads` (semua sales terlihat semua). Penambahan filter per-sales berdasar `assignedTo` ("punya saya" / per penanggung jawab) = USULAN belum diputus; jangan dibangun sebagai scope diam-diam | USULAN | `Lead.assignedTo` schema:4306 tak terpakai loader; Q-LFU-2 (Lead) |
+| BR-LFU-10 | Tidak ada ambang hari minimum: jadwal lewat 0 hari pun tampil. Ambang "tampilkan sesudah N hari" tidak diusulkan (beda dari stale-leads yang berambang 7 hari — ambang di sini akan menelan janji hari ini) | USULAN | Kontras `stale-leads.ts` STALE_LEAD_THRESHOLD_DAYS |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+Benchmark resmi (akses live 2026-10-25 22:0x WIB run ini):
+
+- Accurate — fitur Kalender: "Dapatkan notifikasi pengingat untuk aktivitas penting seperti tenggat waktu pembayaran, pengiriman, dan laporan keuangan" (halaman fitur Perusahaan, terverifikasi live run ini): https://accurate.id/online/fitur/perusahaan/ — rujukan yang sama sudah dikutip entri F-037.
+- Zahir — Zahir CRM memasarkan disiplin follow-up terjadwal ("Follow-Up Jadi Disiplin & Terjadwal... Sales tahu harus follow-up siapa, kapan, dan bagaimana") dan histori aktivitas tercatat (telepon, meeting, follow-up, sales visit, proposal): https://zahiraccounting.com/id/zahir-crm/ ; https://zahirerp.com/id/all-features-of-zahir-products/ . Reminder Zahir Online umum (jatuh tempo utang/piutang/giro): https://www.zahironline.com/fitur-lengkap/
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF (TERVERIFIKASI-KODE) |
+|---|---|---|---|
+| Pengingat aktivitas terjadwal | Ada (Kalender + notifikasi pengingat) | Ada (CRM follow-up terjadwal; reminder jatuh tempo) | PARSIAL: antrean baca di halaman prospek ADA; notifikasi aktif TIDAK ada |
+| Antrean follow-up lewat per prospek | Tidak diverifikasi sebagai daftar khusus run ini — tidak diklaim | Tidak diverifikasi sebagai daftar khusus run ini — tidak diklaim | ADA (`lead-followups` + kartu, PR #314) |
+| Jadwal dicatat per aktivitas prospek | (konteks CRM tidak dirinci run ini) | Ada (histori aktivitas follow-up) | ADA (`LeadActivity.scheduledAt`) |
+| Penanda selesai membersihkan antrean | Tidak diverifikasi run ini | Tidak diverifikasi run ini | ADA (F-008-S complete/reopen) |
+
+Selisih jujur: yang tertinggal dari benchmark BUKAN antreannya (sudah ada), melainkan pengingat AKTIF (notifikasi) — dan itu keputusan kanal/ops terpisah, bukan gap read-model (lihat TIDAK diusulkan).
+
+### 6. Acceptance criteria + edge cases (status: terhadap implementasi existing — falsifikasi QA atas head main)
+
+- AC-LFU-1: lead dengan jadwal kemarin belum selesai tampil dengan Terlambat "1 hari"; jadwal hari ini tampil "Hari ini"; jadwal besok TIDAK tampil. Salah satu beda = MERAH.
+- AC-LFU-2: lead dengan jadwal lewat yang sudah `completedAt` terisi TIDAK tampil; sesudah `reopenLeadActivity` tampil lagi pada muat berikutnya. Tidak kembali = MERAH.
+- AC-LFU-3: lead punya jadwal lewat (belum selesai) + jadwal masa depan → tampil memakai jadwal LEWAT (terawal jatuh tempo), bukan tertutup jadwal masa depan (BR-LFU-04). Tertutup = MERAH.
+- AC-LFU-4: dua jadwal lewat belum selesai pada lead sama → tampil satu baris memakai yang terawal. Dua baris untuk lead sama = MERAH.
+- AC-LFU-5: urutan baris overdue terbesar dulu, seri leadNumber lalu leadId (BR-LFU-02). Urutan beda = MERAH.
+- AC-LFU-6: pengguna tanpa `view_leads` tidak dapat membuka halaman/antrean (requirePermission existing). Bocor = MERAH.
+- AC-LFU-7: label kartu persis "Jadwal follow-up lewat" dan tidak tercampur baris "Lead diam" stale-leads (BR-LFU-03). Gabung makna = MERAH.
+- Edge EC-1: lead tanpa aktivitas sama sekali → bukan anggota (bukan error, bukan baris kosong).
+- Edge EC-2: aktivitas tanpa `scheduledAt` (catatan biasa) → bukan anggota walau lead tua (itu wilayah stale-leads, bukan antrean ini).
+- Edge EC-3: aktivitas yatim tanpa lead → tidak mungkin per skema (FK wajib Cascade, BR-LFU-07); bila data warisan menyimpang ditemukan, baris tanpa lead TIDAK boleh tampil tanpa nama — laporkan sebagai temuan data, jangan tampilkan baris hantu.
+- Edge EC-4: lead won/lost berjadwal belum selesai → tampil apa adanya SESUAI perilaku existing sampai Q-LFU-1 diputus; QA mencatatnya sebagai perilaku terkunci, bukan cacat, pada vonis run ini.
+- Edge EC-5: batas tengah malam WIB — jadwal tanggal hari ini pukul berapa pun (tersimpan tengah-malam UTC WIB dari form) dihitung hari ini (overdueDays 0), bukan besok/lusa karena offset UTC.
+- Edge EC-6: antrean kosong → kartu sembunyi total (tidak ada kotak kosong mengganggu halaman).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-047-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-047-S | Audit keselarasan + spec beku ini (dokumen) | Business | — |
+| (turunan Q-LFU-1) putusan perilaku lead terminal di antrean; bila diputus keluar: ubah builder + sesuaikan tes pengunci status | Lead (putusan) → Backend (builder) → QA | Q-LFU-1 | — |
+| (turunan Q-LFU-2) putusan filter per-sales `assignedTo`; bila dibuka: parameter loader + sakelar kartu | Lead (putusan) → Backend/Frontend → QA | Q-LFU-2 | — |
+| (turunan) falsifikasi AC-LFU-1..7 + EC-1..6 atas head main persis | QA | Spec ini merged | — |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-LFU-1 (Lead, BUTUH-VONIS perilaku inti): lead `won`/`lost`/terkonversi dengan jadwal belum selesai — tetap di antrean (default aman existing) atau keluar? Rekomendasi Business: lead `lost` keluar (tidak ada janji hidup), lead `won` TETAP sampai jadwalnya diselesaikan manual (janji purnajual nyata) — tetapi keduanya USULAN sampai diputus; mengubahnya berarti mengubah tes pengunci existing dengan sadar.
+- Q-LFU-2 (Lead): filter per-sales berdasar `assignedTo` dibuka tahap berikut, atau antrean global per `view_leads` cukup untuk ukuran tim saat ini? Business tidak membangun scope diam-diam (BR-LFU-09).
+- Accountant: TIDAK diminta — nol nominal, nol jurnal, nol pajak pada antrean ini.
+
+### Yang TIDAK diusulkan run ini
+
+- Menulis ulang builder/loader/kartu F-037 — sudah live; duplikasi terlarang.
+- Pengingat aktif (notifikasi in-app, WA, email terjadwal) ke sales/pelanggan: kanal keluar untuk lead tidak ada infrastrukturnya; keputusan kanal/ops terpisah (keluarga penundaan F-27(b)), bukan gap read-model.
+- Ekspor/rekap antrean (GAP-047-C): pola ekspor penawaran ada, kebutuhan ekspor lead belum terbukti dari pemakaian — YAGNI tercatat, bukan hilang.
+- Menambah permission key baru atau scope per-sales diam-diam (menunggu Q-LFU-2).
+- Menggabung kartu dengan stale-leads atau memindahkan ambang 7 hari ke antrean jadwal (BR-LFU-03/10).
+
+F-2026-10-25-047-S — Audit keselarasan antrean follow-up lead terjadwal lewat. Status: SPEC/AUDIT SELESAI run ini; F-2026-10-21-037 dinyatakan TUNTAS terverifikasi live (bukan PARSIAL); implementasi turunan menunggu putusan Lead Q-LFU-1/Q-LFU-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder bila Q diputus berubah), QA (falsifikasi AC-LFU). Butuh putusan accountant: TIDAK.
+
+---
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-048-S: titik pesan-ulang (reorder point) + saran qty pesan per (barang, gudang) di atas stok minimum efektif existing (sisa induk F-2026-10-21-013)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-013 (c) P1 — stok minimum per gudang SUDAH live (ItemWarehouseSetting + minimum efektif, PR #694); sisa induk yang belum ada = lead time + titik pesan-ulang + saran qty. ID F-2026-10-25-048-S: nomor awal 047-S tabrakan dengan audit 047-S sesi paralel profil sama di branch sama (commit 2008904f); audit mempertahankan 047-S, blok ini renumber 048-S (bebas: grep main + branch = 0, 25 Okt 2026 22:16 WIB). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Catatan pivot kartu t_6e33f048: target awal kartu (follow-up lead F-037, termin F-106, histori endDate F-035, status part F-105, reservasi F-012, transfer parsial F-015) semua terbukti SUDAH LIVE di origin/main sesi ini (bukti di komentar kartu) — spec ini mengambil satu-satunya sisa terverifikasi ABSEN di keluarga itu.
+
+Benchmark resmi (akses 25 Okt 2026):
+- Accurate Barang Stok Minimum: https://help.accurate.id/product/Barang-stok-minimum/ — daftar di bawah minimum diteruskan ke Permintaan Barang / Pesanan Pembelian; qty saran = batas minimum atau selisih stok tersedia vs batas minimum; Minimum Beli per barang mengisi qty PO bila diisi. Accurate TIDAK menetapkan lead time per gudang pada halaman ini — ditulis apa adanya, bukan diklaim.
+- Accurate Permintaan Barang dari stok minimum: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/permintaan-stok-minimum/
+- Accurate Pesanan Pembelian dari stok minimum: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/stok-minimum-po/
+- Zahir: halaman help resmi yang menetapkan lead time / titik pesan-ulang per gudang belum ditemukan pada akses run ini — ditulis "belum terverifikasi", bukan diklaim.
+
+### Inventarisasi terverifikasi (25 Okt 2026, basis origin/main 702853a1)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `ItemWarehouseSetting` (prisma/schema.prisma:811-827): hanya `minStock` per (itemId, warehouseId), unik per pasangan. Tidak ada safetyStock / leadTimeDays / reorderPoint.
+- Minimum efektif: `min-stock-effective.ts` (override pasangan, selain itu warisi Item.minStock global, sumber tertanda "override"|"global"); penilaian per gudang `min-stock-warehouse-alert.ts:25-45` (pasangan tanpa lapisan tidak dinilai); laporan `buildMinStockByWarehouse` (min-stock-data.ts:118) + halaman laporan/stok-minimum digerbang `view_reports` (page.tsx:28).
+- Saran qty existing = kekurangan saja: minStockRequest prefill `min-stock-request.ts` (kekurangan minimum − stok, staf boleh sunting bebas di form Permintaan Pembelian).
+- PO terbuka terbaca pola existing: `OPEN_PURCHASE_ORDER_STATUSES = ["ordered","partial_received"]`, sisa per baris = qty − receivedQty clamp >= 0 (bom-revision-impact.ts:12-16; PurchaseOrderItem schema:2043-2057). Builder stok minimum existing TIDAK mengurangi PO masuk ini (grep incoming di min-stock*.ts = 0).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini):
+- `leadTime` / `leadTimeDays` / `reorderPoint` / `safetyStock` di prisma/schema.prisma + src/ = 0 hit. VendorItemPrice (schema:580-600) tanpa leadTimeDays.
+- Tidak ada konsumsi rata-rata harian / laju pakai per gudang yang dipakai ambang pesan-ulang; tidak ada builder titik pesan-ulang.
+
+### 1. Workflow specification (USULAN di atas mesin TERVERIFIKASI-KODE)
+
+Aktor: Admin gudang/pembelian (pengisi lead time), Staf pembelian (pemakai saran), Sistem (builder baca-saja).
+Dokumen masuk: ItemWarehouseSetting existing + leadTimeDays usulan per (barang, gudang) ATAU per (vendor, barang) — bentuk penampung = Q-ROP-2 Backend; InventoryLayer sisa per gudang; PO terbuka existing.
+Dokumen keluar: baris penilaian per (barang, gudang) berstatus di bawah titik pesan-ulang + saran qty pesan; diteruskan ke prefill Permintaan Pembelian existing (min-stock-request.ts) — BUKAN dokumen PO/jurnal baru.
+Alur: (1) minimum efektif existing menentukan lantai aman; (2) titik pesan-ulang turunan = minimum efektif + kebutuhan selama lead time (rumus BR-ROP-02); (3) stok tersedia per gudang + PO masuk dibandingkan ke titik itu; (4) saran qty = kekurangan ke target pengisian (BR-ROP-04); (5) staf membuka Permintaan Pembelian ter-prefill dan menyunting bebas (perilaku existing dipertahankan).
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key | Pemilik existing |
+|---|---|---|
+| Melihat laporan stok minimum / titik pesan-ulang | `view_reports` | TERVERIFIKASI-KODE laporan/stok-minimum page.tsx:28 |
+| Mengubah minimum per gudang (ItemWarehouseSetting) | key tulis pengaturan barang existing — Backend sebut key persis saat fisik | USULAN verifikasi Backend |
+| Mengisi leadTimeDays | key sama dengan pengisi penampungnya (Q-ROP-2) | BUTUH-VONIS Lead (Q-ROP-3) |
+| Membuat Permintaan Pembelian dari saran | key existing form permintaan pembelian | TERVERIFIKASI-KODE (prefill min-stock-request.ts) |
+
+Tidak ada key baru diusulkan tahap ini; key baru = keputusan Lead, bukan karangan spec.
+
+### 3. Status-transition matrix (turunan baca-saja, tanpa mutasi dokumen)
+
+| Status baris | Pemicu (turunan server) | Penjaga |
+|---|---|---|
+| tidak_dinilai | pasangan tanpa lapisan gudang, atau lead time kosong, atau minimum efektif 0 | tampil di ember terpisah, tidak masuk saran (BR-ROP-05) |
+| aman | tersedia + PO masuk > titik pesan-ulang | — |
+| pesan_sekarang | tersedia + PO masuk <= titik pesan-ulang | saran qty terbit (BR-ROP-04) |
+| kritis | tersedia <= minimum efektif (lantai existing) | tetap tertanda kritis walau PO masuk besar — dua label tidak saling menutupi (BR-ROP-06) |
+
+### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-ROP-01 | Titik pesan-ulang dihitung per (barang, gudang), memakai minimum EFEKTIF existing (override pasangan > global). Dilarang ambang global kedua. | USULAN di atas TERVERIFIKASI-KODE min-stock-effective.ts |
+| BR-ROP-02 | Rumus: titik = minimum efektif + ceil(laju pakai harian × leadTimeDays). Laju pakai = pemakaian MaterialIssue completed per gudang selama jendela hari berjalan. Jendela + sumber laju = Q-ROP-1 (Business usul 90 hari; angka final PUTUSAN Lead). Tanpa laju terbukti (barang baru) → titik = minimum efektif, tertanda "tanpa laju". | USULAN; angka BUTUH-VONIS Lead |
+| BR-ROP-03 | leadTimeDays bilangan bulat >= 0 hari kalender. Kosong = tidak dinilai untuk reorder (bukan dianggap 0 diam-diam). Sumber isi: pengalaman vendor nyata per pasangan; sistem tidak menebak dari tanggal PO lama pada tahap ini. | USULAN |
+| BR-ROP-04 | Saran qty = max(0, target isi − (tersedia + PO masuk)); target isi = titik pesan-ulang + minimum efektif? — DITOLAK sebagai karangan: target isi tahap ini = kekurangan ke titik pesan-ulang saja (selisih, pola Accurate selisih vs minimum). Saran selalu boleh disunting staf di form (existing). | USULAN (pola BENCHMARK Accurate selisih) |
+| BR-ROP-05 | Ember "tidak_dinilai" wajib tampil terhitung (pasangan tanpa lead time / tanpa lapisan / minimum 0) — daftar kosong tidak boleh terbaca "semua aman" (pola jujur min-stock.ts existing). | USULAN pola TERVERIFIKASI-KODE |
+| BR-ROP-06 | Status kritis (lantai minimum) dan pesan_sekarang (titik) adalah dua penilaian terpisah; PO masuk mengurangi urgensi pesan, tidak menghapus label kritis stok fisik. | USULAN |
+| BR-ROP-07 | Satuan tidak dijumlahkan lintas UOM (pola min-stock.ts); saran per baris barang-gudang-UOM-nya sendiri. | TERVERIFIKASI-KODE pola existing |
+| BR-ROP-08 | Builder murni baca-saja: tidak menulis setting, tidak membuat PO/permintaan, tidak menyentuh jurnal. Pembuatan dokumen tetap aksi staf existing. | USULAN |
+
+### 5. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan 047-S |
+|---|---|---|---|---|
+| Minimum per barang | ada (help di atas) | belum terverifikasi run ini | ada global + per gudang (PR #694) | dipertahankan |
+| Saran qty dari minimum | selisih / batas / Minimum Beli | belum terverifikasi | kekurangan saja (prefill) | selisih ke titik pesan-ulang |
+| Lead time per gudang/vendor | tidak ditetapkan halaman di atas | belum terverifikasi | ABSEN (grep 0) | penampung + rumus BR-ROP-02 |
+| Kurangi PO masuk dari saran | tidak dinyatakan halaman di atas | belum terverifikasi | ABSEN di builder minimum | BR-ROP-04 |
+
+### 6. Acceptance criteria + edge cases
+
+- AC-ROP-B1: lead time kosong → baris masuk tidak_dinilai terhitung; tampil sebagai saran = MERAH.
+- AC-ROP-B2: tersedia + PO masuk tepat = titik → pesan_sekarang dengan saran 0 tertanda tertutup PO? Tidak: saran qty 0 = baris tidak diteruskan ke prefill (prefill existing membuang qty <= 0). Baris hilang tanpa ember = MERAH.
+- AC-ROP-B3: mengubah minimum efektif (override vs global) mengubah titik di render berikut tanpa edit lead time. Tidak berubah = MERAH (sumber ganda).
+- AC-ROP-B4: stok kritis + PO masuk besar → label kritis tetap tampil. Hilang = MERAH.
+- AC-ROP-B5: barang jasa / nonaktif tidak dinilai (pola loader existing isService/isActive). Masuk = MERAH.
+- Edge: laju pakai 0 dengan lead time terisi → titik = minimum, tertanda "tanpa laju". Lead time negatif ditolak di penjaga penampung (fisik Backend). Gudang tanpa lapisan: tidak dinilai, bukan 0. Retur pembelian tidak menambah tersedia di builder ini (sisa InventoryLayer = sumber tunggal).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-048-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-048-S | Spec kontrak ini (dokumen) | Business | — |
+| (turunan) putusan jendela laju + sumber laju + key tulis lead time | Lead | Q-ROP-1/Q-ROP-3 | — |
+| (turunan) fisik penampung leadTimeDays + builder titik/saran + loader | Backend | putusan Lead; klaim file di board dulu (schema wilayah Backend) | — |
+| (turunan) tampil kolom titik/saran + ember tidak_dinilai di laporan stok minimum | Frontend | kontrak Backend; grep e2e laporan stok-minimum dulu | — |
+| (turunan) falsifikasi AC-ROP-B1..B5 | QA | head Backend/Frontend persis | — |
+
+### 8. Pertanyaan putusan
+
+- Q-ROP-1 (Lead): jendela laju pakai (usul Business 90 hari kalender WIB) + sumber laju sah (MaterialIssue completed per gudang saja, atau termasuk issue proyek?). Angka tidak diputus Business sendiri sebagai fakta.
+- Q-ROP-2 (Backend sesudah Q-ROP-1): penampung leadTimeDays di ItemWarehouseSetting (per gudang) vs VendorItemPrice.leadTimeDays (per vendor, pola induk awal) vs keduanya bertingkat (vendor default, gudang override)?
+- Q-ROP-3 (Lead): key tulis pengisi lead time — reuse key pengaturan barang existing atau key khusus pembelian?
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-048-S)
+
+- Auto-PO / auto-permintaan tanpa staf (dokumen tetap dibuat manusia; saran hanya prefill existing).
+- safetyStock sebagai kolom/angka terpisah: minimum efektif existing sudah berperan lantai aman; kolom kedua = ambang ganda membingungkan sampai ada bukti kebutuhan.
+- Peramalan musiman / EOQ: tidak ada data laju cukup terbukti; YAGNI tercatat.
+
+F-2026-10-25-048-S — Titik pesan-ulang + saran qty per (barang, gudang). Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-ROP-1/Q-ROP-3, lalu fisik Backend Q-ROP-2. Pemilik usulan: Business (spec), Lead (angka jendela/key), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (kuantitas persediaan, tanpa jurnal/angka uang).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-050-S: tingkat pengingat penagihan piutang dari antrean F-089 (turunan umur + janji, tanpa angka karang)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Induk: F-2026-10-22-089-S (antrean penagihan piutang, LIVE penuh). Kartu: t_283cc339. ID F-2026-10-26-050-S diverifikasi bebas run ini 2026-10-26 00:04–00:19 WIB: backlog origin/main maks F-2026-10-25-049-V; grep `F-2026-10-26` di backlog + board origin/main = 0; PR terbuka tidak memuat 050/reminder/pengingat sebagai ID spec ini. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras kartu (dipegang spec ini): ambang hari tingkat = USULAN eksplisit untuk putusan Lead (Q-CR-* di bawah memakai awalan Q-COLR supaya tidak tabrakan register paparan kredit), JANGAN ditulis sebagai fakta/kebijakan; selaraskan ember umur existing `aging.ts`, jangan buat ember kedua; tingkat = turunan builder murni dari field existing, nol migrasi tahap 1; nol jurnal, nol denda/bunga baru (BR-COL-11 tetap wilayah vonis Accountant F-2026-10-22-093-V yang SUDAH terbit dan SUDAH terimplementasi sebagai dokumen denda terpisah — spec ini tidak menghitung ulang, tidak menerbitkan, tidak mengubahnya), nol kirim otomatis WA/email (BR-COL-12 tetap tertutup), nol credit-hold otomatis; kontak pelanggan hanya untuk pemegang izin antrean (BR-COL-10/Q-COL-4), ekspor tanpa kontak.
+
+Penamaan register: awalan `BR-CR-*` SUDAH terpakai register paparan kredit F-2026-10-21-017-S (BR-CR-01..10, backlog :4540/:20376) — register spec ini memakai `BR-COLR-*` (collection reminder) dan pertanyaan `Q-COLR-*`, acceptance `AC-COLR-*`. Jangan campur dengan BR-CR paparan kredit.
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_extract):
+- Accurate Syarat Pembayaran: sistem mengatur jangka waktu/jatuh tempo dan "otomatis mengingatkan" jatuh tempo pembayaran — https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/syarat-pembayaran/mengenal-fitur-syarat-pembayaran/ (BENCHMARK: monitoring jatuh tempo otomatis ada di Accurate; kanal/template pengingat ke pelanggan tidak dirinci halaman ini — tidak diklaim lebih dari isi halaman).
+- Accurate Umur Faktur Penjualan: kolom Umur (hr) dengan dasar perhitungan preferensi Tanggal Faktur ATAU Tanggal Jatuh Tempo; belum lunas dihitung jatuh tempo → hari ini — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/umur-faktur-penjualan/ (BENCHMARK: umur berbasis due adalah praktik pembanding; ISF existing memakai due acuan BR-COL-03, dipertahankan).
+- Zahir Reminder: fasilitas reminder mengetahui jatuh tempo piutang usaha, utang usaha, giro masuk, giro keluar; grafik + daftar jatuh tempo piutang usaha — https://www.zahironline.com/reminder/ dan https://www.zahironline.com/reminder/grafik-dan-daftar-jatuh-tempo-piutang-usaha/ (BENCHMARK: Zahir menyajikan daftar/grafik jatuh tempo sebagai permukaan monitoring internal; halaman resmi ini TIDAK menetapkan tingkat urgensi bertingkat, ambang hari eskalasi, denda, atau kirim otomatis ke pelanggan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 9284f262)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Builder antrean: `src/lib/reports/collection-queue.ts` — tahap turunan `COLLECTION_STAGES = [belum_diserahkan, sudah_diserahkan, lewat_janji]` (:34-40), label verbatim (:43-47); kosakata channel/outcome final Q-COL-2 (:50-67); `COLLECTION_SETTLED_EPSILON = 0.005` (:73); input builder membawa `dueDate` faktur (:82), `dueDate` exchange (:100), followUp `followedUpAt/outcome/promisedDate/deletedAt` (:105-111); baris keluar membawa `dueAcuan` (:130), `umurHari` hari kalender WIB sejak due acuan, negatif = belum jatuh tempo (:137-138), `lastFollowUpAt` (:140), `promiseDate` = promisedDate maksimum outcome janji (:141-142, dihitung :249-257); umur dihitung :259-262; tahap lewat_janji :264-278; urutan Q-COL-3 :306-330.
+- Due acuan BR-COL-03 terimplementasi persis: `dueAcuan = exchange ? exchange.dueDate : invoice.dueDate` (collection-queue.ts:237); exchange aktif terakhir per faktur :172-189; followUp terhapus disaring :208-214.
+- Loader fail-closed: `src/lib/reports/collection-queue-data.ts:22-26` mewajibkan `view_reports` DAN `view_sales_invoices` sebelum query; query massal faktur posted/partial belum terhapus + exchange item + followUp tidak terhapus + late fee terbit (:28-101); kontak pelanggan ikut hanya karena izin antrean (komentar :10-11, select :43-45).
+- Halaman + kartu: `src/app/(dashboard)/penjualan/antrean-penagihan/page.tsx:20-24` (izin catat dibaca halaman, loader menegakkan baca); `src/components/reports/collection-queue-card.tsx` menampilkan tahap/umur/sisa apa adanya tanpa hitung ulang (komentar :37-41), indikator "Ada denda terutang" dari dokumen denda SUDAH terbit (:124-128).
+- Denda SUDAH ada sebagai dokumen terpisah (bukan gap spec ini): builder antrean mengimpor `buildLateFeeOutstandingByInvoice` (collection-queue.ts:23) dan baris membawa `lateFeeOutstanding`/`hasOutstandingLateFee` indikator saja (:143-148, :300-302); read-model dokumen denda `src/lib/reports/sales-late-fee.ts:1-12` menegaskan UI tidak menghitung denda dan indikator = agregat dokumen posted/partial yang sudah terbit. Vonis dasar: F-2026-10-22-093-V (BR-COL-11 terjawab; tarif kontraktual per pelanggan, BUKAN ambang spec ini).
+- Model tindak lanjut: `InvoiceCollectionFollowUp` (prisma/schema.prisma:1709-1728) — followedUpAt, channel, outcome, promisedDate nullable, promisedAmount Decimal(15,2) nullable, deletedAt soft; aksi catat `createInvoiceCollectionFollowUp` izin `create_invoice_collection_followups` (src/actions/invoice-collection.actions.ts:51+, requirePermission di badan aksi), append-only, tanpa jurnal/paidAmount berubah (komentar berkas :1-16).
+- Ember umur existing SATU-SATUNYA yang boleh dirujuk: `src/lib/reports/aging.ts:11-36` — `AGING_BUCKETS = [Belum Jatuh Tempo, 1–30 Hari, 31–60 Hari, 61–90 Hari, > 90 Hari]`, `agingBucket(overdueDays)` batas <=0 / <=30 / <=60 / <=90.
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts): `view_sales_invoices` (:148), `create_invoice_collection_followups` (:178), `view_invoice_exchanges` (:179), `create_invoice_exchanges` (:180), `view_reports` (:428).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini di worktree basis 9284f262):
+- Tingkat pengingat/urgensi turunan per baris antrean: grep `reminderLevel|tingkatPengingat|collectionReminder|ReminderLevel` di src/ + prisma/ = 0. Baris antrean hari ini hanya membawa tahap (3 nilai) + `umurHari` mentah + `promiseDate`/`lastFollowUpAt` mentah — staf membaca angka hari sendiri dan menebak mana "diingatkan lembut" vs "dieskalasi"; tidak ada turunan seragam "sudah diingatkan sesudah janji lewat atau belum", tidak ada penanda "janji lewat belum ada tindak lanjut sesudahnya".
+- Pengiriman pengingat otomatis ke pelanggan: tetap ABSEN dan tetap TERTUTUP (BR-COL-12, BUTUH-VONIS Lead) — spec ini tidak membukanya; klik WA existing bukan pengingat tercatat (BR-COL-08).
+
+Bukan duplikasi: bukan F-089-S (tahap antrean — spec ini lapisan tingkat DI ATAS tahap yang sama, populasi dan builder sama, tanpa tahap kedua); bukan F-2026-10-25-025-S/038-S/043-S (statement per pelanggan + kirim manual WA/email statement — objek dokumen statement, bukan tingkat urgensi antrean); bukan F-093-V (dokumen denda — uang, vonis Accountant, sudah live; spec ini nol nominal); bukan paparan kredit F-017 (BR-CR — risiko kredit pelanggan, bukan urgensi penagihan per faktur).
+
+### 1. Workflow specification
+
+Aktor: Petugas Penagihan / Admin Penjualan (pembaca antrean + pencatat tindak lanjut), Supervisor Penjualan (pembaca antrean; penerima eskalasi manual di luar sistem tahap 1 — lihat Yang TIDAK diusulkan), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris `CollectionQueueRow` existing persis (invoiceId, tahap, dueAcuan, umurHari, promiseDate, lastFollowUpAt, sisa, hasOutstandingLateFee sebagai konteks tampil existing) — TIDAK ada dokumen/field masuk baru tahap 1.
+Dokumen keluar: kolom turunan `tingkatPengingat` + label tampil per baris antrean (read-model, dihitung builder saat render) + rekap hitungan per tingkat di ringkasan antrean (turunan dari baris yang sama). TIDAK ada dokumen keluar ke pelanggan tahap 1: tidak ada pesan WA/email yang dihasilkan, disiapkan, atau dikirim oleh tingkat ini.
+
+Alur:
+1. Builder existing membentuk baris antrean (tahap, umurHari, promiseDate, lastFollowUpAt) persis seperti hari ini — urutan dan populasi tidak berubah.
+2. Builder menurunkan `tingkatPengingat` per baris dari (tahap, umurHari, promiseDate, lastFollowUpAt) memakai tabel turunan §3. Tingkat adalah label urgensi internal untuk petugas, bukan status dokumen: tidak disimpan, tidak mengubah tahap, tidak mengubah urutan antrean Q-COL-3 (urutan tetap; tingkat hanya penanda kolom + filter/rekap — mengubah urutan = Q-COLR-4).
+3. Petugas membuka antrean, memakai tingkat untuk memilih faktur yang dihubungi lebih dulu dan nada tindak lanjut manualnya (telepon/WA manual/kunjungan/email manual lewat kanal existing). Menghubungi pelanggan tetap aksi manusia di luar builder; mencatat hasilnya tetap lewat form Catat Tindak Lanjut existing (BR-COL-06/08).
+4. Sesudah tindak lanjut tercatat, render berikut menghitung ulang tingkat dari followUp terakhir yang baru: janji baru yang belum lewat menurunkan baris keluar dari tingkat janji-lewat; tindak lanjut tanpa janji sesudah lewat tidak menghapus fakta pernah lewat — perilaku persisnya di tabel §3 (baris "sesudah dihubungi").
+5. Pembayaran tetap lewat SalesPayment existing; baris lunas keluar antrean (BR-COL-02) dan tingkatnya hilang bersamanya. Tingkat tidak pernah mencatat pembayaran, tidak membuat jurnal, tidak menerbitkan denda (BR-COL-07 tetap).
+6. Eskalasi tahap 1 = petugas/supervisor membaca tingkat tertinggi dan bertindak manual (telepon/kunjungan/catat tindak lanjut bersengketa bila faktual). Sistem tidak menaikkan izin, tidak menahan dokumen lain, tidak memblokir transaksi pelanggan (nol credit-hold), tidak mengirim apa pun otomatis.
+
+Kata tampil usulan (USULAN — verbatim final = Q-COLR-3 Lead bersama putusan ambang):
+- Judul kolom: `Tingkat Pengingat`.
+- Label tingkat (kunci turunan → label): `belum_perlu` → "Belum Perlu Diingatkan"; `pengingat_awal` → "Pengingat Awal"; `pengingat_lanjutan` → "Pengingat Lanjutan"; `eskalasi` → "Perlu Eskalasi"; `tanpa_acuan` → "Tanpa Acuan Tanggal".
+- Notice tambahan usulan (menempel di bawah COLLECTION_QUEUE_NOTICE_TEXT existing, tidak menggantinya): "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean + tingkat pengingat | `view_reports` (katalog:428) DAN `view_sales_invoices` (katalog:148) | loader collection-queue-data.ts:25-26 fail-closed sebelum query | TIDAK ada key baru; tingkat ikut baris yang sama, tidak tampil ke pemegang satu izin saja |
+| Lihat kontak pelanggan di baris | turunan dua izin di atas (Q-COL-4) | loader select phone/contactPerson :43-45 hanya sesudah gerbang | tidak berubah; tingkat tidak menambah/mengurangi akses kontak |
+| Catat tindak lanjut + janji (satu-satunya cara "sudah mengingatkan" tercatat) | `create_invoice_collection_followups` (katalog:178) | aksi invoice-collection.actions.ts requirePermission + validasi kosakata | tidak berubah; tingkat TIDAK bisa diubah manual lewat aksi apa pun tahap 1 |
+| Soft-delete tindak lanjut | `create_invoice_collection_followups` + juga `view_reports` (Q-COL-1) | aksi delete existing | tidak berubah; menghapus followUp terakhir mengubah turunan render berikut (dihitung ulang jujur, AC-COLR-9) |
+| Buat tukar faktur dari antrean | `create_invoice_exchanges` (katalog:180) | halaman page.tsx:22 | tidak berubah |
+| Ekspor antrean | tidak ada permukaan ekspor antrean tahap ini (Q-COL-4: ekspor tanpa kontak) | — | tingkat boleh ikut ekspor masa depan hanya tanpa kolom kontak; ekspor baru = pekerjaan terpisah, bukan spec ini |
+| Kirim pengingat ke pelanggan (WA/email, manual massal / otomatis) | TIDAK ADA key — dilarang tahap 1 | — | BR-COL-12 tetap BUTUH-VONIS Lead; key kirim tidak diciptakan spec ini |
+| Terbitkan dokumen denda | jalur dokumen denda existing F-093-V (di luar antrean) | sales-late-fee existing | tingkat TIDAK memicu, menyarankan nominal, atau membuka form denda |
+
+Tidak ada permission key baru diusulkan. Key baru apa pun = Q-COLR-5 Lead, bukan karangan spec.
+
+### 3. Status-transition matrix (turunan, nol kolom baru tahap 1)
+
+Populasi: hanya baris yang sudah masuk antrean existing (posted/partial, sisa > epsilon, belum terhapus). Di luar antrean tidak ada tingkat.
+
+Definisi sinyal (semua TERVERIFIKASI-KODE dari builder existing): `umurHari` = hari kalender WIB sejak dueAcuan (null tanpa due); `janjiLewat` = promiseDate != null dan hari janji < hari ini WIB (pola collection-queue.ts:264); `dihubungiSesudahJanjiLewat` = lastFollowUpAt != null dan hari lastFollowUpAt >= hari promiseDate (perbandingan hari kalender WIB — fisik persis Backend, Q-COLR-6).
+
+| # | Kondisi baris (turunan) | Tingkat | Arti kerja untuk petugas |
+|---|---|---|---|
+| T0 | umurHari == null (tanpa due acuan dan tanpa janji) | `tanpa_acuan` | tidak ada tanggal untuk menilai urgensi; petugas melengkapi due/janji lewat jalur existing, sistem tidak menebak (BR-COL-03) |
+| T1 | umurHari <= 0 dan tidak janjiLewat | `belum_perlu` | belum jatuh tempo; tidak diingatkan sebagai tunggakan |
+| T2 | umurHari > 0, tidak janjiLewat, bukan T3/T4 | `pengingat_awal` | sudah lewat due, belum ada janji yang dilanggar; ingatkan biasa |
+| T3 | janjiLewat dan TIDAK dihubungiSesudahJanjiLewat | `pengingat_lanjutan` | janji terlewat dan belum ada tindak lanjut tercatat sesudah tanggal janji — hubungi dan catat janji baru/hasilnya |
+| T4 | janjiLewat dan dihubungiSesudahJanjiLewat (sudah dihubungi sesudah janji lewat, sisa masih > 0, belum ada janji baru yang menutup) | `eskalasi` (USULAN nama+ambang, Q-COLR-1/3) | janji sudah dilanggar dan sudah pernah ditindaklanjuti sesudahnya tanpa penyelesaian tercatat — naik ke supervisor secara manual |
+| T5 | janji baru tercatat dengan promisedDate >= hari ini | keluar dari T3/T4; tingkat dinilai ulang dari umurHari (T1/T2) | janji hidup menggantikan janji lewat (konsisten tahap existing yang keluar lewat_janji) |
+
+Transisi terjadi hanya karena render ulang sesudah fakta existing berubah (pembayaran, tindak lanjut baru, janji baru, exchange baru/terhapus, soft-delete followUp). Tidak ada pemicu waktu yang menulis apa pun; tidak ada cron; membuka halaman besok bisa memberi tingkat berbeda untuk fakta yang sama karena `umurHari` bergerak — itu sifat turunan, dinyatakan jujur di notice.
+
+Pertanyaan ambang yang TIDAK diputus spec ini (semua BUTUH-VONIS Lead, dicatat Q-COLR-1): apakah `pengingat_awal` perlu dipecah mengikuti ember aging existing (1–30 / 31–60 / 61–90 / >90 dari aging.ts:31-35) menjadi lebih dari satu tingkat, dan apakah `eskalasi` juga terpicu oleh umur semata (mis. ember >90 tanpa janji) atau hanya oleh janji-lewat-yang-sudah-dihubungi. Default aman spec selama belum diputus: tingkat mengikuti tabel di atas persis (umur hanya membedakan belum_perlu vs pengingat_awal; kedalaman ember aging tetap kolom Umur existing, bukan tingkat kedua) — builder tidak boleh mengarang ambang hari tambahan.
+
+Urutan antrean: TIDAK berubah tahap 1 (Q-COL-3 tetap: lewat_janji tertua > due terdekat > sisa terbesar). Tingkat tampil sebagai kolom + rekap hitungan; filter per tingkat dan/atau urutan berbasis tingkat = Q-COLR-4.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-COLR-01 | Tingkat pengingat selalu turunan builder murni dari field existing baris antrean (tahap, umurHari, promiseDate, lastFollowUpAt); tidak ada kolom tingkat tersimpan di SalesInvoice/InvoiceCollectionFollowUp tahap 1. Kolom tersimpan = keputusan terpisah Backend/Lead (Q-COLR-2). | USULAN di atas TERVERIFIKASI-KODE collection-queue.ts:121-149 |
+| BR-COLR-02 | Ember umur satu-satunya = aging.ts (Belum Jatuh Tempo / 1–30 / 31–60 / 61–90 / >90). Tingkat dilarang mendefinisikan ember hari kedua; pemecahan tingkat berbasis kedalaman umur hanya boleh merujuk batas ember itu dan hanya sesudah Q-COLR-1 diputus. | USULAN di atas TERVERIFIKASI-KODE aging.ts:11-36 |
+| BR-COLR-03 | Due acuan dan umur mengikuti BR-COL-03 existing tanpa tafsir baru: exchange aktif dueDate, selain itu faktur dueDate; keduanya kosong = umur null = tingkat `tanpa_acuan`, tidak ditebak dari tanggal faktur. | TERVERIFIKASI-KODE collection-queue.ts:237,259-262 |
+| BR-COLR-04 | Janji terakhir = promisedDate maksimum dari tindak lanjut tidak terhapus ber-outcome `terhubung_janji_bayar` (definisi existing); janji dari followUp terhapus tidak menghidupkan/mematikan tingkat. | TERVERIFIKASI-KODE collection-queue.ts:249-257,208-214 |
+| BR-COLR-05 | "Sudah dihubungi sesudah janji lewat" hanya terbukti dari InvoiceCollectionFollowUp tercatat (followedUpAt) — klik WhatsApp, klik mailto, membuka halaman, atau membuka detail faktur TIDAK menaikkan/menurunkan tingkat (pola BR-COL-08). | USULAN pola TERVERIFIKASI-KODE BR-COL-08 spec F-089-S |
+| BR-COLR-06 | Tingkat tidak mengirim pesan apa pun ke pelanggan, tidak menyiapkan draf pesan, tidak menjadwalkan kirim. Pengiriman manual per faktur lewat tombol WhatsApp existing dan pengiriman otomatis tetap wilayah BR-COL-12 (BUTUH-VONIS Lead, tertutup). | USULAN menegaskan BR-COL-12 |
+| BR-COLR-07 | Tingkat tidak membuat jurnal, tidak mengubah paidAmount/status/tahap faktur, tidak mencatat pembayaran, tidak menerbitkan/menghitung dokumen denda. Indikator denda terutang existing (dokumen sudah terbit) tampil apa adanya dan bukan masukan rumus tingkat tahap 1 — menjadikannya pemicu eskalasi = aturan baru BUTUH-VONIS (Q-COLR-7). | USULAN menegaskan BR-COL-07 + TERVERIFIKASI-KODE collection-queue.ts:143-148 |
+| BR-COLR-08 | Tingkat tidak menahan dokumen apa pun: tidak ada credit-hold, blokir SO/invoice/penawaran, atau penolakan transaksi yang dipicu tingkat, otomatis maupun manual-dari-tingkat. Penegakan kredit tetap wilayah advisory/gerbang kredit F-017/F-2026-10-25-035-S. | USULAN (nol penahan) |
+| BR-COLR-09 | Kontak pelanggan (phone/contactPerson) hanya tampil ke pemegang izin antrean (dua key §2); tingkat, rekap tingkat, dan ekspor masa depan tidak membawa kontak. Rekap per tingkat hanya hitungan baris + total sisa. | USULAN menegaskan BR-COL-10/Q-COL-4 |
+| BR-COLR-10 | UI menampilkan tingkat + label dari builder apa adanya; UI tidak menghitung ulang umur/janji/tingkat dan tidak mengarang ambang di komponen (pola AC-COL-10). Kata label final verbatim = Q-COLR-3. | USULAN pola TERVERIFIKASI-KODE collection-queue-card.tsx:37-41 |
+| BR-COLR-11 | Ambang/label tingkat adalah kebijakan perilaku inti: nama tingkat, pemecahan ember, dan pemicu eskalasi berbasis umur = BUTUH-VONIS Lead (Q-COLR-1/3), bukan fakta dan bukan konstanta kode yang boleh ditanam Backend sebelum diputus. | BUTUH-VONIS Lead |
+| BR-COLR-12 | Denda/bunga keterlambatan TIDAK dihitung, ditambah, atau disarankan nominalnya oleh tingkat. Perlakuan denda tetap vonis F-2026-10-22-093-V + dokumen denda existing; kebutuhan vonis Accountant baru hanya lahir bila kelak ada usulan nominal/aturan denda baru (BR-COL-11 tidak dibuka ulang spec ini). | BUTUH-VONIS Accountant hanya bersyarat (tidak diminta run ini) |
+
+### 5. Feature matrix (BENCHMARK akses live 2026-10-26)
+
+| Kemampuan | Accurate | Zahir | ISF hari ini (TERVERIFIKASI-KODE) | Usulan 050-S |
+|---|---|---|---|---|
+| Monitoring jatuh tempo piutang | Ada: syarat pembayaran mengatur jatuh tempo + sistem otomatis mengingatkan jatuh tempo (help syarat pembayaran di atas) | Ada: reminder jatuh tempo piutang/utang/giro + grafik dan daftar jatuh tempo piutang (zahironline.com/reminder) | Ada internal: antrean kerja per faktur F-089 (tahap + umur + janji), bukan sekadar laporan | dipertahankan; ditambah tingkat urgensi internal per baris |
+| Umur piutang berbasis jatuh tempo | Ada: Umur (hr) dasar Tanggal Faktur / Tanggal Jatuh Tempo preferensi (help umur faktur di atas) | daftar jatuh tempo piutang (URL di atas); rincian dasar umur tidak dirinci halaman resmi yang diakses — tidak diklaim | Ada: umurHari dari due acuan BR-COL-03 + ember aging.ts untuk laporan | tingkat merujuk ember aging.ts, tanpa ember kedua (BR-COLR-02) |
+| Tingkat urgensi bertingkat per faktur (lembut vs eskalasi) | Tidak ditetapkan halaman help resmi yang diakses run ini — tidak diklaim ada/tidak | Tidak ditetapkan halaman reminder resmi yang diakses — tidak diklaim | ABSEN: hanya tahap 3 nilai + umur mentah (grep tingkat = 0) | turunan §3 (ambang final Q-COLR-1 Lead) |
+| Jejak tindak lanjut + janji bayar per faktur | Tidak diverifikasi run ini — tidak diklaim | Tidak diverifikasi run ini — tidak diklaim | Ada: InvoiceCollectionFollowUp append-only + janji (F-089 tahap 2 live) | menjadi sinyal tingkat (BR-COLR-04/05), tanpa model baru |
+| Pengingat otomatis ke pelanggan | Halaman distributor Accurate (pemasaran, bukan help) menyebut notifikasi otomatis mendekati jatuh tempo — dicatat BENCHMARK pemasaran lemah, bukan dasar bangun | Tidak ditetapkan halaman resmi yang diakses — tidak diklaim | ABSEN dan TERTUTUP (BR-COL-12) | tetap tertutup; tingkat internal saja (BR-COLR-06) |
+| Denda keterlambatan | Tidak dibahas halaman yang diakses — tidak diklaim | term-of-sales/denda dirujuk spec F-089-S §7 (BENCHMARK lama) | Ada dokumen denda terpisah F-093-V (vonis Accountant, indikator di antrean) | tidak disentuh (BR-COLR-07/12) |
+
+### 6. Acceptance criteria + edge cases (QA, falsifikasi)
+
+| ID | Skenario (fakta existing → tingkat wajib) |
+|---|---|
+| AC-COLR-1 | Faktur belum jatuh tempo (umurHari <= 0, tanpa janji lewat) = `belum_perlu`; tampil sebagai tunggakan/tingkat lanjut = MERAH. Cabut dueAcuan dari builder (umur null ikut karang) = tes MERAH. |
+| AC-COLR-2 | Umur > 0 tanpa janji apa pun = `pengingat_awal`; janji masa depan tercatat = tetap dinilai dari umur (tidak meloncat eskalasi) = MERAH bila tingkat naik karena janji yang belum lewat. |
+| AC-COLR-3 | Janji kemarin + sisa > 0 + tidak ada followUp bertanggal >= tanggal janji = `pengingat_lanjutan`. Cabut perbandingan lastFollowUpAt dari turunan = MERAH (baris salah turun tingkat). |
+| AC-COLR-4 | Janji kemarin + followUp tercatat sesudah tanggal janji + sisa masih > 0 + tidak ada janji baru = `eskalasi`. Menambah janji baru >= hari ini = keluar eskalasi pada render berikut (dinilai ulang); tidak berubah = MERAH. |
+| AC-COLR-5 | Tanpa due faktur maupun exchange dan tanpa janji: baris tampil, Umur "—", tingkat `tanpa_acuan`. Sistem menebak due dari tanggal faktur = MERAH. |
+| AC-COLR-6 | Klik tombol WhatsApp saja (tanpa simpan Catat Tindak Lanjut): tingkat render berikut TIDAK berubah. Berubah = MERAH (BR-COLR-05). |
+| AC-COLR-7 | Tingkat tampil tanpa izin lengkap: pemegang hanya `view_reports` atau hanya `view_sales_invoices` tidak mendapat antrean maupun tingkat (loader fail-closed existing). Satu key membuka = MERAH. |
+| AC-COLR-8 | Mencatat tindak lanjut yang mengubah tingkat: Jurnal = 0, paidAmount/status/tahap faktur tidak berubah, dokumen denda tidak terbit. Satu pun berubah = MERAH (BR-COLR-07). |
+| AC-COLR-9 | Soft-delete followUp terakhir yang menjadi bukti "sudah dihubungi": render berikut menghitung ulang dari followUp tersisa (tingkat boleh kembali naik); tingkat tersimpan diam-diam tidak berubah = MERAH untuk klaim turunan tahap 1. |
+| AC-COLR-10 | UI mengarang tingkat: ganti label/ambang turunan di builder = UI mengikuti; komponen menghitung sendiri dari umurHari mentah = MERAH (pola AC-COL-10). |
+| AC-COLR-11 | Rekap per tingkat: jumlah hitungan semua tingkat = total baris antrean; total sisa rekap = totalSisa existing. Selisih = MERAH. Baris lunas/cancelled/deleted tidak berhak tingkat. |
+| AC-COLR-12 | Kontak bocor lewat tingkat: rekap/ekspor/permukaan tanpa izin antrean memuat phone/contactPerson = MERAH (BR-COLR-09). |
+| EC-COLR-1 | Janji dan followUp di hari kalender WIB yang sama dengan tanggal janji: diperlakukan "dihubungi sesudah janji lewat" atau belum — perilaku persis perbandingan hari = Q-COLR-6 Backend putus dalam tes tepi; ambigu diam-diam = MERAH. |
+| EC-COLR-2 | Dua followUp: satu janji terlewat lama, satu janji baru maksimum masa depan — janji terakhir existing (maksimum) yang berlaku: tingkat tidak boleh eskalasi dari janji lama yang sudah tertutup janji baru. Eskalasi = MERAH. |
+| EC-COLR-3 | Exchange aktif berubah (dueDate tukar faktur menggantikan due faktur): umur dan tingkat ikut due acuan baru render berikut; exchange di-soft-delete = kembali ke due faktur. Tingkat basi = MERAH. |
+| EC-COLR-4 | Faktur dengan dokumen denda terutang existing: indikator denda tampil seperti hari ini; tingkat TIDAK naik hanya karena indikator itu (BR-COLR-07). Naik karenanya = MERAH sampai Q-COLR-7 diputus lain. |
+| EC-COLR-5 | Sisa tepat di epsilon lunas (<= 0,005): baris keluar antrean, tidak ada tingkat yatim di rekap. Baris hilang tetapi rekap tetap menghitungnya = MERAH. |
+| EC-COLR-6 | followUp outcome `sengketa` sesudah janji lewat: tetap fakta "dihubungi" untuk turunan waktu, tetapi petugas membaca outcome dari jejak existing — tingkat tidak mengarang label sengketa baru tahap 1. Label karangan = MERAH. |
+
+### 7. Backlog implementasi (turunan spec ini; ID spec F-2026-10-26-050-S)
+
+Urutan mengikat: putusan Lead Q-COLR-1/3 (ambang + kata) lebih dulu — tanpa itu Backend tidak menanam ambang. Semua turunan tahap 1 nol migrasi.
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-26-050-S | Spec kontrak tingkat pengingat ini (dokumen) | Business | — |
+| (turunan) putusan Q-COLR-1 + Q-COLR-3 (+ Q-COLR-4/5 bila dibuka) | Lead | spec ini merged | — |
+| (turunan) turunan `tingkatPengingat` di builder collection-queue + rekap per tingkat + tes AC-COLR-1..5,9,11 (fisik perbandingan hari Q-COLR-6) | Backend | putusan Lead; klaim file builder di board dulu | — |
+| (turunan) kolom Tingkat Pengingat + filter/rekap tampil di kartu antrean, label verbatim server, nol hitung ulang | Frontend | kontrak Backend; grep e2e antrean-penagihan dulu | — |
+| (turunan) falsifikasi AC-COLR-1..12 + EC-COLR-1..6 atas head persis | QA | head Backend/Frontend | — |
+
+### 8. Pertanyaan putusan
+
+- Q-COLR-1 (Lead, BUTUH-VONIS perilaku inti): ambang tingkat final — (a) tabel §3 apa adanya (umur hanya memisah belum_perlu/pengingat_awal; eskalasi hanya dari janji-lewat-sudah-dihubungi), atau (b) pengingat_awal dipecah per ember aging.ts (1–30/31–60/61–90/>90), dan/atau (c) umur ember >90 tanpa janji ikut memicu eskalasi? Business merekomendasikan (a) tahap 1: paling sedikit angka karang, ember tetap terbaca di kolom Umur; pecahan ditambah hanya bila pemakaian nyata menuntut.
+- Q-COLR-2 (Backend sesudah Q-COLR-1, Lead mengesahkan): kolom tersimpan untuk tingkat — tetap turunan murni (rekomendasi tahap 1) atau ada kebutuhan audit historis "tingkat pada tanggal X" yang membenarkan snapshot tersimpan? Tanpa kebutuhan audit yang ditunjuk, kolom baru ditolak (YAGNI + risiko basi).
+- Q-COLR-3 (Lead): kata label final §1 (nama `eskalasi`/`Perlu Eskalasi` termasuk kata supervisor di notice) — verbatim mengikat Frontend.
+- Q-COLR-4 (Lead): filter per tingkat dan/atau perubahan urutan antrean berbasis tingkat dibuka tahap 1 atau ditunda? Default aman: urutan Q-COL-3 tidak berubah; filter tampil saja bila Frontend menilai murah tanpa ubah urutan.
+- Q-COLR-5 (Lead): permission key baru untuk tingkat — tidak diusulkan; dibuka hanya bila ada aktor yang boleh melihat antrean tanpa tingkat (atau sebaliknya) dari kebutuhan nyata.
+- Q-COLR-6 (Backend): persis perbandingan hari WIB untuk "dihubungi sesudah janji lewat" (hari kalender followedUpAt >= hari promiseDate vs timestamp mentah) — putus dalam tes tepi EC-COLR-1, jangan diam-diam.
+- Q-COLR-7 (Lead, bersyarat Accountant): indikator denda terutang existing boleh menjadi pemicu/penambah tingkat? Default TIDAK (BR-COLR-07); mengubahnya menyentuh perilaku dokumen uang F-093-V sehingga butuh Lead + konfirmasi Accountant, bukan keputusan builder.
+
+Accountant: TIDAK diminta vonis run ini — nol nominal, nol jurnal, nol tarif; hanya dipanggil bersyarat lewat Q-COLR-7.
+
+### Yang TIDAK diusulkan run ini
+
+- Pengiriman pengingat otomatis atau massal ke pelanggan via WA/email, penjadwalan kirim, template pesan penagihan, dan jejak "pesan terkirim" sebagai status (BR-COL-12 tetap tertutup, BUTUH-VONIS Lead terpisah).
+- Denda/bunga baru, perubahan dokumen denda F-093-V, nominal janji sebagai tagihan, dan alokasi pembayaran per janji (BR-COL-09/11 tetap).
+- Credit-hold / blokir transaksi pelanggan berbasis tingkat atau umur (BR-COLR-08) — penegakan kredit tetap jalurnya sendiri.
+- Kolom tingkat tersimpan, histori tingkat, tren tingkat per pelanggan, dan skor kolektibilitas pelanggan (menunggu Q-COLR-2 + bukti kebutuhan).
+- Permission key baru, peran "supervisor penagihan" baru, dan penugasan petugas per faktur (assignment) — antrean tetap populasi berizin yang sama.
+- Mengubah tahap, urutan Q-COL-3, aging/statement existing, atau ambang 7 hari antrean lead (domain lain).
+
+F-2026-10-26-050-S — Tingkat pengingat penagihan piutang dari antrean F-089. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-COLR-1/Q-COLR-3, lalu turunan Backend (Q-COLR-6), konsumen Frontend, falsifikasi QA. Pemilik usulan: Business (spec), Lead (ambang/kata), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap ini (bersyarat hanya Q-COLR-7).
+## PUTUSAN LEAD 2026-10-26 00:40 WIB — gerbang inti F-2026-10-25-047-S (Q-LFU-1/2), F-2026-10-25-048-S (Q-ROP-1/2/3), F-2026-10-26-050-S (Q-COLR-1..7)
+
+> **Slot putusan**: kartu Lead `t_befabf3d` (lanjutan spec Business t_6e33f048 + t_283cc339). Bukti live run ini: `origin/main` `c25f04e3` (backlog berisi 047-S baris 32157 + 048-S baris 32289; 050-S masih di PR #928 head `693b55d1` OPEN MERGEABLE, vonis Accountant 26 Okt 2026 00:27 WIB komentar 6400784439); `lead-followups.ts` (builder tanpa filter status, `lead-followups.test.ts:119-125` pengunci "status apa pun tampil"); `collection-queue.ts:237,249-278` (dueAcuan, promiseDate maksimum, janjiLewat); `aging.ts:11-36` (ember 1-30/31-60/61-90/>90); `item-warehouse-setting.actions.ts:111,159` (tulis ItemWarehouseSetting = `edit_items`, baca `view_items`); katalog `view_leads:369`, `edit_items`, `view_reports:428`, `view_sales_invoices:148`, `create_invoice_collection_followups:178`. Tanpa kode/schema/migrasi di putusan ini. Accountant diminta HANYA bersyarat Q-COLR-7 (sudah dijawab tertutup, lihat butir 3g).
+
+### 1. F-2026-10-25-047-S — antrean follow-up lead (Q-LFU)
+
+- **Q-LFU-1 TERPUTUS (terbelah per status, rekomendasi Business disahkan):** lead `lost` KELUAR dari antrean follow-up lewat; lead `won` dan lead ber-`convertedAt` TETAP di antrean sampai aktivitas terjadwalnya diselesaikan lewat jalur existing (`completeLeadActivity` F-2026-10-25-008-S). Kriteria persis Backend: baris disaring hanya bila `status == "lost"` (string persis kosakata halaman `new/contacted/qualified/proposal/won/lost`); `convertedAt` TIDAK menjadi penyaring sendiri (lead terkonversi yang statusnya bukan `lost` tetap tampil — konversi bukan penutup janji purnajual). Alasan: `lost` = tidak ada janji hidup, menampilkannya = derau antrean; `won` = janji purnajual nyata (jadwal tercatat tidak boleh ditelan diam-diam, BR-LFU-08 default aman dipertahankan untuk won). Dampak sadar: tes pengunci existing `lead-followups.test.ts:119-125` WAJIB diubah Backend menjadi kasus terbelah (won tampil, lost absen) — perubahan tes ini disahkan putusan ini, bukan regresi. AC-LFU baru: lead lost berjadwal lewat TIDAK tampil; lead won berjadwal lewat tampil; reopen/complete tetap berlaku untuk yang tampil.
+- **Q-LFU-2 TERPUTUS: filter per-sales `assignedTo` DITUNDA tahap 1 — antrean tetap global per `view_leads`.** Alasan: belum ada bukti kebutuhan per-sales dari pemakaian (satu halaman prospek, tim kecil); filter diam-diam = scope baru tanpa kebutuhan (BR-LFU-09). Loader/kartu TIDAK diubah untuk ini. Dibuka lagi hanya bila ada keluhan/kebutuhan nyata tercatat (sales tidak bisa menemukan lead sendiri di antrean) lewat kartu terpisah — Backend/Frontend dilarang menyiapkan parameter `assignedTo` diam-diam tahap ini.
+
+### 2. F-2026-10-25-048-S — titik pesan-ulang (Q-ROP)
+
+- **Q-ROP-1 TERPUTUS: jendela laju pakai = 90 hari kalender WIB berjalan; sumber laju SAH = `MaterialIssue` berstatus `completed` per gudang SAJA, termasuk issue ber-`projectId`/`workOrderId` terisi.** Rumus mengikat BR-ROP-02: laju harian per (barang, gudang) = total qty `MaterialIssueItem` pada issue `completed` dengan `warehouseId` gudang itu dan tanggal issue dalam 90 hari kalender WIB terakhir (inklusif hari ini), dibagi 90. Issue proyek/bengkel ADALAH pemakaian persediaan ISF yang nyata (inti bisnis fabrikasi) — mengecualikannya mengecilkan laju secara sistematis; penjualan tidak punya jalur issue per gudang terpisah di model ini dan dilarang ditebak sebagai sumber kedua tahap 1. Tanpa issue completed dalam jendela (laju 0 / barang baru): titik = minimum efektif, tertanda persis `"tanpa laju"` (BR-ROP-02). Jendela 90 hari dipilih karena: cukup panjang meredam lonjakan proyek sesaat, cukup pendek mengikuti pola pakai bengkel berjalan; angka ini PUTUSAN Lead (bukan fakta Business) dan hanya diubah lewat putusan baru, bukan konstanta diam-diam.
+- **Q-ROP-3 TERPUTUS: key tulis lead time = reuse `edit_items`, TANPA key baru.** Selaras preseden Q-MS-1 yang sudah live (`item-warehouse-setting.actions.ts:111` — atur override minimum per gudang = `edit_items`, baca `view_items`). Key khusus pembelian/per-gudang = izin mati tahap 1 + perubahan katalog/seed tanpa kebutuhan terbukti. Siapa pun yang boleh mengatur minimum per gudang boleh mengatur lead time penampung yang sama.
+- **Q-ROP-2 ARAH MENGIKAT untuk Backend (fisik tetap milik Backend): penampung = `ItemWarehouseSetting.leadTimeDays` per (barang, gudang) — SATU penampung tahap 1.** Alasan: titik dihitung per (barang, gudang) di atas minimum efektif per pasangan yang sama; dua penampung (`VendorItemPrice` + gudang) = sumber kebenaran ganda untuk satu titik. `VendorItemPrice.leadTimeDays` per vendor DITUNDA sadar: dibuka lagi hanya bila ada bukti lead time nyata berbeda per vendor untuk barang sama DAN staf memilih vendor per saran — tahap ini saran tidak memilih vendor. Fisik persis (nullable, bilangan bulat >= 0, kosong = tidak dinilai BR-ROP-03; penolakan negatif; ActivityLog pola existing; loader/builder titik + saran qty BR-ROP-04 selisih ke titik dengan PO masuk `ordered`/`partial_received` sebagai pengurang) diputus Backend dalam kartu fisiknya, WAJIB dilaporkan balik ke Lead bila bertabrakan dengan skema berjalan. Migrasi schema wilayah Backend — Lead tidak menulis schema di sini.
+
+### 3. F-2026-10-26-050-S — tingkat pengingat penagihan (Q-COLR)
+
+- **Q-COLR-1 TERPUTUS: opsi (a) SAH tahap 1 persis tabel §3 spec 050-S.** `pengingat_awal` TIDAK dipecah per ember aging; eskalasi TIDAK dipicu umur semata (ember >90 tanpa janji tetap `pengingat_awal`). Titik = minimum makna: umur hanya memisah `belum_perlu`/`pengingat_awal`; `pengingat_lanjutan` = janji lewat + belum dihubungi sesudah janji; `eskalasi` = janji lewat + sudah dihubungi sesudahnya tanpa penyelesaian. Kedalaman umur tetap terbaca di kolom Umur/ember `aging.ts` existing — dilarang ember hari kedua (BR-COLR-02). Pecahan per ember hanya lewat putusan baru berdasar pemakaian nyata.
+- **Q-COLR-3 TERPUTUS: kata label FINAL verbatim (mengikat Frontend, dilarang parafrase):** judul kolom `Tingkat Pengingat`; kunci→label: `tanpa_acuan` → `Tanpa Acuan Tanggal`, `belum_perlu` → `Belum Perlu Diingatkan`, `pengingat_awal` → `Pengingat Awal`, `pengingat_lanjutan` → `Pengingat Lanjutan`, `eskalasi` → `Perlu Eskalasi`. Notice tambahan FINAL (menempel di bawah `COLLECTION_QUEUE_NOTICE_TEXT` existing, tidak menggantinya): `Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda.` Makna "tidak membuat jurnal atau denda" dipertahankan sesuai syarat vonis Accountant.
+- **Q-COLR-2 TERPUTUS: tetap turunan murni, TANPA kolom tersimpan tahap 1.** Tidak ada kebutuhan audit historis "tingkat pada tanggal X" yang ditunjuk; kolom snapshot = basi + migrasi tanpa kebutuhan (YAGNI). Turunan dihitung builder saat render dari field existing (BR-COLR-01).
+- **Q-COLR-4 TERPUTUS: urutan antrean Q-COL-3 TIDAK berubah tahap 1; filter per tingkat DIBUKA sebagai filter tampil saja** (klien/server menyaring baris yang sudah diturunkan, tanpa mengubah urutan, populasi, atau rekap total antrean penuh — rekap per tingkat tetap atas populasi penuh, AC-COLR-11). Urutan berbasis tingkat = putusan terpisah kelak.
+- **Q-COLR-5 TERPUTUS: TANPA permission key baru.** Tingkat ikut gerbang existing `view_reports` DAN `view_sales_invoices` (loader fail-closed); tidak ada aktor yang dibedakan akses tingkatnya tahap 1.
+- **Q-COLR-6 ARAH MENGIKAT untuk Backend: perbandingan = hari kalender WIB** — `dihubungiSesudahJanjiLewat` benar bila hari kalender WIB `lastFollowUpAt >=` hari kalender WIB `promiseDate` (bukan timestamp mentah). Follow-up tepat di hari janji TERHITUNG sudah dihubungi (EC-COLR-1 tertutup dengan definisi ini). Backend mengunci dengan tes tepi hari-sama; menyimpang = laporkan ke Lead, jangan diam-diam.
+- **Q-COLR-7 TERTUTUP tahap 1: indikator denda `hasOutstandingLateFee` BUKAN masukan tingkat** — meratifikasi vonis Accountant PR #928 komentar 6400784439 (26 Okt 2026 00:27 WIB). Tingkat tidak menerbitkan/menghitung/menyarankan denda; credit-hold dari tingkat dilarang (BR-COLR-07/08). Dibuka lagi hanya dengan vonis Accountant baru + rekonsiliasi indikator vs dokumen denda posted.
+
+### Dampak buka-jalan (urusan sesudah putusan ini)
+
+Urutan mengikat: (i) putusan ini + PR #928 ter-merge -> (ii) Backend: ubah builder lead-followups untuk Q-LFU-1; fisik 048-S (penampung + builder titik/saran, klaim `prisma/schema.prisma` dulu); builder `tingkatPengingat` collection-queue untuk 050-S -> (iii) Frontend konsumen sesudah kontrak Backend stabil (bukan edit paralel file sama) -> (iv) QA falsifikasi AC-LFU (termasuk kasus terbelah won/lost) + AC-ROP-B1..B5 + AC-COLR-1..12/EC-1..6 atas head persis. Kartu turunan dibuat Lead di board; spec Business tidak diubah putusan ini selain dirujuk.
+
+F-2026-10-25-047-S / F-2026-10-25-048-S / F-2026-10-26-050-S — Status sesudah putusan: Q-LFU-1/2, Q-ROP-1/3 (+ arah Q-ROP-2), Q-COLR-1..7 TERPUTUS Lead 2026-10-26 00:40 WIB. Pemilik berikutnya: Backend (fisik ketiga domain), Frontend (konsumen), QA (falsifikasi). Accountant: Q-COLR-7 sudah tertutup oleh vonisnya; tidak diminta lagi tahap ini.

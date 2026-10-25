@@ -73,25 +73,9 @@ function isReferencedElsewhere(action: ExportedAction): boolean {
 
 // Daftar-beku: kunci = "<berkas>::<aksi>", nilai = alasan tertulis.
 const ALLOWED_UNWIRED: Record<string, string> = {
-  // F-2026-10-25-005-S DISC-B1 backend dulu (PR #816): 8 aksi pengajuan/
-  // persetujuan SP dirujuk UI rekod disiplin menyusul di kartu Frontend
-  // t_9977774a (DISC-F1) — buang entri ini saat UI memanggilnya.
-  "src/actions/disciplinary.actions.ts::createDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::submitDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::approveDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::rejectDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::acknowledgeDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::respondDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::recordLateDisciplinaryResponse":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  "src/actions/disciplinary.actions.ts::voidDisciplinaryRecord":
-    "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
+  // F-2026-10-25-005-S DISC-B1: 8 aksi SP kini dirujuk UI DISC-F1
+  // (disciplinary-request-form.tsx + disciplinary-record-actions.tsx)
+  // — entri beku DISC-B1 dibuang.
   // F-2026-10-25-004-V: issueDownPaymentTaxInvoiceAction kini dirujuk UI
   // panel status pajak DP (PR konsumen t_b83159ba) — entri beku dibuang.
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
@@ -114,6 +98,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
+  // F-2026-10-25-013-S backend dulu (PR #914): ekspor CSV saldo cuti;
+  // tombol ekspor di UI laporan cuti menyusul (frontend t_4c259ed3) —
+  // buang entri ini saat UI memanggilnya.
+  "src/actions/hrm.actions.ts::exportLeaveBalancesCsv":
+    "F-2026-10-25-013-S backend; UI tombol ekspor CSV saldo cuti menyusul (frontend t_4c259ed3)",
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
@@ -152,6 +141,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol
+  // mailto di halaman statement menyusul di kartu Frontend 043-F1 —
+  // buang entri ini saat UI memanggilnya.
+  "src/actions/email-log.actions.ts::recordEmailLinkOpened":
+    "F-2026-10-25-043-B1 backend; UI tombol email statement menyusul (frontend 043-F1)",
   // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
   // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI

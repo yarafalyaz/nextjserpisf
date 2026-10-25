@@ -173,6 +173,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/produksi/qc": "Checklist, inspeksi, dan NCR",
   "/sdm/absensi": "Absensi kehadiran karyawan",
   "/sdm/apresiasi": "Apresiasi karyawan",
+  "/sdm/disiplin": "Surat peringatan dan rekod disiplin karyawan",
   "/sdm/cuti": "Cuti karyawan",
   "/sdm/klaim-reimbursement": "Klaim reimbursement karyawan mandiri",
   "/sdm/persetujuan": "Pengajuan cuti dan lembur yang menunggu keputusan approver",
@@ -182,6 +183,8 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/sdm/lembur/rekap": "Rekap jam lembur per karyawan per periode",
   "/sdm/kalender-kerja": "Hari libur & jadwal kerja",
   "/sdm/penggajian": "Penggajian",
+  "/sdm/slip-gaji-saya": "Slip gaji final milik sendiri (baca-saja)",
   "/sdm/aturan-statutori": "Tarif BPJS, PTKP & PPh21 berperiode",
   "/sdm/pinjaman": "Pinjaman karyawan",
+  "/sdm/pinjaman/rekap": "Rekap sisa pinjaman per karyawan",
 }
