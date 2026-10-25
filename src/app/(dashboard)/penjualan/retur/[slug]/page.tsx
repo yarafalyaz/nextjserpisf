@@ -16,7 +16,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 import { CanCreate } from "@/components/auth/can-create"
@@ -28,6 +28,9 @@ export default async function SalesReturnDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_sales_returns")
+  // Tombol "Selesaikan" hanya bagi pemegang izin menurut server; UI tidak
+  // menilai status/SoD sendiri — gerbang server tetap penjaga akhir.
+  const canApproveSalesReturn = await hasPermission("approve_sales_returns")
 
   const { slug } = await params
 
@@ -82,7 +85,7 @@ export default async function SalesReturnDetailPage({
               <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
             </CanCreate>
             <PrintButton documentType="sales-return" documentId={salesReturn.id} />
-            {salesReturn.status !== "completed" && (
+            {salesReturn.status !== "completed" && canApproveSalesReturn && (
               <ProcessButton
                 id={salesReturn.id}
                 action={completeSalesReturn}
