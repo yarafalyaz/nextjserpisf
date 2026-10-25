@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   COLLECTION_QUEUE_NOTICE_TEXT,
   COLLECTION_QUEUE_TITLE,
+  COLLECTION_REMINDER_LEVEL_LABELS,
+  COLLECTION_REMINDER_LEVEL_TITLE,
+  COLLECTION_REMINDER_NOTICE_TEXT,
   COLLECTION_STAGE_LABELS,
   buildCollectionQueue,
+  deriveCollectionReminderLevel,
   type CollectionExchangeInput,
   type CollectionFollowUpInput,
   type CollectionInvoiceInput,
@@ -434,5 +438,279 @@ describe("collection-queue-data loader (AC-COL-7)", () => {
     const q = await getCollectionQueue({ now: NOW })
     expect(q.rows[0].lateFeeOutstanding).toBe(40000)
     expect(q.rows[0].hasOutstandingLateFee).toBe(true)
+  })
+})
+
+describe("collection-reminder-level (F-2026-10-26-050-S, Q-COLR-1..7)", () => {
+  const today = TODAY.getTime()
+
+  it("kata tampil verbatim Q-COLR-3", () => {
+    expect(COLLECTION_REMINDER_LEVEL_TITLE).toBe("Tingkat Pengingat")
+    expect(COLLECTION_REMINDER_LEVEL_LABELS).toEqual({
+      tanpa_acuan: "Tanpa Acuan Tanggal",
+      belum_perlu: "Belum Perlu Diingatkan",
+      pengingat_awal: "Pengingat Awal",
+      pengingat_lanjutan: "Pengingat Lanjutan",
+      eskalasi: "Perlu Eskalasi",
+    })
+    expect(COLLECTION_REMINDER_NOTICE_TEXT).toBe(
+      "Tingkat pengingat dihitung dari umur, janji bayar terakhir, dan tindak lanjut terakhir. Tingkat hanya penanda prioritas internal — tidak mengirim pesan ke pelanggan, tidak mencatat pembayaran, dan tidak membuat jurnal atau denda.",
+    )
+    expect(COLLECTION_QUEUE_NOTICE_TEXT).toBe(
+      "Tahap dan umur dihitung dari faktur, tukar faktur, dan janji bayar terakhir. Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal.",
+    )
+  })
+
+  it("AC-COLR-1: belum jatuh tempo = belum_perlu, label di baris", () => {
+    const q = buildCollectionQueue([invoice()], [], [], { now: NOW })
+    expect(q.rows[0].umurHari).toBe(-5)
+    expect(q.rows[0].tingkatPengingat).toBe("belum_perlu")
+    expect(q.rows[0].tingkatPengingatLabel).toBe("Belum Perlu Diingatkan")
+    expect(q.rows[0].tahapLabel).toBe(COLLECTION_STAGE_LABELS[q.rows[0].tahap])
+  })
+
+  it("AC-COLR-2: umur > 0 tanpa janji = pengingat_awal; janji masa depan tidak menaikkan", () => {
+    const overdue = buildCollectionQueue(
+      [invoice({ dueDate: day(-2) })],
+      [],
+      [],
+      { now: NOW },
+    )
+    expect(overdue.rows[0].tingkatPengingat).toBe("pengingat_awal")
+    expect(
+      deriveCollectionReminderLevel(
+        { umurHari: -1, promiseDate: day(3), lastFollowUpAt: day(-1) },
+        today,
+      ),
+    ).toBe("belum_perlu")
+  })
+
+  it("Q-COLR-1: eskalasi TIDAK dari umur >90 — umur 100 tanpa janji tetap pengingat_awal", () => {
+    expect(
+      deriveCollectionReminderLevel(
+        { umurHari: 100, promiseDate: null, lastFollowUpAt: null },
+        today,
+      ),
+    ).toBe("pengingat_awal")
+  })
+
+  it("AC-COLR-3: janji kemarin tanpa followUp sesudahnya = pengingat_lanjutan", () => {
+    const q = buildCollectionQueue(
+      [invoice()],
+      [],
+      [followUp({ followedUpAt: day(-5), promisedDate: day(-1) })],
+      { now: NOW },
+    )
+    expect(q.rows[0].tahap).toBe("lewat_janji")
+    expect(q.rows[0].tingkatPengingat).toBe("pengingat_lanjutan")
+  })
+
+  it("AC-COLR-4/EC-1: janji kemarin + followUp hari janji/sesudah = eskalasi; janji baru menurunkan", () => {
+    const contactedDayOfPromise = buildCollectionQueue(
+      [invoice()],
+      [],
+      [followUp({ followedUpAt: day(-1), promisedDate: day(-1) })],
+      { now: NOW },
+    )
+    expect(contactedDayOfPromise.rows[0].tingkatPengingat).toBe("eskalasi")
+    expect(contactedDayOfPromise.rows[0].tingkatPengingatLabel).toBe(
+      "Perlu Eskalasi",
+    )
+    // Jam dinding mentah lebih awal di hari janji yang sama tetap terhitung
+    // (perbandingan hari kalender WIB, Q-COLR-6).
+    expect(
+      deriveCollectionReminderLevel(
+        {
+          umurHari: null,
+          promiseDate: day(-1),
+          lastFollowUpAt: new Date(day(-1).getTime() + 60_000),
+        },
+        today,
+      ),
+    ).toBe("eskalasi")
+    expect(
+      deriveCollectionReminderLevel(
+        {
+          umurHari: null,
+          promiseDate: day(-1),
+          lastFollowUpAt: new Date(day(-1).getTime() - 60_000),
+        },
+        today,
+      ),
+    ).toBe("eskalasi")
+    // Janji baru >= hari ini menutup T3/T4 (T5), dinilai ulang dari umur.
+    const renewed = buildCollectionQueue(
+      [invoice({ dueDate: day(5) })],
+      [],
+      [
+        followUp({ followedUpAt: day(-3), promisedDate: day(-1) }),
+        followUp({ followedUpAt: day(-1), promisedDate: day(2) }),
+      ],
+      { now: NOW },
+    )
+    expect(renewed.rows[0].promiseDate).toEqual(day(2))
+    expect(renewed.rows[0].tingkatPengingat).toBe("belum_perlu")
+  })
+
+  it("AC-COLR-5: tanpa due dan tanpa janji = tanpa_acuan, baris tetap tampil", () => {
+    const q = buildCollectionQueue(
+      [invoice({ dueDate: null })],
+      [],
+      [],
+      { now: NOW },
+    )
+    expect(q.rows[0].umurHari).toBeNull()
+    expect(q.rows[0].tingkatPengingat).toBe("tanpa_acuan")
+    // Tanpa due tetapi JANJI hidup/lewat ada: acuan janji nyata, bukan tanpa_acuan.
+    // T0b (PR #939): janji masa depan dan janji tepat hari ini = belum_perlu.
+    expect(
+      deriveCollectionReminderLevel(
+        { umurHari: null, promiseDate: day(2), lastFollowUpAt: null },
+        today,
+      ),
+    ).toBe("belum_perlu")
+    expect(
+      deriveCollectionReminderLevel(
+        { umurHari: null, promiseDate: day(0), lastFollowUpAt: null },
+        today,
+      ),
+    ).toBe("belum_perlu")
+    expect(
+      deriveCollectionReminderLevel(
+        { umurHari: null, promiseDate: day(-1), lastFollowUpAt: null },
+        today,
+      ),
+    ).toBe("pengingat_lanjutan")
+  })
+
+  it("AC-COLR-9/EC-3: turunan dihitung ulang sesudah soft-delete / exchange berubah", () => {
+    const withContact = buildCollectionQueue(
+      [invoice()],
+      [],
+      [followUp({ followedUpAt: day(-1), promisedDate: day(-1) })],
+      { now: NOW },
+    )
+    expect(withContact.rows[0].tingkatPengingat).toBe("eskalasi")
+    const afterDelete = buildCollectionQueue(
+      [invoice()],
+      [],
+      [
+        followUp({
+          followedUpAt: day(-1),
+          promisedDate: day(-1),
+          deletedAt: day(0),
+        }),
+      ],
+      { now: NOW },
+    )
+    expect(afterDelete.rows[0].lastFollowUpAt).toBeNull()
+    expect(afterDelete.rows[0].promiseDate).toBeNull()
+    expect(afterDelete.rows[0].tingkatPengingat).toBe("belum_perlu")
+    const noExchange = buildCollectionQueue(
+      [invoice({ dueDate: day(5) })],
+      [],
+      [],
+      { now: NOW },
+    )
+    expect(noExchange.rows[0].tingkatPengingat).toBe("belum_perlu")
+    const withExchange = buildCollectionQueue(
+      [invoice({ dueDate: day(5) })],
+      [exchange({ dueDate: day(-2) })],
+      [],
+      { now: NOW },
+    )
+    expect(withExchange.rows[0].tingkatPengingat).toBe("pengingat_awal")
+  })
+
+  it("AC-COLR-11/EC-2/EC-5: rekap = populasi penuh; janji lama tertutup janji baru; lunas tanpa tingkat yatim", () => {
+    const q = buildCollectionQueue(
+      [
+        invoice({ invoiceId: 1, dueDate: day(-2), grandTotal: 100 }),
+        invoice({ invoiceId: 2, dueDate: day(5), grandTotal: 200 }),
+        invoice({ invoiceId: 3, dueDate: null, grandTotal: 300 }),
+        invoice({ invoiceId: 4, paidAmount: 1_000_000, grandTotal: 400 }),
+        invoice({ invoiceId: 5, dueDate: day(5), grandTotal: 500 }),
+      ],
+      [],
+      [
+        followUp({
+          salesInvoiceId: 5,
+          followedUpAt: day(-4),
+          promisedDate: day(-3),
+        }),
+        followUp({
+          salesInvoiceId: 5,
+          followedUpAt: day(-1),
+          promisedDate: day(4),
+        }),
+      ],
+      { now: NOW },
+    )
+    const levels = q.summary.reminderLevels
+    const rekapCount = Object.values(levels).reduce((acc, v) => acc + v.count, 0)
+    const rekapSisa = Object.values(levels).reduce(
+      (acc, v) => Math.round((acc + v.totalSisa) * 100) / 100,
+      0,
+    )
+    expect(rekapCount).toBe(q.summary.total)
+    expect(rekapCount).toBe(q.rows.length)
+    expect(rekapSisa).toBeCloseTo(q.summary.totalSisa, 2)
+    expect(levels.pengingat_awal.count).toBe(1)
+    expect(levels.belum_perlu.count).toBe(2)
+    expect(levels.tanpa_acuan.count).toBe(1)
+    expect(q.rows.find((r) => r.invoiceId === 5)?.tingkatPengingat).toBe(
+      "belum_perlu",
+    )
+    expect(q.rows.some((r) => r.invoiceId === 4)).toBe(false)
+    expect(JSON.stringify(levels)).not.toContain("0812000000")
+    expect(JSON.stringify(levels)).not.toContain("Budi")
+  })
+
+  it("EC-4/Q-COLR-7: indikator denda terbit BUKAN masukan tingkat", () => {
+    const q = buildCollectionQueue(
+      [invoice({ dueDate: day(5) })],
+      [],
+      [],
+      { now: NOW },
+      [
+        {
+          salesInvoiceId: 1,
+          amount: 50_000,
+          paidAmount: 0,
+          status: "posted",
+          reversesId: null,
+        },
+      ],
+    )
+    expect(q.rows[0].hasOutstandingLateFee).toBe(true)
+    expect(q.rows[0].tingkatPengingat).toBe("belum_perlu")
+  })
+
+  it("EC-6: outcome sengketa sesudah janji lewat tetap fakta dihubungi, tanpa label karangan", () => {
+    const q = buildCollectionQueue(
+      [invoice()],
+      [],
+      [
+        followUp({ followedUpAt: day(-3), promisedDate: day(-1) }),
+        followUp({
+          followedUpAt: day(-1),
+          outcome: "sengketa",
+          promisedDate: null,
+        }),
+      ],
+      { now: NOW },
+    )
+    expect(q.rows[0].tingkatPengingat).toBe("eskalasi")
+  })
+
+  it("tanpa acuan tanggal tidak valid (Invalid Date) tidak ditebak", () => {
+    const q = buildCollectionQueue(
+      [invoice({ dueDate: new Date(Number.NaN) })],
+      [],
+      [],
+      { now: NOW },
+    )
+    expect(q.rows[0].umurHari).toBeNull()
+    expect(q.rows[0].tingkatPengingat).toBe("tanpa_acuan")
   })
 })

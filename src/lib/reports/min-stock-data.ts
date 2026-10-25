@@ -72,13 +72,13 @@ export async function loadMinStock(period: {
       })
     : []
   const overrideByPair = minStockOverrideByPair(
-    settings.map((s) => ({ itemId: s.itemId, warehouseId: s.warehouseId, minStock: Number(s.minStock) })),
+    settings.map((s) => ({ itemId: s.itemId, warehouseId: s.warehouseId, minStock: s.minStock == null ? null : Number(s.minStock) })),
   )
 
   // Sisa lapisan per (barang, gudang). Hanya pasangan yang pernah punya
   // lapisan yang dinilai (BR-MS-03). Barang dinilai bila minimum global
   // ATAU salah satu override-nya > 0.
-  const itemIdsWithOverride = new Set(settings.map((s) => s.itemId))
+  const itemIdsWithOverride = new Set(settings.filter((s) => s.minStock != null).map((s) => s.itemId))
   const withMin = items.filter((i) => Number(i.minStock) > 0 || itemIdsWithOverride.has(i.id))
   const layers = withMin.length
     ? await prisma.inventoryLayer.findMany({
