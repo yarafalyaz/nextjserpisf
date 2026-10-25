@@ -28349,3 +28349,85 @@ Edge cases: EC-1 pengajuan kedua saat pinjaman pertama masih `pending`/`active` 
 - Pelunasan dipercepat / pembayaran angsuran manual di luar payroll (setor kas karyawan): jalur Accurate ada, tetapi ISF hari ini hanya amortisasi payroll; menambah jalur kas = dokumen uang baru, butuh vonis Accountant + spec tersendiri.
 - Notifikasi pengingat approver/pengaju: antrean pasif tahap 1, mengikuti penundaan yang sama seperti 007-S.
 F-2026-10-25-018-S — Pengajuan pinjaman karyawan mandiri. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LS-1/2/4/5 + fisik Backend Q-LS-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/izin), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA bersyarat — hanya untuk BR-LS-09 (angka uang) dan BR-LS-10 (bunga/pajak/akun); inti pintu pengajuan tahap 1 tanpa vonis baru.
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-025-S: kolom Jatuh Tempo + penanda Lewat Jatuh Tempo pada baris faktur Statement Pelanggan (perluasan baca-saja F-2026-10-21-032)
+
+> **Slot**: F-2026-10-25-025-S. Diperiksa bentrok 2026-10-25 14:01 WIB vs `origin/main` (`8dd4590c`): grep `F-2026-10-25-025` di backlog+board origin/main = 0; ID terpakai tanggal ini di main + PR terbuka: 001-S..024 (termasuk 008-S/009-S/010-S/013-S/016-S/018-S/019-S/021-S/024-S di PR Business terbuka). ID 025 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 8dd4590c) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Statement Pelanggan live penuh F-2026-10-21-032: builder murni `buildCustomerStatement` (`src/lib/reports/customer-statement.ts:127`), loader `loadCustomerStatement` (`src/lib/reports/customer-statement-data.ts:71`), halaman `src/app/(dashboard)/laporan/statement-pelanggan/[[...segments]]/page.tsx:37` (`requirePermission("view_reports")`), kartu `src/components/reports/customer-statement-card.tsx:31`, registry PDF `src/lib/reports/report-registry.ts:983` (`"statement-pelanggan"`). Baris: invoice/payment/credit/return, saldo awal/berjalan/akhir; definisi outstanding = `receivableOutstanding` (grandTotal − paidAmount, paidAmount = Σ amount+withholding).
+- `SalesInvoice.dueDate` ada di schema (`prisma/schema.prisma:1596`, `DateTime?` nullable) dan sudah dipakai antrean penagihan: due acuan BR-COL-03 = exchange.dueDate ?? invoice.dueDate (`src/lib/reports/collection-queue.ts:237`), umur hari kalender WIB dari due acuan (:259-262), tahap turunan `lewat_janji` (:268-278). Antrean penagihan F-2026-10-22-089-S live; spec ini BUKAN duplikasi antrean — objeknya statement per pelanggan yang dikirim ke pelanggan.
+
+Gap terbukti (grep run ini):
+- Input faktur builder statement hanya `{id, documentNo, date, grandTotal}` (`customer-statement.ts:37-43`); loader select faktur tanpa dueDate (`customer-statement-data.ts:86`); grep `dueDate` di `customer-statement.ts` + `customer-statement-data.ts` + `customer-statement-card.tsx` = 0. Akibat: penerima statement (pelanggan/admin) tidak bisa melihat kapan tiap faktur jatuh tempo atau sudah lewat dari dokumen statement itu sendiri — harus membuka antrean penagihan terpisah per faktur.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: admin/keuangan berizin `view_reports` membuka Statement Pelanggan existing (periode + pelanggan), sistem menampilkan kolom tambahan "Jatuh Tempo" pada baris faktur dan penanda "Lewat Jatuh Tempo" bila due terlewati per tanggal acuan; ekspor PDF memakai payload server yang sama. Tidak ada aktor pelanggan langsung, tidak ada pengiriman otomatis (email/WA) tahap 1, tidak ada tulis apa pun. Dokumen masuk: faktur recognised existing; dokumen keluar: statement layar + PDF existing dengan kolom baru.
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat statement + kolom jatuh tempo | `view_reports` (existing, page.tsx:37) | TERVERIFIKASI-KODE |
+| Ekspor PDF statement | jalur registry existing (report-registry.ts:983) | TERVERIFIKASI-KODE |
+| Key izin baru | TIDAK diusulkan tahap 1 | USULAN (Q-ST-2 Lead bila ditolak) |
+
+### 3. Status-transition matrix
+
+Tidak ada status tersimpan baru dan tidak ada transisi: penanda lewat jatuh tempo = turunan baca-saja per tanggal acuan, pola tahap turunan BR-COL-01 antrean penagihan. Menambah kolom status/kolom penanda tersimpan = di luar spec ini.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-ST-01 | Kolom Jatuh Tempo hanya pada baris kind `invoice`; baris payment/credit/return tampil kosong/strip. UI/PDF tidak mengarang due dari tanggal faktur + termin karangan. | USULAN | pola baris builder customer-statement.ts:34 |
+| BR-ST-02 | Acuan due per faktur mengikuti keputusan Q-ST-1: (a) reuse due acuan BR-COL-03 (exchange.dueDate ?? invoice.dueDate) — konsisten antrean penagihan, atau (b) invoice.dueDate saja — statement tak membaca exchange. Business merekomendasikan (a) supaya angka statement dan antrean tidak pernah beda untuk faktur sama. | BUTUH-VONIS (Lead) | collection-queue.ts:237 |
+| BR-ST-03 | dueDate null = tampil "—" dan penanda tidak pernah aktif untuk faktur itu (jujur tanpa due, pola umur null BR-COL-03). Dilarang fallback tanggal faktur sebagai due. | USULAN | collection-queue.ts:11-12 |
+| BR-ST-04 | Penanda Lewat Jatuh Tempo aktif hanya bila sisa faktur > epsilon lunas pada tanggal acuan DAN due acuan < hari acuan WIB. Faktur lunas tidak pernah tertanda walau due lampau. Sisa dihitung definisi outstanding existing, bukan saldo berjalan statement (saldo berjalan = agregat pelanggan, bukan sisa per faktur). | USULAN | receivableOutstanding; COLLECTION_SETTLED_EPSILON collection-queue.ts:73 |
+| BR-ST-05 | Tanggal acuan penanda = akhir periode statement yang dipilih (periodEnd), BUKAN hari ini berjalan, supaya statement historis dapat direproduksi persis. Turunan murni dari input builder; builder tidak membaca jam sistem. Label kolom/penanda menyatakan acuan ini. | USULAN | buildCustomerStatement input periodEnd :130 |
+| BR-ST-06 | Angka debit/kredit/saldo statement tidak berubah satu sen pun oleh spec ini; definisi outstanding/paidAmount/returnCredit existing beku. Kolom baru murni tampilan turunan. | USULAN | customer-statement.ts:1-29 |
+| BR-ST-07 | Tanpa denda: spec ini TIDAK menghitung late fee dan tidak menampilkan nominal denda (domain `sales-late-fee`/F-2026-10-22-093-V terpisah). Menempel angka denda di statement = BUTUH-VONIS Accountant baru. | USULAN | collection-queue.ts:147-148 (indikator existing pun terpisah) |
+| BR-ST-08 | PDF/ekspor memakai baris payload server yang sama dengan layar (kolom jatuh tempo + penanda), pola registry statement-pelanggan existing; UI tidak menghitung ulang due/umur/penanda. | USULAN | report-registry.ts:983 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Pernyataan/kartu piutang per pelanggan (saldo awal, mutasi, pembayaran, saldo akhir) | Ada — laporan Pernyataan Piutang https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/rincian-piutang/ | Ada — Kartu Piutang Usaha https://help.zahironline.com/portal/id/kb/articles/melihat-laporan-piutang-usaha-zahir-online-v2 | Ada (F-032) |
+| Umur piutang dari tanggal jatuh tempo (bukan tanggal faktur) pada daftar faktur belum lunas | Ada — kolom umur berdasar due Tukar Faktur https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/umur-piutang/ | Ada — Laporan Umur Piutang per rentang due https://www.zahironline.com/laporan-umur-piutang/ | Parsial: ada di antrean penagihan (F-089-S), ABSEN di statement (gap spec ini) |
+
+### 6. Acceptance criteria (falsifikasi — untuk Backend/Frontend/QA)
+
+- AC-ST-B1: faktur dueDate terisi di periode → payload statement memuat due persis nilai DB pada baris invoice; menghapus dueDate dari loader select = tes MERAH.
+- AC-ST-B2: faktur dueDate null → due tampil kosong/"—" dan penanda tidak aktif; mengganti null dengan tanggal faktur = MERAH.
+- AC-ST-B3: faktur sisa > 0 dengan due < periodEnd → penanda aktif; faktur lunas (sisa <= epsilon) due lampau → penanda tidak aktif; menandai faktur lunas = MERAH.
+- AC-ST-B4: statement periode lampau yang periodEnd-nya sebelum due → penanda tidak aktif walau hari ini sudah lewat due (acuan periodEnd BR-ST-05); memakai jam sistem di builder = MERAH.
+- AC-ST-B5: total debit/kredit/saldo awal/saldo akhir byte-sama dengan builder sebelum spec ini pada fixture sama (regresi F-032 utuh).
+- AC-ST-B6 (bila Q-ST-1 = reuse BR-COL-03): faktur dengan exchange aktif ber-dueDate beda dari invoice.dueDate → statement dan antrean penagihan menampilkan due acuan sama; beda = MERAH.
+- AC-ST-F1: layar dan PDF menampilkan due + penanda verbatim payload server; menghitung umur/due di komponen UI = MERAH (grep hitung tanggal di kartu).
+- AC-ST-F2: user tanpa `view_reports` tetap tertolak di halaman statement (perilaku existing tidak berubah).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-025-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-025-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-025-B1 | Builder: input faktur +dueDate (+exchange due bila Q-ST-1 reuse), output baris +dueAcuan +isOverdueAtPeriodEnd turunan; loader select dueDate; tes AC-ST-B1..B6 | Backend | Q-ST-1 Lead |
+| F-2026-10-25-025-F1 | Kolom Jatuh Tempo + penanda di kartu statement + tabel PDF registry payload sama; AC-ST-F1/F2 | Frontend | Kontrak B1 |
+| F-2026-10-25-025-Q1 | Falsifikasi AC-ST-B1..B6 + F1..F2 atas head persis | QA | B1+F1 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-ST-1 (Lead, perilaku inti): acuan due statement — reuse BR-COL-03 (exchange ?? invoice) atau invoice.dueDate saja? Business rekomendasi reuse; tanpa putusan ini Backend tidak mulai.
+- Q-ST-2 (Lead): tanpa key izin baru (reuse `view_reports`) — sahkan atau minta key khusus statement?
+- Q-ST-3 (Backend, fisik): bentuk output builder (field dueAcuan/isOverdue per baris vs objek samping) + apakah loader exchange massal anti-N+1 layak untuk satu pelanggan.
+- Accountant: TIDAK diminta tahap 1 (tanpa uang/pajak/jurnal/denda; BR-ST-07).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-025-S)
+
+- Pengiriman statement ke pelanggan (email/WA/cetak massal terjadwal) — jalur pengiriman + jejak kirim = spec terpisah; tahap 1 statement tetap ditarik manual dari halaman existing.
+- Nominal denda/denda berjalan di statement (BR-ST-07), ringkasan aging bucket di kepala statement (laporan umur piutang existing menampungnya), kolom due di Buku Pembantu Piutang (objek beda; ajukan terpisah bila diminta).
+
+F-2026-10-25-025-S — Kolom jatuh tempo Statement Pelanggan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-ST-1/Q-ST-2 + fisik Backend Q-ST-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap 1.
