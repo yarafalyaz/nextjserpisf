@@ -92,11 +92,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
   "src/actions/disciplinary.actions.ts::voidDisciplinaryRecord":
     "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  // F-2026-10-25-004-V backend dulu (vonis PR #760): terbit FP uang muka
-  // per DP; panel status pajak DP + form terbit menyusul di kartu
-  // frontend t_b83159ba (buang entri ini saat UI memanggilnya).
-  "src/actions/tax-documents.actions.ts::issueDownPaymentTaxInvoiceAction":
-    "F-2026-10-25-004-V backend; UI panel status pajak DP menyusul (frontend t_b83159ba)",
+  // F-2026-10-25-004-V: issueDownPaymentTaxInvoiceAction kini dirujuk UI
+  // panel status pajak DP (PR konsumen t_b83159ba) — entri beku dibuang.
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
   // izin (action-guard-coverage.test.ts). UI-nya memakai next-auth langsung.
   "src/actions/auth.actions.ts::loginAction":
@@ -206,6 +203,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-25-008-S backend; UI tombol Tandai Selesai aktivitas lead menyusul (frontend t_68dce5df)",
   "src/actions/crm.actions.ts::reopenLeadActivity":
     "F-2026-10-25-008-S backend; UI tombol Batalkan Penanda Selesai aktivitas lead menyusul (frontend t_68dce5df)",
+  // F-2026-10-25-017-S Backend dulu: aksi klaim reimbursement dirujuk UI
+  // mandiri karyawan menyusul di kartu Frontend sesudah kontrak ini stabil
+  // — buang 3 entri ini saat UI memanggilnya.
+  "src/actions/reimbursement.actions.ts::createReimbursementClaim":
+    "F-2026-10-25-017-S backend; UI klaim mandiri menyusul (frontend)",
+  "src/actions/reimbursement.actions.ts::setReimbursementClaimAccounts":
+    "F-2026-10-25-017-S backend; UI verifikasi keuangan menyusul (frontend)",
+  "src/actions/reimbursement.actions.ts::getMyReimbursementClaims":
+    "F-2026-10-25-017-S backend; UI daftar klaim saya menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

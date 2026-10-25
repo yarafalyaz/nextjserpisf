@@ -100,6 +100,7 @@ const DEFAULT_SYSTEM_SETTINGS = {
   pkwtCompensationPayableAccountId: null,
   // F-2026-10-24-135-V: pendapatan besi tua default kosong (fail-closed).
   scrapSaleIncomeAccountId: null,
+  reimbursementLiabilityAccountId: null,
 };
 
 /**
