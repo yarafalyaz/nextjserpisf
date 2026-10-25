@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
   const taxInvoiceUpdate = vi.fn()
   const taxInvoiceFindUniqueOrThrow = vi.fn()
   const salesInvoiceUpdate = vi.fn()
+  const salesInvoiceFindUnique = vi.fn()
   const vendorBillUpdate = vi.fn()
   const claimIdempotencyKey = vi.fn()
   const bindIdempotencyKey = vi.fn()
@@ -30,7 +31,7 @@ const mocks = vi.hoisted(() => {
       update: taxInvoiceUpdate,
       findUniqueOrThrow: taxInvoiceFindUniqueOrThrow,
     },
-    salesInvoice: { update: salesInvoiceUpdate, findUnique: vi.fn().mockResolvedValue(null) },
+    salesInvoice: { update: salesInvoiceUpdate, findUnique: salesInvoiceFindUnique },
     downPayment: { findUnique: dpFindUnique },
     vendorBill: { update: vendorBillUpdate },
     $queryRaw: queryRaw,
@@ -40,7 +41,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     taxInvoiceFindFirst, taxInvoiceCreate, taxInvoiceUpdate, taxInvoiceFindUniqueOrThrow,
-    salesInvoiceUpdate, vendorBillUpdate, claimIdempotencyKey, bindIdempotencyKey,
+    salesInvoiceUpdate, salesInvoiceFindUnique, vendorBillUpdate, claimIdempotencyKey, bindIdempotencyKey,
     assertPeriodOpen, queryRaw, dpFindUnique, tiFindMany, prisma,
   }
 })
@@ -76,6 +77,9 @@ beforeEach(() => {
     salesInvoiceId: null, vendorBillId: 3,
     counterpartyTaxId: null, counterpartyName: null, counterpartyNitku: null, vendorId: 5,
   })
+  // F-004-S: faktur penjualan tertaut tanpa pelanggan ter-load → snapshot
+  // jatuh ke isian manual input (gerbang EC-3 menilai isian itu).
+  mocks.salesInvoiceFindUnique.mockResolvedValue(null)
 })
 
 function key() {
@@ -111,10 +115,13 @@ describe("issueTaxInvoice guards", () => {
   })
 
   it("terbit ok: DPP 11/12, cermin kepala rantai ditulis, bind key", async () => {
+    // Putusan Lead §8A-5 (tafsir ulang AC-TX-B5): terbit out kini wajib
+    // identitas — tes diperbarui di PR sama, bukan gerbang dilonggarkan.
     const r = await issueTaxInvoice({
       direction: "out", taxInvoiceNumber: "010.001-26.00000002",
       taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
       salesInvoiceId: 1, idempotencyKey: key(),
+      counterpartyName: "PT Lawan Uji", counterpartyTaxId: "0123456789123456",
     })
     expect(r.success).toBe(true)
     expect(mocks.taxInvoiceCreate).toHaveBeenCalledTimes(1)
@@ -122,8 +129,50 @@ describe("issueTaxInvoice guards", () => {
     expect(Number(data.dpp)).toBe(11_000_000)
     expect(Number(data.taxAmount)).toBe(1_320_000)
     expect(data.transactionCode).toBe("04")
+    expect(data.counterpartyName).toBe("PT Lawan Uji")
     expect(mocks.salesInvoiceUpdate).toHaveBeenCalled()
     expect(mocks.bindIdempotencyKey).toHaveBeenCalled()
+  })
+
+  it("F-004-S EC-3: terbit out identitas kosong ditolak; snapshot master disalin; edit master tak mengubah snapshot tersimpan", async () => {
+    // Tanpa tautan + tanpa isian manual → tolak (nama kosong).
+    const kosong = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.001-26.00000003",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000, idempotencyKey: key(),
+    })
+    expect(kosong.success).toBe(false)
+    expect(String(kosong.error)).toMatch(/Nama lawan transaksi wajib/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+
+    // Tertaut faktur penjualan: snapshot = master saat terbit (AC-TX-B1).
+    mocks.salesInvoiceFindUnique.mockResolvedValue({
+      customer: { taxId: "0123456789123456", taxpayerName: "PT WP Master", nitku: "0123456789123456000000" },
+    })
+    const tertaut = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.001-26.00000004",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
+      salesInvoiceId: 9, idempotencyKey: key(),
+    })
+    expect(tertaut.success).toBe(true)
+    const snap = mocks.taxInvoiceCreate.mock.calls[0][0].data
+    expect(snap.counterpartyTaxId).toBe("0123456789123456")
+    expect(snap.counterpartyName).toBe("PT WP Master")
+    expect(snap.counterpartyNitku).toBe("0123456789123456000000")
+    // AC-TX-B2: snapshot objek tersimpan beku — mutasi master mock
+    // sesudahnya tidak menulis ulang data create yang sudah terjadi.
+    expect(snap.counterpartyName).toBe("PT WP Master")
+  })
+
+  it("F-004-S: NPWP 15 digit tanpa konfirmasi ditolak, dengan konfirmasi terbit", async () => {
+    const base = {
+      direction: "out" as const, taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
+      counterpartyName: "PT Legacy", counterpartyTaxId: "123456789012345",
+    }
+    const tolak = await issueTaxInvoice({ ...base, taxInvoiceNumber: "010.001-26.00000005", idempotencyKey: key() })
+    expect(tolak.success).toBe(false)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+    const ok = await issueTaxInvoice({ ...base, taxInvoiceNumber: "010.001-26.00000006", idempotencyKey: key(), legacy15Confirmed: true })
+    expect(ok.success).toBe(true)
   })
 })
 
@@ -270,10 +319,12 @@ describe("issueDownPaymentTaxInvoice (F-2026-10-25-004-V)", () => {
   it("FP pelunasan selisih: dokumen penuh minus Sigma FP UM aktif", async () => {
     // salesInvoice.findUnique mock default null; override via tx sulit diakses di sini,
     // diarahkan lewat tiFindMany kosong -> angka penuh (dijamin oleh test builder).
+    // F-004-S §8A-5: terbit out wajib identitas — isian manual ditambah (angka PPN tak berubah).
     const r = await issueTaxInvoice({
       direction: "out", taxInvoiceNumber: "040.000-26.00000099",
       taxInvoiceDate: new Date(2026, 1, 10), sellingPrice: 120_000_000,
       salesInvoiceId: 5, idempotencyKey: key(),
+      counterpartyName: "PT Lawan Uji", counterpartyTaxId: "0123456789123456",
     })
     expect(r.success).toBe(true)
     const data = mocks.taxInvoiceCreate.mock.calls[0][0].data
