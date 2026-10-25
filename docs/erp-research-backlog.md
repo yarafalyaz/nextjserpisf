@@ -30553,7 +30553,7 @@ Sudah ada (TERVERIFIKASI-KODE):
 - Tahap 1-2 F-016 LIVE: snapshot `salesEmployeeId` Quotation (schema.prisma:1387) → SalesOrder (:1544) → SalesInvoice (:1601); builder murni `src/lib/reports/sales-commission.ts` (ekspor `SALES_COMMISSION_NOTICE`, `buildSalesCommissionRecap`); loader `src/lib/reports/sales-commission-data.ts` (satu query faktur `paid`, `deletedAt null`, periode tanggal faktur); halaman konsumen `src/app/(dashboard)/laporan/rekap-komisi/[[...segments]]/page.tsx` + entri katalog `src/lib/reports/report-catalog.ts:156`.
 - `SalesInvoice.taxAmount` Decimal beku per faktur (schema.prisma SalesInvoice) — DPP per faktur dapat diturunkan persis `grandTotal − taxAmount` tanpa tarif berjalan.
 - Snapshot retur: `SalesReturnItem.returnDpp/returnVat` (schema.prisma:1938, :2163) diisi saat retur completed — sumber pengurang komisi per vonis.
-- Izin master kategori existing: `create_customers` / `edit_customers` (module-catalog.generated.ts:126-127); izin baca rekap: `view_reports` (:427); `view_sales_invoices` (:148).
+- Izin master kategori existing: `create_customers` / `edit_customers` (module-catalog.generated.ts:126-127); izin baca rekap: `view_reports` (:428); `view_sales_invoices` (:148).
 - `CustomerCategory` (schema.prisma:479-491) hanya memuat `downPaymentPercent` Decimal(5,2) — pola presisi persen repo.
 
 Belum ada (gap spec ini, bukti grep run ini):
@@ -30592,7 +30592,7 @@ W6 Pembaca laporan membuka rekap per masa: baris per penjual (basis DPP lunas, e
 | BR-KT36-09 | Hasil resolusi nol baris di domain ini = tarif 0 jujur + notice (fail-soft berlabel) — rezim ini TIDAK disamakan dengan fail-closed dokumen pajak | TERVERIFIKASI-VONIS (F-058-V K3) |
 | BR-KT36-10 | Penulis tarif = pemegang izin master kategori existing `create_customers`/`edit_customers`; vonis ini TIDAK menciptakan izin baru; penjual tidak menulis tarifnya sendiri. Bila Backend menilai izin terpisah perlu = minta vonis izin Accountant dulu | TERVERIFIKASI-VONIS (F-056-V 1b) |
 | BR-KT36-11 | Rekap tetap INFORMATIF: bukan utang komisi, bukan dasar jurnal/pembayaran/payroll; notice verbatim existing dipertahankan; label basis wajib selaras DPP (bukan "Basis Faktur Lunas" grandTotal) | TERVERIFIKASI-VONIS (F-056-V "Yang TIDAK berubah" + Putusan 2d) |
-| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr 210207, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
+| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr akun utang komisi BARU hasil Q-KOM3-1 di F-2026-10-25-037-S — 210207 DILARANG untuk komisi, kini Utang Kompensasi PKWT; koreksi audit drift 2026-10-25 21:14 WIB, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
 | BR-KT36-13 | Faktur lama tanpa snapshot: loader meneruskan 0 jujur; DILARANG backfill tebakan dari histori berjalan | TERVERIFIKASI-VONIS (F-056-V 1d + F-084-V §6) |
 | BR-KT36-14 | Satu penjual per faktur (snapshot existing); split komisi multi-penjual = model terpisah, tidak dikarang di spec ini | TERVERIFIKASI-VONIS (F-084-V §6) |
 
@@ -30603,7 +30603,7 @@ W6 Pembaca laporan membuka rekap per masa: baris per penjual (basis DPP lunas, e
 | Tambah baris histori tarif | YA | tidak | tidak | TIDAK (SoD) | `create_customers` existing (:126) |
 | Tutup masa / koreksi tarif (baris baru) | YA | tidak | tidak | TIDAK | `edit_customers` existing (:127) |
 | Edit/hapus baris tarif sudah terpakai snapshot | TIDAK (penjaga beku BR-KT36-08) | tidak | tidak | tidak | penjaga server, bukan izin |
-| Baca rekap komisi | YA | YA | YA | tidak tahap ini | `view_reports` existing (:427) |
+| Baca rekap komisi | YA | YA | YA | tidak tahap ini | `view_reports` existing (:428) |
 | Baca faktur sumber | YA | YA | YA | tidak | `view_sales_invoices` existing (:148) |
 | Tulis snapshot persen | sistem (transisi paid) | — | — | — | tanpa izin manusia; satu tx dengan perubahan status |
 
@@ -30671,7 +30671,7 @@ F-2026-10-25-036-S — Tarif komisi per kategori pelanggan. Status: SPEC SELESAI
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-037-S: tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll; kontrak workflow di atas vonis F-2026-10-22-084-V)
 
-Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. ID induk tetap F-2026-10-21-016; vonis uang induk = F-2026-10-22-056-V (tarif/basis/retur) + rekonsiliasi F-2026-10-22-058-V + vonis tahap 3 F-2026-10-22-084-V (syarat buka jurnal + PPh). Spec tarif nyata (histori + snapshot + loader DPP) = F-2026-10-25-036-S (PR #883 OPEN). ID F-2026-10-25-037-S bebas terverifikasi run ini: grep backlog + board origin/main `c90416df` = 0; maksimum terpakai tanggal ini = 036-S (PR #883). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. ID induk tetap F-2026-10-21-016; vonis uang induk = F-2026-10-22-056-V (tarif/basis/retur) + rekonsiliasi F-2026-10-22-058-V + vonis tahap 3 F-2026-10-22-084-V (syarat buka jurnal + PPh). Spec tarif nyata (histori + snapshot + loader DPP) = F-2026-10-25-036-S (PR #883, kini MERGED 2026-10-25 19:18 WIB — status OPEN di kalimat asli sudah basi per audit drift 2026-10-25 21:14 WIB). ID F-2026-10-25-037-S bebas terverifikasi run ini: grep backlog + board origin/main `c90416df` = 0; maksimum terpakai tanggal ini = 036-S (PR #883). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
 
 > Koreksi premis kartu t_dcbd4a8a (2026-10-25 18:54 WIB): kartu menyebut tahap 3 "belum pernah ada spec-nya dan pajak belum divonis". Verifikasi live membuktikan SEBAGIAN LAPUK: vonis Accountant tahap 3 SUDAH ADA sebagai F-2026-10-22-084-V (akrual saat `paid`, Dr 600002 / Cr akun utang baru, PPh 21 via payroll, reversal retur, falsifikasi KOM3-1..7). Yang memang belum ada = (a) spec workflow Business yang membekukan kontrak tahap 3 sebagai alur yang bisa dibangun/diuji lintas bot, dan (b) penyelesaian dua temuan baru run ini (§0). Spec ini TIDAK mengulang pertanyaan yang sudah dijawab Q-KOM-1/F-084-V.
 
@@ -30687,12 +30687,12 @@ Sudah divonis (TERVERIFIKASI-VONIS, jangan dibuka ulang tanpa alasan baru):
 
 Sudah ada di kode (TERVERIFIKASI-KODE):
 - Tahap 1-2 F-016 live: snapshot `salesEmployeeId` Quotation→SO→Invoice (schema.prisma:1387/1544/1601), builder `src/lib/reports/sales-commission.ts`, loader `src/lib/reports/sales-commission-data.ts` (paid-only, persen diteruskan 0), halaman rekap konsumen existing.
-- Akun 600002 Beban Komisi ADA (`src/lib/setup/base-data.ts:829`); jurnal repo punya idempotensi referensi aktif: `Journal.activeReferenceKey` generated + `@@unique([activeReferenceKey])` (schema.prisma model Journal) dan penjaga `assertJournalClaimRef` (accounting.hook.ts:51 — referenceType kosong ditolak sebelum klaim); reversal repo = jurnal lawan referenceType `Journal` + asal REVERSED, dengan `assertPeriodOpen` tanggal asal.
-- Izin katalog nyata: `view_sales_invoices`/`edit_sales_invoices`/`approve_sales_invoices` (module-catalog.generated.ts:148-152), `view_payroll`/`process_payroll` (:313-317), `view_payroll_reports` (:428), `view_reports`.
+- Akun 600002 Beban Komisi ADA (`src/lib/setup/base-data.ts:834`, koreksi nomor audit drift 2026-10-25 21:14 WIB); jurnal repo punya idempotensi referensi aktif: `Journal.activeReferenceKey` generated + `@@unique([activeReferenceKey])` (schema.prisma model Journal) dan penjaga `assertJournalClaimRef` (accounting.hook.ts:51 — referenceType kosong ditolak sebelum klaim); reversal repo = jurnal lawan referenceType `Journal` + asal REVERSED, dengan `assertPeriodOpen` tanggal asal.
+- Izin katalog nyata: `view_sales_invoices`/`edit_sales_invoices`/`approve_sales_invoices` (module-catalog.generated.ts:148-152), `view_payroll` (:314)/`process_payroll` (:318), `view_payroll_reports` (:429), `view_reports` (:428).
 
 Belum ada / temuan baru run ini:
-- TEMUAN-037-A (BUTUH-VONIS Accountant, koreksi F-084-V §2): nomor akun kredit yang diputus F-084-V — 210207 "Utang Komisi Penjualan" bebas per verifikasi 2026-10-22 — hari ini SUDAH TERPAKAI: `base-data.ts:925` = `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis F-2026-10-24-132-V, merged; juga mapping `pkwtCompensationPayableAccountId` schema SystemSetting + automap `account-automap.ts:204`). Memakai 210207 untuk komisi = mencampur dua kewajiban beda rezim (kompensasi PKWT PP 35/2021 vs komisi penjualan) dalam satu akun — rekonsiliasi keduanya rusak. Nomor pengganti TIDAK ditebak spec ini (lihat Q-KOM3-1). Verifikasi tetangga live run ini: 210201-210206 terpakai, 210207 PKWT, 210209 Reimbursement (F-2026-10-25-018-V); 210208 TIDAK TERVERIFIKASI bebas dari satu grep ini — kelayakan/pemakaiannya wajib dikonfirmasi Accountant dari COA penuh, bukan disimpulkan dari ketiadaan di potongan ini.
-- TEMUAN-037-B (gerbang belum terpenuhi, TERVERIFIKASI-KODE): prasyarat G2 F-084-V belum live — histori tarif + snapshot persen belum dibangun (itulah spec 036-S, PR #883 OPEN); G3 (akun + mapping `commissionExpenseAccountId`/`commissionPayableAccountId`) belum ada di schema/seed; G1 (PUTUSAN Lead buka inti) belum terbit (grep board origin/main run ini: tidak ada PUTUSAN buka inti komisi). Maka tahap 3 TETAP TERTUTUP run ini; spec ini = kontrak supaya urutan buka tidak dibalik.
+- TEMUAN-037-A (BUTUH-VONIS Accountant, koreksi F-084-V §2): nomor akun kredit yang diputus F-084-V — 210207 "Utang Komisi Penjualan" bebas per verifikasi 2026-10-22 — hari ini SUDAH TERPAKAI: `base-data.ts:930` = `["210207", "Utang Kompensasi PKWT", "OCLY", "2102"]` (vonis F-2026-10-24-132-V, merged; juga mapping `pkwtCompensationPayableAccountId` schema SystemSetting :304 + automap `src/lib/utils/account-automap.ts:204`). Semua nomor dikoreksi audit drift 2026-10-25 21:14 WIB vs origin/main fe281d46. Memakai 210207 untuk komisi = mencampur dua kewajiban beda rezim (kompensasi PKWT PP 35/2021 vs komisi penjualan) dalam satu akun — rekonsiliasi keduanya rusak. Nomor pengganti TIDAK ditebak spec ini (lihat Q-KOM3-1). Verifikasi tetangga live run ini: 210201-210206 terpakai, 210207 PKWT, 210209 Reimbursement (F-2026-10-25-018-V); 210208 TIDAK TERVERIFIKASI bebas dari satu grep ini — kelayakan/pemakaiannya wajib dikonfirmasi Accountant dari COA penuh, bukan disimpulkan dari ketiadaan di potongan ini.
+- TEMUAN-037-B (gerbang belum terpenuhi, TERVERIFIKASI-KODE): prasyarat G2 F-084-V belum live — histori tarif + snapshot persen belum dibangun (itulah spec 036-S, PR #883 kini MERGED sebagai spec; implementasi fisiknya belum ada); G3 (akun + mapping `commissionExpenseAccountId`/`commissionPayableAccountId`) belum ada di schema/seed; G1 (PUTUSAN Lead buka inti) belum terbit (grep board origin/main run ini: tidak ada PUTUSAN buka inti komisi). Maka tahap 3 TETAP TERTUTUP run ini; spec ini = kontrak supaya urutan buka tidak dibalik.
 - Dokumen komisi per faktur sebagai subledger penerima: belum ada modelnya; jurnal saja tidak menjawab "utang ke penjual siapa, dari faktur mana, sudah dibayar slip mana". §2 membekukan bentuk minimumnya (fisik final Backend sesudah vonis Q-KOM3-1/Q-KOM3-2).
 
 ### 1. Workflow specification
@@ -30756,7 +30756,7 @@ Tidak ada status "komisi disetujui manual" tahap ini: hak lahir dari dokumen (fa
 ### 6. Gerbang buka (semua wajib, urutan tidak dibalik)
 
 G1 PUTUSAN Lead buka inti tahap 3 tertulis di board (F-084-V G1) — belum ada run ini.
-G2 Inti 036-S live: histori tarif + snapshot persen/kategori di transisi paid + loader DPP (PR #883 spec-nya; implementasi Backend terpisah).
+G2 Inti 036-S live: histori tarif + snapshot persen/kategori di transisi paid + loader DPP (PR #883 spec-nya MERGED; implementasi Backend terpisah).
 G3 Vonis koreksi akun Q-KOM3-1 terbit + akun/mapping ter-seed terkonfigurasi; mapping kosong = fail-closed terbukti tes.
 G4 Titik akrual idempoten teruji per §2 (satu jurnal akrual aktif per (faktur, penjual); retry/klik ulang tidak dobel) memakai penjaga referensi repo.
 G5 Falsifikasi §8 hijau di head inti persis + gate repo; QA audit sebelum Lead merge inti.
