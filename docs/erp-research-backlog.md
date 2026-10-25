@@ -27044,7 +27044,6 @@ Jendela depan: daftar tetap (USULAN mengikuti pola Q-WX-2: 7/30/90 hari; ambang 
 ### 4. Business rules register (BR-SV-*)
 
 | ID | Aturan | Label | Sumber |
-|---|---|---|---|
 | BR-SV-01 | Status pengingat = turunan baca-saja dari jadwal tersimpan; antrean tidak pernah menulis jadwal/status kendaraan | USULAN | pola TERVERIFIKASI-KODE antrean garansi `warranty-expiry-queue.ts:1-30` |
 | BR-SV-02 | Satu kendaraan maksimal satu jadwal servis berikutnya aktif tahap 1 (jadwal berikutnya menimpa sesudah dicatat ulang, riwayat jadwal lama di luar cakupan tahap 1) | USULAN | YAGNI tahap 1; riwayat = tahap terpisah |
 | BR-SV-03 | Jadwal boleh berbasis tanggal saja, km saja, atau keduanya; kendaraan masuk `mendekati`/`terlewat` bila SALAH SATU basis yang terisi terpenuhi | USULAN | praktik bengkel: servis berkala tanggal ATAU km, mana tercapai dulu |
@@ -27059,7 +27058,6 @@ Jendela depan: daftar tetap (USULAN mengikuti pola Q-WX-2: 7/30/90 hari; ambang 
 ### 5. Feature matrix Accurate/Zahir/ISF
 
 | Fitur | Accurate | Zahir | ISF (Silengkap) |
-|---|---|---|---|
 | Pengingat jatuh tempo pembayaran terjadwal | Ada — Syarat Pembayaran memantau jatuh tempo + mengingatkan (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/mengenal-fitur-syarat-pembayaran/) | Reminder tampil saat membuka data, modul Dashboard (BENCHMARK: https://help.zahironline.com/portal/id/kb/articles/setup-program) | Antrean penagihan piutang ada (F-2026-10-22-089-S) TERVERIFIKASI-KODE |
 | Pengingat servis berkala kendaraan per pelanggan (tanggal/km) | Tidak ditemukan di help resmi (akses 2026-10-25) — ditulis tidak ditemukan, bukan tidak ada | Tidak ditemukan di help resmi (akses 2026-10-25) — ditulis tidak ditemukan, bukan tidak ada | ABSEN (grep 0 hit, §0) — spec ini |
 | Riwayat kendaraan sebagai dasar jadwal | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada: linimasa kendaraan F-2026-10-20-15 TERVERIFIKASI-KODE |
@@ -27094,7 +27092,6 @@ Edge cases: kendaraan berpindah pelanggan (jadwal mengikuti kendaraan, pemilik t
 ### 8. Backlog implementasi (turunan F-2026-10-25-021-S)
 
 | ID | Item | Pemilik | Gerbang |
-|---|---|---|---|
 | F-2026-10-25-021-S | Spec ini (dokumen) | Business | — |
 | (turunan) fisik jadwal di master kendaraan (bentuk kolom/relasi) + builder antrean + loader anti-N+1 | Backend | Q-SV-1/2/3 terputus Lead | — |
 | (turunan) UI antrean + form pencatatan di detail kendaraan | Frontend | kontrak Backend stabil; kata §3/§6 verbatim | — |
@@ -27108,3 +27105,136 @@ Edge cases: kendaraan berpindah pelanggan (jadwal mengikuti kendaraan, pemilik t
 - Mencampur antrean ini ke antrean garansi F-2026-10-22-094-S (BR-SV-10).
 
 F-2026-10-25-021-S — Pengingat servis berkala per kendaraan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SV-1..4 + fisik Backend. Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik+builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-017-S: pengajuan reimbursement biaya kerja karyawan mandiri (klaim bukti → persetujuan → bayar, di atas Expense existing)
+
+> **Slot**: F-2026-10-25-017-S. Diperiksa bentrok 2026-10-25 12:29 WIB vs `origin/main` (`9871422e`): grep `F-2026-10-25-017` di backlog+board origin/main = 0; ID terpakai tanggal ini di main: 001-S, 002-S, 003-S, 004-S/V, 005-S/V, 006-S, 007-S, 010-S, 011-S, 012-S, 013-V, 015-V; PR terbuka beda topik: 008-S (#772), 009-S (#774), 013-S (#801), 016-S (#804). ID 017 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR/keuangan operasional** — bukan F-ID lama. Bukan duplikat klasifikasi pajak reimbursement T3 di vonis komponen gaji F-2026-10-21-027 (backlog baris 4128: reimbursement tunai berbukti = NON-TAXABLE sebesar nilai terbukti; itu aturan klasifikasi komponen payroll, BUKAN alur pengajuan). Bukan duplikat Expense operasional existing (dokumen keuangan dibuat staf keuangan, `employeeId` tidak pernah diisi jalur buat). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Karyawan bengkel mengeluarkan uang pribadi untuk pekerjaan (bensin antar kendaraan, beli baut darurat, makan dinas luar, transport ambil part), lalu menitipkan nota ke staf keuangan yang mengetik ulang sebagai Expense umum. Akibatnya: tidak ada jejak pengaju sebagai karyawan, tidak ada antrean "klaim saya di mana", bukti terpisah dari dokumen, dan risiko klaim ganda tidak terlihat per karyawan. Padahal fondasi sudah ada: model `Expense` punya `employeeId` nullable + `receiptImage` + status draft, rantai ApprovalWorkflow generik mengenal referenceType `Expense`, dan gerbang scope HR fail-closed sudah dipakai pinjaman/cuti/lembur. Spec ini membekukan: (A) penanda pengajuan karyawan di atas Expense existing (bukan model klaim kedua), (B) permukaan mandiri karyawan (ajukan + daftar klaim sendiri) dan antrean verifikasi keuangan dalam scope, (C) pembayaran hanya lewat jalur Expense existing yang sudah berjurnal. Klasifikasi pajak reimbursement (T3) tetap vonis Accountant existing — spec ini TIDAK memutus pajak/jurnal baru.
+
+### 1. Inventarisasi terverifikasi (origin/main 9871422e, 2026-10-25)
+
+- Model `Expense` (`prisma/schema.prisma:3887-3925`): `employeeId Int?` + indeks `expenses_employee_id_idx`, `accountId`, `paidFromAccountId`, `projectId`, `categoryId`, `vendorId`, `amount Decimal(15,2)`, `date`, `referenceNo`, `description`, `receiptImage String?`, `status String @default("draft")`, `approvedBy`, `createdBy`. Relasi kategori/vendor ada; relasi employee TIDAK dideklarasikan sebagai relasi Prisma bernama di blok model ini (kolom + indeks saja) — fisik tautan loader = Q-RB-3 Backend.
+- Buat expense: `createExpense` (`src/actions/finance.actions.ts:699`) — izin `create_expenses`, `expenseSchema` (`src/lib/validations/form.schemas.ts:226-237`) TIDAK memuat `employeeId` (schema tidak menerima field itu; data buat di `finance.actions.ts:753-769` tidak menulis `employeeId`), idempotency guard dalam transaksi, lampiran transaksi tertaut dalam tx sama (R-10), lalu `requestApprovalIfConfigured("Expense", ...)` di luar tx. Jadi kolom `employeeId` yatim di jalur buat: tidak ada jalur yang mengisinya sebagai pengaju.
+- Setujui/tolak: `approveExpense` (`finance.actions.ts:796`, izin `approve_expenses`, hanya dari `draft`, `assertApproved("Expense", ...)`) dan `rejectExpense` (:852). Jurnal saat approved lewat hook akuntansi existing (`src/lib/hooks/accounting.hook.ts:1023-1100`: menolak expense tanpa `accountId`/`paidFromAccountId`); sinkron kas kecil `onExpenseApprovedSyncPettyCash` (`src/lib/hooks/expense.hook.ts:11`) hanya bila dibayar dari akun kas kecil. Approval generik juga mengenal `Expense` (`src/actions/approval.actions.ts:172,253,269-275`: penyelesaian workflow Expense memicu sinkron kas kecil).
+- Bukti: `receiptImage` kolom tunggal di Expense + lampiran transaksi generik tertaut (`attachPendingTransactionAttachments`, finance.actions.ts dalam createExpense). Tidak ada kewajiban bukti di schema (`receiptImage` opsional, `referenceNo` opsional).
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:339-343`): `view_expenses`, `create_expenses`, `approve_expenses` (baris 339/340/343; label "Pengeluaran"). Permukaan existing `/keuangan/pengeluaran` (page + tambah + [slug]).
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:40`) — all (role akses penuh), department (kepala departemen), self; roles hilang/rusak = self employeeId -1 (tidak cocok apa pun). `hrScopeWhere(scope)` (:76) memberi fragmen where untuk model ber-`employeeId`. Pinjaman sudah memakai pola persis ini: `createEmployeeLoan` (`src/actions/hrm.actions.ts:3064`, izin `create_loans` + scope self hanya diri sendiri/department se-departemen) dan daftar `/sdm/pinjaman` memakai `hrScopeWhere` (page.tsx). Cuti/lembur/slip mandiri memakai pola yang sama (spec F-2026-10-25-007-S/009-S/010-S).
+- Klasifikasi pajak reimbursement SUDAH divonis (bukan gap): backlog baris 4128 (vonis komponen gaji F-2026-10-21-027/BR-027-07) — T3 reimbursement biaya kerja tunai NON-TAXABLE hanya sebesar nilai terbukti berbukti pihak ketiga; tanpa bukti lengkap = TAXABLE fail-safe; selisih lebih dari pengeluaran nyata = taxable. Spec ini merujuk vonis itu apa adanya (BR-RB-09), tidak mengubahnya.
+
+Belum ada / gap (bukti grep run ini):
+- Jalur pengajuan karyawan: grep `reimburs` di `prisma/schema.prisma` + `src/actions/*.ts` = 0; tidak ada aksi/UI yang membuat Expense atas nama karyawan pengaju, tidak ada daftar "klaim saya", tidak ada penanda dokumen-ini-klaim-karyawan selain kolom `employeeId` yang tidak pernah diisi jalur buat.
+- Kewajiban bukti: `expenseSchema` form.schemas.ts:226-237 — `receiptImage`/`referenceNo` opsional; Expense operasional boleh lahir tanpa bukti apa pun (sah untuk jurnal operasional staf, tidak sah sebagai klaim penggantian uang pribadi menurut BR-RB-04 spec ini).
+- Antrean verifikasi per pengaju: daftar pengeluaran existing adalah daftar dokumen keuangan umum; tidak ada saringan/penanda klaim karyawan menunggu verifikasi dalam scope HR (grep `employeeId` di loader pengeluaran = 0 hasil jalur klaim).
+
+Benchmark resmi (akses 2026-10-25):
+- Zahir ERP Approval Management: pengaturan persetujuan cuti, lembur, reimburse, ganti jadwal "satu jenjang atau lebih" dari karyawan ke atasannya; modul Finance Reimbursement memuat kebijakan/plafon/batas waktu per karyawan dan pengajuan atas nama karyawan terpantau nominalnya (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/). Zahir HR: "Proses persetujuan cuti dan reimburse multi layer" (BENCHMARK: https://zahir.co.id/hr/).
+- Accurate: panduan form reimbursement Accurate (akurat.id) menegaskan alur identitas pemohon + rincian biaya + bukti pembayaran + persetujuan berjenjang + status Diajukan/Disetujui/Dibayarkan sebagai elemen form standar (BENCHMARK: https://accurate.id/akuntansi/contoh-form-reimbursement/). Bentuk fitur reimbursement terintegrasi Accurate Online di help.accurate.id = belum terverifikasi run ini (tidak diklaim rincinya).
+
+### 2. Workflow specification
+
+Aktor: Karyawan pengaju (self-scope), Atasan/approver rantai (ApprovalWorkflow bila terkonfigurasi), Staf keuangan (verifikasi + tetapkan akun + bayar lewat jalur existing), Lead (putus gerbang), Accountant (vonis pajak sudah ada; dipanggil lagi hanya untuk Q-RB-5).
+
+Dokumen masuk: klaim karyawan = Expense existing tertanda pengaju (BR-RB-01) + bukti pengeluaran (lampiran/`receiptImage` + `referenceNo`). Dokumen keluar: Expense `approved` yang berjurnal lewat hook existing; pembayaran ke karyawan lewat jalur bayar Expense existing (kas kecil/bank sesuai `paidFromAccountId`); TIDAK ada dokumen klaim baru, TIDAK ada jurnal baru spec ini.
+
+Alur:
+1. Karyawan mengajukan klaim dari permukaan mandiri: tanggal pengeluaran, nominal, kategori, keperluan, tautan proyek/WO bila ada, bukti wajib. Server menetapkan pengaju = karyawan tertaut user (bukan pilihan bebas), status `draft`, masuk rantai ApprovalWorkflow `Expense` bila terkonfigurasi.
+2. Keuangan/approver memverifikasi: bukti cocok nominal/tanggal/keperluan; akun beban + akun bayar ditetapkan pihak keuangan (karyawan tidak memilih akun GL). Tolak = `rejectExpense` existing dengan alasan tampil ke pengaju.
+3. Disetujui: `approveExpense` existing menjalankan jurnal + sinkron kas kecil existing apa adanya. Klaim berubah tahap turunan DIBAYAR bila jalur bayar existing selesai; spec tahap 1 tidak menambah status bayar baru (Q-RB-4).
+4. Pengaju memantau daftar klaimnya sendiri (self-scope): tahap verbatim server, alasan tolak verbatim; tidak ada nominal karyawan lain, tidak ada data gaji.
+
+### 3. Status-transition matrix
+
+Status dokumen = `Expense.status` existing (draft → approved/rejected lewat jalur existing). Tahap klaim = turunan baca-saja dari (penanda pengaju, status, fakta bayar existing); BUKAN kolom baru tahap 1.
+
+| Dari | Pemicu | Ke | Penjaga |
+| (belum ada) | karyawan ajukan (aksi klaim, BR-RB-02) | draft tertanda pengaju (tahap DIAJUKAN) | izin ajukan Q-RB-1 + scope self; bukti wajib BR-RB-04 |
+| draft (klaim) | rantai ApprovalWorkflow Expense berjalan | tetap draft, langkah rantai berjalan | konfigurasi workflow existing; klaim tidak membuat rantai kedua |
+| draft (klaim) | approveExpense existing oleh keuangan | approved (tahap DISETUJUI; jurnal existing terbit) | `approve_expenses` + `assertApproved` existing; akun lengkap (hook menolak tanpa akun bayar) |
+| draft (klaim) | rejectExpense existing | rejected (tahap DITOLAK, alasan tampil ke pengaju) | izin existing; alasan verbatim |
+| approved (klaim) | pembayaran existing tercatat (kas kecil/bank jalur Expense) | tahap turunan DIBAYAR | fakta bayar existing; tanpa status dokumen baru tahap 1 |
+| draft (klaim) | pengaju batalkan sebelum keputusan (bila Q-RB-2 dibuka) | keluar antrean (dokumen dibatalkan jalur existing) | hanya pengaju sendiri, hanya sebelum approved; tanpa hapus dokumen berjurnal |
+| approved/rejected | — | terminal tahap 1; koreksi = dokumen baru tertaut, bukan edit | pola dokumen beku repo; koreksi uang = Q-RB-5 |
+
+Catatan jujur: bila ApprovalWorkflow tidak terkonfigurasi untuk Expense, keputusan langsung `approveExpense`/`rejectExpense` existing — spec tidak mengarang jenjang baru; jenjang multi-layer Zahir (BENCHMARK §1) dipenuhi lewat konfigurasi rantai existing, bukan mesin kedua.
+
+### 4. Role/permission matrix (key nyata katalog :339-343 + pinjaman :316-319 sebagai pembanding)
+
+| Aksi | Karyawan pengaju (self) | Kepala departemen (department) | Keuangan/HR (all + izin) | Tanpa izin/scope |
+| Ajukan klaim atas nama sendiri | key Q-RB-1 (usul reuse `create_expenses` dibatasi self, atau key baru — putusan Lead) + scope self paksa | boleh untuk diri sendiri; untuk bawahan hanya bila Q-RB-1 membolehkan department | boleh atas nama karyawan dalam scope (mode titip-tercatat, pengaju tetap karyawan pemilik biaya) | ditolak |
+| Lihat daftar klaim | hanya milik sendiri (`hrScopeWhere` self) | klaim se-departemen (verifikasi awal bila diputus Q-RB-2) | semua dalam scope all | baris tidak tampil / ditolak |
+| Verifikasi bukti + tetapkan akun beban/bayar | tidak | tidak (kecuali diberi `approve_expenses`) | `approve_expenses` | ditolak |
+| Setujui / tolak klaim | tidak (self-approve dilarang, BR-RB-07) | hanya lewat rantai/izin existing | `approve_expenses` + `assertApproved` | ditolak |
+| Bayar klaim approved | tidak | tidak | jalur bayar Expense existing (akun bayar sudah ditetapkan) | ditolak |
+| Lihat nominal klaim orang lain di luar scope | tidak | hanya se-departemen bila antrean verifikasi dibuka | ya dalam scope | tidak; nominal BUKAN data gaji — tetap dilindungi scope dokumen (BR-RB-08) |
+
+Tidak ada key izin baru yang diklaim sudah ada. Q-RB-1 meminta Lead memilih: reuse `create_expenses` dengan penjaga self ketat (risiko: pemegang create_expenses staf bisa membuat Expense operasional bebas — penjaga klaim harus membedakan penanda pengaju), atau key baru khusus klaim (butuh seed parity). Spec tidak memutusnya.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+| BR-RB-01 | Klaim karyawan tahap 1 = Expense existing dengan `employeeId` terisi sebagai pengaju + bukti tertaut. Dilarang membuat model/tabel klaim kedua atau dokumen bayar kedua; satu pengeluaran satu dokumen. | USULAN | schema :3887 employeeId yatim; larangan jalur nilai kedua pola repo |
+| BR-RB-02 | Pengaju ditetapkan server dari karyawan tertaut user (`getHrScope` self); klien tidak bisa memilih karyawan lain dalam mode mandiri. Mode titip oleh keuangan mencatat pengaju = karyawan pemilik biaya, pembuat = user keuangan (createdBy existing), dan tertanda titip. | USULAN | hr-scope.ts:40; pola createEmployeeLoan hrm.actions.ts:3064 |
+| BR-RB-03 | Scope fail-closed di loader DAN aksi (bukan UI): self hanya sendiri, department se-departemen, all semua; scope rusak = nol baris/ditolak. Daftar klaim memakai `hrScopeWhere` existing. | TERVERIFIKASI-KODE (pola) + USULAN | hr-scope.ts:40,76; pinjaman page/hrm |
+| BR-RB-04 | Bukti wajib untuk klaim: minimal satu bukti tertaut (lampiran transaksi atau `receiptImage`) DAN `referenceNo`/nomor nota terisi sebelum bisa disetujui; klaim tanpa bukti boleh tersimpan draft oleh pengaju tetapi DITOLAK di gerbang approve (fail-closed berisik), bukan diam-diam lolos. | USULAN | expenseSchema :226 bukti opsional (gap); vonis T3 "tanpa bukti = taxable" backlog :4128 |
+| BR-RB-05 | Nominal klaim = nominal bukti; yang dibayar tidak melebihi nominal disetujui. Selisih lebih bayar dari pengeluaran nyata bukan reimbursement (klasifikasi pajaknya taxable per vonis existing) — jalur selisih di luar spec tahap 1. | USULAN + rujukan vonis | backlog :4128 butir (b) |
+| BR-RB-06 | Akun beban (`accountId`) dan akun bayar (`paidFromAccountId`) ditetapkan/diverifikasi keuangan saat verifikasi, bukan dipilih karyawan. Jurnal hanya dari hook existing saat approved; hook menolak akun kosong — kegagalan tampil apa adanya. | TERVERIFIKASI-KODE (hook) + USULAN | accounting.hook.ts:1023-1100; expense.hook.ts:11 |
+| BR-RB-07 | Pengaju tidak bisa menyetujui klaimnya sendiri dalam mode apa pun (SoD): `approveExpense` oleh user yang sama dengan pengaju pada klaim tertanda = ditolak server, walau memegang `approve_expenses`. Expense operasional non-klaim tidak berubah perilakunya tahap 1. | USULAN | pola SoD gerbang retur F-2026-10-25-012-S |
+| BR-RB-08 | Payload daftar klaim memuat: nomor dokumen, tanggal, nominal, kategori label, tahap, alasan tolak verbatim. TIDAK memuat data gaji, saldo pinjaman, atau nominal klaim di luar scope pemanggil. Masking lintas-scope = baris tidak tampil, bukan nominal disamarkan setengah. | USULAN | mandat authorization profil ini; pola BR-HP-08 |
+| BR-RB-09 | Klasifikasi pajak reimbursement mengikuti vonis existing F-2026-10-21-027 T3 (berbukti ≤ nyata = non-taxable sebagai penggantian; tanpa bukti/selisih = taxable). Spec ini TIDAK membuat komponen payroll reimbursement, TIDAK membayar klaim lewat slip gaji tahap 1; bayar lewat jalur Expense. Mengubah titik bayar ke payroll = Q-RB-5 Accountant. | TERVERIFIKASI-KODE (vonis tertulis) + USULAN | backlog :4128, :4245 AC-S1 |
+| BR-RB-10 | Anti-dobel: pengaju + tanggal + nominal + referenceNo yang sama pada klaim belum terminal = peringatan keras server saat ajukan (tampil kandidat), bukan blokir diam-diam dan bukan lolos diam-diam; keputusan lanjut tercatat. Fisik kunci = Q-RB-3 Backend. | USULAN | pola peringatan duplikat F-2026-10-25-003-S/141-S |
+| BR-RB-11 | Klaim tertaut proyek/WO (`projectId` existing) tampil sebagai fakta keperluan; biaya aktual proyek tetap hanya dari transaksi inventory/jurnal sah — klaim approved yang berjurnal adalah fakta keuangan, klaim draft BUKAN biaya proyek. UI proyek tidak menghitung klaim sebagai aktual. | TERVERIFIKASI-KODE (prinsip) + USULAN | mandat material project profil ini; Expense.projectId schema |
+| BR-RB-12 | Tidak ada plafon nominal, batas hari ajukan, atau daftar kategori boleh-klaim yang dikarang spec ini; bila pemilik proses menetapkan, nilainya konfigurasi/kebijakan tertulis (Q-RB-6), bukan konstanta kode dari spec. Zahir mengenal plafon/batas waktu (BENCHMARK §1) — ISF tahap 1 tanpa plafon sampai diputus. | USULAN | zahirerp.com BENCHMARK §1 |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate | Zahir HR/ERP | ISF (Silengkap) |
+| Pengajuan reimbursement oleh karyawan + persetujuan berjenjang | Elemen form standar: pemohon, rincian, bukti, persetujuan berjenjang, status (BENCHMARK: https://accurate.id/akuntansi/contoh-form-reimbursement/); rincian fitur AOL belum terverifikasi | Ya — Approval Management reimburse satu/multi jenjang + kebijakan plafon/batas waktu per karyawan (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/, https://zahir.co.id/hr/) | ABSEN sebagai alur karyawan (gap spec ini): Expense operasional ada, penanda pengaju yatim |
+| Bukti pengeluaran tertaut dokumen | Bukti pembayaran komponen wajib form (BENCHMARK URL sama) | Terpantau nominal pengajuan (BENCHMARK URL sama) | Parsial: `receiptImage` + lampiran transaksi ada, kewajiban bukti untuk klaim ABSEN |
+| Pembayaran penggantian ke karyawan | Status Dibayarkan sebagai tahap form (BENCHMARK URL sama) | Kebijakan reimbursement terpantau (BENCHMARK URL sama) | Jalur bayar Expense existing ada (jurnal + kas kecil); tahap klaim DIBAYAR turunan ABSEN |
+| Klasifikasi pajak reimbursement | — (di luar cakupan benchmark run ini) | — | Ada sebagai vonis komponen gaji T3 (backlog :4128); integrasi klaim→payroll DITUNDA Q-RB-5 |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-RB-B1: karyawan self mengajukan klaim → Expense lahir tertanda pengaju = karyawan tertaut, status draft, bukti tertaut. Memalsukan employeeId karyawan lain lewat payload = MERAH (server menimpa dari scope).
+- AC-RB-B2: klaim karyawan departemen lain bocor ke daftar/verifikasi pemanggil department = MERAH; scope rusak menghasilkan baris = MERAH; pemanggil self melihat klaim orang lain = MERAH.
+- AC-RB-B3: approve klaim tanpa bukti tertaut atau tanpa referenceNo = MERAH (gerbang BR-RB-04 menolak); menambah bukti lalu approve = hijau; Expense operasional non-klaim tetap berperilaku existing (regresi approve tanpa penanda pengaju tidak berubah).
+- AC-RB-B4: self-approve klaim sendiri oleh pemegang approve_expenses = MERAH (BR-RB-07); approve oleh keuangan lain = hijau dan jurnal existing terbit sekali (retry approve tidak menggandakan jurnal/kas kecil — idempotensi hook existing).
+- AC-RB-B5: akun beban/bayar kosong saat approve klaim = MERAH dari hook existing, dokumen tetap belum approved (bukan setengah berjurnal).
+- AC-RB-B6: kandidat dobel (pengaju+tanggal+nominal+referenceNo sama, belum terminal) memicu peringatan server tercatat (BR-RB-10); membiarkan lolos tanpa jejak = MERAH.
+- AC-RB-B7: payload daftar klaim memuat field gaji/pinjaman atau nominal luar scope = MERAH (grep payload + uji scope).
+
+Frontend (konsumen):
+- AC-RB-F1: tahap/alasan/nominal tampil verbatim server; UI menghitung tahap/tanggal/plafon sendiri = MERAH.
+- AC-RB-F2: form klaim tidak menawarkan pilihan karyawan lain dalam mode mandiri dan tidak menawarkan pilihan akun GL; menawarkan = MERAH. Sebelum commit: grep e2e selector pengeluaran/sdm terdampak, sinkronkan commit yang sama.
+
+QA: AC-RB-B1..B7 + AC-RB-F1..F2 atas head Backend/Frontend persis.
+
+Edge cases: EC-1 klaim untuk pengeluaran sebelum karyawan bergabung / sesudah nonaktif (server menolak pengaju tidak aktif; klaim lama tetap terbaca pemiliknya). EC-2 bukti berupa satu lampiran untuk banyak baris keperluan (tahap 1 satu klaim satu dokumen Expense; pemecahan baris = di luar spec, jangan karang). EC-3 nominal bukti lebih kecil dari nominal diajukan (yang disetujui ≤ bukti, BR-RB-05; selisih ditolak/dikoreksi sebelum approve, bukan dibayar lalu diklasifikasi). EC-4 rantai ApprovalWorkflow Expense tidak terkonfigurasi (keputusan langsung keuangan; spec tidak mengarang jenjang). EC-5 klaim tertaut WO yang sudah ditutup (tampil sebagai fakta; gerbang biaya telat L3 existing yang memutuskan akun/ditolak — klaim tidak membuka jalur biaya kedua di WO tertutup). EC-6 pengaju mengajukan ulang klaim rejected dengan bukti baru = dokumen baru tertaut nomor lama, bukan membuka rejected. EC-7 pembayaran kas kecil tidak cukup saldo (kegagalan jalur bayar existing tampil; tahap tetap DISETUJUI belum DIBAYAR, bukan ditandai lunas).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-RB-1 (Lead): izin mengajukan klaim — key baru khusus klaim (seed parity) vs reuse `create_expenses` dengan penjaga penanda pengaju; dan siapa boleh mode titip (keuangan saja?).
+- Q-RB-2 (Lead): jenjang verifikasi — keuangan langsung vs atasan dulu lewat ApprovalWorkflow terkonfigurasi; sahkan tahap 1 memakai rantai existing apa adanya tanpa jenjang paksa baru.
+- Q-RB-3 (Backend): fisik penanda klaim yang membedakan Expense operasional vs klaim karyawan (kolom penanda vs inferensi employeeId terisi), relasi employee untuk loader, kunci kandidat dobel BR-RB-10, dan bentuk tahap DIBAYAR dari fakta bayar existing tanpa kolom status baru.
+- Q-RB-4 (Lead): tahap DIBAYAR cukup turunan fakta bayar existing tahap 1 (tanpa status/dokumen bayar baru) — sahkan atau minta dokumen bayar terpisah sebagai spec lanjutan.
+- Q-RB-5 (Accountant, BUTUH-VONIS hanya bila titik bayar berubah): pembayaran klaim tetap lewat Expense (default spec) — TIDAK diminta vonis tahap 1. Vonis baru wajib hanya bila diusulkan bayar lewat payroll/komponen slip (klasifikasi T3 backlog :4128 berlaku di sana) atau selisih-lebih diperlakukan sebagai penghasilan lewat jalur klaim ini.
+- Q-RB-6 (Lead/pemilik proses): plafon nominal, batas hari pengajuan sejak tanggal bukti, dan daftar kategori boleh-klaim — semua TANPA angka di spec ini (BR-RB-12); tetapkan tertulis bila mau diterapkan, jangan ambil dari benchmark sebagai fakta ISF.
+
+### 9. Backlog implementasi (turunan F-2026-10-25-017-S)
+
+| ID turunan | Isi | Pemilik | Prasyarat |
+| F-2026-10-25-017-S | Spec ini (dokumen) | Business | — |
+| (dibuat Backend sesudah Q-RB-1/3) | Penanda klaim + aksi ajukan self + gerbang bukti/SoD di approve klaim + loader daftar per scope | Backend | Q-RB-1 Lead, Q-RB-3 fisik |
+| (dibuat Frontend sesudah kontrak Backend) | Permukaan mandiri karyawan: form klaim + daftar klaim saya + antrean verifikasi keuangan | Frontend | kontrak Backend stabil |
+| (dibuat QA sesudah head persis) | Falsifikasi AC-RB-B1..B7 + F1..F2 | QA | head Backend/Frontend |
+
+### Yang TIDAK diusulkan run ini
+- Model/tabel reimbursement baru, dokumen bayar kedua, jurnal baru, komponen payroll reimbursement: YAGNI tercatat — fondasi Expense + hook + rantai existing cukup untuk tahap 1; titik bayar payroll menyentuh klasifikasi T3 dan wajib vonis Accountant dulu (Q-RB-5).
+- Plafon/batas waktu/kategori otomatis dari benchmark Zahir: benchmark bukan kebijakan ISF (BR-RB-12); tanpa vonis pemilik proses, angka apa pun = karangan.
+- Auto-approve nominal kecil / OCR bukti / deteksi fraud otomatis: tanpa data kebijakan; peringatan dobel manusiawi (BR-RB-10) cukup tahap 1.
+- Mengubah perilaku Expense operasional non-klaim (approve tanpa bukti untuk jurnal staf): regresi di luar gap; AC-RB-B3 menjaga perilaku itu tetap existing.
