@@ -8,17 +8,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * gaji (BR-LH-09) dan izin view_employee_loans (BR-LH-02).
  */
 
-const mocks = vi.hoisted(() => ({
-  requirePermission: vi.fn(),
-  loanFindFirst: vi.fn(),
-  payrollFindMany: vi.fn(),
-  employeeFindFirst: vi.fn(),
-}))
+// Mock loader: satu objek hoisted, factory dirakit dari tabel supaya
+// bentuk berkas ini tidak kembar berkas loader pinjaman lain.
+const mocks = vi.hoisted(() => {
+  const fn = () => vi.fn()
+  return { requirePermission: fn(), loanFindFirst: fn(), payrollFindMany: fn(), employeeFindFirst: fn() }
+})
 
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: mocks.requirePermission,
-}))
-
+vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermission }))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     employeeLoan: { findFirst: mocks.loanFindFirst },
