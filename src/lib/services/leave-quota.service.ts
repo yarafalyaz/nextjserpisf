@@ -140,6 +140,52 @@ export async function countLeaveWorkingDays(
   return count
 }
 
+/**
+ * Profil hari untuk tarif lembur: apakah tanggal ini hari kerja menurut
+ * jadwal karyawan (preseden yang sama dengan penghitung cuti), dan
+ * berapa hari kerja dalam seminggu polanya (5 atau 6 menentukan tabel
+ * tarif hari istirahat). Minggu dihitung Senin–Minggu.
+ */
+export async function resolveDayKind(
+  employeeId: number,
+  date: Date,
+  db: Db = prisma,
+): Promise<{ isWorkingDay: boolean; workdaysPerWeek: number }> {
+  const day = new Date(date)
+  day.setHours(0, 0, 0, 0)
+  const dow = day.getDay()
+  const monday = new Date(day)
+  monday.setDate(day.getDate() + (dow === 0 ? -6 : 1 - dow))
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  const { isWorkingDay } = await buildWorkingDayChecker(db, employeeId, monday, sunday)
+  let workdaysPerWeek = 0
+  for (let d = new Date(monday); d <= sunday; d.setDate(d.getDate() + 1)) {
+    if (isWorkingDay(d)) workdaysPerWeek++
+  }
+  return { isWorkingDay: isWorkingDay(day), workdaysPerWeek }
+}
+
+/**
+ * Tipe cuti khusus statutori (UU 13/2003 Pasal 81 & 93) dengan batas
+ * hari KALENDER per kejadian. Tipe ini tidak memotong jatah tahunan
+ * (hanya "annual" yang memotong) — batasnya per peristiwa, bukan per
+ * tahun. `pilgrimage` (ibadah haji) tanpa batas tetap: durasinya
+ * mengikuti perjalanan ibadah, sekali seumur hubungan kerja.
+ */
+export const SPECIAL_LEAVE_DAY_CAPS: Record<string, number | null> = {
+  marriage: 3,
+  child_marriage: 2,
+  child_circumcision: 2,
+  child_baptism: 2,
+  spouse_childbirth: 2,
+  family_death_core: 2,
+  family_death_household: 1,
+  menstrual: 2,
+  pilgrimage: null,
+}
+
 export interface LeaveQuota {
   /** Calendar year this quota covers. */
   year: number
@@ -170,6 +216,18 @@ export interface LeaveQuota {
  * Pass `excludeLeaveId` when editing an existing request so it isn't counted
  * against itself.
  */
+/** Tanggal kalender (tahun/bulan/hari) sebuah instant menurut WIB. */
+function wibCalendarDate(d: Date): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d)
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0)
+  return { y: get("year"), m: get("month"), d: get("day") }
+}
+
 export async function getLeaveQuota(
   employeeId: number,
   opts: { year?: number; now?: Date; excludeLeaveId?: number; db?: Db } = {},
@@ -186,22 +244,35 @@ export async function getLeaveQuota(
 
   const employee = await db.employee.findUnique({
     where: { id: employeeId },
-    select: { joinDate: true },
+    select: { joinDate: true, leaveEligibilityStartDate: true, employmentStatus: true },
   })
 
-  // Tenure: eligible iff joined on or before one year before `asOf`.
+  // Tenure: eligible iff the eligibility anchor is on or before one year
+  // before `asOf`. The anchor defaults to joinDate; for ex-interns it is
+  // the contract start (internship time does not count), and while the
+  // employee is still an INTERN there is no entitlement at all.
+  // Perbandingan TANGGAL kalender WIB (tanpa jam): TTD kontrak 1 Jan
+  // 2026 berarti berhak tepat 1 Jan 2027, bukan sehari sesudahnya —
+  // komponen jam pada nilai tersimpan tidak boleh menggeser batas.
   let eligible = false
   let tenureMonths = 0
   if (employee?.joinDate) {
-    const join = new Date(employee.joinDate)
-    const oneYearAgo = new Date(asOf)
-    oneYearAgo.setFullYear(asOf.getFullYear() - 1)
-    eligible = join.getTime() <= oneYearAgo.getTime()
+    const anchor = employee.leaveEligibilityStartDate
+      ? new Date(employee.leaveEligibilityStartDate)
+      : new Date(employee.joinDate)
+    const a = wibCalendarDate(anchor)
+    const b = wibCalendarDate(asOf)
+    const oneYearBefore = { y: b.y - 1, m: b.m, d: b.d }
+    const anchorLteOneYearBefore =
+      a.y < oneYearBefore.y ||
+      (a.y === oneYearBefore.y &&
+        (a.m < oneYearBefore.m ||
+          (a.m === oneYearBefore.m && a.d <= oneYearBefore.d)))
+    eligible =
+      employee.employmentStatus !== "INTERN" && anchorLteOneYearBefore
     tenureMonths = Math.max(
       0,
-      (asOf.getFullYear() - join.getFullYear()) * 12 +
-        (asOf.getMonth() - join.getMonth()) -
-        (asOf.getDate() < join.getDate() ? 1 : 0),
+      (b.y - a.y) * 12 + (b.m - a.m) - (b.d < a.d ? 1 : 0),
     )
   }
 

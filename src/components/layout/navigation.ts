@@ -300,6 +300,7 @@ export const navigation: NavItem[] = [
       { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, permission: "view_reports" },
       { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, permission: "view_reports" },
       { label: "Analisis Penjualan", href: "/laporan/analisis-penjualan", icon: BarChart3, permission: "view_reports" },
+      { label: "Paparan Diskon Penjualan", href: "/laporan/paparan-diskon-penjualan", icon: Percent, permission: "view_reports" },
       { label: "Rekap Komisi Penjualan", href: "/laporan/rekap-komisi", icon: Banknote, permission: "view_reports" },
       { label: "Target vs Pencapaian Penjualan", href: "/laporan/target-penjualan", icon: Target, permission: "view_reports" },
       { label: "Hasil Penawaran", href: "/laporan/hasil-penawaran", icon: BarChart3, permission: "view_reports" },

@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { readFileSync } from "node:fs"
+
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }))
+
+vi.mock("@/lib/auth/permissions", () => ({
+  requirePermission: vi.fn(),
+  hasPermission: vi.fn(async () => false),
+}))
 import path from "node:path"
 import { REPORTS } from "../report-registry"
 import { REPORT_CATALOG_HREFS } from "../report-catalog"
