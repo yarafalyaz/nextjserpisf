@@ -82,7 +82,7 @@ describe("LoanInstallmentHistorySection", () => {
     )
     const text = container.textContent ?? ""
     expect(text).not.toContain(LOAN_INSTALLMENT_UNALLOCATED_LABEL)
-    expect(text).toContain("Belum ada potongan slip terbayar")
+    expect(text).toContain("Belum ada cicilan terbayar tercatat.")
     expect(container.querySelector("table")).toBeNull()
     unmountCard(root)
   })
