@@ -13,6 +13,9 @@ import {
   type DownPaymentTaxStatus,
 } from "@/lib/tax/down-payment-vat"
 
+/** Label snapshot PKP DP: legacy = baris pra-fitur tanpa snapshot. */
+export const DOWN_PAYMENT_PKP_SNAPSHOT_LEGACY_LABEL = "legacy (snapshot PKP belum tercatat)"
+
 export interface DownPaymentTaxStatusRow {
   downPaymentId: number
   documentNo: string | null
@@ -24,6 +27,10 @@ export interface DownPaymentTaxStatusRow {
   vatDpp: number | null
   vatAmount: number | null
   vatTaxPeriod: string | null
+  /** F-015-V Putusan 3: status PKP perusahaan beku saat confirm; null = legacy. */
+  pkpStatusSnapshot: string | null
+  pkpEffectiveFromSnapshot: Date | null
+  pkpSnapshotLabel: string
   taxInvoiceId: number | null
   taxInvoiceNumber: string | null
   taxStatus: DownPaymentTaxStatus
@@ -64,6 +71,11 @@ export async function loadDownPaymentTaxStatusRows(input?: {
       vatDpp: snapshot ? snapshot.dppUangMuka : null,
       vatAmount: snapshot ? snapshot.ppnUangMuka : null,
       vatTaxPeriod: snapshot ? snapshot.taxPeriod : null,
+      pkpStatusSnapshot: dp.companyPkpStatusSnapshot ?? null,
+      pkpEffectiveFromSnapshot: dp.companyPkpEffectiveFromSnapshot ?? null,
+      pkpSnapshotLabel: dp.companyPkpStatusSnapshot
+        ? dp.companyPkpStatusSnapshot
+        : DOWN_PAYMENT_PKP_SNAPSHOT_LEGACY_LABEL,
       taxInvoiceId: latestFp?.id ?? null,
       taxInvoiceNumber: latestFp?.taxInvoiceNumber ?? null,
       taxStatus,

@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
     salesTaxAccountId: 160 as number | null,
     cashBankAccountId: 100 as number | null,
     customerDownPaymentAccountId: 210102 as number | null,
+    // F-015-V: default PKP efektif sebelum paymentDate tes (J-DP1 tetap).
+    companyPkpStatus: "pkp" as string,
+    companyPkpEffectiveFrom: new Date(2025, 0, 1) as Date | null,
     scrapSaleIncomeAccountId: null as number | null,
     cogsAccountId: 510 as number | null,
     inventoryAccountId: 130 as number | null,
@@ -69,18 +72,22 @@ beforeEach(() => {
   ])
   mocks.salesPaymentFindMany.mockResolvedValue([])
   mocks.settings.salesTaxAccountId = 160
+  mocks.settings.companyPkpStatus = "pkp"
+  mocks.settings.companyPkpEffectiveFrom = new Date(2025, 0, 1)
   mocks.transaction.mockImplementation((fn: any) => fn(dpTx()))
 })
 
+const dpPpn = {
+  id: 1,
+  documentNo: "DP-1",
+  amount: 12_000_000,
+  paymentDate: new Date(2026, 0, 15),
+  quotation: { tax: 13_200_000 },
+}
+
 describe("J-DP1: DP terutang membekukan snapshot + jurnal pecah", () => {
   it("DP 12.000.000 quotation ber-PPN: Cr 210102 10.680.000 + Cr 210201 1.320.000, snapshot tertulis", async () => {
-    mocks.dpFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "DP-1",
-      amount: 12_000_000,
-      paymentDate: new Date(2026, 0, 15),
-      quotation: { tax: 13_200_000 },
-    })
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
     await onDownPaymentReceived(1, 7)
     expect(mocks.dpUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,13 +139,7 @@ describe("J-DP1: DP terutang membekukan snapshot + jurnal pecah", () => {
 
   it("B1: tanpa baris master Tax efektif pada paymentDate = fail-closed, tanpa jurnal/snapshot", async () => {
     mocks.taxFindMany.mockResolvedValue([])
-    mocks.dpFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "DP-1",
-      amount: 12_000_000,
-      paymentDate: new Date(2026, 0, 15),
-      quotation: { tax: 13_200_000 },
-    })
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
     await expect(onDownPaymentReceived(1)).rejects.toThrow(/tidak ada baris master Tax/)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.dpUpdate).not.toHaveBeenCalled()
@@ -148,13 +149,7 @@ describe("J-DP1: DP terutang membekukan snapshot + jurnal pecah", () => {
     mocks.taxFindMany.mockResolvedValue([
       { rate: 11, effectiveFrom: new Date(2026, 0, 1), effectiveTo: null, isActive: true, deletedAt: null },
     ])
-    mocks.dpFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "DP-1",
-      amount: 12_000_000,
-      paymentDate: new Date(2026, 0, 15),
-      quotation: { tax: 13_200_000 },
-    })
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
     await onDownPaymentReceived(1)
     expect(mocks.dpUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ vatRate: 11, vatAmount: 1_210_000 }) }),
@@ -164,15 +159,104 @@ describe("J-DP1: DP terutang membekukan snapshot + jurnal pecah", () => {
   it("E-DP-PPN (9): periode tertutup pada paymentDate = ditolak assertPeriodOpen, tanpa jurnal", async () => {
     const { assertPeriodOpen } = await import("@/lib/services/period-lock.service")
     vi.mocked(assertPeriodOpen).mockRejectedValueOnce(new Error("Periode 2026-01 terkunci"))
-    mocks.dpFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "DP-1",
-      amount: 12_000_000,
-      paymentDate: new Date(2026, 0, 15),
-      quotation: { tax: 13_200_000 },
-    })
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
     await expect(onDownPaymentReceived(1)).rejects.toThrow(/terkunci/)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("B-PKP F-015-V: gerbang PKP perusahaan di onDownPaymentReceived (falsifikasi vonis 1-6)", () => {
+  function expectNoJournalOrSnapshot() {
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.dpUpdate).not.toHaveBeenCalled()
+  }
+  function journalEntries() {
+    return mocks.journalCreate.mock.calls[0][0].data.entries.create as any[]
+  }
+
+  it("(1) unknown + DP ber-PPN ditolak berisik, tanpa jurnal/snapshot/master-tax query", async () => {
+    mocks.settings.companyPkpStatus = "unknown"
+    mocks.settings.companyPkpEffectiveFrom = null
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
+    await expect(onDownPaymentReceived(1)).rejects.toThrow(/status PKP perusahaan belum ditetapkan/)
+    expectNoJournalOrSnapshot()
+    expect(mocks.taxFindMany).not.toHaveBeenCalled()
+  })
+
+  it("(2) non_pkp -> J-DP2 bruto penuh, nol kaki 210201, snapshot PKP beku non_pkp", async () => {
+    mocks.settings.companyPkpStatus = "non_pkp"
+    mocks.settings.companyPkpEffectiveFrom = null
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
+    await onDownPaymentReceived(1)
+    const entries = journalEntries()
+    expect(entries).toHaveLength(2)
+    expect(entries.some((e) => e.accountId === 160)).toBe(false)
+    expect(entries[1]).toEqual({ accountId: 210102, debit: 0, credit: 12_000_000, memo: "Uang Muka Penjualan" })
+    expect(mocks.dpUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ vatAmount: 0, companyPkpStatusSnapshot: "non_pkp" }),
+      }),
+    )
+  })
+
+  it("(3) EffectiveFrom sesudah paymentDate -> J-DP2; digeser <= paymentDate -> J-DP1 (hasil berbalik)", async () => {
+    mocks.settings.companyPkpEffectiveFrom = new Date(2026, 0, 16)
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
+    await onDownPaymentReceived(1)
+    expect(journalEntries().some((e) => e.accountId === 160)).toBe(false)
+
+    vi.clearAllMocks()
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+    mocks.dpUpdate.mockResolvedValue({})
+    mocks.settings.companyPkpStatus = "pkp"
+    mocks.settings.companyPkpEffectiveFrom = new Date(2026, 0, 15)
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
+    await onDownPaymentReceived(1)
+    expect(journalEntries()).toContainEqual(
+      expect.objectContaining({ accountId: 160, credit: 1_320_000 }),
+    )
+    expect(mocks.dpUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ companyPkpStatusSnapshot: "pkp", vatAmount: 1_320_000 }),
+      }),
+    )
+  })
+
+  it("(4) status diubah sesudah DP terbit: snapshot tersimpan byte-sama, tidak ditulis ulang", async () => {
+    // DP sudah bersnapshot (vat* + PKP beku pkp); master kini non_pkp.
+    mocks.settings.companyPkpStatus = "non_pkp"
+    mocks.settings.companyPkpEffectiveFrom = null
+    mocks.dpFindUniqueOrThrow.mockResolvedValue({
+      ...dpPpn,
+      vatTransactionCode: "04",
+      vatRate: 12,
+      vatDpp: 11_000_000,
+      vatAmount: 1_320_000,
+      vatTaxPeriod: "2026-01",
+      companyPkpStatusSnapshot: "pkp",
+      companyPkpEffectiveFromSnapshot: new Date(2025, 0, 1),
+    })
+    await onDownPaymentReceived(1)
+    expect(mocks.dpUpdate).not.toHaveBeenCalled()
+    expect(journalEntries()).toContainEqual(expect.objectContaining({ accountId: 160, credit: 1_320_000 }))
+  })
+
+  it("(5) pkp tanpa EffectiveFrom = fail-closed berisik, tanpa jurnal", async () => {
+    mocks.settings.companyPkpEffectiveFrom = null
+    mocks.dpFindUniqueOrThrow.mockResolvedValue(dpPpn)
+    await expect(onDownPaymentReceived(1)).rejects.toThrow(/tanggal mulai kewajiban PKP belum diisi/)
+    expectNoJournalOrSnapshot()
+  })
+
+  it("(6) quotation tax=0 + unknown tetap lolos J-DP2", async () => {
+    mocks.settings.companyPkpStatus = "unknown"
+    mocks.settings.companyPkpEffectiveFrom = null
+    mocks.dpFindUniqueOrThrow.mockResolvedValue({ ...dpPpn, amount: 500, quotation: { tax: 0 } })
+    await onDownPaymentReceived(1)
+    const entries = journalEntries()
+    expect(entries).toHaveLength(2)
+    expect(entries[1].credit).toBe(500)
   })
 })
 

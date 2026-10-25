@@ -13,6 +13,7 @@ import {
   buildSettlementReclass,
   computeAllocationNet,
   computeDownPaymentVatSnapshot,
+  resolveCompanyPkpGate,
   resolveEffectiveVatRate,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat";
@@ -2090,8 +2091,17 @@ export async function onDownPaymentReceived(
     let snapshot = snapshotFromDownPaymentRow(dp as never);
     if (!snapshot) {
       const quotationTax = Number((dp as { quotation?: { tax?: unknown } }).quotation?.tax ?? 0);
+      const paymentDate = dp.paymentDate || new Date();
+      // F-2026-10-25-015-V Putusan 2-3: gerbang PKP perusahaan menilai
+      // terutang SEBELUM tarif dicari — unknown ber-PPN dan pkp tanpa
+      // tanggal mulai kewajiban fail-closed di sini (dalam tx, sesudah
+      // assertPeriodOpen); non-PKP/belum efektif sah J-DP2 bruto.
+      // Status + tanggal yang dipakai dibekukan ke baris DP bersama
+      // snapshot vat* (edit master sesudahnya nol efek retroaktif).
+      // Gerbang TIDAK membaca status PKP lawan / transactionCode.
+      const pkpGate = resolveCompanyPkpGate({ setting: settings, quotationTax, paymentDate });
       let nominalRate = 0;
-      if (quotationTax > 0) {
+      if (pkpGate.taxableByPkp) {
         if (!settings.salesTaxAccountId) {
           throw new Error(
             "Akun PPN Keluaran (210201) harus dikonfigurasi sebelum uang muka terutang PPN diterima",
@@ -2108,8 +2118,11 @@ export async function onDownPaymentReceived(
       }
       snapshot = computeDownPaymentVatSnapshot({
         amount: Number(dp.amount),
-        quotationTax,
-        paymentDate: dp.paymentDate || new Date(),
+        // Gerbang PKP sudah menilai terutang: non-PKP/belum efektif
+        // dipaksa snapshot bruto (quotationTax 0) walau quotation
+        // memuat PPN — FP UM tidak lahir untuk masa non-PKP.
+        quotationTax: pkpGate.taxableByPkp ? quotationTax : 0,
+        paymentDate,
         transactionCode: DEFAULT_TRANSACTION_CODE,
         nominalRate,
       });
@@ -2121,6 +2134,8 @@ export async function onDownPaymentReceived(
           vatDpp: snapshot.dppUangMuka,
           vatAmount: snapshot.ppnUangMuka,
           vatTaxPeriod: snapshot.taxPeriod,
+          companyPkpStatusSnapshot: pkpGate.pkpStatus,
+          companyPkpEffectiveFromSnapshot: pkpGate.pkpEffectiveFrom,
         },
       });
     }

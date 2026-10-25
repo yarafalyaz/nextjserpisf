@@ -95,6 +95,65 @@ function effectiveTime(value: Date | string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t
 }
 
+/** Status PKP perusahaan penjual (F-2026-10-25-015-V Putusan 1). */
+export type CompanyPkpStatus = "non_pkp" | "pkp" | "unknown"
+
+/** Nilai master SystemSetting mentah yang dibaca gerbang PKP. */
+export interface CompanyPkpSetting {
+  companyPkpStatus?: string | null
+  companyPkpEffectiveFrom?: Date | string | null
+}
+
+function toCalendarTime(value: Date | string | null | undefined): number | null {
+  const t = effectiveTime(value)
+  if (t == null) return null
+  const d = new Date(t)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+/**
+ * Gerbang PKP perusahaan F-2026-10-25-015-V Putusan 2 (murni, tanpa
+ * Prisma): apakah DP atas quotation ber-PPN terutang FP UM pada
+ * paymentDate. Tiga syarat kumulatif — status pkp, tanggal mulai
+ * kewajiban <= paymentDate, quotation.tax > 0 (tarif efektif dinilai
+ * pemanggil lewat resolveEffectiveVatRate).
+ * - `unknown` + quotation ber-PPN = fail-closed berisik (status belum
+ *   ditetapkan; JANGAN dibaca non-PKP/PKP diam-diam).
+ * - `pkp` tanpa tanggal mulai kewajiban = konfigurasi cacat,
+ *   fail-closed berisik (tanggal SPPKP tidak ditebak).
+ * - `non_pkp` / belum efektif = jalur sah J-DP2 bruto (bukan error).
+ * - quotation tax=0 tidak pernah terhalang gerbang.
+ * Status PKP lawan transaksi dan transactionCode TIDAK dibaca di
+ * sini (Putusan 4) — gerbang hanya memutus terutang/tidak.
+ */
+export function resolveCompanyPkpGate(input: {
+  setting: CompanyPkpSetting | null | undefined
+  quotationTax: number
+  paymentDate: Date
+}): { taxableByPkp: boolean; pkpStatus: CompanyPkpStatus; pkpEffectiveFrom: Date | null } {
+  const raw = (input.setting?.companyPkpStatus ?? "unknown").trim().toLowerCase()
+  const pkpStatus: CompanyPkpStatus = raw === "pkp" || raw === "non_pkp" ? raw : "unknown"
+  const effTime = toCalendarTime(input.setting?.companyPkpEffectiveFrom)
+  const pkpEffectiveFrom = effTime == null ? null : new Date(effTime)
+  if (!(input.quotationTax > 0)) return { taxableByPkp: false, pkpStatus, pkpEffectiveFrom }
+  if (pkpStatus === "unknown") {
+    throw new Error(
+      "Penerimaan uang muka ditolak: status PKP perusahaan belum ditetapkan. Tetapkan status PKP perusahaan (PKP/non-PKP beserta tanggal mulai kewajiban) di Pengaturan Perusahaan sebelum menerima uang muka atas penawaran ber-PPN.",
+    )
+  }
+  if (pkpStatus === "pkp" && pkpEffectiveFrom == null) {
+    throw new Error(
+      "Penerimaan uang muka ditolak: perusahaan berstatus PKP tetapi tanggal mulai kewajiban PKP belum diisi. Isi tanggal mulai kewajiban PKP di Pengaturan Perusahaan — tanggal SPPKP tidak ditebak.",
+    )
+  }
+  const payTime = toCalendarTime(input.paymentDate)
+  return {
+    taxableByPkp: pkpStatus === "pkp" && effTime != null && payTime != null && effTime <= payTime,
+    pkpStatus,
+    pkpEffectiveFrom,
+  }
+}
+
 /**
  * B1 (re-audit Accountant PR #785): tarif snapshot DP WAJIB dari master
  * Tax yang efektif pada paymentDate — BUKAN konstanta. Kandidat =

@@ -11,6 +11,7 @@ import {
   computeAllocationNet,
   computeDownPaymentVatSnapshot,
   deriveDownPaymentTaxStatus,
+  resolveCompanyPkpGate,
   resolveEffectiveVatRate,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat"
@@ -169,6 +170,56 @@ describe("B5: bukti SPT nol-dobel dua masa (FP UM + FP pelunasan selisih)", () =
     expect(totalDpp).toBe(110_000_000)
     expect(totalVat).toBe(13_200_000)
     expect(merged.find((r) => r.period === "2026-02")?.source).toBe("tax_invoice")
+  })
+})
+
+describe("B-PKP F-015-V: gerbang PKP perusahaan (falsifikasi vonis 1-6, lapis builder)", () => {
+  const pkp = { companyPkpStatus: "pkp", companyPkpEffectiveFrom: new Date(2026, 0, 1) }
+  it("(1) unknown + quotation ber-PPN = fail-closed berisik arahkan Pengaturan Perusahaan", () => {
+    expect(() =>
+      resolveCompanyPkpGate({ setting: { companyPkpStatus: "unknown" }, quotationTax: 1, paymentDate: PAY_DATE }),
+    ).toThrow(/status PKP perusahaan belum ditetapkan/)
+    // Setting absen/null diperlakukan unknown, BUKAN non-PKP diam-diam.
+    expect(() => resolveCompanyPkpGate({ setting: null, quotationTax: 1, paymentDate: PAY_DATE })).toThrow(/belum ditetapkan/)
+    expect(() => resolveCompanyPkpGate({ setting: {}, quotationTax: 1, paymentDate: PAY_DATE })).toThrow(/belum ditetapkan/)
+  })
+  it("(2) non_pkp = tidak terutang (jalur sah J-DP2), bukan error", () => {
+    const g = resolveCompanyPkpGate({ setting: { companyPkpStatus: "non_pkp" }, quotationTax: 13_200_000, paymentDate: PAY_DATE })
+    expect(g.taxableByPkp).toBe(false)
+    expect(g.pkpStatus).toBe("non_pkp")
+  })
+  it("(3) geser EffectiveFrom lewati paymentDate membalik hasil (tes tanggal, bukan flag)", () => {
+    const before = resolveCompanyPkpGate({
+      setting: { companyPkpStatus: "pkp", companyPkpEffectiveFrom: new Date(2026, 0, 15) },
+      quotationTax: 1,
+      paymentDate: PAY_DATE,
+    })
+    expect(before.taxableByPkp).toBe(true)
+    const after = resolveCompanyPkpGate({
+      setting: { companyPkpStatus: "pkp", companyPkpEffectiveFrom: new Date(2026, 0, 16) },
+      quotationTax: 1,
+      paymentDate: PAY_DATE,
+    })
+    expect(after.taxableByPkp).toBe(false)
+    expect(pkp.companyPkpStatus).toBe("pkp")
+  })
+  it("(5) pkp tanpa EffectiveFrom = fail-closed berisik, bukan lolos", () => {
+    expect(() =>
+      resolveCompanyPkpGate({ setting: { companyPkpStatus: "pkp", companyPkpEffectiveFrom: null }, quotationTax: 1, paymentDate: PAY_DATE }),
+    ).toThrow(/tanggal mulai kewajiban PKP belum diisi/)
+  })
+  it("(6) quotation tax=0 + unknown tetap lolos tidak terutang (gerbang tidak memblokir yang tidak dipungut)", () => {
+    const g = resolveCompanyPkpGate({ setting: { companyPkpStatus: "unknown" }, quotationTax: 0, paymentDate: PAY_DATE })
+    expect(g.taxableByPkp).toBe(false)
+    expect(g.pkpStatus).toBe("unknown")
+  })
+  it("status sampah di master dinormalkan unknown -> fail-closed ber-PPN, lolos tax=0", () => {
+    expect(() =>
+      resolveCompanyPkpGate({ setting: { companyPkpStatus: "PKP?" }, quotationTax: 1, paymentDate: PAY_DATE }),
+    ).toThrow(/belum ditetapkan/)
+    expect(
+      resolveCompanyPkpGate({ setting: { companyPkpStatus: "PKP?" }, quotationTax: 0, paymentDate: PAY_DATE }).taxableByPkp,
+    ).toBe(false)
   })
 })
 
