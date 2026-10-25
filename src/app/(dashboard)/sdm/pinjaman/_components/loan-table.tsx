@@ -20,6 +20,7 @@ interface LoanData {
   monthlyInstallment: number
   remainingAmount: number
   status: string
+  channel?: string | null
 }
 
 const columnHelper = createColumnHelper<LoanData>()
@@ -56,6 +57,11 @@ const columns = [
       const val = info.getValue()
       return <StatusChip status={val} />
     },
+  }),
+  columnHelper.accessor("channel", {
+    header: "Kanal",
+    // Label kanal verbatim dari loader loadEmployeeLoanChannels (Q-LS-3b).
+    cell: (info) => info.getValue() ?? "—",
   }),
   columnHelper.display({
     id: "actions",
