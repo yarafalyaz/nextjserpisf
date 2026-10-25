@@ -30823,3 +30823,112 @@ Urutan: Accountant Q-KOM3-1 → Lead G1 (sesudah 036-S live) → Backend inti �
 - Mengubah rekap informatif menjadi layar utang: read-model saldo terpisah (BR-KOM37-12).
 
 F-2026-10-25-037-S — Tahap 3 komisi penjualan (utang komisi + jurnal + bayar via payroll). Status: SPEC SELESAI run ini; tahap 3 TETAP TERTUTUP menunggu Q-KOM3-1 (Accountant, koreksi akun 210207) + implementasi 036-S + PUTUSAN Lead G1. Pemilik usulan: Business (spec), Accountant (akun), Lead (buka inti), Backend (inti), Frontend (konsumen), QA (falsifikasi KOM3 + AC-KOM37).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-039-S: riwayat harga penawaran per pelanggan×barang (objek QuotationItem; lanjutan tertunda F-2026-10-25-028-S)
+
+> **Slot**: F-2026-10-25-039-S. Diperiksa bentrok 2026-10-25 19:41 WIB vs `origin/main` (`1b147d3c`): grep `F-2026-10-25-039` di backlog+board origin/main = 0; ID terpakai tanggal ini 001-S..038-S (038-S di PR #889 OPEN). ID 039 bebas. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Anti-duplikat**: 028-S membekukan riwayat harga jual AKTUAL dari baris FAKTUR terbit (`SalesInvoiceItem`, status `RECOGNISED_AR_STATUSES`) dan secara eksplisit MENUNDA "riwayat harga penawaran (QuotationItem belum transaksi) — objek berbeda, jangan dicampur fakta faktur". Spec ini mengambil objek tertunda itu. Populasi, makna, dan label WAJIB dibedakan dari 028-S di semua permukaan; jangan menulis ulang definisi harga faktur, resolver `CustomerPriceList` (F-018/001-S), atau laporan paparan diskon (006-S).
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 1b147d3c) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Objek penawaran live: `Quotation` (status `draft`, `validUntil`, `revisionNumber`, `salesEmployeeId`) + `QuotationItem` (`unitPrice`, `qty`, `discount`, `total`, `itemId` nullable) di `prisma/schema.prisma`; `QuotationHistory` menyimpan `dataSnapshot` Json per revisi dengan `statusAtSnapshot` default `sent`.
+- Status penawaran terdaftar: `draft|sent|accepted|rejected|expired|converted` (`src/lib/validations/crm.schemas.ts`, diverifikasi run ini; LEAD_STATUSES terpisah dan TIDAK dipakai di sini).
+- Izin katalog nyata: `view_quotations` + `edit_quotations` (`src/lib/auth/module-catalog.generated.ts:158-160`).
+- Riwayat harga faktur 028-S live (builder/loader pasangan pelanggan×barang dari faktur terbit) — populasi berbeda dari spec ini.
+
+Gap terbukti (grep run ini):
+- Tidak ada permukaan riwayat harga PENAWARAN per (pelanggan, barang): penjual tidak bisa menjawab "harga terakhir yang DITAWARKAN ke pelanggan X untuk barang Y berapa dan di penawaran mana" tanpa membuka penawaran satu per satu.
+- Harga baris penawaran yang sudah berubah lewat revisi hanya hidup di `QuotationHistory.dataSnapshot` Json — tidak ada kontrak baca riwayat harga per revisi; snapshot bukan tabel baris terstruktur.
+
+### 1. Workflow specification
+
+Aktor: penjual pemegang `view_quotations` membuka riwayat harga penawaran untuk pasangan (pelanggan, barang); tampil daftar penawaran yang memuat barang itu terurut tanggal penawaran terbaru dulu, tiap baris menunjukkan nomor penawaran, tanggal, status penawaran, harga satuan ditawarkan, diskon baris, qty, dan masa berlaku (`validUntil`) — semua verbatim dari baris `QuotationItem` + kepala `Quotation` tersimpan.
+
+Dokumen masuk: baris `QuotationItem` terhubung kepala `Quotation` pelanggan terpilih. Dokumen keluar: tampilan baca-saja; tanpa dokumen uang, tanpa perubahan status, tanpa penulisan harga ke mana pun.
+
+Batas makna wajib tampil sebagai label di permukaan: "Harga penawaran — belum tentu menjadi transaksi. Harga transaksi terakhir lihat Riwayat Harga Jual (faktur)." Label persis dibekukan Frontend mengikuti BR-QP-01; UI tidak boleh mempersingkat menjadi "harga terakhir".
+
+### 2. Role/permission matrix (key nyata katalog, TERVERIFIKASI-KODE)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat riwayat harga penawaran | `view_quotations` (katalog :158) | USULAN (permukaan baru memakai key existing) |
+| Ubah harga penawaran dari permukaan ini | DILARANG — baca-saja; edit tetap lewat form penawaran existing (`edit_quotations` :160) | USULAN |
+| Key izin baru | TIDAK diusulkan tahap 1; Lead putus Q-QP-2 bila menuntut key khusus | USULAN |
+
+### 3. Status-transition matrix
+
+Tidak ada transisi status baru. Populasi baca diklasifikasikan per status kepala penawaran (nilai verbatim `crm.schemas.ts`):
+
+| Status penawaran | Masuk populasi? | Makna harga untuk pembaca |
+|---|---|---|
+| `sent` | Ya | Harga resmi terkirim ke pelanggan — populasi inti |
+| `accepted` / `converted` | Ya | Harga disetujui pelanggan; rujuk silang 028-S untuk harga transaksi finalnya |
+| `draft` | Ya, ember terpisah | Belum terkirim — bukan penawaran ke pelanggan; tidak dicampur populasi inti |
+| `rejected` / `expired` | Ya, ember terpisah | Tidak diterima / lewat masa berlaku — konteks negosiasi, bukan harga pasar |
+| status di luar daftar | Ember `status_tidak_dikenal` | Tidak dipetakan paksa (pola BR-LF-01 030-S) |
+
+Fisik pengelompokan (filter builder vs penanda per baris) = Q-QP-3 Backend; klasifikasinya tidak boleh berubah makna.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-QP-01 | Setiap permukaan WAJIB melabeli "harga penawaran, belum tentu menjadi transaksi"; dilarang label "harga terakhir/harga jual terakhir" — frasa itu milik 028-S (faktur) | USULAN | §1; 028-S |
+| BR-QP-02 | Harga tampil verbatim `QuotationItem.unitPrice/discount/qty` tersimpan; UI/loader dilarang menghitung ulang dari resolver daftar harga berjalan | USULAN | schema QuotationItem |
+| BR-QP-03 | Baris bebas (`itemId` null, teks bebas) TIDAK masuk pasangan barang; tampil hanya bila permukaan memilih mode semua-baris dengan penanda "baris bebas" — default pasangan barang mengecualikannya | USULAN | `QuotationItem.itemId` nullable |
+| BR-QP-04 | Penawaran terhapus lunak (`Quotation.deletedAt` terisi) keluar dari populasi | USULAN | konvensi soft-delete penawaran |
+| BR-QP-05 | Revisi: harga yang tampil = baris penawaran SAAT INI; riwayat harga per revisi dari `QuotationHistory.dataSnapshot` DI LUAR tahap 1 (snapshot Json bukan kontrak baris; memaksakan baca Json = rapuh) | USULAN | schema QuotationHistory |
+| BR-QP-06 | TANPA rekomendasi/auto-isi harga dari riwayat ini; penjual memutuskan manual di form penawaran existing (paralel larangan 028-S untuk faktur) | USULAN (warisan 028-S) | 028-S |
+| BR-QP-07 | Urutan terbaru-dulu memakai tanggal penawaran (`Quotation.date`), penanda seri eksplisit bila tanggal sama (pola penanda seri 028-S) | USULAN | — |
+| BR-QP-08 | Rujuk silang satu arah: dari baris `accepted/converted` pembaca dapat melompat ke riwayat harga faktur 028-S pasangan sama; harga faktur TIDAK ditarik masuk ke daftar ini | USULAN | 028-S |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+Benchmark resmi (akses 2026-10-25):
+- Accurate — Penawaran Penjualan tercatat dengan status (diterima/ditolak/menunggu diproses): https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/
+- Zahir — Sales Quotation tercatat, dapat dilanjutkan ke Sales Order, administratif tanpa jurnal: https://www.zahironline.com/sales-quotation/ ; laporan rincian penawaran harga: https://www.zahironline.com/quotation-request/laporan-rincian-penawaran-harga/
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Penawaran tercatat + status terlacak | Ada | Ada | Ada |
+| Laporan rangkuman/rincian penawaran | Tidak diverifikasi run ini dari URL di atas — tidak diklaim | Ada (rincian penawaran harga) | Antrean penawaran diterima 002-S ada; rincian harga per pasangan = gap spec ini |
+| Riwayat harga per pelanggan×barang dari penawaran | Tidak ditemukan di URL resmi run ini — tidak diklaim | Tidak ditemukan di URL resmi run ini — tidak diklaim | Gap spec ini |
+
+Selisih jujur: keunggulan benchmark terverifikasi adalah pencatatan penawaran + laporan rincian; kueri harga historis per pasangan dari penawaran tidak terbukti di kedua benchmark run ini.
+
+### 6. Acceptance criteria + edge cases (draf falsifikasi untuk QA)
+
+- AC-QP-B1: pasangan (pelanggan, barang) menampilkan hanya baris penawaran pelanggan itu untuk barang itu; baris pelanggan/barang lain muncul = MERAH.
+- AC-QP-B2: populasi inti hanya `sent/accepted/converted`; `draft/rejected/expired` masuk ember inti = MERAH; status asing masuk tanpa ember tidak dikenal = MERAH.
+- AC-QP-B3: harga tampil beda dari `QuotationItem.unitPrice` tersimpan (mis. terbaca dari daftar harga berjalan sesudah harga master berubah) = MERAH.
+- AC-QP-B4: label permukaan memuat frasa penawaran-belum-transaksi; label berbunyi "harga jual terakhir" = MERAH.
+- AC-QP-B5: permukaan menulis apa pun (harga/status/log harga) saat dibaca = MERAH (baca-saja).
+- AC-QP-F1: baris `accepted/converted` punya lompatan ke riwayat faktur 028-S pasangan sama; harga faktur tampil di dalam daftar penawaran = MERAH.
+- Edge: barang sama muncul dua kali dalam satu penawaran (dua section) → dua baris tampil apa adanya, tidak digabung diam-diam. Penawaran tanpa `validUntil` → kolom berlaku kosong jujur, bukan tanggal karangan. Pelanggan tanpa penawaran untuk barang itu → keadaan kosong eksplisit per permukaan, bukan Rp0. Revisi mengubah harga → tampil harga saat ini saja (BR-QP-05); klaim riwayat revisi tampil = MERAH tahap ini.
+
+### 7. Backlog implementasi (turunan F-2026-10-25-039-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-039-S | Spec kontrak ini (dokumen) | Business | — |
+| (turunan) builder murni + loader riwayat harga penawaran pasangan (klasifikasi status §3, tanpa tulis) | Backend | Q-QP-2/Q-QP-3; klaim file di board dulu | — |
+| (turunan) permukaan riwayat harga penawaran + label BR-QP-01 + lompatan 028-S | Frontend | kontrak Backend final; grep e2e penawaran terdampak sebelum commit | — |
+| (turunan) falsifikasi AC-QP-B1..B5 + F1 | QA | head Backend/Frontend persis | — |
+
+### 8. Pertanyaan putusan
+
+- Q-QP-1 (Lead): buka read-model harga penawaran ini — ya/tidak. Rekomendasi Business: YA (baca-saja, di atas objek live, menutup celah tertunda 028-S).
+- Q-QP-2 (Lead): reuse `view_quotations` tanpa key baru — sahkan atau minta key khusus.
+- Q-QP-3 (Backend, fisik): bentuk klasifikasi status (filter vs penanda) + indeks baca pasangan; fisik yang membaca `dataSnapshot` Json sebagai kontrak baris tahap 1 = tidak sah (BR-QP-05).
+- Accountant: TIDAK diminta (tanpa uang/pajak/jurnal; harga penawaran bukan pengakuan pendapatan).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-039-S)
+
+- Riwayat harga per revisi dari snapshot Json (BR-QP-05), auto-isi/rekomendasi harga (BR-QP-06), penggabungan harga penawaran + faktur dalam satu daftar (objek berbeda; rujuk silang saja BR-QP-08).
+- Perubahan resolver daftar harga, status penawaran, atau form penawaran existing.
+
+F-2026-10-25-039-S — Riwayat harga penawaran per pelanggan×barang. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-QP-1/Q-QP-2 + fisik Backend Q-QP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder+loader), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK.
