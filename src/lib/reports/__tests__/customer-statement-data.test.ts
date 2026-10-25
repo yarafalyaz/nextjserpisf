@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
     journal: { findMany: vi.fn() },
+    activityLog: { findMany: vi.fn() },
+    user: { findMany: vi.fn() },
   },
   getSystemSettings: vi.fn(),
 }))
@@ -28,11 +30,15 @@ const D = (iso: string) => new Date(`${iso}T00:00:00.000Z`)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 7, name: "CV Uji" })
+  mocks.prismaMock.customer.findFirst
+    .mockResolvedValueOnce({ id: 7, name: "CV Uji" })
+    .mockResolvedValueOnce({ phone: "0812-3456-7890" })
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.salesPayment.findMany.mockResolvedValue([])
   mocks.prismaMock.salesReturn.findMany.mockResolvedValue([])
   mocks.prismaMock.journal.findMany.mockResolvedValue([])
+  mocks.prismaMock.activityLog.findMany.mockResolvedValue([])
+  mocks.prismaMock.user.findMany.mockResolvedValue([])
   mocks.getSystemSettings.mockResolvedValue({ salesReceivableAccountId: 110 })
 })
 
@@ -82,9 +88,14 @@ describe("loadCustomerStatement", () => {
   })
 
   it("pelanggan tanpa dokumen → saldo 0, baris kosong + notice, bukan error", async () => {
-    mocks.prismaMock.customer.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.customer.findFirst.mockReset()
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
     const report = await loadCustomerStatement(404, { start: D("2026-02-01"), end: D("2026-02-28") })
     expect(report.customer).toBeNull()
+    expect(report.customerPhone).toBeNull()
+    expect(report.whatsappTrail).toEqual([])
     expect(report.statement.openingBalance).toBe(0)
     expect(report.statement.closingBalance).toBe(0)
     expect(report.statement.entries).toEqual([])
@@ -141,5 +152,81 @@ describe("loadCustomerStatement", () => {
     expect(mocks.prismaMock.journal.findMany).not.toHaveBeenCalled()
     expect(report.statement.entries.some((e) => e.kind === "return")).toBe(false)
     expect(report.statement.closingBalance).toBe(500_000)
+  })
+
+  it("F-038-B1: phone pelanggan terpilih dimuat terpisah — payload builder/customer beku", async () => {
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+
+    expect(report.customer).toEqual({ id: 7, name: "CV Uji" })
+    expect(report.customerPhone).toBe("0812-3456-7890")
+    expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: 7, deletedAt: null },
+      select: { id: true, name: true },
+    })
+    expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { id: 7 },
+      select: { phone: true },
+    })
+  })
+
+  it("F-038-B1: phone kosong/null → customerPhone null (tombol WA tidak lahir di UI)", async () => {
+    mocks.prismaMock.customer.findFirst.mockReset()
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce({ id: 7, name: "CV Uji" })
+      .mockResolvedValueOnce({ phone: null })
+
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    expect(report.customerPhone).toBeNull()
+  })
+
+  it("F-038-B1: pelanggan statement terhapus lunak → customer null, phone perjalanan tetap, klik ditolak di aksi", async () => {
+    mocks.prismaMock.customer.findFirst.mockReset()
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ phone: "0812-3456-7890" })
+
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    expect(report.customer).toBeNull()
+    expect(report.customerPhone).toBe("0812-3456-7890")
+  })
+
+  it("F-038-B1: jejak WA statement terbaru-dulu + nama staf dari ActivityLog apa adanya", async () => {
+    mocks.prismaMock.activityLog.findMany.mockResolvedValue([
+      { userId: 42, createdAt: D("2026-02-20") },
+      { userId: 43, createdAt: D("2026-02-18") },
+      { userId: null, createdAt: D("2026-02-17") },
+    ])
+    mocks.prismaMock.user.findMany.mockResolvedValue([
+      { id: 42, name: "Sari" },
+      { id: 43, name: "Budi" },
+    ])
+
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+
+    expect(mocks.prismaMock.activityLog.findMany).toHaveBeenCalledWith({
+      where: { modelType: "CustomerStatement", modelId: 7, action: "whatsapp_link_opened" },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+      select: { userId: true, createdAt: true },
+    })
+    expect(mocks.prismaMock.user.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [42, 43] } },
+      select: { id: true, name: true },
+    })
+    expect(report.whatsappTrail).toEqual([
+      { userName: "Sari", createdAt: D("2026-02-20") },
+      { userName: "Budi", createdAt: D("2026-02-18") },
+      { userName: null, createdAt: D("2026-02-17") },
+    ])
+    // BR-SW-01: loader tidak mengarang status terkirim/dibaca dari jumlah klik.
+    expect(JSON.stringify(report.whatsappTrail)).not.toMatch(/terkirim|dibaca/i)
+    // Payload builder statement beku (BR-ST-06): saldo tidak berubah oleh jejak.
+    expect(report.statement.closingBalance).toBe(0)
+  })
+
+  it("F-038-B1: tanpa baris jejak → whatsappTrail [] tanpa query user", async () => {
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    expect(report.whatsappTrail).toEqual([])
+    expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
   })
 })

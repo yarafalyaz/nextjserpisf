@@ -159,6 +159,7 @@ export const navigation: NavItem[] = [
       { label: "Lembur", href: "/sdm/lembur", icon: Timer, permission: "view_overtime" },
       { label: "Rekap Lembur", href: "/sdm/lembur/rekap", icon: Timer, permission: "view_overtime" },
       { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote, permission: "view_payroll" },
+      { label: "Slip Gaji Saya", href: "/sdm/slip-gaji-saya", icon: Wallet },
       { label: "Aturan Statutori", href: "/sdm/aturan-statutori", icon: BookOpenCheck, permission: "view_payroll" },
       { label: "Lembar Waktu", href: "/sdm/lembar-waktu", icon: Clock, permission: "view_timesheets" },
       { label: "Pinjaman", href: "/sdm/pinjaman", icon: PiggyBank, permission: "view_employee_loans" },

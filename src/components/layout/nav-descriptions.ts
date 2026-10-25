@@ -183,6 +183,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/sdm/lembur/rekap": "Rekap jam lembur per karyawan per periode",
   "/sdm/kalender-kerja": "Hari libur & jadwal kerja",
   "/sdm/penggajian": "Penggajian",
+  "/sdm/slip-gaji-saya": "Slip gaji final milik sendiri (baca-saja)",
   "/sdm/aturan-statutori": "Tarif BPJS, PTKP & PPh21 berperiode",
   "/sdm/pinjaman": "Pinjaman karyawan",
 }
