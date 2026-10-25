@@ -9,10 +9,17 @@ import { Button } from "@/components/ui/shadcn/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
 import { Separator } from "@/components/ui/shadcn/separator"
 import { Pencil } from "lucide-react"
+import { formatDate } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Perusahaan" }
+
+const COMPANY_PKP_STATUS_LABELS: Record<string, string> = {
+  pkp: "PKP",
+  non_pkp: "Non-PKP",
+  unknown: "Belum ditetapkan",
+}
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
@@ -48,6 +55,15 @@ export default async function CompanySettingsPage() {
             <Field label="Telepon" value={settings?.companyPhone} />
             <Field label="Website" value={settings?.companyWebsite} />
             <Field label="NPWP" value={settings?.companyTaxId} />
+            <Field
+              label="Status PKP Perusahaan"
+              value={settings ? COMPANY_PKP_STATUS_LABELS[settings.companyPkpStatus] ?? settings.companyPkpStatus : null}
+            />
+            <Field
+              label="Tanggal Mulai Kewajiban PKP"
+              value={settings?.companyPkpEffectiveFrom ? formatDate(settings.companyPkpEffectiveFrom) : null}
+            />
+            <Field label="Sumber Status PKP" value={settings?.companyPkpSource} />
             <Field label="Provinsi" value={settings?.companyProvince} />
             <Field label="Kota" value={settings?.companyCity} />
             <Field label="Kecamatan" value={settings?.companyDistrict} />
