@@ -28984,3 +28984,80 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-035-V: definisi eksposur INTI gerbang kredit tahap 2 — PaparanBersih advisory persis (K1+K2+K5−K3efektif(b)−K4) tanpa subset; K3(b) cukup untuk inti; `unset` tidak ditahan; `warning` tidak ditahan (jawaban Q-CL2-1 spec F-2026-10-25-034-S PR #872)
+
+> **Slot**: F-2026-10-25-035-V. Diperiksa bentrok 2026-10-25 16:03 WIB vs `origin/main` (`272d83da`): grep `F-2026-10-25-035` di backlog+board origin/main = 0; judul/head PR terbuka memuat `035` = 0; branch remote `035` = 0. Nomor terbesar terpakai di origin/main = 027-S (026-L putusan Lead); 028-S..034-S duduk di PR terbuka Business (#858/#859/#860/#865/#867/#870/#872). ID 035-V bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen vonis saja; tanpa kode/schema/migrasi; tanpa buka gerbang; tanpa putus izin/media override; tanpa angka plafon baru.
+
+Kartu: t_84b0575a. Sumber terikat: vonis F-2026-10-22-044-V (V1–V7, di origin/main) + spec Business F-2026-10-25-034-S (PR #872 OPEN head `d51ef7a4`, §5 BR-CL2-01..12, §6 syarat buka, §9 Q-CL2-1). Vonis ini menjawab HANYA Q-CL2-1. Q-CL2-2/3 (izin/media override), Q-CL2-4 (cakupan titik tahan), Q-CL2-5 (aktivasi) tetap milik BOT Lead — vonis ini bukan pembuka gerbang.
+
+### 0. Keadaan prasyarat live (TERVERIFIKASI-KODE, origin/main 272d83da, 2026-10-25 16:03 WIB)
+
+- Builder advisory tergabung: `buildCustomerCreditExposure` di `src/lib/reports/customer-receivables.ts:96`; PaparanKasar = K1+K2+K5 (`safeAdd`, sen), PaparanBersih (`exposure`) = `max(0, kasar − (K3efektif + K4))`; lantai 0 hanya di bersih, bukan per komponen.
+- K3 efektif pilihan (b) vonis V3 tergabung: `effectiveConfirmedDownPaymentByCustomer` di berkas yang sama — DP confirmed yang quotation-nya sudah punya invoice recognised digugurkan (sudah tercermin di K1 lewat `paidAmount` hook DP); DP confirmed pra-tagihan tetap mengurangi.
+- K4 tergabung: `openCustomerCreditByCustomer` — hanya status open, saldo per baris `max(0, received−allocated−refunded)`.
+- K5 tergabung: `woUnrepresentedByCustomer` — per quotation (bukan per WO), hanya quotation aktif tanpa SO sama sekali, nilai `max(0, grandTotal − invoice recognised − SO non-cancelled)`; WO tanpa `quotationId` = K5 0 + bendera `woWithoutQuotationCount`.
+- Status + ambang: `status: unset|ok|warning|over`; `creditLimit <= 0` → `unset` (utilization null); `>= 100` → `over`; `>= 80` → `warning`; selain itu `ok`. Label verbatim `CREDIT_EXPOSURE_STATUS_LABEL`.
+- Loader bersama: `loadCustomerCreditExposure` di `src/lib/reports/ledger-cash-data.ts:598` memanggil builder yang sama (baris 598–604 meneruskan K3/K4/K5 per pelanggan); halaman laporan + ekspor membaca loader yang sama.
+- Tanpa gerbang (TERVERIFIKASI-KODE): `createSalesOrder` (`src/actions/sales.actions.ts:902`) hanya `requirePermission(create_sales_orders)`; `createSalesInvoice` (`:1428`) hanya `requirePermission(create_sales_invoices)` + `assertPeriodOpen` (`:1441`); grep kredit di actions = 0 penahan. `Customer.creditLimit` Decimal(15,2) default 0 (`prisma/schema.prisma:397`).
+- Syarat §6 spec butir 3 ("rekonsiliasi K3 efektif terbukti atas data alokasi DP nyata") BELUM terbukti run ini — lihat Putusan 3: cukup tidaknya (b) untuk inti diputus di sini, pembuktian rekonsiliasinya tetap syarat aktivasi, bukan syarat vonis ini.
+
+### Putusan 1 — Definisi eksposur inti = PaparanBersih advisory PERSIS; subset DITOLAK
+
+Eksposur yang menilai penahan (bila gerbang kelak dibuka Lead) adalah `exposure` dari builder existing yang sama, tanpa rumus kedua:
+
+    PaparanBersih = max(0, K1 + K2 + K5 − K3efektif(b) − K4)
+
+Alasan: (i) satu nilai job tepat satu jalur (urutan anti-dobel 044-V V2) hanya terjaga bila inti dan advisory membaca turunan yang sama — subset inti akan melahirkan dua angka "paparan" untuk pelanggan yang sama dan selisihnya tidak bisa direkonsiliasi operator; (ii) syarat buka 044-V V7 butir 2 mengikat: "definisi paparan inti harus SAMA dengan yang terbukti di advisory" — subset = definisi baru yang belum terbukti, melanggar syarat itu; (iii) penahan atas angka yang lebih kasar dari yang dilihat operator di laporan (advisory) tidak dapat dijelaskan ke pelanggan. BR-CL2-04 dengan ini TERJAWAB: inti = advisory persis.
+
+### Putusan 2 — Per komponen (mengikat; menyimpulkan Q-CL2-1a)
+
+| Komponen | Di inti? | Alasan |
+|---|---|---|
+| K1 piutang terbuka recognised | YA | Sudah jurnal (Dr Piutang). Inti tanpa K1 menahan atas komitmen tetapi melepaskan piutang nyata — terbalik risikonya. |
+| K2 SO confirmed/processing/completed belum tertagih, dikurangi invoice recognised PER SO | YA | Komitmen tertagih yang persis menjadi K1 berikutnya; pengurangan per SO wajib (SO terinvoice penuh = K2 0) — tanpa ini dokumen dinilai dobel sesudah tertagih sebagian. |
+| K5 WO berjalan belum terwakili (jalur quotation tanpa SO) | YA, persis pagar builder existing | K5 adalah satu-satunya jalur nilai jual bengkel yang belum masuk K1/K2; mengeluarkannya dari inti membuat gerbang buta terhadap pekerjaan berjalan — jalur lolos terbesar justru di pekerjaan yang sudah dikerjakan. Pagar anti-dobelnya sudah di builder: per quotation, gugur bila ada SO, WO tanpa quotation = 0 + bendera (bukan tebakan ProductionCost). |
+| K3 efektif (b) sebagai pengurang | YA | Kas DP sudah diterima = risiko turun nyata; menolaknya sebagai pengurang inti menahan pelanggan yang sudah membayar uang muka — penahan yang salah arah. Pilihan (b) cukup: Putusan 3. |
+| K4 saldo CustomerCredit open sebagai pengurang | YA | Dana pelanggan di tangan perusahaan (liabilitas 210102), saldo sudah bersih allocated/refunded per baris; mengabaikannya menahan pelanggan yang dananya masih kita pegang. Vonis 044-V V2 melarang K4 untuk inti HANYA sebelum tergabung+terbukti; kini tergabung di main — status itu gugur, pengesahan inti diberikan di sini dengan syarat rekonsiliasi Putusan 4. |
+| DP pending, CustomerCredit non-open, invoice/SO/WO non-aktif (draft/cancelled/selesai) | TIDAK | Persis vonis 044-V V2: belum kas/belum recognised/sudah selesai = paparan fiktif bila dimasukkan. |
+| Overdue sebagai komponen tambah | TIDAK | Sudah subset K1; menambah = dobel-hitung. Overdue tetap penanda tampil saja. |
+
+Dilarang untuk build inti: menambah nominal dokumen yang sedang dinilai ke paparan yang sudah memuatnya (BR-CL2-12 ditegaskan — K1/K2 per SO sudah dikurangi invoice recognised); menjepit per komponen (lantai 0 hanya di PaparanBersih); menghitung ulang rumus di action/UI (satu builder, BR-CL2-07).
+
+### Putusan 3 — K3 pilihan (b) CUKUP untuk inti; rekonstruksi (a) TIDAK wajib
+
+Pilihan (b) (`effectiveConfirmedDownPaymentByCustomer`: DP confirmed gugur sebagai pengurang bila quotation-nya sudah punya invoice recognised) cukup sebagai definisi inti, dengan dua catatan mengikat:
+
+1. Arah kekeliruan (b) konservatif untuk penahan: DP terkonversi yang belum teralokasi penuh ke `paidAmount` invoice membuat K3-efektif lebih kecil → paparan inti lebih besar → penahan lebih awal, bukan lolos. Rekonstruksi (a) yang keliru justru berisiko understate (DP terhitung mengurangi dua kali) — arah berbahaya untuk gerbang. Untuk penahan, salah-lebih-besar dapat dijelaskan dan dilepas override; salah-lebih-kecil meloloskan diam-diam.
+2. Syarat aktivasi (bukan syarat vonis): sebelum gerbang dibuka, rekonsiliasi atas data nyata wajib membuktikan untuk sampel DP terkonversi bahwa `paidAmount` invoice memang menyerap DP itu (jejak hook DP), dan selisih (b)-vs-(a) pada data produksi dilaporkan ke Accountant; bila selisih material ditemukan, inti kembali ke meja vonis sebelum aktivasi. Ini menutup syarat §6 butir 3 spec tanpa menahan definisi.
+
+### Putusan 4 — `unset` TIDAK ditahan (BR-CL2-03 DISAHKAN untuk inti)
+
+Limit `<= 0` (0 default, negatif data-rusak) = `unset`: dokumen TIDAK ditahan di gerbang, hanya peringatan "Limit belum diatur". Alasan: limit belum diatur adalah kekurangan master data, bukan pelanggaran pelanggan (warisan usulan 044-V V7 butir 4, kini diputus untuk inti). Menahan `unset` berarti menahan SEMUA pelanggan baru secara default (default schema 0) — gerbang berubah menjadi blokir massal terselubung. Konsekuensi yang diterima sadar: pelanggan tanpa limit tidak punya penahan kredit sampai Admin Master mengisi limit (`edit_customers`); itu keputusan kebijakan pemilik proses, terlihat di laporan sebagai `unset`, bukan lubang senyap.
+
+### Putusan 5 — `warning` TIDAK ditahan; hanya `over` yang dapat ditahan
+
+Status `warning` (>= 80, < 100) tidak ditahan dan tidak memerlukan override (BR-CL2-05 disahkan untuk inti). Menahan di warning menggeser ambang penahan efektif ke 80 tanpa ada yang memutusnya — ambang penahan adalah 100 (`over`), ambang 80 tetap murni sinyal dini advisory. Satu-satunya status yang dapat ditahan = `over`, dan hanya sesudah Q-CL2-2..5 diputus Lead dan gerbang diaktifkan.
+
+### Syarat rekonsiliasi & falsifikasi untuk BOT QA (atas head Backend persis, hanya sesudah build gerbang)
+
+1. Cabut/sisipkan tiap komponen dari builder → status inti berubah sesuai arahnya dan tes MERAH: tanpa K5, pelanggan WO-berjalan `over` lolos simpan; tanpa pengurang K4/K3(b), pelanggan berdana/ber-DP tertahan palsu.
+2. DP terkonversi: fixture DP confirmed → invoice recognised (paidAmount menyerap DP) membuktikan K3 tidak mengurangi dua kali (paparan tidak understated); DP confirmed pra-tagihan mengurangi persis sekali.
+3. `unset` ditahan = MERAH; `warning` ditahan = MERAH; `over` tanpa override tersimpan = MERAH (penahan server dicabut → MERAH, dipulihkan hijau).
+4. Nominal dokumen dinilai tidak dobel: SO terinvoice sebagian dinilai dari K2 sisa per SO, bukan grandTotal penuh.
+5. Rekonsiliasi laporan ↔ inti: nilai `exposure` yang menahan identik dengan yang tampil di laporan dari loader yang sama untuk fixture yang sama; UI/action hitung ulang = MERAH.
+6. Ambang batas: utilization 79,995 → dibulatkan 80,00 = `warning` tidak ditahan; 100,00 = `over` tertahan (perilaku pembulatan builder existing, diterima sadar per 044-V V5).
+
+### Yang TIDAK diputus vonis ini (tetap pemiliknya)
+
+- Q-CL2-2/3 izin + media override, Q-CL2-4 cakupan titik tahan, Q-CL2-5 aktivasi/saklar/tanggal berlaku: BOT Lead. Vonis ini tidak membuka gerbang dan tidak mengizinkan flag penahan parsial (larangan 044-V V7 tetap).
+- Angka plafon/limit per pelanggan: kebijakan pemilik proses via master, bukan vonis. Jurnal dari paparan/override: tidak ada (bacaan risiko, bukan peristiwa akuntansi).
+
+### Konsumen & urutan (mengikat)
+
+1. **BOT Lead** — putus Q-CL2-2..5; tanpa itu tidak ada build penahan, walau definisi inti kini final.
+2. **BOT Backend** (sesudah Lead) — penilaian server di action memakai builder existing yang sama; tanpa kolom/status dokumen baru; rekonsiliasi Putusan 3 butir 2 dilaporkan sebelum aktivasi.
+3. **BOT Frontend** — pesan memakai label verbatim builder + nominal server; tanpa hitung ulang, tanpa disable tombol sebagai penahan.
+4. **BOT QA** — falsifikasi 6 butir di atas atas head persis.
+
+F-2026-10-25-035-V — Definisi eksposur inti gerbang kredit tahap 2 (jawaban Q-CL2-1 spec F-2026-10-25-034-S PR #872). Status: VONIS TERBIT run ini; gerbang tetap TERTUTUP sampai Q-CL2-2..5 diputus Lead. Pemilik berikutnya: Lead (Q-CL2-2..5) → Backend (penilaian server) → Frontend (konsumen) → QA (falsifikasi). Board tidak masuk diff PR ini.
