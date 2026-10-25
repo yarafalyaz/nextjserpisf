@@ -9,6 +9,7 @@ const loanFindManyMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
+  requireAnyPermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -45,7 +46,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   payrollFindUniqueOrThrowMock.mockResolvedValue({
-    id: 1, status: "approved", employeeId: 2, loanDeduction: 1000
+    id: 1, status: "approved", employeeId: 2, loanDeduction: 1000,
+    grossSalary: 5000000, lateDeduction: 0, deductions: 0,
   })
   payrollUpdateManyMock.mockResolvedValue({ count: 1 })
   loanFindManyMock.mockResolvedValue([])
@@ -67,5 +69,30 @@ describe("markPayrollPaid concurrency guard", () => {
     const result = await markPayrollPaid(1)
     expect(result.success).toBe(false)
     expect(loanFindManyMock).not.toHaveBeenCalled()
+  })
+
+  it("AC-LSV-2: menolak bayar bila potongan Pasal 63 slip tersimpan menembus 50% upah", async () => {
+    payrollFindUniqueOrThrowMock.mockResolvedValue({
+      id: 1, status: "approved", employeeId: 2,
+      loanDeduction: 3000000, grossSalary: 5000000,
+      lateDeduction: 0, deductions: 0,
+    })
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("plafon 50%")
+    // Ditolak sebelum klaim status: nol bayar, nol amortisasi pinjaman.
+    expect(payrollUpdateManyMock).not.toHaveBeenCalled()
+    expect(loanFindManyMock).not.toHaveBeenCalled()
+  })
+
+  it("AC-LSV-2: tepat 50% upah masih boleh dibayar", async () => {
+    payrollFindUniqueOrThrowMock.mockResolvedValue({
+      id: 1, status: "approved", employeeId: 2,
+      loanDeduction: 2000000, grossSalary: 5000000,
+      lateDeduction: 500000, deductions: 0,
+    })
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(true)
+    expect(payrollUpdateManyMock).toHaveBeenCalledTimes(1)
   })
 })
