@@ -26365,3 +26365,143 @@ Urutan: Lead putus Q-SR → Backend → Frontend → QA. Effort inti S–M. Risi
 - Mengubah gerbang retur pembelian (sudah benar) atau jurnal/PPN retur (wilayah Accountant, tidak berubah).
 
 F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (katalog/seed+gerbang), Frontend (tombol sadar-izin), QA (falsifikasi). Butuh putusan accountant: TIDAK (jurnal/PPN tidak berubah).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-016-S: rekap lembur per karyawan per periode (read-model baca-saja di atas OvertimeRequest existing)
+
+> **Slot**: F-2026-10-25-016-S. Diperiksa bentrok 2026-10-25 08:12 WIB vs `origin/main` (`a5ad6890`): grep `F-2026-10-25-016` di backlog+board = 0 dan pencarian PR GitHub = kosong; 014/015 terpakai akhiran -V (vonis Accountant PR #798/#802). `-016-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR** — bukan F-ID lama. Bukan duplikat F-2026-10-25-007-S (antrean approver pending — antrean keputusan, bukan rekap periode), bukan halaman saldo cuti F-2026-10-25-013-S (hak cuti, bukan jam lembur). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Kepala bengkel dan HR menjawab pertanyaan berulang tiap tutup periode: "karyawan ini lembur berapa jam bulan ini, berapa yang sudah disetujui, berapa yang masih menggantung, dan kendaraan/proyek mana yang menyerap lembur?" Hari ini jawabannya hanya bisa diraih dari daftar transaksional `/sdm/lembur` baris per baris (saring status manual, jumlah sendiri di luar sistem). Rekap agregat per karyawan per periode tidak ada. Akibat nyata: lembur proyek pelanggan tidak terlihat bebannya per proyek, pengajuan pending menua tanpa pemilik, dan angka jam yang masuk payroll tidak bisa direkonsiliasi sebelum slip terbit. Spec ini membekukan: (A) builder baca-saja agregat lembur per karyawan per periode dari `OvertimeRequest` existing, (B) permukaan rekap di area SDM existing, (C) batas tegas jam (fakta operasional, milik spec ini) vs nilai uang lembur (`calculatedValue` + tarif — wilayah payroll/Accountant, spec hanya merujuk). Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/ga/finance (scope `all`), `kepala_bengkel` (scope `department`), karyawan (scope `self` — hanya baris dirinya), approver lembur (pembaca kolom pending; keputusan tetap di aksi existing), payroll (konsumen hilir nilai — bukan konsumen rekap ini).
+
+**Alur (USULAN di atas existing)**:
+1. User berizin melihat rekap membuka permukaan rekap lembur, memilih periode (rentang tanggal/bulan), opsional filter departemen dan status.
+2. Server menegakkan izin + `getHrScope` fail-closed, memuat `OvertimeRequest` dalam scope+periode, dan builder murni mengelompokkan per karyawan: jumlah pengajuan, jam diajukan, jam disetujui, jam pending, jam ditolak, jam billable (`billableHours`) — semua dari kolom existing, tanpa menghitung tarif apa pun.
+3. Halaman menampilkan baris per karyawan + total (penjumlahan tertimbang dari jam, bukan rata-rata), dengan penanda pengajuan pending tertua per karyawan.
+4. Tidak ada dokumen masuk/keluar baru dan tidak ada transisi status dari rekap: dokumen masuk = `OvertimeRequest` + `Employee` (departemen) + `Project` (label proyek nullable); dokumen keluar = tampilan rekap + (tahap berikut, bila dibuka) CSV pola route ekspor existing.
+
+### 2. Inventarisasi terverifikasi (origin/main a5ad6890, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `OvertimeRequest` (`prisma/schema.prisma:3408-3433`): employeeId, projectId nullable, date, `hours` Decimal(5,2), `totalHours`/`mealHours`/`billableHours` Decimal nullable, `calculatedValue` Decimal(15,2) nullable, reason, rejectionReason, status String default `pending`, approvedBy, approvedAt, supervisorApprovedAt, createdAt/updatedAt. Indeks employeeId ada.
+- Buat: `createOvertimeRequest` (`src/actions/hrm.actions.ts:992`) — status `pending`, lalu `requestApprovalIfConfigured("OvertimeRequest", ...)` menautkan ApprovalWorkflow generik bila terkonfigurasi (referenceType terdaftar `src/actions/approval.actions.ts:36,42`).
+- Setujui: `approveOvertime` (`hrm.actions.ts:1042`) — izin `approve_overtime_requests` + `assertApproved`; menerima status `pending` maupun `approved` (rantai workflow bisa sudah memfinalkan status; panggilan ini tetap wajib menghitung nilai), klaim atomik `updateMany status in [pending, approved]`, idempoten (nilai sudah terhitung → no-op), menulis approvedBy + approvedAt + `calculatedValue`. Nilai existing di main: `jam × baseSalary × multiplier × coefficient` dari `SystemSetting` (default multiplier ≈ 1/173 = 0.00578035, coefficient 1.1) — tarif DATAR, bukan bertingkat.
+- Tolak: jalur ApprovalWorkflow generik menulis status `rejected` pada dokumen sumber (`approval.actions.ts:330-343`); edit hanya saat `pending` (`updateOvertimeRequest` `hrm.actions.ts:4065`, penjaga pending-only :4085); hapus menolak baris approved karena memengaruhi penggajian (`deleteOvertimeRequest` :3774, pesan :3798).
+- Konsumen payroll: pratinjau + generate payroll menjumlahkan `calculatedValue` lembur approved per karyawan ke penghasilan bruto (`hrm.actions.ts:1270` dan :1885, `overtimeTotal = Σ (calculatedValue ?? 0)`) — rekap TIDAK menghitung ulang nilai ini dan TIDAK menjadi jalur bayar kedua.
+- Daftar transaksional existing: halaman `/sdm/lembur` (`src/app/(dashboard)/sdm/lembur/page.tsx`) — `requirePermission("view_overtime")`, `getHrScope` + `hrScopeWhere`, cari nama hanya scope `all` (`canSearchAcrossEmployees`), saring status per baris, urut createdAt desc, paginasi. Menjawab "pengajuan mana", bukan "berapa jam per karyawan per periode".
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:305-310`): `view_overtime`, `approve_overtime` (resource `overtime`), `create/edit/delete/approve_overtime_requests` (resource `overtime_requests`). Tidak ada izin laporan lembur terpisah.
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts`) — all (HR/finance/admin/ga), department (kepala_bengkel; departemen null → diri sendiri), self; roles hilang/rusak = self employeeId -1.
+- Pola yang dirujuk: builder murni + loader (`src/lib/reports/employee-lifecycle.ts` + `-data.ts`, keluaran tanpa nominal gaji), route ekspor server (`src/app/api/activity-logs/export/route.ts` — auth + permission + select kolom keluaran + batas baris).
+
+Belum ada / gap (bukti grep run ini):
+- Builder rekap lembur: tidak ada berkas `overtime*`/`lembur*` di `src/lib/reports/`; tidak ada agregasi per karyawan/periode di aksi mana pun (grep `getOvertime|summar.*lembur|rekap.*lembur` di `hrm.actions.ts` = 0 fungsi rekap; yang ada hanya penjumlahan `calculatedValue` untuk payroll per karyawan terpilih).
+- Filter departemen/periode agregat: halaman existing menyaring status + cari nama per baris transaksional; tidak ada pengelompokan per departemen maupun total jam per periode.
+- Umur pending lembur: tidak ada penanda pengajuan pending tertua (saudara antrean F-2026-10-25-007-S menampilkan antrean lintas cuti+lembur untuk approver, bukan rekap jam per karyawan — objek berbeda, tidak diduplikasi).
+- Pemisahan `hours` vs `totalHours`/`mealHours`/`billableHours` di permukaan mana pun: keempat kolom tersimpan, tetapi tidak ada tampilan yang menyatakan jam mana yang menjadi dasar rekap — spec wajib membekukan definisi tampil (BR-OVR-03), bukan menebak diam-diam.
+
+Pengaruh PR #800 (OPEN head `9842cde5`, dicek 2026-10-25 belum merged) + vonis F-2026-10-25-014-V (PR #798 OPEN head `b8721851`, belum merged):
+- SESUDAH #800 merged: service baru `overtime-pay.service.ts` menghitung nilai bertingkat PP 35/2021 (hari kerja 1,5×/2×; hari istirahat pola 5/6 hari 2×/3×/4×; upah sejam = upah sebulan / 173) menggantikan rumus datar settings di `approveOvertime`. Jam (`hours` dkk) TIDAK berubah bentuk — rekap jam sah dikerjakan sebelum maupun sesudah #800.
+- Angka tarif/pengali final = wilayah vonis Accountant (F-2026-10-25-014-V); spec ini TIDAK memutus, TIDAK menyalin tabel tarif, dan TIDAK menampilkan nilai uang sebagai hasil hitungnya sendiri.
+
+### 3. Business rules register (BR-OVR)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-OVR-01 | Satu-satunya sumber baris lembur = `OvertimeRequest` existing; rekap dilarang membuat tabel/angka jam kedua | TERVERIFIKASI-KODE | `prisma/schema.prisma:3408` |
+| BR-OVR-02 | Status terbaca hanya kosakata existing `pending`/`approved`/`rejected`; rekap tidak membuat status baru | TERVERIFIKASI-KODE | `schema.prisma:3421`; `hrm.actions.ts:1061-1065`; `approval.actions.ts:334` |
+| BR-OVR-03 | Definisi jam tampil dibekukan eksplisit per kolom: diajukan = `hours`; disetujui = `hours` baris approved; pending = `hours` baris pending; billable = `billableHours ?? 0` hanya baris approved. `totalHours`/`mealHours` ditampilkan apa adanya bila terisi dan TIDAK dicampur ke jam diajukan tanpa label | USULAN | kolom `schema.prisma:3414-3417`; belum ada definisi tampil existing |
+| BR-OVR-04 | Nilai uang lembur (`calculatedValue`) bukan keluaran hitung rekap. Bila ditampilkan, verbatim tersimpan per baris approved dengan label "nilai tersimpan saat persetujuan"; rekap tidak menjumlahkan nilai lintas basis tarif berbeda (datar settings vs bertingkat #800) tanpa penanda basis | USULAN | `hrm.actions.ts:1084-1101`; risiko campur basis nyata dari transisi #800 |
+| BR-OVR-05 | Payroll tetap konsumen nilai satu-satunya: `overtimeTotal = Σ calculatedValue` approved masuk bruto; rekap bukan jalur bayar dan tidak memicu slip | TERVERIFIKASI-KODE | `hrm.actions.ts:1270,1885` |
+| BR-OVR-06 | Akses rekap = izin katalog existing + `getHrScope` fail-closed; filter departemen/periode tidak pernah memperluas scope | TERVERIFIKASI-KODE + USULAN penempatan filter | `module-catalog.generated.ts:305-310`; `hr-scope.ts` |
+| BR-OVR-07 | Periode rekap mengikuti kolom `date` pengajuan (tanggal lembur), bukan createdAt/approvedAt; pengajuan lintas batas periode masuk periode tanggal lemburnya | USULAN | `schema.prisma:3413` |
+| BR-OVR-08 | Batas lembur statutori (maks 4 jam/hari dan 18 jam/minggu hari kerja) adalah penanda kepatuhan tampil saja di rekap bila dibuka; penegakan (blokir pengajuan) bukan wilayah rekap | BENCHMARK (regulasi) + USULAN penanda | PP 35/2021 Pasal 26 — https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 |
+| BR-OVR-09 | Tarif bertingkat final (1,5×/2×, 2×/3×/4×, pembagi 173) = vonis Accountant F-2026-10-25-014-V; spec merujuk, tidak memutus | BUTUH-VONIS | PR #798 OPEN; PP 35/2021 Pasal 31-33 https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf |
+| BR-OVR-10 | Kepmenaker 102/MEN/VI/2004 TIDAK lagi acuan hidup (status Tidak Berlaku, dicabut Permenaker 23/2021); acuan regulasi lembur yang dikutip spec hanya PP 35/2021 | BENCHMARK (regulasi) | https://jdih.kemnaker.go.id/peraturan/detail/289 |
+| BR-OVR-11 | `projectId` null = lembur tak tertaut proyek; baris rekap per proyek menampilkannya di ember "tanpa proyek" yang tetap terhitung di total karyawan | USULAN | `schema.prisma:3412` nullable |
+| BR-OVR-12 | Keluaran rekap tanpa `baseSalary` dan tanpa komponen gaji apa pun; jam lembur adalah data operasional HR dalam scope, bukan data gaji | TERVERIFIKASI-KODE (pola) + USULAN | pola `employee-lifecycle.ts` tanpa nominal; `approveOvertime` membaca baseSalary hanya di jalur hitung nilai, bukan rekap |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa izin |
+|---|---|---|---|---|
+| Lihat rekap periode | `view_overtime` — semua departemen | `view_overtime` — departemen sendiri | `view_overtime` — baris diri sendiri | Ditolak `requirePermission` |
+| Saring departemen | Ya — semua | Terkunci departemen sendiri (permintaan asing diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| Saring proyek | Ya | Dalam scope | Tidak ditawarkan | Ditolak |
+| (tahap berikut) Ekspor CSV | Ya — isi = rekap terlihatnya | Ya — isi = scope-nya | Ya — baris dirinya | Ditolak |
+| Menyetujui/menolak dari rekap | Tidak ada — keputusan tetap `approve_overtime_requests` di daftar/detail existing | Sama | Sama | — |
+
+Izin halaman rekap mengusulkan reuse `view_overtime` (izin daftar existing); key baru = Q-OVR-3 Lead.
+
+### 5. Status-transition matrix
+
+Rekap tidak memicu transisi. Status `OvertimeRequest` existing:
+
+| Status awal | Pemicu (di luar rekap) | Status akhir | Dihitung rekap |
+|---|---|---|---|
+| — | `createOvertimeRequest` (`hrm.actions.ts:992`) | `pending` | jam pending |
+| `pending` | ApprovalWorkflow generik selesai | `approved` (status diflip engine) | jam disetujui; nilai dihitung panggilan `approveOvertime` berikutnya |
+| `pending`/`approved` | `approveOvertime` (`hrm.actions.ts:1042`) | `approved` + calculatedValue + approvedAt | jam disetujui; nilai verbatim BR-OVR-04 |
+| `pending` | penolakan ApprovalWorkflow (`approval.actions.ts:330-343`) | `rejected` | jam ditolak (tidak masuk jam disetujui/billable) |
+| `pending` | `updateOvertimeRequest` (pending-only) | tetap `pending` | dihitung ulang per nilai baru |
+| `approved` | hapus | ditolak sistem (memengaruhi payroll) | tetap terhitung |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate Online | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Pengajuan + persetujuan lembur | Lembur dicatat sebagai komponen pembayaran gaji; panduan anti-hitung-ganda lembur mingguan vs gaji bulanan https://help.accurate.id/product/accurate-online/accurate-insight/gaji-lembur-tidak-dua-kali/ | Approval Management lembur multi-layer https://zahirerp.com/id/all-features-of-zahir-products/ ; Atur absensi, lembur dan shift https://zahir.co.id/hr/ | ADA (TERVERIFIKASI-KODE §2) |
+| Rekap lembur per karyawan per periode | Tidak ditemukan halaman help rekap lembur per karyawan (akses 2026-10-25) — dicatat belum terverifikasi, bukan diklaim absen dari produk | Laporan Kehadiran tercantum; rekap lembur per karyawan tersendiri belum terverifikasi https://zahir.co.id/hr/ | Belum ada (gap §2) |
+| Nilai lembur masuk payroll | Pencatatan gaji + penyesuaian lembur terbayar https://help.accurate.id/product/pencatatan-gaji/ | Payroll + komponen penggajian fleksibel https://zahirerp.com/id/all-features-of-zahir-products/ | ADA — Σ calculatedValue approved (`hrm.actions.ts:1270,1885`) |
+| Tarif lembur bertingkat statutori | Otomatis sesuai PP 58/2023 diklaim untuk PPh 21 (bukan tarif lembur) https://help.accurate.id/product/pencatatan-gaji/ | Perhitungan PPh 21/BPJS (bukan tarif lembur) https://zahir.co.id/hr/ | Di main: datar settings; bertingkat PP 35/2021 di PR #800 OPEN (BR-OVR-09) |
+
+### 7. Acceptance criteria + edge cases
+
+AC-OVR-B (Backend, bila dibuka Lead):
+- AC-OVR-B1: builder murni rekap menerima baris polos dan menghasilkan per karyawan: hitungan pengajuan + jam diajukan/disetujui/pending/ditolak + billable approved; invariant `diajukan = disetujui + pending + ditolak` per karyawan per periode dibuktikan tes; melanggar = MERAH.
+- AC-OVR-B2: loader menegakkan izin + `getHrScope` fail-closed sebelum memuat; roles rusak → nol baris; filter departemen asing tidak memperluas scope department/self.
+- AC-OVR-B3: angka jam baris identik dengan query langsung `OvertimeRequest` untuk karyawan+periode sama (paritas, termasuk sebelum/sesudah PR #800 — jam tidak berubah oleh #800).
+- AC-OVR-B4: nilai uang tidak dihitung ulang: payload nilai (bila ditampilkan) = verbatim `calculatedValue` baris approved; tidak ada penjumlahan nilai lintas baris tanpa penanda basis tarif (BR-OVR-04); `baseSalary` tidak pernah keluar payload.
+- AC-OVR-B5: periode memakai kolom `date`; pengajuan dibuat bulan ini untuk lembur bulan lalu masuk periode bulan lalu (BR-OVR-07).
+
+AC-OVR-F (Frontend):
+- AC-OVR-F1: halaman menampilkan kolom jam verbatim payload server dengan label definisi BR-OVR-03; UI nol menjumlah/menghitung sendiri di luar total baris yang dikirim server.
+- AC-OVR-F2: pemilih departemen hanya untuk scope `all`; pending tertua tertanda tanpa UI menilai umur sendiri (label server).
+- AC-OVR-F3: grep e2e permukaan `sdm/lembur` sebelum mengubah label/selector apa pun di halaman daftar existing; rekap halaman baru tidak mengubah daftar transaksional.
+
+Edge cases: EC-1 lembur pending dua tahap (workflow belum final + approveOvertime belum dipanggil): status tampil apa adanya; jam pending, bukan disetujui. EC-2 status approved dari workflow tetapi calculatedValue masih null (nilai belum dihitung): jam disetujui terhitung, nilai tampil kosong tertanda — bukan 0 karangan. EC-3 pengajuan lintas periode (date di batas bulan): masuk satu periode tanggal lemburnya saja. EC-4 projectId null: ember "tanpa proyek" (BR-OVR-11). EC-5 jam pecahan Decimal(5,2): total memakai penjumlahan desimal persis, pembulatan tampil tidak mengubah total server. EC-6 karyawan berhenti tengah periode: baris tetap tampil untuk periode masa aktifnya (rekap historis; populasi dari baris lembur, bukan hanya karyawan aktif). EC-7 departemen null: ember "tanpa departemen", hanya terlihat scope all. EC-8 pengajuan diedit saat pending: rekap memuat nilai terakhir; baris rejected tidak pernah masuk jam disetujui. EC-9 week boundary untuk penanda batas 18 jam/minggu (bila Q-OVR-2 dibuka): minggu Senin–Minggu tanggal lembur, bukan tanggal persetujuan.
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-016-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni rekap lembur + loader scope fail-closed; definisi jam BR-OVR-03; CSV pola route ekspor bila dibuka | Backend | Lead buka Q-OVR-1/3; perhatikan basis PR #800 (jam stabil, nilai berubah) | Klaim file di board sebelum edit |
+| (turunan) halaman rekap di area SDM + filter periode/departemen + kolom pending tertua | Frontend | kontrak Backend stabil | grep e2e `sdm/lembur` dulu |
+| (turunan) falsifikasi AC-OVR-B1..B5 + AC-OVR-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-OVR → Backend → Frontend → QA. Effort inti S–M. Risiko: rekap disalahbaca sebagai dasar bayar kedua — mitigasi BR-OVR-04/05 (nilai verbatim, payroll tetap satu-satunya konsumen bayar) + label halaman.
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-OVR-1 (Lead): buka inti rekap tahap 1 (builder+loader+halaman) atau status quo daftar transaksional diterima?
+- Q-OVR-2 (Lead): penanda kepatuhan batas lembur statutori (BR-OVR-08) tampil tahap 1 atau ditunda (tampil saja pun mengubah perhatian approver)?
+- Q-OVR-3 (Lead): reuse izin `view_overtime` untuk halaman rekap atau key laporan baru (katalog+seed)?
+- Q-OVR-4 (Backend): bentuk loader (query agregat DB vs muat baris + builder murni) mengikuti pola employee-lifecycle — putus saat fisik, builder wajib murni.
+- Accountant: vonis tarif sudah berjalan sebagai F-2026-10-25-014-V (PR #798); spec ini tidak meminta vonis baru. Dipanggil hanya bila rekap diminta menampilkan total nilai uang lintas basis tarif.
+
+### Yang TIDAK diusulkan run ini
+- Menghitung tarif/nilai lembur di rekap atau menyalin tabel pengali ke laporan: wilayah service persetujuan + vonis Accountant (BR-OVR-09).
+- Jalur bayar lembur terpisah dari payroll existing: payroll sudah konsumen nilai tunggal (BR-OVR-05); jalur kedua = risiko hitung ganda yang diperingatkan benchmark Accurate.
+- Menegakkan batas 4 jam/hari / 18 jam/minggu dengan memblokir pengajuan: perubahan perilaku inti pengajuan, bukan laporan (BR-OVR-08 hanya penanda, itupun Q-OVR-2).
+- Menggabungkan antrean approver F-2026-10-25-007-S ke rekap: objek berbeda (keputusan vs rekap jam), sudah terspec terpisah.
+- Menampilkan baseSalary/komponen gaji di rekap (BR-OVR-12).
+
+F-2026-10-25-016-S — Rekap lembur per karyawan per periode. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-OVR-1/2/3 + fisik Backend Q-OVR-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk spec ini (tarif berjalan di F-2026-10-25-014-V).
