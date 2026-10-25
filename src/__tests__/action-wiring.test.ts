@@ -92,11 +92,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
   "src/actions/disciplinary.actions.ts::voidDisciplinaryRecord":
     "F-2026-10-25-005-S DISC-B1 backend; UI rekod disiplin menyusul (frontend t_9977774a)",
-  // F-2026-10-25-004-V backend dulu (vonis PR #760): terbit FP uang muka
-  // per DP; panel status pajak DP + form terbit menyusul di kartu
-  // frontend t_b83159ba (buang entri ini saat UI memanggilnya).
-  "src/actions/tax-documents.actions.ts::issueDownPaymentTaxInvoiceAction":
-    "F-2026-10-25-004-V backend; UI panel status pajak DP menyusul (frontend t_b83159ba)",
+  // F-2026-10-25-004-V: issueDownPaymentTaxInvoiceAction kini dirujuk UI
+  // panel status pajak DP (PR konsumen t_b83159ba) — entri beku dibuang.
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
   // izin (action-guard-coverage.test.ts). UI-nya memakai next-auth langsung.
   "src/actions/auth.actions.ts::loginAction":
@@ -199,6 +196,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
   // pelanggan kini dirujuk halaman kelola pelanggan (frontend
   // t_1f97c2ea) — entri beku dibuang.
+  // F-2026-10-25-008-S: completeLeadActivity/reopenLeadActivity kini dirujuk
+  // LeadActivityCompletionButton di detail lead (frontend t_68dce5df) —
+  // 2 entri beku dibuang.
+  // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
+  // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
+  // frontend t_f8d7b3d9) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
