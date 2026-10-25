@@ -29085,3 +29085,90 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+---
+
+## SPEC BUSINESS F-2026-10-25-030-S — Alasan kalah terstruktur lead `lost` (kamus sejajar F-2026-10-20-101, tanpa migrasi tahap 1)
+
+> **Slot**: F-2026-10-25-030-S. Diperiksa bentrok 2026-10-25 15:09 WIB vs `origin/main` (`e9932fdc`): grep `F-2026-10-25-030` di backlog = 0, judul PR terbuka memuat `030` = 0; 027-S (PR #857), 028-S (PR #858), 029-S (PR #859) terpakai spec lain — 030-S bebas. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+> **Batas spec**: Business membekukan alur + label aturan. Keputusan reuse kamus vs kamus lead sendiri, kewajiban alasan, dan bentuk validasi server = gerbang Lead (Q-LR-*). Bukan uang/pajak: tanpa vonis Accountant.
+
+### 0. Basis bukti live (origin/main e9932fdc, 2026-10-25) — TERVERIFIKASI-KODE
+
+- `Lead.status` memuat `lost`: `LEAD_STATUSES = [new, contacted, qualified, proposal, negotiation, won, lost]` (`src/lib/validations/crm.schemas.ts:88-96`); `lead-funnel.ts:41,60,226` — lost = keluar kalah dari tahap mana pun, dihitung `lostCount`/`lostReachedCount` tanpa alasan.
+- Model `Lead` (`prisma/schema.prisma:4297-4330`) TIDAK punya kolom alasan kalah (grep `lostReason` di schema untuk Lead = 0). `LeadActivity` (`schema.prisma:4332-4349`) punya `type/subject/description/oldStatus/newStatus` — wadah riwayat existing.
+- `updateLead` (`src/actions/master.actions.ts:1748`) digerbang `requirePermission("edit_leads")` + guard kepemilikan (non-admin hanya lead `assignedTo` miliknya; `manage_leads`/`super_admin` bebas). Perubahan status menulis `LeadActivity type=status_change` atomik dalam tx yang sama (master.actions.ts:1868-1877) — TANPA alasan apa pun hari ini.
+- Kontras quotation: `rejectQuotation` (`src/actions/sales.actions.ts:361-373`) menolak key asing `[kalah:<key>]`; kamus `LOST_REASON_CATEGORIES` 7 kategori khas bengkel + ember `tak-tercatat` di `src/lib/reports/quotation-outcome.ts:21-34`; laporan `/laporan/hasil-penawaran` existing. Kamus itu terikat konteks penawaran (deskripsi `QuotationHistory`), BUKAN lead.
+- Saudara existing jangan diduplikasi: `stale-leads` F-2026-10-20-29(a) (lead new/contacted basi), `lead-followups` F-2026-10-21-037 (jadwal), `lead-funnel` (corong + lostCount agregat tanpa alasan), F-2026-10-25-027-S (expectedCloseDate), 028-S (riwayat harga), 029-S (janji kirim SO).
+
+### 1. Workflow (usulan tahap 1)
+
+Aktor Sales/Admin mengubah status lead menjadi `lost` lewat form edit existing → sistem meminta kategori alasan dari kamus (Q-LR-1/2) + teks bebas opsional → server memvalidasi key terhadap kamus (key asing ditolak, pola `sales.actions.ts:373`) → status + `LeadActivity status_change` (dengan awalan terstruktur pada `description`) tertulis atomik → laporan corong membaca kategori HANYA dari awalan sah; lead lost lama tanpa awalan masuk ember `tak-tercatat`, TIDAK ditebak dari teks bebas (preseden jujur `quotation-outcome.ts:9-12`).
+
+Dokumen masuk: Lead + LeadActivity existing. Dokumen keluar: tidak ada dokumen baru; keluaran = isian alasan pada aktivitas status_change + ember agregasi baca-saja turunan.
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Key (katalog `module-catalog.generated.ts:367-371`) | Penjaga existing |
+|---|---|---|
+| Lihat lead | `view_leads` | requirePermission halaman/loader |
+| Ubah status ke lost + isi alasan | `edit_leads` | `updateLead` master.actions.ts:1750 + guard assignedTo (non-admin hanya miliknya) |
+| Ubah lead orang lain / pindah assignee | `manage_leads` atau `super_admin` | guard existing master.actions.ts:1751-1753 |
+| Baca agregasi alasan kalah | `view_leads` (USULAN, Q-LR-3) | loader baca-saja, tanpa key baru tahap 1 |
+
+Key izin BARU: tidak diusulkan tahap 1 (USULAN; kunci status sudah digerbang edit_leads existing).
+
+### 3. Status-transition / population matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| new/contacted/qualified/proposal/negotiation | updateLead status=lost + kategori sah | lost | edit_leads + guard kepemilikan; kategori wajib (Q-LR-2) |
+| tahap mana pun | updateLead status=lost + key asing/tanpa kategori | (ditolak, status utuh) | validasi server kamus |
+| won | — | lost | DILARANG tahap 1 (won terminal lewat convertLead; koreksi = gerbang Lead Q-LR-4) |
+| lost | — | tahap aktif mana pun | DILARANG tahap 1 (terminal; buka lagi = lead baru, pola EC riwayat terminal spec lain) |
+| lost lama (pra-fitur) | dibaca laporan | ember `tak-tercatat` | builder murni, tanpa tebak teks |
+
+### 4. Business rules register
+
+- BR-LR-01 (TERVERIFIKASI-KODE): lost sah dari tahap aktif mana pun (`lead-funnel.ts:60`); won/lost diperlakukan terminal oleh corong.
+- BR-LR-02 (TERVERIFIKASI-KODE): setiap perubahan status lead sudah menulis LeadActivity status_change atomik (master.actions.ts:1868-1877) — alasan tahap 1 menumpang wadah ini, tanpa migrasi.
+- BR-LR-03 (USULAN, Q-LR-1): kamus alasan lead REUSE 7 kategori `quotation-outcome` vs kamus lead sendiri (mis. tambah `tidak-ada-respons`, `budget`, `bukan-target`) — Lead memutus; dilarang Backend mengarang kamus di kode tanpa putusan.
+- BR-LR-04 (USULAN, Q-LR-2): kategori WAJIB saat transisi ke lost (tanpa kategori = ditolak server); teks bebas opsional maks mengikuti pola reason quotation (2000 char, sales.actions.ts).
+- BR-LR-05 (TERVERIFIKASI-KODE pola): key asing ditolak eksplisit, bukan jatuh diam-diam ke ember tak-tercatat (sales.actions.ts:373).
+- BR-LR-06 (USULAN): awalan terstruktur = satu-satunya kontrak agregasi; teks bebas TIDAK pernah diparse untuk menebak kategori (preseden quotation-outcome.ts:64-72).
+- BR-LR-07 (USULAN): agregasi alasan kalah tampil di corong lead existing sebagai rincian lostCount, bukan laporan baru terpisah tahap 1 (Q-LR-3).
+- BR-LR-08 (USULAN): tidak ada status/kolom baru tahap 1; kebutuhan kolom tersimpan dinilai ulang hanya bila awalan terbukti rapuh (pola kerapuhan dinyatakan terbuka seperti header quotation-outcome.ts:9-12).
+
+### 5. Feature matrix benchmark (akses live 2026-10-25)
+
+| Fitur | Accurate | Zahir | ISF tahap 1 (spec ini) |
+|---|---|---|---|
+| Status Lost + alasan terstruktur | Halaman CRM resmi dengan daftar alasan kalah lead TIDAK ditemukan (pencarian accurate.id hanya artikel CRM generik) — ditulis jujur: belum terverifikasi | ADA: "Status Lost — alasan peluang gagal seperti budget issue, tidak ada respons, kalah kompetitor, atau pembatalan" + "Laporan Lost dan analisis penyebab kegagalan" (https://zahirerp.com/id/all-features-of-zahir-products/, akses 2026-10-25) | Kamus kategori di transisi lost + ember tak-tercatat untuk data lama |
+| Laporan analisis kalah | belum terverifikasi | ADA (URL sama) | Rincian lostCount per kategori di corong existing (Q-LR-3) |
+
+BENCHMARK label: Zahir = BENCHMARK terverifikasi URL di atas; Accurate = belum terverifikasi (bukan klaim paritas).
+
+### 6. Acceptance criteria (falsifikasi) + edge cases
+
+- AC-LR-B1: transisi ke lost tanpa kategori → ditolak server, status lead utuh (matikan validasi = MERAH).
+- AC-LR-B2: key di luar kamus diputusan Lead → ditolak dengan error eksplisit (pola sales.actions.ts:373).
+- AC-LR-B3: transisi sah menulis TEPAT satu LeadActivity status_change berisi awalan kategori; builder agregasi membaca kategori yang sama (putar balik parse = MERAH bila beda).
+- AC-LR-B4: lead lost pra-fitur (tanpa awalan) masuk `tak-tercatat`; dilarang builder menebak dari kata di teks bebas (sisipkan teks "harga mahal" tanpa awalan → tetap tak-tercatat).
+- AC-LR-B5: won → lost ditolak; lost → aktif ditolak (terminal tahap 1).
+- AC-LR-B6: non-admin mengedit lead assignedTo orang lain tetap ditolak guard existing (alasan tidak membuka celah kepemilikan).
+- AC-LR-F1: UI hanya menampilkan kategori dari payload server; UI nol kamus hardcoded kedua (kamus dobel = MERAH).
+- Edge: lead dihapus lunak (deletedAt) tidak masuk agregasi; transisi status non-lost tidak meminta alasan; kategori `lainnya` + teks bebas kosong tetap sah; awalan kedua di tengah teks bebas = isi bebas (preseden sales.actions.ts komentar F-101).
+
+### 7. Backlog turunan + gerbang
+
+| Turunan | Pemilik | Syarat buka |
+|---|---|---|
+| Putus Q-LR-1..4 | Lead | spec ini merged |
+| Builder parse kategori lead + rincian corong | Backend | Q-LR-1/3 diputus |
+| Validasi server di updateLead (cabang status=lost) | Backend | Q-LR-2 diputus |
+| Pilihan kategori di form edit lead | Frontend | kontrak Backend final; grep e2e crm/leads sebelum commit |
+| Falsifikasi AC-LR-* | QA | head Backend/Frontend persis |
+
+Q-LR-1 (Lead): reuse kamus quotation-outcome 7 kategori vs kamus lead sendiri. Q-LR-2 (Lead): kategori wajib vs opsional saat lost. Q-LR-3 (Lead): agregasi di corong existing vs halaman laporan terpisah; izin baca view_leads cukup? Q-LR-4 (Lead): won→lost koreksi dibuka atau tetap terminal mutlak. Tanpa vonis Accountant (tidak menyentuh uang/pajak/jurnal).
+
+F-2026-10-25-030-S — Alasan kalah terstruktur lead lost. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LR-1..4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/validasi), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
