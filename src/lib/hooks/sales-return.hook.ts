@@ -42,28 +42,27 @@ export async function onSalesReturnCompleted(
       include: { items: true },
     });
 
-    // F-2026-10-24-136-V Putusan 1 (build pertama): retur atas faktur besi
-    // tua murni ditolak berisik fail-closed SEBELUM stok/journal dibuat.
-    // Bentuk retur kelak hanya Dr scrapSaleIncomeAccountId + PPN snapshot
-    // / Cr Piutang (E136-3); selama ini dilarang persediaan/StockMove IN.
+    // F-2026-10-24-137-V Putusan 1 (tahap 2): klasifikasi PER-BARIS.
+    // Retur besi tua murni: nol StockMove IN, nol lapisan FIFO, nol
+    // qtyOnHand (nilai buku Rp0) — hanya status completed. Retur campuran
+    // scrap+dagang ditolak berisik (faktur campuran tak pernah terposting).
+    let isScrapReturn = false;
     if (salesReturn.salesInvoiceId != null) {
-      const linkedInvoice = await tx.salesInvoice.findUniqueOrThrow({
-        where: { id: salesReturn.salesInvoiceId },
-        include: { items: { select: { itemId: true, qty: true } } },
-      });
       const returnItemIds = [...new Set(salesReturn.items.map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
-      const linkedInvoiceItemIds = [...new Set(linkedInvoice.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
       if (returnItemIds.length > 0) {
         const scrapRows = await tx.item.findMany({
-          where: { id: { in: [...new Set([...returnItemIds, ...linkedInvoiceItemIds])] } },
+          where: { id: { in: returnItemIds } },
           select: { id: true, isScrapSaleItem: true },
         });
         const isScrap = new Map(scrapRows.map((r) => [r.id, r.isScrapSaleItem]));
-        const allScrap = (ids: number[]) => ids.length > 0 && ids.every((id) => isScrap.get(id));
-        if (allScrap(linkedInvoiceItemIds) && allScrap(returnItemIds)) {
+        const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0);
+        const scrapCount = activeItems.filter((it) => typeof it.itemId === "number" && isScrap.get(it.itemId)).length;
+        if (scrapCount > 0 && scrapCount === activeItems.length) {
+          isScrapReturn = true;
+        } else if (scrapCount > 0) {
           throw new Error(
-            "Retur penjualan atas faktur besi tua (scrap) ditolak berisik: faktur besi tua punya nilai buku Rp0 dan pendapatannya masuk akun lain-lain, bukan faktur penjualan biasa. " +
-              "Gunakan pembalikan faktur (belum dibayar) atau pengembalian pembayaran melalui jalur existing (sudah dibayar).",
+            "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang — " +
+              "pendapatan besi tua masuk akun lain-lain dan nilai bukunya Rp0.",
           );
         }
       }
@@ -84,6 +83,16 @@ export async function onSalesReturnCompleted(
     // Guard: must be in a completable state
     if (salesReturn.status === Status.COMPLETED || salesReturn.status === Status.CANCELLED) {
       return; // already completed/cancelled; idempotent no-op
+    }
+
+    // Retur besi tua: nol gerakan stok — hanya status completed. Jurnal
+    // dibukukan accounting.hook (Dr scrap income + PPN / Cr Piutang|Kas).
+    if (isScrapReturn) {
+      await tx.salesReturn.update({
+        where: { id: returnId },
+        data: { status: Status.COMPLETED },
+      });
+      return;
     }
 
     // Resolve warehouse: item default warehouse → first ACTIVE warehouse fallback
