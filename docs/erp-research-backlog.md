@@ -30933,3 +30933,131 @@ Mewarisi KOM3-1..7 (F-084-V §7, nomor terbaca per §4 vonis ini) + AC-KOM37-1..
 Label bukti: TERVERIFIKASI-KODE (katalog base-data.ts, schema, automap, grep 210212=0 di origin/main `1b147d3c`, run ini); TERVERIFIKASI-VONIS (alokasi 210208 F-005-V, 210210/210211 F-020-V, 210209 F-018-V, 210207 F-132-V — dari backlog origin/main); REGULASI via vonis existing (PMK 168/2023 Pasal 5/8/10, dikutip F-084-V §5 — bukan riset regulasi baru run ini); KEBIJAKAN INTERNAL (nomor 210212, nama akun, aturan mapping fail-closed — keputusan desain ISF, bukan klaim regulasi). Klaim kepatuhan: perlakuan internal ISF berdasar sumber di atas; bukan penetapan DJP atas kasus perusahaan nyata.
 
 F-2026-10-25-039-V — Koreksi akun utang komisi Q-KOM3-1: 210212 "Utang Komisi Penjualan" final; 210207/210208/210210/210211 dilarang untuk komisi; mapping fail-closed tanpa fallback. Status: VONIS TERBIT run ini; tahap 3 TETAP TERTUTUP menunggu PUTUSAN Lead G1 + inti 036-S live (G2). Pemilik berikutnya: Lead (merge PR vonis + G1) → Backend (paket fisik §6 sesudah G1) → Frontend (konsumen) → QA (QA-KOM39-1..6 + KOM3 + AC-KOM37).
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-038-S: pengiriman Statement Pelanggan via WhatsApp manual + jejak kirim (lanjutan eksplisit F-2026-10-25-025-S)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Lanjutan eksplisit dari bagian "Yang TIDAK diusulkan" F-2026-10-25-025-S: "Pengiriman statement ke pelanggan (email/WA/cetak massal terjadwal) — jalur pengiriman + jejak kirim = spec terpisah". Spec ini mengambil HANYA jalur WA manual + jejak kirim; email dan cetak massal terjadwal tetap di luar (lihat bagian terakhir). ID F-2026-10-25-038-S bebas terverifikasi run ini (2026-10-25 19:36 WIB): grep `F-2026-10-25-038` di backlog + board `origin/main` (`1b147d3c`) = 0; judul PR terbuka tertinggi 037-S (PR #887 backend payslip tidak memuat 038); maksimum terpakai tanggal ini = 037-S. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 1b147d3c) — TERVERIFIKASI-KODE
+
+Sudah ada (jangan dibangun ulang):
+- Statement Pelanggan live penuh F-2026-10-21-032: builder murni `buildCustomerStatement` (`src/lib/reports/customer-statement.ts`), loader `loadCustomerStatement` (`src/lib/reports/customer-statement-data.ts`), halaman `src/app/(dashboard)/laporan/statement-pelanggan/[[...segments]]/page.tsx` digerbang `requirePermission("view_reports")`, registry PDF `"statement-pelanggan"` (`src/lib/reports/report-registry.ts`). Loader memilih pelanggan `select: { id, name }` saja — nomor telepon pelanggan TIDAK ikut dimuat halaman statement hari ini.
+- Kanal WA manual existing F-2026-10-20-27(a): `src/lib/utils/whatsapp.ts` — `normalizeWhatsappPhone` (08.. → 628.., tidak valid = null), `buildWhatsappMessage` (salam + status dokumen + plat + estimasi selesai), `buildWhatsappUrl` (wa.me + teks ter-encode; null bila nomor tidak bisa dipakai). API/gateway otomatis = F-27(b) ditunda-teknis, bukan bagian spec ini.
+- Tombol existing `WhatsappButton` (`src/components/reports/whatsapp-button.tsx`): tidak tampil bila URL null (nomor kosong/tidak valid), klik memanggil `recordWhatsappLinkOpened` fire-and-forget tanpa menahan navigasi.
+- Jejak klik existing F-2026-10-21-036: `recordWhatsappLinkOpened` (`src/actions/whatsapp-log.actions.ts`) menulis ActivityLog `whatsapp_link_opened` dengan metadata `{channel, event: "link_opened", surface}` TANPA nomor telepon/isi pesan; penjaga sesi + permission lihat per jenis dokumen; kegagalan catat tidak pernah menggagalkan navigasi. Jenis dokumen terdaftar hari ini HANYA `WorkOrder` (`view_work_orders`), `SalesInvoice` (`view_sales_invoices`), `Quotation` (`view_quotations`) — statement pelanggan BELUM terdaftar, inilah celah inti spec ini.
+- Master pelanggan punya kontak: `Customer.phone String?` + `Customer.email String?` (`prisma/schema.prisma` model Customer :390-391).
+- Aturan warisan yang mengikat spec ini: label jujur F-036 (yang tercatat = "Tautan WhatsApp dibuka", BUKAN pesan terkirim); BR-ST-07 spec 025-S (tanpa angka denda di statement — berlaku juga di isi pesan); definisi saldo statement beku (BR-ST-06 025-S).
+
+Gap terbukti (grep run ini):
+- Grep `WhatsappButton` / `buildWhatsapp` di halaman + kartu statement = 0: tidak ada tombol kirim apa pun di permukaan Statement Pelanggan.
+- `WHATSAPP_DOC_TYPES` tidak memuat jenis statement; memanggil `recordWhatsappLinkOpened` dengan modelType statement hari ini pasti ditolak "Jenis dokumen tidak dikenal" — jejak kirim statement tidak bisa dicatat tanpa perluasan kontrak.
+- Statement terikat PELANGGAN + PERIODE, bukan satu dokumen bernomor: ActivityLog existing berjangkar `(modelType, modelId)` per dokumen. ModelId statement = ID pelanggan adalah pemetaan paling jujur yang tersedia tanpa schema baru; periode kirim masuk metadata (bukan PII). Fisik final = Q-SW-2 Backend.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: admin/keuangan berizin `view_reports` di halaman Statement Pelanggan existing.
+
+1. Staf membuka statement satu pelanggan untuk satu periode (alur existing, tidak berubah).
+2. Bila pelanggan terpilih punya nomor telepon yang lolos `normalizeWhatsappPhone`, tampil tombol "Kirim WA" di kepala halaman/kartu statement dengan label jujur pendamping: tautan dibuka di aplikasi WhatsApp staf; sistem tidak mengirim dan tidak tahu pesan benar-benar terkirim.
+3. Klik tombol: (a) jejak `whatsapp_link_opened` dicatat fire-and-forget untuk statement ini (jenis dokumen baru, lihat BR-SW-02); (b) wa.me terbuka di tab baru dengan teks ringkas ter-isi (isi pesan dibatasi BR-SW-04).
+4. Staf meninjau teks di aplikasi WhatsApp sendiri, boleh mengubah/membatalkan di sana, lalu menekan kirim secara manual. Sistem TIDAK mengklaim terkirim, TIDAK menunggu konfirmasi, TIDAK mengubah status dokumen/piutang apa pun.
+5. Jejak tampil kembali sebagai riwayat baca-saja di halaman statement pelanggan yang sama: "Tautan WhatsApp dibuka — <waktu WIB> oleh <nama staf>" per klik, dihitung dari ActivityLog. Tidak ada status "terkirim/dibaca pelanggan" di mana pun.
+
+Dokumen masuk: statement existing (pelanggan + periode). Dokumen keluar: tautan wa.me ber-teks + baris jejak ActivityLog. Tanpa tulis finansial, tanpa jurnal, tanpa perubahan status faktur/piutang.
+
+### 2. Role/permission matrix (key nyata katalog `module-catalog.generated.ts`)
+
+| Aksi | Permission | Status |
+|---|---|---|
+| Lihat statement (prasyarat semua aksi spec ini) | `view_reports` (:428) | TERVERIFIKASI-KODE |
+| Klik "Kirim WA" statement | reuse `view_reports` — halaman sudah digerbang key ini; penjaga jejak memeriksa key yang sama | USULAN (Q-SW-1 Lead bila minta key khusus) |
+| Lihat riwayat jejak kirim di halaman statement | `view_reports` (permukaan sama) | USULAN |
+| Key izin baru | TIDAK diusulkan tahap 1 | USULAN |
+| Kirim massal / terjadwal / via gateway | TIDAK ada — di luar spec | — |
+
+Catatan penjaga: pola existing `recordWhatsappLinkOpened` memeriksa permission LIHAT jenis dokumennya. Untuk statement, "dokumen" induknya adalah laporan pelanggan, jadi key penjaga yang konsisten = `view_reports`, bukan `view_customers`/`view_sales_invoices` (keduanya nyata di katalog :125/:148 tetapi melekat ke objek lain). Memilih key lain = Q-SW-1.
+
+### 3. Status-transition matrix
+
+Tidak ada status tersimpan baru dan tidak ada transisi dokumen: klik WA bukan peristiwa bisnis atas piutang. Satu-satunya "keadaan" adalah jejak turunan baca dari ActivityLog:
+
+| Keadaan tampil | Pemicu | Penjaga |
+|---|---|---|
+| Belum pernah dibuka | belum ada baris `whatsapp_link_opened` untuk pelanggan ini | — |
+| Tautan dibuka (per klik, bisa berulang) | klik tombol oleh staf berizin | sesi + `view_reports`; catat gagal ≠ batalkan navigasi |
+| Terkirim / dibaca pelanggan | TIDAK ADA — dilarang dikarang dari klik wa.me | BR-SW-01 |
+
+Setiap klik = satu baris jejak baru (riwayat, bukan penimpaan), mengikuti pola F-036.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-SW-01 | Label jujur mutlak: UI, jejak, dan laporan hanya boleh menyebut "Tautan WhatsApp dibuka". Klaim "terkirim/terbaca/sudah dihubungi" dari klik wa.me DILARANG di semua permukaan. | TERVERIFIKASI-KODE (warisan F-036) | whatsapp-log.actions.ts kepala kontrak; whatsapp-button.tsx |
+| BR-SW-02 | Jejak statement memakai jalur ActivityLog existing `whatsapp_link_opened`, diperluas SATU jenis dokumen statement: modelType berjangkar pelanggan, modelId = ID pelanggan, metadata `{channel: "whatsapp", event: "link_opened", surface, periodStart, periodEnd}` (tanggal periode, bukan PII). Nomor telepon, isi pesan, dan nama pelanggan TIDAK masuk metadata/deskripsi log. | USULAN | pola whatsapp-log.actions.ts; ActivityLog schema.prisma:5177 |
+| BR-SW-03 | Tombol hanya tampil bila pelanggan terpilih ada DAN `buildWhatsappUrl(phone)` tidak null. Nomor kosong/format tidak valid = tombol tidak tampil sama sekali (bukan tampil-mati), mengikuti perilaku `WhatsappButton` existing. Sistem tidak menebak nomor dari contactPerson/alamat. | TERVERIFIKASI-KODE (pola) + USULAN (penerapan) | whatsapp.ts normalize/buildUrl; whatsapp-button.tsx |
+| BR-SW-04 | Isi pesan WA statement dibatasi: salam + nama pelanggan + label periode statement + saldo akhir periode sesuai payload statement + kalimat penutup netral. DILARANG: angka denda (BR-ST-07 025-S), rincian per faktur di badan pesan, tautan unduh karangan, janji/ancaman penagihan. PDF statement TIDAK bisa dilampirkan lewat wa.me tahap ini — pesan menyatakan statement dapat diminta/dicetak, bukan berpura-pura melampirkan. | USULAN | BR-ST-07 025-S; buildWhatsappMessage pola |
+| BR-SW-05 | Angka di pesan = payload server statement yang sama dengan layar/PDF (saldo akhir + periode), tidak dihitung ulang di komponen/klien. Periode di pesan = periode statement yang sedang dibuka staf, bukan "bulan ini" karangan. | USULAN | BR-ST-06/BR-ST-08 025-S |
+| BR-SW-06 | Kegagalan mencatat jejak tidak pernah menahan/membatalkan pembukaan wa.me (fire-and-forget, pola existing). Sebaliknya tanpa sesi/izin, jejak ditolak tanpa log — dan karena tombol hanya lahir di halaman bergerbang `view_reports`, permukaan tanpa izin memang tidak pernah melihat tombol. | TERVERIFIKASI-KODE (pola) | whatsapp-log.actions.ts; page statement |
+| BR-SW-07 | Klik berulang sah dan tercatat berulang (staf boleh membuka ulang); riwayat menampilkan semua klik terbaru-dulu. Tidak ada dedup/idempotency yang menghapus riwayat klik — jejak adalah catatan percobaan buka, bukan dokumen finansial. | USULAN | pola riwayat F-036 |
+| BR-SW-08 | Tanpa gateway/API otomatis, tanpa antrean kirim, tanpa jadwal, tanpa kirim massal banyak pelanggan dalam tahap ini (F-27(b) ditunda-teknis tetap berlaku). Satu klik = satu pelanggan = satu periode. | TERVERIFIKASI-KODE (keputusan F-27) | whatsapp.ts kepala F-27(a)/(b) |
+| BR-SW-09 | Cakupan pelanggan: pelanggan nonaktif/terhapus mengikuti pilihan halaman existing (daftar aktif); statement pelanggan tanpa mutasi periode tetap boleh dibuka tautannya (saldo awal/akhir tetap bermakna) — tombol mengikuti keberadaan nomor, bukan keberadaan baris mutasi. | USULAN | halaman statement select isActive |
+| BR-SW-10 | Perluasan jenis dokumen jejak TIDAK mengubah perilaku tiga jenis existing (WorkOrder/SalesInvoice/Quotation): label, permission penjaga, dan metadata ketiganya byte-sama. | USULAN (kendala regresi) | WHATSAPP_DOC_TYPES existing |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF |
+|---|---|---|---|
+| Kirim tagihan ke WhatsApp pelanggan dari dokumen penjualan | Ada — kirim faktur via WhatsApp (pilih transaksi + kontak, kirim dari Accurate) https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/kirim-faktur-by-whatsapp/ | Tidak ditemukan fitur kirim WA setara pada halaman laporan piutang yang diakses run ini | Parsial: WA manual per dokumen WO/Faktur/Penawaran live (F-27(a)+F-036); statement = gap spec ini |
+| Laporan piutang per pelanggan incl. surat tagihan untuk pelanggan | Ada — Pernyataan Piutang (rujuk 025-S) | Ada — laporan piutang usaha: umur piutang, kartu piutang, mutasi piutang, surat tagihan untuk pelanggan; ekspor Excel/PDF/print https://help.zahironline.com/portal/id/kb/articles/melihat-laporan-piutang-usaha-zahir-online-v2 | Statement per pelanggan live (F-032); surat tagihan formal terpisah tidak diusulkan spec ini |
+| Jejak bahwa staf membuka jalur hubungi pelanggan | Tidak diverifikasi run ini | Tidak diverifikasi run ini | Ada untuk 3 jenis dokumen (F-036); statement = perluasan spec ini |
+
+Catatan benchmark: kirim Accurate berjalan di dalam layanannya (bukan klik wa.me staf); ISF tahap ini sengaja TIDAK menyamai klaim itu — yang dibangun hanya jalur manual berjejak jujur (BR-SW-01/08).
+
+### 6. Acceptance criteria + edge cases (falsifikasi — untuk Backend/Frontend/QA)
+
+- AC-SW-B1: klik tombol statement menulis tepat satu ActivityLog `whatsapp_link_opened` berjangkar pelanggan dengan metadata berisi periode dan TANPA nomor telepon/isi pesan/nama pelanggan; grep/metadata memuat nomor telepon = MERAH.
+- AC-SW-B2: pemanggil tanpa sesi atau tanpa `view_reports` ditolak `{success:false}` dan tidak ada baris log lahir; mencatat diam-diam = MERAH.
+- AC-SW-B3: tiga jenis existing tidak berubah: klik WO/Faktur/Penawaran tetap memakai permission penjaga dan metadata semula; mengubah label/metadata ketiganya = MERAH.
+- AC-SW-B4: kegagalan tulis log (DB error disimulasikan) tetap mengembalikan jalur navigasi wa.me ke staf — aksi pencatat tidak melempar ke pemanggil; navigasi tertahan karena log = MERAH.
+- AC-SW-B5: dua klik = dua baris jejak (urutan waktu utuh); dedup yang menelan klik kedua = MERAH.
+- AC-SW-F1: pelanggan tanpa nomor / nomor tidak valid → tombol tidak tampil; tombol tampil dengan href mati = MERAH.
+- AC-SW-F2: teks pesan memuat nama pelanggan + label periode + saldo akhir persis payload server; memuat angka denda, rincian faktur karangan, atau saldo hitung-ulang klien = MERAH.
+- AC-SW-F3: tidak ada teks "terkirim/terbaca/sudah dihubungi" di tombol, toast, atau riwayat; label selain "Tautan WhatsApp dibuka" untuk jejak = MERAH.
+- AC-SW-F4: riwayat jejak di halaman statement hanya tampil untuk pemegang `view_reports` dan membaca ActivityLog apa adanya (waktu WIB + nama staf); UI mengarang status kirim dari jumlah klik = MERAH.
+
+Edge cases:
+- EC-SW-1: nomor berformat `08..`, `+62..`, spasi/strip — normalisasi mengikuti `normalizeWhatsappPhone` existing; di luar pola itu tombol hilang, bukan ditebak.
+- EC-SW-2: pelanggan diganti di pemilih sesudah halaman termuat — tombol dan pesan mengikuti pelanggan+periode yang sedang tampil, bukan yang sebelumnya.
+- EC-SW-3: statement periode lampau — pesan menyebut periode lampau itu persis (BR-SW-05); jejak mencatat periode yang sama.
+- EC-SW-4: saldo akhir nol/negatif (kelebihan bayar) — pesan tetap netral tanpa kata "tagihan" yang menekan; wording final = Q-SW-3.
+- EC-SW-5: staf membuka wa.me lalu batal mengirim di aplikasi WA — sistem tetap hanya punya jejak "dibuka"; tidak ada koreksi status apa pun (konsekuensi jujur BR-SW-01).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-038-S)
+
+| ID | Isi | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-038-S | Spec ini (dokumen) | Business | — |
+| F-2026-10-25-038-B1 | Perluasan kontrak jejak: satu jenis statement di jalur `recordWhatsappLinkOpened` (jangkar pelanggan, metadata periode tanpa PII, penjaga `view_reports` per Q-SW-1); builder pesan statement murni; loader memuat nomor pelanggan untuk halaman statement; tes AC-SW-B1..B5 | Backend | Q-SW-1 Lead + Q-SW-2 fisik |
+| F-2026-10-25-038-F1 | Tombol "Kirim WA" + label jujur + riwayat jejak di halaman/kartu statement; teks verbatim payload server; AC-SW-F1..F4; grep e2e laporan sebelum commit | Frontend | Kontrak B1 |
+| F-2026-10-25-038-Q1 | Falsifikasi AC-SW-B1..B5 + F1..F4 atas head persis (cabut penjaga MERAH, PII masuk log MERAH, klaim terkirim MERAH) | QA | B1+F1 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SW-1 (Lead, perilaku inti): key penjaga klik statement — reuse `view_reports` (rekomendasi Business, konsisten permukaan laporan) atau key khusus baru? Tanpa putusan ini Backend tidak mulai.
+- Q-SW-2 (Backend, fisik): bentuk perluasan jenis dokumen (entri peta baru vs jalur khusus statement) + cara loader halaman statement memuat `phone` pelanggan terpilih tanpa mengubah payload builder statement.
+- Q-SW-3 (Lead): wording pesan untuk saldo nol/negatif (EC-SW-4) — kalimat netral final disahkan Lead; Business tidak mengarang nada penagihan.
+- Accountant: TIDAK diminta tahap ini (tanpa uang/pajak/jurnal/denda baru; BR-ST-07 tetap menahan angka denda — membuka denda di pesan atau pengiriman massal terjadwal = vonis Accountant + putusan Lead baru, spec terpisah).
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-038-S)
+
+- Gateway/API WhatsApp otomatis (F-27(b) ditunda-teknis), kirim terjadwal/berkala, kirim massal ke banyak pelanggan, template pesan terpusat yang bisa diedit admin.
+- Klaim status terkirim/dibaca, tanda terima pelanggan, atau perubahan status piutang akibat pengiriman.
+- Lampiran PDF statement lewat wa.me (wa.me tidak membawa lampiran berkas dari sistem; menjanjikannya = klaim palsu).
+- Pengiriman via email — kanal + jejak berbeda, spec terpisah bila diminta.
+- Angka denda/penalti di pesan maupun statement (BR-ST-07), surat tagihan formal ala Zahir sebagai dokumen tersendiri.
+
+F-2026-10-25-038-S — Pengiriman Statement Pelanggan via WA manual + jejak kirim. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SW-1/Q-SW-3 + fisik Backend Q-SW-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (kontrak jejak+loader), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini.
+
+---
