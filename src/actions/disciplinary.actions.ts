@@ -55,6 +55,25 @@ function fail(e: unknown, context: string): ActionResult {
   return { success: false, error: getErrorMessage(e) }
 }
 
+/** Klaim transisi atomik + jejak + revalidasi (pola berulang semua aksi). */
+async function claimTransition(
+  where: Record<string, unknown>,
+  data: Record<string, unknown>,
+  conflictMessage: string,
+  action: string,
+  recordId: number,
+  description: string,
+): Promise<ActionResult> {
+  const claim = await prisma.employeeDisciplinaryRecord.updateMany({
+    where: { id: recordId, deletedAt: null, ...where },
+    data,
+  })
+  if (claim.count === 0) throw new Error(conflictMessage)
+  await logActivity(action, "EmployeeDisciplinaryRecord", recordId, description)
+  revalidatePath(REVALIDATE)
+  return { success: true }
+}
+
 function parseDateOnly(value: string, label: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} tidak valid`)
   const parsed = wibDateToUtcMidnight(value)
@@ -418,16 +437,17 @@ export async function rejectDisciplinaryRecord(
     if (record.workflowStatus !== "pending_approval") {
       throw new Error("Pengajuan hanya dapat ditolak dari status menunggu persetujuan")
     }
-    const claim = await prisma.employeeDisciplinaryRecord.updateMany({
-      where: { id: recordId, workflowStatus: "pending_approval", deletedAt: null },
-      data: { workflowStatus: "rejected", rejectionReason: requireText(reason, "Alasan penolakan pengajuan peringatan wajib diisi") },
-    })
-    if (claim.count === 0) {
-      throw new Error("Pengajuan hanya dapat ditolak dari status menunggu persetujuan")
-    }
-    await logActivity("reject", "EmployeeDisciplinaryRecord", recordId, "Menolak pengajuan peringatan")
-    revalidatePath(REVALIDATE)
-    return { success: true }
+    return await claimTransition(
+      { workflowStatus: "pending_approval" },
+      {
+        workflowStatus: "rejected",
+        rejectionReason: requireText(reason, "Alasan penolakan pengajuan peringatan wajib diisi"),
+      },
+      "Pengajuan hanya dapat ditolak dari status menunggu persetujuan",
+      "reject",
+      recordId,
+      "Menolak pengajuan peringatan",
+    )
   } catch (e) {
     return fail(e, "rejectDisciplinaryRecord")
   }
@@ -452,18 +472,18 @@ export async function acknowledgeDisciplinaryRecord(
       throw new Error("Tanda terima hanya untuk surat peringatan yang sudah terbit")
     }
     const cleanMethod = requireText(method, "Cara penerimaan wajib diisi")
-    const claim = await prisma.employeeDisciplinaryRecord.updateMany({
-      where: { id: recordId, workflowStatus: "issued", acknowledgmentAt: null, deletedAt: null },
-      data: {
+    return await claimTransition(
+      { workflowStatus: "issued", acknowledgmentAt: null },
+      {
         acknowledgmentAt: new Date(),
         acknowledgmentMethod: cleanMethod,
         acknowledgmentRefused: refused === true,
       },
-    })
-    if (claim.count === 0) throw new Error("Tanda terima sudah tercatat untuk rekod ini")
-    await logActivity("update", "EmployeeDisciplinaryRecord", recordId, "Mencatat tanda terima surat peringatan")
-    revalidatePath(REVALIDATE)
-    return { success: true }
+      "Tanda terima sudah tercatat untuk rekod ini",
+      "update",
+      recordId,
+      "Mencatat tanda terima surat peringatan",
+    )
   } catch (e) {
     return fail(e, "acknowledgeDisciplinaryRecord")
   }
@@ -491,18 +511,18 @@ export async function respondDisciplinaryRecord(
       at: new Date(),
     })
     if (!window.allowed) throw new Error(window.message)
-    const claim = await prisma.employeeDisciplinaryRecord.updateMany({
-      where: { id: recordId, workflowStatus: "issued", employeeId: me, deletedAt: null },
-      data: {
+    return await claimTransition(
+      { workflowStatus: "issued", employeeId: me },
+      {
         employeeResponse: requireText(response, "Tanggapan karyawan wajib diisi"),
         employeeResponseAt: new Date(),
         employeeResponseLate: false,
       },
-    })
-    if (claim.count === 0) throw new Error("Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit")
-    await logActivity("update", "EmployeeDisciplinaryRecord", recordId, "Karyawan memberi tanggapan surat peringatan")
-    revalidatePath(REVALIDATE)
-    return { success: true }
+      "Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit",
+      "update",
+      recordId,
+      "Karyawan memberi tanggapan surat peringatan",
+    )
   } catch (e) {
     return fail(e, "respondDisciplinaryRecord")
   }
@@ -526,14 +546,14 @@ export async function recordLateDisciplinaryResponse(
     if (record.workflowStatus !== "issued") {
       throw new Error("Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit")
     }
-    const claim = await prisma.employeeDisciplinaryRecord.updateMany({
-      where: { id: recordId, workflowStatus: "issued", deletedAt: null },
-      data: { employeeResponse: clean, employeeResponseAt: new Date(), employeeResponseLate: true },
-    })
-    if (claim.count === 0) throw new Error("Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit")
-    await logActivity("update", "EmployeeDisciplinaryRecord", recordId, "HR menempelkan tanggapan terlambat (terlambat)")
-    revalidatePath(REVALIDATE)
-    return { success: true }
+    return await claimTransition(
+      { workflowStatus: "issued" },
+      { employeeResponse: clean, employeeResponseAt: new Date(), employeeResponseLate: true },
+      "Tanggapan hanya dapat diberikan pada surat peringatan yang sudah terbit",
+      "update",
+      recordId,
+      "HR menempelkan tanggapan terlambat (terlambat)",
+    )
   } catch (e) {
     return fail(e, "recordLateDisciplinaryResponse")
   }
