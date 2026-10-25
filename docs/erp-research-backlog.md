@@ -27249,6 +27249,143 @@ F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI
 
 ---
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-013-S: audit kesesuaian laporan saldo cuti tahunan + gap turunan (fitur inti SUDAH live; tanpa duplikasi)
+
+> **Slot**: F-2026-10-25-013-S. Diperiksa bentrok 2026-10-25 08:05 WIB vs `origin/main` (`a5ad6890`): grep `F-2026-10-25-013` di backlog+board = 0; `F-2026-10-25-013-V` = vonis koreksi absensi Accountant di PR #795 OPEN (akhiran beda, bukan tabrakan); `-013-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Koreksi premis kartu (t_56eacdef)**: kartu mengasumsikan "laporan lintas karyawan ABSEN/PARSIAL". Verifikasi live run ini MEMBANTAH itu: halaman `/sdm/cuti/saldo` + aksi `getAllLeaveBalances` SUDAH live di `origin/main`. Spec ini karena itu berbentuk audit kesesuaian terhadap kartu + gap turunan terverifikasi, BUKAN spec fitur baru. Membangun laporan kedua = duplikasi terlarang. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Admin HR membuka `/sdm/cuti/saldo` tiap awal bulan untuk menjawab: "siapa sisa cutinya menipis, siapa belum berhak, departemen mana paling banyak memakai cuti?" Halaman existing menjawab per karyawan per tahun, tetapi: (a) tidak bisa disaring per departemen — HR men-scroll seluruh roster; (b) tidak bisa diekspor — HR menyalin manual ke spreadsheet untuk dibagikan ke kepala bengkel; (c) kolom "Terpakai" mencampur cuti `approved` + `pending` tanpa pemisah — HR tidak bisa membedakan hak yang sudah pasti terpakai vs masih menunggu keputusan (risiko janji ganda ke pelanggan bengkel); (d) karyawan yang berhenti tengah tahun hilang dari daftar (hanya `isActive: true`), padahal saldo tahun berjalan mereka masih ditanya saat serah terima; (e) visibilitas kolom Karyawan/Departemen diputus heuristik izin halaman (`edit/delete_leave_requests` / `super_admin`), bukan scope HR — kepala_bengkel se-departemen bisa kehilangan kolom nama di departemennya sendiri. Spec ini membekukan: status quo terverifikasi (§2), business rules register BR-LVB (§3), gap turunan G-LVB (§4–§7). Gerbang inti dibuka Lead.
+
+### 1. Workflow specification
+
+**Aktor**: HR/admin/g-a (scope `all`), `kepala_bengkel` (scope `department`), karyawan biasa (scope `self` — hanya baris dirinya), approver cuti (pemilik keputusan `pending`, di luar laporan ini).
+
+**Alur (existing, TERVERIFIKASI-KODE)**:
+1. User berizin `view_leave_requests` membuka `/sdm/cuti/saldo` (opsional segmen `tahun/<YYYY>`; tautan lama `?tahun=` di-redirect ke bentuk path).
+2. Server memanggil `getAllLeaveBalances(year)`: `requirePermission("view_leave_requests")` → `getHrScope` (fail-closed) → daftar karyawan `isActive: true, deletedAt: null` tersaring `hrEmployeeScopeWhere(scope)` → satu `getLeaveQuota(emp.id, { year })` per karyawan → baris `{employeeId, name, employeeNo, department|null, joinDate, entitled, used, remaining, eligible, tenureMonths}`.
+3. Halaman menampilkan 4 kartu ringkasan (Karyawan Berhak, Total Jatah, Total Terpakai "disetujui + menunggu", Total Sisa "Hangus akhir tahun") + tabel (Karyawan, Departemen, Masa Kerja, Jatah, Terpakai, Sisa/lencana "Belum 1 tahun") + cari nama/no. karyawan server-side + chip tahun (berjalan, -1, -2).
+4. Tidak ada dokumen masuk/keluar baru: laporan baca-saja; tidak menulis `LeaveRequest`, tidak mengubah status apa pun, tidak memuat nominal gaji apa pun.
+
+**Dokumen masuk**: `Employee` (joinDate, departmentId, isActive, deletedAt), `LeaveRequest` tipe `annual` status `approved|pending`, `WorkSchedule` + `Holiday`/`DepartmentHoliday` (penghitung hari kerja). **Dokumen keluar**: halaman tabel + (USULAN tahap berikut) berkas CSV.
+
+### 2. Inventarisasi terverifikasi (origin/main a5ad6890, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Service kuota `src/lib/services/leave-quota.service.ts`: `ANNUAL_LEAVE_QUOTA = 12` (:9); hanya tipe `annual` memotong jatah (`QUOTA_LEAVE_TYPES`, :17); `getLeaveQuota` (:173) — `entitled = 12` hanya bila tenure ≥ 1 tahun dari `joinDate` dinilai per akhir tahun laporan (tahun lampau dinilai per 31 Des tahun itu), `used` = hari kerja cuti `annual` status `approved+pending` ter-clip ke batas tahun kalender, `remaining = max(0, entitled - used)`, `eligible`, `tenureMonths`; komentar kode: saldo tak terpakai EXPIRES akhir tahun (no carry-over). Hari kerja dari `buildWorkingDayChecker`: preseden jadwal karyawan > departemen > global, libur nasional + libur departemen dikecualikan; tanpa jadwal sama sekali fallback Senin–Jumat (bukan nol — nol akan memberi cuti tak terbatas diam-diam).
+- Konsumen `getLeaveQuota`: aksi buat/edit cuti (`src/actions/hrm.actions.ts:921,4004` — penjaga kuota dalam transaksi), `getEmployeeLeaveBalance` (:3276, digerbang `assertHrEmployeeAccess`), halaman detail karyawan (`src/app/(dashboard)/master/karyawan/[slug]/page.tsx:116,289` seksi "Saldo Cuti Tahunan"), form cuti (`leave-form.tsx:63` pratinjau saldo live).
+- Laporan lintas karyawan SUDAH ADA: `getAllLeaveBalances` (`hrm.actions.ts:3293`) + halaman `src/app/(dashboard)/sdm/cuti/saldo/[[...segments]]/page.tsx` + tabel `../_components/leave-balance-table.tsx`; tertaut dari `/sdm/cuti` (tombol "Saldo Cuti", `page.tsx:80`) dan navigasi (`navigation.ts:156`, izin `view_leave_requests`). Tes scope existing: `hrm.actions.test.ts:1156,1166` (self tidak bisa intip karyawan lain; daftar dibatasi scope pemanggil).
+- Izin nyata: `view_leave_requests` (`src/lib/auth/module-catalog.generated.ts:288`, resource `leave_requests` label "Cuti"); halaman + aksi sama-sama `requirePermission("view_leave_requests")`.
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts`) — `all` untuk HR/finance/admin/ga (`HR_ALL_ACCESS_ROLES`), `department` untuk `kepala_bengkel` (departemen null → jatuh ke diri sendiri), `self` selainnya; roles hilang/rusak = `self` employeeId -1 (tidak cocok apa pun).
+- Pola CSV existing untuk ditiru (bukan dibangun ulang): `src/lib/reports/statement-csv.ts` (BOM UTF-8 + quoting sel) dan `pph21-export.ts` (builder murni mengembalikan `{csv, fileName, rows}`).
+- Pola route ekspor server untuk jalur unduh (bukan unduh sisi-klien dari data tabel): `src/app/api/activity-logs/export/route.ts` — auth sesi + cek permission server + `select` hanya kolom keluaran + batas baris eksplisit. Satu-satunya sumber angka kuota tetap `getLeaveQuota`; builder/halaman/CSV DILARANG menghitung ulang hari kerja/eligibility (anchor kelayakan milik service, termasuk perubahan PR #800).
+
+Belum ada / gap (bukti grep run ini):
+- Filter departemen: grep `departemen|department` di halaman+ tabel saldo = hanya kolom tampil; tidak ada parameter saring departemen di `getAllLeaveBalances` maupun halaman. Roster lintas departemen tidak bisa dipersempit.
+- Ekspor: grep `csv|CSV` di subtree `sdm/cuti` = 0; halaman saldo tidak punya jalur unduh apa pun.
+- Pemisahan pending: `LeaveQuota.used` tunggal (approved+pending digabung di `leave-quota.service.ts`); keluaran `getAllLeaveBalances` tidak memuat komponen `pending` terpisah — kartu ringkasan halaman sendiri menulis "disetujui + menunggu" sebagai satu angka.
+- Karyawan berhenti tengah tahun: `getAllLeaveBalances` menyaring `isActive: true, deletedAt: null` — karyawan nonaktif hilang dari tahun berjalan maupun tahun lampau.
+- Visibilitas kolom menyimpang dari scope: halaman (`page.tsx:95-99`) menampilkan kolom Karyawan/Departemen hanya bila role `super_admin` ATAU izin `edit_leave_requests`/`delete_leave_requests` — bukan turunan `getHrScope`; `kepala_bengkel` (scope department sah) tanpa izin edit kehilangan nama timnya sendiri, sebaliknya pemegang izin edit ber-scope `self` tetap melihat kolom (isi tetap tersaring scope — cacat tampilan, bukan bocor data; tetap dicatat karena membingungkan).
+- Builder murni read-model: tidak ada berkas `leave*`/`cuti*` di `src/lib/reports/`; logika agregasi hidup di aksi server — pola menyimpang dari konvensi laporan repo (builder murni + loader tipis pola `employee-lifecycle.ts`).
+
+### 3. Business rules register (BR-LVB)
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-LVB-01 | Jatah cuti tahunan = 12 hari KERJA per tahun kalender (Jan–Des) hanya tipe `annual`; tipe lain (sick/personal/maternity/unpaid) tidak memotong jatah | TERVERIFIKASI-KODE | `leave-quota.service.ts:9,17` |
+| BR-LVB-02 | Berhak hanya bila tenure ≥ 1 tahun dari `joinDate` (dinilai per akhir tahun laporan); di bawah itu `entitled = 0` dan cuti tahunan berbayar ditolak | TERVERIFIKASI-KODE | `leave-quota.service.ts:186-215` |
+| BR-LVB-03 | `used` menghitung status `approved` + `pending` sekaligus (pending mengunci jatah supaya dua pengajuan berjalan tidak sama-sama lolos); `remaining = max(0, entitled − used)` | TERVERIFIKASI-KODE | `leave-quota.service.ts:229-262` |
+| BR-LVB-04 | Sisa tak terpakai hangus akhir tahun (no carry-over) | TERVERIFIKASI-KODE | komentar `leave-quota.service.ts:163-165`; hint halaman "Hangus akhir tahun" |
+| BR-LVB-05 | Hari terpakai = hari kerja menurut jadwal karyawan>departemen>global dikurangi libur nasional/departemen; tanpa jadwal apa pun fallback Senin–Jumat | TERVERIFIKASI-KODE | `buildWorkingDayChecker` `leave-quota.service.ts:35-137` |
+| BR-LVB-06 | Cuti memotong dua tahun di-clip per tahun kalender; tiap tahun dinilai dengan tenure tahun itu | TERVERIFIKASI-KODE | clip `leave-quota.service.ts:245-258`; `asOf` :186 |
+| BR-LVB-07 | Akses laporan = izin `view_leave_requests` + `getHrScope` fail-closed (all/department/self; rusak → self -1); keluaran tanpa nominal gaji apa pun | TERVERIFIKASI-KODE | `module-catalog.generated.ts:288`; `hr-scope.ts`; `hrm.actions.ts:3295-3310` |
+| BR-LVB-08 | Regulasi lantai: cuti tahunan sekurang-kurangnya 12 hari kerja sesudah 12 bulan kerja terus-menerus | BENCHMARK (regulasi) | UU 13/2003 Pasal 79 ayat (2) huruf c — https://peraturan.bpk.go.id/Details/43013/uu-no-13-tahun-2003 ; teks pasal https://peraturan.go.id/files/UU+13-2003.pdf |
+| BR-LVB-09 | Angka 12 hari/12 bulan sebagai BATAS statutori final (termasuk tafsir sesudah UU 6/2023 Cipta Kerja) bukan diputus spec ini | BUTUH-VONIS | Accountant, hanya bila implementasi menyentuh uang/kompensasi cuti hangus |
+| BR-LVB-10 | SESUDAH PR #800 merged: anchor eligibility menjadi `leaveEligibilityStartDate` (default `joinDate`; eks-magang dari mulai kontrak), karyawan berstatus INTERN tidak berhak sama sekali, perbandingan per tanggal kalender WIB; SEBELUM merged perilaku BR-LVB-02 (joinDate + jam) berlaku. Spec/laporan WAJIB menyebut basis mana yang sedang live dan tidak mencampur keduanya | TERVERIFIKASI-KODE (delta PR terbuka) | PR #800 head `9842cde5` OPEN belum merged (dicek 2026-10-25 08:05 WIB); diff `leave-quota.service.ts` di branch `hermes/business-muse-hr-rules` |
+| BR-LVB-11 | Ekspor CSV (bila dibuka) memuat kolom yang sama persis dengan tabel terlihat pemanggil (sesudah scope + filter), tanpa kolom tambahan apa pun; nama berkas memuat tahun laporan | USULAN | pola `statement-csv.ts`, `pph21-export.ts` |
+| BR-LVB-12 | Komponen `pending` ditampilkan TERPISAH dari `used` ter-approve (used tetap definisi BR-LVB-03 untuk penjaga kuota; pemisahan hanya lapis tampil/laporan, tidak mengubah penjaga) | USULAN | gap §2 |
+| BR-LVB-13 | Karyawan nonaktif tetap tampil untuk tahun kalender saat ia masih aktif sebagian (ditandai nonaktif), supaya saldo tahun berjalan bisa diserahterimakan; tahun penuh sesudah berhenti tidak menampilkan baris | USULAN | gap §2 (`isActive: true` `hrm.actions.ts:3308`) |
+| BR-LVB-14 | Visibilitas kolom identitas (nama/departemen) mengikuti scope efektif (`all`/`department` = tampil, `self` = boleh disembunyikan), bukan izin edit/delete | USULAN | gap §2 (`page.tsx:95-99`) |
+
+### 4. Role/permission matrix (izin nyata katalog)
+
+| Aksi | HR/admin/ga/finance (scope all) | kepala_bengkel (scope department) | Karyawan (scope self) | Tanpa `view_leave_requests` |
+|---|---|---|---|---|
+| Lihat halaman saldo tahun berjalan/lampau | Ya — semua karyawan aktif | Ya — departemen sendiri (null dept → diri sendiri) | Ya — hanya baris diri sendiri | Ditolak `requirePermission` |
+| Ganti tahun (chip/segmen `tahun/<YYYY>`) | Ya | Ya (isi tetap scope) | Ya (isi tetap scope) | Ditolak |
+| Cari nama/no. karyawan | Ya | Dalam scope saja (server-side) | Dalam scope saja | Ditolak |
+| (USULAN) Saring departemen | Ya — semua departemen | Terkunci ke departemen sendiri (pilihan lain diabaikan/ditolak server) | Tidak ditawarkan | Ditolak |
+| (USULAN) Ekspor CSV | Ya — isi = tabel terlihatnya | Ya — isi = scope-nya | Ya — baris dirinya | Ditolak |
+| Mengubah cuti dari laporan | Tidak ada — laporan baca-saja; keputusan tetap di `/sdm/cuti` (`approve_leave_requests`) | Sama | Sama | — |
+
+### 5. Status-transition matrix
+
+Laporan TIDAK membuat status baru dan TIDAK memicu transisi. Status `LeaveRequest` existing yang dibaca (string, default `pending`, `prisma/schema.prisma:3321`):
+
+| Status awal | Pemicu (di luar laporan) | Status akhir | Yang dihitung laporan |
+|---|---|---|---|
+| — (belum ada) | `createLeaveRequest` (`hrm.actions.ts:849`) | `pending` | Ya — masuk `used` (BR-LVB-03) |
+| `pending` | persetujuan approver/`approve_leave_requests` | `approved` | Ya — masuk `used` |
+| `pending` | penolakan | `rejected` | Tidak dihitung |
+| `pending`/`approved` | edit pengajuan (penjaga pending-only pola existing) | tetap/`pending` | Dihitung ulang per tanggal baru, `excludeLeaveId` mencegah hitung diri sendiri |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate Online | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Master karyawan + departemen | Ada (Karyawan, 5 tutorial) https://help.accurate.id/product/karyawan | Ada (Database Karyawan) https://zahir.co.id/hr/ | Ada (TERVERIFIKASI-KODE §2) |
+| Laporan saldo cuti per karyawan per tahun | Tidak ditemukan halaman help khusus saldo cuti (akses 2026-10-25; hanya Karyawan + Gaji dan Tunjangan) https://help.accurate.id/product/perusahaan/ | Laporan Cuti tercantum sebagai fitur https://zahir.co.id/hr/ ; kebijakan+pengajuan+persetujuan cuti di modul Leave https://zahirerp.com/id/all-features-of-zahir-products/ | SUDAH ADA `/sdm/cuti/saldo` (TERVERIFIKASI-KODE §2) |
+| Pemisahan terpakai approved vs pending | Belum terverifikasi | Belum terverifikasi | Belum ada (BR-LVB-12 USULAN) |
+| Ekspor laporan cuti | Belum terverifikasi | Belum terverifikasi | Belum ada untuk saldo cuti (BR-LVB-11 USULAN); pola CSV laporan lain ada |
+| Persetujuan cuti berjenjang | Approval umum https://help.accurate.id/product/approval | Approval Management multi-layer cuti/lembur https://zahirerp.com/id/all-features-of-zahir-products/ | Ada jalur cuti existing + ApprovalWorkflow generik (di luar spec ini) |
+
+Baris "belum terverifikasi" ditulis apa adanya — tidak dikarang dari ingatan.
+
+### 7. Acceptance criteria + edge cases
+
+AC-LVB-B (Backend, bila gap dibuka Lead):
+- AC-LVB-B1: filter departemen tidak pernah memperluas scope — scope `self`/`department` dengan parameter departemen asing menghasilkan isi scope sendiri (atau ditolak berpesan), dibuktikan tes meniru `hrm.actions.test.ts:1166`.
+- AC-LVB-B2: komponen pending terpisah menjumlah kembali ke definisi lama: `usedApproved + usedPending = used` BR-LVB-03 untuk fixture tahun sama; penjaga kuota create/edit cuti tidak berubah perilaku.
+- AC-LVB-B3: karyawan nonaktif tampil hanya untuk tahun yang memotong masa aktifnya, tertanda; tidak tampil untuk tahun penuh sesudah berhenti.
+- AC-LVB-B4: ekspor CSV berisi persis baris+kolom yang terlihat pemanggil sesudah scope/filter; tanpa izin `view_leave_requests` ditolak; nama berkas memuat tahun.
+- AC-LVB-B5: perilaku sebelum/sesudah PR #800 dibedakan eksplisit di tes eligibility (BR-LVB-10) — tidak ada tes yang mengasumsikan anchor baru selagi #800 belum merged.
+
+AC-LVB-F (Frontend):
+- AC-LVB-F1: pemilih departemen hanya tampil untuk scope `all`; untuk scope lain tidak menawarkan pilihan yang akan diabaikan server.
+- AC-LVB-F2: kolom pending tampil terpisah dengan label server; UI nol menghitung ulang hari kerja/kuota sendiri.
+- AC-LVB-F3: visibilitas kolom identitas mengikuti scope efektif dari server (BR-LVB-14), bukan daftar izin edit/delete di halaman.
+
+Edge cases: EC-1 karyawan <1 tahun (entitled 0, lencana "Belum 1 tahun", tidak masuk total jatah). EC-2 cuti lintas tahun (ter-clip per tahun, BR-LVB-06 — Des 2026–Jan 2027 dihitung dua tahun terpisah). EC-3 dua pengajuan pending bersamaan (keduanya mengunci jatah; penolakan satu membebaskan sisa). EC-4 karyawan tanpa jadwal kerja (fallback Senin–Jumat, bukan nol hari). EC-5 karyawan departemen null (baris tampil "−"; scope department kepala tanpa departemen jatuh ke diri sendiri). EC-6 karyawan berhenti tengah tahun (BR-LVB-13). EC-7 tahun lampau sebelum karyawan bergabung (entitled 0 tahun itu, bukan 12 — tenure dinilai per tahun laporan). EC-8 tahun di luar rentang sah (aksi existing menolak tahun bukan 1900–2200).
+
+### 8. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-013-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni saldo cuti (approved/pending terpisah, filter departemen scope-aman, baris nonaktif tertanda) + loader tipis; ekspor CSV pola `statement-csv.ts` | Backend | Lead buka Q-LVB-1/2; perhatikan basis PR #800 (BR-LVB-10) | Klaim file aksi/laporan di board sebelum edit |
+| (turunan) pemilih departemen + kolom pending + visibilitas kolom berbasis scope di `/sdm/cuti/saldo` | Frontend | kontrak Backend stabil | grep e2e `saldo` dulu (saat spec ditulis: tidak ada e2e khusus halaman ini) |
+| (turunan) falsifikasi AC-LVB-B1..B5 + AC-LVB-F1..F3 | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-LVB → Backend → Frontend → QA. Effort inti S–M. Risiko: pemisahan pending disalahbaca sebagai mengubah penjaga kuota — mitigasi BR-LVB-12 (tampil saja) + AC-LVB-B2.
+
+### 9. Pertanyaan putusan (gerbang)
+
+- Q-LVB-1 (Lead): buka gap tahap 1 (filter departemen + CSV + pending terpisah) sebagai perbaikan laporan existing, atau status quo diterima dan spec ditutup sebagai audit saja?
+- Q-LVB-2 (Lead): karyawan nonaktif di tahun berjalan ditampilkan tertanda (BR-LVB-13) atau tetap disembunyikan (keputusan privasi/kerapian roster)?
+- Q-LVB-3 (Backend): builder murni `src/lib/reports/` baru vs tetap agregasi di aksi — mengikuti konvensi laporan repo atau pengecualian tercatat?
+- Accountant: TIDAK diminta tahap ini — tidak ada uang/pajak/jurnal; dipanggil hanya bila kompensasi cuti hangus diusulkan (BR-LVB-09).
+
+### Yang TIDAK diusulkan run ini
+- Laporan saldo cuti kedua / read-model paralel: fitur inti sudah live — duplikasi terlarang.
+- Carry-over saldo ke tahun berikut: bertentangan BR-LVB-04 terverifikasi; perubahan = keputusan pemilik proses + vonis bila menyentuh kompensasi.
+- Mengubah definisi `used` penjaga kuota (pending tetap mengunci, BR-LVB-03).
+- Notifikasi "sisa cuti menipis" proaktif: belum ada bukti kebutuhan; halaman existing cukup sampai diminta eksplisit (YAGNI tercatat).
+- Menampilkan data gaji/pinjaman di laporan cuti: di luar scope dan dilarang untuk keluaran HR non-payroll.
+
+F-2026-10-25-013-S — Audit kesesuaian laporan saldo cuti tahunan + gap turunan. Status: SPEC SELESAI run ini; fitur inti SUDAH live di main (premis "laporan absen" pada kartu gugur oleh verifikasi); implementasi gap menunggu putusan Lead Q-LVB-1/2 + fisik Backend Q-LVB-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/ekspor), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap ini (BR-LVB-09 hanya bila menyentuh kompensasi).
+
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-016-S: rekap lembur per karyawan per periode (read-model baca-saja di atas OvertimeRequest existing)
 
 > **Slot**: F-2026-10-25-016-S. Diperiksa bentrok 2026-10-25 08:12 WIB vs `origin/main` (`a5ad6890`): grep `F-2026-10-25-016` di backlog+board = 0 dan pencarian PR GitHub = kosong; 014/015 terpakai akhiran -V (vonis Accountant PR #798/#802). `-016-S` bebas. Diverifikasi sebelum tulis, bukan slot tetap.
