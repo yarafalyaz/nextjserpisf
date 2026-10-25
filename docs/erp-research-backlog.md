@@ -31784,3 +31784,45 @@ Urutan: Lead putus Q-ATT → Backend → Frontend → QA. Effort inti S–M. Ris
 F-2026-10-25-044-S — Rekap kehadiran per karyawan per periode. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-ATT-1/2/3 + fisik Backend Q-ATT-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder/loader), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk spec ini (hanya BR-ATT-09 bersyarat).
 
 ---
+
+---
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-045-V: batas BR-ATT-09 — definisi hadir rekap 044-S vs service payroll; rekap bukan dasar potongan kedua
+
+> **Slot**: F-2026-10-25-045-V. Diperiksa bentrok 2026-10-25 21:33 WIB vs `origin/main` (`fe281d46`): grep `F-2026-10-25-045` di backlog+board origin/main = 0; PR terbuka memuat `045` = 0. ID bebas. Dokumen vonis saja; tanpa kode/schema/migrasi. Kartu: t_0efaa897. Sumber terikat: spec Business F-2026-10-25-044-S (PR #906 head `cee766ba`, §2/§3 BR-ATT-01..10, §7 AC-ATT, §9) + kode live `attendance-summary.service.ts`. Vonis ini menjawab HANYA BR-ATT-09 (batas uang/pajak). Q-ATT-1/2/3 milik Lead, Q-ATT-4 milik Backend — tidak diputus di sini.
+
+### 0. Fakta terverifikasi kode (origin/main fe281d46, 2026-10-25 21:33 WIB) — TERVERIFIKASI-KODE
+
+- `calculateAttendanceSummary` (`src/lib/services/attendance-summary.service.ts:17-158`): hadir = baris `Attendance` dengan `checkIn != null` pada tanggal itu (`:105`), TANPA membaca kolom `status`. Hari kerja tanpa hadir dan tanpa `LeaveRequest` approved = `absentDays`; `dailyRate = baseSalary / totalWorkingDays`; `absentDeduction = round(absentDays × dailyRate)` (`:154-157`). Konsumen HANYA payroll (`hrm.actions.ts:1324,2676,2879`); `lateDeduction = Σ lateMinutes × penaltyPerMinute` masuk slip (`hrm.actions.ts:1379-1401`).
+- Akibat faktual: baris status `sick`/`leave`/`half_day` yang punya `checkIn` terhitung HADIR oleh service payroll, dan hari tanpa rekod terhitung `absentDays` (berpotensi potongan). Itu perilaku berjalan yang menentukan angka slip terbit.
+- Spec 044-S BR-ATT-02 membekukan definisi ember rekap yang BERBEDA: sakit = status `sick` (walau ada checkIn), tanpa rekod dipisah dari alpa tercatat (BR-ATT-03), setengah hari ember sendiri. Spec menyatakan selisih ini eksplisit (§2 butir terakhir, AC-ATT-B3) dan melarang nominal potongan tampil (BR-ATT-05).
+
+### Putusan 1 — Rekap BOLEH beda definisi dari service payroll; service payroll TIDAK diubah oleh fitur rekap
+
+**DIPUTUS**: builder rekap 044-S memakai definisi ember BR-ATT-02/03 apa adanya (status dibaca; tanpa rekod dipisah) TANPA mengubah `calculateAttendanceSummary`, tanpa menambah parameter definisi ke service itu, dan tanpa menyelaraskan angka rekap ke angka payroll. Dua definisi hidup berdampingan karena dua tujuan berbeda yang sah: payroll menghitung potongan atas fakta check-in; rekap menampilkan fakta operasional per klasifikasi hari. Menyeragamkan keduanya diam-diam — ke arah mana pun — DILARANG: menyelaraskan rekap ke payroll menghapus guna operasionalnya (sakit ber-checkIn tampil hadir); menyelaraskan payroll ke rekap mengubah angka slip (lihat Putusan 3).
+
+### Putusan 2 — Rekap BUKAN dasar potongan; larangan jalur uang kedua (mengikat)
+
+**DIPUTUS**: keluaran rekap (semua ember, Σ lateMinutes, Σ overtimeMinutes) DILARANG dipakai sebagai masukan hitung potongan, tunjangan, denda, atau komponen payroll apa pun — oleh builder, loader, UI, ekspor CSV, maupun proses manual yang difasilitasi sistem. Payroll tetap SATU-SATUNYA jalur angka potongan, lewat `calculateAttendanceSummary` existing. Builder/loader rekap WAJIB nol akses ke `baseSalary`, `dailyRate`, `absentDeduction`, `lateDeduction`, `penaltyPerMinute` (BR-ATT-05/06 disahkan sebagai syarat vonis, bukan sekadar usul spec). Satu-satunya pengecualian jalur = perubahan service payroll lewat Putusan 3.
+
+### Putusan 3 — Mengubah definisi service payroll = vonis baru; syaratnya mengikat sejak sekarang
+
+**DIPUTUS**: perubahan apa pun pada definisi hadir/absent/`absentDays`/`dailyRate` di `calculateAttendanceSummary` (mis. membaca kolom `status`, memisahkan tanpa-rekod dari absent) adalah perubahan angka potongan slip = wilayah vonis Accountant, DILARANG digabung ke kartu fisik rekap 044-S. Bila kelak diajukan, vonis lanjutannya WAJIB memuat sekaligus: (a) perlakuan slip yang SUDAH terbit (tidak dihitung ulang; koreksi hanya lewat jalur koreksi slip existing/rapel periode berikut sesuai vonis koreksi absensi F-2026-10-25-010-S), (b) tanggal efektif + perlakuan periode berjalan yang separuh lewat, (c) rekonsiliasi selisih definisi lama vs baru per karyawan untuk satu periode contoh, (d) falsifikasi bahwa rekap tidak berubah definisi karenanya. Tanpa paket itu, perubahan service ditolak di review Accountant.
+
+### Putusan 4 — Label selisih WAJIB tampil; selisih adalah temuan, bukan kesalahan
+
+**DIPUTUS**: halaman/ekspor rekap WAJIB membawa penanda verbatim dari payload server (bukan teks karangan UI): (1) ember mengikuti klasifikasi status rekod, (2) angka potongan payroll memakai definisi check-in service payroll sehingga jumlah hadir/alpa rekap DAPAT berbeda dari dasar potongan slip untuk orang+periode yang sama, (3) "tanpa rekod ≠ alpa". Selisih rekap-vs-slip yang ditemukan pengguna DILARANG "diperbaiki" dengan mengubah salah satu sisi diam-diam; ia temuan rekonsiliasi yang dijelaskan label ini. Wording final label = Frontend dalam batas tiga isi wajib di atas; Backend menyediakan penandanya di payload (pola notice verbatim server existing).
+
+### Draf acceptance untuk QA (aktif sesudah Backend/Frontend membangun rekap)
+
+- AC-ATT-V1: baris status `sick` + checkIn terisi → rekap ember sakit; slip payroll periode sama tetap menghitungnya hadir (definisi existing). Salah satu sisi berubah = MERAH.
+- AC-ATT-V2: hari kerja tanpa rekod → rekap "tanpa rekod"; payload rekap tidak memuat baseSalary/dailyRate/nominal potongan apa pun (grep payload). Ada nominal = MERAH.
+- AC-ATT-V3: builder/loader rekap mengimpor/memanggil `calculateAttendanceSummary` atau membaca kolom gaji untuk keluaran rekap = MERAH (jalur uang kedua).
+- AC-ATT-V4: label tiga isi Putusan 4 tampil dari payload server; UI menghitung/menjumlah ember sendiri di luar total terkirim = MERAH.
+- AC-ATT-V5: diff fisik rekap menyentuh `attendance-summary.service.ts` atau konsumen payroll-nya = MERAH (Putusan 1/3).
+
+### Risiko + keputusan manusia
+
+- Risiko utama: pembaca menyimpulkan potongan dari ember rekap ("alpa tercatat 2 hari → potong 2 hari") — dimitigasi Putusan 2/4; risiko sebaliknya (menyelaraskan payroll diam-diam) ditutup Putusan 3. Tidak ada angka/tarif/akun baru; tidak ada klaim regulasi baru — potongan alpa/terlambat tetap mengikuti aturan payroll existing dan perjanjian/peraturan perusahaan yang berlaku, di luar vonis ini.
+
+F-2026-10-25-045-V — Batas BR-ATT-09 rekap kehadiran vs payroll. Status: VONIS TERBIT run ini; BR-ATT-09 TERTUTUP untuk tahap rekap (rekap beda definisi sah, service payroll beku, rekap dilarang jadi dasar potongan, label selisih wajib). Pemilik berikutnya: Lead (Q-ATT-1/2/3 + buka kartu Backend/Frontend/QA dengan parent spec 044-S + vonis ini), Backend (Q-ATT-4), QA (AC-ATT-V1..V5 + AC-ATT-B/F spec). Butuh vonis accountant lanjutan: hanya bila definisi service payroll diajukan berubah (syarat paket Putusan 3).
