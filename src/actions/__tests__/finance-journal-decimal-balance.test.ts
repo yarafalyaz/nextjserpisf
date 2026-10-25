@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   financeAccountingHookFactory,
   financeActivityLogFactory,
-  financeApprovalFactory,
   financeExpenseHookFactory,
   financeJournalPrismaFactory,
   financeNextCacheFactory,
@@ -44,11 +43,19 @@ let entryDeleteManyMock: any
 let attachmentUpdateManyMock: any
 let transactionMock: any
 
+const approvalMocks = vi.hoisted(() => ({
+  assertApprovedMock: vi.fn(async () => undefined),
+  requestApprovalMock: vi.fn(async () => false),
+}))
+
 vi.mock("@/lib/auth/permissions", () => financePermissionsFactory(holder))
 vi.mock("@/lib/db/prisma", () => financeJournalPrismaFactory(holder))
 vi.mock("@/lib/services/period-lock.service", () => financePeriodLockFactory(holder))
 vi.mock("@/lib/services/activity-log.service", () => financeActivityLogFactory(holder))
-vi.mock("@/lib/services/approval-workflow.service", () => financeApprovalFactory())
+vi.mock("@/lib/services/approval-workflow.service", () => ({
+  assertApproved: (...a: unknown[]) => approvalMocks.assertApprovedMock(...(a as [])),
+  requestApprovalIfConfigured: (...a: unknown[]) => approvalMocks.requestApprovalMock(...(a as [])),
+}))
 vi.mock("@/lib/hooks/accounting.hook", () => financeAccountingHookFactory())
 vi.mock("@/lib/hooks/expense.hook", () => financeExpenseHookFactory())
 vi.mock("@/lib/utils/document-number", () => ({
@@ -132,6 +139,40 @@ describe("journal balance check honors Decimal(15,2) precision", () => {
     expect(transactionMock).not.toHaveBeenCalled()
   })
 
+  it("K4-S1: postJournal menolak jurnal tak seimbang tepat 1 sen (100.00 vs 99.99)", async () => {
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 7, status: "DRAFT", transactionDate: new Date("2026-06-01"),
+      entries: [
+        { debit: 100.0, credit: 0 },
+        { debit: 0, credit: 99.99 },
+      ],
+    })
+
+    const result = await postJournal(7)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("tidak balance")
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("K4-S1: postJournal ditolak saat workflow Journal aktif tapi approval belum approved", async () => {
+    approvalMocks.assertApprovedMock.mockRejectedValueOnce(
+      new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan."),
+    )
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 7, status: "DRAFT", transactionDate: new Date("2026-06-01"),
+      entries: [
+        { debit: 100, credit: 0 },
+        { debit: 0, credit: 100 },
+      ],
+    })
+
+    const result = await postJournal(7)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("menunggu persetujuan")
+    expect(approvalMocks.assertApprovedMock).toHaveBeenCalledWith("Journal", 7)
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
   it("postJournal also rejects a draft whose 2-decimal entries are unbalanced", async () => {
     // Imagine a draft was somehow saved with unbalanced decimals (e.g. via a
     // previous createJournal bug). postJournal must NOT promote it to POSTED
@@ -143,6 +184,25 @@ describe("journal balance check honors Decimal(15,2) precision", () => {
         { debit: 0.40, credit: 0 },
         { debit: 0, credit: 0.20 },
         { debit: 0, credit: 0.20 },
+      ],
+    })
+
+    const result = await postJournal(7)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("tidak balance")
+    expect(journalUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("K4-S1 (F-2026-10-25-014-V): postJournal menolak selisih tepat 1 sen (toleransi nol)", async () => {
+    // Debit 100.00 vs kredit 99.99 — selisih 0,01 rupiah. Toleransi apa
+    // pun >= 0,01 akan meloloskan jurnal ini ke GL; vonis Accountant
+    // mewajibkan toleransi nol. Cabut/longgarkan compareAmounts(..., 0)
+    // di postJournal -> tes ini MERAH.
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 7, status: "DRAFT", transactionDate: new Date("2026-06-01"),
+      entries: [
+        { debit: 100, credit: 0 },
+        { debit: 0, credit: 99.99 },
       ],
     })
 
