@@ -1,10 +1,14 @@
 /**
- * Builder murni antrean follow-up lead terjadwal (F-2026-10-21-037).
+ * Builder murni antrean follow-up lead terjadwal (F-2026-10-21-037;
+ * F-2026-10-25-047-S Q-LFU-1 terputus Lead 2026-10-26 00:40 WIB).
  *
  * LeadActivity.scheduledAt tersimpan (crm.actions.ts) tapi tidak ada antrean
  * jatuh-tempo: stale-leads.ts hanya mengukur aktivitas terakhir. Builder ini
  * hanya membaca kolom existing Lead + LeadActivity — tanpa migrasi, tanpa
- * mutasi, tanpa filter status (status hanya ditampilkan di baris).
+ * mutasi. Q-LFU-1: lead berstatus persis `lost` TIDAK masuk antrean; lead
+ * `won` dan lead ber-`convertedAt` berstatus bukan `lost` TETAP tampil;
+ * `convertedAt` sendiri tidak jadi penyaring (lihat LeadFollowupInput).
+ * Q-LFU-2 ditunda: tanpa filter `assignedTo` — antrean global `view_leads`.
  *
  * Per lead dipilih jadwal terawal yang sudah jatuh tempo: scheduledAt tidak
  * kosong, completedAt kosong, dan hari kalender WIB scheduledAt <= hari ini.
@@ -24,6 +28,10 @@ export interface LeadFollowupInput {
   leadNumber: string | null
   name: string
   status: string
+  // Opsional: putusan Q-LFU-1 menegaskan convertedAt TIDAK jadi penyaring
+  // sendiri — hanya dibaca loader untuk tes/jejak kontrak; builder sengaja
+  // mengabaikannya.
+  convertedAt?: Date | null
   activities: readonly LeadFollowupActivityInput[]
 }
 
@@ -78,6 +86,8 @@ export function buildLeadFollowups(
   const today = calendarDay(now)
   const rows: LeadFollowupRow[] = []
   for (const input of inputs) {
+    // Q-LFU-1: `lost` terputus dari antrean; status lain (termasuk `won`) tetap.
+    if (input.status === "lost") continue
     const due = earliestDueActivity(input, today)
     if (!due?.scheduledAt) continue
     rows.push({
