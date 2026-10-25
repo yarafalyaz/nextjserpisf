@@ -31299,3 +31299,111 @@ Selisih jujur: yang tertinggal dari benchmark BUKAN antreannya (sudah ada), mela
 - Menggabung kartu dengan stale-leads atau memindahkan ambang 7 hari ke antrean jadwal (BR-LFU-03/10).
 
 F-2026-10-25-047-S — Audit keselarasan antrean follow-up lead terjadwal lewat. Status: SPEC/AUDIT SELESAI run ini; F-2026-10-21-037 dinyatakan TUNTAS terverifikasi live (bukan PARSIAL); implementasi turunan menunggu putusan Lead Q-LFU-1/Q-LFU-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder bila Q diputus berubah), QA (falsifikasi AC-LFU). Butuh putusan accountant: TIDAK.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-047-S: titik pesan-ulang (reorder point) + saran qty pesan per (barang, gudang) di atas stok minimum efektif existing (sisa induk F-2026-10-21-013)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-013 (c) P1 — stok minimum per gudang SUDAH live (ItemWarehouseSetting + minimum efektif, PR #694); sisa induk yang belum ada = lead time + titik pesan-ulang + saran qty. ID F-2026-10-25-047-S bebas terverifikasi run ini: grep backlog + board origin/main 702853a1 = 0, grep semua branch hermes/* = 0 (25 Okt 2026 22:12 WIB). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Catatan pivot kartu t_6e33f048: target awal kartu (follow-up lead F-037, termin F-106, histori endDate F-035, status part F-105, reservasi F-012, transfer parsial F-015) semua terbukti SUDAH LIVE di origin/main sesi ini (bukti di komentar kartu) — spec ini mengambil satu-satunya sisa terverifikasi ABSEN di keluarga itu.
+
+Benchmark resmi (akses 25 Okt 2026):
+- Accurate Barang Stok Minimum: https://help.accurate.id/product/Barang-stok-minimum/ — daftar di bawah minimum diteruskan ke Permintaan Barang / Pesanan Pembelian; qty saran = batas minimum atau selisih stok tersedia vs batas minimum; Minimum Beli per barang mengisi qty PO bila diisi. Accurate TIDAK menetapkan lead time per gudang pada halaman ini — ditulis apa adanya, bukan diklaim.
+- Accurate Permintaan Barang dari stok minimum: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/permintaan-stok-minimum/
+- Accurate Pesanan Pembelian dari stok minimum: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/stok-minimum-po/
+- Zahir: halaman help resmi yang menetapkan lead time / titik pesan-ulang per gudang belum ditemukan pada akses run ini — ditulis "belum terverifikasi", bukan diklaim.
+
+### Inventarisasi terverifikasi (25 Okt 2026, basis origin/main 702853a1)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `ItemWarehouseSetting` (prisma/schema.prisma:811-827): hanya `minStock` per (itemId, warehouseId), unik per pasangan. Tidak ada safetyStock / leadTimeDays / reorderPoint.
+- Minimum efektif: `min-stock-effective.ts` (override pasangan, selain itu warisi Item.minStock global, sumber tertanda "override"|"global"); penilaian per gudang `min-stock-warehouse-alert.ts:25-45` (pasangan tanpa lapisan tidak dinilai); laporan `buildMinStockByWarehouse` (min-stock-data.ts:118) + halaman laporan/stok-minimum digerbang `view_reports` (page.tsx:28).
+- Saran qty existing = kekurangan saja: minStockRequest prefill `min-stock-request.ts` (kekurangan minimum − stok, staf boleh sunting bebas di form Permintaan Pembelian).
+- PO terbuka terbaca pola existing: `OPEN_PURCHASE_ORDER_STATUSES = ["ordered","partial_received"]`, sisa per baris = qty − receivedQty clamp >= 0 (bom-revision-impact.ts:12-16; PurchaseOrderItem schema:2043-2057). Builder stok minimum existing TIDAK mengurangi PO masuk ini (grep incoming di min-stock*.ts = 0).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini):
+- `leadTime` / `leadTimeDays` / `reorderPoint` / `safetyStock` di prisma/schema.prisma + src/ = 0 hit. VendorItemPrice (schema:580-600) tanpa leadTimeDays.
+- Tidak ada konsumsi rata-rata harian / laju pakai per gudang yang dipakai ambang pesan-ulang; tidak ada builder titik pesan-ulang.
+
+### 1. Workflow specification (USULAN di atas mesin TERVERIFIKASI-KODE)
+
+Aktor: Admin gudang/pembelian (pengisi lead time), Staf pembelian (pemakai saran), Sistem (builder baca-saja).
+Dokumen masuk: ItemWarehouseSetting existing + leadTimeDays usulan per (barang, gudang) ATAU per (vendor, barang) — bentuk penampung = Q-ROP-2 Backend; InventoryLayer sisa per gudang; PO terbuka existing.
+Dokumen keluar: baris penilaian per (barang, gudang) berstatus di bawah titik pesan-ulang + saran qty pesan; diteruskan ke prefill Permintaan Pembelian existing (min-stock-request.ts) — BUKAN dokumen PO/jurnal baru.
+Alur: (1) minimum efektif existing menentukan lantai aman; (2) titik pesan-ulang turunan = minimum efektif + kebutuhan selama lead time (rumus BR-ROP-02); (3) stok tersedia per gudang + PO masuk dibandingkan ke titik itu; (4) saran qty = kekurangan ke target pengisian (BR-ROP-04); (5) staf membuka Permintaan Pembelian ter-prefill dan menyunting bebas (perilaku existing dipertahankan).
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key | Pemilik existing |
+|---|---|---|
+| Melihat laporan stok minimum / titik pesan-ulang | `view_reports` | TERVERIFIKASI-KODE laporan/stok-minimum page.tsx:28 |
+| Mengubah minimum per gudang (ItemWarehouseSetting) | key tulis pengaturan barang existing — Backend sebut key persis saat fisik | USULAN verifikasi Backend |
+| Mengisi leadTimeDays | key sama dengan pengisi penampungnya (Q-ROP-2) | BUTUH-VONIS Lead (Q-ROP-3) |
+| Membuat Permintaan Pembelian dari saran | key existing form permintaan pembelian | TERVERIFIKASI-KODE (prefill min-stock-request.ts) |
+
+Tidak ada key baru diusulkan tahap ini; key baru = keputusan Lead, bukan karangan spec.
+
+### 3. Status-transition matrix (turunan baca-saja, tanpa mutasi dokumen)
+
+| Status baris | Pemicu (turunan server) | Penjaga |
+|---|---|---|
+| tidak_dinilai | pasangan tanpa lapisan gudang, atau lead time kosong, atau minimum efektif 0 | tampil di ember terpisah, tidak masuk saran (BR-ROP-05) |
+| aman | tersedia + PO masuk > titik pesan-ulang | — |
+| pesan_sekarang | tersedia + PO masuk <= titik pesan-ulang | saran qty terbit (BR-ROP-04) |
+| kritis | tersedia <= minimum efektif (lantai existing) | tetap tertanda kritis walau PO masuk besar — dua label tidak saling menutupi (BR-ROP-06) |
+
+### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-ROP-01 | Titik pesan-ulang dihitung per (barang, gudang), memakai minimum EFEKTIF existing (override pasangan > global). Dilarang ambang global kedua. | USULAN di atas TERVERIFIKASI-KODE min-stock-effective.ts |
+| BR-ROP-02 | Rumus: titik = minimum efektif + ceil(laju pakai harian × leadTimeDays). Laju pakai = pemakaian MaterialIssue completed per gudang selama jendela hari berjalan. Jendela + sumber laju = Q-ROP-1 (Business usul 90 hari; angka final PUTUSAN Lead). Tanpa laju terbukti (barang baru) → titik = minimum efektif, tertanda "tanpa laju". | USULAN; angka BUTUH-VONIS Lead |
+| BR-ROP-03 | leadTimeDays bilangan bulat >= 0 hari kalender. Kosong = tidak dinilai untuk reorder (bukan dianggap 0 diam-diam). Sumber isi: pengalaman vendor nyata per pasangan; sistem tidak menebak dari tanggal PO lama pada tahap ini. | USULAN |
+| BR-ROP-04 | Saran qty = max(0, target isi − (tersedia + PO masuk)); target isi = titik pesan-ulang + minimum efektif? — DITOLAK sebagai karangan: target isi tahap ini = kekurangan ke titik pesan-ulang saja (selisih, pola Accurate selisih vs minimum). Saran selalu boleh disunting staf di form (existing). | USULAN (pola BENCHMARK Accurate selisih) |
+| BR-ROP-05 | Ember "tidak_dinilai" wajib tampil terhitung (pasangan tanpa lead time / tanpa lapisan / minimum 0) — daftar kosong tidak boleh terbaca "semua aman" (pola jujur min-stock.ts existing). | USULAN pola TERVERIFIKASI-KODE |
+| BR-ROP-06 | Status kritis (lantai minimum) dan pesan_sekarang (titik) adalah dua penilaian terpisah; PO masuk mengurangi urgensi pesan, tidak menghapus label kritis stok fisik. | USULAN |
+| BR-ROP-07 | Satuan tidak dijumlahkan lintas UOM (pola min-stock.ts); saran per baris barang-gudang-UOM-nya sendiri. | TERVERIFIKASI-KODE pola existing |
+| BR-ROP-08 | Builder murni baca-saja: tidak menulis setting, tidak membuat PO/permintaan, tidak menyentuh jurnal. Pembuatan dokumen tetap aksi staf existing. | USULAN |
+
+### 5. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan 047-S |
+|---|---|---|---|---|
+| Minimum per barang | ada (help di atas) | belum terverifikasi run ini | ada global + per gudang (PR #694) | dipertahankan |
+| Saran qty dari minimum | selisih / batas / Minimum Beli | belum terverifikasi | kekurangan saja (prefill) | selisih ke titik pesan-ulang |
+| Lead time per gudang/vendor | tidak ditetapkan halaman di atas | belum terverifikasi | ABSEN (grep 0) | penampung + rumus BR-ROP-02 |
+| Kurangi PO masuk dari saran | tidak dinyatakan halaman di atas | belum terverifikasi | ABSEN di builder minimum | BR-ROP-04 |
+
+### 6. Acceptance criteria + edge cases
+
+- AC-ROP-B1: lead time kosong → baris masuk tidak_dinilai terhitung; tampil sebagai saran = MERAH.
+- AC-ROP-B2: tersedia + PO masuk tepat = titik → pesan_sekarang dengan saran 0 tertanda tertutup PO? Tidak: saran qty 0 = baris tidak diteruskan ke prefill (prefill existing membuang qty <= 0). Baris hilang tanpa ember = MERAH.
+- AC-ROP-B3: mengubah minimum efektif (override vs global) mengubah titik di render berikut tanpa edit lead time. Tidak berubah = MERAH (sumber ganda).
+- AC-ROP-B4: stok kritis + PO masuk besar → label kritis tetap tampil. Hilang = MERAH.
+- AC-ROP-B5: barang jasa / nonaktif tidak dinilai (pola loader existing isService/isActive). Masuk = MERAH.
+- Edge: laju pakai 0 dengan lead time terisi → titik = minimum, tertanda "tanpa laju". Lead time negatif ditolak di penjaga penampung (fisik Backend). Gudang tanpa lapisan: tidak dinilai, bukan 0. Retur pembelian tidak menambah tersedia di builder ini (sisa InventoryLayer = sumber tunggal).
+
+### 7. Backlog implementasi (turunan F-2026-10-25-047-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-047-S | Spec kontrak ini (dokumen) | Business | — |
+| (turunan) putusan jendela laju + sumber laju + key tulis lead time | Lead | Q-ROP-1/Q-ROP-3 | — |
+| (turunan) fisik penampung leadTimeDays + builder titik/saran + loader | Backend | putusan Lead; klaim file di board dulu (schema wilayah Backend) | — |
+| (turunan) tampil kolom titik/saran + ember tidak_dinilai di laporan stok minimum | Frontend | kontrak Backend; grep e2e laporan stok-minimum dulu | — |
+| (turunan) falsifikasi AC-ROP-B1..B5 | QA | head Backend/Frontend persis | — |
+
+### 8. Pertanyaan putusan
+
+- Q-ROP-1 (Lead): jendela laju pakai (usul Business 90 hari kalender WIB) + sumber laju sah (MaterialIssue completed per gudang saja, atau termasuk issue proyek?). Angka tidak diputus Business sendiri sebagai fakta.
+- Q-ROP-2 (Backend sesudah Q-ROP-1): penampung leadTimeDays di ItemWarehouseSetting (per gudang) vs VendorItemPrice.leadTimeDays (per vendor, pola induk awal) vs keduanya bertingkat (vendor default, gudang override)?
+- Q-ROP-3 (Lead): key tulis pengisi lead time — reuse key pengaturan barang existing atau key khusus pembelian?
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-047-S)
+
+- Auto-PO / auto-permintaan tanpa staf (dokumen tetap dibuat manusia; saran hanya prefill existing).
+- safetyStock sebagai kolom/angka terpisah: minimum efektif existing sudah berperan lantai aman; kolom kedua = ambang ganda membingungkan sampai ada bukti kebutuhan.
+- Peramalan musiman / EOQ: tidak ada data laju cukup terbukti; YAGNI tercatat.
+
+F-2026-10-25-047-S — Titik pesan-ulang + saran qty per (barang, gudang). Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-ROP-1/Q-ROP-3, lalu fisik Backend Q-ROP-2. Pemilik usulan: Business (spec), Lead (angka jendela/key), Backend (fisik), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (kuantitas persediaan, tanpa jurnal/angka uang).
