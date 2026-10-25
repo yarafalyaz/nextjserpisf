@@ -70,6 +70,8 @@ const RESOURCES = [
   // approve_contracts lolos fail-closed generator (permission tanpa
   // resource di sini = process.exit(1)).
   ["contracts", "hrm", "Kontrak Karyawan"],
+  // F-2026-10-25-005-S DISC-B1 Q-DISC-2: izin khusus disiplin.
+  ["disciplinary_records", "hrm", "Rekod Disiplin"],
   ["departments", "master", "Departemen"],
   ["positions", "master", "Jabatan"],
   ["accounts", "master", "Akun (COA)"],
