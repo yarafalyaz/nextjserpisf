@@ -124,7 +124,7 @@
   --border: #e2e8f0;
   --input: #e2e8f0;
   --ring: #171717;
-  /* Sidebar — neutral accents on light surface */
+  /* Sidebar — senada dengan latar konten (#ffffff) */
   --sidebar: #ffffff;
   --sidebar-foreground: #475569;
   --sidebar-primary: #171717;
@@ -170,7 +170,7 @@ html.dark {
   --border: #2d3548;
   --input: #2d3548;
   --ring: #d4d4d4;
-  /* Sidebar — neutral on dark surface */
+  /* Sidebar — senada dengan latar konten (#0f1219) */
   --sidebar: #0f1219;
   --sidebar-foreground: #94a3b8;
   --sidebar-primary: #fafafa;
@@ -1524,17 +1524,6 @@ html.dark [cmdk-group-heading] {
   .text-danger { color: #dc2626 !important; }
   .text-primary { color: #000 !important; }
   .text-muted-foreground { color: #555 !important; }
-}
-
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
 /* Narrative description block for reports */
