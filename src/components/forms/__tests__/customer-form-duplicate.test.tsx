@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { act } from "react"
 import { CustomerForm } from "../customer-form"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { createCustomer, updateCustomer } from "@/actions/master.actions"
 import {
   mountInto,
   unmount,
-  setFieldValue,
+  submitFilledForm,
 } from "./form-a11y-test-utils"
 
 vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
@@ -39,18 +38,6 @@ const warning = {
       matchLabel: "Nomor telepon sama",
     },
   ],
-}
-
-async function submitFilledForm(container: HTMLElement) {
-  setFieldValue(container.querySelector<HTMLInputElement>("#name")!, "Budi Baru")
-  setFieldValue(container.querySelector<HTMLInputElement>("#phone")!, "0812000111")
-  await act(async () => {
-    container.querySelector("form")!.dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    )
-  })
-  // flush transition + action promise
-  await act(async () => {})
 }
 
 describe("CustomerForm — duplikat F-2026-10-25-003-S", () => {

@@ -5,9 +5,8 @@ import { createCustomer } from "@/actions/master.actions"
 import {
   mountInto,
   unmount,
-  setFieldValue,
+  submitFilledForm,
 } from "./form-a11y-test-utils"
-import { act } from "react"
 
 vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
 vi.mock("@/lib/utils/toast", async () => (await import("./form-a11y-test-utils")).toastModule)
@@ -18,17 +17,6 @@ vi.mock("@/actions/master.actions", () => ({
 vi.mock("@/lib/quick-add/registry", async () => (await import("./form-a11y-test-utils")).quickAddRegistryModule)
 
 const mockedCreate = vi.mocked(createCustomer)
-
-async function submitFilledForm(container: HTMLElement) {
-  setFieldValue(container.querySelector<HTMLInputElement>("#name")!, "Budi Baru")
-  setFieldValue(container.querySelector<HTMLInputElement>("#phone")!, "0812000111")
-  await act(async () => {
-    container.querySelector("form")!.dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    )
-  })
-  await act(async () => {})
-}
 
 describe("CustomerForm — identitas pajak F-2026-10-25-004-S", () => {
   beforeEach(() => {
