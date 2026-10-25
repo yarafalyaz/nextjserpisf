@@ -1286,9 +1286,47 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
 
     const result = await actions.getAllLeaveBalances(2026)
     expect(result.success).toBe(true)
+    // F-2026-10-25-013-S BR-LVB-13: nonaktif tahun berjalan ikut dimuat
+    // loader (employmentEndedAt memotong tahun), scope tetap id pemanggil.
     expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { isActive: true, deletedAt: null, id: 3 },
+      where: expect.objectContaining({ deletedAt: null, id: 3 }),
     }))
+  })
+
+  it("F-2026-10-25-013-S AC-LVB-B1: filter departemen asing tidak memperluas scope self", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([])
+
+    const result = await actions.getAllLeaveBalances(2026, { departmentId: 99 })
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error("expected success")
+    expect(result.balances).toEqual([])
+    expect(result.scopeKind).toBe("self")
+    expect(result.showIdentityColumns).toBe(false)
+    expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 3 }),
+    }))
+  })
+
+  it("F-2026-10-25-013-S AC-LVB-B4: ekspor CSV scope self hanya baris pemanggil", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([{
+      id: 3, name: "Diri Sendiri", employeeNo: "EMP-003", departmentId: 4,
+      joinDate: new Date("2020-01-01"), isActive: true, department: { name: "Bengkel" },
+    }])
+    prismaMock.employee.findUnique.mockResolvedValue({
+      joinDate: new Date("2020-01-01"), leaveEligibilityStartDate: null, employmentStatus: "PKWTT",
+    })
+    prismaMock.leaveRequest.findMany.mockResolvedValue([])
+
+    const result = await actions.exportLeaveBalancesCsv(2026)
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error("expected success")
+    expect(result.fileName).toBe("saldo-cuti-2026.csv")
+    expect(result.csv).toContain("Diri Sendiri")
+    expect(result.csv.trimEnd().split("\n")).toHaveLength(2)
   })
 })
 
