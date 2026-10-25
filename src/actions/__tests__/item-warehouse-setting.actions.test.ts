@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => {
   const prismaMock = {
     item: { findUnique: vi.fn() },
     warehouse: { findUnique: vi.fn(), findMany: vi.fn() },
-    itemWarehouseSetting: { findUnique: vi.fn(), upsert: vi.fn(), delete: vi.fn(), findMany: vi.fn() },
+    itemWarehouseSetting: { findUnique: vi.fn(), upsert: vi.fn(), delete: vi.fn(), update: vi.fn(), findMany: vi.fn() },
     inventoryLayer: { findMany: vi.fn() },
     activityLog: { create: vi.fn().mockResolvedValue({ id: 1 }) },
     // Sengaja TANPA stockMove/journalEntry/stockReservation:
@@ -27,7 +27,9 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
 import {
   listItemWarehouseSettings,
+  removeItemWarehouseLeadTime,
   removeItemWarehouseMinStock,
+  setItemWarehouseLeadTime,
   setItemWarehouseMinStock,
 } from "../item-warehouse-setting.actions"
 
@@ -95,6 +97,85 @@ describe("removeItemWarehouseMinStock", () => {
     const res = await removeItemWarehouseMinStock(1, 2)
     expect(res).toMatchObject({ success: true, removed: false })
     expect(mocks.prismaMock.itemWarehouseSetting.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe("lead time titik pesan-ulang F-2026-10-25-048-S", () => {
+  it("setItemWarehouseLeadTime: edit_items + upsert leadTimeDays + jejak", async () => {
+    mocks.prismaMock.itemWarehouseSetting.findUnique.mockResolvedValue(null)
+    const res = await setItemWarehouseLeadTime(1, 2, 7)
+    expect(res).toMatchObject({ success: true, settingId: 9 })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_items")
+    expect(mocks.prismaMock.itemWarehouseSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ leadTimeDays: 7, minStock: null }),
+        update: expect.objectContaining({ leadTimeDays: 7 }),
+      }),
+    )
+    expect(mocks.prismaMock.itemWarehouseSetting.upsert.mock.calls[0]?.[0]?.create?.minStock).toBeNull()
+    expect(mocks.prismaMock.activityLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "item_warehouse_lead_time_set" }),
+      }),
+    )
+  })
+
+  it("BR-ROP-03: negatif dan pecahan ditolak tanpa upsert", async () => {
+    expect((await setItemWarehouseLeadTime(1, 2, -1)).success).toBe(false)
+    expect((await setItemWarehouseLeadTime(1, 2, 1.5)).success).toBe(false)
+    expect(mocks.prismaMock.itemWarehouseSetting.upsert).not.toHaveBeenCalled()
+  })
+
+  it("hapus minimum tak menghancurkan lead time: null-kan bila lead time tinggal", async () => {
+    mocks.prismaMock.itemWarehouseSetting.findUnique.mockResolvedValue({ id: 9, minStock: 2, leadTimeDays: 7 })
+    mocks.prismaMock.itemWarehouseSetting.update.mockResolvedValue({ id: 9 })
+    const res = await removeItemWarehouseMinStock(1, 2)
+    expect(res).toMatchObject({ success: true, removed: true })
+    expect(mocks.prismaMock.itemWarehouseSetting.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ minStock: null }) }),
+    )
+    expect(mocks.prismaMock.itemWarehouseSetting.delete).not.toHaveBeenCalled()
+  })
+
+  it("panel: baris minStock null warisi global (bukan override)", async () => {
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([
+      { id: 2, name: "Gudang Bengkel", code: "BKL" },
+    ])
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
+      { id: 9, warehouseId: 2, minStock: null, leadTimeDays: 7 },
+    ])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([{ warehouseId: 2, remaining: 3 }])
+    const res = await listItemWarehouseSettings(1)
+    expect(res.success).toBe(true)
+    if (res.success) {
+      expect(res.rows[0]).toMatchObject({
+        warehouseId: 2, effectiveMinStock: 5, minStockSource: "global", overrideMinStock: null, leadTimeDays: 7,
+      })
+    }
+  })
+
+  it("removeItemWarehouseLeadTime: null-kan kolom (baris minimum tidak dihapus)", async () => {
+    mocks.prismaMock.itemWarehouseSetting.findUnique.mockResolvedValue({ id: 9, leadTimeDays: 7 })
+    mocks.prismaMock.itemWarehouseSetting.update.mockResolvedValue({ id: 9 })
+    const res = await removeItemWarehouseLeadTime(1, 2)
+    expect(res).toMatchObject({ success: true, removed: true })
+    expect(mocks.prismaMock.itemWarehouseSetting.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ leadTimeDays: null }) }),
+    )
+    expect(mocks.prismaMock.itemWarehouseSetting.delete).not.toHaveBeenCalled()
+  })
+
+  it("panel baca menampilkan leadTimeDays per gudang", async () => {
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([
+      { id: 2, name: "Gudang Bengkel", code: "BKL" },
+    ])
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
+      { id: 9, warehouseId: 2, minStock: 2, leadTimeDays: 7 },
+    ])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([])
+    const res = await listItemWarehouseSettings(1)
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.rows[0]).toMatchObject({ leadTimeDays: 7 })
   })
 })
 
