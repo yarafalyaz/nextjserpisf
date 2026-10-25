@@ -28820,3 +28820,151 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-034-S: gerbang penegakan batas kredit pelanggan tahap 2 (lanjutan advisory F-2026-10-21-017-S; peringatan tetap default, penahan = gerbang vonis)
+
+> **Slot**: F-2026-10-25-034-S. Diperiksa bentrok 2026-10-25 15:54 WIB vs `origin/main` (`4fdb124f`): grep `F-2026-10-25-034` di backlog+board origin/main = 0; judul/head PR terbuka memuat `034` = 0 (30 PR terbuka diperiksa); branch remote `034`/kredit = 0. ID 033-S sudah terpakai (rekap beban tiket, PR #870) — dilarang dipakai ulang per koreksi kondektur kartu t_55f4cb83. ID 034-S bebas. Diverifikasi sebelum tulis, bukan slot tetap. Dokumen saja; tanpa kode/schema/migrasi. Business tidak merge.
+
+Kartu: t_55f4cb83. Spec LANJUTAN tahap 2 saja — dilarang menduplikasi blok advisory yang sudah ada: spec read-model F-2026-10-21-017-S (BR-CR-01..10, AC-CR-01..15), spec konsumen UI F-2026-10-22-043-S (BR-CU-01..07, AC-CU-01..10, T1–T3), dan vonis Accountant F-2026-10-22-044-V (V1–V7). Spec ini hanya mengisi celah yang oleh vonis 044-V V7 sengaja DITUNDA: syarat, aktor, transisi, override, dan audit gerbang penahan dokumen. Angka paparan/ambang tidak didefinisikan ulang di sini.
+
+### 0. Keadaan prasyarat live (TERVERIFIKASI-KODE, origin/main 4fdb124f, 2026-10-25 15:54 WIB)
+
+- Advisory SUDAH TERGABUNG penuh, bukan lagi PR terbuka: builder `buildCustomerCreditExposure` (`src/lib/reports/customer-receivables.ts:96`) PaparanBersih = max(0, K1+K2+K5−K3efektif−K4); K3 efektif pilihan (b) vonis V3 (`effectiveConfirmedDownPaymentByCustomer` :115 — DP confirmed yang quotation-nya belum punya invoice recognised; DP terkonversi sudah mengurangi K1 lewat paidAmount hook DP); status `unset|ok|warning|over` + label verbatim `CREDIT_EXPOSURE_STATUS_LABEL` (:89: "Limit belum diatur"/"Aman"/"Mendekati batas"/"Lewat batas"); ambang warning ≥80, over ≥100; limit ≤0 = `unset`.
+- Loader bersama layar+ekspor: `loadCustomerCreditExposure` di `src/lib/reports/ledger-cash-data.ts:598` (dipakai halaman `/laporan/piutang-pelanggan` page.tsx:7,92,113 + ekspor PDF loader yang sama). Cakupan baris memuat SO-only/WO-only lewat ember tambahan — gap buckets lama di F-043-S §atas sudah tertutup di main.
+- Titik tampil form SO/Invoice (T3a/T3b F-043-S): belum diverifikasi tergabung run ini — spec ini TIDAK mengklaimnya; gerbang tahap 2 menilai di server action, bukan di form, jadi ketergantungan T3 tidak menghalangi kontrak gerbang (lihat BR-CL2-07).
+- Belum ada gerbang sama sekali (TERVERIFIKASI-KODE): `createSalesOrder` (`src/actions/sales.actions.ts:902`) dan `createSalesInvoice` (:1428) hanya `requirePermission(create_sales_orders|create_sales_invoices)` (+ `assertPeriodOpen` di invoice :1441); grep `creditLimit|CreditExposure` di `src/actions/` = 0. `Customer.creditLimit` Decimal(15,2) default 0 (`prisma/schema.prisma:397`).
+- Mesin persetujuan generik existing: `requestApprovalIfConfigured` + `assertApproved` (`src/lib/services/approval-workflow.service.ts:10,58`), dipakai dokumen via `approval.actions.ts:436-437`; log aktivitas `logActivity` (`src/lib/services/activity-log.service.ts:10`) dipakai createSalesOrder sesudah transaksi. Permission nyata katalog: `view_customers` (:125), `edit_customers` (:127), `create_sales_invoices` (:149), `create_sales_orders` (:165), `approve_sales_orders` (:168), `approve_sales_invoices` (:152), `view_reports` (:426). TIDAK ada permission kredit/override kredit di katalog hari ini (grep `credit` di katalog = 0 key).
+
+### 1. Workflow specification (tahap 2, hanya bila gerbang dibuka)
+
+Aktor: Admin Penjualan (pembuat SO/Invoice), Penyetuju Kredit (pemegang izin override — key baru, Q-CL2-2), Admin Master (pengatur `creditLimit` via `edit_customers`), Finance/Penagihan (pembaca laporan T1), Lead (pembuka gerbang), Accountant (pemilik definisi paparan inti).
+
+Alur (dokumen masuk → keluar):
+1. Pembuat menyimpan SO/Invoice seperti hari ini. Server action menghitung status paparan pelanggan yang sama persis dengan builder advisory (satu builder, tanpa hitung ulang UI/action).
+2. Bila gerbang NONAKTIF (keadaan default sampai seluruh §6 terpenuhi): perilaku identik hari ini — simpan selalu berhasil; status hanya tampil advisory. Tidak ada cabang kode gerbang yang aktif.
+3. Bila gerbang AKTIF (sesudah §6): action menilai status turunan (§2) SEBELUM transaksi tulis. `ok`/`warning`/`unset` → simpan lanjut (warning tetap advisory tercatat? — lihat BR-CL2-05). `over` → simpan DITAHAN: dokumen tidak lahir, pembuat menerima pesan tertahan + nominal paparan/limit dari builder (bukan pesan karangan UI).
+4. Pembuat meminta override ke Penyetuju Kredit. Override BUKAN edit dokumen dan BUKAN Approval generik dokumen: ia izin operasional satu-dokumen (§3). Persetujuan override melahirkan dokumen dengan jejak audit; penolakan mengembalikan ke tertahan (dokumen tetap tidak lahir).
+5. Kenaikan limit oleh Admin Master adalah jalur bisnis terpisah (existing `edit_customers`): sesudah limit naik, penilaian ulang murni turunan — dokumen yang tertahan dinilai ulang saat pembuat menyimpan ulang, tanpa status tersimpan yang perlu dibersihkan.
+
+Dokumen masuk: SO/Invoice baru atau ubahan yang menaikkan nilai tertagih (cakupan ubahan = Q-CL2-4). Dokumen keluar: dokumen tersimpan (normal/override) atau penolakan tertahan beralasan. Tidak ada dokumen/jurnal baru: override tidak menulis jurnal (warisan vonis 044-V "Yang TIDAK divonis").
+
+### 2. Status-transition matrix (turunan, tanpa kolom/status dokumen baru)
+
+Status paparan adalah turunan builder (`unset|ok|warning|over`), bukan kolom. Transisi dokumen penjualan TIDAK berubah (SO `draft→…`, Invoice enum existing). Yang ditambah spec ini hanyalah keputusan simpan di server action:
+
+| Keadaan paparan (builder) | Pemicu | Hasil simpan (gerbang aktif) | Penjaga |
+|---|---|---|---|
+| `ok` | simpan SO/Invoice | tersimpan normal | `create_sales_orders`/`create_sales_invoices` existing |
+| `warning` | simpan | tersimpan normal (advisory, tanpa override) | sama |
+| `unset` (limit ≤0) | simpan | tersimpan normal + peringatan "Limit belum diatur" (BR-CL2-03) | sama |
+| `over` | simpan tanpa override sah | TERTAHAN — tidak ada baris dokumen lahir | penilaian server di action (BR-CL2-07) |
+| `over` | simpan dengan override disetujui untuk dokumen ini | tersimpan + jejak audit override (§3) | izin override Q-CL2-2 + SoD BR-CL2-09 |
+| `over`→`ok/warning/unset` | limit dinaikkan / piutang dibayar / DP confirmed masuk | simpan ulang dinilai dari turunan terbaru; tertahan lama tidak mengunci | turunan murni, tanpa pembersihan status |
+
+Dilarang: status dokumen baru (`tertahan_kredit` dsb.), kolom penanda di SO/Invoice, disable tombol di UI sebagai satu-satunya penahan, dan penahanan retroaktif atas dokumen yang lahir sebelum gerbang aktif (BR-CL2-10, warisan V7 butir 7).
+
+### 3. Override & jejak audit (kontrak, fisik menunggu Q-CL2-2/3)
+
+- Override berlaku SATU dokumen percobaan-simpan (pelanggan + jenis dokumen + nominal paparan saat dinilai), bukan jendela waktu, bukan plafon tambahan, bukan per pelanggan permanen. Simpan ulang sesudah ubahan nilai = penilaian baru; override lama tidak menempel (Q-CL2-3 meminta Lead mengunci masa berlaku ini).
+- Alasan override WAJIB teks bebas terisi (mengikuti pola alasan existing di rantai approval); tanpa alasan = override tidak sah.
+- Jejak audit minimum per override: siapa meminta, siapa menyetujui/menolak, kapan (WIB), dokumen yang dilahirkan (nomor/id), pelanggan, limit, PaparanBersih + status saat override, alasan. Media fisik (baris log aktivitas existing vs rekod persetujuan generik vs tabel khusus) = Q-CL2-3 — spec ini hanya mengunci isi minimumnya; dilarang mengklaim `logActivity` cukup tanpa putusan itu, karena log aktivitas bukan rekod persetujuan yang bisa ditolak.
+- Override TIDAK mengubah limit, tidak mengubah paparan, tidak menulis jurnal, dan tidak tampil sebagai status dokumen. Daftar override hanya boleh dibaca peran yang disebut di matriks §4.
+
+### 4. Role/permission matrix (key nyata; key baru hanya sebagai usulan bergerbang)
+
+| Aksi | Admin Penjualan | Penyetuju Kredit | Admin Master | Finance | Key |
+|---|---|---|---|---|---|
+| Simpan SO/Invoice (semua status advisory, gerbang nonaktif) | YA | YA | — | — | `create_sales_orders`/`create_sales_invoices` existing |
+| Atur `creditLimit` pelanggan | tidak | tidak | YA | tidak | `edit_customers` existing (:127) |
+| Lihat paparan T1 laporan | tidak perlu | YA | YA | YA | `view_reports` existing (:426) |
+| Meminta override saat tertahan | YA | — | — | — | key buat dokumen existing (permintaan bukan izin baru) |
+| Menyetujui/menolak override | TIDAK (SoD) | YA | hanya bila juga memegang key override | hanya bila juga memegang key override | KEY BARU diusulkan (nama fisik Backend, Q-CL2-2) — belum ada di katalog |
+| Membaca daftar/jejak override | tidak | YA | tidak | YA (audit) | key override baru / `view_reports` (Q-CL2-2 mengunci) |
+
+Tidak ada key baru yang boleh dibangun dari spec ini sebelum Q-CL2-2 diputus Lead. Menamai key di spec sebagai fakta = dilarang; baris di atas berlabel USULAN.
+
+### 5. Business rules register (BR-CL2)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-CL2-01 | Rumus paparan, komponen K1–K5, K3 efektif (b), dan ambang 80/100 tetap milik builder existing + vonis 044-V V2–V5; spec ini tidak mendefinisikan ulang angka apa pun | TERVERIFIKASI-KODE (`customer-receivables.ts:96,115`; backlog vonis 044-V) |
+| BR-CL2-02 | Default abadi sampai §6 lengkap: peringatan saja, simpan tidak pernah ditahan oleh status kredit | TERVERIFIKASI-KODE (builder "Advisory saja — tidak menahan dokumen", header :65; vonis V7) |
+| BR-CL2-03 | Limit 0/null/negatif = "limit belum diatur" (`unset`): tidak memblokir, tidak dibaca tanpa-limit; di gerbang pun `unset` tidak ditahan (usulan vonis 044-V V7 butir 4, dikunci di sini sebagai syarat spec) | USULAN Business, sejalan vonis 044-V — pengesahan inti BUTUH-VONIS Accountant lanjutan (Q-CL2-1) |
+| BR-CL2-04 | Definisi eksposur untuk GERBANG (apakah sama persis dengan PaparanBersih advisory termasuk K5 WO berjalan dan pengurang K3/K4, atau subset inti) wajib vonis Accountant lanjutan; advisory yang disahkan V1–V6 TIDAK otomatis sah sebagai definisi penahan | BUTUH-VONIS (Q-CL2-1) |
+| BR-CL2-05 | `warning` tidak pernah ditahan dan tidak memerlukan override di tahap 2 ini; menahan di warning = perluasan terpisah | USULAN Business |
+| BR-CL2-06 | Hanya `over` yang dapat ditahan, dan hanya bila gerbang aktif per §6 | USULAN Business — aktivasi BUTUH-PUTUSAN Lead (Q-CL2-5) |
+| BR-CL2-07 | Penilaian penahan wajib di server action (`createSalesOrder`/`createSalesInvoice` dan jalur ubahan yang dibuka Q-CL2-4), memakai builder yang sama; UI boleh menampilkan, tidak boleh menjadi satu-satunya penahan | USULAN Business (pola `assertApproved`/`assertPeriodOpen` existing TERVERIFIKASI-KODE) |
+| BR-CL2-08 | Override: satu dokumen, alasan wajib, isi audit minimum §3, tanpa jurnal, tanpa ubah limit/paparan | USULAN Business — bentuk izin/media BUTUH-PUTUSAN Lead (Q-CL2-2/3) |
+| BR-CL2-09 | SoD: penyetuju override ≠ pembuat dokumen; pembuat tidak boleh menyetujui override dokumennya sendiri (pola Maker-Checker rantai approval existing) | USULAN Business — pengecualian peran rangkap = Q-CL2-2 |
+| BR-CL2-10 | Tanpa retroaktivitas: dokumen lahir sebelum aktivasi tidak dibatalkan/ditahan ulang; ubahan atas dokumen berjalan dinilai hanya bila Q-CL2-4 membukanya | USULAN Business (warisan vonis V7 butir 7 TERVERIFIKASI sebagai syarat vonis) |
+| BR-CL2-11 | Periode terkunci tetap `assertPeriodOpen` mendahului/ menyertai penilaian kredit; gerbang kredit tidak melemahkan gerbang periode | TERVERIFIKASI-KODE pola existing (invoice :1441) |
+| BR-CL2-12 | Nilai dokumen berjalan yang sudah terbit tidak dihitung dua kali: penilaian memakai PaparanBersih turunan terbaru (K1/K2 per SO dikurangi invoice recognised per vonis V2) — dilarang menambah nominal dokumen yang dinilai ke paparan yang sudah memuatnya | TERVERIFIKASI-KODE definisi builder (V2 anti-dobel) |
+
+### 6. Syarat buka gerbang (semua wajib sekaligus; warisan vonis 044-V V7, diperiksa live run ini)
+
+1. PUTUSAN Lead tertulis membuka perilaku penahan dokumen (Q-CL2-5). — BELUM (tidak ditemukan di backlog/board main run ini).
+2. Vonis Accountant lanjutan atas definisi eksposur INTI + perlakuan `unset` untuk gerbang (Q-CL2-1). — BELUM; vonis 044-V hanya mengesahkan advisory.
+3. Rekonsiliasi K3 efektif terbukti atas data alokasi DP nyata — di main K3 efektif pilihan (b) sudah tergabung (`customer-receivables.ts:115`); apakah pilihan (b) cukup untuk inti atau wajib rekonstruksi (a) = bagian Q-CL2-1, jangan diasumsikan.
+4. Izin override baru + SoD + media jejak audit diputus (Q-CL2-2/3) dan dibangun; seed/katalog mengikuti parity repo.
+5. Cakupan titik tahan diputus (Q-CL2-4): buat SO, buat Invoice, ubahan menaikkan nilai, konversi quotation→SO/invoice, dan jalur DP yang melahirkan SO+Invoice sekaligus (`down-payment.hook`) — jalur pintas mana pun yang tidak dinilai = gerbang bocor.
+6. Tes falsifikasi QA atas head persis: penahan dicabut → dokumen `over` tersimpan = MERAH; `unset` ditahan = MERAH; override tanpa izin/SoD lolos = MERAH.
+
+Selama satu saja belum terpenuhi: dilarang flag blokir parsial, validasi diam-diam di action, atau disable tombol berkedok advisory (mengulang larangan vonis V7).
+
+### 7. Acceptance criteria + edge cases (draf untuk QA, dinilai hanya sesudah gerbang dibangun)
+
+Backend (AC-CL2-B):
+- AC-CL2-B1: gerbang nonaktif → SO/Invoice pelanggan `over` tersimpan persis seperti hari ini (regresi advisory nol berubah).
+- AC-CL2-B2: gerbang aktif, pelanggan `over`, tanpa override → simpan tertahan, nol baris dokumen lahir, pesan memuat limit + PaparanBersih builder.
+- AC-CL2-B3: `unset` (limit 0) dengan paparan besar → tersimpan; ditahan = MERAH. `warning` (≥80 <100) → tersimpan tanpa override; ditahan = MERAH.
+- AC-CL2-B4: override disetujui penyetuju berizin (bukan pembuat) + alasan → dokumen lahir, jejak audit memuat seluruh isi minimum §3; override yang sama dipakai menyimpan dokumen kedua → tertahan lagi (satu dokumen).
+- AC-CL2-B5: override oleh pembuat sendiri / tanpa key override / tanpa alasan → tertolak; dokumen tidak lahir.
+- AC-CL2-B6: limit dinaikkan Admin Master hingga status turun dari `over` → simpan ulang berhasil tanpa override (turunan murni).
+- AC-CL2-B7: falsifikasi — cabut penilaian server di action → AC-CL2-B2 MERAH; jadikan `unset` tertahan → AC-CL2-B3 MERAH; pulih hijau sesudah dikembalikan.
+- AC-CL2-B8: jalur yang dibuka Q-CL2-4 (termasuk konversi/DP bila dibuka) tidak bisa melahirkan dokumen `over` tanpa override; jalur di luar cakupan putusan tidak dinilai sebagai kegagalan.
+
+Frontend (AC-CL2-F):
+- AC-CL2-F1: pesan tertahan/override memakai label status verbatim builder (`CREDIT_EXPOSURE_STATUS_LABEL`) dan nominal server; UI menghitung paparan sendiri = MERAH.
+- AC-CL2-F2: tombol simpan tidak di-disable oleh status kredit sebagai satu-satunya penahan; penahan terbukti di server (AC-CL2-B2 dengan UI dilewati).
+
+Edge cases (EC-CL2): EC-1 dua simpan bersamaan pelanggan sama-sama `over` parsial (penilaian dalam transaksi/kunci baris pola existing createSalesOrder quotation lock — Backend membuktikan tidak ada dua-duanya lolos dari paparan basi). EC-2 DP confirmed masuk di antara tertahan dan simpan ulang (turunan terbaru berlaku). EC-3 pelanggan dihapus-lembut/diarsip di antara permintaan dan persetujuan override (override gugur, bukan memaksa lahir). EC-4 dokumen ubahan menurunkan nilai pada pelanggan `over` (perlakuan mengikuti Q-CL2-4; tanpa putusan, jangan ditahan diam-diam). EC-5 limit negatif data-rusak = `unset` (pola builder). EC-6 override untuk Invoice dari SO yang SO-nya sendiri lahir lewat override (tiap dokumen dinilai sendiri).
+
+### 8. Feature matrix (benchmark warisan, jujur)
+
+| Kemampuan | Accurate | Zahir | ISF hari ini (live) | ISF tahap 2 (spec ini) |
+|---|---|---|---|---|
+| Limit kredit per pelanggan + peringatan | Standar pasar (dirujuk backlog F-017:1161-1163) | Standar pasar (fasilitas Zahir, dirujuk blok yang sama) | Advisory tergabung: builder+loader+laporan T1 (TERVERIFIKASI-KODE §0) | — |
+| Blokir dokumen melewati limit | Pola pasar dirujuk backlog yang sama; detail ambang/override tidak diverifikasi ulang run ini (ditulis apa adanya) | Sama — tidak diklaim lebih dari rujukan existing | ABSEN sadar (vonis V7 DITUNDA) | Gerbang bersyarat §6 + override §3, menunggu Q-CL2 |
+
+Benchmark run ini tidak mengakses ulang halaman Accurate/Zahir; matrix memakai rujukan resmi yang sudah tercatat di backlog F-2026-10-21-017 (help.accurate.id/product/penjualan/ ; help.zahironline.com fasilitas) dan tidak mengklaim fitur override kompetitor yang belum diverifikasi.
+
+### 9. Pertanyaan putusan (gerbang, berlabel pemilik)
+
+- Q-CL2-1 (Accountant, BUTUH-VONIS): definisi eksposur INTI untuk penahan — sama dengan PaparanBersih advisory (K1+K2+K5−K3efektif(b)−K4) atau subset? Apakah K5 WO berjalan dan pengurang K4 sah menahan/melepaskan dokumen? Apakah K3 pilihan (b) cukup untuk inti? Perlakuan `unset` di gerbang (usulan BR-CL2-03: tidak ditahan)?
+- Q-CL2-2 (Lead): key override baru (nama/resource/seed/whitelist peran) + SoD mutlak vs pengecualian admin rangkap + siapa membaca jejak override.
+- Q-CL2-3 (Lead, fisik Backend): media persetujuan override (rekod approval generik existing vs rekod khusus) + masa berlaku satu-dokumen §3 + isi audit minimum dikunci.
+- Q-CL2-4 (Lead): cakupan titik tahan — buat saja vs + ubahan menaikkan nilai vs + konversi quotation vs + jalur DP pembentuk SO/Invoice; perlakuan ubahan menurunkan nilai (EC-CL2-4).
+- Q-CL2-5 (Lead): aktivasi gerbang — saklar pengaturan perusahaan vs langsung aktif sesudah build; tanggal berlaku + perlakuan dokumen berjalan (BR-CL2-10).
+- Accountant untuk selain Q-CL2-1: TIDAK (override tanpa jurnal; limit adalah kebijakan pemilik proses, bukan angka pajak).
+
+### 10. Backlog implementasi (turunan F-2026-10-25-034-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-034-S | Spec tahap 2 ini (dokumen) | Business | — |
+| (turunan) vonis eksposur inti + `unset` | Accountant | Q-CL2-1 diajukan Lead | — |
+| (turunan) putusan izin/override/cakupan/aktivasi | Lead | Q-CL2-2..5 | — |
+| (turunan) penilaian server + override + audit | Backend | Q-CL2-1..5 terputus; klaim `sales.actions.ts`/katalog di board dulu | — |
+| (turunan) pesan tertahan + alur minta override | Frontend | kontrak Backend final; grep e2e penjualan terdampak sebelum commit | — |
+| (turunan) falsifikasi AC-CL2-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+
+- Spec paparan/UI advisory baru: sudah ada (F-017-S + F-043-S + builder tergabung) — menduplikasi = dilarang kartu ini.
+- Menahan `warning`, menahan `unset`, plafon nominal tambahan, denda/blokir akun pelanggan: tanpa kebutuhan tertulis pemilik proses.
+- Notifikasi otomatis ke Finance / snapshot historis paparan: YAGNI warisan F-017-S §7, tanpa ID.
+- Kolom/status dokumen baru untuk tertahan: keputusan simpan turunan cukup (§2).
+
+F-2026-10-25-034-S — Gerbang penegakan batas kredit tahap 2. Status: SPEC SELESAI run ini; implementasi menunggu vonis Accountant Q-CL2-1 + putusan Lead Q-CL2-2..5. Pemilik usulan: Business (spec), Accountant (definisi inti), Lead (izin/aktivasi), Backend (penilaian server), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: YA (Q-CL2-1 saja).
