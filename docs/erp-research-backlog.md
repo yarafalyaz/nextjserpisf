@@ -27598,7 +27598,20 @@ saja, tanpa kode. Nomor bebas: grep `F-2026-10-25-019` di origin/main
   kerja berjalan (skorsing bukan PHK). DILARANG memakai dasar
   upah lama saat upah aktual berubah.
 
-### Putusan 5 — Jurnal & akun (bukti src/lib/setup/base-data.ts origin/main 997c8ead)
+### Putusan 5 — Jurnal & akun (bukti src/lib/setup/base-data.ts origin/main 997c8ead; koreksi alokasi 2026-10-25 14:04 WIB vs origin/main d32eb9d2)
+
+Koreksi alokasi (verdict QA TOLAK t_698779f8 atas head 93ac29e3):
+klaim awal 210208/210209 TABRAKAN — 210208 sudah terpakai vonis
+F-2026-10-25-005-V terminasi (PR #812 MERGED, "Utang Pesangon &
+Hak Berhenti"; J-DISC-PHK2 eksplisit melarang akun PPh baru) dan
+210209 sudah terpakai vonis F-2026-10-25-018-V ("Utang
+Reimbursement Karyawan", PR #822 MERGED). Urutan 2102xx terpakai
+di origin/main d32eb9d2 terverifikasi: 210201-210209 (backlog +
+`CHART_OF_ACCOUNTS` base-data.ts); kode bebas berikutnya =
+210210 dan 210211 (grep `210210`/`210211` di backlog + src non-
+alamat origin/main = 0). Alokasi diganti: PPh 21 = 210210,
+BPJS karyawan = 210211. 710006 tidak berubah (bebas terverifikasi
+verdict QA). Perlakuan jurnal tidak berubah, hanya kode akun.
 
 Existing (pakai, jangan buat duplikat):
 - 600004 "Beban Gaji, Upah & Honorer" (EXPS) — beban upah
@@ -27609,10 +27622,10 @@ Existing (pakai, jangan buat duplikat):
 Kandidat akun BARU (Backend daftarkan di base-data + setting,
 fail-closed bila setting kosong — TANPA akun/setting, mutasi
 ditolak berisik, dilarang fallback menebak akun):
-- 210208 "Utang PPh 21 Karyawan" (OCLY, induk 2102) — liabilitas
+- 210210 "Utang PPh 21 Karyawan" (OCLY, induk 2102) — liabilitas
   PPh 21 terpotong. (WITHHOLDING_TAX_TYPES base-data baris 913
   menyatakan PPh 21 dibuat manual; akun ini menutup celah itu.)
-- 210209 "Utang Iuran BPJS Karyawan" (OCLY, induk 2102) —
+- 210211 "Utang Iuran BPJS Karyawan" (OCLY, induk 2102) —
   liabilitas iuran BPJS potongan karyawan.
 - 710006 "Pendapatan Denda Karyawan" (OINC) — kredit denda
   disiplin; PP 36/2021 Pasal 60 ayat (1): uang denda hanya
@@ -27622,9 +27635,9 @@ ditolak berisik, dilarang fallback menebak akun):
 Posting matrix (per periode payroll, sesudah dokumen keputusan):
 - Akrual upah (termasuk skorsing dibayar): Dr 600004 /
   Cr 210204 sebesar bruto aktual.
-- Potong PPh 21: Dr 210204 / Cr 210208 (TER atas bruto aktual).
-- Potong iuran BPJS karyawan: Dr 210204 / Cr 210209; iuran
-  perusahaan: Dr 600009 / Cr 210209.
+- Potong PPh 21: Dr 210204 / Cr 210210 (TER atas bruto aktual).
+- Potong iuran BPJS karyawan: Dr 210204 / Cr 210211; iuran
+  perusahaan: Dr 600009 / Cr 210211.
 - Potong denda (sesudah PPh/BPJS, total potongan <= 50% upah
   pembayaran itu): Dr 210204 / Cr 710006.
 - Bayar neto: Dr 210204 / Cr Kas-Bank.
@@ -27667,7 +27680,7 @@ nyata tetap BUTUH-VONIS-AKUNTAN/penasihat hukum per kasus.
   kartu fisik tahap 2 (sesudah DISC-B1 #816).
 - BOT Backend: batas build Putusan 3/5/6 — dokumen keputusan
   manusia sebagai satu-satunya pemicu potongan, akun kandidat
-  210208/210209/710006 + setting fail-closed, idempotency per
+  210210/210211/710006 + setting fail-closed, idempotency per
   (keputusan, periode, jenis). Klaim schema.prisma di board.
 - BOT Business/BOT Frontend: tampilkan snapshot keputusan
   (perlakuan upah, nominal potongan, dasar PPh/BPJS) apa adanya;
