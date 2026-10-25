@@ -64,3 +64,34 @@ export function clickButtonByText(container: HTMLElement, text: string) {
   btn.click()
   return btn as HTMLButtonElement
 }
+
+/** Stub jsdom untuk Radix Popover/Command (combobox proyek, FormSelect). */
+export function stubPopoverDom() {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+  Element.prototype.scrollIntoView ??= () => {}
+}
+
+/** Buka combobox (button[role=combobox]) dan kembalikan teks opsinya. */
+export function openComboboxOptions(combo: Element): string[] {
+  act(() => {
+    combo.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+  return [...document.body.querySelectorAll('[role="option"]')].map(
+    (o) => o.textContent?.trim() ?? "",
+  )
+}
+
+/** Pilih opsi combobox berdasarkan teks label. */
+export function pickComboboxOption(label: string) {
+  const option = [...document.body.querySelectorAll('[role="option"]')].find(
+    (o) => (o.textContent?.trim() ?? "") === label,
+  )
+  if (!option) throw new Error(`Opsi combobox tidak ditemukan: ${label}`)
+  act(() => {
+    option.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+}
