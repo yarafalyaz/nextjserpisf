@@ -40,6 +40,8 @@ export interface ItemWarehouseSettingRow {
   globalMinStock: number
   minStockSource: "override" | "global"
   settingId: number | null
+  /** Lead time penampung titik pesan-ulang (F-2026-10-25-048-S); null = belum diisi. */
+  leadTimeDays?: number | null
 }
 
 function positiveId(value: unknown, label: string): number {
@@ -56,9 +58,22 @@ function parseMinStock(value: unknown): number {
   return Math.round(n * 100) / 100
 }
 
+/** Lead time BR-ROP-03: bilangan bulat >= 0 hari kalender; pecahan/negatif ditolak. */
+function parseLeadTimeDays(value: unknown): number {
+  const n = typeof value === "string" ? Number(value.trim()) : Number(value)
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error("Lead time wajib bilangan bulat 0 hari atau lebih")
+  }
+  return n
+}
+
 async function writeSettingLog(args: {
   userId: number
-  action: "item_warehouse_min_stock_set" | "item_warehouse_min_stock_removed"
+  action:
+    | "item_warehouse_min_stock_set"
+    | "item_warehouse_min_stock_removed"
+    | "item_warehouse_lead_time_set"
+    | "item_warehouse_lead_time_removed"
   settingId: number
   description: string
   oldValues?: Record<string, string | number | boolean | null>
@@ -151,6 +166,119 @@ export async function setItemWarehouseMinStock(
   }
 }
 
+/**
+ * Isi lead time penampung titik pesan-ulang (F-2026-10-25-048-S,
+ * Q-ROP-2/Q-ROP-3 putusan Lead): SATU penampung
+ * `ItemWarehouseSetting.leadTimeDays` per (barang, gudang), key tulis
+ * reuse `edit_items` tanpa key baru. Baris setting baru yang dibuat
+ * aksi ini menulis minStock = minimum global barang saat dibuat —
+ * konsekuensi terbuka dari resolver existing (baris ada = override,
+ * BR-MS-02): minimum efektif pasangan menjadi override bernilai sama
+ * dengan global saat itu, dan surfaced sebagai "Minimum per gudang"
+ * di panel. Bukan disembunyikan; mengubah global sesudahnya tidak lagi
+ * mengalir ke pasangan ini sampai override diubah staf.
+ */
+export async function setItemWarehouseLeadTime(
+  itemIdInput: unknown,
+  warehouseIdInput: unknown,
+  leadTimeInput: unknown,
+): Promise<Result<{ settingId: number; warning?: string }>> {
+  try {
+    const user = await requirePermission("edit_items")
+    const itemId = positiveId(itemIdInput, "Barang")
+    const warehouseId = positiveId(warehouseIdInput, "Gudang")
+    const leadTimeDays = parseLeadTimeDays(leadTimeInput)
+    const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
+
+    const existing = await prisma.itemWarehouseSetting.findUnique({
+      where: { itemId_warehouseId: { itemId, warehouseId } },
+      select: { id: true, leadTimeDays: true },
+    })
+    const itemRow = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { minStock: true },
+    })
+
+    const saved = await prisma.itemWarehouseSetting.upsert({
+      where: { itemId_warehouseId: { itemId, warehouseId } },
+      create: {
+        itemId,
+        warehouseId,
+        minStock: itemRow?.minStock ?? 0,
+        leadTimeDays,
+        createdBy: Number(user.id),
+        updatedBy: Number(user.id),
+      },
+      update: { leadTimeDays, updatedBy: Number(user.id) },
+      select: { id: true },
+    })
+
+    const log = await writeSettingLog({
+      userId: Number(user.id),
+      action: "item_warehouse_lead_time_set",
+      settingId: saved.id,
+      description: existing
+        ? `Mengubah lead time ${item.sku} ${item.name} di ${warehouse.name} dari ${existing.leadTimeDays ?? "belum diisi"} menjadi ${leadTimeDays} hari`
+        : `Mengatur lead time ${item.sku} ${item.name} di ${warehouse.name} menjadi ${leadTimeDays} hari`,
+      oldValues: { itemId, warehouseId, leadTimeDays: existing?.leadTimeDays ?? null },
+      newValues: { itemId, warehouseId, leadTimeDays },
+    })
+
+    revalidatePath("/laporan/stok-minimum")
+    return {
+      success: true,
+      settingId: saved.id,
+      ...(log.success ? {} : { warning: "Lead time tersimpan, tetapi jejak perubahan gagal dicatat." }),
+    }
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
+/** Kosongkan lead time: pasangan kembali tidak dinilai (BR-ROP-03). */
+export async function removeItemWarehouseLeadTime(
+  itemIdInput: unknown,
+  warehouseIdInput: unknown,
+): Promise<Result<{ removed: boolean; warning?: string }>> {
+  try {
+    const user = await requirePermission("edit_items")
+    const itemId = positiveId(itemIdInput, "Barang")
+    const warehouseId = positiveId(warehouseIdInput, "Gudang")
+    const { item, warehouse } = await assertItemAndWarehouse(itemId, warehouseId)
+
+    const existing = await prisma.itemWarehouseSetting.findUnique({
+      where: { itemId_warehouseId: { itemId, warehouseId } },
+      select: { id: true, leadTimeDays: true },
+    })
+    if (!existing || existing.leadTimeDays == null) return { success: true, removed: false }
+
+    await prisma.itemWarehouseSetting.update({
+      where: { id: existing.id },
+      data: { leadTimeDays: null, updatedBy: Number(user.id) },
+    })
+
+    const log = await writeSettingLog({
+      userId: Number(user.id),
+      action: "item_warehouse_lead_time_removed",
+      settingId: existing.id,
+      description: `Menghapus lead time ${item.sku} ${item.name} di ${warehouse.name} (sebelumnya ${existing.leadTimeDays} hari); pasangan tidak dinilai untuk titik pesan-ulang`,
+      oldValues: { itemId, warehouseId, leadTimeDays: existing.leadTimeDays },
+      newValues: { itemId, warehouseId, leadTimeDays: null },
+    })
+
+    revalidatePath("/laporan/stok-minimum")
+    return {
+      success: true,
+      removed: true,
+      ...(log.success ? {} : { warning: "Lead time terhapus, tetapi jejak perubahan gagal dicatat." }),
+    }
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
 export async function removeItemWarehouseMinStock(
   itemIdInput: unknown,
   warehouseIdInput: unknown,
@@ -215,7 +343,7 @@ export async function listItemWarehouseSettings(
       }),
       prisma.itemWarehouseSetting.findMany({
         where: { itemId },
-        select: { id: true, warehouseId: true, minStock: true },
+        select: { id: true, warehouseId: true, minStock: true, leadTimeDays: true },
       }),
       prisma.inventoryLayer.findMany({
         where: { itemId },
@@ -247,6 +375,7 @@ export async function listItemWarehouseSettings(
           globalMinStock,
           minStockSource: override != null ? ("override" as const) : ("global" as const),
           settingId: setting?.id ?? null,
+          leadTimeDays: setting?.leadTimeDays ?? null,
         }
       }),
     }

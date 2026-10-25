@@ -813,6 +813,10 @@ model ItemWarehouseSetting {
   itemId      Int      @map("item_id")
   warehouseId Int      @map("warehouse_id")
   minStock    Decimal  @map("min_stock") @db.Decimal(15, 2)
+  // F-2026-10-25-048-S (Q-ROP-2 putusan Lead): lead time pemasok per
+  // (barang, gudang) dalam hari kalender. NULL = belum diisi = pasangan
+  // tidak dinilai untuk titik pesan-ulang (BR-ROP-03), bukan 0.
+  leadTimeDays Int?    @map("lead_time_days")
   createdBy   Int?     @map("created_by")
   updatedBy   Int?     @map("updated_by")
   createdAt   DateTime @default(now()) @map("created_at")
