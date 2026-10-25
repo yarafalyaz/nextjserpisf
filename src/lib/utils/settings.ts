@@ -101,6 +101,10 @@ const DEFAULT_SYSTEM_SETTINGS = {
   // F-2026-10-24-135-V: pendapatan besi tua default kosong (fail-closed).
   scrapSaleIncomeAccountId: null,
   reimbursementLiabilityAccountId: null,
+  // F-2026-10-25-020-V Putusan 5: mapping statutori/denda default kosong.
+  pph21PayableAccountId: null,
+  bpjsEmployeePayableAccountId: null,
+  disciplinaryFineIncomeAccountId: null,
 };
 
 /**
