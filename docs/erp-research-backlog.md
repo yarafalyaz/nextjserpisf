@@ -28539,3 +28539,119 @@ Yang tetap berlaku tanpa plafon baru: validasi schema existing (nominal ≥ 1 ds
 - Bunga/denda/biaya admin, klaim/label "bebas PPh 21", hitung kenikmatan/*cost of fund* di kode/UI (TERBUKA-TERCATAT 023-V Putusan 3C tetap).
 
 ID putusan ini **F-2026-10-25-026-L** (jawaban Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S PR #827 head live f966a0cc, berdasar vonis F-2026-10-25-023-V merged 2c59d982; bebas: grep `F-2026-10-25-026` di origin/main 778735ce + judul PR terbuka = 0 sebelum putusan ini). Pemilik berikutnya: BOT Backend inti (t_65b97381) → BOT Backend antrean (turunan Lead) → BOT Frontend konsumen → BOT QA (t_e78fcd26). Spec 018-S di PR #827 dapat merged sebagai dokumen sesudah putusan ini dirujuk di sana; status PPh 21 manfaat pinjaman tetap TERBUKA-TERCATAT per 023-V 3C.
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-028-S: riwayat harga jual aktual per pelanggan×barang (turunan baris faktur terbit)
+
+> **Slot**: F-2026-10-25-028-S. Diperiksa bentrok 2026-10-25 14:44 WIB vs `origin/main` (`e650fdae`): grep `F-2026-10-25-028` di backlog+board origin/main = 0; ID 027-S di PR #857 OPEN beda topik. ID 028 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_70c9a767.
+
+### 0. Ringkasan
+
+Penjual hari ini tidak bisa menjawab dari satu permukaan: "terakhir pelanggan X membeli barang Y di harga berapa, kapan, di faktur mana?" Harga daftar (CustomerPriceList) adalah harga rencana; harga aktual hidup tersebar di baris `SalesInvoiceItem` faktur terbit. Spec ini membekukan read-model turunan baca-saja: untuk pasangan (pelanggan, barang), daftar transaksi harga aktual dari faktur berstatus diakui (`RECOGNISED_AR_STATUSES = posted|partial|paid`, `src/lib/reports/document-status.ts:10`) terurut tanggal terbaru dulu, lengkap dengan harga satuan, diskon baris, qty, nomor dokumen, dan penanda sumber harga tersimpan. Tanpa kolom baru, tanpa mengubah resolver harga, tanpa rekomendasi harga otomatis.
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main e650fdae)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Baris faktur menyimpan harga aktual + asal: `SalesInvoiceItem.unitPrice/discount/total`, `priceSource` (`price_list_tier|price_list_base|item_master`, null = baris lama/konversi/edit, BUKAN klaim historis), `priceListId`, `priceListMinQty` (`prisma/schema.prisma` model SalesInvoiceItem).
+- Induk: `SalesInvoice.customerId/date/documentNo/status` (enum `SalesInvoiceStatus` draft/sent/approved/posted/partial/paid/cancelled); populasi laporan sah = `RECOGNISED_AR_STATUSES` (`document-status.ts:10`, draft/sent/approved belum kewajiban).
+- Analisis penjualan existing (`sales-analytics.ts` + halaman `laporan/analisis-penjualan`): agregat Σ revenue/qty per barang/pelanggan/merek dari populasi diakui — menjawab total, BUKAN harga satuan per kejadian per pasangan.
+- Harga rencana existing: CustomerPriceList + resolver tier (F-018/F-001-S); laporan paparan diskon (F-006-S) membaca baris yang sama untuk diskon efektif dokumen, bukan riwayat harga per pasangan.
+
+Gap (bukti grep run ini):
+- Grep `lastPrice|harga terakhir` di `src/lib/reports/*.ts` = 0 builder riwayat harga per (customerId, itemId); tidak ada halaman/loader pasangan pelanggan×barang.
+- `priceSource` null pada baris lama/konversi tidak tertanda di permukaan mana pun — risiko tampil sebagai sumber pasti bila riwayat dibangun tanpa ember jujur.
+
+### 2. Workflow specification
+
+Aktor: penjual/admin penjualan (melihat riwayat sebelum menyusun penawaran), supervisor (laporan).
+Dokumen masuk: SalesInvoice + SalesInvoiceItem existing. Keluar: tidak ada dokumen; hasil baca menjadi bahan penawaran manual existing (spec tidak menulis harga ke penawaran).
+Alur:
+1. Pemakai memilih pelanggan (wajib) dan/atau barang (pola filter laporan existing pasangan kunci/nilai URL); tanpa pilihan pasangan, permukaan menampilkan petunjuk memilih, bukan seluruh histori mentah tanpa batas (Q-PH-3).
+2. Loader membaca faktur populasi diakui + `deletedAt IS NULL` dalam rentang periode laporan, satu query massal + resolusi nama item massal (pola analisis-penjualan anti-N+1).
+3. Builder mengelompokkan per (customerId, itemId): baris riwayat per kejadian (tanggal, documentNo, qty, uom, unitPrice, discount baris, total, priceSourceLabel), ringkasan pasangan: transaksiTerakhir (baris tanggal terbaru; seri tanggal sama diputus documentNo lalu id faktur), jumlahTransaksi, qtyKumulatif. Bukan rata-rata harga tertimbang sebagai "harga terakhir" — harga terakhir = harga baris kejadian terbaru persis.
+4. Baris `itemId IS NULL` (deskripsi bebas) masuk ember BARIS_TANPA_BARANG tertanda per pelanggan, tidak dipasangkan paksa ke barang mana pun.
+5. UI menampilkan verbatim dari builder; tautan per kejadian ke detail faktur existing; nol hitung ulang harga/diskon di UI.
+
+### 3. Role/permission matrix
+
+| Aksi | Permission nyata | Penjual | Supervisor | Admin |
+|---|---|---|---|---|
+| Melihat riwayat (permukaan laporan) | `view_reports` | bila diberi | ya | ya |
+| Membuka detail faktur dari baris | `view_sales_invoices` (`module-catalog.generated.ts:148`) | sesuai existing | ya | ya |
+| Melihat master pelanggan terkait | `view_customers` (katalog :125) | sesuai existing | ya | ya |
+| Menulis harga ke penawaran dari riwayat | — | TIDAK tahap 1 (manual existing) | — | — |
+
+*Key faktur terverifikasi run ini: `view_sales_invoices` (`module-catalog.generated.ts:148`); Backend mengonfirmasi ulang saat fisik (Q-PH-2). Tanpa key baru tahap 1 usulan.
+
+### 4. Status-transition matrix
+
+Tidak ada status baru. Populasi adalah turunan status faktur existing:
+| Status faktur | Masuk riwayat? | Alasan |
+|---|---|---|
+| posted/partial/paid | YA | populasi diakui document-status.ts:10 |
+| draft/sent/approved | TIDAK | belum terbit, belum kewajiban/harga final |
+| cancelled | TIDAK | dokumen batal tidak membentuk harga aktual |
+Perubahan status faktur sesudah dibaca mengubah hasil baca berikutnya (turunan murni, tanpa snapshot riwayat tersimpan).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-PH-01 | Populasi hanya faktur `RECOGNISED_AR_STATUSES` + `deletedAt IS NULL`; draft/sent/approved/cancelled tidak pernah masuk walau unitPrice terisi. | USULAN (populasi TERVERIFIKASI-KODE) | document-status.ts:10 |
+| BR-PH-02 | "Harga terakhir" pasangan = unitPrice baris kejadian terbaru (date faktur; seri: documentNo, lalu id), ditampilkan apa adanya — DILARANG rata-rata, modus, atau harga "disarankan" karangan. Diskon baris tampil terpisah, tidak dilebur diam-diam ke harga satuan. | USULAN | — |
+| BR-PH-03 | `priceSource` null tampil "Sumber harga tidak tercatat" (pola komentar schema: bukan klaim historis); nilai selain tiga kosakata sah tampil mentah tertanda, tidak dipetakan paksa. | USULAN (kosakata TERVERIFIKASI-KODE) | schema SalesInvoiceItem |
+| BR-PH-04 | Baris itemId null tidak dipasangkan ke barang; ember BARIS_TANPA_BARANG per pelanggan dengan hitungan + rentang tanggal, tanpa harga pasangan. | USULAN | pola ember jujur BR-LF |
+| BR-PH-05 | Harga adalah fakta historis transaksi, bukan harga berlaku: setiap tampilan membawa notice "Harga transaksi lampau — bukan harga jual saat ini; harga berlaku mengikuti daftar harga/master saat penawaran dibuat." UI dilarang label "harga saat ini/terbaru berlaku". | USULAN | pemisahan rencana vs aktual |
+| BR-PH-06 | Urutan riwayat per pasangan: tanggal desc, documentNo, id; ringkasan transaksiTerakhir harus baris pertama hasil urutan yang sama (satu sumber kebenaran, bukan hitungan kedua). | USULAN | pola builder existing |
+| BR-PH-07 | Retur penjualan tidak menghapus/menulis-ulang riwayat harga faktur asal; koreksi harga hanya lewat dokumen existing (nota kredit/retur) dan tampil sebagai dokumennya sendiri bila kelak diminta — tahap 1 riwayat hanya faktur penjualan. | USULAN | pola dokumen tidak dihapus |
+| BR-PH-08 | Tanpa pasangan terpilih tidak ada keluaran massal tak terbatas: batas baris/kejadian per pasangan + periode wajib mengikuti konvensi laporan existing; angka batas final Q-PH-3 Backend/Lead. | BUTUH-VONIS (Lead/Backend) | konvensi laporan |
+| BR-PH-09 | Izin permukaan reuse `view_reports`; tanpa key izin baru dan tanpa menampilkan harga ke peran tanpa izin laporan (harga jual = data komersial sensitif, pola paparan diskon F-006-S). | USULAN (pola TERVERIFIKASI-KODE F-006-S) | loader F-006-S fail-closed |
+
+### 6. Feature matrix (benchmark, akses 2026-10-25)
+
+| Kemampuan | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Laporan penjualan per pelanggan/per barang rinci | Ada: laporan penjualan per produk/pelanggan/periode (https://accurate.id/online/fitur/penjualan/; daftar laporan https://help.accurate.id/product/daftar-laporan/) | Ada: laporan penjualan rinci per detail item + nilai, ekspor Excel/PDF (https://help.zahironline.com/portal/id/kb/articles/melihat-laporan-penjualan-zahir-online-v2) | Ada existing: analisis penjualan agregat |
+| Riwayat harga satuan per kejadian pasangan pelanggan×barang | Tidak ditemukan sebagai laporan bernama di sumber resmi di atas (klaim dibatasi) | Tidak ditemukan sebagai laporan bernama di sumber resmi di atas | Spec ini: riwayat per kejadian + harga terakhir turunan |
+| Penanda sumber harga baris (daftar/master) | Tidak diklaim dari sumber di atas | Tidak diklaim dari sumber di atas | Ada tersimpan: priceSource (BR-PH-03) |
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder+loader):
+- AC-PH-B1: faktur draft/sent/approved/cancelled/deletedAt terisi dengan unitPrice berubah-ubah TIDAK mengubah keluaran; satu pun bocor = MERAH.
+- AC-PH-B2: harga terakhir = baris tanggal terbaru persis termasuk seri tanggal sama (documentNo/id); mengganti ke rata-rata tertimbang harus MERAH.
+- AC-PH-B3: priceSource null tampil label tidak-tercatat; memetakan null ke `item_master` = MERAH.
+- AC-PH-B4: baris itemId null hanya di ember tanpa-barang; terpasang ke barang terdekat/deskripsi mirip = MERAH.
+- AC-PH-B5: loader query massal anti-N+1 (faktur+baris+item), nol mutasi dokumen/harga; menulis SalesInvoiceItem apa pun = MERAH.
+- AC-PH-B6: diskon baris tampil terpisah dari unitPrice; melebur diskon ke harga satuan tanpa label = MERAH.
+Frontend:
+- AC-PH-F1: angka/label/notice verbatim builder (BR-PH-05); UI hitung rata-rata/diskon efektif sendiri = MERAH.
+- AC-PH-F2: tanpa `view_reports` permukaan tertolak fail-closed pola laporan existing; harga bocor ke peran tanpa izin = MERAH.
+- AC-PH-F3: label "harga saat ini/berlaku" untuk harga historis = MERAH; sebelum commit grep e2e selector faktur/laporan terdampak.
+Edge: EC-1 pelanggan sama membeli barang sama di dua faktur tanggal sama (seri documentNo). EC-2 barang diganti nama master sesudah transaksi (nama tampil = nama master kini tertanda, harga tetap fakta baris; nama historis tidak dikarang). EC-3 qty desimal + uom berbeda antar kejadian (tidak dikonversi/dijumlahkan lintas uom tanpa label). EC-4 faktur partial/paid sesudah retur parsial (riwayat harga tidak berubah, BR-PH-07). EC-5 periode laporan memotong histori (transaksiTerakhir = terbaru DALAM periode terpilih, tertanda periode). EC-6 baris harga 0 (bonus) tampil 0 apa adanya tertanda, bukan dibuang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-PH-1 (Lead): permukaan — halaman laporan baru pasangan pelanggan×barang vs tab di analisis penjualan existing; posisi report-catalog/navigasi.
+- Q-PH-2 (Backend): verifikasi key izin detail faktur nyata di katalog untuk tautan baris + fisik builder/loader di `src/lib/reports/` (usulan `sales-price-history.ts`); jangan agregasi kedua di halaman analisis.
+- Q-PH-3 (Lead/Backend): batas periode maksimum + paginasi kejadian per pasangan tahap 1 (BR-PH-08).
+- Q-PH-4 (Lead): apakah ember BARIS_TANPA_BARANG tampil tahap 1 atau hanya hitungan ringkas (menghindari permukaan mengambang).
+- Accountant: TIDAK (fakta harga historis baca-saja; tidak mengubah jurnal/PPN/pengakuan).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-028-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-028-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder+loader riwayat harga pasangan | Backend | Q-PH-2/3 | — |
+| (turunan) permukaan konsumen verbatim | Frontend | kontrak Backend + Q-PH-1/4 | — |
+| (turunan) falsifikasi AC-PH-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Rekomendasi/otomasi harga penawaran dari riwayat (auto-fill harga terakhir ke quotation): mengubah perilaku penyusunan harga = spec terpisah sesudah riwayat terbukti benar.
+- Harga rata-rata tertimbang sebagai "harga terakhir": ditolak BR-PH-02.
+- Kolom harga historis tersimpan/snapshot nama barang: data baris existing cukup tahap 1.
+- Riwayat harga penawaran (QuotationItem belum transaksi): objek berbeda, jangan dicampur ke fakta faktur.
+
+F-2026-10-25-028-S — Riwayat harga jual per pelanggan×barang. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-PH-1/3/4 + fisik Backend Q-PH-2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
