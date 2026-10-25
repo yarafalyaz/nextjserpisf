@@ -486,12 +486,11 @@ describe("Overtime Request Actions", () => {
     expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 
-  it("approveOvertime locks pay to baseSalary as the Pasal 31 wage base (K2-S2)", async () => {
-    // K2-S2: dasar upah = Employee.baseSalary (satu-satunya kolom upah
-    // bulanan di skema) sebagai upah sebulan. 2026-06-12 = Jumat (hari
-    // kerja fallback Senin-Jumat): 2 jam = 1 jam x1,5 + 1 jam x2
-    // = 3,5 x (5.000.000/173) = 101.156. Mengganti dasar ke angka lain
-    // wajib memerahkan tes ini.
+  it("approveOvertime uses baseSalary alone when no fixed component is assigned (E-OT-4)", async () => {
+    // E-OT-4 (vonis F-2026-10-25-022-V): tanpa penugasan komponen tetap,
+    // dasar = baseSalary apa adanya — regresi nol populasi tanpa tunjangan.
+    // 2026-06-12 = Jumat (hari kerja fallback Senin-Jumat): 2 jam = 1 jam
+    // x1,5 + 1 jam x2 = 3,5 x (5.000.000/173) = 101.156.
     prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1,
       employeeId: 1,
@@ -505,6 +504,92 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
     const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
     expect(arg.data.calculatedValue).toBe(101156)
+  })
+
+  it("approveOvertime adds active earning/fixed components at the overtime date (E-OT-1..3, E-OT-7, EC-OT-1..3)", async () => {
+    // Vonis F-2026-10-25-022-V / spec F-2026-10-25-024-S: dasar =
+    // baseSalary + Σ defaultAmount penugasan earning/fixed aktif yang
+    // berjendela efektif pada ot.date. Mock menerapkan where produksi
+    // (enam syarat) ke baris fixture, jadi mencabut syarat apa pun di
+    // implementasi (mis. filter kind) mengubah Σ dan memerahkan tes ini.
+    const otDate = new Date("2026-06-12T00:00:00Z") // Jumat, hari kerja
+    const assignments = [
+      // E-OT-1: earning/fixed aktif berlaku pada tanggal lembur.
+      { defaultAmount: 540_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-2: baru berlaku SESUDAH tanggal lembur → tidak ikut.
+      { defaultAmount: 111_000, isActive: true, effectiveFrom: new Date("2026-07-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-3: sudah berakhir sebelum tanggal lembur → tidak ikut.
+      { defaultAmount: 222_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: new Date("2026-05-31"), component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-3 varian: penugasan tidak aktif → tidak ikut.
+      { defaultAmount: 333_000, isActive: false, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-3 varian: komponen master tidak aktif → tidak ikut.
+      { defaultAmount: 444_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: false, kind: "earning", recurrence: "fixed" } },
+      // EC-OT-3: deduction/fixed aktif → tidak ikut (falsifikasi filter kind).
+      { defaultAmount: 555_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "deduction", recurrence: "fixed" } },
+      // E-OT-5: variable aktif → tidak ikut, tidak memicu cabang 75%.
+      { defaultAmount: 666_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "variable" } },
+      // EC-OT-1: batas inklusif — mulai & berakhir persis pada ot.date ikut.
+      // EC-OT-2: komponen kedua yang ikut; 540.000 + 1 = dasar E-OT-7.
+      { defaultAmount: 1, isActive: true, effectiveFrom: otDate, effectiveTo: otDate, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+    ]
+    prismaMock.employeePayrollComponent.findMany.mockImplementation(
+      async (args: { where: Record<string, any> }) => {
+        const w = args.where
+        return assignments.filter((a) => {
+          if (w.employeeId !== undefined && w.employeeId !== 1) return false
+          if (w.isActive !== undefined && a.isActive !== w.isActive) return false
+          if (w.effectiveFrom?.lte && !(a.effectiveFrom <= w.effectiveFrom.lte)) return false
+          if (Array.isArray(w.OR)) {
+            const orOk = w.OR.some((c: Record<string, any>) =>
+              c.effectiveTo === null ? a.effectiveTo === null : a.effectiveTo !== null && a.effectiveTo >= c.effectiveTo.gte,
+            )
+            if (!orOk) return false
+          }
+          const cw = w.component ?? {}
+          if (cw.isActive !== undefined && a.component.isActive !== cw.isActive) return false
+          if (cw.kind !== undefined && a.component.kind !== cw.kind) return false
+          if (cw.recurrence !== undefined && a.component.recurrence !== cw.recurrence) return false
+          return true
+        })
+      },
+    )
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "pending",
+      hours: 1,
+      date: otDate,
+      calculatedValue: null,
+      employee: { baseSalary: 3_460_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    // Where produksi wajib menilai jendela pada ot.date, bukan tanggal lain.
+    const whereArg = prismaMock.employeePayrollComponent.findMany.mock.calls[0][0].where
+    expect(whereArg.effectiveFrom.lte).toEqual(otDate)
+    expect(whereArg.OR).toEqual([{ effectiveTo: null }, { effectiveTo: { gte: otDate } }])
+    // Dasar = 3.460.000 + 540.000 + 1 = 4.000.001 (E-OT-7, 2 desimal utuh);
+    // 1 jam hari kerja = 1,5 x 4.000.001/173 = 34.682,09… → Rp34.682.
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.calculatedValue).toBe(34682)
+  })
+
+  it("approveOvertime stays idempotent after components change (E-OT-6)", async () => {
+    // E-OT-6: nilai sudah approved beku; perubahan master sesudahnya tidak
+    // memicu hitung ulang — approve ulang no-op existing.
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "approved",
+      hours: 1,
+      date: new Date("2026-06-12T00:00:00Z"),
+      calculatedValue: 34682,
+      employee: { baseSalary: 3_460_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    expect(prismaMock.employeePayrollComponent.findMany).not.toHaveBeenCalled()
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 
   it("updateOvertimeRequest rejects an edit beyond the 4h workday limit (K2-S1)", async () => {
