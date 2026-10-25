@@ -873,6 +873,57 @@ describe("Sales Return Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  // === F-2026-10-25-012-S gerbang persetujuan retur penjualan ===
+  it("AC-SR-B1: completeSalesReturn menuntut approve_sales_returns, bukan edit_sales_returns", async () => {
+    mocks.requirePermissionMock.mockImplementation(async (key: string) => {
+      if (key === "approve_sales_returns") throw new Error("Tidak punya izin approve_sales_returns")
+      return { id: 7 }
+    })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("approve_sales_returns")
+    // Gerbang izin SEBELUM retur dibaca / transaksi dibuka: nol stok, nol jurnal.
+    expect(mocks.prismaMock.salesReturn.findUniqueOrThrow).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.onSalesReturnCompletedMock).not.toHaveBeenCalled()
+  })
+
+  it("AC-SR-B2: penyetuju lain menyelesaikan draft tepat satu transaksi", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    // Satu transaksi memuat hook stok + hook jurnal existing.
+    expect(mocks.onSalesReturnCompletedMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("AC-SR-B3: SoD — pembuat tidak boleh menyelesaikan returnya sendiri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 7, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pembuatnya sendiri")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.onSalesReturnCompletedMock).not.toHaveBeenCalled()
+  })
+
+  it("EC-2: createdBy null (baris legacy) boleh diselesaikan penyetuju berizin", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: null, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(true)
+  })
+
+  it("BR-SR-03: status selain draft ditolak berpesan sebelum transaksi", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled", createdBy: 3, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("hanya bisa diselesaikan dari status draft")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   // === createSalesReturn over-return branch coverage ===
   it("createSalesReturn menolak faktur konsep (di luar RETURNABLE_INVOICE_STATUSES)", async () => {
     mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "draft" })
