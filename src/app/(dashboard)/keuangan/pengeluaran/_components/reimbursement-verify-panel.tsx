@@ -24,6 +24,12 @@ interface ReimbursementVerifyPanelProps {
   accountId: number
   paidFromAccountId: number | null
   accounts: AccountOption[]
+  /**
+   * Notice blocker gerbang bayar/setujui dari server (page RSC), verbatim.
+   * Non-null = Tandai Dibayar + Setujui Klaim dinonaktifkan; UI tidak
+   * menilai sendiri kenapa gerbang tertutup.
+   */
+  paymentBlockerNotice?: string | null
 }
 
 /**
@@ -40,6 +46,7 @@ export function ReimbursementVerifyPanel({
   accountId,
   paidFromAccountId,
   accounts,
+  paymentBlockerNotice = null,
 }: ReimbursementVerifyPanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -55,6 +62,7 @@ export function ReimbursementVerifyPanel({
   const isDraft = status === "draft"
   const canApprove = status === "draft" || status === "pending"
   const canMarkPaid = status === "approved"
+  const gateBlocked = paymentBlockerNotice != null
 
   function handleSetAccounts() {
     if (!expenseAccountId) {
@@ -134,6 +142,12 @@ export function ReimbursementVerifyPanel({
     >
       <h2 className="text-sm font-semibold text-foreground">Verifikasi Klaim Reimbursement</h2>
 
+      {gateBlocked && (
+        <p role="alert" className="text-sm text-warning">
+          {paymentBlockerNotice}
+        </p>
+      )}
+
       {isDraft && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
@@ -175,13 +189,13 @@ export function ReimbursementVerifyPanel({
       {(canApprove || canMarkPaid) && (
         <div className="flex flex-wrap gap-2">
           {canMarkPaid && (
-            <Button variant="success" size="sm" onPress={handleMarkPaid} isDisabled={isPending}>
+            <Button variant="success" size="sm" onPress={handleMarkPaid} isDisabled={isPending || gateBlocked}>
               <CheckCircle size={14} aria-hidden="true" />
               Tandai Dibayar
             </Button>
           )}
           {canApprove && (
-            <Button variant="success" size="sm" onPress={handleApprove} isDisabled={isPending}>
+            <Button variant="success" size="sm" onPress={handleApprove} isDisabled={isPending || gateBlocked}>
               <CheckCircle size={14} aria-hidden="true" />
               Setujui Klaim
             </Button>

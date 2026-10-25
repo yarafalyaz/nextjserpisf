@@ -123,4 +123,46 @@ describe("ReimbursementVerifyPanel", () => {
     act(() => root.unmount())
     container.remove()
   })
+
+  it("blocker gerbang server: notice verbatim + Tandai Dibayar disabled, klik tidak memanggil markExpensePaid", async () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = mount(container, {
+      status: "approved",
+      paymentBlockerNotice: "Menunggu perbaikan gerbang (t_b228bac8)",
+    })
+    expect(container.textContent).toContain("Menunggu perbaikan gerbang (t_b228bac8)")
+    const paidButton = buttonByText(container, "Tandai Dibayar")
+    expect(paidButton).toBeTruthy()
+    expect((paidButton as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => {
+      paidButton.click()
+    })
+    expect(paidMock).not.toHaveBeenCalled()
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("blocker gerbang server: Setujui Klaim disabled, Tolak Klaim tetap aktif", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = mount(container, {
+      status: "draft",
+      paymentBlockerNotice: "Menunggu perbaikan gerbang (t_b228bac8)",
+    })
+    expect((buttonByText(container, "Setujui Klaim") as HTMLButtonElement).disabled).toBe(true)
+    expect((buttonByText(container, "Tolak Klaim") as HTMLButtonElement).disabled).toBe(false)
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("tanpa blocker: Tandai Dibayar aktif (kontrol)", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = mount(container, { status: "approved", paymentBlockerNotice: null })
+    expect((buttonByText(container, "Tandai Dibayar") as HTMLButtonElement).disabled).toBe(false)
+    expect(container.textContent).not.toContain("Menunggu perbaikan gerbang")
+    act(() => root.unmount())
+    container.remove()
+  })
 })
