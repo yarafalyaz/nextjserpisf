@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.prismaMock.customer.findFirst
     .mockResolvedValueOnce({ id: 7, name: "CV Uji" })
-    .mockResolvedValueOnce({ phone: "0812-3456-7890" })
+    .mockResolvedValueOnce({ phone: "0812-3456-7890", email: "uji@example.com" })
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.salesPayment.findMany.mockResolvedValue([])
   mocks.prismaMock.salesReturn.findMany.mockResolvedValue([])
@@ -95,7 +95,9 @@ describe("loadCustomerStatement", () => {
     const report = await loadCustomerStatement(404, { start: D("2026-02-01"), end: D("2026-02-28") })
     expect(report.customer).toBeNull()
     expect(report.customerPhone).toBeNull()
+    expect(report.customerEmail).toBeNull()
     expect(report.whatsappTrail).toEqual([])
+    expect(report.emailTrail).toEqual([])
     expect(report.statement.openingBalance).toBe(0)
     expect(report.statement.closingBalance).toBe(0)
     expect(report.statement.entries).toEqual([])
@@ -165,7 +167,7 @@ describe("loadCustomerStatement", () => {
     })
     expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(2, {
       where: { id: 7 },
-      select: { phone: true },
+      select: { phone: true, email: true },
     })
   })
 
@@ -227,6 +229,66 @@ describe("loadCustomerStatement", () => {
   it("F-038-B1: tanpa baris jejak → whatsappTrail [] tanpa query user", async () => {
     const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
     expect(report.whatsappTrail).toEqual([])
+    expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
+  })
+
+  it("F-043-B1: email pelanggan dimuat dari select perluasan yang sama — payload builder/customer beku", async () => {
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+
+    expect(report.customer).toEqual({ id: 7, name: "CV Uji" })
+    expect(report.customerEmail).toBe("uji@example.com")
+    expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: 7, deletedAt: null },
+      select: { id: true, name: true },
+    })
+    expect(mocks.prismaMock.customer.findFirst).toHaveBeenNthCalledWith(2, {
+      where: { id: 7 },
+      select: { phone: true, email: true },
+    })
+  })
+
+  it("F-043-B1: email kosong/null → customerEmail null (tombol email tidak lahir di UI)", async () => {
+    mocks.prismaMock.customer.findFirst.mockReset()
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce({ id: 7, name: "CV Uji" })
+      .mockResolvedValueOnce({ phone: "0812-3456-7890", email: null })
+
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    expect(report.customerEmail).toBeNull()
+    expect(report.customerPhone).toBe("0812-3456-7890")
+  })
+
+  it("F-043-B1: jejak email terpisah WA — query email_link_opened + nama staf apa adanya", async () => {
+    // findMany dipanggil 2x untuk trail (WA + email); bedakan dari argumen where.
+    mocks.prismaMock.activityLog.findMany.mockImplementation(
+      async (args: { where: { action: string } }) =>
+        args.where.action === "email_link_opened"
+          ? [{ userId: 44, createdAt: D("2026-02-21") }]
+          : [{ userId: 42, createdAt: D("2026-02-20") }],
+    )
+    mocks.prismaMock.user.findMany.mockImplementation(
+      async (args: { where: { id: { in: number[] } } }) =>
+        args.where.id.in.map((id: number) => ({ id, name: id === 44 ? "Rina" : "Sari" })),
+    )
+
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+
+    expect(mocks.prismaMock.activityLog.findMany).toHaveBeenCalledWith({
+      where: { modelType: "CustomerStatement", modelId: 7, action: "email_link_opened" },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+      select: { userId: true, createdAt: true },
+    })
+    expect(report.emailTrail).toEqual([{ userName: "Rina", createdAt: D("2026-02-21") }])
+    expect(report.whatsappTrail).toEqual([{ userName: "Sari", createdAt: D("2026-02-20") }])
+    // BR-SE-01/BR-SE-10: tidak ada status terkirim/dibaca; kanal tidak digabung.
+    expect(JSON.stringify(report.emailTrail)).not.toMatch(/terkirim|dibaca/i)
+    expect(report.statement.closingBalance).toBe(0)
+  })
+
+  it("F-043-B1: tanpa baris jejak email → emailTrail [] (query WA tetap terpisah)", async () => {
+    const report = await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    expect(report.emailTrail).toEqual([])
     expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
   })
 })
