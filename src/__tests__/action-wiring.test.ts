@@ -199,6 +199,13 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
   // pelanggan kini dirujuk halaman kelola pelanggan (frontend
   // t_1f97c2ea) — entri beku dibuang.
+  // F-2026-10-25-008-S inti backend: penanda selesai aktivitas lead
+  // terjadwal; tombol Tandai Selesai/Batalkan + label riwayat menyusul
+  // di kartu frontend t_68dce5df (buang 2 entri ini saat UI memanggilnya).
+  "src/actions/crm.actions.ts::completeLeadActivity":
+    "F-2026-10-25-008-S backend; UI tombol Tandai Selesai aktivitas lead menyusul (frontend t_68dce5df)",
+  "src/actions/crm.actions.ts::reopenLeadActivity":
+    "F-2026-10-25-008-S backend; UI tombol Batalkan Penanda Selesai aktivitas lead menyusul (frontend t_68dce5df)",
 }
 
 describe("keterhubungan aksi server", () => {
