@@ -7,8 +7,9 @@
  * Penjaga mengikat:
  * - Izin tanpa key baru (Q-MS-1): kelola override = `edit_items`,
  *   baca panel = `view_items` (katalog nyata; TIDAK ada permission baru).
- * - Minimum efektif (BR-MS-02): baris ItemWarehouseSetting ada = override
- *   pasangan (item, gudang); hapus baris = kembali warisi Item.minStock.
+ * - Minimum efektif (BR-MS-02): minStock baris terisi = override pasangan
+ *   (item, gudang); minStock null (baris lahir dari lead time) / baris
+ *   tidak ada = kembali warisi Item.minStock.
  * - Simpan hanya untuk item stok aktif (bukan jasa, bukan terhapus) dan
  *   gudang aktif; minStock wajib angka >= 0 (0 sah: menonaktifkan
  *   penilaian pasangan itu). Item/gudang nonaktif ditolak berpesan.
@@ -168,15 +169,11 @@ export async function setItemWarehouseMinStock(
 
 /**
  * Isi lead time penampung titik pesan-ulang (F-2026-10-25-048-S,
- * Q-ROP-2/Q-ROP-3 putusan Lead): SATU penampung
- * `ItemWarehouseSetting.leadTimeDays` per (barang, gudang), key tulis
- * reuse `edit_items` tanpa key baru. Baris setting baru yang dibuat
- * aksi ini menulis minStock = minimum global barang saat dibuat —
- * konsekuensi terbuka dari resolver existing (baris ada = override,
- * BR-MS-02): minimum efektif pasangan menjadi override bernilai sama
- * dengan global saat itu, dan surfaced sebagai "Minimum per gudang"
- * di panel. Bukan disembunyikan; mengubah global sesudahnya tidak lagi
- * mengalir ke pasangan ini sampai override diubah staf.
+ * Q-ROP-2/Q-ROP-3 putusan Lead): satu penampung leadTimeDays per
+ * (barang, gudang), edit_items reuse tanpa key baru. Baris baru dari
+ * aksi ini lahir dengan minStock NULL = warisi global (BR-ROP-01);
+ * lead time tidak boleh membekukan minimum global (perbaiki PR #936).
+ * Minimum eksplisit per gudang tetap butuh setItemWarehouseMinStock.
  */
 export async function setItemWarehouseLeadTime(
   itemIdInput: unknown,
@@ -194,17 +191,12 @@ export async function setItemWarehouseLeadTime(
       where: { itemId_warehouseId: { itemId, warehouseId } },
       select: { id: true, leadTimeDays: true },
     })
-    const itemRow = await prisma.item.findUnique({
-      where: { id: itemId },
-      select: { minStock: true },
-    })
-
     const saved = await prisma.itemWarehouseSetting.upsert({
       where: { itemId_warehouseId: { itemId, warehouseId } },
       create: {
         itemId,
         warehouseId,
-        minStock: itemRow?.minStock ?? 0,
+        minStock: null, // warisi global, bukan snapshot (BR-ROP-01)
         leadTimeDays,
         createdBy: Number(user.id),
         updatedBy: Number(user.id),
@@ -291,18 +283,28 @@ export async function removeItemWarehouseMinStock(
 
     const existing = await prisma.itemWarehouseSetting.findUnique({
       where: { itemId_warehouseId: { itemId, warehouseId } },
-      select: { id: true, minStock: true },
+      select: { id: true, minStock: true, leadTimeDays: true },
     })
     if (!existing) return { success: true, removed: false }
 
-    await prisma.itemWarehouseSetting.delete({ where: { id: existing.id } })
+    if (existing.minStock == null) {
+      return { success: true, removed: false }
+    }
+    if (existing.leadTimeDays != null) {
+      await prisma.itemWarehouseSetting.update({
+        where: { id: existing.id },
+        data: { minStock: null, updatedBy: Number(user.id) },
+      })
+    } else {
+      await prisma.itemWarehouseSetting.delete({ where: { id: existing.id } })
+    }
 
     const log = await writeSettingLog({
       userId: Number(user.id),
       action: "item_warehouse_min_stock_removed",
       settingId: existing.id,
       description: `Menghapus stok minimum per gudang ${item.sku} ${item.name} di ${warehouse.name} (sebelumnya ${Number(existing.minStock)}); kembali warisi minimum global`,
-      oldValues: { itemId, warehouseId, minStock: Number(existing.minStock) },
+      oldValues: { itemId, warehouseId, minStock: existing.minStock == null ? null : Number(existing.minStock) },
       newValues: { itemId, warehouseId, minStock: null },
     })
 
@@ -364,7 +366,7 @@ export async function listItemWarehouseSettings(
       globalMinStock,
       rows: warehouses.map((w) => {
         const setting = settingByWarehouse.get(w.id)
-        const override = setting ? Number(setting.minStock) : null
+        const override = setting?.minStock != null ? Number(setting.minStock) : null
         return {
           warehouseId: w.id,
           warehouseName: w.name,

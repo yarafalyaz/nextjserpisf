@@ -130,7 +130,7 @@ export async function loadReorderPoints(now = new Date()): Promise<ReorderPointR
     const setting = settingByPair.get(key)
     const effective = effectiveMinStock(
       Number(item.minStock),
-      setting ? Number(setting.minStock) : undefined,
+      setting?.minStock != null ? Number(setting.minStock) : undefined,
     )
     return [{
       itemId: item.id,

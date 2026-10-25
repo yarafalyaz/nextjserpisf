@@ -84,6 +84,29 @@ describe("loadReorderPoints", () => {
     })
   })
 
+  it("AC-ROP-B3: baris lead-time minStock null warisi global, ikut berubah saat global berubah", async () => {
+    // pasangan lahir dari lead time saja: minStock null (bukan snapshot 5)
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
+      { itemId: 1, warehouseId: 2, minStock: null, leadTimeDays: 7 },
+    ])
+    mocks.prismaMock.purchaseOrder.findMany.mockResolvedValue([])
+    mocks.prismaMock.materialIssue.findMany.mockResolvedValue([])
+    let res = await loadReorderPoints(new Date(2026, 9, 26))
+    expect(res.result.lines[0]).toMatchObject({ minStock: 5, minStockSource: "global", reorderPoint: 5 })
+    // ubah global 5 -> 10: titik ikut berubah (minStock baris null)
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 1, sku: "BRG-1", name: "Busi", unitOfMeasure: "PCS", minStock: 10 },
+    ])
+    res = await loadReorderPoints(new Date(2026, 9, 26))
+    expect(res.result.lines[0]).toMatchObject({ minStock: 10, minStockSource: "global", reorderPoint: 10 })
+    // setelah staf atur eksplisit per gudang: global tidak lagi mengubah titik
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([
+      { itemId: 1, warehouseId: 2, minStock: 3, leadTimeDays: 7 },
+    ])
+    res = await loadReorderPoints(new Date(2026, 9, 26))
+    expect(res.result.lines[0]).toMatchObject({ minStock: 3, minStockSource: "override", reorderPoint: 3 })
+  })
+
   it("pasangan setting tanpa lapisan -> tidak_dinilai tanpa_lapisan, terhitung", async () => {
     const res = await loadReorderPoints(new Date(2026, 9, 26))
     const line = res.result.lines.find((l) => l.warehouseId === 3)!
