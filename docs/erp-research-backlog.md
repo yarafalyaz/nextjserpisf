@@ -26138,6 +26138,187 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
 ---
 
+
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-013-V: koreksi absensi sesudah slip payroll terbit — slip final beku, selisih hanya lewat slip koreksi periode berjalan (menjawab Q-AC-4 / BR-AC-05 spec F-2026-10-25-010-S PR #777)
+
+Status: PUTUSAN BOT Accountant (kartu t_2dc933c7), menjawab
+HANDOFF Business -> Accountant di PR #777 (spec
+F-2026-10-25-010-S §5 BR-AC-05 + §8 Q-AC-4). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. Implementasi
+fisik = Backend sesudah putusan Lead Q-AC-1/2 + fisik Q-AC-3;
+vonis ini TIDAK membuka build sendiri.
+
+### A. Bukti live (origin/main 281e14b7, 2026-10-25 03:2x WIB)
+
+- Slip final terkunci kode: `updatePayroll` menolak non-draft
+  ("Hanya penggajian status draft yang dapat diubah",
+  hrm.actions.ts jalur update); `approvePayroll` hanya dari
+  draft (claim kondisional status=draft); `markPayrollPaid`
+  hanya dari approved + klaim atomik status=approved dalam tx
+  yang sama dengan `onPayrollPaid`. FINAL = status
+  approved/paid (`FINAL_PAYROLL_STATUSES`, hrm.actions.ts:1420).
+- Jurnal payroll hanya lahir di `onPayrollPaid`
+  (accounting.hook.ts:2152): Dr Beban Gaji (gross) / Cr Bank
+  (net) + Cr Utang statutori (BPJS+PPh21) + Cr Piutang
+  Karyawan (pinjaman) + Cr Utang potongan; idempoten per
+  (referenceType="Payroll", referenceId) cek di luar + di
+  dalam tx; `assertPeriodOpen(paymentDate)`; akun dari
+  SystemSetting, kosong = tolak berisik. Satu slip = tepat
+  satu jurnal; tidak ada jurnal kedua per slip.
+- Rapel/retro/selisih payroll ABSEN: grep
+  rapel|retroactive|backpay|payroll-adjustment di src+prisma
+  origin/main = 0 hasil domain (satu-satunya hit = komentar
+  landed-cost tak terkait). Klaim spec "rapel belum ada di
+  kode" TERVERIFIKASI.
+- Mesin statutori se-masa sudah agregat: PPh21
+  `computePph21ForPeriod` = target gabungan masa dikurangi
+  PPh21 slip se-masa lain (bukan draft/batal); BPJS
+  `computeBpjsForPeriod` pola sama + tolak masa campuran
+  legacy (vonis F-103-V B6/B8). Slip kedua se-masa (mis.
+  REGULAR+THR) adalah pola live yang sah.
+- Reversal jurnal existing: `reverseJournalsByReferenceTx`
+  (accounting.hook.ts:181) — reversal bertanggal asli +
+  assertPeriodOpen tanggal asli; jurnal POSTED tidak dihapus
+  diam-diam.
+
+### B. Putusan
+
+1. SLIP FINAL BEKU MUTLAK. Koreksi absensi yang disetujui
+   untuk tanggal yang sudah masuk slip approved/paid TIDAK
+   mengubah slip itu: tidak edit kolom, tidak hitung ulang,
+   tidak reversal jurnal payroll asal, tidak hapus jurnal.
+   Alasan: slip approved adalah dokumen statutori terbit
+   (bukti potong/SPT masa bersandar padanya); paid sudah
+   keluar kas + jurnal POSTED. Mengubahnya = menulis ulang
+   masa pajak yang sudah dilaporkan.
+2. SELISIH LEWAT SLIP KOREKSI PERIODE BERJALAN (satu-satunya
+   jalur uang). Bila selisih absensi berdampak uang
+   (absentDeduction/lateDeduction/hari kerja berubah), selisih
+   diselesaikan sebagai slip Payroll BARU di periode
+   pembayaran berjalan (bukan periode asal), berisi HANYA
+   delta: hitung-ulang estimasi periode asal dengan absensi
+   terkoreksi memakai mesin existing, kurangi angka slip
+   final asal per komponen; selisih per komponen itulah isi
+   slip koreksi (boleh negatif per komponen; neto boleh
+   negatif = potongan periode berjalan, lihat butir 5).
+   Slip koreksi tertaut ke slip asal + pengajuan koreksi
+   (tautan referensi wajib terbaca di slip koreksi; bentuk
+   fisik kolom/tautan = Backend Q-AC-3, WAJIB koordinasi
+   schema dengan Accountant sebelum migrasi).
+3. PPh21 SELISIH = MASA DITERIMA, BUKAN MASA ASAL.
+   Penghasilan koreksi terutang/dipotong pada masa slip
+   koreksi dibayar, mengikuti rezim mesin se-masa existing:
+   slip koreksi ikut `computePph21ForPeriod` periode berjalan
+   (TER atas bruto gabungan masa berjalan; masa terakhir
+   Pasal 17 tahunan menampungnya otomatis). DILARANG
+   membetulkan slip/bukti potong masa asal dan DILARANG
+   menggeser masa pajak ke periode asal. Dasar: PMK
+   168/2023 Pasal 15 (pemotongan tiap Masa Pajak atas
+   penghasilan masa itu; masa terakhir = selisih tahunan)
+   + PP 58/2023 skema TER — koreksi yang DIBAYAR masa
+   berjalan adalah penghasilan masa berjalan bagi pemotongan.
+4. BPJS SELISIH MENGIKUTI BASIS SLIP KOREKSI. Selisih upah
+   koreksi masuk basis BPJS hanya sejauh komponennya adalah
+   upah menurut ruleset berjalan; dihitung oleh agregator
+   se-masa existing pada periode slip koreksi (ceiling
+   sekali per masa), BUKAN hitung ulang BPJS masa asal.
+   Masa asal campuran legacy tetap ditolak gerbang B8 —
+   koreksi tidak menjadi jalan belakang melegalkan masa itu.
+5. NETO NEGATIF TIDAK DIBAYAR TUNAI TERBALIK. Bila delta
+   neto negatif (karyawan kelebihan bayar): slip koreksi
+   mencatat potongan atas pembayaran periode berjalan;
+   jurnal mengikuti `onPayrollPaid` apa adanya (net dibaca
+   dari slip koreksi). Bila tidak ada pembayaran berjalan
+   untuk menampung (karyawan sudah berhenti): selisih TIDAK
+   dipaksakan jadi piutang otomatis dan TIDAK ditagih lewat
+   jurnal tebak — berhenti sebagai temuan HR/Accountant
+   untuk penyelesaian manual terdokumentasi (kasus tepi,
+   butuh keputusan kasus-per-kasus, bukan default sistem).
+6. TANPA UANG = TANPA SLIP KOREKSI. Koreksi yang tidak
+   mengubah komponen uang apa pun (mis. status hadir berubah
+   tapi potongan nol karena aturan periode itu) cukup
+   mengubah rekod Attendance lewat persetujuan spec; tidak
+   ada dokumen uang dibuat. Attendance boleh berubah;
+   yang beku hanya slip+jurnalnya.
+7. PERIODE TERKUNCI MENAHAN UANG, BUKAN PENGAJUAN.
+   Pengajuan + persetujuan koreksi tetap boleh untuk tanggal
+   di periode akuntansi tertutup; yang ditahan hanya posting
+   uang: slip koreksi diposting di periode berjalan terbuka
+   (`assertPeriodOpen` existing pada paymentDate slip
+   koreksi), tidak pernah backdate ke periode asal.
+8. TAHAP 1 IMPLEMENTASI BOLEH LEBIH KETAT: Backend MAY
+   menahan persetujuan koreksi bertanggal slip-final (tolak
+   berpesan "menunggu jalur slip koreksi") sampai jalur
+   butir 2 dibangun — penahanan ini SAH dan tidak melanggar
+   vonis; yang DILARANG adalah persetujuan yang mengubah
+   slip final atau mengubah Attendance lalu diam-diam
+   menganggap uang selesai.
+
+### C. Larangan (mengikat Backend/Business/Frontend)
+
+- Edit/hitung-ulang/reversal slip approved/paid atau
+  jurnalnya dengan dalih koreksi absensi.
+- Slip koreksi bertanggal/masa periode asal, atau bukti
+  potong pengganti untuk masa asal dari jalur ini.
+- UI menghitung selisih/statutori sendiri; UI menampilkan
+  delta + statutori dari server verbatim.
+- Default akun/jurnal cadangan untuk slip koreksi: akun
+  tetap mapping SystemSetting existing lewat onPayrollPaid,
+  kosong = fail-closed seperti slip biasa.
+- Menjadikan kelebihan bayar karyawan berhenti sebagai
+  piutang/jurnal otomatis tanpa keputusan kasus (butir 5).
+
+### D. Falsifikasi wajib QA (E-AC4-*)
+
+- E-AC4-1: setujui koreksi atas tanggal berslip paid ->
+  slip asal byte-identik (semua kolom uang + status +
+  statutorySnapshot) dan jurnal asal tetap tepat satu.
+  Mutasi: izinkan update slip final -> MERAH.
+- E-AC4-2: koreksi berdampak uang -> tepat satu slip
+  koreksi periode berjalan berisi delta per komponen sen
+  persis (hitung-ulang terkoreksi minus slip asal); replay
+  persetujuan -> tidak ada slip koreksi kedua.
+- E-AC4-3: PPh21 slip koreksi dihitung mesin masa berjalan
+  (gabungan se-masa), masa asal tidak berubah di read-model
+  PPh21. Mutasi: hitung PPh21 koreksi di masa asal -> MERAH.
+- E-AC4-4: koreksi tanpa dampak uang -> nol slip koreksi,
+  nol jurnal baru; Attendance berubah.
+- E-AC4-5: periode asal terkunci -> persetujuan tercatat,
+  posting uang hanya di periode berjalan terbuka; backdate
+  slip koreksi -> MERAH (assertPeriodOpen).
+- E-AC4-6: delta neto negatif karyawan aktif -> potongan
+  tampil di slip koreksi periode berjalan; karyawan berhenti
+  tanpa pembayaran berjalan -> TIDAK ada piutang/jurnal
+  otomatis, temuan tercatat.
+
+### E. Tax rules register (klaim terbatas)
+
+| Aturan | Sumber | Berlaku | Cakupan vonis |
+|---|---|---|---|
+| Pemotongan PPh21 tiap Masa Pajak (TER selain masa terakhir; Pasal 17 di masa terakhir, selisih tahunan) | PMK 168/2023 Pasal 15; PP 58/2023 — pajak.go.id (PMK: jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023, undangan 29 Des 2023, berlaku 1 Jan 2024); akses 2026-10-25 | 1 Jan 2024– | Butir 3: masa potong = masa bayar slip koreksi |
+| Kelebihan potong tahunan dikembalikan pemotong + bukti potong | PMK 168/2023 Pasal 21 (ringkasan DJP pajak.go.id) | 1 Jan 2024– | Butir 3/5: penampung akhir tahun, bukan alasan betulkan masa asal |
+
+Catatan jujur: pasal-pasal di atas mengatur skema masa
+pemotongan; penerapan "rapel dipotong masa diterima" adalah
+konsekuensi skema itu atas pembayaran masa berjalan, bukan
+kutipan pasal rapel tersendiri — bila DJP menerbitkan
+penegasan rapel khusus, vonis ini ditinjau.
+
+### F. Pemilik berikutnya
+
+Lead: merge PR vonis ini + putus Q-AC-1/2; Backend: fisik
+Q-AC-3 + jalur slip koreksi butir 2 (klaim schema di board,
+koordinasi Accountant sebelum migrasi; penahanan tahap 1
+butir 8 sah); Frontend: tampil delta server verbatim;
+QA: E-AC4-1..6 atas head persis.
+
+F-2026-10-25-013-V — Koreksi absensi sesudah slip terbit.
+Status: VONIS Accountant TERBIT (dokumen saja); Q-AC-4
+TERJAWAB. Slip final beku; selisih hanya slip koreksi
+periode berjalan (PPh21 masa diterima); tahap 1 boleh
+menahan persetujuan kasus slip-final. Pemilik berikutnya:
+Lead (merge + Q-AC-1/2), Backend (Q-AC-3 + slip koreksi),
+Frontend (konsumen), QA (E-AC4-1..6).
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-011-S: inti status tersimpan per baris perintah kerja (lanjutan F-2026-10-20-105; migrasi ditunda vonis)
 
 > **Slot**: F-2026-10-25-011-S. Diperiksa bentrok 2026-10-25 01:56 WIB vs `origin/main` (`11ecb983`): grep `F-2026-10-25-011` di backlog+board = 0; seri 001-S..010-S terpakai (006-S di main, 007-S..010-S PR #770/#772/#774/#777 OPEN). Diverifikasi sebelum tulis, bukan slot tetap.
