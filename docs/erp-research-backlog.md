@@ -28470,6 +28470,127 @@ F-2026-10-25-018-S — Pengajuan pinjaman karyawan mandiri. Status: SPEC SELESAI
 
 ---
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-027-S: antrean prospek mendekati/lampaui target tutup (expectedCloseDate, forecast jujur tanpa probabilitas)
+
+> **Slot**: F-2026-10-25-027-S. Diperiksa bentrok 2026-10-25 14:2x WIB vs `origin/main` (`0805642d`): grep `F-2026-10-25-027` di backlog+board origin/main = 0; ID terpakai tanggal ini di main/PR terbuka: 001-S..026-L (026 di PR #851). ID 027 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_be1e2e84.
+
+### 0. Ringkasan
+
+`Lead.expectedCloseDate` sudah tersimpan dan tervalidasi, tetapi tidak ada permukaan baca yang menjawab: "prospek terbuka mana yang target tutupnya sudah lewat atau dekat, sehingga penjual harus bertindak minggu ini?" Corong prospek existing (F-2026-10-22-092-S) hanya menampilkan posisi saat ini per status dan gerakan kohort periode — tanpa dimensi tanggal target tutup. Spec ini membekukan antrean baca-saja turunan: prospek non-terminal dengan `expectedCloseDate` terisi, dikelompokkan LEWAT_TARGET (hari WIB > expectedCloseDate) dan MENDEKATI (dalam jendela hari terkonfigurasi tampilan, usulan 7 hari), diurutkan paling lewat dulu. Tanpa probabilitas tertimbang, tanpa prediksi pendapatan, tanpa status/migrasi/jurnal baru. Nilai tampil = `estimatedValue` saat ini apa adanya dengan notice jujur warisan BR-LF-08.
+
+### 1. Inventarisasi terverifikasi (2026-10-25, origin/main 0805642d)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Kolom `Lead.expectedCloseDate DateTime?` (`prisma/schema.prisma:4301`) + `estimatedValue Decimal?` + `assignedTo` + `status` string default `new`; status kanonik `LEAD_STATUSES = [new, contacted, qualified, proposal, negotiation, won, lost]` (`src/lib/validations/crm.schemas.ts:88`).
+- Validasi server: `expectedCloseDate` dateOnly, ditolak bila tidak ter-parse (`crm.schemas.ts:55,73`); konversi tersimpan tengah malam UTC hari WIB (pola disebut `src/actions/crm.actions.ts:355`).
+- Corong: builder murni `buildLeadFunnel` + `LEAD_FUNNEL_STAGE_LABELS` (`src/lib/reports/lead-funnel.ts:34`), loader `lead-funnel-data.ts` (izin ganda: master `view_leads`, laporan `view_reports`, baris :11-15), halaman `/laporan/corong-prospek` gerbang `requirePermission("view_reports")` (`page.tsx:30`). BR-LF-08 membekukan: TIDAK ada probabilitas tertimbang karena tidak ada tabel probabilitas; Σ nilai = nilai saat ini dengan notice.
+- Pola antrean tanggal existing: `lead-followups.ts` (jadwal aktivitas jatuh tempo, kalender WIB, urut overdue terbesar), `stale-leads.ts` (ambang hari konstan + ember jujur), `quotation-accepted-queue` (validUntil lewat tetap tampil, sisa hari null bila tanpa batas).
+
+Belum ada / gap (bukti grep run ini):
+- Grep `expectedClose` di `src/lib/reports/*.ts` + halaman corong = 0 hit: tidak ada builder/loader/kartu yang membaca `expectedCloseDate` untuk antrean/forecast.
+- Tidak ada pengelompokan prospek terbuka berdasarkan kedekatan target tutup; penjual hanya bisa menemukan target lewat dari daftar lead mentah per baris.
+- `expectedCloseDate` kosong tidak tertanda sebagai temuan data ("tanpa target tutup") di permukaan mana pun.
+
+### 2. Workflow specification
+
+Aktor: penjual (pemegang leads), supervisor/owner (pemegang laporan).
+Dokumen masuk: Lead existing (status non-terminal, `expectedCloseDate` terisi/kosong). Dokumen keluar: tidak ada — antrean baca-saja; tindakan lanjut memakai permukaan existing (buka detail lead, tambah aktivitas terjadwal, ubah status/tanggal lewat form lead existing).
+Alur:
+1. Loader membaca lead `deletedAt IS NULL` + status non-terminal (bukan `won`/`lost`) satu query massal (pola anti-N+1 lead-funnel-data).
+2. Builder murni mengelompokkan per baris: `expectedCloseDate` kosong -> ember TANPA_TARGET (tertanda, tidak masuk urutan urgensi); hari WIB hari ini > expectedCloseDate -> LEWAT_TARGET + `overdueDays`; selisih 0..jendela -> MENDEKATI + `sisaHari`; lebih jauh -> di luar antrean.
+3. Urutan: LEWAT_TARGET (overdue terbesar dulu), lalu MENDEKATI (sisa terkecil dulu); seri diputus leadNumber lalu id (pola lead-followups).
+4. Halaman menampilkan label tahap verbatim `LEAD_FUNNEL_STAGE_LABELS`, penanggung (assignedTo; kosong = label "Belum ditugaskan" warisan funnel), estimatedValue apa adanya + notice nilai saat ini; nol hitung ulang di UI.
+5. Aksi per baris hanya tautan ke detail lead existing; tidak ada tombol ubah status/tanggal di antrean.
+
+### 3. Role/permission matrix
+
+| Aksi | Permission nyata | Penjual | Supervisor | Admin |
+|---|---|---|---|---|
+| Melihat antrean (permukaan laporan) | `view_reports` | bila diberi | ya | ya |
+| Membuka detail lead dari baris | `view_leads` | ya (baris tanpa izin ini = tautan nonaktif/tertanda) | ya | ya |
+| Mengubah tanggal/status (di detail, existing) | `edit_leads` | sesuai existing | sesuai existing | ya |
+| Membuat key izin baru | — | TIDAK tahap 1 (Q-EC-2) | — | — |
+
+Scope baris: mengikuti pola `lead-funnel-data.ts` (report = per penanggung bernama boleh tampil; tanpa scope HR — lead bukan data gaji). Filter penanggung = saring tampil saja, total antrean tidak berubah makna (pola rekap komisi).
+
+### 4. Status-transition matrix
+
+Tidak ada transisi status baru. Antrean adalah turunan baca dari (`status`, `expectedCloseDate`, hari WIB):
+| Keadaan awal (fakta tersimpan) | Pemicu waktu | Tampilan antrean | Penjaga |
+|---|---|---|---|
+| non-terminal + expectedCloseDate > jendela | hari berjalan | tidak tampil | builder |
+| non-terminal + 0<=sisa<=jendela | masuk jendela | MENDEKATI | builder |
+| non-terminal + hari ini > expectedCloseDate | lewat tengah malam WIB | LEWAT_TARGET | builder |
+| won/lost (terminal) | kapan pun | keluar antrean | builder (BR-EC-02) |
+| expectedCloseDate dikosongkan/diundur (edit existing) | simpan lead | baris hilang/pindah ember | tidak ada mutasi antrean |
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-EC-01 | Keanggotaan hanya Lead `deletedAt IS NULL` DAN status non-terminal (`won`/`lost` keluar). Status di luar LEAD_STATUSES masuk ember "Status tidak dikenal" tertanda, tidak dipetakan paksa (warisan BR-LF-01). | USULAN (pola TERVERIFIKASI-KODE funnel) | lead-funnel.ts BR-LF-01 |
+| BR-EC-02 | Lewat target ditentukan per hari kalender WIB: lewat bila hari WIB hari ini > tanggal expectedCloseDate; hari target sendiri masih "hari ini" (sisa 0, MENDEKATI), bukan lewat. Pola semantik guard `assertQuotationNotExpired` + lead-followups. | USULAN (semantik TERVERIFIKASI-KODE di domain tetangga) | quotation-accepted-queue header; lead-followups.ts |
+| BR-EC-03 | DILARANG probabilitas tertimbang, persen peluang per tahap, dan prediksi pendapatan: tidak ada tabel probabilitas di repo; mengarang persen = aturan bisnis karangan. Σ estimatedValue hanya tampil per ember dengan notice "nilai estimasi saat ini, bukan piutang/pendapatan/prediksi" verbatim warisan funnel. | USULAN (mengikat BR-LF-08 TERVERIFIKASI-KODE) | lead-funnel.ts BR-LF-08 |
+| BR-EC-04 | `expectedCloseDate` kosong = ember TANPA_TARGET tertanda terpisah; tidak diberi sisa hari 0, tidak masuk urutan urgensi, tidak disembunyikan (temuan kelengkapan data penjual). | USULAN | pola ember jujur stale-leads/funnel |
+| BR-EC-05 | Jendela MENDEKATI = usulan 7 hari kalender; angka final = Q-EC-1 Lead. Jendela adalah parameter tampilan builder, bukan kolom tersimpan. | BUTUH-VONIS (Lead, perilaku) | — |
+| BR-EC-06 | Urutan deterministik: LEWAT_TARGET overdue desc, MENDEKATI sisa asc, seri leadNumber lalu id. UI dilarang mengurutkan ulang. | USULAN | pola lead-followups.ts |
+| BR-EC-07 | Antrean baca-saja: nol mutasi Lead/status/tanggal, nol notifikasi/cron/email tahap 1. Pengingat aktif = spec terpisah sesudah antrean pasif terbukti dipakai. | USULAN | pola Q-AQ-6 (002-S) |
+| BR-EC-08 | Izin permukaan = `view_reports` (laporan) tanpa key baru; tautan detail mensyaratkan `view_leads` pemakai — baris tetap tampil bagi pemegang laporan walau tanpa izin lead (angka agregat bukan data pribadi), tautan dinonaktifkan tertanda. Bentuk final = Q-EC-2 Lead. | BUTUH-VONIS (Lead) | pola lead-funnel-data.ts:11-15 |
+| BR-EC-09 | estimatedValue kosong tampil sebagai ember "Prospek tanpa nilai estimasi" (label warisan funnel), BUKAN Rp0, dan dikeluarkan dari Σ ember dengan penanda jumlah baris tanpa nilai. | USULAN (label TERVERIFIKASI-KODE) | LEAD_FUNNEL_NO_VALUE_LABEL |
+
+### 6. Feature matrix (benchmark, akses 2026-10-25)
+
+| Kemampuan | Accurate | Zahir CRM | ISF (spec ini) |
+|---|---|---|---|
+| Pipeline prospek per tahap + nilai potensi | Ada (help.accurate.id Accurate Online/Insight) | Ada: Dashboard CRM Total Leads/Potential + rekap pipeline per periode (https://zahirerp.com/id/all-features-of-zahir-products/) | Ada existing: corong prospek F-092-S |
+| Follow-up terjadwal tidak terlewat | — | Ada: "Tidak Ada Lagi Prospek Terlewat", follow-up disiplin terjadwal (https://zahiraccounting.com/id/zahir-crm/) | Ada existing: lead-followups F-037 |
+| Antrean target tutup lewat/dekat per prospek terbuka | Tidak ditemukan permukaan khusus di help resmi (forecast Accurate = metode historis agregat, https://accurate.id/marketing-manajemen/sales-forecast/) | Laporan Potential beserta nilai nominalnya per periode (zahirerp all-features) | Spec ini: antrean per baris LEWAT/MENDEKATI tanpa probabilitas |
+| Probabilitas tertimbang forecast | Metode historis (bukan persen tahap) | Tidak diklaim di sumber resmi di atas | DILARANG tahap 1 (BR-EC-03) |
+
+Catatan jujur: benchmark Zahir/Accurate di atas membuktikan kebutuhan visibilitas pipeline+follow-up, BUKAN bukti keduanya punya antrean expected-close identik; kesetaraan fitur diklaim hanya sejauh tertulis di URL.
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder+loader):
+- AC-EC-B1: lead `won`/`lost`/terhapus-lembut dengan expectedCloseDate lampau TIDAK muncul; muncul satu pun = MERAH.
+- AC-EC-B2: batas hari WIB persis: expectedCloseDate = hari ini -> MENDEKATI sisa 0 (bukan LEWAT); kemarin -> LEWAT overdue 1; menggeser logika ke UTC mentah harus MERAH pada tes lintas tengah malam WIB.
+- AC-EC-B3: expectedCloseDate kosong masuk TANPA_TARGET tanpa sisa/overdue karangan; diberi 0 = MERAH.
+- AC-EC-B4: nol probabilitas/persen/prediksi di keluaran builder (grep keluaran + tes snapshot field); field persen muncul = MERAH.
+- AC-EC-B5: urutan deterministik BR-EC-06 termasuk seri; UI/loader mengurutkan ulang = MERAH.
+- AC-EC-B6: loader satu query massal (tanpa query per baris), nol mutasi Lead/LeadActivity; loader menulis apa pun = MERAH.
+- AC-EC-B7: estimatedValue kosong tidak masuk Σ sebagai 0 dan tertanda per BR-EC-09.
+
+Frontend (konsumen):
+- AC-EC-F1: label tahap/ember/notice verbatim server; UI menghitung sisa hari/overdue sendiri = MERAH (mutasi tanggal builder harus mengubah tampilan tanpa ubah UI).
+- AC-EC-F2: halaman tanpa `view_reports` tertolak (redirect/403 pola laporan existing); baris tampil bagi pemegang tanpa `view_leads` dengan tautan nonaktif tertanda per BR-EC-08.
+- AC-EC-F3: nol tombol ubah status/tanggal/notifikasi di antrean; sebelum commit grep e2e selector lead terdampak.
+
+Edge cases: EC-1 expectedCloseDate di masa depan jauh + status `new` tanpa aktivitas (tetap di luar antrean; stale-leads domain terpisah, jangan digabung). EC-2 lead non-terminal tanpa assignedTo (label "Belum ditugaskan"). EC-3 expectedCloseDate diubah ke lampau oleh edit sesudah antrean dibaca (turunan murni: baca berikutnya langsung LEWAT, tanpa peristiwa tersimpan). EC-4 status liar di luar LEAD_STATUSES (ember tidak dikenal, BR-EC-01). EC-5 dua lead penanggung sama tanggal sama (seri leadNumber/id). EC-6 tahun kabisat/batas bulan pada hitung hari kalender WIB.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-EC-1 (Lead): jendela MENDEKATI final — usulan 7 hari kalender (BR-EC-05); apakah perlu dua tingkat (<=7 dan <=30) tahap 1?
+- Q-EC-2 (Lead): izin permukaan — reuse `view_reports` saja (BR-EC-08) vs wajib `view_leads` juga; spec mengusulkan pola funnel existing.
+- Q-EC-3 (Backend): penempatan fisik — builder baru `lead-expected-close.ts`+loader di `src/lib/reports/` (usulan) vs perluasan funnel; putuskan sebelum konsumen UI, jangan dua agregasi tanggal paralel.
+- Q-EC-4 (Lead): permukaan — halaman laporan baru vs kartu di halaman corong existing; posisi `report-catalog`/navigasi mengikuti putusan ini.
+- Accountant: TIDAK tahap 1 (tanpa uang/pajak/jurnal; estimatedValue bukan pengakuan pendapatan — BR-EC-03).
+
+### 9. Backlog implementasi (turunan F-2026-10-25-027-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-027-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder+loader antrean target tutup | Backend | Q-EC-1/2/3 diputus Lead | — |
+| (turunan) halaman/kartu konsumen verbatim | Frontend | kontrak builder Backend final + Q-EC-4 | — |
+| (turunan) falsifikasi AC-EC-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Probabilitas per tahap / forecast pendapatan tertimbang: dilarang BR-EC-03; butuh tabel probabilitas + pemilik angka (vonis Lead/Accountant bila kelak diusulkan).
+- Notifikasi/cron pengingat target tutup: antrean pasif dulu (BR-EC-07); pengingat servis kendaraan (F-2026-10-25-021-S) domain berbeda.
+- Kolom/status baru di Lead, migrasi, backfill tanggal: data existing cukup.
+- Penggabungan dengan lead basi/follow-up: tiga pertanyaan berbeda (target tutup vs aktivitas terakhir vs jadwal aktivitas).
+
+F-2026-10-25-027-S — Antrean prospek mendekati/lampaui target tutup. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-EC-1/2/4 + fisik Backend Q-EC-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK.
 ## PUTUSAN LEAD 2026-10-25 14:20 WIB — F-2026-10-25-026-L: Q-LS-1..4 + Q-LS-5-spec spec F-2026-10-25-018-S (PR #827), berdasar vonis F-2026-10-25-023-V merged (PR #842, mergeCommit 2c59d982)
 
 > **Slot**: F-2026-10-25-026-L. Diperiksa bentrok 2026-10-25 14:20 WIB vs `origin/main` (`778735ce`): grep `F-2026-10-25-026` di backlog origin/main = 0, judul PR terbuka = 0 (PR terbaru #849); 024-S/025-S sudah terpakai spec lain — 026-L bebas. Basis verifikasi: backlog main 778735ce (blok 023-V baris 27932-28022), head live PR #827 `f966a0cc` (spec 018-S utuh; kartu menyebut a595edf4 — head bergerak, isi spec dibaca dari head live), kode origin/main di worktree bersih. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
