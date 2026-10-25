@@ -171,6 +171,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/produksi/qc": "Checklist, inspeksi, dan NCR",
   "/sdm/absensi": "Absensi kehadiran karyawan",
   "/sdm/apresiasi": "Apresiasi karyawan",
+  "/sdm/disiplin": "Surat peringatan dan rekod disiplin karyawan",
   "/sdm/cuti": "Cuti karyawan",
   "/sdm/persetujuan": "Pengajuan cuti dan lembur yang menunggu keputusan approver",
   "/sdm/cuti/saldo": "Saldo cuti karyawan per periode",
