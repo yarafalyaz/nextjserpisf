@@ -141,7 +141,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol
+  // F-2026-10-25-048-S inti backend (048-B1): aksi lead time penampung
+  // titik pesan-ulang; kontrol lead time di panel stok minimum per gudang
+  // + kolom titik/saran di laporan stok minimum menyusul (frontend
+  // t_c8cc7755, buang 2 entri ini saat UI memanggilnya).
+  "src/actions/item-warehouse-setting.actions.ts::setItemWarehouseLeadTime":
+    "F-2026-10-25-048-S backend; UI lead time panel stok minimum per gudang menyusul (frontend t_c8cc7755)",
+  "src/actions/item-warehouse-setting.actions.ts::removeItemWarehouseLeadTime":
+    "F-2026-10-25-048-S backend; UI hapus lead time panel stok minimum per gudang menyusul (frontend t_c8cc7755)",
+  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol",
   // mailto di halaman statement menyusul di kartu Frontend 043-F1 —
   // buang entri ini saat UI memanggilnya.
   "src/actions/email-log.actions.ts::recordEmailLinkOpened":
@@ -193,6 +201,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-008-S: completeLeadActivity/reopenLeadActivity kini dirujuk
   // LeadActivityCompletionButton di detail lead (frontend t_68dce5df) —
   // 2 entri beku dibuang.
+  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi +
+  // loader loadAttendanceCorrections menunggu kartu UI lanjutan BOT Frontend
+  // (parent t_cbab9ec1); entri beku dibuang saat UI tersambung.
+  "src/actions/hrm.actions.ts::createAttendanceCorrection":
+    "F-2026-10-25-010-S: menunggu UI pengajuan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
+  "src/actions/hrm.actions.ts::approveAttendanceCorrection":
+    "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
+  "src/actions/hrm.actions.ts::rejectAttendanceCorrection":
+    "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
+  "src/actions/hrm.actions.ts::cancelAttendanceCorrection":
+    "F-2026-10-25-010-S: menunggu UI daftar koreksi saya (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
