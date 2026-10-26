@@ -10,6 +10,8 @@ import { CanCreate } from "@/components/auth/can-create"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TicketTable } from "./_components/ticket-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CrmTicketQueueCard } from "@/components/reports/crm-ticket-queue-card"
+import { getCrmTicketQueue } from "@/lib/reports/crm-ticket-queue-data"
 
 import type { Metadata } from "next"
 
@@ -25,6 +27,16 @@ export default async function TicketsPage({
   await requirePermission("view_tickets")
 
   const params = await searchParams
+
+  // Antrean kerja harian F-2026-10-25-032-S: himpunan GLOBAL tiket
+  // non-terminal dari loader read-only (gerbang view_tickets ditegakkan
+  // di loader juga), ditampilkan verbatim di atas daftar inventaris.
+  // Kegagalan loader menyembunyikan kartu saja (BR-CTQ-11) — daftar
+  // tiket existing tetap dapat dipakai; dilarang kartu kosong karangan.
+  const ticketQueue = await getCrmTicketQueue().catch((error) => {
+    console.error("[crm/tickets] antrean tiket:", error)
+    return null
+  })
 
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
@@ -81,6 +93,8 @@ export default async function TicketsPage({
           </Link>
         </CanCreate>
       </div>
+
+      {ticketQueue ? <CrmTicketQueueCard queue={ticketQueue} /> : null}
 
       <TicketTable
         data={data}
