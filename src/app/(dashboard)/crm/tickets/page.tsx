@@ -14,6 +14,8 @@ import { CrmTicketQueueCard } from "@/components/reports/crm-ticket-queue-card"
 import { getCrmTicketQueue } from "@/lib/reports/crm-ticket-queue-data"
 import { CrmTicketWorkloadCard } from "@/components/reports/crm-ticket-workload-card"
 import { getCrmTicketWorkload } from "@/lib/reports/crm-ticket-workload-data"
+import { CrmTicketSlaCard } from "@/components/reports/crm-ticket-sla-card"
+import { getCrmTicketSla } from "@/lib/reports/crm-ticket-sla-data"
 
 import type { Metadata } from "next"
 
@@ -50,6 +52,19 @@ export default async function TicketsPage({
     console.error("[crm/tickets] beban tiket:", error)
     return null
   })
+
+  // Keadaan SLA F-2026-10-24-135-S (konsumen 001-U): loader read-only
+  // gerbang view_tickets; antrean lewat-SLA global + peta primaryState
+  // per id untuk kolom SLA daftar. UI menampilkan verbatim — nol hitung
+  // jam kerja/tenggat. Kegagalan loader menyembunyikan kartu + lencana
+  // saja; daftar tiket existing tetap dapat dipakai.
+  const ticketSla = await getCrmTicketSla().catch((error) => {
+    console.error("[crm/tickets] SLA tiket:", error)
+    return null
+  })
+  const slaByTicketId = ticketSla
+    ? new Map(ticketSla.rows.map((row) => [row.ticketId, row.primaryState] as const))
+    : undefined
 
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
@@ -111,6 +126,8 @@ export default async function TicketsPage({
 
       {ticketWorkload ? <CrmTicketWorkloadCard workload={ticketWorkload} /> : null}
 
+      {ticketSla ? <CrmTicketSlaCard sla={ticketSla} /> : null}
+
       <TicketTable
         data={data}
         total={total}
@@ -118,6 +135,7 @@ export default async function TicketsPage({
         pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari subjek atau pelanggan..." action="/crm/tickets" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+        slaByTicketId={slaByTicketId}
       />
     </div>
   )

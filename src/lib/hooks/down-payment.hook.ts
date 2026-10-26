@@ -47,6 +47,16 @@ export async function onDownPaymentConfirmed(
   userId?: number,
   txClient?: TxClient
 ): Promise<void> {
+  // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 4: gerbang dinilai SEKALI
+  // di confirmDownPayment (hulu, atomik) — hook ini tidak menilai ulang.
+  return onDownPaymentConfirmedInner(dpId, userId, txClient)
+}
+
+async function onDownPaymentConfirmedInner(
+  dpId: number,
+  userId?: number,
+  txClient?: TxClient
+): Promise<void> {
   const readyDocuments: Array<{ type: "WorkOrder" | "SalesOrder" | "SalesInvoice"; documentNo: string; context: string }> = []
 
   const execute = async (tx: TxClient) => {

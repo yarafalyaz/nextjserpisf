@@ -20,7 +20,9 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import {
   CustomerDuplicateWarningPanel,
+  CustomerNpwpBlockedPanel,
   type CustomerDuplicateWarningView,
+  type CustomerNpwpConflictView,
 } from "@/components/forms/customer-duplicate-warning"
 
 interface CustomerFormProps {
@@ -69,6 +71,12 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
   // (taxWarnings, hanya ada bila legacy15/NITKU tak tertaut dsb.) —
   // tampil verbatim, simpan tetap berhasil, navigasi ditunda.
   const [taxWarnings, setTaxWarnings] = useState<string[]>([])
+  // Q-CD-1 (PR Backend #1017): blokir NPWP persis — simpan ditolak,
+  // panel bertahan sesudah toast supaya tautan pemegang tetap bisa diklik.
+  const [npwpBlocked, setNpwpBlocked] = useState<{
+    conflict: CustomerNpwpConflictView
+    message: string
+  } | null>(null)
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
@@ -111,7 +119,17 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
           })
         }
         const result = isEdit ? await updateCustomer(customer!.id, formData) : await createCustomer(formData)
-        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (result && !result.success) {
+          if ("npwpConflict" in result && result.npwpConflict) {
+            setNpwpBlocked({
+              conflict: result.npwpConflict,
+              message: result.error || "Gagal menyimpan data",
+            })
+          }
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        setNpwpBlocked(null)
         // BR-CD-05: quick-add reuse terucap — pesan server verbatim,
         // bukan sukses generik.
         if ("reused" in result && result.reused) {
@@ -143,6 +161,14 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
 
   return (
     <>
+      {npwpBlocked ? (
+        <div className="mb-6">
+          <CustomerNpwpBlockedPanel
+            conflict={npwpBlocked.conflict}
+            message={npwpBlocked.message}
+          />
+        </div>
+      ) : null}
       {taxWarnings.length ? (
         <div className="mb-6">
           <Alert variant="warning" aria-label="Peringatan identitas pajak pelanggan">
