@@ -34782,4 +34782,15 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Status/kolom klaim baru (termasuk soft-delete/batal klaim), perubahan lifecycle intake→eligibility→approved/rejected→in_repair→closed, atau key izin baru.
 - Antrean klaim supplier sebagai bagian spec ini — sumbu supplierClaimStatus terpisah dan gerbangnya sesudah approved (BR-WIQ-07); antrean recovery supplier = spec terpisah bila dibutuhkan.
 
+#### PUTUSAN LEAD Q-WIQ-1..6 (27 Okt 2026 03:03 WIB, kartu t_2242195b; PR spec #1084 MERGED 504b745ec)
+
+- Q-WIQ-1 DIPUTUS: ambang `mengendap` = 3 hari kalender WIB sejak `reportedAt` (selaras preseden keluarga antrean mengendap diputus Lead 2026-10-26). Ambang hanya lewat satu konstanta bernama di builder; angka lain = cacat (AC-WIQ-B3).
+- Q-WIQ-2 DIPUTUS: kata label/notice usulan §1 apa adanya; satu konstanta label server, UI verbatim.
+- Q-WIQ-3 DIPUTUS: urutan `mengendap` dulu, lalu umur tertua; seri `reportedAt` sama persis → id klaim naik. Acuan umur `reportedAt` DISAHKAN (BR-WIQ-05). Klaim atas cakupan expired/revoked TETAP populasi tertanda (BR-WIQ-06/EC-WIQ-2).
+- Q-WIQ-4 DIPUTUS: TIDAK ada maju ke eligibility/putus/tolak dari antrean tahap 1 (BR-WIQ-03); satu-satunya jalan = detail klaim existing berizin.
+- Q-WIQ-5 DIPUTUS: TIDAK ada key izin terpisah tahap 1; `view_warranty_claims` fail-closed sebelum query.
+- Q-WIQ-6 DIPUTUS: TIDAK ada telepon pelanggan dan TIDAK ada penanda penilai/penanggung jawab di payload tahap 1.
+
+Vonis Accountant tidak diminta (nol nominal tahap 1, BR-WIQ-04/11). Turunan dibuka: 076-B Backend, 076-F Frontend (sesudah 076-B merged), 076-Q QA.
+
 F-2026-10-27-076-S — Antrean klaim garansi intake mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WIQ-1/2/3, lalu fisik Backend (076-B), konsumen Frontend (076-F), falsifikasi QA (076-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak nominal/biaya klaim atau perubahan syarat jurnal diusulkan (di luar spec ini, BR-WIQ-04/11).
