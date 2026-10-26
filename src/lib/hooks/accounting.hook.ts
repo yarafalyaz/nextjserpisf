@@ -1264,11 +1264,21 @@ async function resolveReimbursementLiabilityAccountId(db: TxClient): Promise<num
   }
   const account = await db.account.findUnique({
     where: { id: accountId },
-    select: { id: true, code: true },
+    select: { id: true, code: true, isActive: true, deletedAt: true },
   })
   if (!account) {
     throw new Error(
       `Klaim reimbursement tidak dapat diproses: akun liabilitas klaim (id: ${accountId}) tidak ditemukan. Pilih ulang akun 210209 di Mapping Akun.`,
+    )
+  }
+  if (account.deletedAt) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) sudah terhapus. Petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+    )
+  }
+  if (!account.isActive) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) nonaktif. Aktifkan kembali atau petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
     )
   }
   if (account.code !== "210209") {
@@ -1296,8 +1306,14 @@ async function postReimbursementJournal(
   },
 ): Promise<void> {
   assertJournalClaimRef(input.referenceType, input.expenseId)
+  // Jurnal aktif saja = idempotensi; J-RB reversed/terhapus tidak menghalangi posting ulang.
   const existing = await tx.journal.findFirst({
-    where: { referenceType: input.referenceType, referenceId: input.expenseId },
+    where: {
+      referenceType: input.referenceType,
+      referenceId: input.expenseId,
+      status: { not: "REVERSED" },
+      deletedAt: null,
+    },
   })
   if (existing) {
     console.info(
@@ -1388,8 +1404,14 @@ export async function onReimbursementClaimPaid(
       `Klaim ${expense.documentNo} tidak dapat dibayar: akun sumber dana (kas/bank) belum diisi.`,
     )
   }
+  // Hanya J-RB1 AKTIF (bukan REVERSED, belum terhapus) sah sebagai dasar bayar (Putusan 2).
   const accrued = await db.journal.findFirst({
-    where: { referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE, referenceId: expenseId },
+    where: {
+      referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+      referenceId: expenseId,
+      status: { not: "REVERSED" },
+      deletedAt: null,
+    },
     select: { id: true },
   })
   if (!accrued) {

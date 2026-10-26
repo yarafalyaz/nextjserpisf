@@ -20,26 +20,9 @@ vi.mock("@/lib/reports/discount-exposure-export", () => ({
   buildDiscountExposureTable: mocks.buildDiscountExposureTable,
 }))
 
-vi.mock("@/components/reports/report-page-shell", () => ({
-  ReportPageShell: ({
-    children,
-    filter,
-    actions,
-    title,
-  }: {
-    children: React.ReactNode
-    filter?: React.ReactNode
-    actions?: React.ReactNode
-    title: string
-  }) => (
-    <div>
-      <h1>{title}</h1>
-      {filter}
-      {actions}
-      {children}
-    </div>
-  ),
-}))
+vi.mock("@/components/reports/report-page-shell", async () =>
+  (await import("@/components/reports/__tests__/card-test-utils")).reportPageShellModule,
+)
 
 vi.mock("@/components/reports/report-period-filter", () => ({
   ReportPeriodFilter: () => null,

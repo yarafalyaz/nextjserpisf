@@ -189,6 +189,47 @@ describe("F-2026-10-25-003-S duplikat pelanggan (AC-CD-B4/B5/B7)", () => {
     )
   })
 
+  it("Q-CD-1 create: NPWP persis beda format (titik/strip) = BLOKIR, create tidak terpanggil, respons terstruktur menyebut pemegang", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 99, slug: "baru" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 11, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0011", phone: null, email: null, taxId: "012345678901000" },
+    ])
+    const res: any = await actions.createCustomer(fdMap({ name: "Pelanggan Baru", taxId: "01.234.567.8-901.000" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toBe("NPWP yang sama sudah tercatat atas nama PT Sinar (CUST-0011). Pakai pelanggan yang sudah ada itu, atau perbaiki NPWP bila salah ketik.")
+    expect(res.npwpConflict).toEqual({ id: 11, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0011", title: "NPWP sudah dipakai pelanggan lain" })
+    expect(res.duplicateWarning).toBeUndefined()
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+
+  it("Q-CD-1 create: NPWP kosong lolos (bukan konflik, bukan kandidat)", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 100, slug: "baru2" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([])
+    const res: any = await actions.createCustomer(fdMap({ name: "Benar Baru" }))
+    expect(res.success).toBe(true)
+    expect(res.duplicateWarning).toBeNull()
+  })
+
+  it("Q-CD-1 update: NPWP persis milik pelanggan LAIN = BLOKIR, update tidak terpanggil", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 12, slug: "b", name: "Pelanggan B", code: "CUST-0012", phone: null, email: null, taxId: "012345678901000" },
+    ])
+    const res: any = await actions.updateCustomer(11, fdMap({ name: "Pelanggan A", taxId: "01.234.567.8-901.000" }))
+    expect(res.success).toBe(false)
+    expect(res.npwpConflict).toMatchObject({ id: 12, name: "Pelanggan B", code: "CUST-0012" })
+    expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { not: 11 } }) }),
+    )
+  })
+
+  it("Q-CD-1 update: self-match NPWP sendiri lolos (where mengecualikan diri, scan kosong)", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([])
+    const res: any = await actions.updateCustomer(11, fdMap({ name: "Pelanggan A", taxId: "01.234.567.8-901.000" }))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.customer.update).toHaveBeenCalled()
+  })
+
   it("listCustomerDuplicateCandidates: grup >=2 saja lewat izin view_customers", async () => {
     mocks.prismaMock.customer.findMany.mockResolvedValue([
       { id: 11, slug: "a", name: "PT Sinar", code: "C1", phone: "0812-3456-7890", email: null, taxId: null },

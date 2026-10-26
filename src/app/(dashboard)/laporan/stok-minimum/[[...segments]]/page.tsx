@@ -12,6 +12,9 @@ import { minStockSummary } from "@/lib/reports/min-stock"
 import { MinStockWarehouseCard } from "@/components/reports/min-stock-warehouse-card"
 import { buildMinStockRequestHref } from "@/lib/reports/min-stock-request"
 import { loadMinStock } from "@/lib/reports/min-stock-data"
+import { loadReorderPoints } from "@/lib/reports/reorder-point-data"
+import { ReorderPointCard } from "@/components/reports/reorder-point-card"
+import { formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -33,6 +36,7 @@ export default async function MinStockPage({
 
   const { report, warehouseShortages, warehouseNote, periodLabel, periodCaption } =
     await loadMinStock(period)
+  const reorderPointReport = await loadReorderPoints()
   const requestHref = buildMinStockRequestHref(report.shortageLines)
   const canCreateRequest =
     requestHref !== null &&
@@ -85,6 +89,13 @@ export default async function MinStockPage({
           <MinStockWarehouseCard shortages={warehouseShortages} note={warehouseNote} />
         </div>
       ) : null}
+      <div style={{ marginTop: 16 }}>
+        <ReorderPointCard
+          result={reorderPointReport.result}
+          usageWindowDays={reorderPointReport.usageWindowDays}
+          usageWindowStartLabel={formatDate(reorderPointReport.usageWindowStart)}
+        />
+      </div>
     </ReportPageShell>
   )
 }

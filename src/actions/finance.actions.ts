@@ -999,10 +999,13 @@ export async function markExpensePaid(expenseId: number) {
       // API bayar existing (tanpa nominal) — tahap ini bayar penuh saja;
       // penjaga nominal menjaga kontrak itu eksplisit.
       if (locked.isReimbursementClaim) {
+        // Hanya J-RB1 AKTIF (bukan REVERSED, belum terhapus) sah sebagai dasar bayar (Putusan 2).
         const accruedJournal = await tx.journal.findFirst({
           where: {
             referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
             referenceId: expenseId,
+            status: { not: "REVERSED" },
+            deletedAt: null,
           },
           select: { totalDebit: true },
         });

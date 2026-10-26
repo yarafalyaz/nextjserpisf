@@ -17,6 +17,7 @@ const accountFindFirstMock = vi.fn()
 const accountCountMock = vi.fn()
 const attachmentCountMock = vi.fn()
 const journalFindFirstMock = vi.fn()
+const journalFindManyMock = vi.fn()
 const txExpenseUpdateManyMock = vi.fn()
 const accrualMock = vi.fn()
 const paidMock = vi.fn()
@@ -68,7 +69,10 @@ vi.mock("@/lib/db/prisma", () => ({
     transactionAttachment: {
       count: (...a: unknown[]) => attachmentCountMock(...a),
     },
-    journal: { findFirst: (...a: unknown[]) => journalFindFirstMock(...a) },
+    journal: {
+      findFirst: (...a: unknown[]) => journalFindFirstMock(...a),
+      findMany: (...a: unknown[]) => journalFindManyMock(...a),
+    },
   },
 }))
 vi.mock("@/lib/hooks/accounting.hook", () => ({
@@ -107,7 +111,7 @@ vi.mock("next/cache", () => ({
 }))
 
 import { approveExpense, markExpensePaid } from "../finance.actions"
-import { createReimbursementClaim } from "../reimbursement.actions"
+import { createReimbursementClaim, getMyReimbursementClaims } from "../reimbursement.actions"
 
 function form(entries: Record<string, string>): FormData {
   const fd = new FormData()
@@ -239,5 +243,53 @@ describe("markExpensePaid klaim (E-RB5-2)", () => {
     expect(r.success).toBe(true)
     expect(expenseJournalMock).toHaveBeenCalled()
     expect(paidMock).not.toHaveBeenCalled()
+  })
+
+  it("(b) hanya J-RB1 soft-deleted (query aktif kosong) -> bayar ditolak, nol J-RB2", async () => {
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, status: "approved", paidFromAccountId: 100,
+    })
+    journalFindFirstMock.mockResolvedValue(null)
+    const r = await markExpensePaid(42)
+    expect(r.success).toBe(false)
+    expect(paidMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
+    const where = journalFindFirstMock.mock.calls.at(-1)?.[0]?.where
+    expect(where.status).toEqual({ not: "REVERSED" })
+    expect(where.deletedAt).toBeNull()
+  })
+
+  it("(d) hanya J-RB1 REVERSED (query aktif kosong) -> bayar ditolak, nol J-RB2", async () => {
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, status: "approved", paidFromAccountId: 100,
+    })
+    journalFindFirstMock.mockResolvedValue(null)
+    const r = await markExpensePaid(42)
+    expect(r.success).toBe(false)
+    expect(paidMock).not.toHaveBeenCalled()
+    const where = journalFindFirstMock.mock.calls.at(-1)?.[0]?.where
+    expect(where.status).toEqual({ not: "REVERSED" })
+    expect(where.deletedAt).toBeNull()
+  })
+})
+
+describe("getMyReimbursementClaims tahap jurnal aktif (t_b228bac8)", () => {
+  it("klaim paid dengan hanya J-RB2 REVERSED -> tahap BUKAN Dibayar", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 5 })
+    expenseFindManyMock.mockResolvedValue([{
+      ...CLAIM, status: "paid",
+      category: { label: "Transport" }, employee: { name: "Budi" },
+    }])
+    // DB nyata menyaring J-RB2 REVERSED keluar; loader hanya menerima jurnal aktif.
+    journalFindManyMock.mockResolvedValue([])
+    const r = await getMyReimbursementClaims()
+    expect(r.success).toBe(true)
+    if (r.success) {
+      expect(r.data[0].stage).not.toBe("DIBAYAR")
+      expect(r.data[0].hasPaymentJournal).toBe(false)
+    }
+    const where = journalFindManyMock.mock.calls.at(-1)?.[0]?.where
+    expect(where.status).toEqual({ not: "REVERSED" })
+    expect(where.deletedAt).toBeNull()
   })
 })

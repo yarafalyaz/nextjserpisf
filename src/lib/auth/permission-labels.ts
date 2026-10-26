@@ -81,6 +81,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   contracts: "Kontrak Karyawan",
   leave_requests: "Pengajuan Cuti",
   loans: "Pinjaman",
+  attendance_corrections: "Koreksi Absensi",
   material_issues: "Pengeluaran Material",
   nonconformances: "NCR",
   overtime: "Lembur",

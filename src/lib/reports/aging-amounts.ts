@@ -1,5 +1,8 @@
 import { safeAdd, safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 
+/** Lunas bila sisa <= nilai ini (BR-COL-02; dipakai antrean + statement). */
+export const COLLECTION_SETTLED_EPSILON = 0.005
+
 /** Sisa piutang = grandTotal − paid, presisi sen (bukan float mentah). */
 export function receivableOutstanding(grandTotal: SafeMathInput, paidAmount: SafeMathInput): number {
   return safeSubtract(grandTotal, paidAmount, 2)

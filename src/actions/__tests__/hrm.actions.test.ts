@@ -918,6 +918,67 @@ describe("Payroll Actions", () => {
     expect(createArg.data.loanDeduction).toBe(100000)
   })
 
+  it("processPayroll keeps gross/PPh 21 identical with loan instalment (AC-LSV-3)", async () => {
+    // AC-LSV-3 (vonis F-2026-10-25-023-V Putusan 2D): angsuran pinjaman
+    // BUKAN pengurang bruto PPh 21 — angsuran hanya potongan neto.
+    // Mesin TER mock default tarif 0% membuat PPh selalu 0 sehingga mutasi
+    // gross - cappedLoan tak terdeteksi; di sini bracket dibuat sensitif
+    // tarif: 0% s/d 6.000.000, lalu 10% terbuka. Bruto utuh 6.100.000
+    // → PPh 610.000; bruto termutasi 5.600.000 → PPh 0 (MERAH).
+    const terRows: Array<{
+      category: string; lowerBound: number; upperBound: number | null;
+      rateMilliPercent: number; effectiveFrom: Date; effectiveTo: null; source: string;
+    }> = [
+      { category: "A", lowerBound: 0, upperBound: 6000000, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+      { category: "A", lowerBound: 6000000, upperBound: null, rateMilliPercent: 10000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+    ]
+    prismaMock.payrollTerBracket.findMany.mockImplementation(
+      (async (args: { where?: { category?: string } }) =>
+        terRows.map((r) => ({ ...r, category: args?.where?.category ?? "A" }))) as never,
+    )
+    prismaMock.employeeLoan.findMany.mockResolvedValue([
+      { monthlyInstallment: 500000, weeklyInstallment: null, remainingAmount: 500000 },
+    ])
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, basicSalary: 6100000, maritalStatus: "single", dependents: 0,
+      paymentFrequency: "MONTHLY", employmentEndedAt: null, employeeLoans: [],
+      workingDaysPerMonth: 22, overtimeRate: 25000, transportAllowance: 300000,
+      department: { name: "IT" },
+    })
+
+    const withLoan = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-07",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      baseSalary: "6100000",
+      loanDeduction: "500000",
+    }))
+    expect(withLoan?.success).toBe(true)
+    const withLoanArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(withLoanArg.data.grossSalary).toBe(6100000)
+    expect(withLoanArg.data.pph21).toBe(610000)
+    expect(withLoanArg.data.loanDeduction).toBe(500000)
+
+    const withoutLoan = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-07",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      baseSalary: "6100000",
+      loanDeduction: "0",
+    }))
+    expect(withoutLoan?.success).toBe(true)
+    const withoutLoanArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(withoutLoanArg.data.grossSalary).toBe(withLoanArg.data.grossSalary)
+    expect(withoutLoanArg.data.pph21).toBe(withLoanArg.data.pph21)
+    expect(withoutLoanArg.data.statutorySnapshot.pph21Ter).toEqual(
+      withLoanArg.data.statutorySnapshot.pph21Ter,
+    )
+    // Angsuran hanya memotong neto: selisih neto persis angsuran.
+    expect(withoutLoanArg.data.netSalary - withLoanArg.data.netSalary).toBe(500000)
+  })
+
   it("updatePayroll succeeds", async () => {
     const res = await actions.updatePayroll(1, fd({
       period: "2026-05",
@@ -1286,9 +1347,47 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
 
     const result = await actions.getAllLeaveBalances(2026)
     expect(result.success).toBe(true)
+    // F-2026-10-25-013-S BR-LVB-13: nonaktif tahun berjalan ikut dimuat
+    // loader (employmentEndedAt memotong tahun), scope tetap id pemanggil.
     expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { isActive: true, deletedAt: null, id: 3 },
+      where: expect.objectContaining({ deletedAt: null, id: 3 }),
     }))
+  })
+
+  it("F-2026-10-25-013-S AC-LVB-B1: filter departemen asing tidak memperluas scope self", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([])
+
+    const result = await actions.getAllLeaveBalances(2026, { departmentId: 99 })
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error("expected success")
+    expect(result.balances).toEqual([])
+    expect(result.scopeKind).toBe("self")
+    expect(result.showIdentityColumns).toBe(false)
+    expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 3 }),
+    }))
+  })
+
+  it("F-2026-10-25-013-S AC-LVB-B4: ekspor CSV scope self hanya baris pemanggil", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([{
+      id: 3, name: "Diri Sendiri", employeeNo: "EMP-003", departmentId: 4,
+      joinDate: new Date("2020-01-01"), isActive: true, department: { name: "Bengkel" },
+    }])
+    prismaMock.employee.findUnique.mockResolvedValue({
+      joinDate: new Date("2020-01-01"), leaveEligibilityStartDate: null, employmentStatus: "PKWTT",
+    })
+    prismaMock.leaveRequest.findMany.mockResolvedValue([])
+
+    const result = await actions.exportLeaveBalancesCsv(2026)
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error("expected success")
+    expect(result.fileName).toBe("saldo-cuti-2026.csv")
+    expect(result.csv).toContain("Diri Sendiri")
+    expect(result.csv.trimEnd().split("\n")).toHaveLength(2)
   })
 })
 
