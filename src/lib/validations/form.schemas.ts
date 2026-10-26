@@ -99,6 +99,13 @@ export const itemSchema = z.object({
   // F-2026-10-24-135-V: penanda besi tua; server (schemas.ts) sudah terima,
   // form wajib meneruskan supaya toggle benar-benar tersimpan.
   isScrapSaleItem: z.boolean().optional(),
+  // F-2026-10-25-041-S (vonis Q-ITX-1): default pajak per item — FK nullable
+  // per arah + persen DPP. Null = tanpa default (perilaku existing). Penjaga
+  // scrap/rentang/rujukan aktif di server (item-tax-default.service.ts),
+  // pesan server tampil verbatim; form ini tidak men-clamp/menilai sendiri.
+  defaultSalesTaxId: z.number().int().positive().nullable().optional(),
+  defaultPurchaseTaxId: z.number().int().positive().nullable().optional(),
+  defaultDppPercent: z.number().nullable().optional(),
 }).refine((data) => data.price >= data.cost, {
   message: "Harga jual tidak boleh lebih rendah dari harga beli (modal). Diskon diterapkan saat penawaran/penjualan, bukan di master.",
   path: ["price"],

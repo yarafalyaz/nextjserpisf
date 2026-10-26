@@ -29,7 +29,7 @@ export default async function EditItemPage({
 
   if (!item) notFound()
 
-  const [categories, brands, vendors, warehouses, racks, rackRows, unitOptions, groups] = await Promise.all([
+  const [categories, brands, vendors, warehouses, racks, rackRows, unitOptions, groups, taxes] = await Promise.all([
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -39,7 +39,10 @@ export default async function EditItemPage({
     // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
     prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true, category: true } }),
     prisma.itemGroup.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    // F-2026-10-25-041-S: opsi default pajak per item — hanya kode pajak aktif.
+    prisma.tax.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true, rate: true } }),
   ])
+  const taxOptions = taxes.map((t) => ({ id: t.id, label: `${t.code ? `${t.code} — ` : ""}${t.name} (${String(Number(t.rate)).replace(".", ",")}%)` }))
 
   if (!item) notFound()
 
@@ -78,6 +81,9 @@ export default async function EditItemPage({
           costingMethod: item.costingMethod,
           purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : null,
           isProduct: item.isProduct,
+          defaultSalesTaxId: item.defaultSalesTaxId,
+          defaultPurchaseTaxId: item.defaultPurchaseTaxId,
+          defaultDppPercent: item.defaultDppPercent ? Number(item.defaultDppPercent) : null,
           isScrapSaleItem: item.isScrapSaleItem,
           isService: item.isService,
           trackBatch: item.trackBatch,
@@ -92,6 +98,7 @@ export default async function EditItemPage({
         racks={racks}
         rackRows={rackRows}
         unitOptions={unitOptions}
+        taxOptions={taxOptions}
         baseUrl={baseUrl}
       />
     </div>

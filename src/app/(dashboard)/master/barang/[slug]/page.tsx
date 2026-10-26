@@ -23,6 +23,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/aler
 import { ItemSubstitutesPanel } from "@/components/items/item-substitutes-panel"
 import { ItemWarehouseMinStockPanel } from "@/components/items/item-warehouse-min-stock-panel"
 import { MIN_STOCK_GLOBAL_LABEL, MIN_STOCK_OVERRIDE_LABEL } from "@/lib/reports/min-stock-data"
+import { formatPercentage } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
@@ -83,6 +84,8 @@ export default async function ItemDetailPage({
             rackRow: true,
             stockMoves: { orderBy: { createdAt: "desc" }, include: { warehouse: true } },
             inventoryLayers: { where: { remaining: { gt: 0 } }, orderBy: { createdAt: "asc" } },
+            defaultSalesTax: true,
+            defaultPurchaseTax: true,
             uomConversions: { orderBy: { code: "asc" } },
             itemBatches: { orderBy: { createdAt: "desc" } },
             itemSerials: { orderBy: { createdAt: "desc" } },
@@ -98,6 +101,8 @@ export default async function ItemDetailPage({
             rackRow: true,
             stockMoves: { orderBy: { createdAt: "desc" }, include: { warehouse: true } },
             inventoryLayers: { where: { remaining: { gt: 0 } }, orderBy: { createdAt: "asc" } },
+            defaultSalesTax: true,
+            defaultPurchaseTax: true,
             uomConversions: { orderBy: { code: "asc" } },
             itemBatches: { orderBy: { createdAt: "desc" } },
             itemSerials: { orderBy: { createdAt: "desc" } },
@@ -333,6 +338,12 @@ export default async function ItemDetailPage({
                   <DetailField label="Harga Beli" value={formatCurrency(Number(item.cost))} />
                   <DetailField label="Harga Jual" value={formatCurrency(Number(item.price))} />
                   <DetailField label="Nilai Stok" value={formatCurrency(Number(item.qtyOnHand) * Number(item.cost))} />
+                </DetailCard>
+
+                <DetailCard title="Pajak Default">
+                  <DetailField label="Kode Pajak Penjualan Default" value={item.defaultSalesTax ? `${item.defaultSalesTax.code ? `${item.defaultSalesTax.code} — ` : ""}${item.defaultSalesTax.name} (${formatPercentage(Number(item.defaultSalesTax.rate), 2)})` : "Belum ada default pajak penjualan tercatat"} />
+                  <DetailField label="Kode Pajak Pembelian Default" value={item.defaultPurchaseTax ? `${item.defaultPurchaseTax.code ? `${item.defaultPurchaseTax.code} — ` : ""}${item.defaultPurchaseTax.name} (${formatPercentage(Number(item.defaultPurchaseTax.rate), 2)})` : "Belum ada default pajak pembelian tercatat"} />
+                  <DetailField label="Persen DPP Default" value={item.defaultDppPercent != null ? formatPercentage(Number(item.defaultDppPercent), 2) : "Belum ada persen DPP default tercatat"} />
                 </DetailCard>
 
                 <DetailCard>
