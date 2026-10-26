@@ -33026,3 +33026,154 @@ Nominal gaji tetap hanya lewat `view_salary_amounts` fail-closed; penyesuaian TI
 - Notifikasi otomatis ke penyetuju/karyawan (kanal belum diputus; antrean baca-saat-dibuka cukup tahap 1).
 
 F-2026-10-26-054-S — Persetujuan penyesuaian gaji terjadwal. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-SA-1/2/3, lalu fisik Backend (sesudah/bersama t_fedea179 dikoordinasikan Lead), konsumen Frontend, falsifikasi QA. Pemilik usulan: Business (spec), Lead (putusan jalur/pemegang/tepi berhenti), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini (BR-SA-08 bersyarat).
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-055-S: antrean draf penawaran basi belum terkirim (turunan baca-saja dari status draft + umur draf + validUntil; PEMBETULAN PREMIS kartu: antrean kedaluwarsa penawaran terkirim SUDAH LIVE F-2026-10-22-091-S)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_55f18176. ID F-2026-10-26-055-S diverifikasi bebas run ini 2026-10-26 07:38 WIB: grep `F-2026-10-26-055` di backlog + board `origin/main` (`97368be4`) = 0; PR terbuka memuat 055 = 0 (PR terbuka relevan hanya #929 riwayat harga penawaran F-2026-10-25-039-S, beda objek). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+PEMBETULAN PREMIS KARTU (terverifikasi run ini, ditulis apa adanya — pola catatan F-2026-10-26-052-S): kartu meminta spec "antrean penawaran kedaluwarsa/mendekati kedaluwarsa turunan validUntil". Fitur itu SUDAH LIVE di origin/main sebagai F-2026-10-22-091-S tahap 1: builder murni `src/lib/reports/quotation-followup-queue.ts` (tahap turunan KEDALUWARSA/MENIPIS/TERBUKA/TANPA_BATAS dari `validUntil` vs hari kalender WIB, konstanta `QUOTATION_EXPIRY_WARNING_DAYS = 3` :23, label verbatim :35-40, notice verbatim :43-44), loader fail-closed `src/lib/reports/quotation-followup-queue-data.ts` (populasi `status: "sent"`, deletedAt null, :25), ekspor `quotation-followup-export.ts`, kartu UI `src/components/reports/quotation-followup-queue-card.tsx`, halaman `src/app/(dashboard)/penjualan/antrean-penawaran/page.tsx` (`requirePermission("view_quotations")` :26), plus tes builder/kartu/ekspor. Spec duplikat untuk objek yang sama DILARANG; ID 055-S karena itu dipakai untuk gap tetangga yang terbukti kosong di bawah (populasi `draft`), bukan dipaksa ke objek sent.
+
+GAP PIVOT (TERVERIFIKASI-KODE): penawaran berstatus `draft` tidak punya permukaan tindak-lanjut mana pun. (1) Antrean F-091-S hanya memuat `status: "sent"` (quotation-followup-queue-data.ts:25) — draf tidak pernah tampil di sana, benar secara desain (draf belum ditawarkan ke pelanggan). (2) Cron auto-reject hanya memproses `status: SalesStatus.SENT` (src/app/api/cron/auto-reject-quotations/route.ts:31) — draf basi tidak pernah ditutup otomatis, dan spec ini TIDAK mengusulkan penutupan otomatis (lihat Yang TIDAK diusulkan). (3) Riwayat harga penawaran F-039-S menaruh draf di ember `DRAFT` yang hanya tampil lewat saringan eksplisit (quotation-price-history.ts:286-287, Q-QPH-4) — itu permukaan histori harga per kejadian, bukan antrean kerja umur draf. (4) Daftar penawaran existing (`penjualan/penawaran/page.tsx`) terurut `createdAt desc` polos dengan chip status termasuk draft, tanpa kolom umur draf / sisa masa berlaku / penanda basi. Akibat lapangan: draf yang dibuat admin (form memberi default `validUntil` = hari ini + 14 hari, quotation-form.tsx:586) lalu tidak pernah dikirim akan diam selamanya: `validUntil`-nya lewat dalam keadaan belum pernah ditawarkan, dan tidak ada daftar kerja yang menampilkannya untuk diputuskan (kirim / revisi tanggal / hapus).
+
+Batasan keras spec ini: tahap 1 murni turunan baca-saja dari field existing (`status`, `date`, `validUntil`, `createdAt`, `updatedAt`, `grandTotal`, `customerId`, `createdBy`/`salesEmployeeId`) — nol kolom status baru (status turunan "kedaluwarsa" untuk draf DILARANG ditulis sebagai status tersimpan; label tahap hanya turunan builder), nol mutasi, nol auto-kirim, nol auto-tolak/hapus draf, nol jurnal. Ambang hari "basi" dan "menipis" = USULAN untuk putusan Lead (Q-QD-1), BUKAN fakta kebijakan; angka 14 hari default form dan 14 hari cron sent TIDAK diwarisi diam-diam sebagai ambang draf. Kontak pelanggan hanya untuk pemegang izin antrean (pola Q-QF-4 F-091-S: ekspor tanpa phone).
+
+Bukan duplikasi: bukan F-2026-10-22-091-S (objek sent belum dijawab — spec ini objek draft belum terkirim; populasi disjungsi persis pada status); bukan F-2026-10-25-002-S (penawaran accepted tanpa SO); bukan F-2026-10-25-039-S (histori harga; draf hanya ember saringan di sana, bukan antrean umur); bukan F-2026-10-25-027-S (target tutup lead, objek Lead); bukan F-2026-10-26-051-S (DP menunggu verifikasi, objek DownPayment).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search + web_extract):
+- Accurate Penawaran Penjualan (indeks resmi): https://help.accurate.id/product/penawaran-penjualan/ dan "Cara Membuat Penawaran Harga (Quotation)" https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan (terakses penuh run ini: penawaran dibuat, dikelola, dilacak statusnya diterima/ditolak/negosiasi, bisa dikirim email/cetak — BENCHMARK: penawaran adalah dokumen terkelola berstatus; halaman resmi yang diakses TIDAK menetapkan masa berlaku bawaan per penawaran, antrean draf basi, atau ambang hari tindak-lanjut draf — tidak diklaim).
+- Accurate artikel masa berlaku surat penawaran: https://accurate.id/akuntansi/surat-penawaran-harga/ (hasil search live run ini: surat penawaran wajib memuat tanggal penawaran + masa berlaku; untuk produk pembeli lazim diberi waktu satu minggu atau lebih karena harga bisa berubah — BENCHMARK praktik: masa berlaku penawaran itu nyata dan pendek; TIDAK menetapkan perilaku sistem antrean draf — tidak diklaim lebih dari itu).
+- Zahir Sales Quotation: https://www.zahironline.com/sales-quotation/ + indeks bantuan Sales https://help.zahironline.com/portal/id/kb/customer-support/zahir-online/guidance/sales dan halaman "Laporan Rangkuman penawaran harga penjualan" https://www.zahironline.com/sales-quotation/laporan-rangkuman-penawaran-harga-penjualan/ (BENCHMARK terbatas: Zahir punya Sales Quotation non-jurnal yang diteruskan ke Sales Order, dan punya laporan rangkuman penawaran harga penjualan; isi halaman laporan tidak terbaca penuh run ini (extract kosong) sehingga rincian kolom/saringan laporan itu TIDAK diklaim; antrean draf basi / ambang umur draf TIDAK terverifikasi di sumber resmi yang terakses — ditulis apa adanya).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 97368be4)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `Quotation` (prisma/schema.prisma:1398) — `date` :1414, `validUntil DateTime?` :1415 nullable, `status String @default("draft")` :1424, `grandTotal` Decimal(15,2), `salesEmployeeId` nullable :1406 (snapshot atribusi penjual F-2026-10-21-016), `createdBy` :1427, `deletedAt` :1428, indeks status :1450. TIDAK ada kolom expiry/status-turunan tersimpan; "kedaluwarsa" di seluruh domain quotation adalah turunan dari `validUntil` vs hari WIB.
+- Siklus status (string): `draft → sent` hanya lewat `sendQuotation` (src/actions/sales.actions.ts:277; penjaga status persis draft :285-287 + minimal 1 item :290-296; flip :298-301), lalu accepted/rejected/converted/approved lewat aksi existing; guard kedaluwarsa server `assertQuotationNotExpired` (:104-109) menolak accept/convert untuk `validUntil` lewat di :341, :491, :965 — artinya draf yang `validUntil`-nya sudah lewat TIDAK bisa dikirim-lalu-diterima apa adanya; jalurnya revisi/perpanjang dulu.
+- Penulis `validUntil`: form penawaran (quotation-form.tsx:586 default hari ini + 14 hari untuk draf baru; picker :793-807), create/update action menyimpan `wibDateToUtcMidnight(data.validUntil)` (sales.actions.ts:228, :638); schema validasi `validUntil: optionalDate` (sales.schemas.ts:35). `validUntil` boleh kosong (nullable) — draf tanpa masa berlaku sah di kode.
+- Antrean sent (F-091-S, LIVE): builder/loader/ekspor/kartu/halaman seperti di Pembetulan Premis di atas; populasi persis `status: "sent"`, `deletedAt: null`; izin `view_quotations` fail-closed di page :26; penjual diturunkan dari `createdBy` → User (komentar loader menyebut schema tidak punya salesEmployeeId — komentar itu basi sebagian: kolom `salesEmployeeId` kini ada di :1406; pemetaan penjual untuk draf = Q-QD-5 Backend, jangan ditebak di spec).
+- Cron auto-reject: hanya SENT (auto-reject-quotations/route.ts:31, OR validUntil lewat / validUntil null + updatedAt > 14 hari :33-36), flip bersyarat per baris + histori dalam satu transaksi — draf tidak disentuh cron mana pun (grep `auto-reject` hanya route itu).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:158-162): `view_quotations` :158, `create_quotations` :159, `edit_quotations` :160, `delete_quotations` :161, `approve_quotations` :162. Tidak ada izin khusus "antrean" — F-091-S memakai `view_quotations`, pola yang sama diusulkan di sini (izin baru = BUTUH-VONIS Lead, Q-QD-4).
+- Daftar penawaran: `penjualan/penawaran/page.tsx` memuat `validUntil` per baris (:61) dan tabel menandai kedaluwarsa untuk baris terkirim (quotation-table.tsx:62 `isQuotationExpired`, util src/lib/utils/quotation-expiry.ts:6-10 selaras guard server), terurut createdAt desc, chip status termasuk draft — tetapi tanpa pengelompokan/penanda umur untuk populasi draft.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean draf penawaran, turunan umur draf, turunan tahap basi untuk draft: grep `quotation-draft|draftQueue|drafBasi|staleDraft` di src/ = 0; satu-satunya kemunculan "DRAFT" di builder quotation adalah ember saringan histori harga (quotation-price-history.ts:59, :287), bukan antrean kerja. Draf basi hari ini hanya bisa ditemukan manual lewat chip status draft + mata manusia mengurutkan tanggal.
+
+### 1. Workflow specification
+
+Aktor: Admin Penjualan / Sales pemegang `edit_quotations` (pelaku tindak-lanjut: kirim/revisi/hapus dari detail existing), Admin Penjualan pemegang `view_quotations` (pembaca antrean), Pembuat draf pemegang `create_quotations` (sumber baris), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris Quotation existing berstatus `draft` + `deletedAt` null (id, slug, documentNo, customerId + nama pelanggan, date, validUntil, grandTotal, createdAt, updatedAt, salesEmployeeId/createdBy) — semua field existing, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean draf turunan per penawaran (lihat §3) + rekap hitungan per tahap di kepala permukaan. BUKAN dokumen transaksi: antrean tidak mengirim, tidak menolak, tidak menghapus, tidak membuat SO/invoice/jurnal; semua aksi tetap lewat halaman detail/aksi existing (`sendQuotation`, edit, `deleteQuotation` — izinnya masing-masing).
+
+Alur:
+1. Draf lahir lewat create quotation existing (status lahir `draft`, schema :1424); form memberi default validUntil +14 hari (quotation-form.tsx:586) yang boleh diubah/dikosongkan pengguna.
+2. Selama draf belum dikirim, ia tidak masuk antrean sent F-091-S dan tidak disentuh cron — satu-satunya permukaan tahap 1 yang menampilkannya sebagai pekerjaan tertunda adalah antrean spec ini.
+3. Builder turunan (§3) mengklasifikasikan tiap draf terhadap hari kalender WIB berjalan: masa berlaku sudah lewat sebelum pernah terkirim, masa berlaku menipis, belum ada masa berlaku, atau masih terbuka; plus umur draf (hari sejak `date`/createdAt — acuan persisnya Q-QD-5) sebagai fakta tampil, bukan vonis.
+4. Petugas membuka detail dari baris antrean, lalu memilih jalur existing: Kirim (`sendQuotation`, izin edit_quotations; penjaga item + status), Revisi (edit validUntil/isi lalu kirim), atau Hapus (`deleteQuotation`, izin delete_quotations). Antrean tahap 1 TIDAK menyediakan tombol aksi massal dan TIDAK mengubah status apa pun dari daftar.
+5. Begitu draf terkirim, ia keluar dari populasi spec ini dan masuk wilayah F-091-S; begitu terhapus (deletedAt terisi) ia keluar dari kedua antrean.
+
+### 2. Role/permission matrix
+
+Baris = aksi permukaan spec ini; kolom = peran; isi = permissionKey nyata katalog (module-catalog.generated.ts:158-162). Peran konkret per permissionKey mengikuti pemetaan role existing repo (tidak dikarang di sini).
+
+| Aksi | Sales / Admin Penjualan | Kepala Bengkel / Manajer | Finance | Peran tanpa izin quotations |
+|---|---|---|---|---|
+| Melihat antrean draf basi (halaman + rekap tahap) | `view_quotations` | `view_quotations` | `view_quotations` (bila role-nya memang diberi key itu) | ditolak fail-closed (requirePermission sebelum loader, pola antrean-penawaran/page.tsx:26) |
+| Ekspor CSV antrean | `view_quotations` — TANPA phone/contactPerson (pola Q-QF-4 F-091-S) | sama | sama | ditolak |
+| Membuka detail penawaran dari baris | `view_quotations` (halaman detail existing) | sama | sama | ditolak |
+| Mengirim draf (dari detail) | `edit_quotations` (sendQuotation sales.actions.ts:279) | `edit_quotations` | tidak (kecuali key diberi eksplisit) | ditolak |
+| Merevisi validUntil/isi draf | `edit_quotations` | `edit_quotations` | tidak | ditolak |
+| Menghapus draf | `delete_quotations` | `delete_quotations` | tidak | ditolak |
+| Mengubah ambang hari basi/menipis tahap 1 | TIDAK ADA — konstanta bernama di builder (pola QUOTATION_EXPIRY_WARNING_DAYS quotation-followup-queue.ts:23); perubahan = perubahan kode sesudah putusan Lead Q-QD-1 | — | — | — |
+
+Scope data: TIDAK ada scope per-sales existing untuk quotation yang terverifikasi run ini (loader F-091-S memuat semua sent untuk pemegang view_quotations; `salesEmployeeId` ada sebagai atribusi :1406 tetapi tidak dipakai sebagai saringan scope di loader itu). Spec ini mengikuti pola yang sama tahap 1 (semua draf untuk pemegang izin); saringan "draf saya" sebagai tampilan opsional = USULAN Q-QD-5, bukan hak akses baru dan bukan penyembunyian baris orang lain tanpa putusan Lead.
+
+### 3. Status-transition matrix
+
+Status tersimpan TIDAK berubah oleh spec ini. Matriks membaca: status awal tersimpan → pemicu existing → status akhir tersimpan → penjaga; kolom terakhir = posisi baris di antrean turunan.
+
+| Status awal | Pemicu | Status akhir | Penjaga / permission | Antrean spec ini |
+|---|---|---|---|---|
+| (baru) | create quotation | `draft` | `create_quotations` | masuk populasi |
+| `draft` | sendQuotation (detail) | `sent` | `edit_quotations`; status persis draft + ≥1 item (sales.actions.ts:285-296) | keluar; masuk wilayah F-091-S |
+| `draft` | edit (ubah validUntil/isi) | `draft` (tetap) | `edit_quotations` | tetap; tahap turunan dihitung ulang dari validUntil baru |
+| `draft` | deleteQuotation | terhapus lunak (deletedAt) | `delete_quotations` (sales.actions.ts:2179+) | keluar |
+| `draft` | cron auto-reject | — TIDAK ADA transisi (cron hanya SENT, route.ts:31) | — | tetap sampai manusia memutuskan |
+| `draft` | (tidak ada pemicu) | `draft` | — | tahap turunan berubah sendiri seiring hari WIB berjalan (KEDALUWARSA/MENIPIS turunan, §4) — BUKAN transisi tersimpan |
+
+Tahap turunan (bukan status): dihitung builder setiap baca dari `validUntil` vs hari kalender WIB (`getWibTodayUtcDate`, pola quotation-followup-queue.ts:82-92): `validUntil` null → TANPA_BATAS; hari ini > validUntil → LEWAT_BELUM_TERKIRIM; sisa hari ≤ ambang menipis → MENIPIS; selain itu TERBUKA. Nama label final = Q-QD-2 Lead; label di atas USULAN Business dan wajib verbatim dari konstanta builder ke UI (pola QUOTATION_FOLLOWUP_STAGE_LABELS :35-40), UI dilarang parafrase.
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber/bukti |
+|---|---|---|---|
+| BR-QD-01 | Populasi antrean = Quotation `status = "draft"` DAN `deletedAt IS NULL` persis; status lain tidak masuk dengan alasan apa pun (sent = wilayah F-091-S; accepted/converted/rejected = riwayat, bukan pekerjaan draf) | USULAN (di atas fakta TERVERIFIKASI-KODE populasi F-091-S disjungsi) | quotation-followup-queue-data.ts:25; schema status :1424 |
+| BR-QD-02 | "Kedaluwarsa" untuk draf adalah tahap TURUNAN builder dari `validUntil` vs hari kalender WIB (hari validUntil sendiri masih berlaku; lewat bila hari ini > validUntil), selaras `assertQuotationNotExpired` — dilarang kolom status/expiry tersimpan baru tahap 1 dan dilarang menulis tahap turunan kembali ke baris Quotation | TERVERIFIKASI-KODE (semantik) + USULAN (penerapan ke draf) | sales.actions.ts:104-109; quotation-followup-queue.ts:4-10, :82-92; quotation-expiry.ts:6-10 |
+| BR-QD-03 | `validUntil` null = tahap TANPA_BATAS jujur dengan sisaHari null; dilarang mengarang sisa hari dari createdAt/updatedAt/default 14 hari form untuk baris tanpa validUntil | USULAN (pola BR-QF-03 F-091-S) | quotation-form.tsx:586 (default hanya saran form, bukan fakta baris tersimpan); schema :1415 nullable |
+| BR-QD-04 | Ambang MENIPIS (hari) dan ambang "umur draf basi" (hari, bila Lead menghendaki tahap umur terpisah dari tahap masa berlaku) = konstanta bernama di builder, nilai final putusan Lead — spec menanam USULAN awal menipis 3 hari (sejajar QUOTATION_EXPIRY_WARNING_DAYS existing) dan TIDAK menanam ambang umur basi sebagai fakta | BUTUH-VONIS (Lead) via Q-QD-1 | quotation-followup-queue.ts:15-23 (preseden: usulan 3 hari ditanam sebagai konstanta bernama menunggu Q-QF-1) |
+| BR-QD-05 | Antrean murni baca: nol mutasi status/validUntil/dokumen/jurnal, nol auto-kirim, nol auto-tolak, nol auto-hapus draf basi, nol tombol aksi massal tahap 1; semua tindak-lanjut lewat aksi detail existing dengan izinnya masing-masing | USULAN | pola BR-QF-05 (quotation-followup-queue-data.ts:12); penjaga aksi sales.actions.ts:279, :2179 |
+| BR-QD-06 | Urutan tampil default = putusan Lead (Q-QD-3); usulan Business: LEWAT_BELUM_TERKIRIM paling lama-lewat dulu, lalu MENIPIS sisa-hari terkecil, lalu TANPA_BATAS umur-tertua, lalu TERBUKA sisa-hari terkecil (pola STAGE_ORDER F-091-S) — sebelum putusan, implementasi TIDAK mengklaim urutan ini final | USULAN, final BUTUH-VONIS Lead | quotation-followup-queue.ts:97-102, komentar :17-19 (preseden urutan usulan menunggu putusan) |
+| BR-QD-07 | Kontak pelanggan (phone/contactPerson) hanya tampil di permukaan berizin `view_quotations`; ekspor CSV tahap 1 TANPA phone/contactPerson; isi kontak dilarang masuk log/URL publik | USULAN (pola Q-QF-4) | quotation-followup-queue-data.ts:8-12, :64; quotation-followup-export.ts |
+| BR-QD-08 | Penjual/penanggung jawab tampil apa adanya dari data existing: kolom `salesEmployeeId` (schema :1406) dan/atau `createdBy` — sumber kanonik satu-satunya diputus Backend (Q-QD-5); null/kosong tampil `—`, dilarang menebak penanggung jawab dari peran/aktivitas terakhir | TERVERIFIKASI-KODE (kedua kolom ada) + BUTUH-VONIS (pilihan kanonik, Backend) | schema :1406, :1427; preseden loader F-091-S memakai createdBy→User (quotation-followup-queue-data.ts:41-51) |
+| BR-QD-09 | grandTotal tampil verbatim dari baris tersimpan (Number(grandTotal) pola loader existing); antrean dilarang menghitung ulang total dari item, menerapkan diskon/ambang, atau menampilkan nilai "potensi" karangan; draf belum terkirim BUKAN piutang/pendapatan di permukaan mana pun | USULAN | quotation-followup-queue-data.ts:64; konsisten BR-AQ-07/DP draft bukan kas (F-2026-10-26-051-S) |
+| BR-QD-10 | Draf dengan jumlah item 0 tetap tampil (ia pekerjaan tertunda yang sah ditemukan), tetapi antrean TIDAK menjanjikan bisa-kirim; ketidakbisaan kirim ditegakkan penjaga existing saat aksi dicoba (sendQuotation menolak item 0) — builder tidak perlu menghitung item tahap 1 kecuali Lead memutuskan penanda khusus (Q-QD-6) | TERVERIFIKASI-KODE (penjaga) + USULAN (tampil apa adanya) | sales.actions.ts:290-296 |
+| BR-QD-11 | Bila putusan Lead menghendaki draf basi akhirnya ditutup otomatis, itu fitur TERPISAH berisiko (mutasi status + histori) yang wajib spec/putusan baru — tidak boleh menempel sebagai efek samping antrean baca-saja ini, dan tidak boleh memperluas cron SENT yang ada secara diam-diam | USULAN (penjagaan cakupan) | auto-reject-quotations/route.ts:11-36 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF Silengkap (TERVERIFIKASI-KODE) |
+|---|---|---|---|
+| Penawaran harga terkelola + status lacak (diterima/ditolak/negosiasi) | Ada — help.accurate.id/product/penawaran-penjualan/ + artikel quotation terakses run ini | Ada (Sales Quotation, non-jurnal, lanjut ke Sales Order) — zahironline.com/sales-quotation/ | Ada — Quotation status string draft/sent/accepted/rejected/converted (schema :1424, aksi sales.actions.ts) |
+| Masa berlaku (validUntil) per penawaran | Praktik surat penawaran memuat masa berlaku (accurate.id/akuntansi/surat-penawaran-harga/); penetapan field sistem per dokumen tidak terverifikasi dari halaman terakses | Tidak terverifikasi dari sumber resmi terakses run ini | Ada — `validUntil` nullable :1415, default form +14 hari (quotation-form.tsx:586), guard accept/convert (sales.actions.ts:104-109) |
+| Antrean penawaran TERKIRIM mendekati/lewat masa berlaku | Tidak terverifikasi (tidak diklaim) | Tidak terverifikasi (tidak diklaim) | LIVE — F-2026-10-22-091-S (builder/loader/ekspor/halaman antrean-penawaran) |
+| Antrean DRAF belum terkirim yang basi | Tidak terverifikasi (tidak diklaim) | Tidak terverifikasi (tidak diklaim) | ABSEN — grep builder draft-queue run ini = 0; inilah gap F-2026-10-26-055-S |
+| Laporan rangkuman penawaran | Tidak terverifikasi dari halaman terakses | Ada halaman laporan rangkuman penawaran harga penjualan (isi kolom tidak terbaca run ini — tidak diklaim rinciannya) | Parsial — daftar penawaran + histori harga F-039-S + antrean sent F-091-S; rangkuman draf basi belum ada |
+| Penutupan otomatis penawaran basi | Tidak terverifikasi | Tidak terverifikasi | Parsial — cron hanya SENT (auto-reject route.ts:31); draf tidak ditutup otomatis (sengaja di luar cakupan spec ini, BR-QD-11) |
+
+### 6. Acceptance criteria + edge cases
+
+Acceptance criteria (falsifikasi QA atas head Backend/Frontend persis; builder murni wajib tes unit pola quotation-followup-queue.test.ts):
+- AC-QD-1: Baris sent/accepted/rejected/converted atau deletedAt terisi yang validUntil-nya lewat TIDAK PERNAH muncul di antrean draf (populasi persis BR-QD-01); baris draft validUntil lewat muncul dengan sisaHari negatif persis selisih hari kalender WIB.
+- AC-QD-2: Hari validUntil sendiri masih berlaku: draf dengan validUntil = hari ini WIB berstatus turunan MENIPIS/TERBUKA (sisaHari 0), BUKAN LEWAT_BELUM_TERKIRIM; validUntil kemarin = lewat 1 hari. Batas dihitung tengah malam UTC hari WIB (patokan getWibTodayUtcDate), bukan jam server mentah.
+- AC-QD-3: Draf validUntil null tampil TANPA_BATAS dengan sisaHari null (tampil `—`); UI/ekspor yang mengisi sisa hari karangan dari createdAt/default form = MERAH.
+- AC-QD-4: Sesudah draf dikirim lewat aksi existing, baris hilang dari antrean draf pada baca berikutnya dan (bila memenuhi syarat) muncul di antrean sent F-091-S; sesudah dihapus lunak, hilang dari keduanya. Antrean sendiri tidak pernah mengubah status (payload mutasi dari jalur antrean = MERAH).
+- AC-QD-5: Pengguna tanpa `view_quotations` ditolak sebelum loader jalan (fail-closed, pola antrean-penawaran/page.tsx:26); ekspor CSV tidak memuat phone/contactPerson (memuatnya = MERAH).
+- AC-QD-6: Label tahap + notice tampil verbatim konstanta builder (parafrase UI = MERAH, pola AC-QF-10); grandTotal tampil sama persis nilai tersimpan (hitung ulang dari item di UI/builder = MERAH).
+- AC-QD-7: Penjual kosong tampil `—` (bukan nama penebakan); sumber penjual mengikuti putusan Q-QD-5 satu jalur saja (dua sumber dicampur per baris = MERAH).
+- AC-QD-8: Rekap hitungan per tahap di kepala permukaan = hitungan baris builder yang sama (Σ rekap = Σ baris tampil); angka rekap karangan/terpisah = MERAH.
+
+Edge cases:
+- EC-QD-1: Draf lahir dan validUntil-nya sudah lewat di hari yang sama (pengguna memundurkan tanggal manual) → langsung LEWAT_BELUM_TERKIRIM pada baca pertama; bukan error.
+- EC-QD-2: Draf validUntil jauh di masa depan + umur draf sangat tua (dibuat lama, masa berlaku panjang) → tahap TERBUKA; umur tampil sebagai fakta; apakah umur saja cukup menaikkan prioritas = Q-QD-1/Q-QD-3, bukan ditebak builder.
+- EC-QD-3: Draf item 0 (baru dibuat, belum diisi) → tampil (BR-QD-10); percobaan kirim ditolak penjaga existing; antrean tidak menyembunyikannya.
+- EC-QD-4: Dua draf pelanggan sama kendaraan sama → dua baris terpisah (dedup TIDAK dilakukan; draf bukan dokumen final — menggabung = mengarang).
+- EC-QD-5: Perubahan hari WIB di tengah baca (lintas tengah malam) → satu panggilan builder memakai satu `now` konsisten untuk semua baris (pola buildQuotationFollowUpQueue(inputs, now)).
+- EC-QD-6: Baris Quotation tanpa slug (slug nullable schema :1399) → tautan detail memakai fallback existing halaman detail (pola loader F-091-S meneruskan slug apa adanya); slug karangan = MERAH.
+- EC-QD-7: grandTotal 0 (draf kosong) → tampil 0 apa adanya; bukan disembunyikan dan bukan dianggap tidak sah.
+
+### 7. Backlog implementasi (turunan spec ini; ID spec F-2026-10-26-055-S)
+
+| ID turunan | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-055-S | Spec kontrak ini (dokumen) | Business | — |
+| 055-B | Builder murni tahap draf + loader fail-closed (populasi BR-QD-01, satu query massal + pemetaan penjual per Q-QD-5, tanpa N+1) + tes unit pola F-091-S | Backend | Q-QD-1/2/3/5 terputus Lead/Backend |
+| 055-F | Permukaan konsumen: seksi/halaman antrean draf (rute diputus Q-QD-4) — label/notice verbatim, kolom verbatim builder, ekspor tanpa kontak; grep e2e penawaran dulu sebelum ubah selector | Frontend | Kontrak 055-B final |
+| 055-Q | Falsifikasi AC-QD-1..8 + EC-QD-1..7 atas head Backend/Frontend persis | QA | Head final |
+
+Tidak ada turunan akuntansi: nol jurnal, nol angka statutori, nol perubahan ambang DP/invoice. Butuh vonis accountant: TIDAK.
+
+### 8. Pertanyaan putusan (Q-*)
+
+- Q-QD-1 (Lead): Ambang MENIPIS final (usulan 3 hari sejajar QUOTATION_EXPIRY_WARNING_DAYS) dan apakah ada tahap umur-draf-basi terpisah dari tahap masa berlaku (bila ya: ambang harinya berapa, dan apakah ia mengubah urutan atau hanya penanda)? Default tanpa putusan: hanya tahap masa berlaku §3 ditanam, umur tampil sebagai kolom fakta tanpa tahap sendiri.
+- Q-QD-2 (Lead): Label tahap final (usulan: "Lewat Masa Berlaku — Belum Terkirim" / "Masa Berlaku Menipis" / "Terbuka" / "Tanpa Masa Berlaku") + teks notice kepala permukaan verbatim.
+- Q-QD-3 (Lead): Urutan tampil default final (usulan BR-QD-06) dan mode tampilan default vs "semua" (pola tampilan F-091-S: default hanya tahap perlu-tindak, "semua" termasuk TERBUKA?).
+- Q-QD-4 (Lead): Penempatan permukaan — halaman sendiri di grup Penjualan (pola /penjualan/antrean-penawaran) vs seksi kedua di halaman antrean existing vs tab di daftar penawaran; termasuk apakah izin tetap `view_quotations` (usulan: tetap, tanpa key baru).
+- Q-QD-5 (Backend, kata final teknis; Lead meratifikasi): Sumber penjual kanonik draf — `salesEmployeeId`→Employee (schema :1406) vs `createdBy`→User (preseden loader F-091-S) — satu jalur, termasuk perlakuan baris yang keduanya terisi berbeda.
+- Q-QD-6 (Lead): Penanda khusus draf item-0 (perlu hitung item di loader) atau tampil polos tahap 1 (usulan Business: polos, BR-QD-10)?
+
+### Yang TIDAK diusulkan run ini
+
+- Memperluas cron auto-reject ke draf (mutasi status otomatis atas dokumen yang belum pernah ditawarkan = keputusan perilaku inti terpisah; BR-QD-11).
+- Tombol kirim/hapus massal dari antrean, pengingat WhatsApp/email otomatis ke sales/pelanggan (kanal notifikasi belum diputus; antrean baca-saat-dibuka cukup tahap 1, pola yang sama F-091-S tahap 1).
+- Mengubah default form validUntil +14 hari atau menjadikannya kebijakan tertulis (itu saran form existing, bukan aturan yang divonis di sini).
+- Menyatukan antrean draf ini dengan antrean sent F-091-S menjadi satu halaman gabungan tanpa putusan Q-QD-4 (dua populasi, dua pertanyaan kerja berbeda: "belum ditawarkan" vs "belum dijawab").
+
+F-2026-10-26-055-S — Antrean draf penawaran basi belum terkirim (pivot dari premis kartu "antrean kedaluwarsa" yang sudah LIVE sebagai F-2026-10-22-091-S untuk populasi sent). Status: SPEC SELESAI run ini (dokumen saja); gerbang pertama putusan Lead Q-QD-1/2/3/4/6 + ratifikasi Q-QD-5, lalu fisik Backend 055-B, konsumen Frontend 055-F, falsifikasi QA 055-Q. Pemilik usulan: Business (spec), Lead (ambang/label/urutan/penempatan), Backend (fisik turunan + sumber penjual), Frontend (permukaan), QA (falsifikasi). Butuh vonis accountant: TIDAK (baca-saja, tanpa jurnal/angka statutori).
