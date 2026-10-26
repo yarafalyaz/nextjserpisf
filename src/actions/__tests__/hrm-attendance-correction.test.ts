@@ -175,6 +175,8 @@ beforeEach(() => {
 
 describe("createAttendanceCorrection", () => {
   it("AC-AC-1: pengajuan pending TIDAK menulis Attendance; snapshot rekod berjalan tersimpan", async () => {
+    // Pengaju self persis: caller Employee 7 mengajukan untuk 7.
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     const res = await actions.createAttendanceCorrection(
       fd({ employeeId: "7", date: DATE, status: "present", checkIn: "08:00", checkOut: "17:00", reason: "Lupa absen" }),
     )
@@ -189,15 +191,61 @@ describe("createAttendanceCorrection", () => {
 
   it("AC-AC-3a: karyawan self mengajukan untuk employeeId orang lain ditolak", async () => {
     mocks.hrScopeOverride.current = { kind: "self", employeeId: 7 }
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     const res = await actions.createAttendanceCorrection(
       fd({ employeeId: "8", date: DATE, status: "present", reason: "Manipulasi" }),
     )
     expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
     expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
     mocks.hrScopeOverride.current = null
   })
 
+  // TEMUAN-1 PR #954: self persis berlaku untuk SEMUA scope (Q-AC-2).
+  it("TEMUAN-1a: scope department mengajukan untuk bawahan ditolak", async () => {
+    mocks.hrScopeOverride.current = { kind: "department", departmentId: 3, employeeId: 42 }
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 42, departmentId: 3 })
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "7", date: DATE, status: "present", reason: "Atas nama bawahan" }),
+    )
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
+    expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("TEMUAN-1b: scope all mengajukan untuk orang lain ditolak", async () => {
+    // Default fixture: user admin scope all, caller Employee 42, target 7.
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "7", date: DATE, status: "present", reason: "Atas nama orang lain" }),
+    )
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
+    expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
+  })
+
+  it("TEMUAN-1c: akun tanpa Employee tertaut fail-closed untuk semua target", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "7", date: DATE, status: "present", reason: "Tanpa tertaut" }),
+    )
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
+    expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
+  })
+
+  it("TEMUAN-1d: scope all mengajukan untuk diri sendiri lolos", async () => {
+    // Caller Employee 42 (default fixture) mengajukan untuk 42.
+    prismaMock.attendance.findUnique.mockResolvedValue({ ...existingAttendance, id: 20 })
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "42", date: DATE, status: "present", checkIn: "08:00", checkOut: "17:00", reason: "Lupa absen sendiri" }),
+    )
+    expect(res.success).toBe(true)
+    expect(prismaMock.attendanceCorrection.create).toHaveBeenCalledTimes(1)
+  })
+
   it("AC-AC-4: pengajuan pending kedua tanggal sama ditolak", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     prismaMock.attendanceCorrection.findFirst.mockResolvedValue({ id: 3 })
     const res = await actions.createAttendanceCorrection(
       fd({ employeeId: "7", date: DATE, status: "present", reason: "Kedua" }),
@@ -208,6 +256,7 @@ describe("createAttendanceCorrection", () => {
   })
 
   it("Q-AC-1: tanggal masa depan ditolak; alasan kosong ditolak validasi", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     const future = new Date(Date.now() + 7 * 3_600_000 + 86_400_000).toISOString().slice(0, 10)
     const res = await actions.createAttendanceCorrection(
       fd({ employeeId: "7", date: future, status: "present", reason: "Besok" }),

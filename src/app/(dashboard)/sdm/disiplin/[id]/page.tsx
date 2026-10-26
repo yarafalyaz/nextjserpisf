@@ -10,6 +10,8 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DisciplinaryRecordActions } from "@/components/reports/disciplinary-record-actions"
 import { DISCIPLINARY_TITLE } from "@/components/reports/disciplinary-attention-card"
 import { loadDisciplinaryRecords } from "@/lib/reports/disciplinary-data"
+import { loadDisciplinaryDeductionDecisionsForRecord } from "@/lib/reports/disciplinary-deduction-data"
+import { DisciplinaryDeductionRecordContext } from "@/components/reports/disciplinary-deduction-decisions-card"
 import { formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
 
@@ -30,6 +32,9 @@ export default async function DisciplinaryDetailPage({
   const records = await loadDisciplinaryRecords(scope)
   const record = records.find((r) => r.id === recordId)
   if (!record) notFound()
+
+  const canViewAmount = await hasPermission("view_payroll")
+  const decisions = await loadDisciplinaryDeductionDecisionsForRecord(scope, recordId, canViewAmount)
 
   const [canCreate, canApprove, me] = await Promise.all([
     hasPermission("create_disciplinary_records"),
@@ -100,6 +105,8 @@ export default async function DisciplinaryDetailPage({
           ) : null}
         </dl>
       </section>
+
+      <DisciplinaryDeductionRecordContext decisions={decisions} />
 
       <DisciplinaryRecordActions
         record={record}

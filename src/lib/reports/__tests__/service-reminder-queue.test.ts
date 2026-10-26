@@ -89,7 +89,7 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     expect(queue.summary.diLuarJendela).toBe(1)
   })
 
-  it("AC-SV-B3: odometer kosong -> sisaKm null, tidak terlewat karangan; km terlampaui -> jadwal_rusak", () => {
+  it("AC-SV-B3: odometer kosong -> sisaKm null, tidak terlewat karangan; km terlampaui -> terlewat; jadwal_rusak hanya target tidak valid", () => {
     const queue = buildServiceReminderQueue(
       [
         input({ customerVehicleId: 1, nextServiceKm: 10_000, lastOdometerKm: null }),
@@ -102,16 +102,19 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     )
     // id 1: km tidak bisa dinilai -> terjadwal di luar jendela, bukan baris.
     expect(queue.rows.find((r) => r.customerVehicleId === 1)).toBeUndefined()
+    // id 2/3: basis km terpenuhi (lastOdometerKm >= km target) = terlewat,
+    // sisaKm tampil apa adanya 0/negatif dari odometer tercatat (BR-SV-04).
+    // Urutan terlewat: sisaKm naik (-1_000 sebelum 0).
     expect(queue.rows.map((r) => [r.customerVehicleId, r.status, r.sisaKm])).toEqual([
-      [2, "jadwal_rusak", null],
-      [3, "jadwal_rusak", null],
+      [2, "terlewat", -1_000],
+      [3, "terlewat", 0],
       [4, "jadwal_rusak", null],
       [5, "jadwal_rusak", null],
     ])
-    expect(queue.summary).toMatchObject({ jadwalRusak: 4, diLuarJendela: 1 })
+    expect(queue.summary).toMatchObject({ jadwalRusak: 2, terlewat: 2, diLuarJendela: 1 })
   })
 
-  it("tanggal lewat menang atas penanda km rusak (terlewat jujur)", () => {
+  it("tanggal lewat = terlewat; sisa km negatif tampil apa adanya", () => {
     const queue = buildServiceReminderQueue(
       [input({ customerVehicleId: 1, nextServiceDate: day(-2), nextServiceKm: 9_000, lastOdometerKm: 10_000 })],
       { now: NOW },
@@ -120,6 +123,27 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     expect(queue.rows[0]?.sisaHari).toBe(-2)
     // sisa km jujur tetap ditampilkan; bukan disembunyikan.
     expect(queue.rows[0]?.sisaKm).toBe(-1_000)
+  })
+
+  it("AC-SV-B3b (MEDIUM-1 QA #975): baris tampil odometer null membawa sisaKm === null persisten", () => {
+    // Basis tanggal terisi membuat kendaraan MASUK baris (terlewat/
+    // mendekati) sementara basis km tidak bisa dinilai karena odometer
+    // null: sisaKm wajib null apa adanya di keluaran builder.
+    const queue = buildServiceReminderQueue(
+      [
+        input({ customerVehicleId: 1, nextServiceDate: day(-1), nextServiceKm: 10_000, lastOdometerKm: null }),
+        input({ customerVehicleId: 2, nextServiceDate: day(5), nextServiceKm: 10_000, lastOdometerKm: null }),
+        input({ customerVehicleId: 3, nextServiceDate: day(60), nextServiceKm: 10_000, lastOdometerKm: null }),
+      ],
+      { now: NOW },
+    )
+    const byId = new Map(queue.rows.map((r) => [r.customerVehicleId, r]))
+    expect(byId.get(1)).toMatchObject({ status: "terlewat", lastOdometerKm: null, sisaKm: null })
+    expect(byId.get(2)).toMatchObject({ status: "mendekati", lastOdometerKm: null, sisaKm: null })
+    expect(byId.get(1)?.sisaKm).toBeNull()
+    expect(byId.get(2)?.sisaKm).toBeNull()
+    // id 3 di luar jendela (ember), bukan baris — tidak ada sisaKm karangan.
+    expect(byId.get(3)).toBeUndefined()
   })
 
   it("AC-SV-B4: populasi terhitung — nol baris hilang diam-diam", () => {
@@ -132,23 +156,25 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
         input({ customerVehicleId: 5, nextServiceDate: day(60) }),
         input({ customerVehicleId: 6, vehicleIsActive: false, nextServiceDate: day(-1) }),
         input({ customerVehicleId: 7, vehicleDeletedAt: day(-30), nextServiceDate: day(-1) }),
+        input({ customerVehicleId: 8, nextServiceKm: 0, lastOdometerKm: 10_000 }),
       ],
       { now: NOW },
     )
     const s = queue.summary
+    // id 4 km terlampaui = terlewat (bukan rusak); id 8 km target 0 = rusak.
     expect(s).toEqual({
       mendekati: 1,
-      terlewat: 1,
+      terlewat: 2,
       jadwalRusak: 1,
       belumTerjadwal: 1,
       kendaraanNonaktif: 2,
       diLuarJendela: 1,
-      totalKendaraanDinilai: 5,
+      totalKendaraanDinilai: 6,
     })
     expect(
       s.mendekati + s.terlewat + s.jadwalRusak + s.belumTerjadwal + s.diLuarJendela,
     ).toBe(s.totalKendaraanDinilai)
-    expect(queue.rows).toHaveLength(3)
+    expect(queue.rows).toHaveLength(4)
   })
 
   it("jendela tetap 7/30/90; selain itu ditolak berisik", () => {
@@ -170,7 +196,7 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
         input({ customerVehicleId: 2, nextServiceDate: day(-1) }),
         input({ customerVehicleId: 3, nextServiceDate: day(-9) }),
         input({ customerVehicleId: 4, nextServiceDate: day(2) }),
-        input({ customerVehicleId: 5, nextServiceKm: 1, lastOdometerKm: 2 }),
+        input({ customerVehicleId: 5, nextServiceKm: 0, lastOdometerKm: 2 }),
       ],
       { now: NOW },
     )

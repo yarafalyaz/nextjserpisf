@@ -88,6 +88,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // keputusan "hapus atau sambungkan" milik pemilik repo.
   // F-2026-10-24-132-V: 4 aksi PKWT kini dirujuk UI panel kompensasi
   // (pkwt-compensation-panel.tsx, PR #724) — entri beku dibuang.
+  // BR-DISC-09 (F-2026-10-25-020-V): Server Action pencatatan keputusan
+  // potongan disiplin; form UI Frontend menyusul (kartu t_36487e52,
+  // konsumen kartu Backend t_22c51caf) — buang entri ini saat form dirujuk.
+  "src/actions/disciplinary-deduction.actions.ts::createDisciplinaryDeductionDecisionAction":
+    "BR-DISC-09 backend; form pencatatan keputusan disiplin menyusul (frontend t_36487e52)",
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":
@@ -140,11 +145,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
   // F-2026-10-25-048-S: 2 aksi lead time kini dirujuk ItemWarehouseMinStockPanel
   // (kolom + kontrol lead time, PR konsumen Frontend 048-F1) — entri beku dibuang.
-  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol",
-  // mailto di halaman statement menyusul di kartu Frontend 043-F1 —
-  // buang entri ini saat UI memanggilnya.
-  "src/actions/email-log.actions.ts::recordEmailLinkOpened":
-    "F-2026-10-25-043-B1 backend; UI tombol email statement menyusul (frontend 043-F1)",
+  // F-2026-10-25-043-B1: aksi jejak email statement kini dirujuk
+  // EmailButton di halaman statement (PR konsumen Frontend 043-F1) —
+  // entri beku dibuang.
   // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
   // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
@@ -192,17 +195,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-008-S: completeLeadActivity/reopenLeadActivity kini dirujuk
   // LeadActivityCompletionButton di detail lead (frontend t_68dce5df) —
   // 2 entri beku dibuang.
-  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi +
-  // loader loadAttendanceCorrections menunggu kartu UI lanjutan BOT Frontend
-  // (parent t_cbab9ec1); entri beku dibuang saat UI tersambung.
-  "src/actions/hrm.actions.ts::createAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI pengajuan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
-  "src/actions/hrm.actions.ts::approveAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
-  "src/actions/hrm.actions.ts::rejectAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
-  "src/actions/hrm.actions.ts::cancelAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI daftar koreksi saya (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
   // Muse K1 HCMS backend dulu (kartu t_122db5c5): 34 aksi rekrutmen/
   // kinerja/kompetensi/pelatihan/suksesi/gaji; UI HCMS menyusul di kartu
   // Frontend t_daed387f (PR #805, sesudah PR backend ini merged) —
@@ -279,14 +271,16 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
   "src/actions/salary-adjustment.actions.ts::rejectSalaryAdjustment":
     "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
+  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
+  // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
   // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
-  // menunggu form di detail kendaraan (kartu UI t_cf82d1cf, assignee Frontend);
-  // buang entri ini saat form memanggilnya.
-  "src/actions/vehicle.actions.ts::updateCustomerVehicleServiceSchedule":
-    "F-2026-10-25-021-S: menunggu UI form jadwal kendaraan (kartu t_cf82d1cf Frontend)",
+  // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
+  // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
+  // (komponen customer-commission-rates di master kategori + loader histori
+  // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {

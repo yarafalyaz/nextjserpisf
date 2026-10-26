@@ -1264,11 +1264,16 @@ async function resolveReimbursementLiabilityAccountId(db: TxClient): Promise<num
   }
   const account = await db.account.findUnique({
     where: { id: accountId },
-    select: { id: true, code: true, isActive: true },
+    select: { id: true, code: true, isActive: true, deletedAt: true },
   })
   if (!account) {
     throw new Error(
       `Klaim reimbursement tidak dapat diproses: akun liabilitas klaim (id: ${accountId}) tidak ditemukan. Pilih ulang akun 210209 di Mapping Akun.`,
+    )
+  }
+  if (account.deletedAt) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) sudah terhapus. Petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
     )
   }
   if (!account.isActive) {
