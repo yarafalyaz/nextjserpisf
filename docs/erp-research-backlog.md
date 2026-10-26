@@ -33792,3 +33792,154 @@ Catatan jujur cakupan: daftar di atas diperiksa dari grep `salesOrder.create`/`s
 AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap), B5 (SoD/tanpa key/tanpa alasan tertolak), B8 (seluruh jalur Q-CL2-4) — terpetakan ke kartu Backend turunan. AC-CL2-F1/F2 ke kartu Frontend turunan. AC-CL2-B1/B3/B6/B7 tetap berlaku persis spec/vonis.
 
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-063-S: antrean retur pembelian draft mengendap menunggu pemrosesan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_f4348870. ID F-2026-10-26-063-S diverifikasi bebas run ini 2026-10-26 15:32 WIB: grep `F-2026-10-26-063` di backlog + board `origin/main` (`1eb01775`) = 0; ID terpakai terakhir berjalan F-2026-10-26-062-S. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `reason`, `purchaseOrderId`+PO+vendor, `createdBy`, item qty×cost/price), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-PRQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK memproses, TIDAK membatalkan, dan TIDAK menghapus retur apa pun — pemrosesan tetap jalur existing `processPurchaseReturn` berizin `approve_purchase_returns` (purchase.actions.ts:1946); retur draft belum stok-keluar dan belum jurnal/utang-berkurang: nominal tampil sebagai fakta dokumen existing ("nilai draft belum diproses"), bukan nota debit lahir, bukan pengurang utang VendorBill, bukan penerimaan kas. Efek uang/utang/jurnal sesudah proses hanya dicatat TERVERIFIKASI-KODE (§0); penilaian angka/jurnal/PPN nota retur = wilayah Accountant, spec baca-saja ini tidak menilai dan tidak membuka vonis Accountant tahap 1.
+
+Bukan duplikasi: bukan 059-S (retur PENJUALAN: SalesReturn, completeSalesReturn+SoD, sisi pelanggan/piutang — spec ini pasangan sisi PEMBELIAN: PurchaseReturn, processPurchaseReturn tanpa SoD existing, sisi vendor/utang; dua populasi, dua izin, dua efek berlawanan arah — stok IN vs stok OUT — dilarang digabung satu antrean); bukan antrean penerimaan barang 061-S / PO draft 060-S / surat jalan 062-S (dokumen hulu berbeda status & pemilik izin); bukan daftar retur pembelian existing `pembelian/retur` (filter status + urut createdAt desc, tanpa umur draft, tanpa tingkat, baris draft tenggelam di antara returned); bukan laporan PPN/nota retur (vat-invoices-data menautkan retur ke tagihan untuk kepatuhan — populasi antrean ini justru draft yang belum berdampak apa pun); bukan supplier-claim-aging (klaim garansi ke vendor — retur draft bisa tertaut klaim tetapi antrean ini tidak menilai rantai garansi, EC-PRQ-5).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: retur pembelian dicatat dari faktur/penerimaan atau tanpa faktur, lalu sesudah retur tersimpan sistem membentuk jurnal retur pembelian otomatis (stok menyesuaikan, utang/piutang ke pemasok menyesuaikan; retur atas faktur lunas diselesaikan lewat Pembayaran Pembelian nilai minus) — https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/retur-pembelian/penjelasan-dan-fungsi-retur-pembelian/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/retur-pembelian/membuat-retur-pembelian-dari-faktur-yang-sudah-lunas/ (BENCHMARK: retur tersimpan dan penyelesaian stok/utang adalah langkah yang harus terlacak; antrean draft bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: retur pembelian yang mengisi kredit/debit memo mengurangi utang dari nomor invoice penerimaan/pembelian yang dipilih pada memo itu; retur tanpa memo tidak mengurangi utang (menjadi nilai negatif/kredit tertunda) — https://help.zahironline.com/portal/id/kb/articles/mencatat-transaksi-retur-pembelian dan https://help.zahironline.com/portal/id/kb/articles/retur-penjualan-tanpa-mengisi-debit-credit-memo (BENCHMARK: konsekuensi utang retur ditentukan pilihan memo saat transaksi direkam/diposting, bukan oleh draft yang mengendap; tidak ada penetapan antrean umur draft — tidak diklaim). Catatan pemetaan: di ISF tidak ada field memo debit/kredit terpisah — pengurang utang lahir hanya dari jurnal proses existing (§0); jangan karang field memo di spec ini.
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 1eb01775)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `PurchaseReturn` (prisma/schema.prisma:2171-2199) — slug unik nullable, documentNo unik, purchaseOrderId WAJIB (relasi PurchaseOrder, :2189 — vendor/GR hanya lewat PO: vendorId di PO :2056, GoodsReceipt tertaut PO bukan retur), date, reason Text nullable, status String default `draft` (:2178), taxReturnNoteNumber/Date nullable (dicatat apa adanya F-004), sourceTaxInvoiceId nullable, createdBy nullable (:2185), createdAt/updatedAt; TANPA deletedAt (beda PO :2071 yang punya) — penghapusan retur = hard delete existing; indeks status + purchaseOrderId + createdBy + createdAt. Item `PurchaseReturnItem` (:2201-2224) — qty/cost Decimal, price nullable (harga beli beku baris; null = legacy tanpa snapshot), returnDpp/returnVat/sourceTaxRate nullable (snapshot F-004, terisi saat proses), serialNumbers Json.
+- Pemrosesan penjaga nyata: `processPurchaseReturn` (src/actions/purchase.actions.ts:1946) mewajibkan `approve_purchase_returns`, hanya dari status `draft` (:1955), TANPA SoD vs createdBy (beda completeSalesReturn sisi penjualan — pembuat boleh memproses buatannya sendiri hari ini; spec ini TIDAK mengubahnya, BR-PRQ-09); cek scope gudang per item atas resolusi gudang bersama (receipt ?? default ?? active ?? any, :1963-1971), lalu SATU transaksi: `onPurchaseReturnProcessed` hook stok (purchase-return.hook.ts:71 — kunci baris retur, idempotensi stockMove existing, assertPeriodOpen tanggal retur, FIFO OUT per item + qtyOnHand berkurang berjaga stok-cukup, bekukan snapshot DPP/PPN F-004 + guard kumulatif vs tagihan asal non-cancelled, status → `returned` :273-279) + `onPurchaseReturnProcessed` accounting.hook (:2044 — Dr Hutang Usaha sebesar Σqty×cost harga kesepakatan, Cr Persediaan sebesar biaya FIFO aktual keluar, selisih ke akun varians retur bila terkonfigurasi, jurnal POSTED). Katalog izin retur pembelian nyata: view/create/edit/delete/approve_purchase_returns (module-catalog.generated.ts:213-217).
+- Jalur draft lain existing: buat `createPurchaseReturn` (:1869, `create_purchase_returns`, status lahir draft :1922, penjaga over-return dalam transaksi kunci baris PO), ubah `updatePurchaseReturn` (:2923, `edit_purchase_returns`, hanya draft :2936/:2968, penjaga over-return ulang exclude diri), hapus `deletePurchaseReturn` (:3162, `delete_purchase_returns`, hanya draft :3171, hard delete). Detail `pembelian/retur/[slug]` menampilkan tombol Proses Retur hanya saat draft (:75-85, label konfirmasi "Stok akan dikembalikan ke pemasok dan jurnal pembaliknya diposting") — permukaan penyelesaian existing, di luar antrean.
+- Daftar retur pembelian existing: `pembelian/retur/page.tsx` requirePermission `view_purchase_returns` (:25), filter chip status (semua/draft/returned) + cari documentNo, urut `createdAt desc` (:46), halaman tabel (purchase-return-table.tsx) kolom No. Dokumen/PO/Tanggal/Status/Aksi — tanpa kolom umur draft, tanpa tingkat, tanpa rekap draft, tanpa vendor di tabel (vendor hanya di include query).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean retur pembelian draft atau turunan umur menunggu pemrosesan — grep `purchaseReturnQueue|purchase-return-queue|umurRetur|draftPurchaseReturn` di src/lib/reports + src/app = 0; tidak ada cron pengingat/penuaan draft retur pembelian. Draft yang ditinggal berarti barang cacat/salah kirim secara fisik mungkin sudah dikemas tetapi stok sistem belum berkurang, utang ke vendor belum berkurang, dan tidak ada permukaan yang menua baris itu. Risiko bengkel: retur part ke supplier mengendap di draft berhari-hari — stok terlihat tersedia padahal barang menunggu dikirim balik, admin pembelian mengira utang sudah berkurang padahal belum.
+
+### 1. Workflow specification
+
+Aktor: Pemroses retur pemegang `approve_purchase_returns` (satu-satunya yang memproses lewat jalur existing), Admin Pembelian pemegang `view_purchase_returns` (pembaca antrean), Pembuat retur pemegang `create_purchase_returns` (sumber baris draft), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris PurchaseReturn existing berstatus `draft` (id, slug, documentNo, purchaseOrderId+nomor PO+nama vendor lewat PO, date, reason, createdBy+nama bila ada, createdAt, item qty×cost/price) — field existing, tanpa field masuk baru tahap 1. Tautan GoodsReceipt/vendor TIDAK dibaca langsung dari retur (tidak ada fieldnya) — vendor diturunkan lewat PO existing; resolusi gudang/GR adalah urusan jalur proses existing, bukan penanda antrean.
+Dokumen keluar: baris antrean turunan per retur draft (§3) + rekap hitungan per tingkat. BUKAN dokumen akuntansi/inventaris: tidak ada stok keluar, jurnal, nota debit, pengurang utang, atau pesan keluar yang dihasilkan antrean (processPurchaseReturn existing yang menulis stok+jurnal — di luar antrean).
+
+Alur:
+1. Retur lahir `draft` lewat jalur existing (buat dari PO dengan penjaga over-return; status lahir existing, di luar cakupan spec ini).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft (BR-PRQ-01) dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks PO/vendor, penanda pembuat, dan tingkat §3. Penanda kesiapan proses per pembaca TIDAK diturunkan tahap 1 (Q-PRQ-6 — processPurchaseReturn existing tidak punya SoD; antrean tidak menciptakan janji kesiapan).
+3. Pemroses membuka detail dari baris dan memproses lewat jalur existing (processPurchaseReturn: gerbang izin + scope gudang + stok FIFO keluar + jurnal atomik). Antrean tidak menyediakan tombol Proses/batal massal tahap 1 (Q-PRQ-4).
+4. Sesudah diproses: baris keluar populasi (status `returned`). Sesudah dihapus jalur existing: keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-PRQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu Pemrosesan` (umur), `Pesanan Pembelian` (nomor PO), `Pemasok` (nama vendor lewat PO), `Dibuat Oleh` (nama atau `—`).
+- Label tingkat: `mengendap` → "Mengendap"; `menunggu` → "Menunggu Pemrosesan".
+- Notice usulan: "Daftar ini hanya retur pembelian yang masih draft dan belum diproses. Draft belum mengeluarkan stok dan belum mengurangi utang pemasok sampai diproses lewat detail retur."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean retur draft + tingkat/umur | `view_purchase_returns` (katalog:213) | daftar retur requirePermission | TIDAK ada key baru (key terpisah = Q-PRQ-5) |
+| Buat retur (sumber baris draft) | `create_purchase_returns` (katalog:214) | aksi buat existing + penjaga over-return | tidak berubah |
+| Ubah/hapus retur draft | `edit/delete_purchase_returns` (katalog:215-216) | aksi existing + penjaga hanya-draft | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Proses retur (keluar draft) | `approve_purchase_returns` (katalog:217), tanpa SoD existing | processPurchaseReturn:1946 | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Kurangi utang / keluarkan stok dari antrean | TIDAK — draft belum berdampak | utang+stok bergerak di hook saat proses | antrean tidak menawarkan aksi uang/stok apa pun |
+
+Tidak ada permission key baru diusulkan tahap ini. Data nominal retur bukan data gaji/pribadi; tetap di balik `view_purchase_returns` existing.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah: `draft` → `returned` (processPurchaseReturn lewat hook stok yang menetapkan status di akhir transaksi). Status antara tidak ada; status `cancelled` tidak dikenal model retur ini (penghapusan = hard delete existing penjaga deletePurchaseReturn, model tanpa deletedAt) — jangan karang status batal retur di spec ini.
+
+Populasi antrean: hanya PurchaseReturn `status = "draft"`. Per baris, sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurDraftHari` = hari kalender WIB dari `createdAt` ke hari ini (masa depan karena jam server = 0 tertanda, bukan negatif — EC-PRQ-4).
+- `punyaItemPositif` = ada item qty > 0 (penanda fakta baris; proses existing menyaring item qty>0 dan jurnal total<=0 tidak terbit — baris tanpa item positif tetap populasi, EC-PRQ-6, antrean tidak menilai).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft lolos saring | di luar antrean | bukan populasi (wilayah daftar retur existing) |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-PRQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | barang menunggu dikirim balik + utang belum berkurang melewati kesabaran operasional yang diputus Lead; proses/putuskan dulu |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan kerja dari umur tampil tertua-dulu (Q-PRQ-3) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah (retur diproses/dihapus/diubah, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada pemrosesan otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PRQ-01 | Populasi antrean = PurchaseReturn `status="draft"` saja. Status lain tidak disamakan diam-diam tahap 1. | TERVERIFIKASI-KODE (schema:2178 status default draft) + USULAN batas |
+| BR-PRQ-02 | Retur draft belum stok-keluar, belum jurnal, belum pengurang utang VendorBill, belum nota debit: stok OUT FIFO + jurnal Dr Hutang/Cr Persediaan baru lahir di processPurchaseReturn dalam satu transaksi (purchase.actions.ts:1946 dst; hook stok purchase-return.hook.ts:71; accounting.hook:2044). Antrean mencatat efek ini sebagai TERVERIFIKASI-KODE saja — benar/salah angka jurnal, akun, dan PPN nota retur TIDAK dinilai spec ini (wilayah Accountant bila kelak diperluas). Nominal antrean dilarang dijumlahkan ke utang, stok, HPP, atau kas di permukaan mana pun. | TERVERIFIKASI-KODE + BUTUH-VONIS Accountant bila diperluas |
+| BR-PRQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: proses (`approve_purchase_returns` + scope gudang, dari detail), ubah (`edit_purchase_returns`, hanya draft), hapus (`delete_purchase_returns`, hanya draft, hard delete). Antrean tidak menambah jalan pintas proses/hapus dari daftar tahap 1. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-PRQ-04 | Nota retur/PPN retur bukan penanda antrean: taxReturnNoteNumber null pada draft adalah normal (dicatat apa adanya, snapshot returnDpp/returnVat baru terisi saat proses); antrean TIDAK menampilkan kolom kepatuhan pajak dan TIDAK menilai boleh-tidaknya pemrosesan dari sisi pajak — vonis pajak retur wilayah Accountant, bukan spec ini. | TERVERIFIKASI-KODE + BUTUH-VONIS Accountant bila diperluas |
+| BR-PRQ-05 | Umur memakai `createdAt` (momen baris masuk sistem), bukan `date` (tanggal retur input, boleh lampau). Mengubah acuan = Q-PRQ-7. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field schema |
+| BR-PRQ-06 | Nol proses/batal/hapus otomatis berbasis umur dalam tahap mana pun spec ini. Umur hanya penanda prioritas baca; draft yang memang belum boleh diproses (barang belum benar-benar dikirim balik, stok gudang asal tidak cukup — proses existing menolak stok kurang) diputus manusia. | USULAN batas (menegaskan TERVERIFIKASI-KODE tidak adanya cron draft retur pembelian) |
+| BR-PRQ-07 | Builder antrean murni baca-saja turunan: tidak memanggil processPurchaseReturn/hook stok/jurnal, tidak menulis status/kolom/stok/utang. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-PRQ-08 | Nilai baris tampil sebagai Σ qty×cost item (harga kesepakatan retur existing — dasar kaki Dr Hutang jurnal existing) berlabel rekap "nilai draft belum diproses"; bila baris punya price beku, nilai TIDAK dicampuradukkan dua dasar dalam satu angka tanpa label — pilihan dasar tampil final = Q-PRQ-8. Rekap hanya hitungan baris per tingkat + Σ nilai baris antrean, dilarang berlabel utang/stok/HPP/kredit. Baris tanpa item tampil nilai 0 apa adanya (EC-PRQ-6). | USULAN kejujuran nominal |
+| BR-PRQ-09 | Tidak ada SoD pada proses retur pembelian existing (beda sisi penjualan): antrean TIDAK menciptakan penanda "bisa diproses oleh saya"/larangan pembuat-memproses tahap 1, dan TIDAK mengusulkan SoD baru — menambah SoD = perubahan perilaku inti aksi tulis, keputusan Lead terpisah di luar spec antrean baca-saja ini (dicatat, bukan diusulkan). | TERVERIFIKASI-KODE + BUTUH-VONIS Lead bila diperluas |
+| BR-PRQ-10 | Ambang hari `mengendap`, kata label final, urutan tampil, dan proses-dari-daftar adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-PRQ-1/2/3/4). Sisi stok/jurnal yang sudah berjalan existing tidak diubah spec ini sehingga Accountant TIDAK diminta run ini — kecuali Lead membuka aksi proses-dari-daftar (Q-PRQ-4), saat itu vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Retur dari faktur/penerimaan + retur tanpa faktur | Ada: retur dari faktur (termasuk lunas) / tanpa faktur (URL §kepala) | Ada: retur menunjuk penerimaan/pembelian (URL §kepala) | Parsial beda bentuk: retur WAJIB tertaut PO (purchaseOrderId required schema:2175), penerimaan dinilai lewat penjaga over-return | Konteks PO/vendor per baris (tanpa karang tautan GR langsung) |
+| Penyelesaian stok/utang sesudah retur tersimpan | Ada: jurnal retur otomatis + stok/utang menyesuaikan; lunas via pembayaran minus (URL §kepala) | Ada: memo debit mengurangi utang invoice dipilih; tanpa memo tidak mengurangi (URL §kepala) | Ada: proses atomik stok FIFO keluar + jurnal Dr Hutang/Cr Persediaan (purchase.actions.ts:1946) | Antrean berhenti di pemrosesan existing |
+| Status retur belum selesai terlihat di daftar | Tidak ditetapkan antrean umur — tidak diklaim | Tidak ditetapkan antrean umur — tidak diklaim | Ada filter status daftar retur, tanpa umur/tingkat | Antrean draft berumur tertua-dulu |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-PRQ-B1: Populasi tepat draft. Retur returned/terhapus tidak tampil tahap 1; memasukkan status lain ke builder tidak mengubah populasi (cabut saring status → MERAH).
+- AC-PRQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-PRQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-PRQ-4).
+- AC-PRQ-B3: Tanpa angka karang: selama Q-PRQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya lewat satu konstanta bernama/putusan (tanam angka liar → MERAH).
+- AC-PRQ-B4: Loader fail-closed `view_purchase_returns` sebelum query, anti-N+1 (PO+vendor massal, pembuat massal, item diagregasi massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil.
+- AC-PRQ-B5: Baca-saja terbukti: builder/loader tidak memanggil processPurchaseReturn/hook stok/jurnal/tulis status (panggil aksi diam-diam → MERAH); rekap = hitungan + Σ nilai baris yang sama persis.
+
+Frontend (konsumen):
+- AC-PRQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-PRQ-F2: Pembuat null `—`; reason kosong `—`; nilai baris tidak berlabel utang/kredit/stok (label utang di draft → MERAH).
+- AC-PRQ-F3: Tautan baris hanya ke detail retur pembelian existing; tidak ada tombol Proses/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-PRQ-4 → MERAH); tanpa `view_purchase_returns` halaman menolak.
+
+Edge cases:
+- EC-PRQ-1: Retur draft yang stok gudang hasil resolusinya tidak cukup (proses existing menolak) tetap populasi antrean ini — antrean tidak menilai kesiapan stok/gudang; kesiapan diputus jalur pemrosesan existing saat pemroses bertindak.
+- EC-PRQ-2: Periode akuntansi tanggal retur tertutup (assertPeriodOpen existing menolak saat proses) tetap populasi; antrean tidak menilai periode.
+- EC-PRQ-3: Retur kembar untuk PO yang sama tampil apa adanya dua baris; tidak digabung/didedup diam-diam (plafon over-return dinilai aksi existing, bukan antrean).
+- EC-PRQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-PRQ-5: Retur tertaut klaim garansi vendor (warrantyClaims relasi schema:2190) tetap tampil sebagai draft menunggu pemrosesan; antrean tidak menilai rantai garansi/klaim.
+- EC-PRQ-6: Retur draft tanpa item / semua qty 0 / nilai 0 tampil apa adanya; tidak dikeluarkan karena nominal (proses existing sendiri melewatkan jurnal total<=0 — fakta existing, bukan penanda antrean).
+- EC-PRQ-7: Nomor nota retur kosong pada draft bukan penanda salah (BR-PRQ-04); antrean tidak menampilkan kolom kepatuhan pajak.
+- EC-PRQ-8: PO tertaut retur ter-soft-delete (PO punya deletedAt, retur tidak) tidak mengubah populasi — baris tampil dengan konteks PO apa adanya; antrean tidak menyaring diam-diam.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-063-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-063-S | Spec kontrak ini (dokumen) | Business | — |
+| 063-B | Builder murni tingkat/umur draft retur pembelian + loader `view_purchase_returns` fail-closed anti-N+1 + tes AC-PRQ-B1..B5 | Backend | Putusan Lead Q-PRQ-1/2/3 (+ Accountant bila aksi diperluas) |
+| 063-F | Permukaan antrean (daftar retur pembelian existing atau kartu antrean pola antrean existing) verbatim payload + AC-PRQ-F1..F3 | Frontend | 063-B merged |
+| 063-Q | Falsifikasi AC-PRQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 063-B/063-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-PRQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (barang menunggu dikirim balik = stok tercatat belum berkurang dan utang vendor belum berkurang) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-PRQ-2 | Kata label/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-PRQ-3 | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua? | Lead | `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc |
+| Q-PRQ-4 | Proses langsung dari antrean dibuka? | Lead + Accountant (pemrosesan menulis stok+jurnal/utang) | TIDAK tahap 1 (BR-PRQ-03): cek scope gudang + konfirmasi pengiriman fisik harus tetap terasa di detail; jalan pintas = keputusan terpisah |
+| Q-PRQ-5 | Key izin antrean terpisah dari `view_purchase_returns`? | Lead | TIDAK tahap 1 |
+| Q-PRQ-6 | Penanda per baris kesiapan proses ditampilkan tahap 1? | Lead | TIDAK tahap 1: tidak ada SoD existing yang bisa diturunkan jujur (BR-PRQ-09), dan kesiapan stok/gudang/periode hanya dinilai server saat aksi |
+| Q-PRQ-7 | Acuan umur createdAt (BR-PRQ-05) vs date retur? | Lead (fisik Backend menguji) | createdAt — momen menunggu sistem |
+| Q-PRQ-8 | Dasar nilai baris tampil: Σ qty×cost (dasar jurnal existing) vs Σ qty×price beku (dasar snapshot pajak)? | Lead (+ Accountant bila label menyentuh utang) | Σ qty×cost berlabel "nilai draft belum diproses" — meniru dasar dokumen tampil existing, tanpa klaim utang; dua dasar dilarang dicampur diam-diam |
+
+### Yang TIDAK diusulkan run ini
+- Pemrosesan massal/otomatis retur basi (BR-PRQ-03/06) — pemrosesan menulis stok FIFO keluar + jurnal pengurang utang dan melewati cek scope gudang serta stok-cukup; otomatisasi membahayakan kebenaran stok/buku.
+- Memasukkan draft ke utang/stok/HPP/laporan vendor — draft belum berdampak (BR-PRQ-02); wilayah jurnal existing hanya returned.
+- Menambah SoD proses retur pembelian di spec antrean ini (BR-PRQ-09) — perubahan perilaku aksi tulis; bila Lead menghendaki, kartu & putusan terpisah menilainya terhadap pola SoD penjualan existing.
+- Field memo debit/kredit, tautan GR langsung di retur, atau tautan VendorBill di retur — skema existing tidak mengenalnya (retur hanya tertaut PO); mengubah = keputusan skema terpisah, bukan spec antrean.
+- Pengingat WA/email ke pemroses, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru, di luar tahap baca-saja.
+- Status `cancelled` untuk retur pembelian, soft-delete retur — model existing tidak mengenalnya; mengubah = keputusan skema terpisah, bukan spec antrean.
+- Penilaian nota retur/PPN retur untuk draft — wilayah kepatuhan Accountant existing, bukan antrean umur.
+
