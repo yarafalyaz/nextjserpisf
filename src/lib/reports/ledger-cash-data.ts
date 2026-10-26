@@ -29,6 +29,7 @@ import {
 } from "@/lib/reports/customer-receivables"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
@@ -239,7 +240,7 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
   const [invoices, payments] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { customerId: partyId, status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
-      select: { documentNo: true, date: true, grandTotal: true },
+      select: { id: true, documentNo: true, date: true, grandTotal: true },
       orderBy: { date: "asc" },
     }),
     prisma.salesPayment.findMany({
@@ -249,7 +250,7 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
     }),
   ])
   const entries = [
-    ...invoices.map((inv) => ({ date: inv.date, doc: inv.documentNo, desc: "Faktur Penjualan", debit: inv.grandTotal, credit: 0 })),
+    ...invoices.map((inv) => ({ date: inv.date, doc: salesInvoiceLabel(inv), desc: "Faktur Penjualan", debit: inv.grandTotal, credit: 0 })),
     ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: 0, credit: pay.amount })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime())
   const inPeriod = entries.filter((e) => e.date >= period.start && e.date <= period.end)
