@@ -1147,7 +1147,7 @@ export async function approveOvertime(overtimeId: number) {
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
         component: { isActive: true, recurrence: "fixed", kind: "earning" },
       },
-      select: { defaultAmount: true },
+      select: { defaultAmount: true, component: { select: { name: true } } },
     });
     const fixedAllowance = fixedAssignments.reduce(
       (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
@@ -1170,6 +1170,20 @@ export async function approveOvertime(overtimeId: number) {
       dayKind,
     });
 
+    // Snapshot dasar Pasal 32 (F-2026-10-25-024-S): dibekukan di klaim
+    // atomik yang sama dengan calculatedValue supaya rincian yang tampil
+    // di detail = angka yang benar-benar dihitung di sini (BR-OT-09) —
+    // UI dilarang membaca ulang master komponen saat tampil (BR-OT-11).
+    const overtimeBaseSnapshot = {
+      baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
+      components: fixedAssignments.map((a) => ({
+        name: a.component.name,
+        amount: Number(a.defaultAmount),
+      })),
+      baseTotal: baseSalary,
+      overtimeDate: ot.date.toISOString(),
+    };
+
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
       data: {
@@ -1184,6 +1198,7 @@ export async function approveOvertime(overtimeId: number) {
         // awal (idempotensi di atas).
         approvedAt: new Date(),
         calculatedValue,
+        overtimeBaseSnapshot,
       },
     });
     if (claim.count === 0) {

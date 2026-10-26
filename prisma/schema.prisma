@@ -3700,6 +3700,12 @@ model OvertimeRequest {
   mealHours            Decimal?  @map("meal_hours") @db.Decimal(5, 2)
   billableHours        Decimal?  @map("billable_hours") @db.Decimal(5, 2)
   calculatedValue      Decimal?  @map("calculated_value") @db.Decimal(15, 2)
+  /// Snapshot dasar upah lembur Pasal 32 saat approve (F-2026-10-25-024-S):
+  /// { baseSalary, components: [{name, amount}], baseTotal, overtimeDate }.
+  /// Ditulis satu klaim atomik dengan calculatedValue; null = baris approved
+  /// sebelum snapshot ada (tanpa backfill, BR-OT-09). Dibaca hanya pemegang
+  /// view_payroll lewat loader rincian (bukan loader rekap BR-OVR-12).
+  overtimeBaseSnapshot Json?     @map("overtime_base_snapshot")
   reason               String?   @db.Text
   rejectionReason      String?   @map("rejection_reason") @db.Text
   status               String    @default("pending")
