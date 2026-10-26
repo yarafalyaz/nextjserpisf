@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 import Link from "next/link"
 
-import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { formatAccounting, formatDate, formatNumber } from "@/lib/utils/format"
@@ -25,6 +24,12 @@ import {
   parseReportPeriod,
   splitReportSegments,
 } from "@/lib/reports/report-period"
+import {
+  loadPriceHistorySelection,
+  priceHistorySelects,
+  PriceHistoryTruncatedKpi,
+  PriceHistoryTruncatedNote,
+} from "@/app/(dashboard)/laporan/_components/price-history-shared"
 import { getQuotationPriceHistory } from "@/lib/reports/quotation-price-history-data"
 import {
   QUOTATION_PRICE_HISTORY_MAX_EVENTS_PER_PAIR,
@@ -72,27 +77,8 @@ export default async function QuotationPriceHistoryPage({
   const itemKey = filters.barang ?? null
   const includeDraft = (filters.draft ?? search.includeDraft) === "1"
 
-  const [customers, items] = await Promise.all([
-    prisma.customer.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      select: { id: true, code: true, name: true, slug: true },
-    }),
-    prisma.item.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, sku: true, slug: true },
-    }),
-  ])
-
-  const selectedCustomer = customerKey
-    ? (customers.find((c) => c.slug === customerKey) ??
-      customers.find((c) => String(c.id) === customerKey) ??
-      null)
-    : null
-  const selectedItem = itemKey
-    ? (items.find((i) => i.slug === itemKey) ?? items.find((i) => String(i.id) === itemKey) ?? null)
-    : null
+  const selection = await loadPriceHistorySelection(customerKey, itemKey)
+  const { selectedCustomer, selectedItem } = selection
 
   let history: QuotationPriceHistory | null = null
   let loadError: string | null = null
@@ -130,29 +116,7 @@ export default async function QuotationPriceHistoryPage({
           mode="range"
           defaultStartDate={toLocalDateOnly(period.start)}
           defaultEndDate={toLocalDateOnly(period.end)}
-          selects={[
-            {
-              param: "pelanggan",
-              label: "Pelanggan",
-              placeholder: "Cari pelanggan...",
-              required: true,
-              value: selectedCustomer ? (selectedCustomer.slug ?? String(selectedCustomer.id)) : "",
-              options: customers.map((c) => ({
-                value: c.slug ?? String(c.id),
-                label: `${c.code} - ${c.name}`,
-              })),
-            },
-            {
-              param: "barang",
-              label: "Barang",
-              placeholder: "Semua Barang",
-              value: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
-              options: items.map((i) => ({
-                value: i.slug ?? String(i.id),
-                label: `${i.sku} - ${i.name}`,
-              })),
-            },
-          ]}
+          selects={priceHistorySelects(selection)}
           toggle={{
             param: "draft",
             label: "Sertakan Draft",
@@ -188,10 +152,7 @@ export default async function QuotationPriceHistoryPage({
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
             <ReportKpiCard label="Pasangan Pelanggan–Barang" value={String(history.jumlahPasangan)} />
             <ReportKpiCard label="Jumlah Kejadian Penawaran" value={String(history.jumlahKejadian)} />
-            <ReportKpiCard
-              label="Kejadian Terpotong"
-              value={history.terpotong ? "Ada" : "Tidak ada"}
-            />
+            <PriceHistoryTruncatedKpi terpotong={history.terpotong} />
           </div>
 
           <ReportSection
@@ -307,10 +268,11 @@ export default async function QuotationPriceHistoryPage({
                 </DetailTableBody>
               </DetailTable>
               {pair.terpotong && (
-                <p className="doc-lines">
-                  Menampilkan {pair.jumlahTampil} dari {pair.jumlahKejadian} kejadian terbaru
-                  (batas {QUOTATION_PRICE_HISTORY_MAX_EVENTS_PER_PAIR} kejadian per pasangan).
-                </p>
+                <PriceHistoryTruncatedNote
+                  jumlahTampil={pair.jumlahTampil}
+                  jumlahTotal={pair.jumlahKejadian}
+                  maxPerPair={QUOTATION_PRICE_HISTORY_MAX_EVENTS_PER_PAIR}
+                />
               )}
             </ReportSection>
           ))}
