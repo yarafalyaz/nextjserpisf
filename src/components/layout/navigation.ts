@@ -297,6 +297,7 @@ export const navigation: NavItem[] = [
       { label: "Barang Stok Minimum", href: "/laporan/stok-minimum", icon: Package, permission: "view_reports" },
       { label: "Barang Diterima Sebagian", href: "/laporan/penerimaan-sebagian", icon: PackageCheck, permission: "view_reports" },
       { label: "Pemenuhan Pesanan", href: "/laporan/pemenuhan-pesanan", icon: ShoppingCart, permission: "view_reports" },
+      { label: "Terkirim Belum Terfaktur", href: "/laporan/terkirim-belum-terfaktur", icon: FileText, permission: "view_reports" },
       { label: "Piutang Jatuh Tempo", href: "/laporan/piutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Piutang per Pelanggan", href: "/laporan/piutang-pelanggan", icon: Users, permission: "view_reports" },
       { label: "Buku Pembantu Piutang", href: "/laporan/buku-pembantu-piutang", icon: Users, permission: "view_reports" },

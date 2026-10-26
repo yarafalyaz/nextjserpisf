@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
+import { passwordPolicyError } from "@/lib/auth/password-policy";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
@@ -15,6 +16,7 @@ import {
   requireString,
 } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
+import { validateItemTaxDefaults } from "@/lib/services/item-tax-default.service";
 import { validateCommissionRateWrite } from "@/lib/services/customer-commission-rate.service";
 import {
   customerSchema,
@@ -49,11 +51,15 @@ import {
 } from "@/lib/services/lead-duplicate.service";
 import {
   findCustomerDuplicateCandidates,
+  findCustomerNpwpConflict,
   buildCustomerDuplicateWarning,
+  buildCustomerNpwpBlockedMessage,
   loadCustomerDuplicateGroups,
   CUSTOMER_REUSED_MESSAGE,
+  CUSTOMER_NPWP_BLOCKED_TITLE,
   type CustomerDuplicateWarning,
   type CustomerDuplicateGroup,
+  type CustomerNpwpConflict,
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
@@ -67,6 +73,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -203,6 +210,29 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CUSTOMER ACTIONS ====================
 
+/**
+ * Q-CD-1 (PUTUSAN Lead PR #901, F-2026-10-25-040-S §B): gerbang BLOKIR
+ * NPWP persis — pengecualian dari peringatan advisory BR-CD-04. NPWP
+ * ternormalisasi (`normalizeCustomerTaxIdKey`) sama persis DAN terisi di
+ * kedua sisi = simpan DITOLAK sebelum create/update; kunci lain
+ * (telepon/nama+email) tetap peringatan tahap 1. Respons blokir
+ * terstruktur: `npwpConflict` (id/nama/kode pemegang) + `error` verbatim
+ * supaya operator memakai master existing atau mengoreksi NPWP.
+ */
+function buildCustomerNpwpBlockedResult(conflict: CustomerNpwpConflict) {
+  return {
+    success: false as const,
+    error: buildCustomerNpwpBlockedMessage(conflict),
+    npwpConflict: {
+      id: conflict.id,
+      slug: conflict.slug,
+      name: conflict.name,
+      code: conflict.code,
+      title: CUSTOMER_NPWP_BLOCKED_TITLE,
+    },
+  };
+}
+
 // F-2026-10-25-004-S: validasi bentuk identitas pajak master (longgar-
 // tertanda vonis 019-V §1/§2/§3) + normalisasi simpan digit-saja.
 // Bentuk cacat = tolak simpan; legacy15/unlinked lolos dengan peringatan
@@ -264,6 +294,10 @@ export async function createCustomer(formData: FormData) {
 
     const taxIdentity = customerTaxIdentityForSave(v);
     if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum create.
+    const npwpConflict = await findCustomerNpwpConflict({ taxId: v.taxId });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
     // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
@@ -334,6 +368,14 @@ export async function updateCustomer(customerId: number, formData: FormData) {
 
     const taxIdentity = customerTaxIdentityForSave(v);
     if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum update;
+    // self-match (NPWP milik pelanggan ini sendiri) dikecualikan.
+    const npwpConflict = await findCustomerNpwpConflict({
+      taxId: v.taxId,
+      excludeCustomerId: customerId,
+    });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     if (v.customerCategoryId != null) {
       const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
@@ -525,6 +567,25 @@ export async function updateVendor(vendorId: number, formData: FormData) {
 
 // ==================== ITEM ACTIONS ====================
 
+/**
+ * Penjaga rujukan Tax default item (vonis Q-ITX-1 Putusan 3): Tax wajib
+ * ada, aktif, belum terhapus. Kembalikan pesan error atau null bila sah.
+ */
+async function checkItemTaxReferences(taxDefaults: { defaultSalesTaxId: number | null; defaultPurchaseTaxId: number | null }): Promise<string | null> {
+  for (const [field, label] of [
+    ["defaultSalesTaxId", "penjualan"],
+    ["defaultPurchaseTaxId", "pembelian"],
+  ] as const) {
+    const taxId = taxDefaults[field];
+    if (taxId === null) continue;
+    const tax = await prisma.tax.findUnique({ where: { id: taxId }, select: { id: true, isActive: true, deletedAt: true } });
+    if (!tax || !tax.isActive || tax.deletedAt !== null) {
+      return `Kode pajak default ${label} tidak ditemukan atau nonaktif di master pajak (vonis Q-ITX-1 Putusan 3). Pilih kode pajak aktif atau kosongkan.`;
+    }
+  }
+  return null
+}
+
 export async function createItem(formData: FormData) {
   try {
     await requirePermission("create_items");
@@ -538,6 +599,23 @@ export async function createItem(formData: FormData) {
     if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
       return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
     }
+
+    // F-2026-10-25-042-V (vonis Q-ITX-1): penjaga default pajak per item —
+    // scrap menang (Putusan 5), persen 0–100, rujukan Tax wajib ada +
+    // aktif + belum terhapus (fail-closed tanpa fallback, Putusan 3).
+    const taxDefaults = {
+      isScrapSaleItem: v.isScrapSaleItem ?? false,
+      defaultSalesTaxId: v.defaultSalesTaxId ?? null,
+      defaultPurchaseTaxId: v.defaultPurchaseTaxId ?? null,
+      defaultDppPercent: v.defaultDppPercent ?? null,
+    };
+    try {
+      validateItemTaxDefaults(taxDefaults);
+    } catch (e) {
+      return { success: false, error: getErrorMessage(e, "Default pajak item tidak valid") };
+    }
+    const taxRefError = await checkItemTaxReferences(taxDefaults);
+    if (taxRefError) return { success: false, error: taxRefError };
 
     const itemSettings = await getSystemSettings();
     let sku = v.sku || null;
@@ -602,6 +680,9 @@ export async function createItem(formData: FormData) {
           isProduct: v.isProduct ?? false,
           isService: v.isService ?? false,
           isScrapSaleItem: v.isScrapSaleItem ?? false,
+          defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+          defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+          defaultDppPercent: taxDefaults.defaultDppPercent,
           trackBatch: v.trackBatch ?? false,
           trackSerial: v.trackSerial ?? false,
           isActive: true,
@@ -627,12 +708,49 @@ export async function createItem(formData: FormData) {
     });
 
     revalidatePath("/master/barang");
-    await logActivity("create", "Item", item.id, "Membuat barang");
+    await logActivity("create", "Item", item.id, "Membuat barang", {
+      defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+      defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+      defaultDppPercent: taxDefaults.defaultDppPercent,
+    });
     return { success: true, id: item.id, slug: item.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createItem]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Ambil default pajak efektif untuk validasi scrap (Putusan 5).
+ * Field form eksplisit per nama: kunci FormData tidak ada = warisi nilai
+ * tersimpan (form lama/UI belum mengirim tidak mengosongkan diam-diam);
+ * kunci ada tapi kosong = operator mengosongkan.
+ */
+function decimalToNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === "number") return value
+  const maybe = value as { toNumber?: () => number }
+  return typeof maybe.toNumber === "function" ? maybe.toNumber() : null
+}
+
+function pickTaxDefaultFields(
+  formData: FormData,
+  v: { defaultSalesTaxId?: number; defaultPurchaseTaxId?: number; defaultDppPercent?: number },
+  stored: {
+    isScrapSaleItem: boolean
+    defaultSalesTaxId: number | null
+    defaultPurchaseTaxId: number | null
+    defaultDppPercent: unknown
+  } | null,
+) {
+  const pick = (key: "defaultSalesTaxId" | "defaultPurchaseTaxId" | "defaultDppPercent", formVal: number | undefined, storedVal: number | null) =>
+    formData.has(key) ? (formVal ?? null) : storedVal
+  return {
+    isScrapSaleItem: stored?.isScrapSaleItem ?? false,
+    defaultSalesTaxId: pick("defaultSalesTaxId", v.defaultSalesTaxId, stored?.defaultSalesTaxId ?? null),
+    defaultPurchaseTaxId: pick("defaultPurchaseTaxId", v.defaultPurchaseTaxId, stored?.defaultPurchaseTaxId ?? null),
+    defaultDppPercent: pick("defaultDppPercent", v.defaultDppPercent, decimalToNumber(stored?.defaultDppPercent)),
   }
 }
 
@@ -652,6 +770,29 @@ export async function updateItem(itemId: number, formData: FormData) {
     if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
       return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
     }
+
+    // F-2026-10-25-042-V (vonis Q-ITX-1): penjaga default pajak per item —
+    // sama persis createItem. Nilai efektif = gabungan form + tersimpan
+    // (lihat pickTaxDefaultFields): scrap tersimpan + persen warisan
+    // tidak lolos diam-diam saat form tidak mengirim field pajak.
+    const storedItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { isScrapSaleItem: true, defaultSalesTaxId: true, defaultPurchaseTaxId: true, defaultDppPercent: true },
+    });
+    const taxDefaults = pickTaxDefaultFields(formData, v, storedItem);
+    taxDefaults.isScrapSaleItem = taxDefaults.isScrapSaleItem || (v.isScrapSaleItem ?? false);
+    try {
+      validateItemTaxDefaults(taxDefaults);
+    } catch (e) {
+      return { success: false, error: getErrorMessage(e, "Default pajak item tidak valid") };
+    }
+    const taxRefError = await checkItemTaxReferences(taxDefaults);
+    if (taxRefError) return { success: false, error: taxRefError };
+    const storedPercent = decimalToNumber(storedItem?.defaultDppPercent);
+    const taxDefaultChanged =
+      taxDefaults.defaultSalesTaxId !== (storedItem?.defaultSalesTaxId ?? null) ||
+      taxDefaults.defaultPurchaseTaxId !== (storedItem?.defaultPurchaseTaxId ?? null) ||
+      taxDefaults.defaultDppPercent !== storedPercent;
 
     if (v.price < v.cost) {
       return {
@@ -693,6 +834,9 @@ export async function updateItem(itemId: number, formData: FormData) {
           isProduct: v.isProduct ?? false,
           isService: v.isService ?? false,
           isScrapSaleItem: v.isScrapSaleItem ?? false,
+          defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+          defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+          defaultDppPercent: taxDefaults.defaultDppPercent,
           trackBatch: v.trackBatch ?? false,
           trackSerial: v.trackSerial ?? false,
         },
@@ -717,7 +861,26 @@ export async function updateItem(itemId: number, formData: FormData) {
     });
 
     revalidatePath("/master/barang");
-    await logActivity("update", "Item", itemId, "Memperbarui barang");
+    await logActivity(
+      "update",
+      "Item",
+      itemId,
+      taxDefaultChanged
+        ? `Memperbarui barang (default pajak: ${storedItem?.defaultSalesTaxId ?? "-"}->${taxDefaults.defaultSalesTaxId ?? "-"} / ${storedItem?.defaultPurchaseTaxId ?? "-"}->${taxDefaults.defaultPurchaseTaxId ?? "-"} / ${storedPercent ?? "-"}->${taxDefaults.defaultDppPercent ?? "-"})`
+        : "Memperbarui barang",
+      {
+        previous: {
+          defaultSalesTaxId: storedItem?.defaultSalesTaxId ?? null,
+          defaultPurchaseTaxId: storedItem?.defaultPurchaseTaxId ?? null,
+          defaultDppPercent: storedPercent,
+        },
+        next: {
+          defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+          defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+          defaultDppPercent: taxDefaults.defaultDppPercent,
+        },
+      },
+    );
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -1037,8 +1200,9 @@ export async function createEmployee(formData: FormData) {
       if (!email || email.trim() === "") {
         return { success: false, error: "Email wajib diisi untuk akun login" };
       }
-      if (!loginPass || loginPass.length < 8) {
-        return { success: false, error: "Kata sandi minimal 8 karakter" };
+      const loginPassIssue = passwordPolicyError(loginPass ?? "", "Kata sandi");
+      if (loginPassIssue) {
+        return { success: false, error: loginPassIssue };
       }
       const existing = await prisma.user.findUnique({
         where: { email: email.trim() },
@@ -1179,8 +1343,9 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       if (!trimmedEmail) {
         return { success: false, error: "Email wajib diisi untuk akun login" };
       }
-      if (!loginPass || loginPass.length < 8) {
-        return { success: false, error: "Kata sandi minimal 8 karakter" };
+      const loginPassIssue = passwordPolicyError(loginPass ?? "", "Kata sandi");
+      if (loginPassIssue) {
+        return { success: false, error: loginPassIssue };
       }
       const existing = await prisma.user.findUnique({
         where: { email: trimmedEmail },
@@ -1826,6 +1991,25 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
+    // F-2026-10-25-030-S Q-LR-2/4: cabang lost digerbang SEBELUM mutasi —
+    // kategori wajib + key asing ditolak, won/lost terminal mutlak.
+    // Kategori pada status non-lost juga ditolak (form wajib kosong);
+    // guard kepemilikan existing di atas tetap penjaga pertama (AC-LR-B6).
+    if (v.lostReasonCategory != null && v.status !== "lost") {
+      throw new Error(
+        "Kategori alasan kalah hanya berlaku saat status diubah menjadi kalah (lost).",
+      );
+    }
+    const lostCheck = validateLeadLostTransition({
+      fromStatus: existing.status,
+      toStatus: v.status ?? null,
+      category: v.lostReasonCategory ?? null,
+      freeText: v.lostReasonText ?? null,
+    });
+    if (!lostCheck.ok) {
+      throw new Error(lostCheck.error);
+    }
+
     const newAssignedTo = v.assignedTo ?? null;
 
     // Security Guard: Only admins can re-assign leads to others.
@@ -1931,6 +2115,9 @@ export async function updateLead(id: number, formData: FormData) {
             userId: Number(actor.id),
             type: "status_change",
             subject: "Status diubah",
+            // Awalan [kalah:key] hanya pada transisi ke lost (Q-LR-1);
+            // status lain description tetap null seperti existing.
+            description: lostCheck.ok ? lostCheck.description : null,
             oldStatus: existing.status,
             newStatus: v.status,
           },
