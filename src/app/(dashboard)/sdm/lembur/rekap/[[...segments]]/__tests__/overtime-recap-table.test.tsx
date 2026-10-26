@@ -4,9 +4,6 @@ import { describe, it, expect, afterEach } from "vitest"
 import { OvertimeRecapTable } from "../../../_components/overtime-recap-table"
 import {
   OVERTIME_RECAP_NOTICE,
-  OVERTIME_RECAP_NO_DEPARTMENT_LABEL,
-  OVERTIME_RECAP_NO_PROJECT_LABEL,
-  OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL,
   type OvertimeRecap,
 } from "@/lib/reports/overtime-recap"
 import {
@@ -78,7 +75,7 @@ const RECAP: OvertimeRecap = {
     {
       projectId: null,
       projectName: null,
-      label: OVERTIME_RECAP_NO_PROJECT_LABEL,
+      label: "Tanpa proyek",
       requestCount: 2,
       submittedHours: 4,
       approvedHours: 2,
@@ -110,10 +107,15 @@ describe("OvertimeRecapTable F-2026-10-25-016-S", () => {
     const text = container.textContent ?? ""
 
     expect(container.querySelector('[aria-label="Rekap lembur per karyawan"]')).not.toBeNull()
-    expect(text).toContain(OVERTIME_RECAP_NOTICE)
+    // Asersi literal verbatim (bukan konstanta impor produksi): mutasi isi
+    // OVERTIME_RECAP_NOTICE/label di lib WAJIB membuat tes ini merah.
+    expect(text).toContain(
+      "Rekap jam lembur operasional — bukan dasar pembayaran; nilai lembur tetap dihitung payroll dari nilai tersimpan saat persetujuan.",
+    )
+    expect(text).toContain("bukan dasar pembayaran")
     expect(text).toContain("Budi Santoso")
     expect(text).toContain("Karyawan #9")
-    expect(text).toContain(OVERTIME_RECAP_NO_DEPARTMENT_LABEL)
+    expect(text).toContain("Tanpa departemen")
     // jam verbatim payload (2 desimal id-ID), bukan hitungan ulang UI
     expect(text).toContain("10,50")
     expect(text).toContain("5,50")
@@ -123,11 +125,11 @@ describe("OvertimeRecapTable F-2026-10-25-016-S", () => {
     // pending tertua dari tanggal server
     expect(text).toContain("3 Okt 2026")
     // approved belum terhitung nilai: label server, bukan 0/angka uang
-    expect(text).toContain(OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL)
+    expect(text).toContain("Nilai belum dihitung")
     expect(text).toContain("1 pengajuan")
     expect(text).not.toContain("Rp")
     // ember proyek null
-    expect(text).toContain(OVERTIME_RECAP_NO_PROJECT_LABEL)
+    expect(text).toContain("Tanpa proyek")
     expect(text).toContain("Proyek Alpha")
     expect(container.querySelectorAll("table")).toHaveLength(2)
     unmountCard(root)
@@ -158,7 +160,7 @@ describe("OvertimeRecapTable F-2026-10-25-016-S", () => {
     const text = container.textContent ?? ""
     expect(text).toContain("Tidak ada pengajuan lembur pada periode dan filter ini.")
     expect(container.querySelector("table")).toBeNull()
-    expect(text).not.toContain(OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL)
+    expect(text).not.toContain("Nilai belum dihitung")
     unmountCard(root)
   })
 
@@ -172,7 +174,7 @@ describe("OvertimeRecapTable F-2026-10-25-016-S", () => {
       totals: { ...RECAP.totals, approvedValueMissingCount: 0 },
     }
     const { container, root } = renderCard(<OvertimeRecapTable recap={clean} />)
-    expect(container.textContent ?? "").not.toContain(OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL)
+    expect(container.textContent ?? "").not.toContain("Nilai belum dihitung")
     unmountCard(root)
   })
 })
