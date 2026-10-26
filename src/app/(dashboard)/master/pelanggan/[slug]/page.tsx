@@ -175,7 +175,7 @@ export default async function CustomerDetailPage({
                                 <DetailTableTd>{formatDate(inv.taxInvoiceDate)}</DetailTableTd>
                                 <DetailTableTd>{inv.counterpartyName || "-"}</DetailTableTd>
                                 <DetailTableTd>{inv.counterpartyTaxId ? `${inv.counterpartyTaxId} (${NPWP_FORMAT_LABEL[markers.npwpFormat]})` : "-"}</DetailTableTd>
-                                <DetailTableTd>{inv.counterpartyNitku || "(kosong — terbit bertanda nitkuAbsent)"}</DetailTableTd>
+                                <DetailTableTd>{inv.counterpartyNitku ? (markers.nitkuUnlinked ? `${inv.counterpartyNitku} (belum tertaut — NPWP snapshot bukan 16 digit)` : inv.counterpartyNitku) : "(kosong — terbit bertanda nitkuAbsent)"}</DetailTableTd>
                               </DetailTableRow>
                             )
                           })}
