@@ -10,6 +10,17 @@ import {
   type SalesOrderDraftInput,
 } from "@/lib/reports/sales-order-draft-queue"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import {
+  expectDraftQueueAges,
+  expectDraftQueueDateCells,
+  expectDraftQueueDetailLinks,
+  expectDraftQueueHeaders,
+  expectDraftQueueRowOrder,
+  expectDraftQueueSellerCells,
+  expectDraftQueueSummary,
+  expectExcludedDocuments,
+  expectNoQueueButtons,
+} from "./draft-queue-card-test-fixtures"
 
 // 2026-10-26 03:00 UTC = 10:00 WIB; hari WIB = 26 Okt 2026.
 const NOW = new Date(Date.UTC(2026, 9, 26, 3, 0))
@@ -80,7 +91,7 @@ describe("SalesOrderDraftQueueCard F-2026-10-26-056-S", () => {
     const { container, root } = renderCard(<QueueProbe />)
     roots.push(root)
     const text = container.textContent ?? ""
-    const headers = [
+    expectDraftQueueHeaders(text, [
       "Pelanggan",
       "No. Pesanan",
       "Penjual",
@@ -91,44 +102,38 @@ describe("SalesOrderDraftQueueCard F-2026-10-26-056-S", () => {
       "Nilai",
       "Tingkat",
       "Aksi",
-    ]
-    headers.forEach((header) => expect(text).toContain(header))
-    expect(text).toContain("Pesanan Draft Mengendap")
-    expect(text).toContain("Mengendap: 1")
-    expect(text).toContain("Menunggu Persetujuan: 1")
-    expect(text).toContain("2 dokumen")
-    expect(text).toContain("nilai draft belum disetujui")
-    expect(text).toContain(SALES_ORDER_DRAFT_NOTICE_TEXT)
+    ])
+    expectDraftQueueSummary(
+      text,
+      "Pesanan Draft Mengendap",
+      "Mengendap: 1",
+      "Menunggu Persetujuan: 1",
+      "2 dokumen",
+      "nilai draft belum disetujui",
+      SALES_ORDER_DRAFT_NOTICE_TEXT,
+    )
     // Di luar populasi tidak tampil.
-    expect(text).not.toContain("SO-0003")
-    expect(text).not.toContain("SO-0004")
+    expectExcludedDocuments(text, ["SO-0003", "SO-0004"])
     // Urutan verbatim builder: mengendap (SO-0001) sebelum menunggu (SO-0002).
     const rowsDom = Array.from(container.querySelectorAll("tbody tr"))
-    expect(rowsDom).toHaveLength(2)
-    expect(rowsDom[0]?.textContent).toContain("SO-0001")
-    expect(rowsDom[1]?.textContent).toContain("SO-0002")
+    expectDraftQueueRowOrder(rowsDom, "SO-0001", "SO-0002")
     // Umur verbatim builder.
-    expect(text).toContain("16 hari")
-    expect(text).toContain("2 hari")
+    expectDraftQueueAges(text)
     // Asal verbatim builder.
     expect(text).toContain("Dari Penawaran Q-0007")
     expect(text).toContain("Langsung")
-    // Penjual null tampil persis `—` (fallback karangan = MERAH).
-    expect(rowsDom[1]?.children[2]?.textContent).toBe("—")
-    expect(rowsDom[0]?.children[2]?.textContent).toBe("Sari Sales")
-    // Dengan janji → tanggal janji verbatim builder tampil.
-    expect(rowsDom[0]?.children[5]?.textContent).toBe("30 Oktober 2026")
-    // Tanpa janji → penanda builder, bukan tanggal karangan.
-    expect(rowsDom[1]?.children[5]?.textContent).toBe("Janji kirim belum diisi")
+    expectDraftQueueSellerCells(rowsDom)
+    // Dengan janji → tanggal janji verbatim builder tampil; tanpa janji → penanda builder.
+    expectDraftQueueDateCells(rowsDom, "30 Oktober 2026", "Janji kirim belum diisi")
     // Tautan hanya ke detail pesanan existing; slug null → id.
-    const detailLinks = Array.from(container.querySelectorAll("a")).filter(
-      (a) => a.textContent === "Buka Pesanan",
+    expectDraftQueueDetailLinks(
+      container,
+      "Buka Pesanan",
+      "/penjualan/pesanan/pesanan-1",
+      "/penjualan/pesanan/2",
     )
-    expect(detailLinks).toHaveLength(2)
-    expect(detailLinks[0]?.getAttribute("href")).toBe("/penjualan/pesanan/pesanan-1")
-    expect(detailLinks[1]?.getAttribute("href")).toBe("/penjualan/pesanan/2")
     // Q-SOQ-4 MERAH: nol tombol Setujui/Batal/Kirim (nol button sama sekali).
-    expect(container.querySelectorAll("button")).toHaveLength(0)
+    expectNoQueueButtons(container)
     expect(text).not.toContain("Setujui")
   })
 
@@ -144,6 +149,6 @@ describe("SalesOrderDraftQueueCard F-2026-10-26-056-S", () => {
     )
     roots.push(root)
     expect(container.textContent).toContain("Belum ada pesanan penjualan draft")
-    expect(container.querySelectorAll("button")).toHaveLength(0)
+    expectNoQueueButtons(container)
   })
 })
