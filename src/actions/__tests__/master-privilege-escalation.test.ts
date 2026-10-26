@@ -121,7 +121,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "eve@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "99")
 
@@ -138,7 +138,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "mallory@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "99")
 
@@ -172,7 +172,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "bob@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "5") // resolves to "role_5", not super_admin
 
@@ -193,7 +193,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "admin@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "99")
 
