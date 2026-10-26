@@ -4,6 +4,8 @@ import { describe, it, expect, afterEach } from "vitest"
 import { CustomerStatementCard } from "../customer-statement-card"
 import {
   buildCustomerStatement,
+  CUSTOMER_STATEMENT_DUE_COLUMN,
+  CUSTOMER_STATEMENT_OVERDUE_LABEL,
   customerStatementOutstanding,
   type CustomerStatementInvoiceInput,
   type CustomerStatementPaymentInput,
@@ -118,10 +120,51 @@ describe("CustomerStatementCard F-2026-10-21-032", () => {
     const retRow = rows.find((r) => r.includes("RET-021"))
     // Sel Jenis (kolom ke-3) persis label kind — bukan substring deskripsi builder.
     const retRowEl = [...container.querySelectorAll("tbody tr")].find((r) => (r.textContent ?? "").includes("RET-021"))
-    expect(retRowEl?.children[2]?.textContent).toBe("Retur penjualan")
+    expect(retRowEl?.children[3]?.textContent).toBe("Retur penjualan")
     expect(retRow).toContain("Retur penjualan RET-021 atas faktur INV-002")
     expect(retRow).toContain("100.000")
     expect(retRow).toContain("730.000")
+    unmountCard(root)
+  })
+
+  it("kolom Jatuh Tempo + penanda Lewat Jatuh Tempo verbatim builder (F-2026-10-25-025-S)", () => {
+    const dueInvoices: CustomerStatementInvoiceInput[] = [
+      { id: 1, documentNo: "INV-LATE", date: D("2026-02-02"), grandTotal: 400_000, dueDate: D("2026-02-10") },
+      { id: 2, documentNo: "INV-OK", date: D("2026-02-03"), grandTotal: 300_000, dueDate: D("2026-03-15") },
+      { id: 3, documentNo: "INV-PAID", date: D("2026-02-04"), grandTotal: 200_000, dueDate: D("2026-02-05") },
+      { id: 4, documentNo: "INV-NODUE", date: D("2026-02-05"), grandTotal: 100_000 },
+    ]
+    const duePayments: CustomerStatementPaymentInput[] = [
+      { id: 11, documentNo: "PAY-011", salesInvoiceId: 3, salesInvoiceDocumentNo: "INV-PAID", paymentDate: D("2026-02-06"), amount: 200_000, withholdingAmount: 0, paymentMethod: "transfer" },
+    ]
+    const statement = buildCustomerStatement({
+      customerId: 7,
+      periodStart: D("2026-02-01"),
+      periodEnd: D("2026-02-28"),
+      invoices: dueInvoices,
+      payments: duePayments,
+    })
+    // Kontrak builder (bukan hitungan UI): INV-LATE overdue, INV-PAID lunas tak tertanda.
+    expect(statement.entries.find((e) => e.documentNo === "INV-LATE")).toMatchObject({ isOverdue: true })
+    expect(statement.entries.find((e) => e.documentNo === "INV-PAID")).toMatchObject({ isOverdue: false })
+    expect(statement.entries.find((e) => e.documentNo === "INV-NODUE")).toMatchObject({ dueDate: null })
+
+    const { container, root } = renderCard(<CustomerStatementCard statement={statement} />)
+    expect(container.querySelector("thead")?.textContent).toContain(CUSTOMER_STATEMENT_DUE_COLUMN)
+
+    const rowOf = (no: string) => [...container.querySelectorAll("tbody tr")].find((r) => (r.textContent ?? "").includes(no))
+    // Sel jatuh tempo = kolom ke-2 (sesudah Tanggal), persis nilai builder.
+    expect(rowOf("INV-LATE")?.children[1]?.textContent).toContain("10 Feb 2026")
+    expect(rowOf("INV-LATE")?.children[1]?.textContent).toContain(CUSTOMER_STATEMENT_OVERDUE_LABEL)
+    expect(rowOf("INV-OK")?.children[1]?.textContent).toContain("15 Mar 2026")
+    expect(rowOf("INV-OK")?.children[1]?.textContent).not.toContain(CUSTOMER_STATEMENT_OVERDUE_LABEL)
+    expect(rowOf("INV-PAID")?.children[1]?.textContent).toContain("05 Feb 2026")
+    expect(rowOf("INV-PAID")?.children[1]?.textContent).not.toContain(CUSTOMER_STATEMENT_OVERDUE_LABEL)
+    // Baris non-invoice + faktur tanpa due: "—" tanpa penanda.
+    expect(rowOf("INV-NODUE")?.children[1]?.textContent).toBe("—")
+    expect(rowOf("PAY-011")?.children[1]?.textContent).toBe("—")
+    // Hanya satu penanda di seluruh tabel.
+    expect(container.textContent?.match(/Lewat Jatuh Tempo/g)).toHaveLength(1)
     unmountCard(root)
   })
 
