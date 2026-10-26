@@ -65,6 +65,18 @@ describe("salary adjustments", () => {
     expect(employeeUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: { baseSalary: 5_250_000 } }),
     )
+    // Kunci argumen where persis (V-SA-6.2 vonis PR #960): baris menunggu/
+    // ditolak/applied TIDAK boleh bocor ke penerapan. Mock findMany
+    // mengabaikan argumen, jadi tanpa assert ini mutasi cabut filter
+    // status hijau diam-diam.
+    expect(adjustmentFindMany).toHaveBeenCalledWith({
+      where: {
+        employeeId: 7,
+        status: "scheduled",
+        effectiveDate: { lte: new Date("2026-02-01") },
+      },
+      orderBy: [{ effectiveDate: "asc" }, { id: "asc" }],
+    })
   })
 
   it("does nothing when nothing is due", async () => {

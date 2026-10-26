@@ -29753,6 +29753,8 @@ Antrean baca-saja: TIDAK ada transisi status ditulis antrean. Transisi relevan (
 ID **F-2026-10-25-029-S BEKU** untuk spec ini: grep `F-2026-10-25-029` di origin/main (6bbeca0f) + judul/badan PR terbuka = 0 sebelum penulisan (pencarian `gh pr list --search F-2026-10-25-029 --state all` hanya memukul substring `030` PR #397 lama — bukan ID ini); ID 027/028 terpakai PR #857/#858. File disentuh PR spec ini: `docs/erp-research-backlog.md` saja. Implementasi menunggu putusan Lead Q-SD-1..4 — Business tidak menulis kode/schema/migrasi. Backlog turunan (ID baru dipesan saat kartu dibuat, jangan karang sekarang): Lead putusan → Backend builder+loader+tes unit → Frontend halaman+konsumen → QA acceptance AC-SD-01..10.
 ---
 
+> **FISIK BACKEND 2026-10-26 (Backend, kartu t_9e3d0c81)**: builder `src/lib/reports/sales-order-delivery-promise-queue.ts` + loader `src/lib/reports/sales-order-delivery-promise-queue-data.ts` (`getSalesOrderDeliveryPromiseQueue(now?, dueSoonDays?)` → `{ queue, withoutPromiseCount }`, izin `view_sales_orders` fail-closed DI loader sebelum query apa pun + halaman pemanggil menegakkan juga, anti-N+1: query SO massal + 1 query DeliveryOrderItem + 1 count penanda). Putusan Lead Q-SD-1..4 BELUM tertulis saat fisik (grep live backlog+board+PR #859 = 0) — diambil rekomendasi spec tanpa migrasi: Q-SD-2 ambang 3 hari konstan `SO_DELIVERY_PROMISE_DUE_SOON_DAYS` + argumen builder/loader; Q-SD-3 populasi approved/confirmed/processing konstanta `SO_DELIVERY_PROMISE_POPULATION_STATUSES` (gabungan DELIVERABLE/FULFILLABLE minus completed, BUKAN isi konstanta mana pun); Q-SD-4 penanda `withoutPromiseCount` (populasi-status + deliveryDate null, bukan baris). Q-SD-1 permukaan = kartu Frontend t_161f479f. Ember `overdue|due_today|due_soon` + label di `SO_DELIVERY_PROMISE_BUCKET_LABELS`; baris bawa `daysUntilDue/linesRemaining/outstandingValue`, totals per ember + `SO_DELIVERY_PROMISE_QUEUE_NOTICE_TEXT` verbatim UI. Terkirim = SHIPPED_DELIVERY_STATUSES existing; injeksi waktu argumen `now` pola buildAcceptedQuotationQueue. Tanpa kolom/migrasi/UI/aksi tulis. Tes 19/19 fokus + reports 1691/1691, falsifikasi cabut-saring-status→1 MERAH + abaikan-terkirim→5 MERAH pulih hijau, tsc 0, eslint 0. Konsumen: Frontend t_161f479f (kontrak final di ringkasan kartu Backend), QA t_04f91fb0 AC-SD-01..10 head persis.
+
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-028-S: riwayat harga jual aktual per pelanggan×barang (turunan baris faktur terbit)
 > **Slot**: F-2026-10-25-028-S. Diperiksa bentrok 2026-10-25 14:44 WIB vs `origin/main` (`e650fdae`): grep `F-2026-10-25-028` di backlog+board origin/main = 0; ID 027-S di PR #857 OPEN beda topik. ID 028 bebas. Diverifikasi sebelum tulis, bukan slot tetap. Kartu: t_70c9a767.
 ### 0. Ringkasan
@@ -32917,3 +32919,110 @@ Edge cases: EC-DPQ-1 grandTotal quotation 0 / ambangSen 0: jarak 0 tertanda, bar
 - Menghitung DP menunggu sebagai kas/piutang/pelunasan di laporan mana pun (BR-DPQ-02; konsisten BR-AQ-07).
 
 F-2026-10-26-051-S — Antrean verifikasi DP menunggu konfirmasi. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-DPQ-1/2/3/4, lalu fisik Backend (builder turunan) + Frontend (kolom daftar uang-muka), QA falsifikasi AC-DPQ. Pemilik usulan: Business (spec), Lead (ambang hari/label/urutan), Backend (fisik turunan + nasib pending warisan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap ini.
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-054-S: persetujuan penyesuaian gaji terjadwal (gerbang maker-checker di atas SalaryAdjustment PR #959)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_6f90cde6. ID F-2026-10-26-054-S diverifikasi bebas 2026-10-26 06:43 WIB: grep `F-2026-10-26-054` di backlog + board `origin/main` (`1ea82354`) = 0; PR terbuka memuat 054-S = 0. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+### 0. Premis terverifikasi (TERVERIFIKASI-KODE, PR #959 head `df48dfa6`)
+
+- PR #959 memperkenalkan `SalaryAdjustment` (`prisma/schema.prisma` model SalaryAdjustment: employeeId, effectiveDate, previousBaseSalary, newBaseSalary, reason berkala|promosi|umk|kinerja|penyesuaian|lainnya, status scheduled->applied|cancelled, appliedAt, createdBy). TIDAK ada kolom/status persetujuan, TIDAK ada approvedBy/rejectedBy.
+- `createSalaryAdjustment` (`src/actions/salary-adjustment.actions.ts:42-90`): gerbang `edit_employees` + `canViewSalaryAmounts()`, baris lahir langsung `status: "scheduled"`, lalu `applyDueSalaryAdjustments` menerapkan yang sudah jatuh tempo ke `Employee.baseSalary` pada jalur yang sama. Satu aktor yang sama membuat DAN mengeksekusi perubahan gaji pokok.
+- Konsumen payroll: `generateBulkPayroll` (`src/actions/hrm.actions.ts:2290`) + `processPayroll` (`:2596`) memanggil `applyDueSalaryAdjustments(employeeId, periodEnd/endDate)` SEBELUM master dibaca; slip terbit tidak tertulis ulang (review Business t_336f05f2 LOLOS jalur ini).
+- Infrastruktur persetujuan generik SUDAH ada dan dipakai payroll: `requestApprovalIfConfigured("Payroll", ...)` + `assertApproved("Payroll", ...)` (`hrm.actions.ts:2763,2984,3052`), model `ApprovalWorkflow/ApprovalWorkflowStep/Approval/ApprovalHistory` (`schema.prisma:5153-5219`). Penyesuaian gaji TIDAK memakainya.
+- Review konsumen Business PR #959 (t_336f05f2, komentar PR 6405003881): TEMUAN-1 scope HR (kartu Backend t_fedea179) + TEMUAN-2 nominal di ActivityLog. Spec ini menutup gap KETIGA yang dicatat review itu: belum ada aturan persetujuan sama sekali.
+- BENCHMARK (diakses 2026-10-26 06:50 WIB, verifikasi ulang run ini): Accurate Online punya fitur Persetujuan (Approval) terkonfigurasi per tipe transaksi (https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/) — daftar resmi tipe transaksi yang bisa diwajibkan disetujui: kelompok Penjualan, Pembelian, Persediaan, dan Lainnya (Kas & Bank, Buku Besar, Aset Tetap). **Pencatatan Gaji / penyesuaian gaji TIDAK ada di daftar resmi itu — klaim sebelumnya (doniirvan.id, blog pihak ketiga) TIDAK terverifikasi di sumber resmi, dikoreksi run ini.** Dokumentasi gaji/tunjangan resmi hanya mengatur komponen gaji (https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/gaji-dan-tunjangan/cara-mengatur-gaji-dan-tunjangan/), tanpa gerbang persetujuan per penyesuaian. Kesimpulan BENCHMARK yang jujur: Accurate memvalidasi pola persetujuan konfigurabel per transaksi, tetapi persetujuan penyesuaian gaji terjadwal tidak terbukti punya padanan resmi di Accurate maupun Zahir (Zahir HR — Approval Management multi-layer untuk pengajuan HR https://zahir.co.id/hr/; khusus penyesuaian gaji tidak terverifikasi) — nilai spec ini berdiri dari kontrol internal (pemisahan pengaju/penyetuju) dan preseden workflow internal ISF, bukan dari padanan kompetitor.
+
+### 1. Workflow (USULAN)
+
+Aktor: Pengaju (HR/GA pemegang `edit_employees` + `view_salary_amounts`), Penyetuju (pemegang izin persetujuan baru, lihat §3), Sistem (penerap terjadwal existing).
+
+1. Pengaju membuat penyesuaian -> status `menunggu` (BARU; menggantikan lahir-langsung `scheduled`).
+2. Penyetuju menyetujui -> status `scheduled` (semantik existing utuh: menunggu tanggal efektif / siap diterapkan); menolak -> `ditolak` (terminal, alasan wajib).
+3. Penerapan tetap jalur existing persis: `applyDueSalaryAdjustments` hanya mengambil `status="scheduled"` ber-`effectiveDate <= asOf` — baris `menunggu`/`ditolak` tidak pernah menyentuh master maupun payroll.
+4. Pembatalan: pengaju/penyetuju membatalkan dari `menunggu` atau `scheduled` -> `cancelled` (klaim atomik existing diperluas status sumbernya); baris `applied` tidak dapat dibatalkan (sudah menjadi fakta master; koreksi = penyesuaian baru).
+
+Dokumen masuk: FormData existing (employeeId, newBaseSalary, effectiveDate, reason, notes). Dokumen keluar: riwayat `getSalaryAdjustments` + status persetujuan terbaca di riwayat yang sama.
+
+### 2. Status-transition matrix (USULAN)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | createSalaryAdjustment | menunggu | `edit_employees` + `view_salary_amounts` + scope HR (t_fedea179) |
+| menunggu | approveSalaryAdjustment | scheduled | izin persetujuan §3; penyetuju != createdBy (maker-checker) |
+| menunggu | rejectSalaryAdjustment (alasan wajib) | ditolak | izin persetujuan §3; penyetuju != createdBy |
+| menunggu/scheduled | cancelSalaryAdjustment (klaim updateMany bersyarat) | cancelled | `edit_employees` + `view_salary_amounts` |
+| scheduled | applyDueSalaryAdjustments (effectiveDate <= asOf) | applied | existing, tidak diubah |
+| applied/ditolak/cancelled | — | terminal | tidak ada transisi keluar |
+
+Dua jalur fisik untuk diputus Backend/Lead (Q-SA-1): (A) status kolom diperluas seperti di atas (ponytail: satu kolom string existing, tanpa migrasi tabel baru); (B) workflow generik `requestApprovalIfConfigured("SalaryAdjustment", ...)` + `assertApproved` sebelum baris boleh menjadi scheduled. Rekomendasi Business: jalur A tahap 1 (status eksplisit terbaca di riwayat, tanpa bergantung konfigurasi workflow yang bisa kosong = fail-open ala fromFallback); jalur B hanya bila Lead mewajibkan antrean persetujuan terpusat.
+
+### 3. Role/permission matrix (USULAN)
+
+| Aksi | Izin | Scope |
+|---|---|---|
+| buat / batal / baca riwayat | existing `edit_employees`/`view_employees` + `view_salary_amounts` | getHrScope (perbaikan t_fedea179, bukan spec ini) |
+| setujui / tolak | key BARU `approve_salary_adjustments` (didaftarkan base-data + label + katalog; seed hanya admin/super_admin + finance tahap 1 — pemegang final = Q-SA-2 Lead) | scope `all` tahap 1 (konsisten preseden komponen gaji `hrm.actions.ts:283-297`) |
+| terapkan ke payroll | sistem, tanpa izin manusia | hanya `scheduled` jatuh tempo |
+
+Nominal gaji tetap hanya lewat `view_salary_amounts` fail-closed; penyesuaian TIDAK menulis nominal ke ActivityLog (TEMUAN-2 t_fedea179 tetap kartu terpisah, tidak diduplikasi di sini).
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-SA-01 | Baris lahir `menunggu`, TIDAK langsung terjadwal/terterap; hanya `scheduled` yang boleh diterapkan service existing | USULAN | §1-2 spec ini |
+| BR-SA-02 | Maker-checker: penyetuju != pengaju (createdBy), ditegakkan server bandingkan actor.id | USULAN | preseden pola `approveContractDecisionRequest`/`approveDisciplinaryRecord` menolak self-approve (kode existing hrm.actions) |
+| BR-SA-03 | Penolakan wajib alasan, tersimpan, terbaca di riwayat | USULAN | — |
+| BR-SA-04 | Tanggal efektif lampau TIDAK auto-terap saat dibuat (perilaku existing `:89-90`); penerapan hanya terjadi sesudah disetujui, pada pemanggilan applyDue berikutnya (create payroll/generate/process) | USULAN | mengubah perilaku PR #959 — wajib dicatat di PR fisik |
+| BR-SA-05 | Slip yang sudah terbit tidak pernah tertulis ulang oleh persetujuan/penerapan (snapshot payroll utuh) | TERVERIFIKASI-KODE | review t_336f05f2; service hanya menyentuh master + baris scheduled |
+| BR-SA-06 | Karyawan berhenti: penyesuaian `menunggu`/`scheduled` milik karyawan berhenti TIDAK diterapkan diam-diam — gerbang eligibilitas payroll existing (BR-EMP-06) tetap menyaring populasi; nasib barisnya (batal otomatis vs tetap terjadwal) = Q-SA-3 | USULAN + BUTUH-VONIS | gerbang existing `hrm.actions.ts` generate/process |
+| BR-SA-07 | Dua penyesuaian bersamaan untuk karyawan sama: urutan penerapan tetap (effectiveDate, id) menaik existing; snapshot previousBaseSalary baris kedua = hasil baris pertama (tes service existing membuktikan) | TERVERIFIKASI-KODE | `salary-adjustment.service.test.ts` PR #959 |
+| BR-SA-08 | Kesesuaian nominal terhadap UMK/struktur skala upah: spec ini TIDAK memutus angka/batas apa pun; label alasan `umk` hanya kategori | BUTUH-VONIS | Accountant/pemilik proses; nol angka statutori ditanam |
+| BR-SA-09 | Persetujuan satu tingkat tahap 1; multi-tingkat hanya lewat workflow generik bila Lead memutus jalur B | USULAN | Q-SA-1 |
+
+### 5. Acceptance criteria + edge cases
+
+- AC-SA-1: buat penyesuaian tanggal lampau -> master TIDAK berubah sampai disetujui; sesudah setuju, generate/process payroll berikutnya menerapkan tepat sekali.
+- AC-SA-2: self-approve ditolak server (pengaju menyetujui barisnya sendiri = error, status tetap menunggu).
+- AC-SA-3: tolak tanpa alasan ditolak; tolak beralasan -> baris tidak pernah diterapkan walau tanggal lewat.
+- AC-SA-4: batal dari menunggu dan dari scheduled keduanya lolos klaim atomik; batal baris applied ditolak.
+- AC-SA-5: dua penyesuaian disetujui berurutan tanggal -> master berakhir nominal terbaru, riwayat snapshot jujur (melanjutkan tes service existing).
+- AC-SA-6: aktor scope department/self (sesudah t_fedea179) tidak dapat menyetujui karyawan di luar cakupan — falsifikasi MERAH bila lolos.
+- AC-SA-7: slip terbit sebelum persetujuan tidak berubah nominalnya sesudah penerapan (snapshot beku).
+- EC-SA-1: dua penyetuju balapan pada baris sama -> klaim bersyarat status menunggu; yang kalah menerima error, bukan dobel-transisi.
+- EC-SA-2: penyesuaian disetujui untuk karyawan yang kemudian berhenti sebelum tanggal efektif -> mengikuti putusan Q-SA-3, terhitung di hasil run (bukan hilang diam-diam).
+
+### 6. Feature matrix
+
+| Fitur | Accurate Online | Zahir | ISF |
+|---|---|---|---|
+| Persetujuan transaksi gaji sebelum diproses | Approval konfigurabel ADA untuk Penjualan/Pembelian/Persediaan/Kas & Bank/Buku Besar/Aset Tetap (URL resmi §0); Pencatatan Gaji/penyesuaian gaji TIDAK di daftar resmi — tidak terverifikasi | Approval Management multi-layer HR (https://zahir.co.id/hr/); khusus penyesuaian gaji tidak terverifikasi | BELUM — spec ini (PR #959 tanpa gerbang) |
+| Riwayat penyesuaian gaji per karyawan | tidak terverifikasi run ini | tidak terverifikasi run ini | ADA PR #959 (`getSalaryAdjustments`) |
+| Penerapan terjadwal ke payroll berikutnya | tidak terverifikasi run ini | tidak terverifikasi run ini | ADA PR #959 (`applyDueSalaryAdjustments`) |
+
+### 7. Backlog implementasi (turunan F-2026-10-26-054-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-054-S | Spec ini (dokumen) | Business | — |
+| (turunan) putusan Q-SA-1/2/3 | Lead | spec ini | — |
+| (turunan) fisik status persetujuan + aksi approve/reject + tes AC-SA | Backend | Q-SA terputus + t_fedea179 (scope) selesai/di PR sama dikoordinasikan Lead | |
+| (turunan) konsumen antrean/riwayat persetujuan di UI HCMS | Frontend | kontrak Backend | |
+| (turunan) falsifikasi AC-SA-1..7 + EC-SA | QA | head Backend persis | |
+
+### 8. Pertanyaan putusan
+
+- Q-SA-1 (Lead): jalur A status kolom vs jalur B workflow generik (rekomendasi Business: A tahap 1, alasan fail-open konfigurasi kosong).
+- Q-SA-2 (Lead): pemegang `approve_salary_adjustments` tahap 1 (rekomendasi: admin/super_admin + finance; GA pengaju saja).
+- Q-SA-3 (Lead, perilaku tepi BR-SA-06): baris terjadwal karyawan berhenti — batal otomatis tercatat vs tetap terjadwal tak terterap.
+- Accountant: TIDAK diminta tahap ini — nol jurnal, nol angka statutori; BR-SA-08 naik vonis hanya bila kelak ada usulan batas UMK/skala upah.
+
+### Yang TIDAK diusulkan run ini
+
+- Mengubah jalur penerapan payroll / snapshot slip (sudah LOLOS review t_336f05f2).
+- Perbaikan scope HR dan log nominal (kartu Backend t_fedea179 — tidak diduplikasi).
+- Batas/validasi nominal UMK, persen kenaikan maks, atau ambang persetujuan berjenjang menurut nominal (BUTUH-VONIS, tidak ditanam).
+- Notifikasi otomatis ke penyetuju/karyawan (kanal belum diputus; antrean baca-saat-dibuka cukup tahap 1).
+
+F-2026-10-26-054-S — Persetujuan penyesuaian gaji terjadwal. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-SA-1/2/3, lalu fisik Backend (sesudah/bersama t_fedea179 dikoordinasikan Lead), konsumen Frontend, falsifikasi QA. Pemilik usulan: Business (spec), Lead (putusan jalur/pemegang/tepi berhenti), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini (BR-SA-08 bersyarat).
