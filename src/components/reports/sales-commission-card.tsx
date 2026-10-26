@@ -53,7 +53,10 @@ export function SalesCommissionCard({
           <DetailTableTh>Penjual</DetailTableTh>
           <DetailTableTh align="right">Jumlah Faktur Lunas</DetailTableTh>
           <DetailTableTh align="right">Basis Faktur Lunas</DetailTableTh>
+          <DetailTableTh align="right">Basis DPP Faktur Lunas</DetailTableTh>
           <DetailTableTh align="right">Estimasi Komisi</DetailTableTh>
+          <DetailTableTh align="right">Pengurang Retur</DetailTableTh>
+          <DetailTableTh align="right">Estimasi Komisi Bersih</DetailTableTh>
         </DetailTableHead>
         <DetailTableBody>
           {visibleRows.map((row) => (
@@ -61,7 +64,10 @@ export function SalesCommissionCard({
               <DetailTableTd className="font-medium">{row.salesEmployeeName || "—"}</DetailTableTd>
               <DetailTableTd align="right">{row.invoiceCount}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrency(row.paidBase)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrency(row.dppBase)}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrency(row.estimatedCommission)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrency(row.returnDeduction)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrency(row.netEstimatedCommission)}</DetailTableTd>
             </DetailTableRow>
           ))}
           {showUnattributed ? (
@@ -69,6 +75,9 @@ export function SalesCommissionCard({
               <DetailTableTd className="font-medium">Tanpa penjual tercatat</DetailTableTd>
               <DetailTableTd align="right">{report.unattributed.invoiceCount}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrency(report.unattributed.paidBase)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrency(report.unattributed.dppBase)}</DetailTableTd>
+              <DetailTableTd align="right">—</DetailTableTd>
+              <DetailTableTd align="right">—</DetailTableTd>
               <DetailTableTd align="right">—</DetailTableTd>
             </DetailTableRow>
           ) : null}
@@ -85,6 +94,36 @@ export function SalesCommissionCard({
             <DetailTableTd align="right" className="font-bold">
               —
             </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+          </DetailTableFootRow>
+          <DetailTableFootRow>
+            <DetailTableTd className="font-bold">Total Basis DPP Faktur Lunas</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              {formatCurrency(report.totalDppBase)}
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
           </DetailTableFootRow>
           <DetailTableFootRow>
             <DetailTableTd className="font-bold">Total Estimasi Komisi</DetailTableTd>
@@ -95,7 +134,58 @@ export function SalesCommissionCard({
               —
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
               {formatCurrency(report.totalEstimatedCommission)}
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+          </DetailTableFootRow>
+          <DetailTableFootRow>
+            <DetailTableTd className="font-bold">Total Pengurang Retur</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              {formatCurrency(report.totalReturnDeduction)}
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+          </DetailTableFootRow>
+          <DetailTableFootRow>
+            <DetailTableTd className="font-bold">Total Estimasi Komisi Bersih</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              —
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              {formatCurrency(report.totalNetEstimatedCommission)}
             </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>
