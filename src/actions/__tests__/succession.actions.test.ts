@@ -22,8 +22,8 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
+import { computeSuccessionCoverage } from "@/lib/hr/hcms-scoring"
 import {
-  computeSuccessionCoverage,
   setPositionCritical,
   upsertSuccessorCandidate,
 } from "../succession.actions"

@@ -62,7 +62,28 @@ function makeTx(opts: {
   returns?: Row[]
   journals?: Row[]
   receivableAccountId?: number | null
+  workOrders?: Row[]
+  quotations?: Row[]
+  k2Orders?: Row[]
+  k5Orders?: Row[]
+  k5Invoices?: Row[]
 }) {
+  // F1 (verdict Accountant PR #1072): jalur K5 butuh lookup berkait
+  // quotation. Bedakan panggilan findMany dari bentuk where:
+  // - where.customerId -> baris milik pelanggan ini (K1/K2);
+  // - where.quotationId -> lookup per-quotation untuk K5.
+  // Tanpa opsi baru, perilaku persis mock lama (semua kecuali K1 kosong).
+  const invoiceFindMany = vi.fn(async (args?: { where?: Row }) => {
+    if (opts.k5Invoices !== undefined && args?.where && "quotationId" in args.where) {
+      return opts.k5Invoices
+    }
+    return opts.invoices ?? []
+  })
+  const orderFindMany = vi.fn(async (args?: { where?: Row }) => {
+    if (args?.where && "customerId" in args.where) return opts.k2Orders ?? []
+    if (args?.where && "quotationId" in args.where) return opts.k5Orders ?? []
+    return []
+  })
   const tx: Record<string, unknown> = {
     $queryRaw: vi.fn(async () => []),
     systemSetting: model(
@@ -81,12 +102,12 @@ function makeTx(opts: {
         deletedAt: opts.customerDeletedAt ?? null,
       })),
     },
-    salesInvoice: model(opts.invoices ?? []),
-    salesOrder: model(),
+    salesInvoice: { ...model(opts.invoices ?? []), findMany: invoiceFindMany },
+    salesOrder: { ...model(), findMany: orderFindMany },
     downPayment: model(),
     customerCredit: model(),
-    workOrder: model(),
-    quotation: model(),
+    workOrder: model(opts.workOrders ?? []),
+    quotation: model(opts.quotations ?? []),
     salesReturn: model(opts.returns ?? []),
     journal: model(opts.journals ?? []),
     creditOverride: {
@@ -257,6 +278,131 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     const create = (tx as never as { creditOverride: { create: ReturnType<typeof vi.fn> } })
       .creditOverride.create
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it("F1 anti-dobel K5 SO-dari-quotation: K5 sumber digantikan SO baru, WO lain tetap dihitung", async () => {
+    // F1 verdict Accountant PR #1072 (6425538156): WO aktif atas quotation
+    // 10 (400rb) + WO lain atas quotation 20 (200rb) -> K5 existing 600rb,
+    // linkedQuotationWo = 400rb. SO baru 600rb lahir dari quotation 10:
+    // paparan proyeksi = K2 600rb + K5 sisa 200rb = 800rb (allowed, limit
+    // 1jt). Bila pengurangan linkedQuotationWo di projectedRow dicabut,
+    // paparan semu 1.200.000 -> over/blocked, tes ini wajib MERAH.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_000_000,
+      workOrders: [
+        { customerId: 3, quotationId: 10 },
+        { customerId: 3, quotationId: 20 },
+      ],
+      quotations: [
+        { id: 10, customerId: 3, grandTotal: 400_000 },
+        { id: 20, customerId: 3, grandTotal: 200_000 },
+      ],
+      k5Orders: [],
+      k5Invoices: [],
+    })
+    const soFromQuotation = {
+      ...attempt,
+      attemptedAmount: 600_000,
+      quotationId: 10,
+    }
+    const out = await assessCreditGateInTx(tx, soFromQuotation)
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(800_000)
+      expect(out.assessment.status).toBe("warning")
+    }
+  })
+
+  it("F1 anti-dobel K5 invoice-dari-quotation tanpa SO: K5 sumber digantikan invoice baru, WO lain tetap dihitung", async () => {
+    // Jalur projectedRow baris 491-500: invoice 500rb lahir langsung dari
+    // quotation 10 tanpa SO. K5 existing 600rb (quotation 10: 400rb +
+    // quotation 20: 200rb), linkedQuotationWo = 400rb. Paparan proyeksi =
+    // K1 500rb + K5 sisa 200rb = 700rb (allowed, limit 1jt). Bila
+    // pengurangan dicabut, paparan semu 1.100.000 -> over/blocked.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_000_000,
+      workOrders: [
+        { customerId: 3, quotationId: 10 },
+        { customerId: 3, quotationId: 20 },
+      ],
+      quotations: [
+        { id: 10, customerId: 3, grandTotal: 400_000 },
+        { id: 20, customerId: 3, grandTotal: 200_000 },
+      ],
+      k5Orders: [],
+      k5Invoices: [],
+    })
+    const out = await assessCreditGateInTx(tx, {
+      customerId: 3,
+      documentType: "sales_invoice",
+      attemptedAmount: 500_000,
+      requestedBy: 7,
+      quotationId: 10,
+      requestReason: "Proyek mendesak pelanggan",
+    })
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(700_000)
+      expect(out.assessment.status).toBe("ok")
+    }
+  })
+
+  it("BR-CL2-12 anti-dobel invoice-dari-SO: porsi SO terkait pindah K2->K1, bukan K2 penuh + invoice penuh", async () => {
+    // SO terbuka id 30 senilai 1jt belum terinvoice: K2 = 1jt,
+    // linkedOrderOpen = 1jt. Invoice baru 600rb dari SO 30: paparan
+    // proyeksi = K1 600rb + K2 sisa 400rb = 1jt (warning, allowed,
+    // limit 1,2jt). Bila blok linkedOrderOpen di projectedRow dicabut,
+    // paparan semu 1.600.000 -> over/blocked, tes ini wajib MERAH.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_200_000,
+      k2Orders: [{ id: 30, grandTotal: 1_000_000 }],
+    })
+    const out = await assessCreditGateInTx(tx, {
+      customerId: 3,
+      documentType: "sales_invoice",
+      attemptedAmount: 600_000,
+      requestedBy: 7,
+      salesOrderId: 30,
+      requestReason: "Proyek mendesak pelanggan",
+    })
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(1_000_000)
+      expect(out.assessment.status).toBe("warning")
+    }
+  })
+
+  it("BR-CL2-12 anti-dobel invoice-dari-SO sebagian: SO terinvoice sebagian dinilai sisa, porsi terinvoice tidak ditumpuk", async () => {
+    // SO id 31 senilai 1jt sudah terinvoice recognised 400rb (belum
+    // dibayar): K1 = 400rb, K2 sisa = 600rb, linkedOrderOpen = 600rb.
+    // Invoice baru 300rb dari SO 31: paparan proyeksi = K1 700rb +
+    // K2 sisa 300rb = 1jt persis nilai SO (warning, allowed, limit
+    // 1,2jt). Bila blok linkedOrderOpen dicabut, paparan semu
+    // 1.300.000 -> over/blocked, tes ini wajib MERAH.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_200_000,
+      invoices: [
+        { id: 41, grandTotal: 400_000, paidAmount: 0, salesOrderId: 31, quotationId: null },
+      ],
+      k2Orders: [{ id: 31, grandTotal: 1_000_000 }],
+    })
+    const out = await assessCreditGateInTx(tx, {
+      customerId: 3,
+      documentType: "sales_invoice",
+      attemptedAmount: 300_000,
+      requestedBy: 7,
+      salesOrderId: 31,
+      requestReason: "Proyek mendesak pelanggan",
+    })
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(1_000_000)
+      expect(out.assessment.status).toBe("warning")
+    }
   })
 
   it("S-1: returnCredit retur completed + jurnal POSTED Cr Piutang mengurangi K1 persis nominalnya", async () => {

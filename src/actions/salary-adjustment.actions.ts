@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
-import { getHrScope } from "@/lib/auth/hr-scope";
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { canViewSalaryAmounts } from "@/lib/auth/field-visibility";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
@@ -10,15 +10,7 @@ import { logActivity } from "@/lib/services/activity-log.service";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
 import { computeChangePercent } from "@/lib/services/salary-adjustment.service";
-
-export const SALARY_ADJUSTMENT_REASONS = [
-  "berkala",
-  "promosi",
-  "umk",
-  "kinerja",
-  "penyesuaian",
-  "lainnya",
-] as const;
+import { SALARY_ADJUSTMENT_REASONS } from "@/lib/hr/hcms-scoring";
 
 function resultError(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e;
@@ -26,14 +18,23 @@ function resultError(e: unknown, tag: string) {
   return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
 }
 
-export const SALARY_ADJUSTMENT_REASON_LABELS: Record<string, string> = {
-  berkala: "Kenaikan Berkala",
-  promosi: "Promosi",
-  umk: "Penyesuaian UMK/UMP",
-  kinerja: "Kinerja",
-  penyesuaian: "Penyesuaian Struktur",
-  lainnya: "Lainnya",
-};
+/**
+ * TEMUAN-1 PR #959: penyesuaian gaji hanya untuk scope HR `all`
+ * (preseden requirePayrollComponentAdmin di hrm.actions.ts) — permission
+ * edit/view_employees + view_salary_amounts saja tidak cukup; aktor
+ * department/self tidak boleh menyentuh nominal karyawan di luar cakupan.
+ */
+async function assertSalaryEmployeeScope(
+  actor: { id: unknown; roles?: unknown },
+  employeeId: number,
+) {
+  const scope = await getHrScope({
+    id: String(actor.id),
+    roles: Array.isArray(actor.roles) ? [...(actor.roles as string[])] : [],
+  });
+  await assertHrEmployeeAccess(scope, employeeId);
+  return scope;
+}
 
 /*
  * F-2026-10-26-054-S Jalur A (putusan Lead Q-SA-1/2/3; vonis Accountant
@@ -95,6 +96,8 @@ export async function createSalaryAdjustment(formData: FormData) {
     if (!Number.isSafeInteger(employeeIdRaw) || employeeIdRaw <= 0) {
       throw new Error("Karyawan tidak valid");
     }
+    // TEMUAN-1 PR #959: scope HR ditegakkan sebelum employeeId dipakai.
+    await assertSalaryEmployeeScope(actor, employeeIdRaw);
     const newBaseSalary = parseMoneyAmount(formData.get("newBaseSalary"));
     if (newBaseSalary == null || newBaseSalary < 0) {
       throw new Error("Gaji pokok baru tidak valid");
@@ -233,10 +236,13 @@ export async function rejectSalaryAdjustment(id: number, rejectionReason: string
 
 export async function cancelSalaryAdjustment(id: number) {
   try {
-    await requirePermission("edit_employees");
+    const actor = await requirePermission("edit_employees");
     if (!(await canViewSalaryAmounts())) {
       throw new Error("Anda tidak memiliki izin melihat/mengubah nominal gaji");
     }
+    // TEMUAN-1: resolusi employeeId dari baris dulu, baru tegakkan scope.
+    const row = await loadAdjustmentForDecision(id);
+    await assertSalaryEmployeeScope(actor, row.employeeId);
     const claim = await prisma.salaryAdjustment.updateMany({
       where: { id, status: { in: ["menunggu", "scheduled"] } },
       data: { status: "cancelled" },
@@ -256,10 +262,11 @@ export async function cancelSalaryAdjustment(id: number) {
 
 export async function getSalaryAdjustments(employeeId: number) {
   try {
-    await requirePermission("view_employees");
+    const actor = await requirePermission("view_employees");
     if (!(await canViewSalaryAmounts())) {
       throw new Error("Anda tidak memiliki izin melihat nominal gaji");
     }
+    await assertSalaryEmployeeScope(actor, employeeId);
     // Q-SA-3 / EC-SA-2: karyawan yang sudah berhenti — baris menunggu/
     // scheduled dibatalkan otomatis dan tercatat sebagai cancelled di
     // riwayat (bukan hilang diam-diam); baris applied tidak disentuh.
