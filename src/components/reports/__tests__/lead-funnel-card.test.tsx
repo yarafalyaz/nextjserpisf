@@ -102,6 +102,42 @@ describe("LeadFunnelCard F-2026-10-22-092-S", () => {
     unmountCard(root)
   })
 
+  it("alasan kalah: 9 baris stabil verbatim builder (8 kategori + tak-tercatat), jumlah cocok ember lost", () => {
+    const funnel = buildLeadFunnel(
+      [
+        lead({
+          id: 1,
+          status: "lost",
+          activities: [
+            {
+              type: "status_change",
+              oldStatus: "qualified",
+              newStatus: "lost",
+              description: "[kalah:harga] kemahalan",
+              createdAt: new Date(2026, 9, 10),
+            },
+          ],
+        }),
+        lead({ id: 2, status: "lost" }),
+      ],
+      { includeAssigneeBreakdown: false, period: null },
+    )
+    expect(funnel.position.lostByReason).toHaveLength(9)
+    const { container, root } = renderCard(<LeadFunnelCard funnel={funnel} />)
+    const section = container.querySelector('[aria-label="Alasan Kalah"]')
+    expect(section).not.toBeNull()
+    const text = section?.textContent ?? ""
+    expect(text).toContain("Budget tidak masuk")
+    expect(text).toContain("Harga terlalu tinggi")
+    expect(text).toContain("Tidak tercatat (lead kalah lama)")
+    const rows = Array.from(section?.querySelectorAll("tbody tr") ?? [])
+    expect(rows).toHaveLength(9)
+    expect(rows.find((r) => r.textContent?.includes("Harga terlalu tinggi"))?.textContent).toContain("1")
+    expect(rows.find((r) => r.textContent?.includes("Tidak tercatat"))?.textContent).toContain("1")
+    expect(rows.find((r) => r.textContent?.includes("Budget tidak masuk"))?.textContent).toContain("0")
+    unmountCard(root)
+  })
+
   it("kosong: pesan bersih, bukan tabel tahap", () => {
     const funnel = buildLeadFunnel([], { includeAssigneeBreakdown: false, period: PERIOD })
     const { container, root } = renderCard(<LeadFunnelCard funnel={funnel} />)

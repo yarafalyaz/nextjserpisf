@@ -7,6 +7,7 @@ export function ReportCardShell({
   summary,
   isEmpty,
   emptyText,
+  notice,
   children,
 }: Readonly<{
   label: string
@@ -14,6 +15,7 @@ export function ReportCardShell({
   summary: ReactNode
   isEmpty: boolean
   emptyText: string
+  notice?: string
   children: ReactNode
 }>) {
   return (
@@ -26,6 +28,7 @@ export function ReportCardShell({
         <p className="text-xs text-muted-foreground">{summary}</p>
       </div>
       <div className="p-4 px-5">
+        {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
         {isEmpty ? (
           <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
             {emptyText}
