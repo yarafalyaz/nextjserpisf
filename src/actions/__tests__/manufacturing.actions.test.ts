@@ -1128,6 +1128,20 @@ describe("Work Order Operation auto-close (F-2026-10-21-020 lanjutan)", () => {
     )
   })
 
+  it("QC belum bersih -> tahap tetap sukses, WO TIDAK ditutup (guard tidak me-rollback transisi)", async () => {
+    setupLastStage()
+    const qc = await import("@/lib/services/qc.service")
+    vi.mocked(qc.assertWorkOrderQcCleared).mockRejectedValueOnce(
+      new Error("Tidak dapat menyelesaikan WO: inspeksi akhir berstatus failed"),
+    )
+    const res = await actions.updateWorkOrderOperationStatus(1, 12, "completed")
+    expect(res?.success).toBe(true)
+    expect(res?.autoCompleted).toBe(false)
+    expect(P.workOrderOperation.update).toHaveBeenCalledTimes(1)
+    expect(P.workOrder.updateMany).not.toHaveBeenCalled()
+    expect(P.workOrderItem.updateMany).not.toHaveBeenCalled()
+  })
+
   it("MaterialIssue belum completed -> tahap tetap sukses, WO TIDAK ditutup (guard tidak dilewati diam-diam)", async () => {
     setupLastStage()
     P.materialIssue.findFirst.mockResolvedValue(null)
@@ -1285,6 +1299,19 @@ describe("Work Order Actions", () => {
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
     const res = await actions.completeWorkOrder(1)
     expect(res?.success).toBe(false)
+  })
+
+  it("completeWorkOrder tetap menolak QC belum bersih dengan pesan guard verbatim (manual)", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", items: [{ id: 1 }] })
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    const qc = await import("@/lib/services/qc.service")
+    vi.mocked(qc.assertWorkOrderQcCleared).mockRejectedValueOnce(
+      new Error("Tidak dapat menyelesaikan WO: inspeksi akhir berstatus failed"),
+    )
+    const res = await actions.completeWorkOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("inspeksi akhir berstatus failed")
+    expect(mocks.prismaMock.workOrder.updateMany).not.toHaveBeenCalled()
   })
 
   it("completeWorkOrder fails when concurrent claim loses", async () => {

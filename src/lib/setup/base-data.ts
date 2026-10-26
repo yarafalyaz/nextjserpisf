@@ -87,6 +87,14 @@ export const PERMISSIONS = [
       "edit_employees",
       "delete_employees",
       "approve_contracts",
+      // F-2026-10-25-005-S DISC-B1 (Q-DISC-2): izin khusus disiplin.
+      // Pemetaan default-aman putusan Lead: view+create+approve disamakan
+      // pemegang edit_employees fase 1 (lihat whitelist GA di bawah);
+      // admin/super_admin dapat lewat katalog penuh. Dipersempit kelak
+      // hanya lewat perubahan kode bervonis Lead.
+      "view_disciplinary_records",
+      "create_disciplinary_records",
+      "approve_disciplinary_records",
       "view_accounts",
       "create_accounts",
       "edit_accounts",
@@ -189,6 +197,9 @@ export const PERMISSIONS = [
       "create_attendance",
       "edit_attendance",
       "manage_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
+      "approve_attendance_corrections",
       "view_leave_requests",
       "create_leave_requests",
       "edit_leave_requests",
@@ -209,9 +220,11 @@ export const PERMISSIONS = [
       "create_journals",
       "edit_journals",
       "post_journals",
+      "approve_journals",
       "delete_journals",
       "view_expenses",
       "create_expenses",
+      "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
       "delete_expenses",
@@ -242,6 +255,29 @@ export const PERMISSIONS = [
       "view_appreciations",
       "create_appreciations",
       "delete_appreciations",
+      "view_recruitments",
+      "create_recruitments",
+      "edit_recruitments",
+      "delete_recruitments",
+      "view_performance",
+      "create_performance",
+      "edit_performance",
+      "delete_performance",
+      "view_competencies",
+      "create_competencies",
+      "edit_competencies",
+      "delete_competencies",
+      "view_trainings",
+      "create_trainings",
+      "edit_trainings",
+      "delete_trainings",
+      "view_succession",
+      "create_succession",
+      "edit_succession",
+      "delete_succession",
+      // Field-level masking (server-side): izin modul membuka record, izin
+      // ini menentukan boleh melihat nominal gajinya.
+      "view_salary_amounts",
       "create_asset_brands",
       "delete_asset_brands",
       "create_asset_categories",
@@ -301,6 +337,12 @@ export const PERMISSIONS = [
       "manage_holidays",
       "delete_holidays",
       "create_loans",
+      // F-2026-10-25-018-S Q-LS-1 (Putusan Lead F-2026-10-25-026-L): key
+      // khusus pengajuan pinjaman MANDIRI oleh karyawan untuk dirinya
+      // sendiri. SENGAJA terpisah dari create_loans (yang juga membuka
+      // ubah/hapus pending jalur staf) dan dari approve_loans (SoD).
+      // Hanya masuk KARYAWAN_WHITELIST; update/delete tetap create_loans.
+      "create_employee_loan_requests",
       "delete_loans",
       "create_products",
       "edit_products",
@@ -363,6 +405,11 @@ export const PERMISSIONS = [
       // Approval permissions terpisah dari edit_* (Separation of Duties).
       "approve_vendor_payments",
       "approve_purchase_returns",
+      // F-2026-10-25-012-S: menyelesaikan retur penjualan (stok+jurnal)
+      // wajib izin khusus ini; edit_sales_returns saja tidak cukup.
+      // Grant mengikuti pola approve_purchase_returns: hanya admin/
+      // super_admin lewat katalog penuh, role lain diberi eksplisit.
+      "approve_sales_returns",
       // Approving/disbursing an employee loan gets its own permission. It used
       // to reuse "create_loans" in both approval.actions.ts and the status
       // workflow route, so whoever could raise a loan could also approve and
@@ -514,6 +561,9 @@ export const GA_WHITELIST = [
       "create_attendance",
       "edit_attendance",
       "manage_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
+      "approve_attendance_corrections",
       "view_leave_requests",
       "create_leave_requests",
       "edit_leave_requests",
@@ -529,12 +579,43 @@ export const GA_WHITELIST = [
       "manage_holidays",
       "delete_holidays",
       "view_employees",
+      "view_recruitments",
+      "create_recruitments",
+      "edit_recruitments",
+      "delete_recruitments",
+      "view_performance",
+      "create_performance",
+      "edit_performance",
+      "delete_performance",
+      "view_competencies",
+      "create_competencies",
+      "edit_competencies",
+      "delete_competencies",
+      "view_trainings",
+      "create_trainings",
+      "edit_trainings",
+      "delete_trainings",
+      "view_succession",
+      "create_succession",
+      "edit_succession",
+      "delete_succession",
       "view_departments",
-      "view_positions"
+      "view_positions",
+      // F-2026-10-25-005-S DISC-B1 Q-DISC-2: pemetaan default-aman fase 1 —
+      // izin disiplin disamakan pemegang edit_employees (GA/HR).
+      "view_disciplinary_records",
+      "create_disciplinary_records",
+      "approve_disciplinary_records"
 ];
 
 export const KABENG_WHITELIST = [
       "view_dashboard",
+      "view_recruitments",
+      "view_performance",
+      "edit_performance",
+      "view_competencies",
+      "view_trainings",
+      "view_succession",
       "view_customers",
       "view_vendors",
       "view_items",
@@ -584,6 +665,9 @@ export const KABENG_WHITELIST = [
       "view_attendance",
       "create_attendance",
       "edit_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
+      "approve_attendance_corrections",
       "view_purchase_requests",
       "create_purchase_requests",
       "edit_purchase_requests"
@@ -597,13 +681,20 @@ export const KARYAWAN_WHITELIST = [
       "view_projects",
       "view_work_orders",
       "view_attendance",
+      "view_attendance_corrections",
+      "create_attendance_corrections",
       "view_work_schedules",
       "view_leave_requests",
       "create_leave_requests",
       "view_overtime",
       "view_payroll",
+      "view_performance",
       "view_timesheets",
-      "view_employee_loans"
+      "view_employee_loans",
+      // Q-LS-1: pengajuan pinjaman mandiri (hanya diri sendiri, ditegakkan
+      // server di createEmployeeLoan). create_loans TIDAK ikut — key itu
+      // membuka ubah/hapus pending jalur staf.
+      "create_employee_loan_requests"
 ];
 
 export const PURCHASING_WHITELIST = [
@@ -668,9 +759,12 @@ export const FINANCE_WHITELIST = [
       "create_journals",
       "edit_journals",
       "post_journals",
+      "approve_journals",
       "delete_journals",
+      "view_salary_amounts",
       "view_expenses",
       "create_expenses",
+      "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
       "delete_expenses",
@@ -896,6 +990,19 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // berjalan & 600005 rumah pesangon DILARANG untuk jalur ini.
   ["600028", "Beban Kompensasi PKWT", "EXPS", "6000"],
   ["210207", "Utang Kompensasi PKWT", "OCLY", "2102"],
+  // F-2026-10-25-018-V Putusan 3: liabilitas klaim reimbursement karyawan.
+  // 210204 Hutang Gaji / 210101 Utang Usaha / 210205 Provisi Garansi
+  // DILARANG reuse untuk jalur ini.
+  ["210209", "Utang Reimbursement Karyawan", "OCLY", "2102"],
+  // F-2026-10-25-020-V Putusan 5 (koreksi alokasi 14:04 WIB): liabilitas
+  // statutori payroll. 210208 = Utang Pesangon (005-V) dan 210209 =
+  // Utang Reimbursement (018-V) DILARANG reuse untuk jalur ini.
+  ["210210", "Utang PPh 21 Karyawan", "OCLY", "2102"],
+  ["210211", "Utang Iuran BPJS Karyawan", "OCLY", "2102"],
+  // F-2026-10-25-020-V Putusan 5: denda disiplin kredit ke sini (PP
+  // 36/2021 Pasal 60 — uang denda hanya untuk kepentingan pekerja);
+  // kredit mengurangi beban gaji DILARANG.
+  ["710006", "Pendapatan Denda Karyawan", "OINC", "7100"],
 ]
 
 /**

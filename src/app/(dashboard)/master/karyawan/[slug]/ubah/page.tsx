@@ -61,6 +61,9 @@ export default async function EditEmployeePage({
     dependents: data.dependents ?? 0,
     departmentId: data.departmentId,
     positionId: data.positionId,
+    leaveEligibilityStartDate: data.leaveEligibilityStartDate
+      ? data.leaveEligibilityStartDate.toISOString()
+      : null,
     joinDate: data.joinDate.toISOString().split("T")[0],
     paymentFrequency: data.paymentFrequency,
     baseSalary: Number(data.baseSalary),

@@ -120,6 +120,65 @@ describe("getLeaveQuota — tenure eligibility", () => {
     expect(q.eligible).toBe(true)
   })
 
+  it("internship time does not count: the anchor is the contract start", async () => {
+    // Masuk magang 2024-01-01 (total > 2 tahun), jadi kontrak 2026-01-01
+    // (~5 bulan sebelum now) -> belum berhak karena jamnya dari kontrak.
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2024-01-01"),
+      leaveEligibilityStartDate: new Date("2026-01-01"),
+      employmentStatus: "PKWT",
+    } as any)
+
+    const q = await getLeaveQuota(1)
+    expect(q.eligible).toBe(false)
+    expect(q.entitled).toBe(0)
+    expect(q.tenureMonths).toBe(5)
+  })
+
+  it("is eligible one year after the contract start, not the internship start", async () => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2024-01-01"),
+      leaveEligibilityStartDate: new Date("2025-01-01"),
+      employmentStatus: "PKWT",
+    } as any)
+
+    const q = await getLeaveQuota(1)
+    expect(q.eligible).toBe(true)
+    expect(q.entitled).toBe(ANNUAL_LEAVE_QUOTA)
+  })
+
+  it("a current INTERN has no entitlement even with long total service", async () => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2020-01-01"),
+      leaveEligibilityStartDate: null,
+      employmentStatus: "INTERN",
+    } as any)
+
+    const q = await getLeaveQuota(1)
+    expect(q.eligible).toBe(false)
+    expect(q.entitled).toBe(0)
+  })
+
+  it("is eligible exactly on the one-year anniversary date, not a day later", async () => {
+    // now = 2026-06-16 (WIB). Kontrak tepat 1 tahun lalu pada tanggal ini.
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2024-01-01"),
+      leaveEligibilityStartDate: new Date("2025-06-16"),
+      employmentStatus: "PKWT",
+    } as any)
+    const onAnniversary = await getLeaveQuota(1)
+    expect(onAnniversary.eligible).toBe(true)
+
+    // Sehari sebelum ulang tahun: belum.
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2024-01-01"),
+      leaveEligibilityStartDate: new Date("2025-06-17"),
+      employmentStatus: "PKWT",
+    } as any)
+    const dayBefore = await getLeaveQuota(1)
+    expect(dayBefore.eligible).toBe(false)
+  })
+
   it("judges tenure as of the reported YEAR, not today", async () => {
     // now = 2026-06-16. Re-reporting a PAST year must use that year's tenure,
     // not today's — the bug built every year's `eligible` from `now`.
@@ -172,5 +231,34 @@ describe("getLeaveQuota — usage accounting", () => {
 
     const call = vi.mocked(prisma.leaveRequest.findMany).mock.calls[0][0]
     expect(call?.where?.id).toEqual({ not: 99 })
+  })
+})
+
+describe("getLeaveQuota — rincian approved/pending (F-2026-10-25-013-S BR-LVB-12)", () => {
+  it("usedApproved + usedPending = used; penjaga lama tidak berubah (AC-LVB-B2)", async () => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2020-01-01"),
+    } as any)
+    // 2026-06-15..17 (Sen–Rab, 3 hari kerja) approved + 2026-06-18..19 (Kam–Jum, 2) pending.
+    vi.mocked(prisma.leaveRequest.findMany).mockResolvedValue([
+      { startDate: new Date("2026-06-15"), endDate: new Date("2026-06-17"), status: "approved" },
+      { startDate: new Date("2026-06-18"), endDate: new Date("2026-06-19"), status: "pending" },
+    ] as any)
+
+    const q = await getLeaveQuota(1, { year: 2026 })
+    expect(q.usedApproved).toBe(3)
+    expect(q.usedPending).toBe(2)
+    expect(q.used).toBe(5)
+    expect(q.usedApproved + q.usedPending).toBe(q.used)
+    expect(q.remaining).toBe(7)
+  })
+
+  it("tanpa cuti: kedua komponen nol", async () => {
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2020-01-01"),
+    } as any)
+    const q = await getLeaveQuota(1, { year: 2026 })
+    expect(q.usedApproved).toBe(0)
+    expect(q.usedPending).toBe(0)
   })
 })

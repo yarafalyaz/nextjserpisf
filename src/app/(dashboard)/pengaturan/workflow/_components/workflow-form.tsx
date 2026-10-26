@@ -15,6 +15,13 @@ import {
   updateApprovalWorkflow,
 } from "@/actions/approval.actions"
 import { APPROVAL_MODEL_TYPES, APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  isMoneyGateModelType,
+  moneyGateConfirmBody,
+  moneyGateConfirmTitle,
+  moneyGateInlineWarning,
+} from "./money-gate-warning"
 
 export interface WorkflowFormStep {
   name?: string | null
@@ -63,6 +70,8 @@ export function WorkflowForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // K4-S2(b): simpan yang mematikan gerbang uang ditahan sampai konfirmasi sadar.
+  const [pendingMoneyGateSave, setPendingMoneyGateSave] = useState<FormData | null>(null)
 
   const [name, setName] = useState(workflow?.name ?? "")
   const [modelType, setModelType] = useState(workflow?.modelType ?? "")
@@ -105,6 +114,27 @@ export function WorkflowForm({
     })
   }
 
+  function submitFormData(formData: FormData) {
+    startTransition(async () => {
+      try {
+        const result = workflow?.id
+          ? await updateApprovalWorkflow(workflow.id, formData)
+          : await createApprovalWorkflow(formData)
+
+        if (!result?.success) {
+          showError(result?.error || "Gagal menyimpan alur persetujuan")
+          return
+        }
+
+        showSuccess(workflow?.id ? "Alur persetujuan berhasil diperbarui" : "Alur persetujuan berhasil ditambahkan")
+        router.push("/pengaturan/workflow")
+        router.refresh()
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "Gagal menyimpan alur persetujuan")
+      }
+    })
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
@@ -128,24 +158,16 @@ export function WorkflowForm({
     formData.set("isActive", isActive ? "true" : "false")
     formData.set("steps", JSON.stringify(stepsPayload))
 
-    startTransition(async () => {
-      try {
-        const result = workflow?.id
-          ? await updateApprovalWorkflow(workflow.id, formData)
-          : await createApprovalWorkflow(formData)
+    // K4-S2(b) vonis 014-V: menonaktifkan workflow gerbang uang (Journal/
+    // VendorPayment) yang sedang aktif wajib konfirmasi sadar dulu.
+    const killsMoneyGate =
+      !!workflow?.id && workflow.isActive && !isActive && isMoneyGateModelType(workflow.modelType)
+    if (killsMoneyGate) {
+      setPendingMoneyGateSave(formData)
+      return
+    }
 
-        if (!result?.success) {
-          showError(result?.error || "Gagal menyimpan alur persetujuan")
-          return
-        }
-
-        showSuccess(workflow?.id ? "Alur persetujuan berhasil diperbarui" : "Alur persetujuan berhasil ditambahkan")
-        router.push("/pengaturan/workflow")
-        router.refresh()
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal menyimpan alur persetujuan")
-      }
-    })
+    submitFormData(formData)
   }
 
   return (
@@ -190,6 +212,11 @@ export function WorkflowForm({
               <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
               <span className="text-sm text-muted-foreground">{isActive ? "Aktif" : "Nonaktif"}</span>
             </div>
+            {!!workflow?.id && workflow.isActive && !isActive && isMoneyGateModelType(workflow.modelType) && (
+              <p role="alert" className="text-sm text-warning">
+                {moneyGateInlineWarning(workflow.modelType)}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -298,6 +325,24 @@ export function WorkflowForm({
           {isPending ? "Menyimpan..." : workflow?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
+
+      <ConfirmDialog
+        isOpen={pendingMoneyGateSave !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingMoneyGateSave(null)
+        }}
+        title={moneyGateConfirmTitle("deactivate")}
+        body={workflow ? moneyGateConfirmBody("deactivate", workflow.modelType) : undefined}
+        confirmLabel="Ya, Nonaktifkan"
+        cancelLabel="Batal"
+        variant="warning"
+        isPending={isPending}
+        onConfirm={() => {
+          const formData = pendingMoneyGateSave
+          setPendingMoneyGateSave(null)
+          if (formData) submitFormData(formData)
+        }}
+      />
     </form>
   )
 }

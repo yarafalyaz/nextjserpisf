@@ -3,6 +3,11 @@
 import { createColumnHelper } from "@/lib/table"
 import { useMemo } from "react"
 import { DataTable } from "@/components/ui/data-table"
+import {
+  LEAVE_BALANCE_INACTIVE_LABEL,
+  LEAVE_BALANCE_NOT_ELIGIBLE_LABEL,
+  LEAVE_BALANCE_NO_DEPARTMENT_LABEL,
+} from "@/lib/reports/leave-balance"
 
 export interface LeaveBalanceRow {
   // DataTable requires a stable `id` per row; we key on employeeId.
@@ -10,10 +15,14 @@ export interface LeaveBalanceRow {
   employeeId: number
   name: string
   employeeNo: string
+  departmentId: number | null
   department: string | null
   joinDate: string
+  isActive: boolean
   entitled: number
   used: number
+  usedApproved: number
+  usedPending: number
   remaining: number
   eligible: boolean
   tenureMonths: number
@@ -40,22 +49,48 @@ const columns = [
       </div>
     ),
   }),
-  columnHelper.accessor((row) => row.department ?? "-", {
+  columnHelper.accessor((row) => row.department ?? LEAVE_BALANCE_NO_DEPARTMENT_LABEL, {
     id: "department",
     header: "Departemen",
     cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span>,
   }),
+  columnHelper.accessor("isActive", {
+    id: "status",
+    header: "Status",
+    cell: (info) =>
+      info.getValue() ? (
+        <span className="text-muted-foreground">Aktif</span>
+      ) : (
+        <span className="px-2.5 py-1 rounded-full text-xs font-medium border border-default bg-muted text-muted-foreground">
+          {LEAVE_BALANCE_INACTIVE_LABEL}
+        </span>
+      ),
+  }),
   columnHelper.display({
     id: "tenure",
     header: "Masa Kerja",
-    cell: (info) => tenureLabel(info.row.original.tenureMonths),
+    cell: (info) => {
+      const row = info.row.original
+      if (!row.eligible) {
+        return (
+          <span className="px-2.5 py-1 rounded-full text-xs font-medium border border-warning/40 bg-warning/10 text-warning">
+            {LEAVE_BALANCE_NOT_ELIGIBLE_LABEL}
+          </span>
+        )
+      }
+      return tenureLabel(row.tenureMonths)
+    },
   }),
   columnHelper.accessor("entitled", {
     header: "Jatah",
     cell: (info) => `${info.getValue()} hari`,
   }),
-  columnHelper.accessor("used", {
-    header: "Terpakai",
+  columnHelper.accessor("usedApproved", {
+    header: "Terpakai Disetujui",
+    cell: (info) => `${info.getValue()} hari`,
+  }),
+  columnHelper.accessor("usedPending", {
+    header: "Terpakai Menunggu",
     cell: (info) => `${info.getValue()} hari`,
   }),
   columnHelper.accessor("remaining", {
@@ -65,7 +100,7 @@ const columns = [
       if (!row.eligible) {
         return (
           <span className="px-2.5 py-1 rounded-full text-xs font-medium border border-warning/40 bg-warning/10 text-warning">
-            Belum 1 tahun
+            {LEAVE_BALANCE_NOT_ELIGIBLE_LABEL}
           </span>
         )
       }
@@ -82,16 +117,17 @@ const columns = [
 export function LeaveBalanceTable({
   data,
   toolbar,
-  showEmployeeColumn = true,
+  showIdentityColumns = true,
 }: {
   data: LeaveBalanceRow[]
   toolbar?: React.ReactNode
-  showEmployeeColumn?: boolean
+  /** BR-LVB-14: diputus server dari scope efektif, bukan izin edit/delete. */
+  showIdentityColumns?: boolean
 }) {
   const visibleColumns = useMemo(() => {
-    if (!showEmployeeColumn) return columns.filter((c: any) => c.id !== "employeeName" && c.id !== "department")
+    if (!showIdentityColumns) return columns.filter((c) => c.id !== "employeeName" && c.id !== "department")
     return columns
-  }, [showEmployeeColumn])
+  }, [showIdentityColumns])
 
   return (
     <DataTable

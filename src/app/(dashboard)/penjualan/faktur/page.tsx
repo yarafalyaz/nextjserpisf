@@ -5,7 +5,9 @@ import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
+import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { InvoiceTable } from "./_components/invoice-table"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 
@@ -35,14 +37,16 @@ export async function renderInvoicesPage(
   // jadi filternya WAJIB di sini — kalau tidak, kotak cari tidak menyaring
   // apa pun, termasuk saat tiba dari tautan ?cari= di halaman pelanggan/proyek.
   // Mode jatuh tempo memakai kondisi sama persis dengan penghitung widget:
-  // sudah lewat tanggal jatuh tempo, belum lunas, tak batal, tak terhapus.
+  // sudah lewat tanggal jatuh tempo, belum lunas, tak terhapus, dan statusnya
+  // sudah diakui sebagai piutang (Q-SIQ-6: draft/approved/sent belum terbit
+  // bukan piutang — jurnal hanya lahir di postInvoice).
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const overdueWhere = overdueOnly
     ? {
         dueDate: { lt: today },
         paymentStatus: { not: "paid" },
-        status: { not: "cancelled" as const },
+        status: { in: [...RECOGNISED_AR_STATUSES] },
         deletedAt: null,
       }
     : {}
@@ -68,7 +72,7 @@ export async function renderInvoicesPage(
   const invoices = rawInvoices.map((inv) => ({
     id: inv.id,
     slug: inv.slug,
-    documentNo: inv.documentNo,
+    documentNo: salesInvoiceLabel(inv),
     date: inv.date,
     dueDate: inv.dueDate,
     totalAmount: Number(inv.totalAmount),

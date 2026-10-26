@@ -50,6 +50,9 @@ interface SettingsFormValues {
   companyLongitude?: number | null
   companyName?: string | null
   companyPhone?: string | null
+  companyPkpEffectiveFrom?: string | null
+  companyPkpSource?: string | null
+  companyPkpStatus?: string | null
   companyPostalCode?: string | null
   companyProvince?: string | null
   companyTaxId?: string | null
@@ -588,6 +591,34 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="companyTaxId">NPWP</Label>
                 <Input id="companyTaxId" name="companyTaxId" placeholder="XX.XXX.XXX.X-XXX.XXX" defaultValue={settings.companyTaxId || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="companyPkpStatus">Status PKP Perusahaan</Label>
+                <FormSelect
+                  id="companyPkpStatus"
+                  name="companyPkpStatus"
+                  defaultValue={settings.companyPkpStatus || "unknown"}
+                  options={[
+                    { value: "unknown", label: "Belum ditetapkan" },
+                    { value: "non_pkp", label: "Non-PKP" },
+                    { value: "pkp", label: "PKP" },
+                  ]}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Status PKP perusahaan sendiri — bukan status PKP pelanggan. Selama belum ditetapkan, uang muka ber-PPN ditolak server.
+                </p>
+              </div>
+              <AppDatePicker
+                label="Tanggal Mulai Kewajiban PKP"
+                name="companyPkpEffectiveFrom"
+                defaultValue={settings.companyPkpEffectiveFrom || undefined}
+              />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="companyPkpSource">Sumber Status PKP</Label>
+                <Input id="companyPkpSource" name="companyPkpSource" placeholder="Mis. nomor SPPKP" defaultValue={settings.companyPkpSource || ""} className="w-full" />
+                <p className="text-xs text-muted-foreground">
+                  Teks bebas singkat, mis. nomor SPPKP. Tanggal mulai kewajiban di atas bukan tanggal SPPKP.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="companyAddress">Alamat</Label>

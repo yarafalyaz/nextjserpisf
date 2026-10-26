@@ -124,7 +124,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-bold">{companyName || "YaraERP"}</span>
-                    <span className="truncate text-xs text-sidebar-foreground/70">Paket Perusahaan</span>
+                    <span className="truncate text-xs text-sidebar-foreground/70">ERP Bengkel Fabrikasi</span>
                   </div>
                 </Link>
               </SidebarMenuButton>
@@ -145,7 +145,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                 if (!canSee(item)) return null
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={item.label}>
+                    <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={item.label} className="text-[13px] font-medium data-[active=true]:font-semibold">
                       <Link href={item.href} onClick={handleNav}>
                         <Icon />
                         <span>{item.label}</span>
@@ -171,6 +171,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                       asChild
                       isActive={isActive(item.href) || isGroupActive(item)}
                       tooltip={item.label}
+                      className="text-[13px] font-medium data-[active=true]:font-semibold"
                     >
                       <Link href={item.href} onClick={handleNav}>
                         <Icon />
@@ -190,7 +191,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                 >
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={item.label} isActive={isGroupActive(item)}>
+                      <SidebarMenuButton tooltip={item.label} isActive={isGroupActive(item)} className="text-[13px] font-medium data-[active=true]:font-semibold">
                         <Icon />
                         {/*
                           Label grup bisa diklik menuju halaman ringkasan modul (hub),
@@ -214,7 +215,7 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                       <SidebarMenuSub>
                         {visibleChildren.map((child) => (
                           <SidebarMenuSubItem key={child.href}>
-                            <SidebarMenuSubButton asChild isActive={isActive(child.href)}>
+                            <SidebarMenuSubButton asChild isActive={isActive(child.href)} className="text-[13px] data-[active=true]:font-semibold">
                               <Link href={child.href} onClick={handleNav}>
                                 <child.icon />
                                 <span>{child.label}</span>

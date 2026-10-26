@@ -20,6 +20,7 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot"
 import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
 import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
@@ -1081,6 +1082,19 @@ export async function postInvoice(invoiceId: number) {
       throw new Error("Invoice sudah di-post atau sedang diproses.")
     }
 
+    // K5: nomor INV diterbitkan hanya di transisi ini, di dalam tx klaim,
+    // supaya dua posting bersamaan tidak berbagi nomor dan draft yang gagal
+    // posting tidak membakar nomor. Faktur pra-migrasi yang sudah bernomor
+    // TIDAK diterbitkan ulang. Slug mengikuti nomor baru (sebelumnya null).
+    if (!invoice.documentNo) {
+      const documentNo = await generateDocumentNumber("INV")
+      const slug = await nextSlug("salesInvoice", documentNo, { excludeId: invoiceId })
+      await tx.salesInvoice.update({
+        where: { id: invoiceId },
+        data: { documentNo, slug },
+      })
+    }
+
     // Trigger accounting hook (replaces Laravel Observer) — runs once, guarded by
     // the atomic claim above so only the winning request reaches here.
     await onSalesInvoicePosted(invoiceId, Number(user.id), tx)
@@ -1151,8 +1165,6 @@ async function collectQuotationInvoices(
  */
 
 function draftDerivedInvoiceData(input: {
-  documentNo: string
-  slug: string | null
   customerId: number
   customerVehicleId: number | null
   quotationId: number
@@ -1162,8 +1174,10 @@ function draftDerivedInvoiceData(input: {
   createdBy: number
 }) {
   return {
-    documentNo: input.documentNo,
-    slug: input.slug,
+    // K5: draft lahir tanpa nomor & tanpa slug berbasis nomor; keduanya
+    // diterbitkan saat posting (postInvoice). Slug null sah (fallback id).
+    documentNo: null,
+    slug: null,
     customerId: input.customerId,
     customerVehicleId: input.customerVehicleId,
     quotationId: input.quotationId,
@@ -1216,8 +1230,6 @@ export async function createDifferenceInvoice(quotationId: number) {
     const today = new Date()
     await assertPeriodOpen(today)
 
-    const documentNo = await generateDocumentNumber("INV")
-    const slug = await nextSlug("salesInvoice", documentNo)
     const differenceDescription = `Faktur selisih revisi v${quotation.revisionNumber} penawaran ${quotation.documentNo}`
 
     const invoice = await prisma.$transaction(async (tx) => {
@@ -1237,8 +1249,6 @@ export async function createDifferenceInvoice(quotationId: number) {
 
       return tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
-          documentNo,
-          slug,
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
@@ -1254,7 +1264,7 @@ export async function createDifferenceInvoice(quotationId: number) {
     await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id))
     revalidatePath("/penjualan/faktur")
     revalidatePath("/penjualan/penawaran")
-    return { success: true, id: invoice.id, slug }
+    return { success: true, id: invoice.id, slug: invoice.slug ?? null }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -1294,8 +1304,6 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
     const today = new Date()
     await assertPeriodOpen(today)
 
-    const documentNo = await generateDocumentNumber("INV")
-    const slug = await nextSlug("salesInvoice", documentNo)
     const progressDescription = `Faktur progres ${targetPercent}% penawaran ${quotation.documentNo}`
 
     const invoice = await prisma.$transaction(async (tx) => {
@@ -1313,8 +1321,6 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
 
       return tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
-          documentNo,
-          slug,
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
@@ -1330,7 +1336,7 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
     await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id))
     revalidatePath("/penjualan/faktur")
     revalidatePath("/penjualan/penawaran")
-    return { success: true, id: invoice.id, slug }
+    return { success: true, id: invoice.id, slug: invoice.slug ?? null }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -1440,8 +1446,8 @@ export async function createSalesInvoice(formData: FormData) {
   // tidak menyala — penjagaan di sini menutup celah back-date draft.)
   await assertPeriodOpen(wibDateToUtcMidnight(v.date))
 
-  const documentNo = await generateDocumentNumber("INV")
-  const slug = await nextSlug("salesInvoice", documentNo)
+  // K5: draft lahir tanpa documentNo/slug; nomor diterbitkan saat posting.
+  const slug = null
 
   // Item boleh datang langsung dari form (hasil konversi Pesanan Penjualan).
   // Faktur yang lahir hanya dengan header memaksa kasir mengetik ulang seluruh
@@ -1523,7 +1529,7 @@ export async function createSalesInvoice(formData: FormData) {
 
     return tx.salesInvoice.create({
       data: {
-        documentNo,
+        documentNo: null,
         slug,
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
@@ -1692,15 +1698,25 @@ export async function createSalesPayment(formData: FormData) {
 
 export async function completeSalesReturn(returnId: number) {
   try {
-  const user = await requirePermission("edit_sales_returns")
+  // F-2026-10-25-012-S (BR-SR-01/03/04): menyelesaikan retur = stok masuk +
+  // jurnal, jadi wajib izin khusus approve_sales_returns (edit_sales_returns
+  // saja tidak cukup), hanya dari status draft, dan penyelesai != pembuat
+  // (SoD). createdBy null (baris legacy) boleh diselesaikan penyetuju
+  // berizin (EC-2). Semua gerbang dievaluasi SEBELUM transaksi dibuka;
+  // hook stok/jurnal/snapshot pajak tidak diubah.
+  const user = await requirePermission("approve_sales_returns")
 
   const salesReturn = await prisma.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   })
 
-  if (salesReturn.status === "completed") {
-    throw new Error("Sales return sudah completed")
+  if (salesReturn.status !== "draft") {
+    throw new Error("Retur penjualan hanya bisa diselesaikan dari status draft")
+  }
+
+  if (salesReturn.createdBy != null && Number(salesReturn.createdBy) === Number(user.id)) {
+    throw new Error("Retur penjualan tidak boleh diselesaikan oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_sales_returns.")
   }
 
   // P1-1: identitas fisik wajib untuk item tracked. Tanpa serial/batch
@@ -2476,7 +2492,10 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null; description?: string | null }>>(itemsJson) ?? []) : null
 
   const existingForSlug = await prisma.salesInvoice.findUniqueOrThrow({ where: { id }, select: { documentNo: true } })
-  const slug = await nextSlug("salesInvoice", existingForSlug.documentNo, { excludeId: id })
+  // K5: draft belum bernomor -> slug tetap null (URL fallback id).
+  const slug = existingForSlug.documentNo
+    ? await nextSlug("salesInvoice", existingForSlug.documentNo, { excludeId: id })
+    : null
 
   const result = await prisma.$transaction(async (tx) => {
     if (typeof tx.$executeRaw === "function") {
@@ -2589,6 +2608,22 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         paymentStatus = "partial"
       }
 
+      // F-2026-10-25-036-S (lanjutan BLOCKER-1): edit item dapat menaikkan
+      // status ke paid (grandTotal turun <= paidAmount lama, mis. DP penuh)
+      // tanpa melewati jalur pembayaran — bekukan snapshot tarif komisi
+      // lewat helper bersama; snapshot existing tidak pernah ditimpa dan
+      // transisi turun/tetap tidak menulis snapshot (helper mengembalikan {}).
+      const commissionSnapshot = await commissionSnapshotForPaid(
+        tx,
+        {
+          id,
+          customerId: v.customerId,
+          date: wibDateToUtcMidnight(v.date),
+          commissionRatePercent: existingInvoice.commissionRatePercent ?? null,
+        },
+        paymentStatus === "paid",
+      )
+
       await tx.salesInvoice.update({
         where: { id },
         data: {
@@ -2603,6 +2638,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
           grandTotal,
           totalAmount: grandTotal,
           paymentStatus,
+          ...commissionSnapshot,
         },
       })
 

@@ -295,3 +295,181 @@ describe("addTicketComment", () => {
     expect(res).toEqual({ success: false, error: "db err" })
   })
 })
+
+/**
+ * F-2026-10-25-008-S — penanda selesai aktivitas lead terjadwal.
+ * AC-LC-B1..B5 sisi Backend: completedAt server via klaim atomik, gerbang
+ * pemilik pola convertLead, idempoten (completedAt pertama tidak ditimpa),
+ * hanya aktivitas berjadwal, batal = completedAt kosong tanpa hapus baris.
+ */
+describe("completeLeadActivity / reopenLeadActivity (F-2026-10-25-008-S)", () => {
+  const pemilik = { id: 3, permissions: ["edit_leads"], roles: ["sales"] }
+  const bukanPemilik = { id: 9, permissions: ["edit_leads"], roles: ["sales"] }
+  const supervisor = { id: 9, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] }
+
+  function leadMilik(userId: number) {
+    mocks.prismaMock.lead.findFirst.mockResolvedValue({ id: 1, assignedTo: userId })
+  }
+
+  it("B1: pemilik menandai -> klaim atomik completedAt waktu server + log + revalidate", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date("2026-10-20T00:00:00.000Z"), completedAt: null,
+    })
+    mocks.prismaMock.leadActivity.updateMany.mockResolvedValue({ count: 1 })
+
+    const before = Date.now()
+    const res = await actions.completeLeadActivity(1, 5)
+    const after = Date.now()
+
+    expect(res).toEqual({ success: true, id: 5 })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_leads")
+    const claim = mocks.prismaMock.leadActivity.updateMany.mock.calls[0][0]
+    expect(claim.where).toEqual({
+      id: 5, leadId: 1, scheduledAt: { not: null }, completedAt: null,
+    })
+    expect(claim.data.completedAt).toBeInstanceOf(Date)
+    expect(claim.data.completedAt.getTime()).toBeGreaterThanOrEqual(before)
+    expect(claim.data.completedAt.getTime()).toBeLessThanOrEqual(after)
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "complete", "LeadActivity", 5, expect.stringContaining("5"),
+    )
+    expect(mocks.revalidateMock).toHaveBeenCalledWith("/crm/leads")
+    expect(mocks.revalidateMock).toHaveBeenCalledWith("/crm/leads/1")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.delete).not.toHaveBeenCalled()
+  })
+
+  it("B2: non-pemilik tanpa manage_leads ditolak, tidak ada klaim tulis", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(bukanPemilik)
+    leadMilik(3)
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/ditugaskan kepada Anda/i)
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+    expect(mocks.logActivityMock).not.toHaveBeenCalled()
+  })
+
+  it("B2b: supervisor manage_leads boleh menandai aktivitas lead orang lain", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(supervisor)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date(), completedAt: null,
+    })
+    mocks.prismaMock.leadActivity.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res).toEqual({ success: true, id: 5 })
+  })
+
+  it("B3: tandai dua kali -> completedAt pertama tidak ditimpa, penolakan berpesan", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date(), completedAt: new Date("2026-10-21T03:00:00.000Z"),
+    })
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/sudah ditandai selesai/i)
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("B3b: balapan bersamaan — klaim count 0 = kalah idempoten, tanpa log", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst
+      .mockResolvedValueOnce({ id: 5, scheduledAt: new Date(), completedAt: null })
+      .mockResolvedValueOnce({ id: 5, scheduledAt: new Date(), completedAt: new Date() })
+    mocks.prismaMock.leadActivity.updateMany.mockResolvedValue({ count: 0 })
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/sudah ditandai selesai/i)
+    expect(mocks.logActivityMock).not.toHaveBeenCalled()
+  })
+
+  it("B4: aktivitas tanpa scheduledAt ditolak, completedAt tidak terisi", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: null, completedAt: null,
+    })
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/terjadwal/i)
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("lead terhapus / aktivitas lead lain ditolak tanpa klaim", async () => {
+    mocks.requirePermissionMock.mockResolvedValue(pemilik)
+    mocks.prismaMock.lead.findFirst.mockResolvedValue(null)
+    const resDeleted = await actions.completeLeadActivity(1, 5)
+    expect(resDeleted.success).toBe(false)
+    expect(resDeleted.error).toMatch(/Lead tidak ditemukan/i)
+
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue(null)
+    const resMissing = await actions.completeLeadActivity(1, 5)
+    expect(resMissing.success).toBe(false)
+    expect(resMissing.error).toMatch(/Aktivitas lead tidak ditemukan/i)
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("B5: batalkan -> completedAt null via klaim bersyarat, baris tidak dihapus", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date(), completedAt: new Date(),
+    })
+    mocks.prismaMock.leadActivity.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await actions.reopenLeadActivity(1, 5)
+
+    expect(res).toEqual({ success: true, id: 5 })
+    const claim = mocks.prismaMock.leadActivity.updateMany.mock.calls[0][0]
+    expect(claim.where).toEqual({ id: 5, leadId: 1, completedAt: { not: null } })
+    expect(claim.data).toEqual({ completedAt: null })
+    expect(mocks.prismaMock.leadActivity.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "reopen", "LeadActivity", 5, expect.any(String),
+    )
+  })
+
+  it("B5b: batalkan yang belum selesai ditolak; non-pemilik batal juga ditolak", async () => {
+    mocks.requirePermissionMock.mockResolvedValue(pemilik)
+    leadMilik(3)
+    mocks.prismaMock.leadActivity.findFirst.mockResolvedValue({
+      id: 5, scheduledAt: new Date(), completedAt: null,
+    })
+    const res = await actions.reopenLeadActivity(1, 5)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/belum ditandai selesai/i)
+
+    mocks.requirePermissionMock.mockResolvedValueOnce(bukanPemilik)
+    const resDenied = await actions.reopenLeadActivity(1, 5)
+    expect(resDenied.success).toBe(false)
+    expect(resDenied.error).toMatch(/ditugaskan kepada Anda/i)
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("izin katalog nyata: tanpa edit_leads aksi gagal sebelum sentuh DB", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(new Error("Tidak memiliki izin edit_leads"))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const res = await actions.completeLeadActivity(1, 5)
+
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.lead.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.updateMany).not.toHaveBeenCalled()
+  })
+})

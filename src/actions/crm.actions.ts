@@ -366,3 +366,184 @@ export async function addLeadActivity(leadId: number, formData: FormData) {
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
+
+/**
+ * F-2026-10-25-008-S: penanda selesai aktivitas lead terjadwal.
+ *
+ * `LeadActivity.completedAt` dibaca builder antrean F-037
+ * (src/lib/reports/lead-followups.ts) tetapi sebelumnya tidak punya satu pun
+ * jalur tulis — aktivitas terjadwal yang sudah dikerjakan tidak pernah keluar
+ * dari antrean secara sah. Dua aksi ini menutup lubang itu.
+ *
+ * Keputusan spec (usulan Business, dijalankan Backend bila Lead belum
+ * memutus lain — dicatat eksplisit di PR):
+ * - Q-LC-1: tandai/batal tunggal, tanpa alasan wajib, tanpa persetujuan supervisor.
+ * - Q-LC-2: gerbang pemilik pola `convertLead` — `edit_leads` + (pemilik lead,
+ *   atau `manage_leads`/super_admin).
+ * - Q-LC-3: hanya aktivitas ber-`scheduledAt` yang bisa ditandai selesai.
+ * - Q-LC-4: klaim atomik `updateMany` bersyarat keadaan asal; pemenang
+ *   satu-satunya yang menulis log. `completedAt` = waktu server, klien tidak
+ *   mengirim tanggal selesai (BR-LC-01).
+ */
+export async function completeLeadActivity(leadId: number, activityId: number) {
+  try {
+    const user = await requirePermission("edit_leads")
+
+    const denied = await assertLeadActivityCompletionGuard(user, leadId, activityId, true)
+    if (denied) return denied
+
+    const claim = await prisma.leadActivity.updateMany({
+      where: {
+        id: activityId,
+        leadId,
+        scheduledAt: { not: null },
+        completedAt: null,
+      },
+      data: { completedAt: new Date() },
+    })
+    if (claim.count === 0) {
+      return { success: false, error: await leadActivityStateError(activityId, leadId, true) }
+    }
+
+    await logActivity(
+      "complete",
+      "LeadActivity",
+      activityId,
+      `Menandai selesai aktivitas lead #${activityId}`,
+    )
+    revalidatePath("/crm/leads")
+    revalidatePath(`/crm/leads/${leadId}`)
+    return { success: true, id: activityId }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[completeLeadActivity]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * F-2026-10-25-008-S: batalkan penanda selesai aktivitas lead.
+ * completedAt dikosongkan (baris TIDAK dihapus); aktivitas yang jadwalnya
+ * sudah lewat kembali ke antrean F-037 pada muat berikutnya (BR-LC-06).
+ */
+export async function reopenLeadActivity(leadId: number, activityId: number) {
+  try {
+    const user = await requirePermission("edit_leads")
+
+    const denied = await assertLeadActivityCompletionGuard(user, leadId, activityId, false)
+    if (denied) return denied
+
+    const claim = await prisma.leadActivity.updateMany({
+      where: {
+        id: activityId,
+        leadId,
+        completedAt: { not: null },
+      },
+      data: { completedAt: null },
+    })
+    if (claim.count === 0) {
+      return { success: false, error: await leadActivityStateError(activityId, leadId, false) }
+    }
+
+    await logActivity(
+      "reopen",
+      "LeadActivity",
+      activityId,
+      `Membatalkan penanda selesai aktivitas lead #${activityId}`,
+    )
+    revalidatePath("/crm/leads")
+    revalidatePath(`/crm/leads/${leadId}`)
+    return { success: true, id: activityId }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[reopenLeadActivity]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+type LeadActivityGuardUser = {
+  id: string | number
+  permissions: readonly string[]
+  roles: readonly string[]
+}
+
+/**
+ * Penjaga bersama tandai/batal-selesai: lead harus ada & belum terhapus,
+ * aktivitas harus milik lead itu, dan pemanggil harus pemilik lead atau
+ * pemegang `manage_leads`/super_admin (BR-LC-02, pola convertLead).
+ * Mengembalikan hasil penolakan, atau null bila boleh lanjut ke klaim atomik.
+ * Keadaan selesai aktual DIPERIKSA klaim updateMany, bukan di sini — cek di
+ * sini hanya untuk pesan yang akurat pada jalur umum.
+ */
+async function assertLeadActivityCompletionGuard(
+  user: LeadActivityGuardUser,
+  leadId: number,
+  activityId: number,
+  completing: boolean,
+): Promise<{ success: false; error: string } | null> {
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, deletedAt: null },
+    select: { id: true, assignedTo: true },
+  })
+  if (!lead) return { success: false, error: "Lead tidak ditemukan" }
+
+  const isAdmin =
+    user.permissions.includes("manage_leads") || user.roles.includes("super_admin")
+  if (!isAdmin && lead.assignedTo !== Number(user.id)) {
+    return {
+      success: false,
+      error: completing
+        ? "Anda hanya dapat menandai selesai aktivitas lead yang ditugaskan kepada Anda."
+        : "Anda hanya dapat membatalkan penanda selesai aktivitas lead yang ditugaskan kepada Anda.",
+    }
+  }
+
+  const activity = await prisma.leadActivity.findFirst({
+    where: { id: activityId, leadId },
+    select: { id: true, scheduledAt: true, completedAt: true },
+  })
+  if (!activity) return { success: false, error: "Aktivitas lead tidak ditemukan" }
+  if (completing) {
+    if (!activity.scheduledAt) {
+      return {
+        success: false,
+        error: "Hanya aktivitas lead terjadwal yang dapat ditandai selesai.",
+      }
+    }
+    if (activity.completedAt) {
+      return { success: false, error: "Aktivitas lead ini sudah ditandai selesai." }
+    }
+  } else if (!activity.completedAt) {
+    return {
+      success: false,
+      error: "Aktivitas lead ini belum ditandai selesai.",
+    }
+  }
+  return null
+}
+
+/**
+ * Pesan sesudah klaim kalah (balapan bersamaan, EC-3): baca ulang keadaan
+ * sekali untuk membedakan "sudah selesai" dari "tidak ditemukan". completedAt
+ * pertama tidak pernah ditimpa karena klaim bersyarat keadaan asal.
+ */
+async function leadActivityStateError(
+  activityId: number,
+  leadId: number,
+  completing: boolean,
+): Promise<string> {
+  const activity = await prisma.leadActivity.findFirst({
+    where: { id: activityId, leadId },
+    select: { id: true, scheduledAt: true, completedAt: true },
+  })
+  if (!activity) return "Aktivitas lead tidak ditemukan"
+  if (completing) {
+    if (activity.completedAt) return "Aktivitas lead ini sudah ditandai selesai."
+    if (!activity.scheduledAt) {
+      return "Hanya aktivitas lead terjadwal yang dapat ditandai selesai."
+    }
+    return "Aktivitas lead tidak dapat ditandai selesai."
+  }
+  if (!activity.completedAt) return "Aktivitas lead ini belum ditandai selesai."
+  return "Penanda selesai aktivitas lead tidak dapat dibatalkan."
+}

@@ -10,6 +10,8 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
+import { listCustomerDuplicateCandidates } from "@/actions/master.actions"
+import { CustomerDuplicateGroups } from "./_components/customer-duplicate-groups"
 
 export const metadata: Metadata = { title: "Pelanggan" }
 
@@ -46,6 +48,11 @@ export default async function CustomersPage({
 
   const tableData = toPlain(customers)
 
+  // AC-CD-F2: daftar kandidat duplikat bergrup (server, view_customers);
+  // gagal muat tidak memblokir daftar utama.
+  const duplicateResult = await listCustomerDuplicateCandidates()
+  const duplicateGroups = duplicateResult.success ? (duplicateResult.groups ?? []) : []
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,6 +65,8 @@ export default async function CustomersPage({
         </Link>
         </CanCreate>
       </div>
+
+      <CustomerDuplicateGroups groups={duplicateGroups} />
 
       <CustomerTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>

@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { SalesInvoiceStatus, Prisma } from "@prisma/client";
+import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -49,9 +50,27 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
     paymentStatus = "partial";
   }
 
+  // F-2026-10-25-036-S (BR-KT36-04): transisi ke paid membekukan snapshot
+  // tarif komisi dalam transaksi yang sama. Nilai = resolusi histori tarif
+  // per TANGGAL FAKTUR dari kategori pelanggan saat ini; snapshot yang
+  // sudah ada tidak pernah ditulis ulang (kategori/tarif berubah belakangan
+  // tidak mengubah faktur lunas). Tarif tak ditemukan = 0 jujur tertulis,
+  // supaya tarif yang dibuat mundur tidak mengisi faktur lama (BR-KT36-13).
+  // Resolver bersama dengan jalur DP/kredit: commissionSnapshotForPaid.
+  const commissionSnapshot = await commissionSnapshotForPaid(
+    db,
+    invoice,
+    status === "paid",
+  )
+
   await db.salesInvoice.update({
     where: { id: invoiceId },
-    data: { paidAmount: totalPaid, status, paymentStatus },
+    data: {
+      paidAmount: totalPaid,
+      status,
+      paymentStatus,
+      ...(commissionSnapshot ?? {}),
+    },
   });
 }
 

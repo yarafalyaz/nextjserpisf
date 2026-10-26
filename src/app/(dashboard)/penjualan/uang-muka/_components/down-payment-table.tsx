@@ -10,6 +10,10 @@ import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 import { statusLabel } from "@/lib/utils/status-labels"
+import {
+  DownPaymentTaxStatusBadge,
+  type DownPaymentVatSnapshotView,
+} from "./down-payment-vat-snapshot"
 
 interface DownPayment {
   id: number
@@ -18,6 +22,8 @@ interface DownPayment {
   amount: number | string
   status: string
   createdAt: Date | string
+  /** Snapshot PPN verbatim server (read-model PR #785); null = belum ada baris read-model. */
+  vatSnapshot?: DownPaymentVatSnapshotView | null
 }
 
 const columnHelper = createColumnHelper<DownPayment>()
@@ -40,6 +46,20 @@ const columns = [
   columnHelper.accessor("amount", {
     header: "Jumlah Uang Muka",
     cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
+  }),
+  columnHelper.accessor((row) => row.vatSnapshot ?? null, {
+    id: "vatSnapshot",
+    header: "Snapshot PPN",
+    cell: (info) => {
+      const snap = info.getValue()
+      if (!snap) return <span className="text-muted-foreground">Belum ada snapshot PPN tercatat</span>
+      return (
+        <span className="flex flex-col items-start gap-1">
+          <span>{snap.vatAmount === null ? "PPN —" : `PPN ${formatCurrency(snap.vatAmount)}`} · {snap.pkpSnapshotLabel}</span>
+          <DownPaymentTaxStatusBadge snapshot={snap} />
+        </span>
+      )
+    },
   }),
   columnHelper.accessor("status", {
     header: "Status",

@@ -12,7 +12,9 @@ import {
   vehicleVariantSchema,
   vehicleSchema,
   customerVehicleSchema,
+  serviceScheduleSchema,
 } from "@/lib/validations/vehicle.schemas";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
 
 // ==================== VEHICLE BRAND ACTIONS ====================
@@ -829,6 +831,92 @@ export async function deleteCustomerVehicle(id: number) {
     return {
       success: false,
       error: getErrorMessage(e, "Gagal menghapus kendaraan pelanggan"),
+    };
+  }
+}
+
+// ==================== JADWAL SERVIS BERIKUTNYA (F-2026-10-25-021-S) ====================
+
+/**
+ * Catat/ubah/kosongkan jadwal servis berikutnya satu kendaraan
+ * (F-2026-10-25-021-S tahap 1, BR-SV-02/08).
+ *
+ * Mutasi master berizin `edit_customers` — izin ubah master kendaraan
+ * pelanggan existing (updateCustomerVehicle memakai key sama; usulan
+ * Q-SV-2 tanpa key baru, putusan Lead belum tertulis — lihat header
+ * builder service-reminder-queue.ts). Pencatat tercatat di
+ * nextServiceUpdatedBy/At + logActivity pola master existing.
+ * Satu jadwal aktif per kendaraan: catat ulang menimpa, keduanya kosong
+ * = kosongkan jadwal. Tanpa jurnal, tanpa dokumen transaksi (BR-SV-08).
+ *
+ * Penjaga pintu masuk (AC-SV-F3): km target <= odometer terakhir
+ * tercatat ditolak berisik dengan angka nyata — jadwal_rusak dicegah
+ * di pintu masuk, bukan disimpan diam-diam. Tanggal lampau SAH
+ * (langsung terlewat jujur, spec §6). WO selesai TIDAK menggeser
+ * jadwal ini (BR-SV-07, tahap 2 Q-SV-4).
+ */
+export async function updateCustomerVehicleServiceSchedule(
+  id: number,
+  formData: FormData,
+) {
+  try {
+    const user = await requirePermission("edit_customers");
+
+    const parsed = parseFormData(serviceScheduleSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+
+    const { nextServiceDate, nextServiceKm, nextServiceNote } = parsed.data;
+
+    const existing = await prisma.customerVehicle.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, customerId: true, lastOdometerKm: true },
+    });
+    if (!existing) {
+      return { success: false, error: "Kendaraan pelanggan tidak ditemukan" };
+    }
+
+    if (
+      nextServiceKm != null &&
+      existing.lastOdometerKm != null &&
+      nextServiceKm <= existing.lastOdometerKm
+    ) {
+      return {
+        success: false,
+        error:
+          `Km servis berikutnya (${nextServiceKm.toLocaleString("id-ID")}) harus lebih besar ` +
+          `dari odometer terakhir tercatat (${existing.lastOdometerKm.toLocaleString("id-ID")} km). ` +
+          `Periksa kembali jadwal yang dicatat.`,
+      };
+    }
+
+    const updatedBy = Number(user.id);
+    await prisma.customerVehicle.update({
+      where: { id },
+      data: {
+        nextServiceDate: nextServiceDate ? wibDateToUtcMidnight(nextServiceDate) : null,
+        nextServiceKm: nextServiceKm ?? null,
+        nextServiceNote: nextServiceNote ?? null,
+        nextServiceUpdatedBy: Number.isFinite(updatedBy) ? updatedBy : null,
+        nextServiceUpdatedAt: new Date(),
+      },
+    });
+
+    revalidatePath(`/master/pelanggan/${existing.customerId}/kendaraan`);
+    await logActivity(
+      "update",
+      "CustomerVehicle",
+      id,
+      nextServiceDate == null && nextServiceKm == null
+        ? "Mengosongkan jadwal servis berikutnya kendaraan pelanggan"
+        : "Mencatat jadwal servis berikutnya kendaraan pelanggan",
+    );
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateCustomerVehicleServiceSchedule]", getErrorMessage(e) || e);
+    return {
+      success: false,
+      error: getErrorMessage(e, "Gagal mencatat jadwal servis berikutnya"),
     };
   }
 }

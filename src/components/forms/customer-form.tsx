@@ -10,12 +10,18 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
+import { AlertTriangle } from "lucide-react"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { GENDER_CHOICES, OptionGroup } from "@/components/ui/option-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
+import {
+  CustomerDuplicateWarningPanel,
+  type CustomerDuplicateWarningView,
+} from "@/components/forms/customer-duplicate-warning"
 
 interface CustomerFormProps {
   customer?: {
@@ -33,6 +39,12 @@ interface CustomerFormProps {
     gender: string | null
     code: string | null
     taxId?: string | null
+    taxpayerName?: string | null
+    taxAddress?: string | null
+    nitku?: string | null
+    pkpStatus?: string | null
+    pkpEffectiveFrom?: string | null
+    pkpSource?: string | null
     customerCategoryId?: number | null
   }
   generatedCode?: string
@@ -48,6 +60,15 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
   // Quick-add state for "Kategori Pelanggan": the option list is local so a
   // newly created category appears (and gets selected) without a page reload.
   const [categoryOptions, setCategoryOptions] = useState(categories)
+  // F-2026-10-25-003-S AC-CD-F1: peringatan duplikat dari respons server
+  // (simpan tetap berhasil); panel tampil verbatim, navigasi ditunda
+  // sampai operator menekan lanjut.
+  const [duplicateWarning, setDuplicateWarning] =
+    useState<CustomerDuplicateWarningView | null>(null)
+  // F-2026-10-25-004-S: peringatan identitas pajak dari server
+  // (taxWarnings, hanya ada bila legacy15/NITKU tak tertaut dsb.) —
+  // tampil verbatim, simpan tetap berhasil, navigasi ditunda.
+  const [taxWarnings, setTaxWarnings] = useState<string[]>([])
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
@@ -61,6 +82,12 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
       gender: customer?.gender || "",
       code: customer?.code || (enableAutoCode ? generatedCode : "") || "",
       taxId: customer?.taxId || "",
+      taxpayerName: customer?.taxpayerName || "",
+      taxAddress: customer?.taxAddress || "",
+      nitku: customer?.nitku || "",
+      pkpStatus: customer?.pkpStatus || "unknown",
+      pkpEffectiveFrom: customer?.pkpEffectiveFrom || "",
+      pkpSource: customer?.pkpSource || "",
       customerCategoryId: customer?.customerCategoryId ?? null,
     },
   })
@@ -85,7 +112,27 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
         }
         const result = isEdit ? await updateCustomer(customer!.id, formData) : await createCustomer(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        // BR-CD-05: quick-add reuse terucap — pesan server verbatim,
+        // bukan sukses generik.
+        if ("reused" in result && result.reused) {
+          showSuccess(result.message ?? "Data berhasil ditambahkan")
+          router.push("/master/pelanggan")
+          router.refresh()
+          return
+        }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
+        // F-004-S: taxWarnings verbatim dari server — tampil sebelum
+        // navigasi (data sudah tersimpan). Duplikat tetap prioritas panelnya.
+        if ("taxWarnings" in result && result.taxWarnings?.length) {
+          setTaxWarnings(result.taxWarnings)
+          if (!result.duplicateWarning) return
+        }
+        // AC-CD-F1: warning dari server ditampilkan apa adanya; data
+        // sudah tersimpan, jadi jangan navigasi sebelum operator baca.
+        if (result.duplicateWarning) {
+          setDuplicateWarning(result.duplicateWarning)
+          return
+        }
         router.push("/master/pelanggan")
         router.refresh()
       } catch (error) {
@@ -96,6 +143,35 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
 
   return (
     <>
+      {taxWarnings.length ? (
+        <div className="mb-6">
+          <Alert variant="warning" aria-label="Peringatan identitas pajak pelanggan">
+            <AlertTriangle aria-hidden="true" />
+            <AlertTitle>Peringatan identitas pajak</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc pl-5">
+                {taxWarnings.map((w) => (<li key={w}>{w}</li>))}
+              </ul>
+              <div className="mt-3">
+                <Button type="button" variant="primary" onPress={() => { router.push("/master/pelanggan"); router.refresh() }}>
+                  Lanjut ke Daftar Pelanggan
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      {duplicateWarning ? (
+        <div className="mb-6">
+          <CustomerDuplicateWarningPanel
+            warning={duplicateWarning}
+            onContinue={() => {
+              router.push("/master/pelanggan")
+              router.refresh()
+            }}
+          />
+        </div>
+      ) : null}
       <form onSubmit={handleSubmit(onSubmit)} aria-label={isEdit ? "Formulir ubah pelanggan" : "Formulir tambah pelanggan"} aria-busy={isPending}>
         <FormCard>
           <FormSection title="Informasi Umum">
@@ -160,6 +236,40 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
                 />
               )}
             />
+          </FormSection>
+          <FormSection title="Identitas Pajak">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="taxpayerName">Nama Wajib Pajak</Label>
+              <Input id="taxpayerName" {...register("taxpayerName")} placeholder="Nama sesuai NPWP (boleh beda nama dagang)" />
+              {errors.taxpayerName && <span className="text-xs text-danger mt-1">{errors.taxpayerName.message}</span>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nitku">NITKU</Label>
+              <Input id="nitku" {...register("nitku")} placeholder="22 digit" inputMode="numeric" />
+              {errors.nitku && <span className="text-xs text-danger mt-1">{errors.nitku.message}</span>}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="pkpStatus">Status PKP</Label>
+              <select id="pkpStatus" {...register("pkpStatus")} className="form-input" aria-label="Status PKP">
+                <option value="unknown">Belum diketahui</option>
+                <option value="non_pkp">Bukan PKP</option>
+                <option value="pkp">PKP</option>
+              </select>
+              <p className="text-xs text-muted-foreground">Status PKP tidak menentukan kode transaksi faktur.</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="pkpEffectiveFrom">Tanggal Pengukuhan PKP</Label>
+              <Input id="pkpEffectiveFrom" type="date" {...register("pkpEffectiveFrom")} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="pkpSource">Sumber Status PKP</Label>
+              <Input id="pkpSource" {...register("pkpSource")} placeholder="mis. SPPKP / konfirmasi lawan" />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="taxAddress">Alamat Pajak</Label>
+              <Textarea id="taxAddress" {...register("taxAddress")} rows={2} placeholder="Alamat sesuai NPWP (boleh beda alamat kirim)" />
+              <p className="text-xs text-muted-foreground">Alamat pajak master dipakai ekspor Coretax secara live — belum dibekukan ke dokumen.</p>
+            </div>
           </FormSection>
           <FormSection title="Alamat" columns={1}>
             <div className="flex flex-col gap-1.5">

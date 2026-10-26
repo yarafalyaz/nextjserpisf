@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => {
     quotationHistory: buildModelMock(),
     customerVehicle: buildModelMock(),
     customer: buildModelMock(),
+    customerCommissionRate: buildModelMock(),
     customerPriceList: buildModelMock(),
     salesOrder: buildModelMock(),
     salesOrderItem: buildModelMock(),
@@ -767,6 +768,50 @@ describe("Sales Invoice Actions", () => {
     expect(updateCall.paymentStatus).toBe("paid")
   })
 
+  // F-2026-10-25-036-S lanjutan: edit item menurunkan grandTotal ke bawah
+  // paidAmount lama (mis. DP penuh) menaikkan status ke paid TANPA jalur
+  // pembayaran — snapshot tarif komisi wajib dibekukan lewat helper bersama.
+  const seedPaidEdit = (paidAmount: number, commissionRatePercent: number | null) => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "posted", paidAmount, commissionRatePercent,
+    })
+    return { customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }
+  }
+  const totalsUpdate = () => mocks.prismaMock.salesInvoice.update.mock.calls[1][0].data
+  it("updateSalesInvoice transisi ke paid via edit membekukan snapshot tarif per tanggal faktur", async () => {
+    const payload = seedPaidEdit(150, null)
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 1 })
+    // Tarif master berubah sesudah tanggal faktur: 2% s/d 1 Jul, 3% sesudahnya.
+    // Tanggal faktur final 12 Jun 2026 -> snapshot beku 2%, bukan tarif berjalan.
+    mocks.prismaMock.customerCommissionRate.findMany.mockResolvedValue([
+      { id: 1, customerCategoryId: 1, commissionPercent: 2, effectiveFrom: new Date(Date.UTC(2026, 0, 1)), effectiveTo: new Date(Date.UTC(2026, 6, 1)) },
+      { id: 2, customerCategoryId: 1, commissionPercent: 3, effectiveFrom: new Date(Date.UTC(2026, 6, 1)), effectiveTo: null },
+    ])
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    const updateCall = totalsUpdate()
+    expect(updateCall.paymentStatus).toBe("paid")
+    expect(Number(updateCall.commissionRatePercent)).toBe(2)
+    expect(updateCall.commissionCustomerCategoryId).toBe(1)
+    expect(updateCall.commissionRateId).toBe(1)
+  })
+  it("updateSalesInvoice tidak menimpa snapshot komisi yang sudah beku", async () => {
+    const res = await actions.updateSalesInvoice(1, fdMap(seedPaidEdit(150, 7)))
+    expect(res?.success).toBe(true)
+    const updateCall = totalsUpdate()
+    expect(updateCall.paymentStatus).toBe("paid")
+    expect(updateCall.commissionRatePercent).toBeUndefined()
+    expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
+  })
+  it("updateSalesInvoice turun ke partial tidak menulis snapshot komisi", async () => {
+    const res = await actions.updateSalesInvoice(1, fdMap(seedPaidEdit(50, null)))
+    expect(res?.success).toBe(true)
+    const updateCall = totalsUpdate()
+    expect(updateCall.paymentStatus).toBe("partial")
+    expect(updateCall.commissionRatePercent).toBeUndefined()
+    expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
+  })
+
   // === voidSalesInvoice ===
   it("voidSalesInvoice fails if draft", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", payments: [] })
@@ -871,6 +916,57 @@ describe("Sales Return Actions", () => {
     mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(false)
+  })
+
+  // === F-2026-10-25-012-S gerbang persetujuan retur penjualan ===
+  it("AC-SR-B1: completeSalesReturn menuntut approve_sales_returns, bukan edit_sales_returns", async () => {
+    mocks.requirePermissionMock.mockImplementation(async (key: string) => {
+      if (key === "approve_sales_returns") throw new Error("Tidak punya izin approve_sales_returns")
+      return { id: 7 }
+    })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("approve_sales_returns")
+    // Gerbang izin SEBELUM retur dibaca / transaksi dibuka: nol stok, nol jurnal.
+    expect(mocks.prismaMock.salesReturn.findUniqueOrThrow).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.onSalesReturnCompletedMock).not.toHaveBeenCalled()
+  })
+
+  it("AC-SR-B2: penyetuju lain menyelesaikan draft tepat satu transaksi", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    // Satu transaksi memuat hook stok + hook jurnal existing.
+    expect(mocks.onSalesReturnCompletedMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("AC-SR-B3: SoD — pembuat tidak boleh menyelesaikan returnya sendiri", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 7, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pembuatnya sendiri")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.onSalesReturnCompletedMock).not.toHaveBeenCalled()
+  })
+
+  it("EC-2: createdBy null (baris legacy) boleh diselesaikan penyetuju berizin", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: null, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(true)
+  })
+
+  it("BR-SR-03: status selain draft ditolak berpesan sebelum transaksi", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled", createdBy: 3, items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("hanya bisa diselesaikan dari status draft")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
   // === createSalesReturn over-return branch coverage ===
@@ -1178,6 +1274,8 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(res?.success).toBe(true)
 
     const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    // K5: draft lahir tanpa nomor — nomor terbit hanya saat postInvoice.
+    expect(arg.data.documentNo).toBeNull()
     expect(arg.data.items.create).toHaveLength(2)
     // subtotal = 600 + 350 = 950
     expect(Number(arg.data.subtotal)).toBe(950)

@@ -1,8 +1,8 @@
 "use server";
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
-import { requirePermission } from "@/lib/auth/permissions";
-import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math";
+import { requireAnyPermission, requirePermission } from "@/lib/auth/permissions";
+import { safeAdd, safeRound, safeSubtract, safeSum } from "@/lib/utils/math";
 import {
   computeBpjsEmployee,
   computePph21FinalPeriod,
@@ -24,6 +24,7 @@ import {
   markPkwtEventPaid,
   runPkwtMonthlyAccrual,
 } from "@/lib/services/pkwt-compensation.service";
+import { applyDueSalaryAdjustments } from "@/lib/services/salary-adjustment.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -47,12 +48,14 @@ import {
   departmentHolidaySchema,
   workScheduleSchema,
   attendanceSchema,
+  attendanceCorrectionSchema,
   statutoryRuleSchema,
 } from "@/lib/validations/hrm.schemas";
 import {
   computeLateMinutes,
   computeOvertimeMinutes,
   wibDateToUtcMidnight,
+  wibMinutesOfDay,
   wibTimeToUtcInstant,
 } from "@/lib/utils/attendance-time";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
@@ -61,7 +64,14 @@ import {
   getLeaveQuota,
   countLeaveWorkingDays,
   QUOTA_LEAVE_TYPES,
+  SPECIAL_LEAVE_DAY_CAPS,
+  resolveDayKind,
 } from "@/lib/services/leave-quota.service";
+import {
+  assertOvertimeWithinWorkdayLimits,
+  computeOvertimePay,
+  type OvertimeDayKind,
+} from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -89,7 +99,16 @@ import {
   type BpjsPeriodSlip,
 } from "@/lib/reports/payroll-weekly";
 import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
+import { loadLeaveBalanceReport } from "@/lib/reports/leave-balance-data";
+import { buildLeaveBalanceCsv } from "@/lib/reports/leave-balance";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
+import {
+  ATTENDANCE_CORRECTION_CONFLICT_MESSAGE,
+  ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE,
+  ATTENDANCE_CORRECTION_WINDOW_MESSAGE,
+  attendanceCorrectionHasConflict,
+  isWithinAttendanceCorrectionWindow,
+} from "@/lib/reports/attendance-correction";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 import { closedWorkOrderError, timesheetContextError } from "@/lib/services/timesheet-context";
 
@@ -905,6 +924,20 @@ export async function createLeaveRequest(formData: FormData) {
         );
       }
 
+      // Cuti khusus statutori (Pasal 81 & 93 UU 13/2003): batas hari
+      // kalender per kejadian, ditegakkan di sini karena gerbang jatah
+      // tahunan hanya berlaku untuk tipe "annual".
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       // Annual-leave quota gate (only `annual` draws down the 12-day/calendar-year
       // balance — see QUOTA_LEAVE_TYPES). Two enforced rules:
       //  1. Tenure: employees with < 1 year of service (from joinDate) are not
@@ -1001,12 +1034,21 @@ export async function createOvertimeRequest(formData: FormData) {
     await assertHrEmployeeAccess(scope, v.employeeId);
 
     const overtime = await prisma.$transaction(async (tx) => {
+      // Batas lembur PP 35/2021 Pasal 26 ayat (1) — gerbang bersama create/
+      // update di overtime-pay.service (syarat vonis K2-S1).
+      const otDate = wibDateToUtcMidnight(v.date);
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: otDate,
+        hours: v.hours,
+      });
+
       const created = await tx.overtimeRequest.create({
         data: {
           slug: await nextSlug("overtimeRequest", `lembur-${v.date}`),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
-          date: wibDateToUtcMidnight(v.date),
+          date: otDate,
           hours: v.hours,
           totalHours: v.totalHours ?? null,
           mealHours: v.mealHours ?? null,
@@ -1072,18 +1114,82 @@ export async function approveOvertime(overtimeId: number) {
       return { success: true };
     }
 
-    // Compute overtime value: hours * baseSalary * multiplier * coefficient.
-    // Default: multiplier ≈ 1/173 (monthly-to-hourly), coefficient 1.10 (first-hour rate).
-    const settings = await prisma.systemSetting.findFirst({
-      select: { overtimeMultiplier: true, overtimeCoefficient: true },
+    // Nilai lembur bertingkat menurut PP 35/2021 jo. Kepmenakertrans
+    // 102/2004: upah sejam = gaji/173; hari kerja 1,5x lalu 2x; hari
+    // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
+    // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
+    // lewat Pengaturan) membayar di bawah minimum undang-undang.
+    // Syarat vonis K2-S2 (F-2026-10-25-014-V) sebagaimana dimutakhirkan vonis
+    // F-2026-10-25-022-V: dasar upah lembur Pasal 32 PP 35/2021 = Upah pokok
+    // (Employee.baseSalary) + seluruh tunjangan tetap terdaftar, yaitu Σ
+    // defaultAmount EmployeePayrollComponent aktif (isActive, komponen aktif,
+    // kind "earning", recurrence "fixed") yang berjendela efektif pada TANGGAL
+    // LEMBUR (ot.date) — bukan tanggal approve. Komponen gaji terpisah memang
+    // ada di skema (PayrollComponent + EmployeePayrollComponent); penugasan
+    // hanya boleh memuat komponen "fixed", jadi seluruh penugasan aktif adalah
+    // tunjangan tetap. Cabang 75% Pasal 32 ayat (4) SENGAJA tidak diterapkan:
+    // ia berlaku hanya bila ada tunjangan tidak tetap dan (pokok + tetap)
+    // < 75% keseluruhan Upah, dengan dasar 75% x keseluruhan Upah — dan repo
+    // tidak menyimpan penugasan tunjangan tidak tetap berjalan, jadi
+    // keseluruhan Upah tidak terdefinisi deterministik dari data yang ada.
+    // Default yang disahkan vonis: dasar 100% (pokok + tunjangan tetap).
+    // Menambah pemicu 75% dari data lain (master variable, baris slip manual)
+    // DITOLAK vonis. Bila master tunjangan tidak tetap berjalan kelak ada,
+    // dasar ini WAJIB ditinjau ulang oleh vonis Accountant baru.
+    // Pola where disalin dari preseden PKWT (pkwt-compensation.service.ts)
+    // tanpa mengimpor service itu; filter kind "earning" wajib eksplisit —
+    // loadEffectivePayrollAssignments tidak menyaring kind sehingga komponen
+    // deduction/fixed akan ikut terhitung bila pemuat itu dipakai apa adanya.
+    const fixedAssignments = await prisma.employeePayrollComponent.findMany({
+      where: {
+        employeeId: ot.employeeId,
+        isActive: true,
+        effectiveFrom: { lte: ot.date },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
+        component: { isActive: true, recurrence: "fixed", kind: "earning" },
+      },
+      select: {
+        defaultAmount: true,
+        component: { select: { name: true } },
+      },
     });
-    const multiplier = Number(settings?.overtimeMultiplier ?? 0.00578035);
-    const coefficient = Number(settings?.overtimeCoefficient ?? 1.1);
-    const baseSalary = Number(ot.employee?.baseSalary ?? 0);
-    const hours = Number(ot.hours);
-    const calculatedValue = Math.round(
-      hours * baseSalary * multiplier * coefficient,
+    const fixedAllowance = fixedAssignments.reduce(
+      (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
+      0,
     );
+    const baseSalary = safeRound(
+      Number(ot.employee?.baseSalary ?? 0) + fixedAllowance,
+      2,
+    );
+    const hours = Number(ot.hours);
+    const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
+    const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
+      ? "workday"
+      : dayProfile.workdaysPerWeek >= 6
+        ? "rest_6day"
+        : "rest_5day";
+    const calculatedValue = computeOvertimePay({
+      monthlySalary: baseSalary,
+      hours,
+      dayKind,
+    });
+
+    // Snapshot rincian dasar (F-2026-10-25-024-S, BR-OT-09/BR-OT-11):
+    // pokok + HANYA komponen yang benar-benar ikut Σ di atas + total dasar
+    // final, dibekukan pada klaim atomik yang sama dengan calculatedValue.
+    // Tanpa snapshot ini rincian tidak bisa ditampilkan verbatim — membaca
+    // master komponen saat tampil akan menampilkan dasar master kini, bukan
+    // dasar saat approve. Baris yang sudah terhitung berhenti di gerbang
+    // idempotensi di atas, jadi snapshot ikut beku dan tidak ditulis ulang.
+    const overtimeBaseSnapshot = {
+      baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
+      components: fixedAssignments.map((a) => ({
+        name: a.component.name,
+        amount: Number(a.defaultAmount),
+      })),
+      baseTotal: baseSalary,
+      overtimeDate: new Date(ot.date).toISOString(),
+    };
 
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
@@ -1099,6 +1205,7 @@ export async function approveOvertime(overtimeId: number) {
         // awal (idempotensi di atas).
         approvedAt: new Date(),
         calculatedValue,
+        overtimeBaseSnapshot,
       },
     });
     if (claim.count === 0) {
@@ -1298,8 +1405,9 @@ async function computePayrollEstimation(
   const bpjs = bpjsComputed.bpjs;
   // Plafon Pasal 65 TIDAK menolak preview (vonis butir 6: gerbang slip =
   // generate/finalisasi tulis) — pelampauan tampil di snapshot preview.
+  // Basis sama dengan gerbang tulis: upah pembayaran (grossSalary).
   const ceilingFinding = evaluateDeductionCeiling({
-    wageBase: baseSalary,
+    wageBase: grossSalary,
     loanDeduction,
     lateDeduction: latePenalty.totalPenalty,
     componentDeductions: 0,
@@ -2197,6 +2305,12 @@ export async function generateBulkPayroll(
       classified.targetIds.includes(e.id),
     );
 
+    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
+    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
+    for (const e of eligibleEmployees) {
+      await applyDueSalaryAdjustments(e.id, periodEnd);
+    }
+
     // Batch: slip aktif populasi pada jendela rentang run (semua periode —
     // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu
     // ke-2 dalam bulan sama kini LOLOS, yang beririsan ditolak per karyawan
@@ -2291,14 +2405,18 @@ export async function generateBulkPayroll(
       const empId = targetIds[i];
       const est = estimations.get(empId);
       if (!est) continue;
-      // Plafon Pasal 65 run massal (F-105-V butir 6): karyawan pelanggar
-      // terlewati-terhitung, bukan menggagalkan seluruh run / dipangkas.
+      // Plafon Pasal 65 run massal (F-105-V butir 6, ditegakkan ulang
+      // vonis F-2026-10-25-023-V §5): basis = upah pembayaran slip ini
+      // (grossSalary estimasi: pokok + tunjangan + lembur + apresiasi),
+      // BUKAN baseSalary saja; komponen potongan diskresioner ikut ember
+      // Pasal 63. Karyawan pelanggar terlewati-terhitung, bukan
+      // menggagalkan seluruh run / dipangkas diam-diam.
       if (
         evaluateDeductionCeiling({
-          wageBase: est.baseSalary ?? 0,
+          wageBase: est.grossSalary ?? 0,
           loanDeduction: est.loanDeduction ?? 0,
           lateDeduction: est.lateDeduction ?? 0,
-          componentDeductions: 0,
+          componentDeductions: est.deductions ?? 0,
         })
       ) {
         runSkips.push({ employeeId: empId, reason: "plafonPotongan", conflictDocumentNo: null });
@@ -2493,6 +2611,10 @@ export async function processPayroll(formData: FormData) {
     if (!employeeId) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
+
+    // Kenaikan gaji terjadwal yang sudah jatuh tempo diterapkan ke master
+    // lebih dulu, supaya slip periode ini membaca gaji yang benar.
+    await applyDueSalaryAdjustments(employeeId, endDate);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
     // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
@@ -2956,6 +3078,24 @@ export async function markPayrollPaid(payrollId: number) {
       );
     }
 
+    // Vonis F-2026-10-25-023-V §5 (AC-LSV-2): plafon Pasal 65 ditegakkan
+    // juga SAAT DIBAYAR atas angka slip tersimpan — slip warisan/draft lama
+    // yang lolos sebelum gerbang susun tidak boleh membayar potongan
+    // Pasal 63 menembus 50% upah pembayaran ini. Pelanggaran = tolak
+    // berisik sebelum klaim status: nol jurnal, nol amortisasi pinjaman,
+    // sisa pokok tidak berubah (bukan dipangkas diam-diam, bukan denda).
+    const paidCeilingBreach = evaluateDeductionCeiling({
+      wageBase: Number(payroll.grossSalary),
+      loanDeduction: Number(payroll.loanDeduction),
+      lateDeduction: Number(payroll.lateDeduction),
+      componentDeductions: Number(payroll.deductions),
+    });
+    if (paidCeilingBreach) {
+      throw new Error(
+        `Total potongan Pasal 63 (cicilan pinjaman + denda + komponen potongan) Rp${paidCeilingBreach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${paidCeilingBreach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — pembayaran ditolak. Hitung ulang slip, jangan dibayar menembus plafon.`,
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       // Atomic conditional claim: only the request that flips status away from
       // "approved" wins. Without this, two concurrent "bayar gaji" clicks could
@@ -3063,7 +3203,32 @@ export async function markPayrollPaid(payrollId: number) {
 
 export async function createEmployeeLoan(formData: FormData) {
   try {
-    const user = await requirePermission("create_loans");
+    // F-2026-10-25-018-S Q-LS-1 (Putusan Lead F-2026-10-25-026-L): SATU aksi,
+    // DUA pintu izin. Jalur staf/titipan = create_loans (perilaku existing,
+    // nol berubah). Jalur mandiri = create_employee_loan_requests — pemegang
+    // key ini (tanpa create_loans) HANYA boleh mengajukan untuk employee
+    // tertaut dirinya sendiri; scope self di bawah menegakkannya di server.
+    // update/deleteEmployeeLoan tetap digerbang create_loans saja.
+    const user = await requireAnyPermission([
+      "create_loans",
+      "create_employee_loan_requests",
+    ]);
+    const userPerms: string[] = Array.isArray(
+      (user as { permissions?: unknown }).permissions,
+    )
+      ? [...((user as { permissions: string[] }).permissions)]
+      : [];
+    const userRoles: string[] = Array.isArray(
+      (user as { roles?: unknown }).roles,
+    )
+      ? [...((user as { roles: string[] }).roles)]
+      : [];
+    // super_admin melewati requireAnyPermission tanpa perlu memegang key
+    // mana pun — ia jalur staf, bukan mandiri.
+    const isSelfServiceOnly =
+      !userRoles.includes("super_admin") &&
+      !userPerms.includes("create_loans") &&
+      userPerms.includes("create_employee_loan_requests");
 
     const parsed = parseFormData(employeeLoanSchema, formData);
     if (!parsed.success)
@@ -3073,6 +3238,24 @@ export async function createEmployeeLoan(formData: FormData) {
     const employeeId = v.employeeId;
 
     const scope = await getHrScope(user);
+    // Pintu mandiri: walau peran lain memberi scope department/all, key
+    // pengajuan saja tidak pernah membuka pengajuan untuk orang lain.
+    // Scope `all` tidak membawa employeeId, jadi tautan user→employee
+    // diselesaikan langsung di sini (tautan yang sama dengan getHrScope).
+    if (isSelfServiceOnly) {
+      const ownEmployeeId =
+        scope.kind === "all"
+          ? (
+              await prisma.employee.findFirst({
+                where: { userId: Number(user.id) },
+                select: { id: true },
+              })
+            )?.id ?? -1
+          : scope.employeeId;
+      if (ownEmployeeId !== employeeId) {
+        throw new Error("Pengajuan mandiri hanya untuk diri sendiri");
+      }
+    }
     if (scope.kind === "self" && scope.employeeId !== employeeId) {
       throw new Error("Anda hanya diperbolehkan membuat pinjaman untuk diri sendiri");
     } else if (scope.kind === "department") {
@@ -3286,60 +3469,94 @@ export async function getEmployeeLeaveBalance(
 }
 
 /**
- * Annual-leave balance for active employees inside the caller's HR scope
- * (used by the leave-balance dashboard). One getLeaveQuota call per employee — fine for typical SME
- * headcounts; revisit with a batched query if the roster grows large.
+ * Laporan saldo cuti tahunan karyawan dalam scope HR pemanggil
+ * (F-2026-10-25-013-S). Agregasi di builder murni
+ * `src/lib/reports/leave-balance.ts` lewat loader
+ * `leave-balance-data.ts`; angka kuota tetap dari `getLeaveQuota`.
+ * Filter departemen hanya menyempitkan scope (AC-LVB-B1); komponen
+ * pending terpisah lapis tampil saja (BR-LVB-12); karyawan nonaktif
+ * tahun berjalan tampil tertanda (BR-LVB-13).
  */
-export async function getAllLeaveBalances(year?: number) {
+export async function getAllLeaveBalances(
+  year?: number,
+  opts?: { departmentId?: number | null },
+) {
   try {
     const user = await requirePermission("view_leave_requests");
     const targetYear = year ?? new Date().getFullYear();
     if (!Number.isSafeInteger(targetYear) || targetYear < 1900 || targetYear > 2200) {
       return { success: false as const, error: "Tahun tidak valid", balances: [] };
     }
+    if (
+      opts?.departmentId != null &&
+      (!Number.isSafeInteger(opts.departmentId) || opts.departmentId <= 0)
+    ) {
+      return { success: false as const, error: "Departemen tidak valid", balances: [] };
+    }
     const scope = await getHrScope({
       id: String(user.id),
       roles: Array.isArray(user.roles) ? [...user.roles] : [],
     });
 
-    const employees = await prisma.employee.findMany({
-      where: {
-        isActive: true,
-        deletedAt: null,
-        ...hrEmployeeScopeWhere(scope),
-      },
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        employeeNo: true,
-        joinDate: true,
-        department: { select: { name: true } },
-      },
+    const report = await loadLeaveBalanceReport(scope, targetYear, {
+      departmentId: opts?.departmentId ?? null,
     });
 
-    const balances = await Promise.all(
-      employees.map(async (emp) => {
-        const quota = await getLeaveQuota(emp.id, { year: targetYear });
-        return {
-          employeeId: emp.id,
-          name: emp.name,
-          employeeNo: emp.employeeNo,
-          department: emp.department?.name ?? null,
-          joinDate: emp.joinDate.toISOString().split("T")[0],
-          entitled: quota.entitled,
-          used: quota.used,
-          remaining: quota.remaining,
-          eligible: quota.eligible,
-          tenureMonths: quota.tenureMonths,
-        };
-      }),
-    );
-
-    return { success: true as const, year: targetYear, balances };
+    return {
+      success: true as const,
+      year: targetYear,
+      // Visibilitas kolom identitas mengikuti scope efektif (BR-LVB-14),
+      // bukan izin edit/delete — diputus server, UI tinggal membaca.
+      scopeKind: scope.kind,
+      showIdentityColumns: scope.kind !== "self",
+      totals: report.totals,
+      balances: report.rows,
+    };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[getAllLeaveBalances]", getErrorMessage(e) || e);
+    return {
+      success: false as const,
+      error: getErrorMessage(e, "Terjadi kesalahan"),
+    };
+  }
+}
+
+/**
+ * Ekspor CSV laporan saldo cuti (F-2026-10-25-013-S BR-LVB-11, AC-LVB-B4):
+ * isi persis baris+kolom yang terlihat pemanggil sesudah scope+filter
+ * departemen; gerbang izin sama dengan halaman (`view_leave_requests`).
+ * Mengembalikan teks CSV + nama berkas bertahun; pengunduhan berkas
+ * adalah urusan konsumen (Frontend), server tidak menulis berkas.
+ */
+export async function exportLeaveBalancesCsv(
+  year?: number,
+  opts?: { departmentId?: number | null },
+) {
+  try {
+    const user = await requirePermission("view_leave_requests");
+    const targetYear = year ?? new Date().getFullYear();
+    if (!Number.isSafeInteger(targetYear) || targetYear < 1900 || targetYear > 2200) {
+      return { success: false as const, error: "Tahun tidak valid" };
+    }
+    if (
+      opts?.departmentId != null &&
+      (!Number.isSafeInteger(opts.departmentId) || opts.departmentId <= 0)
+    ) {
+      return { success: false as const, error: "Departemen tidak valid" };
+    }
+    const scope = await getHrScope({
+      id: String(user.id),
+      roles: Array.isArray(user.roles) ? [...user.roles] : [],
+    });
+    const report = await loadLeaveBalanceReport(scope, targetYear, {
+      departmentId: opts?.departmentId ?? null,
+    });
+    const { csv, fileName } = buildLeaveBalanceCsv(report);
+    return { success: true as const, year: targetYear, csv, fileName };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[exportLeaveBalancesCsv]", getErrorMessage(e) || e);
     return {
       success: false as const,
       error: getErrorMessage(e, "Terjadi kesalahan"),
@@ -3606,9 +3823,12 @@ export async function deleteWorkSchedule(id: number) {
  * `getDailyAttendanceMetrics`. Tanpa jadwal, keterlambatan tidak bisa dihitung,
  * dan itu harus dikatakan — bukan diam-diam dicatat sebagai 0.
  */
-async function resolveEffectiveSchedule(employeeId: number) {
+async function resolveEffectiveSchedule(
+  employeeId: number,
+  db: PrismaTypes.TransactionClient | typeof prisma = prisma,
+) {
   const select = { startTime: true, endTime: true } as const
-  const employee = await prisma.employee.findUnique({
+  const employee = await db.employee.findUnique({
     where: { id: employeeId },
     select: {
       id: true,
@@ -3624,7 +3844,7 @@ async function resolveEffectiveSchedule(employeeId: number) {
   return (
     employee.workSchedules[0] ??
     employee.department?.workSchedules[0] ??
-    (await prisma.workSchedule.findFirst({
+    (await db.workSchedule.findFirst({
       where: { isActive: true, employees: { none: {} }, departments: { none: {} } },
       orderBy: { id: "asc" },
       select,
@@ -3651,8 +3871,11 @@ type AttendanceInput = {
  * seorang karyawan "present" dengan lateMinutes 60 tetap terbaca terlambat —
  * dan pilihan status milik pengguna tidak diubah diam-diam.
  */
-async function buildAttendanceData(input: AttendanceInput) {
-  const schedule = await resolveEffectiveSchedule(input.employeeId)
+async function buildAttendanceData(
+  input: AttendanceInput,
+  db: PrismaTypes.TransactionClient | typeof prisma = prisma,
+) {
+  const schedule = await resolveEffectiveSchedule(input.employeeId, db)
   if (!schedule && input.checkIn) {
     throw new Error(
       "Karyawan ini belum punya jadwal kerja aktif — buat jadwal kerja lebih dulu " +
@@ -3767,6 +3990,329 @@ export async function deleteAttendance(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteAttendance]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+
+// ==================== ATTENDANCE CORRECTION (F-2026-10-25-010-S) ====================
+// Putusan Lead Q-AC-1/2/3 2026-10-26 + vonis Accountant F-2026-10-25-013-V:
+// pengajuan karyawan TIDAK mengubah rekod Attendance; hanya persetujuan yang
+// menulis rekod induk — dalam SATU $transaction memakai semantik
+// buildAttendanceData existing (bukan penulis kedua; koordinat rekod berjalan
+// tidak ditulis ulang, rekod baru lat/long kosong). Gerbang slip-final tahap 1:
+// persetujuan tanggal yang sudah masuk Payroll approved/paid DITAHAN (pengajuan
+// tetap pending, pesan "menunggu jalur slip koreksi"), slip final tidak diubah.
+
+/** Employee id user pemanggil untuk penjaga self/self-approve (null = tak tertaut). */
+async function callerEmployeeIdForCorrection(userId: string): Promise<number | null> {
+  const me = await prisma.employee.findFirst({
+    where: { userId: Number(userId) },
+    select: { id: true },
+  });
+  return me?.id ?? null;
+}
+
+export async function createAttendanceCorrection(formData: FormData) {
+  try {
+    const user = await requirePermission("create_attendance_corrections");
+    const parsed = parseFormData(attendanceCorrectionSchema, formData);
+    if (!parsed.success)
+      return { success: false as const, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
+    // BR-AC-07 + putusan Lead Q-AC-2: pengaju = employeeId login persis
+    // untuk SEMUA scope (department/all tidak boleh atas nama orang lain),
+    // fail-closed bila akun tak tertaut Employee.
+    const me = await callerEmployeeIdForCorrection(user.id);
+    if (me == null || me !== v.employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengajukan koreksi absensi untuk diri sendiri");
+    }
+
+    const date = wibDateToUtcMidnight(v.date);
+    if (!isWithinAttendanceCorrectionWindow(date)) {
+      throw new Error(ATTENDANCE_CORRECTION_WINDOW_MESSAGE);
+    }
+
+    const correction = await prisma.$transaction(async (tx) => {
+      // Satu pending per (employeeId, date) (BR-AC-03): kunci baris Employee
+      // menserialkan cek + buat untuk karyawan sama (pola createLeaveRequest).
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${v.employeeId} FOR UPDATE`;
+
+      const pending = await tx.attendanceCorrection.findFirst({
+        where: { employeeId: v.employeeId, date, status: "pending" },
+        select: { id: true },
+      });
+      if (pending) {
+        throw new Error(
+          "Masih ada pengajuan koreksi yang menunggu untuk tanggal ini — tunggu diputus atau batalkan dulu.",
+        );
+      }
+
+      const current = await tx.attendance.findUnique({
+        where: { employeeId_date: { employeeId: v.employeeId, date } },
+        select: {
+          id: true,
+          updatedAt: true,
+          status: true,
+          checkIn: true,
+          checkOut: true,
+          notes: true,
+        },
+      });
+
+      return tx.attendanceCorrection.create({
+        data: {
+          slug: await nextSlug("attendanceCorrection", `koreksi-absensi-${v.date}`),
+          employeeId: v.employeeId,
+          date,
+          proposedStatus: v.status,
+          proposedCheckIn: v.checkIn ? wibTimeToUtcInstant(v.date, v.checkIn) : null,
+          proposedCheckOut: v.checkOut ? wibTimeToUtcInstant(v.date, v.checkOut) : null,
+          proposedNotes: v.notes ?? null,
+          reason: v.reason,
+          status: "pending",
+          snapshotAttendanceId: current?.id ?? null,
+          snapshotUpdatedAt: current?.updatedAt ?? null,
+          snapshotStatus: current?.status ?? null,
+          snapshotCheckIn: current?.checkIn ?? null,
+          snapshotCheckOut: current?.checkOut ?? null,
+          snapshotNotes: current?.notes ?? null,
+        },
+      });
+    });
+
+    await logActivity(
+      "create",
+      "AttendanceCorrection",
+      correction.id,
+      `Mengajukan koreksi absensi tanggal ${v.date}`,
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const, id: correction.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createAttendanceCorrection]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+async function loadCorrectionForDecision(id: number) {
+  return prisma.attendanceCorrection.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      employeeId: true,
+      date: true,
+      proposedStatus: true,
+      proposedCheckIn: true,
+      proposedCheckOut: true,
+      proposedNotes: true,
+      status: true,
+      snapshotAttendanceId: true,
+      snapshotUpdatedAt: true,
+      snapshotStatus: true,
+      snapshotCheckIn: true,
+      snapshotCheckOut: true,
+      snapshotNotes: true,
+    },
+  });
+}
+
+/** Penyetuju sah: scope department/all atas pengaju + self-approve dilarang. */
+async function assertAttendanceCorrectionApprover(
+  user: { id: string; roles: string[] },
+  correctionEmployeeId: number,
+): Promise<number> {
+  const scope = await getHrScope(user);
+  if (scope.kind === "self") {
+    throw new Error("Anda tidak memiliki akses menyetujui koreksi absensi");
+  }
+  await assertHrEmployeeAccess(scope, correctionEmployeeId);
+  const me = await callerEmployeeIdForCorrection(user.id);
+  if (me == null) throw new Error("Akun Anda tidak terhubung ke data karyawan");
+  if (me === correctionEmployeeId) {
+    throw new Error("Penyetuju tidak boleh menyetujui koreksi absensinya sendiri");
+  }
+  return me;
+}
+
+export async function approveAttendanceCorrection(id: number) {
+  try {
+    const user = await requirePermission("approve_attendance_corrections");
+    const correctionId = requirePositiveId(id, "koreksi absensi");
+    const loaded = await loadCorrectionForDecision(correctionId);
+    if (!loaded) throw new Error("Pengajuan koreksi absensi tidak ditemukan");
+    const approverEmployeeId = await assertAttendanceCorrectionApprover(user, loaded.employeeId);
+    if (loaded.status !== "pending") {
+      throw new Error("Hanya pengajuan koreksi berstatus menunggu yang dapat disetujui");
+    }
+
+    // Tanggal string untuk buildAttendanceData (konvensi WIB = tanggal UTC
+    // tengah malam Attendance.date, lihat attendance-time.ts).
+    const dateStr = loaded.date.toISOString().slice(0, 10);
+    const toTime = (d: Date | null) => {
+      if (!d) return undefined;
+      const minutes = wibMinutesOfDay(d);
+      return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    };
+
+    await prisma.$transaction(async (tx) => {
+      // Klaim atomik pending -> approved lebih dulu: count 0 = sudah diproses.
+      // PENTING: klaim ini di dalam transaksi yang sama dengan semua penjaga di
+      // bawah — lemparan error sesudah klaim me-rollback flip status, jadi
+      // pengajuan TETAP pending pada konflik/gerbang (BR-AC-02).
+      const claim = await tx.attendanceCorrection.updateMany({
+        where: { id: correctionId, status: "pending" },
+        data: {
+          status: "approved",
+          approvedBy: approverEmployeeId,
+          approvedAt: new Date(),
+          rejectionReason: null,
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
+      }
+
+      const current = await tx.attendance.findUnique({
+        where: { employeeId_date: { employeeId: loaded.employeeId, date: loaded.date } },
+        select: {
+          id: true,
+          updatedAt: true,
+          status: true,
+          checkIn: true,
+          checkOut: true,
+          notes: true,
+        },
+      });
+      // EC-1: rekod berubah sesudah snapshot -> tolak persetujuan kali ini,
+      // pengajuan tetap pending (rollback klaim di atas).
+      if (attendanceCorrectionHasConflict(loaded, current)) {
+        throw new Error(ATTENDANCE_CORRECTION_CONFLICT_MESSAGE);
+      }
+
+      // Gerbang slip-final tahap 1 (013-V butir 8): tanggal sudah masuk slip
+      // approved/paid -> tahan persetujuan, slip final tidak diubah.
+      const finalSlip = await tx.payroll.findFirst({
+        where: {
+          employeeId: loaded.employeeId,
+          status: { in: FINAL_PAYROLL_STATUSES },
+          startDate: { lte: loaded.date },
+          endDate: { gte: loaded.date },
+        },
+        select: { id: true },
+      });
+      if (finalSlip) {
+        throw new Error(ATTENDANCE_CORRECTION_FINAL_PAYROLL_MESSAGE);
+      }
+
+      const data = await buildAttendanceData(
+        {
+          employeeId: loaded.employeeId,
+          date: dateStr,
+          checkIn: toTime(loaded.proposedCheckIn),
+          checkOut: toTime(loaded.proposedCheckOut),
+          status: loaded.proposedStatus,
+          notes: loaded.proposedNotes ?? undefined,
+        },
+        tx,
+      );
+      if (current) {
+        // Update hanya kolom semantik buildAttendanceData: koordinat rekod
+        // berjalan TIDAK ditulis ulang (BR-AC-06).
+        await tx.attendance.update({ where: { id: current.id }, data });
+      } else {
+        await tx.attendance.create({
+          data: { employeeId: loaded.employeeId, ...data },
+        });
+      }
+    });
+
+    await logActivity(
+      "approve",
+      "AttendanceCorrection",
+      correctionId,
+      "Menyetujui koreksi absensi",
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[approveAttendanceCorrection]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function rejectAttendanceCorrection(id: number, reason: string) {
+  try {
+    const user = await requirePermission("approve_attendance_corrections");
+    const correctionId = requirePositiveId(id, "koreksi absensi");
+    const cleanReason = (reason ?? "").trim();
+    if (!cleanReason) throw new Error("Alasan penolakan wajib diisi");
+    const loaded = await loadCorrectionForDecision(correctionId);
+    if (!loaded) throw new Error("Pengajuan koreksi absensi tidak ditemukan");
+    await assertAttendanceCorrectionApprover(user, loaded.employeeId);
+
+    const claim = await prisma.attendanceCorrection.updateMany({
+      where: { id: correctionId, status: "pending" },
+      data: { status: "rejected", rejectionReason: cleanReason },
+    });
+    if (claim.count === 0) {
+      throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
+    }
+
+    await logActivity(
+      "reject",
+      "AttendanceCorrection",
+      correctionId,
+      "Menolak koreksi absensi",
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[rejectAttendanceCorrection]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function cancelAttendanceCorrection(id: number) {
+  try {
+    const user = await requirePermission("create_attendance_corrections");
+    const correctionId = requirePositiveId(id, "koreksi absensi");
+    const loaded = await prisma.attendanceCorrection.findUnique({
+      where: { id: correctionId },
+      select: { employeeId: true, status: true },
+    });
+    if (!loaded) throw new Error("Pengajuan koreksi absensi tidak ditemukan");
+    const me = await callerEmployeeIdForCorrection(user.id);
+    if (me == null || me !== loaded.employeeId) {
+      throw new Error("Hanya pengaju yang dapat membatalkan pengajuan ini");
+    }
+    if (loaded.status !== "pending") {
+      throw new Error("Hanya pengajuan koreksi berstatus menunggu yang dapat dibatalkan");
+    }
+
+    const claim = await prisma.attendanceCorrection.updateMany({
+      where: { id: correctionId, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Pengajuan koreksi absensi sudah diproses atau status tidak valid");
+    }
+
+    await logActivity(
+      "cancel",
+      "AttendanceCorrection",
+      correctionId,
+      "Membatalkan koreksi absensi",
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[cancelAttendanceCorrection]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -3999,10 +4545,22 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
         );
       }
 
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
         const quotaYear = startDate.getFullYear();
         const quota = await getLeaveQuota(employeeId, {
           year: quotaYear,
+          now: startDate,
           excludeLeaveId: id,
           db: tx,
         });
@@ -4106,6 +4664,16 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       if (current.status !== "pending") {
         throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
       }
+
+      // Gerbang batas yang sama dengan create (syarat vonis K2-S1):
+      // tanpa ini edit pending 2 jam -> 5 jam hari kerja lolos batas
+      // PP 35/2021. excludeId mengeluarkan baris ini dari hitungannya.
+      await assertOvertimeWithinWorkdayLimits(tx, (empId, d) => resolveDayKind(empId, d, tx), {
+        employeeId: v.employeeId,
+        date: wibDateToUtcMidnight(v.date),
+        hours: v.hours,
+        excludeId: id,
+      });
 
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },

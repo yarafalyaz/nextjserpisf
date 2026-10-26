@@ -34,6 +34,7 @@ export type ReportPdfKey =
   | "beban-pembayaran"
   | "penerimaan-sebagian"
   | "pemenuhan-pesanan"
+  | "terkirim-belum-terfaktur"
   | "selisih-persediaan"
   | "penerimaan-belum-ditagih"
   | "transfer-terkirim"
@@ -69,6 +70,7 @@ export type ReportPdfKey =
   | "rekonsiliasi-ppn"
   | "bukti-potong-pph"
   | "analisis-penjualan"
+  | "paparan-diskon-penjualan"
   | "buku-besar"
   | "buku-bank"
   | "buku-pembantu-piutang"
@@ -121,6 +123,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "beban-pembayaran": "Rincian-Beban-Pembayaran",
     "penerimaan-sebagian": "Barang-Diterima-Sebagian",
     "pemenuhan-pesanan": "Pemenuhan-Pesanan",
+    "terkirim-belum-terfaktur": "Terkirim-Belum-Terfaktur",
     "selisih-persediaan": "Selisih-Saldo-Akun-Persediaan",
     "penerimaan-belum-ditagih": "Barang-Diterima-Belum-Ditagih",
     "transfer-terkirim": "Persediaan-Terkirim-Belum-Diterima",
@@ -156,6 +159,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "rekonsiliasi-ppn": "Rekonsiliasi-PPN",
     "bukti-potong-pph": "Bukti-Potong-PPh",
     "analisis-penjualan": "Analisis-Penjualan",
+    "paparan-diskon-penjualan": "Paparan-Diskon-Penjualan",
     "buku-besar": "Buku-Besar",
     "buku-bank": "Buku-Bank",
     "buku-pembantu-piutang": "Buku-Pembantu-Piutang",

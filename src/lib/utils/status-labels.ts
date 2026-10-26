@@ -51,6 +51,13 @@ export const STATUS_LABELS: Record<string, string> = {
   reversed: "Dibalik",
   reversing: "Sedang Dibalik",
 
+  // Subledger komisi per penerima (F-2026-10-25-049-S, status turunan server 049-V §3)
+  ACCRUED: "Terakru",
+  PARTIALLY_PAID: "Terbayar Sebagian",
+  PAID: "Lunas Terbayar",
+  REVERSED: "Dibalik Penuh",
+  OVERPAID_NEGATIVE: "Kelebihan Bayar (Saldo Negatif)",
+
   // Garansi (F-2026-10-21-021)
   intake: "Masuk",
   eligibility: "Penilaian",
@@ -112,6 +119,15 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
   personal: "Keperluan Pribadi",
   maternity: "Cuti Melahirkan",
   unpaid: "Tanpa Gaji",
+  marriage: "Menikah",
+  child_marriage: "Menikahkan Anak",
+  child_circumcision: "Mengkhitankan Anak",
+  child_baptism: "Membaptis Anak",
+  spouse_childbirth: "Istri Melahirkan/Keguguran",
+  family_death_core: "Keluarga Inti Meninggal",
+  family_death_household: "Keluarga Serumah Meninggal",
+  menstrual: "Cuti Haid",
+  pilgrimage: "Ibadah Haji",
 };
 
 /** `AssetHistory.type` → label Indonesia. */

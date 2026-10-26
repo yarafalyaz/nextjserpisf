@@ -23,6 +23,10 @@ interface ActionDropdownProps {
   printAction?: () => void
   deleteAction?: (id: number) => Promise<{ success: boolean }>
   deleteId?: number
+  /** Overrides the delete confirmation title (default generic). */
+  deleteConfirmTitle?: string
+  /** Overrides the delete confirmation body (default generic). */
+  deleteConfirmBody?: string
   /** Explicit permission required to show the edit action. If omitted, derived from ROUTE_PERMS. */
   editPermission?: string
   /** Explicit permission required to show the delete action. If omitted, derived from ROUTE_PERMS. */
@@ -37,7 +41,7 @@ interface ActionDropdownProps {
   processPermission?: string
 }
 
-export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId, editPermission, deletePermission, processAction, processLabel = "Proses", processConfirmTitle, processConfirmBody, processSuccessMessage, processPermission }: ActionDropdownProps) {
+export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId, deleteConfirmTitle, deleteConfirmBody, editPermission, deletePermission, processAction, processLabel = "Proses", processConfirmTitle, processConfirmBody, processSuccessMessage, processPermission }: ActionDropdownProps) {
   const { data: session } = useSession()
   const userRoles = session?.user?.roles ?? []
   const userPerms = session?.user?.permissions ?? []
@@ -182,8 +186,8 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
       <ConfirmDialog
         isOpen={isDeleteOpen}
         onOpenChange={setIsDeleteOpen}
-        title="Hapus data ini?"
-        body="Data yang dihapus tidak dapat dikembalikan. Pastikan Anda yakin sebelum melanjutkan."
+        title={deleteConfirmTitle || "Hapus data ini?"}
+        body={deleteConfirmBody || "Data yang dihapus tidak dapat dikembalikan. Pastikan Anda yakin sebelum melanjutkan."}
         confirmLabel="Hapus"
         cancelLabel="Batal"
         variant="danger"

@@ -268,12 +268,107 @@ describe("Approval Workflow CRUD", () => {
   });
   it("deleteApprovalWorkflow handles error", async () => {
     silenceConsole();
-    mocks.prismaMock.approvalWorkflow.update.mockRejectedValue(
+    mocks.prismaMock.approvalWorkflow.update.mockRejectedValueOnce(
       new Error("db err"),
     );
     const res = await actions.deleteApprovalWorkflow(1);
     expect(res?.success).toBe(false);
     expect(res?.error).toBe("db err");
+  });
+
+  // ── K4-S1 (F-2026-10-25-014-V): gate-only — approve/reject workflow
+  // TIDAK menulis status ke dokumen Journal/VendorPayment. Cabut
+  // GATE_ONLY_REFERENCE_TYPES -> tes ini MERAH (docModel.update dipanggil).
+  it("K4-S1: approveStep final Journal tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.journal = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "Journal", referenceId: 42 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.journal.update).not.toHaveBeenCalled();
+  });
+  it("K4-S1: rejectStep Journal tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.journal = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "Journal", referenceId: 42 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expectApprovalStatus("rejected");
+    expect(mocks.prismaMock.journal.update).not.toHaveBeenCalled();
+  });
+  it("K4-S1: approveStep final VendorPayment tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.vendorPayment = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "VendorPayment", referenceId: 9 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled();
+  });
+
+  // ── K4-S2(a) (F-2026-10-25-014-V): nonaktif/hapus workflow gerbang
+  // uang Journal/VendorPayment tercatat eksplisit di activity log.
+  // Hapus panggilan logMoneyGateChange -> tes ini MERAH.
+  const resetWorkflowWriteMocks = () => {
+    // Tes "handles error" sebelumnya meninggalkan mockRejectedValue.
+    mocks.prismaMock.approvalWorkflow.update.mockReset().mockResolvedValue({});
+    mocks.prismaMock.approvalWorkflowStep.deleteMany.mockReset().mockResolvedValue({ count: 0 });
+    mocks.prismaMock.approval.count.mockReset().mockResolvedValue(0);
+  };
+  it("K4-S2(a): delete workflow Journal tercatat sebagai penghapusan gerbang uang", async () => {
+    resetWorkflowWriteMocks();
+    mocks.prismaMock.approvalWorkflow.findUnique.mockResolvedValue({
+      modelType: "Journal", name: "Persetujuan Jurnal Manual",
+    });
+    const res = await actions.deleteApprovalWorkflow(3);
+    expect(res?.success).toBe(true);
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "delete",
+      "ApprovalWorkflow",
+      3,
+      expect.stringContaining("gerbang uang Journal"),
+      { modelType: "Journal" },
+    );
+  });
+  it("K4-S2(a): delete workflow non-uang TIDAK dicatat sebagai gerbang uang", async () => {
+    resetWorkflowWriteMocks();
+    mocks.prismaMock.approvalWorkflow.findUnique.mockResolvedValue({
+      modelType: "PurchaseRequest", name: "WF PR",
+    });
+    const res = await actions.deleteApprovalWorkflow(4);
+    expect(res?.success).toBe(true);
+    const moneyLogs = mocks.logActivityMock.mock.calls.filter(
+      (c: unknown[]) => typeof c[3] === "string" && (c[3] as string).includes("gerbang uang"),
+    );
+    expect(moneyLogs).toHaveLength(0);
+  });
+  it("K4-S2(a): menonaktifkan workflow VendorPayment tercatat sebagai penonaktifan gerbang uang", async () => {
+    resetWorkflowWriteMocks();
+    mocks.prismaMock.approvalWorkflow.findUnique.mockResolvedValue({
+      modelType: "VendorPayment", name: "Persetujuan Pembayaran Vendor", isActive: true,
+    });
+    const res = await actions.updateApprovalWorkflow(
+      5,
+      wfFd([{ name: "Step1" }], { modelType: "VendorPayment", isActive: "false" }),
+    );
+    expect(res?.success).toBe(true);
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "deactivate",
+      "ApprovalWorkflow",
+      5,
+      expect.stringContaining("gerbang uang VendorPayment"),
+      { modelType: "VendorPayment" },
+    );
+  });
+  it("K4-S2(a): update workflow Journal yang tetap aktif TIDAK dicatat sebagai penonaktifan", async () => {
+    resetWorkflowWriteMocks();
+    mocks.prismaMock.approvalWorkflow.findUnique.mockResolvedValue({
+      modelType: "Journal", name: "Persetujuan Jurnal Manual", isActive: true,
+    });
+    const res = await actions.updateApprovalWorkflow(
+      6,
+      wfFd([{ name: "Step1" }], { modelType: "Journal" }),
+    );
+    expect(res?.success).toBe(true);
+    const moneyLogs = mocks.logActivityMock.mock.calls.filter(
+      (c: unknown[]) => c[0] === "deactivate",
+    );
+    expect(moneyLogs).toHaveLength(0);
   });
 });
 

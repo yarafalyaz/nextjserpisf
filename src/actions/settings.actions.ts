@@ -94,6 +94,21 @@ export async function updateSystemSettings(formData: FormData) {
     })
   }
 
+  // F-2026-10-25-015-V: status pkp WAJIB punya tanggal mulai kewajiban
+  // (dari form ini atau nilai tersimpan) — konfigurasi cacat ditolak
+  // di simpan, bukan baru ketahuan saat DP confirm.
+  {
+    const nextStatus = has("companyPkpStatus") ? String(formData.get("companyPkpStatus") ?? "") : settings.companyPkpStatus
+    const nextFrom = has("companyPkpEffectiveFrom")
+      ? String(formData.get("companyPkpEffectiveFrom") ?? "").trim()
+      : settings.companyPkpEffectiveFrom
+    if (nextStatus === "pkp" && !nextFrom) {
+      throw new Error(
+        "Status PKP perusahaan = PKP wajib disertai tanggal mulai kewajiban PKP. Isi tanggal mulai kewajiban (bukan tanggal SPPKP) sebelum menyimpan.",
+      )
+    }
+  }
+
   await prisma.systemSetting.update({
     where: { id: settings.id },
     data: {
@@ -109,6 +124,27 @@ export async function updateSystemSettings(formData: FormData) {
       companyPostalCode: strNull("companyPostalCode"),
       companyWebsite: strNull("companyWebsite"),
       companyTaxId: strNull("companyTaxId"),
+      // F-2026-10-25-015-V: status PKP perusahaan. Nilai bukan enum
+      // tertutup ditolak; status pkp tanpa tanggal mulai kewajiban
+      // ditolak (konfigurasi cacat, jangan disimpan setengah).
+      companyPkpStatus: (() => {
+        const v = strNull("companyPkpStatus")
+        if (v === undefined) return undefined
+        if (v === null) return "unknown"
+        if (v !== "non_pkp" && v !== "pkp" && v !== "unknown") {
+          throw new Error("Status PKP perusahaan tidak valid — pilih PKP, non-PKP, atau belum ditetapkan.")
+        }
+        return v
+      })(),
+      companyPkpEffectiveFrom: (() => {
+        if (!has("companyPkpEffectiveFrom")) return undefined
+        const v = formData.get("companyPkpEffectiveFrom")
+        if (!v || String(v).trim() === "") return null
+        const d = new Date(String(v))
+        if (Number.isNaN(d.getTime())) throw new Error("Tanggal mulai kewajiban PKP tidak valid.")
+        return d
+      })(),
+      companyPkpSource: strNull("companyPkpSource"),
       companyLogo: strNull("companyLogo"),
       companyLogoDark: strNull("companyLogoDark"),
       companyLatitude: decimalNull("companyLatitude"),

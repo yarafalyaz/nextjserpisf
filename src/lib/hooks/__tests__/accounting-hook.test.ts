@@ -13,6 +13,8 @@ import {
   onVendorBillPosted,
   onVendorPaymentCreated,
   onPayrollPaid,
+  onReimbursementClaimApproved,
+  onReimbursementClaimPaid,
   assertJournalClaimRef,
   assertAccountsExist,
 } from "../accounting.hook";
@@ -47,6 +49,7 @@ const mocks = vi.hoisted(() => ({
     pkwtCompensationExpenseAccountId: 631 as number | null,
     pkwtCompensationPayableAccountId: 231 as number | null,
     scrapSaleIncomeAccountId: 711 as number | null,
+    reimbursementLiabilityAccountId: 209 as number | null,
   },
   assertPeriodOpen: vi.fn(),
   fifoConsume: vi.fn(),
@@ -54,6 +57,7 @@ const mocks = vi.hoisted(() => ({
   invoiceFindUnique: vi.fn(),
   journalFindFirst: vi.fn(),
   accountFindMany: vi.fn(),
+  accountFindUnique: vi.fn(),
   accountFindFirst: vi.fn().mockResolvedValue({ id: 711, isActive: true, reportGroup: "OINC" }),
   journalCreate: vi.fn(),
   journalEntryCreate: vi.fn(),
@@ -123,6 +127,11 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     item: {
       findMany: mocks.itemFindMany,
+    },
+    account: {
+      findMany: (...a: unknown[]) => mocks.accountFindMany(...a),
+      findUnique: (...a: unknown[]) => mocks.accountFindUnique(...a),
+      findFirst: (...a: unknown[]) => mocks.accountFindFirst(...a),
     },
     purchaseReturn: {
       findUniqueOrThrow: (...a: unknown[]) =>
@@ -200,6 +209,10 @@ function journalEntryBranch() {
 function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
   return {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+    downPayment: { findMany: vi.fn().mockResolvedValue([]) },
+    // B4 (PR #785): blok penutup 210102 jalur konversi membaca pembayaran
+    // DP tertaut; default kosong = bukan faktur konversi.
+    salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
     salesInvoice: {
       findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
       findUnique: mocks.invoiceFindUnique,
@@ -215,6 +228,58 @@ function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
   };
 }
 
+
+/** Objek `tx` onSalesReturnCompleted bersama; beda antar tes hanya invoice/item. */
+function buildSalesReturnTx(opts: {
+  invoiceFindUniqueOrThrow?: unknown;
+  items?: unknown[];
+} = {}) {
+  const defaultInvoice = vi.fn(async (args: any) =>
+    args?.include?.items?.select
+      ? { id: 55, items: [{ itemId: 60, qty: 2 }] }
+      : args?.select?.grandTotal
+        ? { grandTotal: 11100000, paidAmount: 0 }
+        : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
+  );
+  return {
+    systemSetting: {
+      findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
+    },
+    salesReturn: {
+      findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow,
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    salesReturnItem: {
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    salesInvoice: {
+      findUniqueOrThrow: opts.invoiceFindUniqueOrThrow ?? defaultInvoice,
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    item: {
+      findMany: vi.fn().mockResolvedValue(opts.items ?? [{ id: 60, isScrapSaleItem: true }]),
+    },
+    taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
+    $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
+    account: {
+      findMany: mocks.accountFindMany,
+      findFirst: mocks.accountFindFirst,
+    },
+    journal: {
+      findFirst: mocks.journalFindFirst,
+      findMany: vi.fn().mockResolvedValue([]),
+      create: mocks.journalCreate,
+    },
+    journalEntry: journalEntryBranch(),
+  };
+}
+
+function wireSalesReturnTx(opts?: Parameters<typeof buildSalesReturnTx>[0]) {
+  mocks.transaction.mockImplementation((fn: any) => fn(buildSalesReturnTx(opts)));
+}
 
 const innerInvoice = (over: Record<string, unknown> = {}) => ({
   id: 1, totalAmount: 1000, taxAmount: 0, date: new Date(), documentNo: "INV-1", ...over,
@@ -442,6 +507,9 @@ describe("onSalesInvoicePosted", () => {
           findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
           findUnique: mocks.invoiceFindUnique,
         },
+        // B4 (PR #785): blok penutup 210102 jalur konversi membaca pembayaran DP.
+        salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
+        downPayment: { findMany: vi.fn().mockResolvedValue([]) },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
@@ -1357,65 +1425,147 @@ describe("onSalesReturnCompleted", () => {
     mocks.systemSettings.salesReturnAccountId = 420;
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.inventoryAccountId = 130;
-    mocks.transaction.mockImplementation((fn: any) =>
-      fn({
-        systemSetting: {
-          findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
-        },
-        salesReturn: { findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow },
-        salesReturnItem: {
-          findMany: vi.fn().mockResolvedValue([]),
-          update: vi.fn().mockResolvedValue({}),
-        },
-        salesInvoice: {
-          findUniqueOrThrow: vi.fn(async (args: any) =>
-            args?.include?.items?.select
-              ? { id: 55, items: [{ itemId: 60, qty: 2 }] }
-              : { subtotal: 200, discount: 0, taxAmount: 0 },
-          ),
-        },
-        item: {
-          findMany: vi.fn().mockResolvedValue([{ id: 60, isScrapSaleItem: true }]),
-        },
-        taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
-        $queryRaw: mocks.queryRaw,
-        $executeRaw: mocks.executeRaw,
-        account: {
-          findMany: mocks.accountFindMany,
-          findFirst: mocks.accountFindFirst,
-        },
-        journal: {
-          findFirst: mocks.journalFindFirst,
-          create: mocks.journalCreate,
-        },
-        journalEntry: journalEntryBranch(),
-      }),
-    );
+    // Klasifikasi per-baris pre-tx membaca prisma global (bukan tx).
+    mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: true }]);
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-1",
+      salesInvoiceId: null,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [],
+    });
+    wireSalesReturnTx();
   });
 
-  // E136-1/E136-2: retur atas faktur besi tua murni ditolak berisik;
-  // nol jurnal, nol entri. Persediaan fiktif qty * cost master (750rb) = MERAH.
-  it("E136-1/E136-2: retur atas faktur besi tua murni ditolak fail-closed nol jurnal", async () => {
+  // E136-3 (F-137-V tahap 2, syarat pencabutan larangan): retur besi tua
+  // DPP 4.000.000 + snapshot PPN 440.000 atas faktur E136-1 (DPP
+  // 10.000.000 + PPN 1.100.000, belum dibayar) -> jurnal persis
+  // Dr 711 4.000.000 + Dr PPN Keluaran 440.000 / Cr Piutang 4.440.000.
+  // Kaki 420 (salesReturnAccountId) / 130 (persediaan) = MERAH.
+  it("E136-3: retur besi tua belum dibayar -> Dr scrap+PPN / Cr Piutang sen-persis", async () => {
     mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       documentNo: "SR-SCRAP",
       salesInvoiceId: 55,
       status: "draft",
-      items: [{ id: 900, itemId: 60, qty: 2, price: 100000, cost: 750000 }],
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
     });
     mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    await onSalesReturnCompleted(1, 999);
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceType: "SalesReturn",
+          totalDebit: 4440000,
+          totalCredit: 4440000,
+        }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3);
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 711, debit: 4000000, credit: 0 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 160, debit: 440000, credit: 0 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110, debit: 0, credit: 4440000 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 420 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 130 }),
+      }),
+    );
+  });
 
-    mocks.invoiceFindUnique.mockResolvedValue({ id: 55, items: [{ itemId: 60, qty: 2 }] });
-    mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: true }, { id: 50, isScrapSaleItem: false }]);
-    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/faktur besi tua/);
+  // E136-3b: faktur besi tua sudah dibayar penuh (paidAmount = grandTotal)
+  // -> kredit beralih ke Kas (cashBankAccountId 100), bukan Piutang.
+  it("E136-3b: retur besi tua sudah dibayar -> Cr Kas sen-persis", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-SCRAP-PAID",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn(async (args: any) =>
+        args?.select?.grandTotal
+          ? { grandTotal: 11100000, paidAmount: 11100000 }
+          : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
+      ),
+    });
+    await onSalesReturnCompleted(1, 999);
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 100, debit: 0, credit: 4440000 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110 }),
+      }),
+    );
+  });
+
+  // E136 campuran: baris retur scrap + dagang dalam satu retur ditolak.
+  it("E136-campuran: retur campuran scrap+dagang ditolak berisik nol jurnal", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-MIX",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [
+        { id: 900, itemId: 60, qty: 1, price: 100, cost: 10 },
+        { id: 901, itemId: 50, qty: 1, price: 100, cost: 10 },
+      ],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn().mockResolvedValue({ subtotal: 200, discount: 0, taxAmount: 0 }),
+      items: [
+        { id: 60, isScrapSaleItem: true },
+        { id: 50, isScrapSaleItem: false },
+      ],
+    });
+    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/campuran besi tua/);
     expect(mocks.journalCreate).not.toHaveBeenCalled();
-    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
   });
 
   it("rejects if required settings are missing", async () => {
     (mocks.systemSettings as any).salesReturnAccountId = null;
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-1",
+      salesInvoiceId: null,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 50, qty: 1, price: 100, cost: 10 }],
+    });
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn().mockResolvedValue({ subtotal: 100, discount: 0, taxAmount: 0 }),
+      items: [{ id: 50, isScrapSaleItem: false }],
+    });
     await expect(onSalesReturnCompleted(1)).rejects.toThrow("Retur Penjualan");
-    expect(mocks.salesReturnFindUniqueOrThrow).not.toHaveBeenCalled();
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
   it("returns early if journal already exists (idempotency)", async () => {
@@ -1642,7 +1792,7 @@ describe("onDownPaymentReceived", () => {
         systemSetting: {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
-        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow },
+        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow, update: vi.fn().mockResolvedValue({}) },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
@@ -2323,5 +2473,72 @@ describe("onPayrollPaid — kaki kompensasi PKWT (F-2026-10-24-132-V Putusan 5)"
     mocks.journalFindFirst.mockResolvedValue(null);
     await expect(onPayrollPaid(1)).rejects.toThrow("Snapshot akun baris kompensasi PKWT");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("gerbang akun 210209 klaim reimbursement (t_5c6d55f3)", () => {
+  const claimExpense = {
+    id: 42, documentNo: "EXP-0042", isReimbursementClaim: true,
+    accountId: 610, paidFromAccountId: 100, amount: 150000,
+    description: "Bensin", costCenterId: null,
+  };
+  function buildClaimTx() {
+    return {
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+      expense: { findUniqueOrThrow: mocks.expenseFindUniqueOrThrow },
+      account: {
+        findMany: mocks.accountFindMany,
+        findUnique: mocks.accountFindUnique,
+        findFirst: mocks.accountFindFirst,
+      },
+      journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+      journalEntry: journalEntryBranch(),
+    };
+  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAllAccountsExist();
+    wireTransaction(buildClaimTx);
+    mocks.systemSettings.reimbursementLiabilityAccountId = 209;
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({ ...claimExpense });
+    mocks.journalFindFirst.mockResolvedValue({ id: 77 });
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    mocks.assertPeriodOpen.mockResolvedValue(undefined);
+  });
+
+  it("(c1) akun 210209 nonaktif -> approve (J-RB1) gagal, nol jurnal", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: false, deletedAt: null });
+    await expect(onReimbursementClaimApproved(42, 7, buildClaimTx() as never)).rejects.toThrow("nonaktif");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("(c2) akun 210209 nonaktif -> bayar (J-RB2) gagal, nol jurnal", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: false, deletedAt: null });
+    await expect(onReimbursementClaimPaid(42, 7, buildClaimTx() as never)).rejects.toThrow("nonaktif");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("(c3) akun 210209 terhapus (deletedAt) -> approve DAN bayar gagal, nol jurnal", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: true, deletedAt: new Date("2026-10-26T00:00:00.000Z") });
+    await expect(onReimbursementClaimApproved(42, 7, buildClaimTx() as never)).rejects.toThrow("terhapus");
+    await expect(onReimbursementClaimPaid(42, 7, buildClaimTx() as never)).rejects.toThrow("terhapus");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("(c4) akun 210209 aktif belum terhapus -> J-RB1 terposting (kontrol positif)", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: true, deletedAt: null });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onReimbursementClaimApproved(42, 7, buildClaimTx() as never);
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ referenceType: "ExpenseReimbursementAccrual" }) }),
+    );
+  });
+
+  it("(a) hook bayar: query akrual J-RB1 wajib filter REVERSED + deletedAt", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: true, deletedAt: null });
+    await onReimbursementClaimPaid(42, 7, buildClaimTx() as never);
+    const where = mocks.journalFindFirst.mock.calls[0]?.[0]?.where;
+    expect(where.status).toEqual({ not: "REVERSED" });
+    expect(where.deletedAt).toBeNull();
   });
 });

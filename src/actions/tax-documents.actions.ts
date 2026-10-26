@@ -7,6 +7,7 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import {
   cancelTaxInvoice,
   creditInputInvoice,
+  issueDownPaymentTaxInvoice,
   issueTaxInvoice,
   replaceTaxInvoice,
 } from "@/lib/services/tax-invoice.service"
@@ -53,6 +54,11 @@ const issueSchema = z.object({
   counterpartyTaxId: optionalText,
   counterpartyName: optionalText,
   counterpartyNitku: optionalText,
+  // Vonis 019-V §2: NPWP 15 digit hanya terbit dengan konfirmasi eksplisit.
+  legacy15Confirmed: z.preprocess(
+    (v) => (v === "on" || v === "true" || v === true ? true : undefined),
+    z.boolean().optional(),
+  ),
   idempotencyKey: z.string().trim().min(8, "Idempotency key wajib"),
 })
 
@@ -87,6 +93,28 @@ export async function issueTaxInvoiceAction(formData: FormData) {
   const parsed = parseFormData(issueSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return issueTaxInvoice({ ...parsed.data, userId: Number(user.id) })
+}
+
+const issueDpSchema = z.object({
+  downPaymentId: z.coerce.number().int().positive(),
+  taxInvoiceNumber: z.string().trim().min(1, "Nomor faktur pajak wajib diisi").max(50),
+  counterpartyTaxId: optionalText,
+  counterpartyName: optionalText,
+  counterpartyNitku: optionalText,
+  // Vonis 019-V §2: NPWP 15 digit hanya terbit dengan konfirmasi eksplisit (sama gerbang issueTaxInvoice).
+  legacy15Confirmed: z.preprocess(
+    (v) => (v === "on" || v === "true" || v === true ? true : undefined),
+    z.boolean().optional(),
+  ),
+  idempotencyKey: z.string().trim().min(8, "Idempotency key wajib"),
+})
+
+/** FP uang muka per DP confirmed terutang (F-2026-10-25-004-V). */
+export async function issueDownPaymentTaxInvoiceAction(formData: FormData) {
+  const user = await requirePermission("create_tax_invoices")
+  const parsed = parseFormData(issueDpSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  return issueDownPaymentTaxInvoice({ ...parsed.data, userId: Number(user.id) })
 }
 
 export async function replaceTaxInvoiceAction(formData: FormData) {

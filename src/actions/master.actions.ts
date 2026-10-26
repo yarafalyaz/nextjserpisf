@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
+import { passwordPolicyError } from "@/lib/auth/password-policy";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
@@ -15,6 +16,8 @@ import {
   requireString,
 } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
+import { validateItemTaxDefaults } from "@/lib/services/item-tax-default.service";
+import { validateCommissionRateWrite } from "@/lib/services/customer-commission-rate.service";
 import {
   customerSchema,
   customerCategorySchema,
@@ -48,19 +51,29 @@ import {
 } from "@/lib/services/lead-duplicate.service";
 import {
   findCustomerDuplicateCandidates,
+  findCustomerNpwpConflict,
   buildCustomerDuplicateWarning,
+  buildCustomerNpwpBlockedMessage,
   loadCustomerDuplicateGroups,
   CUSTOMER_REUSED_MESSAGE,
+  CUSTOMER_NPWP_BLOCKED_TITLE,
   type CustomerDuplicateWarning,
   type CustomerDuplicateGroup,
+  type CustomerNpwpConflict,
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
+  normalizeNitku,
+  normalizeNpwp,
+  validateMasterTaxIdentity,
+} from "@/lib/tax/customer-tax-identity";
+import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -197,6 +210,69 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CUSTOMER ACTIONS ====================
 
+/**
+ * Q-CD-1 (PUTUSAN Lead PR #901, F-2026-10-25-040-S §B): gerbang BLOKIR
+ * NPWP persis — pengecualian dari peringatan advisory BR-CD-04. NPWP
+ * ternormalisasi (`normalizeCustomerTaxIdKey`) sama persis DAN terisi di
+ * kedua sisi = simpan DITOLAK sebelum create/update; kunci lain
+ * (telepon/nama+email) tetap peringatan tahap 1. Respons blokir
+ * terstruktur: `npwpConflict` (id/nama/kode pemegang) + `error` verbatim
+ * supaya operator memakai master existing atau mengoreksi NPWP.
+ */
+function buildCustomerNpwpBlockedResult(conflict: CustomerNpwpConflict) {
+  return {
+    success: false as const,
+    error: buildCustomerNpwpBlockedMessage(conflict),
+    npwpConflict: {
+      id: conflict.id,
+      slug: conflict.slug,
+      name: conflict.name,
+      code: conflict.code,
+      title: CUSTOMER_NPWP_BLOCKED_TITLE,
+    },
+  };
+}
+
+// F-2026-10-25-004-S: validasi bentuk identitas pajak master (longgar-
+// tertanda vonis 019-V §1/§2/§3) + normalisasi simpan digit-saja.
+// Bentuk cacat = tolak simpan; legacy15/unlinked lolos dengan peringatan
+// di respons (advisory, simpan tetap berhasil — pola duplicateWarning).
+function customerTaxIdentityForSave(v: {
+  taxId?: string
+  taxpayerName?: string
+  taxAddress?: string
+  nitku?: string
+  pkpStatus?: string
+  pkpEffectiveFrom?: string
+  pkpSource?: string
+}): { error: string } | { data: Record<string, unknown>; warnings: string[] } {
+  const check = validateMasterTaxIdentity({
+    taxId: v.taxId,
+    taxpayerName: v.taxpayerName,
+    nitku: v.nitku,
+  })
+  if (!check.ok) return { error: check.errors.join("; ") }
+  let pkpEffectiveFrom: Date | null = null
+  if (v.pkpEffectiveFrom) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.pkpEffectiveFrom)) {
+      return { error: "Tanggal pengukuhan PKP tidak valid (format YYYY-MM-DD)" }
+    }
+    pkpEffectiveFrom = wibDateToUtcMidnight(v.pkpEffectiveFrom)
+  }
+  return {
+    warnings: check.warnings,
+    data: {
+      taxId: normalizeNpwp(v.taxId) ?? v.taxId ?? null,
+      taxpayerName: v.taxpayerName ?? null,
+      taxAddress: v.taxAddress ?? null,
+      nitku: normalizeNitku(v.nitku),
+      pkpStatus: v.pkpStatus ?? "unknown",
+      pkpEffectiveFrom,
+      pkpSource: v.pkpSource ?? null,
+    },
+  }
+}
+
 export async function createCustomer(formData: FormData) {
   try {
     const user = await requirePermission("create_customers");
@@ -215,6 +291,13 @@ export async function createCustomer(formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const taxIdentity = customerTaxIdentityForSave(v);
+    if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum create.
+    const npwpConflict = await findCustomerNpwpConflict({ taxId: v.taxId });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
     // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
@@ -247,7 +330,7 @@ export async function createCustomer(formData: FormData) {
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
         isActive: true,
-        taxId: v.taxId ?? null,
+        ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
       },
     });
@@ -263,7 +346,11 @@ export async function createCustomer(formData: FormData) {
     );
     const duplicateWarning: CustomerDuplicateWarning | null =
       buildCustomerDuplicateWarning(candidates);
-    return { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
+    // taxWarnings hanya disertakan bila ada peringatan (legacy15 dsb.) —
+    // bentuk respons lama byte-sama bila tidak ada (kontrak tidak berubah diam-diam).
+    return taxIdentity.warnings.length
+      ? { success: true, id: customer.id, slug: customer.slug, duplicateWarning, taxWarnings: taxIdentity.warnings }
+      : { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCustomer]", getErrorMessage(e) || e);
@@ -278,6 +365,17 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const taxIdentity = customerTaxIdentityForSave(v);
+    if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum update;
+    // self-match (NPWP milik pelanggan ini sendiri) dikecualikan.
+    const npwpConflict = await findCustomerNpwpConflict({
+      taxId: v.taxId,
+      excludeCustomerId: customerId,
+    });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     if (v.customerCategoryId != null) {
       const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
@@ -302,7 +400,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         district: v.district ?? null,
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
-        taxId: v.taxId ?? null,
+        ...taxIdentity.data,
         customerCategoryId: v.customerCategoryId ?? null,
       },
     });
@@ -321,7 +419,9 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     );
     const duplicateWarning: CustomerDuplicateWarning | null =
       buildCustomerDuplicateWarning(candidates);
-    return { success: true, duplicateWarning };
+    return taxIdentity.warnings.length
+      ? { success: true, duplicateWarning, taxWarnings: taxIdentity.warnings }
+      : { success: true, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateCustomer]", getErrorMessage(e) || e);
@@ -467,6 +567,25 @@ export async function updateVendor(vendorId: number, formData: FormData) {
 
 // ==================== ITEM ACTIONS ====================
 
+/**
+ * Penjaga rujukan Tax default item (vonis Q-ITX-1 Putusan 3): Tax wajib
+ * ada, aktif, belum terhapus. Kembalikan pesan error atau null bila sah.
+ */
+async function checkItemTaxReferences(taxDefaults: { defaultSalesTaxId: number | null; defaultPurchaseTaxId: number | null }): Promise<string | null> {
+  for (const [field, label] of [
+    ["defaultSalesTaxId", "penjualan"],
+    ["defaultPurchaseTaxId", "pembelian"],
+  ] as const) {
+    const taxId = taxDefaults[field];
+    if (taxId === null) continue;
+    const tax = await prisma.tax.findUnique({ where: { id: taxId }, select: { id: true, isActive: true, deletedAt: true } });
+    if (!tax || !tax.isActive || tax.deletedAt !== null) {
+      return `Kode pajak default ${label} tidak ditemukan atau nonaktif di master pajak (vonis Q-ITX-1 Putusan 3). Pilih kode pajak aktif atau kosongkan.`;
+    }
+  }
+  return null
+}
+
 export async function createItem(formData: FormData) {
   try {
     await requirePermission("create_items");
@@ -480,6 +599,23 @@ export async function createItem(formData: FormData) {
     if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
       return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
     }
+
+    // F-2026-10-25-042-V (vonis Q-ITX-1): penjaga default pajak per item —
+    // scrap menang (Putusan 5), persen 0–100, rujukan Tax wajib ada +
+    // aktif + belum terhapus (fail-closed tanpa fallback, Putusan 3).
+    const taxDefaults = {
+      isScrapSaleItem: v.isScrapSaleItem ?? false,
+      defaultSalesTaxId: v.defaultSalesTaxId ?? null,
+      defaultPurchaseTaxId: v.defaultPurchaseTaxId ?? null,
+      defaultDppPercent: v.defaultDppPercent ?? null,
+    };
+    try {
+      validateItemTaxDefaults(taxDefaults);
+    } catch (e) {
+      return { success: false, error: getErrorMessage(e, "Default pajak item tidak valid") };
+    }
+    const taxRefError = await checkItemTaxReferences(taxDefaults);
+    if (taxRefError) return { success: false, error: taxRefError };
 
     const itemSettings = await getSystemSettings();
     let sku = v.sku || null;
@@ -544,6 +680,9 @@ export async function createItem(formData: FormData) {
           isProduct: v.isProduct ?? false,
           isService: v.isService ?? false,
           isScrapSaleItem: v.isScrapSaleItem ?? false,
+          defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+          defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+          defaultDppPercent: taxDefaults.defaultDppPercent,
           trackBatch: v.trackBatch ?? false,
           trackSerial: v.trackSerial ?? false,
           isActive: true,
@@ -569,12 +708,49 @@ export async function createItem(formData: FormData) {
     });
 
     revalidatePath("/master/barang");
-    await logActivity("create", "Item", item.id, "Membuat barang");
+    await logActivity("create", "Item", item.id, "Membuat barang", {
+      defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+      defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+      defaultDppPercent: taxDefaults.defaultDppPercent,
+    });
     return { success: true, id: item.id, slug: item.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createItem]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Ambil default pajak efektif untuk validasi scrap (Putusan 5).
+ * Field form eksplisit per nama: kunci FormData tidak ada = warisi nilai
+ * tersimpan (form lama/UI belum mengirim tidak mengosongkan diam-diam);
+ * kunci ada tapi kosong = operator mengosongkan.
+ */
+function decimalToNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === "number") return value
+  const maybe = value as { toNumber?: () => number }
+  return typeof maybe.toNumber === "function" ? maybe.toNumber() : null
+}
+
+function pickTaxDefaultFields(
+  formData: FormData,
+  v: { defaultSalesTaxId?: number; defaultPurchaseTaxId?: number; defaultDppPercent?: number },
+  stored: {
+    isScrapSaleItem: boolean
+    defaultSalesTaxId: number | null
+    defaultPurchaseTaxId: number | null
+    defaultDppPercent: unknown
+  } | null,
+) {
+  const pick = (key: "defaultSalesTaxId" | "defaultPurchaseTaxId" | "defaultDppPercent", formVal: number | undefined, storedVal: number | null) =>
+    formData.has(key) ? (formVal ?? null) : storedVal
+  return {
+    isScrapSaleItem: stored?.isScrapSaleItem ?? false,
+    defaultSalesTaxId: pick("defaultSalesTaxId", v.defaultSalesTaxId, stored?.defaultSalesTaxId ?? null),
+    defaultPurchaseTaxId: pick("defaultPurchaseTaxId", v.defaultPurchaseTaxId, stored?.defaultPurchaseTaxId ?? null),
+    defaultDppPercent: pick("defaultDppPercent", v.defaultDppPercent, decimalToNumber(stored?.defaultDppPercent)),
   }
 }
 
@@ -594,6 +770,29 @@ export async function updateItem(itemId: number, formData: FormData) {
     if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
       return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
     }
+
+    // F-2026-10-25-042-V (vonis Q-ITX-1): penjaga default pajak per item —
+    // sama persis createItem. Nilai efektif = gabungan form + tersimpan
+    // (lihat pickTaxDefaultFields): scrap tersimpan + persen warisan
+    // tidak lolos diam-diam saat form tidak mengirim field pajak.
+    const storedItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { isScrapSaleItem: true, defaultSalesTaxId: true, defaultPurchaseTaxId: true, defaultDppPercent: true },
+    });
+    const taxDefaults = pickTaxDefaultFields(formData, v, storedItem);
+    taxDefaults.isScrapSaleItem = taxDefaults.isScrapSaleItem || (v.isScrapSaleItem ?? false);
+    try {
+      validateItemTaxDefaults(taxDefaults);
+    } catch (e) {
+      return { success: false, error: getErrorMessage(e, "Default pajak item tidak valid") };
+    }
+    const taxRefError = await checkItemTaxReferences(taxDefaults);
+    if (taxRefError) return { success: false, error: taxRefError };
+    const storedPercent = decimalToNumber(storedItem?.defaultDppPercent);
+    const taxDefaultChanged =
+      taxDefaults.defaultSalesTaxId !== (storedItem?.defaultSalesTaxId ?? null) ||
+      taxDefaults.defaultPurchaseTaxId !== (storedItem?.defaultPurchaseTaxId ?? null) ||
+      taxDefaults.defaultDppPercent !== storedPercent;
 
     if (v.price < v.cost) {
       return {
@@ -635,6 +834,9 @@ export async function updateItem(itemId: number, formData: FormData) {
           isProduct: v.isProduct ?? false,
           isService: v.isService ?? false,
           isScrapSaleItem: v.isScrapSaleItem ?? false,
+          defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+          defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+          defaultDppPercent: taxDefaults.defaultDppPercent,
           trackBatch: v.trackBatch ?? false,
           trackSerial: v.trackSerial ?? false,
         },
@@ -659,7 +861,26 @@ export async function updateItem(itemId: number, formData: FormData) {
     });
 
     revalidatePath("/master/barang");
-    await logActivity("update", "Item", itemId, "Memperbarui barang");
+    await logActivity(
+      "update",
+      "Item",
+      itemId,
+      taxDefaultChanged
+        ? `Memperbarui barang (default pajak: ${storedItem?.defaultSalesTaxId ?? "-"}->${taxDefaults.defaultSalesTaxId ?? "-"} / ${storedItem?.defaultPurchaseTaxId ?? "-"}->${taxDefaults.defaultPurchaseTaxId ?? "-"} / ${storedPercent ?? "-"}->${taxDefaults.defaultDppPercent ?? "-"})`
+        : "Memperbarui barang",
+      {
+        previous: {
+          defaultSalesTaxId: storedItem?.defaultSalesTaxId ?? null,
+          defaultPurchaseTaxId: storedItem?.defaultPurchaseTaxId ?? null,
+          defaultDppPercent: storedPercent,
+        },
+        next: {
+          defaultSalesTaxId: taxDefaults.defaultSalesTaxId,
+          defaultPurchaseTaxId: taxDefaults.defaultPurchaseTaxId,
+          defaultDppPercent: taxDefaults.defaultDppPercent,
+        },
+      },
+    );
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -847,6 +1068,7 @@ function readEmployeeLifecycleFields(
     contractStartDate?: string;
     contractEndDate?: string;
     employmentEndedAt?: string;
+    leaveEligibilityStartDate?: string;
   },
 ) {
   const rawStatus = (formData.get("employmentStatus") as string | null)?.trim() || null;
@@ -873,7 +1095,15 @@ function readEmployeeLifecycleFields(
       : null,
     employmentEndedAt: endedAt,
     endReason: rawReason,
+    leaveEligibilityStartDate: dates.leaveEligibilityStartDate
+      ? wibDateToUtcMidnight(dates.leaveEligibilityStartDate)
+      : null,
   };
+}
+
+function todayWibMidnightDate(): Date {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  return wibDateToUtcMidnight(today);
 }
 
 function dateOnlyOrNull(value: Date | null | undefined): string | null {
@@ -886,6 +1116,7 @@ type EmployeeLifecycleValues = {
   contractEndDate: string | null;
   employmentEndedAt: string | null;
   endReason: string | null;
+  leaveEligibilityStartDate: string | null;
 };
 
 /**
@@ -969,8 +1200,9 @@ export async function createEmployee(formData: FormData) {
       if (!email || email.trim() === "") {
         return { success: false, error: "Email wajib diisi untuk akun login" };
       }
-      if (!loginPass || loginPass.length < 8) {
-        return { success: false, error: "Kata sandi minimal 8 karakter" };
+      const loginPassIssue = passwordPolicyError(loginPass ?? "", "Kata sandi");
+      if (loginPassIssue) {
+        return { success: false, error: loginPassIssue };
       }
       const existing = await prisma.user.findUnique({
         where: { email: email.trim() },
@@ -1081,6 +1313,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       select: {
         userId: true,
         employmentStatus: true,
+        leaveEligibilityStartDate: true,
         contractStartDate: true,
         contractEndDate: true,
         employmentEndedAt: true,
@@ -1110,8 +1343,9 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       if (!trimmedEmail) {
         return { success: false, error: "Email wajib diisi untuk akun login" };
       }
-      if (!loginPass || loginPass.length < 8) {
-        return { success: false, error: "Kata sandi minimal 8 karakter" };
+      const loginPassIssue = passwordPolicyError(loginPass ?? "", "Kata sandi");
+      if (loginPassIssue) {
+        return { success: false, error: loginPassIssue };
       }
       const existing = await prisma.user.findUnique({
         where: { email: trimmedEmail },
@@ -1160,10 +1394,27 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       formData.has("contractStartDate") ||
       formData.has("contractEndDate") ||
       formData.has("employmentEndedAt") ||
+      formData.has("leaveEligibilityStartDate") ||
       formData.has("endReason");
     const lifecycleFields = lifecycleTouched
       ? readEmployeeLifecycleFields(formData, parsedDates.data)
       : null;
+
+    // Transisi Magang -> Kontrak: jam masa kerja hak cuti mulai dari
+    // tanggal mulai kontrak (masa magang tidak terhitung). Jangkar hanya
+    // diisi otomatis bila belum pernah diatur manual.
+    if (
+      lifecycleFields &&
+      current &&
+      current.employmentStatus === "INTERN" &&
+      (lifecycleFields.employmentStatus === "PKWT" ||
+        lifecycleFields.employmentStatus === "PKWTT") &&
+      current.leaveEligibilityStartDate == null &&
+      lifecycleFields.leaveEligibilityStartDate == null
+    ) {
+      lifecycleFields.leaveEligibilityStartDate =
+        lifecycleFields.contractStartDate ?? todayWibMidnightDate();
+    }
     const updateData = {
       ...employeeFields,
       ...(lifecycleFields ?? {}),
@@ -1229,6 +1480,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(current.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(current.employmentEndedAt),
         endReason: current.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(current.leaveEligibilityStartDate),
       };
       const newValues = {
         employmentStatus: lifecycleFields.employmentStatus,
@@ -1236,6 +1488,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(lifecycleFields.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(lifecycleFields.employmentEndedAt),
         endReason: lifecycleFields.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(lifecycleFields.leaveEligibilityStartDate),
       };
       if (JSON.stringify(oldValues) !== JSON.stringify(newValues)) {
         const logged = await writeEmployeeLifecycleLog({
@@ -1738,6 +1991,25 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
+    // F-2026-10-25-030-S Q-LR-2/4: cabang lost digerbang SEBELUM mutasi —
+    // kategori wajib + key asing ditolak, won/lost terminal mutlak.
+    // Kategori pada status non-lost juga ditolak (form wajib kosong);
+    // guard kepemilikan existing di atas tetap penjaga pertama (AC-LR-B6).
+    if (v.lostReasonCategory != null && v.status !== "lost") {
+      throw new Error(
+        "Kategori alasan kalah hanya berlaku saat status diubah menjadi kalah (lost).",
+      );
+    }
+    const lostCheck = validateLeadLostTransition({
+      fromStatus: existing.status,
+      toStatus: v.status ?? null,
+      category: v.lostReasonCategory ?? null,
+      freeText: v.lostReasonText ?? null,
+    });
+    if (!lostCheck.ok) {
+      throw new Error(lostCheck.error);
+    }
+
     const newAssignedTo = v.assignedTo ?? null;
 
     // Security Guard: Only admins can re-assign leads to others.
@@ -1843,6 +2115,9 @@ export async function updateLead(id: number, formData: FormData) {
             userId: Number(actor.id),
             type: "status_change",
             subject: "Status diubah",
+            // Awalan [kalah:key] hanya pada transisi ke lost (Q-LR-1);
+            // status lain description tetap null seperti existing.
+            description: lostCheck.ok ? lostCheck.description : null,
             oldStatus: existing.status,
             newStatus: v.status,
           },
@@ -3164,4 +3439,190 @@ export async function deleteCustomerCategory(id: number) {
     console.error("[deleteCustomerCategory]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
+}
+
+// ── F-2026-10-25-036-S: histori tarif komisi per kategori pelanggan ──
+// Izin existing master kategori (BR-KT36-10, tanpa izin baru): tambah =
+// create_customers, ubah/tutup masa/hapus = edit_customers. Penjaga murni
+// (tolak tumpang tindih + baris sumber snapshot beku) di
+// customer-commission-rate.service; cek rujukan snapshot dalam tx yang sama.
+
+function parseCommissionRateForm(formData: FormData) {
+  const customerCategoryId = Number(formData.get("customerCategoryId"))
+  const commissionPercent = Number(formData.get("commissionPercent"))
+  const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "")
+  const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim()
+  if (!Number.isInteger(customerCategoryId) || customerCategoryId <= 0) {
+    return { error: "Kategori pelanggan wajib dipilih" } as const
+  }
+  if (!Number.isFinite(commissionPercent)) {
+    return { error: "Persen komisi tidak valid" } as const
+  }
+  const effectiveFrom = wibDateToUtcMidnight(effectiveFromRaw)
+  if (!effectiveFrom) return { error: "Tanggal mulai berlaku tarif tidak valid" } as const
+  let effectiveTo: Date | null = null
+  if (effectiveToRaw) {
+    effectiveTo = wibDateToUtcMidnight(effectiveToRaw)
+    if (!effectiveTo) return { error: "Tanggal berakhir masa tarif tidak valid" } as const
+  }
+  return { customerCategoryId, commissionPercent, effectiveFrom, effectiveTo } as const
+}
+
+async function loadCommissionRateRows(
+  tx: Prisma.TransactionClient,
+  customerCategoryId: number,
+) {
+  const rows = await tx.customerCommissionRate.findMany({
+    where: { customerCategoryId },
+    select: { id: true, customerCategoryId: true, commissionPercent: true, effectiveFrom: true, effectiveTo: true },
+  })
+  return rows.map((r) => ({ ...r, commissionPercent: Number(r.commissionPercent) }))
+}
+
+export async function createCustomerCommissionRate(formData: FormData) {
+  try {
+    const user = await requirePermission("create_customers")
+    const parsed = parseCommissionRateForm(formData)
+    if ("error" in parsed) return { success: false, error: parsed.error }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const category = await tx.customerCategory.findFirst({
+        where: { id: parsed.customerCategoryId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!category) return { error: "Kategori pelanggan tidak ditemukan" } as const
+      const existing = await loadCommissionRateRows(tx, parsed.customerCategoryId)
+      const guardError = validateCommissionRateWrite({
+        existing,
+        targetId: null,
+        customerCategoryId: parsed.customerCategoryId,
+        commissionPercent: parsed.commissionPercent,
+        effectiveFrom: parsed.effectiveFrom,
+        effectiveTo: parsed.effectiveTo,
+        targetIsSnapshotSource: false,
+      })
+      if (guardError) return { error: guardError } as const
+      const rate = await tx.customerCommissionRate.create({
+        data: {
+          customerCategoryId: parsed.customerCategoryId,
+          commissionPercent: new Prisma.Decimal(parsed.commissionPercent.toFixed(2)),
+          effectiveFrom: parsed.effectiveFrom,
+          effectiveTo: parsed.effectiveTo,
+          createdBy: Number(user.id),
+        },
+      })
+      return { id: rate.id } as const
+    })
+    if ("error" in created) return { success: false, error: created.error }
+
+    revalidatePath("/master/kategori-pelanggan")
+    await logActivity("create", "CustomerCommissionRate", created.id, "Menambah tarif komisi kategori pelanggan")
+    return { success: true, id: created.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createCustomerCommissionRate]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateCustomerCommissionRate(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_customers")
+    const parsed = parseCommissionRateForm(formData)
+    if ("error" in parsed) return { success: false, error: parsed.error }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const target = await tx.customerCommissionRate.findUnique({ where: { id } })
+      if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
+      const existing = await loadCommissionRateRows(tx, target.customerCategoryId)
+      const snapshotSource = await tx.salesInvoice.findFirst({
+        where: { commissionRateId: id },
+        select: { id: true },
+      })
+      const guardError = validateCommissionRateWrite({
+        existing,
+        targetId: id,
+        customerCategoryId: target.customerCategoryId,
+        commissionPercent: parsed.commissionPercent,
+        effectiveFrom: parsed.effectiveFrom,
+        effectiveTo: parsed.effectiveTo,
+        targetIsSnapshotSource: snapshotSource !== null,
+      })
+      if (guardError) return { error: guardError } as const
+      await tx.customerCommissionRate.update({
+        where: { id },
+        data: {
+          commissionPercent: new Prisma.Decimal(parsed.commissionPercent.toFixed(2)),
+          effectiveFrom: parsed.effectiveFrom,
+          effectiveTo: parsed.effectiveTo,
+        },
+      })
+      return { ok: true } as const
+    })
+    if ("error" in result) return { success: false, error: result.error }
+
+    revalidatePath("/master/kategori-pelanggan")
+    await logActivity("update", "CustomerCommissionRate", id, "Mengubah tarif komisi kategori pelanggan")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateCustomerCommissionRate]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function deleteCustomerCommissionRate(id: number) {
+  try {
+    await requirePermission("edit_customers")
+
+    const result = await prisma.$transaction(async (tx) => {
+      const target = await tx.customerCommissionRate.findUnique({ where: { id } })
+      if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
+      const snapshotSource = await tx.salesInvoice.findFirst({
+        where: { commissionRateId: id },
+        select: { id: true },
+      })
+      const guardError = validateCommissionRateWrite({
+        existing: [],
+        targetId: id,
+        customerCategoryId: target.customerCategoryId,
+        commissionPercent: Number(target.commissionPercent),
+        effectiveFrom: target.effectiveFrom,
+        effectiveTo: target.effectiveTo,
+        targetIsSnapshotSource: snapshotSource !== null,
+        isDelete: true,
+      })
+      if (guardError) return { error: guardError } as const
+      await tx.customerCommissionRate.delete({ where: { id } })
+      return { ok: true } as const
+    })
+    if ("error" in result) return { success: false, error: result.error }
+
+    revalidatePath("/master/kategori-pelanggan")
+    await logActivity("delete", "CustomerCommissionRate", id, "Menghapus tarif komisi kategori pelanggan")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteCustomerCommissionRate]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/** Daftar histori tarif komisi satu kategori (read-only, untuk layar master). */
+export async function getCustomerCommissionRates(customerCategoryId: number) {
+  await requirePermission("view_customers")
+  const rows = await prisma.customerCommissionRate.findMany({
+    where: { customerCategoryId },
+    orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      customerCategoryId: true,
+      commissionPercent: true,
+      effectiveFrom: true,
+      effectiveTo: true,
+      createdBy: true,
+      createdAt: true,
+    },
+  })
+  return rows.map((r) => ({ ...r, commissionPercent: Number(r.commissionPercent) }))
 }

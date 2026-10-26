@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { loadCustomerTaxCompleteness } from "@/lib/reports/customer-tax-identity-data"
+import { deriveSnapshotMarkers, NPWP_LEGACY15_WARNING } from "@/lib/tax/customer-tax-identity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 
 import type { Metadata } from "next"
@@ -66,6 +68,24 @@ export default async function CustomerDetailPage({
 
   if (!customer) notFound()
 
+  const [taxCompletenessRows, taxInvoices] = await Promise.all([
+    loadCustomerTaxCompleteness([customer.id]),
+    prisma.taxInvoice.findMany({
+      where: { direction: "out", salesInvoice: { customerId: customer.id, deletedAt: null }, djpStatus: { not: "cancelled" } },
+      orderBy: { taxInvoiceDate: "desc" },
+      take: 10,
+      select: { id: true, taxInvoiceNumber: true, taxInvoiceDate: true, counterpartyName: true, counterpartyTaxId: true, counterpartyNitku: true },
+    }),
+  ])
+  const taxCompleteness = taxCompletenessRows[0]?.completeness
+  const NPWP_FORMAT_LABEL: Record<string, string> = {
+    canonical16: "bentuk 16 digit",
+    legacy15: "bentuk 15 digit (legacy)",
+    invalid: "bentuk tidak sah",
+    absent: "kosong",
+  }
+  const PKP_LABEL: Record<string, string> = { pkp: "PKP", non_pkp: "Bukan PKP", unknown: "Belum diketahui" }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -101,6 +121,70 @@ export default async function CustomerDetailPage({
                 <DetailField label="Terdaftar" value={formatDate(customer.createdAt)} />
                 <DetailField label="Alamat" value={customer.address || "-"} colSpan="full" />
               </DetailCard>
+            ),
+          },
+          {
+            id: "tax-identity",
+            label: "Identitas Pajak",
+            content: (
+              <div className="flex flex-col gap-4">
+                <DetailCard>
+                  <DetailField label="Nama Wajib Pajak" value={customer.taxpayerName || "-"} />
+                  <DetailField label="NPWP" value={customer.taxId ? `${customer.taxId} (${NPWP_FORMAT_LABEL[taxCompleteness?.npwpFormat ?? "absent"]})` : "-"} />
+                  <DetailField label="NITKU" value={customer.nitku || "-"} />
+                  <DetailField label="Status PKP" value={PKP_LABEL[customer.pkpStatus] ?? customer.pkpStatus} />
+                  <DetailField label="Tanggal Pengukuhan PKP" value={customer.pkpEffectiveFrom ? formatDate(customer.pkpEffectiveFrom) : "-"} />
+                  <DetailField label="Sumber Status PKP" value={customer.pkpSource || "-"} />
+                  <DetailField label="Alamat Pajak" value={customer.taxAddress || "-"} colSpan="full" />
+                </DetailCard>
+                <p className="text-xs text-muted-foreground">Alamat pajak master dipakai ekspor Coretax secara live — belum dibekukan ke dokumen.</p>
+                {taxCompleteness?.npwpFormat === "legacy15" ? (
+                  <p role="alert" className="rounded-lg border border-warning bg-warning/10 px-3 py-2 text-sm">{NPWP_LEGACY15_WARNING}</p>
+                ) : null}
+                {taxCompleteness && !taxCompleteness.ready ? (
+                  <p className="text-sm text-muted-foreground">
+                    Belum siap terbit faktur pajak: kurang {taxCompleteness.missing.join(", ")}.
+                    {taxCompleteness.usesTradeNameFallback ? " Nama wajib pajak kosong — nama dagang tampil sebagai penanda, bukan pengganti gerbang faktur." : ""}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Identitas pajak master terisi untuk gerbang terbit faktur pajak.</p>
+                )}
+                <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                  <div className="p-4 px-5 border-b border-default">
+                    <h2 className="text-[0.9375rem] font-semibold text-foreground">Snapshot Faktur Pajak Terbit</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">Identitas di bawah dibekukan saat faktur terbit — perubahan master sesudahnya tidak mengubah snapshot ini.</p>
+                  </div>
+                  <div className="p-4 px-5">
+                    {taxInvoices.length === 0 ? (
+                      <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">Belum ada faktur pajak terbit</p>
+                    ) : (
+                      <DetailTable>
+                        <DetailTableHead>
+                          <DetailTableTh>No. Faktur Pajak</DetailTableTh>
+                          <DetailTableTh>Tanggal</DetailTableTh>
+                          <DetailTableTh>Nama Snapshot</DetailTableTh>
+                          <DetailTableTh>NPWP Snapshot</DetailTableTh>
+                          <DetailTableTh>NITKU Snapshot</DetailTableTh>
+                        </DetailTableHead>
+                        <DetailTableBody>
+                          {taxInvoices.map((inv) => {
+                            const markers = deriveSnapshotMarkers(inv)
+                            return (
+                              <DetailTableRow key={inv.id}>
+                                <DetailTableTd className="font-mono">{inv.taxInvoiceNumber}</DetailTableTd>
+                                <DetailTableTd>{formatDate(inv.taxInvoiceDate)}</DetailTableTd>
+                                <DetailTableTd>{inv.counterpartyName || "-"}</DetailTableTd>
+                                <DetailTableTd>{inv.counterpartyTaxId ? `${inv.counterpartyTaxId} (${NPWP_FORMAT_LABEL[markers.npwpFormat]})` : "-"}</DetailTableTd>
+                                <DetailTableTd>{inv.counterpartyNitku ? (markers.nitkuUnlinked ? `${inv.counterpartyNitku} (belum tertaut — NPWP snapshot bukan 16 digit)` : inv.counterpartyNitku) : "(kosong — terbit bertanda nitkuAbsent)"}</DetailTableTd>
+                              </DetailTableRow>
+                            )
+                          })}
+                        </DetailTableBody>
+                      </DetailTable>
+                    )}
+                  </div>
+                </div>
+              </div>
             ),
           },
           {

@@ -59,7 +59,7 @@ const columns = [
           info.row.original.status !== "completed" ? completeSalesReturn : undefined
         }
         processLabel="Selesaikan"
-        processPermission="edit_sales_returns"
+        processPermission="approve_sales_returns"
         processConfirmTitle="Selesaikan retur ini?"
         processConfirmBody="Barang retur akan masuk kembali ke stok dan jurnal retur penjualan diposting. Pastikan retur sudah benar."
         processSuccessMessage="Retur berhasil diselesaikan"

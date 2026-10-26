@@ -44,6 +44,31 @@ services:
       db:
         condition: service_healthy
 
+  # Pemicu sinkronisasi libur nasional dari dalam jaringan compose:
+  # memanggil /api/cron/sync-holidays di app saat start lalu tiap 30
+  # hari. Idempoten; lihat docker-compose.prod.yml untuk catatan penuh.
+  holiday-sync:
+    image: curlimages/curl:8.10.1
+    container_name: silengkap_dev_holiday_sync
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Jakarta
+    depends_on:
+      - app
+    command:
+      - sh
+      - -c
+      - |
+        for i in $(seq 1 12); do
+          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3001/api/cron/sync-holidays && break || sleep 10
+        done
+        while true; do
+          sleep 2592000
+          curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3001/api/cron/sync-holidays || echo "holiday-sync: panggilan gagal, dicoba lagi siklus berikutnya"
+        done
+
   db:
     image: mysql:8.0
     container_name: silengkap_dev_db

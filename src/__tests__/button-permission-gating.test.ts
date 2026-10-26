@@ -25,6 +25,10 @@ const DASHBOARD = join(process.cwd(), "src/app/(dashboard)")
 /** Halaman yang halamannya sendiri menuntut izin tulis — tombol tak perlu gerbang. */
 const PAGE_LEVEL_GATED = new Set([
   "pengaturan/workflow/page.tsx",
+  // F-2026-10-25-018-S: halaman pengajuan mandiri menuntut
+  // create_employee_loan_requests untuk SELURUH halaman; tombol Ajukan
+  // menuju form yang digerbang izin sama.
+  "sdm/pinjaman-saya/page.tsx",
 ])
 
 function walk(dir: string, out: string[] = []): string[] {

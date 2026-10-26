@@ -68,7 +68,7 @@ export async function loadWarehouseLowStock(): Promise<WarehouseLowStockLine[]> 
       select: { itemId: true, warehouseId: true, remaining: true },
     }),
   ])
-  const itemIdsWithOverride = new Set(settings.map((s) => s.itemId))
+  const itemIdsWithOverride = new Set(settings.filter((s) => s.minStock != null).map((s) => s.itemId))
   const relevant = new Set(
     items.filter((i) => Number(i.minStock) > 0 || itemIdsWithOverride.has(i.id)).map((i) => i.id),
   )
@@ -90,7 +90,7 @@ export async function loadWarehouseLowStock(): Promise<WarehouseLowStockLine[]> 
   const itemById = new Map(items.map((i) => [i.id, i]))
   return findWarehouseLowStock({
     items: items.map((i) => ({ id: i.id, name: i.name, minStock: Number(i.minStock) })),
-    settings: settings.map((s) => ({ itemId: s.itemId, warehouseId: s.warehouseId, minStock: Number(s.minStock) })),
+    settings: settings.map((s) => ({ itemId: s.itemId, warehouseId: s.warehouseId, minStock: s.minStock == null ? null : Number(s.minStock) })),
     pairs: [...qtyByPair.values()].map((p) => ({
       itemId: p.itemId,
       itemName: itemById.get(p.itemId)?.name ?? `#${p.itemId}`,

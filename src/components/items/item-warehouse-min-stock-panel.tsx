@@ -5,6 +5,8 @@ import {
   listItemWarehouseSettings,
   setItemWarehouseMinStock,
   removeItemWarehouseMinStock,
+  setItemWarehouseLeadTime,
+  removeItemWarehouseLeadTime,
   type ItemWarehouseSettingRow,
 } from "@/actions/item-warehouse-setting.actions"
 import { formatNumber } from "@/lib/utils/format"
@@ -41,6 +43,7 @@ export function ItemWarehouseMinStockPanel({
   const [globalMinStock, setGlobalMinStock] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<number, string>>({})
+  const [leadTimeDrafts, setLeadTimeDrafts] = useState<Record<number, string>>({})
 
   async function load() {
     try {
@@ -51,6 +54,11 @@ export function ItemWarehouseMinStockPanel({
         setDrafts(
           Object.fromEntries(
             res.rows.map((r) => [r.warehouseId, String(r.overrideMinStock ?? r.effectiveMinStock)]),
+          ),
+        )
+        setLeadTimeDrafts(
+          Object.fromEntries(
+            res.rows.map((r) => [r.warehouseId, r.leadTimeDays == null ? "" : String(r.leadTimeDays)]),
           ),
         )
         setLoadError(null)
@@ -75,6 +83,11 @@ export function ItemWarehouseMinStockPanel({
               res.rows.map((r) => [r.warehouseId, String(r.overrideMinStock ?? r.effectiveMinStock)]),
             ),
           )
+          setLeadTimeDrafts(
+            Object.fromEntries(
+              res.rows.map((r) => [r.warehouseId, r.leadTimeDays == null ? "" : String(r.leadTimeDays)]),
+            ),
+          )
         } else {
           setLoadError(res.error)
         }
@@ -97,6 +110,28 @@ export function ItemWarehouseMinStockPanel({
     run(
       () => setItemWarehouseMinStock(itemId, row.warehouseId, value),
       "Stok minimum per gudang tersimpan",
+      () => void load(),
+    )
+  }
+
+  function submitSaveLeadTime(row: ItemWarehouseSettingRow) {
+    const raw = (leadTimeDrafts[row.warehouseId] ?? "").trim()
+    const value = Number(raw)
+    if (raw === "" || !Number.isInteger(value) || value < 0) {
+      showError("Lead time wajib bilangan bulat 0 hari atau lebih")
+      return
+    }
+    run(
+      () => setItemWarehouseLeadTime(itemId, row.warehouseId, value),
+      "Lead time tersimpan",
+      () => void load(),
+    )
+  }
+
+  function submitRemoveLeadTime(row: ItemWarehouseSettingRow) {
+    run(
+      () => removeItemWarehouseLeadTime(itemId, row.warehouseId),
+      "Lead time dihapus; pasangan tidak dinilai untuk titik pesan-ulang",
       () => void load(),
     )
   }
@@ -136,12 +171,19 @@ export function ItemWarehouseMinStockPanel({
                 <th scope="col" className="py-1 pr-2 font-medium">Stok di gudang</th>
                 <th scope="col" className="py-1 pr-2 font-medium">Minimum efektif</th>
                 <th scope="col" className="py-1 pr-2 font-medium">Sumber minimum</th>
-                {canManage ? <th scope="col" className="py-1 font-medium">Atur minimum</th> : null}
+                <th scope="col" className="py-1 pr-2 font-medium">Lead time (hari)</th>
+                {canManage ? (
+                  <>
+                    <th scope="col" className="py-1 pr-2 font-medium">Atur minimum</th>
+                    <th scope="col" className="py-1 font-medium">Atur lead time</th>
+                  </>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => {
                 const inputId = `min-stock-gudang-${row.warehouseId}`
+                const leadTimeInputId = `lead-time-gudang-${row.warehouseId}`
                 return (
                   <tr key={row.warehouseId} className="border-t border-default">
                     <td className="py-2 pr-2">
@@ -163,8 +205,18 @@ export function ItemWarehouseMinStockPanel({
                     <td className="py-2 pr-2">
                       {row.minStockSource === "override" ? overrideLabel : globalLabel}
                     </td>
+                    <td className="py-2 pr-2">
+                      {row.leadTimeDays == null ? (
+                        <>
+                          — <span className="text-xs text-muted-foreground">belum diisi</span>
+                        </>
+                      ) : (
+                        formatNumber(row.leadTimeDays)
+                      )}
+                    </td>
                     {canManage ? (
-                      <td className="py-2">
+                      <>
+                        <td className="py-2 pr-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <label htmlFor={inputId} className="sr-only">
                             Stok minimum di {row.warehouseName}
@@ -204,7 +256,49 @@ export function ItemWarehouseMinStockPanel({
                             </Button>
                           ) : null}
                         </div>
-                      </td>
+                        </td>
+                        <td className="py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label htmlFor={leadTimeInputId} className="sr-only">
+                              Lead time di {row.warehouseName}
+                            </label>
+                            <input
+                              id={leadTimeInputId}
+                              aria-label={`Lead time di ${row.warehouseName}`}
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              value={leadTimeDrafts[row.warehouseId] ?? ""}
+                              disabled={isPending}
+                              onChange={(e) =>
+                                setLeadTimeDrafts((d) => ({ ...d, [row.warehouseId]: e.target.value }))
+                              }
+                              className="w-24 rounded-md border border-default bg-surface px-3 py-2 text-sm"
+                            />
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              isDisabled={isPending}
+                              onPress={() => submitSaveLeadTime(row)}
+                            >
+                              Simpan
+                            </Button>
+                            {row.leadTimeDays != null ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                isDisabled={isPending}
+                                onPress={() => submitRemoveLeadTime(row)}
+                              >
+                                Hapus lead time
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </>
                     ) : null}
                   </tr>
                 )

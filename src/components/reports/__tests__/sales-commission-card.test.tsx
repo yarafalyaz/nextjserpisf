@@ -28,13 +28,13 @@ describe("SalesCommissionCard F-2026-10-22-053-S", () => {
     // Penjaga literal AC-KOM-1 (BUKAN konstanta impor): ubah string builder
     // SALES_COMMISSION_NOTICE = tes ini MERAH.
     expect(text).toContain(
-      "Rekap informatif dari snapshot penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu.",
+      "Rekap informatif dari snapshot penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu. Basis komisi adalah DPP faktur (total faktur dikurangi PPN), dikurangi retur selesai pada masa berjalan.",
     )
     // Penanda ekspor: notice verbatim terbawa ke PDF/CSV via ExportButtons.
     expect(
       container.querySelector("[data-report-narration]")?.getAttribute("data-report-narration"),
     ).toBe(
-      "Rekap informatif dari snapshot penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu.",
+      "Rekap informatif dari snapshot penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu. Basis komisi adalah DPP faktur (total faktur dikurangi PPN), dikurangi retur selesai pada masa berjalan.",
     )
     expect(text).toContain("Sari")
     expect(text).toContain("Budi")
@@ -102,6 +102,32 @@ describe("SalesCommissionCard F-2026-10-22-053-S", () => {
       <SalesCommissionCard report={reportExample()} selectedSalesEmployeeId={null} />,
     )
     expect(container.querySelectorAll("button, a, form, input")).toHaveLength(0)
+    unmountCard(root)
+  })
+
+  it("036-S: DPP + pengurang retur + komisi bersih tampil verbatim dari loader", () => {
+    // Fixture builder: DPP = 1.110.000 − 110.000 = 1.000.000; estimasi 5% =
+    // 50.000; retur DPP 200.000 × 5% = 10.000; bersih 40.000. Kartu hanya
+    // menampilkan angka builder — hitungan ada di builder, bukan di sini.
+    const report = buildSalesCommissionRecap(
+      [{ salesEmployeeId: 1, salesEmployeeName: "Budi", grandTotal: 1_110_000, taxAmount: 110_000, commissionPercent: 5 }],
+      [{ salesEmployeeId: 1, salesEmployeeName: "Budi", returnDppTotal: 200_000, commissionPercent: 5 }],
+    )
+    const { container, root } = renderCard(
+      <SalesCommissionCard report={report} selectedSalesEmployeeId={null} />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain("Basis DPP Faktur Lunas")
+    expect(text).toContain("Pengurang Retur")
+    expect(text).toContain("Estimasi Komisi Bersih")
+    expect(text).toContain("Rp 1.110.000")
+    expect(text).toContain("Rp 1.000.000")
+    expect(text).toContain("Rp 50.000")
+    expect(text).toContain("Rp 10.000")
+    expect(text).toContain("Rp 40.000")
+    expect(text).toContain("Total Basis DPP Faktur Lunas")
+    expect(text).toContain("Total Pengurang Retur")
+    expect(text).toContain("Total Estimasi Komisi Bersih")
     unmountCard(root)
   })
 })
