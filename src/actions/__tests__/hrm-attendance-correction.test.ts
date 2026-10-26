@@ -176,7 +176,7 @@ beforeEach(() => {
 describe("createAttendanceCorrection", () => {
   it("AC-AC-1: pengajuan pending TIDAK menulis Attendance; snapshot rekod berjalan tersimpan", async () => {
     const res = await actions.createAttendanceCorrection(
-      fd({ employeeId: "7", date: DATE, status: "present", checkIn: "08:00", checkOut: "17:00", reason: "Lupa absen" }),
+      fd({ employeeId: "42", date: DATE, status: "present", checkIn: "08:00", checkOut: "17:00", reason: "Lupa absen" }),
     )
     expect(res.success).toBe(true)
     expect(prismaMock.attendance.create).not.toHaveBeenCalled()
@@ -188,6 +188,7 @@ describe("createAttendanceCorrection", () => {
   })
 
   it("AC-AC-3a: karyawan self mengajukan untuk employeeId orang lain ditolak", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
     mocks.hrScopeOverride.current = { kind: "self", employeeId: 7 }
     const res = await actions.createAttendanceCorrection(
       fd({ employeeId: "8", date: DATE, status: "present", reason: "Manipulasi" }),
@@ -197,10 +198,41 @@ describe("createAttendanceCorrection", () => {
     mocks.hrScopeOverride.current = null
   })
 
+  it("TEMUAN-1a: scope department mengajukan untuk bawahan ditolak (self persis semua scope)", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
+    mocks.hrScopeOverride.current = { kind: "department", employeeId: 7, departmentId: 3 }
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "8", date: DATE, status: "present", reason: "Atas nama bawahan" }),
+    )
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
+    expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("TEMUAN-1b: scope all mengajukan untuk orang lain ditolak", async () => {
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "7", date: DATE, status: "present", reason: "Atas nama orang lain" }),
+    )
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
+    expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
+  })
+
+  it("TEMUAN-1c: akun tak tertaut Employee ditolak fail-closed", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    const res = await actions.createAttendanceCorrection(
+      fd({ employeeId: "7", date: DATE, status: "present", reason: "Tanpa tertaut" }),
+    )
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("untuk diri sendiri")
+    expect(prismaMock.attendanceCorrection.create).not.toHaveBeenCalled()
+  })
+
   it("AC-AC-4: pengajuan pending kedua tanggal sama ditolak", async () => {
     prismaMock.attendanceCorrection.findFirst.mockResolvedValue({ id: 3 })
     const res = await actions.createAttendanceCorrection(
-      fd({ employeeId: "7", date: DATE, status: "present", reason: "Kedua" }),
+      fd({ employeeId: "42", date: DATE, status: "present", reason: "Kedua" }),
     )
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toContain("menunggu untuk tanggal ini")
@@ -210,13 +242,13 @@ describe("createAttendanceCorrection", () => {
   it("Q-AC-1: tanggal masa depan ditolak; alasan kosong ditolak validasi", async () => {
     const future = new Date(Date.now() + 7 * 3_600_000 + 86_400_000).toISOString().slice(0, 10)
     const res = await actions.createAttendanceCorrection(
-      fd({ employeeId: "7", date: future, status: "present", reason: "Besok" }),
+      fd({ employeeId: "42", date: future, status: "present", reason: "Besok" }),
     )
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toContain("di luar jendela")
 
     const noReason = await actions.createAttendanceCorrection(
-      fd({ employeeId: "7", date: DATE, status: "present", reason: "" }),
+      fd({ employeeId: "42", date: DATE, status: "present", reason: "" }),
     )
     expect(noReason.success).toBe(false)
   })
