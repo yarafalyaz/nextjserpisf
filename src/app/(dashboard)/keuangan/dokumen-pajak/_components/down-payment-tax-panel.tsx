@@ -3,37 +3,25 @@
 import { useRef, useState } from "react"
 
 import { issueDownPaymentTaxInvoiceAction } from "@/actions/tax-documents.actions"
-import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import type { DownPaymentTaxStatus } from "@/lib/tax/down-payment-vat"
+import {
+  DownPaymentTaxStatusBadge,
+  type DownPaymentVatSnapshotView,
+} from "@/app/(dashboard)/penjualan/uang-muka/_components/down-payment-vat-snapshot"
 import { useTaxDocAction } from "./tax-doc-submit"
 
 /** Baris panel: bentuk loader `loadDownPaymentTaxStatusRows` apa adanya. */
-export interface DownPaymentTaxRowView {
+export interface DownPaymentTaxRowView extends DownPaymentVatSnapshotView {
   downPaymentId: number
   documentNo: string | null
   customerName: string | null
   paymentDate: Date | string
   amount: number
   dpStatus: string
-  vatDpp: number | null
-  vatAmount: number | null
-  vatTaxPeriod: string | null
-  pkpSnapshotLabel: string
   taxInvoiceId: number | null
-  taxInvoiceNumber: string | null
-  taxStatus: DownPaymentTaxStatus
-  taxStatusLabel: string
-}
-
-const BADGE_VARIANT: Record<DownPaymentTaxStatus, "default" | "secondary" | "outline" | "destructive"> = {
-  "bukan-subjek": "secondary",
-  "terutang-belum-terbit": "default",
-  "fp-um-terbit": "outline",
-  "fp-um-batal": "destructive",
 }
 
 /**
@@ -132,7 +120,7 @@ function FragmentRow({
         <td className="py-2 pr-3">{row.vatTaxPeriod ?? "—"}</td>
         <td className="py-2 pr-3">{row.pkpSnapshotLabel}</td>
         <td className="py-2 pr-3">
-          <Badge variant={BADGE_VARIANT[row.taxStatus]}>{row.taxStatusLabel}</Badge>
+          <DownPaymentTaxStatusBadge snapshot={row} />
         </td>
         <td className="py-2">
           <div className="flex flex-col items-start gap-2">
