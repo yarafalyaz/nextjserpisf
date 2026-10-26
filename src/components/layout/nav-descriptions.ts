@@ -9,6 +9,7 @@
  */
 export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/crm/leads": "Kelola prospek pelanggan",
+  "/crm/prioritas-lead": "Daftar kerja prospek aktif menurut urutan prioritas",
   "/crm/tickets": "Tiket bantuan pelanggan",
   "/inventaris/baris-rak": "Baris rak di dalam gudang",
   "/inventaris/mutasi-stok": "Pergerakan stok",

@@ -198,6 +198,7 @@ export const navigation: NavItem[] = [
     icon: Handshake,
     children: [
       { label: "Prospek", href: "/crm/leads", icon: Target, permission: "view_leads" },
+      { label: "Prioritas Lead", href: "/crm/prioritas-lead", icon: ListOrdered, permission: "view_leads" },
       { label: "Tiket", href: "/crm/tickets", icon: Ticket, permission: "view_tickets" },
     ],
   },
