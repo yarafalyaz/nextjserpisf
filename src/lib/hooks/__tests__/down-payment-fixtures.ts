@@ -64,6 +64,16 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
   const base: Record<string, any> = {
     $queryRaw: vi.fn().mockResolvedValue(undefined),
     $executeRaw: vi.fn().mockResolvedValue(undefined),
+    // BLOCKER-1 F-036-S: mock panel snapshot komisi (kategori 1, tarif 2%
+    // berlaku sepanjang 2026). Berkas tes boleh timpa per kasur.
+    customer: {
+      findUnique: mocks.customerFindUnique ?? vi.fn().mockResolvedValue({ customerCategoryId: 1 }),
+    },
+    customerCommissionRate: {
+      findMany: mocks.customerCommissionRateFindMany ?? vi.fn().mockResolvedValue([
+        { id: 1, customerCategoryId: 1, commissionPercent: 2, effectiveFrom: new Date(Date.UTC(2026, 0, 1)), effectiveTo: null },
+      ]),
+    },
     downPayment: {
       findUniqueOrThrow: vi.fn().mockResolvedValue(dp),
       findMany: mocks.downPaymentFindMany ?? vi.fn().mockResolvedValue([]),
@@ -72,8 +82,8 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
     workOrder: { findFirst: vi.fn().mockResolvedValue({ id: 11 }), create: vi.fn() },
     salesOrder: { findFirst: vi.fn().mockResolvedValue({ id: 12 }), create: vi.fn() },
     salesInvoice: {
-      findFirst: mocks.salesInvoiceFindFirst ?? vi.fn(),
-      create: mocks.salesInvoiceCreate ?? vi.fn(),
+      findFirst: mocks.salesInvoiceFindFirst ?? ((async () => null) as any),
+      create: mocks.salesInvoiceCreate ?? (async () => ({ id: 101, documentNo: "INV-1", date: new Date(Date.UTC(2026, 9, 1)) })),
       update: mocks.salesInvoiceUpdate ?? vi.fn(),
     },
     salesPayment: {
@@ -101,6 +111,11 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
     quotation: { update: vi.fn() },
     quotationHistory: { create: vi.fn() },
   }
+  // Override: hanya MENGGANTI cabang yang pemanggil paksa punya — bedakan
+  // dengan basis lama yang selalu meletakkan mock bersama di beberapa cabang
+  // (findUniqueOrThrow DP dari `dp`, sistem setting, dsb.). Untuk pola lama
+  // (mocks bersama), dasar sudah cukup; override cabang yang eksplisit di
+  // pemanggil (mis. salesInvoice.create tanpa date) tetap menang.
   return { ...base, ...overrides }
 }
 
@@ -149,7 +164,9 @@ export function expectCreditCreated(tx: any, data: Record<string, unknown>) {
 }
 
 export const existingInvoice = (over: Record<string, unknown> = {}) => ({
-  id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial", ...over,
+  id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial",
+  date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: null,
+  ...over,
 })
 
 export function expectDpConfirmed(mocks: { downPaymentUpdate: any }, id: number) {
