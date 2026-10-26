@@ -3989,10 +3989,11 @@ export async function createAttendanceCorrection(formData: FormData) {
       return { success: false as const, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    const scope = await getHrScope(user);
-    // BR-AC-07: pengaju = employeeId login persis, fail-closed tanpa tertaut.
-    await assertHrEmployeeAccess(scope, v.employeeId);
-    if (scope.kind === "self" && scope.employeeId !== v.employeeId) {
+    // BR-AC-07 + putusan Lead Q-AC-2: pengaju = employeeId login persis
+    // untuk SEMUA scope (department/all tidak boleh atas nama orang lain),
+    // fail-closed bila akun tak tertaut Employee.
+    const me = await callerEmployeeIdForCorrection(user.id);
+    if (me == null || me !== v.employeeId) {
       throw new Error("Anda hanya diperbolehkan mengajukan koreksi absensi untuk diri sendiri");
     }
 
