@@ -6,6 +6,7 @@ import { ItemForm } from "@/components/forms/item-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { formatPercentage } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
@@ -14,7 +15,7 @@ export const metadata: Metadata = { title: "Tambah Barang" }
 export default async function CreateItemPage() {
   await requirePermission("create_items")
 
-  const [categories, brands, vendors, warehouses, racks, rackRows, generatedCode, unitOptions, groups] = await Promise.all([
+  const [categories, brands, vendors, warehouses, racks, rackRows, generatedCode, unitOptions, groups, taxes] = await Promise.all([
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -25,6 +26,8 @@ export default async function CreateItemPage() {
     // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
     prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true, category: true } }),
     prisma.itemGroup.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    // F-041-S: hanya kode pajak aktif yang boleh jadi default item (server fail-closed).
+    prisma.tax.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true, rate: true } }),
   ])
   const settings = await getSystemSettings()
   const enableAutoCode = settings.enableAutoItemCode !== false
@@ -49,6 +52,7 @@ export default async function CreateItemPage() {
         warehouses={warehouses}
         racks={racks}
         rackRows={rackRows}
+        taxOptions={taxes.map((t) => ({ id: t.id, label: `${t.code ? `${t.code} — ` : ""}${t.name} (${formatPercentage(Number(t.rate), 2)})` }))}
         unitOptions={unitOptions}
         generatedCode={generatedCode}
         enableAutoCode={enableAutoCode}

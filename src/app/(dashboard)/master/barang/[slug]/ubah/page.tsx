@@ -6,6 +6,7 @@ import { ItemForm } from "@/components/forms/item-form"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { formatPercentage } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 
@@ -29,7 +30,7 @@ export default async function EditItemPage({
 
   if (!item) notFound()
 
-  const [categories, brands, vendors, warehouses, racks, rackRows, unitOptions, groups] = await Promise.all([
+  const [categories, brands, vendors, warehouses, racks, rackRows, unitOptions, groups, taxes] = await Promise.all([
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -39,7 +40,17 @@ export default async function EditItemPage({
     // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
     prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true, category: true } }),
     prisma.itemGroup.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    // F-041-S: opsi aktif + rujukan tersimpan item ini (walau kini nonaktif,
+    // supaya nilai lama tampil jujur dan bisa dikosongkan, bukan hilang diam-diam).
+    prisma.tax.findMany({
+      where: { deletedAt: null, OR: [{ isActive: true }, { id: { in: [item.defaultSalesTaxId, item.defaultPurchaseTaxId].filter((id): id is number => id !== null) } }] },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, code: true, rate: true, isActive: true },
+    }),
   ])
+
+  const taxLabel = (t: { name: string; code: string | null; rate: unknown; isActive: boolean }) =>
+    `${t.code ? `${t.code} — ` : ""}${t.name} (${formatPercentage(Number(t.rate), 2)})${t.isActive ? "" : " — nonaktif"}`
 
   if (!item) notFound()
 
@@ -79,6 +90,9 @@ export default async function EditItemPage({
           purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : null,
           isProduct: item.isProduct,
           isScrapSaleItem: item.isScrapSaleItem,
+          defaultSalesTaxId: item.defaultSalesTaxId,
+          defaultPurchaseTaxId: item.defaultPurchaseTaxId,
+          defaultDppPercent: item.defaultDppPercent ? Number(item.defaultDppPercent) : null,
           isService: item.isService,
           trackBatch: item.trackBatch,
           trackSerial: item.trackSerial,
@@ -91,6 +105,7 @@ export default async function EditItemPage({
         warehouses={warehouses}
         racks={racks}
         rackRows={rackRows}
+        taxOptions={taxes.map((t) => ({ id: t.id, label: taxLabel(t) }))}
         unitOptions={unitOptions}
         baseUrl={baseUrl}
       />

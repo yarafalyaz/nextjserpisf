@@ -51,6 +51,10 @@ interface ItemFormProps {
     isProduct: boolean
     isService?: boolean
     isScrapSaleItem?: boolean
+    // F-2026-10-25-041-S: default pajak tersimpan (kontrak PR #1024).
+    defaultSalesTaxId?: number | null
+    defaultPurchaseTaxId?: number | null
+    defaultDppPercent?: number | null
     trackBatch?: boolean
     trackSerial?: boolean
     uomConversions?: { code: string; factorToBase: number | string }[]
@@ -62,6 +66,8 @@ interface ItemFormProps {
   warehouses: { id: number; name: string }[]
   racks: { id: number; name: string; warehouseId: number }[]
   rackRows: { id: number; name: string; rackId: number }[]
+  /** Kode pajak aktif dari master pajak untuk default per item (F-041-S). */
+  taxOptions?: { id: number; label: string }[]
   /** Active rows from the UoM master (`/master/satuan`). */
   unitOptions?: UomMasterEntry[]
   generatedCode?: string
@@ -69,7 +75,7 @@ interface ItemFormProps {
   baseUrl?: string
 }
 
-export function ItemForm({ item, categories, groups, brands, vendors, warehouses, racks, rackRows, unitOptions = [], generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
+export function ItemForm({ item, categories, groups, brands, vendors, warehouses, racks, rackRows, taxOptions = [], unitOptions = [], generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
@@ -126,7 +132,10 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
       price: item?.price || 0,
       standardCost: item?.standardCost || 0,
       costingMethod: item?.costingMethod || undefined,
-      purchasePrice: item?.purchasePrice || 0}})
+      purchasePrice: item?.purchasePrice || 0,
+      defaultSalesTaxId: item?.defaultSalesTaxId || undefined,
+      defaultPurchaseTaxId: item?.defaultPurchaseTaxId || undefined,
+      defaultDppPercent: item?.defaultDppPercent ?? undefined}})
 
   const selectedWarehouseId = watch("defaultWarehouseId")
   const selectedRackId = watch("defaultRackId")
@@ -214,6 +223,11 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
         formData.set("isService", String(isService))
         formData.set("trackBatch", String(trackBatch))
         formData.set("trackSerial", String(trackSerial))
+        // F-041-S: kunci pajak selalu dikirim — kosong = kosongkan eksplisit
+        // di server (kontrak update PR #1024), bukan warisi diam-diam.
+        formData.set("defaultSalesTaxId", data.defaultSalesTaxId ? String(data.defaultSalesTaxId) : "")
+        formData.set("defaultPurchaseTaxId", data.defaultPurchaseTaxId ? String(data.defaultPurchaseTaxId) : "")
+        formData.set("defaultDppPercent", data.defaultDppPercent != null ? String(data.defaultDppPercent) : "")
         const cleanedUom = uomConversions
           .filter((u) => u.code.trim() !== "" && u.factorToBase !== "")
           .map((u) => ({ code: u.code.trim(), factorToBase: Number(u.factorToBase) }))
@@ -467,6 +481,67 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               )}
             />
           </div>
+        </FormSection>
+
+        <FormSection title="Default Pajak">
+          <div className="flex flex-col gap-1.5">
+            <Controller
+              name="defaultSalesTaxId"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label htmlFor="defaultSalesTaxId">Pajak Penjualan Default</Label>
+                  <Combobox
+                    id="defaultSalesTaxId"
+                    options={taxOptions.map((t) => ({ value: String(t.id), label: t.label }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Tanpa default pajak penjualan"
+                    disabled={isScrapSaleItem}
+                  />
+                  {errors.defaultSalesTaxId && <span className="text-xs text-danger mt-1">{errors.defaultSalesTaxId.message}</span>}
+                </>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Controller
+              name="defaultPurchaseTaxId"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label htmlFor="defaultPurchaseTaxId">Pajak Pembelian Default</Label>
+                  <Combobox
+                    id="defaultPurchaseTaxId"
+                    options={taxOptions.map((t) => ({ value: String(t.id), label: t.label }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Tanpa default pajak pembelian"
+                    disabled={isScrapSaleItem}
+                  />
+                  {errors.defaultPurchaseTaxId && <span className="text-xs text-danger mt-1">{errors.defaultPurchaseTaxId.message}</span>}
+                </>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="defaultDppPercent">Persen DPP Default (%)</Label>
+            <Input
+              id="defaultDppPercent"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              disabled={isScrapSaleItem}
+              aria-describedby="defaultDppPercent-hint"
+              {...register("defaultDppPercent", { setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)) })}
+              placeholder="Kosongkan bila tanpa default"
+            />
+            {errors.defaultDppPercent && <span className="text-xs text-danger mt-1">{errors.defaultDppPercent.message}</span>}
+          </div>
+          <p id="defaultDppPercent-hint" className="text-xs text-muted-foreground sm:col-span-2">
+            Default pajak hanya bantuan pengisian baris dokumen baru; pajak dokumen tetap ditentukan di dokumen. Kosong = tanpa default. Persen DPP adalah persen nilai baris yang menjadi DPP, bukan pengganti faktor kode transaksi dokumen. Item besi tua tidak boleh membawa default pajak — server menolaknya.
+          </p>
         </FormSection>
 
         <FormSection title="Lokasi Penyimpanan">

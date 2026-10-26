@@ -6,7 +6,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
+import { formatCurrency, formatDate, formatPercentage, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DetailTabs } from "@/components/ui/detail-tabs"
@@ -78,6 +78,8 @@ export default async function ItemDetailPage({
           where: { slug: s },
           include: {
             category: true,
+            defaultSalesTax: true,
+            defaultPurchaseTax: true,
             warehouse: true,
             rack: true,
             rackRow: true,
@@ -93,6 +95,8 @@ export default async function ItemDetailPage({
           where: { id },
           include: {
             category: true,
+            defaultSalesTax: true,
+            defaultPurchaseTax: true,
             warehouse: true,
             rack: true,
             rackRow: true,
@@ -333,6 +337,12 @@ export default async function ItemDetailPage({
                   <DetailField label="Harga Beli" value={formatCurrency(Number(item.cost))} />
                   <DetailField label="Harga Jual" value={formatCurrency(Number(item.price))} />
                   <DetailField label="Nilai Stok" value={formatCurrency(Number(item.qtyOnHand) * Number(item.cost))} />
+                </DetailCard>
+
+                <DetailCard>
+                  <DetailField label="Pajak Penjualan Default" value={item.defaultSalesTax ? `${item.defaultSalesTax.code ? `${item.defaultSalesTax.code} — ` : ""}${item.defaultSalesTax.name} (${formatPercentage(Number(item.defaultSalesTax.rate), 2)})` : "Belum ada pajak penjualan default tercatat"} />
+                  <DetailField label="Pajak Pembelian Default" value={item.defaultPurchaseTax ? `${item.defaultPurchaseTax.code ? `${item.defaultPurchaseTax.code} — ` : ""}${item.defaultPurchaseTax.name} (${formatPercentage(Number(item.defaultPurchaseTax.rate), 2)})` : "Belum ada pajak pembelian default tercatat"} />
+                  <DetailField label="Persen DPP Default" value={item.defaultDppPercent != null ? formatPercentage(Number(item.defaultDppPercent), 2) : "Belum ada persen DPP default tercatat"} />
                 </DetailCard>
 
                 <DetailCard>
