@@ -15,9 +15,12 @@ import {
   customerDuplicateKeys,
   customerDuplicateMatchKind,
   findCustomerDuplicateCandidates,
+  findCustomerNpwpConflict,
   buildCustomerDuplicateWarning,
+  buildCustomerNpwpBlockedMessage,
   buildCustomerDuplicateGroups,
   CUSTOMER_DUPLICATE_WARNING_TITLE,
+  CUSTOMER_NPWP_BLOCKED_TITLE,
 } from "@/lib/services/customer-duplicate.service";
 
 const customerFindMany = vi.mocked(prisma.customer.findMany);
@@ -186,6 +189,91 @@ describe("F-003-S buildCustomerDuplicateWarning (AC-CD-B4 advisory)", () => {
     ]);
     expect(w?.title).toBe(CUSTOMER_DUPLICATE_WARNING_TITLE);
     expect(w?.candidates).toHaveLength(1);
+  });
+});
+
+describe("Q-CD-1 findCustomerNpwpConflict (gerbang BLOKIR NPWP persis)", () => {
+  it("NPWP digit-polos tersimpan vs input ber-format -> konflik pemegang", async () => {
+    customerFindMany.mockResolvedValue([
+      row({ taxId: "012345678901000" }),
+    ] as never);
+    const conflict = await findCustomerNpwpConflict({
+      taxId: "01.234.567.8-901.000",
+    });
+    expect(conflict).toEqual({
+      id: 11,
+      slug: "pt-sinar",
+      name: "PT Sinar",
+      code: "CUST-0011",
+    });
+    expect(customerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          deletedAt: null,
+          taxId: { not: null },
+        }),
+      }),
+    );
+  });
+
+  it("NPWP kosong/\"0\"/strip saja -> bukan konflik, tanpa query (EC-3)", async () => {
+    for (const taxId of ["", "0", "---", null, undefined]) {
+      expect(await findCustomerNpwpConflict({ taxId })).toBeNull();
+    }
+    expect(customerFindMany).not.toHaveBeenCalled();
+  });
+
+  it("NPWP beda digit -> bukan konflik", async () => {
+    customerFindMany.mockResolvedValue([row()] as never);
+    expect(
+      await findCustomerNpwpConflict({ taxId: "99.999.999.9-999.999" }),
+    ).toBeNull();
+  });
+
+  it("excludeCustomerId diteruskan ke where (self-match dikecualikan)", async () => {
+    customerFindMany.mockResolvedValue([] as never);
+    await findCustomerNpwpConflict({
+      taxId: "01.234.567.8-901.000",
+      excludeCustomerId: 11,
+    });
+    expect(customerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { not: 11 } }),
+      }),
+    );
+  });
+
+  it("scan terurut id naik: pemegang pertama deterministik", async () => {
+    customerFindMany.mockResolvedValue([
+      row({ id: 30, name: "Belakang" }),
+      row({ id: 20, name: "Depan" }),
+    ] as never);
+    const conflict = await findCustomerNpwpConflict({
+      taxId: "012345678901000",
+    });
+    // Urutan query id asc adalah kontrak; mock dua baris persis sesuai
+    // urutan query -> pemegang pertama dari barisan itu yang dilaporkan.
+    expect(conflict?.id).toBe(30);
+    expect(customerFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { id: "asc" } }),
+    );
+  });
+
+  it("pesan blokir menyebut nama + kode pemegang (verbatim)", () => {
+    expect(
+      buildCustomerNpwpBlockedMessage({
+        id: 11,
+        slug: "pt-sinar",
+        name: "PT Sinar",
+        code: "CUST-0011",
+      }),
+    ).toBe(
+      "NPWP yang sama sudah tercatat atas nama PT Sinar (CUST-0011). Pakai pelanggan yang sudah ada itu, atau perbaiki NPWP bila salah ketik.",
+    );
+    expect(CUSTOMER_NPWP_BLOCKED_TITLE).toBe(
+      "NPWP sudah dipakai pelanggan lain",
+    );
   });
 });
 

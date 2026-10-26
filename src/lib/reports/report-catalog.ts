@@ -75,6 +75,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/histori-penjualan" },
       { href: "/laporan/hasil-penawaran" },
       { href: "/laporan/garansi-segera-berakhir" },
+      { href: "/laporan/servis-berkala" },
       { href: "/laporan/aging-klaim-supplier" },
       { href: "/laporan/corong-prospek" },
       { href: "/laporan/histori-pembelian" },
