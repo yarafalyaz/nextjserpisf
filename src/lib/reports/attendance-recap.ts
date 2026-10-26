@@ -137,7 +137,7 @@ function classifyDay(
   onApprovedLeave: boolean,
 ): "present" | "sick" | "leave" | "absent" | "halfDay" | "other" | "noRecord" {
   if (record) {
-    if (record.status === "sick" && !record.hasCheckIn) return "sick"
+    if (record.status === "sick") return "sick"
     if (record.status === "leave") return "leave"
     if (record.status === "half_day") return "halfDay"
     if (record.status === "absent") return "absent"
