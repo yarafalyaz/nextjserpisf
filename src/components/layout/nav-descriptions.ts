@@ -173,6 +173,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/penjualan/retur": "Retur penjualan",
   "/penjualan/surat-jalan": "Surat jalan",
   "/penjualan/uang-muka": "Uang muka penjualan",
+  "/penjualan/antrean-verifikasi-uang-muka": "Uang muka yang belum dikonfirmasi, dengan umur menunggu dan jarak ke ambang invoice",
   "/produksi/bom-revisi": "Snapshot BOM ber-versi",
   "/produksi/perintah-kerja": "Perintah kerja",
   "/produksi/production-orders": "Perintah produksi",
