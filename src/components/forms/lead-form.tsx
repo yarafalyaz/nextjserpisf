@@ -8,6 +8,11 @@ import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
+import {
+  LEAD_LOST_REASON_CATEGORIES,
+  LEAD_LOST_REASON_FREE_TEXT_MAX,
+  isLeadLostReasonCategoryKey,
+} from "@/lib/reports/lead-lost-reason"
 // Tipe respons createLead/updateLead (kontrak Backend PR #771,
 // lead-duplicate.service.ts) — didefinisikan lokal: modul service
 // menarik Prisma ke bundle klien (node:fs) dan mematahkan build.
@@ -107,6 +112,14 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!lead
+  // F-2026-10-25-030-S: won/lost terminal mutlak di server (Q-LR-4) —
+  // status terminal tidak ditawarkan sebagai pilihan agar aksi yang
+  // pasti ditolak tidak tampil; kategori hanya dikirim saat status=lost
+  // (server menolak kategori pada status lain).
+  const isTerminalStatus = lead?.status === "won" || lead?.status === "lost"
+  const [status, setStatus] = useState(lead?.status ?? "")
+  const [lostReasonCategory, setLostReasonCategory] = useState("")
+  const [lostReasonText, setLostReasonText] = useState("")
   const [source, setSource] = useState(lead?.source ?? "")
   const [assignedTo, setAssignedTo] = useState<string | null>(lead?.assignedTo ? String(lead.assignedTo) : null)
   // DUP-F1 (F-2026-10-24-141-S §7): peringatan duplikat dari respons
@@ -142,7 +155,19 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    submitForm(new FormData(e.currentTarget), null)
+    const formData = new FormData(e.currentTarget)
+    // F-2026-10-25-030-S Q-LR-2: transisi baru ke lost wajib kategori
+    // dari kamus tunggal; galat tampil verbatim pesan server bila lolos
+    // klien tapi ditolak server (submitForm menampilkan result.error).
+    if (isEdit && !isTerminalStatus && status === "lost") {
+      if (!isLeadLostReasonCategoryKey(lostReasonCategory)) {
+        showError("Kategori alasan kalah wajib dipilih saat lead diubah menjadi kalah (lost).")
+        return
+      }
+      formData.set("lostReasonCategory", lostReasonCategory)
+      if (lostReasonText.trim()) formData.set("lostReasonText", lostReasonText.trim())
+    }
+    submitForm(formData, null)
   }
 
   function onOverrideSubmit() {
@@ -238,6 +263,57 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
               placeholder="Cari user..."
             />
           </div>
+        )}
+        {isEdit && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="status">Status</Label>
+            {isTerminalStatus ? (
+              <>
+                <Input value={statusLabel(lead?.status)} readOnly className="bg-surface-secondary" aria-label="Status" />
+                <p className="text-xs text-muted-foreground">
+                  Status {statusLabel(lead?.status)} bersifat final dan tidak dapat diubah.
+                </p>
+              </>
+            ) : (
+              <FormSelect
+                id="status"
+                name="status"
+                value={status}
+                onValueChange={setStatus}
+                placeholder="Pilih Status"
+                options={["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"].map(
+                  (s) => ({ value: s, label: statusLabel(s) }),
+                )}
+              />
+            )}
+          </div>
+        )}
+        {isEdit && !isTerminalStatus && status === "lost" && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="lostReasonCategory">
+                Kategori alasan kalah <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
+              <FormSelect
+                id="lostReasonCategory"
+                value={lostReasonCategory}
+                onValueChange={setLostReasonCategory}
+                placeholder="Pilih kategori alasan"
+                options={LEAD_LOST_REASON_CATEGORIES.map((c) => ({ value: c.key, label: c.label }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="lostReasonText">Rincian alasan kalah (opsional)</Label>
+              <Textarea
+                id="lostReasonText"
+                rows={2}
+                maxLength={LEAD_LOST_REASON_FREE_TEXT_MAX}
+                placeholder="Rincian alasan kalah (opsional)"
+                value={lostReasonText}
+                onChange={(e) => setLostReasonText(e.target.value)}
+              />
+            </div>
+          </>
         )}
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="address">Alamat</Label>

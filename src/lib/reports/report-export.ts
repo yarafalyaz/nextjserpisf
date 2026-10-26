@@ -34,6 +34,7 @@ export type ReportPdfKey =
   | "beban-pembayaran"
   | "penerimaan-sebagian"
   | "pemenuhan-pesanan"
+  | "terkirim-belum-terfaktur"
   | "selisih-persediaan"
   | "penerimaan-belum-ditagih"
   | "transfer-terkirim"
@@ -122,6 +123,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "beban-pembayaran": "Rincian-Beban-Pembayaran",
     "penerimaan-sebagian": "Barang-Diterima-Sebagian",
     "pemenuhan-pesanan": "Pemenuhan-Pesanan",
+    "terkirim-belum-terfaktur": "Terkirim-Belum-Terfaktur",
     "selisih-persediaan": "Selisih-Saldo-Akun-Persediaan",
     "penerimaan-belum-ditagih": "Barang-Diterima-Belum-Ditagih",
     "transfer-terkirim": "Persediaan-Terkirim-Belum-Diterima",

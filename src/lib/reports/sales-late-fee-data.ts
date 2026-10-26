@@ -14,6 +14,7 @@ import {
   buildSalesLateFeePanel,
   type SalesLateFeePanelData,
 } from "@/lib/reports/sales-late-fee"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
 export interface SalesLateFeePanelBundle {
   panel: SalesLateFeePanelData
@@ -101,7 +102,7 @@ export async function getSalesLateFeePanelForInvoice(
   return {
     panel: buildSalesLateFeePanel({
       salesInvoiceId: invoice.id,
-      invoiceDocumentNo: invoice.documentNo,
+      invoiceDocumentNo: salesInvoiceLabel(invoice),
       customerId: invoice.customerId,
       customerName: invoice.customer.name,
       documents: documents.map((doc) => ({

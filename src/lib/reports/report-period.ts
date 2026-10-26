@@ -193,3 +193,8 @@ export async function reportPeriodFromRoute(
 
   return parseReportPeriod(segments[0] ?? legacyCandidate, fallback(now))
 }
+
+/** Fallback periode tahun berjalan (1 Jan – hari ini) untuk laporan. */
+export function reportYearToDatePeriod(now: Date): { start: Date; end: Date } {
+  return { start: new Date(now.getFullYear(), 0, 1), end: now }
+}
