@@ -122,6 +122,27 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     expect(queue.rows[0]?.sisaKm).toBe(-1_000)
   })
 
+  it("AC-SV-B3b (MEDIUM-1 QA #975): baris tampil odometer null membawa sisaKm === null persisten", () => {
+    // Basis tanggal terisi membuat kendaraan MASUK baris (terlewat/
+    // mendekati) sementara basis km tidak bisa dinilai karena odometer
+    // null: sisaKm wajib null apa adanya di keluaran builder.
+    const queue = buildServiceReminderQueue(
+      [
+        input({ customerVehicleId: 1, nextServiceDate: day(-1), nextServiceKm: 10_000, lastOdometerKm: null }),
+        input({ customerVehicleId: 2, nextServiceDate: day(5), nextServiceKm: 10_000, lastOdometerKm: null }),
+        input({ customerVehicleId: 3, nextServiceDate: day(60), nextServiceKm: 10_000, lastOdometerKm: null }),
+      ],
+      { now: NOW },
+    )
+    const byId = new Map(queue.rows.map((r) => [r.customerVehicleId, r]))
+    expect(byId.get(1)).toMatchObject({ status: "terlewat", lastOdometerKm: null, sisaKm: null })
+    expect(byId.get(2)).toMatchObject({ status: "mendekati", lastOdometerKm: null, sisaKm: null })
+    expect(byId.get(1)?.sisaKm).toBeNull()
+    expect(byId.get(2)?.sisaKm).toBeNull()
+    // id 3 di luar jendela (ember), bukan baris — tidak ada sisaKm karangan.
+    expect(byId.get(3)).toBeUndefined()
+  })
+
   it("AC-SV-B4: populasi terhitung — nol baris hilang diam-diam", () => {
     const queue = buildServiceReminderQueue(
       [
