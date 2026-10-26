@@ -34794,3 +34794,134 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 Vonis Accountant tidak diminta (nol nominal tahap 1, BR-WIQ-04/11). Turunan dibuka: 076-B Backend, 076-F Frontend (sesudah 076-B merged), 076-Q QA.
 
 F-2026-10-27-076-S — Antrean klaim garansi intake mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WIQ-1/2/3, lalu fisik Backend (076-B), konsumen Frontend (076-F), falsifikasi QA (076-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak nominal/biaya klaim atau perubahan syarat jurnal diusulkan (di luar spec ini, BR-WIQ-04/11).
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-082-S: antrean klaim reimbursement disetujui belum dibayar (lapisan baca operasional di atas tahap turunan existing)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ada6e6fa. ID F-2026-10-27-082-S diverifikasi bebas run ini 2026-10-27 03:52 WIB basis `origin/main` 6e954d69b: grep `F-2026-10-27-082` di backlog origin/main = 0; `gh pr list --search "082-S"` = 0; branch `*f082*` = 0; maks backlog terverifikasi 076-S (merged #1095), spec berjalan 077-S..081-S (PR #1092/#1093/#1094/#1096/#1098 OPEN). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS. Uang: spec TIDAK memutus jurnal/akun/nominal baru; tahap bayar = fakta jurnal existing per vonis Accountant F-2026-10-25-018-V (sudah ada, dirujuk, tidak divonis ulang).
+
+Benchmark resmi (akses 2026-10-27):
+- Accurate — Pencatatan Beban (akun utang biaya + tanggal jatuh tempo, bayar lewat Kas & Bank → Pembayaran): https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-beban/cara-melakukan-pencatatan-beban/ ; artikel reimbursement Accurate (form klaim: identitas pemohon, rincian tanggal/nominal/kategori, nomor referensi bukti, kolom persetujuan berjenjang, status Diajukan→Disetujui→Dibayarkan): https://accurate.id/akuntansi/contoh-form-reimbursement/ — BENCHMARK saja; antrean "disetujui belum dibayar" sebagai permukaan kerja tersendiri tidak ditemukan sebagai fitur bernama di help Accurate pada akses ini (tidak diklaim ada).
+- Zahir — fitur-lengkap (Kas dan Bank, Department & Job Costing, laporan Hutang-Piutang): https://www.zahironline.com/fitur-lengkap/ dan https://www.zahironline.com/fitur/ — halaman bantuan reimbursement karyawan bernama tidak ditemukan pada akses ini; TIDAK terverifikasi = dinyatakan jujur, tidak diklaim Zahir punya antrean reimbursement setara.
+
+### 0. Inventarisasi TERVERIFIKASI-KODE (2026-10-27, basis origin/main 6e954d69b)
+
+Sudah ada:
+- Builder tahap turunan murni: `src/lib/reports/reimbursement.ts` — `REIMBURSEMENT_STAGES` DIAJUKAN|DISETUJUI|DITOLAK|DIBAYAR (:29-35); `deriveReimbursementStage` (:48-55): `rejected`→DITOLAK; `paid` + `hasPaymentJournal`→DIBAYAR; `approved` ATAU `paid`-tanpa-jurnal→DISETUJUI; selain itu DIAJUKAN. Label verbatim `REIMBURSEMENT_STAGE_LABELS` (:57-62) "Diajukan/Disetujui/Ditolak/Dibayar". Kepala berkas (:1-23) membekukan BR-RB-04 bukti wajib sebelum approve, BR-RB-07 SoD, BR-RB-10 kandidat dobel, BR-RB-12 tanpa plafon/batas hari karangan, jurnal dua tahap J-RB1/J-RB2 per vonis 018-V.
+- Loader permukaan "Klaim Saya": `getMyReimbursementClaims` (`src/actions/reimbursement.actions.ts:298-382`) — `requirePermission("create_employee_reimbursements")` (:300), `getHrScope`+`hrScopeWhere` (:301-305), `Expense where isReimbursementClaim:true`, `orderBy createdAt desc, take 200` (:306-323), tahap per baris dari set jurnal massal aktif (`status != REVERSED` + `deletedAt null`, :325-351) dibedakan akrual vs bayar lewat `referenceType`; payload memuat `stage/stageLabel/hasAccrualJournal/hasPaymentJournal/amount:Number(amount)/createdAt` (:353-377). Halaman konsumen: `src/app/(dashboard)/sdm/klaim-reimbursement/page.tsx:14-16` berjudul "Klaim Reimbursement Saya" — permukaan per pengaju dalam scope pemanggil, BUKAN antrean kerja finance/HR tahap DISETUJUI lintas pengaju.
+- Aksi approve/bayar existing (BUKAN aksi baru): `approveExpense` (`src/actions/finance.actions.ts:808`, izin `approve_expenses` :810) — khusus klaim: gerbang bukti BR-RB-04 + nominal + SoD BR-RB-07 (:838-871), lalu J-RB1 + flip `approved`+`approvedBy` dalam SATU transaksi (:879-893). `markExpensePaid` (:945, izin `approve_expenses` :947) — kunci baris `FOR UPDATE`, wajib status `approved` + `paidFromAccountId`, khusus klaim wajib J-RB1 aktif lalu J-RB2 menggantikan jurnal Expense biasa, flip `paid` bersyarat dalam satu transaksi (:953-1045). Jadi "siapa membayar existing" = pemegang `approve_expenses` lewat `markExpensePaid` di permukaan keuangan/pengeluaran existing; spec ini TIDAK mengarang aksi/tombol bayar baru.
+- Jurnal dua tahap: `src/lib/hooks/accounting.hook.ts` — konstanta `REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE="ExpenseReimbursementAccrual"` / `REIMBURSEMENT_PAYMENT_REFERENCE_TYPE="ExpenseReimbursementPayment"` (:1254-1255); J-RB1 `onReimbursementClaimApproved` (:1363 dst) posting `transactionDate: new Date()` saat approve; J-RB2 `onReimbursementClaimPaid` (:1408 dst). Model `Journal` (`prisma/schema.prisma:4163-4193`): `transactionDate`, `referenceType/referenceId`, `status`, `deletedAt`, `totalDebit/totalCredit` — tanggal jurnal akrual TERSEDIA sebagai fakta tanggal persetujuan berjurnal.
+- Model `Expense` (`prisma/schema.prisma:4233-4276`): `amount Decimal(15,2)` (:4245), `date` tanggal pengeluaran (:4246), `referenceNo` (:4247), `receiptImage` (:4249), `isReimbursementClaim` (:4253), `status` string default `draft` (:4254), `approvedBy Int?` (:4255), `createdAt/updatedAt` (:4258-4259). TIDAK ADA field `approvedAt` pada Expense (grep `approvedAt` di schema hanya model lain :2088/:2312/:2559) — tanggal persetujuan fisik satu-satunya = `Journal.transactionDate` J-RB1 aktif; `updatedAt` berubah oleh edit apa pun sehingga BUKAN bukti tanggal approve.
+- Katalog izin nyata (`src/lib/auth/module-catalog.generated.ts`): `create_employee_reimbursements` (:303, satu-satunya key resource `employee_reimbursements`); `view_expenses`/`create_expenses`/`edit_expenses`/`delete_expenses`/`approve_expenses` (:372-376; approve :375). TIDAK ADA key `view_employee_reimbursements`/`approve_employee_reimbursements`/`pay_employee_reimbursements` di katalog (grep resource `employee_reimbursements` = 1 baris) — jangan karang key baru tahap 1.
+- Scope HR: `getHrScope` fail-closed (`src/lib/auth/hr-scope.ts:40-72`: roles rusak/hilang → self employeeId -1; all = HR/finance/admin/ga; department = kepala se-departemen) + `hrScopeWhere` (:76-85).
+
+Belum ada / parsial (bukti grep run ini):
+- Antrean kerja tahap DISETUJUI lintas pengaju untuk finance/HR: ABSEN. `getMyReimbursementClaims` mencampur semua tahap dalam scope pemanggil tanpa saring tahap, tanpa umur menunggu bayar, tanpa sub-ember paid-tanpa-jurnal; halaman `/sdm/klaim-reimbursement` berbingkai "Saya". Tidak ada builder/loader antrean reimbursement kedua (grep `getMyReimbursementClaims` konsumen tunggal page.tsx:5,16).
+- Umur menunggu bayar sejak persetujuan: ABSEN di payload existing (hanya `createdAt` klaim + `date` pengeluaran tampil). Fakta tanggal J-RB1 tersedia di `Journal.transactionDate` tetapi belum dimuat loader mana pun untuk klaim.
+
+### 1. Kontrak populasi & label (dibekukan spec ini)
+
+Label operasional permukaan: USULAN kata persis — judul antrean "Reimbursement Disetujui — Menunggu Pembayaran"; notice: "Daftar ini hanya memuat klaim bertahap Disetujui yang belum terbukti dibayar oleh jurnal pembayaran aktif. Nominal yang tampil adalah nominal tersimpan klaim, bukan saldo utang atau aging akuntansi." Sub-ember jujur wajib terpisah: "Status terbaca dibayar tanpa fakta jurnal" untuk klaim berstatus dokumen `paid` tanpa J-RB2 aktif (tahap turunan tetap DISETUJUI per builder :53). Kata final = Q-RBQ-2 Lead.
+
+Populasi USULAN (turunan baca-saja, tanpa kolom/status baru):
+- MASUK: klaim `isReimbursementClaim` dalam scope pemanggil yang tahap turunannya (`deriveReimbursementStage` existing, server) = DISETUJUI. Dua sumber fisik: (a) status `approved` (dengan/tanpa J-RB1 — lihat EC-RBQ-2); (b) sub-ember: status `paid` TANPA jurnal bayar J-RB2 aktif → tahap tetap DISETUJUI, tampil di sub-ember terpisah berlabel inkonsistensi apa adanya. Sub-ember TIDAK dibaca DIBAYAR dan TIDAK disembunyikan.
+- KELUAR: tahap DIBAYAR (`paid` + J-RB2 aktif), DITOLAK (`rejected`), DIAJUKAN (status lain, mis. `draft`/`pending`) — keluar populasi seluruhnya, bukan ditandai di dalam antrean.
+- Jurnal REVERSED atau terhapus-lunak (`deletedAt` terisi) TIDAK menghitung sebagai fakta bayar maupun akrual (pola loader existing :335-337) — klaim `paid` yang J-RB2-nya di-reverse jatuh kembali ke sub-ember DISETUJUI, bukan DIBAYAR.
+- Urutan & ambang mengendap: USULAN tertua-menunggu dulu berdasar acuan umur §2; ambang tingkat `mengendap` (hari) = Q-RBQ-1 Lead (usulan 3 hari kalender WIB selaras preseden keluarga antrean) — selama belum diputus, builder hanya tingkat `menunggu`, nol ambang karangan (warisan BR-RB-12: tanpa batas hari karangan).
+
+### 2. Umur menunggu bayar (dua umur, tidak dicampur)
+
+- Umur menunggu bayar (USULAN, acuan utama antrean): sejak fakta persetujuan = `transactionDate` jurnal akrual J-RB1 AKTIF klaim itu (TERVERIFIKASI-KODE tersedia: Journal :4167 + posting saat approve accounting.hook J-RB1 `transactionDate: new Date()`). Klaim approved tanpa J-RB1 aktif tidak punya acuan ini → umur bayar `—` tertanda "tanpa jurnal akrual" (EC-RBQ-2), BUKAN diganti createdAt diam-diam.
+- Umur sejak pengajuan (pendamping opsional, hanya bila tampil): sejak `Expense.createdAt`, WAJIB berlabel terpisah "sejak pengajuan". DILARANG menampilkan umur dari `createdAt` dengan label umur menunggu bayar — dua makna beda (pengajuan vs persetujuan). `Expense.date` = tanggal pengeluaran karyawan, bukan keduanya; tidak dipakai sebagai acuan umur antrean.
+- `approvedAt` TIDAK ADA di Expense (terverifikasi §0) — dilarang mengarang field/tanggal approve dari `updatedAt` (berubah oleh edit akun/status apa pun).
+
+### 3. Aturan bisnis (BR-RBQ)
+
+- BR-RBQ-01 (TERVERIFIKASI-KODE): Tahap antrean = `deriveReimbursementStage` + `REIMBURSEMENT_STAGE_LABELS` server verbatim (`src/lib/reports/reimbursement.ts:48-62`); UI/loader dilarang menurunkan tahap sendiri dari status mentah. `paid` tanpa J-RB2 aktif TIDAK PERNAH dibaca DIBAYAR.
+- BR-RBQ-02 (USULAN): Populasi hanya tahap DISETUJUI dalam scope; DIBAYAR/DITOLAK/DIAJUKAN keluar; `paid`-tanpa-jurnal masuk sub-ember terpisah berlabel "Status terbaca dibayar tanpa fakta jurnal" — inkonsistensi terbaca apa adanya, tidak dinormalisasi, tidak disembunyikan.
+- BR-RBQ-03 (TERVERIFIKASI-KODE): Fakta jurnal penghitung tahap hanya jurnal AKTIF: `status != "REVERSED"` dan `deletedAt IS NULL`, dibedakan per `referenceType` akrual/bayar (pola `reimbursement.actions.ts:325-351`; konstanta accounting.hook.ts:1254-1255). Jurnal REVERSED/terhapus = tidak ada fakta.
+- BR-RBQ-04 (USULAN): Umur menunggu bayar hanya dari `transactionDate` J-RB1 aktif; tanpa J-RB1 aktif umur bayar kosong tertanda, tidak diganti `createdAt`. Umur sejak pengajuan (bila tampil) kolom terpisah berlabel sendiri dari `createdAt`.
+- BR-RBQ-05 (TERVERIFIKASI-KODE + USULAN label): Nominal tampil = `Expense.amount` tersimpan verbatim dalam scope (loader existing `Number(c.amount)`, actions :365), TIDAK dihitung ulang, tidak dikurangi/ditambah di antrean. Agregat yang diizinkan tahap 1 hanya hitungan baris dan jumlah nominal tersimpan baris tampil, berlabel persis "total nominal tersimpan baris tampil — bukan saldo buku". Menyebut populasi/agregat ini "utang", "saldo utang reimbursement", atau "aging" = BUTUH-VONIS Accountant (lihat §8 Q-RBQ-4 bersyarat); tahap bayar dan akunnya sendiri sudah vonis 018-V dan TIDAK divonis ulang di sini.
+- BR-RBQ-06 (TERVERIFIKASI-KODE): Scope = pola existing: gerbang izin loader sebelum query, lalu `getHrScope`/`hrScopeWhere` — self hanya klaimnya sendiri, department se-departemen, all lintas pengaju; scope rusak fail-closed employeeId -1 (hr-scope.ts:40-85). Pengaju berhenti/nonaktif (`employmentEndedAt`) TIDAK mengeluarkan klaim DISETUJUI-nya dari antrean pengelola — kewajiban bayar atas klaim yang sudah disetujui tidak gugur oleh status pengaju (klaim baru saja yang ditolak, create :125-127); antrean tidak menilai ulang kelayakan pengaju.
+- BR-RBQ-07 (USULAN): Daftar antrean TIDAK menerbitkan `receiptImage`/`referenceNo`/kontak pengaju; bukti dan nomor nota hidup di detail klaim existing tertaut per baris. (Payload `getMy` existing memang tidak memuat `receiptImage` — pola dipertahankan; `referenceNo` yang ada di payload Klaim Saya tidak diwariskan ke daftar antrean pengelola tahap 1.)
+- BR-RBQ-08 (TERVERIFIKASI-KODE, warisan): BR-RB-04 (bukti wajib sebelum approve), BR-RB-07 (SoD pengaju≠penyetuju), BR-RB-10 (kandidat dobel = peringatan, bukan blokir), BR-RB-12 (tanpa plafon/batas hari karangan) tetap berlaku apa adanya dari `reimbursement.ts:8-17` dan gerbang `finance.actions.ts:838-871`. Antrean baca-saja tidak melemahkan, mengulang, atau mengganti gerbang itu; kandidat dobel di antrean tetap peringatan existing di jalur ajukan, BUKAN alasan mengeluarkan baris dari antrean.
+- BR-RBQ-09 (USULAN): Baca-saja tahap 1: antrean tidak memanggil `approveExpense`/`markExpensePaid`/`rejectExpense`, tidak menulis `Expense.status`/`approvedBy`, tidak memposting jurnal. Nol tombol Setujui/Bayar/Tolak dari antrean; satu-satunya jalan aksi = permukaan keuangan/pengeluaran existing berizin `approve_expenses` sesudah membuka detail. Bayar dari daftar = keputusan terpisah (Q-RBQ-5), bukan bawaan spec ini.
+- BR-RBQ-10 (USULAN): Anti-N+1: tahap + tanggal J-RB1 aktif dimuat massal per halaman baris (satu query jurnal atas set id klaim tampil, pola loader existing :324-351), bukan query per baris; batas baris mengikuti pola existing `take 200` atau paginasi yang diputus Backend tanpa mengubah populasi.
+
+### 4. Matriks izin (key katalog nyata)
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Self (pengaju) | Department (kepala) | All (HR/keuangan/admin) |
+|---|---|---|---|---|
+| Lihat antrean tahap 1 (USULAN gerbang) | `create_employee_reimbursements` (katalog :303) — gerbang loader existing pola `getMy` :300; key antrean terpisah = Q-RBQ-3 | hanya klaim sendiri tahap DISETUJUI | klaim se-departemen | lintas pengaju |
+| Ajukan klaim (existing, di luar antrean) | `create_employee_reimbursements` (:303) | ya (mode mandiri server) | — | titip ber-`assertHrEmployeeAccess` |
+| Setujui klaim (existing, BUKAN dari antrean) | `approve_expenses` (katalog :375) via `approveExpense` finance.actions.ts:808 | tidak (SoD BR-RB-07) | sesuai izin | sesuai izin |
+| Tandai dibayar (existing, BUKAN dari antrean) | `approve_expenses` (:375) via `markExpensePaid` finance.actions.ts:945 | tidak | sesuai izin | sesuai izin |
+| Buka detail/bukti klaim | permukaan existing tertaut (di luar spec) | klaim sendiri | scope | scope |
+
+Tanpa key gerbang: loader tidak dipanggil dan halaman menolak (fail-closed); izin saja tanpa scope tidak memperluas baris (BR-RBQ-06).
+
+### 5. Matriks transisi status (existing, dibaca antrean — antrean tidak memicu transisi apa pun)
+
+| Dari (status dokumen) | Pemicu existing | Ke | Efek ke antrean |
+|---|---|---|---|
+| `draft`/`pending` (DIAJUKAN) | `approveExpense` lolos BR-RB-04/07 + J-RB1 satu tx | `approved` (DISETUJUI) | masuk populasi; umur bayar mulai dari `transactionDate` J-RB1 |
+| `approved` (DISETUJUI) | `markExpensePaid` (J-RB1 aktif + J-RB2 + flip satu tx) | `paid` + J-RB2 aktif (DIBAYAR) | keluar populasi |
+| `approved` (DISETUJUI) | — (belum dibayar) | tetap `approved` | tetap populasi, umur bertambah |
+| `paid` tanpa J-RB2 aktif (lahir dari jalur non-klaim/reverse) | J-RB2 di-REVERSED/dihapus, atau status terflip tanpa jurnal | tahap turunan tetap DISETUJUI | masuk sub-ember "status terbaca dibayar tanpa fakta jurnal" |
+| `draft`/`pending` | `rejectExpense`/workflow menolak | `rejected` (DITOLAK) | tidak pernah masuk / keluar |
+| `paid` + J-RB2 aktif (DIBAYAR) | J-RB2 menjadi REVERSED/terhapus | tahap turunan DISETUJUI | masuk kembali sub-ember pada render berikut |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-RBQ-B1: `paid` + J-RB2 aktif TIDAK bocor ke populasi maupun sub-ember; DITOLAK/DIAJUKAN tidak tampil; hanya tahap DISETUJUI server yang lolos (tahap dihitung ulang di loader/UI → MERAH).
+- AC-RBQ-B2: `paid` tanpa jurnal bayar aktif masuk sub-ember terpisah berlabel inkonsistensi, tahap tetap DISETUJUI; tidak tampil sebagai DIBAYAR dan tidak hilang dari daftar (disembunyikan/dinormalisasi → MERAH).
+- AC-RBQ-B3: J-RB2 (atau J-RB1) berstatus REVERSED atau `deletedAt` terisi tidak menghitung fakta (BR-RBQ-03): klaim `paid` dengan J-RB2 REVERSED masuk sub-ember; klaim approved dengan J-RB1 REVERSED tampil tanpa acuan umur bayar tertanda (dianggap berjurnal aktif → MERAH).
+- AC-RBQ-B4: Nominal baris = `amount` tersimpan verbatim; agregat (bila ada) hanya hitungan baris + jumlah nominal tersimpan baris tampil berlabel bukan saldo buku; kata "utang/aging/saldo utang" di payload/label → MERAH tanpa vonis Accountant (BR-RBQ-05). Nominal dihitung ulang dari jurnal/totalDebit di antrean → MERAH.
+- AC-RBQ-B5: Loader fail-closed izin gerbang (§4) sebelum query; scope self/department/all sesuai `hrScopeWhere`; `receiptImage`/`referenceNo`/kontak tidak ada di payload daftar (bocor → MERAH); tahap+tanggal J-RB1 massal anti-N+1 (query per baris → MERAH); baca-saja terbukti (builder/loader memanggil approve/bayar/jurnal/tulis status → MERAH).
+
+Frontend (konsumen):
+- AC-RBQ-F1: Label tahap, label sub-ember, umur, dan notice verbatim server; UI tidak menghitung tahap/umur/agregat sendiri (hitung ulang UI → MERAH); urutan tertua-menunggu dulu dari payload.
+- AC-RBQ-F2: Baris tidak berlabel "utang/aging/sudah dibayar" untuk populasi/sub-ember; sub-ember tampil terpisah dengan label inkonsistensi server, bukan disembunyikan di balik tab tanpa penanda hitungan.
+- AC-RBQ-F3: Tautan baris hanya ke detail klaim existing; TIDAK ada tombol Setujui/Bayar/Tolak dari antrean tahap 1 (aksi dari daftar → MERAH, BR-RBQ-09); tanpa izin gerbang halaman menolak.
+
+Edge cases:
+- EC-RBQ-1: Klaim kandidat dobel BR-RB-10 (sudah diakui saat ajukan) tetap tampil per klaim di antrean sebagai baris sendiri; antrean tidak menggabung, tidak mengeluarkan, tidak memblokir pembayaran baris itu — peringatan dobel hidup di jalur ajukan existing, bukan penjaga antrean.
+- EC-RBQ-2: Klaim `approved` tanpa jurnal akrual J-RB1 aktif (akrual gagal/reverse sesudah approve warisan data): tetap populasi DISETUJUI, umur bayar `—` tertanda "tanpa jurnal akrual"; antrean tidak mengarang tanggal approve dari `createdAt`/`updatedAt` dan tidak mengeluarkan baris (bayar existing sendiri akan menolak tanpa J-RB1 — markExpensePaid :1000-1013; antrean hanya membaca).
+- EC-RBQ-3: Pengaju berhenti (`employmentEndedAt` terisi) sesudah klaim disetujui: klaim tetap di antrean pengelola sampai terbukti DIBAYAR/DITOLAK; antrean tidak menyaring baris berdasar status aktif pengaju (create menolak klaim BARU saja, actions :125-127).
+- EC-RBQ-4: Dua klaim tanggal J-RB1 sama persis: urutan seri deterministik (USULAN id klaim naik — final Q-RBQ-1), tidak bergantung urutan query.
+- EC-RBQ-5: Klaim dibayar/ditolak dari permukaan lain saat halaman terbuka keluar populasi pada render berikut; antrean tidak mengunci baris.
+
+### 7. Backlog implementasi (turunan F-2026-10-27-082-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-082-S | Spec kontrak ini (dokumen) | Business | — |
+| 082-B | Builder/loader turunan antrean DISETUJUI (+sub-ember paid-tanpa-jurnal, tanggal J-RB1 aktif massal, umur dua-acuan) fail-closed izin §4 + tes AC-RBQ-B1..B5 | Backend | Putusan Lead Q-RBQ-1/2/3 |
+| 082-F | Permukaan antrean (halaman SDM/keuangan atau daftar tertaut pola keluarga antrean) verbatim payload + AC-RBQ-F1..F3 | Frontend | 082-B merged; penempatan final Q-RBQ-6 |
+| 082-Q | Falsifikasi AC-RBQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 082-B/082-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-RBQ-1 | Ambang hari tingkat `mengendap` (umur menunggu bayar >= N hari kalender WIB sejak `transactionDate` J-RB1 aktif)? Urutan final (mengendap dulu vs tertua murni) + seri tanggal sama = id naik disahkan? | Lead | USULAN 3 hari kalender (preseden keluarga antrean mengendap diputus Lead 2026-10-26); tertua-menunggu dulu, mengendap sebagai tingkat di atasnya; seri id naik — bukan fakta selama belum diputus; builder hanya `menunggu` (BR-RB-12 warisan) |
+| Q-RBQ-2 | Kata judul/notice/sub-ember final §1? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim |
+| Q-RBQ-3 | Key izin antrean tahap 1: tetap `create_employee_reimbursements` pola `getMy` (tapi permukaan pengelola lintas pengaju membaca key "create"…), atau key lihat khusus baru (migrasi katalog+seed)? | Lead | Tahap 1 tetap key existing fail-closed + scope (nol key karangan); key `view_*` khusus hanya lewat keputusan katalog terpisah — nyatakan eksplisit risikonya: pemegang key saat ini = pengaju, jadi antrean pengelola tahap 1 efektif terjangkau peran yang juga memegang create; pisah key = pekerjaan katalog Backend terpisah, bukan bawaan spec |
+| Q-RBQ-4 | Populasi/agregat boleh disebut "utang/aging reimbursement"? | Accountant — BUTUH-VONIS BERSYARAT | TIDAK diminta tahap ini: label operasional "menunggu pembayaran" + "bukan saldo buku" (BR-RBQ-05). Vonis WAJIB hanya bila Lead kelak membuka istilah utang/aging/saldo buku besar untuk populasi ini; tahap bayar/akun tetap vonis 018-V, tidak divonis ulang |
+| Q-RBQ-5 | Tombol Bayar langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-RBQ-09): bayar butuh konteks `paidFromAccountId` + J-RB1 aktif di detail/permukaan keuangan existing; jalan pintas = keputusan terpisah sesudah antrean terbukti |
+| Q-RBQ-6 | Penempatan permukaan: SDM (di samping Klaim Saya) vs Keuangan (di samping pengeluaran)? Sub-ember paid-tanpa-jurnal tampil default atau di balik penanda? | Lead | USULAN: permukaan pengelola di Keuangan (aktor bayar = pemegang `approve_expenses`), tautan dari SDM untuk scope all/department; sub-ember tampil default sebagai seksi terpisah terhitung — menyembunyikan inkonsistensi status-vs-jurnal mengalahkan tujuan antrean kejujuran tahap |
+
+### Yang TIDAK diusulkan run ini
+- Aksi Setujui/Bayar/Tolak dari antrean, bayar massal, atau aksi bayar baru (BR-RBQ-09) — jalur existing `approveExpense`/`markExpensePaid` berizin `approve_expenses` di permukaan keuangan tetap satu-satunya jalur uang.
+- Menyebut populasi/agregat sebagai utang, saldo utang, atau aging, dan laporan aging reimbursement (BR-RBQ-05) — BUTUH-VONIS Accountant bila kelak dibuka (Q-RBQ-4); jurnal/akun/nominal baru apa pun di luar vonis 018-V.
+- Kolom/status/`approvedAt` baru di Expense, key izin baru, atau mengubah `deriveReimbursementStage`/loader `getMyReimbursementClaims` — antrean adalah lapisan baca turunan di atasnya.
+- Menampilkan bukti/`receiptImage`/`referenceNo`/kontak pengaju di daftar antrean (BR-RBQ-07) — detail tertaut existing.
+- Mengeluarkan klaim pengaju berhenti, klaim kandidat dobel, atau klaim tanpa J-RB1 dari antrean (EC-RBQ-1/2/3) — ketiganya dibaca apa adanya.
+- Pengingat WA/email ke keuangan/pengaju, penanda "sudah ditagih" tersimpan, eskalasi otomatis klaim mengendap — kanal & keadaan baru di luar tahap baca-saja.
+- Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
+
+F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
