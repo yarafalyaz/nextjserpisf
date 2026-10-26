@@ -1,4 +1,10 @@
-import type { CustomerStatement, CustomerStatementEntryKind } from "@/lib/reports/customer-statement"
+import {
+  CUSTOMER_STATEMENT_DUE_COLUMN,
+  CUSTOMER_STATEMENT_OVERDUE_LABEL,
+  type CustomerStatement,
+  type CustomerStatementEntryKind,
+} from "@/lib/reports/customer-statement"
+import { Badge } from "@/components/ui/shadcn/badge"
 import { formatAccounting, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -23,7 +29,11 @@ const ENTRY_KIND_LABEL: Record<CustomerStatementEntryKind, string> = {
  * (loader `loadCustomerStatement`): saldo awal, baris mutasi periode dengan
  * saldo berjalan, total debit/kredit, dan saldo akhir ditampilkan apa
  * adanya — komponen ini TIDAK menghitung ulang mutasi, pelunasan, atau
- * outstanding piutang. Jenis baris dibedakan eksplisit per `kind`
+ * outstanding piutang. Kolom Jatuh Tempo + penanda Lewat Jatuh Tempo
+ * (F-2026-10-25-025-S) juga ditampilkan apa adanya dari builder
+ * (`entry.dueDate`/`entry.isOverdue` turunan per periodEnd server);
+ * label memakai konstanta verbatim builder, UI tidak menghitung
+ * umur/tanggal sendiri. Jenis baris dibedakan eksplisit per `kind`
  * (Faktur penjualan / Pembayaran / Alokasi kredit / Retur penjualan); kredit hanya dari
  * alokasi CustomerCredit builder (paymentMethod "customer_credit"),
  * bukan dokumen kredit kedua — anti-dobel mengikuti builder, bukan UI.
@@ -50,6 +60,7 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
       <DetailTable data-report-table="Statement Pelanggan">
         <DetailTableHead>
           <DetailTableTh>Tanggal</DetailTableTh>
+          <DetailTableTh>{CUSTOMER_STATEMENT_DUE_COLUMN}</DetailTableTh>
           <DetailTableTh>Dokumen</DetailTableTh>
           <DetailTableTh>Jenis</DetailTableTh>
           <DetailTableTh>Keterangan</DetailTableTh>
@@ -62,6 +73,7 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
             <DetailTableTd>Saldo awal</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
+            <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>Saldo awal</DetailTableTd>
             <DetailTableTd align="right">–</DetailTableTd>
             <DetailTableTd align="right">–</DetailTableTd>
@@ -71,6 +83,16 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
           {statement.entries.map((entry, index) => (
             <DetailTableRow key={`${entry.date.toISOString()}-${entry.documentNo}-${entry.kind}-${index}`}>
               <DetailTableTd>{formatDate(entry.date, { format: "short" })}</DetailTableTd>
+              <DetailTableTd>
+                {entry.dueDate ? (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    {formatDate(entry.dueDate, { format: "short" })}
+                    {entry.isOverdue ? <Badge variant="destructive">{CUSTOMER_STATEMENT_OVERDUE_LABEL}</Badge> : null}
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </DetailTableTd>
               <DetailTableTd className="font-mono text-xs">{entry.documentNo}</DetailTableTd>
               <DetailTableTd className="text-xs">{ENTRY_KIND_LABEL[entry.kind]}</DetailTableTd>
               <DetailTableTd className="text-xs">
@@ -85,6 +107,7 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
 
           <DetailTableRow className="border-t-2 border-default font-bold">
             <DetailTableTd>Saldo akhir</DetailTableTd>
+            <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>Saldo akhir · Total debit {totalDebitText} · Total kredit {totalCreditText}</DetailTableTd>
