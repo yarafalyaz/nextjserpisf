@@ -22,19 +22,12 @@ vi.mock("@/lib/utils/toast", () => mocks.toast)
 
 // Plumbing tes: date picker nyata = popover kalender (rapuh di jsdom).
 vi.mock("@/components/ui/date-picker", async () => {
-  const React = await import("react")
-  return {
-    AppDatePicker: ({ name, onChange }: { name: string; onChange?: (v: string) => void }) =>
-      React.createElement(
-        "button",
-        {
-          type: "button",
-          "data-testid": `datepicker-${name}`,
-          onClick: () => onChange?.("2026-11-01"),
-        },
-        "Pilih tanggal",
-      ),
-  }
+  const { createElement: h } = await import("react")
+  type PickerProps = { name: string; onChange?: (v: string) => void }
+  const stub = (props: PickerProps) =>
+    h("button", { type: "button", "data-testid": `datepicker-${props.name}`,
+      onClick: () => props.onChange?.("2026-11-01") }, "Pilih tanggal")
+  return { AppDatePicker: stub }
 })
 
 vi.mock("@/actions/salary-adjustment.actions", () => ({
@@ -52,7 +45,7 @@ import {
   type SalaryAdjustmentPanelProps,
   type SalaryAdjustmentRow,
 } from "../salary-adjustment-panel"
-import { mountInto, unmount } from "@/components/forms/__tests__/form-a11y-test-utils"
+import { createRoot } from "react-dom/client"
 
 function row(over: Partial<SalaryAdjustmentRow> = {}): SalaryAdjustmentRow {
   return {
@@ -92,6 +85,18 @@ function el(props: SalaryAdjustmentPanelProps): ReactElement {
   return createElement(SalaryAdjustmentPanel, props)
 }
 
+function renderPanel(container: HTMLElement, element: ReactElement) {
+  document.body.append(container)
+  const root = createRoot(container)
+  act(() => { root.render(element) })
+  return root
+}
+
+function disposePanel(root: ReturnType<typeof createRoot>, container: HTMLElement) {
+  act(() => root.unmount())
+  container.remove()
+}
+
 async function click(button: Element) {
   await act(async () => {
     ;(button as HTMLButtonElement).click()
@@ -113,15 +118,16 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
   it("nominal + status + persen tampil verbatim loader (tanpa hitung ulang)", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
+    const mount = () => renderPanel(container, el(base()))
     try {
-      const root = mountInto(container, el(base()))
+      const root = mount()
       const text = container.textContent ?? ""
       expect(text).toContain("Rp 5.000.000")
       expect(text).toContain("Rp 5.500.000")
       expect(text).toContain("+10%")
       expect(text).toContain("Menunggu")
       expect(text).toContain("Kenaikan Berkala")
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -131,7 +137,7 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(
+      const root = renderPanel(
         container,
         el(
           base({
@@ -155,7 +161,7 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
       expect(text).toContain("Anggaran belum disetujui")
       // Baris non-menunggu tidak boleh punya tombol putusan.
       expect(buttonsByText(container, "Setujui")).toHaveLength(0)
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -165,9 +171,9 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base({ rows: [row({ status: "status_asing_xyz" })] })))
+      const root = renderPanel(container, el(base({ rows: [row({ status: "status_asing_xyz" })] })))
       expect(container.textContent).toContain("status_asing_xyz")
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -177,11 +183,11 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base({ canApprove: false })))
+      const root = renderPanel(container, el(base({ canApprove: false })))
       expect(buttonsByText(container, "Setujui")[0].disabled).toBe(true)
       expect(buttonsByText(container, "Tolak")[0].disabled).toBe(true)
       expect(container.textContent).toContain("Memerlukan izin menyetujui penyesuaian gaji")
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -191,10 +197,10 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base({ currentUserId: 3 })))
+      const root = renderPanel(container, el(base({ currentUserId: 3 })))
       expect(buttonsByText(container, "Setujui")[0].disabled).toBe(true)
       expect(container.textContent).toContain("Pengaju tidak dapat memutus penyesuaian sendiri")
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -204,11 +210,11 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base()))
+      const root = renderPanel(container, el(base()))
       await click(buttonsByText(container, "Setujui")[0])
       expect(mocks.actions.approveSalaryAdjustment).toHaveBeenCalledWith(11)
       expect(mocks.nav.refresh).toHaveBeenCalled()
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -218,7 +224,7 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base()))
+      const root = renderPanel(container, el(base()))
       const tolak = buttonsByText(container, "Tolak")[0]
       expect(tolak.disabled).toBe(true)
       const input = container.querySelector<HTMLInputElement>("#salary-reject-reason-11")!
@@ -230,7 +236,7 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
       expect(buttonsByText(container, "Tolak")[0].disabled).toBe(false)
       await click(buttonsByText(container, "Tolak")[0])
       expect(mocks.actions.rejectSalaryAdjustment).toHaveBeenCalledWith(11, "Di luar struktur gaji")
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -241,12 +247,12 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base()))
+      const root = renderPanel(container, el(base()))
       await click(buttonsByText(container, "Setujui")[0])
       expect(mocks.toast.showError).toHaveBeenCalledWith(
         "Penyesuaian gaji sudah diputus atau tidak lagi menunggu persetujuan",
       )
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -256,11 +262,11 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base({ autoCancelledBerhenti: 2 })))
+      const root = renderPanel(container, el(base({ autoCancelledBerhenti: 2 })))
       expect(container.textContent).toContain(
         "2 penyesuaian dibatalkan otomatis karena karyawan telah berhenti.",
       )
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -270,12 +276,12 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      let root = mountInto(container, el(base({ rows: [] })))
+      let root = renderPanel(container, el(base({ rows: [] })))
       expect(container.textContent).toContain("Belum ada penyesuaian gaji tercatat.")
-      unmount(root, container)
-      root = mountInto(container, el(base({ loadError: "Anda tidak memiliki izin melihat nominal gaji" })))
+      disposePanel(root, container)
+      root = renderPanel(container, el(base({ loadError: "Anda tidak memiliki izin melihat nominal gaji" })))
       expect(container.textContent).toContain("Anda tidak memiliki izin melihat nominal gaji")
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -285,9 +291,9 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base({ canEdit: false })))
+      const root = renderPanel(container, el(base({ canEdit: false })))
       expect(buttonsByText(container, "Catat Kenaikan")).toHaveLength(0)
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
@@ -297,7 +303,7 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
-      const root = mountInto(container, el(base()))
+      const root = renderPanel(container, el(base()))
       const amount = container.querySelector<HTMLInputElement>("#salary-new-base")!
       await act(async () => {
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!
@@ -318,7 +324,7 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
       expect(mocks.toast.showSuccess).toHaveBeenCalledWith(
         "Pengajuan penyesuaian gaji dicatat dan menunggu persetujuan",
       )
-      unmount(root, container)
+      disposePanel(root, container)
     } finally {
       container.remove()
     }
