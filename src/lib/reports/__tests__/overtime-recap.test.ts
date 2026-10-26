@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildOvertimeRecap,
-  OVERTIME_RECAP_NOTICE,
   OVERTIME_RECAP_NO_PROJECT_LABEL,
   type OvertimeRecapRowInput,
 } from "../overtime-recap"
@@ -124,7 +123,10 @@ describe("buildOvertimeRecap (F-2026-10-25-016-S)", () => {
       row({ status: "approved", hours: 2 }),
       row({ employeeId: 2, employeeName: "Sari", status: "pending", hours: 3 }),
     ])
-    expect(recap.notice).toBe(OVERTIME_RECAP_NOTICE)
+    // Literal verbatim penuh — bukan konstanta produksi (tautologis, audit t_071a8727).
+    expect(recap.notice).toBe(
+      "Rekap jam lembur operasional — bukan dasar pembayaran; nilai lembur tetap dihitung payroll dari nilai tersimpan saat persetujuan.",
+    )
     expect(recap.totals.employeeCount).toBe(2)
     expect(recap.totals.submittedHours).toBe(5)
     expect(recap.totals.submittedHours).toBe(
