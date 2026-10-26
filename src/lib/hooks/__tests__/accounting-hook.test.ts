@@ -13,6 +13,8 @@ import {
   onVendorBillPosted,
   onVendorPaymentCreated,
   onPayrollPaid,
+  onReimbursementClaimApproved,
+  onReimbursementClaimPaid,
   assertJournalClaimRef,
   assertAccountsExist,
 } from "../accounting.hook";
@@ -47,6 +49,7 @@ const mocks = vi.hoisted(() => ({
     pkwtCompensationExpenseAccountId: 631 as number | null,
     pkwtCompensationPayableAccountId: 231 as number | null,
     scrapSaleIncomeAccountId: 711 as number | null,
+    reimbursementLiabilityAccountId: 209 as number | null,
   },
   assertPeriodOpen: vi.fn(),
   fifoConsume: vi.fn(),
@@ -54,6 +57,7 @@ const mocks = vi.hoisted(() => ({
   invoiceFindUnique: vi.fn(),
   journalFindFirst: vi.fn(),
   accountFindMany: vi.fn(),
+  accountFindUnique: vi.fn(),
   accountFindFirst: vi.fn().mockResolvedValue({ id: 711, isActive: true, reportGroup: "OINC" }),
   journalCreate: vi.fn(),
   journalEntryCreate: vi.fn(),
@@ -126,6 +130,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     account: {
       findMany: (...a: unknown[]) => mocks.accountFindMany(...a),
+      findUnique: (...a: unknown[]) => mocks.accountFindUnique(...a),
       findFirst: (...a: unknown[]) => mocks.accountFindFirst(...a),
     },
     purchaseReturn: {
@@ -2468,5 +2473,72 @@ describe("onPayrollPaid — kaki kompensasi PKWT (F-2026-10-24-132-V Putusan 5)"
     mocks.journalFindFirst.mockResolvedValue(null);
     await expect(onPayrollPaid(1)).rejects.toThrow("Snapshot akun baris kompensasi PKWT");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("gerbang akun 210209 klaim reimbursement (t_5c6d55f3)", () => {
+  const claimExpense = {
+    id: 42, documentNo: "EXP-0042", isReimbursementClaim: true,
+    accountId: 610, paidFromAccountId: 100, amount: 150000,
+    description: "Bensin", costCenterId: null,
+  };
+  function buildClaimTx() {
+    return {
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+      expense: { findUniqueOrThrow: mocks.expenseFindUniqueOrThrow },
+      account: {
+        findMany: mocks.accountFindMany,
+        findUnique: mocks.accountFindUnique,
+        findFirst: mocks.accountFindFirst,
+      },
+      journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+      journalEntry: journalEntryBranch(),
+    };
+  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAllAccountsExist();
+    wireTransaction(buildClaimTx);
+    mocks.systemSettings.reimbursementLiabilityAccountId = 209;
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({ ...claimExpense });
+    mocks.journalFindFirst.mockResolvedValue({ id: 77 });
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    mocks.assertPeriodOpen.mockResolvedValue(undefined);
+  });
+
+  it("(c1) akun 210209 nonaktif -> approve (J-RB1) gagal, nol jurnal", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: false, deletedAt: null });
+    await expect(onReimbursementClaimApproved(42, 7, buildClaimTx() as never)).rejects.toThrow("nonaktif");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("(c2) akun 210209 nonaktif -> bayar (J-RB2) gagal, nol jurnal", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: false, deletedAt: null });
+    await expect(onReimbursementClaimPaid(42, 7, buildClaimTx() as never)).rejects.toThrow("nonaktif");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("(c3) akun 210209 terhapus (deletedAt) -> approve DAN bayar gagal, nol jurnal", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: true, deletedAt: new Date("2026-10-26T00:00:00.000Z") });
+    await expect(onReimbursementClaimApproved(42, 7, buildClaimTx() as never)).rejects.toThrow("terhapus");
+    await expect(onReimbursementClaimPaid(42, 7, buildClaimTx() as never)).rejects.toThrow("terhapus");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("(c4) akun 210209 aktif belum terhapus -> J-RB1 terposting (kontrol positif)", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: true, deletedAt: null });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onReimbursementClaimApproved(42, 7, buildClaimTx() as never);
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ referenceType: "ExpenseReimbursementAccrual" }) }),
+    );
+  });
+
+  it("(a) hook bayar: query akrual J-RB1 wajib filter REVERSED + deletedAt", async () => {
+    mocks.accountFindUnique.mockResolvedValue({ id: 209, code: "210209", isActive: true, deletedAt: null });
+    await onReimbursementClaimPaid(42, 7, buildClaimTx() as never);
+    const where = mocks.journalFindFirst.mock.calls[0]?.[0]?.where;
+    expect(where.status).toEqual({ not: "REVERSED" });
+    expect(where.deletedAt).toBeNull();
   });
 });
