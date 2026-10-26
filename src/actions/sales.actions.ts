@@ -20,6 +20,7 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot"
 import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
 import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
@@ -2607,6 +2608,22 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         paymentStatus = "partial"
       }
 
+      // F-2026-10-25-036-S (lanjutan BLOCKER-1): edit item dapat menaikkan
+      // status ke paid (grandTotal turun <= paidAmount lama, mis. DP penuh)
+      // tanpa melewati jalur pembayaran — bekukan snapshot tarif komisi
+      // lewat helper bersama; snapshot existing tidak pernah ditimpa dan
+      // transisi turun/tetap tidak menulis snapshot (helper mengembalikan {}).
+      const commissionSnapshot = await commissionSnapshotForPaid(
+        tx,
+        {
+          id,
+          customerId: v.customerId,
+          date: wibDateToUtcMidnight(v.date),
+          commissionRatePercent: existingInvoice.commissionRatePercent ?? null,
+        },
+        paymentStatus === "paid",
+      )
+
       await tx.salesInvoice.update({
         where: { id },
         data: {
@@ -2621,6 +2638,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
           grandTotal,
           totalAmount: grandTotal,
           paymentStatus,
+          ...commissionSnapshot,
         },
       })
 
