@@ -60,6 +60,11 @@ vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug")
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock("@/lib/services/credit-gate.service", () => ({
+  assessCreditGateInTx: vi.fn().mockResolvedValue({ kind: "gate_off" }),
+  assertCreditGatePassed: () => null,
+  markCreditOverrideUsed: vi.fn(),
+}))
 
 import { createSalesOrder } from "../sales.actions"
 

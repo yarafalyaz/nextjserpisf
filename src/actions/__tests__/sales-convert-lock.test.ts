@@ -51,6 +51,12 @@ vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug")
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }))
+// F-2026-10-25-035-B: gerbang kredit default mati di tes kunci existing.
+vi.mock("@/lib/services/credit-gate.service", () => ({
+  assessCreditGateInTx: vi.fn().mockResolvedValue({ kind: "gate_off" }),
+  assertCreditGatePassed: () => null,
+  markCreditOverrideUsed: vi.fn(),
+}))
 
 import { convertQuotationToOrder } from "../sales.actions"
 
