@@ -75,6 +75,9 @@ const mocks = vi.hoisted(() => {
       ]),
     },
     employee: buildModelMock(),
+    // HCMS K1: applyDueSalaryAdjustments berjalan di jalur payroll;
+    // mock kosong = tidak ada kenaikan jatuh tempo.
+    salaryAdjustment: buildModelMock(),
     attendance: buildModelMock(),
     workSchedule: buildModelMock(),
     holiday: buildModelMock(),
@@ -87,6 +90,7 @@ const mocks = vi.hoisted(() => {
     journalEntry: buildModelMock(),
     user: buildModelMock(),
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
         return ops(prismaMock)
@@ -2222,6 +2226,11 @@ describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (au
     prismaMock.$transaction.mockImplementation(async (fn: any) => {
       const tx = {
         $queryRaw: prismaMock.$queryRaw,
+        // HCMS K1: applyDueSalaryAdjustments mengunci baris karyawan lewat
+        // tx transaksi-nested ini — tanpa baris jatuh tempo, cukup no-op.
+        $executeRaw: prismaMock.$executeRaw,
+        salaryAdjustment: prismaMock.salaryAdjustment,
+        employee: prismaMock.employee,
         payroll: {
           findMany: vi.fn(async () => { emitOrder.push("txFindMany"); return inTxPayrolls }),
           createMany: vi.fn(async (args: any) => {

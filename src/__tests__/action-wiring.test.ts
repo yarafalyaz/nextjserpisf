@@ -197,6 +197,78 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // 2 entri beku dibuang.
   // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
   // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
+  // Muse K1 HCMS backend dulu (kartu t_122db5c5): 34 aksi rekrutmen/
+  // kinerja/kompetensi/pelatihan/suksesi/gaji; UI HCMS menyusul di kartu
+  // Frontend t_daed387f (PR #805, sesudah PR backend ini merged) —
+  // buang 34 entri ini saat UI memanggilnya.
+  "src/actions/recruitment.actions.ts::createVacancy":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::updateVacancy":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::setVacancyStatus":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::deleteVacancy":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::createApplicant":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::moveApplicantStage":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::hireApplicant":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/recruitment.actions.ts::deleteApplicant":
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::createPerformanceCycle":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::setPerformanceCycleStatus":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::deletePerformanceCycle":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::upsertPerformanceGoal":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::deletePerformanceGoal":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::submitSelfReview":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::submitManagerReview":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::finalizeReview":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::createCompetency":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::deleteCompetency":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::setPositionCompetency":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::assessEmployeeCompetency":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::getCompetencyGaps":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::createTraining":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::setTrainingStatus":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::deleteTraining":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::addTrainingParticipant":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::setParticipantResult":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::removeTrainingParticipant":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/succession.actions.ts::setPositionCritical":
+    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
+  "src/actions/succession.actions.ts::upsertSuccessorCandidate":
+    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
+  "src/actions/succession.actions.ts::removeSuccessorCandidate":
+    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
+  "src/actions/succession.actions.ts::getSuccessionOverview":
+    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
+  "src/actions/salary-adjustment.actions.ts::cancelSalaryAdjustment":
+    "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
+  "src/actions/salary-adjustment.actions.ts::getSalaryAdjustments":
+    "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
+  // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
+  // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
