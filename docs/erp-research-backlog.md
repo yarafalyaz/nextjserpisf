@@ -35748,3 +35748,161 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-090-S: antrean sesi opname (StocktakeSession) belum selesai mengendap per tahap (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_69b16cfd. Basis `origin/main` `6f55eff18` (2026-10-27 06:09 WIB).
+
+**Verifikasi ID — tegas:** `F-2026-10-22-090-S` SUDAH TERPAKAI = papan beban rencana per stasiun kerja (`docs/erp-research-backlog.md:10365`, PR #569 MERGED). ID run ini `F-2026-10-27-090-S` tanggal beda (27 vs 22) — grep `F-2026-10-27-090` di backlog+board `origin/main` = 0/0 sebelum tulis; branch/PR `f090-stocktake` = 0. Bebas per tanggal+nomor. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+**Bukan duplikat:**
+- Bukan F-2026-10-26-066-S antrean penyesuaian stok draft (PR #1018 MERGED): objeknya `StockAdjustment` — dokumen penyesuaian yang SUDAH lahir (manual atau hasil posting opname). Spec ini objeknya `StocktakeSession` SEBELUM posting; sesi `posted` keluar populasi, dan `StockAdjustment` hasil postingnya masuk wilayah 066-S sesudah lahir. Dua antrean berurutan di rantai yang sama, bukan tumpang tindih.
+- Bukan laporan stok opname existing (`src/lib/reports/stock-count.ts` + `stock-count-data.ts:21-56`): laporan itu membaca `StockAdjustment` per periode (semua status, `deletedAt: null`) sebagai lembar hitung beserta NILAI selisih — dokumen penyesuaian, bukan sesi bertahap, tanpa tahap/umur sesi.
+- Bukan daftar sesi existing (`inventaris/opname/sesi/page.tsx`): daftar itu ADA dan tetap dipakai — gapnya ia tidak membawa tahap terbaca, umur per tahap, urutan mengendap, rekap per status, maupun saringan scope gudang (bukti §2). Spec ini lapisan turunan baca di atas objek yang sama.
+- Bukan halaman opname single-pass (`inventaris/opname/[[...segments]]/page.tsx`): lembar hitung langsung menghasilkan SATU draft `StockAdjustment` tanpa sesi/snapshot/recount/approval — jalur berbeda yang tidak diubah spec ini.
+
+### 1. Workflow specification
+
+Aktor: pemegang `view_stock_opname` (pembaca daftar), pencacah/pengelola sesi (aksi sesi meminjam `create_stock_adjustments`), penyetuju independen (`edit_stock_adjustments`), semua terikat scope gudang pada jalur aksi existing.
+
+Alur existing (TERVERIFIKASI-KODE, §2): sesi lahir `draft` → `snapshotStocktakeSession` mengunci snapshot stok live menjadi baris (`counting`, `snapshotAt`+`countedBy` terisi) → `saveStocktakeCounts` menyimpan hitung 1/2; baris berselisih tanpa hitung-2 mengembalikan sesi ke `recount`, bersih ke `review` → `approveStocktakeSession` oleh penyetuju ≠ pencacah (`approved`, `approvedBy`+`approvedAt`) → `postStocktakeSession` memposting variance menjadi `StockAdjustment` draft tertaut (`posted`, `adjustmentId`), atau langsung `posted` tanpa adjustment bila variance nol.
+
+Gap: sesi bisa berhenti berhari-hari di tahap mana pun — draft tak pernah di-snapshot, hitungan menggantung di `recount`, `review` menunggu penyetuju, `approved` tak kunjung diposting — dan tidak ada permukaan yang menjawab "sesi mana mengendap di tahap apa, sudah berapa lama, di gudang mana". Daftar sesi existing mengurut terbaru-dulu `take 50`, jadi sesi tertua yang paling mengendap justru paling mudah jatuh dari pandangan. Spec ini menambahkan **turunan baca**: populasi belum-selesai per tahap + umur per tahap + tingkat mengendap + rekap per tahap, dihitung server, tampil verbatim.
+
+Dokumen masuk: rekod `StocktakeSession` + hitungan baris `StocktakeLine` existing. Dokumen keluar: tidak ada — keputusan/transisi tetap lewat detail sesi + aksi existing berpenjaga penuh.
+
+Kata usulan (USULAN, final Q-STQ-2): judul seksi `Sesi Opname Belum Selesai`; kolom `Tahap`, `Umur Tahap`, `Progres Hitung`; tingkat `Mengendap` menempel pada baris, bukan status baru.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main 6f55eff18)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Skema: `StocktakeSession` `prisma/schema.prisma:3773-3795` — `documentNo` unik, `slug?`, `warehouseId`, `date Date`, `status String @default("draft") @db.VarChar(32)` (:3779), `snapshotAt DateTime?` (:3780), `countedBy Int?` (:3782), `approvedBy Int?` (:3783), `approvedAt DateTime?` (:3784), `adjustmentId Int?` (:3785), `createdBy?`, `createdAt` (:3787), `updatedAt`; indeks `[warehouseId]`, `[status]`. `StocktakeLine:3833-3849` — `systemQty`, `count1?`, `count2?`, `finalCount?`, `variance?`, `note?`. Kolom `finalCount`/`variance` tersimpan ADA tetapi jalur simpan hitungan existing TIDAK mengisinya (update hanya `count1/count2/note`, `inventory.actions.ts:2497`) — variance selalu dihitung runtime oleh `finalizeCounts`; membaca kolom tersimpan itu = membaca nilai basi/kosong.
+- Kosakata status PERSIS dari aksi (grep `stocktake` run ini, `src/actions/inventory.actions.ts:2370-2653`): `draft` (create :2409-2418), `counting` (snapshot :2455-2458), `recount`/`review` (save :2513-2516), `approved` (approve :2537-2540), `posted` (post :2593/:2635-2638). Header komentar :2370-2373: "draft → counting (snapshot) → recount → review → approved → posted (adjustment)". Kata snapshot/hitung/approve/posting pada komentar halaman (`sesi/page.tsx:20-24`) adalah nama AKSI, bukan status — jangan karang status `snapshot`/`counted`/`posting`. TIDAK ada status `cancelled`/`closed` dan TIDAK ada aksi batal/hapus sesi (grep `cancelStocktake|deleteStocktake` = 0).
+- Aksi transisi + penjaga: `createStocktakeSession:2391` (`create_stock_adjustments` + `assertWarehouseIdInScope:169` + periode terbuka); `snapshotStocktakeSession:2431` (`create_stock_adjustments`, hanya `draft`, kunci baris dalam transaksi, salin live qty gudang, isi `snapshotAt`+`countedBy`); `saveStocktakeCounts:2471` (`create_stock_adjustments`, hanya `counting`/`recount`, transisi `recount` bila ada `needsRecount` else `review`); `approveStocktakeSession:2528` (`edit_stock_adjustments`, hanya `review`, penyetuju ≠ `countedBy` — independen); `postStocktakeSession:2556` (`create_stock_adjustments`, hanya `approved` dibaca ulang sesudah `FOR UPDATE` :2572, `finalizeCounts`, variance nol → `posted` tanpa adjustment, variance ≠ 0 → `StockAdjustment status:"draft"` + `adjustmentId` + `requestApprovalIfConfigured("StockAdjustment", …)` :2643).
+- Logika murni: `src/lib/inventory/stocktake-finalize.ts:23-40` `finalizeCounts` — final = `count2 ?? count1`; baris `count1 == null` DILEWATI (belum dihitung; 0 adalah hitungan sah "stok kosong"); `needsRecount = count2 == null && count1 !== systemQty`; `variance = finalCount − systemQty`. Tes existing: `stocktake-finalize.test.ts`, `stocktake-posting-concurrency.integration.test.ts`.
+- Daftar sesi existing: `sesi/page.tsx:33` `requirePermission("view_stock_opname")`; `findMany orderBy createdAt desc take 50` (:56-63) include gudang + `_count.lines`; kolom Dokumen/Gudang/Status (string mentah)/Baris/Aksi. TIDAK ada filter `where` status/gudang, TIDAK ada umur/tahap terbaca/rekap per status, TIDAK ada saringan scope gudang di query daftar (scope hanya ditegakkan di aksi via `assertWarehouseIdInScope`). Detail `[slug]/page.tsx:24` gerbang sama, baris `take 500`. Tombol transisi per status di `stocktake-forms.tsx:80-115` (Snapshot bila draft, Setujui bila review, Posting bila approved; simpan hitungan hanya di detail).
+- Izin katalog: resource `stock_opname` di `src/lib/auth/module-catalog.generated.ts:248` HANYA punya `view_stock_opname` — tidak ada `create/edit/delete/process_stock_opname`. Aksi sesi meminjam katalog `stock_adjustments`: `create_stock_adjustments` (:235) untuk create/snapshot/save/post, `edit_stock_adjustments` (:236) untuk approve, `process_stock_adjustments` (:237) milik proses adjustment (wilayah 066-S). Konsekuensi jujur: pemegang `view_stock_opname` saja bisa melihat daftar tetapi tidak menjalankan transisi apa pun; menjalankan transisi menuntut izin penyesuaian stok.
+- Scope gudang: `getWarehouseScope` `src/lib/auth/warehouse-scope.ts:21-40` = `all`/`assigned`/`none` fail-closed (roles kosong/rusak → `none`). Dipakai jalur aksi sesi; TIDAK dipakai query daftar sesi existing (di atas).
+- Laporan stok opname existing membaca `StockAdjustment`, bukan sesi: `stock-count-data.ts:21-26` `loadStockCount(period)` `findMany date dalam periode, deletedAt: null`, builder murni `stock-count.ts` menghitung nilai selisih per dokumen — permukaan nilai, sengaja BUKAN permukaan antrean ini (BR-STQ-07).
+
+Belum ada / parsial (bukti grep run ini):
+- Builder/loader antrean sesi opname: grep `stocktake` di `src/lib/reports/` = 0. Umur per tahap, tingkat mengendap, urutan tertua, rekap per status: ABSEN.
+- Jalur batal/tutup sesi yatim: ABSEN (di atas) — sesi `draft` yang ditinggal tidak punya jalan keluar existing selain di-snapshot maju. Antrean baca tidak menciptakan jalan keluar itu (Yang TIDAK diusulkan).
+
+### 3. Status-transition matrix
+
+Status sesi TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `createStocktakeSession` | `draft` | `create_stock_adjustments` + scope gudang + periode terbuka |
+| `draft` | `snapshotStocktakeSession` | `counting` (+`snapshotAt`, `countedBy`) | `create_stock_adjustments` + scope; hanya dari `draft`, kunci baris |
+| `counting`/`recount` | `saveStocktakeCounts` ada baris `needsRecount` | `recount` | `create_stock_adjustments` + scope |
+| `counting`/`recount` | `saveStocktakeCounts` bersih | `review` | sama |
+| `review` | `approveStocktakeSession` | `approved` (+`approvedBy`, `approvedAt`) | `edit_stock_adjustments` + scope + penyetuju ≠ pencacah |
+| `approved` | `postStocktakeSession` variance = 0 | `posted` (`adjustmentId` null) | `create_stock_adjustments` + scope + periode terbuka; klaim `FOR UPDATE` |
+| `approved` | `postStocktakeSession` variance ≠ 0 | `posted` (+`adjustmentId` → `StockAdjustment draft`) | sama; adjustment masuk wilayah 066-S |
+| `draft/counting/recount/review/approved` | — (waktu lewat saja) | tetap | **turunan: tingkat tampil `Mengendap` bila umur tahap ≥ ambang (USULAN) — bukan status, tidak tertulis** |
+| `posted` | — | terminal untuk antrean | keluar populasi pada render berikut |
+
+Tidak ada transisi batal/hapus dari status mana pun di kode existing — matriks tidak mengarangnya.
+
+### 4. Role/permission matrix (katalog nyata)
+
+Katalog `module-catalog.generated.ts:248` (`view_stock_opname`) + pinjaman `stock_adjustments` :234-237 (`view/create/edit/delete/process_stock_adjustments`). Tidak ada key opname selain `view` (grep run ini).
+
+| Aksi | view_stock_opname | create_stock_adjustments | edit_stock_adjustments | Scope gudang |
+|---|---|---|---|---|
+| Lihat daftar sesi existing | YA (gerbang halaman :33) | tidak dituntut | tidak dituntut | TIDAK disaring di query daftar existing (fakta §2) |
+| Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru (USULAN Q-STQ-3) | tidak dituntut | tidak dituntut | WAJIB disaring loader turunan (BR-STQ-11) — lebih ketat dari daftar existing, disengaja |
+| Buat sesi / snapshot / simpan hitungan / posting (existing, di detail/daftar) | halaman menuntutnya | YA | — | YA per aksi existing |
+| Setujui sesi (existing) | halaman menuntutnya | — | YA + independen dari pencacah | YA |
+| Transisi apa pun DARI antrean turunan | TIDAK tahap 1 (BR-STQ-10) | TIDAK | TIDAK | — |
+
+Konsekuensi jujur tahap 1: antrean terbaca pemegang `view_stock_opname` dalam scope gudangnya; pencacah/penyetuju yang tidak memegang `view_stock_opname` tidak melihat antrean (sama seperti daftar existing hari ini). Key izin baru = Q-STQ-3, bukan bawaan.
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-STQ-01 | Populasi belum-selesai = `StocktakeSession.status` PERSIS ∈ {`draft`, `counting`, `recount`, `review`, `approved`}. `posted` keluar (terminal, §3). Nilai status lain (kolom `VarChar(32)` bebas — warisan/asing mungkin ada) masuk ember `Status Tidak Dikenal` tertanda: tampil apa adanya, tidak dibuang, tidak ditebak tahapnya, tidak dihitung ke rekap tahap dikenal. | TERVERIFIKASI-KODE (kosakata aksi :2409-2638; skema :3779) + USULAN (ember asing) |
+| BR-STQ-02 | Label tahap tampil = satu konstanta server memetakan status persis: `draft`→`Draft`, `counting`→`Sedang Dihitung`, `recount`→`Hitung Ulang`, `review`→`Menunggu Persetujuan`, `approved`→`Siap Diposting` (USULAN kata, final Q-STQ-2). Status mentah tetap tampil berdampingan/tertanda agar tidak ada label yang menyembunyikan kosakata kode. | USULAN di atas TERVERIFIKASI-KODE |
+| BR-STQ-03 | Umur acuan PER TAHAP, jujur terhadap penanda yang benar-benar ditulis aksi: `draft` → `createdAt` (satu-satunya penanda; `snapshotAt` memang belum ada); `counting`/`recount`/`review` → `snapshotAt` (snapshot dikunci sekali; simpan hitungan bolak-balik `counting`↔`recount` TIDAK menggerakkan acuan); `approved` → `approvedAt` (menunggu posting sejak disetujui). `updatedAt` DILARANG sebagai acuan (bergerak tiap simpan hitungan — menghapus umur). | USULAN di atas TERVERIFIKASI-KODE (snapshot menulis `snapshotAt` :2455-2458; approve menulis `approvedAt` :2537-2540; `updatedAt @updatedAt` :3788) |
+| BR-STQ-04 | Penanda acuan NULL (warisan: `snapshotAt`/`approvedAt` nullable skema :3780/:3784) → cadangan `createdAt` DAN baris tertanda `tanpa penanda tahap` — tidak diam-diam dianggap sama dengan umur tahap. | USULAN |
+| BR-STQ-05 | Umur tahap = hari kalender WIB sejak acuan (pola `wibDayNumber`, `src/lib/reports/employee-lifecycle.ts:90`); tampil angka hari + tanggal acuan. Tingkat turunan murni: `MENUNGGU` → `MENGENDAP` bila umur ≥ ambang (Q-STQ-1). Dihitung ulang tiap render; waktu lewat sendiri tidak menulis status/kolom apa pun. | USULAN |
+| BR-STQ-06 | Urutan tampil: `MENGENDAP` dulu, lalu umur tahap terbesar, seri acuan sama → id sesi naik. Kepala antrean memuat rekap hitungan SESI per tahap (Σ sesi per status populasi + Σ mengendap) — hitungan dokumen, bukan baris/barang/kuantitas. Ini MEMBALIK urutan daftar existing (`createdAt desc`) hanya untuk permukaan turunan; daftar existing tidak diubah diam-diam (Q-STQ-4). | USULAN |
+| BR-STQ-07 | Payload daftar TANPA kuantitas maupun nominal variance: tidak ada `systemQty`/`count1`/`count2`/`variance` per baris, tidak ada nilai selisih/`unitCost`/`totalCost`. Angka persediaan dan variance = permukaan detail sesi + laporan stok opname existing (§2) yang memang bergerbang sama. Membuka angka variance di daftar = BUTUH-VONIS Accountant bersyarat (Q-STQ-6) karena menyentuh penilaian persediaan; tahap 1 vonis TIDAK diminta. | USULAN (scope) di atas TERVERIFIKASI-KODE (permukaan nilai existing terpisah) |
+| BR-STQ-08 | Progres hitung per sesi BOLEH tampil sebagai HITUNGAN BARIS saja: total baris, baris terhitung (`count1` non-null, pola `finalizeCounts` — 0 terhitung sah), baris perlu hitung ulang (`needsRecount`) — dihitung server massal anti-N+1 dari `StocktakeLine`. Ini hitungan operasional baris, BUKAN kuantitas stok dan bukan variance; label kolom wajib menyatakannya (`Baris Terhitung k dari n`). | USULAN di atas TERVERIFIKASI-KODE (`stocktake-finalize.ts:23-40`) |
+| BR-STQ-09 | Payload tanpa nama pencacah/penyetuju: tahap `review` tertanda menunggu persetujuan independen (fakta penjaga kode), bukan nama orang. `countedBy`/`approvedBy` tidak ditampilkan tahap 1; membuka penanda penanggung jawab bernama = Q-STQ-5. | USULAN |
+| BR-STQ-10 | Baca-saja: builder/loader tidak memanggil `snapshot/save/approve/postStocktakeSession`, tidak menulis status maupun kolom `finalCount`/`variance` tersimpan, tidak auto-posting/auto-batal. Tombol Snapshot/Setujui/Posting/Simpan dari antrean TIDAK ada tahap 1; tautan baris hanya ke detail sesi existing berpenjaga penuh. | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-STQ-11 | Gerbang loader fail-closed SEBELUM query: `view_stock_opname` + saringan `getWarehouseScope` (`warehouse-scope.ts:21-40`) — `all` semua gudang, `assigned` hanya gudang tertugaskan, `none` nol baris. Sesi gudang di luar scope TIDAK bocor. Turunan ini sengaja lebih ketat dari query daftar existing yang tanpa saringan scope (§2); menyelaraskan daftar existing = keputusan terpisah Lead (Q-STQ-3), tidak diubah diam-diam oleh turunan. | USULAN di atas TERVERIFIKASI-KODE |
+| BR-STQ-12 | Batas ambil jujur: antrean TIDAK mewarisi `take 50` terbaru-dulu milik daftar existing. Loader mengambil populasi belum-selesai dengan urutan BR-STQ-06 dan batas eksplisit yang dinyatakan (fisik Backend, mis. 200) + penanda `terpotong` bila populasi melebihi batas — sesi mengendap tidak hilang diam-diam di luar potongan. | USULAN |
+| BR-STQ-13 | Sesi tanpa baris tetap tampil tertanda `tanpa baris`: `draft` memang belum punya baris (baris lahir saat snapshot), dan `counting` bisa 0 baris bila gudang kosong saat snapshot (`createMany` dilewati bila live kosong, :2446). Tidak dibuang, tidak dianggap selesai. | TERVERIFIKASI-KODE + USULAN (tanda) |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
+|---|---|---|---|
+| Perintah + hasil stok opname per gudang | Ada — Perintah Stok Opname (SPK, PIC, gudang, kategori) → Hasil Stok Opname → Proses Opname membuat Penyesuaian Persediaan otomatis (https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/hasil-stok-opname/mencatat-proses-stok-opname/) | Ada — Stok Opname: hitung fisik vs buku, selisih, Proses → penyesuaian + akun koreksi + Rekam draft (https://help.zahironline.com/portal/id/kb/articles/stock-o ; https://help.zahironline.com/portal/id/kb/articles/stock-opname-zahir-online-v2) | Ada — sesi bertahap snapshot/recount/approval independen/posting → adjustment (TERVERIFIKASI-KODE §2), lebih bertahap dari kedua benchmark |
+| Approval independen sesi opname (penyetuju ≠ pencacah) | Tidak ditemukan sebagai approval sesi opname di halaman di atas — tidak diklaim | Tidak ditemukan — tidak diklaim | Ada (TERVERIFIKASI-KODE `approveStocktakeSession:2528-2540`) |
+| Antrean sesi opname BELUM SELESAI per tahap + umur mengendap + tertua-dulu | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim ada | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); daftar sesi ada tanpa umur/tahap terbaca/rekap/scope |
+
+Jujur: kedua benchmark membuktikan opname → penyesuaian adalah fitur standar (ISF sudah setara/lebih bertahap); antrean belum-selesai berumur per tahap tidak ditemukan di keduanya — nilai spec ini operasional internal (sesi tersangkut terlihat sebelum snapshot membusuk oleh pergerakan stok berjalan), bukan mengejar fitur vendor.
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-STQ-B1: Populasi PERSIS lima status BR-STQ-01; `posted` bocor → MERAH. Status asing masuk ember `Status Tidak Dikenal` tertanda (hilang/ditebak tahap → MERAH). Tahap/umur/tingkat/rekap dihitung server; konsumen menghitung ulang → MERAH.
+- AC-STQ-B2: Umur per acuan BR-STQ-03 (`draft`=`createdAt`; `counting`/`recount`/`review`=`snapshotAt`; `approved`=`approvedAt`); acuan NULL tertanda cadangan `createdAt` (BR-STQ-04); umur dari `updatedAt` → MERAH (mutasi: simpan hitungan pada sesi `counting`, umur tahap berubah = gagal).
+- AC-STQ-B3: Urutan BR-STQ-06 (mengendap → umur terbesar → id naik) + rekap Σ sesi per tahap cocok populasi; mewarisi `createdAt desc take 50` daftar existing → MERAH; populasi melebihi batas tampil penanda `terpotong`, bukan hilang diam-diam.
+- AC-STQ-B4: Progres baris massal anti-N+1 (satu agregasi `StocktakeLine` untuk semua sesi; query baris per sesi → MERAH); progres mengikuti `finalizeCounts` (baris `count1=0` terhitung; `count1` null belum). Payload tanpa qty/variance/nilai/nama user (bocor satu pun → MERAH, BR-STQ-07/09).
+- AC-STQ-B5: Loader fail-closed `view_stock_opname` sebelum query + scope gudang BR-STQ-11 (sesi luar scope bocor → MERAH; scope `none` = nol baris); baca-saja terbukti (builder memanggil aksi transisi/menulis status/kolom variance → MERAH).
+
+Frontend (konsumen):
+- AC-STQ-F1: Label tahap/tingkat/umur/rekap/progres verbatim payload server; UI tidak menghitung umur/tingkat/progres/urutan sendiri (grep hitung di komponen = MERAH).
+- AC-STQ-F2: TIDAK ada tombol Snapshot/Setujui/Posting/Simpan/Batal dari antrean (tombol transisi di antrean → MERAH, BR-STQ-10); tautan baris hanya ke detail sesi existing.
+- AC-STQ-F3: Baris tertanda (`tanpa baris`, `tanpa penanda tahap`, `Status Tidak Dikenal`, `terpotong`) tampil dengan tandanya, bukan disembunyikan; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-STQ-1: Sesi `draft` yatim berminggu-minggu tanpa jalur batal existing: tampil mengendap apa adanya; antrean tidak memberi tombol hapus/batal (jalur keluar = keputusan terpisah Lead, Yang TIDAK diusulkan).
+- EC-STQ-2: Sesi `counting` hasil snapshot gudang kosong (0 baris): tertanda `tanpa baris`; progres `0 dari 0` tidak ditampilkan sebagai selesai.
+- EC-STQ-3: Sesi bolak-balik `counting`↔`recount` tiap simpan hitungan: umur tetap sejak `snapshotAt` pertama, tidak reset per putaran (acuan tidak ditulis ulang snapshot — snapshot hanya dari `draft`).
+- EC-STQ-4: Sesi `approved` menunggu posting melewati tutup periode: posting existing menolak (periode terbuka), status tetap `approved` — tetap populasi dengan umur sejak `approvedAt`; antrean tidak menandai gagal posting (tidak ada penanda percobaan di kode).
+- EC-STQ-5: Dua sesi berjalan bersamaan untuk gudang sama (kode existing tidak melarang sesi paralel per gudang — create tanpa cek sesi aktif): tampil per sesi apa adanya; antrean tidak menggabung, tidak menyatakan konflik stok (snapshot masing-masing sah per waktu kunci).
+- EC-STQ-6: Sesi diposting saat antrean terbuka: keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-STQ-7: Baris dengan `count1=0` (fisik kosong sah) vs `count1` null (belum dihitung): progres membedakan persis pola `finalizeCounts`; menyamakan null dengan 0 → progres karangan (kait AC-STQ-B4).
+
+### 8. Backlog implementasi (turunan F-2026-10-27-090-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-090-S | Spec kontrak ini (dokumen) | Business | — |
+| 090-B | Builder murni (tahap/umur WIB per acuan/tingkat/urutan/rekap/progres baris) + loader `view_stock_opname` + `getWarehouseScope` fail-closed anti-N+1 + tes AC-STQ-B1..B5 | Backend | Putusan Lead Q-STQ-1/2/3/4 |
+| 090-F | Permukaan turunan (seksi di halaman sesi existing per Q-STQ-4) verbatim payload + AC-STQ-F1..F3; grep e2e opname dulu | Frontend | 090-B merged |
+| 090-Q | Falsifikasi AC-STQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 090-B/090-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 9. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-STQ-1 | Ambang `MENGENDAP` (umur tahap ≥ N hari kalender WIB sejak acuan BR-STQ-03)? | Lead | USULAN 3 hari (preseden ambang keluarga antrean mengendap) — bukan fakta sebelum diputus |
+| Q-STQ-2 | Kata final: label tahap BR-STQ-02 (`Sedang Dihitung`/`Hitung Ulang`/`Menunggu Persetujuan`/`Siap Diposting`), tingkat `Mengendap`, kolom `Umur Tahap`/`Baris Terhitung k dari n`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim, status mentah tetap tertanda |
+| Q-STQ-3 | Gerbang antrean tahap 1 tetap `view_stock_opname` + scope gudang loader (BR-STQ-11), dan apakah daftar sesi existing yang tanpa saringan scope ikut diselaraskan sebagai pekerjaan terpisah? | Lead | Tahap 1: gerbang + scope pada turunan saja (nol key baru); penyelarasan daftar existing = keputusan terpisah, jangan ubah diam-diam |
+| Q-STQ-4 | Penempatan: seksi `Sesi Opname Belum Selesai` di halaman sesi existing vs permukaan terpisah? Daftar existing (semua status, termasuk `posted`) ikut diubah urutan/batasnya? | Lead | USULAN: seksi turunan di halaman sesi existing; daftar existing tidak diubah |
+| Q-STQ-5 | Penanda penanggung jawab bernama (`countedBy` pencacah, penunggu persetujuan) dibuka tahap 1? | Lead | USULAN tidak tahap 1 (BR-STQ-09): tahap + gudang cukup untuk menemukan sesi tersangkut; nama = permukaan detail existing |
+| Q-STQ-6 | Kuantitas/nilai variance dibuka di payload daftar? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-STQ-07); vonis WAJIB hanya bila Lead membuka ini — tahap baca-saja tanpa angka tidak butuh vonis |
+
+### Yang TIDAK diusulkan run ini
+- Batal/hapus/tutup sesi yatim: tidak ada jalur existing (§2) dan menciptakannya = aksi tulis berpenjaga baru (siapa boleh membatalkan sesi sudah ter-snapshot?) — keputusan Lead terpisah, bukan bawaan antrean baca (EC-STQ-1 dicatat, bukan dipecahkan di sini).
+- Tombol Snapshot/Setujui/Posting/Simpan dari antrean, posting massal, auto-posting sesi `approved` lama (BR-STQ-10).
+- Kuantitas/nilai variance, nilai persediaan, atau hitungan stok live di payload daftar (BR-STQ-07) — permukaan detail/laporan existing yang menanganinya.
+- Pengingat ke pencacah/penyetuju, eskalasi, SLA per tahap per gudang — keadaan/kanal baru di luar tahap baca-saja.
+- Larangan sesi paralel per gudang atau kunci gudang-sedang-opname: aturan inti baru menyentuh perilaku create existing (EC-STQ-5 dicatat apa adanya); butuh putusan Lead terpisah bila mau diubah.
+- Key izin opname baru (`create/edit/process_stock_opname`), mengubah gerbang/urutan/`take 50` daftar sesi existing, atau menyentuh halaman opname single-pass (Q-STQ-3/4).
+- Mengganti laporan stok opname existing (`stock-count*`) — ia membaca `StockAdjustment` untuk nilai selisih; antrean ini membaca sesi untuk tahap/umur. Keduanya tetap.
+
+F-2026-10-27-090-S — Antrean sesi opname belum selesai mengendap per tahap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-STQ-1..5, lalu fisik Backend (090-B), konsumen Frontend (090-F), falsifikasi QA (090-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/gerbang/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja (nol kuantitas/nominal variance di payload, nol jurnal, nol ubah stok — BR-STQ-07); WAJIB bersyarat hanya bila Lead membuka Q-STQ-6 (angka variance di daftar).
