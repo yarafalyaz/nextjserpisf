@@ -74,6 +74,11 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     expect(text).toContain(DP_QUEUE_NOTICE_TEXT)
     expect(text).toContain("2 uang muka menunggu verifikasi")
     expect(text).toContain("belum menjadi kas")
+    // Total Rp dari fixture sen nyata: summary.totalAmountSen = sen dari
+    // 15jt+5jt rupiah = 2.000.000.000 sen -> /100 wajib tampil Rp 20.000.000.
+    expect(q.summary.totalAmountSen).toBe(2_000_000_000)
+    expect(text).toContain("Rp 20.000.000 belum menjadi kas")
+    expect(text).not.toContain("Rp 2.000.000.000")
     // Umur 2 hari dari createdAt (24 Okt WIB), bukan paymentDate 15 Okt.
     expect(text).toContain("2 hari")
     expect(text).not.toContain("11 hari")
@@ -116,6 +121,17 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     expect(rowsDom[0]?.children[9]?.textContent).toBe("Konfirmasi Membuka Invoice")
     expect(rowsDom[1]?.children[7]?.textContent).toBe("Bukti belum ada")
     expect(rowsDom[1]?.children[9]?.textContent).toBe("Menunggu Verifikasi")
+    // Menunggu lain Rp dari sen nyata (kolom 8 = Jarak): DP-1 menunggu lain
+    // 500.000.000 sen -> /100 = Rp 5.000.000; DP-2 -> Rp 15.000.000.
+    // Mutasi membuang /100 di dp-queue-row wajib MERAH di asersi literal ini.
+    expect(q.rows[0]?.menungguLainSen).toBe(500_000_000)
+    expect(q.rows[1]?.menungguLainSen).toBe(1_500_000_000)
+    expect(rowsDom[0]?.children[8]?.textContent).toContain(
+      "Menunggu lain Rp 5.000.000 (belum terhitung ambang)",
+    )
+    expect(rowsDom[1]?.children[8]?.textContent).toContain(
+      "Menunggu lain Rp 15.000.000 (belum terhitung ambang)",
+    )
     expect(text).toContain("DP-1")
     expect(text).toContain("DP-2")
     expect(text).not.toContain("DP-9")
