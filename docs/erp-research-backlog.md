@@ -34628,3 +34628,158 @@ Transisi tingkat hanya karena render ulang sesudah fakta berubah (surat jalan di
 - Status `cancelled`/soft-delete surat jalan — model existing tidak mengenalnya; mengubah = keputusan skema terpisah, bukan spec antrean.
 - Penilaian janji kirim per SO di antrean ini — wilayah 029-S; antrean ini berhenti di dokumen draft yang belum berangkat.
 F-2026-10-26-062-S — Antrean surat jalan draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-DOQ-1/2/3, lalu fisik Backend (062-B), konsumen Frontend (062-F), falsifikasi QA (062-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak jalur stok DO diusulkan berubah (di luar spec ini, BR-DOQ-02/10).
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-076-S: antrean klaim garansi status intake mengendap belum masuk eligibility (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_8f5c1ecd. ID F-2026-10-27-076-S diverifikasi bebas run ini 2026-10-27 01:55 WIB: grep `F-2026-10-27` di backlog `origin/main` (18ffe3ef7) = 0; pencarian PR memuat `076` hanya menemukan seri lama F-2026-10-22-076-S payroll (beda tanggal, beda topik, semua MERGED); branch `*f076*` garansi = 0. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `reportedAt`, `coverageId`, `customerVehicleId`, `odometerKm`, `complaint`, `createdBy`, `createdAt`, tautan coverage/kendaraan/item), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-WIQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK memajukan klaim ke eligibility, TIDAK memutuskan approved/rejected, TIDAK menautkan WO repair, dan TIDAK memposting jurnal apa pun — transisi tetap jalur existing `transitionWarrantyClaimAction` berizin `edit_warranty_claims` dan keputusan tetap `decideWarrantyClaimAction` berizin `approve_warranty_claims` dari detail klaim. Umur antrean dihitung dari `reportedAt` (tanggal lapor klaim, field bisnis wajib), BUKAN `createdAt` karangan (BR-WIQ-05). Nol nominal biaya klaim tahap 1: klaim `intake` belum punya WO repair tertaut (`repairWorkOrderId` null sampai transisi `in_repair`), jadi tidak ada biaya aktual yang sah untuk ditampilkan; biaya klaim terverifikasi hanya dari WO repair tertaut (MaterialIssue completed + ProductionCost) lewat `warranty-journal.service.ts` — di luar populasi intake dan DILARANG dipinjam ke baris intake (BR-WIQ-02/04).
+
+Bukan duplikasi: bukan antrean garansi segera berakhir existing (`src/lib/reports/warranty-expiry-queue.ts` + `-data.ts` + kartu di halaman klaim + halaman `laporan/garansi-segera-berakhir`, F-2026-10-22-094-S) — populasi antrean itu WarrantyCoverage `active`/`expired` dinilai dari `expiresAt` cakupan (masa garansi mau habis); spec ini populasi WarrantyClaim `status="intake"` dinilai dari `reportedAt` klaim (klaim sudah dilaporkan tetapi belum dinilai) — objek, status, dan acuan tanggal beda tegas, dan penanda klaim BR-WX-03 di antrean expiry justru mengecualikan kebutuhan ini (ia hanya menandai "ada klaim terbuka" per coverage, tanpa umur intake per klaim). Bukan daftar klaim garansi existing `produksi/garansi` (findMany semua status urut `reportedAt desc`, filter status + cari, take 200 — klaim intake lama tenggelam di bawah klaim baru, tanpa umur menunggu penilaian, tanpa tingkat, tanpa rekap intake). Bukan halaman detail klaim `[claimId]` (fakta eligibility per klaim untuk penilai — antrean ini mengantar ke sana, tidak menilai eligibility di daftar, BR-WIQ-06). Bukan antrean klaim supplier (status `supplierClaimStatus` terpisah di klaim yang sama — tidak mencemari status antrean, BR-WIQ-07).
+
+Benchmark resmi (akses live 2026-10-27 run ini):
+- Accurate: Klaim Pelanggan mencatat klaim garansi pelanggan dua arah (Terima Barang saat klaim masuk, Kirim Barang saat pengganti/hasil perbaikan dikirim balik), No. Klaim + Tanggal + barang + gudang, jurnal otomatis alokasi persediaan klaim — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/klaim-pelanggan/mengenal-fitur-klaim-pelanggan/ dan indeks https://help.accurate.id/product/klaim-pelanggan/ (BENCHMARK: pencatatan klaim + status penyelesaian ada; antrean klaim masuk bertingkat umur menunggu penilaian dengan ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: daftar fitur lengkap Zahir Online (akses live run ini) memuat Penjualan/Persediaan/Reminder jatuh tempo, tanpa fitur klaim garansi pelanggan yang ditemukan — https://www.zahironline.com/fitur-lengkap/ (BENCHMARK negatif jujur: klaim garansi tidak ditemukan di halaman resmi yang diakses — tidak diklaim ada; antrean umur intake Zahir juga tidak ditetapkan).
+
+### 0. Inventarisasi terverifikasi (2026-10-27, basis origin/main 18ffe3ef7)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `WarrantyClaim` (prisma/schema.prisma:5523-5565) — `coverageId` WAJIB, `customerVehicleId` WAJIB, `reportedAt` DateTime WAJIB, `odometerKm` nullable, `complaint` Text WAJIB, `status` String `@default("intake")` (:5530), `decisionBy`/`decisionAt`/`decisionNotes`/`resolutionType` nullable, `repairWorkOrderId` nullable, kolom klaim supplier terpisah (`supplierClaimStatus` String `@default("none")` :5543, vendor/retur/ref/notes/by/at), `createdBy` nullable, `createdAt`/`updatedAt`; indeks status/customerVehicleId/createdAt ada. TANPA kolom `deletedAt` di blok model (grep = 0) — hapus bukan jalur klaim; jangan karang soft-delete. `WarrantyCoverage` (:5422-5455) — `expiresAt` WAJIB, `status` default `active` (nilai active/expired/revoked, warranty.service.ts:35), `installedAt`, `warrantyMonths`, `mileageLimitKm` nullable, `serialNumber` nullable.
+- Lifecycle (src/lib/services/warranty.service.ts): status klaim `intake → eligibility → approved|rejected → in_repair → closed` (:38-45, komentar :21); tabel transisi `WARRANTY_CLAIM_TRANSITIONS` (:86-93): `intake: ["eligibility"]` saja — satu-satunya jalan keluar intake; `eligibility: ["approved","rejected"]`; `approved: ["in_repair","closed"]`; `rejected: ["closed"]`; `in_repair: ["closed"]`; `closed: []` terminal. `createWarrantyClaim` (:297) lahir selalu `status: "intake"` (:334) apa pun masa cakupannya, keluhan wajib, odometer lapor memperbarui `lastOdometerKm` kendaraan. `decideWarrantyClaim` (:347) hanya sah dari `eligibility` (lewat penjaga transisi), keputusan SELALU manual pejabat tercatat (decisionBy/decisionAt) — sistem tidak pernah auto-reject. `transitionWarrantyClaim` (:380) menolak target approved/rejected (wajib lewat decide). `assessWarrantyEligibility` (:264) hanya menghitung fakta tampil (masa/odometer/serial) untuk penilai, tidak memutuskan apa pun; klaim di luar masa tetap tercatat dan wajib diputus manual.
+- Aksi + izin (src/actions/warranty.actions.ts): buat klaim `create_warranty_claims` (:40); keputusan approved/rejected `approve_warranty_claims` (:65); transisi non-keputusan (termasuk intake→eligibility) `edit_warranty_claims` (:95); detail + fakta eligibility `view_warranty_claims` (:197). Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:258-261): `view_warranty_claims`, `create_warranty_claims`, `edit_warranty_claims`, `approve_warranty_claims` — TIDAK ada key antrean/queue terpisah.
+- Klaim supplier terpisah (TERVERIFIKASI-KODE): `WARRANTY_SUPPLIER_CLAIM_STATUSES` none/drafted/sent/accepted/rejected_supplier/returned/closed_recovered/closed_no_recovery (warranty.service.ts:56-65) dengan tabel transisi sendiri (:74-84); komentar schema:5536-5540 menegaskan status supplier TERPISAH dari status klaim pelanggan (klaim pelanggan bisa closed sementara recovery supplier berjalan). Tautan supplier hanya lahir sesudah klaim approved beresolusi replace (`assertClaimEligibleForSupplierLink`) — klaim intake belum bisa punya tautan supplier berjalan.
+- Biaya klaim (TERVERIFIKASI-KODE): `warranty-journal.service.ts` — biaya terverifikasi HANYA dari WO repair tertaut: MaterialIssue completed (Σ qty × cost FIFO) + ProductionCost WO repair (:54-68); jurnal biaya mensyaratkan klaim approved/in_repair/closed + keputusan tercatat + WO repair tertaut + biaya > 0 (:250-269). Klaim intake: `repairWorkOrderId` null (tautan hanya terisi saat transisi `in_repair`, warranty.service.ts transitionWarrantyClaim) — tidak ada biaya aktual sah pada intake.
+- Daftar klaim existing: `produksi/garansi/page.tsx` requirePermission `view_warranty_claims`, findMany klaim (filter status opsional + cari complaint/plat/nama item, `orderBy: { reportedAt: "desc" }`, `take: 200`, include kendaraan plat + coverage status/expiresAt/item) + kartu antrean expiry coverage di halaman sama — tanpa umur menunggu penilaian per klaim, tanpa tingkat intake, tanpa rekap khusus intake. Detail klaim menampilkan fakta eligibility + panel aksi (transisi/keputusan) lewat `warranty-claim-actions.tsx`.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean klaim `intake` mengendap — grep `warranty-claim-queue|warrantyClaimQueue|claimAge|intakeAge` di src/lib + src/components = 0 antrean klaim (satu-satunya antrean garansi = warranty-expiry-queue berbasis coverage); tidak ada cron pengingat/penuaan klaim intake. Risiko bengkel: pelanggan melaporkan kerusakan part terpasang, klaim tercatat `intake`, lalu tidak pernah dimajukan ke `eligibility` untuk dinilai — pelanggan menunggu tanpa kabar, sementara daftar klaim urut laporan terbaru membuat intake lama tenggelam; cakupan bisa berakhir selama klaim mengendap sehingga penilaian makin sulit, padahal fakta eligibility dinilai dari `reportedAt` (klaim dalam masa saat lapor tetap sah dinilai — pejabat yang memutuskan, bukan sistem).
+
+### 1. Workflow specification
+
+Aktor: Pelapor/Admin klaim pemegang `create_warranty_claims` (sumber baris intake), Petugas penilaian pemegang `edit_warranty_claims` (satu-satunya yang memajukan intake→eligibility lewat jalur existing), Pejabat pemutus pemegang `approve_warranty_claims` (memutuskan approved/rejected dari eligibility — di luar populasi antrean, konteks penjaga), Pembaca klaim pemegang `view_warranty_claims` (pembaca antrean), Sistem (builder turunan baca-saja). Pelanggan BUKAN aktor antrean (tidak ada notifikasi pelanggan tahap 1).
+Dokumen masuk: baris WarrantyClaim existing berstatus `intake` (id, coverageId + item nama/SKU + serialNumber + status cakupan + `expiresAt` cakupan, customerVehicleId + plat + nama pelanggan, `reportedAt`, `odometerKm`, ringkasan `complaint`, `createdBy` + nama bila ada, `createdAt`). Field existing semua; tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per klaim intake (§3) + rekap hitungan klaim per tingkat. BUKAN penilaian atau keputusan: tidak ada fakta eligibility yang diputus, status berubah, WO tertaut, jurnal, atau pesan keluar yang dihasilkan antrean (penilaian/keputusan tetap di detail klaim existing).
+
+Alur:
+1. Klaim lahir `intake` lewat jalur existing dari coverage terpilih (reportedAt = tanggal lapor; selalu intake apa pun masa cakupan — fakta existing, di luar cakupan spec ini).
+2. Builder antrean (usulan, baca-saja) mengambil populasi intake (BR-WIQ-01) dan menurunkan: `umurIntakeHari` (hari kalender WIB sejak `reportedAt`), konteks kendaraan/pelanggan/item cakupan, penanda masa cakupan (`reportedAt` sesudah `expiresAt` cakupan = klaim dilaporkan di luar masa — penanda fakta, bukan penolakan, BR-WIQ-06), penanda klaim berulang kendaraan sama (§6), dan tingkat §3.
+3. Petugas membuka detail klaim dari baris dan memajukan ke `eligibility` lewat jalur existing (transitionWarrantyClaimAction: gerbang `edit_warranty_claims` + penjaga transisi service). Antrean tidak menyediakan tombol Maju/Putus/Tolak tahap 1 (Q-WIQ-4).
+4. Sesudah bukan intake: baris keluar populasi spec ini dan masuk wilayah penilaian/keputusan existing di detail. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-WIQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu Penilaian` (umur), `Pelanggan` (nama), `Kendaraan` (plat), `Part Tercakup` (nama item), `Dilaporkan` (reportedAt), `Dibuat Oleh` (nama atau `—`).
+- Label tingkat: `mengendap` → "Mengendap"; `menunggu` → "Menunggu Penilaian".
+- Notice usulan: "Daftar ini hanya klaim garansi yang masih intake dan belum masuk penilaian eligibility. Klaim tetap wajib dinilai dan diputus manual oleh pejabat; majukan lewat detail klaim."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean klaim intake + tingkat/umur | `view_warranty_claims` (katalog:258) | halaman daftar klaim requirePermission | TIDAK ada key baru (key terpisah = Q-WIQ-5) |
+| Buat klaim (sumber baris intake) | `create_warranty_claims` (katalog:259) | createWarrantyClaimAction → createWarrantyClaim lahir intake | tidak berubah |
+| Majukan intake → eligibility | `edit_warranty_claims` (katalog:260) | transitionWarrantyClaimAction + penjaga transisi service (intake hanya ke eligibility) | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Putuskan approved/rejected (dari eligibility) | `approve_warranty_claims` (katalog:261) | decideWarrantyClaimAction → decideWarrantyClaim (manual, tercatat pejabat) | di luar populasi; antrean tidak memberi jalur putus apa pun |
+| Tautkan WO repair / posting jurnal biaya | `edit`/`approve_warranty_claims` existing lewat jalur detail | transition ke in_repair + postWarrantyClaimCostAction | di luar populasi intake; antrean tidak menampilkan nominal (BR-WIQ-04) |
+
+Tidak ada permission key baru diusulkan tahap ini. Data klaim memuat nama/plat pelanggan (bukan data gaji); tetap di balik `view_warranty_claims` existing. Telepon pelanggan TIDAK masuk payload antrean tahap 1 (mengikuti pola scope expiry-queue: telepon hanya permukaan kerja yang diputus terpisah — Q-WIQ-6).
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah antrean (TERVERIFIKASI-KODE warranty.service.ts:86-93): `intake` → `eligibility` (transitionWarrantyClaim, `edit_warranty_claims`); `eligibility` → `approved`|`rejected` (decideWarrantyClaim SAJA, `approve_warranty_claims`, manual tercatat); `approved` → `in_repair`|`closed`; `rejected` → `closed`; `in_repair` → `closed`; `closed` terminal. Antrean tidak menulis transisi apa pun; tidak ada jalur hapus/batal klaim di kode existing — jangan karang status batal/arsip klaim di spec ini.
+
+Populasi antrean: hanya WarrantyClaim `status = "intake"`. Per baris, sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurIntakeHari` = hari kalender WIB dari `reportedAt` ke hari ini (masa depan karena jam server = 0 tertanda, bukan negatif — EC-WIQ-4). Acuan `reportedAt`, BUKAN `createdAt` (tanggal input bisa menyusul tanggal lapor; umur menunggu penilaian pelanggan dihitung sejak dilaporkan, BR-WIQ-05).
+- `laporDiLuarMasa` = `reportedAt > coverage.expiresAt` (penanda pendamping fakta masa cakupan saat lapor, selaras fakta `withinPeriod` assessWarrantyEligibility; BUKAN tingkat dan BUKAN penolakan — pejabat tetap memutus manual, BR-WIQ-06).
+- `statusCakupan` = coverage.status apa adanya (active/expired/revoked) sebagai konteks tampil, bukan saringan populasi tahap 1 (klaim atas cakupan berakhir/revoked tetap tercatat dan wajib diputus manusia — EC-WIQ-2; mengubah saringan = Q-WIQ-3).
+- Penanda bisa-dimajukan-pembaca TIDAK diturunkan di payload tahap 1: izin dinilai server di transitionWarrantyClaimAction saat aksi, bukan ditampilkan sebagai janji di daftar.
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan intake lolos saring | di luar antrean | bukan populasi (wilayah daftar klaim umum + detail) |
+| S1 | intake dan umurIntakeHari >= ambangHariMengendap (Q-WIQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | klaim dilaporkan melewati kesabaran operasional yang diputus Lead tanpa pernah dinilai; majukan/putuskan dulu |
+| S2 | intake selain S1 | `menunggu` | antrean biasa; urutan kerja dari umur tampil tertua-dulu (Q-WIQ-3) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah (klaim dimajukan/diputus, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada pemajuan/penolakan otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-WIQ-01 | Populasi antrean = WarrantyClaim `status="intake"` saja (model tanpa deletedAt; tidak ada saring hapus-lunak tahap ini). Status lain (eligibility/approved/rejected/in_repair/closed) tidak disamakan diam-diam tahap 1, termasuk dalam rekap. | TERVERIFIKASI-KODE (schema:5530 status default intake) + USULAN batas |
+| BR-WIQ-02 | Klaim intake belum dinilai dan belum diputus: antrean DILARANG menampilkan label/fakta seolah eligibility sudah dinilai, disetujui, atau ditolak. Fakta eligibility (masa/odometer/serial) hanya hidup di detail klaim lewat assessWarrantyEligibility untuk penilai; keputusan selalu manual pejabat (decideWarrantyClaim). Sistem tidak pernah auto-reject — klaim di luar masa tetap populasi dan tetap wajib diputus manusia. | TERVERIFIKASI-KODE (warranty.service.ts:21-30, :264, :347) |
+| BR-WIQ-03 | Satu-satunya jalan keluar dari intake adalah jalur existing berizin: maju ke eligibility (`edit_warranty_claims`, penjaga transisi intake→eligibility saja), lalu keputusan (`approve_warranty_claims`, hanya dari eligibility, tercatat decisionBy/decisionAt). Antrean tidak menambah jalan pintas maju/putus/tolak dari daftar tahap 1 dan tidak mengarang aktor "penyetuju antrean" kedua. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-WIQ-04 | Nol nominal biaya klaim tahap 1: klaim intake belum punya WO repair tertaut (`repairWorkOrderId` null sampai in_repair), sehingga tidak ada biaya aktual yang sah. Biaya klaim terverifikasi hanya dari WO repair tertaut (MaterialIssue completed FIFO + ProductionCost) lewat warranty-journal.service — DILARANG menampilkan/menjumlahkan nominal, estimasi biaya, atau nilai part tercakup di antrean intake, dan DILARANG meminjam biaya WO/klaim lain ke baris intake (estimasi ≠ aktual; aturan keras material). | TERVERIFIKASI-KODE (warranty-journal.service.ts:54-68, :250-269) + USULAN batas |
+| BR-WIQ-05 | Umur memakai `reportedAt` (momen klaim dilaporkan pelanggan, field wajib bisnis), bukan `createdAt` (momen baris diinput, bisa menyusul) dan bukan `coverage.expiresAt` (batas masa cakupan — itu penanda masa, BR-WIQ-06). Mengubah acuan = Q-WIQ-3 bersama urutan. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field schema:5527 |
+| BR-WIQ-06 | Klaim dilaporkan sesudah masa cakupan berakhir (`reportedAt > expiresAt`) atau atas cakupan expired/revoked tetap populasi apa adanya tertanda fakta, BUKAN baris gugur dan BUKAN tingkat sendiri: fakta eligibility dinilai penilai di detail dari reportedAt, dan pejabat memutus manual — antrean tidak menilai layak/tidak dan tidak menyembunyikan klaim yang "kemungkinan ditolak". Odometer kosong (`odometerKm` null) tampil `—`, bukan tuduhan tidak layak. | USULAN kejujuran penanda di atas TERVERIFIKASI-KODE assess (:264-290) |
+| BR-WIQ-07 | `supplierClaimStatus` adalah sumbu terpisah dari status klaim pelanggan dan TIDAK mencemari status/tingkat antrean: populasi dan tingkat hanya membaca `WarrantyClaim.status`. Klaim intake secara existing belum bisa punya tautan supplier berjalan (gerbang approved+replace), jadi nilai supplier pada baris intake tampil tidak diturunkan tahap 1; menampilkan/menyaring antrean berdasarkan status supplier = keputusan terpisah, bukan tahap 1. | TERVERIFIKASI-KODE (schema:5536-5543; warranty.service.ts:51-65) |
+| BR-WIQ-08 | Nol pemajuan/penolakan/penghapusan otomatis berbasis umur dalam tahap mana pun spec ini. Umur hanya penanda prioritas baca; klaim yang memang belum boleh dinilai (bukti belum lengkap, kendaraan belum datang) diputus manusia. | USULAN batas (menegaskan TERVERIFIKASI-KODE tidak adanya cron klaim intake) |
+| BR-WIQ-09 | Builder antrean murni baca-saja turunan: tidak memanggil transition/decide/create klaim, tidak menulis status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-WIQ-10 | createdBy null (legacy) tampil `—` dan TIDAK dijadikan penanda salah; kendaraan nonaktif/terhapus sesudah klaim lahir tetap membuat baris tampil apa adanya dengan konteks relasi berjalan (antrean tidak menilai kendaraan masih layak klaim — penilaian di detail); nama pelanggan/item tampil dari relasi berjalan, bukan snapshot. | USULAN di atas TERVERIFIKASI-KODE field nullable |
+| BR-WIQ-11 | Ambang hari `mengendap`, kata label final, urutan tampil, dan maju-dari-daftar adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-WIQ-1/2/3/4). Biaya/jurnal klaim tidak disentuh spec ini (BR-WIQ-04: memang belum ada biaya sah pada intake) sehingga Accountant TIDAK diminta run ini — kecuali Lead kelak mengusulkan nominal/biaya di antrean atau perubahan syarat jurnal, saat itu vonis Accountant wajib lebih dulu. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Catat klaim garansi pelanggan | Ada: Klaim Pelanggan Terima/Kirim Barang + No. Klaim + Tanggal (URL §kepala) | Tidak ditemukan di halaman fitur resmi yang diakses — tidak diklaim | Ada: WarrantyClaim lahir intake dari coverage, reportedAt + complaint + odometer | Tidak diubah; antrean berhenti di detail existing |
+| Penilaian kelayakan + keputusan tercatat | Ada status penyelesaian klaim (URL §kepala; rincian gerbang tidak ditetapkan — tidak diklaim) | Tidak ditemukan — tidak diklaim | Ada: fakta eligibility tampil di detail (assess), keputusan manual pejabat tercatat dari eligibility saja | Antrean tidak menilai/memutus; mengantar ke detail |
+| Klaim masuk menunggu penilaian terlihat sebagai antrean kerja | Tidak ditetapkan antrean umur — tidak diklaim | Tidak ditetapkan — tidak diklaim | Parsial: daftar klaim filter status urut reportedAt terbaru take 200, intake lama tenggelam | Antrean intake berumur tertua-dulu + tingkat |
+| Antrean klaim intake bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0; antrean garansi existing = expiry coverage) | Inti spec ini (turunan, tanpa angka karang) |
+| Biaya klaim dari pekerjaan perbaikan tertaut | Jurnal otomatis persediaan klaim (URL §kepala) | Tidak ditemukan — tidak diklaim | Ada: biaya terverifikasi WO repair (MI completed + ProductionCost) + jurnal tahap 3 bergerbang | Nol nominal di antrean intake (BR-WIQ-04) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-WIQ-B1: Populasi tepat intake. Klaim eligibility/approved/rejected/in_repair/closed tidak tampil tahap 1 dan tidak terhitung rekap; memasukkan status lain ke builder tidak mengubah populasi (cabut saring status → MERAH).
+- AC-WIQ-B2: Umur hari kalender WIB dari `reportedAt`; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-WIQ-1 diputus), reportedAt masa depan umur 0 tertanda bukan negatif (EC-WIQ-4). Umur dari createdAt/expiresAt → MERAH (BR-WIQ-05).
+- AC-WIQ-B3: Tanpa angka karang: selama Q-WIQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya lewat satu konstanta bernama/putusan (tanam angka liar → MERAH).
+- AC-WIQ-B4: Loader fail-closed `view_warranty_claims` sebelum query, anti-N+1 (coverage+item/kendaraan+pelanggan/pembuat massal), tanpa izin loader tidak dipanggil; telepon pelanggan TIDAK masuk payload tahap 1 (bocor telepon → MERAH). Rekap = hitungan baris per tingkat yang sama persis dengan baris tampil.
+- AC-WIQ-B5: Baca-saja terbukti: builder/loader tidak memanggil transition/decide/create klaim/jurnal, tidak menulis status (panggil aksi diam-diam → MERAH); payload tidak membawa nominal biaya/estimasi/nilai part tahap 1 (BR-WIQ-04) dan tidak membawa fakta keputusan eligibility sebagai vonis (fakta masa tampil sebagai penanda saja, BR-WIQ-06).
+
+Frontend (konsumen):
+- AC-WIQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/rekap sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-WIQ-F2: Pelanggan/kendaraan/part tampil verbatim payload; pembuat/odometer kosong `—`; klaim tidak berlabel dinilai/disetujui/ditolak/berbiaya di antrean (label keputusan/biaya di intake → MERAH).
+- AC-WIQ-F3: Tautan baris hanya ke detail klaim existing; tidak ada tombol Maju ke Eligibility/Putus/Tolak/Tautkan WO di antrean tahap 1 (aksi dari daftar tanpa putusan Q-WIQ-4 → MERAH); tanpa `view_warranty_claims` halaman menolak.
+
+Edge cases:
+- EC-WIQ-1: Klaim kendaraan sama berulang (beberapa klaim intake atas kendaraan/coverage sama atau berbeda) tampil apa adanya per klaim; tidak digabung/didedup diam-diam — riwayat klaim berulang adalah konteks penilai di detail, antrean tidak menilai pola klaim dan tidak menjumlahkan klaim sebagai beban/nominal.
+- EC-WIQ-2: Coverage berakhir (expiresAt lewat) atau berubah expired/revoked sementara klaim masih intake: klaim tetap populasi tertanda status cakupan + penanda lapor-di-luar-masa bila reportedAt sesudah expiresAt; antrean tidak membatalkan/menolak/menyembunyikan klaim (keputusan manual pejabat, BR-WIQ-02/06).
+- EC-WIQ-3: `supplierClaimStatus` baris (termasuk warisan data yang tidak `none`) tidak mengubah populasi/tingkat/urutan antrean; memfilter/menampilkan status supplier sebagai status antrean → cacat spec (BR-WIQ-07).
+- EC-WIQ-4: reportedAt masa depan (jam server/salah input tanggal lapor) → umur 0 tertanda, tidak negatif; antrean tidak mengoreksi reportedAt.
+- EC-WIQ-5: Klaim dimajukan ke eligibility/diputus dari permukaan lain saat halaman terbuka keluar populasi pada render berikut; antrean tidak mengunci baris.
+- EC-WIQ-6: Klaim intake atas kendaraan yang kemudian nonaktif/terhapus-lunak tetap tampil apa adanya; antrean tidak menilai kelayakan kendaraan (BR-WIQ-10).
+- EC-WIQ-7: Dua klaim intake dengan reportedAt sama persis: urutan seri deterministik (usulan id klaim naik — final Q-WIQ-3), tidak bergantung urutan query.
+
+### 7. Backlog implementasi (turunan F-2026-10-27-076-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-076-S | Spec kontrak ini (dokumen) | Business | — |
+| 076-B | Builder murni tingkat/umur intake klaim garansi (acuan reportedAt) + loader `view_warranty_claims` fail-closed anti-N+1 + tes AC-WIQ-B1..B5 | Backend | Putusan Lead Q-WIQ-1/2/3 |
+| 076-F | Permukaan antrean (daftar klaim existing atau halaman antrean pola keluarga antrean) verbatim payload + AC-WIQ-F1..F3 | Frontend | 076-B merged |
+| 076-Q | Falsifikasi AC-WIQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 076-B/076-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-WIQ-1 | Ambang hari tingkat `mengendap` (umur intake >= N hari kalender WIB sejak reportedAt)? | Lead | USULAN 3 hari kalender (selaras preseden keluarga antrean mengendap yang diputus Lead 2026-10-26; klaim pelanggan yang dilaporkan tetapi tidak dinilai cepat mengikis kepercayaan dan masa cakupan berjalan) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-WIQ-2 | Kata label/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-WIQ-3 | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua? Acuan umur reportedAt (BR-WIQ-05) disahkan? Klaim atas cakupan expired/revoked tetap populasi tertanda (BR-WIQ-06)? Seri reportedAt sama = id naik? | Lead | `mengendap` dulu (bila aktif), lalu umur tertua; seri reportedAt naik lalu id klaim naik; acuan reportedAt; cakupan berakhir tetap populasi tertanda |
+| Q-WIQ-4 | Maju ke eligibility langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-WIQ-03): fakta eligibility + konteks coverage/kendaraan harus terasa di detail sebelum maju; jalan pintas = keputusan terpisah |
+| Q-WIQ-5 | Key izin antrean terpisah dari `view_warranty_claims`? | Lead | TIDAK tahap 1 |
+| Q-WIQ-6 | Telepon pelanggan / konteks hubungi pelanggan masuk antrean (pola claims_page expiry-queue)? Penanda penilai/petugas penanggung jawab per klaim diturunkan? | Lead | TIDAK tahap 1 untuk keduanya: antrean ini antrean penilaian internal; menghubungi pelanggan dan penugasan penilai adalah keadaan/kanal baru di luar tahap baca-saja |
+
+### Yang TIDAK diusulkan run ini
+- Memajukan/memutuskan/menolak massal atau otomatis klaim basi (BR-WIQ-03/08) — penilaian eligibility dan keputusan manual pejabat tidak boleh dilewati daftar.
+- Menampilkan nominal biaya/estimasi/nilai part di antrean intake (BR-WIQ-04) — biaya aktual hanya dari WO repair tertaut sesudah klaim berjalan; menarik nilai part tercakup = menarik wilayah master/harga ke antrean penilaian.
+- Menilai eligibility di daftar (skor layak/tidak dari masa/odometer/serial) — fakta itu milik penilai di detail (assessWarrantyEligibility); skor daftar akan dibaca sebagai vonis dan menggeser keputusan manual.
+- Menyaring keluar klaim atas cakupan berakhir/revoked atau klaim lapor-di-luar-masa — klaim di luar masa tetap tercatat dan wajib diputus manual (service existing); penyaringan senyap menghilangkan kewajiban putus itu.
+- Pengingat WA/email ke petugas/pelanggan, penanda "sudah diingatkan" tersimpan, penugasan penilai per klaim — kanal & keadaan baru, di luar tahap baca-saja (Q-WIQ-6).
+- Status/kolom klaim baru (termasuk soft-delete/batal klaim), perubahan lifecycle intake→eligibility→approved/rejected→in_repair→closed, atau key izin baru.
+- Antrean klaim supplier sebagai bagian spec ini — sumbu supplierClaimStatus terpisah dan gerbangnya sesudah approved (BR-WIQ-07); antrean recovery supplier = spec terpisah bila dibutuhkan.
+
+F-2026-10-27-076-S — Antrean klaim garansi intake mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WIQ-1/2/3, lalu fisik Backend (076-B), konsumen Frontend (076-F), falsifikasi QA (076-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak nominal/biaya klaim atau perubahan syarat jurnal diusulkan (di luar spec ini, BR-WIQ-04/11).
