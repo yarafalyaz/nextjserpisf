@@ -51,6 +51,13 @@ export const STATUS_LABELS: Record<string, string> = {
   reversed: "Dibalik",
   reversing: "Sedang Dibalik",
 
+  // Subledger komisi per penerima (F-2026-10-25-049-S, status turunan server 049-V §3)
+  ACCRUED: "Terakru",
+  PARTIALLY_PAID: "Terbayar Sebagian",
+  PAID: "Lunas Terbayar",
+  REVERSED: "Dibalik Penuh",
+  OVERPAID_NEGATIVE: "Kelebihan Bayar (Saldo Negatif)",
+
   // Garansi (F-2026-10-21-021)
   intake: "Masuk",
   eligibility: "Penilaian",

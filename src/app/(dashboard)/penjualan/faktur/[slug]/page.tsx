@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Faktur Penjualan" }
 
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrency, formatDate, formatPercentage } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -55,6 +55,8 @@ export default async function InvoiceDetailPage({
           include: {
             customer: true,
             salesOrder: true,
+            // F-2026-10-25-036-S: nama kategori snapshot tarif komisi (beku).
+            commissionCustomerCategory: { select: { name: true } },
             quotation: { include: { downPayments: { orderBy: { paymentDate: "asc" } } } },
             items: true,
             payments: true,
@@ -72,6 +74,8 @@ export default async function InvoiceDetailPage({
           include: {
             customer: true,
             salesOrder: true,
+            // F-2026-10-25-036-S: nama kategori snapshot tarif komisi (beku).
+            commissionCustomerCategory: { select: { name: true } },
             quotation: { include: { downPayments: { orderBy: { paymentDate: "asc" } } } },
             items: true,
             payments: true,
@@ -234,6 +238,38 @@ export default async function InvoiceDetailPage({
                     <DetailField label="Catatan" value={invoice.notes} colSpan="full" />
                   </DetailCard>
                 )}
+
+                {/* F-2026-10-25-036-S: snapshot tarif komisi beku di faktur.
+                    Nilai verbatim dari kolom snapshot server — UI tidak
+                    menghitung tarif/komisi/DPP dan tidak membaca tarif
+                    kategori berjalan, jadi ubahan kategori sesudah faktur
+                    lunas tidak mengubah tampilan faktur lama (AC-KT-F3). */}
+                <DetailCard title="Snapshot Tarif Komisi">
+                  {invoice.commissionRatePercent !== null &&
+                  invoice.commissionRatePercent !== undefined ? (
+                    <>
+                      <DetailField
+                        label="Tarif Komisi Snapshot (%)"
+                        value={formatPercentage(Number(invoice.commissionRatePercent), 2)}
+                      />
+                      <DetailField
+                        label="Kategori Pelanggan Snapshot"
+                        value={invoice.commissionCustomerCategory?.name || "—"}
+                      />
+                      <DetailField
+                        label="Status Snapshot"
+                        value="Snapshot tarif beku saat faktur lunas — perubahan tarif kategori sesudahnya tidak mengubah faktur ini."
+                        colSpan="full"
+                      />
+                    </>
+                  ) : (
+                    <DetailField
+                      label="Status Snapshot"
+                      value="Faktur ini belum memiliki snapshot tarif komisi tercatat."
+                      colSpan="full"
+                    />
+                  )}
+                </DetailCard>
               </>
             ),
           },

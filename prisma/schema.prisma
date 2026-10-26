@@ -3745,6 +3745,7 @@ model OvertimeRequest {
   mealHours            Decimal?  @map("meal_hours") @db.Decimal(5, 2)
   billableHours        Decimal?  @map("billable_hours") @db.Decimal(5, 2)
   calculatedValue      Decimal?  @map("calculated_value") @db.Decimal(15, 2)
+  overtimeBaseSnapshot Json?     @map("overtime_base_snapshot")
   reason               String?   @db.Text
   rejectionReason      String?   @map("rejection_reason") @db.Text
   status               String    @default("pending")
