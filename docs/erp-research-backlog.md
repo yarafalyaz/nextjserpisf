@@ -33792,3 +33792,162 @@ Catatan jujur cakupan: daftar di atas diperiksa dari grep `salesOrder.create`/`s
 AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap), B5 (SoD/tanpa key/tanpa alasan tertolak), B8 (seluruh jalur Q-CL2-4) — terpetakan ke kartu Backend turunan. AC-CL2-F1/F2 ke kartu Frontend turunan. AC-CL2-B1/B3/B6/B7 tetap berlaku persis spec/vonis.
 
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-067-S: antrean pengeluaran material draft mengendap menunggu penyelesaian (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_f6d3eb82. ID F-2026-10-26-067-S diverifikasi bebas run ini 2026-10-26 16:14 WIB: grep `F-2026-10-26-067` di backlog + board `origin/main` (`aa40b6dd`) = 0 dan tidak ada judul PR terbuka memuat 067/pengeluaran-material-antrean; ID terpakai terakhir berjalan F-2026-10-26-066-S (PR #1018). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `warehouseId`+gudang, `workOrderId`+nomor WO, `projectId`, `costCenterId`, `createdBy`, item), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-MIQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK menyelesaikan, TIDAK mengubah, dan TIDAK menghapus pengeluaran apa pun — penyelesaian tetap jalur existing `completeMaterialIssue` (klaim atomik draft→processing, hook StockMove OUT + jurnal pada biaya FIFO aktual + registri part terpasang dalam satu transaksi, inventory.actions.ts:1117-1235). Sesuai aturan keras domain Business: biaya aktual proyek/WO hanya lahir dari MaterialIssue berstatus completed — MI `draft` belum mengeluarkan stok, belum menjurnal, dan belum menjadi biaya job di laporan mana pun; antrean dilarang menampilkan draft sebagai pemakaian/biaya terealisasi dalam bentuk apa pun. Nilai uang TIDAK ditampilkan tahap 1 sama sekali: `MaterialIssueItem.cost` adalah snapshot harga master saat baris dibuat, sedangkan biaya yang benar-benar dijurnal saat complete adalah biaya FIFO aktual dari lapisan yang dikonsumsi (material-issue.hook.ts:155-157, 192, 237, 253 — "not the item.cost master snapshot") — menampilkan snapshot master berlabel nilai/biaya akan mengarang angka yang berbeda dari jurnal kelak. Scope gudang = `getWarehouseScope` existing fail-closed (none → kosong). Data pengeluaran bukan data gaji/pribadi.
+
+PEMBETULAN PREMIS KARTU (TERVERIFIKASI-KODE, wajib dibaca Lead — tiga fakta yang menyederhanakan sekaligus mempertajam antrean):
+(1) MaterialIssue TIDAK punya jalur persetujuan sama sekali: `createMaterialIssue` (inventory.actions.ts:1047-1115) tidak memanggil `requestApprovalIfConfigured` (beda PurchaseRequest/StockAdjustment), tidak ada `assertApproved` di `completeMaterialIssue`, dan katalog hanya `view/create/edit/delete_material_issues` (module-catalog.generated.ts:229-232 — tanpa key complete/process/approve khusus; penyelesaian sendiri digate `edit_material_issues` :1120). Antrean karena itu TAHAP TUNGGAL "menunggu penyelesaian" — dilarang mengarang approver, langkah persetujuan, atau keadaan approval pendamping seperti spec 065-S/066-S.
+(2) Kosakata status selesai tidak seragam di permukaan existing dan spec ini tidak menyelaraskannya diam-diam: aksi bernama `completeMaterialIssue` dan hook menjaga transisi ke `completed` (material-issue.hook.ts:93-95), label status `completed` = "Selesai" (status-labels.ts:13), tetapi chip saringan daftar memakai `issued` dengan label "Dikeluarkan" (:44) dan halaman daftar menyaring `status` dari parameter itu apa adanya (pengeluaran-material/page.tsx run ini). Apakah baris tersimpan berstatus `completed` lolos chip `issued` adalah fakta fisik yang diverifikasi Backend saat loader (kemungkinan temuan samping daftar existing) — antrean hanya mengenal populasi `draft` persis dan tidak menerbitkan status selesai karangan; ketidakselarasan kosakata dicatat sebagai Q-MIQ-6 untuk Lead/Backend, bukan diperbaiki spec dokumen ini.
+(3) Model TIDAK punya `deletedAt` (schema:2680-2703) dan hapus existing hard delete hanya-draft (inventory.actions.ts:1910-1937) — populasi cukup `status = "draft"` tanpa saringan soft-delete (pola 065-S). Berbeda dari penyesuaian stok, baris draft di sini juga dibekukan oleh konteks pekerjaannya: MI baru ke WorkOrder closed ditolak sejak lahir (assertJobCostMutable :1075-1077) dan MI draft lama ke WO yang kemudian closed ikut ditolak saat complete dengan klaim dikembalikan ke draft (:1170-1185), dan MI tertaut WO yang sudah dikonsumsi lewat perintah produksi ditolak complete dengan pesan "batalkan/void MI ini dan gunakan jalur PO" (:1186-1205) — draft seperti itu TIDAK akan pernah selesai lewat jalur normal dan antrean wajib menandainya sebagai tersangkut-konflik (penanda turunan dari fakta WO/PO existing, §3), bukan sekadar tua.
+
+Bukan duplikasi: bukan daftar pengeluaran existing `inventaris/pengeluaran-material` (chip "", draft, issued; urut `createdAt desc`; tanpa umur/tingkat/konteks WO-proyek per baris kerja — page.tsx + material-issue-table.tsx run ini); bukan laporan biaya-pekerjaan/estimasi-vs-aktual (menghitung MI `completed` sebagai aktual — populasi antrean ini justru yang BELUM aktual); bukan registri part terpasang (lahir dari MI completed/proyek, installed-parts); bukan antrean tinjau scrap abnormal (scrapReviewStatus per baris item MI — objek baris & keputusan berbeda, draft dokumen di sini bisa tanpa scrap sama sekali); bukan work-order-queue/closeout bengkel (objek WorkOrder, bukan dokumen pengeluaran tertautnya); bukan 066-S (StockAdjustment: dokumen koreksi stok ber-approval opsional — dokumen ini pengeluaran pemakaian tanpa approval); bukan MaterialRequest (permintaan antar gudang pendahulu transfer — dokumen ini pengeluaran final dari gudang).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: modul Persediaan memuat Permintaan Barang, Pemindahan Barang, Penyesuaian Persediaan, Penyelesaian Pesanan dan Penambahan Bahan Baku sebagai pergerakan barang terkontrol per gudang, dengan transaksi persediaan yang dapat diatur wajib Persetujuan (help.accurate.id Pengaturan Persetujuan, URL di spec 066-S §kepala; ikhtisar fitur https://accurate.id/online/fitur/persediaan/) (BENCHMARK: pengeluaran/pemakaian bahan adalah pergerakan gudang terdokumentasi yang terkontrol; antrean draft pengeluaran bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: Pemakaian/Penyesuaian Barang mengeluarkan barang untuk pemakaian sendiri/kerusakan dengan pilihan eksplisit "Rekam draft: menyimpan tanpa terbentuknya jurnal (belum diposting)" vs "Rekam: menyimpan dan menjurnal (posting)", dan stok terbentuk terlihat di kartu stok sesudah posting — https://help.zahironline.com/portal/id/kb/articles/pemakaian-penyesuaian-barang (BENCHMARK kuat untuk kejujuran label spec ini: draft = belum jurnal/belum stok; antrean draft mengendap bertingkat umur TIDAK ditetapkan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main aa40b6dd)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `MaterialIssue` (prisma/schema.prisma:2680-2703) — slug unik nullable, documentNo unik, warehouseId WAJIB, projectId/workOrderId/costCenterId nullable, date WAJIB, notes nullable, status String default `draft`, createdBy nullable, createdAt/updatedAt; TANPA deletedAt, TANPA approvedBy/journalId. Item `MaterialIssueItem` (:2710-2760) — qty Decimal(15,2), cost Decimal snapshot master default 0, workOrderItemId nullable, keluarga kolom scrap terstruktur + snapshot FIFO yang terisi saat complete (scrapPercentSnapshot dibekukan saat baris lahir, kolom *Snapshot lain saat complete), serialNumbers/batchNumbers (batchNumbers null sampai ter-issue). Indeks status/warehouseId/projectId/workOrderId/createdAt ada.
+- Lahir draft: `createMaterialIssue` (inventory.actions.ts:1047, izin `create_material_issues`) — assertPeriodOpen, assertWarehouseAccess, documentNo `MI`, minimal 1 item qty > 0, WO closed ditolak (assertJobCostMutable), snapshot allowance scrap dibekukan per baris (resolveMaterialIssueScrapSnapshots), status eksplisit `draft`, TANPA pengajuan Approval. Ubah hanya draft (updateMaterialIssue :2078, snapshot dibekukan ulang), hapus hard delete hanya draft (:1910).
+- Selesai existing: `completeMaterialIssue` (:1117, izin `edit_material_issues`) — assertPeriodOpen tanggal dokumen, assertWarehouseAccess, wajib `draft` (:1135-1139), klaim atomik updateMany draft→processing (:1142-1157), penjaga WO closed + penjaga sudah-dikonsumsi-PO (keduanya mengembalikan klaim ke draft sebelum menolak :1170-1205), transaksi hook StockMove OUT + jurnal FIFO aktual + installed-parts proyek (:1207-1215), gagal transaksi kembali draft (:1216-1225). Tidak ada assertApproved — tanpa gerbang persetujuan dalam bentuk apa pun.
+- Daftar existing: `inventaris/pengeluaran-material/page.tsx` requirePermission `view_material_issues`, cari documentNo, chip "", draft, issued, urut `createdAt desc`, include warehouse+items; tabel menampilkan No. Dokumen/Gudang/Tanggal/"N item"/Status chip. Detail `[slug]/page.tsx`: tombol Selesaikan (form action completeMaterialIssue :80), Ubah edit, Hapus delete (:84-88) — permukaan eksekusi existing.
+- Izin katalog nyata (module-catalog.generated.ts:229-232): `view/create/edit/delete_material_issues`. Penyelesaian memakai `edit_material_issues` — fakta existing yang tidak diubah spec ini (key khusus complete = pertanyaan Q-MIQ-5, bukan karangan spec).
+- Konteks biaya job: MI completed adalah sumber biaya material aktual WorkOrder/Project (aturan charter + laporan biaya-pekerjaan menghitung MI completed); MI draft tidak terhitung di mana pun sebagai aktual.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean pengeluaran material draft mengendap — grep `materialIssue` di src/lib/reports hanya menyentuh installed-parts, bom-revision-impact, saran substitusi, dan laporan biaya (semua objek completed/hilir); tidak ada turunan umur draft, tidak ada cron. Draft yang ditinggal berarti material yang rencananya dipakai pekerjaan belum benar-benar keluar: stok sistem masih menganggap barang tersedia (bisa dijanjikan ke pekerjaan lain), biaya job tertahan understated, dan pekerjaan terlihat "belum mulai" dari sisi material. Risiko bengkel: part sudah disiapkan mekanik di rak kerja tetapi MI-nya draft berhari-hari — stok terbaca sisa padahal fisik sudah terpasang.
+
+### 1. Workflow specification
+
+Aktor: Penyelesai pemegang `edit_material_issues` (pemilik tindakan complete existing), Admin Gudang pemegang `view_material_issues` dalam scope gudangnya (pembaca antrean), Pembuat pemegang `create_material_issues` (sumber baris draft), Mandor/pemegang konteks WO (pembaca konteks pekerjaan tertaut), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris MaterialIssue `draft` dalam scope gudang pembaca (id, slug, documentNo, date, warehouseId+nama gudang, workOrderId+documentNo WO bila ada, projectId+nama proyek bila ada, costCenterId bila ada, createdBy+nama bila terpetakan, jumlah baris item, createdAt) + fakta konteks turunan boleh-tidaknya dokumen diselesaikan dari keadaan existing (WO closed / WO sudah dikonsumsi PO — dibaca dari relasi existing, tidak ditebak dari umur). Field existing semua, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per pengeluaran (§3) + rekap hitungan dokumen per tingkat/konteks. BUKAN pemakaian material: tidak ada StockMove, jurnal, biaya job, atau part terpasang yang dihasilkan antrean.
+
+Alur:
+1. Pengeluaran lahir `draft` lewat jalur existing (item + snapshot allowance dibekukan).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft dalam scope dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks gudang/WO/proyek/pembuat, hitungan item, dan penanda tersangkut-konflik bila fakta existing membuat complete pasti ditolak (BR-MIQ-04).
+3. Penyelesai membuka detail dan menyelesaikan lewat tombol existing. Antrean tidak menyediakan tombol Selesaikan/Ubah/Hapus tahap 1 (Q-MIQ-4).
+4. Sesudah completed/dihapus: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-MIQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu` (umur), `Gudang`, `Pekerjaan` (nomor WO atau nama proyek atau `—`), `Item` (hitungan baris), `Dibuat Oleh`.
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Penyelesaian".
+- Penanda konflik usulan: WO closed → "WO sudah ditutup"; WO terkonsumsi PO → "Sudah lewat jalur produksi" (kata final Q-MIQ-3; penanda menjelaskan kenapa menyelesaikan dari detail pun akan ditolak, mengantar ke jalur batal/void existing — antrean tidak menyediakan tombol void).
+- Notice usulan: "Daftar ini hanya pengeluaran material yang masih draft. Pengeluaran draft belum mengeluarkan stok, belum menjadi biaya pekerjaan, dan nilainya belum dihitung; selesaikan lewat detail pengeluaran bila material benar-benar sudah dipakai."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean pengeluaran draft + tingkat/umur | `view_material_issues` (katalog:229) + scope gudang fail-closed | daftar pengeluaran requirePermission; create/complete assertWarehouseAccess | TIDAK ada key baru (key terpisah = Q-MIQ-5); loader menyaring warehouseId dalam scope (none → kosong) |
+| Buat pengeluaran (sumber baris draft) | `create_material_issues` (katalog:230) | aksi buat existing | tidak berubah |
+| Ubah/hapus pengeluaran draft | `edit/delete_material_issues` (katalog:231-232) | aksi existing + penjaga hanya-draft | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Selesaikan (draft → completed; StockMove+jurnal+biaya job lahir) | `edit_material_issues` (katalog:231 — complete memakai key edit, fakta existing) | completeMaterialIssue + klaim atomik + penjaga WO/PO | TIDAK berubah; antrean hanya mengantar ke detail. Key complete khusus TIDAK dikarang spec ini (Q-MIQ-5) |
+
+Tidak ada permission key baru diusulkan tahap ini dan tidak ada aktor approver — dokumen ini memang tanpa persetujuan (premis 1). Nama pembuat tampil dalam scope izin+gudang yang sama dengan daftar existing.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah spec ini: `draft` → `processing` → `completed` (klaim complete; kegagalan/penolakan penjaga kembali `draft`), hapus = hard delete hanya-draft. `processing` sesaat di luar transaksi berjalan = anomali, bukan populasi (EC-MIQ-6).
+
+Populasi antrean: MaterialIssue `status = "draft"` AND warehouseId dalam scope pembaca. Per baris:
+- `umurDraftHari` = hari kalender WIB dari `createdAt` (masa depan = 0 tertanda).
+- `konteksPekerjaan` = WO tertaut (documentNo WO) / proyek tertaut / bebas (keduanya null) — fakta tampil, bukan tahap.
+- `tersangkutKonflik` = turunan fakta existing: workOrderId menunjuk WO `closed`, atau WO tertaut punya ProductionOrderMaterial actualQty > 0 (keadaan yang membuat completeMaterialIssue menolak, inventory.actions.ts:1170-1205). Bentuk fisik agregat PO = verifikasi Backend (anti-N+1); antrean tidak menilai konflik lain.
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft, atau di luar scope gudang | di luar antrean | bukan populasi |
+| S1 | draft dan tersangkutKonflik | `tersangkut` | menyelesaikan pasti ditolak jalur existing; selesaikan konfliknya dulu (jalur batal/void existing di luar antrean) — tingkat ini terbit dari fakta, bukan ambang hari |
+| S2 | draft dan umurDraftHari >= ambangHariMengendap (Q-MIQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | material belum keluar melewati kesabaran operasional yang diputus Lead |
+| S3 | draft selain S1/S2 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-MIQ-7) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada penyelesaian otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-MIQ-01 | Populasi = MaterialIssue `status="draft"` persis + warehouseId dalam scope pembaca (fail-closed none → kosong). Tanpa saringan deletedAt (kolom tidak ada); status completed/processing/rejected-liar tidak disamakan diam-diam. | TERVERIFIKASI-KODE (schema:2692) + USULAN batas |
+| BR-MIQ-02 | Pengeluaran draft BELUM mengeluarkan stok, BELUM menjurnal, dan BELUM menjadi biaya job/proyek: StockMove OUT + jurnal FIFO + biaya aktual lahir hanya di transaksi completeMaterialIssue (inventory.actions.ts:1207-1215; hook :155-253). Antrean dilarang berlabel pemakaian/biaya/stok-keluar di permukaan mana pun; yang boleh dinyatakan hanya "direncanakan/disiapkan". Ini penegakan aturan charter: aktual material wajib dari MaterialIssue completed. | TERVERIFIKASI-KODE + USULAN kejujuran label |
+| BR-MIQ-03 | Nilai uang TIDAK ditampilkan tahap 1 dalam bentuk apa pun (per baris, per rekap, Σ): item.cost = snapshot master saat baris lahir (schema:2720), biaya terjurnal kelak = FIFO aktual lapisan terkonsumsi yang bisa berbeda (hook :155-157). Menampilkan snapshot sebagai "nilai pengeluaran/biaya" = angka karangan kedua. Σ qty lintas item/satuan juga tidak ditampilkan sebagai total (pola laporan persediaan existing). | TERVERIFIKASI-KODE + USULAN batas |
+| BR-MIQ-04 | Draft yang fakta existing-nya membuat complete pasti ditolak (WO closed; WO sudah dikonsumsi perintah produksi) diterbitkan sebagai tingkat `tersangkut` teratas dengan penanda sebab dari fakta relasi, bukan disembunyikan dan bukan dicampur ke `mengendap` umur. Antrean tidak menyelesaikan konfliknya (void/batal = jalur existing di luar antrean) dan tidak menilai konflik selain dua penjaga kode itu. | TERVERIFIKASI-KODE (inventory.actions.ts:1170-1205) + USULAN |
+| BR-MIQ-05 | Konteks pekerjaan = tautan fakta apa adanya: nomor WO bila workOrderId ada, nama proyek bila projectId ada, `—` bila bebas. Antrean tidak menyimpulkan status/kemajuan pekerjaan dari keberadaan draft ini dan tidak menggabung WO+proyek menjadi satu label karangan bila keduanya terisi (tampil WO dulu, proyek pendamping — fisik urutan kolom Q-MIQ-3). | TERVERIFIKASI-KODE + USULAN |
+| BR-MIQ-06 | Tidak ada persetujuan untuk dokumen ini dan antrean tidak mengarangnya: tidak ada aktor approver, keadaan approval, atau langkah workflow di antrean/detail usulan. Menambah gerbang persetujuan pengeluaran = perubahan perilaku inti terpisah (BUTUH-VONIS Lead, dicatat di Yang-TIDAK-diusulkan). | TERVERIFIKASI-KODE |
+| BR-MIQ-07 | Scope gudang mengikuti `getWarehouseScope` existing per pembaca; baris luar scope tidak tampil dan tidak terhitung di rekap. Loader menegakkan sebelum query. | TERVERIFIKASI-KODE + USULAN penegakan |
+| BR-MIQ-08 | Umur memakai `createdAt`, bukan `date` dokumen. Mengubah acuan = Q-MIQ-8. Hari kalender WIB. | USULAN di atas TERVERIFIKASI-KODE field |
+| BR-MIQ-09 | Kuantitas per baris item tampil apa adanya di detail existing; antrean hanya menampilkan hitungan baris item per dokumen tahap 1. Antrean tidak menilai kecukupan stok, allowance scrap, atau klasifikasi scrap baris (wilayah tinjau scrap existing) — baris scrap belum ditinjau tidak mengubah tingkat dokumen. | USULAN batas |
+| BR-MIQ-10 | Ambang hari `mengendap`, kata final, dan selesaikan-dari-antrean = kebijakan perilaku inti: BUTUH-VONIS Lead (Q-MIQ-1/2/4). Tahap baca-saja tidak mengubah jurnal/stok sehingga Accountant TIDAK diminta — kecuali Lead membuka selesaikan-dari-daftar, saat itu vonis Accountant wajib sebelum fisik (complete melahirkan jurnal FIFO + biaya job). | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Pengeluaran/pemakaian bahan dari gudang ke pekerjaan | Ada: Penyelesaian Pesanan/Penambahan Bahan Baku & pergerakan persediaan per gudang (URL §kepala) | Ada: Pemakaian Barang mengeluarkan stok sesudah posting (URL §kepala) | Ada: buat Pengeluaran Material per gudang tertaut WO/proyek (inventory.actions.ts:1047) | Konteks WO/proyek/gudang per baris antrean |
+| Draft tanpa jurnal/stok dibedakan tegas dari terposting | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Ada eksplisit: "Rekam draft" belum jurnal vs "Rekam" posting (URL §kepala) | Ada: draft nol StockMove/jurnal; chip daftar draft vs issued/completed (kosakata Q-MIQ-6) | Notice §1 menyatakan draft belum stok/biaya |
+| Daftar kerja pengeluaran belum selesai terlihat terpisah | Tidak ditetapkan — tidak diklaim | Daftar pemakaian ada; pemilahan draft mengendap tidak ditetapkan — tidak diklaim | Ada daftar + chip status, tanpa umur/tingkat/konflik WO | Antrean draft berumur + tingkat tersangkut |
+| Antrean draft bertingkat umur + penanda konflik pekerjaan | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa nilai karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-MIQ-B1: Populasi tepat `status="draft"` + scope gudang: completed/processing/di-luar-scope tidak tampil (cabut saring status/scope → MERAH). Tidak ada saringan deletedAt yang dikarang (kolom tidak ada).
+- AC-MIQ-B2: Umur hari kalender WIB dari createdAt; umur 0 batas sama; ambang persis (== ambang → `mengendap` hanya bila Q-MIQ-1 diputus); masa depan 0 tertanda. Tingkat `tersangkut` mengalahkan `mengendap` (baris tersangkut+ tua tetap `tersangkut`, urutan S1 dulu — tertukar → MERAH).
+- AC-MIQ-B3: Tanpa angka karang: builder tidak menerbitkan nilai uang/qty-total lintas satuan dalam payload apa pun (suntik Σ cost/qty → MERAH, BR-MIQ-03); selama Q-MIQ-1 belum diputus `mengendap` tidak terbit.
+- AC-MIQ-B4: Loader fail-closed `view_material_issues` + scope gudang sebelum query (none → kosong), anti-N+1 (gudang massal, nama pembuat massal, nomor WO/nama proyek massal, hitungan item massal, agregat konsumsi PO per WO massal untuk penanda konflik — query per baris → MERAH); Decimal qty → Number di tepi bila ditampilkan di detail payload.
+- AC-MIQ-B5: Baca-saja terbukti: builder/loader tidak memanggil completeMaterialIssue/update/delete/requestApproval/tulis status/StockMove/jurnal (panggil diam-diam → MERAH); rekap = hitungan dokumen per tingkat atas baris yang sama persis; penanda konflik per baris berasal dari WO/PO dokumen itu sendiri, bukan WO lain.
+
+Frontend (konsumen):
+- AC-MIQ-F1: Kolom/label/notice/penanda verbatim server; UI tidak menghitung umur/tingkat/konflik sendiri (hitung ulang UI → MERAH); urutan dari payload.
+- AC-MIQ-F2: Tidak ada nilai uang tampil dalam bentuk apa pun; dokumen tidak berlabel pemakaian/biaya/stok-keluar (label terealisasi → MERAH, BR-MIQ-02/03); konteks WO/proyek/`—` verbatim payload.
+- AC-MIQ-F3: Tautan baris hanya ke detail pengeluaran existing; tidak ada tombol Selesaikan/Ubah/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-MIQ-4 → MERAH); tanpa `view_material_issues` halaman menolak.
+
+Edge cases:
+- EC-MIQ-1: MI draft bebas (tanpa WO/proyek) tetap populasi dengan konteks `—`; tidak dikeluarkan karena tak bertaut.
+- EC-MIQ-2: MI draft tertaut WO yang kemudian closed berubah menjadi `tersangkut` pada render berikut walau umur masih muda (fakta mengalahkan umur, S1); WO dibuka kembali (bila jalur existing ada) mengembalikannya ke tingkat umur.
+- EC-MIQ-3: MI draft yang WO-nya terkonsumsi PO sebagian (actualQty > 0) tetap `tersangkut` — penjaga kode menolak pada > 0, bukan pada penuh; antrean mengikuti ambang kode persis, tidak menebak proporsi.
+- EC-MIQ-4: Pengeluaran dengan baris scrapQty > 0 belum ditinjau tampil apa adanya sebagai draft; status tinjau scrap per baris tidak mengubah tingkat dokumen (BR-MIQ-09).
+- EC-MIQ-5: createdAt masa depan → umur 0 tertanda, tidak negatif.
+- EC-MIQ-6: Baris tertinggal `processing` bukan populasi senyap: dikeluarkan dari antrean dan (fisik Backend memutus) terhitung anomali terpisah terlihat; spec tidak mengusulkan perbaikan statusnya.
+- EC-MIQ-7: Dokumen yang diselesaikan/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci dokumen dan tidak menahan penjaga WO/PO existing.
+- EC-MIQ-8: Dua draft untuk WO+barang sama tampil dua baris apa adanya; tidak digabung (penilaian kebutuhan milik penyelesai/mandor, dan penjaga PO existing yang memutus jalur sahnya).
+
+### 7. Backlog implementasi (turunan F-2026-10-26-067-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-067-S | Spec kontrak ini (dokumen) | Business | — |
+| 067-B | Builder murni tingkat/umur/konflik draft pengeluaran material + loader `view_material_issues`+scope-gudang fail-closed anti-N+1 + tes AC-MIQ-B1..B5; verifikasi fisik kosakata status selesai tersimpan (completed vs chip issued, Q-MIQ-6) dilaporkan apa adanya | Backend | Putusan Lead Q-MIQ-1/2/3 |
+| 067-F | Permukaan antrean verbatim payload + AC-MIQ-F1..F3 | Frontend | 067-B merged |
+| 067-Q | Falsifikasi AC-MIQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 067-B/067-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-MIQ-1 | Ambang hari tingkat `mengendap`? | Lead | USULAN 3 hari kalender (material tak keluar menahan pekerjaan + stok terbaca tersedia; sejajar 066-S) — bukan fakta; selama belum diputus hanya `tersangkut` + menunggu yang terbit |
+| Q-MIQ-2 | Kata label tingkat/penanda/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-MIQ-3 | Kata penanda konflik final + urutan kolom konteks (WO dulu vs proyek dulu)? | Lead | Penanda usulan §1; WO dulu (penjaga konflik terikat WO), proyek pendamping |
+| Q-MIQ-4 | Selesaikan langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-MIQ-10): konteks serial/batch/FIFO + penjaga WO/PO harus terasa di detail; membuka memicu vonis Accountant wajib |
+| Q-MIQ-5 | Key izin antrean terpisah, atau key complete khusus menggantikan `edit_material_issues` untuk complete? | Lead (fisik Backend menilai katalog) | TIDAK keduanya tahap 1 — memakai ulang key existing; key complete khusus = perubahan katalog/seed terpisah lintas dokumen bila Lead mau |
+| Q-MIQ-6 | Kosakata status selesai: tersimpan `completed` vs chip daftar `issued` — selaraskan? | Lead (Backend verifikasi fisik data tersimpan) | Spec antrean tidak menyelaraskan; bila verifikasi membuktikan chip existing melewatkan baris selesai, itu temuan daftar existing untuk kartu terpisah, bukan diubah diam-diam di 067 |
+| Q-MIQ-7 | Urutan: `tersangkut` dulu, lalu `mengendap`, lalu tertua? | Lead | Ya sesuai S1→S2→S3; seri documentNo asc |
+| Q-MIQ-8 | Acuan umur createdAt vs date? | Lead | createdAt — momen menunggu sistem |
+
+### Yang TIDAK diusulkan run ini
+- Menyelesaikan/menghapus/void massal atau otomatis pengeluaran basi (BR-MIQ-10) — complete melahirkan StockMove + jurnal FIFO + biaya job nyata dan terhalang penjaga WO/PO yang memang sengaja menolak sebagian draft.
+- Menampilkan nilai pengeluaran/biaya dari snapshot master atau estimasi FIFO berjalan (BR-MIQ-03) — angka pastinya hanya lahir saat complete; menampilkan angka lain mengarang biaya job.
+- Menambah gerbang persetujuan (approval) untuk pengeluaran material (BR-MIQ-06) — mengubah perilaku inti dokumen tanpa approver existing; bila bengkel membutuhkannya itu spec workflow tersendiri dengan aktor/SoD-nya.
+- Menyelesaikan konflik WO-closed/PO-terkonsumsi dari antrean (void/batal terpandu) — jalur disposisi draft tersangkut adalah keputusan workflow produksi tersendiri, bukan turunan baca-saja.
+- Pengingat WA/email ke penyelesai/mandor, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru.
+- Menampilkan detail serial/batch/scrap per baris di antrean — konteks eksekusi milik detail dan antrean tinjau scrap existing.
+- Menyelaraskan kosakata completed/issued di daftar existing (Q-MIQ-6) — dicatat sebagai pertanyaan/temuan, bukan diperbaiki diam-diam dalam spec antrean.
