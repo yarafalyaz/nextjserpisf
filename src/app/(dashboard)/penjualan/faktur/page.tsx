@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import { InvoiceTable } from "./_components/invoice-table"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 
@@ -68,7 +69,7 @@ export async function renderInvoicesPage(
   const invoices = rawInvoices.map((inv) => ({
     id: inv.id,
     slug: inv.slug,
-    documentNo: inv.documentNo,
+    documentNo: salesInvoiceLabel(inv),
     date: inv.date,
     dueDate: inv.dueDate,
     totalAmount: Number(inv.totalAmount),

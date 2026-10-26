@@ -17,6 +17,7 @@ import {
 import { notFound, redirect } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { parsePathFilterSegments } from "@/lib/utils/path-filters"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
 import type { Metadata } from "next"
 
@@ -101,9 +102,9 @@ export default async function CalendarPage({
   for (const invoice of invoices) {
     // Drafts carry no recognised receivable yet — only flag them as scheduled.
     const settled = invoice.status !== "draft"
-    push({ date: invoice.date, kind: "invoice", label: invoice.documentNo, amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
+    push({ date: invoice.date, kind: "invoice", label: salesInvoiceLabel(invoice), amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
     if (invoice.dueDate && settled) {
-      push({ date: invoice.dueDate, kind: "invoice-due", label: `Tempo ${invoice.documentNo}`, amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
+      push({ date: invoice.dueDate, kind: "invoice-due", label: `Tempo ${salesInvoiceLabel(invoice)}`, amount: Number(invoice.grandTotal), href: `/penjualan/faktur/${invoice.slug ?? invoice.id}` })
     }
   }
   for (const bill of bills) {

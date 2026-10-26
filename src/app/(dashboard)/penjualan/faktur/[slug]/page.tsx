@@ -23,6 +23,7 @@ import { WhatsappButton } from "@/components/reports/whatsapp-button"
 import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note"
 import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data"
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -176,7 +177,7 @@ export default async function InvoiceDetailPage({
               message={buildWhatsappMessage({
                 customerName: invoice.customer.name,
                 documentLabel: "Faktur",
-                documentNo: invoice.documentNo,
+                documentNo: salesInvoiceLabel(invoice),
                 status: invoice.status,
               })}
             />

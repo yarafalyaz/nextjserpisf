@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 import { RecentInvoicesTable } from "@/components/dashboard/recent-invoices-table"
 import { SectionCards } from "@/components/dashboard/section-cards"
@@ -239,7 +240,7 @@ async function getDashboardData() {
   const invoiceRows = recentInvoices.map((invoice) => ({
     id: invoice.id,
     slug: invoice.slug,
-    documentNo: invoice.documentNo,
+    documentNo: salesInvoiceLabel(invoice),
     customerName: invoice.customer.name,
     grandTotal: Number(invoice.grandTotal),
     paidAmount: Number(invoice.paidAmount),

@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
 export const metadata: Metadata = { title: "Ubah Retur" };
 
 export default async function EditPage({
@@ -80,7 +81,7 @@ export default async function EditPage({
       </div>
       <SalesReturnForm
         returnData={returnData}
-        invoices={invoices}
+        invoices={invoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) }))}
         customers={customers}
         items={items}
       />
