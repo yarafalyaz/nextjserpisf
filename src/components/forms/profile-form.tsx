@@ -179,7 +179,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="newPassword">Kata Sandi Baru</Label>
-            <Input id="newPassword" name="newPassword" type="password" placeholder="Minimal 8 karakter" required minLength={8} />
+            <Input id="newPassword" name="newPassword" type="password" placeholder="Minimal 12 karakter" required minLength={12} />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

@@ -11,6 +11,7 @@ import { act } from "react"
 const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   getSalesCommissionRecap: vi.fn(),
+  getSalesCommissionSubledgerRecap: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -19,6 +20,10 @@ vi.mock("@/lib/auth/permissions", () => ({
 
 vi.mock("@/lib/reports/sales-commission-data", () => ({
   getSalesCommissionRecap: mocks.getSalesCommissionRecap,
+}))
+
+vi.mock("@/lib/reports/sales-commission-subledger-data", () => ({
+  getSalesCommissionSubledgerRecap: mocks.getSalesCommissionSubledgerRecap,
 }))
 
 vi.mock("next/navigation", () => ({
@@ -43,6 +48,8 @@ vi.mock("@/components/reports/export-buttons", () => ({
 
 import SalesCommissionPage from "../page"
 import { buildSalesCommissionRecap } from "@/lib/reports/sales-commission"
+import { buildSalesCommissionSubledger } from "@/lib/reports/sales-commission-subledger"
+import { buildSalesCommissionPayable } from "@/lib/reports/sales-commission-payable"
 
 function source(rel: string): string {
   return readFileSync(resolve(process.cwd(), rel), "utf8")
@@ -72,6 +79,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermission.mockResolvedValue(undefined)
   mocks.getSalesCommissionRecap.mockResolvedValue(RECAP)
+  mocks.getSalesCommissionSubledgerRecap.mockResolvedValue({
+    payable: buildSalesCommissionPayable([], { ledgerAvailable: false }),
+    lineStatuses: [],
+  })
 })
 
 afterEach(() => {
@@ -116,5 +127,59 @@ describe("F-2026-10-22-053-S halaman rekap komisi", () => {
       expect(src).not.toMatch(/bayar|posting|jurnal/i)
       expect(src).not.toContain("prisma.")
     }
+  })
+
+  it("049-S: tanpa izin kedua loader tidak dipanggil (fail-closed page)", async () => {
+    mocks.requirePermission.mockRejectedValue(new Error("redirect:/"))
+    await expect(
+      SalesCommissionPage({
+        params: Promise.resolve({ segments: [] }),
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toThrow("redirect:/")
+    expect(mocks.getSalesCommissionRecap).not.toHaveBeenCalled()
+    expect(mocks.getSalesCommissionSubledgerRecap).not.toHaveBeenCalled()
+  })
+
+  it("049-S: subledger loader dipanggil + notice UNAVAILABLE verbatim tampil (G1 tertutup)", async () => {
+    const { container, root } = await renderPage()
+    expect(mocks.getSalesCommissionSubledgerRecap).toHaveBeenCalledTimes(1)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Subledger Komisi per Penerima")
+    expect(text).toContain(
+      "Subledger dan jurnal utang komisi belum tersedia (inti tahap 3 belum live) — saldo utang komisi terbaca 0; rekap informatif tetap bukan utang.",
+    )
+    act(() => root.unmount())
+  })
+
+  it("049-S: saldo + status baris dari loader tampil verbatim, penerima asing tak bocor", async () => {
+    const view = buildSalesCommissionSubledger([
+      {
+        salesInvoiceId: 101,
+        salesEmployeeId: 2,
+        salesEmployeeName: "Sari",
+        accruedAmount: 1_000_000,
+        reversalAmount: 0,
+        paidAmount: 400_000,
+      },
+    ])
+    mocks.getSalesCommissionSubledgerRecap.mockResolvedValue(view)
+    const { container, root } = await renderPage()
+    const text = container.textContent ?? ""
+    expect(text).toContain("Rp 600.000")
+    expect(text).toContain("Terbayar Sebagian")
+    expect(text).not.toContain("Zulkifli")
+    act(() => root.unmount())
+  })
+
+  it("049-S kontrak statis: kartu subledger tanpa hitung ulang/status turunan lokal", () => {
+    const page = source("src/app/(dashboard)/laporan/rekap-komisi/[[...segments]]/page.tsx")
+    const card = source("src/components/reports/sales-commission-subledger-card.tsx")
+    expect(page).toContain("getSalesCommissionSubledgerRecap")
+    expect(card).not.toContain("prisma.")
+    expect(card).not.toMatch(/accruedAmount\s*[-+*/]/)
+    expect(card).not.toMatch(/deriveStatus|commissionPercent/)
+    expect(card).toContain("210212")
+    expect(card).not.toContain("210207")
   })
 })

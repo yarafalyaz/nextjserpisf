@@ -25,6 +25,7 @@ import {
   receivableOutstanding,
 } from "@/lib/reports/aging-amounts"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd } from "@/lib/utils/math"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -109,7 +110,7 @@ export async function loadReceivablesAging(): Promise<AgingReportView> {
       if (outstanding <= 0) return null
       return {
         party: inv.customer.name,
-        documentNo: inv.documentNo,
+        documentNo: salesInvoiceLabel(inv),
         dueDate: new Date(inv.dueDate),
         outstanding,
       }

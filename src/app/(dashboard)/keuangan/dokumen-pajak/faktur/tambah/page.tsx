@@ -15,9 +15,9 @@ import { formatCurrency } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Faktur Pajak" }
 
-const moneyOption = (documentNo: string, amount: unknown, party: string): TaxOption => ({
+const moneyOption = (documentNo: string | null, amount: unknown, party: string): TaxOption => ({
   value: "",
-  label: `${documentNo} — ${party} (${formatCurrency(Number(amount))})`,
+  label: `${documentNo ?? "Tanpa nomor"} — ${party} (${formatCurrency(Number(amount))})`,
 })
 
 /**
