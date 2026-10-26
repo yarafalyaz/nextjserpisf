@@ -114,6 +114,83 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     expectInvoiceNotPaid(mocks, { paidAmount: 1200 })
   })
 
+  it("BLOCKER-1 F-036-S: konversi DP lahir lunas -> snapshot tarif beku 2% per tanggal faktur", async () => {
+    const dp = buildDp({ id: 2, amount: 600, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp)
+    mockConfirmedDps(mocks, [
+      confirmedDpRow("DP-1", 600, "2026-09-01T00:00:00Z"),
+      confirmedDpRow("DP-2", 600, "2026-10-01T00:00:00Z"),
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentStatus: "paid",
+          commissionCustomerCategoryId: 1,
+          commissionRateId: 1,
+        }),
+      }),
+    )
+    const finalData = mocks.salesInvoiceUpdate.mock.calls
+      .map((c: any) => c[0].data)
+      .find((d: any) => d.paymentStatus === "paid")
+    expect(Number(finalData.commissionRatePercent)).toBe(2)
+  })
+
+  it("BLOCKER-1 F-036-S: DP lanjutan melunasi -> snapshot tarif beku; existing tidak ditimpa", async () => {
+    const dp = buildDp({ id: 9, amount: 5000, status: "draft", docNo: "DP-9" })
+    const tx = buildTx(dp)
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
+      id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
+      paymentStatus: "partial",
+      date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: null,
+    })
+    mocks.salesPaymentFindFirst.mockResolvedValue(null)
+    mocks.salesPaymentFindMany
+      .mockResolvedValueOnce([{ amount: 8000 }])
+      .mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(9, 1)
+
+    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentStatus: "paid",
+          commissionCustomerCategoryId: 1,
+          commissionRateId: 1,
+        }),
+      }),
+    )
+    const data = mocks.salesInvoiceUpdate.mock.calls[0][0].data
+    expect(Number(data.commissionRatePercent)).toBe(2)
+  })
+
+  it("BLOCKER-1 F-036-S: DP lanjutan dengan snapshot existing -> tidak ditulis ulang", async () => {
+    const dp = buildDp({ id: 9, amount: 5000, status: "draft", docNo: "DP-9" })
+    const tx = buildTx(dp)
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
+      id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
+      paymentStatus: "partial",
+      date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: 7,
+    })
+    mocks.salesPaymentFindFirst.mockResolvedValue(null)
+    mocks.salesPaymentFindMany
+      .mockResolvedValueOnce([{ amount: 8000 }])
+      .mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(9, 1)
+
+    const data = mocks.salesInvoiceUpdate.mock.calls[0][0].data
+    expect(data.paymentStatus).toBe("paid")
+    expect(data.commissionRatePercent).toBeUndefined()
+    expect(data.commissionRateId).toBeUndefined()
+  })
+
   it("DP pas (tanpa kelebihan): kredit TIDAK terbentuk", async () => {
     const dp = buildDp({ id: 2, amount: 200, status: "draft", docNo: "DP-2" })
     const tx = buildTx(dp)
@@ -136,6 +213,7 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     mocks.salesInvoiceFindFirst.mockResolvedValue({
       id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
       paymentStatus: "partial",
+      date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: null,
     })
     mocks.salesPaymentFindFirst.mockResolvedValue(null)
     // R3-04: payment pertama = prePaid (8000, sebelum alokasi); kedua =
@@ -164,7 +242,7 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     const dp = buildDp({ id: 2, amount: 200, status: "draft", docNo: "DP-2" })
     const tx = buildTx(dp)
     // Invoice SUDAH ada (dari confirm pertama) + marker DP-2 sudah teralokasi.
-    mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 101, grandTotal: 1000, paymentStatus: "partial" })
+    mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 101, grandTotal: 1000, paymentStatus: "partial", date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: null })
     mocks.salesPaymentFindFirst.mockResolvedValue({ id: 555 })
     mocks.salesPaymentFindMany.mockResolvedValue([{ amount: 500 }])
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
@@ -177,7 +255,7 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
   it("DP lanjutan tidak mengubah status lifecycle invoice (tetap draft)", async () => {
     const dp = buildDp({ id: 3, amount: 100, status: "draft", docNo: "DP-3" })
     const tx = buildTx(dp)
-    mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 101, grandTotal: 1000, paymentStatus: "partial" })
+    mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 101, grandTotal: 1000, paymentStatus: "partial", date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: null })
     mocks.salesPaymentFindFirst.mockResolvedValue(null)
     mocks.salesPaymentFindMany.mockResolvedValue([{ amount: 500 }, { amount: 100 }])
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
