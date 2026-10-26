@@ -71,6 +71,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -1865,6 +1866,25 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
+    // F-2026-10-25-030-S Q-LR-2/4: cabang lost digerbang SEBELUM mutasi —
+    // kategori wajib + key asing ditolak, won/lost terminal mutlak.
+    // Kategori pada status non-lost juga ditolak (form wajib kosong);
+    // guard kepemilikan existing di atas tetap penjaga pertama (AC-LR-B6).
+    if (v.lostReasonCategory != null && v.status !== "lost") {
+      throw new Error(
+        "Kategori alasan kalah hanya berlaku saat status diubah menjadi kalah (lost).",
+      );
+    }
+    const lostCheck = validateLeadLostTransition({
+      fromStatus: existing.status,
+      toStatus: v.status ?? null,
+      category: v.lostReasonCategory ?? null,
+      freeText: v.lostReasonText ?? null,
+    });
+    if (!lostCheck.ok) {
+      throw new Error(lostCheck.error);
+    }
+
     const newAssignedTo = v.assignedTo ?? null;
 
     // Security Guard: Only admins can re-assign leads to others.
@@ -1970,6 +1990,9 @@ export async function updateLead(id: number, formData: FormData) {
             userId: Number(actor.id),
             type: "status_change",
             subject: "Status diubah",
+            // Awalan [kalah:key] hanya pada transisi ke lost (Q-LR-1);
+            // status lain description tetap null seperti existing.
+            description: lostCheck.ok ? lostCheck.description : null,
             oldStatus: existing.status,
             newStatus: v.status,
           },
