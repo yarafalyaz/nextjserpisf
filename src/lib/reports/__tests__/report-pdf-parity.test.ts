@@ -100,6 +100,9 @@ describe("paritas registry PDF laporan", () => {
       "proyeksi-kas",
       "pusat-laba",
       "rekap-komisi",
+      // F-2026-10-25-028-S: riwayat harga jual baca-saja tahap 1;
+      // ekspor/PDF server-side belum dibuka (pola 039-S BR-QPH-09).
+      "riwayat-harga-jual",
       "target-penjualan",
       "serapan-overhead",
     ]
