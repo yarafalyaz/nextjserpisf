@@ -542,3 +542,65 @@ describe("Next.js redirect error handling", () => {
     }
   })
 })
+
+describe("updateCustomerVehicleServiceSchedule guard km (021-S)", () => {
+  const existing = { id: 5, customerId: 9, lastOdometerKm: 50000 }
+
+  it("km sama dengan odometer terakhir ditolak, update 0x", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 50000 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("harus lebih besar")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+  })
+
+  it("km di bawah odometer terakhir ditolak, update 0x", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 49999 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("harus lebih besar")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+  })
+
+  it("tanpa izin ditolak sebelum query apa pun", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(
+      new Error("Anda tidak memiliki izin edit_customers"),
+    )
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 60000 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customerVehicle.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+  })
+
+  it("km sah di atas odometer update tepat 1x", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 60000 }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customerVehicle.update).toHaveBeenCalledTimes(1)
+  })
+
+  it("odometer belum tercatat -> km berapa pun diterima (guard hanya bila ada acuan)", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue({
+      ...existing,
+      lastOdometerKm: null,
+    })
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 1000 }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customerVehicle.update).toHaveBeenCalledTimes(1)
+  })
+})
