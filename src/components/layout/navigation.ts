@@ -88,6 +88,7 @@ export const navigation: NavItem[] = [
       { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, permission: "view_quotations" },
       { label: "Antrean Penawaran", href: "/penjualan/antrean-penawaran", icon: ListTodo, permission: "view_quotations" },
       { label: "Draf Penawaran Basi", href: "/penjualan/antrean-penawaran-draf", icon: ListTodo, permission: "view_quotations" },
+      { label: "Pesanan Draft Mengendap", href: "/penjualan/antrean-pesanan-draf", icon: ListTodo, permission: "view_sales_orders" },
       { label: "Faktur Draft Mengendap", href: "/penjualan/antrean-faktur-draf", icon: ListTodo, permission: "view_sales_invoices" },
       { label: "Antrean Penawaran Diterima", href: "/penjualan/antrean-penawaran-diterima", icon: ListTodo, permission: "view_quotations" },
       { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
