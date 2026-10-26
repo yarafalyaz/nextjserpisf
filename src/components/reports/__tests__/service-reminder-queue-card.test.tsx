@@ -11,33 +11,13 @@ import {
   SERVICE_REMINDER_KM_NOTICE_TEXT,
   SERVICE_REMINDER_NOTICE_TEXT,
   SERVICE_REMINDER_QUEUE_TITLE,
-  type ServiceReminderVehicleInput,
 } from "@/lib/reports/service-reminder-queue"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
-
-// 10:00 WIB 26 Okt 2026 = 03:00Z — now di luar tengah malam pada kedua zona.
-const NOW = new Date("2026-10-26T03:00:00.000Z")
-
-function day(offset: number): Date {
-  return new Date(Date.UTC(2026, 9, 26) + offset * 86_400_000)
-}
-
-function input(over: Partial<ServiceReminderVehicleInput>): ServiceReminderVehicleInput {
-  return {
-    customerVehicleId: 1,
-    nextServiceDate: null,
-    nextServiceKm: null,
-    nextServiceNote: null,
-    lastOdometerKm: null,
-    vehicleIsActive: true,
-    vehicleDeletedAt: null,
-    plateNumber: "B 1 AA",
-    vehicleName: "Avanza",
-    customerId: 1,
-    customerName: "Budi",
-    ...over,
-  }
-}
+import {
+  SERVICE_REMINDER_NOW as NOW,
+  serviceReminderDay as day,
+  serviceReminderInput as input,
+} from "@/lib/reports/__tests__/service-reminder-test-fixtures"
 
 let roots: Root[] = []
 afterEach(() => {

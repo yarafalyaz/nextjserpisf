@@ -3,22 +3,25 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-const scheduleAction = vi.fn(
-  async (
-    _id: number,
-    _formData: FormData,
-  ): Promise<{ success: boolean; error?: string }> => ({ success: true }),
-)
-const showError = vi.fn()
-const showSuccess = vi.fn()
+const mocks = vi.hoisted(() => ({
+  scheduleAction: vi.fn(
+    async (
+      _id: number,
+      _formData: FormData,
+    ): Promise<{ success: boolean; error?: string }> => ({ success: true }),
+  ),
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
+}))
+const { scheduleAction, showError, showSuccess } = mocks
 
 vi.mock("@/actions/vehicle.actions", () => ({
   updateCustomerVehicleServiceSchedule: (id: number, formData: FormData) =>
-    scheduleAction(id, formData),
+    mocks.scheduleAction(id, formData),
 }))
 vi.mock("@/lib/utils/toast", () => ({
-  showError: (...args: unknown[]) => showError(...(args as [])),
-  showSuccess: (...args: unknown[]) => showSuccess(...(args as [])),
+  showError: mocks.showError,
+  showSuccess: mocks.showSuccess,
 }))
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
