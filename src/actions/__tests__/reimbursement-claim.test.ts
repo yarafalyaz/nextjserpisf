@@ -245,6 +245,20 @@ describe("markExpensePaid klaim (E-RB5-2)", () => {
     expect(paidMock).not.toHaveBeenCalled()
   })
 
+  it("(b) hanya J-RB1 soft-deleted (query aktif kosong) -> bayar ditolak, nol J-RB2", async () => {
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, status: "approved", paidFromAccountId: 100,
+    })
+    journalFindFirstMock.mockResolvedValue(null)
+    const r = await markExpensePaid(42)
+    expect(r.success).toBe(false)
+    expect(paidMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
+    const where = journalFindFirstMock.mock.calls.at(-1)?.[0]?.where
+    expect(where.status).toEqual({ not: "REVERSED" })
+    expect(where.deletedAt).toBeNull()
+  })
+
   it("(d) hanya J-RB1 REVERSED (query aktif kosong) -> bayar ditolak, nol J-RB2", async () => {
     txExpenseFindUniqueOrThrowMock.mockResolvedValue({
       ...CLAIM, status: "approved", paidFromAccountId: 100,

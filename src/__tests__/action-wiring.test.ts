@@ -274,13 +274,22 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   "src/actions/salary-adjustment.actions.ts::getSalaryAdjustments":
     "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
   // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
-  // menunggu form di detail kendaraan (kartu UI t_cf82d1cf, assignee Frontend);
-  // buang entri ini saat form memanggilnya.
-  "src/actions/vehicle.actions.ts::updateCustomerVehicleServiceSchedule":
-    "F-2026-10-25-021-S: menunggu UI form jadwal kendaraan (kartu t_cf82d1cf Frontend)",
+  // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
+  // F-2026-10-25-036-S inti backend (PR #1006): 4 aksi histori tarif komisi
+  // kategori pelanggan menunggu kartu UI master kategori + label DPP rekap
+  // (kartu UI lanjutan BOT Frontend, parent t_73a60989); entri beku dibuang
+  // saat UI tersambung.
+  "src/actions/master.actions.ts::createCustomerCommissionRate":
+    "F-2026-10-25-036-S backend; form tambah tarif di master kategori menyusul (frontend)",
+  "src/actions/master.actions.ts::updateCustomerCommissionRate":
+    "F-2026-10-25-036-S backend; form ubah/tutup masa tarif menyusul (frontend)",
+  "src/actions/master.actions.ts::deleteCustomerCommissionRate":
+    "F-2026-10-25-036-S backend; tombol hapus tarif menyusul (frontend)",
+  "src/actions/master.actions.ts::getCustomerCommissionRates":
+    "F-2026-10-25-036-S backend; daftar histori tarif di master kategori menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

@@ -15,6 +15,7 @@ import {
   requireString,
 } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
+import { validateCommissionRateWrite } from "@/lib/services/customer-commission-rate.service";
 import {
   customerSchema,
   customerCategorySchema,
@@ -48,11 +49,15 @@ import {
 } from "@/lib/services/lead-duplicate.service";
 import {
   findCustomerDuplicateCandidates,
+  findCustomerNpwpConflict,
   buildCustomerDuplicateWarning,
+  buildCustomerNpwpBlockedMessage,
   loadCustomerDuplicateGroups,
   CUSTOMER_REUSED_MESSAGE,
+  CUSTOMER_NPWP_BLOCKED_TITLE,
   type CustomerDuplicateWarning,
   type CustomerDuplicateGroup,
+  type CustomerNpwpConflict,
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
@@ -66,6 +71,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -202,6 +208,29 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CUSTOMER ACTIONS ====================
 
+/**
+ * Q-CD-1 (PUTUSAN Lead PR #901, F-2026-10-25-040-S §B): gerbang BLOKIR
+ * NPWP persis — pengecualian dari peringatan advisory BR-CD-04. NPWP
+ * ternormalisasi (`normalizeCustomerTaxIdKey`) sama persis DAN terisi di
+ * kedua sisi = simpan DITOLAK sebelum create/update; kunci lain
+ * (telepon/nama+email) tetap peringatan tahap 1. Respons blokir
+ * terstruktur: `npwpConflict` (id/nama/kode pemegang) + `error` verbatim
+ * supaya operator memakai master existing atau mengoreksi NPWP.
+ */
+function buildCustomerNpwpBlockedResult(conflict: CustomerNpwpConflict) {
+  return {
+    success: false as const,
+    error: buildCustomerNpwpBlockedMessage(conflict),
+    npwpConflict: {
+      id: conflict.id,
+      slug: conflict.slug,
+      name: conflict.name,
+      code: conflict.code,
+      title: CUSTOMER_NPWP_BLOCKED_TITLE,
+    },
+  };
+}
+
 // F-2026-10-25-004-S: validasi bentuk identitas pajak master (longgar-
 // tertanda vonis 019-V §1/§2/§3) + normalisasi simpan digit-saja.
 // Bentuk cacat = tolak simpan; legacy15/unlinked lolos dengan peringatan
@@ -263,6 +292,10 @@ export async function createCustomer(formData: FormData) {
 
     const taxIdentity = customerTaxIdentityForSave(v);
     if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum create.
+    const npwpConflict = await findCustomerNpwpConflict({ taxId: v.taxId });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
     // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
@@ -333,6 +366,14 @@ export async function updateCustomer(customerId: number, formData: FormData) {
 
     const taxIdentity = customerTaxIdentityForSave(v);
     if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum update;
+    // self-match (NPWP milik pelanggan ini sendiri) dikecualikan.
+    const npwpConflict = await findCustomerNpwpConflict({
+      taxId: v.taxId,
+      excludeCustomerId: customerId,
+    });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     if (v.customerCategoryId != null) {
       const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
@@ -1825,6 +1866,25 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
+    // F-2026-10-25-030-S Q-LR-2/4: cabang lost digerbang SEBELUM mutasi —
+    // kategori wajib + key asing ditolak, won/lost terminal mutlak.
+    // Kategori pada status non-lost juga ditolak (form wajib kosong);
+    // guard kepemilikan existing di atas tetap penjaga pertama (AC-LR-B6).
+    if (v.lostReasonCategory != null && v.status !== "lost") {
+      throw new Error(
+        "Kategori alasan kalah hanya berlaku saat status diubah menjadi kalah (lost).",
+      );
+    }
+    const lostCheck = validateLeadLostTransition({
+      fromStatus: existing.status,
+      toStatus: v.status ?? null,
+      category: v.lostReasonCategory ?? null,
+      freeText: v.lostReasonText ?? null,
+    });
+    if (!lostCheck.ok) {
+      throw new Error(lostCheck.error);
+    }
+
     const newAssignedTo = v.assignedTo ?? null;
 
     // Security Guard: Only admins can re-assign leads to others.
@@ -1930,6 +1990,9 @@ export async function updateLead(id: number, formData: FormData) {
             userId: Number(actor.id),
             type: "status_change",
             subject: "Status diubah",
+            // Awalan [kalah:key] hanya pada transisi ke lost (Q-LR-1);
+            // status lain description tetap null seperti existing.
+            description: lostCheck.ok ? lostCheck.description : null,
             oldStatus: existing.status,
             newStatus: v.status,
           },
@@ -3251,4 +3314,190 @@ export async function deleteCustomerCategory(id: number) {
     console.error("[deleteCustomerCategory]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
+}
+
+// ── F-2026-10-25-036-S: histori tarif komisi per kategori pelanggan ──
+// Izin existing master kategori (BR-KT36-10, tanpa izin baru): tambah =
+// create_customers, ubah/tutup masa/hapus = edit_customers. Penjaga murni
+// (tolak tumpang tindih + baris sumber snapshot beku) di
+// customer-commission-rate.service; cek rujukan snapshot dalam tx yang sama.
+
+function parseCommissionRateForm(formData: FormData) {
+  const customerCategoryId = Number(formData.get("customerCategoryId"))
+  const commissionPercent = Number(formData.get("commissionPercent"))
+  const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "")
+  const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim()
+  if (!Number.isInteger(customerCategoryId) || customerCategoryId <= 0) {
+    return { error: "Kategori pelanggan wajib dipilih" } as const
+  }
+  if (!Number.isFinite(commissionPercent)) {
+    return { error: "Persen komisi tidak valid" } as const
+  }
+  const effectiveFrom = wibDateToUtcMidnight(effectiveFromRaw)
+  if (!effectiveFrom) return { error: "Tanggal mulai berlaku tarif tidak valid" } as const
+  let effectiveTo: Date | null = null
+  if (effectiveToRaw) {
+    effectiveTo = wibDateToUtcMidnight(effectiveToRaw)
+    if (!effectiveTo) return { error: "Tanggal berakhir masa tarif tidak valid" } as const
+  }
+  return { customerCategoryId, commissionPercent, effectiveFrom, effectiveTo } as const
+}
+
+async function loadCommissionRateRows(
+  tx: Prisma.TransactionClient,
+  customerCategoryId: number,
+) {
+  const rows = await tx.customerCommissionRate.findMany({
+    where: { customerCategoryId },
+    select: { id: true, customerCategoryId: true, commissionPercent: true, effectiveFrom: true, effectiveTo: true },
+  })
+  return rows.map((r) => ({ ...r, commissionPercent: Number(r.commissionPercent) }))
+}
+
+export async function createCustomerCommissionRate(formData: FormData) {
+  try {
+    const user = await requirePermission("create_customers")
+    const parsed = parseCommissionRateForm(formData)
+    if ("error" in parsed) return { success: false, error: parsed.error }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const category = await tx.customerCategory.findFirst({
+        where: { id: parsed.customerCategoryId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!category) return { error: "Kategori pelanggan tidak ditemukan" } as const
+      const existing = await loadCommissionRateRows(tx, parsed.customerCategoryId)
+      const guardError = validateCommissionRateWrite({
+        existing,
+        targetId: null,
+        customerCategoryId: parsed.customerCategoryId,
+        commissionPercent: parsed.commissionPercent,
+        effectiveFrom: parsed.effectiveFrom,
+        effectiveTo: parsed.effectiveTo,
+        targetIsSnapshotSource: false,
+      })
+      if (guardError) return { error: guardError } as const
+      const rate = await tx.customerCommissionRate.create({
+        data: {
+          customerCategoryId: parsed.customerCategoryId,
+          commissionPercent: new Prisma.Decimal(parsed.commissionPercent.toFixed(2)),
+          effectiveFrom: parsed.effectiveFrom,
+          effectiveTo: parsed.effectiveTo,
+          createdBy: Number(user.id),
+        },
+      })
+      return { id: rate.id } as const
+    })
+    if ("error" in created) return { success: false, error: created.error }
+
+    revalidatePath("/master/kategori-pelanggan")
+    await logActivity("create", "CustomerCommissionRate", created.id, "Menambah tarif komisi kategori pelanggan")
+    return { success: true, id: created.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createCustomerCommissionRate]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateCustomerCommissionRate(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_customers")
+    const parsed = parseCommissionRateForm(formData)
+    if ("error" in parsed) return { success: false, error: parsed.error }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const target = await tx.customerCommissionRate.findUnique({ where: { id } })
+      if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
+      const existing = await loadCommissionRateRows(tx, target.customerCategoryId)
+      const snapshotSource = await tx.salesInvoice.findFirst({
+        where: { commissionRateId: id },
+        select: { id: true },
+      })
+      const guardError = validateCommissionRateWrite({
+        existing,
+        targetId: id,
+        customerCategoryId: target.customerCategoryId,
+        commissionPercent: parsed.commissionPercent,
+        effectiveFrom: parsed.effectiveFrom,
+        effectiveTo: parsed.effectiveTo,
+        targetIsSnapshotSource: snapshotSource !== null,
+      })
+      if (guardError) return { error: guardError } as const
+      await tx.customerCommissionRate.update({
+        where: { id },
+        data: {
+          commissionPercent: new Prisma.Decimal(parsed.commissionPercent.toFixed(2)),
+          effectiveFrom: parsed.effectiveFrom,
+          effectiveTo: parsed.effectiveTo,
+        },
+      })
+      return { ok: true } as const
+    })
+    if ("error" in result) return { success: false, error: result.error }
+
+    revalidatePath("/master/kategori-pelanggan")
+    await logActivity("update", "CustomerCommissionRate", id, "Mengubah tarif komisi kategori pelanggan")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateCustomerCommissionRate]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function deleteCustomerCommissionRate(id: number) {
+  try {
+    await requirePermission("edit_customers")
+
+    const result = await prisma.$transaction(async (tx) => {
+      const target = await tx.customerCommissionRate.findUnique({ where: { id } })
+      if (!target) return { error: "Baris tarif komisi tidak ditemukan" } as const
+      const snapshotSource = await tx.salesInvoice.findFirst({
+        where: { commissionRateId: id },
+        select: { id: true },
+      })
+      const guardError = validateCommissionRateWrite({
+        existing: [],
+        targetId: id,
+        customerCategoryId: target.customerCategoryId,
+        commissionPercent: Number(target.commissionPercent),
+        effectiveFrom: target.effectiveFrom,
+        effectiveTo: target.effectiveTo,
+        targetIsSnapshotSource: snapshotSource !== null,
+        isDelete: true,
+      })
+      if (guardError) return { error: guardError } as const
+      await tx.customerCommissionRate.delete({ where: { id } })
+      return { ok: true } as const
+    })
+    if ("error" in result) return { success: false, error: result.error }
+
+    revalidatePath("/master/kategori-pelanggan")
+    await logActivity("delete", "CustomerCommissionRate", id, "Menghapus tarif komisi kategori pelanggan")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteCustomerCommissionRate]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/** Daftar histori tarif komisi satu kategori (read-only, untuk layar master). */
+export async function getCustomerCommissionRates(customerCategoryId: number) {
+  await requirePermission("view_customers")
+  const rows = await prisma.customerCommissionRate.findMany({
+    where: { customerCategoryId },
+    orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      customerCategoryId: true,
+      commissionPercent: true,
+      effectiveFrom: true,
+      effectiveTo: true,
+      createdBy: true,
+      createdAt: true,
+    },
+  })
+  return rows.map((r) => ({ ...r, commissionPercent: Number(r.commissionPercent) }))
 }

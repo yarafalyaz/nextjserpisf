@@ -127,6 +127,29 @@ describe("F-2026-10-25-019-V §7.4/§7.6 snapshot + PKP tidak menurunkan kode", 
   })
 })
 
+describe("F-2026-10-25-019-V §8A-3 penanda nitkuUnlinked dokumen", () => {
+  it("legacy15 + NITKU sah-bentuk → nitkuUnlinked=true, nitkuAbsent=false", () => {
+    expect(
+      deriveSnapshotMarkers({ counterpartyTaxId: "123456789012345", counterpartyNitku: "9999999999999999000001" }),
+    ).toEqual({ npwpFormat: "legacy15", legacy15: true, nitkuAbsent: false, nitkuUnlinked: true })
+  })
+  it("NPWP 16 + NITKU tertaut → nitkuUnlinked=false; NITKU absen → nitkuUnlinked=false + nitkuAbsent=true", () => {
+    expect(deriveSnapshotMarkers({ counterpartyTaxId: NPWP16, counterpartyNitku: NITKU_LINKED }).nitkuUnlinked).toBe(false)
+    expect(deriveSnapshotMarkers({ counterpartyTaxId: NPWP16, counterpartyNitku: null })).toEqual({
+      npwpFormat: "canonical16",
+      legacy15: false,
+      nitkuAbsent: true,
+      nitkuUnlinked: false,
+    })
+  })
+  it("NITKU cacat bentuk → bukan unlinked (cacat, bukan belum-tertaut); NPWP kosong + NITKU sah → unlinked", () => {
+    expect(
+      deriveSnapshotMarkers({ counterpartyTaxId: "123456789012345", counterpartyNitku: "123" }).nitkuUnlinked,
+    ).toBe(false)
+    expect(deriveSnapshotMarkers({ counterpartyTaxId: null, counterpartyNitku: NITKU_LINKED }).nitkuUnlinked).toBe(true)
+  })
+})
+
 describe("AC-TX-B4 penanda kelengkapan (BR-TX-08)", () => {
   it("nama WP kosong → kurang menyebut nama WP; NPWP kosong → menyebut NPWP; lengkap → siap", () => {
     expect(deriveTaxIdentityCompleteness({ taxId: NPWP16 }).missing).toContain("nama wajib pajak")

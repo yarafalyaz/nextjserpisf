@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
+import { getHrScope } from "@/lib/auth/hr-scope";
 import { canViewSalaryAmounts } from "@/lib/auth/field-visibility";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
@@ -37,9 +38,29 @@ export const SALARY_ADJUSTMENT_REASON_LABELS: Record<string, string> = {
   lainnya: "Lainnya",
 };
 
+/**
+ * TEMUAN-1 PR #959: penyesuaian gaji hanya untuk scope HR `all`
+ * (preseden requirePayrollComponentAdmin di hrm.actions.ts) — permission
+ * edit/view_employees + view_salary_amounts saja tidak cukup; aktor
+ * department/self tidak boleh menyentuh nominal karyawan di luar cakupan.
+ */
+async function requireSalaryAdjustmentScopeAll(actor: {
+  id: unknown;
+  roles?: string[];
+}): Promise<void> {
+  const scope = await getHrScope({
+    id: String(actor.id),
+    roles: Array.isArray(actor.roles) ? [...actor.roles] : [],
+  });
+  if (scope.kind !== "all") {
+    throw new Error("Penyesuaian gaji hanya boleh dikelola oleh pengguna dengan cakupan semua karyawan");
+  }
+}
+
 export async function createSalaryAdjustment(formData: FormData) {
   try {
     const actor = await requirePermission("edit_employees");
+    await requireSalaryAdjustmentScopeAll(actor as { id: unknown; roles?: string[] });
     if (!(await canViewSalaryAmounts())) {
       throw new Error("Anda tidak memiliki izin melihat/mengubah nominal gaji");
     }
@@ -94,11 +115,13 @@ export async function createSalaryAdjustment(formData: FormData) {
       select: { status: true, previousBaseSalary: true, newBaseSalary: true },
     });
 
+    // TEMUAN-2 PR #959: deskripsi log TANPA nominal — log aktivitas tampil
+    // ke pemegang manage_settings tanpa view_salary_amounts.
     await logActivity(
       "create",
       "SalaryAdjustment",
       created.adjustment.id,
-      `Kenaikan gaji ${created.employeeName}: ${Number(created.adjustment.previousBaseSalary)} -> ${newBaseSalary} (${reason})`,
+      `Kenaikan gaji ${created.employeeName} (${reason})`,
     );
     revalidatePath("/master/karyawan");
     return {
@@ -117,9 +140,18 @@ export async function createSalaryAdjustment(formData: FormData) {
 
 export async function cancelSalaryAdjustment(id: number) {
   try {
-    await requirePermission("edit_employees");
+    const actor = await requirePermission("edit_employees");
+    await requireSalaryAdjustmentScopeAll(actor as { id: unknown; roles?: string[] });
     if (!(await canViewSalaryAmounts())) {
       throw new Error("Anda tidak memiliki izin melihat/mengubah nominal gaji");
+    }
+    // Resolusi baris dulu: scope diperiksa atas employeeId baris, bukan id mentah.
+    const row = await prisma.salaryAdjustment.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!row) {
+      return { success: false as const, error: "Penyesuaian gaji tidak ditemukan" };
     }
     const claim = await prisma.salaryAdjustment.updateMany({
       where: { id, status: "scheduled" },
@@ -140,7 +172,8 @@ export async function cancelSalaryAdjustment(id: number) {
 
 export async function getSalaryAdjustments(employeeId: number) {
   try {
-    await requirePermission("view_employees");
+    const actor = await requirePermission("view_employees");
+    await requireSalaryAdjustmentScopeAll(actor as { id: unknown; roles?: string[] });
     if (!(await canViewSalaryAmounts())) {
       throw new Error("Anda tidak memiliki izin melihat nominal gaji");
     }

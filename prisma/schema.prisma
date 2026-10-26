@@ -496,9 +496,31 @@ model CustomerCategory {
   updatedAt          DateTime   @updatedAt @map("updated_at")
   customers          Customer[]
   priceLists         CustomerPriceList[]
+  commissionRates    CustomerCommissionRate[]
+  commissionSnapshotInvoices SalesInvoice[] @relation("SalesInvoiceCommissionCategory")
 
   @@index([isActive, deletedAt], map: "idx_cust_cat_active_deleted")
   @@map("customer_categories")
+}
+
+/// F-2026-10-25-036-S (BR-KT36-01): histori tarif komisi per kategori pelanggan,
+/// bertanggal efektif. Masa semi-terbuka: effectiveFrom <= tanggal < effectiveTo;
+/// effectiveTo null = masa terbuka. Baris yang sudah menjadi sumber snapshot
+/// faktur (SalesInvoice.commissionRateId) dilarang edit/hapus (BR-KT36-08).
+model CustomerCommissionRate {
+  id                 Int              @id @default(autoincrement())
+  customerCategoryId Int              @map("customer_category_id")
+  commissionPercent  Decimal          @map("commission_percent") @db.Decimal(5, 2)
+  effectiveFrom      DateTime         @map("effective_from") @db.Date
+  effectiveTo        DateTime?        @map("effective_to") @db.Date
+  createdBy          Int?             @map("created_by")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  customerCategory   CustomerCategory @relation(fields: [customerCategoryId], references: [id])
+  snapshotInvoices   SalesInvoice[]   @relation("SalesInvoiceCommissionRate")
+
+  @@index([customerCategoryId, effectiveFrom], map: "idx_commission_rate_category_from")
+  @@map("customer_commission_rates")
 }
 
 model Vendor {
@@ -1634,6 +1656,12 @@ model SalesInvoice {
   projectId            Int?                  @map("project_id")
   // F-2026-10-21-016 tahap 1: snapshot penjual diwariskan SO/Quotation.
   salesEmployeeId      Int?                  @map("sales_employee_id")
+  // F-2026-10-25-036-S (BR-KT36-04): snapshot tarif komisi dibekukan pada
+  // transisi ke paid, hasil resolusi per tanggal faktur. Null = faktur lama
+  // tanpa snapshot (loader membaca 0 jujur, BR-KT36-13; tanpa backfill).
+  commissionRatePercent      Decimal?      @map("commission_rate_percent") @db.Decimal(5, 2)
+  commissionCustomerCategoryId Int?        @map("commission_customer_category_id")
+  commissionRateId           Int?          @map("commission_rate_id")
   // Nomor faktur pajak keluaran (e-Faktur/Coretax). Opsional: faktur pajak
   // terbit di luar Silengkap, jadi dokumen lama/tanpa PPN tetap valid kosong.
   taxInvoiceNumber     String?               @map("tax_invoice_number")
@@ -1662,6 +1690,8 @@ model SalesInvoice {
   quotation            Quotation?            @relation(fields: [quotationId], references: [id])
   salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id])
   salesEmployee        Employee?             @relation("SalesInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
+  commissionCustomerCategory CustomerCategory? @relation("SalesInvoiceCommissionCategory", fields: [commissionCustomerCategoryId], references: [id])
+  commissionRate       CustomerCommissionRate? @relation("SalesInvoiceCommissionRate", fields: [commissionRateId], references: [id])
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
