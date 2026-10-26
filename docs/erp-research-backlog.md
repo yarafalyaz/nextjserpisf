@@ -35748,3 +35748,159 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-092-S: antrean tahap proyek (ProjectStage) berjalan tanpa catatan progres baru mengendap (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_e14b9a8c. Basis `origin/main` `a1159f3be` (2026-10-27 06:25 WIB).
+
+**Verifikasi ID — tegas:** `F-2026-10-22-092-S` SUDAH TERPAKAI = corong prospek (lead pipeline funnel) dari histori status (`docs/erp-research-backlog.md:10033`, PR #558/#572/#577 MERGED). ID run ini `F-2026-10-27-092-S` tanggal beda (27 vs 22) — grep `F-2026-10-27-092` di backlog+board `origin/main` (`a1159f3be`) = 0/0 sebelum tulis; `gh pr list --search "F-2026-10-27-092"` = 0 hasil tanggal-27; branch `hermes/business-f092-*` = 0 sebelum branch ini. Bebas per tanggal+nomor. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+**PEMBETULAN PENOMORAN BARIS KARTU:** kartu menyebut `ProjectStage schema:5195` + `ProjectStageProgress :5216`; pada `origin/main a1159f3be` terverifikasi run ini: `model Project` :5088, `model ProjectStage` :5167, `model ProjectStageProgress` :5188. Isi model persis klaim kartu (status default `pending`, `startedAt`/`completedAt` nullable; progres `percentage` + `createdAt`). Spec memakai nomor baris terverifikasi run ini.
+
+**Bukan duplikat:**
+- Bukan F-2026-10-27-091-S (PR #1124 OPEN): objek `Task` proyek vs `dueDate` (tenggat kalender tugas). Spec ini objek `ProjectStage` status `in_progress` vs kesegaran catatan `ProjectStageProgress` (progres fisik tahap). Task tidak punya persen dan tidak tertaut tahap (091-S BR-PTQ-08); tahap punya persen fisik tersimpan — disjungsi objek + acuan waktu total.
+- Bukan earned value proyek (`src/lib/reports/project-earned-value.ts` + `-data.ts`, F-2026-10-21-031): EV = UANG — progres tertimbang × anggaran tahap (Σ bobot × persen / Σ bobot), CPI proyek, `spiTimeBasis`. Spec ini BUKAN uang: tidak menghitung EV/CPI/SPI/anggaran/biaya apa pun, hanya kesegaran catatan progres tahap `in_progress`. Loader EV existing sudah memilih progres terbaru per tahap (`project-earned-value-data.ts:61-63,76`) — spec ini mewarisi DEFINISI "progres terbaru" itu, tidak mendefinisikan ulang dan tidak memakai angka EV-nya.
+- Bukan L/R proyek (`src/lib/reports/project-pl.ts` + `-data.ts`): P/L = pendapatan/biaya proyek. Spec ini tanpa nominal sama sekali (persen tampil pun verbatim rekod, bukan nilai uang).
+- Bukan antrean lain keluarga 075-S..091-S: tidak ada antrean yang populasinya `ProjectStage in_progress` berdasar umur sejak progres terakhir — grep `project-stage-queue|ProjectStageQueue` di `src/` + backlog = 0 run ini.
+- Bukan halaman proyek existing (`src/app/(dashboard)/proyek/**`): halaman itu menampilkan tahap per proyek untuk dikelola; gapnya tidak ada permukaan lintas-proyek "tahap mana yang sudah berjalan lama tanpa catatan progres baru" (§2).
+
+### 1. Workflow specification
+
+Aktor: pemegang `view_projects` (pembaca antrean tahap 1 — persis gerbang halaman proyek existing), pengubah progres tahap (`edit_projects` lewat `updateProjectStageProgress` existing). Antrean tidak menambah aktor dan tidak memperluas siapa melihat apa (BR-PSQ-07).
+
+Alur existing (TERVERIFIKASI-KODE, §2): tahap lahir `pending` (bawaan skema / inisialisasi tahap proyek) → mulai dikerjakan lewat `updateProjectStageProgress` (`edit_projects`): status sah `pending`/`in_progress`/`completed`/`skipped`; pindah ke `in_progress` menstempel `startedAt` (bila belum ada) + membersihkan `completedAt` + menulis rekod `ProjectStageProgress` dalam SATU transaksi yang sama (persen dari pemanggil, bawaan 50 bila tidak diberi); `completed` memaksa persen 100 + stempel `completedAt`; tiap panggilan aksi yang sama menulis rekod progres baru. Sesudah itu, tahap yang terus `in_progress` hanya "bergerak" di data bila ada panggilan progres berikutnya — tidak ada kewajiban periodik, tidak ada pengingat, tidak ada permukaan yang menandai tahap berjalan yang catatan progresnya membeku.
+
+Gap: tahap fisik kendaraan bisa berjalan berhari-hari; bila tidak ada yang mencatat progres baru, tidak ada permukaan yang membedakan "tahap berjalan, progres dicatat rutin" dari "tahap berjalan, catatan progres membeku sejak mulai / sejak catatan terakhir". Tahap membeku = pekerjaan mungkin jalan tanpa tercatat, atau memang tersangkut tanpa ada yang tahu. Spec ini menambahkan **turunan baca**: populasi tahap `in_progress` persis + umur kesegaran sejak catatan progres terakhir (fallback `startedAt` tertanda bila nol rekod) + tingkat mengendap USULAN 7 hari kalender WIB + persen terakhir verbatim, dihitung server, tampil apa adanya.
+
+Dokumen masuk: rekod `ProjectStage` + `ProjectStageProgress` existing (+ nama/status proyek induk, nama pelanggan proyek sebagai fakta penunjuk baris). Dokumen keluar: tidak ada — mencatat progres/mengubah status tahap tetap lewat aksi tahap existing berpenjaga penuh di halaman proyek.
+
+Istilah tingkat (USULAN, final Q-PSQ-2): `BERJALAN` (umur kesegaran ≤ ambang), `MENGENDAP` (umur kesegaran > ambang USULAN 7 hari kalender WIB). Kode tingkat turunan server, BUKAN status tersimpan. Penanda sumber umur: `PROGRES_TERAKHIR` vs `MULAI_TANPA_PROGRES` (fallback). Kata judul usulan: `Tahap Proyek Berjalan Tanpa Progres Baru`.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main a1159f3be)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Skema tahap: `ProjectStage` `prisma/schema.prisma:5167-5186` — `projectId Int` wajib (relasi `Project` onDelete Cascade), `name`, `sortOrder Int @default(0)`, `status String @default("pending")` (String bebas — BUKAN enum Prisma), `startedAt DateTime?`, `completedAt DateTime?`, `notes?`, `createdAt`/`updatedAt`; relasi `progress ProjectStageProgress[]`, `budgetItems ProjectItem[]`; indeks `[projectId]`, `[status]`, `[createdAt]`. TIDAK ada `deletedAt` di tahap.
+- Skema progres: `ProjectStageProgress` `prisma/schema.prisma:5188-5201` — `projectStageId Int` wajib (relasi onDelete Cascade), `percentage Int @default(0)`, `notes?`, `createdBy Int?`, `createdAt DateTime @default(now())`; indeks `[projectStageId]`, `[createdBy]`, `[createdAt]`. Satu tahap = banyak rekod progres; rekod terbaru = kesegaran terakhir yang tercatat.
+- Proyek induk: `Project` `prisma/schema.prisma:5088` dst. — `status String @default("active")`, `name`, `customerId` wajib, `workOrderId?`, `startDate?`/`endDate?`, `contractAmount Decimal?` (snapshot kontrak F-2026-10-21-030 — spec ini TIDAK membacanya sebagai payload antrean, BR-PSQ-09), relasi `stages ProjectStage[]`.
+- Aksi tahap: `updateProjectStageProgress(projectId, stageId, status, notes?, percentage?)` `src/actions/project.actions.ts:250` — `requirePermission("edit_projects")` :258; validasi persen 0–100 bila diberi (:260-264); tahap wajib milik proyek itu (:271-273); `percentage === 100` dan bukan `skipped` memaksa target `completed` (:275-277); status sah PERSIS `["pending","in_progress","completed","skipped"]` (:279-281); penjaga tahap sebelumnya belum `completed`/`skipped` menolak mulai/selesai tahap berikut (:284-298); transisi: `in_progress` → stempel `startedAt` bila belum ada + `completedAt = null` + persen = diberi pemanggil ATAU bawaan **50** (:304-309); `completed` → stempel `startedAt` bila belum ada + `completedAt = now` + persen 100 (:310-315); `pending` → kedua stempel null + persen 0 (:316-319); `skipped` → `completedAt = now` + persen 100 (:320-322). **Satu transaksi** (:343-359): update tahap + `projectStageProgress.create` (persen terhitung + `createdBy`) + `syncProjectStatusTx` — jadi SETIAP panggilan aksi tahap menulis tepat satu rekod progres baru, termasuk panggilan mulai (persen bawaan 50). Konsekuensi jujur: "tahap berjalan tanpa satu pun rekod progres" hanya mungkin dari data warisan/lahir-di-luar-aksi (inisialisasi tahap tidak menulis progres — `doInitializeProjectStages` :183 hanya membuat baris tahap), bukan dari alur aksi normal; fallback BR-PSQ-03 tetap wajib untuk baris seperti itu.
+- Sinkron induk: `syncProjectStatusTx` (:402 dst.) menurunkan status proyek dari tahap (semua `completed`/`skipped` → proyek selesai; ada `in_progress`/sebagian selesai → `in_progress`; semua `pending` → `active`) — antrean TIDAK memanggil dan TIDAK meniru logika ini; status proyek induk dibaca apa adanya sebagai fakta pendamping (BR-PSQ-08).
+- Definisi progres terbaru existing (diwarisi, bukan didefinisikan ulang): loader earned value mengambil per tahap `progress` terurut `createdAt desc, id desc` ambil pertama → `latestProgressPercent = progress[0]?.percentage ?? null` (`project-earned-value-data.ts:61-63,76`). Builder EV memakai persen itu tertimbang anggaran (F-2026-10-21-031 BR-031-04/05) — wilayah uang yang TIDAK disentuh spec ini.
+- Izin katalog: `src/lib/auth/module-catalog.generated.ts:416-420` resource `projects` = `view_projects`/`create_projects`/`edit_projects`/`delete_projects`/`manage_projects`. Halaman proyek existing digerbang `view_projects` (`src/app/(dashboard)/proyek/page.tsx:26`, `proyek/[slug]/page.tsx:39`, aksi baca tahap `getProjectStageProgress` `project.actions.ts:538`).
+
+Belum ada / parsial (bukti grep run ini):
+- Builder/loader antrean tahap berjalan: grep `project-stage-queue|ProjectStageQueue|tanpa progres` di `src/` + backlog `origin/main` = 0. Umur kesegaran progres per tahap lintas proyek, tingkat mengendap tahap, rekap tahap membeku per proyek: ABSEN. Halaman proyek menampilkan tahap per proyek (manajemen), bukan antrean kesegaran lintas proyek.
+
+### 3. Status-transition matrix
+
+Status tahap TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Dari (status tersimpan) | Pemicu existing | Ke | Penjaga/permission | Efek ke antrean |
+|---|---|---|---|---|
+| (belum ada) | inisialisasi tahap proyek (`doInitializeProjectStages` :183) / buat proyek | `pending` (bawaan skema :5172) | jalur buat proyek existing | BELUM populasi — `pending` = belum mulai, KELUAR (BR-PSQ-01) |
+| `pending` | `updateProjectStageProgress` status `in_progress` | `in_progress` + stempel `startedAt` + rekod progres lahir (bawaan 50 bila persen tak diberi) | `edit_projects` (:258) + penjaga tahap sebelumnya (:284-298) | MASUK populasi; umur kesegaran mulai dari rekod progres lahir itu |
+| `in_progress` | `updateProjectStageProgress` status `in_progress` lagi / persen baru | tetap `in_progress` + rekod progres BARU | `edit_projects` | tetap populasi; umur kesegaran RESET dari rekod terbaru (BR-PSQ-02) |
+| `in_progress` | persen 100 / status `completed` | `completed` + `completedAt` + rekod 100 | `edit_projects` | KELUAR populasi render berikut |
+| `in_progress` | status `skipped` | `skipped` + `completedAt` + rekod 100 | `edit_projects` | KELUAR populasi render berikut |
+| `in_progress` | status `pending` (dibuka ulang ke belum-mulai) | `pending` + stempel dibersihkan + rekod 0 | `edit_projects` | KELUAR populasi (belum mulai lagi — bukan berjalan mengendap) |
+| `completed`/`skipped` | — | terminal untuk antrean | — | tidak pernah masuk / keluar populasi |
+| `in_progress` | — (waktu berjalan, tidak ada rekod progres baru) | tetap `in_progress` | — | **turunan: umur kesegaran bertambah; > ambang USULAN → tingkat `MENGENDAP`** — bukan status, tidak tertulis |
+| status liar di luar empat nilai sah | — (data warisan; validasi aksi menolak nilai liar saat TULIS :279, tetapi kolom String bebas) | tetap tersimpan apa adanya | — | BUKAN populasi (populasi persis `in_progress`); antrean tidak menebak padanannya (BR-PSQ-01) |
+
+Tidak ada transisi otomatis, pengingat, atau penutupan tahap oleh waktu di kode existing — matriks tidak mengarangnya. Catatan persen bawaan 50 saat mulai (baris 3): persen pertama tahap yang baru mulai bisa 50 BUKAN karena pekerjaan terukur 50%, melainkan bawaan aksi (:309) — antrean menampilkan persen terakhir verbatim (BR-PSQ-05) dan TIDAK menafsirkannya; penafsiran persen fisik = wilayah earned value existing.
+
+### 4. Role/permission matrix (katalog nyata :416-420)
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Catatan |
+|---|---|---|
+| Lihat antrean turunan tahap 1 (USULAN gerbang) | `view_projects` (:416) — persis gerbang halaman proyek existing `proyek/page.tsx:26` | tanpa key baru tahap 1 (Q-PSQ-5) |
+| Lihat detail proyek/tahap existing | `view_projects` via `getProjectStageProgress` `project.actions.ts:538` | permukaan induk tetap |
+| Catat progres / ubah status tahap (existing, BUKAN dari antrean) | `edit_projects` (:418) via `updateProjectStageProgress:258` | satu-satunya jalan keluar baris antrean: catat progres baru di halaman proyek |
+| Buat/hapus proyek, kelola (existing) | `create_projects`/`delete_projects`/`manage_projects` (:417,419,420) | tidak disentuh antrean |
+| Transisi apa pun DARI antrean turunan | — | TIDAK tahap 1 (BR-PSQ-06) |
+
+Scope baca tahap 1 = `view_projects` PERSIS (permintaan kartu): loader fail-closed sebelum query; loader TIDAK menyaring per proyek/pelanggan/penanggung tahap 1 — mewarisi batas baca halaman proyek existing apa adanya dan menyatakannya jujur (BR-PSQ-07). Tidak ada data gaji/pribadi di payload; nama pelanggan proyek tampil hanya sebagai penunjuk baris yang sudah terlihat pemegang `view_projects` di halaman proyek existing.
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PSQ-01 | Populasi PERSIS = `ProjectStage.status === "in_progress"` (satu nilai, dari kosakata sah :279). `pending` KELUAR — belum mulai bukan "berjalan mengendap"; memasukkan `pending` menuduh tahap yang memang belum dijadwalkan mulai. `completed`/`skipped` KELUAR (terminal). Status liar di luar empat nilai sah BUKAN populasi dan tidak ditebak — validasi tulis existing menolaknya (:279-281), kolom String bebas berarti data warisan mungkin menyimpannya; antrean tidak mengarang ember untuknya tahap 1 (dicatat EC-PSQ-6). | TERVERIFIKASI-KODE (skema :5172; aksi :279) + USULAN (cakupan) |
+| BR-PSQ-02 | Acuan kesegaran = rekod progres TERAKHIR per tahap: `max(ProjectStageProgress.createdAt)`, seri timestamp sama dipecah `id` terbesar (persis urutan loader EV existing `createdAt desc, id desc`, `project-earned-value-data.ts:61-63`). BUKAN `ProjectStage.updatedAt` (bergerak oleh edit notes/status apa pun walau tanpa progres), BUKAN `startedAt` bila rekod ada (mulai ≠ progres terakhir). Umur kesegaran dihitung ulang tiap render; waktu berjalan tidak menulis apa pun. | TERVERIFIKASI-KODE (definisi progres terbaru existing) + USULAN (pemakaian kesegaran) |
+| BR-PSQ-03 | Fallback nol-rekod: tahap `in_progress` TANPA satu pun `ProjectStageProgress` (mungkin dari inisialisasi/warisan — aksi normal selalu menulis rekod, §2) → acuan umur = `startedAt` tahap, sumber umur tertanda `MULAI_TANPA_PROGRES` (vs `PROGRES_TERAKHIR` bila rekod ada). `startedAt` null juga (inkonsistensi data: `in_progress` tanpa stempel mulai — aksi existing selalu menstempel :305) → umur = null tertanda `TANPA_ACUAN`, TIDAK dihitung 0 hari, TIDAK dikeluarkan diam-diam; baris tetap tampil tertanda. Dilarang mengarang rekod progres pertama. | USULAN di atas TERVERIFIKASI-KODE (stempel :304-309; inisialisasi tanpa progres :183) |
+| BR-PSQ-04 | Tingkat turunan: `BERJALAN` = umur kesegaran ≤ ambang; `MENGENDAP` = umur kesegaran > ambang. Ambang USULAN **7 hari kalender WIB** tanpa rekod progres baru — SENGAJA dibedakan dari ambang 3 hari keluarga antrean dokumen (penawaran/dokumen menunggu keputusan manusia bisa dikejar harian; tahap fisik kendaraan dikerjakan berhari-hari dan progres dicatat per capaian, jadi 3 hari menuduh tahap normal yang memang multi-hari). Angka ini USULAN sampai Lead memutus (Q-PSQ-1); satu konstanta server bernama bila dibangun. Perbandingan HARI KALENDER WIB (pola keluarga antrean: hari acuan vs hari WIB hari ini), bukan jam mentah — rekod progres kemarin sore WIB belum mengendap besok paginya hanya karena lewat 24 jam. Umur null (`TANPA_ACUAN`) tidak masuk tingkat mana pun — tampil di kelompok tertanda tersendiri, tidak dihitung mengendap. | USULAN (ambang + kata; Q-PSQ-1/2) di atas pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-PSQ-05 | Persen tampil = `percentage` rekod progres terakhir VERBATIM server (definisi terbaru BR-PSQ-02). DILARANG rata-rata antar-rekod, interpolasi antar-tanggal, proyeksi laju, atau persen turunan status. DILARANG menafsirkan persen bawaan-50 rekod mulai (:309) sebagai capaian terukur — tampil apa adanya; yang menilai capaian fisik = manusia/EV existing. Nol rekod → persen = null tertanda (BUKAN 0 — 0 adalah persen rekod nyata yang sah dari transisi `pending` :319). | TERVERIFIKASI-KODE (kolom :5191; bawaan :309) + USULAN (larangan turunan) |
+| BR-PSQ-06 | Baca-saja tahap 1: antrean tidak memanggil `updateProjectStageProgress` atau aksi tulis apa pun, tidak menulis status/stempel/rekod progres. Nol tombol Catat Progres/Selesaikan/Lewati dari antrean; jalan aksi satu-satunya = halaman proyek existing berpenjaga `edit_projects` sesudah membuka proyek tertaut. | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-PSQ-07 | Scope baca = `view_projects` PERSIS, loader fail-closed sebelum query (permintaan kartu). Tanpa key baru tahap 1. Loader tidak menyaring per proyek/pelanggan tahap 1 — batas itu dinyatakan di notice permukaan, bukan disembunyikan dan bukan scope baru karangan. | TERVERIFIKASI-KODE (katalog :416; gerbang existing) + USULAN (pewarisan dinyatakan) |
+| BR-PSQ-08 | Proyek induk dibaca apa adanya: nama proyek + status proyek tersimpan tampil sebagai fakta pendamping verbatim. Status proyek TIDAK menyaring tahap keluar populasi tahap 1 — tahap `in_progress` pada proyek berstatus `completed` (atau status induk lain yang tak sejalan) adalah INKONSISTENSI nyata (sinkron existing `syncProjectStatusTx` seharusnya tidak menyisakannya lewat jalur aksi normal) dan WAJIB tampil tertanda `TAHAP_BERJALAN_DI_PROYEK_SELESAI` (kata final Q-PSQ-2), BUKAN disembunyikan, BUKAN diperbaiki antrean. Antrean tidak menjalankan ulang sinkron status. | USULAN di atas TERVERIFIKASI-KODE (sinkron :402 dst.; status induk skema Project :5088 dst.) |
+| BR-PSQ-09 | Nol uang tahap 1: payload tanpa anggaran tahap, nilai kontrak proyek (`contractAmount`), biaya aktual, EV/CPI/SPI, atau angka uang apa pun. Persen di payload adalah persen FISIK rekod terakhir (BR-PSQ-05), bukan persen tertimbang/uang. Menghitung ulang EV di antrean = duplikasi definisi F-2026-10-21-031 terlarang; mengaitkan keterlambatan tahap ke denda/nilai = BUTUH-VONIS Accountant bersyarat (Q-PSQ-6), tidak diminta tahap 1. Pemakaian material tahap tetap hanya lewat `MaterialIssue` existing — antrean tidak membaca/menampilkan angka material karangan. | TERVERIFIKASI-KODE (wilayah EV/project-pl existing) + USULAN (scope) |
+| BR-PSQ-10 | Urutan tampil: `MENGENDAP` dulu (umur kesegaran terbesar dulu), lalu `BERJALAN` (umur terbesar dulu), kelompok `TANPA_ACUAN` terakhir tertanda; seri dalam kelompok sama → nama proyek naik, `sortOrder` tahap naik, lalu id tahap naik. Kepala antrean memuat rekap hitungan TAHAP per tingkat + per proyek (Σ baris populasi penuh, bukan halaman tampil) — hitungan tahap, bukan persen proyek (jangan pinjam bahasa progres tertimbang EV). Batas ambil eksplisit dinyatakan loader (fisik Backend, pola keluarga 200) + penanda `terpotong` bila populasi melebihi batas. | USULAN |
+| BR-PSQ-11 | Anti-N+1: progres terakhir per tahap + nama/status proyek induk dimuat massal (satu query tahap populasi + agregat/ambil-pertama progres per kelompok tahap + relasi proyek atas set id tampil; pola loader EV `project-earned-value-data.ts` include progres terurut) — bukan query per baris. Rekap dihitung dari populasi penuh server. | USULAN pola TERVERIFIKASI-KODE (loader EV existing) |
+| BR-PSQ-12 | Catatan progres (`notes` rekod terakhir) TIDAK masuk payload daftar tahap 1 — notes adalah teks bebas petugas yang bisa memuat apa pun; antrean menampilkan fakta terstruktur saja (tahap, proyek, persen, umur, sumber umur, tingkat, penanda induk). Membuka catatan = halaman proyek existing berizin sama. | USULAN (scope minimal) |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
+|---|---|---|---|
+| Proyek sebagai dimensi + status berjalan | Proyek di Perusahaan: No. Kontrak, Nama Manajer, Tgl mulai/selesai, % Penyelesaian, Pelanggan (https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/menambahkan-data-departemen-dan-proyek/) | Data Proyek: Project Manager, Order/Delivery date, Status (Not Started/In Progress/Finished/Pending), Estimasi Biaya, % Selesai sebagai catatan laporan (https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye + https://help.zahironline.com/portal/id/kb/articles/cara-membuat-data-proyek-zahir-online-v2) | Ada — `Project` + `ProjectStage` berurutan + persen fisik per tahap dari rekod progres bertimestamp (TERVERIFIKASI-KODE §2), lebih granular dari kedua benchmark (per tahap, bukan hanya % header proyek) |
+| Fase/tahap proyek beranggaran | Tidak ditemukan eksplisit di halaman Accurate yang diakses run ini — tidak diklaim | Ada — "Menggunakan Fase" + Multi Fase Proyek: anggaran biaya/pendapatan per fase (URL memasukkan-data-proye di atas + https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang) | Ada — RAB per tahap (`ProjectItem` tertaut tahap, F-2026-10-21-030) + earned value (F-031) — wilayah existing, TIDAK diduplikasi spec ini |
+| Antrean tahap BERJALAN tanpa catatan progres baru (umur kesegaran + tingkat mengendap lintas proyek) | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim ada | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); tahap tampil per proyek tanpa umur kesegaran lintas proyek |
+
+Jujur: kedua benchmark membuktikan proyek/fase + % penyelesaian adalah fitur standar (ISF sudah setara dan lebih granular di level tahap); antrean kesegaran catatan progres tidak ditemukan di keduanya — nilai spec ini operasional internal bengkel/proyek ISF (tahap tersangkut terlihat sebelum membusuk berminggu-minggu), bukan mengejar fitur vendor. Tidak ada ambang/label yang disalin dari vendor (ambang = Q-PSQ-1 Lead). Halaman Accurate progress produksi manufaktur (bobot 30/60/10 SPK) adalah domain perintah kerja produksi, BUKAN tahap proyek — tidak dipakai sebagai benchmark spec ini.
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-PSQ-B1: Populasi PERSIS `status === "in_progress"` (BR-PSQ-01); `pending`/`completed`/`skipped`/status liar bocor → MERAH. Tingkat/umur/persen/sumber-umur dihitung server; konsumen menghitung ulang → MERAH.
+- AC-PSQ-B2: Acuan kesegaran = rekod progres terakhir (`createdAt desc, id desc` pertama, BR-PSQ-02): tahap dengan rekod lama + rekod baru terhitung dari rekod BARU. Memakai `updatedAt` tahap (edit notes mengnolkan umur tanpa rekod baru) → MERAH. Memakai `startedAt` padahal rekod ada → MERAH.
+- AC-PSQ-B3: Nol rekod: umur dari `startedAt` + sumber `MULAI_TANPA_PROGRES` + persen null (BR-PSQ-03/05); persen tampil 0 karangan → MERAH. `startedAt` null juga: umur null + `TANPA_ACUAN`, baris tetap tampil, tidak dihitung mengendap (null diperlakukan epoch/0 → MERAH).
+- AC-PSQ-B4: Tingkat persis BR-PSQ-04: umur tepat ambang (batas final Q-PSQ-1; fixture diuji pada angka putusan) = `BERJALAN`; ambang+1 hari kalender WIB = `MENGENDAP`; perbandingan jam mentah sampai progres kemarin-sore terbaca mengendap → MERAH. Persen payload byte-sama `percentage` rekod terakhir (rata-rata/interpolasi antar-rekod → MERAH, BR-PSQ-05).
+- AC-PSQ-B5: Loader fail-closed `view_projects` sebelum query (tanpa izin loader terpanggil → MERAH); baca-saja terbukti (builder/loader memanggil `updateProjectStageProgress`/menulis status/rekod → MERAH); payload tanpa nominal/anggaran/EV/CPI/SPI/catatan-notes (bocor satu pun → MERAH, BR-PSQ-09/12); tahap+progres+proyek massal anti-N+1 (query per baris → MERAH); tahap `in_progress` di proyek `completed` tampil tertanda, tidak disaring (hilang → MERAH, BR-PSQ-08).
+
+Frontend (konsumen):
+- AC-PSQ-F1: Tingkat/umur/persen/sumber-umur/penanda tampil verbatim payload server; UI tidak menghitung umur/tingkat/urutan/rekap sendiri (hitung ulang UI → MERAH). Sebelum commit: grep e2e selector proyek/tahap terdampak, sinkronkan commit yang sama.
+- AC-PSQ-F2: TIDAK ada tombol Catat Progres/Selesaikan/Lewati/Ubah Status dari antrean tahap 1 (kontrol tulis di antrean → MERAH, BR-PSQ-06); tautan baris hanya ke halaman proyek existing berpenjaga.
+- AC-PSQ-F3: Baris tertanda (`MULAI_TANPA_PROGRES`, `TANPA_ACUAN`, `TAHAP_BERJALAN_DI_PROYEK_SELESAI`, `terpotong`) tampil dengan tandanya, bukan disembunyikan/digabung ke `MENGENDAP`; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-PSQ-1: Tahap baru mulai pagi ini lewat aksi (rekod lahir persen bawaan 50): umur kesegaran 0 hari, `BERJALAN`, persen tampil 50 verbatim — antrean tidak menafsirkan 50 itu capaian terukur (BR-PSQ-05); bukan baris mengendap walau pekerjaannya belum tentu setengah jalan.
+- EC-PSQ-2: Tahap `in_progress` 10 hari, rekod progres terakhir 1 hari lalu (petugas rajin mencatat, pekerjaan memang panjang): umur kesegaran 1 hari = `BERJALAN` — yang diukur kesegaran CATATAN, bukan lama tahap berjalan; umur sejak `startedAt` tidak ditampilkan sebagai tuduhan tahap 1 (dua umur membingungkan; kolom sejak-mulai = Q-PSQ-4 bila Lead menghendaki).
+- EC-PSQ-3: Progres dicatat dari permukaan lain saat antrean terbuka: render berikut umur reset dari rekod baru; antrean tidak mengunci baris dan tidak menyimpan keadaan tingkat.
+- EC-PSQ-4: Tahap diselesaikan/dilewati/dikembalikan ke `pending` dari halaman proyek: keluar populasi render berikut (matriks §3); rekod progres penutupnya (100/0) tidak membuat baris "baru selesai mengendap" — antrean tidak merekonstruksi histori.
+- EC-PSQ-5: Proyek induk dihapus (Cascade menghapus tahap+progres existing): baris hilang karena dokumen induk hilang, bukan karena antrean menyaring; proyek induk berstatus apa pun selain itu tidak menghapus baris (BR-PSQ-08).
+- EC-PSQ-6: Status tahap liar (di luar empat nilai sah, data warisan): bukan populasi, tidak tampil tahap 1 — dicatat sebagai batas jujur BR-PSQ-01; mengarang ember liar = spec hardening tulis terpisah bila Lead menghendaki (pola catatan 091-S untuk Task), bukan dikerjakan di sini.
+- EC-PSQ-7: Dua rekod progres timestamp `createdAt` sama persis (impor/migrasi): rekod acuan = `id` terbesar (seri EV existing, BR-PSQ-02), deterministik, tidak bergantung urutan query.
+- EC-PSQ-8: Tahap mengendap lalu dicatat progres kecil (mis. 50 → 55): keluar `MENGENDAP` render berikut berdasar rekod baru — tingkat tidak lengket dan tidak ada "pernah mengendap" tersimpan; riwayat tingkat bukan kewajiban tahap 1.
+
+### 8. Backlog implementasi (turunan F-2026-10-27-092-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-092-S | Spec kontrak ini (dokumen) | Business | — |
+| 092-B | Builder murni (populasi `in_progress` persis/umur kesegaran WIB/sumber-umur/tingkat/urutan/rekap) + loader `view_projects` fail-closed anti-N+1 (progres terakhir massal pola loader EV) + tes AC-PSQ-B1..B5 | Backend | Putusan Lead Q-PSQ-1/2/3/5 |
+| 092-F | Permukaan turunan verbatim payload + AC-PSQ-F1..F3; grep e2e proyek dulu | Frontend | 092-B merged |
+| 092-Q | Falsifikasi AC-PSQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 092-B/092-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 9. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-PSQ-1 | Ambang `MENGENDAP`: berapa hari kalender WIB tanpa rekod progres baru? | Lead | USULAN **7 hari** — dibedakan sadar dari ambang 3 hari antrean dokumen (tahap fisik multi-hari; progres dicatat per capaian, bukan harian wajib); satu konstanta server bernama, tanpa konfigurasi bebas tahap 1; angka USULAN sampai diputus |
+| Q-PSQ-2 | Kata final: kode/label tingkat (`BERJALAN`/`MENGENDAP`), penanda `MULAI_TANPA_PROGRES`/`TANPA_ACUAN`/`TAHAP_BERJALAN_DI_PROYEK_SELESAI`, judul `Tahap Proyek Berjalan Tanpa Progres Baru`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim |
+| Q-PSQ-3 | Penempatan: permukaan lintas-proyek baru di area proyek vs seksi di halaman proyek existing? Kepala rekap per proyek cukup, atau rekap per pelanggan proyek juga? | Lead | USULAN: permukaan turunan di area proyek existing (objeknya lintas proyek, halaman proyek existing per-proyek tidak menampungnya); rekap per tingkat + per proyek tahap 1 |
+| Q-PSQ-4 | Kolom umur sejak tahap mulai (`startedAt`) tampil terpisah dari umur kesegaran? | Lead | USULAN: TIDAK tahap 1 (EC-PSQ-2 — dua umur membingungkan; kesegaran catatan adalah sinyal spec ini) |
+| Q-PSQ-5 | Baca tahap 1 tetap `view_projects` persis tanpa key baru (BR-PSQ-07)? | Lead | USULAN: ya — antrean adalah read-model turunan di permukaan berizin sama |
+| Q-PSQ-6 | Keterlambatan tahap dikaitkan nilai kontrak/denda/biaya? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-PSQ-09); vonis WAJIB hanya bila Lead membuka kaitan uang — tahap baca-saja tanpa nominal tidak butuh vonis |
+
+### Yang TIDAK diusulkan run ini
+- Menghitung EV/CPI/SPI, persen tertimbang, atau persen agregat proyek di antrean (BR-PSQ-09) — wilayah earned value F-2026-10-21-031 existing; rata-rata persen antar-rekod/tahap juga terlarang (BR-PSQ-05).
+- Tombol Catat Progres/Selesaikan/Lewati dari antrean, selesai massal, auto-tutup tahap membeku (BR-PSQ-06).
+- Kolom/status baru di `ProjectStage`/`ProjectStageProgress` (penanda terakhir-dicatat tersimpan, enum status, kewajiban progres periodik) — antrean adalah lapisan baca turunan; kewajiban mencatat periodik = perubahan perilaku kerja, keputusan Lead terpisah.
+- Pengingat WA/email ke penanggung tahap, eskalasi manajer proyek, SLA per tahap/proyek — kanal & keadaan baru di luar tahap baca-saja.
+- Menampilkan catatan `notes` progres, kontak pelanggan, atau angka material/biaya tahap di daftar (BR-PSQ-09/12) — pemakaian material sah tetap hanya `MaterialIssue` existing lewat halaman proyek.
+- Mengganti halaman proyek/tahap existing — antrean adalah permukaan turunan tambahan, bukan pengganti manajemen tahap per proyek.
+
+F-2026-10-27-092-S — Antrean tahap proyek berjalan tanpa catatan progres baru. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PSQ-1/2/3/5, lalu fisik Backend (092-B), konsumen Frontend (092-F), falsifikasi QA (092-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/scope-baca), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila kaitan nilai/denda dibuka (Q-PSQ-6, BR-PSQ-09).
