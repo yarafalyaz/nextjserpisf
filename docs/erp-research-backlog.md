@@ -34032,3 +34032,153 @@ F-2026-10-26-061-S — Antrean penerimaan barang draft mengendap. Status: SPEC S
 Urutan: (i) PR putusan ini + PR spec #1030/#1033/#1037 ter-merge -> (ii) Backend fisik 070-B/071-B/072-B (builder murni + loader fail-closed anti-N+1 + tes AC-*-B1..B5, kontrak payload dibekukan di PR Backend) -> (iii) Frontend 070-F/071-F/072-F sesudah PR Backend masing-masing merged (bukan edit paralel) -> (iv) QA falsifikasi AC-*-B/F atas head persis. Kartu turunan dibuat Lead sesudah merge spec terkait; ID F-* turunan dipesan saat kartu dibuat, jangan karang sekarang. Bot Business tidak merge; merge spec + putusan = Lead.
 
 F-2026-10-26-070-S / F-2026-10-26-071-S / F-2026-10-26-072-S — Status sesudah putusan: Q-PDQ-1/2/4, Q-MRQ-1/2/4, Q-VPQ-1/2 TERPUTUS Lead 2026-10-26 19:10 WIB (kartu t_db814113, PR putusan menyertai). Pemilik berikutnya: Backend (fisik 070-B/071-B/072-B sesudah spec merged), Frontend (konsumen), QA (falsifikasi). Accountant: tidak diminta tahap baca-saja; wajib hanya bila Q-PDQ-3/5, Q-MRQ-3, atau Q-VPQ-3 kelak dibuka.
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-075-S: antrean perintah kerja (WorkOrder) draft mengendap belum dimulai (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_8fe6fc8a. ID F-2026-10-26-075-S diverifikasi bebas run ini 2026-10-26 20:41 WIB: grep `F-2026-10-26-075` di backlog + board `origin/main` (`6a53a57a`) = 0; judul PR terbuka (43 PR) = 0; branch remote `*075*`/`*work-order-draft*` = 0. Seri berjalan: backlog main maks F-2026-10-26-072-S; branch terbuka 073-S (change order, PR #1042) dan 074-S (perintah produksi, PR #1044) — objek beda semua. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras domain (wajib dibaca implementor): WorkOrder `draft` BELUM dimulai. `startWorkOrder` (src/actions/manufacturing.actions.ts:1516) hanya menerima `draft`/`pending` dan mensyaratkan item + inspeksi masuk kendaraan (`assertWorkOrderVehicleIntakeRecorded`); penyelesaian `completeWorkOrder` (:1610) mensyaratkan MaterialIssue `completed` tertaut — draft karena itu belum mengeluarkan material apa pun lewat jalur penyelesaian, belum berjalan, belum ada biaya aktual pekerjaan. Antrean ini baca-saja: tidak memulai, tidak mengubah, tidak menghapus, tidak menyelesaikan, tidak menutup/membatalkan perintah kerja. `WorkOrderItem.cost` (prisma/schema.prisma model WorkOrderItem, Decimal default 0) adalah angka baris rencana/estimasi saat WO dibuat — tampil, bila diputus Lead, HANYA berlabel estimasi baris draft (BR-WDQ-04); biaya aktual (MaterialIssue/ProductionCost/Timesheet) pada draft belum tentu ada dan DILARANG ditampilkan/dijanjikan sebagai biaya aktual antrean (estimasi ≠ aktual; draft bisa saja tertaut MI draft dari `createMaterialIssueFromWorkOrder` manufacturing.actions.ts:1847 — MI draft belum mengeluarkan stok dan bukan aktual). Ambang hari tingkat mengendap = putusan Lead (Q-WDQ-1); aksi tulis-dari-antrean dibuka atau tidak = Lead DAN, khusus jalur yang menggerakkan stok/jurnal/biaya pekerjaan, vonis Accountant wajib sebelumnya (Q-WDQ-3).
+
+Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): `WorkOrder.status` String `@default("draft")` (prisma/schema.prisma:3168 model WorkOrder; kolom status), `documentNo` unik WAJIB, `customerId` WAJIB, `customerVehicleId`/`quotationId`/`projectId`/`bomRevisionId` nullable, `date` WAJIB, `startDate`/`endDate` nullable, `notes` Text nullable, jejak closed/reopen nullable (F-2026-10-21-009-V), `createdBy` nullable, `createdAt`/`updatedAt`; indeks status/customerId/createdBy/createdAt ada. TANPA kolom `deletedAt` (hapus = hard delete, `deleteWorkOrder` manufacturing.actions.ts:2070 hanya `draft`/`pending`, izin `delete_work_orders`). `createWorkOrder` (src/actions/inventory.actions.ts:1236, izin `create_work_orders`) lahir `status: "draft"` (:1265) + baris `WorkOrderItem` (status baris bawaan `pending`). `updateWorkOrder` (inventory.actions.ts:1376, `edit_work_orders`) hanya `draft`/`pending` dengan cek ulang status dalam transaksi. `startWorkOrder` (manufacturing.actions.ts:1516, `edit_work_orders`): klaim atomik `draft`/`pending` → `in_progress`, syarat item tidak kosong + inspeksi kendaraan. `completeWorkOrder` (:1610, `complete_work_orders`): hanya `in_progress`/`pending`, syarat item + MaterialIssue `completed` + gerbang QC. `closeWorkOrder`/`reopenWorkOrder` (:2495/:2559, `complete_work_orders`): completed→closed→completed, BUKAN jalur draft. `cancelWorkOrder` (:2606, `complete_work_orders`): hanya dari `in_progress` — draft TIDAK bisa dibatalkan lewat jalur ini (keluar dari draft hanya mulai/ubah/hapus existing). Status sah WorkOrder di kode: `draft`, `pending` (warisan — penjaga start/update/delete/complete menyebutnya; create existing lahir `draft`), `in_progress`, `completed`, `closed`, `cancelled`.
+
+Bukan duplikasi: bukan papan antrean bengkel existing (`src/lib/reports/work-order-queue.ts` + `work-order-queue-data.ts` + kartu `Antrian Bengkel` di halaman `produksi/perintah-kerja`, F-2026-10-20-28(a)) — populasi papan itu CAMPUR `draft`/`pending`/`in_progress` (`ACTIVE_WORK_ORDER_STATUSES`), umur dari `startDate ?? date` (bukan `createdAt`), urut tenggat `endDate`, bendera terlambat dari `endDate`, plus tombol WA pelanggan; spec ini populasi `draft` PERSIS saja, umur dokumen sejak `createdAt`, tingkat mengendap terhadap ambang hari, TANPA bendera terlambat jadwal dan TANPA kontak pelanggan — draft belum dimulai, belum ada tenggat pekerjaan yang dilanggar. Bukan daftar perintah kerja existing (page.tsx findMany semua status urut createdAt desc + chip Semua/draft/in_progress/completed + cari documentNo/nama pelanggan — draft tenggelam di antara berjalan/selesai, tanpa umur draft/tingkat/rekap khusus draft). Bukan F-2026-10-26-074-S ProductionOrder draft (objek manufaktur beda, izin `*_production_orders` beda; FK `workOrderId` di ProductionOrder hanya konteks). Bukan F-2026-10-26-073-S change order mengendap (dokumen perubahan atas WO berjalan; populasi spec ini WO-nya sendiri yang belum dimulai). Bukan laporan beban WO / progres WO / kebutuhan material existing (`work-order-load*`, `work-order-progress*`, `work-order-material-needs*` — populasi berjalan/perencanaan material, bukan antrean draft belum mulai).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: Perintah Kerja mencatat perintah produksi dari Rencana Produksi/Formula/Produk, mengatur kuantitas, bahan baku, biaya produksi, tahapan; sesudah simpan diproses ke Pengambilan Bahan Baku, Pencatatan Biaya Produksi, Penyelesaian Barang Jadi; ada Monitor Perintah Kerja + Histori Perintah Kerja — https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/ dan https://help.accurate.id/product/perintah-kerja/ (BENCHMARK: perintah kerja + monitor ada; konsep antrean WO draft mengendap bertingkat umur sejak dibuat TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: Transaksi Produksi mencatat raw materials, production costs, finish goods — https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-produksi-zahir-online-v2 (BENCHMARK: produksi + biaya produksi ada; antrean draft perintah kerja bertingkat umur TIDAK ditetapkan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 6a53a57a)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `WorkOrder` (prisma/schema.prisma:3168) — slug unik nullable, documentNo unik, customerId WAJIB, customerVehicleId/quotationId/projectId/bomRevisionId nullable, date WAJIB, startDate/endDate nullable, status String default `"draft"`, notes Text nullable, closedAt/closedBy/closedReason + reopenedAt/reopenedBy/reopenReason nullable, createdBy nullable, createdAt/updatedAt; relasi items/costs/timesheets/materialRequests/changeOrders/productionOrders. `WorkOrderItem` (:3226) baris qty Decimal(15,2) + cost Decimal(15,2) default 0 + status String default `"pending"`. TANPA kolom deletedAt — tidak ada soft-delete di model ini.
+- Lifecycle: create lahir draft + baris item (inventory.actions.ts:1236/:1265); update hanya draft/pending berkunci status (inventory.actions.ts:1376); start klaim atomik draft/pending→in_progress + syarat item + inspeksi kendaraan (manufacturing.actions.ts:1516); complete hanya in_progress/pending + syarat MI completed + QC (:1610); delete hard hanya draft/pending (:2070); close/reopen hanya completed/closed (:2495/:2559); cancel hanya in_progress (:2606).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:263-267): `view_work_orders`, `create_work_orders`, `edit_work_orders`, `delete_work_orders`, `complete_work_orders` — start/update memakai `edit_work_orders`; complete/close/reopen/cancel memakai `complete_work_orders`; TIDAK ada key `start_work_orders`/`approve_work_orders` terpisah. Halaman daftar menegakkan `view_work_orders` (page.tsx).
+- Papan existing menyentuh draft: `work-order-queue.ts` (builder murni, populasi draft/pending/in_progress, umur `startDate ?? date`, urut endDate, `isOverdue` dari endDate) + loader `work-order-queue-data.ts` (satu query massal anti-N+1) + kartu di daftar perintah kerja — konteks yang membuat antrean draft khusus ini bukan pengganti papan aktif bengkel.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean WorkOrder `draft` PERSIS mengendap bertingkat umur sejak `createdAt` — grep `WorkOrderDraftQueue`/`work-order-draft-queue` di src = 0; keluarga `*-draft-queue` existing hanya quotation/sales-order/sales-invoice. Risiko bengkel: perintah kerja dibuat dari penawaran/proyek, tidak pernah dimulai — kendaraan menunggu tanpa pekerjaan berjalan, rencana teknisi/bahan menggantung, draft tenggelam di daftar campur urut terbaru dan di papan aktif campur status; pembaca bisa mengira draft "sudah masuk antrean kerja berjalan" padahal belum dimulai dan belum ada material keluar.
+
+### 1. Workflow specification
+
+Aktor: Pembuat perintah pemegang `create_work_orders`/`edit_work_orders` (sumber baris draft), Pelaksana bengkel pemegang `edit_work_orders` (pemilik start/update existing; pembaca kerja antrean), Pembaca perintah kerja pemegang `view_work_orders` (pembaca antrean), Sistem (builder turunan baca-saja). Pelanggan BUKAN aktor antrean ini dan data kontak pelanggan TIDAK masuk payload antrean (beda sadar dari papan antrean bengkel existing yang memang menampilkan tombol WA — antrean draft ini antrean dokumen belum mulai, bukan antrean komunikasi pelanggan; perluasan kontak = Q-WDQ-6). Pengguna tanpa `view_work_orders` bukan aktor sama sekali (termasuk rekap).
+Dokumen masuk: baris WorkOrder `status = "draft"` persis (id, slug, documentNo, customerId+nama pelanggan, customerVehicleId+label kendaraan bila ada, quotationId/projectId bila tertaut, date, startDate/endDate bila terisi, jumlah baris item, createdBy+nama bila terpetakan, createdAt). Field existing semua; tanpa field masuk baru. TIDAK ada saringan deletedAt (model tidak punya — jangan karang).
+Dokumen keluar: baris antrean turunan per perintah (§3) + rekap hitungan perintah per tingkat/pelanggan. BUKAN pelaksanaan pekerjaan: tidak ada perintah dimulai, material keluar, biaya aktual tercatat, atau status perintah berubah karena antrean.
+
+Alur:
+1. Perintah lahir `draft` lewat createWorkOrder existing (baris item rencana; boleh tertaut penawaran/proyek/kendaraan).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft persis dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks pelanggan/kendaraan/tautan, penanda `tanggalRencanaLampau` (fakta endDate lampau bila terisi — bukan keterlambatan pekerjaan, BR-WDQ-06), rekap.
+3. Pelaksana membuka detail perintah existing dan memulai/mengubah/menghapus lewat jalur existing. Antrean tidak menyediakan tombol Mulai/Ubah/Hapus/Selesaikan tahap 1 (Q-WDQ-3).
+4. Sesudah status bukan draft: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-WDQ-2 Lead bersama ambang hari):
+- Judul kolom: `No. Dokumen`, `Pelanggan`, `Kendaraan`, `Rencana Selesai`, `Menunggu` (umur), `Dibuat Oleh`.
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Dimulai".
+- Notice usulan: "Daftar ini hanya perintah kerja yang masih draft dan belum dimulai. Perintah draft belum mengeluarkan material dan belum berjalan; mulai, ubah, atau hapus lewat detail perintah kerja."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean draft + tingkat/umur | `view_work_orders` (katalog:263) | halaman daftar existing requirePermission | TIDAK ada key baru tahap 1; loader menegakkan izin sebelum query (BR-WDQ-05) |
+| Buat perintah (sumber baris draft) | `create_work_orders` (katalog:264) | createWorkOrder; lahir draft + baris item | tidak berubah |
+| Mulai draft → in_progress | `edit_work_orders` (katalog:265) | startWorkOrder klaim atomik draft/pending + item + inspeksi kendaraan | TIDAK berubah; antrean hanya mengantar ke detail |
+| Ubah / hapus draft | `edit_work_orders` / `delete_work_orders` (katalog:265/266) | update/delete hanya draft/pending; hapus = hard delete | tidak berubah; bukan dari antrean tahap 1 |
+| Selesaikan / tutup / buka kembali / batalkan | `complete_work_orders` (katalog:267) | completeWorkOrder (MI completed + QC) / close / reopen / cancel (hanya in_progress) | di luar populasi (bukan draft); tidak berubah |
+
+Tidak ada permission key baru diusulkan tahap 1. Tidak ada key `start_work_orders`/`approve_work_orders` di katalog existing — jangan karang key baru di spec/loader (BR-WDQ-05).
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah spec ini: `draft` → (mulai existing) → `in_progress` → (selesaikan existing) → `completed` → (tutup existing) → `closed` → (buka kembali) → `completed`; `in_progress` → (batalkan existing) → `cancelled`; draft/pending hanya bisa diubah/dihapus (hapus permanen). Tidak ada jalur batal dari draft dan tidak ada jalur material/biaya dari draft selain rangkaian existing sesudah mulai.
+
+Populasi antrean: WorkOrder `status = "draft"` persis. Status `pending` warisan TIDAK dimasukkan diam-diam (EC-WDQ-2; perluasan = Q-WDQ-5). Per baris:
+- `umurDraftHari` = hari kalender WIB dari `createdAt` (masa depan = 0 tertanda). Acuan BUKAN `date`/`startDate`/`endDate` (tanggal dokumen/rencana bisa kosong/masa depan/diubah; umur antrean = umur dokumen sejak dibuat, BR-WDQ-06 — beda sadar dari papan antrean bengkel existing yang memakai `startDate ?? date` untuk WO aktif berjalan).
+- `tanggalRencanaLampau` = endDate terisi DAN hari WIB hari ini > endDate (fakta tanggal rencana selesai; startDate tidak dipakai penanda tahap 1).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft | di luar antrean | bukan populasi (termasuk pending/in_progress/completed/closed/cancelled) |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-WDQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | perintah belum dimulai melewati kesabaran operasional yang diputus Lead; mulai atau hapus lewat detail |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-WDQ-5) |
+
+`tanggalRencanaLampau` adalah penanda pendamping, BUKAN tingkat tersendiri tahap 1 dan BUKAN keterlambatan pekerjaan (BR-WDQ-06): draft belum dimulai, tidak ada pelaksanaan yang terlambat dinilai dari tanggal rencana; keterlambatan WO berjalan dinilai di papan antrean bengkel existing dari endDate untuk status aktif. Tidak ada tingkat kesiapan mulai: menilai draft "siap dimulai" dari item/inspeksi kendaraan/stok di antrean berarti membaca keadaan operasional berjalan — di luar tahap 1 (penilaian milik pelaksana di detail; syarat start dinilai jalur start existing saat waktunya). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada mulai otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-WDQ-01 | Populasi = WorkOrder `status="draft"` persis. pending/in_progress/completed/closed/cancelled tidak disamakan diam-diam dan tidak masuk, termasuk rekap. Model tidak punya deletedAt — saringan soft-delete DILARANG dikarang; baris terhapus hard memang sudah tidak ada. | TERVERIFIKASI-KODE (status default + ketiadaan deletedAt schema) + USULAN batas |
+| BR-WDQ-02 | Draft belum dimulai: nol pekerjaan berjalan dan nol biaya aktual pekerjaan yang boleh diklaim dari antrean. MaterialIssue draft yang mungkin tertaut (createMaterialIssueFromWorkOrder) belum mengeluarkan stok; penyelesaian WO mustahil dari draft (complete mensyaratkan MI completed + status in_progress/pending). Antrean DILARANG menampilkan total biaya aktual, HPP pekerjaan, atau konsumsi material untuk baris draft. | TERVERIFIKASI-KODE (start :1516 + complete :1610 + MI draft bukan completed) |
+| BR-WDQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: mulai (`edit_work_orders`, klaim atomik + syarat item/inspeksi), ubah (`edit_work_orders`, hanya draft/pending berkunci), hapus (`delete_work_orders`, hanya draft/pending, hard delete). TIDAK ada jalur batal dari draft. Antrean tidak menambah jalan pintas mulai/ubah/hapus dari daftar tahap 1 (Q-WDQ-3). | TERVERIFIKASI-KODE + USULAN batas |
+| BR-WDQ-04 | `WorkOrderItem.cost` × qty adalah angka baris rencana saat WO dibuat (estimasi draft), BUKAN biaya aktual: tahap 1 antrean TIDAK menampilkan Σ nominal apa pun (beda sadar dari antrean bervolume nilai keluarga lain); menampilkan estimasi berlabel pun butuh putusan Q-WDQ-4 Lead. Biaya aktual hanya dari MaterialIssue completed/ProductionCost/Timesheet pada WO berjalan — di luar antrean draft dan DILARANG dipinjam ke baris draft (estimasi ≠ aktual). | USULAN kejujuran nominal di atas TERVERIFIKASI-KODE field |
+| BR-WDQ-05 | Loader menegakkan `view_work_orders` sebelum query; anti-N+1 (nama pelanggan/label kendaraan/pembuat massal — query per baris → cacat). TIDAK ada key start/approve terpisah dikarang (katalog hanya view/create/edit/delete/complete :263-267). Data kontak pelanggan (telepon) TIDAK masuk payload antrean tahap 1 (BR-WDQ-07). | TERVERIFIKASI-KODE (katalog + aksi) + USULAN |
+| BR-WDQ-06 | endDate lampau pada draft TIDAK dibaca sebagai keterlambatan pekerjaan: dokumen belum dimulai, tidak ada pelaksanaan berjalan yang melanggar tenggat; keterlambatan dinilai papan antrean bengkel existing untuk WO aktif. Penanda tampil sebagai fakta tanggal rencana (kata Q-WDQ-2). Umur antrean selalu dari `createdAt`, bukan date/startDate/endDate. | USULAN kejujuran label |
+| BR-WDQ-07 | Pelanggan tampil nama apa adanya; kendaraan tampil label plat/model bila tertaut, null tampil `—` (WO tanpa kendaraan sah existing). Telepon pelanggan TIDAK tampil dan tidak masuk payload tahap 1 — antrean ini antrean dokumen internal, bukan permukaan hubungi pelanggan (papan antrean bengkel existing tetap pemilik tombol WA untuk WO aktif). Antrean dilarang menilai status penawaran/proyek induk atau menjanjikan perintah siap mulai dari keadaan induknya. | USULAN di atas TERVERIFIKASI-KODE FK nullable |
+| BR-WDQ-08 | Builder antrean murni baca-saja turunan: tidak memanggil start/update/delete/complete/close/reopen/cancel/createMaterialIssueFromWorkOrder/hook stok-biaya, tidak menulis status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-WDQ-09 | createdBy null (legacy) tampil `—`; pelanggan/kendaraan yang dirujuk sudah berubah nama tampil nama berjalan apa adanya dari relasi (bukan snapshot nama — model tidak menyimpan snapshot nama pelanggan); quotationId/projectId null tampil tanpa tautan `—`, bukan tuduhan sumber hilang (WO mandiri sah existing). | USULAN di atas TERVERIFIKASI-KODE field nullable |
+| BR-WDQ-10 | Ambang hari `mengendap`, kata label final, dan aksi-dari-antrean adalah kebijakan perilaku inti pekerjaan bengkel: BUTUH-VONIS Lead (Q-WDQ-1/2/4/5/6) dan, khusus Q-WDQ-3, vonis Accountant WAJIB sebelum dibuka karena mulai/selesai menggerakkan pengeluaran material, stok, dan biaya pekerjaan. Tahap baca-saja apa adanya tidak mengubah stok/biaya sehingga Accountant tidak diminta untuk tahap ini. | BUTUH-VONIS Lead (+ Accountant bersyarat) |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Perintah kerja dari rencana/formula/produk + tahapan | Ada: Perintah Kerja + tahapan proses + Monitor Perintah Kerja (URL §kepala) | Ada: Transaksi Produksi raw material/cost/finish goods (URL §kepala) | Ada: WorkOrder draft→in_progress→completed→closed, item rencana, MI, QC, serah terima | Tidak diubah; antrean berhenti di detail existing |
+| Perintah draft dibedakan dari berjalan | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: draft tanpa mulai; start hanya draft/pending bersyarat; complete syarat MI completed | Populasi draft persis + label belum dimulai |
+| Daftar perintah kerja semua status | Ada daftar/Monitor Perintah Kerja (URL §kepala) | Ada daftar produksi (URL §kepala) | Ada: semua status urut terbaru, chip status, cari saja; papan aktif campur status | Antrean khusus draft berumur tertua-dulu |
+| Antrean draft perintah kerja bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0; papan antrean bengkel = populasi aktif campur, umur startDate??date, bendera endDate — bukan antrean draft) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-WDQ-B1: Populasi tepat `status="draft"` persis: pending/in_progress/completed/closed/cancelled/status lain tidak tampil dan tidak terhitung rekap (cabut saring status → MERAH). Tanpa saringan deletedAt karangan (model tidak punya — tanam saringan kolom tak ada → MERAH skema/tes).
+- AC-WDQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-WDQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-WDQ-4); selama Q-WDQ-1 belum diputus `mengendap` tidak terbit (tanam angka liar → MERAH). Umur dari date/startDate/endDate → MERAH (BR-WDQ-06).
+- AC-WDQ-B3: Penanda tanggal rencana: endDate lampau → tertanda fakta; hari sama/kosong → tidak lampau; penanda tidak mengubah tingkat dan tidak berlabel terlambat pekerjaan (jadikan tingkat/label terlambat → MERAH, BR-WDQ-06).
+- AC-WDQ-B4: Loader fail-closed `view_work_orders` sebelum query, anti-N+1 (pelanggan/kendaraan tertaut/pembuat massal); tanpa izin loader tidak dipanggil; rekap = baris yang sama persis (rekap beda → MERAH). Telepon pelanggan TIDAK masuk payload (bocor kontak → MERAH, BR-WDQ-05/07).
+- AC-WDQ-B5: Baca-saja terbukti: builder/loader tidak memanggil start/update/delete/complete/close/reopen/cancel/createMaterialIssueFromWorkOrder/hook stok-biaya/tulis status (panggil diam-diam → MERAH, BR-WDQ-02/08); Σ nominal biaya (estimasi maupun aktual) TIDAK masuk payload antrean tahap 1 (bocor Σ cost baris sebagai aktual/estimasi tanpa putusan Q-WDQ-4 → MERAH, BR-WDQ-04).
+
+Frontend (konsumen):
+- AC-WDQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/rekap sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-WDQ-F2: Draft selalu berlabel belum dimulai; tidak berlabel terlambat pekerjaan/sedang berjalan/sudah keluar material/biaya aktual (label terlaksana di draft → MERAH); pelanggan/kendaraan verbatim, null `—`.
+- AC-WDQ-F3: Tautan baris hanya ke detail perintah kerja existing; tidak ada tombol Mulai/Ubah/Hapus/Selesaikan/Tutup/Batalkan di antrean tahap 1 (aksi dari daftar tanpa putusan Q-WDQ-3 → MERAH); tanpa `view_work_orders` halaman menolak.
+
+Edge cases:
+- EC-WDQ-1: Draft yang penawaran/proyek induknya sudah selesai/ditutup sesudah perintah lahir tetap populasi apa adanya; antrean tidak menilai mulai-nya akan diterima/ditolak rangkaian existing (penilaian saat aksi di detail, BR-WDQ-07).
+- EC-WDQ-2: Baris berstatus `pending` warisan (bukan status lahir create existing) TIDAK masuk populasi tahap 1 dan tidak terhitung rekap; perluasan populasi = Q-WDQ-5, bukan saringan longgar senyap.
+- EC-WDQ-3: Draft tanpa item (boleh lahir; start existing menolaknya) tetap populasi apa adanya; antrean tidak menandai "siap/tidak siap mulai" (penilaian syarat start milik jalur start di detail).
+- EC-WDQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-WDQ-5: Perintah dimulai/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-WDQ-6: Draft dengan MaterialIssue draft tertaut tetap populasi apa adanya berlabel belum dimulai; MI draft tidak dibaca sebagai material sudah keluar atau biaya aktual (BR-WDQ-02).
+- EC-WDQ-7: endDate jauh lampau pada draft lama tertanda fakta tanggal rencana saja; antrean tidak menghitung keterlambatan/denda pekerjaan (wilayah papan antrean bengkel existing untuk WO aktif).
+- EC-WDQ-8: Dua draft untuk pelanggan/kendaraan sama tampil dua baris apa adanya; tidak digabung/didedup dan tidak dijumlahkan sebagai beban bengkel berjalan.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-075-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-075-S | Spec kontrak ini (dokumen) | Business | — |
+| 075-B | Builder murni tingkat/umur draft perintah kerja + loader `view_work_orders` fail-closed anti-N+1 + tes AC-WDQ-B1..B5 | Backend | Putusan Lead Q-WDQ-1/2 |
+| 075-F | Permukaan antrean (daftar perintah kerja existing atau halaman antrean pola keluarga antrean) verbatim payload + AC-WDQ-F1..F3 | Frontend | 075-B merged |
+| 075-Q | Falsifikasi AC-WDQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 075-B/075-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-WDQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (selaras preseden keluarga antrean draft 070-S/071-S/072-S yang diputus Lead 2026-10-26 19:10 WIB; perintah belum dimulai cepat basi terhadap jadwal bengkel/kendaraan menunggu) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-WDQ-2 | Kata label/notice/penanda tanggal rencana final §1? | Lead | Kata usulan apa adanya; satu konstanta label server; kata "Terlambat" DILARANG untuk penanda rencana draft (BR-WDQ-06) |
+| Q-WDQ-3 | Mulai langsung dari antrean dibuka? | Lead + Accountant (WAJIB vonis — stok + biaya pekerjaan lewat rangkaian mulai/MI/selesai) | TIDAK tahap 1 (BR-WDQ-03): mulai menilai item/inspeksi kendaraan dari keadaan saat itu dan harus terasa di detail; jalan pintas = keputusan terpisah bervonis |
+| Q-WDQ-4 | Σ estimasi baris draft (`WorkOrderItem.cost` × qty) tampil berlabel estimasi? | Lead | TIDAK tahap 1 (BR-WDQ-04): angka rencana baris mudah dibaca sebagai biaya pekerjaan; bila kelak dibuka wajib frasa label "estimasi baris draft" di setiap Σ dan tetap dilarang berdampingan dengan kata aktual |
+| Q-WDQ-5 | Populasi diperluas ke status `pending` warisan? Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt (bukan startDate??date papan existing) disahkan? Penempatan: kartu di daftar perintah kerja existing (di samping papan Antrian Bengkel) atau permukaan terpisah? | Lead | TIDAK perluas pending tahap 1 (bukan status lahir existing; EC-WDQ-2); ya `mengendap` dulu (bila aktif), lalu umur tertua; seri `documentNo` asc; createdAt — date/startDate/endDate hanya penanda fakta (BR-WDQ-06); penempatan kartu di halaman daftar existing mengikuti pola papan existing, tanpa mengubah populasi/umur papan Antrian Bengkel |
+| Q-WDQ-6 | Kontak pelanggan (telepon/tombol WA seperti papan Antrian Bengkel) masuk antrean draft? | Lead | TIDAK tahap 1 (BR-WDQ-07): draft belum dimulai adalah masalah internal bengkel; menghubungi pelanggan soal pekerjaan yang belum dimulai bukan janji yang boleh dibuat antrean — papan aktif existing tetap permukaan hubungi pelanggan |
+
+### Yang TIDAK diusulkan run ini
+- Memulai/mengubah/menghapus/menyelesaikan massal atau otomatis dari draft basi (BR-WDQ-03) — syarat item/inspeksi/QC/MI tidak boleh dilewati daftar.
+- Menampilkan biaya aktual/HPP/konsumsi material draft, atau Σ estimasi baris tanpa putusan (BR-WDQ-02/04) — draft belum dimulai; estimasi ≠ aktual.
+- Meminjam papan Antrian Bengkel atau laporan beban/progres/kebutuhan-material existing sebagai antrean ini — populasi, acuan umur, dan makna beda tegas (papan = WO aktif berjalan + terlambat endDate + WA; spec ini = draft persis belum mulai + umur dokumen).
+- Simulasi kesiapan mulai (item/inspeksi/stok) untuk draft di antrean — kesiapan dinilai jalur start existing saat aksi; simulasi menjanjikan hasil yang bisa berubah.
+- Menghapus draft basi otomatis berbasis umur — hapus perintah (hard delete) = keputusan manusia lewat jalur existing.
+- Pengingat WA/email ke pelaksana/pelanggan dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja (kontak pelanggan juga tertutup Q-WDQ-6 tahap 1).
+- Status/field perintah baru (termasuk soft-delete WorkOrder), perubahan lifecycle draft→in_progress→completed→closed/cancelled, atau key izin start/approve baru.
+
+F-2026-10-26-075-S — Antrean perintah kerja (WorkOrder) draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WDQ-1/2 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-WDQ-3 dibuka), lalu fisik Backend (075-B), konsumen Frontend (075-F), falsifikasi QA (075-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
