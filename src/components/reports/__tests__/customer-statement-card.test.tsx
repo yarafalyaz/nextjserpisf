@@ -116,12 +116,58 @@ describe("CustomerStatementCard F-2026-10-21-032", () => {
     const { container, root } = renderCard(<CustomerStatementCard statement={statement} />)
     const rows = [...container.querySelectorAll("tbody tr")].map((r) => r.textContent ?? "")
     const retRow = rows.find((r) => r.includes("RET-021"))
-    // Sel Jenis (kolom ke-3) persis label kind — bukan substring deskripsi builder.
+    // Sel Jenis (kolom ke-4, sesudah kolom Jatuh Tempo) persis label kind — bukan substring deskripsi builder.
     const retRowEl = [...container.querySelectorAll("tbody tr")].find((r) => (r.textContent ?? "").includes("RET-021"))
-    expect(retRowEl?.children[2]?.textContent).toBe("Retur penjualan")
+    expect(retRowEl?.children[3]?.textContent).toBe("Retur penjualan")
     expect(retRow).toContain("Retur penjualan RET-021 atas faktur INV-002")
     expect(retRow).toContain("100.000")
     expect(retRow).toContain("730.000")
+    unmountCard(root)
+  })
+
+  it("F-2026-10-25-025-S: kolom Jatuh Tempo verbatim builder + penanda Lewat Jatuh Tempo hanya baris isOverdue (UI nol hitung umur)", () => {
+    // Fixture dibentuk lewat builder Backend: INV-002 due 20 Feb belum lunas
+    // per akhir periode 28 Feb (overdue), INV-003 due 20 Mar belum jatuh
+    // tempo, baris non-faktur dueDate null -> \"—\" tanpa penanda.
+    const datedInvoices: CustomerStatementInvoiceInput[] = [
+      { id: 2, documentNo: "INV-002", date: D("2026-02-05"), grandTotal: 500_000, dueDate: D("2026-02-20") },
+      { id: 3, documentNo: "INV-003", date: D("2026-02-20"), grandTotal: 250_000, dueDate: D("2026-03-20") },
+    ]
+    const datedPayments: CustomerStatementPaymentInput[] = [
+      { id: 12, documentNo: "PAY-012", salesInvoiceId: 2, salesInvoiceDocumentNo: "INV-002", paymentDate: D("2026-02-10"), amount: 200_000, withholdingAmount: 0, paymentMethod: "transfer" },
+    ]
+    const statement = buildCustomerStatement({
+      customerId: 7,
+      periodStart: D("2026-02-01"),
+      periodEnd: D("2026-02-28"),
+      invoices: datedInvoices,
+      payments: datedPayments,
+    })
+    expect(statement.entries.find((e) => e.documentNo === "INV-002")?.isOverdue).toBe(true)
+    expect(statement.entries.find((e) => e.documentNo === "INV-003")?.isOverdue).toBe(false)
+
+    const { container, root } = renderCard(<CustomerStatementCard statement={statement} />)
+    const header = [...container.querySelectorAll("thead th")].map((th) => th.textContent ?? "")
+    expect(header).toEqual([
+      "Tanggal",
+      "Dokumen",
+      "Jatuh Tempo",
+      "Jenis",
+      "Keterangan",
+      "Debit",
+      "Kredit",
+      "Saldo",
+    ])
+    const rowOf = (no: string) =>
+      [...container.querySelectorAll("tbody tr")].find((r) => (r.textContent ?? "").includes(no))
+    const overdueRow = rowOf("INV-002")
+    expect(overdueRow?.children[2]?.textContent).toContain("20")
+    expect(overdueRow?.textContent).toContain("Lewat Jatuh Tempo")
+    const notDueRow = rowOf("INV-003")
+    expect(notDueRow?.textContent).not.toContain("Lewat Jatuh Tempo")
+    const payRow = rowOf("PAY-012")
+    expect(payRow?.children[2]?.textContent).toBe("—")
+    expect(payRow?.textContent).not.toContain("Lewat Jatuh Tempo")
     unmountCard(root)
   })
 

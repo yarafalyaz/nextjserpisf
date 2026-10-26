@@ -1,4 +1,8 @@
 import type { CustomerStatement, CustomerStatementEntryKind } from "@/lib/reports/customer-statement"
+import {
+  CUSTOMER_STATEMENT_DUE_COLUMN,
+  CUSTOMER_STATEMENT_OVERDUE_LABEL,
+} from "@/lib/reports/customer-statement"
 import { formatAccounting, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -51,6 +55,7 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
         <DetailTableHead>
           <DetailTableTh>Tanggal</DetailTableTh>
           <DetailTableTh>Dokumen</DetailTableTh>
+          <DetailTableTh>{CUSTOMER_STATEMENT_DUE_COLUMN}</DetailTableTh>
           <DetailTableTh>Jenis</DetailTableTh>
           <DetailTableTh>Keterangan</DetailTableTh>
           <DetailTableTh align="right">Debit</DetailTableTh>
@@ -60,6 +65,7 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
         <DetailTableBody>
           <DetailTableRow className="font-semibold">
             <DetailTableTd>Saldo awal</DetailTableTd>
+            <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>Saldo awal</DetailTableTd>
@@ -72,9 +78,11 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
             <DetailTableRow key={`${entry.date.toISOString()}-${entry.documentNo}-${entry.kind}-${index}`}>
               <DetailTableTd>{formatDate(entry.date, { format: "short" })}</DetailTableTd>
               <DetailTableTd className="font-mono text-xs">{entry.documentNo}</DetailTableTd>
+              <DetailTableTd className="text-xs">{entry.dueDate ? formatDate(entry.dueDate, { format: "short" }) : "—"}</DetailTableTd>
               <DetailTableTd className="text-xs">{ENTRY_KIND_LABEL[entry.kind]}</DetailTableTd>
               <DetailTableTd className="text-xs">
                 {entry.description}
+                {entry.isOverdue ? <span className="ml-2 inline-flex items-center rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">{CUSTOMER_STATEMENT_OVERDUE_LABEL}</span> : null}
                 {entry.referenceDocumentNo && !entry.description.includes(entry.referenceDocumentNo) ? <span className="text-muted-foreground"> · Faktur {entry.referenceDocumentNo}</span> : null}
               </DetailTableTd>
               <DetailTableTd align="right">{formatAccounting(entry.debit)}</DetailTableTd>
@@ -85,6 +93,7 @@ export function CustomerStatementCard({ statement }: Readonly<{ statement: Custo
 
           <DetailTableRow className="border-t-2 border-default font-bold">
             <DetailTableTd>Saldo akhir</DetailTableTd>
+            <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>–</DetailTableTd>
             <DetailTableTd>Saldo akhir · Total debit {totalDebitText} · Total kredit {totalCreditText}</DetailTableTd>
