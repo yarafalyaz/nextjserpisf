@@ -35748,3 +35748,96 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-086-S: antrean evaluasi masa percobaan menunggu keputusan & titik evaluasi lewat jatuh tempo (turunan baca-saja di atas ProbationReview existing)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_6346a97c. ID F-2026-10-27-086-S diverifikasi bebas run ini 2026-10-27 05:52 WIB basis `origin/main` 585f988359: grep `F-2026-10-27-086` di backlog+board origin/main = 0; backlog main maks 082-S (merged #1100); PR terbuka membawa 083-S (#1112), 084-S (#1113), vonis 083-V (#1111) + 085-V (#1114) — seri -S nomor 086 bebas (086-V milik Accountant = seri vonis beda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS. Uang: spec TIDAK memutus angka statutori/jurnal apa pun; nol nominal gaji/kompensasi (BR-PROB-11 spec induk F-2026-10-24-099-S dirujuk utuh).
+
+Benchmark resmi (akses 2026-10-27):
+- Accurate — help resmi (help.accurate.id) tidak memuat antrean evaluasi masa percobaan sebagai fitur bernama pada akses ini; yang ditemukan hanya artikel edukasi masa probation (https://accurate.id/lifestyle/masa-probation/ — masa percobaan maks 3 bulan PKWTT, penilaian oleh atasan) = BENCHMARK konteks saja, BUKAN bukti fitur antrean. Tidak diklaim Accurate punya antrean setara.
+- Zahir — Zahir HR (https://zahir.co.id/hr/ + fitur Absensi/Cuti/Payroll/PPh21/BPJS/Database Karyawan/ESS) tidak memuat antrean evaluasi probation bernama pada akses ini; artikel Performance Management System Zahir (https://zahiraccounting.com/id/zahir-expert/performance-management-system-adalah-cara-tingkatkan-kinerja-karyawan/) bersifat umum (penetapan tujuan→pengukuran→evaluasi→penghargaan), bukan antrean titik evaluasi percobaan. TIDAK terverifikasi = dinyatakan jujur, tidak diklaim Zahir punya fitur setara.
+
+### 0. Inventarisasi TERVERIFIKASI-KODE (2026-10-27, basis origin/main 585f988359)
+
+Sudah ada:
+- Model `ProbationReview` (`prisma/schema.prisma:3564-3592`): `employeeId`, `milestone` string, `dueDate` DateTime wajib (:3569), `reviewerEmployeeId` (:3570), skor 3 sumbu string nullable (:3571-3573), `recommendation` nullable, `status` string default `draft` (:3576), `finalDecision/decidedBy/decidedAt` nullable (:3577-3579), `createdAt/updatedAt`. TIDAK ADA kolom `submittedAt` — waktu submit fisik tidak tersimpan sebagai kolom (jejak hanya ActivityLog aksi `submitProbationReview`, probation.actions.ts:251).
+- Kosakata tertutup builder murni `src/lib/reports/probation.ts`: `PROBATION_REVIEW_STATUSES = draft|submitted|decided`; `probationMilestoneSlots(joinDate, probationEndDate)` (:184-205): titik 30/60/90 kalender WIB dari joinDate yang <= probationEndDate, final = 90 atau `final` di probationEndDate bila durasi <90 hari, `isFinal` hanya titik final; `evaluateSubmitProbationReview` (:291-310): submit hanya dalam jendela [dueDate, dueDate+7 hari] WIB; skor kategori tertutup tanpa angka gabungan.
+- Status turunan karyawan `deriveProbationStatus` (probation.ts:231-239) + label (:241-249): `awaiting_decision` bila review final submitted, `overdue_undecided` bila lewat probationEndDate tanpa keputusan — status per KARYAWAN, bukan antrean per BARIS review; tidak ada umur menunggu, tidak ada urutan kerja, tidak ada ember titik formatif.
+- Aksi server `src/actions/probation.actions.ts`: `saveProbationReviewDraft` (:159, lahir/ubah draft), `submitProbationReview` (:207, klaim atomik draft→submitted :246-251), `decideProbation` (:265, `approve_contracts` + scope `all` saja + SoD reviewer≠pemutus :275-291, wajib review final `submitted`/`decided` :283, flip decided + tutup/perpanjang probationEndDate satu transaksi :302-308). Kepala berkas (:10-16) membekukan matriks: lihat `view_employees`+HrScope; submit = `edit_employees` DAN tercatat sebagai reviewerEmployeeId; putus = `approve_contracts` scope all.
+- Loader lintas karyawan existing: `getProbationOverview()` (probation.actions.ts, ekspor bacaan): `requirePermission("view_employees")` + `getHrScope` + `hrEmployeeScopeWhere` fail-closed, karyawan `deletedAt null + probationEndDate not null`, payload per karyawan: derivedStatus/label + milestones[] (milestone/dueDate/isFinal/reviewStatus/filled). Konsumen tunggal halaman detail karyawan (`src/app/(dashboard)/master/karyawan/[slug]/page.tsx:161,196,422`) — overview dipakai untuk panel SATU karyawan terpilih, BUKAN permukaan antrean lintas karyawan; tanpa umur menunggu keputusan, tanpa saring submitted, tanpa urutan prioritas kerja.
+- Katalog izin nyata (`src/lib/auth/module-catalog.generated.ts`): `view_employees` (:96), `edit_employees` (:98), `approve_contracts` (:308). Scope HR fail-closed `src/lib/auth/hr-scope.ts:27-57` (self/department/all; sesi rusak → self employeeId -1).
+
+Belum ada / parsial (bukti grep run ini):
+- Antrean kerja evaluasi percobaan: ABSEN. Tidak ada builder/loader antrean ProbationReview di `src/lib/reports/` (daftar berkas reports terverifikasi: probation.ts builder penjaga saja, tanpa berkas `probation-*-queue`); tidak ada permukaan daftar "evaluasi menunggu keputusan" lintas karyawan — `getProbationOverview` hanya dikonsumsi panel detail per karyawan.
+- Umur menunggu keputusan sejak submit: TIDAK BISA diturunkan dari kolom tersimpan — `submittedAt` tidak ada di model; satu-satunya jejak = ActivityLog submit (bukan sumber umur antrean yang sah tanpa keputusan fisik Backend, lihat Q-PBQ-4). Umur sejak `dueDate`/`createdAt` tersedia sebagai fakta kolom.
+- Spec tetangga yang TIDAK diduplikasi: 081-S (merged #1098) secara eksplisit merekomendasikan ProbationReview `submitted` TIDAK ikut antrean HR tertunda (Q-HPC-1, antrean itu kind cuti/lembur/pinjaman/keputusan-kontrak) — spec ini adalah antrean penilai/pemutus terpisah, bukan perluasan 081-S dan bukan antrean HR kedua untuk populasi yang sama. Induk lifecycle = F-2026-10-24-099-S (merged): spec ini hanya lapisan baca di atas rekodnya, tanpa mengubah transisi/penjaga induk.
+
+### 1. Kontrak populasi & label (dibekukan spec ini)
+
+Label operasional permukaan: USULAN kata persis — judul antrean "Evaluasi Percobaan Menunggu Keputusan"; notice: "Daftar ini baca-saja: keputusan akhir tetap lewat aksi putus masa percobaan existing oleh pemegang persetujuan kontrak. Lewat tanggal akhir percobaan bukan berarti lulus otomatis." Kata final = Q-PBQ-2 Lead.
+
+Populasi USULAN (turunan baca-saja, tanpa kolom/status baru), DUA LAPIS TEGAS tidak dicampur:
+- LAPIS A — Menunggu keputusan final: ProbationReview titik FINAL (milestone `90`/`final` per `probationMilestoneSlots`, isFinal) berstatus PERSIS `submitted`, karyawan masih dalam percobaan berjalan (`probationEndDate` tidak null, belum decided). Inilah populasi yang menunggu `decideProbation`. Review formatif submitted BUKAN lapis A (tidak bisa diputus final — decideProbation menolak non-final, probation.actions.ts:283).
+- LAPIS B — Titik evaluasi lewat jatuh tempo belum dikirim: titik milestone (formatif 30/60 maupun final) yang `dueDate` sudah lewat hari acuan WIB dan review-nya belum ada ATAU masih `draft`. Lapis ini pendamping kejujuran proses (penilai belum mengirim), BUKAN populasi menunggu pemutus; jendela submit existing menutup di dueDate+7 (probation.ts:310) sehingga baris lapis B lewat >7 hari tertanda apa adanya "di luar jendela kirim existing" — antrean TIDAK membuka jalur kirim baru dan TIDAK memperpanjang jendela.
+- KELUAR dari kedua lapis: review `decided`; karyawan sudah tidak dalam percobaan (decided passed/failed menutup probationEndDate, extended membuka masa baru dengan titik baru); review formatif `submitted` (sudah terkirim, bukan menunggu keputusan final); karyawan berhenti/terhapus-lunak (keluar lewat penjaga scope/overview existing — dibaca apa adanya, EC-PBQ-3).
+- Status liar di luar kosakata `draft|submitted|decided`: tetap tampil satu baris di lapis sesuai status mentahnya TIDAK dipetakan paksa; tertanda "Status tidak dikenal" (pola keluarga antrean 032-S) — Q-PBQ-5.
+
+### 2. Umur & urutan (dua acuan, tidak dicampur)
+
+- Umur menunggu keputusan (lapis A): sejak `dueDate` titik final (TERVERIFIKASI-KODE kolom wajib :3569) berlabel persis "sejak jatuh tempo evaluasi final". DILARANG memakai `updatedAt` (berubah oleh edit draft apa pun) dan DILARANG mengarang umur sejak submit — `submittedAt` tidak ada (§0); umur sejak submit hanya boleh tampil bila Backend memutus sumber fisik sah di Q-PBQ-4, selain itu tidak ditampilkan.
+- Keterlambatan titik (lapis B): hari kalender WIB sejak `dueDate` titik itu, berlabel "lewat jatuh tempo titik". `createdAt` review hanya pendamping "sejak rekod dibuat" bila tampil, tidak pernah dilabeli umur menunggu.
+- Urutan USULAN: lapis A dulu (paling lama sejak dueDate final dulu, seri dueDate sama → id review naik), lalu lapis B (paling lewat dulu, seri → id naik). Ambang tingkat `mengendap` = Q-PBQ-1 Lead (usulan: lapis A mengendap sesudah probationEndDate lewat — sejajar status turunan existing `overdue_undecided`; selama belum diputus builder hanya tingkat menunggu/tidak ada ambang karangan).
+
+### 3. Aturan bisnis (BR-PBQ)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PBQ-01 | Populasi lapis A = review final `submitted` persis pada karyawan ber-probationEndDate aktif; formatif submitted tidak masuk lapis A | USULAN di atas TERVERIFIKASI-KODE (status kosakata probation.ts; penjaga decide probation.actions.ts:283) |
+| BR-PBQ-02 | Lapis B terpisah terhitung dari lapis A; baris lapis B tidak pernah dilabeli menunggu keputusan pemutus | USULAN |
+| BR-PBQ-03 | Lewat probationEndDate tanpa keputusan TIDAK lulus otomatis dan tidak keluar antrean selama probationEndDate masih terpasang (warisan BR-PROB-06 induk) | TERVERIFIKASI-KODE (deriveProbationStatus probation.ts:231-239) |
+| BR-PBQ-04 | Umur hanya dari `dueDate` (lapis A/B); `updatedAt`/ActivityLog dilarang sebagai sumber umur antrean | USULAN di atas TERVERIFIKASI-KODE (kolom :3569; submittedAt absen) |
+| BR-PBQ-05 | Nol nominal: payload antrean dilarang memuat gaji/kompensasi/nilai uang apa pun; skor tampil sebagai kategori verbatim server (label probation.ts), tanpa angka gabungan/ranking penilai | TERVERIFIKASI-KODE (BR-PROB-11 + skor kategori probation.ts) + USULAN cakupan payload |
+| BR-PBQ-06 | Gerbang baca = `view_employees` + getHrScope fail-closed warisan overview existing; antrean tidak melebarkan scope (self hanya baris dirinya sebagai subjek/reviewer sesuai scope existing — fisik pemetaan = Q-PBQ-3) | TERVERIFIKASI-KODE (probation.actions.ts kepala :10-16; hr-scope.ts:27-57) + BUTUH-VONIS Lead untuk pemetaan self |
+| BR-PBQ-07 | Baca-saja tahap 1: tanpa tombol Putus/Kirim/Ubah dari antrean; tindak lanjut lewat panel karyawan existing (submit oleh reviewer tercatat, putus oleh approve_contracts scope all + SoD) | USULAN (penjaga aksi TERVERIFIKASI-KODE probation.actions.ts:265-291) |
+| BR-PBQ-08 | Penilai tampil sebagai fakta tertaut (reviewerEmployeeId existing); kontak karyawan/penilai tidak masuk payload daftar | USULAN |
+| BR-PBQ-09 | Satu karyawan satu baris lapis A (titik final tunggal konstruksi milestone existing); karyawan tanpa titik final terbentuk (masa <titik mana pun) tidak dikarang barisnya — terbaca lewat lapis B hanya bila slot final-nya terbentuk dari probationMilestoneSlots | TERVERIFIKASI-KODE (probation.ts:184-205) + USULAN |
+
+### 4. Matriks izin & transisi
+
+Izin (key nyata katalog): lihat antrean `view_employees` (:96) + scope; submit existing `edit_employees` (:98) + reviewer tercatat; putus existing `approve_contracts` (:308) scope all + SoD. Antrean TIDAK menambah key dan TIDAK memberi tombol aksi (BR-PBQ-07).
+
+Transisi (semua EXISTING, antrean tidak menulis): draft —submitProbationReview (jendela dueDate..+7)→ submitted —decideProbation (final saja)→ decided(passed/extended/failed). Antrean hanya membaca: submitted-final = lapis A; titik lewat dueDate belum submitted = lapis B; decided = keluar.
+
+### 5. Acceptance criteria & edge cases
+
+AC-PBQ-B (Backend): B1 populasi lapis A persis final+submitted (formatif submitted bocor = MERAH); B2 decided/berhenti bocor = MERAH; B3 umur dari dueDate (updatedAt diubah → umur tetap = lulus; umur diganti updatedAt = MERAH); B4 scope bocor lintas departemen/self = MERAH; B5 payload memuat nominal gaji/kompensasi = MERAH; dua panggilan bersamaan nol mutasi.
+AC-PBQ-F (Frontend): F1 label/notice verbatim server, UI tidak menghitung umur/status sendiri (hitung ulang = MERAH); F2 lapis A/B terpisah terhitung, tidak dicampur satu ember; F3 tanpa tombol Putus/Kirim dari antrean (tombol pintas = MERAH).
+EC-PBQ-1: review final submitted lalu masa diperpanjang (extended) → baris decided keluar, titik masa baru masuk sesuai slot baru. EC-PBQ-2: titik final belum terbentuk karena endDate diubah sebelum final → ikuti slot existing apa adanya. EC-PBQ-3: karyawan berhenti di tengah percobaan → terbaca apa adanya lewat scope/overview existing, antrean tidak menyembunyikan/mengarang status berhenti. EC-PBQ-4: lapis B lewat >7 hari di luar jendela kirim → tertanda, tanpa jalur kirim baru. EC-PBQ-5: status liar → satu baris tertanda tidak dikenal. EC-PBQ-6: reviewer = subjek sendiri / pemutus = reviewer → antrean hanya menampilkan; SoD tetap penjaga aksi existing. EC-PBQ-7: dueDate masa depan pada review submitted awal (submit dalam jendela tidak mungkin sebelum dueDate — data anomali terbaca apa adanya, umur negatif dijepit 0 berlabel sejak jatuh tempo belum tiba).
+
+### 6. Pembagian kerja & pertanyaan putusan
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-086-S | Spec kontrak ini (dokumen) | Business | — |
+| 086-B | Builder murni dua lapis + loader massal anti-N+1 (perluasan pola probation.ts/getProbationOverview, BUKAN builder status kedua) + tes AC-PBQ-B1..B5 | Backend | Putusan Lead Q-PBQ-1/2/3/4 |
+| 086-F | Permukaan antrean verbatim payload + AC-PBQ-F1..F3 | Frontend | 086-B merged |
+| 086-Q | Falsifikasi AC-PBQ-B/F atas head persis | QA | 086-B/086-F |
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-PBQ-1 | Ambang `mengendap` lapis A: sesudah probationEndDate lewat (sejajar overdue_undecided) atau N hari sejak dueDate final? Urutan §2 disahkan? | Lead | USULAN probationEndDate lewat = mengendap (satu makna dengan status turunan existing, tanpa konstanta hari kedua); urutan §2 apa adanya |
+| Q-PBQ-2 | Kata judul/notice/lapis final? | Lead | Kata usulan §1 apa adanya; satu konstanta server |
+| Q-PBQ-3 | Pemetaan scope self/department untuk antrean: self melihat baris dirinya sebagai subjek dan/atau sebagai reviewer tercatat? | Lead | USULAN ikut hrEmployeeScopeWhere existing persis overview (tanpa pelebaran); penanda "Anda penilai" hanya label fakta reviewerEmployeeId |
+| Q-PBQ-4 | Umur sejak submit kelak perlu kolom submittedAt (migrasi) atau tetap hanya sejak dueDate? | Lead + Backend (fisik) | USULAN tahap 1 hanya sejak dueDate; submittedAt = spec/migrasi terpisah bila kebutuhan terbukti, jangan karang dari ActivityLog/updatedAt |
+| Q-PBQ-5 | Status liar tertanda tampil (pola 032-S) disahkan? Penempatan permukaan: seksi SDM vs panel lintas di daftar karyawan existing? | Lead | USULAN tampil tertanda; permukaan mengikuti pola keluarga antrean SDM existing, tautan ke panel karyawan |
+
+### Yang TIDAK diusulkan run ini
+- Mengubah transisi/jendela submit/penjaga decideProbation induk 099-S; memperpanjang jendela kirim lapis B; jalur kirim/putus dari antrean (BR-PBQ-07).
+- Kolom `submittedAt`, status baru, key izin baru, ranking/skor gabungan penilai, nominal gaji/kompensasi apa pun (BR-PBQ-05).
+- Memasukkan populasi ini ke antrean HR tertunda 081-S (sudah ditolak eksplisit Q-HPC-1) atau mengganti `getProbationOverview`/panel detail karyawan existing.
+- Pengingat WA/email ke penilai/pemutus, eskalasi otomatis, keputusan otomatis lewat tanggal (BR-PBQ-03: tidak lulus otomatis).
+- Menilai konsekuensi uang keputusan failed/extended — tetap vonis Accountant F-2026-10-24-134-V + alur berhenti F-085-S existing; spec ini tidak membukanya.
+
+F-2026-10-27-086-S — Antrean evaluasi masa percobaan menunggu keputusan & titik lewat jatuh tempo. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PBQ-1/2/3/5 (+fisik Q-PBQ-4 Backend), lalu fisik Backend (086-B), konsumen Frontend (086-F), falsifikasi QA (086-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/scope/penempatan), Backend (fisik turunan + Q-PBQ-4), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap baca-saja (nol nominal; konsekuensi uang keputusan tetap vonis 134-V existing, tidak divonis ulang).
