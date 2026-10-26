@@ -50,6 +50,15 @@ export function buildSalesRevisionPrismaMock(extra: Record<string, unknown> = {}
     salesOrder: buildModelMock(),
     workOrder: buildModelMock(),
     salesInvoice: buildModelMock(),
+    // F-2026-10-25-035-B: gerbang kredit membaca saklar; mock default
+    // findFirst null = saklar mati (perilaku persis sebelum gerbang).
+    systemSetting: buildModelMock(),
+    customer: buildModelMock(),
+    downPayment: buildModelMock(),
+    customerCredit: buildModelMock(),
+    salesReturn: buildModelMock(),
+    journal: buildModelMock(),
+    creditOverride: buildModelMock(),
     ...extra,
     $queryRaw: vi.fn().mockResolvedValue([]),
   }

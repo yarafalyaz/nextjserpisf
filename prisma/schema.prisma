@@ -125,6 +125,11 @@ model SystemSetting {
   companyPkpSource             String?   @map("company_pkp_source")
   companyLatitude              Decimal?  @map("company_latitude") @db.Decimal(10, 8)
   companyLongitude             Decimal?  @map("company_longitude") @db.Decimal(11, 8)
+  // F-2026-10-25-035-B (Q-CL2-5): saklar gerbang kredit tahap 2. Default
+  // false = perilaku persis sebelum gerbang (nol tertahan, nol rekod
+  // override). Hanya manage_settings lewat updateSystemSettings yang
+  // mengubah; dibaca server tiap penilaian, fail-safe false bila absen.
+  creditGateEnabled            Boolean   @default(false) @map("credit_gate_enabled")
   costingMethod                String    @default("FIFO") @map("costing_method")
   fiscalYearStartMonth         Int       @default(1) @map("fiscal_year_start_month")
   currencyCode                 String    @default("IDR") @map("currency_code")
@@ -423,6 +428,7 @@ model Customer {
   customerVehicles   CustomerVehicle[]
   downPayments       DownPayment[]
   customerCredits    CustomerCredit[]
+  creditOverrides    CreditOverride[]
   projects           Project[]
   quotations         Quotation[]
   salesInvoices      SalesInvoice[]
@@ -469,6 +475,45 @@ model CustomerCredit {
   @@index([customerId, status], map: "idx_customer_credits_cust_status")
   @@index([sourceType, sourceId], map: "idx_customer_credits_source")
   @@map("customer_credits")
+}
+
+/// F-2026-10-25-035-B (PUTUSAN LEAD Q-CL2-3): rekod permintaan override
+/// gerbang kredit PRA-LAHIR — satu dokumen percobaan-simpan. Bukan
+/// logActivity (menelan gagal) dan bukan Approval generik (terikat dokumen
+/// lahir). Sidik = hash normalisasi pelanggan+jenis+pembuat+nominal+
+/// kaitan quotation/SO sumber; payload form mentah DILARANG disimpan.
+/// Status: pending|approved|rejected|used|expired|superseded. Approved
+/// kedaluwarsa 23:59:59 WIB hari sama (expiresAt); pending tak diputus
+/// 1 hari kerja WIB = expired turunan saat dibaca/dipakai.
+model CreditOverride {
+  id               Int       @id @default(autoincrement())
+  customerId       Int       @map("customer_id")
+  documentType     String    @map("document_type") @db.VarChar(16)
+  fingerprint      String    @db.VarChar(64)
+  attemptedAmount  Decimal   @map("attempted_amount") @db.Decimal(15, 2)
+  creditLimit      Decimal   @map("credit_limit") @db.Decimal(15, 2)
+  exposure         Decimal   @db.Decimal(15, 2)
+  exposureStatus   String    @map("exposure_status") @db.VarChar(16)
+  utilization      Decimal?  @db.Decimal(8, 2)
+  quotationId      Int?      @map("quotation_id")
+  salesOrderId     Int?      @map("sales_order_id")
+  requestedBy      Int       @map("requested_by")
+  requestReason    String    @map("request_reason") @db.Text
+  status           String    @default("pending") @db.VarChar(16)
+  decidedBy        Int?      @map("decided_by")
+  decidedAt        DateTime? @map("decided_at")
+  decisionReason   String?   @map("decision_reason") @db.Text
+  usedDocumentId   Int?      @map("used_document_id")
+  usedDocumentNo   String?   @map("used_document_no")
+  expiresAt        DateTime? @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  customer         Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, status], map: "idx_credit_overrides_cust_status")
+  @@index([fingerprint, status], map: "idx_credit_overrides_fp_status")
+  @@index([requestedBy, status], map: "idx_credit_overrides_req_status")
+  @@map("credit_overrides")
 }
 
 model FinancialIdempotencyKey {
@@ -923,6 +968,7 @@ model Department {
   updatedAt     DateTime            @updatedAt @map("updated_at")
   holidays      DepartmentHoliday[]
   employees     Employee[]
+  jobVacancies  JobVacancy[]
   positions     Position[]
   workSchedules WorkSchedule[]      @relation("DepartmentWorkSchedules")
 
@@ -936,12 +982,17 @@ model Position {
   name         String
   code         String?     @unique
   description  String?     @db.Text
+  // Jabatan kritis wajib punya rencana suksesi (kandidat pengganti).
+  isCritical   Boolean     @default(false) @map("is_critical")
   departmentId Int?        @map("department_id")
   createdBy    Int?        @map("created_by")
   updatedBy    Int?        @map("updated_by")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
   employees    Employee[]
+  jobVacancies JobVacancy[]
+  positionCompetencies PositionCompetency[]
+  successionCandidates SuccessionCandidate[]
   department   Department? @relation(fields: [departmentId], references: [id])
 
   @@index([departmentId], map: "positions_department_id_fkey")
@@ -1007,6 +1058,14 @@ model Employee {
   employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
+  hiredFromApplicants JobApplicant[]    @relation("ApplicantHiredEmployee")
+  performanceGoals    PerformanceGoal[] @relation("PerformanceGoalEmployee")
+  performanceReviews  PerformanceReview[] @relation("PerformanceReviewSubject")
+  performanceReviewsGiven PerformanceReview[] @relation("PerformanceReviewReviewer")
+  employeeCompetencies EmployeeCompetency[] @relation("EmployeeCompetencySubject")
+  trainingParticipants TrainingParticipant[] @relation("TrainingParticipantEmployee")
+  successionCandidacies SuccessionCandidate[] @relation("SuccessionCandidateEmployee")
+  salaryAdjustments   SalaryAdjustment[]
   // Jangkar perhitungan masa kerja untuk hak cuti tahunan. Kosong =
   // dihitung dari joinDate. Terisi otomatis saat status berubah
   // INTERN (magang) -> PKWT/PKWTT: masa magang tidak ikut terhitung,
@@ -3700,6 +3759,7 @@ model OvertimeRequest {
   mealHours            Decimal?  @map("meal_hours") @db.Decimal(5, 2)
   billableHours        Decimal?  @map("billable_hours") @db.Decimal(5, 2)
   calculatedValue      Decimal?  @map("calculated_value") @db.Decimal(15, 2)
+  overtimeBaseSnapshot Json?     @map("overtime_base_snapshot")
   reason               String?   @db.Text
   rejectionReason      String?   @map("rejection_reason") @db.Text
   status               String    @default("pending")
@@ -6073,4 +6133,319 @@ model ItemSubstitute {
   @@index([itemId, isActive])
   @@index([substituteItemId])
   @@map("item_substitutes")
+}
+
+// ==================== HCMS: REKRUTMEN ====================
+// Pilar HCMS pertama di dalam ERP (bukan integrasi eksternal): lowongan
+// dibuka HR, pelamar bergerak lewat tahapan seleksi, dan penerimaan
+// (hired) melahirkan baris Employee dari data pelamar + jabatan lowongan
+// sehingga seluruh modul SDM lain (absensi, payroll, scope tim) langsung
+// berlaku tanpa sinkronisasi antar-sistem.
+
+model JobVacancy {
+  slug         String?    @unique
+  id           Int        @id @default(autoincrement())
+  code         String     @unique
+  title        String
+  departmentId Int?       @map("department_id")
+  positionId   Int?       @map("position_id")
+  description  String?    @db.Text
+  requirements String?    @db.Text
+  location     String?
+  employmentType String?  @map("employment_type")
+  quota        Int        @default(1)
+  // draft -> open -> closed (kosakata lowercase mengikuti Expense/Payroll).
+  status       String     @default("draft")
+  openedAt     DateTime?  @map("opened_at")
+  closedAt     DateTime?  @map("closed_at")
+  createdBy    Int?       @map("created_by")
+  deletedAt    DateTime?  @map("deleted_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  department   Department? @relation(fields: [departmentId], references: [id])
+  position     Position?   @relation(fields: [positionId], references: [id])
+  applicants   JobApplicant[]
+
+  @@index([departmentId], map: "job_vacancies_department_id_fkey")
+  @@index([positionId], map: "job_vacancies_position_id_fkey")
+  @@index([status], map: "idx_job_vacancies_status")
+  @@map("job_vacancies")
+}
+
+model JobApplicant {
+  slug            String?   @unique
+  id              Int       @id @default(autoincrement())
+  vacancyId       Int       @map("vacancy_id")
+  name            String
+  email           String?
+  phone           String?
+  source          String?
+  cvReference     String?   @map("cv_reference")
+  // Tahapan seleksi: applied -> screening -> interview -> offering ->
+  // hired | rejected (rejected bisa dari tahap mana pun).
+  stage           String    @default("applied")
+  notes           String?   @db.Text
+  hiredEmployeeId Int?      @map("hired_employee_id")
+  createdBy       Int?      @map("created_by")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  vacancy         JobVacancy @relation(fields: [vacancyId], references: [id])
+  hiredEmployee   Employee?  @relation("ApplicantHiredEmployee", fields: [hiredEmployeeId], references: [id])
+  stageHistories  ApplicantStageHistory[]
+
+  @@index([vacancyId], map: "job_applicants_vacancy_id_fkey")
+  @@index([stage], map: "idx_job_applicants_stage")
+  @@index([hiredEmployeeId], map: "job_applicants_hired_employee_id_fkey")
+  @@map("job_applicants")
+}
+
+model ApplicantStageHistory {
+  id          Int          @id @default(autoincrement())
+  applicantId Int          @map("applicant_id")
+  fromStage   String?      @map("from_stage")
+  toStage     String       @map("to_stage")
+  notes       String?      @db.Text
+  changedBy   Int?         @map("changed_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  applicant   JobApplicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId], map: "applicant_stage_histories_applicant_id_fkey")
+  @@index([createdAt], map: "idx_applicant_stage_histories_created")
+  @@map("applicant_stage_histories")
+}
+
+// ==================== HCMS: PENILAIAN KINERJA ====================
+// Siklus penilaian berisi sasaran (goals) berbobot per karyawan dan satu
+// ulasan per karyawan per siklus. Penilai bawaan = atasan di pohon
+// organisasi (pohon atasan karyawan); gerbang akses memakai scope HR
+// (self/tim/departemen/all) yang sama dengan modul SDM lain.
+
+model PerformanceCycle {
+  slug        String?    @unique
+  id          Int        @id @default(autoincrement())
+  name        String
+  periodStart DateTime   @map("period_start")
+  periodEnd   DateTime   @map("period_end")
+  // draft -> active -> closed
+  status      String     @default("draft")
+  createdBy   Int?       @map("created_by")
+  deletedAt   DateTime?  @map("deleted_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  goals       PerformanceGoal[]
+  reviews     PerformanceReview[]
+
+  @@index([status], map: "idx_performance_cycles_status")
+  @@map("performance_cycles")
+}
+
+model PerformanceGoal {
+  id          Int       @id @default(autoincrement())
+  cycleId     Int       @map("cycle_id")
+  employeeId  Int       @map("employee_id")
+  title       String
+  target      String?   @db.Text
+  weight      Int       @default(1)
+  achievement String?   @db.Text
+  // Skor capaian 0-100; null = belum dinilai.
+  score       Decimal?  @db.Decimal(5, 2)
+  createdBy   Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  cycle       PerformanceCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee    Employee  @relation("PerformanceGoalEmployee", fields: [employeeId], references: [id])
+
+  @@index([cycleId], map: "performance_goals_cycle_id_fkey")
+  @@index([employeeId], map: "performance_goals_employee_id_fkey")
+  @@map("performance_goals")
+}
+
+model PerformanceReview {
+  slug              String?   @unique
+  id                Int       @id @default(autoincrement())
+  cycleId           Int       @map("cycle_id")
+  employeeId        Int       @map("employee_id")
+  reviewerEmployeeId Int?     @map("reviewer_employee_id")
+  selfScore         Decimal?  @map("self_score") @db.Decimal(5, 2)
+  managerScore      Decimal?  @map("manager_score") @db.Decimal(5, 2)
+  finalScore        Decimal?  @map("final_score") @db.Decimal(5, 2)
+  strengths         String?   @db.Text
+  improvements      String?   @db.Text
+  // draft -> self_submitted -> manager_reviewed -> finalized
+  status            String    @default("draft")
+  createdBy         Int?      @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  cycle             PerformanceCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee          Employee  @relation("PerformanceReviewSubject", fields: [employeeId], references: [id])
+  reviewer          Employee? @relation("PerformanceReviewReviewer", fields: [reviewerEmployeeId], references: [id])
+
+  @@unique([cycleId, employeeId], map: "performance_reviews_cycle_employee_key")
+  @@index([employeeId], map: "performance_reviews_employee_id_fkey")
+  @@index([reviewerEmployeeId], map: "performance_reviews_reviewer_employee_id_fkey")
+  @@map("performance_reviews")
+}
+
+// ==================== HCMS: KOMPETENSI & PELATIHAN ====================
+// Kompetensi didefinisikan sekali, dipetakan ke jabatan dengan level
+// syarat, lalu dinilai per karyawan — selisihnya adalah peta kebutuhan
+// pelatihan. Pelatihan mencatat peserta + hasil per karyawan.
+
+model Competency {
+  slug        String?    @unique
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  category    String?
+  description String?    @db.Text
+  deletedAt   DateTime?  @map("deleted_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  positionRequirements PositionCompetency[]
+  employeeCompetencies EmployeeCompetency[]
+
+  @@map("competencies")
+}
+
+model PositionCompetency {
+  id           Int        @id @default(autoincrement())
+  positionId   Int        @map("position_id")
+  competencyId Int        @map("competency_id")
+  // Level syarat skala 1-5.
+  requiredLevel Int       @map("required_level")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  position     Position   @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  competency   Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([positionId, competencyId], map: "position_competencies_pair_key")
+  @@index([competencyId], map: "position_competencies_competency_id_fkey")
+  @@map("position_competencies")
+}
+
+model EmployeeCompetency {
+  id           Int        @id @default(autoincrement())
+  employeeId   Int        @map("employee_id")
+  competencyId Int        @map("competency_id")
+  // Level aktual skala 1-5 hasil penilaian.
+  level        Int
+  assessedBy   Int?       @map("assessed_by")
+  assessedAt   DateTime   @map("assessed_at")
+  notes        String?    @db.Text
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  employee     Employee   @relation("EmployeeCompetencySubject", fields: [employeeId], references: [id])
+  competency   Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, competencyId], map: "employee_competencies_pair_key")
+  @@index([competencyId], map: "employee_competencies_competency_id_fkey")
+  @@map("employee_competencies")
+}
+
+model Training {
+  slug        String?    @unique
+  id          Int        @id @default(autoincrement())
+  title       String
+  provider    String?
+  startDate   DateTime   @map("start_date")
+  endDate     DateTime?  @map("end_date")
+  location    String?
+  cost        Decimal    @default(0.00) @db.Decimal(15, 2)
+  description String?    @db.Text
+  // scheduled -> done | cancelled
+  status      String     @default("scheduled")
+  createdBy   Int?       @map("created_by")
+  deletedAt   DateTime?  @map("deleted_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  participants TrainingParticipant[]
+
+  @@index([status], map: "idx_trainings_status")
+  @@map("trainings")
+}
+
+model TrainingParticipant {
+  id             Int      @id @default(autoincrement())
+  trainingId     Int      @map("training_id")
+  employeeId     Int      @map("employee_id")
+  // registered -> attended | absent
+  status         String   @default("registered")
+  score          Decimal? @db.Decimal(5, 2)
+  certificateRef String?  @map("certificate_ref")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  training       Training @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  employee       Employee @relation("TrainingParticipantEmployee", fields: [employeeId], references: [id])
+
+  @@unique([trainingId, employeeId], map: "training_participants_pair_key")
+  @@index([employeeId], map: "training_participants_employee_id_fkey")
+  @@map("training_participants")
+}
+
+// ==================== HCMS: PERENCANAAN SUKSESI ====================
+// Jabatan kritis (Position.isCritical) dipetakan ke kandidat pengganti
+// berurutan prioritas dengan tingkat kesiapan. Cakupan diturunkan:
+// ada kandidat ready_now = aman; hanya kandidat masa depan = berisiko;
+// tanpa kandidat = kosong (risiko tertinggi). Bersifat rahasia: hanya
+// peran pengelola SDM yang memegang izinnya, karyawan biasa tidak.
+
+model SuccessionCandidate {
+  id                  Int      @id @default(autoincrement())
+  positionId          Int      @map("position_id")
+  candidateEmployeeId Int      @map("candidate_employee_id")
+  // ready_now | ready_1_2_years | ready_future
+  readiness           String   @default("ready_future")
+  // Urutan prioritas pengganti (1 = pilihan pertama).
+  rank                Int      @default(1)
+  notes               String?  @db.Text
+  assessedBy          Int?     @map("assessed_by")
+  createdBy           Int?     @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  position            Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  candidate           Employee @relation("SuccessionCandidateEmployee", fields: [candidateEmployeeId], references: [id])
+
+  @@unique([positionId, candidateEmployeeId], map: "succession_candidates_pair_key")
+  @@index([candidateEmployeeId], map: "succession_candidates_candidate_id_fkey")
+  @@index([readiness], map: "idx_succession_candidates_readiness")
+  @@map("succession_candidates")
+}
+
+// ==================== HCMS: RIWAYAT KENAIKAN GAJI ====================
+// Employee.baseSalary adalah nilai BERLAKU SAAT INI; tabel ini adalah
+// riwayatnya. Kenaikan dicatat dengan tanggal efektif: yang sudah lewat
+// langsung diterapkan ke master dalam transaksi yang sama; yang akan
+// datang berstatus scheduled dan diterapkan otomatis oleh jalur
+// pembuatan slip (processPayroll/generateBulkPayroll) begitu jatuh
+// tempo. Persentase diturunkan server, bukan ketikan client.
+
+model SalaryAdjustment {
+  id                  Int       @id @default(autoincrement())
+  employeeId          Int       @map("employee_id")
+  effectiveDate       DateTime  @map("effective_date")
+  previousBaseSalary  Decimal   @map("previous_base_salary") @db.Decimal(15, 2)
+  newBaseSalary       Decimal   @map("new_base_salary") @db.Decimal(15, 2)
+  // berkala | promosi | umk | kinerja | penyesuaian | lainnya
+  reason              String
+  notes               String?   @db.Text
+  // F-2026-10-26-054-S Jalur A (putusan Lead Q-SA-1): lahir `menunggu`,
+  // approve -> scheduled, reject -> ditolak. Sesudah persetujuan:
+  // scheduled -> applied | cancelled (existing). applied/ditolak/cancelled
+  // terminal.
+  status              String    @default("menunggu")
+  appliedAt           DateTime? @map("applied_at")
+  // Aktor keputusan persetujuan (user id); alasan penolakan wajib terisi
+  // bila status ditolak (ditegakkan di aksi, BR-SA-03).
+  approvedBy          Int?      @map("approved_by")
+  rejectedBy          Int?      @map("rejected_by")
+  rejectionReason     String?   @map("rejection_reason") @db.Text
+  decidedAt           DateTime? @map("decided_at")
+  createdBy           Int?      @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  employee            Employee  @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId], map: "salary_adjustments_employee_id_fkey")
+  @@index([status, effectiveDate], map: "idx_salary_adjustments_due")
+  @@map("salary_adjustments")
 }

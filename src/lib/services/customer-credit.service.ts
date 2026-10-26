@@ -25,6 +25,7 @@ import {
   buildDownPaymentRefundLines,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat";
+import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -126,11 +127,26 @@ export async function allocateCreditToInvoice(
         payments.reduce((s, p) => s + Number(p.amount), 0),
         Number(invoice.grandTotal),
       );
+      // BLOCKER-1 F-036-S: alokasi yang melunasi faktur WAJIB membekukan
+      // snapshot tarif komisi di transaksi yang sama (resolver sama
+      // seperti recalcCore, per tanggal faktur).
+      const creditGoingPaid = totalPaid >= Number(invoice.grandTotal)
+      const commissionSnapshot = await commissionSnapshotForPaid(
+        tx as never,
+        {
+          id: salesInvoiceId,
+          customerId: Number(invoice.customerId),
+          date: (invoice as { date: Date }).date,
+          commissionRatePercent: (invoice as { commissionRatePercent?: number | null }).commissionRatePercent ?? null,
+        },
+        creditGoingPaid,
+      )
       await tx.salesInvoice.update({
         where: { id: salesInvoiceId },
         data: {
           paidAmount: totalPaid,
-          paymentStatus: totalPaid >= Number(invoice.grandTotal) ? "paid" : "partial",
+          paymentStatus: creditGoingPaid ? "paid" : "partial",
+          ...commissionSnapshot,
         },
       });
       // AUD-FIN-03 (putusan akuntan): alokasi kredit = reklas antar-subledger
