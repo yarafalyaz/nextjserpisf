@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from "react"
 
 /**
  * Kerangka kartu antrean tiket CRM bersama (pola 032-S): section +
@@ -12,10 +12,10 @@ export function CrmTicketCardShell({
   noticeText,
   children,
 }: Readonly<{
-  title: string;
-  summaryItems: ReadonlyArray<readonly [string, number]>;
-  noticeText: string;
-  children: ReactNode;
+  title: string
+  summaryItems: ReadonlyArray<readonly [string, number]>
+  noticeText: string
+  children: ReactNode
 }>) {
   return (
     <section
@@ -40,5 +40,5 @@ export function CrmTicketCardShell({
         {children}
       </div>
     </section>
-  );
+  )
 }

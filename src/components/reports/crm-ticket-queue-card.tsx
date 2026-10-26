@@ -43,7 +43,7 @@ export function CrmTicketQueueCard({
   ]
   return (
     <CrmTicketCardShell title={TITLE} summaryItems={summaryItems} noticeText={queue.noticeText}>
-{queue.rows.length === 0 ? (
+      {queue.rows.length === 0 ? (
         <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
           {queue.emptyText}
         </p>
@@ -109,6 +109,6 @@ export function CrmTicketQueueCard({
           </DetailTable>
         </div>
       )}
-  </CrmTicketCardShell>
-)
+    </CrmTicketCardShell>
+  )
 }

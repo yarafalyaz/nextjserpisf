@@ -37,7 +37,7 @@ export function CrmTicketSlaCard({
   ]
   return (
     <CrmTicketCardShell title={TITLE} summaryItems={summaryItems} noticeText={sla.noticeText}>
-{sla.overdueQueue.length === 0 ? (
+      {sla.overdueQueue.length === 0 ? (
         <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
           {sla.emptyText}
         </p>
@@ -97,6 +97,6 @@ export function CrmTicketSlaCard({
           </DetailTable>
         </div>
       )}
-  </CrmTicketCardShell>
-)
+    </CrmTicketCardShell>
+  )
 }
