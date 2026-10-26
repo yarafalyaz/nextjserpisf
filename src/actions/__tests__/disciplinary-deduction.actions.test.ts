@@ -46,10 +46,10 @@ const input = {
   signedBy: 3,
 }
 
-beforeEach(() => {
+function seedMocks(scope: unknown = { kind: "all" }) {
   vi.clearAllMocks()
   mocks.requirePermission.mockResolvedValue(user)
-  mocks.getHrScope.mockResolvedValue({ kind: "all" })
+  mocks.getHrScope.mockResolvedValue(scope)
   mocks.logActivity.mockResolvedValue(undefined)
   mocks.nextSlug.mockResolvedValue("kep-hr-2026-010")
   mocks.employeeFindUnique.mockImplementation(async ({ where }: { where: { id: number } }) => ({
@@ -61,9 +61,10 @@ beforeEach(() => {
   mocks.decisionCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
     id: 9,
     ...data,
-    amount: { toString: () => String(data.amount) },
   }))
-})
+}
+
+beforeEach(() => seedMocks())
 
 describe("createDisciplinaryDeductionDecisionAction", () => {
   it("mencatat keputusan sah lewat service, log tanpa nominal, dan revalidate", async () => {
@@ -94,7 +95,7 @@ describe("createDisciplinaryDeductionDecisionAction", () => {
   })
 
   it("scope department gagal tertutup untuk karyawan luar departemen", async () => {
-    mocks.getHrScope.mockResolvedValue({ kind: "department", departmentId: 9, employeeId: 99 })
+    seedMocks({ kind: "department", departmentId: 9, employeeId: 99 })
     const result = await createDisciplinaryDeductionDecisionAction(input)
 
     expect(result).toEqual({
@@ -105,7 +106,7 @@ describe("createDisciplinaryDeductionDecisionAction", () => {
   })
 
   it("scope self ditolak untuk mencatat keputusan karyawan lain", async () => {
-    mocks.getHrScope.mockResolvedValue({ kind: "self", employeeId: 1 })
+    seedMocks({ kind: "self", employeeId: 1 })
     const result = await createDisciplinaryDeductionDecisionAction(input)
 
     expect(result).toEqual({

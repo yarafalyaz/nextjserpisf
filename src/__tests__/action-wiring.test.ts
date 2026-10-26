@@ -88,6 +88,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // keputusan "hapus atau sambungkan" milik pemilik repo.
   // F-2026-10-24-132-V: 4 aksi PKWT kini dirujuk UI panel kompensasi
   // (pkwt-compensation-panel.tsx, PR #724) — entri beku dibuang.
+  // BR-DISC-09 (F-2026-10-25-020-V): Server Action pencatatan keputusan
+  // potongan disiplin; form UI Frontend menyusul (kartu t_36487e52,
+  // konsumen kartu Backend t_22c51caf) — buang entri ini saat form dirujuk.
+  "src/actions/disciplinary-deduction.actions.ts::createDisciplinaryDeductionDecisionAction":
+    "BR-DISC-09 backend; form pencatatan keputusan disiplin menyusul (frontend t_36487e52)",
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":

@@ -45,13 +45,6 @@ function fail(e: unknown, context: string): ActionResult {
   return { success: false, error: getErrorMessage(e) }
 }
 
-function parseDateOnly(value: string, label: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} tidak valid`)
-  const parsed = wibDateToUtcMidnight(value)
-  if (Number.isNaN(parsed.getTime())) throw new Error(`${label} tidak valid`)
-  return parsed
-}
-
 function assertValidId(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} tidak valid`)
 }
@@ -62,8 +55,16 @@ function optionalId(value: number | null | undefined, label: string): number | n
   return value
 }
 
+/** Parse "YYYY-MM-DD" WIB; guard bentuk string ditahan di action (transport). */
+function parseDecidedAt(value: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Tanggal keputusan tidak valid")
+  const parsed = wibDateToUtcMidnight(value)
+  if (Number.isNaN(parsed.getTime())) throw new Error("Tanggal keputusan tidak valid")
+  return parsed
+}
+
 /**
- * Totale pencatatan keputusan BR-DISC-09.
+ * Pencatatan keputusan BR-DISC-09 (jalur tulis tunggal).
  *
  * Guard amount di action hanya transport fail-closed (finite); nilai dan
  * pesan bisnis tetap divalidasi service existing. signedBy dan
@@ -77,7 +78,7 @@ export async function createDisciplinaryDeductionDecisionAction(
     const user = await requirePermission("create_disciplinary_records")
     const documentNo = (input.documentNo ?? "").trim()
     if (!documentNo) throw new Error("Nomor dokumen keputusan wajib diisi")
-    const decidedAt = parseDateOnly(input.decidedAt, "Tanggal keputusan")
+    const decidedAt = parseDecidedAt(input.decidedAt)
     assertValidId(input.employeeId, "Karyawan")
     if (!isDisciplinaryDeductionKind(input.kind)) {
       throw new Error("Jenis potongan disiplin tidak valid (hanya denda atau ganti rugi)")
