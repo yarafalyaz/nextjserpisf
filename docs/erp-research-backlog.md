@@ -33043,9 +33043,9 @@ F-2026-10-26-058-S — Antrean SO terkirim belum terfaktur penuh (baca-saja): da
 
 | Aksi | Permission (katalog nyata) | Bukti (TERVERIFIKASI-KODE) |
 |---|---|---|
-| Lihat antrean | `view_reports` (bila permukaan laporan) | `module-catalog.generated.ts:446` {key:"view", resource:"reports", permissionKey:"view_reports"} |
-| Lihat daftar SO / faktur tertaut | `view_sales_orders`, `view_sales_invoices` | katalog :165, :149 |
-| Tindak lanjut buat faktur | `create_sales_invoices` (jalur existing, bukan kewenangan baru laporan) | katalog :150 |
+| Lihat antrean | `view_reports` (bila permukaan laporan) | `module-catalog.generated.ts:431` {key:"view", resource:"reports", permissionKey:"view_reports"} |
+| Lihat daftar SO / faktur tertaut | `view_sales_orders`, `view_sales_invoices` | katalog :164, :148 |
+| Tindak lanjut buat faktur | `create_sales_invoices` (jalur existing, bukan kewenangan baru laporan) | katalog :149 |
 | Ubah status SO/DO/faktur dari antrean | TIDAK ADA — antrean baca-saja | desain spec ini |
 
 Sales perorangan TIDAK diberi scope salesman baru oleh spec ini: antrean tahap 1 = pemegang `view_reports` (perilaku laporan existing). Scope per-salesman = keputusan Lead terpisah, jangan dibangun diam-diam.
@@ -33060,6 +33060,8 @@ Tidak ada transisi status baru — antrean adalah klasifikasi turunan. Definisi 
 | Pengiriman dihitung terkirim | DeliveryOrder `shipped`/`delivered` (`SHIPPED_DELIVERY_STATUSES`, :29), per baris `DeliveryOrderItem.salesOrderItemId` | DO `draft`/status lain; baris tanpa tautan baris SO |
 | Faktur dihitung terfaktur | `SalesInvoice.salesOrderId = SO`, `deletedAt IS NULL`, status `sent`/`posted`/`partial`/`paid`/`approved` (enum schema.prisma:5695-5703) | `draft` (belum terbit), `cancelled`, terhapus lunak |
 | Syarat tampil | nilai terkirim > 0 DAN nilai terkirim > nilai terfaktur sah (epsilon uang existing) | terkirim 0 (belum kirim = domain Pemenuhan), terfaktur >= terkirim |
+
+Peringatan definisi (TERVERIFIKASI-KODE, wajib diputus eksplisit Backend, jangan dicampur diam-diam): repo punya DUA definisi "terfaktur" yang beda maksud - (a) `BILLED_INVOICE_STATUSES = [posted, partial, paid]` (job-billing-summary.ts:39) = piutang sah sesudah posting, dipakai sisa tagih job; (b) `billedAmountExcludingCancelled` (job-billing-progress.ts:32) = semua non-cancelled termasuk `draft`, dipakai faktur selisih/progres karena draft "memesan porsi". Antrean ini mengejar SO yang tagihannya BELUM terbit, jadi definisi (b) akan menyembunyikan persis baris yang dicari (faktur draft tertaut membuat SO tampak tertagih padahal belum ada hak tagih) - karena itu populasi faktur sah spec ini = non-`draft`/non-`cancelled` (definisi dekat (a) ditambah `sent`/`approved` yang sudah keluar dari draft menuju terbit). Bila Lead mau persis (a), keluarkan `sent`/`approved` dari pengurang dan nyatakan di putusan Q-DU-1..3; yang dilarang = memakai (b) tanpa sadar.
 
 Nilai (per SO, turunan murni): `nilaiTerkirim = Σ baris terkirim qty × harga baris SO`; `nilaiTerfaktur = Σ grandTotal faktur sah tertaut`; `sisa = nilaiTerkirim − nilaiTerfaktur` (tampil bila > 0; bila faktur sah melebihi terkirim, baris TIDAK tampil dan tidak menampilkan sisa negatif — kasus itu domain rekonsiliasi, bukan antrean ini). Retur penjualan: antrean menilai tautan faktur, BUKAN retur; retur atas faktur sudah tertagih = domain piutang/retur existing, antrean tidak mengurangi sisa oleh retur (kelebihan tagih bukan "belum terfaktur").
 
