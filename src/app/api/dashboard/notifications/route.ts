@@ -6,6 +6,7 @@ import { apiError } from "@/lib/api-response";
 import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service";
 import { resolveActivityReferenceLabels, resolveActivityReferenceSlugs } from "@/lib/services/activity-reference.service";
 import { activityEntityHref } from "@/lib/utils/activity-href";
+import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status";
 
 export async function GET() {
   try {
@@ -57,7 +58,9 @@ export async function GET() {
             where: {
               dueDate: { lt: today },
               paymentStatus: { not: "paid" },
-              status: { not: "cancelled" },
+              // Q-SIQ-6: hanya piutang yang sudah diakui; draft/approved/sent
+              // belum terbit tidak boleh terhitung jatuh tempo.
+              status: { in: [...RECOGNISED_AR_STATUSES] },
               deletedAt: null,
             },
           })
