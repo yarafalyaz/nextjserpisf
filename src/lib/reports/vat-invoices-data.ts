@@ -25,6 +25,7 @@ import {
 } from "@/lib/reports/vat-invoices"
 import { safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
 /** DPP = subtotal − diskon, presisi sen (bukan float mentah). */
 export function vatDpp(subtotal: SafeMathInput, discount: SafeMathInput): number {
@@ -152,7 +153,7 @@ export async function loadVatInvoices(period: {
 
   const output: VatInvoiceInput[] = salesInvoices.map((invoice) => ({
     date: invoice.date,
-    documentNo: invoice.documentNo,
+    documentNo: salesInvoiceLabel(invoice),
     taxInvoiceNumber: invoice.taxInvoiceNumber,
     counterparty: invoice.customer.name,
     npwp: invoice.customer.taxId,

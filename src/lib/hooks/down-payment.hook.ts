@@ -1,6 +1,7 @@
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
 import { notificationService } from "@/lib/services/notification.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
@@ -609,13 +610,13 @@ export async function onDownPaymentConfirmed(
     )
     const thresholdSen = computeInvoiceThresholdSen(grandTotalSen, thresholdPercent)
 
-    let invoice: { id: number; documentNo: string } | null = null
+    let invoice: { id: number; documentNo: string | null } | null = null
     if (totalVerifiedSen >= thresholdSen && salesOrder) {
-    const invDocNo = await generateDocumentNumber("INV");
-
+    // K5: faktur otomatis dari DP lahir draft tanpa nomor; nomor resmi
+    // diterbitkan saat posting (postInvoice di sales.actions).
     const created = await tx.salesInvoice.create({
       data: {
-        documentNo: invDocNo,
+        documentNo: null,
         customerId: quotation.customerId,
         salesOrderId: salesOrder.id,
         quotationId: quotation.id,
@@ -776,7 +777,7 @@ export async function onDownPaymentConfirmed(
       { type: "WorkOrder", documentNo: workOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
       { type: "SalesOrder", documentNo: salesOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
       ...(invoice
-        ? [{ type: "SalesInvoice" as const, documentNo: invoice.documentNo, context: `Dari DP ${dp.documentNo}` }]
+        ? [{ type: "SalesInvoice" as const, documentNo: salesInvoiceLabel(invoice), context: `Dari DP ${dp.documentNo}` }]
         : []),
     );
   };
