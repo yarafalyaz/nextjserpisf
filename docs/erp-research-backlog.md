@@ -35115,4 +35115,17 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Status/kolom baru (siklus/review/karyawan), gerbang urutan nilai-diri-wajib-sebelum-atasan, perubahan lifecycle `draft->active->closed` / `draft->self_submitted->manager_reviewed->finalized`, atau perubahan rumus `computeWeightedScore` — semua perubahan inti existing, bukan wewenang spec antrean.
 - Halaman daftar siklus kedua meniru PR #805 (Q-PFQ-4) — #805 pemilik permukaan siklus; antrean menumpang kontraknya sesudah final.
 
+#### PUTUSAN LEAD Q-PFQ-1..8 (27 Okt 2026 03:52 WIB, kartu t_5d4efe12; PR spec #1092 MERGED b02c60e9f)
+
+- Q-PFQ-1 DIPUTUS: tingkat `mengendap` hanya hidup sesudah `periodEnd` lewat DAN umur menunggu >= 7 hari kalender WIB; satu konstanta bernama di builder.
+- Q-PFQ-2 DIPUTUS: kata label usulan §1/§3 apa adanya, satu konstanta label server; ember tanpa-review dibaca "Belum Ada Ulasan" (fakta baris, bukan tuduhan orang).
+- Q-PFQ-3 DIPUTUS: urutan `mengendap` dulu, lalu menunggu-finalisasi → menunggu-atasan → belum-nilai-diri → belum-ada-ulasan; dalam ember umur tertua dulu; seri sama → id karyawan naik. Acuan umur ganda §3 DISAHKAN apa adanya.
+- Q-PFQ-4 DIPUTUS: penempatan = seksi turunan di halaman kinerja sesudah PR #805 final; bukan daftar siklus kedua, bukan permukaan laporan tahap 1.
+- Q-PFQ-5 DIPUTUS: TIDAK untuk siklus `draft`, karyawan berhenti/nonaktif, dan saringan joinDate pada tahap 1 (BR-PFQ-01/06).
+- Q-PFQ-6 DIPUTUS: TIDAK ada nilai/finalisasi langsung dari antrean tahap 1 (BR-PFQ-07).
+- Q-PFQ-7 DIPUTUS: TIDAK ada key izin terpisah; `view_performance` + `getHrScope` fail-closed.
+- Q-PFQ-8 DIPUTUS: penanda tanpa-sasaran YA sebagai fakta pendamping polos; nama penilai/penanggung jawab TIDAK diturunkan tahap 1 (BR-PFQ-10).
+
+Vonis Accountant tidak diminta (nol data gaji/dampak payroll tahap 1, BR-PFQ-09/12). Turunan dibuka: 077-B Backend, 077-F Frontend (gerbang #805 final + 077-B merged), 077-Q QA.
+
 F-2026-10-27-077-S — Antrean penilaian kinerja belum selesai per siklus aktif. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PFQ-1/2/3, lalu fisik Backend (077-B), konsumen Frontend (077-F sesudah #805 final), falsifikasi QA (077-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak dampak skor ke gaji/bonus atau nominal payroll diusulkan (di luar spec ini, BR-PFQ-09/12).
