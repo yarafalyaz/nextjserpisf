@@ -65,6 +65,13 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     // F-2026-10-25-010-S putusan Lead Q-AC-3: approve koreksi absensi GA
     // sejajar approve cuti GA, sadar terdaftar.
     "approve_attendance_corrections",
+    // HCMS K1 (Muse): GA = operator SDM — hapus master HCMS sejajar
+    // delete_holidays/delete_leave_requests yang sudah dipegang GA.
+    "delete_recruitments",
+    "delete_performance",
+    "delete_competencies",
+    "delete_trainings",
+    "delete_succession",
   ],
   kepala_bengkel: [
     "approve_bom_revisions",

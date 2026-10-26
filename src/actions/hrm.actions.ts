@@ -24,6 +24,7 @@ import {
   markPkwtEventPaid,
   runPkwtMonthlyAccrual,
 } from "@/lib/services/pkwt-compensation.service";
+import { applyDueSalaryAdjustments } from "@/lib/services/salary-adjustment.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -2304,6 +2305,12 @@ export async function generateBulkPayroll(
       classified.targetIds.includes(e.id),
     );
 
+    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
+    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
+    for (const e of eligibleEmployees) {
+      await applyDueSalaryAdjustments(e.id, periodEnd);
+    }
+
     // Batch: slip aktif populasi pada jendela rentang run (semua periode —
     // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu
     // ke-2 dalam bulan sama kini LOLOS, yang beririsan ditolak per karyawan
@@ -2604,6 +2611,10 @@ export async function processPayroll(formData: FormData) {
     if (!employeeId) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
+
+    // Kenaikan gaji terjadwal yang sudah jatuh tempo diterapkan ke master
+    // lebih dulu, supaya slip periode ini membaca gaji yang benar.
+    await applyDueSalaryAdjustments(employeeId, endDate);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
     // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
