@@ -2,6 +2,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
+import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 import { notificationService } from "@/lib/services/notification.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
@@ -281,9 +282,23 @@ export async function onDownPaymentConfirmed(
           paymentStatus = "partial";
         }
 
+        // BLOCKER-1 F-036-S: transisi ke paid di jalur ini WAJIB membekukan
+        // snapshot tarif komisi (resolver sama seperti recalcCore) — loader
+        // rekap menyaring faktur lunas; tanpa snapshot faktur ini terlewat.
+        const commissionSnapshot = await commissionSnapshotForPaid(
+          tx,
+          {
+            id: existingInv.id,
+            customerId: quotation.customerId,
+            date: existingInv.date as Date,
+            commissionRatePercent: existingInv.commissionRatePercent ?? null,
+          },
+          paymentStatus === "paid",
+        )
+
         await tx.salesInvoice.update({
           where: { id: existingInv.id },
-          data: { paidAmount: totalPaid, paymentStatus },
+          data: { paidAmount: totalPaid, paymentStatus, ...commissionSnapshot },
         });
       }
 
@@ -614,13 +629,14 @@ export async function onDownPaymentConfirmed(
     if (totalVerifiedSen >= thresholdSen && salesOrder) {
     // K5: faktur otomatis dari DP lahir draft tanpa nomor; nomor resmi
     // diterbitkan saat posting (postInvoice di sales.actions).
+    const invoiceCreatedAt = new Date()
     const created = await tx.salesInvoice.create({
       data: {
         documentNo: null,
         customerId: quotation.customerId,
         salesOrderId: salesOrder.id,
         quotationId: quotation.id,
-        date: new Date(),
+        date: invoiceCreatedAt,
         subtotal: quotation.subtotal,
         discount: quotation.discount ?? 0,
         tax: quotation.tax ?? 0,
@@ -727,12 +743,22 @@ export async function onDownPaymentConfirmed(
     // paidAmount DIBATASI grandTotal — kelebihan sudah pindah ke ledger
     // (di atas), jadi paidAmount > grandTotal = overstate AR + double-count
     // (sekali di paidAmount, sekali di kredit). Cap di sini = satu sumber.
+    // BLOCKER-1 F-036-S: faktur konversi yang lahir langsung lunas WAJIB
+    // membawa snapshot tarif komisi sejak tulis ini (resolver sama seperti
+    // recalcCore, per tanggal faktur = tanggal lahir faktur di sini).
     const allocatedTotal = Math.min(allocatedSen / 100, Number(quotation.grandTotal))
+    const conversionGoingPaid = allocatedTotal >= Number(quotation.grandTotal)
+    const commissionSnapshot = await commissionSnapshotForPaid(
+      tx,
+      { id: created.id, customerId: quotation.customerId, date: invoiceCreatedAt, commissionRatePercent: null },
+      conversionGoingPaid,
+    )
     await tx.salesInvoice.update({
       where: { id: created.id },
       data: {
         paidAmount: allocatedTotal,
-        paymentStatus: allocatedTotal >= Number(quotation.grandTotal) ? "paid" : "partial",
+        paymentStatus: conversionGoingPaid ? "paid" : "partial",
+        ...commissionSnapshot,
       },
     })
     }
