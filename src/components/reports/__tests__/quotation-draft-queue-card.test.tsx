@@ -35,6 +35,48 @@ function input(over: Partial<QuotationDraftInput>): QuotationDraftInput {
   }
 }
 
+function population(): QuotationDraftInput[] {
+  return [
+    input({}), // MENIPIS, sisa 1, umur 16
+    input({
+      quotationId: 2,
+      slug: null,
+      documentNo: "Q-0002",
+      validUntil: new Date(Date.UTC(2026, 9, 24)), // LEWAT_BELUM_TERKIRIM, sisa -2
+      salesEmployeeId: null,
+      salesEmployeeName: null,
+    }),
+    input({ quotationId: 3, documentNo: "Q-0003", validUntil: null }), // TANPA_BATAS
+    input({
+      quotationId: 4,
+      documentNo: "Q-0004",
+      validUntil: new Date(Date.UTC(2026, 10, 20)), // TERBUKA
+    }),
+    // Di luar populasi BR-QD-01: tidak pernah tampil.
+    input({ quotationId: 5, documentNo: "Q-0005", status: "sent" }),
+    input({ quotationId: 6, documentNo: "Q-0006", deletedAt: new Date(Date.UTC(2026, 9, 20)) }),
+  ]
+}
+
+function QueueProbe({
+  rows,
+  total,
+  mode = "default",
+}: {
+  rows: ReturnType<typeof buildQuotationDraftQueue>
+  total: number
+  mode?: "default" | "semua"
+}) {
+  return (
+    <QuotationDraftQueueCard
+      rows={rows}
+      stageCounts={countQuotationDraftStages(buildQuotationDraftQueue(population(), NOW))}
+      totalDocuments={total}
+      mode={mode}
+    />
+  )
+}
+
 let roots: Root[] = []
 afterEach(() => {
   roots.forEach((root) => unmountCard(root))
@@ -44,46 +86,9 @@ afterEach(() => {
 
 describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
   it("kolom + label tahap + notice verbatim builder; UI tidak hitung ulang; rekap populasi penuh", () => {
-    const rows = buildQuotationDraftQueue(
-      [
-        input({}), // MENIPIS, sisa 1, umur 16
-        input({
-          quotationId: 2,
-          slug: null,
-          documentNo: "Q-0002",
-          validUntil: new Date(Date.UTC(2026, 9, 24)), // LEWAT_BELUM_TERKIRIM, sisa -2
-          salesEmployeeId: null,
-          salesEmployeeName: null,
-        }),
-        input({
-          quotationId: 3,
-          documentNo: "Q-0003",
-          validUntil: null, // TANPA_BATAS, sisa null
-        }),
-        input({
-          quotationId: 4,
-          documentNo: "Q-0004",
-          validUntil: new Date(Date.UTC(2026, 10, 20)), // TERBUKA
-        }),
-        // Di luar populasi BR-QD-01: tidak pernah tampil.
-        input({ quotationId: 5, documentNo: "Q-0005", status: "sent" }),
-        input({
-          quotationId: 6,
-          documentNo: "Q-0006",
-          deletedAt: new Date(Date.UTC(2026, 9, 20)),
-        }),
-      ],
-      NOW,
-    )
+    const rows = buildQuotationDraftQueue(population(), NOW)
     const visible = filterQuotationDraftQueue(rows)
-    const { container, root } = renderCard(
-      <QuotationDraftQueueCard
-        rows={visible}
-        stageCounts={countQuotationDraftStages(rows)}
-        totalDocuments={rows.length}
-        mode="default"
-      />,
-    )
+    const { container, root } = renderCard(<QueueProbe rows={visible} total={4} />)
     roots.push(root)
     const text = container.textContent ?? ""
 
@@ -144,12 +149,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
       NOW,
     )
     const { container, root } = renderCard(
-      <QuotationDraftQueueCard
-        rows={filterQuotationDraftQueue(rows, "semua")}
-        stageCounts={countQuotationDraftStages(rows)}
-        totalDocuments={rows.length}
-        mode="semua"
-      />,
+      <QueueProbe rows={filterQuotationDraftQueue(rows, "semua")} total={1} mode="semua" />,
     )
     roots.push(root)
     const text = container.textContent ?? ""
@@ -158,14 +158,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
   })
 
   it("kosong: teks kosong per mode", () => {
-    const { container, root } = renderCard(
-      <QuotationDraftQueueCard
-        rows={[]}
-        stageCounts={countQuotationDraftStages([])}
-        totalDocuments={0}
-        mode="default"
-      />,
-    )
+    const { container, root } = renderCard(<QueueProbe rows={[]} total={0} />)
     roots.push(root)
     expect(container.textContent).toContain(
       "Belum ada draf penawaran yang perlu ditindak",
