@@ -104,7 +104,7 @@ export function LoanInstallmentHistorySection({
         </DetailTable>
       ) : (
         <p className="rounded-xl border border-default bg-surface px-4 py-10 text-center text-sm text-muted-foreground">
-          Belum ada cicilan terbayar tercatat.
+          {history.emptyLabel}
         </p>
       )}
     </section>

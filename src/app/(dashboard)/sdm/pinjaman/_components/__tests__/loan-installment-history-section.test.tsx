@@ -4,6 +4,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { LoanInstallmentHistorySection } from "../loan-installment-history-section"
 import {
   LOAN_INSTALLMENT_AGGREGATE_LABEL,
+  LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL,
   LOAN_INSTALLMENT_HISTORY_NOTICE,
   LOAN_INSTALLMENT_LEDGER_LABEL,
   LOAN_INSTALLMENT_NEXT_LABEL,
@@ -24,6 +25,7 @@ afterEach(() => {
 function baseHistory(overrides: Partial<LoanInstallmentHistory> = {}): LoanInstallmentHistory {
   return {
     notice: LOAN_INSTALLMENT_HISTORY_NOTICE,
+    emptyLabel: LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL,
     loan: {
       id: 11,
       employeeId: 7,
@@ -82,8 +84,26 @@ describe("LoanInstallmentHistorySection", () => {
     )
     const text = container.textContent ?? ""
     expect(text).not.toContain(LOAN_INSTALLMENT_UNALLOCATED_LABEL)
-    expect(text).toContain("Belum ada cicilan terbayar tercatat.")
+    expect(text).toContain(LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL)
     expect(container.querySelector("table")).toBeNull()
+    unmountCard(root)
+  })
+
+  it("AC-LH53-F4: tampil mengikuti nilai emptyLabel payload, bukan literal komponen", () => {
+    const custom = "Label kosong khusus payload uji."
+    const { container, root } = renderCard(
+      <LoanInstallmentHistorySection
+        history={baseHistory({
+          aggregateSlipRows: [],
+          unallocatedAmount: 0,
+          hasUnallocated: false,
+          emptyLabel: custom,
+        })}
+      />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain(custom)
+    expect(text).not.toContain(LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL)
     unmountCard(root)
   })
 
