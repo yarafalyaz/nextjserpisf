@@ -1663,7 +1663,7 @@ model SalesInvoice {
   // Nomor faktur pajak keluaran (e-Faktur/Coretax). Opsional: faktur pajak
   // terbit di luar Silengkap, jadi dokumen lama/tanpa PPN tetap valid kosong.
   taxInvoiceNumber     String?               @map("tax_invoice_number")
-  documentNo           String                @unique @map("document_no")
+  documentNo           String?               @unique @map("document_no")
   customerId           Int                   @map("customer_id")
   salesOrderId         Int?                  @map("sales_order_id")
   quotationId          Int?                  @map("quotation_id")

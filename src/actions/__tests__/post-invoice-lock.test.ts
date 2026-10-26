@@ -16,8 +16,11 @@ const onSalesInvoicePostedMock = vi.fn()
 const invoiceFindUniqueOrThrowMock = vi.fn()
 const invoiceItemCountMock = vi.fn()
 const invoiceUpdateManyMock = vi.fn()
+const invoiceUpdateMock = vi.fn()
+const invoiceFindFirstMock = vi.fn()
 const customerFindUniqueMock = vi.fn()
 const invoiceAggregateMock = vi.fn()
+const generateDocumentNumberMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -27,6 +30,8 @@ vi.mock("@/lib/db/prisma", () => {
     $transaction: vi.fn((cb) => cb(mockPrisma)),
     salesInvoice: {
       findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
+      findFirst: (...a: unknown[]) => invoiceFindFirstMock(...a),
+      update: (...a: unknown[]) => invoiceUpdateMock(...a),
       updateMany: (...a: unknown[]) => invoiceUpdateManyMock(...a),
       aggregate: (...a: unknown[]) => invoiceAggregateMock(...a),
     },
@@ -50,7 +55,9 @@ vi.mock("@/lib/hooks/sales-payment.hook", () => ({
 vi.mock("@/lib/hooks/sales-return.hook", () => ({ onSalesReturnCompleted: vi.fn() }))
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: {} }))
 vi.mock("@/lib/services/quotation-sync.service", () => ({ resyncOnEdit: vi.fn() }))
-vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn(async () => "INV-0001") }))
+vi.mock("@/lib/utils/document-number", () => ({
+  generateDocumentNumber: (...a: unknown[]) => generateDocumentNumberMock(...a),
+}))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
 vi.mock("@/lib/sales/return-validation", () => ({ findOverReturn: vi.fn(() => null) }))
@@ -64,13 +71,17 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, onSalesInvoicePostedMock,
     invoiceFindUniqueOrThrowMock, invoiceItemCountMock, invoiceUpdateManyMock,
+    invoiceUpdateMock, invoiceFindFirstMock, generateDocumentNumberMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 3 })
   invoiceFindUniqueOrThrowMock.mockResolvedValue({
-    id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0,
+    id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0, documentNo: null,
   })
   invoiceItemCountMock.mockResolvedValue(2)
   invoiceUpdateManyMock.mockResolvedValue({ count: 1 })
+  invoiceUpdateMock.mockResolvedValue({ id: 11 })
+  invoiceFindFirstMock.mockResolvedValue(null) // slug bebas
+  generateDocumentNumberMock.mockResolvedValue("001/INV/YRA/10/2026")
   onSalesInvoicePostedMock.mockResolvedValue(undefined)
 })
 
@@ -91,7 +102,7 @@ describe("postInvoice concurrency guard", () => {
 
   it("posts an invoice whose workflow approval set status=approved", async () => {
     invoiceFindUniqueOrThrowMock.mockResolvedValue({
-      id: 11, status: "approved", customerId: 8, grandTotal: 1000, paidAmount: 0,
+      id: 11, status: "approved", customerId: 8, grandTotal: 1000, paidAmount: 0, documentNo: null,
     })
 
     const result = await postInvoice(11)
@@ -113,7 +124,7 @@ describe("postInvoice concurrency guard", () => {
 
   it("refuses posting an invoice that is not in draft", async () => {
     invoiceFindUniqueOrThrowMock.mockResolvedValue({
-      id: 11, status: "posted", customerId: 8, grandTotal: 1000, paidAmount: 0,
+      id: 11, status: "posted", customerId: 8, grandTotal: 1000, paidAmount: 0, documentNo: null,
     })
 
     const result = await postInvoice(11)
@@ -121,5 +132,59 @@ describe("postInvoice concurrency guard", () => {
     expect(result.success).toBe(false)
     expect(invoiceUpdateManyMock).not.toHaveBeenCalled()
     expect(onSalesInvoicePostedMock).not.toHaveBeenCalled()
+  })
+
+  // K5 falsifikasi: nomor terbit HANYA saat posting, unik per posting, dan
+  // faktur pra-migrasi yang sudah bernomor tidak diterbitkan ulang.
+  it("K5: menerbitkan nomor INV + slug saat posting draft tanpa nomor", async () => {
+    const result = await postInvoice(11)
+
+    expect(result.success).toBe(true)
+    expect(generateDocumentNumberMock).toHaveBeenCalledTimes(1)
+    expect(generateDocumentNumberMock).toHaveBeenCalledWith("INV")
+    expect(invoiceUpdateMock).toHaveBeenCalledTimes(1)
+    const updateArg = invoiceUpdateMock.mock.calls[0][0]
+    expect(updateArg.where.id).toBe(11)
+    expect(updateArg.data.documentNo).toBe("001/INV/YRA/10/2026")
+    expect(typeof updateArg.data.slug).toBe("string")
+  })
+
+  it("K5: dua draft diposting berurutan mendapat nomor berbeda", async () => {
+    generateDocumentNumberMock
+      .mockResolvedValueOnce("001/INV/YRA/10/2026")
+      .mockResolvedValueOnce("002/INV/YRA/10/2026")
+
+    await postInvoice(11)
+    await postInvoice(12)
+
+    const first = invoiceUpdateMock.mock.calls[0][0].data.documentNo
+    const second = invoiceUpdateMock.mock.calls[1][0].data.documentNo
+    expect(first).toBe("001/INV/YRA/10/2026")
+    expect(second).toBe("002/INV/YRA/10/2026")
+    expect(first).not.toBe(second)
+  })
+
+  it("K5: faktur yang sudah bernomor (pra-migrasi) tidak diterbitkan ulang", async () => {
+    invoiceFindUniqueOrThrowMock.mockResolvedValue({
+      id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0,
+      documentNo: "009/INV/YRA/09/2026",
+    })
+
+    const result = await postInvoice(11)
+
+    expect(result.success).toBe(true)
+    expect(generateDocumentNumberMock).not.toHaveBeenCalled()
+    expect(invoiceUpdateMock).not.toHaveBeenCalled()
+    expect(onSalesInvoicePostedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("K5: klaim kalah -> nomor tidak diterbitkan (draft gagal posting tidak membakar nomor)", async () => {
+    invoiceUpdateManyMock.mockResolvedValue({ count: 0 })
+
+    const result = await postInvoice(11)
+
+    expect(result.success).toBe(false)
+    expect(generateDocumentNumberMock).not.toHaveBeenCalled()
+    expect(invoiceUpdateMock).not.toHaveBeenCalled()
   })
 })
