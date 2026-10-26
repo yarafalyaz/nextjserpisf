@@ -110,6 +110,11 @@ export const PERMISSIONS = [
       "edit_sales_orders",
       "delete_sales_orders",
       "approve_sales_orders",
+      // F-2026-10-25-035-B (Q-CL2-2): key TUNGGAL override gerbang kredit.
+      // Default hanya super_admin (katalog penuh) + admin (katalog penuh
+      // minus administrasi sistem); role bawaan lain TIDAK diberi, termasuk
+      // finance. Sensitif (approve_) — wajib sadar di EXPECTED_SENSITIVE.
+      "approve_credit_overrides",
       "view_sales_invoices",
       "create_sales_invoices",
       "edit_sales_invoices",

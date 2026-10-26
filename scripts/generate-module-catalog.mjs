@@ -86,6 +86,9 @@ const RESOURCES = [
   ["quotations", "sales", "Penawaran"],
   ["down_payments", "sales", "Uang Muka"],
   ["sales_orders", "sales", "Pesanan Penjualan"],
+  // F-2026-10-25-035-B (Q-CL2-2): resource override gerbang kredit agar
+  // approve_credit_overrides lolos fail-closed generator.
+  ["credit_overrides", "sales", "Override Batas Kredit"],
   ["delivery_orders", "sales", "Surat Jalan"],
   ["sales_invoices", "sales", "Faktur Penjualan"],
   ["sales_payments", "sales", "Pembayaran Penjualan"],
