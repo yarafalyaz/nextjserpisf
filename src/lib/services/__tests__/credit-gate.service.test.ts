@@ -6,6 +6,41 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * kosong kecuali yang diatur tes, creditOverride antrean in-memory.
  */
 
+// Prisma global termock untuk fase 3 (persistCreditGatePending memakai
+// prisma.$transaction sendiri, bukan tx lahir). State diatur per tes lewat
+// phase3State; tx fase-3 meniru baris pelanggan + antrean override.
+const phase3State = vi.hoisted(() => ({
+  customerDeletedAt: null as Date | null,
+  customerExists: true,
+  candidates: [] as Record<string, unknown>[],
+  created: [] as Record<string, unknown>[],
+  nextId: 900,
+}))
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        $queryRaw: vi.fn(async () => []),
+        customer: {
+          findUnique: vi.fn(async () =>
+            phase3State.customerExists
+              ? { deletedAt: phase3State.customerDeletedAt }
+              : null,
+          ),
+        },
+        creditOverride: {
+          findMany: vi.fn(async () => phase3State.candidates),
+          create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+            const row = { id: phase3State.nextId, ...data }
+            phase3State.created.push(row)
+            return row
+          }),
+        },
+      }),
+  },
+}))
+
 type Row = Record<string, unknown>
 
 function model(rows: Row[] = []) {
@@ -72,6 +107,8 @@ import {
   creditOverrideExpiryWib,
   CreditGateBlockedError,
   deriveCreditOverrideStatus,
+  persistCreditGatePending,
+  type CreditGateOutcome,
 } from "../credit-gate.service"
 
 const attempt = {
@@ -325,5 +362,178 @@ describe("sidik + kedaluwarsa", () => {
       }),
     ).toBe(9)
     expect(assertCreditGatePassed({ kind: "gate_off" })).toBeNull()
+  })
+})
+
+describe("fase 3: persistCreditGatePending (penjaga unit TEMUAN 6422009586)", () => {
+  const assessment = {
+    status: "over" as const,
+    statusLabel: "Lewat batas",
+    exposure: 600_000,
+    creditLimit: 500_000,
+    utilization: 1.2,
+    blocked: true,
+    reason: "over_limit" as never,
+  }
+  const blocked = (
+    over: { requestReason?: string | null } = {},
+  ): Extract<CreditGateOutcome, { kind: "blocked" }> => ({
+    kind: "blocked",
+    assessment,
+    message: "tertahan uji",
+    attempt: { ...attempt, ...over },
+  })
+
+  beforeEach(() => {
+    phase3State.customerDeletedAt = null
+    phase3State.customerExists = true
+    phase3State.candidates = []
+    phase3State.created = []
+  })
+
+  it("membuat tepat 1 pending dengan angka fase 1 apa adanya (tanpa hitung ulang)", async () => {
+    const id = await persistCreditGatePending(blocked())
+    expect(id).toBe(900)
+    expect(phase3State.created).toHaveLength(1)
+    expect(phase3State.created[0]).toMatchObject({
+      customerId: 3,
+      documentType: "sales_order",
+      fingerprint: creditAttemptFingerprint(attempt),
+      attemptedAmount: 600_000,
+      creditLimit: 500_000,
+      exposure: 600_000,
+      exposureStatus: "over",
+      utilization: 1.2,
+      requestedBy: 7,
+      requestReason: "Proyek mendesak pelanggan",
+      status: "pending",
+    })
+  })
+
+  it("idempoten sidik: pending hidup dipakai ulang, nol baris baru", async () => {
+    phase3State.candidates = [
+      {
+        id: 77,
+        fingerprint: creditAttemptFingerprint(attempt),
+        status: "pending",
+        createdAt: new Date(),
+        expiresAt: null,
+      },
+    ]
+    expect(await persistCreditGatePending(blocked())).toBe(77)
+    expect(phase3State.created).toHaveLength(0)
+  })
+
+  it("approved hidup dipakai ulang (tidak diduplikasi); used/expired lahir pending baru", async () => {
+    phase3State.candidates = [
+      {
+        id: 78,
+        fingerprint: creditAttemptFingerprint(attempt),
+        status: "approved",
+        createdAt: new Date(),
+        expiresAt: creditOverrideExpiryWib(new Date()),
+      },
+    ]
+    expect(await persistCreditGatePending(blocked())).toBe(78)
+    expect(phase3State.created).toHaveLength(0)
+
+    phase3State.candidates = [
+      {
+        id: 79,
+        fingerprint: creditAttemptFingerprint(attempt),
+        status: "used",
+        createdAt: new Date(),
+        expiresAt: null,
+      },
+    ]
+    expect(await persistCreditGatePending(blocked())).toBe(900)
+    expect(phase3State.created).toHaveLength(1)
+  })
+
+  it("tanpa alasan / alasan kosong -> null, nol tulis (jalur convert/DP/resync eksplisit)", async () => {
+    expect(await persistCreditGatePending(blocked({ requestReason: null }))).toBeNull()
+    expect(await persistCreditGatePending(blocked({ requestReason: "   " }))).toBeNull()
+    expect(phase3State.created).toHaveLength(0)
+  })
+
+  it("pelanggan terarsip atau hilang -> null, nol tulis", async () => {
+    phase3State.customerDeletedAt = new Date()
+    expect(await persistCreditGatePending(blocked())).toBeNull()
+    phase3State.customerDeletedAt = null
+    phase3State.customerExists = false
+    expect(await persistCreditGatePending(blocked())).toBeNull()
+    expect(phase3State.created).toHaveLength(0)
+  })
+})
+
+describe("fase 2: consumeApprovedCreditOverrideInTx cek sidik/status (penjaga unit)", () => {
+  const doc = { id: 88, documentNo: "SO-001" }
+
+  it("sidik tidak cocok (nominal berubah) -> throw, override tidak ditandai used", async () => {
+    const row = {
+      id: 44,
+      customerId: 3,
+      fingerprint: creditAttemptFingerprint({ ...attempt, attemptedAmount: 1 }),
+      status: "approved",
+      createdAt: new Date(),
+      expiresAt: creditOverrideExpiryWib(new Date()),
+    }
+    const tx = makeTx({ gateEnabled: true, creditLimit: 500_000, overrides: [row] })
+    await expect(consumeApprovedCreditOverrideInTx(tx, 44, attempt, doc)).rejects.toThrow(
+      "sudah tidak dapat dipakai",
+    )
+    const update = (tx as never as { creditOverride: { update: ReturnType<typeof vi.fn> } })
+      .creditOverride.update
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it("pelanggan override lain -> throw, tidak used", async () => {
+    const row = {
+      id: 44,
+      customerId: 99,
+      fingerprint: creditAttemptFingerprint(attempt),
+      status: "approved",
+      createdAt: new Date(),
+      expiresAt: creditOverrideExpiryWib(new Date()),
+    }
+    const tx = makeTx({ gateEnabled: true, creditLimit: 500_000, overrides: [row] })
+    await expect(consumeApprovedCreditOverrideInTx(tx, 44, attempt, doc)).rejects.toThrow(
+      "sudah tidak dapat dipakai",
+    )
+  })
+
+  it("approved kedaluwarsa -> throw, tidak used", async () => {
+    const row = {
+      id: 44,
+      customerId: 3,
+      fingerprint: creditAttemptFingerprint(attempt),
+      status: "approved",
+      createdAt: new Date("2026-10-20T03:00:00Z"),
+      expiresAt: new Date("2026-10-20T16:59:59.999Z"),
+    }
+    const tx = makeTx({ gateEnabled: true, creditLimit: 500_000, overrides: [row] })
+    await expect(
+      consumeApprovedCreditOverrideInTx(tx, 44, { ...attempt, now: new Date() }, doc),
+    ).rejects.toThrow("sudah tidak dapat dipakai")
+  })
+
+  it("pelanggan terarsip saat consume -> throw, tidak used", async () => {
+    const row = {
+      id: 44,
+      customerId: 3,
+      fingerprint: creditAttemptFingerprint(attempt),
+      status: "approved",
+      createdAt: new Date(),
+      expiresAt: creditOverrideExpiryWib(new Date()),
+    }
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 500_000,
+      customerDeletedAt: new Date(),
+      overrides: [row],
+    })
+    await expect(consumeApprovedCreditOverrideInTx(tx, 44, attempt, doc)).rejects.toThrow(
+      "sudah tidak dapat dipakai",
+    )
   })
 })
