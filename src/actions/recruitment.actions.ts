@@ -13,25 +13,7 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
-
-/** Tahapan seleksi pelamar (urutan maju; rejected/hired terminal). */
-export const APPLICANT_STAGES = [
-  "applied",
-  "screening",
-  "interview",
-  "offering",
-  "hired",
-  "rejected",
-] as const;
-
-export const APPLICANT_STAGE_LABELS: Record<string, string> = {
-  applied: "Melamar",
-  screening: "Seleksi Berkas",
-  interview: "Wawancara",
-  offering: "Penawaran",
-  hired: "Diterima",
-  rejected: "Ditolak",
-};
+import { APPLICANT_STAGES } from "@/lib/hr/hcms-scoring";
 
 const TERMINAL_STAGES = new Set(["hired", "rejected"]);
 
