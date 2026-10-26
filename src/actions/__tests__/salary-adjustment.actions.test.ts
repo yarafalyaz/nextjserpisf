@@ -20,12 +20,16 @@ const mocks = vi.hoisted(() => ({
   employeeFindUniqueOrThrow: vi.fn(),
   transaction: vi.fn(),
   logActivity: vi.fn(),
+  employeeFindUniqueScope: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: mocks.requirePermission,
 }))
-vi.mock("@/lib/auth/hr-scope", () => ({ getHrScope: mocks.getHrScope }))
+vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/hr-scope")>()
+  return { getHrScope: mocks.getHrScope, assertHrEmployeeAccess: actual.assertHrEmployeeAccess }
+})
 vi.mock("@/lib/auth/field-visibility", () => ({
   canViewSalaryAmounts: mocks.canViewSalaryAmounts,
 }))
@@ -68,6 +72,27 @@ function pendingRow(overrides: Record<string, unknown> = {}) {
     createdBy: 10,
     ...overrides,
   }
+}
+
+const NOMINAL_GAJI_TERLARANG = /5000000|4000000|5\.000\.000|4\.000\.000/
+
+function mockCreateTransaction() {
+  const txMock = {
+    $executeRaw: vi.fn(async () => 1),
+    employee: {
+      findUniqueOrThrow: vi.fn(async () => ({ baseSalary: 4_000_000, name: "Budi" })),
+    },
+    salaryAdjustment: {
+      create: vi.fn(async (args: { data: Record<string, unknown> }) => ({
+        id: 9,
+        ...args.data,
+      })),
+    },
+  }
+  mocks.transaction.mockImplementation(
+    async (fn: (tx: typeof txMock) => unknown) => fn(txMock),
+  )
+  return txMock
 }
 
 beforeEach(() => {
@@ -175,21 +200,7 @@ describe("createSalaryAdjustment (lahir menunggu, BR-SA-01/04)", () => {
 
   it("baris lahir menunggu walau tanggal efektif lampau; master tak berubah", async () => {
     mocks.requirePermission.mockResolvedValue(maker)
-    const txMock = {
-      $executeRaw: vi.fn(async () => 1),
-      employee: {
-        findUniqueOrThrow: vi.fn(async () => ({ baseSalary: 4_000_000, name: "Budi" })),
-      },
-      salaryAdjustment: {
-        create: vi.fn(async (args: { data: Record<string, unknown> }) => ({
-          id: 9,
-          ...args.data,
-        })),
-      },
-    }
-    mocks.transaction.mockImplementation(
-      async (fn: (tx: typeof txMock) => unknown) => fn(txMock),
-    )
+    const txMock = mockCreateTransaction()
     const res = await createSalaryAdjustment(form())
     expect(res.success).toBe(true)
     expect(txMock.salaryAdjustment.create).toHaveBeenCalledWith({
@@ -201,8 +212,93 @@ describe("createSalaryAdjustment (lahir menunggu, BR-SA-01/04)", () => {
     }
     // Deskripsi log tidak memuat nominal (semangat TEMUAN-2 t_fedea179).
     const desc = String(mocks.logActivity.mock.calls[0]?.[3] ?? "")
-    expect(desc).not.toContain("5000000")
-    expect(desc).not.toContain("4000000")
+    expect(desc).not.toMatch(NOMINAL_GAJI_TERLARANG)
+  })
+})
+
+describe("TEMUAN-1 scope HR create/get/cancel", () => {
+  const deptActor = { id: "30", roles: ["kepala_bengkel"] }
+  function formFor(emp: string) {
+    const fd = new FormData()
+    fd.set("employeeId", emp)
+    fd.set("newBaseSalary", "5000000")
+    fd.set("reason", "berkala")
+    fd.set("effectiveDate", "2027-01-01")
+    return fd
+  }
+  it("create: aktor department ditolak untuk karyawan luar departemen", async () => {
+    mocks.requirePermission.mockResolvedValue(deptActor)
+    mocks.getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    mocks.employeeFindUnique.mockResolvedValue({ departmentId: 99 })
+    const res = await createSalaryAdjustment(formFor("7"))
+    expect(res.success).toBe(false)
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+  it("create: aktor self ditolak untuk karyawan lain", async () => {
+    mocks.requirePermission.mockResolvedValue({ id: "31", roles: [] })
+    mocks.getHrScope.mockResolvedValue({ kind: "self", employeeId: 31 })
+    const res = await createSalaryAdjustment(formFor("7"))
+    expect(res.success).toBe(false)
+    expect(mocks.transaction).not.toHaveBeenCalled()
+  })
+  it("get: aktor department ditolak untuk karyawan luar departemen, tanpa query riwayat/sapuan", async () => {
+    mocks.requirePermission.mockResolvedValue(deptActor)
+    mocks.getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    mocks.employeeFindUnique.mockResolvedValue({ departmentId: 99 })
+    const res = await getSalaryAdjustments(7)
+    expect(res.success).toBe(false)
+    expect(mocks.adjustmentFindMany).not.toHaveBeenCalled()
+    expect(mocks.adjustmentUpdateMany).not.toHaveBeenCalled()
+  })
+  it("get: aktor self ditolak untuk karyawan lain", async () => {
+    mocks.requirePermission.mockResolvedValue({ id: "31", roles: [] })
+    mocks.getHrScope.mockResolvedValue({ kind: "self", employeeId: 31 })
+    const res = await getSalaryAdjustments(7)
+    expect(res.success).toBe(false)
+    expect(mocks.adjustmentFindMany).not.toHaveBeenCalled()
+  })
+  it("cancel: aktor department ditolak untuk karyawan luar departemen (employeeId dari baris)", async () => {
+    mocks.requirePermission.mockResolvedValue(deptActor)
+    mocks.getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    mocks.adjustmentFindUnique.mockResolvedValue(pendingRow({ employeeId: 7 }))
+    mocks.employeeFindUnique.mockResolvedValue({ departmentId: 99 })
+    const res = await cancelSalaryAdjustment(5)
+    expect(res.success).toBe(false)
+    expect(mocks.adjustmentUpdateMany).not.toHaveBeenCalled()
+  })
+  it("cancel: aktor scope all tetap lolos", async () => {
+    mocks.requirePermission.mockResolvedValue(approver)
+    mocks.getHrScope.mockResolvedValue({ kind: "all" })
+    mocks.adjustmentFindUnique.mockResolvedValue(pendingRow({ employeeId: 7 }))
+    const res = await cancelSalaryAdjustment(5)
+    expect(res).toEqual({ success: true })
+  })
+  it("TEMUAN-2: tidak ada deskripsi ActivityLog memuat nominal gaji di semua aksi", async () => {
+    // Panggil 3 aksi sungguhan lebih dulu: tanpa ini logActivity.mock.calls
+    // kosong (beforeEach clearAllMocks) dan loop asersi jadi vakum.
+    mocks.requirePermission.mockResolvedValue(maker)
+    mockCreateTransaction()
+    const created = await createSalaryAdjustment(formFor("7"))
+    expect(created.success).toBe(true)
+
+    mocks.requirePermission.mockResolvedValue(approver)
+    mocks.adjustmentFindUnique.mockResolvedValue(pendingRow())
+    await expect(approveSalaryAdjustment(5)).resolves.toEqual({
+      success: true,
+      status: "scheduled",
+    })
+    mocks.adjustmentFindUnique.mockResolvedValue(pendingRow())
+    await expect(rejectSalaryAdjustment(5, "Belum sesuai struktur")).resolves.toEqual({
+      success: true,
+      status: "ditolak",
+    })
+
+    // Satu log per aksi (create + approve + reject): penjaga tidak vakum.
+    expect(mocks.logActivity).toHaveBeenCalledTimes(3)
+    for (const call of mocks.logActivity.mock.calls) {
+      const desc = String(call[3] ?? "")
+      expect(desc).not.toMatch(NOMINAL_GAJI_TERLARANG)
+    }
   })
 })
 
