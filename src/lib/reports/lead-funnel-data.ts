@@ -51,7 +51,7 @@ export async function getLeadFunnel(
       deletedAt: true,
       activities: {
         where: { type: { in: ["status_change", "conversion"] } },
-        select: { type: true, oldStatus: true, newStatus: true, createdAt: true },
+        select: { type: true, oldStatus: true, newStatus: true, createdAt: true, description: true },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       },
     },
