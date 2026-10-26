@@ -8,18 +8,15 @@ vi.mock("@/actions/email-log.actions", () => ({
 import { EmailStatementSection } from "../email-statement-section"
 import { recordEmailLinkOpened } from "@/actions/email-log.actions"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL } from "./statement-section-test-utils"
 
 afterEach(() => {
   clearRenderedCards()
   vi.mocked(recordEmailLinkOpened).mockClear()
 })
 
-const PERIOD = {
-  periodStart: new Date("2026-01-01T00:00:00.000Z"),
-  periodEnd: new Date("2026-10-15T00:00:00.000Z"),
-  periodLabel: "Periode 1 Jan 2026 – 15 Okt 2026",
-}
-const CUSTOMER = { id: 7, name: "CV Uji" }
+const PERIOD = STATEMENT_PERIOD
+const CUSTOMER = STATEMENT_CUSTOMER
 
 function section(overrides: Partial<Parameters<typeof EmailStatementSection>[0]> = {}) {
   return (
@@ -100,10 +97,7 @@ describe("EmailStatementSection F-2026-10-25-043-F1", () => {
   })
 
   it("AC-SE-F4: riwayat baca-saja terbaru-dulu, waktu WIB + nama staf apa adanya, terpisah dari WA", () => {
-    const trail = [
-      { userName: "Sari", createdAt: new Date("2026-10-21T03:00:00.000Z") },
-      { userName: null, createdAt: new Date("2026-10-20T03:00:00.000Z") },
-    ]
+    const trail = [...STATEMENT_TRAIL]
     const { container, root } = renderCard(section({ emailTrail: trail }))
     const list = container.querySelector('[aria-label="Riwayat tautan Email dibuka"]')
     expect(list).not.toBeNull()

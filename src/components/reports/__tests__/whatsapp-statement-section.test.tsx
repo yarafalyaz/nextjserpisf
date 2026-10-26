@@ -8,18 +8,15 @@ vi.mock("@/actions/whatsapp-log.actions", () => ({
 import { WhatsappStatementSection } from "../whatsapp-statement-section"
 import { recordWhatsappLinkOpened } from "@/actions/whatsapp-log.actions"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL } from "./statement-section-test-utils"
 
 afterEach(() => {
   clearRenderedCards()
   vi.mocked(recordWhatsappLinkOpened).mockClear()
 })
 
-const PERIOD = {
-  periodStart: new Date("2026-01-01T00:00:00.000Z"),
-  periodEnd: new Date("2026-10-15T00:00:00.000Z"),
-  periodLabel: "Periode 1 Jan 2026 – 15 Okt 2026",
-}
-const CUSTOMER = { id: 7, name: "CV Uji" }
+const PERIOD = STATEMENT_PERIOD
+const CUSTOMER = STATEMENT_CUSTOMER
 
 function section(overrides: Partial<Parameters<typeof WhatsappStatementSection>[0]> = {}) {
   return (
@@ -99,10 +96,7 @@ describe("WhatsappStatementSection F-2026-10-25-038-F1", () => {
   })
 
   it("AC-SW-F4: riwayat baca-saja terbaru-dulu, waktu WIB + nama staf apa adanya", () => {
-    const trail = [
-      { userName: "Sari", createdAt: new Date("2026-10-21T03:00:00.000Z") },
-      { userName: null, createdAt: new Date("2026-10-20T03:00:00.000Z") },
-    ]
+    const trail = [...STATEMENT_TRAIL]
     const { container, root } = renderCard(section({ whatsappTrail: trail }))
     const list = container.querySelector('[aria-label="Riwayat tautan WhatsApp dibuka"]')
     expect(list).not.toBeNull()
