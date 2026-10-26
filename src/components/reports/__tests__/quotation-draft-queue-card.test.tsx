@@ -91,8 +91,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
     const { container, root } = renderCard(<QueueProbe rows={visible} total={4} />)
     roots.push(root)
     const text = container.textContent ?? ""
-
-    for (const header of [
+    const headers = [
       "Pelanggan",
       "No. Penawaran",
       "Penjual",
@@ -103,9 +102,8 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
       "Nilai",
       "Tahap",
       "Aksi",
-    ]) {
-      expect(text).toContain(header)
-    }
+    ]
+    headers.forEach((header) => expect(text).toContain(header))
     expect(text).toContain("Draf Penawaran Basi")
     expect(text).toContain("Lewat Masa Berlaku — Belum Terkirim")
     expect(text).toContain("Masa Berlaku Menipis")
