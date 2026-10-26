@@ -8,6 +8,7 @@ import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { CustomerStatementCard } from "@/components/reports/customer-statement-card"
 import { WhatsappStatementSection } from "@/components/reports/whatsapp-statement-section"
+import { EmailStatementSection } from "@/components/reports/email-statement-section"
 import { loadCustomerStatement } from "@/lib/reports/customer-statement-data"
 import {
   loadReportPeriodCustomer,
@@ -33,6 +34,11 @@ export const metadata: Metadata = { title: "Statement Pelanggan" }
  * riwayat jejak baca-saja (`WhatsappStatementSection`, konsumen kontrak
  * Backend 038-B1) — pesan dari payload server, klik tercatat jujur sebagai
  * "Tautan WhatsApp dibuka", tanpa klaim terkirim.
+ *
+ * F-2026-10-25-043-F1: permukaan email sejajar WA — tombol "Kirim Email"
+ * + riwayat (`EmailStatementSection`, konsumen kontrak Backend 043-B1
+ * PR #926) — tautan mailto dari builder server, klik tercatat jujur
+ * sebagai "Tautan Email dibuka", tanpa klaim terkirim/dibaca.
  */
 export default async function CustomerStatementPage({
   params: routeParams,
@@ -90,6 +96,15 @@ export default async function CustomerStatementPage({
             periodStart={period.start}
             periodEnd={period.end}
             whatsappTrail={report.whatsappTrail}
+          />
+          <EmailStatementSection
+            customer={report.customer}
+            customerEmail={report.customerEmail}
+            closingBalance={report.statement.closingBalance}
+            periodLabel={report.periodLabel}
+            periodStart={period.start}
+            periodEnd={period.end}
+            emailTrail={report.emailTrail}
           />
           <CustomerStatementCard statement={report.statement} />
         </>

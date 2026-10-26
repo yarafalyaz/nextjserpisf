@@ -88,6 +88,7 @@ export const navigation: NavItem[] = [
       { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, permission: "view_quotations" },
       { label: "Antrean Penawaran", href: "/penjualan/antrean-penawaran", icon: ListTodo, permission: "view_quotations" },
       { label: "Draf Penawaran Basi", href: "/penjualan/antrean-penawaran-draf", icon: ListTodo, permission: "view_quotations" },
+      { label: "Pesanan Draft Mengendap", href: "/penjualan/antrean-pesanan-draf", icon: ListTodo, permission: "view_sales_orders" },
       { label: "Faktur Draft Mengendap", href: "/penjualan/antrean-faktur-draf", icon: ListTodo, permission: "view_sales_invoices" },
       { label: "Antrean Penawaran Diterima", href: "/penjualan/antrean-penawaran-diterima", icon: ListTodo, permission: "view_quotations" },
       { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
@@ -156,6 +157,8 @@ export const navigation: NavItem[] = [
     icon: Users,
     children: [
       { label: "Absensi", href: "/sdm/absensi", icon: CalendarCheck, permission: "view_attendance" },
+      { label: "Rekap Kehadiran", href: "/sdm/absensi/rekap", icon: CalendarCheck, permission: "view_attendance" },
+      { label: "Koreksi Absensi", href: "/sdm/absensi/koreksi", icon: CalendarCheck, permission: "view_attendance_corrections" },
       { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, permission: "view_leave_requests" },
       { label: "Antrean Persetujuan HR", href: "/sdm/persetujuan", icon: ClipboardCheck, permissions: ["approve_leave_requests", "approve_overtime_requests"] },
       { label: "Saldo Cuti", href: "/sdm/cuti/saldo", icon: Palmtree, permission: "view_leave_requests" },

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { InvoiceExchangeForm, type ExchangeableInvoice } from "../_components/invoice-exchange-form"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
 import type { Metadata } from "next"
 
@@ -52,7 +53,7 @@ export default async function CreateInvoiceExchangePage({
       .filter((invoice) => !exchanged.has(invoice.id))
       .map((invoice) => ({
         id: invoice.id,
-        documentNo: invoice.documentNo,
+        documentNo: salesInvoiceLabel(invoice),
         date: invoice.date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }),
         grandTotal: Number(invoice.grandTotal),
         paidAmount: Number(invoice.paidAmount),
