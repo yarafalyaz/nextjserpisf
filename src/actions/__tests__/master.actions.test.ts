@@ -1563,14 +1563,14 @@ describe('Coverage Hardening Edge Cases', () => {
 
   it('createEmployee - with wantsLogin existing user', async () => {
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Email sudah terdaftar")
   })
 
   it('createEmployee - with wantsLogin success', async () => {
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
-    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
     fd.append("loginRoleIds", "1")
     const res = await actions.createEmployee(fd)
     if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
@@ -1600,7 +1600,7 @@ describe('Coverage Hardening Edge Cases', () => {
   it('updateEmployee - wantsLogin email exists', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" }))
     expect(res?.success).toBe(false)
   })
 
@@ -1615,7 +1615,7 @@ describe('Coverage Hardening Edge Cases', () => {
   it('updateEmployee - wantsLogin success', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
-    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
     fd.append("loginRoleIds", "1")
     const res = await actions.updateEmployee(1, fd)
     if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
