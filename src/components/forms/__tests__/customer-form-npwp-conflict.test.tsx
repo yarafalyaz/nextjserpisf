@@ -9,12 +9,14 @@ import {
   submitFilledForm,
 } from "./form-a11y-test-utils"
 
-vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
-vi.mock("@/lib/utils/toast", async () => (await import("./form-a11y-test-utils")).toastModule)
-vi.mock("@/actions/master.actions", () => ({
+const mocks = vi.hoisted(() => ({
   createCustomer: vi.fn(),
   updateCustomer: vi.fn(),
 }))
+
+vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
+vi.mock("@/lib/utils/toast", async () => (await import("./form-a11y-test-utils")).toastModule)
+vi.mock("@/actions/master.actions", () => mocks)
 vi.mock("@/lib/quick-add/registry", async () => (await import("./form-a11y-test-utils")).quickAddRegistryModule)
 
 const mockedCreate = vi.mocked(createCustomer)
