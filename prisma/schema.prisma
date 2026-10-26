@@ -4981,6 +4981,15 @@ model CustomerVehicle {
   // check-in/serah terima WO. Null = belum pernah tercatat; klaim tetap boleh
   // masuk (kasus tepi odometer tak terbaca diputus manual, bukan ditolak).
   lastOdometerKm Int?       @map("last_odometer_km")
+  // F-2026-10-25-021-S tahap 1: jadwal servis berikutnya dicatat manual staf
+  // berizin (BR-SV-02 satu jadwal aktif; catat ulang menimpa). Tanggal dan/atau
+  // km target boleh kosong salah satu (BR-SV-03). Status pengingat TURUNAN
+  // baca-saja di builder service-reminder-queue — bukan kolom status.
+  nextServiceDate     DateTime? @map("next_service_date") @db.Date
+  nextServiceKm       Int?      @map("next_service_km")
+  nextServiceNote     String?   @map("next_service_note") @db.Text
+  nextServiceUpdatedBy Int?     @map("next_service_updated_by")
+  nextServiceUpdatedAt DateTime? @map("next_service_updated_at")
   isActive      Boolean     @default(true) @map("is_active")
   notes         String?     @db.Text
   deletedAt     DateTime?   @map("deleted_at")

@@ -36,6 +36,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/rekap-komisi": "Menampilkan rekap komisi informatif per penjual dari faktur lunas, tanpa pembayaran atau jurnal",
   "/laporan/target-penjualan": "Menampilkan target vs pencapaian penjualan informatif per penjual dari faktur lunas, bukan dasar bonus, jurnal, atau pembayaran",
   "/laporan/hasil-penawaran": "Menampilkan ringkasan penawaran diterima, ditolak, tingkat menang, konversi, dan kategori alasan kalah",
+  "/laporan/riwayat-harga-jual": "Menampilkan riwayat harga satuan aktual per pelanggan dan barang dari faktur terbit beserta sumber harganya, baca-saja tanpa mengubah faktur",
   "/laporan/garansi-segera-berakhir": "Menampilkan antrean cakupan garansi yang segera atau baru berakhir per pelanggan dan kendaraan, tanpa kontak pelanggan",
   "/laporan/aging-klaim-supplier": "Menampilkan daftar aging klaim supplier yang masih terbuka per supplier, part, dan umur hari sejak pengajuan ke supplier",
   "/laporan/corong-prospek": "Menampilkan posisi saat ini dan corong gerakan periode prospek per tahap, sumber, dan penanggung",
