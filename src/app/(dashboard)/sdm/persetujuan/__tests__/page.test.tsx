@@ -114,6 +114,43 @@ describe("gerbang loan halaman antrean persetujuan HR (syarat audit PR #876)", (
     expect(kinds()).toEqual([])
   })
 
+  it("pemegang cuti saja (view+approve_leave_requests) TIDAK menerima baris lembur/loan", async () => {
+    mocks.requireAnyPermission.mockResolvedValue({
+      roles: [],
+      permissions: ["view_leave_requests", "approve_leave_requests"],
+    })
+    await renderPage()
+    expect(kinds()).toEqual(["leave"])
+  })
+
+  it("pemegang lembur saja (view+approve_overtime_requests) TIDAK menerima baris cuti", async () => {
+    mocks.requireAnyPermission.mockResolvedValue({
+      roles: [],
+      permissions: ["view_overtime", "approve_overtime_requests"],
+    })
+    await renderPage()
+    expect(kinds()).not.toContain("leave")
+    expect(kinds()).toEqual(["overtime"])
+  })
+
+  it("approve_leave_requests tanpa view_leave_requests TIDAK menerima baris cuti", async () => {
+    mocks.requireAnyPermission.mockResolvedValue({
+      roles: [],
+      permissions: ["approve_leave_requests"],
+    })
+    await renderPage()
+    expect(kinds()).toEqual([])
+  })
+
+  it("approve_overtime_requests tanpa view_overtime TIDAK menerima baris lembur", async () => {
+    mocks.requireAnyPermission.mockResolvedValue({
+      roles: [],
+      permissions: ["approve_overtime_requests"],
+    })
+    await renderPage()
+    expect(kinds()).toEqual([])
+  })
+
   it("super_admin menerima semua kind", async () => {
     mocks.requireAnyPermission.mockResolvedValue({
       roles: ["super_admin"],
