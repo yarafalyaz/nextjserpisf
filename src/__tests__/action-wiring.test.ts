@@ -281,6 +281,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
   // (komponen customer-commission-rates di master kategori + loader histori
   // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
+  // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
+  // menunggu UI pesan tertahan + permukaan persetujuan (frontend t_52903522);
+  // entri beku dibuang saat UI tersambung.
+  "src/actions/credit-override.actions.ts::approveCreditOverride":
+    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::rejectCreditOverride":
+    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::listCreditOverrides":
+    "F-2026-10-25-035-B backend; UI daftar/jejak override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::getMyCreditOverrideStatus":
+    "F-2026-10-25-035-B backend; UI status permintaan override menyusul (frontend t_52903522)",
 }
 
 describe("keterhubungan aksi server", () => {
