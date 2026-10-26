@@ -1229,6 +1229,8 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(res?.success).toBe(true)
 
     const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    // K5: draft lahir tanpa nomor — nomor terbit hanya saat postInvoice.
+    expect(arg.data.documentNo).toBeNull()
     expect(arg.data.items.create).toHaveLength(2)
     // subtotal = 600 + 350 = 950
     expect(Number(arg.data.subtotal)).toBe(950)

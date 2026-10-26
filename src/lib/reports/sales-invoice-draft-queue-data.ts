@@ -19,6 +19,7 @@
  * menulis jurnal/status/kolom (BR-SIQ-07, AC-SIQ-B5).
  */
 
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import {
@@ -103,7 +104,7 @@ export async function getSalesInvoiceDraftQueue(
     invoices.map((i) => ({
       invoiceId: i.id,
       slug: i.slug,
-      documentNo: i.documentNo,
+      documentNo: salesInvoiceLabel({ id: i.id, documentNo: i.documentNo }),
       status: i.status,
       deletedAt: i.deletedAt,
       customerId: i.customerId,
