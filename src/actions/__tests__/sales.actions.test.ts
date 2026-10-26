@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => {
     quotationHistory: buildModelMock(),
     customerVehicle: buildModelMock(),
     customer: buildModelMock(),
+    customerCommissionRate: buildModelMock(),
     customerPriceList: buildModelMock(),
     salesOrder: buildModelMock(),
     salesOrderItem: buildModelMock(),
@@ -765,6 +766,54 @@ describe("Sales Invoice Actions", () => {
     await actions.updateSalesInvoice(1, fdMap(payload))
     const updateCall = mocks.prismaMock.salesInvoice.update.mock.calls[1][0].data
     expect(updateCall.paymentStatus).toBe("paid")
+  })
+
+  // F-2026-10-25-036-S lanjutan: edit item menurunkan grandTotal ke bawah
+  // paidAmount lama (mis. DP penuh) menaikkan status ke paid TANPA jalur
+  // pembayaran — snapshot tarif komisi wajib dibekukan lewat helper bersama.
+  it("updateSalesInvoice transisi ke paid via edit membekukan snapshot tarif per tanggal faktur", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "posted", paidAmount: 150, commissionRatePercent: null,
+    })
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 1 })
+    // Tarif master berubah sesudah tanggal faktur: 2% s/d 1 Jul, 3% sesudahnya.
+    // Tanggal faktur final 12 Jun 2026 -> snapshot beku 2%, bukan tarif berjalan.
+    mocks.prismaMock.customerCommissionRate.findMany.mockResolvedValue([
+      { id: 1, customerCategoryId: 1, commissionPercent: 2, effectiveFrom: new Date(Date.UTC(2026, 0, 1)), effectiveTo: new Date(Date.UTC(2026, 6, 1)) },
+      { id: 2, customerCategoryId: 1, commissionPercent: 3, effectiveFrom: new Date(Date.UTC(2026, 6, 1)), effectiveTo: null },
+    ])
+    const payload = { customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    const updateCall = mocks.prismaMock.salesInvoice.update.mock.calls[1][0].data
+    expect(updateCall.paymentStatus).toBe("paid")
+    expect(Number(updateCall.commissionRatePercent)).toBe(2)
+    expect(updateCall.commissionCustomerCategoryId).toBe(1)
+    expect(updateCall.commissionRateId).toBe(1)
+  })
+  it("updateSalesInvoice tidak menimpa snapshot komisi yang sudah beku", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "posted", paidAmount: 150, commissionRatePercent: 7,
+    })
+    const payload = { customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    const updateCall = mocks.prismaMock.salesInvoice.update.mock.calls[1][0].data
+    expect(updateCall.paymentStatus).toBe("paid")
+    expect(updateCall.commissionRatePercent).toBeUndefined()
+    expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
+  })
+  it("updateSalesInvoice turun ke partial tidak menulis snapshot komisi", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "posted", paidAmount: 50, commissionRatePercent: null,
+    })
+    const payload = { customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    const updateCall = mocks.prismaMock.salesInvoice.update.mock.calls[1][0].data
+    expect(updateCall.paymentStatus).toBe("partial")
+    expect(updateCall.commissionRatePercent).toBeUndefined()
+    expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
   })
 
   // === voidSalesInvoice ===
