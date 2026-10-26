@@ -27,6 +27,7 @@ type JournalRow = {
 
 let journals: JournalRow[]
 let liabilityActive: boolean
+let liabilityDeletedAt: Date | null
 let journalCreateCount: number
 
 function matches(row: JournalRow, where: Record<string, unknown>): boolean {
@@ -44,7 +45,7 @@ function makeTx() {
       findFirst: async () => ({ reimbursementLiabilityAccountId: 209 }),
     },
     account: {
-      findUnique: async () => ({ id: 209, code: "210209", isActive: liabilityActive }),
+      findUnique: async () => ({ id: 209, code: "210209", isActive: liabilityActive, deletedAt: liabilityDeletedAt }),
       findMany: async (a: { where: { id: { in: number[] } } }) =>
         a.where.id.in.map((id) => ({ id })),
     },
@@ -84,6 +85,7 @@ function makeTx() {
 beforeEach(() => {
   journals = []
   liabilityActive = true
+  liabilityDeletedAt = null
   journalCreateCount = 0
 })
 
@@ -93,6 +95,15 @@ describe("onReimbursementClaimApproved (018-V Putusan 3)", () => {
     await expect(
       onReimbursementClaimApproved(42, 7, makeTx() as never),
     ).rejects.toThrow(/210209.*nonaktif/)
+    expect(journalCreateCount).toBe(0)
+    expect(journals).toHaveLength(0)
+  })
+
+  it("(c2) akun 210209 soft-deleted -> approve ditolak fail-closed, nol jurnal akrual", async () => {
+    liabilityDeletedAt = new Date("2026-10-25T00:00:00.000Z")
+    await expect(
+      onReimbursementClaimApproved(42, 7, makeTx() as never),
+    ).rejects.toThrow(/210209.*nonaktif atau terhapus/)
     expect(journalCreateCount).toBe(0)
     expect(journals).toHaveLength(0)
   })
@@ -108,6 +119,41 @@ describe("onReimbursementClaimApproved (018-V Putusan 3)", () => {
 })
 
 describe("onReimbursementClaimPaid (018-V Putusan 2)", () => {
+  it("(e) hanya J-RB1 soft-deleted -> bayar ditolak, nol J-RB2", async () => {
+    journals.push({
+      id: 1,
+      referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+      referenceId: 42,
+      status: "POSTED",
+      deletedAt: new Date("2026-10-25T00:00:00.000Z"),
+      totalDebit: 150000,
+    })
+    await expect(
+      onReimbursementClaimPaid(42, 7, makeTx() as never),
+    ).rejects.toThrow(/belum punya jurnal akrual J-RB1/)
+    expect(
+      journals.filter((j) => j.referenceType === REIMBURSEMENT_PAYMENT_REFERENCE_TYPE),
+    ).toHaveLength(0)
+  })
+
+  it("(c3) J-RB1 aktif tapi akun 210209 nonaktif -> bayar ditolak, nol J-RB2", async () => {
+    journals.push({
+      id: 1,
+      referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+      referenceId: 42,
+      status: "POSTED",
+      deletedAt: null,
+      totalDebit: 150000,
+    })
+    liabilityActive = false
+    await expect(
+      onReimbursementClaimPaid(42, 7, makeTx() as never),
+    ).rejects.toThrow(/210209.*nonaktif/)
+    expect(
+      journals.filter((j) => j.referenceType === REIMBURSEMENT_PAYMENT_REFERENCE_TYPE),
+    ).toHaveLength(0)
+  })
+
   it("(d) hanya J-RB1 REVERSED -> bayar ditolak, nol J-RB2", async () => {
     journals.push({
       id: 1,

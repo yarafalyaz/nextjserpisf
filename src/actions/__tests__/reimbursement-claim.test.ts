@@ -253,8 +253,23 @@ describe("markExpensePaid klaim (E-RB5-2)", () => {
     const r = await markExpensePaid(42)
     expect(r.success).toBe(false)
     expect(paidMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
     const where = journalFindFirstMock.mock.calls.at(-1)?.[0]?.where
     expect(where.status).toEqual({ not: "REVERSED" })
+    expect(where.deletedAt).toBeNull()
+  })
+
+  it("(b) hanya J-RB1 soft-deleted -> bayar ditolak, J-RB2 tidak dipanggil, status tetap approved", async () => {
+    txExpenseFindUniqueOrThrowMock.mockResolvedValue({
+      ...CLAIM, status: "approved", paidFromAccountId: 100,
+    })
+    // DB nyata menyaring J-RB1 terhapus keluar; query aktif kembali kosong.
+    journalFindFirstMock.mockResolvedValue(null)
+    const r = await markExpensePaid(42)
+    expect(r.success).toBe(false)
+    expect(paidMock).not.toHaveBeenCalled()
+    expect(txExpenseUpdateManyMock).not.toHaveBeenCalled()
+    const where = journalFindFirstMock.mock.calls.at(-1)?.[0]?.where
     expect(where.deletedAt).toBeNull()
   })
 })
