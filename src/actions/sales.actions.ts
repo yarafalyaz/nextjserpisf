@@ -31,8 +31,36 @@ import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSc
 import {
   assessCreditGateInTx,
   assertCreditGatePassed,
-  markCreditOverrideUsed,
+  consumeApprovedCreditOverrideInTx,
+  isCreditGateBlockedError,
+  persistCreditGatePending,
 } from "@/lib/services/credit-gate.service"
+
+/**
+ * F-2026-10-25-035-B fase 3 (fix TEMUAN 6422009586): hasil tertahan yang
+ * dikembalikan action sesudah tx lahir rollback. Rekod pending dipersist
+ * di tx pendek tersendiri; kegagalan persist tidak mengubah hasil
+ * tertahan (dokumen memang tidak lahir) tetapi dicatat di log server.
+ */
+async function creditGateBlockedResult(e: unknown) {
+  if (!isCreditGateBlockedError(e)) return null
+  let creditOverrideId: number | null = null
+  try {
+    creditOverrideId = await persistCreditGatePending(e.outcome)
+  } catch (persistError) {
+    console.error("[creditGate] persist pending gagal", persistError)
+  }
+  const a = e.outcome.assessment
+  return {
+    success: false as const,
+    error: e.outcome.message,
+    creditOverrideId,
+    creditLimit: a.creditLimit,
+    creditExposure: a.exposure,
+    creditStatus: a.status,
+    creditStatusLabel: a.statusLabel,
+  }
+}
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
@@ -516,15 +544,19 @@ export async function convertQuotationToOrder(quotationId: number) {
 
     // F-2026-10-25-035-B titik tahan Q-CL2-4: nilai SEBELUM baris lahir;
     // tertahan = throw = rollback penuh (nol SO lahir).
+    const convertAttempt = {
+      customerId: quotation.customerId,
+      documentType: "sales_order" as const,
+      attemptedAmount: Number(quotation.grandTotal),
+      requestedBy: Number(user.id),
+      quotationId: quotation.id,
+      // Jalur tanpa FormData: tanpa alasan -> tanpa rekod pending
+      // (fase 3 mengembalikan null); approved bersidik sama tetap
+      // bisa dipakai lewat fase 2 di bawah.
+      requestReason: null,
+    }
     const convertOverrideId = assertCreditGatePassed(
-      await assessCreditGateInTx(tx, {
-        customerId: quotation.customerId,
-        documentType: "sales_order",
-        attemptedAmount: Number(quotation.grandTotal),
-        requestedBy: Number(user.id),
-        quotationId: quotation.id,
-        requestReason: null,
-      }),
+      await assessCreditGateInTx(tx, convertAttempt),
     )
 
     const so = await tx.salesOrder.create({
@@ -567,7 +599,7 @@ export async function convertQuotationToOrder(quotationId: number) {
     })
 
     if (convertOverrideId != null) {
-      await markCreditOverrideUsed(tx, convertOverrideId, {
+      await consumeApprovedCreditOverrideInTx(tx, convertOverrideId, convertAttempt, {
         id: so.id,
         documentNo: so.documentNo,
       })
@@ -583,6 +615,8 @@ export async function convertQuotationToOrder(quotationId: number) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[convertQuotationToOrder]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -922,6 +956,13 @@ export async function confirmDownPayment(dpId: number) {
         select: { id: true },
       })
       if (!existingInvGate) {
+        // Tanpa alasan (jalur DP): tertahan tanpa rekod pending
+        // (fase 3 -> null). assert juga melempar bila ada approved
+        // bersidik sama dari jalur beralasan — overrideId-nya sengaja
+        // tidak dipakai di sini: dokumen hasil DP lahir dari hook
+        // konfirmasi rantai, bukan satu dokumen tertagih langsung di
+        // tx ini, jadi penandaan used tidak punya dokumen pasangan;
+        // menahan ulang adalah perilaku fail-closed yang benar.
         assertCreditGatePassed(
           await assessCreditGateInTx(tx, {
             customerId: dpGate.customerId,
@@ -947,6 +988,8 @@ export async function confirmDownPayment(dpId: number) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[confirmDownPayment]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -1043,17 +1086,18 @@ export async function createSalesOrder(formData: FormData) {
     const grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
 
     // F-2026-10-25-035-B titik tahan Q-CL2-4: nilai SEBELUM baris lahir;
-    // tertahan = throw = rollback (nol SO, rekod pending ikut rollback —
-    // dibuat ulang oleh percobaan berikutnya / jalur minta Frontend).
+    // tertahan = CreditGateBlockedError = rollback (nol SO lahir);
+    // rekod pending dipersist action di fase 3 sesudah rollback.
+    const soAttempt = {
+      customerId: v.customerId,
+      documentType: "sales_order" as const,
+      attemptedAmount: grandTotal,
+      requestedBy: Number(user.id),
+      quotationId: v.quotationId ?? null,
+      requestReason: v.creditOverrideReason ?? null,
+    }
     const soOverrideId = assertCreditGatePassed(
-      await assessCreditGateInTx(tx, {
-        customerId: v.customerId,
-        documentType: "sales_order",
-        attemptedAmount: grandTotal,
-        requestedBy: Number(user.id),
-        quotationId: v.quotationId ?? null,
-        requestReason: v.creditOverrideReason ?? null,
-      }),
+      await assessCreditGateInTx(tx, soAttempt),
     )
 
     const createdOrder = await tx.salesOrder.create({
@@ -1090,7 +1134,7 @@ export async function createSalesOrder(formData: FormData) {
       },
     })
     if (soOverrideId != null) {
-      await markCreditOverrideUsed(tx, soOverrideId, {
+      await consumeApprovedCreditOverrideInTx(tx, soOverrideId, soAttempt, {
         id: createdOrder.id,
         documentNo: createdOrder.documentNo,
       })
@@ -1104,6 +1148,8 @@ export async function createSalesOrder(formData: FormData) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[createSalesOrder]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -1324,15 +1370,17 @@ export async function createDifferenceInvoice(quotationId: number) {
 
       // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 5: faktur turunan
       // menaikkan tertagih ikut dinilai; tertahan = rollback.
+      const diffAttempt = {
+        customerId: quotation.customerId,
+        documentType: "sales_invoice" as const,
+        attemptedAmount: candidate.differenceAmount,
+        requestedBy: Number(user.id),
+        quotationId: quotation.id,
+        // Tanpa FormData: tanpa alasan -> tanpa rekod (lihat fase 3).
+        requestReason: null,
+      }
       const diffOverrideId = assertCreditGatePassed(
-        await assessCreditGateInTx(tx, {
-          customerId: quotation.customerId,
-          documentType: "sales_invoice",
-          attemptedAmount: candidate.differenceAmount,
-          requestedBy: Number(user.id),
-          quotationId: quotation.id,
-          requestReason: null,
-        }),
+        await assessCreditGateInTx(tx, diffAttempt),
       )
       const created = await tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
@@ -1346,7 +1394,7 @@ export async function createDifferenceInvoice(quotationId: number) {
         }),
       })
       if (diffOverrideId != null) {
-        await markCreditOverrideUsed(tx, diffOverrideId, {
+        await consumeApprovedCreditOverrideInTx(tx, diffOverrideId, diffAttempt, {
           id: created.id,
           documentNo: created.documentNo,
         })
@@ -1362,6 +1410,8 @@ export async function createDifferenceInvoice(quotationId: number) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[createDifferenceInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -1414,15 +1464,17 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada progres yang bisa ditagih")
 
       // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 5.
+      const progAttempt = {
+        customerId: quotation.customerId,
+        documentType: "sales_invoice" as const,
+        attemptedAmount: candidate.progressAmount,
+        requestedBy: Number(user.id),
+        quotationId: quotation.id,
+        // Tanpa FormData: tanpa alasan -> tanpa rekod (lihat fase 3).
+        requestReason: null,
+      }
       const progOverrideId = assertCreditGatePassed(
-        await assessCreditGateInTx(tx, {
-          customerId: quotation.customerId,
-          documentType: "sales_invoice",
-          attemptedAmount: candidate.progressAmount,
-          requestedBy: Number(user.id),
-          quotationId: quotation.id,
-          requestReason: null,
-        }),
+        await assessCreditGateInTx(tx, progAttempt),
       )
       const created = await tx.salesInvoice.create({
         data: draftDerivedInvoiceData({
@@ -1436,7 +1488,7 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
         }),
       })
       if (progOverrideId != null) {
-        await markCreditOverrideUsed(tx, progOverrideId, {
+        await consumeApprovedCreditOverrideInTx(tx, progOverrideId, progAttempt, {
           id: created.id,
           documentNo: created.documentNo,
         })
@@ -1452,6 +1504,8 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[createProgressInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -1641,16 +1695,17 @@ export async function createSalesInvoice(formData: FormData) {
 
     // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 3 (sesudah
     // assertPeriodOpen di atas): nilai SEBELUM baris lahir dalam tx ini.
+    const invAttempt = {
+      customerId: v.customerId,
+      documentType: "sales_invoice" as const,
+      attemptedAmount: grandTotal,
+      requestedBy: Number(user.id),
+      quotationId: v.quotationId ?? null,
+      salesOrderId: v.salesOrderId ?? null,
+      requestReason: v.creditOverrideReason ?? null,
+    }
     const invOverrideId = assertCreditGatePassed(
-      await assessCreditGateInTx(tx, {
-        customerId: v.customerId,
-        documentType: "sales_invoice",
-        attemptedAmount: grandTotal,
-        requestedBy: Number(user.id),
-        quotationId: v.quotationId ?? null,
-        salesOrderId: v.salesOrderId ?? null,
-        requestReason: v.creditOverrideReason ?? null,
-      }),
+      await assessCreditGateInTx(tx, invAttempt),
     )
 
     const createdInvoice = await tx.salesInvoice.create({
@@ -1703,7 +1758,7 @@ export async function createSalesInvoice(formData: FormData) {
       },
     })
     if (invOverrideId != null) {
-      await markCreditOverrideUsed(tx, invOverrideId, {
+      await consumeApprovedCreditOverrideInTx(tx, invOverrideId, invAttempt, {
         id: createdInvoice.id,
         documentNo: createdInvoice.documentNo,
       })
@@ -1718,6 +1773,8 @@ export async function createSalesInvoice(formData: FormData) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[createSalesInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -2590,19 +2647,20 @@ export async function updateSalesOrder(id: number, formData: FormData) {
       // dinilai (EC-CL2-4 ubahan turun bebas). Penilaian sebelum tulis
       // total; tertahan = rollback seluruh ubahan.
       if (grandTotal > Number(existing.grandTotal)) {
+        const updAttempt = {
+          customerId: v.customerId,
+          documentType: "sales_order" as const,
+          attemptedAmount: grandTotal,
+          requestedBy: Number(user.id),
+          quotationId: v.quotationId ?? existing.quotationId,
+          existingDocumentId: id,
+          requestReason: v.creditOverrideReason ?? null,
+        }
         const updOverrideId = assertCreditGatePassed(
-          await assessCreditGateInTx(tx, {
-            customerId: v.customerId,
-            documentType: "sales_order",
-            attemptedAmount: grandTotal,
-            requestedBy: Number(user.id),
-            quotationId: v.quotationId ?? existing.quotationId,
-            existingDocumentId: id,
-            requestReason: v.creditOverrideReason ?? null,
-          }),
+          await assessCreditGateInTx(tx, updAttempt),
         )
         if (updOverrideId != null) {
-          await markCreditOverrideUsed(tx, updOverrideId, {
+          await consumeApprovedCreditOverrideInTx(tx, updOverrideId, updAttempt, {
             id,
             documentNo: existing.documentNo,
           })
@@ -2624,6 +2682,8 @@ export async function updateSalesOrder(id: number, formData: FormData) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[updateSalesOrder]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
@@ -2756,20 +2816,21 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 6: hanya delta naik
       // dinilai sebelum tulis/repost; tertahan = rollback seluruh ubahan.
       if (grandTotal > Number(existingInvoice.grandTotal)) {
+        const updInvAttempt = {
+          customerId: v.customerId,
+          documentType: "sales_invoice" as const,
+          attemptedAmount: grandTotal,
+          requestedBy: Number(user.id),
+          quotationId: v.quotationId ?? existingInvoice.quotationId,
+          salesOrderId: v.salesOrderId ?? existingInvoice.salesOrderId,
+          existingDocumentId: id,
+          requestReason: v.creditOverrideReason ?? null,
+        }
         const updInvOverrideId = assertCreditGatePassed(
-          await assessCreditGateInTx(tx, {
-            customerId: v.customerId,
-            documentType: "sales_invoice",
-            attemptedAmount: grandTotal,
-            requestedBy: Number(user.id),
-            quotationId: v.quotationId ?? existingInvoice.quotationId,
-            salesOrderId: v.salesOrderId ?? existingInvoice.salesOrderId,
-            existingDocumentId: id,
-            requestReason: v.creditOverrideReason ?? null,
-          }),
+          await assessCreditGateInTx(tx, updInvAttempt),
         )
         if (updInvOverrideId != null) {
-          await markCreditOverrideUsed(tx, updInvOverrideId, {
+          await consumeApprovedCreditOverrideInTx(tx, updInvOverrideId, updInvAttempt, {
             id,
             documentNo: existingInvoice.documentNo,
           })
@@ -2827,6 +2888,8 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    const blocked = await creditGateBlockedResult(e)
+    if (blocked) return blocked
     console.error("[updateSalesInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }

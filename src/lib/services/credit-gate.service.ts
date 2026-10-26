@@ -20,6 +20,24 @@
  * Serialisasi (EC-CL2-1): kunci baris pelanggan FOR UPDATE di awal penilaian
  * — dua simpan bersamaan pelanggan sama tidak memakai paparan basi.
  * Saklar mati (fail-safe false) = tanpa penilaian, tanpa rekod (AC-CL2-B1).
+ *
+ * FASE PERSISTENSI (fix TEMUAN Business 6422009586, kartu t_0f202cef):
+ * penilaian di dalam transaksi lahir TIDAK menulis rekod apa pun. Rekod
+ * pending yang dibuat di tx yang sama akan ikut rollback saat pemanggil
+ * menggagalkan kelahiran dokumen — pending tidak pernah persisten dari
+ * jalur simpan nyata. Karena itu alur dibagi tiga fase:
+ * 1. `assessCreditGateInTx` (tx lahir): nilai saja; bawa `attempt` pulang.
+ * 2. Pakai override: `consumeApprovedCreditOverrideInTx` (tx lahir, sesudah
+ *    dokumen terbuat): kunci ulang, cocokkan sidik, transisi approved->used
+ *    sekali bersama documentId/No — atomik dengan dokumen.
+ * 3. Tertahan: pemanggil melempar `CreditGateBlockedError`; SESUDAH tx lahir
+ *    rollback, action menjalankan `persistCreditGatePending` dalam tx
+ *    pendek tersendiri (prisma global) lalu mengembalikan id permintaan.
+ * Jalur tanpa alasan peminta (convert/difference/progress/DP/resync,
+ * requestReason null): TETAP tanpa rekod pending — Q-CL2-3 mewajibkan
+ * alasan peminta pada rekod; alasan tidak boleh dikarang sistem. Jalur itu
+ * tertahan tanpa rekod sampai limit turun atau override approved bersidik
+ * sama (dari jalur beralasan) dipakai. Perilaku ini eksplisit, bukan diam.
  */
 
 import { createHash } from "node:crypto"
@@ -37,6 +55,7 @@ import {
   assessCustomerCreditGate,
   type CustomerCreditGateAssessment,
 } from "@/lib/reports/customer-credit-gate"
+import { prisma } from "@/lib/db/prisma"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
 import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
@@ -65,21 +84,34 @@ export type CreditGateOutcome =
   | {
       kind: "blocked"
       assessment: CustomerCreditGateAssessment
-      overrideId: number | null
-      overrideStatus: string | null
       message: string
+      attempt: CreditGateAttempt
     }
   | {
-      kind: "override_used"
+      kind: "override_ready"
       assessment: CustomerCreditGateAssessment
       overrideId: number
+      attempt: CreditGateAttempt
     }
-  | {
-      kind: "override_pending"
-      assessment: CustomerCreditGateAssessment
-      overrideId: number
-      message: string
-    }
+
+/**
+ * Error tertahan gerbang kredit. Dibawa keluar transaksi lahir (yang
+ * rollback karenanya) supaya action dapat memersist pending di tx
+ * tersendiri lalu mengembalikan id-nya — lihat fase 3 di header berkas.
+ */
+export class CreditGateBlockedError extends Error {
+  readonly outcome: Extract<CreditGateOutcome, { kind: "blocked" }>
+
+  constructor(outcome: Extract<CreditGateOutcome, { kind: "blocked" }>) {
+    super(outcome.message)
+    this.name = "CreditGateBlockedError"
+    this.outcome = outcome
+  }
+}
+
+export function isCreditGateBlockedError(e: unknown): e is CreditGateBlockedError {
+  return e instanceof CreditGateBlockedError
+}
 
 type Tx = Prisma.TransactionClient
 
@@ -527,14 +559,13 @@ export async function assessCreditGateInTx(
 
   const fingerprint = creditAttemptFingerprint(attempt)
 
-  // Pelanggan terarsip: override gugur (EC-CL2-3) — tertahan tanpa rekod baru.
+  // Pelanggan terarsip: override gugur (EC-CL2-3) — tertahan tanpa rekod.
   if (customerArchived) {
     return {
       kind: "blocked",
       assessment,
-      overrideId: null,
-      overrideStatus: null,
       message: blockedMessage(assessment),
+      attempt,
     }
   }
 
@@ -543,78 +574,67 @@ export async function assessCreditGateInTx(
     orderBy: { createdAt: "desc" },
   })
 
-  // Pakai: approved cocok sidik -> transisi used sekali dalam tx lahir ini.
-  // Penanda used ditulis pemanggil sesudah dokumen lahir (documentId/No);
-  // di sini status dikunci lebih dulu supaya pakai kedua gagal.
+  // Approved cocok sidik: pemanggil memakainya lewat
+  // consumeApprovedCreditOverrideInTx di dalam tx lahir yang sama,
+  // SESUDAH dokumen terbuat. Di sini TIDAK ada transisi status — menulis
+  // "used" sebelum dokumen lahir akan ikut rollback / menggantung.
   const approved = candidates.find(
     (c) => deriveCreditOverrideStatus(c, now) === "approved",
   )
   if (approved) {
-    await tx.creditOverride.update({
-      where: { id: approved.id },
-      data: { status: "used" },
-    })
-    return { kind: "override_used", assessment, overrideId: approved.id }
-  }
-
-  const pending = candidates.find(
-    (c) => deriveCreditOverrideStatus(c, now) === "pending",
-  )
-  if (pending) {
-    return {
-      kind: "override_pending",
-      assessment,
-      overrideId: pending.id,
-      message: blockedMessage(assessment),
-    }
+    return { kind: "override_ready", assessment, overrideId: approved.id, attempt }
   }
 
   const reason = attempt.requestReason?.trim()
-  if (!reason) {
-    return {
-      kind: "blocked",
-      assessment,
-      overrideId: null,
-      overrideStatus: null,
-      message:
-        `${blockedMessage(assessment)} Alasan permintaan override wajib diisi.`,
-    }
-  }
-
-  const created = await tx.creditOverride.create({
-    data: {
-      customerId: attempt.customerId,
-      documentType: attempt.documentType,
-      fingerprint,
-      attemptedAmount: attempt.attemptedAmount,
-      creditLimit: assessment.creditLimit,
-      exposure: assessment.exposure,
-      exposureStatus: assessment.status,
-      utilization: assessment.utilization,
-      quotationId: attempt.quotationId ?? null,
-      salesOrderId: attempt.salesOrderId ?? null,
-      requestedBy: attempt.requestedBy,
-      requestReason: reason,
-      status: "pending",
-    },
-  })
   return {
-    kind: "override_pending",
+    kind: "blocked",
     assessment,
-    overrideId: created.id,
-    message: blockedMessage(assessment),
+    message: reason
+      ? blockedMessage(assessment)
+      : `${blockedMessage(assessment)} Alasan permintaan override wajib diisi.`,
+    attempt,
   }
 }
 
-/** Tandai override used dengan dokumen hasil, dalam tx lahir yang sama. */
-export async function markCreditOverrideUsed(
+/**
+ * Fase 2 (di dalam tx lahir, sesudah dokumen terbuat): kunci baris
+ * pelanggan + baris override, cocokkan ulang sidik terhadap percobaan
+ * berjalan, lalu transisi approved->used SEKALI bersama documentId/No.
+ * Gagal cocok (sudah dipakai transaksi lain, kedaluwarsa, pelanggan
+ * terarsip, sidik berubah) = throw pesan tertahan -> dokumen rollback,
+ * override tidak terpakai. Mengunci pelanggan lebih dulu menjaga urutan
+ * kunci yang sama dengan fase penilaian (anti deadlock antar jalur).
+ */
+export async function consumeApprovedCreditOverrideInTx(
   tx: Tx,
   overrideId: number,
+  attempt: CreditGateAttempt,
   document: { id: number; documentNo: string | null },
 ): Promise<void> {
+  const now = attempt.now ?? new Date()
+  await tx.$queryRaw`SELECT id FROM customers WHERE id = ${attempt.customerId} FOR UPDATE`
+  await tx.$queryRaw`SELECT id FROM credit_overrides WHERE id = ${overrideId} FOR UPDATE`
+  const row = await tx.creditOverride.findUnique({ where: { id: overrideId } })
+  const customer = await tx.customer.findUnique({
+    where: { id: attempt.customerId },
+    select: { deletedAt: true },
+  })
+  const usable =
+    row != null &&
+    row.customerId === attempt.customerId &&
+    row.fingerprint === creditAttemptFingerprint(attempt) &&
+    deriveCreditOverrideStatus(row, now) === "approved" &&
+    customer != null &&
+    customer.deletedAt == null
+  if (!usable) {
+    throw new Error(
+      "Persetujuan override batas kredit sudah tidak dapat dipakai untuk dokumen ini; simpan ulang untuk penilaian terbaru.",
+    )
+  }
   await tx.creditOverride.update({
     where: { id: overrideId },
     data: {
+      status: "used",
       usedDocumentId: document.id,
       usedDocumentNo: document.documentNo,
     },
@@ -622,14 +642,72 @@ export async function markCreditOverrideUsed(
 }
 
 /**
- * Penjaga titik lahir: throw pesan tertahan (rollback tx pemanggil) bila
- * outcome menahan. Mengembalikan overrideId yang terpakai (untuk ditandai
- * used sesudah dokumen lahir), atau null.
+ * Fase 3 (SESUDAH tx lahir rollback): persist rekod pending dalam tx
+ * pendek tersendiri memakai prisma global. Idempoten per sidik aktif:
+ * pending yang masih hidup dipakai ulang (id sama, nol baris baru);
+ * approved yang cocok sidik tidak diduplikasi (pemanggil akan memakai
+ * fase 2 pada simpan ulang); pelanggan terarsip / tanpa alasan -> null
+ * (tanpa rekod). Penilaian TIDAK dihitung ulang di sini — angka yang
+ * disimpan adalah angka fase 1 yang dibawa CreditGateBlockedError,
+ * supaya pesan dan rekod selalu konsisten untuk percobaan yang sama.
+ * Kegagalan persist DIBIARKAN melempar: action menangkapnya terpisah dan
+ * tetap mengembalikan hasil tertahan (dokumen memang tidak lahir) —
+ * lihat handleCreditGateBlocked di sales.actions.
+ */
+export async function persistCreditGatePending(
+  outcome: Extract<CreditGateOutcome, { kind: "blocked" }>,
+): Promise<number | null> {
+  const { attempt, assessment } = outcome
+  const reason = attempt.requestReason?.trim()
+  if (!reason) return null
+  const fingerprint = creditAttemptFingerprint(attempt)
+  const now = attempt.now ?? new Date()
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM customers WHERE id = ${attempt.customerId} FOR UPDATE`
+    const customer = await tx.customer.findUnique({
+      where: { id: attempt.customerId },
+      select: { deletedAt: true },
+    })
+    if (!customer || customer.deletedAt != null) return null
+    const candidates = await tx.creditOverride.findMany({
+      where: { fingerprint },
+      orderBy: { createdAt: "desc" },
+    })
+    const live = candidates.find((c) => {
+      const derived = deriveCreditOverrideStatus(c, now)
+      return derived === "pending" || derived === "approved"
+    })
+    if (live) return live.id
+    const created = await tx.creditOverride.create({
+      data: {
+        customerId: attempt.customerId,
+        documentType: attempt.documentType,
+        fingerprint,
+        attemptedAmount: attempt.attemptedAmount,
+        creditLimit: assessment.creditLimit,
+        exposure: assessment.exposure,
+        exposureStatus: assessment.status,
+        utilization: assessment.utilization,
+        quotationId: attempt.quotationId ?? null,
+        salesOrderId: attempt.salesOrderId ?? null,
+        requestedBy: attempt.requestedBy,
+        requestReason: reason,
+        status: "pending",
+      },
+    })
+    return created.id
+  })
+}
+
+/**
+ * Penjaga titik lahir: lempar CreditGateBlockedError (rollback tx
+ * pemanggil) bila outcome menahan. Mengembalikan overrideId approved
+ * yang siap dipakai fase 2, atau null (gate_off/allowed).
  */
 export function assertCreditGatePassed(outcome: CreditGateOutcome): number | null {
-  if (outcome.kind === "blocked" || outcome.kind === "override_pending") {
-    throw new Error(outcome.message)
+  if (outcome.kind === "blocked") {
+    throw new CreditGateBlockedError(outcome)
   }
-  if (outcome.kind === "override_used") return outcome.overrideId
+  if (outcome.kind === "override_ready") return outcome.overrideId
   return null
 }

@@ -55,7 +55,9 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 vi.mock("@/lib/services/credit-gate.service", () => ({
   assessCreditGateInTx: vi.fn().mockResolvedValue({ kind: "gate_off" }),
   assertCreditGatePassed: () => null,
-  markCreditOverrideUsed: vi.fn(),
+  consumeApprovedCreditOverrideInTx: vi.fn(),
+  isCreditGateBlockedError: () => false,
+  persistCreditGatePending: vi.fn(async () => null),
 }))
 
 import { convertQuotationToOrder } from "../sales.actions"

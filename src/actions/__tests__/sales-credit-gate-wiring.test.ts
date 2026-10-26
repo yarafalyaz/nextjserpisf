@@ -9,7 +9,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   assess: vi.fn(),
-  markUsed: vi.fn(async () => undefined),
+  consume: vi.fn(async () => undefined),
+  persist: vi.fn(async () => 501),
+  blockedError: class CreditGateBlockedError extends Error {
+    outcome: unknown
+    constructor(outcome: unknown) {
+      super((outcome as { message: string }).message)
+      this.outcome = outcome
+    }
+  },
   onReceived: vi.fn(async () => undefined),
   onConfirmed: vi.fn(async () => undefined),
   soCreate: vi.fn(async () => ({ id: 88, documentNo: "SO-001" })),
@@ -76,13 +84,16 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 vi.mock("@/lib/services/credit-gate.service", () => ({
   assessCreditGateInTx: (...a: unknown[]) => mocks.assess(...a),
   assertCreditGatePassed: (outcome: { kind: string; message?: string; overrideId?: number }) => {
-    if (outcome.kind === "blocked" || outcome.kind === "override_pending") {
-      throw new Error(outcome.message ?? "tertahan")
+    if (outcome.kind === "blocked") {
+      throw new mocks.blockedError(outcome)
     }
-    if (outcome.kind === "override_used") return outcome.overrideId ?? null
+    if (outcome.kind === "override_ready") return outcome.overrideId ?? null
     return null
   },
-  markCreditOverrideUsed: (...a: unknown[]) => mocks.markUsed(...(a as [])),
+  consumeApprovedCreditOverrideInTx: (...a: unknown[]) => mocks.consume(...(a as [])),
+  CreditGateBlockedError: mocks.blockedError,
+  isCreditGateBlockedError: (e: unknown) => e instanceof mocks.blockedError,
+  persistCreditGatePending: (...a: unknown[]) => mocks.persist(...(a as [])),
 }))
 
 import { confirmDownPayment, createSalesOrder } from "../sales.actions"
@@ -109,27 +120,34 @@ describe("wiring gerbang kredit di sales.actions (035-B)", () => {
     expect(mocks.soCreate).toHaveBeenCalledTimes(1)
   })
 
-  it("AC-CL2-B2: override_pending -> SO TIDAK lahir, pesan tertahan", async () => {
+  it("AC-CL2-B2: blocked -> SO TIDAK lahir; fase 3 persist pending dipanggil; hasil membawa creditOverrideId + angka builder", async () => {
     mocks.assess.mockResolvedValue({
-      kind: "override_pending",
-      overrideId: 501,
+      kind: "blocked",
       message: "Dokumen tertahan gerbang kredit: Lewat batas. Batas kredit Rp 500.000, PaparanBersih Rp 600.000.",
+      assessment: { creditLimit: 500000, exposure: 600000, status: "over", statusLabel: "Lewat batas" },
+      attempt: { customerId: 3 },
     })
     const res = await createSalesOrder(soForm())
     expect(res.success).toBe(false)
-    if (!res.success) expect(res.error).toContain("Lewat batas")
+    if (!res.success) {
+      expect(res.error).toContain("Lewat batas")
+      expect((res as { creditOverrideId?: number }).creditOverrideId).toBe(501)
+    }
     expect(mocks.soCreate).not.toHaveBeenCalled()
+    expect(mocks.persist).toHaveBeenCalledTimes(1)
   })
 
-  it("AC-CL2-B4: override_used -> SO lahir + override ditandai used dgn dokumen", async () => {
-    mocks.assess.mockResolvedValue({ kind: "override_used", overrideId: 44 })
+  it("AC-CL2-B4: override_ready -> SO lahir + consume menandai used dgn dokumen dalam tx sama", async () => {
+    mocks.assess.mockResolvedValue({ kind: "override_ready", overrideId: 44 })
     const res = await createSalesOrder(soForm())
     expect(res.success).toBe(true)
-    expect(mocks.markUsed).toHaveBeenCalledWith(
+    expect(mocks.consume).toHaveBeenCalledWith(
       expect.anything(),
       44,
+      expect.anything(),
       expect.objectContaining({ id: 88, documentNo: "SO-001" }),
     )
+    expect(mocks.persist).not.toHaveBeenCalled()
   })
 
   it("AC-CL2-B8 DP: tertahan di hulu -> rantai DP TIDAK jalan sama sekali", async () => {
@@ -141,8 +159,9 @@ describe("wiring gerbang kredit di sales.actions (035-B)", () => {
     })
     mocks.assess.mockResolvedValue({
       kind: "blocked",
-      overrideId: null,
       message: "Dokumen tertahan gerbang kredit: Lewat batas.",
+      assessment: { creditLimit: 500000, exposure: 600000, status: "over", statusLabel: "Lewat batas" },
+      attempt: { customerId: 3 },
     })
     const res = await confirmDownPayment(11)
     expect(res.success).toBe(false)

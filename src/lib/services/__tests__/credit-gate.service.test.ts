@@ -56,6 +56,7 @@ function makeTx(opts: {
     journal: model(opts.journals ?? []),
     creditOverride: {
       findMany: vi.fn(async () => opts.overrides ?? []),
+      findUnique: vi.fn(async () => (opts.overrides ?? [])[0] ?? null),
       create: vi.fn(async ({ data }: { data: Row }) => ({ id: 501, ...data })),
       update: vi.fn(async ({ data }: { data: Row }) => ({ id: 501, ...data })),
     },
@@ -66,8 +67,10 @@ function makeTx(opts: {
 import {
   assessCreditGateInTx,
   assertCreditGatePassed,
+  consumeApprovedCreditOverrideInTx,
   creditAttemptFingerprint,
   creditOverrideExpiryWib,
+  CreditGateBlockedError,
   deriveCreditOverrideStatus,
 } from "../credit-gate.service"
 
@@ -112,23 +115,25 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     if (out.kind === "allowed") expect(out.assessment.status).toBe("warning")
   })
 
-  it("AC-CL2-B2: over tanpa override -> pending lahir + pesan limit/paparan/label", async () => {
+  it("AC-CL2-B2 fase 1: over tanpa override -> blocked membawa attempt, NOL tulis rekod di tx lahir", async () => {
+    // Fix TEMUAN 6422009586: rekod yang dibuat di tx lahir ikut rollback.
+    // Fase 1 hanya menilai; persist pending adalah fase 3 di tx terpisah
+    // (dibuktikan tes integrasi DB nyata, bukan mock ini).
     const tx = makeTx({ gateEnabled: true, creditLimit: 500_000 })
     const out = await assessCreditGateInTx(tx, attempt)
-    expect(out.kind).toBe("override_pending")
-    if (out.kind === "override_pending") {
-      expect(out.overrideId).toBe(501)
+    expect(out.kind).toBe("blocked")
+    if (out.kind === "blocked") {
       expect(out.message).toContain("Lewat batas")
       expect(out.message).toContain("500")
       expect(out.assessment.exposure).toBe(600_000)
+      expect(out.attempt).toBe(attempt)
     }
     const create = (tx as never as { creditOverride: { create: ReturnType<typeof vi.fn> } })
       .creditOverride.create
-    expect(create).toHaveBeenCalledTimes(1)
-    const data = create.mock.calls[0][0].data
-    expect(data.status).toBe("pending")
-    expect(data.requestedBy).toBe(7)
-    expect(data.fingerprint).toBe(creditAttemptFingerprint(attempt))
+    expect(create).not.toHaveBeenCalled()
+    const update = (tx as never as { creditOverride: { update: ReturnType<typeof vi.fn> } })
+      .creditOverride.update
+    expect(update).not.toHaveBeenCalled()
   })
 
   it("over tanpa alasan -> blocked tanpa rekod", async () => {
@@ -140,9 +145,10 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it("AC-CL2-B4: approved cocok sidik -> override_used + transisi used sekali", async () => {
+  it("AC-CL2-B4 fase 1+2: approved cocok sidik -> override_ready tanpa transisi; consume menandai used+dokumen sekali", async () => {
     const approved = {
       id: 44,
+      customerId: 3,
       fingerprint: creditAttemptFingerprint(attempt),
       status: "approved",
       createdAt: new Date(),
@@ -150,14 +156,35 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     }
     const tx = makeTx({ gateEnabled: true, creditLimit: 500_000, overrides: [approved] })
     const out = await assessCreditGateInTx(tx, attempt)
-    expect(out.kind).toBe("override_used")
-    if (out.kind === "override_used") expect(out.overrideId).toBe(44)
+    expect(out.kind).toBe("override_ready")
+    if (out.kind === "override_ready") expect(out.overrideId).toBe(44)
     const update = (tx as never as { creditOverride: { update: ReturnType<typeof vi.fn> } })
       .creditOverride.update
+    expect(update).not.toHaveBeenCalled()
+    await consumeApprovedCreditOverrideInTx(tx, 44, attempt, {
+      id: 88,
+      documentNo: "SO-001",
+    })
+    expect(update).toHaveBeenCalledTimes(1)
     expect(update).toHaveBeenCalledWith({
       where: { id: 44 },
-      data: { status: "used" },
+      data: { status: "used", usedDocumentId: 88, usedDocumentNo: "SO-001" },
     })
+  })
+
+  it("fase 2: approved dipakai pihak lain (status used) -> consume throw, dokumen tidak lahir", async () => {
+    const used = {
+      id: 44,
+      customerId: 3,
+      fingerprint: creditAttemptFingerprint(attempt),
+      status: "used",
+      createdAt: new Date(),
+      expiresAt: creditOverrideExpiryWib(new Date()),
+    }
+    const tx = makeTx({ gateEnabled: true, creditLimit: 500_000, overrides: [used] })
+    await expect(
+      consumeApprovedCreditOverrideInTx(tx, 44, attempt, { id: 88, documentNo: "SO-001" }),
+    ).rejects.toThrow("sudah tidak dapat dipakai")
   })
 
   it("AC-CL2-B6: limit naik sampai tidak over -> allowed tanpa override", async () => {
@@ -179,7 +206,7 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it("pending existing identik -> override_pending id sama, nol create", async () => {
+  it("pending existing identik -> tetap blocked (belum disetujui), nol tulis di tx lahir", async () => {
     const pending = {
       id: 45,
       fingerprint: creditAttemptFingerprint(attempt),
@@ -189,8 +216,7 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     }
     const tx = makeTx({ gateEnabled: true, creditLimit: 500_000, overrides: [pending] })
     const out = await assessCreditGateInTx(tx, attempt)
-    expect(out.kind).toBe("override_pending")
-    if (out.kind === "override_pending") expect(out.overrideId).toBe(45)
+    expect(out.kind).toBe("blocked")
     const create = (tx as never as { creditOverride: { create: ReturnType<typeof vi.fn> } })
       .creditOverride.create
     expect(create).not.toHaveBeenCalled()
@@ -276,18 +302,27 @@ describe("sidik + kedaluwarsa", () => {
     ).toBe("pending")
   })
 
-  it("assertCreditGatePassed: blocked/pending throw, used -> id, lain null", () => {
-    expect(() =>
+  it("assertCreditGatePassed: blocked throw CreditGateBlockedError membawa outcome, ready -> id, lain null", () => {
+    let caught: unknown
+    try {
       assertCreditGatePassed({
         kind: "blocked",
         assessment: {} as never,
-        overrideId: null,
-        overrideStatus: null,
         message: "tertahan uji",
-      }),
-    ).toThrow("tertahan uji")
+        attempt,
+      })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(CreditGateBlockedError)
+    expect((caught as CreditGateBlockedError).outcome.attempt).toBe(attempt)
     expect(
-      assertCreditGatePassed({ kind: "override_used", assessment: {} as never, overrideId: 9 }),
+      assertCreditGatePassed({
+        kind: "override_ready",
+        assessment: {} as never,
+        overrideId: 9,
+        attempt,
+      }),
     ).toBe(9)
     expect(assertCreditGatePassed({ kind: "gate_off" })).toBeNull()
   })
