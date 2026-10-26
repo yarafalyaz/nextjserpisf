@@ -35748,3 +35748,157 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-091-S: antrean tugas proyek (Task) lewat tenggat belum selesai (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_f4f52f27. Basis `origin/main` `a1159f3be` (2026-10-27 06:25 WIB).
+
+**Verifikasi ID — tegas:** `F-2026-10-22-091-S` SUDAH TERPAKAI = antrean penawaran terkirim belum dijawab / masa berlaku menipis-kedaluwarsa (`docs/erp-research-backlog.md:17386`, builder `src/lib/reports/quotation-followup-queue.ts` LIVE). ID run ini `F-2026-10-27-091-S` tanggal beda (27 vs 22) — grep `F-2026-10-27-091` di backlog+board `origin/main` (`a1159f3be`) = 0/0 sebelum tulis; `gh pr list --search "091-S"` untuk tanggal 27 = 0; branch `hermes/business-f091-*` = 0 sebelum branch ini. Bebas per tanggal+nomor. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+**Bukan duplikat:**
+- Bukan F-2026-10-22-091-S (objek `Quotation` status `sent` vs `validUntil`; spec ini objek `Task` proyek vs `dueDate`, populasi belum-selesai — dokumen penjualan pra-keputusan vs tugas pelaksanaan proyek, disjungsi total).
+- Bukan earned value proyek (`src/lib/reports/project-earned-value.ts` F-2026-10-21-031): EV = uang tahap — progres tertimbang × anggaran tahap + realisasi, per proyek/tahap. Spec ini tanpa nominal, tanpa persen, per TUGAS vs tenggat kalender. Tidak ada angka EV/CPI/SPI di payload spec ini.
+- Bukan antrean perintah kerja / work-order-queue (`src/lib/reports/work-order-queue.ts:25` `ACTIVE_WORK_ORDER_STATUSES = draft/pending/in_progress`, objek `WorkOrder` bengkel + `endDate`): objek beda (`Task` di bawah `Project`, bukan `WorkOrder`), penanggung jawab beda (karyawan `assignedTo` Task vs teknisi WO), dan daftar tugas existing adalah permukaan induknya — bukan WO.
+- Bukan daftar tugas existing (`src/app/(dashboard)/proyek/tugas/page.tsx`): daftar itu ADA dan tetap dipakai — gapnya ia mengurut `createdAt desc`, saringan hanya chip status, tanpa ember lewat-tenggat/mendekati/tanpa-tenggat, tanpa umur keterlambatan, tanpa rekap per proyek/penanggung (bukti §2). Spec ini lapisan turunan baca di atas objek yang sama.
+- Bukan progres tahap `ProjectStage`/`ProjectStageProgress`: tahap punya kosakata sendiri termasuk `skipped` (`src/actions/project.actions.ts:279,289`) dan persen fisik. Task TIDAK punya kolom persen dan TIDAK tertaut tahap — menurunkan persen Task dari tahap = karangan terlarang (BR-PTQ-08).
+
+### 1. Workflow specification
+
+Aktor: pemegang `view_projects` (pembaca antrean tahap 1 — persis gerbang daftar tugas existing), pembuat tugas (`create_projects`), pengubah tugas (`edit_projects` + penjaga staf-hanya-tugas-sendiri existing), penghapus (`delete_projects`), manajer (`manage_projects`/`super_admin` untuk penugasan ulang). Antrean tidak menambah aktor dan tidak memperluas siapa melihat apa (BR-PTQ-06).
+
+Alur existing (TERVERIFIKASI-KODE, §2): tugas lahir lewat `createTask` (`create_projects`, status bawaan `pending`, `dueDate` disimpan `wibDateToUtcMidnight`) → dikerjakan/diperbarui lewat `updateTask` (`edit_projects`; staf non-manajer hanya tugas yang `assignedTo`-nya dirinya, dan tidak boleh menugaskan ulang) → selesai `completed` atau dibatalkan `cancelled` lewat pilihan status form yang sama. Tidak ada aksi transisi status khusus, tidak ada penanda selesai-pada, tidak ada riwayat status Task.
+
+Gap: tugas `pending`/`in_progress` yang tenggatnya sudah lewat tidak terbaca sebagai antrean kerja. Daftar tugas mengurut terbaru-dulu, jadi tugas terlama lewat tenggat — yang paling perlu dikejar — justru paling mudah jatuh dari pandangan; chip status tidak membedakan "belum selesai, tenggat besok" dari "belum selesai, tenggat lewat 30 hari" maupun "belum selesai, tanpa tenggat". Spec ini menambahkan **turunan baca**: populasi belum-selesai + tiga ember tenggat jujur + umur keterlambatan hari kalender WIB + rekap per proyek/penanggung, dihitung server, tampil verbatim.
+
+Dokumen masuk: rekod `Task` existing (+ nama proyek, nama penanggung jawab tertaut). Dokumen keluar: tidak ada — perubahan status/penugasan/tenggat tetap lewat form tugas existing berpenjaga penuh.
+
+Istilah ember (USULAN, final Q-PTQ-2): `LEWAT_TENGGAT`, `MENDEKATI`, `TANPA_TENGGAT` — kode ember turunan server, BUKAN status tersimpan. Kata judul usulan: `Tugas Proyek Lewat Tenggat`.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main a1159f3be)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Skema: `Task` `prisma/schema.prisma:5731-5752` — `projectId Int` wajib (`:5734`, relasi `Project` onDelete Cascade), `name`, `description?`, `status String @default("pending")` (`:5737`, String bebas — BUKAN enum Prisma), `assignedTo Int?` (`:5738`, relasi `Employee?`), `startDate DateTime?`, `dueDate DateTime?` (`:5740`), `createdAt`/`updatedAt`; indeks `[assignedTo]`, `[projectId]`, `[status]`, `[createdAt]`. TIDAK ada kolom persen progres, TIDAK ada `completedAt`, TIDAK ada `deletedAt`, TIDAK ada tautan ke `ProjectStage`.
+- **Kosakata status Task PERSIS** (verifikasi tiga sumber, jangan karang): (a) form tugas `src/app/(dashboard)/proyek/tugas/_components/task-form.tsx:32-37` `statusOptions` = `pending` ("Menunggu"), `in_progress` ("Dalam Proses"), `completed` ("Selesai"), `cancelled` ("Dibatalkan"); (b) chip halaman daftar `page.tsx:55` = `["", "pending", "in_progress", "completed", "cancelled"]`; (c) skema validasi `src/lib/validations/project.schemas.ts:127,138` `status: z.string().optional().default("pending")` — **string bebas, bukan `z.enum`**. Konsekuensi jujur: kosakata kanonik UI = empat nilai di atas, TETAPI jalur tulis tidak menolak nilai lain, jadi nilai liar di data (warisan/impor/tulis lama) MUNGKIN ada dan wajib tertanda, tidak ditebak (BR-PTQ-02). Label tampil existing: `src/lib/utils/status-labels.ts:7,13,23,35` pending→Menunggu, completed→Selesai, in_progress→Dalam Proses, cancelled→Dibatalkan.
+- **`skipped` BUKAN status Task.** `skipped` adalah kosakata `ProjectStage`: validasi tahap `project.actions.ts:279` `["pending","in_progress","completed","skipped"]`, penjaga tahap sebelumnya `:289` `notIn ["completed","skipped"]`, hitung selesai tahap `:418`. Memasukkan `skipped` ke populasi/eksklusi Task = mencampur dua model — dilarang (BR-PTQ-02). Untuk Task: terminal keluar-antrean = `completed` + `cancelled` saja (dari kosakata UI Task di atas).
+- Aksi: `createTask` `project.actions.ts:590` (`requirePermission("create_projects")` :596; `status: data.status ?? "pending"`; `assignedTo ?? null`; `startDate`/`dueDate` lewat `wibDateToUtcMidnight` :606-607 — tengah malam UTC hari kalender WIB, konvensi `src/lib/utils/attendance-time.ts:32-35`); `updateTask:622` (`edit_projects` :628; penjaga staf hanya tugas sendiri :634 `existing.assignedTo !== Number(actor.id)` → tolak; penjaga anti-reassign :645-653; `isManager` = `manage_projects` atau `super_admin` :630); `deleteTask:677` (`delete_projects`, hapus fisik — tidak ada soft-delete Task). Semantik WIB pembanding existing: `getWibTodayUtcDate` `attendance-time.ts:26-29`, pola builder antrean `quotation-followup-queue.ts:25` (`QUOTATION_EXPIRY_WARNING_DAYS = 3`) dan `work-order-queue.ts` (hari kalender WIB, tanpa tenggat tidak dituduh terlambat).
+- Daftar tugas existing: `page.tsx:26` `requirePermission("view_projects")`; query `findMany` (`:40-48`) saringan hanya `status` (dari chip, diterjemahkan `indoToStatus`) + `name contains` cari, `include project + assignee`, `orderBy createdAt desc`, paginasi server; kolom tabel (`task-table.tsx`): Nama/Proyek/Ditugaskan Ke (`assignee?.name || "-"`)/Status (`StatusChip`)/Tanggal Mulai/Tenggat/Aksi. TIDAK ada ember tenggat, umur keterlambatan, sisa hari, rekap per proyek/penanggung, atau saringan per penanggung jawab. Loader halaman TIDAK menyaring per penugasan — semua pemegang `view_projects` melihat semua tugas (fakta permukaan existing; tahap 1 spec ini mewarisi persis, BR-PTQ-06).
+- Izin katalog: `src/lib/auth/module-catalog.generated.ts:424-428` resource `projects` = `view_projects`/`create_projects`/`edit_projects`/`delete_projects`/`manage_projects`. Tidak ada key khusus tugas (`view_tasks` dst. = 0 grep) — tugas menumpang izin proyek.
+- Turunan tetangga yang sudah live dan TIDAK diduplikasi: earned value per proyek/tahap (uang, di atas); work-order-queue WO aktif + terlambat dari `endDate` (objek WO, di atas); antrean penawaran `sent` F-2026-10-22-091-S (objek Quotation, di atas).
+
+Belum ada / parsial (bukti grep run ini):
+- Builder/loader antrean tugas proyek: grep `project-task-queue|ProjectTaskQueue|LEWAT_TENGGAT` di `src/` + backlog `origin/main` = 0. Ember tenggat, umur keterlambatan, rekap per proyek/penanggung untuk Task: ABSEN.
+
+### 3. Status-transition matrix
+
+Status Task TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Dari (status tersimpan) | Pemicu existing | Ke | Penjaga/permission | Efek ke antrean |
+|---|---|---|---|---|
+| (belum ada) | `createTask` | `pending` (bawaan) atau status pilihan form | `create_projects` (:590-597) | masuk populasi bila belum-selesai (BR-PTQ-01) |
+| `pending`/`in_progress`/`completed`/`cancelled` | `updateTask` (pilihan status form bebas) | nilai pilihan form (`pending` bawaan bila kosong) | `edit_projects` + staf hanya tugas sendiri + anti-reassign (:622-662) | `completed`/`cancelled` keluar populasi render berikut; nilai lain tetap populasi sesuai BR-PTQ-01/02 |
+| `pending` | — (waktu lewat, `dueDate` < hari WIB) | tetap `pending` | — | **turunan: ember `LEWAT_TENGGAT`** — bukan status, tidak tertulis |
+| `pending`/`in_progress` | — (waktu berjalan, `dueDate` dalam ambang) | tetap | — | **turunan: ember `MENDEKATI`** (ambang USULAN Q-PTQ-1) |
+| `pending`/`in_progress` | — (`dueDate` null) | tetap | — | **turunan: ember `TANPA_TENGGAT`** — tidak pernah dihitung terlambat |
+| status liar (di luar empat kosakata UI) | — | tetap tersimpan apa adanya | validasi string bebas (:127) | ember `Status Tidak Dikenal` tertanda (BR-PTQ-02), tetap populasi belum-selesai |
+| `completed`/`cancelled` | — | terminal untuk antrean | — | tidak pernah masuk / keluar populasi |
+
+Tidak ada transisi "selesai-otomatis", tidak ada penanda waktu selesai, tidak ada batal-otomatis di kode existing — matriks tidak mengarangnya. Perpindahan antar-status bebas lewat form (termasuk membuka kembali `completed` → `in_progress`) adalah perilaku existing; antrean hanya membaca hasil tersimpan.
+
+### 4. Role/permission matrix (katalog nyata)
+
+Katalog `module-catalog.generated.ts:424-428`. Tidak ada key tugas tersendiri.
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Manajer (`manage_projects`/`super_admin`) | Staf proyek lain (pemegang izin proyek) |
+|---|---|---|---|
+| Lihat antrean turunan tahap 1 (USULAN gerbang) | `view_projects` (:424) — persis gerbang daftar tugas existing `page.tsx:26` | semua tugas (loader tidak menyaring per penugasan) | semua tugas — **batas tahap 1 dinyatakan jujur (BR-PTQ-06), bukan scope baru karangan** |
+| Lihat daftar tugas existing | `view_projects` | semua | semua (fakta existing) |
+| Buat tugas (existing, BUKAN dari antrean) | `create_projects` (:425) via `createTask:590` | ya | sesuai izin |
+| Ubah tugas/status/tenggat (existing, BUKAN dari antrean) | `edit_projects` (:426) via `updateTask:622` | semua tugas + boleh menugaskan ulang | hanya tugas `assignedTo` = dirinya; menugaskan ulang ditolak (:634,:645) |
+| Hapus tugas (existing) | `delete_projects` (:427) via `deleteTask:677` | sesuai izin | sesuai izin |
+| Transisi apa pun DARI antrean turunan | — | TIDAK tahap 1 (BR-PTQ-07) | TIDAK tahap 1 |
+
+Konsekuensi jujur tahap 1: penjaga "staf hanya tugas sendiri" di kode existing adalah penjaga **tulis** (`updateTask`), BUKAN penjaga baca — daftar tugas existing pun membaca lintas penugasan untuk semua pemegang `view_projects`. Antrean tahap 1 mewarisi batas baca itu apa adanya dan menyatakannya; mempersempit baca per penugasan (mis. staf hanya melihat tugasnya) = perubahan perilaku permukaan existing = keputusan Lead terpisah (Q-PTQ-3), bukan bawaan spec dan bukan scope HR (`getHrScope` tidak berlaku di domain proyek — jangan dipinjam).
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PTQ-01 | Populasi belum-selesai PERSIS = `Task.status` ∈ {`pending`, `in_progress`} dari kosakata UI Task terverifikasi (§2). `completed` dan `cancelled` keluar (terminal antrean). **`skipped` TIDAK relevan untuk Task** — itu kosakata `ProjectStage` (`project.actions.ts:279`); jangan memasukkan/mengeluarkan Task berdasar `skipped`. | TERVERIFIKASI-KODE (form :32-37; chip `page.tsx:55`; skema :127,138) |
+| BR-PTQ-02 | Status di luar empat kosakata UI (`pending`/`in_progress`/`completed`/`cancelled`) — mungkin ada karena validasi `z.string()` bebas — masuk ember `Status Tidak Dikenal`: tampil verbatim tertanda, TETAP populasi belum-selesai (bukan `completed`/`cancelled` terbukti), tidak ditebak padanannya, tidak dibuang, tidak dihitung ke rekap status dikenal. | USULAN di atas TERVERIFIKASI-KODE (validasi string bebas :127) |
+| BR-PTQ-03 | Dua ember tenggat jujur + satu ember tanpa-tenggat, turunan murni dari `dueDate` vs hari kalender WIB berjalan (pola `getWibTodayUtcDate` `attendance-time.ts:26-29`; `dueDate` tersimpan tengah malam UTC hari WIB via `wibDateToUtcMidnight`): `LEWAT_TENGGAT` = `dueDate` ada DAN hari WIB `dueDate` < hari WIB hari ini; `MENDEKATI` = `dueDate` ada DAN 0 ≤ sisa hari ≤ ambang (Q-PTQ-1); di luar itu (sisa hari > ambang) = belum mendesak — tidak masuk dua ember fokus, hanya tampil bila saringan "semua belum-selesai" dipilih (pola TERBUKA keluarga antrean). `TANPA_TENGGAT` = `dueDate` null, ember terpisah terhitung, TIDAK pernah dihitung terlambat dan sisa/umur hari = null. `dueDate` tepat hari ini = sisa 0, BUKAN lewat (hari tenggat masih berlaku, pola BR-QF-02 antrean penawaran). Ember dihitung ulang tiap render; waktu lewat tidak menulis status/kolom apa pun. | USULAN di atas TERVERIFIKASI-KODE (konvensi WIB existing) |
+| BR-PTQ-04 | Umur keterlambatan = hari kalender WIB sejak `dueDate` (untuk `LEWAT_TENGGAT`: hari ini − hari `dueDate`, ≥ 1); sisa hari = hari `dueDate` − hari ini (untuk `MENDEKATI`/belum-mendesak, ≥ 0). Acuan satu-satunya `dueDate` tersimpan; `startDate`/`createdAt`/`updatedAt` DILARANG sebagai acuan keterlambatan (startDate = rencana mulai, bukan tenggat; updatedAt bergerak tiap edit — menghapus umur). Umur tugas sejak dibuat boleh tampil sebagai kolom terpisah berlabel sejak `createdAt` hanya bila Lead menghendaki (Q-PTQ-5) — tidak dicampur ke umur keterlambatan. | USULAN |
+| BR-PTQ-05 | Penanggung jawab: `assignedTo` null terbaca persis `Belum ditugaskan` (fakta kekosongan penugasan, BUKAN nama karangan dan bukan "—" ambigu; label final Q-PTQ-2). Nama tampil hanya dari relasi `Employee` tertaut (`assignee.name` existing, pola `task-table.tsx`). Karyawan penanggung yang sudah nonaktif/terhapus tampil apa adanya dari relasi — antrean tidak menyaring berdasar status aktif karyawan dan tidak mengarang pengganti. Rekap per penanggung mengelompokkan per `assignedTo` (null = kelompok `Belum ditugaskan` sendiri). | USULAN di atas TERVERIFIKASI-KODE (kolom nullable :5738; relasi Employee) |
+| BR-PTQ-06 | Scope baca tahap 1 = `view_projects` PERSIS gerbang existing, loader fail-closed sebelum query. Loader TIDAK menyaring per penugasan tahap 1 (mewarisi daftar existing) — dinyatakan sebagai batas eksplisit di notice permukaan, bukan scope baru karangan dan bukan kebocoran yang disembunyikan. `getHrScope`/scope departemen TIDAK dipakai (domain proyek tidak punya scope itu). | TERVERIFIKASI-KODE (gerbang :26) + USULAN (pewarisan dinyatakan) |
+| BR-PTQ-07 | Baca-saja tahap 1: antrean tidak memanggil `createTask`/`updateTask`/`deleteTask`, tidak menulis status/tenggat/penugasan. Nol tombol Selesai/Ubah Tenggat/Tugaskan/Hapus dari antrean; satu-satunya jalan aksi = form tugas existing berpenjaga `edit_projects` + staf-sendiri sesudah membuka detail/edit tertaut. | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-PTQ-08 | **Nol % progres karangan.** `Task` tidak punya kolom persen (skema :5731-5752) dan tidak tertaut `ProjectStage`; antrean DILARANG menampilkan persen per tugas, persen per proyek turunan status Task (mis. "3 dari 5 selesai = 60%" diberi label progres fisik), atau persen pinjaman dari `ProjectStageProgress`. Hitungan tugas selesai/total BOLEH tampil hanya sebagai hitungan dokumen berlabel persis ("k dari n tugas berstatus Selesai"), bukan persen progres pekerjaan. Progres fisik proyek = wilayah earned value/tahap existing. | TERVERIFIKASI-KODE (absen kolom) + USULAN (larangan) |
+| BR-PTQ-09 | Tanpa nominal: payload tanpa nilai kontrak proyek, biaya, upah penanggung, atau angka uang apa pun. Mengaitkan keterlambatan tugas ke denda/nilai = BUTUH-VONIS Accountant bersyarat (Q-PTQ-6), tidak diminta tahap 1. Kontak karyawan (email/telepon) tidak ada di payload daftar — nama penanggung saja; detail = permukaan proyek/karyawan existing. | USULAN (scope) |
+| BR-PTQ-10 | Urutan tampil: `LEWAT_TENGGAT` dulu (umur keterlambatan terbesar dulu), lalu `MENDEKATI` (sisa hari terkecil), lalu belum-mendesak (sisa hari terkecil), `TANPA_TENGGAT` terakhir (tertua dibuat dulu); seri dalam ember sama → `dueDate` naik, lalu id tugas naik. Kepala antrean memuat rekap hitungan TUGAS per ember + per status dikenal + per proyek + per penanggung (Σ baris populasi penuh, bukan halaman tampil) — hitungan dokumen, bukan persen (BR-PTQ-08). Ini membalik urutan daftar existing (`createdAt desc`) hanya untuk permukaan turunan; daftar existing tidak diubah diam-diam (Q-PTQ-4). Batas ambil eksplisit dinyatakan loader (fisik Backend, pola keluarga 200) + penanda `terpotong` bila populasi melebihi batas — tugas terlewat tidak hilang diam-diam di luar potongan paginasi daftar existing. | USULAN |
+| BR-PTQ-11 | Proyek induk: nama proyek tampil dari relasi `Project` (wajib ada — `projectId` non-null + Cascade). Status proyek induk (mis. proyek sudah selesai/batal di kolom `Project.status`) TIDAK menyaring tugas keluar antrean tahap 1 — tugas belum-selesai di proyek tertutup justru sinyal yatim yang harus terlihat apa adanya tertanda nama proyeknya; menyaring per status proyek = Q-PTQ-5. Antrean tidak mengubah status proyek/WO (sisi `syncProjectStatus` existing tidak disentuh). | USULAN di atas TERVERIFIKASI-KODE (relasi :5734; `Project.status` schema:5124) |
+| BR-PTQ-12 | Anti-N+1: nama proyek + nama penanggung dimuat massal per halaman baris (relasi include / query atas set id tampil), rekap dihitung dari populasi penuh server — bukan query per baris dan bukan rekap dari halaman tampil saja. | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
+|---|---|---|---|
+| Master proyek + manajer + tanggal mulai/selesai + % penyelesaian | Ada — Proyek di Perusahaan: No. Kontrak, Nama Manajer, Tgl mulai, Tgl selesai, % Penyelesaian, Pelanggan (https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/menambahkan-data-departemen-dan-proyek/) | Ada — Data Proyek: Project Manager, Order/Delivery date, Status (In Progress dst.), Estimasi Biaya + Anggaran Pendapatan (https://help.zahironline.com/portal/id/kb/articles/cara-membuat-data-proyek-zahir-online-v2) + "Mengelola Proyek" pendapatan/biaya per proyek (https://www.zahironline.com/fitur/) | Ada — `Project` + `Task` per proyek dengan penanggung + tenggat per tugas (TERVERIFIKASI-KODE §2), lebih granular dari kedua benchmark (tugas per proyek, bukan hanya header proyek) |
+| Daftar tugas per proyek dengan penanggung + tenggat per tugas | Tidak ditemukan di halaman Accurate yang diakses (proyek = dimensi biaya/header, bukan daftar tugas bertenggat) — tidak diklaim | Tidak ditemukan di halaman Zahir yang diakses (fase proyek = anggaran per fase, bukan tugas bertenggat per penanggung) — tidak diklaim | Ada — daftar tugas existing (§2) |
+| Antrean tugas BELUM SELESAI lewat tenggat + mendekati + umur keterlambatan + rekap per proyek/penanggung | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim ada | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); daftar tugas ada tanpa ember tenggat/umur/rekap |
+
+Jujur: kedua benchmark membuktikan proyek sebagai dimensi biaya/header adalah fitur standar (ISF sudah setara dan lebih granular di level tugas); antrean tugas lewat-tenggat berumur tidak ditemukan di keduanya — nilai spec ini operasional internal bengkel/proyek ISF (tugas tersangkut terlihat sebelum tenggat membusuk), bukan mengejar fitur vendor. Tidak ada ambang/label yang disalin dari vendor (ambang = Q-PTQ-1 Lead).
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-PTQ-B1: Populasi PERSIS `pending`/`in_progress` (BR-PTQ-01); `completed`/`cancelled` bocor → MERAH. Status liar masuk ember `Status Tidak Dikenal` tertanda dan tetap terhitung populasi (hilang/ditebak `completed` → MERAH). Ember/tahap/umur/rekap dihitung server; konsumen menghitung ulang → MERAH.
+- AC-PTQ-B2: Ember persis BR-PTQ-03: `dueDate` kemarin WIB = `LEWAT_TENGGAT` umur ≥ 1; `dueDate` hari ini = sisa 0 BUKAN lewat; `dueDate` dalam ambang = `MENDEKATI`; `dueDate` null = `TANPA_TENGGAT` umur/sisa null dan tidak terhitung terlambat (null diperlakukan epoch/0 → MERAH). Membandingkan timestamp mentah (bukan hari kalender WIB) sampai tenggat hari ini terbaca lewat → MERAH.
+- AC-PTQ-B3: Urutan BR-PTQ-10 + rekap per ember/status/proyek/penanggung cocok populasi penuh (rekap dari halaman tampil saja → MERAH); mewarisi `createdAt desc` daftar existing → MERAH; populasi melebihi batas tampil penanda `terpotong`.
+- AC-PTQ-B4: Payload tanpa persen progres, tanpa nominal, tanpa kontak karyawan (bocor satu pun → MERAH, BR-PTQ-08/09); penanggung null berlabel `Belum ditugaskan` server (UI mengarang nama → MERAH); proyek/penanggung massal anti-N+1 (query per baris → MERAH).
+- AC-PTQ-B5: Loader fail-closed `view_projects` sebelum query (tanpa izin loader terpanggil → MERAH); baca-saja terbukti (builder/loader memanggil `createTask`/`updateTask`/`deleteTask` atau menulis status → MERAH); loader menyaring per penugasan diam-diam tahap 1 (staf hanya melihat tugasnya tanpa putusan Q-PTQ-3) → MERAH terhadap kontrak tahap 1.
+
+Frontend (konsumen):
+- AC-PTQ-F1: Label ember/status/umur/rekap verbatim payload server; UI tidak menghitung ember/umur/urutan/rekap sendiri (hitung ulang UI → MERAH).
+- AC-PTQ-F2: TIDAK ada tombol Selesai/Ubah/Tugaskan/Hapus dari antrean tahap 1 (kontrol tulis di antrean → MERAH, BR-PTQ-07); tautan baris hanya ke detail/edit tugas existing berpenjaga.
+- AC-PTQ-F3: Baris tertanda (`TANPA_TENGGAT`, `Status Tidak Dikenal`, `Belum ditugaskan`, `terpotong`) tampil dengan tandanya, bukan disembunyikan atau digabung ke ember terlambat; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-PTQ-1: Tugas tenggat hari ini WIB dikerjakan sore hari: tetap `MENDEKATI` sisa 0 sepanjang hari kalender WIB, baru `LEWAT_TENGGAT` besok — perbandingan hari, bukan jam (kait AC-PTQ-B2).
+- EC-PTQ-2: Tugas `completed` dengan `dueDate` lampau (selesai terlambat): TIDAK tampil — antrean membaca status tersimpan, bukan merekonstruksi keterlambatan historis; tidak ada `completedAt` untuk menyatakan "selesai terlambat N hari" dan antrean tidak mengarangnya dari `updatedAt`.
+- EC-PTQ-3: Tugas dibuka kembali `completed` → `in_progress` lewat form existing: masuk populasi lagi render berikut dengan ember dari `dueDate` apa adanya (bisa langsung `LEWAT_TENGGAT`) — antrean tidak menyimpan riwayat buka-tutup.
+- EC-PTQ-4: Tugas di proyek yang sudah ditutup/selesai induknya: tetap tampil tertanda nama proyek (BR-PTQ-11); menghapus proyek induk menghapus tugas ikut Cascade existing — baris hilang karena dokumen induk hilang, bukan karena antrean menyaring.
+- EC-PTQ-5: Penanggung berhenti/nonaktif atau `assignedTo` menunjuk karyawan terhapus (relasi null terbaca): baris tampil penanggung apa adanya/`Belum ditugaskan` hanya bila `assignedTo` null; relasi menggantung tidak dikarang namanya (fisik Backend: relasi Prisma null → label jujur tertanda, final di 091-B).
+- EC-PTQ-6: Dua tugas `dueDate` + dibuat sama persis: urutan seri deterministik id tugas naik (BR-PTQ-10), tidak bergantung urutan query.
+- EC-PTQ-7: Tugas diselesaikan/dibatalkan dari permukaan lain saat antrean terbuka: keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-PTQ-8: Tugas `startDate` lampau tetapi `dueDate` masa depan/null: TIDAK terlambat — keterlambatan hanya dari `dueDate` (BR-PTQ-04); "belum mulai padahal startDate lewat" adalah sinyal berbeda yang tidak dicampur spec ini.
+
+### 8. Backlog implementasi (turunan F-2026-10-27-091-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-091-S | Spec kontrak ini (dokumen) | Business | — |
+| 091-B | Builder murni (populasi/ember WIB/umur/urutan/rekap proyek+penanggung) + loader `view_projects` fail-closed anti-N+1 + tes AC-PTQ-B1..B5 | Backend | Putusan Lead Q-PTQ-1/2/3/4 |
+| 091-F | Permukaan turunan (seksi di halaman tugas existing per Q-PTQ-4) verbatim payload + AC-PTQ-F1..F3; grep e2e proyek/tugas dulu | Frontend | 091-B merged |
+| 091-Q | Falsifikasi AC-PTQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 091-B/091-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 9. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-PTQ-1 | Ambang `MENDEKATI` (sisa hari ≤ N hari kalender WIB)? | Lead | USULAN 3 hari (preseden `QUOTATION_EXPIRY_WARNING_DAYS = 3` keluarga antrean) — bukan fakta sebelum diputus; satu konstanta server bernama |
+| Q-PTQ-2 | Kata final: kode/label ember (`LEWAT_TENGGAT`/`MENDEKATI`/`TANPA_TENGGAT`), label `Belum ditugaskan`, `Status Tidak Dikenal`, judul `Tugas Proyek Lewat Tenggat`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim, status mentah tetap tertanda |
+| Q-PTQ-3 | Baca tahap 1 tetap lintas-penugasan untuk semua `view_projects` (BR-PTQ-06), atau staf dibatasi tugasnya sendiri (menyimpang dari daftar existing)? | Lead | USULAN tetap persis existing tahap 1 + notice batas jujur; pembatasan baca per penugasan = perubahan permukaan existing, keputusan terpisah sadar-dampak |
+| Q-PTQ-4 | Penempatan: seksi turunan di halaman tugas existing vs permukaan terpisah? Daftar existing (semua status) ikut diubah urutan/batasnya? | Lead | USULAN: seksi turunan di halaman tugas existing; daftar existing tidak diubah |
+| Q-PTQ-5 | Rekap per proyek ikut saring status proyek induk? Kolom umur-sejak-dibuat (`createdAt`) ikut tampil terpisah dari umur keterlambatan? | Lead | USULAN: tanpa saring status induk tahap 1 (BR-PTQ-11); umur-sejak-dibuat tidak tahap 1 (hindari dua umur membingungkan) |
+| Q-PTQ-6 | Keterlambatan tugas dikaitkan nilai/denda proyek? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-PTQ-09); vonis WAJIB hanya bila Lead membuka kaitan uang — tahap baca-saja tanpa nominal tidak butuh vonis |
+
+### Yang TIDAK diusulkan run ini
+- Persen progres per tugas/proyek dari status Task atau pinjaman `ProjectStageProgress` (BR-PTQ-08) — Task tanpa kolom persen; progres fisik = wilayah tahap/earned value existing.
+- Tombol Selesai/Ubah Tenggat/Tugaskan Ulang/Hapus dari antrean, selesai massal, auto-batal tugas yatim (BR-PTQ-07).
+- Kolom/status baru di `Task` (`completedAt`, enum status, tautan tahap), key izin khusus tugas, atau mengubah kosakata/guard `createTask`/`updateTask` — antrean adalah lapisan baca turunan di atasnya; mengunci validasi status jadi `z.enum` = hardening tulis terpisah bila Lead menghendaki (dicatat dari temuan BR-PTQ-02, bukan dikerjakan di sini).
+- Pengingat WA/email ke penanggung, eskalasi ke manajer proyek, SLA per proyek — kanal & keadaan baru di luar tahap baca-saja.
+- Saringan baca per penugasan, scope departemen/HR, atau menampilkan kontak/gaji penanggung di daftar (BR-PTQ-06/09).
+- Mengganti daftar tugas existing — permukaan semua-status tetap; antrean adalah seksi turunan tambahan, bukan pengganti.
+
+F-2026-10-27-091-S — Antrean tugas proyek lewat tenggat belum selesai. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PTQ-1/2/3/4, lalu fisik Backend (091-B), konsumen Frontend (091-F), falsifikasi QA (091-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/scope-baca), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila kaitan nilai/denda dibuka (Q-PTQ-6, BR-PTQ-09).
