@@ -44,8 +44,8 @@ import DeliveredUnbilledPage from "../page"
 import {
   buildDeliveredUnbilledQueue,
   DELIVERED_UNBILLED_EMPTY_TEXT,
-  type DeliveredUnbilledInput,
 } from "@/lib/reports/delivered-unbilled"
+import { deliveredUnbilledInput } from "@/lib/reports/__tests__/delivered-unbilled-fixtures"
 import { FULFILLABLE_ORDER_STATUSES } from "@/lib/reports/order-fulfillment-data"
 import {
   renderPageNode,
@@ -56,27 +56,28 @@ import {
 const NOW = new Date(Date.UTC(2026, 9, 26, 3, 0))
 
 function queueWithRow() {
-  const input: DeliveredUnbilledInput = {
-    salesOrderId: 9,
-    slug: "so-0009",
-    documentNo: "SO-0009",
-    status: "confirmed",
-    deletedAt: null,
-    date: new Date(Date.UTC(2026, 9, 20)),
-    customerName: "PT Uji",
-    lines: [{ lineId: 91, deliveredQty: 2, unitPrice: 50_000 }],
-    deliveries: [
-      {
-        status: "delivered",
-        date: new Date(Date.UTC(2026, 9, 25)),
-        confirmedAt: new Date(Date.UTC(2026, 9, 25)),
-        deliveredAt: new Date(Date.UTC(2026, 9, 25)),
-        deliveredQty: 2,
-      },
+  return buildDeliveredUnbilledQueue(
+    [
+      deliveredUnbilledInput({
+        salesOrderId: 9,
+        slug: "so-0009",
+        documentNo: "SO-0009",
+        customerName: "PT Uji",
+        lines: [{ lineId: 91, deliveredQty: 2, unitPrice: 50_000 }],
+        deliveries: [
+          {
+            status: "delivered",
+            date: new Date(Date.UTC(2026, 9, 25)),
+            confirmedAt: new Date(Date.UTC(2026, 9, 25)),
+            deliveredAt: new Date(Date.UTC(2026, 9, 25)),
+            deliveredQty: 2,
+          },
+        ],
+      }),
     ],
-    invoices: [],
-  }
-  return buildDeliveredUnbilledQueue([input], NOW, FULFILLABLE_ORDER_STATUSES)
+    NOW,
+    FULFILLABLE_ORDER_STATUSES,
+  )
 }
 
 let roots: Root[] = []

@@ -12,7 +12,7 @@ import {
   DELIVERED_UNBILLED_TITLE,
 } from "@/components/reports/delivered-unbilled-queue-card"
 import { getDeliveredUnbilledQueue } from "@/lib/reports/delivered-unbilled-data"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
+import { reportPeriodFromRoute, formatPeriodLabel } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -58,7 +58,7 @@ export default async function DeliveredUnbilledPage({
     ...(selected ? { customerId: selected.id } : {}),
   })
 
-  const periodLabel = `Periode ${period.start.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} – ${period.end.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const periodLabel = formatPeriodLabel(period)
 
   return (
     <ReportPageShell
