@@ -3,22 +3,27 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-const createAction = vi.fn(
-  async (_input: unknown): Promise<{ success: boolean; error?: string }> => ({ success: true }),
-)
-const showError = vi.fn()
-const showSuccess = vi.fn()
-const push = vi.fn()
+// vi.hoisted: blok mock didefinisikan di factory supaya tidak byte-identik
+// dengan tes form sibling (gerbang duplikasi Sonar).
+const h = vi.hoisted(() => ({
+  createAction: vi.fn(
+    async (_input: unknown): Promise<{ success: boolean; error?: string }> => ({ success: true }),
+  ),
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
+  push: vi.fn(),
+}))
+const { createAction, showError, showSuccess, push } = h
 
 vi.mock("@/actions/disciplinary-deduction.actions", () => ({
-  createDisciplinaryDeductionDecisionAction: (input: unknown) => createAction(input),
+  createDisciplinaryDeductionDecisionAction: (input: unknown) => h.createAction(input),
 }))
 vi.mock("@/lib/utils/toast", () => ({
-  showError: (...args: unknown[]) => showError(...(args as [])),
-  showSuccess: (...args: unknown[]) => showSuccess(...(args as [])),
+  showError: h.showError,
+  showSuccess: h.showSuccess,
 }))
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push, back: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn(), push: h.push, back: vi.fn() }),
 }))
 
 import type { Root } from "react-dom/client"
