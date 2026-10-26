@@ -114,6 +114,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/stok-minimum": "Menampilkan barang yang sudah mencapai atau menembus batas minimum stoknya beserta kekurangan dan perkiraan nilai pembeliannya",
   "/laporan/penerimaan-sebagian": "Menampilkan pesanan pembelian yang barisnya belum diterima penuh beserta nilai sisanya",
   "/laporan/pemenuhan-pesanan": "Menampilkan pesanan penjualan yang barisnya belum terkirim penuh beserta nilai sisanya",
+  "/laporan/terkirim-belum-terfaktur": "Menampilkan pesanan penjualan yang sudah terkirim tetapi belum terfaktur penuh beserta umur dan sisa nilainya",
   "/laporan/ringkasan-ar-ap": "Menampilkan ringkasan piutang dan utang usaha",
   "/laporan/ringkasan-stok": "Menampilkan ringkasan persediaan dan daftar item kritis",
   "/laporan/serapan-overhead": "Menampilkan overhead dibebankan vs aktual beserta selisih kurang/lebih serap",

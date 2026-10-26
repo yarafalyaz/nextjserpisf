@@ -50,11 +50,15 @@ import {
 } from "@/lib/services/lead-duplicate.service";
 import {
   findCustomerDuplicateCandidates,
+  findCustomerNpwpConflict,
   buildCustomerDuplicateWarning,
+  buildCustomerNpwpBlockedMessage,
   loadCustomerDuplicateGroups,
   CUSTOMER_REUSED_MESSAGE,
+  CUSTOMER_NPWP_BLOCKED_TITLE,
   type CustomerDuplicateWarning,
   type CustomerDuplicateGroup,
+  type CustomerNpwpConflict,
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
@@ -68,6 +72,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -204,6 +209,29 @@ async function hardDeleteOrSoftDelete(
 
 // ==================== CUSTOMER ACTIONS ====================
 
+/**
+ * Q-CD-1 (PUTUSAN Lead PR #901, F-2026-10-25-040-S §B): gerbang BLOKIR
+ * NPWP persis — pengecualian dari peringatan advisory BR-CD-04. NPWP
+ * ternormalisasi (`normalizeCustomerTaxIdKey`) sama persis DAN terisi di
+ * kedua sisi = simpan DITOLAK sebelum create/update; kunci lain
+ * (telepon/nama+email) tetap peringatan tahap 1. Respons blokir
+ * terstruktur: `npwpConflict` (id/nama/kode pemegang) + `error` verbatim
+ * supaya operator memakai master existing atau mengoreksi NPWP.
+ */
+function buildCustomerNpwpBlockedResult(conflict: CustomerNpwpConflict) {
+  return {
+    success: false as const,
+    error: buildCustomerNpwpBlockedMessage(conflict),
+    npwpConflict: {
+      id: conflict.id,
+      slug: conflict.slug,
+      name: conflict.name,
+      code: conflict.code,
+      title: CUSTOMER_NPWP_BLOCKED_TITLE,
+    },
+  };
+}
+
 // F-2026-10-25-004-S: validasi bentuk identitas pajak master (longgar-
 // tertanda vonis 019-V §1/§2/§3) + normalisasi simpan digit-saja.
 // Bentuk cacat = tolak simpan; legacy15/unlinked lolos dengan peringatan
@@ -265,6 +293,10 @@ export async function createCustomer(formData: FormData) {
 
     const taxIdentity = customerTaxIdentityForSave(v);
     if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum create.
+    const npwpConflict = await findCustomerNpwpConflict({ taxId: v.taxId });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
     // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
@@ -335,6 +367,14 @@ export async function updateCustomer(customerId: number, formData: FormData) {
 
     const taxIdentity = customerTaxIdentityForSave(v);
     if ("error" in taxIdentity) return { success: false, error: taxIdentity.error };
+
+    // Q-CD-1: NPWP persis terisi dua sisi = BLOKIR sebelum update;
+    // self-match (NPWP milik pelanggan ini sendiri) dikecualikan.
+    const npwpConflict = await findCustomerNpwpConflict({
+      taxId: v.taxId,
+      excludeCustomerId: customerId,
+    });
+    if (npwpConflict) return buildCustomerNpwpBlockedResult(npwpConflict);
 
     if (v.customerCategoryId != null) {
       const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
@@ -1948,6 +1988,25 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
+    // F-2026-10-25-030-S Q-LR-2/4: cabang lost digerbang SEBELUM mutasi —
+    // kategori wajib + key asing ditolak, won/lost terminal mutlak.
+    // Kategori pada status non-lost juga ditolak (form wajib kosong);
+    // guard kepemilikan existing di atas tetap penjaga pertama (AC-LR-B6).
+    if (v.lostReasonCategory != null && v.status !== "lost") {
+      throw new Error(
+        "Kategori alasan kalah hanya berlaku saat status diubah menjadi kalah (lost).",
+      );
+    }
+    const lostCheck = validateLeadLostTransition({
+      fromStatus: existing.status,
+      toStatus: v.status ?? null,
+      category: v.lostReasonCategory ?? null,
+      freeText: v.lostReasonText ?? null,
+    });
+    if (!lostCheck.ok) {
+      throw new Error(lostCheck.error);
+    }
+
     const newAssignedTo = v.assignedTo ?? null;
 
     // Security Guard: Only admins can re-assign leads to others.
@@ -2053,6 +2112,9 @@ export async function updateLead(id: number, formData: FormData) {
             userId: Number(actor.id),
             type: "status_change",
             subject: "Status diubah",
+            // Awalan [kalah:key] hanya pada transisi ke lost (Q-LR-1);
+            // status lain description tetap null seperti existing.
+            description: lostCheck.ok ? lostCheck.description : null,
             oldStatus: existing.status,
             newStatus: v.status,
           },

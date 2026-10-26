@@ -3,17 +3,18 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { prisma } from "@/lib/db/prisma"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { CustomerStatementCard } from "@/components/reports/customer-statement-card"
 import { WhatsappStatementSection } from "@/components/reports/whatsapp-statement-section"
 import { loadCustomerStatement } from "@/lib/reports/customer-statement-data"
+import {
+  loadReportPeriodCustomer,
+  reportCustomerSelect,
+} from "@/lib/reports/report-customer-options"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
 
 export const metadata: Metadata = { title: "Statement Pelanggan" }
 
@@ -42,23 +43,9 @@ export default async function CustomerStatementPage({
 }) {
   const user = await requirePermission("view_reports")
 
-  const [{ segments = [] }, search] = await Promise.all([routeParams, searchParams])
   // Periode + pelanggan kini di path; param lama (`customerId`) tetap dibaca
   // supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const key = parseReportFilters(segments.slice(1)).pelanggan ?? search.customerId ?? null
-  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
-    start: new Date(now.getFullYear(), 0, 1),
-    end: now,
-  }))
-
-  const customers = await prisma.customer.findMany({
-    where: { isActive: true, deletedAt: null },
-    orderBy: { name: "asc" },
-    select: { id: true, code: true, name: true, slug: true },
-  })
-  const selected = key
-    ? customers.find((c) => c.slug === key) ?? customers.find((c) => String(c.id) === key) ?? null
-    : null
+  const { period, customers, selected } = await loadReportPeriodCustomer(routeParams, searchParams)
 
   const report = selected ? await loadCustomerStatement(selected.id, period) : null
 
@@ -77,17 +64,12 @@ export default async function CustomerStatementPage({
           defaultStartDate={toLocalDateOnly(period.start)}
           defaultEndDate={toLocalDateOnly(period.end)}
           selects={[
-            {
-              param: "pelanggan",
-              label: "Pelanggan",
+            reportCustomerSelect({
+              customers,
+              selected,
               placeholder: "Cari pelanggan...",
               required: true,
-              value: selected ? (selected.slug ?? String(selected.id)) : "",
-              options: customers.map((c) => ({
-                value: c.slug ?? String(c.id),
-                label: `${c.code ? `${c.code} — ` : ""}${c.name}`,
-              })),
-            },
+            }),
           ]}
         />
       }
