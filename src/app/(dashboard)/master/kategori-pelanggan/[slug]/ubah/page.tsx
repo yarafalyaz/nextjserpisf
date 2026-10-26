@@ -3,6 +3,9 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { CustomerCategoryForm } from "@/components/forms/customer-category-form"
+import { CustomerCommissionRates } from "../../_components/customer-commission-rates"
+import { getCustomerCommissionRates } from "@/actions/master.actions"
+import { hasPermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 
@@ -29,6 +32,16 @@ export default async function EditCustomerCategoryPage({
 
   if (!category) notFound()
 
+  // F-2026-10-25-036-S: histori tarif komisi kategori ini (loader server
+  // read-only; izin existing kategori — view di page ini, tambah
+  // create_customers, ubah/hapus edit_customers; tanpa izin baru).
+  const [commissionRates, canCreateCommissionRate, canEditCommissionRate] =
+    await Promise.all([
+      getCustomerCommissionRates(category.id),
+      hasPermission("create_customers"),
+      hasPermission("edit_customers"),
+    ])
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs
@@ -48,6 +61,17 @@ export default async function EditCustomerCategoryPage({
           name: category.name,
           downPaymentPercent: Number(category.downPaymentPercent),
         }}
+      />
+      <CustomerCommissionRates
+        customerCategoryId={category.id}
+        rates={commissionRates.map((rate) => ({
+          id: rate.id,
+          commissionPercent: rate.commissionPercent,
+          effectiveFrom: rate.effectiveFrom.toISOString(),
+          effectiveTo: rate.effectiveTo ? rate.effectiveTo.toISOString() : null,
+        }))}
+        canCreate={canCreateCommissionRate}
+        canEdit={canEditCommissionRate}
       />
     </div>
   )
