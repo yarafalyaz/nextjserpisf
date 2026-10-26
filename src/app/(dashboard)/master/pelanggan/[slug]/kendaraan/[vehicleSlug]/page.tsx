@@ -21,6 +21,7 @@ import {
 } from "@/components/reports/work-order-photo-panel"
 import { PhotoUploadField } from "@/components/reports/photo-upload-field"
 import { PhotoVerifyPublishButtons } from "@/components/reports/photo-verify-publish-button"
+import { VehicleServiceScheduleForm } from "@/components/reports/vehicle-service-schedule-form"
 
 import type { Metadata } from "next"
 
@@ -157,6 +158,16 @@ export default async function CustomerVehicleDetailPage({
           )}
         </div>
       </div>
+
+      {/* F-2026-10-25-021-S: jadwal servis berikutnya (aksi edit_customers) */}
+      <VehicleServiceScheduleForm
+        vehicleId={cv.id}
+        nextServiceDate={cv.nextServiceDate}
+        nextServiceKm={cv.nextServiceKm}
+        nextServiceNote={cv.nextServiceNote}
+        lastOdometerKm={cv.lastOdometerKm}
+        canEdit={canEditVehicle}
+      />
 
       {/* F-2026-10-24-096-S: foto kendaraan berkategori (loader backend) */}
       <CustomerVehiclePhotoPanel

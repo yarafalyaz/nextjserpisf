@@ -98,11 +98,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-25-013-S backend dulu (PR #914): ekspor CSV saldo cuti;
-  // tombol ekspor di UI laporan cuti menyusul (frontend t_4c259ed3) —
-  // buang entri ini saat UI memanggilnya.
-  "src/actions/hrm.actions.ts::exportLeaveBalancesCsv":
-    "F-2026-10-25-013-S backend; UI tombol ekspor CSV saldo cuti menyusul (frontend t_4c259ed3)",
+  // F-2026-10-25-013-S: exportLeaveBalancesCsv kini dirujuk tombol ekspor
+  // di UI saldo cuti (leave-balance-export-button.tsx, PR #921) — entri beku dibuang.
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
@@ -141,19 +138,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-25-048-S inti backend (048-B1): aksi lead time penampung
-  // titik pesan-ulang; kontrol lead time di panel stok minimum per gudang
-  // + kolom titik/saran di laporan stok minimum menyusul (frontend
-  // t_c8cc7755, buang 2 entri ini saat UI memanggilnya).
-  "src/actions/item-warehouse-setting.actions.ts::setItemWarehouseLeadTime":
-    "F-2026-10-25-048-S backend; UI lead time panel stok minimum per gudang menyusul (frontend t_c8cc7755)",
-  "src/actions/item-warehouse-setting.actions.ts::removeItemWarehouseLeadTime":
-    "F-2026-10-25-048-S backend; UI hapus lead time panel stok minimum per gudang menyusul (frontend t_c8cc7755)",
-  // F-2026-10-25-043-B1 backend dulu: aksi jejak email statement; tombol",
-  // mailto di halaman statement menyusul di kartu Frontend 043-F1 —
-  // buang entri ini saat UI memanggilnya.
-  "src/actions/email-log.actions.ts::recordEmailLinkOpened":
-    "F-2026-10-25-043-B1 backend; UI tombol email statement menyusul (frontend 043-F1)",
+  // F-2026-10-25-048-S: 2 aksi lead time kini dirujuk ItemWarehouseMinStockPanel
+  // (kolom + kontrol lead time, PR konsumen Frontend 048-F1) — entri beku dibuang.
+  // F-2026-10-25-043-B1: aksi jejak email statement kini dirujuk
+  // EmailButton di halaman statement (PR konsumen Frontend 043-F1) —
+  // entri beku dibuang.
   // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
   // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
@@ -215,6 +204,18 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
+  // F-2026-10-25-036-S inti backend (PR #1006): 4 aksi histori tarif komisi
+  // kategori pelanggan menunggu kartu UI master kategori + label DPP rekap
+  // (kartu UI lanjutan BOT Frontend, parent t_73a60989); entri beku dibuang
+  // saat UI tersambung.
+  "src/actions/master.actions.ts::createCustomerCommissionRate":
+    "F-2026-10-25-036-S backend; form tambah tarif di master kategori menyusul (frontend)",
+  "src/actions/master.actions.ts::updateCustomerCommissionRate":
+    "F-2026-10-25-036-S backend; form ubah/tutup masa tarif menyusul (frontend)",
+  "src/actions/master.actions.ts::deleteCustomerCommissionRate":
+    "F-2026-10-25-036-S backend; tombol hapus tarif menyusul (frontend)",
+  "src/actions/master.actions.ts::getCustomerCommissionRates":
+    "F-2026-10-25-036-S backend; daftar histori tarif di master kategori menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

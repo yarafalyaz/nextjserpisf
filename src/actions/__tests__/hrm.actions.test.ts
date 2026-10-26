@@ -415,7 +415,7 @@ describe("Overtime Request Actions", () => {
     restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.overtimeRequest.create.mockResolvedValue({ id: 1 })
-    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, calculatedValue: null, employee: { baseSalary: 5_000_000 } })
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, date: new Date("2026-06-12T00:00:00Z"), calculatedValue: null, employee: { baseSalary: 5_000_000 } })
     prismaMock.overtimeRequest.update.mockResolvedValue({})
     prismaMock.overtimeRequest.delete.mockResolvedValue({})
   })
@@ -463,6 +463,7 @@ describe("Overtime Request Actions", () => {
       employeeId: 1,
       status: "approved",
       hours: 2,
+      date: new Date("2026-06-12T00:00:00Z"),
       calculatedValue: null,
       employee: { baseSalary: 5_000_000 },
     })
@@ -516,7 +517,7 @@ describe("Overtime Request Actions", () => {
     const otDate = new Date("2026-06-12T00:00:00Z") // Jumat, hari kerja
     const assignments = [
       // E-OT-1: earning/fixed aktif berlaku pada tanggal lembur.
-      { defaultAmount: 540_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      { defaultAmount: 540_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { name: "Tunjangan Tetap A", isActive: true, kind: "earning", recurrence: "fixed" } },
       // E-OT-2: baru berlaku SESUDAH tanggal lembur → tidak ikut.
       { defaultAmount: 111_000, isActive: true, effectiveFrom: new Date("2026-07-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
       // E-OT-3: sudah berakhir sebelum tanggal lembur → tidak ikut.
@@ -531,7 +532,7 @@ describe("Overtime Request Actions", () => {
       { defaultAmount: 666_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "variable" } },
       // EC-OT-1: batas inklusif — mulai & berakhir persis pada ot.date ikut.
       // EC-OT-2: komponen kedua yang ikut; 540.000 + 1 = dasar E-OT-7.
-      { defaultAmount: 1, isActive: true, effectiveFrom: otDate, effectiveTo: otDate, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      { defaultAmount: 1, isActive: true, effectiveFrom: otDate, effectiveTo: otDate, component: { name: "Tunjangan Tetap B", isActive: true, kind: "earning", recurrence: "fixed" } },
     ]
     prismaMock.employeePayrollComponent.findMany.mockImplementation(
       async (args: { where: Record<string, any> }) => {
@@ -573,6 +574,19 @@ describe("Overtime Request Actions", () => {
     // 1 jam hari kerja = 1,5 x 4.000.001/173 = 34.682,09… → Rp34.682.
     const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
     expect(arg.data.calculatedValue).toBe(34682)
+    // Snapshot dasar (F-2026-10-25-024-S): ditulis pada klaim yang sama,
+    // memuat pokok + HANYA komponen yang ikut Σ (540.000 + 1) dengan nama
+    // master verbatim; komponen di luar jendela/deduction/variable pada
+    // fixture di atas TIDAK masuk snapshot. baseTotal = dasar hitung final.
+    expect(arg.data.overtimeBaseSnapshot).toEqual({
+      baseSalary: 3_460_000,
+      components: [
+        { name: "Tunjangan Tetap A", amount: 540_000 },
+        { name: "Tunjangan Tetap B", amount: 1 },
+      ],
+      baseTotal: 4_000_001,
+      overtimeDate: otDate.toISOString(),
+    })
   })
 
   it("approveOvertime stays idempotent after components change (E-OT-6)", async () => {
@@ -591,6 +605,28 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
     expect(prismaMock.employeePayrollComponent.findMany).not.toHaveBeenCalled()
     expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("approveOvertime tanpa komponen tetap menulis snapshot pokok saja (dasar = pokok)", async () => {
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "pending",
+      hours: 2,
+      date: new Date("2026-06-12T00:00:00Z"),
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    })
+    prismaMock.employeePayrollComponent.findMany.mockResolvedValue([])
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.overtimeBaseSnapshot).toEqual({
+      baseSalary: 5_000_000,
+      components: [],
+      baseTotal: 5_000_000,
+      overtimeDate: "2026-06-12T00:00:00.000Z",
+    })
   })
 
   it("updateOvertimeRequest rejects an edit beyond the 4h workday limit (K2-S1)", async () => {
@@ -916,6 +952,67 @@ describe("Payroll Actions", () => {
     expect(res?.success).toBe(true)
     const createArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
     expect(createArg.data.loanDeduction).toBe(100000)
+  })
+
+  it("processPayroll keeps gross/PPh 21 identical with loan instalment (AC-LSV-3)", async () => {
+    // AC-LSV-3 (vonis F-2026-10-25-023-V Putusan 2D): angsuran pinjaman
+    // BUKAN pengurang bruto PPh 21 — angsuran hanya potongan neto.
+    // Mesin TER mock default tarif 0% membuat PPh selalu 0 sehingga mutasi
+    // gross - cappedLoan tak terdeteksi; di sini bracket dibuat sensitif
+    // tarif: 0% s/d 6.000.000, lalu 10% terbuka. Bruto utuh 6.100.000
+    // → PPh 610.000; bruto termutasi 5.600.000 → PPh 0 (MERAH).
+    const terRows: Array<{
+      category: string; lowerBound: number; upperBound: number | null;
+      rateMilliPercent: number; effectiveFrom: Date; effectiveTo: null; source: string;
+    }> = [
+      { category: "A", lowerBound: 0, upperBound: 6000000, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+      { category: "A", lowerBound: 6000000, upperBound: null, rateMilliPercent: 10000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+    ]
+    prismaMock.payrollTerBracket.findMany.mockImplementation(
+      (async (args: { where?: { category?: string } }) =>
+        terRows.map((r) => ({ ...r, category: args?.where?.category ?? "A" }))) as never,
+    )
+    prismaMock.employeeLoan.findMany.mockResolvedValue([
+      { monthlyInstallment: 500000, weeklyInstallment: null, remainingAmount: 500000 },
+    ])
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, basicSalary: 6100000, maritalStatus: "single", dependents: 0,
+      paymentFrequency: "MONTHLY", employmentEndedAt: null, employeeLoans: [],
+      workingDaysPerMonth: 22, overtimeRate: 25000, transportAllowance: 300000,
+      department: { name: "IT" },
+    })
+
+    const withLoan = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-07",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      baseSalary: "6100000",
+      loanDeduction: "500000",
+    }))
+    expect(withLoan?.success).toBe(true)
+    const withLoanArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(withLoanArg.data.grossSalary).toBe(6100000)
+    expect(withLoanArg.data.pph21).toBe(610000)
+    expect(withLoanArg.data.loanDeduction).toBe(500000)
+
+    const withoutLoan = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-07",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      baseSalary: "6100000",
+      loanDeduction: "0",
+    }))
+    expect(withoutLoan?.success).toBe(true)
+    const withoutLoanArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(withoutLoanArg.data.grossSalary).toBe(withLoanArg.data.grossSalary)
+    expect(withoutLoanArg.data.pph21).toBe(withLoanArg.data.pph21)
+    expect(withoutLoanArg.data.statutorySnapshot.pph21Ter).toEqual(
+      withLoanArg.data.statutorySnapshot.pph21Ter,
+    )
+    // Angsuran hanya memotong neto: selisih neto persis angsuran.
+    expect(withoutLoanArg.data.netSalary - withLoanArg.data.netSalary).toBe(500000)
   })
 
   it("updatePayroll succeeds", async () => {

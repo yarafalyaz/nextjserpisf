@@ -36,6 +36,32 @@ export function clearRenderedCards() {
   document.body.replaceChildren()
 }
 
+/**
+ * Factory mock `ReportPageShell` untuk tes halaman laporan: render judul +
+ * filter + aksi + anak apa adanya. Dipakai lewat
+ * `vi.mock("@/components/reports/report-page-shell", async () => (await import("@/components/reports/__tests__/card-test-utils")).reportPageShellModule)`.
+ */
+export const reportPageShellModule = {
+  ReportPageShell: ({
+    children,
+    filter,
+    actions,
+    title,
+  }: {
+    children: ReactNode
+    filter?: ReactNode
+    actions?: ReactNode
+    title: string
+  }) => (
+    <div>
+      <h1>{title}</h1>
+      {filter}
+      {actions}
+      {children}
+    </div>
+  ),
+}
+
 export function renderPageNode(node: React.ReactNode) {
   const container = document.createElement("div")
   document.body.appendChild(container)

@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { ConfirmDownPaymentButton } from "../_components/confirm-dp-button";
 import { CustomerCreditPanel } from "../_components/customer-credit-panel";
+import { loadDownPaymentTaxStatusRows } from "@/lib/reports/down-payment-tax-status-data";
+import { DownPaymentVatSnapshotCard } from "../_components/down-payment-vat-snapshot";
 import {
   getPaymentMethodMap,
   resolvePaymentMethodName,
@@ -24,6 +26,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
 import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Uang Muka" };
 
@@ -59,6 +62,12 @@ export default async function DownPaymentDetailPage({
   );
 
   if (!dp) notFound();
+
+  // Snapshot PPN per DP verbatim dari read-model server (PR #785) —
+  // halaman menampilkan apa adanya, tidak menghitung ulang PPN.
+  const [vatRow] = (await loadDownPaymentTaxStatusRows()).filter(
+    (row) => row.downPaymentId === dp.id,
+  );
 
   const pmMap = await getPaymentMethodMap();
 
@@ -178,10 +187,13 @@ export default async function DownPaymentDetailPage({
         </DetailCard>
       )}
 
+      {/* Snapshot PPN per DP (F-2026-10-25-004-V + 015-V): verbatim server. */}
+      {vatRow && <DownPaymentVatSnapshotCard snapshot={vatRow} />}
+
       {/* AUD-R4-01: panel operasional kredit (alokasi/refund). */}
       {dpCredits.length > 0 && (
         <DetailCard title="Kredit Pelanggan dari DP ini">
-          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices} />
+          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) }))} />
         </DetailCard>
       )}
 
