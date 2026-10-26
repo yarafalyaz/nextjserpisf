@@ -12,6 +12,7 @@ import {
 } from "@/lib/utils/status-labels";
 import { AppSearchField } from "@/components/ui/search-field";
 import { DownPaymentTable } from "./_components/down-payment-table";
+import { loadDownPaymentTaxStatusRows } from "@/lib/reports/down-payment-tax-status-data";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 
 import type { Metadata } from "next";
@@ -55,6 +56,12 @@ export default async function DownPaymentsPage({
     orderBy: { createdAt: "desc" },
   });
 
+  // Snapshot PPN verbatim server per DP (read-model PR #785) untuk kolom
+  // ringkas daftar — halaman tidak menghitung ulang PPN.
+  const vatByDpId = new Map(
+    (await loadDownPaymentTaxStatusRows()).map((row) => [row.downPaymentId, row]),
+  );
+
   const dps = rawDps.map((dp) => ({
     id: dp.id,
     slug: dp.slug,
@@ -62,6 +69,7 @@ export default async function DownPaymentsPage({
     amount: Number(dp.amount),
     status: dp.status,
     createdAt: dp.createdAt,
+    vatSnapshot: vatByDpId.get(dp.id) ?? null,
   }));
 
   const total = await prisma.downPayment.count({ where })
