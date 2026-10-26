@@ -190,32 +190,14 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-008-S: completeLeadActivity/reopenLeadActivity kini dirujuk
   // LeadActivityCompletionButton di detail lead (frontend t_68dce5df) —
   // 2 entri beku dibuang.
-  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi +
-  // loader loadAttendanceCorrections menunggu kartu UI lanjutan BOT Frontend
-  // (parent t_cbab9ec1); entri beku dibuang saat UI tersambung.
-  "src/actions/hrm.actions.ts::createAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI pengajuan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
-  "src/actions/hrm.actions.ts::approveAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
-  "src/actions/hrm.actions.ts::rejectAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
-  "src/actions/hrm.actions.ts::cancelAttendanceCorrection":
-    "F-2026-10-25-010-S: menunggu UI daftar koreksi saya (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
+  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
+  // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
-  // F-2026-10-25-036-S inti backend (PR #1006): 4 aksi histori tarif komisi
-  // kategori pelanggan menunggu kartu UI master kategori + label DPP rekap
-  // (kartu UI lanjutan BOT Frontend, parent t_73a60989); entri beku dibuang
-  // saat UI tersambung.
-  "src/actions/master.actions.ts::createCustomerCommissionRate":
-    "F-2026-10-25-036-S backend; form tambah tarif di master kategori menyusul (frontend)",
-  "src/actions/master.actions.ts::updateCustomerCommissionRate":
-    "F-2026-10-25-036-S backend; form ubah/tutup masa tarif menyusul (frontend)",
-  "src/actions/master.actions.ts::deleteCustomerCommissionRate":
-    "F-2026-10-25-036-S backend; tombol hapus tarif menyusul (frontend)",
-  "src/actions/master.actions.ts::getCustomerCommissionRates":
-    "F-2026-10-25-036-S backend; daftar histori tarif di master kategori menyusul (frontend)",
+  // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
+  // (komponen customer-commission-rates di master kategori + loader histori
+  // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
