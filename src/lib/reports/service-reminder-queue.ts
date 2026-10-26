@@ -28,9 +28,10 @@
  * keduanya; kendaraan `mendekati`/`terlewat` bila SALAH SATU basis yang
  * terisi terpenuhi. Sisa km HANYA dari `lastOdometerKm` (BR-SV-04):
  * odometer null + km target terisi = tidak bisa dinilai km (penanda
- * jujur, bukan 0, bukan terlewat karangan — AC-SV-B3). Odometer tercatat
- * mundur (km target <= odometer terakhir) = `jadwal_rusak` terhitung,
- * bukan sisa km negatif karangan (spec §6 edge).
+ * jujur, bukan 0, bukan terlewat karangan — AC-SV-B3). Sisa km <= 0 =
+ * target tercapai = `terlewat` (BR-SV-03; penjaga pintu masuk menolak
+ * km target <= odometer terakhir SAAT DICATAT, jadi data sah tidak
+ * lahir rusak — sisa <= 0 kemudian berarti target terlampaui).
  *
  * Ember terhitung (BR-SV-05, AC-SV-B4): kendaraan nonaktif/terhapus
  * keluar baris masuk `kendaraan_nonaktif`; tanpa jadwal masuk
@@ -201,12 +202,10 @@ export function buildServiceReminderQueue(
     const kmInvalid =
       nextServiceKm != null && (!Number.isFinite(nextServiceKm) || nextServiceKm <= 0)
 
-    // Jadwal rusak: tanggal/km target tidak valid, atau km target sudah
-    // terlampaui saat dicatat tanpa bisa dibedakan dari terlewat jujur.
-    // Pembedanya: sisa km <= 0 dari odometer tercatat = data rusak di
-    // pintu masuk (spec §3), BUKAN baris terlewat — staf wajib catat ulang.
-    // Pengecualian: tanggal juga terisi dan sudah lewat → terlewat jujur
-    // tetap menang lewat basis tanggal (BR-SV-03 salah satu terpenuhi).
+    // Jadwal rusak: HANYA tanggal/km target tidak valid (BR-SV-03/spec §3).
+    // Sisa km <= 0 BUKAN rusak: penjaga pintu masuk menolak km target
+    // <= odometer terakhir saat dicatat, jadi sisa <= 0 kemudian =
+    // target tercapai sesudah pencatatan = terlewat (cabang di bawah).
     const sisaKmRaw =
       nextServiceKm != null && !kmInvalid && input.lastOdometerKm != null
         ? nextServiceKm - input.lastOdometerKm
@@ -224,15 +223,12 @@ export function buildServiceReminderQueue(
     } else if (nextServiceDate == null && nextServiceKm == null) {
       status = "belum_terjadwal"
     } else if (sisaHariRaw != null && sisaHariRaw < 0) {
-      // Basis tanggal terpenuhi = terlewat jujur (BR-SV-03), menang atas
-      // penanda km rusak di bawah.
       status = "terlewat"
     } else if (sisaKmRaw != null && sisaKmRaw <= 0) {
-      // Km target sudah terlampaui odometer tercatat tanpa tanggal lewat:
-      // tidak bisa dibedakan jadwal lupa dicatat ulang vs odometer mundur
-      // (spec §3/§6) — penanda rusak, staf wajib catat ulang. Bukan sisa
-      // km negatif karangan.
-      status = "jadwal_rusak"
+      // Km target tercapai/terlampaui odometer tercatat (BR-SV-03):
+      // terlewat; sisaKm tampil apa adanya (0/negatif) dari odometer,
+      // bukan perkiraan (BR-SV-04).
+      status = "terlewat"
     } else if (
       (sisaHariRaw != null && sisaHariRaw <= windowAheadDays) ||
       (sisaKmRaw != null && sisaKmRaw <= kmAheadThreshold)

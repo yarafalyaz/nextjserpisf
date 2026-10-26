@@ -89,7 +89,7 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     expect(queue.summary.diLuarJendela).toBe(1)
   })
 
-  it("AC-SV-B3: odometer kosong -> sisaKm null, tidak terlewat karangan; km terlampaui -> jadwal_rusak", () => {
+  it("AC-SV-B3: odometer kosong -> sisaKm null, tidak terlewat karangan; km terlampaui -> terlewat (BR-SV-03)", () => {
     const queue = buildServiceReminderQueue(
       [
         input({ customerVehicleId: 1, nextServiceKm: 10_000, lastOdometerKm: null }),
@@ -102,13 +102,15 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     )
     // id 1: km tidak bisa dinilai -> terjadwal di luar jendela, bukan baris.
     expect(queue.rows.find((r) => r.customerVehicleId === 1)).toBeUndefined()
+    // id 2/3: km tercapai/terlampaui = terlewat, sisaKm apa adanya (BR-SV-04).
+    // id 4/5: target tidak valid = jadwal_rusak (satu-satunya basis rusak).
     expect(queue.rows.map((r) => [r.customerVehicleId, r.status, r.sisaKm])).toEqual([
-      [2, "jadwal_rusak", null],
-      [3, "jadwal_rusak", null],
+      [2, "terlewat", -1_000],
+      [3, "terlewat", 0],
       [4, "jadwal_rusak", null],
       [5, "jadwal_rusak", null],
     ])
-    expect(queue.summary).toMatchObject({ jadwalRusak: 4, diLuarJendela: 1 })
+    expect(queue.summary).toMatchObject({ terlewat: 2, jadwalRusak: 2, diLuarJendela: 1 })
   })
 
   it("tanggal lewat menang atas penanda km rusak (terlewat jujur)", () => {
@@ -159,8 +161,8 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
     const s = queue.summary
     expect(s).toEqual({
       mendekati: 1,
-      terlewat: 1,
-      jadwalRusak: 1,
+      terlewat: 2,
+      jadwalRusak: 0,
       belumTerjadwal: 1,
       kendaraanNonaktif: 2,
       diLuarJendela: 1,
@@ -195,7 +197,9 @@ describe("service-reminder-queue (F-2026-10-25-021-S tahap 1, usulan Q-SV-1..3)"
       ],
       { now: NOW },
     )
-    expect(queue.rows.map((r) => r.customerVehicleId)).toEqual([3, 2, 4, 1, 5])
+    // id 5 kini terlewat basis km (sisaKm -1): kelompok terlewat diurut
+    // sisaHari naik, null terakhir -> 3 (-9), 2 (-1), 5 (null); lalu 4, 1.
+    expect(queue.rows.map((r) => r.customerVehicleId)).toEqual([3, 2, 5, 4, 1])
   })
 
   it("AC-SV-B7: sisa hari hari-kalender WIB, bukan jam mentah", () => {
