@@ -35,6 +35,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   appreciations: "Apresiasi",
   recruitments: "Rekrutmen",
   salary_amounts: "Nominal Gaji",
+  salary_adjustments: "Penyesuaian Gaji",
   performance: "Penilaian Kinerja",
   competencies: "Kompetensi",
   trainings: "Pelatihan",

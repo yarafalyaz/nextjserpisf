@@ -195,8 +195,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-008-S: completeLeadActivity/reopenLeadActivity kini dirujuk
   // LeadActivityCompletionButton di detail lead (frontend t_68dce5df) —
   // 2 entri beku dibuang.
-  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
-  // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
   // Muse K1 HCMS backend dulu (kartu t_122db5c5): 34 aksi rekrutmen/
   // kinerja/kompetensi/pelatihan/suksesi/gaji; UI HCMS menyusul di kartu
   // Frontend t_daed387f (PR #805, sesudah PR backend ini merged) —
@@ -267,6 +265,14 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
   "src/actions/salary-adjustment.actions.ts::getSalaryAdjustments":
     "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
+  // F-2026-10-26-054-S inti backend (t_d40cad23): gerbang persetujuan
+  // penyesuaian gaji; UI antrean persetujuan menyusul (frontend t_2083c754).
+  "src/actions/salary-adjustment.actions.ts::approveSalaryAdjustment":
+    "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
+  "src/actions/salary-adjustment.actions.ts::rejectSalaryAdjustment":
+    "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
+  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
+  // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
   // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
   // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI

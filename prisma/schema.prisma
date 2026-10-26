@@ -6428,9 +6428,18 @@ model SalaryAdjustment {
   // berkala | promosi | umk | kinerja | penyesuaian | lainnya
   reason              String
   notes               String?   @db.Text
-  // scheduled -> applied | cancelled
-  status              String    @default("scheduled")
+  // F-2026-10-26-054-S Jalur A (putusan Lead Q-SA-1): lahir `menunggu`,
+  // approve -> scheduled, reject -> ditolak. Sesudah persetujuan:
+  // scheduled -> applied | cancelled (existing). applied/ditolak/cancelled
+  // terminal.
+  status              String    @default("menunggu")
   appliedAt           DateTime? @map("applied_at")
+  // Aktor keputusan persetujuan (user id); alasan penolakan wajib terisi
+  // bila status ditolak (ditegakkan di aksi, BR-SA-03).
+  approvedBy          Int?      @map("approved_by")
+  rejectedBy          Int?      @map("rejected_by")
+  rejectionReason     String?   @map("rejection_reason") @db.Text
+  decidedAt           DateTime? @map("decided_at")
   createdBy           Int?      @map("created_by")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
