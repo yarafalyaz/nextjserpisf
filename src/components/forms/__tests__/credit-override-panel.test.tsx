@@ -34,7 +34,9 @@ vi.mock("@/actions/credit-override.actions", () => ({
 }))
 
 const BLOCKED: CreditGateBlockedState = {
-  error: "Dokumen tertahan gerbang kredit: Lewat batas. Batas kredit Rp1.000.000, PaparanBersih Rp2.500.000. Minta persetujuan override batas kredit untuk melanjutkan.",
+  // Sengaja tanpa nominal: nominal hanya boleh terbukti dari <dd> panel,
+  // bukan bocor lewat string error (F1 QA PR #1085).
+  error: "Dokumen tertahan gerbang kredit: Lewat batas. Minta persetujuan override batas kredit untuk melanjutkan.",
   creditOverrideId: null,
   creditLimit: 1_000_000,
   creditExposure: 2_500_000,
@@ -84,8 +86,12 @@ describe("CreditOverridePanel (035-F)", () => {
       ))
       expect(container.textContent).toContain(BLOCKED.error)
       expect(container.querySelectorAll("dd")[0]?.textContent).toBe("Lewat batas")
-      expect(container.textContent).toContain("Rp1.000.000")
-      expect(container.textContent).toContain("Rp2.500.000")
+      // Per-dd: [1] Batas Kredit dari creditLimit, [2] PaparanBersih dari creditExposure.
+      // Mutasi sumber angka dd mana pun wajib merah (F1 QA PR #1085).
+      const dds = container.querySelectorAll("dd")
+      expect(dds).toHaveLength(3)
+      expect(dds[1]?.textContent).toBe("Rp 1.000.000")
+      expect(dds[2]?.textContent).toBe("Rp 2.500.000")
       // Tanpa id: alasan override tampil; tombol simpan form tidak disentuh panel.
       expect(container.querySelector("#creditOverrideReason")).not.toBeNull()
       expect(container.querySelector('label[for="creditOverrideReason"]')?.textContent).toBe("Alasan Permintaan Override")
@@ -198,7 +204,9 @@ describe("SalesOrderForm gerbang kredit (035-F, AC-CL2-F2)", () => {
       })
       const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!
       expect(container.textContent).toContain("Lewat batas")
-      expect(container.textContent).toContain("Rp2.500.000")
+      const dds = container.querySelectorAll("dd")
+      expect(dds[1]?.textContent).toBe("Rp 1.000.000")
+      expect(dds[2]?.textContent).toBe("Rp 2.500.000")
       expect(submit.disabled).toBe(false)
       // Alasan kosong: simpan ulang dicegah UI dengan error wajib (server tetap penahan akhir).
       await act(async () => {
