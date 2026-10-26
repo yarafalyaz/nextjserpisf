@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
+import type { Root } from "react-dom/client"
 
 import { QuotationDraftQueueCard } from "../quotation-draft-queue-card"
 import {
@@ -14,6 +11,7 @@ import {
   QUOTATION_DRAFT_NOTICE_TEXT,
   type QuotationDraftInput,
 } from "@/lib/reports/quotation-draft-queue"
+import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 // 2026-10-26 03:00 UTC = 10:00 WIB; hari WIB = 26 Okt 2026.
 const NOW = new Date(Date.UTC(2026, 9, 26, 3, 0))
@@ -37,21 +35,11 @@ function input(over: Partial<QuotationDraftInput>): QuotationDraftInput {
   }
 }
 
-function render(node: React.ReactNode) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
-
 let roots: Root[] = []
 afterEach(() => {
-  roots.forEach((root) => act(() => root.unmount()))
+  roots.forEach((root) => unmountCard(root))
   roots = []
-  document.body.replaceChildren()
+  clearRenderedCards()
 })
 
 describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
@@ -88,7 +76,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
       NOW,
     )
     const visible = filterQuotationDraftQueue(rows)
-    const { container, root } = render(
+    const { container, root } = renderCard(
       <QuotationDraftQueueCard
         rows={visible}
         stageCounts={countQuotationDraftStages(rows)}
@@ -155,7 +143,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
       ],
       NOW,
     )
-    const { container, root } = render(
+    const { container, root } = renderCard(
       <QuotationDraftQueueCard
         rows={filterQuotationDraftQueue(rows, "semua")}
         stageCounts={countQuotationDraftStages(rows)}
@@ -170,7 +158,7 @@ describe("QuotationDraftQueueCard F-2026-10-26-055-S", () => {
   })
 
   it("kosong: teks kosong per mode", () => {
-    const { container, root } = render(
+    const { container, root } = renderCard(
       <QuotationDraftQueueCard
         rows={[]}
         stageCounts={countQuotationDraftStages([])}
