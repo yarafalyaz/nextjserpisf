@@ -1,11 +1,10 @@
 import Link from "next/link"
-import type {
-  QuotationDraftRow,
-  QuotationDraftStage,
-} from "@/lib/reports/quotation-draft-queue"
 import {
   QUOTATION_DRAFT_NOTICE_TEXT,
   QUOTATION_DRAFT_STAGE_LABELS,
+  QUOTATION_DRAFT_STAGES,
+  type QuotationDraftRow,
+  type QuotationDraftStage,
 } from "@/lib/reports/quotation-draft-queue"
 import { entityHref } from "@/lib/utils/entity-url"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -29,13 +28,6 @@ const STAGE_TONES: Record<
   TERBUKA: "accent",
 }
 
-/** Urutan rekap kepala mengikuti urutan tahap builder (Q-QD-3). */
-const STAGE_ORDER: QuotationDraftStage[] = [
-  "LEWAT_BELUM_TERKIRIM",
-  "MENIPIS",
-  "TANPA_BATAS",
-  "TERBUKA",
-]
 
 /**
  * F-2026-10-26-055-S (055-F): antrean draf penawaran basi belum terkirim.
@@ -92,7 +84,7 @@ export function QuotationDraftQueueCard({
           {totalDocuments} draf penawaran belum terkirim
         </p>
         <ul aria-label="Rekap tahap draf" className="mt-2 flex flex-wrap gap-1.5">
-          {STAGE_ORDER.map((stage) => (
+          {QUOTATION_DRAFT_STAGES.map((stage) => (
             <li key={stage}>
               <StatusChip
                 status={stage}
