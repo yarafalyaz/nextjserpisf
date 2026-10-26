@@ -7,8 +7,8 @@ vi.mock("@/actions/email-log.actions", () => ({
 
 import { EmailStatementSection } from "../email-statement-section"
 import { recordEmailLinkOpened } from "@/actions/email-log.actions"
-import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
-import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL, clickFirstLink, expectEmptySurface, expectTrailList, expectNoTrailList } from "./statement-section-test-utils"
+import { unmountCard, clearRenderedCards } from "./card-test-utils"
+import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL, clickFirstLink, expectEmptySurface, expectTrailList, expectNoTrailList, expectPrimaryLink, expectNegativeBalanceHref, STATEMENT_MESSAGE_POSITIVE } from "./statement-section-test-utils"
 
 afterEach(() => {
   clearRenderedCards()
@@ -35,33 +35,20 @@ const FORBIDDEN = /terkirim|dibaca|sudah dihubungi/i
 
 describe("EmailStatementSection F-2026-10-25-043-F1", () => {
   it("AC-SE-F2/F3: tombol tampil dengan URL mailto subjek + isi verbatim Q-SE-4 dari payload server", () => {
-    const { container, root } = renderCard(section())
-    const link = container.querySelector("a")
-    expect(link).not.toBeNull()
-    expect(link?.getAttribute("aria-label")).toBe("Kirim Email")
-    expect(link?.textContent).toContain("Kirim Email")
-    expect(link?.getAttribute("href")).toBe(
-      "mailto:uji@example.com?subject=" +
+    expectPrimaryLink(section(), {
+      ariaLabel: "Kirim Email",
+      href:
+        "mailto:uji@example.com?subject=" +
         encodeURIComponent("Statement Piutang — Periode 1 Jan 2026 – 15 Okt 2026") +
         "&body=" +
-        encodeURIComponent(
-          "Halo CV Uji,\n\nBerikut statement piutang Anda untuk Periode 1 Jan 2026 – 15 Okt 2026. " +
-            "Saldo akhir periode: Rp 350.000. Statement lengkap dapat kami sediakan/dicetak bila diperlukan.\n\nTerima kasih.",
-        ),
-    )
-    expect(container.textContent).toContain("Tautan Email dibuka tercatat sebagai jejak.")
-    expect(container.textContent ?? "").not.toMatch(FORBIDDEN)
-    unmountCard(root)
+        encodeURIComponent(STATEMENT_MESSAGE_POSITIVE),
+      note: "Tautan Email dibuka tercatat sebagai jejak.",
+      forbidden: FORBIDDEN,
+    })
   })
 
   it("saldo negatif dirender sebagai kelebihan bayar absolut, bukan hitung ulang klien", () => {
-    const { container, root } = renderCard(section({ closingBalance: -250_000 }))
-    const href = container.querySelector("a")?.getAttribute("href") ?? ""
-    expect(decodeURIComponent(href)).toContain(
-      "Saldo akhir periode menunjukkan kelebihan bayar sebesar Rp 250.000 yang tercatat sebagai kredit Anda.",
-    )
-    expect(decodeURIComponent(href)).not.toContain("-Rp")
-    unmountCard(root)
+    expectNegativeBalanceHref(section({ closingBalance: -250_000 }))
   })
 
   it("klik mencatat tepat 1 jejak berjangkar pelanggan + periode payload, tanpa mencegah navigasi", () => {

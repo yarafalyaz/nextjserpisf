@@ -7,8 +7,8 @@ vi.mock("@/actions/whatsapp-log.actions", () => ({
 
 import { WhatsappStatementSection } from "../whatsapp-statement-section"
 import { recordWhatsappLinkOpened } from "@/actions/whatsapp-log.actions"
-import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
-import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL, clickFirstLink, expectEmptySurface, expectTrailList, expectNoTrailList } from "./statement-section-test-utils"
+import { unmountCard, clearRenderedCards } from "./card-test-utils"
+import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL, clickFirstLink, expectEmptySurface, expectTrailList, expectNoTrailList, expectPrimaryLink, expectNegativeBalanceHref, STATEMENT_MESSAGE_POSITIVE } from "./statement-section-test-utils"
 
 afterEach(() => {
   clearRenderedCards()
@@ -35,32 +35,17 @@ const FORBIDDEN = /terkirim|dibaca|sudah dihubungi|tagihan|menunggak|denda/i
 
 describe("WhatsappStatementSection F-2026-10-25-038-F1", () => {
   it("AC-SW-F1/F2: tombol tampil dengan URL wa.me berisi pesan verbatim Q-SW-3 dari payload server", () => {
-    const { container, root } = renderCard(section())
-    const link = container.querySelector("a")
-    expect(link).not.toBeNull()
-    expect(link?.getAttribute("aria-label")).toBe("Kirim WA")
-    expect(link?.textContent).toContain("Kirim WA")
-    expect(link?.getAttribute("target")).toBe("_blank")
-    expect(link?.getAttribute("href")).toBe(
-      "https://wa.me/6281234567890?text=" +
-        encodeURIComponent(
-          "Halo CV Uji,\n\nBerikut statement piutang Anda untuk Periode 1 Jan 2026 – 15 Okt 2026. " +
-            "Saldo akhir periode: Rp 350.000. Statement lengkap dapat kami sediakan/dicetak bila diperlukan.\n\nTerima kasih.",
-        ),
-    )
-    expect(container.textContent).toContain("Tautan WhatsApp dibuka tercatat sebagai jejak.")
-    expect(container.textContent ?? "").not.toMatch(FORBIDDEN)
-    unmountCard(root)
+    expectPrimaryLink(section(), {
+      ariaLabel: "Kirim WA",
+      href: "https://wa.me/6281234567890?text=" + encodeURIComponent(STATEMENT_MESSAGE_POSITIVE),
+      note: "Tautan WhatsApp dibuka tercatat sebagai jejak.",
+      forbidden: FORBIDDEN,
+      target: "_blank",
+    })
   })
 
   it("AC-SW-F2: saldo negatif dirender sebagai kelebihan bayar absolut, bukan hitung ulang klien", () => {
-    const { container, root } = renderCard(section({ closingBalance: -250_000 }))
-    const href = container.querySelector("a")?.getAttribute("href") ?? ""
-    expect(decodeURIComponent(href)).toContain(
-      "Saldo akhir periode menunjukkan kelebihan bayar sebesar Rp 250.000 yang tercatat sebagai kredit Anda.",
-    )
-    expect(decodeURIComponent(href)).not.toContain("-Rp")
-    unmountCard(root)
+    expectNegativeBalanceHref(section({ closingBalance: -250_000 }))
   })
 
   it("klik mencatat tepat 1 jejak berjangkar pelanggan + periode payload, tanpa mencegah navigasi", () => {

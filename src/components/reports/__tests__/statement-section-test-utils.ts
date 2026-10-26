@@ -57,3 +57,63 @@ export function expectNoTrailList(node: ReactNode, listLabel: string) {
   expect(container.querySelector("a")).not.toBeNull()
   unmountCard(root)
 }
+
+/** Pesan statement verbatim bersama (Q-SW-3/Q-SE-4, saldo positif fixture). */
+export const STATEMENT_MESSAGE_POSITIVE =
+  "Halo CV Uji,\n\nBerikut statement piutang Anda untuk Periode 1 Jan 2026 – 15 Okt 2026. " +
+  "Saldo akhir periode: Rp 350.000. Statement lengkap dapat kami sediakan/dicetak bila diperlukan.\n\nTerima kasih."
+export const STATEMENT_NEGATIVE_SENTENCE =
+  "Saldo akhir periode menunjukkan kelebihan bayar sebesar Rp 250.000 yang tercatat sebagai kredit Anda."
+
+/** Asersi tautan utama: label, href persis, catatan jejak, tanpa kata terlarang. */
+export function expectPrimaryLink(
+  node: ReactNode,
+  opts: { ariaLabel: string; href: string; note: string; forbidden: RegExp; target?: string },
+) {
+  const { container, root } = renderCard(node)
+  const link = container.querySelector("a")
+  expect(link).not.toBeNull()
+  expect(link?.getAttribute("aria-label")).toBe(opts.ariaLabel)
+  expect(link?.textContent).toContain(opts.ariaLabel)
+  if (opts.target) expect(link?.getAttribute("target")).toBe(opts.target)
+  expect(link?.getAttribute("href")).toBe(opts.href)
+  expect(container.textContent).toContain(opts.note)
+  expect(container.textContent ?? "").not.toMatch(opts.forbidden)
+  unmountCard(root)
+}
+
+/** Asersi saldo negatif: kalimat kelebihan bayar absolut di href ter-decode. */
+export function expectNegativeBalanceHref(node: ReactNode) {
+  const { container, root } = renderCard(node)
+  const href = container.querySelector("a")?.getAttribute("href") ?? ""
+  expect(decodeURIComponent(href)).toContain(STATEMENT_NEGATIVE_SENTENCE)
+  expect(decodeURIComponent(href)).not.toContain("-Rp")
+  unmountCard(root)
+}
+
+
+/** Render tautan pertama + asersi label/href/note verbatim per kanal. */
+export function expectFirstLink(
+  node: ReactNode,
+  opts: { label: string; href: string; note: string; forbidden: RegExp; targetBlank?: boolean },
+) {
+  const { container, root } = renderCard(node)
+  const link = container.querySelector("a")
+  expect(link).not.toBeNull()
+  expect(link?.getAttribute("aria-label")).toBe(opts.label)
+  expect(link?.textContent).toContain(opts.label)
+  if (opts.targetBlank) expect(link?.getAttribute("target")).toBe("_blank")
+  expect(link?.getAttribute("href")).toBe(opts.href)
+  expect(container.textContent).toContain(opts.note)
+  expect(container.textContent ?? "").not.toMatch(opts.forbidden)
+  unmountCard(root)
+}
+
+/** Asersi saldo negatif: kalimat verbatim absolut, tanpa minus. */
+export function expectNegativeBalance(node: ReactNode) {
+  const { container, root } = renderCard(node)
+  const href = container.querySelector("a")?.getAttribute("href") ?? ""
+  expect(decodeURIComponent(href)).toContain(STATEMENT_NEGATIVE_SENTENCE)
+  expect(decodeURIComponent(href)).not.toContain("-Rp")
+  unmountCard(root)
+}
