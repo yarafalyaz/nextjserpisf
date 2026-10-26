@@ -95,14 +95,15 @@ describe("buildLeadPriorityQueue", () => {
       input({ id: 1, leadNumber: "LD-0001", expectedCloseDate: new Date(2026, 9, 28) }),
     ])
     expect(r.rows.map((x) => x.leadId)).toEqual([1, 3, 4, 2, 5])
-    const rev = buildLeadPriorityQueue([
-      input({ id: 1, leadNumber: "LD-0001", expectedCloseDate: new Date(2026, 9, 28) }),
-      input({ id: 3, leadNumber: "LD-0003", expectedCloseDate: new Date(2026, 9, 28) }),
+    const forward = r.rows.map((x) => x.leadId)
+    const shuffled = buildLeadPriorityQueue([
       input({ id: 4, leadNumber: "LD-0004", expectedCloseDate: new Date(2026, 9, 28) }),
-      input({ id: 2, leadNumber: "LD-0002", expectedCloseDate: new Date(2026, 10, 5) }),
       input({ id: 5, leadNumber: "LD-0005", expectedCloseDate: null }),
+      input({ id: 1, leadNumber: "LD-0001", expectedCloseDate: new Date(2026, 9, 28) }),
+      input({ id: 2, leadNumber: "LD-0002", expectedCloseDate: new Date(2026, 10, 5) }),
+      input({ id: 3, leadNumber: "LD-0003", expectedCloseDate: new Date(2026, 9, 28) }),
     ])
-    expect(rev.rows.map((x) => x.leadId)).toEqual([1, 3, 4, 2, 5])
+    expect(shuffled.rows.map((x) => x.leadId)).toEqual(forward)
   })
 
   it("BR-LSC-10/E-LSC-7: estimatedValue kosong di luar Σ, tertanda, bukan Rp0", () => {
