@@ -35748,3 +35748,152 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-095-S: antrean rekod disiplin belum terbit mengendap
+
+> **Slot**: F-2026-10-27-095-S. Diperiksa bentrok 2026-10-27 06:49 WIB vs `origin/main` (`03eaf9b4b`): grep `F-2026-10-27-095` di backlog+board main = 0; ID bebas. Dokumen saja; nol kode/schema/migrasi. Branch `hermes/business-f095-disciplinary-queue`.
+
+### 0. Ringkasan
+
+Rekod disiplin (SP) SUDAH lengkap existing: builder `disciplinary.ts` (jenjang/masa berlaku/daftar perhatian aktif-kedaluwarsa-risiko), loader `disciplinary-data.ts` (semua rekod dalam scope + daftar perhatian), halaman `/sdm/disiplin`. Gap: daftar perhatian existing hanya membaca rekod **issued** (`active`/`expiringWithin30Days`/`highestRisk` dari `summarizeDisciplinaryAttention` — ketiganya saring `isDisciplinaryActiveAt` yang wajib `workflowStatus==="issued"`); rekod yang **belum terbit** (`draft`/`pending_approval`) hanya tampil tercampur di tabel semua rekod tanpa ember menunggu, tanpa umur sejak dibuat. Spec ini membekukan **antrean baca-saja turunan**: hanya `workflowStatus ∈ {draft, pending_approval}` + `voidedAt IS NULL` + `deletedAt IS NULL`, dua tahap menunggu dibedakan persis (`draft` = belum diajukan; `pending_approval` = menunggu penyetuju), umur hari kalender WIB sejak `createdAt` (`updatedAt` DILARANG), payload daftar TANPA isi kasus (`description`/`regulationReference`/`employeeResponse` — isi kasus hidup di detail existing saja), nol nominal potongan (keputusan potongan = model terpisah `DisciplinaryDeductionDecision`, BR-DISC-09 wilayah vonis Accountant, TIDAK disentuh).
+
+### 1. Inventarisasi terverifikasi (origin/main 03eaf9b4b, 2026-10-27 06:49 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `EmployeeDisciplinaryRecord` (`prisma/schema.prisma:3605`): `level String`, `violationCategory` (:3611), `violationDate` (:3612), `description Text` (:3613), `regulationReference?`, `workflowStatus String @default("draft")` (:3615), `requestedBy`, `approvedBy Int?` + `approvedAt DateTime?`, `secondApprovedBy Int?` + `secondApprovedAt DateTime?`, `issuedAt DateTime?`, `documentNo?` unik, `rejectionReason?`, `acknowledgmentAt/Method/Refused`, `employeeResponse?/At/Late`, `voidOfId Int?` unik + `voidedAt DateTime?` + `voidedBy` + `voidReason` (rekod pembatal BR-DISC-10), `deletedAt DateTime?`, `createdAt @default(now())`, `updatedAt @updatedAt`. Indeks `workflowStatus`/`violationDate`/`createdAt` existing. Komentar skema: TANPA kolom nominal/gaji (BR-DISC-08/09).
+- Kosakata: `DISCIPLINARY_WORKFLOW_STATUSES = draft|pending_approval|issued|rejected` (`src/lib/reports/disciplinary.ts:53-58`); `DISCIPLINARY_LEVELS = verbal|sp1|sp2|sp3|sp_first_final` + `DISCIPLINARY_LEVEL_LABELS` verbatim (Teguran Lisan Tercatat / SP1 / SP2 / SP3 / SP Pertama dan Terakhir); kategori resmi `DISCIPLINARY_VIOLATION_CATEGORIES` (umum+berat Q-DISC-1). `deriveDisciplinaryStatus`: non-issued → `workflowStatus` apa adanya; issued → `active`/`expired` turunan dari `issuedAt`+6 bulan kalender WIB (BR-DISC-02/03, PP 35/2021 Pasal 52).
+- Penjaga existing: `evaluateDisciplinaryApprovalSod` (BR-DISC-06: penyetuju != pengaju; SP3 & pertama-dan-terakhir wajib penyetuju kedua berbeda) — kebutuhan persetujuan kedua adalah fakta penjaga existing, BUKAN kesimpulan antrean.
+- Loader existing: `loadDisciplinaryRecords(scope, at)` (`disciplinary-data.ts:171`): `where {deletedAt: null, ...hrScopeWhere(scope)}`, select memuat `description`/`regulationReference`/`employeeResponse` (payload DETAIL — wajar untuk halaman rekod existing; payload antrean TIDAK mewarisinya, BR-DQ-04), `orderBy createdAt desc`. `loadDisciplinaryAttention` → `summarizeDisciplinaryAttention` (disciplinary.ts:386): `active`/`expiringWithin30Days`/`highestRisk` SEMUA dari `isDisciplinaryActiveAt` (issued+issuedAt+belum void) — rekod draft/pending_approval menurut konstruksi TIDAK PERNAH masuk daftar perhatian existing. Inilah gap persis spec ini.
+- Halaman konsumen: `src/app/(dashboard)/sdm/disiplin/page.tsx`: `requirePermission("view_disciplinary_records")` + `getHrScope(user)`; memuat attention + semua rekod + keputusan potongan terpisah (`loadDisciplinaryDeductionDecisions`, gerbang nominal `view_payroll` terpisah). Detail per rekod: `/sdm/disiplin/[id]`, buat: `/sdm/disiplin/tambah`.
+- Izin nyata katalog (`module-catalog.generated.ts:345-347`): HANYA `view_disciplinary_records`, `create_disciplinary_records`, `approve_disciplinary_records` (resource `disciplinary_records`). Tidak ada key `edit/delete_disciplinary_records` dan tidak ada key khusus antrean — jangan karang key baru tahap 1.
+- Scope HR: `getHrScope` fail-closed (`hr-scope.ts:40-72`: roles rusak/hilang → self employeeId -1; all = HR/finance/admin/ga; department = kepala se-departemen) + `hrScopeWhere` (:76-85) — pola loader disiplin existing persis.
+- Keputusan potongan: model `DisciplinaryDeductionDecision` (schema sesudah :3655, BR-DISC-09 tahap 2) + `disciplinary-deduction*.ts` — SATU-SATUNYA pemicu potongan; SP sendiri tidak pernah memicu potongan (larangan permanen komentar skema). Wilayah vonis Accountant; antrean ini TIDAK membacanya sama sekali.
+
+Belum ada / gap (bukti grep run ini):
+- Antrean/ember rekod belum terbit: ABSEN. Tidak ada builder/loader yang menyaring `draft|pending_approval`; tabel semua rekod existing mencampur issued/rejected/draft/pending tanpa umur menunggu dan tanpa pemisah tahap menunggu.
+- Umur sejak `createdAt` untuk rekod belum terbit: ABSEN di payload perhatian (rekod belum terbit tidak punya `issuedAt`; `expiresAt` null menurut konstruksi).
+
+Benchmark resmi (akses 2026-10-27):
+- Accurate: SP hanya artikel konsep blog pemasaran (`https://accurate.id/marketing-manajemen/surat-peringatan-karyawan/`, jenjang SP1-3 + masa 6 bulan); help resmi `https://help.accurate.id/` tidak mendokumentasikan modul disiplin/antrean persetujuan SP maupun Zahir HR (`https://zahir.co.id/hr/`: absensi, cuti, payroll, PPh21, BPJS, database karyawan, ESS — disiplin/SP TIDAK tercantum). Ditulis: antrean rekod disiplin belum terbit tidak ditemukan di dokumentasi produk resmi keduanya — bukan diklaim tidak ada.
+
+### 2. Workflow specification
+
+Aktor: Pengaju (membuat draft), Penyetuju pertama/kedua (pemegang `approve_disciplinary_records`, SoD BR-DISC-06 existing), HR/Admin SDM (penonton antrean scope all), Kepala Bengkel (scope department), Lead (putus Q-DQ-*).
+
+Dokumen masuk: `EmployeeDisciplinaryRecord` (level/kategori verbatim existing, `violationDate`, `workflowStatus`, `createdAt`, `approvedBy`/`secondApprovedBy` null-ness fakta). Dokumen keluar: tidak ada dokumen baru tahap 1; antrean baca-saja + tautan ke halaman detail/aksi existing `/sdm/disiplin/[id]`.
+
+Alur:
+1. Pengaju membuat rekod (`create_disciplinary_records` existing) → `draft` (belum diajukan). Antrean menampilkannya di tahap `draft`.
+2. Pengaju mengajukan (transisi existing) → `pending_approval` (menunggu penyetuju). Antrean memindahkannya ke tahap `pending_approval` pada render berikut.
+3. Penyetuju menyetujui/menolak dari permukaan existing (BUKAN dari antrean): approved berlanjut terbit (`issued`, keluar antrean, masuk dunia daftar perhatian existing) atau `rejected` (keluar antrean).
+4. Rekod batal (`voidedAt` terisi lewat rekod pembatal BR-DISC-10) atau terhapus lunak (`deletedAt`) keluar populasi pada render berikut.
+
+### 3. Status-transition matrix (existing, dibaca antrean — antrean tidak memicu transisi apa pun)
+
+| Dari | Pemicu existing | Ke | Efek ke antrean |
+|---|---|---|---|
+| — (buat baru) | buat rekod existing | `draft` | masuk tahap `draft` |
+| `draft` | ajukan existing | `pending_approval` | pindah tahap `pending_approval` |
+| `pending_approval` | setujui + terbit existing | `issued` (+`issuedAt` terisi) | keluar populasi (masuk perhatian existing) |
+| `pending_approval` | tolak existing (alasan wajib, penjaga rejection) | `rejected` (+`rejectionReason`) | keluar populasi |
+| `draft`/`pending_approval` | rekod pembatal BR-DISC-10 | `voidedAt` terisi | keluar populasi |
+| `draft`/`pending_approval` | hapus lunak existing | `deletedAt` terisi | keluar populasi |
+| `issued`/`rejected` | apa pun | — | tidak pernah masuk populasi |
+
+### 4. Role/permission matrix (key nyata katalog :345-347)
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Self | Department (kepala) | All (HR/finance/admin/ga) |
+|---|---|---|---|---|
+| Lihat antrean tahap 1 (USULAN gerbang) | `view_disciplinary_records` (:345) — pola halaman disiplin existing | hanya rekod dirinya (`employeeId` = dirinya) lewat `hrScopeWhere` | rekod se-departemen | lintas departemen |
+| Buat pengajuan (existing, di luar antrean) | `create_disciplinary_records` (:346) | sesuai existing | sesuai existing | sesuai existing |
+| Setujui/tolak/terbit (existing, BUKAN dari antrean) | `approve_disciplinary_records` (:347) + SoD BR-DISC-06 | tidak (SoD) | sesuai izin | sesuai izin |
+| Lihat isi kasus (detail) | permukaan detail existing `/sdm/disiplin/[id]` | sesuai existing | sesuai existing | sesuai existing |
+| Keputusan potongan (model terpisah) | gerbang existing keputusan potongan + `view_payroll` untuk nominal | di luar antrean | di luar antrean | di luar antrean |
+
+Tanpa `view_disciplinary_records`: loader tidak dipanggil dan halaman menolak (fail-closed, pola page.tsx existing); izin saja tanpa scope tidak memperluas baris (BR-DQ-06).
+
+### 5. Business rules register (BR-DQ)
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-DQ-01 | Populasi antrean persis: `workflowStatus ∈ {draft, pending_approval}` DAN `voidedAt IS NULL` DAN `deletedAt IS NULL`. `issued`/`rejected` keluar seluruhnya; rekod pembatal sendiri (`voidOfId` terisi) menurut konstruksi workflowStatus-nya bukan populasi menunggu — tidak tampil sebagai baris antrean. Status di luar kosakata `DISCIPLINARY_WORKFLOW_STATUSES` (data karangan DB) keluar populasi (bukan ditebak tahapnya). | USULAN (turunan atas kosakata TERVERIFIKASI-KODE) | schema:3615,3636-3639; disciplinary.ts:53-58 |
+| BR-DQ-02 | Dua tahap menunggu WAJIB dibedakan persis: `draft` = "Belum Diajukan" (kata USULAN, final Q-DQ-2); `pending_approval` = "Menunggu Persetujuan". Tidak digabung satu ember "belum terbit" tanpa pemisah hitungan. | USULAN | disciplinary.ts:53-58 |
+| BR-DQ-03 | SP3 & `sp_first_final` pada `pending_approval`: fakta pendamping verbatim = `approvedBy`/`secondApprovedBy` terisi-atau-null apa adanya (beserta label jenjang). Antrean TIDAK menyimpulkan "menunggu penyetuju pertama/kedua", TIDAK menghitung langkah persetujuan, TIDAK menandai kurang-persetujuan — kebutuhan persetujuan kedua adalah penjaga existing `evaluateDisciplinaryApprovalSod` BR-DISC-06 saat aksi persetujuan berjalan, bukan kesimpulan daftar. Menampilkan turunan "kurang satu persetujuan" = MERAH. | TERVERIFIKASI-KODE (null-ness + penjaga) + USULAN (larangan simpulan) | schema:3617-3620; evaluateDisciplinaryApprovalSod disciplinary.ts |
+| BR-DQ-04 | SENSITIF — payload daftar DILARANG memuat `description`, `regulationReference`, `employeeResponse`, `rejectionReason`, `voidReason`. Isi kasus hanya di halaman detail existing. Select loader antrean WAJIB eksplisit tanpa field itu (mewarisi select loader existing `disciplinary-data.ts` apa adanya = MERAH, karena select itu memuat ketiganya). | USULAN (pengerasan atas payload detail existing) | schema:3613-3633; disciplinary-data.ts RECORD_SELECT |
+| BR-DQ-05 | Kolom tampil yang diizinkan: nama karyawan + departemen, `level` verbatim + label existing `DISCIPLINARY_LEVEL_LABELS`, `violationCategory` verbatim, `violationDate`, tahap menunggu (BR-DQ-02), umur (BR-DQ-07), nama pengaju (`requestedBy`), fakta `approvedBy`/`secondApprovedBy` null-ness (BR-DQ-03), tautan detail. Level/kategori di luar kosakata existing tampil verbatim apa adanya (pola `disciplinaryLevelLabel` existing: nilai tak dikenal dikembalikan mentah), tidak divalidasi ulang, tidak dibuang diam-diam — kecuali status di luar kosakata (BR-DQ-01). | TERVERIFIKASI-KODE (label) + USULAN (daftar kolom) | disciplinary.ts DISCIPLINARY_LEVEL_LABELS, disciplinaryLevelLabel |
+| BR-DQ-06 | Loader WAJIB gerbang `view_disciplinary_records` sebelum query + `getHrScope`/`hrScopeWhere` fail-closed persis pola loader existing: self = rekod dirinya saja, department = se-departemen, all = lintas; roles rusak/hilang → self employeeId -1 → nol baris. Baris luar scope tampil = MERAH. | TERVERIFIKASI-KODE | hr-scope.ts:40-85; page.tsx disinplin; disciplinary-data.ts:171 |
+| BR-DQ-07 | Umur menunggu = hari kalender WIB sejak `EmployeeDisciplinaryRecord.createdAt` ke tanggal baca (fungsi hari WIB existing keluarga `wibDayNumber`), untuk KEDUA tahap. `updatedAt` DILARANG sebagai acuan (bergerak oleh edit apa pun termasuk persetujuan — umur dari updatedAt mengecil palsu sesudah disentuh penyetuju). `violationDate`/`issuedAt` bukan acuan umur antrean (`issuedAt` null menurut konstruksi populasi). Ambang tingkat `mengendap` = Q-DQ-1 Lead; sebelum diputus builder hanya tingkat `menunggu`, nol ambang karangan. | USULAN (acuan) + TERVERIFIKASI-KODE (larangan updatedAt: schema `@updatedAt`) | schema:3640-3641; wibDayNumber employee-lifecycle |
+| BR-DQ-08 | Urutan: USULAN tertua-menunggu dulu (`createdAt` naik), seri deterministik `id` naik (Q-DQ-1 mengesahkan). Urutan BUKAN ranking keparahan: dilarang mengurutkan berdasar level/kategori sebagai skor risiko orang. | USULAN | — |
+| BR-DQ-09 | Nol nominal potongan/uang: payload dilarang memuat field keputusan potongan, nominal, gaji, atau status potongan apa pun. Keputusan potongan = model `DisciplinaryDeductionDecision` terpisah (BR-DISC-09, vonis Accountant) — antrean TIDAK membacanya, TIDAK menautkan statusnya, TIDAK menyebut SP sebagai pemicu potongan (larangan permanen existing). Accountant tidak diminta tahap ini. | TERVERIFIKASI-KODE (pemisahan model) | schema komentar BR-DISC-08/09; disciplinary-deduction* |
+| BR-DQ-10 | Baca-saja tahap 1: antrean tidak memanggil aksi ajukan/setujui/tolak/terbit/batal, tidak menulis `workflowStatus`/persetujuan apa pun. Nol tombol Setujui/Tolak/Terbitkan/Ajukan dari antrean (Q-DQ-4); tindak lanjut = permukaan detail existing. | USULAN (scope) | aksi disiplin existing |
+| BR-DQ-11 | Anti-N+1: satu query massal populasi ter-scope (pola `loadDisciplinaryRecords`), nama karyawan/departemen/pengaju lewat relasi select massal, bukan query per baris. Batas baris/paginasi diputus Backend tanpa mengubah populasi. | USULAN | disciplinary-data.ts:171 |
+| BR-DQ-12 | Karyawan berhenti/nonaktif/terhapus-lunak: rekod belum terbitnya TETAP tampil dalam scope (status karyawan pendamping verbatim bila tampil) — antrean tidak mengeluarkan baris berdasar status karyawan; pengajuan menggantung atas karyawan berhenti adalah fakta HR yang justru perlu terlihat, penyelesaiannya (batalkan/tolak) lewat aksi existing, bukan saringan antrean. | USULAN | Employee lifecycle schema |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-DQ-B1: Populasi persis BR-DQ-01: `issued`/`rejected`/`voidedAt` terisi/`deletedAt` terisi/status-di-luar-kosakata TIDAK tampil (bocor satu pun = MERAH); `draft` dan `pending_approval` masuk tahapnya masing-masing terpisah terhitung (digabung tanpa pemisah = MERAH).
+- AC-DQ-B2: Payload daftar TIDAK mengandung kunci `description`/`regulationReference`/`employeeResponse`/`rejectionReason`/`voidReason` (uji serialisasi payload persis; bocor = MERAH, ini AC terkeras spec ini). Select eksplisit tanpa field itu terbukti di loader.
+- AC-DQ-B3: Scope fail-closed BR-DQ-06: self hanya rekod dirinya; department hanya departemennya; roles rusak → kosong; tanpa `view_disciplinary_records` loader menolak sebelum query. Baris luar scope = MERAH.
+- AC-DQ-B4: Umur dihitung dari `createdAt` hari kalender WIB untuk fixture yang `updatedAt`-nya jauh lebih baru dari `createdAt` (umur mengikuti `createdAt`, BUKAN `updatedAt` — umur dari updatedAt = MERAH); urutan `createdAt` naik + seri `id` naik deterministik; sebelum Q-DQ-1 diputus tidak ada field tingkat mengendap karangan.
+- AC-DQ-B5: Baca-saja + nol potongan: loader/builder tidak memanggil aksi mutasi disiplin/jurnal dan tidak membaca model keputusan potongan untuk payload; SP3/`sp_first_final` pending hanya membawa fakta `approvedBy`/`secondApprovedBy` verbatim — field turunan "langkah persetujuan/kurang persetujuan" apa pun = MERAH (BR-DQ-03/09).
+
+Frontend (konsumen):
+- AC-DQ-F1: Label tahap, level, kategori, umur verbatim server; UI tidak menghitung umur/tahap sendiri (hitung ulang = MERAH); dua tahap tampil sebagai seksi/ember terpisah berlabel persis kata final Q-DQ-2.
+- AC-DQ-F2: Isi kasus tidak tampil di daftar (kolom deskripsi/referensi/tanggapan apa pun = MERAH); baris hanya menaut ke detail existing `/sdm/disiplin/[id]`.
+- AC-DQ-F3: TIDAK ada tombol Ajukan/Setujui/Tolak/Terbitkan/Batal dari antrean tahap 1 (aksi dari daftar = MERAH, BR-DQ-10); tanpa izin halaman menolak (pola existing).
+
+Edge cases:
+- EC-DQ-1: Rekod `pending_approval` SP3 dengan `approvedBy` terisi, `secondApprovedBy` null: tampil verbatim begitu saja (fakta pendamping BR-DQ-03); antrean tidak menulis "menunggu penyetuju kedua" — boleh jadi persetujuan kedua memang belum terjadi atau jalur existing menanganinya lain; simpulan apa pun = di luar kontrak.
+- EC-DQ-2: Rekod `draft` yang tidak pernah diajukan bertahun-tahun (data warisan): tetap tampil tahap `draft` dengan umur jujur sejak `createdAt`; antrean tidak menghapus/mengarsipkan dan tidak mengarang batas basi sebelum Q-DQ-1.
+- EC-DQ-3: Rekod dibatalkan (`voidedAt` terisi) saat halaman terbuka: keluar populasi pada render berikut; antrean tidak mengunci baris.
+- EC-DQ-4: `violationDate` di masa depan (input existing mengizinkan apa adanya): tampil verbatim; umur antrean tetap sejak `createdAt`, tidak negatif dari `violationDate` (keduanya fakta berbeda, tidak dicampur).
+- EC-DQ-5: Karyawan terhapus-lunak/berhenti dengan draft menggantung: baris tetap tampil dalam scope tertanda status karyawan pendamping (BR-DQ-12); bukan disembunyikan.
+- EC-DQ-6: Level `verbal` (teguran lisan tercatat, BUKAN SP per builder existing) dalam `draft`/`pending_approval`: masuk populasi apa adanya dengan label verbatim existing — antrean mereplikasi populasi workflow, bukan menyaring "hanya SP"; penyaringan level = keputusan Q-DQ-5 bila Lead menghendaki.
+- EC-DQ-7: Dua rekod karyawan sama, satu `draft` satu `pending_approval`: dua baris tahap berbeda; antrean tidak menggabungkan per karyawan.
+- EC-DQ-8: Rekod dengan `documentNo` terisi tapi masih `pending_approval` (penomoran existing apa adanya): nomor tampil verbatim bila dimuat payload; antrean tidak membaca nomor sebagai bukti terbit — satu-satunya bukti terbit = `workflowStatus issued` + `issuedAt`.
+
+### 7. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir HR | ISF (Silengkap) |
+|---|---|---|---|
+| Rekod SP berjenjang SP1→SP2→SP3 + masa berlaku 6 bulan | Tidak ditemukan di dokumentasi produk (konsep blog saja) | Tidak ditemukan di daftar fitur resmi | Ada (TERVERIFIKASI-KODE disciplinary.ts BR-DISC-01/02/03) |
+| Daftar perhatian SP aktif/kedaluwarsa/risiko | Tidak ditemukan | Tidak ditemukan | Ada (`summarizeDisciplinaryAttention`, halaman `/sdm/disiplin`) |
+| Antrean rekod belum terbit (draft/menunggu persetujuan) berumur + payload tanpa isi kasus | Tidak ditemukan | Tidak ditemukan | ABSEN (gap spec ini) |
+| Keputusan potongan terpisah dari SP | Tidak ditemukan | Tidak ditemukan | Ada (model terpisah BR-DISC-09; di luar antrean ini) |
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-DQ-1 | Ambang hari tingkat `mengendap` sejak `createdAt` + urutan final (tertua dulu, seri `id` naik disahkan)? | Lead | USULAN 3 hari kalender WIB (preseden keluarga antrean mengendap) sebagai tingkat di atas `menunggu`; tertua-menunggu dulu; seri id naik — bukan fakta sebelum diputus |
+| Q-DQ-2 | Kata final label dua tahap (`draft`/`pending_approval`) + judul antrean? | Lead | USULAN: "Belum Diajukan" / "Menunggu Persetujuan"; judul "Rekod Disiplin Belum Terbit"; satu konstanta label server, UI verbatim |
+| Q-DQ-3 | Penempatan permukaan: seksi di halaman `/sdm/disiplin` existing (di samping kartu perhatian) vs halaman antrean terpisah? | Lead | USULAN seksi turunan di halaman existing — aktor dan konteks sama, perhatian existing (issued) dan antrean ini (belum terbit) adalah dua sisi halaman yang sama; halaman baru hanya bila Lead putus lain |
+| Q-DQ-4 | Tombol tindak lanjut dari antrean tahap 1 ditolak spec (BR-DQ-10) — disahkan? | Lead | YA ditolak tahap 1: persetujuan butuh konteks SoD + isi kasus di detail; jalan pintas dari daftar tanpa isi kasus justru berbahaya untuk data disiplin |
+| Q-DQ-5 | Level `verbal` ikut populasi (EC-DQ-6, usul spec: ikut verbatim) vs hanya SP (`sp1..sp_first_final`)? | Lead | Ikut apa adanya tahap 1 — antrean mereplikasi antrean workflow; menyaring = definisi populasi kedua |
+| Q-DQ-6 | Fisik: builder/loader turunan baru vs perluasan `disciplinary-data.ts` (select antrean WAJIB terpisah dari select detail existing, BR-DQ-04)? | Backend | Select terpisah wajib; bentuk modul diputus Backend, klaim file di board |
+| Q-DQ-7 | Vonis pajak/potongan? | Accountant | TIDAK diminta: nol nominal, model potongan terpisah tidak disentuh (BR-DQ-09); vonis hanya bila kelak antrean menautkan status potongan — tidak diusulkan |
+
+### 9. Backlog implementasi (turunan F-2026-10-27-095-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-095-S | Spec kontrak ini (dokumen) | Business | — |
+| 095-B | Builder/loader turunan antrean belum terbit (populasi BR-DQ-01, select tanpa isi kasus, umur `createdAt` WIB, scope fail-closed) + tes AC-DQ-B1..B5 | Backend | Putusan Lead Q-DQ-1/2/5 |
+| 095-F | Permukaan antrean verbatim payload (penempatan Q-DQ-3) + AC-DQ-F1..F3 | Frontend | 095-B merged; grep e2e `sdm/disiplin` dulu |
+| 095-Q | Falsifikasi AC-DQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (isi kasus bocor MERAH, baris luar scope MERAH, umur updatedAt MERAH, simpulan langkah SP3 MERAH) | QA | 095-B/095-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### Yang TIDAK diusulkan run ini
+- Menampilkan isi kasus (`description`/`regulationReference`/`employeeResponse`) di daftar antrean dalam bentuk apa pun, termasuk ringkasan terpotong — 50 karakter pertama deskripsi tetap isi kasus (BR-DQ-04).
+- Menyimpulkan langkah persetujuan SP3/pertama-dan-terakhir, penanda "kurang persetujuan", atau pengingat ke penyetuju tertentu dari null-ness (BR-DQ-03) — fakta verbatim saja; pengingat = kanal/keadaan baru di luar tahap baca-saja.
+- Tombol Ajukan/Setujui/Tolak/Terbitkan/Batal dari antrean (BR-DQ-10).
+- Membaca/menautkan keputusan potongan, nominal, atau status potongan (BR-DQ-09) — wilayah vonis Accountant BR-DISC-09, model terpisah existing.
+- Mengubah `loadDisciplinaryRecords`/halaman detail existing atau select detailnya — payload antrean adalah select terpisah, konsumen lama tidak diganggu (Q-DQ-6).
+- Kolom/status/tenggat tersimpan baru; ambang mengendap sebelum Q-DQ-1 diputus Lead.
+- Eskalasi otomatis, notifikasi WA/email ke pengaju/penyetuju, atau penghapusan draft basi otomatis (EC-DQ-2 dibaca jujur, bukan dibersihkan diam-diam).
+
+F-2026-10-27-095-S — Antrean rekod disiplin belum terbit mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-DQ-1/2/4/5, lalu fisik Backend (095-B), konsumen Frontend (095-F), falsifikasi QA (095-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK — nol nominal/potongan; wilayah BR-DISC-09 tidak disentuh.
