@@ -44,6 +44,31 @@ import { onDownPaymentConfirmed } from "../down-payment.hook"
 
 import { buildDp, buildDpTx, mockConfirmedDps, confirmedDpRow, expectInvoicePaid, expectInvoiceNotPaid, expectPaymentNotes, expectPaymentData, expectCreditCreated } from "./down-payment-fixtures"
 
+
+function seedDpLanjutanPaid(mocks: any, commissionRatePercent: number | null) {
+  mocks.salesInvoiceFindFirst.mockResolvedValue({
+    id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
+    paymentStatus: "partial",
+    date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent,
+  })
+  mocks.salesPaymentFindFirst.mockResolvedValue(null)
+  mocks.salesPaymentFindMany
+    .mockResolvedValueOnce([{ amount: 8000 }])
+    .mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
+}
+
+function expectSnapshotPaid(mocks: any) {
+  expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({
+        paymentStatus: "paid",
+        commissionCustomerCategoryId: 1,
+        commissionRateId: 1,
+      }),
+    }),
+  )
+}
+
 function buildTx(dp: ReturnType<typeof buildDp>) {
   return buildDpTx(mocks, dp)
 }
@@ -125,15 +150,7 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
 
     await onDownPaymentConfirmed(2, 1)
 
-    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          paymentStatus: "paid",
-          commissionCustomerCategoryId: 1,
-          commissionRateId: 1,
-        }),
-      }),
-    )
+    expectSnapshotPaid(mocks)
     const finalData = mocks.salesInvoiceUpdate.mock.calls
       .map((c: any) => c[0].data)
       .find((d: any) => d.paymentStatus === "paid")
@@ -143,28 +160,12 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
   it("BLOCKER-1 F-036-S: DP lanjutan melunasi -> snapshot tarif beku; existing tidak ditimpa", async () => {
     const dp = buildDp({ id: 9, amount: 5000, status: "draft", docNo: "DP-9" })
     const tx = buildTx(dp)
-    mocks.salesInvoiceFindFirst.mockResolvedValue({
-      id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
-      paymentStatus: "partial",
-      date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: null,
-    })
-    mocks.salesPaymentFindFirst.mockResolvedValue(null)
-    mocks.salesPaymentFindMany
-      .mockResolvedValueOnce([{ amount: 8000 }])
-      .mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
+    seedDpLanjutanPaid(mocks, null)
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
 
     await onDownPaymentConfirmed(9, 1)
 
-    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          paymentStatus: "paid",
-          commissionCustomerCategoryId: 1,
-          commissionRateId: 1,
-        }),
-      }),
-    )
+    expectSnapshotPaid(mocks)
     const data = mocks.salesInvoiceUpdate.mock.calls[0][0].data
     expect(Number(data.commissionRatePercent)).toBe(2)
   })
@@ -172,15 +173,7 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
   it("BLOCKER-1 F-036-S: DP lanjutan dengan snapshot existing -> tidak ditulis ulang", async () => {
     const dp = buildDp({ id: 9, amount: 5000, status: "draft", docNo: "DP-9" })
     const tx = buildTx(dp)
-    mocks.salesInvoiceFindFirst.mockResolvedValue({
-      id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
-      paymentStatus: "partial",
-      date: new Date(Date.UTC(2026, 9, 1)), commissionRatePercent: 7,
-    })
-    mocks.salesPaymentFindFirst.mockResolvedValue(null)
-    mocks.salesPaymentFindMany
-      .mockResolvedValueOnce([{ amount: 8000 }])
-      .mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
+    seedDpLanjutanPaid(mocks, 7)
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
 
     await onDownPaymentConfirmed(9, 1)
