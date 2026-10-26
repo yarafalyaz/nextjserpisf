@@ -33,7 +33,10 @@ export default async function TicketsPage({
   // di loader juga), ditampilkan verbatim di atas daftar inventaris.
   // Kegagalan loader menyembunyikan kartu saja (BR-CTQ-11) — daftar
   // tiket existing tetap dapat dipakai; dilarang kartu kosong karangan.
-  const ticketQueue = await getCrmTicketQueue().catch(() => null)
+  const ticketQueue = await getCrmTicketQueue().catch((error) => {
+    console.error("[crm/tickets] antrean tiket:", error)
+    return null
+  })
 
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
