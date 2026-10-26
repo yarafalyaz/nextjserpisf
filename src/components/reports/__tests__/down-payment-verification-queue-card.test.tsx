@@ -165,5 +165,8 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
       "Belum ada uang muka yang menunggu verifikasi",
     )
     expect(container.querySelectorAll("button")).toHaveLength(0)
+    // Judul + notice tetap tampil saat kosong (konteks antrean utuh).
+    expect(container.textContent).toContain("Antrean Verifikasi Uang Muka")
+    expect(container.textContent).toContain(DP_QUEUE_NOTICE_TEXT)
   })
 })
