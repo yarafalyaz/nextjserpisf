@@ -51,7 +51,8 @@ function row(overrides: Partial<CreditOverrideRow> = {}): CreditOverrideRow {
     attemptedAmount: 900_000,
     creditLimit: 1_000_000,
     exposure: 2_500_000,
-    exposureStatus: "Lewat batas",
+    // Payload nyata server (#1072): kode tersimpan "over", bukan label.
+    exposureStatus: "over",
     utilization: null,
     quotationId: null,
     salesOrderId: null,
@@ -132,7 +133,9 @@ describe("CreditOverrideQueue (035-F)", () => {
         <CreditOverrideQueue rows={[row()]} canApprove={false} currentUserId={99} />
       ))
       expect(container.textContent).toContain("PT Uji")
+      // Kode server "over" tampil sebagai label builder, bukan kode mentah.
       expect(container.textContent).toContain("Lewat batas")
+      expect(container.textContent).not.toContain("over")
       expect(container.textContent).toContain("Menunggu Persetujuan")
       expect(container.querySelector('button[aria-label="Setujui override batas kredit 7"]')).toBeNull()
       unmount(root, container)

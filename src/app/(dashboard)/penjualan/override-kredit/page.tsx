@@ -19,11 +19,10 @@ export const metadata: Metadata = { title: "Override Batas Kredit" }
  * view_reports, fail-closed); halaman TIDAK memanggil loader tanpa salah satu
  * izin itu. Setujui/Tolak hanya dirender untuk pemegang
  * approve_credit_overrides; SoD + alasan tolak wajib ditegakkan server dan
- * penolakannya tampil verbatim. ponytail: izin approve_credit_overrides lahir
- * di PR Backend #1072 (belum merged) — cast lokal dicabut sesudah #1072 merged;
- * PR ini merge-blocked oleh #1072.
+ * penolakannya tampil verbatim. Izin approve_credit_overrides lahir di PR
+ * Backend #1072 (MERGED) — literal langsung tanpa cast.
  */
-const APPROVE_CREDIT_OVERRIDES = "approve_credit_overrides" as PermissionName
+const APPROVE_CREDIT_OVERRIDES: PermissionName = "approve_credit_overrides"
 
 export default async function CreditOverridePage() {
   const [canApprove, canReport] = await Promise.all([

@@ -2,7 +2,8 @@
 
 // F-2026-10-25-035-F: permukaan persetujuan + jejak override gerbang kredit.
 // Baris dari listCreditOverrides (server) verbatim — status turunan server,
-// label status kredit pembangun (exposureStatus) ditampilkan apa adanya,
+// kode status kredit tersimpan (exposureStatus, mis. "over") dipetakan ke
+// label builder lewat CREDIT_EXPOSURE_STATUS_LABEL (satu sumber label),
 // UI nol hitung ulang. Setujui/Tolak hanya dirender untuk pemegang
 // approve_credit_overrides (canApprove dari halaman); SoD ditegakkan server
 // dan penolakannya tampil sebagai error jujur, bukan sukses semu.
@@ -14,6 +15,7 @@ import {
   rejectCreditOverride,
 } from "@/actions/credit-override.actions"
 import { CREDIT_OVERRIDE_STATUS_LABEL } from "@/components/forms/credit-override-panel"
+import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
 import { StatusChip } from "@/components/ui/status-chip"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -153,7 +155,7 @@ export function CreditOverrideQueue({
               <DetailTableRow key={row.id}>
                 <DetailTableTd>{row.customerName ?? `#${row.customerId}`}</DetailTableTd>
                 <DetailTableTd>{DOCUMENT_TYPE_LABEL[row.documentType] ?? row.documentType}</DetailTableTd>
-                <DetailTableTd>{row.exposureStatus}</DetailTableTd>
+                <DetailTableTd>{CREDIT_EXPOSURE_STATUS_LABEL[row.exposureStatus as keyof typeof CREDIT_EXPOSURE_STATUS_LABEL] ?? row.exposureStatus}</DetailTableTd>
                 <DetailTableTd className="tabular-nums">{formatCurrency(row.creditLimit)}</DetailTableTd>
                 <DetailTableTd className="tabular-nums">{formatCurrency(row.exposure)}</DetailTableTd>
                 <DetailTableTd className="tabular-nums">{formatCurrency(row.attemptedAmount)}</DetailTableTd>
