@@ -187,10 +187,15 @@ export function buildVendorPaymentDraftQueue(
     menunggu: 0,
   }
   const vendorMap = new Map<number, VendorPaymentDraftVendorCount>()
-  let totalAmount = 0
+  // Σ eksak bersen (vonis Accountant PR #1109): jumlahkan sen integer,
+  // bukan float64 polos — 0.1+0.2 wajib 0.3 eksak. Baris tetap verbatim.
+  let totalAmountSen = 0
+  const vendorSen = new Map<number, number>()
   for (const row of rows) {
     levelCounts[row.tingkat] += 1
-    totalAmount += row.amount
+    const rowSen = Math.round(row.amount * 100)
+    totalAmountSen += rowSen
+    vendorSen.set(row.vendorId, (vendorSen.get(row.vendorId) ?? 0) + rowSen)
     let entry = vendorMap.get(row.vendorId)
     if (!entry) {
       entry = {
@@ -204,7 +209,7 @@ export function buildVendorPaymentDraftQueue(
     }
     entry.levelCounts[row.tingkat] += 1
     entry.total += 1
-    entry.totalAmount += row.amount
+    entry.totalAmount = (vendorSen.get(row.vendorId) ?? 0) / 100
   }
 
   return {
@@ -214,7 +219,7 @@ export function buildVendorPaymentDraftQueue(
       (a, b) => a.vendorName.localeCompare(b.vendorName) || a.vendorId - b.vendorId,
     ),
     totalDocuments: rows.length,
-    totalAmount,
+    totalAmount: totalAmountSen / 100,
     totalLabel: VENDOR_PAYMENT_DRAFT_TOTAL_LABEL,
   }
 }

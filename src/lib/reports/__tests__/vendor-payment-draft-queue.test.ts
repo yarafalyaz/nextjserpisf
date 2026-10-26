@@ -52,6 +52,29 @@ const LOADER_SELECT_KEYS = [
   "vendorId",
 ] as const
 
+// Kunci Row builder persis (daftar-putih) — Input (13) + turunan (5).
+// Suntik field asing (mis. adminFee/totalValue) ke Row WAJIB MERAH.
+const ROW_KEYS = [
+  "amount",
+  "createdAt",
+  "createdByName",
+  "deletedAt",
+  "documentNo",
+  "paymentDate",
+  "paymentDateLampau",
+  "slug",
+  "status",
+  "tingkat",
+  "tingkatLabel",
+  "umurDariMasaDepan",
+  "umurDraftHari",
+  "vendorBillDocumentNo",
+  "vendorBillId",
+  "vendorId",
+  "vendorName",
+  "vendorPaymentId",
+] as const
+
 // Hari kalender WIB tetap: 2026-10-26 — instan 05:00 WIB.
 const NOW = new Date("2026-10-25T22:00:00.000Z")
 const TODAY = getWibTodayUtcDate(NOW)
@@ -214,6 +237,58 @@ describe("vendor-payment-draft-queue (F-2026-10-26-072-S tahap 1)", () => {
     expect(queue.rows).toHaveLength(1)
     expect(queue.rows[0].vendorBillDocumentNo).toBeNull()
     expect(queue.rows[0].createdByName).toBeNull()
+  })
+
+  it("Σ amount eksak bersen — 0.10+0.20+9999999.99 bukan float (vonis Accountant)", () => {
+    const queue = buildVendorPaymentDraftQueue(
+      [
+        input({ vendorPaymentId: 1, amount: 0.1 }),
+        input({ vendorPaymentId: 2, amount: 0.2 }),
+        input({ vendorPaymentId: 3, amount: 9999999.99 }),
+      ],
+      NOW,
+    )
+    expect(queue.rows.map((r) => r.amount)).toEqual([0.1, 0.2, 9999999.99])
+    expect(queue.totalAmount).toBe(10000000.29)
+    expect(queue.vendorCounts).toHaveLength(1)
+    expect(queue.vendorCounts[0].totalAmount).toBe(10000000.29)
+    // Penjaga anti-float: penjumlahan polos menghasilkan 0.30000000000000004.
+    const senQueue = buildVendorPaymentDraftQueue(
+      [input({ vendorPaymentId: 1, amount: 0.1 }), input({ vendorPaymentId: 2, amount: 0.2 })],
+      NOW,
+    )
+    expect(senQueue.totalAmount).toBe(0.3)
+    // 10 x 0.1: float polos = 0.9999999999999999; sen integer = 1 eksak.
+    const tenQueue = buildVendorPaymentDraftQueue(
+      Array.from({ length: 10 }, (_, i) =>
+        input({ vendorPaymentId: i + 1, amount: 0.1 }),
+      ),
+      NOW,
+    )
+    expect(tenQueue.totalAmount).toBe(1)
+    expect(tenQueue.vendorCounts[0].totalAmount).toBe(1)
+  })
+
+  it("keys Row persis daftar-putih — field asing WAJIB gagal", () => {
+    const queue = buildVendorPaymentDraftQueue([input()], NOW)
+    expect(queue.rows).toHaveLength(1)
+    expect([...Object.keys(queue.rows[0])].sort()).toEqual([...ROW_KEYS].sort())
+    expect(Object.keys(queue.rows[0])).not.toContain("adminFee")
+    expect([...Object.keys(queue)].sort()).toEqual(
+      [
+        "levelCounts",
+        "rows",
+        "totalAmount",
+        "totalDocuments",
+        "totalLabel",
+        "vendorCounts",
+      ].sort(),
+    )
+    for (const count of queue.vendorCounts) {
+      expect([...Object.keys(count)].sort()).toEqual(
+        ["levelCounts", "total", "totalAmount", "vendorId", "vendorName"].sort(),
+      )
+    }
   })
 })
 
