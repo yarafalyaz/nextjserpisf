@@ -422,6 +422,10 @@ export const PERMISSIONS = [
       // Granted to admin/super_admin via "ALL"; grant it explicitly to finance
       // if that role is meant to approve loans.
       "approve_loans",
+      // F-2026-10-26-054-S (putusan Lead Q-SA-2): menyetujui/menolak
+      // penyesuaian gaji terjadwal. Tahap 1 hanya admin/super_admin (katalog
+      // penuh) + finance (FINANCE_WHITELIST eksplisit); GA pengaju saja.
+      "approve_salary_adjustments",
 ] as const;
 
 /** Nama permission yang sah — union dari katalog di atas (type-safe). */
@@ -765,6 +769,8 @@ export const FINANCE_WHITELIST = [
       "edit_journals",
       "post_journals",
       "approve_journals",
+      // F-2026-10-26-054-S Q-SA-2: finance penyetuju penyesuaian gaji tahap 1.
+      "approve_salary_adjustments",
       "delete_journals",
       "view_salary_amounts",
       "view_expenses",

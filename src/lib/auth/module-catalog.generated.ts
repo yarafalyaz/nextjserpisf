@@ -333,6 +333,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "performance", permissionKey: "create_performance", label: "Penilaian Kinerja" },
     { key: "edit", resource: "performance", permissionKey: "edit_performance", label: "Penilaian Kinerja" },
     { key: "delete", resource: "performance", permissionKey: "delete_performance", label: "Penilaian Kinerja" },
+    { key: "approve", resource: "salary_adjustments", permissionKey: "approve_salary_adjustments", label: "Penyesuaian Gaji" },
     { key: "view", resource: "succession", permissionKey: "view_succession", label: "Perencanaan Suksesi" },
     { key: "create", resource: "succession", permissionKey: "create_succession", label: "Perencanaan Suksesi" },
     { key: "edit", resource: "succession", permissionKey: "edit_succession", label: "Perencanaan Suksesi" },
