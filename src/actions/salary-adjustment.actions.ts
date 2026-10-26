@@ -10,15 +10,7 @@ import { logActivity } from "@/lib/services/activity-log.service";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
 import { computeChangePercent } from "@/lib/services/salary-adjustment.service";
-
-export const SALARY_ADJUSTMENT_REASONS = [
-  "berkala",
-  "promosi",
-  "umk",
-  "kinerja",
-  "penyesuaian",
-  "lainnya",
-] as const;
+import { SALARY_ADJUSTMENT_REASONS } from "@/lib/hr/hcms-scoring";
 
 function resultError(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e;
@@ -26,14 +18,12 @@ function resultError(e: unknown, tag: string) {
   return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
 }
 
-export const SALARY_ADJUSTMENT_REASON_LABELS: Record<string, string> = {
-  berkala: "Kenaikan Berkala",
-  promosi: "Promosi",
-  umk: "Penyesuaian UMK/UMP",
-  kinerja: "Kinerja",
-  penyesuaian: "Penyesuaian Struktur",
-  lainnya: "Lainnya",
-};
+/**
+ * TEMUAN-1 PR #959: penyesuaian gaji hanya untuk scope HR `all`
+ * (preseden requirePayrollComponentAdmin di hrm.actions.ts) — permission
+ * edit/view_employees + view_salary_amounts saja tidak cukup; aktor
+ * department/self tidak boleh menyentuh nominal karyawan di luar cakupan.
+ */
 
 /*
  * F-2026-10-26-054-S Jalur A (putusan Lead Q-SA-1/2/3; vonis Accountant
