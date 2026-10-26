@@ -9,6 +9,7 @@
  */
 export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/crm/leads": "Kelola prospek pelanggan",
+  "/crm/prioritas-lead": "Daftar kerja prospek aktif menurut urutan prioritas",
   "/crm/tickets": "Tiket bantuan pelanggan",
   "/inventaris/baris-rak": "Baris rak di dalam gudang",
   "/inventaris/mutasi-stok": "Pergerakan stok",
@@ -113,6 +114,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/stok-minimum": "Menampilkan barang yang sudah mencapai atau menembus batas minimum stoknya beserta kekurangan dan perkiraan nilai pembeliannya",
   "/laporan/penerimaan-sebagian": "Menampilkan pesanan pembelian yang barisnya belum diterima penuh beserta nilai sisanya",
   "/laporan/pemenuhan-pesanan": "Menampilkan pesanan penjualan yang barisnya belum terkirim penuh beserta nilai sisanya",
+  "/laporan/terkirim-belum-terfaktur": "Menampilkan pesanan penjualan yang sudah terkirim tetapi belum terfaktur penuh beserta umur dan sisa nilainya",
   "/laporan/ringkasan-ar-ap": "Menampilkan ringkasan piutang dan utang usaha",
   "/laporan/ringkasan-stok": "Menampilkan ringkasan persediaan dan daftar item kritis",
   "/laporan/serapan-overhead": "Menampilkan overhead dibebankan vs aktual beserta selisih kurang/lebih serap",
@@ -164,6 +166,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/penjualan/antrean-penawaran": "Penawaran terkirim belum dijawab pelanggan",
   "/penjualan/antrean-penawaran-draf": "Draf penawaran belum terkirim yang basi atau menipis masa berlakunya",
   "/penjualan/antrean-pesanan-draf": "Pesanan penjualan yang masih draft dan belum disetujui, dari yang paling lama menunggu",
+  "/penjualan/antrean-faktur-draf": "Faktur penjualan yang masih draft dan belum diposting, dari yang paling lama menunggu",
   "/penjualan/antrean-penawaran-diterima": "Penawaran diterima belum menjadi pesanan penjualan",
   "/penjualan/antrean-penagihan": "Faktur belum lunas per tahap penagihan dan janji bayar",
   "/penjualan/antrean-janji-kirim": "Pesanan penjualan yang janji kirimnya mendekati atau sudah lewat dan belum terkirim penuh",
@@ -178,6 +181,8 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/produksi/products": "Rincian kebutuhan material (BOM)",
   "/produksi/qc": "Checklist, inspeksi, dan NCR",
   "/sdm/absensi": "Absensi kehadiran karyawan",
+  "/sdm/absensi/rekap": "Rekap kehadiran per karyawan per periode",
+  "/sdm/absensi/koreksi": "Pengajuan dan putusan koreksi absensi karyawan",
   "/sdm/apresiasi": "Apresiasi karyawan",
   "/sdm/disiplin": "Surat peringatan dan rekod disiplin karyawan",
   "/sdm/cuti": "Cuti karyawan",
