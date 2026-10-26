@@ -273,6 +273,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
   "src/actions/salary-adjustment.actions.ts::getSalaryAdjustments":
     "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
+  // F-2026-10-26-054-S inti backend (t_d40cad23): gerbang persetujuan
+  // penyesuaian gaji; UI antrean persetujuan menyusul (frontend t_2083c754).
+  "src/actions/salary-adjustment.actions.ts::approveSalaryAdjustment":
+    "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
+  "src/actions/salary-adjustment.actions.ts::rejectSalaryAdjustment":
+    "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
   // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
   // menunggu form di detail kendaraan (kartu UI t_cf82d1cf, assignee Frontend);
   // buang entri ini saat form memanggilnya.

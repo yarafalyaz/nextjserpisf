@@ -90,6 +90,8 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     // approve_journals sadar ditambahkan bersama gerbang K4 (F-2026-10-25-014-V):
     // role finance = penyetuju jurnal manual 1 langkah (seed APR-JRN).
     "approve_journals",
+    // F-2026-10-26-054-S Q-SA-2: finance penyetuju penyesuaian gaji tahap 1.
+    "approve_salary_adjustments",
     "post_journals",
     "delete_journals",
     "approve_expenses",
