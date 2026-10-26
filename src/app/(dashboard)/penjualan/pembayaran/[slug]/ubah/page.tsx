@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
 export const metadata: Metadata = { title: "Ubah Pembayaran" };
 
 export default async function EditPage({
@@ -66,7 +67,7 @@ export default async function EditPage({
 
   const invoiceOptions = invoices.map((inv) => ({
     id: inv.id,
-    documentNo: inv.documentNo,
+    documentNo: salesInvoiceLabel(inv),
     grandTotal: String(inv.grandTotal),
     paidAmount: String(inv.paidAmount),
     customer: { name: inv.customer.name },
