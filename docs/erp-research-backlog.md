@@ -33026,3 +33026,155 @@ Nominal gaji tetap hanya lewat `view_salary_amounts` fail-closed; penyesuaian TI
 - Notifikasi otomatis ke penyetuju/karyawan (kanal belum diputus; antrean baca-saat-dibuka cukup tahap 1).
 
 F-2026-10-26-054-S — Persetujuan penyesuaian gaji terjadwal. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-SA-1/2/3, lalu fisik Backend (sesudah/bersama t_fedea179 dikoordinasikan Lead), konsumen Frontend, falsifikasi QA. Pemilik usulan: Business (spec), Lead (putusan jalur/pemegang/tepi berhenti), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini (BR-SA-08 bersyarat).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-057-S: antrean faktur penjualan draft mengendap menunggu posting (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_b669564c. ID F-2026-10-26-057-S diverifikasi bebas run ini 2026-10-26 07:47–07:52 WIB: grep `F-2026-10-26-057` di backlog + board `origin/main` (`97368be4`) = 0; ID terpakai terakhir berjalan F-2026-10-26-056-S (PR #966 OPEN). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `dueDate`, tautan `salesOrderId`/`quotationId`/`projectId`, `salesEmployeeId`, `grandTotal`), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-SIQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK memposting, TIDAK membatalkan, dan TIDAK menghapus faktur apa pun — posting tetap jalur existing berizin `post_sales_invoices` + approval `SalesInvoice`; faktur draft belum piutang dan belum pendapatan: tidak masuk Penagihan, Jatuh Tempo, paparan kredit, atau komisi di permukaan mana pun spec ini; nominal `grandTotal` tampil sebagai fakta dokumen existing ("nilai draft belum terbit"), bukan janji tagihan.
+
+Bukan duplikasi: bukan PenagihanCollection (`INVOICE_COLLECTION_STATUSES` = posted/partial dan dueDate non-null; populasi antrean ini justru draft yang belum punya hak tagih); bukan mode Jatuh Tempo halaman faktur (dueDate lewat + belum lunas + bukan cancelled — mencakup draft lewat dueDate yang belum terbit? Lihat BR-SIQ-04: draft tidak boleh terbaca sebagai piutang lewat di mana pun, dan spec ini tidak mengubah where existing itu — temuan samping dicatat Q-SIQ-6); bukan F-2026-10-26-051-S (DownPayment `draft` menunggu konfirmasi kas — objek pembayaran uang muka, gerbang konfirmasi; spec ini objek faktur menunggu posting, gerbang approval+post); bukan F-2026-10-26-056-S (SO `draft` menunggu persetujuan — tahap hulu, objek dan gerbang izin berbeda: `approve_sales_orders` vs `post_sales_invoices` + workflow SalesInvoice).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: proses faktur dipantau dari daftar Faktur Penjualan (kolom status proses, histori proses penjualan) agar faktur yang belum diproses ke langkah berikut tidak terlewat — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/cek-faktur-dimuka/ dan indeks faktur https://help.accurate.id/product/faktur-penjualan/ (BENCHMARK: keterlacakan status proses faktur adalah kemampuan kategori; antrean draft bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: faktur penjualan menyediakan "Rekam Draft: merekam transaksi (tanpa posting)" vs "Rekam: merekam transaksi (posting)" — https://help.zahironline.com/portal/id/kb/articles/faktur ; draft berarti "penjurnalan dan pembentukan laporan keuangan ditunda sampai transaksi tersebut di-posting oleh user" — https://www.zahironline.com/transaksi-penjualan/ (BENCHMARK: draft faktur = penundaan jurnal yang sah dan disengaja; tidak ada penetapan antrean umur draft — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 97368be4)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `SalesInvoice` (prisma/schema.prisma:1616-1668) — slug, documentNo unik, customerId, salesOrderId/quotationId/projectId nullable, salesEmployeeId nullable, date, dueDate nullable, Decimal subtotal/discount/tax/grandTotal/paidAmount/totalAmount/taxAmount, status enum `SalesInvoiceStatus` default `draft` (enum :5695-5703: draft/sent/posted/partial/paid/cancelled/approved), paymentStatus, taxInvoiceNumber nullable, deletedAt, createdAt/updatedAt; indeks status + dueDate + createdAt.
+- Posting penjaga nyata: `postInvoice` (src/actions/sales.actions.ts) mewajibkan `post_sales_invoices` (katalog:153), lalu `assertApproved("SalesInvoice", …)` (workflow SalesInvoice harus approved bila terkonfigurasi), hanya dari status draft/approved ("Invoice hanya bisa di-post dari status draft atau approved"), item > 0, lalu klaim atomik + jurnal GL dalam satu transaksi (termasuk gerbang invoiceForbidden garansi F-021). Izin katalog nyata faktur: view/create/edit/delete/approve/post_sales_invoices (module-catalog.generated.ts:148-153).
+- Daftar faktur existing: requirePermission `view_sales_invoices` (penjualan/faktur/page.tsx:25), mode reguler `orderBy createdAt desc` polos (semua status tercampur, baris: id/slug/documentNo/date/dueDate/totalAmount/paidAmount/status/customer) — tanpa umur draft, tanpa penanda keterlambatan terbit; mode overdueOnly menyaring dueDate lewat + belum lunas + bukan cancelled.
+- Permukaan piutang semua mensyaratkan terbit: PenagihanCollection `INVOICE_COLLECTION_STATUSES` = posted/partial (collection-queue.ts:33,84-86) + dueDate non-null; notifikasi harian hanya "overdue invoices (due_date < today, not fully paid)" (api/cron/daily-notifications/route.ts:17,120).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean faktur draft atau turunan umur menunggu posting — grep `invoiceDraft|draftInvoiceQueue|umurDraft|menungguPosting` di src/ = 0; tidak ada cron pengingat/penuaan draft faktur. Draft yang ditinggal berarti pekerjaan selesai tapi tagihan tidak pernah terbit: piutang tidak lahir, pelanggan tidak tertagih, dan tidak ada permukaan yang menua baris itu. Risiko bengkel: faktur dari WO/SO selesai mengendap di draft berhari-hari sementara kas menunggu pembayaran yang belum pernah ditagihkan.
+
+### 1. Workflow specification
+
+Aktor: Admin Keuangan/Owner pemegang `post_sales_invoices` (pemosting — satu-satunya yang menerbitkan faktur lewat jalur existing, sesudah approval workflow SalesInvoice bila terkonfigurasi), Admin Penjualan pemegang `view_sales_invoices` (pembaca antrean), Pembuat faktur pemegang `create_sales_invoices` (sumber baris draft), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris SalesInvoice existing berstatus `draft` + belum terhapus (id, slug, documentNo, customerId+nama, tautan SO/penawaran/proyek bila ada, salesEmployeeId+nama bila ada, date, dueDate, grandTotal, createdAt) — field existing, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per faktur draft (§3) + rekap hitungan per tingkat. BUKAN dokumen akuntansi: tidak ada jurnal, piutang, faktur pajak, atau pesan keluar yang dihasilkan antrean (posting existing yang menulis jurnal/piutang — di luar antrean).
+
+Alur:
+1. Faktur lahir `draft` lewat jalur existing (buat langsung / dari SO / dari proyek; status lahir existing, di luar cakupan spec ini).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft (BR-SIQ-01) dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), penanda janji (`dueDate` terisi/kosong — dueDate pada draft adalah tanggal rencana tagih, bukan kelewatan piutang), penanda sumber (SO/penawaran/proyek/langsung bila tertaut), dan tingkat §3.
+3. Pemosting membuka detail dari baris dan memposting lewat jalur existing (approval SalesInvoice dulu bila workflow terkonfigurasi, lalu Post). Antrean tidak menyediakan tombol posting/batal massal tahap 1 (Q-SIQ-4).
+4. Sesudah diposting: baris keluar populasi antrean ini dan masuk wilayah Penagihan/Jatuh Tempo existing. Sesudah dibatalkan jalur existing: keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-SIQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu Posting` (umur), `Rencana Jatuh Tempo` (dueDate atau "Belum diisi"), `Sumber` ("Dari Pesanan <no>" / "Dari Penawaran <no>" / "Proyek" / "Langsung").
+- Label tingkat: `mengendap` → "Mengendap"; `menunggu` → "Menunggu Posting"; baris tanpa dueDate membawa penanda "Jatuh tempo belum diisi", bukan tingkat sendiri.
+- Notice usulan: "Daftar ini hanya faktur penjualan yang masih draft dan belum diposting. Draft belum menjadi tagihan dan belum dihitung sebagai piutang sampai diposting lewat detail faktur."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean faktur draft + tingkat/umur | `view_sales_invoices` (katalog:148) | daftar faktur requirePermission (faktur/page.tsx:25) | TIDAK ada key baru (key terpisah = Q-SIQ-5) |
+| Buat faktur (sumber baris draft) | `create_sales_invoices` (katalog:149) | aksi buat existing | tidak berubah |
+| Ubah/hapus faktur draft | `edit/delete_sales_invoices` (katalog:150-151) | aksi existing + penjaga status existing | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Setujui faktur (approval workflow) | `approve_sales_invoices` (katalog:152) + workflow SalesInvoice | assertApproved di postInvoice | TIDAK berubah; antrean tidak menilai status approval per baris tahap 1 (Q-SIQ-7) |
+| Posting faktur (keluar draft) | `post_sales_invoices` (katalog:153) | postInvoice + item>0 + gerbang garansi | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Tagih dari antrean | TIDAK — draft belum piutang | Penagihan hanya posted/partial (collection-queue.ts:84-86) | antrean tidak menawarkan aksi tagih/kirim |
+
+Tidak ada permission key baru diusulkan tahap ini.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah: `draft` → (approval workflow bila terkonfigurasi) → `posted` (postInvoice; status lanjut sent/partial/paid/cancelled existing di luar populasi ini). Antrean tidak menulis transisi apa pun; status `approved` (sudah disetujui, belum diposting) juga menunggu posting tetapi populasi tahap 1 hanya `draft` — memasukkan `approved` = Q-SIQ-3, tidak diasumsikan.
+
+Populasi antrean: hanya SalesInvoice `status = "draft"` dan `deletedAt = null`. Per baris, sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurDraftHari` = hari kalender WIB dari `createdAt` ke hari ini (masa depan karena jam server = 0 tertanda, bukan negatif — EC-SIQ-4).
+- `punyaRencanaJatuhTempo` = `dueDate != null` (penanda pendamping; dueDate draft TIDAK dinilai lewat — kelewatan piutang hanya sah sesudah posted, wilayah Penagihan/Jatuh Tempo).
+- `sumberDokumen` = salesOrderId → "Dari Pesanan"; quotationId → "Dari Penawaran"; projectId → "Proyek"; semua null → "Langsung" (urut periksa atas-dulu, satu label).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft / terhapus lolos saring | di luar antrean | bukan populasi (wilayah daftar faktur + Penagihan/Jatuh Tempo sesudah terbit) |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-SIQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | tagihan tertunda melewati kesabaran operasional yang diputus Lead; terbitkan/putuskan dulu |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan kerja dari umur tampil tertua-dulu (Q-SIQ-3b) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah (faktur diposting/dibatalkan/dihapus/diubah, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada posting otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SIQ-01 | Populasi antrean = SalesInvoice `status="draft"` dan `deletedAt=null` saja. Status lain (termasuk `approved` belum-posting) tidak disamakan diam-diam tahap 1 (Q-SIQ-3). | TERVERIFIKASI-KODE (enum schema:5695-5703) + USULAN batas |
+| BR-SIQ-02 | Faktur draft belum piutang, belum pendapatan, belum tertagih: Penagihan hanya posted/partial + dueDate (collection-queue.ts:84-86); jurnal GL baru lahir saat postInvoice. Nominal antrean dilarang dijumlahkan ke piutang, Penagihan, Jatuh Tempo, paparan kredit, pendapatan, atau komisi di permukaan mana pun. | TERVERIFIKASI-KODE |
+| BR-SIQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: posting (`post_sales_invoices` + assertApproved SalesInvoice + item>0, dari detail), ubah (`edit_sales_invoices`), batal/hapus penjaga existing. Antrean tidak menambah jalan pintas posting/batal dari daftar tahap 1. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-SIQ-04 | `dueDate` pada draft = tanggal rencana tagih, bukan kelewatan. Draft ber-dueDate lampau TIDAK boleh tampil sebagai piutang jatuh tempo di antrean ini; apakah mode overdueOnly daftar existing ikut menangkap draft = temuan samping untuk vonis Lead/Backend (Q-SIQ-6), spec ini tidak mengubah where itu diam-diam. | USULAN kejujuran penanda + BUTUH-VONIS Lead |
+| BR-SIQ-05 | Umur memakai `createdAt` (momen baris masuk sistem), bukan `date` (tanggal faktur input, boleh lampau) dan bukan `dueDate` (rencana tagih). Mengubah acuan = Q-SIQ-8. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field schema |
+| BR-SIQ-06 | Nol posting/batal/hapus otomatis berbasis umur dalam tahap mana pun spec ini. Umur hanya penanda prioritas baca; draft yang memang belum boleh terbit (pekerjaan belum serah-terima, harga belum final) diputus manusia. | USULAN batas (menegaskan TERVERIFIKASI-KODE tidak adanya cron draft faktur) |
+| BR-SIQ-07 | Builder antrean murni baca-saja turunan: tidak memanggil postInvoice/workflow/hook, tidak menulis jurnal/status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-SIQ-08 | GrandTotal tampil sebagai fakta nominal dokumen existing (Decimal→Number di tepi loader pola existing); rekap hanya hitungan baris per tingkat + Σ grandTotal berlabel "nilai draft belum terbit", dilarang berlabel piutang/tagihan/pendapatan. | USULAN kejujuran nominal |
+| BR-SIQ-09 | Tautan tertaut null = "Langsung" apa adanya; salesEmployeeId null tampil `—`; taxInvoiceNumber kosong pada draft adalah normal (faktur pajak terbit di luar/sesudah posting existing) dan TIDAK dijadikan penanda salah di antrean. | USULAN di atas TERVERIFIKASI-KODE field nullable schema |
+| BR-SIQ-10 | Ambang hari `mengendap`, kata label final, populasi approved-ikut, urutan tampil, dan posting-dari-daftar adalah kebijakan perilaku/uang: BUTUH-VONIS Lead (Q-SIQ-1/2/3/4); sisi jurnal/posting yang sudah berjalan existing tidak diubah spec ini sehingga Accountant TIDAK diminta run ini — kecuali Lead memperluas populasi/aksi (Q-SIQ-3/4), saat itu vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Status proses faktur terlacak | Ada: status proses di daftar + histori proses penjualan (URL §kepala) | Ada: Rekam Draft vs Rekam/Unpost (URL §kepala) | Ada status enum + daftar campur urut terbaru, tanpa umur | Antrean draft berumur tertua-dulu |
+| Draft menunda jurnal sampai posting | Tidak ditetapkan halaman diakses — tidak diklaim | Ada eksplisit: jurnal/laporan ditunda sampai diposting user (URL §kepala) | Ada: jurnal lahir di postInvoice sesudah approval | Populasi antrean = masa penundaan itu |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+| Penagihan hanya faktur terbit | Proses tagih sesudah faktur terbit (pola URL §kepala) | Piutang lahir dari faktur terposting (URL §kepala) | Ada: Penagihan posted/partial + dueDate | Tidak diduplikasi; antrean berhenti di posting |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-SIQ-B1: Populasi tepat draft belum-terhapus. Faktur posted/partial/paid/cancelled/approved/terhapus tidak tampil tahap 1; memasukkan status lain ke builder tidak mengubah populasi (cabut saring status → MERAH).
+- AC-SIQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-SIQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-SIQ-4).
+- AC-SIQ-B3: Tanpa angka karang: selama Q-SIQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya lewat satu konstanta bernama/putusan (tanam angka liar → MERAH).
+- AC-SIQ-B4: Loader fail-closed `view_sales_invoices` sebelum query, anti-N+1 (pelanggan/SO/penawaran/pegawai massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil.
+- AC-SIQ-B5: Baca-saja terbukti: builder/loader tidak memanggil postInvoice/assertApproved/tulis jurnal/status (panggil aksi diam-diam → MERAH); rekap = hitungan + Σ grandTotal baris yang sama persis.
+
+Frontend (konsumen):
+- AC-SIQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-SIQ-F2: dueDate kosong tampil "Jatuh tempo belum diisi"; dueDate lampau pada draft TIDAK berlabel jatuh tempo/piutang (label piutang di draft → MERAH); penjual null `—`; sumber sesuai urutan tautan (mengarang sumber → MERAH).
+- AC-SIQ-F3: Tautan baris hanya ke detail faktur existing; tidak ada tombol Posting/Batal/Tagih di antrean tahap 1 (aksi dari daftar tanpa putusan Q-SIQ-4 → MERAH); tanpa `view_sales_invoices` halaman menolak.
+
+Edge cases:
+- EC-SIQ-1: Faktur draft tanpa item (postInvoice existing menolak posting) tetap populasi antrean ini — antrean tidak menilai kesiapan item; kesiapan diputus jalur posting existing saat pemosting bertindak.
+- EC-SIQ-2: Draft dari proyek/WO garansi yang invoiceForbidden — tetap tampil sebagai draft menunggu keputusan; antrean tidak menilai boleh-tidaknya posting (gerbang garansi berjalan di postInvoice existing).
+- EC-SIQ-3: Draft kembar untuk SO yang sama (buat langsung + dari SO) tampil apa adanya dua baris; tidak digabung/didedup diam-diam.
+- EC-SIQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-SIQ-5: Faktur diposting saat halaman terbuka keluar pada render berikut; antrean tidak mengunci baris.
+- EC-SIQ-6: Faktur draft ber-grandTotal 0 tampil apa adanya; tidak dikeluarkan karena nominal.
+- EC-SIQ-7: Nomor faktur pajak kosong pada draft bukan penanda salah (BR-SIQ-09); antrean tidak menampilkan kolom kepatuhan pajak.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-057-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-057-S | Spec kontrak ini (dokumen) | Business | — |
+| 057-B | Builder murni tingkat/umur draft faktur + loader `view_sales_invoices` fail-closed anti-N+1 + tes AC-SIQ-B1..B5 | Backend | Putusan Lead Q-SIQ-1/2/3 (+ Accountant bila populasi/aksi diperluas) |
+| 057-F | Permukaan antrean (daftar faktur existing atau kartu antrean pola antrean-penagihan) verbatim payload + AC-SIQ-F1..F3 | Frontend | 057-B merged |
+| 057-Q | Falsifikasi AC-SIQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 057-B/057-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-SIQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (tagihan tertunda menggerus kas lebih cepat dari SO draft) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-SIQ-2 | Kata label/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-SIQ-3 | Populasi ikut memasukkan status `approved` (sudah disetujui, belum diposting) dengan tingkat sama? | Lead (sisi uang: Accountant bila ragu) | Tahap 1 TIDAK (BR-SIQ-01); approved adalah antrean posting murni — bila Lead mau, jadikan tingkat/populaai terpisah bernama, bukan campur diam-diam |
+| Q-SIQ-3b | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua? | Lead | `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc |
+| Q-SIQ-4 | Posting langsung dari antrean dibuka? | Lead + Accountant (posting menulis jurnal/piutang) | TIDAK tahap 1 (BR-SIQ-03): approval + gerbang garansi harus tetap terasa di detail; jalan pintas = keputusan terpisah |
+| Q-SIQ-5 | Key izin antrean terpisah dari `view_sales_invoices`? | Lead | TIDAK tahap 1 |
+| Q-SIQ-6 | Mode overdueOnly daftar faktur existing menangkap draft ber-dueDate lampau sebagai "jatuh tempo" — ratifikasi atau perbaiki terpisah? | Lead (fisik Backend) | Temuan samping BR-SIQ-04: draft belum piutang; perbaikan where = kartu terpisah berizin, bukan diam-diam di spec ini |
+| Q-SIQ-7 | Status approval workflow per baris (menunggu approval vs siap posting) ditampilkan tahap 1? | Lead | TIDAK tahap 1: butuh baca keadaan workflow per baris (bukan field existing murni); nilai tambah nyata, keputusan terpisah |
+| Q-SIQ-8 | Acuan umur createdAt (BR-SIQ-05) vs date faktur? | Lead (fisik Backend menguji) | createdAt — momen menunggu sistem |
+
+### Yang TIDAK diusulkan run ini
+- Posting massal/otomatis faktur basi (BR-SIQ-03/06) — posting menulis jurnal+piutang dan melewati approval serta gerbang garansi; otomatisasi membahayakan kebenaran buku.
+- Memasukkan draft ke Penagihan/Jatuh Tempo/paparan kredit/komisi — draft belum hak tagih (BR-SIQ-02).
+- Pengingat WA/email ke pemosting, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru, di luar tahap baca-saja.
+- Penilaian faktur pajak/e-Faktur untuk draft — wilayah kepatuhan existing, bukan antrean umur.
+- Mengubah where overdueOnly existing dalam spec ini — dicatat sebagai Q-SIQ-6, bukan perbaikan diam-diam.
+
+F-2026-10-26-057-S — Antrean faktur penjualan draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-SIQ-1/2/3 (Accountant hanya bila populasi/aksi diperluas), lalu fisik Backend (057-B), konsumen Frontend (057-F), falsifikasi QA (057-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/populasi), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB bila Q-SIQ-3/4 diperluas.
