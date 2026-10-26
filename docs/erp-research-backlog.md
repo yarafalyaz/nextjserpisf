@@ -35748,3 +35748,132 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-087-S: antrean pengajuan ganti revisi BOM menunggu keputusan lintas perintah kerja & order produksi (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_06fafef8. ID F-2026-10-27-087-S diverifikasi bebas run ini 2026-10-27 06:04 WIB basis `origin/main` 585f98835: grep `F-2026-10-27-087` di backlog origin/main = 0; PR terbuka memuat `087-S` = 0; branch `hermes/business-f087-*` = 0 sebelum branch ini; ID 083-S..086-S terpakai PR #1112/#1113/#1116 (OPEN). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Catatan pivot kartu (jujur): judul awal kartu "antrean WO completed belum ditutup" GUGUR saat verifikasi — antrean itu SUDAH LIVE sebagai F-2026-10-24-097-S (`src/lib/reports/workshop-closeout-queue.ts` BR-CLOSE-02 + loader + `WorkshopCloseoutQueueCard` di `produksi/perintah-kerja/page.tsx:13-14`). Kartu dipakai ulang untuk gap terverifikasi di bawah; bukan duplikasi 097-S, bukan duplikasi spec induk F-2026-10-22-068-S (alur pengajuan/keputusan per dokumen — spec ini hanya lapisan baca antrean lintas dokumen di atasnya).
+
+Batasan keras: antrean = turunan builder murni baca-saja dari `BomRevisionChangeRequest` existing, nol migrasi, nol kolom/status baru tahap 1; antrean TIDAK memutuskan pengajuan, TIDAK mengganti pin, TIDAK menyentuh stok/reservasi/jurnal (warisan BR-BOM68-09/10 spec 068-S + vonis Accountant F-2026-10-22-074-V dirujuk, tidak divonis ulang). Nol nominal/biaya di payload — perubahan revisi BOM bukan angka uang di antrean. Ambang "mengendap" (hari) = Q-BCQ-1 Lead, dilarang ditanam sebagai fakta sebelum diputus.
+
+Benchmark resmi (akses 2026-10-27):
+- Accurate — Pengaturan Persetujuan Accurate Online (transaksi produksi/persediaan dapat diwajibkan persetujuan berwenang, termasuk Pekerjaan Pesanan/Penambahan Bahan Baku/Penyelesaian Pesanan): https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/cara-mengaktifkan-pengaturan-persetujuan/ ; Release Notes Accurate Online memuat "Manufaktur: Fitur persetujuan untuk formula produksi" (ACC-15901): https://accurate.id/release-notes/ — BENCHMARK: persetujuan formula/BOM adalah pola produk nyata; antrean lintas "pengajuan ganti revisi menunggu keputusan" sebagai permukaan bernama tidak ditemukan di help Accurate pada akses ini (tidak diklaim ada).
+- Zahir — Zahir Manufacturing (BOM multi-level + Work Order): https://zahirerp.com/en/zahir-manufacturing/ dan manufaktur Zahir ERP: https://zahirerp.com/id/manufaktur/ — fitur antrean persetujuan perubahan BOM pada order berjalan TIDAK ditemukan di halaman resmi yang diakses; tidak diklaim (BENCHMARK negatif jujur).
+
+### 0. Inventarisasi TERVERIFIKASI-KODE (2026-10-27, basis origin/main 585f98835)
+
+Sudah ada:
+- Model `BomRevisionChangeRequest` (`prisma/schema.prisma:6082-6107`): `workOrderId`/`productionOrderId` nullable (tepat satu pemilik), `fromRevisionId`/`toRevisionId` WAJIB, `reason` Text WAJIB, `status String @default("menunggu")` (:6090), `requestedBy`/`decidedBy`/`decidedAt`/`decisionReason`, `createdAt`/`updatedAt`; indeks `[workOrderId, status]`, `[productionOrderId, status]`, `[createdAt]`. TANPA `deletedAt` — baris tidak pernah terhapus-lunak.
+- Kosakata status tersimpan (TERVERIFIKASI-KODE): `menunggu` (lahir dari jalur persetujuan), `diterapkan_langsung` (lahir dari jalur langsung belum-ter-issue, pin diganti di transaksi pengajuan yang sama), `disetujui`, `ditolak` (klaim atomik `decideBomRevisionChange`, `bom-revision-change.actions.ts:238-352`). Label nada panel existing: `menunggu`=amber, `disetujui`/`diterapkan_langsung`=emerald, `ditolak`=red (`src/components/reports/bom-revision-change-panel.tsx:86-98`).
+- Jalur lahir (TERVERIFIKASI-KODE): `requestBomRevisionChange` (`bom-revision-change.actions.ts:84`) — tepat satu pemilik WO/PO (selain itu error), izin kelola per pemilik (`edit_work_orders`/`edit_production_orders`, helper `ownerPermission` :48-51), alasan wajib, target wajib revisi `released` produk sama beda revisi, dari-pin harus pin dokumen saat ini, material sudah ter-issue → SELALU jalur persetujuan status `menunggu`; belum ter-issue → `diterapkan_langsung`; penjaga satu pengajuan `menunggu` per dokumen di dalam transaksi (kunci baris dokumen `FOR UPDATE` + unik). Dokumen pemilik berstatus `completed`/`cancelled`/`closed` ditolak ganti pin (`WO_CLOSED`/`PO_CLOSED` :40-41).
+- Jalur putus (TERVERIFIKASI-KODE): `decideBomRevisionChange` (:238) — keputusan `setujui`/`tolak`, tolak wajib alasan, izin kelola mengikuti pemilik (probe pemilik dulu :252-260), klaim atomik `updateMany status="menunggu"` (yang kalah balapan menerima "Pengajuan ini sudah diputuskan."), SoD: penyetuju != pengaju (rollback transaksi bila sama, BR-BOM68-05), setujui mengganti pin dokumen dalam transaksi yang sama (BR-BOM68-06) sesudah cek pin belum berubah + dokumen belum terminal. Semua aksi TIDAK PERNAH membuat StockMove/MaterialIssue/ProductionCost/jurnal dan tidak menyentuh StockReservation (kepala berkas actions :1-22).
+- Daftar existing HANYA per dokumen (TERVERIFIKASI-KODE): `listBomRevisionChangeRequests` (:354-390) mewajibkan tepat satu `workOrderId`/`productionOrderId`; konsumen hanya detail WO (`src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:251`), detail PO (`src/app/(dashboard)/produksi/production-orders/[slug]/page.tsx:137`), dan panel per dokumen (`bom-revision-change-panel.tsx`, tombol putus per baris `canDecide` :337 + penanda pengajuan sendiri :368). Penyetuju hari ini wajib membuka satu per satu dokumen untuk menemukan pengajuan `menunggu`.
+- Builder tetangga (bukan antrean): `bom-revision-impact.ts` (delta pratinjau lama-vs-baru per dokumen) + `bom-revision-change-delta-data.ts`; grep `BomRevisionChangeRequest` di `src/lib/reports/` = 0 builder antrean lintas; grep `menunggu` di reports hanya panel per dokumen di atas.
+- Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts`): `view_work_orders` (:264), `edit_work_orders` (:266), `complete_work_orders` (:268), `view_production_orders` (:269), `edit_production_orders` (:271). TIDAK ada key antrean/persetujuan BOM terpisah — jangan karang key baru tahap 1.
+
+Belum ada (bukti grep run ini):
+- Antrean lintas dokumen status `menunggu`: ABSEN. Tidak ada builder/loader/halaman yang memuat semua pengajuan `menunggu` lintas WO+PO dengan umur menunggu keputusan; risiko bengkel: pengajuan perubahan resep pada job berjalan mengendap tak terlihat sampai seseorang membuka detail job itu — pekerjaan ter-issue menunggu pin baru, keputusan telat = material keluar mengikuti revisi lama lebih lama.
+
+### 1. Kontrak populasi & label (dibekukan spec ini)
+
+Label operasional permukaan: USULAN kata persis — judul antrean "Pengajuan Ganti Revisi BOM — Menunggu Keputusan"; notice: "Daftar baca-saja: pengajuan ganti revisi BOM yang masih menunggu keputusan lintas perintah kerja dan order produksi. Keputusan tetap diambil di detail dokumen pemilik; daftar ini tidak menyetujui, tidak menolak, dan tidak mengganti revisi yang terpasang." Kata final = Q-BCQ-2 Lead.
+
+Populasi USULAN (turunan baca-saja, tanpa kolom/status baru):
+- MASUK: baris `BomRevisionChangeRequest` berstatus persis `menunggu`, pemilik WO maupun PO (dua jenis pemilik dalam satu daftar, terbedakan per baris). Satu baris = satu pengajuan (penjaga existing: maks satu `menunggu` per dokumen, jadi tidak ada dokumen yang menyumbang dua baris).
+- KELUAR: `diterapkan_langsung` (sudah terpasang saat pengajuan — bukan menunggu apa pun), `disetujui`, `ditolak` — keluar populasi seluruhnya, bukan ditandai di dalam antrean.
+- Penanda per baris (turunan, bukan status baru): jenis pemilik (Perintah Kerja / Order Produksi), nomor dokumen pemilik, revisi asal → revisi tujuan (nomor revisi verbatim server), pengaju, umur menunggu (§2), penanda "dokumen pemilik sudah terminal" bila dokumen pemilik kini `completed`/`cancelled`/`closed` (pengajuan yatim — keputusan setujui pasti ditolak server, lihat EC-BCQ-2), penanda "pin dokumen sudah berubah" bila pin dokumen kini != `fromRevisionId` (setujui pasti gagal cek pin, EC-BCQ-3). Penanda dibaca apa adanya; antrean tidak membatalkan pengajuan yatim/berpin-berubah — pembatalan bukan status existing (Q-BCQ-5).
+- Urutan & ambang mengendap: USULAN tertua-menunggu dulu berdasar `createdAt`; ambang tingkat `mengendap` (hari) = Q-BCQ-1 Lead — selama belum diputus builder hanya tingkat `menunggu`, nol ambang karangan.
+
+### 2. Umur menunggu keputusan
+
+- Acuan umur (TERVERIFIKASI-KODE tersedia): `BomRevisionChangeRequest.createdAt` — saat pengajuan lahir; status hanya bisa meninggalkan `menunggu` lewat `decideBomRevisionChange` yang menulis `decidedAt`, jadi untuk baris `menunggu` createdAt adalah satu-satunya cap lahir pengajuan. Umur = hari kalender WIB sejak `createdAt`, dijepit >= 0, dihitung server.
+- DILARANG memakai `updatedAt` sebagai acuan (berubah oleh keputusan/edit apa pun) dan dilarang mengarang tanggal "mulai menunggu" lain — tidak ada kolom selain createdAt untuk populasi ini.
+- Seri tanggal sama: urutan deterministik id pengajuan naik (USULAN, final Q-BCQ-1).
+
+### 3. Aturan bisnis (BR-BCQ)
+
+- BR-BCQ-01 (TERVERIFIKASI-KODE): Populasi hanya status tersimpan persis `menunggu`; `diterapkan_langsung`/`disetujui`/`ditolak` keluar. UI/loader dilarang menurunkan status sendiri atau membaca `diterapkan_langsung` sebagai menunggu.
+- BR-BCQ-02 (USULAN): Dua jenis pemilik (WO + PO) dalam satu daftar dengan penanda jenis + nomor dokumen pemilik verbatim per baris; baris tanpa tepat satu pemilik (data liar) tidak dikarang pemiliknya — tampil sebagai penanda data-tidak-lengkap atau keluar dengan rekap terhitung (fisik Backend, dinyatakan di payload, bukan ditebak UI).
+- BR-BCQ-03 (TERVERIFIKASI-KODE): Umur menunggu hanya dari `createdAt` server (§2); UI dilarang menghitung umur dari tanggal tampil atau `updatedAt`.
+- BR-BCQ-04 (TERVERIFIKASI-KODE + USULAN penanda): Keputusan tetap di `decideBomRevisionChange` existing (klaim atomik + SoD pengaju!=penyetuju + tolak wajib alasan + pin diganti dalam transaksi setujui). Antrean menandai per baris "pengajuan Anda sendiri" bila `requestedBy` = pemanggil (SoD membuat tombol putus di detail pun tak berlaku baginya) — penanda hanya informasi; penegakan SoD tetap server di jalur putus, bukan di daftar.
+- BR-BCQ-05 (USULAN): Penanda yatim/berubah dibaca apa adanya: dokumen pemilik terminal (`completed`/`cancelled`/`closed`) atau pin dokumen != `fromRevisionId` berarti setujui pasti ditolak server existing; antrean TIDAK menghapus, membatalkan, atau "membersihkan" baris itu — baris tetap tampil tertanda sampai diputus ditolak/dibersihkan lewat jalur yang diputus Lead (Q-BCQ-5).
+- BR-BCQ-06 (TERVERIFIKASI-KODE, warisan 068-S): Antrean tidak menghasilkan StockMove/MaterialIssue/ProductionCost/jurnal/ubahan reservasi dan tidak menilai ulang angka delta revisi; pratinjau delta lama-vs-baru tetap milik builder `bom-revision-impact` per dokumen di detail. Payload antrean tanpa nominal/biaya/qty agregat karangan — hanya fakta pengajuan + konteks dokumen pemilik.
+- BR-BCQ-07 (USULAN): Baca-saja tahap 1: nol tombol Setujui/Tolak dari antrean; baris hanya menaut ke detail dokumen pemilik (panel pengajuan existing di sana, tempat keputusan diambil). Putus dari daftar = keputusan terpisah (Q-BCQ-4).
+- BR-BCQ-08 (USULAN): Izin loader mengikuti pemilik per baris: baris WO terjangkau pemegang `view_work_orders`, baris PO pemegang `view_production_orders`; pemanggil tanpa izin jenis itu tidak menerima baris jenis tersebut (saring di server per jenis pemilik, bukan disembunyikan UI). Key gabungan/key baru = Q-BCQ-3. Loader fail-closed: tanpa satu pun izin lihat kedua jenis → daftar kosong tertolak, bukan bocor semua baris.
+- BR-BCQ-09 (USULAN): Anti-N+1: konteks dokumen pemilik (nomor/status/pin kini), nomor revisi asal/tujuan, dan nama pengaju dimuat massal per halaman baris (query per set id), bukan query per baris; batas baris mengikuti pola keluarga antrean (paginasi/`take` diputus Backend tanpa mengubah populasi).
+
+### 4. Matriks izin (key katalog nyata)
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Penyetuju (kelola WO/PO) | Pembaca (lihat WO/PO) | Pengaju |
+|---|---|---|---|---|
+| Lihat antrean tahap 1 (USULAN gerbang per jenis pemilik) | `view_work_orders` (katalog :264) untuk baris WO; `view_production_orders` (:269) untuk baris PO; key terpisah = Q-BCQ-3 | baris sesuai izin lihatnya | baris sesuai izin lihatnya | baris sesuai izin lihatnya (pengajuan sendiri tertanda, BR-BCQ-04) |
+| Ajukan ganti revisi (existing, di luar antrean) | `edit_work_orders` (:266) / `edit_production_orders` (:271) via `requestBomRevisionChange` | ya | tidak | ya (pemilik izin kelola) |
+| Putus setujui/tolak (existing, BUKAN dari antrean) | `edit_work_orders`/`edit_production_orders` via `decideBomRevisionChange` + SoD != pengaju | ya, kecuali pengajuannya sendiri | tidak | tidak untuk pengajuan sendiri (SoD server) |
+
+Catatan matriks: TIDAK ada key `approve_*` untuk perubahan BOM di katalog; izin putus existing = izin kelola dokumen pemilik (putusan Q-BOM68-2 spec 068-S). Antrean tidak mengarang key persetujuan baru tahap 1.
+
+### 5. Transisi status (existing, dibaca antrean — bukan diubah)
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `requestBomRevisionChange`, material dokumen SUDAH ter-issue | `menunggu` | `edit_work_orders`/`edit_production_orders`; alasan wajib; maks 1 `menunggu`/dokumen |
+| (belum ada) | `requestBomRevisionChange`, material BELUM ter-issue | `diterapkan_langsung` (pin diganti seketika) | izin sama; TIDAK masuk antrean (BR-BCQ-01) |
+| `menunggu` | `decideBomRevisionChange` setujui | `disetujui` (pin diganti transaksi sama) | izin kelola pemilik + SoD + pin belum berubah + dokumen belum terminal; keluar antrean |
+| `menunggu` | `decideBomRevisionChange` tolak | `ditolak` | izin kelola pemilik + SoD + alasan wajib; keluar antrean |
+| `menunggu` | dokumen pemilik menjadi terminal / pin berubah lewat jalur lain | tetap `menunggu` tertanda yatim/berubah (EC-BCQ-2/3) | tidak ada transisi existing; pembersihan = Q-BCQ-5 |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-BCQ-B1: Hanya status `menunggu` lolos; `diterapkan_langsung`/`disetujui`/`ditolak` tidak muncul di baris maupun hitungan (status lain bocor → MERAH).
+- AC-BCQ-B2: Umur menunggu dari `createdAt` server, dijepit >= 0, seri id naik; umur dari `updatedAt`/tanggal karangan → MERAH.
+- AC-BCQ-B3: Saring izin per jenis pemilik di server: pemanggil hanya `view_work_orders` tidak menerima baris PO (dan sebaliknya); tanpa kedua izin → kosong tertolak (baris lintas-izin bocor → MERAH).
+- AC-BCQ-B4: Penanda yatim (dokumen pemilik terminal) + pin-berubah (pin kini != `fromRevisionId`) + pengajuan-sendiri (`requestedBy` = pemanggil) terbaca dari fakta server per baris; penanda ditebak UI/dihitung dari status pengajuan → MERAH.
+- AC-BCQ-B5: Baca-saja terbukti (builder/loader memanggil decide/request/pin/tulis apa pun → MERAH); payload tanpa nominal/biaya agregat; konteks massal anti-N+1 (query per baris → MERAH).
+
+Frontend (konsumen):
+- AC-BCQ-F1: Label jenis pemilik, nomor dokumen, revisi asal→tujuan, pengaju, umur, penanda — verbatim server; UI tidak menghitung umur/status/penanda sendiri (hitung ulang UI → MERAH); urutan tertua-menunggu dulu dari payload.
+- AC-BCQ-F2: Baris yatim/pin-berubah tampil tertanda, tidak disembunyikan dan tidak diberi tombol bersih-bersih; sub-rekap hitungan baris per jenis pemilik (bila tampil) = hitungan server.
+- AC-BCQ-F3: Tautan baris hanya ke detail dokumen pemilik; TIDAK ada tombol Setujui/Tolak dari antrean tahap 1 (aksi dari daftar → MERAH, BR-BCQ-07); tanpa izin lihat halaman menolak.
+
+Edge cases:
+- EC-BCQ-1: Pengajuan lahir dari jalur langsung `diterapkan_langsung` tidak pernah masuk antrean walau dokumennya masih berjalan — bukan menunggu keputusan (BR-BCQ-01).
+- EC-BCQ-2: Dokumen pemilik selesai (`completed`) selagi pengajuan `menunggu` (complete tidak memeriksa pengajuan menunggu — penjaga existing hanya menolak ganti pin BARU pada dokumen terminal): baris tetap tampil tertanda yatim; setujui di detail pasti gagal cek terminal server; antrean tidak menutup baris sendiri (Q-BCQ-5).
+- EC-BCQ-3: Pin dokumen berubah lewat penerapan langsung pengajuan lain sesudah pengajuan `menunggu` lahir: baris tertanda pin-berubah; setujui pasti gagal cek pin server ("ajukan ulang dari pin saat ini") — antrean membaca penanda itu, bukan mengajukan ulang.
+- EC-BCQ-4: Pengaju membuka antrean: pengajuan sendiri tampil tertanda (BR-BCQ-04); SoD tetap ditegakkan server saat putus di detail, daftar tidak menyembunyikan baris dari pengaju.
+- EC-BCQ-5: Keputusan diambil dari detail selagi halaman antrean terbuka: baris keluar populasi pada render berikut; antrean tidak mengunci baris dan tidak menampilkan status basi sebagai menunggu.
+
+### 7. Backlog implementasi (turunan F-2026-10-27-087-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-087-S | Spec kontrak ini (dokumen) | Business | — |
+| 087-B | Builder/loader turunan antrean `menunggu` lintas WO/PO (umur createdAt, penanda yatim/pin-berubah/pengajuan-sendiri, saring izin per jenis pemilik, anti-N+1) + tes AC-BCQ-B1..B5 | Backend | Putusan Lead Q-BCQ-1/2/3 |
+| 087-F | Permukaan antrean (area Produksi, tautan ke detail pemilik) verbatim payload + AC-BCQ-F1..F3 | Frontend | 087-B merged; penempatan final Q-BCQ-6 |
+| 087-Q | Falsifikasi AC-BCQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 087-B/087-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-BCQ-1 | Ambang hari tingkat `mengendap` (umur menunggu >= N hari kalender WIB sejak `createdAt`)? Urutan final + seri id naik disahkan? | Lead | USULAN 3 hari kalender (preseden keluarga antrean mengendap); tertua-menunggu dulu; seri id naik — bukan fakta selama belum diputus |
+| Q-BCQ-2 | Kata judul/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim |
+| Q-BCQ-3 | Gerbang lihat antrean: saring per jenis pemilik `view_work_orders`/`view_production_orders` (BR-BCQ-08), atau satu key lihat gabungan baru (migrasi katalog+seed)? | Lead | Tahap 1 saring per jenis existing (nol key karangan); key gabungan hanya lewat keputusan katalog terpisah |
+| Q-BCQ-4 | Tombol Setujui/Tolak langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-BCQ-07): keputusan butuh konteks delta pratinjau + SoD + cek pin di detail pemilik; jalan pintas = keputusan terpisah |
+| Q-BCQ-5 | Nasib pengajuan yatim/pin-berubah (EC-BCQ-2/3): tetap tampil tertanda sampai ditolak manual, atau perlu jalur bersih-bersih (status batal baru / hapus oleh pengaju)? | Lead (+ Backend fisik) | Tahap 1 tetap tampil tertanda, penolakan manual beralasan dari detail adalah jalan keluar existing; status/hapus baru = migrasi perilaku, jangan karang di antrean baca-saja |
+| Q-BCQ-6 | Penempatan permukaan: halaman Produksi existing vs laporan baru? Rekap per jenis pemilik tampil default? | Lead | USULAN: permukaan di area Produksi dekat daftar perintah kerja/order produksi (konteks pemilik), rekap hitungan per jenis dari server; JANGAN buat halaman BOM kedua |
+
+### Yang TIDAK diusulkan run ini
+- Tombol Setujui/Tolak/putus massal dari antrean (BR-BCQ-07) — keputusan tetap `decideBomRevisionChange` di detail pemilik dengan pratinjau delta existing.
+- Status baru (`dibatalkan`/`kedaluwarsa`), hapus pengajuan, pengajuan ulang otomatis untuk baris pin-berubah — perilaku tulis baru di luar antrean baca-saja (Q-BCQ-5).
+- Mengubah `requestBomRevisionChange`/`decideBomRevisionChange`/`listBomRevisionChangeRequests`, penjaga satu-`menunggu`-per-dokumen, SoD, atau semantik pin (BR-BOM68-01..10 spec 068-S + putusan Q-BOM68 Lead tetap apa adanya).
+- Nominal/biaya/dampak harga perubahan revisi di antrean — vonis angka dampak BOM tetap F-2026-10-22-074-V Accountant (dirujuk 068-S), tidak divonis ulang; antrean tanpa angka uang.
+- Key izin baru tahap 1 (Q-BCQ-3) dan notifikasi/pengingat ke penyetuju — kanal baru di luar tahap baca-saja.
+- Antrean pengajuan `menunggu` per dokumen kedua — panel detail existing tetap satu-satunya permukaan per dokumen; spec ini lapisan lintas dokumen di atas fakta yang sama.
+
+F-2026-10-27-087-S — Antrean pengajuan ganti revisi BOM menunggu keputusan lintas WO/PO. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-BCQ-1/2/3/5/6, lalu fisik Backend (087-B), konsumen Frontend (087-F), falsifikasi QA (087-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan/nasib yatim), Backend (fisik turunan + fisik Q-BCQ-5 bila dibuka), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK — tahap baca-saja tanpa angka uang/jurnal baru; dampak biaya revisi tetap vonis F-2026-10-22-074-V existing.
