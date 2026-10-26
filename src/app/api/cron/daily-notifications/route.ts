@@ -5,6 +5,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { apiError } from "@/lib/api-response"
 import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service"
 import { loadWarehouseLowStock } from "@/lib/reports/min-stock-warehouse-alert"
+import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 
 /**
  * Cron: Send daily notifications to admins.
@@ -118,10 +119,12 @@ export async function GET(request: Request) {
   if (warehouseLow.length > 0) results.lowStockWarehouse = warehouseLow.length
 
   // 2. Overdue invoices
+  // Q-SIQ-6: hanya piutang yang sudah diakui; draft/approved/sent belum
+  // terbit tidak boleh terhitung/teragregat sebagai jatuh tempo.
   const overdueWhere = {
     dueDate: { lt: dayStart },
     paymentStatus: { not: "paid" as const },
-    status: { not: "cancelled" as const },
+    status: { in: [...RECOGNISED_AR_STATUSES] },
     deletedAt: null,
   }
   const [overdueCount, overdueAgg] = await Promise.all([

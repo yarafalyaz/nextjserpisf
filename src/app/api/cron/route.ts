@@ -6,6 +6,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { loadWarehouseLowStock } from "@/lib/reports/min-stock-warehouse-alert"
 import { apiError } from "@/lib/api-response"
 import { pruneIdempotencyKeys } from "@/lib/utils/idempotency"
+import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { unlink } from "node:fs/promises"
 import path from "node:path"
 
@@ -210,7 +211,9 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
     // Cancelling an invoice sets paymentStatus "cancelled" (not "paid"), so it
     // would otherwise still match and inflate the count/total + fire false
     // overdue alerts. Mirrors the daily-notifications cron's exclusion.
-    status: { not: "cancelled" },
+    // Q-SIQ-6: daftar positif status diakui juga membuang draft/approved/sent
+    // belum terbit (bukan piutang).
+    status: { in: [...RECOGNISED_AR_STATUSES] },
     deletedAt: null,
   }
   const [summary, overdueInvoices] = await Promise.all([
