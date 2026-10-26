@@ -84,9 +84,13 @@ describe("DeliveredUnbilledQueueCard F-2026-10-26-058-S", () => {
     expect(container.querySelector("input")).toBeNull()
   })
 
-  it("payload verbatim: unbilledValue payload tampil apa adanya walau beda dari delivered-billed (nol hitung ulang UI)", () => {
-    // Fixture disengaja tidak konsisten: bila UI menghitung ulang
-    // delivered-billed (900.000), teks 750.000 tidak akan muncul -> MERAH.
+  it("payload verbatim: total summary tampil apa adanya walau beda dari sel baris, jumlah baris, dan sisa hitung (nol hitung ulang UI)", () => {
+    // Fixture disengaja tidak konsisten: total payload Rp 750.000 beda dari
+    // unbilledValue tiap baris (500.000/100.000), dari jumlah baris (600.000),
+    // dan dari sisa total terkirim-terfaktur (1.600.000-100.000=1.500.000).
+    // Bila UI menghitung ulang berapa pun cara, frasa summary persis di bawah
+    // tidak akan muncul -> MERAH. (Temuan low QA 6411111633: fixture lama
+    // 1 baris membuat total payload = sel baris, mutasi summary lolos hijau.)
     const queue = {
       rows: [
         {
@@ -99,11 +103,23 @@ describe("DeliveredUnbilledQueueCard F-2026-10-26-058-S", () => {
           ageDays: 2,
           deliveredValue: 1_000_000,
           billedValue: 100_000,
-          unbilledValue: 750_000,
+          unbilledValue: 500_000,
+        },
+        {
+          salesOrderId: 6,
+          slug: null,
+          documentNo: "SO-0006",
+          customerName: "PT Sekunder",
+          date: new Date(Date.UTC(2026, 9, 21)),
+          lastDeliveryAt: new Date(Date.UTC(2026, 9, 25)),
+          ageDays: 1,
+          deliveredValue: 700_000,
+          billedValue: 0,
+          unbilledValue: 100_000,
         },
       ],
-      totalDocuments: 1,
-      totalDeliveredValue: 1_000_000,
+      totalDocuments: 2,
+      totalDeliveredValue: 1_600_000,
       totalBilledValue: 100_000,
       totalUnbilledValue: 750_000,
     }
@@ -112,7 +128,18 @@ describe("DeliveredUnbilledQueueCard F-2026-10-26-058-S", () => {
     )
     roots.push(root)
     const text = container.textContent ?? ""
-    expect(text).toContain("Rp 750.000")
+    // Frasa summary persis (label + total payload), bukan substring angka
+    // yang bisa terpuaskan sel baris mana pun.
+    expect(text).toContain("Belum Terfaktur Rp 750.000")
+    // Sel baris tetap verbatim payload barisnya; total summary bukan salah satunya.
+    expect(text).toContain("Rp 500.000")
+    expect(text).toContain("Rp 100.000")
+    // Hitung-ulang UI mana pun dilarang tampil sebagai summary:
+    // jumlah baris (600.000) atau sisa total (1.500.000).
+    // "Rp 600.000"/"Rp 1.500.000" boleh ada? Tidak — keduanya unik di
+    // fixture ini (bukan sel mana pun), jadi kehadirannya = hitung ulang.
+    expect(text).not.toContain("Rp 600.000")
+    expect(text).not.toContain("Rp 1.500.000")
     expect(text).not.toContain("Rp 900.000")
   })
 
