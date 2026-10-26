@@ -12,6 +12,8 @@ import { TicketTable } from "./_components/ticket-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CrmTicketQueueCard } from "@/components/reports/crm-ticket-queue-card"
 import { getCrmTicketQueue } from "@/lib/reports/crm-ticket-queue-data"
+import { CrmTicketWorkloadCard } from "@/components/reports/crm-ticket-workload-card"
+import { getCrmTicketWorkload } from "@/lib/reports/crm-ticket-workload-data"
 
 import type { Metadata } from "next"
 
@@ -35,6 +37,17 @@ export default async function TicketsPage({
   // tiket existing tetap dapat dipakai; dilarang kartu kosong karangan.
   const ticketQueue = await getCrmTicketQueue().catch((error) => {
     console.error("[crm/tickets] antrean tiket:", error)
+    return null
+  })
+
+  // Rekap beban per penanggung jawab F-2026-10-25-033-S: agregat
+  // baca-saja di atas populasi 032-S yang sama (loader delegasi ke
+  // loader 032-S, gerbang view_tickets di sana), berdampingan dengan
+  // kartu antrean. Bukan penilaian kinerja (BR-CTB-07). Kegagalan
+  // loader menyembunyikan kartu saja (BR-CTB-09) — daftar tiket
+  // existing tetap dapat dipakai; dilarang kartu kosong karangan.
+  const ticketWorkload = await getCrmTicketWorkload().catch((error) => {
+    console.error("[crm/tickets] beban tiket:", error)
     return null
   })
 
@@ -95,6 +108,8 @@ export default async function TicketsPage({
       </div>
 
       {ticketQueue ? <CrmTicketQueueCard queue={ticketQueue} /> : null}
+
+      {ticketWorkload ? <CrmTicketWorkloadCard workload={ticketWorkload} /> : null}
 
       <TicketTable
         data={data}
