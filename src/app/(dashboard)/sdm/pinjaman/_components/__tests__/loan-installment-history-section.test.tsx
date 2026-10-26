@@ -89,20 +89,17 @@ describe("LoanInstallmentHistorySection", () => {
     unmountCard(root)
   })
 
-  it("AC-LH53-F4: tampil mengikuti nilai emptyLabel payload, bukan literal komponen", () => {
-    const custom = "Label kosong khusus payload uji."
+  it("teks kosong tampil verbatim dari payload emptyLabel, bukan kata UI (AC-LH53-F1)", () => {
     const { container, root } = renderCard(
       <LoanInstallmentHistorySection
         history={baseHistory({
           aggregateSlipRows: [],
-          unallocatedAmount: 0,
-          hasUnallocated: false,
-          emptyLabel: custom,
+          emptyLabel: "Kata kosong kiriman server uji.",
         })}
       />,
     )
     const text = container.textContent ?? ""
-    expect(text).toContain(custom)
+    expect(text).toContain("Kata kosong kiriman server uji.")
     expect(text).not.toContain(LOAN_INSTALLMENT_HISTORY_EMPTY_LABEL)
     unmountCard(root)
   })
