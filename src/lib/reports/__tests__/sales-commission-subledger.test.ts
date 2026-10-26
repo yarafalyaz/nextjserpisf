@@ -48,6 +48,11 @@ describe("buildSalesCommissionSubledger — status turunan 049-V §3", () => {
     expect(v.lineStatuses).toHaveLength(2)
   })
 
+  it("REVERSED menang atas terbayar: lawan penuh + P>0 tetap REVERSED (vonis §3: R = A)", () => {
+    const v = buildSalesCommissionSubledger([e(9, 100000, 100000, 40000)])
+    expect(v.lineStatuses[0].status).toBe("REVERSED")
+  })
+
   it("kosong: payable ledgerAvailable true kosong dari builder ini; status nol", () => {
     const v = buildSalesCommissionSubledger([])
     expect(v.payable.rows).toEqual([])
