@@ -59,6 +59,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   profit_centers: "Pusat Laba",
   currencies: "Mata Uang",
   customers: "Pelanggan",
+  credit_overrides: "Pengecualian Kredit",
   dashboard: "Dasbor",
   delivery_orders: "Surat Jalan",
   departments: "Departemen",

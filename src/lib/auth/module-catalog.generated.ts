@@ -151,6 +151,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "delete", resource: "sales_invoices", permissionKey: "delete_sales_invoices", label: "Faktur Penjualan" },
     { key: "approve", resource: "sales_invoices", permissionKey: "approve_sales_invoices", label: "Faktur Penjualan" },
     { key: "post", resource: "sales_invoices", permissionKey: "post_sales_invoices", label: "Faktur Penjualan" },
+    { key: "approve", resource: "credit_overrides", permissionKey: "approve_credit_overrides", label: "Override Batas Kredit" },
     { key: "view", resource: "sales_payments", permissionKey: "view_sales_payments", label: "Pembayaran Penjualan" },
     { key: "create", resource: "sales_payments", permissionKey: "create_sales_payments", label: "Pembayaran Penjualan" },
     { key: "edit", resource: "sales_payments", permissionKey: "edit_sales_payments", label: "Pembayaran Penjualan" },

@@ -178,11 +178,23 @@ export interface SnapshotTaxMarkers {
   npwpFormat: NpwpFormat
   legacy15: boolean
   nitkuAbsent: boolean
+  /**
+   * NITKU sah-bentuk ada tetapi NPWP bukan canonical16 (legacy15/kosong/
+   * cacat) → tidak dapat ditautkan (019-V §8A-3). Bukan mismatch: mismatch
+   * (NPWP 16 + awalan NITKU beda) ditolak gerbang terbit, jadi tidak pernah
+   * beku di dokumen.
+   */
+  nitkuUnlinked: boolean
 }
 
 export function deriveSnapshotMarkers(snapshot: CounterpartySnapshot): SnapshotTaxMarkers {
   const npwpFormat = classifyNpwp(snapshot.counterpartyTaxId)
-  return { npwpFormat, legacy15: npwpFormat === "legacy15", nitkuAbsent: blank(snapshot.counterpartyNitku) }
+  return {
+    npwpFormat,
+    legacy15: npwpFormat === "legacy15",
+    nitkuAbsent: blank(snapshot.counterpartyNitku),
+    nitkuUnlinked: isValidNitkuShape(snapshot.counterpartyNitku) && npwpFormat !== "canonical16",
+  }
 }
 
 export type IssueGateDecision =

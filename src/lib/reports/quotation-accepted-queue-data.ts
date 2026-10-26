@@ -22,6 +22,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import {
   buildAcceptedQuotationQueue,
   type AcceptedQuotationInput,
@@ -147,7 +148,11 @@ export async function getAcceptedQuotationQueue(
       salesOrders: toDocRefs(soByQuotation.get(q.id) ?? []),
       workOrders: toDocRefs(woByQuotation.get(q.id) ?? []),
       salesInvoices: toDocRefs(
-        (invByQuotation.get(q.id) ?? []).map((r) => ({ ...r, status: String(r.status) })),
+        (invByQuotation.get(q.id) ?? []).map((r) => ({
+          ...r,
+          documentNo: salesInvoiceLabel(r),
+          status: String(r.status),
+        })),
       ),
       downPayments: (dpByQuotation.get(q.id) ?? []).map((dp) => ({
         id: dp.id,
