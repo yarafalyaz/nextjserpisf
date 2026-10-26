@@ -108,6 +108,23 @@ export function LeadFunnelCard({
             {position.byAssignee ? (
               <BreakdownSection title="Per Penanggung" rows={position.byAssignee} />
             ) : null}
+            <section aria-label="Alasan Kalah" className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Alasan Kalah</h3>
+              <DetailTable>
+                <DetailTableHead>
+                  <DetailTableTh>Kategori</DetailTableTh>
+                  <DetailTableTh align="right">Jumlah</DetailTableTh>
+                </DetailTableHead>
+                <DetailTableBody>
+                  {position.lostByReason.map((row) => (
+                    <DetailTableRow key={row.key}>
+                      <DetailTableTd>{row.label}</DetailTableTd>
+                      <DetailTableTd align="right">{formatNumber(row.count)}</DetailTableTd>
+                    </DetailTableRow>
+                  ))}
+                </DetailTableBody>
+              </DetailTable>
+            </section>
           </>
         )}
 
