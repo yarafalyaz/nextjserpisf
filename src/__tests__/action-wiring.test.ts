@@ -218,6 +218,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-25-036-S backend; tombol hapus tarif menyusul (frontend)",
   "src/actions/master.actions.ts::getCustomerCommissionRates":
     "F-2026-10-25-036-S backend; daftar histori tarif di master kategori menyusul (frontend)",
+  // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
+  // menunggu UI pesan tertahan + permukaan persetujuan (frontend t_52903522);
+  // entri beku dibuang saat UI tersambung.
+  "src/actions/credit-override.actions.ts::approveCreditOverride":
+    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::rejectCreditOverride":
+    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::listCreditOverrides":
+    "F-2026-10-25-035-B backend; UI daftar/jejak override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::getMyCreditOverrideStatus":
+    "F-2026-10-25-035-B backend; UI status permintaan override menyusul (frontend t_52903522)",
 }
 
 describe("keterhubungan aksi server", () => {
