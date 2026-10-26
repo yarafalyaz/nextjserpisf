@@ -13,30 +13,13 @@ import {
   applyDueSalaryAdjustments,
   computeChangePercent,
 } from "@/lib/services/salary-adjustment.service";
-
-export const SALARY_ADJUSTMENT_REASONS = [
-  "berkala",
-  "promosi",
-  "umk",
-  "kinerja",
-  "penyesuaian",
-  "lainnya",
-] as const;
+import { SALARY_ADJUSTMENT_REASONS } from "@/lib/hr/hcms-scoring";
 
 function resultError(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e;
   console.error(tag, getErrorMessage(e) || e);
   return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
 }
-
-export const SALARY_ADJUSTMENT_REASON_LABELS: Record<string, string> = {
-  berkala: "Kenaikan Berkala",
-  promosi: "Promosi",
-  umk: "Penyesuaian UMK/UMP",
-  kinerja: "Kinerja",
-  penyesuaian: "Penyesuaian Struktur",
-  lainnya: "Lainnya",
-};
 
 /**
  * TEMUAN-1 PR #959: penyesuaian gaji hanya untuk scope HR `all`
