@@ -12,6 +12,8 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 
+import { ReportSummaryStrip } from "./report-card-shell"
+
 const TITLE = "Beban Tiket per Penanggung Jawab"
 
 /**
@@ -56,14 +58,7 @@ export function CrmTicketWorkloadCard({
         <h2 className="text-[0.9375rem] font-semibold text-foreground">{TITLE}</h2>
       </div>
       <div className="p-4 px-5">
-        <dl className="flex flex-wrap gap-x-6 gap-y-2">
-          {summaryItems.map(([label, count]) => (
-            <div key={label} className="flex items-baseline gap-2">
-              <dt className="text-xs text-muted-foreground">{label}</dt>
-              <dd className="text-sm font-semibold text-foreground">{count}</dd>
-            </div>
-          ))}
-        </dl>
+        <ReportSummaryStrip items={summaryItems} />
         <p className="mt-2 text-xs text-muted-foreground">{workload.noticeText}</p>
         {unassignedGroup ? (
           <p className="mt-2 text-sm text-foreground">

@@ -46,7 +46,10 @@ export default async function TicketsPage({
   // kartu antrean. Bukan penilaian kinerja (BR-CTB-07). Kegagalan
   // loader menyembunyikan kartu saja (BR-CTB-09) — daftar tiket
   // existing tetap dapat dipakai; dilarang kartu kosong karangan.
-  const ticketWorkload = await getCrmTicketWorkload().catch(() => null)
+  const ticketWorkload = await getCrmTicketWorkload().catch((error) => {
+    console.error("[crm/tickets] beban tiket:", error)
+    return null
+  })
 
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
