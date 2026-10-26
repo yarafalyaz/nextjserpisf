@@ -35748,3 +35748,150 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-089-S: antrean persetujuan generik menunggu mengendap (turunan baca-saja di atas halaman menunggu existing)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_2820c321. Basis `origin/main` `6f55eff18` (2026-10-27 06:13 WIB).
+
+**Verifikasi ID — tegas:** `F-2026-10-22-089-S` SUDAH TERPAKAI = antrean penagihan piutang (`docs/erp-research-backlog.md:9866`, merged PR #545 `9391de12`); `F-2026-10-22-089-V` juga terpakai (`:17515`). ID run ini `F-2026-10-27-089-S` tanggal beda (27 vs 22) — grep `F-2026-10-27-089` di backlog+board `origin/main` = 0/0 sebelum tulis; `gh pr list` terbuka tidak memuat `089` sebagai ID spec (yang cocok: #928 MERGED menyebut F-089 lama, #1079 = 054-S). Bebas per tanggal+nomor. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+**Bukan duplikat:**
+- Bukan `hr-pending-approval` (`src/lib/reports/hr-pending-approval.ts:34-60`, F-2026-10-25-007-S/018-S/081-S): populasi dokumen HR sumber langsung (LeaveRequest/OvertimeRequest/EmployeeLoan status dokumen), gerbang `view_employees`/HR scope. Spec ini populasi **rekod `Approval` generik lintas-modul** apa pun `referenceType`-nya, gerbang `approve_workflows` existing.
+- Bukan antrean per-dokumen keluarga 075-S..088-S: objeknya dokumen sumber tunggal-modul. Spec ini objeknya rekod persetujuan itu sendiri (lintas 12 tipe `APPROVAL_MODEL_TYPES`, `src/lib/constants/approval.ts:2`).
+- Bukan halaman menunggu existing: halaman itu ADA dan tetap dipakai — gapnya ia tidak membawa umur menunggu, tingkat mengendap, urutan tertua, maupun penanda langkah-saat-ini yang bisa diputus pembaca (bukti §2). Spec ini lapisan turunan baca di atas query yang sama, bukan halaman kedua yang menyaingi.
+
+### 1. Workflow specification
+
+Aktor: pemegang `approve_workflows` (admin/pengelola alur) + approver langkah berjalan (role/user penunjuk langkah). Alur:
+
+1. Dokumen sumber masuk workflow lewat `requestApprovalIfConfigured` (`src/lib/services/approval-workflow.service.ts:10-26`): rekod `Approval` lahir `status="pending"`, `currentStep=1`, `requestedAt=now`, `requestedBy` pengaju.
+2. Approver langkah `currentStep` memutuskan lewat detail existing (`approveStep`/`rejectStep` `src/actions/approval.actions.ts:161/:296`): langkah maju `currentStep+1`, atau terminal `approved`/`rejected` + `completedAt`.
+3. Selama `pending`, rekod muncul di halaman menunggu existing — tetapi pembaca tidak bisa menjawab: "yang mana paling lama menunggu? di langkah siapa tersangkut? mana yang mengendap?" Spec ini menambahkan **turunan baca**: umur menunggu + tingkat + urutan tertua + penanda langkah-saat-ini, dihitung server, tampil verbatim.
+
+Dokumen masuk: rekod `Approval` pending + workflow + steps + histories existing. Dokumen keluar: tidak ada — daftar turunan baca-saja; keputusan tetap lewat detail + aksi existing.
+
+Kata usulan (USULAN, final Q-AGQ-2): judul tetap "Menunggu Persetujuan"; kolom tambahan `Umur Menunggu`, `Langkah` menjadi `Langkah k dari N — <nama langkah>`; tingkat `Mengendap` menempel pada baris, bukan status baru.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main 6f55eff18)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Skema: `ApprovalWorkflow` `prisma/schema.prisma:5250`, `ApprovalWorkflowStep:5269` (`stepOrder`, `roleId?`, `userId?`, `approverType?`, `conditions Json?`), `Approval:5289` (`workflowId`, `referenceType`, `referenceId`, `currentStep @default(1)`, `status @default("pending")`, `requestedBy?`, `requestedAt DateTime?`, `finalApprovedBy?`, `completedAt?`, `createdAt/updatedAt`), `ApprovalHistory:5316` (`step`, `action`, `userId?`, `createdAt`) + indeks `[status]`, `[createdAt]` pada Approval.
+- Halaman menunggu: `src/app/(dashboard)/pengaturan/persetujuan/menunggu/page.tsx:14` memanggil `renderApprovalsPage(searchParams, true)`; induk `page.tsx:24-76`: `requirePermission("approve_workflows")` (:29), `pendingOnly` memaksa `status:"pending"` (:40-41), `orderBy createdAt desc` (:60, terbaru dulu), `include workflow` TANPA steps (:59), proyeksi baris hanya id/slug/workflowName/referenceType/referenceId/currentStep/status/createdAt (:67-76) — **tidak ada `requestedAt`, tidak ada total langkah, tidak ada nama langkah berjalan, tidak ada umur**.
+- Tabel: `approval-table.tsx:25-52` kolom Alur Kerja / Referensi (label `APPROVAL_MODEL_LABELS` + `#referenceId`) / `Langkah <currentStep>` angka telanjang (:41-44) / Status / Dibuat (tanggal saja `formatDate`, :49-52). Tidak ada kolom umur; urutan server terbaru-dulu berarti yang paling lama menunggu justru di halaman terakhir.
+- Detail: `[slug]/page.tsx:60` `requirePermission("approve_workflows")`; menampilkan `Langkah {currentStep} / {steps.length}` + daftar langkah dengan penanda "Saat Ini"/"Selesai" (:105-160) + `requestedAt ?? createdAt` Tanggal Permintaan — penanda langkah-saat-ini SUDAH ada di detail, ABSEN di daftar.
+- Aksi: `approveStep:161` / `rejectStep:296` — kunci baris `FOR UPDATE`, tolak `status !== "pending"` ("Approval sudah diproses"), validasi `currentStep` dalam `1..totalSteps`, `assertApprovalPermission` (`approve_workflows` ATAU izin referensi per `APPROVAL_REFERENCE_PERMISSIONS` `src/lib/auth/approval-permissions.ts:19-32`), `assertStepApprover:126` (userId langkah → persis user itu; roleId langkah → role bernama itu; tanpa keduanya → gerbang izin saja; super_admin bypass), maker-checker (penolak/persetuju ≠ `requestedBy`, super_admin bypass), riwayat append `ApprovalHistory`, langkah terakhir → `approved` + update status dokumen sumber (kecuali GATE_ONLY `Journal`/`VendorPayment`), non-terakhir → `currentStep+1`. `reopenApproval:402` hanya dari `rejected`.
+- Konsumen lain: widget notifikasi menaut `/pengaturan/persetujuan/menunggu` (`src/components/dashboard/notifications-widget.tsx:100`); hub Pengaturan mendaftar rute dengan izin `approve_workflows` (`src/components/layout/settings-sections.ts:88`).
+
+Belum ada / parsial (bukti grep run ini):
+- Umur menunggu: grep turunan umur atas Approval di `src/lib/reports/` = 0; satu-satunya builder approval = `hr-pending-approval*` (dokumen HR, bukan Approval generik) + `quotation-approval-gate*` (ambang informatif penawaran, bukan antrean).
+- Urutan tertua / tingkat mengendap / penanda langkah berjalan di daftar: ABSEN (bukti halaman+tabel di atas). `requestedAt` nullable di skema tapi selalu diisi jalur lahir existing (`approval-workflow.service.ts:26`) — baris warisan tanpa `requestedAt` mungkin ada; acuan cadangan wajib dinyatakan (BR-AGQ-02).
+
+### 3. Status-transition matrix
+
+Status rekod `Approval` TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `requestApprovalIfConfigured` workflow aktif cocok `modelType` | `pending`, `currentStep=1` | jalur dokumen sumber; tanpa workflow aktif = no-op false, tidak lahir |
+| `pending` | `approveStep` langkah < terakhir | `pending`, `currentStep+1` | `approve_workflows` atau izin referensi + `assertStepApprover` + maker-checker |
+| `pending` | `approveStep` langkah terakhir | `approved` + dokumen sumber `approved` (GATE_ONLY dikecualikan) | sama |
+| `pending` | `rejectStep` | `rejected` + dokumen sumber `rejected` | sama |
+| `rejected` | `reopenApproval` | rekod BARU `pending` (dokumen reset draft) | existing |
+| `pending` | — (waktu lewat saja) | tetap `pending` | **turunan: tingkat tampil `Mengendap` bila umur ≥ ambang (USULAN) — bukan status, tidak tertulis** |
+| `approved`/`rejected` | — | terminal untuk antrean | keluar populasi pada render berikut |
+
+### 4. Role/permission matrix (katalog nyata)
+
+Katalog `src/lib/auth/module-catalog.generated.ts:461`: resource `workflows` hanya punya SATU key — `approve_workflows` ("Alur Persetujuan", grup settings). Tidak ada `view_workflows`/`manage_workflows` di katalog (grep run ini = hanya :461). Izin referensi per tipe di `APPROVAL_REFERENCE_PERMISSIONS` (approve_quotations, approve_sales_orders, approve_sales_invoices, approve_purchase_requests, approve_purchase_orders, approve_vendor_bills, approve_leave_requests, approve_overtime_requests, approve_loans, approve_expenses, approve_vendor_payments, approve_journals).
+
+| Aksi | approve_workflows | izin referensi tipe baris | super_admin |
+|---|---|---|---|
+| Lihat antrean menunggu existing | YA (gerbang halaman :29) | TIDAK cukup sendiri (halaman menuntut approve_workflows) | YA |
+| Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru (USULAN Q-AGQ-3) | tidak membuka daftar | YA |
+| Lihat penanda "langkah saya" per baris | YA + cocok userId/roleId langkah berjalan | tidak menentukan penanda | YA (semua baris tertanda peran super_admin? — Q-AGQ-4) |
+| Setujui/Tolak dari daftar antrean | TIDAK tahap 1 (BR-AGQ-09) | TIDAK | TIDAK |
+| Setujui/Tolak di detail existing | YA + lolos assertStepApprover + maker-checker | YA (alternatif gerbang aksi) + penunjuk langkah | YA |
+
+Konsekuensi jujur tahap 1: daftar hanya terbaca pemegang `approve_workflows` — approver langkah yang hanya memegang izin referensi (mis. `approve_leave_requests`) TIDAK melihat daftar ini (sama seperti halaman existing hari ini). Memperluas gerbang daftar = Q-AGQ-3, bukan bawaan.
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-AGQ-01 | Populasi = `Approval.status` PERSIS `"pending"` saja. `approved`/`rejected`/status dokumen sumber apa pun tidak masuk; kesesuaian status dokumen vs rekod Approval tidak dinilai antrean (inkonsistensi terbaca apa adanya, EC-AGQ-3). | TERVERIFIKASI-KODE pola halaman existing (`page.tsx:41`) |
+| BR-AGQ-02 | Acuan umur = `requestedAt`; bila NULL (warisan) cadangan `createdAt` DAN baris tertanda `tanpa tanggal permintaan` — tidak diam-diam dianggap sama. `updatedAt` DILARANG sebagai acuan (bergerak tiap langkah maju, menghapus umur langkah berjalan maupun umur total). | USULAN di atas fakta TERVERIFIKASI-KODE (`requestedAt` nullable schema:5289; selalu diisi service:26; `updatedAt @updatedAt`) |
+| BR-AGQ-03 | Umur menunggu = hari kalender WIB sejak acuan (pola `wibDayNumber` keluarga antrean); tampil angka hari + tanggal acuan. Umur per-langkah (sejak riwayat approve terakhir) TIDAK dihitung tahap 1 — `ApprovalHistory` per langkah ada, tetapi menamainya "umur di langkah ini" = turunan berikutnya (Yang TIDAK diusulkan). | USULAN |
+| BR-AGQ-04 | Tingkat turunan murni: `MENUNGGU` → `MENGENDAP` bila umur ≥ ambang. Tidak ada kolom/status/tahap tersimpan; dihitung ulang tiap render; waktu lewat sendiri tidak menulis apa pun. | USULAN (ambang Q-AGQ-1) |
+| BR-AGQ-05 | Urutan tampil: tertua menunggu dulu (umur terbesar), seri acuan sama → id Approval naik. Ini MEMBALIK urutan halaman existing (`createdAt desc`) hanya untuk permukaan turunan; halaman existing tidak diubah diam-diam (Q-AGQ-5 penempatan). | USULAN |
+| BR-AGQ-06 | Penanda langkah-saat-ini per baris = `Langkah {currentStep} dari {totalSteps} — {nama langkah stepOrder=currentStep}`; langkah tanpa nama tampil `Langkah {stepOrder}` (pola detail existing). Workflow tanpa steps / currentStep di luar rentang = baris tetap tampil tertanda `langkah tidak terbaca`, tidak dibuang (aksi existing sendiri menolak keadaan ini — antrean hanya membaca). | USULAN di atas TERVERIFIKASI-KODE (penanda detail `[slug]/page.tsx:105-160`; validasi rentang actions:161/296) |
+| BR-AGQ-07 | Penanda approver langkah berjalan tampil sebagai FAKTA penunjukan: userId → nama user; roleId → nama role; approverType saja → teks apa adanya; tanpa penunjuk → `penyetuju umum`. Antrean TIDAK menyimpulkan orangnya dari riwayat, TIDAK menampilkan kontak. Penanda "langkah saya" (per pembaca) = Q-AGQ-4. | USULAN |
+| BR-AGQ-08 | Payload daftar TANPA nominal dokumen sumber, tanpa isi `notes`, tanpa data pribadi pengaju selain nama tampil pengaju bila sudah tersedia dari relasi existing — tahap 1: `requestedBy` tampil id/nama apa adanya dari loader, tidak ada resolusi dokumen sumber per baris (anti-N+1 + anti bocor lintas-modul). Membuka dokumen sumber = tautan detail Approval existing saja. | USULAN |
+| BR-AGQ-09 | Baca-saja: builder/loader tidak memanggil approve/reject/reopen, tidak menulis status/history, tidak auto-escalate. Tombol Setujui/Tolak dari daftar TIDAK ada tahap 1; keputusan tetap di detail existing berpenjaga penuh (assertStepApprover + maker-checker). | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-AGQ-10 | Label referensi memakai `APPROVAL_MODEL_LABELS` existing verbatim; `referenceType` tak dikenal tampil string apa adanya (pola tabel existing :36) — tidak ditebak, tidak disembunyikan. | TERVERIFIKASI-KODE |
+| BR-AGQ-11 | Gerbang daftar = `approve_workflows` fail-closed sebelum query (pola `requirePermission` halaman :29). Tanpa izin = halaman menolak, bukan daftar kosong. | TERVERIFIKASI-KODE |
+| BR-AGQ-12 | Antrean tidak menilai benar/salah workflow (workflow nonaktif, steps berubah sesudah rekod lahir, dokumen sumber terhapus): semua terbaca apa adanya per rekod; workflow ter-soft-delete (`deletedAt`) tidak menyaring baris pending-nya keluar. | USULAN |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
+|---|---|---|---|
+| Persetujuan transaksi terpusat lintas tipe | Ada — Preferensi tab Persetujuan per tipe transaksi + penyetuju + syarat min. nilai (https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/cara-mengaktifkan-pengaturan-persetujuan/ ; https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/approval/mengenal-fitur-approval/) | Ada — Approval Management + aturan approval per transaksi/role/divisi/jenjang, notifikasi email/Telegram/WhatsApp/aplikasi (https://zahirerp.com/id/all-features-of-zahir-products/) | Ada — ApprovalWorkflow multi-langkah per modelType (TERVERIFIKASI-KODE) |
+| Antrean menunggu + approval massal | Ada halaman Approval + "persetujuan secara massal" (https://help.accurate.id/product/approval/) — massal TIDAK diusulkan spec ini (BR-AGQ-09) | Tidak ditemukan antrean menunggu berumur di halaman fitur yang diakses — tidak diklaim | Parsial: halaman menunggu ada tanpa umur/urutan tertua (gap spec ini) |
+| Antrean menunggu BERUMUR / tingkat mengendap / tertua-dulu | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim ada | Tidak ditemukan — tidak diklaim | ABSEN (spec ini) |
+
+Jujur: benchmark membuktikan persetujuan terpusat adalah fitur standar; antrean berumur-mengendap tidak ditemukan di kedua benchmark yang diakses run ini — nilai spec ini operasional internal (dokumen tersangkut terlihat), bukan mengejar fitur vendor.
+
+### 7. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-AGQ-B1: Populasi PERSIS `pending`; approved/rejected bocor → MERAH. Tahap/umur dihitung ulang di UI/loader konsumen → MERAH (server satu-satunya penghitung).
+- AC-AGQ-B2: Umur dari `requestedAt`; baris `requestedAt` NULL tampil dengan acuan `createdAt` + tanda `tanpa tanggal permintaan`; umur dihitung dari `updatedAt` → MERAH (mutasi: majukan langkah, umur total berubah = gagal).
+- AC-AGQ-B3: Urutan umur terbesar dulu, seri id naik; urutan `createdAt desc` warisan halaman bocor ke permukaan turunan → MERAH.
+- AC-AGQ-B4: Penanda langkah memuat currentStep + totalSteps + nama langkah berjalan dari steps massal (satu query include, anti-N+1; query steps per baris → MERAH). Workflow 0 steps baris tampil tertanda, tidak crash, tidak hilang.
+- AC-AGQ-B5: Loader fail-closed `approve_workflows` sebelum query; payload tanpa nominal dokumen/`notes`/kontak (bocor → MERAH); baca-saja terbukti (builder memanggil approveStep/rejectStep/tulis → MERAH).
+
+Frontend (konsumen):
+- AC-AGQ-F1: Label tingkat, umur, penanda langkah verbatim payload server; UI tidak menghitung umur/tingkat/urutan sendiri.
+- AC-AGQ-F2: TIDAK ada tombol Setujui/Tolak/Setujui Massal dari daftar (tombol aksi persetujuan di daftar → MERAH, BR-AGQ-09); tautan baris hanya ke detail Approval existing.
+- AC-AGQ-F3: Baris `requestedAt` NULL dan baris `langkah tidak terbaca` tampil dengan tandanya, bukan disembunyikan; tanpa izin halaman menolak (bukan daftar kosong).
+
+Edge cases:
+- EC-AGQ-1: Dua Approval pending untuk dokumen sama (seharusnya dicegah idempotensi service :38-42, warisan data bisa dobel): tampil per rekod, antrean tidak menggabung/mengeluarkan.
+- EC-AGQ-2: Steps workflow diubah sesudah rekod lahir (currentStep menunjuk stepOrder yang sudah tidak ada): penanda `langkah tidak terbaca`; antrean tidak menebak langkah pengganti.
+- EC-AGQ-3: Dokumen sumber sudah approved/rejected lewat jalur lain sementara rekod Approval masih pending (atau sebaliknya): rekod tetap populasi apa adanya; antrean tidak menyaring berdasar status dokumen (BR-AGQ-01).
+- EC-AGQ-4: Pengaju = approver langkah berjalan (maker-checker akan menolak di aksi): baris tetap tampil; antrean tidak menandai "bisa diputus" — kemampuan putus hanya terbukti di aksi existing.
+- EC-AGQ-5: Approval diputus dari detail saat daftar terbuka: keluar populasi render berikut; daftar tidak mengunci baris.
+
+### 8. Backlog implementasi (turunan F-2026-10-27-089-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-089-S | Spec kontrak ini (dokumen) | Business | — |
+| 089-B | Builder murni (umur WIB, tingkat, urutan, penanda langkah) + loader `approve_workflows` fail-closed, steps massal anti-N+1 + tes AC-AGQ-B1..B5 | Backend | Putusan Lead Q-AGQ-1/2/3/5 |
+| 089-F | Permukaan turunan (seksi/kolom di halaman menunggu existing per Q-AGQ-5) verbatim payload + AC-AGQ-F1..F3; grep e2e persetujuan dulu | Frontend | 089-B merged |
+| 089-Q | Falsifikasi AC-AGQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 089-B/089-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 9. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-AGQ-1 | Ambang `MENGENDAP` (umur ≥ N hari kalender WIB sejak acuan BR-AGQ-02)? | Lead | USULAN 3 hari (preseden ambang keluarga antrean mengendap) — bukan fakta sebelum diputus |
+| Q-AGQ-2 | Kata final: tingkat `Mengendap`, kolom `Umur Menunggu`, penanda langkah `Langkah k dari N — nama`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim |
+| Q-AGQ-3 | Gerbang daftar tahap 1 tetap `approve_workflows` saja (konsekuensi §4: approver berizin-referensi-saja tidak melihat daftar), atau dibuka juga untuk pemegang izin referensi dengan penanda per baris? | Lead | Tahap 1 tetap `approve_workflows` (nol key baru, konsisten halaman existing); perluasan = keputusan terpisah berisiko bocor lintas-modul |
+| Q-AGQ-4 | Penanda per-pembaca "langkah saya" (baris yang langkah berjalannya menunjuk user/role pembaca) dibuka tahap 1? | Lead | USULAN ya sebagai penanda tampil saja (bukan saringan, bukan izin baru) — membantu approver menemukan tugasnya; tetap tampil semua baris |
+| Q-AGQ-5 | Penempatan: perluasan halaman menunggu existing (kolom+urutan turunan) vs seksi terpisah? Halaman existing tidak menunggu (`/pengaturan/persetujuan`) ikut diubah? | Lead | USULAN: hanya permukaan menunggu yang diperkaya (di sanalah antrean kerja); halaman semua-status tetap urutan existing |
+| Q-AGQ-6 | Pengingat/eskalasi ke approver langkah berjalan untuk baris mengendap? | Lead | TIDAK tahap 1 (kanal+keadaan baru); nilai antrean baca dulu |
+
+### Yang TIDAK diusulkan run ini
+- Approval massal dari daftar (fitur Accurate di atas) — melompati assertStepApprover/maker-checker per rekod; keputusan terpisah berisiko tinggi, bukan bawaan antrean baca.
+- Umur per-langkah, SLA per langkah/workflow, tenggat per langkah — `conditions` steps existing adalah syarat pemicu, bukan SLA; SLA = keadaan/konfigurasi baru di luar tahap baca-saja.
+- Tombol Setujui/Tolak dari daftar, pengingat WA/email, eskalasi otomatis, penugasan ulang approver (BR-AGQ-09, Q-AGQ-6).
+- Key izin baru, mengubah gerbang halaman existing, mengubah urutan halaman semua-status (Q-AGQ-3/5).
+- Menyaring/memperbaiki inkonsistensi rekod-vs-dokumen dari antrean (EC-AGQ-3) — perbaikan data = jalur dokumen masing-masing.
+- Mengganti halaman menunggu existing atau antrean HR `hr-pending-approval` — keduanya tetap; spec ini lapisan turunan di permukaan menunggu generik.
+
+F-2026-10-27-089-S — Antrean persetujuan generik menunggu mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-AGQ-1..6, lalu fisik Backend (089-B), konsumen Frontend (089-F), falsifikasi QA (089-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/gerbang/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK (nol nominal, nol jurnal, nol status uang — baca rekod persetujuan lintas-modul saja).
