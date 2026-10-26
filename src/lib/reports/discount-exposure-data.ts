@@ -25,6 +25,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas"
 import { parseApprovalThresholds } from "@/lib/reports/quotation-approval-gate"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import {
   buildDiscountExposure,
   DISCOUNT_EXPOSURE_MODEL_TYPES,
@@ -213,7 +214,9 @@ export async function getDiscountExposure(
       }),
     ),
     ...salesOrders.map((so) => toDocInput("SALES_ORDER", so)),
-    ...salesInvoices.map((inv) => toDocInput("SALES_INVOICE", { ...inv, status: String(inv.status) })),
+    ...salesInvoices.map((inv) =>
+      toDocInput("SALES_INVOICE", { ...inv, documentNo: salesInvoiceLabel(inv), status: String(inv.status) }),
+    ),
   ]
 
   return buildDiscountExposure(inputs, thresholdsByType)

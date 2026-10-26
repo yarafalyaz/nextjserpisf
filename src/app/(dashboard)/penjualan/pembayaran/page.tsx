@@ -6,6 +6,7 @@ import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { PaymentTable } from "./_components/payment-table"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 import { CanCreate } from "@/components/auth/can-create"
@@ -49,7 +50,7 @@ export default async function SalesPaymentsPage({
     id: p.id,
     slug: p.slug,
     documentNo: p.documentNo,
-    salesInvoice: p.salesInvoice,
+    salesInvoice: { ...p.salesInvoice, documentNo: salesInvoiceLabel(p.salesInvoice) },
     paymentDate: p.paymentDate,
     paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),
     amount: Number(p.amount),

@@ -122,13 +122,13 @@ describe("createEmployee — with login account", () => {
 
     const res = await createEmployee(
       fd(
-        { ...baseFields, email: "budi@corp.id", createLoginAccount: "true", loginPassword: "rahasia123" },
+        { ...baseFields, email: "budi@corp.id", createLoginAccount: "true", loginPassword: "kata-sandi-budi-2026" },
         { loginRoleIds: ["3", "5"] }
       )
     )
 
     expect(res).toEqual({ success: true, id: 99 })
-    expect(bcryptHashMock).toHaveBeenCalledWith("rahasia123", 12)
+    expect(bcryptHashMock).toHaveBeenCalledWith("kata-sandi-budi-2026", 12)
     // user created with hashed password + role connect
     const userArg = txUserCreateMock.mock.calls[0][0]
     expect(userArg.data.email).toBe("budi@corp.id")
@@ -140,23 +140,30 @@ describe("createEmployee — with login account", () => {
   })
 
   it("rejects when login requested but email missing", async () => {
-    const res = await createEmployee(fd({ ...baseFields, createLoginAccount: "true", loginPassword: "rahasia123" }))
+    const res = await createEmployee(fd({ ...baseFields, createLoginAccount: "true", loginPassword: "kata-sandi-budi-2026" }))
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/email/i)
     expect(transactionMock).not.toHaveBeenCalled()
   })
 
-  it("rejects when login password is shorter than 8 chars", async () => {
+  it("rejects when login password is shorter than 12 chars", async () => {
     const res = await createEmployee(fd({ ...baseFields, email: "x@y.z", createLoginAccount: "true", loginPassword: "short" }))
     expect(res.success).toBe(false)
-    expect(res.error).toMatch(/8 karakter/i)
+    expect(res.error).toMatch(/12 karakter/i)
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects a common login password at sufficient length", async () => {
+    const res = await createEmployee(fd({ ...baseFields, email: "x@y.z", createLoginAccount: "true", loginPassword: "administrator" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/terlalu umum/i)
     expect(transactionMock).not.toHaveBeenCalled()
   })
 
   it("rejects when email already belongs to an existing user", async () => {
     userFindUniqueMock.mockResolvedValue({ id: 1, email: "dup@corp.id" })
     const res = await createEmployee(
-      fd({ ...baseFields, email: "dup@corp.id", createLoginAccount: "true", loginPassword: "rahasia123" })
+      fd({ ...baseFields, email: "dup@corp.id", createLoginAccount: "true", loginPassword: "kata-sandi-budi-2026" })
     )
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/sudah terdaftar/i)
@@ -170,7 +177,7 @@ describe("createEmployee — with login account", () => {
 
     const res = await createEmployee(
       fd(
-        { ...baseFields, email: "budi@corp.id", createLoginAccount: "true", loginPassword: "rahasia123" },
+        { ...baseFields, email: "budi@corp.id", createLoginAccount: "true", loginPassword: "kata-sandi-budi-2026" },
         { loginRoleIds: ["3", "0x10", "1e3", " 5", "+5", "10.0", "", "abc"] }
       )
     )
@@ -204,13 +211,13 @@ describe("updateEmployee — create login account for existing employee", () => 
     const res = await updateEmployee(
       50,
       fd(
-        { ...baseFields, email: "siti@corp.id", createLoginAccount: "true", loginPassword: "rahasia123" },
+        { ...baseFields, email: "siti@corp.id", createLoginAccount: "true", loginPassword: "kata-sandi-budi-2026" },
         { loginRoleIds: ["2"] }
       )
     )
 
     expect(res).toEqual({ success: true })
-    expect(bcryptHashMock).toHaveBeenCalledWith("rahasia123", 12)
+    expect(bcryptHashMock).toHaveBeenCalledWith("kata-sandi-budi-2026", 12)
     const userArg = txUserCreateMock.mock.calls[0][0]
     expect(userArg.data.roles.connect).toEqual([{ id: 2 }])
     const empArg = txEmployeeUpdateMock.mock.calls[0][0]
@@ -222,7 +229,7 @@ describe("updateEmployee — create login account for existing employee", () => 
     employeeFindUniqueMock.mockResolvedValue({ userId: 99 })
     const res = await updateEmployee(
       50,
-      fd({ ...baseFields, email: "siti@corp.id", createLoginAccount: "true", loginPassword: "rahasia123" })
+      fd({ ...baseFields, email: "siti@corp.id", createLoginAccount: "true", loginPassword: "kata-sandi-budi-2026" })
     )
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/sudah memiliki akun/i)
