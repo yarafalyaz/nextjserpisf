@@ -39,6 +39,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/riwayat-harga-penawaran": "Menampilkan riwayat harga yang pernah ditawarkan per pelanggan dan barang dari revisi berjalan penawaran, lengkap dengan ember status penawarnya, baca-saja tanpa mengubah penawaran",
   "/laporan/riwayat-harga-jual": "Menampilkan riwayat harga satuan aktual per pelanggan dan barang dari faktur terbit beserta sumber harganya, baca-saja tanpa mengubah faktur",
   "/laporan/garansi-segera-berakhir": "Menampilkan antrean cakupan garansi yang segera atau baru berakhir per pelanggan dan kendaraan, tanpa kontak pelanggan",
+  "/laporan/servis-berkala": "Menampilkan antrean kendaraan yang mendekati atau melewati jadwal servis berkala tersimpan beserta sisa hari dan sisa km, baca-saja tanpa kontak pelanggan",
   "/laporan/aging-klaim-supplier": "Menampilkan daftar aging klaim supplier yang masih terbuka per supplier, part, dan umur hari sejak pengajuan ke supplier",
   "/laporan/corong-prospek": "Menampilkan posisi saat ini dan corong gerakan periode prospek per tahap, sumber, dan penanggung",
   "/laporan/arus-kas": "Menampilkan arus kas masuk dan keluar per aktivitas",
