@@ -86,6 +86,9 @@ describe("paritas registry PDF laporan", () => {
       // F-095-S BR-SUPP-11: daftar aging klaim supplier baca-saja tahap 1,
       // tanpa ekspor/PDF (pola garansi-segera-berakhir).
       "aging-klaim-supplier",
+      // F-2026-10-25-021-S: antrean pengingat servis berkala baca-saja;
+      // ekspor/PDF server-side belum dibuka (pola garansi-segera-berakhir).
+      "servis-berkala",
       "corong-prospek",
       "grafik-keuangan",
       "giro-mundur",
