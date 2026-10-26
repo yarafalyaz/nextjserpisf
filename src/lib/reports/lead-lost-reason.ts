@@ -87,12 +87,12 @@ export function formatLeadLostReason(input: {
   return freeText ? `${prefix} ${freeText}` : prefix
 }
 
-const LEAD_LOST_REASON_PREFIX_RE = /\[kalah:([a-z-]+)\]/
+const LEAD_LOST_REASON_PREFIX_RE = /^\[kalah:([a-z-]+)\]/
 
 /**
- * Baca kategori kalah dari `description` aktivitas. Awalan sah PERTAMA
- * yang menang; awalan kedua di tengah teks bebas = isi bebas biasa.
- * Tanpa awalan sah -> null (ember `tak-tercatat`, bukan tebakan).
+ * Baca kategori kalah dari `description` aktivitas. Hanya awalan di
+ * posisi 0 yang sah (BR-LR-06); awalan di tengah teks bebas = isi bebas.
+ * Tanpa awalan sah di awal -> null (ember `tak-tercatat`, bukan tebakan).
  */
 export function parseLeadLostReasonCategory(
   description: string | null | undefined,
