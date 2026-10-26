@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   SALES_ORDER_DRAFT_NOTICE_TEXT,
   SALES_ORDER_DRAFT_QUEUE_TITLE_TEXT,
@@ -9,6 +9,25 @@ import {
   type SalesOrderDraftInput,
 } from "../sales-order-draft-queue"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
+
+const mocks = vi.hoisted(() => ({
+  salesOrderFindMany: vi.fn(),
+  requirePermission: vi.fn(),
+}))
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    salesOrder: {
+      findMany: (...a: unknown[]) => mocks.salesOrderFindMany(...a),
+    },
+  },
+}))
+
+vi.mock("@/lib/auth/permissions", () => ({
+  requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
+}))
+
+import { getSalesOrderDraftQueue } from "../sales-order-draft-queue-data"
 
 // Hari kalender WIB tetap: 2026-10-26 — instan 05:00 WIB.
 const NOW = new Date("2026-10-25T22:00:00.000Z")
@@ -136,5 +155,81 @@ describe("sales-order-draft-queue (F-2026-10-26-056-S tahap 1)", () => {
     const fromQuotation = queue.rows.find((r) => r.salesOrderId === 2)!
     expect(fromQuotation.punyaJanji).toBe(true)
     expect(fromQuotation.asalLabel).toBe("Dari Penawaran QUO/2026/042")
+  })
+})
+
+describe("getSalesOrderDraftQueue (loader fail-closed, AC-SOQ-B4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermission.mockResolvedValue(undefined)
+    mocks.salesOrderFindMany.mockResolvedValue([])
+  })
+
+  it("tanpa izin loader menolak sebelum query apa pun (findMany 0x)", async () => {
+    mocks.requirePermission.mockRejectedValue(new Error("Tidak memiliki izin"))
+    await expect(getSalesOrderDraftQueue({ now: NOW })).rejects.toThrow("Tidak memiliki izin")
+    expect(mocks.requirePermission).toHaveBeenCalledWith("view_sales_orders")
+    expect(mocks.salesOrderFindMany).not.toHaveBeenCalled()
+  })
+
+  it("query populasi persis {status:draft, deletedAt:null}; pemetaan relasional customer/quotation/salesEmployee", async () => {
+    mocks.salesOrderFindMany.mockResolvedValue([
+      {
+        id: 1,
+        slug: "so-1",
+        documentNo: "SO/2026/001",
+        status: "draft",
+        deletedAt: null,
+        customerId: 10,
+        quotationId: 42,
+        salesEmployeeId: 7,
+        date: day(-10),
+        deliveryDate: day(3),
+        createdAt: day(-10),
+        grandTotal: 1500,
+        customer: { name: "PT Uji" },
+        quotation: { documentNo: "QUO/2026/042" },
+        salesEmployee: { name: "Sales Uji" },
+      },
+      {
+        id: 2,
+        slug: null,
+        documentNo: "SO/2026/002",
+        status: "draft",
+        deletedAt: null,
+        customerId: 11,
+        quotationId: null,
+        salesEmployeeId: null,
+        date: day(-1),
+        deliveryDate: null,
+        createdAt: day(-1),
+        grandTotal: 0,
+        customer: { name: "PT Lain" },
+        quotation: null,
+        salesEmployee: null,
+      },
+    ])
+
+    const queue = await getSalesOrderDraftQueue({ now: NOW })
+
+    expect(mocks.salesOrderFindMany).toHaveBeenCalledTimes(1)
+    const arg = mocks.salesOrderFindMany.mock.calls[0][0]
+    expect(arg.where).toEqual({ status: "draft", deletedAt: null })
+
+    const fromQuotation = queue.rows.find((r) => r.salesOrderId === 1)!
+    expect(fromQuotation.customerName).toBe("PT Uji")
+    expect(fromQuotation.quotationDocumentNo).toBe("QUO/2026/042")
+    expect(fromQuotation.asalLabel).toBe("Dari Penawaran QUO/2026/042")
+    expect(fromQuotation.salesEmployeeName).toBe("Sales Uji")
+    expect(fromQuotation.tingkat).toBe("mengendap")
+    expect(fromQuotation.grandTotal).toBe(1500)
+
+    const direct = queue.rows.find((r) => r.salesOrderId === 2)!
+    expect(direct.customerName).toBe("PT Lain")
+    expect(direct.quotationDocumentNo).toBeNull()
+    expect(direct.asalLabel).toBe("Langsung")
+    expect(direct.salesEmployeeId).toBeNull()
+    expect(direct.salesEmployeeName).toBeNull()
+    expect(queue.totalDocuments).toBe(2)
   })
 })
