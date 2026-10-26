@@ -9,6 +9,7 @@
  */
 export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/crm/leads": "Kelola prospek pelanggan",
+  "/crm/prioritas-lead": "Daftar kerja prospek aktif menurut urutan prioritas",
   "/crm/tickets": "Tiket bantuan pelanggan",
   "/inventaris/baris-rak": "Baris rak di dalam gudang",
   "/inventaris/mutasi-stok": "Pergerakan stok",
@@ -164,6 +165,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/penjualan/penawaran": "Penawaran harga",
   "/penjualan/antrean-penawaran": "Penawaran terkirim belum dijawab pelanggan",
   "/penjualan/antrean-penawaran-draf": "Draf penawaran belum terkirim yang basi atau menipis masa berlakunya",
+  "/penjualan/antrean-faktur-draf": "Faktur penjualan yang masih draft dan belum diposting, dari yang paling lama menunggu",
   "/penjualan/antrean-penawaran-diterima": "Penawaran diterima belum menjadi pesanan penjualan",
   "/penjualan/antrean-penagihan": "Faktur belum lunas per tahap penagihan dan janji bayar",
   "/penjualan/antrean-janji-kirim": "Pesanan penjualan yang janji kirimnya mendekati atau sudah lewat dan belum terkirim penuh",
