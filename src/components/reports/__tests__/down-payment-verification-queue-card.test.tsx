@@ -8,43 +8,25 @@ import {
   buildDownPaymentVerificationQueue,
   DP_QUEUE_NOTICE_TEXT,
   type DownPaymentQueueDpInput,
-  type DownPaymentQueueQuotationInput,
 } from "@/lib/reports/down-payment-verification-queue"
+import {
+  dpQueueDp,
+  dpQueueQuotation,
+} from "@/lib/reports/__tests__/down-payment-verification-queue-fixtures"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 // 2026-10-25T20:00Z = 2026-10-26 03:00 WIB; hari WIB = 26 Okt 2026.
 const NOW = new Date("2026-10-25T20:00:00.000Z")
 
-function dp(
+// Default kartu beda dari builder: paymentDate 15 Okt, createdAt 24 Okt WIB → umur 2 hari.
+const dp = (
   partial: Partial<DownPaymentQueueDpInput> & { downPaymentId: number },
-): DownPaymentQueueDpInput {
-  return {
-    documentNo: `DP-${partial.downPaymentId}`,
-    quotationId: 1,
-    customerId: 7,
-    customerName: "CV Uji",
-    amount: 10_000_000,
+) =>
+  dpQueueDp(partial, {
     paymentDate: new Date("2026-10-15T00:00:00.000Z"),
-    paymentMethod: "transfer",
-    adaBukti: true,
-    status: "draft",
-    createdAt: new Date("2026-10-23T20:00:00.000Z"), // 24 Okt WIB → umur 2 hari
-    ...partial,
-  }
-}
-
-function quotation(
-  partial: Partial<DownPaymentQueueQuotationInput> = {},
-): DownPaymentQueueQuotationInput {
-  return {
-    quotationId: 1,
-    quotationDocumentNo: "Q-001",
-    quotationStatus: "accepted",
-    grandTotal: 100_000_000,
-    invoiceThresholdPercent: 50,
-    ...partial,
-  }
-}
+    createdAt: new Date("2026-10-23T20:00:00.000Z"),
+  })
+const quotation = dpQueueQuotation
 
 function queue() {
   return buildDownPaymentVerificationQueue(
