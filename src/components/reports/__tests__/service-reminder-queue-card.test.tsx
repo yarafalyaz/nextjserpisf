@@ -52,7 +52,9 @@ describe("ServiceReminderQueueCard F-2026-10-25-021-S", () => {
           customerName: "Dedi Rusak",
           plateNumber: "B 300 CC",
           nextServiceDate: null,
-          nextServiceKm: 40000,
+          // Target tidak valid = satu-satunya basis jadwal_rusak (BR-SV-03);
+          // km terlampaui kini terlewat, bukan rusak.
+          nextServiceKm: 0,
           lastOdometerKm: 45000,
         }),
         input({
