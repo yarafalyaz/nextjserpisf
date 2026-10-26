@@ -18,12 +18,6 @@ import { AttendanceRecapTable } from "../../_components/attendance-recap-table"
 
 export const metadata: Metadata = { title: "Rekap Kehadiran" }
 
-function parsePositiveId(raw: string | undefined): number | null {
-  if (!raw) return null
-  const value = Number(raw)
-  return Number.isSafeInteger(value) && value > 0 ? value : null
-}
-
 /**
  * Rekap kehadiran per karyawan per periode (F-2026-10-25-044-S).
  *
@@ -59,15 +53,19 @@ export default async function AttendanceRecapPage({
     end: now,
   }))
 
-  const showDepartmentFilter = scope.kind === "all"
-  const departmentId = showDepartmentFilter ? parsePositiveId(filters.departemen) : null
-
-  const departments = showDepartmentFilter
-    ? await prisma.department.findMany({
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      })
-    : []
+  // Pemilih departemen hanya untuk scope `all`; scope lain: nilai URL
+  // tidak diteruskan ke loader (loader tetap mengiris ke scope server).
+  const isAllScope = scope.kind === "all"
+  let departmentId: number | null = null
+  let departments: { id: number; name: string }[] = []
+  if (isAllScope) {
+    const parsed = Number(filters.departemen)
+    departmentId = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+    departments = await prisma.department.findMany({
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true },
+    })
+  }
 
   const recap = await loadAttendanceRecap(scope, {
     periodStart: period.start,
@@ -75,7 +73,7 @@ export default async function AttendanceRecapPage({
     departmentId,
   })
 
-  const selects: ReportSelectFilter[] = showDepartmentFilter
+  const selects: ReportSelectFilter[] = isAllScope
     ? [
         {
           param: "departemen",
