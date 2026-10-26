@@ -33026,3 +33026,100 @@ Nominal gaji tetap hanya lewat `view_salary_amounts` fail-closed; penyesuaian TI
 - Notifikasi otomatis ke penyetuju/karyawan (kanal belum diputus; antrean baca-saat-dibuka cukup tahap 1).
 
 F-2026-10-26-054-S — Persetujuan penyesuaian gaji terjadwal. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-SA-1/2/3, lalu fisik Backend (sesudah/bersama t_fedea179 dikoordinasikan Lead), konsumen Frontend, falsifikasi QA. Pemilik usulan: Business (spec), Lead (putusan jalur/pemegang/tepi berhenti), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap ini (BR-SA-08 bersyarat).
+
+F-2026-10-26-058-S — Antrean SO terkirim belum terfaktur penuh (baca-saja): daftar kerja turunan pengiriman sah vs faktur penjualan tertaut supaya admin penjualan menagih pekerjaan yang sudah dikirim tapi belum/sudah sebagian terfaktur; bukan status berkas baru, bukan jurnal/pendapatan baru. Status: SPEC SELESAI run ini oleh Business (kartu t_6edbd098, 2026-10-26 08:17 WIB); implementasi butuh putusan Lead Q-DU-1 (titik umur) + Q-DU-2 (batas ember umur) + Q-DU-3 (permukaan) lebih dulu. Pemilik usulan: Business (spec), Backend (builder/loader sesudah putusan), Frontend (konsumen), QA (falsifikasi), Lead (putusan). Butuh vonis accountant: TIDAK tahap baca-saja ini — tidak ada perlakuan jurnal/PPN baru; sisa tagih = turunan dokumen (lihat BR-DU-05).
+
+## F-2026-10-26-058-S — Antrean SO terkirim belum terfaktur penuh (spesifikasi workflow, Business, 2026-10-26)
+
+### 1. Workflow & aktor
+
+- **Masalah lapangan**: barang/jasa SO sudah dikirim (surat jalan `shipped`/`delivered`) tetapi faktur penjualan belum terbit sama sekali atau baru sebagian; tidak ada daftar kerja tunggal untuk mengejarnya. Laporan Pemenuhan Pesanan yang ada menjawab "apa yang BELUM terkirim", bukan "apa yang sudah terkirim tapi BELUM tertagih dokumennya"; antrean janji kirim menjawab janji tanggal, bukan penagihan.
+- **Aktor**: admin penjualan / finance (membaca antrean, membuka SO, menerbitkan faktur lewat jalur existing `create_sales_invoices`); sales pemilik SO (konteks); tidak ada aktor persetujuan baru.
+- **Dokumen masuk**: SalesOrder (`confirmed`/`processing`/`completed`), DeliveryOrder + item (`shipped`/`delivered`), SalesInvoice tertaut `salesOrderId` (status selain `draft`/`cancelled`, `deletedAt IS NULL`).
+- **Dokumen keluar**: antrean baca-saja per SO (dan rincian per baris bila diputus Lead) + tindakan lanjutan EXISTING (buka SO -> buat faktur). Tidak ada dokumen/status baru yang ditulis laporan ini.
+- **Alur**: buka antrean -> saring periode/pelanggan -> SO tampil dengan nilai terkirim, nilai terfaktur sah, sisa belum terfaktur, umur sejak titik acuan (Q-DU-1) -> klik membuka SO -> faktur diterbitkan/ dilengkapi lewat aksi existing -> SO keluar dari antrean pada muat berikutnya (turunan, bukan centang manual).
+
+### 2. Role/permission matrix
+
+| Aksi | Permission (katalog nyata) | Bukti (TERVERIFIKASI-KODE) |
+|---|---|---|
+| Lihat antrean | `view_reports` (bila permukaan laporan) | `module-catalog.generated.ts:431` {key:"view", resource:"reports", permissionKey:"view_reports"} |
+| Lihat daftar SO / faktur tertaut | `view_sales_orders`, `view_sales_invoices` | katalog :164, :148 |
+| Tindak lanjut buat faktur | `create_sales_invoices` (jalur existing, bukan kewenangan baru laporan) | katalog :149 |
+| Ubah status SO/DO/faktur dari antrean | TIDAK ADA — antrean baca-saja | desain spec ini |
+
+Sales perorangan TIDAK diberi scope salesman baru oleh spec ini: antrean tahap 1 = pemegang `view_reports` (perilaku laporan existing). Scope per-salesman = keputusan Lead terpisah, jangan dibangun diam-diam.
+
+### 3. Matriks populasi & status-transisi
+
+Tidak ada transisi status baru — antrean adalah klasifikasi turunan. Definisi populasi:
+
+| Unsur | Masuk (TERVERIFIKASI-KODE) | Dibuang |
+|---|---|---|
+| Status SO | `confirmed`, `processing`, `completed` (`FULFILLABLE_ORDER_STATUSES`, order-fulfillment-data.ts:26) | `draft`, `cancelled` |
+| Pengiriman dihitung terkirim | DeliveryOrder `shipped`/`delivered` (`SHIPPED_DELIVERY_STATUSES`, :29), per baris `DeliveryOrderItem.salesOrderItemId` | DO `draft`/status lain; baris tanpa tautan baris SO |
+| Faktur dihitung terfaktur | `SalesInvoice.salesOrderId = SO`, `deletedAt IS NULL`, status `sent`/`posted`/`partial`/`paid`/`approved` (enum schema.prisma:5695-5703) | `draft` (belum terbit), `cancelled`, terhapus lunak |
+| Syarat tampil | nilai terkirim > 0 DAN nilai terkirim > nilai terfaktur sah (epsilon uang existing) | terkirim 0 (belum kirim = domain Pemenuhan), terfaktur >= terkirim |
+
+Peringatan definisi (TERVERIFIKASI-KODE, wajib diputus eksplisit Backend, jangan dicampur diam-diam): repo punya DUA definisi "terfaktur" yang beda maksud - (a) `BILLED_INVOICE_STATUSES = [posted, partial, paid]` (job-billing-summary.ts:39) = piutang sah sesudah posting, dipakai sisa tagih job; (b) `billedAmountExcludingCancelled` (job-billing-progress.ts:32) = semua non-cancelled termasuk `draft`, dipakai faktur selisih/progres karena draft "memesan porsi". Antrean ini mengejar SO yang tagihannya BELUM terbit, jadi definisi (b) akan menyembunyikan persis baris yang dicari (faktur draft tertaut membuat SO tampak tertagih padahal belum ada hak tagih) - karena itu populasi faktur sah spec ini = non-`draft`/non-`cancelled` (definisi dekat (a) ditambah `sent`/`approved` yang sudah keluar dari draft menuju terbit). Bila Lead mau persis (a), keluarkan `sent`/`approved` dari pengurang dan nyatakan di putusan Q-DU-1..3; yang dilarang = memakai (b) tanpa sadar.
+
+Nilai (per SO, turunan murni): `nilaiTerkirim = Σ baris terkirim qty × harga baris SO`; `nilaiTerfaktur = Σ grandTotal faktur sah tertaut`; `sisa = nilaiTerkirim − nilaiTerfaktur` (tampil bila > 0; bila faktur sah melebihi terkirim, baris TIDAK tampil dan tidak menampilkan sisa negatif — kasus itu domain rekonsiliasi, bukan antrean ini). Retur penjualan: antrean menilai tautan faktur, BUKAN retur; retur atas faktur sudah tertagih = domain piutang/retur existing, antrean tidak mengurangi sisa oleh retur (kelebihan tagih bukan "belum terfaktur").
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-DU-01 | Populasi SO hanya `confirmed`/`processing`/`completed`; terkirim hanya DO `shipped`/`delivered` per tautan baris | TERVERIFIKASI-KODE (order-fulfillment-data.ts:26,29) |
+| BR-DU-02 | Faktur `draft`/`cancelled`/terhapus lunak TIDAK mengurangi belum-terfaktur; faktur manual tanpa `salesOrderId` TIDAK mengurangi SO mana pun | USULAN (konsekuensi tautan schema.prisma:1628; perilaku turunan baru) |
+| BR-DU-03 | SO tanpa DO sah tidak tampil walau belum ada faktur (itu backlog kirim, bukan tagih) | USULAN |
+| BR-DU-04 | Antrean baca-saja: tidak menulis status, tidak membuat jurnal, tidak mengubah stok/piutang | USULAN (desain) |
+| BR-DU-05 | Sisa = turunan dokumen (harga baris SO × qty terkirim − grandTotal faktur tertaut); dilarang kolom input/ambang/persen karang di antrean | USULAN — angka dasarnya TERVERIFIKASI-KODE (grandTotal schema:1635) |
+| BR-DU-06 | Titik awal umur (sejak DO sah terakhir vs sejak SO `confirmed`) | BUTUH-VONIS Lead (Q-DU-1) — jangan ditanam sebelum diputus |
+| BR-DU-07 | Batas ember umur antrean (mis. 0-7/8-30/>30 hari) bila ditampilkan | BUTUH-VONIS Lead (Q-DU-2) — angka hari bebas = angka karang |
+| BR-DU-08 | Perlakuan pajak/jurnal atas "barang terkirim belum tertagih" (akun barang terkirim ala Accurate) TIDAK termasuk spec ini | BUTUH-VONIS Accountant bila kelak diusulkan; tahap ini nol jurnal |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Aspek | Accurate Online (BENCHMARK) | Zahir (BENCHMARK) | ISF (TERVERIFIKASI-KODE) |
+|---|---|---|---|
+| DO outstanding belum difakturkan dikenali sebagai daftar kerja | Ya — DO outstanding/belum ditagihkan adalah konsep saldo "Barang Terkirim" (https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/input-saldo-awal-barang-terkirim/) | Ya — SO selesai/dipakai ditandai; DO menjadi dasar invoice (https://help.zahironline.com/portal/id/kb/articles/order-penjualan) | Belum ada antrean turunan terkirim-vs-terfaktur (gap spec ini) |
+| Penagihan lanjutan dari DO/SO | Faktur dibuat mengambil data DO (URL yang sama) | Invoice/DO memilih nomor SO; item terisi otomatis (URL yang sama) | Konversi SO->faktur existing (sales.actions.ts:535 `salesOrderId: so.id`) |
+| Sisa belum terkirim | Laporan Pesanan per Barang (Belum Proses) + kolom sisa (https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/pesanan-belum-proses/) | Status pengiriman SO — Detail / Status Pengiriman Item (https://zahirerp.com/id/all-features-of-zahir-products/) | SUDAH ada: order-fulfillment.ts (beda arah dari spec ini) |
+| Akuntansi barang terkirim | Jurnal akun Barang Terkirim (URL pertama) | Jurnal pengiriman sesuai konfigurasi (zahirerp.com di atas) | Di luar spec (BR-DU-08, vonis Accountant kelak) |
+
+### 6. Acceptance criteria + falsifikasi (draf QA)
+
+- AC-DU-1: SO confirmed, DO delivered 10×Rp100rb, tanpa faktur -> tampil sisa Rp1.000.000.
+- AC-DU-2: faktur tertaut `posted` Rp400rb -> sisa Rp600.000; faktur `draft` Rp600rb diterbitkan sesudahnya (status berubah sah) -> SO keluar antrean.
+- AC-DU-3: faktur `draft` saja -> sisa tetap penuh; faktur `cancelled` diabaikan; faktur terhapus lunak diabaikan.
+- AC-DU-4: faktur manual pelanggan sama TANPA `salesOrderId` Rp1.000.000 -> SO tetap tampil penuh (tidak tertutup faktur tak tertaut).
+- AC-DU-5: SO hanya DO `draft` -> tidak tampil. SO `cancelled`/`draft` -> tidak tampil walau ada DO sah.
+- AC-DU-6: multi-DO parsial (4+6) + multi-faktur sah (Rp400rb+Rp300rb) -> sisa Rp300.000; terfaktur melebihi terkirim -> tidak tampil, tidak ada sisa negatif.
+- AC-DU-7: role tanpa `view_reports` ditolak; antrean tidak punya aksi tulis (falsifikasi: tidak ada mutasi SO/DO/faktur dari permukaan antrean).
+- AC-DU-8: baris SO jasa tanpa item gudang tetap dinilai dari qty baris SO × DO tertaut baris (bila DO jasa tidak ada, BR-DU-03 berlaku — konfirmasi cakupan jasa = Q-DU-3/Q-DU-1 konteks, jangan karang).
+
+### 7. Backlog turunan
+
+| Turunan | Pemilik | Prasyarat |
+|---|---|---|
+| Putusan Q-DU-1/2/3 | Lead | spec ini |
+| Builder + loader antrean (`delivered-unbilled`) + tes AC-DU | Backend | putusan Lead |
+| Konsumen UI (laporan/kolom, label putusan) | Frontend | kontrak Backend |
+| Falsifikasi AC-DU-1..8 di head persis | QA | PR Backend |
+| Review konsumen (definisi populasi vs realisasi) | Business | PR Backend terbuka |
+
+### 8. Pertanyaan putusan
+
+- Q-DU-1 (Lead): titik umur antrean — sejak DO sah TERAKHIR (cermin "sudah berapa lama barang keluar belum tertagih") vs sejak tanggal SO. Rekomendasi Business: DO sah terakhir per SO, karena antrean mengejar pengiriman, bukan umur pesanan; SO terkirim sebagian memakai DO terakhir yang menaikkan nilai terkirim.
+- Q-DU-2 (Lead): ember umur ditampilkan sebagai kolom hari mentah saja (tanpa ember) tahap 1 (rekomendasi Business — menghindari angka hari karang), atau ember dengan batas yang Lead tetapkan.
+- Q-DU-3 (Lead): permukaan — laporan baca-saja baru di keluarga Laporan Penjualan (rekomendasi Business) vs kolom tambahan di daftar SO. Termasuk konfirmasi cakupan baris jasa tanpa DO.
+- Accountant: TIDAK diminta tahap ini (BR-DU-08 bersyarat).
+
+### Yang TIDAK diusulkan run ini
+
+- Jurnal/akun barang terkirim, pengakuan pendapatan, atau perlakuan PPN atas pengiriman belum tertagih.
+- Pengingat/penagihan otomatis ke pelanggan, denda, atau blokir kirim lanjutan karena belum terfaktur.
+- Scope antrean per-salesman, target hari-terbit-faktur, atau SLA penagihan (angka kebijakan belum ada).
+- Menulis status "sudah ditagih" manual di SO (sumber kebenaran tetap dokumen faktur tertaut).
+
+F-2026-10-26-058-S — Antrean SO terkirim belum terfaktur penuh. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-DU-1/2/3, lalu builder Backend, konsumen Frontend, falsifikasi QA, review konsumen Business. Pemilik usulan: Business (spec), Lead (putusan umur/permukaan), Backend (fisik), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap baca-saja ini (BR-DU-08 bersyarat).
