@@ -34000,3 +34000,156 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Status `cancelled`/soft-delete penerimaan — model existing tidak mengenalnya; mengubah = keputusan skema terpisah, bukan spec antrean.
 - Nilai sisa-terima PO berjalan di antrean — butuh agregasi lintas penerimaan verified (wilayah purchase-outstanding existing); antrean ini hanya menua satu dokumen draft.
 F-2026-10-26-061-S — Antrean penerimaan barang draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-GRQ-1/2/3/6 (Accountant hanya bila aksi diperluas), lalu fisik Backend (061-B), konsumen Frontend (061-F), falsifikasi QA (061-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/scope), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB bila Q-GRQ-4 dibuka.
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-071-S: antrean permintaan material draft mengendap belum diajukan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_3cbd168d. ID F-2026-10-26-071-S diverifikasi bebas run ini 2026-10-26 18:47 WIB: grep `F-2026-10-26-071` di backlog + board `origin/main` (`6a960ec0`) = 0 dan tidak ada judul PR terbuka memuat 071-S; seri berjalan 050-S..070-S (070-S = antrean slip gaji draft, PR #1030 OPEN; 069-V = vonis Accountant — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras domain (wajib dibaca implementor): permintaan material `draft` adalah rencana internal antar gudang yang BELUM diajukan — belum persetujuan, belum transfer, belum gerak stok apa pun. Permintaan TIDAK membuat StockMove/jurnal/MaterialIssue (kepala berkas `src/actions/material-request.actions.ts`:13-16, BR-MR-02 existing); satu-satunya gerak stok = InventoryTransfer tertaut yang diproses/diterima lewat aksi transfer existing. Antrean ini baca-saja: tidak mengajukkan, tidak menyetujui, tidak membuat transfer, tidak menghapus draft. Ambang hari tingkat mengendap = USULAN putusan Lead (Q-MRQ-1), dilarang ditulis fakta/kebijakan dan dilarang ditanam Backend sebelum diputus. Nilai barang/qty tampil apa adanya dari baris tersimpan; antrean dilarang menghitung nilai uang permintaan (permintaan bukan dokumen nilai, BR-MR-12 existing di kepala `src/lib/reports/material-request.ts`:9-11) dan dilarang menjumlahkan qty draft ke stok/kebutuhan berjalan mana pun.
+
+Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): `MaterialRequest.status` String default `"draft"` (prisma/schema.prisma:2545 model MaterialRequest; status :2554). Transisi manual sah (src/lib/reports/material-request.ts:116-121 `MATERIAL_REQUEST_TRANSITIONS`): draft → diajukan/dibatalkan; diajukan → disetujui/ditolak/dibatalkan; disetujui/terpenuhi_sebagian → ditutup_manual; status turunan sistem terpenuhi/terpenuhi_sebagian dari qty diterima transfer (deriveMaterialRequestFulfillment, berkas sama). Aksi: `createMaterialRequest` (:106, `create_material_requests`, status eksplisit `draft` :131), `submitMaterialRequest` (:216, `edit_material_requests`, klaim transisi dari `["draft"]` :230), `approveMaterialRequest` (:242, `approve_material_requests`, self-approve dilarang kepala berkas :10), `deleteMaterialRequest` (:194, hanya `status: "draft"` klaim deleteMany :204), `cancelMaterialRequest` (:292), `closeMaterialRequest` (:327), `createTransferFromMaterialRequest` (:360, `create_inventory_transfers`, hanya dari disetujui/terpenuhi_sebagian).
+
+Bukan duplikasi: bukan daftar permintaan existing `inventaris/permintaan-gudang` (loader `getMaterialRequestQueue` src/lib/reports/material-request-data.ts:171 — dua ember incoming/outgoing SEMUA status, urut createdAt desc, tanpa umur draft; penanda `isOverdue` :143-147 hanya diajukan/disetujui/terpenuhi_sebagian terhadap `neededBy`, draft tidak pernah tertanda); bukan F-2026-10-26-067-S (MaterialIssue draft — dokumen pengeluaran stok gudang→produksi, beda model/izin/transisi); bukan F-2026-10-26-068-S (InventoryTransfer draft — dokumen pindah yang sudah lahir dari permintaan disetujui, hilir spec ini); bukan F-2026-10-22-078-S (inti permintaan itu sendiri — lifecycle/pemenuhan; spec ini hanya menua populasi draft-nya); bukan antrean persetujuan HR 007-S (objek cuti/lembur).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: fitur Permintaan Barang mencatat kebutuhan barang antar gudang/cabang (tipe Beli Barang/Kirim Barang), menjadi dasar Pemindahan Barang; permintaan dinyatakan rencana internal yang tidak berdampak stok/hutang — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/fitur-permintaan-barang/ dan https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/cara-mencatat-permintaan-kirim-barang/ (BENCHMARK: permintaan sebagai dasar kirim ada; antrean draft mengendap bertingkat umur TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: transfer antar gudang + opsi "Pindah Gudang Menggunakan Nomor Material Request" (permintaan barang modul Pembelian menjadi referensi transfer) — https://help.zahironline.com/portal/id/kb/articles/trans dan https://help.zahironline.com/portal/id/kb/articles/setup-program (BENCHMARK: rantai MR→transfer ada; antrean draft MR bertingkat umur TIDAK ditetapkan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 6a960ec0)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `MaterialRequest` (prisma/schema.prisma:2545) — slug unik nullable, documentNo unik, requesterWarehouseId + sourceWarehouseId WAJIB, workOrderId nullable (relasi WorkOrder onDelete SetNull), neededBy nullable, status default `draft`, rejectionReason nullable, approvedBy/approvedAt nullable, createdBy nullable, createdAt/updatedAt; item `MaterialRequestItem` (:2577) qty Decimal(15,2) + notes nullable. TIDAK ada deletedAt — populasi cukup status persis tanpa saringan soft-delete yang dikarang. Indeks status/createdAt/kedua gudang/workOrder ada.
+- Lifecycle: create draft :131; submit draft→diajukan klaim atomik :230; approve diajukan→disetujui (approvedBy/approvedAt terisi, self-approve dilarang); reject diajukan→ditolak + reason; cancel; close manual dari disetujui/terpenuhi_sebagian; hapus hanya draft :204. Transfer hanya lahir dari permintaan disetujui (:360 dst) — draft belum punya transfer sah.
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:238-242): `view_material_requests`, `create_material_requests`, `edit_material_requests`, `delete_material_requests`, `approve_material_requests`. Scope gudang: `getWarehouseScope` (src/lib/auth/warehouse-scope.ts:22) all/assigned/none fail-closed; loader existing memakai scopeWarehouseFilter per sisi gudang dan none → kosong (material-request-data.ts:76-82,171-184). Penegakan aksi: assertWarehouseAccess per sisi (:91-95,168,388).
+- Daftar existing: `inventaris/permintaan-gudang` (page.tsx:65 `getMaterialRequestQueue`, izin `view_material_requests` :64, nav navigation.ts:134 izin sama) dua seksi incoming/outgoing semua status urut terbaru-dulu; baris draft tenggelam di antara status lain, tanpa umur, tanpa tingkat, tanpa rekap draft.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean permintaan material `draft` mengendap — grep `umur`/`ageDays` di src/lib/reports/material-request*.ts = 0 penanda umur draft; tidak ada turunan tingkat menunggu/mengendap untuk populasi draft. Risiko bengkel: mekanik/gudang tujuan membuat draft permintaan part untuk WO, tidak pernah diajukan — gudang sumber tidak pernah tahu, part tidak bergerak, WO menunggu tanpa permukaan yang menua draft itu; draft yatim juga tidak terlihat menumpuk sampai dicari manual per dokumen.
+
+### 1. Workflow specification
+
+Aktor: Pembuat permintaan pemegang `create_material_requests`/`edit_material_requests` dalam scope gudang tujuan (sumber baris draft; pengaju lewat submit existing), Penyetuju gudang sumber pemegang `approve_material_requests` (pembaca kerja antrean — draft belum sampai mejanya, antrean ini justru menunjukkan draft yang belum diajukan), Pembaca gudang pemegang `view_material_requests` dalam scope gudangnya (pembaca antrean), Sistem (builder turunan baca-saja). Bukan aktor: pengguna tanpa scope ke gudang terkait (baris tidak tampil, termasuk rekap).
+Dokumen masuk: baris MaterialRequest `status = "draft"` dalam scope pembaca (id, slug, documentNo, requesterWarehouseId+nama, sourceWarehouseId+nama, workOrderId+documentNo bila tertaut, neededBy, createdBy+nama bila terpetakan, createdAt, hitungan baris item + Σ qty per baris). Field existing semua; tanpa field masuk baru; qty Decimal→Number di tepi loader pola existing, TANPA nilai uang.
+Dokumen keluar: baris antrean turunan per permintaan (§3) + rekap hitungan permintaan per tingkat/gudang. BUKAN pergerakan stok: tidak ada status berubah, transfer lahir, StockMove, jurnal, atau MaterialIssue karena antrean.
+
+Alur:
+1. Permintaan lahir `draft` lewat createMaterialRequest existing.
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft dalam scope dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), penanda `neededByLampau` (fakta tanggal apa adanya, bukan tingkat), konteks gudang/WO, rekap hitungan.
+3. Pembuat membuka detail permintaan existing dan mengajukkan (submit) atau menghapus lewat jalur existing. Antrean tidak menyediakan tombol Ajukan/Setujui/Buat Transfer/Hapus tahap 1 (Q-MRQ-3).
+4. Sesudah status bukan draft: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-MRQ-2 Lead bersama ambang hari):
+- Judul kolom: `No. Dokumen`, `Gudang Tujuan`, `Gudang Sumber`, `Perintah Kerja`, `Dibutuhkan`, `Menunggu` (umur), `Dibuat Oleh`.
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Diajukan".
+- Penanda neededBy lampau: `Lewat Tanggal Dibutuhkan` (fakta tanggal; bukan kata Terlambat untuk dokumen yang belum diajukan — kata final Q-MRQ-2).
+- Notice usulan: "Daftar ini hanya permintaan material yang masih draft dan belum diajukan. Permintaan draft belum disetujui dan belum memindahkan stok; ajukan, ubah, atau hapus lewat detail permintaan."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean draft + tingkat/umur | `view_material_requests` (katalog:238) + `getWarehouseScope` fail-closed | loader daftar existing menegakkan izin + scope per sisi gudang; none → kosong | TIDAK ada key baru tahap 1; loader antrean menegakkan scope sebelum query (BR-MRQ-04) |
+| Buat permintaan (sumber baris draft) | `create_material_requests` (katalog:239) | createMaterialRequest + assertWarehouseAccess sisi tujuan | tidak berubah |
+| Ajukan draft → diajukan | `edit_material_requests` | submitMaterialRequest klaim transisi dari draft | TIDAK berubah; antrean hanya mengantar ke detail |
+| Setujui/tolak (diajukan) | `approve_material_requests` (katalog:242), self-approve dilarang | approveMaterialRequest/rejectMaterialRequest | di luar populasi antrean (hanya draft); tidak berubah |
+| Hapus draft | `delete_material_requests` | deleteMaterialRequest hanya status draft | tidak berubah; bukan dari antrean tahap 1 |
+| Buat transfer (disetujui) | `create_inventory_transfers` | createTransferFromMaterialRequest | di luar populasi; tidak berubah |
+
+Tidak ada permission key baru diusulkan tahap 1. Sisi scope yang terlihat (tujuan/sumber/keduanya) = Q-MRQ-4.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah spec ini: `draft` → diajukan/dibatalkan; diajukan → disetujui/ditolak/dibatalkan; disetujui/terpenuhi_sebagian → ditutup_manual; terpenuhi/terpenuhi_sebagian turunan qty transfer received. Tidak ada jalur transfer/stok dari draft.
+
+Populasi antrean: MaterialRequest `status = "draft"` AND (requesterWarehouseId ATAU sourceWarehouseId dalam `getWarehouseScope` pembaca — sisi persis = Q-MRQ-4; none → kosong). Per baris:
+- `umurDraftHari` = hari kalender WIB dari `createdAt` (masa depan = 0 tertanda).
+- `neededByLampau` = neededBy non-null dan hari WIB hari ini > neededBy (fakta tanggal apa adanya; neededBy null = tidak tertanda, bukan karangan tenggat dari createdAt).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft, atau kedua gudang di luar scope, atau scope none | di luar antrean | bukan populasi |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-MRQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | permintaan belum diajukan melewati kesabaran operasional yang diputus Lead; ajukan atau hapus lewat detail |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-MRQ-5) |
+
+`neededByLampau` adalah penanda pendamping, BUKAN tingkat tersendiri tahap 1 (membedakannya dari `isOverdue` existing yang memang tidak mencakup draft — memperluas isOverdue existing ke draft = Q-MRQ-6, bukan diam-diam). Tidak ada tingkat qty/kelayakan: draft tanpa item atau qty belum final tetap populasi apa adanya (EC-MRQ-6). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada pengajuan otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-MRQ-01 | Populasi = MaterialRequest `status="draft"` persis + minimal satu sisi gudang dalam scope pembaca (sisi persis Q-MRQ-4, fail-closed none → kosong). diajukan/disetujui/status lain tidak disamakan diam-diam dan tidak masuk. Tanpa saringan deletedAt yang dikarang (model tidak punya). | TERVERIFIKASI-KODE (status default + warehouse-scope) + USULAN batas |
+| BR-MRQ-02 | Draft belum diajukan = belum persetujuan, belum transfer, belum stok bergerak: permintaan tidak membuat StockMove/jurnal/MaterialIssue; gerak stok hanya InventoryTransfer tertaut dari permintaan disetujui lewat aksi transfer existing. Qty draft dilarang dijumlahkan ke stok tersedia, stok keluar, kebutuhan WO berjalan, atau nilai persediaan di permukaan mana pun. | TERVERIFIKASI-KODE (kepala aksi :13-16, BR-MR-02/BR-MR-12 existing) |
+| BR-MRQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: ajukan (`edit_material_requests`, klaim dari draft), ubah (hanya draft), hapus (`delete_material_requests`, hanya draft), batal. Antrean tidak menambah jalan pintas ajukan/setujui/transfer/hapus dari daftar tahap 1. Self-approve tetap dilarang di jalur approve existing. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-MRQ-04 | Loader menegakkan `view_material_requests` + `getWarehouseScope` sebelum query; scope assigned hanya baris dengan gudang dalam scope-nya (sisi Q-MRQ-4); anti-N+1 (nama gudang/WO/pembuat massal — query per baris → cacat). Rekap hanya hitungan permintaan per tingkat/gudang atas baris yang sama persis. | TERVERIFIKASI-KODE (getWarehouseScope + pola loader existing) + USULAN |
+| BR-MRQ-05 | Σ qty tampil per permintaan = Σ qty item tersimpan apa adanya (Decimal→Number tepi loader), berlabel hitungan baris/qty permintaan — BUKAN sisa kebutuhan, bukan qty yang akan dipenuhi, dan tanpa nilai uang (permintaan bukan dokumen nilai). Baris tanpa item tampil qty 0 apa adanya (EC-MRQ-6). | USULAN kejujuran qty di atas TERVERIFIKASI-KODE field |
+| BR-MRQ-06 | Umur memakai `createdAt`, bukan `neededBy`. `neededBy` hanya penanda fakta tanggal lampau (BR-MRQ-07). Mengubah acuan umur = Q-MRQ-5. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field |
+| BR-MRQ-07 | neededBy lampau pada draft TIDAK dibaca sebagai keterlambatan persetujuan/transfer: dokumen belum diajukan, tidak ada pihak yang terlambat menyetujui. Penanda tampil sebagai fakta "lewat tanggal dibutuhkan" (kata Q-MRQ-2); memperluas `isOverdue` existing ke draft = keputusan Q-MRQ-6, bukan perluasan senyap. | USULAN kejujuran label |
+| BR-MRQ-08 | Builder antrean murni baca-saja turunan: tidak memanggil submit/approve/delete/createTransfer/hook stok/jurnal, tidak menulis status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-MRQ-09 | createdBy null (legacy) tampil `—`; workOrderId null tampil `—` (bukan "tanpa WO" karangan yang menyiratkan cacat); permintaan tertaut WO tampil documentNo WO apa adanya — antrean tidak menilai WO masih hidup (WO tertutup/selesai dinilai manusia di detail, EC-MRQ-2). | USULAN di atas TERVERIFIKASI-KODE field nullable |
+| BR-MRQ-10 | Ambang hari `mengendap`, kata label final, sisi scope tampil, dan ajukan-dari-daftar adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-MRQ-1/2/3/4). Sisi stok/jurnal tidak disentuh tahap baca-saja ini sehingga Accountant TIDAK diminta — kecuali Lead membuka aksi tulis dari daftar (Q-MRQ-3), saat itu gerak stok ikut terbaca dan vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Permintaan barang antar gudang sebagai rencana internal | Ada: Permintaan Barang tipe Beli/Kirim, dasar Pemindahan Barang (URL §kepala) | Ada: permintaan barang (MR) menjadi referensi Pindah Gudang (URL §kepala) | Ada: MaterialRequest draft→diajukan→disetujui + transfer tertaut (078-S) | Tidak diubah; antrean ini menua draft-nya |
+| Permintaan tersimpan berdampak stok/hutang | Dinyatakan tidak: rencana internal sebelum pengadaan (URL §kepala) | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak: StockMove hanya dari transfer received existing | Antrean berhenti di jalur existing |
+| Daftar permintaan semua status per gudang | Tidak ditetapkan antrean umur — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: incoming/outgoing semua status, urut terbaru, isOverdue tanpa draft | Antrean khusus draft berumur tertua-dulu |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-MRQ-B1: Populasi tepat `status="draft"` + scope: diajukan/disetujui/status lain/luar-scope/scope-none tidak tampil dan tidak terhitung rekap (cabut saring status/satu sisi scope → MERAH).
+- AC-MRQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-MRQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-MRQ-4); selama Q-MRQ-1 belum diputus `mengendap` tidak terbit (tanam angka liar → MERAH).
+- AC-MRQ-B3: Penanda neededBy: null → tidak tertanda; lampau → tertanda fakta; hari yang sama → tidak lampau; penanda tidak mengubah tingkat (jadikan tingkat → MERAH, BR-MRQ-07).
+- AC-MRQ-B4: Loader fail-closed `view_material_requests` + `getWarehouseScope` sebelum query, anti-N+1 (gudang/WO/pembuat massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil; rekap = hitungan baris yang sama persis (hitung beda → MERAH).
+- AC-MRQ-B5: Baca-saja terbukti: builder/loader tidak memanggil submit/approve/delete/createTransfer/hook stok/jurnal/tulis status (panggil diam-diam → MERAH, BR-MRQ-02/08); Σ qty verbatim item tersimpan, tanpa nilai uang (suntik harga → MERAH).
+
+Frontend (konsumen):
+- AC-MRQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ qty sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-MRQ-F2: Gudang tujuan/sumber + WO tampil verbatim payload; pembuat/WO null `—`; qty tidak berlabel stok/sisa kebutuhan/nilai (label stok di draft → MERAH); draft tidak berlabel terlambat persetujuan.
+- AC-MRQ-F3: Tautan baris hanya ke detail permintaan existing; tidak ada tombol Ajukan/Setujui/Buat Transfer/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-MRQ-3 → MERAH); tanpa `view_material_requests` halaman menolak.
+
+Edge cases:
+- EC-MRQ-1: Permintaan draft yang neededBy-nya sudah lampau lama tetap populasi apa adanya; antrean tidak menghapus/mengajukkan otomatis (keputusan manusia lewat detail).
+- EC-MRQ-2: WO tertaut sudah selesai/dibatalkan sementara draft tertinggal tetap tampil apa adanya; antrean tidak menyembunyikan baris yatim itu.
+- EC-MRQ-3: Dua draft kembar gudang+item sama tampil dua baris apa adanya; tidak digabung/didedup diam-diam (penilaian dobel = manusia).
+- EC-MRQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-MRQ-5: Permintaan diajukan/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-MRQ-6: Permintaan draft tanpa item / qty 0 tampil apa adanya; tidak dikeluarkan karena kosong.
+- EC-MRQ-7: Pembaca yang hanya memegang scope gudang sumber (bukan tujuan) — tampil atau tidak mengikuti putusan sisi Q-MRQ-4 persis; kebocoran satu count lintas scope = gagal AC-MRQ-B1.
+- EC-MRQ-8: Gudang nonaktif sesudah draft lahir tetap tampil nama apa adanya; antrean tidak menilai gudang masih boleh dipakai (dinilai aksi existing saat ajukan).
+
+### 7. Backlog implementasi (turunan F-2026-10-26-071-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-071-S | Spec kontrak ini (dokumen) | Business | — |
+| 071-B | Builder murni tingkat/umur draft permintaan material + loader `view_material_requests` + scope gudang fail-closed anti-N+1 + tes AC-MRQ-B1..B5 | Backend | Putusan Lead Q-MRQ-1/2/4 |
+| 071-F | Permukaan antrean (daftar permintaan existing atau halaman antrean pola keluarga antrean) verbatim payload + AC-MRQ-F1..F3 | Frontend | 071-B merged |
+| 071-Q | Falsifikasi AC-MRQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 071-B/071-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-MRQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (draft part untuk WO yang menggantung = pekerjaan bengkel ikut menunggu; selaras pola ambang 3 hari keluarga antrean draft) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-MRQ-2 | Kata label/notice/penanda neededBy final §1? | Lead | Kata usulan apa adanya; satu konstanta label server; penanda neededBy jangan memakai kata Terlambat |
+| Q-MRQ-3 | Ajukan langsung dari antrean dibuka? | Lead (+ Accountant wajib bila transfer dibuka) | TIDAK tahap 1 (BR-MRQ-03): submit mengubah antrean persetujuan gudang sumber dan harus terasa konteks item/gudang di detail; jalan pintas = keputusan terpisah |
+| Q-MRQ-4 | Sisi scope tampil: gudang tujuan saja (milik pembuat), sumber saja, atau keduanya seperti daftar existing? | Lead | Keduanya seperti loader existing tahap 1 — pembaca sumber perlu melihat draft yang akan datang kepadanya; penyempitan = keputusan sadar terpisah |
+| Q-MRQ-5 | Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt disahkan? | Lead | Ya `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc; acuan createdAt |
+| Q-MRQ-6 | `isOverdue` existing diperluas ke draft, atau penanda neededBy terpisah seperti spec ini? | Lead | Penanda terpisah tahap 1 (BR-MRQ-07): memperluas isOverdue mengubah kata daftar existing untuk status lain; keputusan sadar bila Lead memilih sebaliknya |
+
+### Yang TIDAK diusulkan run ini
+- Mengajukkan/menyetujui/membuat transfer massal atau otomatis dari draft basi (BR-MRQ-03) — persetujuan gudang sumber + gerak stok transfer tidak boleh dilewati daftar.
+- Memasukkan qty draft ke stok tersedia/kebutuhan WO/persediaan atau menilai permintaan dengan harga (BR-MRQ-02/05) — permintaan bukan dokumen nilai dan belum gerak stok.
+- Menghapus draft basi otomatis berbasis umur — hapus draft = keputusan manusia lewat jalur existing.
+- Pengingat WA/email ke pembuat/penyetuju dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja.
+- Mengubah matriks transisi/status MaterialRequest existing, ApprovalWorkflow generik untuk permintaan (Q-MR-2 existing menolaknya), atau lifecycle transfer.
+- Antrean populasi diajukan menunggu persetujuan — wilayah daftar incoming existing + penanda neededBy-nya; spec ini hanya draft belum diajukan.
+
+F-2026-10-26-071-S — Antrean permintaan material draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-MRQ-1/2/4 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-MRQ-3 diperluas ke transfer), lalu fisik Backend (071-B), konsumen Frontend (071-F), falsifikasi QA (071-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/scope), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
