@@ -33793,6 +33793,112 @@ AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap),
 
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
 
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-060-S: antrean Pesanan Pembelian draft mengendap menunggu persetujuan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_e06c99b2. ID F-2026-10-26-060-S diverifikasi bebas run ini 2026-10-26 14:31–14:41 WIB: grep `F-2026-10-26-060` di backlog + board origin/main = 0; verifikasi ulang 14:41 WIB basis maju ke ead8f1d2 (059-S MERGED PR #1002, retur penjualan objek beda) dan grep 060 tetap 0 di sana; branch berbasis 9ea1ef59 lalu di-sync union ke main 0781f3cd. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Bukan duplikasi: bukan F-2026-10-26-056-S (SalesOrder draft penjualan menunggu approve_sales_orders; spec ini PurchaseOrder draft pembelian menunggu approve_purchase_orders — objek, aktor, gerbang, dan hilir berbeda); bukan purchase-outstanding (PO sudah terbit approved/ordered/partial_received dengan sisa penerimaan — populasi disjungsi persis pada status draft); bukan F-2026-10-26-059-S (retur penjualan draft); bukan antrean penerimaan/vendor bill (hilir sesudah PO terbit).
+
+### 0. Ringkasan + benchmark resmi (akses 2026-10-26)
+
+Gap: PO lahir draft lalu menunggu persetujuan workflow generik, tetapi daftar pembelian/pesanan mengurut createdAt desc tanpa penanda umur/tahap — draft tua tenggelam di antara PO terbit. Spec ini membekukan antrean baca-saja: populasi draft murni, tingkat menunggu/mengendap turunan umur kalender WIB dari createdAt, label verbatim server, nilai berlabel "nilai draft belum disetujui". Nol status baru, nol mutasi, nol jurnal; persetujuan tetap jalur workflow existing dari detail PO.
+
+Benchmark resmi (diakses live run ini):
+- Accurate — Persetujuan transaksi mencakup Pesanan Pembelian: PO "baru bisa dikirim ke supplier setelah dapat persetujuan dari manajer pembelian": https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/
+- Zahir — Pesanan/Order Pembelian: "Simpan Draft: hanya rekam draft transaksi dan belum membentuk laporan; Simpan: merekam transaksi dan otomatis terbentuk laporan"; pesanan belum membentuk jurnal: https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-pesanan-order-pembelian-zahir-online-v2
+
+### 1. Workflow specification
+
+Aktor: staf pembelian (pembuat PO, pemegang create/edit_purchase_orders), penyetuju (approve_purchase_orders lewat workflow Approval generik), pembaca antrean (view_purchase_orders).
+Dokumen masuk: PurchaseOrder status draft (dari createPurchaseOrder manual, dari PurchaseRequest approved/partial_ordered, atau PO jasa dari WorkOrder isService) + Approval pending bila workflow terkonfigurasi.
+Alur: (1) PO lahir draft; (2) requestApprovalIfConfigured("PurchaseOrder") membuka Approval pending bila workflow ada; (3) antrean ini menampilkan draft + umur + tahap turunan supaya penyetuju/staf menindaklanjuti; (4) keluar draft hanya lewat persetujuan workflow existing (status menjadi approved + approvedBy) atau batal/hapus dari detail — antrean tidak menyediakan aksi mutasi apa pun tahap 1.
+Dokumen keluar: tidak ada dokumen baru; keluaran hanya payload antrean (baris + rekap hitungan + Σ berlabel) untuk permukaan daftar/laporan.
+
+### 2. Role/permission matrix (key nyata module-catalog.generated.ts:208-212)
+
+| Aksi | view_purchase_orders | create_purchase_orders | edit_purchase_orders | approve_purchase_orders |
+|---|---|---|---|---|
+| Lihat antrean draft (loader fail-closed) | WAJIB | — | — | — |
+| Buat PO (lahir draft) | — | WAJIB (existing) | — | — |
+| Ubah/batalkan PO dari detail | — | — | WAJIB (existing) | — |
+| Setujui PO lewat workflow dari detail | — | — | — | WAJIB (approval-permissions.ts:21) |
+| Setujui/batalkan dari daftar antrean | TIDAK ADA tahap 1 untuk semua role | | | |
+
+### 3. Status-transition matrix (kosakata TERVERIFIKASI-KODE)
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| (lahir) | createPurchaseOrder purchase.actions.ts:726 status:"draft" (+ requestApprovalIfConfigured :740) | draft | create_purchase_orders |
+| (lahir) | createServicePurchaseOrderFromWorkOrder (PO jasa draft, isService, workOrderId) | draft | create_purchase_orders |
+| draft | Approval langkah terakhir disetujui (approval.actions.ts:233-248; PurchaseOrder ∈ APPROVED_BY_MODELS :57-63) | approved (+approvedBy) | approve_purchase_orders |
+| draft | cancelPurchaseOrder (tolak hanya received/cancelled/partial_received) purchase.actions.ts:919-945 | cancelled | edit_purchase_orders |
+| draft | deletePurchaseOrder | (terhapus; deletedAt untuk soft-delete daftar) | delete_purchase_orders |
+| approved | GoodsReceipt dibuat (gerbang status approved/ordered/partial_received purchase.actions.ts:1007) | ordered/partial_received/received (jalur existing, di luar spec) | create_goods_receipts |
+
+Catatan jujur: tanpa workflow terkonfigurasi, PO draft tidak punya jalur approve in-app selain workflow — antrean menampilkan fakta itu apa adanya (status approval per baris TIDAK ditampilkan tahap 1, selaras preseden Q-SIQ-7; penambahan penanda = Q-POQ-5).
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-POQ-01 | Populasi persis PurchaseOrder status="draft" DAN deletedAt null; status lain (approved/ordered/partial_received/received/cancelled) tidak ikut | USULAN (di atas fakta TERVERIFIKASI-KODE: status lahir draft purchase.actions.ts:726; skema status default draft prisma/schema.prisma:2036) | purchase.actions.ts:726; prisma/schema.prisma:2036; prisma/schema.prisma PurchaseOrder.status |
+| BR-POQ-02 | Tingkat turunan murni dari umur hari kalender WIB sejak createdAt: menunggu di bawah ambang, mengendap pada/di atas ambang; ambang = putusan Lead Q-POQ-1, BUKAN konstanta spec | USULAN / BUTUH-VONIS Lead | pola WIB existing getWibTodayUtcDate (sales-invoice-draft-queue.ts) |
+| BR-POQ-03 | Nilai baris = grandTotal tersimpan verbatim (Decimal->Number di loader); Σ rekap WAJIB berlabel "nilai draft belum disetujui" — draft belum utang, belum komitmen bayar, tidak masuk utang/pembelian terbit di permukaan mana pun | USULAN (fakta pendukung BENCHMARK: draft belum membentuk jurnal/laporan — Zahir URL §0) | Zahir §0; preseden BR-SIQ-08/BR-SOQ-09 |
+| BR-POQ-04 | expectedDate hanya penanda rencana terima (terisi/kosong, lampau apa adanya); draft dengan expectedDate lampau TIDAK berlabel terlambat terima/jatuh tempo — belum ada janji vendor yang sah dari draft | USULAN | PurchaseOrder.expectedDate nullable (schema) |
+| BR-POQ-05 | Sumber baris satu label turunan urut periksa: purchaseRequestId (Permintaan Pembelian) -> workOrderId/isService (Perintah Kerja/jasa) -> langsung; satu PO satu label | USULAN | schema PurchaseOrder relasi purchaseRequest/workOrder |
+| BR-POQ-06 | Urutan: mengendap dulu, lalu umur tertua, seri akhir documentNo asc | USULAN (putusan Lead Q-POQ-3) | preseden Q-SIQ-3b/Q-SOQ-3 |
+| BR-POQ-07 | Antrean baca-saja: nol approve/batal/hapus/kirim dari daftar; semua mutasi tetap dari detail PO jalur existing | USULAN | transition matrix §3 |
+| BR-POQ-08 | Kontak vendor (telepon/email/alamat) tidak masuk payload daftar/ekspor antrean; nama vendor saja | USULAN | preseden ekspor tanpa kontak 055-S |
+| BR-POQ-09 | PO jasa (isService/workOrderId) tetap tampil dengan label sumbernya; tidak dinilai dengan logika penerimaan barang stok | USULAN | createServicePurchaseOrderFromWorkOrder |
+| BR-POQ-10 | createdAt masa depan = umur 0 tertanda, bukan negatif | USULAN | preseden EC-SIQ-4 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Persetujuan PO sebelum lanjut ke pemasok | Ada, terkonfigurasi per jenis transaksi (URL §0) | Tidak terverifikasi di URL terakses (ditulis jujur) | Ada: workflow Approval generik + approve_purchase_orders (approval.actions.ts; approval-permissions.ts:21) |
+| Draft PO belum membentuk jurnal/laporan | Tidak diklaim (tidak terverifikasi) | Ada eksplisit: Simpan Draft belum membentuk laporan (URL §0) | Ada: draft belum bisa diterima GR (gerbang approved/ordered/partial_received :1007), jurnal penerimaan baru di GR |
+| Antrean draft PO mengendap berumur | Tidak terverifikasi (tidak diklaim) | Tidak terverifikasi (tidak diklaim) | ABSEN — gap spec ini (grep builder antrean PO draft = 0; daftar urut createdAt desc tanpa umur) |
+
+### 6. Acceptance criteria + edge cases
+
+AC-POQ-B1 (builder populasi): input campuran status/deletedAt -> hanya draft+deletedAt null lolos persis (approved/ordered/cancelled bocor = MERAH).
+AC-POQ-B2 (tingkat/umur): umur dihitung hari kalender WIB dari createdAt; tepat di ambang putusan Lead = mengendap; createdAt masa depan = 0 tertanda.
+AC-POQ-B3 (verbatim): label tingkat/judul/kolom/notice/Σ-label persis konstanta builder; UI menempel tanpa parafrase (mutasi label di tes = MERAH).
+AC-POQ-B4 (sumber): PO ber-PR tampil Permintaan Pembelian walau juga ber-WO tidak pernah terjadi dua label; PO jasa tampil sumber WO; langsung tanpa keduanya.
+AC-POQ-B5 (loader): tanpa view_purchase_orders = fail-closed nol baris; anti-N+1 (vendor massal); Decimal grandTotal -> Number.
+AC-POQ-F1 (permukaan): hanya baris ke detail PO; nol tombol Setujui/Batal/Hapus/Kirim di daftar (ada = MERAH).
+AC-POQ-F2 (jujur nilai): Σ tampil dengan label "nilai draft belum disetujui"; expectedDate lampau tanpa kata terlambat/jatuh tempo.
+AC-POQ-F3 (ekspor bila dibuka): tanpa telepon/email/alamat vendor.
+EC-POQ-1: PO draft grandTotal 0 tetap tampil (umur yang dinilai, bukan nilai).
+EC-POQ-2: PO draft dari PR partial_ordered tetap populasi (status PO yang menilai, bukan status PR).
+EC-POQ-3: vendor ter-soft-delete / nama kosong -> nama null tampil `—` oleh UI, baris tidak gugur.
+EC-POQ-4: draft tanpa expectedDate tampil penanda belum diisi, bukan tanggal karangan.
+EC-POQ-5: dua PO umur sama -> seri documentNo asc deterministik.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-060-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-060-S | Spec kontrak ini (dokumen) | Business | — |
+| F-2026-10-26-060-B | Builder murni tingkat/umur/sumber + loader view_purchase_orders fail-closed anti-N+1 | Backend | Sesudah Q-POQ-1/2/3 |
+| F-2026-10-26-060-F | Permukaan antrean label verbatim, baca-saja, ekspor tanpa kontak vendor | Frontend | Sesudah kontrak -B |
+| F-2026-10-26-060-Q | Falsifikasi AC-POQ-B1..B5/F1..F3 atas head persis | QA | Sesudah -B/-F |
+
+### 8. Yang TIDAK diusulkan + pertanyaan putusan
+
+Tidak diusulkan: auto-approve/auto-batal draft tua; pengingat WA/email ke penyetuju; persetujuan dari daftar; status/tahap tersimpan baru; mengubah gerbang GR atau jurnal penerimaan.
+Q-POQ-1 (Lead): ambang hari mengendap (usulan Business: 7 hari selaras SO draft Q-SOQ-1; angka ini USULAN, bukan fakta).
+Q-POQ-2 (Lead): kata label/judul final ("Pesanan Pembelian Draft Mengendap" + label Σ §BR-POQ-03).
+Q-POQ-3 (Lead): ratifikasi urutan BR-POQ-06 + mode bawaan permukaan.
+Q-POQ-4 (Lead): penempatan permukaan (halaman antrean baru area Pembelian vs seksi daftar pesanan existing).
+Q-POQ-5 (Lead): penanda status Approval pending per baris ditampilkan tahap 1 atau tidak (usulan: tidak, selaras Q-SIQ-7).
+Butuh vonis accountant: TIDAK tahap baca-saja ini (nol jurnal/utang baru; BR-POQ-03 menjaga draft di luar utang). WAJIB hanya bila Lead membuka aksi approve dari daftar atau penilaian komitmen pembelian.
+
+F-2026-10-26-060-S — Antrean Pesanan Pembelian draft mengendap. Status: SPEC SELESAI run ini (dokumen saja); gerbang pertama putusan Lead Q-POQ-1/2/3, lalu fisik Backend (060-B), konsumen Frontend (060-F), falsifikasi QA (060-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap baca-saja ini.
+
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-062-S: antrean surat jalan draft mengendap menunggu pengiriman (turunan baca-saja)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_1ccf458b. ID F-2026-10-26-062-S diverifikasi bebas run ini 2026-10-26 15:23 WIB: grep `F-2026-10-26-062` di backlog + board origin/main (5f8f4f66) = 0; pencarian PR memuat ID ini = 0 (satu-satunya hasil substring `062` = PR #612 lama beda topik). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.

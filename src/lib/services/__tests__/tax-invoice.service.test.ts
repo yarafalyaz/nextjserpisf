@@ -174,6 +174,32 @@ describe("issueTaxInvoice guards", () => {
     const ok = await issueTaxInvoice({ ...base, taxInvoiceNumber: "010.001-26.00000006", idempotencyKey: key(), legacy15Confirmed: true })
     expect(ok.success).toBe(true)
   })
+
+  it("F-004-S mismatch: terbit out NPWP16 + NITKU awalan-beda ditolak SEBELUM tulis dokumen (gerbang :233); tertaut master + isian manual sama-sama tertolak", async () => {
+    // Isian manual: snapshot langsung dari input.
+    const manual = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.001-26.00000007",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000, idempotencyKey: key(),
+      counterpartyName: "PT X WP", counterpartyTaxId: "0123456789123456",
+      counterpartyNitku: "9999999999999999000001",
+    })
+    expect(manual.success).toBe(false)
+    expect(String(manual.error)).toMatch(/NITKU lawan transaksi tidak diawali NPWP lawan transaksi/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+
+    // Tertaut: mismatch disalin dari master pelanggan faktur penjualan.
+    mocks.salesInvoiceFindUnique.mockResolvedValue({
+      customer: { taxId: "0123456789123456", taxpayerName: "PT WP Master", nitku: "9999999999999999000001" },
+    })
+    const tertaut = await issueTaxInvoice({
+      direction: "out", taxInvoiceNumber: "010.001-26.00000008",
+      taxInvoiceDate: new Date(2026, 0, 10), sellingPrice: 12_000_000,
+      salesInvoiceId: 9, idempotencyKey: key(),
+    })
+    expect(tertaut.success).toBe(false)
+    expect(String(tertaut.error)).toMatch(/NITKU lawan transaksi tidak diawali NPWP lawan transaksi/)
+    expect(mocks.taxInvoiceCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe("replaceTaxInvoice guards", () => {
