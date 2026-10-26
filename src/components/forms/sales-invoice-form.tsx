@@ -11,6 +11,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
+import { CreditOverridePanel, type CreditGateBlockedState } from "@/components/forms/credit-override-panel"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
@@ -125,6 +126,9 @@ export function SalesInvoiceForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
+  const [creditBlocked, setCreditBlocked] = useState<CreditGateBlockedState | null>(null)
+  const [creditReason, setCreditReason] = useState("")
+  const [creditReasonError, setCreditReasonError] = useState<string | undefined>()
   const [rows, setRows] = useState<LineItem[]>(() => (initialItems ?? []).map(toRow))
   const [taxRate, setTaxRate] = useState<number>(() => Number(initialTaxRate ?? 0) || 0)
   // P2 idempotency UI: satu key stabil per submit create (crypto.randomUUID per
@@ -160,6 +164,11 @@ export function SalesInvoiceForm({
   }
 
   function onSubmit(data: SalesInvoiceInput) {
+    if (creditBlocked && creditBlocked.creditOverrideId == null && !creditReason.trim()) {
+      setCreditReasonError("Alasan permintaan override wajib diisi")
+      return
+    }
+    setCreditReasonError(undefined)
     startTransition(async () => {
       try {
         const formData = new FormData()
@@ -185,12 +194,18 @@ export function SalesInvoiceForm({
         if (!invoice?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         // Tautan penawaran untuk faktur yang lahir langsung dari penawaran.
         if (!invoice?.id && defaultQuotationId) formData.append("quotationId", String(defaultQuotationId))
+        if (creditReason.trim()) formData.append("creditOverrideReason", creditReason.trim())
         const result = invoice?.id ? await updateSalesInvoice(invoice.id, formData) : await createSalesInvoice(formData)
         if (result.success) {
           if (!invoice?.id) idempotencyKeyRef.current = newIdempotencyKey()
+          setCreditBlocked(null)
           showSuccess(invoice?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/faktur/${result.slug ?? result.id}`)
           router.refresh()
+        } else if ("creditStatusLabel" in result && typeof result.creditStatusLabel === "string") {
+          const b = result as unknown as CreditGateBlockedState & { error: string }
+          setCreditBlocked({ ...b, creditOverrideId: b.creditOverrideId ?? null })
+          showError(b.error)
         } else {
           showError(result.error || "Gagal menyimpan data")
         }
@@ -212,6 +227,14 @@ export function SalesInvoiceForm({
       isPending={isPending}
       isEditing={Boolean(invoice?.id)}
       formLabel={invoice?.id ? "Formulir ubah faktur" : "Formulir tambah faktur"}
+      creditGatePanel={creditBlocked ? (
+        <CreditOverridePanel
+          blocked={creditBlocked}
+          reason={creditReason}
+          onReasonChange={setCreditReason}
+          reasonError={creditReasonError}
+        />
+      ) : undefined}
       afterGrid={
         <>
 

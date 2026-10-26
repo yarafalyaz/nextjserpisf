@@ -161,6 +161,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/pembelian/tagihan": "Tagihan vendor",
   "/penjualan/faktur": "Faktur penjualan",
   "/penjualan/harga-pelanggan": "Daftar harga jual per kategori pelanggan dan barang, bertingkat menurut jumlah minimal",
+  "/penjualan/override-kredit": "Permintaan override batas kredit yang tertahan gerbang kredit — setujui atau tolak dengan alasan, dan jejak keputusannya",
   "/penjualan/pembayaran": "Pembayaran masuk",
   "/penjualan/penawaran": "Penawaran harga",
   "/penjualan/antrean-penawaran": "Penawaran terkirim belum dijawab pelanggan",

@@ -22,6 +22,7 @@ interface SalesCustomerFormShellProps<
   /** Label formulir untuk screen reader (mis. "Formulir tambah faktur"). */
   formLabel: string
   afterGrid?: ReactNode
+  creditGatePanel?: ReactNode
   children: ReactNode
 }
 
@@ -40,6 +41,7 @@ export function SalesCustomerFormShell<
   isEditing,
   formLabel,
   afterGrid,
+  creditGatePanel,
   children,
 }: SalesCustomerFormShellProps<TFieldValues, TName>) {
   const router = useRouter()
@@ -57,6 +59,7 @@ export function SalesCustomerFormShell<
         {children}
       </div>
       {afterGrid}
+      {creditGatePanel}
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end flex-wrap gap-2 sm:gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
         <Button type="submit" isDisabled={isPending} id={submitId} className="w-full sm:w-auto">
