@@ -8,7 +8,7 @@ vi.mock("@/actions/email-log.actions", () => ({
 import { EmailStatementSection } from "../email-statement-section"
 import { recordEmailLinkOpened } from "@/actions/email-log.actions"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
-import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL } from "./statement-section-test-utils"
+import { STATEMENT_PERIOD, STATEMENT_CUSTOMER, STATEMENT_TRAIL, clickFirstLink, expectEmptySurface, expectTrailList, expectNoTrailList } from "./statement-section-test-utils"
 
 afterEach(() => {
   clearRenderedCards()
@@ -65,10 +65,7 @@ describe("EmailStatementSection F-2026-10-25-043-F1", () => {
   })
 
   it("klik mencatat tepat 1 jejak berjangkar pelanggan + periode payload, tanpa mencegah navigasi", () => {
-    const { container, root } = renderCard(section())
-    const link = container.querySelector("a")
-    const event = new MouseEvent("click", { bubbles: true, cancelable: true })
-    link?.dispatchEvent(event)
+    const { root, event } = clickFirstLink(section())
     expect(recordEmailLinkOpened).toHaveBeenCalledTimes(1)
     expect(recordEmailLinkOpened).toHaveBeenCalledWith({
       modelType: "CustomerStatement",
@@ -82,38 +79,24 @@ describe("EmailStatementSection F-2026-10-25-043-F1", () => {
   })
 
   it("AC-SE-F1: email kosong/tidak valid -> permukaan TIDAK tampil (bukan disable)", () => {
-    for (const email of [null, "", "bukan-email", "uji@example"]) {
-      const { container, root } = renderCard(section({ customerEmail: email }))
-      expect(container.querySelector("a")).toBeNull()
-      expect(container.textContent).toBe("")
-      unmountCard(root)
-    }
+    for (const email of [null, "", "bukan-email", "uji@example"]) expectEmptySurface(section({ customerEmail: email }))
   })
 
   it("AC-SE-F1: pelanggan tidak terpilih -> permukaan tidak tampil", () => {
-    const { container, root } = renderCard(section({ customer: null }))
-    expect(container.textContent).toBe("")
-    unmountCard(root)
+    expectEmptySurface(section({ customer: null }))
   })
 
   it("AC-SE-F4: riwayat baca-saja terbaru-dulu, waktu WIB + nama staf apa adanya, terpisah dari WA", () => {
-    const trail = [...STATEMENT_TRAIL]
-    const { container, root } = renderCard(section({ emailTrail: trail }))
-    const list = container.querySelector('[aria-label="Riwayat tautan Email dibuka"]')
-    expect(list).not.toBeNull()
-    expect(container.querySelector('[aria-label="Riwayat tautan WhatsApp dibuka"]')).toBeNull()
-    const items = [...(list?.querySelectorAll("li") ?? [])].map((li) => li.textContent ?? "")
-    expect(items).toHaveLength(2)
-    expect(items[0]).toContain("Tautan Email dibuka — 21 Oktober 2026 pukul 10.00 WIB oleh Sari")
-    expect(items[1]).toContain("Tautan Email dibuka — 20 Oktober 2026 pukul 10.00 WIB oleh Pengguna")
-    expect(container.textContent ?? "").not.toMatch(FORBIDDEN)
-    unmountCard(root)
+    expectTrailList(section({ emailTrail: [...STATEMENT_TRAIL] }), {
+      listLabel: "Riwayat tautan Email dibuka",
+      absentLabel: "Riwayat tautan WhatsApp dibuka",
+      first: "Tautan Email dibuka — 21 Oktober 2026 pukul 10.00 WIB oleh Sari",
+      second: "Tautan Email dibuka — 20 Oktober 2026 pukul 10.00 WIB oleh Pengguna",
+      forbidden: FORBIDDEN,
+    })
   })
 
   it("AC-SE-F4: tanpa jejak -> daftar riwayat tidak tampil, tombol tetap tampil", () => {
-    const { container, root } = renderCard(section())
-    expect(container.querySelector('[aria-label="Riwayat tautan Email dibuka"]')).toBeNull()
-    expect(container.querySelector("a")).not.toBeNull()
-    unmountCard(root)
+    expectNoTrailList(section(), "Riwayat tautan Email dibuka")
   })
 })
