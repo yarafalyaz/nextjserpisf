@@ -59,6 +59,32 @@ const LOADER_SELECT_KEYS = [
   "workOrderId",
 ] as const
 
+// Kunci Row builder persis (daftar-putih) — Input (15) + turunan (6).
+// Suntik kunci nilai uang apa pun (mis. totalValue) WAJIB MERAH.
+const ROW_KEYS = [
+  "createdAt",
+  "createdByName",
+  "documentNo",
+  "itemCount",
+  "materialRequestId",
+  "neededBy",
+  "neededByLampau",
+  "neededByLampauLabel",
+  "requesterWarehouseId",
+  "requesterWarehouseName",
+  "slug",
+  "sourceWarehouseId",
+  "sourceWarehouseName",
+  "status",
+  "tingkat",
+  "tingkatLabel",
+  "totalQty",
+  "umurDariMasaDepan",
+  "umurDraftHari",
+  "workOrderDocumentNo",
+  "workOrderId",
+] as const
+
 // Hari kalender WIB tetap: 2026-10-26 — instan 05:00 WIB.
 const NOW = new Date("2026-10-25T22:00:00.000Z")
 const TODAY = getWibTodayUtcDate(NOW)
@@ -229,6 +255,35 @@ describe("material-request-draft-queue (F-2026-10-26-071-S tahap 1)", () => {
     expect(queue.rows).toHaveLength(1)
     expect(queue.rows[0].workOrderDocumentNo).toBeNull()
     expect(queue.rows[0].createdByName).toBeNull()
+  })
+
+  it("keys Row persis daftar-putih — kunci nilai uang asing WAJIB gagal", () => {
+    const queue = buildMaterialRequestDraftQueue(
+      [input(), input({ materialRequestId: 2, documentNo: "MR/2026/002" })],
+      NOW,
+    )
+    expect(queue.rows).toHaveLength(2)
+    for (const row of queue.rows) {
+      expect([...Object.keys(row)].sort()).toEqual([...ROW_KEYS].sort())
+      expect(Object.keys(row)).not.toContain("totalValue")
+    }
+    expect([...Object.keys(queue)].sort()).toEqual(
+      [
+        "levelCounts",
+        "requesterWarehouseCounts",
+        "rows",
+        "sourceWarehouseCounts",
+        "totalDocuments",
+      ].sort(),
+    )
+    for (const count of [
+      ...queue.requesterWarehouseCounts,
+      ...queue.sourceWarehouseCounts,
+    ]) {
+      expect([...Object.keys(count)].sort()).toEqual(
+        ["levelCounts", "total", "warehouseId", "warehouseName"].sort(),
+      )
+    }
   })
 })
 
