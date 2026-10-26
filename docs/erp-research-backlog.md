@@ -34151,7 +34151,6 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Status/field pembayaran baru, perubahan lifecycle draft→completed, atau jalur pembayaran atas tagihan draft (existing menolaknya :1530).
 
 F-2026-10-26-072-S — Antrean pembayaran vendor draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-VPQ-1/2 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-VPQ-3 dibuka), lalu fisik Backend (072-B), konsumen Frontend (072-F), falsifikasi QA (072-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
-||||||| f630540a
 
 ## PUTUSAN LEAD 2026-10-26 19:10 WIB — gerbang F-2026-10-26-070-S (Q-PDQ), F-2026-10-26-071-S (Q-MRQ), F-2026-10-26-072-S (Q-VPQ)
 
