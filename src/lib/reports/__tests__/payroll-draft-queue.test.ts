@@ -44,6 +44,44 @@ vi.mock("@/lib/auth/hr-scope", () => ({
 
 import { getPayrollDraftQueue } from "../payroll-draft-queue-data"
 
+// Kolom nominal/snapshot model Payroll (daftar Accountant PR #1107) —
+// tidak boleh muncul di payload builder maupun select loader (BR-PDQ-03).
+const FORBIDDEN_PAYROLL_NOMINAL_KEYS = [
+  "baseSalary",
+  "allowances",
+  "deductions",
+  "overtimeTotal",
+  "appreciationTotal",
+  "loanDeduction",
+  "lateDeduction",
+  "grossSalary",
+  "bpjsHealthEmployee",
+  "bpjsEmploymentEmployee",
+  "pph21",
+  "absentDeduction",
+  "netSalary",
+  "totalAmount",
+  "statutorySnapshot",
+  "componentLines",
+] as const
+
+// Kunci select loader persis (daftar-putih BR-PDQ-03) — urutan persis
+// tidak menjamin apa pun untuk Prisma; perbandingan sebagai himpunan.
+const LOADER_SELECT_KEYS = [
+  "createdAt",
+  "createdBy",
+  "documentNo",
+  "employee",
+  "employeeId",
+  "endDate",
+  "id",
+  "period",
+  "slug",
+  "startDate",
+  "status",
+  "type",
+] as const
+
 // Hari kalender WIB tetap: 2026-10-26 — instan 05:00 WIB.
 const NOW = new Date("2026-10-25T22:00:00.000Z")
 const TODAY = getWibTodayUtcDate(NOW)
@@ -150,16 +188,7 @@ describe("payroll-draft-queue (F-2026-10-26-070-S tahap 1)", () => {
     expect(queue.rows).toHaveLength(3)
     for (const row of queue.rows) {
       const keys = Object.keys(row)
-      for (const forbidden of [
-        "baseSalary",
-        "netSalary",
-        "grossSalary",
-        "totalAmount",
-        "allowances",
-        "deductions",
-        "pph21",
-        "bpjsHealthEmployee",
-      ]) {
+      for (const forbidden of FORBIDDEN_PAYROLL_NOMINAL_KEYS) {
         expect(keys).not.toContain(forbidden)
       }
     }
@@ -249,10 +278,15 @@ describe("getPayrollDraftQueue (loader fail-closed, AC-PDQ-B1/B4/B5)", () => {
     expect(mocks.payrollFindMany).toHaveBeenCalledTimes(1)
     const arg = mocks.payrollFindMany.mock.calls[0][0]
     expect(arg.where).toEqual({ status: "draft" })
-    const selectText = JSON.stringify(arg.select)
-    for (const forbidden of ["baseSalary", "netSalary", "grossSalary", "totalAmount", "pph21"]) {
-      expect(selectText).not.toContain(forbidden)
+    const selectKeys = Object.keys(arg.select)
+    // Daftar-putih select persis + daftar-hitam nominal Accountant.
+    expect([...selectKeys].sort()).toEqual([...LOADER_SELECT_KEYS])
+    expect(arg.select.employee).toEqual({ select: { name: true } })
+    for (const forbidden of FORBIDDEN_PAYROLL_NOMINAL_KEYS) {
+      expect(selectKeys).not.toContain(forbidden)
     }
+    const userArg = mocks.userFindMany.mock.calls[0][0]
+    expect([...Object.keys(userArg.select)].sort()).toEqual(["id", "name"])
     expect(mocks.userFindMany).toHaveBeenCalledTimes(1)
     expect(mocks.userFindMany.mock.calls[0][0].where).toEqual({ id: { in: [99] } })
 
