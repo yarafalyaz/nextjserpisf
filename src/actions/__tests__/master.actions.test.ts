@@ -85,6 +85,7 @@ vi.mock("bcryptjs", () => {
 })
 
 import * as actions from "../master.actions"
+import { LEAD_LOST_REASON_CATEGORIES } from "@/lib/reports/lead-lost-reason"
 import { Prisma as RealPrisma } from "@prisma/client"
 
 describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
@@ -2013,8 +2014,8 @@ describe("F-2026-10-25-030-S alasan kalah lead lost (Q-LR-1..4)", () => {
     expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
   })
 
-  it("AC-LR-F1 (server): kamus payload LEAD_LOST_REASON_CATEGORIES re-export = 8 key Q-LR-1", () => {
-    expect(actions.LEAD_LOST_REASON_CATEGORIES.map((c) => c.key)).toEqual([
+  it("AC-LR-F1 (server): kamus payload server LEAD_LOST_REASON_CATEGORIES = 8 key Q-LR-1", () => {
+    expect(LEAD_LOST_REASON_CATEGORIES.map((c) => c.key)).toEqual([
       "budget",
       "harga",
       "waktu",

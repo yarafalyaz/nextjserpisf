@@ -66,12 +66,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
-import {
-  LEAD_LOST_REASON_CATEGORIES,
-  validateLeadLostTransition,
-} from "@/lib/reports/lead-lost-reason";
-
-export { LEAD_LOST_REASON_CATEGORIES };
+import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
