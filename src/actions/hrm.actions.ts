@@ -24,6 +24,7 @@ import {
   markPkwtEventPaid,
   runPkwtMonthlyAccrual,
 } from "@/lib/services/pkwt-compensation.service";
+import { applyDueSalaryAdjustments } from "@/lib/services/salary-adjustment.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -1147,7 +1148,10 @@ export async function approveOvertime(overtimeId: number) {
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
         component: { isActive: true, recurrence: "fixed", kind: "earning" },
       },
-      select: { defaultAmount: true },
+      select: {
+        defaultAmount: true,
+        component: { select: { name: true } },
+      },
     });
     const fixedAllowance = fixedAssignments.reduce(
       (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
@@ -1170,6 +1174,23 @@ export async function approveOvertime(overtimeId: number) {
       dayKind,
     });
 
+    // Snapshot rincian dasar (F-2026-10-25-024-S, BR-OT-09/BR-OT-11):
+    // pokok + HANYA komponen yang benar-benar ikut Σ di atas + total dasar
+    // final, dibekukan pada klaim atomik yang sama dengan calculatedValue.
+    // Tanpa snapshot ini rincian tidak bisa ditampilkan verbatim — membaca
+    // master komponen saat tampil akan menampilkan dasar master kini, bukan
+    // dasar saat approve. Baris yang sudah terhitung berhenti di gerbang
+    // idempotensi di atas, jadi snapshot ikut beku dan tidak ditulis ulang.
+    const overtimeBaseSnapshot = {
+      baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
+      components: fixedAssignments.map((a) => ({
+        name: a.component.name,
+        amount: Number(a.defaultAmount),
+      })),
+      baseTotal: baseSalary,
+      overtimeDate: new Date(ot.date).toISOString(),
+    };
+
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
       data: {
@@ -1184,6 +1205,7 @@ export async function approveOvertime(overtimeId: number) {
         // awal (idempotensi di atas).
         approvedAt: new Date(),
         calculatedValue,
+        overtimeBaseSnapshot,
       },
     });
     if (claim.count === 0) {
@@ -2283,6 +2305,12 @@ export async function generateBulkPayroll(
       classified.targetIds.includes(e.id),
     );
 
+    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
+    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
+    for (const e of eligibleEmployees) {
+      await applyDueSalaryAdjustments(e.id, periodEnd);
+    }
+
     // Batch: slip aktif populasi pada jendela rentang run (semua periode —
     // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu
     // ke-2 dalam bulan sama kini LOLOS, yang beririsan ditolak per karyawan
@@ -2583,6 +2611,10 @@ export async function processPayroll(formData: FormData) {
     if (!employeeId) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
+
+    // Kenaikan gaji terjadwal yang sudah jatuh tempo diterapkan ke master
+    // lebih dulu, supaya slip periode ini membaca gaji yang benar.
+    await applyDueSalaryAdjustments(employeeId, endDate);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
     // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
@@ -3989,10 +4021,11 @@ export async function createAttendanceCorrection(formData: FormData) {
       return { success: false as const, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    const scope = await getHrScope(user);
-    // BR-AC-07: pengaju = employeeId login persis, fail-closed tanpa tertaut.
-    await assertHrEmployeeAccess(scope, v.employeeId);
-    if (scope.kind === "self" && scope.employeeId !== v.employeeId) {
+    // BR-AC-07 + putusan Lead Q-AC-2: pengaju = employeeId login persis
+    // untuk SEMUA scope (department/all tidak boleh atas nama orang lain),
+    // fail-closed bila akun tak tertaut Employee.
+    const me = await callerEmployeeIdForCorrection(user.id);
+    if (me == null || me !== v.employeeId) {
       throw new Error("Anda hanya diperbolehkan mengajukan koreksi absensi untuk diri sendiri");
     }
 

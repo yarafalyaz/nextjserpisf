@@ -45,6 +45,7 @@ vi.mock("@/components/reports/export-buttons", () => ({
 }))
 
 import SalesPriceHistoryPage from "../page"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import {
   SALES_PRICE_HISTORY_ITEMLESS_LABEL,
   SALES_PRICE_HISTORY_NOTICE_TEXT,
@@ -52,6 +53,33 @@ import {
   type SalesPriceHistory,
 } from "@/lib/reports/sales-price-history"
 import { renderPageNode, unmountCard } from "@/components/reports/__tests__/card-test-utils"
+
+const EVENT_OLDER = {
+  invoiceId: 98,
+  invoiceItemId: 499,
+  slug: "faktur-98",
+  documentNo: "INV-2026-098",
+  customerId: 7,
+  customerName: "PT Contoh",
+  itemId: 42,
+  itemName: "Busi Iridium",
+  itemSku: "BSI-001",
+  description: null,
+  date: new Date("2026-10-03T00:00:00Z"),
+  status: "paid",
+  qty: 2,
+  uom: "pcs",
+  unitPrice: 125_000,
+  discount: 5_000,
+  total: 240_000,
+  priceSource: null,
+  priceListId: null,
+  priceListMinQty: null,
+  priceSourceLabel: SALES_PRICE_HISTORY_UNKNOWN_SOURCE_LABEL,
+  sumberTidakTercatat: true,
+  hargaNol: false,
+  tautanDetail: "/penjualan/faktur/faktur-98",
+}
 
 const EVENT = {
   invoiceId: 99,
@@ -87,7 +115,7 @@ const HISTORY: SalesPriceHistory = {
   itemId: null,
   terpotong: false,
   jumlahPasangan: 1,
-  jumlahTransaksi: 1,
+  jumlahTransaksi: 2,
   pasangan: [
     {
       customerId: 7,
@@ -96,11 +124,11 @@ const HISTORY: SalesPriceHistory = {
       itemName: "Busi Iridium",
       itemSku: "BSI-001",
       transaksiTerakhir: EVENT,
-      jumlahTransaksi: 1,
-      jumlahTampil: 1,
+      jumlahTransaksi: 2,
+      jumlahTampil: 2,
       terpotong: false,
-      qtyKumulatif: 3,
-      kejadian: [EVENT],
+      qtyKumulatif: 5,
+      kejadian: [EVENT, EVENT_OLDER],
     },
   ],
   tanpaBarang: [
@@ -155,10 +183,76 @@ describe("F-2026-10-25-028-S halaman Riwayat Harga Jual", () => {
     expect(text).toContain(SALES_PRICE_HISTORY_ITEMLESS_LABEL)
     expect(text).toContain("INV-2026-099")
     expect(text).toContain("BSI-001")
-    expect(text).toContain("150.000")
-    expect(text).toContain("10.000")
     expect(text).toContain("Baris Faktur Tanpa Barang")
     expect(container.querySelector('a[href="/penjualan/faktur/faktur-99"]')).not.toBeNull()
+    unmountCard(root)
+  })
+
+  it("harga verbatim per kejadian + harga terakhir: diskon tidak dikurangkan dari harga satuan", async () => {
+    const { container, root } = await renderPage()
+    const ringkasan = container.querySelector('[data-report-table="Harga Terakhir per Barang"]')
+    const kejadian = container.querySelector('[data-report-table="Kejadian Harga BSI-001"]')
+    expect(ringkasan).not.toBeNull()
+    expect(kejadian).not.toBeNull()
+
+    // Harga terakhir = unitPrice kejadian terbaru dari server, verbatim.
+    // Baris: [Barang, Tanggal, No. Faktur, Sumber Harga, Harga Satuan Terakhir, Jumlah Transaksi]
+    const ringkasanRow = ringkasan?.querySelectorAll("tbody tr")[0]
+    expect(ringkasanRow?.children[1]?.textContent).toBe(formatDate(EVENT.date, { format: "short" }))
+    expect(ringkasanRow?.children[4]?.textContent).toBe(formatAccounting(EVENT.unitPrice, { zeroDash: false }))
+    expect(ringkasanRow?.children[4]?.textContent).toBe("150.000")
+    // Sesudah-diskon terbaru (150.000 − 10.000) tidak boleh tampil sebagai harga satuan.
+    expect(ringkasanRow?.children[4]?.textContent).not.toBe(
+      formatAccounting(EVENT.unitPrice - EVENT.discount, { zeroDash: false }),
+    )
+    expect(ringkasan?.textContent ?? "").not.toContain("140.000")
+
+    // Tiap kejadian verbatim: harga satuan + diskon terpisah, urutan server.
+    // Baris: [Tanggal, No. Faktur, Sumber Harga, Qty, Satuan, Harga Satuan, Diskon Baris, Total Baris]
+    const rows = kejadian?.querySelectorAll("tbody tr") ?? []
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.children[0]?.textContent).toBe(formatDate(EVENT.date, { format: "short" }))
+    expect(rows[0]?.children[5]?.textContent).toBe("150.000")
+    expect(rows[0]?.children[6]?.textContent).toBe("10.000")
+    expect(rows[1]?.children[0]?.textContent).toBe(formatDate(EVENT_OLDER.date, { format: "short" }))
+    expect(rows[1]?.children[5]?.textContent).toBe(formatAccounting(EVENT_OLDER.unitPrice, { zeroDash: false }))
+    expect(rows[1]?.children[5]?.textContent).toBe("125.000")
+    expect(rows[1]?.children[6]?.textContent).toBe("5.000")
+    const kejadianText = kejadian?.textContent ?? ""
+    expect(kejadianText).not.toContain("140.000")
+    expect(kejadianText).not.toContain("120.000")
+    unmountCard(root)
+  })
+
+  it("mutasi harga/tanggal objek builder mengalir verbatim tanpa ubah UI", async () => {
+    const mutated: SalesPriceHistory = {
+      ...HISTORY,
+      pasangan: HISTORY.pasangan.map((pair) => ({
+        ...pair,
+        transaksiTerakhir: { ...EVENT, date: new Date("2026-10-25T00:00:00Z"), unitPrice: 175_000 },
+        kejadian: [
+          { ...EVENT, date: new Date("2026-10-25T00:00:00Z"), unitPrice: 175_000 },
+          EVENT_OLDER,
+        ],
+      })),
+    }
+    mocks.getSalesPriceHistory.mockResolvedValue(mutated)
+    const { container, root } = await renderPage()
+    const ringkasanRow = container
+      .querySelector('[data-report-table="Harga Terakhir per Barang"]')
+      ?.querySelectorAll("tbody tr")[0]
+    const expectedDate = formatDate(new Date("2026-10-25T00:00:00Z"), { format: "short" })
+    expect(ringkasanRow?.children[1]?.textContent).toBe(expectedDate)
+    expect(ringkasanRow?.children[4]?.textContent).toBe("175.000")
+    const kejadianRows = container
+      .querySelector('[data-report-table="Kejadian Harga BSI-001"]')
+      ?.querySelectorAll("tbody tr")
+    expect(kejadianRows?.[0]?.children[0]?.textContent).toBe(expectedDate)
+    expect(kejadianRows?.[0]?.children[5]?.textContent).toBe("175.000")
+    // Nilai fixture lama tidak lagi tampil di tabel harga.
+    expect(
+      container.querySelector('[data-report-table="Harga Terakhir per Barang"]')?.textContent ?? "",
+    ).not.toContain("150.000")
     unmountCard(root)
   })
 
