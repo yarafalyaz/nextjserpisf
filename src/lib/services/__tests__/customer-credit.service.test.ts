@@ -95,6 +95,14 @@ function buildTx() {
       const s = await mocks.settingFindFirst()
       return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
     }),
+    // BLOCKER-1 F-036-S: mock panel snapshot komisi (kategori 1, tarif 2%
+    // berlaku sepanjang 2026).
+    customer: { findUnique: vi.fn().mockResolvedValue({ customerCategoryId: 1 }) },
+    customerCommissionRate: {
+      findMany: vi.fn().mockResolvedValue([
+        { id: 1, customerCategoryId: 1, commissionPercent: 2, effectiveFrom: new Date(Date.UTC(2026, 0, 1)), effectiveTo: null },
+      ]),
+    },
     customerCredit: {
       findUniqueOrThrow: mocks.creditFindUnique,
       findFirst: mocks.creditFindFirst,
@@ -134,6 +142,7 @@ function seedCredit(over: Record<string, unknown> = {}) {
 function seedInvoice(over: Record<string, unknown> = {}) {
   mocks.invoiceFindUnique.mockResolvedValue({
     id: 101, customerId: 9, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000, status: "posted",
+    date: new Date(Date.UTC(2026, 0, 10)), commissionRatePercent: null,
     ...over,
   })
 }
@@ -209,6 +218,45 @@ describe("customer-credit.service", () => {
         data: expect.objectContaining({ paidAmount: 10000, paymentStatus: "paid" }),
       }),
     )
+  })
+
+  it("BLOCKER-1 F-036-S: alokasi melunasi -> snapshot tarif beku 2% per tanggal faktur", async () => {
+    seedCredit()
+    seedInvoice()
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "66666666-6666-4666-8666-666666666666")
+    expect(r.success).toBe(true)
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentStatus: "paid",
+          commissionCustomerCategoryId: 1,
+          commissionRateId: 1,
+        }),
+      }),
+    )
+    const data = mocks.invoiceUpdate.mock.calls[0][0].data
+    expect(Number(data.commissionRatePercent)).toBe(2)
+  })
+
+  it("BLOCKER-1 F-036-S: snapshot existing tidak ditulis ulang oleh alokasi kredit", async () => {
+    seedCredit()
+    seedInvoice({ commissionRatePercent: 7 })
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "77777777-7777-4777-8777-777777777777")
+    expect(r.success).toBe(true)
+    const data = mocks.invoiceUpdate.mock.calls[0][0].data
+    expect(data.commissionRatePercent).toBeUndefined()
+    expect(data.commissionRateId).toBeUndefined()
+  })
+
+  it("BLOCKER-1 F-036-S: alokasi partial tidak menulis snapshot", async () => {
+    seedCredit({ receivedAmount: 1000 })
+    seedInvoice()
+    mocks.paymentFindMany.mockResolvedValue([{ amount: 8000 }, { amount: 1000 }])
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7, "88888888-8888-4888-8888-888888888888")
+    expect(r.success).toBe(true)
+    const data = mocks.invoiceUpdate.mock.calls[0][0].data
+    expect(data.paymentStatus).toBe("partial")
+    expect(data.commissionRatePercent).toBeUndefined()
   })
 
   it("alokasi habiskan saldo: status jadi used", async () => {
