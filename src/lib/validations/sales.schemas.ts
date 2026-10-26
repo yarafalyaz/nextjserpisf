@@ -61,6 +61,9 @@ export const createSalesOrderSchema = z.object({
   date: dateOnly,
   deliveryDate: optionalDate,
   notes: optionalString(500),
+  // F-2026-10-25-035-B: alasan permintaan override gerbang kredit (wajib
+  // diisi peminta saat percobaan tertahan; diabaikan bila gerbang mati).
+  creditOverrideReason: optionalString(1000),
   // Item disalin dari penawaran di dalam aksi; taxRate/discount hanya dipakai
   // bila pengguna menimpanya lewat form.
   taxRate: z.coerce.number().optional(),
@@ -73,6 +76,7 @@ export const updateSalesOrderSchema = z.object({
   date: dateOnly,
   deliveryDate: optionalDate,
   notes: optionalString(500),
+  creditOverrideReason: optionalString(1000),
   // Line items may be edited until a real settlement exists (custom
   // fabrication). Sent as a JSON string like the invoice editor. Per-line values
   // are clamped in the action, so no bounds here (mirrors updateSalesInvoice).
@@ -92,6 +96,7 @@ export const createSalesInvoiceSchema = z.object({
   // Nomor faktur pajak keluaran dari e-Faktur/Coretax (opsional).
   taxInvoiceNumber,
   notes: optionalString(500),
+  creditOverrideReason: optionalString(1000),
   // Item boleh ikut saat pembuatan: faktur hasil konversi Pesanan Penjualan
   // harus lahir dengan baris itemnya, bukan header kosong bertotal 0.
   items: optionalString(50000),

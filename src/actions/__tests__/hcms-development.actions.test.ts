@@ -60,8 +60,8 @@ vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: async () => "test-slug" }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: async () => {} }))
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
+import { computeWeightedScore } from "@/lib/hr/hcms-scoring"
 import {
-  computeWeightedScore,
   finalizeReview,
   submitManagerReview,
   submitSelfReview,
