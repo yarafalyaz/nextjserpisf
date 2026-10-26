@@ -33792,3 +33792,162 @@ Catatan jujur cakupan: daftar di atas diperiksa dari grep `salesOrder.create`/`s
 AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap), B5 (SoD/tanpa key/tanpa alasan tertolak), B8 (seluruh jalur Q-CL2-4) — terpetakan ke kartu Backend turunan. AC-CL2-F1/F2 ke kartu Frontend turunan. AC-CL2-B1/B3/B6/B7 tetap berlaku persis spec/vonis.
 
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-066-S: antrean penyesuaian stok draft mengendap menunggu persetujuan/pemrosesan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_8fe03aac. ID F-2026-10-26-066-S diverifikasi bebas run ini 2026-10-26 16:08 WIB: grep `F-2026-10-26-066` di backlog + board `origin/main` (`aa40b6dd`) = 0 dan tidak ada judul PR terbuka memuat 066/penyesuaian-stok-antrean; ID terpakai terakhir berjalan F-2026-10-26-065-S (PR #1016). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `warehouseId`+gudang, `type`, `reason`, `createdBy`, item, `inventoryTransferId`, Approval tertaut terbaru), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-SAQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK menyetujui, TIDAK menolak, TIDAK memproses, TIDAK mengubah, dan TIDAK menghapus penyesuaian apa pun — pemrosesan tetap jalur existing `processStockAdjustment` (klaim atomik draft→processing→processed + StockMove + jurnal dalam satu transaksi, inventory.actions.ts:349-530), persetujuan tetap langkah Approval workflow existing bila terkonfigurasi. Nilai uang yang tampil = `totalCost` snapshot baris tersimpan apa adanya (snapshot saat buat/ubah dari selisih × unitCost form, inventory.actions.ts:300-330 dan :1969-2078), BUKAN hitung ulang dari stok berjalan, BUKAN jurnal, BUKAN nilai stok terposting: penyesuaian `draft`/`approved` belum menggerakkan StockMove/jurnal mana pun (journalId masih null sampai processed). Scope gudang = `getWarehouseScope` existing fail-closed (kind none → kosong), bukan izin baru. Data penyesuaian bukan data gaji/pribadi.
+
+PEMBETULAN PREMIS KARTU (TERVERIFIKASI-KODE, wajib dibaca Lead — tiga fakta yang mengubah bentuk antrean):
+(1) StockAdjustment BUKAN anggota `GATE_ONLY_REFERENCE_TYPES` (hanya Journal/VendorPayment, approval.actions.ts:36) dan BUKAN anggota `APPROVED_BY_MODELS` (PurchaseRequest/PurchaseOrder/VendorBill/LeaveRequest/OvertimeRequest/EmployeeLoan, :57-64): langkah final `approveStep` menulis status DOKUMEN menjadi `approved` TANPA approvedBy (:230-256), dan `rejectStep` menulis `rejected` (:360-378). Kolom `approvedBy`/`approvedAt` di schema:2489-2490 karena itu TIDAK diisi jalur workflow existing — antrean dilarang membaca keduanya sebagai bukti persetujuan dan dilarang mengarang siapa penyetuju dari kolom itu; bukti persetujuan = baris Approval/ApprovalHistory tertaut. Kosakata status dokumen sah: `draft` (lahir) → `approved`/`rejected` (workflow final) atau tetap `draft` (tanpa workflow / workflow belum final), `rejected` → `draft` (reopenApproval :395-450), `draft` → `processing` → `processed` (klaim processStockAdjustment; `approved` BUKAN prasyarat status untuk proses — gerbangnya `assertApproved` atas baris Approval, no-op tanpa workflow terkonfigurasi :372). Populasi antrean karena itu DUA sumber yang tidak boleh dicampur diam-diam: (a) `draft` menunggu keputusan/pemrosesan, (b) `approved` sudah disetujui workflow tetapi belum diproses menjadi stok+jurnal — keduanya "mengendap" dengan makna dan pemilik tindakan berbeda (Q-SAQ-3 memutus cakupan final; rekomendasi Business: keduanya masuk, dibedakan penanda tahap turunan §3, karena (b) adalah selisih fisik yang sudah disetujui tetapi belum tercermin di stok — risiko paling senyap).
+(2) Penutupan selisih transfer adalah cabang khusus: baris `inventoryTransferId != null` dengan `reason` persis "selisih transfer" diproses sebagai JURNAL SAJA (nol StockMove) lewat cabang processStockAdjustment :400-477 dan menutup transfer tertaut menjadi `received` di transaksi yang sama (F-2026-10-22-081-S). Baris seperti itu BUKAN penyesuaian stok fisik biasa: antrean wajib menandainya terpisah (usulan penanda "Selisih transfer tertaut") dan dilarang menjumlahkan qty/totalCost-nya ke rekap penyesuaian fisik; eksklusi total dari antrean = alternatif yang diputus Q-SAQ-4 (rekomendasi: tampil bertanda, karena draft penutupan yang mengendap membiarkan transfer menggantung `processed`/`partially_received` selamanya).
+(3) Berbeda dari PurchaseRequest 065-S, model ini PUNYA `deletedAt` (schema:2494) dan hapus existing adalah HARD delete `prisma.stockAdjustment.delete` yang hanya menolak non-draft (inventory.actions.ts:1852-1879) — kolom deletedAt dipakai laporan lembar hitung (stock-count-data.ts menyaring `deletedAt: null`) tetapi jalur hapus existing tidak mengisinya. Populasi antrean wajib `deletedAt: null` apa adanya (baris ter-soft-delete warisan tidak ditampilkan/dihitung), tanpa mengklaim jalur hapus existing adalah soft-delete.
+
+Bukan duplikasi: bukan daftar penyesuaian existing `inventaris/penyesuaian` (chip Semua/draft/processed saja — status `approved`/`rejected` bahkan tidak punya chip, urut `createdAt desc`, tanpa umur/tahap/konteks approval; page.tsx run ini); bukan laporan lembar penghitungan stok/stock-count (laporan per periode atas StockAdjustment semua status untuk opname, menyembunyikan umur draft — beda objek kerja); bukan antrean transfer-in-transit (objek InventoryTransfer processed/partially_received, bukan penyesuaian draft); bukan antrean persetujuan generik `pengaturan/persetujuan` (populasi baris Approval lintas dokumen — penyesuaian tanpa workflow tidak muncul di sana, dan populasi antrean ini dokumen, bukan rekod Approval); bukan 060-S..065-S (dokumen pembelian/penjualan lain); bukan StocktakeSession opname (sesi hitung snapshot→count→review→approved→post, objek & lifecycle berbeda tegas).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: Penyesuaian Persediaan termasuk daftar transaksi Persediaan yang bisa diatur wajib Persetujuan (Approval) — bersama Permintaan Barang, Pemindahan Barang, Hasil Stok Opname — lewat Pengaturan | Preferensi | Persetujuan, dan transaksi ber-persetujuan dicek pengguna berwenang sebelum lanjut proses: https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ (BENCHMARK: penyesuaian persediaan = transaksi terkontrol persetujuan; antrean draft bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: Penyesuaian Barang mencatat barang rusak/hilang/diperoleh tanpa pembelian dari Persediaan | Penyesuaian Barang (pilih gudang, tanggal, produk, jumlah, HPP bila perlu), hasilnya tampil di daftar + laporan Penyesuaian Barang, dan kewenangan transaksi diatur otorisasi user: https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-penyesuaian-barang-zahir-online-v2 dan https://www.zahironline.com/adjustment-stock/ (BENCHMARK: penyesuaian terdokumentasi per gudang dengan daftar/laporan; antrean draft mengendap bertingkat umur TIDAK ditetapkan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main aa40b6dd)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `StockAdjustment` (prisma/schema.prisma:2477-2514) — slug unik nullable, documentNo unik, warehouseId WAJIB (relasi Warehouse), date WAJIB, reason/notes Text nullable, type String default `increase`, status String default `draft`, approvedBy/approvedAt nullable (tidak diisi workflow — pembetulan premis 1), journalId nullable (terisi hanya saat processed dari jurnal hook, inventory.actions.ts:489-503), createdBy nullable, deletedAt nullable, inventoryTransferId nullable + relasi (penutupan selisih transfer, komentar schema:2496-2503), items. Item `StockAdjustmentItem` (:2516-2543) — systemQty/actualQty/difference Decimal(15,2), unitCost/totalCost Decimal tersimpan, batchId/serialNumbers/batchNumbers nullable. Indeks status/warehouseId/createdAt/deletedAt ada.
+- Lahir draft: `createStockAdjustment` (src/actions/inventory.actions.ts:255, izin `create_stock_adjustments`) — assertPeriodOpen tanggal, assertWarehouseAccess scope gudang, documentNo `ADJ`, systemQty dihitung server dari StockMove posted (bukan percaya klien :285-299), difference/totalCost snapshot per baris, status eksplisit `draft` (:300-330), lalu `requestApprovalIfConfigured("StockAdjustment", ...)` (:336-339) yang no-op tanpa workflow aktif. Ubah hanya draft (updateStockAdjustment :1969, penjaga + cek ulang dalam transaksi), hapus hard delete hanya draft (:1852).
+- Keluar draft existing: (a) workflow — approveStep final → dokumen `approved` (tanpa approvedBy), rejectStep → `rejected`, reopenApproval rejected → draft + approval baru (approval.actions.ts:230-256, :360-378, :395-450; maker-checker approve/reject ditegakkan di sana); (b) proses — `processStockAdjustment` (:349, izin `process_stock_adjustments` katalog:237): assertPeriodOpen, assertWarehouseAccess, wajib status `draft` (:368-370), `assertApproved` gerbang Approval (:372), klaim atomik `updateMany status=draft → processing` (:377-391), transaksi: cabang selisih transfer jurnal-saja bila tertaut (:400-477) atau hook StockMove+jurnal lalu status `processed` + journalId (:480-503); gagal transaksi mengembalikan processing → draft (:505-514). Catatan jujur: dokumen `approved` TIDAK bisa diproses langsung oleh aksi ini (penjaga wajib `draft`) — sesudah workflow final menyetujui, alur existing yang membawa approved → processed belum terverifikasi run ini; antrean TIDAK mengarang jalur itu dan mencatatnya sebagai pertanyaan fisik Backend di Q-SAQ-3 (apakah approved menunggu proses lewat jalur lain, atau status approved adalah ujung workflow yang prosesnya tetap dari draft sebelum workflow final — fakta lapangan diverifikasi sebelum builder populasi approved diterbitkan).
+- Daftar existing: `inventaris/penyesuaian/page.tsx` requirePermission `view_stock_adjustments`, cari documentNo, chip status "", draft, processed saja, urut `createdAt desc`, include warehouse+items, paginasi server; tabel `adjustment-table.tsx`. Detail `[slug]/page.tsx`: tombol Proses (form action processStockAdjustment :107), Ubah berizin edit, Hapus berizin delete (:111-115) — permukaan keputusan existing yang antrean antar tanpa menduplikasi.
+- Izin katalog nyata (module-catalog.generated.ts:233-237): `view/create/edit/delete/process_stock_adjustments`. TIDAK ada key `approve_stock_adjustments` — persetujuan lewat workflow generik (`approve_workflows`/langkah approver), sama seperti fakta 065-S bahwa key approve hanya ada untuk dokumen berkatalog approve.
+- Scope gudang existing: `getWarehouseScope` (src/lib/auth/warehouse-scope.ts) — all (role all-access), assigned (UserWarehouse), none (fail-closed kosong); create/process menegakkan assertWarehouseAccess per dokumen.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean penyesuaian stok draft/approved mengendap atau turunan umur menunggu — grep `stockAdjustment` di src/lib/reports hanya stock-count-data.ts (lembar hitung per periode, semua status, tanpa umur/tahap); tidak ada cron pengingat/penuaan. Draft yang ditinggal berarti selisih fisik (barang rusak/hilang/lebih) yang sudah dicatat tidak pernah tercermin di stok maupun jurnal: kartu stok tetap salah senyap, dan draft penutupan selisih membiarkan transfer tertaut menggantung di tengah jalan. Risiko bengkel: penyesuaian hasil opname/kerusakan part mengendap berhari-hari sementara stok sistem dipakai untuk janji ke pelanggan.
+
+### 1. Workflow specification
+
+Aktor: Pemroses pemegang `process_stock_adjustments` (pemilik tindakan atas draft siap proses), Approver workflow (pemutus langkah Approval bila terkonfigurasi, lewat permukaan persetujuan existing), Admin Gudang pemegang `view_stock_adjustments` dalam scope gudangnya (pembaca antrean), Pembuat pemegang `create_stock_adjustments` (sumber baris draft), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris StockAdjustment existing berstatus `draft` (dan `approved` bila Q-SAQ-3 disahkan) dengan deletedAt null dalam scope gudang pembaca (id, slug, documentNo, date, warehouseId+nama gudang, type, reason, createdBy+nama bila terpetakan, jumlah baris item, Σ difference bertanda per satuan TIDAK dijumlah lintas item berbeda satuan — lihat BR-SAQ-05, Σ totalCost snapshot tersimpan sebagai nilai baris dokumen, inventoryTransferId penanda, createdAt) + Approval tertaut terbaru bila ada (status/currentStep — dibaca, tidak ditulis). Field existing semua, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per penyesuaian (§3) + rekap hitungan dokumen per tahap/tingkat. BUKAN mutasi stok: tidak ada StockMove, jurnal, atau perubahan status yang dihasilkan antrean (semuanya lahir hanya dari processStockAdjustment existing — di luar antrean).
+
+Alur:
+1. Penyesuaian lahir `draft` lewat jalur existing (bisa disertai Approval pending bila workflow terkonfigurasi).
+2. Builder antrean (usulan, baca-saja) mengambil populasi §3 dalam scope gudang pembaca dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), tahap turunan (menunggu keputusan vs menunggu proses), konteks gudang/pembuat/tipe/alasan, hitungan item + nilai snapshot tersimpan, penanda selisih transfer, keadaan approval tertaut.
+3. Pemutus membuka detail dari baris dan bertindak lewat jalur existing (langkah Approval di permukaan persetujuan, atau Proses di detail berizin `process_stock_adjustments`). Antrean tidak menyediakan tombol Setujui/Tolak/Proses/Hapus tahap 1 (Q-SAQ-5).
+4. Sesudah diproses/ditolak/dihapus: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-SAQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu` (umur), `Gudang`, `Tipe` (type apa adanya), `Item` (hitungan baris), `Nilai Selisih` (Σ totalCost snapshot tersimpan, bertanda).
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Persetujuan" untuk tahap menunggu keputusan, "Menunggu Proses" untuk tahap sudah disetujui belum diproses (kata tahap final Q-SAQ-3).
+- Penanda: tertaut transfer → "Selisih transfer"; tanpa baris Approval → "Tanpa alur persetujuan tercatat" (pola 065-S); Approval pending → "Menunggu langkah persetujuan".
+- Notice usulan: "Daftar ini hanya penyesuaian stok yang belum diproses. Penyesuaian yang belum diproses belum mengubah stok maupun jurnal; nilai selisih adalah angka tercatat di dokumen, bukan nilai stok saat ini."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean penyesuaian mengendap + tahap/umur | `view_stock_adjustments` (katalog:233) + scope gudang `getWarehouseScope` fail-closed | daftar penyesuaian requirePermission; aksi create/process assertWarehouseAccess | TIDAK ada key baru (key terpisah = Q-SAQ-6); loader menyaring warehouseId dalam scope (none → kosong) |
+| Buat penyesuaian (sumber baris draft) | `create_stock_adjustments` (katalog:234) | aksi buat existing | tidak berubah |
+| Ubah/hapus penyesuaian draft | `edit/delete_stock_adjustments` (katalog:235-236) | aksi existing + penjaga hanya-draft | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Proses (keluar draft → processed, stok+jurnal lahir) | `process_stock_adjustments` (katalog:237) | aksi proses existing + assertApproved + klaim atomik | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Setujui/tolak langkah workflow | workflow generik (langkah approver; TIDAK ada `approve_stock_adjustments` di katalog) | approveStep/rejectStep + maker-checker | TIDAK berubah; antrean menampilkan keadaan approval sebagai fakta pendamping |
+
+Tidak ada permission key baru diusulkan tahap ini. Nilai snapshot tampil hanya dalam scope izin+gudang pembaca yang sama dengan daftar existing; ekspor antrean (bila kelak dibuka) tidak boleh memperluas scope itu.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah spec ini: `draft` → `approved` (approveStep final), `draft` → `rejected` (rejectStep), `rejected` → `draft` (reopenApproval), `draft` → `processing` → `processed` (klaim proses; kegagalan transaksi kembali `draft`), hapus = hard delete hanya-draft. Status `processing` adalah keadaan sesaat dalam klaim — baris yang tertinggal `processing` di luar transaksi berjalan adalah anomali data, BUKAN populasi antrean diam-diam (EC-SAQ-6).
+
+Populasi antrean usulan: StockAdjustment `deletedAt IS NULL` AND warehouseId dalam scope pembaca AND ( (`status="draft"`) OR (`status="approved"` bila Q-SAQ-3 disahkan) ). Per baris sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurDraftHari` = hari kalender WIB dari `createdAt` ke hari ini (masa depan = 0 tertanda, bukan negatif).
+- `tahapTurunan` = `menunggu_proses` bila status `approved`; selain itu `menunggu_keputusan` bila Approval tertaut terbaru `pending`; `menunggu_keputusan` juga untuk draft tanpa Approval (belum ada keputusan tercatat — penanda tanpa-alur membedakannya, bukan tahap karangan ketiga).
+- `keadaanApproval` = fakta pendamping dari Approval terbaru (pola 065-S BR-PRQ-04).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status processed/rejected/processing, atau deletedAt terisi, atau di luar scope gudang | di luar antrean | bukan populasi |
+| S1 | populasi dan umurDraftHari >= ambangHariMengendap (Q-SAQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | selisih fisik tercatat belum tercermin melewati kesabaran operasional yang diputus Lead; putuskan/proses dulu lewat detail |
+| S2 | populasi selain S1 | `menunggu` | antrean biasa; urutan kerja tertua-dulu (Q-SAQ-7) |
+
+Transisi tingkat/tahap hanya karena render ulang sesudah fakta berubah (disetujui/diproses/ditolak/dihapus, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada proses otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SAQ-01 | Populasi = StockAdjustment `deletedAt IS NULL`, warehouseId dalam scope gudang pembaca (fail-closed: scope none → kosong), status `draft` (+ `approved` hanya bila Q-SAQ-3 disahkan). Status lain tidak disamakan diam-diam; `processing` tertinggal = anomali yang dilaporkan terpisah, bukan dimasukkan/dikeluarkan senyap (EC-SAQ-6). | TERVERIFIKASI-KODE (schema:2486,2494) + USULAN batas |
+| BR-SAQ-02 | Penyesuaian belum `processed` BELUM mengubah stok dan BELUM menjurnal: StockMove + jurnal lahir hanya di dalam transaksi processStockAdjustment dari hook (inventory.actions.ts:480-503), journalId null sampai saat itu. Antrean dilarang berlabel stok terposting/jurnal/selisih final di permukaan mana pun; notice §1 wajib menyatakan ini. | TERVERIFIKASI-KODE + USULAN kejujuran label |
+| BR-SAQ-03 | Nilai tampil = Σ `totalCost` baris tersimpan apa adanya (snapshot difference × unitCost saat buat/ubah), ditampilkan bertanda sesuai arah selisih dokumen. Antrean TIDAK menghitung ulang nilai dari StockMove berjalan, harga master, atau FIFO saat ini — selisih sistem-vs-fisik dokumen memang dibekukan saat dibuat (systemQty snapshot :285-330) dan menghitung ulang akan mengarang angka kedua yang berbeda dari dokumen yang akan diproses. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-SAQ-04 | Bukti persetujuan = Approval/ApprovalHistory tertaut terbaru, BUKAN kolom `approvedBy`/`approvedAt` dokumen (tidak diisi approveStep untuk model ini — pembetulan premis 1). Antrean tidak menampilkan nama penyetuju dari kolom itu dan tidak mengarang penyetuju dari createdBy. | TERVERIFIKASI-KODE |
+| BR-SAQ-05 | Kuantitas TIDAK dijumlahkan lintas item/satuan: tampil hitungan baris item + Σ difference hanya tidak pernah lintas dokumen berbeda satuan sebagai "total qty" (pola laporan persediaan existing: hanya nilai bertotal, qty per baris). Rekap antrean = hitungan dokumen per tahap/tingkat (+ Σ nilai snapshot sejenis bila Lead memutus, diberi label nilai tercatat dokumen). | USULAN di atas pola TERVERIFIKASI-KODE laporan persediaan |
+| BR-SAQ-06 | Baris `inventoryTransferId != null` (penutupan selisih transfer) bertanda terpisah dan TIDAK dicampur ke rekap penyesuaian fisik: saat diproses ia jurnal-saja nol StockMove dan menutup transfer (inventory.actions.ts:400-477). Menggabung qty/nilainya ke rekap fisik menyesatkan pembaca soal gerak stok. Eksklusi total = putusan Q-SAQ-4. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-SAQ-07 | Scope gudang mengikuti `getWarehouseScope` existing per pembaca; baris gudang di luar scope tidak tampil dan tidak terhitung di rekap (bukan hanya disembunyikan di UI). Loader menegakkan sebelum query, pola loader antrean existing. | TERVERIFIKASI-KODE + USULAN penegakan |
+| BR-SAQ-08 | Umur memakai `createdAt`, bukan `date` dokumen (boleh lampau/masa depan bisnis). Mengubah acuan = Q-SAQ-8. Hari kalender WIB. | USULAN di atas TERVERIFIKASI-KODE field |
+| BR-SAQ-09 | Nol proses/setuju/tolak/hapus otomatis berbasis umur tahap mana pun spec ini. Umur hanya penanda prioritas; keputusan tetap manusia berizin lewat jalur existing (maker-checker workflow tidak dinilai ulang antrean). | USULAN batas |
+| BR-SAQ-10 | Ambang hari `mengendap`, kata label/tahap final, cakupan `approved`, dan proses-dari-antrean = kebijakan perilaku inti: BUTUH-VONIS Lead (Q-SAQ-1/2/3/5). Tahap baca-saja ini tidak mengubah jurnal/stok existing sehingga Accountant TIDAK diminta — kecuali Lead membuka proses-dari-daftar atau menampilkan nilai sebagai angka akuntansi final, saat itu vonis Accountant wajib sebelum fisik (proses melahirkan jurnal persediaan). | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Penyesuaian persediaan per gudang (rusak/hilang/selisih) | Ada: Penyesuaian Persediaan (URL §kepala) | Ada: Penyesuaian Barang per gudang + laporan (URL §kepala) | Ada: buat/ubah Penyesuaian Stok per gudang, systemQty server (inventory.actions.ts:255) | Konteks gudang/tipe/alasan per baris antrean |
+| Persetujuan sebelum proses penyesuaian | Ada: Penyesuaian Persediaan termasuk transaksi ber-Persetujuan (URL §kepala) | Otorisasi user per transaksi disebut; alur approval bertahap tidak ditetapkan — tidak diklaim | Ada: workflow Approval generik opsional + assertApproved menahan proses; tanpa workflow proses langsung berizin process | Antrean berhenti di detail/permukaan persetujuan existing |
+| Daftar kerja penyesuaian belum diproses terlihat terpisah | Daftar persetujuan lintas transaksi ada; khusus draft penyesuaian tidak ditetapkan — tidak diklaim | Daftar penyesuaian ada; pemilahan draft mengendap tidak ditetapkan — tidak diklaim | Ada daftar + chip draft/processed, tanpa umur/tahap/scope-umur; approved bahkan tanpa chip | Antrean belum-proses berumur tertua-dulu + tahap turunan |
+| Antrean mengendap bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-SAQ-B1: Populasi tepat §3: processed/rejected/processing/ter-soft-delete/di-luar-scope tidak tampil (cabut saring status/deletedAt/scope → MERAH). `approved` masuk hanya bila Q-SAQ-3 disahkan dan selalu tahap `menunggu_proses` terbedakan dari draft.
+- AC-SAQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-SAQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif.
+- AC-SAQ-B3: Tanpa angka karang: selama Q-SAQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya satu konstanta bernama. Nilai per baris = Σ totalCost tersimpan payload (hitung ulang dari StockMove/harga berjalan → MERAH, BR-SAQ-03); approvedBy/approvedAt dokumen tidak dibaca sebagai bukti setuju (baca kolom itu → MERAH, BR-SAQ-04).
+- AC-SAQ-B4: Loader fail-closed `view_stock_adjustments` + scope gudang sebelum query (scope none → kosong tanpa query bocor), anti-N+1 (gudang massal, nama createdBy massal, agregat item massal, Approval terbaru massal), Decimal → Number di tepi; baris selisih-transfer bertanda dan terpisah dari rekap fisik (campur rekap → MERAH, BR-SAQ-06).
+- AC-SAQ-B5: Baca-saja terbukti: builder/loader tidak memanggil processStockAdjustment/approveStep/rejectStep/requestApprovalIfConfigured/tulis status/StockMove/jurnal (panggil diam-diam → MERAH); rekap = hitungan dokumen per tahap/tingkat atas baris yang sama persis.
+
+Frontend (konsumen):
+- AC-SAQ-F1: Kolom/label/notice/penanda verbatim server; UI tidak menghitung umur/tahap/tingkat/nilai sendiri (hitung ulang UI → MERAH); urutan dari payload.
+- AC-SAQ-F2: Nilai tampil berlabel nilai tercatat dokumen (bukan "nilai stok"/"jurnal"); qty tidak ditotal lintas satuan; baris selisih-transfer bertanda verbatim (nilai tanpa label snapshot → MERAH, BR-SAQ-02/03).
+- AC-SAQ-F3: Tautan baris hanya ke detail penyesuaian existing; tidak ada tombol Proses/Setujui/Tolak/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-SAQ-5 → MERAH); tanpa `view_stock_adjustments` halaman menolak; baris di luar scope gudang tidak dirender dari payload bocor.
+
+Edge cases:
+- EC-SAQ-1: Draft tanpa workflow (Approval tidak ada) tetap populasi `menunggu_keputusan` berpenanda tanpa-alur; tidak dikeluarkan dan tidak dilabeli "belum diajukan" sebagai fakta.
+- EC-SAQ-2: Penyesuaian hasil opname (reason/teks opname) tampil apa adanya — antrean tidak menyaring berdasarkan reason bebas selain penanda selisih-transfer persis (BR-SAQ-06); reason kosong tampil `—`.
+- EC-SAQ-3: Dokumen bertipe `increase` vs penurunan tampil type apa adanya; arah nilai mengikuti tanda totalCost tersimpan, antrean tidak menormalkan tanda sendiri.
+- EC-SAQ-4: Penyesuaian draft tanpa item (baris tersaring parser) tampil hitungan 0 item, nilai 0; tidak dikeluarkan karena kosong.
+- EC-SAQ-5: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-SAQ-6: Baris tertinggal `processing` (proses terputus di luar rollback existing) BUKAN populasi senyap: builder mengeluarkannya dari antrean dan (fisik Backend memutus bentuknya) menghitungnya sebagai anomali terpisah yang terlihat, bukan menghilang; spec ini tidak mengusulkan jalur perbaikan statusnya.
+- EC-SAQ-7: Penyesuaian yang diproses/ditolak dari permukaan lain saat antrean terbuka keluar populasi pada render berikut; antrean tidak mengunci dokumen.
+- EC-SAQ-8: Dua draft untuk gudang+barang sama tampil apa adanya dua baris; tidak digabung/didedup (penilaian selisih milik pemroses, bukan antrean).
+
+### 7. Backlog implementasi (turunan F-2026-10-26-066-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-066-S | Spec kontrak ini (dokumen) | Business | — |
+| 066-B | Builder murni tahap/tingkat/umur penyesuaian belum-proses + loader `view_stock_adjustments`+scope-gudang fail-closed anti-N+1 + tes AC-SAQ-B1..B5; verifikasi fisik jalur approved→proses existing sebelum populasi approved diterbitkan (Q-SAQ-3) | Backend | Putusan Lead Q-SAQ-1/2/3/4 |
+| 066-F | Permukaan antrean (daftar penyesuaian existing atau kartu antrean pola existing) verbatim payload + AC-SAQ-F1..F3 | Frontend | 066-B merged |
+| 066-Q | Falsifikasi AC-SAQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 066-B/066-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-SAQ-1 | Ambang hari tingkat `mengendap` (umur >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (selisih fisik tak tercermin mengacaukan janji stok; sejajar usulan faktur draft 057-S) — bukan fakta; selama belum diputus builder hanya tingkat menunggu |
+| Q-SAQ-2 | Kata label tingkat/tahap/penanda/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-SAQ-3 | Status `approved` (sudah disetujui workflow, belum diproses) masuk populasi sebagai tahap `menunggu_proses`? Termasuk verifikasi fisik: jalur existing apa yang memproses dokumen approved menjadi processed, mengingat processStockAdjustment mewajibkan `draft`? | Lead (fisik Backend memverifikasi) | MASUK dibedakan tahap — justru risiko senyap terbesar (selisih disetujui belum tercermin). Bila verifikasi Backend menemukan approved tidak punya jalur proses existing, temuan itu dicatat sebagai gap aksi terpisah dan populasi tahap 1 hanya draft sampai Lead memutus jalur prosesnya; spec antrean tidak mengarang transisi approved→processed |
+| Q-SAQ-4 | Baris penutupan selisih transfer tampil bertanda atau eksklusi total dari antrean? | Lead | Tampil bertanda "Selisih transfer", rekap terpisah (BR-SAQ-06) — draft-nya yang mengendap membiarkan transfer menggantung |
+| Q-SAQ-5 | Proses langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-SAQ-09): konteks item/serial/batch + gerbang periode/assertApproved harus terasa di detail; membuka proses-dari-daftar memicu kewajiban vonis Accountant (BR-SAQ-10) |
+| Q-SAQ-6 | Key izin antrean terpisah dari `view_stock_adjustments`? | Lead | TIDAK tahap 1; scope gudang existing cukup |
+| Q-SAQ-7 | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua (lintas tahap)? | Lead | Tahap menunggu_proses dulu (sudah diputus manusia, tinggal eksekusi), lalu `mengendap`, lalu umur tertua; seri documentNo asc — Lead boleh menyederhanakan |
+| Q-SAQ-8 | Acuan umur createdAt (BR-SAQ-08) vs date dokumen? | Lead | createdAt — momen menunggu sistem; date adalah tanggal bisnis penyesuaian |
+
+### Yang TIDAK diusulkan run ini
+- Memproses/menyetujui/menolak/menghapus massal atau otomatis penyesuaian basi (BR-SAQ-09) — proses melahirkan StockMove + jurnal persediaan nyata; otomatisasi melewati pemroses berizin dan gerbang periode.
+- Menghitung ulang nilai selisih dari stok/FIFO berjalan atau menampilkan nilai sebagai jurnal/stok final (BR-SAQ-02/03) — dokumen membekukan snapshotnya sendiri; angka kedua karangan akan berbeda dari yang diproses.
+- Mengisi approvedBy/approvedAt dari antrean atau mengubah perilaku approveStep untuk model ini — pembetulan premis mencatat fakta; mengubah semantik persetujuan generik = keputusan workflow terpisah lintas dokumen.
+- Mengarang transisi approved→processed baru di spec antrean (Q-SAQ-3) — bila jalur proses approved memang absen, itu gap aksi Backend/Lead tersendiri dengan gerbang jurnalnya, bukan turunan baca-saja.
+- Pengingat WA/email ke pemroses/approver, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru, di luar tahap baca-saja.
+- Menampilkan detail serial/batch per baris item di antrean — konteks eksekusi milik detail dokumen; antrean menjawab "penyesuaian belum diproses", bukan menggantikan pemeriksaan fisik.
+- Mengubah jalur hapus existing menjadi soft-delete demi deletedAt — fakta dicatat di premis; semantik hapus = keputusan skema/aksi terpisah.
