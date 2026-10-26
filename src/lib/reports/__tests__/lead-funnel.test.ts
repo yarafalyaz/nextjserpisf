@@ -337,3 +337,38 @@ describe("getLeadFunnel loader", () => {
     expect(mocks.prismaMock.lead.findMany).not.toHaveBeenCalled()
   })
 })
+
+describe("F-2026-10-25-030-S rincian alasan kalah (Q-LR-3)", () => {
+  it("lostByReason: kategori dari aktivitas lost terakhir; lama tak-tercatat; jumlah = ember lost", () => {
+    const at = new Date(2026, 9, 10)
+    const r = buildLeadFunnel(
+      [
+        lead({
+          id: 1, status: "lost",
+          activities: [
+            { type: "status_change", oldStatus: "proposal", newStatus: "lost", createdAt: at, description: "[kalah:harga] mahal" },
+          ],
+        }),
+        lead({
+          id: 2, status: "lost",
+          activities: [
+            { type: "status_change", oldStatus: "new", newStatus: "lost", createdAt: at, description: "teks bebas harga mahal" },
+          ],
+        }),
+        lead({ id: 3, status: "lost", activities: [] }),
+        lead({
+          id: 4, status: "new",
+          activities: [
+            { type: "status_change", oldStatus: "proposal", newStatus: "lost", createdAt: at, description: "[kalah:budget]" },
+          ],
+        }),
+      ],
+      { includeAssigneeBreakdown: false, period: null },
+    )
+    expect(r.position.stages.find((s) => s.status === "lost")?.count).toBe(3)
+    expect(r.position.lostByReason.reduce((sum, row) => sum + row.count, 0)).toBe(3)
+    expect(r.position.lostByReason.find((row) => row.key === "harga")?.count).toBe(1)
+    expect(r.position.lostByReason.find((row) => row.key === "budget")?.count).toBe(0)
+    expect(r.position.lostByReason.find((row) => row.key === "tak-tercatat")?.count).toBe(2)
+  })
+})
