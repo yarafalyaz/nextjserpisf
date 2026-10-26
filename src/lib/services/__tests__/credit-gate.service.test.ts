@@ -23,13 +23,22 @@ function makeTx(opts: {
   creditLimit?: number
   customerDeletedAt?: Date | null
   overrides?: Row[]
+  invoices?: Row[]
+  returns?: Row[]
+  journals?: Row[]
+  receivableAccountId?: number | null
 }) {
   const tx: Record<string, unknown> = {
     $queryRaw: vi.fn(async () => []),
     systemSetting: model(
       opts.gateEnabled === undefined
         ? []
-        : [{ creditGateEnabled: opts.gateEnabled, salesReceivableAccountId: null }],
+        : [
+            {
+              creditGateEnabled: opts.gateEnabled,
+              salesReceivableAccountId: opts.receivableAccountId ?? null,
+            },
+          ],
     ),
     customer: {
       findUnique: vi.fn(async () => ({
@@ -37,14 +46,14 @@ function makeTx(opts: {
         deletedAt: opts.customerDeletedAt ?? null,
       })),
     },
-    salesInvoice: model(),
+    salesInvoice: model(opts.invoices ?? []),
     salesOrder: model(),
     downPayment: model(),
     customerCredit: model(),
     workOrder: model(),
     quotation: model(),
-    salesReturn: model(),
-    journal: model(),
+    salesReturn: model(opts.returns ?? []),
+    journal: model(opts.journals ?? []),
     creditOverride: {
       findMany: vi.fn(async () => opts.overrides ?? []),
       create: vi.fn(async ({ data }: { data: Row }) => ({ id: 501, ...data })),
@@ -185,6 +194,39 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     const create = (tx as never as { creditOverride: { create: ReturnType<typeof vi.fn> } })
       .creditOverride.create
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it("S-1: returnCredit retur completed + jurnal POSTED Cr Piutang mengurangi K1 persis nominalnya", async () => {
+    // Faktur recognised 900rb belum dibayar; retur completed atas faktur itu
+    // menjurnal Cr Piutang 300rb -> K1 = 600rb. Percobaan SO 350rb: paparan
+    // 950rb (warning, allowed). Tanpa pengurang returnCredit paparan jadi
+    // 1.250.000 (over) — mutasi cabut pengurang wajib memerahkan tes ini.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_000_000,
+      receivableAccountId: 110,
+      invoices: [{ id: 11, grandTotal: 900_000, paidAmount: 0, salesOrderId: null, quotationId: null }],
+      returns: [{ id: 21, salesInvoiceId: 11 }],
+      journals: [{ referenceId: 21, entries: [{ credit: 300_000 }] }],
+    })
+    const out = await assessCreditGateInTx(tx, { ...attempt, attemptedAmount: 350_000 })
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(950_000)
+      expect(out.assessment.status).toBe("warning")
+    }
+    const journalFindMany = (tx as never as { journal: { findMany: ReturnType<typeof vi.fn> } })
+      .journal.findMany
+    expect(journalFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          deletedAt: null,
+          status: "POSTED",
+          referenceType: "SalesReturn",
+          referenceId: { in: [21] },
+        }),
+      }),
+    )
   })
 
   it("EC-CL2-1: kunci baris pelanggan diambil saat penilaian aktif", async () => {

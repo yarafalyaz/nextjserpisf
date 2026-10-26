@@ -38,6 +38,7 @@ import {
   type CustomerCreditGateAssessment,
 } from "@/lib/reports/customer-credit-gate"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { loadReturnCreditByInvoiceIdWithClient } from "@/lib/reports/return-credit"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { formatCurrency } from "@/lib/utils/format"
 
@@ -163,65 +164,6 @@ export function deriveCreditOverrideStatus(
   return row.status
 }
 
-/**
- * ReturnCredit per faktur DI DALAM tx (pola return-credit.ts, client tx):
- * Σ kaki Cr akun Piutang jurnal SalesReturn POSTED atas retur completed.
- * Loader laporan memakai prisma global di luar tx; di sini angka harus
- * konsisten dengan snapshot transaksi lahir yang sama.
- */
-async function returnCreditByInvoiceId(
-  tx: Tx,
-  invoiceIds: readonly number[],
-): Promise<Map<number, number>> {
-  const result = new Map<number, number>()
-  if (invoiceIds.length === 0) return result
-  const settings = await tx.systemSetting.findFirst({
-    select: { salesReceivableAccountId: true },
-  })
-  const receivableAccountId = settings?.salesReceivableAccountId ?? null
-  if (receivableAccountId === null) return result
-  const returns = await tx.salesReturn.findMany({
-    where: { status: "completed", salesInvoiceId: { in: [...invoiceIds] } },
-    select: { id: true, salesInvoiceId: true },
-  })
-  if (returns.length === 0) return result
-  const journals = await tx.journal.findMany({
-    where: {
-      deletedAt: null,
-      status: "POSTED",
-      referenceType: "SalesReturn",
-      referenceId: { in: returns.map((r) => r.id) },
-    },
-    select: {
-      referenceId: true,
-      entries: {
-        where: { accountId: receivableAccountId },
-        select: { credit: true },
-      },
-    },
-  })
-  const creditByReturnId = new Map<number, number>()
-  for (const journal of journals) {
-    if (journal.referenceId === null) continue
-    let credit = 0
-    for (const entry of journal.entries) {
-      credit = safeAdd(credit, Number(entry.credit), 2)
-    }
-    if (credit <= 0) continue
-    creditByReturnId.set(
-      journal.referenceId,
-      safeAdd(creditByReturnId.get(journal.referenceId) ?? 0, credit, 2),
-    )
-  }
-  for (const ret of returns) {
-    if (ret.salesInvoiceId == null) continue
-    const credit = creditByReturnId.get(ret.id)
-    if (!credit) continue
-    result.set(ret.salesInvoiceId, safeAdd(result.get(ret.salesInvoiceId) ?? 0, credit, 2))
-  }
-  return result
-}
-
 async function loadComponents(
   tx: Tx,
   customerId: number,
@@ -241,7 +183,7 @@ async function loadComponents(
     },
     select: { id: true, grandTotal: true, paidAmount: true },
   })
-  const returnCreditMap = await returnCreditByInvoiceId(
+  const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(
     tx,
     invoices.map((i) => i.id),
   )
@@ -470,7 +412,7 @@ async function existingDocumentExposure(
   if (!invoice || !(RECOGNISED_AR_STATUSES as readonly string[]).includes(invoice.status)) {
     return 0
   }
-  const returnCreditMap = await returnCreditByInvoiceId(tx, [
+  const returnCreditMap = await loadReturnCreditByInvoiceIdWithClient(tx, [
     attempt.existingDocumentId,
   ])
   const settled =
