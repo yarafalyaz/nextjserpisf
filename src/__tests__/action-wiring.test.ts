@@ -203,6 +203,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-25-010-S: menunggu UI antrean putusan koreksi (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
   "src/actions/hrm.actions.ts::cancelAttendanceCorrection":
     "F-2026-10-25-010-S: menunggu UI daftar koreksi saya (kartu UI lanjutan BOT Frontend, parent t_cbab9ec1)",
+  // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
+  // menunggu form di detail kendaraan (kartu UI t_cf82d1cf, assignee Frontend);
+  // buang entri ini saat form memanggilnya.
+  "src/actions/vehicle.actions.ts::updateCustomerVehicleServiceSchedule":
+    "F-2026-10-25-021-S: menunggu UI form jadwal kendaraan (kartu t_cf82d1cf Frontend)",
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
   // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
   // frontend t_f8d7b3d9) — entri beku dibuang.
