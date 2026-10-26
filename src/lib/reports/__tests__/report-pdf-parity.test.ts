@@ -103,6 +103,10 @@ describe("paritas registry PDF laporan", () => {
       "proyeksi-kas",
       "pusat-laba",
       "rekap-komisi",
+      // F-2026-10-25-037-S §5: saldo utang komisi baca-saja; PDF server-side
+      // belum dibuka (pola rekap-komisi; angka ekspor wajib builder yang
+      // sama dengan layar bila nanti dibuka).
+      "saldo-utang-komisi",
       // F-039-S BR-QPH-09: riwayat harga penawaran baca-saja tahap 1;
       // ekspor/PDF server-side belum dibuka (angka ekspor wajib builder
       // yang sama dengan layar bila nanti dibuka).

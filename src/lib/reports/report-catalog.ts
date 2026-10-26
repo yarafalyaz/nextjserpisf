@@ -158,6 +158,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/pemenuhan-pesanan" },
       { href: "/laporan/terkirim-belum-terfaktur" },
       { href: "/laporan/rekap-komisi" },
+      { href: "/laporan/saldo-utang-komisi" },
       { href: "/laporan/target-penjualan" },
     ],
   },
