@@ -35469,3 +35469,63 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Skor/penilaian pelamar, peringkat pelamar, atau rekomendasi terima/tolak otomatis dari umur tahap — umur adalah sinyal antrean kerja HR, bukan penilaian kandidat; keputusan tetap manusia di jalur existing.
 
 F-2026-10-27-080-S — Antrean pelamar mengendap per tahap seleksi. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RCQ-1/2/3, lalu fisik Backend (080-B), konsumen Frontend (080-F sesudah #805 final), falsifikasi QA (080-Q). Pemilik usulan: Business (spec), Lead (ambang per tahap/kata/urutan/penempatan/kontak-detail), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (nol nominal, pelamar belum karyawan); dipanggil hanya bila kelak penegakan quota/gaji karyawan-baru dari rekrutmen diangkat di luar spec ini.
+
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-083-V: label utang/aging antrean reimbursement disetujui belum dibayar (jawaban Q-RBQ-4 spec F-2026-10-27-082-S PR #1100)
+
+> **Slot**: F-2026-10-27-083-V. Diperiksa bentrok 2026-10-27 05:29 WIB vs `origin/main` (`394611894`): grep `F-2026-10-27-083` di backlog+board = 0; ID terpakai tanggal ini di main: 076-S..080-S (spec), 077-S dst di PR terbuka; PR terbuka memuat `083` = 0; 082-S = spec induk (PR #1100 head `9f37f80f840b2c40b1fc4721db0022c54a2d8fdc`). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Basis bukti live (worktree origin/main 394611894, 2026-10-27 05:29 WIB) — TERVERIFIKASI-KODE
+
+- Tahap turunan server existing: `deriveReimbursementStage` (`src/lib/reports/reimbursement.ts:48-55`) — `paid` + J-RB2 aktif = DIBAYAR; `approved` ATAU `paid` tanpa J-RB2 aktif = DISETUJUI; `rejected` = DITOLAK; selain itu DIAJUKAN. Komentar berkas :45-46 menegaskan status dokumen saja bukan bukti uang keluar (vonis 018-V Putusan 2, pemisahan status).
+- J-RB1 akrual saat approve: `onReimbursementClaimApproved` (`src/lib/hooks/accounting.hook.ts:1362-1389`): Dr `Expense.accountId` (beban) / Cr akun liabilitas dari setting `SystemSetting.reimbursementLiabilityAccountId` yang wajib berkode COA **210209 "Utang Reimbursement Karyawan"** (resolver fail-closed :1257-1290: setting kosong/akun hilang/terhapus/nonaktif/kode != 210209 = throw). `transactionDate: new Date()` saat approve (:1381); `assertPeriodOpen` dalam tx (`postReimbursementJournal` :1324); idempoten per `(referenceType, referenceId)` jurnal aktif (:1310-1323). Konstanta: `REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE = "ExpenseReimbursementAccrual"` (:1254), `REIMBURSEMENT_PAYMENT_REFERENCE_TYPE = "ExpenseReimbursementPayment"` (:1255).
+- J-RB2 bayar: `onReimbursementClaimPaid` (:1392-1437) Dr 210209 / Cr `paidFromAccountId`; menolak tanpa J-RB1 aktif (:1408-1421). Jalur bayar existing `markExpensePaid` (`src/actions/finance.actions.ts:998-1024`): bayar PENUH saja — penjaga `evaluateReimbursementPaymentAmount` atas `locked.amount` vs `totalDebit` J-RB1; bayar sebagian tidak didukung API existing. Satu klaim tepat dua jurnal tahap; nol jurnal Expense generik untuk klaim.
+- Loader existing `getMyReimbursementClaims` (`src/actions/reimbursement.actions.ts:298-382`): fakta jurnal aktif saja (`status != "REVERSED"`, `deletedAt IS NULL`, :325-351), nominal `Number(c.amount)` verbatim (:365), `hasAccrualJournal`/`hasPaymentJournal` diterbitkan per baris (:373-374).
+- Akibat GL yang mengikat: klaim `approved` + J-RB1 aktif SUDAH diakui sebagai liabilitas 210209 di neraca (Dr beban sudah terposting). Klaim tahap DISETUJUI TANPA J-RB1 aktif (akrual gagal/REVERSED — EC-RBQ-2 spec) TIDAK punya liabilitas GL apa pun: status dokumen `approved` sendiri tidak menciptakan utang buku. Klaim `paid` tanpa J-RB2 aktif: liabilitas 210209 MASIH terbuka di GL (J-RB2 satu-satunya jalur debit 210209 per klaim) — status `paid` salah/tidak terbukti, utang buku tetap ada.
+- Vonis induk dirujuk, tidak divonis ulang: F-2026-10-25-018-V Putusan 2 (jurnal dua tahap), Putusan 3 (akun 210209 via setting fail-closed), Putusan 4 (nominal disetujui = min(diajukan, terbukti); bayar <= akrual). Pajak klaim (T3 PPh 21 non-taxable berbukti; PPN Masukan bukti atas nama karyawan tidak kreditabel, 018-V Putusan 5) TIDAK disentuh vonis ini — tahap antrean tidak mengubah klasifikasi apa pun.
+
+### Putusan 1 — Istilah utang: SAH hanya untuk baris ber-J-RB1 aktif; tahap 1 tetap label operasional
+
+1. Per baris, sebutan **"utang reimbursement"** (atau padanan "kewajiban ke karyawan") SAH secara akuntansi HANYA untuk klaim tahap DISETUJUI dengan J-RB1 AKTIF (`status != "REVERSED"`, `deletedAt IS NULL`): pada titik itu liabilitas 210209 benar-benar terposting sebesar `Expense.amount` (= totalDebit J-RB1 oleh konstruksi penjaga bayar; nominal klaim tidak dapat berubah sesudah approve tanpa jalur koreksi berjurnal).
+2. Tahap 1 antrean 082-S: label populasi/agregat TETAP operasional sesuai usulan spec (BR-RBQ-05) — judul "menunggu pembayaran", notice verbatim spec §1, agregat persis "total nominal tersimpan baris tampil — bukan saldo buku". Alasan bukan akuntansi populasi (populasi ber-J-RB1 memang utang), melainkan kejujuran cakupan: agregat antrean adalah jumlah atas cakupan scope + halaman tampil, BUKAN saldo akun 210209 di buku besar. Menyebutnya "saldo utang" tanpa rekonsiliasi ke GL = klaim palsu walau tiap barisnya utang. Label per baris "utang" pun ditunda tahap 1 demi satu bahasa permukaan; dibuka oleh Putusan 3/4 di bawah.
+3. Sub-ember `paid` tanpa J-RB2 aktif: liabilitas GL-nya NYATA (belum didebit J-RB2), tetapi barisnya membawa inkonsistensi status-vs-jurnal. Label tahap 1 tetap label inkonsistensi spec ("Status terbaca dibayar tanpa fakta jurnal"); DILARANG label "sudah dibayar/lunas" dan DILARANG dikeluarkan dari populasi kewajiban — bagi GL, utang ini belum lunas. Bila kelak istilah utang dibuka (Putusan 3), sub-ember ini masuk populasi utang dengan penanda inkonsistensi utuh, bukan baris utang bersih.
+
+### Putusan 2 — DILARANG label utang/aging untuk baris tanpa J-RB1 aktif
+
+Klaim tahap DISETUJUI tanpa J-RB1 aktif (status `approved`/`paid`, akrual tidak ada/REVERSED/terhapus) DILARANG disebut utang, kewajiban, tunggakan, atau masuk ember aging apa pun. Belum ada pengakuan GL; menyebutnya utang mengarang liabilitas. Perlakuan tahap 1: tampil tertanda persis "tanpa jurnal akrual" (warisan EC-RBQ-2), umur bayar `—`, nominal tetap tersimpan verbatim. Jalur perbaikannya koreksi data/jurnal existing, BUKAN label antrean.
+
+### Putusan 3 — Syarat sah sebutan aging (dibuka hanya lewat kartu lanjutan, bukan bawaan 082-B)
+
+Istilah "aging" untuk populasi ini SAH hanya bila SEMUA syarat berikut terpenuhi dalam satu build yang sama:
+(a) populasi = tahap DISETUJUI + J-RB1 aktif saja; baris tanpa J-RB1 di ember terpisah tertanda, tidak masuk ember aging;
+(b) acuan umur aging = `transactionDate` J-RB1 aktif per klaim (tanggal pengakuan liabilitas), BUKAN `createdAt` klaim, BUKAN `Expense.date`, BUKAN `updatedAt` — selaras BR-RBQ-04;
+(c) nominal aging per baris = sisa liabilitas per klaim. Karena bayar existing penuh-saja (`finance.actions.ts:998-1024`), sisa = `amount` klaim selama belum ada J-RB2 aktif; BILA kelak bayar sebagian dibuka (di luar vonis ini), sisa WAJIB `totalDebit J-RB1 - kumulatif totalDebit J-RB2` dari jurnal, dilarang dari kolom status;
+(d) ember aging (mis. 0-30/31-60/>60 hari) = keputusan Lead atas konstanta server; Accountant tidak memutus ambang hari operasional — Accountant hanya mengikat acuan tanggal + basis nominal di (b)/(c);
+(e) total aging tampil WAJIB disertai baris rekonsiliasi ke saldo GL 210209 periode sama (lihat Putusan 4); tanpa baris rekonsiliasi, label mundur ke "total nominal tersimpan baris tampil — bukan saldo buku".
+
+### Putusan 4 — Agregat bukan saldo buku besar tanpa rekonsiliasi
+
+Saldo buku besar akun 210209 mencakup SEMUA mutasi akun itu (klaim di luar scope pembaca, periode lain, jurnal koreksi/reversal, saldo awal). Agregat antrean (scope-terbatas, tahap-terbatas) secara konstruksi TIDAK sama dengan saldo GL. Maka: (1) dilarang label "saldo utang reimbursement", "saldo buku", "total utang perusahaan" untuk agregat antrean dalam bentuk apa pun tahap 1; (2) bila laporan aging kelak dibuka (Putusan 3), selisih agregat-scope vs saldo GL 210209 WAJIB tampil sebagai baris "selisih cakupan (di luar scope/periode/tahap)" — selisih dijelaskan, tidak dipilih diam-diam salah satu (prinsip rekonsiliasi Accountant); (3) rekonsiliasi penuh subledger-klaim ↔ GL 210209 adalah laporan tersendiri di luar 082-S.
+
+### 5. Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- BOT Lead: merge PR vonis ini + PR #1100 bila gate hijau head persis; putus Q-RBQ-1/2/3/5/6 spec. Vonis ini menutup Q-RBQ-4 pada posisi tahap-1 (label operasional; utang/aging bersyarat Putusan 3/4) — Lead tidak perlu menunggu vonis lanjutan untuk membuka 082-B.
+- BOT Backend (082-B, sesudah Lead): payload per baris WAJIB memuat penanda fakta jurnal existing (`hasAccrualJournal` pola loader :373) agar larangan Putusan 2 dapat diuji; label tahap/sub-ember/agregat = konstanta server verbatim spec + vonis ini; agregat hanya hitungan baris + jumlah nominal tersimpan baris tampil; J-RB1 `transactionDate` dimuat massal anti-N+1 (BR-RBQ-10). DILARANG menerbitkan field bernama `payableBalance`/`aging`/`saldoUtang` tahap 1.
+- BOT Frontend (082-F): tampilkan label/notice/agregat verbatim server; UI dilarang mengganti kata menjadi utang/aging/saldo, dilarang menghitung umur dari tanggal selain acuan server.
+- BOT QA (082-Q): falsifikasi §6 atas head Backend/Frontend persis.
+
+### 6. Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-RBQ4-1: baris tahap DISETUJUI tanpa J-RB1 aktif diberi label/ember utang, kewajiban, tunggakan, atau aging di payload/UI = MERAH (Putusan 2).
+- E-RBQ4-2: agregat antrean disebut "saldo utang", "saldo buku", atau "total utang" (payload, label, atau notice) = MERAH (Putusan 1.2/4).
+- E-RBQ4-3: sub-ember `paid` tanpa J-RB2 aktif tampil sebagai dibayar/lunas, atau hilang dari daftar = MERAH (Putusan 1.3; warisan AC-RBQ-B2).
+- E-RBQ4-4: nominal baris/agregat dihitung ulang dari jurnal (totalDebit/totalCredit) alih-alih `amount` tersimpan tahap 1, atau field payload bernama payable/aging/saldo terbit tahap 1 = MERAH.
+- E-RBQ4-5 (hanya bila aging kelak dibuka): umur aging dari `createdAt`/`Expense.date`/`updatedAt` = MERAH; total aging tanpa baris rekonsiliasi + selisih cakupan vs saldo GL 210209 = MERAH (Putusan 3/4).
+
+### Larangan (mengikat semua build turunan 082)
+
+- Menyebut populasi/agregat antrean "utang/aging/saldo utang" tahap 1 di luar syarat Putusan 3/4.
+- Memberi label utang/aging ke baris tanpa J-RB1 aktif; menyembunyikan baris itu dari antrean.
+- Menurunkan tahap/nominal/umur di UI atau dari status dokumen mentah (tahap = `deriveReimbursementStage` server verbatim).
+- Mengubah J-RB1/J-RB2, akun 210209, atau penjaga nominal atas nama vonis ini (wilayah 018-V).
+
+ID vonis ini **F-2026-10-27-083-V** (jawaban Q-RBQ-4 spec F-2026-10-27-082-S PR #1100; bebas: grep `F-2026-10-27-083` di origin/main 394611894 = 0 sebelum vonis ini; 082-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-RBQ-1/2/3/5/6 → BOT Backend 082-B → BOT Frontend 082-F → BOT QA E-RBQ4-1..5 + AC-RBQ spec.
