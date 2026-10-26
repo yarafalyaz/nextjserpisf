@@ -349,6 +349,62 @@ describe("credit-gate.service (F-2026-10-25-035-B)", () => {
     }
   })
 
+  it("BR-CL2-12 anti-dobel invoice-dari-SO: porsi SO terkait pindah K2->K1, bukan K2 penuh + invoice penuh", async () => {
+    // SO terbuka id 30 senilai 1jt belum terinvoice: K2 = 1jt,
+    // linkedOrderOpen = 1jt. Invoice baru 600rb dari SO 30: paparan
+    // proyeksi = K1 600rb + K2 sisa 400rb = 1jt (warning, allowed,
+    // limit 1,2jt). Bila blok linkedOrderOpen di projectedRow dicabut,
+    // paparan semu 1.600.000 -> over/blocked, tes ini wajib MERAH.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_200_000,
+      k2Orders: [{ id: 30, grandTotal: 1_000_000 }],
+    })
+    const out = await assessCreditGateInTx(tx, {
+      customerId: 3,
+      documentType: "sales_invoice",
+      attemptedAmount: 600_000,
+      requestedBy: 7,
+      salesOrderId: 30,
+      requestReason: "Proyek mendesak pelanggan",
+    })
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(1_000_000)
+      expect(out.assessment.status).toBe("warning")
+    }
+  })
+
+  it("BR-CL2-12 anti-dobel invoice-dari-SO sebagian: SO terinvoice sebagian dinilai sisa, porsi terinvoice tidak ditumpuk", async () => {
+    // SO id 31 senilai 1jt sudah terinvoice recognised 400rb (belum
+    // dibayar): K1 = 400rb, K2 sisa = 600rb, linkedOrderOpen = 600rb.
+    // Invoice baru 300rb dari SO 31: paparan proyeksi = K1 700rb +
+    // K2 sisa 300rb = 1jt persis nilai SO (warning, allowed, limit
+    // 1,2jt). Bila blok linkedOrderOpen dicabut, paparan semu
+    // 1.300.000 -> over/blocked, tes ini wajib MERAH.
+    const tx = makeTx({
+      gateEnabled: true,
+      creditLimit: 1_200_000,
+      invoices: [
+        { id: 41, grandTotal: 400_000, paidAmount: 0, salesOrderId: 31, quotationId: null },
+      ],
+      k2Orders: [{ id: 31, grandTotal: 1_000_000 }],
+    })
+    const out = await assessCreditGateInTx(tx, {
+      customerId: 3,
+      documentType: "sales_invoice",
+      attemptedAmount: 300_000,
+      requestedBy: 7,
+      salesOrderId: 31,
+      requestReason: "Proyek mendesak pelanggan",
+    })
+    expect(out.kind).toBe("allowed")
+    if (out.kind === "allowed") {
+      expect(out.assessment.exposure).toBe(1_000_000)
+      expect(out.assessment.status).toBe("warning")
+    }
+  })
+
   it("S-1: returnCredit retur completed + jurnal POSTED Cr Piutang mengurangi K1 persis nominalnya", async () => {
     // Faktur recognised 900rb belum dibayar; retur completed atas faktur itu
     // menjurnal Cr Piutang 300rb -> K1 = 600rb. Percobaan SO 350rb: paparan
