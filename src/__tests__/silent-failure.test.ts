@@ -284,6 +284,7 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "src/lib/reports/work-order-reservations-data.ts": "lazy-expire reservasi (F-2026-10-22-057-S BR-RES-06) best-effort saat baca: kegagalan dicatat berkonteks, tabel reservasi tetap tampil dari baris StockReservation dan expire dicoba lagi pada baca berikutnya — bukan angka yang ditelan",
   "scripts/clear-all-data.ts": "skrip sekali-jalan; error dilaporkan ke console sebelum proses keluar",
   "scripts/verify-migrations.mjs": "pembersihan DB scratch best-effort; kegagalan dilaporkan plus instruksi hapus manual",
+  "src/actions/sales.actions.ts": "F-2026-10-25-035-B fase 3: persist pending CreditOverride gagal dicatat console.error berkonteks; hasil tertahan tetap dikembalikan (dokumen memang tidak lahir) — bukan sukses semu",
 }
 
 const ALLOWED_DEFAULT_RETURN: Record<string, string> = {
@@ -300,6 +301,7 @@ const ALLOWED_DEFAULT_RETURN: Record<string, string> = {
   "src/lib/setup/install-state.ts": "tabel tak ada / DB tak terjangkau → dianggap belum terpasang (degradasi disengaja, beralasan)",
   "src/lib/utils/idempotency.ts": "pembersihan best-effort; kegagalan dicatat dan dianggap \"tak ada yang dihapus\"",
   "src/lib/utils/safe-parse.ts": "parse JSON gagal → null; kontrak fungsi memang mengembalikan null",
+  "src/lib/reports/return-credit.ts": "resolusi akun Piutang global gagal → null = akun belum terkonfigurasi; returnCredit dianggap 0 dan laporan tetap jalan (pola existing sales-target-achievement-data)",
 }
 
 function collectViolations(

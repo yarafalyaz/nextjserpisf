@@ -26,6 +26,8 @@ const TABLE_SOURCES = {
   // master
   accounts: "name", banks: "name", barcodes: "barcode", departments: "name",
   warehouses: "name", positions: "name", employees: "name",
+  job_vacancies: "title", job_applicants: "name", performance_cycles: "name",
+  performance_reviews: "id", competencies: "name", trainings: "title",
   items: "name",
   item_categories: "name", customer_categories: "name", item_groups: "name",
   expense_categories: "name", tax_groups: "name", brands: "name",
