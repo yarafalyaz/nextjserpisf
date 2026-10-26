@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { resolveLeadAssigneeNames } from "@/lib/reports/lead-assignee-names"
 import {
   buildLeadPriorityQueue,
   type LeadPriorityQueue,
@@ -38,17 +39,9 @@ export async function getLeadPriorityQueue(): Promise<LeadPriorityQueue> {
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   })
 
-  const assigneeIds = Array.from(
-    new Set(leads.map((lead) => lead.assignedTo).filter((id) => id != null)),
+  const assigneeNameById = await resolveLeadAssigneeNames(
+    leads.map((lead) => lead.assignedTo),
   )
-  let assigneeNameById = new Map<number, string>()
-  if (assigneeIds.length > 0) {
-    const users = await prisma.user.findMany({
-      where: { id: { in: assigneeIds } },
-      select: { id: true, name: true },
-    })
-    assigneeNameById = new Map(users.map((user) => [user.id, user.name]))
-  }
 
   return buildLeadPriorityQueue(
     leads.map((lead) => ({
