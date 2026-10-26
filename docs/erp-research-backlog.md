@@ -34794,3 +34794,154 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 Vonis Accountant tidak diminta (nol nominal tahap 1, BR-WIQ-04/11). Turunan dibuka: 076-B Backend, 076-F Frontend (sesudah 076-B merged), 076-Q QA.
 
 F-2026-10-27-076-S — Antrean klaim garansi intake mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WIQ-1/2/3, lalu fisik Backend (076-B), konsumen Frontend (076-F), falsifikasi QA (076-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak nominal/biaya klaim atau perubahan syarat jurnal diusulkan (di luar spec ini, BR-WIQ-04/11).
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-081-S: perluasan antrean persetujuan HR tertunda (F-2026-10-25-007-S) kind keputusan kontrak `submitted` (BUKAN antrean baru)
+
+> **Slot**: F-2026-10-27-081-S. Diperiksa bentrok 2026-10-27 03:40 WIB vs `origin/main` (`98a1869e`): grep `F-2026-10-27-081` di backlog+board origin = 0; maks ID 2026-10-27 di backlog origin = 076-S; PR/kartu berjalan 077/078/079/080-S (PR #1092/#1093/#1094/#1096) beda topik; branch `f081` = 0. Bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Perluasan, bukan antrean baru.** Antrean HR tertunda tahap 1 (F-2026-10-25-007-S, builder `hr-pending-approval.ts` + loader `hr-pending-approval-data.ts`, SUDAH di main termasuk kind `loan` dari F-2026-10-25-018-S) hari ini hanya menjawab cuti/lembur/pinjaman `pending`. Pengajuan keputusan kontrak yang sudah `submitted` — menunggu penyetuju `approve_contracts` scope menyeluruh — tidak terlihat di permukaan kerja mana pun lintas karyawan: penyetuju harus membuka panel probation per karyawan satu per satu (`getContractDecisionRequests` hanya per karyawan). Spec ini membekukan penambahan kind `contract_decision` ke builder+loader EXISTING yang sama. Domain (h) HR. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Inventarisasi terverifikasi (origin/main 98a1869e, 2026-10-27)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Antrean existing: `HR_PENDING_KINDS = ["leave", "overtime", "loan"]` (`src/lib/reports/hr-pending-approval.ts:53`); builder `buildHrPendingApprovalQueue` menyaring status PERSIS `pending` (:217-225), umur hari kalender WIB sejak `createdAt` (BR-HP-04, :150), `updatedAt` dilarang sebagai sumber umur (header :16-17); tahap `MENUNGGU_KEPUTUSAN` -> `MENGENDAP` umur > `HR_PENDING_STALE_DAYS = 3` (:45, konstanta bernama usul Q-HP-2); pendamping tanggal per kind (loan tanpa pendamping, :157-161). Loader `hr-pending-approval-data.ts:35-171`: tiga query massal status `pending` + `hrScopeWhere(scope)` di server, select tanpa nominal gaji, gerbang ganda view+approve per kind ditegakkan pemanggil (header :12-18).
+- Model `ContractDecisionRequest` (`prisma/schema.prisma:3722-3745`): employeeId, kind String, proposedContractEndDate nullable, reason, requestedBy, status default `draft`, decidedBy/decidedAt, rejectionReason, appliedAt/appliedBy, appliedFromStartDate/appliedEndDate, finalReviewId nullable, createdAt/updatedAt. Indeks status ada. **TIDAK ada kolom `submittedAt`** — stempel waktu yang ada hanya createdAt, decidedAt, appliedAt (fakta kunci §3).
+- Kosakata tertutup (`src/lib/reports/probation.ts`): `CONTRACT_DECISION_KINDS = extend_pkwt|convert_pkwtt|end_contract` (:47) + label verbatim `CONTRACT_DECISION_KIND_LABELS` (:78-82: "Perpanjang Kontrak (PKWT)" / "Angkat Tetap (PKWTT)" / "Selesai Tanpa Perpanjangan"); `CONTRACT_DECISION_STATUSES = draft|submitted|approved|rejected|applied|cancelled` (:50-58); `PROBATION_REVIEW_STATUSES = draft|submitted|decided` (:41).
+- Transisi aksi (`src/actions/probation.actions.ts`): buat `createContractDecisionRequest:349` (izin `edit_employees` + scope, self ditolak :358, karyawan sudah berhenti ditolak :361, lahir `draft` :404, finalReviewId diisi dari review final submitted/decided bila ada :390-394); ajukan `submitContractDecisionRequest:416` (hanya dari `draft`, klaim atomik dalam transaksi :443-453); setujui `approveContractDecisionRequest:498` / tolak `rejectContractDecisionRequest:534` (alasan wajib :538) / batal `cancelContractDecisionRequest:557` (hanya pengaju, dari draft|submitted) / terapkan `applyContractDecisionRequest:596` (hanya dari `approved`, menulis tanggal kontrak/status ke master :625-645; `end_contract` TIDAK menulis employmentEndedAt — penutupan tetap F-085-S :593-594, :645).
+- Izin aksi keputusan kontrak (key nyata): putus = `requirePermission("approve_contracts")` (:500, :536) + `assertContractApprover` (:478-496): scope `getHrScope` WAJIB `all` (department/self ditolak server), SoD penuh — penyetuju != pengaju (requestedBy) dan != penilai review final tertaut (finalReview.reviewerEmployeeId). Terapkan/ajukan/buat = `edit_employees` (:351, :418, :559, :598) + scope karyawan + bukan self. Katalog: `view_employees` (`module-catalog.generated.ts:96`), `edit_employees` (:98), `approve_contracts` (:308, resource contracts "Kontrak Karyawan").
+- Penjaga satu-submitted: submit menghitung baris `submitted` karyawan yang sama dalam transaksi dan menolak bila sudah ada (:443-447: "Sudah ada pengajuan keputusan kontrak yang menunggu persetujuan untuk karyawan ini"), lalu klaim `updateMany status=draft -> submitted` (:448-452). Draft bebas banyak; yang dibatasi persis populasi antrean spec ini.
+- Bacaan existing: `getContractDecisionRequests:734` hanya per karyawan (view_employees + assertHrEmployeeAccess); `getProbationOverview:676` SUDAH lintas karyawan untuk karyawan ber-probationEndDate (view_employees + hrEmployeeScopeWhere) termasuk status review per milestone — permukaan probation lintas karyawan sudah ada, jangan diduplikasi spec ini.
+- ProbationReview `submitted` menunggu `decideProbation:265` (approve_contracts, scope all, SoD vs penilai final :271-289); submit review hanya penilai tercatat (:207-257). Skor review = kategori tertutup tanpa angka (`probation.ts:31`, BR-PROB-05); seluruh permukaan probation/keputusan kontrak tanpa nominal/kompensasi (BR-PROB-11, `probation.ts:19`; komentar schema :3720 "Tanpa nominal/kompensasi (BR-PROB-11)").
+- Kompensasi PKWT adalah permukaan TERPISAH berizin payroll sendiri (`PkwtCompensationEvent` schema:4048, `src/lib/reports/pkwt-compensation*.ts`, panel payroll) — nominalnya TIDAK boleh ditarik ke antrean ini (lihat BR-HPC-05).
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts:40`, roles rusak = self employeeId -1); `hrScopeWhere` (:76) cocok untuk ContractDecisionRequest (punya employeeId + relasi employee).
+
+Belum ada / gap (bukti grep run ini):
+- `ContractDecisionRequest` tidak dibaca builder/loader antrean mana pun: `HR_PENDING_KINDS` tanpa kind kontrak (hr-pending-approval.ts:53); loader hanya LeaveRequest/OvertimeRequest/EmployeeLoan (hr-pending-approval-data.ts:40-105). Pengajuan kontrak `submitted` lintas karyawan hanya terlihat membuka panel per karyawan (`probation-contract-panel.tsx`, tombol Ajukan/Setujui/Terapkan per baris karyawan :444-473).
+- Tidak ada stempel `submittedAt`: momen transisi draft->submitted tidak tercatat sebagai kolom (submit :448-451 hanya mengubah status; jejak ActivityLog "submit" :454 ada tetapi log bukan sumber turunan sah — pola repo melarang rekonstruksi dari ActivityLog, BR-PROB-08/Q-PROB-6 probation.ts:13-17). Umur "sejak diajukan" yang jujur tidak bisa diturunkan dari kolom existing (§3).
+
+Benchmark resmi (akses live 2026-10-27):
+- Accurate Online: fitur Approval = pengaturan persetujuan terpusat per tipe transaksi + penyetuju + syarat (BENCHMARK: https://help.accurate.id/product/approval/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/cara-mengaktifkan-pengaturan-persetujuan/). Antrean persetujuan keputusan kontrak/probation HR berumur di help Accurate = TIDAK ditemukan run ini — tidak diklaim.
+- Zahir: Approval Management (persetujuan cuti/lembur/reimburse/ganti jadwal satu/multi jenjang) + Recruitment and Contract Management (kelola pelamar sampai kontrak kerja) ada di daftar fitur resmi (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/); Zahir HR memasarkan persetujuan cuti/reimburse multi layer (BENCHMARK: https://zahir.co.id/hr/). Bentuk antrean keputusan kontrak `submitted` berumur/bertingkat di halaman resmi Zahir = TIDAK ditetapkan run ini — tidak diklaim.
+
+### 1. Workflow specification
+
+Aktor: Penyetuju kontrak (pemegang `approve_contracts`, scope HR `all` — satu-satunya yang bisa memutus existing), Pengaju HR (pemegang `edit_employees` dalam scope — pembuat/pengaju/penerap), Karyawan subjek (tidak melihat antrean ini; status pengajuannya terlihat di panel karyawan existing sesuai scope), Lead (putusan Q-HPC), Backend (perluasan builder+loader existing), Frontend (perluasan kartu konsumen existing), QA (falsifikasi).
+
+Dokumen masuk: ContractDecisionRequest berstatus persis `submitted` existing (lahir dari create+submit existing). Dokumen keluar: tidak ada dokumen/kolom baru tahap 1; baris antrean baca-saja + tautan ke panel karyawan existing tempat keputusan diambil.
+
+Alur:
+1. Pengaju membuat pengajuan (draft) lalu mengajukannya lewat aksi existing; status menjadi `submitted` (maks 1 per karyawan, penjaga existing).
+2. Baris masuk antrean HR tertunda sebagai kind `contract_decision` dalam scope pemanggil, tampil: karyawan + departemen, label kind verbatim server, tanggal usulan akhir kontrak (extend_pkwt), alasan verbatim, umur menunggu berlabel jujur (§3), tahap/pendamping turunan.
+3. Penyetuju membuka detail dari antrean ke panel karyawan existing, lalu Setujui/Tolak (beralasan) lewat aksi existing — antrean tidak memutus apa pun tahap 1.
+4. Sesudah status bukan `submitted` (approved/rejected/cancelled), baris keluar populasi antrean keputusan permanen. Baris `approved` yang belum `applied` BUKAN populasi antrean ini (tahap penerapan terpisah untuk pemegang `edit_employees` — masuk/tidak sebagai pendamping = Q-HPC-2, jangan dicampur diam-diam).
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat baris kind `contract_decision` di antrean | `view_employees` (katalog:96) + `approve_contracts` (katalog:308) — gerbang ganda pola antrean existing | halaman/pemanggil loader menegakkan gerbang per kind sebelum loader (pola hr-pending-approval-data.ts:12-18) | USULAN pasangan gerbang kind ini (Q-HPC-5 bila Lead ingin beda); TIDAK ada key baru tahap 1 |
+| Buat / ajukan / batalkan pengajuan (sumber baris) | `edit_employees` (katalog:98) | probation.actions.ts:351/418/559 + scope + bukan self | tidak berubah |
+| Setujui / tolak dari panel existing | `approve_contracts` (katalog:308) | probation.actions.ts:498/534 + scope `all` SAJA + SoD penuh (:478-496) | TIDAK berubah; antrean tidak memberi jalur putus apa pun tahap 1 |
+| Terapkan keputusan approved | `edit_employees` (katalog:98) | applyContractDecisionRequest:596 (hanya approved) | di luar populasi; antrean tidak menampilkan tombol Terapkan tahap 1 |
+| Lihat kompensasi PKWT karyawan sama | izin permukaan pkwt-compensation existing (payroll) | pkwt-compensation.service/panel terpisah | TIDAK ditarik ke antrean (BR-HPC-05) |
+
+Catatan scope: baris tampil mengikuti `getHrScope` pemanggil di loader (server, bukan saringan UI). Penyetuju yang benar-benar bisa memutus tetap hanya scope `all`; pemegang `approve_contracts` berscope department TIDAK ada secara existing (assertContractApprover menolak) — menampilkan baris departemen ke pemegang gerbang ganda berscope department adalah fakta lihat-saja yang harus jujur di UI (keputusan tetap ditolak server di panel), atau populasi dibatasi scope `all` — dipilih Lead di Q-HPC-5, tidak diputuskan diam-diam spec ini.
+
+### 3. Status-transition matrix + fakta umur (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah antrean (TERVERIFIKASI-KODE probation.actions.ts): `draft` -> `submitted` (submit, hanya pengaju berizin edit_employees); `submitted` -> `approved` (approve) | `rejected` (reject beralasan) | `cancelled` (cancel oleh pengaju); `approved` -> `applied` (apply menulis tanggal kontrak ke master). Antrean tidak menulis transisi apa pun.
+
+Populasi antrean kind ini: hanya ContractDecisionRequest `status = "submitted"`. **Fisik penting untuk Backend**: builder existing menyaring status persis `pending` untuk leave/overtime/loan — populasi per kind adalah status persis MILIK kind itu (`pending` untuk tiga kind lama, `submitted` untuk contract_decision). Dilarang memetakan kontrak menjadi string `pending` karangan di loader/builder dan dilarang mengubah status dokumen demi antrean.
+
+Fakta umur (wajib dibekukan, jangan dipakai diam-diam):
+- TIDAK ada `submittedAt` (schema:3722-3745). `updatedAt` berubah oleh transisi/edit apa pun sesudahnya dan DILARANG sebagai sumber umur mengikuti BR-HP-04 antrean existing.
+- Satu-satunya tanggal lahir baris yang sah existing = `createdAt` (momen draft dibuat, BUKAN momen diajukan). Draft bisa dibuat lama sebelum diajukan, jadi umur dari createdAt bisa menggembung melewati ambang pada hari yang sama dengan submit.
+- Pilihan spec (USULAN, diputus Q-HPC-4): (a) tahap 1 umur dari `createdAt` dengan label jujur "sejak pengajuan dibuat" di notice server — nol migrasi, semantik diakui bukan "sejak diajukan"; atau (b) Backend menambah jejak submit sah (kolom `submittedAt` atau setara) sebagai pekerjaan fisik terpisah SEBELUM umur diterbitkan — migrasi di luar dokumen ini. Yang DILARANG: memakai `updatedAt` atau ActivityLog sebagai sumber umur diam-diam.
+- Selama Q-HPC-4 belum diputus, tahap MENGENDAP untuk kind ini TIDAK diterbitkan dari sumber yang salah label; builder tidak menanam angka/sumber karangan.
+
+Per baris, sinyal turunan (field existing, hari kalender WIB pola builder existing):
+- `umurMenungguHari` = hari kalender WIB sejak acuan terpilih Q-HPC-4 (usul (a): createdAt, berlabel jujur).
+- Pendamping tanggal: `proposedContractEndDate` hanya terisi untuk `extend_pkwt` (create :367-371; convert_pkwtt/end_contract usulannya null — :381-385 tidak mengisi tanggal). Jadi pendamping hanya untuk baris extend_pkwt bertanggal: tanggal usulan mendekat/lampau belum diputus (usul flag mengikuti kosakata existing `TANGGAL_LEWAT_BELUM_DIPUTUS` untuk yang lampau; label/pasangan final = Q-HPC-3). Baris convert/end tanpa tanggal usulan = tanpa pendamping (pola loan existing).
+- Penanda penilai final: `finalReviewId` tampil sebagai fakta tertaut ada/tidak (rujukan SoD existing), TANPA isi skor/catatan review probation (payload antrean bukan permukaan evaluasi).
+
+### 4. Business rules register
+
+Penomoran: `BR-HPC-*` = aturan khusus kind contract_decision pada antrean yang sama. Aturan umum antrean existing tetap berlaku dan TIDAK dinomori ulang: BR-HP-01..12 (F-2026-10-25-007-S; khususnya BR-HP-03 scope di loader fail-closed, BR-HP-04 umur dari createdAt/updatedAt dilarang, BR-HP-05 tahap turunan murni + builder dilarang menulis, BR-HP-06 antrean tidak memutus/melewati penjaga existing, BR-HP-08 tanpa nominal gaji, BR-HP-09 verbatim server) dan BR-LS-06 (kind loan). BR-HPC di bawah hanya menambah yang khas kontrak.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-HPC-01 | Populasi kind `contract_decision` = ContractDecisionRequest berstatus PERSIS `submitted` dalam `getHrScope` pemanggil (scope di loader server; karyawan luar scope tidak bocor; scope rusak = nol baris). `draft` (belum diajukan — bukan menunggu keputusan), `approved` (sudah diputus, menunggu penerapan), `rejected`, `applied`, `cancelled` BUKAN populasi dan tidak disamakan diam-diam, termasuk dalam hitungan rekap. | TERVERIFIKASI-KODE (status probation.ts:50-58; aksi probation.actions.ts:416-596) + USULAN batas populasi |
+| BR-HPC-02 | Perluasan dilakukan pada builder `buildHrPendingApprovalQueue` + loader `loadHrPendingApprovalQueue` EXISTING (kind ditambah ke kosakata tertutup server), BUKAN builder/loader/antrean baru terpisah. Saringan status per kind = status persis milik kind itu; kontrak tidak pernah dilabeli `pending` karangan. | USULAN bentuk di atas TERVERIFIKASI-KODE hr-pending-approval.ts:53,217-225 |
+| BR-HPC-03 | Umur menunggu kind ini TIDAK memakai `updatedAt` dan TIDAK merekonstruksi momen submit dari ActivityLog. Acuan tahap 1 = `createdAt` berlabel jujur "sejak pengajuan dibuat" ATAU jejak submit sah dari Backend — diputus Q-HPC-4; selama belum diputus, tahap mengendap kind ini tidak diterbitkan dari sumber salah label. | TERVERIFIKASI-KODE (schema:3722-3745 tanpa submittedAt; BR-HP-04) + USULAN acuan |
+| BR-HPC-04 | Antrean tidak memutus: nol tombol Setujui/Tolak/Terapkan/Batal dari antrean tahap 1. Satu-satunya jalan keputusan = aksi existing di panel karyawan (`approve_contracts` scope `all` + SoD penuh untuk putus; `edit_employees` untuk terapkan), kegagalan penjaga existing (SoD, scope bukan all, PKWT kumulatif) tampil apa adanya, bukan ditelan/dilewati antrean. | TERVERIFIKASI-KODE (probation.actions.ts:478-653) + USULAN batas |
+| BR-HPC-05 | Nol nominal kompensasi/gaji tahap 1: payload antrean TIDAK memuat nominal kompensasi PKWT, gaji, atau nilai uang apa pun, dan TIDAK men-join permukaan pkwt-compensation (permukaan berizin payroll terpisah). Yang tampil hanya: karyawan/departemen, label kind verbatim, proposedContractEndDate (bila ada), reason verbatim, finalReviewId tertaut ada/tidak. Skor/catatan ProbationReview juga TIDAK masuk payload. | TERVERIFIKASI-KODE (BR-PROB-11 probation.ts:19; schema:3720; pkwt-compensation terpisah) + USULAN batas payload |
+| BR-HPC-06 | Urutan/tingkat mengikuti pola antrean existing (pendamping tanggal paling parah dulu, lalu MENGENDAP umur terbesar, lalu MENUNGGU umur terbesar; seri deterministik), ambang mengendap mengikuti konstanta bernama existing yang sama sampai Lead memutus beda (Q-HPC-3). Tidak ada skor prioritas karangan dan tidak ada auto-approve/reject/apply berbasis umur/tanggal pada tahap mana pun. | USULAN di atas TERVERIFIKASI-KODE pola hr-pending-approval.ts:178-240 |
+| BR-HPC-07 | Maksimum satu baris submitted per karyawan dijamin penjaga existing (submit menolak bila submitted lain ada, probation.actions.ts:443-447); antrean menampilkan baris apa adanya per dokumen dan tidak menggabung/mendedup — bila data warisan melanggar (dua submitted satu karyawan), keduanya tampil dan antrean tidak memilih pemenang diam-diam. | TERVERIFIKASI-KODE penjaga + USULAN tampil |
+| BR-HPC-08 | Keputusan kontrak menyentuh status kepegawaian + tanggal akhir kontrak (sensitif, bukan nominal gaji): nama karyawan hanya tampil dalam scope HR pemanggil (BR-HP-03); karyawan di luar scope tidak bocor termasuk lewat hitungan rekap. Antrean tidak menilai kelayakan keputusan (PKWT kumulatif, kelulusan probation, alasan berhenti) — penilaian tetap penjaga existing saat aksi diputus/diterapkan. | TERVERIFIKASI-KODE (hr-scope.ts:40-83; penjaga probation.actions.ts) + USULAN batas |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Persetujuan berjenjang transaksi/pengajuan | Ada: pengaturan approval per tipe + penyetuju + syarat (URL §0) | Ada: Approval Management cuti/lembur/reimburse multi jenjang (URL §0) | Ada: status dokumen + aksi berizin + SoD kontrak | Tidak diubah |
+| Pengelolaan kontrak karyawan | Tidak ditemukan eksplisit run ini — tidak diklaim | Ada: Recruitment and Contract Management sampai pembuatan kontrak (URL §0) | Ada: ContractDecisionRequest draft->submitted->approved->applied per karyawan | Tidak diubah; antrean hanya menampilkan yang submitted |
+| Antrean kerja penyetuju lintas karyawan untuk keputusan kontrak submitted | Tidak ditemukan — tidak diklaim | Tidak ditetapkan bentuk antrean berumur — tidak diklaim | ABSEN: bacaan kontrak hanya per karyawan (getContractDecisionRequests:734); overview probation lintas karyawan ada tetapi untuk milestone probation, bukan pengajuan kontrak submitted | Kind `contract_decision` di antrean HR existing (inti spec ini) |
+| Umur menunggu + pendamping tanggal kontrak usulan | Tidak ditemukan — tidak diklaim | Tidak ditemukan — tidak diklaim | ABSEN (dan submittedAt memang tidak ada kolomnya) | Turunan jujur §3; acuan diputus Q-HPC-4 |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; perluasan builder+loader EXISTING — falsifikasi QA):
+- AC-HPC-B1: Populasi tepat submitted. Baris draft/approved/rejected/applied/cancelled tidak tampil dan tidak terhitung rekap; memasukkan status lain ke builder tidak mengubah populasi (cabut/longgarkan saringan status per kind -> MERAH). Tiga kind lama tetap persis `pending` (regresi leave/overtime/loan = MERAH).
+- AC-HPC-B2: Scope fail-closed: baris karyawan luar scope pemanggil bocor = MERAH; scope rusak (self employeeId -1) menghasilkan baris apa pun = MERAH; tanpa gerbang ganda kind ini loader tidak dipanggil untuk kind kontrak. Rekap = hitungan baris tampil persis.
+- AC-HPC-B3: Umur BUKAN dari `updatedAt`: ubah baris submitted lewat edit tak terkait (updatedAt bergerak) tidak mengnolkan/mengubah umur; umur dihitung dari acuan terpilih Q-HPC-4 dan label sumbernya diterbitkan server. Memakai updatedAt/ActivityLog sebagai sumber umur = MERAH (BR-HPC-03).
+- AC-HPC-B4: Baca-saja + nol nominal: builder/loader tidak memanggil submit/approve/reject/cancel/apply kontrak, tidak menulis ContractDecisionRequest/Employee; payload tidak memuat nominal kompensasi PKWT/gaji dan tidak memuat skor/catatan ProbationReview (grep payload -> MERAH bila ada).
+- AC-HPC-B5: Label kind diterbitkan server verbatim dari kosakata tertutup (`CONTRACT_DECISION_KIND_LABELS`); label karangan per kind dokumen atau string status `pending` karangan untuk baris kontrak di payload = MERAH. Baris convert_pkwtt/end_contract tanpa proposedContractEndDate tampil tanpa pendamping tanggal karangan (tanggal dikarang dari contractEndDate master = MERAH).
+
+Frontend (konsumen existing):
+- AC-HPC-F1: Kolom/label kind/tahap/umur/pendamping verbatim payload server; UI menghitung umur/tanggal/tahap sendiri = MERAH; label umur menampilkan acuan jujur terpilih ("sejak pengajuan dibuat" bila opsi (a)).
+- AC-HPC-F2: Nol tombol Setujui/Tolak/Terapkan/Batal (atau aksi keputusan apa pun) dari antrean tahap 1; tautan baris hanya ke panel/detail karyawan existing tempat aksi berizin hidup. Tombol keputusan di antrean = MERAH.
+- AC-HPC-F3: Baris kontrak tampil tanpa nominal kompensasi/gaji dan tanpa skor probation; karyawan tanpa departemen `—`; finalReview tertaut tampil sebagai penanda ada/tidak, bukan isi evaluasi. Nominal/skor tampil = MERAH.
+
+Edge cases:
+- EC-HPC-1: Dua submitted untuk karyawan sama — dicegah aksi existing (submit :443-447 menolak dalam transaksi + klaim atomik :448-452; TERVERIFIKASI-KODE run ini). Bila data warisan sudah melanggar, dua baris tampil apa adanya (BR-HPC-07); antrean tidak menekan satu diam-diam.
+- EC-HPC-2: Request `end_contract` untuk karyawan yang sudah berhenti: pengajuan BARU memang ditolak existing (create :361 untuk semua kind), tetapi baris yang submitted SEBELUM karyawan berhenti tetap tampil apa adanya; antrean tidak menyembunyikan/membatalkan — apply end_contract existing pun tidak menulis employmentEndedAt (penutupan tetap langkah HR F-085-S, :645). Menilai baris ini gugur otomatis = cacat spec.
+- EC-HPC-3: `finalReviewId` tertaut probation: terisi hanya bila review final submitted/decided ada saat create (:390-394), selain itu null. Baris bertaut tampil penanda tertaut (SoD penilai-final hidup di approve existing :492-494); baris null tampil tanpa penanda — antrean tidak menebak penilai dari review lain dan tidak menampilkan skor review tertaut.
+- EC-HPC-4: Baris extend_pkwt yang proposedContractEndDate-nya sudah lampau saat masih submitted: pendamping tanggal lampau tampil (paling parah di urutan), antrean tidak auto-reject/apply; keputusan tetap manusia lewat aksi existing yang menegakkan ulang penjaga PKWT kumulatif saat approve (:508-519).
+- EC-HPC-5: Pengajuan diajukan hari yang sama sesudah draft dibuat lama (opsi umur (a)): umur sejak createdAt bisa langsung melewati ambang — label jujur wajib tampil supaya tidak dibaca sebagai kelalaian penyetuju; inilah alasan Q-HPC-4 gerbang, bukan alasan memakai updatedAt.
+- EC-HPC-6: Baris approved belum applied berubah status dari panel saat antrean terbuka: keluar populasi keputusan pada render berikut; antrean tidak mengunci baris dan tidak menawarkannya sebagai "belum diterapkan" tanpa putusan Q-HPC-2.
+- EC-HPC-7: Karyawan subjek kemudian nonaktif/berhenti/departemennya berubah: baris tampil apa adanya dari relasi berjalan dalam scope; antrean tidak menilai kelayakan karyawan (penjaga existing di aksi yang menilai).
+
+### 7. Backlog implementasi (turunan F-2026-10-27-081-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-081-S | Spec kontrak ini (dokumen) | Business | — |
+| 081-B | Perluasan builder `hr-pending-approval.ts` (kind `contract_decision`, saringan status per kind, pendamping tanggal kontrak, label server) + loader `hr-pending-approval-data.ts` (query ContractDecisionRequest submitted massal anti-N+1 + hrScopeWhere) + tes AC-HPC-B1..B5 — BUKAN builder baru | Backend | Putusan Lead Q-HPC-1..5 (fisik acuan umur Q-HPC-4 dijawab Backend) |
+| 081-F | Perluasan kartu konsumen antrean existing: baris kind kontrak verbatim payload, tautan ke panel karyawan, nol tombol keputusan tahap 1 + AC-HPC-F1..F3; grep e2e SDM/karyawan dulu | Frontend | 081-B merged |
+| 081-Q | Falsifikasi AC-HPC-B1..B5 + F1..F3 atas head Backend/Frontend persis (status non-submitted bocor MERAH, umur dari updatedAt MERAH, nominal kompensasi tampil MERAH, tombol putus dari antrean MERAH) | QA | 081-B/081-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-HPC-1 | ProbationReview `submitted` ikut antrean ini sebagai kind `probation_review`, atau tetap di luar? | Lead | TIDAK tahap 1: overview probation lintas karyawan sudah ada (getProbationOverview:676) dan keputusan probation hidup di panel karyawan dengan aktor/konteks milestone-nya; memasukkannya menggandakan permukaan yang sama. Rumuskan ulang hanya bila overview terbukti tidak dipakai penyetuju. |
+| Q-HPC-2 | Baris `approved` belum `applied` masuk sebagai pendamping (bendera menunggu-penerapan, populasi terpisah dari submitted), ikut tahap 1 atau tahap berikut? | Lead | Tahap berikut, populasi TIDAK dicampur: aktornya beda (edit_employees penerap vs approve_contracts penyetuju) dan mencampurnya mengaburkan arti "menunggu keputusan". Bila dibuka, bendera terpisah berlabel sendiri. |
+| Q-HPC-3 | Ambang mengendap kind kontrak: sama konstanta existing (3 hari) atau beda? Pasangan pendamping tanggal usulan (mendekat/lampau untuk proposedContractEndDate extend_pkwt) + label kind final ("Keputusan Kontrak"?) disahkan? | Lead | Sama 3 hari tahap 1 (satu konstanta keluarga antrean; beda angka tanpa bukti kebutuhan hanya menambah konstanta), pendamping lampau mengikuti kosakata `TANGGAL_LEWAT_BELUM_DIPUTUS` existing, label kind dokumen verbatim probation.ts:78-82. |
+| Q-HPC-4 | Sumber umur menunggu: (a) createdAt berlabel jujur "sejak pengajuan dibuat" (nol migrasi), atau (b) jejak submit sah dulu (kolom submittedAt/setara — fisik + migrasi Backend) sebelum tahap mengendap kind ini diterbitkan? | Lead + Backend (fisik) | (a) untuk keterlihatan tahap 1 dengan label jujur, (b) sebagai penyempurnaan bila umur-sejak-submit dianggap wajib; updatedAt/ActivityLog DILARANG di kedua opsi (BR-HPC-03). |
+| Q-HPC-5 | Gerbang lihat kind ini: pasangan `view_employees` + `approve_contracts` (usul §2) dan populasi untuk pemegangnya berscope department (lihat-saja vs dibatasi scope `all` mengikuti pemutus existing)? | Lead | Pasangan ganda disahkan; populasi dibatasi yang bisa benar-benar menindak (scope `all`) supaya antrean tidak menampilkan pekerjaan yang tidak bisa diputus pemanggil — department melihat pengajuan kontrak departemennya di panel karyawan existing. |
+| Q-HPC-6 | Keputusan kontrak perlu pengingat aktif (notifikasi penyetuju) tahap 1? | Lead | TIDAK tahap 1 (selaras BR-HP-10 antrean existing pasif); pengingat = keputusan terpisah sesudah antrean terbukti dipakai. |
+
+Accountant: TIDAK diminta tahap ini — nol nominal/jurnal (BR-HPC-05); kompensasi PKWT tetap permukaan payroll terpisahnya. Dipanggil hanya bila kelak nominal kompensasi diusulkan tampil di antrean.
+
+### Yang TIDAK diusulkan run ini
+- Antrean/builder/loader baru terpisah untuk kontrak: permukaan yang sama diperluas (BR-HPC-02); antrean kedua menggandakan scope/urutan/rekap keluarga antrean.
+- Memasukkan ProbationReview submitted tahap 1: overview probation lintas karyawan sudah ada (Q-HPC-1).
+- Mencampur baris approved-belum-applied ke populasi submitted (Q-HPC-2).
+- Tombol Setujui/Tolak/Terapkan dari antrean tahap 1, auto-approve/reject/apply berbasis umur/tanggal, pengingat otomatis (BR-HPC-04/06, Q-HPC-6).
+- Menampilkan nominal kompensasi PKWT/gaji/skor probation, atau men-join pkwt-compensation ke antrean (BR-HPC-05).
+- Kolom `submittedAt`/status dokumen baru dari dokumen ini: kebutuhan fisiknya dirumuskan sebagai Q-HPC-4 untuk diputus Lead + dijawab fisik Backend; spec dokumen tidak mengarang migrasi.
+- Mengubah penjaga existing keputusan kontrak (SoD, PKWT kumulatif 5 tahun, scope all pemutus, maks 1 submitted): antrean membaca fakta yang dijaga aksi-aksi itu, tidak menegakkan ulang atau melemahkannya.
+
+F-2026-10-27-081-S — Perluasan antrean persetujuan HR tertunda kind keputusan kontrak submitted. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-HPC-1..6, lalu fisik Backend (081-B, perluasan builder existing), konsumen Frontend (081-F), falsifikasi QA (081-Q). Pemilik usulan: Business (spec), Lead (putusan kind probation/pendamping/ambang/label/gerbang), Backend (fisik acuan umur + perluasan builder), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak nominal kompensasi PKWT diusulkan tampil (di luar spec ini, BR-HPC-05).
