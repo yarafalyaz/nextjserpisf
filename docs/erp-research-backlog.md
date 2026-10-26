@@ -33579,3 +33579,322 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengubah where overdueOnly existing dalam spec ini — dicatat sebagai Q-SIQ-6, bukan perbaikan diam-diam.
 
 F-2026-10-26-057-S — Antrean faktur penjualan draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-SIQ-1/2/3 (Accountant hanya bila populasi/aksi diperluas), lalu fisik Backend (057-B), konsumen Frontend (057-F), falsifikasi QA (057-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/populasi), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB bila Q-SIQ-3/4 diperluas.
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-059-S: antrean retur penjualan draft mengendap menunggu penyelesaian (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_8fa55426. ID F-2026-10-26-059-S diverifikasi bebas run ini 2026-10-26 14:16 WIB: grep `F-2026-10-26-059` di backlog + board `origin/main` (`8aa8d4a1`) = 0; ID terpakai terakhir berjalan F-2026-10-26-058-S. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `reason`, `customerId`, `salesInvoiceId`, `createdBy`, item qty×price), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-SRQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK menyelesaikan, TIDAK membatalkan, dan TIDAK menghapus retur apa pun — penyelesaian tetap jalur existing `completeSalesReturn` berizin `approve_sales_returns` + SoD (F-2026-10-25-012-S); retur draft belum stok-masuk dan belum kredit/piutang-berkurang: nominal tampil sebagai fakta dokumen existing ("nilai draft belum diselesaikan"), bukan kredit lahir, bukan pengurang piutang, bukan pengembalian uang. Angka PPN/nota retur = wilayah Accountant, spec ini tidak menyentuh dan tidak menilainya.
+
+Bukan duplikasi: bukan F-2026-10-25-012-S (gerbang persetujuan aksi tulis complete: izin khusus + SoD sebelum stok+jurnal; spec ini permukaan baca-saja penuaan draft SEBELUM aksi itu); bukan daftar retur existing `penjualan/retur` (filter status + urut existing, tanpa umur draft, tanpa tingkat, baris draft tenggelam di antara completed); bukan return-credit.ts (dampak kredit retur completed ke piutang — populasi spec ini justru draft yang belum berdampak apa pun); bukan PenagihanCollection (piutang posted/partial — retur draft belum mengurangi piutang di permukaan mana pun).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: retur penjualan dicatat dari faktur, lalu penyelesaian ekonominya (pengurang piutang / pengembalian uang lewat Penerimaan Penjualan, faktur retur tampil sebagai nilai terutang minus) berjalan sesudah retur tersimpan — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penerimaan-penjualan/refund-retur-penjualan-lunas/ dan https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/retur-penjualan/melakukan-retur-penjualan-dari-faktur-yang-sudah-lunas/ (BENCHMARK: retur tersimpan dan penyelesaian uang adalah dua langkah terpisah yang harus terlacak; antrean draft bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: retur penjualan menyebabkan "pengurangan piutang usaha atau pengeluaran dana tunai dan penambahan kuantiti atas barang yang diretur", dan daftar transaksi menandai retur terposting vs belum — https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-retur-penjualan-zahir-online-v2 dan https://help.zahironline.com/portal/id/kb/articles/retur-penjualan (BENCHMARK: retur belum terposting = stok/piutang belum bergerak dan status itu terlihat di daftar; tidak ada penetapan antrean umur draft — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 8aa8d4a1)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `SalesReturn` (prisma/schema.prisma:1908-1943) — slug unik nullable, documentNo unik, salesInvoiceId nullable, customerId, date, reason Text nullable, status String default `draft`, taxReturnNoteNumber/Date nullable (dicatat apa adanya, sistem tidak menerbitkan nomor pajak sendiri), sourceTaxInvoiceId nullable, createdBy nullable, createdAt/updatedAt; indeks status + customerId + createdAt. Item `SalesReturnItem` (:1945 dst) — qty/cost/price Decimal, serialNumbers/batchNumbers Json, snapshot returnDpp/returnVat/sourceTaxRate nullable (terisi saat complete; null = legacy).
+- Penyelesaian penjaga nyata: `completeSalesReturn` (src/actions/sales.actions.ts:1693) mewajibkan `approve_sales_returns` (katalog:173), hanya dari status `draft`, SoD penyelesai != createdBy (createdBy null legacy boleh), validasi identitas serial/batch item tracked, lalu SATU transaksi: `onSalesReturnStock` (stok IN, hook menetapkan status `completed` di akhir) + `onSalesReturnCompleted` (jurnal). Izin katalog nyata retur: view/create/edit/delete/approve_sales_returns (module-catalog.generated.ts:169-173). Hapus: `deleteSalesReturn` (:3226, `delete_sales_returns`, menolak completed, hard delete existing).
+- Daftar retur existing: `penjualan/retur/page.tsx` requirePermission `view_sales_returns`, filter chip status + cari, tanpa kolom umur draft, tanpa tingkat, tanpa rekap draft.
+- Dampak kredit sesudah complete: return-credit.ts menghitung kredit retur completed terhadap piutang (konsumen statement/kredit) — draft tidak ikut, benar, dan tidak diubah spec ini.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean retur draft atau turunan umur menunggu penyelesaian — grep `returnQueue|return-queue|umurRetur|draftReturn` di src/lib/reports = 0 (hit `draftReturn` hanya fixture tes warranty); tidak ada cron pengingat/penuaan draft retur. Draft yang ditinggal berarti barang pelanggan secara fisik mungkin sudah kembali tetapi stok sistem belum bertambah, kredit pelanggan belum lahir, dan tidak ada permukaan yang menua baris itu. Risiko bengkel: retur part mengendap di draft berhari-hari — stok terlihat kosong padahal barang ada, pelanggan bertanya kreditnya belum muncul.
+
+### 1. Workflow specification
+
+Aktor: Penyetuju retur pemegang `approve_sales_returns` (penyelesai — satu-satunya yang menyelesaikan lewat jalur existing, bukan pembuat baris yang sama), Admin Penjualan pemegang `view_sales_returns` (pembaca antrean), Pembuat retur pemegang `create_sales_returns` (sumber baris draft), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris SalesReturn existing berstatus `draft` (id, slug, documentNo, customerId+nama, salesInvoiceId+nomor faktur asal bila ada, date, reason, createdBy+nama bila ada, createdAt, item qty×price) — field existing, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per retur draft (§3) + rekap hitungan per tingkat. BUKAN dokumen akuntansi/inventaris: tidak ada stok masuk, jurnal, kredit, nota retur, atau pesan keluar yang dihasilkan antrean (completeSalesReturn existing yang menulis stok+jurnal — di luar antrean).
+
+Alur:
+1. Retur lahir `draft` lewat jalur existing (buat langsung / dari faktur; status lahir existing, di luar cakupan spec ini).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft (BR-SRQ-01) dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), penanda faktur asal (tertulis/kosong), penanda pembuat untuk kesiapan SoD (baris yang pembuatnya = pembaca tidak bisa diselesaikan pembaca itu sendiri — penanda kesiapan, bukan tombol), dan tingkat §3.
+3. Penyetuju membuka detail dari baris dan menyelesaikan lewat jalur existing (completeSalesReturn: gerbang izin + SoD + identitas serial/batch + stok+jurnal atomik). Antrean tidak menyediakan tombol Selesaikan/batal massal tahap 1 (Q-SRQ-4).
+4. Sesudah diselesaikan: baris keluar populasi dan masuk wilayah return-credit/stok existing. Sesudah dihapus jalur existing: keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-SRQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu Penyelesaian` (umur), `Faktur Asal` (nomor faktur atau "Tanpa Faktur"), `Dibuat Oleh` (nama atau `—`).
+- Label tingkat: `mengendap` → "Mengendap"; `menunggu` → "Menunggu Penyelesaian"; baris tanpa faktur asal membawa penanda "Tanpa faktur asal", bukan tingkat sendiri.
+- Notice usulan: "Daftar ini hanya retur penjualan yang masih draft dan belum diselesaikan. Draft belum menambah stok dan belum menjadi kredit pelanggan sampai diselesaikan lewat detail retur."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean retur draft + tingkat/umur | `view_sales_returns` (katalog:169) | daftar retur requirePermission | TIDAK ada key baru (key terpisah = Q-SRQ-5) |
+| Buat retur (sumber baris draft) | `create_sales_returns` (katalog:170) | aksi buat existing | tidak berubah |
+| Ubah/hapus retur draft | `edit/delete_sales_returns` (katalog:171-172) | aksi existing + penjaga status existing | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Selesaikan retur (keluar draft) | `approve_sales_returns` (katalog:173) + SoD vs createdBy | completeSalesReturn:1693 | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Kurangi piutang / kembalikan uang dari antrean | TIDAK — draft belum kredit | kredit lahir di onSalesReturnCompleted saat complete | antrean tidak menawarkan aksi uang apa pun |
+
+Tidak ada permission key baru diusulkan tahap ini. Data nominal retur bukan data gaji/pribadi; tetap di balik `view_sales_returns` existing.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah: `draft` → `completed` (completeSalesReturn lewat hook stok; status antara tidak ada). Antrean tidak menulis transisi apa pun; status `cancelled` tidak dikenal model retur ini (penghapusan = hard delete existing penjaga deleteSalesReturn) — jangan karang status batal retur di spec ini.
+
+Populasi antrean: hanya SalesReturn `status = "draft"`. Per baris, sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurDraftHari` = hari kalender WIB dari `createdAt` ke hari ini (masa depan karena jam server = 0 tertanda, bukan negatif — EC-SRQ-4).
+- `punyaFakturAsal` = `salesInvoiceId != null` (penanda pendamping; retur tanpa faktur sah existing — createSalesReturn membolehkan tanpa faktur, RETURNABLE_INVOICE_STATUSES hanya menilai bila tertaut).
+- `bisaDiselesaikanPembaca` TIDAK diturunkan di payload tahap 1 (Q-SRQ-7): SoD dinilai server di completeSalesReturn saat aksi, bukan ditampilkan sebagai janji di daftar.
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft lolos saring | di luar antrean | bukan populasi (wilayah daftar retur + return-credit sesudah completed) |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-SRQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | barang/kredit tertahan melewati kesabaran operasional yang diputus Lead; selesaikan/putuskan dulu |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan kerja dari umur tampil tertua-dulu (Q-SRQ-3) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah (retur diselesaikan/dihapus/diubah, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada penyelesaian otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SRQ-01 | Populasi antrean = SalesReturn `status="draft"` saja. Status lain tidak disamakan diam-diam tahap 1. | TERVERIFIKASI-KODE (schema:1908 status default draft) + USULAN batas |
+| BR-SRQ-02 | Retur draft belum stok-masuk, belum kredit, belum pengurang piutang, belum pengembalian uang: stok IN + jurnal baru lahir di completeSalesReturn dalam satu transaksi (sales.actions.ts:1693 dst). Nominal antrean dilarang dijumlahkan ke kredit, piutang, stok, pendapatan, atau kas di permukaan mana pun. | TERVERIFIKASI-KODE |
+| BR-SRQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: selesaikan (`approve_sales_returns` + SoD + identitas tracked, dari detail), ubah (`edit_sales_returns`), hapus (`delete_sales_returns`, menolak completed). Antrean tidak menambah jalan pintas selesaikan/hapus dari daftar tahap 1. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-SRQ-04 | Nota retur/PPN retur bukan penanda antrean: taxReturnNoteNumber null pada draft adalah normal (dicatat apa adanya, snapshot returnDpp/returnVat baru terisi saat complete); antrean TIDAK menampilkan kolom kepatuhan pajak dan TIDAK menilai boleh-tidaknya penyelesaian dari sisi pajak — vonis pajak retur wilayah Accountant, bukan spec ini. | TERVERIFIKASI-KODE + BUTUH-VONIS Accountant bila diperluas |
+| BR-SRQ-05 | Umur memakai `createdAt` (momen baris masuk sistem), bukan `date` (tanggal retur input, boleh lampau). Mengubah acuan = Q-SRQ-6. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field schema |
+| BR-SRQ-06 | Nol selesaikan/batal/hapus otomatis berbasis umur dalam tahap mana pun spec ini. Umur hanya penanda prioritas baca; draft yang memang belum boleh selesai (identitas serial belum jelas, barang belum diterima fisik) diputus manusia. | USULAN batas (menegaskan TERVERIFIKASI-KODE tidak adanya cron draft retur) |
+| BR-SRQ-07 | Builder antrean murni baca-saja turunan: tidak memanggil completeSalesReturn/hook stok/jurnal, tidak menulis status/kolom/stok. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-SRQ-08 | Nilai baris tampil sebagai Σ qty×price item (Decimal→Number di tepi loader pola existing) berlabel rekap "nilai draft belum diselesaikan"; rekap hanya hitungan baris per tingkat + Σ nilai baris antrean, dilarang berlabel kredit/piutang/pendapatan/stok. Baris tanpa item tampil nilai 0 apa adanya (EC-SRQ-6). | USULAN kejujuran nominal |
+| BR-SRQ-09 | salesInvoiceId null = "Tanpa faktur asal" apa adanya (retur tanpa faktur sah existing); createdBy null (legacy) tampil `—` dan TIDAK dijadikan penanda salah; reason kosong tampil `—`, bukan karangan alasan. | USULAN di atas TERVERIFIKASI-KODE field nullable schema |
+| BR-SRQ-10 | Ambang hari `mengendap`, kata label final, urutan tampil, dan selesaikan-dari-daftar adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-SRQ-1/2/3/4). Sisi stok/jurnal yang sudah berjalan existing tidak diubah spec ini sehingga Accountant TIDAK diminta run ini — kecuali Lead membuka aksi selesaikan-dari-daftar (Q-SRQ-4), saat itu vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Retur dari faktur + retur tanpa faktur | Ada: retur dari faktur (termasuk lunas/dimuka) (URL §kepala) | Ada: memo kredit menunjuk transaksi diretur (URL §kepala) | Ada: salesInvoiceId nullable, gerbang RETURNABLE bila tertaut | Penanda faktur asal per baris |
+| Penyelesaian ekonomi sesudah retur tersimpan | Ada: pengurang piutang/refund lewat Penerimaan Penjualan (URL §kepala) | Ada: posting retur menggerakkan piutang/stok (URL §kepala) | Ada: complete atomik stok+jurnal+SoD (012-S) | Antrean berhenti di penyelesaian existing |
+| Status retur belum selesai terlihat di daftar | Tidak ditetapkan antrean umur — tidak diklaim | Ada penanda terposting di daftar (URL §kepala) | Ada filter status daftar retur, tanpa umur/tingkat | Antrean draft berumur tertua-dulu |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-SRQ-B1: Populasi tepat draft. Retur completed/terhapus tidak tampil tahap 1; memasukkan status lain ke builder tidak mengubah populasi (cabut saring status → MERAH).
+- AC-SRQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-SRQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-SRQ-4).
+- AC-SRQ-B3: Tanpa angka karang: selama Q-SRQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya lewat satu konstanta bernama/putusan (tanam angka liar → MERAH).
+- AC-SRQ-B4: Loader fail-closed `view_sales_returns` sebelum query, anti-N+1 (pelanggan/faktur asal/pembuat massal, item diagregasi massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil.
+- AC-SRQ-B5: Baca-saja terbukti: builder/loader tidak memanggil completeSalesReturn/hook stok/jurnal/tulis status (panggil aksi diam-diam → MERAH); rekap = hitungan + Σ nilai baris yang sama persis.
+
+Frontend (konsumen):
+- AC-SRQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-SRQ-F2: Faktur asal kosong tampil "Tanpa faktur asal"; pembuat null `—`; reason kosong `—`; nilai baris tidak berlabel kredit/piutang (label kredit di draft → MERAH).
+- AC-SRQ-F3: Tautan baris hanya ke detail retur existing; tidak ada tombol Selesaikan/Hapus/Refund di antrean tahap 1 (aksi dari daftar tanpa putusan Q-SRQ-4 → MERAH); tanpa `view_sales_returns` halaman menolak.
+
+Edge cases:
+- EC-SRQ-1: Retur draft item tracked tanpa serial/batch (completeSalesReturn existing menolak) tetap populasi antrean ini — antrean tidak menilai kesiapan identitas; kesiapan diputus jalur penyelesaian existing saat penyetuju bertindak.
+- EC-SRQ-2: Retur tertaut klaim garansi/vendor (wilayah F-2026-10-21-021/022) tetap tampil sebagai draft menunggu penyelesaian; antrean tidak menilai rantai garansi.
+- EC-SRQ-3: Retur kembar untuk faktur yang sama tampil apa adanya dua baris; tidak digabung/didedup diam-diam (plafon retur dinilai aksi existing, bukan antrean).
+- EC-SRQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-SRQ-5: Retur diselesaikan saat halaman terbuka keluar pada render berikut; antrean tidak mengunci baris.
+- EC-SRQ-6: Retur draft tanpa item / nilai 0 tampil apa adanya; tidak dikeluarkan karena nominal.
+- EC-SRQ-7: Nomor nota retur kosong pada draft bukan penanda salah (BR-SRQ-04); antrean tidak menampilkan kolom kepatuhan pajak.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-059-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-059-S | Spec kontrak ini (dokumen) | Business | — |
+| 059-B | Builder murni tingkat/umur draft retur + loader `view_sales_returns` fail-closed anti-N+1 + tes AC-SRQ-B1..B5 | Backend | Putusan Lead Q-SRQ-1/2/3 (+ Accountant bila aksi diperluas) |
+| 059-F | Permukaan antrean (daftar retur existing atau kartu antrean pola antrean-penagihan) verbatim payload + AC-SRQ-F1..F3 | Frontend | 059-B merged |
+| 059-Q | Falsifikasi AC-SRQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 059-B/059-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-SRQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (barang kembali tertahan = stok dan kredit pelanggan sama-sama menggantung) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-SRQ-2 | Kata label/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-SRQ-3 | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua? | Lead | `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc |
+| Q-SRQ-4 | Selesaikan langsung dari antrean dibuka? | Lead + Accountant (penyelesaian menulis stok+jurnal) | TIDAK tahap 1 (BR-SRQ-03): SoD + identitas serial/batch harus tetap terasa di detail; jalan pintas = keputusan terpisah |
+| Q-SRQ-5 | Key izin antrean terpisah dari `view_sales_returns`? | Lead | TIDAK tahap 1 |
+| Q-SRQ-6 | Acuan umur createdAt (BR-SRQ-05) vs date retur? | Lead (fisik Backend menguji) | createdAt — momen menunggu sistem |
+| Q-SRQ-7 | Penanda per baris "bisa diselesaikan oleh saya" (createdBy != pembaca berizin approve) ditampilkan tahap 1? | Lead | TIDAK tahap 1: butuh identitas pembaca di loader dan berisiko terbaca sebagai janji lolos SoD; SoD tetap dinilai server saat aksi |
+
+### Yang TIDAK diusulkan run ini
+- Penyelesaian massal/otomatis retur basi (BR-SRQ-03/06) — penyelesaian menulis stok+jurnal dan melewati SoD serta validasi identitas fisik; otomatisasi membahayakan kebenaran stok/buku.
+- Memasukkan draft ke kredit/piutang/stok/statement pelanggan — draft belum berdampak (BR-SRQ-02); wilayah return-credit existing hanya completed.
+- Pengingat WA/email ke penyetuju, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru, di luar tahap baca-saja.
+- Status `cancelled` untuk retur, soft-delete retur — model existing tidak mengenalnya; mengubah = keputusan skema terpisah, bukan spec antrean.
+- Penilaian nota retur/PPN retur untuk draft — wilayah kepatuhan Accountant existing, bukan antrean umur.
+
+F-2026-10-26-059-S — Antrean retur penjualan draft mengendap. Status: SPEC MERGED PR #1002 (merge ead8f1d2, 26 Okt 2026); PUTUSAN LEAD Q-SRQ-1..7 TERTANAM di komentar PR #1002 (26 Okt 2026 14:41 WIB): (1) ambang `mengendap` = umur draft >= 3 hari kalender WIB dari `createdAt`, satu konstanta bernama builder; (2) kata §1 disahkan verbatim (kolom `Menunggu Penyelesaian`/`Faktur Asal`/`Dibuat Oleh`, label `Mengendap`/`Menunggu Penyelesaian`, penanda `Tanpa faktur asal`, notice §1 apa adanya), satu konstanta label server; (3) urutan `mengendap` dulu, lalu umur tertua, seri `documentNo` asc; (4) selesaikan-dari-daftar TIDAK dibuka tahap 1 — vonis Accountant tidak diperlukan; (5) tanpa key izin baru (`view_sales_returns`); (6) acuan umur `createdAt`; (7) penanda `bisaDiselesaikanPembaca` TIDAK diturunkan tahap 1 (menutup temuan QA F1: frasa §1 langkah 2 dibaca bukan payload tahap 1). Kartu turunan: Backend 059-B t_a6ce69bb, Frontend 059-F t_864b5110 (parents 059-B), QA 059-Q t_c6a14b40 (parents 059-B+059-F). Pemilik: Business (spec), Lead (putusan+merge), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi).
+
+---
+
+## PUTUSAN LEAD 2026-10-26 — Q-CL2-2..5 F-2026-10-25-035-S: izin/media override, cakupan titik tahan, aktivasi gerbang kredit tahap 2
+
+Kartu: t_2e1653ba. Prasyarat terverifikasi live origin/main 0781f3cd (26 Okt 2026 14:49 WIB): spec 035-S PR #872 MERGED; vonis 035-V (Q-CL2-1) PR #873 MERGED; builder murni `assessCustomerCreditGate` (`src/lib/reports/customer-credit-gate.ts`) PR #996 MERGED squash 25260f04 — gerbang NONAKTIF default, nol wiring ke action. Putusan ini TIDAK mengubah angka paparan (milik Accountant 035-V: PaparanBersih persis, hanya `over` ditahan, `unset`/`warning` bebas). Dampak domain akuntansi/pajak: NOL — override tanpa jurnal (warisan 044-V).
+
+### Q-CL2-2 — Izin override (DIPUTUS)
+
+1. Key baru TUNGGAL: `approve_credit_overrides` — pola `approve_*` katalog existing. Nama string ini final; Backend memasukkannya lewat jalur katalog/seed yang sama dengan permission lain dan wajib membuktikan parity lewat tes katalog+seed existing. Resource/label katalog mengikuti struktur resource kredit yang dibuat Backend, tetapi nama permission tidak boleh diganti. Key per jenis dokumen (SO terpisah dari Invoice) ditolak: kebutuhan operasionalnya sama dan dua key hanya menggandakan peluang konfigurasi pincang.
+2. Pemegang default: `super_admin` lewat grant katalog penuh existing dan `admin` lewat katalog penuh-minus-administrasi-sistem existing. Role bawaan lain TIDAK diberi default, termasuk `finance`. Alasan: override kredit adalah keputusan risiko piutang, bukan fungsi kas/baca laporan. Pemberian ke role operasional bernama dilakukan lewat manajemen role existing (`manage_roles`) oleh pemilik proses, bukan hardcode whitelist baru yang tidak tercatat di putusan ini.
+3. Role-sensitive ratchet: prefix `approve_` otomatis masuk kelompok sensitif di `role-sensitive-permissions.test.ts`. Backend dilarang menambah key ini ke whitelist role bawaan mana pun tanpa entri sadar di `EXPECTED_SENSITIVE` tes itu; pelanggaran harus merah, bukan disesuaikan diam-diam.
+4. SoD MUTLAK tanpa pengecualian peran rangkap: penyetuju override tidak boleh sama dengan pembuat percobaan (`requestedBy` rekod override), dinilai server dari id pengguna terautentikasi. Pengguna yang memegang key override sekaligus key buat dokumen tetap tidak boleh menyetujui dokumen buatannya sendiri; tidak ada pengecualian admin/super_admin. Pengecualian rangkap membuat satu orang melahirkan dan melepaskan dokumen `over` sendiri, persis jalur yang ditutup BR-CL2-09. Jalan keluar operasional bila penyetuju tunggal berhalangan: pengguna berizin kedua menyetujui, atau Admin Master menaikkan limit lewat `edit_customers` — keduanya jalur existing, bukan pengecualian baru.
+5. Baca jejak override: pemegang `approve_credit_overrides` DAN/ATAU `view_reports` boleh membaca daftar/jejak override untuk audit (operator baca pada handler server, fail-closed bila keduanya tidak ada). Pembuat dokumen hanya melihat status permintaannya sendiri pada percobaannya, bukan daftar override global. Matriks §4 spec yang memisahkan Penyetuju Kredit vs Finance terbaca lewat dua key ini: Penyetuju = key override, Finance audit = `view_reports`.
+
+### Q-CL2-3 — Media jejak + masa berlaku (DIPUTUS: alur persetujuan SEBELUM lahir)
+
+Keputusan fisik mengikat supaya tidak ada celah "dokumen harus lahir dulu baru bisa di-approve":
+
+1. **Permintaan adalah rekod khusus baru, bukan dokumen penjualan.** Saat gerbang aktif menilai percobaan simpan sebagai `over`, server TIDAK melahirkan SO/Invoice. Server membuat/menemukan rekod `CreditOverride` dalam status `pending` untuk sidik percobaan yang sama, lalu mengembalikan hasil tertahan berisi id permintaan + nominal builder. Rekod ini tidak punya nomor SO/Invoice dan tidak menulis jurnal.
+2. Media khusus ini wajib, BUKAN `logActivity` dan BUKAN `Approval` generik. Bukti kode: `logActivity` menangkap kegagalannya sendiri ("logging should never break the main flow") sehingga jejak penentu boleh hilang tanpa menggagalkan simpan; `Approval` generik terikat `referenceType`/`referenceId` dokumen yang sudah lahir dan `assertApproved` membaca rekod itu. Memakai salah satunya sebagai sumber izin akan melahirkan dokumen dulu atau membuat jejak tidak dapat menolak. `logActivity` tetap boleh dipakai sebagai cermin aktivitas tambahan, tetapi bukan sumber kebenaran status override.
+3. Isi minimum rekod (= spec §3, dikunci): id, pelanggan, jenis dokumen (`sales_order`/`sales_invoice`), sidik percobaan ter-hash/normalisasi dari payload simpan yang dinilai (pelanggan + jenis + pembuat + nominal percobaan + kaitan quotation/SO sumber), nominal percobaan, limit, PaparanBersih, status paparan, utilization, pembuat/peminta (`requestedBy`), alasan wajib dari peminta, status `pending|approved|rejected|used|expired|superseded`, penyetuju/penolak + waktu keputusan + alasan keputusan bila ditolak, `documentType`/`documentId`/`documentNo` hasil yang terisi hanya saat `used`, waktu kedaluwarsa, `createdAt`/`updatedAt`. Simpan JSON payload mentah form DILARANG (berisiko data pribadi/field tak relevan); simpan hanya sidik + nominal + konteks yang disebut di sini. Nama model/tabel fisik Backend mengikuti konvensi Prisma existing dan wajib dilaporkan balik bila bentrok.
+4. Alur yang mengikat:
+   - **Minta:** percobaan tertahan membuat 1 rekod `pending` per sidik aktif; percobaan identik yang diulang saat masih `pending` mengembalikan rekod yang sama (tidak menggandakan antrean).
+   - **Setujui/tolak:** hanya pemegang `approve_credit_overrides`, bukan peminta; alasan penolakan wajib. Penyetujuan tidak melahirkan dokumen.
+   - **Pakai:** pembuat mengulang simpan persis sama. Di dalam transaksi titik lahir, server mengunci baris pelanggan (atau kunci serialisasi ekuivalen yang dibuktikan Backend), menilai ulang builder dari data terbaru, mencocokkan `approved` dengan sidik + pembuat + pelanggan + jenis + nominal, lalu BILA cocok menandai `used` dan melahirkan dokumen dalam transaksi yang sama. Penilaian ulang tetap wajib: bila paparan aktual sudah berubah sehingga dokumen baru akan dobel-hitung atau nominal berubah, override tidak cocok lagi.
+   - **Tolak/kedaluwarsa/superseded:** simpan ulang identik tetap tertahan dan membuat/ menampakkan permintaan baru sesuai status terakhir; override lama tidak bangkit.
+5. Masa berlaku: SATU dokumen percobaan-simpan. Override `approved` kedaluwarsa pada akhir hari kerja WIB yang sama (23:59:59 WIB), tidak dapat dipakai untuk nominal/jenis/pembuat/pelanggan/kaitan sumber lain, dan gugur bila pelanggan di-soft-delete/arsip (EC-CL2-3). Simpan ulang sesudah ubahan nilai = sidik baru. Override `pending` yang tidak diputus dalam 1 hari kerja WIB menjadi `expired` secara turunan saat dibaca/dipakai (Backend boleh menambah penanda tersimpan, tetapi keputusan kedaluwarsa harus benar walau job belum jalan). Satu override hanya bisa bertransisi `approved -> used` sekali di dalam transaksi lahir.
+6. Duplikasi nominal dokumen yang dinilai: penilaian server wajib memakai builder yang sama secara proyeksi — paparan existing + delta tertagih dokumen percobaan, dengan dokumen sumber yang sudah termuat di K1/K2/K5 dikecualikan/dikurangi sesuai definisi builder (BR-CL2-12). Menilai hanya status existing sebelum dokumen lahir TIDAK cukup karena SO draft dan Invoice draft tidak masuk K1/K2; sebaliknya menambah grandTotal mentah ke paparan yang sudah memuat SO/quotation sumber adalah dobel-hitung yang dilarang. Fisik proyeksi (helper tx-aware di sekitar `loadCustomerCreditExposure`/builder) milik Backend, rumus komponen tetap builder yang sama — tidak ada rumus kedua di action/UI.
+
+### Q-CL2-4 — Cakupan titik tahan (DIPUTUS: semua jalur lahir/naik-nilai yang benar-benar menambah paparan)
+
+Prinsip putusan: gerbang menilai **transisi yang menambah eksposur tertagih**, bukan setiap pemanggilan `create` Prisma yang kebetulan membuat baris draft. Baris draft sendiri tidak masuk K1/K2 builder, sehingga menahan create-draft saja mudah dibypass lewat posting/konfirmasi; sebaliknya menahan semua draft tanpa proyeksi akan menahan dokumen yang belum menjadi paparan. Cakupan aktif tahap pertama:
+
+1. `createSalesOrder` (sales.actions.ts:902) — dinilai PROYEKSI saat simpan: grandTotal SO baru mengurangi/menambah paparan menurut apakah SO itu akan menggantikan K5 quotation yang sama atau menjadi K2 baru; SO hasil konversi tidak ditambah di atas K5 sumbernya. Karena SO lahir `draft` (belum K2) dan tidak ada action transisi SO draft->confirmed terpisah di katalog server hari ini (create dari DP adalah satu-satunya jalur confirmed langsung), create dinilai sebagai komitmen penjualan yang dapat dilanjutkan ke faktur/WO — tertahan berarti SO draft tidak lahir. Ini mengikuti spec §1/§2 yang memang menahan simpan SO, bukan status SO baru.
+2. `convertQuotationToOrder` (:478) — dinilai dengan proyeksi yang sama; K5 quotation sumber tidak didobel dengan SO hasil konversi.
+3. `createSalesInvoice` (:1428) — dinilai sesudah `assertPeriodOpen` existing (BR-CL2-11) dan di dalam transaksi lahir. Proyeksi: invoice baru dari SO mengurangi K2 SO terkait sebesar porsi yang menjadi K1, bukan menumpuk grandTotal invoice di atas K2 SO penuh; invoice langsung/quotation dinilai dari porsi tertagih yang belum termuat di K1/K2/K5.
+4. Jalur DP `down-payment.hook`/`confirmDownPayment` — dinilai SEKALI di hulu di dalam transaksi yang sama sebelum rantai melahirkan SO CONFIRMED/Invoice. Tertahan menggagalkan seluruh transaksi DP-confirm itu (DP tidak berubah status dan tidak ada SO/Invoice/WO/Project turunan lahir), bukan membiarkan DP confirmed lalu memblokir setengah rantai. DP yang sudah confirmed sebelum aktivasi tidak dibatalkan retroaktif (BR-CL2-10); penilaian ulang hanya terjadi bila jalur itu dipanggil ulang/idempoten — hasil idempoten existing tidak boleh tertahan hanya karena gerbang baru aktif.
+5. Generator invoice turunan yang menaikkan nilai tertagih DIIKUTKAN: `createDifferenceInvoice` dan `createProgressInvoice` (keduanya melahirkan invoice draft dari quotation dan menaikkan total tertagih). Menutup hanya `createSalesInvoice` membiarkan dua jalur ini menjadi bypass persis. Fisik penilaian boleh memakai helper bersama yang sama, bukan duplikasi logika per action.
+6. Ubahan menaikkan nilai tertagih DIIKUTKAN dengan delta persis:
+   - `updateSalesOrder`: nilai tertagih baru > nilai sebelum ubahan.
+   - `updateSalesInvoice`: nilai tertagih baru > nilai sebelum ubahan; untuk invoice yang sudah recognised, delta atas grandTotal yang sama — bukan grandTotal penuh.
+   - `resyncOnEdit` di `quotation-sync.service.ts` (memperbarui SO/Invoice tertaut saat quotation diubah): bila hasil sinkron menaikkan grandTotal SO/Invoice tertaut pelanggan yang sama, transisi itu dinilai sebagai satu kenaikan per dokumen terdampak. Backend wajib membuktikan jalur ini tidak bisa menaikkan nilai melewati gerbang hanya dengan mengedit quotation.
+   Ubahan menurunkan/menyamakan nilai TIDAK ditahan (EC-CL2-4: tidak ditahan — menahan penurunan mengunci koreksi yang mengurangi risiko).
+7. `postInvoice` TIDAK menjadi titik tahan terpisah tahap ini. Invoice yang lahir lewat titik 3/5 sudah dinilai saat lahir; invoice pra-aktivasi tidak ditahan retroaktif saat posting (BR-CL2-10). Bila kelak ada jalur lahir invoice yang lolos dari titik 1-6, itu bug cakupan yang dibuka lewat kartu perbaikan, bukan alasan menahan posting semua invoice lama.
+8. Penilaian dilakukan SEBELUM baris dokumen lahir/diperbarui dan di dalam transaksi/kunci serialisasi pelanggan yang sama dengan tulisnya (EC-CL2-1). Backend membuktikan dua simpan bersamaan untuk pelanggan sama tidak sama-sama memakai paparan basi: kunci baris pelanggan/quotation/SO yang relevan atau kunci advisor per pelanggan — pilih satu pola existing dan kunci dengan tes konkurensi.
+
+Catatan jujur cakupan: daftar di atas diperiksa dari grep `salesOrder.create`/`salesInvoice.create`/`salesOrder.update`/`salesInvoice.update` di origin/main run ini (sales.actions.ts 3 create SO/Invoice + 2 update, down-payment.hook 1+1, quotation-sync.service.ts 1 update). Bila Backend menemukan pemanggil internal lain saat wiring, ia wajib melaporkannya ke Lead sebelum merge — tidak memperluas/mempersempit diam-diam.
+
+### Q-CL2-5 — Aktivasi (DIPUTUS: saklar eksplisit default NONAKTIF; aktivasi = checklist terbukti, bukan tanggal karangan)
+
+1. Mekanisme: kolom boolean baru pada `SystemSetting` existing, dibaca server pada setiap penilaian dengan default fail-safe `false` bila baris/kolom belum ada. Nama kolom fisik Backend mengikuti konvensi `SystemSetting` (usulan arah: makna "gerbang kredit aktif", bukan env var). Hanya pemegang `manage_settings` yang boleh mengubahnya lewat settings action existing; perubahan saklar masuk audit aktivitas. BUKAN langsung aktif sesudah build dan BUKAN env var: env tidak terlihat operator, tidak mencatat siapa/kapan membuka, dan tidak bisa dimatikan dari UI saat insiden.
+2. Wiring yang merged dengan saklar `false` berperilaku persis hari ini (AC-CL2-B1): tidak ada dokumen tertahan, tidak ada rekod override dibuat, UI hanya advisory existing. Default ini bukan "gerbang bocor" — ia keadaan sebelum aktivasi yang memang diwajibkan spec §6.
+3. Saklar hanya BOLEH diputar ke `true` oleh operator sesudah SEMUA bukti ini ada dan tertaut di board/backlog:
+   (a) putusan ini merged; (b) key + rekod + wiring seluruh Q-CL2-4 merged; (c) `EXPECTED_SENSITIVE`/parity izin hijau di CI exact-head; (d) falsifikasi QA AC-CL2-B1..B8 + AC-CL2-F1/F2 LOLOS atas head persis yang akan dipakai; (e) rekonsiliasi K3-efektif(b) Putusan 3 butir 2 vonis 035-V atas data DP alokasi nyata dilaporkan Backend ke Accountant dan Accountant menyatakan tidak ada selisih material terbuka (selisih material = kembali ke vonis, gerbang tidak dibuka); (f) daftar pelanggan yang akan pertama tertahan (`over` di laporan existing) sudah dapat dibaca dari laporan paparan — supaya aktivasi tidak mengejutkan operator.
+   Tanpa (e), aktivasi DILARANG walau kode hijau. Accountant tidak diminta vonis angka baru di putusan ini; (e) adalah verifikasi syarat vonisnya sendiri.
+4. Momen berlaku: sejak transaksi pertama yang dinilai sesudah saklar terbaca `true`. Tanpa tanggal berlaku retroaktif dan tanpa penahanan dokumen berjalan yang lahir sebelum momen itu (BR-CL2-10). Mematikan kembali saklar menghentikan penahanan baru seketika; rekod override `pending/approved` yang belum terpakai menjadi tidak dapat dipakai selama saklar mati dan tidak otomatis terpakai saat saklar dinyalakan lagi tanpa penilaian ulang sidik.
+5. Urutan sesudah putusan ini: Backend wiring (kartu turunan langsung) → Frontend UI tertahan/override (parent: Backend, supaya kontrak payload final dulu) → QA falsifikasi (parent: Backend + Frontend) → Lead merge tiap PR sesudah gate exact-head hijau → aktivasi saklar sebagai tindakan operasional terpisah oleh pemegang `manage_settings` sesudah checklist butir 3 lengkap. Lead tidak mengklaim gerbang "aktif" hanya karena PR build merged.
+
+### Pemetaan AC yang dibuka putusan ini
+
+AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap), B5 (SoD/tanpa key/tanpa alasan tertolak), B8 (seluruh jalur Q-CL2-4) — terpetakan ke kartu Backend turunan. AC-CL2-F1/F2 ke kartu Frontend turunan. AC-CL2-B1/B3/B6/B7 tetap berlaku persis spec/vonis.
+
+F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-060-S: antrean Pesanan Pembelian draft mengendap menunggu persetujuan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_e06c99b2. ID F-2026-10-26-060-S diverifikasi bebas run ini 2026-10-26 14:31–14:41 WIB: grep `F-2026-10-26-060` di backlog + board origin/main = 0; verifikasi ulang 14:41 WIB basis maju ke ead8f1d2 (059-S MERGED PR #1002, retur penjualan objek beda) dan grep 060 tetap 0 di sana; branch berbasis 9ea1ef59 lalu di-sync union ke main 0781f3cd. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Bukan duplikasi: bukan F-2026-10-26-056-S (SalesOrder draft penjualan menunggu approve_sales_orders; spec ini PurchaseOrder draft pembelian menunggu approve_purchase_orders — objek, aktor, gerbang, dan hilir berbeda); bukan purchase-outstanding (PO sudah terbit approved/ordered/partial_received dengan sisa penerimaan — populasi disjungsi persis pada status draft); bukan F-2026-10-26-059-S (retur penjualan draft); bukan antrean penerimaan/vendor bill (hilir sesudah PO terbit).
+
+### 0. Ringkasan + benchmark resmi (akses 2026-10-26)
+
+Gap: PO lahir draft lalu menunggu persetujuan workflow generik, tetapi daftar pembelian/pesanan mengurut createdAt desc tanpa penanda umur/tahap — draft tua tenggelam di antara PO terbit. Spec ini membekukan antrean baca-saja: populasi draft murni, tingkat menunggu/mengendap turunan umur kalender WIB dari createdAt, label verbatim server, nilai berlabel "nilai draft belum disetujui". Nol status baru, nol mutasi, nol jurnal; persetujuan tetap jalur workflow existing dari detail PO.
+
+Benchmark resmi (diakses live run ini):
+- Accurate — Persetujuan transaksi mencakup Pesanan Pembelian: PO "baru bisa dikirim ke supplier setelah dapat persetujuan dari manajer pembelian": https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/
+- Zahir — Pesanan/Order Pembelian: "Simpan Draft: hanya rekam draft transaksi dan belum membentuk laporan; Simpan: merekam transaksi dan otomatis terbentuk laporan"; pesanan belum membentuk jurnal: https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-pesanan-order-pembelian-zahir-online-v2
+
+### 1. Workflow specification
+
+Aktor: staf pembelian (pembuat PO, pemegang create/edit_purchase_orders), penyetuju (approve_purchase_orders lewat workflow Approval generik), pembaca antrean (view_purchase_orders).
+Dokumen masuk: PurchaseOrder status draft (dari createPurchaseOrder manual, dari PurchaseRequest approved/partial_ordered, atau PO jasa dari WorkOrder isService) + Approval pending bila workflow terkonfigurasi.
+Alur: (1) PO lahir draft; (2) requestApprovalIfConfigured("PurchaseOrder") membuka Approval pending bila workflow ada; (3) antrean ini menampilkan draft + umur + tahap turunan supaya penyetuju/staf menindaklanjuti; (4) keluar draft hanya lewat persetujuan workflow existing (status menjadi approved + approvedBy) atau batal/hapus dari detail — antrean tidak menyediakan aksi mutasi apa pun tahap 1.
+Dokumen keluar: tidak ada dokumen baru; keluaran hanya payload antrean (baris + rekap hitungan + Σ berlabel) untuk permukaan daftar/laporan.
+
+### 2. Role/permission matrix (key nyata module-catalog.generated.ts:208-212)
+
+| Aksi | view_purchase_orders | create_purchase_orders | edit_purchase_orders | approve_purchase_orders |
+|---|---|---|---|---|
+| Lihat antrean draft (loader fail-closed) | WAJIB | — | — | — |
+| Buat PO (lahir draft) | — | WAJIB (existing) | — | — |
+| Ubah/batalkan PO dari detail | — | — | WAJIB (existing) | — |
+| Setujui PO lewat workflow dari detail | — | — | — | WAJIB (approval-permissions.ts:21) |
+| Setujui/batalkan dari daftar antrean | TIDAK ADA tahap 1 untuk semua role | | | |
+
+### 3. Status-transition matrix (kosakata TERVERIFIKASI-KODE)
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| (lahir) | createPurchaseOrder purchase.actions.ts:726 status:"draft" (+ requestApprovalIfConfigured :740) | draft | create_purchase_orders |
+| (lahir) | createServicePurchaseOrderFromWorkOrder (PO jasa draft, isService, workOrderId) | draft | create_purchase_orders |
+| draft | Approval langkah terakhir disetujui (approval.actions.ts:233-248; PurchaseOrder ∈ APPROVED_BY_MODELS :57-63) | approved (+approvedBy) | approve_purchase_orders |
+| draft | cancelPurchaseOrder (tolak hanya received/cancelled/partial_received) purchase.actions.ts:919-945 | cancelled | edit_purchase_orders |
+| draft | deletePurchaseOrder | (terhapus; deletedAt untuk soft-delete daftar) | delete_purchase_orders |
+| approved | GoodsReceipt dibuat (gerbang status approved/ordered/partial_received purchase.actions.ts:1007) | ordered/partial_received/received (jalur existing, di luar spec) | create_goods_receipts |
+
+Catatan jujur: tanpa workflow terkonfigurasi, PO draft tidak punya jalur approve in-app selain workflow — antrean menampilkan fakta itu apa adanya (status approval per baris TIDAK ditampilkan tahap 1, selaras preseden Q-SIQ-7; penambahan penanda = Q-POQ-5).
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-POQ-01 | Populasi persis PurchaseOrder status="draft" DAN deletedAt null; status lain (approved/ordered/partial_received/received/cancelled) tidak ikut | USULAN (di atas fakta TERVERIFIKASI-KODE: status lahir draft purchase.actions.ts:726; skema status default draft prisma/schema.prisma:2036) | purchase.actions.ts:726; prisma/schema.prisma:2036; prisma/schema.prisma PurchaseOrder.status |
+| BR-POQ-02 | Tingkat turunan murni dari umur hari kalender WIB sejak createdAt: menunggu di bawah ambang, mengendap pada/di atas ambang; ambang = putusan Lead Q-POQ-1, BUKAN konstanta spec | USULAN / BUTUH-VONIS Lead | pola WIB existing getWibTodayUtcDate (sales-invoice-draft-queue.ts) |
+| BR-POQ-03 | Nilai baris = grandTotal tersimpan verbatim (Decimal->Number di loader); Σ rekap WAJIB berlabel "nilai draft belum disetujui" — draft belum utang, belum komitmen bayar, tidak masuk utang/pembelian terbit di permukaan mana pun | USULAN (fakta pendukung BENCHMARK: draft belum membentuk jurnal/laporan — Zahir URL §0) | Zahir §0; preseden BR-SIQ-08/BR-SOQ-09 |
+| BR-POQ-04 | expectedDate hanya penanda rencana terima (terisi/kosong, lampau apa adanya); draft dengan expectedDate lampau TIDAK berlabel terlambat terima/jatuh tempo — belum ada janji vendor yang sah dari draft | USULAN | PurchaseOrder.expectedDate nullable (schema) |
+| BR-POQ-05 | Sumber baris satu label turunan urut periksa: purchaseRequestId (Permintaan Pembelian) -> workOrderId/isService (Perintah Kerja/jasa) -> langsung; satu PO satu label | USULAN | schema PurchaseOrder relasi purchaseRequest/workOrder |
+| BR-POQ-06 | Urutan: mengendap dulu, lalu umur tertua, seri akhir documentNo asc | USULAN (putusan Lead Q-POQ-3) | preseden Q-SIQ-3b/Q-SOQ-3 |
+| BR-POQ-07 | Antrean baca-saja: nol approve/batal/hapus/kirim dari daftar; semua mutasi tetap dari detail PO jalur existing | USULAN | transition matrix §3 |
+| BR-POQ-08 | Kontak vendor (telepon/email/alamat) tidak masuk payload daftar/ekspor antrean; nama vendor saja | USULAN | preseden ekspor tanpa kontak 055-S |
+| BR-POQ-09 | PO jasa (isService/workOrderId) tetap tampil dengan label sumbernya; tidak dinilai dengan logika penerimaan barang stok | USULAN | createServicePurchaseOrderFromWorkOrder |
+| BR-POQ-10 | createdAt masa depan = umur 0 tertanda, bukan negatif | USULAN | preseden EC-SIQ-4 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Persetujuan PO sebelum lanjut ke pemasok | Ada, terkonfigurasi per jenis transaksi (URL §0) | Tidak terverifikasi di URL terakses (ditulis jujur) | Ada: workflow Approval generik + approve_purchase_orders (approval.actions.ts; approval-permissions.ts:21) |
+| Draft PO belum membentuk jurnal/laporan | Tidak diklaim (tidak terverifikasi) | Ada eksplisit: Simpan Draft belum membentuk laporan (URL §0) | Ada: draft belum bisa diterima GR (gerbang approved/ordered/partial_received :1007), jurnal penerimaan baru di GR |
+| Antrean draft PO mengendap berumur | Tidak terverifikasi (tidak diklaim) | Tidak terverifikasi (tidak diklaim) | ABSEN — gap spec ini (grep builder antrean PO draft = 0; daftar urut createdAt desc tanpa umur) |
+
+### 6. Acceptance criteria + edge cases
+
+AC-POQ-B1 (builder populasi): input campuran status/deletedAt -> hanya draft+deletedAt null lolos persis (approved/ordered/cancelled bocor = MERAH).
+AC-POQ-B2 (tingkat/umur): umur dihitung hari kalender WIB dari createdAt; tepat di ambang putusan Lead = mengendap; createdAt masa depan = 0 tertanda.
+AC-POQ-B3 (verbatim): label tingkat/judul/kolom/notice/Σ-label persis konstanta builder; UI menempel tanpa parafrase (mutasi label di tes = MERAH).
+AC-POQ-B4 (sumber): PO ber-PR tampil Permintaan Pembelian walau juga ber-WO tidak pernah terjadi dua label; PO jasa tampil sumber WO; langsung tanpa keduanya.
+AC-POQ-B5 (loader): tanpa view_purchase_orders = fail-closed nol baris; anti-N+1 (vendor massal); Decimal grandTotal -> Number.
+AC-POQ-F1 (permukaan): hanya baris ke detail PO; nol tombol Setujui/Batal/Hapus/Kirim di daftar (ada = MERAH).
+AC-POQ-F2 (jujur nilai): Σ tampil dengan label "nilai draft belum disetujui"; expectedDate lampau tanpa kata terlambat/jatuh tempo.
+AC-POQ-F3 (ekspor bila dibuka): tanpa telepon/email/alamat vendor.
+EC-POQ-1: PO draft grandTotal 0 tetap tampil (umur yang dinilai, bukan nilai).
+EC-POQ-2: PO draft dari PR partial_ordered tetap populasi (status PO yang menilai, bukan status PR).
+EC-POQ-3: vendor ter-soft-delete / nama kosong -> nama null tampil `—` oleh UI, baris tidak gugur.
+EC-POQ-4: draft tanpa expectedDate tampil penanda belum diisi, bukan tanggal karangan.
+EC-POQ-5: dua PO umur sama -> seri documentNo asc deterministik.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-060-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-060-S | Spec kontrak ini (dokumen) | Business | — |
+| F-2026-10-26-060-B | Builder murni tingkat/umur/sumber + loader view_purchase_orders fail-closed anti-N+1 | Backend | Sesudah Q-POQ-1/2/3 |
+| F-2026-10-26-060-F | Permukaan antrean label verbatim, baca-saja, ekspor tanpa kontak vendor | Frontend | Sesudah kontrak -B |
+| F-2026-10-26-060-Q | Falsifikasi AC-POQ-B1..B5/F1..F3 atas head persis | QA | Sesudah -B/-F |
+
+### 8. Yang TIDAK diusulkan + pertanyaan putusan
+
+Tidak diusulkan: auto-approve/auto-batal draft tua; pengingat WA/email ke penyetuju; persetujuan dari daftar; status/tahap tersimpan baru; mengubah gerbang GR atau jurnal penerimaan.
+Q-POQ-1 (Lead): ambang hari mengendap (usulan Business: 7 hari selaras SO draft Q-SOQ-1; angka ini USULAN, bukan fakta).
+Q-POQ-2 (Lead): kata label/judul final ("Pesanan Pembelian Draft Mengendap" + label Σ §BR-POQ-03).
+Q-POQ-3 (Lead): ratifikasi urutan BR-POQ-06 + mode bawaan permukaan.
+Q-POQ-4 (Lead): penempatan permukaan (halaman antrean baru area Pembelian vs seksi daftar pesanan existing).
+Q-POQ-5 (Lead): penanda status Approval pending per baris ditampilkan tahap 1 atau tidak (usulan: tidak, selaras Q-SIQ-7).
+Butuh vonis accountant: TIDAK tahap baca-saja ini (nol jurnal/utang baru; BR-POQ-03 menjaga draft di luar utang). WAJIB hanya bila Lead membuka aksi approve dari daftar atau penilaian komitmen pembelian.
+
+F-2026-10-26-060-S — Antrean Pesanan Pembelian draft mengendap. Status: SPEC SELESAI run ini (dokumen saja); gerbang pertama putusan Lead Q-POQ-1/2/3, lalu fisik Backend (060-B), konsumen Frontend (060-F), falsifikasi QA (060-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap baca-saja ini.
