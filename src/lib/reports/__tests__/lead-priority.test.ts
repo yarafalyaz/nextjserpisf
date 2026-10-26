@@ -145,30 +145,40 @@ describe("getLeadPriorityQueue (loader)", () => {
   beforeEach(() => {
     mocks.prismaMock.lead.findMany.mockReset()
     mocks.prismaMock.user.findMany.mockReset()
-    mocks.prismaMock.user.findMany.mockResolvedValue([{ id: 7, name: "Sari" }])
   })
 
   it("AC-LSC-B6 loader: satu query massal lead + satu user, nol mutasi, Decimal dipetakan", async () => {
+    mocks.prismaMock.user.findMany.mockResolvedValue([{ id: 9, name: "Rina" }])
+    const aktif = {
+      id: 11, slug: "prio-a", leadNumber: "LD-0011", name: "Citra", status: "qualified",
+      source: "pameran", expectedCloseDate: new Date(2026, 10, 2), estimatedValue: 750,
+      assignedTo: 9, convertedAt: null, deletedAt: null,
+    }
+    const tutup = {
+      ...aktif, id: 12, slug: "prio-b", leadNumber: "LD-0012", name: "Dedi", status: "lost",
+      source: null, expectedCloseDate: null, estimatedValue: null,
+      assignedTo: null, convertedAt: new Date(2026, 9, 18),
+    }
+    mocks.prismaMock.lead.findMany.mockResolvedValue([aktif, tutup])
+    const r = await getLeadPriorityQueue()
+    expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.lead.findMany.mock.calls[0][0].where).toEqual({ deletedAt: null })
+    expect(mocks.prismaMock.user.findMany).toHaveBeenCalledTimes(1)
+    expect(r.rows.map((x) => x.leadId)).toEqual([11])
+    expect(r.rows[0]).toMatchObject({ estimatedValue: 750, assignedToName: "Rina", bucketLabel: "Belum ditetapkan" })
+    expect(Object.keys(mocks.prismaMock.lead)).toEqual(["findMany"])
+  })
+
+  it("loader tanpa penanggung: query user dilewati, label funnel tampil", async () => {
     mocks.prismaMock.lead.findMany.mockResolvedValue([
       {
-        id: 1, slug: "a", leadNumber: "LD-0001", name: "Budi", status: "new",
-        source: "website", expectedCloseDate: new Date(2026, 9, 30), estimatedValue: 100,
-        assignedTo: 7, convertedAt: null, deletedAt: null,
-      },
-      {
-        id: 2, slug: "b", leadNumber: "LD-0002", name: "Ani", status: "won",
+        id: 21, slug: "prio-c", leadNumber: "LD-0021", name: "Eka", status: "new",
         source: null, expectedCloseDate: null, estimatedValue: null,
-        assignedTo: null, convertedAt: new Date(2026, 9, 20), deletedAt: null,
+        assignedTo: null, convertedAt: null, deletedAt: null,
       },
     ])
     const r = await getLeadPriorityQueue()
-    expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledTimes(1)
-    expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { deletedAt: null } }),
-    )
-    expect(mocks.prismaMock.user.findMany).toHaveBeenCalledTimes(1)
-    expect(r.rows.map((x) => x.leadId)).toEqual([1])
-    expect(r.rows[0]).toMatchObject({ estimatedValue: 100, assignedToName: "Sari", bucketLabel: "Belum ditetapkan" })
-    expect(Object.keys(mocks.prismaMock.lead)).toEqual(["findMany"])
+    expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
+    expect(r.rows[0]).toMatchObject({ assignedToName: null, assigneeLabel: "Belum ditugaskan" })
   })
 })
