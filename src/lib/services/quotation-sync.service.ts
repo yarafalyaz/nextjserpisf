@@ -1,6 +1,11 @@
  
 import { SalesInvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import {
+  assessCreditGateInTx,
+  assertCreditGatePassed,
+  consumeApprovedCreditOverrideInTx,
+} from '@/lib/services/credit-gate.service'
 import { onSalesPaymentUpdated } from '@/lib/hooks/sales-payment.hook'
 import { onSalesInvoicePosted } from '@/lib/hooks/accounting.hook'
 import { reverseSalesInvoicePostingTx } from '@/lib/services/sales-invoice-posting.service'
@@ -113,6 +118,34 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
         })
       }
 
+      // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 6: kenaikan hasil
+      // resync dinilai per dokumen terdampak SEBELUM tulis; tertahan =
+      // throw = rollback seluruh resync (quotation edit ikut gagal).
+      if (Number(quotation.grandTotal) > Number(so.grandTotal)) {
+        // Jalur resync tanpa alasan peminta: tertahan tanpa rekod
+        // pending (fase 3 butuh alasan Q-CL2-3); CreditGateBlockedError
+        // merollback seluruh resync dan dibungkus pemanggil quotation
+        // menjadi hasil gagal. Approved bersidik sama tetap terpakai.
+        const soSyncAttempt = {
+          customerId: so.customerId,
+          documentType: 'sales_order' as const,
+          attemptedAmount: Number(quotation.grandTotal),
+          requestedBy: userId ?? 0,
+          quotationId,
+          existingDocumentId: so.id,
+          requestReason: null,
+        }
+        const soSyncOverrideId = assertCreditGatePassed(
+          await assessCreditGateInTx(tx, soSyncAttempt),
+        )
+        if (soSyncOverrideId != null) {
+          await consumeApprovedCreditOverrideInTx(tx, soSyncOverrideId, soSyncAttempt, {
+            id: so.id,
+            documentNo: so.documentNo,
+          })
+        }
+      }
+
       await tx.salesOrder.update({
         where: { id: so.id },
         data: {
@@ -145,6 +178,30 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
               total: qi.total,
             })),
           })
+        }
+
+        // F-2026-10-25-035-B: kenaikan invoice hasil resync dinilai
+        // sebelum tulis/repost; tertahan = rollback seluruh resync.
+        if (Number(quotation.grandTotal) > Number(inv.grandTotal)) {
+          const invSyncAttempt = {
+            customerId: inv.customerId,
+            documentType: 'sales_invoice' as const,
+            attemptedAmount: Number(quotation.grandTotal),
+            requestedBy: userId ?? 0,
+            quotationId,
+            salesOrderId: inv.salesOrderId,
+            existingDocumentId: inv.id,
+            requestReason: null,
+          }
+          const invSyncOverrideId = assertCreditGatePassed(
+            await assessCreditGateInTx(tx, invSyncAttempt),
+          )
+          if (invSyncOverrideId != null) {
+            await consumeApprovedCreditOverrideInTx(tx, invSyncOverrideId, invSyncAttempt, {
+              id: inv.id,
+              documentNo: inv.documentNo,
+            })
+          }
         }
 
         await tx.salesInvoice.update({

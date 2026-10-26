@@ -56,7 +56,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="password" className="text-sm font-semibold">Kata Sandi <span className="text-destructive" aria-hidden="true">*</span></Label>
-          <Input id="password" name="password" type="password" placeholder="Minimal 8 karakter" required minLength={8} />
+          <Input id="password" name="password" type="password" placeholder="Minimal 12 karakter" required minLength={12} />
         </div>
         <div className="flex flex-col gap-2">
           <Label className="text-sm font-semibold">Peran</Label>

@@ -180,6 +180,8 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/produksi/products": "Rincian kebutuhan material (BOM)",
   "/produksi/qc": "Checklist, inspeksi, dan NCR",
   "/sdm/absensi": "Absensi kehadiran karyawan",
+  "/sdm/absensi/rekap": "Rekap kehadiran per karyawan per periode",
+  "/sdm/absensi/koreksi": "Pengajuan dan putusan koreksi absensi karyawan",
   "/sdm/apresiasi": "Apresiasi karyawan",
   "/sdm/disiplin": "Surat peringatan dan rekod disiplin karyawan",
   "/sdm/cuti": "Cuti karyawan",

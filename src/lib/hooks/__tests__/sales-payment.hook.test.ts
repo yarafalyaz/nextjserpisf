@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   paymentFindMany: vi.fn(),
   invoiceUpdate: vi.fn(),
   transaction: vi.fn(),
+  customerFindUnique: vi.fn(),
+  customerCommissionRateFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -18,6 +20,12 @@ vi.mock("@/lib/db/prisma", () => ({
     salesPayment: {
       findUniqueOrThrow: (...a: unknown[]) => mocks.paymentFindUniqueOrThrow(...a),
       findMany: (...a: unknown[]) => mocks.paymentFindMany(...a),
+    },
+    customer: {
+      findUnique: (...a: unknown[]) => mocks.customerFindUnique(...a),
+    },
+    customerCommissionRate: {
+      findMany: (...a: unknown[]) => mocks.customerCommissionRateFindMany(...a),
     },
   },
 }))
@@ -33,6 +41,11 @@ function makeTx() {
     salesPayment: {
       findMany: mocks.paymentFindMany,
     },
+    // F-036-S: fixture faktur drift tanpa commissionRatePercent terbaca
+    // undefined -> snapshot dibekukan lewat helper bersama (tarif 0 jujur
+    // karena panel tarif kosong).
+    customer: { findUnique: mocks.customerFindUnique },
+    customerCommissionRate: { findMany: mocks.customerCommissionRateFindMany },
   }
 }
 
@@ -40,6 +53,8 @@ beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset()
   mocks.transaction.mockImplementation(async (fn: any) => fn(makeTx()))
   mocks.invoiceUpdate.mockResolvedValue({})
+  mocks.customerFindUnique.mockResolvedValue({ customerCategoryId: null })
+  mocks.customerCommissionRateFindMany.mockResolvedValue([])
 })
 
 describe("sales-payment recalc — float drift precision", () => {
