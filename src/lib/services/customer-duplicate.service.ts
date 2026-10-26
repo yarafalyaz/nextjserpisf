@@ -1,9 +1,10 @@
 /**
  * F-2026-10-25-003-S (BR-CD-01..10, AC-CD-B1..B7): peringatan duplikat
  * pelanggan tahap 1 — PERINGATAN advisory, BUKAN blokir keras. Simpan
- * tetap berhasil; respons memuat kandidat terstruktur. Blokir-keras =
- * Q-CD-1 Lead, belum diputus; mengubah fungsi ini menjadi blokir tanpa
- * putusan itu = menyimpang dari spec (AC-CD-B4).
+ * tetap berhasil; respons memuat kandidat terstruktur. Pengecualian:
+ * gerbang NPWP persis Q-CD-1 (PUTUSAN Lead PR #901) di bawah — NPWP
+ * ternormalisasi sama terisi dua sisi = BLOKIR sebelum simpan; kunci
+ * lain tetap advisory persis seperti sebelumnya.
  *
  * Keputusan fisik Backend (Q-CD-3, wilayah Backend):
  * - Telepon: REUSE `normalizeWhatsappPhone` (whatsapp.ts) — satu-satunya
@@ -258,6 +259,73 @@ export async function findCustomerDuplicateCandidates(
   }
   candidates.sort(compareCandidates);
   return candidates;
+}
+
+// ==================== Q-CD-1: gerbang BLOKIR NPWP persis ====================
+
+export interface CustomerNpwpConflict {
+  id: number;
+  slug: string | null;
+  name: string;
+  code: string | null;
+}
+
+/**
+ * PUTUSAN Lead Q-CD-1 (PR #901): NPWP ternormalisasi PERSIS terisi di dua
+ * sisi = pelanggan lain sudah memegang NPWP itu -> BLOKIR sebelum
+ * create/update customer. NPWP ternormalisasi kosong (kosong/"0"/strip
+ * saja, EC-3 003-S) BUKAN konflik. `excludeCustomerId` = pelanggan yang
+ * sedang diedit (self-match dikecualikan). Scope sama kandidat advisory:
+ * hanya pelanggan aktif non-deleted.
+ *
+ * Normalisasi pajak dua lapis di repo ini: simpan menyimpan digit-saja
+ * (`normalizeNpwp`, tax/), kunci kandidat memakai
+ * `normalizeCustomerTaxIdKey` (digit saja + nol-saja -> bukan kunci).
+ * Pencocokan memakai kunci ternormalisasi itu di kedua sisi: baris
+ * kandidat bila kunci digitnya persis sama. Dua NPWP sama hanya beda
+ * format (titik/strip/spasi) SELALU tertangkap karena kedua sisi jatuh
+ * ke digit yang sama; master tua pra-normalisasi ikut tertangkap lewat
+ * normalisasi di memori sesudah scan.
+ */
+export async function findCustomerNpwpConflict(
+  input: {
+    taxId?: string | null;
+    excludeCustomerId?: number;
+  },
+  db: TxClient | typeof prisma = prisma,
+): Promise<CustomerNpwpConflict | null> {
+  const taxIdKey = normalizeCustomerTaxIdKey(input.taxId);
+  if (taxIdKey == null) return null;
+
+  const rows = (await db.customer.findMany({
+    where: {
+      isActive: true,
+      deletedAt: null,
+      ...(input.excludeCustomerId != null
+        ? { id: { not: input.excludeCustomerId } }
+        : {}),
+      taxId: { not: null },
+    },
+    select: { id: true, slug: true, name: true, code: true, taxId: true },
+    orderBy: { id: "asc" },
+    take: MAX_CANDIDATE_SCAN,
+  })) as Array<CustomerRow & { taxId: string | null }>;
+
+  for (const row of rows) {
+    if (normalizeCustomerTaxIdKey(row.taxId) !== taxIdKey) continue;
+    // Baris hasil scan diurut id naik: pemegang pertama deterministik.
+    return { id: row.id, slug: row.slug, name: row.name, code: row.code };
+  }
+  return null;
+}
+
+export const CUSTOMER_NPWP_BLOCKED_TITLE = "NPWP sudah dipakai pelanggan lain";
+
+export function buildCustomerNpwpBlockedMessage(
+  conflict: CustomerNpwpConflict,
+): string {
+  const codePart = conflict.code ? ` (${conflict.code})` : "";
+  return `NPWP yang sama sudah tercatat atas nama ${conflict.name}${codePart}. Pakai pelanggan yang sudah ada itu, atau perbaiki NPWP bila salah ketik.`;
 }
 
 export function buildCustomerDuplicateWarning(
