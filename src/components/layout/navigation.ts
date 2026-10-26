@@ -87,6 +87,8 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, permission: "view_quotations" },
       { label: "Antrean Penawaran", href: "/penjualan/antrean-penawaran", icon: ListTodo, permission: "view_quotations" },
+      { label: "Draf Penawaran Basi", href: "/penjualan/antrean-penawaran-draf", icon: ListTodo, permission: "view_quotations" },
+      { label: "Faktur Draft Mengendap", href: "/penjualan/antrean-faktur-draf", icon: ListTodo, permission: "view_sales_invoices" },
       { label: "Antrean Penawaran Diterima", href: "/penjualan/antrean-penawaran-diterima", icon: ListTodo, permission: "view_quotations" },
       { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
       { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, permission: "view_down_payments" },
@@ -197,6 +199,7 @@ export const navigation: NavItem[] = [
     icon: Handshake,
     children: [
       { label: "Prospek", href: "/crm/leads", icon: Target, permission: "view_leads" },
+      { label: "Prioritas Lead", href: "/crm/prioritas-lead", icon: ListOrdered, permission: "view_leads" },
       { label: "Tiket", href: "/crm/tickets", icon: Ticket, permission: "view_tickets" },
     ],
   },
@@ -314,6 +317,7 @@ export const navigation: NavItem[] = [
       { label: "Riwayat Harga Penawaran", href: "/laporan/riwayat-harga-penawaran", icon: FileText, permission: "view_reports" },
       { label: "Riwayat Harga Jual", href: "/laporan/riwayat-harga-jual", icon: FileText, permission: "view_reports" },
       { label: "Garansi Segera Berakhir", href: "/laporan/garansi-segera-berakhir", icon: ShieldCheck, permission: "view_reports" },
+      { label: "Pengingat Servis Berkala", href: "/laporan/servis-berkala", icon: CalendarCheck, permission: "view_reports" },
       { label: "Aging Klaim Supplier", href: "/laporan/aging-klaim-supplier", icon: ShieldCheck, permission: "view_reports" },
       { label: "Corong Prospek", href: "/laporan/corong-prospek", icon: BarChart3, permission: "view_reports" },
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
