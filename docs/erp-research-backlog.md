@@ -35748,3 +35748,104 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-088-S: antrean ketidaksesuaian (NCR) terbuka mengendap pemblokir serah terima (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ca4bdb53. ID F-2026-10-27-088-S diverifikasi bebas run ini 2026-10-27 06:04 WIB basis `origin/main` 585f988359: grep `F-2026-10-27-088` di backlog+board origin/main = 0; PR membawa `088-S` yang ada = F-2026-10-22-088-S target penjualan (tanggal beda, bukan tabrakan); branch `*f088*`/`*ncr*` selain branch run ini = 0. Kandidat gugur run ini (dicatat supaya tidak diulang): koreksi absensi `pending` — antrean putusan scoped SUDAH live F-2026-10-25-010-S (`src/app/(dashboard)/sdm/absensi/koreksi/page.tsx` + builder `src/lib/reports/attendance-correction.ts`), bukan gap. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS. Uang: spec TIDAK memutus jurnal/akun/nilai HPP; biaya rework TIDAK tampil tahap 1 (BR-NCRQ-06).
+
+Benchmark resmi (akses 2026-10-27):
+- Accurate — pencarian help resmi (https://help.accurate.id/product/laporan/ , indeks Daftar Laporan) tidak memuat antrean ketidaksesuaian/NCR atau daftar kerja QC terbuka sebagai fitur bernama pada akses ini = BENCHMARK jujur: tidak ditemukan, TIDAK diklaim Accurate punya antrean setara.
+- Zahir — halaman fitur resmi (https://www.zahironline.com/fitur/) memuat manufaktur/proyek/job costing secara umum, tanpa antrean NCR/ketidaksesuaian terbuka bernama pada akses ini = BENCHMARK jujur: tidak terverifikasi, TIDAK diklaim Zahir punya fitur setara. Kebutuhan antrean ini kebutuhan operasional ISF sendiri (NCR pemblokir serah terima), bukan salinan kompetitor.
+
+### 0. Inventarisasi TERVERIFIKASI-KODE (2026-10-27, basis origin/main 585f988359)
+
+Sudah ada:
+- Model `Nonconformance` (`prisma/schema.prisma:3159-3190`): `documentNo` unik, `inspectionId` nullable (SetNull bila inspeksi terhapus), `referenceType`/`referenceId` (enum validasi `WorkOrder|ProductionOrder|GoodsReceipt`, `src/lib/validations/qc.schemas.ts:89,143`), `defectDescription`, `cause` nullable, `responsibility` default `internal`, `severity` default `minor`, `status` default `open` (:3170), `reworkCost`/`reworkHours` Decimal default 0, `resolution` nullable, `closedBy`/`closedAt` nullable, `createdBy`, `createdAt`/`updatedAt`; indeks status + createdAt. TIDAK ADA kolom `deletedAt` — NCR tidak punya hapus-lunak di model.
+- Kosakata status server `src/lib/services/qc.service.ts:10`: `NONCONFORMANCE_STATUSES = open|rework|rework_done|rejected|closed`. Himpunan PEMBLOKIR serah terima `:13`: `OPEN_NCR_STATUSES = [open, rework, rejected]` — dipakai `assertQcCleared` (:84-91): NCR status himpunan itu pada (referenceType, referenceId) menahan penyelesaian WO/PO. CATATAN inkonsistensi jujur: komentar `:12` berbunyi "`open`/`rework` block handover" tetapi kode `:13` ikut memblokir `rejected`; spec ini mengikuti KODE (tiga status memblokir), komentar basi TIDAK dijadikan aturan (koreksi komentar = catatan Backend Q-NCRQ-6, bukan diubah spec ini).
+- Makna status dari aksi: lahir `open` (`createNonconformance`, `src/actions/qc.actions.ts:343-391`, gerbang `manage_nonconformances` :345, stempel status `"open"` :372); maju/tutup lewat `resolveNonconformance` (:394-484, gerbang sama :396): status `closed` men-stempel `closedBy`/`closedAt` (:447), NCR sudah `closed` ditolak diproses ulang (:418-420); biaya/jam rework tersimpan dipertahankan bila form tidak mengirim (:424-440) lalu dicerminkan ke HPP order produksi via `syncReworkCostToOrder` (:455-471). `rework_done`/`rejected` dicapai lewat aksi yang sama (skema resolve), bukan transisi otomatis.
+- Permukaan existing: daftar `src/app/(dashboard)/produksi/qc/ncr/page.tsx` = `prisma.nonconformance.findMany` mentah orderBy `createdAt desc` + saring cari `documentNo` saja, gerbang `view_qc`, TANPA saring status, TANPA umur, TANPA penanda pemblokir, TANPA rekap; tabel `_components/nonconformance-table.tsx` menampilkan No. NCR / Referensi (`referenceType #referenceId` mentah) / Tingkat Keparahan (label minor=Ringan, major=Berat, critical=Kritis) / Penanggung / Status chip / Dibuat. Detail/resolve per baris existing di `ncr/[slug]` + `nonconformance-resolve-form.tsx`.
+- Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts`): `view_qc` (:258), `manage_nonconformances` (:263), tetangga `manage_qc_inspections` (:257). Modul QC TIDAK mengenal scope HR/departemen — akses murni gerbang izin (pola daftar NCR existing `view_qc`).
+
+Belum ada / parsial (bukti grep run ini):
+- Antrean kerja NCR terbuka mengendap: ABSEN. Builder/loader antrean NCR di `src/lib/reports/` = 0 berkas (ls-tree terverifikasi; tetangga builder antrean QC tidak ada — QC hanya `qc.service.ts` + aksi); grep backlog `antrean` + NCR/ketidaksesuaian = 0 spec antrean (menyebutan NCR di backlog hanya sebagai prasyarat tutup job F-2026-10-24-097-S/workshop-closeout dan gerbang serah terima, bukan antrean kerjanya).
+- Umur menunggu penyelesaian: TIDAK diturunkan di permukaan mana pun — daftar mengurut `createdAt desc` (terbaru dulu, lawan dari urutan kerja mengendap), tanpa tingkat, tanpa rekap per status/responsibility/severity, tanpa tautan label dokumen referensi (hanya `referenceType #id` mentah).
+- Spec tetangga yang TIDAK diduplikasi: F-2026-10-24-097-S antrean WO completed belum ditutup (builder `workshop-closeout-queue.ts` live) menjawab "job selesai belum ditutup"; spec ini menjawab populasi SEBELUMNYA — NCR terbuka yang justru menahan job itu bisa selesai. NCR atas GoodsReceipt tidak tersentuh antrean WO mana pun. Antrean ini tidak menutup job, tidak menutup NCR, tidak menilai eligibility apa pun.
+
+### 1. Kontrak populasi & label (dibekukan spec ini)
+
+Label operasional permukaan: USULAN kata persis — judul antrean "Antrean NCR Terbuka"; notice: "Daftar ini baca-saja: NCR terbuka menahan serah terima dokumen terkait sampai diselesaikan lewat detail NCR existing. Daftar ini tidak menutup NCR dan tidak menyelesaikan dokumen terkait." Kata final = Q-NCRQ-2 Lead.
+
+Populasi USULAN (turunan baca-saja, tanpa kolom/status baru):
+- POPULASI = `Nonconformance` berstatus PERSIS dalam himpunan pemblokir kode existing `open|rework|rejected` (`qc.service.ts:13`) — memakai definisi server apa adanya, BUKAN kosakata baru spec. Ember per status verbatim: `open` (baru, belum dikerjakan), `rework` (pengerjaan ulang berjalan), `rejected` (ditolak tetapi MASIH memblokir per kode — tampil dengan penanda jujur "masih menahan serah terima", antrean tidak menafsirkan rejected sebagai selesai).
+- KELUAR populasi: `rework_done` (selesai rework, tidak memblokir per kode — bukan menunggu penyelesaian tahap 1; memasukkannya = menuduh baris selesai sebagai tertahan) dan `closed` (terminal, `closedAt` terstempel). Status liar di luar `NONCONFORMANCE_STATUSES`: tampil satu baris tertanda "Status tidak dikenal", TIDAK dipetakan paksa ke ember mana pun dan TIDAK dihitung memblokir (builder tidak menebak makna status tak dikenal; penanda saja) — Q-NCRQ-5.
+- Pendamping fakta per baris: dokumen referensi (`referenceType` verbatim + nomor dokumen referensi bila loader sanggup menaut massal anti-N+1; bila dokumen referensi tidak ditemukan, tampil `referenceType #id` apa adanya tertanda — dilarang mengarang nomor), inspeksi asal ada/tidak (`inspectionId` null terbaca apa adanya, termasuk SetNull historis), severity verbatim + label existing tabel (Ringan/Berat/Kritis), responsibility verbatim, deskripsi cacat verbatim (dipotong tampil oleh UI, bukan oleh builder).
+
+### 2. Umur & urutan
+
+- Umur menunggu penyelesaian = hari kalender WIB sejak `createdAt` NCR, berlabel persis "sejak NCR dibuat". `createdAt` adalah satu-satunya stempel lahir tersimpan; `updatedAt` DILARANG sebagai sumber umur (berubah oleh setiap resolve/ubah biaya). `closedAt` hanya ada pada baris closed yang bukan populasi.
+- Tingkat turunan: `mengendap` bila umur > ambang, selain itu `menunggu penyelesaian`. Ambang = Q-NCRQ-1 Lead (USULAN 3 hari kalender WIB, sejajar konstanta keluarga antrean draft repo; satu konstanta bernama server, bukan angka tersebar).
+- Urutan USULAN: tingkat `mengendap` dulu, lalu umur terbesar dulu; seri `createdAt` sama persis → `documentNo` naik lalu id naik — deterministik, cocok pola keluarga antrean (Q-NCRQ-1 mengesahkan).
+
+### 3. Aturan bisnis (BR-NCRQ)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-NCRQ-01 | Populasi = status persis `open|rework|rejected` per `OPEN_NCR_STATUSES` kode existing; `rework_done`/`closed` keluar; definisi pemblokir TIDAK didefinisikan ulang di builder antrean | USULAN batas populasi di atas TERVERIFIKASI-KODE (qc.service.ts:10,13) |
+| BR-NCRQ-02 | `rejected` tampil tertanda masih-menahan mengikuti kode, bukan komentar basi qc.service.ts:12; antrean tidak menyatakan rejected selesai/bebas | TERVERIFIKASI-KODE (qc.service.ts:13,84-91) |
+| BR-NCRQ-03 | Umur hanya dari `createdAt` hari kalender WIB; `updatedAt` dilarang sebagai sumber umur/tahap | USULAN di atas TERVERIFIKASI-KODE (schema:3182-3183; pola BR-HP-04 keluarga antrean) |
+| BR-NCRQ-04 | Gerbang baca = `view_qc` persis gerbang daftar NCR existing; tanpa scope departemen/HR (modul QC tidak mengenalnya); baris tampil global per izin itu, tidak disaring per pembuat | TERVERIFIKASI-KODE (ncr/page.tsx requirePermission view_qc; katalog:258) |
+| BR-NCRQ-05 | Penyelesaian tetap `manage_nonconformances` lewat `resolveNonconformance` existing di detail; antrean tahap 1 TANPA tombol Tutup/Rework/Tolak dan tanpa aksi massal | TERVERIFIKASI-KODE gerbang aksi (qc.actions.ts:396) + USULAN batas antrean |
+| BR-NCRQ-06 | Payload daftar TANPA nominal: `reworkCost`/`reworkHours` TIDAK masuk payload antrean (angka biaya produksi/HPP, permukaan biaya = detail NCR existing); antrean tidak menjumlahkan biaya tertahan dan tidak menerbitkan total biaya apa pun | USULAN batas payload (kolom TERVERIFIKASI-KODE schema:3173-3174) |
+| BR-NCRQ-07 | Baca-saja murni: builder/loader tidak memanggil `resolveNonconformance`/`createNonconformance`, tidak mengubah status, tidak menutup WO/PO/GR, tidak memicu `syncReworkCostToOrder`; dua panggilan bersamaan nol mutasi | USULAN (penjaga aksi existing tidak disentuh) |
+| BR-NCRQ-08 | Label severity/responsibility/status verbatim server dari kosakata existing; UI tidak menerjemahkan ulang status liar dan tidak menghitung umur/tahap sendiri | USULAN (label severity existing nonconformance-table.tsx) |
+| BR-NCRQ-09 | Satu baris per NCR (kunci id); NCR tanpa inspeksi (`inspectionId` null) dan NCR atas dokumen referensi terhapus tampil apa adanya tertanda, tidak disembunyikan dan tidak digabung | USULAN di atas TERVERIFIKASI-KODE (schema:3162-3164 SetNull) |
+
+### 4. Matriks izin & transisi
+
+Izin (key nyata katalog): lihat antrean + daftar existing `view_qc` (:258); buat NCR existing `manage_nonconformances` (:263); selesaikan/tutup existing `manage_nonconformances` (:263, qc.actions.ts:396). Antrean TIDAK menambah key izin dan TIDAK mewarisi scope HR (modul QC global per izin, BR-NCRQ-04).
+
+Transisi (semua EXISTING, antrean tidak menulis): (lahir) —createNonconformance→ `open` —resolveNonconformance→ `rework`|`rework_done`|`rejected` —resolveNonconformance→ `closed` (stempel closedBy/closedAt; closed terminal ditolak proses ulang). Antrean membaca: open/rework/rejected = populasi (ember per status); rework_done/closed = keluar; status liar = tertanda tidak dikenal.
+
+Status-transition matrix ringkas: awal `open` → pemicu resolve (manage_nonconformances) → `rework`/`rejected`/`rework_done`/`closed` → penjaga: aksi existing + gerbang serah terima `assertQcCleared` menghitung open/rework/rejected sebagai penahan. Antrean bukan pemicu transisi apa pun.
+
+### 5. Acceptance criteria & edge cases
+
+AC-NCRQ-B (Backend): B1 populasi persis open/rework/rejected — baris rework_done/closed bocor tampil atau terhitung rekap = MERAH, dan longgarkan himpunan status builder = MERAH; B2 umur dari `createdAt` — ubah `updatedAt` baris → umur/tahap tetap (lulus), builder membaca updatedAt = MERAH; B3 payload memuat reworkCost/reworkHours atau total biaya turunan = MERAH; B4 tanpa `view_qc` loader tidak terpanggil = MERAH; payload status liar dipetakan paksa ke ember dikenal = MERAH; dua panggilan bersamaan nol mutasi (createNonconformance/resolveNonconformance terpanggil dari builder/loader = MERAH). B5 rekap per ember (open/rework/rejected/mengendap) = hitungan baris tampil persis; tautan dokumen referensi massal anti-N+1 (query per baris = MERAH).
+AC-NCRQ-F (Frontend): F1 judul/notice/label tingkat verbatim server, UI menghitung umur/tahap/status sendiri = MERAH; F2 tanpa tombol Tutup/Rework/Tolak/aksi massal dari antrean (tombol pintas = MERAH), baris hanya menaut detail NCR existing; F3 ember rejected tampil dengan penanda masih-menahan verbatim, melabeli rejected selesai = MERAH.
+EC-NCRQ-1: NCR `rejected` atas WO yang kemudian diselesaikan lewat jalur lain — antrean tetap menampilkannya selama statusnya rejected (mengikuti kode pemblokir), tidak menyimpulkan WO bebas. EC-NCRQ-2: inspeksi asal terhapus (`inspectionId` SetNull null) — baris tampil tanpa tautan inspeksi, tidak gugur. EC-NCRQ-3: dokumen referensi (WO/PO/GR) sudah terminal/terhapus — tampil `referenceType #id` tertanda apa adanya, antrean tidak menilai boleh-tidaknya NCR ditutup. EC-NCRQ-4: `createdAt` masa depan (jam server menyimpang) — umur dijepit 0 tertanda, bukan negatif. EC-NCRQ-5: banyak NCR satu dokumen referensi — satu baris per NCR, tidak digabung menjadi satu baris dokumen; rekap menghitung NCR, bukan dokumen. EC-NCRQ-6: severity/responsibility nilai liar di luar label dikenal — verbatim tampil, label dikenal tidak dipaksakan. EC-NCRQ-7: NCR open sangat lama atas GoodsReceipt tanpa WO — tetap populasi (GR bukan cakupan antrean WO 097-S).
+
+### 6. Pembagian kerja & pertanyaan putusan
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-088-S | Spec kontrak ini (dokumen) | Business | — |
+| 088-B | Builder murni antrean NCR terbuka (populasi/umur/tingkat/ember/rekap + kosakata verbatim server) + loader massal anti-N+1 gerbang `view_qc` + tes AC-NCRQ-B1..B5 | Backend | Putusan Lead Q-NCRQ-1/2/5 |
+| 088-F | Permukaan antrean verbatim payload (seksi di daftar NCR existing atau permukaan laporan QC) + AC-NCRQ-F1..F3; grep e2e QC/NCR dulu | Frontend | 088-B merged |
+| 088-Q | Falsifikasi AC-NCRQ-B/F atas head Backend/Frontend persis | QA | 088-B/088-F |
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-NCRQ-1 | Ambang `mengendap` (USULAN 3 hari kalender WIB sejak createdAt) + urutan §2 disahkan? | Lead | USULAN disahkan apa adanya: satu konstanta bernama server sejajar keluarga antrean; beda angka tanpa bukti kebutuhan hanya menambah konstanta |
+| Q-NCRQ-2 | Kata judul/notice/penanda rejected-masih-menahan final? | Lead | Kata usulan §1 apa adanya; satu konstanta server, UI menempel verbatim |
+| Q-NCRQ-3 | `rework_done` kelak perlu ember pendamping terbaca (selesai rework belum closed)? | Lead | TIDAK tahap 1: bukan pemblokir per kode dan bukan menunggu penyelesaian; rumuskan ulang hanya bila penutupan rework_done→closed terbukti mengendap di data nyata |
+| Q-NCRQ-4 | Biaya rework (reworkCost/reworkHours) kelak tampil di antrean? | Lead + Accountant (bila dibuka) | TIDAK tahap 1 (BR-NCRQ-06): angka HPP produksi permukaan detail existing; membuka nominal di daftar = putusan terpisah, bukan diam-diam |
+| Q-NCRQ-5 | Status liar tertanda tampil (pola keluarga antrean) + penempatan permukaan (seksi daftar NCR existing vs halaman laporan baru)? | Lead | USULAN tampil tertanda; penempatan mengikuti daftar NCR existing supaya satu permukaan kerja QC, bukan halaman kedua |
+| Q-NCRQ-6 | Komentar basi qc.service.ts:12 ("open/rework block") vs kode :13 (rejected ikut memblokir): koreksi komentar saja, atau makna rejected-menahan perlu vonis perilaku? | Lead (perilaku inti) + Backend (fisik) | USULAN koreksi komentar mengikuti kode (perilaku berjalan tidak berubah oleh spec ini); mengubah himpunan pemblokir = perubahan perilaku gerbang serah terima, di luar spec baca-saja ini |
+
+### 7. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Rekod ketidaksesuaian (NCR) + pengerjaan ulang tertaut dokumen | Tidak ditemukan fitur bernama di help resmi (akses 2026-10-27) | Tidak terverifikasi di halaman fitur resmi (akses 2026-10-27) | ADA: Nonconformance + resolve + cermin biaya rework ke ProductionCost (qc.actions.ts, qc.service.ts) |
+| NCR terbuka menahan serah terima dokumen | Tidak ditemukan | Tidak terverifikasi | ADA: `assertQcCleared` menghitung open/rework/rejected (qc.service.ts:84-91) |
+| Antrean kerja NCR terbuka mengendap bertingkat umur | Tidak ditemukan | Tidak terverifikasi | ABSEN — spec ini (088-B/088-F) |
+
+### Yang TIDAK diusulkan run ini
+- Mengubah himpunan status pemblokir, transisi resolve, gerbang serah terima, atau cermin biaya rework existing (BR-NCRQ-07); koreksi komentar basi hanya lewat Q-NCRQ-6.
+- Tombol tutup/rework/tolak dari antrean, aksi massal, penutupan NCR otomatis lewat umur (BR-NCRQ-05).
+- Menampilkan/menjumlahkan biaya rework di daftar (BR-NCRQ-06), menilai kelayakan tutup NCR, atau menilai status dokumen referensi (EC-NCRQ-3).
+- Ember `rework_done`, key izin baru, scope departemen untuk QC, pengingat WA/email ke penanggung jawab, eskalasi otomatis severity.
+- Duplikasi antrean WO belum ditutup 097-S / workshop-closeout: spec ini populasi hulunya (NCR penahan), bukan daftar job kedua.
+
+F-2026-10-27-088-S — Antrean ketidaksesuaian (NCR) terbuka mengendap pemblokir serah terima. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-NCRQ-1/2/5 (+Q-NCRQ-6 perilaku/komentar), lalu fisik Backend (088-B), konsumen Frontend (088-F), falsifikasi QA (088-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan/status liar), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja ini (nol nominal di payload, BR-NCRQ-06); WAJIB hanya bila kelak biaya rework diusulkan tampil (Q-NCRQ-4).
