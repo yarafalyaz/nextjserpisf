@@ -40,3 +40,19 @@ export function ReportCardShell({
     </section>
   )
 }
+
+/** Strip ringkasan label:jumlah verbatim builder (tanpa hitung ulang). */
+export function ReportSummaryStrip({
+  items,
+}: Readonly<{ items: ReadonlyArray<readonly [string, number]> }>) {
+  return (
+    <dl className="flex flex-wrap gap-x-6 gap-y-2">
+      {items.map(([label, count]) => (
+        <div key={label} className="flex items-baseline gap-2">
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="text-sm font-semibold text-foreground">{count}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
