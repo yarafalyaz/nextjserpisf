@@ -22,13 +22,25 @@ describe("setupSchema", () => {
     expect(setupSchema.safeParse({ ...base, adminEmail: "bukan-email" }).success).toBe(false)
   })
 
-  it("rejects a password shorter than 8 characters", () => {
+  it("rejects a password shorter than 12 characters", () => {
     const parsed = setupSchema.safeParse({
       ...base,
       adminPassword: "1234567",
       confirmPassword: "1234567",
     })
     expect(parsed.success).toBe(false)
+  })
+
+  it("rejects a common password at sufficient length", () => {
+    const parsed = setupSchema.safeParse({
+      ...base,
+      adminPassword: "administrator",
+      confirmPassword: "administrator",
+    })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.message).toContain("terlalu umum")
+    }
   })
 
   it("rejects a mismatched confirmation on the confirmPassword field", () => {

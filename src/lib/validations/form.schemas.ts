@@ -26,6 +26,7 @@
 
  */
 
+import { passwordPolicyError } from "@/lib/auth/password-policy"
 import { z } from "zod"
 
 
@@ -159,8 +160,9 @@ export const employeeSchema = z.object({
     if (!data.email || data.email.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Email wajib diisi untuk akun login" })
     }
-    if (!data.loginPassword || data.loginPassword.length < 8) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loginPassword"], message: "Kata sandi minimal 8 karakter" })
+    const loginPasswordIssue = passwordPolicyError(data.loginPassword ?? "", "Kata sandi")
+    if (loginPasswordIssue) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loginPassword"], message: loginPasswordIssue })
     }
   }
 })

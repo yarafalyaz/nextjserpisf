@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { passwordPolicyError } from "@/lib/auth/password-policy"
+
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
@@ -36,7 +38,13 @@ export const setupSchema = z
     companyPostalCode: optionalString(10),
     adminName: z.string().min(1, "Nama administrator wajib diisi").max(200),
     adminEmail: z.string().email("Email tidak valid").max(200),
-    adminPassword: z.string().min(8, "Kata sandi minimal 8 karakter").max(256),
+    adminPassword: z
+      .string()
+      .max(256)
+      .superRefine((value, ctx) => {
+        const issue = passwordPolicyError(value, "Kata sandi")
+        if (issue) ctx.addIssue({ code: "custom", message: issue })
+      }),
     confirmPassword: z.string().min(1, "Konfirmasi kata sandi wajib diisi"),
   })
   .refine((data) => data.adminPassword === data.confirmPassword, {

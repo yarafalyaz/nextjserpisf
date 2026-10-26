@@ -136,7 +136,7 @@ describe("employeeSchema", () => {
       joinDate: "2026-01-01",
       createLoginAccount: true,
       email: "budi@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     expect(result.success).toBe(true)
   })
@@ -147,7 +147,7 @@ describe("employeeSchema", () => {
       joinDate: "2026-01-01",
       createLoginAccount: true,
       email: "",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     expect(result.success).toBe(false)
   })

@@ -34,7 +34,7 @@ describe("changePasswordSchema", () => {
   it("accepts a valid current + new password pair", () => {
     const result = changePasswordSchema.safeParse({
       currentPassword: "old123",
-      newPassword: "newpass88",
+      newPassword: "kata-sandi-baru-kuat",
     })
     expect(result.success).toBe(true)
   })
@@ -45,7 +45,7 @@ describe("changePasswordSchema", () => {
     // (lib/validators) memuatnya — drift ini ditemukan saat tes dipindahkan.
     const result = changePasswordSchema.safeParse({
       currentPassword: "old123",
-      newPassword: "newpass88",
+      newPassword: "kata-sandi-baru-kuat",
       confirmPassword: "newpass88",
     })
     expect(result.success).toBe(false)

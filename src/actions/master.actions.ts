@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
+import { passwordPolicyError } from "@/lib/auth/password-policy";
 import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
@@ -1036,8 +1037,9 @@ export async function createEmployee(formData: FormData) {
       if (!email || email.trim() === "") {
         return { success: false, error: "Email wajib diisi untuk akun login" };
       }
-      if (!loginPass || loginPass.length < 8) {
-        return { success: false, error: "Kata sandi minimal 8 karakter" };
+      const loginPassIssue = passwordPolicyError(loginPass ?? "", "Kata sandi");
+      if (loginPassIssue) {
+        return { success: false, error: loginPassIssue };
       }
       const existing = await prisma.user.findUnique({
         where: { email: email.trim() },
@@ -1178,8 +1180,9 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       if (!trimmedEmail) {
         return { success: false, error: "Email wajib diisi untuk akun login" };
       }
-      if (!loginPass || loginPass.length < 8) {
-        return { success: false, error: "Kata sandi minimal 8 karakter" };
+      const loginPassIssue = passwordPolicyError(loginPass ?? "", "Kata sandi");
+      if (loginPassIssue) {
+        return { success: false, error: loginPassIssue };
       }
       const existing = await prisma.user.findUnique({
         where: { email: trimmedEmail },

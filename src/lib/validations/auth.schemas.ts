@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { passwordPolicyError } from "@/lib/auth/password-policy"
+
 // Localized email regex — Zod's bundled `.email()` is strict (requires a TLD
 // ≥ 2 chars, no underscores in domain, etc.) which breaks the existing test
 // fixtures that use `y@z.c` / `admin@test.com` patterns. The schemas in
@@ -37,7 +39,7 @@ export const loginSchema = z.object({
 
 // ==================== CHANGE PASSWORD ====================
 // Replaces the hand-rolled length check in changePassword. Enforces an
-// 8-char minimum on the new password (matches the policy createUser also
+// 12-char minimum on the new password (matches the policy createUser also
 // uses, so a user can't be created with a password weaker than they're
 // allowed to change it to later). `currentPassword` is required for the
 // bcrypt.compare step; the action extracts the userId from the session, so
@@ -51,8 +53,11 @@ export const changePasswordSchema = z
       .max(256, "Password terlalu panjang"),
     newPassword: z
       .string()
-      .min(8, "Password baru minimal 8 karakter")
-      .max(256, "Password terlalu panjang"),
+      .max(256, "Password terlalu panjang")
+      .superRefine((value, ctx) => {
+        const issue = passwordPolicyError(value, "Password baru")
+        if (issue) ctx.addIssue({ code: "custom", message: issue })
+      }),
   })
   .strict()
 
@@ -88,8 +93,11 @@ export const createUserSchema = z
     email: emailField,
     password: z
       .string()
-      .min(8, "Password minimal 8 karakter")
-      .max(256, "Password terlalu panjang"),
+      .max(256, "Password terlalu panjang")
+      .superRefine((value, ctx) => {
+        const issue = passwordPolicyError(value)
+        if (issue) ctx.addIssue({ code: "custom", message: issue })
+      }),
     roleIds: createUserRoleIdsSchema,
   })
   .strict()
