@@ -80,6 +80,8 @@ import { loadJobEstimateVsActual } from "@/lib/reports/job-estimate-vs-actual-da
 import { loadStockCount } from "@/lib/reports/stock-count-data"
 import { loadPaymentExpenses } from "@/lib/reports/payment-expenses-data"
 import { loadOrderFulfillment } from "@/lib/reports/order-fulfillment-data"
+import { getDeliveredUnbilledQueue } from "@/lib/reports/delivered-unbilled-data"
+import { buildDeliveredUnbilledTable } from "@/lib/reports/delivered-unbilled-export"
 import { loadInventoryReconciliation } from "@/lib/reports/inventory-reconciliation-data"
 import { loadReceivedNotBilled } from "@/lib/reports/received-not-billed-data"
 import { loadTransferInTransit } from "@/lib/reports/transfer-in-transit-data"
@@ -547,6 +549,28 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
         kind: "table",
         table: report.fulfillment.table,
         periodCaption: report.periodCaption,
+        landscape: true,
+      }
+    },
+  },
+
+  "terkirim-belum-terfaktur": {
+    title: "Terkirim Belum Terfaktur",
+    subtitle: "Pesanan Penjualan Terkirim Belum Terfaktur Penuh",
+    async load({ period, search }) {
+      const customerId = Number(search.pelanggan)
+      const queue = await getDeliveredUnbilledQueue({
+        start: period.start,
+        end: period.end,
+        ...(Number.isSafeInteger(customerId) && customerId > 0
+          ? { customerId }
+          : {}),
+        now: period.end,
+      })
+      return {
+        kind: "table",
+        table: buildDeliveredUnbilledTable(queue),
+        periodCaption: formatPeriodLabel(period),
         landscape: true,
       }
     },
