@@ -105,6 +105,15 @@ export const CONVERTIBLE_STATUSES = [
 // so the action can drive the lifecycle + log status_change activities.
 export const updateLeadSchema = createLeadSchema.extend({
   status: z.enum(LEAD_STATUSES).optional(),
+  // F-2026-10-25-030-S (Q-LR-1/2 Lead): kategori + teks bebas alasan kalah.
+  // Kewajiban bersyarat pada transisi ke lost divalidasi isi di
+  // lead-lost-reason (bukan schema) karena bergantung status tersimpan.
+  lostReasonCategory: z
+    .string()
+    .max(100)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  lostReasonText: optionalString(2000),
 });
 
 export const leadActivitySchema = z.object({

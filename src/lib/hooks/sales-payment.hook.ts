@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { SalesInvoiceStatus, Prisma } from "@prisma/client";
+import { resolveCommissionRate } from "@/lib/services/customer-commission-rate.service";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -49,9 +50,46 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
     paymentStatus = "partial";
   }
 
+  // F-2026-10-25-036-S (BR-KT36-04): transisi ke paid membekukan snapshot
+  // tarif komisi dalam transaksi yang sama. Nilai = resolusi histori tarif
+  // per TANGGAL FAKTUR dari kategori pelanggan saat ini; snapshot yang
+  // sudah ada tidak pernah ditulis ulang (kategori/tarif berubah belakangan
+  // tidak mengubah faktur lunas). Tarif tak ditemukan = 0 jujur tertulis,
+  // supaya tarif yang dibuat mundur tidak mengisi faktur lama (BR-KT36-13).
+  let commissionSnapshot: {
+    commissionRatePercent: Prisma.Decimal
+    commissionCustomerCategoryId: number | null
+    commissionRateId: number | null
+  } | null = null
+  if (status === "paid" && invoice.commissionRatePercent === null) {
+    const customer = await db.customer.findUnique({
+      where: { id: invoice.customerId },
+      select: { customerCategoryId: true },
+    })
+    const rates = await db.customerCommissionRate.findMany({
+      where: { customerCategoryId: customer?.customerCategoryId ?? -1 },
+      select: { id: true, customerCategoryId: true, commissionPercent: true, effectiveFrom: true, effectiveTo: true },
+    })
+    const resolved = resolveCommissionRate(
+      rates.map((r) => ({ ...r, commissionPercent: Number(r.commissionPercent) })),
+      customer?.customerCategoryId ?? null,
+      invoice.date,
+    )
+    commissionSnapshot = {
+      commissionRatePercent: new Prisma.Decimal(resolved.commissionPercent.toFixed(2)),
+      commissionCustomerCategoryId: resolved.customerCategoryId,
+      commissionRateId: resolved.rateId,
+    }
+  }
+
   await db.salesInvoice.update({
     where: { id: invoiceId },
-    data: { paidAmount: totalPaid, status, paymentStatus },
+    data: {
+      paidAmount: totalPaid,
+      status,
+      paymentStatus,
+      ...(commissionSnapshot ?? {}),
+    },
   });
 }
 
