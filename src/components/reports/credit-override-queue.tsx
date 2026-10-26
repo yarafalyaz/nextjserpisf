@@ -76,24 +76,28 @@ export function CreditOverrideQueue({
   const [rejectErrors, setRejectErrors] = useState<Record<number, string>>({})
   const [actionErrors, setActionErrors] = useState<Record<number, string>>({})
 
-  function onApprove(row: CreditOverrideRow) {
+  function runDecision(row: CreditOverrideRow, action: () => Promise<{ success: boolean; error?: string }>, successText: string, fallbackText: string) {
     startTransition(async () => {
       try {
-        const result = await approveCreditOverride(row.id)
+        const result = await action()
         if (result.success) {
           setActionErrors((prev) => ({ ...prev, [row.id]: "" }))
-          showSuccess("Override batas kredit disetujui")
+          showSuccess(successText)
           router.refresh()
         } else {
-          setActionErrors((prev) => ({ ...prev, [row.id]: result.error }))
-          showError(result.error)
+          setActionErrors((prev) => ({ ...prev, [row.id]: result.error ?? fallbackText }))
+          showError(result.error ?? fallbackText)
         }
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Gagal menyetujui override"
+        const message = e instanceof Error ? e.message : fallbackText
         setActionErrors((prev) => ({ ...prev, [row.id]: message }))
         showError(message)
       }
     })
+  }
+
+  function onApprove(row: CreditOverrideRow) {
+    runDecision(row, () => approveCreditOverride(row.id), "Override batas kredit disetujui", "Gagal menyetujui override")
   }
 
   function onReject(row: CreditOverrideRow) {
@@ -103,23 +107,7 @@ export function CreditOverrideQueue({
       return
     }
     setRejectErrors((prev) => ({ ...prev, [row.id]: "" }))
-    startTransition(async () => {
-      try {
-        const result = await rejectCreditOverride(row.id, reason)
-        if (result.success) {
-          setActionErrors((prev) => ({ ...prev, [row.id]: "" }))
-          showSuccess("Override batas kredit ditolak")
-          router.refresh()
-        } else {
-          setActionErrors((prev) => ({ ...prev, [row.id]: result.error }))
-          showError(result.error)
-        }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Gagal menolak override"
-        setActionErrors((prev) => ({ ...prev, [row.id]: message }))
-        showError(message)
-      }
-    })
+    runDecision(row, () => rejectCreditOverride(row.id, reason), "Override batas kredit ditolak", "Gagal menolak override")
   }
 
   if (rows.length === 0) {

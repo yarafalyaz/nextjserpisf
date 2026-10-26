@@ -11,7 +11,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
-import { CreditOverridePanel, type CreditGateBlockedState } from "@/components/forms/credit-override-panel"
+import { useCreditGateBlocked } from "@/components/forms/credit-override-panel"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
@@ -39,9 +39,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
-  const [creditBlocked, setCreditBlocked] = useState<CreditGateBlockedState | null>(null)
-  const [creditReason, setCreditReason] = useState("")
-  const [creditReasonError, setCreditReasonError] = useState<string | undefined>()
+  const { guardCreditReason, appendCreditReason, applyCreditResult, creditGatePanel } = useCreditGateBlocked()
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesOrderInput>({
     resolver: zodResolver(salesOrderSchema),
@@ -61,29 +59,23 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   function onSubmit(data: SalesOrderInput) {
     // Alasan wajib HANYA saat percobaan tertahan sebelumnya tanpa rekod:
     // simpan ulang identik + alasan supaya server memersist permintaan.
-    if (creditBlocked && creditBlocked.creditOverrideId == null && !creditReason.trim()) {
-      setCreditReasonError("Alasan permintaan override wajib diisi")
-      return
-    }
-    setCreditReasonError(undefined)
+    if (!guardCreditReason()) return
     startTransition(async () => {
       try {
         const formData = new FormData()
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== "") formData.append(key, String(value))
         })
-        if (creditReason.trim()) formData.append("creditOverrideReason", creditReason.trim())
+        appendCreditReason(formData)
         const result = order?.id ? await updateSalesOrder(order.id, formData) : await createSalesOrder(formData)
         if (result.success) {
-          setCreditBlocked(null)
+          applyCreditResult(result)
           showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/pesanan/${result.slug ?? result.id}`)
           router.refresh()
-        } else if ("creditStatusLabel" in result && typeof result.creditStatusLabel === "string") {
+        } else if (applyCreditResult(result)) {
           // Tertahan gerbang kredit: tampilkan payload server verbatim di panel.
-          const b = result as unknown as CreditGateBlockedState & { error: string }
-          setCreditBlocked({ ...b, creditOverrideId: b.creditOverrideId ?? null })
-          showError(b.error)
+          showError(result.error ?? "Gagal menyimpan data")
         } else {
           showError(result.error || "Gagal menyimpan data")
         }
@@ -105,14 +97,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
       isPending={isPending}
       isEditing={Boolean(order?.id)}
       formLabel={order?.id ? "Formulir ubah pesanan" : "Formulir tambah pesanan"}
-      creditGatePanel={creditBlocked ? (
-        <CreditOverridePanel
-          blocked={creditBlocked}
-          reason={creditReason}
-          onReasonChange={setCreditReason}
-          reasonError={creditReasonError}
-        />
-      ) : undefined}
+      creditGatePanel={creditGatePanel}
     >
 
         <div className="flex flex-col gap-1.5">

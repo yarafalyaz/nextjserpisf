@@ -33,6 +33,56 @@ export interface CreditGateBlockedState {
   creditStatusLabel: string
 }
 
+/**
+ * Plumbing gerbang kredit bersama form penjualan: status tertahan + alasan.
+ * Field/skema/action tetap lokal per form; hook hanya mengurus guard alasan,
+ * lampiran alasan ke FormData, dan penerapan hasil tertahan verbatim.
+ */
+export function useCreditGateBlocked() {
+  const [creditBlocked, setCreditBlocked] = useState<CreditGateBlockedState | null>(null)
+  const [creditReason, setCreditReason] = useState("")
+  const [creditReasonError, setCreditReasonError] = useState<string | undefined>()
+
+  /** true = submit boleh lanjut; false = alasan wajib belum diisi. */
+  function guardCreditReason(): boolean {
+    if (creditBlocked && creditBlocked.creditOverrideId == null && !creditReason.trim()) {
+      setCreditReasonError("Alasan permintaan override wajib diisi")
+      return false
+    }
+    setCreditReasonError(undefined)
+    return true
+  }
+
+  function appendCreditReason(formData: FormData) {
+    if (creditReason.trim()) formData.append("creditOverrideReason", creditReason.trim())
+  }
+
+  /** true = hasil adalah tertahan gerbang kredit (sudah diterapkan + toast). */
+  function applyCreditResult(result: { success: boolean }): boolean {
+    if (result.success) {
+      setCreditBlocked(null)
+      return false
+    }
+    if ("creditStatusLabel" in result && typeof result.creditStatusLabel === "string") {
+      const b = result as unknown as CreditGateBlockedState & { error: string }
+      setCreditBlocked({ ...b, creditOverrideId: b.creditOverrideId ?? null })
+      return true
+    }
+    return false
+  }
+
+  const creditGatePanel = creditBlocked ? (
+    <CreditOverridePanel
+      blocked={creditBlocked}
+      reason={creditReason}
+      onReasonChange={setCreditReason}
+      reasonError={creditReasonError}
+    />
+  ) : undefined
+
+  return { creditBlocked, creditReason, creditReasonError, guardCreditReason, appendCreditReason, applyCreditResult, creditGatePanel }
+}
+
 interface CreditOverridePanelProps {
   blocked: CreditGateBlockedState
   reason: string
