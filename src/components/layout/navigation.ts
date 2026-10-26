@@ -156,6 +156,7 @@ export const navigation: NavItem[] = [
     icon: Users,
     children: [
       { label: "Absensi", href: "/sdm/absensi", icon: CalendarCheck, permission: "view_attendance" },
+      { label: "Rekap Kehadiran", href: "/sdm/absensi/rekap", icon: CalendarCheck, permission: "view_attendance" },
       { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, permission: "view_leave_requests" },
       { label: "Antrean Persetujuan HR", href: "/sdm/persetujuan", icon: ClipboardCheck, permissions: ["approve_leave_requests", "approve_overtime_requests"] },
       { label: "Saldo Cuti", href: "/sdm/cuti/saldo", icon: Palmtree, permission: "view_leave_requests" },
@@ -297,6 +298,7 @@ export const navigation: NavItem[] = [
       { label: "Barang Stok Minimum", href: "/laporan/stok-minimum", icon: Package, permission: "view_reports" },
       { label: "Barang Diterima Sebagian", href: "/laporan/penerimaan-sebagian", icon: PackageCheck, permission: "view_reports" },
       { label: "Pemenuhan Pesanan", href: "/laporan/pemenuhan-pesanan", icon: ShoppingCart, permission: "view_reports" },
+      { label: "Terkirim Belum Terfaktur", href: "/laporan/terkirim-belum-terfaktur", icon: FileText, permission: "view_reports" },
       { label: "Piutang Jatuh Tempo", href: "/laporan/piutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Piutang per Pelanggan", href: "/laporan/piutang-pelanggan", icon: Users, permission: "view_reports" },
       { label: "Buku Pembantu Piutang", href: "/laporan/buku-pembantu-piutang", icon: Users, permission: "view_reports" },
