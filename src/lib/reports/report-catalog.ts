@@ -156,6 +156,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/riwayat-harga-jual" },
       { href: "/laporan/paparan-diskon-penjualan" },
       { href: "/laporan/pemenuhan-pesanan" },
+      { href: "/laporan/terkirim-belum-terfaktur" },
       { href: "/laporan/rekap-komisi" },
       { href: "/laporan/target-penjualan" },
     ],
