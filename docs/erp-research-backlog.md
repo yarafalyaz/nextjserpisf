@@ -35748,3 +35748,54 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+
+## VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-086-V: gerbang FP UM refund kredit sumber Quotation/RevisionDown (menutup lubang J-RF1 lintas sumber; lanjutan F-2026-10-27-085-V + temuan kartu t_e328d8c8 di PR #1112 komentar 6429201433)
+
+> **Slot**: F-2026-10-27-086-V. Diverifikasi bebas 2026-10-27 05:5x WIB: grep `F-2026-10-27-086` di backlog+board `origin/main` (`585f98835`) = 0; vonis Accountant terakhir F-2026-10-27-085-V (PR #1114 OPEN). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Fakta terverifikasi (TERVERIFIKASI-KODE, basis 585f98835)
+
+- F1 — Gerbang J-RF1 vonis F-2026-10-25-004-V di `refundCredit` (customer-credit.service.ts:247) berjalan HANYA untuk `credit.sourceType === "DownPayment"`: DP bersnapshot `ppnUangMuka > 0` + TaxInvoice keluaran aktif → refund ditolak sampai FP UM batal; lalu jurnal pecah Dr 210102 neto + Dr 210201 via `buildDownPaymentRefundLines` (down-payment-vat.ts:285-306, porsi PPN proporsional refundAmount/dpAmount dari snapshot DP, residu sen ditanggung kaki neto).
+- F2 — Kredit `Quotation` lahir dari kelebihan alokasi DP confirmed quotation yang sama atas grandTotal konversi (down-payment.hook.ts:731-746, receivedAmount = kelebihan BRUTO); kredit `RevisionDown` lahir dari DP confirmed + tertagih melebihi nilai kontrak berjalan (sales.actions.ts:1519-1524,1576-1590). Keduanya direfund lewat `refundCredit` yang sama TANPA pemeriksaan FP UM apa pun hari ini.
+- F3 — FP UM terbit PER DP (TaxInvoice.downPaymentId, schema:1271) dengan snapshot per DP (schema:1625-1629). Snapshot PPN adalah milik DP (satu baris DownPayment), BUKAN milik baris CustomerCredit; baris kredit Quotation/RevisionDown tidak membawa snapshot PPN apa pun. Residu bruto kredit TIDAK identik dengan residu satu DP: satu quotation dapat punya banyak DP confirmed, dan residu kredit dapat berasal dari campuran DP terutang + tak-terutang.
+- F4 — Residu per DP dapat dihitung dari data existing tanpa kolom baru: amount DP − alokasi bruto DP itu ke faktur (SalesPayment `paymentMethod="down_payment"` bermarker nomor dokumen DP pada notes, pola accounting.hook.ts:362-375) − kredit DownPayment untuk DP itu (CustomerCredit sourceType DownPayment sourceId=DP). Kredit Quotation/RevisionDown adalah penamaan atas residu agregat quotation sesudah alokasi itu, bukan atas satu DP.
+
+### 1. Putusan
+
+1. **Prinsip: kas keluar mengikuti nasib PPN uang muka.** Refund kredit pelanggan — dari sumber apa pun — atas uang yang FP UM-nya masih aktif dan belum tereklas ke faktur pelunasan tidak boleh keluar sebagai kas bruto bersih. PPN FP UM hanya gugur lewat dua jalan existing: pembatalan FP UM (J-RF1) atau reklas J-PL1/J-PL2 saat DP teralokasi ke faktur terbit. Jurnal refund kredit TIDAK menciptakan jalan ketiga.
+2. **Gerbang refund kredit Quotation/RevisionDown (SYARAT fisik Backend).** Di dalam transaksi refund (lock FOR UPDATE baris kredit existing dipertahankan), refund DITOLAK definitif bila ada DP confirmed untuk quotation sumber (quotationId = sourceId baris kredit) yang memenuhi SEMUA: (a) snapshot `ppnUangMuka > 0`; (b) TaxInvoice keluaran untuk DP itu masih aktif (djpStatus bukan cancelled/replaced); (c) residu DP (F4) > 0 — DP sudah teralokasi penuh ke faktur terbit tidak menahan (PPN-nya sudah tereklas J-PL). Pesan penolakan menamai nomor DP + nomor FP UM aktif, pola pesan J-RF1 existing. Pemeriksaan massal per quotation (bukan per baris kredit), di dalam transaksi yang sama dengan validasi saldo.
+3. **Jurnal sesudah gerbang lolos.** Bila tidak ada DP menahan: jurnal refund tetap existing Dr 210102 / Cr Kas sebesar nominal refund, TANPA kaki 210201 dari baris kredit Quotation/RevisionDown. Kaki PPN dilarang dikarang per baris kredit: snapshot PPN milik DP (F3) dan residu kredit adalah agregat lintas DP — memecah PPN dari baris kredit akan menghitung PPN dua kali (sekali di FP UM DP, sekali di refund). Residu sen pembulatan mengikuti pola builder existing (kaki neto menanggung residu), bukan aturan baru di sini.
+4. **FIFO atribusi DITOLAK.** Backend dilarang menempelkan residu kredit ke DP tertentu (FIFO/LIFO/pro-rata) untuk keperluan gerbang/jurnal: atribusi itu karangan yang mengubah nasib pajak per DP tanpa dasar dokumen. Gerbang Putusan 2 sengaja konservatif per quotation: satu DP terutang ber-FP UM aktif beresidu > 0 menahan SELURUH refund baris kredit quotation itu sampai FP UM DP itu dibatalkan atau DP teralokasi penuh. Ketidaknyamanan ini disengaja (fail-closed) dan dicatat sebagai batas, bukan bug.
+5. **Alokasi TIDAK ditahan.** `allocateCreditToInvoice` tidak berubah: alokasi ke faktur pelanggan yang sama menutup kewajiban lewat jalur faktur (PPN diselesaikan faktur tujuan + reklas existing). Gerbang ini khusus refund kas keluar.
+6. **Penanda antrean 083-S menyatu.** Penanda 085-V Putusan 2 diperluas: payload antrean menandai juga baris Quotation/RevisionDown yang quotation-nya memenuhi syarat tahan Putusan 2 di atas (satu query massal per quotation populasi). Kata penanda tetap final Lead; penanda tetap fakta turunan server, bukan penolakan yang sudah terjadi.
+7. **Kasus tepi.** (a) DP legacy tanpa snapshot (snapshotFromDownPaymentRow null) tidak menahan — pola J-RF1 existing; antrean mewarisi batas legacy yang sama, tidak dikarang gerbang baru untuk data pra-fitur. (b) Refund parsial tetap ditahan penuh selama syarat Putusan 2 terpenuhi (tidak ada refund sebagian "porsi non-PPN" — porsi itu tidak teridentifikasi per F3/F4). (c) Kredit DownPayment tidak berubah (J-RF1 existing sudah menahannya per DP sumbernya sendiri).
+
+### 2. Larangan ringkas
+
+1. Refund kas kredit Quotation/RevisionDown melewati DP ber-FP UM aktif beresidu (Putusan 2).
+2. Kaki 210201 pada jurnal refund baris kredit non-DownPayment; PPN dipecah dari baris kredit.
+3. Atribusi FIFO/LIFO/pro-rata residu kredit ke DP tertentu untuk gerbang maupun jurnal.
+4. Gerbang diletakkan di UI/action tanpa lock transaksi (wajib di service dalam transaksi refund existing).
+5. Penolakan tanpa menamai DP + FP UM penahan.
+
+### 3. Batas build
+
+- **Backend**: gerbang Putusan 2 di `refundCredit` (customer-credit.service.ts) dalam transaksi + lock existing; perhitungan residu F4 dari SalesPayment bermarker DP + kredit DownPayment per DP; pesan definitif menamai DP/FP; penanda 083-B diperluas per Putusan 6. Nol kolom/schema baru. Klaim file di board sebelum edit (service ini wilayah Backend; perlakuan dari vonis ini).
+- **Frontend**: penanda verbatim server (085-V + perluasan Putusan 6); UI tidak menghitung tahan/tidak sendiri.
+- **QA**: falsifikasi W1–W6 di §4 atas head Backend persis.
+
+### 4. Falsifikasi QA (penjaga baru wajib satu tes merah bila dicabut)
+
+- W1: Kredit Quotation dari quotation ber-DP terutang + FP UM aktif + residu DP > 0 → refund ditolak definitif menamai DP/FP UM. Refund lolos = MERAH.
+- W2: Sesudah FP UM DP penahan dibatalkan → refund lolos Dr 210102/Cr Kas tanpa kaki 210201.
+- W3: DP terutang teralokasi penuh ke faktur terbit (residu 0) → tidak menahan; refund lolos.
+- W4: Mutasi: cabut cabang gerbang untuk Quotation/RevisionDown → W1 MERAH.
+- W5: Jurnal refund kredit non-DownPayment memuat kaki 210201 = MERAH.
+- W6: Refund parsial pada quotation tertahan tetap ditolak penuh (tidak ada porsi non-PPN yang lolos).
+
+### 5. Sumber & cakupan
+
+Melanjutkan register vonis F-2026-10-25-004-V (J-RF1/J-PL1/J-PL2; dasar PER-11/PJ/2025 Pasal 31 — register di vonis itu, tidak divonis ulang) + F-2026-10-27-085-V Putusan 2. Vonis ini menutup celah lintas sumber pada mekanisme yang sama; TIDAK memutus tarif/kode baru, TIDAK mengubah J-RF1 untuk kredit DownPayment, TIDAK menilai ulang snapshot per DP.
+
+F-2026-10-27-086-V — Gerbang FP UM refund kredit Quotation/RevisionDown. Status: VONIS TURUN run ini; mengikat fisik Backend (gerbang refundCredit + penanda 083-B) + falsifikasi QA W1–W6; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (merge + kata penanda final), Backend (fisik), Frontend (konsumen penanda), QA (falsifikasi).
