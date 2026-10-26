@@ -33792,3 +33792,158 @@ Catatan jujur cakupan: daftar di atas diperiksa dari grep `salesOrder.create`/`s
 AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap), B5 (SoD/tanpa key/tanpa alasan tertolak), B8 (seluruh jalur Q-CL2-4) — terpetakan ke kartu Backend turunan. AC-CL2-F1/F2 ke kartu Frontend turunan. AC-CL2-B1/B3/B6/B7 tetap berlaku persis spec/vonis.
 
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-065-S: antrean permintaan pembelian draft mengendap menunggu persetujuan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_05da2838. ID F-2026-10-26-065-S diverifikasi bebas run ini 2026-10-26 15:59 WIB: grep `F-2026-10-26-065` di backlog + board `origin/main` (`0e90b07f`) = 0 dan tidak ada judul PR terbuka memuat 065/permintaan-pembelian-antrean; ID terpakai terakhir berjalan F-2026-10-26-064-S (PR #1014). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `requestDate`, `vendorId`+vendor, `requestedBy`, `createdBy`, item, approval tertaut terbaru), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-PRQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK menyetujui, TIDAK menolak, TIDAK mengubah, TIDAK menghapus, dan TIDAK membuat PO dari permintaan apa pun — persetujuan tetap jalur existing (tombol StatusActions di detail berizin `approve_purchase_requests` lewat `/api/workflow/pembelian/permintaan/...`, atau langkah Approval workflow lewat `approveStep`/`rejectStep`), buat PO tetap dari status approved/partial_ordered existing. Permintaan pembelian TIDAK punya nominal: item hanya `qty` + `notes` tanpa harga (schema:2034-2045), jadi antrean TIDAK menampilkan nilai uang, Σ nilai, estimasi harga, atau komitmen pembelian dalam bentuk apa pun — mengarang harga dari master barang = hitung ulang terlarang. Tidak ada jurnal/stok/utang yang lahir dari permintaan pada tahap mana pun existing; penilaian uang tidak dibuka spec ini sehingga Accountant TIDAK diminta tahap 1.
+
+PEMBETULAN PREMIS KARTU (TERVERIFIKASI-KODE, wajib dibaca Lead): (1) PurchaseRequest TIDAK punya `deletedAt` (schema:2003-2032; beda VendorBill 064-S) — hapus = hard delete `prisma.purchaseRequest.delete` + hapus Approval tertaut (purchase.actions.ts:1999-2025), jadi populasi antrean cukup `status = "draft"` tanpa saringan soft-delete. (2) Dokumen TIDAK berpindah ke status `pending` saat diajukan: lahir `draft` (purchase.actions.ts:615-663, status eksplisit :644), `requestApprovalIfConfigured` hanya membuat baris `Approval` berstatus `pending` bila workflow aktif terkonfigurasi (approval-workflow.service.ts:9-55) dan TIDAK menulis status dokumen; dokumen berubah hanya saat langkah final workflow: approve → `approved` (+`approvedBy`, approval.actions.ts:230-256), reject → `rejected` (+`rejectionReason`, :360-378), atau jalur manual route workflow (STATUS_ALLOWED_FROM memuat `draft`, route.ts). Daftar existing tetap menampilkan chip `pending` sebagai saringan (pembelian/permintaan/page.tsx) walau status dokumen tersimpan tidak pernah `pending` dari jalur lahir ini — antrean TIDAK menyamakan `draft` dengan `pending` dan TIDAK mengarang status antara; keadaan persetujuan dibaca dari Approval tertaut terbaru sebagai fakta pendamping terpisah (§3). (3) Tanpa workflow aktif, `requestApprovalIfConfigured` no-op mengembalikan false (service :38-41) sehingga draft bisa menunggu persetujuan manual tanpa baris Approval sama sekali — draft tanpa Approval BUKAN bukti "sudah diajukan ke workflow" dan BUKAN bukti "belum diajukan"; antrean menandainya jujur sebagai tanpa-jejak-workflow (EC-PRQ-2), bukan menebak.
+
+Bukan duplikasi: bukan daftar permintaan pembelian existing `pembelian/permintaan` (filter chip semua/draft/pending/approved/rejected + cari documentNo, urut `createdAt desc`, kolom No. Dokumen/Tanggal/Tgl Permintaan/Item/Status/Pesanan/Aksi — tanpa umur draft, tanpa tingkat, tanpa konteks approval tertaut, baris draft tenggelam di antara approved/rejected; purchase-request-table.tsx); bukan antrean persetujuan generik `pengaturan/persetujuan` (populasi baris Approval lintas dokumen bagi approver workflow — dokumen tanpa workflow tidak muncul di sana sama sekali, dan populasi antrean ini dokumen `draft`, bukan rekod Approval); bukan 060-S (PurchaseOrder draft menunggu persetujuan — dokumen SESUDAH permintaan disetujui, populasi & pemilik keputusan berbeda); bukan 061-S/062-S/063-S/064-S (penerimaan/surat jalan/retur pembelian/tagihan vendor — dokumen hilir lain); bukan laporan pengajuan pembelian Zahir-style per periode (laporan historis semua status, bukan daftar kerja draft hidup); bukan MaterialRequest "Permintaan Antar Gudang" (model & makna berbeda tegas, inventaris/permintaan-gudang — dilarang dicampur, backlog :9392).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: fitur Persetujuan (Approval) transaksi mencakup transaksi pembelian & persediaan dan transaksi yang butuh approval muncul sebagai pekerjaan approver; contoh terdokumentasi permintaan pembelian dari departemen produksi diajukan (Apply for Approval) lalu disetujui/ditolak pengguna berwenang lewat Perusahaan | Persetujuan — https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/approval/mengenal-fitur-approval/ (BENCHMARK: pengajuan menunggu keputusan adalah daftar kerja approver yang harus terlihat; antrean draft bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: Pengajuan Pembelian (Purchase Request) mencatat permintaan pembelian produk dari bagian gudang kepada bagian pembelian, dengan daftar + detail pengajuan dan laporan pengajuan pembelian per periode — https://help.zahironline.com/portal/id/kb/articles/membuat-pengajuan-pembelian-di-zahir-online (BENCHMARK: permintaan terdokumentasi dari peminta ke pembelian dan terlapor per periode; antrean draft mengendap bertingkat umur TIDAK ditetapkan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 0e90b07f)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `PurchaseRequest` (prisma/schema.prisma:2003-2032) — slug unik nullable, documentNo unik, title nullable, requestDate nullable, requestedBy WAJIB (Int, tanpa relasi eksplisit di blok model), vendorId nullable (relasi Vendor "Pemasok Disarankan" di detail), date WAJIB, description/notes nullable, status String default `draft`, rejectionReason nullable, approvedBy/approvedAt nullable, createdBy nullable, createdAt/updatedAt; TANPA deletedAt, TANPA kolom nominal. Item `PurchaseRequestItem` (:2034-2045) — itemId + qty Decimal(15,2) + notes, TANPA unitPrice. Relasi keluar: `purchaseOrders PurchaseOrder[]` (konversi terlihat), items.
+- Lahir draft: `createPurchaseRequest` (src/actions/purchase.actions.ts:615, `create_purchase_requests` katalog `src/lib/auth/module-catalog.generated.ts:204`) — requestedBy dari form atau user berjalan (:625), status eksplisit `draft` (:644), lalu `requestApprovalIfConfigured("PurchaseRequest", ...)` (:660) yang no-op tanpa workflow aktif. Item divalidasi `parsePurchaseRequestItems` (:582-613): qty tak terbaca pada baris berkode ditolak berpesan, baris kosong dibuang.
+- Keluar draft existing: (a) workflow — `approveStep` langkah final menulis dokumen `approved` + approvedBy (approval.actions.ts:230-256; PurchaseRequest anggota APPROVED_BY_MODELS :57-64 dan REJECTION_REASON_MODELS :65-70), `rejectStep` menulis `rejected` + rejectionReason (:360-378), `reopenApproval` mengembalikan rejected → draft + approval baru (:395 dst); (b) manual — StatusActions di detail (status-actions.tsx:40-41: Setujui/Tolak tampil untuk status draft/pending, digate server `approve_purchase_requests` di [slug]/page.tsx:30) memanggil `/api/workflow/pembelian/permintaan/<id>/<aksi>` (MODULE_MAP route.ts:26; izin dari APPROVAL_REFERENCE_PERMISSIONS PurchaseRequest = `approve_purchase_requests`, approval-permissions.ts:20; tanpa workflow aktif route memakai penjaga status STATUS_ALLOWED_FROM). Pembuat-tidak-boleh-menyetujui-sendiri ditegakkan di approveStep/rejectStep (maker-checker :218-221) — antrean tidak menilai ulang SoD ini.
+- Sesudah approved: tombol Buat PO tampil di daftar (status approved/partial_ordered, purchase-request-table.tsx kolom Pesanan) dan detail ([slug]/page.tsx:73-77); hook PO menurunkan status permintaan → `ordered` bila semua item terpesan penuh, `partial_ordered` bila sebagian (purchase-order.hook.ts:60-92); hapus PO mengembalikan tertaut ke `approved` (purchase.actions.ts:2128-2135). Ubah hanya draft (updatePurchaseRequest :2457, penjaga :2470 + cek ulang dalam transaksi :2482-2487). Hapus hard delete (deletePurchaseRequest :1999; menolak `approved` :2007-2009 — draft/rejected/partial_ordered/ordered lolos penjaga ini apa adanya, fakta existing di luar antrean).
+- Daftar existing: `pembelian/permintaan/page.tsx` requirePermission `view_purchase_requests` (:25), cari documentNo saja, chip status, urut `createdAt desc`, include items saja (tanpa vendor/requestedBy di daftar — vendor baru tampil di detail), paginasi server. Detail menampilkan vendor, requestedBy tidak ditampilkan sebagai nama (DetailField vendor :93-100-an), PO tertaut, rejectionReason saat rejected (:171).
+- Izin katalog nyata (module-catalog.generated.ts:203-207): `view/create/edit/delete/approve_purchase_requests`. Tidak ada key antrean khusus existing.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean permintaan pembelian draft atau turunan umur menunggu persetujuan — grep `purchaseRequestQueue|purchase-request-queue|umurPermintaan|draftPurchaseRequest` di src/lib/reports + src/app = 0; tidak ada cron pengingat/penuaan draft permintaan. Draft yang ditinggal berarti kebutuhan barang dari peminta tidak pernah diputus (tidak disetujui untuk jadi PO, tidak ditolak untuk dicari jalan lain), peminta tidak punya permukaan "permintaanku menunggu berapa lama", dan approver tidak punya daftar tertua-dulu lintas daftar campuran status. Risiko bengkel: part yang diminta gudang/workshop mengendap draft berhari-hari sementara kendaraan menunggu — keterlambatan terlihat sebagai "belum ada PO", bukan "permintaan belum diputus".
+
+### 1. Workflow specification
+
+Aktor: Penyetuju pemegang `approve_purchase_requests` (satu-satunya pemutus lewat jalur existing), Admin Pembelian pemegang `view_purchase_requests` (pembaca antrean), Peminta/pembuat pemegang `create_purchase_requests` (sumber baris draft; `requestedBy` bisa berbeda dari `createdBy` existing — keduanya fakta tampil terpisah, tidak digabung), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris PurchaseRequest existing berstatus `draft` (id, slug, documentNo, title, date, requestDate, vendorId+nama vendor bila ada, requestedBy+nama bila terpetakan, createdBy+nama bila ada, jumlah baris item sebagai hitungan — BUKAN nilai uang dan bukan Σ qty, createdAt) + Approval tertaut terbaru untuk dokumen itu bila ada (status approval, requestedAt, currentStep — dibaca, tidak ditulis). Field existing semua, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per permintaan draft (§3) + rekap hitungan per tingkat. BUKAN dokumen pembelian: tidak ada PO, jurnal, stok, utang, atau pesan keluar yang dihasilkan antrean (PO lahir hanya dari jalur Buat PO existing sesudah approved — di luar antrean).
+
+Alur:
+1. Permintaan lahir `draft` lewat jalur existing (status lahir existing, di luar cakupan spec ini; workflow Approval pending bisa lahir menyertainya bila terkonfigurasi).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft (BR-PRQ-01) dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks vendor disarankan/peminta/pembuat, hitungan item, keadaan approval tertaut (BR-PRQ-04), dan tingkat §3.
+3. Penyetuju membuka detail dari baris dan memutus lewat jalur existing (Setujui/Tolak StatusActions atau langkah Approval workflow di permukaan persetujuan existing). Antrean tidak menyediakan tombol Setujui/Tolak/Buat PO tahap 1 (Q-PRQ-4) walau detail existing punya tombol itu — antrean adalah permukaan prioritas, bukan permukaan keputusan kedua.
+4. Sesudah disetujui/ditolak: baris keluar populasi (status `approved`/`rejected`). Sesudah dihapus jalur existing: keluar populasi (hard delete). Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-PRQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu Persetujuan` (umur), `Pemasok Disarankan` (nama vendor atau `—`), `Peminta` (nama requestedBy atau `—`), `Item` (hitungan baris, pola existing "`N item`").
+- Label tingkat: `mengendap` → "Mengendap"; `menunggu` → "Menunggu Persetujuan".
+- Penanda approval pendamping usulan: ber-workflow pending → "Menunggu langkah persetujuan"; tanpa baris Approval → "Tanpa alur persetujuan tercatat"; approval tertaut bukan pending (rejected lama sebelum reopen, dsb.) → tampil status approval apa adanya dari server, bukan ditebak (fisik label final Q-PRQ-6).
+- Notice usulan: "Daftar ini hanya permintaan pembelian yang masih draft dan belum diputuskan. Permintaan draft belum menjadi pesanan pembelian dan belum memesan barang ke pemasok sampai disetujui lewat detail permintaan."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean permintaan draft + tingkat/umur | `view_purchase_requests` (katalog:203) | daftar permintaan requirePermission | TIDAK ada key baru (key terpisah = Q-PRQ-5) |
+| Buat permintaan (sumber baris draft) | `create_purchase_requests` (katalog:204) | aksi buat existing | tidak berubah |
+| Ubah/hapus permintaan draft | `edit/delete_purchase_requests` (katalog:205-206) | aksi existing + penjaga ubah hanya-draft | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Setujui/tolak (keluar draft) | `approve_purchase_requests` (katalog:207) | StatusActions detail + approveStep/rejectStep + route workflow | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Buat PO dari antrean | TIDAK — hanya approved/partial_ordered existing | tautan Buat PO daftar/detail existing | antrean tidak menawarkan aksi buat PO apa pun |
+
+Tidak ada permission key baru diusulkan tahap ini. Data permintaan bukan data gaji/pribadi; nama peminta/pembuat tampil dalam scope `view_purchase_requests` existing yang sama dengan daftar (perluasan visibilitas nama = Q-PRQ-7).
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah spec ini: `draft` → `approved` (approveStep final / route manual), `draft` → `rejected` (rejectStep / route manual), `rejected` → `draft` (reopenApproval), `approved` → `partial_ordered` → `ordered` (hook PO, di luar antrean), hapus = hard delete existing. Status `pending` dikenal chip daftar existing dan STATUS_ALLOWED_FROM route, tetapi TIDAK ditulis jalur lahir/approval ke dokumen ini (pembetulan premis kepala spec) — antrean dilarang menerbitkan tingkat/status bernama `pending` untuk dokumen.
+
+Populasi antrean: hanya PurchaseRequest `status = "draft"` (tanpa saringan deletedAt — kolom tidak ada). Per baris, sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurDraftHari` = hari kalender WIB dari `createdAt` ke hari ini (masa depan karena jam server = 0 tertanda, bukan negatif — EC-PRQ-4).
+- `keadaanApproval` = turunan dari Approval tertaut TERBARU (referenceType `PurchaseRequest`, orderBy id desc pola assertApproved): `pending` → menunggu langkah workflow; tidak ada baris → tanpa alur tercatat; status lain tampil apa adanya. Keadaan ini fakta pendamping, BUKAN tingkat dan BUKAN status dokumen (BR-PRQ-04).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft | di luar antrean | bukan populasi (wilayah daftar permintaan existing) |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-PRQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | kebutuhan belum diputus melewati kesabaran operasional yang diputus Lead; putuskan dulu (setujui/tolak lewat detail) |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan kerja dari umur tampil tertua-dulu (Q-PRQ-3) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah (permintaan disetujui/ditolak/dihapus/diubah, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada persetujuan otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PRQ-01 | Populasi antrean = PurchaseRequest `status="draft"` persis. Tanpa saringan deletedAt (kolom tidak ada di model — hapus hard delete purchase.actions.ts:2010); status lain (`approved`/`rejected`/`partial_ordered`/`ordered`/status liar tersimpan) tidak disamakan diam-diam tahap 1. | TERVERIFIKASI-KODE (schema:2014) + USULAN batas |
+| BR-PRQ-02 | Permintaan draft belum menjadi PO, belum memesan barang, belum menimbulkan stok/utang/jurnal apa pun: PO lahir hanya dari status approved/partial_ordered lewat jalur Buat PO existing (purchase-request-table.tsx kolom Pesanan; hook PO menurunkan ordered/partial_ordered, purchase-order.hook.ts:60-92). Antrean dilarang berlabel pesanan/komitmen/pembelian berjalan di permukaan mana pun. | TERVERIFIKASI-KODE + USULAN kejujuran label |
+| BR-PRQ-03 | Permintaan TIDAK punya nilai uang: PurchaseRequestItem hanya qty+notes tanpa harga (schema:2034-2045) dan header tanpa total. Antrean TIDAK menampilkan nominal, Σ nilai, atau estimasi dari harga master barang/vendor price — menurunkan harga = hitung ulang terlarang dan mengarang komitmen. Rekap hanya hitungan dokumen per tingkat (+ Σ qty item hanya bila Lead memutus tampil, Q-PRQ-8, berlabel hitungan unit bukan nilai). | TERVERIFIKASI-KODE + USULAN batas |
+| BR-PRQ-04 | Keadaan persetujuan dibaca dari Approval tertaut terbaru (status/currentStep/requestedAt), ditampilkan sebagai fakta pendamping terpisah dari status dokumen. Dokumen `draft` + Approval `pending` ≠ dokumen berstatus pending; dokumen `draft` tanpa Approval ≠ "belum diajukan" yang ditegaskan — tanpa workflow aktif jalur lahir memang no-op (approval-workflow.service.ts:38-41). Mengarang status antara (`diajukan`/`menunggu workflow` sebagai status dokumen) dilarang. | TERVERIFIKASI-KODE + USULAN kejujuran label |
+| BR-PRQ-05 | Umur memakai `createdAt` (momen baris masuk sistem), bukan `date` (tanggal dokumen, boleh lampau) dan bukan `requestDate` (tanggal permintaan bisnis, nullable). Mengubah acuan = Q-PRQ-7. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field schema |
+| BR-PRQ-06 | Nol setujui/tolak/buat-PO/hapus otomatis berbasis umur dalam tahap mana pun spec ini. Umur hanya penanda prioritas baca; permintaan yang memang belum boleh diputus (menunggu langkah approver tertentu di workflow, maker-checker existing) diputus manusia lewat jalur existing. | USULAN batas (menegaskan TERVERIFIKASI-KODE tidak adanya cron draft permintaan) |
+| BR-PRQ-07 | Builder antrean murni baca-saja turunan: tidak memanggil approveStep/rejectStep/requestApprovalIfConfigured/route workflow, tidak menulis status/kolom/Approval. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-PRQ-08 | Vendor = `vendorId` nullable "Pemasok Disarankan" apa adanya (kosong tampil `—`, ketiadaannya bukan penanda salah — permintaan tanpa usulan vendor sah existing); peminta = `requestedBy`, pembuat = `createdBy`, keduanya ditampilkan terpisah bila berbeda dan TIDAK digabung jadi satu nama "pembuat" (requestedBy bisa diisi form untuk orang lain, createPurchaseRequest :625). | TERVERIFIKASI-KODE |
+| BR-PRQ-09 | Hitungan item = jumlah baris PurchaseRequestItem tertaut (pola kolom Item daftar existing "`N item`"); baris qty besar tampil apa adanya. Antrean tidak menilai kewajaran qty, ketersediaan stok, atau titik pesan-ulang (wilayah 048-S) — konteks stok per item = perluasan terpisah, bukan tahap 1. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-PRQ-10 | Ambang hari `mengendap`, kata label final, urutan tampil, dan setujui-dari-antrean adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-PRQ-1/2/3/4). Spec baca-saja ini tidak menyentuh jurnal/uang/stok sehingga Accountant TIDAK diminta run ini — kecuali kelak Lead membuka nilai estimasi/komitmen dari permintaan, saat itu vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Permintaan/pengajuan pembelian dari peminta ke pembelian | Ada: permintaan diajukan untuk approval (Apply for Approval, URL §kepala) | Ada: Pengajuan Pembelian gudang → pembelian + laporan per periode (URL §kepala) | Ada: buat permintaan + item qty (purchase.actions.ts:615), daftar + detail | Konteks peminta/vendor/item per baris antrean |
+| Persetujuan berwenang sebelum lanjut ke PO | Ada: fitur Persetujuan transaksi pembelian, approver memutus di permukaan persetujuan (URL §kepala) | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Ada: workflow Approval generik + manual StatusActions, keduanya `approve_purchase_requests`; PO hanya dari approved (tabel/detail) | Antrean berhenti di detail pemutus existing |
+| Daftar kerja permintaan belum diputus terlihat terpisah | Ada permukaan persetujuan lintas transaksi (URL §kepala); khusus draft tanpa workflow tidak ditetapkan — tidak diklaim | Daftar pengajuan ada; pemilahan draft mengendap tidak ditetapkan — tidak diklaim | Ada filter status daftar permintaan, tanpa umur/tingkat/konteks approval; permukaan persetujuan hanya memuat dokumen ber-workflow | Antrean draft berumur tertua-dulu + keadaan approval pendamping |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-PRQ-B1: Populasi tepat `status="draft"` saja. Permintaan approved/rejected/partial_ordered/ordered/terhapus tidak tampil tahap 1; memasukkan status lain ke builder tidak mengubah populasi (cabut saring status → MERAH).
+- AC-PRQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-PRQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-PRQ-4).
+- AC-PRQ-B3: Tanpa angka karang: selama Q-PRQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya lewat satu konstanta bernama/putusan (tanam angka liar → MERAH). Builder tidak menerbitkan nilai uang apa pun dari item/header (suntik harga master → MERAH, BR-PRQ-03).
+- AC-PRQ-B4: Loader fail-closed `view_purchase_requests` sebelum query, anti-N+1 (vendor massal, nama requestedBy/createdBy massal, hitungan item massal, Approval terbaru massal per dokumen — pola orderBy id desc per dokumen tanpa query per baris), Decimal qty → Number di tepi bila ditampilkan; tanpa izin loader tidak dipanggil.
+- AC-PRQ-B5: Baca-saja terbukti: builder/loader tidak memanggil approveStep/rejectStep/requestApprovalIfConfigured/buat-PO/tulis status/Approval (panggil diam-diam → MERAH); rekap = hitungan dokumen per tingkat atas baris yang sama persis; keadaanApproval per baris berasal dari Approval terbaru dokumen itu, bukan approval dokumen lain.
+
+Frontend (konsumen):
+- AC-PRQ-F1: Kolom/label/notice/penanda approval verbatim server; UI tidak menghitung umur/tingkat/keadaan sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-PRQ-F2: Vendor/peminta/pembuat kosong `—` dan ketiganya tidak digabung; tidak ada nominal/Σ nilai/estimasi harga tampil (nilai uang di antrean → MERAH, BR-PRQ-03); dokumen tidak berlabel pesanan/komitmen.
+- AC-PRQ-F3: Tautan baris hanya ke detail permintaan pembelian existing; tidak ada tombol Setujui/Tolak/Buat PO/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-PRQ-4 → MERAH); tanpa `view_purchase_requests` halaman menolak.
+
+Edge cases:
+- EC-PRQ-1: Permintaan draft yang langkah workflow-nya menunggu approver tertentu (Approval pending currentStep > 1) tetap populasi antrean ini — antrean tidak menilai siapa approver berjalan; keputusan tetap di permukaan persetujuan/detail existing (BR-PRQ-06).
+- EC-PRQ-2: Draft tanpa baris Approval (workflow tidak terkonfigurasi saat lahir, atau approval lama rejected lalu dokumen dibuka ulang) tampil dengan penanda tanpa-alur apa adanya; tidak dikeluarkan dari populasi dan tidak dilabeli "belum diajukan" sebagai fakta (BR-PRQ-04).
+- EC-PRQ-3: Permintaan kembar untuk barang/vendor yang sama tampil apa adanya dua baris; tidak digabung/didedup diam-diam (penilaian kebutuhan dinilai penyetuju, bukan antrean).
+- EC-PRQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-PRQ-5: Permintaan draft tanpa item (semua baris kosong tersaring parser existing) tampil apa adanya dengan hitungan 0 item; tidak dikeluarkan karena kosong.
+- EC-PRQ-6: Permintaan tertaut vendor yang kemudian nonaktif/terhapus di master tampil dengan nama apa adanya dari relasi; antrean tidak menyaring diam-diam (fisik relasi vendor nullable SetNull/default Prisma diverifikasi Backend saat loader).
+- EC-PRQ-7: `requestedBy` menunjuk user yang sudah nonaktif/tidak terpetakan nama → nama tampil `—`, baris tetap populasi; antrean tidak menebak peminta dari createdBy sebagai pengganti (BR-PRQ-08).
+- EC-PRQ-8: Dokumen yang disetujui/ditolak dari permukaan lain saat antrean terbuka keluar populasi pada render berikut; antrean tidak mengunci dokumen dan tidak menahan transisi existing.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-065-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-065-S | Spec kontrak ini (dokumen) | Business | — |
+| 065-B | Builder murni tingkat/umur/keadaan-approval draft permintaan pembelian + loader `view_purchase_requests` fail-closed anti-N+1 + tes AC-PRQ-B1..B5 | Backend | Putusan Lead Q-PRQ-1/2/3 (+ Q-PRQ-6 label approval) |
+| 065-F | Permukaan antrean (daftar permintaan existing atau kartu antrean pola antrean existing) verbatim payload + AC-PRQ-F1..F3 | Frontend | 065-B merged |
+| 065-Q | Falsifikasi AC-PRQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 065-B/065-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-PRQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (permintaan part bengkel yang tak diputus menahan pekerjaan kendaraan; lebih pendek dari SO 7 hari karena hulu rantai) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-PRQ-2 | Kata label/notice/penanda approval final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-PRQ-3 | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua? | Lead | `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc |
+| Q-PRQ-4 | Setujui/tolak langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-PRQ-06): konteks item/alasan tolak/maker-checker harus tetap terasa di detail/permukaan persetujuan existing; antrean tidak menggandakan permukaan keputusan kedua |
+| Q-PRQ-5 | Key izin antrean terpisah dari `view_purchase_requests`? | Lead | TIDAK tahap 1 |
+| Q-PRQ-6 | Label keadaanApproval final (pending workflow / tanpa alur / status lain) + apakah currentStep tampil? | Lead (fisik Backend menguji) | Label usulan §1; currentStep TIDAK tampil tahap 1 (nama langkah/approver wilayah permukaan persetujuan existing, bukan antrean dokumen) |
+| Q-PRQ-7 | Acuan umur createdAt (BR-PRQ-05) vs requestDate bisnis? | Lead (fisik Backend menguji) | createdAt — momen menunggu sistem; requestDate nullable dan bisa diisi lampau |
+| Q-PRQ-8 | Σ qty item per baris/rekap tampil? | Lead | Tampil hitungan baris item saja tahap 1 (pola daftar existing); Σ qty lintas satuan barang berbeda menyesatkan — TIDAK ditampilkan |
+
+### Yang TIDAK diusulkan run ini
+- Persetujuan/penolakan massal atau otomatis permintaan basi (BR-PRQ-06) — keputusan permintaan menggerakkan pembelian nyata; otomatisasi melewati penilaian penyetuju dan maker-checker existing.
+- Menampilkan nilai uang/estimasi harga permintaan dari harga master atau harga vendor (BR-PRQ-03) — model memang tanpa harga; estimasi mengarang komitmen dan menyentuh wilayah harga beli.
+- Menulis status `pending`/`diajukan` baru ke dokumen atau menyelaraskan chip daftar existing — pembetulan premis kepala spec mencatat fakta; mengubah kosakata status dokumen = keputusan perilaku terpisah, bukan spec antrean.
+- Membuat PO langsung dari antrean atau dari draft (BR-PRQ-02) — jalur Buat PO existing memang mengunci ke approved/partial_ordered; melonggarkannya = keputusan gerbang persetujuan terpisah.
+- Pengingat WA/email ke penyetuju/peminta, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru, di luar tahap baca-saja.
+- Konteks stok/titik pesan-ulang per item di antrean (wilayah 048-S dan stok gudang) — antrean ini menjawab "permintaan belum diputus", bukan "barang perlu dipesan berapa".
+- Mengubah penjaga hapus existing (draft/approved) atau menghidupkan soft-delete permintaan — fakta dicatat di §0; mengubah semantik hapus = keputusan skema/aksi terpisah.
