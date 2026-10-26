@@ -37,6 +37,7 @@ import {
   type CustomerStatementReturnInput,
 } from "@/lib/reports/customer-statement"
 import { loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -97,7 +98,7 @@ export async function loadCustomerStatement(
         withholdingAmount: true,
         paymentMethod: true,
         notes: true,
-        salesInvoice: { select: { documentNo: true } },
+        salesInvoice: { select: { id: true, documentNo: true } },
       },
       orderBy: [{ paymentDate: "asc" }, { id: "asc" }],
     }),
@@ -108,7 +109,7 @@ export async function loadCustomerStatement(
         documentNo: true,
         salesInvoiceId: true,
         date: true,
-        salesInvoice: { select: { documentNo: true } },
+        salesInvoice: { select: { id: true, documentNo: true } },
       },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
@@ -123,7 +124,7 @@ export async function loadCustomerStatement(
 
   const invoiceInputs: CustomerStatementInvoiceInput[] = invoices.map((inv) => ({
     id: inv.id,
-    documentNo: inv.documentNo,
+    documentNo: salesInvoiceLabel(inv),
     date: new Date(inv.date),
     grandTotal: Number(inv.grandTotal),
   }))
@@ -131,7 +132,7 @@ export async function loadCustomerStatement(
     id: pay.id,
     documentNo: pay.documentNo,
     salesInvoiceId: pay.salesInvoiceId,
-    salesInvoiceDocumentNo: pay.salesInvoice.documentNo,
+    salesInvoiceDocumentNo: salesInvoiceLabel(pay.salesInvoice),
     paymentDate: new Date(pay.paymentDate),
     amount: Number(pay.amount),
     withholdingAmount: Number(pay.withholdingAmount ?? 0),
@@ -145,7 +146,7 @@ export async function loadCustomerStatement(
       id: ret.id,
       documentNo: ret.documentNo,
       salesInvoiceId: ret.salesInvoiceId as number,
-      salesInvoiceDocumentNo: ret.salesInvoice?.documentNo ?? "",
+      salesInvoiceDocumentNo: ret.salesInvoice ? salesInvoiceLabel(ret.salesInvoice) : "",
       date: new Date(ret.date),
       returnCredit: returnCreditByReturnId.get(ret.id) ?? 0,
     }))
