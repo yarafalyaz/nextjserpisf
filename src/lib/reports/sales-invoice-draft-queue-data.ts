@@ -21,6 +21,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import {
   buildSalesInvoiceDraftQueue,
   summarizeSalesInvoiceDraftQueue,
@@ -103,7 +104,7 @@ export async function getSalesInvoiceDraftQueue(
     invoices.map((i) => ({
       invoiceId: i.id,
       slug: i.slug,
-      documentNo: i.documentNo,
+      documentNo: salesInvoiceLabel(i),
       status: i.status,
       deletedAt: i.deletedAt,
       customerId: i.customerId,

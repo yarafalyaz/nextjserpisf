@@ -25,6 +25,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import {
   assertSalesPriceHistoryPeriod,
@@ -117,7 +118,7 @@ export async function getSalesPriceHistory(query: SalesPriceHistoryQuery): Promi
       invoiceId: invoice.id,
       invoiceItemId: item.id,
       slug: invoice.slug,
-      documentNo: invoice.documentNo,
+      documentNo: salesInvoiceLabel(invoice),
       customerId: invoice.customerId,
       customerName: invoice.customer.name,
       itemId: item.itemId,
