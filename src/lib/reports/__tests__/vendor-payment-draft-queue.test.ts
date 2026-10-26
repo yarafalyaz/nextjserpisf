@@ -10,7 +10,6 @@ import {
   deriveVendorPaymentDraftAge,
   type VendorPaymentDraftInput,
 } from "../vendor-payment-draft-queue"
-import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 const mocks = vi.hoisted(() => ({
   vendorPaymentFindMany: vi.fn(),
@@ -18,67 +17,33 @@ const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    vendorPayment: {
-      findMany: (...a: unknown[]) => mocks.vendorPaymentFindMany(...a),
+vi.mock("@/lib/db/prisma", () => {
+  const findManyDelegate = (fn: typeof mocks.userFindMany) => ({
+    findMany: (...a: unknown[]) => fn(...a),
+  })
+  return {
+    prisma: {
+      vendorPayment: findManyDelegate(mocks.vendorPaymentFindMany),
+      user: findManyDelegate(mocks.userFindMany),
     },
-    user: {
-      findMany: (...a: unknown[]) => mocks.userFindMany(...a),
-    },
-  },
-}))
+  }
+})
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
 }))
 
 import { getVendorPaymentDraftQueue } from "../vendor-payment-draft-queue-data"
-
-// Kunci select loader persis (daftar-putih BR-VPQ-04, tanpa adminFee).
-const LOADER_SELECT_KEYS = [
-  "amount",
-  "createdAt",
-  "createdBy",
-  "deletedAt",
-  "documentNo",
-  "id",
-  "paymentDate",
-  "slug",
-  "status",
-  "vendor",
-  "vendorBill",
-  "vendorBillId",
-  "vendorId",
-] as const
-
-// Kunci Row builder persis (daftar-putih) — Input (13) + turunan (5).
-// Suntik field asing (mis. adminFee/totalValue) ke Row WAJIB MERAH.
-const ROW_KEYS = [
-  "amount",
-  "createdAt",
-  "createdByName",
-  "deletedAt",
-  "documentNo",
-  "paymentDate",
-  "paymentDateLampau",
-  "slug",
-  "status",
-  "tingkat",
-  "tingkatLabel",
-  "umurDariMasaDepan",
-  "umurDraftHari",
-  "vendorBillDocumentNo",
-  "vendorBillId",
-  "vendorId",
-  "vendorName",
-  "vendorPaymentId",
-] as const
-
-// Hari kalender WIB tetap: 2026-10-26 — instan 05:00 WIB.
-const NOW = new Date("2026-10-25T22:00:00.000Z")
-const TODAY = getWibTodayUtcDate(NOW)
-const day = (offset: number) => new Date(TODAY.getTime() + offset * 86_400_000)
+import {
+  VENDOR_PAYMENT_DRAFT_TEST_NOW as NOW,
+  VENDOR_PAYMENT_DRAFT_TEST_TODAY as TODAY,
+  VENDOR_PAYMENT_LOADER_SELECT_KEYS,
+  VENDOR_PAYMENT_QUEUE_KEYS,
+  VENDOR_PAYMENT_ROW_KEYS,
+  VENDOR_PAYMENT_VENDOR_COUNT_KEYS,
+  expectKeysPersis,
+  vendorPaymentDraftTestDay as day,
+} from "./vendor-payment-draft-queue-test-fixtures"
 
 function input(overrides: Partial<VendorPaymentDraftInput> = {}): VendorPaymentDraftInput {
   return {
@@ -272,22 +237,11 @@ describe("vendor-payment-draft-queue (F-2026-10-26-072-S tahap 1)", () => {
   it("keys Row persis daftar-putih — field asing WAJIB gagal", () => {
     const queue = buildVendorPaymentDraftQueue([input()], NOW)
     expect(queue.rows).toHaveLength(1)
-    expect([...Object.keys(queue.rows[0])].sort()).toEqual([...ROW_KEYS].sort())
+    expectKeysPersis(queue.rows[0], VENDOR_PAYMENT_ROW_KEYS)
     expect(Object.keys(queue.rows[0])).not.toContain("adminFee")
-    expect([...Object.keys(queue)].sort()).toEqual(
-      [
-        "levelCounts",
-        "rows",
-        "totalAmount",
-        "totalDocuments",
-        "totalLabel",
-        "vendorCounts",
-      ].sort(),
-    )
+    expectKeysPersis(queue, VENDOR_PAYMENT_QUEUE_KEYS)
     for (const count of queue.vendorCounts) {
-      expect([...Object.keys(count)].sort()).toEqual(
-        ["levelCounts", "total", "totalAmount", "vendorId", "vendorName"].sort(),
-      )
+      expectKeysPersis(count, VENDOR_PAYMENT_VENDOR_COUNT_KEYS)
     }
   })
 })
@@ -350,12 +304,12 @@ describe("getVendorPaymentDraftQueue (loader fail-closed, AC-VPQ-B1/B4/B5)", () 
     const arg = mocks.vendorPaymentFindMany.mock.calls[0][0]
     expect(arg.where).toEqual({ status: "draft", deletedAt: null })
     const selectKeys = Object.keys(arg.select)
-    expect([...selectKeys].sort()).toEqual([...LOADER_SELECT_KEYS].sort())
+    expectKeysPersis(arg.select, VENDOR_PAYMENT_LOADER_SELECT_KEYS)
     expect(selectKeys).not.toContain("adminFee")
     expect(arg.select.vendor).toEqual({ select: { name: true } })
     expect(arg.select.vendorBill).toEqual({ select: { documentNo: true } })
     const userArg = mocks.userFindMany.mock.calls[0][0]
-    expect([...Object.keys(userArg.select)].sort()).toEqual(["id", "name"])
+    expectKeysPersis(userArg.select, ["id", "name"])
     expect(mocks.userFindMany).toHaveBeenCalledTimes(1)
     expect(userArg.where).toEqual({ id: { in: [99] } })
 
