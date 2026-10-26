@@ -604,3 +604,52 @@ describe("updateCustomerVehicleServiceSchedule guard km (021-S)", () => {
     expect(mocks.prismaMock.customerVehicle.update).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("updateCustomerVehicleServiceSchedule perilaku aksi (021-S)", () => {
+  const existing = { id: 5, customerId: 9, lastOdometerKm: 50000 }
+
+  it("memakai kunci izin persis edit_customers", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 60000 }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_customers")
+  })
+
+  it("tanggal lampau sah tersimpan apa adanya (langsung terlewat, tidak ditolak)", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceDate: "2020-01-15" }),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.customerVehicle.update.mock.calls[0][0]
+    expect(arg.data.nextServiceDate).toBeInstanceOf(Date)
+    expect(arg.data.nextServiceDate.toISOString().slice(0, 10)).toBe("2020-01-15")
+  })
+
+  it("keduanya kosong = kosongkan jadwal (date/km/note null, updatedBy/At terisi)", async () => {
+    mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(existing)
+    const res = await actions.updateCustomerVehicleServiceSchedule(5, fdMap({}))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.customerVehicle.update.mock.calls[0][0]
+    expect(arg.data.nextServiceDate).toBeNull()
+    expect(arg.data.nextServiceKm).toBeNull()
+    expect(arg.data.nextServiceNote).toBeNull()
+    expect(arg.data.nextServiceUpdatedBy).toBe(1)
+    expect(arg.data.nextServiceUpdatedAt).toBeInstanceOf(Date)
+  })
+
+  it("izin ditolak -> gagal sebelum parse/tulis, update 0x", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(new Error("tanpa izin"))
+    const res = await actions.updateCustomerVehicleServiceSchedule(
+      5,
+      fdMap({ nextServiceKm: 60000 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customerVehicle.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+  })
+})
