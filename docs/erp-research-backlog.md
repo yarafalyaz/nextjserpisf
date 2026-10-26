@@ -33792,3 +33792,157 @@ Catatan jujur cakupan: daftar di atas diperiksa dari grep `salesOrder.create`/`s
 AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap), B5 (SoD/tanpa key/tanpa alasan tertolak), B8 (seluruh jalur Q-CL2-4) — terpetakan ke kartu Backend turunan. AC-CL2-F1/F2 ke kartu Frontend turunan. AC-CL2-B1/B3/B6/B7 tetap berlaku persis spec/vonis.
 
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
+
+---
+
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-064-S: antrean tagihan vendor draft mengendap menunggu posting (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_0ccda310. ID F-2026-10-26-064-S diverifikasi bebas run ini 2026-10-26 15:42 WIB: grep `F-2026-10-26-064` di backlog + board `origin/main` (`0e90b07f`) = 0; ID terpakai terakhir berjalan F-2026-10-26-063-S (PR #1012). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `deletedAt`, `createdAt`, `date`, `dueDate`, `grandTotal`, `vendorId`+vendor, `purchaseOrderId`+PO, `goodsReceiptId`+GR, `createdBy`), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-VBQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK memposting, TIDAK membayar, dan TIDAK menghapus tagihan apa pun — posting tetap jalur existing `confirmVendorBill` berizin `approve_vendor_bills` (purchase.actions.ts:1597), bayar tetap jalur pembayaran vendor existing. Tagihan draft belum jurnal utang dan belum balanceDue: nominal tampil sebagai fakta dokumen existing ("nilai draft belum diposting"), bukan utang usaha diakui, bukan saldo piutang/utang laporan, bukan dasar pembayaran. Efek uang/utang/jurnal sesudah posting hanya dicatat TERVERIFIKASI-KODE (§0); penilaian angka/jurnal/PPh/PPN tagihan = wilayah Accountant, spec baca-saja ini tidak menilai dan tidak membuka vonis Accountant tahap 1 — KECUALI titik yang ditandai BUTUH-VONIS Accountant di BR-VBQ-02/Q-VBQ-4 bila Lead membuka aksi apa pun dari daftar.
+
+PEMBETULAN PREMIS KARTU (TERVERIFIKASI-KODE, wajib dibaca Lead): kartu menyebut populasi "draft + deletedAt null" dengan asumsi deletedAt menandai baris terhapus. Di kode live, `VendorBill.deletedAt` ADA di schema (schema.prisma:2243) tetapi TIDAK PERNAH ditulis jalur tagihan existing: hapus draft = hard delete `tx.vendorBill.delete` (purchase.actions.ts:2392), batal posted = status `cancelled` (voidVendorBill :3114-3139), dan daftar tagihan existing tidak menyaring deletedAt sama sekali (pembelian/tagihan/page.tsx where hanya cari+status). Saringan `deletedAt: null` di populasi antrean tetap diusulkan sebagai penjaga defensif murah (baris soft-deleted warisan/masa depan tidak bocor), BUKAN sebagai fakta bahwa penghapusan hari ini soft-delete. Temuan samping di luar spec ini (dicatat, tidak diperbaiki run ini): komentar received-not-billed-data.ts:13-18 dan purchase.actions.ts:287-288 masih mengklaim "jurnal AP diposting saat createVendorBill" — basi; kode live createVendorBill:1476-1479 menegaskan draft MURNI tanpa jurnal, satu titik pengakuan = confirmVendorBill. Antrean ini mengikuti KODE, bukan komentar basi itu; koreksi komentar = handoff Backend terpisah bila Lead menghendaki.
+
+Bukan duplikasi: bukan purchase-outstanding (sisa penerimaan PO: baris PO belum diterima penuh, purchase-outstanding.ts — populasi dokumen PO, bukan tagihan); bukan received-not-billed / GR-IR (penerimaan verified/completed belum ditagih, received-not-billed-data.ts — populasi baris penerimaan; tagihan draft yang sudah tertaut GR justru mengurangi sisa di laporan itu, populasi berlawanan arah); bukan 060-S (PO draft menunggu persetujuan) / 061-S (penerimaan draft menunggu verifikasi) — dokumen hulu berbeda status & pemilik izin, tagihan adalah hilir keduanya; bukan daftar tagihan vendor existing `pembelian/tagihan` (filter chip semua/draft/approved/paid + urut createdAt desc, tanpa umur draft, tanpa tingkat, baris draft tenggelam di antara posted/paid); bukan laporan hutang jatuh tempo / total hutang / umur hutang (populasi posted+balanceDue — draft memang TIDAK masuk sana karena belum diakui, antrean ini justru menjelaskan mengapa draft belum muncul di laporan utang); bukan 063-S (retur pembelian draft — dokumen pembalik, arah stok/utang berlawanan).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: faktur pembelian mencatat tagihan supplier (dari PO/penerimaan atau langsung, termasuk tagihan di muka mendahului penerimaan), dan pembayaran dilakukan terhadap faktur yang sudah tercatat lewat Pembayaran Pembelian — https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/faktur-pembelian/membuat-faktur-pembelian/ dan https://help.accurate.id/product/faktur-pembelian/ (BENCHMARK: tagihan tercatat dan pembayaran terhadap tagihan adalah langkah yang harus terlacak; antrean draft bertingkat umur atau ambang hari TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: daftar hutang usaha menampilkan transaksi penerimaan/pembelian kredit yang menimbulkan utang, pembayaran hutang memilih nomor invoice yang dilunasi, kartu hutang merinci tagihan + pelunasan per vendor — https://help.zahironline.com/portal/id/kb/articles/melihat-daftar-hutang-usaha dan https://help.zahironline.com/portal/id/kb/articles/mencatat-transaksi-pembayaran-hutang-usaha (BENCHMARK: utang terlihat dari transaksi yang sudah menimbulkan utang dan dibayar per invoice; draft yang belum menimbulkan utang tidak ditetapkan sebagai populasi hutang — konsisten BR-VBQ-02; tidak ada penetapan antrean umur draft — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 0e90b07f)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `VendorBill` (prisma/schema.prisma:2226-2285) — slug unik nullable, documentNo unik, vendorId WAJIB (relasi Vendor :2270), purchaseOrderId nullable (relasi PurchaseOrder), goodsReceiptId nullable (relasi GoodsReceipt onDelete SetNull), projectId nullable, date, dueDate nullable, vendorInvoiceNumber/taxInvoiceNumber nullable, subtotal/tax/grandTotal Decimal, paidAmount default 0, balanceDue Decimal default 0, withholdingAmount/Type, approvedBy/approvedAt nullable, status String default `draft`, deletedAt DateTime nullable (ADA — beda keluarga 059-063 yang modelnya tanpa deletedAt; lihat pembetulan premis di kepala), createdBy nullable, createdAt/updatedAt; indeks status + vendorId + dueDate + createdAt + komposit (vendorId,status,balanceDue). Item `VendorBillItem` (:2287) — qty/unitPrice/subtotal/total Decimal, goodsReceiptItemId nullable.
+- Lahir draft MURNI: `createVendorBill` (src/actions/purchase.actions.ts:1276, `create_vendor_bills` :218 katalog) — kunci baris PO + assertThreeWayMatch + cek vendor PO/GR sama, status lahir `draft` (:1441), dan komentar kode eksplisit :1476-1479 "draft MURNI — tanpa jurnal, tanpa HPP. Satu titik pengakuan adalah posting (confirmVendorBill)" (P0-2: sebelumnya jurnal lahir saat draft sementara laporan AP mengecualikan draft → selisih AP vs GL; perilaku lama SUDAH diperbaiki, antrean tidak menghidupkannya lagi).
+- Posting satu-satunya keluar draft: `confirmVendorBill` (:1597, `approve_vendor_bills` katalog:222) — hanya dari `draft` (:1605 + cek ulang dalam transaksi terkunci PO :1623), assertThreeWayMatch ulang, lalu SATU transaksi: status → `posted`, approvedBy/approvedAt terisi, balanceDue = grandTotal − withholdingAmount (:1661-1672), `onVendorBillPosted` (accounting.hook.ts:2382 — Dr Expense/Clearing / Cr Hutang Usaha grandTotal, idempoten per jurnal existing, assertPeriodOpen tanggal tagihan) + syncServicePoCostFromBills. Efek jurnal dicatat apa adanya; benar/salah akun/angka/PPh = Accountant (BR-VBQ-02).
+- Jalur draft lain existing: ubah `updateVendorBill` (:2624, `edit_vendor_bills`, hanya draft :2637/:2662, 3-way match ulang exclude diri), hapus `deleteVendorBill` (:2352, `delete_vendor_bills`, hanya draft :2384, HARD delete + deleteJournalByReferenceTx defensif + hapus lampiran), batal `voidVendorBill` (:3114, `delete_vendor_bills`, MENOLAK draft :3123 — draft dibuang lewat hapus, bukan batal; posted → `cancelled` + jurnal dibalik). Bayar: daftar tagihan menampilkan tautan Bayar hanya status bukan draft/cancelled/paid (vendor-bill-table.tsx kolom bayar) dan detail hanya bila balanceDue > 0 ([slug]/page.tsx:81) — draft memang belum bisa dibayar existing.
+- Permukaan existing yang SUDAH memberi jalan posting dari daftar: dropdown aksi tabel tagihan punya "Posting" (processAction confirmVendorBill, `approve_vendor_bills`, vendor-bill-table.tsx) dan detail punya tombol Konfirmasi saat draft ([slug]/page.tsx:71-79). Antrean ini TIDAK menggandakan tombol itu tahap 1 (Q-VBQ-4) — nilai tambahnya umur/tingkat/prioritas, bukan aksi kedua.
+- Daftar tagihan vendor existing: `pembelian/tagihan/page.tsx` requirePermission `view_vendor_bills` (:25), filter chip status (semua/draft/approved/paid) + cari documentNo/vendor, urut `createdAt desc`, include vendor + PO (documentNo, isService) — tanpa kolom umur draft, tanpa tingkat, tanpa rekap draft, TANPA saring deletedAt (lihat pembetulan premis), kolom tabel: No. Dokumen/Pemasok/PO/Tanggal/Total/Status/Bayar/Aksi (vendor-bill-table.tsx).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean tagihan vendor draft atau turunan umur menunggu posting — grep `vendorBillQueue|vendor-bill-queue|umurTagihan|draftVendorBill` di src/lib/reports + src/app = 0 (satu-satunya hit "tagihan draft" adalah komentar basi received-not-billed §kepala); tidak ada cron pengingat/penuaan draft tagihan vendor. Draft yang ditinggal berarti barang/jasa sudah diterima tetapi utang belum diakui di jurnal maupun laporan hutang, pemasok belum bisa dibayar lewat jalur existing, dan tidak ada permukaan yang menua baris itu. Risiko bengkel: tagihan supplier menumpuk draft berhari-hari — umur hutang terlihat lebih ringan dari kenyataan operasional dan pembayaran ke supplier molor tanpa penanda.
+
+### 1. Workflow specification
+
+Aktor: Pemposting pemegang `approve_vendor_bills` (satu-satunya yang memposting lewat jalur existing), Admin Pembelian pemegang `view_vendor_bills` (pembaca antrean), Pembuat tagihan pemegang `create_vendor_bills` (sumber baris draft), Sistem (builder turunan baca-saja).
+Dokumen masuk: baris VendorBill existing berstatus `draft` dan `deletedAt IS NULL` (id, slug, documentNo, vendorId+nama vendor langsung dari relasi vendor — BEDA retur 063 yang vendornya hanya lewat PO, date, dueDate, grandTotal, purchaseOrderId+nomor PO bila ada, goodsReceiptId+nomor GR bila ada, createdBy+nama bila ada, createdAt) — field existing, tanpa field masuk baru tahap 1.
+Dokumen keluar: baris antrean turunan per tagihan draft (§3) + rekap hitungan per tingkat. BUKAN dokumen akuntansi: tidak ada jurnal, pengakuan utang, balanceDue, pembayaran, atau pesan keluar yang dihasilkan antrean (confirmVendorBill existing yang menulis jurnal+balanceDue — di luar antrean).
+
+Alur:
+1. Tagihan lahir `draft` lewat jalur existing (buat langsung/dari PO/dari GR dengan 3-way match; status lahir existing, di luar cakupan spec ini).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft (BR-VBQ-01) dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks vendor/PO/GR, penanda pembuat, penanda jatuh tempo dokumen (dueDate lampau pada draft = fakta tampil, BUKAN tingkat tersendiri tahap 1 — EC-VBQ-2), dan tingkat §3.
+3. Pemposting membuka detail dari baris dan memposting lewat jalur existing (confirmVendorBill: gerbang izin + kunci PO + 3-way match + jurnal + balanceDue atomik). Antrean tidak menyediakan tombol Posting/bayar massal tahap 1 (Q-VBQ-4) walau daftar existing sudah punya Posting per baris — antrean adalah permukaan prioritas, bukan permukaan aksi kedua.
+4. Sesudah diposting: baris keluar populasi (status `posted`). Sesudah dihapus jalur existing: keluar populasi (hard delete). Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-VBQ-2 Lead bersama ambang hari):
+- Judul kolom: `Menunggu Posting` (umur), `Pemasok` (nama vendor), `Pesanan Pembelian` (nomor PO atau `—`), `Penerimaan` (nomor GR atau `—`), `Dibuat Oleh` (nama atau `—`).
+- Label tingkat: `mengendap` → "Mengendap"; `menunggu` → "Menunggu Posting".
+- Notice usulan: "Daftar ini hanya tagihan vendor yang masih draft dan belum diposting. Draft belum diakui sebagai utang dan belum bisa dibayar sampai diposting lewat detail tagihan."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean tagihan draft + tingkat/umur | `view_vendor_bills` (katalog:218) | daftar tagihan requirePermission | TIDAK ada key baru (key terpisah = Q-VBQ-5) |
+| Buat tagihan (sumber baris draft) | `create_vendor_bills` (katalog:219) | aksi buat existing + 3-way match | tidak berubah |
+| Ubah/hapus tagihan draft | `edit/delete_vendor_bills` (katalog:220-221) | aksi existing + penjaga hanya-draft | tidak berubah; antrean tidak memberi jalur ubah/hapus baru |
+| Posting tagihan (keluar draft) | `approve_vendor_bills` (katalog:222) | confirmVendorBill:1597 | TIDAK berubah; antrean hanya mengantar ke detail existing |
+| Bayar tagihan dari antrean | TIDAK — draft belum balanceDue | bayar existing hanya non-draft balanceDue>0 | antrean tidak menawarkan aksi bayar apa pun |
+
+Tidak ada permission key baru diusulkan tahap ini. Data nominal tagihan bukan data gaji/pribadi; tetap di balik `view_vendor_bills` existing.
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah: `draft` → `posted` (confirmVendorBill :1661-1672 menetapkan status+approvedBy/approvedAt+balanceDue); `posted` → `cancelled` (voidVendorBill, di luar antrean); status `approved`/`paid` dikenal chip daftar existing tetapi BUKAN transisi keluar draft di jalur posting ini (posting langsung draft→posted; jangan karang tahap persetujuan terpisah di antrean). Penghapusan draft = hard delete existing; `deletedAt` tidak ditulis jalur mana pun hari ini (pembetulan premis kepala spec).
+
+Populasi antrean: hanya VendorBill `status = "draft"` DAN `deletedAt IS NULL`. Per baris, sinyal turunan (field existing, hari kalender WIB pola builder antrean existing):
+- `umurDraftHari` = hari kalender WIB dari `createdAt` ke hari ini (masa depan karena jam server = 0 tertanda, bukan negatif — EC-VBQ-4).
+- `sudahJatuhTempoDokumen` = dueDate tidak null dan dueDate < hari ini WIB (fakta tampil tanggal, bukan tingkat — EC-VBQ-2; draft belum utang sehingga "lewat jatuh tempo" di sini penanda kertas vendor, bukan tunggakan).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft, atau deletedAt terisi | di luar antrean | bukan populasi (wilayah daftar tagihan existing) |
+| S1 | draft+hidup dan umurDraftHari >= ambangHariMengendap (Q-VBQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan; builder tidak menanam angka) | `mengendap` | utang belum diakui + supplier belum bisa dibayar melewati kesabaran operasional yang diputus Lead; posting/putuskan dulu |
+| S2 | draft+hidup selain S1 | `menunggu` | antrean biasa; urutan kerja dari umur tampil tertua-dulu (Q-VBQ-3) |
+
+Transisi tingkat hanya karena render ulang sesudah fakta berubah (tagihan diposting/dihapus/diubah, hari berganti). Tidak ada cron, tidak ada tulis status turunan, tidak ada posting otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-VBQ-01 | Populasi antrean = VendorBill `status="draft"` AND `deletedAt IS NULL`. Saringan deletedAt = penjaga defensif (deletedAt tidak ditulis jalur existing hari ini — hapus = hard delete purchase.actions.ts:2392); status lain tidak disamakan diam-diam tahap 1. | TERVERIFIKASI-KODE (schema:2243,2261 status default draft) + USULAN batas |
+| BR-VBQ-02 | Tagihan draft belum jurnal, belum utang diakui, belum balanceDue (lahir 0; terisi hanya saat posting = grandTotal − withholding :1661-1672), belum bisa dibayar: jurnal Dr Expense/Clearing / Cr Hutang Usaha baru lahir di confirmVendorBill dalam satu transaksi (purchase.actions.ts:1597 dst; accounting.hook.ts:2382). Antrean mencatat efek ini sebagai TERVERIFIKASI-KODE saja — benar/salah angka jurnal, akun, PPh potong, dan PPN masukan TIDAK dinilai spec ini (wilayah Accountant bila kelak diperluas). Nominal antrean dilarang dijumlahkan ke utang, umur hutang, total hutang, HPP, atau kas di permukaan mana pun. | TERVERIFIKASI-KODE + BUTUH-VONIS Accountant bila diperluas |
+| BR-VBQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: posting (`approve_vendor_bills`, dari detail atau dropdown daftar existing), ubah (`edit_vendor_bills`, hanya draft), hapus (`delete_vendor_bills`, hanya draft, hard delete). Antrean tidak menambah jalan pintas posting/hapus dari daftar tahap 1. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-VBQ-04 | Jatuh tempo dokumen (dueDate) pada draft bukan tunggakan utang: draft belum diakui sehingga tidak masuk hutang jatuh tempo/umur hutang existing (populasi posted+balanceDue); antrean menampilkan dueDate apa adanya tanpa label "menunggak/jatuh tempo utang" — label tunggakan untuk draft = Q-VBQ-6. | TERVERIFIKASI-KODE + USULAN kejujuran label |
+| BR-VBQ-05 | Umur memakai `createdAt` (momen baris masuk sistem), bukan `date` (tanggal tagihan vendor, boleh lampau) dan bukan dueDate. Mengubah acuan = Q-VBQ-7. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field schema |
+| BR-VBQ-06 | Nol posting/batal/hapus otomatis berbasis umur dalam tahap mana pun spec ini. Umur hanya penanda prioritas baca; draft yang memang belum boleh diposting (3-way match belum lolos, periode tanggal tagihan tertutup — confirmVendorBill existing menolak) diputus manusia. | USULAN batas (menegaskan TERVERIFIKASI-KODE tidak adanya cron draft tagihan) |
+| BR-VBQ-07 | Builder antrean murni baca-saja turunan: tidak memanggil confirmVendorBill/onVendorBillPosted/jurnal, tidak menulis status/kolom/utang. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-VBQ-08 | Nilai baris tampil = `grandTotal` dokumen existing berlabel rekap "nilai draft belum diposting"; rekap hanya hitungan baris per tingkat + Σ grandTotal baris antrean, dilarang berlabel utang/saldo/hutang. Baris grandTotal 0 tampil apa adanya (EC-VBQ-6). balanceDue draft (lahir 0) TIDAK dipakai sebagai nilai tampil — menampilkan 0 sebagai "sisa utang" menyesatkan dua arah. | USULAN kejujuran nominal |
+| BR-VBQ-09 | Vendor dibaca langsung dari relasi `vendorId` tagihan (WAJIB schema), BUKAN diturunkan lewat PO seperti retur 063; PO/GR nullable ditampilkan `—` bila kosong dan ketiadaannya bukan penanda salah (tagihan langsung/jasa tanpa PO sah existing, termasuk jalur L3 non-job berpenanda notes — antrean tidak menilai penanda L3, EC-VBQ-5). | TERVERIFIKASI-KODE |
+| BR-VBQ-10 | Ambang hari `mengendap`, kata label final, urutan tampil, dan posting-dari-antrean adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-VBQ-1/2/3/4). Sisi jurnal/utang yang sudah berjalan existing tidak diubah spec ini sehingga Accountant TIDAK diminta run ini — kecuali Lead membuka aksi posting-dari-antrean (Q-VBQ-4) atau label tunggakan utang untuk draft (Q-VBQ-6), saat itu vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead (+ Accountant pada titik tertanda) |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Faktur/tagihan dari PO/penerimaan + tagihan langsung/di muka | Ada: faktur dari PO/penerimaan, langsung, di muka (URL §kepala) | Ada: hutang dari penerimaan/pembelian kredit (URL §kepala) | Ada: buat langsung/dari PO/dari GR + 3-way match (purchase.actions.ts:1276) | Konteks vendor langsung + PO/GR per baris |
+| Pengakuan utang + pembayaran per tagihan | Ada: pembayaran terhadap faktur tercatat (URL §kepala) | Ada: daftar hutang + bayar per invoice + kartu hutang (URL §kepala) | Ada: posting atomik jurnal + balanceDue (confirmVendorBill:1597), bayar hanya non-draft balanceDue>0 | Antrean berhenti di posting existing |
+| Draft belum menimbulkan utang terlihat terpisah dari hutang | Tidak ditetapkan antrean umur — tidak diklaim | Daftar hutang = transaksi yang menimbulkan hutang; draft tak ditetapkan — tidak diklaim | Ada filter status daftar tagihan, tanpa umur/tingkat; draft memang di luar laporan hutang | Antrean draft berumur tertua-dulu |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-VBQ-B1: Populasi tepat draft+deletedAt null. Tagihan posted/cancelled/paid/terhapus tidak tampil tahap 1; baris deletedAt terisi (bila kelak ada) tidak bocor; memasukkan status lain ke builder tidak mengubah populasi (cabut saring status/deletedAt → MERAH).
+- AC-VBQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-VBQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-VBQ-4).
+- AC-VBQ-B3: Tanpa angka karang: selama Q-VBQ-1 belum diputus builder tidak menerbitkan `mengendap`; ambang hanya lewat satu konstanta bernama/putusan (tanam angka liar → MERAH).
+- AC-VBQ-B4: Loader fail-closed `view_vendor_bills` sebelum query, anti-N+1 (vendor massal, PO+GR massal, pembuat massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil.
+- AC-VBQ-B5: Baca-saja terbukti: builder/loader tidak memanggil confirmVendorBill/onVendorBillPosted/tulis status (panggil aksi diam-diam → MERAH); rekap = hitungan + Σ grandTotal baris yang sama persis.
+
+Frontend (konsumen):
+- AC-VBQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-VBQ-F2: PO/GR/pembuat kosong `—`; nilai baris tidak berlabel utang/saldo/tunggakan (label utang di draft → MERAH).
+- AC-VBQ-F3: Tautan baris hanya ke detail tagihan vendor existing; tidak ada tombol Posting/Bayar/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-VBQ-4 → MERAH); tanpa `view_vendor_bills` halaman menolak.
+
+Edge cases:
+- EC-VBQ-1: Tagihan draft yang 3-way match-nya akan ditolak saat posting (confirmVendorBill existing menolak) tetap populasi antrean ini — antrean tidak menilai kesiapan posting; kesiapan diputus jalur posting existing saat pemposting bertindak.
+- EC-VBQ-2: dueDate lampau pada draft tetap tingkat dari umur createdAt; tanggal tampil apa adanya tanpa label tunggakan utang (BR-VBQ-04).
+- EC-VBQ-3: Tagihan kembar untuk PO/GR yang sama tampil apa adanya dua baris; tidak digabung/didedup diam-diam (plafon tagih dinilai 3-way match existing, bukan antrean).
+- EC-VBQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-VBQ-5: Tagihan draft berpenanda L3 non-job di notes (biaya telat WO closed) tetap tampil sebagai draft menunggu posting; antrean tidak menilai penanda L3 maupun kelayakan HPP proyeknya.
+- EC-VBQ-6: Tagihan draft grandTotal 0 / tanpa item tampil apa adanya; tidak dikeluarkan karena nominal.
+- EC-VBQ-7: Tagihan tertaut projectId (jasa maklon per proyek) tetap populasi; antrean tidak menilai alokasi HPP proyek.
+- EC-VBQ-8: Vendor tagihan ter-soft-delete di master tidak mengubah populasi — baris tampil dengan nama vendor apa adanya; antrean tidak menyaring diam-diam.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-064-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-064-S | Spec kontrak ini (dokumen) | Business | — |
+| 064-B | Builder murni tingkat/umur draft tagihan vendor + loader `view_vendor_bills` fail-closed anti-N+1 + tes AC-VBQ-B1..B5 | Backend | Putusan Lead Q-VBQ-1/2/3 (+ Accountant bila aksi/label diperluas) |
+| 064-F | Permukaan antrean (daftar tagihan existing atau kartu antrean pola antrean existing) verbatim payload + AC-VBQ-F1..F3 | Frontend | 064-B merged |
+| 064-Q | Falsifikasi AC-VBQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 064-B/064-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-VBQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (utang belum diakui + supplier belum bisa dibayar; tagihan biasanya menyusul penerimaan berhari-hari) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-VBQ-2 | Kata label/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-VBQ-3 | Urutan: tertua-dulu murni atau `mengendap` dulu lalu tertua? | Lead | `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc |
+| Q-VBQ-4 | Posting langsung dari antrean dibuka? | Lead + BUTUH-VONIS Accountant (posting menulis jurnal utang+balanceDue) | TIDAK tahap 1 (BR-VBQ-03): 3-way match + periode + konfirmasi harus tetap terasa di detail; daftar existing sudah punya Posting per baris bagi pemegang approve — antrean tidak menggandakannya; jalan pintas = keputusan terpisah |
+| Q-VBQ-5 | Key izin antrean terpisah dari `view_vendor_bills`? | Lead | TIDAK tahap 1 |
+| Q-VBQ-6 | dueDate lampau pada draft dilabeli tunggakan/jatuh tempo? | Lead + BUTUH-VONIS Accountant (label menyentuh makna utang) | TIDAK tahap 1 (BR-VBQ-04): draft belum utang; tampilkan tanggal polos saja |
+| Q-VBQ-7 | Acuan umur createdAt (BR-VBQ-05) vs date tagihan vendor? | Lead (fisik Backend menguji) | createdAt — momen menunggu sistem |
+| Q-VBQ-8 | Nilai baris tampil grandTotal (BR-VBQ-08) vs subtotal pra-pajak? | Lead (+ Accountant bila label menyentuh utang) | grandTotal berlabel "nilai draft belum diposting" — meniru total dokumen tampil existing, tanpa klaim utang; balanceDue draft dilarang tampil |
+
+### Yang TIDAK diusulkan run ini
+- Posting massal/otomatis tagihan basi (BR-VBQ-03/06) — posting menulis jurnal utang + balanceDue dan melewati 3-way match serta assertPeriodOpen; otomatisasi membahayakan kebenaran buku.
+- Memasukkan draft ke utang/umur hutang/total hutang/HPP/laporan vendor — draft belum berdampak (BR-VBQ-02); wilayah jurnal existing hanya posted.
+- Membayar draft atau membuka bayar-dari-antrean — jalur bayar existing memang mengunci draft (balanceDue 0); mengubah = keputusan perilaku uang terpisah ber-vonis Accountant.
+- Menghidupkan soft-delete tagihan (menulis deletedAt) atau mengubah hard delete existing — pembetulan premis kepala spec mencatat fakta; mengubah semantik hapus = keputusan skema/aksi terpisah, bukan spec antrean.
+- Mengoreksi komentar basi received-not-billed/purchase.actions soal "jurnal saat create" di spec ini — temuan dicatat di kepala spec; koreksi komentar milik Backend lewat kartu terpisah bila Lead menghendaki, supaya diff spec ini tetap murni antrean.
+- Pengingat WA/email ke pemposting, penanda "sudah diingatkan" tersimpan — kanal & keadaan baru, di luar tahap baca-saja.
+- Penilaian PPh potong/PPN masukan/faktur pajak tagihan draft — wilayah kepatuhan Accountant existing, bukan antrean umur.
