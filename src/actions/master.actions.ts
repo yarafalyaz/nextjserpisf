@@ -526,6 +526,25 @@ export async function updateVendor(vendorId: number, formData: FormData) {
 
 // ==================== ITEM ACTIONS ====================
 
+/**
+ * Penjaga rujukan Tax default item (vonis Q-ITX-1 Putusan 3): Tax wajib
+ * ada, aktif, belum terhapus. Kembalikan pesan error atau null bila sah.
+ */
+async function checkItemTaxReferences(taxDefaults: { defaultSalesTaxId: number | null; defaultPurchaseTaxId: number | null }): Promise<string | null> {
+  for (const [field, label] of [
+    ["defaultSalesTaxId", "penjualan"],
+    ["defaultPurchaseTaxId", "pembelian"],
+  ] as const) {
+    const taxId = taxDefaults[field];
+    if (taxId === null) continue;
+    const tax = await prisma.tax.findUnique({ where: { id: taxId }, select: { id: true, isActive: true, deletedAt: true } });
+    if (!tax || !tax.isActive || tax.deletedAt !== null) {
+      return `Kode pajak default ${label} tidak ditemukan atau nonaktif di master pajak (vonis Q-ITX-1 Putusan 3). Pilih kode pajak aktif atau kosongkan.`;
+    }
+  }
+  return null
+}
+
 export async function createItem(formData: FormData) {
   try {
     await requirePermission("create_items");
@@ -554,17 +573,8 @@ export async function createItem(formData: FormData) {
     } catch (e) {
       return { success: false, error: getErrorMessage(e, "Default pajak item tidak valid") };
     }
-    for (const [field, label] of [
-      ["defaultSalesTaxId", "penjualan"],
-      ["defaultPurchaseTaxId", "pembelian"],
-    ] as const) {
-      const taxId = taxDefaults[field];
-      if (taxId === null) continue;
-      const tax = await prisma.tax.findUnique({ where: { id: taxId }, select: { id: true, isActive: true, deletedAt: true } });
-      if (!tax || !tax.isActive || tax.deletedAt !== null) {
-        return { success: false, error: `Kode pajak default ${label} tidak ditemukan atau nonaktif di master pajak (vonis Q-ITX-1 Putusan 3). Pilih kode pajak aktif atau kosongkan.` };
-      }
-    }
+    const taxRefError = await checkItemTaxReferences(taxDefaults);
+    if (taxRefError) return { success: false, error: taxRefError };
 
     const itemSettings = await getSystemSettings();
     let sku = v.sku || null;
@@ -735,17 +745,8 @@ export async function updateItem(itemId: number, formData: FormData) {
     } catch (e) {
       return { success: false, error: getErrorMessage(e, "Default pajak item tidak valid") };
     }
-    for (const [field, label] of [
-      ["defaultSalesTaxId", "penjualan"],
-      ["defaultPurchaseTaxId", "pembelian"],
-    ] as const) {
-      const taxId = taxDefaults[field];
-      if (taxId === null) continue;
-      const tax = await prisma.tax.findUnique({ where: { id: taxId }, select: { id: true, isActive: true, deletedAt: true } });
-      if (!tax || !tax.isActive || tax.deletedAt !== null) {
-        return { success: false, error: `Kode pajak default ${label} tidak ditemukan atau nonaktif di master pajak (vonis Q-ITX-1 Putusan 3). Pilih kode pajak aktif atau kosongkan.` };
-      }
-    }
+    const taxRefError = await checkItemTaxReferences(taxDefaults);
+    if (taxRefError) return { success: false, error: taxRefError };
     const storedPercent = decimalToNumber(storedItem?.defaultDppPercent);
     const taxDefaultChanged =
       taxDefaults.defaultSalesTaxId !== (storedItem?.defaultSalesTaxId ?? null) ||
