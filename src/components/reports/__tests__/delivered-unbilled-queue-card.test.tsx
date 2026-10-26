@@ -12,37 +12,13 @@ import {
   buildDeliveredUnbilledQueue,
   DELIVERED_UNBILLED_EMPTY_TEXT,
   DELIVERED_UNBILLED_NOTICE_TEXT,
-  type DeliveredUnbilledInput,
 } from "@/lib/reports/delivered-unbilled"
 import { FULFILLABLE_ORDER_STATUSES } from "@/lib/reports/order-fulfillment-data"
+import { deliveredUnbilledInput as input } from "@/lib/reports/__tests__/delivered-unbilled-fixtures"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 // 2026-10-26 03:00 UTC = 10:00 WIB; hari WIB = 26 Okt 2026.
 const NOW = new Date(Date.UTC(2026, 9, 26, 3, 0))
-
-function input(over: Partial<DeliveredUnbilledInput>): DeliveredUnbilledInput {
-  return {
-    salesOrderId: 1,
-    slug: "so-0001",
-    documentNo: "SO-0001",
-    status: "confirmed",
-    deletedAt: null,
-    date: new Date(Date.UTC(2026, 9, 20)),
-    customerName: "PT Sinar Abadi",
-    lines: [{ lineId: 11, deliveredQty: 10, unitPrice: 100_000 }],
-    deliveries: [
-      {
-        status: "delivered",
-        date: new Date(Date.UTC(2026, 9, 24)),
-        confirmedAt: new Date(Date.UTC(2026, 9, 24)),
-        deliveredAt: new Date(Date.UTC(2026, 9, 24)),
-        deliveredQty: 10,
-      },
-    ],
-    invoices: [],
-    ...over,
-  }
-}
 
 let roots: Root[] = []
 afterEach(() => {

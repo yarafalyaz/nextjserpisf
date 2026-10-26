@@ -4,35 +4,11 @@ import { buildDeliveredUnbilledTable } from "../delivered-unbilled-export"
 import {
   buildDeliveredUnbilledQueue,
   DELIVERED_UNBILLED_EMPTY_TEXT,
-  type DeliveredUnbilledInput,
 } from "../delivered-unbilled"
+import { deliveredUnbilledInput as input } from "./delivered-unbilled-fixtures"
 import { FULFILLABLE_ORDER_STATUSES } from "../order-fulfillment-data"
 
 const NOW = new Date(Date.UTC(2026, 9, 26, 3, 0))
-
-function input(over: Partial<DeliveredUnbilledInput>): DeliveredUnbilledInput {
-  return {
-    salesOrderId: 1,
-    slug: "so-0001",
-    documentNo: "SO-0001",
-    status: "confirmed",
-    deletedAt: null,
-    date: new Date(Date.UTC(2026, 9, 20)),
-    customerName: "PT Sinar Abadi",
-    lines: [{ lineId: 11, deliveredQty: 10, unitPrice: 100_000 }],
-    deliveries: [
-      {
-        status: "delivered",
-        date: new Date(Date.UTC(2026, 9, 24)),
-        confirmedAt: new Date(Date.UTC(2026, 9, 24)),
-        deliveredAt: new Date(Date.UTC(2026, 9, 24)),
-        deliveredQty: 10,
-      },
-    ],
-    invoices: [],
-    ...over,
-  }
-}
 
 describe("buildDeliveredUnbilledTable F-2026-10-26-058-S", () => {
   it("sel verbatim payload + total grand dari queue apa adanya", () => {
