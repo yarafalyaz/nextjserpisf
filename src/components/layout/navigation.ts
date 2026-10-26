@@ -314,6 +314,7 @@ export const navigation: NavItem[] = [
       { label: "Riwayat Harga Penawaran", href: "/laporan/riwayat-harga-penawaran", icon: FileText, permission: "view_reports" },
       { label: "Riwayat Harga Jual", href: "/laporan/riwayat-harga-jual", icon: FileText, permission: "view_reports" },
       { label: "Garansi Segera Berakhir", href: "/laporan/garansi-segera-berakhir", icon: ShieldCheck, permission: "view_reports" },
+      { label: "Pengingat Servis Berkala", href: "/laporan/servis-berkala", icon: CalendarCheck, permission: "view_reports" },
       { label: "Aging Klaim Supplier", href: "/laporan/aging-klaim-supplier", icon: ShieldCheck, permission: "view_reports" },
       { label: "Corong Prospek", href: "/laporan/corong-prospek", icon: BarChart3, permission: "view_reports" },
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
