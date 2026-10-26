@@ -16,24 +16,7 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
-
-/**
- * Skor akhir dari sasaran berbobot: rata-rata tertimbang skor capaian.
- * Sasaran tanpa skor diabaikan; tanpa sasaran ternilai hasilnya null.
- */
-export function computeWeightedScore(
-  goals: { score: number | null; weight: number }[],
-): number | null {
-  let weighted = 0;
-  let weights = 0;
-  for (const g of goals) {
-    if (g.score == null) continue;
-    weighted += g.score * g.weight;
-    weights += g.weight;
-  }
-  if (weights === 0) return null;
-  return Math.round((weighted / weights) * 100) / 100;
-}
+import { computeWeightedScore } from "@/lib/hr/hcms-scoring";
 
 function resultError(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e;

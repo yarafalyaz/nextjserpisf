@@ -7,29 +7,7 @@ import { successionCandidateSchema } from "@/lib/validations/development.schemas
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { revalidatePath } from "next/cache";
-
-export const READINESS_LEVELS = ["ready_now", "ready_1_2_years", "ready_future"] as const;
-
-export const READINESS_LABELS: Record<string, string> = {
-  ready_now: "Siap Sekarang",
-  ready_1_2_years: "Siap 1-2 Tahun",
-  ready_future: "Siap Masa Depan",
-};
-
-export type SuccessionCoverage = "covered" | "at_risk" | "vacant";
-
-/**
- * Cakupan suksesi satu jabatan dari kandidatnya: ada yang siap sekarang
- * berarti aman; hanya kandidat masa depan berarti berisiko; tanpa
- * kandidat sama sekali berarti kosong.
- */
-export function computeSuccessionCoverage(
-  candidates: { readiness: string }[],
-): SuccessionCoverage {
-  if (candidates.length === 0) return "vacant";
-  if (candidates.some((c) => c.readiness === "ready_now")) return "covered";
-  return "at_risk";
-}
+import { computeSuccessionCoverage } from "@/lib/hr/hcms-scoring";
 
 function resultError(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e;
