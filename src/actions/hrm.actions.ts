@@ -1148,7 +1148,10 @@ export async function approveOvertime(overtimeId: number) {
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
         component: { isActive: true, recurrence: "fixed", kind: "earning" },
       },
-      select: { defaultAmount: true },
+      select: {
+        defaultAmount: true,
+        component: { select: { name: true } },
+      },
     });
     const fixedAllowance = fixedAssignments.reduce(
       (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
@@ -1171,6 +1174,23 @@ export async function approveOvertime(overtimeId: number) {
       dayKind,
     });
 
+    // Snapshot rincian dasar (F-2026-10-25-024-S, BR-OT-09/BR-OT-11):
+    // pokok + HANYA komponen yang benar-benar ikut Σ di atas + total dasar
+    // final, dibekukan pada klaim atomik yang sama dengan calculatedValue.
+    // Tanpa snapshot ini rincian tidak bisa ditampilkan verbatim — membaca
+    // master komponen saat tampil akan menampilkan dasar master kini, bukan
+    // dasar saat approve. Baris yang sudah terhitung berhenti di gerbang
+    // idempotensi di atas, jadi snapshot ikut beku dan tidak ditulis ulang.
+    const overtimeBaseSnapshot = {
+      baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
+      components: fixedAssignments.map((a) => ({
+        name: a.component.name,
+        amount: Number(a.defaultAmount),
+      })),
+      baseTotal: baseSalary,
+      overtimeDate: new Date(ot.date).toISOString(),
+    };
+
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
       data: {
@@ -1185,6 +1205,7 @@ export async function approveOvertime(overtimeId: number) {
         // awal (idempotensi di atas).
         approvedAt: new Date(),
         calculatedValue,
+        overtimeBaseSnapshot,
       },
     });
     if (claim.count === 0) {

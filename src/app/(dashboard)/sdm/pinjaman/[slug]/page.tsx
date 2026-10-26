@@ -17,6 +17,8 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { loadLoanInstallmentHistory } from "@/lib/reports/loan-installment-history-data"
+import { LoanInstallmentHistorySection } from "../_components/loan-installment-history-section"
 export const metadata: Metadata = { title: "Pinjaman" }
 
 export default async function EmployeeLoanDetailPage({
@@ -40,6 +42,8 @@ export default async function EmployeeLoanDetailPage({
   )
 
   if (!loan) notFound()
+
+  const { history: installmentHistory } = await loadLoanInstallmentHistory(loan.id)
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,6 +82,10 @@ export default async function EmployeeLoanDetailPage({
           <DetailField label="Catatan" value={loan.notes} colSpan="full" />
         )}
       </DetailCard>
+
+      {installmentHistory ? (
+        <LoanInstallmentHistorySection history={installmentHistory} />
+      ) : null}
     </div>
   )
 }

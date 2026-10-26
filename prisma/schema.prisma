@@ -754,6 +754,18 @@ model Item {
   // (isProduct=false) tidak melahirkan StockMove/COGS — COGS Rp0 karena
   // nilai buku scrap Rp0 (066-V); dilarang mengarang cost fiktif.
   isScrapSaleItem      Boolean              @default(false) @map("is_scrap_sale_item")
+  // F-2026-10-25-042-V (vonis Q-ITX-1, spec F-2026-10-25-041-S): penampung
+  // default pajak per item. FK nullable ke Tax per arah (FK TaxGroup dan
+  // kolom teks kode transaksi DITOLAK vonis). Null = perilaku existing
+  // byte-sama; murni bantuan input + jejak rekonsiliasi, DILARANG memengaruhi
+  // angka TaxInvoice/SPT/jurnal (Putusan 6). defaultDppPercent = persen dari
+  // nilai baris yang menjadi DPP baris, BUKAN pengganti faktor 11/12 PMK-131
+  // kode dokumen (Putusan 2). Item scrap dilarang membawa default (Putusan 5).
+  defaultSalesTaxId    Int?                 @map("default_sales_tax_id")
+  defaultPurchaseTaxId Int?                 @map("default_purchase_tax_id")
+  defaultDppPercent    Decimal?             @map("default_dpp_percent") @db.Decimal(5, 2)
+  defaultSalesTax      Tax?                 @relation("ItemDefaultSalesTax", fields: [defaultSalesTaxId], references: [id], onDelete: SetNull)
+  defaultPurchaseTax   Tax?                 @relation("ItemDefaultPurchaseTax", fields: [defaultPurchaseTaxId], references: [id], onDelete: SetNull)
   trackBatch           Boolean              @default(false) @map("track_batch")
   trackSerial          Boolean              @default(false) @map("track_serial")
   isActive             Boolean              @default(true) @map("is_active")
@@ -1665,7 +1677,7 @@ model SalesInvoice {
   // Nomor faktur pajak keluaran (e-Faktur/Coretax). Opsional: faktur pajak
   // terbit di luar Silengkap, jadi dokumen lama/tanpa PPN tetap valid kosong.
   taxInvoiceNumber     String?               @map("tax_invoice_number")
-  documentNo           String                @unique @map("document_no")
+  documentNo           String?               @unique @map("document_no")
   customerId           Int                   @map("customer_id")
   salesOrderId         Int?                  @map("sales_order_id")
   quotationId          Int?                  @map("quotation_id")
@@ -3702,6 +3714,7 @@ model OvertimeRequest {
   mealHours            Decimal?  @map("meal_hours") @db.Decimal(5, 2)
   billableHours        Decimal?  @map("billable_hours") @db.Decimal(5, 2)
   calculatedValue      Decimal?  @map("calculated_value") @db.Decimal(15, 2)
+  overtimeBaseSnapshot Json?     @map("overtime_base_snapshot")
   reason               String?   @db.Text
   rejectionReason      String?   @map("rejection_reason") @db.Text
   status               String    @default("pending")
@@ -5309,6 +5322,8 @@ model Tax {
   updatedBy     Int?      @map("updated_by")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+  itemsDefaultSalesTax    Item[] @relation("ItemDefaultSalesTax")
+  itemsDefaultPurchaseTax Item[] @relation("ItemDefaultPurchaseTax")
 
   @@index([accountId])
   @@index([createdAt])
