@@ -66,6 +66,11 @@ describe("AC-LR-B2/B3 parse + format putar-balik", () => {
     ).toBe("harga")
   })
 
+  it("teks sebelum awalan -> tak-tercatat (BR-LR-06: hanya posisi 0 sah)", () => {
+    expect(parseLeadLostReasonCategory("catatan bebas [kalah:harga]")).toBeNull()
+    expect(parseLeadLostReasonCategory("harga mahal")).toBeNull()
+  })
+
   it("awalan key asing -> null (tak-tercatat), bukan kategori karangan", () => {
     expect(parseLeadLostReasonCategory("[kalah:asing-xyz] catatan")).toBeNull()
     expect(parseLeadLostReasonCategory(null)).toBeNull()
