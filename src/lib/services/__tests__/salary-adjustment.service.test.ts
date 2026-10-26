@@ -49,6 +49,17 @@ describe("salary adjustments", () => {
     const applied = await applyDueSalaryAdjustments(7, new Date("2026-02-01"))
 
     expect(applied).toBe(2)
+    // V-SA-6.2 (vonis PR #960): kunci argumen where persis — baris menunggu/
+    // ditolak/applied TIDAK boleh bocor ke penerapan. Mutasi yang mencabut
+    // filter status/employeeId/tanggal wajib memerahkan tes ini.
+    expect(adjustmentFindMany).toHaveBeenCalledWith({
+      where: {
+        employeeId: 7,
+        status: "scheduled",
+        effectiveDate: { lte: new Date("2026-02-01") },
+      },
+      orderBy: [{ effectiveDate: "asc" }, { id: "asc" }],
+    })
     // Riwayat berantai: snapshot "sebelum" baris kedua = gaji hasil baris pertama.
     expect(adjustmentUpdate).toHaveBeenNthCalledWith(
       1,
