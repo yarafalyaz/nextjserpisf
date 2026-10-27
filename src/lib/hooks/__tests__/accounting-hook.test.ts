@@ -86,6 +86,8 @@ const mocks = vi.hoisted(() => ({
   goodsReceiptCount: vi.fn(),
   vendorPaymentFindUniqueOrThrow: vi.fn(),
   payrollFindUniqueOrThrow: vi.fn(),
+  pkwtEventFindUnique: vi.fn().mockResolvedValue(null),
+  pkwtAccrualAggregate: vi.fn().mockResolvedValue({ _sum: { amount: null } }),
   itemUpdate: vi.fn(),
 }));
 
@@ -161,6 +163,8 @@ vi.mock("@/lib/db/prisma", () => ({
         mocks.payrollFindUniqueOrThrow(...a),
     },
     payrollComponentLine: { findMany: (...a: unknown[]) => pkwtLinesMock.findMany(...a) },
+    pkwtCompensationEvent: { findUnique: (...a: unknown[]) => mocks.pkwtEventFindUnique(...a) },
+    pkwtCompensationAccrual: { aggregate: (...a: unknown[]) => mocks.pkwtAccrualAggregate(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
   },
 }));
@@ -217,6 +221,7 @@ function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
       findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
       findUnique: mocks.invoiceFindUnique,
     },
+    // Penutup DP J-PL1/J-PL2 membaca keduanya; fixture tanpa DP tertaut.
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
     journalEntry: journalEntryBranch(),
     item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
@@ -525,6 +530,8 @@ describe("onSalesInvoicePosted", () => {
           update: mocks.itemUpdate,
         },
         uomConversion: { findMany: mocks.uomConversionFindMany },
+        // Jalur posting kini membaca pembayaran DP + snapshot DP untuk
+        // reklas/penutup J-PL1/J-PL2; fixture faktur ini tanpa DP tertaut.
         stockMove: { create: mocks.stockMoveCreate, findFirst: mocks.stockMoveFindFirst },
         inventoryLayer: {
           groupBy: vi.fn().mockResolvedValue([
@@ -1766,6 +1773,27 @@ describe("onPurchaseReturnProcessed", () => {
     expectEntry({ debit: 100, credit: 0, accountId: 220 }); // Dr. Variance 100 (loss)
   });
 
+  it("melegakan hutang sebesar price beku, bukan cost master yang bergerak (BUG-08)", async () => {
+    // Beli 10 @ price 100 (beku dari tagihan asal); cost master kini 120.
+    // Hutang yang dilegakan wajib 10 × 100 = 1.000, BUKAN 10 × 120 = 1.200.
+    // Biaya FIFO yang keluar stok tetap 10 × 50 = 500; sisanya varians.
+    mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "PR-1",
+      items: [{ qty: 10, cost: 120, price: 100 }],
+    });
+    mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: 50 }]);
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+
+    await onPurchaseReturnProcessed(1);
+
+    expectJournalRef("PurchaseReturn", 1000, 1000);
+    expectEntry({ debit: 1000, credit: 0, accountId: 210 }); // Dr. AP sebesar price beku
+    expectEntry({ debit: 0, credit: 500, accountId: 130 }); // Cr. Inventory biaya FIFO
+    expectEntry({ debit: 0, credit: 500, accountId: 220 }); // Cr. Variance (gain)
+  });
+
   it("creates balanced journal with variance gain (Dr) when return > inventory amount", async () => {
     // AP relief 600; Inventory relief 500
     seedPurchaseReturn(60);
@@ -2473,6 +2501,23 @@ describe("onPayrollPaid — kaki kompensasi PKWT (F-2026-10-24-132-V Putusan 5)"
     mocks.journalFindFirst.mockResolvedValue(null);
     await expect(onPayrollPaid(1)).rejects.toThrow("Snapshot akun baris kompensasi PKWT");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("TASK-018 (5) terakrual parsial: Dr utang dibatasi akrual, sisa ke beban", async () => {
+    // Peristiwa 2.500 baru terakrual 2.000 — debit utang penuh menyisakan
+    // saldo -500; jurnal wajib pecah 2.000 utang + 500 beban.
+    pkwtLinesMock.findMany.mockResolvedValue([
+      { pkwtEventId: 9, pkwtSettledViaAccrual: true, amount: 2500, accountIdSnapshot: 231 },
+    ]);
+    mocks.pkwtEventFindUnique.mockResolvedValue({ employeeId: 7, segmentStart: new Date("2026-01-01") });
+    mocks.pkwtAccrualAggregate.mockResolvedValue({ _sum: { amount: 2000 } });
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({ ...basePayroll(), grossSalary: 2500, netSalary: 1900 });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(1);
+    const entries = paymentEntries();
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 231, debit: 2000, credit: 0 }));
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 631, debit: 500, credit: 0 }));
+    expect(entries.reduce((s, e) => s + e.debit, 0)).toBe(entries.reduce((s, e) => s + e.credit, 0));
   });
 });
 

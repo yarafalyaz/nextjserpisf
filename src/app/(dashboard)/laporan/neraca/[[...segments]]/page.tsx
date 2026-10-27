@@ -14,7 +14,7 @@ import {
   statementOptionsToParams,
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display";
-import { parseReportPeriod } from "@/lib/reports/report-period";
+import { reportPeriodFromRoute } from "@/lib/reports/report-period";
 import { loadBalanceSheetStatement } from "@/lib/reports/statement-data";
 import { buildReportPdfHref } from "@/lib/reports/report-export";
 import { serializeStatementCsv } from "@/lib/reports/statement-csv";
@@ -31,12 +31,22 @@ export default async function BalanceSheetPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const user = await requirePermission("view_reports");
-  const [params, search] = await Promise.all([routeParams, searchParams]);
+  const search = await searchParams;
 
-  const now = new Date();
   // A balance sheet is a position "as of" a date, so the period slug resolves to
   // the END of whatever was picked: /laporan/neraca/2026-10 → per 31 Okt 2026.
-  const period = parseReportPeriod(params.segments?.[0] ?? search.date, { start: now, end: now });
+  // Periode dibaca hanya via helper bersama; tautan lama ?tanggalMulai=&
+  // tanggalSelesai= dihormati helper, dan ?date= (satu tanggal posisi)
+  // dinormalisasi menjadi pasangan legacy satu hari di sini.
+  const legacySearch = { ...search };
+  if (!legacySearch.tanggalMulai && !legacySearch.tanggalSelesai && search.date) {
+    legacySearch.tanggalMulai = search.date;
+    legacySearch.tanggalSelesai = search.date;
+  }
+  const period = await reportPeriodFromRoute(routeParams, Promise.resolve(legacySearch), (now) => ({
+    start: now,
+    end: now,
+  }));
   const asOfDate = new Date(period.end);
 
   const cookieStore = await cookies();
