@@ -15,8 +15,10 @@ import type { Metadata } from "next"
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
+import { loadOvertimeBaseSnapshot } from "@/lib/reports/overtime-base-snapshot-data"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { OvertimeBaseSnapshotFields } from "./_components/overtime-base-snapshot-fields"
 export const metadata: Metadata = { title: "Lembur" }
 
 export default async function OvertimeRequestDetailPage({
@@ -25,7 +27,10 @@ export default async function OvertimeRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const user = await requirePermission("view_overtime")
-  const canApprove = await hasPermission("approve_overtime_requests")
+  const [canApprove, canViewPayroll] = await Promise.all([
+    hasPermission("approve_overtime_requests"),
+    hasPermission("view_payroll"),
+  ])
   const scope = await getHrScope(user)
 
   const { slug } = await params
@@ -45,6 +50,8 @@ export default async function OvertimeRequestDetailPage({
   const project = overtime.projectId
     ? await prisma.project.findUnique({ where: { id: overtime.projectId }, select: { name: true } })
     : null
+
+  const overtimeBaseSnapshot = await loadOvertimeBaseSnapshot(overtime.id)
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,6 +98,7 @@ export default async function OvertimeRequestDetailPage({
         {overtime.calculatedValue != null && (
           <DetailField label="Nilai Kalkulasi" value={formatCurrency(Number(overtime.calculatedValue))} />
         )}
+        <OvertimeBaseSnapshotFields canViewPayroll={canViewPayroll} snapshot={overtimeBaseSnapshot} />
         <DetailField label="Status" value={<StatusChip status={overtime.status} />} />
         {overtime.reason && (
           <DetailField label="Alasan" value={overtime.reason} colSpan="full" />

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { SalesReturnForm } from "@/components/forms/sales-return-form"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -116,7 +117,7 @@ export default async function CreateSalesReturnPage({
         </Alert>
       )}
       <SalesReturnForm
-        invoices={invoices}
+        invoices={invoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) }))}
         customers={customers}
         items={items}
         // Form retur memakai prop `returnData` untuk men-seed nilai awal dan
