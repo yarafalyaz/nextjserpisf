@@ -3,7 +3,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
-import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
+import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
@@ -1506,6 +1506,76 @@ export async function onSalesReturnCompleted(
       );
     }
     await tx.journalEntry.createMany({ data: entryRows });
+
+    // TASK-011 BUG-04: jurnal di atas mengkredit Piutang (GL), jadi subledger
+    // faktur WAJIB turun dalam transaksi yang sama — pola recalc kanonis
+    // pembayaran (sales-payment.hook): outstanding = grandTotal - paidAmount,
+    // status diturunkan dari paidAmount vs grandTotal. Retur mengurangi
+    // grandTotal sebesar porsi yang masih terutang; kelebihan di atas sisa
+    // (faktur sudah lunas / terbayar lebih) menjadi CustomerCredit terstruktur
+    // (pola DownPayment/RevisionDown), bukan outstanding negatif.
+    if (
+      linkedToInvoice &&
+      priceTotal > 0 &&
+      salesReturn.salesInvoiceId != null &&
+      typeof tx.salesInvoice?.update === "function"
+    ) {
+      const inv = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId },
+        select: {
+          grandTotal: true,
+          paidAmount: true,
+          customerId: true,
+          documentNo: true,
+        },
+      });
+      const grandSen = Math.round(Number(inv.grandTotal) * 100);
+      const paidSen = Math.round(Number(inv.paidAmount) * 100);
+      if (Number.isFinite(grandSen) && Number.isFinite(paidSen)) {
+        const returnSen = Math.round(priceTotal * 100);
+        const reliefSen = Math.min(returnSen, Math.max(grandSen - paidSen, 0));
+        const excessSen = returnSen - reliefSen;
+        const newGrandSen = grandSen - reliefSen;
+        const invStatus: "posted" | "partial" | "paid" =
+          paidSen >= newGrandSen ? "paid" : paidSen > 0 ? "partial" : "posted";
+        await tx.salesInvoice.update({
+          where: { id: salesReturn.salesInvoiceId },
+          data: {
+            grandTotal: newGrandSen / 100,
+            totalAmount: newGrandSen / 100,
+            paidAmount: paidSen / 100,
+            status: invStatus,
+            paymentStatus: invStatus,
+          },
+        });
+        if (
+          excessSen > 0 &&
+          typeof tx.customerCredit?.findFirst === "function" &&
+          typeof tx.customerCredit?.create === "function"
+        ) {
+          const existingCredit = await tx.customerCredit.findFirst({
+            where: { sourceType: "SalesReturn", sourceId: returnId },
+          });
+          if (!existingCredit) {
+            const creditDocNo =
+              typeof generateDocumentNumber === "function"
+                ? await generateDocumentNumber("CC")
+                : `CC-RET-${returnId}`;
+            await tx.customerCredit.create({
+              data: {
+                documentNo: creditDocNo,
+                customerId: inv.customerId,
+                sourceType: "SalesReturn",
+                sourceId: returnId,
+                receivedAmount: excessSen / 100,
+                notes: `Kelebihan retur penjualan ${salesReturn.documentNo} atas faktur ${inv.documentNo ?? salesReturn.salesInvoiceId} yang sudah lunas. Bisa dipakai ulang / di-refund.`,
+                createdBy: userId ?? null,
+              },
+            });
+          }
+        }
+      }
+    }
   });
 }
 
@@ -1679,6 +1749,60 @@ export async function onPurchaseReturnProcessed(
           memo: e.memo,
         })),
       });
+    }
+
+    // TASK-011 BUG-04: jurnal di atas mendebit Hutang Usaha (GL), jadi
+    // subledger tagihan WAJIB turun dalam transaksi yang sama — pola recalc
+    // kanonis pembayaran vendor (confirmVendorPayment): sisa neto =
+    // (grandTotal - withholding) - paidAmount, status dari sisa. Tagihan asal
+    // dipilih seperti snapshot pajak retur (terbaru non-batal per PO).
+    // balanceDue yang turun membuat confirmVendorPayment menolak pembayaran
+    // melebihi sisa neto retur (alokasi dibatasi balanceDue + guard total).
+    if (
+      typeof tx.vendorBill?.findFirst === "function" &&
+      typeof tx.vendorBill?.update === "function"
+    ) {
+      const bill = await tx.vendorBill.findFirst({
+        where: {
+          purchaseOrderId: purchaseReturn.purchaseOrderId,
+          status: { in: ["posted", "partial", "paid"] },
+        },
+        orderBy: { id: "desc" },
+        select: {
+          id: true,
+          grandTotal: true,
+          paidAmount: true,
+          withholdingAmount: true,
+          balanceDue: true,
+        },
+      });
+      if (bill) {
+        const grandSen = Math.round(Number(bill.grandTotal) * 100);
+        const paidSen = Math.round(Number(bill.paidAmount) * 100);
+        const withholdingSen = Math.round(Number(bill.withholdingAmount ?? 0) * 100);
+        const balanceSen = Math.round(Number(bill.balanceDue) * 100);
+        if (
+          Number.isFinite(grandSen) &&
+          Number.isFinite(paidSen) &&
+          Number.isFinite(balanceSen)
+        ) {
+          const reliefSen = Math.min(Math.round(totalAmount * 100), Math.max(balanceSen, 0));
+          if (reliefSen > 0) {
+            const newGrandSen = grandSen - reliefSen;
+            const newBalanceSen = Math.max(newGrandSen - withholdingSen - paidSen, 0);
+            const billStatus: "posted" | "partial" | "paid" =
+              newBalanceSen <= 0 ? "paid" : paidSen > 0 ? "partial" : "posted";
+            await tx.vendorBill.update({
+              where: { id: bill.id },
+              data: {
+                grandTotal: newGrandSen / 100,
+                balanceDue: newBalanceSen / 100,
+                status: billStatus,
+              },
+            });
+          }
+        }
+      }
     }
   });
 }
