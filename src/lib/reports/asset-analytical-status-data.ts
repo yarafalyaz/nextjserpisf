@@ -92,6 +92,9 @@ export async function loadAssetAnalyticalStatuses(
   // jurnal lawan reversal ber-referenceType "Journal" sehingga tersaring
   // keluar — memasukkan REVERSED akan menghitung asli tanpa lawannya.
   // POSTED-saja sudah neto nol untuk pasangan reversal satu tingkat.
+  // TASK-025: reversal ganda ditolak di sumber (jurnal ber-referenceType
+  // "Journal" tidak boleh di-reverse lagi), jadi batas satu tingkat ini
+  // ditegakkan di jalur generik, bukan hanya diasumsikan.
   const journals = await prisma.journal.findMany({
     where: {
       referenceId: { in: assetIds },

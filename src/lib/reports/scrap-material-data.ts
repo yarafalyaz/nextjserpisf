@@ -141,7 +141,10 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
     // Tetap POSTED-saja (TASK-022): terfilter referenceType scrap; jurnal
     // lawan reversal ber-referenceType "Journal" tersaring keluar, jadi
     // pasangan reversal satu tingkat neto nol. Tanpa filter status, jurnal
-    // asli REVERSED terhitung penuh tanpa lawannya.
+    // asli REVERSED terhitung penuh tanpa lawannya. TASK-025: reversal
+    // ganda ditolak di sumber (jurnal ber-referenceType "Journal" tidak
+    // boleh di-reverse lagi), jadi batas satu tingkat ini ditegakkan di
+    // jalur generik, bukan hanya diasumsikan.
     prisma.journal.findMany({
       where: {
         referenceType: PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE,
