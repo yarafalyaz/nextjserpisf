@@ -16,35 +16,18 @@ import {
   CUSTOMER_CREDIT_QUEUE_TOTAL_LABEL,
   type CustomerCreditQueue,
   type CustomerCreditQueueCreditInput,
-  type CustomerCreditQueueDownPaymentInput,
 } from "@/lib/reports/customer-credit-queue"
-import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
+import {
+  creditQueueCredit,
+  creditQueueDay,
+  creditQueueDp,
+} from "@/lib/reports/__tests__/customer-credit-queue-fixtures"
 
 const NOW = new Date("2026-10-26T22:00:00.000Z") // 05:00 WIB, 27 Okt 2026
-const TODAY = getWibTodayUtcDate(NOW)
-const day = (offset: number) => new Date(TODAY.getTime() + offset * 86_400_000)
-
-function credit(
-  partial: Partial<CustomerCreditQueueCreditInput> & { creditId: number },
-): CustomerCreditQueueCreditInput {
-  return {
-    documentNo: `CC-${partial.creditId}`,
-    customerId: 7,
-    customerName: "CV Uji",
-    sourceType: "DownPayment",
-    sourceId: 100,
-    receivedAmount: 10_000_000,
-    allocatedAmount: 0,
-    refundedAmount: 0,
-    status: "open",
-    createdAt: day(-10),
-    ...partial,
-  }
-}
-
-const dp = (
-  partial: Partial<CustomerCreditQueueDownPaymentInput> & { downPaymentId: number },
-): CustomerCreditQueueDownPaymentInput => ({ ppnUangMuka: 1_000_000, ...partial })
+const day = creditQueueDay(NOW)
+const credit = (partial: Partial<CustomerCreditQueueCreditInput> & { creditId: number }) =>
+  creditQueueCredit(NOW, partial)
+const dp = creditQueueDp
 
 describe("CustomerCreditQueueCard 083-F AC-CCQ-F1..F3", () => {
   let root: Root | undefined
