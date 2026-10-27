@@ -25,7 +25,10 @@ const mocks = vi.hoisted(() => ({
   idemFindUnique: vi.fn(),
   idemUpdate: vi.fn(),
   dpFindUnique: vi.fn(),
+  dpFindMany: vi.fn(),
+  creditFindMany: vi.fn(),
   taxInvoiceFindFirst: vi.fn(),
+  taxInvoiceFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -106,6 +109,7 @@ function buildTx() {
     customerCredit: {
       findUniqueOrThrow: mocks.creditFindUnique,
       findFirst: mocks.creditFindFirst,
+      findMany: mocks.creditFindMany,
       create: mocks.creditCreate,
       update: mocks.creditUpdate,
     },
@@ -119,8 +123,8 @@ function buildTx() {
       findMany: mocks.paymentFindMany,
     },
     journal: { create: mocks.journalCreate, findFirst: vi.fn().mockResolvedValue(null) },
-    downPayment: { findUnique: mocks.dpFindUnique },
-    taxInvoice: { findFirst: mocks.taxInvoiceFindFirst },
+    downPayment: { findUnique: mocks.dpFindUnique, findMany: mocks.dpFindMany },
+    taxInvoice: { findFirst: mocks.taxInvoiceFindFirst, findMany: mocks.taxInvoiceFindMany },
     systemSetting: { findFirst: mocks.settingFindFirst },
     financialIdempotencyKey: {
       create: (...a: unknown[]) => mocks.idemCreate(...a),
@@ -173,7 +177,10 @@ describe("customer-credit.service", () => {
     mocks.creditUpdate.mockResolvedValue({})
     mocks.journalCreate.mockResolvedValue({ id: 1 })
     mocks.dpFindUnique.mockResolvedValue(null)
+    mocks.dpFindMany.mockResolvedValue([])
+    mocks.creditFindMany.mockResolvedValue([])
     mocks.taxInvoiceFindFirst.mockResolvedValue(null)
+    mocks.taxInvoiceFindMany.mockResolvedValue([])
   })
 
   it("alokasi normal: kurangi saldo + lunasi faktur + jurnal Dr 210102 / Cr Piutang TANPA kas", async () => {
@@ -615,6 +622,96 @@ describe("customer-credit.service", () => {
         data: expect.objectContaining({ refundedAmount: 12_000_000, status: "refunded" }),
       }),
     )
+  })
+
+  // F-2026-10-27-086-V Putusan 2 (W1–W6): gerbang FP UM refund kredit
+  // Quotation/RevisionDown. DP id 21 quotation 55: amount 11.200.000,
+  // snapshot PPN 1.200.000; FP UM aktif 010.000-26.00000021.
+  function seedTaxedDpQuotation(over: Record<string, unknown> = {}) {
+    seedCredit({ receivedAmount: 5_000_000, sourceType: "Quotation", sourceId: 55, ...over })
+    mocks.dpFindMany.mockResolvedValue([
+      {
+        id: 21, documentNo: "DP-2026-021", quotationId: 55, amount: 11_200_000, status: "confirmed",
+        vatTransactionCode: "04", vatRate: 12, vatDpp: 10_000_000, vatAmount: 1_200_000, vatTaxPeriod: "2026-01",
+      },
+    ])
+    mocks.taxInvoiceFindMany.mockResolvedValue([
+      { downPaymentId: 21, taxInvoiceNumber: "010.000-26.00000021" },
+    ])
+    mocks.paymentFindMany.mockResolvedValue([])
+    mocks.creditFindMany.mockResolvedValue([])
+  }
+
+  it("086-V W1: kredit Quotation + DP terutang FP UM aktif residu>0 -> refund DITOLAK menamai DP/FP", async () => {
+    seedTaxedDpQuotation()
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0861")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("DP-2026-021")
+    expect(r.error).toContain("010.000-26.00000021")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("086-V W1b: kredit RevisionDown kena gerbang sama", async () => {
+    seedTaxedDpQuotation({ sourceType: "RevisionDown" })
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0862")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("DP-2026-021")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("086-V W2+W5: FP UM batal -> refund lolos Dr 210102/Cr Kas TANPA kaki 210201", async () => {
+    seedTaxedDpQuotation()
+    mocks.taxInvoiceFindMany.mockResolvedValue([])
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0863")
+    expect(r.success).toBe(true)
+    const entries = mocks.journalCreate.mock.calls[0][0].data.entries.create as Array<{
+      accountId: number; debit: number; credit: number
+    }>
+    expect(entries).toEqual([
+      expect.objectContaining({ accountId: 210102, debit: 5_000_000, credit: 0 }),
+      expect.objectContaining({ accountId: 100, debit: 0, credit: 5_000_000 }),
+    ])
+    expect(entries.some((e) => e.accountId === 210201)).toBe(false)
+  })
+
+  it("086-V W3: DP teralokasi penuh (residu 0) tidak menahan", async () => {
+    seedTaxedDpQuotation()
+    mocks.paymentFindMany.mockResolvedValue([
+      { amount: 11_200_000, notes: "Uang muka dari DP DP-2026-021 untuk faktur INV-1" },
+    ])
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0864")
+    expect(r.success).toBe(true)
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("086-V W3b: residu habis oleh kredit DownPayment DP itu -> tidak menahan", async () => {
+    seedTaxedDpQuotation()
+    mocks.creditFindMany.mockResolvedValue([{ sourceId: 21, receivedAmount: 11_200_000 }])
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0865")
+    expect(r.success).toBe(true)
+  })
+
+  it("086-V W6: refund PARSIAL pada quotation tertahan tetap ditolak penuh", async () => {
+    seedTaxedDpQuotation()
+    const r = await refundCredit(1, 100_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0866")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("DP-2026-021")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("086-V 7a: DP legacy tanpa snapshot tidak menahan walau FP aktif", async () => {
+    seedCredit({ receivedAmount: 5_000_000, sourceType: "Quotation", sourceId: 55 })
+    mocks.dpFindMany.mockResolvedValue([
+      {
+        id: 21, documentNo: "DP-2026-021", quotationId: 55, amount: 11_200_000, status: "confirmed",
+        vatTransactionCode: null, vatRate: null, vatDpp: null, vatAmount: null, vatTaxPeriod: null,
+      },
+    ])
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0867")
+    expect(r.success).toBe(true)
+    expect(mocks.taxInvoiceFindMany).not.toHaveBeenCalled()
   })
 
   it("creditBalance = received - allocated - refunded", async () => {

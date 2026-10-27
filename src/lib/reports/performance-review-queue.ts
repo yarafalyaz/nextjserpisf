@@ -93,6 +93,9 @@ export const PERFORMANCE_QUEUE_EMPTY_TEXT =
 /** Tanda skor kosong di UI (spec §3: null → `—`). */
 export const PERFORMANCE_QUEUE_NO_SCORE_LABEL = "—"
 
+/** Label penanda baris tanpa sasaran (putusan kata Lead 27 Okt 2026, TEMUAN-1 PR #1138). */
+export const PERFORMANCE_QUEUE_NO_GOAL_LABEL = "Tanpa Sasaran"
+
 /**
  * Ambang mengendap Q-PFQ-1: satu-satunya tempat angka 7 hidup.
  * Mengendap mensyaratkan periodEnd sudah lewat DAN umur >= angka ini.
