@@ -227,6 +227,7 @@ export default async function CashFlowPage({
                 <td className="num">{amount(safeSubtract(data.inflow, data.outflow, 2))}</td>
               </tr>
             ))}
+            {/* Sisa terjustifikasi TASK-037: sel .stmt dokumen cetak — EmptyState (teks Tailwind px) merusak paritas layar/PDF 9pt. */}
             {sortedMonths.length === 0 ? (
               <tr>
                 <td colSpan={4} className="stmt-empty">Tidak ada mutasi kas pada periode ini</td>
