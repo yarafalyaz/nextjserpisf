@@ -16,6 +16,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { CanCreate } from "@/components/auth/can-create"
 import { MaterialRequestActions } from "../_components/material-request-actions"
 
@@ -134,7 +135,7 @@ export default async function MaterialRequestDetailPage({
         </div>
         <div className="p-4 px-5">
           {request.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada barang</p>
+            <EmptyState title="Tidak ada barang" />
           ) : (
             <div className="overflow-x-auto">
               <DetailTable>
@@ -173,7 +174,7 @@ export default async function MaterialRequestDetailPage({
         </div>
         <div className="p-4 px-5">
           {request.transfers.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada transfer</p>
+            <EmptyState title="Belum ada transfer" />
           ) : (
             <div className="overflow-x-auto">
               <DetailTable>

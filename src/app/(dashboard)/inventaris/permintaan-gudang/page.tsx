@@ -11,6 +11,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { entityHref } from "@/lib/utils/entity-url"
 
 export const metadata: Metadata = { title: "Permintaan Antar Gudang" }
@@ -22,7 +23,7 @@ function QueueSection({ title, rows }: { title: string; rows: MaterialRequestQue
         <h2 className="text-[0.9375rem] font-semibold text-foreground">{title}</h2>
       </div>
       {rows.length === 0 ? (
-        <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada permintaan</p>
+        <EmptyState title="Tidak ada permintaan" />
       ) : (
         <div className="overflow-x-auto">
           <DetailTable>

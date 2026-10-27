@@ -8,6 +8,7 @@ import { ReportSection } from '@/components/reports/report-section'
 import { ReportPeriodFilter } from '@/components/reports/report-period-filter'
 import { reportPeriodFromRoute } from '@/lib/reports/report-period'
 import { parseReportFilters } from '@/lib/reports/report-href'
+import { EmptyState } from "@/components/ui/empty-state"
 import { OpnameForm } from '../_components/opname-form'
 
 import type { Metadata } from 'next'
@@ -118,13 +119,11 @@ export default async function StockOpnamePage({
 
       {warehouseId == null ? (
         <ReportSection title="Lembar Penghitungan">
-          <p className="py-8 text-center text-sm text-muted-foreground">Pilih gudang terlebih dahulu.</p>
+          <EmptyState title="Pilih gudang terlebih dahulu." className="py-8" />
         </ReportSection>
       ) : rows.length === 0 ? (
         <ReportSection title="Lembar Penghitungan">
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Tidak ada barang bersaldo di gudang ini.
-          </p>
+          <EmptyState title="Tidak ada barang bersaldo di gudang ini." className="py-8" />
         </ReportSection>
       ) : (
         <OpnameForm warehouseId={warehouseId} date={date} rows={rows} />
