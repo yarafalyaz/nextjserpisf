@@ -214,6 +214,12 @@ export function SalaryAdjustmentPanel(props: SalaryAdjustmentPanelProps) {
                           {row.rejectionReason ? (
                             <span className="block text-xs text-muted-foreground">{row.rejectionReason}</span>
                           ) : null}
+                          {row.approvedBy != null ? (
+                            <span className="block text-xs text-muted-foreground">Disetujui oleh pengguna #{row.approvedBy}</span>
+                          ) : null}
+                          {row.rejectedBy != null ? (
+                            <span className="block text-xs text-muted-foreground">Ditolak oleh pengguna #{row.rejectedBy}</span>
+                          ) : null}
                           {row.decidedAt ? (
                             <span className="block text-xs text-muted-foreground">Diputus {formatDate(row.decidedAt)}</span>
                           ) : null}

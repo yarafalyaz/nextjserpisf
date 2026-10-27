@@ -167,6 +167,39 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     }
   })
 
+  it("aktor penyetuju/penolak tampil dari ID payload; baris menunggu tanpa aktor putusan (TEMUAN-1 PR #1079)", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    try {
+      const root = renderPanel(
+        container,
+        el(
+          base({
+            rows: [
+              row({ id: 1, status: "scheduled", approvedBy: 42, decidedAt: "2026-10-21T00:00:00.000Z" }),
+              row({ id: 2, status: "applied", approvedBy: 43, decidedAt: "2026-10-22T00:00:00.000Z" }),
+              row({ id: 3, status: "ditolak", rejectedBy: 44, rejectionReason: "Anggaran belum disetujui", decidedAt: "2026-10-23T00:00:00.000Z" }),
+              row({ id: 4, status: "menunggu" }),
+            ],
+          }),
+        ),
+      )
+      const text = container.textContent ?? ""
+      expect(text).toContain("Disetujui oleh pengguna #42")
+      expect(text).toContain("Disetujui oleh pengguna #43")
+      expect(text).toContain("Ditolak oleh pengguna #44")
+      // Baris menunggu (createdBy=3, approvedBy/rejectedBy=null) tidak menampilkan aktor putusan.
+      const waitingRow = Array.from(container.querySelectorAll("tbody tr")).find((tr) =>
+        tr.textContent?.includes("Menunggu"),
+      )
+      expect(waitingRow?.textContent).not.toContain("Disetujui oleh")
+      expect(waitingRow?.textContent).not.toContain("Ditolak oleh")
+      disposePanel(root, container)
+    } finally {
+      container.remove()
+    }
+  })
+
   it("status tak dikenal tampil apa adanya, tidak dipetakan paksa", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
