@@ -10,6 +10,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createRoleSchema, updateRoleSchema, rolePermissionIdsSchema } from "@/lib/validations/roles.schemas"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { assertCanGrantPermissions } from "@/lib/auth/role-grant"
 
 // Kontrak galat modul ini sengaja dibagi dua:
 //  - `createRole`/`updateRole` dipakai form halaman, jadi kegagalan yang bisa
@@ -19,30 +20,6 @@ import { nextSlug } from "@/lib/utils/slug-db"
 //  - `deleteRole` dipanggil dari komponen klien (DeleteButton) yang sudah
 //    menampilkan toast untuk error yang dilempar.
 // Galat tak terduga di keduanya tetap dilempar ke error boundary.
-
-// Least-privilege guard: a non-super-admin must not attach a permission they
-// don't already hold. Without this, a manage_roles holder could mint/modify
-// a role carrying manage_users / approve_workflows / etc. and escalate beyond
-// their own permission set (a privesc that bypasses the super_admin-name check,
-// since the role need not be named super_admin). super_admin bypasses.
-// Returns an error message when disallowed, otherwise null.
-async function assertCanGrantPermissions(
-  actor: { roles: string[]; permissions: string[] },
-  permissionIds: number[]
-): Promise<string | null> {
-  if (actor.roles.includes("super_admin")) return null
-  if (permissionIds.length === 0) return null
-  const requested = await prisma.permission.findMany({
-    where: { id: { in: permissionIds } },
-    select: { name: true },
-  })
-  const held = new Set(actor.permissions)
-  const missing = requested.filter((p) => !held.has(p.name)).map((p) => p.name)
-  if (missing.length > 0) {
-    return `Anda tidak dapat memberikan izin yang tidak Anda miliki: ${missing.join(", ")}`
-  }
-  return null
-}
 
 // Checkbox field berulang: getAll pertahankan nilai penuh; string kosong
 // (field absen/tak dicentang) berarti tanpa izin, bukan ID tidak valid.

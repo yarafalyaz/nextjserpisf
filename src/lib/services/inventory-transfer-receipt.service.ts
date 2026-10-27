@@ -38,6 +38,12 @@ export interface TransferLineState {
   receivedQty: number
   /** Serial terkirim beku dari process (atribusi FIFO sumber). */
   serialNumbers?: readonly string[] | null
+  /** Lot terkirim beku dari process (atribusi FIFO sumber). */
+  batchAllocations?: readonly { batchNumber: string; qty: number }[] | null
+  /** Penanda master Item; bila undefined diturunkan dari atribusi terkirim. */
+  trackSerial?: boolean
+  /** Penanda master Item; bila undefined diturunkan dari atribusi terkirim. */
+  trackBatch?: boolean
 }
 
 export interface ReceiptLineInput {
@@ -68,6 +74,57 @@ export function remainingSerials(
   return (line.serialNumbers ?? []).filter((s) => !received.has(s))
 }
 
+/** Lot tersimpan (Json) -> alokasi bersih; nilai non-array = kosong. */
+export function parseStoredBatches(
+  value: unknown,
+): { batchNumber: string; qty: number }[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry): { batchNumber: string; qty: number }[] => {
+    if (entry === null || Array.isArray(entry) || typeof entry !== "object") return []
+    const allocation = entry as { batchNumber?: unknown; qty?: unknown }
+    const qty = Number(allocation.qty)
+    if (typeof allocation.batchNumber !== "string" || !allocation.batchNumber.trim()) return []
+    if (!Number.isFinite(qty) || qty <= 0) return []
+    return [{ batchNumber: allocation.batchNumber.trim(), qty }]
+  })
+}
+
+/** Grup alokasi batch yang sudah diterima (riwayat kejadian) per baris transfer. */
+export function groupReceivedBatchesByLine(
+  rows: readonly { inventoryTransferItemId: number; batchAllocations: unknown }[],
+): Map<number, Map<string, number>> {
+  const byLine = new Map<number, Map<string, number>>()
+  for (const row of rows) {
+    const batches = parseStoredBatches(row.batchAllocations)
+    if (batches.length === 0) continue
+    const byBatch = byLine.get(row.inventoryTransferItemId) ?? new Map<string, number>()
+    for (const batch of batches) {
+      byBatch.set(batch.batchNumber, safeAdd(byBatch.get(batch.batchNumber) ?? 0, batch.qty, 2))
+    }
+    byLine.set(row.inventoryTransferItemId, byBatch)
+  }
+  return byLine
+}
+
+/** Lot terkirim yang masih tersisa sesudah riwayat kejadian sebelumnya. */
+export function remainingBatches(
+  line: TransferLineState,
+  alreadyReceived: ReadonlyMap<string, number>,
+): { batchNumber: string; qty: number }[] {
+  const shipped = new Map<string, number>()
+  for (const batch of line.batchAllocations ?? []) {
+    const name = String(batch.batchNumber ?? "").trim()
+    if (!name) continue
+    shipped.set(name, safeAdd(shipped.get(name) ?? 0, Number(batch.qty), 2))
+  }
+  const remaining: { batchNumber: string; qty: number }[] = []
+  for (const [batchNumber, qty] of shipped) {
+    const left = safeSubtract(qty, alreadyReceived.get(batchNumber) ?? 0, 2)
+    if (left > EPSILON) remaining.push({ batchNumber, qty: left })
+  }
+  return remaining
+}
+
 /**
  * Validasi SATU kejadian terima terhadap keadaan baris tersimpan.
  * Melempar Error Bahasa Indonesia; pemanggil (aksi/hook) wajib sudah
@@ -77,6 +134,7 @@ export function validateReceiptLines(
   lines: readonly TransferLineState[],
   inputs: readonly ReceiptLineInput[],
   alreadyReceivedSerialsByLine: ReadonlyMap<number, readonly string[]>,
+  alreadyReceivedBatchesByLine: ReadonlyMap<number, ReadonlyMap<string, number>> = new Map(),
 ): ReceiptLineInput[] {
   if (inputs.length === 0) {
     throw new Error("Penerimaan wajib memiliki minimal satu baris diterima.")
@@ -84,6 +142,55 @@ export function validateReceiptLines(
   const lineById = new Map(lines.map((l) => [l.id, l]))
   const seen = new Set<number>()
   const normalized: ReceiptLineInput[] = []
+
+  // Pool per item: atribusi FIFO disimpan satu baris per item (lihat
+  // onTransferProcessed), jadi baris duplikat item yang sama berbagi pool
+  // serial/lot yang sama. Penanda master juga dinilai per item.
+  const shippedSerialPoolByItem = new Map<number, string[]>()
+  const shippedBatchPoolByItem = new Map<number, Map<string, number>>()
+  const trackSerialByItem = new Map<number, boolean | undefined>()
+  const trackBatchByItem = new Map<number, boolean | undefined>()
+  const alreadySerialPoolByItem = new Map<number, Set<string>>()
+  const alreadyBatchPoolByItem = new Map<number, Map<string, number>>()
+  for (const l of lines) {
+    const serialPool = shippedSerialPoolByItem.get(l.itemId) ?? []
+    for (const serial of l.serialNumbers ?? []) {
+      if (!serialPool.includes(serial)) serialPool.push(serial)
+    }
+    shippedSerialPoolByItem.set(l.itemId, serialPool)
+
+    const batchPool = shippedBatchPoolByItem.get(l.itemId) ?? new Map<string, number>()
+    for (const batch of l.batchAllocations ?? []) {
+      const name = String(batch.batchNumber ?? "").trim()
+      if (!name) continue
+      batchPool.set(name, safeAdd(batchPool.get(name) ?? 0, Number(batch.qty), 2))
+    }
+    shippedBatchPoolByItem.set(l.itemId, batchPool)
+
+    if (l.trackSerial === true || trackSerialByItem.get(l.itemId) === true) {
+      trackSerialByItem.set(l.itemId, true)
+    } else if (l.trackSerial !== undefined && trackSerialByItem.get(l.itemId) === undefined) {
+      trackSerialByItem.set(l.itemId, l.trackSerial)
+    }
+    if (l.trackBatch === true || trackBatchByItem.get(l.itemId) === true) {
+      trackBatchByItem.set(l.itemId, true)
+    } else if (l.trackBatch !== undefined && trackBatchByItem.get(l.itemId) === undefined) {
+      trackBatchByItem.set(l.itemId, l.trackBatch)
+    }
+
+    const alreadySerialPool = alreadySerialPoolByItem.get(l.itemId) ?? new Set<string>()
+    for (const serial of alreadyReceivedSerialsByLine.get(l.id) ?? []) alreadySerialPool.add(serial)
+    alreadySerialPoolByItem.set(l.itemId, alreadySerialPool)
+
+    const alreadyBatchPool = alreadyBatchPoolByItem.get(l.itemId) ?? new Map<string, number>()
+    for (const [name, qty] of alreadyReceivedBatchesByLine.get(l.id) ?? new Map<string, number>()) {
+      alreadyBatchPool.set(name, safeAdd(alreadyBatchPool.get(name) ?? 0, qty, 2))
+    }
+    alreadyBatchPoolByItem.set(l.itemId, alreadyBatchPool)
+  }
+  const eventSerialsByItem = new Map<number, Set<string>>()
+  const eventBatchQtyByItem = new Map<number, Map<string, number>>()
+
   for (const input of inputs) {
     const line = lineById.get(input.transferItemId)
     if (!line) {
@@ -103,27 +210,69 @@ export function validateReceiptLines(
       )
     }
     const serials = [...(input.serialNumbers ?? [])].map((s) => String(s).trim()).filter(Boolean)
-    if (serials.length > 0) {
+    const shippedSerialsForItem = shippedSerialPoolByItem.get(line.itemId) ?? []
+    const effectiveShippedSerials =
+      shippedSerialsForItem.length > 0 ? shippedSerialsForItem : [...(line.serialNumbers ?? [])]
+    const itemTrackSerial = trackSerialByItem.get(line.itemId)
+    const isSerialTracked =
+      line.trackSerial !== undefined
+        ? line.trackSerial
+        : itemTrackSerial !== undefined
+          ? itemTrackSerial
+          : effectiveShippedSerials.length > 0
+    const alreadySerialPool = alreadySerialPoolByItem.get(line.itemId) ?? new Set<string>()
+    const stillOutSerials = new Set(effectiveShippedSerials.filter((s) => !alreadySerialPool.has(s)))
+    const eventSerials = eventSerialsByItem.get(line.itemId) ?? new Set<string>()
+
+    if (isSerialTracked) {
+      if (serials.length === 0) {
+        throw new Error(
+          `Item berseri pada baris #${input.transferItemId} memerlukan tepat ${input.qty} nomor seri terpilih.`,
+        )
+      }
       if (new Set(serials).size !== serials.length) {
         throw new Error(`Nomor seri duplikat dalam penerimaan baris #${input.transferItemId}.`)
       }
-      const stillOut = new Set(remainingSerials(line, alreadyReceivedSerialsByLine.get(line.id) ?? []))
       for (const serial of serials) {
-        if (!stillOut.has(serial)) {
+        if (eventSerials.has(serial)) {
+          throw new Error(`Nomor seri duplikat dalam penerimaan baris #${input.transferItemId}.`)
+        }
+        if (!stillOutSerials.has(serial)) {
           throw new Error(
             `Nomor seri ${serial} bukan serial terkirim yang masih belum diterima pada baris #${input.transferItemId}.`,
           )
         }
       }
-      // Serial-tracked: satu qty = satu serial (pola hook existing revive
-      // per serial). Item serial pada baris ini dikenali dari serialNumbers
-      // terkirim yang terisi.
-      if ((line.serialNumbers ?? []).length > 0 && serials.length !== input.qty) {
+      if (Math.abs(serials.length - input.qty) > EPSILON) {
         throw new Error(
           `Item berseri pada baris #${input.transferItemId} memerlukan tepat ${input.qty} nomor seri terpilih.`,
         )
       }
+      for (const serial of serials) eventSerials.add(serial)
+      eventSerialsByItem.set(line.itemId, eventSerials)
+    } else if (serials.length > 0) {
+      if (new Set(serials).size !== serials.length) {
+        throw new Error(`Nomor seri duplikat dalam penerimaan baris #${input.transferItemId}.`)
+      }
+      for (const serial of serials) {
+        if (eventSerials.has(serial)) {
+          throw new Error(`Nomor seri duplikat dalam penerimaan baris #${input.transferItemId}.`)
+        }
+        if (!stillOutSerials.has(serial)) {
+          throw new Error(
+            `Nomor seri ${serial} bukan serial terkirim yang masih belum diterima pada baris #${input.transferItemId}.`,
+          )
+        }
+      }
+      if (effectiveShippedSerials.length > 0 && Math.abs(serials.length - input.qty) > EPSILON) {
+        throw new Error(
+          `Item berseri pada baris #${input.transferItemId} memerlukan tepat ${input.qty} nomor seri terpilih.`,
+        )
+      }
+      for (const serial of serials) eventSerials.add(serial)
+      eventSerialsByItem.set(line.itemId, eventSerials)
     }
+
     const batches = (input.batchAllocations ?? []).map((b) => ({
       batchNumber: String(b.batchNumber ?? "").trim(),
       qty: Number(b.qty),
@@ -133,9 +282,74 @@ export function validateReceiptLines(
         throw new Error(`Alokasi batch tidak valid pada baris #${input.transferItemId}.`)
       }
     }
+    const batchQtyByNumber = new Map<string, number>()
+    for (const batch of batches) {
+      batchQtyByNumber.set(batch.batchNumber, safeAdd(batchQtyByNumber.get(batch.batchNumber) ?? 0, batch.qty, 2))
+    }
     const batchTotal = batches.reduce((sum, b) => safeAdd(sum, b.qty, 2), 0)
-    if (batchTotal - input.qty > EPSILON) {
-      throw new Error(`Alokasi batch melebihi qty diterima pada baris #${input.transferItemId}.`)
+    const shippedBatchForItem = shippedBatchPoolByItem.get(line.itemId) ?? new Map<string, number>()
+    const lineBatchMap = new Map<string, number>()
+    for (const batch of line.batchAllocations ?? []) {
+      const name = String(batch.batchNumber ?? "").trim()
+      if (name) lineBatchMap.set(name, safeAdd(lineBatchMap.get(name) ?? 0, Number(batch.qty), 2))
+    }
+    const effectiveShippedBatches = shippedBatchForItem.size > 0 ? shippedBatchForItem : lineBatchMap
+    const itemTrackBatch = trackBatchByItem.get(line.itemId)
+    const isBatchTracked =
+      line.trackBatch !== undefined
+        ? line.trackBatch
+        : itemTrackBatch !== undefined
+          ? itemTrackBatch
+          : effectiveShippedBatches.size > 0
+    const alreadyBatchPool = alreadyBatchPoolByItem.get(line.itemId) ?? new Map<string, number>()
+    const eventBatchQty = eventBatchQtyByItem.get(line.itemId) ?? new Map<string, number>()
+
+    const assertBatchTotalExact = () => {
+      if (Math.abs(batchTotal - input.qty) > EPSILON) {
+        if (batchTotal - input.qty > EPSILON) {
+          throw new Error(`Alokasi batch melebihi qty diterima pada baris #${input.transferItemId}.`)
+        }
+        throw new Error(
+          `Alokasi batch pada baris #${input.transferItemId} hanya ${batchTotal} dari qty diterima (${input.qty}); alokasi batch wajib menjumlah tepat sama dengan qty diterima.`,
+        )
+      }
+    }
+    const assertBatchLotsShipped = () => {
+      for (const [batchNumber, allocQty] of batchQtyByNumber) {
+        if (!effectiveShippedBatches.has(batchNumber)) {
+          throw new Error(`Lot ${batchNumber} bukan lot terkirim pada baris #${input.transferItemId}.`)
+        }
+        const shippedQty = effectiveShippedBatches.get(batchNumber) ?? 0
+        const alreadyQty = alreadyBatchPool.get(batchNumber) ?? 0
+        const eventQty = eventBatchQty.get(batchNumber) ?? 0
+        const remainingForLot = safeSubtract(safeSubtract(shippedQty, alreadyQty, 2), eventQty, 2)
+        if (allocQty - remainingForLot > EPSILON) {
+          throw new Error(
+            `Alokasi lot ${batchNumber} (${allocQty}) melebihi sisa lot terkirim (${remainingForLot}) pada baris #${input.transferItemId}.`,
+          )
+        }
+      }
+    }
+
+    if (isBatchTracked) {
+      if (batches.length === 0) {
+        throw new Error(
+          `Item batch pada baris #${input.transferItemId} memerlukan alokasi nomor batch sejumlah qty diterima.`,
+        )
+      }
+      assertBatchTotalExact()
+      assertBatchLotsShipped()
+      for (const [name, qty] of batchQtyByNumber) {
+        eventBatchQty.set(name, safeAdd(eventBatchQty.get(name) ?? 0, qty, 2))
+      }
+      eventBatchQtyByItem.set(line.itemId, eventBatchQty)
+    } else if (batches.length > 0) {
+      assertBatchTotalExact()
+      if (effectiveShippedBatches.size > 0) assertBatchLotsShipped()
+      for (const [name, qty] of batchQtyByNumber) {
+        eventBatchQty.set(name, safeAdd(eventBatchQty.get(name) ?? 0, qty, 2))
+      }
+      eventBatchQtyByItem.set(line.itemId, eventBatchQty)
     }
     normalized.push({
       transferItemId: input.transferItemId,

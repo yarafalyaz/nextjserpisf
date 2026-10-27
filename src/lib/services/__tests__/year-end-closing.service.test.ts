@@ -146,6 +146,18 @@ describe("postYearEndClosing", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
+  it("TASK-014: pasangan REVERSED+POSTED neto nol -> tidak ada jurnal penutup sebelah", async () => {
+    // Asli REVERSED kredit 1000 + lawan POSTED debit 1000 pada akun pendapatan
+    // yang sama harus neto nol. Loader/builder lama hanya POSTED → hanya
+    // debit lawan yang dihitung, menghasilkan penutup kredit yatim.
+    mocks.journalEntryFindMany.mockResolvedValue([
+      { ...entry(1, { credit: 1000 }), journal: { status: "REVERSED" } },
+      { ...entry(1, { debit: 1000, credit: 0 }), journal: { status: "POSTED" } },
+    ])
+    await expect(postYearEndClosing(2025, 3)).rejects.toThrow("Tidak ada saldo akun laba/rugi")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
   it("E121-10: baris jurnal DRAFT tidak ikut saldo posting", async () => {
     // Builder menyaring status; loader meniru query POSTED, jadi DRAFT yang
     // bocor dari pemanggil lain tetap dibuang builder (kredit 999 tak dihitung).
