@@ -76,7 +76,8 @@ export async function installBaseData(input: InstallInput): Promise<{ adminEmail
   const adminEmail = input.adminEmail.trim().toLowerCase()
   const adminPasswordHash = await bcrypt.hash(input.adminPassword, 12)
 
-  return prisma.$transaction(
+  try {
+    return await prisma.$transaction(
     async (tx) => {
     // Serialize concurrent first-install attempts on the singleton
     // `system_settings` row, then re-count users inside the transaction.
@@ -246,5 +247,14 @@ export async function installBaseData(input: InstallInput): Promise<{ adminEmail
     return { adminEmail }
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  )
+    )
+  } catch (e: unknown) {
+    // Kalah balapan Serializable: Prisma melempar P2034 sebelum cek ulang
+    // di dalam transaksi sempat berjalan. Bagi pengguna kedua itu tetap
+    // berarti aplikasi sudah terpasang oleh pemenang.
+    if (e && typeof e === "object" && "code" in e && (e as { code?: unknown }).code === "P2034") {
+      throw new Error("Aplikasi sudah terpasang.")
+    }
+    throw e
+  }
 }
