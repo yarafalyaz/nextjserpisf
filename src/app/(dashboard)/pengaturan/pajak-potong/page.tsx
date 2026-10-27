@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -67,8 +68,8 @@ export default async function WithholdingTaxTypesPage() {
           ))}
           {types.length === 0 && (
             <DetailTableRow>
-              <DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">
-                Belum ada jenis PPh. Tambahkan agar pemotongan PPh pada tagihan pemasok bisa dijurnal.
+              <DetailTableTd colSpan={5} className="py-6">
+                <EmptyState title="Belum ada jenis PPh" description="Tambahkan agar pemotongan PPh pada tagihan pemasok bisa dijurnal." className="py-0" />
               </DetailTableTd>
             </DetailTableRow>
           )}

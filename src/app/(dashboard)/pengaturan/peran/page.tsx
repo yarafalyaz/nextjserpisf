@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -52,7 +53,9 @@ export default async function RolesPage() {
             <DetailTableBody>
               {roles.length === 0 ? (
                 <DetailTableRow>
-                  <DetailTableTd colSpan={6} className="text-center py-10 text-muted-foreground">Belum ada peran</DetailTableTd>
+                  <DetailTableTd colSpan={6} className="py-10">
+                    <EmptyState title="Belum ada peran" className="py-0" />
+                  </DetailTableTd>
                 </DetailTableRow>
               ) : (
                 roles.map((role) => (
