@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 379 permission dikelompokkan per modul (15 modul). */
+/** 383 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -89,6 +89,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "warehouses", permissionKey: "create_warehouses", label: "Gudang" },
     { key: "edit", resource: "warehouses", permissionKey: "edit_warehouses", label: "Gudang" },
     { key: "delete", resource: "warehouses", permissionKey: "delete_warehouses", label: "Gudang" },
+    { key: "view", resource: "sensitive_identity", permissionKey: "view_sensitive_identity", label: "Identitas Sensitif Karyawan" },
     { key: "view", resource: "positions", permissionKey: "view_positions", label: "Jabatan" },
     { key: "create", resource: "positions", permissionKey: "create_positions", label: "Jabatan" },
     { key: "edit", resource: "positions", permissionKey: "edit_positions", label: "Jabatan" },
@@ -227,6 +228,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   ],
   inventory: [
     { key: "view", resource: "stock_moves", permissionKey: "view_stock_moves", label: "Mutasi Stok" },
+    { key: "view", resource: "cost_amounts", permissionKey: "view_cost_amounts", label: "Nilai HPP/Biaya" },
     { key: "view", resource: "material_issues", permissionKey: "view_material_issues", label: "Pengeluaran Material" },
     { key: "create", resource: "material_issues", permissionKey: "create_material_issues", label: "Pengeluaran Material" },
     { key: "edit", resource: "material_issues", permissionKey: "edit_material_issues", label: "Pengeluaran Material" },
@@ -292,6 +294,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "leave_requests", permissionKey: "edit_leave_requests", label: "Cuti" },
     { key: "delete", resource: "leave_requests", permissionKey: "delete_leave_requests", label: "Cuti" },
     { key: "approve", resource: "leave_requests", permissionKey: "approve_leave_requests", label: "Cuti" },
+    { key: "view", resource: "subordinate_data", permissionKey: "view_subordinate_data", label: "Data Bawahan (Struktur Organisasi)" },
     { key: "create", resource: "holidays", permissionKey: "create_holidays", label: "Hari Libur" },
     { key: "edit", resource: "holidays", permissionKey: "edit_holidays", label: "Hari Libur" },
     { key: "delete", resource: "holidays", permissionKey: "delete_holidays", label: "Hari Libur" },

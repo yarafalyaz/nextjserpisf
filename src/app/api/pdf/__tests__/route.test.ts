@@ -373,7 +373,9 @@ describe("GET /api/pdf", () => {
       await GET(request("laporan=neraca-saldo&periode=2026-10&pembanding=2026-09-30"))
 
       const [, compareDate] = mocks.loadTrialBalanceReport.mock.calls[0]
-      expect(compareDate).toEqual(new Date("2026-09-30T23:59:59"))
+      // B9: akhir hari penuh (.999) seperti layar — jurnal 23:59:59.500
+      // tidak boleh hilang di PDF.
+      expect(compareDate).toEqual(new Date("2026-09-30T23:59:59.999"))
     })
   })
 

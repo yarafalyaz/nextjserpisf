@@ -9,14 +9,15 @@
  *    memasukkan PPN ke perbandingan dan memunculkan selisih palsu sebesar pajak.
  * 2. **Hanya baris penerimaan dari penerimaan yang benar-benar masuk** (`verified`/`completed`).
  *    Penerimaan draft belum mengubah persediaan maupun GRNI.
- * 3. **Tagihan yang sudah membatalkan (cancelled) tidak dikurangkan**, sementara
- *    tagihan **draft IKUT** dihitung. Alasannya ada di `createVendorBill`: AP
- *    journal (Dr Clearing / Cr Hutang) sudah diposting SAAT tagihan dibuat
- *    (`onVendorBillPosted` dipanggil di dalam transaksi yang sama), jadi draft
- *    sudah membersihkan akun GRNI di buku besar — mengabaikannya membuat sisa
- *    dokumen terlihat lebih besar daripada saldo akun. Perlakuan yang sama dipakai
- *    penjagaan 3-way match (`assertThreeWayMatch` menghitung semua tagihan
- *    non-cancelled).
+ * 3. **Hanya tagihan yang sudah diposting yang dikurangkan.** Tagihan draft
+ *    MURNI tanpa jurnal (kontrak P0-2 di `createVendorBill`/`updateVendorBill`):
+ *    jurnal AP (Dr Clearing / Cr Hutang) baru lahir di `confirmVendorBill`,
+ *    jadi draft belum membersihkan akun GRNI di buku besar — mengikutkannya
+ *    membuat sisa dokumen lebih kecil daripada saldo akun dan memunculkan
+ *    selisih palsu. Tagihan cancelled juga tidak dikurangkan karena jurnalnya
+ *    sudah dibalik. (Penjaga 3-way match memang menghitung draft juga, tetapi
+ *    sebagai reservasi plafon anti-tagih-ganda — bukan pengakuan GL, jadi
+ *    perlakuan di laporan ini sengaja berbeda.)
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -74,9 +75,9 @@ export async function loadReceivedNotBilled(period: {
     ? await prisma.vendorBillItem.findMany({
         where: {
           goodsReceiptItemId: { in: lineIds },
-          // Lihat catatan 3 di atas: tagihan draft sudah menjurnal AP-nya, jadi
-          // hanya tagihan yang dibatalkan yang tidak dikurangkan.
-          vendorBill: { status: { not: "cancelled" } },
+          // Lihat catatan 3 di atas: draft belum menjurnal (draft murni), jadi
+          // hanya tagihan terposting (posted/partial/paid) yang dikurangkan.
+          vendorBill: { status: { notIn: ["draft", "cancelled"] } },
         },
         select: { goodsReceiptItemId: true, subtotal: true },
       })
