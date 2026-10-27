@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     customer: buildModelMock(),
     item: buildModelMock(),
     productionOrderMaterial: buildModelMock(),
+    bomRevisionMaterial: buildModelMock(),
     productionGenealogy: buildModelMock(),
     productMaterial: buildModelMock(),
     bomRevision: buildModelMock(),
@@ -60,6 +61,7 @@ const mocks = vi.hoisted(() => {
     requirePermissionMock: vi.fn(),
     consumeFifoLayersMock: vi.fn(),
     productionIssueJournalMock: vi.fn(),
+    productionAbnormalScrapJournalMock: vi.fn(),
     assertPeriodOpenMock: vi.fn(),
     warehouseScopeMock: vi.fn(),
     createInLayerMock: vi.fn(),
@@ -88,7 +90,7 @@ vi.mock("@/lib/services/stock-journal.service", () => ({
     onProductionOrderMaterialIssue: (...args: any[]) => mocks.productionIssueJournalMock(...args),
     onProductionOrderCompleted: (...args: any[]) => mocks.productionCompletionJournalMock(...args),
     onProductionOrderCostRoundingVariance: (...args: any[]) => mocks.productionRoundingJournalMock(...args),
-    onProductionOrderAbnormalScrap: vi.fn(async () => undefined),
+    onProductionOrderAbnormalScrap: (...args: any[]) => mocks.productionAbnormalScrapJournalMock(...args),
   },
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
@@ -122,6 +124,7 @@ beforeEach(() => {
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.warehouseScopeMock.mockResolvedValue({ kind: "all" })
   mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 42, shortfall: 0 })
+  mocks.productionAbnormalScrapJournalMock.mockResolvedValue(null)
   mocks.assertPeriodOpenMock.mockResolvedValue(undefined)
   mocks.createInLayerMock.mockResolvedValue(undefined)
   mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1 }])
@@ -550,6 +553,70 @@ describe("Production Order Actions", () => {
     )
   })
 
+  it("TASK-019: abnormal scrap terjurnal mengurangi pool WIP — WIP job tidak negatif setelah complete", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: null,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    // Issue 10 × Rp100 = Rp1.000; scrap 4 dengan allowance 10% × rencana 10
+    // = 1 normal, 3 abnormal × Rp100 = Rp300 terjurnal (flag ON).
+    mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 1000, shortfall: 0 })
+    mocks.prismaMock.productionOrderMaterial.findFirst.mockResolvedValue({
+      id: 77, qty: 10, actualQty: 0, actualCost: 0, serialNumbers: [], batchNumbers: [],
+      scrapPercentSnapshot: 10, scrapQty: 0, scrapNormalQtySnapshot: 0,
+      scrapAbnormalQtySnapshot: 0, scrapNormalValueSnapshot: 0,
+      scrapAbnormalValueSnapshot: 0, scrapReviewStatus: null,
+    })
+    mocks.productionAbnormalScrapJournalMock.mockResolvedValue({ id: 55, journalNumber: "JRN-55" })
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 10, scrapQty: 4, scrapReasonCode: "rusak_material" }])
+
+    expect(res.success).toBe(true)
+    expect(mocks.productionAbnormalScrapJournalMock).toHaveBeenCalledWith(
+      mocks.prismaMock, 300, "MO-008", 99, 1,
+    )
+    const updateCall = mocks.prismaMock.productionOrder.update.mock.calls.find(
+      (c: any[]) => c[0]?.data?.totalActualCost !== undefined,
+    )
+    // Pool WIP = 1.000 − 300 abnormal terjurnal = 700. Kredit complete nanti
+    // memakai pool ini: Dr WIP 1.000 − Cr abnormal 300 − Cr FG 700 = 0.
+    expect(updateCall[0].data.totalActualCost).toBe(700)
+    expect(1000 - 300 - updateCall[0].data.totalActualCost).toBe(0)
+  })
+
+  it("TASK-019: abnormal belum terjurnal (flag OFF) tidak mengurangi pool WIP", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: null,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 1000, shortfall: 0 })
+    mocks.prismaMock.productionOrderMaterial.findFirst.mockResolvedValue({
+      id: 77, qty: 10, actualQty: 0, actualCost: 0, serialNumbers: [], batchNumbers: [],
+      scrapPercentSnapshot: 10, scrapQty: 0, scrapNormalQtySnapshot: 0,
+      scrapAbnormalQtySnapshot: 0, scrapNormalValueSnapshot: 0,
+      scrapAbnormalValueSnapshot: 0, scrapReviewStatus: null,
+    })
+    mocks.productionAbnormalScrapJournalMock.mockResolvedValue(null)
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 10, scrapQty: 4, scrapReasonCode: "rusak_material" }])
+
+    expect(res.success).toBe(true)
+    const updateCall = mocks.prismaMock.productionOrder.update.mock.calls.find(
+      (c: any[]) => c[0]?.data?.totalActualCost !== undefined,
+    )
+    expect(updateCall[0].data.totalActualCost).toBe(1000)
+  })
+
   it("receives finished output, updates inventory layers, and transfers WIP on completion", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8,
@@ -913,6 +980,27 @@ describe("Production Order Actions", () => {
     }))
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.productionOrderMaterial.createMany).toHaveBeenCalled()
+  })
+
+  it("TASK-019: updateProductionOrder mempertahankan snapshot ter-pin walau BOM hidup berubah", async () => {
+    // Order lahir dari revisi 77: item 9 qty 8 untuk order qty 4 (2/unit),
+    // scrapPercentSnapshot beku 5%. BOM hidup sudah diedit: item 9 jadi
+    // 99/unit dan item 10 baru muncul — keduanya tidak boleh masuk acuan.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", documentNo: "MO-001", productId: 1, qty: 4, bomRevisionId: 77,
+      materials: [{ itemId: 9, qty: 8, standardCost: 25, scrapPercentSnapshot: 5 }],
+    })
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({
+      id: 1, standardCost: 100,
+      materials: [{ itemId: 9, qty: 99 }, { itemId: 10, qty: 7 }],
+    })
+
+    const res = await actions.updateProductionOrder(1, fdMap({ productId: 1, qty: 6 }))
+
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.productionOrderMaterial.createMany).toHaveBeenCalledWith({
+      data: [{ productionOrderId: 1, itemId: 9, qty: 12, standardCost: 25, scrapPercentSnapshot: 5 }],
+    })
   })
 
   it("updateProductionOrder handles validation error", async () => {
