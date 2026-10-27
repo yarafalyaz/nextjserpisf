@@ -13,6 +13,12 @@ vi.mock("@/actions/sales.actions", () => ({
   createSalesInvoice: vi.fn().mockResolvedValue({ success: true }),
   updateSalesInvoice: vi.fn().mockResolvedValue({ success: true }),
 }))
+vi.mock("@/actions/credit-override.actions", () => ({
+  getMyCreditOverrideStatus: vi.fn(),
+  approveCreditOverride: vi.fn(),
+  rejectCreditOverride: vi.fn(),
+  listCreditOverrides: vi.fn(),
+}))
 
 const baseProps = {
   customers: [{ id: 1, name: "Pelanggan A" }],
