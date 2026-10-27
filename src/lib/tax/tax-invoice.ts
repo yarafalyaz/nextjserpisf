@@ -208,9 +208,16 @@ export interface ChainInvoice {
 /**
  * Efektif SPT per rantai pengganti (F-001): hanya kepala rantai terakhir
  * yang bernilai; yang diganti tampil referensi nol-efek. Rantai diurut
- * asal → pengganti; kepala = elemen terakhir berstatus bukan `cancelled`.
+ * asal → pengganti; kepala = elemen terakhir berstatus bukan
+ * `cancelled`/`replaced`. Kepala hanya bernilai bila `approved`:
+ * `rejected` (ditolak DJP) dan `draft` (belum ada bukti DJP) nol-efek —
+ * keduanya tidak menambah PPN Keluaran posisi SPT.
  */
 export function effectiveChainHead(chain: ChainInvoice[]): ChainInvoice | null {
-  const live = chain.filter((c) => c.djpStatus !== "cancelled")
-  return live.length === 0 ? null : live[live.length - 1]
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    const c = chain[i]
+    if (c.djpStatus === "cancelled" || c.djpStatus === "replaced") continue
+    return c.djpStatus === "approved" ? c : null
+  }
+  return null
 }

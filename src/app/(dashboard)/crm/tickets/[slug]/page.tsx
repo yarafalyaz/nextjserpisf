@@ -25,6 +25,8 @@ import { Pencil } from "lucide-react";
 
 import type { Metadata } from "next";
 
+import { TicketSlaChip } from "@/components/reports/ticket-sla-chip"
+import { getCrmTicketSla } from "@/lib/reports/crm-ticket-sla-data"
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 
@@ -71,6 +73,17 @@ export default async function CrmTicketDetailPage({
       : Promise.resolve(null),
   ]);
 
+  // Keadaan SLA 001-U atas F-2026-10-24-135-S: baris server untuk tiket
+  // ini dari loader read-only (tiket nonaktif tidak terdaftar = tanpa
+  // lencana/tenggat). Tenggat dueAt server apa adanya; UI tidak
+  // menghitung jam kerja. Kegagalan loader = tanpa seksi SLA.
+  const slaRow = await getCrmTicketSla()
+    .then((sla) => sla.rows.find((row) => row.ticketId === ticket.id) ?? null)
+    .catch((error) => {
+      console.error("[crm/tickets/detail] SLA tiket:", error)
+      return null
+    })
+
   // Resolve comment author names in one query
   const commentUserIds = Array.from(
     new Set(
@@ -101,6 +114,7 @@ export default async function CrmTicketDetailPage({
           <>
             <StatusChip status={ticket.status} />
             <StatusChip status={ticket.priority} />
+            {slaRow ? <TicketSlaChip primaryState={slaRow.primaryState} /> : null}
           </>
         }
         actions={
@@ -152,6 +166,24 @@ export default async function CrmTicketDetailPage({
           />
         )}
         <DetailField label="Dibuat" value={formatDate(ticket.createdAt)} />
+        {slaRow ? (
+          <DetailField label="SLA" value={<TicketSlaChip primaryState={slaRow.primaryState} />} />
+        ) : null}
+        {slaRow?.response.dueAt ? (
+          <DetailField
+            label="Tenggat Respons"
+            value={formatDate(slaRow.response.dueAt, { includeTime: true })}
+          />
+        ) : null}
+        {slaRow?.resolution.dueAt ? (
+          <DetailField
+            label="Tenggat Resolusi"
+            value={formatDate(slaRow.resolution.dueAt, { includeTime: true })}
+          />
+        ) : null}
+        {slaRow?.isUnknownPriority ? (
+          <DetailField label="Penanda Prioritas" value="Prioritas tak dikenal" />
+        ) : null}
         {ticket.description && (
           <DetailField
             label="Deskripsi"

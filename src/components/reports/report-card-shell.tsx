@@ -8,6 +8,7 @@ export function ReportCardShell({
   isEmpty,
   emptyText,
   notice,
+  contentClassName,
   children,
 }: Readonly<{
   label: string
@@ -16,6 +17,7 @@ export function ReportCardShell({
   isEmpty: boolean
   emptyText: string
   notice?: string
+  contentClassName?: string
   children: ReactNode
 }>) {
   return (
@@ -27,7 +29,7 @@ export function ReportCardShell({
         <h2 className="text-[0.9375rem] font-semibold text-foreground">{title}</h2>
         <p className="text-xs text-muted-foreground">{summary}</p>
       </div>
-      <div className="p-4 px-5">
+      <div className={contentClassName ? `p-4 px-5 ${contentClassName}` : "p-4 px-5"}>
         {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
         {isEmpty ? (
           <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">

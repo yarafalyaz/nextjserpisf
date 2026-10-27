@@ -47,6 +47,8 @@ export const updateSystemSettingsSchema = z.object({
   companyPostalCode: optionalNullString(20),
   companyWebsite: optionalNullString(),
   companyTaxId: optionalNullString(50),
+  // NITKU penjual 22 digit (SellerIDTKU Coretax); kosong = ekspor ditolak builder.
+  companyNitku: optionalNullString(22),
   // F-2026-10-25-015-V: status PKP perusahaan (enum tertutup; tanggal
   // mulai kewajiban divalidasi silang di aksi — pkp wajib bertanggal).
   // Form kirim string kosong untuk "belum diisi" — normalkan ke null
