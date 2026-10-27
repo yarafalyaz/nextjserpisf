@@ -9,6 +9,7 @@ import {
 import { entityHref } from "@/lib/utils/entity-url"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
+import { ReportCardShell } from "./report-card-shell"
 import {
   DetailTable,
   DetailTableHead,
@@ -41,84 +42,78 @@ export function PayrollDraftQueueCard({
   const { rows, levelCounts, periodCounts, totalDocuments } = queue
 
   return (
-    <section
-      aria-label={QUEUE_TITLE}
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">{QUEUE_TITLE}</h2>
-        <p className="text-xs text-muted-foreground">
+    <ReportCardShell
+      label={QUEUE_TITLE}
+      title={QUEUE_TITLE}
+      summary={
+        <>
           {formatNumber(levelCounts.mengendap)} mengendap ·{" "}
           {formatNumber(levelCounts.menunggu)} menunggu proses ·{" "}
           {formatNumber(totalDocuments)} slip draft
-        </p>
-      </div>
-      <div className="p-4 px-5 flex flex-col gap-4">
-        <p className="text-xs text-muted-foreground">{PAYROLL_DRAFT_NOTICE_TEXT}</p>
-        {periodCounts.length > 0 ? (
-          <ul aria-label="Rekap periode antrean slip gaji draft" className="flex flex-wrap gap-1.5">
-            {periodCounts.map((entry) => (
-              <li key={entry.period}>
-                <StatusChip
-                  status={entry.period}
-                  customLabel={`${entry.period}: ${formatNumber(entry.total)} slip (${formatNumber(entry.levelCounts.mengendap)} ${PAYROLL_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()}, ${formatNumber(entry.levelCounts.menunggu)} ${PAYROLL_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()})`}
-                  customTone="default"
-                />
-              </li>
+        </>
+      }
+      isEmpty={rows.length === 0}
+      emptyText="Tidak ada slip gaji draft."
+      notice={PAYROLL_DRAFT_NOTICE_TEXT}
+      contentClassName="flex flex-col gap-4"
+    >
+      {periodCounts.length > 0 ? (
+        <ul aria-label="Rekap periode antrean slip gaji draft" className="flex flex-wrap gap-1.5">
+          {periodCounts.map((entry) => (
+            <li key={entry.period}>
+              <StatusChip
+                status={entry.period}
+                customLabel={`${entry.period}: ${formatNumber(entry.total)} slip (${formatNumber(entry.levelCounts.mengendap)} ${PAYROLL_DRAFT_LEVEL_LABELS.mengendap.toLowerCase()}, ${formatNumber(entry.levelCounts.menunggu)} ${PAYROLL_DRAFT_LEVEL_LABELS.menunggu.toLowerCase()})`}
+                customTone="default"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="overflow-x-auto">
+        <DetailTable>
+          <DetailTableHead>
+            <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.age}</DetailTableTh>
+            <DetailTableTh>No. Slip</DetailTableTh>
+            <DetailTableTh>Karyawan</DetailTableTh>
+            <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.period}</DetailTableTh>
+            <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.range}</DetailTableTh>
+            <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.type}</DetailTableTh>
+            <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.createdBy}</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {rows.map((row) => (
+              <DetailTableRow key={row.payrollId}>
+                <DetailTableTd>
+                  <StatusChip
+                    status={row.tingkat}
+                    customLabel={row.tingkatLabel}
+                    customTone={LEVEL_TONES[row.tingkat]}
+                  />
+                  <span className="block text-xs text-muted-foreground">
+                    {formatNumber(row.umurDraftHari)} hari
+                  </span>
+                </DetailTableTd>
+                <DetailTableTd>
+                  <Link
+                    href={entityHref("/sdm/penggajian", { id: row.payrollId, slug: row.slug })}
+                    className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
+                  >
+                    {row.documentNo}
+                  </Link>
+                </DetailTableTd>
+                <DetailTableTd>{row.employeeName ?? "—"}</DetailTableTd>
+                <DetailTableTd>{row.period}</DetailTableTd>
+                <DetailTableTd>
+                  {formatDate(row.startDate)} – {formatDate(row.endDate)}
+                </DetailTableTd>
+                <DetailTableTd>{row.type}</DetailTableTd>
+                <DetailTableTd>{row.createdByName ?? "—"}</DetailTableTd>
+              </DetailTableRow>
             ))}
-          </ul>
-        ) : null}
-        {rows.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            Tidak ada slip gaji draft.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.age}</DetailTableTh>
-                <DetailTableTh>No. Slip</DetailTableTh>
-                <DetailTableTh>Karyawan</DetailTableTh>
-                <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.period}</DetailTableTh>
-                <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.range}</DetailTableTh>
-                <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.type}</DetailTableTh>
-                <DetailTableTh>{PAYROLL_DRAFT_COLUMN_LABELS.createdBy}</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {rows.map((row) => (
-                  <DetailTableRow key={row.payrollId}>
-                    <DetailTableTd>
-                      <StatusChip
-                        status={row.tingkat}
-                        customLabel={row.tingkatLabel}
-                        customTone={LEVEL_TONES[row.tingkat]}
-                      />
-                      <span className="block text-xs text-muted-foreground">
-                        {formatNumber(row.umurDraftHari)} hari
-                      </span>
-                    </DetailTableTd>
-                    <DetailTableTd>
-                      <Link
-                        href={entityHref("/sdm/penggajian", { id: row.payrollId, slug: row.slug })}
-                        className="inline-flex min-h-11 items-center font-medium text-primary hover:underline"
-                      >
-                        {row.documentNo}
-                      </Link>
-                    </DetailTableTd>
-                    <DetailTableTd>{row.employeeName ?? "—"}</DetailTableTd>
-                    <DetailTableTd>{row.period}</DetailTableTd>
-                    <DetailTableTd>
-                      {formatDate(row.startDate)} – {formatDate(row.endDate)}
-                    </DetailTableTd>
-                    <DetailTableTd>{row.type}</DetailTableTd>
-                    <DetailTableTd>{row.createdByName ?? "—"}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
-          </div>
-        )}
+          </DetailTableBody>
+        </DetailTable>
       </div>
-    </section>
+    </ReportCardShell>
   )
 }
