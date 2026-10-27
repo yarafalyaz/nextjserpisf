@@ -6,12 +6,13 @@
  * berjalan), lalu memanggil builder murni `buildCoretaxOutputXml`.
  * Satu query massal per sumber (hindari N+1).
  *
- * Tanpa schema/migrasi: SellerIDTKU belum punya kolom sumber di schema
- * saat inti ini dibangun → loader meneruskan null, builder menolak
- * bernama (UNMAPPED/elemen SellerIDTKU) sampai kolom/setting disediakan
- * lewat vonis + migrasi terpisah. Jangan timpa jejak impor (`xmlPayload`/
- * `xmlHash`/`xmlImportedAt` milik impor) — hasil ekspor dikembalikan ke
- * pemanggil, tidak ditulis ke kolom impor.
+ * SellerIDTKU dibaca dari `SystemSetting.companyNitku` (TASK-020 B5) —
+ * kolom sumber khusus NITKU penjual 22 digit, diisi lewat Pengaturan
+ * Perusahaan. Kosong/format salah tetap diteruskan apa adanya: builder
+ * menolak fail-closed bernama, loader tidak mengarang nilai dari NPWP.
+ * Jangan timpa jejak impor (`xmlPayload`/`xmlHash`/`xmlImportedAt` milik
+ * impor) — hasil ekspor dikembalikan ke pemanggil, tidak ditulis ke
+ * kolom impor.
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -42,7 +43,7 @@ export async function loadCoretaxOutputExport(taxInvoiceIds: number[]): Promise<
   const ids = [...new Set(taxInvoiceIds)]
   const [settings, invoices] = await Promise.all([
     prisma.systemSetting.findFirst({
-      select: { companyTaxId: true },
+      select: { companyTaxId: true, companyNitku: true },
     }),
     ids.length === 0
       ? Promise.resolve([])
@@ -86,8 +87,8 @@ export async function loadCoretaxOutputExport(taxInvoiceIds: number[]): Promise<
 
   const seller: CoretaxExportSellerSnapshot = {
     tin: settings?.companyTaxId ?? null,
-    // Belum ada kolom sumber NITKU penjual — null → tolak bernama di builder.
-    sellerIdtku: null,
+    // NITKU penjual dari pengaturan perusahaan; kosong → tolak bernama di builder.
+    sellerIdtku: settings?.companyNitku ?? null,
   }
 
   const customerIds = [

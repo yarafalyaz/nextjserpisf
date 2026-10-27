@@ -7,11 +7,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * "Ditagih" selalu 0; setelah jalur "Buat Tagihan dari Penerimaan" mengisinya,
  * laporan ini harus benar-benar menguranginya.
  *
- * Filter status tagihan juga diuji: AP journal sudah diposting SAAT tagihan
- * dibuat (`onVendorBillPosted` dipanggil di transaksi create), jadi tagihan draft
- * sudah membersihkan akun GRNI dan wajib ikut dikurangkan — sama seperti
- * perlakuan penjagaan 3-way match. Sebelumnya draft dikecualikan, sehingga tagihan
- * yang baru dibuat dari penerimaan tetap terbaca "belum ditagih".
+ * Filter status tagihan juga diuji: draft MURNI tanpa jurnal (P0-2) — jurnal
+ * AP/GRNI baru lahir di `confirmVendorBill`, jadi tagihan draft BELUM
+ * membersihkan akun GRNI dan TIDAK boleh dikurangkan. Hanya tagihan yang
+ * sudah diposting (posted/partial/paid) yang mengurangkan sisa dokumen,
+ * supaya sisa dokumen tetap sebanding dengan saldo buku besar GRNI.
  */
 
 const mocks = vi.hoisted(() => {
@@ -39,11 +39,13 @@ vi.mock("@/lib/db/prisma", () => ({
       // Menghormati filter yang dikirim pemanggil, supaya perilaku filter
       // benar-benar teruji (bukan sekadar argumennya).
       findMany: async (args: any) => {
-        const notStatus = args?.where?.vendorBill?.status?.not;
+        const status = args?.where?.vendorBill?.status;
         mocks.vendorBillItemFindMany(args);
-        return mocks.billedRows.filter(
-          (row) => notStatus === undefined || row.vendorBill.status !== notStatus,
-        );
+        return mocks.billedRows.filter((row) => {
+          if (status?.not !== undefined) return row.vendorBill.status !== status.not;
+          if (Array.isArray(status?.notIn)) return !status.notIn.includes(row.vendorBill.status);
+          return true;
+        });
       },
     },
     item: { findMany: mocks.itemFindMany },
@@ -104,25 +106,26 @@ beforeEach(() => {
 });
 
 describe("loadReceivedNotBilled", () => {
-  it("mengurangkan tagihan draft yang menunjuk baris penerimaan", async () => {
+  it("tidak mengurangkan tagihan draft (draft murni tanpa jurnal, P0-2)", async () => {
     const { report } = await loadReceivedNotBilled(PERIOD);
 
-    // Baris 501 sudah ditagih penuh (5×200 = 1000) → tidak tampil di rincian.
-    // Baris 502 baru ditagih 100 dari 300 → sisa 200 tampil dengan "Ditagih" 100.
-    expect(report.totals.billedValue).toBe(100);
+    // Baris 501 sudah ditagih penuh oleh tagihan posted (5×200 = 1000) → tidak tampil.
+    // Baris 502 baru ditagih 100 oleh tagihan DRAFT → belum membersihkan GRNI,
+    // jadi belum dikurangkan: sisa tetap 300 penuh dengan "Ditagih" 0.
+    expect(report.totals.billedValue).toBe(0);
     expect(report.totals.receivedValue).toBe(300);
-    expect(report.totals.outstandingValue).toBe(200);
+    expect(report.totals.outstandingValue).toBe(300);
     expect(report.totals.receipts).toBe(1);
   });
 
-  it("memakai filter non-cancelled (bukan mengecualikan draft)", async () => {
+  it("memakai filter posted saja (mengecualikan draft dan cancelled)", async () => {
     await loadReceivedNotBilled(PERIOD);
 
     expect(mocks.vendorBillItemFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           goodsReceiptItemId: { in: [501, 502] },
-          vendorBill: { status: { not: "cancelled" } },
+          vendorBill: { status: { notIn: ["draft", "cancelled"] } },
         }),
       }),
     );
@@ -137,7 +140,7 @@ describe("loadReceivedNotBilled", () => {
 
     const { report } = await loadReceivedNotBilled(PERIOD);
 
-    expect(report.totals.billedValue).toBe(100);
+    expect(report.totals.billedValue).toBe(0);
     mocks.billedRows.pop();
   });
 });
