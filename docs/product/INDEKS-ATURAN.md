@@ -220,7 +220,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-FIN-001 | Sebagian | prisma/schema.prisma:2448 — ketertelusuran hutang lewat alokasi; sisi piutang tertaut lewat `prisma/schema.prisma:1986` |
 | AC-FIN-002 | Belum | belum ditelusur — reversal beralasan dengan histori asal tidak ditunjuk di sini |
 | AC-HR-001 | Sebagian | prisma/schema.prisma:4066 — `PayrollComponentLine` merinci komponen payroll |
-| AC-HR-002 | Belum | belum ditelusur — guard anti posting payroll ganda tidak ditunjuk di sini |
+| AC-HR-002 | Sebagian | Spec Business F-2026-10-28-117-S (backlog): inventarisasi 11 guard TERVERIFIKASI-KODE — unik slip `uq_payroll_employee_range` (`prisma/schema.prisma:3998`), guard irisan `payroll-frequency.ts:86-100` di bawah kunci baris `FOR UPDATE` (`hrm.actions.ts:2783-2823,2537-2573`), klaim kondisional approve/bayar (`hrm.actions.ts:3063-3069,3128-3199`), cek jurnal ganda hook (`accounting.hook.ts:2907-2916,3049-3057`), unik jurnal aktif `journals_active_reference_unique` (`schema.prisma:4245`); falsifikasi E117-1..9 di spec; sisa OPEN: vonis Accountant re-post sesudah reversal |
 | AC-HR-003 | Sebagian | prisma/schema.prisma:4166 — `EmployeeLoan`; penegakan batas potongan belum ditelusur |
 | AC-HR-004 | Sebagian | src/app/api/payroll/late-penalty/route.ts:18 — pembatasan akses data turunan payroll; cakupan semua payroll belum diaudit |
 | AC-REP-001 | Belum | belum ditelusur — kesesuaian total report dengan definisi query sumber tidak ditunjuk per laporan di sini |
