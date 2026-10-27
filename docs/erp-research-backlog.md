@@ -38926,3 +38926,162 @@ Perintah bukti (dijalankan run ini di worktree bersih atas `origin/main`): `git 
 PER-11/PJ/2025 (Dirjen Pajak, 22-05-2025) Pasal 37/40/44 — unggah + persetujuan DJP + nomor seri otomatis: https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf (diakses 2026-10-27). Artikel DJP "Coretax DJP: Ketika Faktur Pajak Diterima Seketika": https://pajak.go.id/id/artikel/coretax-djp-ketika-faktur-pajak-diterima-seketika (diakses 2026-10-27). Coretaxpedia (topik "Approval faktur pajak"): https://pajak.go.id/coretaxpedia/ (diakses 2026-10-27). Cakupan vonis: HANYA siapa/mekanisme sah penulis `draft` → `approved`/`rejected` + batas antrean 098-S. TIDAK memutus tarif/DPP/kode transaksi baru, TIDAK membangun mekanisme pencatatan, TIDAK mengubah BR-TIQ spec 098-S selain mengikat larangan statusnya, TIDAK menilai ambang mengendap (Q-TIQ-1 wilayah Lead).
 
 F-2026-10-27-099-V — Penulis status DJP TaxInvoice draft ke approved/rejected (Q-TIQ-6). Status: VONIS TURUN run ini; antrean 098-B/098-F tetap baca-saja tanpa penulis status; mekanisme pencatatan hasil Coretax = ID terpisah bersyarat Putusan 2 bila Lead membuka; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (merge + buka/tidak mekanisme pencatatan), Backend (fisik antrean sesuai spec), Frontend (label verbatim), QA (falsifikasi V1-V5).
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-102-S: antrean tugas proyek terbuka mengendap — umur sejak dibuat untuk tanpa-tenggat + ember belum-ditugaskan (PERLUASAN baca-saja di atas F-2026-10-27-091-S, BUKAN antrean tenggat kedua)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_aa039434. Basis `origin/main` `a737e476c` (2026-10-27 13:09 WIB).
+
+**Verifikasi ID:** grep `F-2026-10-27-102` di backlog+board `origin/main` (`a737e476c`) = 0/0 sebelum tulis; PR terbuka memuat `102-S` = 0 (yang ada #1161 = 100-S); branch `hermes/business-f102-*` selain branch run ini = 0. Bebas. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+**Hubungan dengan F-2026-10-27-091-S (WAJIB dibaca dulu — anti-duplikat ditegaskan):**
+- 091-S (MERGED PR #1124, 27 Okt 2026 09:30 WIB) SUDAH menspec antrean tugas proyek lewat tenggat: populasi `pending`/`in_progress`, ember `LEWAT_TENGGAT`/`MENDEKATI`/`TANPA_TENGGAT`, umur keterlambatan dari `dueDate`, label `Belum ditugaskan`, rekap per proyek/penanggung, BR-PTQ-01..12, AC-PTQ-B1..B5/F1..F3, Q-PTQ-1..6 (putusan Lead atas Q-PTQ belum ditemukan di backlog basis ini — grep `PUTUSAN LEAD.*091`/`Q-PTQ` putusan = hanya rujukan spec; status putusan = belum terverifikasi turun, JANGAN diasumsikan).
+- Spec 102-S ini **BUKAN** pengulangan 091-S dan **BUKAN** builder kedua. Ia menspec persis dua celah yang 091-S sengaja tinggalkan:
+  1. **Umur mengendap sejak dibuat untuk tugas tanpa tenggat.** 091-S BR-PTQ-03/04: `TANPA_TENGGAT` tidak pernah dihitung terlambat, sisa/umur = null; BR-PTQ-04 + Q-PTQ-5 secara eksplisit menunda "umur tugas sejak dibuat (`createdAt`)" keluar tahap 1 ("hindari dua umur membingungkan"). Akibatnya tugas tanpa tenggat berumur 90 hari tidak terbedakan dari yang berumur 1 hari — tidak ada sinyal mengendap sama sekali untuk ember itu. 102-S menspec lapis umur kedua itu sebagai **umur mengendap** (acuan `createdAt`), terpisah tegas dari umur keterlambatan (acuan `dueDate`), supaya penundaan Q-PTQ-5 bisa diputus Lead dengan kontrak lengkap, bukan karangan konsumen.
+  2. **Ember `BELUM_DITUGASKAN` sebagai ember antrean utama lintas tenggat.** 091-S memperlakukan `assignedTo` null hanya sebagai label baris + kelompok rekap (BR-PTQ-05). Tugas terbuka tanpa penanggung — yang tidak bisa dikejar siapa pun karena tidak ada pemiliknya — belum punya ember prioritas sendiri yang memotong ember tenggat. 102-S menspec ember penugasan itu sebagai dimensi ortogonal (tugas bisa sekaligus `LEWAT_TENGGAT` DAN `BELUM_DITUGASKAN`; keduanya tampil, tidak saling menelan).
+- Bila Lead memutuskan umur mengendap + ember penugasan ini masuk tahap 1 yang sama dengan 091-B, implementasi = perluasan builder 091-B yang sama (satu builder, dua lapis turunan teruji terpisah), BUKAN modul `reports/task-*` kedua. Penamaan fisik final = Backend sesudah putusan Lead (Q-TSQ-4). Spec ini tidak membuat file laporan baru dan tidak mengubah satu aturan pun dari 091-S; pertentangan bunyi = 091-S menang untuk ember tenggat, 102-S hanya menambah dimensi umur-mengendap/penugasan.
+
+**Bukan duplikat lain:**
+- Bukan earned value proyek (`src/lib/reports/project-earned-value.ts`): itu uang/persen tahap. Spec ini nol nominal, nol persen (mewarisi BR-PTQ-08 091-S utuh).
+- Bukan antrean tahap proyek 092-S (ProjectStage `in_progress` tanpa progres baru, MERGED bersama 091-S): objek `ProjectStage`, bukan `Task`; Task tidak tertaut tahap (schema §2).
+- Bukan work-order-queue (`WorkOrder` + `endDate`): objek dan penanggung beda.
+- Bukan daftar tugas existing (`proyek/tugas/page.tsx`): tetap permukaan induk semua-status; spec ini dimensi turunan di atas objek sama.
+
+### 1. Workflow specification
+
+Aktor: persis 091-S — pembaca `view_projects`, pembuat `create_projects`, pengubah `edit_projects` (+ penjaga staf-hanya-tugas-sendiri), penghapus `delete_projects`, manajer `manage_projects`/`super_admin`. Tidak ada aktor baru, tidak ada key izin baru (katalog §2).
+
+Alur existing (TERVERIFIKASI-KODE, §2): tugas lahir `createTask` (`create_projects`, status bawaan `pending`, `assignedTo ?? null`, `dueDate` via `wibDateToUtcMidnight`) → diperbarui `updateTask` (`edit_projects`; staf non-manajer hanya tugas miliknya + anti-reassign) → `completed`/`cancelled` via pilihan status form; hapus = hard delete `deleteTask`. Tidak ada `completedAt`, tidak ada riwayat status, tidak ada penanda kapan tugas mulai dikerjakan selain `startDate` rencana.
+
+Gap yang dibangun spec ini (di atas gap 091-S): (a) tugas terbuka **tanpa tenggat** tidak punya sinyal umur apa pun — ember `TANPA_TENGGAT` 091-S datar; (b) tugas terbuka **tanpa penanggung** hanya berlabel per baris, tidak terangkat sebagai ember kerja "tidak ada pemiliknya" yang harus ditugaskan dulu sebelum bisa dikejar tenggatnya. Admin proyek pagi hari butuh dua pertanyaan terpisah: "tugas apa yang lewat tenggat?" (091-S) dan "tugas terbuka apa yang mengendap tanpa tenggat / tanpa pemilik?" (102-S). Spec ini menjawab pertanyaan kedua saja.
+
+Dokumen masuk: rekod `Task` existing (nama, status, `createdAt`, `dueDate`, `assignedTo`) + nama proyek + nama penanggung tertaut. Dokumen keluar: tidak ada — penugasan/tenggat/status tetap diubah lewat form tugas existing berpenjaga penuh. **Nol nominal/biaya:** `Timesheet.taskId` (schema §2) membuktikan jam aktual tertaut tugas, TAPI spec ini dilarang menurunkan biaya/upah dari jam itu — payload tanpa jam, tanpa tarif, tanpa biaya (BR-TSQ-07).
+
+Istilah turunan (USULAN, final Q-TSQ-2): `umurMengendapHari` = hari kalender WIB sejak `createdAt`; tingkat `MENGENDAP` = umur mengendap ≥ ambang (Q-TSQ-1); ember penugasan `BELUM_DITUGASKAN` = `assignedTo` null pada populasi terbuka. Semua turunan server, bukan status/kolom tersimpan. Kata judul usulan permukaan gabungan: `Tugas Proyek Terbuka Mengendap`.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main a737e476c)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Skema `Task` `prisma/schema.prisma:5789-5810`: `projectId Int` wajib (relasi `Project` onDelete Cascade), `name`, `description?`, `status String @default("pending")` (String bebas, bukan enum), `assignedTo Int?`, `startDate DateTime?`, `dueDate DateTime?`, `createdAt @default(now())`, `updatedAt @updatedAt`; relasi `assignee Employee?`, `timesheets Timesheet[]`; indeks `[assignedTo]`, `[projectId]`, `[status]`, `[createdAt]`. TANPA `deletedAt`, TANPA `completedAt`, TANPA kolom persen, TANPA tautan `ProjectStage`.
+- `Timesheet.taskId Int?` (`prisma/schema.prisma:4200`, relasi `task Task?`, indeks `timesheets_task_id_fkey`) — jam aktual per tugas ADA sebagai data, tetapi mengubah jam menjadi biaya = wilayah ProductionCost/payroll, di luar spec ini (BR-TSQ-07).
+- Kosakata status Task persis empat: form `src/app/(dashboard)/proyek/tugas/_components/task-form.tsx:32-37` (`pending`/`in_progress`/`completed`/`cancelled`), chip daftar `page.tsx` `["", "pending", "in_progress", "completed", "cancelled"]`, validasi `src/lib/validations/project.schemas.ts:127,138` `z.string().optional().default("pending")` — string bebas, nilai liar mungkin ada (diwarisi dari 091-S BR-PTQ-02, tidak divonis ulang di sini).
+- Aksi: `createTask` `src/actions/project.actions.ts:590` (`requirePermission("create_projects")` :596; `assignedTo ?? null`; `dueDate`/`startDate` via `wibDateToUtcMidnight`), `updateTask:622` (`edit_projects` :628; `isManager` = `manage_projects`/`super_admin` :630; staf hanya tugas sendiri :634; anti-reassign :645-653), `deleteTask:677` (`delete_projects` :679, hapus fisik). Konvensi hari WIB: `getWibTodayUtcDate` `src/lib/utils/attendance-time.ts:26-29`; `dueDate` tersimpan tengah malam UTC hari WIB (`wibDateToUtcMidnight` :32-35).
+- Daftar tugas existing: `page.tsx` `requirePermission("view_projects")`, `findMany` saringan status chip + cari nama, `include project + assignee`, `orderBy createdAt desc`, paginasi server. Tanpa umur sejak dibuat sebagai sinyal urutan/saringan (createdAt hanya pengurutan terbaru-dulu), tanpa ember penugasan, tanpa ember mengendap.
+- Izin katalog `src/lib/auth/module-catalog.generated.ts:427-431` resource `projects` = `view_projects`/`create_projects`/`edit_projects`/`delete_projects`/`manage_projects`. Key khusus tugas = 0.
+- Nol builder antrean tugas: `git ls-tree origin/main src/lib/reports/ | grep -i task` = 0 berkas; grep `project-task-queue|ProjectTaskQueue` di `src/` = 0. (091-S masih spec; fisik 091-B belum ada di basis ini — terverifikasi, bukan asumsi.)
+
+Belum ada / parsial (bukti grep run ini):
+- Umur mengendap sejak `createdAt` untuk tugas terbuka, tingkat mengendap, ember penugasan lintas-tenggat, rekap mengendap/belum-ditugaskan: ABSEN total. 091-S mencakupnya hanya sebagai penundaan eksplisit Q-PTQ-5 — bukan implementasi, bukan putusan.
+
+### 3. Status-transition matrix
+
+Status tersimpan TIDAK berubah oleh spec ini (mewarisi matriks 091-S §3 utuh). Yang ditambah hanya posisi turunan 102-S:
+
+| Dari (status tersimpan) | Pemicu | Ke | Penjaga | Efek ke turunan 102-S |
+|---|---|---|---|---|
+| (belum ada) | `createTask` | `pending` bawaan / pilihan form | `create_projects` (:590) | masuk populasi terbuka; umur mengendap mulai dari `createdAt` tersimpan |
+| `pending`/`in_progress` | waktu berjalan (`createdAt` makin lampau) | tetap | — | **turunan: `umurMengendapHari` bertambah; ≥ ambang = tingkat `MENGENDAP` (Q-TSQ-1)** — bukan status, tidak tertulis |
+| `pending`/`in_progress` | `assignedTo` null (lahir tanpa penanggung / penugasan dikosongkan via `updateTask` manajer) | tetap | `edit_projects` + anti-reassign (:622-653) | **turunan: ember `BELUM_DITUGASKAN`** sampai penanggung terisi |
+| `pending`/`in_progress` | `updateTask` isi `assignedTo` | tetap | `edit_projects`; staf tidak boleh reassign | keluar ember `BELUM_DITUGASKAN` render berikut; umur mengendap TIDAK reset (acuan tetap `createdAt` lahir) |
+| `pending`/`in_progress` | `updateTask` isi/ubah `dueDate` | tetap | `edit_projects` | ember tenggat mengikuti 091-S; umur mengendap tetap dari `createdAt` — mengisi tenggat tidak menghapus riwayat mengendap tanpa-tenggat |
+| `completed`/`cancelled` | pilihan status form | terminal antrean | `edit_projects` + staf-sendiri | keluar populasi terbuka seluruhnya (kedua dimensi) |
+| status liar di luar empat kosakata | — | tetap tersimpan | validasi string bebas (:127) | perlakuan 091-S BR-PTQ-02 (ember `Status Tidak Dikenal`); dimensi mengendap/penugasan tetap dihitung dari `createdAt`/`assignedTo` apa adanya |
+
+Tidak ada transisi otomatis, tidak ada eskalasi status, tidak ada penugasan otomatis di kode existing — matriks tidak mengarangnya.
+
+### 4. Role/permission matrix (katalog nyata)
+
+Katalog `module-catalog.generated.ts:427-431`. Tidak ada key tugas tersendiri; tidak ada key baru diusulkan.
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Manajer (`manage_projects`/`super_admin`) | Staf proyek pemegang izin proyek |
+|---|---|---|---|
+| Lihat antrean terbuka-mengendap tahap 1 (USULAN gerbang) | `view_projects` (:427) — persis gerbang daftar tugas existing | semua tugas (loader tidak menyaring per penugasan, = batas 091-S BR-PTQ-06) | semua tugas — batas tahap 1 dinyatakan jujur, bukan scope baru |
+| Lihat daftar tugas existing | `view_projects` | semua | semua (fakta existing) |
+| Buat tugas (existing, BUKAN dari antrean) | `create_projects` (:428) via `createTask:590` | ya | sesuai izin |
+| Ubah tugas / isi penanggung / isi tenggat (existing, BUKAN dari antrean) | `edit_projects` (:429) via `updateTask:622` | semua tugas + boleh menugaskan ulang | hanya tugas `assignedTo` = dirinya; menugaskan ulang ditolak |
+| Hapus tugas (existing) | `delete_projects` (:430) via `deleteTask:677` | sesuai izin | sesuai izin |
+| Transisi/tugaskan apa pun DARI antrean turunan | — | TIDAK tahap 1 (BR-TSQ-06) | TIDAK tahap 1 |
+
+Catatan scope jujur (mewarisi 091-S): penjaga staf-hanya-tugas-sendiri adalah penjaga **tulis**, bukan baca; `getHrScope` domain HR TIDAK dipakai di proyek. Mempersempit baca per penugasan = Q-PTQ-3 091-S (Lead), berlaku sama di sini — 102-S tidak membuka pertanyaan scope kedua.
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-TSQ-01 | Populasi terbuka PERSIS = `Task.status` ∈ {`pending`, `in_progress`}; `completed`/`cancelled` keluar; status liar per 091-S BR-PTQ-02. Spec ini TIDAK mendefinisikan populasi kedua — satu populasi terbuka yang sama dengan 091-S, dua dimensi turunan di atasnya. | TERVERIFIKASI-KODE (skema :5789-5810; form :32-37) + pewarisan 091-S |
+| BR-TSQ-02 | **Dua umur, dua acuan, tidak pernah dicampur.** Umur keterlambatan (091-S) acuan `dueDate`, hanya untuk tugas bertenggat lewat. Umur mengendap (102-S) acuan `createdAt`: `umurMengendapHari` = hari kalender WIB hari ini − hari kalender WIB `createdAt`, ≥ 0, untuk SEMUA tugas populasi terbuka (bertenggat maupun tidak). `updatedAt` DILARANG sebagai acuan umur apa pun (bergerak tiap edit — tugas lama yang baru diedit tidak menjadi muda). `startDate` DILARANG sebagai acuan mengendap (rencana mulai, nullable, bisa masa depan). Label tampil kedua umur wajib beda kata persis (Q-TSQ-2) supaya tidak terbaca tertukar. | USULAN di atas TERVERIFIKASI-KODE (kolom `createdAt` :5789-5810; konvensi WIB `attendance-time.ts:26-29`) |
+| BR-TSQ-03 | Tingkat `MENGENDAP` = `umurMengendapHari` ≥ ambang server (Q-TSQ-1). Paling tajam untuk sub-populasi tanpa-tenggat (tidak ada sinyal lain), tetapi dihitung untuk semua tugas terbuka supaya tugas bertenggat-jauh yang sudah berumur juga terbaca mengendap — keduanya tampil sebagai kolom/fakta terpisah dari ember tenggat 091-S, bukan ember pengganti. Tugas di bawah ambang tetap populasi (pola TERBUKA keluarga antrean: saringan fokus "perlu tindak" vs "semua terbuka"), tidak hilang. | USULAN |
+| BR-TSQ-04 | Ember penugasan ortogonal: `BELUM_DITUGASKAN` = populasi terbuka dengan `assignedTo` null (fakta kekosongan kolom `prisma/schema.prisma:5796` nullable, label `Belum ditugaskan` mewarisi 091-S BR-PTQ-05). Ember ini MEMOTONG ember tenggat/mengendap: satu tugas boleh menyandang `LEWAT_TENGGAT` + `BELUM_DITUGASKAN` sekaligus; payload memuat kedua fakta verbatim, UI dilarang memilih satu dan menyembunyikan yang lain. Rekap kepala memuat hitungan irisan (terbuka × belum-ditugaskan × mengendap) dari populasi penuh. | USULAN di atas TERVERIFIKASI-KODE (kolom nullable schema Task) |
+| BR-TSQ-05 | Proyek induk dibaca apa adanya: `projectId` wajib + Cascade (schema Task); status proyek induk TIDAK menyaring tugas keluar populasi (tugas terbuka di proyek tertutup = sinyal yatim, tertanda nama proyek) — mewarisi 091-S BR-PTQ-11 utuh, tidak dibuka ulang. Hapus proyek induk menghapus tugas ikut Cascade existing; baris hilang karena induk hilang, bukan saringan antrean. | TERVERIFIKASI-KODE (relasi schema Task) + pewarisan 091-S |
+| BR-TSQ-06 | Baca-saja tahap 1: antrean tidak memanggil `createTask`/`updateTask`/`deleteTask`, tidak menugaskan, tidak mengisi tenggat, tidak mengubah status. Nol tombol Tugaskan/Isi Tenggat/Selesai/Hapus dari antrean; jalan aksi satu-satunya = form tugas existing berpenjaga `edit_projects` + staf-sendiri + anti-reassign sesudah membuka detail/edit tertaut. | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-TSQ-07 | **Nol nominal, nol jam-biaya.** Payload tanpa nilai proyek, tanpa biaya, tanpa upah, dan tanpa jam Timesheet yang dikonversi apa pun. `Timesheet.taskId` (schema :4200) membuktikan jam tertaut ADA, tetapi jam ≠ biaya di spec ini: tarif/upah per karyawan = data HR terlindungi scope, dan biaya aktual proyek = wilayah ProductionCost/MaterialIssue existing. Mengaitkan mengendap ke jam/biaya/denda = BUTUH-VONIS Accountant bersyarat (Q-TSQ-5), tidak diminta tahap 1. Kontak karyawan tidak ada di payload — nama penanggung saja. | USULAN (scope) di atas TERVERIFIKASI-KODE (relasi Timesheet) |
+| BR-TSQ-08 | **Nol persen karangan** (mewarisi 091-S BR-PTQ-08 utuh): Task tanpa kolom persen dan tanpa tautan tahap; dilarang persen per tugas, persen per proyek turunan status Task, atau label progres fisik dari hitungan tugas. Hitungan "k dari n tugas Selesai" hanya sebagai hitungan dokumen berlabel persis bila tampil. Umur mengendap adalah hari kalender, bukan persen dan bukan skor kesehatan proyek. | TERVERIFIKASI-KODE (absen kolom) + pewarisan 091-S |
+| BR-TSQ-09 | Scope baca tahap 1 = `view_projects` persis, loader fail-closed sebelum query; loader TIDAK menyaring per penugasan tahap 1 (batasan dinyatakan di notice permukaan, = 091-S BR-PTQ-06/Q-PTQ-3). Nama proyek + nama penanggung dimuat massal (anti-N+1); penanggung menunjuk karyawan nonaktif/terhapus tampil apa adanya dari relasi (null relasi ≠ `assignedTo` null — label jujur tertanda, fisik Backend di 102-B, jangan disamakan ember `BELUM_DITUGASKAN`). | TERVERIFIKASI-KODE (gerbang daftar existing) + USULAN |
+| BR-TSQ-10 | Urutan tampil usulan dalam saringan fokus: `BELUM_DITUGASKAN` + `MENGENDAP` (umur mengendap terbesar dulu — tidak ada pemilik dan paling lama menunggu), lalu `MENGENDAP` bertenggat/bertugas, lalu sisa populasi terbuka (umur mengendap terbesar dulu); seri → `createdAt` naik, lalu id tugas naik. Rekap kepala = hitungan TUGAS per tingkat mengendap + per ember penugasan + per status dikenal + per proyek (Σ populasi penuh, bukan halaman tampil). Batas ambil eksplisit loader + penanda `terpotong` bila populasi melebihi batas. Urutan final = Q-TSQ-3; daftar tugas existing (`createdAt desc`) tidak diubah diam-diam. | USULAN |
+| BR-TSQ-11 | Satu builder dengan 091-B: dimensi mengendap/penugasan dihitung server di builder/loader yang sama dengan ember tenggat 091-S (atau modul perluasannya yang diputus Backend), payload satu sumber kebenaran; konsumen dilarang menghitung umur/ember/urutan ulang. Bila Lead memutus tahap terpisah, 102-B tetap mengonsumsi populasi/ember 091-B apa adanya — dilarang logika populasi kedua yang bisa berbeda pendapat tentang "terbuka". | USULAN (anti-duplikasi fisik) |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
+
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
+|---|---|---|---|
+| Master proyek + manajer + tanggal + status | Ada — proyek sebagai dimensi perusahaan/biaya (https://help.accurate.id/ , indeks Help Accurate diakses 2026-10-27; halaman proyek persis dirujuk juga di 091-S §6) | Ada — Data Proyek: Project Manager, Order/Delivery date, Status (In Progress dst.), fase + % Selesai catatan (https://help.zahironline.com/portal/id/kb/articles/cara-membuat-data-proyek-zahir-online-v2 , diakses 2026-10-27) | Ada — `Project` + `Task` per proyek dengan penanggung + tenggat per tugas (TERVERIFIKASI-KODE §2), lebih granular dari kedua benchmark |
+| Daftar tugas per proyek bertenggat per penanggung | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim | Tidak ditemukan di halaman Zahir yang diakses (fase = anggaran per fase, bukan tugas bertenggat per penanggung) — tidak diklaim | Ada — daftar tugas existing (§2) |
+| Antrean tugas terbuka MENGENDAP (umur sejak dibuat) + ember belum-ditugaskan lintas proyek | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim ada | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); 091-S baru menunda umur-sejak-dibuat keluar tahap 1 (Q-PTQ-5) |
+
+Jujur: kedua benchmark membakukan proyek sebagai dimensi biaya/header; antrean tugas mengendap/belum-ditugaskan tidak ditemukan di keduanya. Nilai spec ini operasional internal proyek ISF (tugas tanpa tenggat dan tanpa pemilik adalah yang paling mudah membusuk tak terlihat), bukan mengejar fitur vendor. Tidak ada ambang/label disalin dari vendor (ambang = Q-TSQ-1 Lead).
+
+### 7. Acceptance criteria + edge cases
+
+Backend (perluasan builder/loader — 102-B, fisik mengikuti putusan Q-TSQ-4):
+- AC-TSQ-B1: Populasi persis BR-TSQ-01 (satu populasi dengan 091-B; populasi kedua yang berbeda pendapat → MERAH). `completed`/`cancelled` bocor → MERAH; status liar tertanda per 091-S dan dimensi mengendap/penugasan tetap dihitung.
+- AC-TSQ-B2: `umurMengendapHari` persis BR-TSQ-02: dihitung hari kalender WIB dari `createdAt` (timestamp mentah 24-jam-an atau acuan `updatedAt`/`startDate` → MERAH; tugas dibuat hari ini WIB = 0). Tingkat `MENGENDAP` tepat pada ambang Q-TSQ-1 (≥ ambang masuk, ambang−1 tidak). Mengisi `dueDate`/`assignedTo` tidak mengubah `umurMengendapHari` (reset umur sesudah edit → MERAH).
+- AC-TSQ-B3: Ember `BELUM_DITUGASKAN` persis `assignedTo` null; tugas `LEWAT_TENGGAT` + `assignedTo` null memuat KEDUA fakta di payload (satu ditelan → MERAH). Relasi penanggung menggantung (assignedTo ada, Employee hilang) TIDAK masuk `BELUM_DITUGASKAN` dan tertanda jujur (disamakan → MERAH).
+- AC-TSQ-B4: Urutan + rekap BR-TSQ-10 cocok populasi penuh (rekap dari halaman tampil → MERAH); populasi melebihi batas tampil penanda `terpotong`; proyek/penanggung massal anti-N+1 (query per baris → MERAH).
+- AC-TSQ-B5: Payload tanpa nominal, tanpa jam/biaya Timesheet, tanpa persen, tanpa kontak (bocor satu pun → MERAH, BR-TSQ-07/08). Loader fail-closed `view_projects` sebelum query; baca-saja terbukti (memanggil aksi tulis Task atau menulis status/penugasan/tenggat → MERAH); loader menyaring per penugasan diam-diam tahap 1 → MERAH terhadap kontrak ini.
+
+Frontend (konsumen — 102-F):
+- AC-TSQ-F1: Label tingkat/ember/umur verbatim payload server; UI tidak menghitung umur mengendap/ember/urutan/rekap sendiri (hitung ulang UI → MERAH). Dua umur (keterlambatan vs mengendap) tampil dengan label beda persis Q-TSQ-2, tidak tertukar.
+- AC-TSQ-F2: TIDAK ada tombol Tugaskan/Isi Tenggat/Selesai/Hapus dari antrean tahap 1 (kontrol tulis → MERAH, BR-TSQ-06); tautan baris hanya ke detail/edit tugas existing berpenjaga.
+- AC-TSQ-F3: Baris tertanda (`MENGENDAP`, `BELUM_DITUGASKAN`, tanpa-tenggat, `Status Tidak Dikenal`, `terpotong`) tampil dengan tandanya; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-TSQ-1: Tugas tanpa tenggat dibuat 90 hari lalu, baru diedit kemarin: umur mengendap tetap 90 hari (acuan `createdAt`) — edit tidak meremajakan (kait AC-TSQ-B2).
+- EC-TSQ-2: Tugas bertenggat jauh (sisa 60 hari) tetapi dibuat 80 hari lalu: BUKAN lewat tenggat (091-S), tetapi terbaca `MENGENDAP` bila ≥ ambang — kedua fakta tampil terpisah, tidak digabung jadi "terlambat".
+- EC-TSQ-3: Tugas lewat tenggat tanpa penanggung: prioritas kepala urutan usulan (BR-TSQ-10) — tidak ada pemilik yang bisa dikejar; tampil di irisan rekap, bukan hilang di salah satu ember.
+- EC-TSQ-4: Penanggung diisi lalu dikosongkan lagi oleh manajer via form existing: masuk lagi ke `BELUM_DITUGASKAN` render berikut; umur mengendap berlanjut dari lahir, bukan dari pengosongan.
+- EC-TSQ-5: Tugas di proyek induk sudah ditutup: tetap tampil tertanda nama proyek (BR-TSQ-05); proyek dihapus → tugas hilang ikut Cascade, bukan saringan.
+- EC-TSQ-6: Tugas `completed` berumur lama diselesaikan hari ini: keluar populasi; antrean tidak menyatakan "mengendap N hari sebelum selesai" (tidak ada `completedAt`; `updatedAt` dilarang jadi penanda selesai).
+- EC-TSQ-7: Dua tugas dibuat detik sama persis: seri deterministik `createdAt` naik lalu id naik (BR-TSQ-10).
+- EC-TSQ-8: Tugas `startDate` masa depan, `createdAt` lama: mengendap dihitung dari `createdAt` apa adanya (BR-TSQ-02) — "belum mulai sesuai rencana" adalah sinyal lain yang tidak dicampur; tertanda hanya bila Lead membuka kolom startDate kelak (di luar spec ini).
+
+### 8. Backlog implementasi (turunan F-2026-10-27-102-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-102-S | Spec kontrak ini (dokumen) | Business | — |
+| 102-B | Perluasan builder/loader 091-B: umur mengendap WIB dari `createdAt` + tingkat + ember penugasan ortogonal + irisan rekap + tes AC-TSQ-B1..B5 (fisik satu-builder per Q-TSQ-4) | Backend | Putusan Lead Q-TSQ-1/2/3/4 + status putusan Q-PTQ 091-S terverifikasi |
+| 102-F | Permukaan konsumen verbatim payload (judul per Q-TSQ-2/3) + AC-TSQ-F1..F3; grep e2e proyek/tugas dulu | Frontend | 102-B merged |
+| 102-Q | Falsifikasi AC-TSQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 102-B/102-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 9. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-TSQ-1 | Ambang `MENGENDAP`: umur mengendap ≥ N hari kalender WIB sejak `createdAt`? Satu ambang semua tugas terbuka, atau ambang beda untuk tanpa-tenggat vs bertenggat? | Lead | USULAN satu ambang 14 hari untuk semua populasi terbuka tahap 1 (lebih longgar dari ambang tenggat 3 hari usulan Q-PTQ-1 karena mengendap = sinyal kebersihan antrean, bukan kedaruratan tenggat); ambang beda per sub-populasi = kerumitan tanpa bukti kebutuhan — bukan fakta sebelum diputus; satu konstanta server bernama |
+| Q-TSQ-2 | Kata final: label `MENGENDAP`, `BELUM_DITUGASKAN` (warisi 091-S?), label dua umur (keterlambatan vs mengendap), judul permukaan `Tugas Proyek Terbuka Mengendap`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim; label umur wajib beda kata supaya dua acuan tidak tertukar |
+| Q-TSQ-3 | Urutan kepala (belum-ditugaskan+mengendap dulu) + penempatan: seksi yang sama dengan permukaan 091-F atau permukaan gabungan satu antrean dua dimensi? | Lead | USULAN satu permukaan gabungan sesudah 091-F ada (dua pertanyaan admin pagi dijawab satu layar, saringan fokus beda); urutan usulan BR-TSQ-10 apa adanya |
+| Q-TSQ-4 | Fisik: perluasan builder 091-B yang sama (satu builder dua lapis) vs modul terpisah? | Lead (fisik Backend melaksanakan) | USULAN tegas satu builder (BR-TSQ-11) — populasi/ember berbeda pendapat antar dua builder = cacat desain; nama berkas final Backend |
+| Q-TSQ-5 | Mengendap dikaitkan jam Timesheet/biaya/denda proyek? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-TSQ-07); vonis WAJIB hanya bila Lead membuka kaitan jam/biaya — tahap baca-saja tanpa nominal/jam tidak butuh vonis |
+
+### Yang TIDAK diusulkan run ini
+- Antrean tenggat kedua / builder populasi kedua di luar 091-B (BR-TSQ-11) — 102-S adalah dimensi perluasan, bukan duplikat 091-S.
+- Tombol Tugaskan/Isi Tenggat/Selesai/Hapus dari antrean, penugasan otomatis, eskalasi WA/email ke manajer proyek (BR-TSQ-06).
+- Kolom baru di `Task` (`completedAt`, enum status, `assignedAt`), key izin khusus tugas, atau mengubah guard `createTask`/`updateTask` — lapisan baca di atasnya; stempel waktu penugasan = perubahan tulis terpisah bila Lead menghendaki.
+- Jam Timesheet, biaya, denda, persen progres, skor kesehatan proyek di payload (BR-TSQ-07/08).
+- Saringan baca per penugasan / scope HR di domain proyek (BR-TSQ-09; wilayah Q-PTQ-3 091-S).
+- Mengganti daftar tugas existing atau mengubah urutannya diam-diam.
+
+F-2026-10-27-102-S — Antrean tugas proyek terbuka mengendap (perluasan 091-S: umur sejak dibuat + ember belum-ditugaskan). Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-TSQ-1/2/3/4 (+ status putusan Q-PTQ 091-S terverifikasi lebih dulu), lalu fisik Backend (102-B sebagai perluasan 091-B), konsumen Frontend (102-F), falsifikasi QA (102-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/bentuk fisik), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal/jam); WAJIB bersyarat hanya bila kaitan jam/biaya/denda dibuka (Q-TSQ-5, BR-TSQ-07).
