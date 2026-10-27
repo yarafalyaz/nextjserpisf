@@ -6,7 +6,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { confirmVendorPayment, deleteVendorPayment } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { StatusChip } from "@/components/ui/status-chip"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -51,7 +51,7 @@ const columns = [
   }),
   columnHelper.accessor("status", {
     header: "Status",
-    cell: (info) => <span className="text-sm">{statusLabel(info.getValue())}</span>,
+    cell: (info) => <StatusChip status={info.getValue()} />,
   }),
   columnHelper.display({
     id: "actions",
@@ -60,7 +60,7 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={entityHref("/pembelian/pembayaran-vendor", info.row.original)}
-        deleteAction={deleteVendorPayment}
+        deleteAction={info.row.original.status === "reversed" ? undefined : deleteVendorPayment}
         deleteId={info.row.original.id}
         editPermission="edit_vendor_payments"
         deletePermission="delete_vendor_payments"

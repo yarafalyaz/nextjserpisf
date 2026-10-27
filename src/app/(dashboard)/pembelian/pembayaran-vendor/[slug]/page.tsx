@@ -12,6 +12,9 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { PaymentReversalButton, PaymentReversalNotice } from "@/components/ui/payment-reversal-button"
+import { StatusChip } from "@/components/ui/status-chip"
+import { hasPermission } from "@/lib/auth/permissions"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
 import type { Metadata } from "next"
@@ -69,20 +72,38 @@ export default async function VendorPaymentDetailPage({
         ]}
         actions={
           <>
-            <CanCreate permission="edit_vendor_payments">
-              <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
-            </CanCreate>
+            {payment.status !== "reversed" && (
+              <CanCreate permission="edit_vendor_payments">
+                <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
+              </CanCreate>
+            )}
             <PrintButton documentType="vendor-payment" documentId={payment.id} />
-            <CanCreate permission="delete_vendor_payments">
-              <DeleteButton id={payment.id} action={deleteVendorPayment} />
-            </CanCreate>
+            <PaymentReversalButton
+              kind="vendor"
+              id={payment.id}
+              documentNo={payment.documentNo}
+              status={payment.status}
+              canReverse={await hasPermission("delete_vendor_payments")}
+            />
+            {payment.status !== "reversed" && (
+              <CanCreate permission="delete_vendor_payments">
+                <DeleteButton id={payment.id} action={deleteVendorPayment} />
+              </CanCreate>
+            )}
             <BackButton href="/pembelian/pembayaran-vendor" />
           </>
         }
       />
 
+      <PaymentReversalNotice
+        status={payment.status}
+        reversalReason={payment.reversalReason}
+        reversedAt={payment.reversedAt}
+      />
+
       <DetailCard>
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />
+        <DetailField label="Status" value={<StatusChip status={payment.status} />} />
         <DetailField
           label="Vendor"
           value={<Link href={entityHref("/master/vendor", payment.vendor)}>{payment.vendor.name}</Link>}

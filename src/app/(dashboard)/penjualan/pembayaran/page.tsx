@@ -50,6 +50,7 @@ export default async function SalesPaymentsPage({
     id: p.id,
     slug: p.slug,
     documentNo: p.documentNo,
+    status: p.status,
     salesInvoice: { ...p.salesInvoice, documentNo: salesInvoiceLabel(p.salesInvoice) },
     paymentDate: p.paymentDate,
     paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),

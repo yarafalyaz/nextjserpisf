@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { getActivePaymentMethods } from "@/lib/services/method.service";
+import { PaymentReversalNotice } from "@/components/ui/payment-reversal-button";
 
 import type { Metadata } from "next";
 
@@ -85,13 +86,21 @@ export default async function EditPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
-      <PaymentForm
-        payment={payment}
-        invoices={invoiceOptions}
-        accounts={accounts}
-        paymentMethods={paymentMethods}
-        withholdingTypes={withholdingTypes.map((type) => ({ ...type, rate: Number(type.rate) }))}
-      />
+      {data.status === "reversed" ? (
+        <PaymentReversalNotice
+          status={data.status}
+          reversalReason={data.reversalReason}
+          reversedAt={data.reversedAt}
+        />
+      ) : (
+        <PaymentForm
+          payment={payment}
+          invoices={invoiceOptions}
+          accounts={accounts}
+          paymentMethods={paymentMethods}
+          withholdingTypes={withholdingTypes.map((type) => ({ ...type, rate: Number(type.rate) }))}
+        />
+      )}
     </div>
   );
 }

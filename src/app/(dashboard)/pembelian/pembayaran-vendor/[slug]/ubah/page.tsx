@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { VendorPaymentForm } from "@/components/forms/vendor-payment-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getActivePaymentMethods } from "@/lib/services/method.service"
+import { PaymentReversalNotice } from "@/components/ui/payment-reversal-button"
 
 import type { Metadata } from "next"
 
@@ -65,7 +66,15 @@ export default async function EditPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
-      <VendorPaymentForm payment={payment} vendors={vendors} bills={billOptions} paymentMethods={paymentMethods}/>
+      {data.status === "reversed" ? (
+        <PaymentReversalNotice
+          status={data.status}
+          reversalReason={data.reversalReason}
+          reversedAt={data.reversedAt}
+        />
+      ) : (
+        <VendorPaymentForm payment={payment} vendors={vendors} bills={billOptions} paymentMethods={paymentMethods}/>
+      )}
     </div>
   )
 }

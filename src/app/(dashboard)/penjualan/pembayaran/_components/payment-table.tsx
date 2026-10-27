@@ -7,12 +7,14 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteSalesPayment } from "@/actions/sales.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { StatusChip } from "@/components/ui/status-chip"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface SalesPayment {
   id: number
   slug: string | null
   documentNo: string
+  status: string
   salesInvoice: { documentNo: string; customer: { name: string } }
   paymentDate: Date | string
   paymentMethod: string
@@ -52,13 +54,17 @@ const columns = [
     header: "Jumlah",
     cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
   }),
+  columnHelper.accessor("status", {
+    header: "Status",
+    cell: (info) => <StatusChip status={info.getValue()} />,
+  }),
   columnHelper.display({
     id: "actions",
     header: "Aksi",
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        deleteAction={deleteSalesPayment}
+        deleteAction={info.row.original.status === "reversed" ? undefined : deleteSalesPayment}
         deleteId={info.row.original.id}
         deletePermission="delete_sales_payments"
       />

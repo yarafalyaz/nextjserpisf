@@ -15,6 +15,12 @@ import {
   getPaymentMethodMap,
   resolvePaymentMethodName,
 } from "@/lib/services/method.service";
+import {
+  PaymentReversalButton,
+  PaymentReversalNotice,
+} from "@/components/ui/payment-reversal-button";
+import { StatusChip } from "@/components/ui/status-chip";
+import { hasPermission } from "@/lib/auth/permissions";
 
 import type { Metadata } from "next";
 
@@ -69,25 +75,46 @@ export default async function SalesPaymentDetailPage({
         ]}
         actions={
           <>
-            <CanCreate permission="edit_sales_payments">
-              <Button
-                href={entityEditHref("/penjualan/pembayaran", payment)}
-                variant="primary"
-              >
-                Ubah
-              </Button>
-            </CanCreate>
+            {payment.status !== "reversed" && (
+              <CanCreate permission="edit_sales_payments">
+                <Button
+                  href={entityEditHref("/penjualan/pembayaran", payment)}
+                  variant="primary"
+                >
+                  Ubah
+                </Button>
+              </CanCreate>
+            )}
             <PrintButton documentType="sales-payment" documentId={payment.id} />
-            <CanCreate permission="delete_sales_payments">
-              <DeleteButton id={payment.id} action={deleteSalesPayment} />
-            </CanCreate>
+            <PaymentReversalButton
+              kind="sales"
+              id={payment.id}
+              documentNo={payment.documentNo}
+              status={payment.status}
+              canReverse={await hasPermission("delete_sales_payments")}
+            />
+            {payment.status !== "reversed" && (
+              <CanCreate permission="delete_sales_payments">
+                <DeleteButton id={payment.id} action={deleteSalesPayment} />
+              </CanCreate>
+            )}
             <BackButton href="/penjualan/pembayaran" />
           </>
         }
       />
 
+      <PaymentReversalNotice
+        status={payment.status}
+        reversalReason={payment.reversalReason}
+        reversedAt={payment.reversedAt}
+      />
+
       <DetailCard>
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />
+        <DetailField
+          label="Status"
+          value={<StatusChip status={payment.status} />}
+        />
         <DetailField
           label="Faktur"
           value={
