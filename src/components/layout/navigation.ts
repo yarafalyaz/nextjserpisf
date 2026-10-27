@@ -111,6 +111,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Permintaan", href: "/pembelian/permintaan", icon: ClipboardList, permission: "view_purchase_requests" },
       { label: "Pesanan Pembelian", href: "/pembelian/pesanan", icon: FileCheck, permission: "view_purchase_orders" },
+      { label: "Pesanan Pembelian Draft Mengendap", href: "/pembelian/antrean-pesanan-draf", icon: ListTodo, permission: "view_purchase_orders" },
       { label: "Penerimaan Barang", href: "/pembelian/penerimaan", icon: PackageCheck, permission: "view_goods_receipts" },
       { label: "Tagihan Pemasok", href: "/pembelian/tagihan", icon: FileSpreadsheet, permission: "view_vendor_bills" },
       { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor", icon: Banknote, permission: "view_vendor_payments" },
