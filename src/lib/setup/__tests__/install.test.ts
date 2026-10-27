@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 
+import { Prisma } from "@prisma/client"
 import { installBaseData } from "../install"
 import { PERMISSIONS, ROLES, CHART_OF_ACCOUNTS, WITHHOLDING_TAX_TYPES } from "../base-data"
 
@@ -41,6 +42,7 @@ const input = {
 describe("installBaseData", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.prismaMock.user.count.mockResolvedValue(0)
     // Two permissions exist so the role mapping can resolve ids.
     mocks.prismaMock.permission.findMany.mockResolvedValue([
       { id: 1, name: "view_dashboard" },
@@ -192,6 +194,62 @@ describe("installBaseData", () => {
   it("runs as a single transaction", async () => {
     await installBaseData(input)
     expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it("runs the install transaction at Serializable isolation", async () => {
+    await installBaseData(input)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }),
+    )
+  })
+
+  it("locks the system_settings singleton before creating the administrator", async () => {
+    await installBaseData(input)
+
+    const lockCallIndex = mocks.prismaMock.$queryRawUnsafe.mock.calls.findIndex(
+      (call: unknown[]) => typeof call[0] === "string" && call[0].includes("FOR UPDATE"),
+    )
+    expect(lockCallIndex).toBeGreaterThanOrEqual(0)
+    expect(mocks.prismaMock.$queryRawUnsafe.mock.calls[lockCallIndex][0]).toContain("system_settings")
+
+    const lockOrder = mocks.prismaMock.$queryRawUnsafe.mock.invocationCallOrder[lockCallIndex]
+    const adminOrder = mocks.prismaMock.user.create.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(adminOrder)
+  })
+
+  // Race regresi TASK-021: dua runSetup bersamaan sama-sama lolos
+  // isInstalled()===false di luar transaksi. Pengecekan ulang di dalam
+  // transaksi harus menolak pemanggil kedua tanpa admin kedua.
+  it("rejects a second install when a user already exists inside the transaction", async () => {
+    mocks.prismaMock.user.count.mockResolvedValue(1)
+
+    await expect(
+      installBaseData({ ...input, adminName: "Penyerang", adminEmail: "second@isf.co.id" }),
+    ).rejects.toThrow("Aplikasi sudah terpasang.")
+
+    expect(mocks.prismaMock.user.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.permission.createMany).not.toHaveBeenCalled()
+  })
+
+  it("creates exactly one super_admin across sequential calls with a stale pre-check", async () => {
+    mocks.prismaMock.user.count.mockResolvedValue(0)
+    await installBaseData(input)
+    expect(mocks.prismaMock.user.create).toHaveBeenCalledTimes(1)
+
+    // Panggilan kedua: cek luar basi (masih mengira belum terpasang), tetapi
+    // hitung ulang di dalam transaksi kini melihat admin pemenang.
+    mocks.prismaMock.user.count.mockResolvedValue(1)
+    await expect(
+      installBaseData({ ...input, adminName: "Admin Kedua", adminEmail: "admin2@isf.co.id" }),
+    ).rejects.toThrow("Aplikasi sudah terpasang.")
+
+    expect(mocks.prismaMock.user.create).toHaveBeenCalledTimes(1)
+    const created = mocks.prismaMock.user.create.mock.calls[0][0].data
+    expect(created.roles.connect).toEqual({ name: "super_admin" })
   })
 
   // Regression: the inserts above leave `slug` NULL, so every list link fell

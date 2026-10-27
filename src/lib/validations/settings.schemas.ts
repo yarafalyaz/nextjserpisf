@@ -47,6 +47,8 @@ export const updateSystemSettingsSchema = z.object({
   companyPostalCode: optionalNullString(20),
   companyWebsite: optionalNullString(),
   companyTaxId: optionalNullString(50),
+  // NITKU penjual 22 digit (SellerIDTKU Coretax); kosong = ekspor ditolak builder.
+  companyNitku: optionalNullString(22),
   // F-2026-10-25-015-V: status PKP perusahaan (enum tertutup; tanggal
   // mulai kewajiban divalidasi silang di aksi — pkp wajib bertanggal).
   // Form kirim string kosong untuk "belum diisi" — normalkan ke null
@@ -75,6 +77,9 @@ export const updateSystemSettingsSchema = z.object({
   // lewat proses akhir bulan (period-close.actions.ts).
   showIsActiveField: optionalBool(),
   showTaxId: optionalBool(),
+  // F-2026-10-25-035-B (Q-CL2-5): saklar gerbang kredit; hanya terkirim
+  // dari form pengaturan oleh pemegang manage_settings.
+  creditGateEnabled: optionalBool(),
   defaultProjectStages: optionalString(1000),
 
   // Auto-Code Prefixes

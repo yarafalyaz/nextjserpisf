@@ -2,12 +2,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 
 const employeeFindFirst = vi.fn()
 const employeeFindUnique = vi.fn()
+const employeeFindMany = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     employee: {
       findFirst: (...args: unknown[]) => employeeFindFirst(...args),
       findUnique: (...args: unknown[]) => employeeFindUnique(...args),
+      findMany: (...args: unknown[]) => employeeFindMany(...args),
     },
   },
 }))
@@ -36,6 +38,34 @@ describe("HR data scope", () => {
 
     employeeFindUnique.mockResolvedValueOnce({ departmentId: 4 })
     await expect(assertHrEmployeeAccess(scope, 9)).rejects.toThrow("tidak memiliki akses")
+  })
+
+  it("structural authorization: team scope follows the manager chain recursively", async () => {
+    employeeFindFirst.mockResolvedValue({ id: 1, departmentId: 2 })
+    employeeFindMany
+      .mockResolvedValueOnce([{ id: 2 }, { id: 3 }])
+      .mockResolvedValueOnce([{ id: 4 }])
+      .mockResolvedValueOnce([])
+
+    const scope = await getHrScope({
+      id: "11",
+      roles: ["staff"],
+      permissions: ["view_subordinate_data"],
+    })
+
+    expect(scope.kind).toBe("team")
+    expect(hrScopeWhere(scope)).toEqual({ employeeId: { in: [1, 2, 3, 4] } })
+    await expect(assertHrEmployeeAccess(scope, 4)).resolves.toBeUndefined()
+    await expect(assertHrEmployeeAccess(scope, 9)).rejects.toThrow(
+      "tidak memiliki akses",
+    )
+  })
+
+  it("without view_subordinate_data the same user stays self-scoped", async () => {
+    employeeFindFirst.mockResolvedValue({ id: 1, departmentId: 2 })
+    const scope = await getHrScope({ id: "11", roles: ["staff"], permissions: [] })
+    expect(scope.kind).toBe("self")
+    expect(employeeFindMany).not.toHaveBeenCalled()
   })
 
   it("allows designated HR roles across employees", async () => {

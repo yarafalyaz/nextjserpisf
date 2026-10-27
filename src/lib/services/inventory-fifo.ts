@@ -196,7 +196,6 @@ export async function consumeFifoLayers(
     }
   }
 
-  let toConsume = qty
   let consumedCost = 0
   const batchConsumption = new Map<string, number>()
   const layerUpdates: Promise<any>[] = []
@@ -205,10 +204,62 @@ export async function consumeFifoLayers(
   const consumedBatches: ConsumedBatch[] = []
   const consumedSerials: string[] = []
 
-  for (const layer of layers) {
-    if (toConsume <= 0) break
-    const rem = layer.remaining !== undefined ? layer.remaining : (layer as any).remaining
-    const consume = Math.min(Number(rem), toConsume)
+  const layerRem = (l: (typeof layers)[number]): number =>
+    Number(l.remaining !== undefined ? l.remaining : (l as unknown as { remaining: unknown }).remaining)
+  const totalRemaining = layers.reduce((s, l) => s + layerRem(l), 0)
+  const consumedQtyTarget = Math.min(qty, totalRemaining)
+
+  // Per-layer consumption amounts. FIFO drains oldest first. AVERAGE drains
+  // every layer in proportion to its remaining qty: the weighted average of
+  // what is left must be identical before and after the sale, otherwise the
+  // next sale is valued at a drifted average (10@4 + 30@6, jual 20 lalu 10:
+  // FIFO drain menyisakan 20@6 sehingga penjualan kedua terhitung Rp60,
+  // padahal rata-rata tertimbang yang benar tetap 5,5 → Rp55).
+  const consumptions: { layer: (typeof layers)[number]; consume: number }[] = []
+  if (costingMethod === "average" && totalRemaining > 0 && consumedQtyTarget > 0) {
+    let allocated = 0
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i]
+      const rem = layerRem(layer)
+      let share =
+        i === layers.length - 1
+          ? consumedQtyTarget - allocated
+          : Math.round(((consumedQtyTarget * rem) / totalRemaining) * 100) / 100
+      share = Math.round(Math.min(Math.max(share, 0), rem) * 100) / 100
+      consumptions.push({ layer, consume: share })
+      allocated = Math.round((allocated + share) * 100) / 100
+    }
+    // Rounding to cents can leave a small drift against the target; settle it
+    // on the layers with the most spare capacity (or the largest shares when
+    // removing) so the drained total is exact.
+    let drift = Math.round((consumedQtyTarget - allocated) * 100) / 100
+    if (drift !== 0) {
+      const byCapacity = [...consumptions].sort(
+        (a, b) => layerRem(b.layer) - b.consume - (layerRem(a.layer) - a.consume),
+      )
+      for (const entry of byCapacity) {
+        if (drift === 0) break
+        const capacity = drift > 0 ? layerRem(entry.layer) - entry.consume : entry.consume
+        const adj = drift > 0 ? Math.min(drift, capacity) : Math.max(drift, -capacity)
+        if (adj === 0) continue
+        entry.consume = Math.round((entry.consume + adj) * 100) / 100
+        drift = Math.round((drift - adj) * 100) / 100
+      }
+    }
+  } else {
+    let remainingToDrain = consumedQtyTarget
+    for (const layer of layers) {
+      if (remainingToDrain <= 0) break
+      const consume = Math.min(layerRem(layer), remainingToDrain)
+      if (consume > 0) consumptions.push({ layer, consume })
+      remainingToDrain = Math.round((remainingToDrain - consume) * 100) / 100
+    }
+  }
+
+  let consumedQtyActual = 0
+  for (const { layer, consume } of consumptions) {
+    if (consume <= 0) continue
+    consumedQtyActual = Math.round((consumedQtyActual + consume) * 100) / 100
     if (costingMethod === "fifo") {
       const uCost = layer.unitCost !== undefined ? layer.unitCost : (layer as any).unit_cost
       // Round each layer's contribution to 2dp before accumulating so float drift
@@ -227,12 +278,11 @@ export async function consumeFifoLayers(
       const key = `${layer.batchNumber}|${layer.warehouseId ?? ""}`
       batchConsumption.set(key, (batchConsumption.get(key) ?? 0) + consume)
     }
-    toConsume = Math.round((toConsume - consume) * 100) / 100
   }
+  const toConsume = Math.round((qty - consumedQtyActual) * 100) / 100
 
   if (costingMethod === "average") {
-    const consumedQty = Math.round((qty - Math.max(0, toConsume)) * 100) / 100
-    consumedCost = Math.round(consumedQty * averageCost * 100) / 100
+    consumedCost = Math.round(consumedQtyActual * averageCost * 100) / 100
   }
 
   await Promise.all(layerUpdates)
