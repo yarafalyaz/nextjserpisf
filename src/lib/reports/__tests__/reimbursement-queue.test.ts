@@ -30,14 +30,10 @@ vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
 }))
 
+// Mock scope: "all" tanpa saringan (kasus department diuji lewat where loader lain).
 vi.mock("@/lib/auth/hr-scope", () => ({
   getHrScope: (...a: unknown[]) => mocks.getHrScope(...a),
-  hrScopeWhere: (scope: { kind: string; departmentId?: number | null; employeeId?: number }) => {
-    if (scope.kind === "all") return {}
-    if (scope.kind === "self") return { employeeId: scope.employeeId }
-    if (scope.departmentId == null) return { employeeId: scope.employeeId }
-    return { employee: { departmentId: scope.departmentId } }
-  },
+  hrScopeWhere: (scope: { kind: string }) => (scope.kind === "all" ? {} : { employeeId: -1 }),
 }))
 
 import { getReimbursementQueue } from "../reimbursement-queue-data"
