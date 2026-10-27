@@ -33,6 +33,10 @@ export const STATUS_LABELS: Record<string, string> = {
   delivered: "Terkirim",
   ordered: "Dipesan",
   cancelled: "Dibatalkan",
+  // F-2026-10-26-054-S: status penyesuaian gaji (lahir menunggu -> terjadwal
+  // sesudah disetujui -> diterapkan pada tanggal efektif).
+  scheduled: "Terjadwal",
+  applied: "Diterapkan",
   returned: "Dikembalikan",
   replaced: "Diganti",
   in_transit: "Dalam Perjalanan",
