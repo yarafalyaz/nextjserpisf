@@ -9,12 +9,28 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { FolderKanban } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ProjectTable } from "./_components/project-table"
+import { ProjectStageQueueSection } from "./_components/project-stage-queue"
+import { getProjectStageQueue } from "@/lib/reports/project-stage-queue-data"
+import {
+  PROJECT_STAGE_QUEUE_TITLE,
+  type ProjectStageQueue,
+} from "@/lib/reports/project-stage-queue"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Proyek" }
+
+/** Redirect Next.js (termasuk gerbang izin fail-closed) bukan error muat. */
+function isNextRedirect(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 export default async function ProjectsPage({
   searchParams,
@@ -37,18 +53,37 @@ export default async function ProjectsPage({
     }),
   }
 
-  const projects = await prisma.project.findMany({
-    where,
-    include: {
-      customer: true,
-      _count: { select: { items: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take,
-    skip: (page - 1) * pageSize,
-  })
+  // Seksi turunan baca-saja (F-2026-10-27-092-S, Q-PSQ-3) dimuat
+  // paralel dengan daftar utama. Gerbang view_projects ditegakkan
+  // ulang fail-closed di loader sebelum query: redirect izin tetap
+  // diteruskan, sedangkan kegagalan muat lain hanya mengosongkan
+  // seksi turunan — daftar proyek existing tetap tampil.
+  const stageQueuePromise: Promise<{
+    queue: ProjectStageQueue | null
+    redirectError?: unknown
+  }> = getProjectStageQueue()
+    .then((queue) => ({ queue }))
+    .catch((error: unknown) =>
+      isNextRedirect(error) ? { queue: null, redirectError: error } : { queue: null },
+    )
 
-  const total = await prisma.project.count({ where })
+  const [projects, total] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      include: {
+        customer: true,
+        _count: { select: { items: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      skip: (page - 1) * pageSize,
+    }),
+    prisma.project.count({ where }),
+  ])
+
+  const stageResult = await stageQueuePromise
+  if (stageResult.redirectError !== undefined) throw stageResult.redirectError
+  const projectStageQueue = stageResult.queue
 
   const tableData = toPlain(projects)
 
@@ -76,6 +111,24 @@ export default async function ProjectsPage({
           </Link>
         </CanCreate>
       </div>
+
+      {projectStageQueue ? (
+        <ProjectStageQueueSection queue={projectStageQueue} />
+      ) : (
+        <section
+          aria-label={PROJECT_STAGE_QUEUE_TITLE}
+          className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+        >
+          <div className="flex flex-col gap-1 p-4 px-5">
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">
+              {PROJECT_STAGE_QUEUE_TITLE}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Antrean tahap proyek berjalan tidak dapat dimuat saat ini.
+            </p>
+          </div>
+        </section>
+      )}
 
       <ProjectTable
         data={tableData}
