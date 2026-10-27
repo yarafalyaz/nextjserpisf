@@ -300,6 +300,7 @@ const ALLOWED_DEFAULT_RETURN: Record<string, string> = {
   "src/lib/setup/install-state.ts": "tabel tak ada / DB tak terjangkau → dianggap belum terpasang (degradasi disengaja, beralasan)",
   "src/lib/utils/idempotency.ts": "pembersihan best-effort; kegagalan dicatat dan dianggap \"tak ada yang dihapus\"",
   "src/lib/utils/safe-parse.ts": "parse JSON gagal → null; kontrak fungsi memang mengembalikan null",
+  "src/lib/reports/return-credit.ts": "resolusi akun Piutang global gagal → null = akun belum terkonfigurasi; returnCredit dianggap 0 dan laporan tetap jalan (pola existing sales-target-achievement-data)",
 }
 
 function collectViolations(

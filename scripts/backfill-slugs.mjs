@@ -72,6 +72,8 @@ const TABLE_SOURCES = {
   appreciations: "id", leave_requests: "id", timesheets: "id",
   overtime_requests: "id", payrolls: "document_no", employee_loans: "id",
   probation_reviews: "id", contract_decision_requests: "id",
+  job_vacancies: "code", job_applicants: "name", performance_cycles: "name",
+  performance_reviews: "id", competencies: "name", trainings: "title",
   // crm
   leads: "name", crm_tickets: "subject",
   // pengaturan

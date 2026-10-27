@@ -172,6 +172,40 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-22-070-S inti backend (PR #694): 3 aksi stok minimum per
   // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
   // (t_0fc24ddc) — entri beku dibuang.
+  // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
+  // pelanggan kini dirujuk halaman kelola pelanggan (frontend
+  // t_1f97c2ea) — entri beku dibuang.
+  // F-2026-10-25-017-S Backend dulu: aksi klaim reimbursement dirujuk UI
+  // mandiri karyawan menyusul di kartu Frontend sesudah kontrak ini stabil
+  // — buang 3 entri ini saat UI memanggilnya.
+  "src/actions/reimbursement.actions.ts::createReimbursementClaim":
+    "F-2026-10-25-017-S backend; UI klaim mandiri menyusul (frontend)",
+  "src/actions/reimbursement.actions.ts::setReimbursementClaimAccounts":
+    "F-2026-10-25-017-S backend; UI verifikasi keuangan menyusul (frontend)",
+  "src/actions/reimbursement.actions.ts::getMyReimbursementClaims":
+    "F-2026-10-25-017-S backend; UI daftar klaim saya menyusul (frontend)",
+  // HCMS (Muse K1 backend, kartu t_122db5c5): halaman rekrutmen/kinerja/
+  // kompetensi/pelatihan sudah merujuk aksi buat/ubah/status; aksi hapus,
+  // kesenjangan kompetensi, sasaran kinerja, dan lepas peserta berikut
+  // belum punya pemanggil UI — buang entri ini saat UI memanggilnya.
+  "src/actions/development.actions.ts::deleteCompetency":
+    "HCMS backend; tombol hapus kompetensi menyusul (frontend)",
+  "src/actions/development.actions.ts::getCompetencyGaps":
+    "HCMS backend; panel kesenjangan kompetensi menyusul (frontend)",
+  "src/actions/development.actions.ts::deleteTraining":
+    "HCMS backend; tombol hapus pelatihan menyusul (frontend)",
+  "src/actions/development.actions.ts::removeTrainingParticipant":
+    "HCMS backend; aksi lepas peserta pelatihan menyusul (frontend)",
+  "src/actions/performance.actions.ts::deletePerformanceCycle":
+    "HCMS backend; tombol hapus siklus kinerja menyusul (frontend)",
+  "src/actions/performance.actions.ts::upsertPerformanceGoal":
+    "HCMS backend; form sasaran kinerja menyusul (frontend)",
+  "src/actions/performance.actions.ts::deletePerformanceGoal":
+    "HCMS backend; tombol hapus sasaran kinerja menyusul (frontend)",
+  "src/actions/recruitment.actions.ts::deleteVacancy":
+    "HCMS backend; tombol hapus lowongan menyusul (frontend)",
+  "src/actions/recruitment.actions.ts::deleteApplicant":
+    "HCMS backend; tombol hapus pelamar menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

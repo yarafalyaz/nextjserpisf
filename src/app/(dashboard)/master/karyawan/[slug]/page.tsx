@@ -177,7 +177,7 @@ export default async function EmployeeDetailPage({
   // gaji; tanpa izin, panel dan angka tidak dirender sama sekali.
   const canSeeSalary = await canViewSalaryAmounts()
   const salaryHistory = canSeeSalary
-    ? await getSalaryAdjustments(employee.id).catch(() => null)
+    ? await getSalaryAdjustments(employee.id)
     : null
   const salaryRows: {
     id: number
