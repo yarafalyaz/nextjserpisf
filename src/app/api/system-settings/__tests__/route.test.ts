@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
+  authFn: vi.fn(),
   hasPermission: vi.fn(),
   getSystemSettings: vi.fn(),
+}))
+
+vi.mock("@/lib/auth/auth", () => ({
+  auth: (...a: unknown[]) => mocks.authFn(...a),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -36,6 +41,7 @@ describe("GET /api/system-settings", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.hasPermission.mockResolvedValue(true)
+    mocks.authFn.mockResolvedValue({ user: { name: "Rani", email: "rani@x.id" } })
     mocks.getSystemSettings.mockResolvedValue({ ...SETTINGS })
   })
 
@@ -70,8 +76,20 @@ describe("GET /api/system-settings", () => {
         "companyProvince",
         "companyVillage",
         "companyWebsite",
+        "printedBy",
       ].sort(),
     )
+  })
+
+  it("returns printedBy from session name, falling back to email", async () => {
+    const res = await GET()
+    expect((await res.json()).printedBy).toBe("Rani")
+    mocks.authFn.mockResolvedValueOnce({ user: { email: "rani@x.id" } })
+    expect((await (await GET()).json()).printedBy).toBe("rani@x.id")
+    mocks.authFn.mockResolvedValueOnce({ user: {} })
+    expect((await (await GET()).json()).printedBy).toBeNull()
+    mocks.authFn.mockResolvedValueOnce(null)
+    expect((await (await GET()).json()).printedBy).toBeNull()
   })
 
   it("returns 500 with apiError shape when settings load fails", async () => {
