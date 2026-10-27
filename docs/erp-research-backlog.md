@@ -39074,6 +39074,85 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
 F-2026-10-27-103-S — Antrean transaksi berulang jatuh tempo / gagal jalan mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RCQ103-1/2/3, lalu fisik Backend (103-B), konsumen Frontend (103-F), falsifikasi QA (103-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan/gerbang), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila nominal/posting dari antrean dibuka (Q-RCQ103-5, BR-RCQ103-12).
 
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-107-V: nilai transfer di jalan BUKAN nilai baru di antrean kerja (jawaban Q-ITQ-4 spec F-2026-10-27-106-S PR #1174)
+
+> **Slot**: F-2026-10-27-107-V. Diperiksa bentrok 2026-10-27 14:35 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-107` di backlog+board = 0/0; PR terbuka memakai 102-S/103-S/104-S/106-S (tidak ada 107); 105-V = PR #1175 OPEN (beda topik, sudah terbit) — vonis ini TIDAK menempati ulang 105. Dokumen saja; tanpa kode/schema/migrasi.
+
+### 0. Basis bukti live (origin/main e777d82db, 2026-10-27 14:35 WIB) — TERVERIFIKASI-KODE
+
+- `InventoryTransfer` (`prisma/schema.prisma:2674`): tanpa kolom jurnal/tautan GL; `status` draft→processed→received/partially_received. `processInventoryTransfer` (`src/actions/inventory.actions.ts:626`) memanggil `onInventoryTransferProcessed` (hook stok OUT), `receiveInventoryTransfer` (:793) memanggil `onInventoryTransferReceived` (hook stok IN). Grep `InventoryTransfer` di `src/lib/hooks/accounting.hook.ts` = 0 — transfer antar gudang TIDAK memposting jurnal GL (perpindahan lokasi persediaan yang sama, bukan peristiwa buku baru). Satu-satunya pengecualian jurnal di wilayah transfer = penutupan selisih lewat `StockAdjustment.journalId` (:457-467) — peristiwa penyesuaian terpisah, bukan nilai transfer itu sendiri.
+- Nilai persediaan di jalan SUDAH dinilai satu kali di laporan existing `src/lib/reports/transfer-in-transit-data.ts` + `transfer-in-transit.ts`: sisa per baris (`qty - receivedQty`, `remainingQtyByItem`) dinilai pada carried cost `StockMove` OUT posted (`referenceType: "InventoryTransfer"`, `impact: "OUT"`); baris tanpa pergerakan ditandai perkiraan dari `Item.cost` saat ini (`transfer-in-transit.ts:204-205`); total nilai + ember aging >60 hari tampil di laporan itu.
+- Spec induk F-2026-10-27-106-S §BR-ITQ-08 + §8 Q-ITQ-4: payload antrean kerja tanpa nilai uang tahap 1; membuka nilai = BUTUH-VONIS Accountant bersyarat. Vonis ini menjawab SEBELUM Lead membuka itu.
+
+### Putusan 1 — Tahap 1: nilai uang DILARANG di antrean kerja 106
+
+1. Payload builder/loader 106-B dan permukaan 106-F DILARANG memuat: carried cost, nilai sisa per baris/transfer, Σ nilai persediaan di jalan, atau format Rp apa pun yang diturunkan dari qty transfer. Hitungan baris bersisa (`k dari n`) dan sisa qty per baris (tanpa Σ lintas satuan) tetap SAH apa adanya per spec.
+2. Alasan mengikat: nilai di jalan sudah punya SATU rumah penilaian (laporan in-transit, basis §0). Nilai kedua di antrean kerja pasti menyimpang pada campuran baris perkiraan (`Item.cost` kini vs carried cost OUT) — dua angka "nilai di jalan" yang beda di dua layar adalah cacat rekonsiliasi, bukan fitur. Ditambah: transfer nol jurnal GL (§0) sehingga nilai antrean tidak bisa direkonsiliasi ke akun persediaan GL mana pun; menampilkannya di permukaan kerja memberi kesan saldo buku yang tidak ada peristiwa bukunya.
+
+### Putusan 2 — Syarat sah nilai kelak (SEMUA wajib)
+
+Nilai di antrean kerja SAH hanya bila SEMUA: (a) nilainya DIAMBIL dari builder laporan in-transit existing yang sama (`buildTransferInTransit`/loader-nya), bukan hitungan kedua di builder antrean; (b) label verbatim menyatakan sumbernya ("nilai menurut laporan Persediaan Terkirim Belum Diterima, termasuk baris perkiraan bila ada") dan baris perkiraan tetap tertanda; (c) total antrean tampil berdampingan dengan baris rekonsiliasi ke total laporan periode sama — selisih = temuan tampil, bukan dipilih diam-diam; (d) tidak ada label saldo buku/GL untuk nilai itu (nilai subledger stok, bukan saldo akun).
+
+### Larangan + batas build + falsifikasi QA
+
+- Larangan: nilai kedua hasil hitungan builder antrean; Σ nilai lintas satuan; nilai dari `Item.cost` ditampilkan sebagai nilai pasti; mengklaim nilai antrean = saldo persediaan GL.
+- BOT Lead: Q-ITQ-4 TERTUTUP tahap 1 (tanpa nilai); nilai kelak = rangkaian Putusan 2. BOT Backend (106-B): payload tanpa field nilai (E-ITQ4-1). BOT Frontend (106-F): tanpa kolom/format Rp turunan (E-ITQ4-2). BOT QA: E-ITQ4-1 grep field nilai di payload 106-B = MERAH; E-ITQ4-2 mutasi builder antrean menghitung `qty × cost` sendiri = MERAH; E-ITQ4-3 label nilai tanpa tanda perkiraan pada baris tanpa StockMove OUT = MERAH.
+
+ID vonis ini **F-2026-10-27-107-V** (jawaban Q-ITQ-4 spec F-2026-10-27-106-S PR #1174). Pemilik berikutnya: BOT Lead putus Q-ITQ-1/2/3/5 + merge → Backend 106-B → Frontend 106-F → QA E-ITQ4-1..3 + AC-ITQ.
+
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-108-V: antrean transaksi berulang TIDAK menilai/memposting dokumen hasil (jawaban Q-RCQ103-5 spec F-2026-10-27-103-S PR #1170)
+
+> **Slot**: F-2026-10-27-108-V. Diperiksa bentrok 2026-10-27 14:35 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-108` = 0/0; PR terbuka tidak memakai 108. Dokumen saja.
+
+### 0. Basis bukti live — TERVERIFIKASI-KODE
+
+- `RecurringTransaction` (`prisma/schema.prisma:1467`): `template String @db.Text` memuat JSON nominal + akun debit/kredit + akun bayar (`RecurringTemplate`, `recurring.service.ts:8-16`) — isi template adalah instruksi pembuatan dokumen, bukan saldo.
+- `generateDocument` (`recurring.service.ts:84`): type `journal` → `Journal` status `DRAFT` (:134) dengan `assertPeriodOpen(date)` + idempotensi `(referenceType, referenceId)` unik per tanggal (`RecurringTransaction_<yyyymmdd>`); type `expense` → `Expense` status `draft` (:158); type lain (`sales_invoice`/`purchase_bill` per komentar skema) selalu gagal apa adanya (throw :165). Dokumen hasil TIDAK PERNAH terposting oleh mesin berulang — posting tetap aksi manusia existing di halaman jurnal/beban.
+- `runDueRecurring` (:173): kegagalan satu jadwal dicatat `lastResult: "Gagal: ..."` dan TIDAK memajukan `nextRunDate`; sukses memajukan lewat `nextRunAfter` melewati occurrence terlewat (occurrence yang dilompati tidak pernah dihitung mesin). Spec induk F-2026-10-27-103-S BR-RCQ103-07/12 sudah membekukan payload tanpa template/nominal; Q-RCQ103-5 menahan kaitan nominal/posting ke vonis ini.
+
+### Putusan 1 — Tahap 1: nominal + posting dari antrean DILARANG
+
+1. Antrean 103 DILARANG: membaca/mengurai `template` untuk tampil, menampilkan nominal jadwal/dokumen hasil, menjumlahkan Rp per ember, menghitung "dokumen terlewat", atau memposting/menyetujui dokumen DRAFT hasil dari antrean. Nama jadwal, jenis, frekuensi, `nextRunDate`, ember, umur, teks gagal `lastResult` apa adanya tetap SAH per spec.
+2. Alasan mengikat: (a) nominal template adalah rencana pembuatan, bukan kewajiban tercatat — menjumlahkannya sebagai paparan mengarang angka tanpa dokumen; (b) occurrence terlewat tidak ada di data (mesin melompatinya, §0) — hitungan terlewat = angka karangan; (c) dokumen hasil lahir DRAFT dan postingnya adalah peristiwa persetujuan terpisah dengan gerbang periode + idempotensi existing — tombol posting dari antrean akan menjadi jalur posting kedua yang mengitari halaman jurnal/beban.
+
+### Putusan 2 — Syarat sah kelak
+
+Kaitan nominal/posting SAH hanya bila: (a) nominal yang tampil adalah nominal DOKUMEN HASIL nyata (Journal/Expense yang sudah lahir, tertaut lewat `referenceType/referenceId` atau tautan dokumen), bukan nominal template; (b) label membedakan tegas "dokumen draft hasil jadwal" vs "sudah terposting"; (c) posting tetap lewat aksi posting existing halaman jurnal/beban (antrean hanya menaut, tidak memposting); (d) hitungan occurrence terlewat hanya tampil bila mesin kelak benar-benar mencatat occurrence yang dilompati — tanpa catatan itu, angka dilarang.
+
+### Larangan + batas build + falsifikasi QA
+
+- Larangan: parse `template` di builder/loader antrean; Σ Rp per ember; klaim nominal template = beban/utang akan terjadi; tombol posting/setujui dari antrean.
+- BOT Lead: Q-RCQ103-5 TERTUTUP tahap 1. BOT Backend (103-B): payload tanpa nominal (E-RCQ5-1). BOT Frontend (103-F): tanpa format Rp/tombol posting (E-RCQ5-2). BOT QA: E-RCQ5-1 payload memuat field amount/nominal dari template = MERAH; E-RCQ5-2 hitungan "dokumen terlewat" tampil = MERAH; E-RCQ5-3 aksi posting dipanggil dari antrean = MERAH.
+
+ID vonis ini **F-2026-10-27-108-V** (jawaban Q-RCQ103-5 spec F-2026-10-27-103-S PR #1170). Pemilik berikutnya: BOT Lead putus Q-RCQ103-1/2/3 + merge → Backend 103-B → Frontend 103-F → QA E-RCQ5-1..3 + AC-RCQ103.
+
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-109-V: umur tugas proyek BUKAN biaya; jam Timesheet BUKAN tarif (jawaban Q-TSQ-5 spec F-2026-10-27-102-S PR #1166 + Q-WOOQ-6 spec F-2026-10-27-100-S PR #1161)
+
+> **Slot**: F-2026-10-27-109-V. Diperiksa bentrok 2026-10-27 14:35 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-109` = 0/0; PR terbuka tidak memakai 109. Satu vonis menjawab dua pertanyaan bersyarat yang polanya sama (tugas proyek 102-S + tahap WO 100-S) supaya tidak terbit dua vonis duplikat. Dokumen saja.
+
+### 0. Basis bukti live — TERVERIFIKASI-KODE
+
+- `Task` (`prisma/schema.prisma:5789`): tanpa kolom biaya/tarif/denda/completedAt. `Timesheet` (:4194): `hours Decimal(8,2)` + tautan `taskId/workOrderId/projectId/employeeId`, TANPA kolom tarif/upah — jam adalah fakta waktu, bukan uang.
+- Biaya tenaga kerja proyek lahir di `ProductionCost` (:3211): `category labor`, `hours`, `rate Decimal(15,2)`, `amount`, `sourceTimesheetId` — penarikan Timesheet ke ProductionCost adalah peristiwa biaya tersendiri; `src/lib/reports/project-pl.ts:44-47` membekukan: Timesheet yang BELUM ditarik ke ProductionCost BUKAN biaya dan tidak mengurangi laba. `labor-recap` membaca karyawan hanya lewat `ProductionCost.sourceTimesheetId`.
+- `WorkOrderOperation` (`prisma/schema.prisma:3403`): `estimatedHours Decimal?` — estimasi rencana tahap, dan tahap yang mengendap menurut spec 100-S justru tahap yang belum/sedang jalan; estimasi tahap belum tuntas bukan biaya aktual. Biaya WO aktual tetap wilayah ProductionCost/MaterialIssue existing.
+- Spec induk: 102-S BR-TSQ-07 + Q-TSQ-5 dan 100-S BR-WOOQ-09 + Q-WOOQ-6 sama-sama menahan kaitan jam/biaya/denda ke vonis bersyarat ini.
+
+### Putusan 1 — Tahap 1: kaitan jam/biaya/denda DILARANG di kedua antrean
+
+1. Antrean 102 (tugas proyek) dan antrean 100 (operasi WO) DILARANG menampilkan/menurunkan: jam Timesheet sebagai biaya, jam × tarif karangan, biaya proyek per tugas/tahap, denda keterlambatan, atau Σ Rp apa pun dari umur mengendap. Umur hari, tingkat, ember penugasan, estimasi jam rencana apa adanya (100-S) tetap SAH.
+2. Alasan mengikat: (a) jam Timesheet belum ditarik = bukan biaya menurut mesin biaya existing sendiri (§0, project-pl.ts:44-47) — mengonversinya di antrean menciptakan biaya kedua yang tidak pernah dijurnal; (b) tidak ada tarif per karyawan di Timesheet/Task — tarif apa pun yang dipakai antrean adalah karangan atau kebocoran data gaji; (c) denda keterlambatan tugas/tahap tidak punya dasar kontraktual di model (tidak ada kolom/syarat denda) — menampilkannya mengklaim piutang/ potongan yang tidak ada.
+
+### Putusan 2 — Syarat sah kelak
+
+Kaitan biaya SAH hanya bila: (a) angka diambil dari `ProductionCost` nyata yang sudah lahir (amount tersimpan, tertaut workOrder/project), bukan dihitung antrean dari jam; (b) label membedakan tegas biaya aktual tercatat vs estimasi rencana, dan jam belum ditarik ditampilkan (bila ditampilkan) sebagai jam saja tanpa konversi; (c) total biaya antrean direkonsiliasi ke laporan biaya proyek/WO existing periode sama, selisih tampil; (d) denda hanya tampil bila ada dasar dokumen kontraktual nyata yang tertaut — tanpa itu tetap dilarang, sebesar apa pun umurnya.
+
+### Larangan + batas build + falsifikasi QA
+
+- Larangan: `hours × rate` di builder/UI antrean; membaca tarif/upah karyawan untuk antrean; label denda/penalti; Σ biaya dari baris mengendap.
+- BOT Lead: Q-TSQ-5 + Q-WOOQ-6 TERTUTUP tahap 1. BOT Backend (102-B/100-B): payload tanpa field biaya (E-TSQ5-1). BOT Frontend: tanpa format Rp dari jam (E-TSQ5-2). BOT QA: E-TSQ5-1 payload memuat amount/biaya turunan jam = MERAH; E-TSQ5-2 estimasi jam tampil berlabel biaya aktual = MERAH; E-TSQ5-3 label denda tampil tanpa dokumen dasar = MERAH.
+
+ID vonis ini **F-2026-10-27-109-V** (jawaban Q-TSQ-5 spec F-2026-10-27-102-S PR #1166 + Q-WOOQ-6 spec F-2026-10-27-100-S PR #1161). Pemilik berikutnya: BOT Lead putus Q-TSQ-1..4/Q-WOOQ-1..5 + merge → Backend → Frontend → QA E-TSQ5-1..3 + AC spec induk.
+
 ## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-110-V: sisa tukar faktur adalah sisa serah operasional, bukan saldo piutang dokumen (pelengkap spec F-2026-10-27-101-S PR #1163)
 
 > **Slot**: F-2026-10-27-110-V. Diperiksa bentrok 2026-10-27 14:41 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-110` di backlog+board = 0/0; PR terbuka memuat `110` vonis = 0. Dokumen saja; tanpa kode/schema/migrasi. Vonis SEMPIT: tidak membuka ulang Q-IEX-1/2/3 (wilayah Lead), hanya mengikat makna angka yang tampil.
