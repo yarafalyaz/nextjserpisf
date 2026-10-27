@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic"
 
 import Link from "next/link"
+import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
+import { getHrScope } from "@/lib/auth/hr-scope"
 import { loadEmployeeLoanChannels } from "@/lib/reports/employee-loan-channel-data"
 import { EMPLOYEE_LOAN_CHANNEL_LABELS } from "@/lib/reports/employee-loan-channel"
 import { Banknote } from "lucide-react"
@@ -17,10 +18,23 @@ export default async function MyLoanRequestsPage() {
   const user = await requirePermission("create_employee_loan_requests")
   const scope = await getHrScope(user)
 
-  // Scope self dari getHrScope adalah satu-satunya gerbang visibilitas:
-  // karyawan hanya melihat pinjamannya sendiri.
+  // Pinjaman Saya = hanya milik sendiri pada scope apa pun (self/department/
+  // all): kunci self sama dengan halaman tambah — employee tertaut user
+  // login, BUKAN hrScopeWhere (department/all melebar ke orang lain).
+  const ownEmployeeId =
+    scope.kind === "self"
+      ? scope.employeeId
+      : (
+          await prisma.employee.findFirst({
+            where: { userId: Number(user.id) },
+            select: { id: true },
+          })
+        )?.id
+
+  if (ownEmployeeId == null) notFound()
+
   const loans = await prisma.employeeLoan.findMany({
-    where: hrScopeWhere(scope),
+    where: { employeeId: ownEmployeeId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
