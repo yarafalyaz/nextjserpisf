@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+import type { Root } from "react-dom/client"
 
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
-
+import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 import { TaxInvoiceDraftQueueCard } from "../tax-invoice-draft-queue-card"
 import {
   buildTaxInvoiceDraftQueue,
@@ -40,21 +38,16 @@ function input(overrides: Partial<TaxInvoiceDraftInput> = {}): TaxInvoiceDraftIn
 }
 
 function render(node: React.ReactNode) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
+  const { container, root } = renderCard(node)
   roots.push(root)
   return container
 }
 
 let roots: Root[] = []
 afterEach(() => {
-  roots.forEach((root) => act(() => root.unmount()))
+  roots.forEach((root) => unmountCard(root))
   roots = []
-  document.body.replaceChildren()
+  clearRenderedCards()
 })
 
 describe("TaxInvoiceDraftQueueCard F-2026-10-27-098-S", () => {
