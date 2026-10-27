@@ -43,7 +43,7 @@ describe("JournalService", () => {
           type: "manual",
           entries: [],
         })
-      ).rejects.toThrow("minimal 1 entry");
+      ).rejects.toThrow("minimal 1 entri");
     });
 
     it("throws when debit != credit (not balanced)", async () => {
@@ -88,7 +88,7 @@ describe("JournalService", () => {
             { accountId: 2, debit: 0, credit: 0 },
           ],
         })
-      ).rejects.toThrow("harus memiliki nilai Debit atau Credit");
+      ).rejects.toThrow("harus memiliki nilai Debit atau Kredit");
     });
 
     it("throws when an entry has both debit and credit non-zero", async () => {
@@ -120,7 +120,7 @@ describe("JournalService", () => {
             { accountId: 2, debit: 0, credit: 100 },
           ],
         })
-      ).rejects.toThrow("Account tidak ditemukan: 2");
+      ).rejects.toThrow("Akun tidak ditemukan: 2");
     });
 
     it("creates a balanced journal with entries", async () => {

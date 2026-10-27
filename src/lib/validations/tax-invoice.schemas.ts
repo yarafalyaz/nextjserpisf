@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 /**
  * Nomor faktur pajak (e-Faktur/Coretax) — validasi format RINGAN, boleh kosong.

@@ -2013,7 +2013,7 @@ export async function processPurchaseReturn(returnId: number) {
     const scope = await getWarehouseScope(user);
     for (const item of activeReturnItems) {
       const warehouseId = resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId);
-      if (!warehouseId) throw new Error("Warehouse retur pembelian tidak ditemukan.");
+      if (!warehouseId) throw new Error("Gudang retur pembelian tidak ditemukan.");
       assertWarehouseAccess(scope, warehouseId);
     }
 

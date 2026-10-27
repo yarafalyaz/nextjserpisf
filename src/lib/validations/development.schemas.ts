@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 export const performanceCycleSchema = z.object({
   name: z.string().min(1, "Nama siklus wajib diisi").max(191),

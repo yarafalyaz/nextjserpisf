@@ -31,7 +31,7 @@ import {
 async function getSystemSettings(tx?: TxClient) {
   const db = tx || prisma;
   const settings = await db.systemSetting.findFirst();
-  if (!settings) throw new Error("System settings belum dikonfigurasi.");
+  if (!settings) throw new Error("Pengaturan sistem belum dikonfigurasi.");
   return settings;
 }
 

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 import { dateOnly } from "@/lib/validations/finance.schemas"
 
 // ==================== Helpers ====================

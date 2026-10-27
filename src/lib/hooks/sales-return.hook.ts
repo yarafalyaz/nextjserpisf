@@ -101,7 +101,7 @@ export async function onSalesReturnCompleted(
       select: { id: true },
       orderBy: { id: "asc" },
     });
-    if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
+    if (!fallbackWarehouse) throw new Error("Tidak ada gudang aktif.");
 
     // Pre-fetch every item's default warehouse in ONE query instead of a
     // findUnique per line (N+1). The lookup is a pure read with no ordering

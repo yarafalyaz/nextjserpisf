@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 export const vacancySchema = z.object({
   title: z.string().min(1, "Judul lowongan wajib diisi").max(191),

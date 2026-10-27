@@ -81,7 +81,7 @@ function assertApprovalPermission(
     !permissions.includes("approve_workflows") &&
     !(referencePermission && permissions.includes(referencePermission))
   ) {
-    throw new Error("Forbidden: Anda tidak memiliki izin menyetujui dokumen ini.");
+    throw new Error("Anda tidak memiliki izin menyetujui dokumen ini.");
   }
 }
 
@@ -144,7 +144,7 @@ async function assertStepApprover(
   if (!stepDef) return;
   if (stepDef.userId != null) {
     if (Number(user.id) !== stepDef.userId) {
-      throw new Error("Forbidden: Anda bukan approver untuk langkah ini.");
+      throw new Error("Anda bukan approver untuk langkah ini.");
     }
     return;
   }
@@ -154,7 +154,7 @@ async function assertStepApprover(
       select: { name: true },
     });
     if (!role || !user.roles.includes(role.name)) {
-      throw new Error("Forbidden: Anda bukan approver untuk langkah ini.");
+      throw new Error("Anda bukan approver untuk langkah ini.");
     }
   }
 }

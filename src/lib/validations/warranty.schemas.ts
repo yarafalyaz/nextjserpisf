@@ -1,4 +1,5 @@
 import { z } from "zod";
+import "./zod-locale";
 
 // F-2026-10-21-021 tahap 2 — klaim garansi. State machine + keputusan manual
 // hidup di warranty.service.ts; schema ini hanya gerbang bentuk FormData.

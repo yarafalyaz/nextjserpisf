@@ -46,7 +46,7 @@ export async function onSalesLateFeePosted(
   assertJournalClaimRef(LATE_FEE_JOURNAL_REF, lateFeeId)
   await executeInTx(txClient, async (tx) => {
     const settings = await tx.systemSetting.findFirst()
-    if (!settings) throw new Error("System settings belum dikonfigurasi.")
+    if (!settings) throw new Error("Pengaturan sistem belum dikonfigurasi.")
     if (!settings.salesReceivableAccountId) {
       throw new Error(
         "Dokumen denda ditolak: akun Piutang Usaha belum dikonfigurasi di Pengaturan.",
@@ -120,7 +120,7 @@ export async function onSalesLateFeePaymentCreated(
   assertJournalClaimRef(LATE_FEE_PAYMENT_JOURNAL_REF, paymentId)
   await executeInTx(txClient, async (tx) => {
     const settings = await tx.systemSetting.findFirst()
-    if (!settings) throw new Error("System settings belum dikonfigurasi.")
+    if (!settings) throw new Error("Pengaturan sistem belum dikonfigurasi.")
     if (!settings.salesReceivableAccountId) {
       throw new Error("Pembayaran denda ditolak: akun Piutang Usaha belum dikonfigurasi.")
     }

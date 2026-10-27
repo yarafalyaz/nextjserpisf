@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "@/lib/validations/zod-locale";
 
 /**
  * Runtime environment validation.

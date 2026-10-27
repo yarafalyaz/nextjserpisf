@@ -6,6 +6,7 @@ import { useRef, useState, useTransition } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import "@/lib/validations/zod-locale";
 import { createSalesInvoice, updateSalesInvoice } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"

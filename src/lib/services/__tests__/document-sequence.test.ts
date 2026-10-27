@@ -51,7 +51,7 @@ describe("DocumentSequenceService", () => {
       mocks.queryRaw.mockResolvedValue([]);
 
       await expect(DocumentSequenceService.next("BAD-KEY")).rejects.toThrow(
-        "Failed to retrieve sequence for key: BAD-KEY"
+        "Gagal mengambil nomor urut dokumen untuk kunci BAD-KEY"
       );
     });
 
@@ -60,7 +60,7 @@ describe("DocumentSequenceService", () => {
       mocks.queryRaw.mockResolvedValue(null);
 
       await expect(DocumentSequenceService.next("NULL-KEY")).rejects.toThrow(
-        "Failed to retrieve sequence for key: NULL-KEY"
+        "Gagal mengambil nomor urut dokumen untuk kunci NULL-KEY"
       );
     });
 

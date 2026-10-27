@@ -35,7 +35,7 @@ export class DocumentSequenceService {
       `
 
       if (!row || row.length === 0) {
-        throw new Error(`Failed to retrieve sequence for key: ${key}`)
+        throw new Error(`Gagal mengambil nomor urut dokumen untuk kunci ${key}`)
       }
 
       return Number(row[0].current_value)
@@ -70,7 +70,7 @@ export class DocumentSequenceService {
       `
 
       if (!row || row.length === 0) {
-        throw new Error(`Failed to retrieve sequence for key: ${key}`)
+        throw new Error(`Gagal mengambil nomor urut dokumen untuk kunci ${key}`)
       }
 
       const end = Number(row[0].current_value)

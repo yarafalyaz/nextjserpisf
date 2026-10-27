@@ -1229,7 +1229,7 @@ describe("Purchase Return Actions", () => {
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue(null)
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("Warehouse retur pembelian tidak ditemukan")
+    expect(res?.error).toContain("Gudang retur pembelian tidak ditemukan")
   })
 
   it("processPurchaseReturn succeeds when receipt warehouse is within user scope", async () => {

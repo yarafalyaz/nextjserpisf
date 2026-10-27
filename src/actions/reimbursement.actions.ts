@@ -26,6 +26,7 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import "@/lib/validations/zod-locale";
 
 import { getHrScope, hrScopeWhere, assertHrEmployeeAccess } from "@/lib/auth/hr-scope"
 import { requirePermission } from "@/lib/auth/permissions"

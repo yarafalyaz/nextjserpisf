@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const optionalString = (max: number) =>

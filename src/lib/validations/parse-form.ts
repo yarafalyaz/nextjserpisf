@@ -1,4 +1,5 @@
 import type { ZodType } from "zod"
+import "./zod-locale";
 
 /**
  * Extracts all entries from a FormData object into a plain object,

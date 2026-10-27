@@ -59,7 +59,7 @@ async function handleCron(request: Request) {
       await logCronResult(task, "success", result, duration)
     } catch (e) {
       const duration = Date.now() - start
-      const message = e instanceof Error ? e.message : "Unknown error"
+      const message = e instanceof Error ? e.message : "Terjadi kesalahan"
       results[task] = { status: "error", message, duration }
       console.error(`Cron task "${task}" failed:`, e)
 
