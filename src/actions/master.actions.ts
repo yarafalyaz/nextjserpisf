@@ -62,8 +62,8 @@ import {
   type CustomerNpwpConflict,
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
-import { getHrScope } from "@/lib/auth/hr-scope";
 import { canViewSensitiveIdentity } from "@/lib/auth/field-visibility";
+import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
   normalizeNitku,
