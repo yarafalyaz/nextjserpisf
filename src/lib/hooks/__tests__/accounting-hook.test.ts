@@ -161,11 +161,6 @@ vi.mock("@/lib/db/prisma", () => ({
     pkwtCompensationEvent: { findUnique: (...a: unknown[]) => mocks.pkwtEventFindUnique(...a) },
     pkwtCompensationAccrual: { aggregate: (...a: unknown[]) => mocks.pkwtAccrualAggregate(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
-    // Klasifikasi scrap di jalur global membaca akun lewat delegate ini.
-    account: {
-      findMany: (...a: unknown[]) => mocks.accountFindMany(...a),
-      findFirst: (...a: unknown[]) => mocks.accountFindFirst(...a),
-    },
   },
 }));
 
