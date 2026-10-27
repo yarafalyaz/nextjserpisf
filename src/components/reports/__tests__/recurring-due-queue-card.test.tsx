@@ -12,33 +12,13 @@ import {
   RECURRING_DUE_NOTICE_TEXT,
   RECURRING_DUE_STALE_DAYS,
   RECURRING_DUE_TITLE,
-  type RecurringDueInput,
 } from "@/lib/reports/recurring-due-queue"
-import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
+import {
+  RECURRING_DUE_NOW as NOW,
+  recurringDueDay as day,
+  recurringDueInput as input,
+} from "@/lib/reports/__tests__/recurring-due-queue-fixtures"
 import { formatDate } from "@/lib/utils/format"
-
-const NOW = new Date("2026-10-25T22:00:00.000Z")
-const TODAY = getWibTodayUtcDate(NOW)
-const day = (offset: number) => new Date(TODAY.getTime() + offset * 86_400_000)
-
-function input(overrides: Partial<RecurringDueInput> = {}): RecurringDueInput {
-  return {
-    scheduleId: 1,
-    slug: "jadwal-1",
-    name: "Jurnal Sewa Bulanan",
-    type: "journal",
-    frequency: "monthly",
-    interval: 1,
-    nextRunDate: day(-1),
-    endDate: null,
-    lastRunAt: day(-30),
-    runCount: 3,
-    lastResult: "Jurnal DRAFT dibuat",
-    isActive: true,
-    deletedAt: null,
-    ...overrides,
-  }
-}
 
 function render(node: React.ReactNode) {
   const { container, root } = renderCard(node)
