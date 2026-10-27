@@ -74,6 +74,19 @@ if [ -d /app/.next-dev ]; then
   fi
 fi
 
+# Turbopack (Next 16) mendaftarkan watch ke path virtual
+# `.next-internal/server/app/**` yang tidak pernah dimaterialkan ke disk
+# (output dev hidup di memori/.next-dev), jadi watcher polling meneriakkan
+# "watch error ... NotFound" untuk setiap rute — ±19% log dev. Buat
+# kerangka direktorinya dari pohon src/app supaya watch-nya berhasil dan
+# diam. Idempoten; direktori kosong tidak dilacak git (lihat .gitignore).
+if [ -d /app/src/app ]; then
+  mkdir -p /app/.config
+  ( cd /app/src/app && find . -type d | while IFS= read -r d; do
+      mkdir -p "/app/.next-internal/server/app/$d" "/app/.next-internal/server/app/$d/page" 2>/dev/null || true
+    done )
+fi
+
 # Drop privileges for the actual dev server.
 if [ "$(id -u)" = "0" ]; then
   exec su-exec nextjs "$@"
