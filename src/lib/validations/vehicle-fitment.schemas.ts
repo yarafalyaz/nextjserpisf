@@ -1,4 +1,5 @@
 import { z } from "zod";
+import "./zod-locale";
 
 const optionalNumber = () =>
   z.preprocess(

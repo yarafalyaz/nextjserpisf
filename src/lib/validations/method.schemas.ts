@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))

@@ -1,6 +1,7 @@
 "use server"
 
 import { z } from "zod"
+import "@/lib/validations/zod-locale";
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { parseFormData } from "@/lib/validations/parse-form"

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 const optionalId = z.coerce.number().int().min(1).optional()
 

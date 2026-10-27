@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money"
 import { dateOnly } from "@/lib/validations/finance.schemas"
 import { taxInvoiceNumber } from "@/lib/validations/tax-invoice.schemas"

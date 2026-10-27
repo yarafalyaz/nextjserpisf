@@ -340,7 +340,7 @@ export async function GET(request: Request) {
         processed++
       } else {
         errors++
-        const message = r.reason instanceof Error ? r.reason.message : "Unknown error"
+        const message = r.reason instanceof Error ? r.reason.message : "Terjadi kesalahan"
         const { asset } = toProcess[i]
         errorDetails.push(`Asset ${asset.id} (${asset.name}): ${message}`)
       }

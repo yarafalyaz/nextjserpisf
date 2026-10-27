@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 import { passwordPolicyError } from "@/lib/auth/password-policy"
 

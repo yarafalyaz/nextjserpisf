@@ -1,4 +1,5 @@
 import { z } from "zod"
+import "./zod-locale";
 
 const roleBase = {
   name: z.string().min(1, "Nama role wajib diisi").max(100),

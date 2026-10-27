@@ -393,7 +393,7 @@ describe("approveStep / rejectStep branches", () => {
       user: { id: "2", roles: ["finance"], permissions: ["approve_vendor_bills"] },
     });
     seedApprovalObj({ referenceType: "SalesOrder", requestedBy: 1 }, { userId: 2 });
-    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Forbidden");
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Anda tidak memiliki izin menyetujui dokumen ini.");
     expect(mocks.prismaMock.approval.update).not.toHaveBeenCalled();
   });
 
@@ -460,7 +460,7 @@ describe("approveStep / rejectStep branches", () => {
     mocks.prismaMock.role.findUnique.mockResolvedValue({ name: "manager" });
     await expect(
       actions.approveStep(1, fdMap({ notes: "OK" })),
-    ).rejects.toThrow("Forbidden");
+    ).rejects.toThrow("Anda bukan approver untuk langkah ini.");
   });
   it("approveStep rejects non-approver (userId path)", async () => {
     silenceConsole();
@@ -468,7 +468,7 @@ describe("approveStep / rejectStep branches", () => {
     seedApprovalObj({}, { userId: 7 });
     await expect(
       actions.approveStep(1, fdMap({ notes: "OK" })),
-    ).rejects.toThrow("Forbidden");
+    ).rejects.toThrow("Anda bukan approver untuk langkah ini.");
   });
   it("rejectStep fails when approval not found", async () => {
     silenceConsole();

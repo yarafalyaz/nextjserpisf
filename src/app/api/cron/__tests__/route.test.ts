@@ -428,7 +428,7 @@ describe("GET /api/cron", () => {
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
       expect(json.results["low-stock"].status).toBe("error")
-      expect(json.results["low-stock"].message).toBe("Unknown error")
+      expect(json.results["low-stock"].message).toBe("Terjadi kesalahan")
     })
   })
 

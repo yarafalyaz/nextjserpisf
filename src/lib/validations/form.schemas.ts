@@ -28,6 +28,7 @@
 
 import { passwordPolicyError } from "@/lib/auth/password-policy"
 import { z } from "zod"
+import "./zod-locale";
 
 
 

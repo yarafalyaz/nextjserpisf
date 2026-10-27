@@ -56,7 +56,7 @@ export class JournalService {
   async createJournal(input: CreateJournalInput): Promise<{ id: number; journalNumber: string }> {
     // Validate entries exist
     if (!input.entries || input.entries.length === 0) {
-      throw new Error('Journal harus memiliki minimal 1 entry.')
+      throw new Error('Jurnal harus memiliki minimal 1 entri.')
     }
 
     // Validate double-entry: total debit must equal total credit
@@ -66,20 +66,20 @@ export class JournalService {
     // Use epsilon comparison for floating point
     if (Math.abs(totalDebit - totalCredit) > 0.001) {
       throw new Error(
-        `Journal tidak balance. Total Debit: ${totalDebit.toFixed(2)}, Total Credit: ${totalCredit.toFixed(2)}. Selisih: ${Math.abs(totalDebit - totalCredit).toFixed(2)}`
+        `Jurnal tidak balance. Total Debit: ${totalDebit.toFixed(2)}, Total Kredit: ${totalCredit.toFixed(2)}. Selisih: ${Math.abs(totalDebit - totalCredit).toFixed(2)}`
       )
     }
 
     // Validate each entry has either debit or credit (not both, not zero)
     for (const entry of input.entries) {
       if (entry.debit < 0 || entry.credit < 0) {
-        throw new Error('Debit dan Credit tidak boleh negatif.')
+        throw new Error('Debit dan Kredit tidak boleh negatif.')
       }
       if (entry.debit === 0 && entry.credit === 0) {
-        throw new Error('Setiap entry harus memiliki nilai Debit atau Credit.')
+        throw new Error('Setiap entri harus memiliki nilai Debit atau Kredit.')
       }
       if (entry.debit > 0 && entry.credit > 0) {
-        throw new Error('Entry tidak boleh memiliki Debit dan Credit sekaligus.')
+        throw new Error('Entri tidak boleh memiliki Debit dan Kredit sekaligus.')
       }
     }
 
@@ -94,7 +94,7 @@ export class JournalService {
         if (accounts.length !== accountIds.length) {
           const foundIds = accounts.map((a) => a.id)
           const missingIds = accountIds.filter((id) => !foundIds.includes(id))
-          throw new Error(`Account tidak ditemukan: ${missingIds.join(', ')}`)
+          throw new Error(`Akun tidak ditemukan: ${missingIds.join(', ')}`)
         }
 
         // Create journal header
@@ -157,7 +157,7 @@ export class JournalService {
         })
 
         if (original.status === 'REVERSED') {
-          throw new Error(`Journal ${original.journalNumber} sudah di-reverse.`)
+          throw new Error(`Jurnal ${original.journalNumber} sudah di-reverse.`)
         }
 
         // Selaras finance.actions reverseJournal: hanya POSTED yang boleh
@@ -167,7 +167,7 @@ export class JournalService {
         // dibuatkan lawan kedua secara senyap).
         if (original.status !== 'POSTED') {
           throw new Error(
-            `Journal ${original.journalNumber} tidak bisa dibalik (status: ${original.status})`,
+            `Jurnal ${original.journalNumber} tidak bisa dibalik (status: ${original.status})`,
           )
         }
 
@@ -186,7 +186,7 @@ export class JournalService {
           select: { id: true },
         })
         if (existingReversal) {
-          throw new Error(`Journal ${original.journalNumber} sudah di-reverse.`)
+          throw new Error(`Jurnal ${original.journalNumber} sudah di-reverse.`)
         }
 
         // Create reversal entries (swap debit/credit)

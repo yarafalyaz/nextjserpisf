@@ -131,7 +131,7 @@ export async function onPurchaseReturnProcessed(
         const warehouseId = resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId);
 
         if (!warehouseId) {
-          throw new Error("Warehouse retur pembelian tidak ditemukan.");
+          throw new Error("Gudang retur pembelian tidak ditemukan.");
         }
 
         // Consume FIFO from the resolved warehouse FIRST and capture the ACTUAL
