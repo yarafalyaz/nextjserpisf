@@ -5,18 +5,21 @@
  * Prinsip: dokumen TaxInvoice = sumber SPT bila ADA; tanpa dokumen,
  * fallback dokumen komersial berjalan DIIZINKAN berlabel `legacy`
  * (bukan diam-diam dianggap faktur pajak). Rantai pengganti: hanya
- * kepala rantai terakhir bernilai (djpStatus bukan replaced/cancelled);
- * yang diganti nol-efek. Masa keluaran = taxPeriod dokumen (masa faktur
- * asal untuk pengganti). Masa masukan = creditPeriod (bukan taxPeriod,
- * bukan tanggal tagihan) dan hanya `creditStatus=credited`.
+ * kepala rantai terakhir bernilai dan hanya bila `approved` —
+ * `rejected`/`draft`/`cancelled`/`replaced` nol-efek. Masa keluaran =
+ * taxPeriod dokumen (masa faktur asal untuk pengganti). Masa masukan =
+ * creditPeriod (bukan taxPeriod, bukan tanggal tagihan), hanya
+ * `creditStatus=credited`, faktur batal/tolak DJP tidak dikreditkan
+ * walau status kredit lama masih `credited`, dan nilai kredit sebesar
+ * `creditablePercent` (bukan selalu 100%).
  *
  * Pure (tanpa Prisma/DOM).
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
-import { effectiveChainHead, type ChainInvoice } from "@/lib/tax/tax-invoice"
+import { creditableSplit, effectiveChainHead, type ChainInvoice } from "@/lib/tax/tax-invoice"
 
-export type SptSource = "tax_invoice" | "legacy"
+export type SptSource = "tax_invoice" | "legacy" | "mixed"
 
 export interface SptOutputRow {
   /** Masa SPT "YYYY-MM" (masa faktur asal rantai). */
@@ -71,12 +74,20 @@ export interface InputInvoiceRow {
   creditStatus: string
   dpp: number
   taxAmount: number
+  /** Status DJP; `cancelled`/`rejected` nol-efek walau kredit lama masih tercatat. */
+  djpStatus?: string
+  /** Porsi kreditabel 0–100; absen diperlakukan 100 (data lama). */
+  creditablePercent?: number | null
 }
 
 export function buildInputSptRows(invoices: InputInvoiceRow[]): SptInputRow[] {
   const byPeriod = new Map<string, SptInputRow>()
   for (const inv of invoices) {
     if (inv.creditStatus !== "credited" || !inv.creditPeriod) continue
+    // Faktur batal/tolak DJP tidak dikreditkan, walau `cancelTaxInvoice`
+    // tidak mengosongkan creditStatus/creditPeriod pada data lama.
+    if (inv.djpStatus === "cancelled" || inv.djpStatus === "rejected") continue
+    const pct = inv.creditablePercent ?? 100
     const row = byPeriod.get(inv.creditPeriod) ?? {
       period: inv.creditPeriod,
       dpp: 0,
@@ -84,8 +95,8 @@ export function buildInputSptRows(invoices: InputInvoiceRow[]): SptInputRow[] {
       count: 0,
       source: "tax_invoice" as const,
     }
-    row.dpp = safeAdd(row.dpp, inv.dpp, 2)
-    row.vat = safeAdd(row.vat, inv.taxAmount, 2)
+    row.dpp = safeAdd(row.dpp, creditableSplit(inv.dpp, pct).creditable, 2)
+    row.vat = safeAdd(row.vat, creditableSplit(inv.taxAmount, pct).creditable, 2)
     row.count += 1
     byPeriod.set(inv.creditPeriod, row)
   }
@@ -93,21 +104,31 @@ export function buildInputSptRows(invoices: InputInvoiceRow[]): SptInputRow[] {
 }
 
 /**
- * Fallback legacy SATU masa: dokumen komersial berjalan (SalesInvoice /
- * VendorBill) dipakai berlabel `legacy` HANYA bila masa itu tanpa baris
- * dokumen TaxInvoice — jangan dobel-hitung keduanya.
+ * Fallback legacy PER DOKUMEN: `legacy` harus sudah berisi HANYA dokumen
+ * komersial yang belum punya TaxInvoice (pemfilteran per dokumen di
+ * loader). Baris legacy pada masa yang juga punya baris TaxInvoice
+ * DITAMBAHKAN dan berlabel `mixed` — bukan dibuang; masa tanpa
+ * TaxInvoice tetap berlabel `legacy`.
  */
 export function withLegacyFallback(
   rows: SptOutputRow[] | SptInputRow[],
   legacy: { period: string; dpp: number; vat: number; count: number }[],
 ): (SptOutputRow | SptInputRow)[] {
-  const covered = new Set(rows.map((r) => r.period))
-  const merged: (SptOutputRow | SptInputRow)[] = [...rows]
+  const byPeriod = new Map<string, SptOutputRow | SptInputRow>()
+  for (const row of rows) byPeriod.set(row.period, { ...row })
   for (const leg of legacy) {
-    if (covered.has(leg.period) || leg.count === 0) continue
-    merged.push({ ...leg, source: "legacy" })
+    if (leg.count === 0) continue
+    const existing = byPeriod.get(leg.period)
+    if (!existing) {
+      byPeriod.set(leg.period, { ...leg, source: "legacy" })
+      continue
+    }
+    existing.dpp = safeAdd(existing.dpp, leg.dpp, 2)
+    existing.vat = safeAdd(existing.vat, leg.vat, 2)
+    existing.count += leg.count
+    existing.source = "mixed"
   }
-  return merged.sort((a, b) => a.period.localeCompare(b.period))
+  return [...byPeriod.values()].sort((a, b) => a.period.localeCompare(b.period))
 }
 
 /** Baris retur penjualan untuk pengurang masa (snapshot atau legacy). */

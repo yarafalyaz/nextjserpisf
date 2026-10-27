@@ -454,6 +454,41 @@ export function computePph21FinalPeriod(o: {
   }
 }
 
+/**
+ * TASK-018 (2): gerbang statutori finalisasi slip — SATU pemeriksaan untuk
+ * semua jalur masuk approve/paid (jalur payroll langsung, approval workflow
+ * generik, dan mark-paid). Mengembalikan pesan penolakan atau null bila slip
+ * boleh difinalkan. Slip Desember massal pending-final, slip metode legacy
+ * pra-TER, dan slip ber-parameter fallback 2024 TIDAK boleh lolos lewat jalur
+ * mana pun; tanpa gerbang ini approval generik (tanpa konfigurasi = no-op di
+ * `assertApproved`) melewati pemeriksaan yang ditegakkan `approvePayroll`.
+ */
+export function payrollStatutoryGateError(snapshot: unknown): string | null {
+  const s = snapshot as {
+    fromFallback?: boolean
+    pph21Ter?: { method?: string; periodKind?: string }
+  } | null
+  if (s?.pph21Ter?.periodKind === "bulk-december-pending-final") {
+    return (
+      "Penggajian Desember ini masih memakai TER bulanan dan belum dihitung ulang Pasal 17. " +
+      "Hitung ulang slip draft ini (edit/update slip) agar memakai hitung final Pasal 17 sebelum approve."
+    )
+  }
+  if (s?.pph21Ter?.method === "LEGACY_PRE_TER") {
+    return (
+      "Penggajian ini masih memakai metode PPh21 lama (pra-TER). " +
+      "Hitung ulang slip draft ini agar memakai TER PP 58/2023 sebelum approve."
+    )
+  }
+  if (s?.fromFallback) {
+    return (
+      "Penggajian ini dihitung dengan parameter statutori cadangan (2024). " +
+      "Minta accountant memvalidasi ruleset periode ini dulu, lalu hitung ulang sebelum approve."
+    )
+  }
+  return null
+}
+
 export type TerPeriodKind = "monthly" | "final-december" | "final-resignation"
 
 export interface TerPeriodResolution {
