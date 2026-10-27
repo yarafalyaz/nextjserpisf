@@ -38531,6 +38531,140 @@ Tidak ada tingkat konflik-fakta di antrean ini tahap 1: tidak ada penjaga kode y
 - Menyelaraskan kosakata chip daftar existing (Q-ITQ-6) — dicatat sebagai pertanyaan/temuan, bukan diperbaiki diam-diam dalam spec antrean.
 - Netting atau penggabungan draft arah berlawanan (BR-ITQ-09).
 
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-104-S: antrean giro/cek pending lewat jatuh tempo belum dicairkan (turunan baca-saja di atas register + laporan giro mundur existing)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_f1c68a85. Basis `origin/main` `f13460bf28d4a1e525adefb28b012dc84c0a1d58` (2026-10-27 13:34 WIB).
+
+**Verifikasi ID — tegas:** grep `F-2026-10-27-104` di backlog+board `origin/main` (`f13460bf2`) = 0/0 sebelum tulis; PR terbuka berisi `104-S` = 0; branch `hermes/business-f104-*` Business = 0 (branch backend `hermes/backend-f104-return-credit-*` domain lain, objek beda). ID bebas. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+- Bukan laporan Giro Mundur existing (`src/lib/reports/post-dated-cheques.ts` + `post-dated-cheques-data.ts`, halaman `laporan/giro-mundur/[[...segments]]/page.tsx`): laporan = keluaran statis per tanggal acuan (tabel + PDF, gerbang `view_reports` di halaman :17, loader TANPA `requirePermission`). Spec ini = permukaan kerja operasional: ember arah x tingkat mengendap + rekap + tautan ke register untuk Cair/Batal existing. Builder antrean WAJIB mengonsumsi logika builder laporan existing atau perluasannya — DILARANG builder nominal kedua yang berbeda pendapat soal hari lewat (satu sumber kebenaran `daysUntilDue`, BR-CQ-02).
+- Bukan halaman register giro existing (`keuangan/giro/page.tsx`): halaman itu ADA dan tetap dipakai — `view_cheques` (:13), `findMany deletedAt null orderBy dueDate asc take 200` (:16-19) TANPA saringan status/umur, semua status tampil campur, TANPA penanda terpotong. Gap: giro pending yang sudah lewat dueDate tenggelam di antara yang belum jatuh tempo; tidak ada ember, tingkat, atau rekap. Spec ini lapisan turunan baca di atas objek yang sama.
+- Bukan spec F-2026-10-27-101-S tukar faktur: objek beda (faktur penjualan vs lembar giro/cek), populasi beda, izin beda.
+- Bukan antrean penagihan F-2026-10-27-089-S/050-S: objek faktur piutang; giro `in` BUKAN faktur (BR-CQ-05).
+
+Aktor: pemegang `view_cheques` (pembaca antrean + register), pemegang `edit_cheques` (Cair/Batal di register existing), pemegang `create_cheques`/`delete_cheques` (catat/hapus di register existing). Tidak ada aktor/scope HR di domain ini; Cheque tidak punya departemen/pemilik orang.
+
+Alur existing (TERVERIFIKASI-KODE, §2): giro/cek lahir `pending` lewat `createCheque` (`create_cheques` + `assertPeriodOpen(dueDate)`) → menunggu dueDate → `updateChequeStatus` (`edit_cheques`) memindahkannya ke `cleared` atau `cancelled` saja, transisi terminal terkunci, klaim atomik `updateMany` + `assertPeriodOpen(cheque.dueDate)`; `deleteCheque` soft-delete. Laporan giro mundur memisahkan pending menjadi belum-jatuh-tempo vs jatuh-tempo-belum-dicairkan per tanggal acuan.
+
+Gap: lembar `pending` yang dueDate-nya sudah lewat tidak punya permukaan kerja — register mencampur semua status tanpa umur, laporan statis tidak memberi ember prioritas per arah niaga. Lembar `in` lewat tempo = hak tagih belum cair yang perlu dikejar; lembar `out` lewat tempo = kewajiban bayar belum cair yang perlu disiapkan dananya. Dua arah ini tidak boleh dicampur totalnya. Spec ini menambahkan **turunan baca**: populasi pending lewat + ember arah + tingkat mengendap + rekap, dihitung server, tampil verbatim, dengan tautan ke register tempat Cair/Batal existing berpenjaga penuh dijalankan.
+
+Dokumen masuk: rekod `Cheque` existing. Dokumen keluar: tidak ada — pencairan/pembatalan tetap lewat register + `updateChequeStatus` existing. Kata usulan (USULAN, final Q-CQ-2): judul seksi `Giro/Cek Lewat Jatuh Tempo Belum Cair`; kolom `Umur Lewat`, `Nominal Tercatat`; tingkat `Mengendap` menempel pada baris, bukan status baru.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main f13460bf2)
+
+- Skema: `Cheque` `prisma/schema.prisma:4444-4467` — `documentNo` unik, `type String @default("giro")` (komentar: `"giro" | "cek"`, :4448-4450), `direction String @default("in")` (komentar: `"in"` diterima dari pelanggan, `"out"` dikeluarkan ke pemasok, :4451-4454), `number String?` (nomor tercetak di lembar bank, :4455-4458), `accountId Int?`, `party String?` (TEKS BEBAS — bukan FK pelanggan/vendor), `amount Decimal(15,2)`, `dueDate DateTime` wajib, `status String @default("pending")` (komentar: `pending` belum cair | `cleared` | `cancelled`, :4463-4466), `deletedAt`.
+- Aksi: `src/actions/cheque.actions.ts` — `createCheque:30` (`create_cheques` :32, `assertPeriodOpen(dueDate)` :49, lahir `status: "pending"` :69); `updateChequeStatus:84` (`edit_cheques` :86, target harus anggota `STATUSES` :87, transisi sama ditolak :97-100, `ALLOWED_FROM` + terminal terkunci :103-113, `assertPeriodOpen(cheque.dueDate)` :117, klaim atomik `updateMany where status lama` :122-124, kalah klaim = pesan muat-ulang :129, `logActivity` :133); `deleteCheque:143` (`delete_cheques` :145, `assertPeriodOpen` :153, soft-delete).
+- Halaman register: `keuangan/giro/page.tsx:13` `requirePermission("view_cheques")`; `findMany where deletedAt null, orderBy dueDate asc, take 200` (:16-19) TANPA saringan status/umur dan TANPA penanda terpotong; komponen `keuangan/giro/_components/cheque-manager.tsx` memuat tombol Cair/Batal existing.
+- Laporan giro mundur: builder murni `src/lib/reports/post-dated-cheques.ts` — hanya `status === "pending"` dihitung (komentar :1-11); `daysUntilDue(dueDate, asOf)` hari kalender dari komponen tanggal lokal (builder :71-75); dua grup `notDue` (`daysUntilDue > 0`) vs `overdue` (`<= 0` — hari jatuh tempo PERSIS dihitung overdue oleh laporan, sel `days >= 0 ? String(days) : "${days} (lewat)"`); urut `dueDate` lalu `documentNo` (`sortByDueDate`); rekap `summarize` count+Σ `amount`; loader `post-dated-cheques-data.ts` mengambil SEMUA `deletedAt: null` tanpa batas, menyaring di builder, TANPA `requirePermission` di loader (gerbang di halaman laporan `view_reports` :17). Label laporan untuk overdue: `Jatuh Tempo, Belum Dicairkan`.
+- Izin katalog: `src/lib/auth/module-catalog.generated.ts:359-362` — `view_cheques`, `create_cheques`, `edit_cheques`, `delete_cheques` (resource `cheques`, label `Giro & Cek`). Tidak ada key antrean/report khusus cheques selain ini; laporan memakai `view_reports`.
+- Builder/loader antrean giro lewat tempo: ABSEN (grep `reports` untuk antrean/queue cheques = hanya builder laporan di atas). Ember arah x tingkat, umur lewat per baris kerja, rekap operasional: ABSEN.
+
+### 3. Status-transition matrix
+
+Status Cheque TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `createCheque` | `pending` | `create_cheques` + `assertPeriodOpen(dueDate)` |
+| `pending` | `updateChequeStatus` → `cleared` | `cleared` | `edit_cheques` + `assertPeriodOpen(dueDate)` + klaim atomik status-lama |
+| `pending` | `updateChequeStatus` → `cancelled` | `cancelled` | sama |
+| `cleared`/`cancelled` | `updateChequeStatus` apa pun | tetap (ditolak terminal) | penjaga terminal aksi :105-108 |
+| `pending` lewat dueDate | — (waktu lewat saja) | tetap `pending` | **turunan: masuk populasi antrean; tingkat `Mengendap` bila umur lewat ≥ ambang (USULAN) — bukan status, tidak tertulis** |
+| `pending` due hari ini | — | tetap `pending` | **turunan: ember/tingkat terpisah per putusan Lead Q-CQ-1 — jangan diam-diam ikut definisi laporan `daysUntilDue <= 0`** |
+| status di luar {pending, cleared, cancelled} | — | terbaca apa adanya | **turunan: ember `Status Tidak Dikenal` tertanda; TIDAK dianggap pending** |
+
+### 4. Role/permission matrix
+
+Katalog `module-catalog.generated.ts:359-362`. Tanpa key baru tahap 1 (USULAN, Q-CQ-3).
+
+| Aksi | view_cheques | create_cheques | edit_cheques | delete_cheques |
+|---|---|---|---|---|
+| Lihat register giro existing | YA (gerbang halaman :13) | tidak dituntut | tidak dituntut | tidak dituntut |
+| Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru | tidak dituntut | tidak dituntut | tidak dituntut |
+| Catat giro/cek baru (existing, di register) | halaman menuntutnya | YA | — | — |
+| Cair/Batal (existing, di register) | halaman menuntutnya | — | YA + periode terbuka + klaim atomik | — |
+| Hapus soft-delete (existing, di register) | halaman menuntutnya | — | — | YA + periode terbuka |
+| Cair/Batal/Hapus DARI antrean turunan | TIDAK tahap 1 (BR-CQ-07) | TIDAK | TIDAK | TIDAK |
+
+Konsekuensi jujur tahap 1: pembaca antrean adalah pemegang `view_cheques`; menjalankan Cair/Batal menuntut `edit_cheques` di register — antrean tidak meminjamkan izin itu. Key izin baru = Q-CQ-3, bukan bawaan.
+
+### 5. Business rules register (BR-CQ)
+
+Awalan `BR-CQ` diverifikasi bebas: grep `BR-CQ` di backlog origin/main = 0 sebelum tulis.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-CQ-01 | Populasi antrean = `Cheque.status === "pending"` PERSIS + `deletedAt: null` + dueDate sudah lewat menurut putusan Q-CQ-1. `cleared`/`cancelled` keluar. Nilai status lain masuk ember `Status Tidak Dikenal` tertanda: tampil apa adanya, tidak dibuang, tidak dianggap pending, tidak dihitung ke rekap pending. | TERVERIFIKASI-KODE (kosakata schema:4464-4466 + aksi) + USULAN (ember asing) |
+| BR-CQ-02 | Hari lewat dihitung dari `dueDate` terhadap hari kalender WIB berjalan, memakai logika builder laporan existing (`daysUntilDue`, `post-dated-cheques.ts:71-75`) atau perluasannya yang disahkan Backend — DILARANG rumus hari kedua. Perbedaan definisi hari-H: laporan menghitung `daysUntilDue <= 0` sebagai overdue (hari jatuh tempo persis ikut); antrean memperlakukan due hari ini per Q-CQ-1. Perbedaan ini dicatat eksplisit di spec dan di layar, bukan disembunyikan. | TERVERIFIKASI-KODE (builder existing) + BUTUH-VONIS Lead (Q-CQ-1) |
+| BR-CQ-03 | Umur lewat memakai `dueDate` saja. `createdAt`/`updatedAt` DILARANG sebagai acuan (momen catat/edit administratif, bukan janji cair). Tampil angka hari lewat + tanggal dueDate. | USULAN di atas TERVERIFIKASI-KODE field schema:4462 |
+| BR-CQ-04 | Ember arah ortogonal: `direction === "in"` dan `direction === "out"` adalah dua ember terpisah yang TIDAK pernah dicampur totalnya; nilai direction lain masuk ember `Status Tidak Dikenal`-arah tertanda. Makna bisnis tampil jujur: `in` lewat tempo = hak tagih belum cair; `out` lewat tempo = kewajiban bayar belum cair — kata operasional permukaan kerja, BUKAN klaim saldo buku (BR-CQ-05). Tingkat mengendap berlaku di dalam tiap ember arah. | TERVERIFIKASI-KODE (schema:4451-4454) + USULAN (ember/tingkat) |
+| BR-CQ-05 | Nominal tampil = kolom `amount` tersimpan verbatim berlabel `Nominal Tercatat`. Cheque TIDAK punya tautan faktur/pembayaran/jurnal di skema (schema:4444-4467 tanpa FK dokumen) — nominal ini DILARANG dilabeli atau dijumlahkan sebagai saldo piutang, saldo utang, kas, atau aging buku. Mengklaimnya piutang/utang = BUTUH-VONIS Accountant bersyarat (Q-CQ-4); tahap 1 vonis TIDAK diminta. Rekap Σ nominal hanya Σ kolom tersimpan per ember arah x tingkat. | TERVERIFIKASI-KODE (skema tanpa tautan) + USULAN (label) |
+| BR-CQ-06 | `number` (nomor lembar) dan `party` tampil apa adanya; kosong tampil `—`. `party` adalah TEKS BEBAS (schema tanpa FK): DILARANG ditautkan, dicocokkan, atau diklaim sebagai pelanggan/vendor mana pun; DILARANG deduplikasi per party. | TERVERIFIKASI-KODE + USULAN (larangan tautan) |
+| BR-CQ-07 | Baca-saja tahap 1: builder/loader tidak memanggil `updateChequeStatus`/`deleteCheque`, tidak menulis status/kolom apa pun. TANPA tombol Cair/Batal/Hapus dari antrean — aksi itu tetap di register existing dengan `assertPeriodOpen` + klaim atomik + ActivityLog penuh; tombol kedua dari antrean tanpa audit setara = dilarang. Tautan baris hanya ke register/detail giro existing. | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-CQ-08 | Tingkat turunan murni: `LEWAT` → `MENGENDAP` bila umur lewat ≥ ambang (Q-CQ-1, USULAN 7 hari kalender WIB — giro lewat tempo bukan draft dokumen: lembar sudah jatuh tempo dan belum cair seminggu berarti tindak lanjut register belum terjadi; ambang lebih pendek dari keluarga draft menimbulkan derau harian, lebih panjang menyembunyikan lembar basi — final Lead). Dihitung ulang tiap render; waktu lewat sendiri tidak menulis apa pun. | USULAN, final BUTUH-VONIS Lead (Q-CQ-1) |
+| BR-CQ-09 | Gerbang loader fail-closed SEBELUM query: `view_cheques`. Tanpa izin = halaman menolak, bukan daftar kosong tersamar. Loader laporan existing yang tanpa `requirePermission` TIDAK dijadikan preseden pelonggaran — gerbang halaman laporan `view_reports` adalah permukaan lain. | USULAN di atas TERVERIFIKASI-KODE (gerbang register :13) |
+| BR-CQ-10 | Urutan tampil: `MENGENDAP` dulu, lalu umur lewat terbesar (dueDate tertua), seri dueDate sama → `documentNo` naik — konsisten arah urut builder laporan existing (`sortByDueDate`). Kepala antrean memuat rekap per ember arah x tingkat dari POPULASI PENUH (count + Σ nominal tercatat), bukan dari potongan tampil. | USULAN di atas TERVERIFIKASI-KODE urutan laporan |
+| BR-CQ-11 | Batas ambil jujur: antrean TIDAK mewarisi `take 200` tanpa penanda milik register. Loader mengambil populasi pending-lewat dengan urutan BR-CQ-10 dan batas eksplisit yang dinyatakan (fisik Backend) + penanda `terpotong` bila populasi melebihi batas — lembar paling mengendap (paling tua) tidak hilang diam-diam di luar potongan; rekap tetap dari populasi penuh (BR-CQ-10). | USULAN |
+| BR-CQ-12 | Jenis lembar `type` (`giro`/`cek`) tampil verbatim apa adanya sebagai penanda baris; nilai lain tampil tertanda, tidak ditebak. Jenis tidak mengubah populasi/tingkat tahap 1. | TERVERIFIKASI-KODE (schema:4448-4450) + USULAN |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark resmi, akses 2026-10-27)
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Register giro/cek mundur masuk/keluar | Ada — Giro Mundur (Belum Jatuh Tempo) (https://help.accurate.id/product/daftar-laporan/) | Ada — Giro Mundur input mutasi masuk/keluar (https://www.zahironline.com/giro-mundur/) | Ada — register `keuangan/giro` (TERVERIFIKASI-KODE §2) |
+| Laporan giro belum jatuh tempo + sudah jatuh tempo belum cair | Ada — laporan Giro Mundur (grup belum jatuh tempo) (https://www.doniirvan.id/laporan-accurate/kas-dan-bank/) | Ada — laporan Giro Masuk/Keluar Hari Jatuh Tempo (https://help.zahironline.com/portal/id/kb/articles/transaksi-giro-masuk) | Ada — laporan `laporan/giro-mundur` dua grup (TERVERIFIKASI-KODE §2) |
+| Reminder/monitor giro masuk + keluar akan/lewat jatuh tempo per arah | Tidak ditemukan sebagai antrean kerja per arah di halaman resmi yang diakses — tidak diklaim | Ada — Reminder: grafik + daftar Jatuh Tempo Giro Masuk dan Giro Keluar terpisah (https://www.zahironline.com/reminder/ ; https://www.zahironline.com/giro-mundur/) | PARSIAL — laporan statis dua grup tanpa ember arah/tingkat; antrean kerja spec ini = gap |
+| Pencairan/pembatalan dari daftar giro | Ada (alur giro existing vendor) | Ada — Giro Cair + pembatalan di daftar giro (https://help.zahironline.com/portal/id/kb/articles/transaksi-giro-keluar) | Ada — Cair/Batal di register dengan klaim atomik + periode terbuka (TERVERIFIKASI-KODE §2); dari antrean sengaja TIDAK tahap 1 (BR-CQ-07) |
+| Antrean kerja pending LEWAT tempo + tingkat mengendap + rekap per arah | Tidak ditemukan — tidak diklaim | Reminder mendekati (monitor per arah), tingkat mengendap berumur tidak ditemukan — tidak diklaim | ABSEN (gap spec ini) |
+
+Jujur: Zahir membuktikan monitor giro per arah adalah fitur standar (ISF tertinggal di permukaan kerja, bukan di register/laporan); antrean berumur bertingkat tidak ditemukan persis di kedua benchmark — nilai spec ini operasional internal (lembar basi terlihat sebelum menjadi temuan kas), bukan mengejar fitur vendor.
+
+### 7. Acceptance criteria + edge cases
+
+- AC-CQ-B1: Populasi PERSIS BR-CQ-01 (`pending` + `deletedAt null` + lewat per Q-CQ-1); `cleared`/`cancelled`/terhapus bocor → MERAH. Status asing masuk ember tertanda (hilang/dianggap pending → MERAH). Ember/tahap/umur/tingkat/rekap dihitung server; konsumen menghitung ulang → MERAH.
+- AC-CQ-B2: Umur lewat dari `dueDate` hari kalender WIB memakai logika `daysUntilDue` existing/perluasannya (BR-CQ-02/03); umur dari `createdAt`/`updatedAt` → MERAH (mutasi: edit baris pending lama, umur berubah = gagal). Due hari ini perlakuan PERSIS putusan Q-CQ-1; diam-diam mewarisi `<= 0` laporan tanpa putusan → MERAH.
+- AC-CQ-B3: Ember arah `in`/`out` terpisah, total tidak pernah tercampur (BR-CQ-04); urutan BR-CQ-10 (mengendap → tertua → `documentNo`); rekap count+Σ nominal tercatat per arah x tingkat cocok populasi penuh; populasi melebihi batas tampil penanda `terpotong`, bukan hilang diam-diam.
+- AC-CQ-B4: Payload nominal berlabel tercatat; istilah piutang/utang/kas/aging pada nominal antrean → MERAH (BR-CQ-05). `party` ditautkan ke master pelanggan/vendor atau dideduplikasi → MERAH (BR-CQ-06). Nominal dihitung ulang dari dokumen lain → MERAH (tidak ada dokumen sumber).
+- AC-CQ-B5: Loader fail-closed `view_cheques` sebelum query (BR-CQ-09); baca-saja terbukti (builder memanggil `updateChequeStatus`/`deleteCheque`/menulis status → MERAH, BR-CQ-07).
+- AC-CQ-F1: Label ember/tingkat/umur/rekap verbatim payload server; UI tidak menghitung umur/tingkat/urutan sendiri (grep hitung di komponen = MERAH).
+- AC-CQ-F2: TIDAK ada tombol Cair/Batal/Hapus dari antrean (tombol tulis di antrean → MERAH, BR-CQ-07); tautan baris hanya ke register giro existing berpenjaga penuh.
+- AC-CQ-F3: Baris tertanda (`Status Tidak Dikenal`, arah/jenis asing, `terpotong`, `party`/`number` kosong `—`) tampil dengan tandanya, bukan disembunyikan; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-CQ-1: Lembar `pending` due hari ini persis: perlakuan menunggu Q-CQ-1; sampai diputus, spec melarang dua perilaku diam-diam (dianggap lewat penuh seperti laporan, atau disembunyikan) — implementasi menunggu putusan, bukan menebak.
+- EC-CQ-2: Lembar `out` lewat tempo pada periode sudah ditutup: tetap tampil mengendap apa adanya; percobaan Cair/Batal di register akan ditolak `assertPeriodOpen` existing — antrean tidak menandai "gagal cair" (tidak ada penanda percobaan di kode).
+- EC-CQ-3: Lembar dicairkan/dibatalkan saat antrean terbuka: keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-CQ-4: `party` sama teksnya dengan nama pelanggan terdaftar: tetap teks bebas tertampil apa adanya; kemiripan nama BUKAN tautan (BR-CQ-06).
+- EC-CQ-5: `amount` nol/negatif warisan data: tampil verbatim tertanda apa adanya dalam Σ rekap; antrean tidak membuang atau mengarang koreksinya.
+- EC-CQ-6: Dua lembar nomor `number` sama (nomor lembar bukan unik di skema — hanya `documentNo` unik): tampil per baris per `documentNo`; tidak digabung.
+- EC-CQ-7: Populasi pending-lewat melebihi batas ambil: kepala antrean (mengendap tertua) tetap tampil + penanda `terpotong`; rekap tetap populasi penuh (BR-CQ-10/11).
+
+### 8. Backlog implementasi (turunan F-2026-10-27-104-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-104-S | Spec kontrak ini (dokumen) | Business | — |
+| 104-B | Builder antrean (populasi/ember arah/tingkat/umur WIB/urutan/rekap populasi penuh) mengonsumsi logika `daysUntilDue` builder laporan existing/perluasannya + loader `view_cheques` fail-closed anti-N+1 + tes AC-CQ-B1..B5 | Backend | Putusan Lead Q-CQ-1/2/3 |
+| 104-F | Permukaan antrean (penempatan per Q-CQ-3) verbatim payload + AC-CQ-F1..F3; grep e2e giro dulu | Frontend | 104-B merged |
+| 104-Q | Falsifikasi AC-CQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 104-B/104-F |
+
+| ID | Pertanyaan | Pemutus | Usulan Business |
+|---|---|---|---|
+| Q-CQ-1 | Perlakuan due hari ini (ember `Jatuh Tempo Hari Ini` terpisah vs ikut lewat seperti laporan `<= 0`) + ambang `MENGENDAP`? | Lead | Ember hari-ini TERPISAH (hari jatuh tempo = hari tindakan, bukan keterlambatan); ambang mengendap 7 hari kalender WIB (BR-CQ-08) — memperkecil laporan vs antrean yang berbeda pendapat tanpa alasan tercatat |
+| Q-CQ-2 | Kata final: judul `Giro/Cek Lewat Jatuh Tempo Belum Cair`, label ember arah, tingkat `Mengendap`, kolom `Nominal Tercatat`/`Umur Lewat`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim, status mentah tetap tertanda |
+| Q-CQ-3 | Penempatan: seksi di halaman register `keuangan/giro` existing vs seksi di laporan giro-mundur vs permukaan terpisah? Gerbang tetap `view_cheques` tanpa key baru? | Lead | USULAN: seksi turunan di halaman register (konteks kerja + tautan Cair/Batal existing paling dekat); gerbang `view_cheques`, nol key baru; laporan statis tidak diubah |
+| Q-CQ-4 | Nominal antrean kelak boleh dilabeli/dijumlahkan sebagai piutang/utang buku? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-CQ-05); vonis WAJIB hanya bila Lead membuka ini — Cheque tanpa tautan dokumen, jadi pelabelan buku butuh keputusan tautan sumber dulu, bukan sekadar kata |
+
+### Yang TIDAK diusulkan run ini
+
+- Tombol Cair/Batal/Hapus dari antrean, pencairan massal, auto-cair/auto-batal berbasis umur (BR-CQ-07) — jalur tulis existing di register berpenjaga periode + klaim atomik tidak diduplikasi.
+- Menautkan `party` teks bebas ke master pelanggan/vendor, deduplikasi lembar per party, atau mengarang FK Cheque ke dokumen (EC-CQ-4/6) — perubahan skema/relasi = keputusan Backend/Lead terpisah.
+- Melabeli nominal sebagai piutang/utang/kas/aging atau membuat builder nominal kedua di luar logika laporan existing (BR-CQ-02/05, Q-CQ-4).
+- Pengingat WA/email ke penagih/pembayar, eskalasi, SLA giro per party — kanal/keadaan baru di luar tahap baca-saja (Zahir Reminder adalah monitor tampil, bukan bukti kebutuhan pengiriman notifikasi di ISF).
+- Mengubah gerbang/isi laporan giro-mundur existing, `take 200` register, atau urutan register (BR-CQ-11 hanya untuk turunan; penyelarasan register = keputusan Lead terpisah Q-CQ-3).
+- Key izin cheques baru tahap 1 (Q-CQ-3).
+
+F-2026-10-27-104-S — Antrean giro/cek pending lewat jatuh tempo belum dicairkan. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-CQ-1/2/3, lalu fisik Backend (104-B), konsumen Frontend (104-F), falsifikasi QA (104-Q). Pemilik usulan: Business (spec), Lead (hari-H/ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja (nominal tercatat verbatim, nol jurnal, nol klaim saldo buku — BR-CQ-05); WAJIB bersyarat hanya bila Lead membuka Q-CQ-4 (pelabelan piutang/utang).
 ## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-105-V: nominal antrean giro/cek BUKAN piutang/utang buku (jawaban Q-CQ-4 spec F-2026-10-27-104-S PR #1171)
 
 > **Slot**: F-2026-10-27-105-V. Diperiksa bentrok 2026-10-27 14:22 WIB vs `origin/main` (`f13460bf2`): grep `F-2026-10-27-105` di backlog+board = 0/0; ID main maks F-2026-10-27-099 (099-V vonis terakhir); PR terbuka maks 104-S (PR #1171 spec induk, OPEN). 105-V bebas. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
