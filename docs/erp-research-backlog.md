@@ -38585,6 +38585,145 @@ Aging (ember umur berlabel piutang/utang) DILARANG tahap 1. Bila kelak Putusan 2
 
 ID vonis ini **F-2026-10-27-105-V** (jawaban Q-CQ-4 spec F-2026-10-27-104-S PR #1171; bebas: grep `F-2026-10-27-105` di origin/main f13460bf2 = 0 sebelum vonis ini; 104-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-CQ-1/2/3 → BOT Backend 104-B → BOT Frontend 104-F → BOT QA E-CQ4-1..3 + AC-CQ.
 
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-106-S: antrean transfer inventaris belum diterima penuh mengendap (turunan baca-saja di atas daftar transfer + laporan in-transit existing)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_8ef8397a. Basis `origin/main` `f13460bf28d4a1e525adefb28b012dc84c0a1d58` (2026-10-27 14:35 WIB).
+
+**Verifikasi ID + anti-duplikat judul — tegas:** grep `F-2026-10-27-106` di backlog+board `origin/main` (`f13460bf2`) = 0/0 sebelum tulis; PR terbuka berisi `106-S` = 0; awalan `BR-ITQ` grep backlog = 0. Pemeriksaan JUDUL objek (pelajaran PR #1172 ditutup duplikat 097-S): tidak ada spec antrean transfer inventaris di jalan di backlog — judul terdekat adalah laporan in-transit existing dan spec inti terima parsial F-2026-10-22-081-S, keduanya beda permukaan (lihat anti-duplikat bawah). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+- Bukan laporan Persediaan Terkirim Belum Diterima existing (`src/lib/reports/transfer-in-transit.ts` + `transfer-in-transit-data.ts`, halaman `laporan/transfer-terkirim/[[...segments]]`): laporan = keluaran pemeriksaan NILAI per periode — sisa per baris dinilai pada carried cost StockMove OUT, baris tanpa move tertanda perkiraan harga kini, peringatan transfer berumur > 60 hari (`transfer-in-transit.ts:195`). Spec ini = permukaan KERJA operasional per gudang tujuan: ember status, tingkat mengendap, hitungan baris bersisa, rekap hitungan — TANPA nilai. Builder antrean memakai himpunan status laporan existing (`IN_TRANSIT_TRANSFER_STATUSES`, `transfer-in-transit-data.ts:28`) sebagai satu sumber kosakata, BUKAN himpunan kedua.
+- Bukan spec inti F-2026-10-22-081-S (terima parsial + tutup selisih): itu fitur tulis yang SUDAH hidup (receivedQty per baris, receipt per kejadian idempoten, `closeInventoryTransferShortage`). Spec ini tidak mengubah perilaku terima/tutup apa pun; ia hanya membuat pekerjaan yang masih terbuka terlihat.
+- Bukan antrean permintaan material draft (keluarga 071-S): `MaterialRequest` adalah dokumen permintaan SEBELUM transfer lahir; transfer yang sudah `processed` adalah barang fisik yang sudah keluar gudang asal. Populasi, aktor, dan jalan keluar beda.
+- Bukan daftar transfer existing (`inventaris/transfer/page.tsx`): daftar itu ADA dan tetap dipakai — `view_inventory_transfers` (:25), paginasi `createdAt desc` (:41-49) semua status campur tanpa umur/sisa/tingkat/scope tujuan. Spec ini lapisan turunan baca di atas objek yang sama.
+
+Aktor: pemegang `view_inventory_transfers` dalam scope gudang tujuan (pembaca antrean), pemegang `edit_inventory_transfers` (proses/terima di detail existing), pemegang `create_stock_adjustments` (tutup selisih di detail existing). Scope gudang pembaca berlaku sebagai saringan tujuan (BR-ITQ-06).
+
+Alur existing (TERVERIFIKASI-KODE, §2): transfer lahir `draft` → `processInventoryTransfer` (`edit_inventory_transfers`) klaim atomik `draft → processing → processed`, hook `onTransferProcessed` membuat StockMove OUT gudang asal pada carried cost → `receiveInventoryTransfer` (`edit_inventory_transfers` + `assertWarehouseAccess(destinationWarehouseId)` + `assertPeriodOpen(receivedDate)`) klaim `processed|partially_received → receiving → received|partially_received`, menulis receipt per kejadian ber-`idempotencyKey` unik dan StockMove IN tujuan → sisa yang tidak akan datang ditutup `closeInventoryTransferShortage` (`create_stock_adjustments` + scope tujuan) menjadi `StockAdjustment` draft. Transfer subledger-only: nol jurnal GL (fakta §2).
+
+Gap: sesudah `processed`, stok sudah berkurang di gudang asal tetapi belum bertambah di tujuan — keadaan paling senyap di inventaris. Bila penerimaan tertunda berhari-hari, tidak ada permukaan kerja yang menjawab "transfer mana menunggu diterima di gudang saya, sisa baris apa, sudah berapa lama di jalan". Laporan in-transit menjawab nilai pemeriksaan per periode, bukan antrean kerja per gudang; daftar transfer mengurut terbaru-dulu semua status. Spec ini menambahkan **turunan baca**: populasi di jalan + umur kirim + tingkat mengendap + hitungan baris bersisa + rekap, dihitung server, tampil verbatim, tautan hanya ke detail existing berpenjaga penuh.
+
+Dokumen masuk: rekod `InventoryTransfer` + `InventoryTransferItem` + kejadian `InventoryTransferReceipt` existing. Dokumen keluar: tidak ada — terima/tutup selisih tetap lewat detail + aksi existing. Kata usulan (USULAN, final Q-ITQ-2): judul seksi `Transfer Belum Diterima Penuh`; kolom `Umur di Jalan`, `Baris Bersisa k dari n`; tingkat `Mengendap` menempel pada baris, bukan status baru.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main f13460bf2)
+
+- Skema: `InventoryTransfer` `prisma/schema.prisma:2674-2701` — `documentNo` unik, `slug?`, `sourceWarehouseId`, `destinationWarehouseId`, `materialRequestId Int?`, `date DateTime` (tanggal kirim), `status String @default("draft")`, `createdBy?`, `createdAt`, `updatedAt`. TANPA `deletedAt` (model transfer tidak punya hapus lunak). Item `:2703-2727` — `qty Decimal(15,2)`, `receivedQty Decimal @default(0)` kumulatif per baris (komentar F-2026-10-22-081-S: server menjaga 0 ≤ receivedQty ≤ qty; sisa = qty − receivedQty), `serialNumbers`/`batchAllocations Json?` (atribusi lot/serial saat proses). Receipt `:2732-2747` — SATU baris per kejadian terima, `receivedDate`, `receivedBy?`, `idempotencyKey` unik, `createdAt`.
+- Aksi (`src/actions/inventory.actions.ts`): `createInventoryTransfer` (lahir `status: "draft"` :552-560-an); `processInventoryTransfer:586` (`edit_inventory_transfers`, hanya dari `draft`, klaim `updateMany draft → processing` :607, hook StockMove OUT, lalu `processed` :628, gagal → kembali `draft` :637); `receiveInventoryTransfer` (`edit_inventory_transfers`, status boleh-terima `["processed", "partially_received"]` dengan receipt / `["processed"]` tanpa, klaim `→ receiving`, `assertPeriodOpen(receivedDate)`, `assertWarehouseAccess(destinationWarehouseId)`, hook `onInventoryTransferReceived` menentukan `nextStatus ?? "received"` :800-815); `closeInventoryTransferShortage:892` (`create_stock_adjustments` :894, scope tujuan :898-899, hanya `processed|partially_received` :901, sisa → `StockAdjustment` draft beralasan selisih transfer); hapus transfer existing `:1885-1893` adalah delete keras jalur lama (bukan bagian populasi antrean; lihat EC-ITQ-5).
+- Hook: `src/lib/hooks/inventory-transfer.hook.ts` — `onTransferProcessed` consume FIFO asal + StockMove OUT carried cost; `onTransferReceived` idempoten ("IN moves sudah ada → lewati"), StockMove IN tujuan per item pada `carriedCostByItem`, revive serial `used → available`, lot tujuan per alokasi batch. Transfer = subledger-only, NOL jurnal GL (terverifikasi backlog F-2026-10-22-081-S §Fakta; grep InventoryTransfer di jalur jurnal = 0).
+- Laporan in-transit existing: `transfer-in-transit-data.ts:28` `IN_TRANSIT_TRANSFER_STATUSES = ["processed", "partially_received"]`; loader menyaring status itu + `date` dalam periode, sisa per item = `qty − receivedQty` diagregasi per item (`remainingQtyByItem` :37-48), dinilai dari StockMove OUT `referenceType "InventoryTransfer" impact OUT status posted`, baris tanpa move ditandai perkiraan; builder `transfer-in-transit.ts:195` memberi peringatan jumlah transfer berumur > 60 hari belum diterima. Laporan TIDAK disaring scope gudang (permukaan pemeriksaan lintas gudang per periode).
+- Daftar existing: `inventaris/transfer/page.tsx:25` `requirePermission("view_inventory_transfers")`; `findMany orderBy createdAt desc` paginasi (:41-49) + `count`, semua status. Detail `[slug]/page.tsx` permukaan proses/terima/tutup existing. TIDAK ada umur di jalan, tingkat, sisa terbaca, rekap di jalan, atau saringan scope tujuan di daftar.
+- Izin katalog: `src/lib/auth/module-catalog.generated.ts:251-254` — `view/create/edit/delete_inventory_transfers` (label `Transfer Gudang`). TIDAK ada key process/receive terpisah; aksi proses/terima meminjam `edit_inventory_transfers`, tutup selisih meminjam `create_stock_adjustments` (katalog stock_adjustments).
+- Scope gudang: `getWarehouseScope` `src/lib/auth/warehouse-scope.ts` = `all`/`assigned`/`none` fail-closed; receive existing menegakkan `assertWarehouseAccess(destinationWarehouseId)` — gudang TUJUAN adalah titik tanggung jawab penerimaan.
+- Builder/loader antrean transfer di jalan: ABSEN (yang ada hanya builder LAPORAN bernilai di atas). Ember per tujuan, tingkat kerja, hitungan baris bersisa per transfer di permukaan daftar: ABSEN.
+
+### 3. Status-transition matrix
+
+Status transfer TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `createInventoryTransfer` | `draft` | `create_inventory_transfers` |
+| `draft` | `processInventoryTransfer` | `processed` (via `processing` sesaat) | `edit_inventory_transfers` + klaim atomik; hook StockMove OUT asal |
+| `processed`/`partially_received` | `receiveInventoryTransfer` terima penuh | `received` | `edit_inventory_transfers` + scope tujuan + `assertPeriodOpen(receivedDate)` + klaim `receiving` |
+| `processed`/`partially_received` | `receiveInventoryTransfer` terima sebagian | `partially_received` | sama; receipt kejadian baru ber-idempotencyKey |
+| `processed`/`partially_received` | `closeInventoryTransferShortage` | `received` (sisa → `StockAdjustment` draft) | `create_stock_adjustments` + scope tujuan |
+| `processed`/`partially_received` mengendap | — (waktu lewat saja) | tetap | **turunan: populasi antrean; tingkat `Mengendap` bila umur ≥ ambang (USULAN) — bukan status, tidak tertulis** |
+| `receiving`/`processing` | — (klaim sesaat berjalan) | transisi berjalan | keluar populasi antrean; render berikut menampilkan hasil akhirnya |
+| `draft`/`received` | — | di luar populasi | `draft` belum keluar asal (bukan di jalan); `received` terminal |
+| status di luar kosakata aksi | — | terbaca apa adanya | **turunan: ember `Status Tidak Dikenal` tertanda; TIDAK dianggap di jalan** |
+
+### 4. Role/permission matrix
+
+Katalog `module-catalog.generated.ts:251-254` + pinjaman `create_stock_adjustments`. Tanpa key baru tahap 1 (USULAN, Q-ITQ-3).
+
+| Aksi | view_inventory_transfers | create_inventory_transfers | edit_inventory_transfers | create_stock_adjustments | Scope gudang tujuan |
+|---|---|---|---|---|---|
+| Lihat daftar transfer existing | YA (gerbang halaman :25) | tidak dituntut | tidak dituntut | tidak dituntut | TIDAK disaring di daftar existing (fakta §2) |
+| Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru | tidak dituntut | tidak dituntut | tidak dituntut | WAJIB disaring loader turunan (BR-ITQ-06) — lebih ketat dari daftar existing, disengaja |
+| Buat/proses transfer (existing) | halaman menuntutnya | YA (buat) | YA (proses) | — | per aksi existing |
+| Terima barang (existing, di detail) | halaman menuntutnya | — | YA | — | YA — `assertWarehouseAccess(destinationWarehouseId)` |
+| Tutup selisih (existing, di detail) | halaman menuntutnya | — | — | YA | YA — scope tujuan |
+| Terima/Tutup Selisih/Proses DARI antrean turunan | TIDAK tahap 1 (BR-ITQ-07) | TIDAK | TIDAK | TIDAK | — |
+
+Konsekuensi jujur tahap 1: antrean terbaca pemegang `view_inventory_transfers` untuk transfer yang TUJUANNYA dalam scope dia; petugas gudang asal tidak melihat antrean tujuan di luar scope-nya (penerimaan adalah tanggung jawab tujuan — pola penjaga receive existing). Key izin baru = Q-ITQ-3, bukan bawaan.
+
+### 5. Business rules register (BR-ITQ)
+
+Awalan `BR-ITQ` diverifikasi bebas: grep `BR-ITQ` di backlog origin/main = 0 sebelum tulis.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-ITQ-01 | Populasi antrean = `InventoryTransfer.status` PERSIS ∈ {`processed`, `partially_received`} — himpunan yang sama dengan `IN_TRANSIT_TRANSFER_STATUSES` laporan existing (`transfer-in-transit-data.ts:28`), diimpor/direferensikan, BUKAN himpunan kedua. Model tanpa `deletedAt`: tidak ada saring hapus tahap ini. `draft` (belum keluar asal), `processing`/`receiving` (klaim sesaat), `received` (terminal) keluar. Nilai status lain masuk ember `Status Tidak Dikenal` tertanda: tampil apa adanya, tidak dibuang, tidak dianggap di jalan, tidak dihitung ke rekap di jalan. | TERVERIFIKASI-KODE (konstanta laporan :28 + aksi §2) + USULAN (ember asing) |
+| BR-ITQ-02 | Umur di jalan = hari kalender WIB sejak `date` (tanggal kirim transfer). `updatedAt` DILARANG sebagai acuan (bergerak tiap terima sebagian — menghapus umur). Kejadian terima terakhir (`InventoryTransferReceipt.createdAt` terbaru per transfer) BOLEH tampil sebagai info konteks tertanda `terima terakhir`, TIDAK mengganti acuan umur (pola keputusan spec inti F-2026-10-22-081-S §7 untuk laporan). | USULAN di atas TERVERIFIKASI-KODE (field schema:2681/2742; keputusan acuan laporan existing) |
+| BR-ITQ-03 | Tingkat turunan murni: `DI JALAN` → `MENGENDAP` bila umur ≥ ambang (Q-ITQ-1, USULAN 3 hari kalender WIB — transfer antargudang adalah perpindahan internal: sesudah `processed` stok sudah keluar dari asal, jadi tiap hari tanpa penerimaan adalah hari stok tidak bisa dipakai di kedua gudang; 3 hari memberi ruang kirim internal normal tanpa derau harian. Ambang ini SENGAJA beda dari peringatan > 60 hari laporan in-transit: 60 hari = peringatan pemeriksaan nilai per periode, 3 hari = tingkat kerja penerimaan — keduanya dicatat berdampingan, tidak disamakan, Q-ITQ-1 memutus final). Dihitung ulang tiap render; waktu lewat sendiri tidak menulis status/kolom apa pun. | USULAN, final BUTUH-VONIS Lead (Q-ITQ-1) |
+| BR-ITQ-04 | Ember status ortogonal di dalam populasi: `processed` (belum diterima sama sekali) dan `partially_received` (sudah diterima sebagian) tampil sebagai dua ember terpisah dengan rekap masing-masing — makna tindakannya beda (mulai menerima vs menyelesaikan sisa). Tingkat mengendap berlaku di dalam tiap ember. | TERVERIFIKASI-KODE (kosakata aksi terima) + USULAN (ember) |
+| BR-ITQ-05 | Sisa per baris = `qty − receivedQty` dari kolom tersimpan verbatim (pola `remainingQtyByItem` laporan :37-48: negatif dijepit 0, baris lunas keluar). Yang tampil di antrean: HITUNGAN baris bersisa per transfer (`Baris Bersisa k dari n`) + qty sisa PER BARIS pada rincian baris baris-itu-saja. Σ qty sisa lintas baris/transfer DILARANG (satuan ukur antar barang beda — menjumlahkan qty beda UoM = angka karangan); rekap antrean = hitungan transfer + hitungan baris, bukan Σ qty. | TERVERIFIKASI-KODE (kolom + pola laporan) + USULAN (batas tampil) |
+| BR-ITQ-06 | Gerbang loader fail-closed SEBELUM query: `view_inventory_transfers` + saringan `getWarehouseScope` pada `destinationWarehouseId` — `all` semua tujuan, `assigned` hanya gudang tujuan tertugaskan, `none` nol baris. Transfer menuju gudang di luar scope TIDAK bocor. Turunan ini sengaja lebih ketat dari daftar existing dan laporan in-transit yang tanpa saringan scope (§2); menyelaraskan keduanya = keputusan terpisah Lead (Q-ITQ-3), tidak diubah diam-diam oleh turunan. | USULAN di atas TERVERIFIKASI-KODE (scope receive existing) |
+| BR-ITQ-07 | Baca-saja: builder/loader tidak memanggil `processInventoryTransfer`/`receiveInventoryTransfer`/`closeInventoryTransferShortage`, tidak menulis status/receivedQty/StockMove/layer/serial. Tombol Proses/Terima/Tutup Selisih dari antrean TIDAK ada tahap 1; tautan baris hanya ke detail transfer existing berpenjaga penuh (scope tujuan + periode + klaim tetap terasa di sana). | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-ITQ-08 | Payload daftar TANPA nilai uang: tidak ada carried cost, nilai sisa, harga pokok barang, atau Σ nilai persediaan di jalan — itu permukaan laporan in-transit existing yang memang menilai dari StockMove OUT (§2). Membuka nilai di antrean kerja = BUTUH-VONIS Accountant bersyarat (Q-ITQ-4); tahap 1 vonis TIDAK diminta (transfer subledger-only nol jurnal GL — nilai tampil bukan peristiwa buku baru, tetapi pelabelan nilai di permukaan kerja tetap keputusan akuntansi). | USULAN (scope) di atas TERVERIFIKASI-KODE (permukaan nilai existing terpisah) |
+| BR-ITQ-09 | Urutan tampil: `MENGENDAP` dulu, lalu umur di jalan terbesar (date tertua), seri date sama → `documentNo` naik. Kepala antrean memuat rekap hitungan transfer per ember status x tingkat + hitungan baris bersisa, dari POPULASI PENUH dalam scope (bukan potongan tampil). Ini MEMBALIK urutan daftar existing (`createdAt desc`) hanya untuk permukaan turunan; daftar existing tidak diubah diam-diam (Q-ITQ-3). | USULAN |
+| BR-ITQ-10 | Batas ambil jujur: loader mengambil populasi di jalan dalam scope dengan urutan BR-ITQ-09 dan batas eksplisit yang dinyatakan (fisik Backend) + penanda `terpotong` bila populasi melebihi batas — transfer paling mengendap tidak hilang diam-diam di luar potongan; rekap tetap populasi penuh (BR-ITQ-09). | USULAN |
+| BR-ITQ-11 | Payload tanpa nama pemroses/penerima: `createdBy`/`receivedBy` tidak ditampilkan tahap 1. Yang tampil: nomor dokumen, gudang asal → tujuan (label existing), tanggal kirim, umur, tingkat, ember status verbatim, hitungan baris bersisa, terima terakhir (BR-ITQ-02). Membuka penanda penanggung jawab bernama = Q-ITQ-5. | USULAN |
+| BR-ITQ-12 | Transfer tanpa baris bersisa tetapi masih berstatus di jalan (keadaan data tidak konsisten: semua `receivedQty` penuh tanpa flip status) tampil apa adanya tertanda `tanpa baris bersisa` — tidak dibuang, tidak dinyatakan diterima (flip status hanya milik jalur terima/tutup existing), tidak dihitung selesai. Keadaan ini adalah sinyal perbaikan data lewat detail, bukan untuk diperbaiki antrean. | USULAN di atas TERVERIFIKASI-KODE (sisa turunan kolom :2706-2709) |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark resmi, akses 2026-10-27)
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Pemindahan barang antar gudang (kirim + terima dua tahap) | Ada — Pemindahan Barang proses Kirim Barang lalu Terima Barang (https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemindahan-barang/mencatat-pemindahan-barang-antar-gudang/) | Ada — Transfer Barang Antargudang / Pindah Gudang (https://help.zahironline.com/portal/id/kb/articles/trans ; https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-transfer-antar-gudang-zahir-online-v2) | Ada — draft → processed (OUT asal) → terima penuh/sebagian per kejadian idempoten → received (TERVERIFIKASI-KODE §2), lebih bertahap dari kedua benchmark |
+| Terima sebagian + tutup selisih kirim | Tidak ditemukan sebagai terima parsial per kejadian di halaman yang diakses — tidak diklaim (barang rusak/hilang dicatat lewat pemindahan ke gudang rusak) | Tidak ditemukan — tidak diklaim | Ada — receivedQty per baris + `closeInventoryTransferShortage` → StockAdjustment (TERVERIFIKASI-KODE §2) |
+| Laporan persediaan terkirim belum diterima (in-transit bernilai) | Tidak ditemukan di halaman yang diakses — tidak diklaim | Tidak ditemukan — tidak diklaim | Ada — laporan `transfer-terkirim` sisa × carried cost + peringatan > 60 hari (TERVERIFIKASI-KODE §2) |
+| Antrean kerja transfer DI JALAN per gudang tujuan + umur + tingkat mengendap + hitungan sisa | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); daftar transfer ada tanpa umur/sisa/tingkat/scope tujuan |
+
+Jujur: kedua benchmark membuktikan pemindahan antar gudang adalah fitur standar (ISF sudah setara/lebih bertahap pada inti parsial + tutup selisih); antrean kerja di jalan per tujuan tidak ditemukan di keduanya — nilai spec ini operasional internal (stok menggantung antar gudang terlihat oleh gudang yang harus menerimanya), bukan mengejar fitur vendor.
+
+### 7. Acceptance criteria + edge cases
+
+- AC-ITQ-B1: Populasi PERSIS BR-ITQ-01 (`processed|partially_received`, himpunan konstanta laporan existing); `draft`/`received`/`processing`/`receiving` bocor → MERAH. Status asing masuk ember `Status Tidak Dikenal` tertanda (hilang/dianggap di jalan → MERAH). Ember/umur/tingkat/sisa/rekap dihitung server; konsumen menghitung ulang → MERAH.
+- AC-ITQ-B2: Umur dari `date` hari kalender WIB (BR-ITQ-02); umur dari `updatedAt` → MERAH (mutasi: terima sebagian pada transfer lama, umur berubah = gagal). Terima terakhir tampil sebagai info saja; mengganti acuan umur → MERAH.
+- AC-ITQ-B3: Urutan BR-ITQ-09 (mengendap → tertua → `documentNo`) + dua ember status terpisah (BR-ITQ-04) + rekap cocok populasi penuh dalam scope; mewarisi `createdAt desc` daftar existing → MERAH; populasi melebihi batas tampil penanda `terpotong`, bukan hilang diam-diam.
+- AC-ITQ-B4: Sisa per baris PERSIS `qty − receivedQty` terjepit 0 pola laporan (BR-ITQ-05); payload hanya hitungan baris + qty sisa per baris; Σ qty lintas baris/transfer atau nilai uang/carried cost bocor → MERAH (BR-ITQ-05/08). Agregasi item/transfer massal anti-N+1 (query per transfer → MERAH).
+- AC-ITQ-B5: Loader fail-closed `view_inventory_transfers` sebelum query + scope tujuan BR-ITQ-06 (transfer tujuan luar scope bocor → MERAH; scope `none` = nol baris); baca-saja terbukti (builder memanggil aksi proses/terima/tutup atau menulis status/StockMove → MERAH, BR-ITQ-07).
+- AC-ITQ-F1: Label ember/tingkat/umur/sisa/rekap verbatim payload server; UI tidak menghitung umur/tingkat/sisa/urutan sendiri (grep hitung di komponen = MERAH).
+- AC-ITQ-F2: TIDAK ada tombol Proses/Terima/Tutup Selisih dari antrean (tombol tulis di antrean → MERAH, BR-ITQ-07); tautan baris hanya ke detail transfer existing.
+- AC-ITQ-F3: Baris tertanda (`tanpa baris bersisa`, `Status Tidak Dikenal`, `terpotong`, `terima terakhir`) tampil dengan tandanya, bukan disembunyikan; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-ITQ-1: Transfer `processed` ke gudang tujuan yang stoknya mendesak dibutuhkan proyek: tetap antrean baca — antrean tidak memprioritaskan lintas proyek dan tidak menautkan `materialRequestId` sebagai klaim urgensi tahap 1 (tautan permintaan tampil sebagai konteks dokumen existing di detail).
+- EC-ITQ-2: Terima sebagian berulang banyak kejadian: umur tetap sejak `date` kirim; `terima terakhir` bergerak — dua angka tampil berdampingan dengan label masing-masing, tidak dicampur (BR-ITQ-02).
+- EC-ITQ-3: Transfer diterima penuh/ditutup selisih saat antrean terbuka: keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-ITQ-4: Transfer di jalan melewati tutup periode: penerimaan existing bisa ditolak `assertPeriodOpen(receivedDate)` di detail — status tetap di jalan dan tetap populasi mengendap; antrean tidak menandai "gagal terima" (tidak ada penanda percobaan di kode).
+- EC-ITQ-5: Transfer lama terhapus keras lewat jalur delete existing (`inventory.actions.ts:1885-1893`, model tanpa `deletedAt`): hilang dari populasi render berikut apa adanya; antrean tidak menyimpan jejak hantu dan tidak menilai sahnya penghapusan (wilayah daftar/detail existing).
+- EC-ITQ-6: Dua transfer bersamaan asal/tujuan sama dengan barang sama: tampil per dokumen apa adanya; sisa tidak digabung lintas dokumen (penggabungan per item hanya di dalam laporan bernilai existing, bukan antrean kerja per dokumen).
+- EC-ITQ-7: Baris batch/serial-tracked belum diterima: antrean menampilkan hitungan baris saja — identitas lot/serial tetap wilayah form terima existing (atribusi `batchAllocations`/`serialNumbers`); antrean tidak menampilkan atau menilai kesiapan lot/serial.
+
+### 8. Backlog implementasi (turunan F-2026-10-27-106-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-106-S | Spec kontrak ini (dokumen) | Business | — |
+| 106-B | Builder murni (populasi himpunan laporan existing/ember/umur WIB/tingkat/urutan/sisa per baris/rekap) + loader `view_inventory_transfers` + `getWarehouseScope` tujuan fail-closed anti-N+1 + tes AC-ITQ-B1..B5 | Backend | Putusan Lead Q-ITQ-1/2/3 |
+| 106-F | Permukaan antrean (penempatan per Q-ITQ-3) verbatim payload + AC-ITQ-F1..F3; grep e2e transfer dulu | Frontend | 106-B merged |
+| 106-Q | Falsifikasi AC-ITQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 106-B/106-F |
+
+| ID | Pertanyaan | Pemutus | Usulan Business |
+|---|---|---|---|
+| Q-ITQ-1 | Ambang `MENGENDAP` (umur di jalan ≥ N hari kalender WIB sejak `date`)? Hubungannya dengan peringatan > 60 hari laporan dinyatakan berdampingan? | Lead | USULAN 3 hari (BR-ITQ-03) — bukan fakta sebelum diputus; laporan 60 hari tetap wilayah pemeriksaan nilai |
+| Q-ITQ-2 | Kata final: label ember (`Belum Diterima`/`Diterima Sebagian`), tingkat `Mengendap`, kolom `Umur di Jalan`/`Baris Bersisa k dari n`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim, status mentah tetap tertanda |
+| Q-ITQ-3 | Penempatan: seksi turunan di halaman daftar transfer existing vs permukaan terpisah? Daftar existing + laporan in-transit yang tanpa scope ikut diselaraskan sebagai pekerjaan terpisah? | Lead | USULAN: seksi turunan di halaman daftar transfer; scope hanya pada turunan, nol key baru; penyelarasan daftar/laporan = keputusan terpisah |
+| Q-ITQ-4 | Nilai sisa/carried cost dibuka di payload antrean kerja? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-ITQ-08); vonis WAJIB hanya bila Lead membuka ini — tahap baca-saja tanpa angka tidak butuh vonis |
+| Q-ITQ-5 | Penanda penanggung jawab bernama (pemroses/penerima terakhir) dibuka tahap 1? | Lead | USULAN tidak tahap 1 (BR-ITQ-11): gudang tujuan + umur + sisa cukup untuk menemukan transfer tersangkut; nama = permukaan detail existing |
+
+### Yang TIDAK diusulkan run ini
+
+- Tombol Proses/Terima/Tutup Selisih dari antrean, terima massal, auto-terima berbasis umur (BR-ITQ-07) — penerimaan menulis StockMove IN + layer + revive serial dan menuntut scope tujuan + periode terbuka di detail; jalan pintas mengaburkan penjaga itu.
+- Nilai uang di antrean: carried cost, nilai sisa, Σ persediaan di jalan (BR-ITQ-08, Q-ITQ-4) — permukaan laporan in-transit existing yang menanganinya.
+- Σ qty sisa lintas barang/transfer atau persen diterima per transfer dari qty beda satuan (BR-ITQ-05).
+- Mengubah himpunan status, peringatan 60 hari, atau penilaian laporan in-transit existing; menyelaraskan scope daftar transfer existing (Q-ITQ-3) — keduanya tetap, spec ini lapisan turunan.
+- Pengingat ke gudang tujuan, eskalasi ke gudang asal, SLA kirim per pasangan gudang — keadaan/kanal baru di luar tahap baca-saja.
+- Larangan transfer paralel pasangan gudang sama atau kunci gudang-sedang-transfer (EC-ITQ-6 dicatat apa adanya) — aturan inti baru menyentuh perilaku create/process existing; butuh putusan Lead terpisah.
+- Key izin transfer baru (`process/receive_inventory_transfers`) — aksi existing meminjam `edit_inventory_transfers`; memecahnya = keputusan katalog terpisah (Q-ITQ-3).
+
+F-2026-10-27-106-S — Antrean transfer inventaris belum diterima penuh mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-ITQ-1/2/3/5, lalu fisik Backend (106-B), konsumen Frontend (106-F), falsifikasi QA (106-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja (nol nilai uang di payload, nol jurnal — BR-ITQ-08); WAJIB bersyarat hanya bila Lead membuka Q-ITQ-4 (nilai di daftar).
 ---
 
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-103-S: antrean transaksi berulang jatuh tempo / gagal jalan mengendap (turunan baca-saja di atas RecurringTransaction existing)
