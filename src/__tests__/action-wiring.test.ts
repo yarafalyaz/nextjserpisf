@@ -216,16 +216,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-26-054-S: 4 aksi penyesuaian gaji kini dirujuk panel
   // salary-adjustment-panel.tsx + page karyawan (PR #1079) — entri beku dibuang.
   // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
-  // menunggu UI pesan tertahan + permukaan persetujuan (frontend t_52903522);
-  // entri beku dibuang saat UI tersambung.
-  "src/actions/credit-override.actions.ts::approveCreditOverride":
-    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
-  "src/actions/credit-override.actions.ts::rejectCreditOverride":
-    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
-  "src/actions/credit-override.actions.ts::listCreditOverrides":
-    "F-2026-10-25-035-B backend; UI daftar/jejak override menyusul (frontend t_52903522)",
-  "src/actions/credit-override.actions.ts::getMyCreditOverrideStatus":
-    "F-2026-10-25-035-B backend; UI status permintaan override menyusul (frontend t_52903522)",
+  // kini dirujuk UI (panel tertahan + antrean persetujuan PR #1085,
+  // frontend t_52903522/t_7582c185) — entri beku dibuang.
   // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
   // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
   // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
