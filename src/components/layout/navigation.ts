@@ -8,7 +8,7 @@ import {
   Cog, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck, ClipboardCheck, Percent, ShieldAlert,
-  Boxes, CalendarCheck, ReceiptText,
+  Boxes, CalendarCheck, UserPlus, ReceiptText,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -88,10 +88,12 @@ export const navigation: NavItem[] = [
       { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, permission: "view_quotations" },
       { label: "Antrean Penawaran", href: "/penjualan/antrean-penawaran", icon: ListTodo, permission: "view_quotations" },
       { label: "Draf Penawaran Basi", href: "/penjualan/antrean-penawaran-draf", icon: ListTodo, permission: "view_quotations" },
+      { label: "Pesanan Draft Mengendap", href: "/penjualan/antrean-pesanan-draf", icon: ListTodo, permission: "view_sales_orders" },
       { label: "Faktur Draft Mengendap", href: "/penjualan/antrean-faktur-draf", icon: ListTodo, permission: "view_sales_invoices" },
       { label: "Antrean Penawaran Diterima", href: "/penjualan/antrean-penawaran-diterima", icon: ListTodo, permission: "view_quotations" },
       { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
       { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, permission: "view_down_payments" },
+      { label: "Antrean Verifikasi Uang Muka", href: "/penjualan/antrean-verifikasi-uang-muka", icon: ListTodo, permission: "view_down_payments" },
       { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, permission: "view_sales_orders" },
       { label: "Antrean Janji Kirim", href: "/penjualan/antrean-janji-kirim", icon: ListTodo, permission: "view_sales_orders" },
       { label: "Surat Jalan", href: "/penjualan/surat-jalan", icon: Truck, permission: "view_delivery_orders" },
@@ -171,6 +173,11 @@ export const navigation: NavItem[] = [
       { label: "Pinjaman Saya", href: "/sdm/pinjaman-saya", icon: PiggyBank, permission: "create_employee_loan_requests" },
       { label: "Rekap Pinjaman", href: "/sdm/pinjaman/rekap", icon: PiggyBank, permission: "view_employee_loans" },
       { label: "Apresiasi", href: "/sdm/apresiasi", icon: Gift, permission: "view_appreciations" },
+      { label: "Rekrutmen", href: "/sdm/rekrutmen", icon: UserPlus, permission: "view_recruitments" },
+      { label: "Penilaian Kinerja", href: "/sdm/kinerja", icon: TrendingUp, permission: "view_performance" },
+      { label: "Kompetensi", href: "/sdm/kompetensi", icon: Target, permission: "view_competencies" },
+      { label: "Pelatihan", href: "/sdm/pelatihan", icon: BookOpenCheck, permission: "view_trainings" },
+      { label: "Perencanaan Suksesi", href: "/sdm/suksesi", icon: GitBranch, permission: "view_succession" },
       { label: "Surat Peringatan", href: "/sdm/disiplin", icon: ShieldAlert, permission: "view_disciplinary_records" },
       { label: "Klaim Reimbursement", href: "/sdm/klaim-reimbursement", icon: ReceiptText, permission: "create_employee_reimbursements" },
       { label: "Kalender Kerja", href: "/sdm/kalender-kerja", icon: CalendarDays, permission: "view_work_schedules" },
