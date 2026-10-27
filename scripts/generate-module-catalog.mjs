@@ -66,6 +66,10 @@ const RESOURCES = [
   ["currencies", "master", "Mata Uang"],
   ["warehouses", "master", "Gudang"],
   ["employees", "master", "Karyawan"],
+  ["salary_amounts", "hrm", "Nominal Gaji"],
+  ["cost_amounts", "inventory", "Nilai HPP/Biaya"],
+  ["sensitive_identity", "master", "Identitas Sensitif Karyawan"],
+  ["subordinate_data", "hrm", "Data Bawahan (Struktur Organisasi)"],
   // F-2026-10-24-099-S Q-PROB-2: resource persetujuan kontrak agar
   // approve_contracts lolos fail-closed generator (permission tanpa
   // resource di sini = process.exit(1)).

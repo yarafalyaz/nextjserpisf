@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -12,7 +11,9 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
-import { loadWithholdingCertificatesCsv } from "@/lib/reports/withholding-certificates-data"
+import { serializeWithholdingCertificatesCsv } from "@/lib/reports/withholding-certificates"
+import { loadWithholdingCertificateInputs } from "@/lib/reports/withholding-certificates-data"
+import { safeAdd } from "@/lib/utils/math"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -50,31 +51,27 @@ export default async function WithholdingTaxReportPage({
   }))
   const { start: startDate, end: endDate } = period
 
-  const bills = await prisma.vendorBill.findMany({
-    where: {
-      date: { gte: startDate, lte: endDate },
-      status: { in: ["posted", "partial", "paid"] },
-      deletedAt: null,
-      withholdingAmount: { gt: 0 },
-    },
-    include: {
-      vendor: { select: { name: true } },
-      withholdingType: { select: { code: true, name: true, rate: true } },
-    },
-    orderBy: [{ date: "asc" }, { documentNo: "asc" }],
-  })
+  // Satu sumber dua sisi untuk layar, PDF, dan CSV (B8): baris lahir dari
+  // loader bersama, bukan query per permukaan. Total ketiga permukaan
+  // karena itu selalu sama untuk periode yang sama.
+  const inputs = await loadWithholdingCertificateInputs(period)
+  const byDateThenDoc = (
+    a: { date: Date; documentNo: string },
+    b: { date: Date; documentNo: string },
+  ) => a.date.getTime() - b.date.getTime() || a.documentNo.localeCompare(b.documentNo, "id-ID")
+  const purchaseInputs = inputs.filter((r) => r.side === "purchase").sort(byDateThenDoc)
+  const salesInputs = inputs.filter((r) => r.side === "sales").sort(byDateThenDoc)
 
-  const rows = bills.map((bill) => ({
-    id: bill.id,
-    date: bill.date,
-    documentNo: bill.documentNo,
-    vendorName: bill.vendor.name,
-    typeCode: bill.withholdingType?.code ?? null,
-    typeName: bill.withholdingType?.name ?? null,
-    rate: bill.withholdingType ? Number(bill.withholdingType.rate) : null,
-    // Dasar pengenaan = subtotal − diskon (di luar PPN).
-    dpp: Number(bill.subtotal) - Number(bill.discountAmount ?? 0),
-    withheld: Number(bill.withholdingAmount),
+  const rows = purchaseInputs.map((r) => ({
+    date: r.date,
+    documentNo: r.documentNo,
+    vendorName: r.counterparty,
+    typeCode: r.typeCode,
+    typeName: r.typeName,
+    rate: r.rate,
+    // Dasar pengenaan pembelian selalu terisi (subtotal − diskon).
+    dpp: r.dpp ?? 0,
+    withheld: r.withheld,
   }))
 
   const byType = new Map<string, { label: string; rate: number | null; count: number; amount: number }>()
@@ -87,40 +84,27 @@ export default async function WithholdingTaxReportPage({
       amount: 0,
     }
     bucket.count += 1
-    bucket.amount += row.withheld
+    bucket.amount = safeAdd(bucket.amount, row.withheld, 2)
     byType.set(key, bucket)
   }
 
-  const totalWithheld = rows.reduce((sum, row) => sum + row.withheld, 0)
-  const totalDpp = rows.reduce((sum, row) => sum + row.dpp, 0)
+  const totalWithheld = rows.reduce((sum, row) => safeAdd(sum, row.withheld, 2), 0)
+  const totalDpp = rows.reduce((sum, row) => safeAdd(sum, row.dpp, 2), 0)
 
   // Sisi penjualan: PPh yang dipotong pelanggan, tercatat di pembayaran.
-  const salesPayments = await prisma.salesPayment.findMany({
-    where: {
-      paymentDate: { gte: startDate, lte: endDate },
-      withholdingAmount: { gt: 0 },
-    },
-    include: {
-      salesInvoice: { select: { documentNo: true, customer: { select: { name: true } } } },
-      withholdingType: { select: { code: true, name: true, rate: true } },
-    },
-    orderBy: [{ paymentDate: "asc" }, { documentNo: "asc" }],
-  })
-
-  const salesRows = salesPayments.map((payment) => ({
-    id: payment.id,
-    date: payment.paymentDate,
-    documentNo: payment.documentNo,
-    certificateNo: payment.withholdingCertificateNo,
-    invoiceNo: payment.salesInvoice?.documentNo ?? null,
-    customerName: payment.salesInvoice?.customer?.name ?? null,
-    typeCode: payment.withholdingType?.code ?? null,
-    typeName: payment.withholdingType?.name ?? null,
-    rate: payment.withholdingType ? Number(payment.withholdingType.rate) : null,
-    withheld: Number(payment.withholdingAmount),
+  const salesRows = salesInputs.map((r) => ({
+    date: r.date,
+    documentNo: r.documentNo,
+    certificateNo: r.certificateNo,
+    invoiceNo: r.invoiceNo ?? null,
+    customerName: r.counterparty || null,
+    typeCode: r.typeCode,
+    typeName: r.typeName,
+    rate: r.rate,
+    withheld: r.withheld,
   }))
 
-  const totalSalesWithheld = salesRows.reduce((sum, row) => sum + row.withheld, 0)
+  const totalSalesWithheld = salesRows.reduce((sum, row) => safeAdd(sum, row.withheld, 2), 0)
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
@@ -132,7 +116,7 @@ export default async function WithholdingTaxReportPage({
         defaultEndDate={toLocalDateOnly(endDate)}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Bukti_Potong_PPh" pdfHref={buildReportPdfHref("bukti-potong-pph", period.slug)} csvData={(await loadWithholdingCertificatesCsv(period)).csv} /></div>
+<div className="flex items-center justify-end print:hidden"><ExportButtons title="Bukti_Potong_PPh" pdfHref={buildReportPdfHref("bukti-potong-pph", period.slug)} csvData={serializeWithholdingCertificatesCsv(inputs).csv} /></div>
 </>}>
 
 
@@ -191,7 +175,7 @@ export default async function WithholdingTaxReportPage({
           </DetailTableHead>
           <DetailTableBody>
             {rows.map((row) => (
-              <DetailTableRow key={row.id}>
+              <DetailTableRow key={row.documentNo}>
                 <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.documentNo}</DetailTableTd>
                 <DetailTableTd>{row.vendorName}</DetailTableTd>
@@ -231,7 +215,7 @@ export default async function WithholdingTaxReportPage({
           </DetailTableHead>
           <DetailTableBody>
             {salesRows.map((row) => (
-              <DetailTableRow key={row.id}>
+              <DetailTableRow key={row.documentNo}>
                 <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.documentNo}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.certificateNo ?? "–"}</DetailTableTd>

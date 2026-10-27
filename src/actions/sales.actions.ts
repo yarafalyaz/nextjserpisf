@@ -63,6 +63,7 @@ async function creditGateBlockedResult(e: unknown) {
   }
 }
 import { findOverReturn } from "@/lib/sales/return-validation"
+import { findCumulativeQtyExcess, cumulativeValueExcess } from "@/lib/sales/cumulative-cap"
 import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
@@ -1189,6 +1190,31 @@ export async function postInvoice(invoiceId: number) {
       salesOrderId: invoice.salesOrderId,
     })
 
+    // TASK-016 BUG-06: posting adalah gerbang terakhir cap kumulatif SO —
+    // faktur draft yang lahir sebelum cap ada (atau diedit melewati sisa)
+    // tidak boleh memposting jurnal/stok melebihi pesanan. Nilai segar
+    // dibaca ulang di dalam tx; faktur ini dikeluarkan dari total berjalan.
+    if (invoice.salesOrderId) {
+      const fresh = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: invoiceId },
+        select: { grandTotal: true },
+      })
+      const ownItems = await tx.salesInvoiceItem.findMany({
+        where: { salesInvoiceId: invoiceId },
+        select: { itemId: true, qty: true, uom: true },
+      })
+      await assertInvoiceWithinSalesOrderCap(tx, {
+        salesOrderId: invoice.salesOrderId,
+        excludeInvoiceId: invoiceId,
+        candidateGrandTotal: Number(fresh.grandTotal),
+        candidateLines: ownItems.map((line) => ({
+          itemId: line.itemId,
+          qty: Number(line.qty),
+          uom: line.uom,
+        })),
+      })
+    }
+
     // Claim from EITHER "draft" or "approved". When a SalesInvoice approval
     // workflow is configured, approval.actions sets the document status to
     // "approved" (not "draft"), so a draft-only claim could never match and
@@ -1269,6 +1295,168 @@ async function collectQuotationInvoices(
     byId.set(inv.id, { id: inv.id, status: inv.status, grandTotal: Number(inv.grandTotal) })
   }
   return [...byId.values()]
+}
+
+/**
+ * TASK-016 BUG-06: cap kumulatif faktur terhadap Pesanan Penjualan.
+ *
+ * Nilai: Σ grandTotal faktur non-batal atas SO yang sama (draft ikut
+ * memesan porsi — definisi job-billing) + kandidat tidak boleh menembus
+ * SO.grandTotal. Kuantitas: per itemId dalam SATUAN DASAR (uom baris
+ * faktur dikonversi lewat toBaseFactor; baris SO selalu satuan dasar).
+ * Baris jasa (itemId null) tak punya padanan qty — ia tertahan cap nilai.
+ * Wajib dipanggil di dalam transaksi; baris SO dikunci FOR UPDATE (dan
+ * baris quotation induknya, meniru jalur faktur progres) supaya dua
+ * pembuatan/posting bersamaan tidak sama-sama lolos cap.
+ */
+async function assertInvoiceWithinSalesOrderCap(
+  tx: Prisma.TransactionClient,
+  input: {
+    salesOrderId: number
+    excludeInvoiceId?: number
+    candidateGrandTotal: number
+    candidateLines: Array<{ itemId: number | null; qty: number; uom?: string | null }>
+  },
+): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${input.salesOrderId} FOR UPDATE`
+  const so = await tx.salesOrder.findUnique({
+    where: { id: input.salesOrderId },
+    select: { documentNo: true, grandTotal: true, quotationId: true },
+  })
+  if (!so) throw new Error("Pesanan Penjualan tidak ditemukan")
+  if (so.quotationId) {
+    await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${so.quotationId} FOR UPDATE`
+  }
+
+  const priorInvoices = await tx.salesInvoice.findMany({
+    where: {
+      salesOrderId: input.salesOrderId,
+      deletedAt: null,
+      status: { not: "cancelled" },
+      ...(input.excludeInvoiceId ? { id: { not: input.excludeInvoiceId } } : {}),
+    },
+    select: {
+      grandTotal: true,
+      items: { select: { itemId: true, qty: true, uom: true } },
+    },
+  })
+
+  const alreadyBilled = priorInvoices.reduce(
+    (sum, inv) => safeAdd(sum, Number(inv.grandTotal), 2),
+    0,
+  )
+  const orderTotal = Number(so.grandTotal)
+  if (Number.isFinite(orderTotal)) {
+    const excess = cumulativeValueExcess(alreadyBilled, input.candidateGrandTotal, orderTotal)
+    if (excess > 0.01) {
+      throw new Error(
+        `Faktur melebihi nilai Pesanan Penjualan ${so.documentNo}: sudah tertagih ${alreadyBilled}, ` +
+          `faktur ini ${input.candidateGrandTotal}, nilai pesanan ${orderTotal} (kelebihan ${excess}). ` +
+          `Kurangi nilai faktur atau ubah pesanan.`,
+      )
+    }
+  }
+
+  const soItems = await tx.salesOrderItem.findMany({
+    where: { salesOrderId: input.salesOrderId },
+    select: { itemId: true, qty: true },
+  })
+  const orderedByItem = new Map<number, number>()
+  for (const line of soItems) {
+    if (line.itemId == null) continue
+    orderedByItem.set(line.itemId, (orderedByItem.get(line.itemId) ?? 0) + Number(line.qty))
+  }
+  if (orderedByItem.size === 0) return
+
+  const toBase = async (itemId: number, qty: number, uom: string | null | undefined) =>
+    qty * (await toBaseFactor(tx, itemId, uom))
+  const invoicedByItem = new Map<number, number>()
+  for (const inv of priorInvoices) {
+    for (const line of inv.items) {
+      if (line.itemId == null) continue
+      invoicedByItem.set(
+        line.itemId,
+        (invoicedByItem.get(line.itemId) ?? 0) + (await toBase(line.itemId, Number(line.qty), line.uom)),
+      )
+    }
+  }
+  const candidateByItem = new Map<number, number>()
+  for (const line of input.candidateLines) {
+    if (line.itemId == null) continue
+    candidateByItem.set(
+      line.itemId,
+      (candidateByItem.get(line.itemId) ?? 0) + (await toBase(line.itemId, Math.max(0, Number(line.qty) || 0), line.uom)),
+    )
+  }
+  const violation = findCumulativeQtyExcess(candidateByItem, orderedByItem, invoicedByItem)
+  if (violation) {
+    throw new Error(
+      `Faktur melebihi jumlah dipesan untuk item #${violation.key} pada Pesanan Penjualan ${so.documentNo}: ` +
+        `dipesan ${violation.ordered}, sudah difakturkan ${violation.already}, faktur ini ${violation.requested} ` +
+        `(sisa ${violation.remaining}). Kurangi jumlah faktur atau ubah pesanan.`,
+    )
+  }
+}
+
+/**
+ * TASK-016 BUG-03: cap kumulatif pengiriman per baris SO.
+ *
+ * `requestedByLine` = qty surat jalan ini per salesOrderItemId, sudah
+ * diagregasi pemanggil. Yang sudah berjalan dibaca dari DeliveryOrderItem
+ * surat jalan lain atas baris yang sama: semua status selain batal saat
+ * pembuatan (konsep ikut memesan porsi, pola faktur progres), atau hanya
+ * shipped/delivered saat klaim kirim. Kuantitas dibandingkan dalam satuan
+ * dasar (unit baris surat jalan dikonversi; baris SO selalu satuan dasar).
+ * Wajib di dalam transaksi yang sudah mengunci baris SO.
+ */
+async function assertDeliveryWithinOrderCap(
+  tx: Prisma.TransactionClient,
+  input: {
+    salesOrderId: number
+    requestedByLine: ReadonlyMap<number, number>
+    excludeDeliveryOrderId?: number
+    shippedOnly?: boolean
+  },
+): Promise<void> {
+  const lineIds = [...input.requestedByLine.keys()]
+  if (lineIds.length === 0) return
+
+  const soLines = await tx.salesOrderItem.findMany({
+    where: { id: { in: lineIds }, salesOrderId: input.salesOrderId },
+    select: { id: true, qty: true },
+  })
+  const orderedByLine = new Map(soLines.map((line) => [line.id, Number(line.qty)]))
+
+  const priorItems = await tx.deliveryOrderItem.findMany({
+    where: {
+      salesOrderItemId: { in: lineIds },
+      ...(input.excludeDeliveryOrderId
+        ? { deliveryOrderId: { not: input.excludeDeliveryOrderId } }
+        : {}),
+      deliveryOrder: input.shippedOnly
+        ? { status: { in: ["shipped", "delivered"] } }
+        : { status: { not: "cancelled" } },
+    },
+    select: { salesOrderItemId: true, itemId: true, qty: true, unit: true },
+  })
+  const deliveredByLine = new Map<number, number>()
+  for (const row of priorItems) {
+    if (row.salesOrderItemId == null) continue
+    const baseQty =
+      row.itemId == null
+        ? Number(row.qty)
+        : Number(row.qty) * (await toBaseFactor(tx, row.itemId, row.unit))
+    deliveredByLine.set(row.salesOrderItemId, (deliveredByLine.get(row.salesOrderItemId) ?? 0) + baseQty)
+  }
+
+  const violation = findCumulativeQtyExcess(input.requestedByLine, orderedByLine, deliveredByLine)
+  if (violation) {
+    throw new Error(
+      `Pengiriman melebihi pesanan untuk baris pesanan #${violation.key}: dipesan ${violation.ordered}, ` +
+        `sudah terkirim ${violation.already}, surat jalan ini ${violation.requested} (sisa ${violation.remaining}). ` +
+        `Kurangi jumlah surat jalan atau ubah pesanan.`,
+    )
+  }
 }
 
 /**
@@ -1694,6 +1882,19 @@ export async function createSalesInvoice(formData: FormData) {
       grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
     }
 
+    // TASK-016 BUG-06: faktur atas SO dibatasi kumulatif (nilai + qty
+    // satuan dasar) terhadap SO di dalam tx yang sama, baris SO terkunci.
+    if (v.salesOrderId) {
+      await assertInvoiceWithinSalesOrderCap(tx, {
+        salesOrderId: v.salesOrderId,
+        candidateGrandTotal: grandTotal,
+        candidateLines: (items ?? []).map((item) => ({
+          itemId: item.itemId,
+          qty: Number(item.qty),
+          uom: (item as { uom?: string | null }).uom ?? null,
+        })),
+      })
+    }
     // F-2026-10-25-035-B titik tahan Q-CL2-4 butir 3 (sesudah
     // assertPeriodOpen di atas): nilai SEBELUM baris lahir dalam tx ini.
     const invAttempt = {
@@ -2249,34 +2450,46 @@ export async function createDeliveryOrder(formData: FormData) {
   const documentNo = await generateDocumentNumber("DO")
   const slug = await nextSlug("deliveryOrder", documentNo)
 
-  const deliveryOrder = await prisma.deliveryOrder.create({
-    data: {
-      documentNo,
-      slug,
-      doNumber: v.doNumber ?? null,
-      customerId: salesOrder.customerId,
+  // TASK-016 BUG-03: cap kumulatif per baris SO di dalam transaksi dengan
+  // baris SO terkunci FOR UPDATE (pola penjaga over-receive sisi beli):
+  // surat jalan non-batal lain (konsep ikut memesan porsi) + surat jalan
+  // ini tidak boleh menembus qty dipesan. DO tetap tidak menyentuh stok —
+  // keluar stok hanya lewat posting faktur.
+  const deliveryOrder = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${salesOrderId} FOR UPDATE`
+    await assertDeliveryWithinOrderCap(tx, {
       salesOrderId,
-      date: wibDateToUtcMidnight(v.date),
-      deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
-      shippingAddress: v.shippingAddress ?? null,
-      shippingProvince: v.shippingProvince ?? null,
-      shippingCity: v.shippingCity ?? null,
-      shippingDistrict: v.shippingDistrict ?? null,
-      shippingVillage: v.shippingVillage ?? null,
-      shippingPostalCode: v.shippingPostalCode ?? null,
-      shippingPhone: v.shippingPhone ?? null,
-      vehicleNumber: v.vehicleNumber ?? null,
-      notes: v.notes ?? null,
-      status: "draft",
-      createdBy: Number(user.id),
-      items: {
-        create: [...qtyByLine.entries()].map(([salesOrderItemId, qty]) => ({
-          salesOrderItemId,
-          itemId: lineById.get(salesOrderItemId)!.itemId!,
-          qty,
-        })),
+      requestedByLine: qtyByLine,
+    })
+    return tx.deliveryOrder.create({
+      data: {
+        documentNo,
+        slug,
+        doNumber: v.doNumber ?? null,
+        customerId: salesOrder.customerId,
+        salesOrderId,
+        date: wibDateToUtcMidnight(v.date),
+        deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
+        shippingAddress: v.shippingAddress ?? null,
+        shippingProvince: v.shippingProvince ?? null,
+        shippingCity: v.shippingCity ?? null,
+        shippingDistrict: v.shippingDistrict ?? null,
+        shippingVillage: v.shippingVillage ?? null,
+        shippingPostalCode: v.shippingPostalCode ?? null,
+        shippingPhone: v.shippingPhone ?? null,
+        vehicleNumber: v.vehicleNumber ?? null,
+        notes: v.notes ?? null,
+        status: "draft",
+        createdBy: Number(user.id),
+        items: {
+          create: [...qtyByLine.entries()].map(([salesOrderItemId, qty]) => ({
+            salesOrderItemId,
+            itemId: lineById.get(salesOrderItemId)!.itemId!,
+            qty,
+          })),
+        },
       },
-    },
+    })
   })
 
   await logActivity("create", "DeliveryOrder", deliveryOrder.id, `Membuat surat jalan #${deliveryOrder.id}`)
@@ -2299,32 +2512,64 @@ export async function shipDeliveryOrder(id: number) {
   try {
   const user = await requirePermission("edit_delivery_orders")
 
-  const existing = await prisma.deliveryOrder.findUniqueOrThrow({
-    where: { id },
-    select: { status: true, documentNo: true },
-  })
-  if (existing.status !== "draft") {
-    throw new Error(
-      `Surat jalan ${existing.documentNo} berstatus "${existing.status}" — hanya surat jalan konsep yang bisa ditandai dikirim.`,
-    )
-  }
+  // TASK-016 BUG-03: klaim kirim menilai ulang cap kumulatif di dalam
+  // transaksi dengan baris SO terkunci — dua surat jalan atas SO yang sama
+  // yang dikirim bersamaan tidak boleh sama-sama lolos lalu bersama-sama
+  // menembus qty dipesan (pola kunci PO di verifikasi penerimaan beli).
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.deliveryOrder.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, documentNo: true, salesOrderId: true },
+    })
+    if (existing.status !== "draft") {
+      throw new Error(
+        `Surat jalan ${existing.documentNo} berstatus "${existing.status}" — hanya surat jalan konsep yang bisa ditandai dikirim.`,
+      )
+    }
 
-  // Mengirim surat jalan TANPA baris barang hanya mengubah label: tak satu pun
-  // baris pesanan bertambah terkirim dan sisa kirim tetap salah. Tolak lebih awal
-  // dengan sebab yang bisa ditindaklanjuti.
-  const itemCount = await prisma.deliveryOrderItem.count({ where: { deliveryOrderId: id } })
-  if (itemCount === 0) {
-    throw new Error(
-      "Surat jalan ini tidak punya baris barang, jadi belum bisa ditandai dikirim. Isi barisnya lebih dulu.",
-    )
-  }
+    // Mengirim surat jalan TANPA baris barang hanya mengubah label: tak satu pun
+    // baris pesanan bertambah terkirim dan sisa kirim tetap salah. Tolak lebih awal
+    // dengan sebab yang bisa ditindaklanjuti.
+    const itemCount = await tx.deliveryOrderItem.count({ where: { deliveryOrderId: id } })
+    if (itemCount === 0) {
+      throw new Error(
+        "Surat jalan ini tidak punya baris barang, jadi belum bisa ditandai dikirim. Isi barisnya lebih dulu.",
+      )
+    }
 
-  // Klaim atomik dari `draft` supaya dua klik beruntun tidak memproses dua kali.
-  const claim = await prisma.deliveryOrder.updateMany({
-    where: { id, status: "draft" },
-    data: { status: "shipped", confirmedBy: Number(user.id), confirmedAt: new Date() },
+    if (existing.salesOrderId) {
+      await tx.$queryRaw`SELECT id FROM sales_orders WHERE id = ${existing.salesOrderId} FOR UPDATE`
+      const ownItems = await tx.deliveryOrderItem.findMany({
+        where: { deliveryOrderId: id },
+        select: { salesOrderItemId: true, itemId: true, qty: true, unit: true },
+      })
+      const requestedByLine = new Map<number, number>()
+      for (const line of ownItems) {
+        if (line.salesOrderItemId == null) continue
+        const baseQty =
+          line.itemId == null
+            ? Number(line.qty)
+            : Number(line.qty) * (await toBaseFactor(tx, line.itemId, line.unit))
+        requestedByLine.set(
+          line.salesOrderItemId,
+          (requestedByLine.get(line.salesOrderItemId) ?? 0) + baseQty,
+        )
+      }
+      await assertDeliveryWithinOrderCap(tx, {
+        salesOrderId: existing.salesOrderId,
+        requestedByLine,
+        excludeDeliveryOrderId: id,
+        shippedOnly: true,
+      })
+    }
+
+    // Klaim atomik dari `draft` supaya dua klik beruntun tidak memproses dua kali.
+    const claim = await tx.deliveryOrder.updateMany({
+      where: { id, status: "draft" },
+      data: { status: "shipped", confirmedBy: Number(user.id), confirmedAt: new Date() },
+    })
+    if (claim.count === 0) throw new Error("Surat jalan sudah diproses.")
   })
-  if (claim.count === 0) throw new Error("Surat jalan sudah diproses.")
 
   await logActivity("ship", "DeliveryOrder", id, `Menandai surat jalan #${id} dikirim`)
   revalidatePath("/penjualan/surat-jalan")
@@ -2883,6 +3128,22 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         },
       })
 
+      // TASK-016 BUG-06: edit baris adalah lahir-ulang faktur — cap
+      // kumulatif SO dinilai lagi SEBELUM reverse+repost di bawah, faktur
+      // ini dikeluarkan dari total berjalan.
+      if (v.salesOrderId) {
+        await assertInvoiceWithinSalesOrderCap(tx, {
+          salesOrderId: v.salesOrderId,
+          excludeInvoiceId: id,
+          candidateGrandTotal: grandTotal,
+          candidateLines: items.map((item) => ({
+            itemId: item.itemId,
+            qty: Number(item.qty),
+            uom: item.uom ?? null,
+          })),
+        })
+      }
+
       // If the invoice already posted (stock-out + AR/revenue + COGS journals),
       // the item change invalidated every one of those entries. Reverse them and
       // re-post from the new lines, atomically inside this tx — mirroring the
@@ -3266,34 +3527,63 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
   }
   const v = parsed.data
 
-  const salesOrder = await prisma.salesOrder.findUnique({
-    where: { id: v.salesOrderId },
-    select: { customerId: true },
-  })
+  // TASK-016 BUG-10: gerbang status di server, di dalam transaksi dengan
+  // baris surat jalan terkunci. Surat jalan shipped/delivered adalah
+  // catatan logistik final (barang sudah keluar/diterima) — mengeditnya
+  // atau memindahnya ke SO lain menggeser angka terkirim laporan
+  // Pemenuhan dari pesanan asal tanpa jejak. Hanya konsep yang boleh
+  // diedit, dan SO tujuan tunduk gerbang status yang sama seperti create.
+  const deliveryOrder = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM delivery_orders WHERE id = ${id} FOR UPDATE`
+    }
+    const existing = await tx.deliveryOrder.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, documentNo: true },
+    })
+    if (existing.status === "shipped" || existing.status === "delivered") {
+      throw new Error(
+        `Surat jalan ${existing.documentNo} berstatus "${existing.status}" tidak dapat diubah; hanya surat jalan konsep yang bisa diedit.`,
+      )
+    }
 
-  const existingForSlug = await prisma.deliveryOrder.findUniqueOrThrow({ where: { id }, select: { documentNo: true } })
-  const slug = await nextSlug("deliveryOrder", existingForSlug.documentNo, { excludeId: id })
+    const salesOrder = await tx.salesOrder.findUnique({
+      where: { id: v.salesOrderId },
+      select: { customerId: true, status: true, documentNo: true },
+    })
+    if (!salesOrder) {
+      throw new Error("Pesanan Penjualan tidak ditemukan.")
+    }
+    if (salesOrder.status && !(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(salesOrder.status)) {
+      throw new Error(
+        `Surat jalan hanya bisa dibuat dari Pesanan Penjualan berstatus ${DELIVERABLE_ORDER_STATUS_LABELS}. ` +
+          `Pesanan ${salesOrder.documentNo} masih berstatus "${salesOrder.status}".`,
+      )
+    }
 
-  // Fix #2: Jangan generate documentNo baru
-  const deliveryOrder = await prisma.deliveryOrder.update({
-    where: { id },
-    data: {
-      slug,
-      doNumber: v.doNumber ?? null,
-      customerId: salesOrder?.customerId ?? null,
-      salesOrderId: v.salesOrderId,
-      date: wibDateToUtcMidnight(v.date),
-      deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
-      shippingAddress: v.shippingAddress ?? null,
-      shippingProvince: v.shippingProvince ?? null,
-      shippingCity: v.shippingCity ?? null,
-      shippingDistrict: v.shippingDistrict ?? null,
-      shippingVillage: v.shippingVillage ?? null,
-      shippingPostalCode: v.shippingPostalCode ?? null,
-      shippingPhone: v.shippingPhone ?? null,
-      vehicleNumber: v.vehicleNumber ?? null,
-      notes: v.notes ?? null,
-    },
+    const slug = await nextSlug("deliveryOrder", existing.documentNo, { excludeId: id })
+
+    // Fix #2: Jangan generate documentNo baru
+    return tx.deliveryOrder.update({
+      where: { id },
+      data: {
+        slug,
+        doNumber: v.doNumber ?? null,
+        customerId: salesOrder.customerId,
+        salesOrderId: v.salesOrderId,
+        date: wibDateToUtcMidnight(v.date),
+        deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
+        shippingAddress: v.shippingAddress ?? null,
+        shippingProvince: v.shippingProvince ?? null,
+        shippingCity: v.shippingCity ?? null,
+        shippingDistrict: v.shippingDistrict ?? null,
+        shippingVillage: v.shippingVillage ?? null,
+        shippingPostalCode: v.shippingPostalCode ?? null,
+        shippingPhone: v.shippingPhone ?? null,
+        vehicleNumber: v.vehicleNumber ?? null,
+        notes: v.notes ?? null,
+      },
+    })
   })
 
   await logActivity("update", "DeliveryOrder", deliveryOrder.id, `Memperbarui surat jalan #${deliveryOrder.id}`)

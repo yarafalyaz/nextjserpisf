@@ -37,6 +37,8 @@ interface FakeEntry { accountId: number; debit: number; credit: number; memo?: s
 
 function makeTx(overrides: {
   claim?: Record<string, unknown> | null
+  siblingClaims?: { id: number }[]
+  siblingJournal?: { id: number; journalNumber: string; referenceId: number } | null
   materialIssues?: { items: { qty: number; cost: number }[] }[]
   productionCosts?: { amount: number }[]
   settings?: Record<string, unknown> | null
@@ -59,6 +61,8 @@ function makeTx(overrides: {
     warrantyClaim: {
       findUnique: async () => overrides.claim ?? null,
       findFirst: async () => overrides.invoiceClaim ?? null,
+      findMany: async () =>
+        overrides.siblingClaims ?? [{ id: (overrides.claim as { id?: number } | null)?.id ?? 5 }],
     },
     materialIssue: { findMany: async () => overrides.materialIssues ?? [] },
     productionCost: { findMany: async () => overrides.productionCosts ?? [] },
@@ -84,7 +88,10 @@ function makeTx(overrides: {
         where.id.in.map((id: number) => ({ id })),
     },
     journal: {
-      findFirst: async () => overrides.existingJournal ?? null,
+      findFirst: async ({ where }: { where?: { referenceId?: unknown } }) =>
+        where?.referenceId !== null && typeof where?.referenceId === "object"
+          ? (overrides.siblingJournal ?? null)
+          : (overrides.existingJournal ?? null),
       create: async ({ data }: { data: Record<string, unknown> }) => ({ id: 77, journalNumber: "JRN-77", ...data }),
     },
     journalEntry: {
@@ -181,6 +188,33 @@ describe("E2 WarrantyClaimCost (rute provisi MATI)", () => {
       postWarrantyClaimCostJournal({ claimId: 5, eventDate: new Date("2026-10-21T00:00:00Z") }),
     ).rejects.toThrow(/sudah diposting/)
     expect(entries).toHaveLength(0)
+  })
+
+  it("TASK-019: klaim kedua atas WO repair yang sama tidak menjurnal ulang — mereferensikan jurnal klaim pertama", async () => {
+    const { tx, entries } = makeTx({
+      claim: { ...coveredClaim, id: 6 },
+      siblingClaims: [{ id: 5 }, { id: 6 }],
+      siblingJournal: { id: 9, journalNumber: "JRN-9", referenceId: 5 },
+      ...costRows,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantyClaimCostJournal({ claimId: 6, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/WO repair #55 sudah dijurnal untuk klaim #5 \(jurnal JRN-9\)/)
+    expect(entries).toHaveLength(0)
+  })
+
+  it("TASK-019: WO repair sama tanpa jurnal klaim lain → klaim pertama tetap menjurnal satu kali", async () => {
+    const { tx, entries } = makeTx({
+      claim: { ...coveredClaim, id: 6 },
+      siblingClaims: [{ id: 5 }, { id: 6 }],
+      siblingJournal: null,
+      ...costRows,
+    })
+    state.tx = tx
+    const result = await postWarrantyClaimCostJournal({ claimId: 6, eventDate: new Date("2026-10-21T00:00:00Z") })
+    expect(result.amount).toBe(2_750_000)
+    expect(entries).toHaveLength(1)
   })
 
   it("AC-G8 periode terkunci pada tanggal peristiwa → ditolak, tanggal tidak digeser", async () => {
@@ -396,6 +430,21 @@ describe("E3 WarrantySupplierRecovery", () => {
     await expect(
       postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
     ).rejects.toThrow(/110508/)
+    expect(entries).toHaveLength(0)
+  })
+
+  it("TASK-019: recovery klaim kedua atas WO repair yang sama tidak mengkredit ulang Beban Garansi", async () => {
+    const { tx, entries } = makeTx({
+      claim: { ...coveredClaim, id: 6 },
+      siblingClaims: [{ id: 5 }, { id: 6 }],
+      siblingJournal: { id: 9, journalNumber: "JRN-9", referenceId: 5 },
+      ...costRows,
+      attachmentCount: 1, postSentAttachmentCount: 1,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantySupplierRecoveryJournal({ claimId: 6, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/WO repair #55 sudah dijurnal untuk klaim #5/)
     expect(entries).toHaveLength(0)
   })
 

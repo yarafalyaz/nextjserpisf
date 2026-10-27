@@ -32,8 +32,8 @@ const COLUMNS: TableColumn[] = [
 
 export interface VatInvoiceInput {
   date: Date
-  /** Nomor dokumen internal. */
-  documentNo: string
+  /** Nomor dokumen internal; null = nomor resmi belum terbit (diterbitkan saat posting). */
+  documentNo: string | null
   /** Nomor faktur pajak e-Faktur/Coretax; kosong = belum dicatat. */
   taxInvoiceNumber?: string | null
   counterparty: string
@@ -130,17 +130,17 @@ function summarize(items: VatInvoiceInput[]): VatInvoiceGroup {
   )
 }
 
-function sortByDate<T extends { date: Date; documentNo: string }>(items: T[]): T[] {
+function sortByDate<T extends { date: Date; documentNo: string | null }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
     const byDate = a.date.getTime() - b.date.getTime()
-    return byDate !== 0 ? byDate : a.documentNo.localeCompare(b.documentNo, "id-ID")
+    return byDate !== 0 ? byDate : (a.documentNo ?? "").localeCompare(b.documentNo ?? "", "id-ID")
   })
 }
 
 /** Sel faktur pajak: nomor e-Faktur bila ada, fallback nomor dokumen internal. */
 export function displayTaxInvoiceNo(item: VatInvoiceInput): string {
   const taxNo = item.taxInvoiceNumber?.trim()
-  return taxNo ? taxNo : item.documentNo
+  return taxNo ? taxNo : (item.documentNo ?? "–")
 }
 
 function hasTaxInvoiceNo(item: VatInvoiceInput): boolean {
@@ -160,7 +160,7 @@ function dataRows(items: VatInvoiceInput[]): TableRow[] {
       kind: "data",
       cells: [
         shortDate(item.date),
-        item.documentNo,
+        item.documentNo ?? "–",
         displayTaxInvoiceNo(item),
         item.counterparty,
         displayNpwp(item),
@@ -173,7 +173,7 @@ function dataRows(items: VatInvoiceInput[]): TableRow[] {
       rows.push({
         kind: "notice",
         text:
-          `Peringatan: faktur ${item.documentNo} punya retur terproses ${item.returnRef.documentNo}` +
+          `Peringatan: faktur ${item.documentNo ?? "–"} punya retur terproses ${item.returnRef.documentNo}` +
           (item.returnRef.sourceDocumentNo ? ` atas ${item.returnRef.sourceDocumentNo}` : "") +
           `. Angka DPP/PPN retur belum mengurangi laporan ini — nota retur mengurangi ` +
           `PPN pada masa retur, menunggu vonis masa & dasar hitung.`,
