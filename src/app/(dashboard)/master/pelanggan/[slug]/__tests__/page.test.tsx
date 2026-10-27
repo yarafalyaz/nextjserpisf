@@ -101,9 +101,20 @@ describe("Detail pelanggan — penanda nitkuUnlinked snapshot (konsumen PR #998)
     await act(async () => {
       root!.render(<Suspense fallback={null}>{node}</Suspense>)
     })
-    // Tab Identitas Pajak bukan tab default — isi tetap ter-render di DOM.
+    // Tab Identitas Pajak bukan tab default — panel Radix non-aktif tidak
+    // ter-mount, jadi kontennya absen dari textContent sampai tab aktif.
+    // Aktivasi WAJIB klik mouse deterministik: pola lama focus() +
+    // keydown ArrowRight bergantung aktivasi-otomatis-saat-fokus Radix
+    // yang kadang belum tuntas di bawah beban CI (flaky terverifikasi QA
+    // t_f41c5250 — asersi jalan sebelum panel ter-mount). Klik memicu
+    // onMouseDown Radix yang mengaktifkan tab secara sinkron.
     const trigger = [...container.querySelectorAll("button")].find((b) => b.textContent === "Identitas Pajak")
-    if (trigger) { await act(async () => { trigger.focus() }); await act(async () => { trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })) }) }
+    if (trigger) {
+      await act(async () => {
+        trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+        trigger.click()
+      })
+    }
     return container
   }
 
