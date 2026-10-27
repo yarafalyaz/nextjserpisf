@@ -10,10 +10,26 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { EmptyState } from "@/components/ui/empty-state"
 import { entityHref } from "@/lib/utils/entity-url"
 import { CanCreate } from "@/components/auth/can-create"
+import { BankStatementDraftQueueSection } from "./_components/bank-statement-draft-queue"
+import { getBankStatementDraftQueue } from "@/lib/reports/bank-statement-draft-queue-data"
+import {
+  BANK_STATEMENT_DRAFT_QUEUE_TITLE,
+  type BankStatementDraftQueue,
+} from "@/lib/reports/bank-statement-draft-queue"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Laporan Bank" }
+
+/** Redirect Next.js (termasuk gerbang izin fail-closed) bukan error muat. */
+function isNextRedirect(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 export default async function BankStatementsPage({
   searchParams,
@@ -26,6 +42,20 @@ export default async function BankStatementsPage({
   const page = Number(params.halaman) || 1
   const perPage = 20
 
+  // Seksi turunan baca-saja (F-2026-10-27-096-S, Q-BSQ-3) dimuat
+  // paralel dengan daftar utama. Gerbang view_bank_statements
+  // ditegakkan ulang fail-closed di loader sebelum query: redirect
+  // izin tetap diteruskan, sedangkan kegagalan muat lain hanya
+  // mengosongkan seksi turunan — daftar existing tetap tampil.
+  const draftQueuePromise: Promise<{
+    queue: BankStatementDraftQueue | null
+    redirectError?: unknown
+  }> = getBankStatementDraftQueue()
+    .then((queue) => ({ queue }))
+    .catch((error: unknown) =>
+      isNextRedirect(error) ? { queue: null, redirectError: error } : { queue: null },
+    )
+
   const [statements, total] = await Promise.all([
     prisma.bankStatement.findMany({
       orderBy: { createdAt: "desc" },
@@ -34,6 +64,10 @@ export default async function BankStatementsPage({
     }),
     prisma.bankStatement.count(),
   ])
+
+  const draftResult = await draftQueuePromise
+  if (draftResult.redirectError !== undefined) throw draftResult.redirectError
+  const draftQueue = draftResult.queue
 
   const totalPages = Math.ceil(total / perPage)
 
@@ -52,6 +86,24 @@ export default async function BankStatementsPage({
           </Link>
         </CanCreate>
       </div>
+
+      {draftQueue ? (
+        <BankStatementDraftQueueSection queue={draftQueue} />
+      ) : (
+        <section
+          aria-label={BANK_STATEMENT_DRAFT_QUEUE_TITLE}
+          className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+        >
+          <div className="flex flex-col gap-1 p-4 px-5">
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">
+              {BANK_STATEMENT_DRAFT_QUEUE_TITLE}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Antrean rekening koran draft mengendap tidak dapat dimuat saat ini.
+            </p>
+          </div>
+        </section>
+      )}
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <DetailTable>
