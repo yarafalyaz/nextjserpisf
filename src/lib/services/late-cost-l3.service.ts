@@ -21,14 +21,47 @@ export type L3Tag = { workOrderNo: string; reason: string }
 
 // Baris penanda baku: "BIAYA TELAT NON-JOB L3 | WO: <documentNo> | Alasan: <teks>".
 // Penanda di baris PERTAMA; teks lain sesudahnya bebas catatan operator.
-const L3_LINE_RE =
-  /^BIAYA TELAT NON-JOB L3\s*\|\s*WO:\s*(\S+)\s*\|\s*Alasan:\s*(.+)$/m
-
+// Parsing manual per baris (bukan regex \s* berantai) supaya bebas backtracking
+// super-linear (S8786); semantik `\s` JS (termasuk NBSP) dipetakan lewat trim.
 export function parseL3Tag(text: string | null | undefined): L3Tag | null {
   if (!text) return null
-  const m = L3_LINE_RE.exec(text)
-  if (!m) return null
-  return { workOrderNo: m[1].trim(), reason: m[2].trim() }
+  // `$`/`^` multiline regex lama berhenti di semua pemutus baris JS.
+  for (const line of text.split(/\r\n|\n|\r|\u2028|\u2029/)) {
+    if (!line.startsWith(L3_MARKER)) continue
+    // `\s*` sesudah penanda tidak pernah menelan `|`: sesudah trim sisa wajib
+    // diawali pemisah pipa; bila tidak, baris ini bukan penanda.
+    let rest = line.slice(L3_MARKER.length).trimStart()
+    if (!rest.startsWith("|")) continue
+    rest = rest.slice(1).trimStart()
+    if (!rest.startsWith("WO:")) continue
+    rest = rest.slice("WO:".length).trimStart()
+    // Token WO lama `(\S+)\s*\|`: run non-spasi pertama; pipa pemisah boleh
+    // menempel token atau sesudah spasi. Di dalam run, pipa terakhir yang
+    // diikuti `Alasan:` yang dipakai (backtracking rakus regex lama).
+    const wsAt = rest.search(/\s/)
+    const runEnd = wsAt === -1 ? rest.length : wsAt
+    let pipeAt = -1
+    for (let i = runEnd - 1; i > 0; i--) {
+      if (rest[i] === "|" && rest.slice(i + 1).trimStart().startsWith("Alasan:")) {
+        pipeAt = i
+        break
+      }
+    }
+    if (pipeAt === -1) {
+      let j = runEnd
+      while (j < rest.length && /\s/.test(rest[j])) j++
+      if (rest[j] === "|" && rest.slice(j + 1).trimStart().startsWith("Alasan:")) pipeAt = j
+    }
+    if (pipeAt === -1) continue
+    const workOrderNo = rest.slice(0, pipeAt).trimEnd()
+    if (!workOrderNo || /\s/.test(workOrderNo)) continue
+    const rawReason = rest.slice(pipeAt + 1).trimStart().slice("Alasan:".length)
+    // Regex lama `(.+)$`: alasan wajib >= 1 karakter sesudah `Alasan:`
+    // (spasi mentah pun terhitung; hasil akhir tetap di-trim pemanggil lama).
+    if (rawReason.length === 0) continue
+    return { workOrderNo, reason: rawReason.trim() }
+  }
+  return null
 }
 
 export function formatL3Tag(workOrderNo: string, reason: string): string {

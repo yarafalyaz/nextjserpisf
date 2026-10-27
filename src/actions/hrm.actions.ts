@@ -394,7 +394,7 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
     const user = await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const employeeId = Number(formData.get("employeeId"));
     const componentId = Number(formData.get("componentId"));
-    const defaultAmount = parseMoneyAmount(formData.get("defaultAmount")) ?? NaN;
+    const defaultAmount = parseMoneyAmount(formData.get("defaultAmount")) ?? Number.NaN;
     const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
     const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
@@ -453,7 +453,7 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     if (!existing) throw new Error("Penugasan komponen gaji tidak ditemukan");
     const defaultAmount = formData.get("defaultAmount") == null
       ? Number(existing.defaultAmount)
-      : (parseMoneyAmount(formData.get("defaultAmount")) ?? NaN);
+      : (parseMoneyAmount(formData.get("defaultAmount")) ?? Number.NaN);
     if (!Number.isFinite(defaultAmount) || defaultAmount < 0) {
       throw new Error("Nominal penugasan komponen gaji tidak boleh negatif");
     }
@@ -653,7 +653,7 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
     if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
     await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(payrollId);
     const componentId = Number(formData.get("componentId"));
-    const amount = parseMoneyAmount(formData.get("amount")) ?? NaN;
+    const amount = parseMoneyAmount(formData.get("amount")) ?? Number.NaN;
     if (!Number.isSafeInteger(componentId) || componentId <= 0) throw new Error("Komponen gaji tidak valid");
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
@@ -696,7 +696,7 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
     await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
-    const amount = parseMoneyAmount(formData.get("amount")) ?? NaN;
+    const amount = parseMoneyAmount(formData.get("amount")) ?? Number.NaN;
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
     }

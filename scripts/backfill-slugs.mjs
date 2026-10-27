@@ -26,8 +26,6 @@ const TABLE_SOURCES = {
   // master
   accounts: "name", banks: "name", barcodes: "barcode", departments: "name",
   warehouses: "name", positions: "name", employees: "name",
-  job_vacancies: "title", job_applicants: "name", performance_cycles: "name",
-  performance_reviews: "id", competencies: "name", trainings: "title",
   items: "name",
   item_categories: "name", customer_categories: "name", item_groups: "name",
   expense_categories: "name", tax_groups: "name", brands: "name",
@@ -76,7 +74,7 @@ const TABLE_SOURCES = {
   probation_reviews: "id", contract_decision_requests: "id",
   job_vacancies: "code", job_applicants: "name", performance_cycles: "name",
   performance_reviews: "id", competencies: "name", trainings: "title",
-  probation_reviews: "id", contract_decision_requests: "id", employee_disciplinary_records: "id",
+  employee_disciplinary_records: "id",
   disciplinary_deduction_decisions: "document_no",
   // F-2026-10-25-010-S: pengajuan koreksi absensi ber-slug sejak dibuat.
   attendance_corrections: "id",

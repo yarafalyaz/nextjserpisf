@@ -204,10 +204,19 @@ export const SUPPLIER_CLAIM_SENT_LOG_DESCRIPTION = "Status klaim supplier berpin
  * F-2026-10-24-130-V Putusan 1: pembanding disimpan di notes/refNo yang
  * sudah ada, TANPA kolom baru). Ditulis transisi `sent`, dibaca gerbang E3.
  */
+const SENT_RESI_MARKER = "[Resi pengiriman klaim supplier:"
+
 export function parseSentResiFromNotes(notes: string | null | undefined): string | null {
   if (!notes) return null
-  const match = notes.match(/\[Resi pengiriman klaim supplier:\s*([^\]]+)\]/)
-  const value = match?.[1]?.trim()
+  // Parsing manual (bukan regex `[^\]]+` ber-`\s*`) supaya bebas backtracking
+  // super-linear (S8786). Setara regex lama: penanda pertama, nilai hingga `]`
+  // pertama, spasi tepi (semantik `\s` JS, termasuk NBSP) dibuang.
+  const start = notes.indexOf(SENT_RESI_MARKER)
+  if (start === -1) return null
+  const afterColon = notes.slice(start + SENT_RESI_MARKER.length)
+  const end = afterColon.indexOf("]")
+  if (end === -1) return null
+  const value = afterColon.slice(0, end).trim()
   return value ? value : null
 }
 

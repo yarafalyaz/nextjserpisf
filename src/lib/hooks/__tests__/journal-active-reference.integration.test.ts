@@ -124,15 +124,28 @@ describeIntegration("E127 fisik MySQL 8: unik jurnal aktif-saja (F-127-V)", () =
 
   it("histori bebas menumpuk: REVERSED + soft-deleted se-reference tidak P2002", async () => {
     const ref = stamp + 4
-    await createJournal(ref, "REVERSED", "d1")
-    await createJournal(ref, "REVERSED", "d2")
+    const reversed1 = await createJournal(ref, "REVERSED", "d1")
+    const reversed2 = await createJournal(ref, "REVERSED", "d2")
     const deletedId = await createJournal(ref, "POSTED", "d3")
     await db.journal.update({ where: { id: deletedId }, data: { deletedAt: new Date() } })
     // Soft-deleted berhenti mengikat: aktif baru sah.
-    await createJournal(ref, "POSTED", "d4")
+    const activeId = await createJournal(ref, "POSTED", "d4")
+    expect([reversed1, reversed2, deletedId, activeId].every((id) => Number.isSafeInteger(id) && id > 0)).toBe(true)
+    expect(new Set([reversed1, reversed2, deletedId, activeId]).size).toBe(4)
+
+    const rows = await db.journal.findMany({
+      where: { referenceType: "SalesInvoice", referenceId: ref },
+      select: { status: true, deletedAt: true },
+      orderBy: { id: "asc" },
+    })
+    // Hanya d4 yang aktif (POSTED + belum terhapus); sisanya histori bebas.
+    expect(rows.map((r) => r.status)).toEqual(["REVERSED", "REVERSED", "POSTED", "POSTED"])
+    expect(rows.filter((r) => r.status !== "REVERSED" && r.deletedAt === null)).toHaveLength(1)
+    expect(rows[3].deletedAt).toBeNull()
   })
 
   it("jurnal umum tanpa reference tetap bisa ganda (reference NULL tidak mengikat)", async () => {
+    const ids: number[] = []
     for (const suffix of ["e1", "e2"]) {
       const j = await db.journal.create({
         data: {
@@ -149,6 +162,17 @@ describeIntegration("E127 fisik MySQL 8: unik jurnal aktif-saja (F-127-V)", () =
         select: { id: true },
       })
       createdIds.push(j.id)
+      ids.push(j.id)
     }
+    expect(ids).toHaveLength(2)
+    expect(ids[0]).not.toBe(ids[1])
+
+    const rows = await db.journal.findMany({
+      where: { id: { in: ids } },
+      select: { referenceType: true, referenceId: true, status: true },
+      orderBy: { id: "asc" },
+    })
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.referenceType === null && r.referenceId === null && r.status === "POSTED")).toBe(true)
   })
 })
