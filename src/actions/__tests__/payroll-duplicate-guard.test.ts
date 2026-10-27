@@ -38,6 +38,11 @@ vi.mock("@/lib/db/prisma", () => {
     // requestApprovalIfConfigured locks the workflow row first and bails out when
     // no workflow is configured; an empty result keeps this test on the create path.
     $queryRaw: vi.fn().mockResolvedValue([]),
+    // applyDueSalaryAdjustments (dipanggil processPayroll) mengunci baris
+    // karyawan lewat $executeRaw lalu membaca penyesuaian terjadwal; tanpa
+    // keduanya tx mock melempar dan jalur buat slip tidak pernah tercapai.
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    salaryAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
   })
 
   return {
