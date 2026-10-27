@@ -38980,6 +38980,38 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman detail WO / progres tahap existing — antrean adalah permukaan turunan tambahan, bukan pengganti manajemen tahap per WO.
 F-2026-10-27-100-S — Antrean operasi perintah kerja pending/in_progress mengendap lintas WO. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WOOQ-1/2/3/5, lalu fisik Backend (100-B), konsumen Frontend (100-F), falsifikasi QA (100-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/scope-baca), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila kaitan nilai/denda dibuka (Q-WOOQ-6, BR-WOOQ-09).
 
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-110-V: sisa tukar faktur adalah sisa serah operasional, bukan saldo piutang dokumen (pelengkap spec F-2026-10-27-101-S PR #1163)
+
+> **Slot**: F-2026-10-27-110-V. Diperiksa bentrok 2026-10-27 14:41 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-110` di backlog+board = 0/0; PR terbuka memuat `110` vonis = 0. Dokumen saja; tanpa kode/schema/migrasi. Vonis SEMPIT: tidak membuka ulang Q-IEX-1/2/3 (wilayah Lead), hanya mengikat makna angka yang tampil.
+
+### 0. Basis bukti live (origin/main e777d82db, 2026-10-27 14:41 WIB) — TERVERIFIKASI-KODE
+
+- `InvoiceExchangeItem.amount` = snapshot `grandTotal` faktur SAAT diserahkan (`src/actions/invoice-exchange.actions.ts:180-186`, skema `prisma/schema.prisma:1820-1827` "Nilai faktur saat diserahkan — dasar penagihan"). Snapshot TIDAK pernah ditulis ulang sesudah itu.
+- `createInvoiceExchange` tanpa jurnal (komentar :40-46; `invoice-exchange.ts:3-9`: membuat jurnal akan menggandakan piutang). Piutang hidup di faktur + jurnalnya, bukan di dokumen serah.
+- Listing existing menghitung dari faktur HIDUP, bukan snapshot: `loadInvoiceExchanges` membaca `grandTotal` + `paidAmount` saat ini (`invoice-exchanges-data.ts:sumExchangeAmounts`), label `settled/partial/outstanding` = Lunas/Sebagian/Belum Dibayar (`invoice-exchange.ts:22-26`), sisa = amount − paid (epsilon 0,005, :29).
+- Faktur tertaut BISA berubah sesudah serah: `voidSalesInvoice` (`sales.actions.ts:3743`) membalik posting (`reverseSalesInvoicePostingTx`) lalu `status=cancelled, paidAmount=0` (:3769) — penjaga hanya menolak bila sudah ada pembayaran (:3758). Faktur `cancelled` tetap tertaut `InvoiceExchangeItem` (relasi tanpa cascade hapus dari sisi exchange, skema :1829). Retur/kredit sesudah serah menempuh jalur dokumennya sendiri dan menurunkan sisa faktur tanpa menyentuh snapshot serah.
+- Spec induk 101-S BR-IEX-01/03 memakai "Σ amount item − Σ paidAmount" — campuran snapshot (pembilang) dan angka hidup (pengurang). EC-1 spec sudah menandai faktur terhapus/dibatalkan sebagai anomali, tetapi tanpa putusan makna totalnya. Vonis denda piutang existing F-2026-10-22-093-V dirujuk, tidak divonis ulang.
+
+### Putusan 1 — Makna sisa: operasional serah, dengan rekonsiliasi tampil bila beda
+
+1. Angka sisa antrean 101 WAJIB dilabeli makna **sisa serah** (nilai yang diserahkan belum tertagih menurut pembayaran faktur tertaut), BUKAN "saldo piutang dokumen", "piutang tukar faktur", atau total yang diklaim sama dengan piutang GL pelanggan. Alasan: pembilangnya snapshot beku (§0) — ia mengukur janji serah, bukan saldo buku; saldo piutang pelanggan tetap hanya dari faktur + jurnalnya.
+2. Builder 101-B WAJIB menghitung sisa dari DUA sisi dan menampilkan selisihnya bila tidak nol: (a) sisa serah = Σ snapshot `amount` − Σ `paidAmount` faktur tertaut hidup; (b) sisa faktur hidup = Σ (`grandTotal` hidup − `paidAmount`) atas faktur tertaut yang statusnya bukan `cancelled`/terhapus. Bila (a) ≠ (b) (faktur berubah nominal sesudah serah), baris/baris-rekap menampilkan penanda selisih verbatim server — selisih adalah temuan yang ditampilkan, bukan dipilih diam-diam salah satu (prinsip rekonsiliasi mengikat). UI dilarang menghitung ulang kedua sisi.
+3. Label pelunasan existing (Lunas/Sebagian/Belum Dibayar) SAH dipakai apa adanya dari `settlementStatus` existing — dengan makna status pelunasan faktur tertaut, bukan status dokumen serah sebagai piutang. Dilarang mengganti label menjadi kata piutang/utang/tunggakan.
+
+### Putusan 2 — Faktur anomali sesudah serah: keluar total, tertanda, tidak dianggap lunas
+
+Faktur tertaut yang `cancelled`, terhapus (`deletedAt`), atau sudah ditutup retur/nota kredit penuh sesudah serah masuk ember anomali EC-1: dikeluarkan dari Σ sisa serah DAN Σ sisa hidup pada rekap, ditampilkan sebagai hitungan anomali terpisah per dokumen, dan TIDAK pernah menyumbang status Lunas. Alasan: faktur cancelled sudah dibalik jurnalnya (`paidAmount=0`, §0) — memasukkannya ke sisa mengklaim tagihan atas piutang yang sudah tidak ada di buku; menganggapnya lunas sama salahnya ke arah berlawanan.
+
+### Putusan 3 — Denda/bunga dari dueDate dokumen: DILARANG tahap 1
+
+`dueDate` InvoiceExchange adalah batas kembali administratif kesepakatan serah (form existing), bukan syarat kredit/pembayaran faktur dan bukan tanggal jatuh tempo piutang kontraktual per faktur. Denda, bunga, atau biaya keterlambatan apa pun yang diturunkan dari lewatnya `dueDate` dokumen DILARANG di antrean 101 tahap 1. Denda piutang yang sah tetap hanya lewat jalur vonis F-2026-10-22-093-V (dokumen tagih terpisah, bukan ubah faktur asal) per faktur — antrean dokumen serah tidak menjadi pemicu atau penambah denda.
+
+### Larangan + batas build + falsifikasi QA
+
+- Larangan: label saldo piutang/utang/tunggakan untuk sisa dokumen; total rekap memuat baris anomali; UI hitung sisa sendiri; denda/bunga dari dueDate dokumen.
+- BOT Lead: vonis ini mengikat makna angka 101-B/101-F; Q-IEX-1/2/3 tetap milik Lead. BOT Backend (101-B): payload memuat sisa serah + sisa faktur hidup + penanda selisih + hitungan anomali (E-IEXA-1/2). BOT Frontend (101-F): label verbatim, penanda selisih/anomali tampil (E-IEXA-3). BOT QA: E-IEXA-1 faktur cancelled sesudah serah masuk total sisa = MERAH; E-IEXA-2 selisih snapshot vs hidup tidak tertanda = MERAH; E-IEXA-3 kata piutang/utang/tunggakan/denda menempel pada sisa/dueDate dokumen = MERAH.
+
+ID vonis ini **F-2026-10-27-110-V** (pelengkap spec F-2026-10-27-101-S PR #1163). Pemilik berikutnya: BOT Lead putus Q-IEX-1/2/3 + merge → Backend 101-B → Frontend 101-F → QA E-IEXA-1..3 + AC-IEX.
 ---
 
 ## 2026-10-27 11:50 WIB — Business (x) F-2026-10-27-101-S antrean tukar faktur lewat batas kembali
@@ -39095,63 +39127,166 @@ F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen Invoice
 
 ---
 
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-108-S: antrean aset aktif melewati akhir masa manfaat terdaftar belum ditindak (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_794b0b99. Basis `origin/main` `32787d540` (2026-10-27 15:54 WIB).
+**Verifikasi ID — tegas:** grep `F-2026-10-27-108` di backlog+board `origin/main` (`32787d540`) = 0/0 run ini 2026-10-27 15:56 WIB; `gh pr list --search "108-S"` = 0 hasil spec (yang ada PR Accountant vonis `107-V/108-V/109-V` — seri `-V` beda, bukan tabrakan); branch `hermes/business-f108-*` = 0 sebelum branch ini. ID bebas per tanggal+nomor+seri. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+**Peringatan basis umur ganda (inti spec):** repo punya DUA basis masa manfaat yang sah untuk jalur berbeda — (a) `AssetCategory.usefulLife` dalam TAHUN dipakai mesin GL garis lurus (`computeMonthlyDepreciation` `src/lib/finance/asset-depreciation.ts:83,118` — `categoryUsefulLife` tahun, `monthly = (purchaseCost-residu)/(life*12)`), dan (b) `Asset.usefulLifeMonths` dalam BULAN terbekukan per aset, WAJIB hanya untuk metode analitis SYD (`asset-depreciation-analytical.ts:92-96` reject `missing-parameter` bila null; komentar skema `prisma/schema.prisma:4818-4822` vonis F-2026-10-23-118-V Putusan 2a: NULL = belum dibekukan, DILARANG menebak dari kategori fiskal). Antrean TIDAK boleh mencampur keduanya jadi satu tanggal akhir karangan (BR-ALQ-02).
+**Bukan duplikat:**
+- Bukan status analitis per masa existing (`src/lib/reports/asset-analytical-status-data.ts` + `resolveAnalyticalAssetStatus` `src/lib/finance/asset-analytical-posting.ts:78`): permukaan itu per PERIODE (satu bulan) untuk metode analitis saja (UOP/SYD), menjawab "aset ini computed/skip/reject bulan ini" di komponen detail aset — bukan daftar lintas aset "masa manfaat terdaftar sudah berakhir, aset masih active, belum ada tindak lanjut". Tidak ada tanggal akhir masa manfaat, tidak ada umur lewat-akhir, tidak ada populasi lintas metode GL.
+- Bukan registry/register aset existing (`loadAssetRegister` `src/lib/reports/asset-reports-data.ts:84`, laporan `/laporan/aset-tetap`): register = posisi nilai per tanggal dari jurnal POSTED untuk pelaporan; spec ini daftar kerja operasional tindak-lanjut (perpanjang estimasi / lepas / reklasifikasi) — nol nilai buku (BR-ALQ-08).
+- Bukan peristiwa perubahan existing (`AssetChangeEvent` kind `ESTIMATE_CHANGE` `src/lib/finance/asset-change-event.ts:63`, service `src/lib/services/asset-change-event.service.ts:480-484` menulis `usefulLifeMonths` baru): peristiwa itu adalah JALAN TINDAK LANJUT-nya, bukan deteksinya. Antrean hanya menunjuk aset yang belum punya tindak lanjut sesudah akhir masa terdaftar (BR-ALQ-05); antrean tidak membuat peristiwa.
+- Bukan vonis masa manfaat/statutori Accountant (F-2026-10-22-062-V mesin GL, F-2026-10-23-118-V parameter beku analitis, F-2026-10-23-117-V status guna): spec ini tidak memutus angka/umur/statutori apa pun; ia membaca kolom terdaftar apa adanya. Memakai umur FISKAL (`AssetCategory.taxUsefulLife`, kelompok PMK 72/2023) sebagai acuan antrean DILARANG tahap 1 (BR-ALQ-03) — umur fiskal bukan janji operasional bengkel.
+
+### 1. Workflow specification
+Aktor: pemegang `view_assets` (pembaca antrean tahap 1 — persis gerbang halaman aset existing `src/app/(dashboard)/aset/page.tsx:26`), penindak lanjut existing: pengubah aset `edit_assets`, pelepas aset `manage_assets` (via `disposeAsset`), penulis peristiwa perubahan (jalur `postAssetChangeEventAction` existing). Antrean tidak menambah aktor dan tidak memperluas siapa melihat apa (BR-ALQ-07). TIDAK ada data gaji/pribadi di payload; nama penanggung aset (`employeeId`) tampil hanya sebagai penunjuk yang sudah terlihat pemegang `view_assets` di halaman aset existing (nama saja).
+Alur existing (TERVERIFIKASI-KODE, §2): aset dicatat `createAsset` (`src/actions/asset.actions.ts:719`, status bawaan `active` skema `prisma/schema.prisma:4813`) → disusutkan cron bulanan (`src/app/api/cron/asset-depreciation/route.ts:225` membaca `usefulLifeMonths` untuk analitis; GL garis lurus memakai tarif/umur KATEGORI) → cron berhenti menyusutkan berisik saat nilai buku jurnal POSTED ≤ residu (`skip at-residual` `asset-depreciation.ts:114`) atau parameter belum dibekukan (reject berisik) → aset yang masa manfaat terdaftarnya berakhir tetapi masih dipakai bengkel TETAP berstatus `active` selamanya: tidak ada status "akhir masa manfaat", tidak ada kewajiban meninjau, tidak ada permukaan yang mengumpulkan aset-aset itu. Satu-satunya jalan keluar existing bersifat manual per aset: ubah estimasi lewat `ESTIMATE_CHANGE`, lepas lewat `disposeAsset` (:985, `manage_assets`), atau reklasifikasi `held_for_sale` (gerbang 5 fakta `asset-use-status.ts:14` dst.).
+Gap: kompresor/lift/kendaraan operasional yang umur terdaftarnya habis 2 tahun lalu masih `active` dan masih dipakai — tidak terlihat di mana pun sebagai daftar kerja. Admin membuka aset satu per satu untuk tahu mana yang perlu keputusan: perpanjang masa manfaat (estimasi berubah → peristiwa), lepas, atau memang masih dipakai melewati estimasi awal (keputusan tercatat, bukan dibiarkan).
+Spec ini menambahkan **turunan baca lintas aset**: populasi aset `active` yang tanggal akhir masa manfaat TERDAFTAR (per basis jalurnya, BR-ALQ-02) sudah lewat per hari WIB berjalan + penanda tindak-lanjut (sudah/belum ada `AssetChangeEvent` POSTED sesudah tanggal akhir itu) + tingkat lewat USULAN, dihitung server, tampil apa adanya. Nol nominal nilai buku/biaya penyusutan (BR-ALQ-08). Dokumen masuk: rekod `Asset` + kategori (basis umur GL) + peristiwa perubahan POSTED tertaut. Dokumen keluar: tidak ada — tindak lanjut tetap lewat aksi existing berpenjaga penuh di halaman detail aset.
+Istilah tingkat (USULAN, final Q-ALQ-2): `BARU_LEWAT` (lewat ≤ ambang), `MENGENDAP` (lewat > ambang USULAN 90 hari kalender WIB — siklus tinjau aset tahunan/kuartalan, SENGAJA jauh di atas ambang 3 hari antrean dokumen harian). Kode tingkat turunan server, BUKAN status tersimpan. Penanda basis umur: `BASIS_KATEGORI_TAHUN` vs `BASIS_TERBEKUKAN_BULAN` vs `TANPA_BASIS_TERDAFTAR`; penanda tindak lanjut: `SUDAH_ADA_TINDAK_LANJUT` vs `BELUM_ADA_TINDAK_LANJUT`; penanda anomali: `TANGGAL_PEROLEHAN_KOSONG`, `STATUS_TAK_TERDAFTAR`. Kata judul usulan: `Aset Melewati Masa Manfaat`.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main 32787d540)
+Sudah ada (TERVERIFIKASI-KODE):
+- Skema aset: `Asset` `prisma/schema.prisma:4786-4838` — `status String @default("active")` (:4813, String bebas BUKAN enum), `purchaseDate DateTime?` (:4810), `depreciationMethod String @default("straight_line")` (:4804), `residualValue Decimal` (:4802), `usefulLifeMonths Int?` (:4825, parameter terbekukan SYD per vonis 118-V), `totalEstimatedUnits Decimal?` (:4823, UOP), `employeeId Int?` (:4807 penanggung), `categoryId Int?` (:4815), relasi `changeEvents AssetChangeEvent[]`; indeks `[status]`, `[categoryId]`, `[createdAt]`. TIDAK ada `deletedAt` di Asset.
+- Skema kategori: `AssetCategory` `prisma/schema.prisma:4698` dst. — `usefulLife Int?` (:4704, TAHUN, basis GL komersial), `depreciationRate Decimal?` (:4703), `taxUsefulLife Int?` (:4708, FISKAL — di luar antrean BR-ALQ-03), `taxGroupCode` kelompok PMK 72/2023 (:4712).
+- Kosakata status sah: `ASSET_USE_STATUSES = ["active","held_for_sale","disposed"]` `src/lib/finance/asset-use-status.ts:30` (vonis F-2026-10-23-117-V Putusan 1: string lain = temuan `unregistered-status`, DILARANG status `inactive`/`idle` sebagai saklar); resolver analitis menolak status di luar tiga itu sebagai reject `unregistered-status` (`asset-analytical-posting.ts:84-86`). Status `disposed` terminal: `disposeAsset` menolak aset sudah disposed (:1003-1004) dan flip atomik `status != disposed` (:1065-1069); `updateAsset` menolak transisi langsung ke `disposed` tanpa jalur disposal (:925-929).
+- Mesin GL: `computeMonthlyDepreciation` `asset-depreciation.ts:98` — GL hanya `straight_line`/`declining_balance` (:22-25); garis lurus memakai `categoryUsefulLife` TAHUN bila tarif menurun tidak berlaku (:118-127); berhenti `skip at-residual` bila nilai buku ≤ residu (:114), `skip no-basis` bila tanpa tarif DAN tanpa umur kategori (:134). Metode analitis di-reject berisik oleh jalur GL (:30-33).
+- Mesin analitis: SYD memakai `analyticalMonthIndex(purchaseDate, tahun, bulan)` `asset-analytical-posting.ts:62-73` (bulan ke-1 = bulan perolehan) + `usefulLifeMonths` terbekukan (reject `missing-parameter` bila null/bukan integer positif `asset-depreciation-analytical.ts:92-96`); UOP memakai dokumen unit per masa (bukan tanggal — BR-ALQ-04). Loader status analitis per masa `asset-analytical-status-data.ts:49` hanya memuat aset ber-metode analitis (`depreciationMethod in ANALYTICAL_DEPRECIATION_METHODS`).
+- Peristiwa tindak lanjut: `AssetChangeEvent` `prisma/schema.prisma:4852` dst. — `kind` termasuk `ESTIMATE_CHANGE`/`COMMERCIAL_METHOD_CHANGE`/`REVALUATION_*`/`IMPAIRMENT*`/`RECLASSIFICATION` (`asset-change-event.ts:63` dst.), `status POSTED|REVERSED`, `effectiveDate`, `sourceDocumentKey @unique`; service `asset-change-event.service.ts:480-484` menerapkan `newUsefulLifeMonths` ke Asset pada `ESTIMATE_CHANGE`, dan reversal memulihkannya (:746). Aksi `postAssetChangeEventAction` `asset.actions.ts:1378`, `postAssetReclassificationAction` :1433.
+- Aksi aset: `createAsset:719` (status bawaan dari form/`active` :803), `updateAsset:871`, `disposeAsset:985` (`manage_assets`), `deleteAsset:487`. Halaman daftar `aset/page.tsx:26` dan detail `aset/[slug]/page.tsx:44` digerbang `view_assets`. Izin katalog `src/lib/auth/module-catalog.generated.ts:433-438`: `view_assets`/`create_assets`/`edit_assets`/`delete_assets`/`manage_assets`.
+- Cron penyusutan `src/app/api/cron/asset-depreciation/route.ts:213-235`: per aset aktif menghitung dari nilai buku jurnal POSTED (bukan cache `currentValue`), analitis lewat resolver, skip/reject dicatat berisik per aset — TIDAK ada keluaran daftar "masa manfaat berakhir" dan TIDAK ada perubahan status aset oleh waktu.
+Belum ada / parsial (bukti grep run ini):
+- Antrean/turunan akhir masa manfaat: grep `masa manfaat berakhir|melewati masa manfaat|endOfLife|lewat masa` di `src/` + judul SPEC backlog `origin/main` untuk topik aset = 0 (satu-satunya "Lewat masa berlaku" di src adalah penawaran). Daftar aset `active` yang akhir masa terdaftarnya lewat + status tindak-lanjut per aset: ABSEN. Yang ada: status analitis per bulan per aset (detail), register posisi per tanggal (laporan), histori peristiwa per aset — tidak satu pun menjawab "aset aktif mana yang masa manfaat terdaftarnya sudah berakhir dan belum ditindak".
+
+### 3. Status-transition matrix
+Status aset TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+| Dari (status tersimpan) | Pemicu existing | Ke | Penjaga/permission | Efek ke antrean |
+|---|---|---|---|---|
+| (belum ada) | `createAsset` :719 | `active` (bawaan :4813) | `create_assets` | masuk populasi hanya bila akhir masa terdaftar sudah lewat (BR-ALQ-01/02) |
+| `active` | — (waktu berjalan melewati tanggal akhir terdaftar) | tetap `active` | — | **turunan: MASUK populasi antrean** — bukan status, tidak tertulis |
+| `active` | peristiwa `ESTIMATE_CHANGE` POSTED (service :480) | tetap `active`, `usefulLifeMonths`/estimasi baru | jalur peristiwa existing :1378 | tanggal akhir terdaftar BERGESER; aset keluar populasi bila akhir baru belum lewat; penanda tindak-lanjut tercatat (BR-ALQ-05) |
+| `active` | `disposeAsset` :985 | `disposed` + nilai buku dinolkan subledger (:1066) | `manage_assets` + klaim atomik bukan-disposed | KELUAR populasi render berikut (terminal) |
+| `active` | reklasifikasi `held_for_sale` (5 fakta wajib) | `held_for_sale` | gerbang `asset-use-status.ts` Putusan 3 | KELUAR populasi (bukan `active`); wilayah permukaan status guna existing |
+| `held_for_sale` | `disposeAsset` | `disposed` | `manage_assets` | tetap di luar populasi |
+| `disposed` | — | terminal | disposal ulang ditolak :1004 | tidak pernah masuk populasi |
+| status liar di luar tiga nilai sah | — (data warisan; kolom String bebas) | tetap tersimpan apa adanya | validasi klasifikasi menolaknya sebagai `unregistered-status` (117-V) | BUKAN populasi; antrean tidak menebak padanannya (BR-ALQ-01, EC-ALQ-6) |
+Tidak ada transisi otomatis oleh waktu, tidak ada status "habis masa manfaat" tersimpan, dan tidak ada penghentian paksa pemakaian aset di kode existing — matriks tidak mengarangnya. Catatan jujur: aset melewati masa manfaat terdaftar BUKAN pelanggaran — estimasi awal memang bisa terlampaui pemakaian nyata; antrean meminta KEPUTUSAN tercatat (perpanjang/lepas/biarkan tercatat), bukan menyatakan aset salah.
+
+### 4. Role/permission matrix (katalog nyata :433-438)
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Catatan |
+|---|---|---|
+| Lihat antrean turunan tahap 1 (USULAN gerbang) | `view_assets` (:434) — persis gerbang halaman aset existing `page.tsx:26` | tanpa key baru tahap 1 (Q-ALQ-5) |
+| Lihat detail aset existing | `view_assets` via `aset/[slug]/page.tsx:44` | permukaan induk tetap |
+| Ubah data/estimasi aset existing (BUKAN dari antrean) | `edit_assets` (:436) via `updateAsset:871` | antrean tidak menulis |
+| Posting peristiwa perubahan existing (ESTIMATE_CHANGE dll.) | jalur `postAssetChangeEventAction:1378` berizin existing-nya | satu-satunya jalan perpanjang masa terdaftar; antrean tidak memposting |
+| Lepas aset existing | `manage_assets` (:438) via `disposeAsset:985` | antrean tidak melepas |
+| Transisi apa pun DARI antrean turunan | — | TIDAK tahap 1 (BR-ALQ-06) |
+Scope baca tahap 1 = `view_assets` PERSIS: loader fail-closed sebelum query; loader TIDAK menyaring per kategori/lokasi/penanggung tahap 1 — mewarisi batas baca halaman aset existing apa adanya dan menyatakannya jujur (BR-ALQ-07). Nama penanggung (`employeeId`) tampil sebagai penunjuk baris saja — tanpa data pribadi/gaji (BR-ALQ-08).
+
+### 5. Business rules register
+| ID | Aturan | Label |
+| BR-ALQ-01 | Populasi PERSIS = `Asset.status = "active"` (satu dari kosakata sah `asset-use-status.ts:30`) DAN tanggal akhir masa manfaat terdaftar (BR-ALQ-02) sudah lewat per hari WIB berjalan DAN basis terdaftar tersedia. `held_for_sale`/`disposed` KELUAR. Status liar BUKAN populasi dan tidak ditebak. Aset `active` tanpa basis terdaftar → BUKAN populasi; masuk ember terhitung `TANPA_BASIS_TERDAFTAR` di kepala antrean (bukan disembunyikan — justru aset tanpa umur terdaftar yang tidak akan pernah terlihat habis masa). | TERVERIFIKASI-KODE (skema :4813; kosakata :30) + USULAN (cakupan) |
+| BR-ALQ-02 | Tanggal akhir terdaftar PER JALUR METODE, tidak dicampur: (a) metode GL `straight_line` → akhir = bulan perolehan + `AssetCategory.usefulLife` TAHUN ×12 bulan (basis persis mesin GL `asset-depreciation.ts:118-127`); kategori tanpa `usefulLife` (atau aset tanpa kategori) → tanpa basis jalur ini. (b) metode `sum_of_years_digits` → akhir = bulan perolehan + `Asset.usefulLifeMonths` bulan terbekukan (basis persis `analyticalMonthIndex` :62-73: bulan perolehan = bulan ke-1, jadi bulan terakhir = perolehan + n − 1); `usefulLifeMonths` null → tanpa basis (parameter belum dibekukan, wilayah reject mesin — antrean tidak menebak dari kategori, persis larangan vonis 118-V). (c) `declining_balance` → TANPA tanggal akhir terdaftar tahap 1: mesinnya tarif × nilai buku menurun tanpa umur akhir (`asset-depreciation.ts:120-122`), memaksakan tanggal akhir = karangan — aset ini masuk ember `TANPA_BASIS_TERDAFTAR` tertanda metodenya. (d) `units_of_production` → BR-ALQ-04. Metode di luar daftar terdaftar `DEPRECIATION_METHODS` (:16-21) → tanpa basis, tertanda. Bulan perolehan diturunkan dari `purchaseDate` dengan aritmetika bulan kalender yang sama seperti `analyticalMonthIndex` supaya antrean dan mesin tidak berselisih satu bulan; `purchaseDate` null → penanda `TANGGAL_PEROLEHAN_KOSONG`, bukan populasi berumur. | USULAN di atas TERVERIFIKASI-KODE (dua basis mesin existing) |
+| BR-ALQ-03 | Umur FISKAL tidak pernah jadi acuan antrean tahap 1: `AssetCategory.taxUsefulLife`/`taxGroupCode` (PMK 72/2023) adalah rezim pajak (wilayah vonis Accountant), bukan masa operasional terdaftar; mencampurnya membuat aset "berakhir" menurut pajak padahal umur komersialnya berjalan. Payload tidak memuat kolom fiskal. | TERVERIFIKASI-KODE (pemisahan kolom :4704 vs :4708 + vonis 062-V) |
+| BR-ALQ-04 | `units_of_production` tidak punya akhir berbasis tanggal: masa habisnya = akumulasi unit aktual mencapai `totalEstimatedUnits` terbekukan (dokumen `AssetUsageRecord` per masa), dan nilai itu terbaca di permukaan analitis existing. Antrean tahap 1 TIDAK menurunkan "persen unit terpakai" dan TIDAK menyatakan UOP berakhir — aset UOP di luar populasi tanggal; kelak butuh spec turunan sendiri berbasis dokumen unit (bukan tanggal). Menampilkan aset UOP sebagai "belum berakhir" di antrean tanggal = klaim palsu — ia tidak tampil sama sekali di daftar tanggal (dihitung di kepala sebagai di-luar-cakupan-metode). | TERVERIFIKASI-KODE (basis unit mesin UOP) + USULAN (pengecualian) |
+| BR-ALQ-05 | Penanda tindak-lanjut per aset: `SUDAH_ADA_TINDAK_LANJUT` bila ada `AssetChangeEvent` POSTED (bukan REVERSED) dengan `effectiveDate` sesudah tanggal akhir terdaftar berjalan — kind apa pun yang tercatat (ESTIMATE_CHANGE/COMMERCIAL_METHOD_CHANGE/REVALUATION/IMPAIRMENT/RECLASSIFICATION), ditampilkan kind+tanggal verbatim; selain itu `BELUM_ADA_TINDAK_LANJUT`. Peristiwa sebelum tanggal akhir tidak dihitung tindak-lanjut atas keterlambatan ini. Antrean TIDAK menilai cukup/tidaknya tindak lanjut itu — menilai isi peristiwa = halaman detail/peristiwa existing. Sesudah ESTIMATE_CHANGE memperpanjang umur, tanggal akhir berjalan bergeser (BR-ALQ-02 dibaca dari kolom terkini) dan aset bisa keluar populasi dengan sendirinya. | USULAN di atas TERVERIFIKASI-KODE (skema peristiwa + service) |
+| BR-ALQ-06 | Nol aksi dari antrean tahap 1: tidak ada tombol Perpanjang/Lepas/Reklasifikasi/Tandai-Sudah-Ditinjau. Satu-satunya jalan keluar baris = tautan ke halaman detail aset existing berpenjaga, tindak lanjut lewat aksi existing-nya. Menambah "tandai sudah ditinjau" tersimpan = status/keadaan baru — keputusan Lead terpisah (Q-ALQ-4), tidak dikarang di sini. | USULAN (scope tahap 1) |
+| BR-ALQ-07 | Scope baca = `view_assets` PERSIS, loader fail-closed sebelum query. Tanpa key baru tahap 1. Loader tidak menyaring per kategori/lokasi/penanggung tahap 1 — batas itu dinyatakan di notice permukaan, bukan disembunyikan dan bukan scope baru karangan. | TERVERIFIKASI-KODE (katalog :434; gerbang existing) + USULAN (pewarisan dinyatakan) |
+| BR-ALQ-08 | Nol nominal uang tahap 1: payload tanpa nilai buku, tanpa harga perolehan, tanpa beban penyusutan, tanpa nilai residu, tanpa proceeds disposal. Yang tampil: identitas aset (kode/nama), kategori, metode verbatim, tanggal perolehan verbatim, basis umur + tanggal akhir terdaftar turunan, umur lewat (hari kalender WIB), tingkat, penanda tindak-lanjut, lokasi + penanggung sebagai penunjuk. Nilai buku sah hanya dari jurnal POSTED di permukaan register/status existing (`journalBookValue`) — antrean tidak membacanya. Mengaitkan keterlambatan tindak-lanjut ke angka buku/denda = BUTUH-VONIS Accountant bersyarat (Q-ALQ-6), tidak diminta tahap 1. | TERVERIFIKASI-KODE (wilayah nilai existing) + USULAN (scope) |
+| BR-ALQ-09 | Tingkat turunan: `BARU_LEWAT` = hari lewat ≤ ambang; `MENGENDAP` = hari lewat > ambang. Ambang USULAN **90 hari kalender WIB** — siklus keputusan aset bersifat kuartalan dan keputusan perpanjang/lepas butuh penilaian fisik; ambang 3 hari keluarga antrean dokumen akan menuduh semua aset lewat sebagai darurat. Angka ini USULAN sampai Lead memutus (Q-ALQ-1); satu konstanta server bernama bila dibangun. Perbandingan HARI KALENDER WIB (pola keluarga antrean), bukan jam mentah. Aset tepat di bulan terakhir masa terdaftar BELUM masuk populasi (bulan terakhir masih masa berjalan; fisik Backend mengunci batas hari-lewat ini di tes, AC-ALQ-B4). | USULAN (ambang + kata; Q-ALQ-1/2) di atas pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-ALQ-10 | Urutan tampil: `MENGENDAP` dulu (hari lewat terbesar dulu), lalu `BARU_LEWAT` (hari lewat terbesar dulu); dalam tingkat sama `BELUM_ADA_TINDAK_LANJUT` sebelum `SUDAH_ADA_TINDAK_LANJUT`, seri → kode aset naik, lalu id naik. Kepala antrean memuat rekap hitungan ASET per tingkat + per basis umur + per keadaan tindak-lanjut + ember `TANPA_BASIS_TERDAFTAR` + hitungan di-luar-cakupan-metode (UOP/declining) dari populasi penuh server, bukan halaman tampil. Batas ambil eksplisit dinyatakan loader (fisik Backend, pola keluarga 200) + penanda `terpotong` bila populasi melebihi batas. | USULAN |
+| BR-ALQ-11 | Anti-N+1: aset populasi + kategori (basis umur) + peristiwa POSTED terbaru per aset dimuat massal (satu query aset dengan relasi kategori + muat peristiwa populasi per set id aset lalu pilih per aset di memori server) — bukan query per baris. Rekap dihitung dari populasi penuh server. | USULAN pola TERVERIFIKASI-KODE (loader massal keluarga antrean) |
+| BR-ALQ-12 | Catatan bebas aset (`notes`, `description`) TIDAK masuk payload daftar tahap 1 — teks bebas bisa memuat apa pun; antrean menampilkan fakta terstruktur saja. Membuka catatan = halaman detail aset existing berizin sama. | USULAN (scope minimal) |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
+| Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
+|---|---|---|---|
+| Masa manfaat mengakhiri penyusutan otomatis | Ada — masa manfaat habis dihitung dari Tanggal Pakai membuat sistem berhenti menghitung penyusutan (aset dianggap mencapai nilai ekonomis) (https://help.accurate.id/product/accurate-online/fitur-aol/asset-tetap/aset-tetap/aset-tetap-penyusutan/) | Ada — umur ekonomis/masa manfaat per harta tetap (otomatis dari Kelompok Harta Tetap), penyusutan mulai sejak tanggal beli/pakai, jurnal otomatis saat tutup buku (https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-h) | Ada — dua jalur: GL berhenti `at-residual` dari nilai buku jurnal; analitis reject berisik bila parameter belum dibekukan (TERVERIFIKASI-KODE §2) |
+| Tanggal estimasi berakhir masa manfaat tampil di laporan | Ada — kolom skrip khusus di Laporan Aset Tetap per Kategori: tanggal pakai + umur (tahun×365 + bulan) (https://ultimasolusindo.com/menampilkan-tanggal-estimasi-berakhirnya-masa-manfaat-aset-tetap-pada-laporan/) | Tidak ditemukan kolom tanggal-akhir masa manfaat di halaman Zahir yang diakses run ini — tidak diklaim ada | Parsial — tanggal akhir bisa diturunkan dari basis terdaftar (kategori tahun / terbekukan bulan) tetapi belum ada permukaan yang menampilkannya sebagai daftar kerja (gap spec ini) |
+| Daftar kerja aset lewat masa manfaat belum ditindak (perpanjang/lepas) | Tidak ditemukan antrean tindak-lanjut khusus di halaman Accurate yang diakses run ini — yang ada laporan aset + tanggal estimasi berakhir — tidak diklaim sebagai antrean | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); tindak lanjut per aset ada (ESTIMATE_CHANGE/dispose/reklasifikasi), deteksi daftarnya belum |
+Jujur: benchmark membuktikan masa manfaat + tanggal akhir estimasi adalah konsep standar (Accurate bahkan menampilkan tanggal berakhir di laporan); antrean tindak-lanjut lewat-masa tidak ditemukan sebagai fitur bernama di kedua vendor — nilai spec ini operasional internal bengkel ISF (aset lewat estimasi terlihat sebagai daftar keputusan, bukan terkubur per detail aset). Tidak ada rumus/ambang vendor yang disalin: tanggal akhir diturunkan dari basis mesin ISF sendiri (BR-ALQ-02), ambang = Q-ALQ-1 Lead.
+
+### 7. Acceptance criteria + edge cases
+Backend (builder/loader turunan):
+- AC-ALQ-B1: Populasi PERSIS `status="active"` + akhir terdaftar lewat + basis tersedia (BR-ALQ-01/02); `held_for_sale`/`disposed`/status liar/UOP bocor ke daftar tanggal → MERAH. Tingkat/umur-lewat/basis/penanda dihitung server; konsumen menghitung ulang → MERAH.
+- AC-ALQ-B2: Basis per jalur persis BR-ALQ-02: GL garis lurus dari `category.usefulLife` TAHUN; SYD dari `usefulLifeMonths` terbekukan; SYD tanpa parameter terbekukan TIDAK jatuh ke umur kategori (jatuh ke kategori → MERAH, melanggar larangan vonis 118-V); `declining_balance` tidak diberi tanggal akhir karangan (diberi tanggal → MERAH); umur fiskal terbaca sebagai acuan → MERAH (BR-ALQ-03).
+- AC-ALQ-B3: `purchaseDate` null → `TANGGAL_PEROLEHAN_KOSONG` tanpa umur; aset tanpa basis → ember `TANPA_BASIS_TERDAFTAR` terhitung di kepala, tidak hilang diam-diam dan tidak diberi tanggal karangan (satu pun → MERAH).
+- AC-ALQ-B4: Batas bulan persis: aset yang bulan berjalan = bulan terakhir masa terdaftar BELUM masuk; bulan berikutnya masuk dengan lewat dihitung hari kalender WIB (fisik Backend mengunci definisi hari-lewat di tes; definisi bergeser diam-diam → MERAH). Tingkat persis BR-ALQ-09 pada angka putusan Q-ALQ-1 (tepat ambang = `BARU_LEWAT`; ambang+1 = `MENGENDAP`); perbandingan jam mentah → MERAH.
+- AC-ALQ-B5: Penanda tindak-lanjut persis BR-ALQ-05: peristiwa POSTED `effectiveDate` sesudah akhir berjalan → `SUDAH_ADA_TINDAK_LANJUT` (kind+tanggal verbatim); peristiwa REVERSED atau sebelum akhir → tidak dihitung (dihitung → MERAH). Loader fail-closed `view_assets` sebelum query (tanpa izin loader terpanggil → MERAH); baca-saja terbukti (builder/loader memanggil aksi tulis/peristiwa/disposal apa pun → MERAH); payload tanpa nominal uang/kolom fiskal/catatan bebas (bocor satu pun → MERAH, BR-ALQ-08/12); massal anti-N+1 (query per baris → MERAH).
+Frontend (konsumen):
+- AC-ALQ-F1: Tingkat/umur-lewat/basis/tanggal-akhir/penanda tampil verbatim payload server; UI tidak menghitung tanggal akhir/umur/tingkat/urutan/rekap sendiri (hitung ulang UI → MERAH). Sebelum commit: grep e2e selector aset terdampak, sinkronkan commit yang sama.
+- AC-ALQ-F2: TIDAK ada tombol Perpanjang/Lepas/Reklasifikasi/Tandai dari antrean tahap 1 (kontrol tulis di antrean → MERAH, BR-ALQ-06); tautan baris hanya ke halaman detail aset existing berpenjaga.
+- AC-ALQ-F3: Baris/ember tertanda (`TANPA_BASIS_TERDAFTAR`, `TANGGAL_PEROLEHAN_KOSONG`, di-luar-cakupan-metode, `SUDAH_ADA_TINDAK_LANJUT` vs `BELUM_ADA_TINDAK_LANJUT`, `terpotong`) tampil dengan tandanya dan terhitung di kepala, bukan disembunyikan/digabung ke `MENGENDAP`; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+Edge cases:
+- EC-ALQ-1: Aset garis lurus nilai bukunya sudah di residu jauh sebelum umur kategori berakhir (skip `at-residual` cron): antrean TIDAK menandainya "selesai" — populasi murni dari tanggal akhir terdaftar; aset masuk hanya saat akhir tanggalnya lewat, apa pun keadaan susutnya (keadaan nilai = permukaan register existing, BR-ALQ-08).
+- EC-ALQ-2: ESTIMATE_CHANGE memperpanjang `usefulLifeMonths` SYD sesudah lewat: tanggal akhir berjalan bergeser dari kolom terkini; aset keluar populasi render berikut dan peristiwa itu sendiri tercatat sebagai tindak-lanjut untuk keterlambatan sebelumnya (BR-ALQ-05) — antrean tidak merekonstruksi histori keterlambatan yang sudah tertutup.
+- EC-ALQ-3: Aset aktif tanpa kategori (categoryId null) metode garis lurus: tanpa basis tahun → ember `TANPA_BASIS_TERDAFTAR`; antrean tidak meminjam umur kategori aset lain dan tidak memakai tarif sebagai umur (tarif ≠ umur, mesin GL sendiri memisahkannya :118-130).
+- EC-ALQ-4: Aset `held_for_sale` yang masa terdaftarnya juga lewat: di luar populasi (bukan `active`) — sudah dalam jalur penjualan existing; memasukkannya menggandakan daftar kerja permukaan status guna.
+- EC-ALQ-5: Dua aset bernama sama / kode berbeda, atau aset pindah lokasi/penanggung (`AssetTransfer`): baris dibedakan kode+id aset; transfer tidak mengubah tanggal akhir dan tidak dianggap tindak-lanjut (bukan `AssetChangeEvent`) — menganggap transfer tindak-lanjut → MERAH makna (tertangkap AC-ALQ-B5).
+- EC-ALQ-6: Status liar warisan (di luar tiga nilai sah): bukan populasi; perbaikan status = jalur klasifikasi/service existing (117-V), bukan antrean. Mengarang ember liar tahap 1 ditolak.
+- EC-ALQ-7: Aset dibeli bulan ini dengan umur terdaftar 0/negatif warisan (kategori `usefulLife` ≤ 0): mesin GL sendiri `no-basis` untuk umur tak positif (:126-134) — antrean memperlakukan ≤0 sebagai tanpa basis (ember), bukan akhir-di-masa-lalu yang langsung MENGENDAP (dihitung lewat → MERAH, tertangkap AC-ALQ-B3).
+- EC-ALQ-8: Peristiwa POSTED bertanggal efektif sesudah akhir tetapi kind-nya RECLASSIFICATION murni: tetap `SUDAH_ADA_TINDAK_LANJUT` verbatim kind-nya (BR-ALQ-05 tidak menilai isi) — pembaca menilai dari kind yang tampil; antrean menyatakan "ada peristiwa tercatat", bukan "sudah ditinjau masa manfaatnya" (kata penanda final Q-ALQ-2 menjaga kejujuran ini).
+
+### 8. Backlog implementasi (turunan F-2026-10-27-108-S)
+| ID | Pekerjaan | Pemilik | Gerbang |
+| F-2026-10-27-108-S | Spec kontrak ini (dokumen) | Business | — |
+| 108-B | Builder murni (populasi active persis/akhir terdaftar per jalur BR-ALQ-02/penanda tindak-lanjut massal/tingkat WIB/urutan/rekap+ember) + loader `view_assets` fail-closed anti-N+1 + tes AC-ALQ-B1..B5 | Backend | Putusan Lead Q-ALQ-1/2/3/5 |
+| 108-F | Permukaan turunan verbatim payload + AC-ALQ-F1..F3; grep e2e aset dulu | Frontend | 108-B merged |
+| 108-Q | Falsifikasi AC-ALQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 108-B/108-F |
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 9. Pertanyaan putusan (gerbang)
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+| Q-ALQ-1 | Ambang `MENGENDAP`: berapa hari kalender WIB sejak tanggal akhir terdaftar (BR-ALQ-09)? | Lead | USULAN **90 hari** — siklus keputusan aset kuartalan (penilaian fisik + keputusan perpanjang/lepas), dibedakan sadar dari ambang 3 hari antrean dokumen dan 7 hari tahap WO; satu konstanta server bernama, tanpa konfigurasi bebas tahap 1; angka USULAN sampai diputus |
+| Q-ALQ-2 | Kata final: kode/label tingkat (`BARU_LEWAT`/`MENGENDAP`), penanda `BASIS_KATEGORI_TAHUN`/`BASIS_TERBEKUKAN_BULAN`/`TANPA_BASIS_TERDAFTAR`/`SUDAH_ADA_TINDAK_LANJUT`/`BELUM_ADA_TINDAK_LANJUT`/`TANGGAL_PEROLEHAN_KOSONG`, judul `Aset Melewati Masa Manfaat`? Khususnya kata penanda tindak-lanjut wajib jujur "ada peristiwa tercatat", bukan "sudah ditinjau" (EC-ALQ-8) | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim |
+| Q-ALQ-3 | Penempatan: permukaan baru di area aset vs seksi di halaman daftar aset existing? Rekap per kategori ikut tahap 1? | Lead | USULAN: permukaan turunan di area aset existing (daftar aset existing per-baris transaksional tanpa umur akhir); rekap per tingkat + per basis + per tindak-lanjut tahap 1, per kategori tunda |
+| Q-ALQ-4 | Apakah kelak perlu keadaan tersimpan "sudah ditinjau — tetap dipakai" (keputusan tercatat tanpa peristiwa) supaya aset yang memang sengaja dipakai melewati estimasi keluar dari antrean tanpa ESTIMATE_CHANGE? | Lead | USULAN: TIDAK tahap 1 — ESTIMATE_CHANGE existing adalah keputusan tercatat yang sah (menggeser akhir terdaftar); keadaan tinjau-baru = model perilaku baru, spec terpisah bila kebutuhan terbukti |
+| Q-ALQ-5 | Baca tahap 1 tetap `view_assets` persis tanpa key baru (BR-ALQ-07)? | Lead | USULAN: ya — antrean adalah read-model turunan di permukaan berizin sama |
+| Q-ALQ-6 | Keterlambatan tindak-lanjut dikaitkan nilai buku/dampak laporan? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-ALQ-08); vonis WAJIB hanya bila Lead membuka angka buku/dampak statutori untuk populasi ini — tahap baca-saja tanpa nominal tidak butuh vonis |
+
+### Yang TIDAK diusulkan run ini
+- Status/keadaan baru di Asset (status "habis masa manfaat", penanda mengendap tersimpan, tombol Tandai-Sudah-Ditinjau) — antrean adalah lapisan baca turunan (BR-ALQ-06, Q-ALQ-4).
+- Menghentikan/mengubah penyusutan cron, mengubah basis GL/analitis, atau menyatukan dua basis umur jadi satu kolom — basis ganda adalah kontrak vonis existing (062-V/118-V); antrean membaca keduanya apa adanya per jalur.
+- Memakai umur fiskal PMK 72/2023 sebagai acuan operasional (BR-ALQ-03) — rezim pajak bukan daftar kerja bengkel.
+- Turunan UOP berbasis akumulasi unit dan turunan declining-balance berbasis tarif di antrean ini (BR-ALQ-02/04) — basisnya bukan tanggal; memaksakan tanggal = angka karangan.
+- Tombol Perpanjang/Lepas/Reklasifikasi dari antrean, posting peristiwa massal, auto-dispose aset lewat masa (BR-ALQ-06 §4).
+- Menampilkan nilai buku/harga perolehan/beban/residu/proceeds di daftar (BR-ALQ-08) — nilai sah tetap permukaan register/status jurnal existing.
+- Pengingat WA/email ke penanggung aset, eskalasi, SLA tindak-lanjut — kanal & keadaan baru di luar tahap baca-saja.
+- Mengganti halaman daftar/detail aset, status analitis per masa, atau register aset existing — antrean adalah permukaan turunan tambahan.
+
+F-2026-10-27-108-S — Antrean aset aktif melewati akhir masa manfaat terdaftar belum ditindak. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-ALQ-1/2/3/5, lalu fisik Backend (108-B), konsumen Frontend (108-F), falsifikasi QA (108-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan/scope-baca), Backend (fisik turunan + kunci batas bulan AC-ALQ-B4), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila angka buku/dampak dibuka (Q-ALQ-6, BR-ALQ-08).
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-107-S: antrean pengeluaran (Expense) draft mengendap menunggu persetujuan (turunan baca-saja)
-
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ab1f48e9. Basis `origin/main` `5819f8e88` (2026-10-27 15:49 WIB).
-
 **Verifikasi ID + anti-duplikat — tegas:** grep `F-2026-10-27-107` di backlog+board `origin/main` = 0/0 sebelum tulis; PR terbuka `107-S` = 0; branch `f107` = 0. Nomor 107-V SUDAH terpakai Accountant (vonis nilai antrean, PR #1179 OPEN) — pola repo suffix beda nomor sama sah (preseden 083-S/083-V, 084-S/084-V, 086-S/086-V coexist di backlog main); spec ini BUKAN vonis dan tidak menyentuh angka vonis 107-V. Awalan `BR-EXQ` grep backlog = 0. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
-
 - Bukan antrean reimbursement disetujui-belum-dibayar F-2026-10-27-082-S: populasi 082 = klaim `isReimbursementClaim` tahap turunan DISETUJUI (sudah approve, belum bayar). Spec ini populasi SEBELUMNYA: Expense `draft` belum diputus sama sekali, termasuk klaim yang masih DIAJUKAN maupun Expense operasional non-klaim. Dua populasi disjoint pada sumbu tahap (draft vs approved/paid-turunan).
 - Bukan antrean persetujuan generik F-2026-10-27-089-S: populasi 089 = rekod `Approval` pending lintas tipe. Expense draft TANPA workflow terkonfigurasi tidak melahirkan rekod Approval apa pun (`requestApprovalIfConfigured` no-op tanpa workflow) sehingga tidak pernah tampil di 089 — justru di situlah antrean ini bekerja: dokumen sumber `Expense.status = draft` apa pun keadaan Approval pendampingnya.
 - Bukan daftar pengeluaran existing (`keuangan/pengeluaran/page.tsx`): daftar itu ADA dan tetap dipakai — `view_expenses`, urut `createdAt desc`, saring status/klaim manual. Gap: tidak ada umur menunggu keputusan, tingkat mengendap, ember keadaan-approval pendamping, atau urutan tertua bagi approver.
 - Bukan pembayaran vendor F-2026-10-26-072-S: VendorPayment dokumen bayar tagihan; Expense pengeluaran operasional/klaim. Objek, aktor, jalan keluar beda.
-
 Aktor: pemegang `approve_expenses` (approver pengeluaran), pemegang `view_expenses` (pembaca daftar). Alur existing: Expense lahir `draft` lewat `createExpense` (+ `requestApprovalIfConfigured("Expense")`) → keputusan lewat `approveExpense`/`rejectExpense` di detail existing → klaim berlanjut ke tahap bayar reimbursement (082-S), non-klaim sinkron petty cash saat approve.
-
-### 1. Workflow specification
-
 Gap: Expense draft bisa mengendap tanpa batas waktu — approver membuka daftar pengeluaran urut terbaru dan draft lama tenggelam. Tidak ada permukaan yang menjawab "pengeluaran mana paling lama menunggu keputusan saya, mana yang tersangkut workflow, mana klaim karyawan yang belum diputus". Spec ini menambahkan **turunan baca**: populasi draft + umur sejak dibuat + keadaan Approval pendamping terbaca apa adanya + tingkat mengendap, dihitung server, tampil verbatim, tautan hanya ke detail existing berpenjaga penuh. Nol keputusan dari antrean tahap 1.
-
 Dokumen masuk: rekod `Expense` draft + rekod `Approval` terbaru untuk `("Expense", id)` bila ada + kategori/vendor/proyek existing. Dokumen keluar: tidak ada — approve/reject tetap lewat detail + aksi existing.
-
 Kata usulan (USULAN, final Q-EXQ-2): judul seksi `Pengeluaran Menunggu Persetujuan`; kolom `Umur Menunggu`, `Keadaan Persetujuan`; tingkat `Mengendap` menempel pada baris, bukan status baru.
-
 ### 2. Inventarisasi terverifikasi (2026-10-27, origin/main 5819f8e88)
-
 - Skema: `Expense` `prisma/schema.prisma:4291` — `status String @default("draft")`, `isReimbursementClaim Boolean @default(false)`, `employeeId Int?` (pengaju klaim), `approvedBy Int?`, `amount Decimal(15,2)`, `date`, `referenceNo?`, `receiptImage?`, `createdAt/updatedAt`. TANPA `deletedAt` pada model (verifikasi: tidak ada field deletedAt di blok model).
 - Aksi (`src/actions/finance.actions.ts`): `createExpense:708` (`create_expenses`; operasional `isReimbursementClaim: false`; `requestApprovalIfConfigured("Expense", id)` sesudah lahir); `approveExpense:808` (`approve_expenses`; hanya `draft|approved`, `assertApproved` dulu; klaim = gerbang bukti+SoD reimbursement; non-klaim sinkron petty cash lalu flip `approved`); `rejectExpense:908`; `deleteExpense:1932`. Status keluar draft hanya lewat approve/reject/delete existing.
 - Izin katalog: `src/lib/auth/module-catalog.generated.ts:374-378` — `view/create/edit/delete/approve_expenses` (label `Pengeluaran`); klaim memakai `create_employee_reimbursements:306`. TIDAK ada key `pay_expenses` terpisah; bayar klaim adalah tahap turunan jurnal 082-S.
 - Tahap klaim: `deriveReimbursementStage` `src/lib/reports/reimbursement.ts:48` — draft klaim = `DIAJUKAN`; approved/paid-tanpa-jurnal-bayar = `DISETUJUI` (wilayah 082-S). Antrean ini hanya mengambil wilayah draft/DIAJUKAN dari sumbu dokumen.
 - Daftar existing: `keuangan/pengeluaran/page.tsx` — `requirePermission("view_expenses")`, `findMany orderBy createdAt desc` paginasi 100, saring `status`/`klaim=1` manual; tanpa umur/tingkat/keadaan-approval.
 - Builder antrean Expense draft: ABSEN (yang ada builder 082-S untuk tahap DISETUJUI). Keadaan Approval pendamping per dokumen dibaca dari rekod Approval terbaru — pola sama keluarga 065-S (keadaanApproval pendamping, bukan status dokumen).
-
-### 3. Status-transition matrix
-
 Status Expense TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
-
-| Status awal | Pemicu | Status akhir | Penjaga/permission |
-|---|---|---|---|
 | (belum ada) | `createExpense` / aksi klaim | `draft` | `create_expenses` / `create_employee_reimbursements` |
 | `draft` | `approveExpense` tanpa workflow | `approved` (+ sinkron petty cash non-klaim / J-RB1 klaim) | `approve_expenses` + `assertApproved` no-op; klaim: bukti + SoD |
 | `draft` | workflow selesai (approveStep final) | `approved` | workflow existing; `approveExpense` tetap dipanggil untuk sinkron |
 | `draft` | `rejectExpense` / rejectStep | `rejected` | `approve_expenses` / workflow |
 | `draft` mengendap | — (waktu lewat saja) | tetap `draft` | **turunan: populasi antrean; tingkat `Mengendap` bila umur ≥ ambang (USULAN) — bukan status, tidak tertulis** |
 | `approved`/`paid`/`rejected` | — | di luar populasi | wilayah 082-S (klaim) / daftar existing |
-
-### 4. Role/permission matrix
-
 Katalog `module-catalog.generated.ts:374-378` + `:306`. Tanpa key baru tahap 1 (USULAN, Q-EXQ-3).
-
 | Aksi | view_expenses | create_expenses | approve_expenses | create_employee_reimbursements |
-|---|---|---|---|---|
 | Lihat daftar pengeluaran existing | YA (gerbang halaman) | tidak dituntut | tidak dituntut | tidak dituntut |
 | Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru | tidak dituntut | tidak dituntut (pembaca) | tidak dituntut |
 | Buat pengeluaran / klaim (existing) | halaman menuntutnya | YA / — | — | — / YA (klaim) |
 | Setujui/Tolak (existing, di detail) | halaman menuntutnya | — | YA (+ SoD klaim) | — |
 | Setujui/Tolak DARI antrean turunan | TIDAK tahap 1 (BR-EXQ-07) | TIDAK | TIDAK | TIDAK |
-
-### 5. Business rules register
-
 - BR-EXQ-01 (TERVERIFIKASI-KODE): Populasi = `Expense.status = "draft"` persis, klaim dan non-klaim, tanpa saring `deletedAt` (model tidak punya field itu).
 - BR-EXQ-02 (TERVERIFIKASI-KODE): Nominal tampil = `amount` tersimpan verbatim. DILARANG melabeli total antrean sebagai utang/aging/saldo buku — label uang untuk populasi belum-disetujui = BUTUH-VONIS Accountant (Q-EXQ-4), tahap 1 tanpa label itu.
 - BR-EXQ-03 (USULAN): Umur menunggu = hari kalender WIB sejak `createdAt`; `updatedAt` dan `date` dokumen DILARANG sebagai acuan umur (date adalah tanggal biaya, bukan tanggal pengajuan).
@@ -39162,9 +39297,6 @@ Katalog `module-catalog.generated.ts:374-378` + `:306`. Tanpa key baru tahap 1 (
 - BR-EXQ-08 (TERVERIFIKASI-KODE): Approver klaim terikat SoD existing (pengaju tidak menyetujui klaim sendiri) — antrean tidak melonggarkan; baris klaim milik pembaca sendiri tetap tampil (keputusan tetap ditolak server di detail, antrean tidak menyembunyikan fakta).
 - BR-EXQ-09 (USULAN): Gerbang antrean = `view_expenses` fail-closed; loader anti-N+1 (Approval terbaru massal per halaman dokumen, kategori/vendor/proyek include massal).
 - BR-EXQ-10 (USULAN): Urutan = mengendap dulu, lalu umur tertua; seri `createdAt` sama = id naik. Ambang mengendap satu konstanta server bernama (usulan 3 hari, final Q-EXQ-1).
-
-### 6. Acceptance criteria + edge cases
-
 AC-EXQ-B1 (Backend): builder murni mengembalikan HANYA draft; approved/paid/rejected tidak pernah masuk walau Approval pendampingnya pending.
 AC-EXQ-B2: umur dihitung WIB dari `createdAt`; dokumen dengan `date` lampau tetapi `createdAt` hari ini berumur 0 hari.
 AC-EXQ-B3: keadaan pendamping = rekod Approval terbaru per dokumen; dokumen tanpa Approval masuk ember `tanpa workflow`, bukan hilang.
@@ -39173,35 +39305,25 @@ AC-EXQ-B5: loader `view_expenses` fail-closed (tanpa izin = kosong/akses ditolak
 AC-EXQ-F1 (Frontend): permukaan menampilkan payload verbatim (umur, tingkat, ember, penanda klaim dari builder); UI tidak menghitung ulang umur/tingkat.
 AC-EXQ-F2: tanpa tombol Setujui/Tolak/Hapus/Bayar di antrean; tautan baris hanya ke detail pengeluaran existing.
 AC-EXQ-F3: ember `workflow selesai — menunggu sinkron` tampil terpisah terhitung, tidak menyatu dengan `menunggu langkah`.
-
 EC-EXQ-1: Expense draft hasil workflow approved tetapi `approveExpense` belum dipanggil (petty cash belum sinkron) — tetap populasi, ember ketiga.
 EC-EXQ-2: Klaim draft tanpa bukti — tetap tampil (bukti adalah gerbang approve, bukan gerbang tampil); antrean tidak menilai kelengkapan bukti.
 EC-EXQ-3: Expense non-klaim `employeeId` null — penanda klaim kosong, bukan dianggap klaim.
 EC-EXQ-4: Draft sangat lama hasil migrasi/seed (`createdAt` lampau) — mengendap sah apa adanya, tidak disembunyikan.
 EC-EXQ-5: Dua rekod Approval untuk dokumen sama (workflow diulang) — yang terbaru menentukan ember; riwayat lama tidak mencemari.
 EC-EXQ-6: Status di luar kosakata (`draft` ejaan lain/status asing) — terbaca apa adanya di luar populasi, ember `Status Tidak Dikenal` tidak dikarang untuk draft.
-
 ### 7. Backlog implementasi
-
 - F-2026-10-27-107-B (Backend, SESUDAH putusan Lead Q-EXQ-1/2/3): builder murni ember/umur/keadaan-pendamping + loader `view_expenses` fail-closed anti-N+1 + tes AC-EXQ-B1..B5; klaim file di board dulu.
 - F-2026-10-27-107-F (Frontend, SESUDAH kontrak Backend): permukaan antrean verbatim payload + tes AC-EXQ-F1..F3; grep e2e pengeluaran dulu.
 - F-2026-10-27-107-Q (QA): falsifikasi AC-EXQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (approved bocor MERAH, umur dari date/updatedAt MERAH, total berlabel utang MERAH, tombol setujui dari antrean MERAH, Approval lama mencemari ember MERAH).
-
 ### 8. Pertanyaan keputusan
-
 - Q-EXQ-1 (Lead): ambang mengendap — usulan 3 hari kalender WIB sejak `createdAt` (preseden keluarga antrean 2026-10-26/27).
 - Q-EXQ-2 (Lead): kata judul/kolom/ember §1 apa adanya.
 - Q-EXQ-3 (Lead): tanpa key izin baru (`view_expenses`) tahap 1.
 - Q-EXQ-4 (Accountant, bersyarat): vonis WAJIB hanya bila Lead membuka label utang/aging untuk total populasi draft; tahap 1 tidak diminta.
 - Q-EXQ-5 (Lead): penempatan permukaan — seksi turunan di halaman pengeluaran existing vs halaman antrean terpisah Keuangan.
-
 ### Benchmark resmi (akses 2026-10-27)
-
 - Accurate — fitur Approval mencakup pengeluaran kas/Kas & Bank, penyetuju per transaksi: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/approval/mengenal-fitur-approval/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ (BENCHMARK: transaksi kas keluar lazim wajib persetujuan; antrean berumur tidak ditemukan di halaman itu — tidak diklaim).
 - Zahir — matriks persetujuan keuangan (pengaju/penyetuju/pembayar terpisah, batas nominal bertingkat): https://www.zahironline.com/approval-matrix-keuangan/ (BENCHMARK: prinsip SoD + tier; antrean draft berumur tidak ditemukan — tidak diklaim).
-
-### Yang TIDAK diusulkan run ini
-
 - Setujui/tolak massal dari antrean (pola Accurate approval massal): tahap berikut, butuh putusan Lead + SoD per baris terbukti.
 - Ambang nominal tier persetujuan (pola Zahir): mengubah kebijakan approve existing — bukan turunan baca.
 - Pengingat otomatis ke approver: kanal notifikasi = keputusan Lead terpisah.
@@ -40120,7 +40242,6 @@ F-2026-10-27-103-S — Antrean transaksi berulang jatuh tempo / gagal jalan meng
 2. Alasan mengikat: nilai di jalan sudah punya SATU rumah penilaian (laporan in-transit, basis §0). Nilai kedua di antrean kerja pasti menyimpang pada campuran baris perkiraan (`Item.cost` kini vs carried cost OUT) — dua angka "nilai di jalan" yang beda di dua layar adalah cacat rekonsiliasi, bukan fitur. Ditambah: transfer nol jurnal GL (§0) sehingga nilai antrean tidak bisa direkonsiliasi ke akun persediaan GL mana pun; menampilkannya di permukaan kerja memberi kesan saldo buku yang tidak ada peristiwa bukunya.
 ### Putusan 2 — Syarat sah nilai kelak (SEMUA wajib)
 Nilai di antrean kerja SAH hanya bila SEMUA: (a) nilainya DIAMBIL dari builder laporan in-transit existing yang sama (`buildTransferInTransit`/loader-nya), bukan hitungan kedua di builder antrean; (b) label verbatim menyatakan sumbernya ("nilai menurut laporan Persediaan Terkirim Belum Diterima, termasuk baris perkiraan bila ada") dan baris perkiraan tetap tertanda; (c) total antrean tampil berdampingan dengan baris rekonsiliasi ke total laporan periode sama — selisih = temuan tampil, bukan dipilih diam-diam; (d) tidak ada label saldo buku/GL untuk nilai itu (nilai subledger stok, bukan saldo akun).
-### Larangan + batas build + falsifikasi QA
 - Larangan: nilai kedua hasil hitungan builder antrean; Σ nilai lintas satuan; nilai dari `Item.cost` ditampilkan sebagai nilai pasti; mengklaim nilai antrean = saldo persediaan GL.
 - BOT Lead: Q-ITQ-4 TERTUTUP tahap 1 (tanpa nilai); nilai kelak = rangkaian Putusan 2. BOT Backend (106-B): payload tanpa field nilai (E-ITQ4-1). BOT Frontend (106-F): tanpa kolom/format Rp turunan (E-ITQ4-2). BOT QA: E-ITQ4-1 grep field nilai di payload 106-B = MERAH; E-ITQ4-2 mutasi builder antrean menghitung `qty × cost` sendiri = MERAH; E-ITQ4-3 label nilai tanpa tanda perkiraan pada baris tanpa StockMove OUT = MERAH.
 ID vonis ini **F-2026-10-27-107-V** (jawaban Q-ITQ-4 spec F-2026-10-27-106-S PR #1174). Pemilik berikutnya: BOT Lead putus Q-ITQ-1/2/3/5 + merge → Backend 106-B → Frontend 106-F → QA E-ITQ4-1..3 + AC-ITQ.
@@ -40151,25 +40272,6 @@ Kaitan biaya SAH hanya bila: (a) angka diambil dari `ProductionCost` nyata yang 
 - Larangan: `hours × rate` di builder/UI antrean; membaca tarif/upah karyawan untuk antrean; label denda/penalti; Σ biaya dari baris mengendap.
 - BOT Lead: Q-TSQ-5 + Q-WOOQ-6 TERTUTUP tahap 1. BOT Backend (102-B/100-B): payload tanpa field biaya (E-TSQ5-1). BOT Frontend: tanpa format Rp dari jam (E-TSQ5-2). BOT QA: E-TSQ5-1 payload memuat amount/biaya turunan jam = MERAH; E-TSQ5-2 estimasi jam tampil berlabel biaya aktual = MERAH; E-TSQ5-3 label denda tampil tanpa dokumen dasar = MERAH.
 ID vonis ini **F-2026-10-27-109-V** (jawaban Q-TSQ-5 spec F-2026-10-27-102-S PR #1166 + Q-WOOQ-6 spec F-2026-10-27-100-S PR #1161). Pemilik berikutnya: BOT Lead putus Q-TSQ-1..4/Q-WOOQ-1..5 + merge → Backend → Frontend → QA E-TSQ5-1..3 + AC spec induk.
-## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-110-V: sisa tukar faktur adalah sisa serah operasional, bukan saldo piutang dokumen (pelengkap spec F-2026-10-27-101-S PR #1163)
-> **Slot**: F-2026-10-27-110-V. Diperiksa bentrok 2026-10-27 14:41 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-110` di backlog+board = 0/0; PR terbuka memuat `110` vonis = 0. Dokumen saja; tanpa kode/schema/migrasi. Vonis SEMPIT: tidak membuka ulang Q-IEX-1/2/3 (wilayah Lead), hanya mengikat makna angka yang tampil.
-### 0. Basis bukti live (origin/main e777d82db, 2026-10-27 14:41 WIB) — TERVERIFIKASI-KODE
-- `InvoiceExchangeItem.amount` = snapshot `grandTotal` faktur SAAT diserahkan (`src/actions/invoice-exchange.actions.ts:180-186`, skema `prisma/schema.prisma:1820-1827` "Nilai faktur saat diserahkan — dasar penagihan"). Snapshot TIDAK pernah ditulis ulang sesudah itu.
-- `createInvoiceExchange` tanpa jurnal (komentar :40-46; `invoice-exchange.ts:3-9`: membuat jurnal akan menggandakan piutang). Piutang hidup di faktur + jurnalnya, bukan di dokumen serah.
-- Listing existing menghitung dari faktur HIDUP, bukan snapshot: `loadInvoiceExchanges` membaca `grandTotal` + `paidAmount` saat ini (`invoice-exchanges-data.ts:sumExchangeAmounts`), label `settled/partial/outstanding` = Lunas/Sebagian/Belum Dibayar (`invoice-exchange.ts:22-26`), sisa = amount − paid (epsilon 0,005, :29).
-- Faktur tertaut BISA berubah sesudah serah: `voidSalesInvoice` (`sales.actions.ts:3743`) membalik posting (`reverseSalesInvoicePostingTx`) lalu `status=cancelled, paidAmount=0` (:3769) — penjaga hanya menolak bila sudah ada pembayaran (:3758). Faktur `cancelled` tetap tertaut `InvoiceExchangeItem` (relasi tanpa cascade hapus dari sisi exchange, skema :1829). Retur/kredit sesudah serah menempuh jalur dokumennya sendiri dan menurunkan sisa faktur tanpa menyentuh snapshot serah.
-- Spec induk 101-S BR-IEX-01/03 memakai "Σ amount item − Σ paidAmount" — campuran snapshot (pembilang) dan angka hidup (pengurang). EC-1 spec sudah menandai faktur terhapus/dibatalkan sebagai anomali, tetapi tanpa putusan makna totalnya. Vonis denda piutang existing F-2026-10-22-093-V dirujuk, tidak divonis ulang.
-### Putusan 1 — Makna sisa: operasional serah, dengan rekonsiliasi tampil bila beda
-1. Angka sisa antrean 101 WAJIB dilabeli makna **sisa serah** (nilai yang diserahkan belum tertagih menurut pembayaran faktur tertaut), BUKAN "saldo piutang dokumen", "piutang tukar faktur", atau total yang diklaim sama dengan piutang GL pelanggan. Alasan: pembilangnya snapshot beku (§0) — ia mengukur janji serah, bukan saldo buku; saldo piutang pelanggan tetap hanya dari faktur + jurnalnya.
-2. Builder 101-B WAJIB menghitung sisa dari DUA sisi dan menampilkan selisihnya bila tidak nol: (a) sisa serah = Σ snapshot `amount` − Σ `paidAmount` faktur tertaut hidup; (b) sisa faktur hidup = Σ (`grandTotal` hidup − `paidAmount`) atas faktur tertaut yang statusnya bukan `cancelled`/terhapus. Bila (a) ≠ (b) (faktur berubah nominal sesudah serah), baris/baris-rekap menampilkan penanda selisih verbatim server — selisih adalah temuan yang ditampilkan, bukan dipilih diam-diam salah satu (prinsip rekonsiliasi mengikat). UI dilarang menghitung ulang kedua sisi.
-3. Label pelunasan existing (Lunas/Sebagian/Belum Dibayar) SAH dipakai apa adanya dari `settlementStatus` existing — dengan makna status pelunasan faktur tertaut, bukan status dokumen serah sebagai piutang. Dilarang mengganti label menjadi kata piutang/utang/tunggakan.
-### Putusan 2 — Faktur anomali sesudah serah: keluar total, tertanda, tidak dianggap lunas
-Faktur tertaut yang `cancelled`, terhapus (`deletedAt`), atau sudah ditutup retur/nota kredit penuh sesudah serah masuk ember anomali EC-1: dikeluarkan dari Σ sisa serah DAN Σ sisa hidup pada rekap, ditampilkan sebagai hitungan anomali terpisah per dokumen, dan TIDAK pernah menyumbang status Lunas. Alasan: faktur cancelled sudah dibalik jurnalnya (`paidAmount=0`, §0) — memasukkannya ke sisa mengklaim tagihan atas piutang yang sudah tidak ada di buku; menganggapnya lunas sama salahnya ke arah berlawanan.
-### Putusan 3 — Denda/bunga dari dueDate dokumen: DILARANG tahap 1
-`dueDate` InvoiceExchange adalah batas kembali administratif kesepakatan serah (form existing), bukan syarat kredit/pembayaran faktur dan bukan tanggal jatuh tempo piutang kontraktual per faktur. Denda, bunga, atau biaya keterlambatan apa pun yang diturunkan dari lewatnya `dueDate` dokumen DILARANG di antrean 101 tahap 1. Denda piutang yang sah tetap hanya lewat jalur vonis F-2026-10-22-093-V (dokumen tagih terpisah, bukan ubah faktur asal) per faktur — antrean dokumen serah tidak menjadi pemicu atau penambah denda.
-- Larangan: label saldo piutang/utang/tunggakan untuk sisa dokumen; total rekap memuat baris anomali; UI hitung sisa sendiri; denda/bunga dari dueDate dokumen.
-- BOT Lead: vonis ini mengikat makna angka 101-B/101-F; Q-IEX-1/2/3 tetap milik Lead. BOT Backend (101-B): payload memuat sisa serah + sisa faktur hidup + penanda selisih + hitungan anomali (E-IEXA-1/2). BOT Frontend (101-F): label verbatim, penanda selisih/anomali tampil (E-IEXA-3). BOT QA: E-IEXA-1 faktur cancelled sesudah serah masuk total sisa = MERAH; E-IEXA-2 selisih snapshot vs hidup tidak tertanda = MERAH; E-IEXA-3 kata piutang/utang/tunggakan/denda menempel pada sisa/dueDate dokumen = MERAH.
-ID vonis ini **F-2026-10-27-110-V** (pelengkap spec F-2026-10-27-101-S PR #1163). Pemilik berikutnya: BOT Lead putus Q-IEX-1/2/3 + merge → Backend 101-B → Frontend 101-F → QA E-IEXA-1..3 + AC-IEX.
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-102-S: antrean tugas proyek terbuka mengendap — umur sejak dibuat untuk tanpa-tenggat + ember belum-ditugaskan (PERLUASAN baca-saja di atas F-2026-10-27-091-S, BUKAN antrean tenggat kedua)
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_aa039434. Basis `origin/main` `a737e476c` (2026-10-27 13:09 WIB).
 **Verifikasi ID:** grep `F-2026-10-27-102` di backlog+board `origin/main` (`a737e476c`) = 0/0 sebelum tulis; PR terbuka memuat `102-S` = 0 (yang ada #1161 = 100-S); branch `hermes/business-f102-*` selain branch run ini = 0. Bebas. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
