@@ -9,6 +9,7 @@ import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
 import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
+import { isSettled } from "@/lib/finance/settlement-status";
 import { REVERSAL_JOURNAL_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
   buildDownPaymentReceiptLines,
@@ -2099,8 +2100,9 @@ export async function onSalesReturnCompleted(
         const reliefSen = Math.min(returnSen, Math.max(grandSen - paidSen, 0));
         const excessSen = returnSen - reliefSen;
         const newGrandSen = grandSen - reliefSen;
+        // FIN-BR-006: lunas dari outstanding valid dalam toleransi Rp1.
         const invStatus: "posted" | "partial" | "paid" =
-          paidSen >= newGrandSen ? "paid" : paidSen > 0 ? "partial" : "posted";
+          isSettled(newGrandSen / 100, paidSen / 100) ? "paid" : paidSen > 0 ? "partial" : "posted";
         await tx.salesInvoice.update({
           where: { id: salesReturn.salesInvoiceId },
           data: {
@@ -2357,8 +2359,10 @@ export async function onPurchaseReturnProcessed(
           if (reliefSen > 0) {
             const newGrandSen = grandSen - reliefSen;
             const newBalanceSen = Math.max(newGrandSen - withholdingSen - paidSen, 0);
+            // FIN-BR-006: lunas dari outstanding NETO valid dalam toleransi
+            // Rp1 (100 sen) — konsisten dengan confirmVendorPayment.
             const billStatus: "posted" | "partial" | "paid" =
-              newBalanceSen <= 0 ? "paid" : paidSen > 0 ? "partial" : "posted";
+              isSettled((newGrandSen - withholdingSen) / 100, paidSen / 100) ? "paid" : paidSen > 0 ? "partial" : "posted";
             await tx.vendorBill.update({
               where: { id: bill.id },
               data: {

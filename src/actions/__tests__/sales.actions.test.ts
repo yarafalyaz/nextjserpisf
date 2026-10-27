@@ -859,6 +859,23 @@ describe("Sales Payment Actions", () => {
     const res = await actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount: 200, paymentDate: "2026-06-12", paymentMethod: "cash" }))
     expect(res?.success).toBe(false)
   })
+  // FIN-BR-006: satu helper bersama dua lewat-sisa batas (dalam vs luar Rp1).
+  async function createPaymentOf(amount: number) {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 1000, paidAmount: 0, customerId: 3 })
+    return actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount, paymentDate: "2026-06-12", paymentMethod: "cash" }))
+  }
+
+  it("FIN-BR-006: createSalesPayment lolos bila lewat sisa dalam toleransi Rp1", async () => {
+    // grandTotal 1000, paid 0 → remaining 1000. Bayar 1000.50: lewat 0.50
+    // (pembulatan rupiah-penuh), bukan overpay.
+    const res = await createPaymentOf(1000.50)
+    expect(res?.success).toBe(true)
+  })
+  it("FIN-BR-006: createSalesPayment tetap tolak bila lewat sisa di atas Rp1", async () => {
+    const res = await createPaymentOf(1002)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("melebihi sisa tagihan")
+  })
   it("createSalesPayment updates attachments", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 100, paidAmount: 0 })
     const res = await actions.createSalesPayment(fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "cash", attachmentIds: "[1,2]" }))
