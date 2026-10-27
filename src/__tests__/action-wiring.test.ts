@@ -213,8 +213,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
   "src/actions/development.actions.ts::removeTrainingParticipant":
     "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
-  "src/actions/salary-adjustment.actions.ts::getSalaryAdjustments":
-    "Muse K1 HCMS backend; UI penyesuaian gaji menyusul (frontend t_daed387f)",
   // F-2026-10-26-054-S inti backend (t_d40cad23): gerbang persetujuan
   // penyesuaian gaji; UI antrean persetujuan menyusul (frontend t_2083c754).
   "src/actions/salary-adjustment.actions.ts::approveSalaryAdjustment":

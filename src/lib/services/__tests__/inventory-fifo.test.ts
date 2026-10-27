@@ -182,6 +182,46 @@ describe("inventory-fifo", () => {
       expect(result.shortfall).toBe(0);
     });
 
+    it("average: dua penjualan berurutan mempertahankan rata-rata tertimbang (Rp110 lalu Rp55)", async () => {
+      // Stateful fake: layerUpdate benar-benar mengurangi remaining, sehingga
+      // penjualan kedua menilai sisa stok yang ditinggalkan penjualan pertama.
+      // Pengurasan FIFO lama menyisakan 20@6 → penjualan kedua Rp60 (drift).
+      const layers = [
+        { id: 1, remaining: 10, unitCost: 4, batchNumber: null as string | null, warehouseId: 1 },
+        { id: 2, remaining: 30, unitCost: 6, batchNumber: null as string | null, warehouseId: 1 },
+      ];
+      const tx = {
+        $queryRaw: vi.fn().mockImplementation(() =>
+          Promise.resolve(layers.filter((l) => l.remaining > 0).map((l) => ({ ...l }))),
+        ),
+        inventoryLayer: {
+          aggregate: vi.fn().mockResolvedValue({ _sum: { remaining: 40 } }),
+          update: vi.fn().mockImplementation(({ where, data }: { where: { id: number }; data: { remaining: { decrement: number } } }) => {
+            const layer = layers.find((l) => l.id === where.id)!;
+            layer.remaining -= data.remaining.decrement;
+            return Promise.resolve({});
+          }),
+          create: vi.fn().mockResolvedValue({}),
+        },
+        itemBatch: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn().mockResolvedValue({}) },
+        item: {
+          findUnique: vi.fn().mockResolvedValue({
+            trackSerial: false,
+            costingMethod: "average",
+            category: { costingMethod: null },
+          }),
+        },
+        systemSetting: { findFirst: vi.fn().mockResolvedValue({ costingMethod: "FIFO" }) },
+        itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({}) },
+      } as unknown as Prisma.TransactionClient;
+
+      const first = await consumeFifoLayers(tx, { itemId: 1, qty: 20 });
+      expect(first.consumedCost).toBe(110); // 20 × 5,5
+
+      const second = await consumeFifoLayers(tx, { itemId: 1, qty: 10 });
+      expect(second.consumedCost).toBe(55); // rata-rata sisa tetap 5,5 — bukan 6
+    });
+
     it("category method overrides the item method (average via category)", async () => {
       const tx = mockTx({
         costingMethod: "fifo",

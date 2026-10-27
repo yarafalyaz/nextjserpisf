@@ -50,7 +50,7 @@ describe("inventory-transfer-receipt.service (F-2026-10-22-081-S)", () => {
     expect(
       validateReceiptLines(lines, [
         { transferItemId: 11, qty: 6 },
-        { transferItemId: 12, qty: 5 },
+        { transferItemId: 12, qty: 2, serialNumbers: ["SN-1", "SN-2"] },
       ], new Map()),
     ).toHaveLength(2)
   })
@@ -100,6 +100,121 @@ describe("inventory-transfer-receipt.service (F-2026-10-22-081-S)", () => {
         },
       ], new Map()),
     ).not.toThrow()
+  })
+
+  it("regresi TASK-012: terima parsial item berseri tanpa serial ditolak", () => {
+    const serialLines: TransferLineState[] = [
+      { id: 21, itemId: 7, qty: 3, receivedQty: 0, serialNumbers: ["S1", "S2", "S3"] },
+    ]
+    expect(() =>
+      validateReceiptLines(serialLines, [{ transferItemId: 21, qty: 2 }], new Map()),
+    ).toThrow(/berseri.*nomor seri|memerlukan tepat/)
+    expect(() =>
+      validateReceiptLines(serialLines, [{ transferItemId: 21, qty: 2, serialNumbers: [] }], new Map()),
+    ).toThrow(/berseri.*nomor seri|memerlukan tepat/)
+    expect(() =>
+      validateReceiptLines(serialLines, [{ transferItemId: 21, qty: 2, serialNumbers: ["S1"] }], new Map()),
+    ).toThrow(/memerlukan tepat/)
+    expect(() =>
+      validateReceiptLines(serialLines, [{ transferItemId: 21, qty: 2, serialNumbers: ["S1", "SX"] }], new Map()),
+    ).toThrow(/bukan serial terkirim/)
+    expect(
+      validateReceiptLines(serialLines, [{ transferItemId: 21, qty: 2, serialNumbers: ["S1", "S2"] }], new Map()),
+    ).toHaveLength(1)
+  })
+
+  it("regresi TASK-012: alokasi batch parsial ditolak, tepat qty diterima, lot asing ditolak", () => {
+    const batchLines: TransferLineState[] = [
+      {
+        id: 31,
+        itemId: 8,
+        qty: 10,
+        receivedQty: 0,
+        serialNumbers: [],
+        batchAllocations: [
+          { batchNumber: "LOT-A", qty: 6 },
+          { batchNumber: "LOT-B", qty: 4 },
+        ],
+      },
+    ]
+    // 4 dari 10
+    expect(() =>
+      validateReceiptLines(
+        batchLines,
+        [{ transferItemId: 31, qty: 10, batchAllocations: [{ batchNumber: "LOT-A", qty: 4 }] }],
+        new Map(),
+      ),
+    ).toThrow(/alokasi batch|menjumlah tepat/)
+    // tanpa alokasi sama sekali untuk item batch
+    expect(() => validateReceiptLines(batchLines, [{ transferItemId: 31, qty: 10 }], new Map())).toThrow(
+      /alokasi nomor batch|alokasi batch/,
+    )
+    // lot tidak terkirim
+    expect(() =>
+      validateReceiptLines(
+        batchLines,
+        [{ transferItemId: 31, qty: 2, batchAllocations: [{ batchNumber: "LOT-X", qty: 2 }] }],
+        new Map(),
+      ),
+    ).toThrow(/bukan lot terkirim/)
+    // tepat qty per lot diterima
+    expect(
+      validateReceiptLines(
+        batchLines,
+        [
+          {
+            transferItemId: 31,
+            qty: 10,
+            batchAllocations: [
+              { batchNumber: "LOT-A", qty: 6 },
+              { batchNumber: "LOT-B", qty: 4 },
+            ],
+          },
+        ],
+        new Map(),
+      ),
+    ).toHaveLength(1)
+    // parsial kejadian 4 dengan lot tepat 4 diterima (kejadian parsial, bukan alokasi parsial)
+    expect(
+      validateReceiptLines(
+        batchLines,
+        [{ transferItemId: 31, qty: 4, batchAllocations: [{ batchNumber: "LOT-A", qty: 4 }] }],
+        new Map(),
+      ),
+    ).toHaveLength(1)
+  })
+
+  it("regresi TASK-012: sisa lot per kejadian berikutnya dihormati", () => {
+    const batchLines: TransferLineState[] = [
+      {
+        id: 31,
+        itemId: 8,
+        qty: 10,
+        receivedQty: 4,
+        serialNumbers: [],
+        batchAllocations: [
+          { batchNumber: "LOT-A", qty: 6 },
+          { batchNumber: "LOT-B", qty: 4 },
+        ],
+      },
+    ]
+    const alreadyBatches = new Map([[31, new Map([["LOT-A", 4]])]])
+    expect(() =>
+      validateReceiptLines(
+        batchLines,
+        [{ transferItemId: 31, qty: 3, batchAllocations: [{ batchNumber: "LOT-A", qty: 3 }] }],
+        new Map(),
+        alreadyBatches,
+      ),
+    ).toThrow(/melebihi sisa lot terkirim/)
+    expect(
+      validateReceiptLines(
+        batchLines,
+        [{ transferItemId: 31, qty: 2, batchAllocations: [{ batchNumber: "LOT-A", qty: 2 }] }],
+        new Map(),
+        alreadyBatches,
+      ),
+    ).toHaveLength(1)
   })
 
   it("shortage: hanya baris bersisa, nilai sisa x carried cost, serial sisa ikut", () => {

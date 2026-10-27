@@ -18,6 +18,22 @@ const mocks = vi.hoisted(() => {
     inventoryLayer: {
       deleteMany: vi.fn(),
       count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    itemBatch: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
+    purchaseOrderItem: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    item: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    uomConversion: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     goodsReceiptItem: {
       deleteMany: vi.fn(),
@@ -64,14 +80,14 @@ vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermi
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }));
 
-/** Panggilan $executeRaw yang merupakan rekomputasi received_qty. */
-function receivedQtyRecompute(call: unknown[]) {
-  const sql = Array.isArray(call[0]) ? (call[0] as string[]).join("") : String(call[0]);
-  return (
-    sql.includes("purchase_order_items") &&
-    sql.includes("received_qty") &&
-    sql.includes("goods_receipt_items")
-  );
+/** Panggilan $executeRaw penulisan received_qty PER BARIS PO (nilai, id baris). */
+function receivedQtyWrites() {
+  return mocks.txMock.$executeRaw.mock.calls
+    .filter((call: unknown[]) => {
+      const sql = Array.isArray(call[0]) ? (call[0] as string[]).join("") : String(call[0]);
+      return sql.includes("purchase_order_items") && sql.includes("received_qty");
+    })
+    .map((call: unknown[]) => call.slice(1));
 }
 
 describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
@@ -90,24 +106,47 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
   });
 
   it("menjalankan rekomputasi dari penerimaan yang tersisa, per PO", async () => {
+    // PO memuat item 7 dua kali (5 + 10); penerimaan tersisa berjumlah 6 →
+    // per baris 5 lalu 1 (bukan total 6 yang sama di kedua baris).
+    mocks.txMock.purchaseOrderItem.findMany.mockResolvedValue([
+      { id: 11, itemId: 7, qty: 5 },
+      { id: 12, itemId: 7, qty: 10 },
+    ]);
+    mocks.txMock.goodsReceiptItem.findMany.mockResolvedValue([{ itemId: 7, qty: 6, uom: null }]);
+    mocks.txMock.item.findMany.mockResolvedValue([{ id: 7, unitOfMeasure: "PCS" }]);
+
     const res = await deleteGoodsReceipt(1);
 
     expect(res?.success).toBe(true);
-    const calls = mocks.txMock.$executeRaw.mock.calls.filter(receivedQtyRecompute);
-    expect(calls).toHaveLength(1);
-    // PO + status yang dihitung: hanya penerimaan terverifikasi/selesai yang tersisa.
-    expect(calls[0].slice(1)).toEqual([10, "verified", "completed", 10]);
+    expect(receivedQtyWrites()).toEqual([
+      [5, 11],
+      [1, 12],
+    ]);
+    // Hanya penerimaan terverifikasi/selesai yang tersisa yang dihitung.
+    expect(mocks.txMock.goodsReceiptItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          goodsReceipt: expect.objectContaining({
+            purchaseOrderId: 10,
+            status: { in: ["verified", "completed"] },
+          }),
+        }),
+      }),
+    );
   });
 
   it("menjalankan rekomputasi SESUDAH baris penerimaan dihapus", async () => {
+    mocks.txMock.purchaseOrderItem.findMany.mockResolvedValue([{ id: 11, itemId: 7, qty: 10 }]);
+
     await deleteGoodsReceipt(1);
 
     const deleteOrder = mocks.txMock.goodsReceiptItem.deleteMany.mock.invocationCallOrder[0];
-    const recomputeCall = mocks.txMock.$executeRaw.mock.calls.find(receivedQtyRecompute)!;
-    const recomputeOrder =
-      mocks.txMock.$executeRaw.mock.invocationCallOrder[
-        mocks.txMock.$executeRaw.mock.calls.indexOf(recomputeCall)
-      ];
+    const writeIdx = mocks.txMock.$executeRaw.mock.calls.findIndex((call: unknown[]) => {
+      const sql = Array.isArray(call[0]) ? (call[0] as string[]).join("") : String(call[0]);
+      return sql.includes("purchase_order_items") && sql.includes("received_qty");
+    });
+    expect(writeIdx).toBeGreaterThanOrEqual(0);
+    const recomputeOrder = mocks.txMock.$executeRaw.mock.invocationCallOrder[writeIdx];
     expect(recomputeOrder).toBeGreaterThan(deleteOrder);
   });
 
@@ -130,6 +169,6 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     const res = await deleteGoodsReceipt(2);
 
     expect(res?.success).toBe(true);
-    expect(mocks.txMock.$executeRaw.mock.calls.filter(receivedQtyRecompute)).toHaveLength(0);
+    expect(receivedQtyWrites()).toHaveLength(0);
   });
 });
