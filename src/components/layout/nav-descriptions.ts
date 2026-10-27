@@ -170,6 +170,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/penjualan/antrean-faktur-draf": "Faktur penjualan yang masih draft dan belum diposting, dari yang paling lama menunggu",
   "/penjualan/antrean-penawaran-diterima": "Penawaran diterima belum menjadi pesanan penjualan",
   "/penjualan/antrean-penagihan": "Faktur belum lunas per tahap penagihan dan janji bayar",
+  "/penjualan/antrean-saldo-kredit": "Kredit pelanggan yang masih terbuka, termasuk penanda refund menunggu pembatalan faktur pajak uang muka",
   "/penjualan/antrean-janji-kirim": "Pesanan penjualan yang janji kirimnya mendekati atau sudah lewat dan belum terkirim penuh",
   "/penjualan/pesanan": "Pesanan penjualan",
   "/penjualan/retur": "Retur penjualan",
