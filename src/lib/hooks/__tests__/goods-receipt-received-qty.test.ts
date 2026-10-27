@@ -184,6 +184,57 @@ describe("onGoodsReceiptVerified menulis PurchaseOrderItem.receivedQty", () => {
     expect(receivedQtyWrites(spies)).toEqual([]);
   });
 
+  it("PO duplikat 5+5 terima 6: per baris 5 lalu 1, tanpa over-receipt palsu", async () => {
+    const { spies } = wireTx({
+      poId: 50,
+      poItems: [
+        { id: 11, itemId: 7, qty: 5 },
+        { id: 12, itemId: 7, qty: 5 },
+      ],
+      priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 6, unitCost: 1000 }],
+    });
+
+    await onGoodsReceiptVerified(100, 1);
+
+    // Total per item (6) didistribusikan per baris — bukan 6 di kedua baris.
+    expect(receivedQtyWrites(spies).sort((a, b) => Number(a.id) - Number(b.id))).toEqual([
+      { value: 5, id: 11 },
+      { value: 1, id: 12 },
+    ]);
+    expect(spies.poUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "partial_received" } }),
+    );
+  });
+
+  it("PO duplikat 5+5 terima 11 tetap ditolak (guard terhadap total PO)", async () => {
+    const { spies } = wireTx({
+      poId: 50,
+      poItems: [
+        { id: 11, itemId: 7, qty: 5 },
+        { id: 12, itemId: 7, qty: 5 },
+      ],
+      priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 11, unitCost: 1000 }],
+    });
+
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/melebihi pesanan/);
+    expect(receivedQtyWrites(spies)).toEqual([]);
+  });
+
+  it("menolak penerimaan item trackBatch tanpa nomor lot", async () => {
+    const { spies } = wireTx({
+      poId: 50,
+      poItems: [{ id: 11, itemId: 7, qty: 10 }],
+      priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 6, unitCost: 1000 }],
+      itemMeta: { unitOfMeasure: "PCS", trackBatch: true, trackSerial: false, isService: false },
+    });
+
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/batch/);
+    expect(spies.moveCreate).not.toHaveBeenCalled();
+  });
+
   it("tidak menyentuh baris PO bila penerimaan tidak terkait PO", async () => {
     const { spies } = wireTx({
       poId: null,

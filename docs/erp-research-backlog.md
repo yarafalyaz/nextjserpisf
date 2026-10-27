@@ -17239,10 +17239,16 @@ G5. Tes falsifikasi §7 hijau di head inti persis + gate repo.
     OCLY, sesudah 210206). Verifikasi live: 210201-210206 terpakai
     (210205 Provisi Garansi, 210206 Utang PPh 4(2) Sewa — keduanya
     DILARANG dipakai ulang). 210207 bebas di COA bawaan.
+    > KOREKSI 26 Okt 2026 (BOT Backend, kartu t_4f49b18c): nomor di
+    > atas DIGANTIKAN vonis F-2026-10-25-039-V — akun utang komisi =
+    > 210212 BARU; 210207 tetap Utang Kompensasi PKWT. Teks di atas
+    > historis dan tidak boleh disalin builder.
 3. Mapping: SystemSetting baru `commissionExpenseAccountId` +
     `commissionPayableAccountId` (nullable, tanpa default tebak),
     pola mapping F-021. Seed menunjuk 600002 / 210207; instalasi
     berjalan tanpa seed = mapping diisi admin, kosong = fail-closed.
+    > KOREKSI 26 Okt 2026 (t_4f49b18c): seed menunjuk 600002 / 210212
+    > per F-2026-10-25-039-V (bukan 210207).
     Dilarang fallback ke Hutang Gaji 210204 (komisi belum tentu
     dibayar lewat siklus gaji berjalan; mencampur = rekonsiliasi
     gaji tercemar) dan dilarang fallback akun beban lain.
@@ -17343,6 +17349,9 @@ KOM3-1. Faktur DPP 11.000.000 PPN 1.320.000 tarif snapshot 2%
   mencapai paid -> satu jurnal Dr 600002 / Cr 210207 220.000.
   Basis grandTotal (246.400) atau jurnal dobel saat retry =
   MERAH.
+  > KOREKSI 26 Okt 2026 (t_4f49b18c): rujukan uji menjadi
+  > Dr 600002 / Cr 210212 220.000 per F-2026-10-25-039-V; angka
+  > 220.000 tidak berubah.
 KOM3-2. Mapping commissionPayableAccountId dikosongkan ->
   transisi paid menolak jurnal berisik, nol jurnal setengah;
   fallback ke 210204/210205/210206 terbit = MERAH.
@@ -17370,6 +17379,8 @@ KOM3-7. Faktur paid tanpa penjual / tanpa snapshot persen ->
   retur + komponen payroll pembayar utang. Klaim
   schema.prisma di board sebelum edit; jangan bangun sebelum
   inti F-056-V (histori+snapshot) merged.
+  > KOREKSI 26 Okt 2026 (t_4f49b18c): seed 210212 + 2 mapping per
+  > F-2026-10-25-039-V (bukan 210207).
 - BOT 5: workflow bayar komisi = run payroll existing (komponen
   T2); jangan rancang jalur bayar terpisah. Sinkronkan spec
   bila menyentuh komisi non-karyawan: berhenti, vonis terpisah.
@@ -19777,6 +19788,11 @@ akun, dan pihak penyetor tidak ditebak.
 4. AKUN: akun baru 210207 "Utang PPh 4(2) Pengalihan Hak
    Tanah/Bangunan" (anak 2102 OCLY; bebas terverifikasi live run ini:
    210201-210206 terisi, 210207 nol hasil grep base-data.ts).
+   > KOREKSI 26 Okt 2026 (BOT Backend, kartu t_4f49b18c): alokasi
+   > 210207 di butir ini DIGANTIKAN vonis koreksi 050-V (blok koreksi
+   > di backlog ini) — Utang PPh 4(2) Pengalihan Hak = 210213; 210207
+   > sah terpakai Utang Kompensasi PKWT. Semua rujukan 210207 di blok
+   > F-050-V dibaca 210213; jangan seed liabilityAccountCode "210207".
    DILARANG fallback ke 210202 (PPh 23) atau 210206 (sewa). Jenis
    potong baru diusulkan `PPH42-ALIH` di WITHHOLDING_TAX_TYPES dengan
    liabilityAccountCode "210207", tarif dari master bertanggal
@@ -30596,7 +30612,7 @@ W6 Pembaca laporan membuka rekap per masa: baris per penjual (basis DPP lunas, e
 | BR-KT36-09 | Hasil resolusi nol baris di domain ini = tarif 0 jujur + notice (fail-soft berlabel) — rezim ini TIDAK disamakan dengan fail-closed dokumen pajak | TERVERIFIKASI-VONIS (F-058-V K3) |
 | BR-KT36-10 | Penulis tarif = pemegang izin master kategori existing `create_customers`/`edit_customers`; vonis ini TIDAK menciptakan izin baru; penjual tidak menulis tarifnya sendiri. Bila Backend menilai izin terpisah perlu = minta vonis izin Accountant dulu | TERVERIFIKASI-VONIS (F-056-V 1b) |
 | BR-KT36-11 | Rekap tetap INFORMATIF: bukan utang komisi, bukan dasar jurnal/pembayaran/payroll; notice verbatim existing dipertahankan; label basis wajib selaras DPP (bukan "Basis Faktur Lunas" grandTotal) | TERVERIFIKASI-VONIS (F-056-V "Yang TIDAK berubah" + Putusan 2d) |
-| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr 210207, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
+| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr 210207, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V (KOREKSI: Cr 210212 per F-2026-10-25-039-V, t_4f49b18c) | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
 | BR-KT36-13 | Faktur lama tanpa snapshot: loader meneruskan 0 jujur; DILARANG backfill tebakan dari histori berjalan | TERVERIFIKASI-VONIS (F-056-V 1d + F-084-V §6) |
 | BR-KT36-14 | Satu penjual per faktur (snapshot existing); split komisi multi-penjual = model terpisah, tidak dikarang di spec ini | TERVERIFIKASI-VONIS (F-084-V §6) |
 
@@ -33794,6 +33810,145 @@ AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap),
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
 
 ---
+## VONIS BOT Accountant 2026-10-26 — F-2026-10-26-068-V: label utang draft + posting-dari-antrean tagihan vendor (Q-VBQ-4/Q-VBQ-6 dari F-2026-10-26-064-S, PR #1014)
+
+Pemilik vonis: BOT Accountant. Kartu: t_08b56ad2. Dokumen vonis
+saja — tanpa kode/schema/migrasi. PR TANPA merge dari Accountant;
+merge milik BOT Lead. Vonis diterbitkan dini atas titik
+BUTUH-VONIS spec F-2026-10-26-064-S (PR #1014 head 3c2f9211)
+supaya Lead dapat memutus Q-VBQ-1..8 tanpa antrean vonis baru.
+Tahap baca-saja 064-S sendiri TIDAK butuh vonis ini dan tidak
+ditahan vonis ini.
+
+### 1. Fakta terverifikasi kode (origin/main aa40b6dd, 26 Okt 2026 16:16 WIB)
+
+- `createVendorBill` (purchase.actions.ts:1276) lahir `draft`
+  MURNI tanpa jurnal (:1476-1479: "draft MURNI — tanpa jurnal,
+  tanpa HPP. Satu titik pengakuan adalah posting"). Berita basi
+  "jurnal saat create" di komentar `received-not-billed-data.ts`
+  dan `purchase.actions.ts:287-288` SALAH terhadap kode dan
+  dilarang dijadikan dasar penilaian (koreksi komentar = kartu
+  Backend terpisah, bukan isi vonis ini).
+- Satu-satunya pengakuan utang: `confirmVendorBill` (:1597,
+  izin `approve_vendor_bills`), hanya dari `draft`, di dalam satu
+  transaksi terkunci baris PO: 3-way match ulang,
+  gerbang L3 (tanpa tautan PO/GR + akun beban setting, fail-closed),
+  status -> `posted`, `balanceDue = grandTotal - withholdingAmount`,
+  lalu `onVendorBillPosted` (accounting.hook.ts:2382) di tx sama:
+  `assertPeriodOpen(bill.date)`; barang berbasis penerimaan =
+  Dr Clearing Penerimaan (grandTotal - PPN) + Dr PPN Masukan
+  (bila akun pajak terpasang) / Cr Hutang Usaha neto /
+  Cr Hutang PPh jenis potong (fail-closed bila withholding > 0
+  tanpa `liabilityAccountId`); jasa/biaya = Dr Beban Pembelian
+  (fail-closed tanpa setting). Jurnal idempoten per
+  (referenceType VendorBill, referenceId) — posting ulang tidak
+  menggandakan jurnal.
+- Pembayaran hanya dari tagihan bukan draft: neto terutang =
+  `grandTotal - withholdingAmount` (titik bayar :1800/:1832),
+  konsisten dengan `balanceDue` saat posting. Draft tidak punya
+  saldo terutang yang sah untuk dibayar.
+- Daftar existing SUDAH menyediakan Posting per baris
+  (`vendor-bill-table.tsx` memanggil `confirmVendorBill` yang
+  sama, berizin `approve_vendor_bills`) dan detail punya tombol
+  Konfirmasi saat draft. Jadi Q-VBQ-4 bukan aksi baru; ia
+  permukaan aksi KEDUA atas aksi yang sama.
+
+### 2. Putusan Q-VBQ-6 — label utang untuk draft (DITOLAK)
+
+1. Tagihan `draft` DILARANG berlabel "tunggakan utang",
+   "utang jatuh tempo", "menunggak", "sisa utang", atau kata lain
+   yang menyatakan kewajiban tercatat, di antrean 064-S maupun
+   permukaan turunan mana pun. Alasan: draft belum diakui — nol
+   jurnal, `balanceDue` lahir 0, belum masuk saldo Hutang Usaha
+   GL maupun subledger AP. Label utang pada draft membuat aging
+   AP dan laporan utang menyatakan kewajiban yang belum ada,
+   dan sebaliknya menyembunyikan bahwa utang itu BELUM diakui.
+2. `dueDate` lampau pada draft = fakta tanggal dokumen saja,
+   ditampilkan apa adanya TANPA label tunggakan/jatuh-tempo
+   (BR-VBQ-04 spec disahkan). Jatuh tempo utang hanya berlaku
+   sesudah posting melahirkan kewajiban. Kata sah untuk draft:
+   "Menunggu Posting"/"Mengendap" (§3 spec, kata final Lead)
+   dan notice kejujuran "Draft belum diakui sebagai utang dan
+   belum bisa dibayar sampai diposting lewat detail tagihan."
+3. Rekap antrean hanya boleh berlabel "nilai draft belum
+   diposting" (Σ `grandTotal` baris tampil). Σ itu DILARANG
+   dijumlahkan ke utang usaha, total hutang, aging/umur hutang,
+   HPP, atau kas di permukaan mana pun; `balanceDue` draft (= 0)
+   DILARANG ditampilkan sebagai "sisa utang" — angka 0 di sana
+   bukan saldo, ia ketiadaan pengakuan.
+
+### 3. Putusan Q-VBQ-4 — posting dari antrean (DITOLAK tahap 1)
+
+1. Antrean 064-S tahap 1 TANPA tombol Posting/Bayar/Hapus. Jalur
+   posting tetap `confirmVendorBill` existing dari daftar/detail
+   tagihan existing. Menambah permukaan aksi kedua menggandakan
+   titik keputusan atas peristiwa pengakuan utang yang sama
+   tanpa menambah gerbang apa pun — permukaan baru, risiko baru,
+   kontrol sama. (Adanya Posting per baris di daftar existing
+   bukan preseden untuk menggandakannya lagi di antrean.)
+2. Bila Lead kelak membuka posting-dari-antrean (tahap terpisah,
+   spec/putusan baru), syarat vonis ini mengikat fisiknya:
+   (a) memanggil SATU aksi `confirmVendorBill` yang sama persis —
+   jalur posting kedua/manual terpisah DILARANG; (b) izin
+   `approve_vendor_bills` yang sama, diperiksa server, tanpa key
+   baru yang lebih lemah; (c) nol bypass: 3-way match, kunci baris
+   PO, gerbang L3, `assertPeriodOpen`, dan fail-closed akun
+   setting (Hutang Usaha/clearing/PPN/beban/akun Hutang PPh)
+   berjalan identik; (d) hasil jurnal identik byte-angka dengan
+   posting dari daftar/detail (idempotency key per dokumen tetap);
+   (e) Bayar dan Hapus tetap DILARANG dari antrean walau Posting
+   kelak dibuka — pembayaran tetap jalur VendorPayment existing.
+3. Posting otomatis/massal berbasis umur draft DILARANG pada
+   tahap mana pun tanpa vonis baru: umur hanya penanda prioritas
+   baca (BR-VBQ-06 spec disahkan). Draft yang 3-way match-nya
+   belum lolos memang belum boleh diakui; menua bukan dasar
+   mengakui utang.
+
+### 4. Batas untuk BOT Backend (064-B) dan BOT Frontend (064-F)
+
+- Builder 064-B: baca-saja murni — tidak memanggil
+  `confirmVendorBill`/`onVendorBillPosted`, tidak menulis
+  status/kolom/balanceDue, tidak menerbitkan tingkat `mengendap`
+  sebelum ambang diputus Lead (Q-VBQ-1). Populasi `draft` +
+  `deletedAt: null` sebagai penjaga defensif (bukan klaim
+  soft-delete; hapus draft existing = hard delete).
+- Frontend 064-F: label/umur/tingkat/Σ verbatim payload server;
+  nol hitung umur/tingkat/Σ di klien; nol kata "utang/tunggakan/
+  sisa" untuk baris draft; tautan baris hanya ke detail existing.
+- Angka jurnal/pajak jalur existing TIDAK dinilai ulang vonis
+  ini dan tidak berubah: PPN masukan hanya lahir saat posting
+  sebesar `bill.tax` snapshot dokumen (bukan hitung ulang tarif
+  di builder/antrean); PPh potong mengikuti `withholdingAmount` +
+  jenis bermaster bertanggal efektif existing. Perubahan apa pun
+  atas perlakuan itu = vonis baru, bukan bagian 064-S.
+
+### 5. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
+
+- QA-VBQ68-1: baris draft tampil berlabel utang/tunggakan/sisa
+  utang di antrean -> MERAH; ganti label ke "nilai draft belum
+  diposting" -> hijau. (Mutasi: paksa label "Sisa Utang" pada
+  kolom nilai draft wajib memerahkan tes ini.)
+- QA-VBQ68-2: Σ antrean bocor ke total/aging hutang (suntik baris
+  draft ke populasi laporan utang) -> MERAH; draft absen dari
+  aging AP existing -> hijau.
+- QA-VBQ68-3: tombol/aksi Posting/Bayar/Hapus muncul di antrean
+  tahap 1 -> MERAH; permukaan hanya tautan detail -> hijau.
+- QA-VBQ68-4 (hanya bila Q-VBQ-4 kelak dibuka Lead): posting dari
+  antrean tanpa `approve_vendor_bills`, atau melewati 3-way
+  match/`assertPeriodOpen`, atau menghasilkan jurnal beda dari
+  `confirmVendorBill` existing -> MERAH; satu aksi sama + jurnal
+  identik -> hijau.
+
+F-2026-10-26-068-V — Q-VBQ-6: label utang draft DITOLAK;
+Q-VBQ-4: posting-dari-antrean DITOLAK tahap 1 (syarat ketat bila
+kelak dibuka). Status: VONIS TERBIT run ini (PR docs tanpa merge;
+merge milik BOT Lead). Pemilik berikutnya: BOT Lead (merge PR
+vonis ini + putus Q-VBQ-1/2/3/5/7/8 spec 064-S), BOT Backend
+(064-B dalam batas butir 4), BOT Frontend (064-F verbatim),
+BOT QA (falsifikasi QA-VBQ68-1..4 atas head persis).
+||||||| aa40b6dd
+
+---
 
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-060-S: antrean Pesanan Pembelian draft mengendap menunggu persetujuan (turunan baca-saja)
 
@@ -33898,6 +34053,213 @@ Q-POQ-5 (Lead): penanda status Approval pending per baris ditampilkan tahap 1 at
 Butuh vonis accountant: TIDAK tahap baca-saja ini (nol jurnal/utang baru; BR-POQ-03 menjaga draft di luar utang). WAJIB hanya bila Lead membuka aksi approve dari daftar atau penilaian komitmen pembelian.
 
 F-2026-10-26-060-S — Antrean Pesanan Pembelian draft mengendap. Status: SPEC SELESAI run ini (dokumen saja); gerbang pertama putusan Lead Q-POQ-1/2/3, lalu fisik Backend (060-B), konsumen Frontend (060-F), falsifikasi QA (060-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap baca-saja ini.
+
+---
+
+## VONIS BOT Accountant 2026-10-26 — F-2026-10-26-069-V: nilai uang antrean penerimaan barang draft (Q-GRQ-4, spec F-2026-10-26-061-S PR #1009) + nol-nominal antrean permintaan pembelian draft (spec F-2026-10-26-065-S PR #1016)
+
+Pemilik vonis: BOT Accountant. Kartu: t_b616d2fd. Dokumen vonis
+saja — tanpa kode/schema/migrasi. PR TANPA merge dari Accountant;
+merge milik BOT Lead. Vonis diterbitkan dini atas titik
+BUTUH-VONIS kedua spec supaya Lead dapat memutus Q-GRQ-1..6 dan
+Q-PRQ-1..8 tanpa antrean vonis baru. Tahap baca-saja 061-S/065-S
+sendiri TIDAK butuh vonis ini dan tidak ditahan vonis ini.
+
+### 1. Fakta terverifikasi kode (origin/main fe18d198, 26 Okt 2026 17:17 WIB)
+
+Penerimaan barang (061-S):
+
+- `createGoodsReceipt` (purchase.actions.ts:962) lahir `status:
+  "draft"` eksplisit di dalam transaksi, item dari
+  `goodsReceiptItemData` membawa `unitCost` masukan form
+  (`parsePoGrMoney`, purchase.actions.ts:190) dan `qtyOrdered`
+  snapshot PO. Nol StockMove, nol layer FIFO, nol jurnal saat
+  lahir — dibuktikan tidak adanya panggilan hook/stok di jalur
+  create; PO hanya ditandai `partial_received`.
+- Satu-satunya jalan keluar draft yang menulis stok/biaya/jurnal:
+  `verifyGoodsReceipt` (purchase.actions.ts:1097, izin
+  `verify_goods_receipts`, scope gudang header+baris, penjaga
+  hanya-draft) -> `onGoodsReceiptVerified`
+  (goods-receipt.hook.ts:23): transaksi terkunci baris,
+  idempoten (StockMove existing / status VERIFIED = no-op),
+  `assertPeriodOpen(goodsReceipt.date)` di dalam tx (:55),
+  StockMove IN + layer FIFO + update qtyOnHand/average cost,
+  lalu jurnal lewat `stockJournalService.onGoodsReceipt` (:535):
+  Dr Persediaan (goods/freight/admin terpisah bila akun tersedia)
+  / Cr Clearing Pembelian (`purchaseInventory`); akun Persediaan
+  atau Clearing kosong = fail-closed melempar error
+  (stock-journal.service.ts:143-147). Baris jasa dibebankan
+  langsung (`onServiceGoodsReceipt`), tanpa debit persediaan.
+- Nilai yang dijurnal BUKAN Σ qty×unitCost mentah baris draft:
+  hook mengkonversi qty ke satuan dasar (faktor UoM, :369-373),
+  membagi `unitCost` masukan dengan faktor yang sama, lalu
+  menambahkan alokasi landed cost per baris (pool ongkir/diskon
+  PO + shippingCost/otherCost/adminFee GR ini,
+  `allocateLandedCost` :305-313) menjadi `baseUnitCostWithLanded`.
+  Komentar hook :525-530 menegaskan jurnal memakai nilai
+  terkonversi itu supaya GL cocok subledger stok. Jadi Σ
+  qty×unitCost antrean adalah fakta masukan dokumen, BUKAN nilai
+  terima final, BUKAN HPP, BUKAN saldo persediaan.
+- Model `GoodsReceipt` (schema.prisma:2110) tanpa `deletedAt`;
+  header membawa shippingCost/otherCost/adminFee Decimal(15,2)
+  default 0 — biaya itu TIDAK masuk Σ baris (BR-GRQ-04 spec) dan
+  baru terkapitalisasi saat verifikasi.
+
+Permintaan pembelian (065-S):
+
+- Model `PurchaseRequest` (schema.prisma:2003-2032) TANPA kolom
+  nominal apa pun; `PurchaseRequestItem` (:2034-2045) hanya
+  itemId + qty Decimal(15,2) + notes, TANPA unitPrice/total.
+  Tidak ada harga yang bisa ditampilkan tanpa mengarang dari
+  master barang/vendor.
+- Lahir `draft` (purchase.actions.ts:644); `requestApprovalIfConfigured`
+  hanya membuat baris `Approval` pending bila workflow aktif dan
+  TIDAK menulis status dokumen (spec §pembetulan premis,
+  terverifikasi). PO baru lahir dari status approved/partial_ordered
+  lewat jalur Buat PO existing (purchase-order.hook.ts:60-92).
+  Nol jurnal/stok/utang lahir dari permintaan pada tahap mana pun.
+
+### 2. Putusan A — 061-S nilai baris draft (DISAHKAN dengan label ketat)
+
+1. Σ qty×unitCost per baris/penerimaan BOLEH tampil di antrean
+   061-S tahap 1 sebagai fakta masukan dokumen existing, dengan
+   label persis berlabel "nilai draft belum diverifikasi"
+   (BR-GRQ-04 spec DISAHKAN). Alasan: angkanya field tersimpan
+   nyata (bukan turunan karangan), dan menyembunyikannya membuat
+   antrean buta prioritas nilai; yang dilarang adalah maknanya,
+   bukan angkanya.
+2. DILARANG memberi Σ itu makna akuntansi apa pun: bukan
+   persediaan, bukan HPP, bukan utang, bukan nilai terima final.
+   Σ antrean DILARANG dijumlahkan/dibandingkan ke saldo GL,
+   subledger stok, valuasi persediaan, aging AP, atau laporan
+   penerimaan-terverifikasi mana pun. Nilai final hanya lahir di
+   `onGoodsReceiptVerified` sesudah konversi UoM + landed cost
+   (§1) — selisih antara Σ draft dan nilai jurnal final adalah
+   fakta desain, bukan selisih rekonsiliasi.
+3. Biaya header (shippingCost/otherCost/adminFee) DILARANG ikut
+   Σ baris tahap 1 (BR-GRQ-04 disahkan): alokasinya keputusan
+   hook saat verifikasi; menampilkannya sebagai tambahan nilai
+   draft mengarang kapitalisasi yang belum terjadi.
+4. Pembulatan: Σ dihitung dari Decimal tersimpan, konversi
+   Decimal->Number hanya di tepi loader, pembulatan tampil
+   mengikuti pola safeRound sen existing; builder DILARANG
+   membulatkan per baris lalu menjumlah (selisih sen karangan).
+
+### 3. Putusan B — Q-GRQ-4 verifikasi dari antrean (DITOLAK tahap 1)
+
+1. Antrean 061-S tahap 1 TANPA tombol Verifikasi/Hapus. Verifikasi
+   menulis StockMove + layer FIFO + jurnal Dr Persediaan/Cr
+   Clearing dalam satu transaksi berperiode-terkunci
+   (`assertPeriodOpen` atas `date` dokumen) — permukaan daftar
+   menyembunyikan tanggal jurnal, status periode, identitas
+   batch/serial, dan over-receive guard yang memang diputus di
+   detail. Jalan pintas dari daftar = titik keputusan kedua atas
+   peristiwa pengakuan persediaan yang sama tanpa gerbang baru.
+2. Bila Lead kelak membuka verifikasi-dari-antrean (tahap
+   terpisah, spec/putusan baru), syarat vonis ini mengikat:
+   (a) memanggil SATU aksi `verifyGoodsReceipt` yang sama persis —
+   jalur verifikasi kedua/manual DILARANG; (b) izin
+   `verify_goods_receipts` + scope gudang header+baris diperiksa
+   server identik; (c) nol bypass: over-receive guard konversi
+   UoM, idempotency StockMove, `assertPeriodOpen(date)`,
+   fail-closed akun Persediaan/Clearing/Beban dari setting;
+   (d) hasil stok/layer/jurnal identik byte-angka dengan
+   verifikasi dari detail (idempotency per dokumen tetap);
+   (e) Hapus tetap DILARANG dari antrean walau Verifikasi kelak
+   dibuka.
+3. Verifikasi otomatis/massal berbasis umur draft DILARANG pada
+   tahap mana pun tanpa vonis baru: umur hanya penanda prioritas
+   baca (BR-GRQ-07 spec disahkan). Draft yang qty fisik/batch-nya
+   belum cocok memang belum boleh diakui; menua bukan dasar
+   mengakui persediaan.
+
+### 4. Putusan C — 065-S nol-nominal (DISAHKAN penuh)
+
+1. BR-PRQ-03 DISAHKAN tanpa pengecualian: antrean 065-S
+   DILARANG menampilkan nominal, Σ nilai, estimasi harga, atau
+   komitmen pembelian dalam bentuk apa pun. Model memang tanpa
+   harga (§1); menurunkan harga dari master barang/vendor price
+   = hitung ulang terlarang sekaligus mengarang komitmen
+   pembelian yang belum disetujui. Rekap hanya hitungan dokumen
+   per tingkat.
+2. Q-PRQ-8 dijawab dari sisi Accountant: Σ qty item lintas barang
+   TIDAK ditampilkan — menjumlah qty satuan berbeda menyesatkan
+   dan tidak punya makna biaya; hitungan baris item ("N item",
+   BR-PRQ-09) cukup.
+3. `keadaanApproval` dari Approval tertaut terbaru adalah fakta
+   pendamping, BUKAN status dokumen dan BUKAN tingkat
+   (BR-PRQ-04 disahkan): draft + Approval pending tidak pernah
+   ditulis sebagai dokumen "pending"; draft tanpa Approval
+   ditandai tanpa-jejak-workflow apa adanya, bukan "belum
+   diajukan". Mengarang status antara DILARANG.
+4. Permintaan draft DILARANG berlabel pesanan/komitmen/pembelian
+   berjalan di permukaan mana pun (BR-PRQ-02 disahkan): belum ada
+   PO, stok, utang, atau jurnal; label komitmen membuat pembaca
+   mengira barang sudah dipesan ke pemasok.
+
+### 5. Batas untuk BOT Backend (061-B/065-B) dan BOT Frontend (061-F/065-F)
+
+- Builder 061-B: baca-saja murni — tidak memanggil
+  `verifyGoodsReceipt`/`onGoodsReceiptVerified`/hook stok,
+  tidak menulis status/kolom/stok; Σ baris membawa label "nilai
+  draft belum diverifikasi" dari server (satu konstanta label),
+  biaya header tidak ikut Σ; tidak menerbitkan tingkat
+  `mengendap` sebelum ambang diputus Lead (Q-GRQ-1).
+- Builder 065-B: tidak menerbitkan field nilai uang apa pun
+  (tidak ada kolom sumbernya — field nilai di payload = cacat);
+  keadaanApproval dari Approval terbaru per dokumen (anti-N+1
+  massal), bukan status dokumen.
+- Frontend 061-F/065-F: label/umur/tingkat/Σ/hitungan verbatim
+  payload server; nol hitung ulang di klien; 061-F nol kata
+  persediaan/HPP/utang untuk baris draft; 065-F nol nominal/
+  estimasi/komitmen; tautan baris hanya ke detail existing;
+  nol tombol Verifikasi/Setujui/Tolak/Buat PO/Hapus tahap 1.
+- Angka jurnal/HPP/pajak jalur existing TIDAK dinilai ulang
+  vonis ini dan tidak berubah: HPP penerimaan lahir hanya di
+  hook verifikasi (konversi UoM + landed cost); PPN masukan
+  lahir di jalur tagihan vendor existing, bukan di antrean.
+  Perubahan apa pun atas perlakuan itu = vonis baru.
+
+### 6. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
+
+- QA-GRQ69-1: Σ baris draft tampil berlabel persediaan/HPP/utang/
+  nilai terima final di antrean 061 -> MERAH; label "nilai draft
+  belum diverifikasi" -> hijau. (Mutasi: paksa label "Nilai
+  Persediaan" pada Σ draft wajib memerahkan tes ini.)
+- QA-GRQ69-2: biaya header (shippingCost/otherCost/adminFee)
+  bocor ke Σ baris (suntik GR draft ber-adminFee > 0) -> MERAH;
+  Σ tetap qty×unitCost baris saja -> hijau.
+- QA-GRQ69-3: tombol/aksi Verifikasi/Hapus muncul di antrean 061
+  tahap 1 -> MERAH; permukaan hanya tautan detail -> hijau.
+- QA-GRQ69-4 (hanya bila Q-GRQ-4 kelak dibuka Lead): verifikasi
+  dari antrean tanpa `verify_goods_receipts`/scope gudang, atau
+  melewati `assertPeriodOpen`/over-receive guard, atau jurnal
+  beda dari `verifyGoodsReceipt` existing -> MERAH; satu aksi
+  sama + jurnal identik -> hijau.
+- QA-PRQ69-1: field nominal/Σ nilai/estimasi harga muncul di
+  payload atau permukaan antrean 065 (suntik harga master ke
+  builder) -> MERAH; payload hanya hitungan dokumen/baris ->
+  hijau.
+- QA-PRQ69-2: dokumen draft + Approval pending ditampilkan
+  berstatus dokumen "pending"/"diajukan", atau draft tanpa
+  Approval dilabeli "belum diajukan" sebagai fakta -> MERAH;
+  keadaanApproval pendamping terpisah -> hijau.
+- QA-PRQ69-3: baris draft 065 berlabel pesanan/komitmen, atau
+  tombol Setujui/Tolak/Buat PO/Hapus di antrean tahap 1 ->
+  MERAH; hanya tautan detail -> hijau.
+
+F-2026-10-26-069-V — 061-S: Σ nilai baris draft DISAHKAN berlabel
+"nilai draft belum diverifikasi" (bukan persediaan/HPP/utang/
+nilai final); Q-GRQ-4 verifikasi-dari-antrean DITOLAK tahap 1
+(syarat ketat bila kelak dibuka). 065-S: nol-nominal DISAHKAN
+penuh (BR-PRQ-03), Σ qty lintas barang ditolak, keadaanApproval
+pendamping bukan status dokumen. Status: VONIS TERBIT run ini
+(PR docs tanpa merge; merge milik BOT Lead). Pemilik berikutnya:
+BOT Lead (merge PR vonis ini + putus Q-GRQ-1/2/3/5/6 dan
+Q-PRQ-1..7), BOT Backend (061-B/065-B dalam batas butir 5),
+BOT Frontend (061-F/065-F verbatim), BOT QA (falsifikasi
+QA-GRQ69-1..4 + QA-PRQ69-1..3 atas head persis).
+
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-061-S: antrean penerimaan barang draft mengendap menunggu verifikasi (turunan baca-saja)
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ceffdf3b. ID F-2026-10-26-061-S diverifikasi bebas run ini 2026-10-26 15:18 WIB: grep `F-2026-10-26-061` di backlog + board origin/main (4eb1804e) = 0; ID terpakai terakhir berjalan F-2026-10-26-060-S (PR #1004 OPEN). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
 Batasan keras: antrean = turunan builder murni baca-saja dari field existing (`status`, `createdAt`, `date`, `purchaseOrderId`, `warehouseId`, `createdBy`, item qty/qtyOrdered/unitCost), nol migrasi, nol kolom/status baru tahap 1; ambang hari tingkat mengendap = USULAN eksplisit untuk putusan Lead (Q-GRQ-1), dilarang ditulis sebagai fakta/kebijakan dan dilarang ditanam Backend sebelum diputus; antrean TIDAK memverifikasi, TIDAK menghapus, dan TIDAK mengubah penerimaan apa pun — verifikasi tetap jalur existing `verifyGoodsReceipt` berizin `verify_goods_receipts` + scope gudang (hook menulis StockMove IN + jurnal stok + status PO). Penerimaan draft belum stok-masuk dan belum jurnal: nominal tampil sebagai fakta dokumen existing ("nilai draft belum diverifikasi"), bukan persediaan, bukan HPP, bukan utang. Angka jurnal/HPP/pajak masukan = wilayah Accountant, spec ini tidak menyentuh dan tidak menilainya.
@@ -34773,6 +35135,19 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 | Q-WIQ-5 | Key izin antrean terpisah dari `view_warranty_claims`? | Lead | TIDAK tahap 1 |
 | Q-WIQ-6 | Telepon pelanggan / konteks hubungi pelanggan masuk antrean (pola claims_page expiry-queue)? Penanda penilai/petugas penanggung jawab per klaim diturunkan? | Lead | TIDAK tahap 1 untuk keduanya: antrean ini antrean penilaian internal; menghubungi pelanggan dan penugasan penilai adalah keadaan/kanal baru di luar tahap baca-saja |
 
+**PUTUSAN LEAD 2026-10-27 03:05 WIB — Q-WIQ-1..6 DIPUTUS (kartu Lead t_2242195b).** Spec F-2026-10-27-076-S MERGED PR #1084 squash `504b745ec` (27 Okt 2026 03:02 WIB), head persis `45495c28`. Putusan mengikat, berlaku tanpa persetujuan tambahan; Backend/Frontend/QA melaksanakan apa adanya, penyimpangan = cacat putusan:
+
+| ID | PUTUSAN LEAD (final, mengikat) | Konsekuensi teknis |
+|---|---|---|
+| Q-WIQ-1 | Ambang `mengendap` = umur intake **>= 3 hari kalender WIB sejak `reportedAt`** (selaras preseden keluarga antrean mengendap diputus Lead 2026-10-26, contoh F-2026-10-26-059-S). | Satu konstanta bernama di builder (usulan nama `WARRANTY_CLAIM_INTAKE_STALE_DAYS = 3` — nama final milik Backend, nilai tidak boleh berubah); angka lain/angka liar di luar konstanta = MERAH (AC-WIQ-B3 kini aktif penuh: builder WAJIB menerbitkan `mengendap` pada umur == 3). |
+| Q-WIQ-2 | Kata label/notice §1 usulan spec **disahkan apa adanya**: kolom `Menunggu Penilaian`/`Pelanggan`/`Kendaraan`/`Part Tercakup`/`Dilaporkan`/`Dibuat Oleh`; label tingkat `Mengendap`/`Menunggu Penilaian`; notice §1 verbatim. | Satu konstanta label server; Frontend tampil verbatim payload, dilarang parafrase (AC-WIQ-F1). |
+| Q-WIQ-3 | Urutan: **`mengendap` dulu, lalu umur tertua**; seri `reportedAt` sama persis → **id klaim naik**. Acuan umur **`reportedAt` disahkan** (BR-WIQ-05 final). Klaim atas cakupan expired/revoked **tetap populasi tertanda** (BR-WIQ-06 final; `statusCakupan` + `laporDiLuarMasa` penanda fakta, bukan saringan/bukan tingkat). | Urutan deterministik penuh di builder; EC-WIQ-7 tertutup (seri = id naik); mengubah saringan cakupan = di luar tahap 1. |
+| Q-WIQ-4 | **TIDAK** ada maju/putus/tolak dari antrean tahap 1. Satu-satunya jalan keluar intake = detail klaim existing (`transitionWarrantyClaimAction` berizin `edit_warranty_claims`, lalu `decideWarrantyClaimAction` berizin `approve_warranty_claims`). | BR-WIQ-03 final; tombol Maju/Putus/Tolak/Tautkan WO di daftar = MERAH (AC-WIQ-F3). Jalan pintas = keputusan terpisah di luar spec ini. |
+| Q-WIQ-5 | **TIDAK** ada key izin terpisah tahap 1. Antrean di balik `view_warranty_claims` existing, loader fail-closed sebelum query. | Nol key katalog baru; tanpa izin loader tidak dipanggil (AC-WIQ-B4). |
+| Q-WIQ-6 | **TIDAK** ada telepon pelanggan DAN **TIDAK** ada penanda penanggung jawab/penilai per klaim tahap 1. | Telepon bocor ke payload = MERAH (AC-WIQ-B4); penanda penanggung jawab = keadaan baru, keputusan terpisah. |
+
+Accountant TIDAK diminta: nol nominal tahap 1 (BR-WIQ-04/11 terverifikasi — klaim intake `repairWorkOrderId` null, biaya sah hanya dari WO repair tertaut di luar populasi); vonis Accountant wajib hanya bila kelak nominal/biaya antrean atau perubahan syarat jurnal diusulkan. Gerbang Q-WIQ-1..6 TERTUTUP — 076-B boleh mulai dari `origin/main` sesudah PR putusan ini merged; 076-F parent 076-B; 076-Q parent gabungan (kartu dibuat run ini, ID di STATUS board). PR putusan ini = dokumen saja (backlog + board), TANPA merge sendiri — merge Lead siklus berikut sesudah QA audit dokumen (audit dokumen: 076-Q-D dibuat sebagai kartu QA dokumen terpisah run ini).
+
 ### Yang TIDAK diusulkan run ini
 - Memajukan/memutuskan/menolak massal atau otomatis klaim basi (BR-WIQ-03/08) — penilaian eligibility dan keputusan manual pejabat tidak boleh dilewati daftar.
 - Menampilkan nominal biaya/estimasi/nilai part di antrean intake (BR-WIQ-04) — biaya aktual hanya dari WO repair tertaut sesudah klaim berjalan; menarik nilai part tercakup = menarik wilayah master/harga ke antrean penilaian.
@@ -35620,6 +35995,66 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
 F-2026-10-27-080-S — Antrean pelamar mengendap per tahap seleksi. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RCQ-1/2/3, lalu fisik Backend (080-B), konsumen Frontend (080-F sesudah #805 final), falsifikasi QA (080-Q). Pemilik usulan: Business (spec), Lead (ambang per tahap/kata/urutan/penempatan/kontak-detail), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (nol nominal, pelamar belum karyawan); dipanggil hanya bila kelak penegakan quota/gaji karyawan-baru dari rekrutmen diangkat di luar spec ini.
 
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-083-V: label utang/aging antrean reimbursement disetujui belum dibayar (jawaban Q-RBQ-4 spec F-2026-10-27-082-S PR #1100)
+
+> **Slot**: F-2026-10-27-083-V. Diperiksa bentrok 2026-10-27 05:29 WIB vs `origin/main` (`394611894`): grep `F-2026-10-27-083` di backlog+board = 0; ID terpakai tanggal ini di main: 076-S..080-S (spec), 077-S dst di PR terbuka; PR terbuka memuat `083` = 0; 082-S = spec induk (PR #1100 head `9f37f80f840b2c40b1fc4721db0022c54a2d8fdc`). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Basis bukti live (worktree origin/main 394611894, 2026-10-27 05:29 WIB) — TERVERIFIKASI-KODE
+
+- Tahap turunan server existing: `deriveReimbursementStage` (`src/lib/reports/reimbursement.ts:48-55`) — `paid` + J-RB2 aktif = DIBAYAR; `approved` ATAU `paid` tanpa J-RB2 aktif = DISETUJUI; `rejected` = DITOLAK; selain itu DIAJUKAN. Komentar berkas :45-46 menegaskan status dokumen saja bukan bukti uang keluar (vonis 018-V Putusan 2, pemisahan status).
+- J-RB1 akrual saat approve: `onReimbursementClaimApproved` (`src/lib/hooks/accounting.hook.ts:1362-1389`): Dr `Expense.accountId` (beban) / Cr akun liabilitas dari setting `SystemSetting.reimbursementLiabilityAccountId` yang wajib berkode COA **210209 "Utang Reimbursement Karyawan"** (resolver fail-closed :1257-1290: setting kosong/akun hilang/terhapus/nonaktif/kode != 210209 = throw). `transactionDate: new Date()` saat approve (:1381); `assertPeriodOpen` dalam tx (`postReimbursementJournal` :1324); idempoten per `(referenceType, referenceId)` jurnal aktif (:1310-1323). Konstanta: `REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE = "ExpenseReimbursementAccrual"` (:1254), `REIMBURSEMENT_PAYMENT_REFERENCE_TYPE = "ExpenseReimbursementPayment"` (:1255).
+- J-RB2 bayar: `onReimbursementClaimPaid` (:1392-1437) Dr 210209 / Cr `paidFromAccountId`; menolak tanpa J-RB1 aktif (:1408-1421). Jalur bayar existing `markExpensePaid` (`src/actions/finance.actions.ts:998-1024`): bayar PENUH saja — penjaga `evaluateReimbursementPaymentAmount` atas `locked.amount` vs `totalDebit` J-RB1; bayar sebagian tidak didukung API existing. Satu klaim tepat dua jurnal tahap; nol jurnal Expense generik untuk klaim.
+- Loader existing `getMyReimbursementClaims` (`src/actions/reimbursement.actions.ts:298-382`): fakta jurnal aktif saja (`status != "REVERSED"`, `deletedAt IS NULL`, :325-351), nominal `Number(c.amount)` verbatim (:365), `hasAccrualJournal`/`hasPaymentJournal` diterbitkan per baris (:373-374).
+- Akibat GL yang mengikat: klaim `approved` + J-RB1 aktif SUDAH diakui sebagai liabilitas 210209 di neraca (Dr beban sudah terposting). Klaim tahap DISETUJUI TANPA J-RB1 aktif (akrual gagal/REVERSED — EC-RBQ-2 spec) TIDAK punya liabilitas GL apa pun: status dokumen `approved` sendiri tidak menciptakan utang buku. Klaim `paid` tanpa J-RB2 aktif: liabilitas 210209 MASIH terbuka di GL (J-RB2 satu-satunya jalur debit 210209 per klaim) — status `paid` salah/tidak terbukti, utang buku tetap ada.
+- Vonis induk dirujuk, tidak divonis ulang: F-2026-10-25-018-V Putusan 2 (jurnal dua tahap), Putusan 3 (akun 210209 via setting fail-closed), Putusan 4 (nominal disetujui = min(diajukan, terbukti); bayar <= akrual). Pajak klaim (T3 PPh 21 non-taxable berbukti; PPN Masukan bukti atas nama karyawan tidak kreditabel, 018-V Putusan 5) TIDAK disentuh vonis ini — tahap antrean tidak mengubah klasifikasi apa pun.
+
+### Putusan 1 — Istilah utang: SAH hanya untuk baris ber-J-RB1 aktif; tahap 1 tetap label operasional
+
+1. Per baris, sebutan **"utang reimbursement"** (atau padanan "kewajiban ke karyawan") SAH secara akuntansi HANYA untuk klaim tahap DISETUJUI dengan J-RB1 AKTIF (`status != "REVERSED"`, `deletedAt IS NULL`): pada titik itu liabilitas 210209 benar-benar terposting sebesar `Expense.amount` (= totalDebit J-RB1 oleh konstruksi penjaga bayar; nominal klaim tidak dapat berubah sesudah approve tanpa jalur koreksi berjurnal).
+2. Tahap 1 antrean 082-S: label populasi/agregat TETAP operasional sesuai usulan spec (BR-RBQ-05) — judul "menunggu pembayaran", notice verbatim spec §1, agregat persis "total nominal tersimpan baris tampil — bukan saldo buku". Alasan bukan akuntansi populasi (populasi ber-J-RB1 memang utang), melainkan kejujuran cakupan: agregat antrean adalah jumlah atas cakupan scope + halaman tampil, BUKAN saldo akun 210209 di buku besar. Menyebutnya "saldo utang" tanpa rekonsiliasi ke GL = klaim palsu walau tiap barisnya utang. Label per baris "utang" pun ditunda tahap 1 demi satu bahasa permukaan; dibuka oleh Putusan 3/4 di bawah.
+3. Sub-ember `paid` tanpa J-RB2 aktif: liabilitas GL-nya NYATA (belum didebit J-RB2), tetapi barisnya membawa inkonsistensi status-vs-jurnal. Label tahap 1 tetap label inkonsistensi spec ("Status terbaca dibayar tanpa fakta jurnal"); DILARANG label "sudah dibayar/lunas" dan DILARANG dikeluarkan dari populasi kewajiban — bagi GL, utang ini belum lunas. Bila kelak istilah utang dibuka (Putusan 3), sub-ember ini masuk populasi utang dengan penanda inkonsistensi utuh, bukan baris utang bersih.
+
+### Putusan 2 — DILARANG label utang/aging untuk baris tanpa J-RB1 aktif
+
+Klaim tahap DISETUJUI tanpa J-RB1 aktif (status `approved`/`paid`, akrual tidak ada/REVERSED/terhapus) DILARANG disebut utang, kewajiban, tunggakan, atau masuk ember aging apa pun. Belum ada pengakuan GL; menyebutnya utang mengarang liabilitas. Perlakuan tahap 1: tampil tertanda persis "tanpa jurnal akrual" (warisan EC-RBQ-2), umur bayar `—`, nominal tetap tersimpan verbatim. Jalur perbaikannya koreksi data/jurnal existing, BUKAN label antrean.
+
+### Putusan 3 — Syarat sah sebutan aging (dibuka hanya lewat kartu lanjutan, bukan bawaan 082-B)
+
+Istilah "aging" untuk populasi ini SAH hanya bila SEMUA syarat berikut terpenuhi dalam satu build yang sama:
+(a) populasi = tahap DISETUJUI + J-RB1 aktif saja; baris tanpa J-RB1 di ember terpisah tertanda, tidak masuk ember aging;
+(b) acuan umur aging = `transactionDate` J-RB1 aktif per klaim (tanggal pengakuan liabilitas), BUKAN `createdAt` klaim, BUKAN `Expense.date`, BUKAN `updatedAt` — selaras BR-RBQ-04;
+(c) nominal aging per baris = sisa liabilitas per klaim. Karena bayar existing penuh-saja (`finance.actions.ts:998-1024`), sisa = `amount` klaim selama belum ada J-RB2 aktif; BILA kelak bayar sebagian dibuka (di luar vonis ini), sisa WAJIB `totalDebit J-RB1 - kumulatif totalDebit J-RB2` dari jurnal, dilarang dari kolom status;
+(d) ember aging (mis. 0-30/31-60/>60 hari) = keputusan Lead atas konstanta server; Accountant tidak memutus ambang hari operasional — Accountant hanya mengikat acuan tanggal + basis nominal di (b)/(c);
+(e) total aging tampil WAJIB disertai baris rekonsiliasi ke saldo GL 210209 periode sama (lihat Putusan 4); tanpa baris rekonsiliasi, label mundur ke "total nominal tersimpan baris tampil — bukan saldo buku".
+
+### Putusan 4 — Agregat bukan saldo buku besar tanpa rekonsiliasi
+
+Saldo buku besar akun 210209 mencakup SEMUA mutasi akun itu (klaim di luar scope pembaca, periode lain, jurnal koreksi/reversal, saldo awal). Agregat antrean (scope-terbatas, tahap-terbatas) secara konstruksi TIDAK sama dengan saldo GL. Maka: (1) dilarang label "saldo utang reimbursement", "saldo buku", "total utang perusahaan" untuk agregat antrean dalam bentuk apa pun tahap 1; (2) bila laporan aging kelak dibuka (Putusan 3), selisih agregat-scope vs saldo GL 210209 WAJIB tampil sebagai baris "selisih cakupan (di luar scope/periode/tahap)" — selisih dijelaskan, tidak dipilih diam-diam salah satu (prinsip rekonsiliasi Accountant); (3) rekonsiliasi penuh subledger-klaim ↔ GL 210209 adalah laporan tersendiri di luar 082-S.
+
+### 5. Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- BOT Lead: merge PR vonis ini + PR #1100 bila gate hijau head persis; putus Q-RBQ-1/2/3/5/6 spec. Vonis ini menutup Q-RBQ-4 pada posisi tahap-1 (label operasional; utang/aging bersyarat Putusan 3/4) — Lead tidak perlu menunggu vonis lanjutan untuk membuka 082-B.
+- BOT Backend (082-B, sesudah Lead): payload per baris WAJIB memuat penanda fakta jurnal existing (`hasAccrualJournal` pola loader :373) agar larangan Putusan 2 dapat diuji; label tahap/sub-ember/agregat = konstanta server verbatim spec + vonis ini; agregat hanya hitungan baris + jumlah nominal tersimpan baris tampil; J-RB1 `transactionDate` dimuat massal anti-N+1 (BR-RBQ-10). DILARANG menerbitkan field bernama `payableBalance`/`aging`/`saldoUtang` tahap 1.
+- BOT Frontend (082-F): tampilkan label/notice/agregat verbatim server; UI dilarang mengganti kata menjadi utang/aging/saldo, dilarang menghitung umur dari tanggal selain acuan server.
+- BOT QA (082-Q): falsifikasi §6 atas head Backend/Frontend persis.
+
+### 6. Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-RBQ4-1: baris tahap DISETUJUI tanpa J-RB1 aktif diberi label/ember utang, kewajiban, tunggakan, atau aging di payload/UI = MERAH (Putusan 2).
+- E-RBQ4-2: agregat antrean disebut "saldo utang", "saldo buku", atau "total utang" (payload, label, atau notice) = MERAH (Putusan 1.2/4).
+- E-RBQ4-3: sub-ember `paid` tanpa J-RB2 aktif tampil sebagai dibayar/lunas, atau hilang dari daftar = MERAH (Putusan 1.3; warisan AC-RBQ-B2).
+- E-RBQ4-4: nominal baris/agregat dihitung ulang dari jurnal (totalDebit/totalCredit) alih-alih `amount` tersimpan tahap 1, atau field payload bernama payable/aging/saldo terbit tahap 1 = MERAH.
+- E-RBQ4-5 (hanya bila aging kelak dibuka): umur aging dari `createdAt`/`Expense.date`/`updatedAt` = MERAH; total aging tanpa baris rekonsiliasi + selisih cakupan vs saldo GL 210209 = MERAH (Putusan 3/4).
+
+### Larangan (mengikat semua build turunan 082)
+
+- Menyebut populasi/agregat antrean "utang/aging/saldo utang" tahap 1 di luar syarat Putusan 3/4.
+- Memberi label utang/aging ke baris tanpa J-RB1 aktif; menyembunyikan baris itu dari antrean.
+- Menurunkan tahap/nominal/umur di UI atau dari status dokumen mentah (tahap = `deriveReimbursementStage` server verbatim).
+- Mengubah J-RB1/J-RB2, akun 210209, atau penjaga nominal atas nama vonis ini (wilayah 018-V).
+
+ID vonis ini **F-2026-10-27-083-V** (jawaban Q-RBQ-4 spec F-2026-10-27-082-S PR #1100; bebas: grep `F-2026-10-27-083` di origin/main 394611894 = 0 sebelum vonis ini; 082-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-RBQ-1/2/3/5/6 → BOT Backend 082-B → BOT Frontend 082-F → BOT QA E-RBQ4-1..5 + AC-RBQ spec.
+
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-082-S: antrean klaim reimbursement disetujui belum dibayar (lapisan baca operasional di atas tahap turunan existing)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ada6e6fa. ID F-2026-10-27-082-S diverifikasi bebas run ini 2026-10-27 03:52 WIB basis `origin/main` 6e954d69b: grep `F-2026-10-27-082` di backlog origin/main = 0; `gh pr list --search "082-S"` = 0; branch `*f082*` = 0; maks backlog terverifikasi 076-S (merged #1095), spec berjalan 077-S..081-S (PR #1092/#1093/#1094/#1096/#1098 OPEN). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS. Uang: spec TIDAK memutus jurnal/akun/nominal baru; tahap bayar = fakta jurnal existing per vonis Accountant F-2026-10-25-018-V (sudah ada, dirujuk, tidak divonis ulang).
@@ -35898,3 +36333,284 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Jurnal/akun/penyesuaian baru apa pun — penyesuaian existing di detail tetap satu-satunya jalur.
 
 F-2026-10-27-097-S — Antrean rekonsiliasi bank draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBK-1/2/3/4, lalu fisik Backend (097-B), konsumen Frontend (097-F), falsifikasi QA (097-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja ini (BR-RBK-12); bersyarat hanya bila selisih turunan dibuka (Q-RBK-5).
+
+## VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-086-V: gerbang FP UM refund kredit sumber Quotation/RevisionDown (menutup lubang J-RF1 lintas sumber; lanjutan F-2026-10-27-085-V + temuan kartu t_e328d8c8 di PR #1112 komentar 6429201433)
+
+> **Slot**: F-2026-10-27-086-V. Diverifikasi bebas 2026-10-27 05:5x WIB: grep `F-2026-10-27-086` di backlog+board `origin/main` (`585f98835`) = 0; vonis Accountant terakhir F-2026-10-27-085-V (PR #1114 OPEN). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Fakta terverifikasi (TERVERIFIKASI-KODE, basis 585f98835)
+
+- F1 — Gerbang J-RF1 vonis F-2026-10-25-004-V di `refundCredit` (customer-credit.service.ts:247) berjalan HANYA untuk `credit.sourceType === "DownPayment"`: DP bersnapshot `ppnUangMuka > 0` + TaxInvoice keluaran aktif → refund ditolak sampai FP UM batal; lalu jurnal pecah Dr 210102 neto + Dr 210201 via `buildDownPaymentRefundLines` (down-payment-vat.ts:285-306, porsi PPN proporsional refundAmount/dpAmount dari snapshot DP, residu sen ditanggung kaki neto).
+- F2 — Kredit `Quotation` lahir dari kelebihan alokasi DP confirmed quotation yang sama atas grandTotal konversi (down-payment.hook.ts:731-746, receivedAmount = kelebihan BRUTO); kredit `RevisionDown` lahir dari DP confirmed + tertagih melebihi nilai kontrak berjalan (sales.actions.ts:1519-1524,1576-1590). Keduanya direfund lewat `refundCredit` yang sama TANPA pemeriksaan FP UM apa pun hari ini.
+- F3 — FP UM terbit PER DP (TaxInvoice.downPaymentId, schema:1271) dengan snapshot per DP (schema:1625-1629). Snapshot PPN adalah milik DP (satu baris DownPayment), BUKAN milik baris CustomerCredit; baris kredit Quotation/RevisionDown tidak membawa snapshot PPN apa pun. Residu bruto kredit TIDAK identik dengan residu satu DP: satu quotation dapat punya banyak DP confirmed, dan residu kredit dapat berasal dari campuran DP terutang + tak-terutang.
+- F4 — Residu per DP dapat dihitung dari data existing tanpa kolom baru: amount DP − alokasi bruto DP itu ke faktur (SalesPayment `paymentMethod="down_payment"` bermarker nomor dokumen DP pada notes, pola accounting.hook.ts:362-375) − kredit DownPayment untuk DP itu (CustomerCredit sourceType DownPayment sourceId=DP). Kredit Quotation/RevisionDown adalah penamaan atas residu agregat quotation sesudah alokasi itu, bukan atas satu DP.
+
+### 1. Putusan
+
+1. **Prinsip: kas keluar mengikuti nasib PPN uang muka.** Refund kredit pelanggan — dari sumber apa pun — atas uang yang FP UM-nya masih aktif dan belum tereklas ke faktur pelunasan tidak boleh keluar sebagai kas bruto bersih. PPN FP UM hanya gugur lewat dua jalan existing: pembatalan FP UM (J-RF1) atau reklas J-PL1/J-PL2 saat DP teralokasi ke faktur terbit. Jurnal refund kredit TIDAK menciptakan jalan ketiga.
+2. **Gerbang refund kredit Quotation/RevisionDown (SYARAT fisik Backend).** Di dalam transaksi refund (lock FOR UPDATE baris kredit existing dipertahankan), refund DITOLAK definitif bila ada DP confirmed untuk quotation sumber (quotationId = sourceId baris kredit) yang memenuhi SEMUA: (a) snapshot `ppnUangMuka > 0`; (b) TaxInvoice keluaran untuk DP itu masih aktif (djpStatus bukan cancelled/replaced); (c) residu DP (F4) > 0 — DP sudah teralokasi penuh ke faktur terbit tidak menahan (PPN-nya sudah tereklas J-PL). Pesan penolakan menamai nomor DP + nomor FP UM aktif, pola pesan J-RF1 existing. Pemeriksaan massal per quotation (bukan per baris kredit), di dalam transaksi yang sama dengan validasi saldo.
+3. **Jurnal sesudah gerbang lolos.** Bila tidak ada DP menahan: jurnal refund tetap existing Dr 210102 / Cr Kas sebesar nominal refund, TANPA kaki 210201 dari baris kredit Quotation/RevisionDown. Kaki PPN dilarang dikarang per baris kredit: snapshot PPN milik DP (F3) dan residu kredit adalah agregat lintas DP — memecah PPN dari baris kredit akan menghitung PPN dua kali (sekali di FP UM DP, sekali di refund). Residu sen pembulatan mengikuti pola builder existing (kaki neto menanggung residu), bukan aturan baru di sini.
+4. **FIFO atribusi DITOLAK.** Backend dilarang menempelkan residu kredit ke DP tertentu (FIFO/LIFO/pro-rata) untuk keperluan gerbang/jurnal: atribusi itu karangan yang mengubah nasib pajak per DP tanpa dasar dokumen. Gerbang Putusan 2 sengaja konservatif per quotation: satu DP terutang ber-FP UM aktif beresidu > 0 menahan SELURUH refund baris kredit quotation itu sampai FP UM DP itu dibatalkan atau DP teralokasi penuh. Ketidaknyamanan ini disengaja (fail-closed) dan dicatat sebagai batas, bukan bug.
+5. **Alokasi TIDAK ditahan.** `allocateCreditToInvoice` tidak berubah: alokasi ke faktur pelanggan yang sama menutup kewajiban lewat jalur faktur (PPN diselesaikan faktur tujuan + reklas existing). Gerbang ini khusus refund kas keluar.
+6. **Penanda antrean 083-S menyatu.** Penanda 085-V Putusan 2 diperluas: payload antrean menandai juga baris Quotation/RevisionDown yang quotation-nya memenuhi syarat tahan Putusan 2 di atas (satu query massal per quotation populasi). Kata penanda tetap final Lead; penanda tetap fakta turunan server, bukan penolakan yang sudah terjadi.
+7. **Kasus tepi.** (a) DP legacy tanpa snapshot (snapshotFromDownPaymentRow null) tidak menahan — pola J-RF1 existing; antrean mewarisi batas legacy yang sama, tidak dikarang gerbang baru untuk data pra-fitur. (b) Refund parsial tetap ditahan penuh selama syarat Putusan 2 terpenuhi (tidak ada refund sebagian "porsi non-PPN" — porsi itu tidak teridentifikasi per F3/F4). (c) Kredit DownPayment tidak berubah (J-RF1 existing sudah menahannya per DP sumbernya sendiri).
+
+### 2. Larangan ringkas
+
+1. Refund kas kredit Quotation/RevisionDown melewati DP ber-FP UM aktif beresidu (Putusan 2).
+2. Kaki 210201 pada jurnal refund baris kredit non-DownPayment; PPN dipecah dari baris kredit.
+3. Atribusi FIFO/LIFO/pro-rata residu kredit ke DP tertentu untuk gerbang maupun jurnal.
+4. Gerbang diletakkan di UI/action tanpa lock transaksi (wajib di service dalam transaksi refund existing).
+5. Penolakan tanpa menamai DP + FP UM penahan.
+
+### 3. Batas build
+
+- **Backend**: gerbang Putusan 2 di `refundCredit` (customer-credit.service.ts) dalam transaksi + lock existing; perhitungan residu F4 dari SalesPayment bermarker DP + kredit DownPayment per DP; pesan definitif menamai DP/FP; penanda 083-B diperluas per Putusan 6. Nol kolom/schema baru. Klaim file di board sebelum edit (service ini wilayah Backend; perlakuan dari vonis ini).
+- **Frontend**: penanda verbatim server (085-V + perluasan Putusan 6); UI tidak menghitung tahan/tidak sendiri.
+- **QA**: falsifikasi W1–W6 di §4 atas head Backend persis.
+
+### 4. Falsifikasi QA (penjaga baru wajib satu tes merah bila dicabut)
+
+- W1: Kredit Quotation dari quotation ber-DP terutang + FP UM aktif + residu DP > 0 → refund ditolak definitif menamai DP/FP UM. Refund lolos = MERAH.
+- W2: Sesudah FP UM DP penahan dibatalkan → refund lolos Dr 210102/Cr Kas tanpa kaki 210201.
+- W3: DP terutang teralokasi penuh ke faktur terbit (residu 0) → tidak menahan; refund lolos.
+- W4: Mutasi: cabut cabang gerbang untuk Quotation/RevisionDown → W1 MERAH.
+- W5: Jurnal refund kredit non-DownPayment memuat kaki 210201 = MERAH.
+- W6: Refund parsial pada quotation tertahan tetap ditolak penuh (tidak ada porsi non-PPN yang lolos).
+
+### 5. Sumber & cakupan
+
+Melanjutkan register vonis F-2026-10-25-004-V (J-RF1/J-PL1/J-PL2; dasar PER-11/PJ/2025 Pasal 31 — register di vonis itu, tidak divonis ulang) + F-2026-10-27-085-V Putusan 2. Vonis ini menutup celah lintas sumber pada mekanisme yang sama; TIDAK memutus tarif/kode baru, TIDAK mengubah J-RF1 untuk kredit DownPayment, TIDAK menilai ulang snapshot per DP.
+
+F-2026-10-27-086-V — Gerbang FP UM refund kredit Quotation/RevisionDown. Status: VONIS TURUN run ini; mengikat fisik Backend (gerbang refundCredit + penanda 083-B) + falsifikasi QA W1–W6; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (merge + kata penanda final), Backend (fisik), Frontend (konsumen penanda), QA (falsifikasi).
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-083-S: antrean saldo kredit pelanggan terbuka mengendap (CustomerCredit `open` bersaldo belum teralokasi/refund lintas pelanggan)
+
+> **Slot**: F-2026-10-27-083-S. Diperiksa bentrok 2026-10-27 05:36 WIB vs `origin/main` (`e1a09a9c1`): grep `F-2026-10-27-083` di backlog+board origin = 0 untuk akhiran `-S` (PR #1111 OPEN adalah `083-V` vonis Accountant untuk 082-S — beda akhiran, bukan tabrakan); maks ID 2026-10-27 `…-S` di backlog origin = 082-S (merged #1100); grep judul SPEC "kredit pelanggan terbuka/antrean CustomerCredit" = 0. Bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Objek baru, bukan duplikat.** CustomerCredit hari ini hanya terbaca sebagai (a) pengurang advisory paparan piutang per pelanggan K4 (`customer-receivables.ts:61-72,127-134`), (b) baris turun-temurun di statement pelanggan (`customer-statement.ts:11-26`), (c) panel operasional per dokumen uang-muka (`customer-credit-panel.tsx` di detail DP). Tidak ada daftar kerja lintas pelanggan yang menjawab "saldo kredit siapa yang masih menggantung, sudah berapa lama, dari sumber apa" — admin keuangan menemukan kredit mengendap hanya bila membuka pelanggan/DP satu per satu. Spec ini membekukan antrean baca-saja atas populasi itu. Domain (d) penjualan/keuangan pelanggan. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Inventarisasi terverifikasi (origin/main e1a09a9c1, 2026-10-27)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `CustomerCredit` (`prisma/schema.prisma:459-478`): documentNo unik, customerId, sourceType+sourceId, receivedAmount, allocatedAmount default 0, refundedAmount default 0, status String default `"open"`, notes, createdBy, createdAt/updatedAt. Indeks `[customerId, status]` + `[sourceType, sourceId]` ada — populasi antrean terindeks.
+- Saldo kanonik existing: `creditBalance()` = received − allocated − refunded (`src/lib/services/customer-credit.service.ts:30-33`); per baris di paparan K4 dijepit `max(0, …)` (`customer-receivables.ts:127-134`, query loader menyaring status open). Saldo antrean WAJIB memakai aritmetika yang sama persis; dilarang rumus kedua.
+- Status baris ditulis service: lahir `open` (default schema); alokasi penuh -> `used`, sebagian tetap status lama (`customer-credit.service.ts:119`); refund penuh -> `refunded`, sebagian tetap (`:286`). Jadi populasi "masih ada saldo" = status `open` DAN saldo > 0; baris open bersaldo 0 (anomali warisan) bukan populasi tampil tetapi wajib terhitung jujur (EC-CCQ-2).
+- Sumber lahir kredit (sourceType tertutup faktual dari kode): `DownPayment` (down-payment.hook.ts:269, kelebihan/DP tak terpakai), `Quotation` (down-payment.hook.ts:735, satu baris per quotation), `RevisionDown` (sales.actions.ts:1576-1590, kredit revisi-turun pasif TANPA jurnal saat lahir — jurnal hanya saat alokasi/refund). Label tampil per sourceType = USULAN kata Lead (Q-CCQ-2); payload membawa sourceType verbatim server, bukan terjemahan karangan UI.
+- Aksi penyelesaian existing (BUKAN aksi baru): `allocateCustomerCredit(creditId, salesInvoiceId, amount, idempotencyKey)` (sales.actions.ts:880) + `refundCustomerCredit(creditId, amount, idempotencyKey)` (sales.actions.ts:911), keduanya gerbang `requirePermission("confirm_down_payments")` (sales.actions.ts:883/914; katalog `module-catalog.generated.ts:187`), delegasi ke `allocateCreditToInvoice`/`refundCredit` (customer-credit.service.ts:35/198) dengan lock baris FOR UPDATE, validasi saldo dalam transaksi, idempotency key wajib, jurnal Dr 210102/Cr Piutang via SalesPayment (alokasi) dan Dr 210102/Cr Kas (refund) — perlakuan jurnal SUDAH divonis arsitektur service (header customer-credit.service.ts:1-10, AUD-NEXT-04); spec ini TIDAK memutus jurnal/akun/nominal baru.
+- Konsumen existing yang TIDAK diduplikasi: panel kredit per DP (`customer-credit-panel.tsx`, memanggil dua aksi di atas dari detail uang-muka), paparan K4 per pelanggan (`customer-credit-exposure-data` + statement), ringkasan tagihan job per quotation (`job-billing-summary-data.ts:85,109` menyaring sourceType Quotation status open). Antrean ini = daftar kerja lintas pelanggan; penyelesaian tetap di panel/aksi existing tertaut, bukan jalur kedua.
+- Izin baca tetangga: daftar faktur/penjualan memakai key keluarga penjualan existing; key khusus "lihat kredit pelanggan" TIDAK ada di katalog (grep `customer_credit` di module-catalog.generated.ts = 0 selain confirm_down_payments:187) — gerbang baca antrean = Q-CCQ-3 (usul: pasangan view faktur penjualan + confirm_down_payments, pola gerbang ganda antrean existing; key baru hanya bila Lead memutus).
+
+Belum ada / gap (bukti grep run ini):
+- Tidak ada builder/loader/daftar CustomerCredit lintas pelanggan: grep `customerCredit.findMany` di `src/lib/reports` hanya paparan per pelanggan/statement/job per quotation; halaman `penjualan/uang-muka/[slug]` per dokumen. Saldo open mengendap lintas pelanggan tidak terlihat sebagai antrean kerja di permukaan mana pun.
+- Tidak ada turunan umur/sumber untuk kredit terbuka: createdAt baris adalah satu-satunya stempel lahir; tidak ada "sejak kapan saldo tersisa" selain createdAt baris itu sendiri (alokasi/refund parsial mengubah updatedAt — updatedAt dilarang sebagai acuan umur, pola BR antrean existing).
+
+Benchmark resmi (akses live 2026-10-27):
+- Accurate Online: kelebihan bayar (overpay) pada Penerimaan Penjualan otomatis tercatat sebagai saldo lebih pelanggan dan dipakai melunasi faktur berikutnya (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penerimaan-penjualan/mencatat-overpay/); alokasi lebih bayar ke akun lain juga didokumentasikan (https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penerimaan-penjualan/alokasikan-lebih-bayar-penjualan-akun-lain/). Bentuk daftar antrean saldo lebih mengendap lintas pelanggan di help Accurate = TIDAK ditemukan run ini — tidak diklaim.
+- Zahir: modul Penjualan > Pengembalian Lebih Bayar menampilkan daftar faktur lebih bayar lalu dua opsi penyelesaian — alokasi ke faktur lain atau konversi kas (BENCHMARK: https://help.zahironline.com/portal/id/kb/articles/cara-input-pengembalian-lebih-bayar-kredit-zahir-online-v2). Ini membuktikan pola "daftar kerja kelebihan bayar -> pilih penyelesaian" adalah permukaan standar; ambang umur/ember mengendap Zahir = TIDAK ditetapkan — tidak diklaim.
+
+### 1. Workflow specification
+
+Aktor: Admin keuangan/penjualan pemegang gerbang baca antrean (Q-CCQ-3) — melihat dan menindaklanjuti; pemegang `confirm_down_payments` — satu-satunya yang bisa mengalokasi/refund lewat aksi existing; Pelanggan (tidak melihat antrean; saldonya tampak di statement existing); Lead (putusan Q-CCQ), Backend (builder+loader baru read-only), Frontend (permukaan daftar), QA (falsifikasi).
+
+Dokumen masuk: baris CustomerCredit existing berstatus `open` bersaldo > 0 (lahir dari DP/quotation/revisi-turun existing). Dokumen keluar: tidak ada dokumen/kolom/status baru tahap 1; baris antrean baca-saja + tautan ke panel kredit existing (detail uang-muka/dokumen sumber) tempat alokasi/refund dilakukan.
+
+Alur:
+1. Kredit lahir lewat jalur existing (DP berlebih, kredit quotation, revisi-turun). Jurnal lahir hanya sesuai aturan service existing (RevisionDown pasif tanpa jurnal sampai dialokasi/direfund).
+2. Selama status `open` dan saldo > 0, baris tampil di antrean: pelanggan, nomor dokumen kredit, sourceType verbatim + label terpilih Q-CCQ-2, tanggal lahir (createdAt), umur saldo, received/allocated/refunded/saldo verbatim tersimpan, tautan dokumen sumber.
+3. Petugas membuka tautan ke permukaan penyelesaian existing, lalu Alokasi ke faktur pelanggan yang sama atau Refund ke kas lewat aksi existing (idempotency key wajib, penjaga saldo service). Antrean tahap 1 TIDAK menyediakan tombol alokasi/refund sendiri (Q-CCQ-5).
+4. Baris keluar populasi permanen saat status berubah `used`/`refunded` (saldo habis lewat service) — antrean tidak pernah mengubah status/saldo.
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean saldo kredit terbuka | usul pasangan: view faktur penjualan existing + `confirm_down_payments` (katalog:187) | belum ada permukaan; gerbang diputus Q-CCQ-3 | USULAN gerbang ganda pola antrean existing; key view khusus baru hanya bila Lead memutus (migrasi katalog+seed, di luar dokumen ini) |
+| Alokasi kredit ke faktur (penyelesaian) | `confirm_down_payments` | sales.actions.ts:880-883 -> service lock+saldo+jurnal | TIDAK berubah; antrean hanya menautkan |
+| Refund kredit ke kas (penyelesaian) | `confirm_down_payments` | sales.actions.ts:911-914 -> service lock+saldo+jurnal | TIDAK berubah; antrean hanya menautkan |
+| Buat kredit revisi-turun (sumber baris) | `confirm_down_payments` | createRevisionDownCredit sales.actions.ts:1526 | tidak berubah |
+| Lihat statement/paparan K4 pelanggan | izin permukaan statement existing | customer-statement/receivables existing | tidak diubah; antrean bukan pengganti statement |
+
+Catatan data sensitif: nominal di antrean ini adalah saldo kredit pelanggan (uang pelanggan di tangan bengkel), bukan gaji/data pribadi karyawan — tetap hanya tampil bagi pemegang gerbang baca; payload daftar TIDAK memuat rekening bank pelanggan, bukti transfer, atau kontak (detail penyelesaian di permukaan existing).
+
+### 3. Status-transition matrix + fakta umur (nol status/kolom baru tahap 1)
+
+Transisi dokumen existing yang TIDAK diubah antrean (TERVERIFIKASI-KODE customer-credit.service.ts): `open` --alokasi sebagian--> `open` (allocatedAmount naik, status tetap, :119); `open` --alokasi >= saldo--> `used` (:119); `open` --refund sebagian--> `open` (:286); `open` --refund >= saldo--> `refunded` (:286). Alokasi ke faktur batal ditolak service (:87); nominal <= 0 / tanpa idempotency key ditolak sebelum mutasi (:38-45). Antrean tidak menulis transisi apa pun.
+
+Populasi antrean: CustomerCredit `status = "open"` DAN saldo turunan `received − allocated − refunded > 0` (aritmetika creditBalance :30-33, penjepit per baris pola K4 customer-receivables.ts:134). Baris `used`/`refunded` tidak tampil walau saldo terbaca > 0 karena inkonsistensi warisan — tampil apa adanya di ember anomali terhitung, bukan dicampur populasi (EC-CCQ-2).
+
+Fakta umur:
+- Acuan umur saldo = `createdAt` baris kredit (momen kredit lahir, TERVERIFIKASI-KODE schema:459-478; tidak ada stempel lain). Label jujur: "umur kredit sejak diterbitkan" — BUKAN "sejak terakhir dialokasi", karena alokasi parsial tidak meninggalkan stempel per kejadian di baris (jejaknya di SalesPayment/jurnal lawan, bukan sumber umur baris).
+- `updatedAt` DILARANG sebagai acuan (berubah oleh alokasi/refund/edit apa pun). ActivityLog dilarang sebagai sumber turunan.
+- Umur = hari kalender WIB sejak createdAt, pola builder antrean existing. Tahap: usul `BARU` (<= ambang) / `MENGENDAP` (> ambang) dengan ambang konstanta bernama diputus Lead (Q-CCQ-1; usul 30 hari kalender — kredit pelanggan adalah liabilitas menggantung, ambang lebih longgar dari antrean persetujuan 3 hari; angka ini USULAN, bukan fakta bisnis).
+- Pendamping sumber: baris `RevisionDown` lahir pasif tanpa jurnal (sales.actions.ts:1519-1524) — antrean menandai sumber verbatim; apakah ember RevisionDown dipisah tampil dari DownPayment/Quotation = Q-CCQ-4 (usul: satu daftar, kolom sumber verbatim, saringan sumber; pemisahan ember hanya bila Lead memutus).
+
+Per baris tampil: customerId + nama pelanggan (dari relasi existing), documentNo, sourceType verbatim, createdAt, umurMenungguHari, receivedAmount/allocatedAmount/refundedAmount/saldo (verbatim Decimal tersimpan, saldo = turunan rumus kanonik di atas), status verbatim. Total rekap = jumlah baris tampil + jumlah saldo baris tampil (penjumlahan saldo tersimpan, bukan angka karangan).
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-CCQ-01 | Populasi = CustomerCredit status PERSIS `open` dengan saldo `received − allocated − refunded > 0`; saldo dihitung rumus kanonik `creditBalance` (customer-credit.service.ts:30-33) dijepit per baris pola K4. Baris `used`/`refunded`/open-bersaldo-0 tidak masuk populasi tampil; open-bersaldo-0 dan used/refunded-bersaldo->0 (anomali warisan) terhitung di ember anomali terpisah, tidak dipilih/dibuang diam-diam. | TERVERIFIKASI-KODE (schema:459-478; service:30-33,119,286) + USULAN batas populasi |
+| BR-CCQ-02 | Antrean baca-saja murni tahap 1: builder/loader tidak memanggil allocate/refund/create kredit, tidak menulis CustomerCredit/SalesPayment/Journal. Penyelesaian hanya lewat aksi existing `allocateCustomerCredit`/`refundCustomerCredit` (confirm_down_payments, idempotency wajib) dari permukaan existing tertaut. | TERVERIFIKASI-KODE aksi (sales.actions.ts:880-940) + USULAN batas |
+| BR-CCQ-03 | Umur dari `createdAt` baris berlabel "sejak diterbitkan"; `updatedAt` dan ActivityLog dilarang sebagai sumber umur/tahap. Tahap BARU/MENGENDAP dari konstanta ambang bernama terpilih Q-CCQ-1; tanpa skor prioritas karangan, tanpa auto-alokasi/auto-refund berbasis umur pada tahap mana pun. | TERVERIFIKASI-KODE stempel (schema) + USULAN tahap/ambang |
+| BR-CCQ-04 | Nominal tampil = kolom tersimpan verbatim (received/allocated/refunded) dan saldo = aritmetika ketiganya; dilarang menghitung ulang dari jurnal/SalesPayment, dilarang membulatkan/menjumlahkan lintas pelanggan menjadi "total utang" berlabel akuntansi baru. Rekap antrean berlabel operasional ("total saldo kredit terbuka pada baris tampil"). Perlakuan jurnal/akun 210102 saat alokasi/refund tetap milik service existing (sudah berjalan); label utang/aging untuk saldo ini TIDAK dibuka spec ini (BUTUH-VONIS bersyarat bila Lead membuka istilah itu — pola Q-RBQ-4 spec 082-S). | TERVERIFIKASI-KODE (service header :1-10; K4 customer-receivables.ts:61-72) + BUTUH-VONIS bersyarat label |
+| BR-CCQ-05 | Payload daftar tanpa data pembayaran sensitif: tanpa nomor rekening, bukti transfer, referenceNo pembayaran, kontak pelanggan. Yang tampil hanya identitas dokumen kredit + pelanggan + nominal saldo + sumber + umur (§3). Detail penyelesaian (pilih faktur tujuan, nominal, key) tetap di panel existing. | USULAN batas di atas TERVERIFIKASI-KODE panel existing |
+| BR-CCQ-06 | Penyelesaian lintas pelanggan dilarang oleh konstruksi antrean: tautan alokasi hanya ke faktur pelanggan pemilik kredit yang sama (service existing menolak beda pelanggan di dalam transaksi); antrean tidak menawarkan pemindahan kredit antar pelanggan. Kredit pelanggan terhapus/nonaktif tetap tampil apa adanya dengan penanda verbatim server (penanganan penyelesaian = penjaga existing saat aksi, bukan saringan diam-diam antrean). | TERVERIFIKASI-KODE (service validasi dalam tx) + USULAN tampil |
+| BR-CCQ-07 | Urutan usul: MENGENDAP dulu (umur terbesar), lalu BARU (umur terbesar), seri deterministik createdAt naik lalu id naik; saringan pelanggan/sumber/ember menyempitkan populasi tampil dan rekap selalu = hitungan baris tampil persis. Urutan/kata final diputus Q-CCQ-1/2. | USULAN di atas pola antrean existing |
+| BR-CCQ-08 | Satu query massal lintas pelanggan dalam gerbang baca server (anti-N+1; tanpa query per pelanggan/per dokumen sumber). Nama pelanggan dari relasi Customer existing; dokumen sumber ditautkan per sourceType+sourceId tanpa memuat isi dokumen sumber ke payload. | USULAN fisik (pola loader antrean existing) |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Kelebihan bayar jadi saldo pelanggan | Ada: overpay otomatis saldo lebih, dipakai faktur berikutnya (URL §0) | Ada: pengembalian lebih bayar (URL §0) | Ada: CustomerCredit open + alokasi/refund service ber-jurnal | Tidak diubah |
+| Daftar kerja saldo lebih terbuka | Tidak ditemukan bentuk antrean mengendap — tidak diklaim | Ada daftar faktur lebih bayar sebagai titik mulai penyelesaian (URL §0) | ABSEN lintas pelanggan: hanya panel per DP + pengurang statement per pelanggan | Antrean baca-saja lintas pelanggan (inti spec ini) |
+| Dua jalan penyelesaian (alokasi faktur lain / kas) | Ada (alokasi faktur berikutnya / akun lain) | Ada persis dua opsi itu | Ada: allocateCustomerCredit + refundCustomerCredit existing | Tidak diubah; antrean menautkan |
+| Umur mengendap saldo + ambang tindak lanjut | Tidak ditemukan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN | Turunan umur createdAt + tahap Q-CCQ-1 |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder+loader BARU read-only — falsifikasi QA):
+- AC-CCQ-B1: Populasi tepat. Baris used/refunded/open-bersaldo-0 bocor ke daftar tampil = MERAH; saldo dihitung ulang dari jurnal/SalesPayment alih-alih rumus kolom kanonik = MERAH (BR-CCQ-01/04).
+- AC-CCQ-B2: Gerbang baca fail-closed: pemanggil tanpa pasangan izin Q-CCQ-3 menerima baris apa pun = MERAH; loader dipanggil tanpa gerbang server = MERAH. Rekap (jumlah baris + total saldo) = baris tampil persis sesudah saringan.
+- AC-CCQ-B3: Umur BUKAN updatedAt: sentuh baris open lewat alokasi parsial (updatedAt bergerak, status tetap open) tidak mengnolkan umur; umur tetap dari createdAt. Memakai updatedAt/ActivityLog = MERAH (BR-CCQ-03).
+- AC-CCQ-B4: Baca-saja: builder/loader memanggil allocate/refund/create atau menulis tabel apa pun = MERAH (grep + tes tulis-nol).
+- AC-CCQ-B5: Anti-N+1 + payload ramping: jumlah query konstan terhadap jumlah baris/pelanggan; payload memuat rekening/bukti/referenceNo pembayaran/kontak = MERAH (BR-CCQ-05/08).
+
+Frontend (sesudah kontrak Backend):
+- AC-CCQ-F1: Permukaan menampilkan payload verbatim server (label sumber/tahap dari server, saldo apa adanya); UI menghitung ulang saldo/tahap sendiri = MERAH.
+- AC-CCQ-F2: Nol tombol Alokasi/Refund/bayar dari antrean tahap 1; hanya tautan ke permukaan penyelesaian existing. Tombol penyelesaian lahir di antrean = MERAH (Q-CCQ-5 bila Lead membuka tahap berikut).
+- AC-CCQ-F3: Ember anomali (bila diterbitkan) terpisah terhitung dari populasi utama; mencampur anomali ke total saldo tampil = MERAH.
+
+Edge cases:
+- EC-CCQ-1: Alokasi/refund parsial berulang: baris tetap open, saldo menyusut, umur tetap sejak lahir — antrean tidak menafsirkan "sebagian selesai" sebagai tahap baru karangan.
+- EC-CCQ-2: Data warisan inkonsisten (open saldo 0; used/refunded saldo > 0; allocated+refunded > received): tampil di ember anomali terhitung dengan angka apa adanya; antrean tidak memperbaiki/menyembunyikan.
+- EC-CCQ-3: Kredit RevisionDown belum ber-jurnal sama sekali: tetap populasi (saldo uang pelanggan menurut kolom tersimpan); antrean tidak menyimpulkan saldo buku — label operasional saja (BR-CCQ-04).
+- EC-CCQ-4: Pelanggan dengan banyak kredit kecil dari sumber campur: baris per dokumen kredit (bukan agregat per pelanggan tahap 1; agregat per pelanggan hanya rekap tampil bila Lead memutus di Q-CCQ-4).
+- EC-CCQ-5: Kredit untuk pelanggan yang faktur terbukanya tidak ada: tetap tampil (refund kas adalah jalan existing); antrean tidak menyembunyikan baris tanpa faktur tujuan.
+
+### 7. Backlog implementasi (turunan F-2026-10-27-083-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-083-S | Spec kontrak ini (dokumen) | Business | — |
+| F-2026-10-27-083-B | Builder+loader antrean CustomerCredit open bersaldo (populasi/umur/rekap §3, gerbang Q-CCQ-3, anti-N+1) | Backend | Sesudah putusan Lead Q-CCQ-1/2/3/4 |
+| F-2026-10-27-083-F | Permukaan daftar verbatim + tautan penyelesaian existing, nol tombol alokasi/refund tahap 1 | Frontend | Sesudah kontrak 083-B |
+| F-2026-10-27-083-Q | Falsifikasi AC-CCQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | Sesudah 083-B/F terbit |
+
+### 8. Yang TIDAK diusulkan run ini + pertanyaan putusan Lead
+
+Tidak diusulkan: tombol alokasi/refund langsung dari antrean (jalur penyelesaian existing cukup; membuka = tahap berikut berizin sama, diputus Q-CCQ-5); pengingat otomatis ke pelanggan/petugas soal saldo mengendap; pemindahan kredit antar pelanggan; penutupan paksa kredit lama (write-off saldo = keputusan akuntansi, bukan antrean baca); agregat "total utang kredit pelanggan" berlabel buku (BR-CCQ-04).
+
+Pertanyaan untuk Lead (pemilik proses; Business tidak memutus sendiri):
+- Q-CCQ-1: Ambang MENGENDAP (usul 30 hari kalender WIB sejak createdAt) + kata tahap (usul BARU/MENGENDAP) + urutan §BR-CCQ-07 — disahkan/diubah?
+- Q-CCQ-2: Label tampil per sourceType (DownPayment/Quotation/RevisionDown verbatim server) + apakah ember RevisionDown (pasif tanpa jurnal) dipisah tampil dari kredit ber-jurnal?
+- Q-CCQ-3: Gerbang baca antrean: pasangan view faktur penjualan + confirm_down_payments (usul), atau key view khusus baru (perlu katalog+seed), atau cukup confirm_down_payments?
+- Q-CCQ-4: Bentuk rekap: per dokumen kredit saja (usul tahap 1) atau tambah subtotal per pelanggan; ember anomali diterbitkan tampil atau hanya terhitung di log server?
+- Q-CCQ-5: Tahap 1 tanpa tombol penyelesaian dari antrean (usul) — tautan saja; tombol Alokasi/Refund dari antrean dibuka tahap berikut atau tidak sama sekali?
+- Q-CCQ-6: Penempatan permukaan: daftar Penjualan/Keuangan tertaut dari panel uang-muka existing, atau seksi di halaman pelanggan? (Frontend mengusulkan teknis; kata akhir Lead.)
+
+F-2026-10-27-083-S — Antrean saldo kredit pelanggan terbuka mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-CCQ-1..6, lalu fisik Backend (083-B), konsumen Frontend (083-F), falsifikasi QA (083-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/gerbang/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (saldo kolom tersimpan, jurnal existing tidak diubah); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka untuk populasi ini (BR-CCQ-04).
+
+## VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-085-V: label saldo kredit pelanggan + penanda FP UM antrean 083-S (menjawab BR-CCQ-04 bersyarat + celah J-RF1 yang tidak disebut spec 083-S)
+
+> **Slot**: F-2026-10-27-085-V. Diverifikasi bebas 2026-10-27 05:5x WIB: grep `F-2026-10-27-085` di backlog+board `origin/main` (`e1a09a9c1`) = 0; pencarian PR terbuka `085-V`/`085` pada judul = 0; vonis Accountant terakhir berjalan F-2026-10-27-083-V (PR #1111, untuk 082-S — beda objek). Audit read-only atas spec F-2026-10-27-083-S (PR #1112 head `e542e9879`) + kode `origin/main` `e1a09a9c1`. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Fakta terverifikasi (TERVERIFIKASI-KODE, basis e1a09a9c1)
+
+- F1 — Tiga sumber lahir CustomerCredit: `DownPayment` (down-payment.hook.ts:261-281, kelebihan DP atas faktur posted), `Quotation` (down-payment.hook.ts:731-746, kelebihan alokasi DP atas grandTotal quotation saat konversi; komentar kode:728-735 jurnal nol-net reklas di kewajiban 210102 — kas sudah terjurnal saat terima DP), `RevisionDown` (sales.actions.ts:1519-1524,1576-1590, TANPA jurnal saat lahir).
+- F2 — Perlakuan jurnal existing sudah tervonis & berjalan: header customer-credit.service.ts:1-10 (AUD-NEXT-04) — alokasi Dr 210102/Cr Piutang 1103 via SalesPayment, refund Dr 210102/Cr Kas; lock FOR UPDATE + validasi saldo dalam transaksi + idempotency key wajib (service:35/198; sales.actions.ts:880-940). Vonis ini TIDAK memutus jurnal/akun/nominal baru.
+- F3 — RevisionDown tanpa jurnal saat lahir SAH secara buku: akun kewajiban uang muka 210102 (SystemSetting `customerDownPaymentAccountId`) sudah memuat DP terkonfirmasi penuh sejak penerimaan; kredit revisi-turun hanya menamai porsi saldo 210102 yang tidak lagi tertagih oleh nilai kontrak berjalan. Alokasi/refund-nya kelak Dr 210102 konsisten. Saldo kolom RevisionDown BUKAN uang baru dan BUKAN jurnal tertunda.
+- F4 — Refund kredit bersumber DP terutang PPN SUDAH diatur vonis F-2026-10-25-004-V J-RF1 (customer-credit.service.ts, blok `F-2026-10-25-004-V J-RF1` di refundCredit): DP dengan snapshot `ppnUangMuka > 0` dan TaxInvoice keluaran AKTIF (djpStatus bukan cancelled/replaced) → refund DITOLAK definitif sampai FP UM dibatalkan; sesudah batal jurnal pecah Dr 210102 neto + Dr 210201 PPN Keluaran, akun 210201 kosong = fail-closed. Spec 083-S TIDAK menyebut gerbang ini.
+- F5 — Saldo kanonik = `creditBalance()` received − allocated − refunded (customer-credit.service.ts:30-33); konsumen K4 menjepit per baris `max(0, …)` (customer-receivables.ts:127-134). GL akun 210102 memuat LEBIH dari populasi CustomerCredit (antara lain DP confirmed yang belum terkonversi/teralokasi) — saldo CustomerCredit adalah subledger/sub-himpunan 210102, bukan sama-dengan GL.
+
+### 1. Putusan
+
+1. **Makna saldo (menjawab BR-CCQ-04 bersyarat).** Saldo tampil antrean 083-S SAH disebut persis label spec: "total saldo kredit terbuka pada baris tampil" / label operasional setara. Saldo ini secara buku adalah bagian subledger kewajiban uang muka pelanggan (akun 210102 setting) untuk sumber DownPayment/Quotation, dan porsi bernama dari saldo 210102 yang sama untuk RevisionDown (F3). DILARANG: (a) menyebut saldo/rekap sebagai "saldo buku", "saldo GL", atau menyamakannya dengan saldo akun 210102 di neraca/trial balance; (b) label "utang/aging" dalam makna laporan (aging liabilitas, umur utang) untuk populasi ini — umur antrean adalah umur operasional sejak kredit diterbitkan, bukan aging buku; (c) mengurangkan total antrean dari piutang menjadi angka "piutang neto" baru di permukaan mana pun (pengurang piutang tetap K4 advisory existing, customer-receivables.ts). Selisih subledger CustomerCredit vs GL 210102 = temuan rekonsiliasi yang ditampilkan bila kelak direkonsiliasi, BUKAN angka yang dipilih diam-diam salah satu.
+2. **Penanda FP UM (SYARAT fisik 083-B, celah spec).** Baris sumber `DownPayment` yang DP-nya memiliki TaxInvoice keluaran aktif DAN snapshot `ppnUangMuka > 0` (persis syarat penolakan J-RF1, F4) WAJIB membawa penanda turunan server di payload, kata final Lead (usul Accountant: "Refund menunggu pembatalan FP uang muka"). Alasan: untuk baris ini satu-satunya jalan keluar kas tertutup sampai FP UM dibatalkan — antrean yang menampilkan semua baris setara menyesatkan petugas (refund pasti ditolak definitif oleh service, terbaca seperti bug). Penanda = turunan status DJP + snapshot existing, BUKAN status pajak/status dokumen baru; dihitung Backend massal anti-N+1 (satu query TaxInvoice atas himpunan downPaymentId populasi), UI dilarang menyimpulkan sendiri dari field mentah. Baris DownPayment tanpa FP aktif / `ppnUangMuka = 0` tidak berpenanda. Alokasi ke faktur TIDAK terhalang penanda ini (J-RF1 hanya menahan refund) — penanda dilarang dibaca sebagai "baris terkunci total".
+3. **RevisionDown tampil apa adanya.** sourceType verbatim server cukup; DILARANG label per baris "sudah terjurnal"/"belum terjurnal"/"kredit belum ber-jurnal" (kelahiran tanpa jurnal adalah normal & sah, F3 — label semacam itu mengarang makna buku). Bila Lead memutus ember terpisah di Q-CCQ-4, kata ember netral sumber saja (mis. nama sumber verbatim), tanpa kata akuntansi baru.
+4. **Umur createdAt LOLOS.** Label spec "sejak diterbitkan" jujur dan disahkan. Tambahan larangan: umur antrean dilarang ditampilkan/dijumlahkan sebagai umur liabilitas sejak kas diterima (kas diterima pada tanggal DP sumber, lebih tua dari createdAt kredit hasil reklas) — menyamakan keduanya mengarang aging.
+5. **Ember anomali (EC-CCQ-2) LOLOS & mengikat.** Baris open saldo 0, used/refunded saldo > 0, allocated+refunded > received: terhitung terpisah, angka apa adanya, tidak masuk populasi/total, tidak diperbaiki/dibuang diam-diam oleh builder/loader/antrean.
+6. **Write-off/penutupan paksa saldo lama DITOLAK untuk antrean ini** (sejalan §8 spec): saldo kredit pelanggan adalah uang pelanggan; penutupan tanpa alokasi/refund = jurnal ke pendapatan lain-lain yang hanya sah lewat vonis terpisah dengan dasar (mis. konfirmasi tertulis pelanggan/kedaluwarsa perikatan) — antrean baca-saja tidak membuka jalur itu, tombol/aksi semacam itu dilarang lahir dari antrean.
+
+### 2. Larangan ringkas
+
+1. Label "utang/aging/saldo buku/total utang kredit pelanggan" pada populasi/rekap antrean (Putusan 1).
+2. Baris DownPayment ber-FP UM aktif tampil tanpa penanda Putusan 2; penanda dihitung UI.
+3. Label terjurnal/belum-terjurnal per baris RevisionDown; ember berlabel akuntansi karangan.
+4. Umur createdAt dibaca sebagai aging liabilitas sejak kas diterima.
+5. Anomali warisan masuk total tampil atau dibuang diam-diam.
+6. Write-off/penutupan paksa/alokasi-refund dari antrean (penyelesaian tetap aksi existing berizin `confirm_down_payments` + idempotency key wajib).
+
+### 3. Batas build
+
+- **Backend (083-B)**: populasi persis BR-CCQ-01 + rumus `creditBalance`; payload membawa penanda Putusan 2 (query TaxInvoice massal anti-N+1); rekap = baris tampil persis; ember anomali terhitung terpisah; nol tulis CustomerCredit/SalesPayment/Journal/TaxInvoice.
+- **Frontend (083-F)**: label sumber/tahap/penanda verbatim server; UI tidak menghitung saldo, umur, atau penanda FP UM sendiri; tidak ada tombol Alokasi/Refund dari antrean tahap 1 (spec Q-CCQ-5 tetap wilayah Lead).
+- **QA (083-Q)**: falsifikasi V1–V6 di §4 atas head Backend/Frontend persis.
+
+### 4. Falsifikasi QA (penjaga baru wajib satu tes merah bila dicabut)
+
+- V1: Baris DownPayment ber-FP UM aktif + ppnUangMuka > 0 tampil TANPA penanda = MERAH; sesudah FP UM dibatalkan penanda hilang.
+- V2: Penanda dihitung UI dari field mentah (payload tidak membawa penanda server) = MERAH.
+- V3: Rekap/payload memakai kata "utang/total utang/aging/saldo buku" = MERAH.
+- V4: Baris RevisionDown berlabel "belum terjurnal" (atau sinonim akuntansi karangan) = MERAH.
+- V5: Anomali used saldo > 0 masuk total saldo tampil = MERAH.
+- V6: Matikan cabang query TaxInvoice massal di loader → V1 MERAH (falsifikasi penjaga Putusan 2).
+
+### 5. Sumber & cakupan
+
+Perlakuan refund DP terutang dirujuk dari vonis F-2026-10-25-004-V (J-RF1; dasar PER-11/PJ/2025 Pasal 31 — register sumber di vonis itu, tidak divonis ulang di sini). Vonis ini hanya memutus label, makna saldo, dan penanda turunan atas mekanisme existing; TIDAK memutus tarif/kode pajak baru, TIDAK membuka istilah utang/aging laporan, TIDAK menilai ulang jurnal AUD-NEXT-04/004-V. Q-CCQ-1/2/3/4/5/6 tetap milik Lead; vonis ini mengikat hanya pada titik BR-CCQ-04 + Putusan 2/3 di atas.
+
+F-2026-10-27-085-V — Vonis label saldo kredit pelanggan + penanda FP UM antrean 083-S. Status: VONIS TURUN run ini; mengikat fisik 083-B/083-F pada Putusan 1–6 + falsifikasi V1–V6; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (Q-CCQ-1..6 + kata penanda final), Backend (083-B), Frontend (083-F), QA (083-Q).
+## VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-084-V: slip approved belum dibayar BUKAN utang buku — label operasional saja, nol nominal mengikat ganda (menjawab titik BUTUH-VONIS spec F-2026-10-27-084-S §8/Q-APQ-4)
+
+> **Slot**: F-2026-10-27-084-V. Diverifikasi bebas 2026-10-27 06:05 WIB: grep `F-2026-10-27-084-V` di backlog+board `origin/main` (`585f9883`) = 0; PR terbuka `084-V` = 0; `084-S` = spec Business PR #1113 head `804490e5` (OPEN, belum merged — vonis ini ditulis di atas origin/main dan berlaku atas teks spec persis head itu). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Fakta terverifikasi (TERVERIFIKASI-KODE, basis origin/main 585f9883)
+
+- F1 — Jurnal payroll HANYA lahir saat bayar, tidak saat setuju. `approvePayroll` (hrm.actions.ts:3045-3048) hanya klaim atomik `draft -> approved` + `approvedBy`, tanpa jurnal. `markPayrollPaid` (hrm.actions.ts:3063 dst) dalam SATU transaksi: klaim atomik `approved -> paid` + `paymentDate=now` + tegak ulang plafon Pasal 63/65 atas angka tersimpan + amortisasi pinjaman + `onPayrollPaid(payrollId, undefined, tx)` (:3170). Jurnal gagal = seluruh flip status + amortisasi rollback (komentar kode :3158-3169).
+- F2 — Bentuk jurnal `onPayrollPaid` (accounting.hook.ts:2746 dst): Dr Beban Gaji sebesar gross (dikurangi kaki kompensasi PKWT per snapshot baris, F-2026-10-24-132-V Putusan 5) / Cr Bank payroll sebesar netSalary / Cr Utang Gaji (`salariesPayableAccountId`) untuk statutori BPJS+PPh21 dan potongan lain / Cr Piutang Karyawan untuk angsuran pinjaman. Akun wajib dari setting, kosong = fail-closed berisik (beban gaji/bank :2753-2757; utang gaji/piutang karyawan bersyarat nominal :2824-2835). `assertPeriodOpen(payroll.paymentDate ?? now)` di dalam hook (:2837). Idempoten per (referenceType `Payroll`, referenceId) + cek ulang dalam tx (:2873-2885).
+- F3 — Konsekuensi buku F1+F2: slip berstatus `approved` BELUM melahirkan jurnal apa pun, BELUM melahirkan utang gaji di GL, dan angka net/gross kolom slip BELUM tentu menjadi kas keluar final — plafon Pasal 63/65 ditegakkan ulang saat bayar atas angka tersimpan (hrm.actions.ts:3083-3097) dan kegagalan jurnal mengembalikan status ke `approved`. Kolom nominal slip approved = angka dokumen tersimpan, BUKAN kewajiban terukur final dan BUKAN saldo buku.
+- F4 — Model `Payroll` (schema.prisma:3900-3942): TIDAK ada `approvedAt`/`paidAt`; `paymentDate` nullable terisi hanya saat flip ke `paid`; `approvedBy` hanya ID penyetuju. Klaim spec §0 soal ini benar.
+- F5 — `statutorySnapshot` adalah data hitung gaji (isi snapshot statutori per slip); spec BR-APQ-07 sudah melarangnya masuk payload — vonis ini mengesahkan dan memperkeras (Putusan 4).
+
+### 1. Putusan
+
+1. **Makna status approved (inti).** Populasi antrean 084-S secara akuntansi adalah dokumen tersetujui yang BELUM diakui di buku: nol jurnal, nol utang gaji GL, nol beban gaji GL (F1-F3). Label sah satu-satunya = label operasional spec (usul "Menunggu Proses"/"Mengendap" dari Q-APQ-2, kata final Lead). DILARANG untuk populasi/rekap antrean: "utang gaji", "kewajiban gaji terutang", "saldo utang", "aging utang gaji", "total kewajiban belum dibayar", dan setiap rekap nominal yang menyiratkan saldo GL. Rekonsiliasi: total beban/utang gaji laporan WAJIB tetap dari jurnal terposting (status `paid`); antrean tidak boleh dijumlahkan ke, dibandingkan sebagai sama-dengan, atau dipakai menggantikan saldo akun beban gaji/utang gaji/bank payroll di laporan mana pun. Selisih daftar approved vs GL = bukan selisih — memang belum terjurnal; jangan ditampilkan sebagai temuan selisih.
+2. **Nol nominal tahap 1 LOLOS dan mengikat ganda (BR-APQ-02 disahkan dari sisi akuntansi, bukan hanya privasi gaji).** Alasan akun: nominal kolom slip approved belum final secara buku (F3) — menampilkannya sebagai "yang akan dibayar" mengarang kewajiban terukur; menampilkan Σ/rekap nominal menciptakan angka pseudo-utang tanpa jurnal. Larangan mencakup: semua kolom nominal spec BR-APQ-02, `statutorySnapshot` utuh maupun turunannya (tarif/TER/potongan per karyawan), dan angka uang turunan apa pun di payload/rekap/log/board. Satu-satunya angka rekap sah = JUMLAH SLIP (hitungan baris). Melonggarkan nominal kelak = vonis Accountant baru (preseden Q-PDQ-5 yang dirujuk spec), bukan putusan Lead/Backend sendiri.
+3. **Acuan umur (Q-APQ-1, sisi Accountant).** Umur sejak `endDate` berlabel persis "sejak akhir periode slip" LOLOS — jujur secara periode: beban periode itu memang belum diakui sampai bayar (F1), jadi umur dari akhir periode tidak mengarang momen setuju. DILARANG: (a) label "sejak disetujui" tanpa stempel `approvedAt` sah (spec §3 benar, disahkan); (b) umur dari `updatedAt`/ActivityLog; (c) label/frasa keterlambatan regulasi — "terlambat bayar gaji", "melewati jadwal wajib bayar", "berisiko sanksi/denda" — pada tahap/notice/rekap: ambang MENGENDAP adalah ambang tindak-lanjut operasional, BUKAN putusan kepatuhan jadwal bayar (dimensi ketenagakerjaan di luar vonis ini dan di luar spec; spec §8 sudah menandainya benar). Bila kelak jejak `approvedAt` fisik dibangun Backend, label "sejak disetujui" baru sah sejak kolom itu terisi di klaim approve — berlaku prospektif, baris lama tanpa stempel tidak ditebak dari `updatedAt`.
+4. **Bayar dari antrean (Q-APQ-4) DITOLAK untuk dibuka dari antrean, termasuk tahap berikut, kecuali paket syarat ini utuh.** Rantai bayar adalah satu transaksi tak terpisahkan: tegak plafon Pasal 63/65 + klaim atomik + amortisasi pinjaman + jurnal + peristiwa PKWT terbayar (F1). Tombol pintas yang memanggil selain `markPayrollPaid` existing persis = jalur jurnal kedua = DITOLAK mutlak. Pembayaran massal banyak slip DITOLAK mutlak dari antrean (satu kegagalan periode/akun harus menahan slip itu sendiri berisik di detail, bukan batch senyap). Yang sah tetap: tautan ke detail slip, bayar lewat `markPayrollPaid` existing di detail. Bila Lead kelak tetap membuka pemicu per-satu-slip dari antrean, syarat minimum vonis ini: pemicu memanggil aksi `markPayrollPaid` yang sama (bukan salinan), menampilkan error penjaga existing apa adanya (plafon/workflow/periode tutup/akun belum dipetakan), nol bayar massal, nol nominal baru di antrean, dan falsifikasi QA §4 butir V5 sebelum aktif.
+5. **Periode & koreksi.** Slip approved lintas periode tutup tetap populasi tampil apa adanya; pembayaran atasnya akan ditolak `assertPeriodOpen` pada tanggal bayar berjalan (F2) — antrean TIDAK menilai "periode sudah tutup" sebagai penanda karangan dan TIDAK menyarankan backdate `paymentDate`. Koreksi slip approved yang salah angka tetap jalur existing (hitung ulang/rapel sesuai vonis koreksi payroll berjalan), bukan edit dari antrean.
+6. **Karyawan berhenti (EC-APQ-1) LOLOS.** Slip approved karyawan berhenti tetap tampil dan tetap dibayar lewat jalur final existing di detail; status dokumen `approved` adalah satu-satunya fakta populasi. Antrean dilarang menandai "tidak layak bayar"/menahan baris berdasarkan status karyawan (penjaga lifecycle tetap memutus di aksi existing, bukan saringan diam antrean).
+
+### 2. Larangan ringkas
+
+1. Label utang/aging/saldo buku/kewajiban-terutang untuk slip `approved` atau rekapnya (Putusan 1).
+2. Nominal/statutorySnapshot/angka uang turunan apa pun di payload, rekap, log, board antrean (Putusan 2).
+3. Label "sejak disetujui" tanpa `approvedAt` sah; umur dari `updatedAt`/ActivityLog; frasa keterlambatan regulasi pada tahap/notice (Putusan 3).
+4. Tombol/aksi bayar dari antrean yang bukan `markPayrollPaid` existing persis; pembayaran massal; jalur jurnal/amortisasi kedua (Putusan 4).
+5. Penanda "periode tutup" karangan, saran backdate, edit/koreksi angka slip dari antrean (Putusan 5).
+6. Saringan/penanda kelayakan bayar berdasar status karyawan dari antrean (Putusan 6).
+
+### 3. Batas build
+
+- **Backend (084-B)**: populasi persis `status = "approved"` dalam `getHrScope` (gerbang Q-APQ-3 wilayah Lead, preseden 070-S diusulkan spec); select eksplisit TANPA satu pun kolom nominal BR-APQ-02 dan tanpa `statutorySnapshot`; umur dari acuan Q-APQ-1 terpilih berlabel server; nol tulis Payroll/EmployeeLoan/Journal; anti-N+1.
+- **Frontend (084-F)**: kolom/tahap/notice verbatim payload server; UI tidak menghitung umur/tahap; nol tombol Bayar/Setujui (Putusan 4); tidak ada nominal dalam bentuk apa pun termasuk tooltip/judul rekap.
+- **QA (084-Q)**: falsifikasi V1-V6 di §4 atas head Backend/Frontend persis, ditambah AC-APQ spec.
+
+### 4. Falsifikasi QA (penjaga baru wajib satu tes merah bila dicabut)
+
+- V1: Payload/rekap memuat satu pun kolom nominal/`statutorySnapshot`/angka uang turunan = MERAH (Putusan 2).
+- V2: Kata "utang/kewajiban terutang/aging/saldo buku" pada label/rekap/notice antrean = MERAH (Putusan 1).
+- V3: Umur berubah sesudah `updatedAt` baris approved disentuh edit tak terkait, atau label "sejak disetujui" terbit tanpa kolom `approvedAt` = MERAH (Putusan 3).
+- V4: Builder/loader menulis Payroll/EmployeeLoan/Journal atau memanggil approve/markPaid = MERAH.
+- V5: (Hanya bila Lead membuka pemicu bayar kelak) pemicu dari antrean yang tidak memanggil `markPayrollPaid` existing, atau bayar massal aktif = MERAH (Putusan 4).
+- V6: Baris approved karyawan berhenti disaring/ditandai tidak-layak oleh antrean, atau baris draft/paid bocor populasi = MERAH (Putusan 6 + BR-APQ-01 spec).
+
+### 5. Yang TIDAK diputus vonis ini
+
+Kata final label/tahap/notice, ambang hari MENGENDAP, gerbang baca Q-APQ-3, penempatan permukaan, dan kalimat notice = putusan Lead (Q-APQ-1/2/3/5/6 atas PR #1113). Tarif/aturan statutori slip tidak berubah; jurnal/akun `onPayrollPaid` existing tidak divonis ulang. Penilaian kepatuhan jadwal pembayaran gaji terhadap regulasi ketenagakerjaan = di luar vonis ini (butuh dasar regulasi + fakta praktik bayar perusahaan; jangan diturunkan dari ambang antrean).
+
+F-2026-10-27-084-V — Vonis label & batas bayar antrean slip approved belum dibayar (atas spec F-2026-10-27-084-S PR #1113). Status: VONIS SELESAI run ini; berlaku atas teks spec head `804490e5`. Pemilik berikut: Lead (Q-APQ-1/2/3/5/6 + merge PR vonis ini dan PR #1113 bila gate hijau head persis), Backend (084-B patuh Putusan 1-6), Frontend (084-F verbatim, nol nominal), QA (084-Q falsifikasi V1-V6). Butuh vonis Accountant lanjutan hanya bila: nominal dibuka, pemicu bayar dari antrean dibuka tanpa paket Putusan 4, atau label utang/aging diusulkan.

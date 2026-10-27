@@ -104,6 +104,29 @@ describe("reportPeriodFromRoute", () => {
     )
     expect(period.slug).toBe("2026-10-13")
   })
+
+  // B1 pola posisi (neraca/aset-tetap): yang dipakai adalah AKHIR periode,
+  // jadi tautan lama harus berakhir 23:59:59.999 pada tanggalSelesai.
+  it("pola posisi: tautan lama berakhir pada akhir tanggalSelesai (.999)", async () => {
+    const period = await reportPeriodFromRoute(
+      Promise.resolve({ segments: [] }),
+      Promise.resolve({ tanggalMulai: "2026-01-01", tanggalSelesai: "2026-10-13" }),
+      (now) => ({ start: now, end: now }),
+    )
+    expect(period.end).toEqual(new Date(2026, 9, 13, 23, 59, 59, 999))
+  })
+
+  // B1 pola rentang (mutasi-aset/biaya-pekerjaan): kedua ujung dari tautan
+  // lama, bukan periode bawaan awal-tahun.
+  it("pola rentang: tautan lama memberi kedua ujung periode", async () => {
+    const period = await reportPeriodFromRoute(
+      Promise.resolve({ segments: [] }),
+      Promise.resolve({ tanggalMulai: "2026-03-01", tanggalSelesai: "2026-03-31" }),
+      fallbackOf,
+    )
+    expect(period.start).toEqual(new Date(2026, 2, 1))
+    expect(period.end).toEqual(new Date(2026, 2, 31, 23, 59, 59, 999))
+  })
 })
 
 describe("looksLikePeriodSlug", () => {
@@ -218,6 +241,37 @@ describe("parseReportPeriod", () => {
     expect(parseReportPeriod("2026-03-20_2026-01-05", fallback).slug).toBe("2026-10-12")
     expect(parseReportPeriod("2026-13", fallback).slug).toBe("2026-10-12")
     expect(parseReportPeriod(undefined, fallback).slug).toBe("2026-10-12")
+  })
+
+  // B6: konstruktor Date menggeser 2026-02-31 menjadi 3 Mar 2026. Hari
+  // mustahil wajib ditolak ke fallback seperti bulan 13 — bukan bergeser.
+  it("menolak hari mustahil alih-alih menggesernya ke bulan berikutnya", () => {
+    expect(parseReportPeriod("2026-02-31", fallback).slug).toBe("2026-10-12")
+    expect(parseReportPeriod("2026-02-29", fallback).slug).toBe("2026-10-12")
+    expect(parseReportPeriod("2026-04-31", fallback).slug).toBe("2026-10-12")
+    expect(parseReportPeriod("2026-13-01", fallback).slug).toBe("2026-10-12")
+    expect(parseReportPeriod("2026-01-00", fallback).slug).toBe("2026-10-12")
+  })
+
+  it("menerima 29 Februari pada tahun kabisat", () => {
+    const period = parseReportPeriod("2028-02-29", fallback)
+    expect(period.slug).toBe("2028-02-29")
+    expect(period.start).toEqual(new Date(2028, 1, 29))
+  })
+
+  it("menolak rentang yang salah satu ujungnya mustahil", () => {
+    expect(parseReportPeriod("2026-01-01_2026-02-31", fallback).slug).toBe("2026-10-12")
+    expect(parseReportPeriod("2026-02-31_2026-03-01", fallback).slug).toBe("2026-10-12")
+  })
+
+  it("tautan lama dengan tanggal mustahil gugur ke fallback, bukan bergeser", async () => {
+    const period = await reportPeriodFromRoute(
+      Promise.resolve({ segments: [] }),
+      Promise.resolve({ tanggalMulai: "2026-01-01", tanggalSelesai: "2026-02-31" }),
+      (now) => ({ start: new Date(now.getFullYear(), 0, 1), end: now }),
+    )
+    const now = new Date()
+    expect(period.start).toEqual(new Date(now.getFullYear(), 0, 1))
   })
 })
 
