@@ -7,6 +7,8 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { RecurringTransactionTable } from "./_components/recurring-transaction-table"
 import { isDue } from "@/lib/reports/recurring-schedule"
+import { RecurringDueQueueCard } from "@/components/reports/recurring-due-queue-card"
+import { getRecurringDueQueue } from "@/lib/reports/recurring-due-queue-data"
 
 import type { Metadata } from "next"
 
@@ -36,6 +38,11 @@ export default async function RecurringTransactionsPage() {
     due: schedule.isActive && isDue(schedule.nextRunDate, now),
   }))
 
+  // Antrean jatuh tempo/gagal mengendap (F-2026-10-27-103-S): seksi turunan
+  // verbatim loader di atas tabel master (Q-RCQ103-3) — satu tempat kerja:
+  // antrean menunjuk, master mengeksekusi. Izin sama ditegakkan loader.
+  const dueQueue = await getRecurringDueQueue()
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -58,6 +65,8 @@ export default async function RecurringTransactionsPage() {
           </Link>
         </CanCreate>
       </div>
+
+      <RecurringDueQueueCard queue={dueQueue} />
 
       <RecurringTransactionTable data={rows} />
     </div>

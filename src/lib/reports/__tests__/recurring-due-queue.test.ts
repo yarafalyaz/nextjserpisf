@@ -6,9 +6,7 @@ import {
   RECURRING_DUE_STALE_DAYS,
   RECURRING_DUE_TITLE,
   buildRecurringDueQueue,
-  type RecurringDueInput,
 } from "../recurring-due-queue"
-import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 const mocks = vi.hoisted(() => ({
   recurringFindMany: vi.fn(),
@@ -24,29 +22,11 @@ vi.mock("@/lib/auth/permissions", () => ({
 }))
 
 import { getRecurringDueQueue } from "../recurring-due-queue-data"
-
-const NOW = new Date("2026-10-25T22:00:00.000Z")
-const TODAY = getWibTodayUtcDate(NOW)
-const day = (offset: number) => new Date(TODAY.getTime() + offset * 86_400_000)
-
-function input(overrides: Partial<RecurringDueInput> = {}): RecurringDueInput {
-  return {
-    scheduleId: 1,
-    slug: "jadwal-1",
-    name: "Jurnal Sewa Bulanan",
-    type: "journal",
-    frequency: "monthly",
-    interval: 1,
-    nextRunDate: day(-1),
-    endDate: null,
-    lastRunAt: day(-30),
-    runCount: 3,
-    lastResult: "Jurnal DRAFT dibuat",
-    isActive: true,
-    deletedAt: null,
-    ...overrides,
-  }
-}
+import {
+  RECURRING_DUE_NOW as NOW,
+  recurringDueDay as day,
+  recurringDueInput as input,
+} from "./recurring-due-queue-fixtures"
 
 describe("recurring-due-queue (F-2026-10-27-103-S, RTQ)", () => {
   it("kata verbatim putusan + ambang 3", () => {
