@@ -26,6 +26,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/keuangan/kas-kecil": "Kas kecil",
   "/keuangan/laporan-bank": "Mutasi bank",
   "/keuangan/pengeluaran": "Pengeluaran",
+  "/keuangan/antrean-reimbursement": "Klaim reimbursement disetujui yang menunggu pembayaran",
   "/keuangan/pusat-biaya": "Pusat biaya",
   "/keuangan/pusat-laba": "Pusat laba",
   "/keuangan/rekonsiliasi-bank": "Rekonsiliasi bank",
