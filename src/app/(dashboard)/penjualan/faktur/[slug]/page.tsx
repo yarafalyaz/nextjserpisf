@@ -27,6 +27,7 @@ import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
@@ -326,7 +327,7 @@ export default async function InvoiceDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {(!invoice.quotation?.downPayments || invoice.quotation.downPayments.length === 0) ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada uang muka</p>
+                    <EmptyState title="Tidak ada uang muka" />
                   ) : (
                     <>
                       <DetailTable>
@@ -384,7 +385,7 @@ export default async function InvoiceDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {invoice.payments.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pembayaran</p>
+                    <EmptyState title="Belum ada pembayaran" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -424,7 +425,7 @@ export default async function InvoiceDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {invoice.salesReturns.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada retur untuk faktur ini</p>
+                    <EmptyState title="Belum ada retur untuk faktur ini" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
