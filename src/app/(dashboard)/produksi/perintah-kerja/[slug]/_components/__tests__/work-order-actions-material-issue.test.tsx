@@ -1,36 +1,16 @@
 import { describe, it, expect, vi } from "vitest"
-import { renderToStaticMarkup } from "react-dom/server"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
-}))
-
-// Aksi server menyeret rantai auth yang tak bisa dimuat di vitest; yang diuji
-// pemetaan fakta MI aktif -> tombol, bukan aksinya.
-vi.mock("@/actions/manufacturing.actions", () => ({
-  startWorkOrder: vi.fn(async () => ({ success: true })),
-  completeWorkOrder: vi.fn(async () => ({ success: true })),
-  createMaterialIssueFromWorkOrder: vi.fn(async () => ({ success: true })),
-}))
-vi.mock("@/actions/inventory.actions", () => ({
-  reviseWorkOrderItems: vi.fn(async () => ({ success: true })),
-}))
+vi.mock("next/navigation", async () => (await import("./work-order-actions-test-utils")).workOrderActionsRouterModule)
+vi.mock("@/actions/manufacturing.actions", async () => (await import("./work-order-actions-test-utils")).workOrderActionsManufacturingModule)
+vi.mock("@/actions/inventory.actions", async () => (await import("./work-order-actions-test-utils")).workOrderActionsInventoryModule)
 
 import { WorkOrderActions } from "../work-order-actions"
+import { renderWorkOrderActions } from "./work-order-actions-test-utils"
 
-function render(props: Partial<React.ComponentProps<typeof WorkOrderActions>> = {}) {
-  return renderToStaticMarkup(
-    <WorkOrderActions
-      workOrderId={7}
-      status="in_progress"
-      hasCompletedMaterialIssue={false}
-      defaultWarehouseId={1}
-      {...props}
-    />,
-  )
-}
+const render = (props: Parameters<typeof renderWorkOrderActions>[1] = {}) =>
+  renderWorkOrderActions(WorkOrderActions, props, { status: "in_progress" })
 
 describe("WorkOrderActions anti issue ganda WO-BR-004", () => {
   it("belum ada pengeluaran: tombol Buat Pengeluaran Material tampil", () => {
