@@ -153,6 +153,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/master/syarat-pembayaran": "Termin pembayaran",
   "/master/vendor": "Kelola data vendor/supplier",
   "/pembelian/pembayaran-vendor": "Pembayaran ke vendor",
+  "/pembelian/antrean-pembayaran-draf": "Pembayaran vendor yang masih draft dan belum dikonfirmasi, dari yang paling lama menunggu",
   "/pembelian/penerimaan": "Penerimaan barang",
   "/pembelian/perintah-pembayaran": "Instruksi pembayaran tagihan jatuh tempo",
   "/pembelian/permintaan": "Permintaan pembelian",
