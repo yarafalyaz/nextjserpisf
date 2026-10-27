@@ -44,6 +44,16 @@ export default async function MyReimbursementClaimsPage() {
       ) : (
         <MyReimbursementClaimsTable data={data} />
       )}
+
+      <p className="text-sm text-muted-foreground">
+        Mengelola klaim disetujui yang menunggu pembayaran?{" "}
+        <Link
+          href="/keuangan/antrean-reimbursement"
+          className="inline-flex min-h-11 items-center font-medium text-primary hover:underline sm:min-h-9"
+        >
+          Antrean Reimbursement
+        </Link>
+      </p>
     </div>
   )
 }
