@@ -34,6 +34,7 @@ import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.h
 import {
   classifyScrapLine,
   validateScrapInput,
+  wipCostPoolAfterIssue,
 } from "@/lib/services/scrap-classification";
 import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
@@ -1118,6 +1119,7 @@ export async function issueMaterial(
         });
         postedMoves.push(move);
       }
+      let abnormalPostedValue = 0;
       if (postedMoves[0]) {
         await stockJournalService.onProductionOrderMaterialIssue(
           tx,
@@ -1129,19 +1131,29 @@ export async function issueMaterial(
         // F-008 P2(b): jurnal abnormal kejadian ini DALAM tx yang sama —
         // fail-closed saat flag ON (throw = rollback total). Flag OFF:
         // no-op, nilai abnormal hidup di snapshot + laporan.
-        await stockJournalService.onProductionOrderAbnormalScrap(
+        const abnormalJournal = await stockJournalService.onProductionOrderAbnormalScrap(
           tx,
           runningAbnormalValue,
           order.documentNo,
           postedMoves[0].id,
           Number(user.id),
         );
+        // TASK-019: jurnal abnormal mengkredit WIP keluar dari job ini.
+        // Pool WIP subledger (totalActualCost) wajib turun sebesar yang
+        // terjurnal, atau kredit WIP saat complete memakai pool gross dan
+        // WIP per job negatif sebesar abnormal. Return null = flag OFF /
+        // sudah terjurnal untuk move ini → pool tidak berubah.
+        abnormalPostedValue = abnormalJournal ? runningAbnormalValue : 0;
       }
 
       await tx.productionOrder.update({
         where: { id: productionOrderId },
         data: {
-          totalActualCost: safeAdd(Number(order.totalActualCost), runningActual, 2),
+          totalActualCost: wipCostPoolAfterIssue({
+            previousWipCost: Number(order.totalActualCost),
+            issuedCost: runningActual,
+            abnormalPostedValue,
+          }),
         },
       });
     });
@@ -1277,7 +1289,11 @@ export async function completeProductionOrder(
       // Equivalent unit cost: the remaining WIP cost spread over the REMAINING
       // planned qty (not the whole order qty). `actualCost` is the WIP cost still
       // held for the order — it is trimmed on each partial release (see the
-      // order.update below) — so dividing it by the ORIGINAL order qty would
+      // order.update below) and, per TASK-019, already NET of abnormal scrap
+      // journaled out of WIP at issue time (issueMaterial deducts the posted
+      // abnormal value from this pool), so this credit can never exceed the
+      // job's WIP debit and drive WIP negative. Normal scrap stays in the
+      // pool and is absorbed into finished-goods cost here.
       // understate the unit cost from the second release onward and let the
       // released cost never sum back to the full actual WIP. Using the remaining
       // quantity keeps `releaseCost` a clean proportional share, so a full
@@ -2135,9 +2151,14 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
-    // Fix #34: Recalculate materials based on new qty
+    // TASK-019 Fix #34: materials dihitung ulang dari SNAPSHOT ter-pin
+    // order ini, BUKAN BOM hidup. Snapshot dibekukan di createProductionOrder
+    // dari revisi ter-pin (BomRevision/BomRevisionMaterial); BOM yang diedit
+    // belakangan tidak boleh mengubah acuan order lama, dan
+    // scrapPercentSnapshot tidak boleh dikosongkan.
     const po = await prisma.productionOrder.findUniqueOrThrow({
       where: { id },
+      include: { materials: true },
     });
     if (po.status !== "draft" && po.status !== "pending") {
       return {
@@ -2150,16 +2171,6 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       where: { id: v.productId },
       include: { materials: true },
     });
-
-    // Per-item standard cost map for stamping BOM lines (no more hardcoded 0).
-    const updBomItemIds = product.materials.map((m) => m.itemId);
-    const updBomItems = updBomItemIds.length
-      ? await prisma.item.findMany({
-          where: { id: { in: updBomItemIds } },
-          select: { id: true, standardCost: true },
-        })
-      : [];
-    const updBomCostMap = new Map(updBomItems.map((i) => [i.id, Number(i.standardCost)]));
     const updProductStdCost = Number(product.standardCost);
     const poDocumentNo = po.documentNo;
 
@@ -2171,12 +2182,105 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${id} FOR UPDATE`;
       const current = await tx.productionOrder.findUniqueOrThrow({
         where: { id },
-        select: { status: true },
+        include: { materials: true },
       });
       if (current.status !== "draft" && current.status !== "pending") {
         throw new Error(
           `Tidak bisa memperbarui Perintah Produksi dengan status '${current.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
         );
+      }
+
+      const existingLines = current.materials ?? [];
+      const pinnedRevisionId = current.bomRevisionId ?? null;
+      const productChanged = current.productId != null && v.productId !== current.productId;
+
+      type UpdateLine = {
+        itemId: number;
+        qty: number;
+        standardCost: number;
+        scrapPercentSnapshot: number | null;
+      };
+      let lines: UpdateLine[] = [];
+      let repinRevisionId: number | null | undefined;
+
+      if (!productChanged && existingLines.length > 0) {
+        // Baris sudah ter-snapshot: pertahankan item, basis qty per unit
+        // (qty lama / qty order lama), standardCost, dan scrapPercentSnapshot
+        // persis. BOM hidup (Product.materials / revisi terbaru) TIDAK dibaca
+        // untuk baris ini walau master BOM sudah diedit setelah PO lahir.
+        const oldQty = Number(current.qty);
+        lines = existingLines.map((m) => ({
+          itemId: m.itemId,
+          qty:
+            oldQty > 0
+              ? Math.round(((Number(m.qty) / oldQty) * v.qty) * 10000) / 10000
+              : Number(m.qty),
+          standardCost: Number(m.standardCost),
+          scrapPercentSnapshot:
+            m.scrapPercentSnapshot != null ? Number(m.scrapPercentSnapshot) : null,
+        }));
+      } else if (!productChanged && pinnedRevisionId != null) {
+        // Belum ada baris snapshot tetapi order ter-pin ke revisi: baris baru
+        // di-snapshot dari revisi yang sama dengan acuan order, bukan BOM hidup.
+        const revLines = await tx.bomRevisionMaterial.findMany({
+          where: { bomRevisionId: pinnedRevisionId },
+          select: { itemId: true, qty: true, scrapPercent: true },
+        });
+        const revItemIds = revLines.map((m) => m.itemId);
+        const revItems = revItemIds.length
+          ? await tx.item.findMany({
+              where: { id: { in: revItemIds } },
+              select: { id: true, standardCost: true },
+            })
+          : [];
+        const revCostMap = new Map(revItems.map((i) => [i.id, Number(i.standardCost)]));
+        lines = revLines.map((m) => ({
+          itemId: m.itemId,
+          qty: safeMultiply(Number(m.qty), v.qty, 4),
+          standardCost: revCostMap.get(m.itemId) ?? 0,
+          scrapPercentSnapshot: m.scrapPercent != null ? Number(m.scrapPercent) : null,
+        }));
+      } else {
+        // Produk berganti, atau order belum punya snapshot/pin sama sekali:
+        // perlakukan seperti create — snapshot dari BOM efektif produk tujuan
+        // (revisi released terbaru; fallback BOM kerja hanya bila belum ada
+        // revisi released, persis createProductionOrder) dan pin revisinya.
+        const effectiveBom = await resolveEffectiveBom(v.productId, tx);
+        const effItemIds = effectiveBom.lines.map((m) => m.itemId);
+        const effItems = effItemIds.length
+          ? await tx.item.findMany({
+              where: { id: { in: effItemIds } },
+              select: { id: true, standardCost: true },
+            })
+          : [];
+        const effCostMap = new Map(effItems.map((i) => [i.id, Number(i.standardCost)]));
+        if (effectiveBom.lines.length > 0) {
+          lines = effectiveBom.lines.map((m) => ({
+            itemId: m.itemId,
+            qty: safeMultiply(m.qtyPerUnit, v.qty, 4),
+            standardCost: effCostMap.get(m.itemId) ?? 0,
+            scrapPercentSnapshot: m.scrapPercent ?? null,
+          }));
+          repinRevisionId = effectiveBom.revisionId;
+        } else {
+          // Produk tanpa revisi dan tanpa garis efektif: BOM kerja adalah
+          // satu-satunya basis (sama dengan fallback create untuk produk
+          // yang belum pernah direvisi).
+          const workItemIds = product.materials.map((m) => m.itemId);
+          const workItems = workItemIds.length
+            ? await tx.item.findMany({
+                where: { id: { in: workItemIds } },
+                select: { id: true, standardCost: true },
+              })
+            : [];
+          const workCostMap = new Map(workItems.map((i) => [i.id, Number(i.standardCost)]));
+          lines = product.materials.map((m) => ({
+            itemId: m.itemId,
+            qty: safeMultiply(Number(m.qty), v.qty, 4),
+            standardCost: workCostMap.get(m.itemId) ?? 0,
+            scrapPercentSnapshot: null,
+          }));
+        }
       }
 
       const po = await tx.productionOrder.update({
@@ -2185,6 +2289,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
           slug: await nextSlug("productionOrder", poDocumentNo, { excludeId: id }),
           productId: v.productId,
           qty: v.qty,
+          ...(repinRevisionId !== undefined ? { bomRevisionId: repinRevisionId } : {}),
           // Field ini kini muncul di form (Combobox "Perintah Kerja"), jadi nilainya
           // adalah maksud pengguna: kosong berarti tautan dilepas sengaja. Sebelumnya
           // form tak pernah mengirimnya sehingga setiap penyimpanan menghapus tautan
@@ -2197,18 +2302,19 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         },
       });
 
-      // Recalculate materials: delete old, create new based on BOM * qty
+      // Recalculate materials from the pinned snapshot basis above.
       await tx.productionOrderMaterial.deleteMany({
         where: { productionOrderId: id },
       });
 
-      if (product.materials.length > 0) {
+      if (lines.length > 0) {
         await tx.productionOrderMaterial.createMany({
-          data: product.materials.map((m) => ({
+          data: lines.map((m) => ({
             productionOrderId: id,
             itemId: m.itemId,
-            qty: safeMultiply(Number(m.qty), v.qty, 4),
-            standardCost: updBomCostMap.get(m.itemId) ?? 0,
+            qty: m.qty,
+            standardCost: m.standardCost,
+            scrapPercentSnapshot: m.scrapPercentSnapshot,
           })),
         });
       }

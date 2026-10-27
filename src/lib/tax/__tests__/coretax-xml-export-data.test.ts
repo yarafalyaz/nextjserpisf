@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
  * Loader ekspor Coretax (F-113-V): snapshot dibaca massal, SellerIDTKU
- * tanpa kolom sumber diteruskan null → builder menolak bernama.
+ * dibaca dari SystemSetting.companyNitku (TASK-020 B5); kosong → builder
+ * menolak bernama, terisi 22 digit → XML terbentuk.
  * Mock prisma pola tax-invoice.service.test.ts.
  */
 
@@ -70,11 +71,25 @@ beforeEach(() => {
 })
 
 describe("loadCoretaxOutputExport", () => {
-  it("tanpa kolom SellerIDTKU: faktur tertolak bernama, tanpa berkas (fail-closed jujur)", async () => {
+  it("NITKU penjual kosong: faktur tertolak bernama, tanpa berkas (fail-closed jujur)", async () => {
     const r = await loadCoretaxOutputExport([1])
     expect(r.xml).toBeNull()
     expect(r.rejections[0].code).toBe("MISSING_SELLER_IDTKU")
     expect(r.readyLabel).toBe("siap impor Coretax")
+  })
+
+  // B5: NITKU terisi dari pengaturan perusahaan → loader meneruskannya ke
+  // builder dan ekspor faktur sah menghasilkan XML (dulu selalu gagal 100%).
+  it("B5: NITKU penjual terisi dari SystemSetting → XML terbentuk", async () => {
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      companyTaxId: "1090000000002325",
+      companyNitku: "1090000000002325000000",
+    })
+    const r = await loadCoretaxOutputExport([1])
+    expect(r.xml).not.toBeNull()
+    expect(r.xml).toContain("<SellerIDTKU>1090000000002325000000</SellerIDTKU>")
+    expect(r.exportedIds).toEqual([1])
+    expect(r.rejections).toEqual([])
   })
 
   it("daftar kosong → tanpa berkas, tanpa query faktur karangan", async () => {

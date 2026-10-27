@@ -35979,6 +35979,66 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
 F-2026-10-27-080-S — Antrean pelamar mengendap per tahap seleksi. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RCQ-1/2/3, lalu fisik Backend (080-B), konsumen Frontend (080-F sesudah #805 final), falsifikasi QA (080-Q). Pemilik usulan: Business (spec), Lead (ambang per tahap/kata/urutan/penempatan/kontak-detail), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (nol nominal, pelamar belum karyawan); dipanggil hanya bila kelak penegakan quota/gaji karyawan-baru dari rekrutmen diangkat di luar spec ini.
 
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-083-V: label utang/aging antrean reimbursement disetujui belum dibayar (jawaban Q-RBQ-4 spec F-2026-10-27-082-S PR #1100)
+
+> **Slot**: F-2026-10-27-083-V. Diperiksa bentrok 2026-10-27 05:29 WIB vs `origin/main` (`394611894`): grep `F-2026-10-27-083` di backlog+board = 0; ID terpakai tanggal ini di main: 076-S..080-S (spec), 077-S dst di PR terbuka; PR terbuka memuat `083` = 0; 082-S = spec induk (PR #1100 head `9f37f80f840b2c40b1fc4721db0022c54a2d8fdc`). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo, bukan nomor bot/peran.
+
+### 0. Basis bukti live (worktree origin/main 394611894, 2026-10-27 05:29 WIB) — TERVERIFIKASI-KODE
+
+- Tahap turunan server existing: `deriveReimbursementStage` (`src/lib/reports/reimbursement.ts:48-55`) — `paid` + J-RB2 aktif = DIBAYAR; `approved` ATAU `paid` tanpa J-RB2 aktif = DISETUJUI; `rejected` = DITOLAK; selain itu DIAJUKAN. Komentar berkas :45-46 menegaskan status dokumen saja bukan bukti uang keluar (vonis 018-V Putusan 2, pemisahan status).
+- J-RB1 akrual saat approve: `onReimbursementClaimApproved` (`src/lib/hooks/accounting.hook.ts:1362-1389`): Dr `Expense.accountId` (beban) / Cr akun liabilitas dari setting `SystemSetting.reimbursementLiabilityAccountId` yang wajib berkode COA **210209 "Utang Reimbursement Karyawan"** (resolver fail-closed :1257-1290: setting kosong/akun hilang/terhapus/nonaktif/kode != 210209 = throw). `transactionDate: new Date()` saat approve (:1381); `assertPeriodOpen` dalam tx (`postReimbursementJournal` :1324); idempoten per `(referenceType, referenceId)` jurnal aktif (:1310-1323). Konstanta: `REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE = "ExpenseReimbursementAccrual"` (:1254), `REIMBURSEMENT_PAYMENT_REFERENCE_TYPE = "ExpenseReimbursementPayment"` (:1255).
+- J-RB2 bayar: `onReimbursementClaimPaid` (:1392-1437) Dr 210209 / Cr `paidFromAccountId`; menolak tanpa J-RB1 aktif (:1408-1421). Jalur bayar existing `markExpensePaid` (`src/actions/finance.actions.ts:998-1024`): bayar PENUH saja — penjaga `evaluateReimbursementPaymentAmount` atas `locked.amount` vs `totalDebit` J-RB1; bayar sebagian tidak didukung API existing. Satu klaim tepat dua jurnal tahap; nol jurnal Expense generik untuk klaim.
+- Loader existing `getMyReimbursementClaims` (`src/actions/reimbursement.actions.ts:298-382`): fakta jurnal aktif saja (`status != "REVERSED"`, `deletedAt IS NULL`, :325-351), nominal `Number(c.amount)` verbatim (:365), `hasAccrualJournal`/`hasPaymentJournal` diterbitkan per baris (:373-374).
+- Akibat GL yang mengikat: klaim `approved` + J-RB1 aktif SUDAH diakui sebagai liabilitas 210209 di neraca (Dr beban sudah terposting). Klaim tahap DISETUJUI TANPA J-RB1 aktif (akrual gagal/REVERSED — EC-RBQ-2 spec) TIDAK punya liabilitas GL apa pun: status dokumen `approved` sendiri tidak menciptakan utang buku. Klaim `paid` tanpa J-RB2 aktif: liabilitas 210209 MASIH terbuka di GL (J-RB2 satu-satunya jalur debit 210209 per klaim) — status `paid` salah/tidak terbukti, utang buku tetap ada.
+- Vonis induk dirujuk, tidak divonis ulang: F-2026-10-25-018-V Putusan 2 (jurnal dua tahap), Putusan 3 (akun 210209 via setting fail-closed), Putusan 4 (nominal disetujui = min(diajukan, terbukti); bayar <= akrual). Pajak klaim (T3 PPh 21 non-taxable berbukti; PPN Masukan bukti atas nama karyawan tidak kreditabel, 018-V Putusan 5) TIDAK disentuh vonis ini — tahap antrean tidak mengubah klasifikasi apa pun.
+
+### Putusan 1 — Istilah utang: SAH hanya untuk baris ber-J-RB1 aktif; tahap 1 tetap label operasional
+
+1. Per baris, sebutan **"utang reimbursement"** (atau padanan "kewajiban ke karyawan") SAH secara akuntansi HANYA untuk klaim tahap DISETUJUI dengan J-RB1 AKTIF (`status != "REVERSED"`, `deletedAt IS NULL`): pada titik itu liabilitas 210209 benar-benar terposting sebesar `Expense.amount` (= totalDebit J-RB1 oleh konstruksi penjaga bayar; nominal klaim tidak dapat berubah sesudah approve tanpa jalur koreksi berjurnal).
+2. Tahap 1 antrean 082-S: label populasi/agregat TETAP operasional sesuai usulan spec (BR-RBQ-05) — judul "menunggu pembayaran", notice verbatim spec §1, agregat persis "total nominal tersimpan baris tampil — bukan saldo buku". Alasan bukan akuntansi populasi (populasi ber-J-RB1 memang utang), melainkan kejujuran cakupan: agregat antrean adalah jumlah atas cakupan scope + halaman tampil, BUKAN saldo akun 210209 di buku besar. Menyebutnya "saldo utang" tanpa rekonsiliasi ke GL = klaim palsu walau tiap barisnya utang. Label per baris "utang" pun ditunda tahap 1 demi satu bahasa permukaan; dibuka oleh Putusan 3/4 di bawah.
+3. Sub-ember `paid` tanpa J-RB2 aktif: liabilitas GL-nya NYATA (belum didebit J-RB2), tetapi barisnya membawa inkonsistensi status-vs-jurnal. Label tahap 1 tetap label inkonsistensi spec ("Status terbaca dibayar tanpa fakta jurnal"); DILARANG label "sudah dibayar/lunas" dan DILARANG dikeluarkan dari populasi kewajiban — bagi GL, utang ini belum lunas. Bila kelak istilah utang dibuka (Putusan 3), sub-ember ini masuk populasi utang dengan penanda inkonsistensi utuh, bukan baris utang bersih.
+
+### Putusan 2 — DILARANG label utang/aging untuk baris tanpa J-RB1 aktif
+
+Klaim tahap DISETUJUI tanpa J-RB1 aktif (status `approved`/`paid`, akrual tidak ada/REVERSED/terhapus) DILARANG disebut utang, kewajiban, tunggakan, atau masuk ember aging apa pun. Belum ada pengakuan GL; menyebutnya utang mengarang liabilitas. Perlakuan tahap 1: tampil tertanda persis "tanpa jurnal akrual" (warisan EC-RBQ-2), umur bayar `—`, nominal tetap tersimpan verbatim. Jalur perbaikannya koreksi data/jurnal existing, BUKAN label antrean.
+
+### Putusan 3 — Syarat sah sebutan aging (dibuka hanya lewat kartu lanjutan, bukan bawaan 082-B)
+
+Istilah "aging" untuk populasi ini SAH hanya bila SEMUA syarat berikut terpenuhi dalam satu build yang sama:
+(a) populasi = tahap DISETUJUI + J-RB1 aktif saja; baris tanpa J-RB1 di ember terpisah tertanda, tidak masuk ember aging;
+(b) acuan umur aging = `transactionDate` J-RB1 aktif per klaim (tanggal pengakuan liabilitas), BUKAN `createdAt` klaim, BUKAN `Expense.date`, BUKAN `updatedAt` — selaras BR-RBQ-04;
+(c) nominal aging per baris = sisa liabilitas per klaim. Karena bayar existing penuh-saja (`finance.actions.ts:998-1024`), sisa = `amount` klaim selama belum ada J-RB2 aktif; BILA kelak bayar sebagian dibuka (di luar vonis ini), sisa WAJIB `totalDebit J-RB1 - kumulatif totalDebit J-RB2` dari jurnal, dilarang dari kolom status;
+(d) ember aging (mis. 0-30/31-60/>60 hari) = keputusan Lead atas konstanta server; Accountant tidak memutus ambang hari operasional — Accountant hanya mengikat acuan tanggal + basis nominal di (b)/(c);
+(e) total aging tampil WAJIB disertai baris rekonsiliasi ke saldo GL 210209 periode sama (lihat Putusan 4); tanpa baris rekonsiliasi, label mundur ke "total nominal tersimpan baris tampil — bukan saldo buku".
+
+### Putusan 4 — Agregat bukan saldo buku besar tanpa rekonsiliasi
+
+Saldo buku besar akun 210209 mencakup SEMUA mutasi akun itu (klaim di luar scope pembaca, periode lain, jurnal koreksi/reversal, saldo awal). Agregat antrean (scope-terbatas, tahap-terbatas) secara konstruksi TIDAK sama dengan saldo GL. Maka: (1) dilarang label "saldo utang reimbursement", "saldo buku", "total utang perusahaan" untuk agregat antrean dalam bentuk apa pun tahap 1; (2) bila laporan aging kelak dibuka (Putusan 3), selisih agregat-scope vs saldo GL 210209 WAJIB tampil sebagai baris "selisih cakupan (di luar scope/periode/tahap)" — selisih dijelaskan, tidak dipilih diam-diam salah satu (prinsip rekonsiliasi Accountant); (3) rekonsiliasi penuh subledger-klaim ↔ GL 210209 adalah laporan tersendiri di luar 082-S.
+
+### 5. Batas build (pemilik berikutnya; vonis ini tanpa kode/schema/migrasi)
+
+- BOT Lead: merge PR vonis ini + PR #1100 bila gate hijau head persis; putus Q-RBQ-1/2/3/5/6 spec. Vonis ini menutup Q-RBQ-4 pada posisi tahap-1 (label operasional; utang/aging bersyarat Putusan 3/4) — Lead tidak perlu menunggu vonis lanjutan untuk membuka 082-B.
+- BOT Backend (082-B, sesudah Lead): payload per baris WAJIB memuat penanda fakta jurnal existing (`hasAccrualJournal` pola loader :373) agar larangan Putusan 2 dapat diuji; label tahap/sub-ember/agregat = konstanta server verbatim spec + vonis ini; agregat hanya hitungan baris + jumlah nominal tersimpan baris tampil; J-RB1 `transactionDate` dimuat massal anti-N+1 (BR-RBQ-10). DILARANG menerbitkan field bernama `payableBalance`/`aging`/`saldoUtang` tahap 1.
+- BOT Frontend (082-F): tampilkan label/notice/agregat verbatim server; UI dilarang mengganti kata menjadi utang/aging/saldo, dilarang menghitung umur dari tanggal selain acuan server.
+- BOT QA (082-Q): falsifikasi §6 atas head Backend/Frontend persis.
+
+### 6. Acceptance criteria (falsifikasi — untuk BOT QA)
+
+- E-RBQ4-1: baris tahap DISETUJUI tanpa J-RB1 aktif diberi label/ember utang, kewajiban, tunggakan, atau aging di payload/UI = MERAH (Putusan 2).
+- E-RBQ4-2: agregat antrean disebut "saldo utang", "saldo buku", atau "total utang" (payload, label, atau notice) = MERAH (Putusan 1.2/4).
+- E-RBQ4-3: sub-ember `paid` tanpa J-RB2 aktif tampil sebagai dibayar/lunas, atau hilang dari daftar = MERAH (Putusan 1.3; warisan AC-RBQ-B2).
+- E-RBQ4-4: nominal baris/agregat dihitung ulang dari jurnal (totalDebit/totalCredit) alih-alih `amount` tersimpan tahap 1, atau field payload bernama payable/aging/saldo terbit tahap 1 = MERAH.
+- E-RBQ4-5 (hanya bila aging kelak dibuka): umur aging dari `createdAt`/`Expense.date`/`updatedAt` = MERAH; total aging tanpa baris rekonsiliasi + selisih cakupan vs saldo GL 210209 = MERAH (Putusan 3/4).
+
+### Larangan (mengikat semua build turunan 082)
+
+- Menyebut populasi/agregat antrean "utang/aging/saldo utang" tahap 1 di luar syarat Putusan 3/4.
+- Memberi label utang/aging ke baris tanpa J-RB1 aktif; menyembunyikan baris itu dari antrean.
+- Menurunkan tahap/nominal/umur di UI atau dari status dokumen mentah (tahap = `deriveReimbursementStage` server verbatim).
+- Mengubah J-RB1/J-RB2, akun 210209, atau penjaga nominal atas nama vonis ini (wilayah 018-V).
+
+ID vonis ini **F-2026-10-27-083-V** (jawaban Q-RBQ-4 spec F-2026-10-27-082-S PR #1100; bebas: grep `F-2026-10-27-083` di origin/main 394611894 = 0 sebelum vonis ini; 082-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-RBQ-1/2/3/5/6 → BOT Backend 082-B → BOT Frontend 082-F → BOT QA E-RBQ4-1..5 + AC-RBQ spec.
+
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-082-S: antrean klaim reimbursement disetujui belum dibayar (lapisan baca operasional di atas tahap turunan existing)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ada6e6fa. ID F-2026-10-27-082-S diverifikasi bebas run ini 2026-10-27 03:52 WIB basis `origin/main` 6e954d69b: grep `F-2026-10-27-082` di backlog origin/main = 0; `gh pr list --search "082-S"` = 0; branch `*f082*` = 0; maks backlog terverifikasi 076-S (merged #1095), spec berjalan 077-S..081-S (PR #1092/#1093/#1094/#1096/#1098 OPEN). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS. Uang: spec TIDAK memutus jurnal/akun/nominal baru; tahap bayar = fakta jurnal existing per vonis Accountant F-2026-10-25-018-V (sudah ada, dirujuk, tidak divonis ulang).
@@ -36158,3 +36218,55 @@ F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Stat
 Melanjutkan register vonis F-2026-10-25-004-V (J-RF1/J-PL1/J-PL2; dasar PER-11/PJ/2025 Pasal 31 — register di vonis itu, tidak divonis ulang) + F-2026-10-27-085-V Putusan 2. Vonis ini menutup celah lintas sumber pada mekanisme yang sama; TIDAK memutus tarif/kode baru, TIDAK mengubah J-RF1 untuk kredit DownPayment, TIDAK menilai ulang snapshot per DP.
 
 F-2026-10-27-086-V — Gerbang FP UM refund kredit Quotation/RevisionDown. Status: VONIS TURUN run ini; mengikat fisik Backend (gerbang refundCredit + penanda 083-B) + falsifikasi QA W1–W6; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (merge + kata penanda final), Backend (fisik), Frontend (konsumen penanda), QA (falsifikasi).
+---
+
+## VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-084-V: slip approved belum dibayar BUKAN utang buku — label operasional saja, nol nominal mengikat ganda (menjawab titik BUTUH-VONIS spec F-2026-10-27-084-S §8/Q-APQ-4)
+
+> **Slot**: F-2026-10-27-084-V. Diverifikasi bebas 2026-10-27 06:05 WIB: grep `F-2026-10-27-084-V` di backlog+board `origin/main` (`585f9883`) = 0; PR terbuka `084-V` = 0; `084-S` = spec Business PR #1113 head `804490e5` (OPEN, belum merged — vonis ini ditulis di atas origin/main dan berlaku atas teks spec persis head itu). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Fakta terverifikasi (TERVERIFIKASI-KODE, basis origin/main 585f9883)
+
+- F1 — Jurnal payroll HANYA lahir saat bayar, tidak saat setuju. `approvePayroll` (hrm.actions.ts:3045-3048) hanya klaim atomik `draft -> approved` + `approvedBy`, tanpa jurnal. `markPayrollPaid` (hrm.actions.ts:3063 dst) dalam SATU transaksi: klaim atomik `approved -> paid` + `paymentDate=now` + tegak ulang plafon Pasal 63/65 atas angka tersimpan + amortisasi pinjaman + `onPayrollPaid(payrollId, undefined, tx)` (:3170). Jurnal gagal = seluruh flip status + amortisasi rollback (komentar kode :3158-3169).
+- F2 — Bentuk jurnal `onPayrollPaid` (accounting.hook.ts:2746 dst): Dr Beban Gaji sebesar gross (dikurangi kaki kompensasi PKWT per snapshot baris, F-2026-10-24-132-V Putusan 5) / Cr Bank payroll sebesar netSalary / Cr Utang Gaji (`salariesPayableAccountId`) untuk statutori BPJS+PPh21 dan potongan lain / Cr Piutang Karyawan untuk angsuran pinjaman. Akun wajib dari setting, kosong = fail-closed berisik (beban gaji/bank :2753-2757; utang gaji/piutang karyawan bersyarat nominal :2824-2835). `assertPeriodOpen(payroll.paymentDate ?? now)` di dalam hook (:2837). Idempoten per (referenceType `Payroll`, referenceId) + cek ulang dalam tx (:2873-2885).
+- F3 — Konsekuensi buku F1+F2: slip berstatus `approved` BELUM melahirkan jurnal apa pun, BELUM melahirkan utang gaji di GL, dan angka net/gross kolom slip BELUM tentu menjadi kas keluar final — plafon Pasal 63/65 ditegakkan ulang saat bayar atas angka tersimpan (hrm.actions.ts:3083-3097) dan kegagalan jurnal mengembalikan status ke `approved`. Kolom nominal slip approved = angka dokumen tersimpan, BUKAN kewajiban terukur final dan BUKAN saldo buku.
+- F4 — Model `Payroll` (schema.prisma:3900-3942): TIDAK ada `approvedAt`/`paidAt`; `paymentDate` nullable terisi hanya saat flip ke `paid`; `approvedBy` hanya ID penyetuju. Klaim spec §0 soal ini benar.
+- F5 — `statutorySnapshot` adalah data hitung gaji (isi snapshot statutori per slip); spec BR-APQ-07 sudah melarangnya masuk payload — vonis ini mengesahkan dan memperkeras (Putusan 4).
+
+### 1. Putusan
+
+1. **Makna status approved (inti).** Populasi antrean 084-S secara akuntansi adalah dokumen tersetujui yang BELUM diakui di buku: nol jurnal, nol utang gaji GL, nol beban gaji GL (F1-F3). Label sah satu-satunya = label operasional spec (usul "Menunggu Proses"/"Mengendap" dari Q-APQ-2, kata final Lead). DILARANG untuk populasi/rekap antrean: "utang gaji", "kewajiban gaji terutang", "saldo utang", "aging utang gaji", "total kewajiban belum dibayar", dan setiap rekap nominal yang menyiratkan saldo GL. Rekonsiliasi: total beban/utang gaji laporan WAJIB tetap dari jurnal terposting (status `paid`); antrean tidak boleh dijumlahkan ke, dibandingkan sebagai sama-dengan, atau dipakai menggantikan saldo akun beban gaji/utang gaji/bank payroll di laporan mana pun. Selisih daftar approved vs GL = bukan selisih — memang belum terjurnal; jangan ditampilkan sebagai temuan selisih.
+2. **Nol nominal tahap 1 LOLOS dan mengikat ganda (BR-APQ-02 disahkan dari sisi akuntansi, bukan hanya privasi gaji).** Alasan akun: nominal kolom slip approved belum final secara buku (F3) — menampilkannya sebagai "yang akan dibayar" mengarang kewajiban terukur; menampilkan Σ/rekap nominal menciptakan angka pseudo-utang tanpa jurnal. Larangan mencakup: semua kolom nominal spec BR-APQ-02, `statutorySnapshot` utuh maupun turunannya (tarif/TER/potongan per karyawan), dan angka uang turunan apa pun di payload/rekap/log/board. Satu-satunya angka rekap sah = JUMLAH SLIP (hitungan baris). Melonggarkan nominal kelak = vonis Accountant baru (preseden Q-PDQ-5 yang dirujuk spec), bukan putusan Lead/Backend sendiri.
+3. **Acuan umur (Q-APQ-1, sisi Accountant).** Umur sejak `endDate` berlabel persis "sejak akhir periode slip" LOLOS — jujur secara periode: beban periode itu memang belum diakui sampai bayar (F1), jadi umur dari akhir periode tidak mengarang momen setuju. DILARANG: (a) label "sejak disetujui" tanpa stempel `approvedAt` sah (spec §3 benar, disahkan); (b) umur dari `updatedAt`/ActivityLog; (c) label/frasa keterlambatan regulasi — "terlambat bayar gaji", "melewati jadwal wajib bayar", "berisiko sanksi/denda" — pada tahap/notice/rekap: ambang MENGENDAP adalah ambang tindak-lanjut operasional, BUKAN putusan kepatuhan jadwal bayar (dimensi ketenagakerjaan di luar vonis ini dan di luar spec; spec §8 sudah menandainya benar). Bila kelak jejak `approvedAt` fisik dibangun Backend, label "sejak disetujui" baru sah sejak kolom itu terisi di klaim approve — berlaku prospektif, baris lama tanpa stempel tidak ditebak dari `updatedAt`.
+4. **Bayar dari antrean (Q-APQ-4) DITOLAK untuk dibuka dari antrean, termasuk tahap berikut, kecuali paket syarat ini utuh.** Rantai bayar adalah satu transaksi tak terpisahkan: tegak plafon Pasal 63/65 + klaim atomik + amortisasi pinjaman + jurnal + peristiwa PKWT terbayar (F1). Tombol pintas yang memanggil selain `markPayrollPaid` existing persis = jalur jurnal kedua = DITOLAK mutlak. Pembayaran massal banyak slip DITOLAK mutlak dari antrean (satu kegagalan periode/akun harus menahan slip itu sendiri berisik di detail, bukan batch senyap). Yang sah tetap: tautan ke detail slip, bayar lewat `markPayrollPaid` existing di detail. Bila Lead kelak tetap membuka pemicu per-satu-slip dari antrean, syarat minimum vonis ini: pemicu memanggil aksi `markPayrollPaid` yang sama (bukan salinan), menampilkan error penjaga existing apa adanya (plafon/workflow/periode tutup/akun belum dipetakan), nol bayar massal, nol nominal baru di antrean, dan falsifikasi QA §4 butir V5 sebelum aktif.
+5. **Periode & koreksi.** Slip approved lintas periode tutup tetap populasi tampil apa adanya; pembayaran atasnya akan ditolak `assertPeriodOpen` pada tanggal bayar berjalan (F2) — antrean TIDAK menilai "periode sudah tutup" sebagai penanda karangan dan TIDAK menyarankan backdate `paymentDate`. Koreksi slip approved yang salah angka tetap jalur existing (hitung ulang/rapel sesuai vonis koreksi payroll berjalan), bukan edit dari antrean.
+6. **Karyawan berhenti (EC-APQ-1) LOLOS.** Slip approved karyawan berhenti tetap tampil dan tetap dibayar lewat jalur final existing di detail; status dokumen `approved` adalah satu-satunya fakta populasi. Antrean dilarang menandai "tidak layak bayar"/menahan baris berdasarkan status karyawan (penjaga lifecycle tetap memutus di aksi existing, bukan saringan diam antrean).
+
+### 2. Larangan ringkas
+
+1. Label utang/aging/saldo buku/kewajiban-terutang untuk slip `approved` atau rekapnya (Putusan 1).
+2. Nominal/statutorySnapshot/angka uang turunan apa pun di payload, rekap, log, board antrean (Putusan 2).
+3. Label "sejak disetujui" tanpa `approvedAt` sah; umur dari `updatedAt`/ActivityLog; frasa keterlambatan regulasi pada tahap/notice (Putusan 3).
+4. Tombol/aksi bayar dari antrean yang bukan `markPayrollPaid` existing persis; pembayaran massal; jalur jurnal/amortisasi kedua (Putusan 4).
+5. Penanda "periode tutup" karangan, saran backdate, edit/koreksi angka slip dari antrean (Putusan 5).
+6. Saringan/penanda kelayakan bayar berdasar status karyawan dari antrean (Putusan 6).
+
+### 3. Batas build
+
+- **Backend (084-B)**: populasi persis `status = "approved"` dalam `getHrScope` (gerbang Q-APQ-3 wilayah Lead, preseden 070-S diusulkan spec); select eksplisit TANPA satu pun kolom nominal BR-APQ-02 dan tanpa `statutorySnapshot`; umur dari acuan Q-APQ-1 terpilih berlabel server; nol tulis Payroll/EmployeeLoan/Journal; anti-N+1.
+- **Frontend (084-F)**: kolom/tahap/notice verbatim payload server; UI tidak menghitung umur/tahap; nol tombol Bayar/Setujui (Putusan 4); tidak ada nominal dalam bentuk apa pun termasuk tooltip/judul rekap.
+- **QA (084-Q)**: falsifikasi V1-V6 di §4 atas head Backend/Frontend persis, ditambah AC-APQ spec.
+
+### 4. Falsifikasi QA (penjaga baru wajib satu tes merah bila dicabut)
+
+- V1: Payload/rekap memuat satu pun kolom nominal/`statutorySnapshot`/angka uang turunan = MERAH (Putusan 2).
+- V2: Kata "utang/kewajiban terutang/aging/saldo buku" pada label/rekap/notice antrean = MERAH (Putusan 1).
+- V3: Umur berubah sesudah `updatedAt` baris approved disentuh edit tak terkait, atau label "sejak disetujui" terbit tanpa kolom `approvedAt` = MERAH (Putusan 3).
+- V4: Builder/loader menulis Payroll/EmployeeLoan/Journal atau memanggil approve/markPaid = MERAH.
+- V5: (Hanya bila Lead membuka pemicu bayar kelak) pemicu dari antrean yang tidak memanggil `markPayrollPaid` existing, atau bayar massal aktif = MERAH (Putusan 4).
+- V6: Baris approved karyawan berhenti disaring/ditandai tidak-layak oleh antrean, atau baris draft/paid bocor populasi = MERAH (Putusan 6 + BR-APQ-01 spec).
+
+### 5. Yang TIDAK diputus vonis ini
+
+Kata final label/tahap/notice, ambang hari MENGENDAP, gerbang baca Q-APQ-3, penempatan permukaan, dan kalimat notice = putusan Lead (Q-APQ-1/2/3/5/6 atas PR #1113). Tarif/aturan statutori slip tidak berubah; jurnal/akun `onPayrollPaid` existing tidak divonis ulang. Penilaian kepatuhan jadwal pembayaran gaji terhadap regulasi ketenagakerjaan = di luar vonis ini (butuh dasar regulasi + fakta praktik bayar perusahaan; jangan diturunkan dari ambang antrean).
+
+F-2026-10-27-084-V — Vonis label & batas bayar antrean slip approved belum dibayar (atas spec F-2026-10-27-084-S PR #1113). Status: VONIS SELESAI run ini; berlaku atas teks spec head `804490e5`. Pemilik berikut: Lead (Q-APQ-1/2/3/5/6 + merge PR vonis ini dan PR #1113 bila gate hijau head persis), Backend (084-B patuh Putusan 1-6), Frontend (084-F verbatim, nol nominal), QA (084-Q falsifikasi V1-V6). Butuh vonis Accountant lanjutan hanya bila: nominal dibuka, pemicu bayar dari antrean dibuka tanpa paket Putusan 4, atau label utang/aging diusulkan.

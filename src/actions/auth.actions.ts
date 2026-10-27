@@ -16,26 +16,7 @@ import {
   updateUserRolesSchema,
   updateUserWarehousesSchema,
 } from "@/lib/validations/auth.schemas"
-
-// Privilege-escalation guard: a non-super-admin (even one holding manage_users)
-// must not be able to grant the super_admin role to anyone — including
-// themselves. Returns an error message when the assignment is disallowed,
-// otherwise null. Not exported, so it stays a plain helper under "use server".
-async function assertNoSuperAdminGrant(
-  actorRoles: string[],
-  roleIds: number[]
-): Promise<string | null> {
-  if (actorRoles.includes("super_admin")) return null
-  if (roleIds.length === 0) return null
-  const requested = await prisma.role.findMany({
-    where: { id: { in: roleIds } },
-    select: { name: true },
-  })
-  if (requested.some((r) => r.name === "super_admin")) {
-    return "Hanya super admin yang dapat memberikan role super admin"
-  }
-  return null
-}
+import { assertCanGrantRoles } from "@/lib/auth/role-grant"
 
 // Target-escalation guard: a non-super-admin must not be able to modify or
 // disable an existing super_admin's account.
@@ -177,9 +158,9 @@ export async function createUser(formData: FormData) {
     }
     const { name, email, password, roleIds } = parsed.data
 
-    // Privilege-escalation guard: block granting super_admin unless the actor
-    // is super_admin (prevents a manage_users holder from minting super admins).
-    const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds ?? [])
+    // Privilege-escalation guard: block granting any role (super_admin
+    // included) whose permissions exceed the actor's own.
+    const grantErr = await assertCanGrantRoles(actor, roleIds ?? [])
     if (grantErr) {
       return { error: grantErr }
     }
@@ -269,8 +250,8 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     }
 
     // Privilege-escalation guard: a non-super-admin must not be able to assign
-    // the super_admin role to anyone (including themselves).
-    const grantErr = await assertNoSuperAdminGrant(actor.roles, cleanRoleIds)
+    // any role (super_admin included) whose permissions exceed their own.
+    const grantErr = await assertCanGrantRoles(actor, cleanRoleIds)
     if (grantErr) {
       return { error: grantErr }
     }
