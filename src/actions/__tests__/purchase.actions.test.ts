@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => {
     inventoryMovement: buildModelMock(),
     stockMove: buildModelMock(),
     inventoryLayer: buildModelMock(),
+    itemBatch: buildModelMock(),
+    itemSerial: buildModelMock(),
     batch: buildModelMock(),
     vendor: buildModelMock(),
     item: buildModelMock(),
@@ -1846,6 +1848,41 @@ describe("Purchase Actions Additional Branch Coverage", () => {
 
     const res = await actions.deleteGoodsReceipt(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deleteGoodsReceipt menghapus lot ItemBatch yang dibuat layer GR (tak yatim)", async () => {
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, purchaseOrderId: 10, warehouseId: 1, items: [] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([{ id: 201, itemId: 1, qty: 5 }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValueOnce([
+      { itemId: 1, warehouseId: 1, batchNumber: "LOT-A", qtyIn: 5 },
+    ])
+    mocks.prismaMock.itemBatch.findFirst.mockResolvedValueOnce({ id: 77, qty: 5 })
+    mocks.prismaMock.goodsReceipt.count.mockResolvedValueOnce(0)
+
+    const res = await actions.deleteGoodsReceipt(1)
+    expect(res?.success).toBe(true)
+    // Lot habis persis sebesar sumbangan GR ini → baris lot dihapus.
+    expect(mocks.prismaMock.itemBatch.delete).toHaveBeenCalledWith({ where: { id: 77 } })
+  })
+
+  it("deleteGoodsReceipt mengurangi lot bersama hanya sebesar sumbangan GR ini", async () => {
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, purchaseOrderId: 10, warehouseId: 1, items: [] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([{ id: 201, itemId: 1, qty: 5 }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValueOnce([
+      { itemId: 1, warehouseId: 1, batchNumber: "LOT-A", qtyIn: 5 },
+    ])
+    mocks.prismaMock.itemBatch.findFirst.mockResolvedValueOnce({ id: 77, qty: 8 })
+    mocks.prismaMock.goodsReceipt.count.mockResolvedValueOnce(0)
+
+    const res = await actions.deleteGoodsReceipt(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.itemBatch.update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { qty: 3 },
+    })
+    expect(mocks.prismaMock.itemBatch.delete).not.toHaveBeenCalled()
   })
 
   it("deleteVendorBill fails if status not draft", async () => {

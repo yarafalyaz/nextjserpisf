@@ -176,34 +176,57 @@ export async function onSalesReturnCompleted(
             `Item #${item.itemId} memakai pelacakan serial — sebutkan nomor seri yang benar-benar kembali.`,
           );
         }
-        const batchForLayer = rowBatches.length > 0 ? rowBatches.join(", ") : null;
-        await createInLayer(tx, {
-          itemId: item.itemId,
-          warehouseId: resolvedWarehouseId,
-          batchNumber: batchForLayer,
-          stockMoveId: sm.id,
-          qty: baseQty,
-          unitCost: baseCost,
-        });
-        if (rowBatches.length > 0) {
+        // Satu layer per lot: layer gabungan "LOT-A, LOT-B" tak pernah
+        // ditemukan konsumsi FIFO sehingga ItemBatch tak berkurang. Qty
+        // baris dibagi rata antar lot (sisa pembulatan di lot terakhir)
+        // dan nilai yang sama dipakai layer + ItemBatch.
+        const basePerBatch =
+          rowBatches.length > 0 ? Math.round((baseQty / rowBatches.length) * 100) / 100 : 0;
+        const perBatchQty = rowBatches.map((bn, idx) => ({
+          batchNumber: bn,
+          qty:
+            idx === rowBatches.length - 1
+              ? Math.round((baseQty - basePerBatch * (rowBatches.length - 1)) * 100) / 100
+              : basePerBatch,
+        }));
+        if (perBatchQty.length === 0) {
+          await createInLayer(tx, {
+            itemId: item.itemId,
+            warehouseId: resolvedWarehouseId,
+            batchNumber: null,
+            stockMoveId: sm.id,
+            qty: baseQty,
+            unitCost: baseCost,
+          });
+        } else {
+          for (const alloc of perBatchQty) {
+            await createInLayer(tx, {
+              itemId: item.itemId,
+              warehouseId: resolvedWarehouseId,
+              batchNumber: alloc.batchNumber,
+              stockMoveId: sm.id,
+              qty: alloc.qty,
+              unitCost: baseCost,
+            });
+          }
           // Pola sama seperti transfer: tambah ke lot tujuan bila ada, buat bila belum.
-          for (const bn of rowBatches) {
+          for (const alloc of perBatchQty) {
             const destBatch = await tx.itemBatch.findFirst({
-              where: { itemId: item.itemId, warehouseId: resolvedWarehouseId, batchNumber: bn },
+              where: { itemId: item.itemId, warehouseId: resolvedWarehouseId, batchNumber: alloc.batchNumber },
               select: { id: true },
             });
             if (destBatch) {
               await tx.itemBatch.update({
                 where: { id: destBatch.id },
-                data: { qty: { increment: baseQty / rowBatches.length } },
+                data: { qty: { increment: alloc.qty } },
               });
             } else {
               await tx.itemBatch.create({
                 data: {
                   itemId: item.itemId,
-                  batchNumber: bn,
+                  batchNumber: alloc.batchNumber,
                   warehouseId: resolvedWarehouseId,
-                  qty: baseQty / rowBatches.length,
+                  qty: alloc.qty,
                   notes: `Retur Penjualan ${salesReturn.documentNo}`,
                 },
               });
