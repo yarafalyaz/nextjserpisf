@@ -38926,3 +38926,135 @@ Perintah bukti (dijalankan run ini di worktree bersih atas `origin/main`): `git 
 PER-11/PJ/2025 (Dirjen Pajak, 22-05-2025) Pasal 37/40/44 — unggah + persetujuan DJP + nomor seri otomatis: https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf (diakses 2026-10-27). Artikel DJP "Coretax DJP: Ketika Faktur Pajak Diterima Seketika": https://pajak.go.id/id/artikel/coretax-djp-ketika-faktur-pajak-diterima-seketika (diakses 2026-10-27). Coretaxpedia (topik "Approval faktur pajak"): https://pajak.go.id/coretaxpedia/ (diakses 2026-10-27). Cakupan vonis: HANYA siapa/mekanisme sah penulis `draft` → `approved`/`rejected` + batas antrean 098-S. TIDAK memutus tarif/DPP/kode transaksi baru, TIDAK membangun mekanisme pencatatan, TIDAK mengubah BR-TIQ spec 098-S selain mengikat larangan statusnya, TIDAK menilai ambang mengendap (Q-TIQ-1 wilayah Lead).
 
 F-2026-10-27-099-V — Penulis status DJP TaxInvoice draft ke approved/rejected (Q-TIQ-6). Status: VONIS TURUN run ini; antrean 098-B/098-F tetap baca-saja tanpa penulis status; mekanisme pencatatan hasil Coretax = ID terpisah bersyarat Putusan 2 bila Lead membuka; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (merge + buka/tidak mekanisme pencatatan), Backend (fisik antrean sesuai spec), Frontend (label verbatim), QA (falsifikasi V1-V5).
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-105-S: antrean sesi rekonsiliasi bank draft mengendap (turunan baca-saja di atas daftar rekonsiliasi existing)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_a1779886. Basis `origin/main` `f13460bf28d4a1e525adefb28b012dc84c0a1d58` (2026-10-27 14:22 WIB).
+
+**Verifikasi ID — tegas:** grep `F-2026-10-27-105` di backlog+board `origin/main` (`f13460bf2`) = 0/0 sebelum tulis; PR terbuka berisi `105-S` = 0; awalan `BR-BRQ` grep backlog = 0. ID + awalan bebas. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+- Bukan daftar rekonsiliasi existing (`keuangan/rekonsiliasi-bank/page.tsx`): daftar itu ADA dan tetap dipakai — gerbang `view_bank_reconciliation` (:34), saringan status opsional, `findMany deletedAt null orderBy createdAt desc skip/take perPage 20` (:49-56) beserta `count`. Gap: daftar terbaru-dulu tanpa umur sesi, tanpa tingkat mengendap, tanpa rekap per status — sesi `draft` tertua justru paling mudah jatuh dari halaman pertama. Spec ini lapisan turunan baca di atas objek yang sama.
+- Bukan laporan transaksi bank / rekonsiliasi stok / buku bank existing: laporan-laporan itu membaca jurnal/statement/stok per periode untuk nilai — bukan sesi rekonsiliasi sebagai unit kerja bertahap. Objek beda.
+- Bukan antrean jurnal draft: jurnal adalah dokumen posting; sesi rekonsiliasi adalah pekerjaan pencocokan atas jurnal yang SUDAH terposting (`completeReconciliation` menuntut selisih < 0,01 dari item matched/cleared + jurnal POSTED, §2). Populasi dan pemilik tindakan beda.
+
+Aktor: pemegang `view_bank_reconciliation` (pembaca antrean + daftar), pemegang `manage_bank_reconciliation` (match/unmatch/penyesuaian/selesaikan di detail existing), pemegang `create_journals` (membuat sesi — pinjaman katalog existing, §2). Tidak ada scope departemen/gudang pada objek ini; akun bank adalah konteks baris, bukan saringan scope tahap 1 (Q-BRQ-3).
+
+Alur existing (TERVERIFIKASI-KODE, §2): sesi lahir `draft` lewat `createBankReconciliation` (`create_journals`, nomor `REC` tergenerate, `statementDate`/`statementBalance` dari rekening koran) → `matchReconciliationLine`/`unmatchReconciliationLine`/`createReconciliationAdjustment` (`manage_bank_reconciliation`) mencocokkan baris statement vs jurnal → `completeReconciliation` (`manage_bank_reconciliation`) menuntut selisih |difference| < 0,01 lalu klaim atomik `updateMany status draft → completed` + stempel `completedAt`/`completedBy` dalam satu transaksi; complete ganda serentak hanya satu yang menang.
+
+Gap: sesi bisa berhenti sebagai `draft` berhari-hari — dibuat lalu ditinggal sebelum pencocokan selesai, dan tidak ada permukaan yang menjawab "sesi draft mana mengendap, untuk akun apa, sudah berapa lama". Daftar existing mengurut terbaru-dulu per 20 baris. Spec ini menambahkan **turunan baca**: populasi draft + umur sesi + tingkat mengendap + hitungan progres item + rekap, dihitung server, tampil verbatim, tautan hanya ke detail existing berpenjaga penuh.
+
+Dokumen masuk: rekod `BankReconciliation` + item `BankReconciliationItem` existing. Dokumen keluar: tidak ada — pencocokan/penyelesaian tetap lewat detail + aksi existing. Kata usulan (USULAN, final Q-BRQ-2): judul seksi `Rekonsiliasi Bank Draft Mengendap`; kolom `Umur Draft`, `Item Tercocok k dari n`; tingkat `Mengendap` menempel pada baris, bukan status baru.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main f13460bf2)
+
+- Skema: `BankReconciliation` `prisma/schema.prisma:4530-4564` — `reconciliationNumber String?` unik, `slug?`, `accountId Int`, `bankId Int?`, `bankStatementId Int?`, `statementDate DateTime`, `statementBalance Decimal(15,2)`, `periodStart DateTime?`/`periodEnd DateTime?`, `bookBalance`/`difference`/`outstandingDeposits`/`outstandingPayments`/`adjustedBookBalance Decimal @default(0)`, `status String @default("draft")`, `completedBy Int?`/`completedAt DateTime?`, `createdBy Int?`, `deletedAt`, `createdAt`/`updatedAt`; indeks `[status]`, `[accountId]`. Item `BankReconciliationItem:4567-4589` — `bankStatementLineId?`, `journalEntryId?`, `amount`, `date?`, `matched Boolean @default(false)`, `cleared Boolean @default(false)`; unik `[bankReconciliationId, journalEntryId]` (satu jurnal sekali per sesi, komentar R-03 :4584-4586).
+- Aksi (`src/actions/finance.actions.ts`): `createBankReconciliation:1287` (`create_journals` :1289, nomor `REC` :1295, `slug` :1297, `status: "draft"` :1309, `logActivity` create); `matchReconciliationLine:1329` (`manage_bank_reconciliation` :1335); `createReconciliationAdjustment:1490` (`manage_bank_reconciliation` :1495); `unmatchReconciliationLine:1565` (`manage_bank_reconciliation` :1570); `completeReconciliation:1610` (`manage_bank_reconciliation` :1612; selisih dihitung ulang dari item, |difference| ≥ 0,01 ditolak dengan pesan selisih verbatim; klaim `updateMany where status draft` → `completed` + `completedAt` + angka final dalam SATU transaksi :1693-1705; kalah klaim = error "sudah diselesaikan atau sedang diproses"; `logActivity` complete memuat selisih).
+- Daftar existing: `keuangan/rekonsiliasi-bank/page.tsx:34` `requirePermission("view_bank_reconciliation")`; `where deletedAt null` + saringan status opsional dari query; `findMany include items, orderBy createdAt desc, skip/take 20` (:49-56) + `count`; detail `[slug]/page.tsx` permukaan kerja match/complete existing. TIDAK ada umur sesi, tingkat, rekap per status, atau urutan tertua-dulu di daftar.
+- Izin katalog: `src/lib/auth/module-catalog.generated.ts:391-392` — `view_bank_reconciliation`, `manage_bank_reconciliation` (resource `bank_reconciliation`, label `Rekonsiliasi Bank`). Pembuatan sesi meminjam `create_journals` (katalog journals) — konsekuensi jujur: pembuat sesi bukan otomatis pengelola; lihat matriks §4.
+- Builder/loader antrean draft rekonsiliasi: ABSEN. Umur draft, tingkat mengendap, hitungan progres per sesi di permukaan daftar, rekap draft: ABSEN (daftar memuat `items` per baris tampil tetapi tidak menurunkan penanda kerja).
+
+### 3. Status-transition matrix
+
+Status sesi TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `createBankReconciliation` | `draft` | `create_journals` |
+| `draft` | `matchReconciliationLine`/`unmatchReconciliationLine`/`createReconciliationAdjustment` | tetap `draft` (item berubah) | `manage_bank_reconciliation` |
+| `draft` | `completeReconciliation` selisih < 0,01 | `completed` (+`completedAt`, `completedBy`, angka final) | `manage_bank_reconciliation` + klaim atomik `updateMany` status draft |
+| `draft` | `completeReconciliation` selisih ≥ 0,01 | tetap `draft` (ditolak, pesan selisih) | penjaga selisih aksi :1684-1689 |
+| `completed` | aksi kelola apa pun | terminal untuk antrean | keluar populasi pada render berikut |
+| `draft` mengendap | — (waktu lewat saja) | tetap `draft` | **turunan: tingkat tampil `Mengendap` bila umur ≥ ambang (USULAN) — bukan status, tidak tertulis** |
+| status di luar {draft, completed} | — | terbaca apa adanya | **turunan: ember `Status Tidak Dikenal` tertanda; TIDAK dianggap draft** |
+
+### 4. Role/permission matrix
+
+Katalog `module-catalog.generated.ts:391-392` + pinjaman `create_journals`. Tanpa key baru tahap 1 (USULAN, Q-BRQ-3).
+
+| Aksi | view_bank_reconciliation | manage_bank_reconciliation | create_journals |
+|---|---|---|---|
+| Lihat daftar rekonsiliasi existing | YA (gerbang halaman :34) | tidak dituntut | tidak dituntut |
+| Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru | tidak dituntut | tidak dituntut |
+| Buat sesi (existing) | halaman menuntutnya | tidak dituntut | YA (pinjaman katalog existing) |
+| Match/unmatch/penyesuaian/selesaikan (existing, di detail) | halaman menuntutnya | YA (+ klaim atomik + penjaga selisih untuk selesaikan) | tidak dituntut |
+| Selesaikan/Cocokkan/Hapus DARI antrean turunan | TIDAK tahap 1 (BR-BRQ-07) | TIDAK | TIDAK |
+
+Konsekuensi jujur tahap 1: pembaca antrean adalah pemegang `view_bank_reconciliation`; menyelesaikan sesi menuntut `manage_bank_reconciliation` di detail — antrean tidak meminjamkan izin itu. Key izin baru = Q-BRQ-3, bukan bawaan.
+
+### 5. Business rules register (BR-BRQ)
+
+Awalan `BR-BRQ` diverifikasi bebas: grep `BR-BRQ` di backlog origin/main = 0 sebelum tulis.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-BRQ-01 | Populasi antrean = `BankReconciliation.status === "draft"` PERSIS + `deletedAt: null`. `completed` keluar (terminal). Nilai status lain masuk ember `Status Tidak Dikenal` tertanda: tampil apa adanya, tidak dibuang, tidak dianggap draft, tidak dihitung ke rekap draft. | TERVERIFIKASI-KODE (default schema:4550 + klaim aksi :1693) + USULAN (ember asing) |
+| BR-BRQ-02 | Umur draft = hari kalender WIB sejak `createdAt` (momen sesi lahir menjadi pekerjaan). `updatedAt` DILARANG sebagai acuan (bergerak tiap match/unmatch/penyesuaian — menghapus umur). `statementDate`/`periodStart`/`periodEnd` tampil apa adanya sebagai konteks periode koran, BUKAN acuan umur (sesi sah lahir lama sesudah periode berakhir; menyamakan umur dengan akhir periode = umur karangan, EC-BRQ-3). Mengubah acuan ke akhir periode = Q-BRQ-1 bersama ambang. | USULAN di atas TERVERIFIKASI-KODE (field schema:4540-4558; `updatedAt @updatedAt`) |
+| BR-BRQ-03 | Tingkat turunan murni: `MENUNGGU` → `MENGENDAP` bila umur draft ≥ ambang (Q-BRQ-1, USULAN 7 hari kalender WIB — rekonsiliasi adalah pekerjaan berkala bulanan: draft berumur lebih dari seminggu berarti pencocokan tertunda yang akan menekan tutup periode; ambang lebih pendek menimbulkan derau untuk sesi yang memang dikerjakan bertahap dalam hitungan hari — final Lead). Dihitung ulang tiap render; waktu lewat sendiri tidak menulis status/kolom apa pun. | USULAN, final BUTUH-VONIS Lead (Q-BRQ-1) |
+| BR-BRQ-04 | Urutan tampil: `MENGENDAP` dulu, lalu umur draft terbesar (createdAt tertua), seri createdAt sama → id sesi naik. Kepala antrean memuat rekap HITUNGAN SESI per tingkat dari populasi penuh. Ini MEMBALIK urutan daftar existing (`createdAt desc`) hanya untuk permukaan turunan; daftar existing tidak diubah diam-diam (Q-BRQ-3). | USULAN |
+| BR-BRQ-05 | Payload daftar TANPA nominal saldo: tidak ada `statementBalance`/`bookBalance`/`difference`/`outstandingDeposits`/`outstandingPayments`/`adjustedBookBalance` per baris maupun di rekap. Angka-angka itu adalah hasil pencocokan yang kebenarannya diputus jalur complete existing + vonis akuntansi; menampilkannya sebagai penanda antrean menyiratkan selisih draft sudah sah. Membuka nominal di daftar = BUTUH-VONIS Accountant bersyarat (Q-BRQ-4); tahap 1 vonis TIDAK diminta. | USULAN (scope) di atas TERVERIFIKASI-KODE (angka final hanya tertulis saat complete :1695-1703) |
+| BR-BRQ-06 | Progres item BOLEH tampil sebagai HITUNGAN BARIS saja: total item, item `matched`, item `cleared` — dihitung server massal anti-N+1 dari `BankReconciliationItem`. Label wajib hitungan (`Item Tercocok k dari n`), DILARANG persen penyelesaian, DILARANG kata "hampir selesai/seimbang" — complete menuntut selisih nominal < 0,01, dan hitungan item cocok TIDAK membuktikan selisih kecil (item penyesuaian bisa belum ada). Sesi tanpa item tampil tertanda `tanpa item`, bukan 0 dari 0 tersamar selesai. | USULAN di atas TERVERIFIKASI-KODE (flag item schema:4580-4581; penjaga selisih aksi) |
+| BR-BRQ-07 | Baca-saja: builder/loader tidak memanggil `match/unmatch/createReconciliationAdjustment/completeReconciliation`, tidak menulis status/item/kolom angka. Tombol Selesaikan/Cocokkan/Penyesuaian/Hapus dari antrean TIDAK ada tahap 1; tautan baris hanya ke detail rekonsiliasi existing berpenjaga penuh (klaim atomik + penjaga selisih tetap terasa di sana). | USULAN pola TERVERIFIKASI-KODE keluarga antrean |
+| BR-BRQ-08 | Gerbang loader fail-closed SEBELUM query: `view_bank_reconciliation`. Tanpa izin = halaman menolak, bukan daftar kosong tersamar. Akun bank tampil sebagai konteks baris (label akun existing); antrean TIDAK menyaring per akun sebagai scope tahap 1 dan TIDAK mengarang scope akun — membuka saringan/scope akun = Q-BRQ-3. | USULAN di atas TERVERIFIKASI-KODE (gerbang daftar :34) |
+| BR-BRQ-09 | Batas ambil jujur: antrean TIDAK mewarisi paginasi `take 20` terbaru-dulu milik daftar existing untuk kepala antrean. Loader mengambil populasi draft dengan urutan BR-BRQ-04 dan batas eksplisit yang dinyatakan (fisik Backend) + penanda `terpotong` bila populasi melebihi batas — sesi paling mengendap tidak hilang diam-diam di luar potongan; rekap tetap dari populasi penuh (BR-BRQ-04). | USULAN |
+| BR-BRQ-10 | `completedBy`/`createdBy` tidak ditampilkan tahap 1; baris tidak memuat nama pembuat/penyelesai. Sesi draft memang belum punya penyelesai; membuka penanda penanggung jawab bernama = Q-BRQ-5. Yang tampil: nomor sesi, akun konteks, tanggal koran/periode apa adanya, umur, tingkat, hitungan item. | USULAN |
+| BR-BRQ-11 | Sesi draft yatim tanpa jalan keluar: TIDAK ada aksi hapus/batal sesi rekonsiliasi di kode existing (grep aksi delete sesi = hanya soft-delete kolom `deletedAt` di skema, tanpa aksi sesi khusus yang diverifikasi run ini) — antrean tidak mengarang tombol hapus/batal; sesi yatim tampil mengendap apa adanya dan jalan keluarnya = keputusan Lead terpisah (Yang TIDAK diusulkan, EC-BRQ-1). | TERVERIFIKASI-KODE (aksi :1287-1740 tanpa hapus sesi) + USULAN (tanda) |
+
+### 6. Feature matrix Accurate/Zahir/ISF (benchmark resmi, akses 2026-10-27)
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Rekonsiliasi bank (cocokkan mutasi buku vs rekening koran) | Ada — Rekonsiliasi Bank Kas & Bank, manual + impor e-banking (https://help.accurate.id/product/accurate-online/fitur-aol/kas-bank/rekonsiliasi-bank-accurate-online/) | Ada — Rekonsiliasi Bank Kas & Bank + analisa saldo bank vs buku besar (https://help.zahironline.com/portal/id/kb/articles/rekonsiliasi-bank) | Ada — sesi draft → match/adjustment → complete berselisih < 0,01 klaim atomik (TERVERIFIKASI-KODE §2) |
+| Pencocokan massal/otomatis | Ada — rekonsiliasi massal Smartlink e-Banking (https://help.accurate.id/product/accurate-online/fitur-aol/kas-bank/rekonsiliasi-bank/rekonsiliasi-bank-secara-massal/) | Ada — status Match/Potential Match/Not Match + rekonsiliasi semua yang cocok (https://help.zahironline.com/portal/id/kb/articles/rekonsiliasi-bank-zahir-online-v2) | Parsial — match per baris existing; otomatisasi massal di luar spec ini (bukan gap antrean) |
+| Batalkan rekonsiliasi sesudah selesai | Ada — pembatalan lewat Histori Bank (URL Accurate di atas) | Tidak ditemukan di halaman yang diakses — tidak diklaim | ABSEN untuk sesi (complete terminal; koreksi = jalur jurnal/laporan existing) — di luar spec antrean |
+| Antrean sesi draft BELUM SELESAI + umur mengendap + tertua-dulu + rekap draft | Tidak ditemukan di halaman Accurate yang diakses — tidak diklaim | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); daftar ada tanpa umur/tingkat/rekap |
+
+Jujur: kedua benchmark membuktikan rekonsiliasi adalah fitur standar (ISF sudah setara pada inti match/complete berpenjaga selisih); antrean draft mengendap tidak ditemukan di keduanya — nilai spec ini operasional internal (sesi tertunda terlihat sebelum menekan tutup periode), bukan mengejar fitur vendor.
+
+### 7. Acceptance criteria + edge cases
+
+- AC-BRQ-B1: Populasi PERSIS BR-BRQ-01 (`draft` + `deletedAt null`); `completed`/terhapus bocor → MERAH. Status asing masuk ember `Status Tidak Dikenal` tertanda (hilang/dianggap draft → MERAH). Tingkat/umur/progres/rekap dihitung server; konsumen menghitung ulang → MERAH.
+- AC-BRQ-B2: Umur dari `createdAt` hari kalender WIB (BR-BRQ-02); umur dari `updatedAt`/`statementDate`/`periodEnd` → MERAH (mutasi: match satu item pada sesi lama, umur berubah = gagal).
+- AC-BRQ-B3: Urutan BR-BRQ-04 (mengendap → tertua → id naik) + rekap hitungan sesi per tingkat cocok populasi penuh; mewarisi `createdAt desc take 20` daftar existing → MERAH; populasi melebihi batas tampil penanda `terpotong`, bukan hilang diam-diam.
+- AC-BRQ-B4: Progres item massal anti-N+1 (satu agregasi `BankReconciliationItem` untuk semua sesi; query item per sesi → MERAH) mengikuti flag `matched`/`cleared` apa adanya; payload tanpa nominal saldo/nama user (bocor satu pun → MERAH, BR-BRQ-05/10); persen/"hampir selesai" turunan dari hitungan → MERAH (BR-BRQ-06).
+- AC-BRQ-B5: Loader fail-closed `view_bank_reconciliation` sebelum query (BR-BRQ-08); baca-saja terbukti (builder memanggil aksi kelola/complete/menulis status → MERAH, BR-BRQ-07).
+- AC-BRQ-F1: Label tingkat/umur/progres/rekap verbatim payload server; UI tidak menghitung umur/tingkat/progres/urutan sendiri (grep hitung di komponen = MERAH).
+- AC-BRQ-F2: TIDAK ada tombol Selesaikan/Cocokkan/Penyesuaian/Hapus dari antrean (tombol tulis di antrean → MERAH, BR-BRQ-07); tautan baris hanya ke detail rekonsiliasi existing.
+- AC-BRQ-F3: Baris tertanda (`tanpa item`, `Status Tidak Dikenal`, `terpotong`, periode kosong `—`) tampil dengan tandanya, bukan disembunyikan; tanpa izin halaman menolak (bukan daftar kosong tersamar).
+
+Edge cases:
+- EC-BRQ-1: Sesi `draft` yatim berminggu-minggu tanpa jalur hapus/batal existing: tampil mengendap apa adanya; antrean tidak memberi tombol hapus/batal (jalur keluar = keputusan terpisah Lead, Yang TIDAK diusulkan).
+- EC-BRQ-2: Sesi diselesaikan saat antrean terbuka: keluar populasi render berikut; antrean tidak mengunci baris (klaim atomik complete existing tetap penjaga tunggal).
+- EC-BRQ-3: Sesi lahir hari ini untuk periode koran bulan lalu (`periodEnd` jauh lampau): umur draft tetap sejak `createdAt` (lahir baru = pekerjaan baru), periode tampil sebagai konteks — menyamakan umur dengan akhir periode membuat sesi baru terlihat basi karangan (kait AC-BRQ-B2).
+- EC-BRQ-4: Sesi dengan semua item `matched` tetapi selisih nominal masih ≥ 0,01 (penyesuaian belum dibuat): progres hitungan penuh TIDAK ditampilkan sebagai siap selesai; complete existing tetap menolak di detail (BR-BRQ-06).
+- EC-BRQ-5: Dua sesi draft bersamaan untuk akun sama (kode existing tidak melarang sesi paralel per akun — create tanpa cek sesi draft aktif): tampil per sesi apa adanya; antrean tidak menggabung, tidak menyatakan konflik (pencocokan per sesi sah per item unik jurnal-per-sesi existing).
+- EC-BRQ-6: Sesi draft tanpa item sama sekali: tertanda `tanpa item`; progres tidak ditampilkan sebagai 0% atau selesai.
+- EC-BRQ-7: Item dengan `journalEntryId` null (penyesuaian): ikut hitungan item apa adanya; antrean tidak menilai sah/tidaknya penyesuaian — itu jalur detail + complete existing.
+
+### 8. Backlog implementasi (turunan F-2026-10-27-105-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-105-S | Spec kontrak ini (dokumen) | Business | — |
+| 105-B | Builder murni (populasi draft/umur WIB/tingkat/urutan/rekap hitungan/progres item massal) + loader `view_bank_reconciliation` fail-closed anti-N+1 + tes AC-BRQ-B1..B5 | Backend | Putusan Lead Q-BRQ-1/2/3 |
+| 105-F | Permukaan antrean (penempatan per Q-BRQ-3) verbatim payload + AC-BRQ-F1..F3; grep e2e rekonsiliasi dulu | Frontend | 105-B merged |
+| 105-Q | Falsifikasi AC-BRQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 105-B/105-F |
+
+| ID | Pertanyaan | Pemutus | Usulan Business |
+|---|---|---|---|
+| Q-BRQ-1 | Ambang `MENGENDAP` (umur draft ≥ N hari kalender WIB sejak `createdAt`)? Acuan `createdAt` disahkan (bukan akhir periode)? | Lead | USULAN 7 hari + acuan `createdAt` (BR-BRQ-02/03) — bukan fakta sebelum diputus |
+| Q-BRQ-2 | Kata final: label tingkat `Mengendap`, kolom `Umur Draft`/`Item Tercocok k dari n`, judul seksi? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim, status mentah tetap tertanda |
+| Q-BRQ-3 | Penempatan: seksi turunan di halaman daftar rekonsiliasi existing vs permukaan terpisah? Saringan per akun dibuka? Daftar existing ikut diubah urutan/batasnya? | Lead | USULAN: seksi turunan di halaman daftar existing; tanpa saringan akun tahap 1; daftar existing tidak diubah |
+| Q-BRQ-4 | Nominal saldo/selisih dibuka di payload daftar? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-BRQ-05); vonis WAJIB hanya bila Lead membuka ini — tahap baca-saja tanpa angka tidak butuh vonis |
+| Q-BRQ-5 | Penanda penanggung jawab bernama (`createdBy`) dibuka tahap 1? | Lead | USULAN tidak tahap 1 (BR-BRQ-10): umur + akun + progres cukup untuk menemukan sesi tersangkut; nama = permukaan detail existing |
+
+### Yang TIDAK diusulkan run ini
+
+- Tombol Selesaikan/Cocokkan/Penyesuaian/Hapus dari antrean, penyelesaian massal, auto-complete sesi seimbang (BR-BRQ-07) — complete menuntut selisih < 0,01 + klaim atomik di detail; jalan pintas mengaburkan penjaga itu.
+- Hapus/batal sesi draft yatim: tidak ada jalur existing (§2/BR-BRQ-11) dan menciptakannya = aksi tulis berpenjaga baru (siapa boleh membuang sesi berisi item tercocok?) — keputusan Lead terpisah, bukan bawaan antrean baca (EC-BRQ-1 dicatat, bukan dipecahkan di sini).
+- Nominal saldo/selisih/outstanding di payload daftar, persen penyelesaian, atau label "seimbang/hampir selesai" dari hitungan item (BR-BRQ-05/06, Q-BRQ-4).
+- Pencocokan otomatis/massal gaya Smartlink, impor rekening koran dari antrean — kemampuan kerja detail existing/vendor, bukan permukaan antrean.
+- Pengingat ke penyusun rekonsiliasi, eskalasi, SLA per akun — keadaan/kanal baru di luar tahap baca-saja.
+- Key izin rekonsiliasi baru, mengubah gerbang/urutan/paginasi daftar existing, atau melarang sesi draft paralel per akun (Q-BRQ-3; EC-BRQ-5 dicatat apa adanya).
+- Membatalkan rekonsiliasi `completed` (fitur Accurate) — koreksi hasil rekonsiliasi menyentuh jurnal/angka final; spec terpisah dengan vonis Accountant, bukan turunan antrean draft.
+
+F-2026-10-27-105-S — Antrean sesi rekonsiliasi bank draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-BRQ-1/2/3/5, lalu fisik Backend (105-B), konsumen Frontend (105-F), falsifikasi QA (105-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja (nol nominal saldo di payload, nol jurnal — BR-BRQ-05); WAJIB bersyarat hanya bila Lead membuka Q-BRQ-4 (nominal di daftar).
