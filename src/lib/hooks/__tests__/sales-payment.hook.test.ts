@@ -140,16 +140,49 @@ describe("sales-payment recalc — float drift precision", () => {
     )
   })
 
-  it("still leaves a strictly-partial invoice on 'partial' (real drift, not underpayment)", async () => {
-    // 0.2 + 0.3 = 0.5 (no float drift; gt 0.6) → should remain "partial".
+  // FIN-BR-006: satu helper bersama dua sisa batas (dalam vs luar toleransi).
+  async function recalcWithPaid(id: number, amount: number) {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({
+      id,
+      grandTotal: 1000,
+      status: "posted",
+    })
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount }])
+    await onSalesPaymentUpdated(id)
+  }
+
+  it("FIN-BR-006: sisa 0,50 dalam toleransi Rp1 -> 'paid'", async () => {
+    await recalcWithPaid(61, 999.5)
+
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "paid", paymentStatus: "paid" }),
+      }),
+    )
+  })
+
+  it("FIN-BR-006: sisa 1,01 di luar toleransi -> 'partial'", async () => {
+    await recalcWithPaid(62, 998.99)
+
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "partial", paymentStatus: "partial" }),
+      }),
+    )
+  })
+
+  it("still leaves an underpaid invoice beyond tolerance on 'partial'", async () => {
+    // FIN-BR-006: sisa 100 jauh di luar toleransi Rp1 -> tetap "partial".
+    // (Fixture lama grandTotal 0.6 / bayar 0.5 gugur: sisa 0,10 kini
+    // dalam toleransi sehingga lunas — perilaku baru yang disengaja.)
     mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({
       id: 99,
-      grandTotal: 0.6,
+      grandTotal: 600,
       status: "posted",
     })
     mocks.paymentFindMany.mockResolvedValueOnce([
-      { amount: 0.2 },
-      { amount: 0.3 },
+      { amount: 200 },
+      { amount: 300 },
     ])
 
     await onSalesPaymentUpdated(99)

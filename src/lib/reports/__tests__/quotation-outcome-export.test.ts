@@ -23,6 +23,8 @@ describe("buildQuotationOutcomeTable (F-2026-10-20-101)", () => {
     expect(text).toContain("Harga terlalu tinggi")
     expect(text).toContain("Tidak tercatat (penolakan lama)")
     expect(table.columns).toHaveLength(2)
+    // Kolom hitung berlabel entitasnya (AC-REP-003), bukan "Jumlah" ambigu.
+    expect(table.columns.map((column) => column.header)).toEqual(["Kategori Kalah", "Penawaran"])
   })
 
   it("keadaan kosong tampil catatan jujur, bukan tabel angka nol", () => {

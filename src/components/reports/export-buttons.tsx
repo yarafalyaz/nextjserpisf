@@ -62,6 +62,40 @@ function openPdf(href: string, download: boolean) {
   window.open(url.toString(), "_blank", "noopener,noreferrer")
 }
 
+/**
+ * Waktu cetak ekspor klien, selalu Asia/Jakarta berlabel WIB — zona perangkat
+ * pembaca tidak boleh mengubah cap waktu dokumen (AC-REP-003).
+ */
+export function formatPrintedAtWib(now: Date): string {
+  const date = now.toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta',
+  })
+  const time = now.toLocaleTimeString('id-ID', {
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta',
+  })
+  return `${date} ${time} WIB`
+}
+
+function csvQuote(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/**
+ * Blok kop bersama untuk semua CSV ekspor klien: identitas perusahaan,
+ * periode (bila halaman menyediakan `[data-report-period]`), dan waktu
+ * cetak WIB. Tanpa blok ini CSV hanya membawa judul + angka (AC-REP-003).
+ */
+export function buildCsvHeaderLines(input: {
+  companyName: string
+  periodText?: string
+  printedAt: string
+}): string[] {
+  const lines = [csvQuote(input.companyName)]
+  if (input.periodText) lines.push(csvQuote(input.periodText))
+  lines.push(csvQuote(`Dicetak: ${input.printedAt}`))
+  return lines
+}
+
 function downloadCsv(csv: string, title: string) {
   const content = csv.startsWith("\ufeff") ? csv : `\ufeff${csv}`
   const blob = new Blob([content], { type: "text/csv;charset=utf-8;" })
@@ -117,20 +151,32 @@ export function ExportButtons({
   const handleExportCSV = () => {
     if (isExporting) return
     setIsExporting(true)
-    // Ditunda satu tick supaya status pending sempat ter-render sebelum
-    // pembentukan CSV (sinkron) memblokir main thread.
+    // Kop CSV memuat identitas perusahaan dari endpoint setelan; ditunda satu
+    // tick supaya status pending sempat ter-render sebelum pembentukan CSV.
     window.setTimeout(() => {
-      try {
-        exportCsv()
-      } finally {
-        setIsExporting(false)
-      }
+      void (async () => {
+        try {
+          exportCsv(await fetchSettings())
+        } finally {
+          setIsExporting(false)
+        }
+      })()
     }, 0)
   }
 
-  const exportCsv = () => {
+  const exportCsv = (settings: Settings) => {
+    const periodText = document.querySelector('[data-report-period]')?.getAttribute('data-report-period') || ''
+    const headerLines = buildCsvHeaderLines({
+      companyName: settings.companyName,
+      periodText,
+      printedAt: formatPrintedAtWib(new Date()),
+    })
+
     if (csvData) {
-      downloadCsv(csvData, title)
+      // Serializer server sudah membawa judulnya sendiri; kop disisipkan
+      // sesudah baris judul agar susunan judul, kop, tabel konsisten.
+      const bodyLines = csvData.replace(/^\ufeff/, '').split('\n')
+      downloadCsv([bodyLines[0], ...headerLines, ...bodyLines.slice(1)].join('\n'), title)
       return
     }
 
@@ -140,7 +186,7 @@ export function ExportButtons({
       return
     }
 
-    let csv = `"${title}"\n\n`
+    let csv = `"${title}"\n${headerLines.join('\n')}\n\n`
     // Narasi laporan (mis. disclaimer di [data-report-narration]) ikut ke
     // berkas: ekspor tidak boleh melepas konteks hukum dari angkanya.
     const narrationEl = document.querySelector('[data-report-narration]')
@@ -207,7 +253,7 @@ export function ExportButtons({
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(...C.light)
       doc.text(
-        `Dicetak: ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}  |  Halaman ${page} dari ${total}`,
+        `Dicetak: ${formatPrintedAtWib(now)}  |  Halaman ${page} dari ${total}`,
         lm, ph - 14
       )
       doc.setDrawColor(...C.line)
