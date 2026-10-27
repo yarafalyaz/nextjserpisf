@@ -73,7 +73,7 @@ describe("vendor-payment-draft-queue (F-2026-10-26-072-S tahap 1)", () => {
     })
     expect(VENDOR_PAYMENT_DRAFT_COLUMN_LABELS).toEqual({
       documentNo: "No. Dokumen",
-      vendor: "Vendor",
+      vendor: "Pemasok",
       amount: "Nilai Draft",
       paymentDate: "Tanggal Bayar",
       vendorBill: "Tagihan Tujuan",

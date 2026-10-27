@@ -54,7 +54,7 @@ function input(overrides: Partial<TaxInvoiceDraftInput> = {}): TaxInvoiceDraftIn
 describe("tax-invoice-draft-queue (F-2026-10-27-098-S)", () => {
   it("kata verbatim Q-TIQ-2 + ambang Q-TIQ-1", () => {
     expect(TAX_INVOICE_DRAFT_STALE_DAYS).toBe(3)
-    expect(TAX_INVOICE_DRAFT_TITLE).toBe("Faktur Pajak Draft")
+    expect(TAX_INVOICE_DRAFT_TITLE).toBe("Faktur Pajak Draf")
     expect(TAX_INVOICE_DRAFT_DIRECTION_LABELS).toEqual({ out: "Keluaran", in: "Masukan" })
     expect(TAX_INVOICE_DRAFT_LEVEL_LABELS).toEqual({ mengendap: "Mengendap", menunggu: "Menunggu" })
     expect(TAX_INVOICE_DRAFT_PAST_PERIOD_LABEL).toBe("masa lampau")

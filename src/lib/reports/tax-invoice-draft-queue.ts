@@ -27,7 +27,7 @@ import { getWibTodayUtcDate, WIB_OFFSET_HOURS } from "@/lib/utils/attendance-tim
 /** Ambang mengendap (hari kalender WIB sejak createdAt) — Q-TIQ-1: 3. */
 export const TAX_INVOICE_DRAFT_STALE_DAYS = 3
 
-export const TAX_INVOICE_DRAFT_TITLE = "Faktur Pajak Draft"
+export const TAX_INVOICE_DRAFT_TITLE = "Faktur Pajak Draf"
 
 export const TAX_INVOICE_DRAFT_DIRECTION_LABELS = {
   out: "Keluaran",
@@ -47,7 +47,7 @@ export const TAX_INVOICE_DRAFT_LEVEL_LABELS: Record<TaxInvoiceDraftLevel, string
 export const TAX_INVOICE_DRAFT_PAST_PERIOD_LABEL = "masa lampau"
 
 export const TAX_INVOICE_DRAFT_NOTICE_TEXT =
-  "Daftar ini hanya faktur pajak yang masih draft. Status DJP hanya dari bukti Coretax; proses lewat permukaan faktur pajak existing."
+  "Daftar ini hanya faktur pajak yang masih draft. Status DJP hanya dari bukti Coretax; proses lewat permukaan faktur pajak yang ada."
 
 const MS_PER_DAY = 86_400_000
 

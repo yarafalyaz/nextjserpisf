@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { showError } from "@/lib/utils/toast"
+import { statusLabel } from "@/lib/utils/status-labels"
 
 /**
  * F-2026-10-21-009-V / F-2026-10-24-097-S: tombol Buka Kembali (reopen) job
@@ -53,7 +54,7 @@ export function JobReopenButton({
         kind === "work_order"
           ? reopenWorkOrder(id, trimmed)
           : reopenProductionOrder(id, trimmed),
-      "Job dibuka kembali. Status kini completed.",
+      `Job dibuka kembali. Status kini ${statusLabel("completed")}.`,
       () => {
         setOpen(false)
         setReason("")

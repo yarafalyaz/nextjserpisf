@@ -53,7 +53,7 @@ export function PayrollDraftQueueCard({
         </>
       }
       isEmpty={rows.length === 0}
-      emptyText="Tidak ada slip gaji draft."
+      emptyText="Tidak ada slip gaji Draf."
       notice={PAYROLL_DRAFT_NOTICE_TEXT}
       contentClassName="flex flex-col gap-4"
     >

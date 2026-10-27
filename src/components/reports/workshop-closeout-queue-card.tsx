@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { entityHref } from "@/lib/utils/entity-url"
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
+import { statusLabel } from "@/lib/utils/status-labels"
 
 /**
  * F-2026-10-24-097-S S3: antrean "Job Selesai Belum Ditutup".
@@ -85,7 +86,7 @@ export function WorkshopCloseoutQueueCard({
         job.kind === "work_order"
           ? closeWorkOrder(job.id, trimmed)
           : closeProductionOrder(job.id, trimmed),
-      "Job ditutup. Status kini closed.",
+      `Job ditutup. Status kini ${statusLabel("closed")}.`,
       () => {
         setPendingJob(null)
         setReason("")

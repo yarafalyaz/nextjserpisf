@@ -20,7 +20,7 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 
-export const VENDOR_PAYMENT_DRAFT_QUEUE_TITLE = "Pembayaran Vendor Draft Mengendap"
+export const VENDOR_PAYMENT_DRAFT_QUEUE_TITLE = "Pembayaran Pemasok Draf Mengendap"
 
 const LEVEL_TONES: Record<VendorPaymentDraftLevel, "danger" | "default"> = {
   mengendap: "danger",
@@ -61,12 +61,12 @@ export function VendorPaymentDraftQueueCard({
         </>
       }
       isEmpty={rows.length === 0}
-      emptyText="Tidak ada pembayaran vendor draft."
+      emptyText="Tidak ada pembayaran pemasok Draf."
       notice={VENDOR_PAYMENT_DRAFT_NOTICE_TEXT}
     >
       <div className="flex flex-col gap-4">
         <ul
-          aria-label="Rekap tingkat antrean pembayaran vendor draft"
+          aria-label="Rekap tingkat antrean pembayaran pemasok Draf"
           className="flex flex-wrap gap-1.5"
         >
           {VENDOR_PAYMENT_DRAFT_LEVELS.map((level) => (
@@ -81,7 +81,7 @@ export function VendorPaymentDraftQueueCard({
         </ul>
         {vendorCounts.length > 0 ? (
           <ul
-            aria-label="Rekap vendor antrean pembayaran vendor draft"
+            aria-label="Rekap pemasok antrean pembayaran pemasok Draf"
             className="flex flex-wrap gap-1.5"
           >
             {vendorCounts.map((entry) => (

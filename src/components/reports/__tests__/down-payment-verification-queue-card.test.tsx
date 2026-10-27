@@ -65,7 +65,7 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
       "Menunggu",
       "Jumlah",
       "Bukti",
-      "Jarak ke Ambang Invoice",
+      "Jarak ke Ambang Faktur",
       "Tingkat",
       "Aksi",
     ]
@@ -88,7 +88,7 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     expect(text).toContain("Bukti belum ada")
     expect(text).toContain("1")
     // Tingkat + jarak verbatim builder: DP-1 membuka invoice, DP-2 menunggu.
-    expect(text).toContain("Konfirmasi Membuka Invoice")
+    expect(text).toContain("Konfirmasi Membuka Faktur")
     expect(text).toContain("Menunggu Verifikasi")
     expect(text).toContain("Cukup dengan konfirmasi baris ini")
     // Menunggu lain terpisah, tidak dijumlahkan ke ambang.
@@ -118,7 +118,7 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     // Sel per kolom dikunci posisi: 5=Menunggu(umur), 7=Bukti, 9=Tingkat.
     expect(rowsDom[0]?.children[5]?.textContent).toBe("2 hari")
     expect(rowsDom[0]?.children[7]?.textContent).toBe("Bukti ada")
-    expect(rowsDom[0]?.children[9]?.textContent).toBe("Konfirmasi Membuka Invoice")
+    expect(rowsDom[0]?.children[9]?.textContent).toBe("Konfirmasi Membuka Faktur")
     expect(rowsDom[1]?.children[7]?.textContent).toBe("Bukti belum ada")
     expect(rowsDom[1]?.children[9]?.textContent).toBe("Menunggu Verifikasi")
     // Menunggu lain Rp dari sen nyata (kolom 8 = Jarak): DP-1 menunggu lain

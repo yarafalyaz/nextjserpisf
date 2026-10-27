@@ -98,7 +98,7 @@ describe("SalesInvoiceDraftQueueCard F-2026-10-26-057-S", () => {
       "Aksi",
     ]
     headers.forEach((header) => expect(text).toContain(header))
-    expect(text).toContain("Faktur Draft Mengendap")
+    expect(text).toContain("Faktur Draf Mengendap")
     expect(text).toContain("Mengendap: 1")
     expect(text).toContain("Menunggu Posting: 1")
     expect(text).toContain("2 dokumen")

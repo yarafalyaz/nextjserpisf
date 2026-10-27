@@ -201,7 +201,7 @@ describe("MaterialRequestDraftQueueCard 071-F AC-MRQ-F1..F3", () => {
     const queue = buildMaterialRequestDraftQueue([], NOW)
     const rendered = renderCard(<MaterialRequestDraftQueueCard queue={queue} />)
     root = rendered.root
-    expect(rendered.container.textContent ?? "").toContain("Tidak ada permintaan material draft.")
+    expect(rendered.container.textContent ?? "").toContain("Tidak ada permintaan material Draf.")
     expect(rendered.container.querySelector("table")).toBeNull()
   })
 })

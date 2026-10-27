@@ -21,6 +21,7 @@ export const STATUS_LABELS: Record<string, string> = {
 
   // Manufacturing
   in_progress: "Dalam Proses",
+  processing: "Diproses",
 
   // Purchase
   sent: "Terkirim",
@@ -77,6 +78,8 @@ export const STATUS_LABELS: Record<string, string> = {
   won: "Menang",
   lost: "Kalah",
   converted: "Terkonversi",
+  used: "Terpakai",
+  refunded: "Sudah Direfund",
   accepted: "Diterima",
   on_hold: "Ditunda",
   contacted: "Dihubungi",

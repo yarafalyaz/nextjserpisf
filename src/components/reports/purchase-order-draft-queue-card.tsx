@@ -60,7 +60,7 @@ export function PurchaseOrderDraftQueueCard({
         </>
       }
       isEmpty={rows.length === 0}
-      emptyText="Tidak ada pesanan pembelian draft."
+      emptyText="Tidak ada pesanan pembelian Draf."
       notice={PURCHASE_ORDER_DRAFT_NOTICE_TEXT}
     >
       <div className="flex flex-col gap-4">

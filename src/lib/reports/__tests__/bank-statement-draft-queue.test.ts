@@ -74,7 +74,7 @@ function input(over: Partial<BankStatementDraftInput> = {}): BankStatementDraftI
 
 describe("bank-statement-draft-queue (F-2026-10-27-096-S)", () => {
   it("kata verbatim Q-BSQ-1/2 + ambang dan label nominal bernama", () => {
-    expect(BANK_STATEMENT_DRAFT_QUEUE_TITLE).toBe("Rekening Koran Draft Mengendap")
+    expect(BANK_STATEMENT_DRAFT_QUEUE_TITLE).toBe("Rekening Koran Draf Mengendap")
     expect(BANK_STATEMENT_DRAFT_BUCKET_LABELS).toEqual({
       belum_ada_baris: "Belum Ada Baris",
       belum_semua_tercocokkan: "Belum Semua Tercocokkan",
@@ -448,7 +448,7 @@ describe("wiring permukaan antrean rekening koran (AC-BSQ-B5/F1..F3)", () => {
     expect(uiSource).toContain("BANK_STATEMENT_DRAFT_BUCKET_LABELS")
     expect(builderSource).toContain('"Belum Ada Baris"')
     expect(builderSource).toContain('"Belum Semua Tercocokkan"')
-    expect(builderSource).toContain('"Rekening Koran Draft Mengendap"')
+    expect(builderSource).toContain('"Rekening Koran Draf Mengendap"')
   })
 
   it("AC-BSQ-F2/F3: tanpa tombol tulis dari antrean; tautan hanya ke detail koran existing", () => {
