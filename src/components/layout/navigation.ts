@@ -194,6 +194,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Jurnal", href: "/keuangan/jurnal", icon: BookOpenCheck, permission: "view_journals" },
       { label: "Biaya", href: "/keuangan/pengeluaran", icon: CircleDollarSign, permission: "view_expenses" },
+      { label: "Antrean Reimbursement", href: "/keuangan/antrean-reimbursement", icon: ListTodo, permission: "create_employee_reimbursements" },
       { label: "Kas Kecil", href: "/keuangan/kas-kecil", icon: Coins, permission: "view_petty_cash" },
       { label: "Pusat Biaya", href: "/keuangan/pusat-biaya", icon: Target, permission: "view_cost_centers" },
       { label: "Pusat Laba", href: "/keuangan/pusat-laba", icon: TrendingUp, permission: "view_profit_centers" },
