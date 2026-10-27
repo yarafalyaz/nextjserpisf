@@ -29,6 +29,9 @@
  * Pure (tanpa Prisma/DOM).
  */
 
+/** Status pemindahan yang berarti barang masih di jalan (penuh / sebagian). Sumber tunggal murni — loader me-re-export. */
+export const IN_TRANSIT_TRANSFER_STATUSES = ["processed", "partially_received"] as const
+
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import { AGING_BUCKETS, ageInDays } from "@/lib/reports/received-not-billed"
