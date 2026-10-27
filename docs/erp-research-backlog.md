@@ -40645,3 +40645,117 @@ ID vonis ini **F-2026-10-28-115-V** (jawaban garpu INV-BR-007/AC-INV-007). Pemil
 - E115-1: panggil consume path mana pun dengan `allowShortfall: true` dari kode produksi (bukan tes) = MERAH (grep produksi harus 0).
 - E115-2: cabut guard `if (!allowShortfall)` di inventory-fifo.ts → tes `inventory-fifo.test.ts:273` (throws when insufficient) MERAH.
 - E115-3: tambah saklar/settings/permission override stok negatif tanpa vonis baru = MERAH (keputusan V1 dilanggar).
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-117-S: guard anti posting payroll ganda (AC-HR-002)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane spec tertulis, TANPA kode). Basis `origin/main` `ceaeeeb4365012f9a14f5b5f0f343418e233fda7` (28 Okt 2026 02:05 WIB). Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:223` (AC-HR-002 `Belum` — "guard anti posting payroll ganda tidak ditunjuk di sini") + `docs/product/TEST-STRATEGY.md:25` (payroll posting = P0) + `docs/product/TEST-STRATEGY.md:50-51` (skenario 13: payroll "tidak dapat diposting dua kali") + `docs/product/TEST-STRATEGY.md:68-72` (konkurensi/idempotency: retry sesudah timeout, double-click, dua user bersamaan).
+
+**Verifikasi ID:** grep `F-2026-10-28-117` di backlog+board = 0/0 sebelum tulis (28 Okt 2026 02:15 WIB). Bebas. ID ini spec (`-S`), bukan vonis jurnal.
+
+### 1. Definisi "posting ganda" payroll (tiga lapis dokumen, jangan dicampur)
+
+| Lapis | Dokumen | "Ganda" berarti | Akibat bila lolos |
+|---|---|---|---|
+| L1 Slip | `Payroll` | dua slip aktif karyawan sama dengan rentang tanggal beririsan | karyawan digaji dua kali untuk hari sama; komponen/statutori terhitung dobel |
+| L2 Bayar | transisi `approved → paid` + amortisasi `EmployeeLoan` | dua eksekusi bayar untuk slip sama (double-submit, retry sesudah timeout, dua user bersamaan) | pinjaman teramortisasi dua kali; kas keluar tercatat dua kali di subledger |
+| L3 Jurnal | `Journal` `referenceType="Payroll"` | dua jurnal aktif untuk `payrollId` sama | beban gaji + kredit bank/utang tercatat dobel di GL |
+
+"Re-post periode sama" dalam bahasa operator bengkel terpetakan ke L1 (slip kedua rentang sama/beririsan, termasuk run massal diulang) — BUKAN string `period` sama: dua slip mingguan dalam bulan kalender sama adalah SAH selama rentang tidak beririsan (TERVERIFIKASI-KODE §2 baris G1/G2). "Posting" pada AC-HR-002 dibaca sebagai rantai penuh L1→L2→L3; guard dinyatakan menutup AC-HR-002 hanya bila ketiga lapis terjaga.
+
+### 2. Inventarisasi terverifikasi (28 Okt 2026, basis di atas)
+
+Sudah ada — guard per lapis (semua `TERVERIFIKASI-KODE`):
+
+| # | Lapis | Guard | Bukti file:baris |
+|---|---|---|---|
+| G1 | L1 | Kunci unik DB slip: `@@unique([employeeId, startDate, endDate], map: "uq_payroll_employee_range")`; `documentNo @unique`; `slug @unique` | `prisma/schema.prisma:3959-3961,3998` |
+| G2 | L1 | Guard irisan rentang (setengah-terbuka `[startDate, endDate)`, status selain cancelled/canceled menghalangi; rentang bersebelahan persis lolos) | `src/lib/reports/payroll-frequency.ts:86-100`; query jendela ±90 hari `src/actions/hrm.actions.ts:2225-2244` |
+| G3 | L1 | Pembuatan tunggal: kunci baris karyawan `FOR UPDATE` + cek irisan ulang di dalam transaksi insert (anti-TOCTOU); P2002 diterjemahkan jadi pesan ramah "sudah ada", bukan error Prisma mentah | `src/actions/hrm.actions.ts:2783-2823,2828-2846`; regresi `src/actions/__tests__/payroll-duplicate-guard.test.ts:126-155` |
+| G4 | L1 | Run massal: populasi disaring per frekuensi + gerbang berhenti; cek irisan luar, lalu kunci baris populasi urut id menaik + cek irisan ulang + `createMany skipDuplicates` dalam SATU transaksi; penabrak terlewati-terhitung per karyawan menyebut `documentNo`, karyawan lain tetap terbit | `src/actions/hrm.actions.ts:2308-2384,2524-2598`; tes DB nyata `src/actions/__tests__/bulk-payroll-concurrency.integration.test.ts:160-258` |
+| G5 | L1 | Edit slip draft: hanya `draft` boleh diubah; kunci baris + cek irisan mengecualikan slip sendiri dalam transaksi update | `src/actions/hrm.actions.ts:2853-2857,2992-3023` |
+| G6 | L2 | Approve: klaim kondisional atomik `updateMany where {id, status:"draft"}`; count 0 = tolak. Jalur workflow generik menegakkan gerbang statutori sama | `src/actions/hrm.actions.ts:3049-3069`; `src/actions/approval.actions.ts:230-261` |
+| G7 | L2+L3 | Bayar: klaim kondisional atomik `updateMany where {id, status:"approved"}` dalam SATU transaksi berisi flip status + amortisasi pinjaman + `onPayrollPaid(tx)`; posting gagal = seluruh transaksi rollback sehingga retry sah (status tidak menggantung `paid` tanpa jurnal) | `src/actions/hrm.actions.ts:3093-3097,3122-3199` |
+| G8 | L3 | Hook jurnal: cek jurnal existing sebelum transaksi (`findFirst referenceType/referenceId`) lalu cek ulang di dalam transaksi; sudah ada = lewati tanpa jurnal kedua | `src/lib/hooks/accounting.hook.ts:2907-2916,3042-3057`; tes `src/lib/hooks/__tests__/accounting-hook.test.ts:2222-2230` |
+| G9 | L3 | Kunci unik DB jurnal aktif: kolom generated `activeReferenceKey` (`CONCAT(reference_type,'#',reference_id)` hanya bila `status <> 'REVERSED' AND deleted_at IS NULL`) + `@@unique([activeReferenceKey])`; jurnal REVERSED/terhapus berhenti memegang referensi sehingga posting ulang sesudah reversal fisik sah | `prisma/schema.prisma:4234-4245`; `prisma/migrations/20261023170000_journal_active_reference_unique_f127v/migration.sql:40-49` |
+| G10 | L3 | Gerbang klaim jurnal fail-closed: `referenceType` kosong/null atau `referenceId` bukan integer positif ditolak sebelum klaim (anti bypass UNIQUE via NULL) | `src/lib/hooks/accounting.hook.ts:52-63,2899` |
+| G11 | L1/L2 | Izin: buat `create_payroll`, edit `edit_payroll`, approve/bayar `process_payroll`; katalog `view/create/edit/update/process_payroll` | `src/actions/hrm.actions.ts:2253,2851,3042,3083`; `src/lib/auth/module-catalog.generated.ts:330-334` |
+
+Belum ada / batas jujur (bukti grep run ini):
+
+- B1. Scope idempotency-key finansial untuk Payroll TIDAK ada dengan sengaja-terlihat: `IdemScope` hanya memuat customer_credit/sales_late_fee/tax_invoice/withholding (`src/lib/services/financial-idempotency.service.ts:13-26`); nol pemanggilan `claimIdempotencyKey`/`bindIdempotencyKey` dari `src/actions/hrm.actions.ts` maupun `onPayrollPaid`. Model penampungnya ada (`prisma/schema.prisma:524-536`). Ini BUKAN lubang terbuka: fungsi anti-ganda untuk payroll saat ini dipikul G1+G7+G9 (kunci DB + klaim status), bukan key dari client. Lihat putusan §3.
+- B2. `onPayrollPaid` sendiri tidak memeriksa status slip; ia hanya menjaga lapis jurnal (G8/G9/G10). Satu-satunya pemanggil produksi adalah `markPayrollPaid` (`src/actions/hrm.actions.ts:3185`; grep pemanggil lain di luar tes = 0). Kontrak lapis saat ini: status dijaga action, jurnal dijaga hook. Pemanggil hook langsung di masa depan tanpa klaim status = jalur yang belum terjaga (kasus E117-6).
+- B3. Jalur re-post jurnal payroll sesudah reversal jurnal: secara fisik dimungkinkan G9, tetapi TIDAK ada jalur produknya — tidak ada aksi batal/reverse khusus slip `paid`, tidak ada pemanggil `onPayrollPaid` kedua, status slip tidak pernah kembali dari `paid`. Reversal jurnal umum lewat `src/lib/services/journal.service.ts:147` tidak menautkan ulang slip/amortisasi. Status: ABSEN sebagai fitur (bukan celah ganda; lihat §6 BUTUH-VONIS).
+- B4. `markPayrollPaid`/`approvePayroll` digerbang permission saja tanpa `getHrScope` per karyawan pada titik klaim (kontras jalur baca HR yang memakai scope `src/lib/auth/hr-scope.ts:67`). Ini soal otorisasi objek, BUKAN anti-ganda; dicatat supaya tidak hilang, tidak diputus di spec ini (di luar AC-HR-002).
+
+### 3. Putusan spec (yang dituntut guard — membekukan kontrak existing, bukan membangun ulang)
+
+- P1. AC-HR-002 dinyatakan TERJAGA oleh kombinasi G1–G10. Spec ini adalah penunjukan resmi guard tersebut untuk `INDEKS-ATURAN.md:223`: tidak ada mekanisme anti-ganda payroll baru yang dituntut selama kontrak §4 tidak dilanggar. Menambah scope `FinancialIdempotencyKey` untuk payroll saat ini = duplikasi fungsi klaim status + unik jurnal (YAGNI, dicatat di §7).
+- P2. Kunci kebenaran anti-ganda WAJIB tetap fisik/transaksional, fail-closed: (a) kunci unik DB slip per (karyawan, rentang persis) G1 sebagai jaring terakhir; (b) keputusan irisan G2 di bawah kunci baris karyawan dalam transaksi tulis yang sama G3/G4/G5; (c) klaim status kondisional tepat-satu-pemenang G6/G7; (d) unik jurnal aktif G9. Pemeriksaan aplikasi tanpa (a)/(d) atau tanpa kunci baris = pelanggaran kontrak (TOCTOU).
+- P3. Semantik retry yang sah: retry/double-submit/klik ulang TIDAK PERNAH menulis dokumen kedua. Hasil yang benar untuk yang kalah: penolakan berisik menyebut dokumen penabrak (L1), penolakan status tidak valid (L2), atau lewati-diam di hook karena jurnal pertama sudah ada (L3, hanya di dalam transaksi bayar yang sah). Sukses palsu (mengembalikan sukses tanpa dokumen/jurnal baru padahal intent berbeda) DILARANG — selaras kontrak idempotency repo `src/lib/services/financial-idempotency.service.ts:2-11`.
+- P4. Pesan kegagalan tidak membocorkan nominal gaji siapa pun; menyebut `documentNo` penabrak saja (pola existing G3/G4). Nominal hanya tampil lewat permukaan ber-scope HR existing.
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-HRPG-01 | Satu karyawan paling banyak satu slip aktif per rentang; irisan ketat ditolak, rentang bersebelahan persis (mulai baru = selesai lama) lolos | TERVERIFIKASI-KODE | G1,G2 (`payroll-frequency.ts:77-99`) |
+| BR-HRPG-02 | Kunci periode anti-ganda adalah rentang tanggal, BUKAN string `period`; dua slip se-`period` beda rentang (mingguan) sah | TERVERIFIKASI-KODE | G2,G4; `hrm.actions.ts:2344-2347` |
+| BR-HRPG-03 | Approve dan bayar masing-masing tepat satu pemenang lewat klaim kondisional status; eksekusi kedua ditolak berisik | TERVERIFIKASI-KODE | G6,G7 |
+| BR-HRPG-04 | Flip `paid`, amortisasi pinjaman, dan jurnal terjadi atomik satu transaksi; gagal posting = rollback semua, retry dari `approved` sah | TERVERIFIKASI-KODE | G7 (`hrm.actions.ts:3178-3185`) |
+| BR-HRPG-05 | Satu slip paling banyak satu jurnal aktif `referenceType="Payroll"`; posting ulang sesudah jurnal asal REVERSED tidak ditahan kunci unik | TERVERIFIKASI-KODE | G8,G9 |
+| BR-HRPG-06 | Retry/double-submit tidak menulis dokumen kedua dan tidak mengembalikan sukses palsu untuk intent berbeda | TERVERIFIKASI-KODE (L1–L3) + USULAN (rumusan kontrak) | G3,G7,G8; §3 P3 |
+| BR-HRPG-07 | Hook jurnal payroll kelak WAJIB hanya dipanggil dari jalur yang sudah memenangkan klaim status (atau hook menambah penjaga status sendiri) | USULAN — perlu putusan Backend + Accountant (§6) | B2 |
+| BR-HRPG-08 | Scope idempotency-key client untuk payroll TIDAK ditambah selama tidak ada jalur bayar eksternal (gateway/bank); kunci DB + klaim status adalah mekanisme resmi | USULAN (YAGNI tercatat) | B1; §7 |
+| BR-HRPG-09 | Re-post jurnal payroll sesudah reversal (jalur produk) belum ada dan tidak boleh dikarang dari reversal jurnal umum | BUTUH-VONIS Accountant | B3; §6 |
+
+### 5. Status-transition matrix (yang relevan anti-ganda)
+
+| Status awal | Pemicu | Penjaga | Status akhir | Eksekusi kedua |
+|---|---|---|---|---|
+| — (belum ada slip) | `processPayroll` / `generateBulkPayroll` | `create_payroll` + G2/G3/G4 | `draft` | ditolak/skips "irisan" menyebut `documentNo` penabrak |
+| `draft` | `updatePayroll` | `edit_payroll` + G5 | `draft` | edit menabrak slip lain ditolak di dalam tx |
+| `draft` | `approvePayroll` / langkah terakhir workflow generik | `process_payroll` + gerbang statutori + G6 | `approved` | klaim count 0 → "sudah diproses atau status tidak valid" |
+| `approved` | `markPayrollPaid` | `process_payroll` + gerbang statutori/plafon + G7 (klaim + amortisasi + jurnal satu tx) | `paid` | klaim count 0 → "sudah dibayar atau status tidak valid"; nol amortisasi/jurnal kedua |
+| `paid` | pemicu apa pun existing | tidak ada transisi keluar | `paid` | tidak ada re-post produk (B3) |
+
+### 6. Batas eksplisit — yang BELUM diputus spec ini
+
+1. **BUTUH-VONIS Accountant** (`@accounting-finance-tax`): (a) apakah jurnal payroll yang sudah REVERSED boleh diposting ulang sebagai jurnal baru untuk slip yang tetap `paid` (B3/BR-HRPG-09), termasuk perlakuan amortisasi pinjaman yang sudah terjadi; (b) persetujuan BR-HRPG-07 bila diwujudkan sebagai penjaga status di dalam hook (mengubah syarat lahir jurnal). Spec ini TIDAK memutus akun, nominal, mapping, atau jurnal koreksi apa pun.
+2. **Butuh putusan Backend** (`@backend-prisma-inventory-workshop`): wujud BR-HRPG-07 (penjaga di hook vs kontrak pemanggil terdokumentasi + tes), dan apakah kasus warisan "slip `approved` tetapi jurnal Payroll aktif sudah ada" (hook lewati, amortisasi tetap jalan — perilaku terbaca dari G7+G8) dipertahankan atau ditolak fail-closed.
+3. **Di luar cakupan**: otorisasi objek per karyawan pada approve/bayar (B4), reversal/pembatalan slip `paid` sebagai fitur, pembayaran gaji lewat kanal eksternal. Ketiganya bukan syarat tutup AC-HR-002.
+4. Pembaruan status AC-HR-002 di `docs/product/INDEKS-ATURAN.md` adalah langkah terbit sesudah spec ini merged (pola entri lain: status berubah mengikuti bukti merged), bukan bagian diff spec ini.
+
+### 7. Yang TIDAK diusulkan run ini
+
+- Scope `payroll_*` baru di `FinancialIdempotencyKey` + key dari client untuk `markPayrollPaid`/`processPayroll` — menggandakan fungsi G1/G7/G9; nilai tambahnya nol sampai ada intent eksternal yang tidak bisa diklaim lewat status (BR-HRPG-08). Bila kelak ada pembayaran via gateway/bank: scope baru + vonis Accountant dulu.
+- Kunci unik `(employeeId, period)` — SALAH secara bisnis: membunuh slip mingguan kedua dalam bulan sama yang sah (BR-HRPG-02).
+- Tombol/UI "posting ulang jurnal payroll" — tidak ada jalur produk yang disetujui; menunggu vonis butir §6.1.
+- Mengubah pesan/skip hook G8 menjadi error keras — akan mematahkan retry sah BR-HRPG-04/06.
+
+### 8. Matriks kasus + falsifikasi untuk QA (E117, atas head implementasi/verifikasi persis)
+
+| ID | Kasus | Hasil wajib | Falsifikasi (satu mutasi → MERAH) |
+|---|---|---|---|
+| E117-1 | `processPayroll` dua kali sekuensial, karyawan+rentang sama persis | tepat 1 slip; kedua ditolak menyebut `documentNo` pertama; nol baris `PayrollComponentLine` yatim | cabut cek irisan di dalam tx (`hrm.actions.ts:2787-2797`) → tes `payroll-duplicate-guard.test.ts:127-136` MERAH |
+| E117-2 | Dua `processPayroll` konkuren rentang sama persis (race lolos cek awal) | tepat 1 slip; kalah menerima pesan "sudah ada" tanpa string `P2002` | ganti terjemahan P2002 (`hrm.actions.ts:2833-2843`) jadi lempar mentah → tes `:138-148` MERAH |
+| E117-3 | Rentang beririsan tak identik (geser 1 hari) + rentang bersebelahan persis | irisan ditolak; bersebelahan lolos (dua slip sah) | ubah ketimpangan ketat `payroll-frequency.ts:97` jadi `<=` → tes bersebelahan `payroll-frequency.test.ts` MERAH |
+| E117-4 | Dua run `generateBulkPayroll` konkuren rentang beririsan tak identik | per karyawan tepat 1 slip; kalah tercatat skip "irisan"; karyawan non-irisan tetap terbit; count hasil konsisten | cabut kunci baris/cek ulang dalam tx massal (`hrm.actions.ts:2537-2573`) → tes integrasi `bulk-payroll-concurrency.integration.test.ts:199` MERAH |
+| E117-5 | Dua `markPayrollPaid` konkuren / klik ganda / retry sesudah timeout untuk slip `approved` berpinjaman aktif | tepat 1 transisi `paid`, 1 jurnal aktif, amortisasi pinjaman tepat 1× sebesar snapshot slip; retry berikutnya ditolak status | ganti klaim kondisional G7 jadi update tanpa syarat status → dua jurnal/amortisasi dobel, tes konkurensi baru QA MERAH |
+| E117-6 | Pemanggil langsung `onPayrollPaid` dua kali (tanpa `markPayrollPaid`) | tepat 1 `journal.create`; kedua lewati (G8) — dan bila BR-HRPG-07 kelak diputus, perilaku barunya mengikuti vonis itu | hapus cek ulang dalam tx (`accounting.hook.ts:3049-3057`) pada harness dua-transaksi-bersamaan → jurnal kedua menabrak unik G9 sebagai P2002 mentah, bukan lewati bersih |
+| E117-7 | Slip `approved` warisan dengan jurnal Payroll aktif sudah ada, lalu `markPayrollPaid` | perilaku terbaca saat ini: status `paid`, hook lewati, amortisasi jalan, nol jurnal baru — QA mencatat sebagai kasus terkarakterisasi; menyimpang dari ini tanpa vonis §6.2 = MERAH | paksa hook membuat jurnal kedua → tabrakan unik `journals_active_reference_unique` MERAH |
+| E117-8 | Jurnal payroll asal di-REVERSED, lalu posting ulang lewat jalur yang kelak disetujui (bila §6.1 memutus boleh) | tepat 1 jurnal aktif baru; yang REVERSED tetap terbaca sebagai jejak; status slip tetap `paid` | kembalikan unik lama `(referenceType, referenceId)` tanpa pengecualian REVERSED → posting ulang tertahan fisik, MERAH terhadap G9 |
+| E117-9 | `approvePayroll` ganda konkuren + approve lewat workflow generik bersamaan | tepat 1 pemenang `approved`; gerbang statutori ditegakkan di kedua jalur | cabut gerbang `approval.actions.ts:234-241` → slip fallback lolos generik, tes TASK-018 terkait MERAH |
+
+Catatan QA: E117-1..4 dan E117-9 (gerbang) sudah punya regresi hidup yang ditunjuk di §2 — jalankan apa adanya atas head persis; E117-5..8 adalah celah cakupan tes yang direkomendasikan menjadi kartu QA/Backend terpisah (tertulis di sini, kartu TIDAK dibuat oleh spec ini sesuai mandat kartu).
+
+### 9. Backlog implementasi (rekomendasi tertulis — kartu dibuat pemilik berikutnya, bukan run ini)
+
+| Urutan | Pemilik usulan | Isi | Effort | Prasyarat |
+|---|---|---|---|---|
+| 1 | QA | Tes konkurensi E117-5 (double `markPayrollPaid` DB nyata) + karakterisasi E117-7 | S | tidak ada |
+| 2 | Accountant → Backend | Vonis §6.1 (re-post sesudah reversal; BR-HRPG-07) lalu wujud penjaga sesuai vonis | S–M | vonis terbit |
+| 3 | Lead | Terbitkan status AC-HR-002 di `INDEKS-ATURAN.md` menunjuk spec ini + hasil E117 | S | spec merged + QA jalan |
+
+ID spec ini **F-2026-10-28-117-S** (AC-HR-002). Pemilik berikutnya: BOT QA (E117-1..9) → BOT Accountant (vonis §6.1) → BOT Backend (hanya bila vonis menuntut guard baru) → BOT Lead (status INDEKS-ATURAN). Implementasi BUKAN bagian spec ini.
