@@ -182,6 +182,40 @@ describe("sales return UoM", () => {
     )
   })
 
+  it("creates ONE layer per lot for a multi-batch return (bukan layer gabungan)", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    const { spies, tx } = wireTx({
+      items: [{ itemId: 3, qty: 10, cost: 100, batchNumbers: ["LOT-A", "LOT-B"] }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackBatch: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await onSalesReturnCompleted(7, 9)
+
+    // Layer gabungan "LOT-A, LOT-B" tak pernah ditemukan konsumsi FIFO.
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(2)
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ batchNumber: "LOT-A", qty: 5 })
+    )
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ batchNumber: "LOT-B", qty: 5 })
+    )
+    expect(mocks.createInLayer).not.toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ batchNumber: "LOT-A, LOT-B" })
+    )
+    expect(spies.batchCreate).toHaveBeenCalledTimes(2)
+    expect(spies.batchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ batchNumber: "LOT-A", qty: 5 }) })
+    )
+    expect(spies.batchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ batchNumber: "LOT-B", qty: 5 }) })
+    )
+  })
+
   it("rejects a batch-tracked item with no batch identity", async () => {
     mocks.toBaseFactor.mockResolvedValue(1)
     wireTx({

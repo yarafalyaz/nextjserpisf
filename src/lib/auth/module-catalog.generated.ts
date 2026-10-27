@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 357 permission dikelompokkan per modul (15 modul). */
+/** 383 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -89,6 +89,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "warehouses", permissionKey: "create_warehouses", label: "Gudang" },
     { key: "edit", resource: "warehouses", permissionKey: "edit_warehouses", label: "Gudang" },
     { key: "delete", resource: "warehouses", permissionKey: "delete_warehouses", label: "Gudang" },
+    { key: "view", resource: "sensitive_identity", permissionKey: "view_sensitive_identity", label: "Identitas Sensitif Karyawan" },
     { key: "view", resource: "positions", permissionKey: "view_positions", label: "Jabatan" },
     { key: "create", resource: "positions", permissionKey: "create_positions", label: "Jabatan" },
     { key: "edit", resource: "positions", permissionKey: "edit_positions", label: "Jabatan" },
@@ -151,6 +152,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "delete", resource: "sales_invoices", permissionKey: "delete_sales_invoices", label: "Faktur Penjualan" },
     { key: "approve", resource: "sales_invoices", permissionKey: "approve_sales_invoices", label: "Faktur Penjualan" },
     { key: "post", resource: "sales_invoices", permissionKey: "post_sales_invoices", label: "Faktur Penjualan" },
+    { key: "approve", resource: "credit_overrides", permissionKey: "approve_credit_overrides", label: "Override Batas Kredit" },
     { key: "view", resource: "sales_payments", permissionKey: "view_sales_payments", label: "Pembayaran Penjualan" },
     { key: "create", resource: "sales_payments", permissionKey: "create_sales_payments", label: "Pembayaran Penjualan" },
     { key: "edit", resource: "sales_payments", permissionKey: "edit_sales_payments", label: "Pembayaran Penjualan" },
@@ -226,6 +228,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   ],
   inventory: [
     { key: "view", resource: "stock_moves", permissionKey: "view_stock_moves", label: "Mutasi Stok" },
+    { key: "view", resource: "cost_amounts", permissionKey: "view_cost_amounts", label: "Nilai HPP/Biaya" },
     { key: "view", resource: "material_issues", permissionKey: "view_material_issues", label: "Pengeluaran Material" },
     { key: "create", resource: "material_issues", permissionKey: "create_material_issues", label: "Pengeluaran Material" },
     { key: "edit", resource: "material_issues", permissionKey: "edit_material_issues", label: "Pengeluaran Material" },
@@ -291,6 +294,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "leave_requests", permissionKey: "edit_leave_requests", label: "Cuti" },
     { key: "delete", resource: "leave_requests", permissionKey: "delete_leave_requests", label: "Cuti" },
     { key: "approve", resource: "leave_requests", permissionKey: "approve_leave_requests", label: "Cuti" },
+    { key: "view", resource: "subordinate_data", permissionKey: "view_subordinate_data", label: "Data Bawahan (Struktur Organisasi)" },
     { key: "create", resource: "holidays", permissionKey: "create_holidays", label: "Hari Libur" },
     { key: "edit", resource: "holidays", permissionKey: "edit_holidays", label: "Hari Libur" },
     { key: "delete", resource: "holidays", permissionKey: "delete_holidays", label: "Hari Libur" },
@@ -300,6 +304,10 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "work_schedules", permissionKey: "edit_work_schedules", label: "Jadwal Kerja" },
     { key: "delete", resource: "work_schedules", permissionKey: "delete_work_schedules", label: "Jadwal Kerja" },
     { key: "create", resource: "employee_reimbursements", permissionKey: "create_employee_reimbursements", label: "Klaim Reimbursement" },
+    { key: "view", resource: "competencies", permissionKey: "view_competencies", label: "Kompetensi" },
+    { key: "create", resource: "competencies", permissionKey: "create_competencies", label: "Kompetensi" },
+    { key: "edit", resource: "competencies", permissionKey: "edit_competencies", label: "Kompetensi" },
+    { key: "delete", resource: "competencies", permissionKey: "delete_competencies", label: "Kompetensi" },
     { key: "approve", resource: "contracts", permissionKey: "approve_contracts", label: "Kontrak Karyawan" },
     { key: "view", resource: "attendance_corrections", permissionKey: "view_attendance_corrections", label: "Koreksi Absensi" },
     { key: "create", resource: "attendance_corrections", permissionKey: "create_attendance_corrections", label: "Koreksi Absensi" },
@@ -309,6 +317,11 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "delete", resource: "timesheets", permissionKey: "delete_timesheets", label: "Lembar Waktu" },
     { key: "view", resource: "overtime", permissionKey: "view_overtime", label: "Lembur" },
     { key: "approve", resource: "overtime", permissionKey: "approve_overtime", label: "Lembur" },
+    { key: "view", resource: "salary_amounts", permissionKey: "view_salary_amounts", label: "Nominal Gaji" },
+    { key: "view", resource: "trainings", permissionKey: "view_trainings", label: "Pelatihan & Pengembangan" },
+    { key: "create", resource: "trainings", permissionKey: "create_trainings", label: "Pelatihan & Pengembangan" },
+    { key: "edit", resource: "trainings", permissionKey: "edit_trainings", label: "Pelatihan & Pengembangan" },
+    { key: "delete", resource: "trainings", permissionKey: "delete_trainings", label: "Pelatihan & Pengembangan" },
     { key: "create", resource: "overtime_requests", permissionKey: "create_overtime_requests", label: "Pengajuan Lembur" },
     { key: "edit", resource: "overtime_requests", permissionKey: "edit_overtime_requests", label: "Pengajuan Lembur" },
     { key: "delete", resource: "overtime_requests", permissionKey: "delete_overtime_requests", label: "Pengajuan Lembur" },
@@ -319,6 +332,15 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "payroll", permissionKey: "edit_payroll", label: "Penggajian" },
     { key: "update", resource: "payroll", permissionKey: "update_payroll", label: "Penggajian" },
     { key: "process", resource: "payroll", permissionKey: "process_payroll", label: "Penggajian" },
+    { key: "view", resource: "performance", permissionKey: "view_performance", label: "Penilaian Kinerja" },
+    { key: "create", resource: "performance", permissionKey: "create_performance", label: "Penilaian Kinerja" },
+    { key: "edit", resource: "performance", permissionKey: "edit_performance", label: "Penilaian Kinerja" },
+    { key: "delete", resource: "performance", permissionKey: "delete_performance", label: "Penilaian Kinerja" },
+    { key: "approve", resource: "salary_adjustments", permissionKey: "approve_salary_adjustments", label: "Penyesuaian Gaji" },
+    { key: "view", resource: "succession", permissionKey: "view_succession", label: "Perencanaan Suksesi" },
+    { key: "create", resource: "succession", permissionKey: "create_succession", label: "Perencanaan Suksesi" },
+    { key: "edit", resource: "succession", permissionKey: "edit_succession", label: "Perencanaan Suksesi" },
+    { key: "delete", resource: "succession", permissionKey: "delete_succession", label: "Perencanaan Suksesi" },
     { key: "create", resource: "loans", permissionKey: "create_loans", label: "Pinjaman" },
     { key: "delete", resource: "loans", permissionKey: "delete_loans", label: "Pinjaman" },
     { key: "approve", resource: "loans", permissionKey: "approve_loans", label: "Pinjaman" },
@@ -326,6 +348,10 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "view", resource: "disciplinary_records", permissionKey: "view_disciplinary_records", label: "Rekod Disiplin" },
     { key: "create", resource: "disciplinary_records", permissionKey: "create_disciplinary_records", label: "Rekod Disiplin" },
     { key: "approve", resource: "disciplinary_records", permissionKey: "approve_disciplinary_records", label: "Rekod Disiplin" },
+    { key: "view", resource: "recruitments", permissionKey: "view_recruitments", label: "Rekrutmen" },
+    { key: "create", resource: "recruitments", permissionKey: "create_recruitments", label: "Rekrutmen" },
+    { key: "edit", resource: "recruitments", permissionKey: "edit_recruitments", label: "Rekrutmen" },
+    { key: "delete", resource: "recruitments", permissionKey: "delete_recruitments", label: "Rekrutmen" },
   ],
   finance: [
     { key: "manage", resource: "withholding_certificates", permissionKey: "manage_withholding_certificates", label: "Bukti Potong (Bupot)" },

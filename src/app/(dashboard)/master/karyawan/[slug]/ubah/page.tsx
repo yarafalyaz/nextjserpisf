@@ -61,6 +61,7 @@ export default async function EditEmployeePage({
     dependents: data.dependents ?? 0,
     departmentId: data.departmentId,
     positionId: data.positionId,
+    managerId: data.managerId,
     leaveEligibilityStartDate: data.leaveEligibilityStartDate
       ? data.leaveEligibilityStartDate.toISOString()
       : null,
@@ -81,10 +82,15 @@ export default async function EditEmployeePage({
     endReason: data.endReason ?? null,
   };
 
-  const [departments, positions, roles] = await Promise.all([
+  const [departments, positions, roles, managers] = await Promise.all([
     prisma.department.findMany({ orderBy: { name: "asc" } }),
     prisma.position.findMany({ orderBy: { name: "asc" } }),
     prisma.role.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.employee.findMany({
+      where: { deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
@@ -107,6 +113,7 @@ export default async function EditEmployeePage({
         employee={employee}
         departments={departments}
         positions={positions}
+        managers={managers}
         roles={roles}
       />
     </div>

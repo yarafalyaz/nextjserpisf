@@ -123,12 +123,30 @@ export default async function WarrantyClaimDetailPage({
   // Status rute E2/E3 dibaca dari Journal nyata (POSTED non-REVERSED),
   // BUKAN flag klaim. Jurnal lawan (reversal) referenceType "Journal"
   // menunjuk id jurnal asli — ikut dibaca supaya riwayat reversal tampil.
+  // TASK-019: klaim lain atas WO repair yang sama ikut dibaca — biaya WO
+  // repair terjurnal satu kali lintas klaim, klaim kedua mereferensikan
+  // jurnal klaim pertama (tampil sebagai sudah diposting di sini).
+  const siblingClaimIds =
+    claim.repairWorkOrderId != null
+      ? (
+          await prisma.warrantyClaim.findMany({
+            where: { repairWorkOrderId: claim.repairWorkOrderId, id: { not: claim.id } },
+            select: { id: true },
+          })
+        ).map((c) => c.id)
+      : []
   const journalRowsRaw = await prisma.journal.findMany({
     where: {
       deletedAt: null,
       OR: [
         { referenceType: "WarrantyClaimCost", referenceId: claim.id },
         { referenceType: "WarrantySupplierRecovery", referenceId: claim.id },
+        ...(siblingClaimIds.length > 0
+          ? [
+              { referenceType: "WarrantyClaimCost", referenceId: { in: siblingClaimIds } },
+              { referenceType: "WarrantySupplierRecovery", referenceId: { in: siblingClaimIds } },
+            ]
+          : []),
       ],
     },
     select: {

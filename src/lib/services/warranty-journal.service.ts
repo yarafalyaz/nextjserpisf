@@ -135,6 +135,46 @@ async function assertNoExistingJournal(
   }
 }
 
+/**
+ * TASK-019: biaya satu WO repair hanya boleh terjurnal SATU kali lintas
+ * klaim. Jurnal E2/E3 kini di-key per klaim (referenceId = claimId), jadi
+ * dua klaim yang berbagi repairWorkOrderId yang sama masing-masing lolos
+ * cek per-klaim di atas dan menjurnal biaya repair yang sama dua kali.
+ * Pemanggil wajib mengunci baris WO repair (`FOR UPDATE`) sebelum cek ini
+ * supaya dua transaksi klaim berbeda atas WO yang sama terserialisasi.
+ * Klaim kedua TIDAK menjurnal ulang — ia mereferensikan jurnal klaim
+ * pertama lewat pesan penolakan ini. Jurnal REVERSED tidak mengunci:
+ * biaya boleh diposting ulang setelah reversal (pola assert di atas).
+ */
+async function assertNoSiblingClaimJournal(
+  tx: TxClient,
+  referenceType: string,
+  claimId: number,
+  repairWorkOrderId: number,
+  label: string,
+): Promise<void> {
+  const siblings = await tx.warrantyClaim.findMany({
+    where: { repairWorkOrderId },
+    select: { id: true },
+  })
+  const otherClaimIds = siblings.map((s) => s.id).filter((id) => id !== claimId)
+  if (otherClaimIds.length === 0) return
+  const prior = await tx.journal.findFirst({
+    where: {
+      referenceType,
+      referenceId: { in: otherClaimIds },
+      status: "POSTED",
+      deletedAt: null,
+    },
+    select: { id: true, journalNumber: true, referenceId: true },
+  })
+  if (prior) {
+    throw new Error(
+      `${label} untuk WO repair #${repairWorkOrderId} sudah dijurnal untuk klaim #${prior.referenceId} (jurnal ${prior.journalNumber ?? `#${prior.id}`}) — klaim #${claimId} mereferensikan jurnal yang sama, biaya repair yang sama tidak dijurnal ulang.`,
+    )
+  }
+}
+
 async function loadClaimInTx(tx: TxClient, claimId: number) {
   await tx.$queryRaw`SELECT id FROM warranty_claims WHERE id = ${claimId} FOR UPDATE`
   const claim = await tx.warrantyClaim.findUnique({
@@ -263,6 +303,9 @@ export async function postWarrantyClaimCostJournal(
     if (claim.repairWorkOrderId == null) {
       throw new Error("Klaim belum tertaut ke WO repair — jurnal biaya garansi tidak dapat diposting.")
     }
+    // TASK-019: kunci WO repair supaya klaim lain atas WO yang sama tidak
+    // menjurnal biaya bersamaan (cek lintas klaim di bawah terserialisasi).
+    await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${claim.repairWorkOrderId} FOR UPDATE`
 
     const cost = await computeWarrantyRepairCost(claim.repairWorkOrderId, tx)
     if (cost.total <= 0) {
@@ -301,6 +344,7 @@ export async function postWarrantyClaimCostJournal(
 
     await assertPeriodOpen(input.eventDate, tx)
     await assertNoExistingJournal(tx, WARRANTY_CLAIM_COST_REF, claim.id, "Jurnal biaya garansi")
+    await assertNoSiblingClaimJournal(tx, WARRANTY_CLAIM_COST_REF, claim.id, claim.repairWorkOrderId, "Jurnal biaya garansi")
 
     const journalNumber = await generateDocumentNumber("JRN")
     const journal = await new JournalService(tx as never).createJournal({
@@ -372,6 +416,11 @@ export async function postWarrantySupplierRecoveryJournal(
 
     await assertPeriodOpen(input.eventDate, tx)
     await assertNoExistingJournal(tx, WARRANTY_SUPPLIER_RECOVERY_REF, claim.id, "Jurnal recovery supplier")
+    // TASK-019: recovery atas WO repair yang sama juga satu kali lintas
+    // klaim — dua klaim tidak boleh mengkredit Beban Garansi dua kali
+    // untuk biaya repair yang sama.
+    await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${claim.repairWorkOrderId} FOR UPDATE`
+    await assertNoSiblingClaimJournal(tx, WARRANTY_SUPPLIER_RECOVERY_REF, claim.id, claim.repairWorkOrderId, "Jurnal recovery supplier")
 
     const journalNumber = await generateDocumentNumber("JRN")
     const journal = await new JournalService(tx as never).createJournal({
