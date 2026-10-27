@@ -318,10 +318,41 @@ describe("onTransferReceived", () => {
     await expect(onTransferReceived(100, 1)).rejects.toThrow(/memerlukan alokasi nomor batch/)
     expect(spies.moveCreate).not.toHaveBeenCalled()
   })
+
+  it("regresi TASK-012: jalur penuh batch-tracked dengan alokasi parsial ditolak di hook", async () => {
+    const { spies } = wireTx(
+      [{ id: 51, itemId: 7, qty: 3, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 1, qty: 2 }] }],
+      "processed",
+    )
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+    spies.itemFindMany.mockResolvedValue([{ id: 7, trackBatch: true, trackSerial: false }])
+
+    await expect(onTransferReceived(100, 1)).rejects.toThrow(/wajib menjumlah tepat/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi TASK-012: jalur penuh berseri tanpa serial sejumlah qty ditolak di hook", async () => {
+    const { spies } = wireTx(
+      [{ id: 51, itemId: 7, qty: 3, serialNumbers: ["SER-1"] }],
+      "processed",
+    )
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+    spies.itemFindMany.mockResolvedValue([{ id: 7, trackBatch: false, trackSerial: true }])
+
+    await expect(onTransferReceived(100, 1)).rejects.toThrow(/berseri.*memerlukan tepat|memerlukan tepat.*nomor seri/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe("onTransferReceived partial per-event (F-081-S)", () => {
-  const receipt = (lines: Array<{ transferItemId: number; qty: number; serialNumbers?: string[] }>) => ({
+  const receipt = (
+    lines: Array<{
+      transferItemId: number
+      qty: number
+      serialNumbers?: string[]
+      batchAllocations?: { batchNumber: string; qty: number }[]
+    }>,
+  ) => ({
     receivedDate: new Date(2026, 9, 22),
     idempotencyKey: "evt-1",
     lines,
@@ -410,6 +441,115 @@ describe("onTransferReceived partial per-event (F-081-S)", () => {
       onTransferReceived(100, 1, undefined, receipt([{ transferItemId: 11, qty: 1, serialNumbers: ["SER-2"] }])),
     ).rejects.toThrow(/bukan serial terkirim yang masih belum diterima/)
     expect(again.spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("regresi TASK-012: terima parsial berseri tanpa serial ditolak tanpa StockMove/layer", async () => {
+    const { spies } = wireTx(
+      [{ id: 11, itemId: 7, qty: 3, receivedQty: 0, serialNumbers: ["S1", "S2", "S3"] }],
+      "processed",
+    )
+    await expect(
+      onTransferReceived(100, 1, undefined, receipt([{ transferItemId: 11, qty: 2 }])),
+    ).rejects.toThrow(/berseri.*nomor seri|memerlukan tepat/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(spies.receiptCreate).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+  })
+
+  it("regresi TASK-012: subset serial valid diterima dan serial tujuan available", async () => {
+    const { spies } = wireTx(
+      [{ id: 11, itemId: 7, qty: 3, receivedQty: 0, serialNumbers: ["S1", "S2", "S3"] }],
+      "processed",
+    )
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 910 })
+    spies.serialUpdateMany.mockResolvedValueOnce({ count: 2 })
+
+    const status = await onTransferReceived(
+      100, 1, undefined,
+      receipt([{ transferItemId: 11, qty: 2, serialNumbers: ["S1", "S2"] }]),
+    )
+    expect(status).toBe("partially_received")
+    expect(spies.serialUpdateMany).toHaveBeenCalledWith({
+      where: { itemId: 7, serialNumber: { in: ["S1", "S2"] }, status: "used" },
+      data: { status: "available", warehouseId: 2 },
+    })
+    expect(spies.moveCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("regresi TASK-012: alokasi batch 4 dari 10 ditolak tanpa StockMove/layer", async () => {
+    const { spies } = wireTx(
+      [
+        {
+          id: 11,
+          itemId: 7,
+          qty: 10,
+          receivedQty: 0,
+          batchAllocations: [
+            { batchNumber: "LOT-A", qty: 6 },
+            { batchNumber: "LOT-B", qty: 4 },
+          ],
+        },
+      ],
+      "processed",
+    )
+    await expect(
+      onTransferReceived(
+        100, 1, undefined,
+        receipt([{ transferItemId: 11, qty: 10, batchAllocations: [{ batchNumber: "LOT-A", qty: 4 }] }]),
+      ),
+    ).rejects.toThrow(/alokasi batch/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(spies.receiptCreate).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+  })
+
+  it("regresi TASK-012: alokasi batch tepat qty diterima dan layer per lot ber-batchNumber", async () => {
+    const { spies } = wireTx(
+      [
+        {
+          id: 11,
+          itemId: 7,
+          qty: 10,
+          receivedQty: 0,
+          batchAllocations: [
+            { batchNumber: "LOT-A", qty: 6 },
+            { batchNumber: "LOT-B", qty: 4 },
+          ],
+        },
+      ],
+      "processed",
+    )
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 911 })
+    spies.batchFindMany.mockResolvedValueOnce([
+      { batchNumber: "LOT-A", manufacturingDate: null, expiryDate: null, notes: null },
+      { batchNumber: "LOT-B", manufacturingDate: null, expiryDate: null, notes: null },
+    ])
+
+    const status = await onTransferReceived(
+      100, 1, undefined,
+      receipt([
+        {
+          transferItemId: 11,
+          qty: 10,
+          batchAllocations: [
+            { batchNumber: "LOT-A", qty: 6 },
+            { batchNumber: "LOT-B", qty: 4 },
+          ],
+        },
+      ]),
+    )
+    expect(status).toBe("received")
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(2)
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ itemId: 7, warehouseId: 2, batchNumber: "LOT-A", qty: 6, stockMoveId: 911 }),
+    )
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ itemId: 7, warehouseId: 2, batchNumber: "LOT-B", qty: 4, stockMoveId: 911 }),
+    )
   })
 })
 

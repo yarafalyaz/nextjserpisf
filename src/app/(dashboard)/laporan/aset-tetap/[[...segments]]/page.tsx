@@ -7,7 +7,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
-import { parseReportPeriod } from "@/lib/reports/report-period"
+import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { loadAssetRegister } from "@/lib/reports/asset-reports-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -29,9 +29,13 @@ export default async function AssetRegisterPage({
   const user = await requirePermission("view_reports")
   const [params, search] = await Promise.all([routeParams, searchParams])
 
-  const now = new Date()
-  // Laporan posisi: slug periode berarti "per akhir periode" (2026-10 → 31 Okt 2026).
-  const period = parseReportPeriod(params.segments?.[0], { start: now, end: now })
+  // Laporan posisi: slug periode berarti "per akhir periode" (2026-10 → 31 Okt
+  // 2026). Periode dibaca hanya via helper bersama supaya tautan lama
+  // ?tanggalMulai=&tanggalSelesai= tetap menampilkan posisi yang diminta.
+  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
+    start: now,
+    end: now,
+  }))
   const asOfDate = new Date(period.end)
   // Sakelar kini berada di path (`/termasukDilepas/1`); param query lama tetap
   // dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.

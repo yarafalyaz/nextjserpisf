@@ -15,3 +15,11 @@ import { hasPermission } from "./permissions"
 export async function canViewSalaryAmounts(): Promise<boolean> {
   return hasPermission("view_salary_amounts")
 }
+
+export async function canViewCostAmounts(): Promise<boolean> {
+  return hasPermission("view_cost_amounts")
+}
+
+export async function canViewSensitiveIdentity(): Promise<boolean> {
+  return hasPermission("view_sensitive_identity")
+}
