@@ -1,11 +1,12 @@
 /**
  * Pemuatan data sumber temporer NON-ASET pajak tangguhan (F-2026-10-23-126-V).
  *
- * Provisi garansi: saldo dibuktikan dari jurnal POSTED akun provisi terpetakan
+ * Provisi garansi: saldo dibuktikan dari jurnal akun provisi terpetakan
  * `SystemSetting.warrantyProvisionAccountId` (210205) s.d. tanggal neraca —
- * kredit − debit jurnal POSTED, jurnal terhapus dikecualikan. Akun belum
+ * kredit − debit jurnal POSTED+REVERSED (`REPORT_JOURNAL_STATUSES`), jurnal
+ * terhapus dikecualikan, agar pasangan reversal neto nol. Akun belum
  * terpetakan -> null (belum tersedia bernama). Flag rute provisi TIDAK dibaca:
- * ketiadaan jurnal POSTED sendirilah bukti nol (Putusan 1).
+ * ketiadaan jurnal yang terhitung sendirilah bukti nol (Putusan 1).
  *
  * CKPN: inti penyisihan F-090-V belum ada di schema (akun kontra 110302 usulan
  * F-090-V hari ini = Uang Muka Pembelian) -> null, tampil belum tersedia
@@ -18,6 +19,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { DEFERRED_TAX_NOTICE } from "@/lib/reports/deferred-tax"
 import {
   buildDeferredTaxNonAssetSources,
@@ -53,14 +55,14 @@ export async function loadDeferredTaxNonAssetSources(input: {
       prisma.journalEntry.aggregate({
         where: {
           accountId: provisionAccountId,
-          journal: { status: "POSTED", deletedAt: null, transactionDate: { lte: input.asOf } },
+          journal: { status: { in: [...REPORT_JOURNAL_STATUSES] }, deletedAt: null, transactionDate: { lte: input.asOf } },
         },
         _sum: { debit: true, credit: true },
       }),
       prisma.journalEntry.count({
         where: {
           accountId: provisionAccountId,
-          journal: { status: "POSTED", deletedAt: null, transactionDate: { lte: input.asOf } },
+          journal: { status: { in: [...REPORT_JOURNAL_STATUSES] }, deletedAt: null, transactionDate: { lte: input.asOf } },
         },
       }),
     ])

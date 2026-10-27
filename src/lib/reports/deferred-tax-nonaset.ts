@@ -77,12 +77,13 @@ export type NonAssetSourceStatus =
 
 export interface WarrantyProvisionInput {
   /**
-   * Saldo kredit provisi dari jurnal POSTED akun provisi terpetakan per
-   * tanggal neraca. null = akun belum terpetakan (belum tersedia bernama).
+   * Saldo kredit provisi dari jurnal POSTED+REVERSED akun provisi
+   * terpetakan per tanggal neraca (pasangan reversal neto nol).
+   * null = akun belum terpetakan (belum tersedia bernama).
    * DILARANG mengisi dari flag rute atau saldo GL karangan.
    */
   postedProvisionBalance: number | null
-  /** Jumlah jurnal POSTED yang menyentuh akun provisi s.d. tanggal neraca. */
+  /** Jumlah jurnal POSTED+REVERSED yang menyentuh akun provisi s.d. tanggal neraca. */
   postedProvisionJournalCount: number
   /** Dasar laba kena pajak terbekukan untuk sumber ini (uji pengakuan). */
   profitBasisFrozen: boolean

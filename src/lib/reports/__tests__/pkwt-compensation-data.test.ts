@@ -151,7 +151,7 @@ describe("getPkwtCompensationReport — scope HR diterapkan ke semua query karya
     // Query GL sendiri tanpa filter karyawan.
     expect(mocks.journalEntryFindMany.mock.calls[0][0].where).toEqual({
       accountId: 20,
-      journal: { status: "POSTED" },
+      journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null },
     })
 
     const allReport = await getPkwtCompensationReport({ kind: "all" })

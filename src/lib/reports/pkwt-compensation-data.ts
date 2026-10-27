@@ -18,6 +18,7 @@
  * selisih akuntansi), dan report menandai glComparableToScope=false.
  */
 import { prisma } from "@/lib/db/prisma"
+import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { hrScopeWhere, type HrScope } from "@/lib/auth/hr-scope"
 import {
   buildPkwtCompensationReport,
@@ -82,7 +83,9 @@ export async function getPkwtCompensationReport(
     }),
     payableAccountId
       ? prisma.journalEntry.findMany({
-          where: { accountId: payableAccountId, journal: { status: "POSTED" } },
+          // Agregasi saldo per akun (kredit−debit di reduce di bawah):
+          // POSTED+REVERSED agar pasangan reversal neto nol.
+          where: { accountId: payableAccountId, journal: { status: { in: [...REPORT_JOURNAL_STATUSES] }, deletedAt: null } },
           select: { debit: true, credit: true },
         })
       : Promise.resolve([] as { debit: unknown; credit: unknown }[]),
