@@ -169,6 +169,10 @@ describe("CustomerCreditQueueCard 083-F AC-CCQ-F1..F3", () => {
     // Umur/saldo/summary passthrough persis payload (createdAt kemarin != 99).
     expect(text).toContain("99 hari")
     expect(text).toContain("Rp 123.456")
+    // Total header = summary.totalSaldo verbatim (2.123.456), BUKAN
+    // hitung-ulang UI dari baris (123.456 + 2.000.000 = sama di sini adalah
+    // kebetulan payload konsisten builder; mutasi reduce wajib MERAH di
+    // tes AC-CCQ-F2b payload tak-konsisten di bawah).
     expect(text).toContain("Rp 2.123.456")
     // Label penanda = penandaFpUangMukaLabel payload verbatim, bukan konstanta UI.
     expect(text).toContain(customLabel)
@@ -179,6 +183,42 @@ describe("CustomerCreditQueueCard 083-F AC-CCQ-F1..F3", () => {
     // Penanda bukan baris terkunci: alokasiTerhalang false -> nol kata terkunci/halangan.
     expect(text).not.toContain("Terkunci")
     expect(text).not.toContain("terkunci")
+  })
+
+  it("AC-CCQ-F2b: total header passthrough summary tak-konsisten (UI dilarang reduce baris)", () => {
+    const queue: CustomerCreditQueue = {
+      rows: [
+        {
+          creditId: 1,
+          documentNo: "CC-1",
+          customerId: 7,
+          customerName: "CV Uji",
+          sourceType: "Quotation",
+          sourceId: 300,
+          status: "open",
+          createdAt: day(-1),
+          umurMenungguHari: 1,
+          receivedAmount: 1_000_000,
+          allocatedAmount: 0,
+          refundedAmount: 0,
+          saldo: 1_000_000,
+          penandaFpUangMuka: false,
+          penandaFpUangMukaLabel: null,
+          alokasiTerhalang: false,
+        },
+      ],
+      // Angka summary sengaja beda dari Σ saldo baris (7.777.777 vs
+      // 1.000.000): UI wajib menempel summary server apa adanya.
+      summary: { jumlahBaris: 7, totalSaldo: 7_777_777, jumlahPenandaFpUangMuka: 3 },
+      anomaly: { openSaldoNol: 0, selesaiSaldoPositif: 0, alokasiMelebihiDiterima: 0 },
+    }
+    const rendered = renderCard(<CustomerCreditQueueCard queue={queue} />)
+    root = rendered.root
+    const text = rendered.container.textContent ?? ""
+    expect(text).toContain(
+      `${CUSTOMER_CREDIT_QUEUE_TOTAL_LABEL}: Rp 7.777.777 · 7 baris · 3 berpenanda ${CUSTOMER_CREDIT_FP_UM_MARKER_LABEL}`,
+    )
+    expect(text).not.toContain("Rp 1.000.000 · 1 baris")
   })
 
   it("AC-CCQ-F3: ember anomali tampil terpisah di luar populasi/total", () => {
@@ -196,7 +236,7 @@ describe("CustomerCreditQueueCard 083-F AC-CCQ-F1..F3", () => {
     const rendered = renderCard(<CustomerCreditQueueCard queue={queue} />)
     root = rendered.root
     const text = rendered.container.textContent ?? ""
-    expect(text).toContain("Anomali warisan terpisah (tidak masuk populasi/total): 3 baris — open saldo nol: 1 · selesai saldo positif: 1 · alokasi melebihi diterima: 1")
+    expect(text).toContain("Anomali warisan terpisah (tidak masuk populasi/total): open saldo nol: 1 · selesai saldo positif: 1 · alokasi melebihi diterima: 1")
     expect(text).not.toContain("CC-NOL")
     expect(text).not.toContain("CC-SELESAI")
     expect(text).not.toContain("CC-LEBIH")
