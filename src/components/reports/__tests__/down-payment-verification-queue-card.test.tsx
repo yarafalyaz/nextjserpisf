@@ -155,6 +155,31 @@ describe("DownPaymentVerificationQueueCard F-2026-10-26-051-S", () => {
     expect(container.querySelectorAll("img")).toHaveLength(0)
   })
 
+  it("header summary verbatim payload: total Rp summary beda dari Σ baris tampil tetap tampil apa adanya (nol hitung ulang UI)", () => {
+    // Fixture disengaja tak-konsisten (pola 058-S): baris tampil 2 baris
+    // Σ amountSen = 1.500.000.000 + 500.000.000 = 2.000.000.000 sen
+    // (Rp 20.000.000), tapi summary payload total=7/totalAmountSen=
+    // 7.700.000.000 sen (Rp 77.000.000). Mutasi produksi ke konstanta
+    // 424242 atau reduce(rows) wajib MERAH di frasa persis ini.
+    // (Temuan LOW QA PR #1068 6430004757: fixture builder selalu
+    // konsisten sehingga header tak terkunci tes apa pun.)
+    const q = queue()
+    const summary = { ...q.summary, total: 7, totalAmountSen: 7_700_000_000 }
+    expect(q.rows.reduce((acc, row) => acc + row.amountSen, 0)).toBe(2_000_000_000)
+    const { container, root } = renderCard(
+      <DownPaymentVerificationQueueCard rows={q.rows} summary={summary} />,
+    )
+    roots.push(root)
+    const text = container.textContent ?? ""
+    // Frasa header persis dari payload summary, bukan Σ baris.
+    expect(text).toContain("7 uang muka menunggu verifikasi — Rp 77.000.000 belum menjadi kas")
+    expect(text).not.toContain("Rp 20.000.000 belum menjadi kas")
+    expect(text).not.toContain("Rp 424.242 belum menjadi kas")
+    // Sel jumlah baris tetap verbatim payload barisnya.
+    expect(text).toContain("Rp 15.000.000")
+    expect(text).toContain("Rp 5.000.000")
+  })
+
   it("kosong: teks kosong tampil, nol tombol", () => {
     const q = buildDownPaymentVerificationQueue([], [quotation()], { now: NOW })
     const { container, root } = renderCard(
