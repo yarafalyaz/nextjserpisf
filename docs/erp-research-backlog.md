@@ -36275,6 +36275,127 @@ EC-PBQ-1: review final submitted lalu masa diperpanjang (extended) → baris dec
 - Menilai konsekuensi uang keputusan failed/extended — tetap vonis Accountant F-2026-10-24-134-V + alur berhenti F-085-S existing; spec ini tidak membukanya.
 
 F-2026-10-27-086-S — Antrean evaluasi masa percobaan menunggu keputusan & titik lewat jatuh tempo. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PBQ-1/2/3/5 (+fisik Q-PBQ-4 Backend), lalu fisik Backend (086-B), konsumen Frontend (086-F), falsifikasi QA (086-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/scope/penempatan), Backend (fisik turunan + Q-PBQ-4), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap baca-saja (nol nominal; konsekuensi uang keputusan tetap vonis 134-V existing, tidak divonis ulang).
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-084-S: antrean slip gaji disetujui belum dibayar mengendap (Payroll `approved` tanpa jejak bayar, lintas periode, TANPA nominal)
+
+> **Slot**: F-2026-10-27-084-S. Diperiksa bentrok 2026-10-27 05:50 WIB vs `origin/main` (`e1a09a9c1`): grep `F-2026-10-27-084` di backlog+board origin = 0; maks ID 2026-10-27 `…-S` = 082-S merged (#1100), 083-S PR #1112 OPEN beda topik. Bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Tahap lanjutan populasi berbeda, bukan duplikat 070-S.** F-2026-10-26-070-S (sudah DIPUTUS Lead 2026-10-26 19:10 WIB) membekukan antrean slip `draft`. Slip yang sudah `approved` tetapi belum `paid` adalah populasi tahap berikutnya: kewajiban bayar sudah disetujui, jurnal+amortisasi pinjaman+flip status hanya lahir saat `markPayrollPaid` — slip approved yang menggantung lintas periode tidak terlihat sebagai daftar kerja lintas periode di permukaan mana pun (daftar penggajian existing per periode). Spec ini membekukan antrean baca-saja atas populasi itu. Domain (h) HR/payroll. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo.
+
+### 0. Inventarisasi terverifikasi (origin/main e1a09a9c1, 2026-10-27)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `Payroll` (`prisma/schema.prisma:3900-3942`): documentNo unik, employeeId nullable, period, type default REGULAR, startDate/endDate, paymentDate nullable, status String default `draft`, approvedBy nullable, createdBy, createdAt/updatedAt; unik `[employeeId, startDate, endDate]`; indeks status + approvedBy. **TIDAK ada kolom `approvedAt`/`paidAt`** — momen setuju hanya terbaca dari status + approvedBy; momen bayar tercatat di `paymentDate` yang diisi saat flip ke paid. Seluruh kolom nominal (baseSalary s/d netSalary/totalAmount) ada di baris yang sama — payload antrean WAJIB select eksplisit tanpa satu pun kolom nominal itu (BR-APQ-02).
+- Transisi existing: `approvePayroll` menolak snapshot fromFallback/TER-pending/legacy (hrm.actions.ts:3020-3043), lalu klaim atomik `updateMany status=draft -> approved` mengisi `approvedBy` saja (:3045-3048) — tanpa stempel waktu setuju. `markPayrollPaid` (hrm.actions.ts:3063 dst): gerbang `process_payroll`, `assertApproved` workflow generik bila terkonfigurasi, hanya dari status `approved`, tegak plafon Pasal 63/65 saat bayar, lalu SATU transaksi: klaim `updateMany approved -> paid` + paymentDate=now + amortisasi pinjaman dari loanDeduction aktual + jurnal `onPayrollPaid`. Antrean tidak mengubah, tidak memisahkan, dan tidak meniru rantai ini.
+- Preseden gerbang keluarga ini SUDAH DIPUTUS Lead untuk 070-S (PUTUSAN LEAD 2026-10-26, Q-PDQ-4): key baca antrean slip = `process_payroll` saja (katalog `src/lib/auth/module-catalog.generated.ts:331`) + `getHrScope` (src/lib/auth/hr-scope.ts:40, fail-closed; self/none -> kosong) ditegakkan loader sebelum query; nama karyawan tampil dalam scope, nominal dilarang mutlak. Spec ini MENGUSULKAN preseden yang sama untuk populasi approved (diputus ulang Lead di Q-APQ-3 karena populasi beda), bukan mengklaimnya sudah berlaku.
+- Permukaan existing: daftar penggajian per periode di `sdm/penggajian` (slip approved terlihat hanya bila membuka periodenya); slip mandiri karyawan 009-S hanya membaca slip milik sendiri sesudah terbit — bukan antrean pemroses lintas periode. Builder 070-S (bila fisiknya sudah dibangun Backend) adalah pola saudara, bukan populasi ini.
+
+Belum ada / gap (bukti grep run ini):
+- Tidak ada builder/loader/daftar Payroll berstatus `approved` lintas periode: grep antrean payroll di `src/lib/reports` hanya rekap/konteks periode + antrean draft spec 070-S. Slip approved mengendap (mis. periode lalu belum dibayar karena kas/approval workflow generik tertahan) tidak terbaca sebagai daftar kerja.
+- Tidak ada stempel `approvedAt`: umur "sejak disetujui" tidak dapat diturunkan jujur dari kolom existing (updatedAt berubah oleh edit apa pun dan dilarang; ActivityLog "approve" ada di hrm.actions.ts:3052 tetapi log bukan sumber turunan sah — pola terlarang repo, sama seperti BR-HPC-03 spec 081-S). Pilihan acuan = Q-APQ-1.
+
+Benchmark resmi (akses live 2026-10-27):
+- Accurate Online: pembayaran gaji adalah langkah terpisah sesudah pencatatan beban gaji — Kas & Bank > Pembayaran > Ambil > Pencatatan Gaji, memilih periode+beban yang dibayar (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/kas-bank/pembayaran/cara-membuat-pembayaran-gaji/). Ini membuktikan tahap "sudah dicatat/disahkan, belum dibayar" adalah permukaan kerja nyata; bentuk antrean mengendap bertingkat umur di help Accurate = TIDAK ditemukan — tidak diklaim.
+- Zahir: Zahir HR memasarkan Payroll + proses transfer gaji + ESS (BENCHMARK: https://zahir.co.id/hr/); daftar fitur Zahir memuat payroll run menghasilkan slip yang diakses karyawan (https://zahirerp.com/id/all-features-of-zahir-products/). Bentuk antrean slip disetujui-belum-dibayar lintas periode di halaman resmi Zahir = TIDAK ditetapkan run ini — tidak diklaim.
+
+### 1. Workflow specification
+
+Aktor: Pemroses payroll pemegang `process_payroll` dalam `getHrScope` department/all (satu-satunya yang bisa membayar existing); Penyetuju slip (sudah bertindak — approvedBy tercatat); Karyawan (tidak melihat antrean; slipnya terbit untuknya lewat permukaan existing); Lead (putusan Q-APQ), Backend (builder+loader baru read-only), Frontend (permukaan), QA (falsifikasi).
+
+Dokumen masuk: baris Payroll existing berstatus persis `approved` (lahir dari approvePayroll existing). Dokumen keluar: tidak ada dokumen/kolom/status baru tahap 1; baris antrean baca-saja TANPA nominal + tautan ke detail slip existing tempat `markPayrollPaid` dijalankan.
+
+Alur:
+1. Slip disetujui lewat jalur existing (gerbang snapshot statutori di approve tetap berlaku penuh).
+2. Selama status `approved`, baris tampil di antrean: nomor slip, karyawan (dalam scope), periode/rentang slip, tipe, penyetuju (approvedBy sebagai fakta ID/nama sesuai pola existing), umur menunggu bayar (§3), tahap turunan.
+3. Pemroses membuka detail slip existing dan membayar lewat `markPayrollPaid` existing (assertApproved workflow generik + plafon Pasal 63/65 + klaim atomik + jurnal + amortisasi satu transaksi). Antrean tahap 1 TIDAK menyediakan tombol Bayar (Q-APQ-4).
+4. Baris keluar populasi permanen saat status menjadi `paid`. Slip kembali ke `draft`/dihapus lewat jalur existing (bila ada) keluar populasi apa adanya — antrean tidak menafsirkan.
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean slip approved belum dibayar | usul `process_payroll` (katalog:331) + `getHrScope` department/all | preseden DIPUTUS Lead untuk 070-S (Q-PDQ-4); populasi ini diputus Q-APQ-3 | USULAN preseden sama; `view_payroll` tidak cukup (usul); self/none = kosong |
+| Setujui slip (sumber baris) | izin approvePayroll existing + gerbang snapshot | hrm.actions.ts:3000-3060 | tidak berubah |
+| Bayar slip dari detail existing | `process_payroll` | markPayrollPaid hrm.actions.ts:3063+ (assertApproved, plafon, klaim atomik, jurnal) | TIDAK berubah; antrean tidak memberi jalur bayar apa pun tahap 1 |
+| Lihat nominal slip (detail) | izin permukaan detail slip existing dalam scope | halaman detail penggajian existing | TIDAK ditarik ke antrean (BR-APQ-02) |
+
+Aturan keras data gaji: payload, rekap, log, dan board untuk antrean ini TANPA nominal dalam bentuk apa pun — termasuk totalAmount per baris, Σ nominal rekap, dan rata-rata. Jumlah yang boleh direkap hanya JUMLAH SLIP (hitungan baris), bukan uang.
+
+### 3. Status-transition matrix + fakta umur (nol status/kolom baru tahap 1)
+
+Transisi existing yang TIDAK diubah antrean (TERVERIFIKASI-KODE): `draft` -> `approved` (approvePayroll, klaim atomik :3045); `approved` -> `paid` (markPayrollPaid, klaim atomik + paymentDate + jurnal + amortisasi satu transaksi). Antrean tidak menulis transisi apa pun dan tidak memisahkan flip status dari jurnal (aturan keras charter payroll).
+
+Populasi antrean: Payroll `status = "approved"` persis, dalam `getHrScope` pemanggil. Slip `draft` (wilayah 070-S), `paid`, dan status lain bukan populasi dan tidak terhitung rekap.
+
+Fakta umur (dibekukan, jangan dipakai diam-diam):
+- TIDAK ada `approvedAt` (schema:3900-3942). Acuan jujur yang tersedia: `endDate` periode slip (akhir masa kerja yang digaji — momen kewajiban bayar lahir secara bisnis) dan `createdAt` baris (momen slip dibuat, bisa jauh sebelum disetujui). `updatedAt` berubah oleh approve itu sendiri dan edit lain — DILARANG. ActivityLog "approve" (:3052) DILARANG sebagai sumber turunan.
+- Pilihan spec (USULAN, diputus Q-APQ-1): (a) umur sejak `endDate` berlabel jujur "sejak akhir periode slip" — nol migrasi, bermakna bisnis (gaji periode itu seharusnya dibayar), tidak mengklaim momen setuju; atau (b) umur sejak `createdAt` berlabel "sejak slip dibuat" (pola 070-S); atau (c) Backend menambah jejak setuju sah (kolom `approvedAt` terisi di klaim approve) sebagai pekerjaan fisik terpisah SEBELUM umur "sejak disetujui" diterbitkan. Yang dilarang: melabeli (a)/(b) sebagai "sejak disetujui".
+- Tahap: usul `MENUNGGU` / `MENGENDAP` dengan ambang konstanta bernama dari acuan terpilih (usul 7 hari kalender WIB sesudah endDate — gaji bulanan lazim dibayar awal bulan berikutnya; angka ini USULAN kebijakan untuk Lead, BUKAN fakta/statutori; keterlambatan bayar gaji punya dimensi regulasi yang BUKAN diputus spec ini — lihat catatan Accountant §8).
+
+Per baris tampil: documentNo, employeeId + nama karyawan (dalam scope), departmentId karyawan (untuk saringan scope), period + startDate/endDate verbatim, type verbatim, approvedBy (fakta penyetuju), umurHari dari acuan Q-APQ-1 + label sumbernya, tahap turunan server. Rekap = jumlah slip per tahap saja.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-APQ-01 | Populasi = Payroll berstatus PERSIS `approved` dalam `getHrScope` pemanggil (scope ditegakkan loader server sebelum query; self/none/rusak = nol baris). Slip draft/paid/status lain tidak tampil dan tidak terhitung, termasuk rekap. | TERVERIFIKASI-KODE (status hrm.actions.ts:3045; hr-scope.ts:40) + USULAN batas populasi |
+| BR-APQ-02 | TANPA nominal tahap 1 mutlak: select loader tidak memuat baseSalary/allowances/deductions/overtimeTotal/appreciationTotal/loanDeduction/lateDeduction/grossSalary/bpjs*/pph21/netSalary/totalAmount/absentDeduction, dan payload/rekap tidak memuat angka uang turunan apa pun (Σ/rata-rata/median). Rekap hanya hitungan slip. Pelanggaran satu kolom pun = cacat. | USULAN di atas aturan keras payroll charter + preseden Q-PDQ-4 (070-S) |
+| BR-APQ-03 | Umur TIDAK dari `updatedAt`/ActivityLog dan tidak dilabeli "sejak disetujui" tanpa stempel setuju sah; acuan + label diputus Q-APQ-1 (usul endDate berlabel "sejak akhir periode slip"). Tahap mengendap dari konstanta ambang terpilih Q-APQ-1; tanpa skor prioritas karangan; tanpa auto-bayar/auto-ingatkan berbasis umur tahap 1. | TERVERIFIKASI-KODE (schema tanpa approvedAt) + USULAN acuan |
+| BR-APQ-04 | Antrean baca-saja murni: tidak memanggil approvePayroll/markPayrollPaid, tidak menulis Payroll/pinjaman/jurnal. Pembayaran hanya `markPayrollPaid` existing dari detail (assertApproved workflow generik + plafon Pasal 63/65 + klaim atomik + jurnal + amortisasi pinjaman SATU transaksi tetap utuh); kegagalan penjaga existing (workflow belum approved penuh, plafon tembus) tampil apa adanya di detail, bukan dilewati antrean. | TERVERIFIKASI-KODE (hrm.actions.ts:3063+) + USULAN batas |
+| BR-APQ-05 | Baris karyawan berhenti tetap tampil apa adanya (slip approved karyawan yang kemudian berhenti tetap kewajiban bayar yang harus diselesaikan lewat jalur final existing); antrean tidak menyaring berdasarkan isActive/employmentEndedAt dan tidak menafsirkan kelayakan bayar — penjaga payroll existing (periode sesudah employmentEndedAt, slip final) tetap memutus di detail/aksi. | TERVERIFIKASI-KODE (penjaga lifecycle employee-lifecycle.ts) + USULAN tampil |
+| BR-APQ-06 | Urutan usul: MENGENDAP dulu (umur terbesar), lalu MENUNGGU (umur terbesar), seri documentNo naik; saringan periode/departemen/tahap menyempitkan dan rekap = hitungan baris tampil persis. Kata/urutan final Q-APQ-2. | USULAN pola keluarga antrean |
+| BR-APQ-07 | Satu query massal lintas periode dalam scope (anti-N+1; tanpa query per slip/karyawan). Nama/departemen karyawan dari relasi existing; statutorySnapshot TIDAK dimuat ke payload (isi snapshot adalah data hitung gaji). | USULAN fisik pola loader existing |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Bayar gaji sesudah pencatatan beban | Ada: Pembayaran ambil Pencatatan Gaji per periode (URL §0) | Ada: Payroll + transfer gaji Zahir HR (URL §0) | Ada: markPayrollPaid approved->paid + jurnal + amortisasi | Tidak diubah |
+| Daftar kerja slip disahkan belum dibayar lintas periode | Tidak ditemukan bentuk antrean mengendap — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN: daftar penggajian per periode; 070-S hanya draft | Antrean approved baca-saja tanpa nominal (inti spec ini) |
+| Umur menunggu bayar + ambang tindak lanjut | Tidak ditemukan — tidak diklaim | Tidak ditemukan — tidak diklaim | ABSEN (approvedAt memang tidak ada) | Turunan jujur §3; acuan diputus Q-APQ-1 |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder+loader BARU read-only — falsifikasi QA):
+- AC-APQ-B1: Populasi tepat approved + scope fail-closed: slip draft/paid bocor = MERAH; baris karyawan luar scope bocor (termasuk lewat rekap hitungan) = MERAH; scope self/none menghasilkan baris apa pun = MERAH.
+- AC-APQ-B2: Nol nominal: payload memuat satu pun kolom nominal/statutorySnapshot (BR-APQ-02) = MERAH (grep daftar select + bentuk payload tes). Rekap memuat angka uang = MERAH.
+- AC-APQ-B3: Umur dari acuan Q-APQ-1 berlabel server; mengubah updatedAt baris approved (edit tak terkait) mengubah umur = MERAH; label "sejak disetujui" terbit tanpa stempel setuju sah = MERAH (BR-APQ-03).
+- AC-APQ-B4: Baca-saja: builder/loader memanggil approve/markPaid atau menulis Payroll/EmployeeLoan/Journal = MERAH.
+- AC-APQ-B5: Anti-N+1: query konstan terhadap jumlah slip/periode; memuat componentLines/snapshot per baris = MERAH.
+
+Frontend (sesudah kontrak Backend):
+- AC-APQ-F1: Kolom verbatim payload server (Periode/Rentang/Tipe/Penyetuju/Menunggu usul §1); UI menghitung umur/tahap sendiri atau menampilkan nominal turunan = MERAH.
+- AC-APQ-F2: Nol tombol Bayar/Setujui dari antrean tahap 1; hanya tautan ke detail slip existing. Tombol bayar lahir di antrean = MERAH (Q-APQ-4).
+- AC-APQ-F3: Notice tanpa nominal tampil persis kata terpilih Q-APQ-2, memuat frasa bahwa slip approved belum dibayar dan pembayaran lewat detail — parafrase Frontend = MERAH.
+
+Edge cases:
+- EC-APQ-1: Slip approved karyawan berhenti (BR-APQ-05): tetap tampil; pembayaran final tetap penjaga existing di detail — antrean tidak menandai "tidak layak bayar" karangan.
+- EC-APQ-2: Slip approved dari periode lama lintas tahun (termasuk Desember TER pending-final yang lolos approve sebelum gerbang diperketat): tampil apa adanya; antrean tidak menilai ulang statutori.
+- EC-APQ-3: Slip approved dengan workflow generik Approval belum tuntas (assertApproved akan menolak saat bayar): tetap populasi (status dokumen approved) — antrean tidak membaca status workflow generik sebagai saringan diam-diam tahap 1; kegagalan muncul saat aksi bayar existing.
+- EC-APQ-4: employeeId null (slip tanpa karyawan tertaut warisan): tampil di ember tanpa-karyawan terhitung, tidak dibuang, tidak diberi nama karangan.
+- EC-APQ-5: Dua slip approved karyawan sama beda periode (mingguan+bulanan warisan): baris per slip apa adanya; antrean tidak menggabung.
+
+### 7. Backlog implementasi (turunan F-2026-10-27-084-S)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-084-S | Spec kontrak ini (dokumen) | Business | — |
+| F-2026-10-27-084-B | Builder+loader antrean Payroll approved (populasi/umur tanpa nominal §3, gerbang Q-APQ-3, anti-N+1) | Backend | Sesudah putusan Lead Q-APQ-1/2/3 |
+| F-2026-10-27-084-F | Permukaan daftar verbatim + tautan detail, nol tombol Bayar tahap 1 | Frontend | Sesudah kontrak 084-B |
+| F-2026-10-27-084-Q | Falsifikasi AC-APQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | Sesudah 084-B/F terbit |
+
+### 8. Yang TIDAK diusulkan run ini + pertanyaan putusan Lead
+
+Tidak diusulkan: tombol Bayar dari antrean (rantai jurnal+amortisasi+plafon wajib terasa utuh di detail; membuka = Q-APQ-4 dengan vonis Accountant); menampilkan nominal/total bayar rekap (BR-APQ-02; membuka rincian = Q-PDQ-5 preseden: butuh vonis Accountant); pengingat ke karyawan/pemroses; pembayaran massal banyak slip; penilaian kepatuhan jadwal bayar gaji (dimensi regulasi ketenagakerjaan — bukan wilayah spec antrean; bila Lead ingin ambang berbasis kewajiban bayar tepat waktu, rujukan statutori diputus Accountant/Kemenaker dulu).
+
+Pertanyaan untuk Lead (Business tidak memutus sendiri):
+- Q-APQ-1: Acuan umur: endDate berlabel "sejak akhir periode slip" (usul) vs createdAt vs jejak approvedAt fisik Backend; ambang MENGENDAP usul 7 hari kalender WIB dari acuan itu — disahkan/diubah?
+- Q-APQ-2: Kata kolom/tahap/notice final (usul mengikuti kosakata 070-S: "Menunggu Proses"/"Mengendap")?
+- Q-APQ-3: Gerbang baca: preseden 070-S (`process_payroll` saja + getHrScope department/all) disahkan untuk populasi approved, atau beda?
+- Q-APQ-4: Tahap 1 tanpa tombol Bayar dari antrean (usul) — dibuka tahap berikut atau tidak sama sekali? (Bila dibuka: vonis Accountant wajib dulu.)
+- Q-APQ-5: Slip approved karyawan berhenti (EC-APQ-1) tampil satu daftar (usul) atau ember terpisah?
+- Q-APQ-6: Penempatan permukaan: seksi antrean di halaman penggajian existing (pola 070-S) atau halaman antrean keluarga?
+
+F-2026-10-27-084-S — Antrean slip gaji disetujui belum dibayar mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-APQ-1..6, lalu fisik Backend (084-B), konsumen Frontend (084-F), falsifikasi QA (084-Q). Pemilik usulan: Business (spec), Lead (acuan umur/ambang/kata/gerbang), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja tanpa nominal apa adanya; WAJIB bila tombol Bayar dari antrean atau rincian nominal kelak dibuka (Q-APQ-4, preseden Q-PDQ-5).
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-083-S: antrean saldo kredit pelanggan terbuka mengendap (CustomerCredit `open` bersaldo belum teralokasi/refund lintas pelanggan)
 
 > **Slot**: F-2026-10-27-083-S. Diperiksa bentrok 2026-10-27 05:36 WIB vs `origin/main` (`e1a09a9c1`): grep `F-2026-10-27-083` di backlog+board origin = 0 untuk akhiran `-S` (PR #1111 OPEN adalah `083-V` vonis Accountant untuk 082-S — beda akhiran, bukan tabrakan); maks ID 2026-10-27 `…-S` di backlog origin = 082-S (merged #1100); grep judul SPEC "kredit pelanggan terbuka/antrean CustomerCredit" = 0. Bebas. Diverifikasi sebelum tulis, bukan slot tetap.
@@ -36403,7 +36524,6 @@ Pertanyaan untuk Lead (pemilik proses; Business tidak memutus sendiri):
 - Q-CCQ-6: Penempatan permukaan: daftar Penjualan/Keuangan tertaut dari panel uang-muka existing, atau seksi di halaman pelanggan? (Frontend mengusulkan teknis; kata akhir Lead.)
 
 F-2026-10-27-083-S — Antrean saldo kredit pelanggan terbuka mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-CCQ-1..6, lalu fisik Backend (083-B), konsumen Frontend (083-F), falsifikasi QA (083-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/gerbang/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (saldo kolom tersimpan, jurnal existing tidak diubah); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka untuk populasi ini (BR-CCQ-04).
-<<<<<<<<< Temporary merge branch 1
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-083-S: antrean saldo kredit pelanggan terbuka mengendap (CustomerCredit `open` bersaldo belum teralokasi/refund lintas pelanggan)
 
 > **Slot**: F-2026-10-27-083-S. Diperiksa bentrok 2026-10-27 05:36 WIB vs `origin/main` (`e1a09a9c1`): grep `F-2026-10-27-083` di backlog+board origin = 0 untuk akhiran `-S` (PR #1111 OPEN adalah `083-V` vonis Accountant untuk 082-S — beda akhiran, bukan tabrakan); maks ID 2026-10-27 `…-S` di backlog origin = 082-S (merged #1100); grep judul SPEC "kredit pelanggan terbuka/antrean CustomerCredit" = 0. Bebas. Diverifikasi sebelum tulis, bukan slot tetap.
@@ -36532,7 +36652,6 @@ Pertanyaan untuk Lead (pemilik proses; Business tidak memutus sendiri):
 - Q-CCQ-6: Penempatan permukaan: daftar Penjualan/Keuangan tertaut dari panel uang-muka existing, atau seksi di halaman pelanggan? (Frontend mengusulkan teknis; kata akhir Lead.)
 
 F-2026-10-27-083-S — Antrean saldo kredit pelanggan terbuka mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-CCQ-1..6, lalu fisik Backend (083-B), konsumen Frontend (083-F), falsifikasi QA (083-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/gerbang/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (saldo kolom tersimpan, jurnal existing tidak diubah); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka untuk populasi ini (BR-CCQ-04).
-=========
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-096-S: antrean rekening koran draft mengendap
 
 > **Slot**: F-2026-10-27-096-S. Diperiksa bentrok 2026-10-27 07:12 WIB vs `origin/main` (`4e8191548`): grep `F-2026-10-27-096` di backlog+board main = 0; maks ID 2026-10-27 di backlog main = 082-S, seri 083-S..095-S hidup di PR terbuka (#1112..#1129); branch `*f096*` tanggal 27 = 0 (temuan `f096` lama = F-2026-10-24-096-S foto WO, tanggal beda). ID bebas. Dokumen saja; nol kode/schema/migrasi. Branch `hermes/business-f096-bank-statement-queue`. Kartu t_012ca31b judul asal menyebut model `GoodsReceiptNote` — model itu TIDAK ADA di origin/main (grep schema: hanya `GoodsReceipt:2181`, `PurchaseReturn:2242`); pivot sesuai klausul kartu ke kandidat terverifikasi di bawah, dicatat di komentar kartu.
