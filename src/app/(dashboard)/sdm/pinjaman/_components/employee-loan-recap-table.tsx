@@ -8,6 +8,7 @@ import {
   EMPLOYEE_LOAN_RECAP_UNKNOWN_STATUS_LABEL,
   type EmployeeLoanRecap,
 } from "@/lib/reports/employee-loan-recap"
+import { EmptyState } from "@/components/ui/empty-state"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -65,9 +66,7 @@ export function EmployeeLoanRecapTable({ recap }: Readonly<{ recap: EmployeeLoan
       </div>
 
       {isEmpty ? (
-        <p className="rounded-xl border border-default bg-surface px-4 py-10 text-center text-sm text-muted-foreground">
-          Tidak ada pinjaman aktif atau menunggu persetujuan pada cakupan ini.
-        </p>
+        <EmptyState title="Tidak ada pinjaman aktif atau menunggu persetujuan pada cakupan ini." className="py-10" />
       ) : (
         <div>
           <h2 className="mb-2 text-base font-semibold text-foreground">Per karyawan</h2>

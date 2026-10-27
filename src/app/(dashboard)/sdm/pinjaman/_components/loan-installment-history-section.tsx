@@ -3,6 +3,7 @@ import {
   type LoanInstallmentHistory,
 } from "@/lib/reports/loan-installment-history"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   DetailTable,
   DetailTableBody,
@@ -103,9 +104,7 @@ export function LoanInstallmentHistorySection({
           </DetailTableBody>
         </DetailTable>
       ) : (
-        <p className="rounded-xl border border-default bg-surface px-4 py-10 text-center text-sm text-muted-foreground">
-          {history.emptyLabel}
-        </p>
+        <EmptyState title={history.emptyLabel} className="py-10" />
       )}
     </section>
   )

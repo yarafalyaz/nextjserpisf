@@ -7,6 +7,7 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { ApplicantForm } from "../_components/applicant-form"
 import {
@@ -144,8 +145,8 @@ export default async function VacancyDetailPage({
             <tbody>
               {vacancy.applicants.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                    Belum ada pelamar.
+                  <td colSpan={5} className="px-4 py-8">
+                    <EmptyState title="Belum ada pelamar." className="py-0" />
                   </td>
                 </tr>
               )}

@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { kindLabel } from "@/components/payroll/payroll-component-master"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -81,9 +82,7 @@ export default async function OwnPayslipDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <h2 className="mb-4 text-base font-semibold text-foreground">Komponen Gaji Slip</h2>
         {detail.componentLines.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">
-            Belum ada baris komponen gaji pada slip ini.
-          </p>
+          <EmptyState title="Belum ada baris komponen gaji pada slip ini." className="py-4" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
