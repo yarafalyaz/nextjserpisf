@@ -125,7 +125,7 @@ perilaku, bukan hanya keberadaan file/model.
 | FIN-BR-005 | Sebagian | prisma/schema.prisma:2448 — dasar perhitungan outstanding ada; rumusnya belum ditelusur |
 | FIN-BR-006 | Belum | belum ditelusur — status lunas dan toleransi pembulatan tidak ditunjuk di sini |
 | FIN-BR-007 | Sebagian | prisma/schema.prisma:1981 — `SalesPayment` ada; isolasi pembayaran draft/gagal belum ditelusur |
-| FIN-BR-008 | Belum | belum ditelusur — reversal pembayaran dengan histori asal tidak ditunjuk di sini |
+| FIN-BR-008 | Terpasang | Reversal pembayaran berhistori (vonis t_9a1c4453): `reverseVendorPayment`/`reverseSalesPayment` — jurnal lawan via `reverseJournalsByReferenceTx`, dokumen asal status `reversed` + `reversedAt/reversedBy/reversalReason` (kolom aditif migrasi `20261028020000_payment_reversal_history_fin_br_008`; `SalesPayment.status` default `posted`), saldo kembali dalam tx yang sama, scope idempotensi `vendor_payment_reverse`/`sales_payment_reverse`; hapus fisik hanya vendor draft + sales payment yang jurnalnya belum POSTED; dialog alasan UI = pekerjaan Frontend berikutnya |
 | FIN-BR-009 | Belum | belum ditelusur — laporan aging hutang/piutang tidak ditunjuk di sini (aging WIP di laporan lain bukan bukti aging AP/AR) |
 | FIN-BR-010 | OPEN-keputusan | Keputusan scope double-entry terbuka di sumber. Fakta repo: jurnal double-entry ada — `prisma/schema.prisma:4221` (`Journal`) dan `prisma/schema.prisma:4254` (`JournalEntry`). Keberadaan jurnal bukan penutupan keputusan scope/laporan formal |
 

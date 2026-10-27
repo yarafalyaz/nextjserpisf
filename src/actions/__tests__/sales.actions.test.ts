@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const onDownPaymentReceivedMock = vi.fn()
   const deleteJournalByReferenceMock = vi.fn()
   const deleteJournalByReferenceTxMock = vi.fn()
+  const reverseJournalsByReferenceTxMock = vi.fn()
   const resyncOnEditMock = vi.fn()
   const findOverReturnMock = vi.fn().mockReturnValue(null)
 
@@ -56,6 +57,8 @@ const mocks = vi.hoisted(() => {
     salesInvoiceItem: buildModelMock(),
     salesPayment: buildModelMock(),
     salesPaymentAllocation: buildModelMock(),
+    withholdingCertificate: buildModelMock(),
+    financialIdempotencyKey: buildModelMock(),
     salesReturn: buildModelMock(),
     salesReturnItem: buildModelMock(),
     deliveryOrder: buildModelMock(),
@@ -113,6 +116,7 @@ const mocks = vi.hoisted(() => {
     onDownPaymentReceivedMock,
     deleteJournalByReferenceMock,
     deleteJournalByReferenceTxMock,
+    reverseJournalsByReferenceTxMock,
     resyncOnEditMock,
     findOverReturnMock,
     prismaMock,
@@ -179,6 +183,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   onDownPaymentReceived: (...a: unknown[]) => mocks.onDownPaymentReceivedMock(...a),
   deleteJournalByReference: (...a: unknown[]) => mocks.deleteJournalByReferenceMock(...a),
   deleteJournalByReferenceTx: (...a: unknown[]) => mocks.deleteJournalByReferenceTxMock(...a),
+  reverseJournalsByReferenceTx: (...a: unknown[]) => mocks.reverseJournalsByReferenceTxMock(...a),
 }))
 
 vi.mock("@/lib/hooks/down-payment.hook", () => ({

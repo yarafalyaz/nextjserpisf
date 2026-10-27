@@ -19,7 +19,13 @@ import {
   onVendorBillPosted,
   onVendorPaymentCreated,
   deleteJournalByReferenceTx,
+  reverseJournalsByReferenceTx,
 } from "@/lib/hooks/accounting.hook";
+import {
+  bindIdempotencyKey,
+  claimIdempotencyKey,
+  payloadFingerprint,
+} from "@/lib/services/financial-idempotency.service";
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook";
 import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook";
 import { onPurchaseReturnProcessed as onPurchaseReturnStock, resolvePurchaseReturnWarehouse, loadPurchaseReturnWarehouseContext } from "@/lib/hooks/purchase-return.hook";
@@ -1736,6 +1742,136 @@ export async function confirmVendorBill(billId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[confirmVendorBill]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * FIN-BR-008 (vonis t_9a1c4453): reversal pembayaran vendor completed.
+ * Dokumen asal TIDAK dihapus: jurnal asal di-reverse lewat
+ * reverseJournalsByReferenceTx (bukan deleteJournalByReferenceTx), saldo
+ * tiap bill dikembalikan per alokasi lalu alokasi dihapus, payment
+ * menjadi status reversed + reversedAt/reversedBy/reversalReason.
+ * Alasan kosong ditolak SEBELUM mutasi apa pun. Periode jurnal asal
+ * terkunci = assertPeriodOpen di helper reversal menolak dalam tx.
+ */
+export async function reverseVendorPayment(
+  id: number,
+  reason: string,
+  idempotencyKey?: string,
+) {
+  try {
+    const user = await requirePermission("delete_vendor_payments");
+    const cleanReason = (reason ?? "").trim();
+    if (!cleanReason) {
+      return {
+        success: false,
+        error: "Alasan pembalikan pembayaran wajib diisi.",
+      };
+    }
+    const key = (idempotencyKey ?? "").trim();
+    const userId = Number(user.id);
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorPayment.findUniqueOrThrow({
+        where: { id },
+      });
+      if (fresh.status === "reversed") {
+        throw new Error("Pembayaran vendor ini sudah dibalik.");
+      }
+      if (fresh.status !== "completed") {
+        throw new Error(
+          "Hanya pembayaran vendor completed yang dapat dibalik; pembayaran draft dihapus saja.",
+        );
+      }
+
+      if (key) {
+        const claim = await claimIdempotencyKey(
+          tx as never,
+          "vendor_payment_reverse",
+          key,
+          userId,
+          payloadFingerprint({ paymentId: id, reason: cleanReason }),
+        );
+        if (claim.replayed) return { id, replayed: true as const };
+      }
+
+      // Jurnal lawan atas jurnal asal (assertPeriodOpen tanggal asal di
+      // dalam helper; periode terkunci = throw = rollback nol mutasi).
+      await reverseJournalsByReferenceTx(
+        tx,
+        "VendorPayment",
+        id,
+        cleanReason,
+        userId,
+      );
+
+      // Saldo kembali per alokasi: paidAmount turun, balanceDue naik,
+      // status dihitung ulang neto (pola sama confirmVendorPayment).
+      const allocations = await tx.vendorPaymentAllocation.findMany({
+        where: { vendorPaymentId: id },
+      });
+      const billIds = [...new Set(allocations.map((a) => a.vendorBillId))];
+      const bills =
+        billIds.length > 0
+          ? await tx.vendorBill.findMany({ where: { id: { in: billIds } } })
+          : [];
+      const billMap = new Map(bills.map((b) => [b.id, b]));
+      for (const alloc of allocations) {
+        const bill = billMap.get(alloc.vendorBillId);
+        if (!bill) continue;
+        const netPayable = safeSubtract(
+          bill.grandTotal,
+          bill.withholdingAmount ?? 0,
+          0,
+        );
+        const nextPaid = safeSubtract(bill.paidAmount, alloc.amount, 0);
+        const nextBalance = safeSubtract(netPayable, nextPaid, 0);
+        await tx.vendorBill.update({
+          where: { id: bill.id },
+          data: {
+            paidAmount: nextPaid,
+            balanceDue: nextBalance,
+            status:
+              nextBalance <= 0 ? "paid" : nextPaid > 0 ? "partial" : "posted",
+          },
+        });
+      }
+      await tx.vendorPaymentAllocation.deleteMany({
+        where: { vendorPaymentId: id },
+      });
+
+      await tx.vendorPayment.update({
+        where: { id },
+        data: {
+          status: "reversed",
+          reversedAt: new Date(),
+          reversedBy: userId,
+          reversalReason: cleanReason,
+        },
+      });
+
+      if (key) {
+        await bindIdempotencyKey(tx as never, key, "VendorPayment", id);
+      }
+      return { id, replayed: false as const };
+    });
+
+    await logActivity(
+      "reverse",
+      "VendorPayment",
+      id,
+      `Pembalikan pembayaran vendor #${id}: ${cleanReason}`,
+    );
+    revalidatePath("/pembelian/pembayaran");
+    revalidatePath("/pembelian/tagihan");
+    return { success: true, id: result.id, replayed: result.replayed };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reverseVendorPayment]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     uomConversion: buildModelMock(),
     transactionAttachment: buildModelMock(),
+    financialIdempotencyKey: buildModelMock(),
     userWarehouse: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approval: buildModelMock(),
@@ -66,6 +67,8 @@ const mocks = vi.hoisted(() => {
     logActivityMock: vi.fn(),
     generateDocNumMock: vi.fn(),
     createGlJournalMock: vi.fn(),
+    deleteJournalByReferenceTxMock: vi.fn().mockResolvedValue({}),
+    reverseJournalsByReferenceTxMock: vi.fn().mockResolvedValue({}),
   }
 })
 
@@ -91,7 +94,8 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   onVendorBillPosted: vi.fn().mockResolvedValue({}),
   onVendorPaymentCreated: vi.fn().mockResolvedValue({}),
   deleteJournalByReference: vi.fn().mockResolvedValue({}),
-  deleteJournalByReferenceTx: vi.fn().mockResolvedValue({}),
+  deleteJournalByReferenceTx: mocks.deleteJournalByReferenceTxMock,
+  reverseJournalsByReferenceTx: mocks.reverseJournalsByReferenceTxMock,
 }))
 vi.mock("@/lib/hooks/goods-receipt.hook", () => ({
   onGoodsReceiptVerified: vi.fn().mockResolvedValue({}),
