@@ -126,7 +126,7 @@ perilaku, bukan hanya keberadaan file/model.
 | FIN-BR-006 | Belum | belum ditelusur — status lunas dan toleransi pembulatan tidak ditunjuk di sini |
 | FIN-BR-007 | Sebagian | prisma/schema.prisma:1981 — `SalesPayment` ada; isolasi pembayaran draft/gagal belum ditelusur |
 | FIN-BR-008 | Belum | belum ditelusur — reversal pembayaran dengan histori asal tidak ditunjuk di sini |
-| FIN-BR-009 | Belum | belum ditelusur — laporan aging hutang/piutang tidak ditunjuk di sini (aging WIP di laporan lain bukan bukti aging AP/AR) |
+| FIN-BR-009 | Terpasang | FIN-BR-009-S2: sisa AP layar hutang-jatuh-tempo = NETO via `payableOutstanding` yang sama dengan loader PDF (`src/lib/reports/aging-amounts.ts`; halaman mengoper `withholdingAmount`, `src/app/(dashboard)/laporan/hutang-jatuh-tempo/page.tsx`; tes falsifikasi vendor bill ber-PPh di `src/components/reports/__tests__/aging-report-view.test.ts`) |
 | FIN-BR-010 | OPEN-keputusan | Keputusan scope double-entry terbuka di sumber. Fakta repo: jurnal double-entry ada — `prisma/schema.prisma:4221` (`Journal`) dan `prisma/schema.prisma:4254` (`JournalEntry`). Keberadaan jurnal bukan penutupan keputusan scope/laporan formal |
 
 ## 6. Projects & Work Orders — `PROJ-BR-*`, `WO-BR-*`
