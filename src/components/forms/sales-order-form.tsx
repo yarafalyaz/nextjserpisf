@@ -11,6 +11,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
+import { useCreditGateBlocked } from "@/components/forms/credit-override-panel"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
@@ -38,6 +39,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
+  const { guardCreditReason, appendCreditReason, applyCreditResult, creditGatePanel } = useCreditGateBlocked()
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesOrderInput>({
     resolver: zodResolver(salesOrderSchema),
@@ -55,17 +57,25 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   })
 
   function onSubmit(data: SalesOrderInput) {
+    // Alasan wajib HANYA saat percobaan tertahan sebelumnya tanpa rekod:
+    // simpan ulang identik + alasan supaya server memersist permintaan.
+    if (!guardCreditReason()) return
     startTransition(async () => {
       try {
         const formData = new FormData()
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== "") formData.append(key, String(value))
         })
+        appendCreditReason(formData)
         const result = order?.id ? await updateSalesOrder(order.id, formData) : await createSalesOrder(formData)
         if (result.success) {
+          applyCreditResult(result)
           showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/pesanan/${result.slug ?? result.id}`)
           router.refresh()
+        } else if (applyCreditResult(result)) {
+          // Tertahan gerbang kredit: tampilkan payload server verbatim di panel.
+          showError(result.error ?? "Gagal menyimpan data")
         } else {
           showError(result.error || "Gagal menyimpan data")
         }
@@ -87,6 +97,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
       isPending={isPending}
       isEditing={Boolean(order?.id)}
       formLabel={order?.id ? "Formulir ubah pesanan" : "Formulir tambah pesanan"}
+      creditGatePanel={creditGatePanel}
     >
 
         <div className="flex flex-col gap-1.5">

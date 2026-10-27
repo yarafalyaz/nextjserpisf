@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs"
-import type { Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { resolveAllAccountMappings } from "@/lib/utils/account-automap"
 import { seedModules } from "./modules"
@@ -68,13 +68,38 @@ export const DEFAULT_WAREHOUSE = { code: "WH-0001", name: "Gudang Utama" }
  *
  * Runs in a single transaction: if any step fails the database is left
  * untouched, so the operator can simply retry the wizard. Intended to be called
- * exactly once, guarded by `isInstalled()`.
+ * exactly once: the caller's `isInstalled()` guard is re-checked inside the
+ * transaction under a `system_settings` row lock, so a concurrent second call
+ * fails instead of creating a second administrator.
  */
 export async function installBaseData(input: InstallInput): Promise<{ adminEmail: string }> {
   const adminEmail = input.adminEmail.trim().toLowerCase()
   const adminPasswordHash = await bcrypt.hash(input.adminPassword, 12)
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(
+    async (tx) => {
+    // Serialize concurrent first-install attempts on the singleton
+    // `system_settings` row, then re-count users inside the transaction.
+    // The caller's `isInstalled()` check is outside the transaction, so two
+    // concurrent `runSetup` calls can both observe "not installed"; the loser
+    // must re-check here — after acquiring the row lock, hence after the
+    // winner commits — instead of creating a second `super_admin`.
+    const lockedSettings = await tx.$queryRawUnsafe<Array<{ id: number }>>(
+      "SELECT id FROM `system_settings` ORDER BY id ASC LIMIT 1 FOR UPDATE",
+    )
+    if (lockedSettings.length === 0) {
+      await tx.systemSetting.upsert({
+        where: { id: 1 },
+        create: { id: 1 },
+        update: {},
+      })
+      await tx.$queryRawUnsafe("SELECT id FROM `system_settings` WHERE id = 1 FOR UPDATE")
+    }
+    const existingUserCount = await tx.user.count()
+    if (existingUserCount > 0) {
+      throw new Error("Aplikasi sudah terpasang.")
+    }
+
     // 1. RBAC catalogue — permissions, roles, role→permission mappings.
     await tx.permission.createMany({
       data: PERMISSIONS.map((name) => ({ name })),
@@ -219,5 +244,7 @@ export async function installBaseData(input: InstallInput): Promise<{ adminEmail
     }
 
     return { adminEmail }
-  })
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  )
 }
