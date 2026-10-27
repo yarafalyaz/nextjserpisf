@@ -34364,42 +34364,66 @@ F-2026-10-26-061-S — Antrean penerimaan barang draft mengendap. Status: SPEC S
 
 ---
 
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-071-S: antrean permintaan material draft mengendap belum diajukan (turunan baca-saja)
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-070-S: antrean slip gaji draft mengendap menunggu proses (turunan baca-saja, TANPA nominal gaji)
 
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_3cbd168d. ID F-2026-10-26-071-S diverifikasi bebas run ini 2026-10-26 18:47 WIB: grep `F-2026-10-26-071` di backlog + board `origin/main` (`6a960ec0`) = 0 dan tidak ada judul PR terbuka memuat 071-S; seri berjalan 050-S..070-S (070-S = antrean slip gaji draft, PR #1030 OPEN; 069-V = vonis Accountant — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_7479226a. ID F-2026-10-26-070-S diverifikasi bebas run ini 2026-10-26 18:2x WIB: grep `F-2026-10-26-070` di backlog + board `origin/main` (`4376c4c2`) = 0 dan tidak ada judul PR terbuka memuat 070-S; seri berjalan 050-S..069 (069 = vonis Accountant `F-2026-10-26-069-V` — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
 
+Batasan keras domain (wajib dibaca implementor): permintaan material `draft` adalah rencana internal antar gudang yang BELUM diajukan — belum persetujuan, belum transfer, belum gerak stok apa pun. Permintaan TIDAK membuat StockMove/jurnal/MaterialIssue (kepala berkas `src/actions/material-request.actions.ts`:13-16, BR-MR-02 existing); satu-satunya gerak stok = InventoryTransfer tertaut yang diproses/diterima lewat aksi transfer existing. Antrean ini baca-saja: tidak mengajukkan, tidak menyetujui, tidak membuat transfer, tidak menghapus draft. Ambang hari tingkat mengendap = USULAN putusan Lead (Q-MRQ-1), dilarang ditulis fakta/kebijakan dan dilarang ditanam Backend sebelum diputus. Nilai barang/qty tampil apa adanya dari baris tersimpan; antrean dilarang menghitung nilai uang permintaan (permintaan bukan dokumen nilai, BR-MR-12 existing di kepala `src/lib/reports/material-request.ts`:9-11) dan dilarang menjumlahkan qty draft ke stok/kebutuhan berjalan mana pun.
 Batasan keras domain (wajib dibaca implementor): data gaji dilindungi authorization. Antrean ini TANPA nominal dalam bentuk apa pun tahap 1 — tidak ada `baseSalary`, `netSalary`, `grossSalary`, komponen, potongan, BPJS, PPh21, atau total uang per baris/per rekap di payload antrean (BR-PDQ-03). Antrean cukup: hitungan slip per periode/status/tingkat + konteks non-nominal (periode, rentang tanggal, tipe, pembuat, umur). Permukaan hanya untuk pemroses berizin `process_payroll` dalam `getHrScope` fail-closed (BR-PDQ-02/04); scope `self` TIDAK melihat antrean proses (antrean proses bukan slip-milik-sendiri — wilayah slip karyawan existing yang sah hanya menampilkan slip non-draft milik sendiri). Ambang hari tingkat mengendap = USULAN putusan Lead (Q-PDQ-1), dilarang ditulis fakta/kebijakan dan dilarang ditanam Backend sebelum diputus. Nilai statutori (TER/BPJS/PPh21) TIDAK disentuh tahap baca-saja ini sama sekali; vonis Accountant bersyarat hanya bila Lead membuka rincian nominal atau aksi proses-dari-antrean (BR-PDQ-09/Q-PDQ-5).
 
+Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): `MaterialRequest.status` String default `"draft"` (prisma/schema.prisma:2545 model MaterialRequest; status :2554). Transisi manual sah (src/lib/reports/material-request.ts:116-121 `MATERIAL_REQUEST_TRANSITIONS`): draft → diajukan/dibatalkan; diajukan → disetujui/ditolak/dibatalkan; disetujui/terpenuhi_sebagian → ditutup_manual; status turunan sistem terpenuhi/terpenuhi_sebagian dari qty diterima transfer (deriveMaterialRequestFulfillment, berkas sama). Aksi: `createMaterialRequest` (:106, `create_material_requests`, status eksplisit `draft` :131), `submitMaterialRequest` (:216, `edit_material_requests`, klaim transisi dari `["draft"]` :230), `approveMaterialRequest` (:242, `approve_material_requests`, self-approve dilarang kepala berkas :10), `deleteMaterialRequest` (:194, hanya `status: "draft"` klaim deleteMany :204), `cancelMaterialRequest` (:292), `closeMaterialRequest` (:327), `createTransferFromMaterialRequest` (:360, `create_inventory_transfers`, hanya dari disetujui/terpenuhi_sebagian).
 Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): Payroll `status` String default `"draft"` (prisma/schema.prisma, model Payroll); unik BUKAN `[employeeId, period]` melainkan `@@unique([employeeId, startDate, endDate])` (`uq_payroll_employee_range`) — satu karyawan boleh banyak slip per label periode selama rentang tanggal berbeda (koreksi premis kartu, wajib dibaca Lead). `processPayroll` (src/actions/hrm.actions.ts:2554, izin `process_payroll`) melahirkan/memfinalkan slip `draft` (status eksplisit `draft` :2452); `approvePayroll` (:2967) menolak snapshot statutori `fromFallback` (:3003, AUD-HRM-01); `markPayrollPaid` (:3028) hanya dari `approved`, klaim atomik `updateMany status=approved` + amortisasi pinjaman + jurnal dalam SATU transaksi. Slip karyawan (permukaan self existing) sengaja menyembunyikan draft dari karyawan — antrean ini permukaan SEBALIKNYA untuk pemroses, bukan membocorkan draft ke karyawan.
 
+Bukan duplikasi: bukan daftar permintaan existing `inventaris/permintaan-gudang` (loader `getMaterialRequestQueue` src/lib/reports/material-request-data.ts:171 — dua ember incoming/outgoing SEMUA status, urut createdAt desc, tanpa umur draft; penanda `isOverdue` :143-147 hanya diajukan/disetujui/terpenuhi_sebagian terhadap `neededBy`, draft tidak pernah tertanda); bukan F-2026-10-26-067-S (MaterialIssue draft — dokumen pengeluaran stok gudang→produksi, beda model/izin/transisi); bukan F-2026-10-26-068-S (InventoryTransfer draft — dokumen pindah yang sudah lahir dari permintaan disetujui, hilir spec ini); bukan F-2026-10-22-078-S (inti permintaan itu sendiri — lifecycle/pemenuhan; spec ini hanya menua populasi draft-nya); bukan antrean persetujuan HR 007-S (objek cuti/lembur).
 Bukan duplikasi: bukan daftar penggajian existing `sdm/penggajian` (daftar operasional per slip dengan nominal untuk pemegang izin — antrean ini rekap mengendap tanpa nominal, tertua-dulu, per periode); bukan laporan gaji `view_payroll_reports` (wilayah nominal sesudah proses); bukan slip karyawan self (hanya slip sendiri non-draft); bukan spec frekuensi PF (aturan lahir slip mingguan/bulanan, BR-PF-08 menyebut slip draft sebagai fakta populasi — bukan antrean umurnya); bukan antrean persetujuan HR 007-S (cuti/lembur pending — dokumen ini slip gaji `draft`, tahap sebelum approve payroll, tanpa approver generik yang dikarang); bukan estimasi payroll (`getPayrollEstimation`/`getBulkPayrollEstimations` — angka rencana, bukan slip draft tersimpan).
 
 Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: fitur Permintaan Barang mencatat kebutuhan barang antar gudang/cabang (tipe Beli Barang/Kirim Barang), menjadi dasar Pemindahan Barang; permintaan dinyatakan rencana internal yang tidak berdampak stok/hutang — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/fitur-permintaan-barang/ dan https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/cara-mencatat-permintaan-kirim-barang/ (BENCHMARK: permintaan sebagai dasar kirim ada; antrean draft mengendap bertingkat umur TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: transfer antar gudang + opsi "Pindah Gudang Menggunakan Nomor Material Request" (permintaan barang modul Pembelian menjadi referensi transfer) — https://help.zahironline.com/portal/id/kb/articles/trans dan https://help.zahironline.com/portal/id/kb/articles/setup-program (BENCHMARK: rantai MR→transfer ada; antrean draft MR bertingkat umur TIDAK ditetapkan — tidak diklaim).
 - Accurate: fitur Gaji dan Tunjangan menghitung gaji pokok, tunjangan, potongan BPJS, PPh 21 sampai bonus dengan slip gaji digital yang dicek karyawan sendiri — https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/mengenal-fitur-gaji-dan-tunjangan/ (BENCHMARK: slip digital self-service ada; antrean draft mengendap bertingkat umur untuk pemroses TIDAK ditetapkan halaman yang diakses — tidak diklaim).
 - Zahir: payroll adalah produk/add-on tersendiri (Zahir Payroll / Zahir HR absensi+payroll) terpisah dari Zahir Online inti — https://www.zahironline.com/ (BENCHMARK lemah: payroll modul tersendiri; antrean draft slip bertingkat umur TIDAK ditetapkan — tidak diklaim).
 
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 6a960ec0)
 ### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 4376c4c2)
 
 Sudah ada (TERVERIFIKASI-KODE):
+- Model: `MaterialRequest` (prisma/schema.prisma:2545) — slug unik nullable, documentNo unik, requesterWarehouseId + sourceWarehouseId WAJIB, workOrderId nullable (relasi WorkOrder onDelete SetNull), neededBy nullable, status default `draft`, rejectionReason nullable, approvedBy/approvedAt nullable, createdBy nullable, createdAt/updatedAt; item `MaterialRequestItem` (:2577) qty Decimal(15,2) + notes nullable. TIDAK ada deletedAt — populasi cukup status persis tanpa saringan soft-delete yang dikarang. Indeks status/createdAt/kedua gudang/workOrder ada.
+- Lifecycle: create draft :131; submit draft→diajukan klaim atomik :230; approve diajukan→disetujui (approvedBy/approvedAt terisi, self-approve dilarang); reject diajukan→ditolak + reason; cancel; close manual dari disetujui/terpenuhi_sebagian; hapus hanya draft :204. Transfer hanya lahir dari permintaan disetujui (:360 dst) — draft belum punya transfer sah.
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:238-242): `view_material_requests`, `create_material_requests`, `edit_material_requests`, `delete_material_requests`, `approve_material_requests`. Scope gudang: `getWarehouseScope` (src/lib/auth/warehouse-scope.ts:22) all/assigned/none fail-closed; loader existing memakai scopeWarehouseFilter per sisi gudang dan none → kosong (material-request-data.ts:76-82,171-184). Penegakan aksi: assertWarehouseAccess per sisi (:91-95,168,388).
+- Daftar existing: `inventaris/permintaan-gudang` (page.tsx:65 `getMaterialRequestQueue`, izin `view_material_requests` :64, nav navigation.ts:134 izin sama) dua seksi incoming/outgoing semua status urut terbaru-dulu; baris draft tenggelam di antara status lain, tanpa umur, tanpa tingkat, tanpa rekap draft.
 - Model: `Payroll` (prisma/schema.prisma, model Payroll) — slug unik nullable, documentNo unik, employeeId nullable, period String (label periode), type default `REGULAR`, startDate/endDate WAJIB, status String default `draft`, approvedBy/createdBy nullable, paymentDate nullable, createdAt/updatedAt; kolom nominal lengkap tersimpan di model (baseSalary s.d. netSalary/totalAmount) — KEBERADAAN kolom bukan izin menampilkannya di antrean (BR-PDQ-03). Unik `@@unique([employeeId, startDate, endDate])`; indeks status/createdAt ada. TIDAK ada deletedAt di potongan terverifikasi — populasi cukup status persis tanpa saringan soft-delete yang dikarang.
 - Lahir/proses draft: `processPayroll` (:2554, `process_payroll`) + jalur bulk `generateBulkPayroll` (:2191) melahirkan slip `draft` (:2452). Approve `approvePayroll` (:2967, menolak `statutorySnapshot.fromFallback` :3003). Bayar `markPayrollPaid` (:3028, hanya `approved`, klaim atomik + amortisasi pinjaman tertua-dulu ter-cap + jurnal satu transaksi). Gerbang workflow generik `assertApproved("Payroll", …)` dihormati markPayrollPaid.
 - Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:323-327): `view_payroll`, `create_payroll`, `edit_payroll`, `process_payroll`; laporan `view_payroll_reports` (:447). Scope HR: `getHrScope` (src/lib/auth/hr-scope.ts:67) self/department/all fail-closed (roles rusak → self employeeId -1); `hrScopeWhere`/`assertHrEmployeeAccess` existing.
 - Daftar existing: `sdm/penggajian` ([[...segments]] + [slug] + tambah/ubah/komponen) — permukaan operasional nominal per slip untuk pemegang izin; konteks yang membuat antrean tanpa-nominal ini bukan penggantinya.
 
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean permintaan material `draft` mengendap — grep `umur`/`ageDays` di src/lib/reports/material-request*.ts = 0 penanda umur draft; tidak ada turunan tingkat menunggu/mengendap untuk populasi draft. Risiko bengkel: mekanik/gudang tujuan membuat draft permintaan part untuk WO, tidak pernah diajukan — gudang sumber tidak pernah tahu, part tidak bergerak, WO menunggu tanpa permukaan yang menua draft itu; draft yatim juga tidak terlihat menumpuk sampai dicari manual per dokumen.
 Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean slip gaji `draft` mengendap — tidak ada turunan umur draft payroll, tidak ada rekap hitungan draft per periode untuk pemroses. Slip draft yang ditinggal berarti karyawan periode itu tidak pernah sampai approve/bayar lewat jalur sah; karena unik rentang (bukan periode), draft yatim juga menahan lahirnya slip pengganti rentang sama. Risiko bengkel: run gajian mingguan dibuat Jumat, tidak diproses — karyawan mingguan tidak dibayar dan tidak ada permukaan yang menua draft itu (daftar nominal campur semua status bukan antrean tertua-dulu).
 
 ### 1. Workflow specification
 
+Aktor: Pembuat permintaan pemegang `create_material_requests`/`edit_material_requests` dalam scope gudang tujuan (sumber baris draft; pengaju lewat submit existing), Penyetuju gudang sumber pemegang `approve_material_requests` (pembaca kerja antrean — draft belum sampai mejanya, antrean ini justru menunjukkan draft yang belum diajukan), Pembaca gudang pemegang `view_material_requests` dalam scope gudangnya (pembaca antrean), Sistem (builder turunan baca-saja). Bukan aktor: pengguna tanpa scope ke gudang terkait (baris tidak tampil, termasuk rekap).
+Dokumen masuk: baris MaterialRequest `status = "draft"` dalam scope pembaca (id, slug, documentNo, requesterWarehouseId+nama, sourceWarehouseId+nama, workOrderId+documentNo bila tertaut, neededBy, createdBy+nama bila terpetakan, createdAt, hitungan baris item + Σ qty per baris). Field existing semua; tanpa field masuk baru; qty Decimal→Number di tepi loader pola existing, TANPA nilai uang.
+Dokumen keluar: baris antrean turunan per permintaan (§3) + rekap hitungan permintaan per tingkat/gudang. BUKAN pergerakan stok: tidak ada status berubah, transfer lahir, StockMove, jurnal, atau MaterialIssue karena antrean.
 Aktor: Pemroses Penggajian pemegang `process_payroll` dalam scope department/all (pemilik tindakan proses/approve/bayar existing), Pembaca HR pemegang `view_payroll` dalam scope sama (pembaca antrean bila Lead memutus cukup view — Q-PDQ-4), Pembuat slip pemegang `create_payroll`/`process_payroll` (sumber baris draft), Sistem (builder turunan baca-saja). Karyawan (scope self) BUKAN aktor antrean ini.
 Dokumen masuk: baris Payroll `status = "draft"` dalam scope pembaca (id, slug, documentNo, period, type, startDate, endDate, createdBy+nama bila terpetakan, createdAt). Field existing semua, TANPA field nominal masuk tahap 1, tanpa field masuk baru.
 Dokumen keluar: baris antrean turunan per slip (§3) + rekap hitungan slip per periode/tingkat. BUKAN pembayaran: tidak ada status berubah, jurnal, amortisasi pinjaman, atau uang bergerak karena antrean.
 
 Alur:
+1. Permintaan lahir `draft` lewat createMaterialRequest existing.
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft dalam scope dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), penanda `neededByLampau` (fakta tanggal apa adanya, bukan tingkat), konteks gudang/WO, rekap hitungan.
+3. Pembuat membuka detail permintaan existing dan mengajukkan (submit) atau menghapus lewat jalur existing. Antrean tidak menyediakan tombol Ajukan/Setujui/Buat Transfer/Hapus tahap 1 (Q-MRQ-3).
 1. Slip lahir `draft` lewat processPayroll/generateBulkPayroll existing.
 2. Builder antrean (usulan, baca-saja) mengambil populasi draft dalam scope dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks periode/rentang/tipe, hitungan per periode.
 3. Pemroses membuka detail slip existing dan memproses/menyetujui lewat jalur existing. Antrean tidak menyediakan tombol Proses/Setujui/Bayar/Hapus tahap 1 (Q-PDQ-3).
 4. Sesudah status bukan draft: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
 
+Kata tampil usulan (USULAN — verbatim final = Q-MRQ-2 Lead bersama ambang hari):
+- Judul kolom: `No. Dokumen`, `Gudang Tujuan`, `Gudang Sumber`, `Perintah Kerja`, `Dibutuhkan`, `Menunggu` (umur), `Dibuat Oleh`.
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Diajukan".
+- Penanda neededBy lampau: `Lewat Tanggal Dibutuhkan` (fakta tanggal; bukan kata Terlambat untuk dokumen yang belum diajukan — kata final Q-MRQ-2).
+- Notice usulan: "Daftar ini hanya permintaan material yang masih draft dan belum diajukan. Permintaan draft belum disetujui dan belum memindahkan stok; ajukan, ubah, atau hapus lewat detail permintaan."
 Kata tampil usulan (USULAN — verbatim final = Q-PDQ-2 Lead bersama ambang hari):
 - Judul kolom: `Periode`, `Rentang`, `Tipe`, `Dibuat Oleh`, `Menunggu` (umur).
 - Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Proses".
@@ -34409,34 +34433,123 @@ Kata tampil usulan (USULAN — verbatim final = Q-PDQ-2 Lead bersama ambang hari
 
 | Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
 |---|---|---|---|
+| Lihat antrean draft + tingkat/umur | `view_material_requests` (katalog:238) + `getWarehouseScope` fail-closed | loader daftar existing menegakkan izin + scope per sisi gudang; none → kosong | TIDAK ada key baru tahap 1; loader antrean menegakkan scope sebelum query (BR-MRQ-04) |
+| Buat permintaan (sumber baris draft) | `create_material_requests` (katalog:239) | createMaterialRequest + assertWarehouseAccess sisi tujuan | tidak berubah |
+| Ajukan draft → diajukan | `edit_material_requests` | submitMaterialRequest klaim transisi dari draft | TIDAK berubah; antrean hanya mengantar ke detail |
+| Setujui/tolak (diajukan) | `approve_material_requests` (katalog:242), self-approve dilarang | approveMaterialRequest/rejectMaterialRequest | di luar populasi antrean (hanya draft); tidak berubah |
+| Hapus draft | `delete_material_requests` | deleteMaterialRequest hanya status draft | tidak berubah; bukan dari antrean tahap 1 |
+| Buat transfer (disetujui) | `create_inventory_transfers` | createTransferFromMaterialRequest | di luar populasi; tidak berubah |
 | Lihat antrean slip draft + tingkat/umur (tanpa nominal) | `process_payroll` (katalog:327) + `getHrScope` department/all fail-closed (self → di luar antrean) | aksi payroll requirePermission + scope; slip self existing terpisah | TIDAK ada key baru tahap 1 (view cukup atau tidak = Q-PDQ-4 Lead); loader menegakkan scope sebelum query, self/none → kosong |
 | Buat slip (sumber baris draft) | `create_payroll`/`process_payroll` (katalog:324/327) | processPayroll/generateBulkPayroll existing | tidak berubah |
 | Proses final / setujui slip draft | `process_payroll` | processPayroll + approvePayroll (tolak fromFallback) | TIDAK berubah; antrean hanya mengantar ke detail |
 | Bayar (approved → paid + jurnal + amortisasi) | `process_payroll` | markPayrollPaid klaim atomik satu transaksi | di luar populasi antrean (hanya draft); tidak berubah |
 | Lihat slip sendiri (karyawan) | scope self existing | permukaan slip karyawan, draft disembunyikan | TIDAK diubah spec ini; antrean dilarang menjadi jalur bocor draft ke self |
 
+Tidak ada permission key baru diusulkan tahap 1. Sisi scope yang terlihat (tujuan/sumber/keduanya) = Q-MRQ-4.
 Tidak ada permission key baru diusulkan tahap 1. Nama pembuat tampil hanya nama (bukan nominal, bukan data gaji) dalam scope izin yang sama.
 
 ### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
 
+Status dokumen existing TIDAK diubah spec ini: `draft` → diajukan/dibatalkan; diajukan → disetujui/ditolak/dibatalkan; disetujui/terpenuhi_sebagian → ditutup_manual; terpenuhi/terpenuhi_sebagian turunan qty transfer received. Tidak ada jalur transfer/stok dari draft.
 Status dokumen existing TIDAK diubah spec ini: `draft` → (proses/approve existing) → `approved` → `paid` (markPayrollPaid); approve menolak snapshot fromFallback; tidak ada jalur bayar dari draft.
 
+Populasi antrean: MaterialRequest `status = "draft"` AND (requesterWarehouseId ATAU sourceWarehouseId dalam `getWarehouseScope` pembaca — sisi persis = Q-MRQ-4; none → kosong). Per baris:
 Populasi antrean: Payroll `status = "draft"` AND employeeId dalam `getHrScope` pembaca (department/all; self → bukan populasi). Per baris:
 - `umurDraftHari` = hari kalender WIB dari `createdAt` (masa depan = 0 tertanda).
+- `neededByLampau` = neededBy non-null dan hari WIB hari ini > neededBy (fakta tanggal apa adanya; neededBy null = tidak tertanda, bukan karangan tenggat dari createdAt).
 - `konteksPeriode` = period + startDate..endDate + type apa adanya (label periode BUKAN kunci unik — rentang yang membedakan, BR-PDQ-05).
 
 | # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
 |---|---|---|---|
+| S0 | status bukan draft, atau kedua gudang di luar scope, atau scope none | di luar antrean | bukan populasi |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-MRQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | permintaan belum diajukan melewati kesabaran operasional yang diputus Lead; ajukan atau hapus lewat detail |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-MRQ-5) |
 | S0 | status bukan draft, atau di luar scope, atau scope self | di luar antrean | bukan populasi |
 | S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-PDQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | slip menunggu proses melewati kesabaran operasional yang diputus Lead |
 | S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-PDQ-6) |
 
+`neededByLampau` adalah penanda pendamping, BUKAN tingkat tersendiri tahap 1 (membedakannya dari `isOverdue` existing yang memang tidak mencakup draft — memperluas isOverdue existing ke draft = Q-MRQ-6, bukan diam-diam). Tidak ada tingkat qty/kelayakan: draft tanpa item atau qty belum final tetap populasi apa adanya (EC-MRQ-6). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada pengajuan otomatis.
 Tidak ada tingkat nominal/kelayakan di antrean ini: menilai slip "siap approve" dari snapshot statutori di antrean berarti membaca data gaji/statutori per slip — di luar batas tanpa-nominal tahap 1 (penilaian fromFallback milik approvePayroll existing di detail). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada proses otomatis.
 
 ### 4. Business rules register
 
 | ID | Aturan | Label |
 |---|---|---|
+| BR-MRQ-01 | Populasi = MaterialRequest `status="draft"` persis + minimal satu sisi gudang dalam scope pembaca (sisi persis Q-MRQ-4, fail-closed none → kosong). diajukan/disetujui/status lain tidak disamakan diam-diam dan tidak masuk. Tanpa saringan deletedAt yang dikarang (model tidak punya). | TERVERIFIKASI-KODE (status default + warehouse-scope) + USULAN batas |
+| BR-MRQ-02 | Draft belum diajukan = belum persetujuan, belum transfer, belum stok bergerak: permintaan tidak membuat StockMove/jurnal/MaterialIssue; gerak stok hanya InventoryTransfer tertaut dari permintaan disetujui lewat aksi transfer existing. Qty draft dilarang dijumlahkan ke stok tersedia, stok keluar, kebutuhan WO berjalan, atau nilai persediaan di permukaan mana pun. | TERVERIFIKASI-KODE (kepala aksi :13-16, BR-MR-02/BR-MR-12 existing) |
+| BR-MRQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: ajukan (`edit_material_requests`, klaim dari draft), ubah (hanya draft), hapus (`delete_material_requests`, hanya draft), batal. Antrean tidak menambah jalan pintas ajukan/setujui/transfer/hapus dari daftar tahap 1. Self-approve tetap dilarang di jalur approve existing. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-MRQ-04 | Loader menegakkan `view_material_requests` + `getWarehouseScope` sebelum query; scope assigned hanya baris dengan gudang dalam scope-nya (sisi Q-MRQ-4); anti-N+1 (nama gudang/WO/pembuat massal — query per baris → cacat). Rekap hanya hitungan permintaan per tingkat/gudang atas baris yang sama persis. | TERVERIFIKASI-KODE (getWarehouseScope + pola loader existing) + USULAN |
+| BR-MRQ-05 | Σ qty tampil per permintaan = Σ qty item tersimpan apa adanya (Decimal→Number tepi loader), berlabel hitungan baris/qty permintaan — BUKAN sisa kebutuhan, bukan qty yang akan dipenuhi, dan tanpa nilai uang (permintaan bukan dokumen nilai). Baris tanpa item tampil qty 0 apa adanya (EC-MRQ-6). | USULAN kejujuran qty di atas TERVERIFIKASI-KODE field |
+| BR-MRQ-06 | Umur memakai `createdAt`, bukan `neededBy`. `neededBy` hanya penanda fakta tanggal lampau (BR-MRQ-07). Mengubah acuan umur = Q-MRQ-5. Hari kalender WIB pola builder existing. | USULAN di atas TERVERIFIKASI-KODE field |
+| BR-MRQ-07 | neededBy lampau pada draft TIDAK dibaca sebagai keterlambatan persetujuan/transfer: dokumen belum diajukan, tidak ada pihak yang terlambat menyetujui. Penanda tampil sebagai fakta "lewat tanggal dibutuhkan" (kata Q-MRQ-2); memperluas `isOverdue` existing ke draft = keputusan Q-MRQ-6, bukan perluasan senyap. | USULAN kejujuran label |
+| BR-MRQ-08 | Builder antrean murni baca-saja turunan: tidak memanggil submit/approve/delete/createTransfer/hook stok/jurnal, tidak menulis status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-MRQ-09 | createdBy null (legacy) tampil `—`; workOrderId null tampil `—` (bukan "tanpa WO" karangan yang menyiratkan cacat); permintaan tertaut WO tampil documentNo WO apa adanya — antrean tidak menilai WO masih hidup (WO tertutup/selesai dinilai manusia di detail, EC-MRQ-2). | USULAN di atas TERVERIFIKASI-KODE field nullable |
+| BR-MRQ-10 | Ambang hari `mengendap`, kata label final, sisi scope tampil, dan ajukan-dari-daftar adalah kebijakan perilaku inti: BUTUH-VONIS Lead (Q-MRQ-1/2/3/4). Sisi stok/jurnal tidak disentuh tahap baca-saja ini sehingga Accountant TIDAK diminta — kecuali Lead membuka aksi tulis dari daftar (Q-MRQ-3), saat itu gerak stok ikut terbaca dan vonis Accountant wajib sebelum fisik. | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Permintaan barang antar gudang sebagai rencana internal | Ada: Permintaan Barang tipe Beli/Kirim, dasar Pemindahan Barang (URL §kepala) | Ada: permintaan barang (MR) menjadi referensi Pindah Gudang (URL §kepala) | Ada: MaterialRequest draft→diajukan→disetujui + transfer tertaut (078-S) | Tidak diubah; antrean ini menua draft-nya |
+| Permintaan tersimpan berdampak stok/hutang | Dinyatakan tidak: rencana internal sebelum pengadaan (URL §kepala) | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak: StockMove hanya dari transfer received existing | Antrean berhenti di jalur existing |
+| Daftar permintaan semua status per gudang | Tidak ditetapkan antrean umur — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: incoming/outgoing semua status, urut terbaru, isOverdue tanpa draft | Antrean khusus draft berumur tertua-dulu |
+| Antrean draft bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-MRQ-B1: Populasi tepat `status="draft"` + scope: diajukan/disetujui/status lain/luar-scope/scope-none tidak tampil dan tidak terhitung rekap (cabut saring status/satu sisi scope → MERAH).
+- AC-MRQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-MRQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-MRQ-4); selama Q-MRQ-1 belum diputus `mengendap` tidak terbit (tanam angka liar → MERAH).
+- AC-MRQ-B3: Penanda neededBy: null → tidak tertanda; lampau → tertanda fakta; hari yang sama → tidak lampau; penanda tidak mengubah tingkat (jadikan tingkat → MERAH, BR-MRQ-07).
+- AC-MRQ-B4: Loader fail-closed `view_material_requests` + `getWarehouseScope` sebelum query, anti-N+1 (gudang/WO/pembuat massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil; rekap = hitungan baris yang sama persis (hitung beda → MERAH).
+- AC-MRQ-B5: Baca-saja terbukti: builder/loader tidak memanggil submit/approve/delete/createTransfer/hook stok/jurnal/tulis status (panggil diam-diam → MERAH, BR-MRQ-02/08); Σ qty verbatim item tersimpan, tanpa nilai uang (suntik harga → MERAH).
+
+Frontend (konsumen):
+- AC-MRQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ qty sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-MRQ-F2: Gudang tujuan/sumber + WO tampil verbatim payload; pembuat/WO null `—`; qty tidak berlabel stok/sisa kebutuhan/nilai (label stok di draft → MERAH); draft tidak berlabel terlambat persetujuan.
+- AC-MRQ-F3: Tautan baris hanya ke detail permintaan existing; tidak ada tombol Ajukan/Setujui/Buat Transfer/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-MRQ-3 → MERAH); tanpa `view_material_requests` halaman menolak.
+
+Edge cases:
+- EC-MRQ-1: Permintaan draft yang neededBy-nya sudah lampau lama tetap populasi apa adanya; antrean tidak menghapus/mengajukkan otomatis (keputusan manusia lewat detail).
+- EC-MRQ-2: WO tertaut sudah selesai/dibatalkan sementara draft tertinggal tetap tampil apa adanya; antrean tidak menyembunyikan baris yatim itu.
+- EC-MRQ-3: Dua draft kembar gudang+item sama tampil dua baris apa adanya; tidak digabung/didedup diam-diam (penilaian dobel = manusia).
+- EC-MRQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-MRQ-5: Permintaan diajukan/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-MRQ-6: Permintaan draft tanpa item / qty 0 tampil apa adanya; tidak dikeluarkan karena kosong.
+- EC-MRQ-7: Pembaca yang hanya memegang scope gudang sumber (bukan tujuan) — tampil atau tidak mengikuti putusan sisi Q-MRQ-4 persis; kebocoran satu count lintas scope = gagal AC-MRQ-B1.
+- EC-MRQ-8: Gudang nonaktif sesudah draft lahir tetap tampil nama apa adanya; antrean tidak menilai gudang masih boleh dipakai (dinilai aksi existing saat ajukan).
+
+### 7. Backlog implementasi (turunan F-2026-10-26-071-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-071-S | Spec kontrak ini (dokumen) | Business | — |
+| 071-B | Builder murni tingkat/umur draft permintaan material + loader `view_material_requests` + scope gudang fail-closed anti-N+1 + tes AC-MRQ-B1..B5 | Backend | Putusan Lead Q-MRQ-1/2/4 |
+| 071-F | Permukaan antrean (daftar permintaan existing atau halaman antrean pola keluarga antrean) verbatim payload + AC-MRQ-F1..F3 | Frontend | 071-B merged |
+| 071-Q | Falsifikasi AC-MRQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 071-B/071-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-MRQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (draft part untuk WO yang menggantung = pekerjaan bengkel ikut menunggu; selaras pola ambang 3 hari keluarga antrean draft) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-MRQ-2 | Kata label/notice/penanda neededBy final §1? | Lead | Kata usulan apa adanya; satu konstanta label server; penanda neededBy jangan memakai kata Terlambat |
+| Q-MRQ-3 | Ajukan langsung dari antrean dibuka? | Lead (+ Accountant wajib bila transfer dibuka) | TIDAK tahap 1 (BR-MRQ-03): submit mengubah antrean persetujuan gudang sumber dan harus terasa konteks item/gudang di detail; jalan pintas = keputusan terpisah |
+| Q-MRQ-4 | Sisi scope tampil: gudang tujuan saja (milik pembuat), sumber saja, atau keduanya seperti daftar existing? | Lead | Keduanya seperti loader existing tahap 1 — pembaca sumber perlu melihat draft yang akan datang kepadanya; penyempitan = keputusan sadar terpisah |
+| Q-MRQ-5 | Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt disahkan? | Lead | Ya `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc; acuan createdAt |
+| Q-MRQ-6 | `isOverdue` existing diperluas ke draft, atau penanda neededBy terpisah seperti spec ini? | Lead | Penanda terpisah tahap 1 (BR-MRQ-07): memperluas isOverdue mengubah kata daftar existing untuk status lain; keputusan sadar bila Lead memilih sebaliknya |
+
+### Yang TIDAK diusulkan run ini
+- Mengajukkan/menyetujui/membuat transfer massal atau otomatis dari draft basi (BR-MRQ-03) — persetujuan gudang sumber + gerak stok transfer tidak boleh dilewati daftar.
+- Memasukkan qty draft ke stok tersedia/kebutuhan WO/persediaan atau menilai permintaan dengan harga (BR-MRQ-02/05) — permintaan bukan dokumen nilai dan belum gerak stok.
+- Menghapus draft basi otomatis berbasis umur — hapus draft = keputusan manusia lewat jalur existing.
+- Pengingat WA/email ke pembuat/penyetuju dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja.
+- Mengubah matriks transisi/status MaterialRequest existing, ApprovalWorkflow generik untuk permintaan (Q-MR-2 existing menolaknya), atau lifecycle transfer.
+- Antrean populasi diajukan menunggu persetujuan — wilayah daftar incoming existing + penanda neededBy-nya; spec ini hanya draft belum diajukan.
+
+F-2026-10-26-071-S — Antrean permintaan material draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-MRQ-1/2/4 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-MRQ-3 diperluas ke transfer), lalu fisik Backend (071-B), konsumen Frontend (071-F), falsifikasi QA (071-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/scope), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
 | BR-PDQ-01 | Populasi = Payroll `status="draft"` persis + employeeId dalam scope department/all pembaca (fail-closed self/none → kosong). approved/paid/status lain tidak disamakan diam-diam dan tidak masuk. Tanpa saringan deletedAt yang dikarang. | TERVERIFIKASI-KODE (status default + hr-scope) + USULAN batas |
 | BR-PDQ-02 | Antrean proses BUKAN permukaan karyawan: scope `self` tidak melihat antrean walau slip draft itu miliknya — draft memang disembunyikan dari karyawan oleh permukaan self existing; menampilkan draft sendiri di antrean mengkhianati pemisahan itu. | TERVERIFIKASI-KODE (pemisahan self existing) + USULAN |
 | BR-PDQ-03 | TANPA nominal tahap 1 dalam bentuk apa pun (per baris, per rekap, Σ, tooltip, payload tersembunyi): payload builder dilarang memuat baseSalary/netSalary/grossSalary/komponen/potongan/BPJS/PPh21/totalAmount. Hitungan slip (count) bukan nominal dan satu-satunya angka agregat sah tahap 1. Rincian per slip boleh atau tidak = Q-PDQ-5 (Lead + vonis Accountant wajib sebelum dibuka). | USULAN batas di atas TERVERIFIKASI-KODE perlindungan gaji |
@@ -34446,30 +34559,17 @@ Tidak ada tingkat nominal/kelayakan di antrean ini: menilai slip "siap approve" 
 | BR-PDQ-07 | Antrean tidak memproses, tidak menyetujui, tidak membayar, tidak menghapus slip: tidak memanggil processPayroll/approvePayroll/markPayrollPaid/hapus existing. Bayar tetap klaim atomik + jurnal + amortisasi satu transaksi di detail — jalan pintas dari daftar yang memisahkannya = cacat uang. | TERVERIFIKASI-KODE + USULAN batas |
 | BR-PDQ-08 | Urutan default tertua-dulu di dalam tingkat, seri documentNo asc (Q-PDQ-6). Rekap = hitungan slip per periode/tingkat atas baris yang sama persis; hitungan rekap ≠ hitungan baris = cacat. | USULAN |
 | BR-PDQ-09 | Ambang hari `mengendap`, kata final, nama-per-baris, dan rincian nominal = kebijakan perilaku inti/data gaji: BUTUH-VONIS Lead (Q-PDQ-1/2/4/5). Tahap baca-saja tanpa nominal tidak menyentuh jurnal/statutori sehingga Accountant TIDAK diminta tahap ini — WAJIB sebelum rincian nominal atau aksi proses-dari-antrean dibuka (saat itu snapshot statutori + jurnal ikut terbaca/bergerak). | BUTUH-VONIS Lead |
-
-### 5. Feature matrix Accurate/Zahir/ISF
-
-| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
-|---|---|---|---|---|
 | Payroll + slip gaji digital karyawan cek sendiri | Ada: Gaji dan Tunjangan hitung pokok/tunjangan/BPJS/PPh21 + slip digital (URL §kepala) | Add-on tersendiri Zahir Payroll/HR (URL §kepala) | Ada: slip per karyawan + permukaan self (draft disembunyikan) | Tidak diubah; antrean ini sisi pemroses |
 | Draft slip dibedakan dari disetujui/dibayar | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: draft → approved → paid, approve tolak fromFallback, bayar klaim atomik+jurnal | Populasi draft persis, tanpa nominal |
 | Antrean slip draft mengendap bertingkat umur untuk pemroses | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (hitungan saja, tanpa nominal karang) |
-
-### 6. Acceptance criteria + edge cases
-
-Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
 - AC-PDQ-B1: Populasi tepat `status="draft"` + scope department/all: approved/paid/status lain/luar-scope/scope-self tidak tampil dan tidak terhitung rekap (cabut saring status/satu sisi scope/self-guard → MERAH).
 - AC-PDQ-B2: Payload tanpa nominal terbukti: suntik baseSalary/netSalary/totalAmount/komponen ke payload → MERAH (BR-PDQ-03); rekap hanya count slip per periode/tingkat sama dengan hitungan baris.
 - AC-PDQ-B3: Umur hari kalender WIB dari createdAt; umur 0 batas sama; ambang persis (== ambang → `mengendap` hanya bila Q-PDQ-1 diputus); masa depan 0 tertanda; selama Q-PDQ-1 belum diputus `mengendap` tidak terbit.
 - AC-PDQ-B4: Loader fail-closed izin + `getHrScope` sebelum query (self/none → kosong), anti-N+1 (nama pembuat massal — query per baris → MERAH); dua slip se-label-periode beda rentang tampil dua baris terpisah (dedup label → MERAH, BR-PDQ-05).
 - AC-PDQ-B5: Baca-saja terbukti: builder/loader tidak memanggil processPayroll/approvePayroll/markPayrollPaid/hapus/tulis status/jurnal/amortisasi (panggil diam-diam → MERAH, BR-PDQ-07).
-
-Frontend (konsumen):
 - AC-PDQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/count sendiri (hitung ulang UI → MERAH); urutan dari payload.
 - AC-PDQ-F2: Tidak ada nominal tampil dalam bentuk apa pun termasuk tooltip/atribut data (nominal tampil → MERAH, BR-PDQ-03); slip tidak berlabel disetujui/dibayar/siap-bayar.
 - AC-PDQ-F3: Tautan baris hanya ke detail slip existing; tidak ada tombol Proses/Setujui/Bayar/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-PDQ-3 → MERAH); tanpa izin halaman menolak.
-
-Edge cases:
 - EC-PDQ-1: Slip draft karyawan nonaktif/keluar sesudah lahir tetap populasi apa adanya dalam scope; antrean tidak menilai masih harus dibayar (keputusan manusia lewat detail).
 - EC-PDQ-2: Slip draft employeeId null (bila jalur existing mengizinkannya) tampil tanpa nama karyawan karangan (`—`), tetap terhitung; tidak dibuang senyap.
 - EC-PDQ-3: Dua slip draft karyawan sama rentang-beririsan parsial (unik hanya rentang persis sama) tampil dua baris apa adanya; antrean tidak menyatakan dobel-bayar (penilaian milik pemroses di detail).
@@ -34477,30 +34577,17 @@ Edge cases:
 - EC-PDQ-5: Slip diproses/dibayar/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci slip.
 - EC-PDQ-6: Periode tanpa draft sama sekali → antrean kosong jujur (emptyText server), bukan nol karangan per karyawan.
 - EC-PDQ-7: Pembaca scope department tidak melihat draft departemen lain sama sekali — termasuk dari rekap count (kebocoran satu count lintas departemen = gagal AC-PDQ-B1, karena count pun membocorkan keberadaan draft gaji departemen lain).
-
 ### 7. Backlog implementasi (turunan F-2026-10-26-070-S)
-
-| ID | Pekerjaan | Pemilik | Gerbang |
-|---|---|---|---|
 | F-2026-10-26-070-S | Spec kontrak ini (dokumen) | Business | — |
 | 070-B | Builder murni tingkat/umur draft payroll (payload tanpa nominal) + loader izin+`getHrScope` fail-closed anti-N+1 + tes AC-PDQ-B1..B5 | Backend | Putusan Lead Q-PDQ-1/2/4 |
 | 070-F | Permukaan antrean verbatim payload + AC-PDQ-F1..F3 | Frontend | 070-B merged |
 | 070-Q | Falsifikasi AC-PDQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 070-B/070-F |
-
-ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
-
-### 8. Pertanyaan putusan (gerbang)
-
-| ID | Pertanyaan | Untuk | Rekomendasi Business |
-|---|---|---|---|
 | Q-PDQ-1 | Ambang hari tingkat `mengendap`? | Lead | USULAN 3 hari kalender (slip mingguan basi cepat merugikan karyawan; bulanan punya konteks tutup-periode di Q-PDQ-6) — bukan fakta; selama belum diputus hanya menunggu yang terbit |
 | Q-PDQ-2 | Kata label tingkat/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
 | Q-PDQ-3 | Proses/Setujui langsung dari antrean dibuka? | Lead (+ Accountant wajib bila dibuka) | TIDAK tahap 1 (BR-PDQ-07): approve menolak fromFallback dan bayar klaim atomik+jurnal harus terasa di detail; jalan pintas = keputusan terpisah bervonis |
 | Q-PDQ-4 | Key baca antrean: `process_payroll` saja, atau `view_payroll` cukup? Nama karyawan per baris tampil, atau hanya rekap count per periode? | Lead | `process_payroll` tahap 1 (antrean = antrean kerja pemroses, bukan laporan); nama per baris dalam scope sama boleh — bukan nominal, dan pemroses memang bekerja per slip di detail existing |
 | Q-PDQ-5 | Rincian nominal per slip di antrean dibuka tahap berikut? | Lead + Accountant (WAJIB vonis) | TIDAK di spec ini (BR-PDQ-03): daftar nominal mengendap memperluas permukaan data gaji tanpa kebutuhan proses yang terbukti; detail existing sudah permukaan nominal sah |
 | Q-PDQ-6 | Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt disahkan? Ambang beda mingguan vs bulanan? | Lead | Ya `mengendap` dulu, seri documentNo asc; createdAt; ambang tunggal tahap 1 — beda frekuensi hanya bila Lead punya kebijakan nyata, jangan karang dua ambang |
-
-### Yang TIDAK diusulkan run ini
 - Memproses/menyetujui/membayar massal atau otomatis slip basi (BR-PDQ-07) — approve statutori + bayar atomik jurnal/amortisasi tidak boleh dilewati daftar.
 - Menampilkan nominal gaji dalam bentuk apa pun di antrean (BR-PDQ-03), termasuk "total draft menggantung" — agregat uang draft bukan kebutuhan antrean kerja dan memperluas paparan data gaji.
 - Menampilkan antrean ini ke karyawan/scope self (BR-PDQ-02) atau menjadikannya slip self baru.
@@ -34508,7 +34595,6 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Pengingat WA/email ke pemroses/HR dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja.
 - Menghapus slip draft basi otomatis — hapus slip = keputusan manusia; draft yatim penahan rentang diselesaikan lewat jalur existing.
 - Ambang/status/field payroll baru, perubahan unik `[employeeId, period]`, atau perubahan lifecycle draft→approved→paid existing.
-
 F-2026-10-26-070-S — Antrean slip gaji draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PDQ-1/2/4 (Accountant TIDAK untuk tahap baca-saja tanpa nominal; WAJIB hanya bila Q-PDQ-3/Q-PDQ-5 dibuka), lalu fisik Backend (070-B), konsumen Frontend (070-F), falsifikasi QA (070-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin/nama), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-072-S: antrean pembayaran vendor draft mengendap belum dikonfirmasi (turunan baca-saja)
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_2ee3d03a. ID F-2026-10-26-072-S diverifikasi bebas run ini 2026-10-26 18:58 WIB: grep `F-2026-10-26-072` di backlog + board `origin/main` (`39562550`) = 0 dan tidak ada judul PR terbuka memuat 072-S; seri berjalan 050-S..071-S (071-S PR #1033 OPEN; 069-V = vonis Accountant — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
