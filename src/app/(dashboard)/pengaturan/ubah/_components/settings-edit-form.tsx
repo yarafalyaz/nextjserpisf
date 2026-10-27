@@ -53,6 +53,7 @@ interface SettingsFormValues {
   companyPostalCode?: string | null
   companyProvince?: string | null
   companyTaxId?: string | null
+  companyNitku?: string | null
   companyVillage?: string | null
   companyWebsite?: string | null
   costingMethod?: string | null
@@ -588,6 +589,10 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="companyTaxId">NPWP</Label>
                 <Input id="companyTaxId" name="companyTaxId" placeholder="XX.XXX.XXX.X-XXX.XXX" defaultValue={settings.companyTaxId || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="companyNitku">NITKU (SellerIDTKU Coretax)</Label>
+                <Input id="companyNitku" name="companyNitku" placeholder="22 digit" maxLength={22} defaultValue={settings.companyNitku || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="companyAddress">Alamat</Label>

@@ -116,6 +116,11 @@ model SystemSetting {
   companyLogoDark              String?   @map("company_logo_dark")
   companyWebsite               String?   @map("company_website")
   companyTaxId                 String?   @map("company_tax_id")
+  // NITKU penjual 22 digit untuk ekspor Coretax (elemen SellerIDTKU).
+  // Terpisah dari NPWP: satu NPWP bisa punya banyak NITKU cabang; builder
+  // ekspor menolak fail-closed bila kosong/format salah — jangan diturunkan
+  // dari NPWP secara diam-diam.
+  companyNitku                 String?   @map("company_nitku")
   companyLatitude              Decimal?  @map("company_latitude") @db.Decimal(10, 8)
   companyLongitude             Decimal?  @map("company_longitude") @db.Decimal(11, 8)
   costingMethod                String    @default("FIFO") @map("costing_method")
