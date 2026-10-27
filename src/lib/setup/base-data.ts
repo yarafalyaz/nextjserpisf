@@ -110,6 +110,11 @@ export const PERMISSIONS = [
       "edit_sales_orders",
       "delete_sales_orders",
       "approve_sales_orders",
+      // F-2026-10-25-035-B (Q-CL2-2): key TUNGGAL override gerbang kredit.
+      // Default hanya super_admin (katalog penuh) + admin (katalog penuh
+      // minus administrasi sistem); role bawaan lain TIDAK diberi, termasuk
+      // finance. Sensitif (approve_) — wajib sadar di EXPECTED_SENSITIVE.
+      "approve_credit_overrides",
       "view_sales_invoices",
       "create_sales_invoices",
       "edit_sales_invoices",
@@ -255,6 +260,29 @@ export const PERMISSIONS = [
       "view_appreciations",
       "create_appreciations",
       "delete_appreciations",
+      "view_recruitments",
+      "create_recruitments",
+      "edit_recruitments",
+      "delete_recruitments",
+      "view_performance",
+      "create_performance",
+      "edit_performance",
+      "delete_performance",
+      "view_competencies",
+      "create_competencies",
+      "edit_competencies",
+      "delete_competencies",
+      "view_trainings",
+      "create_trainings",
+      "edit_trainings",
+      "delete_trainings",
+      "view_succession",
+      "create_succession",
+      "edit_succession",
+      "delete_succession",
+      // Field-level masking (server-side): izin modul membuka record, izin
+      // ini menentukan boleh melihat nominal gajinya.
+      "view_salary_amounts",
       "create_asset_brands",
       "delete_asset_brands",
       "create_asset_categories",
@@ -394,6 +422,10 @@ export const PERMISSIONS = [
       // Granted to admin/super_admin via "ALL"; grant it explicitly to finance
       // if that role is meant to approve loans.
       "approve_loans",
+      // F-2026-10-26-054-S (putusan Lead Q-SA-2): menyetujui/menolak
+      // penyesuaian gaji terjadwal. Tahap 1 hanya admin/super_admin (katalog
+      // penuh) + finance (FINANCE_WHITELIST eksplisit); GA pengaju saja.
+      "approve_salary_adjustments",
 ] as const;
 
 /** Nama permission yang sah — union dari katalog di atas (type-safe). */
@@ -556,6 +588,26 @@ export const GA_WHITELIST = [
       "manage_holidays",
       "delete_holidays",
       "view_employees",
+      "view_recruitments",
+      "create_recruitments",
+      "edit_recruitments",
+      "delete_recruitments",
+      "view_performance",
+      "create_performance",
+      "edit_performance",
+      "delete_performance",
+      "view_competencies",
+      "create_competencies",
+      "edit_competencies",
+      "delete_competencies",
+      "view_trainings",
+      "create_trainings",
+      "edit_trainings",
+      "delete_trainings",
+      "view_succession",
+      "create_succession",
+      "edit_succession",
+      "delete_succession",
       "view_departments",
       "view_positions",
       // F-2026-10-25-005-S DISC-B1 Q-DISC-2: pemetaan default-aman fase 1 —
@@ -567,6 +619,12 @@ export const GA_WHITELIST = [
 
 export const KABENG_WHITELIST = [
       "view_dashboard",
+      "view_recruitments",
+      "view_performance",
+      "edit_performance",
+      "view_competencies",
+      "view_trainings",
+      "view_succession",
       "view_customers",
       "view_vendors",
       "view_items",
@@ -639,6 +697,7 @@ export const KARYAWAN_WHITELIST = [
       "create_leave_requests",
       "view_overtime",
       "view_payroll",
+      "view_performance",
       "view_timesheets",
       "view_employee_loans",
       // Q-LS-1: pengajuan pinjaman mandiri (hanya diri sendiri, ditegakkan
@@ -710,7 +769,10 @@ export const FINANCE_WHITELIST = [
       "edit_journals",
       "post_journals",
       "approve_journals",
+      // F-2026-10-26-054-S Q-SA-2: finance penyetuju penyesuaian gaji tahap 1.
+      "approve_salary_adjustments",
       "delete_journals",
+      "view_salary_amounts",
       "view_expenses",
       "create_expenses",
       "create_employee_reimbursements",
