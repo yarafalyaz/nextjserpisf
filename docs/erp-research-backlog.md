@@ -39092,3 +39092,116 @@ Edge cases:
 - Perubahan form tukar faktur existing (mis. dueDate wajib): mengubah perilaku catat existing, butuh bukti kebutuhan terpisah.
 
 F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen InvoiceExchange dueDate lampau, sisa belum lunas). Status: SPEC SELESAI run ini (dokumen saja); gerbang putusan Lead Q-IEX-1..3. Pemilik: Business (spec), Lead (putusan + merge), Backend (101-B sesudah putusan), Frontend (101-F sesudah kontrak), QA (101-Q falsifikasi).
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-107-S: antrean pengeluaran (Expense) draft mengendap menunggu persetujuan (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_ab1f48e9. Basis `origin/main` `5819f8e88` (2026-10-27 15:49 WIB).
+
+**Verifikasi ID + anti-duplikat — tegas:** grep `F-2026-10-27-107` di backlog+board `origin/main` = 0/0 sebelum tulis; PR terbuka `107-S` = 0; branch `f107` = 0. Nomor 107-V SUDAH terpakai Accountant (vonis nilai antrean, PR #1179 OPEN) — pola repo suffix beda nomor sama sah (preseden 083-S/083-V, 084-S/084-V, 086-S/086-V coexist di backlog main); spec ini BUKAN vonis dan tidak menyentuh angka vonis 107-V. Awalan `BR-EXQ` grep backlog = 0. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+- Bukan antrean reimbursement disetujui-belum-dibayar F-2026-10-27-082-S: populasi 082 = klaim `isReimbursementClaim` tahap turunan DISETUJUI (sudah approve, belum bayar). Spec ini populasi SEBELUMNYA: Expense `draft` belum diputus sama sekali, termasuk klaim yang masih DIAJUKAN maupun Expense operasional non-klaim. Dua populasi disjoint pada sumbu tahap (draft vs approved/paid-turunan).
+- Bukan antrean persetujuan generik F-2026-10-27-089-S: populasi 089 = rekod `Approval` pending lintas tipe. Expense draft TANPA workflow terkonfigurasi tidak melahirkan rekod Approval apa pun (`requestApprovalIfConfigured` no-op tanpa workflow) sehingga tidak pernah tampil di 089 — justru di situlah antrean ini bekerja: dokumen sumber `Expense.status = draft` apa pun keadaan Approval pendampingnya.
+- Bukan daftar pengeluaran existing (`keuangan/pengeluaran/page.tsx`): daftar itu ADA dan tetap dipakai — `view_expenses`, urut `createdAt desc`, saring status/klaim manual. Gap: tidak ada umur menunggu keputusan, tingkat mengendap, ember keadaan-approval pendamping, atau urutan tertua bagi approver.
+- Bukan pembayaran vendor F-2026-10-26-072-S: VendorPayment dokumen bayar tagihan; Expense pengeluaran operasional/klaim. Objek, aktor, jalan keluar beda.
+
+Aktor: pemegang `approve_expenses` (approver pengeluaran), pemegang `view_expenses` (pembaca daftar). Alur existing: Expense lahir `draft` lewat `createExpense` (+ `requestApprovalIfConfigured("Expense")`) → keputusan lewat `approveExpense`/`rejectExpense` di detail existing → klaim berlanjut ke tahap bayar reimbursement (082-S), non-klaim sinkron petty cash saat approve.
+
+### 1. Workflow specification
+
+Gap: Expense draft bisa mengendap tanpa batas waktu — approver membuka daftar pengeluaran urut terbaru dan draft lama tenggelam. Tidak ada permukaan yang menjawab "pengeluaran mana paling lama menunggu keputusan saya, mana yang tersangkut workflow, mana klaim karyawan yang belum diputus". Spec ini menambahkan **turunan baca**: populasi draft + umur sejak dibuat + keadaan Approval pendamping terbaca apa adanya + tingkat mengendap, dihitung server, tampil verbatim, tautan hanya ke detail existing berpenjaga penuh. Nol keputusan dari antrean tahap 1.
+
+Dokumen masuk: rekod `Expense` draft + rekod `Approval` terbaru untuk `("Expense", id)` bila ada + kategori/vendor/proyek existing. Dokumen keluar: tidak ada — approve/reject tetap lewat detail + aksi existing.
+
+Kata usulan (USULAN, final Q-EXQ-2): judul seksi `Pengeluaran Menunggu Persetujuan`; kolom `Umur Menunggu`, `Keadaan Persetujuan`; tingkat `Mengendap` menempel pada baris, bukan status baru.
+
+### 2. Inventarisasi terverifikasi (2026-10-27, origin/main 5819f8e88)
+
+- Skema: `Expense` `prisma/schema.prisma:4291` — `status String @default("draft")`, `isReimbursementClaim Boolean @default(false)`, `employeeId Int?` (pengaju klaim), `approvedBy Int?`, `amount Decimal(15,2)`, `date`, `referenceNo?`, `receiptImage?`, `createdAt/updatedAt`. TANPA `deletedAt` pada model (verifikasi: tidak ada field deletedAt di blok model).
+- Aksi (`src/actions/finance.actions.ts`): `createExpense:708` (`create_expenses`; operasional `isReimbursementClaim: false`; `requestApprovalIfConfigured("Expense", id)` sesudah lahir); `approveExpense:808` (`approve_expenses`; hanya `draft|approved`, `assertApproved` dulu; klaim = gerbang bukti+SoD reimbursement; non-klaim sinkron petty cash lalu flip `approved`); `rejectExpense:908`; `deleteExpense:1932`. Status keluar draft hanya lewat approve/reject/delete existing.
+- Izin katalog: `src/lib/auth/module-catalog.generated.ts:374-378` — `view/create/edit/delete/approve_expenses` (label `Pengeluaran`); klaim memakai `create_employee_reimbursements:306`. TIDAK ada key `pay_expenses` terpisah; bayar klaim adalah tahap turunan jurnal 082-S.
+- Tahap klaim: `deriveReimbursementStage` `src/lib/reports/reimbursement.ts:48` — draft klaim = `DIAJUKAN`; approved/paid-tanpa-jurnal-bayar = `DISETUJUI` (wilayah 082-S). Antrean ini hanya mengambil wilayah draft/DIAJUKAN dari sumbu dokumen.
+- Daftar existing: `keuangan/pengeluaran/page.tsx` — `requirePermission("view_expenses")`, `findMany orderBy createdAt desc` paginasi 100, saring `status`/`klaim=1` manual; tanpa umur/tingkat/keadaan-approval.
+- Builder antrean Expense draft: ABSEN (yang ada builder 082-S untuk tahap DISETUJUI). Keadaan Approval pendamping per dokumen dibaca dari rekod Approval terbaru — pola sama keluarga 065-S (keadaanApproval pendamping, bukan status dokumen).
+
+### 3. Status-transition matrix
+
+Status Expense TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
+
+| Status awal | Pemicu | Status akhir | Penjaga/permission |
+|---|---|---|---|
+| (belum ada) | `createExpense` / aksi klaim | `draft` | `create_expenses` / `create_employee_reimbursements` |
+| `draft` | `approveExpense` tanpa workflow | `approved` (+ sinkron petty cash non-klaim / J-RB1 klaim) | `approve_expenses` + `assertApproved` no-op; klaim: bukti + SoD |
+| `draft` | workflow selesai (approveStep final) | `approved` | workflow existing; `approveExpense` tetap dipanggil untuk sinkron |
+| `draft` | `rejectExpense` / rejectStep | `rejected` | `approve_expenses` / workflow |
+| `draft` mengendap | — (waktu lewat saja) | tetap `draft` | **turunan: populasi antrean; tingkat `Mengendap` bila umur ≥ ambang (USULAN) — bukan status, tidak tertulis** |
+| `approved`/`paid`/`rejected` | — | di luar populasi | wilayah 082-S (klaim) / daftar existing |
+
+### 4. Role/permission matrix
+
+Katalog `module-catalog.generated.ts:374-378` + `:306`. Tanpa key baru tahap 1 (USULAN, Q-EXQ-3).
+
+| Aksi | view_expenses | create_expenses | approve_expenses | create_employee_reimbursements |
+|---|---|---|---|---|
+| Lihat daftar pengeluaran existing | YA (gerbang halaman) | tidak dituntut | tidak dituntut | tidak dituntut |
+| Lihat antrean turunan spec ini (tahap 1) | YA — key sama, tanpa key baru | tidak dituntut | tidak dituntut (pembaca) | tidak dituntut |
+| Buat pengeluaran / klaim (existing) | halaman menuntutnya | YA / — | — | — / YA (klaim) |
+| Setujui/Tolak (existing, di detail) | halaman menuntutnya | — | YA (+ SoD klaim) | — |
+| Setujui/Tolak DARI antrean turunan | TIDAK tahap 1 (BR-EXQ-07) | TIDAK | TIDAK | TIDAK |
+
+### 5. Business rules register
+
+- BR-EXQ-01 (TERVERIFIKASI-KODE): Populasi = `Expense.status = "draft"` persis, klaim dan non-klaim, tanpa saring `deletedAt` (model tidak punya field itu).
+- BR-EXQ-02 (TERVERIFIKASI-KODE): Nominal tampil = `amount` tersimpan verbatim. DILARANG melabeli total antrean sebagai utang/aging/saldo buku — label uang untuk populasi belum-disetujui = BUTUH-VONIS Accountant (Q-EXQ-4), tahap 1 tanpa label itu.
+- BR-EXQ-03 (USULAN): Umur menunggu = hari kalender WIB sejak `createdAt`; `updatedAt` dan `date` dokumen DILARANG sebagai acuan umur (date adalah tanggal biaya, bukan tanggal pengajuan).
+- BR-EXQ-04 (TERVERIFIKASI-KODE): Keadaan Approval pendamping dibaca dari rekod `Approval` terbaru per dokumen (`pending/approved/rejected/tidak ada`) dan ditampilkan sebagai pendamping terlabel terpisah — BUKAN status dokumen, tidak mengubah populasi.
+- BR-EXQ-05 (USULAN): Ember pendamping: `tanpa workflow` (tidak ada rekod Approval), `menunggu langkah` (pending), `workflow selesai — menunggu sinkron` (Approval approved tetapi dokumen masih draft; fakta fisik dari jalur approveStep→approveExpense §2). Ember ketiga tertanda tegas, bukan dibaca sudah disetujui.
+- BR-EXQ-06 (USULAN): Penanda klaim: baris `isReimbursementClaim` tertanda `Klaim Karyawan` + nama pengaju (`employeeId`); kontak/bukti (`receiptImage`, `referenceNo`) TIDAK masuk payload daftar — detail existing tempatnya.
+- BR-EXQ-07 (USULAN): Baca-saja tahap 1: tanpa tombol Setujui/Tolak/Hapus/Bayar dari antrean; tautan hanya ke detail pengeluaran existing.
+- BR-EXQ-08 (TERVERIFIKASI-KODE): Approver klaim terikat SoD existing (pengaju tidak menyetujui klaim sendiri) — antrean tidak melonggarkan; baris klaim milik pembaca sendiri tetap tampil (keputusan tetap ditolak server di detail, antrean tidak menyembunyikan fakta).
+- BR-EXQ-09 (USULAN): Gerbang antrean = `view_expenses` fail-closed; loader anti-N+1 (Approval terbaru massal per halaman dokumen, kategori/vendor/proyek include massal).
+- BR-EXQ-10 (USULAN): Urutan = mengendap dulu, lalu umur tertua; seri `createdAt` sama = id naik. Ambang mengendap satu konstanta server bernama (usulan 3 hari, final Q-EXQ-1).
+
+### 6. Acceptance criteria + edge cases
+
+AC-EXQ-B1 (Backend): builder murni mengembalikan HANYA draft; approved/paid/rejected tidak pernah masuk walau Approval pendampingnya pending.
+AC-EXQ-B2: umur dihitung WIB dari `createdAt`; dokumen dengan `date` lampau tetapi `createdAt` hari ini berumur 0 hari.
+AC-EXQ-B3: keadaan pendamping = rekod Approval terbaru per dokumen; dokumen tanpa Approval masuk ember `tanpa workflow`, bukan hilang.
+AC-EXQ-B4: total tampil berlabel persis konstanta server "total nominal tersimpan baris tampil — bukan saldo buku"; tidak ada field payload bernama utang/aging/payable.
+AC-EXQ-B5: loader `view_expenses` fail-closed (tanpa izin = kosong/akses ditolak), query Approval massal satu kali per halaman (anti-N+1 terbukti tes hitung query/mock).
+AC-EXQ-F1 (Frontend): permukaan menampilkan payload verbatim (umur, tingkat, ember, penanda klaim dari builder); UI tidak menghitung ulang umur/tingkat.
+AC-EXQ-F2: tanpa tombol Setujui/Tolak/Hapus/Bayar di antrean; tautan baris hanya ke detail pengeluaran existing.
+AC-EXQ-F3: ember `workflow selesai — menunggu sinkron` tampil terpisah terhitung, tidak menyatu dengan `menunggu langkah`.
+
+EC-EXQ-1: Expense draft hasil workflow approved tetapi `approveExpense` belum dipanggil (petty cash belum sinkron) — tetap populasi, ember ketiga.
+EC-EXQ-2: Klaim draft tanpa bukti — tetap tampil (bukti adalah gerbang approve, bukan gerbang tampil); antrean tidak menilai kelengkapan bukti.
+EC-EXQ-3: Expense non-klaim `employeeId` null — penanda klaim kosong, bukan dianggap klaim.
+EC-EXQ-4: Draft sangat lama hasil migrasi/seed (`createdAt` lampau) — mengendap sah apa adanya, tidak disembunyikan.
+EC-EXQ-5: Dua rekod Approval untuk dokumen sama (workflow diulang) — yang terbaru menentukan ember; riwayat lama tidak mencemari.
+EC-EXQ-6: Status di luar kosakata (`draft` ejaan lain/status asing) — terbaca apa adanya di luar populasi, ember `Status Tidak Dikenal` tidak dikarang untuk draft.
+
+### 7. Backlog implementasi
+
+- F-2026-10-27-107-B (Backend, SESUDAH putusan Lead Q-EXQ-1/2/3): builder murni ember/umur/keadaan-pendamping + loader `view_expenses` fail-closed anti-N+1 + tes AC-EXQ-B1..B5; klaim file di board dulu.
+- F-2026-10-27-107-F (Frontend, SESUDAH kontrak Backend): permukaan antrean verbatim payload + tes AC-EXQ-F1..F3; grep e2e pengeluaran dulu.
+- F-2026-10-27-107-Q (QA): falsifikasi AC-EXQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (approved bocor MERAH, umur dari date/updatedAt MERAH, total berlabel utang MERAH, tombol setujui dari antrean MERAH, Approval lama mencemari ember MERAH).
+
+### 8. Pertanyaan keputusan
+
+- Q-EXQ-1 (Lead): ambang mengendap — usulan 3 hari kalender WIB sejak `createdAt` (preseden keluarga antrean 2026-10-26/27).
+- Q-EXQ-2 (Lead): kata judul/kolom/ember §1 apa adanya.
+- Q-EXQ-3 (Lead): tanpa key izin baru (`view_expenses`) tahap 1.
+- Q-EXQ-4 (Accountant, bersyarat): vonis WAJIB hanya bila Lead membuka label utang/aging untuk total populasi draft; tahap 1 tidak diminta.
+- Q-EXQ-5 (Lead): penempatan permukaan — seksi turunan di halaman pengeluaran existing vs halaman antrean terpisah Keuangan.
+
+### Benchmark resmi (akses 2026-10-27)
+
+- Accurate — fitur Approval mencakup pengeluaran kas/Kas & Bank, penyetuju per transaksi: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/approval/mengenal-fitur-approval/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ (BENCHMARK: transaksi kas keluar lazim wajib persetujuan; antrean berumur tidak ditemukan di halaman itu — tidak diklaim).
+- Zahir — matriks persetujuan keuangan (pengaju/penyetuju/pembayar terpisah, batas nominal bertingkat): https://www.zahironline.com/approval-matrix-keuangan/ (BENCHMARK: prinsip SoD + tier; antrean draft berumur tidak ditemukan — tidak diklaim).
+
+### Yang TIDAK diusulkan run ini
+
+- Setujui/tolak massal dari antrean (pola Accurate approval massal): tahap berikut, butuh putusan Lead + SoD per baris terbukti.
+- Ambang nominal tier persetujuan (pola Zahir): mengubah kebijakan approve existing — bukan turunan baca.
+- Pengingat otomatis ke approver: kanal notifikasi = keputusan Lead terpisah.
