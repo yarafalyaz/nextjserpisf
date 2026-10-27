@@ -87,8 +87,10 @@ bertentangan.
     stock item yang relevan.
 -   **SAL-BR-004 \[OPEN\]:** DP dicatat sesuai model uang
     muka/accounting yang disetujui.
--   **SAL-BR-005:** pembayaran DP valid mencapai 50% memicu konversi
-    quotation menjadi faktur sesuai definisi yang disetujui.
+-   **SAL-BR-005:** pembayaran DP valid mencapai ambang persen kategori
+    pelanggan yang tersnapshot pada quotation (bawaan aman 50% bila
+    snapshot tak sah) memicu konversi quotation menjadi faktur sesuai
+    definisi yang disetujui.
 -   **SAL-BR-006:** hanya pembayaran posted yang memenuhi syarat
     dihitung untuk ambang DP.
 -   **SAL-BR-007:** konversi DP idempotent; tidak membuat faktur ganda.
@@ -104,8 +106,12 @@ bertentangan.
     memiliki baris material.
 -   **SAL-BR-014:** penjualan barang dan material proyek tidak boleh
     menghasilkan pengurangan stok ganda.
--   **SAL-BR-015 \[OPEN\]:** basis 50%: nilai sebelum/sesudah pajak,
-    diskon, ongkir, dan tipe faktur harus disetujui.
+-   **SAL-BR-015:** basis ambang tertutup-terverifikasi: ambang dihitung
+    dari `grandTotal` quotation (sudah termasuk komponen diskon/pajak
+    yang membentuk `grandTotal`; tidak ada basis DPP terpisah), dan
+    faktur hasil adalah faktur penuh yang lahir sebagai DRAFT. Persen
+    ambang mengikuti SAL-BR-005. Sisa OPEN: tidak ada untuk basis/tipe
+    faktur; perilaku reversal DP sesudah konversi tetap OPEN di ADR-003.
 
 ## 5. Finance
 

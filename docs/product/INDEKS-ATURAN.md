@@ -102,7 +102,7 @@ perilaku, bukan hanya keberadaan file/model.
 | SAL-BR-002 | Sebagian | prisma/schema.prisma:1629 — `DownPayment.status` default `pending`; perhitungan ambang hanya dari DP terkonfirmasi belum ditelusur per baris |
 | SAL-BR-003 | Sebagian | src/actions/sales.actions.ts:1248 — hook posting faktur terpanggil; seleksi baris stock-item belum ditelusur |
 | SAL-BR-004 | OPEN-keputusan | Keputusan model uang muka/accounting DP terbuka di sumber (lihat juga ADR-003) |
-| SAL-BR-005 | Sebagian | src/lib/sales/invoice-threshold.ts:17 — ambang default 50 (`DEFAULT_INVOICE_THRESHOLD_PERCENT`), dapat disnapshot per quotation; tipe faktur hasil konversi tetap mengikuti ADR-003 yang Proposed |
+| SAL-BR-005 | Sebagian | src/lib/hooks/down-payment.hook.ts:639-646 — ambang = persen kategori pelanggan tersnapshot per quotation (`Quotation.invoiceThresholdPercent` dari `CustomerCategory.downPaymentPercent`, ditulis di src/actions/sales.actions.ts:261); 50% hanya fallback fail-closed bawaan bila snapshot tak sah (src/lib/sales/invoice-threshold.ts:17,38-49). Cara baca: jangan baca 50% sebagai ambang tetap |
 | SAL-BR-006 | Sebagian | src/lib/hooks/down-payment.hook.ts:45 — `onDownPaymentConfirmed` adalah titik konfirmasi DP; syarat posted untuk ambang belum ditelusur per baris |
 | SAL-BR-007 | Sebagian | src/lib/sales/invoice-threshold.ts:1 — catatan desain ambang DP→invoice dan penjaga di hook; idempotensi konversi belum dibuktikan test di indeks ini |
 | SAL-BR-008 | Sebagian | prisma/schema.prisma:1623 — `DownPayment.quotationId` menautkan DP ke quotation; referensi invoice hasil ke pembayaran pemicu belum ditelusur |
@@ -112,7 +112,7 @@ perilaku, bukan hanya keberadaan file/model.
 | SAL-BR-012 | Sebagian | prisma/schema.prisma:2021 — `SalesReturn` ada; pelestarian histori faktur asal belum ditelusur |
 | SAL-BR-013 | Belum | belum ditelusur — pengecualian stok untuk jasa/non-stock per baris faktur tidak ditunjuk di sini |
 | SAL-BR-014 | Belum | belum ditelusur — guard anti pengurangan stok ganda penjualan vs material proyek tidak ditunjuk di sini |
-| SAL-BR-015 | OPEN-keputusan | Keputusan basis 50% (pajak/diskon/ongkir/tipe faktur) terbuka di sumber dan di ADR-003 |
+| SAL-BR-015 | Sebagian | Basis tertutup-terverifikasi: ambang dari `grandTotal` quotation, faktur penuh lahir DRAFT (src/lib/hooks/down-payment.hook.ts:639-669; src/lib/sales/invoice-threshold.ts:51-54). Sisa OPEN bukan basis: reversal DP sesudah konversi (ADR-003) |
 
 ## 5. Finance — `FIN-BR-*`
 
@@ -200,8 +200,8 @@ perilaku, bukan hanya keberadaan file/model.
 | ID | Status | Bukti paling relevan / catatan |
 | --- | --- | --- |
 | AC-SAL-001 | Sebagian | prisma/schema.prisma:1503 — `Quotation` dokumen tersendiri; bukti tidak berpengaruh ke saldo posted belum ditelusur negatif |
-| AC-SAL-002 | Sebagian | prisma/schema.prisma:1629 — DP berstatus awal `pending`; pengecualian DP draft/gagal dari ambang belum ditelusur per baris |
-| AC-SAL-003 | Sebagian | src/lib/sales/invoice-threshold.ts:17 — ambang konversi default 50; perilaku konversi final mengikuti ADR-003 (Proposed), jadi belum dapat diklaim lulus |
+| AC-SAL-002 | Sebagian | src/lib/hooks/down-payment.hook.ts:639-646 — hanya DP `CONFIRMED` dihitung terhadap ambang persen kategori pelanggan tersnapshot pada quotation (bawaan aman 50% bila snapshot tak sah); DP draft/gagal tidak dihitung |
+| AC-SAL-003 | Sebagian | src/lib/hooks/down-payment.hook.ts:639-669 — DP posted mencapai ambang snapshot kategori pelanggan per quotation (50% hanya fallback fail-closed) memicu satu faktur penuh DRAFT; reversal DP pasca-konversi tetap OPEN di ADR-003, jadi belum dapat diklaim lulus penuh |
 | AC-SAL-004 | Sebagian | src/actions/sales.actions.ts:1248 — hook posting faktur; pembatasan hanya baris stock belum ditelusur |
 | AC-SAL-005 | Sebagian | prisma/schema.prisma:1986 — pembayaran tertaut ke faktur; kebenaran outstanding parsial/penuh belum ditelusur |
 | AC-SAL-006 | Sebagian | prisma/schema.prisma:2021 — `SalesReturn` ada; pelestarian histori invoice asal belum ditelusur |

@@ -49,9 +49,10 @@ makna berbeda.
 ## 4. Sales
 
 -   **AC-SAL-001:** Quotation tidak memengaruhi saldo posted.
--   **AC-SAL-002:** DP draft/gagal tidak dihitung pada threshold 50%.
--   **AC-SAL-003:** DP posted mencapai threshold memicu konversi tepat
-    satu kali sesuai keputusan final.
+-   **AC-SAL-002:** DP draft/gagal tidak dihitung pada ambang persen kategori pelanggan yang tersnapshot pada quotation (bawaan aman 50% bila snapshot tak sah).
+-   **AC-SAL-003:** DP posted mencapai ambang persen kategori pelanggan
+    yang tersnapshot pada quotation (bawaan aman 50% bila snapshot tak
+    sah) memicu konversi tepat satu kali sesuai keputusan final.
 -   **AC-SAL-004:** Invoice posted mengurangi stok hanya untuk baris
     stock yang relevan.
 -   **AC-SAL-005:** Pembayaran parsial/penuh menghasilkan outstanding

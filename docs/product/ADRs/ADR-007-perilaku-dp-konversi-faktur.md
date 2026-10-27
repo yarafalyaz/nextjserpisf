@@ -6,9 +6,13 @@
     menyisakan empat pertanyaan tentang konversi quotation saat DP
     mencapai ambang: (1) tipe faktur hasil, (2) basis perhitungan ambang,
     (3) perilaku revisi quotation setelah DP, (4) perilaku reversal
-    pembayaran setelah konversi. Repo aktif
+    pembayaran setelah konversi. Aturan yang berlaku bukan ambang
+    tetap 50%: ambang adalah persen per kategori pelanggan yang
+    tersnapshot per quotation, dan 50% hanya fallback fail-closed
+    bawaan bila snapshot kosong/tidak sah. Repo aktif
     (commit `275b9596038608f7ce4c29fcb82e7c7cecd709f0`) sudah menentukan
-    perilaku untuk pertanyaan 1–3. ADR ini memisahkannya dari ADR-003:
+    perilaku untuk pertanyaan 1–3, termasuk bahwa revisi/edit quotation
+    tidak menulis ulang snapshot. ADR ini memisahkannya dari ADR-003:
     bagian yang sudah ditentukan kode ditutup di sini; pertanyaan 4 tetap
     OPEN dan tetap menjadi isi ADR-003.
 -   **Keputusan yang diusulkan:** Tetapkan perilaku berjalan berikut
@@ -40,10 +44,14 @@ atau HPP; itu terjadi di jalur posting faktur.
 -   Persen dibaca dari snapshot `Quotation.invoiceThresholdPercent`, yang
     disalin dari `CustomerCategory.downPaymentPercent` ketika quotation
     dibuat; mengubah master kategori sesudahnya tidak mengubah quotation
-    berjalan. Snapshot kosong/korup fail-closed ke default **50**.
-    `src/lib/sales/invoice-threshold.ts:4-15,17,38-49`;
-    `prisma/schema.prisma:542,1515-1518`;
-    `src/actions/sales.actions.ts:209-211,261`
+    berjalan. Snapshot sah adalah >0 dan <=100; snapshot kosong/korup
+    fail-closed ke fallback bawaan **50** — 50 bukan ambang tetap.
+    Label sumber verbatim: `Ambang invoice dari kategori pelanggan: X%`
+    bila snapshot sah, `Ambang invoice default: 50%` bila fallback.
+    `src/lib/sales/invoice-threshold.ts:17,28-49,56-62`;
+    `prisma/schema.prisma:542,1514-1518`;
+    `src/actions/sales.actions.ts:201,209-211,261`;
+    hook memakai snapshot di `src/lib/hooks/down-payment.hook.ts:639-646`
 -   Karena basisnya `grandTotal` quotation, ambang dihitung dari nilai
     akhir dokumen itu (sesudah komponen diskon/pajak yang membentuk
     `grandTotal`); tidak ada basis DPP terpisah.
@@ -64,6 +72,15 @@ atau HPP; itu terjadi di jalur posting faktur.
     `src/lib/services/tax-invoice.service.ts:301`
 
 ### 3. Revisi quotation setelah DP
+
+Snapshot ambang tidak ditulis ulang oleh revisi maupun edit quotation:
+`reviseQuotation` hanya mengubah `status`/`revisionNumber`
+(`src/actions/sales.actions.ts:491-497`); `updateQuotation` menulis
+ulang isi dokumen tanpa `invoiceThresholdPercent`
+(`src/actions/sales.actions.ts:682-712`). Snapshot hanya ditulis saat
+pembuatan (`src/actions/sales.actions.ts:261`), jadi mengubah master
+kategori atau merevisi quotation tidak mengubah ambang quotation
+berjalan.
 
 Revisi sesudah konversi tidak menulis ulang faktur hasil secara diam-diam:
 
@@ -86,8 +103,9 @@ tunggal ini.
 
 ## Konsekuensi
 
--   `SAL-BR-004` dan `SAL-BR-015` kandidat ditandai tertutup-sebagian;
-    sisa OPEN-nya hanya reversal DP pasca-konversi.
+-   `SAL-BR-015` tertutup untuk basis ambang (`grandTotal`) dan tipe
+    faktur; `SAL-BR-004` dan sisa reversal DP pasca-konversi tetap
+    seperti tertulis di ADR-003.
 -   `AC-SAL-003` terpenuhi oleh perilaku di atas untuk tipe faktur dan
     basis ambang; kriteria untuk reversal belum dapat ditulis sebelum
     keputusan owner.
