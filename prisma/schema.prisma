@@ -116,6 +116,11 @@ model SystemSetting {
   companyLogoDark              String?   @map("company_logo_dark")
   companyWebsite               String?   @map("company_website")
   companyTaxId                 String?   @map("company_tax_id")
+  // NITKU penjual 22 digit untuk ekspor Coretax (elemen SellerIDTKU).
+  // Terpisah dari NPWP: satu NPWP bisa punya banyak NITKU cabang; builder
+  // ekspor menolak fail-closed bila kosong/format salah — jangan diturunkan
+  // dari NPWP secara diam-diam.
+  companyNitku                 String?   @map("company_nitku")
   // F-2026-10-25-015-V: status PKP perusahaan penjual (nilai kini +
   // tanggal mulai kewajiban, BUKAN tanggal SPPKP — PMK 164/2023).
   // Default "unknown": install existing TIDAK ditebak non-PKP/PKP.
@@ -1058,6 +1063,17 @@ model Employee {
   employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
+  // Pohon organisasi untuk otorisasi struktural (scope "tim"): atasan
+  // melihat data HR seluruh bawahan rekursifnya. Nullable = puncak/rantai
+  // belum diatur; scope jatuh ke self/departemen seperti sebelumnya.
+  managerId           Int?              @map("manager_id")
+  manager             Employee?         @relation("EmployeeReports", fields: [managerId], references: [id], onDelete: SetNull)
+  // Jangkar perhitungan masa kerja untuk hak cuti tahunan. Kosong =
+  // dihitung dari joinDate. Terisi otomatis saat status berubah
+  // INTERN (magang) -> PKWT/PKWTT: masa magang tidak ikut terhitung,
+  // jam 1 tahun mulai dari tanggal mulai kontrak.
+  leaveEligibilityStartDate DateTime?   @map("leave_eligibility_start_date")
+  reports             Employee[]        @relation("EmployeeReports")
   hiredFromApplicants JobApplicant[]    @relation("ApplicantHiredEmployee")
   performanceGoals    PerformanceGoal[] @relation("PerformanceGoalEmployee")
   performanceReviews  PerformanceReview[] @relation("PerformanceReviewSubject")
@@ -1066,11 +1082,6 @@ model Employee {
   trainingParticipants TrainingParticipant[] @relation("TrainingParticipantEmployee")
   successionCandidacies SuccessionCandidate[] @relation("SuccessionCandidateEmployee")
   salaryAdjustments   SalaryAdjustment[]
-  // Jangkar perhitungan masa kerja untuk hak cuti tahunan. Kosong =
-  // dihitung dari joinDate. Terisi otomatis saat status berubah
-  // INTERN (magang) -> PKWT/PKWTT: masa magang tidak ikut terhitung,
-  // jam 1 tahun mulai dari tanggal mulai kontrak.
-  leaveEligibilityStartDate DateTime?   @map("leave_eligibility_start_date")
   user                User?             @relation(fields: [userId], references: [id])
   leaveRequests       LeaveRequest[]
   overtimeRequests    OvertimeRequest[]
@@ -1098,6 +1109,7 @@ model Employee {
   workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
+  @@index([managerId], map: "employees_manager_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
   @@index([isActive, deletedAt])
   @@index([userId])
@@ -3747,6 +3759,52 @@ model ContractDecisionRequest {
   @@index([finalReviewId], map: "contract_decision_requests_final_review_id_fkey")
   @@map("contract_decision_requests")
 }
+
+// ==================== HCMS: REKRUTMEN ====================
+// Pilar HCMS pertama di dalam ERP (bukan integrasi eksternal): lowongan
+// dibuka HR, pelamar bergerak lewat tahapan seleksi, dan penerimaan
+// (hired) melahirkan baris Employee dari data pelamar + jabatan lowongan
+// sehingga seluruh modul SDM lain (absensi, payroll, scope tim) langsung
+// berlaku tanpa sinkronisasi antar-sistem.
+
+
+
+
+// ==================== HCMS: PENILAIAN KINERJA ====================
+// Siklus penilaian berisi sasaran (goals) berbobot per karyawan dan satu
+// ulasan per karyawan per siklus. Penilai bawaan = atasan di pohon
+// organisasi (Employee.managerId); gerbang akses memakai scope HR
+// (self/tim/departemen/all) yang sama dengan modul SDM lain.
+
+
+
+
+// ==================== HCMS: KOMPETENSI & PELATIHAN ====================
+// Kompetensi didefinisikan sekali, dipetakan ke jabatan dengan level
+// syarat, lalu dinilai per karyawan — selisihnya adalah peta kebutuhan
+// pelatihan. Pelatihan mencatat peserta + hasil per karyawan.
+
+
+
+
+
+
+// ==================== HCMS: PERENCANAAN SUKSESI ====================
+// Jabatan kritis (Position.isCritical) dipetakan ke kandidat pengganti
+// berurutan prioritas dengan tingkat kesiapan. Cakupan diturunkan:
+// ada kandidat ready_now = aman; hanya kandidat masa depan = berisiko;
+// tanpa kandidat = kosong (risiko tertinggi). Bersifat rahasia: hanya
+// peran pengelola SDM yang memegang izinnya, karyawan biasa tidak.
+
+
+// ==================== HCMS: RIWAYAT KENAIKAN GAJI ====================
+// Employee.baseSalary adalah nilai BERLAKU SAAT INI; tabel ini adalah
+// riwayatnya. Kenaikan dicatat dengan tanggal efektif: yang sudah lewat
+// langsung diterapkan ke master dalam transaksi yang sama; yang akan
+// datang berstatus scheduled dan diterapkan otomatis oleh jalur
+// pembuatan slip (processPayroll/generateBulkPayroll) begitu jatuh
+// tempo. Persentase diturunkan server, bukan ketikan client.
+
 
 model OvertimeRequest {
   slug                 String?   @unique

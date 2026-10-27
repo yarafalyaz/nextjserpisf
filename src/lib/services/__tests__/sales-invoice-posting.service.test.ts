@@ -10,6 +10,10 @@ const stockMoveFindMany = vi.fn()
 const stockMoveCreate = vi.fn()
 const stockMoveUpdateMany = vi.fn()
 const inventoryLayerCreateMany = vi.fn()
+const inventoryLayerFindMany = vi.fn()
+const itemBatchFindFirst = vi.fn()
+const itemBatchUpdate = vi.fn()
+const itemBatchCreate = vi.fn()
 const executeRaw = vi.fn()
 const salesPaymentFindMany = vi.fn()
 const salesInvoiceItemFindMany = vi.fn()
@@ -28,6 +32,12 @@ const client = {
   },
   inventoryLayer: {
     createMany: (...a: unknown[]) => inventoryLayerCreateMany(...a),
+    findMany: (...a: unknown[]) => inventoryLayerFindMany(...a),
+  },
+  itemBatch: {
+    findFirst: (...a: unknown[]) => itemBatchFindFirst(...a),
+    update: (...a: unknown[]) => itemBatchUpdate(...a),
+    create: (...a: unknown[]) => itemBatchCreate(...a),
   },
   salesPayment: {
     findMany: (...a: unknown[]) => salesPaymentFindMany(...a),
@@ -53,6 +63,10 @@ beforeEach(() => {
   salesInvoiceItemFindMany.mockResolvedValue([])
   itemSerialUpdateMany.mockResolvedValue({ count: 0 })
   inventoryLayerCreateMany.mockResolvedValue({ count: 0 })
+  inventoryLayerFindMany.mockResolvedValue([])
+  itemBatchFindFirst.mockResolvedValue(null)
+  itemBatchUpdate.mockResolvedValue({})
+  itemBatchCreate.mockResolvedValue({})
   executeRaw.mockResolvedValue(0)
   salesPaymentFindMany.mockResolvedValue([])
 })
@@ -116,6 +130,49 @@ describe("reverseSalesInvoicePostingTx", () => {
       expect.stringContaining("7"),
       null,
     )
+  })
+
+  it("restores consumed batch lots on reversal (layer batchNumber + ItemBatch qty)", async () => {
+    stockMoveFindMany.mockResolvedValue([
+      { id: 1, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
+    ])
+    inventoryLayerFindMany.mockResolvedValue([
+      { batchNumber: "LOT-A", warehouseId: 2, qtyOut: 5 },
+    ])
+    itemBatchFindFirst.mockResolvedValue({ id: 77 })
+
+    await reverseSalesInvoicePostingTx(client as never, 7)
+
+    // Layer pulih membawa identitas lot asalnya (bukan tanpa batch).
+    expect(inventoryLayerCreateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ batchNumber: "LOT-A", qtyIn: 5, remaining: 5 }),
+        ]),
+      }),
+    )
+    // Lot fisik ditambah kembali, simetris dengan pemulihan serial.
+    expect(itemBatchUpdate).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { qty: { increment: 5 } },
+    })
+    expect(itemBatchCreate).not.toHaveBeenCalled()
+  })
+
+  it("recreates the batch lot on reversal when the lot row is gone", async () => {
+    stockMoveFindMany.mockResolvedValue([
+      { id: 1, itemId: 10, warehouseId: 2, qty: 5, cost: 1000 },
+    ])
+    inventoryLayerFindMany.mockResolvedValue([
+      { batchNumber: "LOT-A", warehouseId: 2, qtyOut: 5 },
+    ])
+    itemBatchFindFirst.mockResolvedValue(null)
+
+    await reverseSalesInvoicePostingTx(client as never, 7)
+
+    expect(itemBatchCreate).toHaveBeenCalledWith({
+      data: { itemId: 10, batchNumber: "LOT-A", warehouseId: 2, qty: 5 },
+    })
   })
 
   it("restores sold serials to available from the invoice lines (P1-7)", async () => {
