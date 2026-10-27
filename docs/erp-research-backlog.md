@@ -35748,3 +35748,153 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman "Klaim Saya" — permukaan per pengaju existing tetap; antrean pengelola adalah permukaan tambahan dalam scope, bukan pengganti.
 
 F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBQ-1/2/3/5/6, lalu fisik Backend (082-B), konsumen Frontend (082-F), falsifikasi QA (082-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (label operasional, bukan utang/aging); WAJIB bersyarat hanya bila istilah utang/aging/saldo buku dibuka (Q-RBQ-4, BR-RBQ-05) — jurnal/akun tahap bayar tetap vonis F-2026-10-25-018-V existing.
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-096-S: antrean rekening koran draft mengendap
+
+> **Slot**: F-2026-10-27-096-S. Diperiksa bentrok 2026-10-27 07:12 WIB vs `origin/main` (`4e8191548`): grep `F-2026-10-27-096` di backlog+board main = 0; maks ID 2026-10-27 di backlog main = 082-S, seri 083-S..095-S hidup di PR terbuka (#1112..#1129); branch `*f096*` tanggal 27 = 0 (temuan `f096` lama = F-2026-10-24-096-S foto WO, tanggal beda). ID bebas. Dokumen saja; nol kode/schema/migrasi. Branch `hermes/business-f096-bank-statement-queue`. Kartu t_012ca31b judul asal menyebut model `GoodsReceiptNote` — model itu TIDAK ADA di origin/main (grep schema: hanya `GoodsReceipt:2181`, `PurchaseReturn:2242`); pivot sesuai klausul kartu ke kandidat terverifikasi di bawah, dicatat di komentar kartu.
+
+### 0. Ringkasan
+
+Rekening koran (`BankStatement`) lahir `draft` dan — temuan inti run ini — **statusnya tidak pernah berubah**: satu-satunya penulisan `status` adalah `status: "draft"` saat buat (`finance.actions.ts:97`); update header existing hanya menghitung ulang `totalDebits`/`totalCredits` dari baris (`finance.actions.ts:140-141`). Jadi setiap rekening koran di basis data berstatus `draft` selamanya, termasuk yang barisnya sudah dicocokkan lewat rekonsiliasi — daftar existing `/keuangan/laporan-bank` karena itu mencampur koran yang baru dibuat (bahkan tanpa baris) dengan koran yang pekerjaan rekonsiliasinya sudah selesai, tanpa umur, tanpa penanda kemajuan. Spec ini membekukan **antrean baca-saja turunan**: populasi persis `status = "draft"` + `deletedAt IS NULL`, dibedakan dua ember fakta berdasar barisnya — (a) **belum ada baris**, (b) **ada baris belum semua tercocokkan** — dengan definisi "tercocokkan" WAJIB definisi ganda existing laporan rekonsiliasi transaksi bank (status baris `matched` ATAU item rekonsiliasi `matched=true`), umur hari kalender WIB sejak `createdAt` (`updatedAt` DILARANG — bergerak oleh edit baris apa pun). Antrean TIDAK menyelesaikan apa pun: pencocokan dan penyelesaian tetap di permukaan rekonsiliasi existing; koran yang semua barisnya tercocokkan keluar antrean pada render berikut walau status header tetap `draft` (itulah sebabnya antrean membaca baris, bukan menunggu transisi status yang tidak ada). Nominal header (`openingBalance`/`closingBalance`/`totalDebits`/`totalCredits`) tampil **verbatim tersimpan apa adanya** berlabel "tercatat di rekening koran" — BUKAN saldo buku, BUKAN selisih rekonsiliasi, tidak dihitung ulang di antrean.
+
+### 1. Inventarisasi terverifikasi (origin/main 4e8191548, 2026-10-27 07:12 WIB)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `BankStatement` (`prisma/schema.prisma:4424`): `accountId`, `bankId?`, `accountNumber?`, `date`, `reference?`, `periodStart?`/`periodEnd?`, `openingBalance`/`closingBalance`/`totalDebits`/`totalCredits` Decimal(15,2) default 0, `notes?`, `status String @default("draft")` (:4439), `uploadedBy?`, `filePath?`, `deletedAt?`, `createdAt @default(now())`, `updatedAt @updatedAt`; relasi `lines BankStatementLine[]`; indeks `accountId`/`bankId`/`status`/`uploadedBy`/`createdAt`.
+- `BankStatementLine` (:4455): `bankStatementId`, `date`, `description?`, `amount`, `debit`/`credit` Decimal default 0, `type`, `reference?`, `status @default("unmatched")` (:4467).
+- Aksi existing (`src/actions/finance.actions.ts`): `createBankStatement` (:66, gerbang `create_journals`, lahir `status: "draft"` :97 di dalam transaksi + `assertPeriodOpen`); `createBankStatementLine` (:229), `updateBankStatementLine` (:290), hapus baris — ketiganya gerbang `create_journals`, mengunci header (`lockBankStatementHeaders`) dan menghitung ulang total header dalam transaksi sama (`recalcBankStatementTotals` :131-141). **Tidak ada aksi ubah status header, tidak ada aksi hapus header rekening koran** (grep `bankStatement.update` = hanya recalc :140; tidak ada `bankStatement.delete`/`updateMany` status).
+- Rekonsiliasi (`BankReconciliation` :4472, lahir `draft` juga): `matchReconciliationLine` (:1329, gerbang `manage_bank_reconciliation`, menolak rekonsiliasi non-draft), `completeReconciliation` (:1610, gerbang `manage_bank_reconciliation`; wajib semua item pencocokan matched + |selisih| < 0,01; klaim atomik `draft→completed` :1693-1695). Pencocokan menulis **item rekonsiliasi**, BUKAN status baris/header koran.
+- Definisi terekonsiliasi existing (`src/lib/reports/bank-transaction-reconciliation.ts:9-17`): baris terekonsiliasi bila status baris `matched` **ATAU** punya item rekonsiliasi `matched=true` — memakai salah satu saja dinyatakan salah oleh komentar laporan itu sendiri. Laporan ini per baris per periode; ia BUKAN antrean per dokumen koran.
+- Halaman konsumen: daftar `/keuangan/laporan-bank` (`page.tsx:22` gerbang `view_bank_statements`; urut `createdAt desc`, TANPA saringan status, tanpa umur/kemajuan), detail `/keuangan/laporan-bank/[slug]` (ringkasan header apa adanya + baris; tulis baris gerbang `create_journals`), daftar/detail rekonsiliasi `/keuangan/rekonsiliasi-bank` (gerbang `view_bank_reconciliation` :34).
+- Izin nyata katalog (`module-catalog.generated.ts:387-389`): HANYA `view_bank_statements` (resource `bank_statements`), `view_bank_reconciliation`, `manage_bank_reconciliation`. **Tidak ada key create/edit/delete `bank_statements`** — tulis koran+baris meminjam `create_journals` (:361). Jangan karang key baru tahap 1.
+- Daftar builder antrean existing (`src/lib/reports/*-queue.ts`): collection, crm-ticket, down-payment-verification, material-request-draft, payroll-draft, performance-review, purchase-order-draft, quotation-*, sales-invoice-draft, sales-order-*, service-reminder, vendor-payment-draft, warranty-*, work-order, workshop-closeout — **tidak ada antrean rekening koran/statement** (grep `bank` di daftar itu = 0 builder antrean; `bank-transaction-reconciliation.ts` adalah laporan, bukan antrean dokumen).
+
+Belum ada / gap (bukti grep run ini):
+- Antrean/ember rekening koran `draft` mengendap: ABSEN. Daftar existing mengurutkan terbaru-dulu untuk semua koran tanpa membedakan belum-ada-baris vs belum-selesai-dicocokkan; koran kosong berbulan-bulan tenggelam di bawah koran baru.
+- Jalur keluar status `draft` header: ABSEN menurut konstruksi (status ditulis sekali). Antrean karena itu TIDAK BOLEH menjanjikan transisi "selesai" pada header — kemajuan hanya terbaca dari baris + item rekonsiliasi. Usul transisi status header baru = perubahan perilaku inti, di luar spec baca-saja ini (dicatat sebagai Q-BSQ-5 untuk Lead, BUKAN diasumsikan).
+
+Benchmark resmi (akses 2026-10-27):
+- Accurate Online: rekonsiliasi bank membandingkan Histori Bank vs Rekening Koran, pencocokan manual/otomatis Smartlink e-Banking, transaksi cocok hilang dari daftar kerja (`https://help.accurate.id/product/accurate-online/fitur-aol/kas-bank/rekonsiliasi-bank-accurate-online/`); impor rekening koran via file/internet banking (`https://help.accurate.id/product/accurate-online/fitur-aol/kas-bank/transfer-bank/impor-rekening-koran-accurate-online/`). Antrean dokumen rekening koran draft berumur per dokumen tidak ditemukan di help resmi — tidak diklaim.
+- Zahir: form Rekonsiliasi Bank membandingkan transaksi Zahir vs rekening koran, centang per transaksi, penyesuaian, selisih wajib nol sebelum direkonsiliasi (`https://help.zahironline.com/portal/id/kb/articles/rekonsiliasi-bank`); Zahir Online V2: impor Bank Statement CSV + status Match/Potential Match/Not Match per transaksi (`https://help.zahironline.com/portal/id/kb/articles/rekonsiliasi-bank-zahir-online-v2`). Keduanya bekerja per transaksi/baris, bukan antrean dokumen koran mengendap berumur — antrean per dokumen tidak ditemukan, tidak diklaim tidak ada.
+
+### 2. Workflow specification
+
+Aktor: Staf keuangan pembuat koran (pemegang `create_journals` existing), Pencocok rekonsiliasi (pemegang `manage_bank_reconciliation`), Penonton antrean (pemegang `view_bank_statements`), Lead (putus Q-BSQ-*).
+
+Dokumen masuk: `BankStatement` (akun bank, `date`, `reference`, periode, nominal header tersimpan, `createdAt`) + `BankStatementLine[]` (status baris) + item `BankReconciliationItem` matched (lewat relasi baris). Dokumen keluar: tidak ada dokumen baru tahap 1; antrean baca-saja + tautan ke detail koran existing dan ke permukaan rekonsiliasi existing.
+
+Alur:
+1. Staf membuat rekening koran (existing) → lahir `draft`, nol baris. Antrean menampilkannya di ember **belum ada baris**.
+2. Staf menambah baris dari detail existing. Sesudah baris pertama, koran pindah ke ember **belum semua tercocokkan** sampai seluruh barisnya tercocokkan.
+3. Pencocok mencocokkan baris lewat rekonsiliasi existing dan menyelesaikan rekonsiliasi di sana (BUKAN dari antrean). Baris yang tercocokkan — menurut definisi ganda existing — berhenti dihitung sebagai sisa.
+4. Koran yang semua barisnya tercocokkan keluar antrean pada render berikut (header tetap `draft`; antrean tidak menulis apa pun). Koran terhapus lunak (`deletedAt`) keluar populasi pada render berikut.
+
+### 3. Status-transition matrix (existing, dibaca antrean — antrean tidak memicu transisi apa pun)
+
+| Dari | Pemicu existing | Ke | Efek ke antrean |
+|---|---|---|---|
+| — (buat baru) | `createBankStatement` existing | `draft` + 0 baris | masuk ember belum-ada-baris |
+| `draft` 0 baris | tambah baris existing | `draft` + ≥1 baris belum tercocokkan | pindah ember belum-semua-tercocokkan |
+| `draft` ada baris | cocokkan baris existing (item rekonsiliasi matched / status baris `matched`) | `draft`, sisa baris belum tercocokkan berkurang | tetap di ember sampai sisa = 0 |
+| `draft` ada baris | semua baris tercocokkan | `draft` (status header TIDAK berubah — tidak ada transisi) | keluar populasi pada render berikut |
+| `draft` | hapus lunak existing (bila ada jalurnya di luar aksi terverifikasi run ini) | `deletedAt` terisi | keluar populasi |
+| non-`draft` (data karangan DB) | apa pun | — | tidak pernah masuk populasi (BR-BSQ-01) |
+
+### 4. Role/permission matrix (key nyata katalog :387-389 + :361)
+
+| Aksi | Key izin (TERVERIFIKASI-KODE) | Peran terbaca |
+|---|---|---|
+| Lihat antrean tahap 1 (USULAN gerbang) | `view_bank_statements` (:387) — pola halaman daftar existing | pemegang izin lihat rekening koran |
+| Buat koran + tambah/ubah/hapus baris (existing, di luar antrean) | `create_journals` (:361) | staf keuangan penulis jurnal/koran |
+| Lihat rekonsiliasi (existing) | `view_bank_reconciliation` (:388) | penonton rekonsiliasi |
+| Cocokkan + selesaikan rekonsiliasi (existing, BUKAN dari antrean) | `manage_bank_reconciliation` (:389) | pencocok |
+| Scope baris | TIDAK ada scope departemen/HR untuk keuangan di jalur ini — antrean TIDAK meminjam `getHrScope`; populasi = semua koran dalam gerbang izin (pola daftar existing yang juga tanpa scope baris) | — |
+
+Tanpa `view_bank_statements`: loader tidak dipanggil dan halaman menolak (fail-closed, pola `page.tsx:22` existing).
+
+### 5. Business rules register (BR-BSQ)
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-BSQ-01 | Populasi antrean persis: `BankStatement.status = "draft"` DAN `deletedAt IS NULL` DAN (belum ada baris ATAU ada baris yang belum tercocokkan per BR-BSQ-02). Koran yang semua barisnya tercocokkan KELUAR populasi walau status header masih `draft`. Status di luar kosakata terbaca (`draft` satu-satunya nilai tertulis existing; nilai lain = data karangan DB) keluar populasi, bukan ditebak. | USULAN (turunan atas fakta TERVERIFIKASI-KODE status ditulis sekali) | schema:4439; finance.actions.ts:97,140 |
+| BR-BSQ-02 | "Tercocokkan" WAJIB definisi ganda existing laporan rekonsiliasi: status baris `matched` ATAU ada item rekonsiliasi dengan `matched=true` untuk baris itu. Memakai status baris saja (atau item saja) = MERAH — penandaan lewat aksi aplikasi hanya menulis item, impor bisa mengisi status baris. | TERVERIFIKASI-KODE | bank-transaction-reconciliation.ts:9-17,165 |
+| BR-BSQ-03 | Dua ember WAJIB dibedakan persis: (a) belum ada baris, (b) ada baris belum semua tercocokkan (sertakan hitungan sisa baris belum tercocokkan sebagai fakta hitung baris, BUKAN status baru). Tidak digabung satu ember "draft" tanpa pemisah hitungan. Kata final ember = Q-BSQ-2. | USULAN | schema:4445 relasi lines |
+| BR-BSQ-04 | Umur mengendap = hari kalender WIB sejak `BankStatement.createdAt` ke tanggal baca (fungsi hari WIB existing keluarga `wibDayNumber`), sama untuk kedua ember. `updatedAt` DILARANG sebagai acuan (bergerak oleh tambah/ubah/hapus baris apa pun — koran yang sedang dikerjakan justru tampak muda palsu). `date`/`periodEnd` dokumen BUKAN acuan umur antrean (tanggal dokumen bisa lampau menurut konstruksi impor periode lama; tampil verbatim sebagai fakta dokumen, tidak dicampur ke umur). Ambang tingkat `mengendap` = Q-BSQ-1 Lead; sebelum diputus builder hanya tingkat `menunggu`, nol ambang karangan. | USULAN (acuan) + TERVERIFIKASI-KODE (larangan updatedAt: schema `@updatedAt`) | schema:4442-4443; employee-lifecycle wibDayNumber |
+| BR-BSQ-05 | Nominal payload: hanya nominal header tersimpan verbatim (`openingBalance`, `closingBalance`, `totalDebits`, `totalCredits`) berlabel "tercatat di rekening koran", ditampilkan apa adanya dari kolom header (yang dihitung ulang aksi baris existing), TIDAK dihitung ulang di antrean/loader dari baris, TIDAK dijumlahkan lintas koran, dan DILARANG berlabel saldo buku/saldo seharusnya/selisih/utang/aging. Koran belum-ada-baris wajar bernominal header 0 — tampil apa adanya, bukan ditandai salah. Bila kelak label saldo buku/selisih dibuka, vonis Accountant WAJIB dulu (di luar spec ini). | USULAN (pembatasan label atas kolom TERVERIFIKASI-KODE) | schema:4435-4438; finance.actions.ts:131-141 recalc |
+| BR-BSQ-06 | Loader WAJIB gerbang `view_bank_statements` sebelum query (fail-closed pola daftar existing). Antrean TIDAK memakai scope HR/departemen — tidak ada scope baris keuangan existing untuk koran; mengarang scope = MERAH. Tanpa izin, nol baris dan halaman menolak. | TERVERIFIKASI-KODE | page.tsx:22; katalog:387 |
+| BR-BSQ-07 | Kolom tampil yang diizinkan: nama akun bank (akun tertaut), `accountNumber` bila ada, `date`, `reference`, `periodStart`/`periodEnd` bila ada, ember (BR-BSQ-03), hitungan baris + sisa belum tercocokkan, umur (BR-BSQ-04), nominal header verbatim (BR-BSQ-05), nama pembuat (`uploadedBy` tertaut bila tampil), tautan detail. `filePath` berkas unggahan mentah DILARANG tampil di daftar (jalur berkas internal; tautan unduh bukan permukaan daftar). `notes` teks bebas tidak tampil di daftar (hidup di detail). | USULAN (daftar kolom atas field TERVERIFIKASI-KODE) | schema:4425-4443 |
+| BR-BSQ-08 | Baca-saja tahap 1: antrean tidak memanggil aksi buat/ubah/hapus baris, cocokkan, selesaikan rekonsiliasi, dan tidak menulis `status`/kolom apa pun. Nol tombol Tambah Baris/Cocokkan/Selesaikan/Hapus dari antrean (Q-BSQ-4); tindak lanjut = detail koran existing untuk baris, permukaan rekonsiliasi existing untuk pencocokan. | USULAN (scope) | finance.actions.ts aksi existing |
+| BR-BSQ-09 | Urutan: USULAN tertua-menunggu dulu (`createdAt` naik), seri deterministik `id` naik (Q-BSQ-1 mengesahkan). Urutan BUKAN berdasar nominal: dilarang mengurutkan/menandai prioritas dari besar saldo sebagai skor risiko uang. | USULAN | — |
+| BR-BSQ-10 | Anti-N+1: satu query massal populasi + agregat baris (total baris, sisa belum tercocokkan per definisi ganda BR-BSQ-02) dihitung massal per koran (group-by), bukan query per koran/per baris. Item rekonsiliasi matched dibaca massal per kumpulan baris populasi. Batas baris/paginasi diputus Backend tanpa mengubah populasi. | USULAN | pola loader antrean existing |
+| BR-BSQ-11 | Koran untuk akun bank nonaktif/terhapus tertaut: baris TETAP tampil apa adanya dengan label akun verbatim tertaut (atau fakta akun-tidak-ditemukan bila relasi putus) — antrean tidak mengeluarkan koran berdasar keadaan akun; koran menggantung atas akun bermasalah justru fakta keuangan yang perlu terlihat, penyelesaiannya lewat permukaan existing. | USULAN | schema:4426 accountId wajib |
+| BR-BSQ-12 | Fakta pendamping pencocokan adalah HITUNGAN baris (total, tercocokkan, sisa) — antrean TIDAK menyimpulkan "siap diselesaikan": kesiapan selesaikan rekonsiliasi diputus gerbang existing `completeReconciliation` (semua item matched + selisih < 0,01 atas rekonsiliasi terkait), bukan kesimpulan daftar. Menampilkan turunan "siap selesai/seimbang" = MERAH. | TERVERIFIKASI-KODE (gerbang) + USULAN (larangan simpulan) | finance.actions.ts:1610-1695 |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (builder/loader turunan):
+- AC-BSQ-B1: Populasi persis BR-BSQ-01: koran semua-baris-tercocokkan TIDAK tampil (bocor = MERAH); koran `deletedAt` terisi/status-di-luar-kosakata TIDAK tampil; koran 0 baris dan koran ada-sisa-baris masuk embernya masing-masing terpisah terhitung (digabung tanpa pemisah = MERAH).
+- AC-BSQ-B2: Definisi tercocokkan ganda BR-BSQ-02 terbukti dua arah: baris berstatus bukan-`matched` tetapi punya item rekonsiliasi `matched=true` dihitung tercocokkan; baris berstatus `matched` tanpa item apa pun dihitung tercocokkan; memakai satu sumber saja pada fixture campuran = MERAH.
+- AC-BSQ-B3: Payload daftar TIDAK mengandung kunci `filePath`/`notes` dan tidak mengandung label/turunan saldo buku/selisih/siap-selesai (uji serialisasi payload persis; bocor = MERAH). Nominal yang tampil byte-sama dengan kolom header tersimpan (hitung ulang dari baris di loader = MERAH per BR-BSQ-05).
+- AC-BSQ-B4: Umur dihitung dari `createdAt` hari kalender WIB untuk fixture yang `updatedAt`-nya jauh lebih baru (baris baru saja ditambah): umur mengikuti `createdAt`, BUKAN `updatedAt` (umur dari updatedAt = MERAH); urutan `createdAt` naik + seri `id` naik deterministik; sebelum Q-BSQ-1 diputus tidak ada field tingkat mengendap karangan.
+- AC-BSQ-B5: Baca-saja + gerbang: loader/builder tidak memanggil aksi mutasi koran/baris/rekonsiliasi/jurnal; tanpa `view_bank_statements` loader menolak sebelum query; payload tidak membaca jurnal untuk menurunkan saldo apa pun (BR-BSQ-05/12).
+
+Frontend (konsumen):
+- AC-BSQ-F1: Label ember, hitungan baris/sisa, umur, nominal verbatim server; UI tidak menghitung umur/sisa/keseimbangan sendiri (hitung ulang = MERAH); dua ember tampil sebagai seksi terpisah berlabel persis kata final Q-BSQ-2.
+- AC-BSQ-F2: Baris hanya menaut ke detail existing `/keuangan/laporan-bank/[slug]` (dan dari sana ke rekonsiliasi existing); daftar tidak menampilkan isi baris mutasi per transaksi (daftar mutasi = detail existing, bukan antrean dokumen).
+- AC-BSQ-F3: TIDAK ada tombol Tambah Baris/Cocokkan/Selesaikan Rekonsiliasi/Hapus dari antrean tahap 1 (aksi dari daftar = MERAH, BR-BSQ-08); tanpa izin halaman menolak (pola existing).
+
+Edge cases:
+- EC-BSQ-1: Koran dibuat untuk periode lama (impor susulan, `date` lampau, `createdAt` hari ini): umur antrean kecil jujur sejak `createdAt`; `date` tampil verbatim — antrean tidak menua-kan koran dari tanggal dokumen (BR-BSQ-04).
+- EC-BSQ-2: Koran 0 baris berbulan-bulan: tetap tampil ember belum-ada-baris dengan umur jujur; antrean tidak menghapus/mengarsipkan dan tidak mengarang batas basi sebelum Q-BSQ-1.
+- EC-BSQ-3: Baris terakhir tercocokkan saat halaman terbuka: koran keluar populasi pada render berikut; antrean tidak mengunci baris/koran.
+- EC-BSQ-4: Baris berstatus `matched` dari impor tetapi rekonsiliasi terkait belum `completed`: menurut definisi ganda existing baris itu tercocokkan — bila semua baris begitu, koran keluar antrean walau rekonsiliasi belum diselesaikan. Antrean mereplikasi definisi existing apa adanya; mengubah definisi demi menunggu `completed` = definisi kedua, di luar spec (dicatat, bukan dilakukan).
+- EC-BSQ-5: Satu baris dipakai dua rekonsiliasi (satu matched, satu tidak): baris dihitung tercocokkan satu kali (definisi ganda per baris, dedup per baris); hitungan sisa tidak negatif dan tidak menghitung baris yang sama dua kali.
+- EC-BSQ-6: Nominal header tidak nol untuk koran 0 baris (input existing mengizinkan `openingBalance`/`closingBalance` terisi sebelum baris ada): tampil verbatim berlabel tercatat; antrean tidak menandai inkonsistensi dan tidak "memperbaiki" angka (BR-BSQ-05).
+- EC-BSQ-7: Dua koran akun sama periode tumpang tindih: dua baris antrean terpisah; antrean tidak menggabungkan per akun/periode dan tidak menyimpulkan dobel-impor.
+- EC-BSQ-8: Koran yang barisnya semua `unmatched` tetapi total debit=kredit seimbang angka: tetap ember belum-semua-tercocokkan dengan sisa penuh — keseimbangan angka BUKAN kecocokan (BR-BSQ-12); tampil "siap selesai" = MERAH.
+
+### 7. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Impor rekening koran (file/internet banking) | Ada (Smartlink e-Banking) | Ada (CSV + template bank) | Parsial: buat koran + baris manual existing; `filePath` tersimpan, jalur impor bukan cakupan spec ini |
+| Pencocokan mutasi vs buku + selesaikan rekonsiliasi | Ada (Cocok manual/otomatis) | Ada (Match/Potential/Not Match per transaksi) | Ada (item rekonsiliasi + `completeReconciliation` gerbang selisih < 0,01) |
+| Laporan baris terekonsiliasi vs belum per periode | Ada (daftar kerja rekonsiliasi) | Ada | Ada (`bank-transaction-reconciliation`, per baris) |
+| Antrean dokumen rekening koran draft mengendap berumur (belum-ada-baris vs belum-semua-tercocokkan) | Tidak ditemukan di help resmi | Tidak ditemukan di help resmi | ABSEN (gap spec ini) |
+| Transisi status selesai pada dokumen koran itu sendiri | Tidak ditemukan | Tidak ditemukan | ABSEN menurut konstruksi (status ditulis sekali `draft`) — di luar spec, Q-BSQ-5 |
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-BSQ-1 | Ambang hari tingkat `mengendap` sejak `createdAt` + urutan final (tertua dulu, seri `id` naik disahkan)? | Lead | USULAN 3 hari kalender WIB (preseden keluarga antrean mengendap) sebagai tingkat di atas `menunggu`; tertua-menunggu dulu; seri id naik — bukan fakta sebelum diputus |
+| Q-BSQ-2 | Kata final label dua ember + judul antrean? | Lead | USULAN: "Belum Ada Baris" / "Belum Semua Tercocokkan"; judul "Rekening Koran Draft Mengendap"; satu konstanta label server, UI verbatim |
+| Q-BSQ-3 | Penempatan permukaan: seksi di halaman `/keuangan/laporan-bank` existing vs halaman antrean terpisah? | Lead | USULAN seksi turunan di halaman daftar existing — aktor dan konteks sama; halaman baru hanya bila Lead putus lain |
+| Q-BSQ-4 | Tombol tindak lanjut dari antrean tahap 1 ditolak spec (BR-BSQ-08) — disahkan? | Lead | YA ditolak tahap 1: tambah baris butuh konteks detail, pencocokan butuh konteks rekonsiliasi; jalan pintas dari daftar berisiko mencocokkan tanpa konteks selisih |
+| Q-BSQ-5 | Status header `draft` yang tidak pernah bertransisi: tetap dibaca apa adanya tahap 1 (usul spec) vs Lead membuka pekerjaan perilaku inti transisi status koran terpisah? | Lead | Tetap apa adanya tahap 1 — antrean membaca baris; transisi status = perubahan perilaku inti + dampak ke daftar/detail existing, pekerjaan terpisah bila Lead menghendaki |
+| Q-BSQ-6 | Fisik: builder/loader turunan baru vs perluasan pembaca daftar existing (agregat sisa wajib definisi ganda BR-BSQ-02)? | Backend | Modul turunan baru pola `*-queue` existing; bentuk diputus Backend, klaim file di board |
+| Q-BSQ-7 | Vonis nominal/saldo? | Accountant | TIDAK diminta tahap baca-saja apa adanya: nominal header verbatim berlabel tercatat, bukan saldo buku/selisih (BR-BSQ-05); vonis WAJIB bersyarat hanya bila Lead membuka label saldo buku/selisih/kesiapan-selesai (Q-BSQ-4/5 menyentuhnya) |
+
+### 9. Backlog implementasi (turunan F-2026-10-27-096-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-27-096-S | Spec kontrak ini (dokumen) | Business | — |
+| 096-B | Builder/loader turunan antrean koran draft (populasi BR-BSQ-01, definisi ganda BR-BSQ-02, umur `createdAt` WIB, gerbang `view_bank_statements`) + tes AC-BSQ-B1..B5 | Backend | Putusan Lead Q-BSQ-1/2 |
+| 096-F | Permukaan antrean verbatim payload (penempatan Q-BSQ-3) + AC-BSQ-F1..F3 | Frontend | 096-B merged; grep e2e `laporan-bank` dulu |
+| 096-Q | Falsifikasi AC-BSQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (semua-tercocokkan bocor MERAH, satu-sumber-definisi MERAH, umur updatedAt MERAH, label selisih tampil MERAH) | QA | 096-B/096-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### Yang TIDAK diusulkan run ini
+- Menambah transisi/status baru pada `BankStatement`, tombol selesaikan koran, atau mengubah daftar/detail existing — kemajuan dibaca dari baris apa adanya (Q-BSQ-5 gerbang Lead terpisah).
+- Menghitung ulang nominal header dari baris di antrean, menjumlahkan nominal lintas koran, atau melabeli saldo buku/selisih/siap-selesai/utang/aging (BR-BSQ-05/12) — wilayah vonis Accountant bila kelak dibuka.
+- Memakai hanya status baris atau hanya item rekonsiliasi sebagai definisi tercocokkan (BR-BSQ-02) — definisi tunggal dinyatakan salah oleh laporan existing sendiri.
+- Tombol Tambah Baris/Cocokkan/Selesaikan/Hapus dari antrean (BR-BSQ-08).
+- Menampilkan `filePath`, isi `notes`, atau daftar mutasi per baris di antrean dokumen (BR-BSQ-07) — itu permukaan detail existing.
+- Mengarang key izin `bank_statements` baru atau scope departemen keuangan tahap 1 (BR-BSQ-06) — katalog hanya `view_bank_statements` + izin rekonsiliasi existing.
+- Impor rekening koran otomatis, pencocokan otomatis, pengingat/eskalasi ke staf keuangan, atau penghapusan draft basi otomatis (EC-BSQ-2 dibaca jujur, bukan dibersihkan diam-diam).
+
+F-2026-10-27-096-S — Antrean rekening koran draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-BSQ-1/2/4/5, lalu fisik Backend (096-B), konsumen Frontend (096-F), falsifikasi QA (096-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan/status), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (nominal header verbatim berlabel tercatat, bukan saldo buku/selisih); WAJIB bersyarat hanya bila istilah saldo buku/selisih/kesiapan dibuka (Q-BSQ-7, BR-BSQ-05).
