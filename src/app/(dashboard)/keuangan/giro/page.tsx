@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ChequeManager, type ChequeRow } from "./_components/cheque-manager"
+import { ChequeOverdueQueueSection } from "./_components/cheque-overdue-queue"
+import { getChequeOverdueQueue } from "@/lib/reports/cheque-overdue-queue-data"
 
 import type { Metadata } from "next"
 
@@ -24,6 +26,10 @@ export default async function ChequesPage() {
       select: { id: true, code: true, name: true },
     }),
   ])
+
+  // Seksi turunan baca-saja (F-2026-10-27-104-S, Q-CQ-3): gerbang
+  // view_cheques ditegakkan ulang fail-closed di loader sebelum query.
+  const overdueQueue = await getChequeOverdueQueue()
 
   const accountById = new Map(accounts.map((account) => [account.id, account]))
 
@@ -61,6 +67,8 @@ export default async function ChequesPage() {
           </p>
         </div>
       </div>
+
+      <ChequeOverdueQueueSection queue={overdueQueue} />
 
       <ChequeManager cheques={rows} accounts={accounts} />
     </div>
