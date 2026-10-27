@@ -25,6 +25,17 @@ Paket ini berisi baseline dokumentasi produk dan pengembangan ERP ISF.
 -   `ACCEPTANCE-CRITERIA.md` --- indeks kriteria penerimaan.
 -   `TASK-BOARD.md` --- template board dan backlog awal.
 -   `ADRs/` --- catatan keputusan arsitektur/bisnis yang masih proposed.
+-   [KEPUTUSAN-TERVERIFIKASI.md](KEPUTUSAN-TERVERIFIKASI.md) --- hasil
+    verifikasi 12 keputusan terbuka terhadap kode repo (bukan
+    persetujuan owner); sebagian keputusan dirujuk ke ADR-004 s.d.
+    ADR-007.
+-   ADR keputusan terverifikasi-kode:
+    [ADR-004 stack baseline](ADRs/ADR-004-stack-baseline-terverifikasi.md),
+    [ADR-005 valuasi stok, landed cost, stok negatif](ADRs/ADR-005-valuasi-stok-landed-cost-stok-negatif.md),
+    [ADR-006 model accounting double-entry](ADRs/ADR-006-model-accounting-double-entry.md),
+    [ADR-007 perilaku DP dan konversi faktur](ADRs/ADR-007-perilaku-dp-konversi-faktur.md).
+    Keempatnya berstatus diusulkan-terverifikasi-kode: isi cocok dengan
+    kode, penerimaan formal tetap keputusan owner.
 -   `INDEKS-ATURAN.md` --- peta ID aturan (`GL-BR-*`, `INV-BR-*`,
     `PUR-*`, `SAL-*`, `FIN-*`, `PROJ-*`, `WO-*`, `HR-*`, `AC-*`) ke
     status implementasi terverifikasi di repo.
@@ -52,8 +63,14 @@ bagian yang secara eksplisit ditandai terverifikasi (Stack di
 `INDEKS-ATURAN.md`). Business rules yang diketahui dicatat sebagai
 baseline; aturan yang belum diputuskan ditandai OPEN.
 
-> **Penanda keputusan menyusul:** file `KEPUTUSAN-TERVERIFIKASI.md`
-> dan ADR keputusan bisnis baru belum dilipat ke paket ini. Tabel
-> keputusannya menyusul dari peran Business; lihat penanda di
-> `INDEKS-ATURAN.md`. Jangan menganggap keputusan OPEN sudah tertutup
-> hanya karena implementasi parsial ditemukan di repo.
+> **Keputusan terverifikasi sudah dilipat:** file
+> [KEPUTUSAN-TERVERIFIKASI.md](KEPUTUSAN-TERVERIFIKASI.md) dan ADR
+> keputusan bisnis
+> [ADR-004](ADRs/ADR-004-stack-baseline-terverifikasi.md),
+> [ADR-005](ADRs/ADR-005-valuasi-stok-landed-cost-stok-negatif.md),
+> [ADR-006](ADRs/ADR-006-model-accounting-double-entry.md),
+> [ADR-007](ADRs/ADR-007-perilaku-dp-konversi-faktur.md) sudah ada di
+> paket ini. Jangan menganggap keputusan OPEN sudah tertutup hanya
+> karena implementasi parsial ditemukan di repo; baca status tiap
+> keputusan di `KEPUTUSAN-TERVERIFIKASI.md` (termasuk daftar keputusan
+> yang masih OPEN di sana).

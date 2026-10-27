@@ -25,13 +25,22 @@ Jangan membaca `Terpasang`/`Sebagian` di sini sebagai lulus
 acceptance criteria. Acceptance tetap butuh test dan verifikasi
 perilaku, bukan hanya keberadaan file/model.
 
-> **Penanda keputusan menyusul:** tabel keputusan terverifikasi
-> (`KEPUTUSAN-TERVERIFIKASI.md` dan/atau ADR keputusan bisnis baru)
-> belum ada di paket ini saat indeks ini dibuat dan sengaja tidak
-> ditunggu. Peran Business akan melipatnya menyusul. Sampai itu
-> terjadi, semua baris `OPEN-keputusan` di bawah tetap terbuka,
-> termasuk yang implementasi parsialnya sudah ada di repo (mis.
-> costing, landed cost, ambang DP, jurnal).
+> **Keputusan terverifikasi sudah dilipat:** tabel keputusan
+> terverifikasi ada di
+> [KEPUTUSAN-TERVERIFIKASI.md](KEPUTUSAN-TERVERIFIKASI.md), dengan ADR
+> keputusan bisnis
+> [ADR-004](ADRs/ADR-004-stack-baseline-terverifikasi.md) (stack
+> baseline),
+> [ADR-005](ADRs/ADR-005-valuasi-stok-landed-cost-stok-negatif.md)
+> (valuasi stok, landed cost, stok negatif),
+> [ADR-006](ADRs/ADR-006-model-accounting-double-entry.md) (model
+> accounting double-entry), dan
+> [ADR-007](ADRs/ADR-007-perilaku-dp-konversi-faktur.md) (perilaku DP
+> dan konversi faktur). Status tiap baris `OPEN-keputusan` di bawah
+> tidak otomatis berubah oleh dokumen-dokumen itu: baca status
+> keputusan terkait di `KEPUTUSAN-TERVERIFIKASI.md`, termasuk daftar
+> keputusan yang masih OPEN di sana (mis. reversal DP pasca-konversi
+> tetap menjadi sisa ADR-003).
 
 
 ## 1. Global — `GL-BR-*`
