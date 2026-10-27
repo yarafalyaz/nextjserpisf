@@ -6,6 +6,8 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { CycleForm, CycleStatusButton } from "./_components/cycle-actions"
+import { getPerformanceQueue } from "@/lib/reports/performance-review-queue-data"
+import { PerformanceQueueCard } from "@/components/reports/performance-queue-card"
 
 import type { Metadata } from "next"
 
@@ -30,6 +32,8 @@ export default async function PerformancePage() {
     orderBy: { createdAt: "desc" },
   })
 
+  const performanceQueue = await getPerformanceQueue()
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -42,6 +46,8 @@ export default async function PerformancePage() {
       <CanCreate permission="create_performance">
         <CycleForm />
       </CanCreate>
+
+      <PerformanceQueueCard queue={performanceQueue} />
 
       <div className="overflow-x-auto rounded-lg border border-default">
         <table className="w-full text-sm">
