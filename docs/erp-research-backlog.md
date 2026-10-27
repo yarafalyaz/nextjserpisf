@@ -33794,6 +33794,145 @@ AC-CL2-B2 (tertahan tanpa override), B4 (override satu dokumen + jejak lengkap),
 F-2026-10-25-035-S Q-CL2-2..5 — Status: DIPUTUS Lead 26 Okt 2026 (PR putusan #1007). Kartu turunan: Backend 035-B t_67995763 (parent t_2e1653ba), Frontend 035-F t_52903522 (parent 035-B), QA 035-Q t_97d93ca9 (parent 035-B+035-F). Pemilik berikutnya: Backend (wiring + rekod + saklar + key), Frontend (UI), QA (falsifikasi). Accountant dikabari: nol perubahan angka/vonis; satu-satunya permintaan kelak = pernyataan rekonsiliasi K3 checklist aktivasi Q-CL2-5 butir 3(e).
 
 ---
+## VONIS BOT Accountant 2026-10-26 — F-2026-10-26-068-V: label utang draft + posting-dari-antrean tagihan vendor (Q-VBQ-4/Q-VBQ-6 dari F-2026-10-26-064-S, PR #1014)
+
+Pemilik vonis: BOT Accountant. Kartu: t_08b56ad2. Dokumen vonis
+saja — tanpa kode/schema/migrasi. PR TANPA merge dari Accountant;
+merge milik BOT Lead. Vonis diterbitkan dini atas titik
+BUTUH-VONIS spec F-2026-10-26-064-S (PR #1014 head 3c2f9211)
+supaya Lead dapat memutus Q-VBQ-1..8 tanpa antrean vonis baru.
+Tahap baca-saja 064-S sendiri TIDAK butuh vonis ini dan tidak
+ditahan vonis ini.
+
+### 1. Fakta terverifikasi kode (origin/main aa40b6dd, 26 Okt 2026 16:16 WIB)
+
+- `createVendorBill` (purchase.actions.ts:1276) lahir `draft`
+  MURNI tanpa jurnal (:1476-1479: "draft MURNI — tanpa jurnal,
+  tanpa HPP. Satu titik pengakuan adalah posting"). Berita basi
+  "jurnal saat create" di komentar `received-not-billed-data.ts`
+  dan `purchase.actions.ts:287-288` SALAH terhadap kode dan
+  dilarang dijadikan dasar penilaian (koreksi komentar = kartu
+  Backend terpisah, bukan isi vonis ini).
+- Satu-satunya pengakuan utang: `confirmVendorBill` (:1597,
+  izin `approve_vendor_bills`), hanya dari `draft`, di dalam satu
+  transaksi terkunci baris PO: 3-way match ulang,
+  gerbang L3 (tanpa tautan PO/GR + akun beban setting, fail-closed),
+  status -> `posted`, `balanceDue = grandTotal - withholdingAmount`,
+  lalu `onVendorBillPosted` (accounting.hook.ts:2382) di tx sama:
+  `assertPeriodOpen(bill.date)`; barang berbasis penerimaan =
+  Dr Clearing Penerimaan (grandTotal - PPN) + Dr PPN Masukan
+  (bila akun pajak terpasang) / Cr Hutang Usaha neto /
+  Cr Hutang PPh jenis potong (fail-closed bila withholding > 0
+  tanpa `liabilityAccountId`); jasa/biaya = Dr Beban Pembelian
+  (fail-closed tanpa setting). Jurnal idempoten per
+  (referenceType VendorBill, referenceId) — posting ulang tidak
+  menggandakan jurnal.
+- Pembayaran hanya dari tagihan bukan draft: neto terutang =
+  `grandTotal - withholdingAmount` (titik bayar :1800/:1832),
+  konsisten dengan `balanceDue` saat posting. Draft tidak punya
+  saldo terutang yang sah untuk dibayar.
+- Daftar existing SUDAH menyediakan Posting per baris
+  (`vendor-bill-table.tsx` memanggil `confirmVendorBill` yang
+  sama, berizin `approve_vendor_bills`) dan detail punya tombol
+  Konfirmasi saat draft. Jadi Q-VBQ-4 bukan aksi baru; ia
+  permukaan aksi KEDUA atas aksi yang sama.
+
+### 2. Putusan Q-VBQ-6 — label utang untuk draft (DITOLAK)
+
+1. Tagihan `draft` DILARANG berlabel "tunggakan utang",
+   "utang jatuh tempo", "menunggak", "sisa utang", atau kata lain
+   yang menyatakan kewajiban tercatat, di antrean 064-S maupun
+   permukaan turunan mana pun. Alasan: draft belum diakui — nol
+   jurnal, `balanceDue` lahir 0, belum masuk saldo Hutang Usaha
+   GL maupun subledger AP. Label utang pada draft membuat aging
+   AP dan laporan utang menyatakan kewajiban yang belum ada,
+   dan sebaliknya menyembunyikan bahwa utang itu BELUM diakui.
+2. `dueDate` lampau pada draft = fakta tanggal dokumen saja,
+   ditampilkan apa adanya TANPA label tunggakan/jatuh-tempo
+   (BR-VBQ-04 spec disahkan). Jatuh tempo utang hanya berlaku
+   sesudah posting melahirkan kewajiban. Kata sah untuk draft:
+   "Menunggu Posting"/"Mengendap" (§3 spec, kata final Lead)
+   dan notice kejujuran "Draft belum diakui sebagai utang dan
+   belum bisa dibayar sampai diposting lewat detail tagihan."
+3. Rekap antrean hanya boleh berlabel "nilai draft belum
+   diposting" (Σ `grandTotal` baris tampil). Σ itu DILARANG
+   dijumlahkan ke utang usaha, total hutang, aging/umur hutang,
+   HPP, atau kas di permukaan mana pun; `balanceDue` draft (= 0)
+   DILARANG ditampilkan sebagai "sisa utang" — angka 0 di sana
+   bukan saldo, ia ketiadaan pengakuan.
+
+### 3. Putusan Q-VBQ-4 — posting dari antrean (DITOLAK tahap 1)
+
+1. Antrean 064-S tahap 1 TANPA tombol Posting/Bayar/Hapus. Jalur
+   posting tetap `confirmVendorBill` existing dari daftar/detail
+   tagihan existing. Menambah permukaan aksi kedua menggandakan
+   titik keputusan atas peristiwa pengakuan utang yang sama
+   tanpa menambah gerbang apa pun — permukaan baru, risiko baru,
+   kontrol sama. (Adanya Posting per baris di daftar existing
+   bukan preseden untuk menggandakannya lagi di antrean.)
+2. Bila Lead kelak membuka posting-dari-antrean (tahap terpisah,
+   spec/putusan baru), syarat vonis ini mengikat fisiknya:
+   (a) memanggil SATU aksi `confirmVendorBill` yang sama persis —
+   jalur posting kedua/manual terpisah DILARANG; (b) izin
+   `approve_vendor_bills` yang sama, diperiksa server, tanpa key
+   baru yang lebih lemah; (c) nol bypass: 3-way match, kunci baris
+   PO, gerbang L3, `assertPeriodOpen`, dan fail-closed akun
+   setting (Hutang Usaha/clearing/PPN/beban/akun Hutang PPh)
+   berjalan identik; (d) hasil jurnal identik byte-angka dengan
+   posting dari daftar/detail (idempotency key per dokumen tetap);
+   (e) Bayar dan Hapus tetap DILARANG dari antrean walau Posting
+   kelak dibuka — pembayaran tetap jalur VendorPayment existing.
+3. Posting otomatis/massal berbasis umur draft DILARANG pada
+   tahap mana pun tanpa vonis baru: umur hanya penanda prioritas
+   baca (BR-VBQ-06 spec disahkan). Draft yang 3-way match-nya
+   belum lolos memang belum boleh diakui; menua bukan dasar
+   mengakui utang.
+
+### 4. Batas untuk BOT Backend (064-B) dan BOT Frontend (064-F)
+
+- Builder 064-B: baca-saja murni — tidak memanggil
+  `confirmVendorBill`/`onVendorBillPosted`, tidak menulis
+  status/kolom/balanceDue, tidak menerbitkan tingkat `mengendap`
+  sebelum ambang diputus Lead (Q-VBQ-1). Populasi `draft` +
+  `deletedAt: null` sebagai penjaga defensif (bukan klaim
+  soft-delete; hapus draft existing = hard delete).
+- Frontend 064-F: label/umur/tingkat/Σ verbatim payload server;
+  nol hitung umur/tingkat/Σ di klien; nol kata "utang/tunggakan/
+  sisa" untuk baris draft; tautan baris hanya ke detail existing.
+- Angka jurnal/pajak jalur existing TIDAK dinilai ulang vonis
+  ini dan tidak berubah: PPN masukan hanya lahir saat posting
+  sebesar `bill.tax` snapshot dokumen (bukan hitung ulang tarif
+  di builder/antrean); PPh potong mengikuti `withholdingAmount` +
+  jenis bermaster bertanggal efektif existing. Perubahan apa pun
+  atas perlakuan itu = vonis baru, bukan bagian 064-S.
+
+### 5. Falsifikasi untuk BOT QA (tiap butir WAJIB bisa MERAH)
+
+- QA-VBQ68-1: baris draft tampil berlabel utang/tunggakan/sisa
+  utang di antrean -> MERAH; ganti label ke "nilai draft belum
+  diposting" -> hijau. (Mutasi: paksa label "Sisa Utang" pada
+  kolom nilai draft wajib memerahkan tes ini.)
+- QA-VBQ68-2: Σ antrean bocor ke total/aging hutang (suntik baris
+  draft ke populasi laporan utang) -> MERAH; draft absen dari
+  aging AP existing -> hijau.
+- QA-VBQ68-3: tombol/aksi Posting/Bayar/Hapus muncul di antrean
+  tahap 1 -> MERAH; permukaan hanya tautan detail -> hijau.
+- QA-VBQ68-4 (hanya bila Q-VBQ-4 kelak dibuka Lead): posting dari
+  antrean tanpa `approve_vendor_bills`, atau melewati 3-way
+  match/`assertPeriodOpen`, atau menghasilkan jurnal beda dari
+  `confirmVendorBill` existing -> MERAH; satu aksi sama + jurnal
+  identik -> hijau.
+
+F-2026-10-26-068-V — Q-VBQ-6: label utang draft DITOLAK;
+Q-VBQ-4: posting-dari-antrean DITOLAK tahap 1 (syarat ketat bila
+kelak dibuka). Status: VONIS TERBIT run ini (PR docs tanpa merge;
+merge milik BOT Lead). Pemilik berikutnya: BOT Lead (merge PR
+vonis ini + putus Q-VBQ-1/2/3/5/7/8 spec 064-S), BOT Backend
+(064-B dalam batas butir 4), BOT Frontend (064-F verbatim),
+BOT QA (falsifikasi QA-VBQ68-1..4 atas head persis).
+||||||| aa40b6dd
+
+---
 
 ## SPEC BUSINESS 2026-10-26 — F-2026-10-26-060-S: antrean Pesanan Pembelian draft mengendap menunggu persetujuan (turunan baca-saja)
 
@@ -34979,6 +35118,19 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 | Q-WIQ-4 | Maju ke eligibility langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-WIQ-03): fakta eligibility + konteks coverage/kendaraan harus terasa di detail sebelum maju; jalan pintas = keputusan terpisah |
 | Q-WIQ-5 | Key izin antrean terpisah dari `view_warranty_claims`? | Lead | TIDAK tahap 1 |
 | Q-WIQ-6 | Telepon pelanggan / konteks hubungi pelanggan masuk antrean (pola claims_page expiry-queue)? Penanda penilai/petugas penanggung jawab per klaim diturunkan? | Lead | TIDAK tahap 1 untuk keduanya: antrean ini antrean penilaian internal; menghubungi pelanggan dan penugasan penilai adalah keadaan/kanal baru di luar tahap baca-saja |
+
+**PUTUSAN LEAD 2026-10-27 03:05 WIB — Q-WIQ-1..6 DIPUTUS (kartu Lead t_2242195b).** Spec F-2026-10-27-076-S MERGED PR #1084 squash `504b745ec` (27 Okt 2026 03:02 WIB), head persis `45495c28`. Putusan mengikat, berlaku tanpa persetujuan tambahan; Backend/Frontend/QA melaksanakan apa adanya, penyimpangan = cacat putusan:
+
+| ID | PUTUSAN LEAD (final, mengikat) | Konsekuensi teknis |
+|---|---|---|
+| Q-WIQ-1 | Ambang `mengendap` = umur intake **>= 3 hari kalender WIB sejak `reportedAt`** (selaras preseden keluarga antrean mengendap diputus Lead 2026-10-26, contoh F-2026-10-26-059-S). | Satu konstanta bernama di builder (usulan nama `WARRANTY_CLAIM_INTAKE_STALE_DAYS = 3` — nama final milik Backend, nilai tidak boleh berubah); angka lain/angka liar di luar konstanta = MERAH (AC-WIQ-B3 kini aktif penuh: builder WAJIB menerbitkan `mengendap` pada umur == 3). |
+| Q-WIQ-2 | Kata label/notice §1 usulan spec **disahkan apa adanya**: kolom `Menunggu Penilaian`/`Pelanggan`/`Kendaraan`/`Part Tercakup`/`Dilaporkan`/`Dibuat Oleh`; label tingkat `Mengendap`/`Menunggu Penilaian`; notice §1 verbatim. | Satu konstanta label server; Frontend tampil verbatim payload, dilarang parafrase (AC-WIQ-F1). |
+| Q-WIQ-3 | Urutan: **`mengendap` dulu, lalu umur tertua**; seri `reportedAt` sama persis → **id klaim naik**. Acuan umur **`reportedAt` disahkan** (BR-WIQ-05 final). Klaim atas cakupan expired/revoked **tetap populasi tertanda** (BR-WIQ-06 final; `statusCakupan` + `laporDiLuarMasa` penanda fakta, bukan saringan/bukan tingkat). | Urutan deterministik penuh di builder; EC-WIQ-7 tertutup (seri = id naik); mengubah saringan cakupan = di luar tahap 1. |
+| Q-WIQ-4 | **TIDAK** ada maju/putus/tolak dari antrean tahap 1. Satu-satunya jalan keluar intake = detail klaim existing (`transitionWarrantyClaimAction` berizin `edit_warranty_claims`, lalu `decideWarrantyClaimAction` berizin `approve_warranty_claims`). | BR-WIQ-03 final; tombol Maju/Putus/Tolak/Tautkan WO di daftar = MERAH (AC-WIQ-F3). Jalan pintas = keputusan terpisah di luar spec ini. |
+| Q-WIQ-5 | **TIDAK** ada key izin terpisah tahap 1. Antrean di balik `view_warranty_claims` existing, loader fail-closed sebelum query. | Nol key katalog baru; tanpa izin loader tidak dipanggil (AC-WIQ-B4). |
+| Q-WIQ-6 | **TIDAK** ada telepon pelanggan DAN **TIDAK** ada penanda penanggung jawab/penilai per klaim tahap 1. | Telepon bocor ke payload = MERAH (AC-WIQ-B4); penanda penanggung jawab = keadaan baru, keputusan terpisah. |
+
+Accountant TIDAK diminta: nol nominal tahap 1 (BR-WIQ-04/11 terverifikasi — klaim intake `repairWorkOrderId` null, biaya sah hanya dari WO repair tertaut di luar populasi); vonis Accountant wajib hanya bila kelak nominal/biaya antrean atau perubahan syarat jurnal diusulkan. Gerbang Q-WIQ-1..6 TERTUTUP — 076-B boleh mulai dari `origin/main` sesudah PR putusan ini merged; 076-F parent 076-B; 076-Q parent gabungan (kartu dibuat run ini, ID di STATUS board). PR putusan ini = dokumen saja (backlog + board), TANPA merge sendiri — merge Lead siklus berikut sesudah QA audit dokumen (audit dokumen: 076-Q-D dibuat sebagai kartu QA dokumen terpisah run ini).
 
 ### Yang TIDAK diusulkan run ini
 - Memajukan/memutuskan/menolak massal atau otomatis klaim basi (BR-WIQ-03/08) — penilaian eligibility dan keputusan manual pejabat tidak boleh dilewati daftar.
