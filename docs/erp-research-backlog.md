@@ -39125,15 +39125,142 @@ Edge cases:
 
 F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen InvoiceExchange dueDate lampau, sisa belum lunas). Status: SPEC SELESAI run ini (dokumen saja); gerbang putusan Lead Q-IEX-1..3. Pemilik: Business (spec), Lead (putusan + merge), Backend (101-B sesudah putusan), Frontend (101-F sesudah kontrak), QA (101-Q falsifikasi).
 
-
 ---
 
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-113-S: workflow sengketa pajak (SKP/keberatan/pengurangan/banding/gugatan/PK) — model absen total, angka menunggu vonis Accountant
+
+Sumber temuan: scan Accountant t_61d1bb9c (basis origin/main f62056bd8, temuan #8 P3). Spec tahap dokumen saja: nol kode, nol skema, nol angka/jurnal diputus di sini.
+
+Regulasi resmi (akses 27 Okt 2026, pajak.go.id):
+- DJP — Penyelesaian Sengketa Pajak (definisi sengketa; upaya: keberatan, banding, gugatan, peninjauan kembali): https://www.pajak.go.id/id/penyelesaian-sengketa-pajak
+- DJP — Keberatan (objek SKPKB/SKPKBT/SKPN/SKPLB/pemotongan/pemungutan; syarat lunas minimal sebesar disetujui pembahasan akhir; jangka 3 bulan sejak SKP dikirim; DJP putus paling lama 12 bulan, lewat = dianggap dikabulkan): https://www.pajak.go.id/id/keberatan
+- DJP — Banding vs Gugatan (Pasal 27 UU KUP: banding 3 bulan sejak SK Keberatan diterima, 1 keputusan 1 surat banding, banding atas besarnya terutang hanya bila sudah dibayar 50%): https://www.pajak.go.id/id/artikel/banding-versus-gugatan-apa-bedanya
+- DJP — upaya hukum pajak (gugatan pelaksanaan penagihan 14 hari; PK 1 kali ke MA lewat Pengadilan Pajak, tidak menangguhkan putusan): https://www.pajak.go.id/id/artikel/mengenal-upaya-hukum-pajak-di-indonesia
+
+Benchmark kompetitor (akses 27 Okt 2026):
+- Accurate/Zahir: fitur register sengketa pajak (SKP/keberatan/banding) TIDAK ditemukan sebagai modul bernama pada pencarian run ini — tidak diklaim ada. Nilai spec ini = register internal + pengingat tenggat + tautan dokumen, bukan paritas kompetitor.
+
+### Inventarisasi terverifikasi (27 Okt 2026, basis origin/main f62056bd8bec12abc5d896976a9aa48ecd1c53df)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `TaxPayment` (prisma/schema.prisma:1413): documentNo unik, date, period "YYYY-MM" (masa setor dari period), taxTypeId, taxAccountId, paymentAccountId, amount Decimal(15,2), billingCode 15 digit nullable, ntpn 16 nullable, taxKind (ppn|pph21|pph23|pph4_2|pph_badan|other), status default "posted", journalId nullable, deletedAt soft.
+- `TaxInvoice` (prisma/schema.prisma:1250): direction out/in, taxInvoiceNumber, taxPeriod "YYYY-MM", dpp/taxRate/taxAmount, djpStatus draft|approved|rejected|replaced|cancelled, tautan salesInvoiceId/vendorBillId/downPaymentId/vendorId (semua SetNull), replacesId unik.
+- `Tax`/`TaxGroup` master (prisma/schema.prisma:5408/5451). Read-model SPT dari jurnal POSTED direkonsiliasi dokumen (`src/lib/reports/spt-read-model-data.ts:1-16` header). Aksi `src/actions/tax-payment.actions.ts`, `src/actions/tax-documents.actions.ts`.
+- Bukti lampiran generik: `TransactionAttachment` (prisma/schema.prisma:5505) referenceType+referenceId polimorfik, fileUrl/fileSize/mimeType/uploadedBy — pola dipakai ulang untuk dokumen sengketa, tanpa tabel lampiran baru.
+- Izin katalog nyata: `view_tax_payments`/`create_tax_payments`/`delete_tax_payments` (src/lib/auth/module-catalog.generated.ts:379-381), `create_tax_invoices` (:358).
+
+Belum ada (bukti grep run ini, di origin/main f62056bd8):
+- `git grep -i -E "TaxDispute|sengketa pajak|keberatan|SKPKB" origin/main -- src prisma` = 0 hasil. Tidak ada model/enum/aksi/halaman ketetapan pajak (SKP), keberatan, pengurangan/pembatalan, banding, gugatan, PK. Kata "sengketa" yang ada = outcome penagihan pelanggan (domain CRM/collection, bukan pajak) — dilarang disamakan.
+- Tidak ada entitas induk "ketetapan" tempat SKPKB/SKPKBT/SKPLB/SKPN menempel; TaxPayment/TaxInvoice tidak punya relasi ke dokumen ketetapan DJP.
+
+#### F-2026-10-27-113-S (x) P2 — Register + workflow sengketa pajak bertahap (dokumen & tenggat dulu, jurnal sesudah vonis)
+
+- Status Silengkap: ABSEN total (bukti grep di atas).
+- Relevansi: SKP yang terlewat tenggat keberatan 3 bulan kehilangan upaya hukum; pembayaran "di bawah protes" tanpa register membuat nominal disengketakan vs dibayar tidak tertelusur ke TaxPayment; putusan keberatan/banding mengubah kewajiban tanpa jejak dokumen. Risiko utama = tenggat hukum hilang, bukan kecepatan input.
+- Batas tegas spec: spec ini membekukan WORKFLOW/DOKUMEN/TENGGAT/STATUS. Perlakuan jurnal pembayaran sengketa, pengakuan saat putusan, dan masa pelaporan = BUTUH-VONIS Accountant (§8 Q-TXD-1..5). Backend dilarang menebak akun dari spec ini.
+
+##### §1 Objek & kata beku (USULAN, final Lead Q-TXD-6)
+
+Satu register induk usul bernama **Ketetapan Pajak** (dokumen DJP diterima), anak proses usul **Upaya Sengketa** (per tahap). Kata tampil usul: "Ketetapan Pajak", "Upaya Sengketa", "Nominal Ketetapan", "Nominal Disengketakan", "Dibayar di Bawah Protes", "Tenggat Upaya". Dilarang: label "utang pajak" untuk nominal yang disengketakan sebelum vonis Accountant (Q-TXD-1), kata "menang/kalah" (pakai hasil putusan verbatim §3), angka persen ambang karangan.
+
+Jenis ketetapan (enum usul, dari halaman DJP Keberatan): `SKPKB`, `SKPKBT`, `SKPLB`, `SKPN` (nihil), plus `PEMUNGUTAN_PIHAK_KETIGA` untuk objek keberatan atas pemotongan/pemungutan. Jenis upaya (enum usul): `KEBERATAN`, `PENGURANGAN_PEMBATALAN` (Pasal 36 UU KUP — pengurangan/penghapusan sanksi & pembatalan ketetapan; label regulasi BENCHMARK pajak.go.id, rincian syarat BUTUH-VONIS Q-TXD-5), `BANDING`, `GUGATAN`, `PENINJAUAN_KEMBALI`.
+
+##### §2 Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-TXD-01 | Satu keberatan hanya untuk 1 SKP / 1 pemotongan / 1 pemungutan; satu surat banding untuk 1 SK Keberatan. Register menegakkan 1 upaya aktif per (ketetapan, jenis upaya) — upaya tahap lanjut menunjuk putusan tahap sebelumnya | BENCHMARK (pajak.go.id Penyelesaian Sengketa + Keberatan) |
+| BR-TXD-02 | Tenggat keberatan = 3 bulan kalender sejak tanggal SKP dikirim (tanggal kirim DJP tersimpan terpisah dari tanggal terima internal); pengecualian keadaan di luar kekuasaan WP dicatat sebagai flag + alasan, bukan perpanjangan karangan | BENCHMARK (pajak.go.id/keberatan) — hitungan tanggal persis Q-TXD-7 Lead |
+| BR-TXD-03 | DJP wajib putus keberatan ≤12 bulan sejak surat keberatan diterima DJP; lewat tanpa putusan = keberatan dianggap dikabulkan — register menandai `LEWAT_BATAS_PUTUSAN` sebagai penanda baca, BUKAN mengubah hasil sendiri | BENCHMARK (pajak.go.id/keberatan) |
+| BR-TXD-04 | Prasyarat catat keberatan: pajak yang masih harus dibayar paling sedikit sebesar yang disetujui WP dalam pembahasan akhir sudah dilunasi sebelum surat disampaikan — register menyimpan nominal disetujui + tautan TaxPayment bukti; keberatan tanpa bukti ini tertanda `PRASYARAT_BELUM_TERCATAT`, tidak diblokir diam-diam tahap register | BENCHMARK (pajak.go.id/keberatan) |
+| BR-TXD-05 | Banding hanya atas SK Keberatan; tenggat 3 bulan sejak SK Keberatan diterima; banding atas besarnya terutang hanya bila yang terutang sudah dibayar 50% — ambang 50% ini ambang REGULASI banding (Pasal 27), disimpan sebagai syarat tahap banding saja, DILARANG digeneralisasi ke tahap lain/DP komersial | BENCHMARK (pajak.go.id Banding vs Gugatan) |
+| BR-TXD-06 | Gugatan pelaksanaan penagihan: tenggat 14 hari sejak pelaksanaan penagihan (+14 hari sesudah keadaan di luar kekuasaan berakhir); PK hanya 1 kali, tidak menangguhkan pelaksanaan putusan Pengadilan Pajak — kedua flag tampil di register | BENCHMARK (pajak.go.id Penyelesaian Sengketa) |
+| BR-TXD-07 | Nominal per ketetapan disimpan rinci: nominal ketetapan, nominal disetujui WP, nominal disengketakan, nominal dibayar (tautan TaxPayment), nominal hasil putusan per tahap. Selisih turunan server; UI nol hitung; TIDAK ada jurnal dari register ini tahap 1 | USULAN (struktur) — makna akuntansi tiap nominal BUTUH-VONIS Q-TXD-1/2 |
+| BR-TXD-08 | Tautan dokumen: ketetapan boleh menunjuk TaxInvoice (salesInvoiceId/vendorBillId asal) dan TaxPayment (bukti bayar di bawah protes/lunas prasyarat) via relasi SetNull pola existing; putusan tidak menghapus tautan asal | USULAN (pola tautan TERVERIFIKASI-KODE TaxInvoice:1250/TaxPayment:1413) |
+| BR-TXD-09 | Dokumen bukti (SKP, surat keberatan, SK putusan, bukti kirim/terima) = TransactionAttachment referenceType usul `TaxAssessment`/`TaxDisputeStep`; tanpa bukti kirim, tanggal tenggat tertanda `TANGGAL_BELUM_TERBUKTI` | USULAN (mekanisme TERVERIFIKASI-KODE TransactionAttachment:5505) |
+| BR-TXD-10 | SKPLB/SKPN: tetap tercatat sebagai ketetapan (hasil lebih bayar/nihil), upaya sengketa atas nominalnya mengikuti objek DJP; perlakuan restitusi/kompensasi nominal LB = BUTUH-VONIS Q-TXD-3 | USULAN + BUTUH-VONIS |
+| BR-TXD-11 | Tahap 1 register baca-tulis dokumen & status proses saja: nol jurnal otomatis, nol ubah TaxPayment/TaxInvoice/SPT read-model, nol hapus fisik (batal = status `DIBATALKAN` + alasan) | USULAN |
+| BR-TXD-12 | Masa/tanggal yang menggerakkan tenggat disimpan apa adanya dari dokumen (tanggal SKP, tanggal kirim, tanggal terima putusan); sistem tidak menebak tanggal dari createdAt baris | USULAN |
+
+##### §3 Status-transition matrix (USULAN)
+
+Status ketetapan: `DITERIMA` → `DALAM_UPAYA` → `SELESAI` (putusan final berkekuatan tetap / tenggat upaya terakhir lewat tercatat) ; `DIBATALKAN` dari status apa pun (koreksi catat, alasan wajib).
+
+| Dari (upaya) | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | catat upaya (jenis + tanggal ajuan + bukti) | `DIAJUKAN` | izin §4; BR-TXD-01 satu upaya aktif |
+| DIAJUKAN | bukti kirim/terima otoritas tercatat | `DALAM_PROSES` | tanggal terima otoritas wajib (BR-TXD-12); tenggat tahap mulai tampil |
+| DALAM_PROSES | putusan diterima: hasil `DIKABULKAN`/`DIKABULKAN_SEBAGIAN`/`DITOLAK`/`TIDAK_DAPAT_DITERIMA` (verbatim usul) | `DIPUTUS` | nomor+tanggal putusan + lampiran wajib; nominal putusan tersimpan (BR-TXD-07) |
+| DALAM_PROSES | tenggat putusan otoritas lewat (khusus keberatan 12 bulan) | `DIPUTUS` tertanda LEWAT_BATAS_PUTUSAN | BR-TXD-03 — hasil dianggap-dikabulkan hanya penanda, konfirmasi dokumen tetap dicatat |
+| DIPUTUS | upaya tahap lanjut dicatat (banding sesudah keberatan; PK sesudah putusan PP) | upaya baru DIAJUKAN; ketetapan tetap DALAM_UPAYA | rantai putusan sebelumnya wajib (BR-TXD-01/05/06) |
+| DIPUTUS | tidak ada upaya lanjut dalam tenggat tahap berikut | ketetapan `SELESAI` | tenggat tahap berikut lewat tercatat; bukan auto-final diam-diam — tampil sebagai penanda `TENGGAT_LANJUT_LEWAT` dulu |
+| status apa pun | pencabutan upaya oleh WP / koreksi catat | `DICABUT`/`DIBATALKAN` + alasan | izin §4; baris tidak terhapus (BR-TXD-11) |
+
+##### §4 Role/permission matrix (USULAN, key baru final Lead Q-TXD-8)
+
+| Aksi | Izin usul | Catatan |
+|---|---|---|
+| Lihat register ketetapan/upaya | `view_tax_disputes` (key BARU usul) | reuse `view_tax_payments` ditolak usul: sengketa memuat strategi hukum; Q-TXD-8 Lead putus gabung/pisah |
+| Catat/edit ketetapan & upaya, unggah bukti | `create_tax_disputes`/`edit_tax_disputes` (usul) | nominal sensitif — tidak tampil ke role tanpa izin ini |
+| Catat putusan / tutup ketetapan | `edit_tax_disputes` + peran finance/tax (usul) | empat mata usul: pencatat putusan ≠ pengaju upaya bila Lead menyetujui Q-TXD-8 |
+| Bayar (di bawah protes/prasyarat) | `create_tax_payments` existing | pembayaran tetap dokumen TaxPayment existing; register hanya menautkan (BR-TXD-08) |
+| Jurnal apa pun dari sengketa | TIDAK ADA tahap 1 | menunggu vonis Accountant Q-TXD-1..3 |
+
+##### §5 Acceptance criteria (untuk tahap bangun sesudah vonis; spec ini belum mengklaim hijau apa pun)
+
+Backend (113-B, SESUDAH Q-TXD-1..8 terputus):
+- AC-TXD-B1: catat SKPKB + keberatan: tenggat tampil = tanggal kirim + 3 bulan kalender; ganti basis ke tanggal terima internal = MERAH.
+- AC-TXD-B2: keberatan kedua aktif atas SKP sama ditolak; banding tanpa SK Keberatan tertaut ditolak; PK kedua ditolak.
+- AC-TXD-B3: nominal disengketakan + dibayar tertaut TaxPayment; cabut tautan bayar mengubah ringkasan turunan, register sendiri tidak menulis jurnal/TaxPayment (grep jalur tulis jurnal dari modul sengketa = MERAH bila ada tahap 1).
+- AC-TXD-B4: keberatan diajukan ≤ tenggat tampil normal; lewat tenggat tertanda `LEWAT_TENGGAT` + alasan keadaan-di-luar-kekuasaan terpisah; tidak auto-ditolak sistem.
+- AC-TXD-B5: tanpa izin `view_tax_disputes` loader ditolak sebelum query; nominal tidak bocor ke payload role lain.
+- AC-TXD-B6: putusan sebagian: nominal putusan tersimpan, sisa disengketakan turunan server; hapus fisik baris mustahil (hanya status batal).
+
+Frontend (113-F):
+- AC-TXD-F1: label/kolom verbatim payload server; nol kata terlarang §1; nol hitung tenggat/nominal di UI.
+- AC-TXD-F2: tenggat terdekat tampil per upaya aktif (tanggal + sisa hari server), upaya tanpa tanggal bukti tertanda TANGGAL_BELUM_TERBUKTI.
+- AC-TXD-F3: nol tombol Bayar/Jurnal dari register; bayar lewat halaman Penyetoran Pajak existing.
+
+QA (113-Q): falsifikasi AC-TXD-B1..B6/F1..F3 atas head persis; mutasi basis tenggat (kirim→terima) wajib MERAH; nominal bocor ke role tanpa izin wajib MERAH.
+
+##### §6 Feature matrix
+
+| Fitur | Accurate | Zahir | ISF tahap usul |
+|---|---|---|---|
+| Register SKP + jenis ketetapan | Tidak ditemukan modul bernama (run ini) | Tidak ditemukan (run ini) | Register Ketetapan Pajak (usul) |
+| Tenggat keberatan/banding terhitung dokumen | Tidak terverifikasi | Tidak terverifikasi | §2 BR-TXD-02/05 (benchmark DJP) |
+| Bayar di bawah protes tertaut bukti setor | Tidak terverifikasi | Tidak terverifikasi | Tautan TaxPayment existing (usul) |
+| Jurnal sengketa otomatis | Tidak diklaim | Tidak diklaim | TIDAK ADA — vonis Accountant dulu |
+
+##### §7 Backlog turunan (urut, gerbang vonis dulu)
+
+- 113-V Accountant: vonis Q-TXD-1..5 (jurnal bayar sengketa, pengakuan putusan, SKPLB, masa pelaporan, cakupan pengurangan/pembatalan). TANPA ini, 113-B hanya register dokumen tanpa jurnal — dinyatakan eksplisit di kartu.
+- 113-B Backend (SESUDAH 113-V + putusan Lead Q-TXD-6..8): model Ketetapan/Upaya + lampiran TransactionAttachment + loader/register; skema milik Backend.
+- 113-F Frontend (SESUDAH kontrak 113-B): halaman register + detail rantai upaya.
+- 113-Q QA: falsifikasi §5.
+
+##### §8 Pertanyaan vonis (Accountant — angka/jurnal TIDAK diputus spec ini)
+
+- Q-TXD-1 (Accountant): pembayaran SKP yang disengketakan (bayar di bawah protes): diakui sebagai pelunasan utang pajak, piutang pajak/prepaid (aset), atau beban — per jenis pajak (PPN vs PPh badan/potong)? Akun + jurnal persisnya?
+- Q-TXD-2 (Accountant): saat putusan keberatan/banding (dikabulkan sebagian/penuh/ditolak): pengakuan beban/penghasilan/penyesuaian utang-piutang pajak di masa mana (tanggal putusan vs masa ketetapan asal)? Perlakuan sanksi administrasi terpisah dari pokok?
+- Q-TXD-3 (Accountant): SKPLB: nominal lebih bayar menjadi piutang restitusi, kompensasi masa berikut, atau kas saat terima — pengakuan + jurnal tiap jalannya? SKPN: cukup arsip ketetapan atau ada pengakuan?
+- Q-TXD-4 (Accountant): masa pelaporan SPT: apakah ketetapan/putusan menggerakkan pembetulan SPT masa asal (read-model SPT existing) atau hanya catatan register sampai putusan final? Titik taut ke spt-read-model?
+- Q-TXD-5 (Accountant): cakupan tahap `PENGURANGAN_PEMBATALAN` (Pasal 36): sub-jenis apa saja yang dicatat (pengurangan sanksi, penghapusan sanksi, pembatalan SKP/STP) dan dokumen putusannya?
+- Q-TXD-6 (Lead): sahkan kata §1 + enum jenis ketetapan/upaya + hasil putusan §3.
+- Q-TXD-7 (Lead): hitungan "3 bulan kalender" & "14 hari" (kalender vs kerja; jam batas WIB) untuk penanda tenggat server.
+- Q-TXD-8 (Lead): izin key baru `*_tax_disputes` vs reuse izin pajak existing; empat mata pencatat putusan?
+
+### Yang TIDAK diusulkan run ini
+
+- Jurnal/reklasifikasi otomatis dari register: menunggu vonis 113-V; menebak akun = dilarang.
+- E-filing/ekspor sengketa ke DJP/Coretax: tidak ada kanal resmi terverifikasi run ini; register internal dulu.
+- Integrasi penagihan aktif DJP (surat paksa dsb.) sebagai workflow otomatis: gugatan atas pelaksanaan penagihan cukup dicatat tahapnya (BR-TXD-06).
+- Menyamakan "sengketa" outcome penagihan pelanggan dengan sengketa pajak: domain berbeda, register terpisah.
+
+F-2026-10-27-113-S — Workflow sengketa pajak (register ketetapan SKPKB/SKPKBT/SKPLB/SKPN + upaya keberatan/pengurangan-pembatalan/banding/gugatan/PK, tenggat regulasi DJP, nominal disengketakan vs dibayar tertaut TaxPayment/TaxInvoice, bukti TransactionAttachment). Status: SPEC SELESAI run ini (dokumen saja, nol kode/skema/jurnal); gerbang vonis Accountant Q-TXD-1..5 (113-V) + putusan Lead Q-TXD-6..8 sebelum 113-B. Pemilik: Business (spec), Accountant (113-V), Lead (putusan + merge), Backend (113-B), Frontend (113-F), QA (113-Q).
 ## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-112-V: jurnal POSTED beku mutlak; PPN tagihan jasa dipisah fail-closed; serap PPN diam-diam DILARANG (temuan scan t_61d1bb9c #1-3/#5/#6)
-
 > **Slot**: F-2026-10-27-112-V. Diperiksa bentrok 2026-10-27 16:45 WIB vs `origin/main` (`f62056bd8`): grep `F-2026-10-27-112` di backlog+board `origin/main` = 0/0 dan PR terbuka yang memuat `112-V` = 0; nomor `-V` bebas berikutnya sesudah 110-V di main dan 111-V di PR #1207 (t_e1dfd5ad, OPEN saat vonis ini ditulis). Dokumen saja; tanpa kode/schema/migrasi. Tiga putusan mengikat; tidak ada `BUTUH-KEPUTUSAN-OWNER` — semua dalam mandat vonis Accountant. Eksekusi: Backend kartu saudara t_214faacc (Putusan 1, sudah `ready`), kartu eksekusi baru untuk Putusan 2+3 (jangan dicampur ke t_214faacc), QA falsifikasi atas head persis.
-
 ### 0. Basis bukti live (origin/main f62056bd8, 2026-10-27 16:45 WIB) — TERVERIFIKASI-KODE
-
 - `deleteJournalByReferenceTx` (`src/lib/hooks/accounting.hook.ts:118-189`): `journalEntry.deleteMany` + `journal.deleteMany` fisik atas semua jurnal ber-`(referenceType, referenceId)` termasuk POSTED, mengikuti rantai reversal transitif (kasus J1<-J2<-J3). Satu-satunya gerbang: `assertPeriodOpen(transactionDate)` TANPA argumen tx (per jurnal POSTED, :143) — TOCTOU terpisah di kartu t_a75de3bd.
 - `reverseJournalsByReferenceTx` (hook sama :191-271) SUDAH ADA dan benar: jurnal POSTED -> jurnal lawan POSTED (`referenceType "Journal"` -> id asli, tanggal asli, `assertPeriodOpen(tanggal, tx)`) + asli `REVERSED`; jurnal `REVERSED` dilewati; DRAFT dihapus fisik (belum menyentuh GL). Pola produksi existing: `sales-invoice-posting.service.ts:220/229` (reverse faktur + pembayaran), `sales-late-fee.hook.ts:183/190`, `voidVendorBill` menyebut dirinya "reverses" (komentar `purchase.actions.ts:3270`) tetapi masih memanggil jalur HAPUS (`:3296`) — ketidaksesuaian label-perilaku terbukti.
 - Pemanggil jalur hapus (grep origin/main, di luar test): `hrm.actions.ts:4437` (EmployeeLoan), `purchase.actions.ts:2172/2383/2532/2578/3296` (PO/vendorBill/vendorPayment/void), `sales.actions.ts:2676/2717/2792/3292` (DownPayment/SalesPayment), plus pembungkus `deleteJournalByReference` (hook :101-107, dipanggil jurnal manual `finance.actions`). Jalur hapus menggerakkan uang nyata (pembayaran, DP, pinjaman) — dampak migrasi bukan kosmetik.
@@ -39142,9 +39269,7 @@ F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen Invoice
 - VendorBill (`prisma/schema.prisma:2309` dst.): `subtotal/tax/grandTotal Decimal(15,2)`, `taxInvoiceNumber` nullable (:2316, nomor faktur pajak MASUKAN dari pemasok), `VendorBillItem` (:2370) punya `taxPercent/taxAmount/accountId` per baris. `onVendorBillPosted` (hook :2521): goods-based (ada goodsReceipt) memisah PPN dari `bill.tax` bila `purchaseTaxAccountId` ada, dan SENYAP memakai `bill.tax` = 0 bila akun pajak kosong (clearing menyerap seluruhnya — lihat Putusan 3 butir 3.4); non-goods Dr `purchaseExpenseAccountId` = `grandTotal` PENUH (di hook maupun re-fetch dalam tx), PPN tidak pernah dipisah walau `bill.tax > 0` dan akun ada.
 - Serapan diam-diam persis dua titik (grep `hasTaxAccount`/komentar keep-balanced di seluruh hook+services origin/main): (a) `onPurchaseOrderReceived` hook :1080-1082 — `inventoryDebit = totalAmount` bila `purchaseTaxAccountId` kosong, komentar `// Keep balanced: inventory absorbs tax when no input-tax account is set.`; (b) `onSalesInvoicePosted` hook :539-542 — `revenueCredit = totalAmount`, komentar `// Keep the journal balanced ... otherwise revenue absorbs the full amount`. Preseden fail-closed SUDAH DI FILE YANG SAMA: jalur besi tua (`onSalesInvoicePosted` cabang scrap, :~505-510) melempar `Pendapatan besi tua dilarang menyerap PPN.` bila `taxAmount > 0 && !salesTaxAccountId`; `onVendorBillPosted` goods melempar bila `taxAmount > grandTotal`; puluhan hook lain melempar bila akun wajib kosong.
 - Pemanggil produksi `onPurchaseOrderReceived`: nol di luar `accounting.hook.ts` sendiri + test `accounting-hook.test.ts:1002` (grep origin/main) — penerimaan barang produksi berjalan lewat `goods-receipt.hook.ts` -> `stock-journal.service.ts:onGoodsReceipt` (jurnal Dr Persediaan / Cr clearing berbasis nilai diterima FIFO, tanpa komponen PPN sama sekali). Hook PO ini yatim produksi hari ini; vonis tetap mengikatnya karena ia ekspor publik yang bisa dipanggil siapa pun dan test menguncinya.
-
 ### Putusan 1 — Hapus fisik jurnal POSTED: MIGRASI PENUH ke reversal. Nol pengecualian.
-
 1. **Terposting = beku, mutlak.** Jurnal berstatus POSTED (dan rantai reversalnya) tidak pernah dihapus fisik, tidak pernah diubah nominal/akun/tanggalnya, pada periode terbuka maupun tertutup. Satu-satunya koreksi jurnal POSTED adalah jurnal lawan POSTED bertanggal asli lewat `reverseJournalsByReferenceTx` (asli -> `REVERSED`), di dalam tx yang sama dengan perubahan dokumen sumber, dengan `assertPeriodOpen(tanggalAsli, tx)`. Alasan satu kalimat: GL adalah satu-satunya bukti bahwa peristiwa uang pernah terjadi — menghapusnya menulis ulang sejarah buku, dan selisih laporan-vs-ledger sesudahnya tidak dapat direkonsiliasi oleh siapa pun termasuk auditor.
 2. **Nol pengecualian terdokumentasi.** Tidak ada kasus "salah ketik", "dokumen uji", "periode masih terbuka", atau "belum ada yang membaca" yang membenarkan hapus fisik POSTED. Periode terbuka bukan izin hapus; periode terbuka adalah syarat reversal sah. Data uji dibersihkan di level database seed/scratch, bukan lewat aksi aplikasi.
 3. **Yang BOLEH dihapus fisik, persis:** (a) jurnal DRAFT — belum menyentuh GL (perilaku `reverseJournalsByReferenceTx` existing, dipertahankan); (b) baris dokumen sumber yang memang belum berjurnal sama sekali. Dokumen sumber BERJURNAL POSTED tidak dihapus fisik dari aksi hapus: ia dibatalkan (`cancelled`/`void`, status dokumen terpisah dari status posting) sesudah reversal lolos; penghapusan fisik baris sumber sesudah reversal hanya sah bila pola soft-delete/`deletedAt` existing dokumen itu dipertahankan — jurnal + reversalnya tetap hidup selamanya sebagai audit trail. `bankTransfer.delete`/`taxPayment.delete` fisik hari ini WAJIB diganti pola batal: baris ditandai batal (ikuti pola `deletedAt`/status existing model itu; bila model belum punya penanda batal, Backend usulkan kolom di kartu eksekusi — koordinasi schema milik Backend, vonis ini hanya melarang baris+jurnal hilang tanpa jejak).
@@ -39154,28 +39279,21 @@ F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen Invoice
    - `deleteJournalByReferenceTx` + pembungkus `deleteJournalByReference`: fungsi ini BERHENTI menghapus POSTED. Kontrak baru: delegasikan POSTED ke logika `reverseJournalsByReferenceTx`, DRAFT tetap hapus. Semua pemanggil existing (sales/purchase/hrm/finance) mewarisi perilaku baru tanpa pengecualian per pemanggil; pemanggil yang hari ini bergantung pada "jurnal hilang" (mis. edit-dokumen yang memposting ulang) wajib memakai pola existing faktur penjualan: reversal lalu posting ulang (penjaga posting `onSalesInvoicePosted` sudah mengabaikan jurnal `REVERSED`). Nama fungsi boleh diganti Backend (mis. `clearJournalsByReferenceTx`) asal tidak ada ekspor tersisa yang menghapus POSTED; grep akhir wajib nol.
 5. **Urutan dalam satu tx (mengikat):** kunci baris dokumen -> `assertPeriodOpen(tanggalJurnalAsli, tx)` -> reversal -> tandai dokumen batal -> commit. Reversal di luar tx dokumen, atau dokumen terlanjur batal sebelum reversal gagal, = cacat. Idempoten: aksi batal diulang atas dokumen sudah batal = no-op sukses tanpa reversal kedua (penjaga `REVERSED`/existing-reversal existing dipertahankan).
 6. **Larangan turunan:** dilarang "reversal lalu hapus keduanya"; dilarang reversal bertanggal hari ini untuk jurnal periode lain (tanggal lawan = tanggal asli, pola existing); dilarang status jurnal baru di luar POSTED/REVERSED/DRAFT existing; dilarang menghapus `JournalEntry` POSTED lewat jalur lampiran/cascade apa pun (lampiran jurnal yang dibatalkan mengikuti nasib dokumennya, bukan jurnalnya).
-
 ### Putusan 2 — PPN tagihan jasa (non-goods): PISAH di jurnal dari snapshot `bill.tax`, fail-closed. TaxInvoice `in` BUKAN syarat posting.
-
 1. **Perlakuan (mengikat):** jalur non-goods `onVendorBillPosted` memisah persis seperti jalur goods, dari snapshot dokumen yang sama: Dr Beban = `grandTotal - tax`, Dr PPN Masukan (akun `purchaseTaxAccountId`) = `tax`, Cr Hutang Usaha = `grandTotal` (dikurangi Cr Hutang PPh existing bila ada potongan — kaki PPh existing tidak diubah vonis ini). Berlaku di cabang awal hook DAN cabang re-fetch dalam tx (keduanya hari ini menulis `grandTotal` penuh; satu diperbaiki satu tidak = cacat). Angka dari `bill.tax`/`VendorBillItem.taxAmount` tersimpan (snapshot dokumen), bukan hitung ulang dari `taxPercent` saat posting, bukan dari TaxInvoice.
 2. **Fail-closed, tiga gerbang:** (a) `tax > 0` dan `purchaseTaxAccountId` kosong -> posting DITOLAK berisik dengan pesan mengarahkan ke Pengaturan akun PPN Masukan (pola pesan existing file ini); (b) `tax > grandTotal` -> ditolak (gerbang goods existing diperluas ke non-goods); (c) `tax < 0` -> ditolak. `tax = 0` -> jurnal satu kaki beban seperti hari ini, tanpa syarat apa pun.
 3. **TaxInvoice `in` BUKAN gerbang posting tagihan.** Usulan "syarat TaxInvoice `in` wajib sebelum posting tagihan jasa kena PPN" DITOLAK sebagai syarat posting: pengakuan utang+beban mengikuti tagihan vendor (peristiwa ekonomi), sedangkan pengkreditan PPN Masukan di SPT mengikuti dokumen pajak (`creditStatus`/`creditPeriod`, `spt-read-model.ts:86`) — dua status yang memang terpisah. Menahan posting AP sampai faktur pajak tiba mengarang utang tak tercatat dan memindahkan beban antar periode. Yang WAJIB: tagihan dengan `tax > 0` tanpa TaxInvoice `in` tertaut tampil sebagai temuan rekonsiliasi (PPN di jurnal belum tentu dapat dikreditkan; jendela kredit 3 masa UU PPN Pasal 9(9) berjalan sejak tanggal faktur pajak) — permukaan rekonsiliasi existing menampilkannya, bukan posting yang menahannya.
 4. **PPN tidak dapat dikreditkan (UU PPN Pasal 9(8)):** bila tagihan dinyatakan non-kreditabel lewat alasan terstruktur existing, PPN-nya TIDAK masuk akun PPN Masukan — ia dikapitalisasi ke beban (Dr Beban = `grandTotal` penuh) dan itulah satu-satunya bentuk "beban penuh" yang sah, wajib tertanda alasan non-kreditabel di dokumen. Tanpa penanda itu, beban penuh = cacat Putusan ini. Penanda/field-nya wilayah Backend mengikuti pola alasan terstruktur existing; vonis ini melarang memakai flag bebas client sebagai fakta non-kreditabel.
 5. **Koreksi data lama:** jurnal non-goods yang sudah POSTED dengan beban penuh TIDAK diubah diam-diam dan TIDAK direversal massal oleh migrasi kode ini. Ia dikoreksi per dokumen lewat jurnal koreksi/reversal+posting-ulang di periode terbuka oleh operator, dan tampil di rekonsiliasi jurnal-vs-SPT sebagai selisih sampai dikoreksi. Klaim "sudah diperbaiki" dari perubahan kode saja = dilarang.
-
 ### Putusan 3 — Serap pajak diam-diam: DILARANG. Fail-closed berisik di kedua titik bernama.
-
 1. **Prinsip:** jurnal yang seimbang secara aritmetika tetapi salah akun secara ekonomi lebih buruk daripada posting yang gagal berisik — yang pertama mengarang angka laporan (HPP/persediaan/pendapatan) yang terlihat sah. Maka: nominal pajak dokumen > 0 tanpa akun pajak terkonfigurasi = posting DITOLAK, selalu, di semua jalur. "Serap-terdokumentasi berlabel" DITOLAK sebagai perlakuan posting: label di jurnal tidak menyembuhkan akun yang salah, dan tidak ada permukaan yang membaca label itu sebelum angka masuk laporan. (Label/temuan rekonsiliasi untuk data LAMA hasil serapan masa lalu: wajib, lihat butir 3.5.)
 2. **`onSalesInvoicePosted` (hook :539):** `taxAmount > 0 && !salesTaxAccountId` -> `throw` fail-closed sebelum jurnal dibuat, pesan mengarahkan konfigurasi akun PPN Keluaran — persis preseden cabang besi tua di fungsi yang sama ("Pendapatan besi tua dilarang menyerap PPN"); cabang besi tua dan cabang umum berakhir pada gerbang yang sama. `revenueCredit` selalu `totalAmount - taxAmount`; kaki Cr PPN Keluaran selalu ada bila `taxAmount > 0`. Reklas PPN uang muka J-PL1/J-PL2 existing tidak berubah.
 3. **`onPurchaseOrderReceived` (hook :1080):** `tax > 0 && !purchaseTaxAccountId` -> `throw` fail-closed sebelum jurnal dibuat. `inventoryDebit` selalu `totalAmount - taxAmount` bila `tax > 0`. Karena hook ini yatim produksi hari ini (§0), Backend boleh memilih memperbaiki di tempat ATAU menghapus ekspor yatim ini beserta test-nya — keduanya sah menurut vonis ini; yang dilarang adalah mempertahankannya dalam keadaan menyerap. Pilihan dinyatakan di PR eksekusi.
 4. **Perluasan wajib, titik ketiga:** jalur goods `onVendorBillPosted` hari ini menyerap dengan cara lain — `purchaseTaxAccountId` kosong membuat `bill.tax` diperlakukan 0 sehingga clearing menanggung seluruh `grandTotal` (PPN masuk nilai barang/clearing diam-diam). Perlakuan sama: `bill.tax > 0 && !purchaseTaxAccountId` -> tolak berisik, di cabang awal maupun re-fetch tx. Tanpa perluasan ini Putusan 2 bocor lewat jalur goods.
 5. **Data lama terserap:** jurnal masa lalu yang terlanjur menyerap tidak diubah dan tidak direversal massal. Read-model/laporan yang menurunkan angka pajak dari jurnal WAJIB menampilkan selisih jurnal-vs-dokumen (PPN dokumen tanpa kaki akun pajak di jurnal aktif) sebagai temuan rekonsiliasi berlabel, bukan menormalkannya. Koreksi per dokumen hanya reversal+posting-ulang di periode terbuka sesudah akun dikonfigurasi.
 6. **Batas pengecualian satu-satunya:** pajak dokumen = 0 persis. Tidak ada ambang "kecil" untuk serapan; selisih pembulatan sen mengikuti `safeRound` existing dan bukan serapan.
-
 ### Posting matrix (mengikat, sesudah eksekusi)
-
 | Event | Debit | Kredit | Syarat / gerbang |
-|---|---|---|---|
 | Hapus/batal dokumen berjurnal POSTED (semua jalur) | jurnal lawan = kebalikan jurnal asli, POSTED, tanggal asli | (pasangan lawan) | periode tanggal asli terbuka, dalam tx dokumen, idempoten; asli -> REVERSED; dokumen -> batal, bukan hilang |
 | Hapus dokumen berjurnal DRAFT | — (DRAFT dihapus) | — | belum GL; baris sumber boleh hilang |
 | Tagihan jasa/non-goods posting, `tax > 0` kreditabel | Beban `grandTotal - tax`; PPN Masukan `tax` | Hutang Usaha `grandTotal` (− Hutang PPh bila ada) | `purchaseTaxAccountId` wajib ada; `0 <= tax <= grandTotal`; snapshot `bill.tax` |
@@ -39183,9 +39301,7 @@ F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen Invoice
 | Tagihan jasa, `tax = 0` | Beban `grandTotal` | Hutang Usaha `grandTotal` | tanpa syarat pajak |
 | Faktur penjualan posting, `taxAmount > 0` | Piutang `totalAmount` (+ kaki J-PL1/2 existing) | Pendapatan `totalAmount - taxAmount`; PPN Keluaran `taxAmount` | `salesTaxAccountId` wajib ada, tanpa kecuali jenis faktur |
 | Penerimaan PO (hook yatim, bila dipertahankan), `tax > 0` | Persediaan `totalAmount - tax`; PPN Masukan `tax` | Hutang Usaha `totalAmount` | `purchaseTaxAccountId` wajib ada |
-
 ### Falsifikasi wajib (QA, atas head Backend persis — penjaga dicabut = tes MERAH)
-
 - E112-1: hapus transfer bank berjurnal POSTED (periode terbuka): jurnal asli tetap ada berstatus `REVERSED`, jurnal lawan POSTED ada, neto GL per akun dari pasangan itu = 0, baris `journal/journalEntry` asli tidak hilang. Mutasi penjaga kembali ke `journal.delete` = MERAH.
 - E112-2: sama untuk `deleteTaxPayment` dan satu pemanggil `deleteJournalByReferenceTx` dari tiap famili (sales/purchase/hrm): nol baris jurnal POSTED terhapus (hitung baris sebelum/sesudah), rantai J1<-J2 tidak menyisakan lawan yatim.
 - E112-3: batal dokumen berjurnal POSTED pada periode terkunci ditolak dan dokumen+jurnal tidak berubah; batal kedua kali (idempoten) tidak membuat reversal kedua.
@@ -39193,14 +39309,11 @@ F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen Invoice
 - E112-5: tagihan jasa `tax > 0` tanpa `purchaseTaxAccountId` ditolak sebelum jurnal ada (jumlah jurnal tidak berubah); `tax > grandTotal` dan `tax < 0` ditolak; non-kreditabel beralasan -> PPN Masukan 0 dan beban penuh, tanpa alasan -> beban penuh = MERAH.
 - E112-6: faktur penjualan `taxAmount > 0` tanpa `salesTaxAccountId` ditolak (termasuk faktur umum, bukan hanya besi tua); PO hook `tax > 0` tanpa `purchaseTaxAccountId` ditolak (atau ekspor yatim terbukti terhapus dari kode+test); tagihan goods `bill.tax > 0` tanpa akun pajak ditolak.
 - E112-7: regresi keseimbangan: setiap jurnal baru dari jalur di atas Σdebit = Σkredit sen-persis (bukan epsilon float), dan jurnal DRAFT tetap boleh terhapus tanpa reversal.
-
 ### Pemilik berikutnya
-
 - BOT Lead: merge PR vonis ini (dokumen saja); merge urutan eksekusi milik Lead. Tidak ada putusan Lead yang ditunggu vonis ini.
 - BOT Backend: Putusan 1 di kartu existing t_214faacc (sudah `ready`, kontrak di body kartu itu + posting matrix di atas); Putusan 2+3 di kartu eksekusi baru terpisah (dibuat bersamaan PR vonis ini, parent = kartu vonis ini) — file sama (`accounting.hook.ts`) dengan t_a75de3bd, kerjakan berurutan lewat parent, jangan paralel. Tanpa migrasi schema kecuali penanda batal Putusan 1 butir 3 (koordinasi schema Backend).
 - BOT QA: falsifikasi E112-1..7 atas head Backend persis; verdict terikat SHA, head bergerak = verdict gugur.
 - BOT Frontend: tidak ada UI baru dari vonis ini; label batal mengikuti status dokumen existing. Dilarang menampilkan dokumen berjurnal yang dibatalkan sebagai "terhapus dari buku".
-
 ID vonis ini **F-2026-10-27-112-V** (temuan scan t_61d1bb9c #1-3, #5, #6 basis origin/main f62056bd8). Pemilik berikutnya: BOT Lead (merge dokumen) -> BOT Backend t_214faacc + kartu eksekusi Putusan 2/3 -> BOT QA E112-1..7.
 ## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-111-V: draft Expense bukan utang; antrean aset lewat masa manfaat tanpa nilai buku/fiskal (jawaban bersyarat Q-EXQ-4 spec 107-S PR #1203 + Q-ALQ-6 spec 108-S PR #1204)
 > **Slot**: F-2026-10-27-111-V. Diperiksa bentrok 2026-10-27 16:08 WIB vs `origin/main` (`6d48bda1f`): grep `F-2026-10-27-111` di backlog+board `origin/main` = 0/0; PR terbuka memuat `111-V` = 0; seri `-V` bebas berikutnya sesudah 110-V di main. Spec induk OPEN: 107-S PR #1203 head `3339090dc`, 108-S PR #1204 head `38d366fc4`. Dokumen saja; tanpa kode/schema/migrasi. Vonis ini MENGUNCI batas label/angka; tahap 1 kedua spec (tanpa label utang, tanpa nominal buku) TIDAK butuh vonis lanjutan untuk dibangun.
