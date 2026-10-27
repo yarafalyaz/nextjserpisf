@@ -3,6 +3,7 @@ import type { PerformanceQueue } from "@/lib/reports/performance-review-queue"
 import {
   PERFORMANCE_QUEUE_COLUMN_LABELS,
   PERFORMANCE_QUEUE_EMPTY_TEXT,
+  PERFORMANCE_QUEUE_NO_GOAL_LABEL,
   PERFORMANCE_QUEUE_NO_SCORE_LABEL,
   PERFORMANCE_QUEUE_NOTICE_TEXT,
   PERFORMANCE_QUEUE_TITLE,
@@ -81,7 +82,7 @@ export function PerformanceQueueCard({
                     </span>
                     <span className="block text-xs text-muted-foreground">{row.stageLabel}</span>
                     {row.tanpaSasaran ? (
-                      <span className="block text-xs text-muted-foreground">tanpaSasaran</span>
+                      <span className="block text-xs text-muted-foreground">{PERFORMANCE_QUEUE_NO_GOAL_LABEL}</span>
                     ) : null}
                   </DetailTableTd>
                   <DetailTableTd>{row.selfScore ?? PERFORMANCE_QUEUE_NO_SCORE_LABEL}</DetailTableTd>
