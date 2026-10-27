@@ -4,6 +4,8 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getMaterialRequestQueue, type MaterialRequestQueueRow } from "@/lib/reports/material-request-data"
+import { getMaterialRequestDraftQueue } from "@/lib/reports/material-request-draft-queue-data"
+import { MaterialRequestDraftQueueCard } from "@/components/reports/material-request-draft-queue-card"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
@@ -63,6 +65,10 @@ function QueueSection({ title, rows }: { title: string; rows: MaterialRequestQue
 export default async function MaterialRequestsPage() {
   const user = await requirePermission("view_material_requests")
   const queue = await getMaterialRequestQueue(user)
+  // 071-F: antrean permintaan material draft mengendap (Backend PR #1108).
+  // Halaman menegakkan view_material_requests sebelum loader; loader
+  // menegakkan ulang + scope gudang kedua sisi fail-closed.
+  const draftQueue = await getMaterialRequestDraftQueue()
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,6 +85,8 @@ export default async function MaterialRequestsPage() {
           </Link>
         </CanCreate>
       </div>
+
+      <MaterialRequestDraftQueueCard queue={draftQueue} />
 
       <QueueSection title="Permintaan Masuk" rows={queue.incoming} />
       <QueueSection title="Permintaan Keluar" rows={queue.outgoing} />

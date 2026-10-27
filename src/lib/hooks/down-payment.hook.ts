@@ -340,7 +340,11 @@ async function onDownPaymentConfirmedInner(
     const existingSO = await tx.salesOrder.findFirst({
       where: { quotationId: quotation.id },
     });
-    const needWorkDocs = !existingWO && !existingSO;
+    // TASK-011 BUG-01: dokumen pendamping dilengkapi SATU-SATU. Pola lama
+    // `!existingWO && !existingSO` melewati KEDUA pembuatan bila salah satu
+    // sudah ada (mis. SO draft dari convertQuotationToOrder tanpa WO), lalu
+    // penjaga `!workOrder || !salesOrder` di bawah melempar dan seluruh
+    // konfirmasi DP (termasuk jurnal kas) rollback permanen.
 
     // Flatten all items from quotation sections
     const allItems: FlatItem[] = quotation.sections.flatMap((section) =>
@@ -505,7 +509,7 @@ async function onDownPaymentConfirmedInner(
     // dievaluasi ambang setiap kali.
     let workOrder = existingWO
     let salesOrder = existingSO
-    if (needWorkDocs) {
+    if (!workOrder) {
     // ─── 1. Create Work Order ─────────────────────────────────────────
     const woDocNo = await generateDocumentNumber("WO");
 
@@ -524,7 +528,7 @@ async function onDownPaymentConfirmedInner(
 
     // Create Work Order Items — include BOM/custom items (itemId=null) with
     // description so they appear in the WO items table.
-    if (allItems.length > 0 && needWorkDocs) {
+    if (allItems.length > 0) {
       await tx.workOrderItem.createMany({
         data: allItems
           .filter((item) => item.itemId !== null || (item.itemName && item.itemName.trim() !== ""))
@@ -566,7 +570,10 @@ async function onDownPaymentConfirmedInner(
       ],
     });
 
-    // ─── 3. Create Sales Order + Items ───────────────────────────────
+    } // end if (!workOrder): WO + Project dibuat bila WO belum ada
+
+    // ─── 3. Create Sales Order + Items (bila SO belum ada) ────────────
+    if (!salesOrder) {
     const soDocNo = await generateDocumentNumber("SO");
 
     salesOrder = await tx.salesOrder.create({
@@ -586,7 +593,7 @@ async function onDownPaymentConfirmedInner(
       },
     });
 
-    if (allItems.length > 0 && needWorkDocs) {
+    if (allItems.length > 0) {
       await tx.salesOrderItem.createMany({
         data: allItems.map((item) => ({
           salesOrderId: salesOrder!.id,
@@ -598,7 +605,7 @@ async function onDownPaymentConfirmedInner(
         })),
       });
     }
-    } // end if (needWorkDocs): WO/Project/SO dibuat sekali
+    } // end if (!salesOrder): SO dibuat bila SO belum ada
 
     // Di titik ini WO+SO pasti ada (dibuat di atas atau pre-existing).
     // Bila keduanya null berarti state parsial yang tak dikenal — gagal keras
@@ -660,7 +667,7 @@ async function onDownPaymentConfirmedInner(
         createdBy: userId ?? null,
       },
     });
-    invoice = created
+    invoice = { id: created.id, documentNo: created.documentNo }
 
     if (allItems.length > 0) {
       await tx.salesInvoiceItem.createMany({
@@ -696,13 +703,20 @@ async function onDownPaymentConfirmedInner(
     const verifiedForAllocation = await tx.downPayment.findMany({
       where: { quotationId: quotation.id, status: SalesStatus.CONFIRMED },
     })
+    const createdSen = Math.round(Number(quotation.grandTotal) * 100)
+    // TASK-011 BUG-02: alokasi awal WAJIB jurnal reklas Dr 210102 / Cr
+    // Piutang per DP (pola sama jalur faktur-sudah-ada AUD-FIN-04 di atas).
+    // Tanpa ini GL Piutang overstated dan kewajiban 210102 tak pernah lunas
+    // walau subledger menyatakan faktur (sebagian) lunas. Akun dipetakan
+    // sekali dari systemSetting yang sama; belum terpetakan = fail-closed.
+    let allocAccounts: { liabilityId: number; arId: number } | null = null
     let allocatedSen = 0
     for (const vdp of verifiedForAllocation) {
       const vmarker = `Uang muka dari DP ${vdp.documentNo}`
       if ([...allocatedMarkers].some((n) => n.includes(vmarker))) continue
       if (Number(vdp.amount) <= 0) continue
       const payDocNo = await generateDocumentNumber("PAY");
-      await tx.salesPayment.create({
+      const allocPayment = await tx.salesPayment.create({
         data: {
           documentNo: payDocNo,
           salesInvoiceId: created.id,
@@ -714,9 +728,54 @@ async function onDownPaymentConfirmedInner(
           createdBy: userId ?? null,
         },
       });
-      allocatedSen += Math.round(Number(vdp.amount) * 100)
+      const vdpSen = Math.round(Number(vdp.amount) * 100)
+      // Porsi yang benar-benar melunasi faktur ini (kelebihan di atas
+      // grandTotal menjadi kredit pelanggan di bawah, bukan reklas).
+      const journalSen = Math.max(Math.min(vdpSen, createdSen - allocatedSen), 0)
+      allocatedSen += vdpSen
+      if (journalSen > 0) {
+        if (!allocAccounts) {
+          const dpSettings = await tx.systemSetting.findFirst();
+          const liabilityId = (dpSettings as { customerDownPaymentAccountId?: number | null } | null)?.customerDownPaymentAccountId ?? null;
+          const arId = (dpSettings as { salesReceivableAccountId?: number | null } | null)?.salesReceivableAccountId ?? null;
+          if (!liabilityId || !arId) {
+            throw new Error(
+              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi DP awal ditolak",
+            );
+          }
+          allocAccounts = { liabilityId, arId }
+        }
+        const allocDate = vdp.paymentDate ?? new Date();
+        await assertPeriodOpen(allocDate, tx);
+        const existingAllocJournal = await tx.journal.findFirst({
+          where: { referenceType: "SalesPayment", referenceId: allocPayment.id },
+        });
+        if (!existingAllocJournal) {
+          const allocJournalNo = await generateDocumentNumber("JRN");
+          const allocAmount = journalSen / 100;
+          await tx.journal.create({
+            data: {
+              journalNumber: allocJournalNo,
+              transactionDate: allocDate,
+              referenceType: "SalesPayment",
+              referenceId: allocPayment.id,
+              description: `Alokasi DP ${vdp.documentNo} ke faktur ${created.documentNo ?? created.id}`,
+              type: "AUTO",
+              status: "POSTED",
+              totalDebit: allocAmount,
+              totalCredit: allocAmount,
+              createdBy: userId ?? null,
+              entries: {
+                create: [
+                  { accountId: allocAccounts.liabilityId, debit: allocAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
+                  { accountId: allocAccounts.arId, debit: 0, credit: allocAmount, memo: "Pelunasan piutang via uang muka" },
+                ],
+              },
+            },
+          });
+        }
+      }
     }
-    const createdSen = Math.round(Number(quotation.grandTotal) * 100)
     // AUD-FIN-02 (putusan akuntan): KELEBIHAN DP = KREDIT PELANGGAN
     // terstruktur (customer_credits), BUKAN pelunasan, BUKAN catatan teks.
     // paidAmount dibatasi grandTotal (tak boleh overstate); selisih masuk

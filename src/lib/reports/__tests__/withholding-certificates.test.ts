@@ -10,11 +10,15 @@ vi.mock("@/lib/db/prisma", () => ({
 
 import { prisma } from "@/lib/db/prisma"
 import {
+  buildWithholdingCertificateTable,
   purchaseDpp,
   serializeWithholdingCertificatesCsv,
   type WithholdingCertificateInput,
 } from "../withholding-certificates"
-import { loadWithholdingCertificatesCsv } from "../withholding-certificates-data"
+import {
+  loadWithholdingCertificateInputs,
+  loadWithholdingCertificatesCsv,
+} from "../withholding-certificates-data"
 
 const vb = vi.mocked(prisma.vendorBill.findMany)
 const sp = vi.mocked(prisma.salesPayment.findMany)
@@ -104,6 +108,42 @@ describe("loadWithholdingCertificatesCsv (F-35a)", () => {
     expect(vb).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ withholdingAmount: { gt: 0 } }),
     }))
+  })
+
+  // B8: satu loader bersama — input yang sama membentuk tabel layar/PDF
+  // dan CSV, jadi total kedua sisi ketiga permukaan selalu sama. Versi
+  // lama: layar dua sisi, PDF hanya vendor, CSV semesta ketiga.
+  it("B8: total tabel (layar/PDF) = total CSV dari input yang sama, dua sisi", () => {
+    const inputs: WithholdingCertificateInput[] = [
+      row({ documentNo: "VB-001", withheld: 20, dpp: 1000 }),
+      row({ documentNo: "VB-002", withheld: 30, dpp: 1500 }),
+      row({ side: "sales", documentNo: "SP-001", certificateNo: "BP-001", dpp: null, withheld: 50 }),
+    ]
+    const table = buildWithholdingCertificateTable(inputs)
+    const csv = serializeWithholdingCertificatesCsv(inputs)
+    expect(table.purchaseWithheld).toBe(csv.purchaseWithheld)
+    expect(table.salesWithheld).toBe(csv.salesWithheld)
+    expect(table.purchaseWithheld).toBe(50)
+    expect(table.salesWithheld).toBe(50)
+    // Kedua sisi tampil sebagai kelompok terpisah di tabel.
+    const groups = table.rows.filter((r) => r.kind === "group").map((r) => (r.kind === "group" ? r.label : ""))
+    expect(groups.some((g) => g.includes("Pembelian"))).toBe(true)
+    expect(groups.some((g) => g.includes("Penjualan"))).toBe(true)
+  })
+
+  it("B8: loader inputs membawa nomor faktur penjualan untuk kolom Faktur layar", async () => {
+    vb.mockResolvedValue([] as never)
+    sp.mockResolvedValue([{
+      paymentDate: new Date(2026, 0, 11), documentNo: "SP-001", withholdingCertificateNo: "BP-9",
+      withholdingAmount: 30,
+      salesInvoice: { documentNo: "INV-77", customer: { name: "PT Klien", taxId: "03.222" } },
+      withholdingType: { code: "PPh 23", name: "Jasa", rate: 2 },
+    }] as never)
+
+    const inputs = await loadWithholdingCertificateInputs({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0].side).toBe("sales")
+    expect(inputs[0].invoiceNo).toBe("INV-77")
   })
 
   it("F-003: bupot snapshot menggantikan baris fallback tagihan tertaut (tanpa dobel)", async () => {
