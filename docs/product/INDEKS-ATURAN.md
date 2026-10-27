@@ -182,7 +182,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-INV-006 | Sebagian | prisma/schema.prisma:2560 — `StockAdjustment` ada; pencatatan alasan/approver/aktor/ledger belum ditelusur per field |
 | AC-INV-007 | OPEN-keputusan | Mengikuti INV-BR-007: policy negative stock dan konkurensinya belum diputuskan di sumber |
 | AC-INV-008 | Sebagian | prisma/schema.prisma:3870 — `Remnant`; pembeda scrap: `src/lib/services/scrap-classification.ts:8` |
-| AC-INV-009 | Sebagian | prisma/schema.prisma:2513 — `StockMove.referenceType`/`referenceId` ke dokumen sumber |
+| AC-INV-009 | Sebagian | prisma/schema.prisma:2513 — `StockMove.referenceType`/`referenceId` ke dokumen sumber; UI bertaut: laporan kartu stok + detail mutasi + daftar mutasi (PR kartu t_3bef3072) + laporan mutasi stok; sisa: tipe di luar daftar putih `referenceHref` (mis. WorkOrder, SalesInvoiceCOGS) tampil label polos |
 
 ## 10. Acceptance — Purchasing `AC-PUR-*`
 
