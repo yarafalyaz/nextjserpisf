@@ -83,6 +83,7 @@ export async function loadSptPeriodRowsForRange(range?: {
           dpp: true,
           taxAmount: true,
           djpStatus: true,
+          creditablePercent: true,
           salesInvoiceId: true,
           vendorBillId: true,
           replacesId: true,
@@ -91,11 +92,11 @@ export async function loadSptPeriodRowsForRange(range?: {
       }),
       prisma.salesInvoice.findMany({
         where: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null, taxAmount: { gt: 0 } },
-        select: { date: true, subtotal: true, discount: true, taxAmount: true },
+        select: { id: true, date: true, subtotal: true, discount: true, taxAmount: true },
       }),
       prisma.vendorBill.findMany({
         where: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null, tax: { gt: 0 } },
-        select: { date: true, subtotal: true, discountAmount: true, tax: true },
+        select: { id: true, date: true, subtotal: true, discountAmount: true, tax: true },
       }),
       prisma.salesReturn.findMany({
         where: { status: "completed" },
@@ -163,12 +164,23 @@ export async function loadSptPeriodRowsForRange(range?: {
         creditStatus: t.creditStatus,
         dpp: Number(t.dpp),
         taxAmount: Number(t.taxAmount),
+        djpStatus: t.djpStatus,
+        creditablePercent: Number(t.creditablePercent),
       })),
   )
 
-  // Fallback legacy per masa (dokumen komersial) — hanya masa tanpa dokumen.
+  // Fallback legacy PER DOKUMEN: dokumen komersial yang sudah punya
+  // TaxInvoice (status apa pun) tidak dihitung ulang sebagai legacy —
+  // yang belum punya tetap tampil walau masanya sudah punya TaxInvoice.
+  const coveredSalesIds = new Set(
+    taxInvoices.filter((t) => t.direction === "out" && t.salesInvoiceId != null).map((t) => t.salesInvoiceId),
+  )
+  const coveredBillIds = new Set(
+    taxInvoices.filter((t) => t.direction === "in" && t.vendorBillId != null).map((t) => t.vendorBillId),
+  )
   const legacyOut = new Map<string, { dpp: number; vat: number; count: number }>()
   for (const inv of salesInvoices) {
+    if (coveredSalesIds.has(inv.id)) continue
     const p = periodOf(inv.date)
     const row = legacyOut.get(p) ?? { dpp: 0, vat: 0, count: 0 }
     row.dpp += Number(inv.subtotal) - Number(inv.discount)
@@ -178,6 +190,7 @@ export async function loadSptPeriodRowsForRange(range?: {
   }
   const legacyIn = new Map<string, { dpp: number; vat: number; count: number }>()
   for (const bill of vendorBills) {
+    if (coveredBillIds.has(bill.id)) continue
     const p = periodOf(bill.date)
     const row = legacyIn.get(p) ?? { dpp: 0, vat: 0, count: 0 }
     row.dpp += Number(bill.subtotal) - Number(bill.discountAmount)
@@ -268,12 +281,12 @@ export async function loadSptPeriodRowsForRange(range?: {
       inputVat,
       net: position.net,
       kurangBayar: position.kurangBayar,
-      source:
-        out?.source === "legacy" || inp?.source === "legacy"
-          ? out?.source === "tax_invoice" || inp?.source === "tax_invoice"
-            ? "mixed"
-            : "legacy"
-          : "tax_invoice",
+      source: (() => {
+        const sources = [out?.source, inp?.source].filter(Boolean)
+        const hasLegacy = sources.some((s) => s === "legacy" || s === "mixed")
+        const hasTax = sources.some((s) => s === "tax_invoice" || s === "mixed")
+        return hasLegacy && hasTax ? "mixed" : hasLegacy ? "legacy" : "tax_invoice"
+      })(),
       journalLiability,
       journalVsSptDiff:
         journalLiability == null ? null : safeSubtract(journalLiability, position.net, 2),

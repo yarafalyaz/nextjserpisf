@@ -73,6 +73,9 @@ const TABLE_SOURCES = {
   // sdm
   appreciations: "id", leave_requests: "id", timesheets: "id",
   overtime_requests: "id", payrolls: "document_no", employee_loans: "id",
+  probation_reviews: "id", contract_decision_requests: "id",
+  job_vacancies: "code", job_applicants: "name", performance_cycles: "name",
+  performance_reviews: "id", competencies: "name", trainings: "title",
   probation_reviews: "id", contract_decision_requests: "id", employee_disciplinary_records: "id",
   disciplinary_deduction_decisions: "document_no",
   // F-2026-10-25-010-S: pengajuan koreksi absensi ber-slug sejak dibuat.
