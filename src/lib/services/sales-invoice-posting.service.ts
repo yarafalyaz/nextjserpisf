@@ -20,6 +20,9 @@ import { slugify } from "@/lib/utils/slug"
  *  - Serial: nomor seri yang dijual (tercatat di baris faktur) dan masih
  *    `used` dikembalikan ke `available`. Tanpa ini serial hilang selamanya
  *    ("manual correction" sebelumnya).
+ *  - Batch: lot yang terkonsumsi (tercatat sebagai qtyOut pada layer sumber
+ *    ber-batch) dipulihkan — layer pulih membawa batchNumber asalnya dan
+ *    `ItemBatch.qty` ditambah kembali, simetris dengan serial.
  *  - Revenue journal (referenceType "SalesInvoice") and COGS journal
  *    ("SalesInvoiceCOGS"): P1-7 dibalik via reversal entry (asli REVERSED +
  *    jurnal lawan), bukan dihapus.
@@ -58,6 +61,14 @@ export async function reverseSalesInvoicePostingTx(
     notes: string
   }> = []
 
+  // Batch lots to restore per OUT move (parallel to moveInserts). Derived
+  // from the source FIFO layers this sale consumed: layers with qtyOut > 0
+  // carrying a batchNumber, oldest first. Faktur tak menyimpan identitas lot
+  // per baris (hanya serial), jadi layer sumber adalah satu-satunya catatan
+  // lot yang benar-benar keluar; sisa yang tak teratribusi (layer lama tanpa
+  // batch) pulih sebagai layer tanpa batch seperti sebelumnya.
+  const allocationsByMove: Array<Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }>> = []
+
   for (const m of outMoves) {
     const qty = Number(m.qty)
     if (qty <= 0) continue
@@ -75,6 +86,45 @@ export async function reverseSalesInvoicePostingTx(
       referenceId: invoiceId,
       notes: `Pembalikan stok penghapusan faktur #${invoiceId}`,
     })
+
+    const allocations: Array<{ batchNumber: string | null; warehouseId: number | null; qty: number }> = []
+    if (typeof tx.inventoryLayer.findMany === "function") {
+      const sourceLayers = await tx.inventoryLayer.findMany({
+        where: {
+          itemId: m.itemId,
+          ...(m.warehouseId != null ? { warehouseId: m.warehouseId } : {}),
+          qtyOut: { gt: 0 },
+          batchNumber: { not: null },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { batchNumber: true, warehouseId: true, qtyOut: true },
+      })
+      let remaining = qty
+      const byLot = new Map<string, { batchNumber: string | null; warehouseId: number | null; qty: number }>()
+      for (const layer of sourceLayers) {
+        if (remaining <= 0) break
+        if (!layer.batchNumber) continue
+        const take = Math.min(Number(layer.qtyOut), remaining)
+        if (take <= 0) continue
+        const key = `${layer.batchNumber}|${layer.warehouseId ?? ""}`
+        const existing = byLot.get(key)
+        if (existing) {
+          existing.qty = Math.round((existing.qty + take) * 100) / 100
+        } else {
+          byLot.set(key, {
+            batchNumber: layer.batchNumber,
+            warehouseId: layer.warehouseId ?? m.warehouseId,
+            qty: take,
+          })
+        }
+        remaining = Math.round((remaining - take) * 100) / 100
+      }
+      allocations.push(...byLot.values())
+      if (remaining > 0) {
+        allocations.push({ batchNumber: null, warehouseId: m.warehouseId, qty: remaining })
+      }
+    }
+    allocationsByMove.push(allocations)
   }
 
   if (qtyUpdates.length > 0) {
@@ -82,17 +132,62 @@ export async function reverseSalesInvoicePostingTx(
     const revMoves = await Promise.all(
       moveInserts.map((m) => tx.stockMove.create({ data: m as never })),
     )
-    await tx.inventoryLayer.createMany({
-      data: revMoves.map((m) => ({
+    const layerRows = revMoves.flatMap((m, idx) => {
+      const allocs = allocationsByMove[idx] ?? []
+      if (allocs.length === 0) {
+        return [{
+          itemId: m.itemId,
+          warehouseId: m.warehouseId!,
+          stockMoveId: m.id,
+          qtyIn: Number(m.qty),
+          qtyOut: 0,
+          remaining: Number(m.qty),
+          unitCost: m.cost as never,
+          batchNumber: null as string | null,
+        }]
+      }
+      return allocs.map((a) => ({
         itemId: m.itemId,
-        warehouseId: m.warehouseId!,
+        warehouseId: (a.warehouseId ?? m.warehouseId)!,
         stockMoveId: m.id,
-        qtyIn: Number(m.qty),
+        qtyIn: a.qty,
         qtyOut: 0,
-        remaining: Number(m.qty),
+        remaining: a.qty,
         unitCost: m.cost as never,
-      })),
+        batchNumber: a.batchNumber,
+      }))
     })
+    if (layerRows.length > 0) {
+      await tx.inventoryLayer.createMany({ data: layerRows })
+    }
+
+    // Kembalikan qty lot fisik, simetris dengan pemulihan serial di bawah:
+    // tambah ke lot bila masih ada, buat ulang bila sudah terhapus.
+    for (let idx = 0; idx < revMoves.length; idx++) {
+      for (const alloc of allocationsByMove[idx] ?? []) {
+        if (!alloc.batchNumber || alloc.warehouseId == null) continue
+        const itemId = revMoves[idx].itemId
+        const existingBatch = await tx.itemBatch.findFirst({
+          where: { itemId, warehouseId: alloc.warehouseId, batchNumber: alloc.batchNumber },
+          select: { id: true },
+        })
+        if (existingBatch) {
+          await tx.itemBatch.update({
+            where: { id: existingBatch.id },
+            data: { qty: { increment: alloc.qty } },
+          })
+        } else {
+          await tx.itemBatch.create({
+            data: {
+              itemId,
+              batchNumber: alloc.batchNumber,
+              warehouseId: alloc.warehouseId,
+              qty: alloc.qty,
+            },
+          })
+        }
+      }
+    }
   }
   if (outMoves.length > 0) {
     // P1-7: tandai reversed — histori tetap bisa diaudit; laporan yang

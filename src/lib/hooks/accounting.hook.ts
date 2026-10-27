@@ -3,7 +3,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
-import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
+import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
@@ -209,8 +209,17 @@ export async function reverseJournalsByReferenceTx(
   if (journals.length === 0) return;
 
   for (const j of journals) {
+    // REVERSED sudah punya jurnal lawan POSTED (referenceType "Journal").
+    // Lewati tanpa hapus: menghapus asli akan meninggalkan counterpart
+    // POSTED yatim sebelah di GL. Cabang ini harus konsisten dengan
+    // pemeriksaan existing-reversal di bawah — keduanya berarti
+    // "sudah direversal, jangan buat dan jangan hapus apa pun".
+    // Pemeriksaan status REVERSED yang lama berada sesudah cabang
+    // `!== POSTED` sehingga tak pernah tercapai (dead code) dan
+    // REVERSED justru terhapus.
+    if (j.status === "REVERSED") continue;
     if (j.status !== "POSTED") {
-      // Belum GL: hapus aman (dokumen sumber tetap ada).
+      // DRAFT (belum GL): hapus aman (dokumen sumber tetap ada).
       await tx.journalEntry.deleteMany({ where: { journalId: j.id } });
       await tx.journal.delete({ where: { id: j.id } });
       continue;
@@ -219,7 +228,7 @@ export async function reverseJournalsByReferenceTx(
       where: { referenceType: "Journal", referenceId: j.id },
       select: { id: true },
     });
-    if (existingReversal || (j as { status: string }).status === "REVERSED") continue;
+    if (existingReversal) continue;
 
     // Koreksi periode asal — tolak bila periode sudah dikunci.
     await assertPeriodOpen(j.transactionDate, tx);
@@ -1598,6 +1607,15 @@ export async function onSalesReturnCompleted(
   const db = txClient || prisma;
   assertJournalClaimRef("SalesReturn", returnId);
   const settings = await getSystemSettings(db);
+  // Sales-return + inventory mappings are always needed (jalur dagang).
+  // The AR mapping is only needed when the return is tied to an invoice
+  // (see below) — resolved after we know whether there is a linked invoice.
+  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
+    throw new Error(
+      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
+    );
+  }
+
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
@@ -1663,13 +1681,6 @@ export async function onSalesReturnCompleted(
           "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting retur besi tua.",
       );
     }
-  } else if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
-    // Sales-return + inventory mappings are always needed (jalur dagang).
-    // The AR mapping is only needed when the return is tied to an invoice
-    // (see below) — resolved after we know whether there is a linked invoice.
-    throw new Error(
-      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
-    );
   }
 
   // A return tied to an invoice relieves the customer's receivable. A return
@@ -2037,6 +2048,76 @@ export async function onSalesReturnCompleted(
       );
     }
     await tx.journalEntry.createMany({ data: entryRows });
+
+    // TASK-011 BUG-04: jurnal di atas mengkredit Piutang (GL), jadi subledger
+    // faktur WAJIB turun dalam transaksi yang sama — pola recalc kanonis
+    // pembayaran (sales-payment.hook): outstanding = grandTotal - paidAmount,
+    // status diturunkan dari paidAmount vs grandTotal. Retur mengurangi
+    // grandTotal sebesar porsi yang masih terutang; kelebihan di atas sisa
+    // (faktur sudah lunas / terbayar lebih) menjadi CustomerCredit terstruktur
+    // (pola DownPayment/RevisionDown), bukan outstanding negatif.
+    if (
+      linkedToInvoice &&
+      priceTotal > 0 &&
+      salesReturn.salesInvoiceId != null &&
+      typeof tx.salesInvoice?.update === "function"
+    ) {
+      const inv = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId },
+        select: {
+          grandTotal: true,
+          paidAmount: true,
+          customerId: true,
+          documentNo: true,
+        },
+      });
+      const grandSen = Math.round(Number(inv.grandTotal) * 100);
+      const paidSen = Math.round(Number(inv.paidAmount) * 100);
+      if (Number.isFinite(grandSen) && Number.isFinite(paidSen)) {
+        const returnSen = Math.round(priceTotal * 100);
+        const reliefSen = Math.min(returnSen, Math.max(grandSen - paidSen, 0));
+        const excessSen = returnSen - reliefSen;
+        const newGrandSen = grandSen - reliefSen;
+        const invStatus: "posted" | "partial" | "paid" =
+          paidSen >= newGrandSen ? "paid" : paidSen > 0 ? "partial" : "posted";
+        await tx.salesInvoice.update({
+          where: { id: salesReturn.salesInvoiceId },
+          data: {
+            grandTotal: newGrandSen / 100,
+            totalAmount: newGrandSen / 100,
+            paidAmount: paidSen / 100,
+            status: invStatus,
+            paymentStatus: invStatus,
+          },
+        });
+        if (
+          excessSen > 0 &&
+          typeof tx.customerCredit?.findFirst === "function" &&
+          typeof tx.customerCredit?.create === "function"
+        ) {
+          const existingCredit = await tx.customerCredit.findFirst({
+            where: { sourceType: "SalesReturn", sourceId: returnId },
+          });
+          if (!existingCredit) {
+            const creditDocNo =
+              typeof generateDocumentNumber === "function"
+                ? await generateDocumentNumber("CC")
+                : `CC-RET-${returnId}`;
+            await tx.customerCredit.create({
+              data: {
+                documentNo: creditDocNo,
+                customerId: inv.customerId,
+                sourceType: "SalesReturn",
+                sourceId: returnId,
+                receivedAmount: excessSen / 100,
+                notes: `Kelebihan retur penjualan ${salesReturn.documentNo} atas faktur ${inv.documentNo ?? salesReturn.salesInvoiceId} yang sudah lunas. Bisa dipakai ulang / di-refund.`,
+                createdBy: userId ?? null,
+              },
+            });
+          }
+        }
+      }
+    }
   });
 }
 
@@ -2076,9 +2157,13 @@ export async function onPurchaseReturnProcessed(
     return;
   }
 
-  // AP relief = agreed return price (what the vendor credits back).
+  // AP relief = harga retur BEKU per baris (`price`, harga beli dari tagihan
+  // asal saat retur dibuat) — what the vendor credits back. `cost` adalah cost
+  // master yang bergerak, jadi memakainya melegakan hutang sebesar harga kini,
+  // bukan harga kesepakatan asal. Baris legacy tanpa `price` (null) jatuh ke
+  // `cost` karena tidak ada harga beku yang bisa dipakai.
   const totalAmount = purchaseReturn.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.cost),
+    (sum, item) => sum + Number(item.qty) * Number(item.price ?? item.cost),
     0,
   );
   if (totalAmount <= 0) return;
@@ -2210,6 +2295,60 @@ export async function onPurchaseReturnProcessed(
           memo: e.memo,
         })),
       });
+    }
+
+    // TASK-011 BUG-04: jurnal di atas mendebit Hutang Usaha (GL), jadi
+    // subledger tagihan WAJIB turun dalam transaksi yang sama — pola recalc
+    // kanonis pembayaran vendor (confirmVendorPayment): sisa neto =
+    // (grandTotal - withholding) - paidAmount, status dari sisa. Tagihan asal
+    // dipilih seperti snapshot pajak retur (terbaru non-batal per PO).
+    // balanceDue yang turun membuat confirmVendorPayment menolak pembayaran
+    // melebihi sisa neto retur (alokasi dibatasi balanceDue + guard total).
+    if (
+      typeof tx.vendorBill?.findFirst === "function" &&
+      typeof tx.vendorBill?.update === "function"
+    ) {
+      const bill = await tx.vendorBill.findFirst({
+        where: {
+          purchaseOrderId: purchaseReturn.purchaseOrderId,
+          status: { in: ["posted", "partial", "paid"] },
+        },
+        orderBy: { id: "desc" },
+        select: {
+          id: true,
+          grandTotal: true,
+          paidAmount: true,
+          withholdingAmount: true,
+          balanceDue: true,
+        },
+      });
+      if (bill) {
+        const grandSen = Math.round(Number(bill.grandTotal) * 100);
+        const paidSen = Math.round(Number(bill.paidAmount) * 100);
+        const withholdingSen = Math.round(Number(bill.withholdingAmount ?? 0) * 100);
+        const balanceSen = Math.round(Number(bill.balanceDue) * 100);
+        if (
+          Number.isFinite(grandSen) &&
+          Number.isFinite(paidSen) &&
+          Number.isFinite(balanceSen)
+        ) {
+          const reliefSen = Math.min(Math.round(totalAmount * 100), Math.max(balanceSen, 0));
+          if (reliefSen > 0) {
+            const newGrandSen = grandSen - reliefSen;
+            const newBalanceSen = Math.max(newGrandSen - withholdingSen - paidSen, 0);
+            const billStatus: "posted" | "partial" | "paid" =
+              newBalanceSen <= 0 ? "paid" : paidSen > 0 ? "partial" : "posted";
+            await tx.vendorBill.update({
+              where: { id: bill.id },
+              data: {
+                grandTotal: newGrandSen / 100,
+                balanceDue: newBalanceSen / 100,
+                status: billStatus,
+              },
+            });
+          }
+        }
+      }
     }
   });
 }
@@ -2863,6 +3002,35 @@ export async function onPayrollPaid(
     }
   }
 
+  // TASK-018 (5): porsi utang (210207) per baris dibatasi akrual subledger
+  // aktual peristiwa itu — boolean settled saja membebankan nominal penuh
+  // ke utang walau baru terakrual sebagian (peristiwa Rp2,5jt terakrual
+  // Rp2,0jt -> saldo utang -Rp500rb). Sisa di atas akrual = beban (600028).
+  const pkwtPayablePortion = new Map<number, number>();
+  if (pkwtTotal > 0) {
+    for (const l of pkwtLines) {
+      const amount = Number(l.amount) || 0;
+      if (!l.pkwtSettledViaAccrual || l.pkwtEventId == null) {
+        if (l.pkwtEventId != null) pkwtPayablePortion.set(l.pkwtEventId, 0);
+        continue;
+      }
+      const event = await db.pkwtCompensationEvent?.findUnique({
+        where: { id: l.pkwtEventId },
+        select: { employeeId: true, segmentStart: true },
+      });
+      let payable = amount;
+      if (event) {
+        const agg = await db.pkwtCompensationAccrual?.aggregate({
+          where: { employeeId: event.employeeId, segmentStart: event.segmentStart },
+          _sum: { amount: true },
+        });
+        const accrued = Number(agg?._sum?.amount ?? 0) || 0;
+        payable = Math.min(amount, Math.max(0, accrued));
+      }
+      pkwtPayablePortion.set(l.pkwtEventId, payable);
+    }
+  }
+
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx: two concurrent calls both pass the early
     // `findFirst` (returns null) and both open their own $transaction;
@@ -2916,10 +3084,19 @@ export async function onPayrollPaid(
       };
       const byAccount = new Map<number, number>();
       for (const l of pkwtLines) {
-        const acct = l.pkwtSettledViaAccrual
-          ? s2.pkwtCompensationPayableAccountId!
-          : s2.pkwtCompensationExpenseAccountId!;
-        byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, Number(l.amount) || 0, 2));
+        const amount = Number(l.amount) || 0;
+        // TASK-018 (5): baris terakrual parsial dipecah — porsi utang
+        // sebesar akrual aktual, sisanya beban periode berjalan.
+        const payableAmt = l.pkwtEventId != null ? (pkwtPayablePortion.get(l.pkwtEventId) ?? 0) : 0;
+        const expenseAmt = safeAdd(amount, -payableAmt, 2);
+        if (payableAmt > 0) {
+          const acct = s2.pkwtCompensationPayableAccountId!;
+          byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, payableAmt, 2));
+        }
+        if (expenseAmt > 0) {
+          const acct = s2.pkwtCompensationExpenseAccountId!;
+          byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, expenseAmt, 2));
+        }
       }
       for (const [accountId, amt] of byAccount) {
         if (amt > 0) {
