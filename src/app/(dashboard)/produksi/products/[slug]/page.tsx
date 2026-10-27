@@ -10,6 +10,7 @@ import { deleteProduct } from "@/actions/manufacturing.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -120,7 +121,7 @@ export default async function ProductDetailPage({
       {/* Rincian Bahan Baku (BOM) */}
       <DetailSection title="Rincian Bahan Baku (BOM)">
         {product.materials.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
+          <EmptyState title="Tidak ada bahan" />
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -164,9 +165,7 @@ export default async function ProductDetailPage({
       {/* BOM Revisions */}
       <DetailSection title="Revisi BOM">
         {product.bomRevisions.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            Belum ada revisi. Revisi membekukan BOM saat ini agar perintah produksi yang dirilis tidak berubah bila BOM master disunting.
-          </p>
+          <EmptyState title="Belum ada revisi." description="Revisi membekukan BOM saat ini agar perintah produksi yang dirilis tidak berubah bila BOM master disunting." className="py-8" />
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -191,7 +190,7 @@ export default async function ProductDetailPage({
 
       {/* Recent Production Orders */}
       <DetailSection title="Perintah Produksi Terbaru">        {product.productionOrders.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada perintah produksi</p>
+          <EmptyState title="Belum ada perintah produksi" />
         ) : (
           <DetailTable>
             <DetailTableHead>

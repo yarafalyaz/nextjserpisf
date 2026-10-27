@@ -16,6 +16,7 @@ import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
 import { getWorkOrderPhotos } from "@/lib/reports/attachment-photo-data";
 import {
@@ -673,9 +674,7 @@ export default async function WorkOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {materialIssues.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada pengeluaran material untuk perintah kerja ini
-            </p>
+            <EmptyState title="Belum ada pengeluaran material untuk perintah kerja ini" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -715,9 +714,7 @@ export default async function WorkOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {wo.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada bahan
-            </p>
+            <EmptyState title="Belum ada bahan" />
           ) : (
             <DetailTable>
               <DetailTableHead>

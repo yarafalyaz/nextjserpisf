@@ -9,6 +9,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -106,7 +107,7 @@ export default async function BomRevisionDetailPage({
 
       <DetailSection title="Bahan (BOM Revisi)">
         {revision.materials.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
+          <EmptyState title="Tidak ada bahan" />
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -138,7 +139,7 @@ export default async function BomRevisionDetailPage({
 
       <DetailSection title="Perintah Produksi yang Memakai Revisi Ini">
         {revision.productionOrders.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada</p>
+          <EmptyState title="Belum ada" />
         ) : (
           <DetailTable>
             <DetailTableHead>

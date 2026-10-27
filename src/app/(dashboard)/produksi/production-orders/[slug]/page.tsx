@@ -11,6 +11,7 @@ import { ProductionOrderActions } from "../_components/production-order-actions"
 import { JobReopenButton } from "@/components/reports/job-reopen-button"
 import { ProductionCostSection } from "../_components/production-cost-section"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -355,7 +356,7 @@ export default async function ProductionOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {order.materials.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
+            <EmptyState title="Tidak ada bahan" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -422,9 +423,7 @@ export default async function ProductionOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {!order.genealogy ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta bahan yang dipakai.
-            </p>
+            <EmptyState title="Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta bahan yang dipakai." className="py-10" />
           ) : (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">

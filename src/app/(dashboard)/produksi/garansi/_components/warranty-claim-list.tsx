@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { StatusChip } from "@/components/ui/status-chip"
+import { EmptyState } from "@/components/ui/empty-state"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 
@@ -23,9 +24,7 @@ export interface WarrantyClaimListRow {
 export function WarrantyClaimList({ claims }: { claims: WarrantyClaimListRow[] }) {
   if (claims.length === 0) {
     return (
-      <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-        Belum ada klaim garansi
-      </p>
+      <EmptyState title="Belum ada klaim garansi" className="py-12" />
     )
   }
 
