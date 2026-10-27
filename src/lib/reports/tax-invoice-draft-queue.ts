@@ -27,7 +27,7 @@ import { getWibTodayUtcDate, WIB_OFFSET_HOURS } from "@/lib/utils/attendance-tim
 /** Ambang mengendap (hari kalender WIB sejak createdAt) — Q-TIQ-1: 3. */
 export const TAX_INVOICE_DRAFT_STALE_DAYS = 3
 
-export const TAX_INVOICE_DRAFT_TITLE = "Faktur Pajak Draf"
+export const TAX_INVOICE_DRAFT_TITLE = "Faktur Pajak Draft"
 
 export const TAX_INVOICE_DRAFT_DIRECTION_LABELS = {
   out: "Keluaran",
