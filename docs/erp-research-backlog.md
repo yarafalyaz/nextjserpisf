@@ -39099,4 +39099,3 @@ Aging (ember umur berlabel piutang/utang) DILARANG tahap 1. Bila kelak Putusan 2
 - E-CQ4-3: Baris `cleared` atau kecocokan teks `party` dengan nama pelanggan tampil/dihitung sebagai piutang atau kas = MERAH.
 
 ID vonis ini **F-2026-10-27-105-V** (jawaban Q-CQ-4 spec F-2026-10-27-104-S PR #1171; bebas: grep `F-2026-10-27-105` di origin/main f13460bf2 = 0 sebelum vonis ini; 104-S = spec induk Business). Pemilik berikutnya: BOT Lead merge + putus Q-CQ-1/2/3 → BOT Backend 104-B → BOT Frontend 104-F → BOT QA E-CQ4-1..3 + AC-CQ.
-||||||| f13460bf2
