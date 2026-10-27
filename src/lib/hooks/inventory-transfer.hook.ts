@@ -8,12 +8,16 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
   carriedCostMapFromOutMoves,
   deriveTransferStatusAfterReceipt,
+  groupReceivedBatchesByLine,
   groupReceivedSerialsByLine,
+  parseStoredBatches as parseStoredBatchAllocations,
   parseStoredSerials,
   validateReceiptLines,
   type ReceiptLineInput,
   type TransferLineState,
 } from "@/lib/services/inventory-transfer-receipt.service";
+
+const EPSILON = 0.0001;
 
 
 const executeInTx = async (
@@ -204,21 +208,49 @@ async function createInboundMoves(
   transfer: { id: number; documentNo: string; sourceWarehouseId: number; destinationWarehouseId: number },
   entries: InboundEntry[],
   userId?: number,
+  prefetchedItemMetas?: readonly { id: number; trackBatch?: boolean; trackSerial?: boolean }[],
 ): Promise<void> {
   if (entries.length === 0) return;
   const costs = await carriedCostByItem(tx, transfer.id, entries.map((e) => e.itemId));
 
-  // P1-1: item batch-tracked wajib bawa alokasi lot eksplisit per kejadian.
-  const trackedRows = await tx.item.findMany({
-    where: { id: { in: entries.map((e) => e.itemId) } },
-    select: { id: true, trackBatch: true },
-  });
+  // Penjaga fail-closed per item (agregat): serial/batch wajib tepat qty.
+  // Pemeriksaan batches.length===0 saja tidak cukup — alokasi parsial akan
+  // melahirkan layer tanpa batchNumber dan serial yang tidak dihidupkan
+  // kembali menjadi stok tak terjual di tujuan (TASK-012).
+  const trackedRows =
+    prefetchedItemMetas ??
+    (await tx.item.findMany({
+      where: { id: { in: entries.map((e) => e.itemId) } },
+      select: { id: true, trackBatch: true, trackSerial: true },
+    })) ??
+    [];
   const trackBatchByItem = new Map(trackedRows.map((r) => [r.id, r.trackBatch]));
+  const trackSerialByItem = new Map(trackedRows.map((r) => [r.id, r.trackSerial]));
   for (const entry of entries) {
-    if (trackBatchByItem.get(entry.itemId) && entry.batches.length === 0) {
-      throw new Error(
-        `Item batch #${entry.itemId} memerlukan alokasi nomor batch untuk penerimaan transfer ${transfer.documentNo}.`,
-      );
+    if (trackSerialByItem.get(entry.itemId)) {
+      if (entry.serials.length === 0 || Math.abs(entry.serials.length - entry.qty) > EPSILON) {
+        throw new Error(
+          `Item berseri #${entry.itemId} memerlukan tepat ${entry.qty} nomor seri untuk penerimaan transfer ${transfer.documentNo}.`,
+        );
+      }
+      if (new Set(entry.serials).size !== entry.serials.length) {
+        throw new Error(
+          `Item berseri #${entry.itemId} memiliki nomor seri duplikat untuk penerimaan transfer ${transfer.documentNo}.`,
+        );
+      }
+    }
+    if (trackBatchByItem.get(entry.itemId)) {
+      if (entry.batches.length === 0) {
+        throw new Error(
+          `Item batch #${entry.itemId} memerlukan alokasi nomor batch untuk penerimaan transfer ${transfer.documentNo}.`,
+        );
+      }
+      const batchTotal = entry.batches.reduce((sum, b) => safeAdd(sum, b.qty, 2), 0);
+      if (Math.abs(batchTotal - entry.qty) > EPSILON) {
+        throw new Error(
+          `Alokasi batch untuk item #${entry.itemId} wajib menjumlah tepat sama dengan qty diterima (${entry.qty}) pada transfer ${transfer.documentNo}; diterima ${batchTotal}.`,
+        );
+      }
     }
   }
 
@@ -361,9 +393,19 @@ export async function onTransferReceived(
 
       const priorReceiptItems = await tx.inventoryTransferReceiptItem.findMany({
         where: { receipt: { inventoryTransferId: transferId } },
-        select: { inventoryTransferItemId: true, serialNumbers: true },
+        select: { inventoryTransferItemId: true, serialNumbers: true, batchAllocations: true },
       });
       const receivedSerialsByLine = groupReceivedSerialsByLine(priorReceiptItems);
+      const receivedBatchesByLine = groupReceivedBatchesByLine(priorReceiptItems);
+
+      const itemMetas =
+        transfer.items.length === 0
+          ? []
+          : await tx.item.findMany({
+              where: { id: { in: [...new Set(transfer.items.map((it) => it.itemId))] } },
+              select: { id: true, trackSerial: true, trackBatch: true },
+            });
+      const itemMetaById = new Map(itemMetas.map((m) => [m.id, m]));
 
       const lineStates: TransferLineState[] = transfer.items.map((it) => ({
         id: it.id,
@@ -371,8 +413,16 @@ export async function onTransferReceived(
         qty: Number(it.qty),
         receivedQty: Number(it.receivedQty),
         serialNumbers: parseStoredSerials(it.serialNumbers),
+        batchAllocations: parseStoredBatchAllocations(it.batchAllocations),
+        trackSerial: itemMetaById.get(it.itemId)?.trackSerial,
+        trackBatch: itemMetaById.get(it.itemId)?.trackBatch,
       }));
-      const lines = validateReceiptLines(lineStates, receipt.lines, receivedSerialsByLine);
+      const lines = validateReceiptLines(
+        lineStates,
+        receipt.lines,
+        receivedSerialsByLine,
+        receivedBatchesByLine,
+      );
       const lineById = new Map(lineStates.map((l) => [l.id, l]));
 
       // Satu StockMove IN per item per kejadian (agregasi pola existing);
@@ -394,7 +444,7 @@ export async function onTransferReceived(
       }
       // Batch-tracked tanpa alokasi lot pada KEJADIAN ini ditolak walau
       // transfer membawa alokasi kirim: penerima wajib menyebut lot tiba.
-      await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId);
+      await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId, itemMetas);
 
       await tx.inventoryTransferReceipt.create({
         data: {
