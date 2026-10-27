@@ -8,6 +8,8 @@ import Link from "next/link"
 import { ListTodo } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TaskTable } from "./_components/task-table"
+import { ProjectTaskQueueSection } from "./_components/project-task-queue"
+import { getProjectTaskQueue } from "@/lib/reports/project-task-queue-data"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
@@ -50,6 +52,11 @@ export default async function TasksPage({
 
   const total = await prisma.task.count({ where })
 
+  // Seksi turunan baca-saja (F-2026-10-27-091-S, Q-PTQ-4): gerbang
+  // view_projects ditegakkan ulang fail-closed di loader sebelum query.
+  // Daftar existing di bawah tidak diubah urutan/batasnya.
+  const projectTaskQueue = await getProjectTaskQueue()
+
   const tableData = toPlain(tasks)
 
   const statusChips = ["", "pending", "in_progress", "completed", "cancelled"].map((dbStatus) => {
@@ -76,6 +83,8 @@ export default async function TasksPage({
           </Link>
         </CanCreate>
       </div>
+
+      <ProjectTaskQueueSection queue={projectTaskQueue} />
 
       <TaskTable
         data={tableData}

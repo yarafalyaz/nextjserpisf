@@ -201,6 +201,7 @@ export default async function GeneralLedgerPage({
                 <td colSpan={6}>Saldo Awal</td>
                 <td className="num">{formatAccounting(openingBalance, { zeroDash: false })}</td>
               </tr>
+              {/* Sisa terjustifikasi TASK-037: sel .stmt dokumen cetak — EmptyState (teks Tailwind px) merusak paritas layar/PDF 9pt. */}
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="stmt-empty">Tidak ada transaksi dalam periode ini</td>

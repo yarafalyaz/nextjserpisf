@@ -16,6 +16,8 @@ import { WorkOrderLoadCard } from "@/components/reports/work-order-load-card"
 import { getWorkOrderLoad } from "@/lib/reports/work-order-load-data"
 import { WorkCenterLoadPlanCard } from "@/components/reports/work-center-load-plan-card"
 import { getWorkCenterLoadPlan, getWorkCenters } from "@/lib/reports/work-center-load-plan-data"
+import { WorkOrderOperationQueueSection } from "./_components/work-order-operation-queue"
+import { getWorkOrderOperationQueue } from "@/lib/reports/work-order-operation-queue-data"
 import { WorkCenterMaster } from "@/components/manufacturing/work-center-master"
 import { hasPermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -59,7 +61,7 @@ export default async function WorkOrdersPage({
 
   const total = await prisma.workOrder.count({ where })
 
-  const [queue, load, loadPlan, centers, canEditCenters, closeoutQueue, canCloseWorkOrder, canCloseProductionOrder] =
+  const [queue, load, loadPlan, centers, canEditCenters, closeoutQueue, canCloseWorkOrder, canCloseProductionOrder, operationQueue] =
     await Promise.all([
       getWorkOrderQueue(),
       getWorkOrderLoad(),
@@ -71,6 +73,7 @@ export default async function WorkOrdersPage({
       // Izin tutup PO = izin server closeProductionOrder (edit_production_orders);
       // tidak ada complete_production_orders di katalog. Server tetap penegak.
       hasPermission("edit_production_orders"),
+      getWorkOrderOperationQueue(),
     ])
 
   const tableData = toPlain(workOrders)
@@ -105,6 +108,8 @@ export default async function WorkOrdersPage({
       </div>
 
       <WorkOrderQueueCard queue={queue} />
+
+      <WorkOrderOperationQueueSection queue={operationQueue} />
 
       <WorkshopCloseoutQueueCard
         queue={closeoutQueue}

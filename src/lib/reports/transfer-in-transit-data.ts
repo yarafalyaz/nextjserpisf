@@ -21,11 +21,11 @@ import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import {
   buildTransferInTransit,
+  IN_TRANSIT_TRANSFER_STATUSES,
   type TransferInTransitResult,
 } from "@/lib/reports/transfer-in-transit"
 
-/** Status pemindahan yang berarti barang masih di jalan (penuh / sebagian). */
-export const IN_TRANSIT_TRANSFER_STATUSES = ["processed", "partially_received"] as const
+export { IN_TRANSIT_TRANSFER_STATUSES }
 
 /**
  * Sisa belum diterima per item (F-2026-10-22-081-S §7): qty terkirim

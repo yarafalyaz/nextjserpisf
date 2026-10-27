@@ -8,6 +8,8 @@ import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TransferTable } from "./_components/transfer-table"
+import { InventoryTransferUnreceivedQueueCard } from "@/components/reports/inventory-transfer-unreceived-queue-card"
+import { getInventoryTransferUnreceivedQueue } from "@/lib/reports/inventory-transfer-unreceived-queue-data"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 
@@ -48,6 +50,8 @@ export default async function InventoryTransfersPage({
 
   const total = await prisma.inventoryTransfer.count({ where })
 
+  const unreceivedQueue = await getInventoryTransferUnreceivedQueue()
+
   const tableData = toPlain(transfers)
 
   const statusChips = ["", "draft", "in_transit", "completed"].map((dbStatus) => {
@@ -78,6 +82,8 @@ export default async function InventoryTransfersPage({
           </Link>
         </CanCreate>
       </div>
+
+      <InventoryTransferUnreceivedQueueCard queue={unreceivedQueue} />
 
       <TransferTable
         data={tableData}
