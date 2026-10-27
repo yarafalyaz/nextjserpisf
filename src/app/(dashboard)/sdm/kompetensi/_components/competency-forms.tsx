@@ -1,0 +1,130 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useTransition } from "react"
+import {
+  assessEmployeeCompetency,
+  createCompetency,
+  setPositionCompetency,
+} from "@/actions/development.actions"
+import { showError, showSuccess } from "@/lib/utils/toast"
+
+function submit(
+  router: ReturnType<typeof useRouter>,
+  startTransition: (fn: () => void) => void,
+  form: HTMLFormElement,
+  fn: (fd: FormData) => Promise<{ success: boolean; error?: string }>,
+  okMessage: string,
+) {
+  const formData = new FormData(form)
+  startTransition(() => {
+    void fn(formData)
+      .then((result) => {
+        if (!result?.success) throw new Error(result?.error || "Gagal menyimpan")
+        showSuccess(okMessage)
+        form.reset()
+        router.refresh()
+      })
+      .catch((error) => {
+        showError(error instanceof Error ? error.message : "Gagal menyimpan")
+      })
+  })
+}
+
+export function CompetencyForm() {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  return (
+    <form
+      aria-busy={isPending}
+      className="grid grid-cols-1 sm:grid-cols-4 gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        submit(router, startTransition, e.currentTarget, createCompetency, "Kompetensi dibuat")
+      }}
+    >
+      <input name="name" required placeholder="Nama kompetensi" className="form-input" />
+      <input name="category" placeholder="Kategori (Teknis/Perilaku/Kepemimpinan)" className="form-input" />
+      <input name="description" placeholder="Deskripsi" className="form-input" />
+      <button type="submit" disabled={isPending} className="btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+        Tambah Kompetensi
+      </button>
+    </form>
+  )
+}
+
+export function PositionCompetencyForm({
+  positions,
+  competencies,
+}: {
+  positions: { id: number; name: string }[]
+  competencies: { id: number; name: string }[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  return (
+    <form
+      aria-busy={isPending}
+      className="grid grid-cols-1 sm:grid-cols-4 gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        submit(router, startTransition, e.currentTarget, setPositionCompetency, "Syarat jabatan disimpan")
+      }}
+    >
+      <select name="positionId" required className="form-input" defaultValue="">
+        <option value="" disabled>Jabatan</option>
+        {positions.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+      <select name="competencyId" required className="form-input" defaultValue="">
+        <option value="" disabled>Kompetensi</option>
+        {competencies.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+      <input name="requiredLevel" type="number" min={1} max={5} required placeholder="Level syarat (1-5)" className="form-input" />
+      <button type="submit" disabled={isPending} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+        Tetapkan Syarat
+      </button>
+    </form>
+  )
+}
+
+export function EmployeeCompetencyForm({
+  employees,
+  competencies,
+}: {
+  employees: { id: number; name: string }[]
+  competencies: { id: number; name: string }[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  return (
+    <form
+      aria-busy={isPending}
+      className="grid grid-cols-1 sm:grid-cols-4 gap-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        submit(router, startTransition, e.currentTarget, assessEmployeeCompetency, "Penilaian kompetensi disimpan")
+      }}
+    >
+      <select name="employeeId" required className="form-input" defaultValue="">
+        <option value="" disabled>Karyawan</option>
+        {employees.map((e) => (
+          <option key={e.id} value={e.id}>{e.name}</option>
+        ))}
+      </select>
+      <select name="competencyId" required className="form-input" defaultValue="">
+        <option value="" disabled>Kompetensi</option>
+        {competencies.map((c) => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+      <input name="level" type="number" min={1} max={5} required placeholder="Level aktual (1-5)" className="form-input" />
+      <button type="submit" disabled={isPending} className="btn-secondary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+        Nilai Karyawan
+      </button>
+    </form>
+  )
+}
