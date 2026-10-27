@@ -24,6 +24,21 @@
  * false tahap ini. Sesudah FP UM dibatalkan (himpunan aktif kosong)
  * penanda hilang dengan sendirinya.
  *
+ * PERLUASAN 086-V Putusan 6 (kartu 086-B2): baris `Quotation` /
+ * `RevisionDown` ikut berpenanda bila quotation sumbernya (sourceId)
+ * memenuhi syarat tahan gerbang refund 086-V Putusan 2 — ada DP
+ * confirmed quotation itu ber-snapshot `ppnUangMuka > 0` + FP UM
+ * keluaran aktif + residu F4 DP itu > 0 (amount − alokasi bruto
+ * SalesPayment `down_payment` bermarker nomor DP − kredit DownPayment
+ * DP itu), persis hitungan gerbang refundCredit PR #1148. Turunan
+ * murni dari himpunan quotationId tertahan yang dihitung loader (satu
+ * rantai query massal per quotation populasi; residu dihitung builder);
+ * tanpa atribusi FIFO/pro-rata ke DP tertentu (Putusan 4): satu DP
+ * menahan = seluruh baris tertahan. DP legacy tanpa snapshot tidak
+ * menahan (Putusan 7a). Kata penanda tetap
+ * CUSTOMER_CREDIT_FP_UM_MARKER_LABEL yang sama; fakta turunan server,
+ * BUKAN penolakan.
+ *
  * Saldo tampil berlabel operasional spec ("total saldo kredit
  * terbuka pada baris tampil"); DILARANG label utang/aging/saldo buku
  * (085-V Putusan 1 — subledger CustomerCredit bukan GL 210102).
@@ -91,6 +106,39 @@ export interface CustomerCreditQueueDownPaymentInput {
   ppnUangMuka: number | null
 }
 
+/**
+ * Fakta per quotation untuk residu F4 (086-V Putusan 6) — hanya DP
+ * confirmed quotation populasi yang lolos saringan snapshot
+ * (ppnUangMuka > 0) DAN FP UM aktif yang diteruskan loader; residu
+ * dihitung builder dengan rumus F4 persis gerbang refundCredit.
+ */
+export interface CustomerCreditQueueQuotationInput {
+  quotationId: number
+  /** DP confirmed ber-snapshot + ber-FP-aktif milik quotation ini. */
+  taxedDownPayments: {
+    downPaymentId: number
+    documentNo: string
+    amount: number
+  }[]
+  /** Alokasi bruto SalesPayment down_payment bermarker nomor DP di notes. */
+  dpAllocations: { documentNo: string; amount: number }[]
+  /** Kredit DownPayment per DP (pengurang residu F4). */
+  dpCredits: { downPaymentId: number; receivedAmount: number }[]
+}
+
+/** Residu F4 per DP: amount − alokasi bruto bermarker − kredit DP. */
+export function downPaymentResidueF4(input: {
+  amount: number
+  allocatedByMarker: number
+  creditAmount: number
+}): number {
+  return safeSubtract(
+    safeSubtract(input.amount, input.allocatedByMarker, 2),
+    input.creditAmount,
+    2,
+  )
+}
+
 export interface CustomerCreditQueueRow {
   creditId: number
   documentNo: string
@@ -108,8 +156,10 @@ export interface CustomerCreditQueueRow {
   /** Saldo kanonik received - allocated - refunded (tanpa jepit di baris tampil). */
   saldo: number
   /**
-   * Penanda turunan server 085-V Putusan 2: true hanya untuk sumber
-   * DownPayment ber-FP UM aktif + snapshot ppnUangMuka > 0.
+   * Penanda turunan server 085-V Putusan 2 + 086-V Putusan 6: true
+   * untuk sumber DownPayment ber-FP UM aktif + snapshot ppnUangMuka
+   * > 0, atau sumber Quotation/RevisionDown yang quotation-nya
+   * memenuhi syarat tahan gerbang refund (residu F4 > 0).
    */
   penandaFpUangMuka: boolean
   /** Label server verbatim saat penanda aktif; null tanpa penanda. */
@@ -165,8 +215,40 @@ export function buildCustomerCreditQueue(
   downPayments: readonly CustomerCreditQueueDownPaymentInput[],
   activeFpDownPaymentIds: ReadonlySet<number>,
   options: CustomerCreditQueueOptions = {},
+  quotations: readonly CustomerCreditQueueQuotationInput[] = [],
 ): CustomerCreditQueue {
   const today = getWibTodayUtcDate(options.now ?? new Date()).getTime()
+
+  // 086-V Putusan 6: quotation tertahan = ada DP taxed ber-FP aktif
+  // dengan residu F4 > 0 (rumus persis gerbang refundCredit #1148).
+  const blockedQuotationIds = new Set<number>()
+  for (const q of quotations) {
+    const allocatedByDocNo = new Map<string, number>()
+    for (const p of q.dpAllocations) {
+      allocatedByDocNo.set(
+        p.documentNo,
+        (allocatedByDocNo.get(p.documentNo) ?? 0) + p.amount,
+      )
+    }
+    const creditByDpId = new Map<number, number>()
+    for (const c of q.dpCredits) {
+      creditByDpId.set(
+        c.downPaymentId,
+        (creditByDpId.get(c.downPaymentId) ?? 0) + c.receivedAmount,
+      )
+    }
+    for (const dp of q.taxedDownPayments) {
+      const residue = downPaymentResidueF4({
+        amount: dp.amount,
+        allocatedByMarker: allocatedByDocNo.get(dp.documentNo) ?? 0,
+        creditAmount: creditByDpId.get(dp.downPaymentId) ?? 0,
+      })
+      if (residue > 0) {
+        blockedQuotationIds.add(q.quotationId)
+        break
+      }
+    }
+  }
 
   const ppnByDownPaymentId = new Map<number, number | null>()
   for (const dp of downPayments) {
@@ -199,15 +281,20 @@ export function buildCustomerCreditQueue(
 
     // 085-V Putusan 2: persis syarat J-RF1 — sumber DownPayment,
     // snapshot ppnUangMuka > 0, dan FP keluaran aktif untuk DP itu.
+    // 086-V Putusan 6: sumber Quotation/RevisionDown berpenanda bila
+    // quotation sumbernya tertahan gerbang refund Putusan 2.
     const ppnUangMuka =
       credit.sourceType === "DownPayment"
         ? (ppnByDownPaymentId.get(credit.sourceId) ?? null)
         : null
     const penandaFpUangMuka =
-      credit.sourceType === "DownPayment" &&
-      ppnUangMuka != null &&
-      ppnUangMuka > 0 &&
-      activeFpDownPaymentIds.has(credit.sourceId)
+      (credit.sourceType === "DownPayment" &&
+        ppnUangMuka != null &&
+        ppnUangMuka > 0 &&
+        activeFpDownPaymentIds.has(credit.sourceId)) ||
+      ((credit.sourceType === "Quotation" ||
+        credit.sourceType === "RevisionDown") &&
+        blockedQuotationIds.has(credit.sourceId))
 
     const umurMenungguHari = Math.max(
       0,
