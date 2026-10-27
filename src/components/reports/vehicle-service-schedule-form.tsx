@@ -43,7 +43,7 @@ export function VehicleServiceScheduleForm({
   const kmId = `next-service-km-${vehicleId}`
   const noteId = `next-service-note-${vehicleId}`
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

@@ -69,7 +69,7 @@ export function DisciplinaryDeductionDecisionForm({
   // kepemilikan SP terhadap employeeId yang sama.
   const visibleRecords = records.filter((r) => String(r.employeeId) === employeeId)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       const result = await createDisciplinaryDeductionDecisionAction({

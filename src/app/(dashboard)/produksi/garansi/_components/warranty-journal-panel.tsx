@@ -138,7 +138,7 @@ export function WarrantyJournalPanel({
     })
   }
 
-  function handleCost(e: React.FormEvent<HTMLFormElement>) {
+  function handleCost(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("claimId", String(facts.claimId))
@@ -151,7 +151,7 @@ export function WarrantyJournalPanel({
     )
   }
 
-  function handleRecovery(e: React.FormEvent<HTMLFormElement>) {
+  function handleRecovery(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("claimId", String(facts.claimId))

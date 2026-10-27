@@ -5,6 +5,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -118,7 +119,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.purchaseOrders.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pesanan pembelian</p>
+                    <EmptyState title="Belum ada pesanan pembelian" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -154,7 +155,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {goodsReceipts.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penerimaan barang</p>
+                    <EmptyState title="Belum ada penerimaan barang" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -192,7 +193,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {purchaseReturns.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada retur</p>
+                    <EmptyState title="Belum ada retur" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -228,7 +229,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.vendorBills.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada tagihan</p>
+                    <EmptyState title="Belum ada tagihan" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -266,7 +267,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.items.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang dari pemasok ini</p>
+                    <EmptyState title="Belum ada barang dari pemasok ini" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

@@ -7,6 +7,7 @@ import Link from "next/link"
 import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { entityHref } from "@/lib/utils/entity-url"
 import { CanCreate } from "@/components/auth/can-create"
 
@@ -63,7 +64,7 @@ export default async function BankStatementsPage({
             </DetailTableHead>
             <DetailTableBody>
               {statements.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 px-4 text-muted-foreground">Tidak ada data rekening koran</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5}><EmptyState title="Tidak ada data rekening koran" className="py-10" /></DetailTableTd></DetailTableRow>
               ) : (
                 statements.map((stmt) => (
                   <DetailTableRow key={stmt.id}>

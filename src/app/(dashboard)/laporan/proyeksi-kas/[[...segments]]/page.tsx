@@ -9,6 +9,7 @@ import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { projectCash, buildPayableProjectionItems, summarizeOpenCommitments } from '@/lib/reports/cash-projection'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
 import { ReportSection, ReportKpiCard } from '@/components/reports/report-section'
@@ -179,7 +180,7 @@ export default async function CashProjectionPage({
             ))}
             {rows.length === 0 && (
               <DetailTableRow>
-                <DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada data untuk diproyeksikan</DetailTableTd>
+                <DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada data untuk diproyeksikan" className="py-0" /></DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>

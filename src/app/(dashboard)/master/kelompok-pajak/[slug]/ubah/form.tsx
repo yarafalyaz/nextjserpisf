@@ -20,7 +20,7 @@ export function TaxGroupEditForm({ id, name, selectedTaxIds, taxes }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

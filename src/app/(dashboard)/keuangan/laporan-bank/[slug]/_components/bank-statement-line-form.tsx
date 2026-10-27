@@ -55,7 +55,7 @@ export function BankStatementLineForm({
   // `form.reset()` saja tidak mengosongkan angka yang terlihat.
   const [amount, setAmount] = useState<number>(line?.amount ?? 0)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {

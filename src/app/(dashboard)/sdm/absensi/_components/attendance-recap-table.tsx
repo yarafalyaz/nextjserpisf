@@ -3,6 +3,7 @@ import {
   ATTENDANCE_RECAP_NO_SCHEDULE_LABEL,
   type AttendanceRecap,
 } from "@/lib/reports/attendance-recap"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   DetailTable,
   DetailTableBody,
@@ -57,9 +58,7 @@ export function AttendanceRecapTable({ recap }: Readonly<{ recap: AttendanceReca
       </div>
 
       {isEmpty ? (
-        <p className="rounded-xl border border-default bg-surface px-4 py-10 text-center text-sm text-muted-foreground">
-          Tidak ada karyawan dalam cakupan pada periode dan filter ini.
-        </p>
+        <EmptyState title="Tidak ada karyawan dalam cakupan pada periode dan filter ini." className="py-10" />
       ) : (
         <div>
           <h2 className="mb-2 text-base font-semibold text-foreground">Per karyawan</h2>

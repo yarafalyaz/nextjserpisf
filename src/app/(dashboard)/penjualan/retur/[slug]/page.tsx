@@ -12,6 +12,7 @@ import { ProcessButton } from "@/components/ui/process-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -139,7 +140,7 @@ export default async function SalesReturnDetailPage({
         </div>
         <div className="p-4 px-5">
           {salesReturn.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada barang</p>
+            <EmptyState title="Tidak ada barang" />
           ) : (
             <DetailTable>
               <DetailTableHead>

@@ -9,12 +9,14 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
+import { JobReopenButton } from "@/components/reports/job-reopen-button";
 import { WorkOrderOperationActions, InitializeStagesButton, WorkOrderOperationWorkCenterSelect } from "./_components/work-order-operation-actions";
 import { getWorkCenters } from "@/lib/reports/work-center-load-plan-data";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
 import { getWorkOrderPhotos } from "@/lib/reports/attachment-photo-data";
 import {
@@ -210,6 +212,8 @@ export default async function WorkOrderDetailPage({
   // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
   const stageProgress = await getWorkOrderProgress(wo.id);
   const canEditStages = await hasPermission("edit_work_orders");
+  // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenWorkOrder.
+  const canReopenWorkOrder = await hasPermission("complete_work_orders");
   // F-090-S: pilihan stasiun tahap dari master WorkCenter (BOT 3 PR #569).
   const workCenters = canEditStages ? await getWorkCenters() : [];
 
@@ -333,6 +337,15 @@ export default async function WorkOrderDetailPage({
                 + Perintah Produksi
               </Button>
             </CanCreate>
+            {/* F-2026-10-21-009-V: reopen job closed — izin sama dengan
+                penegakan server reopenWorkOrder (complete_work_orders). */}
+            <JobReopenButton
+              kind="work_order"
+              id={wo.id}
+              code={wo.documentNo}
+              status={wo.status}
+              canReopen={canReopenWorkOrder}
+            />
             <WorkOrderActions
               workOrderId={wo.id}
               status={wo.status}
@@ -661,9 +674,7 @@ export default async function WorkOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {materialIssues.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada pengeluaran material untuk perintah kerja ini
-            </p>
+            <EmptyState title="Belum ada pengeluaran material untuk perintah kerja ini" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -703,9 +714,7 @@ export default async function WorkOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {wo.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada bahan
-            </p>
+            <EmptyState title="Belum ada bahan" />
           ) : (
             <DetailTable>
               <DetailTableHead>

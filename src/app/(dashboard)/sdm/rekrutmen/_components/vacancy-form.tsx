@@ -26,7 +26,7 @@ export function VacancyForm({ vacancy, departments, positions }: VacancyFormProp
   const [isPending, startTransition] = useTransition()
   const isEdit = !!vacancy
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {

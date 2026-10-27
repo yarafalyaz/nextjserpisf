@@ -43,7 +43,7 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
   const [assignedTo, setAssignedTo] = useState<string | null>(task?.assignedTo ? String(task.assignedTo) : null)
   const [employeeOptions, setEmployeeOptions] = useState(employees)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

@@ -8,6 +8,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -169,7 +170,7 @@ export default async function BankBookPage({
                 </DetailTableRow>
                 {rows.length === 0 && (
                   <DetailTableRow>
-                    <DetailTableTd colSpan={6} className="text-center text-muted-foreground">Tidak ada transaksi dalam periode ini</DetailTableTd>
+                    <DetailTableTd colSpan={6} className="text-center text-muted-foreground"><EmptyState title="Tidak ada transaksi dalam periode ini" className="py-0" /></DetailTableTd>
                   </DetailTableRow>
                 )}
                 {rows.map((row, i) => (

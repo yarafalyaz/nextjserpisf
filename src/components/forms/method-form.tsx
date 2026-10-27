@@ -37,7 +37,7 @@ export function MethodForm({ config, method, generatedCode, enableAutoCode = tru
   const codeReadOnly = isEdit || enableAutoCode
   const codeDefault = method?.code ?? (enableAutoCode ? generatedCode : "") ?? ""
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

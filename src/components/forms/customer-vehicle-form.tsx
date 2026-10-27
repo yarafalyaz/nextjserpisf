@@ -94,7 +94,7 @@ export function CustomerVehicleForm({
     return model?.variants || [];
   }, [selectedModelId, models]);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
       try {

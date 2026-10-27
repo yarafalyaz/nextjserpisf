@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { runCronTask } from "@/actions/cron.actions"
 import { formatDate } from "@/lib/utils/format"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -103,7 +104,7 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat 10 Eksekusi Terakhir</h2>
         </div>
         {logs.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada riwayat</div>
+          <EmptyState title="Belum ada riwayat" className="py-10" />
         ) : (
           <DetailTable>
             <DetailTableHead>

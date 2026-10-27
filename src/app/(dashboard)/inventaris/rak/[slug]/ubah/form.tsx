@@ -24,7 +24,7 @@ export function RackEditForm({ id, code, name, warehouseId, warehouses }: Props)
   const [whId, setWhId] = useState(String(warehouseId))
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("warehouseId", whId)

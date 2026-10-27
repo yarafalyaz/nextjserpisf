@@ -99,7 +99,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
       .every((it) => results[it.id]?.result)
   }, [selectedChecklist, results])
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!selectedChecklist) {
       showError("Pilih checklist terlebih dahulu")

@@ -57,26 +57,31 @@ export function SetupForm() {
   const [isPending, startTransition] = useTransition()
   const [isProvisioning, startProvision] = useTransition()
 
-  function refreshStatus() {
+  async function refreshStatus() {
     setStatusLoading(true)
-    getSetupStatus()
-      .then((s) => setStatus(s))
-      .catch(() => setStatus({ installed: false, checks: null }))
-      .finally(() => setStatusLoading(false))
+    try {
+      const s = await getSetupStatus()
+      setStatus(s)
+    } catch {
+      setStatus({ installed: false, checks: null })
+    } finally {
+      setStatusLoading(false)
+    }
   }
 
   useEffect(() => {
     let cancelled = false
-    getSetupStatus()
-      .then((s) => {
+    async function loadStatus() {
+      try {
+        const s = await getSetupStatus()
         if (!cancelled) setStatus(s)
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setStatus({ installed: false, checks: null })
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setStatusLoading(false)
-      })
+      }
+    }
+    void loadStatus()
     return () => {
       cancelled = true
     }
@@ -121,7 +126,7 @@ export function SetupForm() {
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
 

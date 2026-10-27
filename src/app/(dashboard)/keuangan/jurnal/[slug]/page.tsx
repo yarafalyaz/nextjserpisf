@@ -10,6 +10,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -93,7 +94,7 @@ export default async function JournalDetailPage({
         </div>
         <div className="p-4 px-5">
           {journal.entries.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada entri</p>
+            <EmptyState title="Tidak ada entri" />
           ) : (
             <DetailTable>
               <DetailTableHead>

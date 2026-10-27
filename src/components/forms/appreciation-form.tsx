@@ -31,7 +31,7 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
   const [employeeId, setEmployeeId] = useState(appreciation?.employeeId ? String(appreciation.employeeId) : "")
   const [employeeOptions, setEmployeeOptions] = useState(employees)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

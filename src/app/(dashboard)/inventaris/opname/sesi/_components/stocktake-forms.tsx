@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import {
   createStocktakeSession,
@@ -21,7 +22,7 @@ export function StocktakeSessionForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
@@ -132,7 +133,7 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
     setCounts((prev) => ({ ...prev, [lineId]: { ...prev[lineId], [field]: value } }))
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const payload = lines.map((l) => ({
       lineId: l.id,
@@ -158,7 +159,7 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
   }
 
   if (lines.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">Belum ada snapshot — tekan Snapshot.</p>
+    return <EmptyState title="Belum ada snapshot — tekan Snapshot." className="py-8" />
   }
 
   return (

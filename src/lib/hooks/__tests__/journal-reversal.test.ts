@@ -143,6 +143,15 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
     expect(entryDeleteMany).not.toHaveBeenCalled()
   })
 
+  it("TASK-025: menolak dipanggil dengan referenceType Journal (reversal atas reversal), nol jurnal ditulis", async () => {
+    await expect(
+      reverseJournalsByReferenceTx(tx as never, "Journal", 5, "reverse atas reversal", 1),
+    ).rejects.toThrow(/Jurnal reversal tidak boleh di-reverse lagi/)
+    expect(journalFindMany).not.toHaveBeenCalled()
+    expect(journalCreate).not.toHaveBeenCalled()
+    expect(journalUpdate).not.toHaveBeenCalled()
+  })
+
   it("DRAFT journal is still deleted (not yet in GL)", async () => {
     const DRAFT = { ...POSTED, status: "DRAFT" }
     journalFindMany.mockResolvedValue([DRAFT])

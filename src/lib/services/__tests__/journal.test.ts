@@ -260,6 +260,27 @@ describe("JournalService", () => {
       expect(spies.journalUpdate).not.toHaveBeenCalled();
     });
 
+    it("TASK-025: menolak reversal atas jurnal reversal (referenceType Journal), nol reversal ditulis", async () => {
+      const { service, spies } = buildService();
+      spies.journalFindUniqueOrThrow.mockResolvedValue({
+        id: 2,
+        journalNumber: "JRN-RV-1",
+        status: "POSTED",
+        referenceType: "Journal",
+        referenceId: 1,
+        type: "GENERAL",
+        totalDebit: 100,
+        totalCredit: 100,
+        entries: [{ accountId: 1, debit: 0, credit: 100, memo: "Reversal", costCenterId: null }],
+      });
+
+      await expect(service.reverseJournal(2, "REV-2")).rejects.toThrow(
+        "Jurnal reversal tidak boleh di-reverse lagi"
+      );
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+      expect(spies.journalUpdate).not.toHaveBeenCalled();
+    });
+
     it("rejects DRAFT journal (only POSTED can be reversed, consistent with finance.actions)", async () => {
       const { service, spies } = buildService();
       spies.journalFindUniqueOrThrow.mockResolvedValue({

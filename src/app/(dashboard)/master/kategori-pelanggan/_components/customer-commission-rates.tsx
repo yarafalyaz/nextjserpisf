@@ -66,7 +66,7 @@ export function CustomerCommissionRates({
     })
   }
 
-  function onAdd(e: React.FormEvent<HTMLFormElement>) {
+  function onAdd(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("customerCategoryId", String(customerCategoryId))

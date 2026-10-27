@@ -12,6 +12,7 @@ import {
   type SubledgerEntry,
 } from "@/lib/reports/subledger"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
@@ -300,7 +301,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
                 {card.rows.length === 0 && (
                   <DetailTableRow>
                     <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">
-                      Tidak ada transaksi pada periode ini
+                      <EmptyState title="Tidak ada transaksi pada periode ini" className="py-0" />
                     </DetailTableTd>
                   </DetailTableRow>
                 )}
@@ -343,7 +344,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
                 {outstanding.length === 0 && (
                   <DetailTableRow>
                     <DetailTableTd colSpan={7} className="text-center text-muted-foreground py-6">
-                      Tidak ada dokumen belum lunas
+                      <EmptyState title="Tidak ada dokumen belum lunas" className="py-0" />
                     </DetailTableTd>
                   </DetailTableRow>
                 )}

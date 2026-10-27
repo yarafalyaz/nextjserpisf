@@ -19,6 +19,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { entityHref } from "@/lib/utils/entity-url";
 import { CanCreate } from "@/components/auth/can-create";
 
@@ -114,12 +115,7 @@ export default async function BankReconciliationPage({
             <DetailTableBody>
               {reconciliations.length === 0 ? (
                 <DetailTableRow>
-                  <DetailTableTd
-                    colSpan={6}
-                    className="text-center py-10 px-4 text-muted-foreground"
-                  >
-                    Tidak ada data rekonsiliasi
-                  </DetailTableTd>
+                  <DetailTableTd colSpan={6}><EmptyState title="Tidak ada data rekonsiliasi" className="py-10" /></DetailTableTd>
                 </DetailTableRow>
               ) : (
                 reconciliations.map((r) => (

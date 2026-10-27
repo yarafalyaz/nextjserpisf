@@ -81,7 +81,7 @@ export function WarrantyClaimActions({
             : []
   const showTransition = canTransition && transitionTargets.length > 0
 
-  function handleDecision(e: React.FormEvent<HTMLFormElement>) {
+  function handleDecision(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("claimId", String(claim.id))

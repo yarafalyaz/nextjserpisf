@@ -7,6 +7,7 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
@@ -137,7 +138,7 @@ export default async function StockMovementPage({
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={9} className="text-center text-muted-foreground py-6">Tidak ada mutasi stok</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={9} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada mutasi stok" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
           </DetailTableBody>
         </DetailTable>

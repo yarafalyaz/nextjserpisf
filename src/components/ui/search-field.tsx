@@ -24,7 +24,7 @@ export function AppSearchField({
   const searchParams = useSearchParams()
   const [value, setValue] = useState(searchParams.get(paramName) || "")
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const params = new URLSearchParams(searchParams.toString())
     if (value) {

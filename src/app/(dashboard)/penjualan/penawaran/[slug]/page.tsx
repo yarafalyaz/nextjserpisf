@@ -17,6 +17,7 @@ import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
 import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
 import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold";
@@ -513,9 +514,7 @@ export default async function QuotationDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {historyItems.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-                      Belum ada riwayat
-                    </p>
+                    <EmptyState title="Belum ada riwayat" />
                   ) : (
                     historyItems.map((item) => (
                       <div

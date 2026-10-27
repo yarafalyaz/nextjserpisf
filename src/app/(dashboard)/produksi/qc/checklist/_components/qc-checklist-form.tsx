@@ -89,7 +89,7 @@ export function QcChecklistForm({
     setRows(updated)
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("checklistType", checklistType)

@@ -61,7 +61,7 @@ export function InvoiceExchangeForm({
     setSelected((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]))
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (selected.length === 0) {
       showError("Pilih minimal satu faktur yang diserahkan.")

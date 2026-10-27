@@ -57,12 +57,16 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWareho
   // Fetch next code when rack changes
   useEffect(() => {
     if (!enableAutoCode || !rackId) return
-    getNextRowCode(Number(rackId)).then((res) => {
-      setAutoCode(res.code ?? "")
-    }).catch((e) => {
-      // Gagal memuat kode berikutnya — kolom tetap bisa diisi manual.
-      console.warn("[auto-code]", e instanceof Error ? e.message : e)
-    })
+    async function loadNextCode() {
+      try {
+        const res = await getNextRowCode(Number(rackId))
+        setAutoCode(res.code ?? "")
+      } catch (e) {
+        // Gagal memuat kode berikutnya — kolom tetap bisa diisi manual.
+        console.warn("[auto-code]", e instanceof Error ? e.message : e)
+      }
+    }
+    void loadNextCode()
   }, [rackId, enableAutoCode])
 
   function handleWarehouseChange(key: string | null) {
@@ -81,7 +85,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWareho
     setRackId(key ?? "")
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("rackId", rackId)

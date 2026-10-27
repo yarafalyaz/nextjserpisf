@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requireAnyPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { formatDate } from "@/lib/utils/format"
+import { EmptyState } from "@/components/ui/empty-state"
 import { PageHeader } from "@/components/ui/page-header"
 import {
   DetailTable,
@@ -115,9 +116,7 @@ export default async function WorkCalendarPage({
         </div>
         <div className="p-4 px-5">
           {holidays.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada hari libur
-            </p>
+            <EmptyState title="Belum ada hari libur" className="py-10" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -177,9 +176,7 @@ export default async function WorkCalendarPage({
         </div>
         <div className="p-4 px-5">
           {departmentHolidays.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada hari libur departemen
-            </p>
+            <EmptyState title="Belum ada hari libur departemen" className="py-10" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -238,9 +235,7 @@ export default async function WorkCalendarPage({
         </div>
         <div className="p-4 px-5">
           {workSchedules.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada jadwal kerja
-            </p>
+            <EmptyState title="Belum ada jadwal kerja" className="py-10" />
           ) : (
             <DetailTable>
               <DetailTableHead>

@@ -7,6 +7,7 @@ import { ExternalLink, Plus, Trash2 } from "lucide-react"
 
 import { createFavoriteTransaction, deleteFavoriteTransaction } from "@/actions/favorite.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -34,7 +35,7 @@ export function FavoriteManager({
   const [label, setLabel] = useState("")
   const [href, setHref] = useState("")
 
-  function handleAdd(e: React.FormEvent<HTMLFormElement>) {
+  function handleAdd(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {
@@ -130,10 +131,7 @@ export function FavoriteManager({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm divide-y divide-default">
         {favorites.length === 0 ? (
-          <p className="p-5 text-sm text-muted-foreground">
-            Belum ada transaksi favorit. Tambahkan pintasan di atas agar transaksi yang sering
-            dibuka bisa dijangkau cepat dari sini.
-          </p>
+          <EmptyState title="Belum ada transaksi favorit" description="Tambahkan pintasan di atas agar transaksi yang sering dibuka bisa dijangkau cepat dari sini." className="py-5" />
         ) : (
           favorites.map((favorite) => (
             <div key={favorite.id} className="flex flex-wrap items-center justify-between gap-4 p-4">

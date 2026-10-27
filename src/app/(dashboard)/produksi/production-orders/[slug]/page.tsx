@@ -8,8 +8,10 @@ import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteProductionOrder } from "@/actions/manufacturing.actions"
 import { ProductionOrderActions } from "../_components/production-order-actions"
+import { JobReopenButton } from "@/components/reports/job-reopen-button"
 import { ProductionCostSection } from "../_components/production-cost-section"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -24,6 +26,7 @@ import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.act
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel"
 import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card"
 import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data"
+import { completedByLabel, genealogyMaterialTokens } from "@/lib/reports/genealogy-forward-trace"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -85,6 +88,19 @@ export default async function ProductionOrderDetailPage({
     : []
   const geneItemMap = new Map(geneItemRows.map((i) => [i.id, i]))
 
+  // `completedBy` hanya kolom Int tanpa relasi User — resolve namanya di sini.
+  const completedByUser =
+    order.genealogy?.completedBy != null
+      ? await prisma.user.findUnique({
+          where: { id: order.genealogy.completedBy },
+          select: { id: true, name: true },
+        })
+      : null
+  const completedByName = completedByLabel(
+    order.genealogy?.completedBy,
+    new Map(completedByUser ? [[completedByUser.id, completedByUser.name]] : []),
+  )
+
   // The production order now carries a real workOrderId FK (see migration
   // 20261008130000_integration_relations); fall back to the legacy best-effort
   // item match only for older orders created before the link existed.
@@ -139,6 +155,8 @@ export default async function ProductionOrderDetailPage({
     auth(),
   ])
   const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : []
+  // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenProductionOrder.
+  const canReopenProductionOrder = await hasPermission("edit_production_orders")
   const bomRevisionOptions = order.bomRevision
     ? await prisma.bomRevision.findMany({
         where: {
@@ -215,6 +233,13 @@ export default async function ProductionOrderDetailPage({
         <div className="flex gap-2 items-center">
           <StatusChip status={order.status} />
   <div className="flex gap-2">
+          <JobReopenButton
+            kind="production_order"
+            id={order.id}
+            code={order.documentNo}
+            status={order.status}
+            canReopen={canReopenProductionOrder}
+          />
           <ProductionOrderActions
             orderId={order.id}
             status={order.status}
@@ -331,7 +356,7 @@ export default async function ProductionOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {order.materials.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
+            <EmptyState title="Tidak ada bahan" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -398,9 +423,7 @@ export default async function ProductionOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {!order.genealogy ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta bahan yang dipakai.
-            </p>
+            <EmptyState title="Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta bahan yang dipakai." className="py-10" />
           ) : (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
@@ -420,6 +443,12 @@ export default async function ProductionOrderDetailPage({
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diselesaikan</span>
                   <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(order.genealogy.completedAt)}</span>
                 </div>
+                {completedByName ? (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diselesaikan Oleh</span>
+                    <span className="text-[0.9375rem] text-foreground font-medium">{completedByName}</span>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HPP / Unit</span>
                   <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(order.genealogy.unitCost))}</span>
@@ -450,8 +479,7 @@ export default async function ProductionOrderDetailPage({
                     </DetailTableHead>
                     <DetailTableBody>
                       {order.genealogy.materials.map((m) => {
-                        const serials = (m.serialNumbers as string[] | null) ?? []
-                        const lotText = [m.batchNumber, ...serials].filter(Boolean).join(", ")
+                        const tokens = genealogyMaterialTokens(m)
                         return (
                           <DetailTableRow key={m.id}>
                             <DetailTableTd>
@@ -461,8 +489,17 @@ export default async function ProductionOrderDetailPage({
                             </DetailTableTd>
                             <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
                             <DetailTableTd>
-                              {lotText ? (
-                                <span className="font-mono text-xs">{lotText}</span>
+                              {tokens.length ? (
+                                <span className="font-mono text-xs">
+                                  {tokens.map((token, i) => (
+                                    <span key={token}>
+                                      {i > 0 ? ", " : null}
+                                      <Link href={`/produksi/telusur-genealogi?cari=${encodeURIComponent(token)}`} className="hover:underline" title="Telusur hasil jadi yang memakai lot/serial ini">
+                                        {token}
+                                      </Link>
+                                    </span>
+                                  ))}
+                                </span>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}

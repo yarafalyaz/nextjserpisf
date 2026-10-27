@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
+import { EmptyState } from "@/components/ui/empty-state";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import {
   DetailTable,
@@ -245,11 +246,8 @@ export default async function ApprovalDetailPage({
             <DetailTableBody>
               {approval.histories.length === 0 ? (
                 <DetailTableRow>
-                  <DetailTableTd
-                    colSpan={4}
-                    className="text-center py-10 text-muted-foreground"
-                  >
-                    Belum ada riwayat
+                  <DetailTableTd colSpan={4} className="py-10">
+                    <EmptyState title="Belum ada riwayat" className="py-0" />
                   </DetailTableTd>
                 </DetailTableRow>
               ) : (

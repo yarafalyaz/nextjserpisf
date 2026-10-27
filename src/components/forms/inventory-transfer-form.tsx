@@ -57,7 +57,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
     const updated = [...transferItems]; updated[i] = { ...updated[i], [field]: value }; setTransferItems(updated)
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

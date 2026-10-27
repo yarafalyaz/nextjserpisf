@@ -8,6 +8,7 @@ import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
 import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
+import { REVERSAL_JOURNAL_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
   buildDownPaymentReceiptLines,
   buildSettlementReclass,
@@ -150,9 +151,9 @@ export async function deleteJournalByReferenceTx(
   // companion journal with referenceType "Journal" + referenceId = the original
   // journal id and flips the original to REVERSED. Deleting the original without
   // its reversal would strand a POSTED reversal in the GL (a one-sided balance
-  // that can never be cleared). A reversal is itself POSTED and can be reversed
-  // again, so follow the chain to a fixed point: J1 <- J2 <- J3 must delete all
-  // three, not just J2. One level would strand J3.
+  // that can never be cleared). TASK-025 melarang reversal ganda lewat jalur
+  // generik, tetapi rantai warisan (J1 <- J2 <- J3) yang sudah telanjur ada
+  // tetap harus terhapus tuntas — ikuti rantai sampai titik tetap.
   const seen = new Set(journalIds);
   let frontier = journalIds;
   while (frontier.length > 0) {
@@ -195,6 +196,13 @@ export async function reverseJournalsByReferenceTx(
   reason: string,
   userId?: number | null,
 ): Promise<void> {
+  // TASK-025: jalur ini generik menurut (referenceType, referenceId); meminta
+  // reversal atas "Journal" berarti me-reverse jurnal lawan reversal itu
+  // sendiri — tolak di sumber, sama seperti jalur by-id.
+  const requestedTypes = Array.isArray(referenceType) ? referenceType : [referenceType];
+  if (requestedTypes.includes("Journal")) {
+    throw new Error(REVERSAL_JOURNAL_REVERSAL_ERROR);
+  }
   const journals = await tx.journal.findMany({
     where: {
       referenceType: Array.isArray(referenceType)

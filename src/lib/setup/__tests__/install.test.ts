@@ -235,6 +235,27 @@ describe("installBaseData", () => {
     expect(mocks.prismaMock.permission.createMany).not.toHaveBeenCalled()
   })
 
+  // TASK-024: kalah balapan Serializable melempar P2034 dari Prisma sebelum
+  // sempat mencapai lemparan domain di dalam transaksi. Pihak yang kalah
+  // harus tetap menerima pesan domain yang sama.
+  it("maps a P2034 write conflict from the install transaction to the domain message", async () => {
+    const conflict = new Prisma.PrismaClientKnownRequestError(
+      "Transaction failed due to a write conflict or a deadlock. Please retry your transaction",
+      { code: "P2034", clientVersion: "test" },
+    )
+    mocks.prismaMock.$transaction.mockRejectedValueOnce(conflict)
+
+    await expect(installBaseData(input)).rejects.toThrow("Aplikasi sudah terpasang.")
+    expect(mocks.prismaMock.user.create).not.toHaveBeenCalled()
+  })
+
+  it("rethrows non-concurrency errors from the install transaction unchanged", async () => {
+    const boom = new Error("seed gagal: tabel tidak ditemukan")
+    mocks.prismaMock.$transaction.mockRejectedValueOnce(boom)
+
+    await expect(installBaseData(input)).rejects.toBe(boom)
+  })
+
   it("creates exactly one super_admin across sequential calls with a stale pre-check", async () => {
     mocks.prismaMock.user.count.mockResolvedValue(0)
     await installBaseData(input)

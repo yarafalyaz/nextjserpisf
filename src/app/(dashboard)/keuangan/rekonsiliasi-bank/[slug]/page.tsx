@@ -16,6 +16,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { CompleteReconciliationButton } from "../_components/complete-reconciliation-button"
 import { MatchLineForm } from "./_components/match-line-form"
 import { AdjustmentForm } from "./_components/adjustment-form"
@@ -181,9 +182,7 @@ export default async function BankReconciliationDetailPage({
         </div>
 
         {matchedItems.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-            Belum ada baris yang dicocokkan
-          </p>
+          <EmptyState title="Belum ada baris yang dicocokkan" />
         ) : (
           <div className="p-4 px-5">
             <DetailTable>
@@ -269,9 +268,7 @@ export default async function BankReconciliationDetailPage({
 
         <div className="p-4 px-5">
           {adjustments.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada item penyesuaian
-            </p>
+            <EmptyState title="Belum ada item penyesuaian" />
           ) : (
             <DetailTable>
               <DetailTableHead>

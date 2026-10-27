@@ -15,7 +15,7 @@ export function CycleForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const formData = new FormData(form)
@@ -73,27 +73,26 @@ export function CycleStatusButton({ cycleId, status }: { cycleId: number; status
   )
 }
 
-function runAction(
+async function runAction(
   router: ReturnType<typeof useRouter>,
   fn: () => Promise<{ success: boolean; error?: string }>,
   okMessage: string,
 ) {
-  return fn()
-    .then((result) => {
-      if (!result?.success) throw new Error(result?.error || "Gagal menyimpan")
-      showSuccess(okMessage)
-      router.refresh()
-    })
-    .catch((error) => {
-      showError(error instanceof Error ? error.message : "Gagal menyimpan")
-    })
+  try {
+    const result = await fn()
+    if (!result?.success) throw new Error(result?.error || "Gagal menyimpan")
+    showSuccess(okMessage)
+    router.refresh()
+  } catch (error) {
+    showError(error instanceof Error ? error.message : "Gagal menyimpan")
+  }
 }
 
 export function SelfReviewForm({ cycleId, employeeId }: { cycleId: number; employeeId: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const score = Number(new FormData(event.currentTarget).get("selfScore"))
     startTransition(() => {
@@ -115,7 +114,7 @@ export function ManagerReviewForm({ cycleId, employeeId }: { cycleId: number; em
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const fd = new FormData(event.currentTarget)
     const managerScore = Number(fd.get("managerScore"))

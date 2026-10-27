@@ -5,6 +5,7 @@ import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
@@ -149,7 +150,7 @@ export default async function WithholdingTaxReportPage({
               </DetailTableRow>
             ))}
             {byType.size === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6">Tidak ada pemotongan PPh pada periode ini</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada pemotongan PPh pada periode ini" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {byType.size > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
@@ -188,7 +189,7 @@ export default async function WithholdingTaxReportPage({
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={7} className="text-center text-muted-foreground py-6">Tidak ada tagihan pemasok dengan pemotongan PPh pada periode ini</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={7} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada tagihan pemasok dengan pemotongan PPh pada periode ini" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
@@ -231,8 +232,7 @@ export default async function WithholdingTaxReportPage({
             {salesRows.length === 0 && (
               <DetailTableRow>
                 <DetailTableTd colSpan={8} className="text-center text-muted-foreground py-6">
-                  Tidak ada PPh yang dipotong pelanggan pada periode ini. Potongan dicatat saat menerima
-                  pembayaran (Penjualan → Pembayaran → terima pembayaran).
+                  <EmptyState title="Tidak ada PPh yang dipotong pelanggan pada periode ini." description="Potongan dicatat saat menerima pembayaran (Penjualan → Pembayaran → terima pembayaran)." className="py-0" />
                 </DetailTableTd>
               </DetailTableRow>
             )}

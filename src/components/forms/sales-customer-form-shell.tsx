@@ -1,6 +1,6 @@
 "use client"
 
-import type { FormEventHandler, ReactNode } from "react"
+import type { SubmitEventHandler, ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import type { Control, FieldPath, FieldValues } from "react-hook-form"
 import { CustomerSelectField } from "@/components/forms/customer-select-field"
@@ -10,7 +10,7 @@ interface SalesCustomerFormShellProps<
   TFieldValues extends FieldValues,
   TName extends FieldPath<TFieldValues>,
 > {
-  onSubmit: FormEventHandler<HTMLFormElement>
+  onSubmit: SubmitEventHandler<HTMLFormElement>
   control: Control<TFieldValues>
   name: TName
   options: { id: number; name: string }[]

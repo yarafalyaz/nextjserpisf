@@ -49,7 +49,7 @@ export function NonconformanceForm({ inspections }: { inspections: InspectionOpt
   const [responsibility, setResponsibility] = useState("internal")
   const [inspectionId, setInspectionId] = useState<number | null>(null)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("referenceType", referenceType)

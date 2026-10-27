@@ -77,7 +77,7 @@ export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormPr
     setVariantId(null)
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

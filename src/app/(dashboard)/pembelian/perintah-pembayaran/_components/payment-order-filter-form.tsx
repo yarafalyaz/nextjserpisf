@@ -25,7 +25,7 @@ export function PaymentOrderFilterForm({
   const [vendorValue, setVendorValue] = useState(vendorSegment ?? "")
   const [dateValue, setDateValue] = useState(sampaiTanggal)
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const path = [
       "/pembelian/perintah-pembayaran",

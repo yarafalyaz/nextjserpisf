@@ -64,7 +64,7 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
     const updated = [...requestItems]; updated[i] = { ...updated[i], [field]: value }; setRequestItems(updated)
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

@@ -43,7 +43,7 @@ export function TaxPaymentForm({
   const [reference, setReference] = useState("")
   const [notes, setNotes] = useState("")
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

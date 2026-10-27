@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetCategory } from "@/actions/asset.actions"
@@ -104,7 +105,7 @@ export default async function AssetCategoryDetailPage({
         </div>
         <div className="p-4 px-5">
           {category.assets.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada aset</p>
+            <EmptyState title="Belum ada aset" />
           ) : (
             <DetailTable>
               <DetailTableHead>

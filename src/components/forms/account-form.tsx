@@ -25,7 +25,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
   const [parentId, setParentId] = useState(account?.parentId ? String(account.parentId) : "")
   const [accountOptions, setAccountOptions] = useState(accounts)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

@@ -13,6 +13,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { StocktakeSessionForm, StocktakeActions } from "./_components/stocktake-forms"
 
 import type { Metadata } from "next"
@@ -82,9 +83,7 @@ export default async function StocktakePage({
         <StocktakeSessionForm />
         <div className="p-4 px-5">
           {sessions.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada sesi opname
-            </p>
+            <EmptyState title="Belum ada sesi opname" className="py-10" />
           ) : (
             <DetailTable>
               <DetailTableHead>

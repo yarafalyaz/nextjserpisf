@@ -65,7 +65,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
   const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!isBalanced) return showError("Debit dan Kredit harus seimbang!")
     startTransition(async () => {

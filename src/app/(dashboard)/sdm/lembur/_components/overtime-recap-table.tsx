@@ -3,6 +3,7 @@ import {
   OVERTIME_RECAP_VALUE_NOT_CALCULATED_LABEL,
   type OvertimeRecap,
 } from "@/lib/reports/overtime-recap"
+import { EmptyState } from "@/components/ui/empty-state"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -65,9 +66,7 @@ export function OvertimeRecapTable({ recap }: Readonly<{ recap: OvertimeRecap }>
       </div>
 
       {isEmpty ? (
-        <p className="rounded-xl border border-default bg-surface px-4 py-10 text-center text-sm text-muted-foreground">
-          Tidak ada pengajuan lembur pada periode dan filter ini.
-        </p>
+        <EmptyState title="Tidak ada pengajuan lembur pada periode dan filter ini." className="py-10" />
       ) : (
         <>
           <div>

@@ -50,7 +50,7 @@ export function BankTransferForm({
 
   const feeNumber = adminFee ?? 0
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

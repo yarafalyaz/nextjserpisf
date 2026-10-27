@@ -15,6 +15,11 @@ import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
+import {
+  SCRAP_REASON_CODES,
+  SCRAP_REASON_LABELS,
+  validateScrapInput,
+} from "@/lib/services/scrap-classification"
 
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string }[];
@@ -33,7 +38,13 @@ interface MaterialIssueFormProps {
     date: string;
     notes?: string | null;
     costCenterId?: number | null;
-    items?: Array<{ itemId: number; qty: number }>;
+    items?: Array<{
+      itemId: number;
+      qty: number;
+      scrapQty?: number;
+      scrapReasonCode?: string | null;
+      scrapNote?: string | null;
+    }>;
   };
   items: {
     id: number;
@@ -48,6 +59,9 @@ interface MIItem {
   itemId: number;
   qty: number;
   unitCost: number;
+  scrapQty: number;
+  scrapReasonCode: string;
+  scrapNote: string;
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
@@ -58,7 +72,14 @@ export interface MaterialIssuePayload {
   costCenterId?: string | null;
   workOrderId?: string | null;
   projectId?: string | null;
-  items: Array<{ itemId: number; qty: number; unitCost: number }>;
+  items: Array<{
+    itemId: number;
+    qty: number;
+    unitCost: number;
+    scrapQty?: number;
+    scrapReasonCode?: string | null;
+    scrapNote?: string | null;
+  }>;
 }
 
 /**
@@ -78,7 +99,14 @@ export function buildMaterialIssueFormData(input: MaterialIssuePayload): FormDat
   formData.append(
     "items",
     JSON.stringify(
-      input.items.map(({ itemId, qty, unitCost }) => ({ itemId, qty, unitCost })),
+      input.items.map(({ itemId, qty, unitCost, scrapQty, scrapReasonCode, scrapNote }) => ({
+        itemId,
+        qty,
+        unitCost,
+        scrapQty: Number(scrapQty ?? 0),
+        scrapReasonCode: scrapReasonCode?.trim() ? scrapReasonCode : null,
+        scrapNote: scrapNote?.trim() ? scrapNote : null,
+      })),
     ),
   );
   const links: Array<[string, string | null | undefined]> = [
@@ -131,13 +159,16 @@ export function MaterialIssueForm({
           itemId: it.itemId,
           qty: it.qty,
           unitCost: Number(items.find((x) => x.id === it.itemId)?.cost ?? 0),
+          scrapQty: Number(it.scrapQty ?? 0),
+          scrapReasonCode: it.scrapReasonCode ?? "",
+          scrapNote: it.scrapNote ?? "",
           uid: nextItemUid(),
         }))
-      : [{ itemId: 0, qty: 1, unitCost: 0, uid: nextItemUid() }],
+      : [{ itemId: 0, qty: 1, unitCost: 0, scrapQty: 0, scrapReasonCode: "", scrapNote: "", uid: nextItemUid() }],
   );
 
   function addItem() {
-    setMiItems([...miItems, { itemId: 0, qty: 1, unitCost: 0, uid: nextItemUid() }]);
+    setMiItems([...miItems, { itemId: 0, qty: 1, unitCost: 0, scrapQty: 0, scrapReasonCode: "", scrapNote: "", uid: nextItemUid() }]);
   }
   function removeItem(i: number) {
     setMiItems(miItems.filter((_, idx) => idx !== i));
@@ -152,8 +183,20 @@ export function MaterialIssueForm({
     setMiItems(updated);
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
+    for (const [idx, it] of miItems.entries()) {
+      const err = validateScrapInput({
+        issueQty: it.qty,
+        scrapQty: it.scrapQty,
+        scrapReasonCode: it.scrapReasonCode || null,
+        scrapNote: it.scrapNote || null,
+      });
+      if (err) {
+        showError(`Baris ${idx + 1}: ${err}`);
+        return;
+      }
+    }
     startTransition(async () => {
       try {
         const formData = buildMaterialIssueFormData({
@@ -287,13 +330,16 @@ export function MaterialIssueForm({
         </div>
         <div className="overflow-x-auto">
           <table
-            className="w-full border-collapse min-w-[640px]"
+            className="w-full border-collapse min-w-[900px]"
             style={{ fontSize: "0.8125rem" }}
           >
             <thead>
               <tr>
                 <th>Item</th>
                 <th>Jumlah</th>
+                <th>Qty Scrap</th>
+                <th>Alasan Scrap</th>
+                <th>Catatan Scrap</th>
                 <th>Harga Satuan</th>
                 <th>Total</th>
                 <th></th>
@@ -331,6 +377,55 @@ export function MaterialIssueForm({
                         padding: "6px",
                         width: "80px",
                       }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.scrapQty}
+                      onChange={(e) =>
+                        updateItem(i, "scrapQty", Number(e.target.value))
+                      }
+                      aria-label={`Qty scrap baris ${i + 1}`}
+                      className="form-input"
+                      style={{
+                        fontSize: "0.8125rem",
+                        padding: "6px",
+                        width: "80px",
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <select
+                      value={item.scrapReasonCode}
+                      onChange={(e) =>
+                        updateItem(i, "scrapReasonCode", e.target.value)
+                      }
+                      aria-label={`Alasan scrap baris ${i + 1}`}
+                      className="form-input"
+                      style={{ fontSize: "0.8125rem", padding: "6px", width: "150px" }}
+                    >
+                      <option value="">— Tanpa scrap —</option>
+                      {SCRAP_REASON_CODES.map((code) => (
+                        <option key={code} value={code}>
+                          {SCRAP_REASON_LABELS[code]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={item.scrapNote}
+                      onChange={(e) =>
+                        updateItem(i, "scrapNote", e.target.value)
+                      }
+                      aria-label={`Catatan scrap baris ${i + 1}`}
+                      placeholder={item.scrapReasonCode === "lainnya" ? "Wajib diisi" : "Opsional"}
+                      className="form-input"
+                      style={{ fontSize: "0.8125rem", padding: "6px", width: "140px" }}
                     />
                   </td>
                   <td className="text-right">

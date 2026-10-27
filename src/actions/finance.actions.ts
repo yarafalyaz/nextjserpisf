@@ -47,7 +47,7 @@ import {
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { YEAR_END_CLOSING_REFERENCE_TYPE } from "@/lib/reports/year-end-closing";
-import { YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR } from "@/lib/services/journal.service";
+import { REVERSAL_JOURNAL_REVERSAL_ERROR, YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
   requestApprovalIfConfigured,
   assertApproved,
@@ -2173,6 +2173,12 @@ export async function reverseJournal(journalId: number) {
             ? "Jurnal sudah pernah dibalik"
             : `Jurnal tidak bisa dibalik (status: ${current})`,
         );
+      }
+
+      // TASK-025: jurnal lawan reversal tidak boleh di-reverse lagi lewat
+      // jalur generik — lihat REVERSAL_JOURNAL_REVERSAL_ERROR.
+      if (journal.referenceType === "Journal") {
+        throw new Error(REVERSAL_JOURNAL_REVERSAL_ERROR);
       }
 
       // F-121-V Putusan 3: jurnal penutup tahun tidak boleh lewat jalur

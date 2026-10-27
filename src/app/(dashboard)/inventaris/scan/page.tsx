@@ -52,7 +52,7 @@ export default function ScanItemPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
+  function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     resolve(code)
   }

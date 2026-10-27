@@ -8,7 +8,10 @@
  * ber-referenceType "Journal", bukan "SalesReturn", sehingga tersaring
  * keluar; memasukkan REVERSED akan menghitung asli tanpa lawannya dan
  * penjumlahan satu-sisi (kredit saja) tidak akan neto nol.
- * Neto nol hanya untuk pasangan reversal satu tingkat. `paidAmount` kolom TIDAK pernah diubah helper ini —
+ * Neto nol hanya untuk pasangan reversal satu tingkat. TASK-025:
+ * reversal ganda ditolak di sumber (jurnal ber-referenceType "Journal"
+ * tidak boleh di-reverse lagi), jadi batas satu tingkat ini ditegakkan
+ * di jalur generik, bukan hanya diasumsikan. `paidAmount` kolom TIDAK pernah diubah helper ini —
  * definisi pembayaran tetap murni (vonis); outstanding baru =
  * grandTotal − paidAmount − returnCredit.
  *

@@ -86,7 +86,7 @@ export function SalaryAdjustmentPanel(props: SalaryAdjustmentPanelProps) {
     })
   }
 
-  function onCreate(event: React.FormEvent<HTMLFormElement>) {
+  function onCreate(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData()
     formData.set("employeeId", String(props.employeeId))

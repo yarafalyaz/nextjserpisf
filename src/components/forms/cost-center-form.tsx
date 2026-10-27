@@ -34,7 +34,7 @@ export function CostCenterForm({
   const parentOptions = parentOptionsState
     .map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

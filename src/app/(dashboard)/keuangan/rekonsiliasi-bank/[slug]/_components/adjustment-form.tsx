@@ -26,7 +26,7 @@ export function AdjustmentForm({ reconciliationId }: { reconciliationId: number 
   const [type, setType] = useState("")
   const [amount, setAmount] = useState<number>(0)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     if (!type) {

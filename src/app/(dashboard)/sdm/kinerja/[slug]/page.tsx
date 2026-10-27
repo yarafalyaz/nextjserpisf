@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { EmptyState } from "@/components/ui/empty-state"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { ManagerReviewForm, SelfReviewForm } from "../_components/cycle-actions"
 
@@ -90,7 +91,7 @@ export default async function PerformanceCycleDetailPage({
           <tbody>
             {employees.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Tidak ada karyawan dalam cakupan Anda.</td>
+                <td colSpan={8} className="px-4 py-8"><EmptyState title="Tidak ada karyawan dalam cakupan Anda." className="py-0" /></td>
               </tr>
             )}
             {employees.map((emp) => {

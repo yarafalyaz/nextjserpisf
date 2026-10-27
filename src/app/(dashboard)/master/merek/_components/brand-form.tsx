@@ -42,7 +42,7 @@ export function BrandForm({ categories, brand, initialCategories = [] }: BrandFo
     setSelectedCategories((prev) => prev.filter((c) => c.id !== id))
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("categoryIds", selectedCategories.map((c) => c.id).join(","))

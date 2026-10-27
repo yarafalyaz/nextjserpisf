@@ -37,7 +37,7 @@ export function DownPaymentTaxPanel({ rows, canIssue = false }: { rows: DownPaym
   const [activeId, setActiveId] = useState<number | null>(null)
   const keyRef = useRef<string>(crypto.randomUUID())
 
-  function submit(e: React.FormEvent<HTMLFormElement>, downPaymentId: number) {
+  function submit(e: React.SubmitEvent<HTMLFormElement>, downPaymentId: number) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("downPaymentId", String(downPaymentId))
@@ -105,7 +105,7 @@ function FragmentRow({
   isPending: boolean
   formOpen: boolean
   onToggle: () => void
-  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+  onSubmit: (e: React.SubmitEvent<HTMLFormElement>) => void
 }) {
   const showForm = canIssue && row.taxStatus === "terutang-belum-terbit"
   return (

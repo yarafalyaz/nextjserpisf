@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import Link from "next/link"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -69,7 +70,7 @@ export default async function CustomerVehiclesPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-4 px-5">
           {vehicles.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada kendaraan terdaftar</p>
+            <EmptyState title="Belum ada kendaraan terdaftar" />
           ) : (
             <DetailTable>
               <DetailTableHead>

@@ -67,7 +67,7 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
     setItemRows((prev) => prev.map((row, i) => (i === index ? { ...row, qty } : row)))
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

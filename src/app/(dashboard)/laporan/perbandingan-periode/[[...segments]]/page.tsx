@@ -10,6 +10,7 @@ import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { buildReportHref, parseReportFilters } from '@/lib/reports/report-href'
 import { buildComparison, previousWindow, toAccountBalances } from '@/lib/reports/period-comparison'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
@@ -153,7 +154,7 @@ export default async function PeriodComparisonPage({
             ))}
             {comparison.rows.length === 0 && (
               <DetailTableRow>
-                <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">Tidak ada mutasi pada kedua periode</DetailTableTd>
+                <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada mutasi pada kedua periode" className="py-0" /></DetailTableTd>
               </DetailTableRow>
             )}
             {comparison.rows.length > 0 && (

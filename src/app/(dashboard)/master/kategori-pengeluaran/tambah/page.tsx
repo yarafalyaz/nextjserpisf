@@ -13,7 +13,7 @@ export default function CreateExpenseCategoryPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

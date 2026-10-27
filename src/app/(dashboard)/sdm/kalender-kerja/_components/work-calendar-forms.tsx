@@ -56,7 +56,7 @@ export function HolidayForm({ holiday }: { holiday?: HolidayItem }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
@@ -129,7 +129,7 @@ export function DepartmentHolidayForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
@@ -209,7 +209,7 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
     (schedule?.workDays ?? "1,2,3,4,5").split(",").map((v) => v.trim()),
   )
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {

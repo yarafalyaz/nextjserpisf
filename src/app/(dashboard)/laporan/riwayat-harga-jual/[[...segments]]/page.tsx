@@ -18,6 +18,7 @@ import {
   DetailTableTd,
   DetailTableTh,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   formatPeriodLabel,
   parseReportPeriod,
@@ -186,7 +187,7 @@ export default async function SalesPriceHistoryPage({
                 {history.pasangan.length === 0 && (
                   <DetailTableRow>
                     <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">
-                      Tidak ada transaksi harga jual untuk pelanggan ini pada periode dan saringan aktif.
+                      <EmptyState title="Tidak ada transaksi harga jual untuk pelanggan ini pada periode dan saringan aktif." className="py-0" />
                     </DetailTableTd>
                   </DetailTableRow>
                 )}
@@ -268,7 +269,7 @@ export default async function SalesPriceHistoryPage({
                 {history.tanpaBarang.length === 0 && (
                   <DetailTableRow>
                     <DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">
-                      Tidak ada baris faktur tanpa barang pada periode dan saringan aktif.
+                      <EmptyState title="Tidak ada baris faktur tanpa barang pada periode dan saringan aktif." className="py-0" />
                     </DetailTableTd>
                   </DetailTableRow>
                 )}

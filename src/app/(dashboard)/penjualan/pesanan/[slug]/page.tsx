@@ -11,6 +11,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor";
 import {
   DetailTable,
@@ -268,9 +269,7 @@ export default async function SalesOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {order.deliveryOrders.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada surat jalan untuk pesanan ini
-            </p>
+            <EmptyState title="Belum ada surat jalan untuk pesanan ini" />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -320,9 +319,7 @@ export default async function SalesOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {order.salesInvoices.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada faktur untuk pesanan ini
-            </p>
+            <EmptyState title="Belum ada faktur untuk pesanan ini" />
           ) : (
             <DetailTable>
               <DetailTableHead>

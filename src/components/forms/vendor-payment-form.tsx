@@ -115,20 +115,21 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
       const removed = prev.find((f) => f.id === id)
       // Hapus gagal di server tidak boleh diam: kembalikan barisnya supaya
       // pemakai tahu berkasnya masih ada dan tidak terkirim setengah jalan.
-      fetch(`/api/upload/attachments/${id}`, { method: "DELETE" })
-        .then((res) => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/upload/attachments/${id}`, { method: "DELETE" })
           if (!res.ok && removed) setUploadedFiles((cur) => [...cur, removed])
           if (!res.ok) showError("Gagal menghapus lampiran")
-        })
-        .catch(() => {
+        } catch {
           if (removed) setUploadedFiles((cur) => [...cur, removed])
           showError("Gagal menghapus lampiran")
-        })
+        }
+      })()
       return prev.filter((f) => f.id !== id)
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

@@ -157,23 +157,26 @@ export function QuickAddSelect({
   useEffect(() => {
     if (!openDialog || !loaderKey) return
     let active = true
-    Promise.all(
-      fields
-        .filter((field) => field.loadOptions)
-        .map(async (field) => {
-          try {
-            return [field.name, await field.loadOptions!()] as const
-          } catch {
-            // Gagal memuat pilihan tidak boleh memblokir pengisian field lain.
-            return [field.name, [] as ComboboxOption[]] as const
-          }
-        }),
-    ).then((pairs) => {
-      if (active) setDynamicOptions(Object.fromEntries(pairs))
-    }).catch((e) => {
-      // Gagal memuat pilihan dinamis — form tetap bisa diisi manual.
-      console.warn("[quick-add]", e instanceof Error ? e.message : e)
-    })
+    void (async () => {
+      try {
+        const pairs = await Promise.all(
+          fields
+            .filter((field) => field.loadOptions)
+            .map(async (field) => {
+              try {
+                return [field.name, await field.loadOptions!()] as const
+              } catch {
+                // Gagal memuat pilihan tidak boleh memblokir pengisian field lain.
+                return [field.name, [] as ComboboxOption[]] as const
+              }
+            }),
+        )
+        if (active) setDynamicOptions(Object.fromEntries(pairs))
+      } catch (e) {
+        // Gagal memuat pilihan dinamis — form tetap bisa diisi manual.
+        console.warn("[quick-add]", e instanceof Error ? e.message : e)
+      }
+    })()
     return () => {
       active = false
     }
@@ -182,7 +185,7 @@ export function QuickAddSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openDialog, loaderKey])
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     // Dialog ini hidup di dalam form dokumen (Penawaran/Faktur/…). Tanpa stopPropagation,
     // event submit naik ke form induk sehingga menyimpan quick-add sekaligus MENGIRIM

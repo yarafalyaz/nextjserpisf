@@ -153,7 +153,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     // F-2026-10-25-030-S Q-LR-2: transisi baru ke lost wajib kategori

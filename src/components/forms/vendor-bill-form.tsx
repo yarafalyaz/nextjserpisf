@@ -199,7 +199,7 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
     );
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
       try {

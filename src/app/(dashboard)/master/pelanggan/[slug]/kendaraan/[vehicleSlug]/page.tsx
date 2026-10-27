@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
@@ -208,7 +209,7 @@ export default async function CustomerVehicleDetailPage({
         </div>
         <div className="p-4 px-5">
           {workOrders.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada perintah kerja</p>
+            <EmptyState title="Belum ada perintah kerja" className="py-12" />
           ) : (
             <div className="flex flex-col divide-y divide-default">
               {workOrders.map((wo) => (
@@ -254,7 +255,7 @@ export default async function CustomerVehicleDetailPage({
         </div>
         <div className="p-4 px-5">
           {quotations.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada penawaran</p>
+            <EmptyState title="Belum ada penawaran" className="py-12" />
           ) : (
             <div className="flex flex-col divide-y divide-default">
               {quotations.map((q) => (
@@ -283,7 +284,7 @@ export default async function CustomerVehicleDetailPage({
             </div>
           )}
           {history.entries.length === 0 && (!canViewWarranty || history.installedParts.rows.length === 0) ? (
-            <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada riwayat</p>
+            <EmptyState title="Belum ada riwayat" className="py-12" />
           ) : history.entries.length === 0 ? null : (
             <ol className="flex flex-col divide-y divide-default">
               {history.entries.map((entry) => {

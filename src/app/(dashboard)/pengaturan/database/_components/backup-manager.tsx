@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/shadcn/table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Badge } from "@/components/ui/shadcn/badge"
@@ -117,8 +118,8 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
               <TableBody>
                 {initialBackups.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                      Belum ada backup. Klik &quot;Buat Backup&quot; untuk membuat cadangan pertama.
+                    <TableCell colSpan={5} className="py-10 whitespace-normal">
+                      <EmptyState title="Belum ada backup" description={'Klik "Buat Backup" untuk membuat cadangan pertama.'} className="py-0" />
                     </TableCell>
                   </TableRow>
                 ) : (

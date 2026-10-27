@@ -11,6 +11,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { ProjectPlDetailCard } from "@/components/reports/project-pl-detail-card"
@@ -335,7 +336,7 @@ export default async function ProjectDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {project.items.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
+                    <EmptyState title="Tidak ada item" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -396,7 +397,7 @@ export default async function ProjectDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {quotations.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penawaran</p>
+                    <EmptyState title="Belum ada penawaran" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -432,7 +433,7 @@ export default async function ProjectDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {invoices.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada faktur</p>
+                    <EmptyState title="Belum ada faktur" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -470,7 +471,7 @@ export default async function ProjectDetailPage({
                 <ProjectLogForm projectId={project.id} />
                 <div className="p-4 px-5">
                   {project.logs.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada log</p>
+                    <EmptyState title="Belum ada log" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

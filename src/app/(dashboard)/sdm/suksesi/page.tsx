@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 import { getSuccessionOverview } from "@/actions/succession.actions"
 import {
   CriticalToggle,
@@ -85,8 +86,8 @@ export default async function SuccessionPage() {
             <tbody>
               {overview.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    Belum ada jabatan kritis. Tandai jabatan kritis pada daftar di bawah.
+                  <td colSpan={6} className="px-4 py-8">
+                    <EmptyState title="Belum ada jabatan kritis." description="Tandai jabatan kritis pada daftar di bawah." className="py-0" />
                   </td>
                 </tr>
               )}

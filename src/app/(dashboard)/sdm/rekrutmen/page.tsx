@@ -6,6 +6,7 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/button"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -81,8 +82,8 @@ export default async function RecruitmentsPage({
           <tbody>
             {vacancies.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                  Belum ada lowongan.
+                <td colSpan={6} className="px-4 py-8">
+                  <EmptyState title="Belum ada lowongan." className="py-0" />
                 </td>
               </tr>
             )}

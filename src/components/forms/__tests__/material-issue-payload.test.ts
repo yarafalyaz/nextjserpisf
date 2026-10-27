@@ -42,7 +42,9 @@ describe("buildMaterialIssueFormData", () => {
 
     expect(fd.get("warehouseId")).toBe("3")
     expect(fd.get("date")).toBe("2026-10-17")
-    expect(JSON.parse(String(fd.get("items")))).toEqual(items)
+    expect(JSON.parse(String(fd.get("items")))).toEqual(
+      items.map((it) => ({ ...it, scrapQty: 0, scrapReasonCode: null, scrapNote: null })),
+    )
   })
 
   it("mengirim pusat biaya, perintah kerja, dan proyek bila terisi", () => {
@@ -73,6 +75,45 @@ describe("buildMaterialIssueFormData", () => {
     expect(fd.get("costCenterId")).toBeNull()
     expect(fd.get("workOrderId")).toBeNull()
     expect(fd.get("projectId")).toBeNull()
+  })
+})
+
+describe("buildMaterialIssueFormData — scrap per baris (F-008 UI)", () => {
+  it("membawa scrapQty/alasan/catatan per baris ke payload items", () => {
+    const fd = buildMaterialIssueFormData({
+      warehouseId: "3",
+      date: "2026-10-17",
+      items: [
+        { itemId: 11, qty: 2, unitCost: 5_000, scrapQty: 0.3, scrapReasonCode: "salah_potong", scrapNote: "salah ukur" },
+        { itemId: 12, qty: 1, unitCost: 7_500 },
+      ],
+    })
+    expect(JSON.parse(String(fd.get("items")))).toEqual([
+      { itemId: 11, qty: 2, unitCost: 5_000, scrapQty: 0.3, scrapReasonCode: "salah_potong", scrapNote: "salah ukur" },
+      { itemId: 12, qty: 1, unitCost: 7_500, scrapQty: 0, scrapReasonCode: null, scrapNote: null },
+    ])
+  })
+
+  it("string alasan/catatan kosong menjadi null (tanpa scrap)", () => {
+    const fd = buildMaterialIssueFormData({
+      warehouseId: "3",
+      date: "2026-10-17",
+      items: [{ itemId: 11, qty: 2, unitCost: 5_000, scrapQty: 0, scrapReasonCode: "", scrapNote: "  " }],
+    })
+    expect(JSON.parse(String(fd.get("items")))).toEqual([
+      { itemId: 11, qty: 2, unitCost: 5_000, scrapQty: 0, scrapReasonCode: null, scrapNote: null },
+    ])
+  })
+
+  it("form merender input qty scrap + alasan terstruktur per baris", () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "src/components/forms/material-issue-form.tsx"),
+      "utf8",
+    )
+    expect(source).toMatch(/Qty scrap baris/)
+    expect(source).toMatch(/Alasan scrap baris/)
+    expect(source).toMatch(/SCRAP_REASON_LABELS/)
+    expect(source).toMatch(/validateScrapInput/)
   })
 })
 

@@ -20,7 +20,7 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
   const [isPending, startTransition] = useTransition()
   const isEdit = !!position
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     if (!isEdit) formData.delete("code")

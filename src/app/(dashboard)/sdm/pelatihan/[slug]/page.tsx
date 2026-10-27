@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { EmptyState } from "@/components/ui/empty-state"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import {
   ParticipantForm,
@@ -101,7 +102,7 @@ export default async function TrainingDetailPage({
             <tbody>
               {training.participants.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Belum ada peserta.</td>
+                  <td colSpan={6} className="px-4 py-8"><EmptyState title="Belum ada peserta." className="py-0" /></td>
                 </tr>
               )}
               {training.participants.map((p) => (

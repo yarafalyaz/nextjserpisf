@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deletePosition } from "@/actions/master.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -89,7 +90,7 @@ export default async function PositionDetailPage({
       {/* Employees */}
       <DetailSection title="Karyawan">
         {position.employees.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada karyawan</p>
+          <EmptyState title="Belum ada karyawan" />
         ) : (
           <DetailTable>
             <DetailTableHead>

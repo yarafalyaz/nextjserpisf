@@ -28,12 +28,12 @@ export default async function EditPage({
       bySlug: (s) =>
         prisma.materialIssue.findFirst({
           where: { slug: s },
-          include: { items: { select: { itemId: true, qty: true } } },
+          include: { items: { select: { itemId: true, qty: true, scrapQty: true, scrapReasonCode: true, scrapNote: true } } },
         }),
       byId: (id) =>
         prisma.materialIssue.findUnique({
           where: { id },
-          include: { items: { select: { itemId: true, qty: true } } },
+          include: { items: { select: { itemId: true, qty: true, scrapQty: true, scrapReasonCode: true, scrapNote: true } } },
         }),
     },
   );

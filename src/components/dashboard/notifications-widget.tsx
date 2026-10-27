@@ -45,11 +45,18 @@ export function NotificationsWidget() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/dashboard/notifications")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setData(d))
-      .catch(() => showError("Gagal memuat notifikasi"))
-      .finally(() => setLoading(false))
+    async function loadNotifications() {
+      try {
+        const r = await fetch("/api/dashboard/notifications")
+        const d = r.ok ? await r.json() : null
+        if (d) setData(d)
+      } catch {
+        showError("Gagal memuat notifikasi")
+      } finally {
+        setLoading(false)
+      }
+    }
+    void loadNotifications()
   }, [])
 
   if (loading) {

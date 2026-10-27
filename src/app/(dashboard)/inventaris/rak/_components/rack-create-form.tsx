@@ -33,12 +33,16 @@ export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId 
   // Fetch next code when warehouse changes
   useEffect(() => {
     if (!enableAutoCode || !warehouseId) return
-    getNextRackCode(Number(warehouseId)).then((res) => {
-      setAutoCode(res.code)
-    }).catch((e) => {
-      // Gagal memuat kode berikutnya — kolom tetap bisa diisi manual.
-      console.warn("[auto-code]", e instanceof Error ? e.message : e)
-    })
+    async function loadNextCode() {
+      try {
+        const res = await getNextRackCode(Number(warehouseId))
+        setAutoCode(res.code)
+      } catch (e) {
+        // Gagal memuat kode berikutnya — kolom tetap bisa diisi manual.
+        console.warn("[auto-code]", e instanceof Error ? e.message : e)
+      }
+    }
+    void loadNextCode()
   }, [warehouseId, enableAutoCode])
 
   function handleWarehouseChange(key: string | null) {
@@ -46,7 +50,7 @@ export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId 
     setWarehouseId(key ?? "")
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("warehouseId", warehouseId)

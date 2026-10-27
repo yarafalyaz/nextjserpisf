@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition, useState, type FormEvent } from "react"
+import { useTransition, useState, type InputEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { customerSchema, type CustomerInput } from "@/lib/validations/form.schemas"
@@ -240,7 +240,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="phone">Telepon <span className="text-destructive" aria-hidden="true">*</span></Label>
-              <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
+              <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: InputEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
               {errors.phone && <span className="text-xs text-danger mt-1">{errors.phone.message}</span>}
             </div>
             <div className="flex flex-col gap-1.5">

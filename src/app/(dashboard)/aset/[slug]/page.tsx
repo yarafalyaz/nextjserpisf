@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { DisposeAssetButton } from "./_components/dispose-asset-button"
 import { deleteAsset } from "@/actions/asset.actions"
@@ -278,9 +279,7 @@ export default async function AssetDetailPage({
         </div>
         <div className="p-4 px-5">
           {asset.fiscalYearRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Belum ada baris tahun fiskal terbekukan. Angka fiskal tahun berjalan di laporan berlabel estimasi-tahun-berjalan sampai baris tahun dibuat.
-            </p>
+            <EmptyState title="Belum ada baris tahun fiskal terbekukan" description="Angka fiskal tahun berjalan di laporan berlabel estimasi-tahun-berjalan sampai baris tahun dibuat." />
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -343,7 +342,7 @@ export default async function AssetDetailPage({
         </div>
         <div className="p-4 px-5">
           {asset.histories.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada riwayat</p>
+            <EmptyState title="Belum ada riwayat" />
           ) : (
             <DetailTable>
               <DetailTableHead>

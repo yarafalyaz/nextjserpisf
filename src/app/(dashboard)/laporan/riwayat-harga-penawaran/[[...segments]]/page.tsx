@@ -18,6 +18,7 @@ import {
   DetailTableTd,
   DetailTableTh,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   formatPeriodLabel,
@@ -201,7 +202,7 @@ export default async function QuotationPriceHistoryPage({
                 {history.pasangan.length === 0 && (
                   <DetailTableRow>
                     <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">
-                      Tidak ada penawaran untuk pelanggan ini pada periode dan saringan aktif.
+                      <EmptyState title="Tidak ada penawaran untuk pelanggan ini pada periode dan saringan aktif." className="py-0" />
                     </DetailTableTd>
                   </DetailTableRow>
                 )}
@@ -300,7 +301,7 @@ export default async function QuotationPriceHistoryPage({
                 {history.tanpaBarang.length === 0 && (
                   <DetailTableRow>
                     <DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6">
-                      Tidak ada baris penawaran tanpa barang pada periode dan saringan aktif.
+                      <EmptyState title="Tidak ada baris penawaran tanpa barang pada periode dan saringan aktif." className="py-0" />
                     </DetailTableTd>
                   </DetailTableRow>
                 )}
