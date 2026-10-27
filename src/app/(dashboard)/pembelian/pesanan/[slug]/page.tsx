@@ -18,6 +18,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -201,7 +202,7 @@ export default async function PurchaseOrderDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {po.goodsReceipts.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penerimaan barang</p>
+                    <EmptyState title="Belum ada penerimaan barang" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -244,7 +245,7 @@ export default async function PurchaseOrderDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {po.purchaseReturns.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada retur</p>
+                    <EmptyState title="Belum ada retur" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -279,7 +280,7 @@ export default async function PurchaseOrderDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {po.vendorBills.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada tagihan</p>
+                    <EmptyState title="Belum ada tagihan" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

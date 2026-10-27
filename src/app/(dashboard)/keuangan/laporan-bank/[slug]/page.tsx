@@ -19,6 +19,7 @@ import {
   DetailTableFoot,
   DetailTableFootRow,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { deleteBankStatementLine } from "@/actions/finance.actions"
 import { bankStatementLineTypeLabel } from "./_components/bank-statement-line-labels"
 
@@ -146,9 +147,7 @@ export default async function BankStatementDetailPage({
 
         <div className="p-4 px-5">
           {stmt.lines.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada baris rekening koran
-            </p>
+            <EmptyState title="Belum ada baris rekening koran" />
           ) : (
             <DetailTable>
               <DetailTableHead>

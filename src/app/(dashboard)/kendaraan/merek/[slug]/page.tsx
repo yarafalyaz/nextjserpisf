@@ -10,6 +10,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -99,9 +100,7 @@ export default async function VehicleBrandDetailPage({
         </div>
         <div className="p-4 px-5">
           {brand.models.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada model untuk merek ini.
-            </p>
+            <EmptyState title="Belum ada model untuk merek ini." />
           ) : (
             <DetailTable>
               <DetailTableHead>

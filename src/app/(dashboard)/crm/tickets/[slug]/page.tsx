@@ -21,6 +21,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Pencil } from "lucide-react";
 
 import type { Metadata } from "next";
@@ -203,9 +204,7 @@ export default async function CrmTicketDetailPage({
         <TicketCommentForm ticketId={ticket.id} />
         <div className="p-4 px-5">
           {ticket.comments.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada komentar
-            </p>
+            <EmptyState title="Belum ada komentar" />
           ) : (
             <DetailTable>
               <DetailTableHead>
