@@ -136,7 +136,7 @@ perilaku, bukan hanya keberadaan file/model.
 | PROJ-BR-001 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` ada; kewajiban referensi project/work order per issue belum ditelusur per field |
 | PROJ-BR-002 | Sebagian | prisma/schema.prisma:2763 — issue dimodelkan tersendiri dari `StockMove` (`prisma/schema.prisma:2498`); larangan direct update saldo oleh modul proyek belum ditelusur |
 | PROJ-BR-003 | Sebagian | prisma/schema.prisma:3870 — `Remnant` untuk sisa terklasifikasi; verifikasi return proyek belum ditelusur |
-| PROJ-BR-004 | Belum | belum ditelusur — pemisahan tampilan estimasi vs biaya aktual proyek tidak ditunjuk di sini |
+| PROJ-BR-004 | Sebagian | src/components/reports/project-budget-card.tsx — RAB vs Realisasi terpisah label per proyek (estimasi `ProjectItem` ≠ aktual builder L/R); label tab rencana diperjelas + jejak id transaksi sumber di `project-pl-detail-card.tsx`; realisasi per tahap/kategori masih "Belum terukur" (sumber biaya tanpa kolom tahap) |
 | PROJ-BR-005 | Sebagian | prisma/schema.prisma:5174 — `Project` ada; ketertelusuran biaya aktual ke transaksi sumber belum ditelusur |
 | PROJ-BR-006 | Sebagian | prisma/schema.prisma:5927 — `JobChangeOrder` ada untuk perubahan scope; approval/historinya belum ditelusur |
 | PROJ-BR-007 | Belum | belum ditelusur — penutupan proyek dan pelestarian histori tidak ditunjuk di sini |
