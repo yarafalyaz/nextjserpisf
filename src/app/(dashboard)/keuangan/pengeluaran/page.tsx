@@ -7,11 +7,27 @@ import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ExpenseTable } from "./_components/expense-table"
+import { ExpenseDraftQueueSection } from "./_components/expense-draft-queue"
+import { getExpenseDraftQueue } from "@/lib/reports/expense-draft-queue-data"
+import {
+  EXPENSE_DRAFT_QUEUE_TITLE,
+  type ExpenseDraftQueue,
+} from "@/lib/reports/expense-draft-queue"
 import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Pengeluaran" }
+
+/** Redirect Next.js (termasuk gerbang izin fail-closed) bukan error muat. */
+function isNextRedirect(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 export default async function ExpensesPage({
   searchParams,
@@ -31,6 +47,20 @@ export default async function ExpensesPage({
     ...(onlyClaims && { isReimbursementClaim: true }),
   }
 
+  // Seksi turunan baca-saja (F-2026-10-27-107-S, Q-EXQ-5) dimuat
+  // paralel dengan daftar utama. Gerbang view_expenses ditegakkan
+  // ulang fail-closed di loader sebelum query: redirect izin tetap
+  // diteruskan, sedangkan kegagalan muat lain hanya mengosongkan
+  // seksi turunan — daftar pengeluaran existing tetap tampil.
+  const draftQueuePromise: Promise<{
+    queue: ExpenseDraftQueue | null
+    redirectError?: unknown
+  }> = getExpenseDraftQueue()
+    .then((queue) => ({ queue }))
+    .catch((error: unknown) =>
+      isNextRedirect(error) ? { queue: null, redirectError: error } : { queue: null },
+    )
+
   const [expenses, total] = await Promise.all([
     prisma.expense.findMany({
       where,
@@ -41,6 +71,10 @@ export default async function ExpensesPage({
     }),
     prisma.expense.count({ where }),
   ])
+
+  const draftResult = await draftQueuePromise
+  if (draftResult.redirectError !== undefined) throw draftResult.redirectError
+  const draftQueue = draftResult.queue
 
   const totalPages = Math.ceil(total / perPage)
   const data = toPlain(expenses).map((e) => ({
@@ -76,6 +110,24 @@ export default async function ExpensesPage({
           </Link>
         </CanCreate>
       </div>
+
+      {draftQueue ? (
+        <ExpenseDraftQueueSection queue={draftQueue} />
+      ) : (
+        <section
+          aria-label={EXPENSE_DRAFT_QUEUE_TITLE}
+          className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+        >
+          <div className="flex flex-col gap-1 p-4 px-5">
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">
+              {EXPENSE_DRAFT_QUEUE_TITLE}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Antrean pengeluaran menunggu persetujuan tidak dapat dimuat saat ini.
+            </p>
+          </div>
+        </section>
+      )}
 
       <ExpenseTable
         data={data}
