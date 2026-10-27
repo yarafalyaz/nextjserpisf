@@ -6,17 +6,12 @@ const mocks = vi.hoisted(() => ({
   getSystemSettings: vi.fn(),
 }))
 
-vi.mock("@/lib/auth/auth", () => ({
-  auth: (...a: unknown[]) => mocks.authFn(...a),
-}))
+vi.mock("@/lib/auth/auth", () => ({ auth: (...a: unknown[]) => mocks.authFn(...a) }))
 
-vi.mock("@/lib/auth/permissions", () => ({
-  hasPermission: (...a: unknown[]) => mocks.hasPermission(...a),
-}))
+vi.mock("@/lib/auth/permissions", () => ({ hasPermission: (...a: unknown[]) => mocks.hasPermission(...a) }))
 
-vi.mock("@/lib/utils/settings", () => ({
-  getSystemSettings: (...a: unknown[]) => mocks.getSystemSettings(...a),
-}))
+// Respons dibatasi ke identitas kop (lihat tes kunci di bawah), jadi stub cukup.
+vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: (...a: unknown[]) => mocks.getSystemSettings(...a) }))
 
 import { GET } from "../route"
 
