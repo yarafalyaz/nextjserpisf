@@ -20,6 +20,7 @@ import { ReportSection, ReportKpiCard } from "@/components/reports/report-sectio
 import { ReportNarration } from "@/components/reports/report-narration"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
 export type SubledgerSide = "AR" | "AP"
 
@@ -84,7 +85,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
         }),
         prisma.salesPayment.findMany({
           where: { salesInvoice: { customerId: partyId } },
-          select: { id: true, slug: true, documentNo: true, paymentDate: true, amount: true, salesInvoice: { select: { documentNo: true } } },
+          select: { id: true, slug: true, documentNo: true, paymentDate: true, amount: true, salesInvoice: { select: { id: true, documentNo: true } } },
         }),
         prisma.salesReturn.findMany({
           where: { customerId: partyId, status: "completed" },
@@ -96,7 +97,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
         ...invoices.map((inv) => ({
           key: `SalesInvoice:${inv.id}`,
           date: inv.date,
-          documentNo: inv.documentNo,
+          documentNo: salesInvoiceLabel(inv),
           href: entityHref("/penjualan/faktur", inv),
           description: "Faktur Penjualan",
           debit: Number(inv.grandTotal),
@@ -107,7 +108,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
           date: pay.paymentDate,
           documentNo: pay.documentNo,
           href: entityHref("/penjualan/pembayaran", pay),
-          description: pay.salesInvoice ? `Pembayaran ${pay.salesInvoice.documentNo}` : "Pembayaran",
+          description: pay.salesInvoice ? `Pembayaran ${salesInvoiceLabel(pay.salesInvoice)}` : "Pembayaran",
           debit: 0,
           credit: Number(pay.amount),
         })),
@@ -125,7 +126,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
       outstanding = invoices
         .map((inv) => ({
           key: `SalesInvoice:${inv.id}`,
-          documentNo: inv.documentNo,
+          documentNo: salesInvoiceLabel(inv),
           href: entityHref("/penjualan/faktur", inv),
           date: inv.date,
           dueDate: inv.dueDate,
