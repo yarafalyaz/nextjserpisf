@@ -7,6 +7,8 @@ import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
 import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
+import { payableOutstanding } from "@/lib/reports/aging-amounts"
+import type { SafeMathInput } from "@/lib/utils/math"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { AgingChart } from "@/components/lazy/aging-chart"
 
@@ -14,12 +16,16 @@ export interface AgingRowInput {
   party: string
   documentNo: string
   dueDate: Date | null
-  grandTotal: unknown
-  paidAmount: unknown
+  grandTotal: SafeMathInput
+  paidAmount: SafeMathInput
   /** F-104-V opsional (piutang saja): returnCredit jurnal SalesReturn POSTED
    * faktur ini dari loader — pengurang sisa, BUKAN bagian paidAmount.
    * Hutang tidak mengisinya (perilaku lama persis). */
-  returnCreditAmount?: unknown
+  returnCreditAmount?: SafeMathInput
+  /** FIN-BR-009-S2 opsional (hutang saja): PPh dipotong dari halaman hutang —
+   * sisa NETO via `payableOutstanding`, sama dengan loader PDF. Piutang
+   * tidak mengisinya (default 0 = perilaku lama). */
+  withholdingAmount?: SafeMathInput
 }
 
 export interface AgingReportTexts {
@@ -45,10 +51,12 @@ export function buildAgingRows(items: AgingRowInput[], now: Date) {
   return items
     .map((item) => {
       if (!item.dueDate) return null
-      // F-104-V: sisa = grandTotal − paidAmount − returnCredit (definisi
-      // outstanding tunggal vonis; returnCredit dari loader, default 0 =
-      // perilaku lama persis, mis. permukaan hutang).
-      const outstanding = Number(item.grandTotal) - Number(item.paidAmount) - Number(item.returnCreditAmount ?? 0)
+      // FIN-BR-009-S2: sisa NETO via payableOutstanding — definisi yang sama
+      // dengan loader PDF (aging-reports-data.ts) — lalu returnCredit layar
+      // piutang (F-104-V; AP tak mengisinya sehingga AP murni NETO).
+      const outstanding =
+        payableOutstanding(item.grandTotal, item.withholdingAmount ?? 0, item.paidAmount) -
+        Number(item.returnCreditAmount ?? 0)
       if (outstanding <= 0) return null
       const dueDate = new Date(item.dueDate)
       const overdue = daysOverdue(dueDate, now)
