@@ -407,6 +407,82 @@ describe("updateUserRoles", () => {
   })
 })
 
+describe("user-to-role subset guard (TASK-013 regression)", () => {
+  // Peran `admin` seperti ter-seed: hampir seluruh katalog. Pelaku hanya
+  // memegang manage_users + view_dashboard, jadi penugasan admin harus
+  // ditolak walau namanya bukan super_admin (celah pada penjaga literal).
+  const adminRole = [
+    {
+      name: "admin",
+      permissions: [{ name: "view_dashboard" }, { name: "view_customers" }, { name: "edit_customers" }],
+    },
+  ]
+
+  it("(a) rejects a manage_users delegate assigning the admin role via updateUserRoles", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue(adminRole)
+    const res = await updateUserRoles(3, [2])
+    expect(res).toMatchObject({ error: expect.stringContaining("tidak Anda miliki") })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("(b) allows assigning a role whose permissions are a subset of the actor's", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue([
+      { name: "viewer", permissions: [{ name: "view_dashboard" }] },
+    ])
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserRoles(3, [5])
+    expect(res).toEqual({ success: true })
+    expect(userUpdateMock).toHaveBeenCalled()
+  })
+
+  it("(c) lets a super_admin assign any role without a permission lookup", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserRoles(3, [2])
+    expect(res).toEqual({ success: true })
+    expect(roleFindManyMock).not.toHaveBeenCalled()
+    expect(userUpdateMock).toHaveBeenCalled()
+  })
+
+  it("(d) rejects createUser when the requested role exceeds the actor's permissions", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue(adminRole)
+    const res = await createUser(
+      fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["2"] }),
+    )
+    expect(res).toMatchObject({ error: expect.stringContaining("tidak Anda miliki") })
+    expect(userCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps the literal super_admin block even when the actor holds its permissions", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue([
+      { name: "super_admin", permissions: [{ name: "view_dashboard" }] },
+    ])
+    const res = await updateUserRoles(3, [1])
+    expect(res).toEqual({ error: "Hanya super admin yang dapat memberikan role super admin" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("toggleUserActive", () => {
   it("flips the active flag", async () => {
     userFindMock.mockResolvedValue({ id: 4, isActive: true })

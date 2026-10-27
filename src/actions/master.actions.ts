@@ -44,6 +44,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { assertCanGrantRoles } from "@/lib/auth/role-grant";
 
 /**
  * Konversi satuan alternatif dari JSON FormData `uomConversions`
@@ -78,38 +79,12 @@ function parseUomConversions(
 }
 
 /**
- * Privilege-escalation guard for Employee → User creation/sync flows.
- *
- * `createEmployee` and `updateEmployee` both let a caller mint a brand-new
- * login account (or sync roles onto an existing one) by submitting a list of
- * role IDs in the form. Without this guard, anyone holding `create_employees`
- * or `edit_employees` — even an HR manager with no role-management rights —
- * could pass the `super_admin` role ID and grant themselves (or anyone) full
- * system access, completely bypassing the
- * `assertNoSuperAdminGrant` gate that `auth.actions.ts` enforces for the
- * dedicated user-management path. That would defeat the principle of least
- * privilege and allow a single HR-permission holder to escalate to super admin
- * by editing a single employee record.
- *
- * Returns an error message when the assignment is disallowed, otherwise null.
- * Kept local to this file (not exported) on purpose: it is a server-action
- * helper and must not be reachable from client components.
+ * Privilege-escalation guard for Employee → User creation/sync flows is the
+ * shared `assertCanGrantRoles` (`@/lib/auth/role-grant`): the same subset
+ * check that guards the dedicated user-management path, so an HR-permission
+ * holder cannot mint or sync a role (super_admin, admin, or any other)
+ * carrying permissions beyond their own from the Employee form.
  */
-async function assertNoSuperAdminGrant(
-  actorRoles: string[],
-  roleIds: number[],
-): Promise<string | null> {
-  if (actorRoles.includes("super_admin")) return null;
-  if (roleIds.length === 0) return null;
-  const requested = await prisma.role.findMany({
-    where: { id: { in: roleIds } },
-    select: { name: true },
-  });
-  if (requested.some((r) => r.name === "super_admin")) {
-    return "Hanya super admin yang dapat memberikan role super admin";
-  }
-  return null;
-}
 
 /**
  * Target-escalation guard for Employee → User update flows.
@@ -123,7 +98,7 @@ async function assertNoSuperAdminGrant(
  *
  * Returns an error message when the modification is disallowed, otherwise
  * null. Resolves to null when `targetUserId` is null (employee has no login
- * account yet — the create path covers that case via `assertNoSuperAdminGrant`).
+ * account yet — the create path covers that case via `assertCanGrantRoles`).
  */
 async function assertCanModifyEmployeeTarget(
   actorRoles: string[],
@@ -1010,10 +985,9 @@ export async function createEmployee(formData: FormData) {
         };
       }
       // Privilege-escalation guard: never let a non-super-admin mint a
-      // login account carrying the super_admin role from the Employee form.
-      // Mirrors `assertNoSuperAdminGrant` in auth.actions.ts so an HR-permission
-      // holder cannot bypass the dedicated user-management gate.
-      const grantErr = await assertNoSuperAdminGrant(actor.roles, loginRoleIds);
+      // login account carrying a role beyond their own permissions from the
+      // Employee form (shared subset check with the user-management path).
+      const grantErr = await assertCanGrantRoles(actor, loginRoleIds);
       if (grantErr) {
         return { success: false, error: grantErr };
       }
@@ -1166,10 +1140,11 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       }
     }
 
-    // Privilege-escalation guard: block granting the super_admin role from the
-    // Employee form on BOTH the "create new login" and the "sync existing login"
-    // branches. Applies whenever role IDs are submitted, regardless of wantsLogin.
-    const grantErr = await assertNoSuperAdminGrant(actor.roles, loginRoleIds);
+    // Privilege-escalation guard: block granting any role beyond the actor's
+    // own permissions from the Employee form on BOTH the "create new login"
+    // and the "sync existing login" branches. Applies whenever role IDs are
+    // submitted, regardless of wantsLogin.
+    const grantErr = await assertCanGrantRoles(actor, loginRoleIds);
     if (grantErr) {
       return { success: false, error: grantErr };
     }
