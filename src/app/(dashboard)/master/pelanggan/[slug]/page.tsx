@@ -7,6 +7,7 @@ import { CanCreate } from "@/components/auth/can-create"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -156,7 +157,7 @@ export default async function CustomerDetailPage({
                   </div>
                   <div className="p-4 px-5">
                     {taxInvoices.length === 0 ? (
-                      <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">Belum ada faktur pajak terbit</p>
+                      <EmptyState title="Belum ada faktur pajak terbit" className="py-10" />
                     ) : (
                       <DetailTable>
                         <DetailTableHead>
@@ -198,7 +199,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.quotations.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penawaran</p>
+                    <EmptyState title="Belum ada penawaran" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -234,7 +235,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.salesInvoices.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada faktur</p>
+                    <EmptyState title="Belum ada faktur" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -272,7 +273,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.projects.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada proyek</p>
+                    <EmptyState title="Belum ada proyek" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -308,7 +309,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.customerVehicles.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada kendaraan</p>
+                    <EmptyState title="Belum ada kendaraan" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

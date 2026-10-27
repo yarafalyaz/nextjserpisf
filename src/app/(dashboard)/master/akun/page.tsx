@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -110,7 +111,7 @@ export default async function AccountsPage({
           </div>
           <div className="p-4 px-5">
             {group.length === 0 ? (
-              <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada akun {label.toLowerCase()}</p>
+              <EmptyState title={`Belum ada akun ${label.toLowerCase()}`} />
             ) : (
               <DetailTable>
                 <DetailTableHead>
