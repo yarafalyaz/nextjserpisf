@@ -10,9 +10,12 @@
  *
  * Berkas ini hanya menghitung pratinjau dari baris jurnal yang sudah
  * dikumpulkan loader:
- * - hanya jurnal POSTED (vonis: DRAFT/REVERSED tidak ikut saldo; loader
- *   menyaringnya, builder menyaring ulang agar pemanggil lain tidak
- *   membocorkan status lain),
+ * - jurnal POSTED + REVERSED (konvensi GL `REPORT_JOURNAL_STATUSES` di
+ *   report-aggregation.service.ts): jurnal lawan reversal berstatus POSTED
+ *   sehingga pasangan (REVERSED asli + POSTED lawan, tanggal sama) neto
+ *   nol. DRAFT tidak ikut saldo. Loader menyaring status yang sama dan
+ *   builder menyaring ulang agar pemanggil lain tidak membocorkan status
+ *   lain. Menghitung POSTED saja akan menyisakan lawan sebelah yatim,
  * - saldo per (akun P&L, profitCenterId): REVENUE normal kredit
  *   (saldo = kredit − debit), EXPENSE normal debit (saldo = debit − kredit);
  *   baris penutup membalik saldo itu, kontra-akun (saldo lawan normal, mis.
@@ -38,7 +41,7 @@ export interface YearEndClosingEntryInput {
   accountType: string
   profitCenterId: number | null
   profitCenterCode: string | null
-  /** Status jurnal induk; hanya POSTED yang dihitung. */
+  /** Status jurnal induk; hanya POSTED/REVERSED (REPORT_JOURNAL_STATUSES) yang dihitung. */
   journalStatus: string
   debit: number
   credit: number
@@ -108,7 +111,8 @@ export function buildYearEndClosingPreview(input: {
 
   const groups = new Map<string, YearEndClosingAccountLine>()
   for (const entry of input.entries) {
-    if (entry.journalStatus !== "POSTED") continue
+    // POSTED + REVERSED (REPORT_JOURNAL_STATUSES): pasangan reversal neto nol.
+    if (entry.journalStatus !== "POSTED" && entry.journalStatus !== "REVERSED") continue
     if (entry.accountType !== "REVENUE" && entry.accountType !== "EXPENSE") continue
     const key = groupKey(entry.accountId, entry.profitCenterId)
     const existing = groups.get(key)

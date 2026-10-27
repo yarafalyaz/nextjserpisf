@@ -31,7 +31,9 @@ const READERS = [
   // Vonis Bot 4 issuecomment-6311771332: penjaga mengawasi rumus di
   // read-model, bukan lokasi berkas halaman.
   "src/lib/reports/spt-read-model-data.ts",
-  "src/app/(dashboard)/laporan/bukti-potong-pph/[[...segments]]/page.tsx",
+  // Halaman bukti-potong-pph kini murni tampilan; DPP pembelian dihitung
+  // loader bersama (satu sumber layar/PDF/CSV) lewat purchaseDpp.
+  "src/lib/reports/withholding-certificates-data.ts",
   "src/lib/reports/vat-invoices-data.ts",
 ]
 
@@ -64,11 +66,17 @@ describe("diskon tagihan vendor: penulis dan pembaca DPP harus sepakat", () => {
       // menghilangkan pengurangan, bukan mengganti bentuk, yang dilarang.
       const rawDiscount = /subtotal\)\s*-\s*Number\([^)]*discountAmount/
       const viaVatDpp = /dpp:\s*vatDpp\([^,]*\.subtotal,\s*[^,]*\.discountAmount/
+      const viaPurchaseDpp = /dpp:\s*purchaseDpp\(Number\([^)]*\.subtotal\),\s*Number\([^)]*discountAmount/
       expect(
-        rawDiscount.test(src) || viaVatDpp.test(src),
+        rawDiscount.test(src) || viaVatDpp.test(src) || viaPurchaseDpp.test(src),
         `${file} harus menghitung DPP dari subtotal − discountAmount`
       ).toBe(true)
     }
+    // purchaseDpp sendiri wajib tetap mengurangi diskon dari subtotal.
+    const ppSrc = read("src/lib/reports/withholding-certificates.ts")
+    expect(ppSrc).toMatch(
+      /export function purchaseDpp\(subtotal: number, discountAmount[^)]*\)[^{]*\{\s*return safeSubtract\(subtotal, discountAmount/
+    )
   })
 
   it("subtotal yang dikirim form memang BRUTO — dasar asumsi di atas", () => {

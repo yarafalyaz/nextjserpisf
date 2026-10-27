@@ -246,7 +246,9 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       // filter-nya juga membawa pusat biaya; keduanya dipakai apa adanya supaya
       // PDF memuat periode yang sama dengan yang dilihat di layar.
       const start = search.tanggalMulai ? new Date(`${search.tanggalMulai}T00:00:00`) : period.start
-      const end = search.tanggalSelesai ? new Date(`${search.tanggalSelesai}T23:59:59`) : period.end
+      // Akhir hari penuh (.999) sama dengan layar — jurnal pukul 23:59:59.500
+      // tidak boleh tampil di layar tapi hilang di PDF (B9).
+      const end = search.tanggalSelesai ? new Date(`${search.tanggalSelesai}T23:59:59.999`) : period.end
       const costCenterId = search.costCenterId ? Number(search.costCenterId) : null
 
       const report = await loadIncomeStatementByCostCenter({
@@ -307,7 +309,8 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     subtitle: "Daftar Saldo per Akun",
     async load({ period, search }) {
       // Tanggal pembanding adalah parameter tersendiri, bukan bagian periode.
-      const compareRaw = search.pembanding ? new Date(`${search.pembanding}T23:59:59`) : null
+      // Akhir hari penuh (.999) sama dengan layar (B9).
+      const compareRaw = search.pembanding ? new Date(`${search.pembanding}T23:59:59.999`) : null
       const compareDate = compareRaw && !Number.isNaN(compareRaw.getTime()) ? compareRaw : null
 
       const report = await loadTrialBalanceReport(new Date(period.end), compareDate)
@@ -960,7 +963,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
   },
   "bukti-potong-pph": {
     title: "Daftar Bukti Potong PPh",
-    subtitle: "Pemotongan PPh atas Tagihan Pemasok",
+    subtitle: "Pemotongan PPh Dua Sisi — Pembelian & Penjualan",
     defaultPeriod: startOfYear,
     async load({ period }) {
       const report = await loadWithholdingSummary(period)

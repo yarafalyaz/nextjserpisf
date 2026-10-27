@@ -12,6 +12,8 @@ import { WarrantyClaimList } from "./_components/warranty-claim-list"
 import { getWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue-data"
 import { WARRANTY_EXPIRY_WINDOW_CHOICES } from "@/lib/reports/warranty-expiry-queue"
 import { WarrantyExpiryQueueCard } from "@/components/reports/warranty-expiry-queue-card"
+import { getWarrantyIntakeQueue } from "@/lib/reports/warranty-claim-intake-queue-data"
+import { WarrantyIntakeQueueCard } from "@/components/reports/warranty-intake-queue-card"
 
 export const metadata: Metadata = { title: "Klaim Garansi" }
 
@@ -56,6 +58,7 @@ export default async function WarrantyClaimsPage({
     windowAheadDays,
     windowPastDays,
   })
+  const intakeQueue = await getWarrantyIntakeQueue()
 
   const claims = await prisma.warrantyClaim.findMany({
     where: {
@@ -185,6 +188,8 @@ export default async function WarrantyClaimsPage({
           Terapkan Jendela
         </button>
       </form>
+
+      <WarrantyIntakeQueueCard queue={intakeQueue} />
 
       <WarrantyExpiryQueueCard queue={expiryQueue} />
 
