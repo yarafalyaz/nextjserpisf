@@ -10,11 +10,9 @@
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { buildVatPosition } from "@/lib/reports/vat-reconciliation"
-import {
-  buildVatReconciliationTotals,
-  buildWithholdingTotal,
-  taxDocumentBase,
-} from "@/lib/reports/tax-summary"
+import { buildVatReconciliationTotals } from "@/lib/reports/tax-summary"
+import { buildWithholdingCertificateTable } from "@/lib/reports/withholding-certificates"
+import { loadWithholdingCertificateInputs } from "@/lib/reports/withholding-certificates-data"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { formatAccounting } from "@/lib/utils/format"
@@ -28,8 +26,6 @@ export interface TaxSimpleReport {
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
-const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 
 type Period = { start: Date; end: Date }
@@ -220,45 +216,14 @@ export async function loadTaxSummarySpt(period: Period): Promise<TaxSimpleReport
   return { table: { columns: SPT_COLUMNS, rows: buildSptTableRows(rows) }, ...periodOf(period) }
 }
 
-const WHT_COLUMNS: TableColumn[] = [
-  { header: "Tanggal", align: "left", width: 28 },
-  { header: "No. Tagihan", align: "left", width: 38 },
-  { header: "Pemasok", align: "left", width: 56 },
-  { header: "Jenis PPh", align: "left", width: 28 },
-  { header: "DPP", align: "right", width: 38 },
-  { header: "PPh Dipotong", align: "right", width: 38 },
-]
-
+/**
+ * Bukti Potong PPh untuk PDF — DUA sisi dari loader bersama yang sama
+ * dengan layar & CSV (B8). Versi lama hanya memuat sisi vendor
+ * (VendorBill), sehingga total PDF tidak pernah sama dengan layar yang
+ * menampilkan juga PPh yang dipotong pelanggan.
+ */
 export async function loadWithholdingSummary(period: Period): Promise<TaxSimpleReport> {
-  const bills = await prisma.vendorBill.findMany({
-    where: {
-      date: { gte: period.start, lte: period.end },
-      status: { in: ["posted", "partial", "paid"] },
-      deletedAt: null,
-      withholdingAmount: { gt: 0 },
-    },
-    include: {
-      vendor: { select: { name: true } },
-      withholdingType: { select: { code: true, name: true, rate: true } },
-    },
-    orderBy: [{ date: "asc" }, { documentNo: "asc" }],
-  })
-  const rows: TableRow[] = bills.map((bill) => ({
-    kind: "data" as const,
-    cells: [
-      shortDate(bill.date),
-      bill.documentNo,
-      bill.vendor.name,
-      bill.withholdingType?.code ?? "-",
-      money(taxDocumentBase(bill.subtotal, bill.discountAmount ?? 0)),
-      money(Number(bill.withholdingAmount)),
-    ],
-  }))
-  if (rows.length === 0) {
-    rows.push({ kind: "notice", text: "Tidak ada bukti potong PPh pada periode ini." })
-  } else {
-    const total = buildWithholdingTotal(bills.map((b) => b.withholdingAmount))
-    rows.push({ kind: "total", grand: true, label: "Jumlah Dipotong", cells: ["", "", "", "", "", money(total)] })
-  }
-  return { table: { columns: WHT_COLUMNS, rows }, ...periodOf(period) }
+  const inputs = await loadWithholdingCertificateInputs(period)
+  const table = buildWithholdingCertificateTable(inputs)
+  return { table: { columns: table.columns, rows: table.rows }, ...periodOf(period) }
 }

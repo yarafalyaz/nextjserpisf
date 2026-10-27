@@ -13,6 +13,8 @@ import { PayrollFilterForm } from "../_components/payroll-filter-form";
 import { buildPathFilterHref, parsePathFilterSegments } from "@/lib/utils/path-filters";
 
 import { BulkGeneratePayrollButton } from "../_components/bulk-generate-payroll-button";
+import { getPayrollDraftQueue } from "@/lib/reports/payroll-draft-queue-data";
+import { PayrollDraftQueueCard } from "@/components/reports/payroll-draft-queue-card";
 import { getPkwtCompensationReport } from "@/lib/reports/pkwt-compensation-data";
 import { hasPermission } from "@/lib/auth/permissions";
 import { PkwtCompensationPanel } from "@/components/payroll/pkwt-compensation-panel";
@@ -136,6 +138,12 @@ export default async function PayrollPage({
   const settings = await prisma.systemSetting.findFirst();
   const cutoffDay = settings?.payrollCutoffDay ?? 25;
 
+  // 070-F: antrean slip gaji draft mengendap (Backend PR #1107). Halaman
+  // menegakkan process_payroll sebelum loader; loader menegakkan ulang
+  // fail-closed (view_payroll saja tidak cukup tahap 1).
+  const canProcessPayroll = await hasPermission("process_payroll");
+  const payrollDraftQueue = canProcessPayroll ? await getPayrollDraftQueue() : null;
+
   // F-2026-10-24-132-V: panel kompensasi PKWT (read-model server murni).
   const [pkwtReport, pkwtEmployees, pkwtDraftSlips, canCreatePkwt, canApprovePkwt, canProcessPkwt, canAttachPkwt] =
     await Promise.all([
@@ -209,6 +217,8 @@ export default async function PayrollPage({
           </CanCreate>
         </div>
       </div>
+
+      {payrollDraftQueue ? <PayrollDraftQueueCard queue={payrollDraftQueue} /> : null}
 
       <PkwtCompensationPanel
         report={pkwtReport}

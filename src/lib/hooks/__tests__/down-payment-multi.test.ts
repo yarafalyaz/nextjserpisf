@@ -161,6 +161,11 @@ describe("onDownPaymentConfirmed — ready-document notification batching", () =
     mocks.onSalesInvoicePosted.mockResolvedValue(undefined)
     mocks.notifyDocumentsReadyBatch.mockResolvedValue(undefined)
     mocks.salesPaymentCreate.mockResolvedValue({ id: 555, amount: 100 })
+    // TASK-011 BUG-02: alokasi awal kini fail-closed tanpa pemetaan akun.
+    mocks.systemSettingFindFirst.mockResolvedValue({ customerDownPaymentAccountId: 210, salesReceivableAccountId: 110 })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
   })
 
   it("sends one batched notification call with all 3 ready documents, not a per-doc loop", async () => {
