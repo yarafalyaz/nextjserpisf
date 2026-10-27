@@ -35328,6 +35328,19 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
 F-2026-10-27-078-S — Daftar kesenjangan kompetensi lintas karyawan (jabatan vs aktual). Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-CGQ-1/2/3, lalu fisik Backend (078-B), konsumen Frontend (078-F sesudah #805 final), falsifikasi QA (078-Q). Pemilik usulan: Business (spec), Lead (ambang kritis/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak dampak kompetensi ke gaji/promosi diusulkan (di luar spec ini, BR-CGQ-09/12).
 
+#### PUTUSAN LEAD Q-CGQ-1..8 (27 Okt 2026 10:19 WIB, kartu t_810fb4d8; PR spec #1093 MERGED 31a71149b; PR #805 MERGED 6b64c0efe — gerbang #805 final TERTUTUP)
+
+- Q-CGQ-1 DIPUTUS: penempatan = seksi turunan di halaman kompetensi existing sesudah #805 final (MERGED 6b64c0efe, halaman `sdm/kompetensi` ADA di main terverifikasi run ini); BUKAN laporan SDM mandiri, BUKAN halaman daftar mandiri tahap 1. Satu izin `view_competencies`, nol halaman kompetensi kedua.
+- Q-CGQ-2 DIPUTUS: penanda kritis DITERBITKAN sebagai tingkat pada baris `di-bawah-syarat`: gap >= 2 pada skala 1-5; satu konstanta bernama di builder (usulan nama `COMPETENCY_GAP_CRITICAL_MIN = 2` — nama final milik Backend, nilai tidak boleh berubah). Belum-dinilai TIDAK berpenanda kritis (bukan gap). Mengubah nilai/ambang di luar konstanta = MERAH (AC-CGQ-B5).
+- Q-CGQ-3 DIPUTUS: kata §1 disahkan verbatim — kolom `Karyawan`/`Jabatan`/`Kompetensi`/`Syarat`/`Aktual`/`Kesenjangan`/`Dinilai`; label ember `Belum Dinilai`/`Di Bawah Syarat`/`Memenuhi Syarat`; label kritis `Kritis`; notice §1 apa adanya. Satu konstanta label server. Urutan: ember `belum-dinilai` lalu `di-bawah-syarat`; dalam ember nama kompetensi naik, lalu nama karyawan naik; seri sama persis → id karyawan naik, lalu id kompetensi naik. TANPA urutan berdasar gap/level (BR-CGQ-08).
+- Q-CGQ-4 DIPUTUS: TIDAK ada nilai/nilai-ulang langsung dari daftar tahap 1 (BR-CGQ-06 final); satu-satunya jalan nilai = `assessEmployeeCompetency` di permukaan #805.
+- Q-CGQ-5 DIPUTUS: TIDAK ada antar-daftar ke pendaftaran pelatihan tahap 1 — tanpa tombol, tanpa tautan pendaftaran, tanpa auto-daftar (BR-CGQ-11); daftar murni peta kebutuhan.
+- Q-CGQ-6 DIPUTUS: TIDAK ada key izin baru tahap 1; loader WAJIB `view_competencies` DAN `view_employees` sebelum query + `getHrScope` fail-closed (BR-CGQ-04). Tanpa salah satu izin loader tidak dipanggil; nama tidak diturunkan lewat jalan lain termasuk rekap.
+- Q-CGQ-7 DIPUTUS: jabatan-tanpa-kandidat TIDAK tampil sebagai baris daftar/rekap tahap 1 (tidak dikarang gap nol-karyawan); karyawan berhenti/nonaktif (`isActive: false` atau `employmentEndedAt` terisi atau `deletedAt` terisi) TIDAK masuk populasi (§3 final).
+- Q-CGQ-8 DIPUTUS: ekspor TIDAK tahap 1; baris `memenuhi` rekap-saja (tidak tampil sebagai baris daftar); `assessedBy`/`notes` TIDAK masuk payload (BR-CGQ-10); persen cakupan TIDAK diterbitkan tahap 1 (bila kelak diputus: dari hitungan tertimbang populasi, bukan rata-rata persen kelompok).
+
+Vonis Accountant tidak diminta (nol nominal/gaji tahap 1, BR-CGQ-09/12). Gerbang Q-CGQ-1..8 TERTUTUP — turunan dibuka run ini: 078-B Backend (kartu anak kartu putusan ini), 078-F Frontend (parent 078-B; gerbang #805 final sudah tertutup), 078-Q QA (parent 078-B+078-F). ID F-* turunan dipesan Backend/Frontend/QA saat kartu dibuat, jangan dikarang di sini.
+
 ---
 
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-079-S: antrean hasil pelatihan belum dicatat (pelatihan lewat jadwal belum ditutup + peserta selesai belum ber-hasil) (turunan baca-saja)
@@ -38862,33 +38875,73 @@ Jujur: kedua benchmark membuktikan opname → penyesuaian adalah fitur standar (
 - Mengganti laporan stok opname existing (`stock-count*`) — ia membaca `StockAdjustment` untuk nilai selisih; antrean ini membaca sesi untuk tahap/umur. Keduanya tetap.
 F-2026-10-27-090-S — Antrean sesi opname belum selesai mengendap per tahap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-STQ-1..5, lalu fisik Backend (090-B), konsumen Frontend (090-F), falsifikasi QA (090-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/gerbang/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja (nol kuantitas/nominal variance di payload, nol jurnal, nol ubah stok — BR-STQ-07); WAJIB bersyarat hanya bila Lead membuka Q-STQ-6 (angka variance di daftar).
 
+## VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-099-V: penulis status `djpStatus` TaxInvoice `draft` → `approved`/`rejected` (menjawab Q-TIQ-6 spec F-2026-10-27-098-S §5/§8, PR #1134 MERGED)
+
+> **Slot**: F-2026-10-27-099-V. Diverifikasi bebas 2026-10-27 10:12 WIB: grep `F-2026-10-27-099` di backlog+board `origin/main` (`0a8f3064f3892ecd62a366876d730cde7f79ab57`) = 0; seri 2026-10-27 terakhir di backlog main = 098-S (PR #1134 MERGED, head PR `bd09f8cb85d6`, base `819cf35b48`). Dokumen saja; nol kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran. Kartu t_cc38ac61.
+
+### 0. Fakta terverifikasi (TERVERIFIKASI-KODE, basis origin/main `0a8f3064f`, 2026-10-27 10:12 WIB)
+
+Perintah bukti (dijalankan run ini di worktree bersih atas `origin/main`): `git grep -n "djpStatus" origin/main -- 'src/**' 'prisma/**'` (71 hit), lalu saringan assignment `djpStatus: *"approved"|"rejected"` non-tes = **0 hit (exit 1)**; `git grep -n "taxInvoice\.update|taxInvoice\.updateMany|taxInvoice\.create" origin/main -- 'src/**'` non-tes = hanya service di bawah.
+
+- F1 — Kosakata: `DJP_STATUSES = draft|approved|rejected|replaced|cancelled` (`src/lib/tax/tax-invoice.ts:41`); kolom `djpStatus String @default("draft")` (`prisma/schema.prisma:1274`, komentar kosakata :1272). Kolom bukti eksternal existing: `xmlPayload`/`xmlHash`/`xmlImportedAt`/`djpMessage` (schema :1313-1316).
+- F2 — PENULIS `djpStatus` non-tes PERSIS LIMA, semua di `src/lib/services/tax-invoice.service.ts`: lahir `draft` tiga jalur — `issueTaxInvoice` :247, `issueDownPaymentTaxInvoice` :387, `replaceTaxInvoice` (pengganti) :484; `replaced` pada asal oleh `replaceTaxInvoice` :496; `cancelled` oleh `cancelTaxInvoice` :550. Penulis lain nol: tidak ada `taxInvoice.update/updateMany/create` di luar service ini.
+- F3 — PENULIS `approved`/`rejected`: **ABSEN TOTAL di `src/` non-tes.** Nilai itu hanya hidup sebagai (a) fixture tes (`tax-invoice.service.test.ts:209/:261`, `spt-read-model.test.ts:18/:38/:66/:109`, `down-payment-vat.test.ts:161-162`, `tax-verdicts.test.ts:41`) dan (b) KONSUMEN baca yang sudah mengantisipasinya: `effectiveChainHead` hanya mengakui kepala `approved` bernilai SPT, `draft`/`rejected` nol-efek (`tax-invoice.ts:213-220`); SPT masukan membuang `cancelled`/`rejected` walau `creditStatus` lama masih `credited` (`spt-read-model.ts:89`); `deriveDownPaymentTaxStatus` hanya `approved` = FP UM terbit, `draft`/`rejected` tetap terutang-belum-terbit (`down-payment-vat.ts:404-420`, komentar Putusan 3 :416); ekspor Coretax menolak `cancelled`/`replaced` (`coretax-xml-export.ts:218-223`) tetapi MEMBIARKAN `draft` diekspor (itulah jalur keluar draft existing).
+- F4 — Pembaca lain (semua baca, nol tulis): daftar pilih halaman terbit `djpStatus IN (draft, approved)` maks 100 (`faktur/tambah/page.tsx:54`); SPT read-model memilih `djpStatus` apa adanya (`spt-read-model-data.ts:85/:150/:167`); status FP UM tertaut (`down-payment-tax-status-data.ts:52/:62`); penjaga retur/kredit memakai `notIn [cancelled, replaced]` (`accounting.hook.ts:1796`, `purchase-return.hook.ts:217`, `customer-credit.service.ts:230`, service :180/:341/:458/:555/:566); ekspor XML membaca `djpStatus` (`coretax-xml-export-data.ts:61/:139`).
+- F5 — Impor XML existing BUKAN penulis status: `issueTaxInvoice` menerima `xmlPayload` opsional dan hanya menulis `xmlPayload`/`xmlHash`/`xmlImportedAt`/`djpMessage="Diimpor dari XML Coretax"` (service :254-261) — faktur tetap lahir `draft` :247. Tidak ada jalur impor/sinkron Coretax masuk, tidak ada aksi konfirmasi status, tidak ada cron/webhook DJP di repo (grep `taxInvoice.update*` di luar service = 0).
+- F6 — Kata existing panel ekspor (`coretax-export-panel.tsx:64`): "Berkas yang terbentuk bukan bukti terkirim atau disetujui DJP — status DJP hanya dari bukti Coretax." Ini kontrak kata yang sudah mengikat UI.
+- F7 — Otoritas DJP (diakses 2026-10-27): PER-11/PJ/2025 Pasal 44 ayat (1)-(2) — e-Faktur WAJIB diunggah ke DJP memakai modul e-Faktur dan **memperoleh persetujuan dari DJP**, paling lambat tanggal 20 bulan berikutnya sesudah tanggal pembuatan; persetujuan diberikan sepanjang diunggah dalam jangka itu (https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf). Nomor seri diberikan otomatis saat e-Faktur diunggah dan memperoleh persetujuan DJP (Pasal 37 ayat (1) huruf c jo. Pasal 40 ayat (2), kutipan teks sama). Artikel resmi DJP: nomor faktur ter-generate otomatis ketika faktur berhasil diunggah dan status berubah menjadi "disetujui"; faktur keluaran berstatus disetujui langsung terlihat pembeli di Pajak Masukan (https://pajak.go.id/id/artikel/coretax-djp-ketika-faktur-pajak-diterima-seketika). Coretaxpedia DJP memuat topik "Approval faktur pajak" di bawah Faktur Pajak (https://pajak.go.id/coretaxpedia/) — approval adalah peristiwa di Coretax, bukan di ERP.
+
+### 1. Putusan (menjawab Q-TIQ-6)
+
+1. **Penulis sah `approved`/`rejected` adalah DJP lewat Coretax, bukan operator ERP.** `approved` = persetujuan DJP atas e-Faktur yang diunggah (PER-11/PJ/2025 Pasal 44); `rejected` = penolakan/validasi gagal DJP atas unggahan itu. Keduanya peristiwa eksternal. ERP hanya boleh MENCATAT hasil terbukti, tidak pernah MEMUTUSKAN hasil. Maka di kode existing jawabannya jujur: penulis transisi `draft` → `approved`/`rejected` memang TIDAK ADA dan TIDAK BOLEH dikarang sebagai tombol internal.
+2. **Mekanisme pencatatan yang sah (bila kelak dibangun, ID terpisah, BUKAN tahap antrean 098-S):** satu aksi pencatatan hasil Coretax per faktur dengan syarat kumulatif — (a) izin `create_tax_invoices` existing (satu siklus dokumen = satu izin; key `approve_*` baru DILARANG dikarang tanpa putusan Lead Q-TIQ-5); (b) bukti wajib terisi: hasil dari Coretax yang dapat ditunjuk operator (nomor seri faktur pajak dari DJP untuk `approved`; pesan penolakan DJP disimpan verbatim ke `djpMessage` untuk `rejected`) — pencatatan tanpa bukti = ditolak fail-closed; (c) idempotency key wajib, scope terpisah per aksi pencatatan; (d) `assertPeriodOpen` dalam transaksi yang sama; (e) transisi hanya dari `draft`, satu arah, tidak dapat diubah lagi dari ERP (koreksi status salah catat = jalur koreksi terdokumentasi, bukan edit diam-diam); (f) jurnal: pencatatan status TIDAK memposting jurnal apa pun — status pajak bukan peristiwa akuntansi; dampaknya hanya lewat read-model SPT existing yang sudah membaca `djpStatus` apa adanya (F3/F4). Membangun mekanisme ini di luar scope vonis ini dan di luar 098-S; vonis ini hanya membekukan syaratnya.
+3. **Antrean 098-S TIDAK BOLEH menautkan status `approved`/`rejected` sebagai aksi.** Yang boleh: antrean menampilkan `djpStatus` verbatim dan baris keluar populasi bila status berubah oleh jalur sah mana pun (BR-TIQ-01/10 spec 098-S tetap). Antrean TIDAK menyediakan tombol/aksi "Tandai Disetujui", "Tandai Ditolak", "Sinkron DJP", atau sejenisnya dalam kata apa pun sebelum mekanisme Putusan 2 dibangun terpisah dan lolos falsifikasi QA.
+4. **Status antrean yang boleh ditautkan (tindak lanjut existing saja):** dari baris draft, tautan hanya ke permukaan existing — halaman terbit/lifecycle existing (ganti/batal/kredit) dan panel ekspor XML Coretax existing. Ekspor XML adalah jalan keluar draft menuju persetujuan DJP; berkas ekspor BUKAN bukti status (F6).
+5. **Label yang DILARANG** (di antrean dan permukaan pencatatan kelak): "disetujui DJP", "ditolak DJP", "terkirim ke DJP", "terdaftar di DJP", "sudah lapor" sebagai label status baris hasil tindakan internal — kata itu hanya sah menempel pada nilai `djpStatus` terbukti dari Coretax. Label sah untuk draft: verbatim `draft` / kata final Lead Q-TIQ-2 tanpa klaim DJP. `djpMessage` tetap dilarang tampil di daftar (BR-TIQ-04 tetap).
+
+### 2. Larangan ringkas
+
+1. Tombol/aksi internal apa pun yang menulis `approved`/`rejected` tanpa bukti Coretax per Putusan 2 (termasuk "Tandai Disetujui" dari antrean — sudah dilarang spec 098-S §9, vonis ini mengikatnya sebagai perlakuan pajak).
+2. Menurunkan `approved` dari peristiwa internal: ekspor XML berhasil dibuat, jurnal terposting, invoice lunas, kredit masukan tercatat, atau umur draft — semuanya BUKAN persetujuan DJP.
+3. Mengarang key izin `approve_tax_invoices`/status/kolom bukti baru tanpa putusan Lead + koordinasi Backend (schema wilayah Backend).
+4. Jurnal dari transisi status DJP (Putusan 2f).
+5. Kata klaim DJP untuk status yang dicatat tanpa bukti (Putusan 5).
+
+### 3. Batas build
+
+- **Backend (098-B, tidak berubah oleh vonis ini)**: antrean tetap baca-saja persis spec 098-S; payload tanpa `xmlPayload`/`xmlHash`/`djpMessage`; nol penulis `djpStatus` baru. Mekanisme pencatatan Putusan 2 = kartu/ID terpisah, hanya sesudah Lead membuka dan menunjuk bukti Coretax yang diterima.
+- **Frontend (098-F)**: label status verbatim server; nol tombol status (AC-TIQ-F3 diperkuat: kata "disetujui/ditolak DJP" sebagai status baris dari tindakan internal = MERAH).
+- **QA (098-Q)**: falsifikasi §4 atas head persis.
+
+### 4. Falsifikasi QA (penjaga wajib satu tes merah bila penjaga dicabut)
+
+- V1: Grep statis atas head Backend/Frontend: assignment `djpStatus: "approved"` atau `"rejected"` di `src/` non-tes selain mekanisme pencatatan yang disahkan Lead = MERAH. (Hari ini hasil sah = 0; tes ini mengunci absennya.)
+- V2: Antrean: tidak ada aksi yang mengubah `djpStatus`/`creditStatus`; klik apa pun di baris tidak menulis status (perluasan AC-TIQ-B5/F3).
+- V3: Bila mekanisme pencatatan Putusan 2 kelak dibangun: catat `approved` tanpa nomor seri DJP / tanpa bukti → ditolak; catat `rejected` tanpa `djpMessage` verbatim → ditolak; replay idempotency key sama → tidak ada tulis kedua; catat pada periode tertutup → ditolak; transisi dari non-`draft` → ditolak.
+- V4: Mutasi: turunkan `approved` dari keberhasilan ekspor XML → V1/V3 MERAH.
+- V5: SPT regression tetap: kepala rantai `draft`/`rejected` nol-efek, `approved` bernilai (`tax-invoice.ts:220`, `spt-read-model.ts:89`) — perilaku existing tidak berubah oleh pencatatan.
+
+### 5. Sumber & cakupan
+
+PER-11/PJ/2025 (Dirjen Pajak, 22-05-2025) Pasal 37/40/44 — unggah + persetujuan DJP + nomor seri otomatis: https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf (diakses 2026-10-27). Artikel DJP "Coretax DJP: Ketika Faktur Pajak Diterima Seketika": https://pajak.go.id/id/artikel/coretax-djp-ketika-faktur-pajak-diterima-seketika (diakses 2026-10-27). Coretaxpedia (topik "Approval faktur pajak"): https://pajak.go.id/coretaxpedia/ (diakses 2026-10-27). Cakupan vonis: HANYA siapa/mekanisme sah penulis `draft` → `approved`/`rejected` + batas antrean 098-S. TIDAK memutus tarif/DPP/kode transaksi baru, TIDAK membangun mekanisme pencatatan, TIDAK mengubah BR-TIQ spec 098-S selain mengikat larangan statusnya, TIDAK menilai ambang mengendap (Q-TIQ-1 wilayah Lead).
+
+F-2026-10-27-099-V — Penulis status DJP TaxInvoice draft ke approved/rejected (Q-TIQ-6). Status: VONIS TURUN run ini; antrean 098-B/098-F tetap baca-saja tanpa penulis status; mekanisme pencatatan hasil Coretax = ID terpisah bersyarat Putusan 2 bila Lead membuka; merge PR vonis ini milik Lead. Pemilik: Accountant (vonis), Lead (merge + buka/tidak mekanisme pencatatan), Backend (fisik antrean sesuai spec), Frontend (label verbatim), QA (falsifikasi V1-V5).
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-100-S: antrean operasi perintah kerja (WorkOrderOperation) pending/in_progress mengendap lintas WO (turunan baca-saja)
-
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_9d5fe771. Basis `origin/main` `9c0817bd1` (2026-10-27 10:49 WIB).
-
 **Verifikasi ID — tegas:** grep `F-2026-10-27-100` di backlog+board `origin/main` (`9c0817bd1`) = 0/0 run ini 2026-10-27 10:51 WIB; PR terbuka memuat `100-S` = 0; branch `hermes/business-f100-*` = 0 sebelum branch ini. `F-2026-10-27-099-V` (PR #1153 OPEN) adalah vonis Accountant, bukan spec -S — beda akhiran, bukan bentrok. ID bebas, tidak perlu renumber. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
-
 **Bukan duplikat:**
 - Bukan F-2026-10-26-075-S (PR #1057 OPEN): objek `WorkOrder` status `draft` mengendap (dokumen WO belum mulai). Spec ini objek `WorkOrderOperation` — tahap DI DALAM WO yang sudah berjalan. WO `draft` belum punya operasi berjalan; operasi `pending`/`in_progress` hanya lahir dan bergerak saat WO `in_progress` (penjaga aksi §2). Disjungsi objek + status induk total.
 - Bukan F-2026-10-27-091-S: objek `Task` proyek vs `dueDate`. Bukan F-2026-10-27-092-S: objek `ProjectStage` proyek vs kesegaran rekod `ProjectStageProgress`. Operasi WO tidak punya rekod progres terpisah dan tidak punya persen tersimpan per rekod — kesegaran operasi hanya dibaca dari stempel kolomnya sendiri (BR-WOOQ-03), bukan dari tabel anak.
 - Bukan progres per WO existing (`src/lib/reports/work-order-progress.ts` F-2026-10-21-020): builder itu menghitung progres SATU WO dari daftar operasinya (`buildWorkOrderProgress` :139, loader `work-order-progress-data.ts:9` dipanggil halaman detail WO `[slug]/page.tsx:211`). Tidak ada query lintas WO, tidak ada umur per operasi, tidak ada tingkat mengendap. Spec ini mewarisi kosakata statusnya, tidak mendefinisikan ulang.
 - Bukan papan beban stasiun F-2026-10-22-090-S (`work-center-load-plan.ts`): papan itu mengagregat Σ `estimatedHours` operasi `pending`/`in_progress` per `WorkCenter` per minggu untuk kapasitas rencana. Spec ini TIDAK menjumlah jam, TIDAK menghitung kapasitas/persen beban, dan populasinya per BARIS operasi berumur — bukan agregat stasiun. Ember "Belum ada stasiun" BR-LP-03 dipakai sebagai penanda baris (BR-WOOQ-06), definisinya tidak diubah.
 - Bukan antrean WO aktif (`work-order-queue.ts` F-2026-10-20-28(a)): antrean itu per dokumen WO aktif + bendera terlambat dari `endDate` WO. Spec ini per operasi di dalam WO; `endDate` WO hanya fakta pendamping verbatim, bukan acuan umur operasi (BR-WOOQ-08).
-
 ### 1. Workflow specification
-
 Aktor: pemegang `view_work_orders` (pembaca antrean tahap 1 — persis gerbang halaman perintah kerja existing), pengubah tahap WO (`edit_work_orders` lewat `updateWorkOrderOperationStatus` existing). Antrean tidak menambah aktor dan tidak memperluas siapa melihat apa (BR-WOOQ-07).
-
 Alur existing (TERVERIFIKASI-KODE, §2): WO masuk `in_progress` → operasi diinisialisasi dari setting nama tahap (`doInitializeWorkOrderOperationsTx` manufacturing.actions.ts:2422, semua lahir `pending`) → tahap dikerjakan sekuensial-keras lewat `updateWorkOrderOperationStatus` (:2480, `edit_work_orders`): `pending → in_progress` menstempel `startedAt`; `in_progress → completed`/`skipped` menstempel `completedAt` (`skipped` wajib alasan); kembali ke `pending` membersihkan kedua stempel. Sesudah tahap mulai, tidak ada kewajiban mencatat apa pun secara periodik pada baris operasi — tidak ada rekod progres anak, tidak ada pengingat, tidak ada permukaan lintas WO yang menandai tahap yang sudah lama `pending` (belum mulai padahal WO berjalan) atau lama `in_progress` (sudah mulai tapi belum tuntas).
-
 Gap: di bengkel, WO berjalan bisa punya tahap awal yang tidak pernah dimulai (antre stasiun/teknisi) atau tahap yang sudah mulai tapi menggantung — terlihat hanya bila seseorang membuka detail WO satu per satu. Spec ini menambahkan **turunan baca lintas WO**: populasi operasi `pending`/`in_progress` persis + umur mengendap per operasi dari acuan per status (BR-WOOQ-03) + tingkat mengendap USULAN + fakta penunjuk baris (WO induk, stasiun, penanggung jawab, estimasi jam verbatim), dihitung server, tampil apa adanya. Nol nominal biaya (BR-WOOQ-09).
-
 Dokumen masuk: rekod `WorkOrderOperation` + WO induk (`documentNo`, status, `endDate`) + `WorkCenter`/`Employee` tertaut sebagai label. Dokumen keluar: tidak ada — memulai/menyelesaikan/melewati tahap tetap lewat aksi tahap existing berpenjaga penuh di halaman detail WO.
-
 Istilah tingkat (USULAN, final Q-WOOQ-2): `BERJALAN` (umur ≤ ambang), `MENGENDAP` (umur > ambang USULAN 7 hari kalender WIB). Kode tingkat turunan server, BUKAN status tersimpan. Penanda acuan umur: `SEJAK_DIBUAT` (untuk `pending`) vs `SEJAK_MULAI` (untuk `in_progress`); penanda anomali `MULAI_TANPA_STEMPEL` dan `BELUM_ADA_STASIUN` / `BELUM_ADA_PENANGGUNG_JAWAB`. Kata judul usulan: `Operasi Perintah Kerja Mengendap`.
-
 ### 2. Inventarisasi terverifikasi (2026-10-27, origin/main 9c0817bd1)
-
 Sudah ada (TERVERIFIKASI-KODE):
 - Skema operasi: `WorkOrderOperation` `prisma/schema.prisma:3403-3430` — `workOrderId Int` wajib (relasi `WorkOrder` onDelete Cascade), `workCenterId Int?` (komentar F-2026-10-22-090-S: tahap tanpa stasiun masuk ember "Belum ada stasiun", tidak ditebak dari nama teks tahap BR-LP-03), `name`, `sortOrder Int @default(0)`, `status String @default("pending")` (String bebas — BUKAN enum Prisma), `estimatedHours Decimal?`, `assignedEmployeeId Int?`, `startedAt DateTime?`, `completedAt DateTime?`, `notes?`, `createdAt`/`updatedAt`; indeks `[workOrderId]`, `[workCenterId]`, `[workOrderId, sortOrder]`, `[status]`, `[assignedEmployeeId]`, `[createdAt]`. TIDAK ada `deletedAt` di operasi.
 - Skema stasiun: `WorkCenter` `prisma/schema.prisma:3383` — `name`, `capacityHoursPerDay`, `parallelStations`, `isActive`, relasi `operations WorkOrderOperation[]`.
@@ -38900,14 +38953,10 @@ Sudah ada (TERVERIFIKASI-KODE):
 - Papan beban stasiun existing: `work-center-load-plan.ts` mengagregat `LOAD_PLAN_OPERATION_STATUSES = ["pending","in_progress"]` per stasiun/minggu dari Σ `estimatedHours` + kapasitas — agregat rencana, tanpa umur per baris (lihat Bukan duplikat).
 - Izin katalog: `src/lib/auth/module-catalog.generated.ts:266-270` resource `work_orders` = `view_work_orders`/`create_work_orders`/`edit_work_orders`/`delete_work_orders`/`complete_work_orders`. Halaman daftar WO `src/app/(dashboard)/produksi/perintah-kerja/page.tsx:35` dan detail `[slug]/page.tsx:72` digerbang `view_work_orders`.
 - Material/biaya aktual existing (TIDAK dibaca antrean, BR-WOOQ-09): `MaterialIssue` `prisma/schema.prisma:2763` tertambat WO, `ProductionCost` :3211 snapshot biaya WO, `Timesheet` :4194 (`workOrderId Int?`, `hours Decimal`) — biaya/jam aktual sah hanya dari rekod-rekod ini lewat permukaan existing.
-
 Belum ada / parsial (bukti grep run ini):
 - Builder/loader antrean operasi lintas WO: grep `work-order-operation-queue|WorkOrderOperationQueue|operasi mengendap` di `src/` + backlog `origin/main` = 0. Daftar operasi `pending`/`in_progress` lintas WO berdasar umur, tingkat mengendap per operasi, rekap operasi membeku per WO/stasiun: ABSEN. Yang ada per WO (progres detail) dan per stasiun (agregat jam rencana) — tidak satu pun menjawab "tahap mana, di WO mana, sudah mengendap berapa lama".
-
 ### 3. Status-transition matrix
-
 Status operasi TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE) + posisi turunan:
-
 | Dari (status tersimpan) | Pemicu existing | Ke | Penjaga/permission | Efek ke antrean |
 |---|---|---|---|---|
 | (belum ada) | inisialisasi tahap saat WO berjalan (`doInitializeWorkOrderOperationsTx` :2422 / `initializeWorkOrderOperations` :2453) | `pending` (bawaan skema :3411) | `edit_work_orders` + WO `in_progress` | MASUK populasi; umur dari `createdAt` (BR-WOOQ-03) |
@@ -38918,11 +38967,8 @@ Status operasi TIDAK berubah oleh spec ini. Matriks existing (TERVERIFIKASI-KODE
 | `completed`/`skipped` | — | terminal untuk antrean | — | tidak pernah masuk / keluar populasi |
 | `pending`/`in_progress` | — (waktu berjalan, tidak ada aksi tahap) | tetap status sama | — | **turunan: umur bertambah; > ambang USULAN → tingkat `MENGENDAP`** — bukan status, tidak tertulis |
 | status liar di luar empat nilai sah | — (data warisan; validasi aksi menolak nilai liar saat TULIS, kolom String bebas) | tetap tersimpan apa adanya | — | BUKAN populasi (populasi persis dua nilai); antrean tidak menebak padanannya (BR-WOOQ-01) |
-
 Tidak ada transisi otomatis, pengingat, atau auto-mulai/auto-selesai tahap oleh waktu di kode existing — matriks tidak mengarangnya. Catatan jujur: tahap `pending` pada WO `in_progress` bisa berarti "memang belum giliran" (sekuensial-keras: tahap berikut tidak boleh mulai sebelum tahap sebelumnya tuntas) — karena itu penanda terhalang-urutan wajib tampil (BR-WOOQ-05) supaya `pending` yang terhalang tahap sebelumnya tidak dituduh lalai.
-
 ### 4. Role/permission matrix (katalog nyata :266-270)
-
 | Aksi | Key izin (TERVERIFIKASI-KODE) | Catatan |
 |---|---|---|
 | Lihat antrean turunan tahap 1 (USULAN gerbang) | `view_work_orders` (:266) — persis gerbang halaman perintah kerja existing `page.tsx:35` | tanpa key baru tahap 1 (Q-WOOQ-5) |
@@ -38932,13 +38978,9 @@ Tidak ada transisi otomatis, pengingat, atau auto-mulai/auto-selesai tahap oleh 
 | Tugaskan stasiun tahap (existing) | jalur `work-center.actions.ts:155` (wilayah 090-S) | antrean hanya membaca `workCenterId` |
 | Selesaikan/tutup WO (existing) | `complete_work_orders` (:270) | tidak disentuh antrean |
 | Transisi apa pun DARI antrean turunan | — | TIDAK tahap 1 (BR-WOOQ-06) |
-
 Scope baca tahap 1 = `view_work_orders` PERSIS: loader fail-closed sebelum query; loader TIDAK menyaring per WO/pelanggan/stasiun/penanggung tahap 1 — mewarisi batas baca halaman perintah kerja existing apa adanya dan menyatakannya jujur (BR-WOOQ-07). Tidak ada data gaji di payload; nama karyawan penanggung tampil hanya sebagai penunjuk baris yang sudah terlihat pemegang `view_work_orders` di halaman detail WO existing (nama saja — tanpa nominal gaji, tanpa data pribadi lain, BR-WOOQ-09).
-
 ### 5. Business rules register
-
 | ID | Aturan | Label |
-|---|---|---|
 | BR-WOOQ-01 | Populasi PERSIS = `WorkOrderOperation.status ∈ {"pending","in_progress"}` (dua nilai dari kosakata sah `work-order-progress.ts:8`). `completed`/`skipped` KELUAR (terminal). Status liar di luar empat nilai sah BUKAN populasi dan tidak ditebak — validasi tulis existing menolaknya, kolom String bebas berarti data warisan mungkin menyimpannya; antrean tidak mengarang ember untuknya tahap 1 (dicatat EC-WOOQ-6). Status WO induk TIDAK menyaring populasi tahap 1: operasi hanya bergerak saat WO `in_progress`, jadi operasi `pending`/`in_progress` pada WO berstatus lain adalah inkonsistensi nyata yang tampil tertanda (BR-WOOQ-08), bukan disembunyikan. | TERVERIFIKASI-KODE (skema :3411; kosakata :8) + USULAN (cakupan) |
 | BR-WOOQ-02 | Tingkat turunan: `BERJALAN` = umur ≤ ambang; `MENGENDAP` = umur > ambang. Ambang USULAN **7 hari kalender WIB** — SENGAJA dibedakan dari ambang 3 hari keluarga antrean dokumen (tahap fisik bengkel dikerjakan berhari-hari dan antre antar-tahap adalah normal; 3 hari menuduh tahap yang memang menunggu giliran/stasiun). Angka ini USULAN sampai Lead memutus (Q-WOOQ-1); satu konstanta server bernama bila dibangun. Perbandingan HARI KALENDER WIB (pola keluarga antrean: hari acuan vs hari WIB hari ini), bukan jam mentah — tahap yang mulai kemarin sore WIB belum mengendap besok paginya hanya karena lewat 24 jam. Umur null (BR-WOOQ-03) tidak masuk tingkat mana pun — tampil di kelompok tertanda tersendiri, tidak dihitung mengendap. | USULAN (ambang + kata; Q-WOOQ-1/2) di atas pola TERVERIFIKASI-KODE keluarga antrean |
 | BR-WOOQ-03 | Acuan umur PER STATUS, dari stempel kolom operasi sendiri (operasi tidak punya tabel rekod anak): `pending` → `createdAt` baris, sumber tertanda `SEJAK_DIBUAT`; `in_progress` → `startedAt`, sumber tertanda `SEJAK_MULAI`. `in_progress` dengan `startedAt` null (inkonsistensi data: aksi existing selalu menstempel saat masuk `in_progress` manufacturing.actions.ts:2480 dst.) → umur = null tertanda `MULAI_TANPA_STEMPEL`, TIDAK dihitung 0 hari, TIDAK memakai `createdAt` diam-diam (mengganti acuan diam-diam mengubah arti umur), baris tetap tampil tertanda. DILARANG memakai `updatedAt` (bergerak oleh edit notes/penugasan stasiun apa pun walau tahap tidak dikerjakan). Umur dihitung ulang tiap render; waktu berjalan tidak menulis apa pun. | USULAN di atas TERVERIFIKASI-KODE (stempel aksi :2480 dst.; skema :3414-3415) |
@@ -38951,32 +38993,25 @@ Scope baca tahap 1 = `view_work_orders` PERSIS: loader fail-closed sebelum query
 | BR-WOOQ-10 | Urutan tampil: `MENGENDAP` dulu (umur terbesar dulu), lalu `BERJALAN` (umur terbesar dulu), kelompok umur-null (`MULAI_TANPA_STEMPEL`) terakhir tertanda; seri dalam kelompok sama → `documentNo` WO naik, `sortOrder` tahap naik, lalu id operasi naik. Kepala antrean memuat rekap hitungan OPERASI per tingkat + per status operasi + per stasiun (termasuk ember `BELUM_ADA_STASIUN`) dari populasi penuh server, bukan halaman tampil. Batas ambil eksplisit dinyatakan loader (fisik Backend, pola keluarga 200) + penanda `terpotong` bila populasi melebihi batas. | USULAN |
 | BR-WOOQ-11 | Anti-N+1: operasi populasi + WO induk + nama stasiun/penanggung dimuat massal (satu query operasi populasi dengan relasi WO/stasiun/karyawan + penanda terhalang dihitung dari set operasi per WO yang sama) — bukan query per baris. Rekap dihitung dari populasi penuh server. | USULAN pola TERVERIFIKASI-KODE (loader massal keluarga antrean) |
 | BR-WOOQ-12 | Catatan operasi (`notes`) TIDAK masuk payload daftar tahap 1 — notes adalah teks bebas petugas (termasuk alasan `skipped` pada tahap lain) yang bisa memuat apa pun; antrean menampilkan fakta terstruktur saja (tahap, WO induk, status, umur, sumber umur, tingkat, stasiun, penanggung, estimasi verbatim, penanda). Membuka catatan = halaman detail WO existing berizin sama. | USULAN (scope minimal) |
-
 ### 6. Feature matrix Accurate/Zahir/ISF (benchmark live 2026-10-27)
-
 | Fitur | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF/Silengkap |
 |---|---|---|---|
 | Perintah kerja dengan tahapan proses | Ada — fitur Tahapan Proses opsional (Preferensi Manufaktur): master tahapan, Rincian Tahapan per Perintah Kerja dengan urutan (https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/perintah-kerja-dengan-tahapan/) | Tidak ditemukan tahapan proses per perintah produksi di halaman Zahir yang diakses run ini — produksi dicatat sebagai transaksi Produksi (bahan baku/biaya produksi/barang jadi) tanpa tahap bernama (https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-produksi-zahir-online-v2) — tidak diklaim ada | Ada — `WorkOrderOperation` berurutan sekuensial-keras + stasiun + penanggung + estimasi jam per tahap (TERVERIFIKASI-KODE §2), lebih granular dari kedua benchmark |
 | Monitor lintas perintah kerja | Ada — Monitor Perintah Kerja terhubung otomatis dari Tahapan Proses: jumlah diproses, tahap sedang berjalan, tahap selesai (URL tahapan-proses di bawah) (https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/tahapan-proses/tahapan-proses-produksi/) | Tidak ditemukan monitor tahap lintas produksi di halaman yang diakses — tidak diklaim | Parsial — progres per WO di detail WO + papan beban agregat per stasiun (090-S); monitor per TAHAP lintas WO belum ada (gap spec ini) |
 | Progres perintah kerja | Ada — dihitung dari komponen berbobot: Pengeluaran Bahan Baku 30% + Penyelesaian Tahapan 60% + Finishing 10% (https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/menghitung-progress-perintah-kerja/) | Tidak ditemukan rumus progres bertahap di halaman yang diakses — tidak diklaim | Ada dengan definisi berbeda — `buildWorkOrderProgress`: completed/(total−skipped) per WO (F-020). Spec ini TIDAK mengadopsi bobot 30/60/10 Accurate dan TIDAK menghitung progres apa pun (BR-WOOQ-04) |
 | Antrean tahap pending/in_progress MENGENDAP berdasar umur (lintas WO, per baris tahap) | Tidak ditemukan di halaman Accurate yang diakses run ini — Monitor menampilkan tahap berjalan/selesai tanpa umur mengendap per tahap yang ditemukan — tidak diklaim ada | Tidak ditemukan di halaman Zahir yang diakses — tidak diklaim | ABSEN (gap spec ini); tahap tampil per WO (detail) dan teragregat per stasiun (beban rencana), tanpa umur per tahap lintas WO |
-
 Jujur: Accurate membuktikan tahapan proses + monitor lintas perintah kerja adalah fitur standar (ISF sudah setara di level model tahap dan lebih ketat — sekuensial-keras + stasiun); antrean tahap mengendap berdasar umur tidak ditemukan di kedua benchmark — nilai spec ini operasional internal bengkel ISF (tahap tersangkut terlihat tanpa membuka WO satu per satu), bukan mengejar fitur vendor. Tidak ada ambang/label/bobot progres yang disalin dari vendor (ambang = Q-WOOQ-1 Lead; bobot progres Accurate tidak dipakai, BR-WOOQ-04).
-
 ### 7. Acceptance criteria + edge cases
-
 Backend (builder/loader turunan):
 - AC-WOOQ-B1: Populasi PERSIS `status ∈ {"pending","in_progress"}` (BR-WOOQ-01); `completed`/`skipped`/status liar bocor → MERAH. Tingkat/umur/sumber-umur/penanda dihitung server; konsumen menghitung ulang → MERAH.
 - AC-WOOQ-B2: Acuan umur per status persis BR-WOOQ-03: `pending` dari `createdAt`, `in_progress` dari `startedAt`. Memakai `updatedAt` (edit notes/penugasan stasiun mengnolkan umur) → MERAH. Memakai `createdAt` untuk `in_progress` yang punya `startedAt` → MERAH.
 - AC-WOOQ-B3: `in_progress` tanpa `startedAt`: umur null + `MULAI_TANPA_STEMPEL`, baris tetap tampil, tidak dihitung mengendap (null diperlakukan epoch/0 → MERAH). `estimatedHours` null tampil tertanda, bukan 0 (BR-WOOQ-04).
 - AC-WOOQ-B4: Tingkat persis BR-WOOQ-02: umur tepat ambang (batas final Q-WOOQ-1; fixture diuji pada angka putusan) = `BERJALAN`; ambang+1 hari kalender WIB = `MENGENDAP`; perbandingan jam mentah sampai tahap mulai kemarin-sore terbaca mengendap → MERAH. Penanda `TERHALANG_TAHAP_SEBELUMNYA` muncul persis bila ada tahap `sortOrder` lebih kecil belum closed pada WO sama, dan tidak muncul bila semua sebelumnya closed (BR-WOOQ-05).
 - AC-WOOQ-B5: Loader fail-closed `view_work_orders` sebelum query (tanpa izin loader terpanggil → MERAH); baca-saja terbukti (builder/loader memanggil `updateWorkOrderOperationStatus`/aksi tulis apa pun → MERAH); payload tanpa nominal biaya/`ProductionCost`/jam aktual/catatan-notes (bocor satu pun → MERAH, BR-WOOQ-09/12); operasi+induk+stasiun+penanggung massal anti-N+1 (query per baris → MERAH); operasi aktif di WO induk tidak-berjalan tampil tertanda, tidak disaring (hilang → MERAH, BR-WOOQ-08).
-
 Frontend (konsumen):
 - AC-WOOQ-F1: Tingkat/umur/sumber-umur/penanda/estimasi tampil verbatim payload server; UI tidak menghitung umur/tingkat/urutan/rekap sendiri (hitung ulang UI → MERAH). Sebelum commit: grep e2e selector perintah-kerja/tahap terdampak, sinkronkan commit yang sama.
 - AC-WOOQ-F2: TIDAK ada tombol Mulai/Selesai/Lewati/Buka-Ulang/Tugaskan dari antrean tahap 1 (kontrol tulis di antrean → MERAH, BR-WOOQ-06 pada §4); tautan baris hanya ke halaman detail WO existing berpenjaga.
 - AC-WOOQ-F3: Baris tertanda (`MULAI_TANPA_STEMPEL`, `TERHALANG_TAHAP_SEBELUMNYA`, `BELUM_ADA_STASIUN`, `BELUM_ADA_PENANGGUNG_JAWAB`, `TAHAP_AKTIF_DI_WO_TIDAK_BERJALAN`, `terpotong`) tampil dengan tandanya, bukan disembunyikan/digabung ke `MENGENDAP`; tanpa izin halaman menolak (bukan daftar kosong tersamar).
-
 Edge cases:
 - EC-WOOQ-1: Tahap kedua `pending` 10 hari karena tahap pertama masih `in_progress` (urutan normal): tertanda `TERHALANG_TAHAP_SEBELUMNYA` — umurnya tampil apa adanya, tetapi pembaca tahu ia memang belum boleh mulai; antrean tidak menyatakan siapa salah (tingkat tetap mekanis dari umur, kata final Q-WOOQ-2).
 - EC-WOOQ-2: Tahap `in_progress` dibuka-ulang ke `pending` lalu dibiarkan: stempel dibersihkan aksi existing, acuan umur kembali ke `createdAt` baris (bisa jauh lebih tua dari tanggal buka-ulang) — tampil apa adanya tertanda `SEJAK_DIBUAT`; antrean tidak mengarang stempel buka-ulang (tidak ada kolomnya).
@@ -38986,29 +39021,21 @@ Edge cases:
 - EC-WOOQ-6: Status operasi liar (di luar empat nilai sah, data warisan): bukan populasi, tidak tampil tahap 1 — dicatat sebagai batas jujur BR-WOOQ-01; mengarang ember liar = spec hardening tulis terpisah bila Lead menghendaki, bukan dikerjakan di sini.
 - EC-WOOQ-7: Operasi tanpa stasiun DAN tanpa penanggung DAN tanpa estimasi (baris inisialisasi polos yang belum diatur): tampil dengan ketiga tandanya — justru baris seperti ini yang paling perlu terlihat; menyembunyikan baris tak-lengkap dari antrean → MERAH makna (tertangkap AC-WOOQ-F3).
 - EC-WOOQ-8: Dua operasi bernama sama pada WO berbeda (nama tahap dari setting yang sama): baris dibedakan oleh `documentNo` WO induk + id operasi; nama tahap tidak pernah dipakai sebagai kunci penggabungan (penggabungan per nama = MERAH makna, tertangkap AC-WOOQ-B1/B5).
-
 ### 8. Backlog implementasi (turunan F-2026-10-27-100-S)
-
 | ID | Pekerjaan | Pemilik | Gerbang |
-|---|---|---|---|
 | F-2026-10-27-100-S | Spec kontrak ini (dokumen) | Business | — |
 | 100-B | Builder murni (populasi dua status persis/umur WIB per acuan status/sumber-umur/tingkat/penanda terhalang+stasiun+penanggung/urutan/rekap) + loader `view_work_orders` fail-closed anti-N+1 + tes AC-WOOQ-B1..B5 | Backend | Putusan Lead Q-WOOQ-1/2/3/5 |
 | 100-F | Permukaan turunan verbatim payload + AC-WOOQ-F1..F3; grep e2e perintah-kerja dulu | Frontend | 100-B merged |
 | 100-Q | Falsifikasi AC-WOOQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 100-B/100-F |
-
 ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
-
 ### 9. Pertanyaan putusan (gerbang)
-
 | ID | Pertanyaan | Untuk | Rekomendasi Business |
-|---|---|---|---|
 | Q-WOOQ-1 | Ambang `MENGENDAP`: berapa hari kalender WIB sejak acuan per status (BR-WOOQ-03)? | Lead | USULAN **7 hari** — dibedakan sadar dari ambang 3 hari antrean dokumen (tahap fisik multi-hari + antre urutan/stasiun normal); satu konstanta server bernama, tanpa konfigurasi bebas tahap 1; angka USULAN sampai diputus |
 | Q-WOOQ-2 | Kata final: kode/label tingkat (`BERJALAN`/`MENGENDAP`), penanda `SEJAK_DIBUAT`/`SEJAK_MULAI`/`MULAI_TANPA_STEMPEL`/`TERHALANG_TAHAP_SEBELUMNYA`/`BELUM_ADA_STASIUN`/`BELUM_ADA_PENANGGUNG_JAWAB`/`TAHAP_AKTIF_DI_WO_TIDAK_BERJALAN`, judul `Operasi Perintah Kerja Mengendap`? | Lead | Kata usulan apa adanya; satu konstanta label server, UI verbatim |
 | Q-WOOQ-3 | Penempatan: permukaan lintas WO baru di area produksi/perintah-kerja vs seksi di halaman daftar WO existing? Kepala rekap per stasiun cukup, atau per WO induk juga? | Lead | USULAN: permukaan turunan di area perintah kerja existing (objeknya lintas WO, daftar WO existing per-dokumen tidak menampungnya); rekap per tingkat + per status + per stasiun tahap 1 |
 | Q-WOOQ-4 | Apakah tahap `pending` terhalang urutan (BR-WOOQ-05) ikut dihitung `MENGENDAP`, atau tingkatnya ditahan sampai tahap penghalang tuntas? | Lead | USULAN: tingkat tetap mekanis dari umur + penanda tampil (fakta tidak disembunyikan); menahan tingkat = menyembunyikan umur nyata — bila Lead memilih ditahan, builder wajib menyatakan baris tertahan terpisah, bukan menghilangkannya |
 | Q-WOOQ-5 | Baca tahap 1 tetap `view_work_orders` persis tanpa key baru (BR-WOOQ-07)? | Lead | USULAN: ya — antrean adalah read-model turunan di permukaan berizin sama |
 | Q-WOOQ-6 | Keterlambatan tahap dikaitkan biaya/denda/jam aktual? | Accountant (BUTUH-VONIS bersyarat) | TIDAK tahap 1 (BR-WOOQ-09); vonis WAJIB hanya bila Lead membuka kaitan uang/jam aktual — tahap baca-saja tanpa nominal tidak butuh vonis |
-
 ### Yang TIDAK diusulkan run ini
 - Menghitung progres persen WO, beban stasiun, atau kapasitas di antrean (BR-WOOQ-04) — wilayah `buildWorkOrderProgress` per WO (F-020) dan papan beban 090-S existing; mengadopsi bobot progres 30/60/10 Accurate juga terlarang (definisi progres kedua).
 - Tombol Mulai/Selesai/Lewati/Buka-Ulang/Tugaskan Stasiun dari antrean, mulai massal, auto-mulai tahap terhalang, auto-selesai tahap membeku (BR-WOOQ-06 §4).
@@ -39016,5 +39043,4 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Pengingat WA/email ke penanggung tahap, eskalasi kepala bengkel, SLA per stasiun/tahap — kanal & keadaan baru di luar tahap baca-saja.
 - Menampilkan catatan `notes` operasi, kontak pelanggan, angka material/biaya/jam aktual tahap di daftar (BR-WOOQ-09/12) — pemakaian material sah tetap hanya `MaterialIssue` existing lewat halaman detail WO.
 - Mengganti halaman detail WO / progres tahap existing — antrean adalah permukaan turunan tambahan, bukan pengganti manajemen tahap per WO.
-
 F-2026-10-27-100-S — Antrean operasi perintah kerja pending/in_progress mengendap lintas WO. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WOOQ-1/2/3/5, lalu fisik Backend (100-B), konsumen Frontend (100-F), falsifikasi QA (100-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/scope-baca), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila kaitan nilai/denda dibuka (Q-WOOQ-6, BR-WOOQ-09).
