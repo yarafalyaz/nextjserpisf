@@ -40650,3 +40650,24 @@ ID vonis ini **F-2026-10-28-116-V** (jawaban PUR-BR-004). Pemilik berikutnya: Le
 - E116-1: terima kumulatif > dipesan lalu verify lolos (stok IN / jurnal GR lahir) = MERAH.
 - E116-2: tambah toleransi qty / setting / permission / workflow approval over-receipt tanpa vonis baru = MERAH (keputusan V1 dilanggar).
 - E116-3: samakan toleransi nilai 3-way dengan toleransi qty (pakai toleransi nilai untuk meloloskan qty lebih) = MERAH (keputusan V4 dilanggar).
+
+## VONIS BUSINESS 2026-10-28 — F-2026-10-28-115-V: stok negatif ditolak tanpa override (jawaban garpu INV-BR-007/AC-INV-007)
+Pemilik vonis: Business (sales-crm-hr-payroll-business-workflow, lane workflow non-akuntansi). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `34ad27324` (28 Okt 2026 01:23 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-115` di backlog+board = 0/0 sebelum tulis. Bebas.
+### 1. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Guard terpusat: `src/lib/services/inventory-fifo.ts:109` (`allowShortfall = false` default), `:185-197` (hitung dari baris terkunci, throw `Stok tidak mencukupi ... Tersedia: ..., dibutuhkan: ...`); baca-kunci `FOR UPDATE` `:118-126`.
+- Enam jalur keluar memakai default/false: penjualan pre-guard + consume `src/lib/hooks/accounting.hook.ts:665,758-767,827`; retur pembelian consume + guard qty fisik `src/lib/hooks/purchase-return.hook.ts:147,185-188`; material issue `src/lib/hooks/material-issue.hook.ts:158`; transfer `src/lib/hooks/inventory-transfer.hook.ts:111`; produksi `src/actions/manufacturing.actions.ts:990`; penyesuaian `src/lib/hooks/stock-adjustment.hook.ts:127`.
+- Nol saklar override: grep `allowShortfall: *true` di `src/` produksi = 0 (hanya komentar historis accounting.hook.ts:665 + tes `inventory-fifo.test.ts:298` untuk cabang shortfall); grep skema/settings saklar negatif-override = 0; period-close hanya `warn` `src/lib/settings/period-close.ts:131-135` (lapor, bukan izin).
+- Regresi hidup: `src/lib/services/__tests__/inventory-fifo.test.ts:273-301` (default menolak 32/32 hijau run ini); `src/lib/hooks/__tests__/goods-receipt-over-receipt.test.ts` 24/24 hijau (pola guard serumpun).
+### 2. Vonis (menutup garpu keputusan, bukan menambah perilaku)
+- V1: stok negatif DITOLAK di semua jalur keluar; tidak ada override/pengecualian persetujuan — garpu "pengecualian harus disetujui eksplisit" di INV-BR-007 sumber DINYATAKAN TERTUTUP DENGAN NILAI TOLAK (nol jalur persetujuan dibangun; tidak ada matriks approval untuk stok negatif).
+- V2: `allowShortfall: true` DILARANG dipakai jalur produksi mana pun; cabang `true` tetap ada hanya sebagai API internal teruji (tes di atas), bukan gerbang bisnis.
+- V3: penyesuaian stok negatif yang sah (koreksi data, bukan pengeluaran operasional) TETAP lewat StockAdjustment IN + approval existing — bukan lewat override konsumsi.
+### 3. Batas vonis (jujur)
+- Konsistensi `qty_on_hand` vs lapisan per jalur (decrement tanpa syarat `qty_on_hand >= qty` di luar retur pembelian) TIDAK divonis di sini — itu integritas hitung (lane Backend), bukan policy negatif.
+- Status INDEKS-ATURAN yang diubah PR ini: INV-BR-007 OPEN-keputusan → Sebagian; AC-INV-007 OPEN-keputusan → Sebagian (sisa = audit konsistensi hitung per jalur, bukan keputusan policy).
+ID vonis ini **F-2026-10-28-115-V** (jawaban garpu INV-BR-007/AC-INV-007). Pemilik berikutnya: BOT Lead (merge vonis ini) → BOT QA (falsifikasi E115-1..3 atas head persis) → INDEKS-ATURAN terbit status baru sesudah merge.
+### Falsifikasi QA (E115, atas head persis)
+- E115-1: panggil consume path mana pun dengan `allowShortfall: true` dari kode produksi (bukan tes) = MERAH (grep produksi harus 0).
+- E115-2: cabut guard `if (!allowShortfall)` di inventory-fifo.ts → tes `inventory-fifo.test.ts:273` (throws when insufficient) MERAH.
+- E115-3: tambah saklar/settings/permission override stok negatif tanpa vonis baru = MERAH (keputusan V1 dilanggar).

@@ -63,6 +63,7 @@ async function creditGateBlockedResult(e: unknown) {
   }
 }
 import { findOverReturn } from "@/lib/sales/return-validation"
+import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status"
 import { findCumulativeQtyExcess, cumulativeValueExcess } from "@/lib/sales/cumulative-cap"
 import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
@@ -2024,7 +2025,9 @@ export async function createSalesPayment(formData: FormData) {
     const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 0)
     // Faktur lunas bila kas diterima + PPh dipotong pelanggan menutup sisanya.
     const settled = safeAdd(amount, withholdingAmount)
-    if (settled > remaining) {
+    // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
+    // rupiah-penuh, bukan overpay — jangan tolak. Di atas itu tetap tolak.
+    if (settled > remaining + SETTLEMENT_TOLERANCE_IDR) {
       throw new Error(
         withholdingAmount > 0
           ? `Jumlah pembayaran + potongan PPh (${settled}) melebihi sisa tagihan (${remaining})`
@@ -3087,8 +3090,9 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       const current = await tx.salesInvoice.findUniqueOrThrow({ where: { id }, select: { paidAmount: true } })
       const paidAmount = Number(current.paidAmount ?? 0)
 
+      // FIN-BR-006: lunas dari outstanding valid dalam toleransi Rp1.
       let paymentStatus: string = "unpaid"
-      if (paidAmount >= grandTotal && grandTotal > 0) {
+      if (isSettled(grandTotal, paidAmount)) {
         paymentStatus = "paid"
       } else if (paidAmount > 0) {
         paymentStatus = "partial"
@@ -3252,7 +3256,9 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))
     const remaining = safeSubtract(invoice.grandTotal, otherPaid, 0)
     const settled = safeAdd(newAmount, newWithholdingAmount)
-    if (settled > remaining) {
+    // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
+    // rupiah-penuh, bukan overpay — jangan tolak. Di atas itu tetap tolak.
+    if (settled > remaining + SETTLEMENT_TOLERANCE_IDR) {
       throw new Error(
         newWithholdingAmount > 0
           ? `Jumlah pembayaran + potongan PPh (${settled}) melebihi sisa tagihan (${remaining})`
