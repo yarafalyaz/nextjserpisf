@@ -280,9 +280,12 @@ describe("getInventoryTransferUnreceivedQueue (loader)", () => {
     mocks.itemFindMany.mockResolvedValue([
       { id: 11, inventoryTransferId: 1, itemId: 101, qty: 10, receivedQty: 4 },
     ])
+    // Terima terakhir = createdAt terbaru (BR-ITQ-02), bukan receivedDate:
+    // receipt terbaru menurut createdAt justru backdate (receivedDate lebih lama),
+    // sehingga max(receivedDate)=dayAgo(2) akan gagal terhadap ekspektasi dayAgo(1).
     mocks.receiptFindMany.mockResolvedValue([
-      { inventoryTransferId: 1, receivedDate: dayAgo(2) },
-      { inventoryTransferId: 1, receivedDate: dayAgo(1) },
+      { inventoryTransferId: 1, createdAt: dayAgo(3), receivedDate: dayAgo(2) },
+      { inventoryTransferId: 1, createdAt: dayAgo(1), receivedDate: dayAgo(5) },
     ])
     const q = await getInventoryTransferUnreceivedQueue({ now: NOW })
     const arg = mocks.transferFindMany.mock.calls.at(-1)![0]
@@ -290,8 +293,9 @@ describe("getInventoryTransferUnreceivedQueue (loader)", () => {
     expect(arg.where.status).toEqual({ notIn: ["draft", "processing", "receiving", "received"] })
     expect(mocks.receiptFindMany.mock.calls[0][0].select).toEqual({
       inventoryTransferId: true,
-      receivedDate: true,
+      createdAt: true,
     })
+    expect(mocks.receiptFindMany.mock.calls[0][0].select).not.toHaveProperty("receivedDate")
     const selectJson = JSON.stringify(arg.select)
     expect(selectJson).not.toContain("updatedAt")
     expect(selectJson).not.toContain("createdBy")
@@ -304,7 +308,9 @@ describe("getInventoryTransferUnreceivedQueue (loader)", () => {
     expect(mocks.receiptFindMany.mock.calls[0][0].where).toEqual({ inventoryTransferId: { in: [1] } })
     expect(mocks.receiptFindMany.mock.calls[0][0].select).not.toHaveProperty("receivedBy")
     expect(q.rows[0]).toMatchObject({ umurDiJalanHari: 5, tingkat: "mengendap", barisBersisa: 1 })
+    // createdAt terbaru (dayAgo(1)); max(receivedDate) akan memberi dayAgo(2).
     expect(q.rows[0].terimaTerakhirAt).toEqual(dayAgo(1))
+    expect(q.rows[0].terimaTerakhirAt).not.toEqual(dayAgo(2))
     expect(q.rows[0].sisaPerBaris).toEqual([{ lineId: 11, itemId: 101, sisaQty: 6 }])
     // Baca-saja.
     expect(mocks.transferUpdate).not.toHaveBeenCalled()

@@ -92,7 +92,7 @@ export async function getInventoryTransferUnreceivedQueue(
     ids.length > 0
       ? await prisma.inventoryTransferReceipt.findMany({
           where: { inventoryTransferId: { in: ids } },
-          select: { inventoryTransferId: true, receivedDate: true },
+          select: { inventoryTransferId: true, createdAt: true },
         })
       : []
 
@@ -111,8 +111,8 @@ export async function getInventoryTransferUnreceivedQueue(
   const lastReceiptByTransfer = new Map<number, Date>()
   for (const receipt of receipts) {
     const previous = lastReceiptByTransfer.get(receipt.inventoryTransferId)
-    if (previous == null || receipt.receivedDate.getTime() > previous.getTime()) {
-      lastReceiptByTransfer.set(receipt.inventoryTransferId, receipt.receivedDate)
+    if (previous == null || receipt.createdAt.getTime() > previous.getTime()) {
+      lastReceiptByTransfer.set(receipt.inventoryTransferId, receipt.createdAt)
     }
   }
 
