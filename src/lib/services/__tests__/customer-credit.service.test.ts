@@ -220,6 +220,22 @@ describe("customer-credit.service", () => {
     )
   })
 
+  it("BUG-07 kredit+PPh: faktur 100 (60 kas + 10 PPh) + kredit 30 berakhir lunas, status selaras", async () => {
+    seedCredit({ receivedAmount: 1000 })
+    seedInvoice({ grandTotal: 100, paidAmount: 70, status: "partial" })
+    mocks.paymentFindMany.mockResolvedValue([
+      { amount: 60, withholdingAmount: 10 },
+      { amount: 30, withholdingAmount: 0 },
+    ])
+    const r = await allocateCreditToInvoice(1, 101, 30, 7, "77777777-7777-4777-8777-777777777777")
+    expect(r.success).toBe(true)
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ paidAmount: 100, status: "paid", paymentStatus: "paid" }),
+      }),
+    )
+  })
+
   it("BLOCKER-1 F-036-S: alokasi melunasi -> snapshot tarif beku 2% per tanggal faktur", async () => {
     seedCredit()
     seedInvoice()

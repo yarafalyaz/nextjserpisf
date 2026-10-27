@@ -13,7 +13,7 @@ import {
   parseStatementOptions,
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display"
-import { parseReportPeriod } from "@/lib/reports/report-period"
+import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { loadTrialBalanceReport } from "@/lib/reports/trial-balance-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -32,9 +32,13 @@ export default async function TrialBalancePage({
   const user = await requirePermission("view_reports")
   const [params, search] = await Promise.all([routeParams, searchParams])
 
-  const now = new Date()
-  // Neraca saldo adalah posisi "per" tanggal: slug periode berarti akhir periode.
-  const period = parseReportPeriod(params.segments?.[0], { start: now, end: now })
+  // Neraca saldo adalah posisi "per" tanggal: slug periode berarti akhir
+  // periode. Periode dibaca hanya via helper bersama supaya tautan lama
+  // ?tanggalMulai=&tanggalSelesai= tetap menampilkan posisi yang diminta.
+  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
+    start: now,
+    end: now,
+  }))
   const asOfDate = new Date(period.end)
 
   const cookieStore = await cookies()
@@ -45,7 +49,9 @@ export default async function TrialBalancePage({
   // Tanggal pembanding kini bagian dari path (`/pembanding/2026-09-30`); param
   // query lama tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
   const compareValue = parseReportFilters(params.segments?.slice(1) ?? []).pembanding ?? search.pembanding
-  const compareRaw = compareValue ? new Date(`${compareValue}T23:59:59`) : null
+  // Akhir hari penuh (.999) sama dengan layar & registry PDF — jurnal pukul
+  // 23:59:59.500 tidak boleh hilang dari salah satu sisi (B9).
+  const compareRaw = compareValue ? new Date(`${compareValue}T23:59:59.999`) : null
   const compareDate = compareRaw && !Number.isNaN(compareRaw.getTime()) ? compareRaw : null
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
