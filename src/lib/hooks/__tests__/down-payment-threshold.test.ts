@@ -220,6 +220,63 @@ describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
     expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
   })
 
+  it("TASK-011 BUG-01: SO sudah ada tanpa WO (convert manual) — WO saja yang dibuat, confirm tidak melempar", async () => {
+    const dp = buildDp({ id: 11, amount: 600, status: "draft", docNo: "DP-11" })
+    const tx = buildTx(dp)
+    mocks.workOrderFindFirst.mockResolvedValue(null)
+    mocks.salesOrderFindFirst.mockResolvedValue({ id: 12, documentNo: "SO-0" })
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 600 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await expect(onDownPaymentConfirmed(11, 1)).resolves.toBeUndefined()
+
+    expect(mocks.workOrderCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.salesOrderCreate).not.toHaveBeenCalled()
+    expect(mocks.salesInvoiceCreate).toHaveBeenCalled()
+  })
+
+  it("TASK-011 BUG-01: WO sudah ada tanpa SO — SO saja yang dibuat, confirm tidak melempar", async () => {
+    const dp = buildDp({ id: 12, amount: 600, status: "draft", docNo: "DP-12" })
+    const tx = buildTx(dp)
+    mocks.workOrderFindFirst.mockResolvedValue({ id: 11, documentNo: "WO-0" })
+    mocks.salesOrderFindFirst.mockResolvedValue(null)
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 600 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await expect(onDownPaymentConfirmed(12, 1)).resolves.toBeUndefined()
+
+    expect(mocks.workOrderCreate).not.toHaveBeenCalled()
+    expect(mocks.salesOrderCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("TASK-011 BUG-02: alokasi DP awal membuat jurnal reklas Dr 210102 / Cr Piutang", async () => {
+    const dp = buildDp({ id: 13, amount: 600, status: "draft", docNo: "DP-13" })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([
+      { documentNo: "DP-13", amount: 600, paymentDate: new Date("2026-10-01T00:00:00Z") },
+    ])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(13, 1)
+
+    expect((tx.journal.create as any)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceType: "SalesPayment",
+          referenceId: 555,
+          totalDebit: 600,
+          totalCredit: 600,
+          entries: {
+            create: [
+              expect.objectContaining({ accountId: 210102, debit: 600, credit: 0 }),
+              expect.objectContaining({ accountId: 110, debit: 0, credit: 600 }),
+            ],
+          },
+        }),
+      }),
+    )
+  })
+
   it("snapshot korup 150: fail-closed ke 50 + log, invoice tidak lahir pada 30% (AC-DP65-5)", async () => {
     const dp = buildDp({ id: 8, amount: 300, status: "draft", docNo: "DP-8", invoiceThresholdPercent: 150 })
     const tx = buildTx(dp)

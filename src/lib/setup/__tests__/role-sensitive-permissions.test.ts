@@ -65,6 +65,13 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     // F-2026-10-25-010-S putusan Lead Q-AC-3: approve koreksi absensi GA
     // sejajar approve cuti GA, sadar terdaftar.
     "approve_attendance_corrections",
+    // HCMS K1 (Muse): GA = operator SDM — hapus master HCMS sejajar
+    // delete_holidays/delete_leave_requests yang sudah dipegang GA.
+    "delete_recruitments",
+    "delete_performance",
+    "delete_competencies",
+    "delete_trainings",
+    "delete_succession",
   ],
   kepala_bengkel: [
     "approve_bom_revisions",
@@ -83,6 +90,8 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     // approve_journals sadar ditambahkan bersama gerbang K4 (F-2026-10-25-014-V):
     // role finance = penyetuju jurnal manual 1 langkah (seed APR-JRN).
     "approve_journals",
+    // F-2026-10-26-054-S Q-SA-2: finance penyetuju penyesuaian gaji tahap 1.
+    "approve_salary_adjustments",
     "post_journals",
     "delete_journals",
     "approve_expenses",

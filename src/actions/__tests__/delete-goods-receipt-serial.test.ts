@@ -10,6 +10,22 @@ const mocks = vi.hoisted(() => {
     inventoryLayer: {
       deleteMany: vi.fn(),
       count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    itemBatch: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
+    purchaseOrderItem: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    item: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    uomConversion: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     goodsReceiptItem: {
       deleteMany: vi.fn(),

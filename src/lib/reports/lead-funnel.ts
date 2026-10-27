@@ -28,6 +28,11 @@
  */
 
 import { LEAD_STATUSES } from "@/lib/validations/crm.schemas"
+import {
+  buildLeadLostReasonBreakdown,
+  latestLeadLostDescription,
+  type LeadLostReasonBreakdownRow,
+} from "@/lib/reports/lead-lost-reason"
 import { safeAdd } from "@/lib/utils/math"
 
 /** Label tahap verbatim spec §6 — UI menempel apa adanya. */
@@ -79,6 +84,8 @@ export interface LeadFunnelActivityInput {
   oldStatus: string | null
   newStatus: string | null
   createdAt: Date
+  /** F-2026-10-25-030-S: awalan [kalah:key] dibaca builder alasan kalah dari sini. */
+  description?: string | null
 }
 
 export interface LeadFunnelLeadInput {
@@ -132,6 +139,8 @@ export interface LeadFunnelPosition {
   bySource: LeadFunnelBreakdownRow[]
   /** null bila scope permukaan tidak mengizinkan nama penanggung (Q-LF-1). */
   byAssignee: LeadFunnelBreakdownRow[] | null
+  /** F-2026-10-25-030-S Q-LR-3: rincian lostCount per kategori alasan kalah. */
+  lostByReason: LeadLostReasonBreakdownRow[]
 }
 
 export interface LeadFunnelMovementStage {
@@ -289,6 +298,13 @@ function buildPosition(
     noStageHistoryCount,
     bySource: sortedBreakdown(bySource),
     byAssignee: includeAssigneeBreakdown ? sortedBreakdown(byAssignee) : null,
+    // Q-LR-3: rincian hanya lead lost posisi saat ini; aktivitas
+    // status_change->lost TERBARU per lead (loader orderBy naik).
+    lostByReason: buildLeadLostReasonBreakdown(
+      leads
+        .filter((lead) => lead.status === "lost")
+        .map((lead) => latestLeadLostDescription(lead.activities)),
+    ),
   }
 }
 

@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => {
     inventoryMovement: buildModelMock(),
     stockMove: buildModelMock(),
     inventoryLayer: buildModelMock(),
+    itemBatch: buildModelMock(),
+    itemSerial: buildModelMock(),
     batch: buildModelMock(),
     vendor: buildModelMock(),
     item: buildModelMock(),
@@ -749,6 +751,73 @@ describe("Vendor Bill Actions", () => {
     // Satu titik pengakuan = posting; draft tanpa jurnal (selaras laporan AP
     // yang mengecualikan draft).
     expect(hook).not.toHaveBeenCalled()
+  })
+
+  it("updateVendorBill pada draft tidak menyentuh jurnal sama sekali (draft murni, BUG-05)", async () => {
+    const accounting = (await import("@/lib/hooks/accounting.hook")) as any
+    accounting.onVendorBillPosted.mockClear()
+    accounting.deleteJournalByReferenceTx.mockClear()
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+    }))
+    expect(res?.success).toBe(true)
+    // Simetris createVendorBill: draft murni tanpa jurnal. Jurnal hanya lahir
+    // di confirmVendorBill (posting), bukan saat draft dibuat/diedit.
+    expect(accounting.onVendorBillPosted).not.toHaveBeenCalled()
+    expect(accounting.deleteJournalByReferenceTx).not.toHaveBeenCalled()
+  })
+
+  // GR senilai 100 (1 × 100) sudah ditagih 60 lewat baris penerimaan 501.
+  const setupGrBill = (billedSubtotal: number) => {
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValue({
+      id: 77, documentNo: "GR-077", status: "verified",
+      purchaseOrder: { vendorId: 1 },
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([
+      { id: 501, itemId: 7, qty: 1, unitCost: 100 },
+    ])
+    mocks.prismaMock.vendorBillItem.aggregate.mockResolvedValue({
+      _sum: { subtotal: billedSubtotal },
+    })
+    mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 1 })
+  }
+
+  it("createVendorBill menolak tagihan kedua yang membuat total per-GR melebihi nilai GR (BUG-09)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    setupGrBill(60)
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      goodsReceiptId: "77",
+      date: "2026-06-12",
+      subtotal: "60",
+      tax: "0",
+      grandTotal: "60",
+      items: JSON.stringify([{ itemId: 7, qty: 1, unitPrice: 60 }]),
+    }))
+    // 60 (sudah ditagih) + 60 (baru) = 120 > 100 nilai penerimaan.
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/melebihi nilai penerimaan/i)
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorBill menerima tagihan kedua yang tepat menghabiskan nilai GR (BUG-09)", async () => {
+    setupGrBill(60)
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      goodsReceiptId: "77",
+      date: "2026-06-12",
+      subtotal: "40",
+      tax: "0",
+      grandTotal: "40",
+      items: JSON.stringify([{ itemId: 7, qty: 1, unitPrice: 40 }]),
+    }))
+    // 60 + 40 = 100 = nilai penerimaan — pas, tidak melebihi.
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBill.create).toHaveBeenCalled()
   })
 
   it("confirmVendorBill isi balanceDue NETO (grandTotal − withholding, P0-2)", async () => {
@@ -1846,6 +1915,41 @@ describe("Purchase Actions Additional Branch Coverage", () => {
 
     const res = await actions.deleteGoodsReceipt(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deleteGoodsReceipt menghapus lot ItemBatch yang dibuat layer GR (tak yatim)", async () => {
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, purchaseOrderId: 10, warehouseId: 1, items: [] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([{ id: 201, itemId: 1, qty: 5 }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValueOnce([
+      { itemId: 1, warehouseId: 1, batchNumber: "LOT-A", qtyIn: 5 },
+    ])
+    mocks.prismaMock.itemBatch.findFirst.mockResolvedValueOnce({ id: 77, qty: 5 })
+    mocks.prismaMock.goodsReceipt.count.mockResolvedValueOnce(0)
+
+    const res = await actions.deleteGoodsReceipt(1)
+    expect(res?.success).toBe(true)
+    // Lot habis persis sebesar sumbangan GR ini → baris lot dihapus.
+    expect(mocks.prismaMock.itemBatch.delete).toHaveBeenCalledWith({ where: { id: 77 } })
+  })
+
+  it("deleteGoodsReceipt mengurangi lot bersama hanya sebesar sumbangan GR ini", async () => {
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, purchaseOrderId: 10, warehouseId: 1, items: [] })
+    mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([{ id: 201, itemId: 1, qty: 5 }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValueOnce([
+      { itemId: 1, warehouseId: 1, batchNumber: "LOT-A", qtyIn: 5 },
+    ])
+    mocks.prismaMock.itemBatch.findFirst.mockResolvedValueOnce({ id: 77, qty: 8 })
+    mocks.prismaMock.goodsReceipt.count.mockResolvedValueOnce(0)
+
+    const res = await actions.deleteGoodsReceipt(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.itemBatch.update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: { qty: 3 },
+    })
+    expect(mocks.prismaMock.itemBatch.delete).not.toHaveBeenCalled()
   })
 
   it("deleteVendorBill fails if status not draft", async () => {

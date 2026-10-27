@@ -2,8 +2,9 @@
  * Loader pratinjau jurnal penutup tahunan (F-2026-10-20-86) + pengumpul
  * baris bersama untuk inti posting (F-2026-10-23-121-V).
  *
- * Query massal tanpa N+1: akun P&L aktif, baris jurnal POSTED dalam tahun
- * fiskal, pusat laba, cek anti-dobel jurnal penutup. Loader publik tetap
+ * Query massal tanpa N+1: akun P&L aktif, baris jurnal POSTED+REVERSED
+ * (REPORT_JOURNAL_STATUSES) dalam tahun fiskal, pusat laba, cek anti-dobel
+ * jurnal penutup. Loader publik tetap
  * read-only; `collectYearEndClosingEntries` diekspor agar service posting
  * menjalankan query yang SAMA di dalam transaksinya (satu sumber rumus —
  * builder `buildYearEndClosingPreview` tidak pernah disalin).
@@ -16,6 +17,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { getSystemSettings } from "@/lib/utils/settings"
 import {
   buildYearEndClosingPreview,
@@ -27,7 +29,7 @@ import {
 
 type YearEndClosingDb = Pick<typeof prisma, "account" | "journalEntry" | "profitCenter">
 
-/** Baris masukan builder dari jurnal POSTED tahun fiskal, via client apa pun (prisma/tx). */
+/** Baris masukan builder dari jurnal POSTED+REVERSED tahun fiskal, via client apa pun (prisma/tx). */
 export async function collectYearEndClosingEntries(
   db: YearEndClosingDb,
   start: Date,
@@ -41,7 +43,7 @@ export async function collectYearEndClosingEntries(
     db.journalEntry.findMany({
       where: {
         journal: {
-          status: "POSTED",
+          status: { in: [...REPORT_JOURNAL_STATUSES] },
           deletedAt: null,
           transactionDate: { gte: start, lte: end },
         },

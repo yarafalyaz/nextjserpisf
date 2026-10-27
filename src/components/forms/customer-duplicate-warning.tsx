@@ -64,6 +64,43 @@ export function CustomerDuplicateCandidateRow({
   )
 }
 
+export interface CustomerNpwpConflictView {
+  id: number
+  slug: string | null
+  name: string
+  code: string | null
+  title: string
+}
+
+// Q-CD-1 (PR Backend #1017): simpan DITOLAK karena NPWP persis sudah
+// dipegang pelanggan lain. Judul + pesan + identitas pemegang verbatim
+// dari server; komponen hanya menambah tautan master pemegang.
+export function CustomerNpwpBlockedPanel({
+  conflict,
+  message,
+}: {
+  conflict: CustomerNpwpConflictView
+  message: string
+}) {
+  return (
+    <Alert variant="destructive" aria-label="NPWP sudah dipakai pelanggan lain">
+      <AlertTriangle aria-hidden="true" />
+      <AlertTitle>{conflict.title}</AlertTitle>
+      <AlertDescription>
+        <p>{message}</p>
+        <p className="mt-3">
+          <Link
+            href={entityHref("/master/pelanggan", conflict)}
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Buka pelanggan existing
+          </Link>
+        </p>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 export function CustomerDuplicateWarningPanel({
   warning,
   onContinue,

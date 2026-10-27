@@ -124,6 +124,7 @@ export async function updateSystemSettings(formData: FormData) {
       companyPostalCode: strNull("companyPostalCode"),
       companyWebsite: strNull("companyWebsite"),
       companyTaxId: strNull("companyTaxId"),
+      companyNitku: strNull("companyNitku"),
       // F-2026-10-25-015-V: status PKP perusahaan. Nilai bukan enum
       // tertutup ditolak; status pkp tanpa tanggal mulai kewajiban
       // ditolak (konfigurasi cacat, jangan disimpan setengah).
@@ -166,6 +167,9 @@ export async function updateSystemSettings(formData: FormData) {
       // log khusus tutup-periode.
       showIsActiveField: bool("showIsActiveField"),
       showTaxId: bool("showTaxId"),
+      // F-2026-10-25-035-B (Q-CL2-5): saklar gerbang kredit tahap 2.
+      // Default false; perubahan tercatat lewat logActivity di bawah.
+      creditGateEnabled: bool("creditGateEnabled"),
       defaultProjectStages: strDefault("defaultProjectStages", "Persiapan, Pengerjaan, Quality Check, Selesai"),
 
       // Auto-Code Prefixes

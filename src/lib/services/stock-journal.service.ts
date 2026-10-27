@@ -107,6 +107,19 @@ export function productionOrderCostVarianceJournalRef(stockMoveId: number): stri
  */
 export const PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE = "ProductionOrderAbnormalScrap"
 
+/**
+ * `Journal.referenceType` jurnal serapan biaya produksi non-material.
+ * `referenceId` = id baris `ProductionCost` (atau id perintah produksi untuk
+ * jurnal agregat tarikan timesheet tanpa baris tunggal). Indeks unik aktif
+ * `journals_active_reference_unique` hanya mengizinkan SATU jurnal aktif per
+ * (referenceType, referenceId), jadi baris biaya yang bisa berubah tidak
+ * boleh menumpuk jurnal delta aktif baru di kunci yang sama — lihat
+ * `onProductionCostAbsorbed`: jurnal aktif lama di-reversal dulu, lalu
+ * jurnal pengganti berisi nilai KUMULATIF baris diposting di kunci yang
+ * sama (pola reversal repo, `reverseJournalsByReferenceTx`).
+ */
+export const PRODUCTION_COST_JOURNAL_REF_TYPE = "ProductionCost"
+
 // ────────────────────────────────────────────────────────────────────────────
 // Stock Journal Service
 // ────────────────────────────────────────────────────────────────────────────
@@ -584,13 +597,90 @@ export const stockJournalService = {
     const value = Math.round(Math.abs(amount) * 100) / 100
     if (value <= 0) return null
 
-    const isAbsorb = amount > 0
+    // Baris biaya produksi BISA berubah (edit/hapus/sync): jurnal aktif
+    // sebelumnya atas kunci yang sama wajib dibebaskan dulu, kalau tidak
+    // jurnal kedua menabrak `journals_active_reference_unique` (P2002).
+    // Pola repo (reverseJournalsByReferenceTx): jurnal lawan POSTED
+    // (referenceType "Journal" → id asli, debit↔kredit, tanggal asli) lalu
+    // asli menjadi REVERSED — histori utuh dan laporan POSTED+REVERSED
+    // men-net-kan pasangan itu ke nol. Jurnal pengganti di bawah berisi
+    // nilai kumulatif (lama + delta), jadi tetap tepat SATU jurnal aktif
+    // `ProductionCost` per baris biaya. Jurnal lama yang sudah terposting
+    // tidak pernah diubah referensinya.
+    let currentAmount = 0
+    const journalDelegate = tx.journal as typeof tx.journal | undefined
+    if (journalDelegate && typeof journalDelegate.findFirst === "function") {
+      const existing = await journalDelegate.findFirst({
+        where: {
+          referenceType: PRODUCTION_COST_JOURNAL_REF_TYPE,
+          referenceId,
+          deletedAt: null,
+          status: { not: "REVERSED" },
+        },
+        include: { entries: true },
+      })
+      if (existing) {
+        if (existing.status === "POSTED") {
+          currentAmount =
+            Math.round(
+              existing.entries.reduce(
+                (sum, e) =>
+                  e.accountId === accounts.wip
+                    ? sum + Number(e.debit) - Number(e.credit)
+                    : sum,
+                0,
+              ) * 100,
+            ) / 100
+          const reversalNumber = await generateDocumentNumber('JRN')
+          const reversal = await tx.journal.create({
+            data: {
+              journalNumber: reversalNumber,
+              transactionDate: existing.transactionDate,
+              referenceType: 'Journal',
+              referenceId: existing.id,
+              description: `Reversal of ${existing.journalNumber}`,
+              type: existing.type,
+              status: 'POSTED',
+              totalDebit: existing.totalCredit,
+              totalCredit: existing.totalDebit,
+              createdBy: userId ?? null,
+            },
+          })
+          await tx.journalEntry.createMany({
+            data: existing.entries.map((e) => ({
+              journalId: reversal.id,
+              accountId: e.accountId,
+              debit: Number(e.credit),
+              credit: Number(e.debit),
+              memo: `Reversal: ${e.memo ?? ''}`.trim(),
+              costCenterId: e.costCenterId ?? null,
+              profitCenterId: e.profitCenterId ?? null,
+            })),
+          })
+          await tx.journal.update({
+            where: { id: existing.id },
+            data: { status: 'REVERSED' },
+          })
+        } else {
+          // Belum menyentuh GL (mis. DRAFT): hapus aman, dokumen sumber
+          // (baris biaya) tetap ada sebagai jejak audit.
+          await tx.journalEntry.deleteMany({ where: { journalId: existing.id } })
+          await tx.journal.delete({ where: { id: existing.id } })
+        }
+      }
+    }
+
+    const newAmount = Math.round((currentAmount + amount) * 100) / 100
+    if (newAmount === 0) return null
+
+    const isAbsorb = newAmount > 0
+    const newValue = Math.abs(newAmount)
     const journalNumber = await generateDocumentNumber('JRN')
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'ProductionCost',
+      referenceType: PRODUCTION_COST_JOURNAL_REF_TYPE,
       referenceId,
       type: 'PROD',
       description: `Biaya Produksi Non-Material ${productionOrderNo}`,
@@ -598,14 +688,14 @@ export const stockJournalService = {
       entries: [
         {
           accountId: isAbsorb ? accounts.wip : absorption,
-          debit: value,
+          debit: newValue,
           credit: 0,
           memo: `${isAbsorb ? 'Debit' : 'Kredit'} Barang Dalam Proses - ${productionOrderNo}`,
         },
         {
           accountId: isAbsorb ? absorption : accounts.wip,
           debit: 0,
-          credit: value,
+          credit: newValue,
           memo: `${isAbsorb ? 'Kredit' : 'Debit'} Beban Material - ${productionOrderNo}`,
         },
       ],

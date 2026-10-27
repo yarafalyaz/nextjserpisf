@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import {
   buildJobBillingSummary,
   type JobBillingSummary,
@@ -171,7 +172,7 @@ export async function loadJobBillingSummary(
     nilaiBerjalan: Number(quotation.grandTotal),
     invoices: [...byId.values()].map((inv) => ({
       id: inv.id,
-      documentNo: inv.documentNo,
+      documentNo: salesInvoiceLabel(inv),
       status: String(inv.status),
       grandTotal: Number(inv.grandTotal),
       paidAmount: Number(inv.paidAmount),

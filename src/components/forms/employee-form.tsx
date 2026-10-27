@@ -57,6 +57,7 @@ interface EmployeeFormProps {
     dependents: number | null
     departmentId: number | null
     positionId: number | null
+    managerId?: number | null
     joinDate: string
     paymentFrequency: string
     baseSalary: number
@@ -78,6 +79,7 @@ interface EmployeeFormProps {
   }
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
+  managers?: { id: number; name: string }[]
   generatedCode?: string
   enableAutoCode?: boolean
   roles?: { id: number; name: string }[]
@@ -141,7 +143,7 @@ function RolePicker({
   )
 }
 
-export function EmployeeForm({ employee, departments, positions, generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
+export function EmployeeForm({ employee, departments, positions, managers = [], generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!employee
@@ -185,6 +187,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
       dependents: employee?.dependents ?? 0,
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
+      managerId: employee?.managerId ?? null,
       joinDate: toDateInputValue(employee?.joinDate) || toLocalDateOnly(new Date()),
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
@@ -366,6 +369,31 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                       field.onChange(created.id)
                     }}
                   />
+                </>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Controller
+              name="managerId"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label>Atasan Langsung</Label>
+                  <select
+                    value={field.value ? String(field.value) : ""}
+                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                    className="form-input"
+                  >
+                    <option value="">— Tidak ada (puncak rantai) —</option>
+                    {managers
+                      .filter((m) => m.id !== employee?.id)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
                 </>
               )}
             />
@@ -556,8 +584,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               <div className="flex flex-col gap-5 pt-2 border-t border-default mt-2">
                 <div className="flex flex-col gap-1.5 max-w-md">
                   <Label htmlFor="loginPassword">Kata Sandi <span className="text-destructive" aria-hidden="true">*</span></Label>
-                  <Input id="loginPassword" name="loginPassword" type="password" required placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
-                  <span className="text-xs text-muted-foreground">Minimal 8 karakter. Pastikan email pada bagian atas sudah terisi.</span>
+                  <Input id="loginPassword" name="loginPassword" type="password" required placeholder="Minimal 12 karakter" minLength={12} autoComplete="new-password" />
+                  <span className="text-xs text-muted-foreground">Minimal 12 karakter. Pastikan email pada bagian atas sudah terisi.</span>
                 </div>
                 <RolePicker roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} hint="Pilih satu atau lebih peran untuk menentukan hak akses." />
               </div>

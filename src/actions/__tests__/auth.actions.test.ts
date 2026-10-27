@@ -149,13 +149,20 @@ describe("changePassword", () => {
 
   it("enforces minimum length on the new value", async () => {
     const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "short" }))
-    expect(res).toEqual({ error: "Password baru minimal 8 karakter" })
+    expect(res).toEqual({ error: "Password baru minimal 12 karakter" })
+  })
+
+  it("rejects an 8-11 char new password and a common one", async () => {
+    const short = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "delapan12" }))
+    expect(short).toEqual({ error: "Password baru minimal 12 karakter" })
+    const common = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "administrator" }))
+    expect(common).toEqual({ error: "Password terlalu umum, gunakan kata sandi lain" })
   })
 
   it("rejects when the old value does not match", async () => {
     userFindMock.mockResolvedValue({ id: 7, password: "stored-hash" })
     bcryptCompareMock.mockResolvedValue(false)
-    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewval" }))
+    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewvalue12" }))
     expect(res).toEqual({ error: "Password lama salah" })
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
@@ -165,7 +172,7 @@ describe("changePassword", () => {
     bcryptCompareMock.mockResolvedValue(true)
     userUpdateMock.mockResolvedValue({ id: 7 })
     const res = await changePassword(
-      fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewval", userId: "999" }),
+      fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewvalue12", userId: "999" }),
     )
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).toHaveBeenCalledWith(
@@ -176,7 +183,7 @@ describe("changePassword", () => {
   it("returns generic error on exception", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     userFindMock.mockRejectedValue(new Error("DB Connection Error"))
-    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewval" }))
+    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewvalue12" }))
     expect(res).toEqual({ error: "Terjadi kesalahan saat mengubah password" })
     expect(consoleSpy).toHaveBeenCalled()
     consoleSpy.mockRestore()
@@ -186,13 +193,13 @@ describe("changePassword", () => {
 describe("createUser", () => {
   it("enforces the manage_users guard before creating", async () => {
     userCreateMock.mockResolvedValue({ id: 1 })
-    await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
+    await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
     expect(requirePermissionMock).toHaveBeenCalledWith("manage_users")
   })
 
   it("records an audit-trail entry for user creation", async () => {
     userCreateMock.mockResolvedValue({ id: 12 })
-    await createUser(fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["1", "2"] }))
+    await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat", roleIds: ["1", "2"] }))
     expect(logActivityMock).toHaveBeenCalledWith(
       "create",
       "User",
@@ -212,10 +219,10 @@ describe("createUser", () => {
   it("hashes the password and connects roles", async () => {
     userCreateMock.mockResolvedValue({ id: 12 })
     const res = await createUser(
-      fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["1", "2"] }),
+      fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat", roleIds: ["1", "2"] }),
     )
     expect(res).toEqual({ success: true, id: 12 })
-    expect(bcryptHashMock).toHaveBeenCalledWith("passval12", 12)
+    expect(bcryptHashMock).toHaveBeenCalledWith("kata-sandi-baru-kuat", 12)
     const arg = userCreateMock.mock.calls[0][0]
     expect(arg.data.password).toBe("hashed-value")
     expect(arg.data.roles.connect).toEqual([{ id: 1 }, { id: 2 }])
@@ -223,25 +230,30 @@ describe("createUser", () => {
 
   it("maps a duplicate-email constraint to a friendly error", async () => {
     userCreateMock.mockRejectedValue(new Error("Unique constraint failed on email"))
-    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
     expect(res).toEqual({ error: "Email sudah terdaftar" })
   })
 
   it("enforces minimum password length", async () => {
     const res = await createUser(fd({ name: "X", email: "x@y.z", password: "short" }))
-    expect(res).toEqual({ error: "Password minimal 8 karakter" })
+    expect(res).toEqual({ error: "Password minimal 12 karakter" })
+  })
+
+  it("rejects a common password at sufficient length", async () => {
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "administrator" }))
+    expect(res).toEqual({ error: "Password terlalu umum, gunakan kata sandi lain" })
   })
 
   it("blocks privilege escalation if actor tries to grant super_admin", async () => {
     roleFindManyMock.mockResolvedValue([{ name: "super_admin" }])
-    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["9"] }))
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat", roleIds: ["9"] }))
     expect(res).toEqual({ error: "Hanya super admin yang dapat memberikan role super admin" })
   })
 
   it("returns generic error on database exception", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     userCreateMock.mockRejectedValue(new Error("DB Down"))
-    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat" }))
     expect(res).toEqual({ error: "Terjadi kesalahan saat membuat pengguna" })
     expect(consoleSpy).toHaveBeenCalled()
     consoleSpy.mockRestore()
@@ -259,7 +271,7 @@ describe("createUser", () => {
   describe("Zod bypass hardening (regression)", () => {
     it("rejects non-email string (was: passed straight to prisma)", async () => {
       const res = await createUser(
-        fd({ name: "X", email: "not-an-email", password: "passval12" }),
+        fd({ name: "X", email: "not-an-email", password: "kata-sandi-baru-kuat" }),
       )
       expect(res).toEqual({ error: "Format email tidak valid" })
       expect(userCreateMock).not.toHaveBeenCalled()
@@ -277,7 +289,7 @@ describe("createUser", () => {
 
     it("rejects negative roleIds (was: silently no-op'd by .connect)", async () => {
       const res = await createUser(
-        fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["-1"] }),
+        fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat", roleIds: ["-1"] }),
       )
       expect(res).toMatchObject({ error: expect.any(String) })
       expect(userCreateMock).not.toHaveBeenCalled()
@@ -286,7 +298,7 @@ describe("createUser", () => {
     it("de-dupes duplicate roleIds", async () => {
       userCreateMock.mockResolvedValue({ id: 99 })
       const res = await createUser(
-        fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["1", "1", "2"] }),
+        fd({ name: "X", email: "x@y.z", password: "kata-sandi-baru-kuat", roleIds: ["1", "1", "2"] }),
       )
       expect(res).toEqual({ success: true, id: 99 })
       const arg = userCreateMock.mock.calls[0][0]
@@ -295,7 +307,7 @@ describe("createUser", () => {
 
     it("rejects malformed email like 'a@b' (no TLD)", async () => {
       const res = await createUser(
-        fd({ name: "X", email: "a@b", password: "passval12" }),
+        fd({ name: "X", email: "a@b", password: "kata-sandi-baru-kuat" }),
       )
       expect(res).toEqual({ error: "Format email tidak valid" })
       expect(userCreateMock).not.toHaveBeenCalled()
@@ -404,6 +416,82 @@ describe("updateUserRoles", () => {
     const res = await updateUserRoles(1, [5])
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).toHaveBeenCalled()
+  })
+})
+
+describe("user-to-role subset guard (TASK-013 regression)", () => {
+  // Peran `admin` seperti ter-seed: hampir seluruh katalog. Pelaku hanya
+  // memegang manage_users + view_dashboard, jadi penugasan admin harus
+  // ditolak walau namanya bukan super_admin (celah pada penjaga literal).
+  const adminRole = [
+    {
+      name: "admin",
+      permissions: [{ name: "view_dashboard" }, { name: "view_customers" }, { name: "edit_customers" }],
+    },
+  ]
+
+  it("(a) rejects a manage_users delegate assigning the admin role via updateUserRoles", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue(adminRole)
+    const res = await updateUserRoles(3, [2])
+    expect(res).toMatchObject({ error: expect.stringContaining("tidak Anda miliki") })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("(b) allows assigning a role whose permissions are a subset of the actor's", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue([
+      { name: "viewer", permissions: [{ name: "view_dashboard" }] },
+    ])
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserRoles(3, [5])
+    expect(res).toEqual({ success: true })
+    expect(userUpdateMock).toHaveBeenCalled()
+  })
+
+  it("(c) lets a super_admin assign any role without a permission lookup", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserRoles(3, [2])
+    expect(res).toEqual({ success: true })
+    expect(roleFindManyMock).not.toHaveBeenCalled()
+    expect(userUpdateMock).toHaveBeenCalled()
+  })
+
+  it("(d) rejects createUser when the requested role exceeds the actor's permissions", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue(adminRole)
+    const res = await createUser(
+      fd({ name: "X", email: "x@y.z", password: "passvalid123", roleIds: ["2"] }),
+    )
+    expect(res).toMatchObject({ error: expect.stringContaining("tidak Anda miliki") })
+    expect(userCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("keeps the literal super_admin block even when the actor holds its permissions", async () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "2",
+      roles: ["staff"],
+      permissions: ["manage_users", "view_dashboard"],
+    })
+    roleFindManyMock.mockResolvedValue([
+      { name: "super_admin", permissions: [{ name: "view_dashboard" }] },
+    ])
+    const res = await updateUserRoles(3, [1])
+    expect(res).toEqual({ error: "Hanya super admin yang dapat memberikan role super admin" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
   })
 })
 
