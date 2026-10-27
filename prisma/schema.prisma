@@ -121,8 +121,20 @@ model SystemSetting {
   // ekspor menolak fail-closed bila kosong/format salah — jangan diturunkan
   // dari NPWP secara diam-diam.
   companyNitku                 String?   @map("company_nitku")
+  // F-2026-10-25-015-V: status PKP perusahaan penjual (nilai kini +
+  // tanggal mulai kewajiban, BUKAN tanggal SPPKP — PMK 164/2023).
+  // Default "unknown": install existing TIDAK ditebak non-PKP/PKP.
+  // Pisah tegas dari pkpStatus lawan transaksi (F-2026-10-25-005-V).
+  companyPkpStatus             String    @default("unknown") @map("company_pkp_status") @db.VarChar(16)
+  companyPkpEffectiveFrom      DateTime? @map("company_pkp_effective_from")
+  companyPkpSource             String?   @map("company_pkp_source")
   companyLatitude              Decimal?  @map("company_latitude") @db.Decimal(10, 8)
   companyLongitude             Decimal?  @map("company_longitude") @db.Decimal(11, 8)
+  // F-2026-10-25-035-B (Q-CL2-5): saklar gerbang kredit tahap 2. Default
+  // false = perilaku persis sebelum gerbang (nol tertahan, nol rekod
+  // override). Hanya manage_settings lewat updateSystemSettings yang
+  // mengubah; dibaca server tiap penilaian, fail-safe false bila absen.
+  creditGateEnabled            Boolean   @default(false) @map("credit_gate_enabled")
   costingMethod                String    @default("FIFO") @map("costing_method")
   fiscalYearStartMonth         Int       @default(1) @map("fiscal_year_start_month")
   currencyCode                 String    @default("IDR") @map("currency_code")
@@ -308,6 +320,10 @@ model SystemSetting {
    * DILARANG fallback ke salesRevenueAccountId/710005.
    */
   scrapSaleIncomeAccountId Int?    @map("scrap_sale_income_account_id")
+  // F-2026-10-25-018-V Putusan 3: akun Utang Reimbursement Karyawan (kode
+  // COA 210209) untuk jurnal akrual klaim J-RB1/J-RB2. Nullable TANPA
+  // default tebak; kosong = approve klaim ditolak fail-closed.
+  reimbursementLiabilityAccountId Int? @map("reimbursement_liability_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -399,6 +415,7 @@ model Customer {
   customerVehicles   CustomerVehicle[]
   downPayments       DownPayment[]
   customerCredits    CustomerCredit[]
+  creditOverrides    CreditOverride[]
   projects           Project[]
   quotations         Quotation[]
   salesInvoices      SalesInvoice[]
@@ -445,6 +462,45 @@ model CustomerCredit {
   @@index([customerId, status], map: "idx_customer_credits_cust_status")
   @@index([sourceType, sourceId], map: "idx_customer_credits_source")
   @@map("customer_credits")
+}
+
+/// F-2026-10-25-035-B (PUTUSAN LEAD Q-CL2-3): rekod permintaan override
+/// gerbang kredit PRA-LAHIR — satu dokumen percobaan-simpan. Bukan
+/// logActivity (menelan gagal) dan bukan Approval generik (terikat dokumen
+/// lahir). Sidik = hash normalisasi pelanggan+jenis+pembuat+nominal+
+/// kaitan quotation/SO sumber; payload form mentah DILARANG disimpan.
+/// Status: pending|approved|rejected|used|expired|superseded. Approved
+/// kedaluwarsa 23:59:59 WIB hari sama (expiresAt); pending tak diputus
+/// 1 hari kerja WIB = expired turunan saat dibaca/dipakai.
+model CreditOverride {
+  id               Int       @id @default(autoincrement())
+  customerId       Int       @map("customer_id")
+  documentType     String    @map("document_type") @db.VarChar(16)
+  fingerprint      String    @db.VarChar(64)
+  attemptedAmount  Decimal   @map("attempted_amount") @db.Decimal(15, 2)
+  creditLimit      Decimal   @map("credit_limit") @db.Decimal(15, 2)
+  exposure         Decimal   @db.Decimal(15, 2)
+  exposureStatus   String    @map("exposure_status") @db.VarChar(16)
+  utilization      Decimal?  @db.Decimal(8, 2)
+  quotationId      Int?      @map("quotation_id")
+  salesOrderId     Int?      @map("sales_order_id")
+  requestedBy      Int       @map("requested_by")
+  requestReason    String    @map("request_reason") @db.Text
+  status           String    @default("pending") @db.VarChar(16)
+  decidedBy        Int?      @map("decided_by")
+  decidedAt        DateTime? @map("decided_at")
+  decisionReason   String?   @map("decision_reason") @db.Text
+  usedDocumentId   Int?      @map("used_document_id")
+  usedDocumentNo   String?   @map("used_document_no")
+  expiresAt        DateTime? @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  customer         Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, status], map: "idx_credit_overrides_cust_status")
+  @@index([fingerprint, status], map: "idx_credit_overrides_fp_status")
+  @@index([requestedBy, status], map: "idx_credit_overrides_req_status")
+  @@map("credit_overrides")
 }
 
 model FinancialIdempotencyKey {
@@ -972,6 +1028,7 @@ model Employee {
   overtimeRequests    OvertimeRequest[]
   probationReviews    ProbationReview[] @relation("ProbationReviewSubject")
   probationReviewsGiven ProbationReview[] @relation("ProbationReviewReviewer")
+  expenses            Expense[]
   contractDecisionRequests ContractDecisionRequest[] @relation("ContractDecisionSubject")
   payrolls            Payroll[]
   tasks               Task[]
@@ -1150,6 +1207,12 @@ model TaxInvoice {
   vendorBillId         Int?         @map("vendor_bill_id")
   vendorId             Int?         @map("vendor_id")
   /**
+   * F-2026-10-25-004-V: FP uang muka (FP UM) tertaut DownPayment.
+   * Snapshot DPP/PPN FP UM hidup di baris ini (dpp/taxAmount/taxRate);
+   * snapshot DP asal dibekukan di DownPayment.vat*. SetNull pola existing.
+   */
+  downPaymentId        Int?         @map("down_payment_id")
+  /**
    * Self-FK ke faktur diganti; unik (satu pengganti per faktur).
    */
   replacesId           Int?         @unique @map("replaces_id")
@@ -1186,6 +1249,7 @@ model TaxInvoice {
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
   salesInvoice         SalesInvoice? @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+  downPayment          DownPayment? @relation(fields: [downPaymentId], references: [id], onDelete: SetNull)
   vendorBill           VendorBill?  @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
   vendor               Vendor?      @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   replaces             TaxInvoice?  @relation("TaxInvoiceReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
@@ -1199,6 +1263,7 @@ model TaxInvoice {
   @@index([creditPeriod], map: "idx_tax_invoices_credit_period")
   @@index([creditStatus], map: "idx_tax_invoices_credit_status")
   @@index([salesInvoiceId], map: "idx_tax_invoices_sales_invoice")
+  @@index([downPaymentId], map: "idx_tax_invoices_down_payment")
   @@index([vendorBillId], map: "idx_tax_invoices_vendor_bill")
   @@index([vendorId], map: "idx_tax_invoices_vendor")
   @@index([direction, creditStatus, creditPeriod], map: "idx_tax_invoices_spt_input")
@@ -1494,11 +1559,31 @@ model DownPayment {
   proofImage    String?   @map("proof_image")
   status        String    @default("pending")
   notes         String?   @db.Text
+  /**
+   * F-2026-10-25-004-V: snapshot PPN uang muka dibekukan saat confirm
+   * (vonis PR #760). Null = DP legacy pra-fitur / belum confirmed.
+   * vatAmount > 0 = terutang FP UM; kredit 210102 = amount - vatAmount.
+   * Edit master pajak sesudah confirm TIDAK mengubah snapshot ini.
+   */
+  vatTransactionCode String? @map("vat_transaction_code") @db.VarChar(2)
+  vatRate            Decimal? @map("vat_rate") @db.Decimal(5, 2)
+  vatDpp             Decimal? @map("vat_dpp") @db.Decimal(15, 2)
+  vatAmount          Decimal? @map("vat_amount") @db.Decimal(15, 2)
+  vatTaxPeriod       String? @map("vat_tax_period") @db.VarChar(7)
+  /**
+   * F-2026-10-25-015-V Putusan 3: snapshot status PKP perusahaan yang
+   * dipakai gerbang saat DP confirmed (beku, nol efek retroaktif dari
+   * edit master). Null = baris legacy pra-fitur, berlabel legacy di
+   * read-model.
+   */
+  companyPkpStatusSnapshot        String?   @map("company_pkp_status_snapshot") @db.VarChar(16)
+  companyPkpEffectiveFromSnapshot DateTime? @map("company_pkp_effective_from_snapshot")
   createdBy     Int?      @map("created_by")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   customer      Customer  @relation(fields: [customerId], references: [id])
   quotation     Quotation @relation(fields: [quotationId], references: [id])
+  taxInvoices   TaxInvoice[]
 
   @@index([customerId], map: "down_payments_customer_id_fkey")
   @@index([quotationId], map: "down_payments_quotation_id_fkey")
@@ -4238,6 +4323,10 @@ model Expense {
   referenceNo       String?          @map("reference_no")
   description       String?          @db.Text
   receiptImage      String?          @map("receipt_image")
+  // F-2026-10-25-017-S (Q-RB-3 Backend): penanda fisik klaim reimbursement
+  // karyawan di atas Expense existing (BR-RB-01) — membedakan klaim dari
+  // Expense operasional tanpa model/dokumen kedua. employeeId = pengaju.
+  isReimbursementClaim Boolean       @default(false) @map("is_reimbursement_claim")
   status            String           @default("draft")
   approvedBy        Int?             @map("approved_by")
   costCenterId      Int?             @map("cost_center_id")
@@ -4246,6 +4335,7 @@ model Expense {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   category          ExpenseCategory? @relation(fields: [categoryId], references: [id])
   vendor            Vendor?          @relation(fields: [vendorId], references: [id])
+  employee          Employee?        @relation(fields: [employeeId], references: [id])
 
   @@index([accountId], map: "expenses_account_id_idx")
   @@index([projectId], map: "expenses_project_id_idx")

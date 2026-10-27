@@ -102,6 +102,11 @@ export const PERMISSIONS = [
       "edit_sales_orders",
       "delete_sales_orders",
       "approve_sales_orders",
+      // F-2026-10-25-035-B (Q-CL2-2): key TUNGGAL override gerbang kredit.
+      // Default hanya super_admin (katalog penuh) + admin (katalog penuh
+      // minus administrasi sistem); role bawaan lain TIDAK diberi, termasuk
+      // finance. Sensitif (approve_) — wajib sadar di EXPECTED_SENSITIVE.
+      "approve_credit_overrides",
       "view_sales_invoices",
       "create_sales_invoices",
       "edit_sales_invoices",
@@ -213,6 +218,7 @@ export const PERMISSIONS = [
       "delete_journals",
       "view_expenses",
       "create_expenses",
+      "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
       "delete_expenses",
@@ -732,6 +738,7 @@ export const FINANCE_WHITELIST = [
       "delete_journals",
       "view_expenses",
       "create_expenses",
+      "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
       "view_salary_amounts",
@@ -960,6 +967,10 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // berjalan & 600005 rumah pesangon DILARANG untuk jalur ini.
   ["600028", "Beban Kompensasi PKWT", "EXPS", "6000"],
   ["210207", "Utang Kompensasi PKWT", "OCLY", "2102"],
+  // F-2026-10-25-018-V Putusan 3: liabilitas klaim reimbursement karyawan.
+  // 210204 Hutang Gaji / 210101 Utang Usaha / 210205 Provisi Garansi
+  // DILARANG reuse untuk jalur ini.
+  ["210209", "Utang Reimbursement Karyawan", "OCLY", "2102"],
 ]
 
 /**
