@@ -229,11 +229,11 @@ describe("sales return UoM", () => {
   })
 })
 
-// E136-1/E136-2 (stock hook): retur atas faktur besi tua murni ditolak
-// sebelum StockMove IN / lapisan FIFO / qtyOnHand berubah. Cost master
-// Rp750.000 sengaja: persediaan fiktif = MERAH.
-describe("sales return scrap guard E136", () => {
-  it("E136-1/E136-2: retur scrap ditolak nol StockMove/FIFO", async () => {
+// E136-3 (stock hook, F-137-V tahap 2): retur besi tua murni completed
+// dengan NOL StockMove IN, nol lapisan FIFO, nol qtyOnHand — hanya status.
+// Cost master Rp750.000 sengaja: satu pun gerakan stok lahir = MERAH.
+describe("sales return scrap E136 tahap 2", () => {
+  it("E136-3 stok: retur scrap completed nol StockMove/FIFO/qtyOnHand", async () => {
     const spies = {
       queryRaw: vi.fn().mockResolvedValue([]),
       executeRaw: vi.fn().mockResolvedValue(1),
@@ -262,7 +262,53 @@ describe("sales return scrap guard E136", () => {
     }
     mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
 
-    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/Retur penjualan atas faktur besi tua/)
+    await onSalesReturnCompleted(7, 9)
+    expect(tx.stockMove.create).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+    expect(spies.executeRaw).not.toHaveBeenCalled()
+    expect(tx.salesReturn.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { status: "completed" } })
+    )
+  })
+
+  it("E136-campuran stok: retur campuran scrap+dagang ditolak nol StockMove", async () => {
+    const spies = {
+      queryRaw: vi.fn().mockResolvedValue([]),
+      executeRaw: vi.fn().mockResolvedValue(1),
+    }
+    const tx = {
+      $queryRaw: spies.queryRaw,
+      $executeRaw: spies.executeRaw,
+      salesReturn: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: 7,
+          salesInvoiceId: 4,
+          date: new Date("2026-10-01"),
+          status: "draft",
+          items: [
+            { itemId: 60, qty: 1, cost: 10 },
+            { itemId: 50, qty: 1, cost: 10 },
+          ],
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      salesInvoice: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 4, items: [{ itemId: 60, qty: 1 }, { itemId: 50, qty: 1 }] }),
+      },
+      item: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 60, isScrapSaleItem: true },
+          { id: 50, isScrapSaleItem: false },
+        ]),
+      },
+      stockMove: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+      warehouse: { findFirst: vi.fn().mockResolvedValue({ id: 5 }) },
+      salesInvoiceItem: { findMany: vi.fn().mockResolvedValue([]) },
+      systemSetting: { findFirst: vi.fn().mockResolvedValue({ periodLockDate: null }) },
+    }
+    mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/campuran besi tua/)
     expect(tx.stockMove.create).not.toHaveBeenCalled()
     expect(mocks.createInLayer).not.toHaveBeenCalled()
     expect(spies.executeRaw).not.toHaveBeenCalled()

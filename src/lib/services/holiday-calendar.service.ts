@@ -151,10 +151,7 @@ export function computeNationalHolidays(year: number): ComputedHoliday[] {
     if (!found) continue
     const [fy, fm, fd] = found.split("-").map(Number)
     const hijriYear = partsOf(new Date(Date.UTC(fy, fm - 1, fd)), "islamic-umalqura").y
-    const label =
-      h.month === 1
-        ? `${h.name} ${hijriYear} Hijriah`
-        : `${h.name} ${hijriYear} Hijriah`
+    const label = `${h.name} ${hijriYear} Hijriah`
     out.push({ date: found, name: label, estimated: true })
     if (h.spanDays === 2) {
       out.push({

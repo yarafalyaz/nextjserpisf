@@ -11,10 +11,13 @@ import { requirePermission } from "@/lib/auth/permissions"
  * settle tetap `create_tax_payments`.
  */
 import { CanCreate } from "@/components/auth/can-create"
+import { hasPermission } from "@/lib/auth/permissions"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
+import { DownPaymentTaxPanel } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/down-payment-tax-panel"
+import { loadDownPaymentTaxStatusRows } from "@/lib/reports/down-payment-tax-status-data"
 import { loadTaxSummarySpt } from "@/lib/reports/tax-summary-data"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -48,6 +51,10 @@ export default async function TaxReportPage({
   }))
 
   const { table, periodLabel, periodCaption } = await loadTaxSummarySpt(period)
+  const [dpTaxRows, canIssueDpTax] = await Promise.all([
+    loadDownPaymentTaxStatusRows({ confirmedOnly: true }),
+    hasPermission("create_tax_invoices"),
+  ])
 
   return (
     <ReportPageShell
@@ -92,6 +99,9 @@ export default async function TaxReportPage({
       }
     >
       <ReportTableView columns={table.columns} rows={table.rows} tableLabel="Laporan Pajak (PPN)" />
+      <div className="mt-6">
+        <DownPaymentTaxPanel rows={dpTaxRows} canIssue={canIssueDpTax} />
+      </div>
     </ReportPageShell>
   )
 }

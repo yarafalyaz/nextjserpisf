@@ -78,6 +78,10 @@ export const createLeadSchema = z.object({
   source: optionalString(255),
   notes: optionalString(2000),
   assignedTo: optionalId,
+  // F-2026-10-24-141-S Model C: alasan wajib hanya bila server menemukan
+  // kandidat duplikat; divalidasi isi di lead-duplicate.service (bukan
+  // schema) karena kewajiban bersyarat pada hasil query kandidat.
+  duplicateOverrideReason: optionalString(2000),
 });
 
 // Lead status lifecycle (mirrors YaraERP). Only qualified+ may be converted.
@@ -101,6 +105,15 @@ export const CONVERTIBLE_STATUSES = [
 // so the action can drive the lifecycle + log status_change activities.
 export const updateLeadSchema = createLeadSchema.extend({
   status: z.enum(LEAD_STATUSES).optional(),
+  // F-2026-10-25-030-S (Q-LR-1/2 Lead): kategori + teks bebas alasan kalah.
+  // Kewajiban bersyarat pada transisi ke lost divalidasi isi di
+  // lead-lost-reason (bukan schema) karena bergantung status tersimpan.
+  lostReasonCategory: z
+    .string()
+    .max(100)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  lostReasonText: optionalString(2000),
 });
 
 export const leadActivitySchema = z.object({

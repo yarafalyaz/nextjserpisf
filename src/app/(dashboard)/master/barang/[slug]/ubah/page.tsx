@@ -78,6 +78,7 @@ export default async function EditItemPage({
           costingMethod: item.costingMethod,
           purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : null,
           isProduct: item.isProduct,
+          isScrapSaleItem: item.isScrapSaleItem,
           isService: item.isService,
           trackBatch: item.trackBatch,
           trackSerial: item.trackSerial,

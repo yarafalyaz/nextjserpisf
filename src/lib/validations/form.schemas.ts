@@ -26,6 +26,7 @@
 
  */
 
+import { passwordPolicyError } from "@/lib/auth/password-policy"
 import { z } from "zod"
 
 
@@ -45,6 +46,15 @@ export const customerSchema = z.object({
   village: z.string().optional(),
   postalCode: z.string().optional(),
   taxId: z.string().max(50).optional(),
+  // F-2026-10-25-004-S: identitas pajak terstruktur. Semua opsional,
+  // tanpa aturan bentuk di klien — validasi bentuk + peringatan
+  // ditegakkan server (customerTaxIdentityForSave), pesan tampil verbatim.
+  taxpayerName: z.string().max(200).optional(),
+  taxAddress: z.string().max(2000).optional(),
+  nitku: z.string().max(50).optional(),
+  pkpStatus: z.string().optional(),
+  pkpEffectiveFrom: z.string().optional(),
+  pkpSource: z.string().max(200).optional(),
   customerCategoryId: z.number().optional().nullable(),
 })
 
@@ -87,6 +97,9 @@ export const itemSchema = z.object({
   standardCost: z.number().min(0).optional(),
   purchasePrice: z.number().min(0).optional(),
   costingMethod: z.string().optional(),
+  // F-2026-10-24-135-V: penanda besi tua; server (schemas.ts) sudah terima,
+  // form wajib meneruskan supaya toggle benar-benar tersimpan.
+  isScrapSaleItem: z.boolean().optional(),
 }).refine((data) => data.price >= data.cost, {
   message: "Harga jual tidak boleh lebih rendah dari harga beli (modal). Diskon diterapkan saat penawaran/penjualan, bukan di master.",
   path: ["price"],
@@ -148,8 +161,9 @@ export const employeeSchema = z.object({
     if (!data.email || data.email.trim() === "") {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Email wajib diisi untuk akun login" })
     }
-    if (!data.loginPassword || data.loginPassword.length < 8) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loginPassword"], message: "Kata sandi minimal 8 karakter" })
+    const loginPasswordIssue = passwordPolicyError(data.loginPassword ?? "", "Kata sandi")
+    if (loginPasswordIssue) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loginPassword"], message: loginPasswordIssue })
     }
   }
 })

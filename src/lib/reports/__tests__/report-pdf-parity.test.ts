@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { readFileSync } from "node:fs"
+
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }))
+
+vi.mock("@/lib/auth/permissions", () => ({
+  requirePermission: vi.fn(),
+  hasPermission: vi.fn(async () => false),
+}))
 import path from "node:path"
 import { REPORTS } from "../report-registry"
 import { REPORT_CATALOG_HREFS } from "../report-catalog"
@@ -79,6 +86,9 @@ describe("paritas registry PDF laporan", () => {
       // F-095-S BR-SUPP-11: daftar aging klaim supplier baca-saja tahap 1,
       // tanpa ekspor/PDF (pola garansi-segera-berakhir).
       "aging-klaim-supplier",
+      // F-2026-10-25-021-S: antrean pengingat servis berkala baca-saja;
+      // ekspor/PDF server-side belum dibuka (pola garansi-segera-berakhir).
+      "servis-berkala",
       "corong-prospek",
       "grafik-keuangan",
       "giro-mundur",
@@ -93,6 +103,13 @@ describe("paritas registry PDF laporan", () => {
       "proyeksi-kas",
       "pusat-laba",
       "rekap-komisi",
+      // F-039-S BR-QPH-09: riwayat harga penawaran baca-saja tahap 1;
+      // ekspor/PDF server-side belum dibuka (angka ekspor wajib builder
+      // yang sama dengan layar bila nanti dibuka).
+      "riwayat-harga-penawaran",
+      // F-2026-10-25-028-S: riwayat harga jual baca-saja tahap 1;
+      // ekspor/PDF server-side belum dibuka (pola 039-S BR-QPH-09).
+      "riwayat-harga-jual",
       "target-penjualan",
       "serapan-overhead",
     ]

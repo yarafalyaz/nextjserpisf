@@ -74,6 +74,8 @@ const RESOURCES = [
   // approve_contracts lolos fail-closed generator (permission tanpa
   // resource di sini = process.exit(1)).
   ["contracts", "hrm", "Kontrak Karyawan"],
+  // F-2026-10-25-005-S DISC-B1 Q-DISC-2: izin khusus disiplin.
+  ["disciplinary_records", "hrm", "Rekod Disiplin"],
   ["departments", "master", "Departemen"],
   ["positions", "master", "Jabatan"],
   ["accounts", "master", "Akun (COA)"],
@@ -130,6 +132,7 @@ const RESOURCES = [
   ["nonconformances", "manufacturing", "NCR"],
   ["production_costs", "manufacturing", "Biaya Produksi"],
   ["attendance", "hrm", "Absensi"],
+  ["attendance_corrections", "hrm", "Koreksi Absensi"],
   ["work_schedules", "hrm", "Jadwal Kerja"],
   ["leave_requests", "hrm", "Cuti"],
   ["overtime", "hrm", "Lembur"],
@@ -138,6 +141,9 @@ const RESOURCES = [
   ["timesheets", "hrm", "Lembar Waktu"],
   ["holidays", "hrm", "Hari Libur"],
   ["employee_loans", "hrm", "Pinjaman Karyawan"],
+  // F-2026-10-25-018-S Q-LS-1: resource key pengajuan mandiri
+  // create_employee_loan_requests (label beda dari "Pinjaman" staf).
+  ["employee_loan_requests", "hrm", "Pengajuan Pinjaman Karyawan"],
   ["loans", "hrm", "Pinjaman"],
   ["appreciations", "hrm", "Apresiasi"],
   ["recruitments", "hrm", "Rekrutmen"],
@@ -145,6 +151,9 @@ const RESOURCES = [
   ["competencies", "hrm", "Kompetensi"],
   ["trainings", "hrm", "Pelatihan & Pengembangan"],
   ["succession", "hrm", "Perencanaan Suksesi"],
+  ["salary_amounts", "hrm", "Nominal Gaji"],
+  // F-2026-10-26-054-S Q-SA-2: verba approve atas resource ini.
+  ["salary_adjustments", "hrm", "Penyesuaian Gaji"],
   ["journals", "finance", "Jurnal"],
   ["expenses", "finance", "Pengeluaran"],
   ["employee_reimbursements", "hrm", "Klaim Reimbursement"],

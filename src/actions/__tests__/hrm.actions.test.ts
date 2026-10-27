@@ -77,6 +77,8 @@ const mocks = vi.hoisted(() => {
       ]),
     },
     employee: buildModelMock(),
+    // HCMS K1: applyDueSalaryAdjustments berjalan di jalur payroll;
+    // mock kosong = tidak ada kenaikan jatuh tempo.
     attendance: buildModelMock(),
     workSchedule: buildModelMock(),
     holiday: buildModelMock(),
@@ -128,6 +130,7 @@ const {
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
+  requireAnyPermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -417,7 +420,7 @@ describe("Overtime Request Actions", () => {
     restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.overtimeRequest.create.mockResolvedValue({ id: 1 })
-    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, calculatedValue: null, employee: { baseSalary: 5_000_000 } })
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, date: new Date("2026-06-12T00:00:00Z"), calculatedValue: null, employee: { baseSalary: 5_000_000 } })
     prismaMock.overtimeRequest.update.mockResolvedValue({})
     prismaMock.overtimeRequest.delete.mockResolvedValue({})
   })
@@ -465,6 +468,7 @@ describe("Overtime Request Actions", () => {
       employeeId: 1,
       status: "approved",
       hours: 2,
+      date: new Date("2026-06-12T00:00:00Z"),
       calculatedValue: null,
       employee: { baseSalary: 5_000_000 },
     })
@@ -487,6 +491,161 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
     // No recompute / no overwrite of the existing value or approver.
     expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("approveOvertime uses baseSalary alone when no fixed component is assigned (E-OT-4)", async () => {
+    // E-OT-4 (vonis F-2026-10-25-022-V): tanpa penugasan komponen tetap,
+    // dasar = baseSalary apa adanya — regresi nol populasi tanpa tunjangan.
+    // 2026-06-12 = Jumat (hari kerja fallback Senin-Jumat): 2 jam = 1 jam
+    // x1,5 + 1 jam x2 = 3,5 x (5.000.000/173) = 101.156.
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "pending",
+      hours: 2,
+      date: new Date("2026-06-12T00:00:00Z"),
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.calculatedValue).toBe(101156)
+  })
+
+  it("approveOvertime adds active earning/fixed components at the overtime date (E-OT-1..3, E-OT-7, EC-OT-1..3)", async () => {
+    // Vonis F-2026-10-25-022-V / spec F-2026-10-25-024-S: dasar =
+    // baseSalary + Σ defaultAmount penugasan earning/fixed aktif yang
+    // berjendela efektif pada ot.date. Mock menerapkan where produksi
+    // (enam syarat) ke baris fixture, jadi mencabut syarat apa pun di
+    // implementasi (mis. filter kind) mengubah Σ dan memerahkan tes ini.
+    const otDate = new Date("2026-06-12T00:00:00Z") // Jumat, hari kerja
+    const assignments = [
+      // E-OT-1: earning/fixed aktif berlaku pada tanggal lembur.
+      { defaultAmount: 540_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { name: "Tunjangan Tetap A", isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-2: baru berlaku SESUDAH tanggal lembur → tidak ikut.
+      { defaultAmount: 111_000, isActive: true, effectiveFrom: new Date("2026-07-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-3: sudah berakhir sebelum tanggal lembur → tidak ikut.
+      { defaultAmount: 222_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: new Date("2026-05-31"), component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-3 varian: penugasan tidak aktif → tidak ikut.
+      { defaultAmount: 333_000, isActive: false, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "fixed" } },
+      // E-OT-3 varian: komponen master tidak aktif → tidak ikut.
+      { defaultAmount: 444_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: false, kind: "earning", recurrence: "fixed" } },
+      // EC-OT-3: deduction/fixed aktif → tidak ikut (falsifikasi filter kind).
+      { defaultAmount: 555_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "deduction", recurrence: "fixed" } },
+      // E-OT-5: variable aktif → tidak ikut, tidak memicu cabang 75%.
+      { defaultAmount: 666_000, isActive: true, effectiveFrom: new Date("2026-01-01"), effectiveTo: null, component: { isActive: true, kind: "earning", recurrence: "variable" } },
+      // EC-OT-1: batas inklusif — mulai & berakhir persis pada ot.date ikut.
+      // EC-OT-2: komponen kedua yang ikut; 540.000 + 1 = dasar E-OT-7.
+      { defaultAmount: 1, isActive: true, effectiveFrom: otDate, effectiveTo: otDate, component: { name: "Tunjangan Tetap B", isActive: true, kind: "earning", recurrence: "fixed" } },
+    ]
+    prismaMock.employeePayrollComponent.findMany.mockImplementation(
+      async (args: { where: Record<string, any> }) => {
+        const w = args.where
+        return assignments.filter((a) => {
+          if (w.employeeId !== undefined && w.employeeId !== 1) return false
+          if (w.isActive !== undefined && a.isActive !== w.isActive) return false
+          if (w.effectiveFrom?.lte && !(a.effectiveFrom <= w.effectiveFrom.lte)) return false
+          if (Array.isArray(w.OR)) {
+            const orOk = w.OR.some((c: Record<string, any>) =>
+              c.effectiveTo === null ? a.effectiveTo === null : a.effectiveTo !== null && a.effectiveTo >= c.effectiveTo.gte,
+            )
+            if (!orOk) return false
+          }
+          const cw = w.component ?? {}
+          if (cw.isActive !== undefined && a.component.isActive !== cw.isActive) return false
+          if (cw.kind !== undefined && a.component.kind !== cw.kind) return false
+          if (cw.recurrence !== undefined && a.component.recurrence !== cw.recurrence) return false
+          return true
+        })
+      },
+    )
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "pending",
+      hours: 1,
+      date: otDate,
+      calculatedValue: null,
+      employee: { baseSalary: 3_460_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    // Where produksi wajib menilai jendela pada ot.date, bukan tanggal lain.
+    const whereArg = prismaMock.employeePayrollComponent.findMany.mock.calls[0][0].where
+    expect(whereArg.effectiveFrom.lte).toEqual(otDate)
+    expect(whereArg.OR).toEqual([{ effectiveTo: null }, { effectiveTo: { gte: otDate } }])
+    // Dasar = 3.460.000 + 540.000 + 1 = 4.000.001 (E-OT-7, 2 desimal utuh);
+    // 1 jam hari kerja = 1,5 x 4.000.001/173 = 34.682,09… → Rp34.682.
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.calculatedValue).toBe(34682)
+    // Snapshot dasar (F-2026-10-25-024-S): ditulis pada klaim yang sama,
+    // memuat pokok + HANYA komponen yang ikut Σ (540.000 + 1) dengan nama
+    // master verbatim; komponen di luar jendela/deduction/variable pada
+    // fixture di atas TIDAK masuk snapshot. baseTotal = dasar hitung final.
+    expect(arg.data.overtimeBaseSnapshot).toEqual({
+      baseSalary: 3_460_000,
+      components: [
+        { name: "Tunjangan Tetap A", amount: 540_000 },
+        { name: "Tunjangan Tetap B", amount: 1 },
+      ],
+      baseTotal: 4_000_001,
+      overtimeDate: otDate.toISOString(),
+    })
+  })
+
+  it("approveOvertime stays idempotent after components change (E-OT-6)", async () => {
+    // E-OT-6: nilai sudah approved beku; perubahan master sesudahnya tidak
+    // memicu hitung ulang — approve ulang no-op existing.
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "approved",
+      hours: 1,
+      date: new Date("2026-06-12T00:00:00Z"),
+      calculatedValue: 34682,
+      employee: { baseSalary: 3_460_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    expect(prismaMock.employeePayrollComponent.findMany).not.toHaveBeenCalled()
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("approveOvertime tanpa komponen tetap menulis snapshot pokok saja (dasar = pokok)", async () => {
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "pending",
+      hours: 2,
+      date: new Date("2026-06-12T00:00:00Z"),
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    })
+    prismaMock.employeePayrollComponent.findMany.mockResolvedValue([])
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.overtimeBaseSnapshot).toEqual({
+      baseSalary: 5_000_000,
+      components: [],
+      baseTotal: 5_000_000,
+      overtimeDate: "2026-06-12T00:00:00.000Z",
+    })
+  })
+
+  it("updateOvertimeRequest rejects an edit beyond the 4h workday limit (K2-S1)", async () => {
+    // Syarat vonis K2-S1: gerbang PP 35/2021 yang sama dengan create wajib
+    // berlaku di update. Edit pengajuan pending ke 5 jam pada hari kerja
+    // yang sama (2026-06-12 Jumat) DITOLAK; mencabut panggilan gerbang di
+    // updateOvertimeRequest memerahkan tes ini.
+    const res = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "5",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("maksimal 4 jam")
   })
 
   it("updateOvertimeRequest updates record", async () => {
@@ -800,6 +959,67 @@ describe("Payroll Actions", () => {
     expect(createArg.data.loanDeduction).toBe(100000)
   })
 
+  it("processPayroll keeps gross/PPh 21 identical with loan instalment (AC-LSV-3)", async () => {
+    // AC-LSV-3 (vonis F-2026-10-25-023-V Putusan 2D): angsuran pinjaman
+    // BUKAN pengurang bruto PPh 21 — angsuran hanya potongan neto.
+    // Mesin TER mock default tarif 0% membuat PPh selalu 0 sehingga mutasi
+    // gross - cappedLoan tak terdeteksi; di sini bracket dibuat sensitif
+    // tarif: 0% s/d 6.000.000, lalu 10% terbuka. Bruto utuh 6.100.000
+    // → PPh 610.000; bruto termutasi 5.600.000 → PPh 0 (MERAH).
+    const terRows: Array<{
+      category: string; lowerBound: number; upperBound: number | null;
+      rateMilliPercent: number; effectiveFrom: Date; effectiveTo: null; source: string;
+    }> = [
+      { category: "A", lowerBound: 0, upperBound: 6000000, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+      { category: "A", lowerBound: 6000000, upperBound: null, rateMilliPercent: 10000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+    ]
+    prismaMock.payrollTerBracket.findMany.mockImplementation(
+      (async (args: { where?: { category?: string } }) =>
+        terRows.map((r) => ({ ...r, category: args?.where?.category ?? "A" }))) as never,
+    )
+    prismaMock.employeeLoan.findMany.mockResolvedValue([
+      { monthlyInstallment: 500000, weeklyInstallment: null, remainingAmount: 500000 },
+    ])
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, basicSalary: 6100000, maritalStatus: "single", dependents: 0,
+      paymentFrequency: "MONTHLY", employmentEndedAt: null, employeeLoans: [],
+      workingDaysPerMonth: 22, overtimeRate: 25000, transportAllowance: 300000,
+      department: { name: "IT" },
+    })
+
+    const withLoan = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-07",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      baseSalary: "6100000",
+      loanDeduction: "500000",
+    }))
+    expect(withLoan?.success).toBe(true)
+    const withLoanArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(withLoanArg.data.grossSalary).toBe(6100000)
+    expect(withLoanArg.data.pph21).toBe(610000)
+    expect(withLoanArg.data.loanDeduction).toBe(500000)
+
+    const withoutLoan = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-07",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      baseSalary: "6100000",
+      loanDeduction: "0",
+    }))
+    expect(withoutLoan?.success).toBe(true)
+    const withoutLoanArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(withoutLoanArg.data.grossSalary).toBe(withLoanArg.data.grossSalary)
+    expect(withoutLoanArg.data.pph21).toBe(withLoanArg.data.pph21)
+    expect(withoutLoanArg.data.statutorySnapshot.pph21Ter).toEqual(
+      withLoanArg.data.statutorySnapshot.pph21Ter,
+    )
+    // Angsuran hanya memotong neto: selisih neto persis angsuran.
+    expect(withoutLoanArg.data.netSalary - withLoanArg.data.netSalary).toBe(500000)
+  })
+
   it("updatePayroll succeeds", async () => {
     const res = await actions.updatePayroll(1, fd({
       period: "2026-05",
@@ -1084,7 +1304,7 @@ describe("markPayrollPaid edge cases", () => {
   it("amortizes active loans", async () => {
     const payroll = {
       id: 1, status: "approved", netPay: 5000000, employeeId: 1, period: "2026-05",
-      loanDeduction: 500000,
+      loanDeduction: 500000, grossSalary: 5000000, lateDeduction: 0, deductions: 0,
     }
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce(payroll)
     prismaMock.employeeLoan.findMany.mockResolvedValueOnce([
@@ -1168,9 +1388,47 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
 
     const result = await actions.getAllLeaveBalances(2026)
     expect(result.success).toBe(true)
+    // F-2026-10-25-013-S BR-LVB-13: nonaktif tahun berjalan ikut dimuat
+    // loader (employmentEndedAt memotong tahun), scope tetap id pemanggil.
     expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { isActive: true, deletedAt: null, id: 3 },
+      where: expect.objectContaining({ deletedAt: null, id: 3 }),
     }))
+  })
+
+  it("F-2026-10-25-013-S AC-LVB-B1: filter departemen asing tidak memperluas scope self", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([])
+
+    const result = await actions.getAllLeaveBalances(2026, { departmentId: 99 })
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error("expected success")
+    expect(result.balances).toEqual([])
+    expect(result.scopeKind).toBe("self")
+    expect(result.showIdentityColumns).toBe(false)
+    expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 3 }),
+    }))
+  })
+
+  it("F-2026-10-25-013-S AC-LVB-B4: ekspor CSV scope self hanya baris pemanggil", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([{
+      id: 3, name: "Diri Sendiri", employeeNo: "EMP-003", departmentId: 4,
+      joinDate: new Date("2020-01-01"), isActive: true, department: { name: "Bengkel" },
+    }])
+    prismaMock.employee.findUnique.mockResolvedValue({
+      joinDate: new Date("2020-01-01"), leaveEligibilityStartDate: null, employmentStatus: "PKWTT",
+    })
+    prismaMock.leaveRequest.findMany.mockResolvedValue([])
+
+    const result = await actions.exportLeaveBalancesCsv(2026)
+    expect(result.success).toBe(true)
+    if (!result.success) throw new Error("expected success")
+    expect(result.fileName).toBe("saldo-cuti-2026.csv")
+    expect(result.csv).toContain("Diri Sendiri")
+    expect(result.csv.trimEnd().split("\n")).toHaveLength(2)
   })
 })
 
@@ -1969,15 +2227,11 @@ describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (au
     prismaMock.$transaction.mockImplementation(async (fn: any) => {
       const tx = {
         $queryRaw: prismaMock.$queryRaw,
-        $executeRaw: vi.fn(async () => 1),
-        salaryAdjustment: {
-          findMany: vi.fn(async () => []),
-          update: vi.fn(async () => ({})),
-        },
-        employee: {
-          findUniqueOrThrow: vi.fn(async () => ({ baseSalary: 5000000 })),
-          update: vi.fn(async () => ({})),
-        },
+        // HCMS K1: applyDueSalaryAdjustments mengunci baris karyawan lewat
+        // tx transaksi-nested ini — tanpa baris jatuh tempo, cukup no-op.
+        $executeRaw: prismaMock.$executeRaw,
+        salaryAdjustment: prismaMock.salaryAdjustment,
+        employee: prismaMock.employee,
         payroll: {
           findMany: vi.fn(async () => { emitOrder.push("txFindMany"); return inTxPayrolls }),
           createMany: vi.fn(async (args: any) => {
@@ -2150,6 +2404,9 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
   it("(6) amortisasi dibayar memakai snapshot slip walau cicilan master berubah", async () => {
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "approved", employeeId: 1, loanDeduction: 500000,
+      // Basis upah slip untuk gerbang plafon Pasal 65 saat dibayar:
+      // cicilan 500rb wajib di bawah 50% upah agar slip ini sah dibayar.
+      grossSalary: 5000000, lateDeduction: 0, deductions: 0,
       statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
     })
     prismaMock.employeeLoan.findMany.mockResolvedValue([

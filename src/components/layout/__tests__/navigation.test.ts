@@ -116,6 +116,12 @@ describe("navigation single source of truth", () => {
 
   it("assigns every entry a permission (so the palette can filter)", () => {
     for (const entry of flattenNavigation()) {
+      // Pengecualian sempit PUTUSAN Lead Q-PS-1 (2026-10-25): hanya
+      // /sdm/slip-gaji-saya boleh tanpa permission — gerbangnya requireAuth()
+      // saja dan loader fail-closed sendiri; view_payroll akan menyembunyikan
+      // fitur dari karyawan sasaran (BR-PS-09), key baru ditolak tahap 1.
+      // Entri lain tanpa permission tetap harus MERAH.
+      if (entry.href === "/sdm/slip-gaji-saya") continue
       // `permission` (tunggal) atau `permissions` (any-of, mis. Perintah Pembayaran
       // yang isinya turunan dari tagihan/pembayaran vendor).
       const hasPermission = entry.permission || (entry.permissions?.length ?? 0) > 0

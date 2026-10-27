@@ -60,7 +60,7 @@ CREATE TABLE `performance_reviews` (
     UNIQUE INDEX `performance_reviews_slug_key`(`slug`),
     UNIQUE INDEX `performance_reviews_cycle_employee_key`(`cycle_id`, `employee_id`),
     INDEX `performance_reviews_employee_id_fkey`(`employee_id`),
-    INDEX `performance_reviews_reviewer_id_fkey`(`reviewer_employee_id`),
+    INDEX `performance_reviews_reviewer_employee_id_fkey`(`reviewer_employee_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -154,7 +154,7 @@ ALTER TABLE `performance_goals` ADD CONSTRAINT `performance_goals_cycle_id_fkey`
 ALTER TABLE `performance_goals` ADD CONSTRAINT `performance_goals_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employees`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `performance_reviews` ADD CONSTRAINT `performance_reviews_cycle_id_fkey` FOREIGN KEY (`cycle_id`) REFERENCES `performance_cycles`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `performance_reviews` ADD CONSTRAINT `performance_reviews_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employees`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `performance_reviews` ADD CONSTRAINT `performance_reviews_reviewer_id_fkey` FOREIGN KEY (`reviewer_employee_id`) REFERENCES `employees`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `performance_reviews` ADD CONSTRAINT `performance_reviews_reviewer_employee_id_fkey` FOREIGN KEY (`reviewer_employee_id`) REFERENCES `employees`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `position_competencies` ADD CONSTRAINT `position_competencies_position_id_fkey` FOREIGN KEY (`position_id`) REFERENCES `positions`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `position_competencies` ADD CONSTRAINT `position_competencies_competency_id_fkey` FOREIGN KEY (`competency_id`) REFERENCES `competencies`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `employee_competencies` ADD CONSTRAINT `employee_competencies_employee_id_fkey` FOREIGN KEY (`employee_id`) REFERENCES `employees`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

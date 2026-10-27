@@ -29,6 +29,7 @@ import {
 } from "@/lib/reports/customer-receivables"
 import { payableOutstanding, receivableOutstanding } from "@/lib/reports/aging-amounts"
 import { loadReturnCreditByInvoiceId, loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
@@ -298,7 +299,7 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
   })
   const returnCreditByReturnId = await loadReturnCreditByReturnId(salesReturns.map((ret) => ret.id))
   const entries = buildReceivableSubledgerEntries({
-    invoices,
+    invoices: invoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) })),
     payments,
     returns: salesReturns.map((ret) => ({
       documentNo: ret.documentNo,

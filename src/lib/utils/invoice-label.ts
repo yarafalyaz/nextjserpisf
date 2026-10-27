@@ -1,13 +1,14 @@
 /**
- * Display identity for a sales invoice.
+ * Label tampilan Faktur Penjualan.
  *
- * Drafts do not own an official INV number yet (it is issued at posting),
- * so every human-facing surface refers to them by internal id instead.
- * Posted legacy/new invoices always use their stored document number.
+ * `SalesInvoice.documentNo` diterbitkan saat posting (K5 PR #900); faktur
+ * konsep belum punya nomor. Kontrak beku bersama Backend (t_4e19199d):
+ * label = documentNo apa adanya, atau `DRAFT #<id>` bila belum terbit.
+ * Semua permukaan UI wajib memakai label ini — jangan karang varian lain.
  */
 export function salesInvoiceLabel(invoice: {
-  id: number
-  documentNo: string | null | undefined
+  id: number;
+  documentNo: string | null;
 }): string {
-  return invoice.documentNo ?? `DRAFT #${invoice.id}`
+  return invoice.documentNo ?? `DRAFT #${invoice.id}`;
 }

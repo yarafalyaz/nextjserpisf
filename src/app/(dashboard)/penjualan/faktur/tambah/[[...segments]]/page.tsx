@@ -214,7 +214,7 @@ export default async function CreateSalesInvoicePage({
   const items = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, sku: true, price: true },
+    select: { id: true, name: true, sku: true, price: true, isScrapSaleItem: true },
   })
 
   return (
@@ -242,6 +242,7 @@ export default async function CreateSalesInvoicePage({
           name: item.name,
           sku: item.sku,
           price: Number(item.price),
+          isScrapSaleItem: item.isScrapSaleItem,
         }))}
       />
     </div>

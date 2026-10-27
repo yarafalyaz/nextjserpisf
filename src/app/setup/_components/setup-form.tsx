@@ -129,7 +129,7 @@ export function SetupForm() {
     const adminEmail = fieldValue("adminEmail")
     if (!adminEmail || !adminEmail.includes("@")) return setError("Email administrator tidak valid")
     const password = fieldValue("adminPassword")
-    if (password.length < 8) return setError("Kata sandi minimal 8 karakter")
+    if (password.length < 12) return setError("Kata sandi minimal 12 karakter")
     if (password !== fieldValue("confirmPassword")) return setError("Konfirmasi kata sandi tidak cocok")
 
     const formData = new FormData(e.currentTarget)
@@ -372,7 +372,7 @@ export function SetupForm() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="adminPassword">Kata Sandi *</Label>
-                <Input id="adminPassword" name="adminPassword" type="password" placeholder="Minimal 8 karakter" />
+                <Input id="adminPassword" name="adminPassword" type="password" placeholder="Minimal 12 karakter" required minLength={12} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="confirmPassword">Konfirmasi Kata Sandi *</Label>

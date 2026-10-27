@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { UserCheck, Plus } from "lucide-react"
+import { UserCheck, Plus, Check, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { convertLead, addLeadActivity } from "@/actions/crm.actions"
+import { convertLead, addLeadActivity, completeLeadActivity, reopenLeadActivity } from "@/actions/crm.actions"
 import { LEAD_ACTIVITY_TYPE_LABELS, LEAD_ACTIVITY_TYPE_OPTIONS } from "@/lib/utils/status-labels"
 
 /** Convert-to-customer button. Shown only when the lead is convertible + not yet converted. */
@@ -105,5 +105,73 @@ export function AddLeadActivityForm({ leadId }: { leadId: number }) {
         <Plus size={14} aria-hidden="true" /> {isPending ? "Menyimpan..." : "Tambah"}
       </Button>
     </form>
+  )
+}
+
+/**
+ * F-2026-10-25-008-S: tombol penanda selesai / batal-selesai aktivitas lead
+ * terjadwal. `canAct` dihitung server di halaman detail dari gerbang yang sama
+ * dengan server action (edit_leads + pemilik atau manage_leads/super_admin,
+ * BR-LC-02) — komponen ini tidak menilai kepemilikan/izin sendiri. Aktivitas
+ * tanpa jadwal + belum selesai tidak mendapat tombol apa pun (BR-LC-05).
+ * completedAt selalu waktu server; klien tidak mengirim tanggal.
+ * Spesifikasi: backlog F-2026-10-25-008-S §2/§6, AC-LC-F1/F2.
+ */
+export function LeadActivityCompletionButton({
+  leadId,
+  activityId,
+  subject,
+  completedAt,
+  canAct,
+}: {
+  leadId: number
+  activityId: number
+  subject?: string | null
+  completedAt: boolean
+  canAct: boolean
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  if (!canAct) return null
+
+  function handleClick() {
+    startTransition(async () => {
+      const res = completedAt
+        ? await reopenLeadActivity(leadId, activityId)
+        : await completeLeadActivity(leadId, activityId)
+      if (!res.success) {
+        showError(res.error || "Gagal memperbarui penanda selesai aktivitas")
+        return
+      }
+      showSuccess(
+        completedAt
+          ? "Penanda selesai aktivitas dibatalkan"
+          : "Aktivitas ditandai selesai",
+      )
+      router.refresh()
+    })
+  }
+
+  const label = completedAt ? "Batalkan Penanda Selesai" : "Tandai Selesai"
+  const ariaLabel = subject ? `${label}: ${subject}` : label
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleClick}
+      disabled={isPending}
+      aria-busy={isPending}
+      aria-label={ariaLabel}
+    >
+      {completedAt ? (
+        <RotateCcw size={14} aria-hidden="true" />
+      ) : (
+        <Check size={14} aria-hidden="true" />
+      )}
+      {isPending ? "Memproses..." : label}
+    </Button>
   )
 }

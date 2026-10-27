@@ -18,6 +18,8 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { Input } from "@/components/ui/shadcn/input"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { formatCurrency } from "@/lib/utils/format"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
+import { AlertCircle } from "lucide-react"
 
 const salesInvoiceSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -63,6 +65,7 @@ interface AvailableItem {
   name: string
   sku?: string | null
   price?: number | null
+  isScrapSaleItem?: boolean
 }
 
 interface InitialItem {
@@ -142,6 +145,13 @@ export function SalesInvoiceForm({
   })
 
   const subtotal = rows.reduce((sum, row) => sum + lineTotal(row), 0)
+  // F-135-V: peringatan tampilan saja dari flag master server — server tetap
+  // menolak campuran besi tua + dagang saat posting.
+  const pickedItems = rows
+    .map((row) => availableItems.find((a) => a.id === row.itemId))
+    .filter((a) => a !== undefined)
+  const hasMixedScrapLines =
+    pickedItems.some((a) => a.isScrapSaleItem) && pickedItems.some((a) => !a.isScrapSaleItem)
   const taxAmount = Math.round((subtotal * (Number(taxRate) || 0)) / 100)
   const grandTotal = subtotal + taxAmount
 
@@ -214,6 +224,16 @@ export function SalesInvoiceForm({
           </Button>
         </div>
 
+        {hasMixedScrapLines && (
+          <Alert variant="warning" className="mb-3">
+            <AlertCircle />
+            <AlertTitle>Faktur campuran besi tua</AlertTitle>
+            <AlertDescription>
+              Faktur ini mencampur item besi tua dan barang dagang. Pisahkan ke faktur tersendiri — server menolak posting faktur campuran.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Belum ada item. Tambahkan baris di sini, atau simpan dulu lalu isi di halaman detail.
@@ -250,7 +270,7 @@ export function SalesInvoiceForm({
                         placeholder="Pilih barang..."
                         options={availableItems.map((a) => ({
                           value: String(a.id),
-                          label: a.sku ? `${a.name} (${a.sku})` : a.name,
+                          label: `${a.sku ? `${a.name} (${a.sku})` : a.name}${a.isScrapSaleItem ? " — Besi Tua" : ""}`,
                         }))}
                       />
                     </td>

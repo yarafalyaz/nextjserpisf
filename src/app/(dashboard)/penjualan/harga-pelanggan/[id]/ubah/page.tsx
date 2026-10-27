@@ -33,6 +33,7 @@ export default async function EditCustomerPricePage({
         price: true,
         minQty: true,
         effectiveDate: true,
+        expiresAt: true,
         notes: true,
       },
     }),
@@ -66,6 +67,7 @@ export default async function EditCustomerPricePage({
           price: String(Number(price.price)),
           minQty: String(Number(price.minQty)),
           effectiveDate: toDateInput(price.effectiveDate),
+          expiresAt: toDateInput(price.expiresAt),
           notes: price.notes ?? "",
         }}
       />

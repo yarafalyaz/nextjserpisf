@@ -22,6 +22,10 @@ describe("F-070-S effectiveMinStock (BR-MS-02)", () => {
     expect(effectiveMinStock(5, null)).toEqual({ minStock: 5, source: "global" })
     expect(effectiveMinStock(5, undefined)).toEqual({ minStock: 5, source: "global" })
     expect(effectiveMinStock(5, 0)).toEqual({ minStock: 0, source: "override" })
+    // PR #936/BR-ROP-01: baris lead-time minStock null -> warisi global,
+    // label jujur "global"; 0 tetap override eksplisit (beda makna).
+    expect(effectiveMinStock(10, null)).toEqual({ minStock: 10, source: "global" })
+    expect(effectiveMinStock(10, 0)).toEqual({ minStock: 0, source: "override" })
   })
 })
 

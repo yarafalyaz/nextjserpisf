@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     department: buildModelMock(),
     position: buildModelMock(),
     lead: buildModelMock(),
+    leadActivity: buildModelMock(),
     bank: buildModelMock(),
     bankStatement: buildModelMock(),
     tax: {
@@ -84,6 +85,7 @@ vi.mock("bcryptjs", () => {
 })
 
 import * as actions from "../master.actions"
+import { LEAD_LOST_REASON_CATEGORIES } from "@/lib/reports/lead-lost-reason"
 import { Prisma as RealPrisma } from "@prisma/client"
 
 describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
@@ -127,6 +129,10 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, permissions: ["manage_leads"], roles: ["super_admin"] })
+  // F-2026-10-25-042-V: updateItem membaca item tersimpan (penjaga scrap/
+  // default pajak); default mock = item non-scrap tanpa default supaya
+  // tes lama tidak bergantung urutan mockResolvedValueOnce.
+  mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null })
 })
 
 describe("Customer Actions", () => {
@@ -141,6 +147,105 @@ describe("Customer Actions", () => {
   it("deleteCustomer succeeds", async () => {
     const res = await actions.deleteCustomer(1)
     expect(res?.success).toBe(true)
+  })
+})
+
+describe("F-2026-10-25-003-S duplikat pelanggan (AC-CD-B4/B5/B7)", () => {
+  it("AC-CD-B7: quick-add reuse menyatakan reused + identitas; id sama perilaku existing", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 42, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0042" })
+    const res: any = await actions.createCustomer(fdMap({ name: "PT Sinar", phone: "0812-3456-7890" }))
+    expect(res.success).toBe(true)
+    expect(res.id).toBe(42)
+    expect(res.reused).toBe(true)
+    expect(res.reusedCustomer).toEqual({ id: 42, name: "PT Sinar", code: "CUST-0042", slug: "pt-sinar" })
+    expect(typeof res.message).toBe("string")
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+
+  it("AC-CD-B4: simpan tetap sukses + duplicateWarning kandidat telepon ternormalisasi (AC-CD-B1)", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 99, slug: "baru" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 11, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0011", phone: "0812-3456-7890", email: null, taxId: null },
+    ])
+    const res: any = await actions.createCustomer(fdMap({ name: "Pelanggan Baru", phone: "+62 812-3456-7890" }))
+    expect(res.success).toBe(true)
+    expect(res.id).toBe(99)
+    expect(res.duplicateWarning?.candidates).toHaveLength(1)
+    expect(res.duplicateWarning.candidates[0]).toMatchObject({ id: 11, matchKind: "phone" })
+  })
+
+  it("AC-CD-B4: tanpa kecocokan -> duplicateWarning null, perilaku simpan tak berubah", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 100, slug: "baru2" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([])
+    const res: any = await actions.createCustomer(fdMap({ name: "Benar Baru", phone: "0857-1111-2222" }))
+    expect(res.success).toBe(true)
+    expect(res.duplicateWarning).toBeNull()
+  })
+
+  it("AC-CD-B5: updateCustomer kandidat memuat B, excludeId diri diteruskan", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 12, slug: "b", name: "Pelanggan B", code: "CUST-0012", phone: "+6281234567890", email: null, taxId: null },
+    ])
+    const res: any = await actions.updateCustomer(11, fdMap({ name: "Pelanggan A", phone: "0812-3456-7890" }))
+    expect(res.success).toBe(true)
+    expect(res.duplicateWarning?.candidates.map((c: any) => c.id)).toEqual([12])
+    expect(mocks.prismaMock.customer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { not: 11 } }) }),
+    )
+  })
+
+  it("Q-CD-1 create: NPWP persis beda format (titik/strip) = BLOKIR, create tidak terpanggil, respons terstruktur menyebut pemegang", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 99, slug: "baru" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 11, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0011", phone: null, email: null, taxId: "012345678901000" },
+    ])
+    const res: any = await actions.createCustomer(fdMap({ name: "Pelanggan Baru", taxId: "01.234.567.8-901.000" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toBe("NPWP yang sama sudah tercatat atas nama PT Sinar (CUST-0011). Pakai pelanggan yang sudah ada itu, atau perbaiki NPWP bila salah ketik.")
+    expect(res.npwpConflict).toEqual({ id: 11, slug: "pt-sinar", name: "PT Sinar", code: "CUST-0011", title: "NPWP sudah dipakai pelanggan lain" })
+    expect(res.duplicateWarning).toBeUndefined()
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+
+  it("Q-CD-1 create: NPWP kosong lolos (bukan konflik, bukan kandidat)", async () => {
+    mocks.prismaMock.customer.create.mockResolvedValue({ id: 100, slug: "baru2" })
+    mocks.prismaMock.customer.findMany.mockResolvedValue([])
+    const res: any = await actions.createCustomer(fdMap({ name: "Benar Baru" }))
+    expect(res.success).toBe(true)
+    expect(res.duplicateWarning).toBeNull()
+  })
+
+  it("Q-CD-1 update: NPWP persis milik pelanggan LAIN = BLOKIR, update tidak terpanggil", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 12, slug: "b", name: "Pelanggan B", code: "CUST-0012", phone: null, email: null, taxId: "012345678901000" },
+    ])
+    const res: any = await actions.updateCustomer(11, fdMap({ name: "Pelanggan A", taxId: "01.234.567.8-901.000" }))
+    expect(res.success).toBe(false)
+    expect(res.npwpConflict).toMatchObject({ id: 12, name: "Pelanggan B", code: "CUST-0012" })
+    expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { not: 11 } }) }),
+    )
+  })
+
+  it("Q-CD-1 update: self-match NPWP sendiri lolos (where mengecualikan diri, scan kosong)", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([])
+    const res: any = await actions.updateCustomer(11, fdMap({ name: "Pelanggan A", taxId: "01.234.567.8-901.000" }))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.customer.update).toHaveBeenCalled()
+  })
+
+  it("listCustomerDuplicateCandidates: grup >=2 saja lewat izin view_customers", async () => {
+    mocks.prismaMock.customer.findMany.mockResolvedValue([
+      { id: 11, slug: "a", name: "PT Sinar", code: "C1", phone: "0812-3456-7890", email: null, taxId: null },
+      { id: 12, slug: "b", name: "PT Sinar 2", code: "C2", phone: "+6281234567890", email: null, taxId: null },
+      { id: 13, slug: "c", name: "Unik", code: "C3", phone: "0857-0000-9999", email: null, taxId: null },
+    ])
+    const res: any = await actions.listCustomerDuplicateCandidates()
+    expect(res.success).toBe(true)
+    expect(res.groups).toHaveLength(1)
+    expect(res.groups[0].members.map((m: any) => m.id)).toEqual([11, 12])
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("view_customers")
   })
 })
 
@@ -185,6 +290,47 @@ describe("Item Actions", () => {
   it("deleteItem succeeds", async () => {
     const res = await actions.deleteItem(1)
     expect(res?.success).toBe(true)
+  })
+  // F-2026-10-25-042-V (vonis Q-ITX-1): default pajak per item.
+  it("createItem menyimpan default pajak sah + audit metadata", async () => {
+    mocks.prismaMock.tax.findUnique.mockResolvedValue({ id: 7, isActive: true, deletedAt: null })
+    const res = await actions.createItem(fdMap({ name: "Item Pajak", cost: "100", price: "200", defaultSalesTaxId: "7", defaultDppPercent: "50" }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.item.create.mock.calls[0][0].data
+    expect(data.defaultSalesTaxId).toBe(7)
+    expect(data.defaultPurchaseTaxId).toBeNull()
+    expect(data.defaultDppPercent).toBe(50)
+    expect(mocks.logActivityMock).toHaveBeenCalledWith("create", "Item", 1, "Membuat barang", {
+      defaultSalesTaxId: 7,
+      defaultPurchaseTaxId: null,
+      defaultDppPercent: 50,
+    })
+  })
+  it("createItem menolak scrap ber-default pajak (Putusan 5)", async () => {
+    const res = await actions.createItem(fdMap({ name: "Besi Tua", cost: "100", price: "200", isScrapSaleItem: "true", defaultDppPercent: "50" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/besi tua/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("createItem menolak persen DPP di luar 0-100 (Putusan 2)", async () => {
+    const res = await actions.createItem(fdMap({ name: "Item X", cost: "100", price: "200", defaultDppPercent: "101" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/0,00 dan 100,00/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("createItem menolak rujukan Tax nonaktif (fail-closed Putusan 3)", async () => {
+    mocks.prismaMock.tax.findUnique.mockResolvedValue({ id: 7, isActive: false, deletedAt: null })
+    const res = await actions.createItem(fdMap({ name: "Item X", cost: "100", price: "200", defaultSalesTaxId: "7" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/nonaktif/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("updateItem menolak scrap tersimpan + persen warisan tanpa field form", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: true, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: 50 })
+    const res = await actions.updateItem(1, fdMap({ name: "Besi Tua", cost: "100", price: "200" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/besi tua/)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
   })
 })
 
@@ -461,6 +607,99 @@ describe("Lead Actions", () => {
     const res = await actions.updateLead(1, fdMap({ name: "test", expectedCloseDate: "invalid-date" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("expectedCloseDate")
+  })
+})
+
+describe("F-2026-10-24-141-S duplikat lead (Model C)", () => {
+  const dupRow = {
+    id: 11, leadNumber: "LEAD-0011", slug: "budi", name: "Budi",
+    company: "PT Sinar", status: "new", customerId: null, assignedTo: 1,
+    phone: "+6281234567890", email: "budi@mail.com",
+    createdAt: new Date("2026-10-20T00:00:00Z"),
+  }
+
+  it("createLead kandidat cocok tanpa alasan -> peringatan, nol baris baru (AC-DUP-1/7)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    const res: any = await actions.createLead(fdMap({ name: "Budi Baru", phone: "0812-3456-7890" }))
+    expect(res?.success).toBe(false)
+    expect(res?.duplicateWarning?.candidates?.map((c: any) => c.id)).toEqual([11])
+    expect(mocks.prismaMock.lead.create).not.toHaveBeenCalled()
+  })
+
+  it("createLead kandidat cocok + alasan sah -> buat + jejak duplicate_override di lead baru (BR-DUP-06/10)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    mocks.prismaMock.lead.create.mockResolvedValue({ id: 55 })
+    try {
+      await actions.createLead(fdMap({
+        name: "Budi Baru", phone: "0812-3456-7890",
+        duplicateOverrideReason: "Nomor sentral perusahaan, orang berbeda",
+      }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          leadId: 55, type: "duplicate_override",
+          description: expect.stringContaining("11"),
+        }),
+      }),
+    )
+  })
+
+  it("createLead tanpa kandidat -> perilaku existing, tanpa jejak override (AC-DUP-10)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([])
+    try {
+      await actions.createLead(fdMap({ name: "Unik", phone: "081299998888" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+
+  it("createLead company-saja sama -> TIDAK peringatan (AC-DUP-4)", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([
+      { ...dupRow, phone: "081200001111", email: "lain@mail.com" },
+    ])
+    try {
+      await actions.createLead(fdMap({ name: "Budi", company: "PT Sinar", phone: "081277778888" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+  })
+
+  it("updateLead ubah phone ke phone lead lain tanpa alasan -> ditolak, nol update (AC-DUP-11)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+      phone: "081211110000", email: null, status: "new",
+    })
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    const res: any = await actions.updateLead(1, fdMap({ name: "Saya", phone: "0812-3456-7890" }))
+    expect(res?.success).toBe(false)
+    expect(res?.duplicateWarning?.candidates?.[0]?.id).toBe(11)
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
+  it("updateLead nomor sama format beda (self) -> TIDAK memicu, update jalan (AC-DUP-11)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+      phone: "+6281234567890", email: null, status: "new",
+    })
+    mocks.prismaMock.lead.findMany.mockResolvedValue([dupRow])
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", phone: "0812-3456-7890" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
+    expect(mocks.prismaMock.lead.findMany).not.toHaveBeenCalled()
+  })
+
+  it("updateLead status-saja nomor tetap -> TIDAK query kandidat (AC-DUP-11)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+      phone: "081211110000", email: null, status: "new",
+    })
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", phone: "081211110000", status: "contacted" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
+    expect(mocks.prismaMock.lead.findMany).not.toHaveBeenCalled()
   })
 })
 
@@ -1324,14 +1563,14 @@ describe('Coverage Hardening Edge Cases', () => {
 
   it('createEmployee - with wantsLogin existing user', async () => {
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Email sudah terdaftar")
   })
 
   it('createEmployee - with wantsLogin success', async () => {
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
-    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
     fd.append("loginRoleIds", "1")
     const res = await actions.createEmployee(fd)
     if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
@@ -1361,7 +1600,7 @@ describe('Coverage Hardening Edge Cases', () => {
   it('updateEmployee - wantsLogin email exists', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" }))
     expect(res?.success).toBe(false)
   })
 
@@ -1376,7 +1615,7 @@ describe('Coverage Hardening Edge Cases', () => {
   it('updateEmployee - wantsLogin success', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
-    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
     fd.append("loginRoleIds", "1")
     const res = await actions.updateEmployee(1, fd)
     if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
@@ -1745,5 +1984,132 @@ describe('Zod Validation Coverage in master.actions', () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Validasi gagal/)
     expect(mocks.prismaMock.account.update).not.toHaveBeenCalled()
+  })
+})
+
+describe("F-2026-10-25-030-S alasan kalah lead lost (Q-LR-1..4)", () => {
+  const baseLead = {
+    id: 1, leadNumber: "LEAD-0001", name: "Saya", assignedTo: 1,
+    phone: null, email: null, status: "new",
+  }
+
+  it("AC-LR-B1: transisi ke lost tanpa kategori ditolak, status utuh", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead })
+    const res: any = await actions.updateLead(1, fdMap({ name: "Saya", status: "lost" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("wajib dipilih")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+
+  it("AC-LR-B2: key asing (kamus quotation) ditolak eksplisit", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead })
+    const res: any = await actions.updateLead(
+      1,
+      fdMap({ name: "Saya", status: "lost", lostReasonCategory: "pilih-bengkel-lain" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("Kategori alasan kalah tidak dikenal")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
+  it("AC-LR-B3: transisi sah menulis tepat satu status_change berawalan [kalah:key]", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead })
+    try {
+      await actions.updateLead(
+        1,
+        fdMap({ name: "Saya", status: "lost", lostReasonCategory: "harga", lostReasonText: "kemahalan" }),
+      )
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalledTimes(1)
+    const statusChanges = mocks.prismaMock.leadActivity.create.mock.calls.filter(
+      (c: any[]) => c[0]?.data?.type === "status_change",
+    )
+    expect(statusChanges).toHaveLength(1)
+    expect(statusChanges[0][0].data).toMatchObject({
+      leadId: 1,
+      oldStatus: "new",
+      newStatus: "lost",
+      description: "[kalah:harga] kemahalan",
+    })
+  })
+
+  it("Q-LR-2: kategori lainnya + teks kosong sah", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead })
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", status: "lost", lostReasonCategory: "lainnya" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ description: "[kalah:lainnya]" }),
+      }),
+    )
+  })
+
+  it("AC-LR-B5: won -> lost ditolak; lost -> aktif ditolak (terminal Q-LR-4)", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead, status: "won" })
+    const resWon: any = await actions.updateLead(
+      1,
+      fdMap({ name: "Saya", status: "lost", lostReasonCategory: "budget" }),
+    )
+    expect(resWon?.success).toBe(false)
+    expect(resWon?.error).toContain("terminal")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead, status: "lost" })
+    const resLost: any = await actions.updateLead(1, fdMap({ name: "Saya", status: "new" }))
+    expect(resLost?.success).toBe(false)
+    expect(resLost?.error).toContain("terminal")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
+  it("kategori pada status non-lost ditolak", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead })
+    const res: any = await actions.updateLead(
+      1,
+      fdMap({ name: "Saya", status: "contacted", lostReasonCategory: "budget" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("hanya berlaku")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
+  it("transisi status non-lost existing tetap jalan tanpa description alasan", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead })
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", status: "contacted" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ type: "status_change", description: null }),
+      }),
+    )
+  })
+
+  it("AC-LR-B6: non-admin lead orang lain + lost tetap ditolak guard kepemilikan", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 2, permissions: [], roles: [] })
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ ...baseLead, assignedTo: 3 })
+    const res: any = await actions.updateLead(
+      1,
+      fdMap({ name: "Saya", status: "lost", lostReasonCategory: "budget" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Anda hanya dapat mengubah lead")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+  })
+
+  it("AC-LR-F1 (server): kamus payload server LEAD_LOST_REASON_CATEGORIES = 8 key Q-LR-1", () => {
+    expect(LEAD_LOST_REASON_CATEGORIES.map((c) => c.key)).toEqual([
+      "budget",
+      "harga",
+      "waktu",
+      "tidak-ada-respons",
+      "kalah-kompetitor",
+      "bukan-target",
+      "pembatalan",
+      "lainnya",
+    ])
   })
 })

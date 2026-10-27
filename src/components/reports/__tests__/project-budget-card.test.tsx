@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { ProjectBudgetCard } from "../project-budget-card"
 import { buildProjectBudget } from "@/lib/reports/project-budget"
 import type { ProjectBudgetForProject } from "@/lib/reports/project-budget-data"
-import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { renderCardText, clearRenderedCards } from "./card-test-utils"
 
 afterEach(() => {
   clearRenderedCards()
@@ -46,19 +46,11 @@ function budgetFixture(overrides: Partial<Parameters<typeof buildProjectBudget>[
 }
 
 function renderBudgetText(budget: ProjectBudgetForProject) {
-  const { container, root } = renderCard(<ProjectBudgetCard budget={budget} />)
-  const text = container.textContent ?? ""
-  const selectors = {
-    card: '[aria-label="RAB vs Realisasi Proyek"]',
-    stages: '[aria-label="Anggaran vs realisasi per tahap"]',
-    history: '[aria-label="Riwayat RAB"]',
-  } as const
-  const found = Object.fromEntries(
-    Object.entries(selectors).map(([key, selector]) => [key, container.querySelector(selector) !== null]),
-  ) as Record<keyof typeof selectors, boolean>
-  const hasTable = container.querySelector("table") !== null
-  unmountCard(root)
-  return { text, found, hasTable }
+  return renderCardText(<ProjectBudgetCard budget={budget} />, {
+    card: "RAB vs Realisasi Proyek",
+    stages: "Anggaran vs realisasi per tahap",
+    history: "Riwayat RAB",
+  })
 }
 
 describe("ProjectBudgetCard F-2026-10-21-030", () => {

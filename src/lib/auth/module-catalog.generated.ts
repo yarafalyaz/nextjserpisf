@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 374 permission dikelompokkan per modul (15 modul). */
+/** 383 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -172,6 +172,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "sales_returns", permissionKey: "create_sales_returns", label: "Retur Penjualan" },
     { key: "edit", resource: "sales_returns", permissionKey: "edit_sales_returns", label: "Retur Penjualan" },
     { key: "delete", resource: "sales_returns", permissionKey: "delete_sales_returns", label: "Retur Penjualan" },
+    { key: "approve", resource: "sales_returns", permissionKey: "approve_sales_returns", label: "Retur Penjualan" },
     { key: "view", resource: "delivery_orders", permissionKey: "view_delivery_orders", label: "Surat Jalan" },
     { key: "create", resource: "delivery_orders", permissionKey: "create_delivery_orders", label: "Surat Jalan" },
     { key: "edit", resource: "delivery_orders", permissionKey: "edit_delivery_orders", label: "Surat Jalan" },
@@ -308,6 +309,9 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "competencies", permissionKey: "edit_competencies", label: "Kompetensi" },
     { key: "delete", resource: "competencies", permissionKey: "delete_competencies", label: "Kompetensi" },
     { key: "approve", resource: "contracts", permissionKey: "approve_contracts", label: "Kontrak Karyawan" },
+    { key: "view", resource: "attendance_corrections", permissionKey: "view_attendance_corrections", label: "Koreksi Absensi" },
+    { key: "create", resource: "attendance_corrections", permissionKey: "create_attendance_corrections", label: "Koreksi Absensi" },
+    { key: "approve", resource: "attendance_corrections", permissionKey: "approve_attendance_corrections", label: "Koreksi Absensi" },
     { key: "view", resource: "timesheets", permissionKey: "view_timesheets", label: "Lembar Waktu" },
     { key: "create", resource: "timesheets", permissionKey: "create_timesheets", label: "Lembar Waktu" },
     { key: "delete", resource: "timesheets", permissionKey: "delete_timesheets", label: "Lembar Waktu" },
@@ -322,6 +326,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "overtime_requests", permissionKey: "edit_overtime_requests", label: "Pengajuan Lembur" },
     { key: "delete", resource: "overtime_requests", permissionKey: "delete_overtime_requests", label: "Pengajuan Lembur" },
     { key: "approve", resource: "overtime_requests", permissionKey: "approve_overtime_requests", label: "Pengajuan Lembur" },
+    { key: "create", resource: "employee_loan_requests", permissionKey: "create_employee_loan_requests", label: "Pengajuan Pinjaman Karyawan" },
     { key: "view", resource: "payroll", permissionKey: "view_payroll", label: "Penggajian" },
     { key: "create", resource: "payroll", permissionKey: "create_payroll", label: "Penggajian" },
     { key: "edit", resource: "payroll", permissionKey: "edit_payroll", label: "Penggajian" },
@@ -331,6 +336,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "performance", permissionKey: "create_performance", label: "Penilaian Kinerja" },
     { key: "edit", resource: "performance", permissionKey: "edit_performance", label: "Penilaian Kinerja" },
     { key: "delete", resource: "performance", permissionKey: "delete_performance", label: "Penilaian Kinerja" },
+    { key: "approve", resource: "salary_adjustments", permissionKey: "approve_salary_adjustments", label: "Penyesuaian Gaji" },
     { key: "view", resource: "succession", permissionKey: "view_succession", label: "Perencanaan Suksesi" },
     { key: "create", resource: "succession", permissionKey: "create_succession", label: "Perencanaan Suksesi" },
     { key: "edit", resource: "succession", permissionKey: "edit_succession", label: "Perencanaan Suksesi" },
@@ -339,6 +345,9 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "delete", resource: "loans", permissionKey: "delete_loans", label: "Pinjaman" },
     { key: "approve", resource: "loans", permissionKey: "approve_loans", label: "Pinjaman" },
     { key: "view", resource: "employee_loans", permissionKey: "view_employee_loans", label: "Pinjaman Karyawan" },
+    { key: "view", resource: "disciplinary_records", permissionKey: "view_disciplinary_records", label: "Rekod Disiplin" },
+    { key: "create", resource: "disciplinary_records", permissionKey: "create_disciplinary_records", label: "Rekod Disiplin" },
+    { key: "approve", resource: "disciplinary_records", permissionKey: "approve_disciplinary_records", label: "Rekod Disiplin" },
     { key: "view", resource: "recruitments", permissionKey: "view_recruitments", label: "Rekrutmen" },
     { key: "create", resource: "recruitments", permissionKey: "create_recruitments", label: "Rekrutmen" },
     { key: "edit", resource: "recruitments", permissionKey: "edit_recruitments", label: "Rekrutmen" },

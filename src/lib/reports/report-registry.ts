@@ -29,6 +29,10 @@ import { loadFinancialRatios } from "@/lib/reports/financial-ratios-data"
 import { buildRatiosTable } from "@/lib/reports/ratios-table"
 import { loadProfitability } from "@/lib/reports/profitability-data"
 import { loadSalesProcessHistory } from "@/lib/reports/sales-process-history-data"
+import {
+  buildDiscountExposureTable,
+  loadDiscountExposureReport,
+} from "@/lib/reports/discount-exposure-export"
 import { loadPurchaseProcessHistory } from "@/lib/reports/purchase-process-history-data"
 import { loadPurchasesByDimension } from "@/lib/reports/purchase-by-dimension-data"
 import { loadPayrollRows } from "@/lib/reports/payroll-reports-data"
@@ -76,6 +80,8 @@ import { loadJobEstimateVsActual } from "@/lib/reports/job-estimate-vs-actual-da
 import { loadStockCount } from "@/lib/reports/stock-count-data"
 import { loadPaymentExpenses } from "@/lib/reports/payment-expenses-data"
 import { loadOrderFulfillment } from "@/lib/reports/order-fulfillment-data"
+import { getDeliveredUnbilledQueue } from "@/lib/reports/delivered-unbilled-data"
+import { buildDeliveredUnbilledTable } from "@/lib/reports/delivered-unbilled-export"
 import { loadInventoryReconciliation } from "@/lib/reports/inventory-reconciliation-data"
 import { loadReceivedNotBilled } from "@/lib/reports/received-not-billed-data"
 import { loadTransferInTransit } from "@/lib/reports/transfer-in-transit-data"
@@ -551,6 +557,28 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     },
   },
 
+  "terkirim-belum-terfaktur": {
+    title: "Terkirim Belum Terfaktur",
+    subtitle: "Pesanan Penjualan Terkirim Belum Terfaktur Penuh",
+    async load({ period, search }) {
+      const customerId = Number(search.pelanggan)
+      const queue = await getDeliveredUnbilledQueue({
+        start: period.start,
+        end: period.end,
+        ...(Number.isSafeInteger(customerId) && customerId > 0
+          ? { customerId }
+          : {}),
+        now: period.end,
+      })
+      return {
+        kind: "table",
+        table: buildDeliveredUnbilledTable(queue),
+        periodCaption: formatPeriodLabel(period),
+        landscape: true,
+      }
+    },
+  },
+
   "selisih-persediaan": {
     title: "Selisih Saldo Akun Persediaan",
     subtitle: "Pemeriksaan: Buku Besar dibanding Nilai Barang",
@@ -954,6 +982,20 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
         : "barang"
       const report = await loadSalesAnalytics(period, dimension)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "paparan-diskon-penjualan": {
+    title: "Paparan Diskon Penjualan",
+    subtitle: "Diskon Efektif Dokumen Penjualan per Periode",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period }) {
+      const report = await loadDiscountExposureReport(period)
+      return {
+        kind: "table",
+        table: buildDiscountExposureTable(report),
+        periodCaption: report.periodCaption,
+        landscape: true,
+      }
     },
   },
   "buku-besar": {

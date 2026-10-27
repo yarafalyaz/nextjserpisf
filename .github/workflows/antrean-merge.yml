@@ -1,0 +1,213 @@
+name: Antrean Merge
+
+# Merge queue buatan sendiri. Merge queue bawaan GitHub tidak tersedia untuk
+# repo ini (opsi "Require merge queue" tidak tampil di UI branch protection
+# maupun ruleset; pembuatan rule lewat REST ditolak 422 dan skema GraphQL
+# tidak punya field-nya — diverifikasi 25 Okt 2026). Workflow ini menirunya:
+# PR berlabel `antrean-merge` diproses satu per satu (FIFO) — update branch
+# ke main terbaru, tunggu semua gerbang check hijau di head persis, approve
+# oleh bot, lalu squash merge + hapus branch. Satu antrean, satu merge pada
+# satu waktu, jadi balapan "branch tertinggal dari main" (BEHIND) tidak
+# terjadi.
+#
+# PERINGATAN: label `antrean-merge` = izin merge de-facto. Siapa pun yang
+# bisa memasang label (izin triage/write) bisa memicu approve + merge.
+# Pasang label HANYA sesudah verdict manusia/QA tercatat di PR itu.
+#
+# Kenapa approve oleh bot sah di sini: penulis PR adalah akun pemilik,
+# sedangkan peninjau adalah github-actions[bot] — aktor berbeda, dan syarat
+# branch protection (1 approval, dismiss stale) terpenuhi sesudah update
+# terakhir karena approve diberikan paling akhir. Kegagalan approve di sini
+# GAGAL KERAS (langkah gagal + komentar spesifik), tidak ditelan: repo saat
+# ini melaporkan actions/permissions/workflow `can_approve_pull_request_reviews=false`,
+# jadi jalur approve GITHUB_TOKEN belum terbukti sampai ada run nyata hijau.
+#
+# Jadwal cron adalah jaring pengaman: trigger `labeled` bisa tertelan batas
+# concurrency (GitHub hanya menyimpan 1 run pending per grup; labeled ke-3+
+# bisa menjatuhkan run pending terdahulu), jadi antrean disapu berkala juga.
+#
+# Dua token, dua aktor (penting):
+# - `ANTREAN_MERGE_TOKEN` (PAT pemilik, secret repo) hanya untuk
+#   `update-branch`. Push/update oleh GITHUB_TOKEN bawaan tidak memicu
+#   workflow `pull_request`, dan check dari `workflow_dispatch` tidak masuk
+#   rollup PR sehingga tidak dihitung branch protection (pelajaran run
+#   40123035523: check dispatch hijau semua tapi PR tetap REVIEW_REQUIRED/
+#   BEHIND). Dengan PAT, update memicu CI `pull_request` biasa — antrean
+#   TIDAK pernah memicu workflow_dispatch CI; ia hanya membaca rollup PR.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+concurrency:
+  group: antrean-merge-main
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  proses:
+    name: Proses Antrean Merge
+    if: github.event_name != 'pull_request' || github.event.label.name == 'antrean-merge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 170
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PAT: ${{ secrets.ANTREAN_MERGE_TOKEN }}
+      TZ: Asia/Jakarta
+    steps:
+      # Checkout eksplisit: kegagalan pertama antrean (run 40122122702)
+      # adalah "fatal: not a git repository". GH_REPO di atas sudah cukup
+      # untuk gh, tetapi checkout membuat konteks git nyata tersedia dan
+      # kegagalan sejenis tidak bersembunyi di balik tebakan repo.
+      - uses: actions/checkout@v7
+      - name: Proses PR berlabel antrean-merge (FIFO)
+        run: |
+          set -uo pipefail
+
+          if [ -z "${PAT}" ]; then
+            # Tanpa PAT, antrean Actions tidak bisa memicu CI pull_request.
+            # Antrean utama repo = skrip lokal scripts/antrean-merge.sh
+            # (login pemilik) — run ini selesai wajar, bukan gagal, supaya
+            # PR berlabel tidak kena X merah palsu. Bila PAT dipasang
+            # kelak, workflow ini otomatis jadi antrean penuh.
+            echo "Secret ANTREAN_MERGE_TOKEN tidak dipasang: antrean Actions dilewati (antrean lokal Lead yang memproses)."
+            exit 0
+          fi
+
+          cabut_label() {
+            pr=$1; pesan=$2
+            gh pr edit "$pr" --remove-label antrean-merge || true
+            gh pr comment "$pr" --body "$pesan" || true
+          }
+
+          # Tunggu gerbang di head yang TERIKAT sesudah update-branch:
+          # - 4 check wajib protection (Lint, Unit Tests, Build Next.js,
+          #   DB Integration Tests): bucket pass, atau skipping HANYA bila
+          #   diff PR terbukti docs-only (semua berkas .md dari merge-base).
+          # - SonarCloud Code Analysis: bucket pass (tidak pernah skipping
+          #   untuk head yang punya run CI; absen = belum selesai).
+          # - Docker Image Build: wajib pass bila diff menyentuh jalur
+          #   Docker/CI/dependensi; di luar itu skipping/absen sah.
+          # Hitungan memakai length array jq per nama persis — dilarang
+          # menghitung karakter string gabungan (bug B1: "pass" = 4 karakter
+          # lolos padahal baru 1 dari 4 check yang lapor).
+          wait_checks() {
+            pr=$1; target=$2; docs_only=$3; docker_req=$4
+            tries=0
+            while [ $tries -lt 80 ]; do
+              now=$(gh pr view "$pr" --json headRefOid --jq .headRefOid 2>/dev/null || echo "")
+              if [ "$now" != "$target" ]; then
+                echo "Head PR #$pr bergerak $target -> $now saat menunggu; batalkan putaran ini."
+                return 2
+              fi
+              json=$(gh pr checks "$pr" --json name,bucket 2>/dev/null || echo "[]")
+              bad=$(printf '%s' "$json" | jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length')
+              if [ "$bad" -gt 0 ]; then
+                printf '%s' "$json" | jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | "GAGAL: \(.name) bucket=\(.bucket)"'
+                return 1
+              fi
+              ok=$(printf '%s' "$json" | jq -r \
+                --argjson docs "$docs_only" --argjson dreq "$docker_req" '
+                def bucket_of($n): ([.[] | select(.name == $n) | .bucket] | first // "absent");
+                def wajib_ok($n): (bucket_of($n) == "pass" or ($docs and bucket_of($n) == "skipping"));
+                (wajib_ok("Lint") and wajib_ok("Unit Tests")
+                 and wajib_ok("Build Next.js") and wajib_ok("DB Integration Tests")
+                 and bucket_of("SonarCloud Code Analysis") == "pass"
+                 and ((($dreq | not) and (bucket_of("Docker Image Build") == "pass" or bucket_of("Docker Image Build") == "skipping" or bucket_of("Docker Image Build") == "absent"))
+                      or ($dreq and bucket_of("Docker Image Build") == "pass")))')
+              if [ "$ok" = "true" ]; then
+                return 0
+              fi
+              sleep 30
+              tries=$((tries + 1))
+            done
+            echo "Timeout menunggu check PR #$pr di head $target."
+            return 1
+          }
+
+          prs=$(gh pr list --label antrean-merge --state open --json number,createdAt,isDraft --jq '[.[] | select(.isDraft | not)] | sort_by(.createdAt) | .[].number')
+          if [ -z "${prs}" ]; then
+            echo "Antrean kosong."
+            exit 0
+          fi
+
+          for pr in $prs; do
+            echo "::group::PR #$pr"
+            state=$(gh pr view "$pr" --json state --jq .state)
+            if [ "$state" != "OPEN" ]; then
+              echo "Dilewati: bukan OPEN."
+              echo "::endgroup::"
+              continue
+            fi
+            before=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+
+            # Klasifikasi diff dari merge-base PR (bukan HEAD~1): menentukan
+            # skipping docs-only yang sah dan kewajiban Docker.
+            git fetch origin "pull/$pr/head:refs/antrean/pr-$pr" "main:refs/antrean/main" --quiet
+            files=$(git diff --name-only "refs/antrean/main...refs/antrean/pr-$pr")
+            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '\.md$'; then docs_only=true; else docs_only=false; fi
+            # Pola docker_req HARUS sama persis dengan pola output `docker`
+            # di Detect Changes ci.yml: jalur yang tidak memicu job Docker
+            # di CI tidak boleh dituntut pass oleh antrean (job itu akan
+            # skipping selamanya dan antrean timeout). Perubahan workflow
+            # .github/ sendiri divalidasi CI lewat Lint/Unit/Build, bukan
+            # job Docker.
+            if printf '%s\n' "$files" | grep -qE '^(Dockerfile|docker/|\.dockerignore|docker-compose|package(-lock)?\.json|prisma/|next\.config\.)'; then docker_req=true; else docker_req=false; fi
+            echo "PR #$pr: docs_only=$docs_only docker_wajib=$docker_req berkas=$(printf '%s' "$files" | wc -l)"
+
+            # Update sebagai pemilik (PAT) supaya event pull_request
+            # synchronize terbit dan CI jalan pada head terbaru; check-nya
+            # lalu masuk rollup PR dan dihitung branch protection.
+            if ! GH_TOKEN="${PAT}" gh pr update-branch "$pr"; then
+              echo "::error::update-branch PR #$pr gagal (PAT)."
+              cabut_label "$pr" "Antrean merge: update-branch gagal, head tidak terikat ke main terbaru. Label dicabut; periksa konflik/izin PAT lalu beri label \`antrean-merge\` lagi."
+              echo "::endgroup::"
+              continue
+            fi
+            sleep 5
+            after=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+            if [ "$before" != "$after" ]; then
+              echo "Branch diperbarui $before -> $after oleh PAT; menunggu CI pull_request di head $after."
+              sleep 10
+            fi
+
+            if wait_checks "$pr" "$after" "$docs_only" "$docker_req"; then
+              # Verifikasi ulang head tepat sebelum approve+merge (B5).
+              final=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+              if [ "$final" != "$after" ]; then
+                echo "::error::Head PR #$pr bergerak $after -> $final sesudah check lolos; tidak di-merge putaran ini."
+                cabut_label "$pr" "Antrean merge: head bergerak sesudah check lolos ($after -> $final). Label dicabut demi keamanan; beri label \`antrean-merge\` lagi untuk putaran baru."
+                echo "::endgroup::"
+                continue
+              fi
+              if ! gh pr review "$pr" --approve --body "Disetujui antrean merge: semua gerbang check hijau di head $after di atas main terbaru."; then
+                echo "::error::Approve PR #$pr oleh github-actions[bot] GAGAL di head $after (repo can_approve_pull_request_reviews=false — jalur ini belum terbukti; lihat run ini)."
+                cabut_label "$pr" "Antrean merge: approve oleh github-actions[bot] GAGAL di head $after. Ini kegagalan approve spesifik (bukan check): periksa izin Actions approve di pengaturan repo. Label dicabut; jangan pasang lagi sampai jalur approve terbukti."
+                echo "::endgroup::"
+                continue
+              fi
+              if gh pr merge "$pr" --squash --delete-branch --match-head-commit "$after"; then
+                echo "PR #$pr merged lewat antrean di head $after."
+              else
+                echo "::error::Merge PR #$pr gagal di head $after."
+                cabut_label "$pr" "Antrean merge: merge gagal di head $after sesudah approve (kemungkinan syarat protection/head berubah). Label dicabut; periksa lalu beri label \`antrean-merge\` lagi."
+              fi
+            else
+              rc=$?
+              if [ "$rc" -eq 2 ]; then
+                cabut_label "$pr" "Antrean merge: head PR bergerak saat check ditunggu. Label dicabut; beri label \`antrean-merge\` lagi untuk putaran baru di head terbaru."
+              else
+                cabut_label "$pr" "Antrean merge: check gagal atau timeout di head yang terikat sesudah update-branch. Label dicabut; perbaiki lalu beri label \`antrean-merge\` lagi untuk masuk antrean."
+              fi
+            fi
+            echo "::endgroup::"
+          done

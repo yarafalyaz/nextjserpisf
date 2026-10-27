@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { AgingReportView, buildAgingRows } from "@/components/reports/aging-report-view"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 
 import type { Metadata } from "next"
 
@@ -20,13 +22,18 @@ export default async function AgingReceivablesPage() {
     orderBy: { dueDate: 'asc' },
   })
 
+  // F-104-V: sisa layar kurangi returnCredit per faktur (helper bersama
+  // Backend PR #748 — definisi outstanding tunggal; paidAmount tetap murni).
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
+
   const rows = buildAgingRows(
     invoices.map((inv) => ({
       party: inv.customer.name,
-      documentNo: inv.documentNo,
+      documentNo: salesInvoiceLabel(inv),
       dueDate: inv.dueDate,
       grandTotal: inv.grandTotal,
       paidAmount: inv.paidAmount,
+      returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
     })),
     new Date(),
   )

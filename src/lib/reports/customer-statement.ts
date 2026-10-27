@@ -26,10 +26,30 @@
  * CustomerCredit (sumber JUMLAH kredit formal, domain terpisah). Retur
  * tanpa faktur asal tidak punya kaki Cr Piutang (priceTotal = 0 di hook)
  * sehingga tidak pernah diteruskan loader ke sini.
+ *
+ * F-2026-10-25-025-S (Q-ST-1=(a) Lead, BR-ST-01..08): kolom Jatuh Tempo +
+ * penanda Lewat Jatuh Tempo TURUNAN baca-saja. Due acuan per faktur =
+ * BR-COL-03: due tukar faktur aktif terakhir ?? dueDate dokumen faktur;
+ * builder murni menerima keduanya sebagai input opsional (`dueDate` +
+ * `exchangeDueDate`, loader yang memuat — builder tidak membaca exchange).
+ * Penanda baris faktur aktif hanya bila sisa per faktur (grandTotal −
+ * paid − returnCredit, definisi outstanding existing beku BR-ST-06) > 0.005
+ * DAN due acuan < periodEnd (hari kalender WIB) — acuan periodEnd, BUKAN
+ * jam sistem (BR-ST-05), supaya statement lampau ter-reproduksi persis.
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
-import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import {
+  COLLECTION_SETTLED_EPSILON,
+  receivableOutstanding,
+} from "@/lib/reports/aging-amounts"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
+
+/** Judul kolom verbatim BR-ST-01 — UI/PDF menempel apa adanya. */
+export const CUSTOMER_STATEMENT_DUE_COLUMN = "Jatuh Tempo"
+
+/** Label penanda verbatim BR-ST-05 — UI/PDF menempel apa adanya. */
+export const CUSTOMER_STATEMENT_OVERDUE_LABEL = "Lewat Jatuh Tempo"
 
 export type CustomerStatementEntryKind = "invoice" | "payment" | "credit" | "return"
 
@@ -40,6 +60,17 @@ export interface CustomerStatementInvoiceInput {
   /** Tanggal terbit faktur — momen Dr. */
   date: Date
   grandTotal: number
+  /**
+   * F-2026-10-25-025-S: due dokumen faktur (SalesInvoice.dueDate).
+   * Opsional supaya pemanggil lama tak berubah; tanpa field ini due
+   * acuan null (BR-ST-03, tidak pernah tertanda).
+   */
+  dueDate?: Date | null
+  /**
+   * Due tukar faktur aktif terakhir (BR-COL-03 reuse Q-ST-1=(a)).
+   * Loader meneruskannya; null/tidak ada = jatuh ke `dueDate` faktur.
+   */
+  exchangeDueDate?: Date | null
 }
 
 /** Satu SalesPayment atas faktur pelanggan. `paymentMethod === "customer_credit"` = alokasi kredit. */
@@ -78,6 +109,17 @@ export interface CustomerStatementEntry {
   documentNo: string
   /** No. faktur lawan untuk baris payment/credit; null untuk baris invoice. */
   referenceDocumentNo: string | null
+  /**
+   * Due acuan baris (BR-COL-03 via loader); null untuk baris non-invoice
+   * dan untuk faktur tanpa due apa pun (BR-ST-01/03 — tampil "—").
+   */
+  dueDate: Date | null
+  /**
+   * Penanda lewat jatuh tempo TURUNAN per periodEnd (BR-ST-04/05):
+   * sisa faktur > epsilon lunas DAN due acuan < akhir periode (hari WIB).
+   * Selalu false untuk baris non-invoice dan faktur lunas.
+   */
+  isOverdue: boolean
   description: string
   debit: number
   credit: number
@@ -113,6 +155,22 @@ function byDateThenKindThenId(
   return a.id - b.id
 }
 
+/** Hari kalender WIB (tengah malam UTC) dari sebuah tanggal. */
+function wibDayKey(date: Date): number {
+  return getWibTodayUtcDate(date).getTime()
+}
+
+/**
+ * Due acuan BR-COL-03 untuk input faktur builder: exchangeDueDate bila
+ * ada (tukar faktur aktif terakhir dari loader), else dueDate faktur.
+ * Tanggal invalid (NaN) diperlakukan tidak ada — penanda tak pernah aktif.
+ */
+export function customerStatementDueAcuan(inv: CustomerStatementInvoiceInput): Date | null {
+  const pick = (d: Date | null | undefined): Date | null =>
+    d != null && !Number.isNaN(d.getTime()) ? d : null
+  return pick(inv.exchangeDueDate) ?? pick(inv.dueDate)
+}
+
 /**
  * Bangun statement satu pelanggan untuk [periodStart, periodEnd] inklusif.
  *
@@ -139,6 +197,31 @@ export function buildCustomerStatement(input: {
   const payments = input.payments.filter((p) => invoiceIds.has(p.salesInvoiceId))
   const returns = (input.returns ?? []).filter((r) => invoiceIds.has(r.salesInvoiceId))
 
+  // Sisa per faktur untuk penanda (BR-ST-04): grandTotal − paid −
+  // returnCredit, rumus persis customerStatementOutstanding/outstanding
+  // existing (BR-ST-06 — bukan saldo berjalan agregat pelanggan).
+  const paidByInvoice = new Map<number, number>()
+  for (const pay of payments) {
+    paidByInvoice.set(
+      pay.salesInvoiceId,
+      safeAdd(paidByInvoice.get(pay.salesInvoiceId) ?? 0, safeAdd(pay.amount, pay.withholdingAmount, 2), 2),
+    )
+  }
+  const returnCreditByInvoice = new Map<number, number>()
+  for (const ret of returns) {
+    if (ret.returnCredit <= 0) continue
+    returnCreditByInvoice.set(
+      ret.salesInvoiceId,
+      safeAdd(returnCreditByInvoice.get(ret.salesInvoiceId) ?? 0, ret.returnCredit, 2),
+    )
+  }
+  const sisaByInvoice = new Map<number, number>()
+  for (const inv of input.invoices) {
+    const settled = safeAdd(paidByInvoice.get(inv.id) ?? 0, returnCreditByInvoice.get(inv.id) ?? 0, 2)
+    sisaByInvoice.set(inv.id, receivableOutstanding(inv.grandTotal, settled))
+  }
+  const periodEndDay = wibDayKey(periodEnd)
+
   let openingBalance = 0
   type Raw = {
     id: number
@@ -146,6 +229,8 @@ export function buildCustomerStatement(input: {
     date: Date
     documentNo: string
     referenceDocumentNo: string | null
+    dueDate: Date | null
+    isOverdue: boolean
     description: string
     debit: number
     credit: number
@@ -157,12 +242,19 @@ export function buildCustomerStatement(input: {
     if (t < startMs) {
       openingBalance = safeAdd(openingBalance, inv.grandTotal, 2)
     } else if (t <= endMs) {
+      const dueAcuan = customerStatementDueAcuan(inv)
       raw.push({
         id: inv.id,
         kind: "invoice",
         date: inv.date,
         documentNo: inv.documentNo,
         referenceDocumentNo: null,
+        dueDate: dueAcuan,
+        isOverdue:
+          // ponytail: penanda ikut deskripsi existing; label mandiri (mis. overdueLabel) tambah bila Frontend butuh badge terpisah.
+          dueAcuan != null &&
+          wibDayKey(dueAcuan) < periodEndDay &&
+          (sisaByInvoice.get(inv.id) ?? 0) > COLLECTION_SETTLED_EPSILON,
         description: `Faktur penjualan ${inv.documentNo}`,
         debit: safeAdd(0, inv.grandTotal, 2),
         credit: 0,
@@ -186,6 +278,8 @@ export function buildCustomerStatement(input: {
         date: pay.paymentDate,
         documentNo: pay.documentNo,
         referenceDocumentNo: pay.salesInvoiceDocumentNo,
+        dueDate: null,
+        isOverdue: false,
         description: isCredit
           ? `Alokasi kredit pelanggan${pay.creditDocumentNo ? ` ${pay.creditDocumentNo}` : ""} ke faktur ${pay.salesInvoiceDocumentNo}`
           : `Pembayaran faktur ${pay.salesInvoiceDocumentNo}`,
@@ -207,6 +301,8 @@ export function buildCustomerStatement(input: {
         date: ret.date,
         documentNo: ret.documentNo,
         referenceDocumentNo: ret.salesInvoiceDocumentNo,
+        dueDate: null,
+        isOverdue: false,
         description: `Retur penjualan ${ret.documentNo} atas faktur ${ret.salesInvoiceDocumentNo}`,
         debit: 0,
         credit: safeAdd(0, ret.returnCredit, 2),
@@ -228,6 +324,8 @@ export function buildCustomerStatement(input: {
       date: row.date,
       documentNo: row.documentNo,
       referenceDocumentNo: row.referenceDocumentNo,
+      dueDate: row.dueDate,
+      isOverdue: row.isOverdue,
       description: row.description,
       debit: row.debit,
       credit: row.credit,

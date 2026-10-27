@@ -243,5 +243,31 @@ export const attendanceSchema = z
     path: ["checkOut"],
   })
 
+// ==================== Attendance Correction (F-2026-10-25-010-S) ====================
+
+/**
+ * Pengajuan koreksi absensi. Nilai usulan dibatasi field rekod existing
+ * (BR-AC-06); alasan wajib (BR-AC-04). Jendela tanggal ditegakkan server
+ * (putusan Q-AC-1), bukan skema — bergantung hari berjalan WIB.
+ */
+export const attendanceCorrectionSchema = z
+  .object({
+    employeeId: requiredId("Karyawan"),
+    date: requiredDate("Tanggal"),
+    status: z.enum(ATTENDANCE_STATUSES, { error: "Status absensi tidak dikenal" }),
+    checkIn: timeString("Jam masuk harus format HH:MM").optional(),
+    checkOut: timeString("Jam keluar harus format HH:MM").optional(),
+    notes: z.string().max(500, "Catatan paling panjang 500 karakter").optional(),
+    reason: z
+      .string({ error: "Alasan koreksi wajib diisi" })
+      .trim()
+      .min(1, "Alasan koreksi wajib diisi")
+      .max(1000, "Alasan paling panjang 1000 karakter"),
+  })
+  .refine((v) => !v.checkIn || !v.checkOut || v.checkIn < v.checkOut, {
+    error: "Jam keluar harus setelah jam masuk",
+    path: ["checkOut"],
+  })
+
 // ==================== Inferred Types ====================
 

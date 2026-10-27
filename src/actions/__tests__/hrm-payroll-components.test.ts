@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
     payrollComponentLine: buildModel(),
     payroll: buildModel(),
     employee: buildModel(),
+    // HCMS K1: applyDueSalaryAdjustments di jalur payroll; mock kosong
+    // = tidak ada kenaikan gaji jatuh tempo.
     account: buildModel(),
     employeeLoan: buildModel(),
     overtimeRequest: buildModel(),

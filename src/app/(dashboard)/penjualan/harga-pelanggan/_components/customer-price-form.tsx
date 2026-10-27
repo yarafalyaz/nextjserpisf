@@ -31,6 +31,7 @@ export interface CustomerPriceInitial {
   price: string
   minQty: string
   effectiveDate: string
+  expiresAt: string
   notes: string
 }
 
@@ -51,6 +52,7 @@ export function CustomerPriceForm({
   const [price, setPrice] = useState<number | null>(initial?.price ? Number(initial.price) : null)
   const [minQty, setMinQty] = useState(initial?.minQty ?? "1")
   const [effectiveDate, setEffectiveDate] = useState(initial?.effectiveDate ?? "")
+  const [expiresAt, setExpiresAt] = useState(initial?.expiresAt ?? "")
   const [notes, setNotes] = useState(initial?.notes ?? "")
 
   const isEdit = Boolean(initial)
@@ -67,6 +69,7 @@ export function CustomerPriceForm({
         formData.set("price", price === null ? "" : String(price))
         formData.set("minQty", minQty)
         formData.set("effectiveDate", effectiveDate)
+        formData.set("expiresAt", expiresAt)
         formData.set("notes", notes)
 
         const result = initial
@@ -157,6 +160,18 @@ export function CustomerPriceForm({
           value={effectiveDate}
           onChange={setEffectiveDate}
         />
+
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker
+            label="Berlaku Sampai"
+            name="expiresAt"
+            value={expiresAt}
+            onChange={setExpiresAt}
+          />
+          <span className="text-xs text-muted-foreground">
+            Opsional. Kosongkan bila harga tanpa batas waktu.
+          </span>
+        </div>
 
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label htmlFor="notes">Catatan</Label>

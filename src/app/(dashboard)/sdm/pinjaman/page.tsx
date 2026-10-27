@@ -10,6 +10,8 @@ import { Banknote } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LoanTable } from "./_components/loan-table"
 import { CanCreate } from "@/components/auth/can-create"
+import { loadEmployeeLoanChannels } from "@/lib/reports/employee-loan-channel-data"
+import { EMPLOYEE_LOAN_CHANNEL_LABELS } from "@/lib/reports/employee-loan-channel"
 
 import type { Metadata } from "next"
 
@@ -47,6 +49,7 @@ export default async function EmployeeLoansPage({
 
   const total = await prisma.employeeLoan.count({ where })
 
+  const channels = await loadEmployeeLoanChannels(loans)
   const data = loans.map((l) => ({
     id: l.id,
     slug: l.slug,
@@ -56,6 +59,7 @@ export default async function EmployeeLoansPage({
     monthlyInstallment: Number(l.monthlyInstallment),
     remainingAmount: Number(l.remainingAmount),
     status: l.status,
+    channel: channels.get(l.id) ? EMPLOYEE_LOAN_CHANNEL_LABELS[channels.get(l.id)!] : null,
   }))
 
   const userRoles: string[] = user.roles ?? [];

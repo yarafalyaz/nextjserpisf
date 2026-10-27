@@ -1,18 +1,14 @@
-import { describe, expect, it } from "vitest"
-
-import { salesInvoiceLabel } from "../invoice-label"
+import { describe, expect, it } from "vitest";
+import { salesInvoiceLabel } from "../invoice-label";
 
 describe("salesInvoiceLabel", () => {
-  it("uses the official document number once one exists", () => {
-    expect(
-      salesInvoiceLabel({ id: 11, documentNo: "001/INV/YRA/10/2026" }),
-    ).toBe("001/INV/YRA/10/2026")
-  })
+  it("memakai documentNo apa adanya bila sudah terbit", () => {
+    expect(salesInvoiceLabel({ id: 7, documentNo: "INV/2026/10/0007" })).toBe(
+      "INV/2026/10/0007",
+    );
+  });
 
-  it("falls back to the internal draft identity before posting", () => {
-    expect(salesInvoiceLabel({ id: 11, documentNo: null })).toBe("DRAFT #11")
-    expect(salesInvoiceLabel({ id: 12, documentNo: undefined })).toBe(
-      "DRAFT #12",
-    )
-  })
-})
+  it("memakai label DRAFT #<id> bila documentNo null (belum posting)", () => {
+    expect(salesInvoiceLabel({ id: 42, documentNo: null })).toBe("DRAFT #42");
+  });
+});

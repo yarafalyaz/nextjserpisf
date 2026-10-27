@@ -210,6 +210,26 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
     expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).not.toBe("create_loans")
   })
 
+  it("F-2026-10-25-012-S: approve_sales_returns ter-seed tepat satu kali dan tidak bocor ke whitelist non-admin", () => {
+    // AC-SR-B4: key gerbang retur penjualan ada di katalog seed tepat satu
+    // kali (duplikat katalog sudah dijaga tes di atas) dan hanya dipegang
+    // admin/super_admin lewat katalog penuh — pola approve_purchase_returns.
+    // Whitelist role operasional tidak boleh memuatnya diam-diam (SoD bocor).
+    const permissions = extractArray(baseDataSource, "const PERMISSIONS = [")
+    expect(permissions.filter((p) => p === "approve_sales_returns")).toHaveLength(1)
+    for (const whitelist of [
+      "STAFF_WHITELIST",
+      "GA_WHITELIST",
+      "KABENG_WHITELIST",
+      "KARYAWAN_WHITELIST",
+      "PURCHASING_WHITELIST",
+      "WAREHOUSE_WHITELIST",
+      "FINANCE_WHITELIST",
+    ]) {
+      expect(extractArray(baseDataSource, `const ${whitelist} = [`), `${whitelist} memuat approve_sales_returns`).not.toContain("approve_sales_returns")
+    }
+  })
+
   it("seed.ts never destructures a row then treats it as a row list", () => {
     // Regression: `const [existing] = await conn.query("SELECT id ...")` binds
     // the FIRST ROW to `existing`. The mariadb driver returns the rows array

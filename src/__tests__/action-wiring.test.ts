@@ -73,6 +73,11 @@ function isReferencedElsewhere(action: ExportedAction): boolean {
 
 // Daftar-beku: kunci = "<berkas>::<aksi>", nilai = alasan tertulis.
 const ALLOWED_UNWIRED: Record<string, string> = {
+  // F-2026-10-25-005-S DISC-B1: 8 aksi SP kini dirujuk UI DISC-F1
+  // (disciplinary-request-form.tsx + disciplinary-record-actions.tsx)
+  // — entri beku DISC-B1 dibuang.
+  // F-2026-10-25-004-V: issueDownPaymentTaxInvoiceAction kini dirujuk UI
+  // panel status pajak DP (PR konsumen t_b83159ba) — entri beku dibuang.
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
   // izin (action-guard-coverage.test.ts). UI-nya memakai next-auth langsung.
   "src/actions/auth.actions.ts::loginAction":
@@ -93,6 +98,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
+  // F-2026-10-25-013-S: exportLeaveBalancesCsv kini dirujuk tombol ekspor
+  // di UI saldo cuti (leave-balance-export-button.tsx, PR #921) — entri beku dibuang.
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
@@ -131,6 +138,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-25-048-S: 2 aksi lead time kini dirujuk ItemWarehouseMinStockPanel
+  // (kolom + kontrol lead time, PR konsumen Frontend 048-F1) — entri beku dibuang.
+  // F-2026-10-25-043-B1: aksi jejak email statement kini dirujuk
+  // EmailButton di halaman statement (PR konsumen Frontend 043-F1) —
+  // entri beku dibuang.
   // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
   // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
@@ -175,37 +187,57 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-003-S inti backend (PR #791): daftar kandidat duplikat
   // pelanggan kini dirujuk halaman kelola pelanggan (frontend
   // t_1f97c2ea) — entri beku dibuang.
-  // F-2026-10-25-017-S Backend dulu: aksi klaim reimbursement dirujuk UI
-  // mandiri karyawan menyusul di kartu Frontend sesudah kontrak ini stabil
-  // — buang 3 entri ini saat UI memanggilnya.
-  "src/actions/reimbursement.actions.ts::createReimbursementClaim":
-    "F-2026-10-25-017-S backend; UI klaim mandiri menyusul (frontend)",
-  "src/actions/reimbursement.actions.ts::setReimbursementClaimAccounts":
-    "F-2026-10-25-017-S backend; UI verifikasi keuangan menyusul (frontend)",
-  "src/actions/reimbursement.actions.ts::getMyReimbursementClaims":
-    "F-2026-10-25-017-S backend; UI daftar klaim saya menyusul (frontend)",
-  // HCMS (Muse K1 backend, kartu t_122db5c5): halaman rekrutmen/kinerja/
-  // kompetensi/pelatihan sudah merujuk aksi buat/ubah/status; aksi hapus,
-  // kesenjangan kompetensi, sasaran kinerja, dan lepas peserta berikut
-  // belum punya pemanggil UI — buang entri ini saat UI memanggilnya.
-  "src/actions/development.actions.ts::deleteCompetency":
-    "HCMS backend; tombol hapus kompetensi menyusul (frontend)",
-  "src/actions/development.actions.ts::getCompetencyGaps":
-    "HCMS backend; panel kesenjangan kompetensi menyusul (frontend)",
-  "src/actions/development.actions.ts::deleteTraining":
-    "HCMS backend; tombol hapus pelatihan menyusul (frontend)",
-  "src/actions/development.actions.ts::removeTrainingParticipant":
-    "HCMS backend; aksi lepas peserta pelatihan menyusul (frontend)",
-  "src/actions/performance.actions.ts::deletePerformanceCycle":
-    "HCMS backend; tombol hapus siklus kinerja menyusul (frontend)",
-  "src/actions/performance.actions.ts::upsertPerformanceGoal":
-    "HCMS backend; form sasaran kinerja menyusul (frontend)",
-  "src/actions/performance.actions.ts::deletePerformanceGoal":
-    "HCMS backend; tombol hapus sasaran kinerja menyusul (frontend)",
+  // F-2026-10-25-008-S: completeLeadActivity/reopenLeadActivity kini dirujuk
+  // LeadActivityCompletionButton di detail lead (frontend t_68dce5df) —
+  // 2 entri beku dibuang.
+  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
+  // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
+  // Muse K1 HCMS (backend #959 merged, kartu t_122db5c5): 23 dari 34 aksi
+  // kini dirujuk UI HCMS PR #805 (frontend t_daed387f) — entri beku dibuang.
+  // Sisa 11 di bawah belum dirujuk UI mana pun (aksi hapus + getter loader).
   "src/actions/recruitment.actions.ts::deleteVacancy":
-    "HCMS backend; tombol hapus lowongan menyusul (frontend)",
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
   "src/actions/recruitment.actions.ts::deleteApplicant":
-    "HCMS backend; tombol hapus pelamar menyusul (frontend)",
+    "Muse K1 HCMS backend; UI rekrutmen menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::deletePerformanceCycle":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::upsertPerformanceGoal":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/performance.actions.ts::deletePerformanceGoal":
+    "Muse K1 HCMS backend; UI kinerja menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::deleteCompetency":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::getCompetencyGaps":
+    "Muse K1 HCMS backend; UI kompetensi menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::deleteTraining":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  "src/actions/development.actions.ts::removeTrainingParticipant":
+    "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
+  // F-2026-10-26-054-S inti backend (t_d40cad23): gerbang persetujuan
+  // penyesuaian gaji; UI antrean persetujuan menyusul (frontend t_2083c754).
+  "src/actions/salary-adjustment.actions.ts::approveSalaryAdjustment":
+    "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
+  "src/actions/salary-adjustment.actions.ts::rejectSalaryAdjustment":
+    "F-2026-10-26-054-S: menunggu UI antrean persetujuan (kartu t_2083c754 Frontend)",
+  // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
+  // menunggu UI pesan tertahan + permukaan persetujuan (frontend t_52903522);
+  // entri beku dibuang saat UI tersambung.
+  "src/actions/credit-override.actions.ts::approveCreditOverride":
+    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::rejectCreditOverride":
+    "F-2026-10-25-035-B backend; UI persetujuan override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::listCreditOverrides":
+    "F-2026-10-25-035-B backend; UI daftar/jejak override menyusul (frontend t_52903522)",
+  "src/actions/credit-override.actions.ts::getMyCreditOverrideStatus":
+    "F-2026-10-25-035-B backend; UI status permintaan override menyusul (frontend t_52903522)",
+  // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
+  // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
+  // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
+  // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
+  // frontend t_f8d7b3d9) — entri beku dibuang.
+  // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
+  // (komponen customer-commission-rates di master kategori + loader histori
+  // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {

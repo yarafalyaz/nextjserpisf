@@ -25,6 +25,14 @@ export const customerSchema = z.object({
   gender: z.enum(["male", "female"]).optional(),
   code: optionalString(50),
   taxId: optionalString(50),
+  // F-2026-10-25-004-S: blok identitas pajak (semua opsional; bentuk
+  // NPWP/NITKU divalidasi service-layer builder, bukan di skema ini).
+  taxpayerName: optionalString(200),
+  taxAddress: optionalString(2000),
+  nitku: optionalString(50),
+  pkpStatus: z.enum(["non_pkp", "pkp", "unknown"]).optional(),
+  pkpEffectiveFrom: optionalString(10),
+  pkpSource: optionalString(200),
   customerCategoryId: optionalNumber(),
 })
 
@@ -78,6 +86,13 @@ export const itemSchema = z.object({
     .optional(),
   isProduct: optionalBoolean,
   isService: optionalBoolean,
+  // F-2026-10-25-042-V (vonis Q-ITX-1): default pajak per item — FK nullable
+  // ke Tax per arah + persen DPP Decimal(5,2). Kosong/null = existing
+  // byte-sama. Penjaga scrap + rentang 0–100 + rujukan aktif di service
+  // item-tax-default (fail-closed), bukan di skema ini.
+  defaultSalesTaxId: optionalNumber(),
+  defaultPurchaseTaxId: optionalNumber(),
+  defaultDppPercent: optionalNumber(),
   // F-2026-10-24-135-V: penanda item besi tua (dijual lewat faktur existing,
   // pendapatan lain-lain fail-closed, COGS Rp0).
   isScrapSaleItem: optionalBoolean,

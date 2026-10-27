@@ -62,6 +62,12 @@ export default async function EditCustomerPage({
           gender: customer.gender,
           code: customer.code,
           taxId: customer.taxId,
+          taxpayerName: customer.taxpayerName,
+          taxAddress: customer.taxAddress,
+          nitku: customer.nitku,
+          pkpStatus: customer.pkpStatus,
+          pkpEffectiveFrom: customer.pkpEffectiveFrom ? customer.pkpEffectiveFrom.toISOString().slice(0, 10) : null,
+          pkpSource: customer.pkpSource,
           customerCategoryId: customer.customerCategoryId,
         }}
         categories={categories}

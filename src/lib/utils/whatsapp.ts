@@ -1,4 +1,4 @@
-import { formatDate } from "@/lib/utils/format";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
 import { statusLabel } from "@/lib/utils/status-labels";
 
 /**
@@ -50,4 +50,50 @@ export function buildWhatsappUrl(
   const normalized = normalizeWhatsappPhone(phone);
   if (!normalized) return null;
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
+}
+
+export interface StatementWhatsappMessageInput {
+  customerName: string;
+  /** Label periode payload server statement, mis. "Periode 1 Jan 2026 – 15 Okt 2026". */
+  periodLabel: string;
+  /** Saldo akhir payload server statement (buildCustomerStatement). */
+  closingBalance: number;
+}
+
+/**
+ * Kalimat saldo statement — 3 varian verbatim PUTUSAN Lead Q-SW-3
+ * (PR #890 issuecomment-6398030628), dipakai bersama pesan WA (038-B1) dan
+ * email (043-B1, Q-SE-4: kalimat identik per varian). Angka = payload
+ * server (BR-SW-05: UI tidak hitung ulang); negatif = nilai absolut
+ * "kelebihan bayar ... kredit Anda". TANPA kata tagihan/menunggak/denda,
+ * rincian faktur, atau klaim terkirim (BR-SW-01/BR-SW-04).
+ */
+export function statementBalanceSentence(closingBalance: number): string {
+  if (closingBalance > 0) {
+    return `Saldo akhir periode: ${formatCurrency(closingBalance)}.`;
+  }
+  if (closingBalance === 0) {
+    return "Saldo akhir periode: Rp 0 — tidak ada sisa piutang pada akhir periode ini.";
+  }
+  return `Saldo akhir periode menunjukkan kelebihan bayar sebesar ${formatCurrency(Math.abs(closingBalance))} yang tercatat sebagai kredit Anda.`;
+}
+
+/**
+ * F-2026-10-25-038-B1: pesan WA statement pelanggan. Kalimat saldo +
+ * penutup memakai helper bersama `statementBalanceSentence` (verbatim
+ * Q-SW-3). Pesan menyatakan statement dapat disediakan/dicetak — TIDAK
+ * berpura-pura melampirkan PDF.
+ */
+export function buildStatementWhatsappMessage(
+  input: StatementWhatsappMessageInput,
+): string {
+  const tail = "Statement lengkap dapat kami sediakan/dicetak bila diperlukan.";
+  const balanceLine = statementBalanceSentence(input.closingBalance);
+  return [
+    `Halo ${input.customerName},`,
+    "",
+    `Berikut statement piutang Anda untuk ${input.periodLabel}. ${balanceLine} ${tail}`,
+    "",
+    "Terima kasih.",
+  ].join("\n");
 }

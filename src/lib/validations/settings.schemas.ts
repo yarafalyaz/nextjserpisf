@@ -77,6 +77,9 @@ export const updateSystemSettingsSchema = z.object({
   // lewat proses akhir bulan (period-close.actions.ts).
   showIsActiveField: optionalBool(),
   showTaxId: optionalBool(),
+  // F-2026-10-25-035-B (Q-CL2-5): saklar gerbang kredit; hanya terkirim
+  // dari form pengaturan oleh pemegang manage_settings.
+  creditGateEnabled: optionalBool(),
   defaultProjectStages: optionalString(1000),
 
   // Auto-Code Prefixes

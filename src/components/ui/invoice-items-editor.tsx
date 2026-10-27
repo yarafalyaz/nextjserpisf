@@ -33,6 +33,7 @@ interface AvailableItem {
   name: string;
   sku: string;
   price?: number;
+  isScrapSaleItem?: boolean;
   unitOfMeasure?: string;
   trackSerial?: boolean;
   uomConversions?: Array<{ code: string; factorToBase: number }>;
@@ -492,7 +493,7 @@ export function InvoiceItemsEditor({
                     <Combobox
                       options={availableItems.map((ai) => ({
                         value: String(ai.id),
-                        label: `${ai.name} (${ai.sku})`,
+                        label: `${ai.name} (${ai.sku})${ai.isScrapSaleItem ? " — Besi Tua" : ""}`,
                       }))}
                       value={item.itemId ? String(item.itemId) : null}
                       onChange={(key) => updateItem(i, "itemId", key ?? "")}
@@ -660,7 +661,7 @@ export function InvoiceItemsEditor({
                       <Combobox
                         options={availableItems.map((ai) => ({
                           value: String(ai.id),
-                          label: `${ai.name} (${ai.sku})`,
+                          label: `${ai.name} (${ai.sku})${ai.isScrapSaleItem ? " — Besi Tua" : ""}`,
                         }))}
                         value={item.itemId ? String(item.itemId) : null}
                         onChange={(key) => updateItem(i, "itemId", key ?? "")}

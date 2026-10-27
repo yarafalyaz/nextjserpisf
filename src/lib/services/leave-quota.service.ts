@@ -193,6 +193,10 @@ export interface LeaveQuota {
   entitled: number
   /** Working days of annual leave already approved/pending this year. */
   used: number
+  /** Komponen `used` dari status approved saja (F-2026-10-25-013-S BR-LVB-12). */
+  usedApproved: number
+  /** Komponen `used` dari status pending saja; usedApproved + usedPending = used. */
+  usedPending: number
   /** entitled - used, floored at 0. */
   remaining: number
   /** Tenure ≥ 1 year from joinDate (paid annual leave gate). */
@@ -291,10 +295,11 @@ export async function getLeaveQuota(
       endDate: { gte: yearStart },
       ...(opts.excludeLeaveId ? { id: { not: opts.excludeLeaveId } } : {}),
     },
-    select: { startDate: true, endDate: true },
+    select: { startDate: true, endDate: true, status: true },
   })
 
-  let used = 0
+  let usedApproved = 0
+  let usedPending = 0
   if (leaves.length > 0) {
     const { isWorkingDay } = await buildWorkingDayChecker(
       db,
@@ -311,15 +316,20 @@ export async function getLeaveQuota(
       const from = s < yearStart ? new Date(yearStart) : s
       const to = e > yearEnd ? new Date(yearEnd) : e
       for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-        if (isWorkingDay(d)) used++
+        if (!isWorkingDay(d)) continue
+        if (lv.status === "approved") usedApproved++
+        else usedPending++
       }
     }
   }
 
+  const used = usedApproved + usedPending
   return {
     year,
     entitled,
     used,
+    usedApproved,
+    usedPending,
     remaining: Math.max(0, entitled - used),
     eligible,
     tenureMonths,

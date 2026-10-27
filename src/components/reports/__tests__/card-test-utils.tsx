@@ -17,12 +17,49 @@ export function renderCard(node: ReactNode) {
   return { container, root }
 }
 
+export function renderCardText<L extends string>(node: ReactNode, labels: Record<L | "card", string>) {
+  const { container, root } = renderCard(node)
+  const found = Object.fromEntries(
+    Object.entries(labels).map(([key, selector]) => [key, container.querySelector(`[aria-label="${selector}"]`) !== null]),
+  ) as Record<L | "card", boolean>
+  const hasTable = container.querySelector("table") !== null
+  const text = container.textContent ?? ""
+  unmountCard(root)
+  return { text, found, hasTable }
+}
+
 export function unmountCard(root: Root) {
   act(() => root.unmount())
 }
 
 export function clearRenderedCards() {
   document.body.replaceChildren()
+}
+
+/**
+ * Factory mock `ReportPageShell` untuk tes halaman laporan: render judul +
+ * filter + aksi + anak apa adanya. Dipakai lewat
+ * `vi.mock("@/components/reports/report-page-shell", async () => (await import("@/components/reports/__tests__/card-test-utils")).reportPageShellModule)`.
+ */
+export const reportPageShellModule = {
+  ReportPageShell: ({
+    children,
+    filter,
+    actions,
+    title,
+  }: {
+    children: ReactNode
+    filter?: ReactNode
+    actions?: ReactNode
+    title: string
+  }) => (
+    <div>
+      <h1>{title}</h1>
+      {filter}
+      {actions}
+      {children}
+    </div>
+  ),
 }
 
 export function renderPageNode(node: React.ReactNode) {
@@ -52,4 +89,35 @@ export function clickButtonByText(container: HTMLElement, text: string) {
   if (!btn) throw new Error(`Tombol tidak ditemukan: ${text}`)
   btn.click()
   return btn as HTMLButtonElement
+}
+
+/** Stub jsdom untuk Radix Popover/Command (combobox proyek, FormSelect). */
+export function stubPopoverDom() {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+  Element.prototype.scrollIntoView ??= () => {}
+}
+
+/** Buka combobox (button[role=combobox]) dan kembalikan teks opsinya. */
+export function openComboboxOptions(combo: Element): string[] {
+  act(() => {
+    combo.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+  return [...document.body.querySelectorAll('[role="option"]')].map(
+    (o) => o.textContent?.trim() ?? "",
+  )
+}
+
+/** Pilih opsi combobox berdasarkan teks label. */
+export function pickComboboxOption(label: string) {
+  const option = [...document.body.querySelectorAll('[role="option"]')].find(
+    (o) => (o.textContent?.trim() ?? "") === label,
+  )
+  if (!option) throw new Error(`Opsi combobox tidak ditemukan: ${label}`)
+  act(() => {
+    option.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
 }

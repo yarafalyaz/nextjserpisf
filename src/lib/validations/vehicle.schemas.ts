@@ -76,3 +76,30 @@ export const customerVehicleSchema = z.object({
   isActive: optionalBool,
   notes: optionalStr(1000),
 })
+
+// ==================== Jadwal Servis Berikutnya (F-2026-10-25-021-S) ====================
+//
+// Pencatatan manual staf berizin (BR-SV-08): tanggal dan/atau km target,
+// keduanya boleh kosong = kosongkan jadwal. Tanggal bentuk YYYY-MM-DD
+// (hari kalender WIB, dikonversi aksi via wibDateToUtcMidnight).
+// Km target <= odometer terakhir BUKAN ditolak skema: aksi membandingkan
+// dengan lastOdometerKm tersimpan dan menolak berisik (AC-SV-F3) supaya
+// pesan menyebut angka odometer nyata.
+
+const optionalServiceDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal servis berikutnya tidak valid")
+  .optional()
+  .or(z.literal("").transform(() => undefined))
+
+const optionalServiceKm = z.coerce
+  .number()
+  .int("Km servis berikutnya harus bilangan bulat")
+  .positive("Km servis berikutnya harus lebih dari 0")
+  .optional()
+
+export const serviceScheduleSchema = z.object({
+  nextServiceDate: optionalServiceDate,
+  nextServiceKm: optionalServiceKm,
+  nextServiceNote: optionalStr(1000),
+})

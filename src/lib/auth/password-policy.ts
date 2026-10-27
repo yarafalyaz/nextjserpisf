@@ -56,3 +56,15 @@ export function passwordPolicyIssue(password: string): PasswordPolicyIssue | nul
   if (COMMON_PASSWORDS.has(password.toLowerCase())) return "common"
   return null
 }
+
+/**
+ * Pesan pengguna (Bahasa Indonesia) untuk satu password; null bila lolos.
+ * `label` membedakan konteks ("Password baru" / "Kata sandi") mengikuti pola
+ * pesan field di jalur pemanggil; pesan `common` sama untuk semua jalur.
+ */
+export function passwordPolicyError(password: string, label = "Password"): string | null {
+  const issue = passwordPolicyIssue(password)
+  if (issue === "short") return `${label} minimal ${PASSWORD_MIN_LENGTH} karakter`
+  if (issue === "common") return "Password terlalu umum, gunakan kata sandi lain"
+  return null
+}

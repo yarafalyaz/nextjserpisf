@@ -10,63 +10,17 @@ import {
   PROJECT_EARNED_VALUE_SCHEDULE_LABEL,
   PROJECT_EARNED_VALUE_STAGE_NO_BUDGET_LABEL,
   buildProjectEarnedValue,
-  type ProjectEarnedValueInput,
 } from "@/lib/reports/project-earned-value"
-import type { ProjectBudgetResult } from "@/lib/reports/project-budget"
+import {
+  PROJECT_EARNED_VALUE_LOCKED_AT,
+  projectEarnedValueBudgetFixture,
+  projectEarnedValueInputFixture,
+} from "./project-earned-value-test-fixtures"
 
-const LOCKED_AT = new Date(2026, 9, 20, 9, 0, 0)
-const AS_OF = new Date(2026, 10, 15, 0, 0, 0) // 2026-11-15
+const LOCKED_AT = PROJECT_EARNED_VALUE_LOCKED_AT
 
-function budget(over: Partial<ProjectBudgetResult> = {}): ProjectBudgetResult {
-  return {
-    projectId: 1,
-    contractAmount: 120_000_000,
-    contractSource: "quotation",
-    isLocked: true,
-    budgetRevisionNo: 2,
-    perStageBudget: [
-      {
-        projectStageId: 11,
-        stageName: "Tahap A",
-        categories: [{ category: "material", amount: 60_000_000 }],
-        total: 60_000_000,
-      },
-      {
-        projectStageId: 12,
-        stageName: "Tahap B",
-        categories: [{ category: "labor", amount: 40_000_000 }],
-        total: 40_000_000,
-      },
-    ],
-    unallocatedBudget: { categories: [], total: 0 },
-    perStageRealized: [
-      { projectStageId: 11, stageName: "Tahap A", realized: null, hasStageAllocation: false },
-      { projectStageId: 12, stageName: "Tahap B", realized: null, hasStageAllocation: false },
-    ],
-    totalBudget: 100_000_000,
-    realizedTotal: 0,
-    unallocatedRealized: 0,
-    varianceTotal: 100_000_000,
-    marginRencana: 20_000_000,
-    revenue: 0,
-    ...over,
-  }
-}
-
-function input(over: Partial<ProjectEarnedValueInput> = {}): ProjectEarnedValueInput {
-  return {
-    budget: budget(),
-    budgetLockedAt: LOCKED_AT,
-    stageProgress: [
-      { projectStageId: 11, stageStatus: "in_progress", latestProgressPercent: 50 },
-      { projectStageId: 12, stageStatus: "completed", latestProgressPercent: 100 },
-    ],
-    startDate: null,
-    endDate: null,
-    asOf: AS_OF,
-    ...over,
-  }
-}
+const budget = projectEarnedValueBudgetFixture
+const input = projectEarnedValueInputFixture
 
 describe("buildProjectEarnedValue — F-2026-10-21-031 (spec BOT 5 BR-031-*)", () => {
   it("A1: bobot 60/40 persen 50/100 -> progres tertimbang tepat 70%, EV tepat 70.000.000", () => {

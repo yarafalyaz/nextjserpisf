@@ -47,6 +47,34 @@ async function submit(container: HTMLDivElement) {
   })
 }
 
+describe("TaxInvoiceForm — konfirmasi legacy15 F-2026-10-25-004-S", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("arah out: checkbox legacy15Confirmed tampil; centang ikut FormData apa adanya", async () => {
+    vi.mocked(issueTaxInvoiceAction).mockResolvedValue({ success: true } as never)
+    const { container, root } = mount()
+    const box = container.querySelector<HTMLInputElement>("#legacy15Confirmed")
+    expect(box).not.toBeNull()
+    expect(container.querySelector('label[for="legacy15Confirmed"]')?.textContent).toContain("15 digit (legacy)")
+    box!.checked = true
+    await submit(container)
+    const fd = vi.mocked(issueTaxInvoiceAction).mock.calls[0][0] as FormData
+    expect(fd.get("legacy15Confirmed")).toBe("true")
+    act(() => root.unmount())
+    document.body.replaceChildren()
+  })
+
+  it("tanpa centang: legacy15Confirmed tidak terkirim (server menolak legacy15 tanpa konfirmasi)", async () => {
+    vi.mocked(issueTaxInvoiceAction).mockResolvedValue({ success: true } as never)
+    const { container, root } = mount()
+    await submit(container)
+    const fd = vi.mocked(issueTaxInvoiceAction).mock.calls[0][0] as FormData
+    expect(fd.get("legacy15Confirmed")).toBeNull()
+    act(() => root.unmount())
+    document.body.replaceChildren()
+  })
+})
+
 describe("TaxInvoiceForm — error service tampil verbatim (HANDOFF Bot 4)", () => {
   beforeEach(() => vi.clearAllMocks())
 

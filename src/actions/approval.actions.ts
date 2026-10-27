@@ -36,6 +36,25 @@ type WorkflowStepInput = {
 // ke dokumen akan merusak kosakata statusnya.
 const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment"]);
 
+// Vonis F-2026-10-25-014-V K4-S2(a): mematikan/menghapus workflow untuk
+// tipe gerbang uang WAJIB tercatat eksplisit di activity log — no-op
+// requestApprovalIfConfigured tanpa workflow sesudah itu tidak senyap.
+const MONEY_GATE_MODEL_TYPES = GATE_ONLY_REFERENCE_TYPES;
+
+async function logMoneyGateChange(
+  action: "deactivate" | "delete",
+  workflow: { id: number; modelType: string; name: string },
+): Promise<void> {
+  if (!MONEY_GATE_MODEL_TYPES.has(workflow.modelType)) return;
+  await logActivity(
+    action,
+    "ApprovalWorkflow",
+    workflow.id,
+    `Workflow gerbang uang ${workflow.modelType} (${workflow.name}) ${action === "delete" ? "dihapus" : "dinonaktifkan"} — gerbang persetujuan dokumen uang mati sampai workflow aktif pengganti dibuat`,
+    { modelType: workflow.modelType },
+  );
+}
+
 const APPROVED_BY_MODELS = new Set([
   "PurchaseRequest",
   "PurchaseOrder",
@@ -538,6 +557,11 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
       });
       if (pendingCount > 0) return pendingCount;
 
+      const previous = await tx.approvalWorkflow.findUnique({
+        where: { id },
+        select: { modelType: true, name: true, isActive: true },
+      });
+
       await tx.approvalWorkflowStep.deleteMany({ where: { workflowId: id } });
       await tx.approvalWorkflow.update({
         where: { id },
@@ -558,15 +582,23 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
           },
         },
       });
-      return 0;
+      return { previous, pendingCount: 0 };
     });
-    if (pendingApprovals > 0) {
+    if (typeof pendingApprovals === "number") {
       return {
         success: false,
         error: `Tidak bisa mengubah langkah alur — masih ada ${pendingApprovals} persetujuan yang sedang berjalan. Selesaikan atau tolak terlebih dahulu.`,
       };
     }
 
+    // K4-S2(a): transisi aktif -> nonaktif workflow gerbang uang tercatat.
+    if (pendingApprovals.previous?.isActive && isActive === false) {
+      await logMoneyGateChange("deactivate", {
+        id,
+        modelType: pendingApprovals.previous.modelType,
+        name: pendingApprovals.previous.name,
+      });
+    }
     await logActivity(
       "update",
       "ApprovalWorkflow",
@@ -594,19 +626,31 @@ export async function deleteApprovalWorkflow(id: number) {
         where: { workflowId: id, status: "pending" },
       });
       if (pendingCount > 0) return pendingCount;
+      const previous = await tx.approvalWorkflow.findUnique({
+        where: { id },
+        select: { modelType: true, name: true },
+      });
       await tx.approvalWorkflow.update({
         where: { id },
         data: { deletedAt: new Date(), isActive: false },
       });
-      return 0;
+      return { previous, pendingCount: 0 };
     });
-    if (pendingApprovals > 0) {
+    if (typeof pendingApprovals === "number") {
       return {
         success: false,
         error: `Tidak bisa menghapus alur — masih ada ${pendingApprovals} persetujuan yang sedang berjalan.`,
       };
     }
 
+    // K4-S2(a): penghapusan workflow gerbang uang tercatat eksplisit.
+    if (pendingApprovals.previous) {
+      await logMoneyGateChange("delete", {
+        id,
+        modelType: pendingApprovals.previous.modelType,
+        name: pendingApprovals.previous.name,
+      });
+    }
     await logActivity(
       "delete",
       "ApprovalWorkflow",

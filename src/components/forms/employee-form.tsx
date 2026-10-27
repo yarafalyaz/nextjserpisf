@@ -584,8 +584,8 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
               <div className="flex flex-col gap-5 pt-2 border-t border-default mt-2">
                 <div className="flex flex-col gap-1.5 max-w-md">
                   <Label htmlFor="loginPassword">Kata Sandi <span className="text-destructive" aria-hidden="true">*</span></Label>
-                  <Input id="loginPassword" name="loginPassword" type="password" required placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
-                  <span className="text-xs text-muted-foreground">Minimal 8 karakter. Pastikan email pada bagian atas sudah terisi.</span>
+                  <Input id="loginPassword" name="loginPassword" type="password" required placeholder="Minimal 12 karakter" minLength={12} autoComplete="new-password" />
+                  <span className="text-xs text-muted-foreground">Minimal 12 karakter. Pastikan email pada bagian atas sudah terisi.</span>
                 </div>
                 <RolePicker roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} hint="Pilih satu atau lebih peran untuk menentukan hak akses." />
               </div>

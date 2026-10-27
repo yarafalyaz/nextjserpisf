@@ -25,6 +25,14 @@ const baseProps = {
   rackRows: [],
 }
 
+const scrapItem = (id: number, sku: string, name: string, unitOfMeasure: string) => ({
+  id, sku, name, description: null, image: "img.png",
+  categoryId: 1, brandId: 1, vendorId: 1, defaultWarehouseId: 1, defaultRackId: 1,
+  defaultRackRowId: null, unitOfMeasure, minStock: 0, cost: 100, price: 200,
+  standardCost: null, costingMethod: null, purchasePrice: null, isProduct: false,
+  isScrapSaleItem: true,
+})
+
 describe("ItemForm — a11y wiring", () => {
   it("aria-label tambah + busy false; 9 bintang dekoratif; kontrol wajib required, opsional bersih", () => {
     withContainer((container) => {
@@ -52,6 +60,49 @@ describe("ItemForm — a11y wiring", () => {
       }
       expect(container.querySelector("#sku")!.hasAttribute("required")).toBe(false)
       expect(container.querySelector("#minStock")!.hasAttribute("required")).toBe(false)
+      unmount(root, container)
+    })
+  })
+
+  it("mode ubah: besi tua tampil saat isScrapSaleItem, tanpa nominal", () => {
+    withContainer((container) => {
+      const root = mountInto(container, (
+        <ItemForm {...baseProps} item={scrapItem(7, "SKU-1", "Besi Tua A", "PCS")} />
+      ))
+      const form = container.querySelector("form")!
+      expect(form.textContent).toContain("Tandai sebagai Besi Tua")
+      expect(form.textContent).toContain("faktur khusus besi tua")
+      // Label harga pakai formatCurrency terpusat — sengaja tanpa angka di sini.
+      const toggle = container.querySelector("#isScrapSaleItem")!
+      expect(toggle.getAttribute("aria-checked") ?? toggle.getAttribute("data-state")).toBeTruthy()
+      expect(toggle.getAttribute("aria-describedby")).toBe("isScrapSaleItem-hint")
+      expect(container.querySelector("#isScrapSaleItem-hint")!.textContent).toContain("retur penjualannya ditolak")
+      unmount(root, container)
+    })
+  })
+
+  it("mode ubah besi tua: toggle tercentang, peringatan tampil, Produk nonaktif", () => {
+    withContainer((container) => {
+      const root = mountInto(container, (
+        <ItemForm {...baseProps} item={scrapItem(8, "SCR-1", "Besi Tua", "KG")} />
+      ))
+      const scrap = container.querySelector("#isScrapSaleItem")!
+      expect(scrap.getAttribute("data-state")).toBe("checked")
+      expect(scrap.getAttribute("aria-describedby")).toBe("isScrapSaleItem-hint")
+      expect(container.querySelector("#isScrapSaleItem-hint")!.textContent).toContain("pendapatan lain-lain")
+      expect(container.textContent).toContain("server menolak posting faktur")
+      expect(container.querySelector("#isProduct")!.hasAttribute("disabled")).toBe(true)
+      unmount(root, container)
+    })
+  })
+
+  it("mode tambah: toggle besi tua mati, peringatan sembunyi, label terdaftar", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <ItemForm {...baseProps} />)
+      const form = container.querySelector("form")!
+      expect(labelTexts(form)).toContain("Tandai sebagai Besi Tua (Scrap)")
+      expect(container.querySelector("#isScrapSaleItem")!.getAttribute("data-state")).toBe("unchecked")
+      expect(container.textContent).not.toContain("server menolak posting faktur")
       unmount(root, container)
     })
   })

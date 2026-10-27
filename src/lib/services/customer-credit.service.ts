@@ -22,6 +22,11 @@ import {
   definitive,
   payloadFingerprint,
 } from "@/lib/services/financial-idempotency.service";
+import {
+  buildDownPaymentRefundLines,
+  snapshotFromDownPaymentRow,
+} from "@/lib/tax/down-payment-vat";
+import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -213,6 +218,45 @@ export async function refundCredit(
       // SEBELUM saldo berubah (tanpa ini kontrol period-lock bisa dilewati).
       const refundDate = new Date();
       await assertPeriodOpen(refundDate, tx as never);
+      // F-2026-10-25-004-V J-RF1: kredit bersumber DP terutang PPN.
+      // FP UM aktif = refund DITOLAK sampai FP UM batal tercatat;
+      // sesudah batal, jurnal pecah Dr 210102 neto + Dr 210201 PPN.
+      let refundLines: { accountId: number; debit: number; credit: number; memo: string }[] | null = null;
+      if (credit.sourceType === "DownPayment" && credit.sourceId != null) {
+        const dp = await tx.downPayment.findUnique({ where: { id: credit.sourceId } });
+        const dpSnapshot = dp ? snapshotFromDownPaymentRow(dp as never) : null;
+        if (dp && dpSnapshot && dpSnapshot.ppnUangMuka > 0) {
+          const activeFp = await tx.taxInvoice.findFirst({
+            where: { downPaymentId: dp.id, direction: "out", djpStatus: { notIn: ["cancelled", "replaced"] } },
+            select: { id: true },
+          });
+          if (activeFp) {
+            throw definitive(
+              `FP uang muka #${activeFp.id} masih aktif — batalkan FP UM dulu sebelum refund DP terutang (J-RF1)`,
+            );
+          }
+          const taxAccountId = (settings as { salesTaxAccountId?: number | null }).salesTaxAccountId ?? null;
+          if (!taxAccountId) {
+            throw definitive("Akun PPN Keluaran (210201) belum dikonfigurasi — refund DP terutang ditolak");
+          }
+          const accountByKey = {
+            cashBank: settings.cashBankAccountId!,
+            downPaymentLiability: (settings as { customerDownPaymentAccountId: number }).customerDownPaymentAccountId,
+            salesTax: taxAccountId,
+            receivable: 0,
+          } as const;
+          refundLines = buildDownPaymentRefundLines({
+            refundAmount: amount,
+            dpAmount: Number(dp.amount),
+            snapshot: dpSnapshot,
+          }).map((line) => ({
+            accountId: accountByKey[line.account],
+            debit: line.debit,
+            credit: line.credit,
+            memo: line.memo,
+          }));
+        }
+      }
       await tx.customerCredit.update({
         where: { id: creditId },
         data: {
@@ -238,7 +282,7 @@ export async function refundCredit(
           totalCredit: amount,
           createdBy: userId ?? null,
           entries: {
-            create: [
+            create: refundLines ?? [
               { accountId: dpAccount, debit: amount, credit: 0, memo: "Refund kewajiban UMP" },
               { accountId: settings.cashBankAccountId!, debit: 0, credit: amount, memo: "Kas keluar refund" },
             ],

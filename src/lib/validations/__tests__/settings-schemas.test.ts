@@ -150,6 +150,21 @@ describe("updateSystemSettingsSchema — payroll/geofence/fiscal bounds", () => 
   })
 })
 
+describe("updateSystemSettingsSchema — F-015-V status PKP perusahaan", () => {
+  it("status enum tertutup: pkp/non_pkp/unknown lolos, nilai lain ditolak", () => {
+    expect(updateSystemSettingsSchema.safeParse({ companyPkpStatus: "pkp" }).success).toBe(true)
+    expect(updateSystemSettingsSchema.safeParse({ companyPkpStatus: "non_pkp" }).success).toBe(true)
+    expect(updateSystemSettingsSchema.safeParse({ companyPkpStatus: "ya" }).success).toBe(false)
+  })
+
+  it("tanggal mulai kewajiban: string kosong dari form -> null (bukan Invalid Date), tanggal valid ter-parse", () => {
+    const empty = updateSystemSettingsSchema.parse({ companyPkpEffectiveFrom: "" })
+    expect(empty.companyPkpEffectiveFrom).toBeNull()
+    const filled = updateSystemSettingsSchema.parse({ companyPkpEffectiveFrom: "2026-01-15" })
+    expect(filled.companyPkpEffectiveFrom).toBeInstanceOf(Date)
+  })
+})
+
 describe("updateStorageSettingsSchema", () => {
   it("defaults storageDriver to 'local' when omitted", () => {
     const result = updateStorageSettingsSchema.parse({})

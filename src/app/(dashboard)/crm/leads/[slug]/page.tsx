@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, requireAuth } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
@@ -11,7 +11,7 @@ import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteLead } from "@/actions/crm.actions"
 import { CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
-import { ConvertLeadButton, AddLeadActivityForm } from "../_components/lead-actions"
+import { ConvertLeadButton, AddLeadActivityForm, LeadActivityCompletionButton } from "../_components/lead-actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -32,6 +32,7 @@ export default async function LeadDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_leads")
+  const viewer = await requireAuth()
   const { slug } = await params
 
   const lead = await resolveEntity(
@@ -51,6 +52,19 @@ export default async function LeadDetailPage({
   )
 
   if (!lead) notFound()
+
+  // F-2026-10-25-008-S (BR-LC-02, AC-LC-F1): tombol penanda selesai hanya
+  // untuk pemanggil yang lolos gerbang server yang sama — edit_leads DAN
+  // (pemilik lead ATAU manage_leads/super_admin), pola convertLead. Halaman
+  // menghitung canAct dari fakta sesi server; komponen tombol tidak menilai
+  // kepemilikan sendiri.
+  const viewerPermissions: readonly string[] = viewer.permissions ?? []
+  const viewerRoles: readonly string[] = viewer.roles ?? []
+  const canActOnLeadActivities =
+    viewerPermissions.includes("edit_leads") &&
+    (viewerRoles.includes("super_admin") ||
+      viewerPermissions.includes("manage_leads") ||
+      lead.assignedTo === Number(viewer.id))
 
   // F-2026-10-20-93(a): kendaraan pelanggan tertaut (read-only). Lead belum
   // terkonversi (customerId kosong) tidak punya kendaraan; tampilkan kartu
@@ -161,20 +175,44 @@ export default async function LeadDetailPage({
                         <DetailTableTh>Subjek</DetailTableTh>
                         <DetailTableTh>Detail</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>Jadwal</DetailTableTh>
+                        <DetailTableTh>Aksi</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>
-                        {lead.activities.map((activity) => (
-                          <DetailTableRow key={activity.id}>
-                            <DetailTableTd>{labelFrom(LEAD_ACTIVITY_TYPE_LABELS, activity.type)}</DetailTableTd>
-                            <DetailTableTd>
-                              {activity.type === "status_change"
-                                ? `${statusLabel(activity.oldStatus)} → ${statusLabel(activity.newStatus)}`
-                                : (activity.subject || "-")}
-                            </DetailTableTd>
-                            <DetailTableTd>{activity.description || activity.notes || "-"}</DetailTableTd>
-                            <DetailTableTd>{formatDate(activity.createdAt)}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
+                        {lead.activities.map((activity) => {
+                          // F-2026-10-25-008-S §6/BR-LC-07: label riwayat
+                          // verbatim dari completedAt/scheduledAt server —
+                          // UI tidak menentukan status selesai sendiri.
+                          const historyLabel = activity.completedAt
+                            ? `Selesai ${formatDate(activity.completedAt)}`
+                            : activity.scheduledAt
+                              ? `Terjadwal ${formatDate(activity.scheduledAt)}`
+                              : "-"
+                          return (
+                            <DetailTableRow key={activity.id}>
+                              <DetailTableTd>{labelFrom(LEAD_ACTIVITY_TYPE_LABELS, activity.type)}</DetailTableTd>
+                              <DetailTableTd>
+                                {activity.type === "status_change"
+                                  ? `${statusLabel(activity.oldStatus)} → ${statusLabel(activity.newStatus)}`
+                                  : (activity.subject || "-")}
+                              </DetailTableTd>
+                              <DetailTableTd>{activity.description || activity.notes || "-"}</DetailTableTd>
+                              <DetailTableTd>{formatDate(activity.createdAt)}</DetailTableTd>
+                              <DetailTableTd>{historyLabel}</DetailTableTd>
+                              <DetailTableTd>
+                                {activity.scheduledAt || activity.completedAt ? (
+                                  <LeadActivityCompletionButton
+                                    leadId={lead.id}
+                                    activityId={activity.id}
+                                    subject={activity.subject}
+                                    completedAt={Boolean(activity.completedAt)}
+                                    canAct={canActOnLeadActivities}
+                                  />
+                                ) : null}
+                              </DetailTableTd>
+                            </DetailTableRow>
+                          )
+                        })}
                       </DetailTableBody>
                     </DetailTable>
                   )}

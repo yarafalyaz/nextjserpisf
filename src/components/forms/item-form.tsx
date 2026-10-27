@@ -50,6 +50,7 @@ interface ItemFormProps {
     purchasePrice: number | null
     isProduct: boolean
     isService?: boolean
+    isScrapSaleItem?: boolean
     trackBatch?: boolean
     trackSerial?: boolean
     uomConversions?: { code: string; factorToBase: number | string }[]
@@ -74,6 +75,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(item?.image || null)
   const [isProduct, setIsProduct] = useState(item?.isProduct ?? false)
+  const [isScrapSaleItem, setIsScrapSaleItem] = useState(item?.isScrapSaleItem ?? false)
   const [isService, setIsService] = useState(item?.isService ?? false)
   const [trackBatch, setTrackBatch] = useState(item?.trackBatch ?? false)
   const [trackSerial, setTrackSerial] = useState(item?.trackSerial ?? false)
@@ -207,7 +209,8 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
-        formData.set("isProduct", String(isProduct))
+        formData.set("isProduct", String(isScrapSaleItem ? false : isProduct))
+        formData.set("isScrapSaleItem", String(isScrapSaleItem))
         formData.set("isService", String(isService))
         formData.set("trackBatch", String(trackBatch))
         formData.set("trackSerial", String(trackSerial))
@@ -556,10 +559,12 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                 checked={isProduct}
                 onCheckedChange={setIsProduct}
                 id="isProduct"
+                disabled={isScrapSaleItem}
               />
               <Label htmlFor="isProduct">Tandai sebagai Produk</Label>
             </div>
             <span className="text-xs text-muted-foreground">Aktifkan jika item ini merupakan produk jadi</span>
+            {isScrapSaleItem && <span className="text-xs text-muted-foreground">Nonaktif saat item ditandai besi tua — server menolak posting faktur besi tua untuk item produk (jalur stok/COGS).</span>}
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
@@ -571,6 +576,27 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               <Label htmlFor="isService">Tandai sebagai Jasa</Label>
             </div>
             <span className="text-xs text-muted-foreground">Aktifkan untuk item jasa/subkontrak (tidak menggerakkan stok; biaya dibebankan saat penerimaan)</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={isScrapSaleItem}
+                onCheckedChange={setIsScrapSaleItem}
+                id="isScrapSaleItem"
+                aria-describedby="isScrapSaleItem-hint"
+              />
+              <Label htmlFor="isScrapSaleItem">Tandai sebagai Besi Tua (Scrap)</Label>
+            </div>
+            <span id="isScrapSaleItem-hint" className="text-xs text-muted-foreground">Aktifkan untuk item besi tua: hanya boleh dalam faktur khusus besi tua (semua baris besi tua, tidak dicampur barang dagang), tidak bergerak lewat stok, pendapatan masuk akun pendapatan lain-lain, dan retur penjualannya ditolak. Akun pendapatan besi tua wajib sudah dipetakan di Pengaturan sebelum faktur besi tua diposting.</span>
+            {isScrapSaleItem && (
+              <Alert variant="warning">
+                <AlertCircle />
+                <AlertTitle>Item besi tua</AlertTitle>
+                <AlertDescription>
+                  Item ini hanya dapat dijual lewat faktur khusus besi tua. Server menolak posting faktur campuran besi tua dan barang dagang, serta menolak retur penjualan besi tua.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
