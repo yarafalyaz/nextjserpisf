@@ -1607,6 +1607,15 @@ export async function onSalesReturnCompleted(
   const db = txClient || prisma;
   assertJournalClaimRef("SalesReturn", returnId);
   const settings = await getSystemSettings(db);
+  // Sales-return + inventory mappings are always needed (jalur dagang).
+  // The AR mapping is only needed when the return is tied to an invoice
+  // (see below) — resolved after we know whether there is a linked invoice.
+  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
+    throw new Error(
+      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
+    );
+  }
+
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
@@ -1672,13 +1681,6 @@ export async function onSalesReturnCompleted(
           "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting retur besi tua.",
       );
     }
-  } else if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
-    // Sales-return + inventory mappings are always needed (jalur dagang).
-    // The AR mapping is only needed when the return is tied to an invoice
-    // (see below) — resolved after we know whether there is a linked invoice.
-    throw new Error(
-      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
-    );
   }
 
   // A return tied to an invoice relieves the customer's receivable. A return

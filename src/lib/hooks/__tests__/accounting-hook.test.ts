@@ -126,6 +126,10 @@ vi.mock("@/lib/db/prisma", () => ({
     item: {
       findMany: mocks.itemFindMany,
     },
+    account: {
+      findMany: (...a: unknown[]) => mocks.accountFindMany(...a),
+      findFirst: (...a: unknown[]) => mocks.accountFindFirst(...a),
+    },
     purchaseReturn: {
       findUniqueOrThrow: (...a: unknown[]) =>
         mocks.purchaseReturnFindUniqueOrThrow(...a),
@@ -157,6 +161,11 @@ vi.mock("@/lib/db/prisma", () => ({
     pkwtCompensationEvent: { findUnique: (...a: unknown[]) => mocks.pkwtEventFindUnique(...a) },
     pkwtCompensationAccrual: { aggregate: (...a: unknown[]) => mocks.pkwtAccrualAggregate(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
+    // Klasifikasi scrap di jalur global membaca akun lewat delegate ini.
+    account: {
+      findMany: (...a: unknown[]) => mocks.accountFindMany(...a),
+      findFirst: (...a: unknown[]) => mocks.accountFindFirst(...a),
+    },
   },
 }));
 
@@ -208,6 +217,9 @@ function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
       findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
       findUnique: mocks.invoiceFindUnique,
     },
+    // Penutup DP J-PL1/J-PL2 membaca keduanya; fixture tanpa DP tertaut.
+    salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
+    downPayment: { findMany: vi.fn().mockResolvedValue([]) },
     journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
     journalEntry: journalEntryBranch(),
     item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
@@ -219,6 +231,58 @@ function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
   };
 }
 
+
+/** Objek `tx` onSalesReturnCompleted bersama; beda antar tes hanya invoice/item. */
+function buildSalesReturnTx(opts: {
+  invoiceFindUniqueOrThrow?: unknown;
+  items?: unknown[];
+} = {}) {
+  const defaultInvoice = vi.fn(async (args: any) =>
+    args?.include?.items?.select
+      ? { id: 55, items: [{ itemId: 60, qty: 2 }] }
+      : args?.select?.grandTotal
+        ? { grandTotal: 11100000, paidAmount: 0 }
+        : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
+  );
+  return {
+    systemSetting: {
+      findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
+    },
+    salesReturn: {
+      findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow,
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    salesReturnItem: {
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    salesInvoice: {
+      findUniqueOrThrow: opts.invoiceFindUniqueOrThrow ?? defaultInvoice,
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    item: {
+      findMany: vi.fn().mockResolvedValue(opts.items ?? [{ id: 60, isScrapSaleItem: true }]),
+    },
+    taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
+    $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
+    account: {
+      findMany: mocks.accountFindMany,
+      findFirst: mocks.accountFindFirst,
+    },
+    journal: {
+      findFirst: mocks.journalFindFirst,
+      findMany: vi.fn().mockResolvedValue([]),
+      create: mocks.journalCreate,
+    },
+    journalEntry: journalEntryBranch(),
+  };
+}
+
+function wireSalesReturnTx(opts?: Parameters<typeof buildSalesReturnTx>[0]) {
+  mocks.transaction.mockImplementation((fn: any) => fn(buildSalesReturnTx(opts)));
+}
 
 const innerInvoice = (over: Record<string, unknown> = {}) => ({
   id: 1, totalAmount: 1000, taxAmount: 0, date: new Date(), documentNo: "INV-1", ...over,
@@ -461,6 +525,10 @@ describe("onSalesInvoicePosted", () => {
           update: mocks.itemUpdate,
         },
         uomConversion: { findMany: mocks.uomConversionFindMany },
+        // Jalur posting kini membaca pembayaran DP + snapshot DP untuk
+        // reklas/penutup J-PL1/J-PL2; fixture faktur ini tanpa DP tertaut.
+        salesPayment: { findMany: vi.fn().mockResolvedValue([]) },
+        downPayment: { findMany: vi.fn().mockResolvedValue([]) },
         stockMove: { create: mocks.stockMoveCreate, findFirst: mocks.stockMoveFindFirst },
         inventoryLayer: {
           groupBy: vi.fn().mockResolvedValue([
@@ -1361,65 +1429,147 @@ describe("onSalesReturnCompleted", () => {
     mocks.systemSettings.salesReturnAccountId = 420;
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.inventoryAccountId = 130;
-    mocks.transaction.mockImplementation((fn: any) =>
-      fn({
-        systemSetting: {
-          findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
-        },
-        salesReturn: { findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow },
-        salesReturnItem: {
-          findMany: vi.fn().mockResolvedValue([]),
-          update: vi.fn().mockResolvedValue({}),
-        },
-        salesInvoice: {
-          findUniqueOrThrow: vi.fn(async (args: any) =>
-            args?.include?.items?.select
-              ? { id: 55, items: [{ itemId: 60, qty: 2 }] }
-              : { subtotal: 200, discount: 0, taxAmount: 0 },
-          ),
-        },
-        item: {
-          findMany: vi.fn().mockResolvedValue([{ id: 60, isScrapSaleItem: true }]),
-        },
-        taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
-        $queryRaw: mocks.queryRaw,
-        $executeRaw: mocks.executeRaw,
-        account: {
-          findMany: mocks.accountFindMany,
-          findFirst: mocks.accountFindFirst,
-        },
-        journal: {
-          findFirst: mocks.journalFindFirst,
-          create: mocks.journalCreate,
-        },
-        journalEntry: journalEntryBranch(),
-      }),
-    );
+    // Klasifikasi per-baris pre-tx membaca prisma global (bukan tx).
+    mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: true }]);
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-1",
+      salesInvoiceId: null,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [],
+    });
+    wireSalesReturnTx();
   });
 
-  // E136-1/E136-2: retur atas faktur besi tua murni ditolak berisik;
-  // nol jurnal, nol entri. Persediaan fiktif qty * cost master (750rb) = MERAH.
-  it("E136-1/E136-2: retur atas faktur besi tua murni ditolak fail-closed nol jurnal", async () => {
+  // E136-3 (F-137-V tahap 2, syarat pencabutan larangan): retur besi tua
+  // DPP 4.000.000 + snapshot PPN 440.000 atas faktur E136-1 (DPP
+  // 10.000.000 + PPN 1.100.000, belum dibayar) -> jurnal persis
+  // Dr 711 4.000.000 + Dr PPN Keluaran 440.000 / Cr Piutang 4.440.000.
+  // Kaki 420 (salesReturnAccountId) / 130 (persediaan) = MERAH.
+  it("E136-3: retur besi tua belum dibayar -> Dr scrap+PPN / Cr Piutang sen-persis", async () => {
     mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       documentNo: "SR-SCRAP",
       salesInvoiceId: 55,
       status: "draft",
-      items: [{ id: 900, itemId: 60, qty: 2, price: 100000, cost: 750000 }],
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
     });
     mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    await onSalesReturnCompleted(1, 999);
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceType: "SalesReturn",
+          totalDebit: 4440000,
+          totalCredit: 4440000,
+        }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3);
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 711, debit: 4000000, credit: 0 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 160, debit: 440000, credit: 0 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110, debit: 0, credit: 4440000 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 420 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 130 }),
+      }),
+    );
+  });
 
-    mocks.invoiceFindUnique.mockResolvedValue({ id: 55, items: [{ itemId: 60, qty: 2 }] });
-    mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: true }, { id: 50, isScrapSaleItem: false }]);
-    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/faktur besi tua/);
+  // E136-3b: faktur besi tua sudah dibayar penuh (paidAmount = grandTotal)
+  // -> kredit beralih ke Kas (cashBankAccountId 100), bukan Piutang.
+  it("E136-3b: retur besi tua sudah dibayar -> Cr Kas sen-persis", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-SCRAP-PAID",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn(async (args: any) =>
+        args?.select?.grandTotal
+          ? { grandTotal: 11100000, paidAmount: 11100000 }
+          : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
+      ),
+    });
+    await onSalesReturnCompleted(1, 999);
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 100, debit: 0, credit: 4440000 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110 }),
+      }),
+    );
+  });
+
+  // E136 campuran: baris retur scrap + dagang dalam satu retur ditolak.
+  it("E136-campuran: retur campuran scrap+dagang ditolak berisik nol jurnal", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-MIX",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [
+        { id: 900, itemId: 60, qty: 1, price: 100, cost: 10 },
+        { id: 901, itemId: 50, qty: 1, price: 100, cost: 10 },
+      ],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn().mockResolvedValue({ subtotal: 200, discount: 0, taxAmount: 0 }),
+      items: [
+        { id: 60, isScrapSaleItem: true },
+        { id: 50, isScrapSaleItem: false },
+      ],
+    });
+    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/campuran besi tua/);
     expect(mocks.journalCreate).not.toHaveBeenCalled();
-    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
   });
 
   it("rejects if required settings are missing", async () => {
     (mocks.systemSettings as any).salesReturnAccountId = null;
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-1",
+      salesInvoiceId: null,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 50, qty: 1, price: 100, cost: 10 }],
+    });
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn().mockResolvedValue({ subtotal: 100, discount: 0, taxAmount: 0 }),
+      items: [{ id: 50, isScrapSaleItem: false }],
+    });
     await expect(onSalesReturnCompleted(1)).rejects.toThrow("Retur Penjualan");
-    expect(mocks.salesReturnFindUniqueOrThrow).not.toHaveBeenCalled();
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
   it("returns early if journal already exists (idempotency)", async () => {
@@ -1667,7 +1817,11 @@ describe("onDownPaymentReceived", () => {
         systemSetting: {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
-        downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow },
+        downPayment: {
+          findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow,
+          // Snapshot vat* dibekukan ke baris DP sesudah jurnal dinilai.
+          update: vi.fn().mockResolvedValue({}),
+        },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
