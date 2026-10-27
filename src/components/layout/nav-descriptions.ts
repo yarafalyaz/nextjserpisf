@@ -157,6 +157,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/pembelian/perintah-pembayaran": "Instruksi pembayaran tagihan jatuh tempo",
   "/pembelian/permintaan": "Permintaan pembelian",
   "/pembelian/pesanan": "Pesanan pembelian",
+  "/pembelian/antrean-pesanan-draf": "Pesanan pembelian yang masih draft dan belum disetujui, dari yang paling lama menunggu",
   "/pembelian/retur": "Retur pembelian",
   "/pembelian/tagihan": "Tagihan vendor",
   "/penjualan/faktur": "Faktur penjualan",
