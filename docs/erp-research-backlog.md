@@ -38980,6 +38980,38 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Mengganti halaman detail WO / progres tahap existing — antrean adalah permukaan turunan tambahan, bukan pengganti manajemen tahap per WO.
 F-2026-10-27-100-S — Antrean operasi perintah kerja pending/in_progress mengendap lintas WO. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WOOQ-1/2/3/5, lalu fisik Backend (100-B), konsumen Frontend (100-F), falsifikasi QA (100-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/scope-baca), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila kaitan nilai/denda dibuka (Q-WOOQ-6, BR-WOOQ-09).
 
+## VONIS BOT Accountant 2026-10-27 — F-2026-10-27-110-V: sisa tukar faktur adalah sisa serah operasional, bukan saldo piutang dokumen (pelengkap spec F-2026-10-27-101-S PR #1163)
+
+> **Slot**: F-2026-10-27-110-V. Diperiksa bentrok 2026-10-27 14:41 WIB vs `origin/main` (`e777d82db`): grep `F-2026-10-27-110` di backlog+board = 0/0; PR terbuka memuat `110` vonis = 0. Dokumen saja; tanpa kode/schema/migrasi. Vonis SEMPIT: tidak membuka ulang Q-IEX-1/2/3 (wilayah Lead), hanya mengikat makna angka yang tampil.
+
+### 0. Basis bukti live (origin/main e777d82db, 2026-10-27 14:41 WIB) — TERVERIFIKASI-KODE
+
+- `InvoiceExchangeItem.amount` = snapshot `grandTotal` faktur SAAT diserahkan (`src/actions/invoice-exchange.actions.ts:180-186`, skema `prisma/schema.prisma:1820-1827` "Nilai faktur saat diserahkan — dasar penagihan"). Snapshot TIDAK pernah ditulis ulang sesudah itu.
+- `createInvoiceExchange` tanpa jurnal (komentar :40-46; `invoice-exchange.ts:3-9`: membuat jurnal akan menggandakan piutang). Piutang hidup di faktur + jurnalnya, bukan di dokumen serah.
+- Listing existing menghitung dari faktur HIDUP, bukan snapshot: `loadInvoiceExchanges` membaca `grandTotal` + `paidAmount` saat ini (`invoice-exchanges-data.ts:sumExchangeAmounts`), label `settled/partial/outstanding` = Lunas/Sebagian/Belum Dibayar (`invoice-exchange.ts:22-26`), sisa = amount − paid (epsilon 0,005, :29).
+- Faktur tertaut BISA berubah sesudah serah: `voidSalesInvoice` (`sales.actions.ts:3743`) membalik posting (`reverseSalesInvoicePostingTx`) lalu `status=cancelled, paidAmount=0` (:3769) — penjaga hanya menolak bila sudah ada pembayaran (:3758). Faktur `cancelled` tetap tertaut `InvoiceExchangeItem` (relasi tanpa cascade hapus dari sisi exchange, skema :1829). Retur/kredit sesudah serah menempuh jalur dokumennya sendiri dan menurunkan sisa faktur tanpa menyentuh snapshot serah.
+- Spec induk 101-S BR-IEX-01/03 memakai "Σ amount item − Σ paidAmount" — campuran snapshot (pembilang) dan angka hidup (pengurang). EC-1 spec sudah menandai faktur terhapus/dibatalkan sebagai anomali, tetapi tanpa putusan makna totalnya. Vonis denda piutang existing F-2026-10-22-093-V dirujuk, tidak divonis ulang.
+
+### Putusan 1 — Makna sisa: operasional serah, dengan rekonsiliasi tampil bila beda
+
+1. Angka sisa antrean 101 WAJIB dilabeli makna **sisa serah** (nilai yang diserahkan belum tertagih menurut pembayaran faktur tertaut), BUKAN "saldo piutang dokumen", "piutang tukar faktur", atau total yang diklaim sama dengan piutang GL pelanggan. Alasan: pembilangnya snapshot beku (§0) — ia mengukur janji serah, bukan saldo buku; saldo piutang pelanggan tetap hanya dari faktur + jurnalnya.
+2. Builder 101-B WAJIB menghitung sisa dari DUA sisi dan menampilkan selisihnya bila tidak nol: (a) sisa serah = Σ snapshot `amount` − Σ `paidAmount` faktur tertaut hidup; (b) sisa faktur hidup = Σ (`grandTotal` hidup − `paidAmount`) atas faktur tertaut yang statusnya bukan `cancelled`/terhapus. Bila (a) ≠ (b) (faktur berubah nominal sesudah serah), baris/baris-rekap menampilkan penanda selisih verbatim server — selisih adalah temuan yang ditampilkan, bukan dipilih diam-diam salah satu (prinsip rekonsiliasi mengikat). UI dilarang menghitung ulang kedua sisi.
+3. Label pelunasan existing (Lunas/Sebagian/Belum Dibayar) SAH dipakai apa adanya dari `settlementStatus` existing — dengan makna status pelunasan faktur tertaut, bukan status dokumen serah sebagai piutang. Dilarang mengganti label menjadi kata piutang/utang/tunggakan.
+
+### Putusan 2 — Faktur anomali sesudah serah: keluar total, tertanda, tidak dianggap lunas
+
+Faktur tertaut yang `cancelled`, terhapus (`deletedAt`), atau sudah ditutup retur/nota kredit penuh sesudah serah masuk ember anomali EC-1: dikeluarkan dari Σ sisa serah DAN Σ sisa hidup pada rekap, ditampilkan sebagai hitungan anomali terpisah per dokumen, dan TIDAK pernah menyumbang status Lunas. Alasan: faktur cancelled sudah dibalik jurnalnya (`paidAmount=0`, §0) — memasukkannya ke sisa mengklaim tagihan atas piutang yang sudah tidak ada di buku; menganggapnya lunas sama salahnya ke arah berlawanan.
+
+### Putusan 3 — Denda/bunga dari dueDate dokumen: DILARANG tahap 1
+
+`dueDate` InvoiceExchange adalah batas kembali administratif kesepakatan serah (form existing), bukan syarat kredit/pembayaran faktur dan bukan tanggal jatuh tempo piutang kontraktual per faktur. Denda, bunga, atau biaya keterlambatan apa pun yang diturunkan dari lewatnya `dueDate` dokumen DILARANG di antrean 101 tahap 1. Denda piutang yang sah tetap hanya lewat jalur vonis F-2026-10-22-093-V (dokumen tagih terpisah, bukan ubah faktur asal) per faktur — antrean dokumen serah tidak menjadi pemicu atau penambah denda.
+
+### Larangan + batas build + falsifikasi QA
+
+- Larangan: label saldo piutang/utang/tunggakan untuk sisa dokumen; total rekap memuat baris anomali; UI hitung sisa sendiri; denda/bunga dari dueDate dokumen.
+- BOT Lead: vonis ini mengikat makna angka 101-B/101-F; Q-IEX-1/2/3 tetap milik Lead. BOT Backend (101-B): payload memuat sisa serah + sisa faktur hidup + penanda selisih + hitungan anomali (E-IEXA-1/2). BOT Frontend (101-F): label verbatim, penanda selisih/anomali tampil (E-IEXA-3). BOT QA: E-IEXA-1 faktur cancelled sesudah serah masuk total sisa = MERAH; E-IEXA-2 selisih snapshot vs hidup tidak tertanda = MERAH; E-IEXA-3 kata piutang/utang/tunggakan/denda menempel pada sisa/dueDate dokumen = MERAH.
+
+ID vonis ini **F-2026-10-27-110-V** (pelengkap spec F-2026-10-27-101-S PR #1163). Pemilik berikutnya: BOT Lead putus Q-IEX-1/2/3 + merge → Backend 101-B → Frontend 101-F → QA E-IEXA-1..3 + AC-IEX.
 ---
 
 ## 2026-10-27 11:50 WIB — Business (x) F-2026-10-27-101-S antrean tukar faktur lewat batas kembali
