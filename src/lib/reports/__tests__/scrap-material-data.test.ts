@@ -59,6 +59,22 @@ describe("loadScrapMaterialReport — rekonsiliasi tidak dinilai (butir b)", () 
   })
 })
 
+describe("loadScrapMaterialReport — jurnal scrap REVERSED tidak terhitung (TASK-022)", () => {
+  it("query jurnal menyaring status POSTED; jurnal REVERSED tersaring dari abnormalJournalValue", async () => {
+    const raw = [
+      { status: "POSTED", totalDebit: 400 },
+      { status: "REVERSED", totalDebit: 400 },
+      { status: "DRAFT", totalDebit: 400 },
+    ]
+    mocks.prismaMock.journal.findMany.mockImplementation(async ({ where }: { where: { status?: string } }) =>
+      raw.filter((j) => !where.status || j.status === where.status),
+    )
+    const { report } = await loadScrapMaterialReport(start, end)
+    expect(mocks.prismaMock.journal.findMany.mock.calls[0][0].where.status).toBe("POSTED")
+    expect(report.totals.abnormalJournalValue).toBe(400)
+  })
+})
+
 describe("loadScrapReviewQueue (butir c)", () => {
   it("gabung MI+PO menunggu_tinjau, urut tanggal, label alasan + kategori terpetakan", async () => {
     mocks.prismaMock.materialIssueItem.findMany.mockResolvedValue([

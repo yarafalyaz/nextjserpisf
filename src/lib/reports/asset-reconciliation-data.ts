@@ -49,6 +49,10 @@ export async function loadAssetReconciliation(): Promise<AssetReconciliationRepo
       where: { type: "depreciation" },
       _sum: { amount: true },
     }),
+    // Tetap POSTED-saja (TASK-022): terfilter referenceType aset; jurnal
+    // lawan reversal ber-referenceType "Journal" tersaring keluar, jadi
+    // memasukkan REVERSED akan menghitung asli tanpa lawannya.
+    // Neto nol hanya untuk pasangan reversal satu tingkat.
     prisma.journal.findMany({
       where: {
         deletedAt: null,

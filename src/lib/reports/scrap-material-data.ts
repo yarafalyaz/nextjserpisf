@@ -138,9 +138,14 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
         productionOrder: { select: { documentNo: true, createdAt: true } },
       },
     }),
+    // Tetap POSTED-saja (TASK-022): terfilter referenceType scrap; jurnal
+    // lawan reversal ber-referenceType "Journal" tersaring keluar, jadi
+    // pasangan reversal satu tingkat neto nol. Tanpa filter status, jurnal
+    // asli REVERSED terhitung penuh tanpa lawannya.
     prisma.journal.findMany({
       where: {
         referenceType: PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE,
+        status: "POSTED",
         transactionDate: { gte: start, lte: end },
         deletedAt: null,
       },

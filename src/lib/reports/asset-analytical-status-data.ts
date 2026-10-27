@@ -88,6 +88,10 @@ export async function loadAssetAnalyticalStatuses(
   if (assets.length === 0) return { periodYear, periodMonth, rows: [] }
 
   const assetIds = assets.map((a) => a.id)
+  // Tetap POSTED-saja (TASK-022): agregasi terfilter referenceType aset;
+  // jurnal lawan reversal ber-referenceType "Journal" sehingga tersaring
+  // keluar — memasukkan REVERSED akan menghitung asli tanpa lawannya.
+  // POSTED-saja sudah neto nol untuk pasangan reversal satu tingkat.
   const journals = await prisma.journal.findMany({
     where: {
       referenceId: { in: assetIds },
