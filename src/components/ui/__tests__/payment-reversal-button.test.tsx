@@ -16,7 +16,12 @@ vi.mock("@/actions/sales.actions", () => ({
 
 vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }))
 
-import { PaymentReversalButton, PaymentReversalNotice } from "../payment-reversal-button"
+import {
+  HideWhenReversed,
+  PaymentReversalButton,
+  PaymentReversalNotice,
+  ReversedOrForm,
+} from "../payment-reversal-button"
 import { reverseVendorPayment } from "@/actions/purchase.actions"
 import { reverseSalesPayment } from "@/actions/sales.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
@@ -194,5 +199,43 @@ describe("PaymentReversalNotice FIN-BR-008 (read-only reversed)", () => {
     expect(r.container.textContent).not.toContain("Alasan pembalikan:")
     expect(r.container.textContent).not.toContain("Dibalik pada:")
     unmountCard(r.root)
+  })
+})
+
+describe("HideWhenReversed + ReversedOrForm FIN-BR-008 (dedup pintu reversed)", () => {
+  it("HideWhenReversed: reversed null, selain itu anak tampil", () => {
+    const r = renderCard(
+      <HideWhenReversed status="reversed">
+        <span>aksi-ubah</span>
+      </HideWhenReversed>,
+    )
+    expect(r.container.textContent ?? "").not.toContain("aksi-ubah")
+    unmountCard(r.root)
+    const v = renderCard(
+      <HideWhenReversed status="completed">
+        <span>aksi-ubah</span>
+      </HideWhenReversed>,
+    )
+    expect(v.container.textContent ?? "").toContain("aksi-ubah")
+    unmountCard(v.root)
+  })
+
+  it("ReversedOrForm: reversed tampil penanda tanpa form, draft tampil form tanpa penanda", () => {
+    const r = renderCard(
+      <ReversedOrForm status="reversed" reversalReason="Salah nominal" reversedAt="2026-10-28T03:00:00.000Z">
+        <span>form-ubah</span>
+      </ReversedOrForm>,
+    )
+    expect(r.container.textContent ?? "").toContain("sudah dibalik")
+    expect(r.container.textContent ?? "").not.toContain("form-ubah")
+    unmountCard(r.root)
+    const v = renderCard(
+      <ReversedOrForm status="draft">
+        <span>form-ubah</span>
+      </ReversedOrForm>,
+    )
+    expect(v.container.textContent ?? "").toContain("form-ubah")
+    expect(v.container.textContent ?? "").not.toContain("sudah dibalik")
+    unmountCard(v.root)
   })
 })

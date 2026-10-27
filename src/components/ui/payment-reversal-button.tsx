@@ -144,6 +144,47 @@ export function PaymentReversalButton({
 }
 
 /**
+ * FIN-BR-008: penanda + pintu read-only pembayaran `reversed`, dipakai
+ * halaman detail + ubah kedua domain (penjualan + vendor) agar salinan
+ * syarat `status !== "reversed"` tidak berlipat di tiap page.
+ */
+export function HideWhenReversed({
+  status,
+  children,
+}: Readonly<{ status: string; children: React.ReactNode }>) {
+  if (status === "reversed") return null
+  return <>{children}</>
+}
+
+/**
+ * FIN-BR-008: cabang read-only halaman ubah — `reversed` tampil penanda,
+ * selain itu render form yang diberikan. Satu cabang, bukan salinan
+ * ternary `data.status === "reversed"` di tiap halaman ubah.
+ */
+export function ReversedOrForm({
+  status,
+  reversalReason,
+  reversedAt,
+  children,
+}: Readonly<{
+  status: string
+  reversalReason?: string | null
+  reversedAt?: Date | string | null
+  children: React.ReactNode
+}>) {
+  if (status === "reversed") {
+    return (
+      <PaymentReversalNotice
+        status={status}
+        reversalReason={reversalReason}
+        reversedAt={reversedAt}
+      />
+    )
+  }
+  return <>{children}</>
+}
+
+/**
  * FIN-BR-008: penanda read-only pembayaran berstatus `reversed`.
  * Alasan + tanggal tampil verbatim dari kolom histori server
  * (`reversalReason`/`reversedAt`); tanpa keduanya komponen kosong —

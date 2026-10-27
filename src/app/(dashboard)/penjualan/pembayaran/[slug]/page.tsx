@@ -16,6 +16,7 @@ import {
   resolvePaymentMethodName,
 } from "@/lib/services/method.service";
 import {
+  HideWhenReversed,
   PaymentReversalButton,
   PaymentReversalNotice,
 } from "@/components/ui/payment-reversal-button";
@@ -75,7 +76,7 @@ export default async function SalesPaymentDetailPage({
         ]}
         actions={
           <>
-            {payment.status !== "reversed" && (
+            <HideWhenReversed status={payment.status}>
               <CanCreate permission="edit_sales_payments">
                 <Button
                   href={entityEditHref("/penjualan/pembayaran", payment)}
@@ -84,7 +85,7 @@ export default async function SalesPaymentDetailPage({
                   Ubah
                 </Button>
               </CanCreate>
-            )}
+            </HideWhenReversed>
             <PrintButton documentType="sales-payment" documentId={payment.id} />
             <PaymentReversalButton
               kind="sales"
@@ -93,11 +94,11 @@ export default async function SalesPaymentDetailPage({
               status={payment.status}
               canReverse={await hasPermission("delete_sales_payments")}
             />
-            {payment.status !== "reversed" && (
+            <HideWhenReversed status={payment.status}>
               <CanCreate permission="delete_sales_payments">
                 <DeleteButton id={payment.id} action={deleteSalesPayment} />
               </CanCreate>
-            )}
+            </HideWhenReversed>
             <BackButton href="/penjualan/pembayaran" />
           </>
         }
