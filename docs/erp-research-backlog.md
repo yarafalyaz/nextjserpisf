@@ -36185,6 +36185,18 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 | Q-RBQ-5 | Tombol Bayar langsung dari antrean dibuka? | Lead | TIDAK tahap 1 (BR-RBQ-09): bayar butuh konteks `paidFromAccountId` + J-RB1 aktif di detail/permukaan keuangan existing; jalan pintas = keputusan terpisah sesudah antrean terbukti |
 | Q-RBQ-6 | Penempatan permukaan: SDM (di samping Klaim Saya) vs Keuangan (di samping pengeluaran)? Sub-ember paid-tanpa-jurnal tampil default atau di balik penanda? | Lead | USULAN: permukaan pengelola di Keuangan (aktor bayar = pemegang `approve_expenses`), tautan dari SDM untuk scope all/department; sub-ember tampil default sebagai seksi terpisah terhitung — menyembunyikan inkonsistensi status-vs-jurnal mengalahkan tujuan antrean kejujuran tahap |
 
+**PUTUSAN LEAD 2026-10-27 14:47 WIB — Q-RBQ-1/2/3/5/6 DIPUTUS (kartu Lead t_3663905b).** Spec F-2026-10-27-082-S sudah di `origin/main`; Q-RBQ-4 sudah dijawab vonis Accountant F-2026-10-27-083-V (label operasional tahap 1; istilah utang/aging hanya bersyarat Putusan 3/4 vonis itu). Putusan di bawah mengikat; Backend/Frontend/QA melaksanakan apa adanya, penyimpangan = cacat putusan:
+
+| ID | Putusan Lead (final) | Akibat build (mengikat) |
+|---|---|---|
+| Q-RBQ-1 | Ambang tingkat `mengendap` = umur menunggu bayar **>= 3 hari kalender WIB sejak `transactionDate` J-RB1 aktif** (preseden keluarga antrean mengendap diputus Lead 2026-10-26). Urutan final: **tingkat `mengendap` dulu, lalu umur tertua**; seri tanggal J-RB1 sama persis → **id klaim naik**. Baris tanpa J-RB1 aktif TIDAK PERNAH tingkat `mengendap` (umur bayar `—` tertanda "tanpa jurnal akrual" per vonis 083-V Putusan 2); kunci urut baris itu = `createdAt` naik lalu id naik, TANPA label umur bayar dari `createdAt`. | Satu konstanta bernama di builder (nama final milik Backend, nilai 3 tidak boleh berubah); angka lain/angka liar = MERAH. Sesudah putusan ini AC-RBQ-B4/B5 dibaca dengan tingkat `mengendap` AKTIF (umur == 3 → `mengendap`). Urutan deterministik penuh di server; UI merender urutan payload apa adanya. |
+| Q-RBQ-2 | Kata §1 usulan spec **disahkan verbatim**: judul "Reimbursement Disetujui — Menunggu Pembayaran"; notice §1 apa adanya; sub-ember "Status terbaca dibayar tanpa fakta jurnal"; label tingkat "Mengendap"/"Menunggu"; agregat persis "total nominal tersimpan baris tampil — bukan saldo buku" (selaras vonis 083-V Putusan 1/4). | Satu konstanta label server; Frontend tampil verbatim payload, dilarang parafrase menjadi "utang/aging/saldo" (E-RBQ4-2 vonis 083-V). |
+| Q-RBQ-3 | Tahap 1 gerbang tetap **`create_employee_reimbursements`** existing pola `getMyReimbursementClaims`, fail-closed sebelum query, lalu scope `getHrScope`/`hrScopeWhere` apa adanya. **Nol key izin baru tahap 1.** Risiko dinyatakan eksplisit: pemegang key saat ini mencakup pengaju, jadi permukaan pengelola tahap 1 terjangkau peran yang juga memegang create; scope baris yang membatasinya, bukan key. | 082-B TIDAK membuat key `view_*`, TIDAK mengubah katalog/seed. Key lihat terpisah = keputusan katalog terpisah di luar 082-B, bukan gerbang 082-B. |
+| Q-RBQ-5 | **TIDAK** ada tombol Bayar (atau Setujui/Tolak) dari antrean tahap 1 (BR-RBQ-09 final). Satu-satunya jalan bayar = permukaan keuangan/pengeluaran existing berizin `approve_expenses` (`markExpensePaid`) sesudah membuka detail klaim. | Tombol/aksi bayar dari daftar = MERAH (AC-RBQ-F3). Bayar dari daftar = keputusan terpisah sesudah antrean terbukti, di luar spec ini. |
+| Q-RBQ-6 | Penempatan final: **permukaan pengelola di Keuangan** (di samping pengeluaran; aktor bayar pemegang `approve_expenses`), dengan **tautan dari halaman SDM Klaim Saya** untuk scope all/department. Sub-ember paid-tanpa-jurnal **tampil default sebagai seksi terpisah terhitung**, bukan di balik tab/penanda tersembunyi. Rute persis milik Frontend pada 082-F sesudah 082-B merged. | 082-F tidak mengganti halaman "Klaim Saya"; sub-ember tersembunyi tanpa hitungan = MERAH (AC-RBQ-F2). |
+
+Batas turunan tambahan dari vonis 083-V §5 (mengikat 082-B): payload per baris WAJIB memuat penanda fakta jurnal existing (`hasAccrualJournal` pola loader); field payload bernama `payableBalance`/`aging`/`saldoUtang` DILARANG tahap 1 (E-RBQ4-4). Gerbang Q-RBQ-1/2/3/5/6 TERTUTUP — Backend 082-B boleh mulai dari `origin/main` sesudah PR putusan ini merged; 082-F konsumen sesudah 082-B merged; 082-Q falsifikasi AC-RBQ-B1..B5 + F1..F3 + E-RBQ4-1..5 atas head persis. Fisik 082-B/082-F/082-Q dikerjakan di kartu Backend/Frontend/QA yang sudah ada atau dicatat sebagai sisa eksplisit di kartu Lead ini (freeze CEO 27 Okt 14:34 WIB: tanpa kartu baru).
+
 ### Yang TIDAK diusulkan run ini
 - Aksi Setujui/Bayar/Tolak dari antrean, bayar massal, atau aksi bayar baru (BR-RBQ-09) — jalur existing `approveExpense`/`markExpensePaid` berizin `approve_expenses` di permukaan keuangan tetap satu-satunya jalur uang.
 - Menyebut populasi/agregat sebagai utang, saldo utang, atau aging, dan laporan aging reimbursement (BR-RBQ-05) — BUTUH-VONIS Accountant bila kelak dibuka (Q-RBQ-4); jurnal/akun/nominal baru apa pun di luar vonis 018-V.
@@ -37854,6 +37866,19 @@ Tanpa `create_tax_invoices`: loader tidak dipanggil dan halaman menolak (fail-cl
 | Q-TIQ-5 | Gerbang baca tahap 1 memakai `create_tax_invoices` existing (katalog hanya punya key itu) vs pesan key `view_tax_invoices` baru ke Backend/Lead? | Lead | USULAN pakai existing tahap 1 (pola halaman terbit); key baca terpisah = perubahan katalog + seed, keputusan tersendiri, jangan karang di spec ini |
 | Q-TIQ-6 | Siapa/mekanisme apa yang sah menulis `djpStatus` `draft` → `approved`/`rejected`, dan apakah antrean kelak boleh menautkan status itu? | Accountant (vonis pajak) | BUTUH-VONIS: grep run ini tidak menemukan penulis non-tes; antrean tahap 1 tidak menyimpulkan apa pun tentang jalur ini dan tidak memakai kata disetujui/terkirim DJP |
 | Q-TIQ-7 | Penempatan permukaan: seksi di halaman Dokumen Pajak existing vs halaman antrean terpisah? | Lead | USULAN seksi/halaman dalam Keuangan > Dokumen Pajak berizin sama; bentuk diputus Lead/Frontend sesudah kontrak Backend |
+
+**PUTUSAN LEAD 2026-10-27 14:47 WIB — Q-TIQ-1..5 DIPUTUS (kartu Lead t_3663905b).** Spec F-2026-10-27-098-S sudah di `origin/main`; Q-TIQ-6 sudah terjawab vonis Accountant F-2026-10-27-099-V + konfirmasi Accountant 2026-10-27 12:44 WIB di spec ini (penulis sah `approved`/`rejected` = DJP lewat Coretax; ERP hanya mencatat bukti; antrean tidak menautkan status itu sebagai aksi; falsifikasi V1-V5 vonis 099-V berlaku). Putusan di bawah mengikat; Backend/Frontend/QA melaksanakan apa adanya, penyimpangan = cacat putusan:
+
+| ID | Putusan Lead (final) | Akibat build (mengikat) |
+|---|---|---|
+| Q-TIQ-1 | Ambang tingkat `mengendap` = umur **>= 3 hari kalender WIB sejak `TaxInvoice.createdAt`** (preseden keluarga antrean mengendap). Urutan final: **tingkat `mengendap` dulu, lalu `createdAt` naik (tertua dulu)**; seri `createdAt` sama persis → **id naik**. Kata "mengendap" = tingkat operasional internal SAJA; DILARANG ditulis sebagai tenggat/batas lapor DJP atau kewajiban statutori (BR-TIQ-07). | Satu konstanta bernama di builder (nama final milik Backend, nilai 3 tidak boleh berubah); angka lain = MERAH. Sesudah putusan ini AC-TIQ-B4 dibaca dengan tingkat `mengendap` AKTIF (umur == 3 → `mengendap`). `updatedAt`/`taxInvoiceDate` tetap dilarang sebagai acuan umur. |
+| Q-TIQ-2 | Kata final disahkan: ember `out` = **"Keluaran"**, ember `in` = **"Masukan"**; judul antrean **"Faktur Pajak Draft"**; label tingkat "Mengendap"/"Menunggu". | Satu konstanta label server; Frontend tampil verbatim payload, dilarang parafrase (AC-TIQ-F1). Dua ember tetap terpisah terhitung (BR-TIQ-02). |
+| Q-TIQ-3 | `taxPeriod` tampil **verbatim** + penanda turunan netral **"masa lampau"** bila `taxPeriod` < masa berjalan WIB (perbandingan string `YYYY-MM` server). DILARANG kata "terlambat", "jatuh tempo", "kewajiban", atau simpulan statutori apa pun dari penanda itu (selaras BR-TIQ-07 + vonis 099-V). | Penanda dihitung server, UI verbatim; kata terlarang di payload/UI = MERAH (AC-TIQ-F1/F3 dibaca bersama falsifikasi V1-V5 vonis 099-V). Bila kelak kata menyentuh kewajiban diminta, vonis Accountant wajib lebih dulu. |
+| Q-TIQ-4 | **TIDAK** ada tombol Terbit/Ganti/Batal/Kredit/Ekspor/Unggah dari antrean tahap 1 (BR-TIQ-10 final). Tindak lanjut hanya lewat permukaan lifecycle existing + ekspor Coretax existing dari detail/dokumen sumber. | Tombol/aksi mutasi dari daftar = MERAH (AC-TIQ-F3). Antrean tidak menulis `djpStatus`/`creditStatus` dalam bentuk apa pun. |
+| Q-TIQ-5 | Gerbang baca tahap 1 tetap **`create_tax_invoices`** existing (satu-satunya key resource `tax_invoices` katalog :355), fail-closed sebelum query, TANPA scope baris (BR-TIQ-06). **Nol key izin baru tahap 1.** | 098-B TIDAK membuat key `view_tax_invoices`, TIDAK mengubah katalog/seed, TIDAK membatasi per `createdBy`. Key baca terpisah = keputusan katalog terpisah di luar 098-B, bukan gerbang 098-B. |
+| Q-TIQ-7 | Penempatan final: **seksi antrean di dalam area Keuangan > Dokumen Pajak** berizin `create_tax_invoices` yang sama (bukan halaman/modul terpisah di luar Dokumen Pajak); rute persis + bentuk seksi milik Frontend pada 098-F sesudah 098-B merged, sesudah grep `e2e/` teks dokumen-pajak terdampak. | 098-F tidak membuat gerbang izin kedua; tanpa izin halaman menolak (AC-TIQ-F3). |
+
+Gerbang Q-TIQ-1/2/3/4/5/7 TERTUTUP (Q-TIQ-6 = vonis 099-V) — Backend 098-B boleh mulai dari `origin/main` sesudah PR putusan ini merged; 098-F konsumen sesudah 098-B merged; 098-Q falsifikasi AC-TIQ-B1..B5 + F1..F3 + V1-V5 vonis 099-V atas head persis (payload XML bocor = MERAH terkeras, AC-TIQ-B2). Fisik 098-B/098-F/098-Q dikerjakan di kartu Backend/Frontend/QA yang sudah ada atau dicatat sebagai sisa eksplisit di kartu Lead ini (freeze CEO 27 Okt 14:34 WIB: tanpa kartu baru).
 ### 9. Backlog implementasi (turunan F-2026-10-27-098-S)
 | F-2026-10-27-098-S | Spec kontrak ini (dokumen) | Business | — |
 | 098-B | Builder/loader turunan antrean draft (populasi BR-TIQ-01/02, select tanpa payload XML, umur `createdAt` WIB, gerbang `create_tax_invoices`) + tes AC-TIQ-B1..B5 | Backend | Putusan Lead Q-TIQ-1/2/5 |
@@ -38386,97 +38411,6 @@ Scope keuangan: TIDAK ada scope HR (`getHrScope`) di domain ini — populasi dib
 - Pengingat/eskalasi otomatis rekonsiliasi mengendap, ekspor/PDF antrean tahap 1.
 - Jurnal/akun/penyesuaian baru apa pun — penyesuaian existing di detail tetap satu-satunya jalur.
 F-2026-10-27-097-S — Antrean rekonsiliasi bank draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBK-1/2/3/4, lalu fisik Backend (097-B), konsumen Frontend (097-F), falsifikasi QA (097-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja ini (BR-RBK-12); bersyarat hanya bila selisih turunan dibuka (Q-RBK-5).
-## SPEC BUSINESS 2026-10-27 — F-2026-10-27-098-S: antrean faktur pajak draft mengendap belum berstatus DJP (turunan baca-saja)
-> **Slot**: F-2026-10-27-098-S (RENUMBER dari F-2026-10-27-096-S — PUTUSAN LEAD 2026-10-27 08:24 WIB, komentar PR #1135 6431408626: #1132 tetap 096-S tertua, #1133 jadi 097-S, spec ini 098-S; nama branch `hermes/business-f096-tax-invoice-draft-queue` TIDAK diganti). Pemeriksaan bentrok awal 2026-10-27 07:21 WIB vs `origin/main` (`1dfe94ca0`): grep `F-2026-10-27-096` di backlog+board main = 0, tidak ada judul PR terbuka/branch `business-f096`; seri terakhir terverifikasi 095-S (PR #1129 OPEN). Dokumen saja; nol kode/schema/migrasi. Kartu asal t_012ca31b berjudul GoodsReceiptNote: model itu TIDAK ADA di schema main (hanya `GoodsReceipt` :2181 dan `PurchaseReturn` :2242 — keduanya sudah dispec 061-S/063-S), maka pivot sesuai klausul kartu ke kandidat mengendap berikutnya yang belum dispec. Kandidat yang DITOLAK dengan bukti: `BankStatement` lahir `draft` (finance.actions.ts:97) tetapi TIDAK ADA penulis status lain di seluruh `src/` non-tes — status mati tanpa jalur keluar, bukan antrean kerja; `PurchaseAdvance` lahir `posted` (schema:624) bukan draft; `InvoiceExchange` tanpa kolom status. Dipilih: `TaxInvoice.djpStatus = draft`.
-Faktur pajak SUDAH lengkap existing sebagai dokumen: model `TaxInvoice` (arah out/in, nomor, masa, DPP/PPN snapshot, rantai pengganti, status kredit masukan), service `tax-invoice.service.ts` (terbit/FP-UM/ganti/batal/kredit), aksi `tax-documents.actions.ts` berizin `create_tax_invoices`, ekspor XML Coretax, dan read-model SPT. Setiap faktur LAHIR `djpStatus = "draft"` (service :247/:387/:484) dan kosakata DJP = `draft|approved|rejected|replaced|cancelled` (`tax-invoice.ts:41`). Gap: tidak ada permukaan yang menua faktur yang tetap `draft` — halaman terbit existing hanya memuat daftar pilih `djpStatus IN (draft, approved)` maks 100 terurut `taxInvoiceDate desc` untuk aksi pengganti/batal/kredit (faktur/tambah/page.tsx), tanpa umur sejak dibuat, tanpa pemisah arah, tanpa tingkat mengendap. Faktur keluaran draft yang mengendap = PPN keluaran belum pernah dilaporkan lewat Coretax pada masanya; faktur masukan draft yang mengendap = kredit masukan menggantung. Spec ini membekukan **antrean baca-saja turunan**: hanya `djpStatus = "draft"`, dua ember arah dipisah persis (`out`/`in`), umur hari kalender WIB sejak `createdAt` (`updatedAt` DILARANG), payload TANPA `xmlPayload`/`xmlHash` dan tanpa menyimpulkan status DJP eksternal apa pun. Antrean TIDAK mengunggah, TIDAK menyetujui, TIDAK mengubah `djpStatus` — status DJP hanya dari bukti Coretax (kata existing coretax-export-panel.tsx:64).
-### 1. Inventarisasi terverifikasi (origin/main 1dfe94ca0, 2026-10-27 07:21 WIB)
-- `TaxInvoice` (`prisma/schema.prisma:1238`): `direction "out"|"in"`, `transactionCode` 2 digit PER-11/PJ/2025 (:1246), `taxInvoiceNumber`, `taxInvoiceDate`, `taxPeriod "YYYY-MM"` turunan tanggal, `dpp`/`taxRate @default(12.00)`/`taxAmount` Decimal, `djpStatus String @default("draft")` (:1262, komentar kosakata :1260), `salesInvoiceId?`/`vendorBillId?`/`vendorId?`/`downPaymentId?` (SetNull), `replacesId Int? @unique` + `replaceReason?`, `counterpartyTaxId/Name/Nitku?`, `creditPeriod?`/`creditedAt?`, `creditStatus @default("uncredited")` (:1288, arah in saja), `creditablePercent @default(100.00)`, `xmlPayload Text?`/`xmlHash?`/`xmlImportedAt?`, `djpMessage Text?`, `createdBy`, `createdAt @default(now())`, `updatedAt @updatedAt`. Indeks `djpStatus`/`taxPeriod`/`creditStatus`/`direction+creditStatus+creditPeriod` existing. TIDAK ada `deletedAt` pada model ini — jangan karang saringan hapus-lunak.
-- Kosakata: `DJP_STATUSES = draft|approved|rejected|replaced|cancelled` (`src/lib/tax/tax-invoice.ts:41`); `CREDIT_STATUSES = uncredited|credited|not_creditable|expired` (:44); `effectiveChainHead` (:213): kepala rantai = elemen terakhir bukan `cancelled`; yang `replaced` nol-efek di SPT.
-- Jalur lahir draft (service `src/lib/services/tax-invoice.service.ts`): `issueTaxInvoice` :136 buat `djpStatus: "draft"` :247 (idempotency key wajib, nomor seri TIDAK diterbitkan sistem, duplikat nomor per arah ditolak, gerbang snapshot lawan arah out); `issueDownPaymentTaxInvoice` :301 buat draft :387 (FP uang muka tertaut DownPayment); `replaceTaxInvoice` :420 buat pengganti draft :484 + asal menjadi `replaced` :496; `cancelTaxInvoice` :529 → `cancelled` :550 (faktur batal/replaced ditolak dibatalkan ulang); `creditInputInvoice` :600 (arah in, `creditStatus`, BUKAN `djpStatus`).
-- Penulis `approved`/`rejected`: TIDAK ADA di `src/` non-tes (grep run ini: hanya pembaca — SPT read-model, `deriveDownPaymentTaxStatus` down-payment-vat.ts:417, tes). Artinya transisi draft → approved/rejected TIDAK punya penulis kode existing yang terverifikasi run ini; makna dan penulisnya = BUTUH-VONIS Accountant (Q-TIQ-6), BUKAN fakta spec ini.
-- Aksi existing (`src/actions/tax-documents.actions.ts`): `issueTaxInvoiceAction` :91, `issueDownPaymentTaxInvoiceAction` :113, `replaceTaxInvoiceAction` :120, `cancelTaxInvoiceAction` :127, `creditInputInvoiceAction` :134, `exportCoretaxOutputXmlAction` :231 — SEMUA `requirePermission("create_tax_invoices")` (:92 dst). Komentar file :24: izin faktur pajak = `create_tax_invoices` (F-2026-10-21-034).
-- Izin nyata katalog (`src/lib/auth/module-catalog.generated.ts:355`): untuk resource `tax_invoices` HANYA `{ key: "create", permissionKey: "create_tax_invoices" }`. TIDAK ada `view_tax_invoices`/`edit_tax_invoices`/`approve_tax_invoices` — jangan karang key baru tahap 1 (key antrean terpisah = Q-TIQ-5).
-- Konsumen existing: halaman terbit `/keuangan/dokumen-pajak/faktur/tambah` (`requirePermission("create_tax_invoices")`; daftar `issued` = `djpStatus IN (draft, approved)` orderBy taxInvoiceDate desc take 100 — daftar PILIH aksi, bukan antrean kerja); panel ekspor Coretax (kata :64: "Berkas yang terbentuk bukan bukti terkirim atau disetujui DJP — status DJP hanya dari bukti Coretax"); read-model SPT `spt-read-model-data.ts` (memilih `djpStatus` :85 apa adanya); laporan `/laporan/faktur-ppn`. Nav existing: "Dokumen Pajak" → halaman tambah (navigation.ts:194, izin `create_tax_invoices`).
-- Scope HR TIDAK berlaku di domain ini (bukan data SDM/gaji); akses existing = izin katalog saja tanpa scope baris. Antrean mewarisi persis itu (BR-TIQ-06).
-- Builder/loader/kartu antrean faktur pajak draft: ABSEN. `git grep taxInvoice -- src/lib/reports/*queue*` = 0 berkas antrean; tidak ada turunan umur sejak `createdAt`, tidak ada ember arah, tidak ada tingkat mengendap. Draft yang ditinggal tidak terlihat di permukaan mana pun sebagai pekerjaan menunggu: halaman terbit mencampurnya ke daftar pilih 100 terakhir.
-- Penanda masa lewat: `taxPeriod` tersimpan, tetapi tidak ada permukaan yang membandingkan masa faktur draft dengan masa berjalan.
-- Accurate: e-Faktur CTAS mengunggah faktur pajak keluaran langsung ke Coretax DJP dan status berubah sesudah berhasil diunggah (https://help.accurate.id/product/accurate-online/fitur-aol/smartlink-tax/e-faktur-ctas/efaktur-ctas/); integrasi Pajak.io: faktur penjualan kena pajak otomatis masuk daftar faktur pajak, klik upload, status berubah berhasil (https://help.accurate.id/product/accurate-online/accurate-store/cara-integrasi-pajak-io/). Benchmark = daftar faktur pajak + status unggah terbaca; antrean draft berumur dengan ambang mengendap TIDAK didokumentasikan — tidak diklaim.
-- Zahir: fasilitas faktur pajak = cetak dari acuan transaksi (https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang) + ekspor CSV e-Faktur per periode (https://help.zahironline.com/portal/id/kb/articles/langkah-langkah-ekspor-e-faktur-pada-program-zahir-accounting). Antrean draft berumur tidak ditemukan di dokumentasi resmi — bukan diklaim tidak ada.
-- DJP resmi: Coretax adalah saluran penerbitan/status faktur pajak DJP (https://www.pajak.go.id/reformdjp/Coretax/). Spec ini TIDAK menurunkan aturan masa/status dari sumber ini — angka dan makna status statutori = vonis Accountant (Q-TIQ-6).
-Aktor: Petugas Pajak/Finance pemegang `create_tax_invoices` (satu-satunya pemegang aksi faktur existing sekaligus pembaca antrean usulan), Admin Keuangan (konteks), Lead (putus Q-TIQ-*), Accountant (vonis bersyarat Q-TIQ-6).
-Dokumen masuk: `TaxInvoice` (arah, nomor, kode transaksi, tanggal + masa turunan existing, DPP/PPN snapshot tersimpan, tautan dokumen sumber, `creditStatus` arah in, `createdAt`). Dokumen keluar: tidak ada dokumen baru tahap 1; antrean baca-saja + tautan ke permukaan existing (halaman terbit/lifecycle existing, ekspor Coretax existing).
-1. Petugas menerbitkan faktur lewat jalur existing (terbit/FP-UM/pengganti) → lahir `draft`. Antrean menampilkannya di ember arahnya (`out`/`in`).
-2. Petugas memproses kelanjutan di luar antrean lewat permukaan existing (ekspor XML Coretax / aksi lifecycle existing). Antrean tidak ikut menulis.
-3. Bila `djpStatus` berubah oleh jalur existing apa pun (batal → `cancelled`, diganti → `replaced`, atau status lain yang penulisnya kelak terverifikasi), baris keluar populasi pada render berikut.
-4. Faktur `in` dikreditkan lewat `creditInputInvoice` existing: `creditStatus` berubah, `djpStatus` tetap apa adanya — antrean membedakan tegas kedua sumbu itu (BR-TIQ-05).
-| — (terbit `issueTaxInvoice` :247) | buat faktur existing | `draft` | masuk ember arah (`out`/`in`) |
-| — (FP-UM `issueDownPaymentTaxInvoice` :387) | buat FP uang muka existing | `draft` | masuk ember `out` (pendamping tautan DP verbatim) |
-| `draft`/`approved` (pengganti `replaceTaxInvoice` :484/:496) | ganti existing | pengganti `draft`; asal `replaced` | pengganti masuk; asal keluar |
-| `draft` (batal `cancelTaxInvoice` :550) | batal existing (batal/replaced ditolak) | `cancelled` | keluar populasi |
-| `draft` arah in | kredit existing (`creditInputInvoice` :600) | `djpStatus` tetap; `creditStatus` berubah | tetap di antrean; status kredit tampil verbatim terpisah |
-| `draft` | penulis `approved`/`rejected` | `approved`/`rejected` | keluar populasi — PENULISNYA BELUM TERVERIFIKASI-KODE (Q-TIQ-6, BUTUH-VONIS Accountant); antrean tidak menebak jalur ini ada |
-| `approved`/`rejected`/`replaced`/`cancelled` | apa pun | — | tidak pernah masuk populasi |
-### 4. Role/permission matrix (key nyata katalog :355)
-| Aksi | Key izin (TERVERIFIKASI-KODE) | Perilaku |
-| Lihat antrean tahap 1 (USULAN gerbang) | `create_tax_invoices` (:355) — pola halaman terbit existing, karena katalog tidak punya key view tax_invoices | hanya pemegang key ini; pemisahan key baca = Q-TIQ-5 |
-| Terbit faktur / FP-UM (existing, di luar antrean) | `create_tax_invoices` (tax-documents.actions.ts:92/:114) | sesuai existing |
-| Ganti / batal / kredit (existing, BUKAN dari antrean) | `create_tax_invoices` (:121/:128/:135) | sesuai existing + penjaga service |
-| Ekspor XML Coretax (existing, BUKAN dari antrean) | `create_tax_invoices` (:232) | sesuai existing; berkas bukan bukti status DJP |
-| Baca SPT/laporan pajak (existing) | permukaan laporan existing | di luar antrean |
-Tanpa `create_tax_invoices`: loader tidak dipanggil dan halaman menolak (fail-closed, pola halaman terbit existing). Tidak ada scope baris (self/department/all) di domain pajak existing — antrean DILARANG mengarang scope SDM ke faktur pajak (BR-TIQ-06).
-### 5. Business rules register (BR-TIQ)
-| BR-TIQ-01 | Populasi antrean persis: `djpStatus = "draft"`. `approved`/`rejected`/`replaced`/`cancelled` keluar seluruhnya. Status di luar kosakata `DJP_STATUSES` (data karangan DB) keluar populasi (bukan ditebak). Model TIDAK punya `deletedAt` — saringan hapus-lunak tidak dikenalkan. | USULAN (turunan atas kosakata TERVERIFIKASI-KODE) | schema:1262; tax-invoice.ts:41 |
-| BR-TIQ-02 | Dua ember arah WAJIB dibedakan persis: `out` (keluaran) dan `in` (masukan), hitungan terpisah. `direction` di luar `out`/`in` keluar populasi. Tidak digabung satu ember "draft" tanpa pemisah. | USULAN | schema:1240-1242 (direction) |
-| BR-TIQ-03 | Nominal tampil = snapshot tersimpan verbatim: `dpp`, `taxRate`, `taxAmount` apa adanya. Antrean TIDAK menghitung ulang DPP/PPN dari harga jual, TIDAK menurunkan tarif efektif, TIDAK menjumlahkan total PPN sebagai kewajiban — agregat kewajiban/masa = wilayah SPT existing + vonis Accountant. Hitung ulang di builder/UI = MERAH. | TERVERIFIKASI-KODE (snapshot service) + USULAN (larangan hitung ulang) | service :247 computed snapshot; computeVat tax-invoice.ts |
-| BR-TIQ-04 | SENSITIF PAJAK — payload daftar DILARANG memuat `xmlPayload`, `xmlHash`, `djpMessage`. Payload XML adalah isi dokumen pajak untuk Coretax, bukan kolom daftar. Select loader antrean WAJIB eksplisit tanpa ketiganya. | USULAN (pengerasan payload) | schema xmlPayload/xmlHash/djpMessage |
-| BR-TIQ-05 | Dua sumbu status TIDAK dicampur: `djpStatus` (sumbu populasi) vs `creditStatus` (arah in, sumbu kredit). Faktur in `uncredited` yang `draft` tetap populasi; antrean TIDAK menyimpulkan "belum dikreditkan = bermasalah" dan TIDAK menurunkan status kredit dari `djpStatus` atau sebaliknya. Keduanya tampil verbatim terpisah bila dimuat. | TERVERIFIKASI-KODE (dua kolom terpisah) | schema:1262 vs :1288; CREDIT_STATUSES tax-invoice.ts:44 |
-| BR-TIQ-06 | Loader WAJIB gerbang `create_tax_invoices` sebelum query (pola aksi + halaman existing). Tidak ada scope baris existing di domain ini: izin saja yang membatasi; antrean TIDAK menerapkan `getHrScope` (itu scope SDM) dan TIDAK membatasi per `createdBy` — pembatasan per pembuat = definisi akses baru, Q-TIQ-5. Tanpa izin loader menolak sebelum query. | TERVERIFIKASI-KODE (gerbang) + USULAN (tanpa scope karangan) | katalog:355; actions :92; hr-scope khusus SDM |
-| BR-TIQ-07 | Umur menunggu = hari kalender WIB sejak `TaxInvoice.createdAt` ke tanggal baca (keluarga `wibDayNumber`, employee-lifecycle.ts:90) untuk KEDUA ember. `updatedAt` DILARANG (bergerak oleh batal/ganti/kredit/edit apa pun). `taxInvoiceDate` bukan acuan umur antrean (tanggal dokumen bisa lampau/masa depan; umur antrean = sejak rekaman dibuat). Ambang tingkat `mengendap` = Q-TIQ-1 Lead; sebelum diputus hanya tingkat `menunggu`, nol ambang karangan. Perbandingan masa (`taxPeriod` vs masa berjalan) hanya penanda verbatim Q-TIQ-3, bukan vonis keterlambatan statutori. | USULAN (acuan) + TERVERIFIKASI-KODE (larangan updatedAt: `@updatedAt`) | schema createdAt/updatedAt; wibDayNumber :90 |
-| BR-TIQ-08 | Urutan: USULAN tertua-menunggu dulu (`createdAt` naik), seri deterministik `id` naik. Dilarang mengurutkan berdasar nominal DPP/PPN sebagai ranking kewajiban. | USULAN | — |
-| BR-TIQ-09 | Rantai pengganti dibaca apa adanya: faktur pengganti `draft` dengan `replacesId` terisi masuk populasi sebagai baris sendiri tertanda pendamping `replacesId` verbatim; asal `replaced` tidak tampil. Antrean TIDAK menghitung kepala rantai efektif (`effectiveChainHead` wilayah SPT) dan TIDAK menolkan DPP/PPN baris mana pun. | TERVERIFIKASI-KODE (rantai service) + USULAN (tanpa simpulan SPT) | service :484/:496; tax-invoice.ts:213 |
-| BR-TIQ-10 | Baca-saja tahap 1: antrean tidak memanggil aksi terbit/ganti/batal/kredit/ekspor, tidak menulis `djpStatus`/`creditStatus` apa pun, tidak mengunggah ke Coretax. Nol tombol Terbit/Ganti/Batal/Kredit/Ekspor dari antrean (Q-TIQ-4); tindak lanjut = permukaan existing. Antrean TIDAK menyatakan faktur "terkirim/terdaftar/disetujui DJP" dalam kata apa pun — status DJP hanya dari bukti Coretax (kata existing panel ekspor :64). | USULAN (scope) + TERVERIFIKASI-KODE (kata panel) | coretax-export-panel.tsx:64 |
-| BR-TIQ-11 | Anti-N+1: satu query massal populasi (indeks `djpStatus` existing), nama lawan dari snapshot tersimpan (`counterpartyName`) atau relasi select massal dokumen tertaut, bukan query per baris. Batas baris/paginasi diputus Backend tanpa mengubah populasi; daftar pilih existing maks 100 BUKAN batas populasi antrean. | USULAN | schema indeks :1319 |
-| BR-TIQ-12 | Dokumen sumber tertaut terhapus/berubah (relasi SetNull): baris draft TETAP tampil dengan tautan kosong apa adanya; antrean tidak mengeluarkan baris berdasar keadaan dokumen sumber dan tidak menebak lawan transaksi pengganti di luar snapshot `counterparty*` tersimpan. | USULAN | schema relasi SetNull :1312-1315 |
-- AC-TIQ-B1: Populasi persis BR-TIQ-01/02: `approved`/`rejected`/`replaced`/`cancelled`/status-di-luar-kosakata/direction-di-luar-out-in TIDAK tampil (bocor satu pun = MERAH); `out` dan `in` masuk embernya masing-masing terpisah terhitung.
-- AC-TIQ-B2: Payload daftar TIDAK mengandung kunci `xmlPayload`/`xmlHash`/`djpMessage` (uji serialisasi payload persis; bocor = MERAH, AC terkeras spec ini). Select eksplisit terbukti di loader.
-- AC-TIQ-B3: Nominal payload byte-sama dengan snapshot tersimpan (`dpp`/`taxRate`/`taxAmount`); builder tidak memanggil computeVat/hitung ulang (hitung ulang = MERAH); tanpa `create_tax_invoices` loader menolak sebelum query (BR-TIQ-06).
-- AC-TIQ-B4: Umur dari `createdAt` hari kalender WIB untuk fixture yang `updatedAt`-nya jauh lebih baru (umur mengikuti `createdAt`, BUKAN `updatedAt`/`taxInvoiceDate` — salah acuan = MERAH); urutan `createdAt` naik + seri `id` naik; sebelum Q-TIQ-1 diputus tidak ada field tingkat mengendap karangan.
-- AC-TIQ-B5: Baca-saja + dua sumbu terpisah: loader/builder tidak memanggil aksi mutasi pajak/jurnal dan tidak mengubah `djpStatus`/`creditStatus`; field turunan "status DJP eksternal/sudah terunggah/kepala rantai efektif/kewajiban masa" apa pun = MERAH (BR-TIQ-05/09/10).
-- AC-TIQ-F1: Label ember arah, status, umur verbatim server; UI tidak menghitung umur/status/nominal sendiri (hitung ulang = MERAH); dua ember tampil terpisah berlabel persis kata final Q-TIQ-2.
-- AC-TIQ-F2: `xmlPayload`/`xmlHash`/`djpMessage` tidak tampil dalam bentuk apa pun termasuk pratinjau terpotong; baris hanya menaut ke permukaan existing.
-- AC-TIQ-F3: TIDAK ada tombol Terbit/Ganti/Batal/Kredit/Ekspor/Unggah dari antrean tahap 1 (aksi dari daftar = MERAH, BR-TIQ-10); kata "disetujui DJP/terkirim" tidak muncul sebagai status baris; tanpa izin halaman menolak.
-- EC-TIQ-1: Pengganti `draft` (`replacesId` terisi) atas asal `replaced`: hanya pengganti tampil tertanda verbatim; antrean tidak menampilkan asal dan tidak menolkan nominal pengganti (BR-TIQ-09).
-- EC-TIQ-2: Faktur in `draft` + `creditStatus = expired` (lewat jendela kredit existing): tetap tampil dua sumbu verbatim terpisah; antrean tidak menyimpulkan boleh/tidak dikreditkan lagi — itu penjaga `creditInputInvoice` existing saat aksi berjalan (BR-TIQ-05).
-- EC-TIQ-3: FP-UM draft tertaut DownPayment yang kemudian lunas/dibatalkan: baris tetap tampil apa adanya dengan pendamping tautan verbatim; status DP adalah domain antrean DP existing, bukan simpulan antrean ini.
-- EC-TIQ-4: `taxInvoiceDate` di masa berbeda dari `createdAt` (faktur tanggal lampau baru direkam): masa tampil verbatim dari `taxPeriod`; umur tetap sejak `createdAt`; antrean tidak menulis "terlambat" statutori (BR-TIQ-07, Q-TIQ-3).
-- EC-TIQ-5: Nomor faktur sama beda arah (unik per arah di service): dua baris ember berbeda sah; antrean tidak menggabungkan per nomor.
-- EC-TIQ-6: Faktur berubah status saat halaman terbuka: keluar populasi pada render berikut; antrean tidak mengunci baris.
-- EC-TIQ-7: `counterpartyName` kosong (snapshot tanpa lawan): tampil kosong apa adanya; antrean tidak mengambil nama dari master pelanggan/vendor lewat query per baris (BR-TIQ-11/12).
-- EC-TIQ-8: Draft sangat tua lintas masa (data warisan): tetap tampil dengan umur + masa jujur; antrean tidak menghapus, tidak mengarsipkan, tidak mengarang batas basi sebelum Q-TIQ-1.
-| Faktur pajak keluaran/masukan + unggah/ekspor ke DJP | Ada: e-Faktur CTAS upload Coretax + status berubah (help.accurate.id e-faktur-ctas) | Ada: cetak faktur pajak + ekspor CSV e-Faktur (help.zahironline.com) | Ada (TERVERIFIKASI-KODE: service + ekspor XML Coretax existing) |
-| Daftar faktur pajak terbaca per status | Ada (daftar faktur pajak integrasi) | Tidak ditemukan antrean per status di dokumentasi resmi | Parsial: daftar pilih maks 100 di halaman terbit, bukan antrean kerja |
-| Antrean faktur pajak draft berumur + ember arah | Tidak ditemukan di dokumentasi resmi | Tidak ditemukan | ABSEN (gap spec ini) |
-| Status DJP dari bukti eksternal (bukan klaim internal) | Status berubah sesudah upload berhasil | Ekspor CSV lalu upload e-Faktur | Ada sebagai kata existing panel ekspor; penulis `approved`/`rejected` belum terverifikasi-kode (Q-TIQ-6) |
-| Q-TIQ-1 | Ambang hari tingkat `mengendap` sejak `createdAt` + urutan final (tertua dulu, seri `id` naik disahkan)? | Lead | USULAN 3 hari kalender WIB (preseden keluarga antrean mengendap) sebagai tingkat di atas `menunggu`; BUKAN tenggat statutori — kata "mengendap" operasional internal, jangan ditulis sebagai batas lapor DJP sebelum vonis Accountant |
-| Q-TIQ-2 | Kata final label dua ember (`out`/`in`) + judul antrean? | Lead | USULAN: "Keluaran" / "Masukan"; judul "Faktur Pajak Draft"; satu konstanta label server, UI verbatim |
-| Q-TIQ-3 | Penanda masa: tampilkan `taxPeriod` verbatim saja vs penanda turunan "masa lampau" (taxPeriod < masa berjalan WIB)? | Lead (sahkan kata), Accountant (bila kata menyentuh kewajiban) | USULAN tampil verbatim + penanda masa lampau netral tanpa kata terlambat/kewajiban; makna statutori tidak ditulis |
-| Q-TIQ-4 | Tombol tindak lanjut dari antrean tahap 1 ditolak spec (BR-TIQ-10) — disahkan? | Lead | YA ditolak tahap 1: ganti/batal/kredit butuh konteks form lifecycle existing; jalan pintas dari daftar berisiko menulis status pajak tanpa konteks dokumen sumber |
-| Q-TIQ-5 | Gerbang baca tahap 1 memakai `create_tax_invoices` existing (katalog hanya punya key itu) vs pesan key `view_tax_invoices` baru ke Backend/Lead? | Lead | USULAN pakai existing tahap 1 (pola halaman terbit); key baca terpisah = perubahan katalog + seed, keputusan tersendiri, jangan karang di spec ini |
-| Q-TIQ-6 | Siapa/mekanisme apa yang sah menulis `djpStatus` `draft` → `approved`/`rejected`, dan apakah antrean kelak boleh menautkan status itu? | Accountant (vonis pajak) | BUTUH-VONIS: grep run ini tidak menemukan penulis non-tes; antrean tahap 1 tidak menyimpulkan apa pun tentang jalur ini dan tidak memakai kata disetujui/terkirim DJP |
-| Q-TIQ-7 | Penempatan permukaan: seksi di halaman Dokumen Pajak existing vs halaman antrean terpisah? | Lead | USULAN seksi/halaman dalam Keuangan > Dokumen Pajak berizin sama; bentuk diputus Lead/Frontend sesudah kontrak Backend |
-### 9. Backlog implementasi (turunan F-2026-10-27-098-S)
-| F-2026-10-27-098-S | Spec kontrak ini (dokumen) | Business | — |
-| 098-B | Builder/loader turunan antrean draft (populasi BR-TIQ-01/02, select tanpa payload XML, umur `createdAt` WIB, gerbang `create_tax_invoices`) + tes AC-TIQ-B1..B5 | Backend | Putusan Lead Q-TIQ-1/2/5 |
-| 098-F | Permukaan antrean verbatim payload (penempatan Q-TIQ-7) + AC-TIQ-F1..F3 | Frontend | 098-B merged; grep e2e dokumen-pajak dulu |
-| 098-Q | Falsifikasi AC-TIQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (payload XML bocor MERAH, hitung ulang PPN MERAH, kata disetujui DJP tampil MERAH, tombol batal dari antrean MERAH) | QA | 098-B/098-F |
-- Menulis/mengubah `djpStatus` atau `creditStatus` dari permukaan mana pun dalam spec ini, termasuk tombol "Tandai Disetujui" — penulis approved/rejected belum terverifikasi dan makna statutori = vonis Accountant (Q-TIQ-6).
-- Menghitung ulang DPP/PPN, tarif efektif, total kewajiban masa, atau kepala rantai efektif SPT di antrean (BR-TIQ-03/09) — SPT existing tetap satu-satunya permukaan agregat pajak.
-- Menampilkan `xmlPayload`/`xmlHash`/`djpMessage` di daftar dalam bentuk apa pun, termasuk cuplikan (BR-TIQ-04).
-- Key izin baru, scope baris per pembuat, atau scope SDM di domain pajak (BR-TIQ-06, Q-TIQ-5).
-- Kolom/status/tenggat tersimpan baru; ambang mengendap sebelum Q-TIQ-1 diputus Lead; kata tenggat DJP/statutori sebelum vonis Accountant.
-- Unggah Coretax host-to-host, pengingat WA/email petugas pajak, penghapusan draft basi otomatis (EC-TIQ-8 dibaca jujur, bukan dibersihkan diam-diam).
-- Menyentuh GoodsReceiptNote: model itu tidak ada — penerimaan barang tetap wilayah 061-S (`GoodsReceipt`), retur pembelian tetap 063-S (`PurchaseReturn`).
-F-2026-10-27-098-S — Antrean faktur pajak draft mengendap belum berstatus DJP. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-TIQ-1/2/4/5/7, vonis bersyarat Accountant Q-TIQ-6 (penulis approved/rejected), lalu fisik Backend (098-B), konsumen Frontend (098-F), falsifikasi QA (098-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: BERSYARAT — hanya Q-TIQ-6; tahap baca-saja tidak mengubah perlakuan pajak apa pun.
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-093-S: antrean kesenjangan kompetensi jabatan belum dinilai lintas karyawan
 > **Slot**: F-2026-10-27-093-S. Diperiksa bentrok 2026-10-27 06:39 WIB vs `origin/main` (`03eaf9b4b`): grep `F-2026-10-27-093` di backlog+board = 0; ID bebas. Dokumen saja; nol kode/schema/migrasi. Branch `hermes/business-f093-competency-gap-queue`.
 Gap per karyawan SUDAH ada (`getCompetencyGaps(employeeId)`, `development.actions.ts:127`). Belum ada permukaan **lintas karyawan** yang menjawab: "karyawan aktif berjabatan mana yang kompetensi wajib jabatannya belum dinilai sama sekali, atau level aktualnya di bawah syarat — tanpa harus membuka satu per satu?" Spec ini membekukan antrean baca-saja turunan: dua ember jujur `BELUM_DINILAI` vs `DI_BAWAH_SYARAT`, level verbatim, kesegaran hanya `assessedAt` verbatim + label "dinilai terakhir". TANPA tenggat karangan, TANPA skor komposit, TANPA ranking karyawan, nol data gaji. Prasyarat permukaan: halaman kompetensi/suksesi di wilayah PR #805 (OPEN, `hermes/frontend-muse-hcms-ui`) — belum di `origin/main` (`git ls-tree origin/main src/app/(dashboard)/sdm/kompetensi/` = kosong run ini; direktori itu hanya ada di working tree lokal belum ter-commit). Antrean = lapisan baca di atas kontrak, bukan halaman kedua.
@@ -39133,3 +39067,116 @@ Populasi antrean: WorkOrder `status = "draft"` persis. Status `pending` warisan 
 - Pengingat WA/email ke pelaksana/pelanggan dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja (kontak pelanggan juga tertutup Q-WDQ-6 tahap 1).
 - Status/field perintah baru (termasuk soft-delete WorkOrder), perubahan lifecycle draft→in_progress→completed→closed/cancelled, atau key izin start/approve baru.
 F-2026-10-26-075-S — Antrean perintah kerja (WorkOrder) draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WDQ-1/2 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-WDQ-3 dibuka), lalu fisik Backend (075-B), konsumen Frontend (075-F), falsifikasi QA (075-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
+
+---
+
+## 2026-10-27 11:50 WIB — Business (x) F-2026-10-27-101-S antrean tukar faktur lewat batas kembali
+
+Benchmark resmi (akses 27 Okt 2026):
+- Accurate — fitur Tukar Faktur (tanda terima resmi penyerahan faktur, kolom Jatuh Tempo kesepakatan): https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/tukar-faktur/mengenal-fitur-tukar-faktur/
+- Accurate — umur piutang berdasarkan tanggal jatuh tempo Tukar Faktur pada laporan Faktur Belum Lunas (`salesInvoice.exchangeInvoiceDueDate`): https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/umur-piutang/
+- Zahir — artikel KB tukar faktur spesifik tidak ditemukan pada pencarian help.zahironline.com run ini (hanya pembayaran piutang umum); ditulis tidak terverifikasi, bukan dikarang.
+
+### Inventarisasi terverifikasi (27 Okt 2026, basis origin/main a1755940b)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `InvoiceExchange` (prisma/schema.prisma:1793): documentNo unik, date, customerId, receiptNumber nullable, dueDate nullable, deletedAt soft; `InvoiceExchangeItem` (:1820) amount snapshot grandTotal saat diserahkan.
+- Aksi `createInvoiceExchange` (src/actions/invoice-exchange.actions.ts:47): izin `create_invoice_exchanges` (:49), hanya faktur `EXCHANGEABLE_STATUSES=["posted","partial"]` (:22), faktur lunas ditolak (:89-97), satu faktur tidak boleh diserahkan dua kali (:107-115), tanpa jurnal (komentar :40-46).
+- Listing laporan per periode: `loadInvoiceExchanges` (src/lib/reports/invoice-exchanges-data.ts) + `buildInvoiceExchangeListing` (src/lib/finance/invoice-exchange.ts:67) — status pelunasan turunan dari paidAmount faktur (settled/partial/outstanding, :20-35), urutan tanggal dokumen terbaru. Ini daftar laporan per periode, BUKAN antrean kerja terurut batas kembali.
+- Izin katalog nyata: `view/create/delete_invoice_exchanges` (src/lib/auth/module-catalog.generated.ts:181-183).
+- Antrean penagihan piutang existing (F-2026-10-22-089-S + F-2026-10-26-050-S): builder `collection-queue.ts` berobjek SATU FAKTUR piutang per baris; dueDate exchange hanya dipakai sebagai due acuan faktur (BR-COL-03). Tidak ada permukaan berobjek dokumen tukar faktur.
+
+Belum ada (bukti grep run ini): builder/loader antrean dokumen `InvoiceExchange` yang dueDate-nya lampau dan sisa faktur terserahkan masih > 0, terurut lewat-batas; grep `invoice-exchange` di src/lib/reports hanya listing-data di atas.
+
+#### F-2026-10-27-101-S (x) P2 — Antrean tukar faktur lewat batas (dokumen belum kembali lunas)
+
+- Kompetitor: Accurate menampilkan umur piutang dari jatuh tempo Tukar Faktur (URL di atas) — acuan kerja penagihan per dokumen serah, bukan per faktur.
+- Status Silengkap: PARSIAL. Tukar faktur + listing ada; antrean kerja per dokumen tukar faktur ABSEN.
+- Relevansi: dokumen tukar faktur adalah tanda terima resmi di tangan pelanggan; dueDate dokumen lewat dan sisa belum lunas = janji serah-bayar lewat yang tenggelam di listing per periode. Admin penagihan butuh daftar kerja per dokumen (satu tanda terima, banyak faktur), bukan menyisir antrean per faktur.
+- Batas beda objek (wajib dijaga): antrean ini berobjek `InvoiceExchange` (dokumen); collection-queue berobjek `SalesInvoice` (faktur). Satu dokumen tukar faktur tampil SATU baris walau memuat banyak faktur; faktur yang sama tidak boleh tampil dua kali di antrean ini (penjaga existing satu-faktur-satu-serah aktif).
+
+##### §1 Kata dan label beku (usul, final Lead Q-IEX-2)
+
+Judul usul: "Tukar Faktur Lewat Batas". Kolom usul: Dokumen / Tanggal Serah / Pelanggan / Tanda Terima / Batas Kembali (dueDate dokumen) / Faktur (hitungan item) / Nilai Serah / Dibayar / Sisa. Kata "Batas Kembali" dipakai karena dueDate di form existing bernama jatuh tempo kesepakatan; dilarang label "utang", "tunggakan", "denda", "terlambat bayar" sebagai status dokumen — status pelunasan per dokumen hanya verbatim turunan existing `settled/partial/outstanding` berlabel Lunas/Sebagian/Belum Dibayar (invoice-exchange.ts:22-26) bila Lead menyetujui tampil.
+
+##### §2 Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-IEX-01 | Populasi: InvoiceExchange deletedAt null, dueDate tidak null dan < hari ini WIB, dan sisa dokumen (Σ amount item − Σ paidAmount faktur tertaut) > 0,005 mengikuti epsilon existing | USULAN (epsilon TERVERIFIKASI-KODE invoice-exchange.ts:29) |
+| BR-IEX-02 | Satu baris per dokumen tukar faktur; jumlah faktur = hitungan item dokumen itu; UI dilarang memecah per faktur | USULAN |
+| BR-IEX-03 | Nilai serah = Σ snapshot amount item; dibayar = Σ paidAmount faktur tertaut saat baca; sisa turunan server — UI nol hitung | USULAN (sumber angka TERVERIFIKASI-KODE invoice-exchanges-data.ts) |
+| BR-IEX-04 | Dokumen tanpa dueDate TIDAK masuk antrean lewat batas; masuk ember penanda terpisah "Tanpa batas kembali" tanpa umur karangan | USULAN |
+| BR-IEX-05 | Dokumen yang semua fakturnya lunas keluar populasi walau dueDate lampau | USULAN |
+| BR-IEX-06 | Baca-saja tahap 1: nol tombol catat bayar/tagih/hapus; tautan hanya ke detail tukar faktur existing dan faktur tertaut existing | USULAN |
+| BR-IEX-07 | Tanpa jurnal, tanpa ubah status faktur/dokumen, tanpa kolom tersimpan baru tahap 1 | USULAN (konsisten tanpa-jurnal TERVERIFIKASI-KODE invoice-exchange.actions.ts:40-46) |
+| BR-IEX-08 | Ambang "mengendap" tambahan di luar dueDate lampau (mis. >=N hari) TIDAK dikarang; dueDate lampau sendiri adalah pemicu tahap 1 | BUTUH-VONIS Lead Q-IEX-1 |
+| BR-IEX-09 | Izin baca usul reuse `view_invoice_exchanges`; key baru hanya bila Lead memutus | BUTUH-VONIS Lead Q-IEX-3 (key existing TERVERIFIKASI-KODE katalog:181) |
+| BR-IEX-10 | Urutan usul: dueDate paling lampau dulu, seri dueDate = documentNo naik; rekap total hanya atas baris tampil | USULAN |
+
+##### §3 Status-transition matrix (tahap 1, semua turunan — tanpa tulis)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| di luar antrean | dueDate dokumen lewat + sisa > epsilon | baris antrean | BR-IEX-01 |
+| baris antrean | pembayaran faktur tertaut menutup sisa | keluar antrean | BR-IEX-05, angka faktur existing |
+| baris antrean | dokumen dihapus (delete existing) | keluar antrean | BR-IEX-01 deletedAt null |
+| baris antrean | dueDate dikoreksi ke masa depan lewat jalur existing | dinilai ulang baca berikutnya | tanpa tulis dari antrean BR-IEX-06/07 |
+
+##### §4 Role/permission matrix
+
+| Aksi | Izin (key nyata) | Catatan |
+|---|---|---|
+| Lihat antrean | `view_invoice_exchanges` (usul Q-IEX-3) | loader fail-closed sebelum query |
+| Buat tukar faktur | `create_invoice_exchanges` existing | di luar antrean, halaman existing |
+| Hapus tukar faktur | `delete_invoice_exchanges` existing | di luar antrean tahap 1 |
+| Catat pembayaran | izin pembayaran faktur existing | bukan dari antrean (BR-IEX-06) |
+
+##### §5 Acceptance criteria
+
+Backend (sesudah putusan Lead):
+- AC-IEX-B1: dokumen dueDate kemarin + sisa > 0 tampil satu baris; dueDate hari ini/besok tidak tampil; tanpa dueDate masuk ember BR-IEX-04.
+- AC-IEX-B2: dokumen 3 faktur tampil 1 baris, hitungan faktur 3, sisa = Σ snapshot − Σ paidAmount; cabut pembacaan paidAmount = MERAH.
+- AC-IEX-B3: semua faktur lunas -> dokumen keluar walau dueDate lampau; dokumen terhapus tidak tampil.
+- AC-IEX-B4: tanpa izin loader ditolak sebelum query; nol tulis/jurnal dari loader (grep jalur tulis = MERAH bila ada).
+- AC-IEX-B5: urutan dueDate lampau dulu + seri documentNo; rekap hanya baris tampil.
+
+Frontend:
+- AC-IEX-F1: label/kolom/notice verbatim payload server; mutasi builder (sisa/urutan) tampil tanpa ubah UI.
+- AC-IEX-F2: nol kata terlarang §1; nol tombol aksi; tautan hanya detail existing.
+- AC-IEX-F3: dokumen tanpa dueDate tampil penanda server, tanpa umur karangan.
+
+Edge cases:
+- EC-1: faktur tertaut dihapus/dibatalkan sesudah serah — baris tertanda anomali terpisah, tidak masuk total (pola ember anomali antrean existing).
+- EC-2: dueDate = hari ini WIB persis — belum lewat (perbandingan hari kalender WIB).
+- EC-3: pembayaran parsial mengubah sisa tapi dokumen tetap tampil selama sisa > epsilon.
+- EC-4: receiptNumber kosong tampil "—" (pola listing existing), bukan karangan.
+
+##### §6 Feature matrix
+
+| Fitur | Accurate | Zahir | ISF tahap 1 |
+|---|---|---|---|
+| Tukar faktur + jatuh tempo dokumen | Ada (URL fitur) | Tidak terverifikasi run ini | Ada existing |
+| Umur dari jatuh tempo tukar faktur | Ada di Faktur Belum Lunas (URL laporan) | Tidak terverifikasi | Antrean ini (usul) |
+| Daftar kerja per dokumen lewat batas terurut | Sebagian via laporan | Tidak terverifikasi | Antrean ini (usul) |
+
+##### §7 Backlog turunan
+
+- 101-B Backend: builder murni + loader `view_invoice_exchanges` fail-closed, query massal anti-N+1 (dokumen+item+faktur), ember tanpa-dueDate + anomali EC-1. Effort S-M.
+- 101-F Frontend: halaman antrean verbatim payload, pola kartu antrean existing.
+- 101-Q QA: falsifikasi AC-IEX-B1..B5/F1..F3 atas head persis.
+
+##### §8 Pertanyaan putusan
+
+- Q-IEX-1 (Lead): pemicu cukup dueDate lampau, atau tambah ambang mengendap konstanta bernama?
+- Q-IEX-2 (Lead): sahkan kata §1 ("Tukar Faktur Lewat Batas", "Batas Kembali", label pelunasan tampil/tidak).
+- Q-IEX-3 (Lead): reuse `view_invoice_exchanges` vs gerbang ganda dengan izin penagihan.
+- Accountant tidak diminta tahap 1: nol jurnal, nol angka pajak/denda baru; angka sisa = turunan paidAmount existing.
+
+### Yang TIDAK diusulkan run ini
+
+- Antrean janji bayar per follow-up: sudah tercakup collection-queue tahap lewat_janji (F-089/050-S) — duplikasi ditolak.
+- Pengiriman pengingat otomatis ke pelanggan dari antrean ini: tahap 1 baca-saja; kanal kirim = keputusan terpisah.
+- Perubahan form tukar faktur existing (mis. dueDate wajib): mengubah perilaku catat existing, butuh bukti kebutuhan terpisah.
+
+F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen InvoiceExchange dueDate lampau, sisa belum lunas). Status: SPEC SELESAI run ini (dokumen saja); gerbang putusan Lead Q-IEX-1..3. Pemilik: Business (spec), Lead (putusan + merge), Backend (101-B sesudah putusan), Frontend (101-F sesudah kontrak), QA (101-Q falsifikasi).
