@@ -117,6 +117,7 @@ export const navigation: NavItem[] = [
       { label: "Penerimaan Barang", href: "/pembelian/penerimaan", icon: PackageCheck, permission: "view_goods_receipts" },
       { label: "Tagihan Pemasok", href: "/pembelian/tagihan", icon: FileSpreadsheet, permission: "view_vendor_bills" },
       { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor", icon: Banknote, permission: "view_vendor_payments" },
+      { label: "Pembayaran Vendor Draft Mengendap", href: "/pembelian/antrean-pembayaran-draf", icon: ListTodo, permission: "view_vendor_payments" },
       { label: "Perintah Pembayaran", href: "/pembelian/perintah-pembayaran", icon: Banknote, permissions: ["view_vendor_bills", "view_vendor_payments"] },
       { label: "Uang Muka Pembelian", href: "/pembelian/uang-muka", icon: Banknote, permission: "view_purchase_advances" },
       { label: "Harga Pemasok", href: "/pembelian/harga-pemasok", icon: BadgeDollarSign, permission: "view_vendor_prices" },
