@@ -11,6 +11,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { RemnantForm, ConsumeRemnantForm, ScrapRemnantForm } from "./_components/remnant-forms"
 
 import type { Metadata } from "next"
@@ -54,9 +55,7 @@ export default async function RemnantPage() {
         <RemnantForm />
         <div className="p-4 px-5">
           {remnants.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada sisa tercatat
-            </p>
+            <EmptyState title="Belum ada sisa tercatat" className="py-10" />
           ) : (
             <DetailTable>
               <DetailTableHead>

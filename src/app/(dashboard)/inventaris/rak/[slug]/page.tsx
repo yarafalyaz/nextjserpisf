@@ -8,6 +8,7 @@ import { deleteRack } from "@/actions/inventory.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -88,7 +89,7 @@ export default async function RackDetailPage({
         </div>
         <div className="p-4 px-5">
           {rack.rows.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada baris</p>
+            <EmptyState title="Tidak ada baris" />
           ) : (
             <DetailTable>
               <DetailTableHead>

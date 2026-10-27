@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import {
   createStocktakeSession,
@@ -158,7 +159,7 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
   }
 
   if (lines.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">Belum ada snapshot — tekan Snapshot.</p>
+    return <EmptyState title="Belum ada snapshot — tekan Snapshot." className="py-8" />
   }
 
   return (
