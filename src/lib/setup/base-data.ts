@@ -421,12 +421,6 @@ export const PERMISSIONS = [
       // Grant mengikuti pola approve_purchase_returns: hanya admin/
       // super_admin lewat katalog penuh, role lain diberi eksplisit.
       "approve_sales_returns",
-      // Field-level masking (server-side): izin modul membuka record, izin
-      // ini menentukan boleh melihat nilainya. view_subordinate_data menyala-
-      // kan scope "tim" dari pohon organisasi (Employee.managerId).
-      "view_cost_amounts",
-      "view_sensitive_identity",
-      "view_subordinate_data",
       // Approving/disbursing an employee loan gets its own permission. It used
       // to reuse "create_loans" in both approval.actions.ts and the status
       // workflow route, so whoever could raise a loan could also approve and
