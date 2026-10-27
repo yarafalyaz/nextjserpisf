@@ -37,6 +37,9 @@ describe("QuotationOutcomeCard F-2026-10-20-101", () => {
     expect(text).toContain("50,0%")
     expect(text).toContain("Harga terlalu tinggi")
     expect(text).toContain("Tidak tercatat (penolakan lama)")
+    // Kolom hitung berlabel entitasnya (AC-REP-003), bukan "Jumlah" ambigu.
+    const headers = Array.from(container.querySelectorAll("th")).map((th) => th.textContent)
+    expect(headers).toEqual(["Ukuran", "Penawaran", "Kategori Kalah", "Penawaran"])
     unmountCard(root)
   })
 

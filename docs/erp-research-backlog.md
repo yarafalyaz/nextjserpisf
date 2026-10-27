@@ -40646,115 +40646,6 @@ ID vonis ini **F-2026-10-28-115-V** (jawaban garpu INV-BR-007/AC-INV-007). Pemil
 - E115-2: cabut guard `if (!allowShortfall)` di inventory-fifo.ts → tes `inventory-fifo.test.ts:273` (throws when insufficient) MERAH.
 - E115-3: tambah saklar/settings/permission override stok negatif tanpa vonis baru = MERAH (keputusan V1 dilanggar).
 
-## SPEC BUSINESS 2026-10-28 — F-2026-10-28-119-S: tutup HR-BR-003 formula lembur/tarif/pembulatan (penunjukan guard live, tanpa angka baru)
-
-Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane spec tertulis, TANPA kode). Basis `origin/main` `205de512e` (28 Okt 2026). Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:155` (HR-BR-003 `OPEN-keputusan` — "Keputusan formula lembur/tarif/pembulatan terbuka di sumber") + `docs/product/KEPUTUSAN-TERVERIFIKASI.md:44` (keputusan 10: "formula tertutup, parameter tahun berjalan OPEN").
-
-**Verifikasi ID:** grep `F-2026-10-28-119` di backlog+board = 0/0 sebelum tulis (28 Okt 2026). Bebas (116-V=#1231 vonis Accountant, 117-S=#1237, 118-S=#1239 beda topik). ID ini spec (`-S`): menunjuk formula yang sudah live + vonis yang sudah merged, bukan memutus angka baru.
-
-### 1. Definisi "formula lembur/tarif/pembulatan" (tiga komponen, satu keputusan)
-
-| Komponen | Isi keputusan | Status |
-|---|---|---|
-| Formula dasar | Dasar = pokok + Σ tunjangan tetap aktif per tanggal lembur; cabang 75% default 100% | TERTUTUP oleh vonis 022-V — lihat §2 V1 |
-| Tarif/pengali | Upah sejam = upah sebulan / 173; hari kerja 1,5× lalu 2×; istirahat/libur pola 5/6 hari 2×/3×/4×; batas 4 jam/hari + 18 jam/minggu hari kerja | TERTUTUP oleh vonis 014-V + fisik #800 — lihat §2 V2 |
-| Pembulatan | Σ dasar `safeRound(...,2)`; hasil akhir rupiah penuh `Math.round`; dilarang pembulatan menengah | TERTUTUP oleh vonis 022-V Putusan 3 — lihat §2 V3 |
-
-### 2. Inventarisasi terverifikasi (28 Okt 2026, basis di atas)
-
-Sudah ada — formula per komponen (semua `TERVERIFIKASI-KODE`):
-
-| # | Komponen | Guard | Bukti file:baris |
-|---|---|---|---|
-| G1 | Dasar | `monthlySalary = safeRound(baseSalary + Σ defaultAmount, 2)`; Σ atas penugasan dengan enam syarat (assignment `isActive`, `effectiveFrom <= ot.date`, `effectiveTo` null/`>= ot.date`, komponen `isActive`, `kind="earning"`, `recurrence="fixed"`); acuan `ot.date` bukan tanggal approve; filter `kind` eksplisit | `src/actions/hrm.actions.ts:1164-1183` |
-| G2 | Dasar beku | `calculatedValue` beku di `updateMany` klaim atomik + `overtimeBaseSnapshot` (pokok/komponen/total dasar/tanggal lembur) ditulis pada klaim yang sama; approve ulang no-op bila `calculatedValue > 0` | `src/actions/hrm.actions.ts:1193-1221,1122-1124` |
-| G3 | Tarif | `HOURLY_DIVISOR = 173`; `TIERS` hari kerja 1,5×/2×, istirahat 5-hari 2×/3×/4×, 6-hari 2×/3×/4×; hasil akhir `Math.round` | `src/lib/services/overtime-pay.service.ts:17-62` |
-| G4 | Batas | `MAX_OVERTIME_HOURS_PER_WORKDAY = 4`, `MAX_OVERTIME_HOURS_PER_WEEK = 18`; gerbang di create DAN update (self-exclusion); pending+approved sama-sama dihitung | `src/lib/services/overtime-pay.service.ts:18-19`; `src/actions/hrm.actions.ts:1049-1054,4686` |
-| G5 | Plafon potongan | Total potongan (pinjaman+denda+komponen) ditolak bila melewati 50% upah slip (PP 36/2021 Pasal 65); ditegakkan saat hitung DAN saat bayar | `src/actions/hrm.actions.ts:743-749,3118` |
-| G6 | Ruleset statutori | `getStatutoryParams` berperiode dari `PayrollStatutoryRule`; fallback 2024 = tolak berisik (hitung, approve, massal) bukan angka diam | `src/lib/services/payroll-statutory.service.ts:123-135`; `src/actions/hrm.actions.ts:794-798,3057-3066,1948` |
-| G7 | Rekap bukan jalur bayar | Rekap hanya jam operasional + `calculatedValue` verbatim; payroll satu-satunya konsumen nilai | `src/lib/reports/overtime-recap.ts:18-25` |
-
-Vonis yang menutup keputusan (sudah merged di main, bukan klaim baru):
-
-- V1: vonis Accountant F-2026-10-25-014-V (PR #798 merged): tarif bertingkat persis Pasal 31 (upah sejam = upah sebulan/173; 1,5×/2×; 2×/3×/4× dua pola), batas Pasal 26, LOLOS BERSYARAT dengan syarat K2-S1 (gerbang di update — TERTUTUP: `hrm.actions.ts:4686`) + K2-S2 (dasar pokok+tetap — TERTUTUP oleh V2).
-- V2: vonis Accountant F-2026-10-25-022-V (PR #840 merged): dasar Pasal 32 = pokok + Σ tetap aktif per tanggal lembur, cabang 75% default 100%, koreksi sitasi Pasal 31→32; syarat fisiknya TERTUTUP oleh PR #850 (dasar per `ot.date`) + PR #1069 (snapshot `overtimeBaseSnapshot`).
-- V3: spec Business F-2026-10-25-024-S (PR #845) + F-2026-10-25-016-S rekap (fisik #868 merged): register BR-OT-01..12 + BR-OVR-01..12; rekap live di `/sdm/lembur/rekap`.
-
-Batas jujur — yang TETAP OPEN dan bukan bagian penutupan ini (bukti grep run ini):
-
-- B1. Angka statutori tahun berjalan: `PayrollStatutoryRule` seed = parameter 2024; komentar skema `prisma/schema.prisma:3926-3929` menyatakan angka 2026+ perlu konfirmasi akuntan/legal. Selaras keputusan 10 ("parameter tahun berjalan OPEN") — penutupan HR-BR-003 adalah formula, bukan angka tahun berjalan.
-- B2. Lantai upah minimum Pasal 32 ayat penutup: tidak ada master UMK/upah-minimum di skema (grep model UMK/MinimumWage = 0) dan tidak ada pemakaian lantai di jalur lembur/payroll — sama persis dengan catatan risiko 3 vonis 022-V ("di luar cakupan vonis ini"). Bukan regresi, bukan celah baru.
-- B3. Sitasi Kepmenakertrans 102/MEN/VI/2004 di komentar kode (`overtime-pay.service.ts:2`, tes, `hrm.actions.ts:1126`): regulasi itu sudah dicabut (BR-OVR-10, TERVERIFIKASI-KODE) tetapi pengali tabelnya identik dengan yang dipakai — komentar usang, rumus benar. Perbaikan komentar = editorial satu baris (pemilik: Backend/Lead), bukan syarat tutup formula.
-- B4. Cabang 75% masa depan butuh master tunjangan-tidak-tetap berjalan + vonis Accountant baru (Putusan 2.5 vonis 022-V) — tidak dibuka spec ini.
-
-### 3. Putusan spec (penunjukan resmi, bukan pembangunan)
-
-- P1. HR-BR-003 dinyatakan TERTUTUP-untuk-formula oleh kombinasi G1–G7 + V1–V3. Tidak ada mekanisme formula lembur/tarif/pembulatan baru yang dituntut. `BUSINESS-RULES.md` baris 180 (`HR-BR-003 [OPEN]`) mengikuti pola kandidat-keputusan-10: menjadi tertutup-untuk-formula dengan catatan parameter.
-- P2. Sisa OPEN eksplisit yang sah: (a) konfirmasi Accountant atas parameter statutori tahun berjalan (B1 — selaras keputusan 10); (b) lantai upah minimum bila perusahaan memutuskan menegakkannya (B2 — butuh master UMK + vonis, bukan tambalan rumus); (c) editorial sitasi Kepmenakertrans (B3). Ketiganya di luar definisi "formula" §1.
-- P3. Larangan turunan (mengikat build berikutnya): mengubah `HOURLY_DIVISOR`/TIERS/pembulatan tanpa vonis Accountant baru; memicu cabang 75% dari data existing; memakai tanggal approve/hari ini sebagai acuan jendela; menghitung ulang `calculatedValue` beku; memakai realisasi slip sebagai dasar.
-
-### 4. Business rules register
-
-| ID | Aturan | Label | Sumber |
-|---|---|---|---|
-| BR-OTF-01 | Dasar lembur = pokok + Σ tetap aktif per tanggal lembur; cabang 75% default 100% | TERVERIFIKASI-KODE | V2; G1 (`hrm.actions.ts:1164-1183`) |
-| BR-OTF-02 | Tarif = 1/173, 1,5×/2× hari kerja, 2×/3×/4× istirahat dua pola | TERVERIFIKASI-KODE | V1; G3 (`overtime-pay.service.ts:17-62`) |
-| BR-OTF-03 | Batas 4 jam/hari + 18 jam/minggu hari kerja ditegakkan di create dan update | TERVERIFIKASI-KODE | V1 K2-S1; G4 |
-| BR-OTF-04 | Pembulatan: Σ dasar 2 desimal, hasil akhir rupiah penuh, tanpa pembulatan menengah | TERVERIFIKASI-KODE | V2 Putusan 3; G1/G3 |
-| BR-OTF-05 | Nilai approved beku (`calculatedValue` + snapshot); tanpa hitung ulang | TERVERIFIKASI-KODE | PR #1069; G2 |
-| BR-OTF-06 | Plafon potongan 50% upah ditegakkan saat hitung dan bayar | TERVERIFIKASI-KODE | G5 |
-| BR-OTF-07 | Ruleset statutori berperiode; fallback = tolak berisik | TERVERIFIKASI-KODE | G6 |
-| BR-OTF-08 | Angka tahun berjalan + lantai UMK + cabang 75% masa depan = OPEN di luar formula | USULAN (batas eksplisit) | B1/B2/B4 |
-
-### 5. Status-transition matrix
-
-Tidak ada transisi status oleh spec ini (formula sudah live). Matriks ini mencatat keadaan existing yang wajib tetap berlaku:
-
-| Dari | Pemicu | Ke | Penjaga |
-|---|---|---|---|
-| `pending` | create/update | `pending` | gerbang batas G4 (self-exclusion di update) |
-| `pending`/`approved` (belum terhitung) | approve | `approved` + `calculatedValue` beku | G1+G2 |
-| `approved` (terhitung) | approve ulang/klik ganda/ubah master | tidak berubah (no-op) | G2 |
-| `draft`/`approved` slip | hitung/approve/bayar payroll | ditolak bila ruleset fallback | G6 |
-
-### 6. Batas eksplisit — yang BELUM diputus spec ini
-
-1. **BUTUH-VONIS Accountant** (`@accounting-finance-tax`): konfirmasi parameter statutori tahun berjalan di `PayrollStatutoryRule` (B1) — angka, bukan formula; spec ini TIDAK memutus angka apa pun.
-2. **Butuh putusan Lead**: (a) terbitkan status HR-BR-003 di `INDEKS-ATURAN.md:155` + `BUSINESS-RULES.md:180` menunjuk spec ini (pola keputusan 10); (b) editorial sitasi Kepmenakertrans B3 (satu baris komentar, pemilik Backend).
-3. **Di luar cakupan**: master UMK + lantai upah minimum (B2), master tunjangan-tidak-tetap + cabang 75% (B4), re-post jurnal payroll sesudah reversal (§6.1 spec 117-S milik Accountant).
-
-### 7. Yang TIDAK diusulkan run ini
-
-- Mengubah `computeOvertimePay`/TIERS/173/pembulatan — rumus benar dan terkunci regresi.
-- Menambah scope idempotency payroll untuk jalur lembur — klaim atomik existing cukup.
-- Backfill/hitung ulang `calculatedValue` lama — dilarang BR-OT-09.
-- Kunci unik `(employeeId, period)` untuk lembur — salah secara bisnis (pola BR-HRPG-02 spec 117-S).
-
-### 8. Falsifikasi untuk QA (E119, atas head implementasi persis — semua regresi sudah hidup)
-
-| ID | Kasus | Hasil wajib | Falsifikasi (satu mutasi → MERAH) |
-|---|---|---|---|
-| E119-1 | Gaji 3.460.000, 1 jam hari kerja | Rp30.000 | ubah 1,5→1,0 di TIERS → tes `overtime-pay.service.test.ts` MERAH |
-| E119-2 | 10 jam rest_5day / 9 jam rest_6day | Rp460.000 / Rp420.000 | ubah batas tier → tes yang sama MERAH |
-| E119-3 | Pokok 3.460.000 + tetap 540.000 aktif per tanggal lembur | dasar 4.000.000 → 1 jam = Rp34.682 | hapus filter `kind="earning"` → tes E-OT-1 MERAH |
-| E119-4 | Komponen berlaku sesudah tanggal lembur | tidak terhitung → Rp30.000 | pakai tanggal approve → tes E-OT-2 MERAH |
-| E119-5 | Edit lembur hari kerja menjadi 5 jam | DITOLAK | cabut gerbang update → tes K2-S1 MERAH |
-| E119-6 | Ruleset kosong (fallback 2024) | hitung/approve/bayar DITOLAK berisik | hapus cek `fromFallback` → tes gate MERAH |
-| E119-7 | Total potongan > 50% upah | DITOLAK saat hitung dan bayar | cabut `assertDeductionCeilingOrThrow` → tes plafon MERAH |
-| E119-8 | Ubah master sesudah approve | `calculatedValue` beku | hitung ulang diam-diam → tes E-OT-6 MERAH |
-
-Catatan QA: E119-1..8 semuanya menunjuk regresi hidup yang ditunjuk di §2 — jalankan apa adanya atas head persis; tidak ada celah cakupan tes baru yang dituntut spec ini.
-
-### 9. Backlog implementasi (rekomendasi tertulis — kartu dibuat pemilik berikutnya, bukan run ini)
-
-| Urutan | Pemilik usulan | Isi | Effort | Prasyarat |
-|---|---|---|---|---|
-| 1 | Lead | Terbitkan HR-BR-003 di `INDEKS-ATURAN.md:155` + `BUSINESS-RULES.md:180` menunjuk spec ini (tertutup-untuk-formula; OPEN eksplisit B1/B2) | S | spec merged |
-| 2 | Accountant | Vonis parameter statutori tahun berjalan (angka `PayrollStatutoryRule`) | M | — |
-| 3 | Backend | Editorial sitasi Kepmenakertrans satu baris (B3) | XS | — |
-
-ID spec ini **F-2026-10-28-119-S** (HR-BR-003). Pemilik berikutnya: BOT QA (E119-1..8 atas head persis) → BOT Lead (status INDEKS-ATURAN + BUSINESS-RULES). Implementasi BUKAN bagian spec ini (formula sudah live).
-
 ---
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-117-S: guard anti posting payroll ganda (AC-HR-002)
@@ -40868,3 +40759,181 @@ Catatan QA: E117-1..4 dan E117-9 (gerbang) sudah punya regresi hidup yang ditunj
 | 3 | Lead | Terbitkan status AC-HR-002 di `INDEKS-ATURAN.md` menunjuk spec ini + hasil E117 | S | spec merged + QA jalan |
 
 ID spec ini **F-2026-10-28-117-S** (AC-HR-002). Pemilik berikutnya: BOT QA (E117-1..9) → BOT Accountant (vonis §6.1) → BOT Backend (hanya bila vonis menuntut guard baru) → BOT Lead (status INDEKS-ATURAN). Implementasi BUKAN bagian spec ini.
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-118-S: reversal beralasan piutang sisi penjualan (AC-FIN-002, cermin FIN-BR-008 sisi beli)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec). Dokumen spec saja; tanpa kode/schema/migrasi. Basis `origin/main` `8a677bf1f` (2026-10-28 02:16 WIB). Kartu asal `t_4fbb1d15`.
+**Verifikasi ID:** grep `F-2026-10-28-118` di backlog+board `origin/main` = 0/0 sebelum tulis; slot 116-V = PR #1231 OPEN (beda topik), 117-S = PR #1237 OPEN (beda topik). Bebas.
+**ANTI-DUPLIKAT (wajib dibaca Backend/Lead):** PR #1233 OPEN (`hermes/backend-fin-br-008-reversal`, head `28f62b3b6`, "feat(finance): reversal pembayaran berhistori FIN-BR-008") SUDAH mengimplementasikan reversal SalesPayment+VendorPayment (aksi `reverseSalesPayment`/`reverseVendorPayment`, field `reversedAt/reversedBy/reversalReason`, migrasi `20261028020000_payment_reversal_history_fin_br_008`, idempotency `sales_payment_reverse`, tes 13/13 per body PR). Spec ini TIDAK meminta kode itu lagi. Sisa spec ini = (a) penilaian status AC-FIN-002 sesudah #1233 merged, (b) jalur penjualan yang TIDAK dicakup #1233: void faktur tanpa alasan wajib, hapus fisik faktur+payment-nya, hapus retur non-completed, reversal DP pasca-konversi (OPEN #1), nota kredit formal (OPEN #2). Vonis jurnal/pajak tetap milik Accountant; spec ini tidak menetapkan akun/jurnal baru.
+
+### 1. Sumber tunggal + label
+- `TERVERIFIKASI-KODE`: INDEKS-ATURAN:221 AC-FIN-002 `Belum`; INDEKS-ATURAN:128 FIN-BR-008 `Belum` di main (status Terpasang ditulis PR #1233 di branch-nya, belum merged ke main per basis ini); KEPUTUSAN-TERVERIFIKASI OPEN #1 reversal DP pasca-konversi + #2 nota kredit formal berdiri sendiri (`src/lib/reports/vat-invoices-data.ts:181-182` "belum ada model SalesCreditNote di repo" per kutip indeks); BUSINESS-RULES retur/credit note pertahankan histori.
+- Aturan spec di bawah berlabel `USULAN` (Business) kecuali dirujuk `TERVERIFIKASI-KODE`; perlakuan jurnal/PPN spesifik = `BUTUH-VONIS` Accountant.
+
+### 2. Inventarisasi jalur reversal/void/cancel penjualan di main (TERVERIFIKASI-KODE, basis 8a677bf1f)
+| # | Jalur | Lokasi | Histori vs hapus fisik |
+|---|---|---|---|
+| P1 | `deleteSalesPayment` (main) | `src/actions/sales.actions.ts:2698` | HAPUS FISIK: `deleteJournalByReferenceTx(tx,"SalesPayment",id)` (`src/lib/hooks/accounting.hook.ts:119`, hapus jurnal+rantai lawan) lalu `tx.salesPayment.delete`, lampiran disapu, recalc faktur. Hanya `logActivity("delete",...)` tanpa alasan wajib & tanpa field reversal. INILAH yang diganti PR #1233 (belum merged). |
+| P2 | `reverseSalesPayment` (PR #1233, OPEN) | branch `hermes/backend-fin-br-008-reversal` head `28f62b3b6` | Histori dipertahankan: jurnal lawan `reverseJournalsByReferenceTx`, `reversedAt/reversedBy/reversalReason`, recalc exclude reversed, idempotency `sales_payment_reverse`, tolak bupot aktif, permission `delete_sales_payments`. DILARANG duplikat. |
+| P3 | `voidSalesInvoice` | `src/actions/sales.actions.ts:3743` | SEBAGIAN histori: faktur tetap ada status `cancelled`, posting dibalik `reverseSalesInvoicePostingTx`, `paidAmount=0`. GAP: tanpa alasan wajib, tanpa `cancelledBy/At/reason`; wajib payment sudah kosong dulu (pesan "Hapus pembayaran faktur ini terlebih dahulu") — urutan itu hari ini memaksa jalur hapus fisik P1 untuk faktur berpayment. |
+| P4 | `deleteSalesInvoice` | `src/actions/sales.actions.ts:3710` | HAPUS FISIK penuh: reverse posting lalu `deleteMany` payment, item, faktur, lampiran. Tanpa gerbang status/alasan di aksi (baca run ini: hanya `requirePermission("delete_sales_invoices")`). Bertentangan "dokumen posted tidak dihapus" — USULAN batasi draft saja (lihat BR-ACFIN2-04). |
+| P5 | `createSalesReturn` / retur penjualan | `src/actions/sales.actions.ts:2215`; model `prisma/schema.prisma:2021` | Histori baik: dokumen retur tersendiri tertaut `salesInvoiceId`, gerbang `RETURNABLE_INVOICE_STATUSES`, over-return guard dalam tx, nomor nota retur Coretax apa adanya. `reason` model ada tapi nullable (`prisma/schema.prisma:2028`). |
+| P6 | `deleteSalesReturn` | `src/actions/sales.actions.ts:3785` | HAPUS FISIK bila status bukan `completed`; `completed` ditolak. Tanpa alasan. Retur draft hapus = dapat diterima (belum efek GL), completed terlindungi — sudah selaras arah spec. |
+| P7 | `deleteDownPayment` | `src/actions/sales.actions.ts:2778` | Hanya `draft` boleh hapus (guard eksplisit); non-draft (posted/CONFIRMED/terkonversi) TIDAK ada jalur reversal — inilah OPEN #1. Tidak ada `reverseDownPayment`/cancel beralasan di main. |
+| P8 | Reversal jurnal generik | `src/lib/services/journal.service.ts:147` `reverseJournal`; `src/lib/hooks/accounting.hook.ts:192` `reverseJournalsByReferenceTx(tx,type,id,reason,userId)` | Fondasi KUAT & sudah beralasan: jurnal lawan POSTED, asal `REVERSED`, tolak reversal ganda/jurnal-lawan, `assertPeriodOpen` tanggal asal, deskripsi `Pembalikan <no>: <reason>`. Kebutuhan backend = memakai primitif ini, bukan primitif baru. |
+| P9 | Skema SalesPayment di main | `prisma/schema.prisma:1981` | Belum ada `reversedAt/reversedBy/reversalReason`/status reversal di main (grep 0); field itu lahir di PR #1233. Spec dilarang mengarang nama field kedua. |
+
+### 3. Syarat reversal posted sisi penjualan (USULAN, cermin pola FIN-BR-008 sisi beli)
+- **BR-ACFIN2-01 Alasan wajib:** reversal/void dokumen penjualan POSTED (SalesPayment, SalesInvoice, DP terkonversi) wajib `reason` trim non-kosong; kosong = tolak sebelum mutasi apa pun (nol jurnal, nol saldo berubah). Cermin syarat 1 FIN-BR-008 di PR #1233.
+- **BR-ACFIN2-02 Tautan asal wajib:** dokumen asal tidak dihapus; reversal mencatat penunjuk asal (jurnal lawan `referenceType="Journal", referenceId=<jurnal asal>` pola P8; dokumen reversal/void menyimpan id+nomor dokumen asal yang bisa dibuka dari UI/laporan). Membuka asal dari reversal dan sebaliknya wajib dua arah.
+- **BR-ACFIN2-03 Larangan hapus fisik posted:** dokumen penjualan yang pernah POSTED dilarang `delete` fisik dari aksi mana pun; koreksi hanya reversal/void berstatus. Hapus fisik hanya dokumen belum posted (draft) — pola guard P6/P7 yang diperluas.
+- **BR-ACFIN2-04 Faktur:** `voidSalesInvoice` ditambah alasan wajib + aktor/waktu pembatalan tersimpan (nama field final = Backend selaraskan pola `reversedAt/reversedBy/reversalReason` PR #1233, bukan nama baru karangan spec); `deleteSalesInvoice` dibatasi status draft saja (posted → arahkan void). Urutan kanonis faktur berpayment: reversal tiap SalesPayment dulu (jalur P2 sesudah merged), baru void faktur — pesan error wajib menunjuk urutan itu, bukan menyuruh "hapus pembayaran".
+- **BR-ACFIN2-05 Audit trail:** tiap reversal/void menulis `logActivity` memuat alasan + nomor dokumen asal + nominal terdampak; baris asal tampil read-only berstatus reversed/cancelled di daftar & detail; ekspor/statement pelanggan mengecualikan nominal reversed dari outstanding tetapi tetap menampilkan baris asal+reversal saat ditelusur (definisi agregasi final mengikuti pola recalc exclude-reversed PR #1233).
+- **BR-ACFIN2-06 Periode terkunci & idempotensi:** reversal bertanggal jurnal asal; `assertPeriodOpen` gagal = tolak nol mutasi. Reversal kedua atas dokumen sama ditolak. Replay kunci idempotensi sama = hasil awal tanpa jurnal/saldo baru (scope meniru `sales_payment_reverse`; nama scope faktur/DP = Backend, satu pola).
+- **BR-ACFIN2-07 Permission:** pakai permission existing jalur yang diganti (`delete_sales_payments` untuk reversal payment per PR #1233; `delete_sales_invoices` untuk void faktur) — spec tidak mengusulkan permission key baru; perubahan key = putusan Lead.
+- **BR-ACFIN2-08 Relasi OPEN #1 (reversal DP pasca-konversi):** SESUDAH faktur konversi lahir, DP tidak lagi bisa diperlakukan sebagai DP bebas: reversal DP posted wajib menempuh urutan (1) tangani faktur konversi (void per BR-ACFIN2-04 atau biarkan bila koreksi hanya DP), (2) reversal alokasi DP→faktur, (3) reversal jurnal terima DP, (4) status/jejak DP beralasan. Urutan & perlakuan PPN FP UM pada tiap langkah = `BUTUH-VONIS` Accountant (menyambung spec SAL-BR-004 kartu `t_e2f98d06`); spec ini hanya membekukan syarat alasan/tautan/anti-hapus/idempotensi yang sama.
+- **BR-ACFIN2-09 Relasi OPEN #2 (nota kredit formal):** selama model `SalesCreditNote` belum diputuskan (OPEN #2), koreksi nilai piutang berjalan lewat retur (P5) + `CustomerCredit` existing — spec ini TIDAK menciptakan dokumen nota kredit dan tidak melarangnya; reversal beralasan di sini menutup kebutuhan "koreksi tercatat", bukan mengganti keputusan nota kredit formal. Keputusan perlu/tidak nota kredit berdiri sendiri tetap terbuka untuk Lead+Accountant.
+- **BR-ACFIN2-10 Estimasi≠aktual / non-tujuan:** reversal tidak mengubah histori Qty/stok selain lewat jalur retur/posting-reversal existing (P3/P5); dilarang edit nominal dokumen asal sebagai pengganti reversal.
+
+### 4. Status-transisi ringkas (USULAN)
+| Dokumen | Dari → Ke | Pemicu | Penjaga |
+|---|---|---|---|
+| SalesPayment | posted → reversed | `reverseSalesPayment` (PR #1233) | alasan wajib, periode asal terbuka, belum reversed, bupot aktif ditolak |
+| SalesInvoice | posted/partial/paid → cancelled | `voidSalesInvoice` + alasan | semua payment sudah reversed (bukan dihapus), alasan wajib |
+| SalesInvoice | draft → (hapus fisik) | `deleteSalesInvoice` dibatasi | hanya draft; posted ditolak arahkan void |
+| DownPayment | confirmed/terkonversi → reversed | jalur baru (OPEN #1) | urutan BR-ACFIN2-08 + vonis Accountant PPN |
+| SalesReturn | draft → (hapus) / completed → terkunci | existing P6 | completed tidak dapat dihapus — dipertahankan |
+
+### 5. Penerimaan AC-FIN-002 (untuk QA, atas head implementasi persis BUKAN head spec ini)
+AC-FIN-002 dinyatakan terpenuhi sisi penjualan bila: (i) PR #1233 merged (payment), (ii) void faktur beralasan + batas hapus draft terpasang, (iii) E118 lulus atas head merged itu. Sampai itu INDEKS-ATURAN AC-FIN-002 tetap `Belum` — spec ini TIDAK mengubah status indeks (loop tertutup: status berubah lewat PR implementasi, pola PR #1233 untuk FIN-BR-008).
+
+### 6. Falsifikasi QA (E118, atas head implementasi persis)
+- E118-1: reversal SalesPayment/SalesInvoice-void dengan alasan kosong/spasi = lolos atau ada mutasi jurnal/saldo = MERAH.
+- E118-2: sesudah reversal, baris asal hilang fisik / jurnal asal terhapus (bukan `REVERSED` + jurnal lawan POSTED tertaut) = MERAH.
+- E118-3: reversal kedua atas dokumen sama membuat jurnal lawan kedua / mengubah outstanding dua kali = MERAH; replay idempotensi membuat jurnal baru = MERAH.
+- E118-4: reversal pada periode terkunci lolos atau termutasi sebagian = MERAH.
+- E118-5: `deleteSalesInvoice` atas faktur posted menghapus faktur/payment/item = MERAH (harus tolak, arahkan void); void faktur yang masih punya payment aktif (belum reversed) lolos = MERAH.
+- E118-6: outstanding/statement masih menghitung payment reversed, atau baris asal+reversal tidak dapat ditelusur dua arah dari UI/read-model = MERAH.
+- E118-7: mutasi guard — ganti reversal payment menjadi `deleteJournalByReferenceTx`+delete (gaya main lama) → tes reversal wajib MERAH; pulihkan → hijau (pola falsifikasi PR #1233).
+- E118-8: reversal DP terkonversi yang melompati faktur konversi (DP reversed sementara faktur konversi masih posted tanpa perlakuan tercatat) = MERAH (sesudah jalur OPEN #1 dibangun; sebelum itu jalur apa pun selain draft-delete untuk DP non-draft = MERAH).
+
+### 7. Backlog turunan (BUKAN kartu baru run ini — tindak lanjut ditulis di komentar kartu t_4fbb1d15)
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-118-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) nilai status AC-FIN-002 sesudah PR #1233 merged | Lead/QA | head merged #1233 |
+| (tanpa ID baru) void faktur beralasan + batasi delete faktur draft | Backend, konsumen Frontend | spec ini merged; nama field ikut pola #1233 |
+| (tanpa ID baru) reversal DP pasca-konversi | Accountant (urutan jurnal/PPN) → Backend → Frontend → QA E118-8 | OPEN #1 + vonis |
+
+ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main 8a677bf1f). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status AC-FIN-002 hanya sesudah #1233 merged) → BOT Backend (void-faktur beralasan mengikuti pola #1233, tanpa duplikat payment) → BOT Frontend (dialog alasan wajib) → BOT QA (E118-1..8 atas head persis). Butuh putusan accountant: YA bersyarat — hanya urutan jurnal/PPN reversal DP terkonversi (BR-ACFIN2-08) dan keputusan nota kredit formal (BR-ACFIN2-09); syarat alasan/tautan/anti-hapus payment+faktur TIDAK menunggu vonis baru karena cermin FIN-BR-008 yang sudah divonis.
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-119-S: tutup HR-BR-003 formula lembur/tarif/pembulatan (penunjukan guard live, tanpa angka baru)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane spec tertulis, TANPA kode). Basis `origin/main` `205de512e` (28 Okt 2026). Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:155` (HR-BR-003 `OPEN-keputusan` — "Keputusan formula lembur/tarif/pembulatan terbuka di sumber") + `docs/product/KEPUTUSAN-TERVERIFIKASI.md:44` (keputusan 10: "formula tertutup, parameter tahun berjalan OPEN").
+
+**Verifikasi ID:** grep `F-2026-10-28-119` di backlog+board = 0/0 sebelum tulis (28 Okt 2026). Bebas (116-V=#1231 vonis Accountant, 117-S=#1237, 118-S=#1239 beda topik). ID ini spec (`-S`): menunjuk formula yang sudah live + vonis yang sudah merged, bukan memutus angka baru.
+
+### 1. Definisi "formula lembur/tarif/pembulatan" (tiga komponen, satu keputusan)
+
+| Komponen | Isi keputusan | Status |
+|---|---|---|
+| Formula dasar | Dasar = pokok + Σ tunjangan tetap aktif per tanggal lembur; cabang 75% default 100% | TERTUTUP oleh vonis 022-V — lihat §2 V1 |
+| Tarif/pengali | Upah sejam = upah sebulan / 173; hari kerja 1,5× lalu 2×; istirahat/libur pola 5/6 hari 2×/3×/4×; batas 4 jam/hari + 18 jam/minggu hari kerja | TERTUTUP oleh vonis 014-V + fisik #800 — lihat §2 V2 |
+| Pembulatan | Σ dasar `safeRound(...,2)`; hasil akhir rupiah penuh `Math.round`; dilarang pembulatan menengah | TERTUTUP oleh vonis 022-V Putusan 3 — lihat §2 V3 |
+
+### 2. Inventarisasi terverifikasi (28 Okt 2026, basis di atas)
+
+Sudah ada — formula per komponen (semua `TERVERIFIKASI-KODE`):
+
+| # | Komponen | Guard | Bukti file:baris |
+|---|---|---|---|
+| G1 | Dasar | `monthlySalary = safeRound(baseSalary + Σ defaultAmount, 2)`; Σ atas penugasan dengan enam syarat (assignment `isActive`, `effectiveFrom <= ot.date`, `effectiveTo` null/`>= ot.date`, komponen `isActive`, `kind="earning"`, `recurrence="fixed"`); acuan `ot.date` bukan tanggal approve; filter `kind` eksplisit | `src/actions/hrm.actions.ts:1164-1183` |
+| G2 | Dasar beku | `calculatedValue` beku di `updateMany` klaim atomik + `overtimeBaseSnapshot` (pokok/komponen/total dasar/tanggal lembur) ditulis pada klaim yang sama; approve ulang no-op bila `calculatedValue > 0` | `src/actions/hrm.actions.ts:1193-1221,1122-1124` |
+| G3 | Tarif | `HOURLY_DIVISOR = 173`; `TIERS` hari kerja 1,5×/2×, istirahat 5-hari 2×/3×/4×, 6-hari 2×/3×/4×; hasil akhir `Math.round` | `src/lib/services/overtime-pay.service.ts:17-62` |
+| G4 | Batas | `MAX_OVERTIME_HOURS_PER_WORKDAY = 4`, `MAX_OVERTIME_HOURS_PER_WEEK = 18`; gerbang di create DAN update (self-exclusion); pending+approved sama-sama dihitung | `src/lib/services/overtime-pay.service.ts:18-19`; `src/actions/hrm.actions.ts:1049-1054,4686` |
+| G5 | Plafon potongan | Total potongan (pinjaman+denda+komponen) ditolak bila melewati 50% upah slip (PP 36/2021 Pasal 65); ditegakkan saat hitung DAN saat bayar | `src/actions/hrm.actions.ts:743-749,3118` |
+| G6 | Ruleset statutori | `getStatutoryParams` berperiode dari `PayrollStatutoryRule`; fallback 2024 = tolak berisik (hitung, approve, massal) bukan angka diam | `src/lib/services/payroll-statutory.service.ts:123-135`; `src/actions/hrm.actions.ts:794-798,3057-3066,1948` |
+| G7 | Rekap bukan jalur bayar | Rekap hanya jam operasional + `calculatedValue` verbatim; payroll satu-satunya konsumen nilai | `src/lib/reports/overtime-recap.ts:18-25` |
+
+Vonis yang menutup keputusan (sudah merged di main, bukan klaim baru):
+
+- V1: vonis Accountant F-2026-10-25-014-V (PR #798 merged): tarif bertingkat persis Pasal 31 (upah sejam = upah sebulan/173; 1,5×/2×; 2×/3×/4× dua pola), batas Pasal 26, LOLOS BERSYARAT dengan syarat K2-S1 (gerbang di update — TERTUTUP: `hrm.actions.ts:4686`) + K2-S2 (dasar pokok+tetap — TERTUTUP oleh V2).
+- V2: vonis Accountant F-2026-10-25-022-V (PR #840 merged): dasar Pasal 32 = pokok + Σ tetap aktif per tanggal lembur, cabang 75% default 100%, koreksi sitasi Pasal 31→32; syarat fisiknya TERTUTUP oleh PR #850 (dasar per `ot.date`) + PR #1069 (snapshot `overtimeBaseSnapshot`).
+- V3: spec Business F-2026-10-25-024-S (PR #845) + F-2026-10-25-016-S rekap (fisik #868 merged): register BR-OT-01..12 + BR-OVR-01..12; rekap live di `/sdm/lembur/rekap`.
+
+Batas jujur — yang TETAP OPEN dan bukan bagian penutupan ini (bukti grep run ini):
+
+- B1. Angka statutori tahun berjalan: `PayrollStatutoryRule` seed = parameter 2024; komentar skema `prisma/schema.prisma:3926-3929` menyatakan angka 2026+ perlu konfirmasi akuntan/legal. Selaras keputusan 10 ("parameter tahun berjalan OPEN") — penutupan HR-BR-003 adalah formula, bukan angka tahun berjalan.
+- B2. Lantai upah minimum Pasal 32 ayat penutup: tidak ada master UMK/upah-minimum di skema (grep model UMK/MinimumWage = 0) dan tidak ada pemakaian lantai di jalur lembur/payroll — sama persis dengan catatan risiko 3 vonis 022-V ("di luar cakupan vonis ini"). Bukan regresi, bukan celah baru.
+- B3. Sitasi Kepmenakertrans 102/MEN/VI/2004 di komentar kode (`overtime-pay.service.ts:2`, tes, `hrm.actions.ts:1126`): regulasi itu sudah dicabut (BR-OVR-10, TERVERIFIKASI-KODE) tetapi pengali tabelnya identik dengan yang dipakai — komentar usang, rumus benar. Perbaikan komentar = editorial satu baris (pemilik: Backend/Lead), bukan syarat tutup formula.
+- B4. Cabang 75% masa depan butuh master tunjangan-tidak-tetap berjalan + vonis Accountant baru (Putusan 2.5 vonis 022-V) — tidak dibuka spec ini.
+
+### 3. Putusan spec (penunjukan resmi, bukan pembangunan)
+
+- P1. HR-BR-003 dinyatakan TERTUTUP-untuk-formula oleh kombinasi G1–G7 + V1–V3. Tidak ada mekanisme formula lembur/tarif/pembulatan baru yang dituntut. `BUSINESS-RULES.md` baris 180 (`HR-BR-003 [OPEN]`) mengikuti pola kandidat-keputusan-10: menjadi tertutup-untuk-formula dengan catatan parameter.
+- P2. Sisa OPEN eksplisit yang sah: (a) konfirmasi Accountant atas parameter statutori tahun berjalan (B1 — selaras keputusan 10); (b) lantai upah minimum bila perusahaan memutuskan menegakkannya (B2 — butuh master UMK + vonis, bukan tambalan rumus); (c) editorial sitasi Kepmenakertrans (B3). Ketiganya di luar definisi "formula" §1.
+- P3. Larangan turunan (mengikat build berikutnya): mengubah `HOURLY_DIVISOR`/TIERS/pembulatan tanpa vonis Accountant baru; memicu cabang 75% dari data existing; memakai tanggal approve/hari ini sebagai acuan jendela; menghitung ulang `calculatedValue` beku; memakai realisasi slip sebagai dasar.
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-OTF-01 | Dasar lembur = pokok + Σ tetap aktif per tanggal lembur; cabang 75% default 100% | TERVERIFIKASI-KODE | V2; G1 (`hrm.actions.ts:1164-1183`) |
+| BR-OTF-02 | Tarif = 1/173, 1,5×/2× hari kerja, 2×/3×/4× istirahat dua pola | TERVERIFIKASI-KODE | V1; G3 (`overtime-pay.service.ts:17-62`) |
+| BR-OTF-03 | Batas 4 jam/hari + 18 jam/minggu hari kerja ditegakkan di create dan update | TERVERIFIKASI-KODE | V1 K2-S1; G4 |
+| BR-OTF-04 | Pembulatan: Σ dasar 2 desimal, hasil akhir rupiah penuh, tanpa pembulatan menengah | TERVERIFIKASI-KODE | V2 Putusan 3; G1/G3 |
+| BR-OTF-05 | Nilai approved beku (`calculatedValue` + snapshot); tanpa hitung ulang | TERVERIFIKASI-KODE | PR #1069; G2 |
+| BR-OTF-06 | Plafon potongan 50% upah ditegakkan saat hitung dan bayar | TERVERIFIKASI-KODE | G5 |
+| BR-OTF-07 | Ruleset statutori berperiode; fallback = tolak berisik | TERVERIFIKASI-KODE | G6 |
+| BR-OTF-08 | Angka tahun berjalan + lantai UMK + cabang 75% masa depan = OPEN di luar formula | USULAN (batas eksplisit) | B1/B2/B4 |
+
+### 5. Status-transition matrix
+
+Tidak ada transisi status oleh spec ini (formula sudah live). Matriks ini mencatat keadaan existing yang wajib tetap berlaku:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| `pending` | create/update | `pending` | gerbang batas G4 (self-exclusion di update) |
+| `pending`/`approved` (belum terhitung) | approve | `approved` + `calculatedValue` beku | G1+G2 |
+| `approved` (terhitung) | approve ulang/klik ganda/ubah master | tidak berubah (no-op) | G2 |
+| `draft`/`approved` slip | hitung/approve/bayar payroll | ditolak bila ruleset fallback | G6 |
+
+### 6. Batas eksplisit — yang BELUM diputus spec ini
+
+1. **BUTUH-VONIS Accountant** (`@accounting-finance-tax`): konfirmasi parameter statutori tahun berjalan di `PayrollStatutoryRule` (B1) — angka, bukan formula; spec ini TIDAK memutus angka apa pun.
+2. **Butuh putusan Lead**: (a) terbitkan status HR-BR-003 di `INDEKS-ATURAN.md:155` + `BUSINESS-RULES.md:180` menunjuk spec ini (pola keputusan 10); (b) editorial sitasi Kepmenakertrans B3 (satu baris komentar, pemilik Backend).
+3. **Di luar cakupan**: master UMK + lantai upah minimum (B2), master tunjangan-tidak-tetap + cabang 75% (B4), re-post jurnal payroll sesudah reversal (§6.1 spec 117-S milik Accountant).
+
+### 7. Yang TIDAK diusulkan run ini
+
+- Mengubah `computeOvertimePay`/TIERS/173/pembulatan — rumus benar dan terkunci regresi.
+- Menambah scope idempotency payroll untuk jalur lembur — klaim atomik existing cukup.
+- Backfill/hitung ulang `calculatedValue` lama — dilarang BR-OT-09.
+- Kunci unik `(employeeId, period)` untuk lembur — salah secara bisnis (pola BR-HRPG-02 spec 117-S).
+
+### 8. Falsifikasi untuk QA (E119, atas head implementasi persis — semua regresi sudah hidup)
+
+| ID | Kasus | Hasil wajib | Falsifikasi (satu mutasi → MERAH) |
+|---|---|---|---|
+| E119-1 | Gaji 3.460.000, 1 jam hari kerja | Rp30.000 | ubah 1,5→1,0 di TIERS → tes `overtime-pay.service.test.ts` MERAH |
+| E119-2 | 10 jam rest_5day / 9 jam rest_6day | Rp460.000 / Rp420.000 | ubah batas tier → tes yang sama MERAH |
+| E119-3 | Pokok 3.460.000 + tetap 540.000 aktif per tanggal lembur | dasar 4.000.000 → 1 jam = Rp34.682 | hapus filter `kind="earning"` → tes E-OT-1 MERAH |
+| E119-4 | Komponen berlaku sesudah tanggal lembur | tidak terhitung → Rp30.000 | pakai tanggal approve → tes E-OT-2 MERAH |
+| E119-5 | Edit lembur hari kerja menjadi 5 jam | DITOLAK | cabut gerbang update → tes K2-S1 MERAH |
+| E119-6 | Ruleset kosong (fallback 2024) | hitung/approve/bayar DITOLAK berisik | hapus cek `fromFallback` → tes gate MERAH |
+| E119-7 | Total potongan > 50% upah | DITOLAK saat hitung dan bayar | cabut `assertDeductionCeilingOrThrow` → tes plafon MERAH |
+| E119-8 | Ubah master sesudah approve | `calculatedValue` beku | hitung ulang diam-diam → tes E-OT-6 MERAH |
+
+Catatan QA: E119-1..8 semuanya menunjuk regresi hidup yang ditunjuk di §2 — jalankan apa adanya atas head persis; tidak ada celah cakupan tes baru yang dituntut spec ini.
+
+### 9. Backlog implementasi (rekomendasi tertulis — kartu dibuat pemilik berikutnya, bukan run ini)
+
+| Urutan | Pemilik usulan | Isi | Effort | Prasyarat |
+|---|---|---|---|---|
+| 1 | Lead | Terbitkan HR-BR-003 di `INDEKS-ATURAN.md:155` + `BUSINESS-RULES.md:180` menunjuk spec ini (tertutup-untuk-formula; OPEN eksplisit B1/B2) | S | spec merged |
+| 2 | Accountant | Vonis parameter statutori tahun berjalan (angka `PayrollStatutoryRule`) | M | — |
+| 3 | Backend | Editorial sitasi Kepmenakertrans satu baris (B3) | XS | — |
+
+ID spec ini **F-2026-10-28-119-S** (HR-BR-003). Pemilik berikutnya: BOT QA (E119-1..8 atas head persis) → BOT Lead (status INDEKS-ATURAN + BUSINESS-RULES). Implementasi BUKAN bagian spec ini (formula sudah live).
