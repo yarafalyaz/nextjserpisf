@@ -283,13 +283,13 @@ async function assertThreeWayMatch(
     0,
   );
 
-  // Count EVERY non-cancelled bill, not just posted/paid. createVendorBill posts
-  // the AP journal (onVendorBillPosted) on creation while leaving the bill
-  // status "draft" — so a draft bill already recognises the liability in the GL.
-  // Filtering to posted/paid here let two create-path bills both pass the match
-  // (each sees the other as draft → uncounted) and over-bill the PO even
-  // sequentially. notIn:['cancelled'] = draft|posted|partial|paid = every bill
-  // that has recognised AP for this PO.
+  // Count EVERY non-cancelled bill, not just posted/paid. Draft memang MURNI
+  // tanpa jurnal (P0-2), tetapi tagihan draft tetap dihitung di sini sebagai
+  // RESERVASI plafon: bila hanya tagihan terposting yang dihitung, dua draft
+  // yang dibuat berurutan sama-sama lolos dari angka lama lalu sama-sama
+  // diposting dan menagih PO berlebih. notIn:['cancelled'] =
+  // draft|posted|partial|paid = setiap tagihan yang masih bisa menjadi AP
+  // untuk PO ini.
   //
   // Match goods-value to goods-value: receivedValue is Σ qty×unitCost (tax- and
   // discount-exclusive), so compare it against each bill's `subtotal` (Σ
@@ -317,6 +317,75 @@ async function assertThreeWayMatch(
     throw new Error(
       `3-way match gagal: total tagihan (${safeAdd(alreadyBilled, billGoodsValue, 0).toLocaleString("id-ID")}) ` +
         `melebihi nilai barang diterima (${receivedValue.toLocaleString("id-ID")}).`,
+    );
+  }
+}
+
+/**
+ * Penjaga tagih-ganda PER-GR (BUG-09): total nilai yang sudah ditagih untuk
+ * SATU penerimaan — Σ `VendorBillItem.subtotal` non-cancelled yang menunjuk
+ * baris GR ini — DITAMBAH nilai tagihan baru tidak boleh melebihi nilai barang
+ * yang diterima pada GR itu (Σ qty × unitCost). Penjaga 3-way level PO saja
+ * tidak cukup: PO dengan banyak GR bisa tetap di bawah plafon PO sementara
+ * satu GR ditagih dua kali lipat.
+ *
+ * Baris GR dikunci `FOR UPDATE` lebih dulu (pola kunci yang sama dengan
+ * penjaga over-receive/over-return), sehingga dua pembuatan/pengeditan
+ * tagihan konkuren atas GR yang sama terserialisasi: panggilan kedua membaca
+ * baris tagihan pertama sesudah terkunci, bukan sama-sama lolos dari angka
+ * lama. `excludeBillId` dipakai jalur edit supaya tagihan tidak menghitung
+ * dirinya sendiri (baris lamanya akan diganti).
+ */
+async function assertGrBillingWithinReceived(
+  tx: Prisma.TransactionClient,
+  goodsReceiptId: number,
+  receiptLabel: string,
+  newBillValue: number,
+  excludeBillId?: number,
+): Promise<void> {
+  await tx.$executeRaw`SELECT id FROM goods_receipts WHERE id = ${goodsReceiptId} FOR UPDATE`;
+
+  const queueLines = await tx.goodsReceiptItem.findMany({
+    where: { goodsReceiptId },
+    select: { id: true },
+  });
+  const lineIds = queueLines.map((line) => line.id);
+  const grLines = lineIds.length
+    ? await tx.goodsReceiptItem.findMany({
+        where: { id: { in: lineIds } },
+        select: { qty: true, unitCost: true },
+      })
+    : [];
+  const receivedValue = grLines.reduce(
+    (s, line) => safeAdd(s, safeMultiply(line.qty, line.unitCost ?? 0, 2), 2),
+    0,
+  );
+  const billed = lineIds.length
+    ? await tx.vendorBillItem.aggregate({
+        where: {
+          goodsReceiptItemId: { in: lineIds },
+          vendorBill: {
+            status: { notIn: ["cancelled"] },
+            ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
+          },
+        },
+        _sum: { subtotal: true },
+      })
+    : null;
+  const billedValue = Number(billed?._sum.subtotal ?? 0);
+
+  // Toleransi 1 sen untuk pembulatan, sama seperti penjaga sebelumnya.
+  if (receivedValue > 0 && billedValue >= receivedValue - 0.01) {
+    throw new Error(
+      `Penerimaan ${receiptLabel} sudah ditagih penuh (${billedValue.toLocaleString("id-ID")} dari ${receivedValue.toLocaleString("id-ID")}).`,
+    );
+  }
+  if (
+    receivedValue > 0 &&
+    safeAdd(billedValue, newBillValue, 2) > safeAdd(receivedValue, 0.01, 2)
+  ) {
+    throw new Error(
+      `Penagihan melebihi nilai penerimaan ${receiptLabel}: sudah ditagih ${billedValue.toLocaleString("id-ID")} + tagihan ini ${newBillValue.toLocaleString("id-ID")} melebihi nilai diterima ${receivedValue.toLocaleString("id-ID")}.`,
     );
   }
 }
@@ -1283,18 +1352,15 @@ export async function createVendorBill(formData: FormData) {
     const documentNo = await generateDocumentNumber("BILL");
     const slug = await nextSlug("vendorBill", documentNo);
 
-    // Lock the PO row, run the 3-way match, create the bill, and post its AP
-    // journal atomically so two concurrent createVendorBill calls on the same PO
-    // cannot both pass the match and over-bill. With the draft bill now counted
-    // by assertThreeWayMatch, the serialized second call sees the first bill and
+    // Lock the PO row, run the 3-way match, and create the bill atomically so
+    // two concurrent createVendorBill calls on the same PO cannot both pass
+    // the match and over-bill. With the draft bill now counted by
+    // assertThreeWayMatch, the serialized second call sees the first bill and
     // is rejected. Mirrors the confirmVendorPayment lock pattern.
     //
-    // The journal MUST be posted inside this transaction (passing `tx`):
-    // onVendorBillPosted is idempotent and its own executeInTx would otherwise
-    // open a SECOND transaction that commits after this one. A failure after
-    // commit (closed period, missing account) would then leave the bill without
-    // an AP journal — an unposted liability. Posting inside rolls the whole
-    // thing back so the user retries cleanly.
+    // Draft MURNI tanpa jurnal (P0-2, lihat catatan di akhir transaksi ini):
+    // tidak ada jurnal AP yang diposting di sini — satu titik pengakuan adalah
+    // confirmVendorBill.
     // Bila form mengirim baris, kop (subtotal bruto/diskon/pajak/total)
     // dihitung ulang dari baris yang sama dengan yang ditulis ke
     // vendor_bill_items; tanpa baris, kop manual form dipertahankan.
@@ -1382,36 +1448,17 @@ export async function createVendorBill(formData: FormData) {
 
         grLineQueues = await loadGrLineQueues(tx, gr.id);
 
-        // Guard tagih-ganda: nilai tagihan yang sudah ada (non-cancelled) untuk
-        // baris penerimaan ini tidak boleh melebihi nilai barang yang diterima;
-        // tagihan berbasis GR yang sudah lunas ditagih ulang hanya akan
-        // menggandakan AP. Toleransi 1 sen untuk pembulatan.
-        const lineIds = [...grLineQueues.values()].flat();
-        const grLines = lineIds.length
-          ? await tx.goodsReceiptItem.findMany({
-              where: { id: { in: lineIds } },
-              select: { qty: true, unitCost: true },
-            })
-          : [];
-        const receivedValue = grLines.reduce(
-          (s, line) => safeAdd(s, safeMultiply(line.qty, line.unitCost ?? 0, 2), 2),
-          0,
+        // Guard tagih-ganda per-GR (BUG-09): tagihan yang sudah ada
+        // (non-cancelled) DITAMBAH tagihan baru ini tidak boleh melebihi nilai
+        // barang yang diterima pada GR ini. Nilai tagihan baru adalah nilai
+        // barang neto diskon (subtotal bruto − diskon baris), sebanding dengan
+        // Σ `VendorBillItem.subtotal` yang dijumlah penjaga untuk tagihan lama.
+        await assertGrBillingWithinReceived(
+          tx,
+          gr.id,
+          gr.documentNo,
+          safeSubtract(billHeader.subtotal, billHeader.discountAmount, 2),
         );
-        const billed = lineIds.length
-          ? await tx.vendorBillItem.aggregate({
-              where: {
-                goodsReceiptItemId: { in: lineIds },
-                vendorBill: { status: { notIn: ["cancelled"] } },
-              },
-              _sum: { subtotal: true },
-            })
-          : null;
-        const billedValue = Number(billed?._sum.subtotal ?? 0);
-        if (receivedValue > 0 && billedValue >= receivedValue - 0.01) {
-          throw new Error(
-            `Penerimaan ${gr.documentNo} sudah ditagih penuh (${billedValue.toLocaleString("id-ID")} dari ${receivedValue.toLocaleString("id-ID")}).`,
-          );
-        }
       }
 
       const created = await tx.vendorBill.create({
@@ -2636,8 +2683,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
 
     // Lock the PO + re-run the 3-way match BEFORE persisting the edit, mirroring
     // createVendorBill/confirmVendorBill. Without this, a draft bill created small
-    // (passing the match) could be edited to an over-bill grandTotal and the
-    // journal would be reposted with a value the 3-way match should have rejected
+    // (passing the match) could be edited to an over-bill grandTotal and later
+    // posted at confirm with a value the 3-way match should have rejected
     // — i.e. the over-bill guard was bypassable via edit. assertThreeWayMatch
     // excludes this bill's own id so it doesn't count itself.
     const billHeader = summarizeBillItems(v.items) ?? {
@@ -2686,6 +2733,24 @@ export async function updateVendorBill(id: number, formData: FormData) {
         billHeader.subtotal,
         id,
       );
+
+      // Penjaga per-GR yang sama seperti create (BUG-09): edit draft tidak
+      // boleh menaikkan tagihan GR-nya melebihi nilai penerimaan, walau plafon
+      // PO (3-way) masih longgar. Tagihan ini dikecualikan dari jumlah lama
+      // karena barisnya diganti di bawah.
+      if (existingBill.goodsReceiptId) {
+        const grRef = await tx.goodsReceipt.findUnique({
+          where: { id: existingBill.goodsReceiptId },
+          select: { documentNo: true },
+        });
+        await assertGrBillingWithinReceived(
+          tx,
+          existingBill.goodsReceiptId,
+          grRef?.documentNo ?? `#${existingBill.goodsReceiptId}`,
+          safeSubtract(billHeader.subtotal, billHeader.discountAmount, 2),
+          id,
+        );
+      }
 
       const date = wibDateToUtcMidnight(v.date);
       const dueDate = v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null;
@@ -2752,14 +2817,12 @@ export async function updateVendorBill(id: number, formData: FormData) {
         });
       }
 
-      // The bill journal is posted at creation; reverse + repost so the edited
-      // amount/tax/PO-link (which can flip the goods-based clearing branch) is
-      // reflected. Both run INSIDE this transaction so a failing repost (closed
-      // period, misconfigured account) rolls back the delete — otherwise the bill
-      // would be left with no AP journal and the GL silently understated. Delete
-      // first so onVendorBillPosted's idempotency guard doesn't skip the repost.
-      await deleteJournalByReferenceTx(tx, "VendorBill", id);
-      await onVendorBillPosted(updated.id, Number(user.id), tx);
+      // P0-2 / BUG-05: draft MURNI — edit draft TIDAK menyentuh jurnal sama
+      // sekali, simetris dengan createVendorBill. Jurnal AP lahir hanya pada
+      // jalur posting yang sah (confirmVendorBill), yang membaca nilai hasil
+      // edit ini. Dulu edit di sini menghapus + memposting ulang jurnal selagi
+      // status masih "draft", sehingga satu kali edit langsung mengakui
+      // Dr Clearing/Beban Cr Hutang sebelum tagihan diposting.
 
       // The bill's PO link or amount may have changed — resync the old and new
       // service PO subcontract costs so HPP stays exact.

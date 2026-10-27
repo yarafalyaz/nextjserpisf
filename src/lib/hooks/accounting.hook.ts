@@ -1545,9 +1545,13 @@ export async function onPurchaseReturnProcessed(
     return;
   }
 
-  // AP relief = agreed return price (what the vendor credits back).
+  // AP relief = harga retur BEKU per baris (`price`, harga beli dari tagihan
+  // asal saat retur dibuat) — what the vendor credits back. `cost` adalah cost
+  // master yang bergerak, jadi memakainya melegakan hutang sebesar harga kini,
+  // bukan harga kesepakatan asal. Baris legacy tanpa `price` (null) jatuh ke
+  // `cost` karena tidak ada harga beku yang bisa dipakai.
   const totalAmount = purchaseReturn.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.cost),
+    (sum, item) => sum + Number(item.qty) * Number(item.price ?? item.cost),
     0,
   );
   if (totalAmount <= 0) return;

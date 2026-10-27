@@ -1616,6 +1616,27 @@ describe("onPurchaseReturnProcessed", () => {
     expectEntry({ debit: 100, credit: 0, accountId: 220 }); // Dr. Variance 100 (loss)
   });
 
+  it("melegakan hutang sebesar price beku, bukan cost master yang bergerak (BUG-08)", async () => {
+    // Beli 10 @ price 100 (beku dari tagihan asal); cost master kini 120.
+    // Hutang yang dilegakan wajib 10 × 100 = 1.000, BUKAN 10 × 120 = 1.200.
+    // Biaya FIFO yang keluar stok tetap 10 × 50 = 500; sisanya varians.
+    mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "PR-1",
+      items: [{ qty: 10, cost: 120, price: 100 }],
+    });
+    mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: 50 }]);
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+
+    await onPurchaseReturnProcessed(1);
+
+    expectJournalRef("PurchaseReturn", 1000, 1000);
+    expectEntry({ debit: 1000, credit: 0, accountId: 210 }); // Dr. AP sebesar price beku
+    expectEntry({ debit: 0, credit: 500, accountId: 130 }); // Cr. Inventory biaya FIFO
+    expectEntry({ debit: 0, credit: 500, accountId: 220 }); // Cr. Variance (gain)
+  });
+
   it("creates balanced journal with variance gain (Dr) when return > inventory amount", async () => {
     // AP relief 600; Inventory relief 500
     seedPurchaseReturn(60);
