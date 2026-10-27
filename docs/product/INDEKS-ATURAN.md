@@ -84,7 +84,7 @@ perilaku, bukan hanya keberadaan file/model.
 | PUR-BR-001 | Sebagian | src/lib/hooks/goods-receipt.hook.ts:18 — hook goods receipt membuat Stock Move IN saat verifikasi |
 | PUR-BR-002 | Sebagian | src/lib/hooks/purchase-order.hook.ts:11 — `onPurchaseOrderCreated` hanya memperbarui status purchase request; ketiadaan efek stok PO tidak dibuktikan hanya dari hook ini |
 | PUR-BR-003 | Sebagian | prisma/schema.prisma:2228 — `GoodsReceiptItem`; tampilan dipesan/diterima/sisa belum ditelusur |
-| PUR-BR-004 | OPEN-keputusan | Keputusan over-receipt terbuka di sumber. Penegak toleransi/approval: belum ditelusur |
+| PUR-BR-004 | Sebagian | Penegakan qty tertutup-terverifikasi: guard keras `src/lib/hooks/goods-receipt.hook.ts:206-236` (kumulatif satuan dasar per item, `received > ordered` → throw, hard cap tanpa toleransi, kunci PO `FOR UPDATE`); draft boleh lebih, penegakan hanya di verify (`src/actions/purchase.actions.ts:1101`); PO dikunci sesudah terima berjalan (edit draft-only `:2690`, cancel tolak partial/received `:1005`, hapus GR verified tertahan tagihan `:2290`); regresi 24/24 + received-qty absolut. Vonis Accountant F-2026-10-28-116-V (backlog): garpu "kecuali kebijakan/approval" TERTUTUP DENGAN NILAI TOLAK; toleransi nilai 3-way (max Rp1000/1%) sah untuk nilai, bukan qty. Sisa = alur revisi PO approved (workflow, bukan toleransi) |
 | PUR-BR-005 | Terpasang | prisma/schema.prisma:2309 — `VendorBill` terpisah dari `prisma/schema.prisma:2397` — `VendorPayment` |
 | PUR-BR-006 | Sebagian | prisma/schema.prisma:2448 — `VendorPaymentAllocation` menautkan pembayaran ke bill dengan amount alokasi |
 | PUR-BR-007 | Sebagian | prisma/schema.prisma:2448 — alokasi ada; perhitungan outstanding/status lunas belum ditelusur |

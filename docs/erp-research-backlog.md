@@ -40624,3 +40624,29 @@ Penjaga: (a) permohonan Pasal 36 dapat karena jabatan DJP — register menandai 
 - E114-6: setting akun sengketa null -> posting lolos dgn akun tebak/fallback 210201 = MERAH.
 - E114-7: jurnal sengketa POSTED diedit/dihapus fisik (bukan reversal) = MERAH (selaras 112-V Putusan 1).
 ID vonis ini **F-2026-10-27-114-V** (jawaban Q-TXD-1..5 spec F-2026-10-27-113-S PR #1210; basis origin/main f62056bd8). Pemilik berikutnya: BOT Lead (merge vonis + putus Q-TXD-6..8) -> BOT Backend (113-B register dulu, lapis jurnal sub-tahap terpisah) -> BOT Frontend (113-F) -> BOT QA (113-Q + E114-1..7 atas head persis). FREEZE CEO 27 Okt 14:34 WIB dipatuhi: nol kartu baru dibuat run ini; handoff tertulis di komentar kartu t_40d5e2c1 + board.
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-116-V: over-receipt ditolak keras tanpa toleransi/approval (jawaban PUR-BR-004)
+Pemilik vonis: Accountant (accounting-finance-tax, lane FIN + vonis jurnal). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `437a2baa2` (28 Okt 2026 01:46 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-116` di backlog+board = 0/0 sebelum tulis. Bebas. Slot 115-V terisi PR #1226 (Business, INV-BR-007) — tidak bentrok.
+### 1. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Guard over-receipt keras di verifikasi: `src/lib/hooks/goods-receipt.hook.ts:206-236` — kumulatif diterima (satuan dasar via `toBaseQty`) per item vs total dipesan item itu; `received > ordered` → throw `Penerimaan melebihi pesanan ... Sesuaikan qty penerimaan atau ubah PO.` Komentar baris 210 menegaskan `Hard cap with no tolerance`. Kunci baris PO `FOR UPDATE` sebelum hitung (serialisasi verifikasi konkuren).
+- Draft boleh melebihi PO, penegakan hanya di verifikasi: `src/actions/purchase.actions.ts:1101` (`cumulative over-receive guard lives in the verification hook`); create/update GR hanya cek keanggotaan item di PO (`Item #N tidak ada dalam PO`), bukan plafon qty.
+- PO dikunci sesudah penerimaan berjalan: edit hanya status draft (`purchase.actions.ts:2690,2708`); cancel menolak `partial_received`/`received` (`:1005`); GR verified tidak bisa dihapus bila PO punya tagihan aktif (`:2290`); GR draft bebas diedit/dihapus (sebelum efek stok/jurnal lahir).
+- GR vs tagihan terpisah jurnal: GR verified → StockMove IN posted + jurnal `GoodsReceipt` (Dr Persediaan / Cr clearing) `stock-journal.service.ts:77,144-235`; tagihan vendor → jurnal `VendorBill` terpisah (`accounting.hook.ts:2548,2631,2731`) + 3-way match plafon nilai diterima (`purchase.actions.ts:223-325`, toleransi nilai max(Rp1000, 1%) hanya untuk pembulatan nilai tagihan, bukan qty).
+- Stok hanya lahir di verifikasi: `goods-receipt.hook.ts:423-424` (`impact: IN`, `status: posted`); `receivedQty` PO ditulis absolut dari peta kumulatif yang sama dengan guard (`:246-254`), self-healing dari drift.
+- Izin terpisah: `verify_goods_receipts` beda dari `create/edit/delete_goods_receipts` (`base-data.ts:147-151,759-762`); verifikasi = titik otorisasi penerimaan.
+- Nol saklar toleransi/approval over-receipt: grep `tolerance/TOLERANCE/allowExcess` di settings/seed/skema = 0 (di luar toleransi nilai 3-way); grep `OverReceipt/overreceipt` di skema/seed = 0 — tidak ada model, setting, workflow approval, atau matriks untuk pengecualian over-receipt.
+- Regresi hidup: `src/lib/hooks/__tests__/goods-receipt-over-receipt.test.ts` 24/24 hijau run ini (termasuk multi-UoM 13× false-positive + 6× lolos nyata); `goods-receipt-received-qty.test.ts` (absolut + anti over-receipt palsu 5+5/terima-6).
+### 2. Vonis (menutup garpu keputusan PUR-BR-004, bukan menambah perilaku)
+- V1: penerimaan melebihi PO DITOLAK KERAS di verifikasi, tanpa toleransi qty dan tanpa jalur approval pengecualian — garpu "kecuali kebijakan dan approval mengizinkan" di PUR-BR-004 sumber DINYATAKAN TERTUTUP DENGAN NILAI TOLAK (nol kebijakan toleransi dibangun; nol matriks approval untuk over-receipt; satu-satunya jalan sah = ubah PO-nya dulu — PO draft diedit, PO approved di-... — atau sesuaikan qty GR).
+- V2: draft GR boleh melebihi PO (kertas kerja), tetapi verify, stok IN, jurnal GR, dan `receivedQty` TIDAK PERNAH lahir dari kelebihan — guard berjalan sebelum mutasi apa pun dalam tx yang sama (gagal = seluruh verifikasi rollback).
+- V3: kelebihan yang sah secara bisnis (vendor kirim lebih, disepakati) dicatat sebagai PERUBAHAN PO (edit qty PO draft / revisi PO), bukan sebagai penerimaan-lebih — supaya kontrak (PO), fisik (GR), dan plafon tagih (3-way) tetap satu angka.
+- V4: toleransi nilai 3-way match (max Rp1000 / 1% receivedValue, `purchase.actions.ts:254,310`) SAH apa adanya untuk pembulatan nilai tagihan vs nilai diterima — itu toleransi NILAI, bukan toleransi QTY, dan tidak membuka celah qty (guard qty tetap 0).
+### 3. Batas vonis (jujur)
+- Alur revisi PO approved (siapa boleh menaikkan qty PO sesudah approved, approval apa) TIDAK divonis di sini — itu workflow dokumen (lane Business/Lead), bukan akuntansi; vonis ini hanya menetapkan kelebihan fisik tidak bisa masuk tanpa lewat PO.
+- Status INDEKS-ATURAN yang diubah PR ini: PUR-BR-004 OPEN-keputusan → Sebagian (penegakan qty tertutup-terverifikasi + regresi; sisa = alur revisi PO approved bila owner menghendaki, bukan keputusan toleransi).
+ID vonis ini **F-2026-10-28-116-V** (jawaban PUR-BR-004). Pemilik berikutnya: Lead (merge vonis ini) → QA (falsifikasi E116-1..3 atas head persis) → INDEKS-ATURAN terbit status baru sesudah merge.
+### Falsifikasi QA (E116, atas head persis)
+- E116-1: terima kumulatif > dipesan lalu verify lolos (stok IN / jurnal GR lahir) = MERAH.
+- E116-2: tambah toleransi qty / setting / permission / workflow approval over-receipt tanpa vonis baru = MERAH (keputusan V1 dilanggar).
+- E116-3: samakan toleransi nilai 3-way dengan toleransi qty (pakai toleransi nilai untuk meloloskan qty lebih) = MERAH (keputusan V4 dilanggar).
