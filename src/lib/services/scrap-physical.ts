@@ -47,7 +47,7 @@ export function validateUsableRemnant(input: {
   if (!(input.dimensions ?? "").trim()) {
     return "Remnant usable wajib diisi dimensi terukur."
   }
-  const measured = Number(input.measuredSize ?? NaN)
+  const measured = Number(input.measuredSize ?? Number.NaN)
   if (!Number.isFinite(measured) || measured <= 0) {
     return "Remnant usable wajib diisi ukuran terukur lebih dari 0."
   }
@@ -55,7 +55,7 @@ export function validateUsableRemnant(input: {
   if (!(REMNANT_SOURCE_TYPES as readonly string[]).includes(sourceType)) {
     return "Remnant usable wajib tertaut ke baris issue asal (sumber material_issue_item/production_order_material)."
   }
-  const sourceId = Number(input.sourceId ?? NaN)
+  const sourceId = Number(input.sourceId ?? Number.NaN)
   if (!Number.isSafeInteger(sourceId) || sourceId <= 0) {
     return "Remnant usable wajib tertaut ke baris issue asal (sumber tidak valid)."
   }
@@ -71,7 +71,7 @@ export function validateUsableRemnant(input: {
 
 /** Berat besi tua wajib > 0 kg saat sisa masuk penampungan scrap. */
 export function validateScrapWeightKg(weightKg?: number | null): string | null {
-  const kg = Number(weightKg ?? NaN)
+  const kg = Number(weightKg ?? Number.NaN)
   if (!Number.isFinite(kg) || kg <= 0) {
     return "Berat besi tua (kg) wajib diisi lebih dari 0 saat sisa dicatat sebagai scrap."
   }
