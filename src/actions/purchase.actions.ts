@@ -10,7 +10,7 @@ import {
   safeMultiply,
   safeRound,
 } from "@/lib/utils/math";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, type TxClient } from "@/lib/db/prisma";
 import { toBaseFactor } from "@/lib/services/uom.service";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import { Prisma } from "@prisma/client";
@@ -2092,6 +2092,12 @@ export async function deletePurchaseOrder(id: number) {
           }
           await Promise.all(qtyUpdates);
 
+          const grLayers = await tx.inventoryLayer.findMany({
+            where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
+            select: { itemId: true, warehouseId: true, batchNumber: true, qtyIn: true },
+          });
+          await decrementItemBatchesForLayers(tx, grLayers);
+
           await tx.inventoryLayer.deleteMany({
             where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
           });
@@ -2148,6 +2154,48 @@ export async function deletePurchaseOrder(id: number) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deletePurchaseOrder]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Kurangi lot `ItemBatch` sebesar qty yang layer-layer sebuah GR sumbangkan
+ * (qtyIn per lot, diagregasi per item+gudang+batch), hapus lot yang habis.
+ * Penghapusan GR/PO membersihkan layer + StockMove + serial + jurnal; tanpa
+ * langkah ini lot fisiknya yatim — stok tertelusur-batch menggantung di atas
+ * persediaan yang sudah tidak ada.
+ */
+async function decrementItemBatchesForLayers(
+  tx: TxClient,
+  layers: Array<{ itemId: number; warehouseId: number | null; batchNumber: string | null; qtyIn: unknown }>,
+): Promise<void> {
+  const byLot = new Map<string, { itemId: number; warehouseId: number; batchNumber: string; qty: number }>();
+  for (const layer of layers) {
+    if (!layer.batchNumber || layer.warehouseId == null) continue;
+    const key = `${layer.itemId}|${layer.warehouseId}|${layer.batchNumber}`;
+    const existing = byLot.get(key);
+    if (existing) {
+      existing.qty = Math.round((existing.qty + Number(layer.qtyIn)) * 100) / 100;
+    } else {
+      byLot.set(key, {
+        itemId: layer.itemId,
+        warehouseId: layer.warehouseId,
+        batchNumber: layer.batchNumber,
+        qty: Number(layer.qtyIn),
+      });
+    }
+  }
+  for (const lot of byLot.values()) {
+    const batch = await tx.itemBatch.findFirst({
+      where: { itemId: lot.itemId, warehouseId: lot.warehouseId, batchNumber: lot.batchNumber },
+      select: { id: true, qty: true },
+    });
+    if (!batch) continue;
+    const remainingQty = Math.round((Number(batch.qty) - lot.qty) * 100) / 100;
+    if (remainingQty <= 0) {
+      await tx.itemBatch.delete({ where: { id: batch.id } });
+    } else {
+      await tx.itemBatch.update({ where: { id: batch.id }, data: { qty: remainingQty } });
+    }
   }
 }
 
@@ -2227,6 +2275,12 @@ export async function deleteGoodsReceipt(id: number) {
         }
         await Promise.all(qtyUpdates);
 
+        const grLayers = await tx.inventoryLayer.findMany({
+          where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
+          select: { itemId: true, warehouseId: true, batchNumber: true, qtyIn: true },
+        });
+        await decrementItemBatchesForLayers(tx, grLayers);
+
         await tx.inventoryLayer.deleteMany({
           where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
         });
@@ -2286,32 +2340,75 @@ export async function deleteGoodsReceipt(id: number) {
       // by the PO page ("Diterima") and the PO Outstanding report, so deleting a
       // verified receipt must lower it — otherwise stock that no longer exists
       // keeps counting as received. Recomputed (not decremented) from the receipts
-      // that remain, so a delete/re-verify cycle also heals any drift, and in ONE
-      // statement so every PO line is written together. UoM rule: no UoM or UoM
-      // == item base unit → factor 1, missing or non-positive conversion
-      // factor → 1 with an explicit console.warn in the hook (never silent;
-      // throwing would break the sales quick-add UoM flow, see uom.service).
+      // that remain, so a delete/re-verify cycle also heals any drift. Total per
+      // item didistribusikan PER BARIS (urutan id, sampai qty baris) seperti di
+      // goods-receipt.hook — PO berbaris item duplikat tak boleh menerima total
+      // yang sama di semua barisnya. UoM rule: no UoM or UoM == item base unit
+      // → factor 1, missing or non-positive conversion factor → 1 with an
+      // explicit console.warn (never silent; throwing would break the sales
+      // quick-add UoM flow, see uom.service).
       if (gr.purchaseOrderId) {
-        await tx.$executeRaw`
-          UPDATE purchase_order_items poi
-          LEFT JOIN (
-            SELECT gri.item_id,
-                   SUM(gri.qty * CASE
-                       WHEN gri.uom IS NULL OR gri.uom = i.unit_of_measure THEN 1
-                       WHEN uc.factor_to_base > 0 THEN uc.factor_to_base
-                       ELSE 1
-                   END) AS received_qty
-            FROM goods_receipt_items gri
-            JOIN goods_receipts gr ON gr.id = gri.goods_receipt_id
-            JOIN items i ON i.id = gri.item_id
-            LEFT JOIN uom_conversions uc ON uc.item_id = gri.item_id AND uc.code = gri.uom
-            WHERE gr.purchase_order_id = ${gr.purchaseOrderId}
-              AND gr.status IN (${PurchaseStatus.VERIFIED}, ${Status.COMPLETED})
-            GROUP BY gri.item_id
-          ) agg ON agg.item_id = poi.item_id
-          SET poi.received_qty = COALESCE(agg.received_qty, 0)
-          WHERE poi.purchase_order_id = ${gr.purchaseOrderId}
-        `;
+        const poLines = await tx.purchaseOrderItem.findMany({
+          where: { purchaseOrderId: gr.purchaseOrderId },
+          orderBy: { id: "asc" },
+          select: { id: true, itemId: true, qty: true },
+        });
+        if (poLines.length > 0) {
+          const remainingItems = await tx.goodsReceiptItem.findMany({
+            where: {
+              goodsReceipt: {
+                purchaseOrderId: gr.purchaseOrderId,
+                status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+              },
+            },
+            select: { itemId: true, qty: true, uom: true },
+          });
+          const recomputeItemIds = [
+            ...new Set([...poLines.map((l) => l.itemId), ...remainingItems.map((i) => i.itemId)]),
+          ];
+          const recomputeItemRows = recomputeItemIds.length
+            ? await tx.item.findMany({
+                where: { id: { in: recomputeItemIds } },
+                select: { id: true, unitOfMeasure: true },
+              })
+            : [];
+          const baseUnitByItem = new Map(recomputeItemRows.map((r) => [r.id, r.unitOfMeasure]));
+          const enteredUoms = [
+            ...new Set(remainingItems.map((i) => i.uom).filter((u): u is string => !!u)),
+          ];
+          const conversions =
+            recomputeItemIds.length && enteredUoms.length
+              ? await tx.uomConversion.findMany({
+                  where: { itemId: { in: recomputeItemIds }, code: { in: enteredUoms } },
+                  select: { itemId: true, code: true, factorToBase: true },
+                })
+              : [];
+          const factorMap = new Map(
+            conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)]),
+          );
+          const receivedByItem = new Map<number, number>();
+          for (const row of remainingItems) {
+            let factor = 1;
+            if (row.uom && row.uom !== baseUnitByItem.get(row.itemId)) {
+              const raw = factorMap.get(`${row.itemId}:${row.uom}`);
+              if (raw == null || !(raw > 0)) {
+                console.warn(
+                  `[purchase.actions] konversi ${row.uom} untuk item #${row.itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} — qty dihitung 1:1 dalam satuan dasar. Daftarkan konversi UoM item tersebut.`,
+                );
+              } else {
+                factor = raw;
+              }
+            }
+            receivedByItem.set(row.itemId, (receivedByItem.get(row.itemId) ?? 0) + Number(row.qty) * factor);
+          }
+          const remainingByItem = new Map(receivedByItem);
+          for (const line of poLines) {
+            const remaining = remainingByItem.get(line.itemId) ?? 0;
+            const allocated = Math.min(remaining, Number(line.qty));
+            remainingByItem.set(line.itemId, Math.round((remaining - allocated) * 100) / 100);
+            await tx.$executeRaw`UPDATE purchase_order_items SET received_qty = ${allocated} WHERE id = ${line.id}`;
+          }
+        }
 
         const remainingCount = await tx.goodsReceipt.count({
           where: { purchaseOrderId: gr.purchaseOrderId },
