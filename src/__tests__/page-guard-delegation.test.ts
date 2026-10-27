@@ -62,6 +62,11 @@ const DELEGATED: Record<string, Delegation> = {
     call: "getCollectionQueue",
     target: "src/lib/reports/collection-queue-data.ts",
   },
+  "keuangan/antrean-reimbursement/page.tsx": {
+    kind: "loader",
+    call: "getReimbursementQueue",
+    target: "src/lib/reports/reimbursement-queue-data.ts",
+  },
   "laporan/pph-21/[[...segments]]/page.tsx": {
     kind: "loader",
     call: "loadPayrollPageContext",
