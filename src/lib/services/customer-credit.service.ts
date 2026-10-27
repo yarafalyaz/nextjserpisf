@@ -13,6 +13,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { onSalesPaymentUpdated } from "@/lib/hooks/sales-payment.hook";
 import {
   claimIdempotencyKey,
   bindIdempotencyKey,
@@ -119,36 +120,13 @@ export async function allocateCreditToInvoice(
           status: amount >= balance ? "used" : credit.status,
         },
       });
-      const payments = await tx.salesPayment.findMany({
-        where: { salesInvoiceId },
-        select: { amount: true },
-      });
-      const totalPaid = Math.min(
-        payments.reduce((s, p) => s + Number(p.amount), 0),
-        Number(invoice.grandTotal),
-      );
-      // BLOCKER-1 F-036-S: alokasi yang melunasi faktur WAJIB membekukan
-      // snapshot tarif komisi di transaksi yang sama (resolver sama
-      // seperti recalcCore, per tanggal faktur).
-      const creditGoingPaid = totalPaid >= Number(invoice.grandTotal)
-      const commissionSnapshot = await commissionSnapshotForPaid(
-        tx as never,
-        {
-          id: salesInvoiceId,
-          customerId: Number(invoice.customerId),
-          date: (invoice as { date: Date }).date,
-          commissionRatePercent: (invoice as { commissionRatePercent?: number | null }).commissionRatePercent ?? null,
-        },
-        creditGoingPaid,
-      )
-      await tx.salesInvoice.update({
-        where: { id: salesInvoiceId },
-        data: {
-          paidAmount: totalPaid,
-          paymentStatus: creditGoingPaid ? "paid" : "partial",
-          ...commissionSnapshot,
-        },
-      });
+      // TASK-016 BUG-07: hitung ulang lewat recalc kanonis pembayaran
+      // (sales-payment.hook): pelunasan sah = amount + potongan PPh, dan
+      // `status` faktur ikut selaras (paid/partial/posted), bukan hanya
+      // paymentStatus. Hitung manual `amount` saja membuat faktur yang
+      // dipotong PPh tak pernah lunas (mis. 60 kas + 10 PPh + kredit 30
+      // atas faktur 100 tertulis 90/partial).
+      await onSalesPaymentUpdated(salesInvoiceId, tx);
       // AUD-FIN-03 (putusan akuntan): alokasi kredit = reklas antar-subledger
       // kewajiban 210102 → piutang, NOL-NET tanpa kas. Kas penuh SUDAH dijurnal
       // saat terima DP/kredit — panggil onSalesPaymentCreated generik (Dr Kas /
@@ -277,6 +255,75 @@ export async function refundCredit(
             credit: line.credit,
             memo: line.memo,
           }));
+        }
+      }
+      // F-2026-10-27-086-V Putusan 2: kredit Quotation/RevisionDown lahir
+      // dari DP quotation yang sama — refund kas DITOLAK definitif bila
+      // ada DP confirmed quotation sumber ber-FP UM aktif beresidu > 0.
+      // Residu per DP (F4) = amount DP − alokasi bruto SalesPayment
+      // paymentMethod="down_payment" bermarker nomor DP (pola
+      // accounting.hook.ts) − kredit DownPayment untuk DP itu. Tanpa
+      // atribusi FIFO/pro-rata (Putusan 4): satu DP menahan = seluruh
+      // seluruh refund, termasuk parsial (Putusan 7b). DP legacy tanpa
+      // snapshot tidak menahan (Putusan 7a). Lolos gerbang: jurnal
+      // existing Dr 210102/Cr Kas TANPA kaki 210201 (Putusan 3).
+      if (
+        (credit.sourceType === "Quotation" || credit.sourceType === "RevisionDown") &&
+        credit.sourceId != null
+      ) {
+        const dps = await tx.downPayment.findMany({
+          where: { quotationId: credit.sourceId, status: "confirmed" },
+        });
+        const taxedDps = dps.filter((d) => {
+          const snap = snapshotFromDownPaymentRow(d as never);
+          return snap != null && snap.ppnUangMuka > 0;
+        });
+        if (taxedDps.length > 0) {
+          const dpIds = taxedDps.map((d) => d.id);
+          const [activeFps, dpPayments, dpCredits] = await Promise.all([
+            tx.taxInvoice.findMany({
+              where: {
+                downPaymentId: { in: dpIds },
+                direction: "out",
+                djpStatus: { notIn: ["cancelled", "replaced"] },
+              },
+              select: { downPaymentId: true, taxInvoiceNumber: true },
+            }),
+            tx.salesPayment.findMany({
+              where: { paymentMethod: "down_payment", notes: { contains: "Uang muka dari DP" } },
+              select: { amount: true, notes: true },
+            }),
+            tx.customerCredit.findMany({
+              where: { sourceType: "DownPayment", sourceId: { in: dpIds } },
+              select: { sourceId: true, receivedAmount: true },
+            }),
+          ]);
+          const fpByDpId = new Map(activeFps.map((f) => [f.downPaymentId, f.taxInvoiceNumber]));
+          const allocatedByDocNo = new Map<string, number>();
+          for (const p of dpPayments) {
+            const m = /Uang muka dari DP\s+(\S+)/.exec(p.notes ?? "");
+            if (m) allocatedByDocNo.set(m[1], (allocatedByDocNo.get(m[1]) ?? 0) + Number(p.amount));
+          }
+          const creditByDpId = new Map<number, number>();
+          for (const c of dpCredits) {
+            creditByDpId.set(c.sourceId, (creditByDpId.get(c.sourceId) ?? 0) + Number(c.receivedAmount));
+          }
+          for (const d of taxedDps) {
+            const fpNo = fpByDpId.get(d.id);
+            if (!fpNo) continue;
+            const residue =
+              Math.round(
+                (Number(d.amount) -
+                  (allocatedByDocNo.get(d.documentNo) ?? 0) -
+                  (creditByDpId.get(d.id) ?? 0)) *
+                  100,
+              ) / 100;
+            if (residue > 0) {
+              throw definitive(
+                `FP uang muka ${fpNo} untuk DP ${d.documentNo} masih aktif dengan sisa uang muka belum teralokasi — batalkan FP UM dulu atau alokasikan DP sampai habis sebelum refund kredit quotation ini (086-V)`,
+              );
+            }
+          }
         }
       }
       await tx.customerCredit.update({

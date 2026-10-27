@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => {
   return {
     taxInvoiceFindFirst, taxInvoiceCreate, taxInvoiceUpdate, taxInvoiceFindUniqueOrThrow,
     salesInvoiceUpdate, salesInvoiceFindUnique, vendorBillUpdate, claimIdempotencyKey, bindIdempotencyKey,
-    assertPeriodOpen, queryRaw, dpFindUnique, tiFindMany, prisma,
+    assertPeriodOpen, queryRaw, dpFindUnique, tiFindMany, prisma, tx,
   }
 })
 
@@ -282,6 +282,50 @@ describe("creditInputInvoice guards", () => {
     expect(mocks.taxInvoiceUpdate).toHaveBeenCalledWith(
       { where: { id: 7 }, data: { creditStatus: "expired" } },
     )
+  })
+
+  // B4: mock di atas tidak mensimulasikan rollback, jadi tes F-002(c) lolos
+  // walau kode lama menulis `expired` lalu throw di dalam $transaction
+  // (rollback membuang statusnya). Tes ini memakai $transaction yang
+  // membuang tulisan saat callback melempar — status expired hanya selamat
+  // bila penulisannya ter-commit sebelum error dikembalikan.
+  it("B4: status expired ter-commit walau error sampai ke pengguna (tanpa rollback)", async () => {
+    const committed: unknown[] = []
+    let pending: unknown[] = []
+    const baseTx = mocks.tx as {
+      taxInvoice: Record<string, unknown>
+      [key: string]: unknown
+    }
+    const rollbackTx = {
+      ...baseTx,
+      taxInvoice: {
+        ...baseTx.taxInvoice,
+        update: (args: unknown) => {
+          pending.push(args)
+          return mocks.taxInvoiceUpdate(args as never)
+        },
+      },
+    }
+    const original = mocks.prisma.$transaction
+    mocks.prisma.$transaction = async (fn: (tx: unknown) => unknown) => {
+      pending = []
+      try {
+        const result = await fn(rollbackTx)
+        committed.push(...pending)
+        return result
+      } catch (e) {
+        pending = []
+        throw e
+      }
+    }
+    try {
+      const r = await creditInputInvoice({ id: 7, creditPeriod: "2026-05", idempotencyKey: key() })
+      expect(r.success).toBe(false)
+      expect(String(r.error)).toMatch(/expired/)
+      expect(committed).toContainEqual({ where: { id: 7 }, data: { creditStatus: "expired" } })
+    } finally {
+      mocks.prisma.$transaction = original
+    }
   })
 
   it("duplikat kredit (sudah credited) ditolak", async () => {

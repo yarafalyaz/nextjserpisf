@@ -124,6 +124,7 @@ export async function updateSystemSettings(formData: FormData) {
       companyPostalCode: strNull("companyPostalCode"),
       companyWebsite: strNull("companyWebsite"),
       companyTaxId: strNull("companyTaxId"),
+      companyNitku: strNull("companyNitku"),
       // F-2026-10-25-015-V: status PKP perusahaan. Nilai bukan enum
       // tertutup ditolak; status pkp tanpa tanggal mulai kewajiban
       // ditolak (konfigurasi cacat, jangan disimpan setengah).
