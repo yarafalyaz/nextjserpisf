@@ -12,15 +12,10 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
 }))
 
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumberBatch: mocks.generateDocumentNumberBatch,
-}))
-vi.mock("@/lib/services/inventory-fifo", () => ({
-  consumeFifoLayers: mocks.consumeFifoLayers,
-}))
-vi.mock("@/lib/services/stock-journal.service", () => ({
-  stockJournalService: { onMaterialIssue: mocks.onMaterialIssue },
-}))
+// Tiruan modul murni + jurnal: teruskan spy tanpa logika (pola serial test).
+vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumberBatch: mocks.generateDocumentNumberBatch }))
+vi.mock("@/lib/services/inventory-fifo", () => ({ consumeFifoLayers: mocks.consumeFifoLayers }))
+vi.mock("@/lib/services/stock-journal.service", () => ({ stockJournalService: { onMaterialIssue: mocks.onMaterialIssue } }))
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }))
