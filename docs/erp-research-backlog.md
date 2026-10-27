@@ -35751,9 +35751,9 @@ F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Stat
 
 ---
 
-## SPEC BUSINESS 2026-10-27 — F-2026-10-27-096-S: antrean rekonsiliasi bank draft mengendap
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-097-S: antrean rekonsiliasi bank draft mengendap
 
-> **Slot**: F-2026-10-27-096-S. Diperiksa bentrok 2026-10-27 07:19 WIB vs `origin/main` (`4e8191548`): grep `F-2026-10-27-096` di backlog+board main = 0; PR/branch terbuka `business-f096` = 0 (096 lama = F-2026-10-24-096-S foto WO, tanggal beda, bukan bentrok). Dokumen saja; nol kode/schema/migrasi. Branch `hermes/business-f096-bank-reconciliation-queue`.
+> **Slot**: F-2026-10-27-097-S (RENUMBER dari F-2026-10-27-096-S — PUTUSAN LEAD 2026-10-27 08:24 WIB, komentar PR #1135 6431408626: #1132 tetap 096-S tertua, spec ini 097-S, #1134 jadi 098-S; nama branch `hermes/business-f096-bank-reconciliation-queue` TIDAK diganti). Pemeriksaan bentrok awal 2026-10-27 07:19 WIB vs `origin/main` (`4e8191548`): grep `F-2026-10-27-096` di backlog+board main = 0 (096 lama = F-2026-10-24-096-S foto WO, tanggal beda, bukan bentrok). Dokumen saja; nol kode/schema/migrasi.
 > **Pembetulan premis kartu asal**: model `GoodsReceiptNote` TIDAK ADA di origin/main (grep schema: hanya `GoodsReceipt:2181`, `PurchaseReturn:2242`). Kandidat pivot terverifikasi: `BankStatement` status lahir `draft` TANPA jalur keluar status apa pun (tidak ada aksi ubah status header di main — status mati), sedangkan `BankReconciliation` status lahir `draft` DENGAN jalur keluar sah `completeReconciliation` (klaim atomik draft→completed + gerbang seimbang). Dipilih `BankReconciliation` draft mengendap: antrean mengendap mensyaratkan dokumen lahir menunggu DAN punya jalan keluar existing; `BankStatement` draft adalah status yatim tak berpintu (dicatat §Yang TIDAK diusulkan sebagai temuan terpisah untuk Lead, bukan dispec diam-diam). Beda tegas: 061-S = GoodsReceipt draft, 063-S = PurchaseReturn draft — beda model, beda aktor (gudang/pembelian vs keuangan), beda jalan keluar.
 
 ### 0. Ringkasan
@@ -35877,14 +35877,14 @@ Edge cases:
 | Q-RBK-7 | Penempatan: seksi di halaman `/keuangan/rekonsiliasi-bank` existing vs halaman antrean terpisah? + fisik builder/loader baru vs perluasan laporan bank existing? | Lead/Backend | USULAN seksi turunan di halaman daftar existing (aktor sama); bentuk modul diputus Backend, klaim file di board |
 | Q-RBK-8 | Temuan samping: `BankStatement.status` lahir `draft` tanpa satu pun jalur keluar status di main (header koran tidak pernah lulus dari draft) — status mati dibiarkan, diganti makna, atau dihapus kelak? | Lead/Backend | Bukan populasi spec ini (BR-RBK-02); Business catat sebagai temuan — putusan milik Lead/Backend, jangan dicampur antrean rekonsiliasi |
 
-### 9. Backlog implementasi (turunan F-2026-10-27-096-S)
+### 9. Backlog implementasi (turunan F-2026-10-27-097-S)
 
 | ID | Pekerjaan | Pemilik | Gerbang |
 |---|---|---|---|
-| F-2026-10-27-096-S | Spec kontrak ini (dokumen) | Business | — |
-| 096-B | Builder/loader turunan antrean draft (populasi BR-RBK-01, umur `createdAt` WIB, agregat item anti-N+1, gerbang view) + tes AC-RBK-B1..B5 | Backend | Putusan Lead Q-RBK-1/2/3 |
-| 096-F | Permukaan antrean verbatim payload (penempatan Q-RBK-7) + AC-RBK-F1..F3 | Frontend | 096-B merged; grep e2e `rekonsiliasi-bank` dulu |
-| 096-Q | Falsifikasi AC-RBK-B1..B5 + F1..F3 atas head Backend/Frontend persis (completed bocor MERAH, umur updatedAt MERAH, selisih turunan MERAH, tombol Selesai dari antrean MERAH) | QA | 096-B/096-F |
+| F-2026-10-27-097-S | Spec kontrak ini (dokumen) | Business | — |
+| 097-B | Builder/loader turunan antrean draft (populasi BR-RBK-01, umur `createdAt` WIB, agregat item anti-N+1, gerbang view) + tes AC-RBK-B1..B5 | Backend | Putusan Lead Q-RBK-1/2/3 |
+| 097-F | Permukaan antrean verbatim payload (penempatan Q-RBK-7) + AC-RBK-F1..F3 | Frontend | 097-B merged; grep e2e `rekonsiliasi-bank` dulu |
+| 097-Q | Falsifikasi AC-RBK-B1..B5 + F1..F3 atas head Backend/Frontend persis (completed bocor MERAH, umur updatedAt MERAH, selisih turunan MERAH, tombol Selesai dari antrean MERAH) | QA | 097-B/097-F |
 
 ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
@@ -35897,4 +35897,4 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Pengingat/eskalasi otomatis rekonsiliasi mengendap, ekspor/PDF antrean tahap 1.
 - Jurnal/akun/penyesuaian baru apa pun — penyesuaian existing di detail tetap satu-satunya jalur.
 
-F-2026-10-27-096-S — Antrean rekonsiliasi bank draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBK-1/2/3/4, lalu fisik Backend (096-B), konsumen Frontend (096-F), falsifikasi QA (096-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja ini (BR-RBK-12); bersyarat hanya bila selisih turunan dibuka (Q-RBK-5).
+F-2026-10-27-097-S — Antrean rekonsiliasi bank draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-RBK-1/2/3/4, lalu fisik Backend (097-B), konsumen Frontend (097-F), falsifikasi QA (097-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja ini (BR-RBK-12); bersyarat hanya bila selisih turunan dibuka (Q-RBK-5).
