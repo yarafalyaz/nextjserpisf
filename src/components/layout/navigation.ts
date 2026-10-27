@@ -103,6 +103,7 @@ export const navigation: NavItem[] = [
       { label: "Retur", href: "/penjualan/retur", icon: RotateCcw, permission: "view_sales_returns" },
       { label: "Tukar Faktur", href: "/penjualan/tukar-faktur", icon: FileCheck, permission: "view_invoice_exchanges" },
       { label: "Daftar Harga Pelanggan", href: "/penjualan/harga-pelanggan", icon: BadgeDollarSign, permission: "view_customer_price_lists" },
+      { label: "Override Batas Kredit", href: "/penjualan/override-kredit", icon: ShieldAlert, permissions: ["approve_credit_overrides", "view_reports"] },
     ],
   },
   {

@@ -45,6 +45,12 @@ export function withContainer(run: (container: HTMLElement) => void) {
   run(container)
 }
 
+export async function withContainerAsync(run: (container: HTMLElement) => Promise<void>) {
+  const container = document.createElement("div")
+  document.body.appendChild(container)
+  await run(container)
+}
+
 export function decorativeStars(form: Element) {
   return form.querySelectorAll('span[aria-hidden="true"].text-destructive')
 }
