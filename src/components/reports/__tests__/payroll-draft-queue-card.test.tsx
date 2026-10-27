@@ -53,9 +53,6 @@ describe("PayrollDraftQueueCard 070-F AC-PDQ-F1..F3", () => {
     root = rendered.root
     const text = rendered.container.textContent ?? ""
     expect(rendered.container.querySelector('[aria-label="Antrean Slip Gaji Draft"]')).not.toBeNull()
-    expect(text).toContain(
-      "Daftar ini hanya slip gaji yang masih draft. Slip draft belum disetujui dan belum dibayar; proses lewat detail slip. Nominal gaji tidak ditampilkan di daftar ini.",
-    )
     const headers = [...rendered.container.querySelectorAll("th")].map((el) => el.textContent)
     expect(headers).toEqual([
       "Menunggu",
@@ -66,15 +63,21 @@ describe("PayrollDraftQueueCard 070-F AC-PDQ-F1..F3", () => {
       "Tipe",
       "Dibuat Oleh",
     ])
-    expect(text).toContain("1 mengendap · 1 menunggu proses · 2 slip draft")
-    expect(text).toContain("2026-10: 2 slip (1 mengendap, 1 menunggu proses)")
-    expect(text).toContain("Mengendap")
-    expect(text).toContain("5 hari")
-    expect(text).toContain("Menunggu Proses")
-    expect(text).toContain("1 hari")
-    expect(text).toContain("Karyawan Uji")
-    expect(text).toContain("Pemroses Uji")
-    expect(text).toContain("REGULAR")
+    // Notice verbatim server + rekap payload + label tingkat + umur tempel.
+    for (const expected of [
+      "Daftar ini hanya slip gaji yang masih draft. Slip draft belum disetujui dan belum dibayar; proses lewat detail slip. Nominal gaji tidak ditampilkan di daftar ini.",
+      "1 mengendap · 1 menunggu proses · 2 slip draft",
+      "2026-10: 2 slip (1 mengendap, 1 menunggu proses)",
+      "Mengendap",
+      "5 hari",
+      "Menunggu Proses",
+      "1 hari",
+      "Karyawan Uji",
+      "Pemroses Uji",
+      "REGULAR",
+    ]) {
+      expect(text).toContain(expected)
+    }
   })
 
   it("AC-PDQ-F1: passthrough umur/tingkat/count buatan — tampil payload, bukan hitung-ulang", () => {
