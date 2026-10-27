@@ -38,6 +38,7 @@ import {
 } from "@/lib/validations/crm.schemas";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
+import { canViewSensitiveIdentity } from "@/lib/auth/field-visibility";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
   isEmploymentEndReason,
@@ -776,6 +777,7 @@ function readEmployeeFormFields(
     dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
     departmentId: safeId(formData.get("departmentId")),
     positionId: safeId(formData.get("positionId")),
+    managerId: safeId(formData.get("managerId")),
     paymentFrequency:
       (formData.get("paymentFrequency") as string) || "MONTHLY",
     // Gaji pokok nominal uang: wajib parser repo — safeNumber/Number membaca
@@ -811,6 +813,7 @@ function readEmployeeLifecycleFields(
     contractStartDate?: string;
     contractEndDate?: string;
     employmentEndedAt?: string;
+    leaveEligibilityStartDate?: string;
   },
 ) {
   const rawStatus = (formData.get("employmentStatus") as string | null)?.trim() || null;
@@ -837,7 +840,15 @@ function readEmployeeLifecycleFields(
       : null,
     employmentEndedAt: endedAt,
     endReason: rawReason,
+    leaveEligibilityStartDate: dates.leaveEligibilityStartDate
+      ? wibDateToUtcMidnight(dates.leaveEligibilityStartDate)
+      : null,
   };
+}
+
+function todayWibMidnightDate(): Date {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  return wibDateToUtcMidnight(today);
 }
 
 function dateOnlyOrNull(value: Date | null | undefined): string | null {
@@ -850,6 +861,7 @@ type EmployeeLifecycleValues = {
   contractEndDate: string | null;
   employmentEndedAt: string | null;
   endReason: string | null;
+  leaveEligibilityStartDate: string | null;
 };
 
 /**
@@ -896,6 +908,53 @@ async function assertEmployeeRefsExist(fields: { departmentId: number | null; po
   }
 }
 
+// Field identitas sensitif: tanpa izin view_sensitive_identity nilai dari
+// form tidak boleh menimpa/mengisi kolom ini (server-side, bukan kosmetik UI).
+const SENSITIVE_IDENTITY_FIELDS = [
+  "idNumber",
+  "npwp",
+  "bankName",
+  "bankAccountNumber",
+  "bankAccountHolder",
+  "bpjsKetenagakerjaan",
+  "bpjsKesehatan",
+] as const;
+
+function stripSensitiveIdentity<T extends Record<string, unknown>>(data: T): T {
+  const out = { ...data };
+  for (const f of SENSITIVE_IDENTITY_FIELDS) delete out[f];
+  return out;
+}
+
+// Rantai atasan tidak boleh siklik: telusuri ke atas dari atasan yang dipilih;
+// bertemu karyawan itu sendiri (atau putaran yang sudah ada) = tolak.
+async function assertManagerChainAcyclic(
+  employeeId: number | null,
+  managerId: number | null,
+): Promise<string | null> {
+  if (managerId == null) return null;
+  if (employeeId != null && managerId === employeeId) {
+    return "Karyawan tidak dapat menjadi atasan bagi dirinya sendiri";
+  }
+  const seen = new Set<number>();
+  let cursor: number | null = managerId;
+  for (let i = 0; i < 64 && cursor != null; i++) {
+    if (employeeId != null && cursor === employeeId) {
+      return "Rantai atasan tidak boleh membentuk lingkaran";
+    }
+    if (seen.has(cursor)) break;
+    seen.add(cursor);
+    const row: { managerId: number | null } | null =
+      await prisma.employee.findUnique({
+        where: { id: cursor },
+        select: { managerId: true },
+      });
+    if (!row) return "Atasan tidak ditemukan";
+    cursor = row.managerId;
+  }
+  return null;
+}
+
 // ==================== EMPLOYEE ACTIONS ====================
 
 export async function createEmployee(formData: FormData) {
@@ -917,6 +976,11 @@ export async function createEmployee(formData: FormData) {
       const deptId = safeId(formData.get("departmentId"));
       if (deptId !== scope.departmentId) {
         throw new Error("Anda hanya diperbolehkan membuat data karyawan di departemen Anda sendiri.");
+      }
+    } else if (scope.kind === "team") {
+      const mgr = safeId(formData.get("managerId"));
+      if (mgr == null || !scope.memberIds.includes(mgr)) {
+        throw new Error("Anda hanya diperbolehkan membuat data karyawan di dalam tim Anda.");
       }
     }
 
@@ -958,13 +1022,18 @@ export async function createEmployee(formData: FormData) {
     const parsedDates = parseFormData(employeeDatesSchema, formData);
     if (!parsedDates.success) return { success: false, error: parsedDates.error };
 
-    const employeeData = {
+    const employeeDataRaw = {
       employeeNo,
       ...readEmployeeFormFields(formData, parsedDates.data),
       ...readEmployeeLifecycleFields(formData, parsedDates.data),
       joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
+    const managerErr = await assertManagerChainAcyclic(null, employeeDataRaw.managerId);
+    if (managerErr) return { success: false, error: managerErr };
+    const employeeData = (await canViewSensitiveIdentity())
+      ? employeeDataRaw
+      : stripSensitiveIdentity(employeeDataRaw);
     await assertEmployeeRefsExist(employeeData);
 
     // Create employee + (optionally) a linked login account atomically.
@@ -1034,6 +1103,14 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       if (newDeptId !== scope.departmentId) {
         throw new Error("Anda hanya diperbolehkan mengupdate data karyawan ke departemen Anda sendiri.");
       }
+    } else if (scope.kind === "team") {
+      if (!scope.memberIds.includes(employeeId)) {
+        throw new Error("Anda hanya diperbolehkan mengupdate data karyawan di dalam tim Anda.");
+      }
+      const mgr = safeId(formData.get("managerId"));
+      if (mgr != null && !scope.memberIds.includes(mgr)) {
+        throw new Error("Atasan harus berada di dalam tim Anda.");
+      }
     }
 
     // Optional: create a login account for an employee that does not have one yet.
@@ -1045,6 +1122,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       select: {
         userId: true,
         employmentStatus: true,
+        leaveEligibilityStartDate: true,
         contractStartDate: true,
         contractEndDate: true,
         employmentEndedAt: true,
@@ -1124,16 +1202,39 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       formData.has("contractStartDate") ||
       formData.has("contractEndDate") ||
       formData.has("employmentEndedAt") ||
+      formData.has("leaveEligibilityStartDate") ||
       formData.has("endReason");
     const lifecycleFields = lifecycleTouched
       ? readEmployeeLifecycleFields(formData, parsedDates.data)
       : null;
-    const updateData = {
+
+    // Transisi Magang -> Kontrak: jam masa kerja hak cuti mulai dari
+    // tanggal mulai kontrak (masa magang tidak terhitung). Jangkar hanya
+    // diisi otomatis bila belum pernah diatur manual.
+    if (
+      lifecycleFields &&
+      current &&
+      current.employmentStatus === "INTERN" &&
+      (lifecycleFields.employmentStatus === "PKWT" ||
+        lifecycleFields.employmentStatus === "PKWTT") &&
+      current.leaveEligibilityStartDate == null &&
+      lifecycleFields.leaveEligibilityStartDate == null
+    ) {
+      lifecycleFields.leaveEligibilityStartDate =
+        lifecycleFields.contractStartDate ?? todayWibMidnightDate();
+    }
+    const managerErr = await assertManagerChainAcyclic(employeeId, employeeFields.managerId);
+    if (managerErr) return { success: false, error: managerErr };
+
+    const updateDataRaw = {
       ...employeeFields,
       ...(lifecycleFields ?? {}),
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
       slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
+    const updateData = (await canViewSensitiveIdentity())
+      ? updateDataRaw
+      : stripSensitiveIdentity(updateDataRaw);
 
     await prisma.$transaction(async (tx) => {
       if (wantsLogin && email && loginPass) {
@@ -1193,6 +1294,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(current.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(current.employmentEndedAt),
         endReason: current.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(current.leaveEligibilityStartDate),
       };
       const newValues = {
         employmentStatus: lifecycleFields.employmentStatus,
@@ -1200,6 +1302,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         contractEndDate: dateOnlyOrNull(lifecycleFields.contractEndDate),
         employmentEndedAt: dateOnlyOrNull(lifecycleFields.employmentEndedAt),
         endReason: lifecycleFields.endReason,
+        leaveEligibilityStartDate: dateOnlyOrNull(lifecycleFields.leaveEligibilityStartDate),
       };
       if (JSON.stringify(oldValues) !== JSON.stringify(newValues)) {
         const logged = await writeEmployeeLifecycleLog({

@@ -104,6 +104,7 @@ export const employeeSchema = z.object({
   dependents: z.coerce.number().int().min(0).max(3).default(0),
   departmentId: z.number().optional(),
   positionId: z.number().optional(),
+  managerId: z.number().nullable().optional(),
   joinDate: z.string().min(1, "Tanggal masuk wajib diisi"),
   paymentFrequency: z.string().default("MONTHLY"),
   baseSalary: z.number().min(0).default(0).or(z.string().transform((val) => Number(val.replace(/\D/g, '')) || 0)),
@@ -128,6 +129,7 @@ export const employeeSchema = z.object({
   // hidup. Kosakata ditolak server bila di luar daftar; di sini hanya
   // pasangan tanggal+alasan berhenti yang dijaga, pesan persis server.
   employmentStatus: z.string().optional(),
+  leaveEligibilityStartDate: z.string().optional(),
   contractStartDate: z.string().optional(),
   contractEndDate: z.string().optional(),
   employmentEndedAt: z.string().optional(),

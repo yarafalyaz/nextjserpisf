@@ -142,6 +142,7 @@ export const employeeDatesSchema = z.object({
   contractStartDate: optionalDateOnly,
   contractEndDate: optionalDateOnly,
   employmentEndedAt: optionalDateOnly,
+  leaveEligibilityStartDate: optionalDateOnly,
 })
 
 export const uomServerSchema = z.object({

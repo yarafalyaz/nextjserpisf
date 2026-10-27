@@ -5,6 +5,8 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { seedModules } from "../src/lib/setup/modules";
+import { NATIONAL_HOLIDAYS } from "../src/lib/setup/national-holidays";
+import { wibDateToUtcMidnight } from "../src/lib/utils/attendance-time";
 import {
   PERMISSIONS,
   ROLES,
@@ -147,6 +149,61 @@ async function main() {
     await assignPermissionsToRole("finance", FINANCE_WHITELIST);
 
     console.log("✅ All roles whitelists successfully mapped");
+
+    // Workflow persetujuan bawaan untuk dokumen uang sensitif (jurnal manual
+    // + pembayaran vendor): satu langkah oleh peran finance. Idempoten:
+    // hanya dibuat bila model itu belum punya workflow aktif, dan langkah
+    // hanya ditambah bila workflow belum punya langkah sama sekali, jadi
+    // konfigurasi tenant yang sudah diedit lewat UI tidak ditimpa seed.
+    const financeRoleId = roleIdByName.get("finance");
+    const defaultWorkflows = [
+      { name: "Persetujuan Jurnal Manual", code: "APR-JRN", modelType: "Journal" },
+      { name: "Persetujuan Pembayaran Vendor", code: "APR-VPAY", modelType: "VendorPayment" },
+    ];
+    for (const wf of defaultWorkflows) {
+      await conn.query(
+        `INSERT INTO approval_workflows (name, code, model_type, is_active, created_at, updated_at)
+         SELECT ?, ?, ?, 1, NOW(), NOW()
+         WHERE NOT EXISTS (
+           SELECT 1 FROM approval_workflows
+           WHERE model_type = ? AND is_active = 1 AND deleted_at IS NULL
+         )`,
+        [wf.name, wf.code, wf.modelType, wf.modelType],
+      );
+      if (financeRoleId) {
+        const wfRows = await conn.query(
+          `SELECT id FROM approval_workflows
+           WHERE model_type = ? AND is_active = 1 AND deleted_at IS NULL
+           ORDER BY priority DESC LIMIT 1`,
+          [wf.modelType],
+        );
+        const wfId = wfRows[0] ? Number(wfRows[0].id) : null;
+        if (wfId) {
+          await conn.query(
+            `INSERT INTO approval_workflow_steps (workflow_id, name, step_order, role_id, created_at, updated_at)
+             SELECT ?, 'Persetujuan Finance', 1, ?, NOW(), NOW()
+             WHERE NOT EXISTS (
+               SELECT 1 FROM approval_workflow_steps WHERE workflow_id = ?
+             )`,
+            [wfId, financeRoleId, wfId],
+          );
+        }
+      }
+    }
+    console.log("✅ Default approval workflows ensured (Journal, VendorPayment)");
+
+    // Hari libur nasional (SKB 3 Menteri): idempoten per (tanggal, nama),
+    // disimpan tengah malam WIB persis seperti createHoliday. Tanpa baris
+    // ini penghitung cuti menganggap tanggal merah sebagai hari kerja.
+    for (const h of NATIONAL_HOLIDAYS) {
+      await conn.query(
+        `INSERT INTO holidays (name, date, created_at, updated_at)
+         SELECT ?, ?, NOW(), NOW()
+         WHERE NOT EXISTS (SELECT 1 FROM holidays WHERE date = ? AND name = ?)`,
+        [h.name, wibDateToUtcMidnight(h.date), wibDateToUtcMidnight(h.date), h.name],
+      );
+    }
+    console.log(`✅ National holidays ensured (${NATIONAL_HOLIDAYS.length} entries)`);
 
     // Create system settings
     await conn.query(

@@ -24,6 +24,7 @@ import {
   markPkwtEventPaid,
   runPkwtMonthlyAccrual,
 } from "@/lib/services/pkwt-compensation.service";
+import { applyDueSalaryAdjustments } from "@/lib/services/salary-adjustment.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -61,7 +62,17 @@ import {
   getLeaveQuota,
   countLeaveWorkingDays,
   QUOTA_LEAVE_TYPES,
+  SPECIAL_LEAVE_DAY_CAPS,
+  resolveDayKind,
 } from "@/lib/services/leave-quota.service";
+import {
+  computeOvertimePay,
+  endOfWeekSunday,
+  startOfWeekMonday,
+  MAX_OVERTIME_HOURS_PER_WEEK,
+  MAX_OVERTIME_HOURS_PER_WORKDAY,
+  type OvertimeDayKind,
+} from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -905,6 +916,20 @@ export async function createLeaveRequest(formData: FormData) {
         );
       }
 
+      // Cuti khusus statutori (Pasal 81 & 93 UU 13/2003): batas hari
+      // kalender per kejadian, ditegakkan di sini karena gerbang jatah
+      // tahunan hanya berlaku untuk tipe "annual".
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       // Annual-leave quota gate (only `annual` draws down the 12-day/calendar-year
       // balance — see QUOTA_LEAVE_TYPES). Two enforced rules:
       //  1. Tenure: employees with < 1 year of service (from joinDate) are not
@@ -918,8 +943,13 @@ export async function createLeaveRequest(formData: FormData) {
       // START year (a leave straddling Dec→Jan is charged to the year it begins).
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
         const quotaYear = startDate.getFullYear();
+        // Kelayakan dinilai per TANGGAL MULAI cuti, bukan hari pengajuan:
+        // karyawan yang mengajukan dari sekarang untuk tanggal sesudah
+        // ulang tahun masa kerjanya yang ke-1 memang sudah berhak pada
+        // saat cuti itu berjalan.
         const quota = await getLeaveQuota(employeeId, {
           year: quotaYear,
+          now: startDate,
           db: tx,
         });
         if (!quota.eligible) {
@@ -1001,12 +1031,53 @@ export async function createOvertimeRequest(formData: FormData) {
     await assertHrEmployeeAccess(scope, v.employeeId);
 
     const overtime = await prisma.$transaction(async (tx) => {
+      // Batas lembur PP 35/2021 Pasal 26 ayat (1): maksimal 4 jam dalam
+      // sehari dan 18 jam dalam seminggu pada HARI KERJA. Lembur pada
+      // hari istirahat mingguan/libur resmi tidak termasuk batas itu.
+      const otDate = wibDateToUtcMidnight(v.date);
+      const dayProfile = await resolveDayKind(v.employeeId, otDate, tx);
+      if (dayProfile.isWorkingDay) {
+        const sameDay = await tx.overtimeRequest.findMany({
+          where: {
+            employeeId: v.employeeId,
+            date: otDate,
+            status: { in: ["pending", "approved"] },
+          },
+          select: { hours: true },
+        });
+        const dayTotal =
+          sameDay.reduce((s, r) => s + Number(r.hours), 0) + v.hours;
+        if (dayTotal > MAX_OVERTIME_HOURS_PER_WORKDAY) {
+          throw new Error(
+            `Lembur hari kerja maksimal ${MAX_OVERTIME_HOURS_PER_WORKDAY} jam sehari (sudah ada ${dayTotal - v.hours} jam pada tanggal ini).`,
+          );
+        }
+        const weekRows = await tx.overtimeRequest.findMany({
+          where: {
+            employeeId: v.employeeId,
+            date: { gte: startOfWeekMonday(otDate), lte: endOfWeekSunday(otDate) },
+            status: { in: ["pending", "approved"] },
+          },
+          select: { hours: true, date: true },
+        });
+        let weekWorkdayHours = v.hours;
+        for (const r of weekRows) {
+          const p = await resolveDayKind(v.employeeId, r.date, tx);
+          if (p.isWorkingDay) weekWorkdayHours += Number(r.hours);
+        }
+        if (weekWorkdayHours > MAX_OVERTIME_HOURS_PER_WEEK) {
+          throw new Error(
+            `Lembur hari kerja maksimal ${MAX_OVERTIME_HOURS_PER_WEEK} jam seminggu.`,
+          );
+        }
+      }
+
       const created = await tx.overtimeRequest.create({
         data: {
           slug: await nextSlug("overtimeRequest", `lembur-${v.date}`),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
-          date: wibDateToUtcMidnight(v.date),
+          date: otDate,
           hours: v.hours,
           totalHours: v.totalHours ?? null,
           mealHours: v.mealHours ?? null,
@@ -1072,18 +1143,24 @@ export async function approveOvertime(overtimeId: number) {
       return { success: true };
     }
 
-    // Compute overtime value: hours * baseSalary * multiplier * coefficient.
-    // Default: multiplier ≈ 1/173 (monthly-to-hourly), coefficient 1.10 (first-hour rate).
-    const settings = await prisma.systemSetting.findFirst({
-      select: { overtimeMultiplier: true, overtimeCoefficient: true },
-    });
-    const multiplier = Number(settings?.overtimeMultiplier ?? 0.00578035);
-    const coefficient = Number(settings?.overtimeCoefficient ?? 1.1);
+    // Nilai lembur bertingkat menurut PP 35/2021 jo. Kepmenakertrans
+    // 102/2004: upah sejam = gaji/173; hari kerja 1,5x lalu 2x; hari
+    // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
+    // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
+    // lewat Pengaturan) membayar di bawah minimum undang-undang.
     const baseSalary = Number(ot.employee?.baseSalary ?? 0);
     const hours = Number(ot.hours);
-    const calculatedValue = Math.round(
-      hours * baseSalary * multiplier * coefficient,
-    );
+    const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
+    const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
+      ? "workday"
+      : dayProfile.workdaysPerWeek >= 6
+        ? "rest_6day"
+        : "rest_5day";
+    const calculatedValue = computeOvertimePay({
+      monthlySalary: baseSalary,
+      hours,
+      dayKind,
+    });
 
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
@@ -2167,6 +2244,12 @@ export async function generateBulkPayroll(
       );
     }
 
+    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
+    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
+    for (const e of employmentEligible) {
+      await applyDueSalaryAdjustments(e.id, periodEnd);
+    }
+
     // F-076-S BR-PF-02 + turunan (F-103-V/F-105-V): populasi run =
     // karyawan sefrekuensi; frekuensi lain terlewati-terhitung. WEEKLY
     // kini lolos via agregator BPJS se-masa; sisa gerbang hanya pinjaman
@@ -2493,6 +2576,10 @@ export async function processPayroll(formData: FormData) {
     if (!employeeId) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
+
+    // Kenaikan gaji terjadwal yang sudah jatuh tempo diterapkan ke master
+    // lebih dulu, supaya slip periode ini membaca gaji yang benar.
+    await applyDueSalaryAdjustments(employeeId, endDate);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
     // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
@@ -3999,10 +4086,22 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
         );
       }
 
+      const specialCap = SPECIAL_LEAVE_DAY_CAPS[v.type];
+      if (specialCap != null) {
+        const calendarDays =
+          Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
+        if (calendarDays > specialCap) {
+          throw new Error(
+            `Cuti jenis ini maksimal ${specialCap} hari per kejadian (diajukan ${calendarDays} hari).`,
+          );
+        }
+      }
+
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
         const quotaYear = startDate.getFullYear();
         const quota = await getLeaveQuota(employeeId, {
           year: quotaYear,
+          now: startDate,
           excludeLeaveId: id,
           db: tx,
         });

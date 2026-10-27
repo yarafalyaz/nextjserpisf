@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
   const prismaMock: Record<string, any> = {
     payrollComponent: buildModel(),
     employeePayrollComponent: buildModel(),
+    salaryAdjustment: buildModel(),
     payrollComponentLine: buildModel(),
     payroll: buildModel(),
     employee: buildModel(),
@@ -50,6 +51,7 @@ const mocks = vi.hoisted(() => {
       ]),
     },
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(async (fn: any) => (typeof fn === "function" ? fn(prismaMock) : Promise.all(fn))),
   }
   return {

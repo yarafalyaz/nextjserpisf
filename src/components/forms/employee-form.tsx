@@ -57,6 +57,7 @@ interface EmployeeFormProps {
     dependents: number | null
     departmentId: number | null
     positionId: number | null
+    managerId?: number | null
     joinDate: string
     paymentFrequency: string
     baseSalary: number
@@ -70,6 +71,7 @@ interface EmployeeFormProps {
     roleIds?: string[]
     // F-2026-10-22-085-S: siklus hidup (YYYY-MM-DD | null)
     employmentStatus?: string | null
+    leaveEligibilityStartDate?: string | null
     contractStartDate?: string | null
     contractEndDate?: string | null
     employmentEndedAt?: string | null
@@ -77,6 +79,7 @@ interface EmployeeFormProps {
   }
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
+  managers?: { id: number; name: string }[]
   generatedCode?: string
   enableAutoCode?: boolean
   roles?: { id: number; name: string }[]
@@ -140,7 +143,7 @@ function RolePicker({
   )
 }
 
-export function EmployeeForm({ employee, departments, positions, generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
+export function EmployeeForm({ employee, departments, positions, managers = [], generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!employee
@@ -184,10 +187,12 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
       dependents: employee?.dependents ?? 0,
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
+      managerId: employee?.managerId ?? null,
       joinDate: toDateInputValue(employee?.joinDate) || toLocalDateOnly(new Date()),
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
       employmentStatus: employee?.employmentStatus || "",
+      leaveEligibilityStartDate: toDateInputValue(employee?.leaveEligibilityStartDate),
       contractStartDate: toDateInputValue(employee?.contractStartDate),
       contractEndDate: toDateInputValue(employee?.contractEndDate),
       employmentEndedAt: toDateInputValue(employee?.employmentEndedAt),
@@ -219,6 +224,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
         // F-085-S: lifecycle selalu dikirim eksplisit (kosong -> server null);
         // jangan bergantung iterasi data (field kosong bisa terlewat).
         formData.set("employmentStatus", data.employmentStatus ?? "")
+        formData.set("leaveEligibilityStartDate", data.leaveEligibilityStartDate ?? "")
         formData.set("contractStartDate", data.contractStartDate ?? "")
         formData.set("contractEndDate", data.contractEndDate ?? "")
         formData.set("employmentEndedAt", data.employmentEndedAt ?? "")
@@ -368,6 +374,31 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Controller
+              name="managerId"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label>Atasan Langsung</Label>
+                  <select
+                    value={field.value ? String(field.value) : ""}
+                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                    className="form-input"
+                  >
+                    <option value="">— Tidak ada (puncak rantai) —</option>
+                    {managers
+                      .filter((m) => m.id !== employee?.id)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
+                </>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <AppDatePicker
               label="Tanggal Masuk"
               name="joinDate"
@@ -420,6 +451,14 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                   ))}
                 </select>
               )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              label="Mulai Hitung Masa Kerja Cuti"
+              name="leaveEligibilityStartDate"
+              value={watch("leaveEligibilityStartDate")}
+              onChange={(val) => setValue("leaveEligibilityStartDate", val)}
             />
           </div>
           <div className="flex flex-col gap-1.5">

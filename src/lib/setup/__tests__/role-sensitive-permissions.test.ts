@@ -47,6 +47,11 @@ const WHITELISTS: Record<string, readonly string[]> = {
 const EXPECTED_SENSITIVE: Record<string, string[]> = {
   staff: [],
   ga: [
+    "delete_recruitments",
+    "delete_performance",
+    "delete_competencies",
+    "delete_trainings",
+    "delete_succession",
     "delete_assets",
     "delete_asset_brands",
     "delete_asset_categories",
@@ -74,6 +79,7 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     "post_journals",
     "delete_journals",
     "approve_expenses",
+    "approve_journals",
     "delete_expenses",
     "delete_petty_cash",
     "delete_cost_centers",

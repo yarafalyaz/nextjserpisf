@@ -112,6 +112,15 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
   personal: "Keperluan Pribadi",
   maternity: "Cuti Melahirkan",
   unpaid: "Tanpa Gaji",
+  marriage: "Menikah",
+  child_marriage: "Menikahkan Anak",
+  child_circumcision: "Mengkhitankan Anak",
+  child_baptism: "Membaptis Anak",
+  spouse_childbirth: "Istri Melahirkan/Keguguran",
+  family_death_core: "Keluarga Inti Meninggal",
+  family_death_household: "Keluarga Serumah Meninggal",
+  menstrual: "Cuti Haid",
+  pilgrimage: "Ibadah Haji",
 };
 
 /** `AssetHistory.type` → label Indonesia. */

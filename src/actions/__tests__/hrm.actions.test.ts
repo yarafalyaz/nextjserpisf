@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => {
     payroll: buildModelMock(),
     // F-2026-10-21-027: model komponen gaji (mock kosong = tanpa penugasan).
     payrollComponent: buildModelMock(),
+    // Riwayat kenaikan gaji: mock kosong = tidak ada yang jatuh tempo.
+    salaryAdjustment: buildModelMock(),
     employeePayrollComponent: buildModelMock(),
     payrollComponentLine: buildModelMock(),
     // AUD-R3-02: ruleset statutori LENGKAP untuk periode tes (tulis-final
@@ -87,6 +89,7 @@ const mocks = vi.hoisted(() => {
     journalEntry: buildModelMock(),
     user: buildModelMock(),
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
         return ops(prismaMock)
@@ -1966,6 +1969,15 @@ describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (au
     prismaMock.$transaction.mockImplementation(async (fn: any) => {
       const tx = {
         $queryRaw: prismaMock.$queryRaw,
+        $executeRaw: vi.fn(async () => 1),
+        salaryAdjustment: {
+          findMany: vi.fn(async () => []),
+          update: vi.fn(async () => ({})),
+        },
+        employee: {
+          findUniqueOrThrow: vi.fn(async () => ({ baseSalary: 5000000 })),
+          update: vi.fn(async () => ({})),
+        },
         payroll: {
           findMany: vi.fn(async () => { emitOrder.push("txFindMany"); return inTxPayrolls }),
           createMany: vi.fn(async (args: any) => {
