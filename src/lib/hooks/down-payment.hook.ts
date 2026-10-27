@@ -3,6 +3,7 @@ import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
+import { isSettled } from "@/lib/finance/settlement-status";
 import { notificationService } from "@/lib/services/notification.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
@@ -286,7 +287,8 @@ async function onDownPaymentConfirmedInner(
         // gate izin/approval/period-lock). Tanpa ini, faktur draft berubah
         // "posted" tanpa posting — stok-out + revenue/COGS lewat tanpa gate.
         let paymentStatus: "posted" | "partial" | "paid" = existingInv.paymentStatus as "posted" | "partial" | "paid";
-        if (totalPaid >= grandTotal) {
+        // FIN-BR-006: lunas dari outstanding valid dalam toleransi Rp1.
+        if (isSettled(grandTotal, totalPaid)) {
           paymentStatus = "paid";
         } else if (totalPaid > 0) {
           paymentStatus = "partial";
@@ -816,7 +818,9 @@ async function onDownPaymentConfirmedInner(
     // membawa snapshot tarif komisi sejak tulis ini (resolver sama seperti
     // recalcCore, per tanggal faktur = tanggal lahir faktur di sini).
     const allocatedTotal = Math.min(allocatedSen / 100, Number(quotation.grandTotal))
-    const conversionGoingPaid = allocatedTotal >= Number(quotation.grandTotal)
+    // FIN-BR-006: allocated sudah di-cap grandTotal; lunas dari outstanding
+    // valid dalam toleransi Rp1 (selaraskan dengan jalur pembayaran lain).
+    const conversionGoingPaid = isSettled(Number(quotation.grandTotal), allocatedTotal)
     const commissionSnapshot = await commissionSnapshotForPaid(
       tx,
       { id: created.id, customerId: quotation.customerId, date: invoiceCreatedAt, commissionRatePercent: null },

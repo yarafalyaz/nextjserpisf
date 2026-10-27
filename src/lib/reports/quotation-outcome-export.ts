@@ -41,7 +41,7 @@ export function buildQuotationOutcomeTable(
   const { report } = result
   const columns: TableDocument["table"]["columns"] = [
     { header: "Kategori Kalah", align: "left", width: 60 },
-    { header: "Jumlah", align: "right", width: 24 },
+    { header: "Penawaran", align: "right", width: 24 },
   ]
 
   if (report.totalQuotations === 0) {
