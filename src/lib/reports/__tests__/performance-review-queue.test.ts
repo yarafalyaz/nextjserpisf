@@ -3,6 +3,7 @@ import {
   PERFORMANCE_QUEUE_COLUMN_LABELS,
   PERFORMANCE_QUEUE_EMPTY_TEXT,
   PERFORMANCE_QUEUE_LEVEL_LABELS,
+  PERFORMANCE_QUEUE_NO_GOAL_LABEL,
   PERFORMANCE_QUEUE_NOTICE_TEXT,
   PERFORMANCE_QUEUE_STAGE_LABELS,
   PERFORMANCE_QUEUE_STALE_DAYS,
@@ -105,6 +106,7 @@ describe("performance-review-queue builder (F-2026-10-27-077-S, Q-PFQ-1..8)", ()
       "Daftar ini hanya penilaian kinerja yang belum selesai pada siklus aktif. Penilaian dan finalisasi tetap dilakukan dari detail siklus; daftar ini tidak memberi peringkat antar karyawan.",
     )
     expect(PERFORMANCE_QUEUE_EMPTY_TEXT).toBe("Tidak ada penilaian kinerja yang belum selesai.")
+    expect(PERFORMANCE_QUEUE_NO_GOAL_LABEL).toBe("Tanpa Sasaran")
     expect(PERFORMANCE_QUEUE_STALE_DAYS).toBe(7)
   })
 
