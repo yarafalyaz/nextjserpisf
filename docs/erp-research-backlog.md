@@ -35751,9 +35751,9 @@ F-2026-10-27-082-S — Antrean klaim reimbursement disetujui belum dibayar. Stat
 
 ---
 
-## SPEC BUSINESS 2026-10-27 — F-2026-10-27-096-S: antrean faktur pajak draft mengendap belum berstatus DJP (turunan baca-saja)
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-098-S: antrean faktur pajak draft mengendap belum berstatus DJP (turunan baca-saja)
 
-> **Slot**: F-2026-10-27-096-S. Diperiksa bentrok 2026-10-27 07:21 WIB vs `origin/main` (`1dfe94ca0`): grep `F-2026-10-27-096` di backlog+board main = 0, tidak ada judul PR terbuka/branch `business-f096`; seri terakhir terverifikasi 095-S (PR #1129 OPEN). Dokumen saja; nol kode/schema/migrasi. Branch `hermes/business-f096-tax-invoice-queue`. Kartu asal t_012ca31b berjudul GoodsReceiptNote: model itu TIDAK ADA di schema main (hanya `GoodsReceipt` :2181 dan `PurchaseReturn` :2242 — keduanya sudah dispec 061-S/063-S), maka pivot sesuai klausul kartu ke kandidat mengendap berikutnya yang belum dispec. Kandidat yang DITOLAK dengan bukti: `BankStatement` lahir `draft` (finance.actions.ts:97) tetapi TIDAK ADA penulis status lain di seluruh `src/` non-tes — status mati tanpa jalur keluar, bukan antrean kerja; `PurchaseAdvance` lahir `posted` (schema:624) bukan draft; `InvoiceExchange` tanpa kolom status. Dipilih: `TaxInvoice.djpStatus = draft`.
+> **Slot**: F-2026-10-27-098-S (RENUMBER dari F-2026-10-27-096-S — PUTUSAN LEAD 2026-10-27 08:24 WIB, komentar PR #1135 6431408626: #1132 tetap 096-S tertua, #1133 jadi 097-S, spec ini 098-S; nama branch `hermes/business-f096-tax-invoice-draft-queue` TIDAK diganti). Pemeriksaan bentrok awal 2026-10-27 07:21 WIB vs `origin/main` (`1dfe94ca0`): grep `F-2026-10-27-096` di backlog+board main = 0, tidak ada judul PR terbuka/branch `business-f096`; seri terakhir terverifikasi 095-S (PR #1129 OPEN). Dokumen saja; nol kode/schema/migrasi. Kartu asal t_012ca31b berjudul GoodsReceiptNote: model itu TIDAK ADA di schema main (hanya `GoodsReceipt` :2181 dan `PurchaseReturn` :2242 — keduanya sudah dispec 061-S/063-S), maka pivot sesuai klausul kartu ke kandidat mengendap berikutnya yang belum dispec. Kandidat yang DITOLAK dengan bukti: `BankStatement` lahir `draft` (finance.actions.ts:97) tetapi TIDAK ADA penulis status lain di seluruh `src/` non-tes — status mati tanpa jalur keluar, bukan antrean kerja; `PurchaseAdvance` lahir `posted` (schema:624) bukan draft; `InvoiceExchange` tanpa kolom status. Dipilih: `TaxInvoice.djpStatus = draft`.
 
 ### 0. Ringkasan
 
@@ -35878,14 +35878,14 @@ Edge cases:
 | Q-TIQ-6 | Siapa/mekanisme apa yang sah menulis `djpStatus` `draft` → `approved`/`rejected`, dan apakah antrean kelak boleh menautkan status itu? | Accountant (vonis pajak) | BUTUH-VONIS: grep run ini tidak menemukan penulis non-tes; antrean tahap 1 tidak menyimpulkan apa pun tentang jalur ini dan tidak memakai kata disetujui/terkirim DJP |
 | Q-TIQ-7 | Penempatan permukaan: seksi di halaman Dokumen Pajak existing vs halaman antrean terpisah? | Lead | USULAN seksi/halaman dalam Keuangan > Dokumen Pajak berizin sama; bentuk diputus Lead/Frontend sesudah kontrak Backend |
 
-### 9. Backlog implementasi (turunan F-2026-10-27-096-S)
+### 9. Backlog implementasi (turunan F-2026-10-27-098-S)
 
 | ID | Pekerjaan | Pemilik | Gerbang |
 |---|---|---|---|
-| F-2026-10-27-096-S | Spec kontrak ini (dokumen) | Business | — |
-| 096-B | Builder/loader turunan antrean draft (populasi BR-TIQ-01/02, select tanpa payload XML, umur `createdAt` WIB, gerbang `create_tax_invoices`) + tes AC-TIQ-B1..B5 | Backend | Putusan Lead Q-TIQ-1/2/5 |
-| 096-F | Permukaan antrean verbatim payload (penempatan Q-TIQ-7) + AC-TIQ-F1..F3 | Frontend | 096-B merged; grep e2e dokumen-pajak dulu |
-| 096-Q | Falsifikasi AC-TIQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (payload XML bocor MERAH, hitung ulang PPN MERAH, kata disetujui DJP tampil MERAH, tombol batal dari antrean MERAH) | QA | 096-B/096-F |
+| F-2026-10-27-098-S | Spec kontrak ini (dokumen) | Business | — |
+| 098-B | Builder/loader turunan antrean draft (populasi BR-TIQ-01/02, select tanpa payload XML, umur `createdAt` WIB, gerbang `create_tax_invoices`) + tes AC-TIQ-B1..B5 | Backend | Putusan Lead Q-TIQ-1/2/5 |
+| 098-F | Permukaan antrean verbatim payload (penempatan Q-TIQ-7) + AC-TIQ-F1..F3 | Frontend | 098-B merged; grep e2e dokumen-pajak dulu |
+| 098-Q | Falsifikasi AC-TIQ-B1..B5 + F1..F3 atas head Backend/Frontend persis (payload XML bocor MERAH, hitung ulang PPN MERAH, kata disetujui DJP tampil MERAH, tombol batal dari antrean MERAH) | QA | 098-B/098-F |
 
 ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
@@ -35898,4 +35898,4 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Unggah Coretax host-to-host, pengingat WA/email petugas pajak, penghapusan draft basi otomatis (EC-TIQ-8 dibaca jujur, bukan dibersihkan diam-diam).
 - Menyentuh GoodsReceiptNote: model itu tidak ada — penerimaan barang tetap wilayah 061-S (`GoodsReceipt`), retur pembelian tetap 063-S (`PurchaseReturn`).
 
-F-2026-10-27-096-S — Antrean faktur pajak draft mengendap belum berstatus DJP. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-TIQ-1/2/4/5/7, vonis bersyarat Accountant Q-TIQ-6 (penulis approved/rejected), lalu fisik Backend (096-B), konsumen Frontend (096-F), falsifikasi QA (096-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: BERSYARAT — hanya Q-TIQ-6; tahap baca-saja tidak mengubah perlakuan pajak apa pun.
+F-2026-10-27-098-S — Antrean faktur pajak draft mengendap belum berstatus DJP. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-TIQ-1/2/4/5/7, vonis bersyarat Accountant Q-TIQ-6 (penulis approved/rejected), lalu fisik Backend (098-B), konsumen Frontend (098-F), falsifikasi QA (098-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: BERSYARAT — hanya Q-TIQ-6; tahap baca-saja tidak mengubah perlakuan pajak apa pun.
