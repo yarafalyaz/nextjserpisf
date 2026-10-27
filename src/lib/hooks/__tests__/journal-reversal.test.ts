@@ -114,4 +114,43 @@ describe("reverseJournalsByReferenceTx (P1-7)", () => {
     ).rejects.toThrow(/terkunci/)
     expect(journalCreate).not.toHaveBeenCalled()
   })
+
+  it("REVERSED journal is skipped, not deleted (counterpart must not be orphaned)", async () => {
+    const REVERSED = { ...POSTED, status: "REVERSED" }
+    journalFindMany.mockResolvedValue([REVERSED])
+    // Even if the counterpart lookup would find the reversal, the status
+    // branch alone must already skip — deleting the REVERSED original would
+    // strand its POSTED counterpart as a one-sided GL balance.
+    journalFindFirst.mockResolvedValue({ id: 77 })
+
+    await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "void lagi", 1)
+
+    expect(journalCreate).not.toHaveBeenCalled()
+    expect(journalUpdate).not.toHaveBeenCalled()
+    expect(journalDelete).not.toHaveBeenCalled()
+    expect(entryDeleteMany).not.toHaveBeenCalled()
+  })
+
+  it("REVERSED without a found counterpart is still skipped, not deleted", async () => {
+    const REVERSED = { ...POSTED, status: "REVERSED" }
+    journalFindMany.mockResolvedValue([REVERSED])
+    journalFindFirst.mockResolvedValue(null)
+
+    await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "void lagi", 1)
+
+    expect(journalCreate).not.toHaveBeenCalled()
+    expect(journalDelete).not.toHaveBeenCalled()
+    expect(entryDeleteMany).not.toHaveBeenCalled()
+  })
+
+  it("DRAFT journal is still deleted (not yet in GL)", async () => {
+    const DRAFT = { ...POSTED, status: "DRAFT" }
+    journalFindMany.mockResolvedValue([DRAFT])
+
+    await reverseJournalsByReferenceTx(tx as never, "SalesInvoice", 7, "edit draft", 1)
+
+    expect(journalDelete).toHaveBeenCalledWith({ where: { id: 5 } })
+    expect(entryDeleteMany).toHaveBeenCalledWith({ where: { journalId: 5 } })
+    expect(journalCreate).not.toHaveBeenCalled()
+  })
 })

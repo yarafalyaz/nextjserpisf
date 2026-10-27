@@ -161,10 +161,13 @@ describe("B5: bukti SPT nol-dobel dua masa (FP UM + FP pelunasan selisih)", () =
       { chain: [{ id: 1, dpp: um.dppUangMuka, taxAmount: um.ppnUangMuka, djpStatus: "approved" }], originPeriod: "2026-01" },
       { chain: [{ id: 2, dpp: settlement.settlementDpp, taxAmount: settlement.settlementPpn, djpStatus: "approved" }], originPeriod: "2026-02" },
     ])
-    // Legacy faktur komersial Feb (dokumen penuh) WAJIB tertekan karena
-    // masa Feb sudah punya baris TaxInvoice (FP selisih) — tanpa tekanan
-    // ini SPT Feb dobel.
-    const merged = withLegacyFallback(rows, [{ period: "2026-02", dpp: 110_000_000, vat: 13_200_000, count: 1 }])
+    // Legacy faktur komersial Feb adalah dokumen yang sama dengan FP
+    // selisih: loader SPT menyaringnya PER DOKUMEN (coveredSalesIds)
+    // sebelum withLegacyFallback, jadi warisan yang sampai ke sini untuk
+    // dokumen tertutup = kosong — tanpa penyaringan ini SPT Feb dobel.
+    // (Kontrak lama menekan per masa di fungsi ini; task-010 memindahkannya
+    // ke loader supaya dokumen legacy lain di masa yang sama tetap tampil.)
+    const merged = withLegacyFallback(rows, [])
     const totalDpp = merged.reduce((s, r) => s + r.dpp, 0)
     const totalVat = merged.reduce((s, r) => s + r.vat, 0)
     expect(totalDpp).toBe(110_000_000)

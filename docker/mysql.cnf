@@ -1,0 +1,25 @@
+# Salinan /etc/my.cnf bawaan image mysql:8.0 (Oracle Linux) dengan SATU
+# perubahan: baris `skip-host-cache` dibuang karena sintaksnya usang
+# (warning MY-011068 di setiap start). Perilakunya identik —
+# host_cache_size=0 sudah dipasang lewat `command:` di docker-compose.yml.
+# File ini di-mount read-only menimpa /etc/my.cnf; bila image mysql:8.0
+# suatu saat mengubah my.cnf bawaannya, samakan lagi dari image terbaru:
+#   docker compose exec db cat /etc/my.cnf
+
+[mysqld]
+# Hanya error sungguhan yang dicatat; baris [System]/[Warning] informasional
+# bawaan image (TLS channel, ready for connections, sertifikat, dst.)
+# dibungkam demi log start yang bersih. Naikkan ke 2 bila suatu saat perlu
+# melihat warning server lagi.
+log_error_verbosity=1
+skip-name-resolve
+datadir=/var/lib/mysql
+socket=/var/run/mysqld/mysqld.sock
+secure-file-priv=/var/lib/mysql-files
+user=mysql
+
+pid-file=/var/run/mysqld/mysqld.pid
+[client]
+socket=/var/run/mysqld/mysqld.sock
+
+!includedir /etc/mysql/conf.d/
