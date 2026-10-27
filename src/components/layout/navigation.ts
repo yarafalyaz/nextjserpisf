@@ -93,6 +93,7 @@ export const navigation: NavItem[] = [
       { label: "Antrean Penawaran Diterima", href: "/penjualan/antrean-penawaran-diterima", icon: ListTodo, permission: "view_quotations" },
       { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
       { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, permission: "view_down_payments" },
+      { label: "Antrean Verifikasi Uang Muka", href: "/penjualan/antrean-verifikasi-uang-muka", icon: ListTodo, permission: "view_down_payments" },
       { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, permission: "view_sales_orders" },
       { label: "Antrean Janji Kirim", href: "/penjualan/antrean-janji-kirim", icon: ListTodo, permission: "view_sales_orders" },
       { label: "Surat Jalan", href: "/penjualan/surat-jalan", icon: Truck, permission: "view_delivery_orders" },
@@ -110,6 +111,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Permintaan", href: "/pembelian/permintaan", icon: ClipboardList, permission: "view_purchase_requests" },
       { label: "Pesanan Pembelian", href: "/pembelian/pesanan", icon: FileCheck, permission: "view_purchase_orders" },
+      { label: "Pesanan Pembelian Draft Mengendap", href: "/pembelian/antrean-pesanan-draf", icon: ListTodo, permission: "view_purchase_orders" },
       { label: "Penerimaan Barang", href: "/pembelian/penerimaan", icon: PackageCheck, permission: "view_goods_receipts" },
       { label: "Tagihan Pemasok", href: "/pembelian/tagihan", icon: FileSpreadsheet, permission: "view_vendor_bills" },
       { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor", icon: Banknote, permission: "view_vendor_payments" },
