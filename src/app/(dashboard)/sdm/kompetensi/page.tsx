@@ -23,9 +23,7 @@ export default async function CompetenciesPage() {
   // seksi disembunyikan, halaman induk tetap tampil (hanya mensyaratkan
   // view_competencies). Loader juga menahan scope SDM fail-closed.
   const canViewGapQueue = await hasPermission("view_employees")
-  const gapQueue = canViewGapQueue
-    ? await getCompetencyGapQueue().catch(() => null)
-    : null
+  const gapQueue = canViewGapQueue ? await getCompetencyGapQueue() : null
 
   const [competencies, positions, employees, requirements, assessments] = await Promise.all([
     prisma.competency.findMany({
