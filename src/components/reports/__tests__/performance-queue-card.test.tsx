@@ -8,6 +8,7 @@ import { PerformanceQueueCard } from "../performance-queue-card"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 import {
   buildPerformanceQueue,
+  PERFORMANCE_QUEUE_NO_GOAL_LABEL,
   type PerformanceQueue,
   type PerformanceQueueInput,
 } from "@/lib/reports/performance-review-queue"
@@ -81,7 +82,9 @@ describe("PerformanceQueueCard 077-F AC-PFQ-F1..F3", () => {
     expect(text).toContain("Menunggu Finalisasi")
     expect(text).toContain("80.00")
     expect(text).toContain("75.50")
-    expect(text).toContain("tanpaSasaran")
+    expect(text).toContain(PERFORMANCE_QUEUE_NO_GOAL_LABEL)
+    expect(PERFORMANCE_QUEUE_NO_GOAL_LABEL).toBe("Tanpa Sasaran")
+    expect(text).not.toContain("tanpaSasaran")
     // Urutan payload server dipertahankan: mengendap -> menunggu-finalisasi dulu.
     const bodyText = rendered.container.querySelector("tbody")?.textContent ?? ""
     expect(bodyText.indexOf("Karyawan Empat")).toBeLessThan(bodyText.indexOf("Karyawan Tiga"))
