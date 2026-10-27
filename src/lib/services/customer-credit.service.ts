@@ -13,6 +13,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { onSalesPaymentUpdated } from "@/lib/hooks/sales-payment.hook";
 import {
   claimIdempotencyKey,
   bindIdempotencyKey,
@@ -114,21 +115,13 @@ export async function allocateCreditToInvoice(
           status: amount >= balance ? "used" : credit.status,
         },
       });
-      const payments = await tx.salesPayment.findMany({
-        where: { salesInvoiceId },
-        select: { amount: true },
-      });
-      const totalPaid = Math.min(
-        payments.reduce((s, p) => s + Number(p.amount), 0),
-        Number(invoice.grandTotal),
-      );
-      await tx.salesInvoice.update({
-        where: { id: salesInvoiceId },
-        data: {
-          paidAmount: totalPaid,
-          paymentStatus: totalPaid >= Number(invoice.grandTotal) ? "paid" : "partial",
-        },
-      });
+      // TASK-016 BUG-07: hitung ulang lewat recalc kanonis pembayaran
+      // (sales-payment.hook): pelunasan sah = amount + potongan PPh, dan
+      // `status` faktur ikut selaras (paid/partial/posted), bukan hanya
+      // paymentStatus. Hitung manual `amount` saja membuat faktur yang
+      // dipotong PPh tak pernah lunas (mis. 60 kas + 10 PPh + kredit 30
+      // atas faktur 100 tertulis 90/partial).
+      await onSalesPaymentUpdated(salesInvoiceId, tx);
       // AUD-FIN-03 (putusan akuntan): alokasi kredit = reklas antar-subledger
       // kewajiban 210102 → piutang, NOL-NET tanpa kas. Kas penuh SUDAH dijurnal
       // saat terima DP/kredit — panggil onSalesPaymentCreated generik (Dr Kas /
