@@ -3000,6 +3000,35 @@ export async function onPayrollPaid(
     }
   }
 
+  // TASK-018 (5): porsi utang (210207) per baris dibatasi akrual subledger
+  // aktual peristiwa itu — boolean settled saja membebankan nominal penuh
+  // ke utang walau baru terakrual sebagian (peristiwa Rp2,5jt terakrual
+  // Rp2,0jt -> saldo utang -Rp500rb). Sisa di atas akrual = beban (600028).
+  const pkwtPayablePortion = new Map<number, number>();
+  if (pkwtTotal > 0) {
+    for (const l of pkwtLines) {
+      const amount = Number(l.amount) || 0;
+      if (!l.pkwtSettledViaAccrual || l.pkwtEventId == null) {
+        if (l.pkwtEventId != null) pkwtPayablePortion.set(l.pkwtEventId, 0);
+        continue;
+      }
+      const event = await db.pkwtCompensationEvent?.findUnique({
+        where: { id: l.pkwtEventId },
+        select: { employeeId: true, segmentStart: true },
+      });
+      let payable = amount;
+      if (event) {
+        const agg = await db.pkwtCompensationAccrual?.aggregate({
+          where: { employeeId: event.employeeId, segmentStart: event.segmentStart },
+          _sum: { amount: true },
+        });
+        const accrued = Number(agg?._sum?.amount ?? 0) || 0;
+        payable = Math.min(amount, Math.max(0, accrued));
+      }
+      pkwtPayablePortion.set(l.pkwtEventId, payable);
+    }
+  }
+
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx: two concurrent calls both pass the early
     // `findFirst` (returns null) and both open their own $transaction;
@@ -3053,10 +3082,19 @@ export async function onPayrollPaid(
       };
       const byAccount = new Map<number, number>();
       for (const l of pkwtLines) {
-        const acct = l.pkwtSettledViaAccrual
-          ? s2.pkwtCompensationPayableAccountId!
-          : s2.pkwtCompensationExpenseAccountId!;
-        byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, Number(l.amount) || 0, 2));
+        const amount = Number(l.amount) || 0;
+        // TASK-018 (5): baris terakrual parsial dipecah — porsi utang
+        // sebesar akrual aktual, sisanya beban periode berjalan.
+        const payableAmt = l.pkwtEventId != null ? (pkwtPayablePortion.get(l.pkwtEventId) ?? 0) : 0;
+        const expenseAmt = safeAdd(amount, -payableAmt, 2);
+        if (payableAmt > 0) {
+          const acct = s2.pkwtCompensationPayableAccountId!;
+          byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, payableAmt, 2));
+        }
+        if (expenseAmt > 0) {
+          const acct = s2.pkwtCompensationExpenseAccountId!;
+          byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, expenseAmt, 2));
+        }
       }
       for (const [accountId, amt] of byAccount) {
         if (amt > 0) {

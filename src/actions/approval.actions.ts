@@ -19,6 +19,7 @@ import {
 } from "@/lib/validations/approval.schemas";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
+import { payrollStatutoryGateError } from "@/lib/services/payroll-statutory.service";
 import { nextSlug } from "@/lib/utils/slug-db";
 
 type WorkflowStepInput = {
@@ -208,6 +209,17 @@ export async function approveStep(approvalId: number, formData: FormData) {
 
       // If last step, mark as approved + update source document
       if (approval.currentStep >= totalSteps) {
+        // TASK-018 (2): slip gaji yang lolos workflow generik wajib melewati
+        // gerbang statutori yang sama dengan approvePayroll — tanpa ini
+        // jalur generik membypass pemeriksaan pending-final/legacy/fallback.
+        if (approval.referenceType === "Payroll") {
+          const slip = await (tx as any).payroll?.findUnique({
+            where: { id: approval.referenceId },
+            select: { statutorySnapshot: true },
+          });
+          const gateError = payrollStatutoryGateError(slip?.statutorySnapshot);
+          if (gateError) throw new Error(gateError);
+        }
         await tx.approval.update({
           where: { id: approval.id },
           data: {

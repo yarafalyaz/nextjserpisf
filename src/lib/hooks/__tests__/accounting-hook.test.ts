@@ -82,6 +82,8 @@ const mocks = vi.hoisted(() => ({
   goodsReceiptCount: vi.fn(),
   vendorPaymentFindUniqueOrThrow: vi.fn(),
   payrollFindUniqueOrThrow: vi.fn(),
+  pkwtEventFindUnique: vi.fn().mockResolvedValue(null),
+  pkwtAccrualAggregate: vi.fn().mockResolvedValue({ _sum: { amount: null } }),
   itemUpdate: vi.fn(),
 }));
 
@@ -152,6 +154,8 @@ vi.mock("@/lib/db/prisma", () => ({
         mocks.payrollFindUniqueOrThrow(...a),
     },
     payrollComponentLine: { findMany: (...a: unknown[]) => pkwtLinesMock.findMany(...a) },
+    pkwtCompensationEvent: { findUnique: (...a: unknown[]) => mocks.pkwtEventFindUnique(...a) },
+    pkwtCompensationAccrual: { aggregate: (...a: unknown[]) => mocks.pkwtAccrualAggregate(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
   },
 }));
@@ -2344,5 +2348,22 @@ describe("onPayrollPaid — kaki kompensasi PKWT (F-2026-10-24-132-V Putusan 5)"
     mocks.journalFindFirst.mockResolvedValue(null);
     await expect(onPayrollPaid(1)).rejects.toThrow("Snapshot akun baris kompensasi PKWT");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("TASK-018 (5) terakrual parsial: Dr utang dibatasi akrual, sisa ke beban", async () => {
+    // Peristiwa 2.500 baru terakrual 2.000 — debit utang penuh menyisakan
+    // saldo -500; jurnal wajib pecah 2.000 utang + 500 beban.
+    pkwtLinesMock.findMany.mockResolvedValue([
+      { pkwtEventId: 9, pkwtSettledViaAccrual: true, amount: 2500, accountIdSnapshot: 231 },
+    ]);
+    mocks.pkwtEventFindUnique.mockResolvedValue({ employeeId: 7, segmentStart: new Date("2026-01-01") });
+    mocks.pkwtAccrualAggregate.mockResolvedValue({ _sum: { amount: 2000 } });
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({ ...basePayroll(), grossSalary: 2500, netSalary: 1900 });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(1);
+    const entries = paymentEntries();
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 231, debit: 2000, credit: 0 }));
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: 631, debit: 500, credit: 0 }));
+    expect(entries.reduce((s, e) => s + e.debit, 0)).toBe(entries.reduce((s, e) => s + e.credit, 0));
   });
 });
