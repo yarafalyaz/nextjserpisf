@@ -25,6 +25,7 @@ import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.act
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel"
 import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card"
 import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data"
+import { completedByLabel, genealogyMaterialTokens } from "@/lib/reports/genealogy-forward-trace"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -85,6 +86,19 @@ export default async function ProductionOrderDetailPage({
       })
     : []
   const geneItemMap = new Map(geneItemRows.map((i) => [i.id, i]))
+
+  // `completedBy` hanya kolom Int tanpa relasi User — resolve namanya di sini.
+  const completedByUser =
+    order.genealogy?.completedBy != null
+      ? await prisma.user.findUnique({
+          where: { id: order.genealogy.completedBy },
+          select: { id: true, name: true },
+        })
+      : null
+  const completedByName = completedByLabel(
+    order.genealogy?.completedBy,
+    new Map(completedByUser ? [[completedByUser.id, completedByUser.name]] : []),
+  )
 
   // The production order now carries a real workOrderId FK (see migration
   // 20261008130000_integration_relations); fall back to the legacy best-effort
@@ -430,6 +444,12 @@ export default async function ProductionOrderDetailPage({
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diselesaikan</span>
                   <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(order.genealogy.completedAt)}</span>
                 </div>
+                {completedByName ? (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diselesaikan Oleh</span>
+                    <span className="text-[0.9375rem] text-foreground font-medium">{completedByName}</span>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HPP / Unit</span>
                   <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(order.genealogy.unitCost))}</span>
@@ -460,8 +480,7 @@ export default async function ProductionOrderDetailPage({
                     </DetailTableHead>
                     <DetailTableBody>
                       {order.genealogy.materials.map((m) => {
-                        const serials = (m.serialNumbers as string[] | null) ?? []
-                        const lotText = [m.batchNumber, ...serials].filter(Boolean).join(", ")
+                        const tokens = genealogyMaterialTokens(m)
                         return (
                           <DetailTableRow key={m.id}>
                             <DetailTableTd>
@@ -471,8 +490,17 @@ export default async function ProductionOrderDetailPage({
                             </DetailTableTd>
                             <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
                             <DetailTableTd>
-                              {lotText ? (
-                                <span className="font-mono text-xs">{lotText}</span>
+                              {tokens.length ? (
+                                <span className="font-mono text-xs">
+                                  {tokens.map((token, i) => (
+                                    <span key={token}>
+                                      {i > 0 ? ", " : null}
+                                      <Link href={`/produksi/telusur-genealogi?cari=${encodeURIComponent(token)}`} className="hover:underline" title="Telusur hasil jadi yang memakai lot/serial ini">
+                                        {token}
+                                      </Link>
+                                    </span>
+                                  ))}
+                                </span>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
                               )}
