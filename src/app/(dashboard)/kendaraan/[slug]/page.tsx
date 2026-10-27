@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { CanCreate } from "@/components/auth/can-create"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -102,7 +103,7 @@ export default async function VehicleDetailPage({
         </div>
         <div className="p-4 px-5">
           {vehicle.customerVehicles.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pemilik terdaftar</p>
+            <EmptyState title="Belum ada pemilik terdaftar" />
           ) : (
             <DetailTable>
               <DetailTableHead>

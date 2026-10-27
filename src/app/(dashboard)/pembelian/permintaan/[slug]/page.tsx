@@ -13,6 +13,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 
 import type { Metadata } from "next"
 
@@ -111,7 +112,7 @@ export default async function PurchaseRequestDetailPage({
         </div>
         <div className="p-4 px-5">
           {request.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
+            <EmptyState title="Tidak ada item" />
           ) : (
             <DetailTable>
               <DetailTableHead>

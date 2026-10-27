@@ -15,6 +15,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { formatAccounting } from "@/lib/utils/format"
 
@@ -253,9 +254,7 @@ export function ChequeManager({
           ))}
           {cheques.length === 0 && (
             <DetailTableRow>
-              <DetailTableTd colSpan={9} className="text-center text-muted-foreground py-6">
-                Belum ada giro/cek tercatat. Catat giro mundur di atas agar laporan Giro Mundur terisi.
-              </DetailTableTd>
+              <DetailTableTd colSpan={9}><EmptyState title="Belum ada giro/cek tercatat." description="Catat giro mundur di atas agar laporan Giro Mundur terisi." className="py-6" /></DetailTableTd>
             </DetailTableRow>
           )}
         </DetailTableBody>

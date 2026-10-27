@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { StatusChip } from "@/components/ui/status-chip"
 import { Progress } from "@/components/ui/shadcn/progress"
+import { EmptyState } from "@/components/ui/empty-state"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatDate } from "@/lib/utils/format"
 import { cn } from "@/lib/utils"
@@ -167,10 +168,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
       {/* Timeline List */}
       <div className="p-5 px-6 pt-2">
         {stages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground gap-2">
-            <AlertCircle className="size-8 text-muted-foreground/60 animate-bounce" />
-            <p className="text-sm">Belum ada tahapan diinisialisasi untuk proyek ini.</p>
-          </div>
+          <EmptyState title="Belum ada tahapan diinisialisasi untuk proyek ini." icon={<AlertCircle className="size-8 text-muted-foreground/60 animate-bounce" />} />
         ) : (
           <div className="relative border-l-2 border-primary/20 ml-4 pl-6 my-2 flex flex-col gap-8">
             {stages.map((stage, index) => {

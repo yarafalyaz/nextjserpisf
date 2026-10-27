@@ -16,6 +16,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { LEAD_ACTIVITY_TYPE_LABELS, labelFrom, statusLabel } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
@@ -167,7 +168,7 @@ export default async function LeadDetailPage({
                 <AddLeadActivityForm leadId={lead.id} />
                 <div className="p-4 px-5">
                   {lead.activities.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada aktivitas</p>
+                    <EmptyState title="Belum ada aktivitas" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

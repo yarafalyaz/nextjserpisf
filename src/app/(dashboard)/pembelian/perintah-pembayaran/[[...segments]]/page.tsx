@@ -10,6 +10,7 @@ import { agingBucket, daysOverdue } from '@/lib/reports/aging'
 import { RECOGNISED_AP_STATUSES } from '@/lib/reports/document-status'
 import { AppBreadcrumbs } from '@/components/ui/breadcrumbs'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
 import { ReportSection, ReportKpiCard } from '@/components/reports/report-section'
@@ -188,7 +189,7 @@ export default async function PaymentOrderPage({
             ))}
             {grouped.length === 0 && (
               <DetailTableRow>
-                <DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">Tidak ada tagihan yang jatuh tempo</DetailTableTd>
+                <DetailTableTd colSpan={6}><EmptyState title="Tidak ada tagihan yang jatuh tempo" className="py-6" /></DetailTableTd>
               </DetailTableRow>
             )}
             {grouped.length > 0 && (
