@@ -4,9 +4,19 @@ import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
-import { safeAdd } from "@/lib/utils/math";
+import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
+import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
+import {
+  buildDownPaymentReceiptLines,
+  buildSettlementReclass,
+  computeAllocationNet,
+  computeDownPaymentVatSnapshot,
+  resolveCompanyPkpGate,
+  resolveEffectiveVatRate,
+  snapshotFromDownPaymentRow,
+} from "@/lib/tax/down-payment-vat";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -301,9 +311,98 @@ export async function onSalesInvoicePosted(
         taxAmount: true,
         date: true,
         documentNo: true,
+        quotationId: true,
       },
     });
     if (!inv) throw new Error("Invoice tidak ditemukan");
+
+    // F-2026-10-25-004-V J-PL1: reklas PPN uang muka anti-dobel. Sigma
+    // snapshot DP confirmed tertaut quotation faktur ini; PPN dokumen
+    // lebih kecil dari Sigma = fail-closed (buildSettlementReclass).
+    // Tanpa DP bersnapshot (termasuk faktur tanpa quotation) = nol,
+    // jurnal existing persis seperti sebelumnya.
+    const dpVatRows =
+      inv.quotationId != null
+        ? await tx.downPayment.findMany({
+            where: { quotationId: inv.quotationId, status: "confirmed", vatAmount: { gt: 0 } },
+            select: { vatDpp: true, vatAmount: true },
+          })
+        : [];
+    const settlementReclass = buildSettlementReclass({
+      documentPpn: Number(inv.taxAmount ?? 0),
+      uangMuka: dpVatRows.map((r) => ({
+        dppUangMuka: Number(r.vatDpp ?? 0),
+        ppnUangMuka: Number(r.vatAmount ?? 0),
+      })),
+    });
+    const sigmaPpnUangMuka = settlementReclass.length
+      ? settlementReclass[0].debit
+      : 0;
+    if (sigmaPpnUangMuka > 0 && !settings.salesTaxAccountId) {
+      throw new Error(
+        "Akun PPN Keluaran (210201) harus dikonfigurasi untuk reklas PPN uang muka faktur pelunasan",
+      );
+    }
+
+    // B4 re-audit Accountant PR #785: tutup 210102 di jalur KONVERSI.
+    // Invoice yang lahir dari ambang DP (down-payment.hook) menerima
+    // SalesPayment bruto per DP TANPA jurnal alokasi; tanpa penutup ini
+    // Cr 210102 neto J-DP1 menggantung permanen sesudah posting dan
+    // piutang GL tak rekonsiliasi dengan paidAmount bruto. Penutup =
+    // J-PL2 tekstual vonis (Dr 210102 neto / Cr Piutang neto,
+    // computeAllocationNet dari snapshot beku) untuk pembayaran DP
+    // tertaut faktur ini yang BELUM punya jurnal alokasi SalesPayment
+    // (jalur existingInv sudah menutup lewat jurnal alokasinya sendiri
+    // — dilewati supaya tidak dobel). Masuk jurnal posting yang sama:
+    // idempoten inheren dari penjaga jurnal posting di atas.
+    const dpLiabilityAccountId = (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+    const conversionClosingLines: { account: "downPaymentLiability" | "receivable"; debit: number; credit: number; memo: string }[] = [];
+    {
+      const dpPayments = await tx.salesPayment.findMany({
+        where: { salesInvoiceId: invoiceId, paymentMethod: "down_payment" },
+        select: { id: true, amount: true, notes: true },
+      });
+      const dpDocNos = new Set<string>();
+      for (const p of dpPayments) {
+        const m = /Uang muka dari DP\s+(\S+)/.exec(p.notes ?? "");
+        if (m) dpDocNos.add(m[1]);
+      }
+      if (dpDocNos.size > 0 && inv.quotationId != null) {
+        const allocDps = await tx.downPayment.findMany({
+          where: { quotationId: inv.quotationId, documentNo: { in: [...dpDocNos] }, status: "confirmed" },
+        });
+        const dpByDocNo = new Map(allocDps.map((d) => [d.documentNo, d]));
+        for (const p of dpPayments) {
+          const m = /Uang muka dari DP\s+(\S+)/.exec(p.notes ?? "");
+          const allocDp = m ? dpByDocNo.get(m[1]) : undefined;
+          if (!allocDp) continue;
+          const allocJournal = await tx.journal.findFirst({
+            where: { referenceType: "SalesPayment", referenceId: p.id },
+            select: { id: true },
+          });
+          if (allocJournal) continue;
+          const allocSnapshot = snapshotFromDownPaymentRow(allocDp as never);
+          if (!allocSnapshot || allocSnapshot.ppnUangMuka <= 0) continue;
+          const net = computeAllocationNet({
+            allocAmount: Number(p.amount),
+            previouslyAllocated: 0,
+            snapshot: allocSnapshot,
+            dpAmount: Number(allocDp.amount),
+          });
+          if (net.netAmount <= 0) continue;
+          if (!dpLiabilityAccountId) {
+            throw new Error(
+              "Akun kewajiban Uang Muka Penjualan (210102) harus dikonfigurasi untuk menutup alokasi DP faktur konversi",
+            );
+          }
+          conversionClosingLines.push(
+            { account: "downPaymentLiability", debit: net.netAmount, credit: 0, memo: "Penutup kewajiban UMP alokasi DP konversi (J-PL2)" },
+            { account: "receivable", debit: 0, credit: net.netAmount, memo: "Penutup piutang alokasi DP konversi (J-PL2)" },
+          );
+        }
+      }
+    }
+    const conversionClosingTotal = conversionClosingLines.reduce((s, l) => s + l.debit, 0);
 
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
@@ -421,8 +520,8 @@ export async function onSalesInvoicePosted(
         description: `Invoice Posting ${inv.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: inv.totalAmount,
-        totalCredit: inv.totalAmount,
+        totalDebit: safeAdd(safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2), conversionClosingTotal, 2),
+        totalCredit: safeAdd(safeAdd(Number(inv.totalAmount), sigmaPpnUangMuka, 2), conversionClosingTotal, 2),
         createdBy: userId ?? null,
       },
     });
@@ -464,6 +563,39 @@ export async function onSalesInvoicePosted(
         credit: taxAmount,
         memo: "PPN Keluaran",
       });
+    }
+    // J-PL1 reklas: Dr 210201 Sigma PPN UM / Cr Piutang Sigma PPN UM —
+    // dalam jurnal yang sama, total kedua sisi naik berpasangan.
+    if (settlementReclass.length === 2) {
+      const accountByKey = {
+        salesTax: settings.salesTaxAccountId!,
+        receivable: settings.salesReceivableAccountId!,
+      } as const;
+      for (const line of settlementReclass) {
+        invoiceEntries.push({
+          journalId: journal.id,
+          accountId: accountByKey[line.account as "salesTax" | "receivable"],
+          debit: line.debit,
+          credit: line.credit,
+          memo: line.memo,
+        });
+      }
+    }
+    // B4: penutup 210102 jalur konversi (J-PL2) — jurnal yang sama.
+    if (conversionClosingLines.length > 0) {
+      const closingAccountByKey = {
+        downPaymentLiability: dpLiabilityAccountId!,
+        receivable: settings.salesReceivableAccountId!,
+      } as const;
+      for (const line of conversionClosingLines) {
+        invoiceEntries.push({
+          journalId: journal.id,
+          accountId: closingAccountByKey[line.account],
+          debit: line.debit,
+          credit: line.credit,
+          memo: line.memo,
+        });
+      }
     }
     await tx.journalEntry.createMany({ data: invoiceEntries });
 
@@ -1108,6 +1240,203 @@ export async function onExpenseApproved(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 6b. Klaim reimbursement karyawan (F-2026-10-25-017-S + vonis
+//     F-2026-10-25-018-V Putusan 2): jurnal DUA tahap khusus klaim
+//     tertanda pengaju. Expense operasional NON-klaim TIDAK memakai
+//     jalur ini (tetap onExpenseApproved satu tahap saat bayar).
+//     J-RB1 akrual saat approve: Dr Beban / Cr Utang Reimbursement
+//     Karyawan (setting, kode COA 210209). J-RB2 saat bayar:
+//     Dr Utang Reimbursement / Cr Kas-Bank. Pembedah tahap =
+//     referenceType terpisah karena @@unique jurnal aktif mengikat
+//     (referenceType, referenceId) — satu klaim tepat dua jurnal.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE = "ExpenseReimbursementAccrual"
+export const REIMBURSEMENT_PAYMENT_REFERENCE_TYPE = "ExpenseReimbursementPayment"
+
+async function resolveReimbursementLiabilityAccountId(db: TxClient): Promise<number> {
+  const settings = await getSystemSettings(db)
+  const accountId = settings.reimbursementLiabilityAccountId
+  if (!accountId) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) belum dipetakan di Pengaturan → Mapping Akun. Petakan lebih dulu — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+    )
+  }
+  const account = await db.account.findUnique({
+    where: { id: accountId },
+    select: { id: true, code: true, isActive: true, deletedAt: true },
+  })
+  if (!account) {
+    throw new Error(
+      `Klaim reimbursement tidak dapat diproses: akun liabilitas klaim (id: ${accountId}) tidak ditemukan. Pilih ulang akun 210209 di Mapping Akun.`,
+    )
+  }
+  if (account.deletedAt) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) sudah terhapus. Petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+    )
+  }
+  if (!account.isActive) {
+    throw new Error(
+      "Klaim reimbursement tidak dapat diproses: akun Utang Reimbursement Karyawan (kode 210209) nonaktif. Aktifkan kembali atau petakan akun 210209 aktif di Mapping Akun — approve/bayar klaim ditolak fail-closed (vonis F-2026-10-25-018-V Putusan 3).",
+    )
+  }
+  if (account.code !== "210209") {
+    throw new Error(
+      `Klaim reimbursement tidak dapat diproses: akun liabilitas klaim wajib berkode 210209 (Utang Reimbursement Karyawan), terpetakan kode ${account.code}. Dilarang memakai 210204/210101/210205 (vonis F-2026-10-25-018-V Putusan 3).`,
+    )
+  }
+  return account.id
+}
+
+async function postReimbursementJournal(
+  tx: TxClient,
+  input: {
+    referenceType: string
+    expenseId: number
+    debitAccountId: number
+    creditAccountId: number
+    amount: Prisma.Decimal
+    transactionDate: Date
+    description: string
+    debitMemo: string
+    creditMemo: string
+    userId?: number
+    costCenterId?: number | null
+  },
+): Promise<void> {
+  assertJournalClaimRef(input.referenceType, input.expenseId)
+  // Jurnal aktif saja = idempotensi; J-RB reversed/terhapus tidak menghalangi posting ulang.
+  const existing = await tx.journal.findFirst({
+    where: {
+      referenceType: input.referenceType,
+      referenceId: input.expenseId,
+      status: { not: "REVERSED" },
+      deletedAt: null,
+    },
+  })
+  if (existing) {
+    console.info(
+      `[accounting.hook] klaim #${input.expenseId} tahap ${input.referenceType} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    )
+    return
+  }
+  await assertPeriodOpen(input.transactionDate, tx)
+  await assertAccountsExist(tx, [input.debitAccountId, input.creditAccountId], "Klaim reimbursement")
+  const journalNumber = await generateJournalNumber(tx, "EXP", input.expenseId)
+  const journal = await tx.journal.create({
+    data: {
+      journalNumber,
+      transactionDate: input.transactionDate,
+      referenceType: input.referenceType,
+      referenceId: input.expenseId,
+      description: input.description,
+      type: "GENERAL",
+      status: "POSTED",
+      totalDebit: input.amount,
+      totalCredit: input.amount,
+      createdBy: input.userId ?? null,
+    },
+  })
+  await tx.journalEntry.createMany({
+    data: [
+      {
+        journalId: journal.id,
+        accountId: input.debitAccountId,
+        debit: input.amount,
+        credit: 0,
+        memo: input.debitMemo,
+        costCenterId: input.costCenterId ?? null,
+      },
+      {
+        journalId: journal.id,
+        accountId: input.creditAccountId,
+        debit: 0,
+        credit: input.amount,
+        memo: input.creditMemo,
+      },
+    ],
+  })
+}
+
+/** J-RB1: akrual klaim saat disetujui. Dipanggil dalam tx approve klaim. */
+export async function onReimbursementClaimApproved(
+  expenseId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma
+  const expense = await db.expense.findUniqueOrThrow({ where: { id: expenseId } })
+  if (!expense.isReimbursementClaim) {
+    throw new Error("Jurnal akrual J-RB1 hanya untuk klaim reimbursement tertanda pengaju.")
+  }
+  const liabilityAccountId = await resolveReimbursementLiabilityAccountId(db)
+  await executeInTx(txClient, async (tx) => {
+    await postReimbursementJournal(tx, {
+      referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+      expenseId,
+      debitAccountId: expense.accountId,
+      creditAccountId: liabilityAccountId,
+      amount: expense.amount,
+      transactionDate: new Date(),
+      description: `Klaim reimbursement disetujui: ${expense.description ?? expense.documentNo}`,
+      debitMemo: `Beban klaim: ${expense.description ?? ""}`,
+      creditMemo: "Utang Reimbursement Karyawan",
+      userId,
+      costCenterId: expense.costCenterId,
+    })
+  })
+}
+
+/** J-RB2: bayar klaim. Dipanggil dalam tx markExpensePaid khusus klaim. */
+export async function onReimbursementClaimPaid(
+  expenseId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma
+  const expense = await db.expense.findUniqueOrThrow({ where: { id: expenseId } })
+  if (!expense.isReimbursementClaim) {
+    throw new Error("Jurnal bayar J-RB2 hanya untuk klaim reimbursement tertanda pengaju.")
+  }
+  if (!expense.paidFromAccountId) {
+    throw new Error(
+      `Klaim ${expense.documentNo} tidak dapat dibayar: akun sumber dana (kas/bank) belum diisi.`,
+    )
+  }
+  // Hanya J-RB1 AKTIF (bukan REVERSED, belum terhapus) sah sebagai dasar bayar (Putusan 2).
+  const accrued = await db.journal.findFirst({
+    where: {
+      referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+      referenceId: expenseId,
+      status: { not: "REVERSED" },
+      deletedAt: null,
+    },
+    select: { id: true },
+  })
+  if (!accrued) {
+    throw new Error(
+      `Klaim ${expense.documentNo} belum punya jurnal akrual J-RB1 — bayar ditolak. Setujui klaim lebih dulu sampai akrual terposting.`,
+    )
+  }
+  const liabilityAccountId = await resolveReimbursementLiabilityAccountId(db)
+  await executeInTx(txClient, async (tx) => {
+    await postReimbursementJournal(tx, {
+      referenceType: REIMBURSEMENT_PAYMENT_REFERENCE_TYPE,
+      expenseId,
+      debitAccountId: liabilityAccountId,
+      creditAccountId: expense.paidFromAccountId!,
+      amount: expense.amount,
+      transactionDate: new Date(),
+      description: `Klaim reimbursement dibayar: ${expense.description ?? expense.documentNo}`,
+      debitMemo: "Pelunasan Utang Reimbursement Karyawan",
+      creditMemo: "Pembayaran klaim dari Kas/Bank",
+      userId,
+    })
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 7. onPettyCashCreated
 //    IN:  Dr. PettyCash Account, Cr. Source Account
 //    OUT: Dr. Expense Account, Cr. PettyCash Account
@@ -1269,19 +1598,79 @@ export async function onSalesReturnCompleted(
   const db = txClient || prisma;
   assertJournalClaimRef("SalesReturn", returnId);
   const settings = await getSystemSettings(db);
-  // Sales-return + inventory mappings are always needed. The AR mapping is only
-  // needed when the return is tied to an invoice (see below) — resolved after we
-  // know whether there is a linked invoice.
-  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
-    throw new Error(
-      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
-    );
-  }
-
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   });
+
+  // F-2026-10-24-137-V Putusan 1 (tahap 2): klasifikasi PER-BARIS retur.
+  // Baris scrap = itemId ter-resolve isScrapSaleItem=true. Retur scrap
+  // murni dibukukan jurnal khusus di bawah (Dr scrapSaleIncomeAccountId +
+  // Dr PPN Keluaran snapshot / Cr Piutang|Kas; nol persediaan/COGS).
+  // Retur campuran scrap+dagang ditolak berisik: faktur campuran tak
+  // pernah terposting (E135-6), jadi baris campuran = data tak konsisten.
+  let scrapClass: "none" | "all" | "mixed" = "none";
+  if (salesReturn.salesInvoiceId != null && salesReturn.items.length > 0) {
+    const returnItemIds = [
+      ...new Set(
+        salesReturn.items
+          .map((it) => it.itemId)
+          .filter((id): id is number => typeof id === "number"),
+      ),
+    ];
+    if (returnItemIds.length > 0) {
+      const scrapRows = await db.item.findMany({
+        where: { id: { in: returnItemIds } },
+        select: { id: true, isScrapSaleItem: true },
+      });
+      const isScrap = new Map(
+        (scrapRows as { id: number; isScrapSaleItem: boolean }[]).map((r) => [
+          r.id,
+          r.isScrapSaleItem,
+        ]),
+      );
+      const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0);
+      const scrapCount = activeItems.filter(
+        (it) => typeof it.itemId === "number" && isScrap.get(it.itemId),
+      ).length;
+      if (scrapCount > 0 && scrapCount === activeItems.length) scrapClass = "all";
+      else if (scrapCount > 0) scrapClass = "mixed";
+    }
+  }
+  if (scrapClass === "mixed") {
+    throw new Error(
+      "Retur penjualan campuran besi tua (scrap) dan dagang ditolak: pisahkan retur besi tua dari retur dagang — " +
+        "pendapatan besi tua masuk akun lain-lain dan nilai bukunya Rp0.",
+    );
+  }
+  const isScrapReturn = scrapClass === "all";
+  if (isScrapReturn) {
+    // Fail-closed akun scrap (pola posting faktur besi tua): kosong /
+    // nonaktif / bukan OINC = tolak sebelum jurnal apa pun lahir.
+    if (!settings.scrapSaleIncomeAccountId) {
+      throw new Error(
+        "Akun pendapatan besi tua (scrap) belum dipetakan. " +
+          "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting retur besi tua.",
+      );
+    }
+    const scrapAccount = await db.account.findFirst({
+      where: { id: settings.scrapSaleIncomeAccountId },
+      select: { id: true, isActive: true, reportGroup: true },
+    });
+    if (!scrapAccount || !scrapAccount.isActive || scrapAccount.reportGroup !== "OINC") {
+      throw new Error(
+        "Akun pendapatan besi tua (scrap) tidak valid: wajib akun aktif grup pendapatan lain-lain (OINC). " +
+          "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting retur besi tua.",
+      );
+    }
+  } else if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
+    // Sales-return + inventory mappings are always needed (jalur dagang).
+    // The AR mapping is only needed when the return is tied to an invoice
+    // (see below) — resolved after we know whether there is a linked invoice.
+    throw new Error(
+      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
+    );
+  }
 
   // A return tied to an invoice relieves the customer's receivable. A return
   // NOT tied to any invoice has no receivable to reduce — booking Cr. Piutang
@@ -1293,33 +1682,6 @@ export async function onSalesReturnCompleted(
     throw new Error(
       "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
     );
-  }
-
-  // F-2026-10-24-136-V Putusan 1: retur atas faktur besi tua murni
-  // ditolak berisik (fail-closed) SEBELUM idempotency/journal/stok disentuh.
-  if (salesReturn.salesInvoiceId != null) {
-    const linkedInvoice = await db.salesInvoice.findUnique({
-      where: { id: salesReturn.salesInvoiceId },
-      include: { items: { select: { itemId: true, qty: true } } },
-    });
-    if (linkedInvoice) {
-      const returnItemIds = [...new Set(salesReturn.items.map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
-      const linkedInvoiceItemIds = [...new Set(linkedInvoice.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
-      if (returnItemIds.length > 0) {
-        const scrapRows = await db.item.findMany({
-          where: { id: { in: [...new Set([...returnItemIds, ...linkedInvoiceItemIds])] } },
-          select: { id: true, isScrapSaleItem: true },
-        });
-        const isScrap = new Map((scrapRows as { id: number; isScrapSaleItem: boolean }[]).map((r) => [r.id, r.isScrapSaleItem]));
-        const allScrap = (ids: number[]) => ids.length > 0 && ids.every((id) => isScrap.get(id));
-        if (allScrap(linkedInvoiceItemIds) && allScrap(returnItemIds)) {
-          throw new Error(
-            "Retur penjualan atas faktur besi tua (scrap) ditolak berisik: faktur besi tua punya nilai buku Rp0 dan pendapatannya masuk akun lain-lain, bukan faktur penjualan biasa. " +
-              "Gunakan pembalikan faktur (belum dibayar) atau pengembalian pembayaran melalui jalur existing (sudah dibayar).",
-          );
-        }
-      }
-    }
   }
 
   // Idempotency check
@@ -1337,16 +1699,20 @@ export async function onSalesReturnCompleted(
   // goods come back into inventory at cost. The margin nets into the Sales Return
   // contra-revenue account. This single journal owns all GL for a sales return
   // (the stock hook only moves stock now).
+  // Retur scrap: cost dipaksa 0 oleh konstruksi (nilai buku Rp0) — angka
+  // Item.cost master tidak pernah masuk jurnal scrap (E136-2).
   const priceTotal = linkedToInvoice
     ? salesReturn.items.reduce(
         (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
         0,
       )
     : 0;
-  const costTotal = salesReturn.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
-    0,
-  );
+  const costTotal = isScrapReturn
+    ? 0
+    : salesReturn.items.reduce(
+        (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
+        0,
+      );
   if (priceTotal <= 0 && costTotal <= 0) return;
 
   await assertPeriodOpen(salesReturn.date, txClient);
@@ -1426,6 +1792,171 @@ export async function onSalesReturnCompleted(
           data: { sourceTaxInvoiceId: taxInvoice.id },
         });
       }
+    }
+
+    // F-137-V tahap 2: jurnal retur besi tua dari snapshot F-004 di atas.
+    // Dr scrapSaleIncomeAccountId (DPP retur) + Dr PPN Keluaran (PPN retur,
+    // hanya bila > 0) / Cr Piutang bila faktur asal masih punya outstanding
+    // (grandTotal − returnCredit POSTED existing − paidAmount), selain itu
+    // Cr Kas (sudah dibayar → pengembalian kas). Nol kaki 400003, nol
+    // persediaan/COGS. Idempoten per (SalesReturn, jurnal) dipertahankan.
+    if (isScrapReturn) {
+      const existingInTx = await tx.journal.findFirst({
+        where: { referenceType: "SalesReturn", referenceId: returnId },
+      });
+      if (existingInTx) {
+        console.info(
+          `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        );
+        return;
+      }
+      const dppTotal = safeAdd(
+        salesReturn.items.reduce(
+          (s, it) =>
+            safeAdd(s, Number(it.qty) * Number(it.price ?? 0), 2),
+          0,
+        ),
+        0,
+        2,
+      );
+      const sourceInvoice = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId! },
+        select: { subtotal: true, discount: true, taxAmount: true },
+      });
+      const sourceForSnap = {
+        subtotal: Number(sourceInvoice.subtotal),
+        discount: Number(sourceInvoice.discount),
+        taxAmount: Number(sourceInvoice.taxAmount),
+      };
+      const vatTotal = safeAdd(
+        salesReturn.items.reduce((s, it) => {
+          const snap = snapshotReturnLine({
+            qty: Number(it.qty),
+            price: Number(it.price ?? 0),
+            source: sourceForSnap,
+          });
+          return safeAdd(s, snap.returnVat, 2);
+        }, 0),
+        0,
+        2,
+      );
+      if (vatTotal > 0 && !settings.salesTaxAccountId) {
+        throw new Error(
+          "Retur besi tua ditolak: PPN Keluaran belum dipetakan padahal retur memuat PPN snapshot. " +
+            "Atur salesTaxAccountId di Pengaturan → Akun.",
+        );
+      }
+      const invoiceFull = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId! },
+        select: { grandTotal: true, paidAmount: true },
+      });
+      const priorReturns = await tx.salesReturn.findMany({
+        where: {
+          salesInvoiceId: salesReturn.salesInvoiceId!,
+          status: "completed",
+          id: { not: returnId },
+        },
+        select: { id: true },
+      });
+      let priorReturnCredit = 0;
+      if (priorReturns.length > 0 && settings.salesReceivableAccountId) {
+        const priorJournals = await tx.journal.findMany({
+          where: {
+            referenceType: "SalesReturn",
+            referenceId: { in: priorReturns.map((r) => r.id) },
+            status: "POSTED",
+            deletedAt: null,
+          },
+          select: {
+            entries: {
+              where: { accountId: settings.salesReceivableAccountId },
+              select: { credit: true },
+            },
+          },
+        });
+        for (const j of priorJournals) {
+          for (const e of j.entries) {
+            priorReturnCredit = safeAdd(priorReturnCredit, Number(e.credit), 2);
+          }
+        }
+      }
+      const outstanding = safeSubtract(
+        safeSubtract(
+          Number(invoiceFull.grandTotal),
+          priorReturnCredit,
+          2,
+        ),
+        Number(invoiceFull.paidAmount),
+        2,
+      );
+      const creditTotal = safeAdd(dppTotal, vatTotal, 2);
+      const useReceivable = outstanding > 0;
+      let creditAccountId: number;
+      if (useReceivable) {
+        if (!settings.salesReceivableAccountId) {
+          throw new Error(
+            "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
+          );
+        }
+        creditAccountId = settings.salesReceivableAccountId;
+      } else {
+        if (!settings.cashBankAccountId) {
+          throw new Error(
+            "Akun kas/bank belum dikonfigurasi untuk pengembalian kas retur besi tua (faktur asal sudah dibayar).",
+          );
+        }
+        creditAccountId = settings.cashBankAccountId;
+      }
+      const journalNumber = await generateJournalNumber(tx, "SR", returnId);
+      const journal = await tx.journal.create({
+        data: {
+          journalNumber,
+          transactionDate: salesReturn.date,
+          referenceType: "SalesReturn",
+          referenceId: salesReturn.id,
+          description: `Retur Penjualan Besi Tua ${salesReturn.documentNo}`,
+          type: "GENERAL",
+          status: "POSTED",
+          totalDebit: creditTotal,
+          totalCredit: creditTotal,
+          createdBy: userId ?? null,
+        },
+      });
+      const scrapEntryRows: {
+        journalId: number;
+        accountId: number;
+        debit: number;
+        credit: number;
+        memo: string;
+      }[] = [
+        {
+          journalId: journal.id,
+          accountId: settings.scrapSaleIncomeAccountId!,
+          debit: dppTotal,
+          credit: 0,
+          memo: "Pengurang Pendapatan Lain-lain Besi Tua (Retur)",
+        },
+      ];
+      if (vatTotal > 0) {
+        scrapEntryRows.push({
+          journalId: journal.id,
+          accountId: settings.salesTaxAccountId!,
+          debit: vatTotal,
+          credit: 0,
+          memo: "PPN Keluaran (Retur Besi Tua)",
+        });
+      }
+      scrapEntryRows.push({
+        journalId: journal.id,
+        accountId: creditAccountId,
+        debit: 0,
+        credit: creditTotal,
+        memo: useReceivable
+          ? "Pengurangan Piutang (Retur Besi Tua)"
+          : "Pengembalian Kas (Retur Besi Tua)",
+      });
+      await tx.journalEntry.createMany({ data: scrapEntryRows });
+      return;
     }
 
     // double-check inside tx
@@ -1710,6 +2241,7 @@ export async function onDownPaymentReceived(
 
   const dp = await db.downPayment.findUniqueOrThrow({
     where: { id: dpId },
+    include: { quotation: { select: { tax: true } } },
   });
 
   const existing = await db.journal.findFirst({
@@ -1743,6 +2275,79 @@ export async function onDownPaymentReceived(
 
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
+    // F-2026-10-25-004-V (vonis PR #760) + B1 re-audit Accountant PR #785:
+    // bekukan snapshot PPN uang muka SEKALI saat jurnal terima lahir. DP
+    // yang sudah terjurnal (replay / legacy pra-fitur) tidak dibekukan
+    // belakangan — return awal di atas sudah menangani replay. Tarif
+    // WAJIB dari master Tax efektif pada paymentDate (kandidat dibatasi
+    // accountId = akun PPN Keluaran setting; nol/ambigu = fail-closed
+    // resolveEffectiveVatRate) lalu dibekukan ke kolom DP — edit master
+    // sesudah confirm tidak mengubah snapshot. Kode transaksi: master
+    // Tax tidak menyimpan kode transaksi DJP, jadi tetap
+    // DEFAULT_TRANSACTION_CODE repo ("04") dan dibekukan apa adanya.
+    let snapshot = snapshotFromDownPaymentRow(dp as never);
+    if (!snapshot) {
+      const quotationTax = Number((dp as { quotation?: { tax?: unknown } }).quotation?.tax ?? 0);
+      const paymentDate = dp.paymentDate || new Date();
+      // F-2026-10-25-015-V Putusan 2-3: gerbang PKP perusahaan menilai
+      // terutang SEBELUM tarif dicari — unknown ber-PPN dan pkp tanpa
+      // tanggal mulai kewajiban fail-closed di sini (dalam tx, sesudah
+      // assertPeriodOpen); non-PKP/belum efektif sah J-DP2 bruto.
+      // Status + tanggal yang dipakai dibekukan ke baris DP bersama
+      // snapshot vat* (edit master sesudahnya nol efek retroaktif).
+      // Gerbang TIDAK membaca status PKP lawan / transactionCode.
+      const pkpGate = resolveCompanyPkpGate({ setting: settings, quotationTax, paymentDate });
+      let nominalRate = 0;
+      if (pkpGate.taxableByPkp) {
+        if (!settings.salesTaxAccountId) {
+          throw new Error(
+            "Akun PPN Keluaran (210201) harus dikonfigurasi sebelum uang muka terutang PPN diterima",
+          );
+        }
+        const taxRows = await tx.tax.findMany({
+          where: { accountId: settings.salesTaxAccountId, isActive: true, deletedAt: null },
+          select: { rate: true, effectiveFrom: true, effectiveTo: true, isActive: true, deletedAt: true },
+        });
+        nominalRate = resolveEffectiveVatRate(
+          taxRows.map((r) => ({ ...r, rate: Number(r.rate) })),
+          dp.paymentDate || new Date(),
+        );
+      }
+      snapshot = computeDownPaymentVatSnapshot({
+        amount: Number(dp.amount),
+        // Gerbang PKP sudah menilai terutang: non-PKP/belum efektif
+        // dipaksa snapshot bruto (quotationTax 0) walau quotation
+        // memuat PPN — FP UM tidak lahir untuk masa non-PKP.
+        quotationTax: pkpGate.taxableByPkp ? quotationTax : 0,
+        paymentDate,
+        transactionCode: DEFAULT_TRANSACTION_CODE,
+        nominalRate,
+      });
+      await tx.downPayment.update({
+        where: { id: dpId },
+        data: {
+          vatTransactionCode: snapshot.transactionCode,
+          vatRate: snapshot.nominalRate,
+          vatDpp: snapshot.dppUangMuka,
+          vatAmount: snapshot.ppnUangMuka,
+          vatTaxPeriod: snapshot.taxPeriod,
+          companyPkpStatusSnapshot: pkpGate.pkpStatus,
+          companyPkpEffectiveFromSnapshot: pkpGate.pkpEffectiveFrom,
+        },
+      });
+    }
+    if (snapshot.ppnUangMuka > 0 && !settings.salesTaxAccountId) {
+      throw new Error(
+        "Akun PPN Keluaran (210201) harus dikonfigurasi sebelum uang muka terutang PPN diterima",
+      );
+    }
+    const accountByKey = {
+      cashBank: settings.cashBankAccountId!,
+      downPaymentLiability: dpLiabilityAccountId!,
+      salesTax: settings.salesTaxAccountId ?? 0,
+      receivable: settings.salesReceivableAccountId ?? 0,
+    } as const;
+
     await tx.journal.create({
       data: {
         journalNumber,
@@ -1756,23 +2361,12 @@ export async function onDownPaymentReceived(
         totalCredit: dp.amount,
         createdBy: userId,
         entries: {
-          create: [
-            // Fix #27: Dr. Bank/Cash (bukan Piutang)
-            {
-              accountId: settings.cashBankAccountId!,
-              debit: dp.amount,
-              credit: 0,
-              memo: "Bank/Cash received",
-            },
-            // AUD-FIN-01: Cr. Kewajiban Uang Muka Penjualan 210102 (bukan
-            // Piutang 1103, bukan Revenue). DP = kewajiban sampai faktur posting.
-            {
-              accountId: dpLiabilityAccountId!,
-              debit: 0,
-              credit: dp.amount,
-              memo: "Uang Muka Penjualan",
-            },
-          ],
+          create: buildDownPaymentReceiptLines({ amount: Number(dp.amount), snapshot }).map((line) => ({
+            accountId: accountByKey[line.account],
+            debit: line.debit,
+            credit: line.credit,
+            memo: line.memo,
+          })),
         },
       },
     });

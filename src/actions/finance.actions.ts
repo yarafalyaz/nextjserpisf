@@ -9,7 +9,16 @@ import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
   onExpenseApproved,
   onPettyCashCreated,
+  onReimbursementClaimApproved,
+  onReimbursementClaimPaid,
+  REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
 } from "@/lib/hooks/accounting.hook";
+import {
+  evaluateReimbursementApprovalSod,
+  evaluateReimbursementApprovedAmount,
+  evaluateReimbursementEvidence,
+  evaluateReimbursementPaymentAmount,
+} from "@/lib/reports/reimbursement";
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
@@ -591,6 +600,9 @@ export async function createJournal(formData: FormData) {
       return j;
     });
 
+    // Route through approval workflow if one is configured for Journal.
+    await requestApprovalIfConfigured("Journal", journal.id, Number(user.id));
+
     return finishJournalMutation(journal, "create", "Membuat jurnal");
   } catch (e: unknown) {
     return journalMutationError(e, "[createJournal]");
@@ -612,6 +624,9 @@ export async function postJournal(journalId: number) {
     if (preview.status !== "DRAFT") {
       throw new Error("Journal hanya bisa di-post dari status DRAFT");
     }
+
+    // Workflow approval must be complete (no-op if no workflow configured).
+    await assertApproved("Journal", journalId);
 
     // Block posting into a closed accounting period
     await assertPeriodOpen(preview.transactionDate);
@@ -734,6 +749,9 @@ export async function createExpense(formData: FormData) {
 
       const created = await tx.expense.create({
       data: {
+        // Jalur operasional tidak pernah menandai klaim (BR-RB-01):
+        // klaim hanya lahir lewat aksi klaim reimbursement.
+        isReimbursementClaim: false,
         documentNo,
         slug: await nextSlug("expense", documentNo),
         accountId: v.accountId,
@@ -810,6 +828,35 @@ export async function approveExpense(expenseId: number) {
     // Workflow approval must be complete (no-op if no workflow configured).
     await assertApproved("Expense", expenseId);
 
+    // F-2026-10-25-017-S: gerbang khusus klaim reimbursement (non-klaim
+    // nol perubahan). Bukti BR-RB-04 + SoD BR-RB-07 + nominal <= bukti.
+    const isClaim = expense.isReimbursementClaim;
+    if (isClaim) {
+      const attachmentCount = await prisma.transactionAttachment.count({
+        where: { referenceType: "expense", referenceId: expenseId },
+      });
+      const evidence = evaluateReimbursementEvidence({
+        referenceNo: expense.referenceNo,
+        receiptImage: expense.receiptImage,
+        attachmentCount,
+      });
+      if (!evidence.ok) throw new Error(evidence.error);
+      const amountGuard = evaluateReimbursementApprovedAmount({
+        submittedAmount: Number(expense.amount),
+        evidencedAmount: Number(expense.amount),
+      });
+      if (!amountGuard.ok) throw new Error(amountGuard.error);
+      const approverEmployee = await prisma.employee.findFirst({
+        where: { userId: Number(user.id) },
+        select: { id: true },
+      });
+      const sod = evaluateReimbursementApprovalSod({
+        claimantEmployeeId: expense.employeeId,
+        approverEmployeeId: approverEmployee?.id ?? null,
+      });
+      if (!sod.ok) throw new Error(sod.error);
+    }
+
     // Sync to PettyCash (idempotent on documentNo), THEN flip to approved.
     // Ordering matters: if the petty-cash sync fails, the expense keeps its
     // pre-approval status and the whole approveExpense is retryable. The sync is
@@ -819,12 +866,27 @@ export async function approveExpense(expenseId: number) {
 
     // Guarded write: only flip when the row is still in a pre-approval state,
     // so a concurrent approver cannot double-apply the status change.
-    const claim = await prisma.expense.updateMany({
-      where: { id: expenseId, status: { in: ["draft", "approved"] } },
-      data: { status: "approved", approvedBy: Number(user.id) },
-    });
-    if (claim.count === 0) {
-      throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+    if (isClaim) {
+      // J-RB1 + flip status dalam SATU tx: akrual gagal (setting 210209
+      // kosong/periode tutup) = klaim tetap draft, bukan setengah berjurnal.
+      await prisma.$transaction(async (tx) => {
+        await onReimbursementClaimApproved(expenseId, Number(user.id), tx);
+        const claimTx = await tx.expense.updateMany({
+          where: { id: expenseId, status: { in: ["draft", "approved"] } },
+          data: { status: "approved", approvedBy: Number(user.id) },
+        });
+        if (claimTx.count === 0) {
+          throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+        }
+      });
+    } else {
+      const claim = await prisma.expense.updateMany({
+        where: { id: expenseId, status: { in: ["draft", "approved"] } },
+        data: { status: "approved", approvedBy: Number(user.id) },
+      });
+      if (claim.count === 0) {
+        throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+      }
     }
 
     await logActivity(
@@ -931,7 +993,36 @@ export async function markExpensePaid(expenseId: number) {
       // prevents any double-post on concurrent calls — the tx-scoped hook call
       // (executeInTx reuses this tx) keeps check-then-create serial under the
       // expense row lock.
-      await onExpenseApproved(expenseId, Number(user.id), tx);
+      // Klaim reimbursement: J-RB2 (Dr 210209/Cr Kas) MENGGANTIKAN jurnal
+      // existing — klaim tidak boleh juga memposting Dr Beban/Cr Kas
+      // (vonis 018-V Putusan 2, E-RB5-2). Bayar sebagian tidak didukung
+      // API bayar existing (tanpa nominal) — tahap ini bayar penuh saja;
+      // penjaga nominal menjaga kontrak itu eksplisit.
+      if (locked.isReimbursementClaim) {
+        // Hanya J-RB1 AKTIF (bukan REVERSED, belum terhapus) sah sebagai dasar bayar (Putusan 2).
+        const accruedJournal = await tx.journal.findFirst({
+          where: {
+            referenceType: REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+            referenceId: expenseId,
+            status: { not: "REVERSED" },
+            deletedAt: null,
+          },
+          select: { totalDebit: true },
+        });
+        if (!accruedJournal) {
+          throw new Error(
+            "Klaim belum punya jurnal akrual J-RB1 — bayar ditolak. Setujui klaim lebih dulu.",
+          );
+        }
+        const payGuard = evaluateReimbursementPaymentAmount({
+          accruedAmount: Number(accruedJournal.totalDebit),
+          paymentAmount: Number(locked.amount),
+        });
+        if (!payGuard.ok) throw new Error(payGuard.error);
+        await onReimbursementClaimPaid(expenseId, Number(user.id), tx);
+      } else {
+        await onExpenseApproved(expenseId, Number(user.id), tx);
+      }
 
       // Conditional claim: only flip when still approved. The FOR UPDATE lock
       // serializes this block, so count===0 means the status moved under us
@@ -2041,6 +2132,10 @@ export async function updateJournal(id: number, formData: FormData) {
 
       return j;
     });
+
+    // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
+    // (resubmit); tanpa workflow terkonfigurasi ini no-op.
+    await requestApprovalIfConfigured("Journal", id, Number(user.id));
 
     return finishJournalMutation(journal, "update", "Memperbarui jurnal");
   } catch (e: unknown) {
