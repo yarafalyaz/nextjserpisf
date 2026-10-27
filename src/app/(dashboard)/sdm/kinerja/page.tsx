@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 import { CycleForm, CycleStatusButton } from "./_components/cycle-actions"
 import { getPerformanceQueue } from "@/lib/reports/performance-review-queue-data"
 import { PerformanceQueueCard } from "@/components/reports/performance-queue-card"
@@ -64,7 +65,7 @@ export default async function PerformancePage() {
           <tbody>
             {cycles.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Belum ada siklus penilaian.</td>
+                <td colSpan={6} className="px-4 py-8"><EmptyState title="Belum ada siklus penilaian." className="py-0" /></td>
               </tr>
             )}
             {cycles.map((c) => (

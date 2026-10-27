@@ -6,6 +6,7 @@ import { getCompetencyGapQueue } from "@/lib/reports/competency-gap-queue-data"
 import { CompetencyGapQueueCard } from "@/components/reports/competency-gap-queue-card"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   CompetencyForm,
   EmployeeCompetencyForm,
@@ -71,7 +72,7 @@ export default async function CompetenciesPage() {
           <tbody>
             {competencies.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Belum ada kompetensi.</td>
+                <td colSpan={4} className="px-4 py-8"><EmptyState title="Belum ada kompetensi." className="py-0" /></td>
               </tr>
             )}
             {competencies.map((c) => (

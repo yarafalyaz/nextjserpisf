@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requireAnyPermission } from "@/lib/auth/permissions"
+import { EmptyState } from "@/components/ui/empty-state"
 import { PageHeader } from "@/components/ui/page-header"
 import {
   DetailTable,
@@ -62,9 +63,7 @@ export default async function StatutoryRulesPage() {
         <StatutoryRuleForm />
         <div className="p-4 px-5">
           {rules.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Belum ada aturan — hitungan memakai bawaan 2024 dari kode
-            </p>
+            <EmptyState title="Belum ada aturan — hitungan memakai bawaan 2024 dari kode" className="py-10" />
           ) : (
             <DetailTable>
               <DetailTableHead>

@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 import { TrainingForm } from "./_components/training-actions"
 
 import type { Metadata } from "next"
@@ -53,7 +54,7 @@ export default async function TrainingsPage() {
           <tbody>
             {trainings.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Belum ada pelatihan.</td>
+                <td colSpan={5} className="px-4 py-8"><EmptyState title="Belum ada pelatihan." className="py-0" /></td>
               </tr>
             )}
             {trainings.map((t) => (

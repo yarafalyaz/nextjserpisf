@@ -8,6 +8,7 @@ import { getHrScope } from "@/lib/auth/hr-scope"
 import { loadEmployeeLoanChannels } from "@/lib/reports/employee-loan-channel-data"
 import { EMPLOYEE_LOAN_CHANNEL_LABELS } from "@/lib/reports/employee-loan-channel"
 import { Banknote } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { LoanTable } from "../pinjaman/_components/loan-table"
 
 import type { Metadata } from "next"
@@ -75,9 +76,7 @@ export default async function MyLoanRequestsPage() {
       </div>
 
       {data.length === 0 ? (
-        <div className="rounded-xl border border-default bg-surface p-6 text-sm text-muted-foreground">
-          Belum ada pengajuan pinjaman. Gunakan tombol Ajukan Pinjaman untuk membuat pengajuan pertama.
-        </div>
+        <EmptyState title="Belum ada pengajuan pinjaman." description="Gunakan tombol Ajukan Pinjaman untuk membuat pengajuan pertama." />
       ) : (
         <LoanTable data={data} total={data.length} page={1} pageSize={data.length || 10} showActions={false} showEmployeeColumn={false} readOnly />
       )}

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { requireAuth } from "@/lib/auth/permissions"
 import { loadOwnPayslips } from "@/lib/reports/payslip-self-data"
+import { EmptyState } from "@/components/ui/empty-state"
 import { OwnPayslipTable } from "./_components/own-payslip-table"
 
 import type { Metadata } from "next"
@@ -21,10 +22,7 @@ export default async function OwnPayslipsPage() {
       </div>
 
       {data.length === 0 ? (
-        <div className="rounded-xl border border-default bg-surface p-6 text-sm text-muted-foreground">
-          Belum ada slip gaji final. Slip tampil di sini sesudah penggajian disetujui atau
-          dibayar oleh SDM.
-        </div>
+        <EmptyState title="Belum ada slip gaji final." description="Slip tampil di sini sesudah penggajian disetujui atau dibayar oleh SDM." />
       ) : (
         <OwnPayslipTable data={data} />
       )}

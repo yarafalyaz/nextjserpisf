@@ -4,6 +4,7 @@ import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { getMyReimbursementClaims } from "@/actions/reimbursement.actions"
 import { CanCreate } from "@/components/auth/can-create"
+import { EmptyState } from "@/components/ui/empty-state"
 import { MyReimbursementClaimsTable } from "./_components/my-reimbursement-claims-table"
 
 import type { Metadata } from "next"
@@ -38,9 +39,7 @@ export default async function MyReimbursementClaimsPage() {
       </div>
 
       {data.length === 0 ? (
-        <div className="rounded-xl border border-default bg-surface p-6 text-sm text-muted-foreground">
-          Belum ada klaim reimbursement. Gunakan tombol Ajukan Klaim untuk membuat klaim pertama.
-        </div>
+        <EmptyState title="Belum ada klaim reimbursement." description="Gunakan tombol Ajukan Klaim untuk membuat klaim pertama." />
       ) : (
         <MyReimbursementClaimsTable data={data} />
       )}
