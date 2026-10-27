@@ -117,12 +117,17 @@ describe("updateSalesPayment overpay guard", () => {
     expect(result.error).toContain("lebih dari 0")
   })
 
+  // FIN-BR-006: satu helper bersama dua lewat-sisa batas (dalam vs luar Rp1).
+  async function editPaymentTo(amount: string) {
+    return updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount, paymentDate: "2026-06-09", paymentMethod: "transfer",
+    }))
+  }
+
   it("FIN-BR-006: edit lewat sisa dalam toleransi Rp1 tetap lolos (pembulatan rupiah-penuh)", async () => {
     // grandTotal 1000, others paid 200 → remaining 800. Edit ke 800.50
     // melebihi sisa 0.50 — dalam toleransi Rp1, bukan overpay.
-    const result = await updateSalesPayment(9, fd({
-      salesInvoiceId: "50", amount: "800.50", paymentDate: "2026-06-09", paymentMethod: "transfer",
-    }))
+    const result = await editPaymentTo("800.50")
     expect(result.success).toBe(true)
     expect(paymentUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 9 }, data: expect.objectContaining({ amount: 800.5 }) }),
@@ -131,9 +136,7 @@ describe("updateSalesPayment overpay guard", () => {
 
   it("FIN-BR-006: edit lewat sisa di atas toleransi tetap ditolak", async () => {
     // remaining 800; edit ke 802 melebihi 2.00 — di atas toleransi Rp1.
-    const result = await updateSalesPayment(9, fd({
-      salesInvoiceId: "50", amount: "802", paymentDate: "2026-06-09", paymentMethod: "transfer",
-    }))
+    const result = await editPaymentTo("802")
     expect(result.success).toBe(false)
     expect(result.error).toContain("melebihi sisa tagihan")
     expect(paymentUpdateMock).not.toHaveBeenCalled()
