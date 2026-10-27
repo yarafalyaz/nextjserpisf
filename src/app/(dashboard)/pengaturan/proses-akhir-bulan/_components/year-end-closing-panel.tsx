@@ -10,6 +10,7 @@ import {
   reverseYearEndClosingAction,
 } from "@/actions/year-end-closing.actions"
 import { Button } from "@/components/ui/shadcn/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { FormSelect } from "@/components/ui/form-select"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -93,9 +94,7 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
       </p>
 
       {preview.lines.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Belum ada saldo akun pendapatan/beban terposting untuk tahun fiskal ini.
-        </p>
+        <EmptyState title="Belum ada saldo akun pendapatan/beban terposting untuk tahun fiskal ini" />
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[560px] text-sm">

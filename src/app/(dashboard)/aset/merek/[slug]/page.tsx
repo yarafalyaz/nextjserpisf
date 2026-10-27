@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { formatDate } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
+import { EmptyState } from "@/components/ui/empty-state";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteAssetBrand } from "@/actions/asset.actions";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
@@ -84,9 +85,7 @@ export default async function AssetBrandDetailPage({
         </div>
         <div className="p-4 px-5">
           {brand.models.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada model
-            </p>
+            <EmptyState title="Belum ada model" />
           ) : (
             <DetailTable>
               <DetailTableHead>

@@ -7,6 +7,7 @@ import {
   postAssetReclassificationAction,
   reverseAssetChangeEventAction,
 } from "@/actions/asset.actions"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/shadcn/input"
@@ -183,9 +184,7 @@ export function AssetChangeEventPanel({
   return (
     <div className="flex flex-col gap-4">
       {events.length === 0 ? (
-        <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-          Belum ada peristiwa perubahan aset
-        </p>
+        <EmptyState title="Belum ada peristiwa perubahan aset" className="py-10" />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[880px] text-sm" aria-label="Riwayat peristiwa perubahan aset">

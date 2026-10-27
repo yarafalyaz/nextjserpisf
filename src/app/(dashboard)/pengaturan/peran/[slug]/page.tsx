@@ -6,6 +6,7 @@ import { permissionGroupLabel, permissionLabel } from "@/lib/auth/permission-lab
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
@@ -79,7 +80,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ slu
           Hak Akses ({role.permissions.length})
         </h2>
         {role.permissions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Belum ada hak akses yang ditetapkan</p>
+          <EmptyState title="Belum ada hak akses yang ditetapkan" className="py-6" />
         ) : (
           <div className="flex flex-col gap-4">
             {Object.entries(grouped).map(([prefix, perms]) => (
@@ -103,7 +104,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ slu
           Pengguna dengan Peran ini ({role.users.length})
         </h2>
         {role.users.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Belum ada pengguna dengan peran ini</p>
+          <EmptyState title="Belum ada pengguna dengan peran ini" className="py-6" />
         ) : (
           <div className="flex flex-wrap gap-2">
             {role.users.map((user) => (
