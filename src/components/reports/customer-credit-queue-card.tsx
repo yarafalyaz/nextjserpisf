@@ -37,6 +37,14 @@ import { ReportCardShell } from "./report-card-shell"
  * `sourceType` verbatim tanpa label terjurnal (Putusan 3). Umur tampil
  * angka server + label AGE_LABEL ("sejak diterbitkan") tanpa
  * tahap/ambang karangan (Q-CCQ-1/2/4/6 belum diputus).
+ *
+ * 086-B2 (kontrak PR #1151, 086-V Putusan 6): penanda FP UM juga bisa
+ * `true` untuk baris `Quotation`/`RevisionDown` bila quotation sumbernya
+ * tertahan gerbang refund server (residu F4 DP taxed ber-FP aktif > 0) —
+ * bentuk field baris TIDAK berubah; kartu tetap menempel
+ * `penandaFpUangMukaLabel` apa adanya untuk SEMUA `sourceType`, tanpa
+ * cabang per sumber dan tanpa menyimpulkan tahan/tidak dari field
+ * mentah. `alokasiTerhalang` tetap false (penanda menahan refund saja).
  */
 export function CustomerCreditQueueCard({
   queue,
