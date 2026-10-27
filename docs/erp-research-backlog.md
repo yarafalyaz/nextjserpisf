@@ -34364,6 +34364,155 @@ F-2026-10-26-061-S — Antrean penerimaan barang draft mengendap. Status: SPEC S
 
 ---
 
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-072-S: antrean pembayaran vendor draft mengendap belum dikonfirmasi (turunan baca-saja)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_2ee3d03a. ID F-2026-10-26-072-S diverifikasi bebas run ini 2026-10-26 18:58 WIB: grep `F-2026-10-26-072` di backlog + board `origin/main` (`39562550`) = 0 dan tidak ada judul PR terbuka memuat 072-S; seri berjalan 050-S..071-S (071-S PR #1033 OPEN; 069-V = vonis Accountant — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Batasan keras domain (wajib dibaca implementor): pembayaran vendor `draft` BELUM membayar apa pun. Jurnal TIDAK dibuat saat draft lahir ("Journal is NOT created here — it is posted only on confirmVendorPayment", src/actions/purchase.actions.ts:1576); kas/bank keluar, debit Hutang Usaha, dan alokasi ke tagihan vendor semuanya baru lahir di `confirmVendorPayment` (:1696) dalam satu transaksi berkunci baris. Antrean ini baca-saja: tidak mengonfirmasi, tidak mengalokasi, tidak menandai transfer, tidak menghapus draft. Nominal tampil = `amount` dokumen tersimpan apa adanya berlabel nilai draft (BR-VPQ-04) — bukan kas keluar, bukan pengurang utang berjalan, bukan sisa utang vendor; menjumlahkannya ke laporan kas/AP mana pun = cacat. Ambang hari tingkat mengendap = USULAN putusan Lead (Q-VPQ-1); konfirmasi-dari-daftar dibuka atau tidak = Lead DAN vonis Accountant wajib sebelumnya (Q-VPQ-3), karena konfirmasi menggerakkan jurnal + alokasi subledger.
+
+Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): `VendorPayment.status` String default `"draft"` (prisma/schema.prisma:2314 model, status :2320), deletedAt nullable :2323, `amount` Decimal(15,2) WAJIB, paymentDate WAJIB, vendorBillId nullable (tagihan tujuan pilihan tombol Bayar), transferredAt/transferReference nullable (penanda eksekusi transfer operasional — jurnal sudah dibuat pembayaran, menandai transfer TIDAK membuat jurnal baru, komentar schema). `createVendorPayment` (:1500, `create_vendor_payments`) menolak target tagihan draft/paid/cancelled (:1519-1532 — tagihan konsep belum diakui tidak boleh dibayar); lahir draft tanpa alokasi dan tanpa jurnal (:1576). `confirmVendorPayment` (:1696, `approve_vendor_payments` + `assertApproved("VendorPayment")`): hanya dari draft, kunci baris FOR UPDATE, status → `completed` + confirmedBy/At, alokasi deterministik (tagihan tujuan dulu lalu oldest-first) ke tagihan posted/partial balanceDue>0, menolak overpay yang membuat GL AP debit penuh melebihi subledger (komentar :1756-1763), lalu jurnal `onVendorPaymentCreated` Dr Hutang Usaha / Cr Bank-Kas + adminFee beban terpisah (src/lib/hooks/accounting.hook.ts:2624). `updateVendorPayment` (:3023, `edit_vendor_payments`) hanya draft; `deleteVendorPayment` (:2413, `delete_vendor_payments`) hanya draft, kunci baris, sapu lampiran + jurnal-by-reference (draft tidak berjurnal sehingga reversal no-op terjaga).
+
+Bukan duplikasi: bukan F-2026-10-26-064-S (VendorBill draft — tagihan vendor belum diposting; spec ini pembayaran atas tagihan yang sudah posted, tahap sesudahnya, aktor/izin beda: `view_vendor_bills` vs `view_vendor_payments`); bukan daftar pembayaran existing `pembelian/pembayaran-vendor` (page.tsx:39 findMany tanpa saring status, urut createdAt desc, cari saja — draft tenggelam di antara completed, tanpa umur/tingkat/rekap draft); bukan PurchaseAdvance (uang muka pembelian dokumen terpisah status default posted); bukan Transfer Pemasok (vendor-transfer — eksekusi transfer atas pembayaran yang sudah completed, hilir spec ini); bukan perintah pembayaran (daftar tagihan siap bayar — sisi tagihan, bukan pembayaran draft).
+
+Benchmark resmi (akses live 2026-10-26 run ini, web_search):
+- Accurate: Pembayaran Pembelian mencatat pembayaran ke supplier (termasuk sebagian/cicilan) yang mengurangi utang supplier sesudah pembayaran dicatat — https://help.accurate.id/product/pembayaran-pembelian/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/pembayaran-pembelian/membuat-pembayaran-pembelian-sebagian/ (BENCHMARK: pembayaran mengurangi utang saat tercatat; konsep draft pembayaran mengendap bertingkat umur TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: Pembayaran Hutang Usaha mencatat pembayaran ke pemasok per faktur dengan akun kas/bank — https://help.zahironline.com/portal/id/kb/articles/cara-input-pembayaran-hutang-usaha-zahir-online-v2 (BENCHMARK: pembayaran per faktur ada; antrean draft pembayaran bertingkat umur TIDAK ditetapkan — tidak diklaim).
+
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 39562550)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model: `VendorPayment` (prisma/schema.prisma:2314) — slug unik nullable, documentNo unik, vendorId WAJIB, amount Decimal(15,2) WAJIB, paymentDate WAJIB, paymentMethod String, accountId/bankId nullable, adminFee default 0, vendorBillId nullable, referenceNumber/bankAccount/notes nullable, confirmedBy/confirmedAt nullable, transferredAt/transferReference nullable, createdBy nullable, deletedAt nullable, createdAt/updatedAt; `VendorPaymentAllocation` (:2365) hanya lahir saat konfirmasi. Indeks status/deletedAt/vendor/paymentDate/createdBy ada.
+- Lifecycle: create draft tanpa jurnal/alokasi :1500,1576 (target bill draft ditolak :1530); confirm draft→completed satu transaksi berkunci + alokasi capped balanceDue + tolak overpay + jurnal hook :1696; update hanya draft :3037; delete hanya draft :2433. Penanda transfer operasional terpisah dari jurnal (komentar schema model).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:193-197): `view_vendor_payments`, `create_vendor_payments`, `edit_vendor_payments`, `delete_vendor_payments`, `approve_vendor_payments` (konfirmasi memakai approve :1698). Navigasi existing (navigation.ts:114 `view_vendor_payments`).
+- Daftar existing: `pembelian/pembayaran-vendor` (page.tsx:39-54, findMany semua status urut createdAt desc + count, saring cari documentNo/nama vendor saja) — permukaan operasional semua pembayaran; konteks yang membuat antrean draft ini bukan penggantinya.
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean pembayaran vendor `draft` mengendap — grep `vendor-payment-draft-queue`/`VendorPaymentDraftQueue` di src = 0 (hit `umurDraft` hanya keluarga sales draft-queue). Risiko bengkel: staf keuangan membuat draft pembayaran ke supplier part, tidak pernah dikonfirmasi — kas terlihat aman padahal rencana bayar menggantung, tagihan tujuan tetap terbuka menua di aging, dan tidak ada permukaan yang menua draft pembayarannya; draft yang ditinggal juga menahan kesan "sudah dibuatkan pembayaran" palsu bagi pembaca daftar campur.
+
+### 1. Workflow specification
+
+Aktor: Pembuat pembayaran pemegang `create_vendor_payments`/`edit_vendor_payments` (sumber baris draft), Pengonfirmasi pemegang `approve_vendor_payments` (pembaca kerja antrean; pemilik konfirmasi existing), Pembaca keuangan pemegang `view_vendor_payments` (pembaca antrean), Sistem (builder turunan baca-saja). Vendor BUKAN aktor (tidak ada permukaan vendor); pengguna tanpa `view_vendor_payments` bukan aktor sama sekali (termasuk rekap — nominal pembayaran vendor data keuangan internal).
+Dokumen masuk: baris VendorPayment `status = "draft"` AND deletedAt null (id, slug, documentNo, vendorId+nama, amount, paymentDate, paymentMethod label existing, vendorBillId+documentNo tagihan tujuan bila tertaut, createdBy+nama bila terpetakan, createdAt). Field existing semua; tanpa field masuk baru.
+Dokumen keluar: baris antrean turunan per pembayaran (§3) + rekap hitungan pembayaran per tingkat/vendor + Σ amount baris berlabel nilai draft. BUKAN pembayaran: tidak ada kas keluar, jurnal, alokasi, atau status tagihan berubah karena antrean.
+
+Alur:
+1. Pembayaran lahir `draft` lewat createVendorPayment existing (boleh menargetkan satu tagihan terbuka).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks vendor/tagihan tujuan, penanda `paymentDateLampau` (fakta tanggal rencana bayar lampau — bukan tunggakan, BR-VPQ-06), rekap.
+3. Pengonfirmasi membuka detail pembayaran existing dan mengonfirmasi/mengubah/menghapus lewat jalur existing. Antrean tidak menyediakan tombol Konfirmasi/Alokasi/Tandai Transfer/Hapus tahap 1 (Q-VPQ-3).
+4. Sesudah status bukan draft: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
+
+Kata tampil usulan (USULAN — verbatim final = Q-VPQ-2 Lead bersama ambang hari):
+- Judul kolom: `No. Dokumen`, `Vendor`, `Nilai Draft`, `Tanggal Bayar`, `Tagihan Tujuan`, `Menunggu` (umur), `Dibuat Oleh`.
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Konfirmasi".
+- Label rekap nilai: `nilai draft belum dibayar` (verbatim usulan, nempel di setiap Σ amount).
+- Notice usulan: "Daftar ini hanya pembayaran vendor yang masih draft dan belum dikonfirmasi. Pembayaran draft belum mengeluarkan kas dan belum mengurangi tagihan vendor; konfirmasi, ubah, atau hapus lewat detail pembayaran."
+
+### 2. Role/permission matrix (key katalog nyata)
+
+| Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
+|---|---|---|---|
+| Lihat antrean draft + tingkat/umur + nilai draft | `view_vendor_payments` (katalog:193) | daftar existing requirePermission + halaman pembayaran | TIDAK ada key baru tahap 1; loader menegakkan izin sebelum query (BR-VPQ-05) |
+| Buat pembayaran (sumber baris draft) | `create_vendor_payments` (katalog:194) | createVendorPayment; target bill draft ditolak | tidak berubah |
+| Konfirmasi draft → completed (+ alokasi + jurnal) | `approve_vendor_payments` (katalog:197) + assertApproved workflow | confirmVendorPayment klaim berkunci satu transaksi | TIDAK berubah; antrean hanya mengantar ke detail |
+| Ubah / hapus draft | `edit_vendor_payments` / `delete_vendor_payments` (katalog:195/196) | update/delete hanya status draft | tidak berubah; bukan dari antrean tahap 1 |
+| Tandai transfer terkirim | jalur Transfer Pemasok existing | penanda operasional, tanpa jurnal baru | di luar populasi (hanya completed); tidak berubah |
+
+Tidak ada permission key baru diusulkan tahap 1. Tidak ada scope gudang/departemen untuk pembayaran vendor di kode existing — jangan karang scope baru di loader (BR-VPQ-05).
+
+### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
+
+Status dokumen existing TIDAK diubah spec ini: `draft` → (konfirmasi existing) → `completed`; tidak ada status paid terpisah di VendorPayment (penanda transfer = transferredAt, bukan status); draft hanya bisa diubah/dihapus, completed tidak kembali draft. Tidak ada jalur kas/jurnal dari draft selain konfirmasi.
+
+Populasi antrean: VendorPayment `status = "draft"` AND deletedAt null. Per baris:
+- `umurDraftHari` = hari kalender WIB dari `createdAt` (masa depan = 0 tertanda).
+- `paymentDateLampau` = hari WIB hari ini > paymentDate (fakta tanggal rencana; paymentDate adalah tanggal bayar yang direncanakan/diinput, bukan tanggal jatuh tempo tagihan).
+
+| # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
+|---|---|---|---|
+| S0 | status bukan draft, atau deletedAt terisi | di luar antrean | bukan populasi |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-VPQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | rencana bayar belum dikonfirmasi melewati kesabaran operasional yang diputus Lead; konfirmasi atau hapus lewat detail |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-VPQ-5) |
+
+`paymentDateLampau` adalah penanda pendamping, BUKAN tingkat tersendiri tahap 1 dan BUKAN tunggakan (BR-VPQ-06). Tidak ada tingkat kelayakan bayar: menilai draft "siap konfirmasi" dari saldo kas/tagihan berjalan di antrean berarti membaca keadaan uang berjalan — di luar tahap 1 (penilaian milik pengonfirmasi di detail; overpay/alokasi dinilai confirm existing). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada konfirmasi otomatis.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-VPQ-01 | Populasi = VendorPayment `status="draft"` persis AND deletedAt null. completed/status lain/baris terhapus lunak tidak disamakan diam-diam dan tidak masuk, termasuk rekap. | TERVERIFIKASI-KODE (status default + deletedAt schema) + USULAN batas |
+| BR-VPQ-02 | Draft belum membayar: nol jurnal, nol kas/bank keluar, nol alokasi, nol pengurang balanceDue tagihan sampai confirmVendorPayment existing berjalan. Amount draft dilarang dijumlahkan ke kas keluar, pembayaran terlaksana, AP terbayar, atau sisa utang vendor di permukaan mana pun. | TERVERIFIKASI-KODE (:1576 + confirm :1696 + hook :2624) |
+| BR-VPQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: konfirmasi (`approve_vendor_payments` + assertApproved, klaim berkunci, alokasi capped, tolak overpay), ubah (hanya draft), hapus (hanya draft + sapu lampiran). Antrean tidak menambah jalan pintas konfirmasi/alokasi/transfer/hapus dari daftar tahap 1 (Q-VPQ-3). | TERVERIFIKASI-KODE + USULAN batas |
+| BR-VPQ-04 | `amount` tampil verbatim Decimal→Number tepi loader berlabel nilai draft belum dibayar; Σ amount hanya atas baris antrean yang sama persis dengan label rekap yang sama; adminFee TIDAK ikut nilai pembayaran tahap ini (biaya bank lahir saat jurnal konfirmasi; mencampurnya menilai biaya yang belum terjadi). Baris amount 0 tampil apa adanya (EC-VPQ-6). | USULAN kejujuran nominal di atas TERVERIFIKASI-KODE field |
+| BR-VPQ-05 | Loader menegakkan `view_vendor_payments` sebelum query; anti-N+1 (nama vendor/tagihan tujuan/pembuat massal — query per baris → cacat). TIDAK ada scope gudang/departemen diusulkan (kode existing tidak mengenalnya untuk pembayaran vendor); membatasi per pembuat = Q-VPQ-4, bukan saringan senyap. | TERVERIFIKASI-KODE (katalog + pola loader) + USULAN |
+| BR-VPQ-06 | paymentDate lampau pada draft TIDAK dibaca sebagai tunggakan/keterlambatan bayar: dokumen belum dikonfirmasi, tidak ada kewajiban yang dilanggar pembayaran ini; keterlambatan tagihan dinilai di permukaan tagihan/aging existing dari dueDate tagihan, bukan dari draft ini. Penanda tampil sebagai fakta tanggal rencana (kata Q-VPQ-2). | USULAN kejujuran label |
+| BR-VPQ-07 | Tagihan tujuan (vendorBillId) tampil documentNo apa adanya bila tertaut; null tampil `—` (alokasi oldest-first saat konfirmasi nanti — antrean tidak menjanjikan tagihan mana yang akan teralokasi, karena alokasi dinilai ulang saat konfirmasi dari keadaan tagihan saat itu). Antrean dilarang menampilkan alokasi simulasi. | USULAN di atas TERVERIFIKASI-KODE perilaku confirm |
+| BR-VPQ-08 | Builder antrean murni baca-saja turunan: tidak memanggil confirmVendorPayment/update/delete/hook jurnal/alokasi, tidak menulis status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
+| BR-VPQ-09 | createdBy null (legacy) tampil `—`; referenceNumber kosong tampil `—`, bukan karangan nomor referensi; transferredAt pada draft (bila data legacy mengisinya) diabaikan antrean — penanda transfer hanya bermakna sesudah completed, antrean tidak menampilkannya sebagai bukti sudah transfer. | USULAN di atas TERVERIFIKASI-KODE field nullable |
+| BR-VPQ-10 | Ambang hari `mengendap`, kata label final, dan konfirmasi-dari-daftar adalah kebijakan perilaku inti + uang: BUTUH-VONIS Lead (Q-VPQ-1/2/5) dan, khusus Q-VPQ-3, vonis Accountant WAJIB sebelum dibuka karena konfirmasi menggerakkan jurnal Dr Hutang Usaha/Cr Kas + alokasi subledger + penolakan overpay. Tahap baca-saja apa adanya tidak mengubah jurnal sehingga Accountant tidak diminta untuk tahap ini. | BUTUH-VONIS Lead (+ Accountant bersyarat) |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Pembayaran pembelian mengurangi utang supplier | Ada: pembayaran tercatat mengurangi utang, termasuk cicilan (URL §kepala) | Ada: pembayaran hutang per faktur akun kas/bank (URL §kepala) | Ada: konfirmasi → alokasi capped + jurnal Dr AP/Cr Kas satu transaksi | Tidak diubah; antrean berhenti di konfirmasi existing |
+| Pembayaran konsep/draft dibedakan dari terlaksana | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: draft tanpa jurnal; completed berjurnal+alokasi; transfer penanda terpisah | Populasi draft persis + label nilai draft |
+| Daftar pembayaran semua status | Ada daftar pembayaran (URL §kepala) | Ada daftar pembayaran hutang (URL §kepala) | Ada: semua status urut terbaru, cari saja | Antrean khusus draft berumur tertua-dulu |
+| Antrean draft pembayaran bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-VPQ-B1: Populasi tepat `status="draft"` + deletedAt null: completed/terhapus/status lain tidak tampil dan tidak terhitung rekap/Σ (cabut saring status/deletedAt → MERAH).
+- AC-VPQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-VPQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-VPQ-4); selama Q-VPQ-1 belum diputus `mengendap` tidak terbit (tanam angka liar → MERAH).
+- AC-VPQ-B3: Penanda paymentDate: lampau → tertanda fakta; hari sama → tidak lampau; penanda tidak mengubah tingkat dan tidak berlabel tunggakan (jadikan tingkat/label tunggakan → MERAH, BR-VPQ-06).
+- AC-VPQ-B4: Loader fail-closed `view_vendor_payments` sebelum query, anti-N+1 (vendor/tagihan/pembuat massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil; rekap/Σ = baris yang sama persis (Σ beda → MERAH).
+- AC-VPQ-B5: Baca-saja terbukti: builder/loader tidak memanggil confirm/update/delete/hook jurnal/alokasi/tulis status (panggil diam-diam → MERAH, BR-VPQ-02/08); amount verbatim, adminFee tidak ikut Σ pembayaran (campur adminFee → MERAH).
+
+Frontend (konsumen):
+- AC-VPQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
+- AC-VPQ-F2: Nilai selalu berlabel nilai draft belum dibayar; draft tidak berlabel kas keluar/terbayar/pengurang utang/tunggakan (label terlaksana di draft → MERAH); vendor/tagihan tujuan verbatim, null `—`.
+- AC-VPQ-F3: Tautan baris hanya ke detail pembayaran existing; tidak ada tombol Konfirmasi/Alokasi/Tandai Transfer/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-VPQ-3 → MERAH); tanpa `view_vendor_payments` halaman menolak.
+
+Edge cases:
+- EC-VPQ-1: Draft yang target tagihannya sudah lunas oleh pembayaran lain sesudah draft lahir tetap populasi apa adanya; antrean tidak menilai konfirmasinya akan ditolak confirm existing (penilaian saat konfirmasi, BR-VPQ-07).
+- EC-VPQ-2: Dua draft untuk vendor/tagihan sama tampil dua baris apa adanya; tidak digabung/didedup dan tidak dijumlahkan sebagai rencana bayar gabungan berlabel utang.
+- EC-VPQ-3: Draft vendor nonaktif sesudah lahir tetap populasi apa adanya; keputusan bayar/tidak dinilai manusia di detail.
+- EC-VPQ-4: createdAt masa depan (jam server) → umur 0 tertanda, tidak negatif.
+- EC-VPQ-5: Pembayaran dikonfirmasi/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci baris.
+- EC-VPQ-6: Pembayaran draft amount 0 tampil apa adanya; tidak dikeluarkan karena nominal.
+- EC-VPQ-7: paymentDate jauh lampau pada draft lama tertanda fakta tanggal saja; antrean tidak menghitung denda/keterlambatan (wilayah tagihan existing).
+- EC-VPQ-8: Draft dengan transferredAt terisi (legacy) tidak tampil sebagai sudah transfer (BR-VPQ-09); tetap populasi draft.
+
+### 7. Backlog implementasi (turunan F-2026-10-26-072-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-072-S | Spec kontrak ini (dokumen) | Business | — |
+| 072-B | Builder murni tingkat/umur draft pembayaran vendor + loader `view_vendor_payments` fail-closed anti-N+1 + tes AC-VPQ-B1..B5 | Backend | Putusan Lead Q-VPQ-1/2 |
+| 072-F | Permukaan antrean (daftar pembayaran existing atau halaman antrean pola keluarga antrean) verbatim payload + AC-VPQ-F1..F3 | Frontend | 072-B merged |
+| 072-Q | Falsifikasi AC-VPQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 072-B/072-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-VPQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (rencana kas menggantung cepat basi terhadap keadaan tagihan/kas berjalan) — bukan fakta; selama belum diputus builder hanya `menunggu` |
+| Q-VPQ-2 | Kata label/notice/penanda paymentDate final §1? | Lead | Kata usulan apa adanya; satu konstanta label server; label nilai wajib memuat "belum dibayar" |
+| Q-VPQ-3 | Konfirmasi langsung dari antrean dibuka? | Lead + Accountant (WAJIB vonis — jurnal + alokasi + overpay guard) | TIDAK tahap 1 (BR-VPQ-03): konfirmasi menilai alokasi/overpay dari keadaan tagihan saat itu dan harus terasa di detail; jalan pintas = keputusan terpisah bervonis |
+| Q-VPQ-4 | Key baca antrean cukup `view_vendor_payments`, atau dibatasi pembuat/pengonfirmasi? | Lead | `view_vendor_payments` tahap 1 (sama dengan daftar existing); pembatasan per pembuat = keputusan sadar terpisah |
+| Q-VPQ-5 | Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt (bukan paymentDate) disahkan? | Lead | Ya `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc; createdAt — paymentDate hanya penanda fakta (BR-VPQ-06) |
+
+### Yang TIDAK diusulkan run ini
+- Mengonfirmasi/mengalokasi/menandai transfer massal atau otomatis dari draft basi (BR-VPQ-03) — jurnal + alokasi subledger + overpay guard tidak boleh dilewati daftar.
+- Memasukkan amount draft ke kas keluar/AP terbayar/sisa utang/aging (BR-VPQ-02) — draft belum berdampak uang; aging wilayah tagihan existing.
+- Simulasi alokasi draft ke tagihan (BR-VPQ-07) — alokasi dinilai ulang saat konfirmasi; simulasi menjanjikan hasil yang bisa berubah.
+- Menghapus draft basi otomatis berbasis umur — hapus pembayaran = keputusan manusia lewat jalur existing.
+- Pengingat WA/email ke pengonfirmasi dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja.
+- Status/field pembayaran baru, perubahan lifecycle draft→completed, atau jalur pembayaran atas tagihan draft (existing menolaknya :1530).
+
+F-2026-10-26-072-S — Antrean pembayaran vendor draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-VPQ-1/2 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-VPQ-3 dibuka), lalu fisik Backend (072-B), konsumen Frontend (072-F), falsifikasi QA (072-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
+
 ## PUTUSAN LEAD 2026-10-26 19:10 WIB — gerbang F-2026-10-26-070-S (Q-PDQ), F-2026-10-26-071-S (Q-MRQ), F-2026-10-26-072-S (Q-VPQ)
 
 > **Slot putusan**: kartu Lead `t_db814113`. Bukti live run ini: PR #1030 head `b9afaee7a05af1ca49c13054684ee780cdc6d94e` BEHIND + verdict QA LOLOS isi CONDITIONAL komentar 6415464385 (26 Okt 2026 18:59 WIB); PR #1033 head `02396f8d29d14994c2e38a0febe35c0f8a40abad` BEHIND + verdict QA komentar 6415476098 (19:00 WIB); PR #1037 head `8148ab485428b18a6413d1ce4c6c511fb2921b34` MERGEABLE leluhur main + verdict QA komentar 6415545575 (19:04 WIB). Ketiganya diff docs saja (backlog + board), Detect + SonarCloud SUCCESS exact-head, konteks wajib lain SKIPPED sah docs-only. Tanpa kode/schema/migrasi di putusan ini. Accountant TIDAK diminta tahap baca-saja ini — wajib hanya bila aksi tulis-dari-antrean kelak dibuka (Q-PDQ-3/5, Q-MRQ-3, Q-VPQ-3), persis syarat spec masing-masing. Preseden mengikat: PUTUSAN LEAD 2026-10-26 (keluarga antrean draft, contoh baris status F-2026-10-26-059-S: ambang 3 hari kalender WIB dari `createdAt`, kata §1 disahkan verbatim, urutan mengendap-dulu/tertua/`documentNo` asc, tanpa key baru, aksi-dari-daftar ditutup tahap 1).
