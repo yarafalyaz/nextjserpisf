@@ -47,6 +47,8 @@ export const updateSystemSettingsSchema = z.object({
   companyPostalCode: optionalNullString(20),
   companyWebsite: optionalNullString(),
   companyTaxId: optionalNullString(50),
+  // NITKU penjual 22 digit (SellerIDTKU Coretax); kosong = ekspor ditolak builder.
+  companyNitku: optionalNullString(22),
   companyLogo: optionalNullString(500),
   companyLogoDark: optionalNullString(500),
   companyLatitude: optionalDecimal(),

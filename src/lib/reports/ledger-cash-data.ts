@@ -27,8 +27,8 @@ import {
   woUnrepresentedByCustomer,
   type CustomerCreditExposureRow,
 } from "@/lib/reports/customer-receivables"
-import { receivableOutstanding } from "@/lib/reports/aging-amounts"
-import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { payableOutstanding, receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { loadReturnCreditByInvoiceId, loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
@@ -224,6 +224,49 @@ async function resolvePartyId(side: "AR" | "AP", key: string | null): Promise<nu
   return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
 }
 
+export interface ReceivableSubledgerSource {
+  invoices: readonly { documentNo: string; date: Date; grandTotal: unknown }[]
+  payments: readonly { documentNo: string; paymentDate: Date; amount: unknown; withholdingAmount?: unknown }[]
+  /** Kredit retur per dokumen retur (dari jurnal SalesReturn POSTED). */
+  returns: readonly { documentNo: string; date: Date; credit: number }[]
+}
+
+/**
+ * Entri Buku Pembantu Piutang dari dokumen sumber — SATU basis dengan
+ * aging/GL (B7): pelunasan = kas + PPh yang dipotong pelanggan
+ * (`amount + withholdingAmount`, sama dengan basis `paidAmount`), dan
+ * retur mengurangi piutang lewat kredit retur jurnal POSTED, bukan
+ * `grandTotal` penuh. Tanpa ini saldo buku pembantu tidak pernah sama
+ * dengan aging untuk faktur ber-PPh/ber-retur.
+ */
+export function buildReceivableSubledgerEntries(source: ReceivableSubledgerSource): LedgerEntryInput[] {
+  return [
+    ...source.invoices.map((inv) => ({
+      date: inv.date,
+      doc: inv.documentNo,
+      desc: "Faktur Penjualan",
+      debit: inv.grandTotal,
+      credit: 0,
+    })),
+    ...source.payments.map((pay) => ({
+      date: pay.paymentDate,
+      doc: pay.documentNo,
+      desc: "Pembayaran",
+      debit: 0,
+      credit: safeAdd(pay.amount as never, (pay.withholdingAmount ?? 0) as never, 2),
+    })),
+    ...source.returns
+      .filter((ret) => ret.credit > 0)
+      .map((ret) => ({
+        date: ret.date,
+        doc: ret.documentNo,
+        desc: "Retur Penjualan",
+        debit: 0,
+        credit: ret.credit,
+      })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
 /** Buku Pembantu Piutang: mutasi satu pelanggan + saldo berjalan. */
 export async function loadReceivableSubledger(period: Period, partyKey: string | null): Promise<LedgerReportView> {
   const partyId = await resolvePartyId("AR", partyKey)
@@ -239,19 +282,30 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
   const [invoices, payments] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { customerId: partyId, status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
-      select: { documentNo: true, date: true, grandTotal: true },
+      select: { id: true, documentNo: true, date: true, grandTotal: true },
       orderBy: { date: "asc" },
     }),
     prisma.salesPayment.findMany({
       where: { salesInvoice: { customerId: partyId } },
-      select: { documentNo: true, paymentDate: true, amount: true },
+      select: { documentNo: true, paymentDate: true, amount: true, withholdingAmount: true },
       orderBy: { paymentDate: "asc" },
     }),
   ])
-  const entries = [
-    ...invoices.map((inv) => ({ date: inv.date, doc: inv.documentNo, desc: "Faktur Penjualan", debit: inv.grandTotal, credit: 0 })),
-    ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: 0, credit: pay.amount })),
-  ].sort((a, b) => a.date.getTime() - b.date.getTime())
+  const salesReturns = await prisma.salesReturn.findMany({
+    where: { status: "completed", salesInvoiceId: { in: invoices.map((inv) => inv.id) } },
+    select: { id: true, documentNo: true, date: true },
+    orderBy: { date: "asc" },
+  })
+  const returnCreditByReturnId = await loadReturnCreditByReturnId(salesReturns.map((ret) => ret.id))
+  const entries = buildReceivableSubledgerEntries({
+    invoices,
+    payments,
+    returns: salesReturns.map((ret) => ({
+      documentNo: ret.documentNo,
+      date: ret.date,
+      credit: returnCreditByReturnId.get(ret.id) ?? 0,
+    })),
+  })
   const inPeriod = entries.filter((e) => e.date >= period.start && e.date <= period.end)
   const opening = buildLedgerRows({ opening: 0, entries: entries.filter((e) => e.date < period.start) }).balance
   const built = buildLedgerRows({ opening, entries: inPeriod })
@@ -263,6 +317,37 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
     cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
   })
   return { table: { columns: SUBLEDGER_COLUMNS, rows }, ...periodOf(period) }
+}
+
+export interface PayableSubledgerSource {
+  bills: readonly { documentNo: string; date: Date; grandTotal: unknown; withholdingAmount?: unknown }[]
+  payments: readonly { documentNo: string; paymentDate: Date; amount: unknown }[]
+}
+
+/**
+ * Entri Buku Pembantu Utang dari dokumen sumber — SATU basis dengan
+ * aging/GL (B7): kredit tagihan adalah NETO PPh (`payableOutstanding`:
+ * grandTotal − withholding), karena PPh yang dipotong perusahaan menjadi
+ * Hutang PPh, bukan utang ke pemasok. `grandTotal` penuh menaikkan saldo
+ * buku pembantu di atas aging dan utang sebenarnya.
+ */
+export function buildPayableSubledgerEntries(source: PayableSubledgerSource): LedgerEntryInput[] {
+  return [
+    ...source.bills.map((bill) => ({
+      date: bill.date,
+      doc: bill.documentNo,
+      desc: "Tagihan Vendor",
+      debit: 0,
+      credit: payableOutstanding(bill.grandTotal as never, (bill.withholdingAmount ?? 0) as never, 0),
+    })),
+    ...source.payments.map((pay) => ({
+      date: pay.paymentDate,
+      doc: pay.documentNo,
+      desc: "Pembayaran",
+      debit: pay.amount,
+      credit: 0,
+    })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime())
 }
 
 /** Buku Pembantu Utang: mutasi satu pemasok + saldo berjalan. */
@@ -280,7 +365,7 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
   const [bills, payments] = await Promise.all([
     prisma.vendorBill.findMany({
       where: { vendorId: partyId, status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
-      select: { documentNo: true, date: true, grandTotal: true },
+      select: { documentNo: true, date: true, grandTotal: true, withholdingAmount: true },
       orderBy: { date: "asc" },
     }),
     prisma.vendorPayment.findMany({
@@ -289,10 +374,7 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
       orderBy: { paymentDate: "asc" },
     }),
   ])
-  const entries = [
-    ...bills.map((bill) => ({ date: bill.date, doc: bill.documentNo, desc: "Tagihan Vendor", debit: 0, credit: bill.grandTotal })),
-    ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: pay.amount, credit: 0 })),
-  ].sort((a, b) => a.date.getTime() - b.date.getTime())
+  const entries = buildPayableSubledgerEntries({ bills, payments })
   const inPeriod = entries.filter((e) => e.date >= period.start && e.date <= period.end)
   const opening = buildLedgerRows({ opening: 0, entries: entries.filter((e) => e.date < period.start), direction: "credit" }).balance
   const built = buildLedgerRows({ opening, entries: inPeriod, direction: "credit" })

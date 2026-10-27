@@ -109,6 +109,7 @@ export async function updateSystemSettings(formData: FormData) {
       companyPostalCode: strNull("companyPostalCode"),
       companyWebsite: strNull("companyWebsite"),
       companyTaxId: strNull("companyTaxId"),
+      companyNitku: strNull("companyNitku"),
       companyLogo: strNull("companyLogo"),
       companyLogoDark: strNull("companyLogoDark"),
       companyLatitude: decimalNull("companyLatitude"),
