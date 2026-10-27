@@ -212,17 +212,37 @@ export async function onGoodsReceiptVerified(
       // rounding tolerance; a qty count does not). Cumulative received is
       // summed from verified GR items here, converted to base units via
       // toBaseQty.
+      // Guard + akumulator dinilai PER ITEM terhadap TOTAL pesanan item itu,
+      // lalu ditulis PER BARIS PO. PO boleh memuat item yang sama di beberapa
+      // baris (skema tak punya unique purchaseOrderId+itemId): menilai per
+      // baris dari total per item menolak penerimaan sah (5+5, terima 6) dan
+      // menulis total yang sama ke semua baris (tampil 12).
+      const orderedByItem = new Map<number, number>();
       for (const poItem of poItems) {
-        const received = receivedMap.get(poItem.itemId) ?? 0;
-        if (received > Number(poItem.qty)) {
+        orderedByItem.set(poItem.itemId, (orderedByItem.get(poItem.itemId) ?? 0) + Number(poItem.qty));
+      }
+      for (const [itemId, ordered] of orderedByItem) {
+        const received = receivedMap.get(itemId) ?? 0;
+        if (received > ordered) {
           throw new Error(
-            `Penerimaan melebihi pesanan untuk item #${poItem.itemId}: ` +
-            `diterima kumulatif ${received} melebihi dipesan ${Number(poItem.qty)}. ` +
+            `Penerimaan melebihi pesanan untuk item #${itemId}: ` +
+            `diterima kumulatif ${received} melebihi dipesan ${ordered}. ` +
             `Sesuaikan qty penerimaan atau ubah PO.`
           );
         }
       }
 
+      // Distribusikan total diterima per item ke baris-baris PO item itu
+      // mengikuti urutan baris (id naik), masing-masing sampai qty pesanannya.
+      const remainingByItem = new Map(receivedMap);
+      const lineAllocations = [...poItems]
+        .sort((a, b) => a.id - b.id)
+        .map((poItem) => {
+          const remaining = remainingByItem.get(poItem.itemId) ?? 0;
+          const allocated = Math.min(remaining, Number(poItem.qty));
+          remainingByItem.set(poItem.itemId, Math.round((remaining - allocated) * 100) / 100);
+          return { poItem, allocated };
+        });
       // Persist the accumulator `PurchaseOrderItem.receivedQty` from the SAME
       // base-unit cumulative map the guard above used, so the PO page ("Diterima")
       // and the PO Outstanding report read a value that agrees with the over-
@@ -230,16 +250,14 @@ export async function onGoodsReceiptVerified(
       // receivedMap is recomputed from the verified GR lines on every verify, so
       // the column also self-heals from any drift. Raw SQL mirrors the qty_on_hand
       // write below and keeps the write to one statement per PO line.
-      for (const poItem of poItems) {
-        const received = receivedMap.get(poItem.itemId) ?? 0;
-        await tx.$executeRaw`UPDATE purchase_order_items SET received_qty = ${received} WHERE id = ${poItem.id}`;
+      for (const { poItem, allocated } of lineAllocations) {
+        await tx.$executeRaw`UPDATE purchase_order_items SET received_qty = ${allocated} WHERE id = ${poItem.id}`;
       }
 
       // Determine if fully received
-      const allReceived = poItems.every((poItem) => {
-        const received = receivedMap.get(poItem.itemId) ?? 0;
-        return received >= Number(poItem.qty);
-      });
+      const allReceived = lineAllocations.every(
+        ({ poItem, allocated }) => allocated >= Number(poItem.qty),
+      );
 
       await tx.purchaseOrder.update({
         where: { id: goodsReceipt.purchaseOrderId },
@@ -368,7 +386,7 @@ export async function onGoodsReceiptVerified(
       const baseQty = Number(item.qty) * factor;
       const enteredUnitCost = Number(item.unitCost ?? 0);
       const baseUnitCost = factor > 0 ? enteredUnitCost / factor : enteredUnitCost;
-      const batchNumber = itemMeta?.trackBatch ? (item.batchNumber ?? null) : null;
+      const batchNumber = itemMeta?.trackBatch ? (String(item.batchNumber ?? "").trim() || null) : null;
 
       const baseUnitCostWithLanded = baseUnitCost + landedPerUnit;
 
@@ -377,6 +395,16 @@ export async function onGoodsReceiptVerified(
       if (itemMeta?.isService) {
         serviceJournalLines.push({ qty: Number(item.qty), cost: enteredUnitCost });
         continue;
+      }
+
+      // Batch-tracked stock MUST arrive under an explicit lot, konsisten
+      // dengan jalur serial di hook ini serta transfer/adjustment/retur:
+      // layer tanpa lot tak pernah ditemukan konsumsi FIFO sehingga lot
+      // fisiknya tak berkurang dan stoknya tak tertelusur.
+      if (itemMeta?.trackBatch && !batchNumber && baseQty > 0) {
+        throw new Error(
+          `Item #${item.itemId} melacak nomor batch: nomor batch wajib diisi pada penerimaan barang.`,
+        );
       }
 
       const sm = await tx.stockMove.create({
