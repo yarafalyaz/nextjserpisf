@@ -17239,10 +17239,16 @@ G5. Tes falsifikasi §7 hijau di head inti persis + gate repo.
     OCLY, sesudah 210206). Verifikasi live: 210201-210206 terpakai
     (210205 Provisi Garansi, 210206 Utang PPh 4(2) Sewa — keduanya
     DILARANG dipakai ulang). 210207 bebas di COA bawaan.
+    > KOREKSI 26 Okt 2026 (BOT Backend, kartu t_4f49b18c): nomor di
+    > atas DIGANTIKAN vonis F-2026-10-25-039-V — akun utang komisi =
+    > 210212 BARU; 210207 tetap Utang Kompensasi PKWT. Teks di atas
+    > historis dan tidak boleh disalin builder.
 3. Mapping: SystemSetting baru `commissionExpenseAccountId` +
     `commissionPayableAccountId` (nullable, tanpa default tebak),
     pola mapping F-021. Seed menunjuk 600002 / 210207; instalasi
     berjalan tanpa seed = mapping diisi admin, kosong = fail-closed.
+    > KOREKSI 26 Okt 2026 (t_4f49b18c): seed menunjuk 600002 / 210212
+    > per F-2026-10-25-039-V (bukan 210207).
     Dilarang fallback ke Hutang Gaji 210204 (komisi belum tentu
     dibayar lewat siklus gaji berjalan; mencampur = rekonsiliasi
     gaji tercemar) dan dilarang fallback akun beban lain.
@@ -17343,6 +17349,9 @@ KOM3-1. Faktur DPP 11.000.000 PPN 1.320.000 tarif snapshot 2%
   mencapai paid -> satu jurnal Dr 600002 / Cr 210207 220.000.
   Basis grandTotal (246.400) atau jurnal dobel saat retry =
   MERAH.
+  > KOREKSI 26 Okt 2026 (t_4f49b18c): rujukan uji menjadi
+  > Dr 600002 / Cr 210212 220.000 per F-2026-10-25-039-V; angka
+  > 220.000 tidak berubah.
 KOM3-2. Mapping commissionPayableAccountId dikosongkan ->
   transisi paid menolak jurnal berisik, nol jurnal setengah;
   fallback ke 210204/210205/210206 terbit = MERAH.
@@ -17370,6 +17379,8 @@ KOM3-7. Faktur paid tanpa penjual / tanpa snapshot persen ->
   retur + komponen payroll pembayar utang. Klaim
   schema.prisma di board sebelum edit; jangan bangun sebelum
   inti F-056-V (histori+snapshot) merged.
+  > KOREKSI 26 Okt 2026 (t_4f49b18c): seed 210212 + 2 mapping per
+  > F-2026-10-25-039-V (bukan 210207).
 - BOT 5: workflow bayar komisi = run payroll existing (komponen
   T2); jangan rancang jalur bayar terpisah. Sinkronkan spec
   bila menyentuh komisi non-karyawan: berhenti, vonis terpisah.
@@ -19777,6 +19788,11 @@ akun, dan pihak penyetor tidak ditebak.
 4. AKUN: akun baru 210207 "Utang PPh 4(2) Pengalihan Hak
    Tanah/Bangunan" (anak 2102 OCLY; bebas terverifikasi live run ini:
    210201-210206 terisi, 210207 nol hasil grep base-data.ts).
+   > KOREKSI 26 Okt 2026 (BOT Backend, kartu t_4f49b18c): alokasi
+   > 210207 di butir ini DIGANTIKAN vonis koreksi 050-V (blok koreksi
+   > di backlog ini) — Utang PPh 4(2) Pengalihan Hak = 210213; 210207
+   > sah terpakai Utang Kompensasi PKWT. Semua rujukan 210207 di blok
+   > F-050-V dibaca 210213; jangan seed liabilityAccountCode "210207".
    DILARANG fallback ke 210202 (PPh 23) atau 210206 (sewa). Jenis
    potong baru diusulkan `PPH42-ALIH` di WITHHOLDING_TAX_TYPES dengan
    liabilityAccountCode "210207", tarif dari master bertanggal
@@ -30596,7 +30612,7 @@ W6 Pembaca laporan membuka rekap per masa: baris per penjual (basis DPP lunas, e
 | BR-KT36-09 | Hasil resolusi nol baris di domain ini = tarif 0 jujur + notice (fail-soft berlabel) — rezim ini TIDAK disamakan dengan fail-closed dokumen pajak | TERVERIFIKASI-VONIS (F-058-V K3) |
 | BR-KT36-10 | Penulis tarif = pemegang izin master kategori existing `create_customers`/`edit_customers`; vonis ini TIDAK menciptakan izin baru; penjual tidak menulis tarifnya sendiri. Bila Backend menilai izin terpisah perlu = minta vonis izin Accountant dulu | TERVERIFIKASI-VONIS (F-056-V 1b) |
 | BR-KT36-11 | Rekap tetap INFORMATIF: bukan utang komisi, bukan dasar jurnal/pembayaran/payroll; notice verbatim existing dipertahankan; label basis wajib selaras DPP (bukan "Basis Faktur Lunas" grandTotal) | TERVERIFIKASI-VONIS (F-056-V "Yang TIDAK berubah" + Putusan 2d) |
-| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr 210207, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
+| BR-KT36-12 | Tahap 3 (jurnal Dr 600002 / Cr 210207, bayar lewat payroll) TETAP TERTUTUP — spec ini hanya membuka tarif nyata untuk rekap informatif; membuka tahap 3 = PUTUSAN Lead sesudah syarat G1-G5 F-084-V (KOREKSI: Cr 210212 per F-2026-10-25-039-V, t_4f49b18c) | TERVERIFIKASI-VONIS (F-084-V §0/§1) |
 | BR-KT36-13 | Faktur lama tanpa snapshot: loader meneruskan 0 jujur; DILARANG backfill tebakan dari histori berjalan | TERVERIFIKASI-VONIS (F-056-V 1d + F-084-V §6) |
 | BR-KT36-14 | Satu penjual per faktur (snapshot existing); split komisi multi-penjual = model terpisah, tidak dikarang di spec ini | TERVERIFIKASI-VONIS (F-084-V §6) |
 
