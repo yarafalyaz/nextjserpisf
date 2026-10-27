@@ -8,6 +8,7 @@ import { entityHref } from "@/lib/utils/entity-url"
 import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppSearchField } from "@/components/ui/search-field"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export const metadata: Metadata = { title: "Telusur Genealogi Produksi" }
@@ -38,9 +39,7 @@ export default async function TelusurGenealogiPage({
       <AppSearchField placeholder="Cari lot / nomor seri bahan..." action="/produksi/telusur-genealogi" />
 
       {query && hits.length === 0 ? (
-        <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-          Tidak ada hasil jadi yang memakai lot/serial &quot;{query}&quot;.
-        </p>
+        <EmptyState title={`Tidak ada hasil jadi yang memakai lot/serial "${query}".`} />
       ) : null}
 
       {hits.length > 0 ? (

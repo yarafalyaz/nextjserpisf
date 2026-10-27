@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/shadcn/select"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Button } from "@/components/ui/button"
 import {
   createProductionCost,
@@ -327,9 +328,7 @@ export function ProductionCostSection({
 
       <div className="p-4 px-5">
         {costs.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-            Belum ada biaya non-bahan. HPP saat ini hanya dari bahan.
-          </p>
+          <EmptyState title="Belum ada biaya non-bahan." description="HPP saat ini hanya dari bahan." className="py-10" />
         ) : (
           <DetailTable>
             <DetailTableHead>

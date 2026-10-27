@@ -9,6 +9,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -114,7 +115,7 @@ export default async function QcChecklistDetailPage({
 
       <DetailSection title="Butir Checklist">
         {checklist.items.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada butir</p>
+          <EmptyState title="Tidak ada butir" />
         ) : (
           <DetailTable>
             <DetailTableHead>

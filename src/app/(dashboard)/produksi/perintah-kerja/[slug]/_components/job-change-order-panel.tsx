@@ -18,6 +18,7 @@ import {
 import type { ChangeOrderLineInput } from "@/lib/reports/job-change-order"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { cn } from "@/lib/utils"
@@ -293,9 +294,7 @@ export function JobChangeOrderPanel({
         ) : null}
 
         {changeOrders.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-            Belum ada change order untuk perintah kerja ini
-          </p>
+          <EmptyState title="Belum ada change order untuk perintah kerja ini" className="py-10" />
         ) : (
           changeOrders.map((co) => {
             const label =
