@@ -112,7 +112,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
         <DetailTable data-report-table={texts.summaryTitle}>
           <DetailTableHead>
             <DetailTableTh>Kategori</DetailTableTh>
-            <DetailTableTh align="right">Jumlah</DetailTableTh>
+            <DetailTableTh align="right">Dokumen</DetailTableTh>
             <DetailTableTh align="right">Total (Rp)</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>

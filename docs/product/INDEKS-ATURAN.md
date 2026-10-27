@@ -126,7 +126,7 @@ perilaku, bukan hanya keberadaan file/model.
 | FIN-BR-006 | Belum | belum ditelusur — status lunas dan toleransi pembulatan tidak ditunjuk di sini |
 | FIN-BR-007 | Sebagian | prisma/schema.prisma:1981 — `SalesPayment` ada; isolasi pembayaran draft/gagal belum ditelusur |
 | FIN-BR-008 | Belum | belum ditelusur — reversal pembayaran dengan histori asal tidak ditunjuk di sini |
-| FIN-BR-009 | Belum | belum ditelusur — laporan aging hutang/piutang tidak ditunjuk di sini (aging WIP di laporan lain bukan bukti aging AP/AR) |
+| FIN-BR-009 | Sebagian | Aging posisi saat ini terverifikasi dari vonis t_1d4e7168 di origin/main 34ad27324: `src/lib/reports/aging.ts:11-36` (bucket hari lewat tempo bersama), `src/lib/reports/aging-reports-data.ts:91,124` (loader PDF), `src/app/(dashboard)/laporan/piutang-jatuh-tempo/page.tsx:29` dan `hutang-jatuh-tempo/page.tsx:22` (layar). S2 layar hutang NETO = PR #1225 (head 09be248bc). S4 keterbacaan: header ringkasan layar "Dokumen" (kolom hitung dokumen, bukan nominal; ekspor PDF tetap header "No. Dokumen" dan count di slot itu); cap waktu cetak sudah generik via `report-letterhead.tsx` footer cetak dan `src/app/api/pdf/route.ts` `printFooter`. Sisa: S1 asOf historis + rekonstruksi sisa per tanggal belum dikerjakan; S3 semantik dueDate WIB belum dinyatakan di `aging.ts`/harness; penelusuran alokasi pembayaran dari baris aging belum penuh — status tetap Sebagian. |
 | FIN-BR-010 | OPEN-keputusan | Keputusan scope double-entry terbuka di sumber. Fakta repo: jurnal double-entry ada — `prisma/schema.prisma:4221` (`Journal`) dan `prisma/schema.prisma:4254` (`JournalEntry`). Keberadaan jurnal bukan penutupan keputusan scope/laporan formal |
 
 ## 6. Projects & Work Orders — `PROJ-BR-*`, `WO-BR-*`
