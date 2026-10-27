@@ -22,6 +22,8 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { entityHref } from "@/lib/utils/entity-url";
 import { CanCreate } from "@/components/auth/can-create";
+import { BankReconciliationDraftQueueCard } from "@/components/reports/bank-reconciliation-draft-queue-card";
+import { getBankReconciliationDraftQueue } from "@/lib/reports/bank-reconciliation-draft-queue-data";
 
 import type { Metadata } from "next";
 
@@ -59,6 +61,11 @@ export default async function BankReconciliationPage({
 
   const totalPages = Math.ceil(total / perPage);
 
+  // Antrean draft mengendap (F-2026-10-27-097-S): seksi turunan verbatim
+  // loader di atas daftar existing (Q-RBK-7) — antrean menunjuk, daftar
+  // mengeksekusi. Izin sama ditegakkan loader.
+  const draftQueue = await getBankReconciliationDraftQueue();
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs
@@ -82,6 +89,8 @@ export default async function BankReconciliationPage({
           </Link>
         </CanCreate>
       </div>
+
+      <BankReconciliationDraftQueueCard queue={draftQueue} />
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
