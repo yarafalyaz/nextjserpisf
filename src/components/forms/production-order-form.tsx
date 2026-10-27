@@ -32,7 +32,7 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
     order?.workOrderId ? String(order.workOrderId) : defaultWorkOrderId ? String(defaultWorkOrderId) : "",
   )
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

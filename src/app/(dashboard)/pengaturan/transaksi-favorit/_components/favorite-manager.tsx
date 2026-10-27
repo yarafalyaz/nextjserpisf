@@ -35,7 +35,7 @@ export function FavoriteManager({
   const [label, setLabel] = useState("")
   const [href, setHref] = useState("")
 
-  function handleAdd(e: React.FormEvent<HTMLFormElement>) {
+  function handleAdd(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

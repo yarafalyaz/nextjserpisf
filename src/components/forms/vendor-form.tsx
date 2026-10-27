@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition, type FormEvent } from "react"
+import { useTransition, type InputEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { vendorSchema, type VendorInput } from "@/lib/validations/form.schemas"
@@ -113,7 +113,7 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="phone">Telepon</Label>
-            <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
+            <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: InputEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
           </div>
 
           <div className="flex flex-col gap-1.5">

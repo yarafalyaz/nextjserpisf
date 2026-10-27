@@ -113,7 +113,7 @@ export function PurchaseRequestForm({
     setPrItems(updated);
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!requestedBy) {
       showError("Pilih pemohon terlebih dahulu");

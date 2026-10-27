@@ -21,7 +21,7 @@ export function BankReconciliationForm({ accounts }: Props) {
   const [isPending, startTransition] = useTransition()
   const [accountId, setAccountId] = useState("")
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

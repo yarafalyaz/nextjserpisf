@@ -47,7 +47,7 @@ export function OpnameForm({ warehouseId, date, rows }: OpnameFormProps) {
     return Number(value) !== row.systemQty
   })
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (differing.length === 0) {
       showError("Tidak ada selisih untuk disimpan")

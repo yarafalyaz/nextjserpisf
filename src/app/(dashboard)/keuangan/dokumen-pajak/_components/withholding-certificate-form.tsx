@@ -51,7 +51,7 @@ export function WithholdingCertificateForm({
   const [linkId, setLinkId] = useState("")
   const [dpp, setDpp] = useState<number | null>(null)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
@@ -176,7 +176,7 @@ export function WithholdingLifecycleActions({
 
   if (!canRevoke && !canSettle) return null
 
-  function submitRevoke(e: React.FormEvent<HTMLFormElement>) {
+  function submitRevoke(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData()
     formData.set("id", certId)
@@ -185,7 +185,7 @@ export function WithholdingLifecycleActions({
     run(revokeWithholdingCertificateAction, formData, "Bukti potong dicabut")
   }
 
-  function submitSettle(e: React.FormEvent<HTMLFormElement>) {
+  function submitSettle(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("idempotencyKey", keyRef.current)

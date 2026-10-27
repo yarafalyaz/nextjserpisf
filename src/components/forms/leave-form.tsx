@@ -75,8 +75,9 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
     if (leaveType !== "annual" || !employeeId) return
     let cancelled = false
     const empId = employeeId
-    getEmployeeLeaveBalance(Number(empId))
-      .then((res) => {
+    async function loadQuota() {
+      try {
+        const res = await getEmployeeLeaveBalance(Number(empId))
         if (cancelled) return
         if (res.success) {
           setQuota({
@@ -90,12 +91,13 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
         } else {
           setQuota({ forEmployee: empId, eligible: false, entitled: 0, used: 0, remaining: 0, failed: true })
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setQuota({ forEmployee: empId, eligible: false, entitled: 0, used: 0, remaining: 0, failed: true })
         }
-      })
+      }
+    }
+    void loadQuota()
     return () => {
       cancelled = true
     }
@@ -105,7 +107,7 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
   const quotaReady = !!quota && quota.forEmployee === employeeId && !quota.failed
   const quotaLoading = showQuota && (!quota || quota.forEmployee !== employeeId)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

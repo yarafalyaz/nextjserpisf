@@ -59,7 +59,7 @@ export function CustomerPriceForm({
   const selectedUnit = itemOptions.find((option) => option.value === itemId)?.unit
   const minQtyLabel = selectedUnit ? `Minimal Qty (${selectedUnit})` : "Minimal Qty"
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

@@ -30,7 +30,7 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
   const [transmission, setTransmission] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleAdd(e: React.FormEvent) {
+  function handleAdd(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return

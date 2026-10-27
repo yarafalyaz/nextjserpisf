@@ -22,7 +22,7 @@ export function StocktakeSessionForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
@@ -133,7 +133,7 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
     setCounts((prev) => ({ ...prev, [lineId]: { ...prev[lineId], [field]: value } }))
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const payload = lines.map((l) => ({
       lineId: l.id,

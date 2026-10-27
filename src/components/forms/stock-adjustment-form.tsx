@@ -110,7 +110,7 @@ export function StockAdjustmentForm({
     setAdjItems(updated);
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
       try {

@@ -30,7 +30,7 @@ export function AttendanceFilterForm({
   const [tanggalValue, setTanggalValue] = useState(tanggal ?? "")
   const [bulanValue, setBulanValue] = useState(bulan ?? "")
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     let path = "/sdm/absensi"
     if (tanggalValue) path += `/tanggal/${tanggalValue}`

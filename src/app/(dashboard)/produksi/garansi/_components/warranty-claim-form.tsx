@@ -39,7 +39,7 @@ export function WarrantyClaimForm({
   const [coverageId, setCoverageId] = useState(defaultCoverageId ?? "")
   const [reportedDate, setReportedDate] = useState(toLocalDateOnly(new Date()))
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)

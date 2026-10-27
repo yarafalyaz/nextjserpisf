@@ -73,14 +73,28 @@ export function ProductForm({
     // The /api/vehicle-brands and /api/vehicle-models endpoints return
     // paginated results: { data, total, page, pageSize }. We need the
     // .data array for the Combobox options.
-    fetch("/api/vehicle-brands")
-      .then((r) => r.json())
-      .then((d) => setVehicleBrands(d.data ?? []))
-      .catch(() => { setVehicleBrands([]); showError("Gagal memuat daftar merek") })
-    fetch("/api/vehicle-models")
-      .then((r) => r.json())
-      .then((d) => setVehicleModels(d.data ?? []))
-      .catch(() => { setVehicleModels([]); showError("Gagal memuat daftar model") })
+    async function loadBrands() {
+      try {
+        const r = await fetch("/api/vehicle-brands")
+        const d = await r.json()
+        setVehicleBrands(d.data ?? [])
+      } catch {
+        setVehicleBrands([])
+        showError("Gagal memuat daftar merek")
+      }
+    }
+    async function loadModels() {
+      try {
+        const r = await fetch("/api/vehicle-models")
+        const d = await r.json()
+        setVehicleModels(d.data ?? [])
+      } catch {
+        setVehicleModels([])
+        showError("Gagal memuat daftar model")
+      }
+    }
+    void loadBrands()
+    void loadModels()
   }, [])
 
   const filteredModels = useMemo(() => {
@@ -117,7 +131,7 @@ export function ProductForm({
     setMaterials(updated)
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
 

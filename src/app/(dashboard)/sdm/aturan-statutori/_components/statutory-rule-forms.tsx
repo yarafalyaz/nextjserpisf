@@ -14,7 +14,7 @@ export function StatutoryRuleForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
@@ -61,7 +61,7 @@ export function CloseRuleForm({ id }: { id: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {

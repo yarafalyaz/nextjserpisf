@@ -118,7 +118,7 @@ export function WarrantySupplierClaimPanel({
   const showTransitionForm = !isTerminal && status !== "none" && visibleTargets.length > 0
   const confirmTarget = targets.find((t) => t.value === confirmTo)
 
-  function handleLink(e: React.FormEvent<HTMLFormElement>) {
+  function handleLink(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("claimId", String(facts.claimId))
@@ -127,7 +127,7 @@ export function WarrantySupplierClaimPanel({
     run(linkSupplierClaimAction, formData, "Klaim supplier ditautkan")
   }
 
-  function handleTransition(e: React.FormEvent<HTMLFormElement>) {
+  function handleTransition(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("claimId", String(facts.claimId))

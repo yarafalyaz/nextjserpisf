@@ -16,7 +16,7 @@ export function AssetUsageRecordForm({ assetId, defaultYear, defaultMonth }: { a
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

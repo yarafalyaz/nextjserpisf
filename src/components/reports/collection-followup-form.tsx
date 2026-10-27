@@ -59,7 +59,7 @@ export function CollectionFollowUpForm({
 
   const isPromise = outcome === "terhubung_janji_bayar"
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {

@@ -56,7 +56,7 @@ export function VendorPriceForm({
 
   const isEdit = Boolean(initial)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

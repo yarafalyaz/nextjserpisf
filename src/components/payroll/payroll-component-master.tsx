@@ -73,7 +73,7 @@ export function PayrollComponentMaster({
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     if (editing) {

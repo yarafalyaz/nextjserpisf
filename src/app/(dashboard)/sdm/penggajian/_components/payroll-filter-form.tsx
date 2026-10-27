@@ -26,7 +26,7 @@ export function PayrollFilterForm({
   const [bulanValue, setBulanValue] = useState(bulan ?? "")
   const [tahunValue, setTahunValue] = useState(tahun ?? "")
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const path = buildPathFilterHref("/sdm/penggajian", {
       tahun: tahunValue || undefined,

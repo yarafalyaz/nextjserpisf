@@ -135,7 +135,7 @@ export function WorkflowForm({
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
 
     if (!name.trim() || !modelType.trim()) {

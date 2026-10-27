@@ -18,16 +18,17 @@ function submit(
 ) {
   const formData = new FormData(form)
   startTransition(() => {
-    void fn(formData)
-      .then((result) => {
+    void (async () => {
+      try {
+        const result = await fn(formData)
         if (!result?.success) throw new Error(result?.error || "Gagal menyimpan")
         showSuccess(okMessage)
         form.reset()
         router.refresh()
-      })
-      .catch((error) => {
+      } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan")
-      })
+      }
+    })()
   })
 }
 

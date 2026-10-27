@@ -68,15 +68,17 @@ export function ItemSubstitutesPanel({
 
   useEffect(() => {
     let alive = true
-    listItemSubstitutes(itemId)
-      .then((res) => {
+    async function loadSubstitutes() {
+      try {
+        const res = await listItemSubstitutes(itemId)
         if (!alive) return
         if (res.success) setRows(res.substitutes as ItemSubstituteRow[])
         else setLoadError(res.error)
-      })
-      .catch((e: unknown) => {
+      } catch (e) {
         if (alive) setLoadError(e instanceof Error ? e.message : "Gagal memuat substitusi barang")
-      })
+      }
+    }
+    void loadSubstitutes()
     return () => {
       alive = false
     }

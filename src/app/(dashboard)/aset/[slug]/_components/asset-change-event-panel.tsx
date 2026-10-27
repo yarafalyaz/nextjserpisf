@@ -142,7 +142,7 @@ export function AssetChangeEventPanel({
     }
   }
 
-  function onEventSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onEventSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
@@ -154,7 +154,7 @@ export function AssetChangeEventPanel({
     })
   }
 
-  function onReclassSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onReclassSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {

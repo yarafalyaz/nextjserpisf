@@ -85,7 +85,7 @@ export function ProjectBudgetEditor({ projectId, items, stages, quotations, isLo
     })
   }
 
-  function submitItem(e: React.FormEvent<HTMLFormElement>) {
+  function submitItem(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     if (stageId) fd.set("projectStageId", stageId); else fd.delete("projectStageId")

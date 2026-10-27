@@ -65,7 +65,7 @@ function TermForm({
   const [isPending, startTransition] = useTransition()
   const [basis, setBasis] = useState("rate")
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     if (basis === "rate") formData.delete("flatAmountPerDay")
@@ -164,7 +164,7 @@ function IssueForm({
   )
   const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
@@ -253,7 +253,7 @@ function PayForm({
   const [accountId, setAccountId] = useState("")
   const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)

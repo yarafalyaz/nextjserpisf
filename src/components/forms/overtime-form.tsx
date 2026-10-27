@@ -26,7 +26,7 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
   const [projectId, setProjectId] = useState<string | null>(overtime?.projectId ? String(overtime.projectId) : null)
   const [employeeOptions, setEmployeeOptions] = useState(employees)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

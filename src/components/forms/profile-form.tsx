@@ -53,7 +53,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
     }
   }
 
-  function onSubmitProfile(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmitProfile(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startProfileTransition(async () => {
       const formData = new FormData(e.currentTarget)
@@ -70,7 +70,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
     })
   }
 
-  function onSubmitPassword(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmitPassword(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startPasswordTransition(async () => {
       const formData = new FormData(e.currentTarget)

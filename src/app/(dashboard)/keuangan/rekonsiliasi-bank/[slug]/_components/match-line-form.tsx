@@ -34,7 +34,7 @@ export function MatchLineForm({
   const [lineId, setLineId] = useState("")
   const [journalEntryId, setJournalEntryId] = useState("")
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const line = Number(lineId)
     const entry = Number(journalEntryId)

@@ -56,7 +56,7 @@ export function AssetTransferForm({
 
   const selectedAsset = assets.find((a) => a.id === Number(assetId));
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
       try {

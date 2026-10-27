@@ -48,7 +48,7 @@ export function NonconformanceResolveForm({
     return <p className="text-sm text-muted-foreground">NCR sudah ditutup.</p>
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("status", status)

@@ -53,34 +53,58 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   const districtCode = districts.find((d) => d.name === selectedDistrict)?.code || ""
 
   useEffect(() => {
-    fetch("/api/address?tipe=provinces")
-      .then(res => res.json())
-      .then(data => setProvinces(Array.isArray(data) ? data : []))
-      .catch(() => showError("Gagal memuat data provinsi", "Periksa koneksi lalu coba lagi."))
+    async function loadProvinces() {
+      try {
+        const res = await fetch("/api/address?tipe=provinces")
+        const data = await res.json()
+        setProvinces(Array.isArray(data) ? data : [])
+      } catch {
+        showError("Gagal memuat data provinsi", "Periksa koneksi lalu coba lagi.")
+      }
+    }
+    void loadProvinces()
   }, [])
 
   useEffect(() => {
     if (!provinceCode) return
-    fetch(`/api/address?tipe=regencies&kodeInduk=${provinceCode}`)
-      .then(res => res.json())
-      .then(data => setCities(Array.isArray(data) ? data : []))
-      .catch(() => showError("Gagal memuat data kabupaten/kota", "Periksa koneksi lalu coba lagi."))
+    async function loadCities() {
+      try {
+        const res = await fetch(`/api/address?tipe=regencies&kodeInduk=${provinceCode}`)
+        const data = await res.json()
+        setCities(Array.isArray(data) ? data : [])
+      } catch {
+        showError("Gagal memuat data kabupaten/kota", "Periksa koneksi lalu coba lagi.")
+      }
+    }
+    void loadCities()
   }, [provinceCode])
 
   useEffect(() => {
     if (!cityCode) return
-    fetch(`/api/address?tipe=districts&kodeInduk=${cityCode}`)
-      .then(res => res.json())
-      .then(data => setDistricts(Array.isArray(data) ? data : []))
-      .catch(() => showError("Gagal memuat data kecamatan", "Periksa koneksi lalu coba lagi."))
+    async function loadDistricts() {
+      try {
+        const res = await fetch(`/api/address?tipe=districts&kodeInduk=${cityCode}`)
+        const data = await res.json()
+        setDistricts(Array.isArray(data) ? data : [])
+      } catch {
+        showError("Gagal memuat data kecamatan", "Periksa koneksi lalu coba lagi.")
+      }
+    }
+    void loadDistricts()
   }, [cityCode])
 
   useEffect(() => {
     if (!districtCode) return
-    fetch(`/api/address?tipe=villages&kodeInduk=${districtCode}`)
-      .then(res => res.json())
-      .then(data => setVillages(Array.isArray(data) ? data : []))
-      .catch(() => showError("Gagal memuat data kelurahan/desa", "Periksa koneksi lalu coba lagi."))
+    async function loadVillages() {
+      try {
+        const res = await fetch(`/api/address?tipe=villages&kodeInduk=${districtCode}`)
+        const data = await res.json()
+        setVillages(Array.isArray(data) ? data : [])
+      } catch {
+        showError("Gagal memuat data kelurahan/desa", "Periksa koneksi lalu coba lagi.")
+      }
+    }
+    void loadVillages()
   }, [districtCode])
 
   const toOptions = (regions: Region[], withPostal = false) =>

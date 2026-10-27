@@ -61,7 +61,7 @@ export function EmployeePayrollComponents({
     })
   }
 
-  function onAssign(e: React.FormEvent<HTMLFormElement>) {
+  function onAssign(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     run(
       () => assignEmployeePayrollComponent(new FormData(e.currentTarget)),

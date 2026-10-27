@@ -61,7 +61,7 @@ export function AddLeadActivityForm({ leadId }: { leadId: number }) {
   const [isPending, startTransition] = useTransition()
   const [type, setType] = useState("note")
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {

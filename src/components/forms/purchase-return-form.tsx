@@ -52,7 +52,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
     setReturnItems(updated)
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

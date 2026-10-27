@@ -183,7 +183,7 @@ export function MaterialIssueForm({
     setMiItems(updated);
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     for (const [idx, it] of miItems.entries()) {
       const err = validateScrapInput({

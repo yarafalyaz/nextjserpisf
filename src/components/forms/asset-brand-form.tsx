@@ -19,7 +19,7 @@ export function AssetBrandForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
       try {

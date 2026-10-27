@@ -72,8 +72,9 @@ export function ItemWarehouseMinStockPanel({
 
   useEffect(() => {
     let alive = true
-    listItemWarehouseSettings(itemId)
-      .then((res) => {
+    async function loadSettings() {
+      try {
+        const res = await listItemWarehouseSettings(itemId)
         if (!alive) return
         if (res.success) {
           setRows(res.rows)
@@ -91,10 +92,11 @@ export function ItemWarehouseMinStockPanel({
         } else {
           setLoadError(res.error)
         }
-      })
-      .catch((e: unknown) => {
+      } catch (e) {
         if (alive) setLoadError(e instanceof Error ? e.message : "Gagal memuat stok minimum per gudang")
-      })
+      }
+    }
+    void loadSettings()
     return () => {
       alive = false
     }

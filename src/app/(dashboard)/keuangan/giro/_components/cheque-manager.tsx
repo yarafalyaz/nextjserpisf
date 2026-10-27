@@ -73,7 +73,7 @@ export function ChequeManager({
     label: `${account.code} - ${account.name}`,
   }))
 
-  function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+  function handleCreate(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

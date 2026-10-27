@@ -107,7 +107,7 @@ export function ProductionCostSection({
     return Math.round(h * rate * 100) / 100
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("productionOrderId", String(productionOrderId))
@@ -157,7 +157,7 @@ export function ProductionCostSection({
     setAmount(c.amount)
   }
 
-  function handleApplyOverhead(e: React.FormEvent<HTMLFormElement>) {
+  function handleApplyOverhead(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData()
     formData.set("productionOrderId", String(productionOrderId))

@@ -26,7 +26,7 @@ export function ProjectLogForm({ projectId }: { projectId: number }) {
   const [isPending, startTransition] = useTransition()
   const [action, setAction] = useState("Progres")
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {

@@ -54,7 +54,7 @@ export function WorkCenterMaster({
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     // Checkbox absen = undefined di server -> isActive lama dipertahankan;

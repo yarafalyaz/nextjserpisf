@@ -35,7 +35,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
   const [selectedDriver, setSelectedDriver] = useState(driver || "local")
   const [fallback, setFallback] = useState(fallbackLocal)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

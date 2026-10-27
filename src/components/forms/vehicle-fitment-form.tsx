@@ -116,7 +116,7 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
     [modelId, variants],
   )
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!itemId) return showError("Item wajib dipilih")
 

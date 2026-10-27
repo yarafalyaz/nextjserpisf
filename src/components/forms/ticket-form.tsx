@@ -28,7 +28,7 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   const [customerOptions, setCustomerOptions] = useState(customers)
   const [assignedTo, setAssignedTo] = useState<string | null>(ticket?.assignedTo ? String(ticket.assignedTo) : null)
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

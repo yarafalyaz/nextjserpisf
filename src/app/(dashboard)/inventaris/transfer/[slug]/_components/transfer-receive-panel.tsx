@@ -68,7 +68,7 @@ export function TransferReceivePanel({ transferId, status, lines, canCloseShorta
     setQtyByLine((prev) => ({ ...prev, [lineId]: String(nextSerials.length) }))
   }
 
-  function handleReceive(event: React.FormEvent<HTMLFormElement>) {
+  function handleReceive(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const payload = lines
       .map((line) => {

@@ -28,7 +28,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
     )
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       const formData = new FormData(e.currentTarget)

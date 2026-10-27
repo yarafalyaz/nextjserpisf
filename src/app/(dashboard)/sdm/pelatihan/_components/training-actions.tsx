@@ -14,7 +14,7 @@ export function TrainingForm() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const formData = new FormData(form)
@@ -56,7 +56,7 @@ export function ParticipantForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const formData = new FormData(form)

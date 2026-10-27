@@ -81,7 +81,7 @@ export function ReimbursementClaimForm({ categories, projects }: ReimbursementCl
     })
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     submit(false)
   }

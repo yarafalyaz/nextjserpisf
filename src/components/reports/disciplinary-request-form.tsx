@@ -41,7 +41,7 @@ export function DisciplinaryRequestForm({
   const severe = isDisciplinarySevereCategory(category)
   const visibleLevels = levels.filter((l) => severe || l.value !== "sp_first_final")
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       const result = await createDisciplinaryRecord({

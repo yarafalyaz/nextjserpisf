@@ -58,7 +58,7 @@ export function TaxInvoiceForm({
   const [linkId, setLinkId] = useState("")
   const [sellingPrice, setSellingPrice] = useState<number | null>(null)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("idempotencyKey", idempotencyKeyRef.current)
@@ -173,7 +173,7 @@ export function TaxInvoiceLifecycleActions({ invoices }: { invoices: TaxOption[]
 
   if (invoices.length === 0) return null
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
+  function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("idempotencyKey", keyRef.current)

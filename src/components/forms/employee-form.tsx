@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, useState, type FormEvent } from "react"
+import { useTransition, useState, type InputEvent } from "react"
 import { useForm, Controller, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { employeeSchema, type EmployeeInput } from "@/lib/validations/form.schemas"
@@ -273,7 +273,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="phone">Telepon</Label>
-            <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
+            <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: InputEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
           </div>
           <Controller
             name="gender"
@@ -528,7 +528,7 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bankAccountNumber">No. Rekening</Label>
-            <Input id="bankAccountNumber" inputMode="numeric" {...register("bankAccountNumber")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, "") }} placeholder="No. rekening" />
+            <Input id="bankAccountNumber" inputMode="numeric" {...register("bankAccountNumber")} onInput={(e: InputEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, "") }} placeholder="No. rekening" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bankAccountHolder">Atas Nama</Label>
@@ -536,11 +536,11 @@ export function EmployeeForm({ employee, departments, positions, managers = [], 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bpjsKetenagakerjaan">BPJS Ketenagakerjaan</Label>
-            <Input id="bpjsKetenagakerjaan" inputMode="numeric" {...register("bpjsKetenagakerjaan")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, "") }} placeholder="No. BPJS Ketenagakerjaan" />
+            <Input id="bpjsKetenagakerjaan" inputMode="numeric" {...register("bpjsKetenagakerjaan")} onInput={(e: InputEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, "") }} placeholder="No. BPJS Ketenagakerjaan" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bpjsKesehatan">BPJS Kesehatan</Label>
-            <Input id="bpjsKesehatan" inputMode="numeric" {...register("bpjsKesehatan")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, "") }} placeholder="No. BPJS Kesehatan" />
+            <Input id="bpjsKesehatan" inputMode="numeric" {...register("bpjsKesehatan")} onInput={(e: InputEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, "") }} placeholder="No. BPJS Kesehatan" />
           </div>
         </FormSection>
 

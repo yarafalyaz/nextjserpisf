@@ -545,7 +545,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       && (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

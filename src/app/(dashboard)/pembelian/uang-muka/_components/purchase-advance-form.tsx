@@ -53,7 +53,7 @@ export function PurchaseAdvanceForm({
     label: `${account.code} - ${account.name}`,
   }))
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

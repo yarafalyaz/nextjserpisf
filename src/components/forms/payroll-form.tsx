@@ -63,37 +63,35 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
     if (!employeeId || !startDate || !endDate) return
 
     let cancelled = false
-    const timer = window.setTimeout(() => {
+    const timer = window.setTimeout(async () => {
       setIsEstimating(true)
-      getPayrollEstimation(employeeId, startDate, endDate)
-        .then(data => {
-          if (cancelled) return
-          if (data && "error" in data) {
-            showError("Gagal menarik data estimasi: " + data.error)
-            return
-          }
-          if (!data) return
-          setBaseSalary(data.baseSalary ?? 0)
-          setOvertime(data.overtimeTotal ?? 0)
-          setAppreciation(data.appreciationTotal ?? 0)
-          setLoan(data.loanDeduction ?? 0)
-          setLate(data.lateDeduction ?? 0)
-          setAbsentDeduction(data.absentDeduction ?? 0)
-          setAttendance({
-            workingDays: data.workingDays ?? 0,
-            presentDays: data.presentDays ?? 0,
-            leaveDays: data.leaveDays ?? 0,
-            holidayDays: data.holidayDays ?? 0,
-            absentDays: data.absentDays ?? 0,
-          })
+      try {
+        const data = await getPayrollEstimation(employeeId, startDate, endDate)
+        if (cancelled) return
+        if (data && "error" in data) {
+          showError("Gagal menarik data estimasi: " + data.error)
+          return
+        }
+        if (!data) return
+        setBaseSalary(data.baseSalary ?? 0)
+        setOvertime(data.overtimeTotal ?? 0)
+        setAppreciation(data.appreciationTotal ?? 0)
+        setLoan(data.loanDeduction ?? 0)
+        setLate(data.lateDeduction ?? 0)
+        setAbsentDeduction(data.absentDeduction ?? 0)
+        setAttendance({
+          workingDays: data.workingDays ?? 0,
+          presentDays: data.presentDays ?? 0,
+          leaveDays: data.leaveDays ?? 0,
+          holidayDays: data.holidayDays ?? 0,
+          absentDays: data.absentDays ?? 0,
         })
-        .catch((e) => {
-          if (cancelled) return
-          showError("Gagal menarik data estimasi: " + e.message)
-        })
-        .finally(() => {
-          if (!cancelled) setIsEstimating(false)
-        })
+      } catch (e) {
+        if (cancelled) return
+        showError("Gagal menarik data estimasi: " + (e as Error).message)
+      } finally {
+        if (!cancelled) setIsEstimating(false)
+      }
     }, 0)
 
     return () => {
@@ -108,7 +106,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
   const totalDeductions = deductions + loan + late + absentDeduction
   const netSalaryEst = grossSalary - totalDeductions
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {

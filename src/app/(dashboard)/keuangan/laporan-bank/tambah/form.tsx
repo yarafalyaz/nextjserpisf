@@ -28,7 +28,7 @@ export function BankStatementForm({ accounts, banks }: Props) {
   const [accountId, setAccountId] = useState("")
   const [bankId, setBankId] = useState("")
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
