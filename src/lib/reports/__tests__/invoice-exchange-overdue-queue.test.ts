@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   INVOICE_EXCHANGE_OVERDUE_ANOMALY_LABEL,
+  INVOICE_EXCHANGE_OVERDUE_ANOMALY_ONLY_LABEL,
   INVOICE_EXCHANGE_OVERDUE_COLUMN_LABELS,
   INVOICE_EXCHANGE_OVERDUE_DIFFERENCE_LABEL,
   INVOICE_EXCHANGE_OVERDUE_NOTICE_TEXT,
@@ -83,6 +84,7 @@ describe("invoice-exchange-overdue-queue (F-2026-10-27-101-S + 110-V)", () => {
     })
     expect(INVOICE_EXCHANGE_OVERDUE_NO_DUE_DATE_LABEL).toBe("Tanpa batas kembali")
     expect(INVOICE_EXCHANGE_OVERDUE_ANOMALY_LABEL).toBe("Faktur tertaut tidak berlaku")
+    expect(INVOICE_EXCHANGE_OVERDUE_ANOMALY_ONLY_LABEL).toBe("Semua faktur tertaut tidak berlaku")
     expect(INVOICE_EXCHANGE_OVERDUE_DIFFERENCE_LABEL).toBe("Selisih dengan nilai faktur saat ini")
     expect(INVOICE_EXCHANGE_OVERDUE_NOTICE_TEXT).toContain("bukan saldo piutang")
     expect(INVOICE_EXCHANGE_OVERDUE_NOTICE_TEXT).not.toMatch(/denda|tunggakan/i)
@@ -179,6 +181,61 @@ describe("invoice-exchange-overdue-queue (F-2026-10-27-101-S + 110-V)", () => {
     )
     expect(queue.rows[0].anomalyCount).toBe(1)
     expect(queue.rows[0].remainingAmount).toBe(1_000_000)
+  })
+
+  it("verdict #1191 minor-1: dokumen semua-anomali (cancelled) tertanda anomalyOnlyCount, bukan baris/totals", () => {
+    const queue = buildInvoiceExchangeOverdueQueue(
+      [
+        input({ exchangeId: 1, documentNo: "TF/A", invoices: [invoice({ status: "cancelled" })] }),
+        input({
+          exchangeId: 2,
+          documentNo: "TF/B",
+          invoices: [
+            invoice({ salesInvoiceId: 11, exchangedAmount: 1_000_000 }),
+            invoice({ salesInvoiceId: 12, exchangedAmount: 5_000_000, grandTotal: 5_000_000, status: "cancelled" }),
+          ],
+        }),
+        // semua-anomali tapi dueDate BELUM lampau -> bukan anomalyOnly
+        input({ exchangeId: 3, documentNo: "TF/C", dueDate: day(2), invoices: [invoice({ status: "cancelled" })] }),
+        // lunas penuh dueDate lampau -> hilang sah, bukan anomalyOnly
+        input({ exchangeId: 4, documentNo: "TF/D", invoices: [invoice({ paidAmount: 1_000_000 })] }),
+        // tanpa faktur sama sekali -> bukan anomalyOnly
+        input({ exchangeId: 5, documentNo: "TF/E", invoices: [] }),
+      ],
+      NOW,
+    )
+    expect(queue.rows.map((r) => r.exchangeId)).toEqual([2])
+    expect(queue.anomalyOnlyCount).toBe(1)
+    expect(queue.anomalyOnlyLabel).toBe("Semua faktur tertaut tidak berlaku")
+    expect(queue.totalDocuments).toBe(1)
+    expect(queue.totals.anomalyCount).toBe(1)
+    expect(queue.totals.remainingAmount).toBe(1_000_000)
+  })
+
+  it("verdict #1191 minor-1: semua-anomali via terhapus & retur-penuh juga tertanda", () => {
+    const queue = buildInvoiceExchangeOverdueQueue(
+      [
+        input({ exchangeId: 1, invoices: [invoice({ deletedAt: day(-1) })] }),
+        input({ exchangeId: 2, invoices: [invoice({ grandTotal: 2_000_000, exchangedAmount: 2_000_000, returnCredit: 2_000_000 })] }),
+      ],
+      NOW,
+    )
+    expect(queue.rows).toEqual([])
+    expect(queue.anomalyOnlyCount).toBe(2)
+  })
+
+  it("verdict #1191 minor-2 (kosmetik): withoutDueDateCount abaikan dokumen lunas penuh & semua-anomali", () => {
+    const queue = buildInvoiceExchangeOverdueQueue(
+      [
+        input({ exchangeId: 1, dueDate: null, invoices: [invoice()] }), // sisa >0 -> dihitung
+        input({ exchangeId: 2, dueDate: null, invoices: [invoice({ paidAmount: 1_000_000 })] }), // lunas -> tidak
+        input({ exchangeId: 3, dueDate: null, invoices: [invoice({ status: "cancelled" })] }), // semua anomali -> tidak
+      ],
+      NOW,
+    )
+    expect(queue.rows).toEqual([])
+    expect(queue.withoutDueDateCount).toBe(1)
+    expect(queue.anomalyOnlyCount).toBe(0)
   })
 
   it("AC-IEX-B5: urutan dueDate lampau dulu, seri documentNo; rekap hanya baris tampil", () => {

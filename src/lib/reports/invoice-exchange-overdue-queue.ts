@@ -50,6 +50,7 @@ export const INVOICE_EXCHANGE_OVERDUE_NOTICE_TEXT =
 
 export const INVOICE_EXCHANGE_OVERDUE_NO_DUE_DATE_LABEL = "Tanpa batas kembali"
 export const INVOICE_EXCHANGE_OVERDUE_ANOMALY_LABEL = "Faktur tertaut tidak berlaku"
+export const INVOICE_EXCHANGE_OVERDUE_ANOMALY_ONLY_LABEL = "Semua faktur tertaut tidak berlaku"
 export const INVOICE_EXCHANGE_OVERDUE_DIFFERENCE_LABEL = "Selisih dengan nilai faktur saat ini"
 
 const MS_PER_DAY = 86_400_000
@@ -115,6 +116,14 @@ export interface InvoiceExchangeOverdueQueue {
   /** Hitungan dokumen populasi tanpa dueDate (BR-IEX-04) — penanda, bukan baris. */
   withoutDueDateCount: number
   withoutDueDateLabel: string
+  /**
+   * Dokumen dueDate lampau yang SEMUA fakturnya anomali (cancelled/terhapus/
+   * tertutup retur-kredit penuh) sehingga tidak tampil sebagai baris —
+   * penanda tingkat antrean (verdict Accountant #1191 catatan minor 1),
+   * bukan baris dan tidak masuk totals.
+   */
+  anomalyOnlyCount: number
+  anomalyOnlyLabel: string
   totalDocuments: number
   /** Rekap HANYA atas baris tampil (BR-IEX-10); anomali tidak masuk. */
   totals: {
@@ -148,11 +157,21 @@ export function buildInvoiceExchangeOverdueQueue(
   const today = getWibTodayUtcDate(now)
   const rows: InvoiceExchangeOverdueRow[] = []
   let withoutDueDateCount = 0
+  let anomalyOnlyCount = 0
 
   for (const input of inputs) {
     if (input.deletedAt !== null) continue
     if (input.dueDate === null) {
-      withoutDueDateCount += 1
+      // Kosmetik verdict #1191 catatan 2: dokumen lunas penuh tidak dihitung
+      // penanda tanpa-dueDate (sisa serah non-anomali <= epsilon). Anomali
+      // keluar dari sisa seperti pada baris (110-V) — bukan status Lunas.
+      const active = input.invoices.filter((i) => !isAnomalyInvoice(i))
+      const remaining = safeSubtract(
+        sumMoney(active.map((i) => i.exchangedAmount as never)),
+        sumMoney(active.map((i) => i.paidAmount as never)),
+        2,
+      )
+      if (remaining > SETTLED_EPSILON) withoutDueDateCount += 1
       continue
     }
     const dueDay = wibCalendarDay(input.dueDate)
@@ -165,7 +184,12 @@ export function buildInvoiceExchangeOverdueQueue(
     const exchangedAmount = sumMoney(active.map((i) => i.exchangedAmount as never))
     const paidAmount = sumMoney(active.map((i) => i.paidAmount as never))
     const remainingAmount = safeSubtract(exchangedAmount, paidAmount, 2)
-    if (remainingAmount <= SETTLED_EPSILON) continue
+    if (remainingAmount <= SETTLED_EPSILON) {
+      // Semua faktur anomali -> sisa non-anomali 0; tertanda di tingkat
+      // antrean, bukan hilang tanpa jejak (verdict #1191 catatan minor 1).
+      if (active.length === 0 && input.invoices.length > 0) anomalyOnlyCount += 1
+      continue
+    }
 
     const liveRemainingAmount = sumMoney(
       active.map((i) => safeSubtract(i.grandTotal as never, i.paidAmount as never, 2) as never),
@@ -209,6 +233,8 @@ export function buildInvoiceExchangeOverdueQueue(
     rows,
     withoutDueDateCount,
     withoutDueDateLabel: INVOICE_EXCHANGE_OVERDUE_NO_DUE_DATE_LABEL,
+    anomalyOnlyCount,
+    anomalyOnlyLabel: INVOICE_EXCHANGE_OVERDUE_ANOMALY_ONLY_LABEL,
     totalDocuments: rows.length,
     totals: {
       exchangedAmount: sumMoney(rows.map((r) => r.exchangedAmount as never)),
