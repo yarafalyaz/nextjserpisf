@@ -11,6 +11,8 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/tax-invoice-form"
 import { CoretaxExportPanel } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/coretax-export-panel"
+import { TaxInvoiceDraftQueueCard } from "@/components/reports/tax-invoice-draft-queue-card"
+import { getTaxInvoiceDraftQueue } from "@/lib/reports/tax-invoice-draft-queue-data"
 import { formatCurrency } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Faktur Pajak" }
@@ -30,6 +32,8 @@ const moneyOption = (documentNo: string | null, amount: unknown, party: string):
  */
 export default async function CreateTaxInvoicePage() {
   await requirePermission("create_tax_invoices")
+
+  const draftQueue = await getTaxInvoiceDraftQueue()
 
   const [salesInvoices, vendorBills, vendors, issued] = await Promise.all([
     prisma.salesInvoice.findMany({
@@ -71,6 +75,7 @@ export default async function CreateTaxInvoicePage() {
         ]}
       />
       <h1 className="text-2xl font-bold text-foreground">Terbitkan Faktur Pajak</h1>
+      <TaxInvoiceDraftQueueCard queue={draftQueue} />
       <TaxInvoiceForm
         salesInvoices={salesInvoices.map((inv) => ({ ...moneyOption(inv.documentNo, inv.grandTotal, inv.customer.name), value: String(inv.id) }))}
         vendorBills={vendorBills.map((bill) => ({ ...moneyOption(bill.documentNo, bill.grandTotal, bill.vendor.name), value: String(bill.id) }))}
