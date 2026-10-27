@@ -204,6 +204,82 @@ describe("CustomerCreditQueueCard 083-F AC-CCQ-F1..F3", () => {
     expect(text).not.toContain("Rp 1.000.000 · 1 baris")
   })
 
+  it("086-B2: baris Quotation/RevisionDown quotation tertahan berpenanda verbatim sama; quotation bebas tanpa penanda", () => {
+    // Kontrak 086-B2 (PR #1151): builder menghitung blockedQuotationIds
+    // dari residu F4 DP taxed quotation 55 > 0; kartu menempel label.
+    const queue = buildCustomerCreditQueue(
+      [
+        credit({ creditId: 10, sourceType: "Quotation", sourceId: 55 }),
+        credit({ creditId: 11, sourceType: "RevisionDown", sourceId: 55 }),
+        credit({ creditId: 12, sourceType: "Quotation", sourceId: 56 }),
+      ],
+      [],
+      new Set(),
+      { now: NOW },
+      [
+        {
+          quotationId: 55,
+          taxedDownPayments: [
+            { downPaymentId: 21, documentNo: "DP-2026-021", amount: 11_200_000 },
+          ],
+          dpAllocations: [],
+          dpCredits: [],
+        },
+      ],
+    )
+    const rendered = renderCard(<CustomerCreditQueueCard queue={queue} />)
+    root = rendered.root
+    const text = rendered.container.textContent ?? ""
+    const rowsDom = [...rendered.container.querySelectorAll("tbody tr")]
+    const penandaCell = (i: number) => rowsDom[i]?.children[8]?.textContent
+    expect(rowsDom).toHaveLength(3)
+    // Baris tertahan membawa label server verbatim di sel Penanda.
+    expect(penandaCell(0)).toContain(CUSTOMER_CREDIT_FP_UM_MARKER_LABEL)
+    expect(penandaCell(1)).toContain(CUSTOMER_CREDIT_FP_UM_MARKER_LABEL)
+    // Quotation 56 tanpa fakta tahan -> sel Penanda kosong "—".
+    expect(penandaCell(2)).toBe("—")
+    // Summary server menghitung baris Quotation/RevisionDown berpenanda.
+    expect(text).toContain(
+      `${CUSTOMER_CREDIT_QUEUE_TOTAL_LABEL}: Rp 30.000.000 · 3 baris · 2 berpenanda ${CUSTOMER_CREDIT_FP_UM_MARKER_LABEL}`,
+    )
+    // Penanda bukan kunci alokasi: nol kata terkunci/halangan.
+    expect(text).not.toContain("Terkunci")
+    expect(text).not.toContain("terkunci")
+  })
+
+  it("086-B2: payload Quotation berpenanda dengan label kustom server tampil verbatim (UI tidak menyimpulkan dari sourceType)", () => {
+    const customLabel = "PENANDA-SERVER-UJI"
+    const queue: CustomerCreditQueue = {
+      rows: [
+        {
+          creditId: 1,
+          documentNo: "CC-1",
+          customerId: 7,
+          customerName: "CV Uji",
+          sourceType: "Quotation",
+          sourceId: 55,
+          status: "open",
+          createdAt: day(-1),
+          umurMenungguHari: 1,
+          receivedAmount: 1_000_000,
+          allocatedAmount: 0,
+          refundedAmount: 0,
+          saldo: 1_000_000,
+          penandaFpUangMuka: true,
+          penandaFpUangMukaLabel: customLabel,
+          alokasiTerhalang: false,
+        },
+      ],
+      summary: { jumlahBaris: 1, totalSaldo: 1_000_000, jumlahPenandaFpUangMuka: 1 },
+      anomaly: { openSaldoNol: 0, selesaiSaldoPositif: 0, alokasiMelebihiDiterima: 0 },
+    }
+    const rendered = renderCard(<CustomerCreditQueueCard queue={queue} />)
+    root = rendered.root
+    const rowsDom = [...rendered.container.querySelectorAll("tbody tr")]
+    expect(rowsDom[0]?.children[8]?.textContent).toContain(customLabel)
+    expect(rowsDom[0]?.textContent).toContain("Quotation")
+  })
+
   it("AC-CCQ-F3: ember anomali tampil terpisah di luar populasi/total", () => {
     const queue = buildCustomerCreditQueue(
       [
