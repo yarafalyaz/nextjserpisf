@@ -166,7 +166,7 @@ export interface PkwtReconciliationInput {
   employeeId: number
   /** Σ peristiwa terbekukan (approved+paid) per karyawan. */
   frozenEventTotal: number
-  /** Saldo GL akun utang kompensasi POSTED (kredit-debit) total perusahaan. */
+  /** Saldo GL akun utang kompensasi POSTED+REVERSED (kredit-debit, pasangan reversal neto nol) total perusahaan. */
   glPayableBalance: number
   /** Σ baris kompensasi slip terbayar (status paid). */
   paidSlipTotal: number

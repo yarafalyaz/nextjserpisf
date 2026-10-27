@@ -351,6 +351,10 @@ export async function getSalesTargetPeriodReconciliation(range: {
     }))
 
   // (iii) Kaki Retur Penjualan jurnal retur POSTED periode tanggal retur.
+  // Tetap POSTED-saja (TASK-022): terfilter referenceType "SalesReturn";
+  // jurnal lawan reversal ber-referenceType "Journal" tersaring keluar,
+  // jadi memasukkan REVERSED akan menghitung asli tanpa lawannya.
+  // Neto nol hanya untuk pasangan reversal satu tingkat.
   let settings: Awaited<ReturnType<typeof getSystemSettings>> | null = null
   try {
     settings = await getSystemSettings()

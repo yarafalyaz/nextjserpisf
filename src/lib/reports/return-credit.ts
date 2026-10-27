@@ -4,7 +4,11 @@
  * Satu-satunya derivation: Σ kaki Cr akun Piutang (`salesReceivableAccountId`)
  * jurnal SalesReturn POSTED tidak-terhapus atas SalesReturn `completed`
  * ber-`salesInvoiceId` faktur itu. Jurnal REVERSED tidak dihitung (filter
- * status POSTED). `paidAmount` kolom TIDAK pernah diubah helper ini —
+ * status POSTED) — tetap POSTED-saja (TASK-022): jurnal lawan reversal
+ * ber-referenceType "Journal", bukan "SalesReturn", sehingga tersaring
+ * keluar; memasukkan REVERSED akan menghitung asli tanpa lawannya dan
+ * penjumlahan satu-sisi (kredit saja) tidak akan neto nol.
+ * Neto nol hanya untuk pasangan reversal satu tingkat. `paidAmount` kolom TIDAK pernah diubah helper ini —
  * definisi pembayaran tetap murni (vonis); outstanding baru =
  * grandTotal − paidAmount − returnCredit.
  *

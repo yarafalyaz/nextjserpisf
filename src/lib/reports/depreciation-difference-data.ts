@@ -49,7 +49,13 @@ export interface AssetJournalBookRow {
   fiscalYearRows: FiscalYearRow[]
 }
 
-/** Dasar bersama laporan aset berbasis jurnal POSTED (dipakai juga deferred-tax-data). */
+/**
+ * Dasar bersama laporan aset berbasis jurnal POSTED (dipakai juga deferred-tax-data).
+ * Tetap POSTED-saja (TASK-022): query terfilter referenceType aset; jurnal
+ * lawan reversal ber-referenceType "Journal" tersaring keluar, jadi
+ * memasukkan REVERSED akan menghitung asli tanpa lawannya.
+ * Neto nol hanya untuk pasangan reversal satu tingkat.
+ */
 export async function loadAssetJournalBookRows(): Promise<AssetJournalBookRow[]> {
   const [assets, journals, settings] = await Promise.all([
     prisma.asset.findMany({
@@ -129,6 +135,8 @@ function decimalOf(value: { toString(): string } | number) {
 }
 
 export async function loadDepreciationDifference(): Promise<DepreciationDifferenceReport> {
+  // Query jurnal di bawah tetap POSTED-saja — alasan sama seperti
+  // loadAssetJournalBookRows (TASK-022).
   const [assets, journals, settings] = await Promise.all([
     prisma.asset.findMany({
       where: { status: { not: "disposed" } },
