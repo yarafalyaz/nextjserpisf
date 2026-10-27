@@ -6,6 +6,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 import type { Root } from "react-dom/client"
 import { PerformanceQueueCard } from "../performance-queue-card"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { expectQueueCardTable } from "./queue-card-test-table"
 import {
   buildPerformanceQueue,
   PERFORMANCE_QUEUE_NO_GOAL_LABEL,
@@ -58,31 +59,30 @@ describe("PerformanceQueueCard 077-F AC-PFQ-F1..F3", () => {
     const queue = buildPerformanceQueue([input()], { now: NOW })
     const rendered = renderCard(<PerformanceQueueCard queue={queue} />)
     root = rendered.root
-    const text = rendered.container.textContent ?? ""
-    expect(
-      rendered.container.querySelector('[aria-label="Antrean Penilaian Kinerja Belum Selesai"]'),
-    ).not.toBeNull()
-    expect(text).toContain(
+    const text = expectQueueCardTable(
+      rendered.container,
+      "Antrean Penilaian Kinerja Belum Selesai",
       "Daftar ini hanya penilaian kinerja yang belum selesai pada siklus aktif. Penilaian dan finalisasi tetap dilakukan dari detail siklus; daftar ini tidak memberi peringkat antar karyawan.",
+      [
+        "Karyawan",
+        "Siklus",
+        "Tahap",
+        "Skor Diri",
+        "Skor Atasan",
+        "Periode Berakhir",
+        "Menunggu",
+      ],
+      [
+        "2 mengendap · 2 menunggu · 4 belum selesai",
+        "Belum Ada Ulasan",
+        "Belum Nilai Diri",
+        "Menunggu Atasan",
+        "Menunggu Finalisasi",
+        "80.00",
+        "75.50",
+        PERFORMANCE_QUEUE_NO_GOAL_LABEL,
+      ],
     )
-    const headers = [...rendered.container.querySelectorAll("th")].map((el) => el.textContent)
-    expect(headers).toEqual([
-      "Karyawan",
-      "Siklus",
-      "Tahap",
-      "Skor Diri",
-      "Skor Atasan",
-      "Periode Berakhir",
-      "Menunggu",
-    ])
-    expect(text).toContain("2 mengendap · 2 menunggu · 4 belum selesai")
-    expect(text).toContain("Belum Ada Ulasan")
-    expect(text).toContain("Belum Nilai Diri")
-    expect(text).toContain("Menunggu Atasan")
-    expect(text).toContain("Menunggu Finalisasi")
-    expect(text).toContain("80.00")
-    expect(text).toContain("75.50")
-    expect(text).toContain(PERFORMANCE_QUEUE_NO_GOAL_LABEL)
     expect(PERFORMANCE_QUEUE_NO_GOAL_LABEL).toBe("Tanpa Sasaran")
     expect(text).not.toContain("tanpaSasaran")
     // Urutan payload server dipertahankan: mengendap -> menunggu-finalisasi dulu.
