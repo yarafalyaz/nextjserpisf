@@ -66,7 +66,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock, Prisma: { PrismaClientKnownRequestError: class {} } }))
-vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
+vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a), hasPermission: vi.fn().mockResolvedValue(true) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
