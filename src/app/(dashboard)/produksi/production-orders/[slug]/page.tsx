@@ -8,6 +8,7 @@ import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteProductionOrder } from "@/actions/manufacturing.actions"
 import { ProductionOrderActions } from "../_components/production-order-actions"
+import { JobReopenButton } from "@/components/reports/job-reopen-button"
 import { ProductionCostSection } from "../_components/production-cost-section"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -139,6 +140,8 @@ export default async function ProductionOrderDetailPage({
     auth(),
   ])
   const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : []
+  // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenProductionOrder.
+  const canReopenProductionOrder = await hasPermission("edit_production_orders")
   const bomRevisionOptions = order.bomRevision
     ? await prisma.bomRevision.findMany({
         where: {
@@ -215,6 +218,13 @@ export default async function ProductionOrderDetailPage({
         <div className="flex gap-2 items-center">
           <StatusChip status={order.status} />
   <div className="flex gap-2">
+          <JobReopenButton
+            kind="production_order"
+            id={order.id}
+            code={order.documentNo}
+            status={order.status}
+            canReopen={canReopenProductionOrder}
+          />
           <ProductionOrderActions
             orderId={order.id}
             status={order.status}

@@ -108,12 +108,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
   // produksi/perintah kerja memanggilnya).
   // F-2026-10-24-097-S S3: tombol tutup kini dirujuk kartu antrean
-  // workshop-closeout-queue-card (closeWorkOrder + closeProductionOrder);
-  // reopen tetap tanpa UI (antrean hanya memuat job completed belum closed).
-  "src/actions/manufacturing.actions.ts::reopenProductionOrder":
-    "F-2026-10-21-009-V backend; tombol buka-kembali produksi menyusul (frontend)",
-  "src/actions/manufacturing.actions.ts::reopenWorkOrder":
-    "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // workshop-closeout-queue-card (closeWorkOrder + closeProductionOrder).
+  // TASK-026: reopen kini dirujuk JobReopenButton di halaman detail perintah
+  // kerja & perintah produksi — entri beku reopen dibuang.
   // F-2026-10-22-069-S: 4 aksi substitusi kini dirujuk UI (tab Substitusi
   // master barang + panel saran WO, t_bfaf2287) — entri beku dibuang.
   // getSubstituteSuggestionsForWorkOrder tetap beku: page detail WO membaca

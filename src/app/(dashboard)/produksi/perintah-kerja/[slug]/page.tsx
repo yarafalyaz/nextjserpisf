@@ -9,6 +9,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
+import { JobReopenButton } from "@/components/reports/job-reopen-button";
 import { WorkOrderOperationActions, InitializeStagesButton, WorkOrderOperationWorkCenterSelect } from "./_components/work-order-operation-actions";
 import { getWorkCenters } from "@/lib/reports/work-center-load-plan-data";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
@@ -210,6 +211,8 @@ export default async function WorkOrderDetailPage({
   // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
   const stageProgress = await getWorkOrderProgress(wo.id);
   const canEditStages = await hasPermission("edit_work_orders");
+  // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenWorkOrder.
+  const canReopenWorkOrder = await hasPermission("complete_work_orders");
   // F-090-S: pilihan stasiun tahap dari master WorkCenter (BOT 3 PR #569).
   const workCenters = canEditStages ? await getWorkCenters() : [];
 
@@ -333,6 +336,15 @@ export default async function WorkOrderDetailPage({
                 + Perintah Produksi
               </Button>
             </CanCreate>
+            {/* F-2026-10-21-009-V: reopen job closed — izin sama dengan
+                penegakan server reopenWorkOrder (complete_work_orders). */}
+            <JobReopenButton
+              kind="work_order"
+              id={wo.id}
+              code={wo.documentNo}
+              status={wo.status}
+              canReopen={canReopenWorkOrder}
+            />
             <WorkOrderActions
               workOrderId={wo.id}
               status={wo.status}
