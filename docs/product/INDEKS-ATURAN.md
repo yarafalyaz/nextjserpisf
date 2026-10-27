@@ -67,7 +67,7 @@ perilaku, bukan hanya keberadaan file/model.
 | INV-BR-004 | Sebagian | src/lib/services/scrap-classification.ts:8 — klasifikasi scrap memakai cost FIFO terbawa baris |
 | INV-BR-005 | Sebagian | prisma/schema.prisma:2513 — `StockMove.referenceType`/`referenceId` menautkan movement ke dokumen sumber |
 | INV-BR-006 | Sebagian | src/lib/services/inventory-fifo.ts:91 — `consumeFifoLayers`; atomisitas menyeluruh bergantung transaksi pemanggil, belum diaudit |
-| INV-BR-007 | OPEN-keputusan | Keputusan negative stock terbuka di sumber. Penegak policy final: belum ditelusur |
+| INV-BR-007 | Sebagian | Keputusan bisnis OPEN di sumber (BUSINESS-RULES.md): garpu "pengecualian disetujui eksplisit" belum diputus — tidak ada saklar override/approval stok negatif di kode (grep allowShortfall:true=0 produksi, grep schema/settings negatif-override=0). Fakta penegakan berjalan: guard terpusat `src/lib/services/inventory-fifo.ts:109,185-197` (allowShortfall default false, throw Stok tidak mencukupi); semua jalur keluar memakai default/false: penjualan `src/lib/hooks/accounting.hook.ts:665,758-767,827`, retur pembelian `src/lib/hooks/purchase-return.hook.ts:147,185-188`, material issue `src/lib/hooks/material-issue.hook.ts:158`, transfer `src/lib/hooks/inventory-transfer.hook.ts:111`, produksi `src/actions/manufacturing.actions.ts:990`, penyesuaian `src/lib/hooks/stock-adjustment.hook.ts:127`; period-close hanya lapor warn `src/lib/settings/period-close.ts:131-135`; regresi `src/lib/services/__tests__/inventory-fifo.test.ts:273-301`. Lihat vonis Business F-2026-10-28-115-V (backlog) + ADR-005 §3 |
 | INV-BR-008 | Sebagian | prisma/schema.prisma:2674 — model `InventoryTransfer` ada; atomisitas asal/tujuan belum ditelusur |
 | INV-BR-009 | Sebagian | prisma/schema.prisma:2511 — status `draft` adalah status awal `StockMove`; perilaku gagal posting per modul belum diaudit |
 | INV-BR-010 | Belum | belum ditelusur — jalur reversal/retur/adjustment khusus stok posted tidak ditunjuk di sini |
@@ -180,7 +180,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-INV-004 | Sebagian | prisma/schema.prisma:2674 — `InventoryTransfer` ada; atomisitas transfer belum ditelusur |
 | AC-INV-005 | Sebagian | prisma/schema.prisma:2560 — `StockAdjustment` ada; gate approval sebelum efek saldo belum ditelusur |
 | AC-INV-006 | Sebagian | prisma/schema.prisma:2560 — `StockAdjustment` ada; pencatatan alasan/approver/aktor/ledger belum ditelusur per field |
-| AC-INV-007 | OPEN-keputusan | Mengikuti INV-BR-007: policy negative stock dan konkurensinya belum diputuskan di sumber |
+| AC-INV-007 | Sebagian | Mengikuti INV-BR-007: garpu override/approval belum diputus (tidak ada saklar di kode). Fakta penegakan: guard terpusat inventory-fifo.ts:109,185-197 + 6 jalur keluar default/false + period-close warn-only. Vonis Business F-2026-10-28-115-V (backlog). Konkurensi: baca-kunci FOR UPDATE inventory-fifo.ts:118-126 |
 | AC-INV-008 | Sebagian | prisma/schema.prisma:3870 — `Remnant`; pembeda scrap: `src/lib/services/scrap-classification.ts:8` |
 | AC-INV-009 | Sebagian | prisma/schema.prisma:2513 — `StockMove.referenceType`/`referenceId` ke dokumen sumber |
 
