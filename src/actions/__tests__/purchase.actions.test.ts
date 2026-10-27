@@ -1860,19 +1860,24 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.error).toContain("tidak lagi terbuka")
   })
 
-  it("FIN-BR-006: sisa 0,50 dalam toleransi Rp1 sesudah alokasi -> bill 'paid'", async () => {
+  // FIN-BR-006: satu helper bersama dua sisa batas (dalam vs luar toleransi).
+  async function confirmBillWithAlloc(amount: number) {
     mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", vendorId: 1, amount: 999.5, vendorBillId: 10,
+      id: 1, status: "draft", vendorId: 1, amount, vendorBillId: 10,
     })
     mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
-      { id: 10, balanceDue: 999.5, paidAmount: 0, grandTotal: 1000 },
+      { id: 10, balanceDue: amount, paidAmount: 0, grandTotal: 1000 },
     ])
     const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
     vi.mocked(allocatePaymentToBills).mockReset()
     vi.mocked(allocatePaymentToBills).mockReturnValueOnce([
-      { vendorBillId: 10, amount: 999.5 },
+      { vendorBillId: 10, amount },
     ])
-    const res = await actions.confirmVendorPayment(1)
+    return actions.confirmVendorPayment(1)
+  }
+
+  it("FIN-BR-006: sisa 0,50 dalam toleransi Rp1 sesudah alokasi -> bill 'paid'", async () => {
+    const res = await confirmBillWithAlloc(999.5)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1883,18 +1888,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
   })
 
   it("FIN-BR-006: sisa 1,01 di luar toleransi -> bill tetap 'partial'", async () => {
-    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", vendorId: 1, amount: 998.99, vendorBillId: 10,
-    })
-    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
-      { id: 10, balanceDue: 998.99, paidAmount: 0, grandTotal: 1000 },
-    ])
-    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
-    vi.mocked(allocatePaymentToBills).mockReset()
-    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([
-      { vendorBillId: 10, amount: 998.99 },
-    ])
-    const res = await actions.confirmVendorPayment(1)
+    const res = await confirmBillWithAlloc(998.99)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalledWith(
       expect.objectContaining({

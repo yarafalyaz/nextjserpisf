@@ -140,15 +140,19 @@ describe("sales-payment recalc — float drift precision", () => {
     )
   })
 
-  it("FIN-BR-006: sisa 0,50 dalam toleransi Rp1 -> 'paid'", async () => {
+  // FIN-BR-006: satu helper bersama dua sisa batas (dalam vs luar toleransi).
+  async function recalcWithPaid(id: number, amount: number) {
     mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({
-      id: 61,
+      id,
       grandTotal: 1000,
       status: "posted",
     })
-    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 999.5 }])
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount }])
+    await onSalesPaymentUpdated(id)
+  }
 
-    await onSalesPaymentUpdated(61)
+  it("FIN-BR-006: sisa 0,50 dalam toleransi Rp1 -> 'paid'", async () => {
+    await recalcWithPaid(61, 999.5)
 
     expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -158,14 +162,7 @@ describe("sales-payment recalc — float drift precision", () => {
   })
 
   it("FIN-BR-006: sisa 1,01 di luar toleransi -> 'partial'", async () => {
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({
-      id: 62,
-      grandTotal: 1000,
-      status: "posted",
-    })
-    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 998.99 }])
-
-    await onSalesPaymentUpdated(62)
+    await recalcWithPaid(62, 998.99)
 
     expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
