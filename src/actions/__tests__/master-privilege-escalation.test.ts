@@ -60,7 +60,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock, Prisma: { PrismaClientKnownRequestError: class {} } }))
-vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
+vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a), hasPermission: vi.fn().mockResolvedValue(true) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
@@ -121,7 +121,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "eve@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "99")
 
@@ -138,7 +138,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "mallory@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "99")
 
@@ -172,7 +172,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "bob@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "5") // resolves to "role_5", not super_admin
 
@@ -193,7 +193,7 @@ describe("Privilege-escalation guard on Employee login account", () => {
       joinDate: "2026-06-13",
       createLoginAccount: "true",
       email: "admin@example.com",
-      loginPassword: "password123",
+      loginPassword: "kata-sandi-pegawai-kuat",
     })
     fd.append("loginRoleIds", "99")
 

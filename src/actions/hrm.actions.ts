@@ -10,6 +10,7 @@ import {
   computePph21Ter,
   getStatutoryParams,
   getTerBrackets,
+  payrollStatutoryGateError,
   resolveTerPeriod,
   statusCodeDependents,
   terCategoryFor,
@@ -24,6 +25,7 @@ import {
   markPkwtEventPaid,
   runPkwtMonthlyAccrual,
 } from "@/lib/services/pkwt-compensation.service";
+import { applyDueSalaryAdjustments } from "@/lib/services/salary-adjustment.service";
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
@@ -91,7 +93,6 @@ import {
   capLoanDeductionForFrequency,
   evaluateDeductionCeiling,
   hasActiveLoanWithoutWeeklyInstallment,
-  loanInstallmentForFrequency,
   readBpjsAggregateSnapshot,
   sumLoanDeductionForFrequency,
   type BpjsAggregateSnapshot,
@@ -598,10 +599,14 @@ async function recalcDraftPayrollFromLines(payrollId: number): Promise<void> {
     orderBy: { componentId: "asc" },
   });
   const summary = summarizePayrollComponentLines(lines);
+  // TASK-018 (3): hitung ulang dari baris komponen mempertahankan kelas
+  // final slip — slip final-resign tidak boleh turun ke TER bulanan.
+  const recalcSnapshot = payroll.statutorySnapshot as { pph21Ter?: { periodKind?: string } } | null;
   const w = await buildPayrollWrite({
     employeeId: payroll.employeeId,
     period: payroll.period,
     excludePayrollId: payroll.id,
+    resignationFinal: recalcSnapshot?.pph21Ter?.periodKind === "final-resignation",
     endDate: payroll.endDate,
     fallbackLabel: "update slip",
     componentLines: lines,
@@ -950,8 +955,13 @@ export async function createLeaveRequest(formData: FormData) {
       // START year (a leave straddling Dec→Jan is charged to the year it begins).
       if (QUOTA_LEAVE_TYPES.has(v.type)) {
         const quotaYear = startDate.getFullYear();
+        // Kelayakan dinilai per TANGGAL MULAI cuti, bukan hari pengajuan:
+        // karyawan yang mengajukan dari sekarang untuk tanggal sesudah
+        // ulang tahun masa kerjanya yang ke-1 memang sudah berhak pada
+        // saat cuti itu berjalan.
         const quota = await getLeaveQuota(employeeId, {
           year: quotaYear,
+          now: startDate,
           db: tx,
         });
         if (!quota.eligible) {
@@ -1147,7 +1157,10 @@ export async function approveOvertime(overtimeId: number) {
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
         component: { isActive: true, recurrence: "fixed", kind: "earning" },
       },
-      select: { defaultAmount: true },
+      select: {
+        defaultAmount: true,
+        component: { select: { name: true } },
+      },
     });
     const fixedAllowance = fixedAssignments.reduce(
       (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
@@ -1170,6 +1183,23 @@ export async function approveOvertime(overtimeId: number) {
       dayKind,
     });
 
+    // Snapshot rincian dasar (F-2026-10-25-024-S, BR-OT-09/BR-OT-11):
+    // pokok + HANYA komponen yang benar-benar ikut Σ di atas + total dasar
+    // final, dibekukan pada klaim atomik yang sama dengan calculatedValue.
+    // Tanpa snapshot ini rincian tidak bisa ditampilkan verbatim — membaca
+    // master komponen saat tampil akan menampilkan dasar master kini, bukan
+    // dasar saat approve. Baris yang sudah terhitung berhenti di gerbang
+    // idempotensi di atas, jadi snapshot ikut beku dan tidak ditulis ulang.
+    const overtimeBaseSnapshot = {
+      baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
+      components: fixedAssignments.map((a) => ({
+        name: a.component.name,
+        amount: Number(a.defaultAmount),
+      })),
+      baseTotal: baseSalary,
+      overtimeDate: new Date(ot.date).toISOString(),
+    };
+
     const claim = await prisma.overtimeRequest.updateMany({
       where: { id: overtimeId, status: { in: ["pending", "approved"] } },
       data: {
@@ -1184,6 +1214,7 @@ export async function approveOvertime(overtimeId: number) {
         // awal (idempotensi di atas).
         approvedAt: new Date(),
         calculatedValue,
+        overtimeBaseSnapshot,
       },
     });
     if (claim.count === 0) {
@@ -1936,6 +1967,7 @@ async function computeBulkPayrollEstimations(
         select: {
           employeeId: true, baseSalary: true, bpjsHealthEmployee: true,
           bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
+          grossSalary: true, pph21: true,
         },
       });
   const bulkSlipsByEmployee = new Map<number, BpjsPeriodSlip[]>();
@@ -1950,6 +1982,17 @@ async function computeBulkPayrollEstimations(
       statutorySnapshot: row.statutorySnapshot,
     });
     bulkSlipsByEmployee.set(row.employeeId, arr);
+  }
+  // TASK-018 (1): agregat TER se-masa per karyawan (bruto + PPh21 slip aktif
+  // se-period lain) — pasangan data agregator BPJS di atas. Tanpa ini slip
+  // WEEKLY hasil bulk dihitung per-slip dan bracket TER ter-reset tiap minggu.
+  const bulkTerByEmployee = new Map<number, { gross: number; pph21: number }>();
+  for (const row of bulkPeriodSlips) {
+    if (row.employeeId == null || row.status === "cancelled" || row.status === "canceled") continue;
+    const acc = bulkTerByEmployee.get(row.employeeId) ?? { gross: 0, pph21: 0 };
+    acc.gross += Number(row.grossSalary) || 0;
+    acc.pph21 += Number(row.pph21) || 0;
+    bulkTerByEmployee.set(row.employeeId, acc);
   }
 
   for (const employee of employees) {
@@ -2077,11 +2120,13 @@ async function computeBulkPayrollEstimations(
     });
     const bpjs = bpjsAllocated.bpjs;
 
-    // F-026 jalur tulis massal: TER masa berjalan atas bruto karyawan ini
-    // (generate melewati karyawan yang sudah ber-slip periode ini, jadi tidak
-    // ada slip se-masa lain). Snapshot Desember ditandai pending-final:
-    // hitung ulang masa terakhir per karyawan terjadi di jalur single/update
-    // (buildPayrollWrite) yang punya agregasi tahunan lengkap.
+    // F-026 jalur tulis massal + TASK-018 (1): TER atas bruto GABUNGAN
+    // se-masa (bruto slip aktif se-period lain + slip berjalan), selisih
+    // terhadap PPh21 yang sudah terpotong se-masa — persis
+    // computePph21ForPeriod jalur single. Menghitung per-slip mereset
+    // bracket tiap minggu (4 x Rp2,6jt = 0 vs gabungan Rp260rb). Snapshot
+    // Desember ditandai pending-final: hitung ulang masa terakhir per
+    // karyawan terjadi di jalur single/update (buildPayrollWrite).
     const bulkCategory = terCategoryFor(employee.maritalStatus, employee.dependents ?? 0);
     const bulkBrackets = bulkTerByCategory.get(bulkCategory);
     if (!bulkBrackets) {
@@ -2090,8 +2135,9 @@ async function computeBulkPayrollEstimations(
           "Minta accountant melengkapi tabel TER, lalu hitung ulang.",
       );
     }
-    const bulkTer = computePph21Ter(grossSalary, bulkBrackets);
-    const pph21 = bulkTer.pph21;
+    const bulkSamePeriod = bulkTerByEmployee.get(employee.id) ?? { gross: 0, pph21: 0 };
+    const bulkTer = computePph21Ter(bulkSamePeriod.gross + grossSalary, bulkBrackets);
+    const pph21 = Math.max(0, bulkTer.pph21 - bulkSamePeriod.pph21);
 
     result.set(employee.id, {
       baseSalary,
@@ -2253,6 +2299,12 @@ export async function generateBulkPayroll(
       );
     }
 
+    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
+    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
+    for (const e of employmentEligible) {
+      await applyDueSalaryAdjustments(e.id, periodEnd);
+    }
+
     // F-076-S BR-PF-02 + turunan (F-103-V/F-105-V): populasi run =
     // karyawan sefrekuensi; frekuensi lain terlewati-terhitung. WEEKLY
     // kini lolos via agregator BPJS se-masa; sisa gerbang hanya pinjaman
@@ -2282,6 +2334,12 @@ export async function generateBulkPayroll(
     const eligibleEmployees = employmentEligible.filter((e) =>
       classified.targetIds.includes(e.id),
     );
+
+    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
+    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
+    for (const e of eligibleEmployees) {
+      await applyDueSalaryAdjustments(e.id, periodEnd);
+    }
 
     // Batch: slip aktif populasi pada jendela rentang run (semua periode —
     // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu
@@ -2388,6 +2446,8 @@ export async function generateBulkPayroll(
           wageBase: est.grossSalary ?? 0,
           loanDeduction: est.loanDeduction ?? 0,
           lateDeduction: est.lateDeduction ?? 0,
+          // TASK-018 (4): plafon bulk wajib memasukkan potongan komponen
+          // slip ini — sebelumnya 0 sehingga plafon terlampaui senyap.
           componentDeductions: est.deductions ?? 0,
         })
       ) {
@@ -2583,6 +2643,10 @@ export async function processPayroll(formData: FormData) {
     if (!employeeId) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
+
+    // Kenaikan gaji terjadwal yang sudah jatuh tempo diterapkan ke master
+    // lebih dulu, supaya slip periode ini membaca gaji yang benar.
+    await applyDueSalaryAdjustments(employeeId, endDate);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
     // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
@@ -2845,12 +2909,18 @@ export async function updatePayroll(id: number, formData: FormData) {
           "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
       );
     }
+    // TASK-018 (3): kelas final dibaca dari snapshot slip existing — edit
+    // slip final-resign (dengan atau tanpa flag client) mempertahankan
+    // perlakuan masa terakhir, tidak turun ke TER bulanan biasa.
+    const existingSnapshot = existing.statutorySnapshot as { pph21Ter?: { periodKind?: string } } | null;
+    const effectiveResignationFinal =
+      wantsFinalUpdate || existingSnapshot?.pph21Ter?.periodKind === "final-resignation";
     if (updateEmployeeId) {
       const gate = evaluatePayrollEmploymentGate({
         employmentEndedAt: updateLifecycle?.employmentEndedAt ?? null,
         periodStart: wibDateToUtcMidnight(v.startDate),
         periodEnd: wibDateToUtcMidnight(v.endDate),
-        isFinalSlip: false,
+        isFinalSlip: effectiveResignationFinal,
         confirmCuttingPeriod:
           formData.get("confirmEmploymentEndedCuttingPeriod") === "true",
       });
@@ -2907,7 +2977,7 @@ export async function updatePayroll(id: number, formData: FormData) {
       employeeId,
       period: v.period,
       excludePayrollId: id,
-      resignationFinal: false,
+      resignationFinal: effectiveResignationFinal,
       endDate,
       fallbackLabel: "update slip",
       componentLines: existingLines.length > 0 ? existingLines : undefined,
@@ -2985,30 +3055,10 @@ export async function approvePayroll(payrollId: number) {
     // periode ini. Approve = finalisasi angka pajak/BPJS — angka 2024 yang
     // lolos diam-diam adalah kesalahan gaji massal. Snapshot menyimpan
     // fromFallback persis untuk gate ini.
-    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean; pph21Ter?: { method?: string; periodKind?: string } } | null;
-    // F-026 HIGH: slip Desember massal masih TER bulanan (pending-final) —
-    // belum hitung ulang Pasal 17. Tolak approve; hitung ulang lewat update
-    // slip draft membuka jalur buildPayrollWrite final-december per karyawan.
-    if (snapshot?.pph21Ter?.periodKind === "bulk-december-pending-final") {
-      throw new Error(
-        "Penggajian Desember ini masih memakai TER bulanan dan belum dihitung ulang Pasal 17. " +
-          "Hitung ulang slip draft ini (edit/update slip) agar memakai hitung final Pasal 17 sebelum approve.",
-      );
-    }
-    // F-026: slip metode legacy tidak boleh difinalkan sesudah titik berlaku
-    // (tabel TER kini wajib terisi; hitung ulang slip lewat update draft).
-    if (snapshot?.pph21Ter?.method === "LEGACY_PRE_TER") {
-      throw new Error(
-        "Penggajian ini masih memakai metode PPh21 lama (pra-TER). " +
-          "Hitung ulang slip draft ini agar memakai TER PP 58/2023 sebelum approve.",
-      );
-    }
-    if (snapshot?.fromFallback) {
-      throw new Error(
-        "Penggajian ini dihitung dengan parameter statutori cadangan (2024). " +
-          "Minta accountant memvalidasi ruleset periode ini dulu, lalu hitung ulang sebelum approve.",
-      );
-    }
+    // TASK-018 (2): gerbang statutori bersama — pemeriksaan yang sama
+    // ditegakkan jalur generik (approveStep) dan markPayrollPaid.
+    const gateError = payrollStatutoryGateError(payroll.statutorySnapshot);
+    if (gateError) throw new Error(gateError);
 
     const claim = await prisma.payroll.updateMany({
       where: { id: payrollId, status: "draft" },
@@ -3046,6 +3096,11 @@ export async function markPayrollPaid(payrollId: number) {
       );
     }
 
+    // TASK-018 (2): slip yang ter-approve lewat workflow generik tidak
+    // melewati gerbang approvePayroll — tegakkan gerbang yang sama di sini
+    // sebelum status/paid + jurnal terjadi.
+    const paidGateError = payrollStatutoryGateError(payroll.statutorySnapshot);
+    if (paidGateError) throw new Error(paidGateError);
     // Vonis F-2026-10-25-023-V §5 (AC-LSV-2): plafon Pasal 65 ditegakkan
     // juga SAAT DIBAYAR atas angka slip tersimpan — slip warisan/draft lama
     // yang lolos sebelum gerbang susun tidak boleh membayar potongan
@@ -3088,28 +3143,20 @@ export async function markPayrollPaid(payrollId: number) {
           where: { employeeId: payroll.employeeId, status: "active" },
           orderBy: { loanDate: "asc" },
         });
-        // F-105-V butir 5: nominal amortisasi = frekuensi SLIP (master
-        // karyawan saat dibayar; snapshot nominal per pinjaman tidak
-        // disimpan — loanDeduction slip adalah budget ter-snapshot).
-        const slipEmployee = await tx.employee.findUnique({
-          where: { id: payroll.employeeId },
-          select: { paymentFrequency: true },
-        });
-        const slipFrequency: PayrollFrequency = slipEmployee?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+        // TASK-018 (6): amortisasi membaca snapshot slip (budget =
+        // payroll.loanDeduction), BUKAN nominal cicilan master yang bisa
+        // berubah sesudah slip terbit — jurnal onPayrollPaid mengkredit
+        // Piutang sebesar snapshot yang sama, jadi plafon cicilan master
+        // berjalan membuat subledger menyimpang dari jurnal (slip Rp500rb
+        // vs master Rp300rb menyisakan selisih Rp200rb). Alokasi tertua
+        // dulu, tercap sisa utang per pinjaman saja.
         let budget = Number(payroll.loanDeduction);
         const updates: Promise<unknown>[] = [];
         for (const loan of activeLoans) {
           if (budget <= 0) break;
-          const installment = loanInstallmentForFrequency(
-            {
-              monthlyInstallment: Number(loan.monthlyInstallment),
-              weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
-            },
-            slipFrequency,
-          ) ?? 0;
           const remaining = Number(loan.remainingAmount);
           if (remaining <= 0) continue;
-          const applied = Math.min(installment, remaining, budget);
+          const applied = Math.min(remaining, budget);
           if (applied <= 0) continue;
           const newRemaining = safeSubtract(remaining, applied, 0);
           budget = safeSubtract(budget, applied, 0);
@@ -3989,10 +4036,11 @@ export async function createAttendanceCorrection(formData: FormData) {
       return { success: false as const, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    const scope = await getHrScope(user);
-    // BR-AC-07: pengaju = employeeId login persis, fail-closed tanpa tertaut.
-    await assertHrEmployeeAccess(scope, v.employeeId);
-    if (scope.kind === "self" && scope.employeeId !== v.employeeId) {
+    // BR-AC-07 + putusan Lead Q-AC-2: pengaju = employeeId login persis
+    // untuk SEMUA scope (department/all tidak boleh atas nama orang lain),
+    // fail-closed bila akun tak tertaut Employee.
+    const me = await callerEmployeeIdForCorrection(user.id);
+    if (me == null || me !== v.employeeId) {
       throw new Error("Anda hanya diperbolehkan mengajukan koreksi absensi untuk diri sendiri");
     }
 

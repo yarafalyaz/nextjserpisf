@@ -86,6 +86,13 @@ export const itemSchema = z.object({
     .optional(),
   isProduct: optionalBoolean,
   isService: optionalBoolean,
+  // F-2026-10-25-042-V (vonis Q-ITX-1): default pajak per item — FK nullable
+  // ke Tax per arah + persen DPP Decimal(5,2). Kosong/null = existing
+  // byte-sama. Penjaga scrap + rentang 0–100 + rujukan aktif di service
+  // item-tax-default (fail-closed), bukan di skema ini.
+  defaultSalesTaxId: optionalNumber(),
+  defaultPurchaseTaxId: optionalNumber(),
+  defaultDppPercent: optionalNumber(),
   // F-2026-10-24-135-V: penanda item besi tua (dijual lewat faktur existing,
   // pendapatan lain-lain fail-closed, COGS Rp0).
   isScrapSaleItem: optionalBoolean,

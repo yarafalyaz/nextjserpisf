@@ -66,14 +66,18 @@ const RECAP: EmployeeLoanRecap = {
       negativeRemainingCount: 1,
     },
   ],
+  // Totals server SENGAJA divergen dari Σ baris tampil (mis. server menjumlah
+  // cakupan lebih luas dari baris contoh): hitung-ulang UI atas baris mana pun
+  // tidak akan pernah menghasilkan angka ini, jadi asersi total di bawah hanya
+  // hijau bila komponen menempel totals server apa adanya.
   totals: {
     employeeCount: 2,
     activeCount: 3,
-    totalPrincipalActive: 12_000_000,
-    totalRemainingActive: 6_450_000,
-    totalPaidDerived: 5_550_000,
-    monthlyInstallmentTotal: 950_000,
-    weeklyInstallmentTotal: 125_000,
+    totalPrincipalActive: 12_345_111,
+    totalRemainingActive: 6_777_111,
+    totalPaidDerived: 5_567_111,
+    monthlyInstallmentTotal: 977_111,
+    weeklyInstallmentTotal: 177_111,
     activeWithoutWeeklyCount: 1,
     pendingCount: 1,
     unknownStatusCount: 1,
@@ -93,14 +97,45 @@ describe("EmployeeLoanRecapTable F-2026-10-25-046-S", () => {
     expect(text).toContain("Budi Santoso")
     expect(text).toContain("Karyawan #9")
     expect(text).toContain(EMPLOYEE_LOAN_RECAP_NO_DEPARTMENT_LABEL)
-    // Angka verbatim payload (format id-ID), bukan hitungan ulang UI.
+    // Angka verbatim payload baris (format id-ID), bukan hitungan ulang UI.
     expect(text).toContain("Rp 10.000.000")
     expect(text).toContain("Rp 6.500.000")
     expect(text).toContain("Rp 3.500.000")
-    // Total footer = totals server apa adanya.
-    expect(text).toContain("Rp 12.000.000")
-    expect(text).toContain("Rp 6.450.000")
-    expect(text).toContain("Rp 5.550.000")
+    // Total server terikat elemen spesifik: kartu ringkasan + sel footer.
+    // Nilai fixture totals divergen dari Σ baris (6.500.000 + -50.000 =
+    // 6.450.000), jadi hitung-ulang UI atas baris — termasuk +1 — gagal di sini.
+    const summary = container.querySelector('[aria-label="Ringkasan rekap pinjaman"]')
+    expect(summary).not.toBeNull()
+    const summaryLabels = [...(summary?.querySelectorAll("div > p:first-child") ?? [])]
+    const remainingCard = summaryLabels.find(
+      (label) => label.textContent === "Total sisa pinjaman aktif",
+    )?.nextElementSibling
+    expect(remainingCard?.textContent).toBe("Rp 6.777.111")
+    // Kunci urutan kolom lengkap supaya pergeseran kolom memerahkan asersi sel.
+    expect(headers).toEqual([
+      "Karyawan",
+      "Departemen",
+      "Pinjaman aktif",
+      "Pokok aktif",
+      "Sisa pinjaman",
+      "Terbayar tercatat",
+      "Cicilan bulanan",
+      "Cicilan mingguan",
+      "Pinjaman aktif tertua",
+      "Catatan",
+      "Daftar pinjaman",
+    ])
+    const footCells = [...container.querySelectorAll("tfoot td")].map(
+      (td) => td.textContent ?? "",
+    )
+    // Sel footer (sel "Total" colSpan=2 = satu elemen): aktif | pokok | sisa | terbayar | bulanan | mingguan
+    expect(footCells[0]).toBe("Total")
+    expect(footCells[1]).toBe("3")
+    expect(footCells[2]).toBe("Rp 12.345.111")
+    expect(footCells[3]).toBe("Rp 6.777.111")
+    expect(footCells[4]).toBe("Rp 5.567.111")
+    expect(footCells[5]).toBe("Rp 977.111")
+    expect(footCells[6]).toBe("Rp 177.111")
     // Cicilan bulanan vs mingguan: dua kolom terpisah berlabel frekuensi.
     expect(headers).toContain("Cicilan bulanan")
     expect(headers).toContain("Cicilan mingguan")

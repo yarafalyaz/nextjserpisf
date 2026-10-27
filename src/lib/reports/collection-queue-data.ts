@@ -18,6 +18,7 @@ import {
   type CollectionQueue,
 } from "@/lib/reports/collection-queue"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 
 export async function getCollectionQueue(
   options: { now?: Date } = {},
@@ -106,7 +107,7 @@ export async function getCollectionQueue(
   return buildCollectionQueue(
     invoices.map((invoice) => ({
       invoiceId: invoice.id,
-      documentNo: invoice.documentNo,
+      documentNo: salesInvoiceLabel(invoice),
       status: invoice.status,
       deletedAt: invoice.deletedAt,
       date: invoice.date,

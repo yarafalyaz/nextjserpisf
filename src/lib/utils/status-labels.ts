@@ -33,6 +33,10 @@ export const STATUS_LABELS: Record<string, string> = {
   delivered: "Terkirim",
   ordered: "Dipesan",
   cancelled: "Dibatalkan",
+  // F-2026-10-26-054-S: status penyesuaian gaji (lahir menunggu -> terjadwal
+  // sesudah disetujui -> diterapkan pada tanggal efektif).
+  scheduled: "Terjadwal",
+  applied: "Diterapkan",
   returned: "Dikembalikan",
   replaced: "Diganti",
   in_transit: "Dalam Perjalanan",
@@ -50,6 +54,13 @@ export const STATUS_LABELS: Record<string, string> = {
   posted: "Diposting",
   reversed: "Dibalik",
   reversing: "Sedang Dibalik",
+
+  // Subledger komisi per penerima (F-2026-10-25-049-S, status turunan server 049-V §3)
+  ACCRUED: "Terakru",
+  PARTIALLY_PAID: "Terbayar Sebagian",
+  PAID: "Lunas Terbayar",
+  REVERSED: "Dibalik Penuh",
+  OVERPAID_NEGATIVE: "Kelebihan Bayar (Saldo Negatif)",
 
   // Garansi (F-2026-10-21-021)
   intake: "Masuk",

@@ -18,6 +18,12 @@ vi.mock("@/actions/sales.actions", () => ({
   createSalesOrder: vi.fn(),
   updateSalesOrder: vi.fn(),
 }))
+vi.mock("@/actions/credit-override.actions", () => ({
+  getMyCreditOverrideStatus: vi.fn(),
+  approveCreditOverride: vi.fn(),
+  rejectCreditOverride: vi.fn(),
+  listCreditOverrides: vi.fn(),
+}))
 
 describe("SalesCustomerFormShell — a11y wiring", () => {
   it("uang muka: aria-label tambah + busy + pelanggan required", () => {

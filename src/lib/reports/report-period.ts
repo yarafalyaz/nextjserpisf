@@ -39,6 +39,26 @@ function pad(value: number) {
   return String(value).padStart(2, "0")
 }
 
+/**
+ * Benarkah (tahun, bulan 1–12, hari) tanggal kalender yang nyata?
+ *
+ * Konstruktor `Date` menggeser tanggal mustahil diam-diam (`2026-02-31`
+ * menjadi 3 Mar 2026), jadi hari wajib diperiksa terhadap jumlah hari
+ * bulan itu — termasuk kabisat — SEBELUM tanggal dibangun. Tanggal
+ * mustahil diperlakukan sama seperti bulan 13: ditolak ke fallback.
+ */
+function isValidCalendarDay(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) return false
+  return day <= new Date(year, month, 0).getDate()
+}
+
+/** Validasi string `YYYY-MM-DD`; bentuk lain diserahkan ke `parseReportPeriod`. */
+function isValidDateOnlyString(value: string): boolean {
+  const match = DAY.exec(value)
+  if (!match) return true
+  return isValidCalendarDay(Number(match[1]), Number(match[2]), Number(match[3]))
+}
+
 export function buildReportPeriodSlug(start: Date, end: Date): string {
   const sameDay = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth() && start.getDate() === end.getDate()
   if (sameDay) return `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`
@@ -81,6 +101,12 @@ export function parseReportPeriod(raw: string | undefined, fallback: { start: Da
     const from = DAY.exec(rangeParts[0])
     const to = DAY.exec(rangeParts[1])
     if (!from || !to) return fallbackPeriod()
+    if (
+      !isValidCalendarDay(Number(from[1]), Number(from[2]), Number(from[3])) ||
+      !isValidCalendarDay(Number(to[1]), Number(to[2]), Number(to[3]))
+    ) {
+      return fallbackPeriod()
+    }
     const start = new Date(Number(from[1]), Number(from[2]) - 1, Number(from[3]))
     const end = new Date(Number(to[1]), Number(to[2]) - 1, Number(to[3]))
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return fallbackPeriod()
@@ -89,6 +115,7 @@ export function parseReportPeriod(raw: string | undefined, fallback: { start: Da
 
   const day = DAY.exec(raw)
   if (day) {
+    if (!isValidCalendarDay(Number(day[1]), Number(day[2]), Number(day[3]))) return fallbackPeriod()
     const date = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
     if (Number.isNaN(date.getTime())) return fallbackPeriod()
     return { start: startOfDay(date), end: endOfDay(date), slug: buildReportPeriodSlug(date, date) }
@@ -182,10 +209,17 @@ export async function reportPeriodFromRoute(
   // (opname `date`, serapan `periode`) tidak diperlakukan begitu.
   const legacyRangeEnd = legacyEnd ?? (options.legacyParam ? undefined : toLocalDateOnly(new Date()))
 
+  // Tanggal mustahil pada tautan lama (mis. tanggalSelesai=2026-02-31)
+  // ditolak seperti bulan 13 — pasangan legacy gugur ke fallback, bukan
+  // bergeser diam-diam ke bulan berikutnya lewat konstruktor Date.
+  const legacyValid =
+    (!legacyStart || isValidDateOnlyString(legacyStart)) &&
+    (!legacyRangeEnd || isValidDateOnlyString(legacyRangeEnd))
+
   // Nilai legacy diteruskan apa adanya bila sudah berbentuk yang dikenali
   // parseReportPeriod (2026, 2026-10, 2026-10-13); rentang dua tanggal dirangkai
   // menjadi slug.
-  const legacyCandidate = legacyStart
+  const legacyCandidate = legacyStart && legacyValid
     ? legacyRangeEnd && legacyRangeEnd !== legacyStart
       ? buildReportPeriodSlug(parseLocalDateOnly(legacyStart), parseLocalDateOnly(legacyRangeEnd))
       : legacyStart

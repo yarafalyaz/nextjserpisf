@@ -41,6 +41,8 @@ const statusColors: Record<string, Tone> = {
   superseded: 'default',
   done: 'success',
   planned: 'default',
+  scheduled: 'accent',
+  applied: 'success',
   in: 'success',
   out: 'warning',
 }

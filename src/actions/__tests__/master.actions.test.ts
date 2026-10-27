@@ -67,7 +67,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock, Prisma: { PrismaClientKnownRequestError: class {} } }))
-vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
+vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a), hasPermission: vi.fn().mockResolvedValue(true) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
@@ -129,6 +129,10 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, permissions: ["manage_leads"], roles: ["super_admin"] })
+  // F-2026-10-25-042-V: updateItem membaca item tersimpan (penjaga scrap/
+  // default pajak); default mock = item non-scrap tanpa default supaya
+  // tes lama tidak bergantung urutan mockResolvedValueOnce.
+  mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: false, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: null })
 })
 
 describe("Customer Actions", () => {
@@ -286,6 +290,47 @@ describe("Item Actions", () => {
   it("deleteItem succeeds", async () => {
     const res = await actions.deleteItem(1)
     expect(res?.success).toBe(true)
+  })
+  // F-2026-10-25-042-V (vonis Q-ITX-1): default pajak per item.
+  it("createItem menyimpan default pajak sah + audit metadata", async () => {
+    mocks.prismaMock.tax.findUnique.mockResolvedValue({ id: 7, isActive: true, deletedAt: null })
+    const res = await actions.createItem(fdMap({ name: "Item Pajak", cost: "100", price: "200", defaultSalesTaxId: "7", defaultDppPercent: "50" }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.item.create.mock.calls[0][0].data
+    expect(data.defaultSalesTaxId).toBe(7)
+    expect(data.defaultPurchaseTaxId).toBeNull()
+    expect(data.defaultDppPercent).toBe(50)
+    expect(mocks.logActivityMock).toHaveBeenCalledWith("create", "Item", 1, "Membuat barang", {
+      defaultSalesTaxId: 7,
+      defaultPurchaseTaxId: null,
+      defaultDppPercent: 50,
+    })
+  })
+  it("createItem menolak scrap ber-default pajak (Putusan 5)", async () => {
+    const res = await actions.createItem(fdMap({ name: "Besi Tua", cost: "100", price: "200", isScrapSaleItem: "true", defaultDppPercent: "50" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/besi tua/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("createItem menolak persen DPP di luar 0-100 (Putusan 2)", async () => {
+    const res = await actions.createItem(fdMap({ name: "Item X", cost: "100", price: "200", defaultDppPercent: "101" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/0,00 dan 100,00/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("createItem menolak rujukan Tax nonaktif (fail-closed Putusan 3)", async () => {
+    mocks.prismaMock.tax.findUnique.mockResolvedValue({ id: 7, isActive: false, deletedAt: null })
+    const res = await actions.createItem(fdMap({ name: "Item X", cost: "100", price: "200", defaultSalesTaxId: "7" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/nonaktif/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("updateItem menolak scrap tersimpan + persen warisan tanpa field form", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ isScrapSaleItem: true, defaultSalesTaxId: null, defaultPurchaseTaxId: null, defaultDppPercent: 50 })
+    const res = await actions.updateItem(1, fdMap({ name: "Besi Tua", cost: "100", price: "200" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/besi tua/)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
   })
 })
 
@@ -1518,14 +1563,14 @@ describe('Coverage Hardening Edge Cases', () => {
 
   it('createEmployee - with wantsLogin existing user', async () => {
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Email sudah terdaftar")
   })
 
   it('createEmployee - with wantsLogin success', async () => {
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
-    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
     fd.append("loginRoleIds", "1")
     const res = await actions.createEmployee(fd)
     if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
@@ -1555,7 +1600,7 @@ describe('Coverage Hardening Edge Cases', () => {
   it('updateEmployee - wantsLogin email exists', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" }))
     expect(res?.success).toBe(false)
   })
 
@@ -1570,7 +1615,7 @@ describe('Coverage Hardening Edge Cases', () => {
   it('updateEmployee - wantsLogin success', async () => {
     mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
     mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
-    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "kata-sandi-pegawai-kuat" })
     fd.append("loginRoleIds", "1")
     const res = await actions.updateEmployee(1, fd)
     if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }

@@ -12,6 +12,8 @@ import {
 } from "@/components/reports/disciplinary-attention-card"
 import { DisciplinaryRecordsTable } from "@/components/reports/disciplinary-records-table"
 import { loadDisciplinaryAttention, loadDisciplinaryRecords } from "@/lib/reports/disciplinary-data"
+import { loadDisciplinaryDeductionDecisions } from "@/lib/reports/disciplinary-deduction-data"
+import { DisciplinaryDeductionDecisionsCard } from "@/components/reports/disciplinary-deduction-decisions-card"
 
 export const metadata: Metadata = { title: DISCIPLINARY_TITLE }
 
@@ -24,9 +26,11 @@ export const metadata: Metadata = { title: DISCIPLINARY_TITLE }
 export default async function DisciplinaryPage() {
   const user = await requirePermission("view_disciplinary_records")
   const scope = await getHrScope(user)
-  const [attention, records] = await Promise.all([
+  const canViewAmount = await hasPermission("view_payroll")
+  const [attention, records, decisions] = await Promise.all([
     loadDisciplinaryAttention(scope),
     loadDisciplinaryRecords(scope),
+    loadDisciplinaryDeductionDecisions(scope, canViewAmount),
   ])
   const canCreate = await hasPermission("create_disciplinary_records")
 
@@ -42,16 +46,25 @@ export default async function DisciplinaryPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">{DISCIPLINARY_TITLE}</h1>
         {canCreate ? (
-          <Link
-            href="/sdm/disiplin/tambah"
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
-          >
-            Pengajuan Baru
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/sdm/disiplin/tambah"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary-hover"
+            >
+              Pengajuan Baru
+            </Link>
+            <Link
+              href="/sdm/disiplin/keputusan"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
+            >
+              Catat Keputusan Potongan
+            </Link>
+          </div>
         ) : null}
       </div>
       <DisciplinaryAttentionCard attention={attention} />
       <DisciplinaryRecordsTable records={records} />
+      <DisciplinaryDeductionDecisionsCard decisions={decisions} />
     </div>
   )
 }
