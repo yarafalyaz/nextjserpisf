@@ -164,7 +164,7 @@ describe("buildDownPaymentVerificationQueue", () => {
       { now: NOW },
     )
     expect(queue.rows[0].jarakTeks).toBe(
-      "Ambang sudah tercapai (invoice dinilai mesin konfirmasi)",
+      "Ambang sudah tercapai (faktur dinilai mesin konfirmasi)",
     )
     expect(queue.rows[0].tingkat).toBe("menunggu")
   })

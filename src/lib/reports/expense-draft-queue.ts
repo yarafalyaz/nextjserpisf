@@ -60,7 +60,7 @@ export const EXPENSE_DRAFT_QUEUE_COLUMN_LABELS = {
   documentNo: "No. Dokumen",
   description: "Deskripsi",
   category: "Kategori",
-  vendor: "Vendor",
+  vendor: "Pemasok",
   project: "Proyek",
   claim: "Penanda Klaim",
   amount: "Nominal",
@@ -70,7 +70,7 @@ export const EXPENSE_DRAFT_QUEUE_COLUMN_LABELS = {
 } as const
 
 export const EXPENSE_DRAFT_QUEUE_NOTICE_TEXT =
-  "Daftar pengeluaran yang masih draft dan menunggu keputusan. Umur dihitung sejak dokumen dibuat. Daftar ini baca-saja; keputusan dilakukan lewat detail pengeluaran existing."
+  "Daftar pengeluaran yang masih draft dan menunggu keputusan. Umur dihitung sejak dokumen dibuat. Daftar ini baca-saja; keputusan dilakukan lewat detail pengeluaran yang ada."
 
 export const EXPENSE_DRAFT_QUEUE_EMPTY_TEXT =
   "Tidak ada pengeluaran draft yang menunggu persetujuan."

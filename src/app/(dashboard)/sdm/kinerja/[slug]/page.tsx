@@ -13,6 +13,12 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Detail Siklus Penilaian" }
 
+const CYCLE_STATUS_LABELS: Record<string, string> = {
+  draft: "Konsep",
+  active: "Aktif",
+  closed: "Ditutup",
+}
+
 const REVIEW_STATUS_LABELS: Record<string, string> = {
   draft: "Belum dinilai",
   self_submitted: "Menunggu atasan",
@@ -70,7 +76,7 @@ export default async function PerformanceCycleDetailPage({
       <div>
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">{cycle.name}</h1>
         <p className="text-sm text-muted-foreground">
-          {cycle.periodStart.toLocaleDateString("id-ID")} – {cycle.periodEnd.toLocaleDateString("id-ID")} · {cycle.status}
+          {cycle.periodStart.toLocaleDateString("id-ID")} – {cycle.periodEnd.toLocaleDateString("id-ID")} · {CYCLE_STATUS_LABELS[cycle.status] ?? "Status tidak dikenal"}
         </p>
       </div>
 

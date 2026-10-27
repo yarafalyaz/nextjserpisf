@@ -46,7 +46,7 @@ export type RecurringDueLevel = keyof typeof RECURRING_DUE_LEVEL_LABELS
 export const RECURRING_DUE_NEVER_RAN_LABEL = "belum pernah jalan"
 
 export const RECURRING_DUE_NOTICE_TEXT =
-  "Daftar ini hanya jadwal transaksi berulang aktif yang sudah jatuh tempo pada hari ini, termasuk yang terakhir gagal jalan. Umur dihitung sejak tanggal jadwal seharusnya jalan, bukan sejak kegagalan pertama. Jalankan atau perbaiki lewat halaman Transaksi Berulang existing."
+  "Daftar ini hanya jadwal transaksi berulang aktif yang sudah jatuh tempo pada hari ini, termasuk yang terakhir gagal jalan. Umur dihitung sejak tanggal jadwal seharusnya jalan, bukan sejak kegagalan pertama. Jalankan atau perbaiki lewat halaman Transaksi Berulang yang ada."
 
 const MS_PER_DAY = 86_400_000
 const FAILED_PREFIX = "Gagal:"

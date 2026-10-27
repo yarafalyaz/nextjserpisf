@@ -78,9 +78,9 @@ describe("VendorPaymentDraftQueueCard 072-F AC-VPQ-F1..F3", () => {
     root = rendered.root
     expectQueueCardTable(
       rendered.container,
-      "Pembayaran Vendor Draft Mengendap",
+      "Pembayaran Pemasok Draf Mengendap",
       VENDOR_PAYMENT_DRAFT_NOTICE_TEXT,
-      ["Menunggu", "No. Dokumen", "Vendor", "Nilai Draft", "Tanggal Bayar", "Tagihan Tujuan", "Dibuat Oleh"],
+      ["Menunggu", "No. Dokumen", "Pemasok", "Nilai Draft", "Tanggal Bayar", "Tagihan Tujuan", "Dibuat Oleh"],
       [
         "1 mengendap · 1 menunggu konfirmasi · 2 pembayaran draft — Rp 2.000.000 nilai draft belum dibayar",
         "Mengendap: 1",
@@ -153,7 +153,7 @@ describe("VendorPaymentDraftQueueCard 072-F AC-VPQ-F1..F3", () => {
     const queue = buildVendorPaymentDraftQueue([], NOW)
     const rendered = renderCard(<VendorPaymentDraftQueueCard queue={queue} />)
     root = rendered.root
-    expectQueueCardEmpty(rendered.container.textContent ?? "", "Tidak ada pembayaran vendor draft.")
+    expectQueueCardEmpty(rendered.container.textContent ?? "", "Tidak ada pembayaran pemasok Draf.")
     expectNoQueueButtons(rendered.container)
   })
 })

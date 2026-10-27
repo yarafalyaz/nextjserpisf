@@ -43,7 +43,7 @@ export const BANK_STATEMENT_DRAFT_MENGENDAP_MIN_DAYS = 3
 export const BANK_STATEMENT_DRAFT_QUEUE_LIMIT = 100
 
 /** Judul antrean verbatim Q-BSQ-2 — UI menempel apa adanya. */
-export const BANK_STATEMENT_DRAFT_QUEUE_TITLE = "Rekening Koran Draft Mengendap"
+export const BANK_STATEMENT_DRAFT_QUEUE_TITLE = "Rekening Koran Draf Mengendap"
 
 /** Label nominal verbatim BR-BSQ-05 — nominal header tercatat apa adanya. */
 export const BANK_STATEMENT_DRAFT_NOMINAL_LABEL = "tercatat di rekening koran"
@@ -63,7 +63,7 @@ export const BANK_STATEMENT_DRAFT_QUEUE_COLUMN_LABELS = {
 } as const
 
 export const BANK_STATEMENT_DRAFT_QUEUE_NOTICE_TEXT =
-  "Daftar rekening koran yang masih draft: belum ada baris, atau barisnya belum semua tercocokkan. Nominal tampil tercatat di rekening koran apa adanya dari dokumen. Daftar ini baca-saja; baris ditambah lewat detail rekening koran dan pencocokan dilakukan lewat rekonsiliasi bank existing."
+  "Daftar rekening koran yang masih draft: belum ada baris, atau barisnya belum semua tercocokkan. Nominal tampil tercatat di rekening koran apa adanya dari dokumen. Daftar ini baca-saja; baris ditambah lewat detail rekening koran dan pencocokan dilakukan lewat rekonsiliasi bank yang ada."
 
 export const BANK_STATEMENT_DRAFT_QUEUE_EMPTY_TEXT =
   "Tidak ada rekening koran draft yang mengendap."

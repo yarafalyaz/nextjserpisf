@@ -24,7 +24,7 @@ const LEVEL_TONES: Record<SalesInvoiceDraftLevel, "danger" | "default"> = {
   menunggu: "default",
 }
 
-const TITLE = "Faktur Draft Mengendap"
+const TITLE = "Faktur Draf Mengendap"
 
 /**
  * F-2026-10-26-057-S (057-F): antrean faktur penjualan draft mengendap.

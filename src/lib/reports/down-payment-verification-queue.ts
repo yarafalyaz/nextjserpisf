@@ -50,7 +50,7 @@ export type DpQueueLevel = (typeof DP_QUEUE_LEVELS)[number]
 
 /** Label tingkat — usulan spec §1 (kata final Q-DPQ-2 milik Lead). */
 export const DP_QUEUE_LEVEL_LABELS: Record<DpQueueLevel, string> = {
-  membuka_invoice: "Konfirmasi Membuka Invoice",
+  membuka_invoice: "Konfirmasi Membuka Faktur",
   menunggu: "Menunggu Verifikasi",
 }
 
@@ -58,7 +58,7 @@ export const DP_QUEUE_LEVEL_LABELS: Record<DpQueueLevel, string> = {
 export const DP_QUEUE_COLUMN_TITLES = {
   menunggu: "Menunggu",
   bukti: "Bukti",
-  jarakAmbang: "Jarak ke Ambang Invoice",
+  jarakAmbang: "Jarak ke Ambang Faktur",
 } as const
 
 export const DP_QUEUE_PROOF_LABELS = {
@@ -178,12 +178,12 @@ function buildJarakTeks(args: {
     return "Tanpa acuan ambang (grand total penawaran 0)"
   }
   if (args.confirmedSen >= args.ambangSen) {
-    return "Ambang sudah tercapai (invoice dinilai mesin konfirmasi)"
+    return "Ambang sudah tercapai (faktur dinilai mesin konfirmasi)"
   }
   if (args.potensiSen <= 0) {
     return "Cukup dengan konfirmasi baris ini"
   }
-  return "Belum mencapai ambang invoice"
+  return "Belum mencapai ambang faktur"
 }
 
 export function buildDownPaymentVerificationQueue(

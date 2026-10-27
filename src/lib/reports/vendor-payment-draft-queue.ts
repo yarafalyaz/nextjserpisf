@@ -45,7 +45,7 @@ export const VENDOR_PAYMENT_DRAFT_LEVEL_LABELS: Record<VendorPaymentDraftLevel, 
 /** Judul kolom verbatim Q-VPQ-2. */
 export const VENDOR_PAYMENT_DRAFT_COLUMN_LABELS = {
   documentNo: "No. Dokumen",
-  vendor: "Vendor",
+  vendor: "Pemasok",
   amount: "Nilai Draft",
   paymentDate: "Tanggal Bayar",
   vendorBill: "Tagihan Tujuan",

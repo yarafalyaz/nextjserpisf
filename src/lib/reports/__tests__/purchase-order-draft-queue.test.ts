@@ -100,7 +100,7 @@ describe("purchase-order-draft-queue (F-2026-10-26-060-S tahap 1, lapis aman)", 
     expect(PURCHASE_ORDER_DRAFT_QUEUE_TITLE_TEXT).toBe("Pesanan Pembelian Draft Mengendap")
     expect(PURCHASE_ORDER_DRAFT_COLUMN_LABELS).toEqual({
       documentNo: "No. Dokumen",
-      vendor: "Vendor",
+      vendor: "Pemasok",
       source: "Sumber",
       value: "Nilai Draft",
       expectedDate: "Rencana Terima",

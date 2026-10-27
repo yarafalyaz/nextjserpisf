@@ -9,6 +9,7 @@ import {
   DELIVERABLE_ORDER_STATUSES,
   DELIVERABLE_ORDER_STATUS_LABELS,
 } from "@/lib/validations/sales.schemas"
+import { statusLabel } from "@/lib/utils/status-labels"
 import {
   parsePrefillSegments,
   redirectLegacyPrefillQuery,
@@ -100,7 +101,7 @@ export default async function CreateSalesInvoicePage({
       defaultSalesOrderId = so.id
     } else {
       prefillNotice = so
-        ? `Pesanan Penjualan ${so.documentNo} berstatus ${so.status}; faktur hanya dibuat dari pesanan berstatus ${DELIVERABLE_ORDER_STATUS_LABELS}. Pilihan awal tidak dipakai.`
+        ? `Pesanan Penjualan ${so.documentNo} berstatus ${statusLabel(so.status)}; faktur hanya dibuat dari pesanan berstatus ${DELIVERABLE_ORDER_STATUS_LABELS}. Pilihan awal tidak dipakai.`
         : `Pesanan Penjualan #${wantedSalesOrderId} tidak ditemukan. Pilihan awal tidak dipakai.`
     }
   } else if (wantedQuotationId) {
@@ -114,7 +115,7 @@ export default async function CreateSalesInvoicePage({
       defaultCustomerId = so.customerId
     } else if (so) {
       prefillNotice =
-        `Penawaran ini sudah punya Pesanan Penjualan ${so.documentNo} berstatus ${so.status}; ` +
+        `Penawaran ini sudah punya Pesanan Penjualan ${so.documentNo} berstatus ${statusLabel(so.status)}; ` +
         `faktur dibuat sesudah pesanan berstatus ${DELIVERABLE_ORDER_STATUS_LABELS}. Pilihan awal tidak dipakai.`
     } else {
       // Penawaran belum punya pesanan (mis. Perintah Kerja yang lahir

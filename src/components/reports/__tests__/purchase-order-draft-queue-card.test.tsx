@@ -86,7 +86,7 @@ describe("PurchaseOrderDraftQueueCard 060-F AC-POQ-F1..F3", () => {
     expect(headers).toEqual([
       "Menunggu Persetujuan",
       "No. Dokumen",
-      "Vendor",
+      "Pemasok",
       "Sumber",
       "Nilai Draft",
       "Rencana Terima",
@@ -169,7 +169,7 @@ describe("PurchaseOrderDraftQueueCard 060-F AC-POQ-F1..F3", () => {
     const queue = buildPurchaseOrderDraftQueue([], NOW)
     const rendered = renderCard(<PurchaseOrderDraftQueueCard queue={queue} />)
     root = rendered.root
-    expect(rendered.container.textContent).toContain("Tidak ada pesanan pembelian draft.")
+    expect(rendered.container.textContent).toContain("Tidak ada pesanan pembelian Draf.")
     expectNoQueueButtons(rendered.container)
   })
 })

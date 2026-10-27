@@ -90,7 +90,7 @@ describe("JobReopenButton F-2026-10-21-009-V (UI reopen job closed)", () => {
     })
     expect(own).toHaveBeenCalledWith(c.id, c.trimmedReason)
     expect(other).not.toHaveBeenCalled()
-    expect(showSuccess).toHaveBeenCalledWith("Job dibuka kembali. Status kini completed.")
+    expect(showSuccess).toHaveBeenCalledWith("Job dibuka kembali. Status kini Selesai.")
     unmountCard(root)
   })
 

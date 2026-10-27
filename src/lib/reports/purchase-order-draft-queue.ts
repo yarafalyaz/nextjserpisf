@@ -51,7 +51,7 @@ export const PURCHASE_ORDER_DRAFT_QUEUE_TITLE_TEXT = "Pesanan Pembelian Draft Me
 /** Judul kolom. */
 export const PURCHASE_ORDER_DRAFT_COLUMN_LABELS = {
   documentNo: "No. Dokumen",
-  vendor: "Vendor",
+  vendor: "Pemasok",
   source: "Sumber",
   value: "Nilai Draft",
   expectedDate: "Rencana Terima",

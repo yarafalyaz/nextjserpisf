@@ -116,7 +116,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWareho
     { label: "Dasbor", href: "/" },
     { label: "Inventaris", href: "/inventaris" },
     { label: "Baris Rak", href: "/inventaris/baris-rak" },
-    { label: rackRow ? "Edit" : "Tambah" },
+    { label: rackRow ? "Ubah" : "Tambah" },
   ]
 
   return (
@@ -124,7 +124,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWareho
       <AppBreadcrumbs items={breadcrumbs} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">
-          {rackRow ? "Edit Baris Rak" : "Tambah Baris Rak"}
+          {rackRow ? "Ubah Baris Rak" : "Tambah Baris Rak"}
         </h1>
       </div>
 

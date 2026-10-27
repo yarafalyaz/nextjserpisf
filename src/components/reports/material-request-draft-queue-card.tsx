@@ -80,7 +80,7 @@ export function MaterialRequestDraftQueueCard({
         </>
       }
       isEmpty={rows.length === 0}
-      emptyText="Tidak ada permintaan material draft."
+      emptyText="Tidak ada permintaan material Draf."
       notice={MATERIAL_REQUEST_DRAFT_NOTICE_TEXT}
     >
       <div className="flex flex-col gap-4">

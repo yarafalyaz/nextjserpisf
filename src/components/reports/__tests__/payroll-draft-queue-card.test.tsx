@@ -147,7 +147,7 @@ describe("PayrollDraftQueueCard 070-F AC-PDQ-F1..F3", () => {
     const queue = buildPayrollDraftQueue([], NOW)
     const rendered = renderCard(<PayrollDraftQueueCard queue={queue} />)
     root = rendered.root
-    expect(rendered.container.textContent ?? "").toContain("Tidak ada slip gaji draft.")
+    expect(rendered.container.textContent ?? "").toContain("Tidak ada slip gaji Draf.")
     expect(rendered.container.querySelector("table")).toBeNull()
   })
 })

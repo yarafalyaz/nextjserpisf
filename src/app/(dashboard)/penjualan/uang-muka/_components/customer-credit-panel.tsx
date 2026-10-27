@@ -8,6 +8,7 @@ import {
   refundCustomerCredit,
 } from "@/actions/sales.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { statusLabel } from "@/lib/utils/status-labels"
 
 // Decimal Prisma diterima apa adanya (Number() di dalam) — hindari konversi
 // presisi di server hanya demi tipe props.
@@ -176,7 +177,7 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
         return (
           <div key={c.id} className="flex flex-col gap-2 rounded-lg border p-3">
             <div className="text-sm font-medium">
-              {c.documentNo} — sisa {saldo.toLocaleString("id-ID")} ({c.status})
+              {c.documentNo} — sisa {saldo.toLocaleString("id-ID")} ({statusLabel(c.status)})
             </div>
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col gap-1 text-xs">
