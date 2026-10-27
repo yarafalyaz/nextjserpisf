@@ -39158,3 +39158,13 @@ Edge cases:
 - Perubahan form tukar faktur existing (mis. dueDate wajib): mengubah perilaku catat existing, butuh bukti kebutuhan terpisah.
 
 F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen InvoiceExchange dueDate lampau, sisa belum lunas). Status: SPEC SELESAI run ini (dokumen saja); gerbang putusan Lead Q-IEX-1..3. Pemilik: Business (spec), Lead (putusan + merge), Backend (101-B sesudah putusan), Frontend (101-F sesudah kontrak), QA (101-Q falsifikasi).
+
+### RUJUKAN VONIS ACCOUNTANT 2026-10-27 — F-2026-10-27-110-V mengikat makna angka spec 101-S di atas (PR vonis #1182)
+
+Spec 101-S di atas menulis "Accountant tidak diminta tahap 1" — benar untuk jurnal/perlakuan pajak baru (tukar faktur tanpa jurnal, `invoice-exchange.actions.ts:40-46`). Makna ANGKA sisa dokumen tetap wilayah Accountant dan sudah divonis F-2026-10-27-110-V; 101-B/101-F wajib membaca spec + vonis ini bersama:
+
+1. Sisa antrean = **sisa serah operasional** (Σ snapshot `amount` beku saat serah − Σ `paidAmount` faktur tertaut), BUKAN saldo piutang dokumen/GL. Builder wajib menampilkan sisa faktur hidup (Σ `grandTotal` hidup − `paidAmount`) + penanda selisih verbatim server bila beda; selisih tampil sebagai temuan, tidak dipilih diam-diam.
+2. Faktur tertaut `cancelled`/terhapus/tertutup retur-kredit sesudah serah (mis. `voidSalesInvoice`: jurnal dibalik, `paidAmount=0`) masuk ember anomali EC-1: keluar dari total, tertanda terpisah, tidak pernah menyumbang status Lunas.
+3. Label pelunasan existing Lunas/Sebagian/Belum Dibayar SAH apa adanya (makna pelunasan faktur tertaut); kata piutang/utang/tunggakan untuk sisa dokumen DILARANG. Denda/bunga dari `dueDate` dokumen DILARANG — bukan syarat kredit faktur; denda sah hanya jalur vonis F-2026-10-22-093-V per faktur.
+
+Q-IEX-1/2/3 tetap putusan Lead. Falsifikasi QA tambahan: E-IEXA-1..3 di vonis 110-V (PR #1182).
