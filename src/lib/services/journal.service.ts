@@ -34,6 +34,17 @@ type PrismaLike = PrismaClient | Prisma.TransactionClient
 export const YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR =
   "Jurnal penutup tahun hanya boleh di-reversal lewat reversal penutup tahun (izin manage_settings), bukan reversal jurnal umum."
 
+/**
+ * TASK-025: jurnal lawan reversal (`referenceType: "Journal"`, POSTED) tidak
+ * boleh di-reverse lagi lewat jalur generik. Membaliknya memulihkan jurnal
+ * asal secara diam-diam: agregasi GL POSTED+REVERSED tetap benar, tetapi
+ * loader terfilter `referenceType` (mis. return-credit) kehilangan jurnal
+ * pemulih karena ber-referenceType "Journal" dan menyimpang diam-diam.
+ * Koreksi yang sah: posting ulang dokumen sumber atau jurnal koreksi manual.
+ */
+export const REVERSAL_JOURNAL_REVERSAL_ERROR =
+  "Jurnal reversal tidak boleh di-reverse lagi: jurnal ini adalah jurnal lawan (referenceType Journal). Posting ulang dokumen sumber atau buat jurnal koreksi manual sebagai gantinya."
+
 export class JournalService {
   constructor(private prisma: PrismaLike) {}
 
@@ -158,6 +169,10 @@ export class JournalService {
           throw new Error(
             `Journal ${original.journalNumber} tidak bisa dibalik (status: ${original.status})`,
           )
+        }
+
+        if (original.referenceType === 'Journal') {
+          throw new Error(REVERSAL_JOURNAL_REVERSAL_ERROR)
         }
 
         if (original.referenceType === YEAR_END_CLOSING_REFERENCE_TYPE) {

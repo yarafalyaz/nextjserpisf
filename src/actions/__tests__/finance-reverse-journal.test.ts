@@ -131,6 +131,32 @@ describe("reverseJournal", () => {
     expect(created.data.referenceId).toBe(7)
   })
 
+  it("TASK-025: menolak reversal atas jurnal reversal (referenceType Journal), nol jurnal ditulis", async () => {
+    journalFindUniqueOrThrowMock.mockResolvedValue({
+      id: 99,
+      status: "POSTED",
+      referenceType: "Journal",
+      referenceId: 7,
+      transactionDate: new Date("2026-06-15"),
+      journalNumber: "JRN-RV-0001",
+      description: "Reversal of JRN-202606-00007",
+      type: "GENERAL",
+      totalDebit: 1000,
+      totalCredit: 1000,
+      entries: [
+        { accountId: 100, debit: 0, credit: 1000, memo: "kas", costCenterId: null, profitCenterId: null },
+        { accountId: 200, debit: 1000, credit: 0, memo: "modal", costCenterId: null, profitCenterId: null },
+      ],
+    })
+
+    const result = await reverseJournal(99)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Jurnal reversal tidak boleh di-reverse lagi")
+    expect(journalCreateMock).not.toHaveBeenCalled()
+    expect(journalUpdateManyMock).not.toHaveBeenCalled()
+    expect(journalUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("rolls the tx back when the reversal body throws (atomic claim+reversal)", async () => {
     // The claim now lives INSIDE the same tx as the reversal: a tx failure
     // rolls both back atomically. No outer claim + compensating restore
