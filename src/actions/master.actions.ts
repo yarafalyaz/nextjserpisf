@@ -63,6 +63,7 @@ import {
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
+import { canViewSensitiveIdentity } from "@/lib/auth/field-visibility";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
   normalizeNitku,
@@ -73,6 +74,7 @@ import {
   isEmploymentEndReason,
   isEmploymentStatus,
 } from "@/lib/reports/employee-lifecycle";
+import { assertCanGrantRoles } from "@/lib/auth/role-grant";
 import { validateLeadLostTransition } from "@/lib/reports/lead-lost-reason";
 
 /**
@@ -108,38 +110,12 @@ function parseUomConversions(
 }
 
 /**
- * Privilege-escalation guard for Employee → User creation/sync flows.
- *
- * `createEmployee` and `updateEmployee` both let a caller mint a brand-new
- * login account (or sync roles onto an existing one) by submitting a list of
- * role IDs in the form. Without this guard, anyone holding `create_employees`
- * or `edit_employees` — even an HR manager with no role-management rights —
- * could pass the `super_admin` role ID and grant themselves (or anyone) full
- * system access, completely bypassing the
- * `assertNoSuperAdminGrant` gate that `auth.actions.ts` enforces for the
- * dedicated user-management path. That would defeat the principle of least
- * privilege and allow a single HR-permission holder to escalate to super admin
- * by editing a single employee record.
- *
- * Returns an error message when the assignment is disallowed, otherwise null.
- * Kept local to this file (not exported) on purpose: it is a server-action
- * helper and must not be reachable from client components.
+ * Privilege-escalation guard for Employee → User creation/sync flows is the
+ * shared `assertCanGrantRoles` (`@/lib/auth/role-grant`): the same subset
+ * check that guards the dedicated user-management path, so an HR-permission
+ * holder cannot mint or sync a role (super_admin, admin, or any other)
+ * carrying permissions beyond their own from the Employee form.
  */
-async function assertNoSuperAdminGrant(
-  actorRoles: string[],
-  roleIds: number[],
-): Promise<string | null> {
-  if (actorRoles.includes("super_admin")) return null;
-  if (roleIds.length === 0) return null;
-  const requested = await prisma.role.findMany({
-    where: { id: { in: roleIds } },
-    select: { name: true },
-  });
-  if (requested.some((r) => r.name === "super_admin")) {
-    return "Hanya super admin yang dapat memberikan role super admin";
-  }
-  return null;
-}
 
 /**
  * Target-escalation guard for Employee → User update flows.
@@ -153,7 +129,7 @@ async function assertNoSuperAdminGrant(
  *
  * Returns an error message when the modification is disallowed, otherwise
  * null. Resolves to null when `targetUserId` is null (employee has no login
- * account yet — the create path covers that case via `assertNoSuperAdminGrant`).
+ * account yet — the create path covers that case via `assertCanGrantRoles`).
  */
 async function assertCanModifyEmployeeTarget(
   actorRoles: string[],
@@ -1033,6 +1009,7 @@ function readEmployeeFormFields(
     dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
     departmentId: safeId(formData.get("departmentId")),
     positionId: safeId(formData.get("positionId")),
+    managerId: safeId(formData.get("managerId")),
     paymentFrequency:
       (formData.get("paymentFrequency") as string) || "MONTHLY",
     // Gaji pokok nominal uang: wajib parser repo — safeNumber/Number membaca
@@ -1163,6 +1140,53 @@ async function assertEmployeeRefsExist(fields: { departmentId: number | null; po
   }
 }
 
+// Field identitas sensitif: tanpa izin view_sensitive_identity nilai dari
+// form tidak boleh menimpa/mengisi kolom ini (server-side, bukan kosmetik UI).
+const SENSITIVE_IDENTITY_FIELDS = [
+  "idNumber",
+  "npwp",
+  "bankName",
+  "bankAccountNumber",
+  "bankAccountHolder",
+  "bpjsKetenagakerjaan",
+  "bpjsKesehatan",
+] as const;
+
+function stripSensitiveIdentity<T extends Record<string, unknown>>(data: T): T {
+  const out = { ...data };
+  for (const f of SENSITIVE_IDENTITY_FIELDS) delete out[f];
+  return out;
+}
+
+// Rantai atasan tidak boleh siklik: telusuri ke atas dari atasan yang dipilih;
+// bertemu karyawan itu sendiri (atau putaran yang sudah ada) = tolak.
+async function assertManagerChainAcyclic(
+  employeeId: number | null,
+  managerId: number | null,
+): Promise<string | null> {
+  if (managerId == null) return null;
+  if (employeeId != null && managerId === employeeId) {
+    return "Karyawan tidak dapat menjadi atasan bagi dirinya sendiri";
+  }
+  const seen = new Set<number>();
+  let cursor: number | null = managerId;
+  for (let i = 0; i < 64 && cursor != null; i++) {
+    if (employeeId != null && cursor === employeeId) {
+      return "Rantai atasan tidak boleh membentuk lingkaran";
+    }
+    if (seen.has(cursor)) break;
+    seen.add(cursor);
+    const row: { managerId: number | null } | null =
+      await prisma.employee.findUnique({
+        where: { id: cursor },
+        select: { managerId: true },
+      });
+    if (!row) return "Atasan tidak ditemukan";
+    cursor = row.managerId;
+  }
+  return null;
+}
+
 // ==================== EMPLOYEE ACTIONS ====================
 
 export async function createEmployee(formData: FormData) {
@@ -1184,6 +1208,11 @@ export async function createEmployee(formData: FormData) {
       const deptId = safeId(formData.get("departmentId"));
       if (deptId !== scope.departmentId) {
         throw new Error("Anda hanya diperbolehkan membuat data karyawan di departemen Anda sendiri.");
+      }
+    } else if (scope.kind === "team") {
+      const mgr = safeId(formData.get("managerId"));
+      if (mgr == null || !scope.memberIds.includes(mgr)) {
+        throw new Error("Anda hanya diperbolehkan membuat data karyawan di dalam tim Anda.");
       }
     }
 
@@ -1214,10 +1243,9 @@ export async function createEmployee(formData: FormData) {
         };
       }
       // Privilege-escalation guard: never let a non-super-admin mint a
-      // login account carrying the super_admin role from the Employee form.
-      // Mirrors `assertNoSuperAdminGrant` in auth.actions.ts so an HR-permission
-      // holder cannot bypass the dedicated user-management gate.
-      const grantErr = await assertNoSuperAdminGrant(actor.roles, loginRoleIds);
+      // login account carrying a role beyond their own permissions from the
+      // Employee form (shared subset check with the user-management path).
+      const grantErr = await assertCanGrantRoles(actor, loginRoleIds);
       if (grantErr) {
         return { success: false, error: grantErr };
       }
@@ -1226,13 +1254,18 @@ export async function createEmployee(formData: FormData) {
     const parsedDates = parseFormData(employeeDatesSchema, formData);
     if (!parsedDates.success) return { success: false, error: parsedDates.error };
 
-    const employeeData = {
+    const employeeDataRaw = {
       employeeNo,
       ...readEmployeeFormFields(formData, parsedDates.data),
       ...readEmployeeLifecycleFields(formData, parsedDates.data),
       joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
+    const managerErr = await assertManagerChainAcyclic(null, employeeDataRaw.managerId);
+    if (managerErr) return { success: false, error: managerErr };
+    const employeeData = (await canViewSensitiveIdentity())
+      ? employeeDataRaw
+      : stripSensitiveIdentity(employeeDataRaw);
     await assertEmployeeRefsExist(employeeData);
 
     // Create employee + (optionally) a linked login account atomically.
@@ -1302,6 +1335,14 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       if (newDeptId !== scope.departmentId) {
         throw new Error("Anda hanya diperbolehkan mengupdate data karyawan ke departemen Anda sendiri.");
       }
+    } else if (scope.kind === "team") {
+      if (!scope.memberIds.includes(employeeId)) {
+        throw new Error("Anda hanya diperbolehkan mengupdate data karyawan di dalam tim Anda.");
+      }
+      const mgr = safeId(formData.get("managerId"));
+      if (mgr != null && !scope.memberIds.includes(mgr)) {
+        throw new Error("Atasan harus berada di dalam tim Anda.");
+      }
     }
 
     // Optional: create a login account for an employee that does not have one yet.
@@ -1358,10 +1399,11 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       }
     }
 
-    // Privilege-escalation guard: block granting the super_admin role from the
-    // Employee form on BOTH the "create new login" and the "sync existing login"
-    // branches. Applies whenever role IDs are submitted, regardless of wantsLogin.
-    const grantErr = await assertNoSuperAdminGrant(actor.roles, loginRoleIds);
+    // Privilege-escalation guard: block granting any role beyond the actor's
+    // own permissions from the Employee form on BOTH the "create new login"
+    // and the "sync existing login" branches. Applies whenever role IDs are
+    // submitted, regardless of wantsLogin.
+    const grantErr = await assertCanGrantRoles(actor, loginRoleIds);
     if (grantErr) {
       return { success: false, error: grantErr };
     }
@@ -1415,12 +1457,18 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       lifecycleFields.leaveEligibilityStartDate =
         lifecycleFields.contractStartDate ?? todayWibMidnightDate();
     }
-    const updateData = {
+    const managerErr = await assertManagerChainAcyclic(employeeId, employeeFields.managerId);
+    if (managerErr) return { success: false, error: managerErr };
+
+    const updateDataRaw = {
       ...employeeFields,
       ...(lifecycleFields ?? {}),
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
       slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
+    const updateData = (await canViewSensitiveIdentity())
+      ? updateDataRaw
+      : stripSensitiveIdentity(updateDataRaw);
 
     await prisma.$transaction(async (tx) => {
       if (wantsLogin && email && loginPass) {
