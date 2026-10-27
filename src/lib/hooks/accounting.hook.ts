@@ -209,8 +209,17 @@ export async function reverseJournalsByReferenceTx(
   if (journals.length === 0) return;
 
   for (const j of journals) {
+    // REVERSED sudah punya jurnal lawan POSTED (referenceType "Journal").
+    // Lewati tanpa hapus: menghapus asli akan meninggalkan counterpart
+    // POSTED yatim sebelah di GL. Cabang ini harus konsisten dengan
+    // pemeriksaan existing-reversal di bawah — keduanya berarti
+    // "sudah direversal, jangan buat dan jangan hapus apa pun".
+    // Pemeriksaan status REVERSED yang lama berada sesudah cabang
+    // `!== POSTED` sehingga tak pernah tercapai (dead code) dan
+    // REVERSED justru terhapus.
+    if (j.status === "REVERSED") continue;
     if (j.status !== "POSTED") {
-      // Belum GL: hapus aman (dokumen sumber tetap ada).
+      // DRAFT (belum GL): hapus aman (dokumen sumber tetap ada).
       await tx.journalEntry.deleteMany({ where: { journalId: j.id } });
       await tx.journal.delete({ where: { id: j.id } });
       continue;
@@ -219,7 +228,7 @@ export async function reverseJournalsByReferenceTx(
       where: { referenceType: "Journal", referenceId: j.id },
       select: { id: true },
     });
-    if (existingReversal || (j as { status: string }).status === "REVERSED") continue;
+    if (existingReversal) continue;
 
     // Koreksi periode asal — tolak bila periode sudah dikunci.
     await assertPeriodOpen(j.transactionDate, tx);
