@@ -35328,6 +35328,19 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 
 F-2026-10-27-078-S — Daftar kesenjangan kompetensi lintas karyawan (jabatan vs aktual). Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-CGQ-1/2/3, lalu fisik Backend (078-B), konsumen Frontend (078-F sesudah #805 final), falsifikasi QA (078-Q). Pemilik usulan: Business (spec), Lead (ambang kritis/kata/urutan/penempatan), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila kelak dampak kompetensi ke gaji/promosi diusulkan (di luar spec ini, BR-CGQ-09/12).
 
+#### PUTUSAN LEAD Q-CGQ-1..8 (27 Okt 2026 10:19 WIB, kartu t_810fb4d8; PR spec #1093 MERGED 31a71149b; PR #805 MERGED 6b64c0efe — gerbang #805 final TERTUTUP)
+
+- Q-CGQ-1 DIPUTUS: penempatan = seksi turunan di halaman kompetensi existing sesudah #805 final (MERGED 6b64c0efe, halaman `sdm/kompetensi` ADA di main terverifikasi run ini); BUKAN laporan SDM mandiri, BUKAN halaman daftar mandiri tahap 1. Satu izin `view_competencies`, nol halaman kompetensi kedua.
+- Q-CGQ-2 DIPUTUS: penanda kritis DITERBITKAN sebagai tingkat pada baris `di-bawah-syarat`: gap >= 2 pada skala 1-5; satu konstanta bernama di builder (usulan nama `COMPETENCY_GAP_CRITICAL_MIN = 2` — nama final milik Backend, nilai tidak boleh berubah). Belum-dinilai TIDAK berpenanda kritis (bukan gap). Mengubah nilai/ambang di luar konstanta = MERAH (AC-CGQ-B5).
+- Q-CGQ-3 DIPUTUS: kata §1 disahkan verbatim — kolom `Karyawan`/`Jabatan`/`Kompetensi`/`Syarat`/`Aktual`/`Kesenjangan`/`Dinilai`; label ember `Belum Dinilai`/`Di Bawah Syarat`/`Memenuhi Syarat`; label kritis `Kritis`; notice §1 apa adanya. Satu konstanta label server. Urutan: ember `belum-dinilai` lalu `di-bawah-syarat`; dalam ember nama kompetensi naik, lalu nama karyawan naik; seri sama persis → id karyawan naik, lalu id kompetensi naik. TANPA urutan berdasar gap/level (BR-CGQ-08).
+- Q-CGQ-4 DIPUTUS: TIDAK ada nilai/nilai-ulang langsung dari daftar tahap 1 (BR-CGQ-06 final); satu-satunya jalan nilai = `assessEmployeeCompetency` di permukaan #805.
+- Q-CGQ-5 DIPUTUS: TIDAK ada antar-daftar ke pendaftaran pelatihan tahap 1 — tanpa tombol, tanpa tautan pendaftaran, tanpa auto-daftar (BR-CGQ-11); daftar murni peta kebutuhan.
+- Q-CGQ-6 DIPUTUS: TIDAK ada key izin baru tahap 1; loader WAJIB `view_competencies` DAN `view_employees` sebelum query + `getHrScope` fail-closed (BR-CGQ-04). Tanpa salah satu izin loader tidak dipanggil; nama tidak diturunkan lewat jalan lain termasuk rekap.
+- Q-CGQ-7 DIPUTUS: jabatan-tanpa-kandidat TIDAK tampil sebagai baris daftar/rekap tahap 1 (tidak dikarang gap nol-karyawan); karyawan berhenti/nonaktif (`isActive: false` atau `employmentEndedAt` terisi atau `deletedAt` terisi) TIDAK masuk populasi (§3 final).
+- Q-CGQ-8 DIPUTUS: ekspor TIDAK tahap 1; baris `memenuhi` rekap-saja (tidak tampil sebagai baris daftar); `assessedBy`/`notes` TIDAK masuk payload (BR-CGQ-10); persen cakupan TIDAK diterbitkan tahap 1 (bila kelak diputus: dari hitungan tertimbang populasi, bukan rata-rata persen kelompok).
+
+Vonis Accountant tidak diminta (nol nominal/gaji tahap 1, BR-CGQ-09/12). Gerbang Q-CGQ-1..8 TERTUTUP — turunan dibuka run ini: 078-B Backend (kartu anak kartu putusan ini), 078-F Frontend (parent 078-B; gerbang #805 final sudah tertutup), 078-Q QA (parent 078-B+078-F). ID F-* turunan dipesan Backend/Frontend/QA saat kartu dibuat, jangan dikarang di sini.
+
 ---
 
 ## SPEC BUSINESS 2026-10-27 — F-2026-10-27-079-S: antrean hasil pelatihan belum dicatat (pelatihan lewat jadwal belum ditutup + peserta selesai belum ber-hasil) (turunan baca-saja)
