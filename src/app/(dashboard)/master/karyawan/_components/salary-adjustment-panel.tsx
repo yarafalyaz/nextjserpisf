@@ -227,34 +227,36 @@ export function SalaryAdjustmentPanel(props: SalaryAdjustmentPanelProps) {
                         <td className="py-2">
                           {row.status === "menunggu" ? (
                             <div className="flex min-w-44 flex-col gap-2">
-                              <Button
-                                type="button"
-                                variant="primary"
-                                isDisabled={isPending || !canDecide}
-                                onClick={() => run(() => approveSalaryAdjustment(row.id), "Penyesuaian gaji disetujui; menunggu penerapan pada tanggal efektif")}
-                              >
-                                Setujui
-                              </Button>
-                              <div className="flex flex-col gap-1.5">
-                                <Label htmlFor={`salary-reject-reason-${row.id}`}>Alasan Penolakan</Label>
-                                <Input
-                                  id={`salary-reject-reason-${row.id}`}
-                                  value={rejectReasons[row.id] ?? ""}
-                                  onChange={(e) => setRejectReasons((p) => ({ ...p, [row.id]: e.target.value }))}
-                                />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                isDisabled={isPending || !canDecide || !(rejectReasons[row.id] ?? "").trim()}
-                                onClick={() => run(() => rejectSalaryAdjustment(row.id, rejectReasons[row.id] ?? ""), "Penyesuaian gaji ditolak")}
-                              >
-                                Tolak
-                              </Button>
-                              {!props.canApprove ? (
-                                <span className="text-xs text-muted-foreground">Memerlukan izin menyetujui penyesuaian gaji</span>
-                              ) : isRequester ? (
-                                <span className="text-xs text-muted-foreground">Pengaju tidak dapat memutus penyesuaian sendiri</span>
+                              {props.canApprove ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    isDisabled={isPending || !canDecide}
+                                    onClick={() => run(() => approveSalaryAdjustment(row.id), "Penyesuaian gaji disetujui; menunggu penerapan pada tanggal efektif")}
+                                  >
+                                    Setujui
+                                  </Button>
+                                  <div className="flex flex-col gap-1.5">
+                                    <Label htmlFor={`salary-reject-reason-${row.id}`}>Alasan Penolakan</Label>
+                                    <Input
+                                      id={`salary-reject-reason-${row.id}`}
+                                      value={rejectReasons[row.id] ?? ""}
+                                      onChange={(e) => setRejectReasons((p) => ({ ...p, [row.id]: e.target.value }))}
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="secondary"
+                                    isDisabled={isPending || !canDecide || !(rejectReasons[row.id] ?? "").trim()}
+                                    onClick={() => run(() => rejectSalaryAdjustment(row.id, rejectReasons[row.id] ?? ""), "Penyesuaian gaji ditolak")}
+                                  >
+                                    Tolak
+                                  </Button>
+                                  {isRequester ? (
+                                    <span className="text-xs text-muted-foreground">Pengaju tidak dapat memutus penyesuaian sendiri</span>
+                                  ) : null}
+                                </>
                               ) : null}
                               {props.canEdit ? (
                                 <Button

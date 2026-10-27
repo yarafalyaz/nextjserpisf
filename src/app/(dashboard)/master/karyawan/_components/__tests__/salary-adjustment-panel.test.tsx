@@ -212,14 +212,15 @@ describe("SalaryAdjustmentPanel — F-2026-10-26-054-S", () => {
     }
   })
 
-  it("tanpa izin approve: tombol Setujui/Tolak mati + petunjuk izin (fail-closed)", () => {
+  it("tanpa izin approve: blok putusan tidak dirender sama sekali (TEMUAN-2 PR #1079)", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     try {
       const root = renderPanel(container, el(base({ canApprove: false })))
-      expect(buttonsByText(container, "Setujui")[0].disabled).toBe(true)
-      expect(buttonsByText(container, "Tolak")[0].disabled).toBe(true)
-      expect(container.textContent).toContain("Memerlukan izin menyetujui penyesuaian gaji")
+      expect(buttonsByText(container, "Setujui")).toHaveLength(0)
+      expect(buttonsByText(container, "Tolak")).toHaveLength(0)
+      expect(container.querySelector("#salary-reject-reason-11")).toBeNull()
+      expect(container.textContent).not.toContain("Alasan Penolakan")
       disposePanel(root, container)
     } finally {
       container.remove()

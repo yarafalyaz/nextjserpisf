@@ -213,26 +213,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
   "src/actions/development.actions.ts::removeTrainingParticipant":
     "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
-  "src/actions/succession.actions.ts::setPositionCritical":
-    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
-  "src/actions/succession.actions.ts::upsertSuccessorCandidate":
-    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
-  "src/actions/succession.actions.ts::removeSuccessorCandidate":
-    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
-  "src/actions/succession.actions.ts::getSuccessionOverview":
-    "Muse K1 HCMS backend; UI suksesi menyusul (frontend t_daed387f)",
   // F-2026-10-26-054-S: 4 aksi penyesuaian gaji kini dirujuk panel
   // salary-adjustment-panel.tsx + page karyawan (PR #1079) — entri beku dibuang.
-  // F-2026-10-25-010-S inti backend (PR #954): 4 aksi koreksi absensi kini
-  // dirujuk UI /sdm/absensi/koreksi (frontend t_242267c0) — entri beku dibuang.
-  // F-2026-10-25-021-S tahap 1 backend: aksi catat jadwal servis berikutnya
-  // kini dirujuk UI (vehicle-service-schedule-form) — entri beku dibuang.
-  // F-2026-10-25-017-S: 3 aksi klaim reimbursement kini dirujuk UI
-  // (form klaim mandiri, daftar klaim saya, panel verifikasi keuangan;
-  // frontend t_f8d7b3d9) — entri beku dibuang.
-  // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
-  // (komponen customer-commission-rates di master kategori + loader histori
-  // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
   // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
   // menunggu UI pesan tertahan + permukaan persetujuan (frontend t_52903522);
   // entri beku dibuang saat UI tersambung.
