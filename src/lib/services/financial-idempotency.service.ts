@@ -16,6 +16,8 @@ export type IdemScope =
   | "sales_late_fee_issue"
   | "sales_late_fee_pay"
   | "sales_late_fee_reverse"
+  | "vendor_payment_reverse"
+  | "sales_payment_reverse"
   | "tax_invoice_issue"
   | "tax_invoice_dp_issue"
   | "tax_invoice_replace"
@@ -79,6 +81,8 @@ const EXPECTED_REF_TYPE: Record<IdemScope, string> = {
   sales_late_fee_issue: "SalesLateFee",
   sales_late_fee_pay: "SalesLateFeePayment",
   sales_late_fee_reverse: "SalesLateFee",
+  vendor_payment_reverse: "VendorPayment",
+  sales_payment_reverse: "SalesPayment",
   tax_invoice_issue: "TaxInvoice",
   tax_invoice_dp_issue: "TaxInvoice",
   tax_invoice_replace: "TaxInvoice",
