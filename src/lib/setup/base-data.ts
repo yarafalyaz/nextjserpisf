@@ -418,7 +418,6 @@ export const PERMISSIONS = [
       // Field-level masking (server-side): izin modul membuka record, izin
       // ini menentukan boleh melihat nilainya. view_subordinate_data menyala-
       // kan scope "tim" dari pohon organisasi (Employee.managerId).
-      "view_salary_amounts",
       "view_cost_amounts",
       "view_sensitive_identity",
       "view_subordinate_data",

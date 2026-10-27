@@ -69,7 +69,6 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   employee_loan_requests: "Pengajuan Pinjaman Karyawan",
   employee_reimbursements: "Klaim Reimbursement",
   employees: "Karyawan",
-  salary_amounts: "Nominal Gaji",
   cost_amounts: "Nilai HPP/Biaya",
   sensitive_identity: "Identitas Sensitif Karyawan",
   subordinate_data: "Data Bawahan",
