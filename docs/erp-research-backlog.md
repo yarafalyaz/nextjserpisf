@@ -39045,3 +39045,116 @@ ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
 - Menampilkan catatan `notes` operasi, kontak pelanggan, angka material/biaya/jam aktual tahap di daftar (BR-WOOQ-09/12) — pemakaian material sah tetap hanya `MaterialIssue` existing lewat halaman detail WO.
 - Mengganti halaman detail WO / progres tahap existing — antrean adalah permukaan turunan tambahan, bukan pengganti manajemen tahap per WO.
 F-2026-10-27-100-S — Antrean operasi perintah kerja pending/in_progress mengendap lintas WO. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-WOOQ-1/2/3/5, lalu fisik Backend (100-B), konsumen Frontend (100-F), falsifikasi QA (100-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/urutan/penempatan/scope-baca), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya (tanpa nominal); WAJIB bersyarat hanya bila kaitan nilai/denda dibuka (Q-WOOQ-6, BR-WOOQ-09).
+
+---
+
+## 2026-10-27 11:50 WIB — Business (x) F-2026-10-27-101-S antrean tukar faktur lewat batas kembali
+
+Benchmark resmi (akses 27 Okt 2026):
+- Accurate — fitur Tukar Faktur (tanda terima resmi penyerahan faktur, kolom Jatuh Tempo kesepakatan): https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/tukar-faktur/mengenal-fitur-tukar-faktur/
+- Accurate — umur piutang berdasarkan tanggal jatuh tempo Tukar Faktur pada laporan Faktur Belum Lunas (`salesInvoice.exchangeInvoiceDueDate`): https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/umur-piutang/
+- Zahir — artikel KB tukar faktur spesifik tidak ditemukan pada pencarian help.zahironline.com run ini (hanya pembayaran piutang umum); ditulis tidak terverifikasi, bukan dikarang.
+
+### Inventarisasi terverifikasi (27 Okt 2026, basis origin/main a1755940b)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `InvoiceExchange` (prisma/schema.prisma:1793): documentNo unik, date, customerId, receiptNumber nullable, dueDate nullable, deletedAt soft; `InvoiceExchangeItem` (:1820) amount snapshot grandTotal saat diserahkan.
+- Aksi `createInvoiceExchange` (src/actions/invoice-exchange.actions.ts:47): izin `create_invoice_exchanges` (:49), hanya faktur `EXCHANGEABLE_STATUSES=["posted","partial"]` (:22), faktur lunas ditolak (:89-97), satu faktur tidak boleh diserahkan dua kali (:107-115), tanpa jurnal (komentar :40-46).
+- Listing laporan per periode: `loadInvoiceExchanges` (src/lib/reports/invoice-exchanges-data.ts) + `buildInvoiceExchangeListing` (src/lib/finance/invoice-exchange.ts:67) — status pelunasan turunan dari paidAmount faktur (settled/partial/outstanding, :20-35), urutan tanggal dokumen terbaru. Ini daftar laporan per periode, BUKAN antrean kerja terurut batas kembali.
+- Izin katalog nyata: `view/create/delete_invoice_exchanges` (src/lib/auth/module-catalog.generated.ts:181-183).
+- Antrean penagihan piutang existing (F-2026-10-22-089-S + F-2026-10-26-050-S): builder `collection-queue.ts` berobjek SATU FAKTUR piutang per baris; dueDate exchange hanya dipakai sebagai due acuan faktur (BR-COL-03). Tidak ada permukaan berobjek dokumen tukar faktur.
+
+Belum ada (bukti grep run ini): builder/loader antrean dokumen `InvoiceExchange` yang dueDate-nya lampau dan sisa faktur terserahkan masih > 0, terurut lewat-batas; grep `invoice-exchange` di src/lib/reports hanya listing-data di atas.
+
+#### F-2026-10-27-101-S (x) P2 — Antrean tukar faktur lewat batas (dokumen belum kembali lunas)
+
+- Kompetitor: Accurate menampilkan umur piutang dari jatuh tempo Tukar Faktur (URL di atas) — acuan kerja penagihan per dokumen serah, bukan per faktur.
+- Status Silengkap: PARSIAL. Tukar faktur + listing ada; antrean kerja per dokumen tukar faktur ABSEN.
+- Relevansi: dokumen tukar faktur adalah tanda terima resmi di tangan pelanggan; dueDate dokumen lewat dan sisa belum lunas = janji serah-bayar lewat yang tenggelam di listing per periode. Admin penagihan butuh daftar kerja per dokumen (satu tanda terima, banyak faktur), bukan menyisir antrean per faktur.
+- Batas beda objek (wajib dijaga): antrean ini berobjek `InvoiceExchange` (dokumen); collection-queue berobjek `SalesInvoice` (faktur). Satu dokumen tukar faktur tampil SATU baris walau memuat banyak faktur; faktur yang sama tidak boleh tampil dua kali di antrean ini (penjaga existing satu-faktur-satu-serah aktif).
+
+##### §1 Kata dan label beku (usul, final Lead Q-IEX-2)
+
+Judul usul: "Tukar Faktur Lewat Batas". Kolom usul: Dokumen / Tanggal Serah / Pelanggan / Tanda Terima / Batas Kembali (dueDate dokumen) / Faktur (hitungan item) / Nilai Serah / Dibayar / Sisa. Kata "Batas Kembali" dipakai karena dueDate di form existing bernama jatuh tempo kesepakatan; dilarang label "utang", "tunggakan", "denda", "terlambat bayar" sebagai status dokumen — status pelunasan per dokumen hanya verbatim turunan existing `settled/partial/outstanding` berlabel Lunas/Sebagian/Belum Dibayar (invoice-exchange.ts:22-26) bila Lead menyetujui tampil.
+
+##### §2 Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-IEX-01 | Populasi: InvoiceExchange deletedAt null, dueDate tidak null dan < hari ini WIB, dan sisa dokumen (Σ amount item − Σ paidAmount faktur tertaut) > 0,005 mengikuti epsilon existing | USULAN (epsilon TERVERIFIKASI-KODE invoice-exchange.ts:29) |
+| BR-IEX-02 | Satu baris per dokumen tukar faktur; jumlah faktur = hitungan item dokumen itu; UI dilarang memecah per faktur | USULAN |
+| BR-IEX-03 | Nilai serah = Σ snapshot amount item; dibayar = Σ paidAmount faktur tertaut saat baca; sisa turunan server — UI nol hitung | USULAN (sumber angka TERVERIFIKASI-KODE invoice-exchanges-data.ts) |
+| BR-IEX-04 | Dokumen tanpa dueDate TIDAK masuk antrean lewat batas; masuk ember penanda terpisah "Tanpa batas kembali" tanpa umur karangan | USULAN |
+| BR-IEX-05 | Dokumen yang semua fakturnya lunas keluar populasi walau dueDate lampau | USULAN |
+| BR-IEX-06 | Baca-saja tahap 1: nol tombol catat bayar/tagih/hapus; tautan hanya ke detail tukar faktur existing dan faktur tertaut existing | USULAN |
+| BR-IEX-07 | Tanpa jurnal, tanpa ubah status faktur/dokumen, tanpa kolom tersimpan baru tahap 1 | USULAN (konsisten tanpa-jurnal TERVERIFIKASI-KODE invoice-exchange.actions.ts:40-46) |
+| BR-IEX-08 | Ambang "mengendap" tambahan di luar dueDate lampau (mis. >=N hari) TIDAK dikarang; dueDate lampau sendiri adalah pemicu tahap 1 | BUTUH-VONIS Lead Q-IEX-1 |
+| BR-IEX-09 | Izin baca usul reuse `view_invoice_exchanges`; key baru hanya bila Lead memutus | BUTUH-VONIS Lead Q-IEX-3 (key existing TERVERIFIKASI-KODE katalog:181) |
+| BR-IEX-10 | Urutan usul: dueDate paling lampau dulu, seri dueDate = documentNo naik; rekap total hanya atas baris tampil | USULAN |
+
+##### §3 Status-transition matrix (tahap 1, semua turunan — tanpa tulis)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| di luar antrean | dueDate dokumen lewat + sisa > epsilon | baris antrean | BR-IEX-01 |
+| baris antrean | pembayaran faktur tertaut menutup sisa | keluar antrean | BR-IEX-05, angka faktur existing |
+| baris antrean | dokumen dihapus (delete existing) | keluar antrean | BR-IEX-01 deletedAt null |
+| baris antrean | dueDate dikoreksi ke masa depan lewat jalur existing | dinilai ulang baca berikutnya | tanpa tulis dari antrean BR-IEX-06/07 |
+
+##### §4 Role/permission matrix
+
+| Aksi | Izin (key nyata) | Catatan |
+|---|---|---|
+| Lihat antrean | `view_invoice_exchanges` (usul Q-IEX-3) | loader fail-closed sebelum query |
+| Buat tukar faktur | `create_invoice_exchanges` existing | di luar antrean, halaman existing |
+| Hapus tukar faktur | `delete_invoice_exchanges` existing | di luar antrean tahap 1 |
+| Catat pembayaran | izin pembayaran faktur existing | bukan dari antrean (BR-IEX-06) |
+
+##### §5 Acceptance criteria
+
+Backend (sesudah putusan Lead):
+- AC-IEX-B1: dokumen dueDate kemarin + sisa > 0 tampil satu baris; dueDate hari ini/besok tidak tampil; tanpa dueDate masuk ember BR-IEX-04.
+- AC-IEX-B2: dokumen 3 faktur tampil 1 baris, hitungan faktur 3, sisa = Σ snapshot − Σ paidAmount; cabut pembacaan paidAmount = MERAH.
+- AC-IEX-B3: semua faktur lunas -> dokumen keluar walau dueDate lampau; dokumen terhapus tidak tampil.
+- AC-IEX-B4: tanpa izin loader ditolak sebelum query; nol tulis/jurnal dari loader (grep jalur tulis = MERAH bila ada).
+- AC-IEX-B5: urutan dueDate lampau dulu + seri documentNo; rekap hanya baris tampil.
+
+Frontend:
+- AC-IEX-F1: label/kolom/notice verbatim payload server; mutasi builder (sisa/urutan) tampil tanpa ubah UI.
+- AC-IEX-F2: nol kata terlarang §1; nol tombol aksi; tautan hanya detail existing.
+- AC-IEX-F3: dokumen tanpa dueDate tampil penanda server, tanpa umur karangan.
+
+Edge cases:
+- EC-1: faktur tertaut dihapus/dibatalkan sesudah serah — baris tertanda anomali terpisah, tidak masuk total (pola ember anomali antrean existing).
+- EC-2: dueDate = hari ini WIB persis — belum lewat (perbandingan hari kalender WIB).
+- EC-3: pembayaran parsial mengubah sisa tapi dokumen tetap tampil selama sisa > epsilon.
+- EC-4: receiptNumber kosong tampil "—" (pola listing existing), bukan karangan.
+
+##### §6 Feature matrix
+
+| Fitur | Accurate | Zahir | ISF tahap 1 |
+|---|---|---|---|
+| Tukar faktur + jatuh tempo dokumen | Ada (URL fitur) | Tidak terverifikasi run ini | Ada existing |
+| Umur dari jatuh tempo tukar faktur | Ada di Faktur Belum Lunas (URL laporan) | Tidak terverifikasi | Antrean ini (usul) |
+| Daftar kerja per dokumen lewat batas terurut | Sebagian via laporan | Tidak terverifikasi | Antrean ini (usul) |
+
+##### §7 Backlog turunan
+
+- 101-B Backend: builder murni + loader `view_invoice_exchanges` fail-closed, query massal anti-N+1 (dokumen+item+faktur), ember tanpa-dueDate + anomali EC-1. Effort S-M.
+- 101-F Frontend: halaman antrean verbatim payload, pola kartu antrean existing.
+- 101-Q QA: falsifikasi AC-IEX-B1..B5/F1..F3 atas head persis.
+
+##### §8 Pertanyaan putusan
+
+- Q-IEX-1 (Lead): pemicu cukup dueDate lampau, atau tambah ambang mengendap konstanta bernama?
+- Q-IEX-2 (Lead): sahkan kata §1 ("Tukar Faktur Lewat Batas", "Batas Kembali", label pelunasan tampil/tidak).
+- Q-IEX-3 (Lead): reuse `view_invoice_exchanges` vs gerbang ganda dengan izin penagihan.
+- Accountant tidak diminta tahap 1: nol jurnal, nol angka pajak/denda baru; angka sisa = turunan paidAmount existing.
+
+### Yang TIDAK diusulkan run ini
+
+- Antrean janji bayar per follow-up: sudah tercakup collection-queue tahap lewat_janji (F-089/050-S) — duplikasi ditolak.
+- Pengiriman pengingat otomatis ke pelanggan dari antrean ini: tahap 1 baca-saja; kanal kirim = keputusan terpisah.
+- Perubahan form tukar faktur existing (mis. dueDate wajib): mengubah perilaku catat existing, butuh bukti kebutuhan terpisah.
+
+F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen InvoiceExchange dueDate lampau, sisa belum lunas). Status: SPEC SELESAI run ini (dokumen saja); gerbang putusan Lead Q-IEX-1..3. Pemilik: Business (spec), Lead (putusan + merge), Backend (101-B sesudah putusan), Frontend (101-F sesudah kontrak), QA (101-Q falsifikasi).
