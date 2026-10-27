@@ -78,6 +78,10 @@ const CONTRACT_DECISION_STATUS_LABELS: Record<string, string> = {
   cancelled: "Dibatalkan",
 }
 import { EmployeePayrollComponents, type EmployeePayrollComponentRow } from "@/components/payroll/employee-payroll-components"
+import {
+  SalaryAdjustmentPanel,
+  type SalaryAdjustmentRow,
+} from "../_components/salary-adjustment-panel"
 
 import type { Metadata } from "next"
 
@@ -266,6 +270,32 @@ export default async function EmployeeDetailPage({
     rejectionReason: d.rejectionReason,
     createdAt: new Date(d.createdAt).toISOString(),
   }))
+
+  // F-2026-10-26-054-S: penyesuaian gaji (antrean persetujuan + riwayat).
+  // Payload nominal hanya dimuat untuk pemegang view_salary_amounts —
+  // tanpa izin, panel tidak dirender sama sekali (server juga menolak).
+  // Angka/status dari loader ditampilkan apa adanya; UI tidak menghitung.
+  const canViewSalary = await canViewSalaryAmounts()
+  const canEditSalary = canViewSalary && (await hasPermission("edit_employees"))
+  const canApproveSalary =
+    canViewSalary && (await hasPermission("approve_salary_adjustments"))
+  const salaryAdjustmentsResult = canViewSalary
+    ? await getSalaryAdjustments(employee.id).catch((error) => {
+        console.error("[Karyawan] Gagal memuat penyesuaian gaji", error)
+        return null
+      })
+    : null
+  const salaryAdjustmentRows: SalaryAdjustmentRow[] =
+    salaryAdjustmentsResult?.success && salaryAdjustmentsResult.data
+      ? salaryAdjustmentsResult.data
+      : []
+  const salaryAdjustmentsError = !canViewSalary
+    ? null
+    : salaryAdjustmentsResult === null
+      ? "Penyesuaian gaji tidak dapat dimuat."
+      : salaryAdjustmentsResult.success
+        ? null
+        : salaryAdjustmentsResult.error || "Penyesuaian gaji tidak dapat dimuat."
 
   return (
     <div className="flex flex-col gap-6">
@@ -567,6 +597,23 @@ export default async function EmployeeDetailPage({
                         components={fixedComponents}
                       />
                     )}
+                  </div>
+                )}
+                {canViewSalary && (
+                  <div className="border-t border-default p-4 px-5">
+                    <SalaryAdjustmentPanel
+                      employeeId={employee.id}
+                      rows={salaryAdjustmentRows}
+                      autoCancelledBerhenti={
+                        salaryAdjustmentsResult?.success
+                          ? salaryAdjustmentsResult.autoCancelledBerhenti
+                          : 0
+                      }
+                      loadError={salaryAdjustmentsError}
+                      canEdit={canEditSalary}
+                      canApprove={canApproveSalary}
+                      currentUserId={Number(sessionUser.id)}
+                    />
                   </div>
                 )}
               </div>
