@@ -40852,3 +40852,97 @@ AC-FIN-002 dinyatakan terpenuhi sisi penjualan bila: (i) PR #1233 merged (paymen
 | (tanpa ID baru) reversal DP pasca-konversi | Accountant (urutan jurnal/PPN) → Backend → Frontend → QA E118-8 | OPEN #1 + vonis |
 
 ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main 8a677bf1f). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status AC-FIN-002 hanya sesudah #1233 merged) → BOT Backend (void-faktur beralasan mengikuti pola #1233, tanpa duplikat payment) → BOT Frontend (dialog alasan wajib) → BOT QA (E118-1..8 atas head persis). Butuh putusan accountant: YA bersyarat — hanya urutan jurnal/PPN reversal DP terkonversi (BR-ACFIN2-08) dan keputusan nota kredit formal (BR-ACFIN2-09); syarat alasan/tautan/anti-hapus payment+faktur TIDAK menunggu vonis baru karena cermin FIN-BR-008 yang sudah divonis.
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-124-S: kontrak ambang DP→invoice tersnapshot + fallback 50% fail-closed (SAL-BR-007, AC-SAL-002/AC-SAL-003)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec). Dokumen spec saja; tanpa kode/schema/migrasi, tanpa vonis jurnal, tanpa merge. Basis `origin/main` `bb30bc1f4` (2026-10-28 03:01 WIB, fetch ulang run ini; tip bergerak dari `c0fea2087` selama run — baris kode di bawah diverifikasi pada `bb30bc1f4`). Kartu asal `t_09d21a15`.
+**Verifikasi ID:** grep `F-2026-10-28-124` di `docs/erp-research-backlog.md` + `docs/autonomous-board.md` pada `origin/main` = 0/0 sebelum tulis. Bebas.
+**Sumber tunggal:** `docs/product/INDEKS-ATURAN.md:107` SAL-BR-007 `Sebagian`; `:203` AC-SAL-002 `Sebagian`; `:204` AC-SAL-003 `Sebagian`; `:115` SAL-BR-015 (basis tertutup-terverifikasi, sisa OPEN ADR-003); `docs/product/TEST-STRATEGY.md:25,44` (P0 faktur/pembayaran; DP draft/gagal tidak dihitung).
+
+### 1. Putusan ringkas
+
+Kontrak ambang DP→invoice **sudah terpasang dan sudah teruji** di main — spec ini membekukan kontraknya sebagai satu dokumen acuan (sumber tunggal untuk QA/Backend/Frontend), bukan meminta implementasi ulang. Yang tersisa bukan kode ambang, melainkan: (a) cakupan falsifikasi QA E124 atas head persis (terutama mutasi penjaga yang belum tentu tertangkap tes berjalan), (b) reversal DP pasca-konversi yang tetap OPEN di ADR-003 (vonis Accountant, di luar spec ini), (c) penerbitan status indeks lewat PR implementasi/verifikasi — spec ini TIDAK mengubah status `Sebagian` di INDEKS-ATURAN.
+
+### 2. Inventarisasi terverifikasi (TERVERIFIKASI-KODE, basis bb30bc1f4)
+
+| Klaim | Bukti file:baris |
+|---|---|
+| Snapshot persen per quotation, nullable | `prisma/schema.prisma:1514-1518` `Quotation.invoiceThresholdPercent Decimal?`; sumber master `prisma/schema.prisma:542` `CustomerCategory.downPaymentPercent Decimal @default(0.00)` |
+| Snapshot ditulis SEKALI saat quotation dibuat, dari kategori pelanggan | `src/actions/sales.actions.ts:202-216` helper lokal `resolveInvoiceThresholdPercent(tx, customerId)` (tak ditemukan/0/negatif/>100 → `null`); dipanggil `src/actions/sales.actions.ts:262` di `createQuotation` |
+| Revisi/edit quotation TIDAK menulis ulang snapshot | `reviseQuotation` `src/actions/sales.actions.ts:492-499` hanya update `status`+`revisionNumber`; `updateQuotation` (mulai `:628`) tanpa `invoiceThresholdPercent` di seluruh badan update (grep run ini = 0 kemunculan) — ganti pelanggan saat edit pun tidak mengambil ulang persen kategori |
+| Helper ambang murni + fallback | `src/lib/sales/invoice-threshold.ts:17` `DEFAULT_INVOICE_THRESHOLD_PERCENT = 50`; `:28-31` sah bila finite `>0 && <=100`; `:38-49` `resolveInvoiceThresholdPercent` (sah dipakai; kosong `null/undefined/0` → 50 diam; korup lain → 50 + `onInvalid`); `:51-54` `computeInvoiceThresholdSen = ceil(grandTotalSen × persen / 100)`; `:57-62` label sumber verbatim |
+| DP CONFIRMED-only dihitung | `src/lib/hooks/down-payment.hook.ts:628-631` `findMany({ quotationId, status: SalesStatus.CONFIRMED })`; kumulatif sen integer `:633-637`; basis `grandTotalSen = round(quotation.grandTotal × 100)` `:637` |
+| Ambang dibaca dari snapshot quotation, bukan master berjalan | `src/lib/hooks/down-payment.hook.ts:641-645` `resolveInvoiceThresholdPercent(Number(quotation.invoiceThresholdPercent), onInvalid=log fail-closed 50%)` lalu `computeInvoiceThresholdSen` |
+| Tepat di ambang → satu faktur PENUH lahir DRAFT | `:648` `totalVerifiedSen >= thresholdSen`; `:652-671` `salesInvoice.create` nilai penuh quotation (`grandTotal`/`totalAmount = quotation.grandTotal`), `status: "draft"`, `paymentStatus: "partial"`, `paidAmount: 0`, `documentNo: null` (nomor resmi saat posting) |
+| Satu faktur saja / DP lanjutan tidak melahirkan faktur kedua | `:123-125` `existingInv = salesInvoice.findFirst({ quotationId, status != cancelled })`; bila ada → jalur alokasi SalesPayment ke faktur existing (`:139+`), bukan create; kunci baris quotation `FOR UPDATE` `:92`; guard DP sudah CONFIRMED return diam `:99-101` |
+| DP pemicu ditandai CONFIRMED sebelum kumulatif dihitung (bila belum ada faktur) | `:132-137` `downPayment.update status=CONFIRMED`, lalu jatuh ke alur pembuatan |
+| Tes hidup ambang (sudah ada, jangan duplikasi) | `src/lib/hooks/__tests__/down-payment-threshold.test.ts` (bawah ambang tanpa faktur; tepat 50%; draft tak dihitung + assert filter `status: "confirmed"`; snapshot 30%/29%/100%; snapshot korup 150 → 50 + log; faktur `status:"draft"`); `src/lib/sales/__tests__/invoice-threshold.test.ts` (helper: sah/kosong/korup/ceil/label verbatim) |
+
+Catatan pembeda dari klaim basi: angka "50%" di kode BUKAN konstanta konversi — ia hanya nilai `DEFAULT_INVOICE_THRESHOLD_PERCENT` yang dipakai bila snapshot kosong/korup. Ambang berjalan = snapshot per quotation. Menulis "invoice terbit saat DP 50%" sebagai aturan bisnis = SALAH.
+
+### 3. Kontrak ambang (business rules register)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SAL124-01 | Ambang konversi = `ceil(grandTotal quotation (sen) × persen efektif / 100)`; faktur lahir bila kumulatif DP `CONFIRMED` (sen integer per baris `round(amount×100)`) `>=` ambang. Basis adalah `grandTotal` dokumen quotation itu sendiri (sudah termasuk diskon/pajak pembentuknya), bukan DPP/basis terpisah. | TERVERIFIKASI-KODE (§2) |
+| BR-SAL124-02 | Persen efektif = snapshot `Quotation.invoiceThresholdPercent` yang disalin dari `CustomerCategory.downPaymentPercent` pelanggan saat quotation DIBUAT. Mengubah master kategori sesudahnya tidak mengubah quotation berjalan. | TERVERIFIKASI-KODE |
+| BR-SAL124-03 | Snapshot kosong (`null`, quotation lama/pelanggan tanpa kategori sah) → fallback 50% tanpa log korup. Snapshot korup (di luar `>0..<=100`, non-finite) → fallback 50% + log `fail-closed 50%`. Fallback tidak pernah menaikkan ambang di atas 50 dan tidak pernah memakai nilai korup apa adanya. | TERVERIFIKASI-KODE |
+| BR-SAL124-04 | Revisi quotation (`sent → draft`, `revisionNumber+1`) dan edit quotation tidak menulis ulang snapshot persen — walau pelanggan diganti saat edit. Persen yang berlaku seumur quotation = persen saat dibuat. Mengubah ambang quotation berjalan hanya sah lewat quotation baru. | TERVERIFIKASI-KODE (perilaku terbaca); penegasan "hanya quotation baru" = USULAN |
+| BR-SAL124-05 | Hanya DP berstatus `CONFIRMED` yang dihitung. DP draft/cancelled/gagal tidak menaikkan kumulatif, berapa pun nominalnya. | TERVERIFIKASI-KODE |
+| BR-SAL124-06 | Faktur hasil konversi = faktur PENUH senilai `grandTotal` quotation, lahir `draft` tanpa nomor dokumen; pembuatan ≠ posting (stok/pendapatan/HPP/jurnal faktur terjadi di jalur posting terpisah). Tepat satu faktur non-cancelled per quotation dari jalur ini; DP berikutnya dialokasikan sebagai pembayaran ke faktur itu. | TERVERIFIKASI-KODE |
+| BR-SAL124-07 | Pembulatan: ambang dibulatkan KE ATAS ke sen (`ceil`); perbandingan `>=` — kumulatif tepat sama dengan ambang SUDAH melahirkan faktur. | TERVERIFIKASI-KODE |
+| BR-SAL124-08 | Reversal/pembatalan DP sesudah konversi (faktur sudah lahir) TIDAK diatur spec ini — OPEN ADR-003, menunggu vonis Accountant (urutan perlakuan faktur konversi, jurnal terima DP, PPN uang muka). Dilarang mengarang jalur reversal dari spec ini. | BUTUH-VONIS Accountant |
+
+### 4. Workflow + status-transition (ringkas)
+
+Aktor: sistem (hook konfirmasi DP) atas pemicu konfirmasi DP oleh pengguna berizin jalur DP existing; tanpa aksi/permission baru dari spec ini.
+
+| Status awal | Pemicu | Penjaga | Status akhir |
+|---|---|---|---|
+| DP `draft`, belum ada faktur non-cancelled utk quotation | konfirmasi DP | DP ditandai `CONFIRMED`; kumulatif CONFIRMED `<` ambang snapshot | DP `CONFIRMED`; WO/SO/Project boleh lahir; faktur TIDAK lahir |
+| sama | konfirmasi DP | kumulatif CONFIRMED `>= ceil(grandTotal × persen efektif)` | tepat 1 faktur penuh `draft`; DP terkonversi teralokasi ke faktur |
+| faktur konversi `draft` sudah ada | konfirmasi DP berikutnya | faktur existing non-cancelled ditemukan | tidak ada faktur kedua; DP dialokasikan sbg pembayaran faktur existing |
+| DP sudah `CONFIRMED` | konfirmasi/retry ulang | guard idempotensi | tidak berubah; nol faktur/pembayaran ganda |
+| snapshot kosong/korup | penilaian ambang | helper fail-closed | persen efektif 50 (korup: + log); kontrak lain identik |
+
+### 5. Matriks kasus + falsifikasi QA (E124, atas head implementasi/verifikasi persis)
+
+Jalankan dulu regresi hidup §2 apa adanya; E124 menilai penjaga lewat mutasi satu titik. Mutasi ke berkas lain = tidak membuktikan apa-apa.
+
+| ID | Kasus | Hasil wajib | Falsifikasi (satu mutasi → MERAH) |
+|---|---|---|---|
+| E124-1 | Kumulatif CONFIRMED tepat = ambang (snapshot 30%, grandTotal Rp1.000, DP 300) | tepat 1 faktur penuh `draft` | ubah `>=` jadi `>` di `down-payment.hook.ts:648` → tes "snapshot 30%" MERAH |
+| E124-2 | DP draft Rp999 + CONFIRMED Rp1, snapshot 100% | faktur TIDAK lahir; query kumulatif menyaring `status: CONFIRMED` | cabut filter status di `:629` → tes "DP draft/batal tidak dihitung" MERAH |
+| E124-3 | Master kategori diubah 30%→80% sesudah quotation dibuat (snapshot 30%), DP 30% | faktur lahir pada 30% (snapshot), bukan 80% (master) | ganti sumber persen hook dari `quotation.invoiceThresholdPercent` ke master berjalan → tes snapshot 30% MERAH |
+| E124-4 | Revisi + edit quotation (termasuk ganti pelanggan berkategori lain) sesudah snapshot 30% | snapshot tetap 30; ambang tidak berubah | tambah tulis `invoiceThresholdPercent` di `updateQuotation`/`reviseQuotation` → snapshot berubah, tes baru QA atas edit MERAH (celah cakupan: tes edit-snapshot belum ada — QA buat) |
+| E124-5 | DP kedua melampaui ambang sesudah faktur lahir; lalu retry konfirmasi DP sama | tetap 1 faktur; alokasi tidak ganda | cabut cek `existingInv` `:123-125` → faktur kedua lahir, MERAH |
+| E124-6 | Snapshot korup (150 / -5 / non-numerik), DP 30% dari grandTotal | faktur TIDAK lahir; log memuat `fail-closed 50%`; persen efektif 50 bukan nilai korup | buat helper mengembalikan snapshot korup apa adanya → tes "snapshot korup 150" + `invoice-threshold.test.ts` korup MERAH |
+| E124-7 | Snapshot kosong (quotation lama), DP tepat 50% | faktur lahir (fallback 50 diam, tanpa log korup) | perlakukan `null` sebagai 0/tanpa ambang → perilaku berubah, MERAH |
+| E124-8 | Ambang pecahan sen: grandTotal Rp1, persen 33% | ambang 33 sen (`ceil`); DP 32 sen tidak lahir, 33 sen lahir | ganti `ceil` jadi `floor`/`round` di `invoice-threshold.ts:53` → tes ceil helper MERAH |
+| E124-9 | Faktur konversi yang lahir | `status=draft`, nilai = `grandTotal` penuh quotation, `documentNo=null`; posting TIDAK terpanggil oleh konversi | paksa `status:"posted"`/panggil posting di create `:652-671` → assert `status:"draft"` + `onSalesInvoicePosted` tak terpanggil MERAH |
+
+Celah cakupan jujur: E124-4 (edit/revisi tidak menulis ulang snapshot) belum punya regresi hidup yang ditunjuk run ini — itu satu-satunya butir kontrak tanpa tes bernama; sisanya terpetakan ke tes §2.
+
+### 6. Batas eksplisit
+
+1. **Reversal DP pasca-konversi = OPEN ADR-003** (`docs/product/ADRs/ADR-003-dp-50-percent-conversion.md`, dipersempit oleh ADR-007): vonis Accountant; spec ini tidak menetapkan urutan jurnal/PPN/faktur pengganti apa pun (BR-SAL124-08).
+2. **Status indeks tidak berubah oleh spec ini.** SAL-BR-007/AC-SAL-002/AC-SAL-003 tetap `Sebagian` di INDEKS-ATURAN sampai PR implementasi/verifikasi (hasil E124 atas head persis) merged — loop tertutup pola entri lain.
+3. Spec ini tidak meminta kode baru untuk ambang; bila QA menemukan E124 merah atas head berjalan, temuan itu = kartu Backend terpisah (pemilik berikutnya), bukan edit kode dari lane Business.
+
+### 7. Yang TIDAK diusulkan run ini
+
+- Persen ambang per-quotation yang bisa diedit manual per dokumen — snapshot dari kategori adalah kontrak berjalan (BR-SAL124-02/04); override per dokumen = keputusan bisnis baru, bukan kebutuhan terbukti.
+- Ambang bertingkat (faktur parsial per tahap DP) — faktur penuh DRAFT adalah kontrak terverifikasi; faktur parsial = model dokumen berbeda, YAGNI.
+- Mengganti fallback 50 dengan "tolak konversi" — fallback mempertahankan perilaku quotation lama; mengubahnya mematahkan quotation warisan tanpa vonis.
+
+### 8. Backlog turunan (rekomendasi tertulis di komentar kartu asal — kartu TIDAK dibuat run ini)
+
+| Urutan | Pemilik usulan | Isi | Effort | Prasyarat |
+|---|---|---|---|---|
+| 1 | QA | Jalankan E124-1..9 atas head main persis; buat tes edit-snapshot E124-4 | S | spec ini merged |
+| 2 | Accountant → Backend | Vonis ADR-003 reversal DP pasca-konversi, lalu implementasi mengikuti vonis | M | ADR-003 |
+| 3 | Lead | Terbitkan status SAL-BR-007/AC-SAL-002/AC-SAL-003 di INDEKS-ATURAN menunjuk spec ini + hasil E124 | S | E124 hijau di head persis |
+
+ID spec ini **F-2026-10-28-124-S** (SAL-BR-007 + AC-SAL-002/AC-SAL-003; basis origin/main bb30bc1f4). Pemilik berikutnya: BOT QA (E124) → BOT Accountant (ADR-003, di luar ambang) → BOT Lead (status indeks sesudah bukti merged). Butuh putusan accountant: YA hanya untuk reversal DP pasca-konversi (BR-SAL124-08/ADR-003); kontrak ambang sendiri TIDAK menunggu vonis baru karena sudah terpasang + teruji.
