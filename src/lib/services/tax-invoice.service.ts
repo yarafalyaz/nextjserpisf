@@ -607,6 +607,15 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
     }
     const fp = payloadFingerprint({ scope: SCOPE_CREDIT, id: input.id, creditPeriod: input.creditPeriod })
     let isReplay = false
+    // B4: status `expired` adalah FAKTA yang harus tersimpan, bukan bagian
+    // dari transaksi yang gagal. Menulisnya lalu `throw` di dalam
+    // $transaction membuat rollback membuang status itu — faktur tertinggal
+    // `uncredited` selamanya. Jadi cabang expired TIDAK melempar di dalam
+    // transaksi: status ditulis, transaksi commit, baru error dikembalikan
+    // ke pemanggil sesudahnya. Klaim idempotency sengaja tidak di-bind pada
+    // jalur ini — retry dengan key baru menilai ulang dan menerima error
+    // expired yang sama, bukan sukses replay palsu.
+    let expiredError: string | undefined
     await prisma.$transaction(async (tx) => {
       const claim = await claimIdempotencyKey(tx as never, SCOPE_CREDIT, input.idempotencyKey, input.userId, fp)
       if (claim.replayed) {
@@ -627,7 +636,8 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
       if (!check.eligible) {
         if (check.reason === "expired") {
           await tx.taxInvoice.update({ where: { id: inv.id }, data: { creditStatus: "expired" } })
-          throw definitive(`Masa kredit ${input.creditPeriod} lewat jendela 3 masa dari ${inv.taxPeriod} — faktur expired`)
+          expiredError = `Masa kredit ${input.creditPeriod} lewat jendela 3 masa dari ${inv.taxPeriod} — faktur expired`
+          return
         }
         throw definitive(`Masa kredit ${input.creditPeriod} sebelum masa faktur ${inv.taxPeriod}`)
       }
@@ -648,6 +658,7 @@ export async function creditInputInvoice(input: CreditInputInvoiceInput): Promis
       })
       await bindIdempotencyKey(tx as never, input.idempotencyKey, "TaxInvoice", inv.id)
     })
+    if (expiredError) return { success: false, error: expiredError, ambiguous: false }
     return { success: true, replayed: isReplay, id: input.id }
   } catch (e) {
     return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) }

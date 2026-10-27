@@ -47,6 +47,27 @@ import {
   type ContractDecisionRow,
   type ProbationMilestoneRow,
 } from "../_components/probation-contract-panel"
+import { canViewSalaryAmounts } from "@/lib/auth/field-visibility"
+import { getSalaryAdjustments } from "@/actions/salary-adjustment.actions"
+import {
+  CancelSalaryAdjustmentButton,
+  SalaryAdjustmentForm,
+} from "./_components/salary-adjustment-form"
+
+const SALARY_REASON_LABELS: Record<string, string> = {
+  berkala: "Kenaikan Berkala",
+  promosi: "Promosi",
+  umk: "Penyesuaian UMK/UMP",
+  kinerja: "Kinerja",
+  penyesuaian: "Penyesuaian Struktur",
+  lainnya: "Lainnya",
+}
+
+const SALARY_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Terjadwal",
+  applied: "Diterapkan",
+  cancelled: "Dibatalkan",
+}
 
 const CONTRACT_DECISION_STATUS_LABELS: Record<string, string> = {
   draft: "Draf",
@@ -57,6 +78,10 @@ const CONTRACT_DECISION_STATUS_LABELS: Record<string, string> = {
   cancelled: "Dibatalkan",
 }
 import { EmployeePayrollComponents, type EmployeePayrollComponentRow } from "@/components/payroll/employee-payroll-components"
+import {
+  SalaryAdjustmentPanel,
+  type SalaryAdjustmentRow,
+} from "../_components/salary-adjustment-panel"
 
 import type { Metadata } from "next"
 
@@ -79,6 +104,7 @@ export default async function EmployeeDetailPage({
           include: {
             department: true,
             position: true,
+            manager: { select: { name: true } },
             user: {
               include: {
                 roles: true,
@@ -96,6 +122,7 @@ export default async function EmployeeDetailPage({
           include: {
             department: true,
             position: true,
+            manager: { select: { name: true } },
             user: {
               include: {
                 roles: true,
@@ -150,6 +177,21 @@ export default async function EmployeeDetailPage({
   // sempit (tanpa nominal) hanya untuk merender nilai tersimpan.
   const canEditProbation = await hasPermission("edit_employees")
   const canApproveContracts = await hasPermission("approve_contracts")
+  // Riwayat kenaikan gaji: nominal hanya turun ke pemegang izin nominal
+  // gaji; tanpa izin, panel dan angka tidak dirender sama sekali.
+  const canSeeSalary = await canViewSalaryAmounts()
+  const salaryHistory = canSeeSalary
+    ? await getSalaryAdjustments(employee.id)
+    : null
+  const salaryRows: {
+    id: number
+    effectiveDate: string
+    previousBaseSalary: number
+    newBaseSalary: number
+    changePercent: number | null
+    reason: string
+    status: string
+  }[] = salaryHistory?.success ? salaryHistory.data : []
   // Baca RSC probation tunduk pada scope HR yang sama dengan aksi server
   // (assertHrEmployeeAccess + hrScopeWhere/hrEmployeeScopeWhere). Di luar
   // scope: ulasan + opsi penilai dikosongkan, bukan bocor semua karyawan.
@@ -229,6 +271,32 @@ export default async function EmployeeDetailPage({
     createdAt: new Date(d.createdAt).toISOString(),
   }))
 
+  // F-2026-10-26-054-S: penyesuaian gaji (antrean persetujuan + riwayat).
+  // Payload nominal hanya dimuat untuk pemegang view_salary_amounts —
+  // tanpa izin, panel tidak dirender sama sekali (server juga menolak).
+  // Angka/status dari loader ditampilkan apa adanya; UI tidak menghitung.
+  const canViewSalary = await canViewSalaryAmounts()
+  const canEditSalary = canViewSalary && (await hasPermission("edit_employees"))
+  const canApproveSalary =
+    canViewSalary && (await hasPermission("approve_salary_adjustments"))
+  const salaryAdjustmentsResult = canViewSalary
+    ? await getSalaryAdjustments(employee.id).catch((error) => {
+        console.error("[Karyawan] Gagal memuat penyesuaian gaji", error)
+        return null
+      })
+    : null
+  const salaryAdjustmentRows: SalaryAdjustmentRow[] =
+    salaryAdjustmentsResult?.success && salaryAdjustmentsResult.data
+      ? salaryAdjustmentsResult.data
+      : []
+  const salaryAdjustmentsError = !canViewSalary
+    ? null
+    : salaryAdjustmentsResult === null
+      ? "Penyesuaian gaji tidak dapat dimuat."
+      : salaryAdjustmentsResult.success
+        ? null
+        : salaryAdjustmentsResult.error || "Penyesuaian gaji tidak dapat dimuat."
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -264,10 +332,11 @@ export default async function EmployeeDetailPage({
                   <DetailField label="NIP" value={employee.employeeNo} mono />
                   <DetailField label="Departemen" value={employee.department?.name || "-"} />
                   <DetailField label="Jabatan" value={employee.position?.name || "-"} />
+                  <DetailField label="Atasan Langsung" value={employee.manager?.name || "-"} />
                   <DetailField label="Email" value={employee.email || "-"} />
                   <DetailField label="Telepon" value={employee.phone || "-"} />
                   <DetailField label="Tanggal Masuk" value={formatDate(employee.joinDate)} />
-                  <DetailField label="Gaji Pokok" value={formatCurrency(Number(employee.baseSalary))} />
+                  <DetailField label="Gaji Pokok" value={canSeeSalary ? formatCurrency(Number(employee.baseSalary)) : "••••••"} />
                   <DetailField label="Peran (Akun)" value={
                     employee.user
                       ? employee.user.roles.map(r => r.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).join(", ") || "-"
@@ -284,6 +353,54 @@ export default async function EmployeeDetailPage({
                   <DetailField label="Tanggal Berhenti Bekerja" value={employee.employmentEndedAt ? formatDate(employee.employmentEndedAt) : "-"} />
                   <DetailField label="Alasan Berhenti" value={employmentEndReasonLabel(employee.endReason) ?? "-"} />
                 </DetailCard>
+
+                {canSeeSalary && (
+                  <DetailSection title="Riwayat Kenaikan Gaji">
+                    <div className="flex flex-col gap-4">
+                      <CanCreate permission="edit_employees">
+                        <SalaryAdjustmentForm employeeId={employee.id} />
+                      </CanCreate>
+                      {salaryRows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Belum ada catatan kenaikan gaji.</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-default">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-default bg-surface-secondary text-left">
+                                <th className="px-4 py-3 font-medium">Efektif</th>
+                                <th className="px-4 py-3 font-medium">Dari</th>
+                                <th className="px-4 py-3 font-medium">Menjadi</th>
+                                <th className="px-4 py-3 font-medium">Perubahan</th>
+                                <th className="px-4 py-3 font-medium">Alasan</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {salaryRows.map((r) => (
+                                <tr key={r.id} className="border-b border-default last:border-0">
+                                  <td className="px-4 py-3">{formatDate(new Date(r.effectiveDate))}</td>
+                                  <td className="px-4 py-3">{formatCurrency(r.previousBaseSalary)}</td>
+                                  <td className="px-4 py-3">{formatCurrency(r.newBaseSalary)}</td>
+                                  <td className="px-4 py-3">{r.changePercent != null ? `${r.changePercent > 0 ? "+" : ""}${r.changePercent}%` : "-"}</td>
+                                  <td className="px-4 py-3">{SALARY_REASON_LABELS[r.reason] ?? r.reason}</td>
+                                  <td className="px-4 py-3">{SALARY_STATUS_LABELS[r.status] ?? r.status}</td>
+                                  <td className="px-4 py-3">
+                                    {r.status === "scheduled" ? (
+                                      <CancelSalaryAdjustmentButton id={r.id} />
+                                    ) : (
+                                      "-"
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </DetailSection>
+                )}
 
                 {/* Sisa Cuti Tahunan (tahun berjalan) */}
                 <DetailSection title={`Saldo Cuti Tahunan ${leaveQuota.year}`}>
@@ -480,6 +597,23 @@ export default async function EmployeeDetailPage({
                         components={fixedComponents}
                       />
                     )}
+                  </div>
+                )}
+                {canViewSalary && (
+                  <div className="border-t border-default p-4 px-5">
+                    <SalaryAdjustmentPanel
+                      employeeId={employee.id}
+                      rows={salaryAdjustmentRows}
+                      autoCancelledBerhenti={
+                        salaryAdjustmentsResult?.success
+                          ? salaryAdjustmentsResult.autoCancelledBerhenti
+                          : 0
+                      }
+                      loadError={salaryAdjustmentsError}
+                      canEdit={canEditSalary}
+                      canApprove={canApproveSalary}
+                      currentUserId={Number(sessionUser.id)}
+                    />
                   </div>
                 )}
               </div>
