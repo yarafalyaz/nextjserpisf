@@ -93,6 +93,7 @@ export const navigation: NavItem[] = [
       { label: "Antrean Penawaran Diterima", href: "/penjualan/antrean-penawaran-diterima", icon: ListTodo, permission: "view_quotations" },
       { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
       { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, permission: "view_down_payments" },
+      { label: "Antrean Verifikasi Uang Muka", href: "/penjualan/antrean-verifikasi-uang-muka", icon: ListTodo, permission: "view_down_payments" },
       { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, permission: "view_sales_orders" },
       { label: "Antrean Janji Kirim", href: "/penjualan/antrean-janji-kirim", icon: ListTodo, permission: "view_sales_orders" },
       { label: "Surat Jalan", href: "/penjualan/surat-jalan", icon: Truck, permission: "view_delivery_orders" },
