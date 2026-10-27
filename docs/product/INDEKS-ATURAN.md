@@ -73,7 +73,7 @@ perilaku, bukan hanya keberadaan file/model.
 | INV-BR-010 | Belum | belum ditelusur — jalur reversal/retur/adjustment khusus stok posted tidak ditunjuk di sini |
 | INV-BR-011 | Sebagian | prisma/schema.prisma:2560 — `StockAdjustment` ada; kelengkapan alasan/approver/waktu belum ditelusur per field |
 | INV-BR-012 | Belum | belum ditelusur — guard anti movement ganda khusus posting stok tidak ditunjuk di sini |
-| INV-BR-013 | Belum | belum ditelusur — larangan hapus ledger oleh pengguna operasional tidak ditunjuk di sini |
+| INV-BR-013 | Terpasang | src/actions/purchase.actions.ts:2290 — `deleteGoodsReceipt` menolak GR non-draft (GR terverifikasi memposting `StockMove` posted di src/lib/hooks/goods-receipt.hook.ts:424) dan `deletePurchaseOrder` menolak PO ber-GR non-draft, sehingga ledger posted tidak terhapus fisik; jalur koreksinya retur pembelian. Pola sama: `deleteStockAdjustment`/`deleteInventoryTransfer`/`deleteMaterialIssue` hanya draft. Dikunci test `INV-BR-013 larangan hapus ledger posted` di src/actions/__tests__/purchase.actions.test.ts |
 | INV-BR-014 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` ada sebagai referensi pemakaian material |
 | INV-BR-015 | Sebagian | prisma/schema.prisma:3870 — `Remnant`; klasifikasi return reusable/remnant/scrap: `src/lib/services/scrap-classification.ts:8`, alur return-nya belum ditelusur |
 
