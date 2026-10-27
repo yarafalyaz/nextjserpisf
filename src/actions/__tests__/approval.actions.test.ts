@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     approvalHistory: buildModelMock(),
     purchaseRequest: buildModelMock(),
     expense: buildModelMock(),
+    payroll: buildModelMock(),
     role: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
@@ -488,5 +489,27 @@ describe("Next.js redirect error handling", () => {
     for (const { fn } of fnsToTest) {
       await expect(fn()).rejects.toThrow(redirectErr);
     }
+  });
+});
+
+describe("TASK-018 (2) gerbang statutori jalur approval generik", () => {
+  it("approveStep langkah akhir Payroll menolak slip fallback 2024", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({
+      statutorySnapshot: { fromFallback: true },
+    });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("cadangan (2024)");
+    expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStep langkah akhir Payroll bersih tetap mengubah status dokumen", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
+    });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.payroll.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 9 }, data: expect.objectContaining({ status: "approved" }) }),
+    );
   });
 });
