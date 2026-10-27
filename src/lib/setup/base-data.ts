@@ -410,6 +410,12 @@ export const PERMISSIONS = [
       // Approval permissions terpisah dari edit_* (Separation of Duties).
       "approve_vendor_payments",
       "approve_purchase_returns",
+      // Field-level masking (server-side): izin modul membuka record, izin
+      // ini menentukan boleh melihat nilainya. view_subordinate_data menyala-
+      // kan scope "tim" dari pohon organisasi (Employee.managerId).
+      "view_cost_amounts",
+      "view_sensitive_identity",
+      "view_subordinate_data",
       // F-2026-10-25-012-S: menyelesaikan retur penjualan (stok+jurnal)
       // wajib izin khusus ini; edit_sales_returns saja tidak cukup.
       // Grant mengikuti pola approve_purchase_returns: hanya admin/
@@ -615,6 +621,7 @@ export const GA_WHITELIST = [
       "create_succession",
       "edit_succession",
       "delete_succession",
+      "view_sensitive_identity",
       "view_departments",
       "view_positions",
       // F-2026-10-25-005-S DISC-B1 Q-DISC-2: pemetaan default-aman fase 1 —
@@ -626,6 +633,7 @@ export const GA_WHITELIST = [
 
 export const KABENG_WHITELIST = [
       "view_dashboard",
+      "view_cost_amounts",
       "view_recruitments",
       "view_performance",
       "edit_performance",
@@ -788,6 +796,8 @@ export const FINANCE_WHITELIST = [
       "create_employee_reimbursements",
       "edit_expenses",
       "approve_expenses",
+      "view_cost_amounts",
+      "view_sensitive_identity",
       "delete_expenses",
       "view_petty_cash",
       "create_petty_cash",

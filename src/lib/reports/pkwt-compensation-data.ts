@@ -54,16 +54,16 @@ export async function getPkwtCompensationReport(
   const lineScopeWhere =
     scope.kind === "all"
       ? {}
-      : {
-          payroll:
-            scope.kind === "self"
-              ? { employeeId: scope.employeeId }
-              : scope.kind === "team"
-                ? { employeeId: { in: scope.memberIds } }
+      : scope.kind === "team"
+        ? { payroll: { employeeId: { in: scope.memberIds } } }
+        : {
+            payroll:
+              scope.kind === "self"
+                ? { employeeId: scope.employeeId }
                 : scope.departmentId == null
                   ? { employeeId: scope.employeeId }
                   : { employee: { departmentId: scope.departmentId } },
-        }
+          }
 
   const [events, accrualAgg, paidLines, glRows, pendingSlips] = await Promise.all([
     prisma.pkwtCompensationEvent.findMany({

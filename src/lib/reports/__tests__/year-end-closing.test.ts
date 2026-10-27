@@ -116,15 +116,62 @@ describe("buildYearEndClosingPreview", () => {
     expect(r.balanced).toBe(true)
   })
 
-  it("jurnal DRAFT/REVERSED dan akun neraca tidak ikut saldo", () => {
+  it("jurnal DRAFT dan akun neraca tidak ikut saldo; pasangan REVERSED+POSTED neto nol", () => {
     const r = preview([
       entry({ journalStatus: "DRAFT", credit: 9_000_000 }),
+      // Pasangan yang sudah direversal: asli REVERSED (kredit) + lawan POSTED
+      // (debit) pada akun yang sama harus neto nol — bukan salah satu saja.
       entry({ journalStatus: "REVERSED", credit: 8_000_000 }),
+      entry({ journalStatus: "POSTED", debit: 8_000_000, credit: 0 }),
       entry({ accountId: 9, accountCode: "1103", accountName: "Piutang Usaha", accountType: "ASSET", debit: 7_000_000, credit: 0 }),
       entry({ credit: 100_000 }),
     ])
     expect(r.lines).toHaveLength(1)
     expect(r.netProfit).toBe(100_000)
+  })
+
+  it("REVERSED + counterpart menghasilkan neto nol di closing (tidak ada entri sebelah)", () => {
+    // Skenario TASK-014: jurnal pendapatan sudah direversal di tahun yang
+    // sama. Loader lama hanya POSTED → hanya lawan debit 1jt yang dihitung,
+    // menghasilkan baris penutup kredit 1jt yatim. Keduanya (POSTED+REVERSED,
+    // REPORT_JOURNAL_STATUSES) harus neto nol.
+    const r = preview([
+      entry({ journalStatus: "REVERSED", credit: 1_000_000 }),
+      entry({ journalStatus: "POSTED", debit: 1_000_000, credit: 0 }),
+    ])
+    expect(r.lines).toEqual([])
+    expect(r.retainedLines).toEqual([])
+    expect(r.netProfit).toBe(0)
+    expect(r.totalDebit).toBe(0)
+    expect(r.totalCredit).toBe(0)
+    expect(r.balanced).toBe(true)
+  })
+
+  it("REVERSED expense + counterpart juga neto nol per profitCenter", () => {
+    const r = preview([
+      entry({
+        accountId: 2,
+        accountCode: "600001",
+        accountName: "Beban Gaji",
+        accountType: "EXPENSE",
+        journalStatus: "REVERSED",
+        debit: 400_000,
+        credit: 0,
+      }),
+      entry({
+        accountId: 2,
+        accountCode: "600001",
+        accountName: "Beban Gaji",
+        accountType: "EXPENSE",
+        journalStatus: "POSTED",
+        debit: 0,
+        credit: 400_000,
+      }),
+      entry({ credit: 250_000 }),
+    ])
+    // Hanya pendapatan 250rb yang tersisa untuk ditutup.
+    expect(r.lines).toHaveLength(1)
+    expect(r.netProfit).toBe(250_000)
   })
 
   it("saldo nol tidak menghasilkan baris; akun tujuan kosong = belum dipetakan", () => {
@@ -159,13 +206,13 @@ describe("getYearEndClosingPreview", () => {
     mocks.prismaMock.journal.findFirst.mockResolvedValue(null)
   })
 
-  it("loader massal: hanya POSTED dalam tahun fiskal, akun tujuan belum dipetakan", async () => {
+  it("loader massal: POSTED+REVERSED dalam tahun fiskal, akun tujuan belum dipetakan", async () => {
     const r = await getYearEndClosingPreview(2026)
     expect(mocks.prismaMock.journalEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           journal: expect.objectContaining({
-            status: "POSTED",
+            status: { in: ["POSTED", "REVERSED"] },
             transactionDate: { gte: new Date("2026-04-01T00:00:00.000Z"), lte: new Date("2027-03-31T23:59:59.999Z") },
           }),
         }),
