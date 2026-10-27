@@ -3,8 +3,8 @@ import {
   DP_QUEUE_LEVEL_LABELS,
   buildDownPaymentVerificationQueue,
   type DownPaymentQueueDpInput,
-  type DownPaymentQueueQuotationInput,
 } from "../down-payment-verification-queue"
+import { dpQueueDp, dpQueueQuotation } from "./down-payment-verification-queue-fixtures"
 
 /**
  * F-2026-10-26-051-S builder — AC-DPQ-1..10 / EC-DPQ-1..8 (lapis builder).
@@ -12,36 +12,10 @@ import {
  */
 const NOW = new Date("2026-10-25T20:00:00.000Z")
 
-function dp(
+const dp = (
   partial: Partial<DownPaymentQueueDpInput> & { downPaymentId: number },
-): DownPaymentQueueDpInput {
-  return {
-    documentNo: `DP-${partial.downPaymentId}`,
-    quotationId: 1,
-    customerId: 7,
-    customerName: "CV Uji",
-    amount: 10_000_000,
-    paymentDate: new Date("2026-10-25T00:00:00.000Z"),
-    paymentMethod: "transfer",
-    adaBukti: true,
-    status: "draft",
-    createdAt: new Date("2026-10-25T20:00:00.000Z"), // hari ini WIB
-    ...partial,
-  }
-}
-
-function quotation(
-  partial: Partial<DownPaymentQueueQuotationInput> = {},
-): DownPaymentQueueQuotationInput {
-  return {
-    quotationId: 1,
-    quotationDocumentNo: "Q-001",
-    quotationStatus: "accepted",
-    grandTotal: 100_000_000,
-    invoiceThresholdPercent: 50,
-    ...partial,
-  }
-}
+) => dpQueueDp(partial)
+const quotation = dpQueueQuotation
 
 describe("buildDownPaymentVerificationQueue", () => {
   it("AC-DPQ-1: draft hari ini bukti ada potensi>0 = menunggu, umur 0 dari createdAt bukan paymentDate", () => {

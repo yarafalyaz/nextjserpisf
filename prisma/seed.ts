@@ -204,6 +204,7 @@ async function main() {
       );
     }
     console.log(`✅ National holidays ensured (${NATIONAL_HOLIDAYS.length} entries)`);
+
     // Create system settings
     await conn.query(
       `INSERT IGNORE INTO system_settings (id, company_name, company_email, costing_method, fiscal_year_start_month, currency_code, currency_symbol, created_at, updated_at)
