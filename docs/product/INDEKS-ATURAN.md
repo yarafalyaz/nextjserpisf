@@ -127,7 +127,7 @@ perilaku, bukan hanya keberadaan file/model.
 | FIN-BR-007 | Sebagian | prisma/schema.prisma:1981 — `SalesPayment` ada; isolasi pembayaran draft/gagal belum ditelusur |
 | FIN-BR-008 | Belum | belum ditelusur — reversal pembayaran dengan histori asal tidak ditunjuk di sini |
 | FIN-BR-009 | Belum | belum ditelusur — laporan aging hutang/piutang tidak ditunjuk di sini (aging WIP di laporan lain bukan bukti aging AP/AR) |
-| FIN-BR-010 | OPEN-keputusan | Keputusan scope double-entry terbuka di sumber. Fakta repo: jurnal double-entry ada — `prisma/schema.prisma:4221` (`Journal`) dan `prisma/schema.prisma:4254` (`JournalEntry`). Keberadaan jurnal bukan penutupan keputusan scope/laporan formal |
+| FIN-BR-010 | Tertutup-terverifikasi | Scope double-entry tertutup oleh ADR-006 + vonis Accountant kartu t_9e202412 (28 Okt 2026, butir 1: TERTUTUP-terverifikasi; sisa hanya administratif dokumen ini). Bukti: `JournalService.createJournal` menolak jurnal tak balance/negatif/nol/debit+kredit sekaligus, status lahir `POSTED`, isolasi Serializable (`src/lib/services/journal.service.ts:57-71,73-84,100-140`); reversal jurnal lawan bertanggal asal + asal `REVERSED`, non-POSTED/lawan ganda ditolak (`src/lib/services/journal.service.ts:147-235`); `Journal`/`JournalEntry` Decimal(15,2), `journalNumber @unique`, `activeReferenceKey` unik (`prisma/schema.prisma:4221-4272`); period lock `assertPeriodOpen` dibaca `FOR UPDATE` dalam transaksi (`src/lib/services/period-lock.service.ts:20-47`); laporan formal (neraca, laba-rugi, neraca saldo, arus kas) hidup dari GL sama. Sejalan KEPUTUSAN-TERVERIFIKASI.md butir 6 (TERTUTUP-oleh-implementasi) |
 
 ## 6. Projects & Work Orders — `PROJ-BR-*`, `WO-BR-*`
 
