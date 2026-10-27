@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StocktakeSessionForm, StocktakeActions } from "./_components/stocktake-forms"
+import { getStocktakeUnfinishedQueue } from "@/lib/reports/stocktake-unfinished-queue-data"
+import { StocktakeUnfinishedQueueCard } from "@/components/reports/stocktake-unfinished-queue-card"
 
 import type { Metadata } from "next"
 
@@ -59,6 +61,10 @@ export default async function StocktakePage({
       _count: { select: { lines: true } },
     },
   })
+
+  // Seksi turunan baca-saja (F-2026-10-27-090-S): daftar existing di
+  // atas tidak diubah; antrean menegakkan scope gudang di loadernya.
+  const unfinishedQueue = await getStocktakeUnfinishedQueue()
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,6 +122,7 @@ export default async function StocktakePage({
         </div>
       </div>
 
+      <StocktakeUnfinishedQueueCard queue={unfinishedQueue} />
     </div>
   )
 }
