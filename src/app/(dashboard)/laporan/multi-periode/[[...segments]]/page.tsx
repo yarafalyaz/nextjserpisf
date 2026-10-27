@@ -10,6 +10,7 @@ import { ReportLetterhead } from '@/components/reports/report-letterhead'
 import { ReportSection, ReportKpiCard } from '@/components/reports/report-section'
 import { ReportNarration } from '@/components/reports/report-narration'
 import { ExportButtons } from '@/components/reports/export-buttons'
+import { EmptyState } from '@/components/ui/empty-state'
 import { MultiPeriodFilter } from '@/components/reports/multi-period-filter'
 
 import type { Metadata } from 'next'
@@ -271,7 +272,7 @@ export default async function MultiPeriodReportPage({
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={columnCount} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    Tidak ada mutasi akun pada periode ini
+                    <EmptyState title="Tidak ada mutasi akun pada periode ini" className="py-0" />
                   </td>
                 </tr>
               )}

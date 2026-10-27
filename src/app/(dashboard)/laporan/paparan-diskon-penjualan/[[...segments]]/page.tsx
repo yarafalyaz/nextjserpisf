@@ -18,6 +18,7 @@ import {
   DetailTableTd,
   DetailTableTh,
 } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { loadDiscountExposureReport } from "@/lib/reports/discount-exposure-export"
@@ -121,7 +122,7 @@ export default async function DiscountExposurePage({
             {exposure.ringkasan.length === 0 && (
               <DetailTableRow>
                 <DetailTableTd colSpan={7} className="text-center text-muted-foreground py-6">
-                  Tidak ada dokumen penjualan pada periode ini.
+                  <EmptyState title="Tidak ada dokumen penjualan pada periode ini." className="py-0" />
                 </DetailTableTd>
               </DetailTableRow>
             )}
@@ -190,7 +191,7 @@ export default async function DiscountExposurePage({
             {exposure.dokumen.length === 0 && (
               <DetailTableRow>
                 <DetailTableTd colSpan={11} className="text-center text-muted-foreground py-6">
-                  Tidak ada dokumen penjualan pada periode ini.
+                  <EmptyState title="Tidak ada dokumen penjualan pada periode ini." className="py-0" />
                 </DetailTableTd>
               </DetailTableRow>
             )}

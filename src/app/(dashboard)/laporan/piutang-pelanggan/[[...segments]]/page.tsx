@@ -7,6 +7,7 @@ import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
 import { loadCustomerCreditExposure } from "@/lib/reports/ledger-cash-data"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
@@ -115,7 +116,7 @@ export default async function CustomerReceivablesPage({
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={14} className="text-center text-muted-foreground py-6">Tidak ada piutang belum lunas</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={14} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada piutang belum lunas" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">

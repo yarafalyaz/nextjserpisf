@@ -7,6 +7,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
@@ -108,7 +109,7 @@ export default async function TotalPayablesPage() {
               </DetailTableRow>
             ))}
             {summary.vendors.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada hutang usaha</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada hutang usaha" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {summary.vendors.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
@@ -143,7 +144,7 @@ export default async function TotalPayablesPage() {
               </DetailTableRow>
             ))}
             {summary.rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada hutang usaha</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada hutang usaha" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {summary.rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">

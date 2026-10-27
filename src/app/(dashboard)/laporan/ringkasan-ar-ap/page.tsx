@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
@@ -105,7 +106,7 @@ export default async function ArApSummaryPage() {
               </DetailTableRow>
             ))}
             {arRows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada piutang belum lunas</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada piutang belum lunas" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {arRows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
@@ -140,7 +141,7 @@ export default async function ArApSummaryPage() {
               </DetailTableRow>
             ))}
             {apRows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada hutang belum lunas</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada hutang belum lunas" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
             {apRows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">

@@ -10,6 +10,7 @@ import { parseReportFilters } from "@/lib/reports/report-href"
 import { RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { SALES_DIMENSIONS, aggregateSales, monthlySales, type SalesDimension, type SalesLine } from '@/lib/reports/sales-analytics'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
@@ -145,7 +146,7 @@ export default async function SalesAnalyticsPage({
             ))}
             {groups.length === 0 && (
               <DetailTableRow>
-                <DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6">Tidak ada penjualan pada periode ini</DetailTableTd>
+                <DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada penjualan pada periode ini" className="py-0" /></DetailTableTd>
               </DetailTableRow>
             )}
             {groups.length > 0 && (
@@ -183,7 +184,7 @@ export default async function SalesAnalyticsPage({
             ))}
             {monthly.length === 0 && (
               <DetailTableRow>
-                <DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6">Belum ada data penjualan</DetailTableTd>
+                <DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6"><EmptyState title="Belum ada data penjualan" className="py-0" /></DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
