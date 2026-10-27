@@ -34364,80 +34364,189 @@ F-2026-10-26-061-S — Antrean penerimaan barang draft mengendap. Status: SPEC S
 
 ---
 
-## SPEC BUSINESS 2026-10-26 — F-2026-10-26-072-S: antrean pembayaran vendor draft mengendap belum dikonfirmasi (turunan baca-saja)
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-070-S: antrean slip gaji draft mengendap menunggu proses (turunan baca-saja, TANPA nominal gaji)
 
-Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_2ee3d03a. ID F-2026-10-26-072-S diverifikasi bebas run ini 2026-10-26 18:58 WIB: grep `F-2026-10-26-072` di backlog + board `origin/main` (`39562550`) = 0 dan tidak ada judul PR terbuka memuat 072-S; seri berjalan 050-S..071-S (071-S PR #1033 OPEN; 069-V = vonis Accountant — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_7479226a. ID F-2026-10-26-070-S diverifikasi bebas run ini 2026-10-26 18:2x WIB: grep `F-2026-10-26-070` di backlog + board `origin/main` (`4376c4c2`) = 0 dan tidak ada judul PR terbuka memuat 070-S; seri berjalan 050-S..069 (069 = vonis Accountant `F-2026-10-26-069-V` — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
 
-Batasan keras domain (wajib dibaca implementor): pembayaran vendor `draft` BELUM membayar apa pun. Jurnal TIDAK dibuat saat draft lahir ("Journal is NOT created here — it is posted only on confirmVendorPayment", src/actions/purchase.actions.ts:1576); kas/bank keluar, debit Hutang Usaha, dan alokasi ke tagihan vendor semuanya baru lahir di `confirmVendorPayment` (:1696) dalam satu transaksi berkunci baris. Antrean ini baca-saja: tidak mengonfirmasi, tidak mengalokasi, tidak menandai transfer, tidak menghapus draft. Nominal tampil = `amount` dokumen tersimpan apa adanya berlabel nilai draft (BR-VPQ-04) — bukan kas keluar, bukan pengurang utang berjalan, bukan sisa utang vendor; menjumlahkannya ke laporan kas/AP mana pun = cacat. Ambang hari tingkat mengendap = USULAN putusan Lead (Q-VPQ-1); konfirmasi-dari-daftar dibuka atau tidak = Lead DAN vonis Accountant wajib sebelumnya (Q-VPQ-3), karena konfirmasi menggerakkan jurnal + alokasi subledger.
+Batasan keras domain (wajib dibaca implementor): data gaji dilindungi authorization. Antrean ini TANPA nominal dalam bentuk apa pun tahap 1 — tidak ada `baseSalary`, `netSalary`, `grossSalary`, komponen, potongan, BPJS, PPh21, atau total uang per baris/per rekap di payload antrean (BR-PDQ-03). Antrean cukup: hitungan slip per periode/status/tingkat + konteks non-nominal (periode, rentang tanggal, tipe, pembuat, umur). Permukaan hanya untuk pemroses berizin `process_payroll` dalam `getHrScope` fail-closed (BR-PDQ-02/04); scope `self` TIDAK melihat antrean proses (antrean proses bukan slip-milik-sendiri — wilayah slip karyawan existing yang sah hanya menampilkan slip non-draft milik sendiri). Ambang hari tingkat mengendap = USULAN putusan Lead (Q-PDQ-1), dilarang ditulis fakta/kebijakan dan dilarang ditanam Backend sebelum diputus. Nilai statutori (TER/BPJS/PPh21) TIDAK disentuh tahap baca-saja ini sama sekali; vonis Accountant bersyarat hanya bila Lead membuka rincian nominal atau aksi proses-dari-antrean (BR-PDQ-09/Q-PDQ-5).
 
-Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): `VendorPayment.status` String default `"draft"` (prisma/schema.prisma:2314 model, status :2320), deletedAt nullable :2323, `amount` Decimal(15,2) WAJIB, paymentDate WAJIB, vendorBillId nullable (tagihan tujuan pilihan tombol Bayar), transferredAt/transferReference nullable (penanda eksekusi transfer operasional — jurnal sudah dibuat pembayaran, menandai transfer TIDAK membuat jurnal baru, komentar schema). `createVendorPayment` (:1500, `create_vendor_payments`) menolak target tagihan draft/paid/cancelled (:1519-1532 — tagihan konsep belum diakui tidak boleh dibayar); lahir draft tanpa alokasi dan tanpa jurnal (:1576). `confirmVendorPayment` (:1696, `approve_vendor_payments` + `assertApproved("VendorPayment")`): hanya dari draft, kunci baris FOR UPDATE, status → `completed` + confirmedBy/At, alokasi deterministik (tagihan tujuan dulu lalu oldest-first) ke tagihan posted/partial balanceDue>0, menolak overpay yang membuat GL AP debit penuh melebihi subledger (komentar :1756-1763), lalu jurnal `onVendorPaymentCreated` Dr Hutang Usaha / Cr Bank-Kas + adminFee beban terpisah (src/lib/hooks/accounting.hook.ts:2624). `updateVendorPayment` (:3023, `edit_vendor_payments`) hanya draft; `deleteVendorPayment` (:2413, `delete_vendor_payments`) hanya draft, kunci baris, sapu lampiran + jurnal-by-reference (draft tidak berjurnal sehingga reversal no-op terjaga).
+Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): Payroll `status` String default `"draft"` (prisma/schema.prisma, model Payroll); unik BUKAN `[employeeId, period]` melainkan `@@unique([employeeId, startDate, endDate])` (`uq_payroll_employee_range`) — satu karyawan boleh banyak slip per label periode selama rentang tanggal berbeda (koreksi premis kartu, wajib dibaca Lead). `processPayroll` (src/actions/hrm.actions.ts:2554, izin `process_payroll`) melahirkan/memfinalkan slip `draft` (status eksplisit `draft` :2452); `approvePayroll` (:2967) menolak snapshot statutori `fromFallback` (:3003, AUD-HRM-01); `markPayrollPaid` (:3028) hanya dari `approved`, klaim atomik `updateMany status=approved` + amortisasi pinjaman + jurnal dalam SATU transaksi. Slip karyawan (permukaan self existing) sengaja menyembunyikan draft dari karyawan — antrean ini permukaan SEBALIKNYA untuk pemroses, bukan membocorkan draft ke karyawan.
 
-Bukan duplikasi: bukan F-2026-10-26-064-S (VendorBill draft — tagihan vendor belum diposting; spec ini pembayaran atas tagihan yang sudah posted, tahap sesudahnya, aktor/izin beda: `view_vendor_bills` vs `view_vendor_payments`); bukan daftar pembayaran existing `pembelian/pembayaran-vendor` (page.tsx:39 findMany tanpa saring status, urut createdAt desc, cari saja — draft tenggelam di antara completed, tanpa umur/tingkat/rekap draft); bukan PurchaseAdvance (uang muka pembelian dokumen terpisah status default posted); bukan Transfer Pemasok (vendor-transfer — eksekusi transfer atas pembayaran yang sudah completed, hilir spec ini); bukan perintah pembayaran (daftar tagihan siap bayar — sisi tagihan, bukan pembayaran draft).
+Bukan duplikasi: bukan daftar penggajian existing `sdm/penggajian` (daftar operasional per slip dengan nominal untuk pemegang izin — antrean ini rekap mengendap tanpa nominal, tertua-dulu, per periode); bukan laporan gaji `view_payroll_reports` (wilayah nominal sesudah proses); bukan slip karyawan self (hanya slip sendiri non-draft); bukan spec frekuensi PF (aturan lahir slip mingguan/bulanan, BR-PF-08 menyebut slip draft sebagai fakta populasi — bukan antrean umurnya); bukan antrean persetujuan HR 007-S (cuti/lembur pending — dokumen ini slip gaji `draft`, tahap sebelum approve payroll, tanpa approver generik yang dikarang); bukan estimasi payroll (`getPayrollEstimation`/`getBulkPayrollEstimations` — angka rencana, bukan slip draft tersimpan).
 
 Benchmark resmi (akses live 2026-10-26 run ini, web_search):
-- Accurate: Pembayaran Pembelian mencatat pembayaran ke supplier (termasuk sebagian/cicilan) yang mengurangi utang supplier sesudah pembayaran dicatat — https://help.accurate.id/product/pembayaran-pembelian/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/pembayaran-pembelian/membuat-pembayaran-pembelian-sebagian/ (BENCHMARK: pembayaran mengurangi utang saat tercatat; konsep draft pembayaran mengendap bertingkat umur TIDAK ditetapkan halaman yang diakses — tidak diklaim).
-- Zahir: Pembayaran Hutang Usaha mencatat pembayaran ke pemasok per faktur dengan akun kas/bank — https://help.zahironline.com/portal/id/kb/articles/cara-input-pembayaran-hutang-usaha-zahir-online-v2 (BENCHMARK: pembayaran per faktur ada; antrean draft pembayaran bertingkat umur TIDAK ditetapkan — tidak diklaim).
+- Accurate: fitur Gaji dan Tunjangan menghitung gaji pokok, tunjangan, potongan BPJS, PPh 21 sampai bonus dengan slip gaji digital yang dicek karyawan sendiri — https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/mengenal-fitur-gaji-dan-tunjangan/ (BENCHMARK: slip digital self-service ada; antrean draft mengendap bertingkat umur untuk pemroses TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: payroll adalah produk/add-on tersendiri (Zahir Payroll / Zahir HR absensi+payroll) terpisah dari Zahir Online inti — https://www.zahironline.com/ (BENCHMARK lemah: payroll modul tersendiri; antrean draft slip bertingkat umur TIDAK ditetapkan — tidak diklaim).
 
-### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 39562550)
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 4376c4c2)
 
 Sudah ada (TERVERIFIKASI-KODE):
-- Model: `VendorPayment` (prisma/schema.prisma:2314) — slug unik nullable, documentNo unik, vendorId WAJIB, amount Decimal(15,2) WAJIB, paymentDate WAJIB, paymentMethod String, accountId/bankId nullable, adminFee default 0, vendorBillId nullable, referenceNumber/bankAccount/notes nullable, confirmedBy/confirmedAt nullable, transferredAt/transferReference nullable, createdBy nullable, deletedAt nullable, createdAt/updatedAt; `VendorPaymentAllocation` (:2365) hanya lahir saat konfirmasi. Indeks status/deletedAt/vendor/paymentDate/createdBy ada.
-- Lifecycle: create draft tanpa jurnal/alokasi :1500,1576 (target bill draft ditolak :1530); confirm draft→completed satu transaksi berkunci + alokasi capped balanceDue + tolak overpay + jurnal hook :1696; update hanya draft :3037; delete hanya draft :2433. Penanda transfer operasional terpisah dari jurnal (komentar schema model).
-- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:193-197): `view_vendor_payments`, `create_vendor_payments`, `edit_vendor_payments`, `delete_vendor_payments`, `approve_vendor_payments` (konfirmasi memakai approve :1698). Navigasi existing (navigation.ts:114 `view_vendor_payments`).
-- Daftar existing: `pembelian/pembayaran-vendor` (page.tsx:39-54, findMany semua status urut createdAt desc + count, saring cari documentNo/nama vendor saja) — permukaan operasional semua pembayaran; konteks yang membuat antrean draft ini bukan penggantinya.
+- Model: `Payroll` (prisma/schema.prisma, model Payroll) — slug unik nullable, documentNo unik, employeeId nullable, period String (label periode), type default `REGULAR`, startDate/endDate WAJIB, status String default `draft`, approvedBy/createdBy nullable, paymentDate nullable, createdAt/updatedAt; kolom nominal lengkap tersimpan di model (baseSalary s.d. netSalary/totalAmount) — KEBERADAAN kolom bukan izin menampilkannya di antrean (BR-PDQ-03). Unik `@@unique([employeeId, startDate, endDate])`; indeks status/createdAt ada. TIDAK ada deletedAt di potongan terverifikasi — populasi cukup status persis tanpa saringan soft-delete yang dikarang.
+- Lahir/proses draft: `processPayroll` (:2554, `process_payroll`) + jalur bulk `generateBulkPayroll` (:2191) melahirkan slip `draft` (:2452). Approve `approvePayroll` (:2967, menolak `statutorySnapshot.fromFallback` :3003). Bayar `markPayrollPaid` (:3028, hanya `approved`, klaim atomik + amortisasi pinjaman tertua-dulu ter-cap + jurnal satu transaksi). Gerbang workflow generik `assertApproved("Payroll", …)` dihormati markPayrollPaid.
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:323-327): `view_payroll`, `create_payroll`, `edit_payroll`, `process_payroll`; laporan `view_payroll_reports` (:447). Scope HR: `getHrScope` (src/lib/auth/hr-scope.ts:67) self/department/all fail-closed (roles rusak → self employeeId -1); `hrScopeWhere`/`assertHrEmployeeAccess` existing.
+- Daftar existing: `sdm/penggajian` ([[...segments]] + [slug] + tambah/ubah/komponen) — permukaan operasional nominal per slip untuk pemegang izin; konteks yang membuat antrean tanpa-nominal ini bukan penggantinya.
 
-Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean pembayaran vendor `draft` mengendap — grep `vendor-payment-draft-queue`/`VendorPaymentDraftQueue` di src = 0 (hit `umurDraft` hanya keluarga sales draft-queue). Risiko bengkel: staf keuangan membuat draft pembayaran ke supplier part, tidak pernah dikonfirmasi — kas terlihat aman padahal rencana bayar menggantung, tagihan tujuan tetap terbuka menua di aging, dan tidak ada permukaan yang menua draft pembayarannya; draft yang ditinggal juga menahan kesan "sudah dibuatkan pembayaran" palsu bagi pembaca daftar campur.
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean slip gaji `draft` mengendap — tidak ada turunan umur draft payroll, tidak ada rekap hitungan draft per periode untuk pemroses. Slip draft yang ditinggal berarti karyawan periode itu tidak pernah sampai approve/bayar lewat jalur sah; karena unik rentang (bukan periode), draft yatim juga menahan lahirnya slip pengganti rentang sama. Risiko bengkel: run gajian mingguan dibuat Jumat, tidak diproses — karyawan mingguan tidak dibayar dan tidak ada permukaan yang menua draft itu (daftar nominal campur semua status bukan antrean tertua-dulu).
 
 ### 1. Workflow specification
 
-Aktor: Pembuat pembayaran pemegang `create_vendor_payments`/`edit_vendor_payments` (sumber baris draft), Pengonfirmasi pemegang `approve_vendor_payments` (pembaca kerja antrean; pemilik konfirmasi existing), Pembaca keuangan pemegang `view_vendor_payments` (pembaca antrean), Sistem (builder turunan baca-saja). Vendor BUKAN aktor (tidak ada permukaan vendor); pengguna tanpa `view_vendor_payments` bukan aktor sama sekali (termasuk rekap — nominal pembayaran vendor data keuangan internal).
-Dokumen masuk: baris VendorPayment `status = "draft"` AND deletedAt null (id, slug, documentNo, vendorId+nama, amount, paymentDate, paymentMethod label existing, vendorBillId+documentNo tagihan tujuan bila tertaut, createdBy+nama bila terpetakan, createdAt). Field existing semua; tanpa field masuk baru.
-Dokumen keluar: baris antrean turunan per pembayaran (§3) + rekap hitungan pembayaran per tingkat/vendor + Σ amount baris berlabel nilai draft. BUKAN pembayaran: tidak ada kas keluar, jurnal, alokasi, atau status tagihan berubah karena antrean.
+Aktor: Pemroses Penggajian pemegang `process_payroll` dalam scope department/all (pemilik tindakan proses/approve/bayar existing), Pembaca HR pemegang `view_payroll` dalam scope sama (pembaca antrean bila Lead memutus cukup view — Q-PDQ-4), Pembuat slip pemegang `create_payroll`/`process_payroll` (sumber baris draft), Sistem (builder turunan baca-saja). Karyawan (scope self) BUKAN aktor antrean ini.
+Dokumen masuk: baris Payroll `status = "draft"` dalam scope pembaca (id, slug, documentNo, period, type, startDate, endDate, createdBy+nama bila terpetakan, createdAt). Field existing semua, TANPA field nominal masuk tahap 1, tanpa field masuk baru.
+Dokumen keluar: baris antrean turunan per slip (§3) + rekap hitungan slip per periode/tingkat. BUKAN pembayaran: tidak ada status berubah, jurnal, amortisasi pinjaman, atau uang bergerak karena antrean.
 
 Alur:
-1. Pembayaran lahir `draft` lewat createVendorPayment existing (boleh menargetkan satu tagihan terbuka).
-2. Builder antrean (usulan, baca-saja) mengambil populasi draft dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks vendor/tagihan tujuan, penanda `paymentDateLampau` (fakta tanggal rencana bayar lampau — bukan tunggakan, BR-VPQ-06), rekap.
-3. Pengonfirmasi membuka detail pembayaran existing dan mengonfirmasi/mengubah/menghapus lewat jalur existing. Antrean tidak menyediakan tombol Konfirmasi/Alokasi/Tandai Transfer/Hapus tahap 1 (Q-VPQ-3).
+1. Slip lahir `draft` lewat processPayroll/generateBulkPayroll existing.
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft dalam scope dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks periode/rentang/tipe, hitungan per periode.
+3. Pemroses membuka detail slip existing dan memproses/menyetujui lewat jalur existing. Antrean tidak menyediakan tombol Proses/Setujui/Bayar/Hapus tahap 1 (Q-PDQ-3).
 4. Sesudah status bukan draft: baris keluar populasi. Hari berganti: tingkat dihitung ulang saat render, tanpa cron.
 
-Kata tampil usulan (USULAN — verbatim final = Q-VPQ-2 Lead bersama ambang hari):
-- Judul kolom: `No. Dokumen`, `Vendor`, `Nilai Draft`, `Tanggal Bayar`, `Tagihan Tujuan`, `Menunggu` (umur), `Dibuat Oleh`.
-- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Konfirmasi".
-- Label rekap nilai: `nilai draft belum dibayar` (verbatim usulan, nempel di setiap Σ amount).
-- Notice usulan: "Daftar ini hanya pembayaran vendor yang masih draft dan belum dikonfirmasi. Pembayaran draft belum mengeluarkan kas dan belum mengurangi tagihan vendor; konfirmasi, ubah, atau hapus lewat detail pembayaran."
+Kata tampil usulan (USULAN — verbatim final = Q-PDQ-2 Lead bersama ambang hari):
+- Judul kolom: `Periode`, `Rentang`, `Tipe`, `Dibuat Oleh`, `Menunggu` (umur).
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Proses".
+- Notice usulan: "Daftar ini hanya slip gaji yang masih draft. Slip draft belum disetujui dan belum dibayar; proses lewat detail slip. Nominal gaji tidak ditampilkan di daftar ini."
 
 ### 2. Role/permission matrix (key katalog nyata)
 
 | Aksi | Key (TERVERIFIKASI-KODE) | Penegakan existing | Perubahan spec ini |
 |---|---|---|---|
-| Lihat antrean draft + tingkat/umur + nilai draft | `view_vendor_payments` (katalog:193) | daftar existing requirePermission + halaman pembayaran | TIDAK ada key baru tahap 1; loader menegakkan izin sebelum query (BR-VPQ-05) |
-| Buat pembayaran (sumber baris draft) | `create_vendor_payments` (katalog:194) | createVendorPayment; target bill draft ditolak | tidak berubah |
-| Konfirmasi draft → completed (+ alokasi + jurnal) | `approve_vendor_payments` (katalog:197) + assertApproved workflow | confirmVendorPayment klaim berkunci satu transaksi | TIDAK berubah; antrean hanya mengantar ke detail |
-| Ubah / hapus draft | `edit_vendor_payments` / `delete_vendor_payments` (katalog:195/196) | update/delete hanya status draft | tidak berubah; bukan dari antrean tahap 1 |
-| Tandai transfer terkirim | jalur Transfer Pemasok existing | penanda operasional, tanpa jurnal baru | di luar populasi (hanya completed); tidak berubah |
+| Lihat antrean slip draft + tingkat/umur (tanpa nominal) | `process_payroll` (katalog:327) + `getHrScope` department/all fail-closed (self → di luar antrean) | aksi payroll requirePermission + scope; slip self existing terpisah | TIDAK ada key baru tahap 1 (view cukup atau tidak = Q-PDQ-4 Lead); loader menegakkan scope sebelum query, self/none → kosong |
+| Buat slip (sumber baris draft) | `create_payroll`/`process_payroll` (katalog:324/327) | processPayroll/generateBulkPayroll existing | tidak berubah |
+| Proses final / setujui slip draft | `process_payroll` | processPayroll + approvePayroll (tolak fromFallback) | TIDAK berubah; antrean hanya mengantar ke detail |
+| Bayar (approved → paid + jurnal + amortisasi) | `process_payroll` | markPayrollPaid klaim atomik satu transaksi | di luar populasi antrean (hanya draft); tidak berubah |
+| Lihat slip sendiri (karyawan) | scope self existing | permukaan slip karyawan, draft disembunyikan | TIDAK diubah spec ini; antrean dilarang menjadi jalur bocor draft ke self |
 
-Tidak ada permission key baru diusulkan tahap 1. Tidak ada scope gudang/departemen untuk pembayaran vendor di kode existing — jangan karang scope baru di loader (BR-VPQ-05).
+Tidak ada permission key baru diusulkan tahap 1. Nama pembuat tampil hanya nama (bukan nominal, bukan data gaji) dalam scope izin yang sama.
 
 ### 3. Status-transition matrix (turunan antrean, nol kolom/status baru tahap 1)
 
-Status dokumen existing TIDAK diubah spec ini: `draft` → (konfirmasi existing) → `completed`; tidak ada status paid terpisah di VendorPayment (penanda transfer = transferredAt, bukan status); draft hanya bisa diubah/dihapus, completed tidak kembali draft. Tidak ada jalur kas/jurnal dari draft selain konfirmasi.
+Status dokumen existing TIDAK diubah spec ini: `draft` → (proses/approve existing) → `approved` → `paid` (markPayrollPaid); approve menolak snapshot fromFallback; tidak ada jalur bayar dari draft.
 
-Populasi antrean: VendorPayment `status = "draft"` AND deletedAt null. Per baris:
+Populasi antrean: Payroll `status = "draft"` AND employeeId dalam `getHrScope` pembaca (department/all; self → bukan populasi). Per baris:
 - `umurDraftHari` = hari kalender WIB dari `createdAt` (masa depan = 0 tertanda).
-- `paymentDateLampau` = hari WIB hari ini > paymentDate (fakta tanggal rencana; paymentDate adalah tanggal bayar yang direncanakan/diinput, bukan tanggal jatuh tempo tagihan).
+- `konteksPeriode` = period + startDate..endDate + type apa adanya (label periode BUKAN kunci unik — rentang yang membedakan, BR-PDQ-05).
 
 | # | Kondisi turunan (urut periksa dari atas) | Tingkat | Arti kerja |
 |---|---|---|---|
-| S0 | status bukan draft, atau deletedAt terisi | di luar antrean | bukan populasi |
-| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-VPQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | rencana bayar belum dikonfirmasi melewati kesabaran operasional yang diputus Lead; konfirmasi atau hapus lewat detail |
-| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-VPQ-5) |
+| S0 | status bukan draft, atau di luar scope, atau scope self | di luar antrean | bukan populasi |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-PDQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | slip menunggu proses melewati kesabaran operasional yang diputus Lead |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-PDQ-6) |
 
-`paymentDateLampau` adalah penanda pendamping, BUKAN tingkat tersendiri tahap 1 dan BUKAN tunggakan (BR-VPQ-06). Tidak ada tingkat kelayakan bayar: menilai draft "siap konfirmasi" dari saldo kas/tagihan berjalan di antrean berarti membaca keadaan uang berjalan — di luar tahap 1 (penilaian milik pengonfirmasi di detail; overpay/alokasi dinilai confirm existing). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada konfirmasi otomatis.
+Tidak ada tingkat nominal/kelayakan di antrean ini: menilai slip "siap approve" dari snapshot statutori di antrean berarti membaca data gaji/statutori per slip — di luar batas tanpa-nominal tahap 1 (penilaian fromFallback milik approvePayroll existing di detail). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada proses otomatis.
 
 ### 4. Business rules register
 
 | ID | Aturan | Label |
 |---|---|---|
+| BR-PDQ-01 | Populasi = Payroll `status="draft"` persis + employeeId dalam scope department/all pembaca (fail-closed self/none → kosong). approved/paid/status lain tidak disamakan diam-diam dan tidak masuk. Tanpa saringan deletedAt yang dikarang. | TERVERIFIKASI-KODE (status default + hr-scope) + USULAN batas |
+| BR-PDQ-02 | Antrean proses BUKAN permukaan karyawan: scope `self` tidak melihat antrean walau slip draft itu miliknya — draft memang disembunyikan dari karyawan oleh permukaan self existing; menampilkan draft sendiri di antrean mengkhianati pemisahan itu. | TERVERIFIKASI-KODE (pemisahan self existing) + USULAN |
+| BR-PDQ-03 | TANPA nominal tahap 1 dalam bentuk apa pun (per baris, per rekap, Σ, tooltip, payload tersembunyi): payload builder dilarang memuat baseSalary/netSalary/grossSalary/komponen/potongan/BPJS/PPh21/totalAmount. Hitungan slip (count) bukan nominal dan satu-satunya angka agregat sah tahap 1. Rincian per slip boleh atau tidak = Q-PDQ-5 (Lead + vonis Accountant wajib sebelum dibuka). | USULAN batas di atas TERVERIFIKASI-KODE perlindungan gaji |
+| BR-PDQ-04 | Loader menegakkan `process_payroll` (atau key yang diputus Q-PDQ-4) + `getHrScope` sebelum query; scope department hanya karyawan departemen itu (hrScopeWhere existing); anti-N+1 (nama pembuat massal — query per baris → cacat). Nama karyawan per baris: tampil atau hanya hitungan per periode = Q-PDQ-4 (nama karyawan bukan nominal, tetapi tetap data pribadi dalam scope). | TERVERIFIKASI-KODE (getHrScope) + USULAN |
+| BR-PDQ-05 | Kunci populasi per slip = id slip + rentang startDate..endDate, BUKAN label period: unik existing `uq_payroll_employee_range` mengizinkan banyak slip se-label-periode beda rentang (mingguan). Mengelompokkan/mendedup dari label period saja mengarang gabungan yang tidak ada. | TERVERIFIKASI-KODE (schema @@unique) |
+| BR-PDQ-06 | Umur memakai `createdAt`, bukan startDate/period. Mengubah acuan = Q-PDQ-6. Hari kalender WIB. | USULAN di atas TERVERIFIKASI-KODE field |
+| BR-PDQ-07 | Antrean tidak memproses, tidak menyetujui, tidak membayar, tidak menghapus slip: tidak memanggil processPayroll/approvePayroll/markPayrollPaid/hapus existing. Bayar tetap klaim atomik + jurnal + amortisasi satu transaksi di detail — jalan pintas dari daftar yang memisahkannya = cacat uang. | TERVERIFIKASI-KODE + USULAN batas |
+| BR-PDQ-08 | Urutan default tertua-dulu di dalam tingkat, seri documentNo asc (Q-PDQ-6). Rekap = hitungan slip per periode/tingkat atas baris yang sama persis; hitungan rekap ≠ hitungan baris = cacat. | USULAN |
+| BR-PDQ-09 | Ambang hari `mengendap`, kata final, nama-per-baris, dan rincian nominal = kebijakan perilaku inti/data gaji: BUTUH-VONIS Lead (Q-PDQ-1/2/4/5). Tahap baca-saja tanpa nominal tidak menyentuh jurnal/statutori sehingga Accountant TIDAK diminta tahap ini — WAJIB sebelum rincian nominal atau aksi proses-dari-antrean dibuka (saat itu snapshot statutori + jurnal ikut terbaca/bergerak). | BUTUH-VONIS Lead |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
+|---|---|---|---|---|
+| Payroll + slip gaji digital karyawan cek sendiri | Ada: Gaji dan Tunjangan hitung pokok/tunjangan/BPJS/PPh21 + slip digital (URL §kepala) | Add-on tersendiri Zahir Payroll/HR (URL §kepala) | Ada: slip per karyawan + permukaan self (draft disembunyikan) | Tidak diubah; antrean ini sisi pemroses |
+| Draft slip dibedakan dari disetujui/dibayar | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: draft → approved → paid, approve tolak fromFallback, bayar klaim atomik+jurnal | Populasi draft persis, tanpa nominal |
+| Antrean slip draft mengendap bertingkat umur untuk pemroses | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (hitungan saja, tanpa nominal karang) |
+
+### 6. Acceptance criteria + edge cases
+
+Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
+- AC-PDQ-B1: Populasi tepat `status="draft"` + scope department/all: approved/paid/status lain/luar-scope/scope-self tidak tampil dan tidak terhitung rekap (cabut saring status/satu sisi scope/self-guard → MERAH).
+- AC-PDQ-B2: Payload tanpa nominal terbukti: suntik baseSalary/netSalary/totalAmount/komponen ke payload → MERAH (BR-PDQ-03); rekap hanya count slip per periode/tingkat sama dengan hitungan baris.
+- AC-PDQ-B3: Umur hari kalender WIB dari createdAt; umur 0 batas sama; ambang persis (== ambang → `mengendap` hanya bila Q-PDQ-1 diputus); masa depan 0 tertanda; selama Q-PDQ-1 belum diputus `mengendap` tidak terbit.
+- AC-PDQ-B4: Loader fail-closed izin + `getHrScope` sebelum query (self/none → kosong), anti-N+1 (nama pembuat massal — query per baris → MERAH); dua slip se-label-periode beda rentang tampil dua baris terpisah (dedup label → MERAH, BR-PDQ-05).
+- AC-PDQ-B5: Baca-saja terbukti: builder/loader tidak memanggil processPayroll/approvePayroll/markPayrollPaid/hapus/tulis status/jurnal/amortisasi (panggil diam-diam → MERAH, BR-PDQ-07).
+
+Frontend (konsumen):
+- AC-PDQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/count sendiri (hitung ulang UI → MERAH); urutan dari payload.
+- AC-PDQ-F2: Tidak ada nominal tampil dalam bentuk apa pun termasuk tooltip/atribut data (nominal tampil → MERAH, BR-PDQ-03); slip tidak berlabel disetujui/dibayar/siap-bayar.
+- AC-PDQ-F3: Tautan baris hanya ke detail slip existing; tidak ada tombol Proses/Setujui/Bayar/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-PDQ-3 → MERAH); tanpa izin halaman menolak.
+
+Edge cases:
+- EC-PDQ-1: Slip draft karyawan nonaktif/keluar sesudah lahir tetap populasi apa adanya dalam scope; antrean tidak menilai masih harus dibayar (keputusan manusia lewat detail).
+- EC-PDQ-2: Slip draft employeeId null (bila jalur existing mengizinkannya) tampil tanpa nama karyawan karangan (`—`), tetap terhitung; tidak dibuang senyap.
+- EC-PDQ-3: Dua slip draft karyawan sama rentang-beririsan parsial (unik hanya rentang persis sama) tampil dua baris apa adanya; antrean tidak menyatakan dobel-bayar (penilaian milik pemroses di detail).
+- EC-PDQ-4: createdAt masa depan → umur 0 tertanda, tidak negatif.
+- EC-PDQ-5: Slip diproses/dibayar/dihapus dari permukaan lain saat antrean terbuka keluar populasi render berikut; antrean tidak mengunci slip.
+- EC-PDQ-6: Periode tanpa draft sama sekali → antrean kosong jujur (emptyText server), bukan nol karangan per karyawan.
+- EC-PDQ-7: Pembaca scope department tidak melihat draft departemen lain sama sekali — termasuk dari rekap count (kebocoran satu count lintas departemen = gagal AC-PDQ-B1, karena count pun membocorkan keberadaan draft gaji departemen lain).
+
+### 7. Backlog implementasi (turunan F-2026-10-26-070-S)
+
+| ID | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-26-070-S | Spec kontrak ini (dokumen) | Business | — |
+| 070-B | Builder murni tingkat/umur draft payroll (payload tanpa nominal) + loader izin+`getHrScope` fail-closed anti-N+1 + tes AC-PDQ-B1..B5 | Backend | Putusan Lead Q-PDQ-1/2/4 |
+| 070-F | Permukaan antrean verbatim payload + AC-PDQ-F1..F3 | Frontend | 070-B merged |
+| 070-Q | Falsifikasi AC-PDQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 070-B/070-F |
+
+ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
+
+### 8. Pertanyaan putusan (gerbang)
+
+| ID | Pertanyaan | Untuk | Rekomendasi Business |
+|---|---|---|---|
+| Q-PDQ-1 | Ambang hari tingkat `mengendap`? | Lead | USULAN 3 hari kalender (slip mingguan basi cepat merugikan karyawan; bulanan punya konteks tutup-periode di Q-PDQ-6) — bukan fakta; selama belum diputus hanya menunggu yang terbit |
+| Q-PDQ-2 | Kata label tingkat/notice final §1? | Lead | Kata usulan apa adanya; satu konstanta label server |
+| Q-PDQ-3 | Proses/Setujui langsung dari antrean dibuka? | Lead (+ Accountant wajib bila dibuka) | TIDAK tahap 1 (BR-PDQ-07): approve menolak fromFallback dan bayar klaim atomik+jurnal harus terasa di detail; jalan pintas = keputusan terpisah bervonis |
+| Q-PDQ-4 | Key baca antrean: `process_payroll` saja, atau `view_payroll` cukup? Nama karyawan per baris tampil, atau hanya rekap count per periode? | Lead | `process_payroll` tahap 1 (antrean = antrean kerja pemroses, bukan laporan); nama per baris dalam scope sama boleh — bukan nominal, dan pemroses memang bekerja per slip di detail existing |
+| Q-PDQ-5 | Rincian nominal per slip di antrean dibuka tahap berikut? | Lead + Accountant (WAJIB vonis) | TIDAK di spec ini (BR-PDQ-03): daftar nominal mengendap memperluas permukaan data gaji tanpa kebutuhan proses yang terbukti; detail existing sudah permukaan nominal sah |
+| Q-PDQ-6 | Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt disahkan? Ambang beda mingguan vs bulanan? | Lead | Ya `mengendap` dulu, seri documentNo asc; createdAt; ambang tunggal tahap 1 — beda frekuensi hanya bila Lead punya kebijakan nyata, jangan karang dua ambang |
+
+### Yang TIDAK diusulkan run ini
+- Memproses/menyetujui/membayar massal atau otomatis slip basi (BR-PDQ-07) — approve statutori + bayar atomik jurnal/amortisasi tidak boleh dilewati daftar.
+- Menampilkan nominal gaji dalam bentuk apa pun di antrean (BR-PDQ-03), termasuk "total draft menggantung" — agregat uang draft bukan kebutuhan antrean kerja dan memperluas paparan data gaji.
+- Menampilkan antrean ini ke karyawan/scope self (BR-PDQ-02) atau menjadikannya slip self baru.
+- Menilai slip "siap approve/siap bayar" dari snapshot statutori di antrean — membaca data statutori per slip di luar detail tanpa putusan Q-PDQ-5.
+- Pengingat WA/email ke pemroses/HR dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja.
+- Menghapus slip draft basi otomatis — hapus slip = keputusan manusia; draft yatim penahan rentang diselesaikan lewat jalur existing.
+- Ambang/status/field payroll baru, perubahan unik `[employeeId, period]`, atau perubahan lifecycle draft→approved→paid existing.
+
+F-2026-10-26-070-S — Antrean slip gaji draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-PDQ-1/2/4 (Accountant TIDAK untuk tahap baca-saja tanpa nominal; WAJIB hanya bila Q-PDQ-3/Q-PDQ-5 dibuka), lalu fisik Backend (070-B), konsumen Frontend (070-F), falsifikasi QA (070-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin/nama), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
+## SPEC BUSINESS 2026-10-26 — F-2026-10-26-072-S: antrean pembayaran vendor draft mengendap belum dikonfirmasi (turunan baca-saja)
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_2ee3d03a. ID F-2026-10-26-072-S diverifikasi bebas run ini 2026-10-26 18:58 WIB: grep `F-2026-10-26-072` di backlog + board `origin/main` (`39562550`) = 0 dan tidak ada judul PR terbuka memuat 072-S; seri berjalan 050-S..071-S (071-S PR #1033 OPEN; 069-V = vonis Accountant — sufiks domain berbeda, bukan tabrakan). Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+Batasan keras domain (wajib dibaca implementor): pembayaran vendor `draft` BELUM membayar apa pun. Jurnal TIDAK dibuat saat draft lahir ("Journal is NOT created here — it is posted only on confirmVendorPayment", src/actions/purchase.actions.ts:1576); kas/bank keluar, debit Hutang Usaha, dan alokasi ke tagihan vendor semuanya baru lahir di `confirmVendorPayment` (:1696) dalam satu transaksi berkunci baris. Antrean ini baca-saja: tidak mengonfirmasi, tidak mengalokasi, tidak menandai transfer, tidak menghapus draft. Nominal tampil = `amount` dokumen tersimpan apa adanya berlabel nilai draft (BR-VPQ-04) — bukan kas keluar, bukan pengurang utang berjalan, bukan sisa utang vendor; menjumlahkannya ke laporan kas/AP mana pun = cacat. Ambang hari tingkat mengendap = USULAN putusan Lead (Q-VPQ-1); konfirmasi-dari-daftar dibuka atau tidak = Lead DAN vonis Accountant wajib sebelumnya (Q-VPQ-3), karena konfirmasi menggerakkan jurnal + alokasi subledger.
+Fakta lifecycle terverifikasi (TERVERIFIKASI-KODE): `VendorPayment.status` String default `"draft"` (prisma/schema.prisma:2314 model, status :2320), deletedAt nullable :2323, `amount` Decimal(15,2) WAJIB, paymentDate WAJIB, vendorBillId nullable (tagihan tujuan pilihan tombol Bayar), transferredAt/transferReference nullable (penanda eksekusi transfer operasional — jurnal sudah dibuat pembayaran, menandai transfer TIDAK membuat jurnal baru, komentar schema). `createVendorPayment` (:1500, `create_vendor_payments`) menolak target tagihan draft/paid/cancelled (:1519-1532 — tagihan konsep belum diakui tidak boleh dibayar); lahir draft tanpa alokasi dan tanpa jurnal (:1576). `confirmVendorPayment` (:1696, `approve_vendor_payments` + `assertApproved("VendorPayment")`): hanya dari draft, kunci baris FOR UPDATE, status → `completed` + confirmedBy/At, alokasi deterministik (tagihan tujuan dulu lalu oldest-first) ke tagihan posted/partial balanceDue>0, menolak overpay yang membuat GL AP debit penuh melebihi subledger (komentar :1756-1763), lalu jurnal `onVendorPaymentCreated` Dr Hutang Usaha / Cr Bank-Kas + adminFee beban terpisah (src/lib/hooks/accounting.hook.ts:2624). `updateVendorPayment` (:3023, `edit_vendor_payments`) hanya draft; `deleteVendorPayment` (:2413, `delete_vendor_payments`) hanya draft, kunci baris, sapu lampiran + jurnal-by-reference (draft tidak berjurnal sehingga reversal no-op terjaga).
+Bukan duplikasi: bukan F-2026-10-26-064-S (VendorBill draft — tagihan vendor belum diposting; spec ini pembayaran atas tagihan yang sudah posted, tahap sesudahnya, aktor/izin beda: `view_vendor_bills` vs `view_vendor_payments`); bukan daftar pembayaran existing `pembelian/pembayaran-vendor` (page.tsx:39 findMany tanpa saring status, urut createdAt desc, cari saja — draft tenggelam di antara completed, tanpa umur/tingkat/rekap draft); bukan PurchaseAdvance (uang muka pembelian dokumen terpisah status default posted); bukan Transfer Pemasok (vendor-transfer — eksekusi transfer atas pembayaran yang sudah completed, hilir spec ini); bukan perintah pembayaran (daftar tagihan siap bayar — sisi tagihan, bukan pembayaran draft).
+- Accurate: Pembayaran Pembelian mencatat pembayaran ke supplier (termasuk sebagian/cicilan) yang mengurangi utang supplier sesudah pembayaran dicatat — https://help.accurate.id/product/pembayaran-pembelian/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/pembayaran-pembelian/membuat-pembayaran-pembelian-sebagian/ (BENCHMARK: pembayaran mengurangi utang saat tercatat; konsep draft pembayaran mengendap bertingkat umur TIDAK ditetapkan halaman yang diakses — tidak diklaim).
+- Zahir: Pembayaran Hutang Usaha mencatat pembayaran ke pemasok per faktur dengan akun kas/bank — https://help.zahironline.com/portal/id/kb/articles/cara-input-pembayaran-hutang-usaha-zahir-online-v2 (BENCHMARK: pembayaran per faktur ada; antrean draft pembayaran bertingkat umur TIDAK ditetapkan — tidak diklaim).
+### 0. Inventarisasi terverifikasi (2026-10-26, basis origin/main 39562550)
+- Model: `VendorPayment` (prisma/schema.prisma:2314) — slug unik nullable, documentNo unik, vendorId WAJIB, amount Decimal(15,2) WAJIB, paymentDate WAJIB, paymentMethod String, accountId/bankId nullable, adminFee default 0, vendorBillId nullable, referenceNumber/bankAccount/notes nullable, confirmedBy/confirmedAt nullable, transferredAt/transferReference nullable, createdBy nullable, deletedAt nullable, createdAt/updatedAt; `VendorPaymentAllocation` (:2365) hanya lahir saat konfirmasi. Indeks status/deletedAt/vendor/paymentDate/createdBy ada.
+- Lifecycle: create draft tanpa jurnal/alokasi :1500,1576 (target bill draft ditolak :1530); confirm draft→completed satu transaksi berkunci + alokasi capped balanceDue + tolak overpay + jurnal hook :1696; update hanya draft :3037; delete hanya draft :2433. Penanda transfer operasional terpisah dari jurnal (komentar schema model).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:193-197): `view_vendor_payments`, `create_vendor_payments`, `edit_vendor_payments`, `delete_vendor_payments`, `approve_vendor_payments` (konfirmasi memakai approve :1698). Navigasi existing (navigation.ts:114 `view_vendor_payments`).
+- Daftar existing: `pembelian/pembayaran-vendor` (page.tsx:39-54, findMany semua status urut createdAt desc + count, saring cari documentNo/nama vendor saja) — permukaan operasional semua pembayaran; konteks yang membuat antrean draft ini bukan penggantinya.
+Belum ada (TERVERIFIKASI-KODE, grep run ini): builder/loader/kartu antrean pembayaran vendor `draft` mengendap — grep `vendor-payment-draft-queue`/`VendorPaymentDraftQueue` di src = 0 (hit `umurDraft` hanya keluarga sales draft-queue). Risiko bengkel: staf keuangan membuat draft pembayaran ke supplier part, tidak pernah dikonfirmasi — kas terlihat aman padahal rencana bayar menggantung, tagihan tujuan tetap terbuka menua di aging, dan tidak ada permukaan yang menua draft pembayarannya; draft yang ditinggal juga menahan kesan "sudah dibuatkan pembayaran" palsu bagi pembaca daftar campur.
+Aktor: Pembuat pembayaran pemegang `create_vendor_payments`/`edit_vendor_payments` (sumber baris draft), Pengonfirmasi pemegang `approve_vendor_payments` (pembaca kerja antrean; pemilik konfirmasi existing), Pembaca keuangan pemegang `view_vendor_payments` (pembaca antrean), Sistem (builder turunan baca-saja). Vendor BUKAN aktor (tidak ada permukaan vendor); pengguna tanpa `view_vendor_payments` bukan aktor sama sekali (termasuk rekap — nominal pembayaran vendor data keuangan internal).
+Dokumen masuk: baris VendorPayment `status = "draft"` AND deletedAt null (id, slug, documentNo, vendorId+nama, amount, paymentDate, paymentMethod label existing, vendorBillId+documentNo tagihan tujuan bila tertaut, createdBy+nama bila terpetakan, createdAt). Field existing semua; tanpa field masuk baru.
+Dokumen keluar: baris antrean turunan per pembayaran (§3) + rekap hitungan pembayaran per tingkat/vendor + Σ amount baris berlabel nilai draft. BUKAN pembayaran: tidak ada kas keluar, jurnal, alokasi, atau status tagihan berubah karena antrean.
+1. Pembayaran lahir `draft` lewat createVendorPayment existing (boleh menargetkan satu tagihan terbuka).
+2. Builder antrean (usulan, baca-saja) mengambil populasi draft dan menurunkan: `umurDraftHari` (hari kalender WIB sejak `createdAt`), konteks vendor/tagihan tujuan, penanda `paymentDateLampau` (fakta tanggal rencana bayar lampau — bukan tunggakan, BR-VPQ-06), rekap.
+3. Pengonfirmasi membuka detail pembayaran existing dan mengonfirmasi/mengubah/menghapus lewat jalur existing. Antrean tidak menyediakan tombol Konfirmasi/Alokasi/Tandai Transfer/Hapus tahap 1 (Q-VPQ-3).
+Kata tampil usulan (USULAN — verbatim final = Q-VPQ-2 Lead bersama ambang hari):
+- Judul kolom: `No. Dokumen`, `Vendor`, `Nilai Draft`, `Tanggal Bayar`, `Tagihan Tujuan`, `Menunggu` (umur), `Dibuat Oleh`.
+- Label tingkat: `mengendap` → "Mengendap"; selain itu → "Menunggu Konfirmasi".
+- Label rekap nilai: `nilai draft belum dibayar` (verbatim usulan, nempel di setiap Σ amount).
+- Notice usulan: "Daftar ini hanya pembayaran vendor yang masih draft dan belum dikonfirmasi. Pembayaran draft belum mengeluarkan kas dan belum mengurangi tagihan vendor; konfirmasi, ubah, atau hapus lewat detail pembayaran."
+| Lihat antrean draft + tingkat/umur + nilai draft | `view_vendor_payments` (katalog:193) | daftar existing requirePermission + halaman pembayaran | TIDAK ada key baru tahap 1; loader menegakkan izin sebelum query (BR-VPQ-05) |
+| Buat pembayaran (sumber baris draft) | `create_vendor_payments` (katalog:194) | createVendorPayment; target bill draft ditolak | tidak berubah |
+| Konfirmasi draft → completed (+ alokasi + jurnal) | `approve_vendor_payments` (katalog:197) + assertApproved workflow | confirmVendorPayment klaim berkunci satu transaksi | TIDAK berubah; antrean hanya mengantar ke detail |
+| Ubah / hapus draft | `edit_vendor_payments` / `delete_vendor_payments` (katalog:195/196) | update/delete hanya status draft | tidak berubah; bukan dari antrean tahap 1 |
+| Tandai transfer terkirim | jalur Transfer Pemasok existing | penanda operasional, tanpa jurnal baru | di luar populasi (hanya completed); tidak berubah |
+Tidak ada permission key baru diusulkan tahap 1. Tidak ada scope gudang/departemen untuk pembayaran vendor di kode existing — jangan karang scope baru di loader (BR-VPQ-05).
+Status dokumen existing TIDAK diubah spec ini: `draft` → (konfirmasi existing) → `completed`; tidak ada status paid terpisah di VendorPayment (penanda transfer = transferredAt, bukan status); draft hanya bisa diubah/dihapus, completed tidak kembali draft. Tidak ada jalur kas/jurnal dari draft selain konfirmasi.
+Populasi antrean: VendorPayment `status = "draft"` AND deletedAt null. Per baris:
+- `paymentDateLampau` = hari WIB hari ini > paymentDate (fakta tanggal rencana; paymentDate adalah tanggal bayar yang direncanakan/diinput, bukan tanggal jatuh tempo tagihan).
+| S0 | status bukan draft, atau deletedAt terisi | di luar antrean | bukan populasi |
+| S1 | draft dan umurDraftHari >= ambangHariMengendap (Q-VPQ-1, BELUM diputus — selama belum diputus tingkat ini TIDAK diterbitkan) | `mengendap` | rencana bayar belum dikonfirmasi melewati kesabaran operasional yang diputus Lead; konfirmasi atau hapus lewat detail |
+| S2 | draft selain S1 | `menunggu` | antrean biasa; urutan tertua-dulu (Q-VPQ-5) |
+`paymentDateLampau` adalah penanda pendamping, BUKAN tingkat tersendiri tahap 1 dan BUKAN tunggakan (BR-VPQ-06). Tidak ada tingkat kelayakan bayar: menilai draft "siap konfirmasi" dari saldo kas/tagihan berjalan di antrean berarti membaca keadaan uang berjalan — di luar tahap 1 (penilaian milik pengonfirmasi di detail; overpay/alokasi dinilai confirm existing). Transisi tingkat hanya karena render ulang sesudah fakta berubah. Tidak ada cron, tidak ada tulis status turunan, tidak ada konfirmasi otomatis.
 | BR-VPQ-01 | Populasi = VendorPayment `status="draft"` persis AND deletedAt null. completed/status lain/baris terhapus lunak tidak disamakan diam-diam dan tidak masuk, termasuk rekap. | TERVERIFIKASI-KODE (status default + deletedAt schema) + USULAN batas |
 | BR-VPQ-02 | Draft belum membayar: nol jurnal, nol kas/bank keluar, nol alokasi, nol pengurang balanceDue tagihan sampai confirmVendorPayment existing berjalan. Amount draft dilarang dijumlahkan ke kas keluar, pembayaran terlaksana, AP terbayar, atau sisa utang vendor di permukaan mana pun. | TERVERIFIKASI-KODE (:1576 + confirm :1696 + hook :2624) |
 | BR-VPQ-03 | Satu-satunya jalan keluar dari draft adalah jalur existing berizin: konfirmasi (`approve_vendor_payments` + assertApproved, klaim berkunci, alokasi capped, tolak overpay), ubah (hanya draft), hapus (hanya draft + sapu lampiran). Antrean tidak menambah jalan pintas konfirmasi/alokasi/transfer/hapus dari daftar tahap 1 (Q-VPQ-3). | TERVERIFIKASI-KODE + USULAN batas |
@@ -34448,31 +34557,18 @@ Populasi antrean: VendorPayment `status = "draft"` AND deletedAt null. Per baris
 | BR-VPQ-08 | Builder antrean murni baca-saja turunan: tidak memanggil confirmVendorPayment/update/delete/hook jurnal/alokasi, tidak menulis status/kolom. Kolom tingkat tersimpan atau penanda "sudah diingatkan" = keputusan terpisah, bukan tahap 1. | USULAN |
 | BR-VPQ-09 | createdBy null (legacy) tampil `—`; referenceNumber kosong tampil `—`, bukan karangan nomor referensi; transferredAt pada draft (bila data legacy mengisinya) diabaikan antrean — penanda transfer hanya bermakna sesudah completed, antrean tidak menampilkannya sebagai bukti sudah transfer. | USULAN di atas TERVERIFIKASI-KODE field nullable |
 | BR-VPQ-10 | Ambang hari `mengendap`, kata label final, dan konfirmasi-dari-daftar adalah kebijakan perilaku inti + uang: BUTUH-VONIS Lead (Q-VPQ-1/2/5) dan, khusus Q-VPQ-3, vonis Accountant WAJIB sebelum dibuka karena konfirmasi menggerakkan jurnal Dr Hutang Usaha/Cr Kas + alokasi subledger + penolakan overpay. Tahap baca-saja apa adanya tidak mengubah jurnal sehingga Accountant tidak diminta untuk tahap ini. | BUTUH-VONIS Lead (+ Accountant bersyarat) |
-
-### 5. Feature matrix Accurate/Zahir/ISF
-
-| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | Usulan spec ini |
-|---|---|---|---|---|
 | Pembayaran pembelian mengurangi utang supplier | Ada: pembayaran tercatat mengurangi utang, termasuk cicilan (URL §kepala) | Ada: pembayaran hutang per faktur akun kas/bank (URL §kepala) | Ada: konfirmasi → alokasi capped + jurnal Dr AP/Cr Kas satu transaksi | Tidak diubah; antrean berhenti di konfirmasi existing |
 | Pembayaran konsep/draft dibedakan dari terlaksana | Tidak ditetapkan di halaman yang diakses — tidak diklaim | Tidak ditetapkan — tidak diklaim | Ada: draft tanpa jurnal; completed berjurnal+alokasi; transfer penanda terpisah | Populasi draft persis + label nilai draft |
 | Daftar pembayaran semua status | Ada daftar pembayaran (URL §kepala) | Ada daftar pembayaran hutang (URL §kepala) | Ada: semua status urut terbaru, cari saja | Antrean khusus draft berumur tertua-dulu |
 | Antrean draft pembayaran bertingkat umur + ambang hari | Tidak ditetapkan — tidak diklaim | Tidak ditetapkan — tidak diklaim | ABSEN (grep §0) | Inti spec ini (turunan, tanpa angka karang) |
-
-### 6. Acceptance criteria + edge cases
-
-Backend (sesudah putusan Lead; builder murni + loader — falsifikasi QA):
 - AC-VPQ-B1: Populasi tepat `status="draft"` + deletedAt null: completed/terhapus/status lain tidak tampil dan tidak terhitung rekap/Σ (cabut saring status/deletedAt → MERAH).
 - AC-VPQ-B2: Umur hari kalender WIB dari createdAt; batas hari sama (umur 0), ambang persis (umur == ambang → `mengendap` hanya bila Q-VPQ-1 diputus), createdAt masa depan umur 0 tertanda bukan negatif (EC-VPQ-4); selama Q-VPQ-1 belum diputus `mengendap` tidak terbit (tanam angka liar → MERAH).
 - AC-VPQ-B3: Penanda paymentDate: lampau → tertanda fakta; hari sama → tidak lampau; penanda tidak mengubah tingkat dan tidak berlabel tunggakan (jadikan tingkat/label tunggakan → MERAH, BR-VPQ-06).
 - AC-VPQ-B4: Loader fail-closed `view_vendor_payments` sebelum query, anti-N+1 (vendor/tagihan/pembuat massal), Decimal→Number di tepi; tanpa izin loader tidak dipanggil; rekap/Σ = baris yang sama persis (Σ beda → MERAH).
 - AC-VPQ-B5: Baca-saja terbukti: builder/loader tidak memanggil confirm/update/delete/hook jurnal/alokasi/tulis status (panggil diam-diam → MERAH, BR-VPQ-02/08); amount verbatim, adminFee tidak ikut Σ pembayaran (campur adminFee → MERAH).
-
-Frontend (konsumen):
 - AC-VPQ-F1: Kolom/label/notice verbatim server; UI tidak menghitung umur/tingkat/Σ sendiri (hitung ulang UI → MERAH); urutan tertua-dulu dari payload.
 - AC-VPQ-F2: Nilai selalu berlabel nilai draft belum dibayar; draft tidak berlabel kas keluar/terbayar/pengurang utang/tunggakan (label terlaksana di draft → MERAH); vendor/tagihan tujuan verbatim, null `—`.
 - AC-VPQ-F3: Tautan baris hanya ke detail pembayaran existing; tidak ada tombol Konfirmasi/Alokasi/Tandai Transfer/Hapus di antrean tahap 1 (aksi dari daftar tanpa putusan Q-VPQ-3 → MERAH); tanpa `view_vendor_payments` halaman menolak.
-
-Edge cases:
 - EC-VPQ-1: Draft yang target tagihannya sudah lunas oleh pembayaran lain sesudah draft lahir tetap populasi apa adanya; antrean tidak menilai konfirmasinya akan ditolak confirm existing (penilaian saat konfirmasi, BR-VPQ-07).
 - EC-VPQ-2: Dua draft untuk vendor/tagihan sama tampil dua baris apa adanya; tidak digabung/didedup dan tidak dijumlahkan sebagai rencana bayar gabungan berlabel utang.
 - EC-VPQ-3: Draft vendor nonaktif sesudah lahir tetap populasi apa adanya; keputusan bayar/tidak dinilai manusia di detail.
@@ -34481,36 +34577,22 @@ Edge cases:
 - EC-VPQ-6: Pembayaran draft amount 0 tampil apa adanya; tidak dikeluarkan karena nominal.
 - EC-VPQ-7: paymentDate jauh lampau pada draft lama tertanda fakta tanggal saja; antrean tidak menghitung denda/keterlambatan (wilayah tagihan existing).
 - EC-VPQ-8: Draft dengan transferredAt terisi (legacy) tidak tampil sebagai sudah transfer (BR-VPQ-09); tetap populasi draft.
-
 ### 7. Backlog implementasi (turunan F-2026-10-26-072-S)
-
-| ID | Pekerjaan | Pemilik | Gerbang |
-|---|---|---|---|
 | F-2026-10-26-072-S | Spec kontrak ini (dokumen) | Business | — |
 | 072-B | Builder murni tingkat/umur draft pembayaran vendor + loader `view_vendor_payments` fail-closed anti-N+1 + tes AC-VPQ-B1..B5 | Backend | Putusan Lead Q-VPQ-1/2 |
 | 072-F | Permukaan antrean (daftar pembayaran existing atau halaman antrean pola keluarga antrean) verbatim payload + AC-VPQ-F1..F3 | Frontend | 072-B merged |
 | 072-Q | Falsifikasi AC-VPQ-B1..B5 + F1..F3 atas head Backend/Frontend persis | QA | 072-B/072-F |
-
-ID turunan bernomor F-* baru dipesan saat kartu dibuat; jangan karang sekarang.
-
-### 8. Pertanyaan putusan (gerbang)
-
-| ID | Pertanyaan | Untuk | Rekomendasi Business |
-|---|---|---|---|
 | Q-VPQ-1 | Ambang hari tingkat `mengendap` (umur draft >= N hari kalender WIB)? | Lead | USULAN 3 hari kalender (rencana kas menggantung cepat basi terhadap keadaan tagihan/kas berjalan) — bukan fakta; selama belum diputus builder hanya `menunggu` |
 | Q-VPQ-2 | Kata label/notice/penanda paymentDate final §1? | Lead | Kata usulan apa adanya; satu konstanta label server; label nilai wajib memuat "belum dibayar" |
 | Q-VPQ-3 | Konfirmasi langsung dari antrean dibuka? | Lead + Accountant (WAJIB vonis — jurnal + alokasi + overpay guard) | TIDAK tahap 1 (BR-VPQ-03): konfirmasi menilai alokasi/overpay dari keadaan tagihan saat itu dan harus terasa di detail; jalan pintas = keputusan terpisah bervonis |
 | Q-VPQ-4 | Key baca antrean cukup `view_vendor_payments`, atau dibatasi pembuat/pengonfirmasi? | Lead | `view_vendor_payments` tahap 1 (sama dengan daftar existing); pembatasan per pembuat = keputusan sadar terpisah |
 | Q-VPQ-5 | Urutan: `mengendap` dulu lalu tertua? Acuan umur createdAt (bukan paymentDate) disahkan? | Lead | Ya `mengendap` dulu (bila aktif), lalu umur tertua; seri documentNo asc; createdAt — paymentDate hanya penanda fakta (BR-VPQ-06) |
-
-### Yang TIDAK diusulkan run ini
 - Mengonfirmasi/mengalokasi/menandai transfer massal atau otomatis dari draft basi (BR-VPQ-03) — jurnal + alokasi subledger + overpay guard tidak boleh dilewati daftar.
 - Memasukkan amount draft ke kas keluar/AP terbayar/sisa utang/aging (BR-VPQ-02) — draft belum berdampak uang; aging wilayah tagihan existing.
 - Simulasi alokasi draft ke tagihan (BR-VPQ-07) — alokasi dinilai ulang saat konfirmasi; simulasi menjanjikan hasil yang bisa berubah.
 - Menghapus draft basi otomatis berbasis umur — hapus pembayaran = keputusan manusia lewat jalur existing.
 - Pengingat WA/email ke pengonfirmasi dan penanda "sudah diingatkan" tersimpan — kanal & keadaan baru di luar tahap baca-saja.
 - Status/field pembayaran baru, perubahan lifecycle draft→completed, atau jalur pembayaran atas tagihan draft (existing menolaknya :1530).
-
 F-2026-10-26-072-S — Antrean pembayaran vendor draft mengendap. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead Q-VPQ-1/2 (Accountant TIDAK untuk tahap baca-saja apa adanya; WAJIB hanya bila Q-VPQ-3 dibuka), lalu fisik Backend (072-B), konsumen Frontend (072-F), falsifikasi QA (072-Q). Pemilik usulan: Business (spec), Lead (ambang/kata/izin), Backend (fisik turunan), Frontend (permukaan), QA (falsifikasi). Butuh putusan accountant: TIDAK untuk tahap baca-saja apa adanya.
 
 ## PUTUSAN LEAD 2026-10-26 19:10 WIB — gerbang F-2026-10-26-070-S (Q-PDQ), F-2026-10-26-071-S (Q-MRQ), F-2026-10-26-072-S (Q-VPQ)
