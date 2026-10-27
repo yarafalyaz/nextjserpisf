@@ -116,6 +116,20 @@ describe("buildVatInvoiceList", () => {
     expect(result.verdict).toContain("2 tanpa nomor faktur pajak")
   })
 
+  it("faktur tanpa nomor dokumen tampil tanda hubung, angka tetap terhitung", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice({ documentNo: null }), invoice({ documentNo: "INV-002", date: new Date(2026, 9, 6) })],
+      input: [],
+    })
+
+    expect(result.output.count).toBe(2)
+    expect(result.output.vat).toBe(2_200_000)
+    const data = result.table.rows.filter((row) => row.kind === "data")
+    expect(data.map((row) => (row.kind === "data" ? row.cells[1] : ""))).toEqual(["–", "INV-002"])
+    expect(displayTaxInvoiceNo(invoice({ documentNo: null }))).toBe("–")
+    expect(displayTaxInvoiceNo(invoice({ documentNo: null, taxInvoiceNumber: "010.000-26.9" }))).toBe("010.000-26.9")
+  })
+
   it("displayTaxInvoiceNo memprioritaskan nomor faktur pajak, lalu nomor internal", () => {
     expect(displayTaxInvoiceNo(invoice({ taxInvoiceNumber: " 010.000-26.1 " }))).toBe("010.000-26.1")
     expect(displayTaxInvoiceNo(invoice({ taxInvoiceNumber: null }))).toBe("INV-001")

@@ -15,7 +15,7 @@ import {
   statementOptionsToParams,
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display"
-import { parseReportPeriod } from "@/lib/reports/report-period"
+import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { loadSkontroBalanceSheet } from "@/lib/reports/skontro-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
@@ -31,11 +31,20 @@ export default async function SkontroBalanceSheetPage({
   searchParams: Promise<Record<string, string | undefined>>
 }) {
   const user = await requirePermission("view_reports")
-  const [params, search] = await Promise.all([routeParams, searchParams])
+  const search = await searchParams
 
-  const now = new Date()
-  // Posisi "per" tanggal: slug 2026-10 berarti per 31 Okt 2026.
-  const period = parseReportPeriod(params.segments?.[0] ?? search.date, { start: now, end: now })
+  // Posisi "per" tanggal: slug 2026-10 berarti per 31 Okt 2026. Periode
+  // dibaca hanya via helper bersama; ?date= lama dinormalisasi menjadi
+  // pasangan legacy satu hari, ?tanggalMulai=&tanggalSelesai= oleh helper.
+  const legacySearch = { ...search }
+  if (!legacySearch.tanggalMulai && !legacySearch.tanggalSelesai && search.date) {
+    legacySearch.tanggalMulai = search.date
+    legacySearch.tanggalSelesai = search.date
+  }
+  const period = await reportPeriodFromRoute(routeParams, Promise.resolve(legacySearch), (now) => ({
+    start: now,
+    end: now,
+  }))
   const asOfDate = new Date(period.end)
 
   const cookieStore = await cookies()

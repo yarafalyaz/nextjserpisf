@@ -189,34 +189,58 @@ export async function onStockAdjustmentProcessed(
               `Item batch #${item.itemId} memerlukan nomor batch untuk penambahan stok.`,
             );
           }
-          const batchForLayer = batchNumbers.length > 0 ? batchNumbers.join(", ") : null;
-          await createInLayer(tx, {
-            itemId: item.itemId,
-            warehouseId: adjustment.warehouseId,
-            batchNumber: batchForLayer,
-            stockMoveId: sm.id,
-            qty: qtyDiff,
-            unitCost: enteredUnitCost,
-          });
-          if (batchNumbers.length > 0) {
+          // Satu layer per lot: layer gabungan "LOT-A, LOT-B" tak pernah
+          // ditemukan konsumsi FIFO sehingga ItemBatch tak berkurang. Qty
+          // baris dibagi rata antar lot (sisa pembulatan di lot terakhir)
+          // dan nilai yang sama dipakai layer + ItemBatch.
+          const uniqueBatches = [...new Set(batchNumbers)];
+          const basePerBatch =
+            uniqueBatches.length > 0 ? Math.round((qtyDiff / uniqueBatches.length) * 100) / 100 : 0;
+          const perBatchQty = uniqueBatches.map((bn, idx) => ({
+            batchNumber: bn,
+            qty:
+              idx === uniqueBatches.length - 1
+                ? Math.round((qtyDiff - basePerBatch * (uniqueBatches.length - 1)) * 100) / 100
+                : basePerBatch,
+          }));
+          if (perBatchQty.length === 0) {
+            await createInLayer(tx, {
+              itemId: item.itemId,
+              warehouseId: adjustment.warehouseId,
+              batchNumber: null,
+              stockMoveId: sm.id,
+              qty: qtyDiff,
+              unitCost: enteredUnitCost,
+            });
+          } else {
+            for (const alloc of perBatchQty) {
+              await createInLayer(tx, {
+                itemId: item.itemId,
+                warehouseId: adjustment.warehouseId,
+                batchNumber: alloc.batchNumber,
+                stockMoveId: sm.id,
+                qty: alloc.qty,
+                unitCost: enteredUnitCost,
+              });
+            }
             // Pola sama seperti transfer/retur: tambah ke lot bila ada, buat bila belum.
-            for (const bn of batchNumbers) {
+            for (const alloc of perBatchQty) {
               const destBatch = await tx.itemBatch.findFirst({
-                where: { itemId: item.itemId, warehouseId: adjustment.warehouseId, batchNumber: bn },
+                where: { itemId: item.itemId, warehouseId: adjustment.warehouseId, batchNumber: alloc.batchNumber },
                 select: { id: true },
               });
               if (destBatch) {
                 await tx.itemBatch.update({
                   where: { id: destBatch.id },
-                  data: { qty: { increment: qtyDiff / batchNumbers.length } },
+                  data: { qty: { increment: alloc.qty } },
                 });
               } else {
                 await tx.itemBatch.create({
                   data: {
                     itemId: item.itemId,
-                    batchNumber: bn,
+                    batchNumber: alloc.batchNumber,
                     warehouseId: adjustment.warehouseId,
-                    qty: qtyDiff / batchNumbers.length,
+                    qty: alloc.qty,
                     notes: `Penyesuaian Stok ${adjustment.documentNo}`,
                   },
                 });

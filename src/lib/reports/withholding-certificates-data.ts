@@ -18,7 +18,17 @@ import {
 
 type Period = { start: Date; end: Date }
 
-export async function loadWithholdingCertificatesCsv(period: Period): Promise<WithholdingCertificateCsv> {
+/**
+ * SATU sumber Bukti Potong untuk layar, PDF, dan CSV (B8): baris dua sisi
+ * (dokumen `WithholdingCertificate` snapshot + fallback dokumen komersial
+ * tanpa bupot) yang kemudian dibentuk menjadi tabel layar/PDF oleh
+ * `buildWithholdingCertificateTable` dan menjadi CSV oleh
+ * `serializeWithholdingCertificatesCsv`. Tidak ada permukaan yang boleh
+ * membaca semesta dokumennya sendiri lagi.
+ */
+export async function loadWithholdingCertificateInputs(
+  period: Period,
+): Promise<WithholdingCertificateInput[]> {
   const [bills, payments, certificates] = await Promise.all([
     prisma.vendorBill.findMany({
       where: {
@@ -39,7 +49,7 @@ export async function loadWithholdingCertificatesCsv(period: Period): Promise<Wi
         withholdingAmount: { gt: 0 },
       },
       include: {
-        salesInvoice: { select: { customer: { select: { name: true, taxId: true } } } },
+        salesInvoice: { select: { documentNo: true, customer: { select: { name: true, taxId: true } } } },
         withholdingType: { select: { code: true, name: true, rate: true } },
       },
       orderBy: [{ paymentDate: "asc" }, { documentNo: "asc" }],
@@ -102,6 +112,7 @@ export async function loadWithholdingCertificatesCsv(period: Period): Promise<Wi
       date: payment.paymentDate,
       certificateNo: payment.withholdingCertificateNo,
       documentNo: payment.documentNo,
+      invoiceNo: payment.salesInvoice?.documentNo ?? null,
       counterparty: payment.salesInvoice?.customer?.name ?? "",
       npwp: payment.salesInvoice?.customer?.taxId ?? null,
       typeCode: payment.withholdingType?.code ?? null,
@@ -112,5 +123,9 @@ export async function loadWithholdingCertificatesCsv(period: Period): Promise<Wi
     })),
   ]
 
-  return serializeWithholdingCertificatesCsv(inputs)
+  return inputs
+}
+
+export async function loadWithholdingCertificatesCsv(period: Period): Promise<WithholdingCertificateCsv> {
+  return serializeWithholdingCertificatesCsv(await loadWithholdingCertificateInputs(period))
 }

@@ -127,6 +127,26 @@ export function classifyScrapLine(input: ScrapLineInput): ScrapClassification {
   }
 }
 
+/**
+ * Pool biaya WIP per job SETELAH kejadian issue (TASK-019): jurnal scrap
+ * abnormal per kejadian mengkredit WIP keluar ke Beban Kerugian, jadi pool
+ * yang boleh di-release ke barang jadi adalah biaya terbit dikurangi
+ * abnormal yang SUDAH terjurnal. Tanpa pengurangan ini kredit WIP saat
+ * complete memakai pool gross dan WIP per job negatif sebesar abnormal.
+ * Flag OFF (catat-dulu) → abnormalPostedValue 0 → pool tetap gross, konsisten
+ * dengan nol jurnal abnormal. Hasil tidak pernah negatif.
+ */
+export function wipCostPoolAfterIssue(input: {
+  previousWipCost: number
+  issuedCost: number
+  abnormalPostedValue: number
+}): number {
+  const previous = round2(Number(input.previousWipCost ?? 0))
+  const issued = round2(Number(input.issuedCost ?? 0))
+  const abnormalPosted = round2(Number(input.abnormalPostedValue ?? 0))
+  return Math.max(0, round2(previous + issued - abnormalPosted))
+}
+
 export interface AbnormalScrapGate {
   abnormalScrapPostingEnabled: boolean
   abnormalScrapExpenseAccountId: number | null
