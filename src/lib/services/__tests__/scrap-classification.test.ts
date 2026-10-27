@@ -3,6 +3,7 @@ import {
   classifyScrapLine,
   decideAbnormalScrapPosting,
   validateScrapInput,
+  wipCostPoolAfterIssue,
 } from "../scrap-classification"
 
 const GATE_OFF = { abnormalScrapPostingEnabled: false, abnormalScrapExpenseAccountId: null, wipAccountId: null }
@@ -75,5 +76,23 @@ describe("decideAbnormalScrapPosting (putusan flag Lead catat-dulu)", () => {
 
   it("tanpa abnormal: mode off walau flag ON", () => {
     expect(decideAbnormalScrapPosting(GATE_ON_OK, 0)).toEqual({ mode: "off", journalAmount: 0 })
+  })
+})
+
+describe("wipCostPoolAfterIssue (TASK-019 WIP tidak negatif)", () => {
+  it("abnormal terjurnal dikeluarkan dari pool: WIP job seimbang setelah complete", () => {
+    // Issue Rp1.000, abnormal terjurnal Rp300 → pool release Rp700.
+    // WIP GL: Dr 1.000 − Cr abnormal 300 − Cr barang jadi 700 = 0.
+    const pool = wipCostPoolAfterIssue({ previousWipCost: 0, issuedCost: 1000, abnormalPostedValue: 300 })
+    expect(pool).toBe(700)
+    expect(1000 - 300 - pool).toBe(0)
+  })
+
+  it("flag OFF (abnormal belum terjurnal): pool tetap gross", () => {
+    expect(wipCostPoolAfterIssue({ previousWipCost: 200, issuedCost: 1000, abnormalPostedValue: 0 })).toBe(1200)
+  })
+
+  it("pool tidak pernah negatif walau abnormal melebihi sisa pool", () => {
+    expect(wipCostPoolAfterIssue({ previousWipCost: 0, issuedCost: 100, abnormalPostedValue: 150 })).toBe(0)
   })
 })

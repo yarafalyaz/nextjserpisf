@@ -99,7 +99,7 @@ export interface CoretaxExportInvoiceSnapshot {
 export interface CoretaxExportSellerSnapshot {
   /** NPWP penjual (SystemSetting.companyTaxId) → TIN bulk + SellerIDTKU basis. */
   tin: string | null
-  /** NITKU penjual 22 digit. Kolom sumber belum ada di schema → tolak bernama sampai disediakan. */
+  /** NITKU penjual 22 digit dari SystemSetting.companyNitku; kosong → tolak bernama. */
   sellerIdtku: string | null
 }
 

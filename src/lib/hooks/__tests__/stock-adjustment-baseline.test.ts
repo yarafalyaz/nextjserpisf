@@ -142,6 +142,39 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     )
   })
 
+  it("creates ONE layer per lot for a multi-batch positive adjustment (bukan layer gabungan)", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 9, systemQty: 0, actualQty: 10, difference: 10, unitCost: 50, batchNumbers: ["LOT-A", "LOT-B"] }],
+      liveQty: { 9: 0 },
+      trackBatchItemIds: [9],
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    // Layer gabungan "LOT-A, LOT-B" tak pernah ditemukan konsumsi FIFO.
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(2)
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ batchNumber: "LOT-A", qty: 5 })
+    )
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ batchNumber: "LOT-B", qty: 5 })
+    )
+    expect(mocks.createInLayer).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ batchNumber: "LOT-A, LOT-B" })
+    )
+    // ItemBatch per lot dengan qty yang sama seperti layernya (total tetap 10).
+    expect(spies.batchCreate).toHaveBeenCalledTimes(2)
+    expect(spies.batchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ batchNumber: "LOT-A", qty: 5 }) })
+    )
+    expect(spies.batchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ batchNumber: "LOT-B", qty: 5 }) })
+    )
+  })
+
   it("rejects a positive adjustment of a batch-tracked item without a lot (P1-1)", async () => {
     wireTx({
       items: [{ itemId: 9, systemQty: 0, actualQty: 6, difference: 6, unitCost: 50 }],

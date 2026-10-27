@@ -136,9 +136,10 @@ export async function onPurchaseReturnProcessed(
 
         // Consume FIFO from the resolved warehouse FIRST and capture the ACTUAL
         // carrying cost that leaves inventory. The StockMove and the GL inventory
-        // relief use this real FIFO cost — not the agreed return price (item.cost),
-        // which the AP side keeps. Any difference is a purchase-return price
-        // variance booked by accounting.hook.onPurchaseReturnProcessed.
+        // relief use this real FIFO cost — not the agreed return price
+        // (item.price beku), which the AP side keeps. Any difference is a
+        // purchase-return price variance booked by
+        // accounting.hook.onPurchaseReturnProcessed.
         const { consumedCost, consumedSerials } = await consumeFifoLayers(tx, {
           itemId: item.itemId,
           warehouseId,
