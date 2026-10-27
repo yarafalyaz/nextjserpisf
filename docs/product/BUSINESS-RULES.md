@@ -85,8 +85,31 @@ bertentangan.
     posted.
 -   **SAL-BR-003:** faktur penjualan posted mengurangi stok untuk baris
     stock item yang relevan.
--   **SAL-BR-004 \[OPEN\]:** DP dicatat sesuai model uang
-    muka/accounting yang disetujui.
+-   **SAL-BR-004:** model akunting DP tertutup-terverifikasi oleh
+    kode. Saat DP dikonfirmasi, penerimaan dicatat lebih dulu oleh
+    `onDownPaymentReceived` dalam transaksi yang sama dengan
+    konfirmasi (`src/actions/sales.actions.ts:980-981`): jurnal
+    `POSTED` lahir lewat `tx.journal.create`
+    (`src/lib/hooks/accounting.hook.ts:2498-2519`) dengan baris dari
+    `buildDownPaymentReceiptLines`
+    (`src/lib/tax/down-payment-vat.ts:261-278`) — debit akun kas/bank
+    (`cashBankAccountId`) sebesar amount penuh, kredit akun kewajiban
+    Uang Muka Penjualan 210102 (`customerDownPaymentAccountId`)
+    sebesar amount, atau neto PPN bila DP terutang PPN (sisa kredit
+    ke PPN Keluaran 210201). Akun kas/bank atau 210102 belum
+    terkonfigurasi = gagal tertutup
+    (`src/lib/hooks/accounting.hook.ts:2382-2387,2491-2496`).
+    DP bukan piutang dan bukan pendapatan saat diterima: kredit ke
+    210102, bukan Piutang (`src/lib/hooks/accounting.hook.ts:2378-2381`).
+    Alokasi DP ke faktur adalah reklas, bukan kas baru: Dr 210102 /
+    Cr Piutang — jalur faktur-sudah-ada
+    `src/lib/hooks/down-payment.hook.ts:219-240` dan jalur konversi
+    awal `src/lib/hooks/down-payment.hook.ts:756-775`; tanpa jurnal
+    kas kedua (`src/lib/hooks/down-payment.hook.ts:685-688`).
+    Sisa OPEN tunggal: perilaku reversal/pembatalan pembayaran DP
+    setelah konversi terjadi (ADR-003); refund kelebihan DP lewat
+    kredit pelanggan adalah jalur terpisah, bukan reversal DP
+    terkonversi.
 -   **SAL-BR-005:** pembayaran DP valid mencapai ambang persen kategori
     pelanggan yang tersnapshot pada quotation (bawaan aman 50% bila
     snapshot tak sah) memicu konversi quotation menjadi faktur sesuai
@@ -171,7 +194,7 @@ bertentangan.
 1.  Metode valuasi stok.
 2.  Negative stock dan override.
 3.  Ongkir dan landed cost.
-4.  Detail konversi quotation pada DP 50%.
+4.  Reversal/pembatalan pembayaran DP setelah konversi quotation terjadi (sisa OPEN tunggal DP; detail konversi lain tertutup-terverifikasi — lihat SAL-BR-004, SAL-BR-005, SAL-BR-015, ADR-007).
 5.  Retur pembelian/penjualan dan credit note.
 6.  Double-entry accounting.
 7.  Nomor dokumen.

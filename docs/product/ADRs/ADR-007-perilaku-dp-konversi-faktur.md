@@ -104,8 +104,10 @@ tunggal ini.
 ## Konsekuensi
 
 -   `SAL-BR-015` tertutup untuk basis ambang (`grandTotal`) dan tipe
-    faktur; `SAL-BR-004` dan sisa reversal DP pasca-konversi tetap
-    seperti tertulis di ADR-003.
+    faktur; `SAL-BR-004` tertutup-terverifikasi untuk model akunting
+    DP (jurnal terima Dr kas/bank / Cr 210102 dan reklas alokasi
+    Dr 210102 / Cr Piutang — lihat SAL-BR-004 di BUSINESS-RULES);
+    sisa reversal DP pasca-konversi tetap seperti tertulis di ADR-003.
 -   `AC-SAL-003` terpenuhi oleh perilaku di atas untuk tipe faktur dan
     basis ambang; kriteria untuk reversal belum dapat ditulis sebelum
     keputusan owner.

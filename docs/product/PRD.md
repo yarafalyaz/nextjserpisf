@@ -92,9 +92,13 @@ kecuali disetujui secara eksplisit.
 -   **INV-BR-003:** Remnant yang masih layak pakai dapat digunakan
     kembali.
 -   **INV-BR-004:** Scrap dipisahkan dari remnant reusable.
--   **SAL-BR-005:** DP yang valid mencapai 50% memicu konversi quotation
-    menjadi faktur secara otomatis. Detail tipe faktur dan basis
-    perhitungan harus disetujui sebelum implementasi.
+-   **SAL-BR-005:** DP yang valid mencapai ambang persen kategori
+    pelanggan yang tersnapshot pada quotation memicu konversi quotation
+    menjadi faktur secara otomatis; 50% hanya fallback fail-closed
+    bila snapshot tak sah. Tipe faktur (faktur penuh DRAFT) dan basis
+    perhitungan (`grandTotal` quotation) tertutup-terverifikasi di
+    ADR-007 / SAL-BR-015; sisa OPEN hanya reversal DP pasca-konversi
+    (ADR-003).
 -   Semua transaksi stok/keuangan penting harus dapat ditelusuri ke
     dokumen sumber.
 
@@ -139,7 +143,7 @@ kecuali disetujui secara eksplisit.
 -   Metode valuasi stok.
 -   Kebijakan negative stock.
 -   Perlakuan ongkir: biaya periode atau landed cost.
--   DP 50% menghasilkan faktur penuh atau faktur DP/progress.
+-   Reversal/pembatalan pembayaran DP setelah konversi terjadi (ambang DP memakai persen kategori pelanggan tersnapshot pada quotation, 50% hanya fallback fail-closed bila snapshot tak sah; faktur hasil adalah faktur penuh DRAFT — ADR-007).
 -   Scope accounting: pencatatan dasar atau double-entry lengkap.
 -   Kebijakan retur, approval, nomor dokumen, remnant/scrap.
 -   Formula payroll/lembur/cuti/pinjaman.

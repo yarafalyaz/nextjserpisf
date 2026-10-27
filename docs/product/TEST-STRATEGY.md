@@ -41,8 +41,10 @@ permission, audit, data migration.\
 8.  Receipt parsial mempertahankan ordered/received/remaining
     quantities.
 9.  Pembayaran parsial menghitung outstanding benar.
-10. DP draft/gagal tidak dihitung; DP posted mencapai 50% membuat
-    konversi sekali sesuai policy.
+10. DP draft/gagal tidak dihitung; DP posted mencapai ambang persen
+    kategori pelanggan yang tersnapshot pada quotation (50% hanya
+    fallback fail-closed bila snapshot tak sah) membuat konversi
+    sekali sesuai policy.
 11. Issue material proyek terhubung ke project/work order dan ledger.
 12. Return material hanya masuk kembali setelah verifikasi.
 13. Payroll formula memakai komponen yang disetujui dan tidak dapat
