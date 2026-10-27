@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { entityHref } from "@/lib/utils/entity-url";
 import { parsePagination } from "@/lib/utils/pagination";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   DetailTable,
   DetailTableHead,
@@ -73,11 +74,8 @@ export default async function UomPage({
             <DetailTableBody>
               {units.length === 0 ? (
                 <DetailTableRow>
-                  <DetailTableTd
-                    colSpan={4}
-                    className="text-center py-10 px-4 text-muted-foreground"
-                  >
-                    Belum ada satuan
+                  <DetailTableTd colSpan={4} className="py-10 px-4">
+                    <EmptyState title="Belum ada satuan" className="py-0" />
                   </DetailTableTd>
                 </DetailTableRow>
               ) : (

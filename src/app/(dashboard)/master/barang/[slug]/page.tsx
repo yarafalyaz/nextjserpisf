@@ -9,6 +9,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -415,7 +416,7 @@ export default async function ItemDetailPage({
             content: (
               <DetailSection title="Lapisan FIFO (Sisa)">
                 {item.inventoryLayers.length === 0 ? (
-                  <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada lapisan aktif</p>
+                  <EmptyState title="Tidak ada lapisan aktif" />
                 ) : (
                   <DetailTable>
                     <DetailTableHead>
@@ -482,7 +483,7 @@ export default async function ItemDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {stockMovesWithRef.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada transaksi</p>
+                    <EmptyState title="Belum ada transaksi" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

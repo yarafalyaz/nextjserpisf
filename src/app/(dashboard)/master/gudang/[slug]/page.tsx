@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -124,7 +125,7 @@ export default async function WarehouseDetailPage({
                     </div>
                   </div>
                   {warehouse.racks.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada rak</p>
+                    <EmptyState title="Belum ada rak" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -158,7 +159,7 @@ export default async function WarehouseDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {stockMoves.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pergerakan stok</p>
+                    <EmptyState title="Belum ada pergerakan stok" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

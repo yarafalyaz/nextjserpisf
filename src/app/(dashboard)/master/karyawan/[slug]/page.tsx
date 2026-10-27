@@ -7,6 +7,7 @@ import { CanCreate } from "@/components/auth/can-create"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { EmptyState } from "@/components/ui/empty-state"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
@@ -361,7 +362,7 @@ export default async function EmployeeDetailPage({
                         <SalaryAdjustmentForm employeeId={employee.id} />
                       </CanCreate>
                       {salaryRows.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Belum ada catatan kenaikan gaji.</p>
+                        <EmptyState title="Belum ada catatan kenaikan gaji." />
                       ) : (
                         <div className="overflow-x-auto rounded-lg border border-default">
                           <table className="w-full text-sm">
@@ -463,7 +464,7 @@ export default async function EmployeeDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {employee.leaveRequests.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data cuti</p>
+                    <EmptyState title="Belum ada data cuti" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -501,7 +502,7 @@ export default async function EmployeeDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {employee.overtimeRequests.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data lembur</p>
+                    <EmptyState title="Belum ada data lembur" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -557,7 +558,7 @@ export default async function EmployeeDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {employee.payrolls.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data penggajian</p>
+                    <EmptyState title="Belum ada data penggajian" />
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
