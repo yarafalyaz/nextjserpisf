@@ -8,10 +8,15 @@ import { hasPermission } from "./permissions"
  * terjadi di server (loader/action membuang field) — bukan sekadar
  * menyembunyikan input di UI. super_admin lolos lewat hasPermission
  * seperti biasa.
- *
- * ponytail: helper cost/identity milik K3 menyusul di file ini; sekarang
- * hanya gerbang gaji yang dipakai salary-adjustment.actions (K1 HCMS).
  */
 export async function canViewSalaryAmounts(): Promise<boolean> {
   return hasPermission("view_salary_amounts")
+}
+
+export async function canViewCostAmounts(): Promise<boolean> {
+  return hasPermission("view_cost_amounts")
+}
+
+export async function canViewSensitiveIdentity(): Promise<boolean> {
+  return hasPermission("view_sensitive_identity")
 }
