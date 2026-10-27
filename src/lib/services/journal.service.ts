@@ -149,8 +149,29 @@ export class JournalService {
           throw new Error(`Journal ${original.journalNumber} sudah di-reverse.`)
         }
 
+        // Selaras finance.actions reverseJournal: hanya POSTED yang boleh
+        // dibalik. DRAFT/REVERSING/dll ditolak berisik — sebelumnya lolos
+        // dan dibuatkan jurnal lawan, menyimpang dari pemeriksaan
+        // existing-reversal (POSTED yang sudah punya lawan pun bisa
+        // dibuatkan lawan kedua secara senyap).
+        if (original.status !== 'POSTED') {
+          throw new Error(
+            `Journal ${original.journalNumber} tidak bisa dibalik (status: ${original.status})`,
+          )
+        }
+
         if (original.referenceType === YEAR_END_CLOSING_REFERENCE_TYPE) {
           throw new Error(YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR)
+        }
+
+        // Pemeriksaan existing-reversal (selaras reverseJournalsByReferenceTx):
+        // POSTED yang sudah punya jurnal lawan tidak boleh dibuatkan kedua.
+        const existingReversal = await tx.journal.findFirst({
+          where: { referenceType: 'Journal', referenceId: journalId },
+          select: { id: true },
+        })
+        if (existingReversal) {
+          throw new Error(`Journal ${original.journalNumber} sudah di-reverse.`)
         }
 
         // Create reversal entries (swap debit/credit)

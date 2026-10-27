@@ -162,6 +162,11 @@ export async function syncServicePurchaseOrderCost(
     const existing = byOrder.get(orderId)
     const currentAmount = existing ? Number(existing.amount) : 0
 
+    // Jurnal serapan dikunci per BARIS biaya: baris yang baru dibuat wajib
+    // menyumbang id-nya sendiri. Jatuh ke id perintah produksi (perilaku
+    // lama) membuat jurnal baris pertama berbagi kunci dengan baris lain
+    // pada perintah yang sama.
+    let costLineId = existing?.id
     if (existing) {
       await client.productionCost.update({
         where: { id: existing.id },
@@ -171,7 +176,7 @@ export async function syncServicePurchaseOrderCost(
         },
       })
     } else {
-      await client.productionCost.create({
+      const createdLine = await client.productionCost.create({
         data: {
           productionOrderId: orderId,
           workOrderId: po.workOrderId,
@@ -184,10 +189,11 @@ export async function syncServicePurchaseOrderCost(
           createdBy: input.createdBy,
         },
       })
+      costLineId = createdLine.id
     }
     await applyProductionCostDelta(orderId, target - currentAmount, client, {
       userId: input.createdBy ?? undefined,
-      costLineId: existing?.id,
+      costLineId,
     })
   }
 
@@ -264,6 +270,9 @@ export async function syncReworkCostToOrder(
     return { posted: 0, productionOrderId }
   }
 
+  // Sama seperti sync subkontrak: jurnal dikunci id baris ini sendiri,
+  // termasuk baris yang baru dibuat di cabang create.
+  let costLineId = existing?.id
   if (existing) {
     await client.productionCost.update({
       where: { id: existing.id },
@@ -274,7 +283,7 @@ export async function syncReworkCostToOrder(
       },
     })
   } else {
-    await client.productionCost.create({
+    const createdLine = await client.productionCost.create({
       data: {
         productionOrderId,
         category: "rework",
@@ -286,10 +295,11 @@ export async function syncReworkCostToOrder(
         createdBy: input.createdBy,
       },
     })
+    costLineId = createdLine.id
   }
   await applyProductionCostDelta(productionOrderId, desired - currentAmount, client, {
     userId: input.createdBy ?? undefined,
-    costLineId: existing?.id,
+    costLineId,
   })
   return { posted: desired, productionOrderId }
 }

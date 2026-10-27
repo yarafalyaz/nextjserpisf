@@ -8,14 +8,17 @@ function buildService(txOverrides: Record<string, unknown> = {}) {
     journalCreate: vi.fn(),
     journalEntryCreateMany: vi.fn(),
     journalFindUniqueOrThrow: vi.fn(),
+    journalFindFirst: vi.fn(),
     journalUpdate: vi.fn(),
   };
+  spies.journalFindFirst.mockResolvedValue(null);
 
   const tx = {
     account: { findMany: spies.accountFindMany },
     journal: {
       create: spies.journalCreate,
       findUniqueOrThrow: spies.journalFindUniqueOrThrow,
+      findFirst: spies.journalFindFirst,
       update: spies.journalUpdate,
     },
     journalEntry: { createMany: spies.journalEntryCreateMany },
@@ -253,6 +256,49 @@ describe("JournalService", () => {
       await expect(service.reverseJournal(1, "REV-1")).rejects.toThrow(
         "hanya boleh di-reversal lewat reversal penutup tahun"
       );
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+      expect(spies.journalUpdate).not.toHaveBeenCalled();
+    });
+
+    it("rejects DRAFT journal (only POSTED can be reversed, consistent with finance.actions)", async () => {
+      const { service, spies } = buildService();
+      spies.journalFindUniqueOrThrow.mockResolvedValue({
+        id: 1,
+        journalNumber: "JRN-1",
+        status: "DRAFT",
+        type: "sales",
+        totalDebit: 100,
+        totalCredit: 100,
+        entries: [
+          { accountId: 1, debit: 100, credit: 0, memo: "AR" },
+          { accountId: 2, debit: 0, credit: 100, memo: "Revenue" },
+        ],
+      });
+      spies.journalCreate.mockResolvedValue({ id: 2, journalNumber: "REV-1" });
+
+      await expect(service.reverseJournal(1, "REV-1")).rejects.toThrow("tidak bisa dibalik (status: DRAFT)");
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+      expect(spies.journalUpdate).not.toHaveBeenCalled();
+    });
+
+    it("rejects POSTED journal that already has a reversal (no silent double reversal)", async () => {
+      const { service, spies } = buildService();
+      spies.journalFindUniqueOrThrow.mockResolvedValue({
+        id: 1,
+        journalNumber: "JRN-1",
+        status: "POSTED",
+        type: "sales",
+        totalDebit: 100,
+        totalCredit: 100,
+        entries: [
+          { accountId: 1, debit: 100, credit: 0, memo: "AR" },
+          { accountId: 2, debit: 0, credit: 100, memo: "Revenue" },
+        ],
+      });
+      spies.journalFindFirst.mockResolvedValue({ id: 99 });
+      spies.journalCreate.mockResolvedValue({ id: 2, journalNumber: "REV-1" });
+
+      await expect(service.reverseJournal(1, "REV-1")).rejects.toThrow("sudah di-reverse");
       expect(spies.journalCreate).not.toHaveBeenCalled();
       expect(spies.journalUpdate).not.toHaveBeenCalled();
     });
