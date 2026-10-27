@@ -1555,7 +1555,6 @@ html.dark [cmdk-group-heading] {
 .rdp-dropdown_month select,
 .rdp-dropdown_year select {
   appearance: auto;
-  -webkit-appearance: auto;
   background: var(--bg-card, #fff);
   border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 6px;

@@ -21,16 +21,97 @@ export function formatL3TagClient(workOrderNo: string, reason: string): string {
   return `${L3_MARKER_UI} | WO: ${workOrderNo} | Alasan: ${reason}`;
 }
 
-const L3_LINE_RE =
-  /^BIAYA TELAT NON-JOB L3\s*\|\s*WO:\s*(\S+)\s*\|\s*Alasan:\s*(.*)$/m;
+// Pemisah baris JS yang sama dengan yang dikenali ^/$ multiline regex lama.
+const L3_LINE_SPLIT = /\r\n|\n|\r|\u2028|\u2029/;
+const L3_LINE_SPLIT_KEEP = /(\r\n|\n|\r|\u2028|\u2029)/;
+
+/**
+ * Parse SATU baris penanda; null bila baris bukan penanda.
+ * Parser manual (bukan regex `\s*` berantai) supaya bebas backtracking
+ * super-linear (S8786) — pola yang sama dengan parseL3Tag di server.
+ * Semantik dipertahankan dari regex lama client
+ * /^BIAYA TELAT NON-JOB L3\s*\|\s*WO:\s*(\S+)\s*\|\s*Alasan:\s*(.*)$/m:
+ * `\s` JS (termasuk NBSP) dipetakan lewat trim/search, token WO rakus
+ * boleh memuat `|` selama pipa terakhir diikuti `Alasan:`, dan alasan
+ * kosong di akhir baris tetap diterima (`.*`, beda dari `(.+)` server —
+ * vonis alasan kosong tetap milik server). Satu-satunya penyimpangan:
+ * pemisah/alasan tidak lagi bocor menyeberangi baris pada input rusak
+ * (regex lama menelan `\n` lewat `\s*` dan `(.*)$` multiline); format
+ * baku dari formatL3TagClient selalu satu baris sehingga tak terpengaruh.
+ */
+function parseL3Line(
+  line: string,
+): { workOrderNo: string; reason: string } | null {
+  if (!line.startsWith(L3_MARKER_UI)) return null;
+  let rest = line.slice(L3_MARKER_UI.length).trimStart();
+  if (!rest.startsWith("|")) return null;
+  rest = rest.slice(1).trimStart();
+  if (!rest.startsWith("WO:")) return null;
+  rest = rest.slice("WO:".length).trimStart();
+  // Token WO lama `(\S+)\s*\|`: run non-spasi pertama; pipa pemisah boleh
+  // menempel token atau sesudah spasi. Di dalam run, pipa terakhir yang
+  // diikuti `Alasan:` yang dipakai (meniru backtracking rakus regex lama).
+  const wsAt = rest.search(/\s/);
+  const runEnd = wsAt === -1 ? rest.length : wsAt;
+  let pipeAt = -1;
+  for (let i = runEnd - 1; i > 0; i--) {
+    if (rest[i] === "|" && rest.slice(i + 1).trimStart().startsWith("Alasan:")) {
+      pipeAt = i;
+      break;
+    }
+  }
+  if (pipeAt === -1) {
+    let j = runEnd;
+    while (j < rest.length && /\s/.test(rest[j])) j++;
+    if (rest[j] === "|" && rest.slice(j + 1).trimStart().startsWith("Alasan:")) {
+      pipeAt = j;
+    }
+  }
+  if (pipeAt === -1) return null;
+  const workOrderNo = rest.slice(0, pipeAt).trimEnd();
+  if (!workOrderNo || /\s/.test(workOrderNo)) return null;
+  const reason = rest.slice(pipeAt + 1).trimStart().slice("Alasan:".length);
+  return { workOrderNo, reason: reason.trim() };
+}
+
+/**
+ * Baris yang dikelola upsert/remove: baris penanda sah (parseL3Line) ATAU
+ * baris perantara yang ditulis formatL3TagClient sendiri sebelum WO/alasan
+ * terisi ("... | WO:  | Alasan: "). Regex lama mengenali baris perantara
+ * itu secara tidak langsung — match-nya menyeberangi "\n" lewat `\s*`
+ * sesudah "Alasan:" lalu menelan baris berikutnya — sehingga upsert
+ * langkah berikutnya membersihkannya; tanpa pengenalan ini baris sampah
+ * tertinggal di notes (regresi tertangkap tes vendor-bill/expense-form).
+ * Deteksi struktural saja: penanda + kedua label hadir berurutan.
+ */
+function isManagedL3Line(line: string): boolean {
+  if (parseL3Line(line)) return true;
+  if (!line.startsWith(L3_MARKER_UI)) return false;
+  let rest = line.slice(L3_MARKER_UI.length).trimStart();
+  if (!rest.startsWith("|")) return false;
+  rest = rest.slice(1).trimStart();
+  if (!rest.startsWith("WO:")) return false;
+  const pipeAt = rest.indexOf("|", "WO:".length);
+  return pipeAt !== -1 && rest.slice(pipeAt + 1).trimStart().startsWith("Alasan:");
+}
+
+/** Indeks elemen baris penanda pertama dalam hasil split-yang-menyimpan-pemisah. */
+function findL3LineIndex(parts: string[]): number {
+  for (let i = 0; i < parts.length; i += 2) {
+    if (isManagedL3Line(parts[i])) return i;
+  }
+  return -1;
+}
 
 export function parseL3TagClient(
   text: string | null | undefined,
 ): { workOrderNo: string; reason: string } | null {
   if (!text) return null;
-  const m = L3_LINE_RE.exec(text);
-  if (!m) return null;
-  return { workOrderNo: m[1].trim(), reason: m[2].trim() };
+  for (const line of text.split(L3_LINE_SPLIT)) {
+    const tag = parseL3Line(line);
+    if (tag) return tag;
+  }
+  return null;
 }
 
 /** Ganti baris penanda L3 pertama (atau sisipkan di baris pertama); teks lain operator dipertahankan. */
@@ -40,16 +121,24 @@ export function upsertL3Tag(
   reason: string,
 ): string {
   const line = formatL3TagClient(workOrderNo.trim(), reason.trim());
-  return L3_LINE_RE.test(text)
-    ? text.replace(L3_LINE_RE, line)
-    : text
-      ? `${line}\n${text}`
-      : line;
+  const parts = text.split(L3_LINE_SPLIT_KEEP);
+  const idx = findL3LineIndex(parts);
+  if (idx === -1) return text ? `${line}\n${text}` : line;
+  parts[idx] = line;
+  return parts.join("");
 }
 
 /** Hapus baris penanda L3; teks lain operator dipertahankan. */
 export function removeL3Tag(text: string): string {
-  return text.replace(/^BIAYA TELAT NON-JOB L3\s*\|.*(?:\n|$)/m, "");
+  const parts = text.split(L3_LINE_SPLIT_KEEP);
+  const idx = findL3LineIndex(parts);
+  if (idx === -1) return text;
+  // Buang baris + pemisah sesudahnya; bila baris terakhir, buang pemisah sebelumnya.
+  // (Regex lama hanya menangani "\n" dan menyisakan "\r" yatim pada CRLF.)
+  if (idx + 1 < parts.length) parts.splice(idx, 2);
+  else if (idx > 0) parts.splice(idx - 1, 2);
+  else parts.splice(idx, 1);
+  return parts.join("");
 }
 
 interface LateCostL3FieldProps {
