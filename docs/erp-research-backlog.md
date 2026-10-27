@@ -39124,3 +39124,137 @@ Edge cases:
 - Perubahan form tukar faktur existing (mis. dueDate wajib): mengubah perilaku catat existing, butuh bukti kebutuhan terpisah.
 
 F-2026-10-27-101-S — Antrean tukar faktur lewat batas kembali (dokumen InvoiceExchange dueDate lampau, sisa belum lunas). Status: SPEC SELESAI run ini (dokumen saja); gerbang putusan Lead Q-IEX-1..3. Pemilik: Business (spec), Lead (putusan + merge), Backend (101-B sesudah putusan), Frontend (101-F sesudah kontrak), QA (101-Q falsifikasi).
+
+---
+
+## SPEC BUSINESS 2026-10-27 — F-2026-10-27-113-S: workflow sengketa pajak (SKP/keberatan/pengurangan/banding/gugatan/PK) — model absen total, angka menunggu vonis Accountant
+
+Sumber temuan: scan Accountant t_61d1bb9c (basis origin/main f62056bd8, temuan #8 P3). Spec tahap dokumen saja: nol kode, nol skema, nol angka/jurnal diputus di sini.
+
+Regulasi resmi (akses 27 Okt 2026, pajak.go.id):
+- DJP — Penyelesaian Sengketa Pajak (definisi sengketa; upaya: keberatan, banding, gugatan, peninjauan kembali): https://www.pajak.go.id/id/penyelesaian-sengketa-pajak
+- DJP — Keberatan (objek SKPKB/SKPKBT/SKPN/SKPLB/pemotongan/pemungutan; syarat lunas minimal sebesar disetujui pembahasan akhir; jangka 3 bulan sejak SKP dikirim; DJP putus paling lama 12 bulan, lewat = dianggap dikabulkan): https://www.pajak.go.id/id/keberatan
+- DJP — Banding vs Gugatan (Pasal 27 UU KUP: banding 3 bulan sejak SK Keberatan diterima, 1 keputusan 1 surat banding, banding atas besarnya terutang hanya bila sudah dibayar 50%): https://www.pajak.go.id/id/artikel/banding-versus-gugatan-apa-bedanya
+- DJP — upaya hukum pajak (gugatan pelaksanaan penagihan 14 hari; PK 1 kali ke MA lewat Pengadilan Pajak, tidak menangguhkan putusan): https://www.pajak.go.id/id/artikel/mengenal-upaya-hukum-pajak-di-indonesia
+
+Benchmark kompetitor (akses 27 Okt 2026):
+- Accurate/Zahir: fitur register sengketa pajak (SKP/keberatan/banding) TIDAK ditemukan sebagai modul bernama pada pencarian run ini — tidak diklaim ada. Nilai spec ini = register internal + pengingat tenggat + tautan dokumen, bukan paritas kompetitor.
+
+### Inventarisasi terverifikasi (27 Okt 2026, basis origin/main f62056bd8bec12abc5d896976a9aa48ecd1c53df)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `TaxPayment` (prisma/schema.prisma:1413): documentNo unik, date, period "YYYY-MM" (masa setor dari period), taxTypeId, taxAccountId, paymentAccountId, amount Decimal(15,2), billingCode 15 digit nullable, ntpn 16 nullable, taxKind (ppn|pph21|pph23|pph4_2|pph_badan|other), status default "posted", journalId nullable, deletedAt soft.
+- `TaxInvoice` (prisma/schema.prisma:1250): direction out/in, taxInvoiceNumber, taxPeriod "YYYY-MM", dpp/taxRate/taxAmount, djpStatus draft|approved|rejected|replaced|cancelled, tautan salesInvoiceId/vendorBillId/downPaymentId/vendorId (semua SetNull), replacesId unik.
+- `Tax`/`TaxGroup` master (prisma/schema.prisma:5408/5451). Read-model SPT dari jurnal POSTED direkonsiliasi dokumen (`src/lib/reports/spt-read-model-data.ts:1-16` header). Aksi `src/actions/tax-payment.actions.ts`, `src/actions/tax-documents.actions.ts`.
+- Bukti lampiran generik: `TransactionAttachment` (prisma/schema.prisma:5505) referenceType+referenceId polimorfik, fileUrl/fileSize/mimeType/uploadedBy — pola dipakai ulang untuk dokumen sengketa, tanpa tabel lampiran baru.
+- Izin katalog nyata: `view_tax_payments`/`create_tax_payments`/`delete_tax_payments` (src/lib/auth/module-catalog.generated.ts:379-381), `create_tax_invoices` (:358).
+
+Belum ada (bukti grep run ini, di origin/main f62056bd8):
+- `git grep -i -E "TaxDispute|sengketa pajak|keberatan|SKPKB" origin/main -- src prisma` = 0 hasil. Tidak ada model/enum/aksi/halaman ketetapan pajak (SKP), keberatan, pengurangan/pembatalan, banding, gugatan, PK. Kata "sengketa" yang ada = outcome penagihan pelanggan (domain CRM/collection, bukan pajak) — dilarang disamakan.
+- Tidak ada entitas induk "ketetapan" tempat SKPKB/SKPKBT/SKPLB/SKPN menempel; TaxPayment/TaxInvoice tidak punya relasi ke dokumen ketetapan DJP.
+
+#### F-2026-10-27-113-S (x) P2 — Register + workflow sengketa pajak bertahap (dokumen & tenggat dulu, jurnal sesudah vonis)
+
+- Status Silengkap: ABSEN total (bukti grep di atas).
+- Relevansi: SKP yang terlewat tenggat keberatan 3 bulan kehilangan upaya hukum; pembayaran "di bawah protes" tanpa register membuat nominal disengketakan vs dibayar tidak tertelusur ke TaxPayment; putusan keberatan/banding mengubah kewajiban tanpa jejak dokumen. Risiko utama = tenggat hukum hilang, bukan kecepatan input.
+- Batas tegas spec: spec ini membekukan WORKFLOW/DOKUMEN/TENGGAT/STATUS. Perlakuan jurnal pembayaran sengketa, pengakuan saat putusan, dan masa pelaporan = BUTUH-VONIS Accountant (§8 Q-TXD-1..5). Backend dilarang menebak akun dari spec ini.
+
+##### §1 Objek & kata beku (USULAN, final Lead Q-TXD-6)
+
+Satu register induk usul bernama **Ketetapan Pajak** (dokumen DJP diterima), anak proses usul **Upaya Sengketa** (per tahap). Kata tampil usul: "Ketetapan Pajak", "Upaya Sengketa", "Nominal Ketetapan", "Nominal Disengketakan", "Dibayar di Bawah Protes", "Tenggat Upaya". Dilarang: label "utang pajak" untuk nominal yang disengketakan sebelum vonis Accountant (Q-TXD-1), kata "menang/kalah" (pakai hasil putusan verbatim §3), angka persen ambang karangan.
+
+Jenis ketetapan (enum usul, dari halaman DJP Keberatan): `SKPKB`, `SKPKBT`, `SKPLB`, `SKPN` (nihil), plus `PEMUNGUTAN_PIHAK_KETIGA` untuk objek keberatan atas pemotongan/pemungutan. Jenis upaya (enum usul): `KEBERATAN`, `PENGURANGAN_PEMBATALAN` (Pasal 36 UU KUP — pengurangan/penghapusan sanksi & pembatalan ketetapan; label regulasi BENCHMARK pajak.go.id, rincian syarat BUTUH-VONIS Q-TXD-5), `BANDING`, `GUGATAN`, `PENINJAUAN_KEMBALI`.
+
+##### §2 Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-TXD-01 | Satu keberatan hanya untuk 1 SKP / 1 pemotongan / 1 pemungutan; satu surat banding untuk 1 SK Keberatan. Register menegakkan 1 upaya aktif per (ketetapan, jenis upaya) — upaya tahap lanjut menunjuk putusan tahap sebelumnya | BENCHMARK (pajak.go.id Penyelesaian Sengketa + Keberatan) |
+| BR-TXD-02 | Tenggat keberatan = 3 bulan kalender sejak tanggal SKP dikirim (tanggal kirim DJP tersimpan terpisah dari tanggal terima internal); pengecualian keadaan di luar kekuasaan WP dicatat sebagai flag + alasan, bukan perpanjangan karangan | BENCHMARK (pajak.go.id/keberatan) — hitungan tanggal persis Q-TXD-7 Lead |
+| BR-TXD-03 | DJP wajib putus keberatan ≤12 bulan sejak surat keberatan diterima DJP; lewat tanpa putusan = keberatan dianggap dikabulkan — register menandai `LEWAT_BATAS_PUTUSAN` sebagai penanda baca, BUKAN mengubah hasil sendiri | BENCHMARK (pajak.go.id/keberatan) |
+| BR-TXD-04 | Prasyarat catat keberatan: pajak yang masih harus dibayar paling sedikit sebesar yang disetujui WP dalam pembahasan akhir sudah dilunasi sebelum surat disampaikan — register menyimpan nominal disetujui + tautan TaxPayment bukti; keberatan tanpa bukti ini tertanda `PRASYARAT_BELUM_TERCATAT`, tidak diblokir diam-diam tahap register | BENCHMARK (pajak.go.id/keberatan) |
+| BR-TXD-05 | Banding hanya atas SK Keberatan; tenggat 3 bulan sejak SK Keberatan diterima; banding atas besarnya terutang hanya bila yang terutang sudah dibayar 50% — ambang 50% ini ambang REGULASI banding (Pasal 27), disimpan sebagai syarat tahap banding saja, DILARANG digeneralisasi ke tahap lain/DP komersial | BENCHMARK (pajak.go.id Banding vs Gugatan) |
+| BR-TXD-06 | Gugatan pelaksanaan penagihan: tenggat 14 hari sejak pelaksanaan penagihan (+14 hari sesudah keadaan di luar kekuasaan berakhir); PK hanya 1 kali, tidak menangguhkan pelaksanaan putusan Pengadilan Pajak — kedua flag tampil di register | BENCHMARK (pajak.go.id Penyelesaian Sengketa) |
+| BR-TXD-07 | Nominal per ketetapan disimpan rinci: nominal ketetapan, nominal disetujui WP, nominal disengketakan, nominal dibayar (tautan TaxPayment), nominal hasil putusan per tahap. Selisih turunan server; UI nol hitung; TIDAK ada jurnal dari register ini tahap 1 | USULAN (struktur) — makna akuntansi tiap nominal BUTUH-VONIS Q-TXD-1/2 |
+| BR-TXD-08 | Tautan dokumen: ketetapan boleh menunjuk TaxInvoice (salesInvoiceId/vendorBillId asal) dan TaxPayment (bukti bayar di bawah protes/lunas prasyarat) via relasi SetNull pola existing; putusan tidak menghapus tautan asal | USULAN (pola tautan TERVERIFIKASI-KODE TaxInvoice:1250/TaxPayment:1413) |
+| BR-TXD-09 | Dokumen bukti (SKP, surat keberatan, SK putusan, bukti kirim/terima) = TransactionAttachment referenceType usul `TaxAssessment`/`TaxDisputeStep`; tanpa bukti kirim, tanggal tenggat tertanda `TANGGAL_BELUM_TERBUKTI` | USULAN (mekanisme TERVERIFIKASI-KODE TransactionAttachment:5505) |
+| BR-TXD-10 | SKPLB/SKPN: tetap tercatat sebagai ketetapan (hasil lebih bayar/nihil), upaya sengketa atas nominalnya mengikuti objek DJP; perlakuan restitusi/kompensasi nominal LB = BUTUH-VONIS Q-TXD-3 | USULAN + BUTUH-VONIS |
+| BR-TXD-11 | Tahap 1 register baca-tulis dokumen & status proses saja: nol jurnal otomatis, nol ubah TaxPayment/TaxInvoice/SPT read-model, nol hapus fisik (batal = status `DIBATALKAN` + alasan) | USULAN |
+| BR-TXD-12 | Masa/tanggal yang menggerakkan tenggat disimpan apa adanya dari dokumen (tanggal SKP, tanggal kirim, tanggal terima putusan); sistem tidak menebak tanggal dari createdAt baris | USULAN |
+
+##### §3 Status-transition matrix (USULAN)
+
+Status ketetapan: `DITERIMA` → `DALAM_UPAYA` → `SELESAI` (putusan final berkekuatan tetap / tenggat upaya terakhir lewat tercatat) ; `DIBATALKAN` dari status apa pun (koreksi catat, alasan wajib).
+
+| Dari (upaya) | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | catat upaya (jenis + tanggal ajuan + bukti) | `DIAJUKAN` | izin §4; BR-TXD-01 satu upaya aktif |
+| DIAJUKAN | bukti kirim/terima otoritas tercatat | `DALAM_PROSES` | tanggal terima otoritas wajib (BR-TXD-12); tenggat tahap mulai tampil |
+| DALAM_PROSES | putusan diterima: hasil `DIKABULKAN`/`DIKABULKAN_SEBAGIAN`/`DITOLAK`/`TIDAK_DAPAT_DITERIMA` (verbatim usul) | `DIPUTUS` | nomor+tanggal putusan + lampiran wajib; nominal putusan tersimpan (BR-TXD-07) |
+| DALAM_PROSES | tenggat putusan otoritas lewat (khusus keberatan 12 bulan) | `DIPUTUS` tertanda LEWAT_BATAS_PUTUSAN | BR-TXD-03 — hasil dianggap-dikabulkan hanya penanda, konfirmasi dokumen tetap dicatat |
+| DIPUTUS | upaya tahap lanjut dicatat (banding sesudah keberatan; PK sesudah putusan PP) | upaya baru DIAJUKAN; ketetapan tetap DALAM_UPAYA | rantai putusan sebelumnya wajib (BR-TXD-01/05/06) |
+| DIPUTUS | tidak ada upaya lanjut dalam tenggat tahap berikut | ketetapan `SELESAI` | tenggat tahap berikut lewat tercatat; bukan auto-final diam-diam — tampil sebagai penanda `TENGGAT_LANJUT_LEWAT` dulu |
+| status apa pun | pencabutan upaya oleh WP / koreksi catat | `DICABUT`/`DIBATALKAN` + alasan | izin §4; baris tidak terhapus (BR-TXD-11) |
+
+##### §4 Role/permission matrix (USULAN, key baru final Lead Q-TXD-8)
+
+| Aksi | Izin usul | Catatan |
+|---|---|---|
+| Lihat register ketetapan/upaya | `view_tax_disputes` (key BARU usul) | reuse `view_tax_payments` ditolak usul: sengketa memuat strategi hukum; Q-TXD-8 Lead putus gabung/pisah |
+| Catat/edit ketetapan & upaya, unggah bukti | `create_tax_disputes`/`edit_tax_disputes` (usul) | nominal sensitif — tidak tampil ke role tanpa izin ini |
+| Catat putusan / tutup ketetapan | `edit_tax_disputes` + peran finance/tax (usul) | empat mata usul: pencatat putusan ≠ pengaju upaya bila Lead menyetujui Q-TXD-8 |
+| Bayar (di bawah protes/prasyarat) | `create_tax_payments` existing | pembayaran tetap dokumen TaxPayment existing; register hanya menautkan (BR-TXD-08) |
+| Jurnal apa pun dari sengketa | TIDAK ADA tahap 1 | menunggu vonis Accountant Q-TXD-1..3 |
+
+##### §5 Acceptance criteria (untuk tahap bangun sesudah vonis; spec ini belum mengklaim hijau apa pun)
+
+Backend (113-B, SESUDAH Q-TXD-1..8 terputus):
+- AC-TXD-B1: catat SKPKB + keberatan: tenggat tampil = tanggal kirim + 3 bulan kalender; ganti basis ke tanggal terima internal = MERAH.
+- AC-TXD-B2: keberatan kedua aktif atas SKP sama ditolak; banding tanpa SK Keberatan tertaut ditolak; PK kedua ditolak.
+- AC-TXD-B3: nominal disengketakan + dibayar tertaut TaxPayment; cabut tautan bayar mengubah ringkasan turunan, register sendiri tidak menulis jurnal/TaxPayment (grep jalur tulis jurnal dari modul sengketa = MERAH bila ada tahap 1).
+- AC-TXD-B4: keberatan diajukan ≤ tenggat tampil normal; lewat tenggat tertanda `LEWAT_TENGGAT` + alasan keadaan-di-luar-kekuasaan terpisah; tidak auto-ditolak sistem.
+- AC-TXD-B5: tanpa izin `view_tax_disputes` loader ditolak sebelum query; nominal tidak bocor ke payload role lain.
+- AC-TXD-B6: putusan sebagian: nominal putusan tersimpan, sisa disengketakan turunan server; hapus fisik baris mustahil (hanya status batal).
+
+Frontend (113-F):
+- AC-TXD-F1: label/kolom verbatim payload server; nol kata terlarang §1; nol hitung tenggat/nominal di UI.
+- AC-TXD-F2: tenggat terdekat tampil per upaya aktif (tanggal + sisa hari server), upaya tanpa tanggal bukti tertanda TANGGAL_BELUM_TERBUKTI.
+- AC-TXD-F3: nol tombol Bayar/Jurnal dari register; bayar lewat halaman Penyetoran Pajak existing.
+
+QA (113-Q): falsifikasi AC-TXD-B1..B6/F1..F3 atas head persis; mutasi basis tenggat (kirim→terima) wajib MERAH; nominal bocor ke role tanpa izin wajib MERAH.
+
+##### §6 Feature matrix
+
+| Fitur | Accurate | Zahir | ISF tahap usul |
+|---|---|---|---|
+| Register SKP + jenis ketetapan | Tidak ditemukan modul bernama (run ini) | Tidak ditemukan (run ini) | Register Ketetapan Pajak (usul) |
+| Tenggat keberatan/banding terhitung dokumen | Tidak terverifikasi | Tidak terverifikasi | §2 BR-TXD-02/05 (benchmark DJP) |
+| Bayar di bawah protes tertaut bukti setor | Tidak terverifikasi | Tidak terverifikasi | Tautan TaxPayment existing (usul) |
+| Jurnal sengketa otomatis | Tidak diklaim | Tidak diklaim | TIDAK ADA — vonis Accountant dulu |
+
+##### §7 Backlog turunan (urut, gerbang vonis dulu)
+
+- 113-V Accountant: vonis Q-TXD-1..5 (jurnal bayar sengketa, pengakuan putusan, SKPLB, masa pelaporan, cakupan pengurangan/pembatalan). TANPA ini, 113-B hanya register dokumen tanpa jurnal — dinyatakan eksplisit di kartu.
+- 113-B Backend (SESUDAH 113-V + putusan Lead Q-TXD-6..8): model Ketetapan/Upaya + lampiran TransactionAttachment + loader/register; skema milik Backend.
+- 113-F Frontend (SESUDAH kontrak 113-B): halaman register + detail rantai upaya.
+- 113-Q QA: falsifikasi §5.
+
+##### §8 Pertanyaan vonis (Accountant — angka/jurnal TIDAK diputus spec ini)
+
+- Q-TXD-1 (Accountant): pembayaran SKP yang disengketakan (bayar di bawah protes): diakui sebagai pelunasan utang pajak, piutang pajak/prepaid (aset), atau beban — per jenis pajak (PPN vs PPh badan/potong)? Akun + jurnal persisnya?
+- Q-TXD-2 (Accountant): saat putusan keberatan/banding (dikabulkan sebagian/penuh/ditolak): pengakuan beban/penghasilan/penyesuaian utang-piutang pajak di masa mana (tanggal putusan vs masa ketetapan asal)? Perlakuan sanksi administrasi terpisah dari pokok?
+- Q-TXD-3 (Accountant): SKPLB: nominal lebih bayar menjadi piutang restitusi, kompensasi masa berikut, atau kas saat terima — pengakuan + jurnal tiap jalannya? SKPN: cukup arsip ketetapan atau ada pengakuan?
+- Q-TXD-4 (Accountant): masa pelaporan SPT: apakah ketetapan/putusan menggerakkan pembetulan SPT masa asal (read-model SPT existing) atau hanya catatan register sampai putusan final? Titik taut ke spt-read-model?
+- Q-TXD-5 (Accountant): cakupan tahap `PENGURANGAN_PEMBATALAN` (Pasal 36): sub-jenis apa saja yang dicatat (pengurangan sanksi, penghapusan sanksi, pembatalan SKP/STP) dan dokumen putusannya?
+- Q-TXD-6 (Lead): sahkan kata §1 + enum jenis ketetapan/upaya + hasil putusan §3.
+- Q-TXD-7 (Lead): hitungan "3 bulan kalender" & "14 hari" (kalender vs kerja; jam batas WIB) untuk penanda tenggat server.
+- Q-TXD-8 (Lead): izin key baru `*_tax_disputes` vs reuse izin pajak existing; empat mata pencatat putusan?
+
+### Yang TIDAK diusulkan run ini
+
+- Jurnal/reklasifikasi otomatis dari register: menunggu vonis 113-V; menebak akun = dilarang.
+- E-filing/ekspor sengketa ke DJP/Coretax: tidak ada kanal resmi terverifikasi run ini; register internal dulu.
+- Integrasi penagihan aktif DJP (surat paksa dsb.) sebagai workflow otomatis: gugatan atas pelaksanaan penagihan cukup dicatat tahapnya (BR-TXD-06).
+- Menyamakan "sengketa" outcome penagihan pelanggan dengan sengketa pajak: domain berbeda, register terpisah.
+
+F-2026-10-27-113-S — Workflow sengketa pajak (register ketetapan SKPKB/SKPKBT/SKPLB/SKPN + upaya keberatan/pengurangan-pembatalan/banding/gugatan/PK, tenggat regulasi DJP, nominal disengketakan vs dibayar tertaut TaxPayment/TaxInvoice, bukti TransactionAttachment). Status: SPEC SELESAI run ini (dokumen saja, nol kode/skema/jurnal); gerbang vonis Accountant Q-TXD-1..5 (113-V) + putusan Lead Q-TXD-6..8 sebelum 113-B. Pemilik: Business (spec), Accountant (113-V), Lead (putusan + merge), Backend (113-B), Frontend (113-F), QA (113-Q).
