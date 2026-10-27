@@ -16,6 +16,31 @@ import {
   completeProductionOrder,
   startProductionOrder,
 } from "@/actions/manufacturing.actions"
+import {
+  SCRAP_REASON_CODES,
+  SCRAP_REASON_LABELS,
+  validateScrapInput,
+} from "@/lib/services/scrap-classification"
+
+export function buildIssueMaterialArgs(input: {
+  itemId: number
+  qty: number
+  scrapQty?: number
+  scrapReasonCode?: string | null
+  scrapNote?: string | null
+}): { itemId: number; qty: number; scrapQty: number; scrapReasonCode: string | null; scrapNote: string | null } {
+  const scrapQty = Number(input.scrapQty ?? 0)
+  const scrapReasonCode = input.scrapReasonCode?.trim() ? input.scrapReasonCode : null
+  const scrapNote = input.scrapNote?.trim() ? input.scrapNote : null
+  const err = validateScrapInput({
+    issueQty: input.qty,
+    scrapQty,
+    scrapReasonCode,
+    scrapNote,
+  })
+  if (err) throw new Error(err)
+  return { itemId: input.itemId, qty: input.qty, scrapQty, scrapReasonCode, scrapNote }
+}
 
 interface Props {
   orderId: number
@@ -36,6 +61,9 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
   const [issueOpen, setIssueOpen] = useState(false)
   const [issueItemId, setIssueItemId] = useState<string | null>(null)
   const [issueQty, setIssueQty] = useState("")
+  const [issueScrapQty, setIssueScrapQty] = useState("")
+  const [issueScrapReasonCode, setIssueScrapReasonCode] = useState<string | null>(null)
+  const [issueScrapNote, setIssueScrapNote] = useState("")
   const [serialNumbersText, setSerialNumbersText] = useState("")
   const remainingQty = Math.max(0, outputQty - completedQty)
   const [completeQty, setCompleteQty] = useState("")
@@ -93,13 +121,28 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
     const itemId = Number(issueItemId)
     const qty = Number(issueQty)
     if (!itemId || qty <= 0) return showError("Pilih barang dan isi qty > 0")
+    let args: ReturnType<typeof buildIssueMaterialArgs>
+    try {
+      args = buildIssueMaterialArgs({
+        itemId,
+        qty,
+        scrapQty: issueScrapQty === "" ? 0 : Number(issueScrapQty),
+        scrapReasonCode: issueScrapReasonCode,
+        scrapNote: issueScrapNote,
+      })
+    } catch (e) {
+      return showError(e instanceof Error ? e.message : "Data scrap tidak valid")
+    }
     startTransition(async () => {
-      const res = await issueMaterial(orderId, [{ itemId, qty }])
+      const res = await issueMaterial(orderId, [args])
       if (!res.success) return showError(res.error || "Gagal mengeluarkan bahan")
       showSuccess("Bahan dikeluarkan")
       setIssueOpen(false)
       setIssueItemId(null)
       setIssueQty("")
+      setIssueScrapQty("")
+      setIssueScrapReasonCode(null)
+      setIssueScrapNote("")
       router.refresh()
     })
   }
@@ -208,6 +251,24 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="issueQty">Kuantitas</Label>
             <Input id="issueQty" type="number" min="0" step="0.01" value={issueQty} onChange={(e) => setIssueQty(e.target.value)} placeholder="0" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="issueScrapQty">Qty Scrap</Label>
+            <Input id="issueScrapQty" type="number" min="0" step="0.01" value={issueScrapQty} onChange={(e) => setIssueScrapQty(e.target.value)} placeholder="0" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="issueScrapReason">Alasan Scrap</Label>
+            <Combobox
+              id="issueScrapReason"
+              options={SCRAP_REASON_CODES.map((code) => ({ value: code, label: SCRAP_REASON_LABELS[code] }))}
+              value={issueScrapReasonCode}
+              onChange={setIssueScrapReasonCode}
+              placeholder="— Tanpa scrap —"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="issueScrapNote">Catatan Scrap</Label>
+            <Input id="issueScrapNote" value={issueScrapNote} onChange={(e) => setIssueScrapNote(e.target.value)} placeholder={issueScrapReasonCode === "lainnya" ? "Wajib diisi" : "Opsional"} />
           </div>
         </div>
       </ConfirmDialog>
