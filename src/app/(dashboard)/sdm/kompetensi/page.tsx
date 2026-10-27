@@ -1,7 +1,9 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
+import { getCompetencyGapQueue } from "@/lib/reports/competency-gap-queue-data"
+import { CompetencyGapQueueCard } from "@/components/reports/competency-gap-queue-card"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import {
@@ -16,6 +18,14 @@ export const metadata: Metadata = { title: "Kompetensi" }
 
 export default async function CompetenciesPage() {
   await requirePermission("view_competencies")
+  // Tanpa view_employees, loader gap (fail-closed view_competencies +
+  // view_employees di server) akan redirect("/") — pagari di sini:
+  // seksi disembunyikan, halaman induk tetap tampil (hanya mensyaratkan
+  // view_competencies). Loader juga menahan scope SDM fail-closed.
+  const canViewGapQueue = await hasPermission("view_employees")
+  const gapQueue = canViewGapQueue
+    ? await getCompetencyGapQueue().catch(() => null)
+    : null
 
   const [competencies, positions, employees, requirements, assessments] = await Promise.all([
     prisma.competency.findMany({
@@ -103,6 +113,8 @@ export default async function CompetenciesPage() {
           </tbody>
         </table>
       </div>
+
+      {gapQueue ? <CompetencyGapQueueCard queue={gapQueue} /> : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Kesenjangan Kompetensi ({gaps.length})</h2>
