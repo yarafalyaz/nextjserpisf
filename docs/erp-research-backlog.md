@@ -43012,6 +43012,7 @@ ID vonis ini **F-2026-10-28-146-V** (jawaban BR-PROJ-07). Pemilik berikutnya: Le
 
 ---
 
+
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-152-S: verifikasi mekanisme approval vs isi matriks + rantai jam kerja WO-BR-003 (OPEN #4, keputusan 9)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_d5d54080`. Basis `origin/main` `b8d4f7c24` (28 Okt 2026, WIB).
@@ -43415,6 +43416,7 @@ ID vonis ini F-2026-10-28-148-V (bawaan costing = FIFO; tutup OPEN 8). Pemilik b
 - E148-2: resolver kosong = fifo; global sampah non-kosong = throw Indonesia.
 - E148-3: barang eksplisit average tetap cabang average (HPP = qty x rata-rata, item.cost ditulis); ubah default lalu paksa fifo untuk eksplisit-average -> MERAH.
 - E148-4: valuasi baris tanpa pilihan = remaining x layer.unitCost (fifo), bukan x item.cost.
+
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-152-S: verifikasi mekanisme approval vs isi matriks + rantai jam kerja WO-BR-003 (OPEN #4, keputusan 9)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_d5d54080`. Basis `origin/main` `b8d4f7c24` (28 Okt 2026, WIB).
