@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("VoidButton requireReason (BR-F139-01 presentasi)", () => {
   it("menolak client-side bila alasan kosong — aksi nol dipanggil", async () => {
-    const action = vi.fn(async (_id: number) => ({ success: true }))
+    const action = vi.fn(async (_id: number, _reason?: string) => ({ success: true }))
     const { container, root } = newTestContainer()
     renderTestUi(container, root, <VoidButton id={7} action={action} requireReason />)
     clickTestEl(container.querySelector("button"))
@@ -46,40 +46,42 @@ describe("VoidButton requireReason (BR-F139-01 presentasi)", () => {
     unmountTestUi(root, container)
   })
 
-  it("tetap panggil aksi bila alasan terisi", async () => {
-    const action = vi.fn(async (_id: number) => ({ success: true }))
+  it("alasan terisi: aksi dipanggil dengan (id, alasan trim)", async () => {
+    const action = vi.fn(async (_id: number, _reason?: string) => ({ success: true }))
     const { container, root } = newTestContainer()
     renderTestUi(container, root, <VoidButton id={7} action={action} requireReason />)
     clickTestEl(container.querySelector("button"))
     await act(async () => {})
     const textarea = document.querySelector("textarea[aria-label='Alasan pembatalan']") as HTMLTextAreaElement | null
     expect(textarea).not.toBeNull()
-    // simulasi ketik via native setter + event change agar React onChange terpanggil
+    // simulasi ketik via setter prototipe agar React onChange terpanggil
+    // (pola repo: reverse-payment-button.test.tsx)
     await act(async () => {
       const el = textarea!
-      const tracker = (el as unknown as { _valueTracker?: { setValue: (v: string) => void } })._valueTracker
-      tracker?.setValue("")
-      el.value = "salah input pelanggan"
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!
+      setter.call(el, "  salah input pelanggan  ")
       el.dispatchEvent(new Event("input", { bubbles: true }))
     })
     const confirm = findButtonByText(document, "Batalkan Dokumen")
     clickTestEl(confirm)
-    await act(async () => { await Promise.resolve() })
-    // react state update dari input event bisa async; terima salah satu bukti
-    expect(textarea!.value).toBe("salah input pelanggan")
+    await act(async () => {})
+    expect(action).toHaveBeenCalledTimes(1)
+    expect(action.mock.calls[0][0]).toBe(7)
+    expect(action.mock.calls[0][1]).toBe("salah input pelanggan")
+    expect(toastCalls.ok.some((m) => m.includes("dibatalkan"))).toBe(true)
     unmountTestUi(root, container)
   })
 
-  it("mutasi: tanpa alasan wajib, confirm langsung memanggil aksi", async () => {
-    const action = vi.fn(async (_id: number) => ({ success: true }))
+  it("tanpa requireReason, alasan dikirim undefined", async () => {
+    const action = vi.fn(async (_id: number, _reason?: string) => ({ success: true }))
     const { container, root } = newTestContainer()
     renderTestUi(container, root, <VoidButton id={7} action={action} />)
     clickTestEl(container.querySelector("button"))
     await act(async () => {})
     const confirm = findButtonByText(document, "Batalkan Dokumen")
     clickTestEl(confirm)
-    await act(async () => { await Promise.resolve() })
-    expect(action).toHaveBeenCalledWith(7)
+    await act(async () => {})
+    expect(action).toHaveBeenCalledWith(7, undefined)
     unmountTestUi(root, container)
   })
 })
