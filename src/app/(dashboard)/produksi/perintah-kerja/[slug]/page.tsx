@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusChip } from "@/components/ui/status-chip";
+import { statusLabel } from "@/lib/utils/status-labels";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
@@ -187,6 +188,15 @@ export default async function WorkOrderDetailPage({
       : Promise.resolve(null),
   ]);
 
+  // WO-BR-004: MI aktif (draf/diproses) untuk WO ini — server menolak MI kedua
+  // lewat createMaterialIssueFromWorkOrder, jadi kedua tombol buat baru di
+  // halaman ini wajib sembunyi selama MI aktif ada (status tampil di kartu
+  // "Pengeluaran Material" di bawah). MI batal tidak dihitung: sesudah batal,
+  // satu MI pengganti boleh lahir lewat jalur form Inventaris.
+  const activeMi = materialIssues.find(
+    (mi) => mi.status === "draft" || mi.status === "processing",
+  );
+
   const suggestedProduct = linkedProducts.length === 1 ? linkedProducts[0] : null;
 
   const materialNeeds = await getWorkOrderMaterialNeeds(wo.id);
@@ -350,6 +360,7 @@ export default async function WorkOrderDetailPage({
               workOrderId={wo.id}
               status={wo.status}
               hasCompletedMaterialIssue={!!completedMi}
+              hasActiveMaterialIssue={!!activeMi}
               defaultWarehouseId={defaultWarehouse?.id ?? null}
               vehicleIntakeBlocked={!!wo.customerVehicleId && !vehicleIntake}
               vehicleIntakeHref={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
@@ -661,7 +672,7 @@ export default async function WorkOrderDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengeluaran Material</h2>
-          {wo.status === "in_progress" && !completedMi && (
+          {wo.status === "in_progress" && !completedMi && !activeMi && (
             <CanCreate permission="create_material_issues">
               <Button
                 href={`/inventaris/pengeluaran-material/tambah/perintah-kerja/${wo.slug ?? wo.id}`}
@@ -670,6 +681,13 @@ export default async function WorkOrderDetailPage({
                 + Pengeluaran Material
               </Button>
             </CanCreate>
+          )}
+          {activeMi && (
+            <span id="wo-material-issue-active-hint" role="note" className="text-xs text-muted-foreground">
+              Pengeluaran material aktif {activeMi.documentNo} berstatus{" "}
+              {statusLabel(activeMi.status)} — selesaikan atau batalkan dahulu
+              sebelum membuat pengeluaran baru.
+            </span>
           )}
         </div>
         <div className="p-4 px-5">

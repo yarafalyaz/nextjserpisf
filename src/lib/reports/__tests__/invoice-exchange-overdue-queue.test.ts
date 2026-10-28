@@ -238,6 +238,59 @@ describe("invoice-exchange-overdue-queue (F-2026-10-27-101-S + 110-V)", () => {
     expect(queue.anomalyOnlyCount).toBe(0)
   })
 
+  it("FIN-BR-006: toleransi lunas sisa = Rp1 (satu sumber dengan modul tukar faktur)", () => {
+    // Sisa Rp0,50 sudah Lunas di modul tukar faktur -> tidak boleh tampil di antrean.
+    const lunas = buildInvoiceExchangeOverdueQueue(
+      [input({ exchangeId: 1, invoices: [invoice({ paidAmount: 999_999.5 })] })],
+      NOW,
+    )
+    expect(lunas.rows).toEqual([])
+
+    // Sisa Rp1,01 masih terbuka -> tampil sebagai Sebagian, bukan Lunas.
+    const terbuka = buildInvoiceExchangeOverdueQueue(
+      [input({ exchangeId: 2, invoices: [invoice({ paidAmount: 999_998.99 })] })],
+      NOW,
+    )
+    expect(terbuka.rows.map((r) => r.exchangeId)).toEqual([2])
+    expect(terbuka.rows[0].remainingAmount).toBe(1.01)
+    expect(terbuka.rows[0].settlementStatus).toBe("partial")
+
+    // Penanda tanpa-dueDate memakai toleransi yang sama.
+    const tanpaDue = buildInvoiceExchangeOverdueQueue(
+      [
+        input({ exchangeId: 3, dueDate: null, invoices: [invoice({ paidAmount: 999_999.5 })] }),
+        input({
+          exchangeId: 4,
+          dueDate: null,
+          invoices: [invoice({ salesInvoiceId: 12, paidAmount: 999_998.99 })],
+        }),
+      ],
+      NOW,
+    )
+    expect(tanpaDue.withoutDueDateCount).toBe(1)
+
+    // Retur-kredit yang menutup sisa sampai <= Rp1 = tertutup penuh (anomali).
+    const retur = buildInvoiceExchangeOverdueQueue(
+      [
+        input({
+          exchangeId: 5,
+          invoices: [
+            invoice({ salesInvoiceId: 11, exchangedAmount: 1_000_000, paidAmount: 0 }),
+            invoice({
+              salesInvoiceId: 12,
+              exchangedAmount: 2_000_000,
+              grandTotal: 2_000_000,
+              paidAmount: 0,
+              returnCredit: 1_999_999.5,
+            }),
+          ],
+        }),
+      ],
+      NOW,
+    )
+    expect(retur.rows[0].anomalyCount).toBe(1)
+  })
+
   it("AC-IEX-B5: urutan dueDate lampau dulu, seri documentNo; rekap hanya baris tampil", () => {
     const queue = buildInvoiceExchangeOverdueQueue(
       [

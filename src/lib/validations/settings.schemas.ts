@@ -159,6 +159,10 @@ export const updateSystemSettingsSchema = z.object({
   salesTaxAccountId: optionalInt(),
   salesReturnAccountId: optionalInt(),
   salesAccountId: optionalInt(),
+  // F-2026-10-28 QA (t_de3aba0b): akun uang muka penjualan dari form Mapping
+  // Akun; tanpa kunci ini zod membuang field diam-diam sehingga mapping
+  // selamanya hanya berasal dari auto-map instalasi.
+  customerDownPaymentAccountId: optionalInt(),
 
   // Accounting - Purchase
   purchasePayableAccountId: optionalInt(),
@@ -189,11 +193,20 @@ export const updateSystemSettingsSchema = z.object({
   ),
   abnormalScrapExpenseAccountId: optionalInt(),
 
+  // Accounting - Garansi (F-2026-10-28 QA t_de3aba0b): beban garansi 510104,
+  // provisi garansi 210205, piutang klaim supplier 110508 — semuanya jalur
+  // uang fail-closed (warranty-journal.service, deferred-tax-nonaset-data).
+  warrantyExpenseAccountId: optionalInt(),
+  warrantyProvisionAccountId: optionalInt(),
+  supplierClaimReceivableAccountId: optionalInt(),
+
   // Accounting - General
   pettyCashAccountId: optionalInt(),
   cashBankAccountId: optionalInt(),
   generalExpenseAccountId: optionalInt(),
   defaultCashAccountId: optionalInt(),
+  // F-2026-10-28 QA (t_de3aba0b): utang reimbursement 210209.
+  reimbursementLiabilityAccountId: optionalInt(),
 
   // Accounting - Payroll
   salaryExpenseAccountId: optionalInt(),
