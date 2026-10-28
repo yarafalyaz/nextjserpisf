@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import {
@@ -34,7 +35,7 @@ import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
 import type { StatementTable } from "@/lib/reports/statement-table"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface LedgerReportView {
@@ -50,7 +51,7 @@ export interface CashFlowReportView {
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
 const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 
 type Period = { start: Date; end: Date }
@@ -287,7 +288,7 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
       orderBy: { date: "asc" },
     }),
     prisma.salesPayment.findMany({
-      where: { salesInvoice: { customerId: partyId } },
+      where: activeSalesPaymentWhere({ salesInvoice: { customerId: partyId } }),
       select: { documentNo: true, paymentDate: true, amount: true, withholdingAmount: true },
       orderBy: { paymentDate: "asc" },
     }),
@@ -498,7 +499,7 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
       },
     }),
     prisma.salesPayment.findMany({
-      where: { paymentDate: { gte: period.start, lte: period.end } },
+      where: activeSalesPaymentWhere({ paymentDate: { gte: period.start, lte: period.end } }),
       select: {
         amount: true,
         paymentDate: true,

@@ -268,3 +268,41 @@ describe("updateSalesPayment dengan PPh dipotong pelanggan", () => {
     )
   })
 })
+
+/**
+ * FIN-BR-008 (t_9a24236e): sesudah reversal, baris pembayaran TETAP ada dengan
+ * status "reversed". Dua hal wajib benar: baris batal tidak boleh diedit, dan
+ * pembayaran pengganti harus DITERIMA karena nilai batal tidak ikut dihitung
+ * sebagai pelunasan.
+ */
+describe("updateSalesPayment sesudah reversal FIN-BR-008", () => {
+  it("menolak edit baris reversed, lalu menerima pembayaran pengganti", async () => {
+    paymentFindUniqueOrThrowMock.mockResolvedValueOnce({
+      salesInvoiceId: 50, documentNo: "PAY-0001", status: "reversed",
+    })
+    const tolak = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "100", paymentDate: "2026-06-09", paymentMethod: "cash",
+    }))
+    expect(tolak.success).toBe(false)
+    expect(tolak.error).toContain("sudah dibalik")
+    expect(paymentUpdateMock).not.toHaveBeenCalled()
+
+    // Pengganti: agregat pembayaran lain kosong karena baris reversed disaring.
+    paymentFindUniqueOrThrowMock.mockResolvedValueOnce({
+      salesInvoiceId: 50, documentNo: "PAY-0002",
+    })
+    invoiceFindUniqueOrThrowMock.mockResolvedValueOnce({
+      id: 50, grandTotal: 1000, customerId: 3, status: "partial",
+    })
+    paymentAggregateMock.mockResolvedValueOnce({ _sum: { amount: null, withholdingAmount: null } })
+    const res = await updateSalesPayment(10, fd({
+      salesInvoiceId: "50", amount: "1000", paymentDate: "2026-06-09", paymentMethod: "transfer",
+    }))
+    expect(res.success).toBe(true)
+    expect(paymentAggregateMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { not: "reversed" } }),
+      }),
+    )
+  })
+})

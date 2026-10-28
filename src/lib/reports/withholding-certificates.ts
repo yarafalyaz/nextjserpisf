@@ -12,7 +12,7 @@
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface WithholdingCertificateInput {
@@ -143,7 +143,7 @@ export interface WithholdingCertificateTable {
 
 const tableMoney = (value: number) => formatAccounting(value, { zeroDash: false })
 const tableDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 
 /**
  * Tabel Bukti Potong dua sisi untuk layar & PDF (B8) — dibangun dari

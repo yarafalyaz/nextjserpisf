@@ -14,7 +14,7 @@
  */
 
 import { isOutstandingSettled } from "@/lib/finance/settlement-status"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -62,7 +62,7 @@ function amount(value: number): string {
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 export function buildSalesProcessHistory(lines: SalesProcessLine[]): SalesProcessResult {

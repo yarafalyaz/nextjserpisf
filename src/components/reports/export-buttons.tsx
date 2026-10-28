@@ -7,6 +7,7 @@ import { showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { companyAddressOneLine } from "@/lib/utils/company-address"
+import { formatPrintedAtWib } from "@/lib/utils/format"
 
 /**
  * Helper: fetch system settings from a JSON endpoint for the PDF letterhead.
@@ -65,16 +66,10 @@ function openPdf(href: string, download: boolean) {
 /**
  * Waktu cetak ekspor klien, selalu Asia/Jakarta berlabel WIB — zona perangkat
  * pembaca tidak boleh mengubah cap waktu dokumen (AC-REP-003).
+ * Implementasi di `src/lib/utils/format.ts`; re-ekspor supaya impor existing
+ * (`../export-buttons`) tidak pecah.
  */
-export function formatPrintedAtWib(now: Date): string {
-  const date = now.toLocaleDateString('id-ID', {
-    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta',
-  })
-  const time = now.toLocaleTimeString('id-ID', {
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta',
-  })
-  return `${date} ${time} WIB`
-}
+export { formatPrintedAtWib }
 
 function csvQuote(value: string): string {
   return `"${value.replace(/"/g, '""')}"`

@@ -15,7 +15,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -85,7 +85,7 @@ function amount(value: number): string {
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 function accountLabel(movement: BankMovementInput): string {
@@ -160,7 +160,7 @@ export function buildBankMovements(input: {
       amount(row.inflow),
       amount(row.outflow),
       amount(row.net),
-      row.count.toLocaleString("id-ID"),
+      formatNumber(row.count),
     ],
   }))
 
@@ -179,7 +179,7 @@ export function buildBankMovements(input: {
         amount(totals.inflow),
         amount(totals.outflow),
         amount(totals.net),
-        totals.count.toLocaleString("id-ID"),
+        formatNumber(totals.count),
       ],
     })
   }

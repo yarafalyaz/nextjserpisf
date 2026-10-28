@@ -19,6 +19,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
+import { formatDate, formatQuantity } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -80,11 +81,11 @@ export interface SerialBatchResult {
 }
 
 function quantity(value: number): string {
-  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+  return formatQuantity(value)
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 function serialStatusLabel(status: string | null): string {

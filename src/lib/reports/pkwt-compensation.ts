@@ -12,6 +12,7 @@
  * Tanggal = hari kalender WIB (pola employee-lifecycle wibDayNumber).
  */
 
+import { formatNumber } from "@/lib/utils/format"
 import { safeRound } from "@/lib/utils/math"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -199,7 +200,7 @@ export function buildPkwtReconciliation(
     }
     if (accrualVsEventDiff !== 0 && r.frozenEventTotal > 0) {
       findings.push(
-        `Selisih peristiwa terbekukan vs (akrual + slip terbayar) Rp${accrualVsEventDiff.toLocaleString("id-ID")} — segmen belum terakrual penuh/belum dibayar; tampil sebagai temuan, bukan dipilih diam-diam.`,
+        `Selisih peristiwa terbekukan vs (akrual + slip terbayar) Rp${formatNumber(accrualVsEventDiff)} — segmen belum terakrual penuh/belum dibayar; tampil sebagai temuan, bukan dipilih diam-diam.`,
       )
     }
     return { ...r, expectedPayable, accrualVsEventDiff, findings }
@@ -310,7 +311,7 @@ export function buildPkwtCompensationReport(input: {
     anomalies.push({
       code: "GL_VS_EVENT_DIFF",
       label: "GL vs peristiwa",
-      detail: `Saldo GL 210207 Rp${input.glPayableBalance.toLocaleString("id-ID")} vs utang seharusnya (peristiwa terbekukan − slip terbayar) Rp${expectedPayableTotal.toLocaleString("id-ID")} — selisih Rp${glDiff.toLocaleString("id-ID")}; tampil sebagai temuan, bukan dipilih diam-diam.`,
+      detail: `Saldo GL 210207 Rp${formatNumber(input.glPayableBalance)} vs utang seharusnya (peristiwa terbekukan − slip terbayar) Rp${formatNumber(expectedPayableTotal)} — selisih Rp${formatNumber(glDiff)}; tampil sebagai temuan, bukan dipilih diam-diam.`,
     })
   }
   const subDiff = safeRound(accrualSubledgerTotal + paidSlipTotal - frozen.reduce((s, r) => s + r.amount, 0), 2)
@@ -318,7 +319,7 @@ export function buildPkwtCompensationReport(input: {
     anomalies.push({
       code: "ACCRUAL_VS_EVENT_DIFF",
       label: "Akrual vs peristiwa",
-      detail: `Subledger akrual + slip terbayar vs peristiwa terbekukan selisih Rp${subDiff.toLocaleString("id-ID")} — segmen belum terakrual penuh atau belum dibayar.`,
+      detail: `Subledger akrual + slip terbayar vs peristiwa terbekukan selisih Rp${formatNumber(subDiff)} — segmen belum terakrual penuh atau belum dibayar.`,
     })
   }
   for (const r of rows) {
