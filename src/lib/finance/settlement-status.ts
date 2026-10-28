@@ -21,6 +21,20 @@ import { safeSubtract, type SafeMathInput } from "@/lib/utils/math"
  */
 export const SETTLEMENT_TOLERANCE_IDR = 1
 
+/**
+ * Sisa outstanding dianggap lunas bila <= toleransi FIN-BR-006.
+ *
+ * Untuk laporan/antrean yang hanya memegang angka SISA (bukan pasangan
+ * grandTotal − totalPaid). Sebelum paritas ini tiap modul laporan menyimpan
+ * ambangnya sendiri (0,005), sehingga satu faktur dengan sisa Rp0,50 tampil
+ * "Lunas" di layar faktur/daftar tukar faktur tetapi tetap dihitung sebagai
+ * piutang di antrean penagihan, statement pelanggan, dan antrean tukar faktur
+ * lewat batas — dua kebenaran untuk satu dokumen.
+ */
+export function isOutstandingSettled(outstanding: SafeMathInput): boolean {
+  return Number(outstanding ?? 0) <= SETTLEMENT_TOLERANCE_IDR
+}
+
 /** Outstanding valid = grandTotal − total terbayar valid, presisi sen. */
 export function settlementOutstanding(
   grandTotal: SafeMathInput,

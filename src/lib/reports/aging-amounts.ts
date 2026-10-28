@@ -1,7 +1,15 @@
 import { safeAdd, safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 
-/** Lunas bila sisa <= nilai ini (BR-COL-02; dipakai antrean + statement). */
-export const COLLECTION_SETTLED_EPSILON = 0.005
+/**
+ * Ambang "sisa dianggap lunas" TIDAK lagi didefinisikan di sini.
+ *
+ * Sebelumnya berkas ini mengekspor `COLLECTION_SETTLED_EPSILON = 0,005`
+ * (setengah sen) sementara FIN-BR-006 menetapkan toleransi Rp1 — akibatnya
+ * satu faktur dengan sisa Rp0,50 tampil "Lunas" di layar faktur tetapi masih
+ * dihitung piutang di antrean penagihan/statement/antrean tukar faktur.
+ * Sekarang semua pemakai memakai `isOutstandingSettled()`
+ * (`@/lib/finance/settlement-status`) supaya hanya ada SATU ambang.
+ */
 
 /** Sisa piutang = grandTotal − paid, presisi sen (bukan float mentah). */
 export function receivableOutstanding(grandTotal: SafeMathInput, paidAmount: SafeMathInput): number {

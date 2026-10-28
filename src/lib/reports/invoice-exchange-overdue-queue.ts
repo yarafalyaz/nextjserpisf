@@ -27,6 +27,7 @@
  */
 
 import { settlementStatus, type SettlementStatus } from "@/lib/finance/invoice-exchange"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { sumMoney } from "@/lib/reports/aging-amounts"
 import { getWibTodayUtcDate, WIB_OFFSET_HOURS } from "@/lib/utils/attendance-time"
 import { safeSubtract } from "@/lib/utils/math"
@@ -54,8 +55,13 @@ export const INVOICE_EXCHANGE_OVERDUE_ANOMALY_ONLY_LABEL = "Semua faktur tertaut
 export const INVOICE_EXCHANGE_OVERDUE_DIFFERENCE_LABEL = "Selisih dengan nilai faktur saat ini"
 
 const MS_PER_DAY = 86_400_000
-/** Epsilon lunas existing invoice-exchange.ts (setengah sen). */
-const SETTLED_EPSILON = 0.005
+/*
+ * Toleransi "sisa lunas" di modul ini = FIN-BR-006 lewat `isOutstandingSettled`
+ * (Rp1), BUKAN ambang lokal. Sebelum paritas ini modul menyimpan ambangnya
+ * sendiri (setengah sen, 0,005) sehingga antrean menampilkan dokumen yang oleh
+ * modul tukar faktur & layar faktur sudah dinyatakan Lunas — dua kebenaran
+ * untuk dokumen yang sama.
+ */
 
 export interface InvoiceExchangeOverdueInvoiceInput {
   salesInvoiceId: number
@@ -144,10 +150,15 @@ function wibCalendarDay(instant: Date): Date {
 function isAnomalyInvoice(invoice: InvoiceExchangeOverdueInvoiceInput): boolean {
   if (invoice.deletedAt !== null) return true
   if (invoice.status === "cancelled") return true
-  // Tertutup retur-kredit penuh: kredit retur menutup sisa faktur hidup.
+  // Tertutup retur-kredit penuh: kredit retur menutup sisa faktur hidup sampai
+  // toleransi lunas FIN-BR-006 (Rp1) — bukan lagi setengah sen.
   const liveRemaining = safeSubtract(invoice.grandTotal as never, invoice.paidAmount as never, 2)
   const credit = Number(invoice.returnCredit ?? 0)
-  return credit > 0 && credit >= liveRemaining - SETTLED_EPSILON && liveRemaining > SETTLED_EPSILON
+  return (
+    credit > 0 &&
+    isOutstandingSettled(safeSubtract(liveRemaining, credit, 2)) &&
+    !isOutstandingSettled(liveRemaining)
+  )
 }
 
 export function buildInvoiceExchangeOverdueQueue(
@@ -171,7 +182,7 @@ export function buildInvoiceExchangeOverdueQueue(
         sumMoney(active.map((i) => i.paidAmount as never)),
         2,
       )
-      if (remaining > SETTLED_EPSILON) withoutDueDateCount += 1
+      if (!isOutstandingSettled(remaining)) withoutDueDateCount += 1
       continue
     }
     const dueDay = wibCalendarDay(input.dueDate)
@@ -184,7 +195,7 @@ export function buildInvoiceExchangeOverdueQueue(
     const exchangedAmount = sumMoney(active.map((i) => i.exchangedAmount as never))
     const paidAmount = sumMoney(active.map((i) => i.paidAmount as never))
     const remainingAmount = safeSubtract(exchangedAmount, paidAmount, 2)
-    if (remainingAmount <= SETTLED_EPSILON) {
+    if (isOutstandingSettled(remainingAmount)) {
       // Semua faktur anomali -> sisa non-anomali 0; tertanda di tingkat
       // antrean, bukan hilang tanpa jejak (verdict #1191 catatan minor 1).
       if (active.length === 0 && input.invoices.length > 0) anomalyOnlyCount += 1
@@ -195,7 +206,7 @@ export function buildInvoiceExchangeOverdueQueue(
       active.map((i) => safeSubtract(i.grandTotal as never, i.paidAmount as never, 2) as never),
     )
     const differenceAmount = safeSubtract(remainingAmount, liveRemainingAmount, 2)
-    const hasDifference = Math.abs(differenceAmount) > SETTLED_EPSILON
+    const hasDifference = !isOutstandingSettled(Math.abs(differenceAmount))
 
     rows.push({
       exchangeId: input.exchangeId,
