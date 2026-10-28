@@ -398,9 +398,12 @@ describe("customer-credit-queue loader (anti-N+1 + gerbang)", () => {
       status: "confirmed",
     })
     // SalesPayment bermarker DP dibaca satu kali massal.
+    // FIN-BR-008: alokasi DP yang sudah dibalik tidak boleh menandai sisa
+    // kredit sebagai "sudah dialokasikan" — saringan ikut diharapkan di sini.
     expect(mocks.findSalesPayments.mock.calls[0]?.[0]?.where).toEqual({
       paymentMethod: "down_payment",
       notes: { contains: "Uang muka dari DP" },
+      status: { not: "reversed" },
     })
 
     // FP UM DP 21 dibatalkan (hanya DP 100 tersisa aktif) -> penanda hilang.
