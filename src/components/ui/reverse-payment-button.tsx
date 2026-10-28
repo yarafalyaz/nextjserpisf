@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
-import { Textarea } from "@/components/ui/shadcn/textarea"
+import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
@@ -85,23 +85,14 @@ export function ReversePaymentButton({
         isPending={isPending}
         onConfirm={handleReverse}
       >
-        <div className="mt-3 flex flex-col gap-1.5">
-          <label htmlFor={`reverse-reason-${id}`} className="text-sm font-medium">
-            Alasan pembalikan <span aria-hidden="true" className="text-danger">*</span>
-          </label>
-          <Textarea
-            id={`reverse-reason-${id}`}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Tulis alasan pembalikan (wajib diisi)"
-            aria-label="Alasan pembalikan"
-            rows={3}
-            disabled={isPending}
-          />
-          <p className="text-xs text-muted-foreground">
-            Alasan wajib diisi dan tersimpan sebagai jejak audit pembalikan.
-          </p>
-        </div>
+        <ReasonField
+          id={`reverse-reason-${id}`}
+          value={reason}
+          onChange={setReason}
+          disabled={isPending}
+          label="Alasan pembalikan"
+          placeholder="Tulis alasan pembalikan (wajib diisi)"
+        />
       </ConfirmDialog>
     </>
   )
