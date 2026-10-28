@@ -44228,3 +44228,94 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 2. BOT QA memfalsifikasi tiap AC (bukan membaca diff) dan menulis atestasi blob pada head persis; gerbang merge tetap Q-CHURN-1.
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-149-S: alur approval adjustment hasil stocktake (INV-BR-002 sisi approval)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: t_d75d8dd3. Basis `origin/main` `beb4d690b` (2026-10-28 16:40 WIB).
+
+**Verifikasi ID — tegas:** `F-2026-10-28-149` bebas run ini: grep `F-2026-10-28-149` di backlog+board `origin/main` = 0/0; grep semua head PR terbuka (`origin/<branch>`, `gh pr list --state open`) = 0; seri 14x terbuka hanya sampai 148-V (rantai PR #1266-#1327). Nomor falsifikasi `E-INV02-1..6` bebas: grep `E-INV02` di backlog = 0. Label bukti wajib tiap aturan: TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+- Bukan F-2026-10-26-066-S antrean penyesuaian draft (PR #1018 MERGED): objeknya `StockAdjustment` semua asal (manual + hasil posting opname). Spec ini objeknya rantai opname→adjustment: sesi `StocktakeSession` SEBELUM posting plus `StockAdjustment` yang LAHIR dari posting sesi itu, dengan fokus persetujuan + taut dua arah.
+- Bukan F-2026-10-27-090-S antrean sesi belum selesai (PR OPEN): objeknya sesi BELUM posting (umur/tahap mengendap). Spec ini objeknya sisi SESUDAH posting: selisih wajib dokumen adjustment, approval adjustment itu, taut dua arah sesi↔adjustment, idempotensi. `posted` — yang keluar populasi 090-S — justru pintu masuk spec ini.
+- Bukan F-2026-10-22-081-S penutupan selisih transfer (jalur Q-TP-3): adjustment alasan persis `selisih transfer` tertaut `inventoryTransferId` diproses JURNAL SAJA tanpa StockMove (`inventory.actions.ts:397-475`). Adjustment hasil opname = jalur STOK PENUH (move IN/OUT + jurnal), bukan cabang itu; mencampur keduanya = salah jalur.
+
+### 1. Workflow specification (rantai opname → adjustment → posting)
+
+Aktor: pencacah (menjalankan sesi; izin `create_stock_adjustments`), penyetuju sesi independen (izin `edit_stock_adjustments`, wajib ≠ `countedBy`), penyusun adjustment manual (izin `create_stock_adjustments`), approver adjustment (alur `Approval` generik via `requestApprovalIfConfigured`/`assertApproved`, BUKAN penyetuju sesi), pemroses adjustment (izin `process_stock_adjustments` + scope gudang + periode terbuka).
+
+Alur existing (TERVERIFIKASI-KODE, `src/actions/inventory.actions.ts:2391-2650`): sesi lahir `draft` → `snapshotStocktakeSession` (hanya `draft`, kunci baris, salin live qty → `counting` + `snapshotAt`+`countedBy`) → `saveStocktakeCounts` (hanya `counting`/`recount`; ada `needsRecount` → `recount`, bersih → `review`) → `approveStocktakeSession` (hanya `review`, penyetuju ≠ `countedBy` → `approved` + `approvedBy`/`approvedAt`) → `postStocktakeSession` (hanya `approved` dibaca ulang sesudah `FOR UPDATE`; `finalizeCounts`; variance nol → `posted` tanpa adjustment; variance ≠ 0 → buat `StockAdjustment status:"draft"` + `adjustmentId` + `requestApprovalIfConfigured("StockAdjustment", …)` :2643) → adjustment hasil opname diproses lewat `processStockAdjustment` (:349: wajib `draft` + `assertPeriodOpen` + `assertApproved` + klaim atomik `draft→processing` + hook move+jurnal + `processed`) persis seperti adjustment manual.
+
+Dokumen masuk: sesi `StocktakeSession` + baris `StocktakeLine` ter-snapshot. Dokumen keluar: `StockAdjustment` draft tertaut (selisih ≠ 0) → StockMove `posted` + jurnal GL `referenceType:"StockAdjustment"` + sesi `posted`.
+
+### 2. Role/permission matrix (key nyata `module-catalog.generated.ts`)
+
+| Aksi | `view_stock_opname` | `create_stock_adjustments` | `edit_stock_adjustments` | `process_stock_adjustments` | Scope gudang |
+| Buat sesi / snapshot / simpan hitungan (`:2391/:2431/:2471`) | halaman menuntutnya (daftar/detail) | YA | — | — | YA per aksi |
+| Setujui sesi (`approveStocktakeSession` :2528) | halaman menuntutnya | — | YA + wajib ≠ `countedBy` | — | YA |
+| Posting sesi (`postStocktakeSession` :2556) | — | YA | — | — | YA |
+| Susun/ubah adjustment (`create/updateStockAdjustment` :255/:1969) | — | YA (buat) / `edit_stock_adjustments` (ubah) | ubah YA | — | YA multi-gudang |
+| Proses adjustment (`processStockAdjustment` :349) | — | — | — | YA + `assertApproved` | YA |
+| Hapus adjustment (`deleteStockAdjustment` :1852) | — | — | — | `delete_stock_adjustments` | YA, hanya `draft` |
+
+Catatan jujur (TERVERIFIKASI-KODE): katalog `stock_opname` hanya punya `view_stock_opname` — semua transisi sesi meminjam katalog `stock_adjustments`. Pemegang `view` saja tidak bisa menjalankan transisi apa pun. BUKAN celah: sengaja dipinjam, bukan izin hilang.
+
+### 3. Status-transition matrix
+
+| Status awal | Pemicu (aksi) | Status akhir | Penjaga/permission |
+| (belum ada) | `createStocktakeSession` | sesi `draft` | `create_stock_adjustments` + scope + periode terbuka |
+| sesi `draft` | `snapshotStocktakeSession` | sesi `counting` (`snapshotAt`+`countedBy`) | `create_stock_adjustments` + scope; hanya dari `draft` |
+| sesi `counting`/`recount` | `saveStocktakeCounts` selisih tanpa hitung-2 | sesi `recount` | `create_stock_adjustments` + scope |
+| sesi `counting`/`recount` | `saveStocktakeCounts` bersih | sesi `review` | sama |
+| sesi `review` | `approveStocktakeSession` | sesi `approved` (`approvedBy`+`approvedAt`) | `edit_stock_adjustments` + scope + penyetuju ≠ `countedBy` (SoD sesi) |
+| sesi `approved`, variance = 0 | `postStocktakeSession` | sesi `posted` (`adjustmentId` null) | `create_stock_adjustments` + scope + periode terbuka + klaim `FOR UPDATE` |
+| sesi `approved`, variance ≠ 0 | `postStocktakeSession` | sesi `posted` + adjustment `draft` (`adjustmentId` terisi) | sama + `requestApprovalIfConfigured("StockAdjustment")` |
+| adjustment `draft` (asal opname maupun manual) | `processStockAdjustment` | adjustment `processed` (+ StockMove `posted` + jurnal) | `process_stock_adjustments` + scope + periode terbuka + `assertApproved` + klaim `draft→processing`; gagal tx → pulih ke `draft` |
+| adjustment/sesi `processed`/`posted` | — terminal | tetap (koreksi hanya dokumen baru/retur/reversal jurnal, INV-BR-010) | edit/hapus guard `draft`-only |
+| adjustment `processing` (klaim basi) | retry user | `draft` | pulih otomatis sesudah tx gagal (pola limbo) |
+
+SoD dua lapis (TERVERIFIKASI-KODE): lapis sesi — penyetuju ≠ pencacah (`inventory.actions.ts:2536-2538`, fail-closed bila `countedBy` sama); lapis adjustment — `assertApproved("StockAdjustment")` menolak pending/rejected (`approval-workflow.service.ts:58-72`), tanpa workflow terkonfigurasi = no-op mundur-kompatibel (INV-BR-010). Celah jujur: self-approve adjustment MANUAL tanpa workflow terkonfigurasi tetap mungkin (no-op) — tertutup hanya bila workflow `StockAdjustment` aktif dikonfigurasi. Spec ini tidak mengarang guard baru.
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+| BR-INV02-01 | Selisih stocktake (variance ≠ 0 hasil `finalizeCounts`) WAJIB menjadi dokumen `StockAdjustment` — tidak ada penulisan stok langsung dari sesi. Posting tanpa selisih menutup sesi `posted` tanpa adjustment. | TERVERIFIKASI-KODE (`postStocktakeSession` :2581-2640; `finalizeCounts` `stocktake-finalize.ts:23-40`; baris tanpa `count1` dilewati, 0 = hitungan sah) |
+| BR-INV02-02 | Adjustment hasil opname TERIKAT dua arah: sesi→adjustment via `StocktakeSession.adjustmentId` (`schema.prisma:3867`), adjustment→sesi via `notes` `Posting opname <documentNo>` + `items[].notes` `Opname <documentNo>` (`inventory.actions.ts:2615-2633`) dan `requestApprovalIfConfigured` yang menaut `Approval(referenceType:"StockAdjustment", referenceId)`. | TERVERIFIKASI-KODE (kolom + 3 penanda teks; ID sesi tidak disimpan di adjustment — USULAN BR-INV02-02b menimbang FK eksplisit `stocktakeSessionId?`, TIDAK dibangun run ini) |
+| BR-INV02-03 | Approval pemisahan tugas dua lapis: (a) sesi — penyetuju ≠ pencacah, fail-closed; (b) adjustment — `assertApproved` sebelum klaim `processing`; adjustment pending/rejected = proses ditolak berpesan. | TERVERIFIKASI-KODE (:2536-2538, :372, service :58-72; INV-BR-007/010) |
+| BR-INV02-04 | Posting sesi + proses adjustment TUNDUK periode tutup: `assertPeriodOpen` di `postStocktakeSession` (tanggal berjalan) dan `processStockAdjustment` (tanggal dokumen) + di hook (`stock-adjustment.hook.ts:54-58`). Sesi `approved` melewati tutup periode tetap `approved` — tetap populasi antrean 090-S, bukan gagal diam-diam. | TERVERIFIKASI-KODE (:359, :2643-area, hook :52-58; EC-STQ-4 090-S) |
+| BR-INV02-05 | Idempotensi dua lapis: (a) posting sesi klaim atomik `FOR UPDATE` + baca ulang status — request paralel single-winner (`:2572-2580`, AUD-01, `stocktake-posting-concurrency.integration.test.ts`); (b) adjustment hook no-op bila StockMove `(StockAdjustment, id)` sudah ada (:39-45) + guard status `processed`/`cancelled` (:47-49) + klaim `updateMany draft→processing` + pulih `draft` bila tx gagal. | TERVERIFIKASI-KODE (INV-BR-012; satu dokumen sah banyak movement per item — `UNIQUE(referenceType,referenceId)` DILARANG) |
+| BR-INV02-06 | Alasan adjustment: skema `reason` NULLABLE (`inventory.schemas.ts:41`, `schema.prisma:2577`) — alasan WAJIB operasional untuk adjustment HASIL OPNAME dijamin oleh penanda otomatis (`notes` posting + `notes` per baris), bukan oleh validasi `reason`. `reason="selisih transfer"` + `inventoryTransferId` = jalur JURNAL SAJA transfer (081-S) — DILARANG dipakai untuk selisih opname; posting opname tidak pernah mengisi `inventoryTransferId`. Mengetatkan `reason` jadi wajib skema = BUTUH-VONIS Lead (menyentuh adjustment manual + cabang transfer). | TERVERIFIKASI-KODE + BUTUH-VONIS (batas pengetatan) |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (run ini) |
+| Perintah + hasil opname per gudang → penyesuaian otomatis | Ada — Perintah Stok Opname (SPK/PIC/gudang/kategori) → Hasil Stok Opname → tab Proses Opname buat penyesuaian (https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/hasil-stok-opname/mencatat-proses-stok-opname/) | Ada — Stok Opname: hitung fisik vs buku, selisih, Proses → penyesuaian + akun koreksi + Rekam draft (https://help.zahironline.com/portal/id/kb/articles/stock-o ; https://help.zahironline.com/portal/id/kb/articles/stock-opname-zahir-online-v2) | Ada, lebih bertahap — sesi snapshot/recount/approval independen/posting → adjustment (TERVERIFIKASI-KODE §1) |
+| Persetujuan atas penyesuaian persediaan | Ada — Penyesuaian Persediaan termasuk transaksi terkontrol Persetujuan via Pengaturan Preferensi (https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/) | Tidak ditemukan di halaman di atas — tidak diklaim | Ada dua lapis — SoD sesi (penyetuju ≠ pencacah) + `assertApproved` adjustment (TERVERIFIKASI-KODE BR-INV02-03) |
+| Taut dua arah sesi↔adjustment | Tidak ditemukan di halaman diakses — tidak diklaim | Tidak ditemukan — tidak diklaim | Parsial — `adjustmentId` + 3 penanda teks (BR-INV02-02); FK eksplisit = USULAN |
+| Idempotensi posting paralel | Tidak diklaim | Tidak diklaim | Ada — klaim `FOR UPDATE` sesi + no-op hook adjustment (BR-INV02-05, regresi AUD-01) |
+
+### 6. Acceptance criteria + edge cases (falsifikasi E-INV02-1..6, atas head persis)
+
+- E-INV02-1: posting sesi `approved` bervariance TANPA melahirkan `StockAdjustment` draft tertaut (`adjustmentId` null padahal `finalizeCounts` ≠ 0) = **MERAH**.
+- E-INV02-2: `processStockAdjustment` atas adjustment hasil opname lolos saat rekod `Approval` berstatus `pending`/`rejected` (cabut `assertApproved` :372, proses tetap hijau) = **MERAH**; tanpa workflow terkonfigurasi tetap hijau = SAH (no-op mundur-kompatibel, bukan cacat).
+- E-INV02-3: sesi diposting dua request paralel → DUA adjustment lahir / sesi `posted` tanpa single-winner (cabut `FOR UPDATE` :2572, duplikat muncul) = **MERAH** (kait AUD-01).
+- E-INV02-4: proses adjustment diulang (retry sesudah sukses) → StockMove ganda `(StockAdjustment, id)` kedua (cabut no-op hook :39-45, movement dobel) = **MERAH**.
+- E-INV02-5: posting sesi / proses adjustment bertanggal periode tertutup lolos (`assertPeriodOpen` dicabut, jurnal back-date terbentuk) = **MERAH**.
+- E-INV02-6: adjustment `reason="selisih transfer"` TANPA `inventoryTransferId` (atau sebaliknya) lolos proses normal stok-penuh; adjustment opname terproses lewat cabang jurnal-saja transfer = **MERAH** (batas jalur 081-S vs opname).
+- EC-1: sesi `approved` + variance nol → `posted` tanpa adjustment; antrean 090-S mengeluarkan, antrean 066-S tidak pernah memuat.
+- EC-2: `count1` null (belum dihitung) vs 0 (kosong sah): yang null dilewati `finalizeCounts`, bukan variance 0 — posting tidak menutup baris belum-dihitung sebagai cocok.
+- EC-3: pergerakan stok selama sesi (live − snapshot ≠ 0) dicatat di `notes` adjustment, basis proses = LIVE (`stock-adjustment.hook.ts:57-90`), bukan snapshot basi.
+- EC-4: adjustment hasil opname berstatus `processed` TIDAK bisa diedit/dihapus (guard `draft`-only); koreksi = dokumen baru (INV-BR-010).
+- EC-5: halaman opname single-pass (`opname/[[...segments]]`) = jalur TANPA sesi (satu draft adjustment langsung) — di luar rantai ini, tidak diubah spec ini.
+
+### 7. Backlog implementasi
+
+| F-2026-10-28-149-S | Spec kontrak ini (dokumen) | Business | — |
+| 149-B | FK opsional `StockAdjustment.stocktakeSessionId?` + backfill penanda teks existing + tampil taut dua arah di detail sesi/adjustment (BR-INV02-02b) | Backend | Putusan Lead BR-INV02-02b + BUTUH-VONIS tidak (nol nominal; jurnal tak berubah) |
+| 149-F | Taut klik dua arah sesi↔adjustment (detail sesi tampil adjustment; detail adjustment tampil sesi asal bila ada) verbatim payload | Frontend | 149-B merged |
+| 149-Q | Falsifikasi E-INV02-1..6 atas head Backend/Frontend persis | QA | 149-B/149-F |
+
+Yang TIDAK diusulkan run ini: `reason` wajib skema (BUTUH-VONIS Lead, menyentuh manual+transfer); tombol batal/hapus sesi (nol jalur existing, keputusan Lead terpisah — EC-STQ-1 090-S); auto-posting/auto-approve adjustment hasil opname (melanggar SoD BR-INV02-03); `UNIQUE(referenceType,referenceId)` StockMove (dilarang INV-BR-012); mengubah jalur single-pass tanpa sesi; angka/statutori (nol nominal baru — BUTUH-VONIS accountant: TIDAK untuk spec ini).
+
+F-2026-10-28-149-S — Alur approval adjustment hasil stocktake. Status: SPEC SELESAI run ini; gerbang pertama putusan Lead BR-INV02-02b/Q-149 (FK eksplisit ya/tidak), lalu fisik Backend (149-B), konsumen Frontend (149-F), falsifikasi QA (149-Q). Pemilik usulan: Business (spec), Lead (FK + batas reason), Backend (fisik), Frontend (taut), QA (E-INV02-1..6). Butuh putusan accountant: TIDAK (nol akun/nominal/jurnal baru — memakai jalur adjustment existing INV-BR-010).
