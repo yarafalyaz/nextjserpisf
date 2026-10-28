@@ -27,15 +27,16 @@ let loansByEmployee: Map<number, LoanRow[]>
 let payrollSeq: number
 let componentLinesByPayroll: Map<number, any[]>
 let pkwtBlocking: { id: number; status: string } | null
+let forceCreateP2002 = false
 
 const BASE_SOURCE = () => ({
   id: 1,
   documentNo: "PAYROLL-0001",
   employeeId: 9,
-  period: "2026-10",
+  period: "2026-09",
   type: "REGULAR",
-  startDate: new Date("2026-10-01T00:00:00Z"),
-  endDate: new Date("2026-10-31T00:00:00Z"),
+  startDate: new Date("2026-09-01T00:00:00Z"),
+  endDate: new Date("2026-09-30T00:00:00Z"),
   baseSalary: 5000000,
   allowances: 0,
   deductions: 0,
@@ -79,6 +80,9 @@ function txClient() {
         return null
       },
       create: async ({ data }: any) => {
+        if (forceCreateP2002) {
+          throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" })
+        }
         const id = ++payrollSeq
         const row = { id, ...data }
         payrollById.set(id, row)
@@ -167,6 +171,7 @@ const fd = (reason: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  forceCreateP2002 = false
   payrollById = new Map([[1, BASE_SOURCE()]])
   loansByEmployee = new Map([
     [9, [{ id: 11, remainingAmount: 1000000, status: "active", loanDate: new Date("2026-09-01T00:00:00Z") }]],
@@ -213,6 +218,12 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     // Nilai penuh disalin (bukan delta saja).
     expect(Number(correction.grossSalary)).toBe(5000000)
     expect(Number(correction.netSalary)).toBe(4500000)
+    // Rentang + periode koreksi = periode TERBUKA (135-V §2b), bukan
+    // salinan rentang asal — salinan persis selalu P2002 di DB nyata
+    // (uq_payroll_employee_range: asal tetap `paid` = pemblokir irisan).
+    expect(correction.startDate.getTime()).not.toBe(new Date("2026-09-01T00:00:00Z").getTime())
+    expect(correction.period).not.toBe("2026-09")
+    expect(String(correction.period)).toMatch(/^\d{4}-\d{2}$/)
     // Urutan atomik: reversal jurnal asal lalu jurnal koreksi dokumen BARU.
     expect(reverseJournalsMock).toHaveBeenCalledTimes(1)
     expect(reverseJournalsMock.mock.calls[0].slice(1, 3)).toEqual(["Payroll", 1])
@@ -256,6 +267,36 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     const res = await correctPaidPayroll(1, fd("koreksi lintas periode"))
     expect(res.success).toBe(false)
     expect(reverseJournalsMock).not.toHaveBeenCalled()
+    expect(payrollById.size).toBe(1)
+  })
+
+  it("E-HRCR-2b: restorasi amortisasi cermin alokasi tertua-dulu, dicap sisa per pinjaman", async () => {
+    // markPayrollPaid mengalokasi min(sisa,budget) tertua-dulu; slip ini
+    // memotong 500rb dari dua pinjaman -> pulihkan porsi yang sama, total 500rb.
+    loansByEmployee = new Map([
+      [9, [
+        { id: 11, remainingAmount: 100000, status: "active", loanDate: new Date("2026-09-01T00:00:00Z") },
+        { id: 12, remainingAmount: 800000, status: "active", loanDate: new Date("2026-09-15T00:00:00Z") },
+      ]],
+    ])
+    const res = await correctPaidPayroll(1, fd("koreksi multi pinjaman"))
+    expect(res.success).toBe(true)
+    const rows = loansByEmployee.get(9)!
+    // Pinjaman tertua pulih penuh 100rb (sisa cap), sisanya ke pinjaman kedua.
+    expect(rows.find((r) => r.id === 11)!.remainingAmount).toBe(200000)
+    expect(rows.find((r) => r.id === 12)!.remainingAmount).toBe(1200000)
+  })
+
+  it("E-HRCR-2c: P2002 rentang periode koreksi ditolak berisik tanpa nominal gaji", async () => {
+    // P2002 dari create slip koreksi (rentang periode koreksi bentrok slip
+    // lain) = tolak berisik tanpa nominal gaji, bukan throw mentah.
+    forceCreateP2002 = true
+    const res = await correctPaidPayroll(1, fd("koreksi bentrok rentang"))
+    forceCreateP2002 = false
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("rentang periode koreksi")
+    expect(res.error).not.toMatch(/[0-9]{7,}/)
+    expect(logActivityMock).not.toHaveBeenCalled()
     expect(payrollById.size).toBe(1)
   })
 
