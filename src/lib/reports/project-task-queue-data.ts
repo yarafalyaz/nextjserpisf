@@ -17,6 +17,10 @@
  * penugasan apa pun. Populasi/ember/umur/urutan/rekap di builder
  * murni `project-task-queue.ts`; query hanya mengecualikan status
  * terminal dan builder menyaring ulang (pola keluarga antrean).
+ *
+ * Lapisan F-2026-10-27-102-S (Q-TSQ-4): loader yang SAMA diperluas —
+ * kolom `createdAt` sudah dibaca builder 091 (untuk urutan TANPA_TENGGAT),
+ * jadi dimensi mengendap nol query tambahan. Modul populasi kedua dilarang.
  */
 
 import { prisma } from "@/lib/db/prisma"
