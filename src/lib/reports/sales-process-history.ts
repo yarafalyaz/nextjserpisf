@@ -13,7 +13,8 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
+import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -61,7 +62,7 @@ function amount(value: number): string {
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 export function buildSalesProcessHistory(lines: SalesProcessLine[]): SalesProcessResult {
@@ -85,7 +86,9 @@ export function buildSalesProcessHistory(lines: SalesProcessLine[]): SalesProces
     totals.paid = safeAdd(totals.paid, line.paid, 2)
     totals.outstanding = safeAdd(totals.outstanding, outstanding, 2)
     if (line.deliveryCount > 0 && line.invoiceCount === 0) totals.deliveredNotInvoiced += 1
-    if (line.invoiceCount > 0 && outstanding > 0.005) totals.invoicedUnpaid += 1
+    // FIN-BR-006: penghitung "belum dibayar" memakai SATU ambang lunas Rp1
+    // (isOutstandingSettled) dengan layar dokumen — sisa <= Rp1 = lunas.
+    if (line.invoiceCount > 0 && !isOutstandingSettled(outstanding)) totals.invoicedUnpaid += 1
 
     return {
       kind: "data",

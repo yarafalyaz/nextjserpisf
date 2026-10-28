@@ -53,6 +53,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import {
@@ -66,7 +67,7 @@ import {
 } from "@/lib/reports/customer-statement"
 import { loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface CustomerStatementWhatsappTrailEntry {
@@ -111,7 +112,7 @@ const COLUMNS: TableColumn[] = [
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
 const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 
 /** Nomor dokumen CustomerCredit dari notes payment alokasi; null bila tak terbaca. */
 export function creditDocumentNoFromNotes(notes: string | null | undefined): string | null {
@@ -201,7 +202,7 @@ export async function loadCustomerStatement(
       },
     }),
     prisma.salesPayment.findMany({
-      where: { salesInvoice: { customerId, deletedAt: null } },
+      where: activeSalesPaymentWhere({ salesInvoice: { customerId, deletedAt: null } }),
       select: {
         id: true,
         documentNo: true,

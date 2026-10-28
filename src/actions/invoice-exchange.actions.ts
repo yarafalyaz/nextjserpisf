@@ -13,12 +13,14 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { invoiceExchangeSchema } from "@/lib/validations/sales.schemas"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { isSettled } from "@/lib/finance/settlement-status"
 
 const REVALIDATE = "/penjualan/tukar-faktur"
 
 /** Faktur yang boleh diserahkan: sudah diposting (bukan draft). Kelunasan
- * diputuskan dari ANGKA (paidAmount vs grandTotal), bukan status saja —
- * halaman tambah memakai tolok ukur yang sama (sisa > 0,005). */
+ * diputuskan dari ANGKA lewat predikat kanonis FIN-BR-006
+ * `isSettled(grandTotal, paidAmount)` (ambang Rp1),
+ * bukan status saja — halaman tambah memakai tolok ukur yang sama. */
 const EXCHANGEABLE_STATUSES = ["posted", "partial"] as const
 
 export interface InvoiceExchangeActionResult {
@@ -87,7 +89,7 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
     }
 
     const settled = invoices.filter(
-      (invoice) => invoice.status === "paid" || Number(invoice.grandTotal) - Number(invoice.paidAmount) <= 0.005,
+      (invoice) => invoice.status === "paid" || isSettled(invoice.grandTotal, invoice.paidAmount),
     )
     if (settled.length > 0) {
       return {
@@ -137,7 +139,7 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
         throw new Error(`Faktur berikut bukan milik pelanggan ini: ${wrongLocked.map((invoice) => invoice.documentNo).join(", ")}.`)
       }
       const settledLocked = lockedInvoices.filter(
-        (invoice) => invoice.status === "paid" || Number(invoice.grandTotal) - Number(invoice.paidAmount) <= 0.005,
+        (invoice) => invoice.status === "paid" || isSettled(invoice.grandTotal, invoice.paidAmount),
       )
       if (settledLocked.length > 0) {
         throw new Error(`Faktur berikut sudah lunas sehingga tidak perlu diserahkan: ${settledLocked.map((invoice) => invoice.documentNo).join(", ")}.`)

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertSalesInvoiceStockOutOnce } from "@/lib/services/stock-out-once.service";
@@ -378,7 +379,7 @@ export async function onSalesInvoicePosted(
     const conversionClosingLines: { account: "downPaymentLiability" | "receivable"; debit: number; credit: number; memo: string }[] = [];
     {
       const dpPayments = await tx.salesPayment.findMany({
-        where: { salesInvoiceId: invoiceId, paymentMethod: "down_payment" },
+        where: activeSalesPaymentWhere({ salesInvoiceId: invoiceId, paymentMethod: "down_payment" }),
         select: { id: true, amount: true, notes: true },
       });
       const dpDocNos = new Set<string>();
@@ -1737,6 +1738,21 @@ export async function onSalesReturnCompleted(
   // (the stock hook only moves stock now).
   // Retur scrap: cost dipaksa 0 oleh konstruksi (nilai buku Rp0) — angka
   // Item.cost master tidak pernah masuk jurnal scrap (E136-2).
+  // F-2026-10-28-137-V V2 (SAL-BR-013 G2): cost baris jasa/non-stok
+  // (isProduct=false) = 0 — nol kaki persediaan/COGS; koreksi nilai saja.
+  const serviceItemIds =
+    salesReturn.items.length > 0
+      ? new Set(
+          (
+            await db.item.findMany({
+              where: { id: { in: salesReturn.items.map((it) => it.itemId) } },
+              select: { id: true, isProduct: true },
+            })
+          )
+            .filter((r: { id: number; isProduct: boolean }) => r.isProduct === false)
+            .map((r: { id: number }) => r.id),
+        )
+      : new Set<number>();
   const priceTotal = linkedToInvoice
     ? salesReturn.items.reduce(
         (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
@@ -1746,7 +1762,8 @@ export async function onSalesReturnCompleted(
   const costTotal = isScrapReturn
     ? 0
     : salesReturn.items.reduce(
-        (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
+        (sum, item) =>
+          sum + (serviceItemIds.has(item.itemId) ? 0 : Number(item.qty) * Number(item.cost ?? 0)),
         0,
       );
   if (priceTotal <= 0 && costTotal <= 0) return;
@@ -2924,9 +2941,13 @@ export async function onPayrollPaid(
     );
   }
 
-  // Idempotency
+  // Idempotency: skip when an ACTIVE journal already exists. A REVERSED
+  // journal is history, not a block (HR-BR-005 B4 §5.2 F-2026-10-28-133-S,
+  // E-HRCR-6). NOTE: tidak ada jalur reversal Payroll yang hidup — satu-satunya
+  // penulis jurnal Payroll adalah onPayrollPaid. Jadi saringan ini no-op hari
+  // ini dan membuka jalan re-post yang benar bila reversal lahir (SalesInvoice).
   const existing = await db.journal.findFirst({
-    where: { referenceType: "Payroll", referenceId: payrollId },
+    where: { referenceType: "Payroll", referenceId: payrollId, status: { not: "REVERSED" } },
   });
   if (existing) {
     console.info(
@@ -3067,7 +3088,7 @@ export async function onPayrollPaid(
     // a confusing Prisma P2002 error to the user even though the operation
     // logically succeeded once.
     const existingInTx = await tx.journal.findFirst({
-      where: { referenceType: "Payroll", referenceId: payrollId },
+      where: { referenceType: "Payroll", referenceId: payrollId, status: { not: "REVERSED" } },
     });
     if (existingInTx) {
       console.info(

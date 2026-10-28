@@ -5,7 +5,13 @@ import path from "node:path"
 import {
   PROJECT_TASK_BUCKET_LABELS,
   PROJECT_TASK_COLUMN_LABELS,
+  PROJECT_TASK_BELUM_DITUGASKAN_CODE,
+  PROJECT_TASK_COLUMN_LABELS_TSQ,
   PROJECT_TASK_MENDEKATI_MAX_DAYS,
+  PROJECT_TASK_MENGENDAP_CODE,
+  PROJECT_TASK_MENGENDAP_LABEL,
+  PROJECT_TASK_MENGENDAP_MIN_DAYS,
+  PROJECT_TASK_OPEN_QUEUE_TITLE,
   PROJECT_TASK_QUEUE_LIMIT,
   PROJECT_TASK_QUEUE_NOTICE_TEXT,
   PROJECT_TASK_QUEUE_TITLE,
@@ -36,6 +42,8 @@ import { getProjectTaskQueue } from "../project-task-queue-data"
 const NOW = new Date(Date.UTC(2026, 9, 27, 5)) // 12:00 WIB
 const due = (offset: number) => new Date(Date.UTC(2026, 9, 27 + offset))
 const created = (offset: number) => new Date(Date.UTC(2026, 8, 1 + offset))
+// Umur mengendap: hari kalender WIB hari ini (27 Okt 2026) − hari WIB createdAt.
+const createdDaysAgo = (days: number) => new Date(Date.UTC(2026, 9, 27 - days))
 
 function input(overrides: Partial<ProjectTaskQueueInput> = {}): ProjectTaskQueueInput {
   return {
@@ -150,27 +158,31 @@ describe("project-task-queue (F-2026-10-27-091-S)", () => {
     expect(future.rows[0].umurLewatHari).toBeNull()
   })
 
-  it("AC-PTQ-B3/BR-PTQ-10: urutan lewat(umur terbesar) -> mendekati -> belum-mendesak -> tanpa-tenggat(tertua); seri id naik", () => {
+  it("AC-PTQ-B3/BR-PTQ-10 + BR-TSQ-10: urutan lapisan gabungan mengendap-dulu (semua umur 0 = netral, seri createdAt lalu id naik)", () => {
+    const fresh = createdDaysAgo(0)
     const queue = buildProjectTaskQueue(
       [
         input({ taskId: 9, name: "TANPA-BARU", dueDate: null, createdAt: created(5) }),
-        input({ taskId: 8, name: "JAUH", dueDate: due(10) }),
-        input({ taskId: 7, name: "DEKAT", dueDate: due(2) }),
-        input({ taskId: 6, name: "LEWAT-B", dueDate: due(-10) }),
-        input({ taskId: 5, name: "LEWAT-A", dueDate: due(-10) }),
-        input({ taskId: 4, name: "LEWAT-TUA", dueDate: due(-30) }),
+        input({ taskId: 8, name: "JAUH", dueDate: due(10), createdAt: fresh }),
+        input({ taskId: 7, name: "DEKAT", dueDate: due(2), createdAt: fresh }),
+        input({ taskId: 6, name: "LEWAT-B", dueDate: due(-10), createdAt: fresh }),
+        input({ taskId: 5, name: "LEWAT-A", dueDate: due(-10), createdAt: fresh }),
+        input({ taskId: 4, name: "LEWAT-TUA", dueDate: due(-30), createdAt: fresh }),
         input({ taskId: 3, name: "TANPA-TUA", dueDate: null, createdAt: created(0) }),
       ],
       NOW,
     )
+    // Semua umur-mengendap di bawah ambang kecuali dua TANPA (created lama);
+    // dua TANPA MENGENDAP naik ke kepala (umur terbesar dulu), sisanya umur 0
+    // seri -> createdAt naik -> id naik.
     expect(queue.rows.map((r) => r.name)).toEqual([
+      "TANPA-TUA",
+      "TANPA-BARU",
       "LEWAT-TUA",
       "LEWAT-A",
       "LEWAT-B",
       "DEKAT",
       "JAUH",
-      "TANPA-TUA",
-      "TANPA-BARU",
     ])
   })
 
@@ -245,6 +257,120 @@ describe("project-task-queue (F-2026-10-27-091-S)", () => {
   })
 })
 
+
+describe("project-task-queue lapisan 102-S (F-2026-10-27-102-S, AC-TSQ-B1..B5)", () => {
+  it("kata + ambang Q-TSQ-1/2: konstanta bernama, judul gabungan, label dua umur beda kata", () => {
+    expect(PROJECT_TASK_MENGENDAP_MIN_DAYS).toBe(14)
+    expect(PROJECT_TASK_MENGENDAP_CODE).toBe("MENGENDAP")
+    expect(PROJECT_TASK_MENGENDAP_LABEL).toBe("Mengendap")
+    expect(PROJECT_TASK_BELUM_DITUGASKAN_CODE).toBe("BELUM_DITUGASKAN")
+    expect(PROJECT_TASK_OPEN_QUEUE_TITLE).toBe("Tugas Proyek Terbuka")
+    expect(PROJECT_TASK_COLUMN_LABELS_TSQ.mengendap).toBe("Mengendap")
+    expect(PROJECT_TASK_COLUMN_LABELS_TSQ.keterlambatan).toBe("Keterlambatan")
+    expect(PROJECT_TASK_COLUMN_LABELS_TSQ.mengendap).not.toBe(
+      PROJECT_TASK_COLUMN_LABELS_TSQ.keterlambatan,
+    )
+  })
+
+  it("AC-TSQ-B2: umur mengendap dari createdAt; tepat 14 masuk, 13 tidak; edit tidak meremajakan", () => {
+    const queue = buildProjectTaskQueue(
+      [
+        input({ taskId: 1, name: "PAS-14", createdAt: createdDaysAgo(14) }),
+        input({ taskId: 2, name: "BAWAH-13", createdAt: createdDaysAgo(13) }),
+        input({ taskId: 3, name: "HARI-INI", createdAt: createdDaysAgo(0) }),
+      ],
+      NOW,
+    )
+    const byName = new Map(queue.rows.map((r) => [r.name, r]))
+    expect(byName.get("PAS-14")?.umurMengendapHari).toBe(14)
+    expect(byName.get("PAS-14")?.mengendap).toBe(true)
+    expect(byName.get("BAWAH-13")?.umurMengendapHari).toBe(13)
+    expect(byName.get("BAWAH-13")?.mengendap).toBe(false)
+    expect(byName.get("HARI-INI")?.umurMengendapHari).toBe(0)
+    expect(byName.get("HARI-INI")?.mengendap).toBe(false)
+    // EC-TSQ-1: tugas tanpa tenggat dibuat 90 hari lalu, baru diedit kemarin —
+    // umur tetap 90 (acuan createdAt, bukan updatedAt).
+    const edited = buildProjectTaskQueue(
+      [input({ taskId: 9, name: "LAMA-DIEDIT", createdAt: createdDaysAgo(90), updatedAt: createdDaysAgo(1), startDate: createdDaysAgo(80) })],
+      NOW,
+    )
+    expect(edited.rows[0].umurMengendapHari).toBe(90)
+    expect(edited.rows[0].mengendap).toBe(true)
+  })
+
+  it("AC-TSQ-B3: BELUM_DITUGASKAN ortogonal — LEWAT_TENGGAT tanpa penanggung memuat KEDUA fakta; gantung tertanda", () => {
+    const queue = buildProjectTaskQueue(
+      [
+        input({ taskId: 1, name: "LEWAT-TANPA-PEMILIK", dueDate: due(-10), assignedTo: null, assigneeName: null }),
+        input({ taskId: 2, name: "GANYUT", assignedTo: 99, assigneeName: null, createdAt: createdDaysAgo(20) }),
+        input({ taskId: 3, name: "ADA", assignedTo: 5, assigneeName: "Budi", createdAt: createdDaysAgo(20) }),
+      ],
+      NOW,
+    )
+    const byName = new Map(queue.rows.map((r) => [r.name, r]))
+    const both = byName.get("LEWAT-TANPA-PEMILIK")
+    expect(both?.bucket).toBe("LEWAT_TENGGAT")
+    expect(both?.belumDitugaskan).toBe(true)
+    expect(both?.emberPenugasan).toBe("BELUM_DITUGASKAN")
+    expect(both?.flags).toContain("Mengendap")
+    const ganyut = byName.get("GANYUT")
+    expect(ganyut?.belumDitugaskan).toBe(false)
+    expect(ganyut?.emberPenugasan).toBeNull()
+    const ada = byName.get("ADA")
+    expect(ada?.belumDitugaskan).toBe(false)
+    expect(ada?.emberPenugasan).toBeNull()
+  })
+
+  it("AC-TSQ-B4: urutan BR-TSQ-10 + rekap populasi penuh + penanda terpotong", () => {
+    const queue = buildProjectTaskQueue(
+      [
+        input({ taskId: 1, name: "TUA-BERTUGAS", assignedTo: 5, assigneeName: "Budi", createdAt: createdDaysAgo(80), dueDate: due(60) }),
+        input({ taskId: 2, name: "SEDANG-TANPA-PEMILIK", assignedTo: null, assigneeName: null, createdAt: createdDaysAgo(30), dueDate: due(60) }),
+        input({ taskId: 3, name: "BARU-BERTUGAS", assignedTo: 5, assigneeName: "Budi", createdAt: createdDaysAgo(5), dueDate: due(60) }),
+        input({ taskId: 4, name: "MUDA-TANPA-PEMILIK", assignedTo: null, assigneeName: null, createdAt: createdDaysAgo(5), dueDate: due(60) }),
+      ],
+      NOW,
+    )
+    // EC-TSQ-2/EC-TSQ-3: bertenggat jauh tapi berumur -> MENGENDAP, tampil terpisah
+    // dari keterlambatan; tanpa-pemilik+mengendap di kepala.
+    expect(queue.rows.map((r) => r.name)).toEqual([
+      "SEDANG-TANPA-PEMILIK",
+      "TUA-BERTUGAS",
+      "BARU-BERTUGAS",
+      "MUDA-TANPA-PEMILIK",
+    ])
+    expect(queue.mengendapCount).toBe(2)
+    expect(queue.belumDitugaskanCount).toBe(2)
+    expect(queue.mengendapBelumDitugaskanCount).toBe(1)
+    // Rekap dari populasi penuh walau tampil terpotong.
+    const cut = buildProjectTaskQueue(
+      Array.from({ length: 5 }, (_, i) =>
+        input({ taskId: i + 1, name: `T-${i + 1}`, createdAt: createdDaysAgo(20), assignedTo: i === 4 ? null : 5, assigneeName: i === 4 ? null : "Budi" }),
+      ),
+      NOW,
+      2,
+    )
+    expect(cut.rows).toHaveLength(2)
+    expect(cut.terpotong).toBe(true)
+    expect(cut.mengendapCount).toBe(5)
+    expect(cut.belumDitugaskanCount).toBe(1)
+    expect(cut.mengendapBelumDitugaskanCount).toBe(1)
+    // EC-TSQ-7: seri detik sama -> createdAt naik lalu id naik (sudah diuji di atas).
+  })
+
+  it("AC-TSQ-B5: payload tanpa nominal/jam/persen/kontak; baca-saja; fail-closed view_projects", async () => {
+    const queue = buildProjectTaskQueue([input({})], NOW)
+    const payload = JSON.stringify(queue)
+    expect(payload).not.toMatch(
+      /"(persen|percent|progress|progres|nominal|amount|grandTotal|salary|gaji|upah|denda|rate|tarif|cost|biaya|hour|jam|email|phone|telepon|kontak)[^"]*":/i,
+    )
+    expect(payload).not.toMatch(/%|Rp\s?\d/)
+    expect(Object.keys(queue.rows[0])).not.toContain("progress")
+    // updatedAt/startDate boleh terbawa sebagai bawaan rekod tetapi TIDAK
+    // dipakai sebagai acuan umur (dibuktikan AC-TSQ-B2 di atas).
+  })
+})
+
 describe("getProjectTaskQueue (loader fail-closed, AC-PTQ-B5)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -282,10 +408,13 @@ describe("getProjectTaskQueue (loader fail-closed, AC-PTQ-B5)", () => {
     expect(arg.where).toEqual({ status: { notIn: ["completed", "cancelled"] } })
     expect(arg.select.project).toBeDefined()
     expect(arg.select.assignee).toBeDefined()
+    expect(arg.select.createdAt).toBe(true)
     expect(arg.where.assignedTo).toBeUndefined()
     expect(queue.rows).toHaveLength(1)
     expect(queue.rows[0].bucket).toBe("LEWAT_TENGGAT")
     expect(queue.rows[0].assigneeLabel).toBe("Belum ditugaskan")
+    expect(queue.rows[0].umurMengendapHari).toBeGreaterThanOrEqual(0)
+    expect(queue.mengendapCount).toBeGreaterThanOrEqual(0)
   })
 })
 
@@ -297,8 +426,11 @@ describe("wiring permukaan antrean tugas proyek (AC-PTQ-B5/F1..F3)", () => {
   const uiSource = read("src/app/(dashboard)/proyek/tugas/_components/project-task-queue.tsx")
   const pageSource = read("src/app/(dashboard)/proyek/tugas/page.tsx")
 
-  it("AC-PTQ-B5: builder+loader baca-saja, gerbang view_projects sebelum query", () => {
+  it("AC-PTQ-B5/AC-TSQ-B1: builder+loader baca-saja SATU builder, gerbang view_projects sebelum query", () => {
     expect(builderSource + loaderSource).not.toMatch(/createTask|updateTask|deleteTask/)
+    // Q-TSQ-4: modul populasi kedua dilarang — satu builder `buildProjectTaskQueue`.
+    expect(builderSource).toContain("function buildProjectTaskQueue")
+    expect((builderSource.match(/export function build\w*Project\w*Queue/g) ?? []).length).toBe(1)
     expect(loaderSource).not.toMatch(/\.update\(|\.create\(|\.delete\(|updateMany|deleteMany/)
     expect(loaderSource).toContain('requirePermission("view_projects")')
     expect(loaderSource.indexOf('requirePermission("view_projects")')).toBeLessThan(

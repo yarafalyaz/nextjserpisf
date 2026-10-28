@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -72,7 +72,7 @@ export default async function StockReconciliationPage() {
     layerTotals,
   )
 
-  const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Per ${formatDate(new Date())}`
 
   return (
     <ReportPageShell title="Rekonsiliasi Stok" sheet={false} wide actions={<>
@@ -88,14 +88,14 @@ export default async function StockReconciliationPage() {
       <ReportNarration text="Laporan Rekonsiliasi Stok membandingkan jumlah stok pada data induk barang (qty on-hand) dengan jumlah pada lapisan FIFO (lot per gudang). Keduanya seharusnya selalu sama; selisih menandakan ada mutasi yang memperbarui salah satu saja, sehingga angka stok bisa menyesatkan. Gunakan laporan ini sebagai alat kontrol integritas persediaan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Item" value={summary.totalItems.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Total Item" value={formatNumber(summary.totalItems)} />
         <ReportKpiCard
           label="Item Selisih"
-          value={summary.mismatchCount.toLocaleString('id-ID')}
+          value={formatNumber(summary.mismatchCount)}
           valueClassName={summary.mismatchCount > 0 ? 'text-danger' : 'text-success'}
         />
-        <ReportKpiCard label="Total Qty (Induk)" value={summary.totalMasterQty.toLocaleString('id-ID')} />
-        <ReportKpiCard label="Total Qty (FIFO)" value={summary.totalLayerQty.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Total Qty (Induk)" value={formatNumber(summary.totalMasterQty)} />
+        <ReportKpiCard label="Total Qty (FIFO)" value={formatNumber(summary.totalLayerQty)} />
         <ReportKpiCard label="Nilai Persediaan (FIFO)" value={formatCurrency(summary.totalLayerValue)} valueClassName="text-primary" />
       </div>
 
@@ -114,13 +114,13 @@ export default async function StockReconciliationPage() {
               <DetailTableRow key={row.itemId}>
                 <DetailTableTd className="font-mono text-sm">{row.sku}</DetailTableTd>
                 <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
-                <DetailTableTd align="right">{row.masterQty.toLocaleString('id-ID')}</DetailTableTd>
-                <DetailTableTd align="right">{row.layerQty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(row.masterQty)}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(row.layerQty)}</DetailTableTd>
                 <DetailTableTd
                   align="right"
                   className={row.variance > 0 ? 'text-success font-semibold' : 'text-danger font-semibold'}
                 >
-                  {row.variance > 0 ? '+' : ''}{row.variance.toLocaleString('id-ID')}
+                  {row.variance > 0 ? '+' : ''}{formatNumber(row.variance)}
                 </DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.layerValue)}</DetailTableTd>
               </DetailTableRow>

@@ -32,7 +32,7 @@
 /** Status pemindahan yang berarti barang masih di jalan (penuh / sebagian). Sumber tunggal murni — loader me-re-export. */
 export const IN_TRANSIT_TRANSFER_STATUSES = ["processed", "partially_received"] as const
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatQuantity, formatDate } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import { AGING_BUCKETS, ageInDays } from "@/lib/reports/received-not-billed"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -80,11 +80,11 @@ function amount(value: number): string {
 }
 
 function quantity(value: number): string {
-  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+  return formatQuantity(value)
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 function bucketOf(age: number): string {

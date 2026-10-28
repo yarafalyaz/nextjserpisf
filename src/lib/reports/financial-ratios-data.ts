@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
+import { formatDate, formatDayMonthYear } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { computeIncomeStatement } from "@/lib/finance/income-statement"
 import { computeFinancialRatios, type FinancialRatiosResult } from "@/lib/finance/financial-ratios"
@@ -86,9 +87,9 @@ export async function loadFinancialRatios(period: {
   // laporan keuangannya tidak akan cocok.
 
   const shortDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    formatDayMonthYear(date)
   const fullDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+    formatDate(date, { format: "short" })
 
   return {
     ratios: computeFinancialRatios({

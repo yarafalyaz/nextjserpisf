@@ -8,6 +8,7 @@ import { ReportSection, ReportKpiCard } from "@/components/reports/report-sectio
 import { ReportNarration } from "@/components/reports/report-narration"
 import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
 import { payableOutstanding } from "@/lib/reports/aging-amounts"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import type { SafeMathInput } from "@/lib/utils/math"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { AgingChart } from "@/components/lazy/aging-chart"
@@ -57,7 +58,11 @@ export function buildAgingRows(items: AgingRowInput[], now: Date) {
       const outstanding =
         payableOutstanding(item.grandTotal, item.withholdingAmount ?? 0, item.paidAmount) -
         Number(item.returnCreditAmount ?? 0)
-      if (outstanding <= 0) return null
+      // FIN-BR-006 + V3 vonis F-2026-10-28-130-V: gerbang populasi bentuk
+      // `sisa > SETTLEMENT_TOLERANCE_IDR` (Rp1). `!isSettled()` mentah
+      // DILARANG: isSettled() false untuk grandTotal <= 0 sehingga faktur
+      // Rp0/negatif ikut masuk bila gerbang dibalik.
+      if (isOutstandingSettled(outstanding)) return null
       const dueDate = new Date(item.dueDate)
       const overdue = daysOverdue(dueDate, now)
       return {
@@ -88,7 +93,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
     count: agingSummary.get(key)?.count || 0,
     total: agingSummary.get(key)?.total || 0,
   }))
-  const period = `Per ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const period = `Per ${formatDate(new Date())}`
 
   const exportButtons = (
     <ExportButtons title={texts.exportTitle} pdfHref={buildReportPdfHref(texts.pdfSlug, buildReportPeriodSlug(new Date(), new Date()))} />
@@ -120,7 +125,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
         <DetailTable data-report-table={texts.summaryTitle}>
           <DetailTableHead>
             <DetailTableTh>Kategori</DetailTableTh>
-            <DetailTableTh align="right">Jumlah</DetailTableTh>
+            <DetailTableTh align="right">Dokumen</DetailTableTh>
             <DetailTableTh align="right">Total (Rp)</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>

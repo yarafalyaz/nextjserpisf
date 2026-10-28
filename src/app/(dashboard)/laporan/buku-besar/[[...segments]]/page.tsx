@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
 import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting } from '@/lib/utils/format'
+import { formatAccounting, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { BookOpen } from 'lucide-react'
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -138,7 +138,7 @@ export default async function GeneralLedgerPage({
   // (a 0 here hid the account's carried-forward balance entirely).
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
 
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
   const ledgerSubtitle = selectedAccount ? `${selectedAccount.code} – ${selectedAccount.name}` : undefined
 
   return (
@@ -181,7 +181,7 @@ export default async function GeneralLedgerPage({
           title="Buku Besar"
           subtitle={ledgerSubtitle}
           periodLabel={periodLabel}
-          periodCaption={`Periode ${startDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} s/d ${endDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+          periodCaption={`Periode ${formatDate(startDate, { format: "short" })} s/d ${formatDate(endDate, { format: "short" })}`}
           printedBy={user.name ?? user.email}
         >
           <table className="stmt" data-report-table="Buku Besar">
@@ -209,7 +209,7 @@ export default async function GeneralLedgerPage({
               ) : (
                 rows.map((row) => (
                   <tr key={row.id}>
-                    <td>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                    <td>{formatDate(row.date, { format: "numeric" })}</td>
                     <td className="muted">
                       {row.journalSlug ? (
                         <Link href={`/keuangan/jurnal/${row.journalSlug}`} aria-label={`Lihat jurnal ${row.journalNumber}`}>

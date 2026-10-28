@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -106,7 +106,7 @@ export default async function WithholdingTaxReportPage({
   }))
 
   const totalSalesWithheld = salesRows.reduce((sum, row) => safeAdd(sum, row.withheld, 2), 0)
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Bukti Potong PPh" sheet={false} wide filter={<>
@@ -126,7 +126,7 @@ export default async function WithholdingTaxReportPage({
       <ReportNarration text="Daftar Bukti Potong PPh memuat dua sisi. Sisi pembelian: pemotongan PPh yang dilakukan perusahaan atas tagihan pemasok, dikelompokkan per jenis potongan — nilainya diambil dari tagihan yang sudah diposting, sehingga sama dengan jurnal Hutang PPh. Sisi penjualan: PPh yang dipotong pelanggan atas pembayaran kita, tercatat saat pembayaran diterima dan berpasangan dengan jurnal PPh dibayar dimuka; nilainya bukan kas yang diterima, melainkan bagian pelunasan piutang yang ditahan pelanggan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Jumlah Bukti Potong" value={rows.length.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Jumlah Bukti Potong" value={formatNumber(rows.length)} />
         <ReportKpiCard label="Total Dasar Pengenaan" value={formatCurrency(totalDpp)} />
         <ReportKpiCard label="Total PPh Dipotong (Pembelian)" value={formatCurrency(totalWithheld)} valueClassName="text-primary" />
         <ReportKpiCard label="PPh Dipotong Pelanggan (Penjualan)" value={formatCurrency(totalSalesWithheld)} valueClassName="text-primary" />
@@ -144,8 +144,8 @@ export default async function WithholdingTaxReportPage({
             {[...byType.entries()].map(([key, bucket]) => (
               <DetailTableRow key={key}>
                 <DetailTableTd>{bucket.label}</DetailTableTd>
-                <DetailTableTd align="right">{bucket.rate === null ? "–" : `${bucket.rate.toLocaleString('id-ID')}%`}</DetailTableTd>
-                <DetailTableTd align="right">{bucket.count.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{bucket.rate === null ? "–" : `${formatNumber(bucket.rate)}%`}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(bucket.count)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(bucket.amount)}</DetailTableTd>
               </DetailTableRow>
             ))}
@@ -155,7 +155,7 @@ export default async function WithholdingTaxReportPage({
             {byType.size > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{rows.length.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(rows.length)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalWithheld)}</DetailTableTd>
               </DetailTableRow>
             )}
@@ -177,13 +177,13 @@ export default async function WithholdingTaxReportPage({
           <DetailTableBody>
             {rows.map((row) => (
               <DetailTableRow key={row.documentNo}>
-                <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
+                <DetailTableTd>{formatDate(row.date, { format: "numeric" })}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.documentNo}</DetailTableTd>
                 <DetailTableTd>{row.vendorName}</DetailTableTd>
                 <DetailTableTd className={row.typeCode ? undefined : "text-danger"}>
                   {row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan"}
                 </DetailTableTd>
-                <DetailTableTd align="right">{row.rate === null ? "–" : `${row.rate.toLocaleString('id-ID')}%`}</DetailTableTd>
+                <DetailTableTd align="right">{row.rate === null ? "–" : `${formatNumber(row.rate)}%`}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.dpp)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.withheld)}</DetailTableTd>
               </DetailTableRow>
@@ -217,7 +217,7 @@ export default async function WithholdingTaxReportPage({
           <DetailTableBody>
             {salesRows.map((row) => (
               <DetailTableRow key={row.documentNo}>
-                <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
+                <DetailTableTd>{formatDate(row.date, { format: "numeric" })}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.documentNo}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.certificateNo ?? "–"}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{row.invoiceNo ?? "–"}</DetailTableTd>
@@ -225,7 +225,7 @@ export default async function WithholdingTaxReportPage({
                 <DetailTableTd className={row.typeCode ? undefined : "text-danger"}>
                   {row.typeCode ? `${row.typeCode} — ${row.typeName}` : "Jenis PPh tidak ditemukan"}
                 </DetailTableTd>
-                <DetailTableTd align="right">{row.rate === null ? "–" : `${row.rate.toLocaleString('id-ID')}%`}</DetailTableTd>
+                <DetailTableTd align="right">{row.rate === null ? "–" : `${formatNumber(row.rate)}%`}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.withheld)}</DetailTableTd>
               </DetailTableRow>
             ))}

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { formatDate } from "@/lib/utils/format"
 import type { Metadata } from "next"
 
 import { prisma } from "@/lib/db/prisma"
@@ -47,11 +48,7 @@ export default async function SerialBatchStockPage({
 
   const asOf = new Date()
   const { report } = await loadSerialBatchStock({ warehouseId, asOf })
-  const periodLabel = `Per ${asOf.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })}`
+  const periodLabel = `Per ${formatDate(asOf)}`
 
   return (
     <ReportPageShell

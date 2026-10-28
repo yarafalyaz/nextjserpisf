@@ -24,7 +24,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatQuantity } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -126,7 +126,7 @@ function amount(value: number): string {
 }
 
 function quantity(value: number): string {
-  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+  return formatQuantity(value)
 }
 
 export function buildMinStock(items: MinStockItemInput[]): MinStockResult {

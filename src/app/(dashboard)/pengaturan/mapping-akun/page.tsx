@@ -57,6 +57,7 @@ export default async function AccountMappingPage() {
       title: "Penjualan",
       items: [
         { label: "Piutang Usaha", value: accountName(settings?.salesReceivableAccountId) },
+        { label: "Uang Muka Penjualan / DP (210102)", value: accountName(settings?.customerDownPaymentAccountId) },
         { label: "Pendapatan Penjualan", value: accountName(settings?.salesRevenueAccountId) },
         { label: "PPN Keluaran", value: accountName(settings?.salesTaxAccountId) },
         { label: "Retur Penjualan", value: accountName(settings?.salesReturnAccountId) },
@@ -87,6 +88,20 @@ export default async function AccountMappingPage() {
         { label: "WIP", value: accountName(settings?.wipAccountId) },
         { label: "Beban Material", value: accountName(settings?.materialExpenseAccountId) },
         { label: "Beban Pengeluaran Material", value: accountName(settings?.materialIssueExpenseAccountId) },
+      ],
+    },
+    {
+      title: "Garansi",
+      items: [
+        { label: "Beban Garansi (510104)", value: accountName(settings?.warrantyExpenseAccountId) },
+        { label: "Provisi Garansi (210205)", value: accountName(settings?.warrantyProvisionAccountId) },
+      ],
+    },
+    {
+      title: "Klaim Supplier & Reimbursement",
+      items: [
+        { label: "Piutang Klaim Supplier (110508)", value: accountName(settings?.supplierClaimReceivableAccountId) },
+        { label: "Utang Reimbursement (210209)", value: accountName(settings?.reimbursementLiabilityAccountId) },
       ],
     },
     {

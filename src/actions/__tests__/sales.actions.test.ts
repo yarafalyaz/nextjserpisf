@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const onDownPaymentReceivedMock = vi.fn()
   const deleteJournalByReferenceMock = vi.fn()
   const deleteJournalByReferenceTxMock = vi.fn()
+  const reverseJournalsByReferenceTxMock = vi.fn()
   const resyncOnEditMock = vi.fn()
   const findOverReturnMock = vi.fn().mockReturnValue(null)
 
@@ -56,6 +57,8 @@ const mocks = vi.hoisted(() => {
     salesInvoiceItem: buildModelMock(),
     salesPayment: buildModelMock(),
     salesPaymentAllocation: buildModelMock(),
+    withholdingCertificate: buildModelMock(),
+    financialIdempotencyKey: buildModelMock(),
     salesReturn: buildModelMock(),
     salesReturnItem: buildModelMock(),
     deliveryOrder: buildModelMock(),
@@ -113,6 +116,7 @@ const mocks = vi.hoisted(() => {
     onDownPaymentReceivedMock,
     deleteJournalByReferenceMock,
     deleteJournalByReferenceTxMock,
+    reverseJournalsByReferenceTxMock,
     resyncOnEditMock,
     findOverReturnMock,
     prismaMock,
@@ -179,6 +183,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   onDownPaymentReceived: (...a: unknown[]) => mocks.onDownPaymentReceivedMock(...a),
   deleteJournalByReference: (...a: unknown[]) => mocks.deleteJournalByReferenceMock(...a),
   deleteJournalByReferenceTx: (...a: unknown[]) => mocks.deleteJournalByReferenceTxMock(...a),
+  reverseJournalsByReferenceTx: (...a: unknown[]) => mocks.reverseJournalsByReferenceTxMock(...a),
 }))
 
 vi.mock("@/lib/hooks/down-payment.hook", () => ({
@@ -824,15 +829,24 @@ describe("Sales Invoice Actions", () => {
     expect(res?.success).toBe(false)
   })
   it("voidSalesInvoice fails if has payments", async () => {
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [{ id: 1 }] })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [{ id: 1, status: "posted" }] })
     const res = await actions.voidSalesInvoice(1)
     expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Reversal")
+  })
+  it("voidSalesInvoice lolos bila semua payment reversed (P2 121-V / E139-5)", async () => {
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: [{ id: 1, status: "reversed" }, { id: 2, status: "reversed" }] })
+    mocks.prismaMock.customer.findUnique.mockResolvedValueOnce({ creditLimit: 0, name: "CUST" })
+    const res = await actions.voidSalesInvoice(1)
+    expect(res?.success).toBe(true)
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
   })
 
   // === reverseSalesInvoicePostingTx delegation ===
   it("deleteSalesInvoice delegates stock/GL reversal to the posting service", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteSalesInvoice(1)
     expect(res?.success).toBe(true)
     // The reversal (stock restore + journal delete) now lives in the shared
@@ -952,7 +966,7 @@ describe("Sales Return Actions", () => {
 
   it("AC-SR-B2: penyetuju lain menyelesaikan draft tepat satu transaksi", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1)
@@ -962,7 +976,7 @@ describe("Sales Return Actions", () => {
 
   it("AC-SR-B3: SoD — pembuat tidak boleh menyelesaikan returnya sendiri", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 7, items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 7, reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("pembuatnya sendiri")
@@ -972,9 +986,21 @@ describe("Sales Return Actions", () => {
 
   it("EC-2: createdBy null (baris legacy) boleh diselesaikan penyetuju berizin", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: null, items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: null, reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(true)
+  })
+
+  // P4 vonis F-2026-10-26-121-V syarat pengimbang (tanpa model SalesCreditNote):
+  // complete tanpa reason trim non-kosong ditolak SEBELUM transaksi.
+  it("E121-7: completeSalesReturn tanpa reason ditolak, nol mutasi", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, reason: "   ", items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tanpa alasan tertulis")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.onSalesReturnCompletedMock).not.toHaveBeenCalled()
   })
 
   it("BR-SR-03: status selain draft ditolak berpesan sebelum transaksi", async () => {
@@ -1199,6 +1225,15 @@ describe("Quotation Actions (legacy happy paths)", () => {
     const res = await actions.deleteQuotation(1)
     expect(res?.success).toBe(true)
   })
+  it("deleteQuotation menolak bila faktur turunan hidup (P3 121-V: void dulu)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // findMany ke-1 = liveInvoices (ada 1 posted), sisanya default []
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValueOnce([{ id: 9 }])
+    const res = await actions.deleteQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("void")
+    expect(mocks.prismaMock.quotation.delete).not.toHaveBeenCalled()
+  })
   it("convertQuotationToOrder succeeds", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "accepted", sections: [], documentNo: "Q-100", subtotal: 100, grandTotal: 100,
@@ -1386,6 +1421,14 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     const res = await actions.deleteSalesOrder(1)
     expect(res?.success).toBe(true)
   })
+  it("deleteSalesOrder menolak bila faktur turunan hidup (P3 121-V: void dulu)", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValueOnce([{ id: 9 }])
+    const res = await actions.deleteSalesOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("void")
+    expect(mocks.prismaMock.salesOrder.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Sales Invoice Actions (legacy happy paths)", () => {
@@ -1417,6 +1460,13 @@ describe("Sales Invoice Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesPayment.findMany.mockResolvedValueOnce([])
     const res = await actions.deleteSalesInvoice(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteSalesInvoice menolak faktur posted (P3 121-V: draft-only, arahkan void)", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "posted", customerId: 1 })
+    const res = await actions.deleteSalesInvoice(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("void")
+    expect(mocks.prismaMock.salesInvoice.delete).not.toHaveBeenCalled()
   })
   it("voidSalesInvoice succeeds", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: [] })
@@ -1486,7 +1536,7 @@ describe("Sales Return Actions (legacy happy paths)", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_returns")
   })
   it("completeSalesReturn succeeds", async () => {
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(true)
   })

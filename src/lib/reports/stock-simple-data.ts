@@ -10,7 +10,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { reconcileInventory } from "@/lib/inventory/stock-reconciliation"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatQuantity } from "@/lib/utils/format"
 import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -58,7 +58,7 @@ export function sumRemainingQty(layers: { remaining: unknown }[]): number {
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
-const qty = (value: number) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+const qty = (value: number) => formatQuantity(value)
 const nowLabels = () => {
   const now = new Date()
   return rangePeriodLabels({ start: now, end: now })

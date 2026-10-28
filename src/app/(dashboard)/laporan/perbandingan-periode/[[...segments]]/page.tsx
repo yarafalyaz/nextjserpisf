@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import Link from 'next/link'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { buildReportHref, parseReportFilters } from '@/lib/reports/report-href'
@@ -73,11 +73,11 @@ export default async function PeriodComparisonPage({
 
   const title = isBalance ? "Neraca Perbandingan Periode" : "Laba Rugi Perbandingan Periode"
   const currentLabel = isBalance
-    ? `Per ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
-    : `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    ? `Per ${formatDate(endDate)}`
+    : `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
   const previousLabel = isBalance
-    ? `Per ${new Date(startDate.getTime() - 1).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
-    : `Periode ${previous.start.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${previous.end.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    ? `Per ${formatDate(new Date(startDate.getTime() - 1))}`
+    : `Periode ${formatDate(previous.start)} – ${formatDate(previous.end)}`
 
   return (
     <ReportPageShell title="Perbandingan Periode" sheet={false} wide filter={<>

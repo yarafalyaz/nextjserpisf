@@ -24,8 +24,7 @@ export interface DiscountExposureLoadResult {
 }
 
 function periodCaption(period: { start: Date; end: Date }): string {
-  const format = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+  const format = (date: Date) => formatDate(date)
   return `${format(period.start)} – ${format(period.end)}`
 }
 

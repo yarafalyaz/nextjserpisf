@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -117,7 +117,7 @@ export default async function InventorySummaryPage() {
   const categoryTotalQty = categoryRows.reduce((s, r) => s + r.qty, 0)
   const categoryTotalValue = categoryRows.reduce((s, r) => s + r.value, 0)
 
-  const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Per ${formatDate(new Date())}`
 
   return (
     <ReportPageShell title="Ringkasan Stok" sheet={false} wide actions={<>
@@ -133,8 +133,8 @@ export default async function InventorySummaryPage() {
       <ReportNarration text="Laporan Ringkasan Stok menyajikan saldo dan nilai persediaan per gudang atau per kategori barang secara ringkas. Informasi ini memberikan gambaran cepat tentang posisi persediaan perusahaan secara keseluruhan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Jenis Item" value={totalItems.toLocaleString('id-ID')} />
-        <ReportKpiCard label="Total Qty" value={totalQty.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Total Jenis Item" value={formatNumber(totalItems)} />
+        <ReportKpiCard label="Total Qty" value={formatNumber(totalQty)} />
         <ReportKpiCard label="Total Nilai" value={formatCurrency(totalValue)} valueClassName="text-primary" />
         <ReportKpiCard label="Item Kritis" value={criticalItems.length.toString()} valueClassName={criticalItems.length > 0 ? 'text-danger' : 'text-success'} />
       </div>
@@ -154,14 +154,14 @@ export default async function InventorySummaryPage() {
                 <DetailTableTd className="font-mono">{row.code}</DetailTableTd>
                 <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
                 <DetailTableTd align="right">{row.items}</DetailTableTd>
-                <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(row.qty)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
               </DetailTableRow>
             ))}
             <DetailTableRow className="font-bold border-t-2 border-default">
               <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
               <DetailTableTd align="right">{totalItems}</DetailTableTd>
-              <DetailTableTd align="right">{totalQty.toLocaleString('id-ID')}</DetailTableTd>
+              <DetailTableTd align="right">{formatNumber(totalQty)}</DetailTableTd>
               <DetailTableTd align="right" className="text-primary">{formatAccounting(totalValue)}</DetailTableTd>
             </DetailTableRow>
           </DetailTableBody>
@@ -181,14 +181,14 @@ export default async function InventorySummaryPage() {
               <DetailTableRow key={row.name}>
                 <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
                 <DetailTableTd align="right">{row.count}</DetailTableTd>
-                <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(row.qty)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {categoryRows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{categoryTotalQty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(categoryTotalQty)}</DetailTableTd>
                 <DetailTableTd align="right" className="text-primary">{formatAccounting(categoryTotalValue)}</DetailTableTd>
               </DetailTableRow>
             )}
@@ -217,9 +217,9 @@ export default async function InventorySummaryPage() {
                     <DetailTableTd className="font-medium">{item.name}</DetailTableTd>
                     <DetailTableTd>{item.category?.name || '-'}</DetailTableTd>
                     <DetailTableTd>{item.warehouse?.code || '-'}</DetailTableTd>
-                    <DetailTableTd align="right" className="text-danger font-semibold">{Number(item.qtyOnHand).toLocaleString('id-ID')}</DetailTableTd>
-                    <DetailTableTd align="right">{Number(item.minStock).toLocaleString('id-ID')}</DetailTableTd>
-                    <DetailTableTd align="right" className="text-danger font-bold">{shortage > 0 ? shortage.toLocaleString('id-ID') : '-'}</DetailTableTd>
+                    <DetailTableTd align="right" className="text-danger font-semibold">{formatNumber(Number(item.qtyOnHand))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatNumber(Number(item.minStock))}</DetailTableTd>
+                    <DetailTableTd align="right" className="text-danger font-bold">{shortage > 0 ? formatNumber(shortage) : '-'}</DetailTableTd>
                   </DetailTableRow>
                 )
               })}

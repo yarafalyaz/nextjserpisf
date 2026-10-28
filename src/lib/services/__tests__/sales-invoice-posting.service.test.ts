@@ -123,6 +123,12 @@ describe("reverseSalesInvoicePostingTx", () => {
 
     await reverseSalesInvoicePostingTx(client as never, 7)
 
+    // FIN-BR-008: hanya pembayaran live yang jurnalnya dibalik.
+    expect(salesPaymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ salesInvoiceId: 7, status: { not: "reversed" } }),
+      }),
+    )
     expect(reverseJournalsByReferenceTx).toHaveBeenCalledWith(
       client,
       "SalesPayment",

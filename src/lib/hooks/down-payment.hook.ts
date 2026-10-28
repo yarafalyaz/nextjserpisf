@@ -1,4 +1,5 @@
 import { prisma, TxClient } from "@/lib/db/prisma";
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
@@ -143,7 +144,9 @@ async function onDownPaymentConfirmedInner(
       // DP→payment belum ada di skema; cocok amount/tanggal rapuh).
       const marker = `Uang muka dari DP ${dp.documentNo}`
       const alreadyAllocated = await tx.salesPayment.findFirst({
-        where: { salesInvoiceId: existingInv.id, notes: { contains: marker } },
+        // FIN-BR-008: alokasi DP yang sudah dibalik tidak boleh dianggap
+        // "sudah teralokasi" — DP pengganti harus bisa membuat baris baru.
+        where: activeSalesPaymentWhere({ salesInvoiceId: existingInv.id, notes: { contains: marker } }),
       })
       // Create SalesPayment for this subsequent DP linked to the existing invoice
       if (Number(dp.amount) > 0 && !alreadyAllocated) {
@@ -153,7 +156,7 @@ async function onDownPaymentConfirmedInner(
         // SalesPayment penuh + kredit selisih = double-count di laporan yang
         // menjumlah SalesPayment.amount sebagai pelunasan faktur.
         const prePaid = await tx.salesPayment.findMany({
-          where: { salesInvoiceId: existingInv.id },
+          where: activeSalesPaymentWhere({ salesInvoiceId: existingInv.id }),
           select: { amount: true, withholdingAmount: true },
         });
         const prePaidSen = Math.round(safeSum(prePaid.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)), 2) * 100);
@@ -244,7 +247,7 @@ async function onDownPaymentConfirmedInner(
 
         // Recalculate invoice paid amount & status inside the same transaction
         const payments = await tx.salesPayment.findMany({
-          where: { salesInvoiceId: existingInv.id },
+          where: activeSalesPaymentWhere({ salesInvoiceId: existingInv.id }),
           select: { amount: true, withholdingAmount: true },
         });
         
@@ -697,7 +700,7 @@ async function onDownPaymentConfirmedInner(
     const allocatedMarkers = new Set(
       (
         await tx.salesPayment.findMany({
-          where: { salesInvoiceId: created.id },
+          where: activeSalesPaymentWhere({ salesInvoiceId: created.id }),
           select: { notes: true },
         })
       ).map((p) => p.notes ?? ""),

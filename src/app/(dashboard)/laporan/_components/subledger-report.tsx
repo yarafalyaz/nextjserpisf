@@ -201,7 +201,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
 
   const opening = openingFromEntries(entries, startDate)
   const card = buildSubledger(periodEntries(entries, startDate, endDate), opening)
-  const periodLabel = `Periode ${startDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   const title = isAr ? "Buku Besar Pembantu Piutang" : "Buku Besar Pembantu Utang"
   const partyLabel = isAr ? "Pelanggan" : "Pemasok"

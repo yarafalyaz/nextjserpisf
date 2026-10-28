@@ -45,6 +45,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
+import { formatNumber } from "@/lib/utils/format"
 import { safeAdd, safeRound, safeSubtract } from "@/lib/utils/math"
 import { isLegacyReturnLine, snapshotReturnLine } from "@/lib/tax/return-snapshot"
 
@@ -650,14 +651,14 @@ export function buildSalesTargetPeriodReconciliation(args: {
       findings.push({
         code: "GROSS_VS_COMMISSION_MISMATCH",
         message:
-          `Komponen bruto target penjual ${employeeId ?? "tanpa penjual"} berbeda dari paidBase komisi sebesar Rp ${commissionDifference.toLocaleString("id-ID")} pada periode sama.`,
+          `Komponen bruto target penjual ${employeeId ?? "tanpa penjual"} berbeda dari paidBase komisi sebesar Rp ${formatNumber(commissionDifference)} pada periode sama.`,
       })
     }
     if (independentDifference !== 0) {
       findings.push({
         code: "INDEPENDENT_RETURN_MISMATCH",
         message:
-          `Pengurang retur read-model penjual ${employeeId ?? "tanpa penjual"} berbeda dari query sumber independen sebesar Rp ${independentDifference.toLocaleString("id-ID")}.`,
+          `Pengurang retur read-model penjual ${employeeId ?? "tanpa penjual"} berbeda dari query sumber independen sebesar Rp ${formatNumber(independentDifference)}.`,
       })
     }
     return {
@@ -691,7 +692,7 @@ export function buildSalesTargetPeriodReconciliation(args: {
     findings.push({
       code: "JOURNAL_RETURN_DIFF",
       message:
-        `Pengurang retur read-model berbeda dari total kaki Retur Penjualan jurnal retur POSTED sebesar Rp ${journalDifference.toLocaleString("id-ID")}; penyebab sah antara lain jurnal memakai nilai qty × harga, retur tanpa faktur asal, baris legacy, atau plafon per faktur asal.`,
+        `Pengurang retur read-model berbeda dari total kaki Retur Penjualan jurnal retur POSTED sebesar Rp ${formatNumber(journalDifference)}; penyebab sah antara lain jurnal memakai nilai qty × harga, retur tanpa faktur asal, baris legacy, atau plafon per faktur asal.`,
     })
   }
 

@@ -36,6 +36,12 @@ function CostLine({ label, amount }: Readonly<{ label: string; amount: number }>
  * margin tampil apa adanya — tidak ada agregasi quotation per-pelanggan dan
  * tidak ada hitung ulang uang di UI. Memo jam timesheet belum ditarik tampil
  * terpisah dengan label jelas: bukan biaya, tidak mengurangi laba.
+ *
+ * AC-PROJ-003 (t_9b516ac7): kartu ini sisi AKTUAL pasangan kartu
+ * Estimasi vs Aktual — pendapatan/biaya di sini semuanya biaya aktual dari
+ * transaksi sumber (invoice, pengeluaran material, biaya produksi, tagihan
+ * vendor). Label "aktual (terealisasi)" eksplisit per baris biaya; laba =
+ * margin job kendaraan, BUKAN laba akuntansi (keputusan 11).
  */
 export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
   const otherCost = pl.expenseCost + pl.pettyCashCost + pl.vendorBillCost
@@ -49,8 +55,8 @@ export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
   return (
     <ReportCardShell
       label="Laba Rugi Proyek"
-      title="Laba Rugi Proyek"
-      summary={<>Sumber: builder L/R proyek (invoice, material, biaya produksi, beban)</>}
+      title="Aktual Proyek (Laba Rugi)"
+      summary={<>Sumber: biaya aktual L/R proyek (invoice, pengeluaran material, biaya produksi, beban)</>}
       isEmpty={isEmpty}
       emptyText="Belum ada data laba rugi untuk proyek ini"
     >
@@ -71,24 +77,27 @@ export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
 
       <div className="mt-3 grid grid-cols-1 gap-2 border-t border-default/50 pt-3 text-xs sm:grid-cols-2">
         <div>
-          <span className="text-muted-foreground block">Pendapatan (invoice diakui):</span>
+          <span className="text-muted-foreground block">Pendapatan Aktual (invoice diakui):</span>
           <span className="font-semibold text-foreground">{formatCurrency(pl.revenue)}</span>
           <SourceTrace label="Invoice sumber" ids={pl.revenueInvoiceIds} />
         </div>
         <div>
-          <span className="text-muted-foreground block">Total Biaya:</span>
+          <span className="text-muted-foreground block">Total Biaya Aktual:</span>
           <span className="font-semibold text-danger">{formatCurrency(pl.totalCost)}</span>
         </div>
         <div>
-          <CostLine label="Material" amount={pl.materialCost} />
+          <CostLine label="Material Aktual" amount={pl.materialCost} />
           <SourceTrace label="Pengeluaran material sumber" ids={pl.materialIssueIds} />
         </div>
-        <CostLine label="Biaya Produksi" amount={pl.productionCost} />
+        <CostLine label="Biaya Produksi Aktual" amount={pl.productionCost} />
         <div>
-          <CostLine label="Beban Lain (biaya, kas kecil, tagihan vendor)" amount={otherCost} />
+          <CostLine label="Beban Aktual Lain (biaya, kas kecil, tagihan vendor)" amount={otherCost} />
           <SourceTrace label="Tagihan vendor sumber" ids={pl.vendorBillIds} />
         </div>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Laba di atas = margin job kendaraan (pendapatan aktual − biaya aktual terealisasi), bukan laba akuntansi.
+      </p>
 
       {pl.unpulledTimesheetCount > 0 && (
         <section aria-label="Memo jam timesheet belum ditarik" className="mt-4 border-t border-default/50 pt-3">

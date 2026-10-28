@@ -1,7 +1,23 @@
 import { safeAdd, safeSubtract, type SafeMathInput } from "@/lib/utils/math"
+import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status"
 
-/** Lunas bila sisa <= nilai ini (BR-COL-02; dipakai antrean + statement). */
-export const COLLECTION_SETTLED_EPSILON = 0.005
+/**
+ * Nama warisan era ambang lokal (FIN-BR-006): dipertahankan karena dipakai
+ * lintas modul, nilainya TURUNAN dari `SETTLEMENT_TOLERANCE_IDR` (Rp1) —
+ * bukan angka tulis ulang. Ambang lokal `0,005` di domain piutang/hutang
+ * DILARANG (putusan Lead Q-EPS-1/Q-EPS-2, vonis Accountant F-2026-10-28-130-V).
+ */
+export const COLLECTION_SETTLED_EPSILON = SETTLEMENT_TOLERANCE_IDR
+
+/**
+ * Ambang "sisa dianggap lunas" DIDEFINISIKAN di sini sebagai alias warisan:
+ * `COLLECTION_SETTLED_EPSILON = SETTLEMENT_TOLERANCE_IDR` (Rp1, FIN-BR-006).
+ * Konstanta lokal `0,005` yang dulu ada di sini SUDAH dihapus (PR #1275):
+ * faktur sisa Rp0,50 tampil "Lunas" di layar faktur tetapi masih dihitung
+ * piutang di antrean/statement/antrean tukar faktur bila ambang beda.
+ * Semua pemakai populasi memakai `isOutstandingSettled()` / konstanta
+ * warisan ini supaya hanya ada SATU ambang.
+ */
 
 /** Sisa piutang = grandTotal − paid, presisi sen (bukan float mentah). */
 export function receivableOutstanding(grandTotal: SafeMathInput, paidAmount: SafeMathInput): number {

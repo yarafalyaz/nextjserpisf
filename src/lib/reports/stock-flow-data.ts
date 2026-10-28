@@ -20,7 +20,8 @@ import {
   type SalesLine,
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
-import { formatAccounting, formatReferenceType } from "@/lib/utils/format"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
+import { formatAccounting, formatReferenceType, formatQuantity, formatDate } from "@/lib/utils/format"
 import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -31,9 +32,9 @@ export interface StockFlowReport {
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
-const qty = (value: number) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+const qty = (value: number) => formatQuantity(value)
 const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 
 type Period = { start: Date; end: Date }
@@ -48,6 +49,39 @@ const MOVEMENT_COLUMNS: TableColumn[] = [
   { header: "Qty", align: "right", width: 26 },
   { header: "Referensi", align: "left", width: 34 },
 ]
+
+export interface StockMovementTotals {
+  totalInQty: number
+  totalOutQty: number
+  totalInValue: number
+  totalOutValue: number
+}
+
+/**
+ * Agregat mutasi posted satu periode, sen-kanonis: qty x cost via
+ * safeMultiply(2) lalu safeAdd(2) — sama untuk layar & baris Jumlah PDF (D4).
+ */
+export function aggregateStockMovementTotals(
+  moves: { impact: string | null; qty: unknown; cost: unknown }[],
+): StockMovementTotals {
+  let totalInQty = 0
+  let totalOutQty = 0
+  let totalInValue = 0
+  let totalOutValue = 0
+  for (const m of moves) {
+    const q = Number(m.qty)
+    const c = Number(m.cost)
+    const value = safeMultiply(Number.isNaN(q) ? 0 : q, Number.isNaN(c) ? 0 : c, 2)
+    if (m.impact === "OUT") {
+      totalOutQty = safeAdd(totalOutQty, Number.isNaN(q) ? 0 : q, 2)
+      totalOutValue = safeAdd(totalOutValue, value, 2)
+    } else {
+      totalInQty = safeAdd(totalInQty, Number.isNaN(q) ? 0 : q, 2)
+      totalInValue = safeAdd(totalInValue, value, 2)
+    }
+  }
+  return { totalInQty, totalOutQty, totalInValue, totalOutValue }
+}
 
 export async function loadStockMovements(
   period: Period,
@@ -76,11 +110,22 @@ export async function loadStockMovements(
         m.item.name,
         m.warehouse?.code ?? "-",
         m.moveType ?? "-",
-        `${m.impact === "IN" ? "+" : "-"}${qty(Number(m.qty))}`,
+        `${m.impact === "OUT" ? "-" : "+"}${qty(Number(m.qty))}`,
         m.referenceType ? `${formatReferenceType(m.referenceType)}#${m.referenceId}` : "-",
       ],
     }))
-  if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada mutasi stok pada periode ini." })
+  if (rows.length === 0) {
+    rows.push({ kind: "notice", text: "Tidak ada mutasi stok pada periode ini." })
+  } else {
+    const datedMoves = moves.filter((m) => m.date)
+    const totals = aggregateStockMovementTotals(datedMoves.map((m) => ({ impact: m.impact, qty: m.qty, cost: m.cost })))
+    rows.push({
+      kind: "total",
+      grand: true,
+      label: "Jumlah",
+      cells: [`+${qty(totals.totalInQty)} / -${qty(totals.totalOutQty)}`, `${money(totals.totalInValue)} / ${money(totals.totalOutValue)}`],
+    })
+  }
   return { table: { columns: MOVEMENT_COLUMNS, rows }, ...periodOf(period) }
 }
 
@@ -141,13 +186,14 @@ export async function loadStockValuation(warehouseId: number | null): Promise<St
 }
 
 const CARD_COLUMNS: TableColumn[] = [
-  { header: "Tanggal", align: "left", width: 26 },
-  { header: "Dokumen", align: "left", width: 34 },
-  { header: "Jenis", align: "left", width: 30 },
-  { header: "Masuk", align: "right", width: 26 },
-  { header: "Keluar", align: "right", width: 26 },
-  { header: "Saldo", align: "right", width: 26 },
-  { header: "Keterangan", align: "left", width: 60 },
+  { header: "Tanggal", align: "left", width: 22 },
+  { header: "Dokumen", align: "left", width: 30 },
+  { header: "Jenis", align: "left", width: 26 },
+  { header: "Gudang", align: "left", width: 20 },
+  { header: "Masuk", align: "right", width: 22 },
+  { header: "Keluar", align: "right", width: 22 },
+  { header: "Saldo", align: "right", width: 22 },
+  { header: "Keterangan", align: "left", width: 54 },
 ]
 
 export async function loadStockCard(
@@ -172,6 +218,7 @@ export async function loadStockCard(
     }),
     prisma.stockMove.findMany({
       where: { ...baseWhere, date: { gte: period.start, lte: period.end } },
+      include: { warehouse: { select: { code: true } } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
   ])
@@ -181,18 +228,18 @@ export async function loadStockCard(
       date: m.date ?? m.createdAt,
       documentNo: m.documentNo,
       moveType: m.moveType ?? "-",
-      impact: m.impact === "IN" || m.impact === "OUT" ? m.impact : "IN",
+      impact: m.impact,
       qty: Number(m.qty),
       cost: Number(m.cost),
       referenceType: m.referenceType,
       referenceId: m.referenceId,
       description: m.description,
-      warehouseCode: null,
+      warehouseCode: m.warehouse?.code ?? null,
     })),
     openingBalance(priorMoves.map((m) => ({ qty: Number(m.qty), cost: Number(m.cost), impact: m.impact }))),
   )
   const rows: TableRow[] = [
-    { kind: "data", cells: ["", "Saldo Awal", "", qty(card.openingQty), "", qty(card.closingQty - card.totalInQty + card.totalOutQty), ""] },
+    { kind: "data", cells: ["", "Saldo Awal", "", "", qty(card.openingQty), "", qty(card.closingQty - card.totalInQty + card.totalOutQty), ""] },
   ]
   for (const move of card.rows) {
     rows.push({
@@ -201,6 +248,7 @@ export async function loadStockCard(
         shortDate(move.date),
         move.documentNo,
         move.moveType ?? "-",
+        move.warehouseCode ?? "-",
         move.impact === "IN" ? qty(move.qty) : "",
         move.impact === "OUT" ? qty(move.qty) : "",
         qty(move.balanceQty),
@@ -212,7 +260,7 @@ export async function loadStockCard(
     kind: "total",
     grand: true,
     label: "Saldo Akhir",
-    cells: ["", "", "", qty(card.totalInQty), qty(card.totalOutQty), qty(card.closingQty), ""],
+    cells: ["", "", "", "", qty(card.totalInQty), qty(card.totalOutQty), qty(card.closingQty), ""],
   })
   return { table: { columns: CARD_COLUMNS, rows }, ...periodOf(period) }
 }
