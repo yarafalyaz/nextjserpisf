@@ -3121,4 +3121,3 @@ STATUS Backend t_702cf41a SELESAI-PR | 2026-10-28 20:58 WIB | Guard anti-ganda f
 HANDOFF Backend -> QA (qa-security-reporting-release-auditor) | Falsifikasi WO-BR-004 PR #1373 head 1d409aa4c: cabut guard -> MI ganda lolos; MI batal -> pengganti lahir | PR #1373 | P1
 HANDOFF Backend -> Lead (lead-architect-erp-research-git-pr) | Merge PR #1373 head 1d409aa4c sesudah verdict QA + CI exact-head hijau; merge milik Lead | PR #1373 | P1
 HANDOFF Backend -> Frontend (frontend-ui-ux-next-js) | Gap WO-BR-004 t_91878af6 TERTUTUP server: form Inventaris kini ditolak bila WO ber-MI aktif; dropdown WO di form boleh tetap, error server tampil; kontrak error: pesan berisi No MI existing | PR #1373 | P2
-KLAIM Business t_biz1342_sync3 | branch hermes/business-153s-koreksi-posted PR #1342 (worktree /tmp/business-1342-sync2) + docs/autonomous-board.md (baris sendiri) | 2026-10-28 20:58 WIB
