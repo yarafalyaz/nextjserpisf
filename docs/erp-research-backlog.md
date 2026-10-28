@@ -41283,3 +41283,80 @@ Status dokumen, status pembayaran, status pajak, status posting tetap empat hal 
 - E123-7: reversal payment menaikkan outstanding lebih dari satu kali (baris asal dieksklusi + reversal dihitung negatif), reversal kedua/replay idempotency mengubah outstanding lagi, atau jurnal asal payment terhapus fisik (bukan REVERSED + jurnal lawan) = MERAH.
 
 ID vonis ini **F-2026-10-28-123-V** (FIN-BR-004 outstanding piutang simetri NETO; jawaban Q-120-1 + Q-120-3 spec F-2026-10-28-120-S PR #1241; basis origin/main bb30bc1f4). Pemilik berikutnya: BOT Lead (merge PR docs ini + PR #1241; putus Q-120-2) → BOT Backend (penyeragaman derivasi Putusan 2/4 + hentikan penurunan `grandTotal` retur, di atas PR #1233 merged) → BOT Frontend (label Putusan 5, tanpa hitung ulang) → BOT QA (E123-1..7 atas head implementasi persis). Tanpa implementasi dari kartu vonis ini; tanpa kartu baru dibuat run ini (rekomendasi penerus di komentar kartu t_4cd3062a).
+## VONIS BOT Accountant 2026-10-28 — F-2026-10-28-135-V: nota kredit formal vs retur + CustomerCredit (OPEN #2, BR-ACFIN2-09)
+
+**Verifikasi ID:** grep `F-2026-10-28-135` di backlog+board+docs/product `origin/main` = 0 sebelum tulis (28 Okt 2026; hanya usul CEO-riset di board:2694 menamai `135-S` untuk spec SAL-BR-013 yang belum terbit — slot `-V` vonis ini bebas, beda sufiks dan beda topik). Bebas.
+**Basis:** `origin/main` `a7cacc0ad` (28 Okt 2026 11:58 WIB). Kartu asal `t_d31e6bea`. Nol kode/schema/migrasi di kartu ini (jalur Accountant = vonis tertulis).
+**Pertanyaan diputus:** perlu/tidak model `SalesCreditNote` berdiri sendiri di luar retur + `CustomerCredit` existing. Sumber tunggal: KEPUTUSAN-TERVERIFIKASI.md OPEN #2 (keputusan 5: "nota kredit formal berdiri sendiri ... perlu keputusan owner apakah diperlukan") + urgensi F-2026-10-28-118-S BR-ACFIN2-09 ("selama model `SalesCreditNote` belum diputuskan, koreksi nilai piutang berjalan lewat retur (P5) + `CustomerCredit` existing") + BUSINESS-RULES.md SAL-BR-012 + `src/lib/reports/vat-invoices-data.ts:181-182` ("belum ada model SalesCreditNote di repo, jadi belum ada yang diabaikan di sini").
+
+### §0. Fakta kode terverifikasi (TERVERIFIKASI-KODE, bukan usulan)
+
+1. Retur penjualan = dokumen + hook + jurnal hidup: model `SalesReturn` (`prisma/schema.prisma:2021`) tertaut opsional `salesInvoiceId` + `sourceTaxInvoiceId`, nomor nota retur Coretax dicatat apa adanya (sistem tidak menerbitkan: `prisma/schema.prisma:2031-2038`); hook stok `src/lib/hooks/sales-return.hook.ts:28` (StockMove IN per baris, idempoten, `assertPeriodOpen`, tolak stok campuran scrap+dagang); hook jurnal `src/lib/hooks/accounting.hook.ts:1622-2136` (Dr Retur Penjualan / Cr Piutang bila tertaut faktur; retur tanpa faktur hanya kaki persediaan/biaya, tanpa kaki AR — anti-piutang-negatif; varian besi tua Dr OINC + Dr PPN / Cr Piutang|Kas, nol persediaan/COGS; fail-closed akun belum terkonfigurasi; idempoten per `(SalesReturn, jurnal)`).
+2. `CustomerCredit` = kredit pasif existing (`prisma/schema.prisma:464-483`: `documentNo` unik, `sourceType`/`sourceId`, `receivedAmount`/`allocatedAmount`/`refundedAmount` Decimal(15,2), status `open`); alokasi ke faktur + refund ke kas lewat `src/lib/services/customer-credit.service.ts` (idempotency scope `customer_credit_allocate` / `customer_credit_refund`, key wajib valid, jurnal POSTED, replay = hasil awal tanpa jurnal baru). Kelebihan retur di atas outstanding mengalir ke sini (bukan outstanding negatif) — ditegaskan vonis F-2026-10-28-123-V Putusan 2.
+3. Pajak: FP pengganti/pembatalan hidup di `src/lib/services/tax-invoice.service.ts` (terbit FP UM, pengganti nomor seri sama + `replacesId` + alasan wajib, batal + alasan wajib, jurnal komersial asal tidak diubah/dihapus pengganti/batal, pengganti ditolak bila masa asal terkunci). Retur PPN dihitung dari snapshot tarif efektif faktur asal (`returnDpp`/`returnVat`/`sourceTaxRate`, `prisma/schema.prisma:2067-2077`); PPN-retur 0 bila faktur asal tanpa PPN (vonis Salsa, dikutip vat-invoices-data.ts). Ekspor Coretax = XML impor manual, nomor seri DJP diisi operator (keputusan 12).
+4. Retur tanpa `salesInvoiceId` tidak ikut pengurang masa PPN (query vat-invoices-data mewajibkannya) — retur komersial murni tanpa faktur = nol efek PPN.
+
+### §1. Putusan: PERLU — model nota kredit formal berdiri sendiri (tahap backend terpisah, bukan kartu ini)
+
+Retur + `CustomerCredit` cukup untuk koreksi yang **mengembalikan barang fisik** (stok kembali, HPP/COGS bergerak). Tetapi ada kelas koreksi nilai piutang yang **tidak melibatkan kembalinya barang** dan tidak terwakili retur tanpa mengarang makna dokumen:
+
+- Diskon susulan / potongan harga sesudah faktur posted (komersial, DPP berubah, PPN berubah).
+- Koreksi tarif/harga salah ketik pada faktur posted tanpa pergerakan barang.
+- Denda/kompensasi/pembulatan kontraktual yang mengurangi tagihan (bukan pembayaran).
+- Koreksi PPN saja (faktur pajak diganti/dibetulkan, nilai komersial tetap) — butuh dokumen pengurang yang tertaut ke FP pengganti/pembatalan tanpa menyentuh stok.
+
+Memaksa keempatnya lewat `SalesReturn` berarti menciptakan StockMove IN + lapisan FIFO fiktif atas barang yang tidak pernah kembali — pelanggaran integritas stok yang vonis ini tolak. `CustomerCredit` existing hanya menampung **kelebihan nilai** (saldo), bukan **alasan dan jejak koreksi nilai** (dokumen pengurang beralasan tertaut faktur + FP). Jadi OPEN #2 diputus: **nota kredit formal PERLU sebagai dokumen pengurang nilai non-fisik**, terpisah dari retur (fisik) dan dari saldo `CustomerCredit` (hasil, bukan dokumen).
+
+Batas tegas: vonis ini TIDAK menciptakan model/schema/migrasi (larangan kartu). Rancangan §2-§3 = kontrak untuk Backend; implementasi = kartu Backend terpisah.
+
+### §2. Kapan retur+P5 cukup vs kapan nota kredit formal wajib
+
+| # | Situasi | Jalur sah | Alasan satu kalimat |
+|---|---|---|---|
+| 1 | Barang kembali fisik (cacat, salah kirim, kelebihan qty) | Retur penjualan P5 + jurnal existing (`accounting.hook.ts:1622`) | Stok benar-benar masuk gudang; kaki persediaan/COGS wajib bergerak. |
+| 2 | Kelebihan bayar / sisa retur di atas outstanding | `CustomerCredit` existing (alokasi/refund) | Saldo, bukan koreksi nilai; dokumen asal tetap benar. |
+| 3 | Diskon/potongan susulan, koreksi harga/tarif tanpa barang kembali, kompensasi kontraktual pengurang tagihan | **Nota kredit formal (§3)** — retur DILARANG | Tanpa barang kembali; retur menciptakan stok fiktif. |
+| 4 | Koreksi PPN sesudah FP pengganti/pembatalan (nilai komersial tetap atau berubah) | **Nota kredit formal tertaut FP** (§3) + jalur `tax-invoice.service.ts` existing | Jejak pajak butuh dokumen pengurang bernomor pajak sendiri, tertaut `sourceTaxInvoiceId` seperti retur. |
+| 5 | Faktur komersial tanpa FP (non-PKP / tanpa PPN) dikoreksi nilainya tanpa barang kembali | **Nota kredit formal non-pajak** (PPN = 0, tanpa tautan FP) | Sama dengan #3; PPN nol eksplisit, bukan absen diam-diam. |
+| 6 | Jasa (JKP) dibatalkan sebagian/penuh | **Nota kredit formal** (bukan nota retur barang) | Retur = BKP kembali; JKP memakai nota pembatalan di sisi pajak — dokumen komersialnya nota kredit. |
+
+### §3. Rancangan minimal dokumen nota kredit (kontrak untuk Backend, tanpa migrasi di kartu ini)
+
+- **Field minimal** (cermin `SalesReturn` + `FIN-BR-008`): `documentNo` unik; `customerId`; `salesInvoiceId` WAJIB (nota kredit tanpa faktur asal = tolak; beda dari retur yang membolehkan null); `sourceTaxInvoiceId` opsional (null = non-PPN, PPN nol eksplisit); baris `qty × price` + `returnDpp`/`returnVat`/`sourceTaxRate` snapshot pola `SalesReturnItem:2067-2077` (DPP beku, PPN = DPP × tarif efektif faktur asal, `safeRound` sen); `reason` WAJIB trim non-kosong (cermin BR-ACFIN2-01); `status` (`draft` → `completed`; `completed` = efek GL, anti-hapus); `taxCreditNoteNumber`/`taxCreditNoteDate` dicatat apa adanya (sistem tidak menerbitkan nomor pajak sendiri — cermin `taxReturnNoteNumber`); `createdBy/At`.
+- **Jurnal kanonis** (Dr pengurang pendapatan / Cr Piutang; tanpa kaki persediaan/COGS — inilah beda hakiki vs retur):
+  - Dr Retur Penjualan (`salesReturnAccountId` sama — satu akun kontra-pendapatan, bukan akun baru) sebesar DPP.
+  - Dr PPN Keluaran (`salesTaxAccountId`) sebesar PPN snapshot — bila PPN > 0 dan akun kosong = fail-closed tolak sebelum jurnal lahir (cermin pola scrap).
+  - Cr Piutang Usaha (`salesReceivableAccountId`) sebesar DPP + PPN.
+  - Uang `Decimal(15,2)`, tarif `Decimal(5,2)`; seimbang debit = kredit (toleransi balance ikut `JournalService` existing).
+  - Kelebihan nota kredit di atas outstanding → `CustomerCredit` jalur existing (bukan outstanding negatif — cermin Putusan 2 F-123-V).
+- **Syarat posting** (cermin FIN-BR-008 via BR-ACFIN2-01..07 spec 118-S): alasan wajib; tautan dua arah asal (faktur + FP bila ada); dokumen posted anti-hapus fisik (draft boleh hapus, `completed` hanya reversal); `assertPeriodOpen` tanggal nota; idempotensi scope baru `sales_credit_note_post` (satu scope per aksi; replay = hasil awal tanpa jurnal baru); `logActivity` alasan + nomor asal + nominal; status dokumen/pembayaran/pajak/posting empat hal terpisah.
+- **Relasi ke `CustomerCredit`:** nota kredit = dokumen pengurang (menurunkan outstanding); `CustomerCredit` = wadah saldo hasilnya. Nota kredit completed yang membuat outstanding negatif melahirkan `CustomerCredit` (saldo), bukan sebaliknya. Tidak ada alokasi nota-kredit-ke-banyak-faktur tahap 1 (YAGNI — satu nota = satu faktur, cermin FIN-BR-004 sisi jual).
+
+### §4. Dampak PPN/Coretax (dasar regulasi, bukan klaim patuh)
+
+- Dasar: PER-11/PJ/2025 (berlaku 22 Mei 2025): FP pengganti dibuat memakai modul e-Faktur Coretax dan **memperhitungkan nota retur/pembatalan**; bila FP pengganti dibuat atas faktur yang BKP-nya diretur / JKP-nya dibatalkan, retur/pembatalan itu **dianggap tidak terjadi** (sumber: `pajak.go.id` — PER-11/PJ/2025 PDF lampiran; coretaxpedia "Retur barang"; diakses 28 Okt 2026 WIB). Akibat perlakuan: nota kredit formal sisi komersial WAJIB tertaut ke status FP (asal/pengganti/batal) via `sourceTaxInvoiceId`; masa PPN pengurang mengikuti tanggal dokumen pajak, bukan tanggal komersial bila beda — read-model `vat-invoices-data.ts` wajib mengabaikan baris nota-kredit yang FP-nya belum terbit/di masa lain (cermin perlakuan "retur ber-nota kredit belum ada yang diabaikan" hari ini, diperluas saat model lahir).
+- Klaim kepatuhan dibatasi: vonis ini memutus **perlakuan dokumen dan jurnal**, bukan pernyataan "patuh PPN" — patuh butuh nomor seri DJP + status credited/uncredited + SPT Masa yang semuanya di luar repo (keputusan 12: tanpa integrasi API DJP langsung).
+
+### §5. Falsifikasi QA (E135, atas head implementasi Backend persis — BUKAN head vonis ini)
+
+- E135-1: fixture koreksi harga tanpa barang kembali dibukukan lewat `SalesReturn` (ada StockMove IN / lapisan FIFO baru atas barang tak kembali) = MERAH. Jalur sah = nota kredit, nol gerakan stok.
+- E135-2: nota kredit tanpa `salesInvoiceId` / tanpa `reason` / tanpa idempotency key valid lolos posting = MERAH tiga arah.
+- E135-3: nota kredit `completed` terhapus fisik, atau jurnal asalnya terhapus (bukan REVERSED + jurnal lawan) = MERAH.
+- E135-4: replay kunci idempotensi sama mengubah outstanding/jurnal kedua kali = MERAH; reversal kedua atas nota sama lolos = MERAH.
+- E135-5: mutasi cabut fail-closed akun (`salesReturnAccountId`/`salesReceivableAccountId`/PPN-bila-terutang) — posting tetap lolos = MERAH.
+- E135-6: nota kredit atas faktur ber-PPN tanpa `sourceTaxInvoiceId` namun PPN ≠ 0, atau retur/korvei PPN tanpa FP ikut pengurang masa = MERAH.
+- E135-7: rekonsiliasi — Σ outstanding (faktur − retur − nota kredit − payment valid) ≠ subledger Piutang POSTED sen-presisi = MERAH.
+
+### §6. Batas yang tetap OPEN / milik peran lain (vonis ini TIDAK menutup)
+
+| Batas | Pemilik berikutnya | Gerbang |
+|---|---|---|
+| Implementasi model + migrasi + hook + jurnal §3 (Backend), termasuk scope idempotensi `sales_credit_note_post` | Backend | vonis ini merged; tanpa duplikat `CustomerCredit` sebagai dokumen |
+| Dialog alasan wajib + tautan dua arah asal di UI (tanpa hitung ulang pajak di UI — tampilkan snapshot backend) | Frontend | kontrak §3 merged |
+| E135-1..7 atas head implementasi persis | QA | head implementasi Backend, bukan head vonis ini |
+| Perluasan read-model PPN (`vat-invoices-data.ts:181-182`) memasukkan pengurang nota kredit per masa | Backend (+ vonis pajak bila masa beda) | model lahir + FP tertaut |
+| Nomor dokumen nota kredit (format kunci urutan — ikut GL-BR-007 reset bulanan implisit atau kunci sendiri) | Lead | putusan penomoran; vonis ini hanya mewajibkan unik |
+| Status SAL-BR-012 / FIN-BR-008 / AC-FIN-002 di INDEKS-ATURAN sesudah implementasi | Lead | implementasi merged + E135 lulus |
+| Reversal DP pasca-konversi (OPEN #1) | Accountant (BR-ACFIN2-08) + Backend | bukan cakupan vonis ini |
+
+ID vonis ini **F-2026-10-28-135-V** (nota kredit formal vs retur+CustomerCredit; jawaban BR-ACFIN2-09 spec F-2026-10-28-118-S; basis origin/main a7cacc0ad). Pemilik berikutnya: BOT Lead (merge PR docs ini) → BOT Backend (implementasi §3 di kartu terpisah, tanpa duplikat CustomerCredit) → BOT Frontend (alasan wajib + tautan, tanpa hitung pajak di UI) → BOT QA (E135-1..7 atas head implementasi persis). Tanpa implementasi dari kartu vonis ini; tanpa kartu baru dibuat run ini (rekomendasi penerus di komentar kartu t_d31e6bea).

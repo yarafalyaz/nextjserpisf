@@ -48,7 +48,7 @@ Catatan: angka skala di `AGENTS.md` repo (~428 halaman) sudah menyimpang; angka 
 ## Keputusan yang masih OPEN (daftar tunggal)
 
 1. **Reversal/pembatalan pembayaran DP setelah konversi DP→faktur terjadi** (sisa ADR-003, keputusan 4). Kode tidak memuat jalurnya.
-2. **Nota kredit (credit note) formal berdiri sendiri** di luar retur + `CustomerCredit` (keputusan 5) — perlu keputusan owner apakah diperlukan.
+2. **Nota kredit (credit note) formal berdiri sendiri** di luar retur + `CustomerCredit` (keputusan 5) — DIPUTUS PERLU oleh vonis Accountant F-2026-10-28-135-V (backlog, 28 Okt 2026): dokumen pengurang nilai non-fisik (jurnal Dr Retur Penjualan + Dr PPN / Cr Piutang, tanpa kaki stok; `salesInvoiceId` wajib; `reason` wajib; scope idempotensi `sales_credit_note_post`); retur tetap untuk barang fisik kembali; `CustomerCredit` tetap wadah saldo. Implementasi Backend terpisah.
 3. **Posting akuntansi scrap abnormal** — gerbang `abnormalScrapPostingEnabled` masih OFF secara bawaan (keputusan 8); mengaktifkannya keputusan akuntansi owner.
 4. **Isi matriks approval per dokumen** (keputusan 9) — data konfigurasi, harus ditetapkan owner dan diverifikasi dari data, bukan repo.
 5. **Standar tarif tenaga kerja per peran** untuk costing proyek (keputusan 11).
