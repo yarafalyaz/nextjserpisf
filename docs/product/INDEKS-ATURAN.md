@@ -154,9 +154,9 @@ perilaku, bukan hanya keberadaan file/model.
 | --- | --- | --- |
 | HR-BR-001 | Sebagian | prisma/schema.prisma:3958 — `Payroll` ada; pengikatan periode eksplisit per baris belum ditelusur |
 | HR-BR-002 | Sebagian | prisma/schema.prisma:3958 — `Payroll` ada; pemisahan draft vs pembayaran final belum ditelusur |
-| HR-BR-003 | OPEN-keputusan | Keputusan formula lembur/tarif/pembulatan terbuka di sumber. Layanan statutori ada (`src/lib/services/payroll-statutory.service.ts`), tetapi baris penegak formula tidak ditunjuk di indeks ini |
+| HR-BR-003 | Sebagian | Formula/tarif/pembulatan TERTUTUP (vonis F-2026-10-25-014-V A1 + F-2026-10-25-022-V Putusan 3): upah sejam = upah sebulan/173, hari kerja 1,5x jam pertama lalu 2x, hari istirahat pola 5 hari 2x/3x/4x dan pola 6 hari 2x/3x/4x, pembulatan rupiah penuh hanya di ujung. Penegak: `src/lib/services/overtime-pay.service.ts:17-60` + batas 4 jam/hari & 18 jam/minggu `:96-138` dipakai create (`src/actions/hrm.actions.ts:1049`) dan update (`:4686`); dasar pokok + Σ tunjangan tetap aktif pada tanggal lembur + snapshot beku `src/actions/hrm.actions.ts:1152-1219`; masuk bruto slip `:1349,1385` (pratinjau) dan `:1874,2013` (tulis massal); regresi `src/lib/services/__tests__/overtime-pay.service.test.ts:11-57`. Sisa OPEN: parameter statutori tahun berjalan (`docs/product/KEPUTUSAN-TERVERIFIKASI.md:44,55`) |
 | HR-BR-004 | Sebagian | prisma/schema.prisma:4166 — `EmployeeLoan` ada; batas potongan terhadap saldo/policy belum ditelusur |
-| HR-BR-005 | Belum | belum ditelusur — koreksi payroll posted yang dapat diaudit tidak ditunjuk di sini |
+| HR-BR-005 | Belum | TERVERIFIKASI-KODE: NOL jalur koreksi slip `paid` di main (`d6cf442ba` + `363826a5` sudah di main: gerbang terminal paid di `approveStep` E-HRCR-5 + saringan jurnal aktif `onPayrollPaid` E-HRCR-6); jalur koreksi teraudit = spec F-2026-10-28-133-S + vonis 135-V (jawaban §5.1, reversal penuh + slip koreksi) — status tetap Belum sampai implementasi merged + QA |
 | HR-BR-006 | Sebagian | Baca: src/app/api/payroll/late-penalty/route.ts:18. Tulis (F-2026-10-28-128-S, AC-HRS-1..6): lima jalur tulis payroll menegakkan `getHrScope` + `assertHrEmployeeAccess` — processPayroll, populasi generateBulkPayroll, updatePayroll (baris lama DAN baru), approvePayroll, markPayrollPaid (src/actions/hrm.actions.ts); halaman/form payroll lain belum diaudit |
 | HR-BR-007 | Sebagian | prisma/schema.prisma:3546 — `LeaveRequest` ada; kelengkapan pemohon/approver/periode/status belum ditelusur per field |
 | HR-BR-008 | Sebagian | prisma/schema.prisma:4066 — `PayrollComponentLine` merinci komponen payroll; ketertelusuran ke sumber perhitungan belum ditelusur |
@@ -214,7 +214,7 @@ perilaku, bukan hanya keberadaan file/model.
 | --- | --- | --- |
 | AC-PROJ-001 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` ada; kewajiban referensi project/work order belum ditelusur |
 | AC-PROJ-002 | Sebagian | prisma/schema.prisma:2763 — issue lewat model inventory tersendiri; larangan direct update belum ditelusur |
-| AC-PROJ-003 | Belum | belum ditelusur — tampilan terpisah estimasi vs aktual tidak ditunjuk di sini |
+| AC-PROJ-003 | Sebagian | Frontend t_9b516ac7: `ProjectBudgetCard` (judul Estimasi vs Aktual Proyek, ringkasan Total Estimasi/Total Aktual/Selisih Estimasi−Aktual, tabel per tahap kolom Estimasi (RAB)/Aktual (Terealisasi), aktual per tahap Belum terukur + alasan kolom tahap absen) + `ProjectPlDetailCard` sisi aktual (judul Aktual Proyek, baris Pendapatan/Biaya Aktual, catatan margin job bukan laba akuntansi); sisa: kolom tahap sumber biaya belum ada di schema (Backend) |
 | AC-PROJ-004 | Sebagian | prisma/schema.prisma:5174 — `Project` ada; ketertelusuran biaya ke sumber belum ditelusur |
 | AC-WO-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem`; ketiadaan efek stok rencana belum dibuktikan negatif di sini |
 | AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; UI detail WO mencegah arah ke issue ganda (tombol buat baru disembunyikan selama MI aktif ada, status aktif tertampil) — `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx`. Sisa: pencatatan ganda inventory+project dan guard jalur form Inventaris belum ditelusur (backend) |
@@ -229,6 +229,31 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-REP-002 | Sebagian | .github/workflows/ci.yml:25 — CI berjalan `TZ=Asia/Jakarta`; konsistensi timezone semua filter report belum ditelusur |
 | AC-REP-003 | Sebagian | Audit Frontend t_af1af475: PDF server registry (70 kunci) lengkap kop+periode+Dicetak-oleh di src/lib/pdf/documents/statement.ts dan layar ReportLetterhead; jalur klien diseragamkan di src/components/reports/export-buttons.tsx (formatPrintedAtWib Asia/Jakarta berlabel WIB di footer PDF + blok kop CSV buildCsvHeaderLines: perusahaan/periode/dicetak) dites export-buttons.test.ts; kolom hitung ambigu dilabeli entitas (Penawaran di quotation-outcome-card.tsx + quotation-outcome-export.ts, Layer Stok di laporan/umur-stok). Sisa: preparedBy belum ada di PDF klien (endpoint setelan tak memuat pengguna), halaman tanpa ReportLetterhead tak menyumbang periode ke ekspor klien. RATCHET 2026-10-28 (PR Frontend AC-REP-003): nol format tanggal/angka ad-hoc di seluruh src/app/(dashboard)/laporan/** — 69 panggilan toLocaleDateString/toLocaleString dikonversi ke formatDate/formatNumber/formatCurrency/formatPeriod (zona WIB dipaku, nominal bersimbol Rp), dijaga src/app/(dashboard)/laporan/__tests__/report-format-consistency.test.ts |
 | AC-REP-004 | Sebagian | src/lib/auth/permissions.ts:21 — permission backend tersedia; permission khusus export per laporan belum ditelusur |
+
+## 13. Peta kolom mapping akun `SystemSetting` → ID aturan
+
+Bagian ini melengkapi tabel di atas, bukan menggantikannya: tabel di atas
+memetakan ID aturan → bukti, bagian ini memetakan **kolom penyimpanan** →
+ID aturan/spec yang menuntut kolom itu terisi. Kelima kolom dibaca jalur uang
+secara fail-closed — kosong berarti posting/jurnal ditolak, bukan angka
+default — sehingga isinya bukan preferensi tampilan.
+
+Sampai audit 28 Oktober 2026 kelima kolom hanya terisi sekali saat instalasi
+(`src/lib/setup/install.ts:135-140` `resolveAllAccountMappings`) dan tidak ada
+jalur tulis sesudahnya. Sejak `src/actions/settings.actions.ts` mendaftarkan
+kelimanya sebagai `intNull(...)` dan `src/lib/validations/settings.schemas.ts`
+mendaftarkannya di skema, kolom dapat diisi/diubah dari form Pengaturan →
+Akuntansi tanpa instalasi ulang; dikunci
+`src/actions/__tests__/settings.actions.test.ts` (payload + baca-balik
+penyimpanan). Kolom yang tidak dikirim form tidak ikut ditulis.
+
+| Kolom `SystemSetting` | ID aturan / spec | Bukti paling relevan |
+| --- | --- | --- |
+| `customerDownPaymentAccountId` | SAL-BR-004 (+ ADR-007) | `docs/product/BUSINESS-RULES.md:88-104` — kredit Uang Muka Penjualan 210102; fail-closed `src/lib/hooks/accounting.hook.ts:2382-2387,2491-2496`; alokasi reklas `src/lib/hooks/down-payment.hook.ts:219-240,756-775` |
+| `warrantyExpenseAccountId` | vonis F-2026-10-21-021 (tahap 3: provisi + jurnal garansi) | `src/lib/services/warranty-journal.service.ts:341` — posting biaya garansi ditolak bila kosong |
+| `warrantyProvisionAccountId` | vonis F-2026-10-21-021, dilanjutkan F-2026-10-22-041 (kode 210205 milik provisi garansi, bukan liabilitas PPh 4(2) sewa) | `src/lib/reports/deferred-tax-nonaset-data.ts:46-48` |
+| `supplierClaimReceivableAccountId` | vonis F-2026-10-21-021, dilanjutkan F-2026-10-24-130-V (klaim vendor part cacat garansi) | `src/lib/services/warranty-journal.service.ts:418` — jurnal klaim supplier ditolak bila kosong |
+| `reimbursementLiabilityAccountId` | vonis F-2026-10-25-018-V (wajib COA 210209) + F-2026-10-27-083-V | `src/lib/hooks/accounting.hook.ts:1275-1307` — resolver fail-closed (kosong/akun hilang/terhapus/nonaktif/kode ≠ 210209 = throw) |
 
 ## Penutup
 

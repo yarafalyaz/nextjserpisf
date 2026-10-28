@@ -34,7 +34,7 @@ import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
 import type { StatementTable } from "@/lib/reports/statement-table"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface LedgerReportView {
@@ -50,7 +50,7 @@ export interface CashFlowReportView {
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
 const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 
 type Period = { start: Date; end: Date }

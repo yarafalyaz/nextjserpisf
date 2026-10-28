@@ -16,7 +16,7 @@
  * Pure (tanpa Prisma/DOM) supaya penggabungan dan penyusunan periode bisa diuji.
  */
 
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -91,7 +91,7 @@ function amount(value: number): string {
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 function kindOfHistoryType(type: string): string {

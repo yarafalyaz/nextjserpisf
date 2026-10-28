@@ -26,7 +26,7 @@ beforeEach(() => {
 /** Build a fully-stubbed tx and wire it into the prisma.$transaction mock. */
 function wireTx(overrides: {
   items: { itemId: number; qty: number; cost: number; serialNumbers?: string[]; batchNumbers?: string[] }[]
-  itemRows: Array<{ id: number; defaultWarehouseId: number | null; trackSerial?: boolean; trackBatch?: boolean }>
+  itemRows: Array<{ id: number; defaultWarehouseId: number | null; trackSerial?: boolean; trackBatch?: boolean; isProduct?: boolean }>
   invoiceItemRows: Array<{ itemId: number; uom: string | null }>
   serialFindMany: ReturnType<typeof vi.fn>
   serialUpdateMany?: ReturnType<typeof vi.fn>
@@ -234,33 +234,12 @@ describe("sales return UoM", () => {
 // Cost master Rp750.000 sengaja: satu pun gerakan stok lahir = MERAH.
 describe("sales return scrap E136 tahap 2", () => {
   it("E136-3 stok: retur scrap completed nol StockMove/FIFO/qtyOnHand", async () => {
-    const spies = {
-      queryRaw: vi.fn().mockResolvedValue([]),
-      executeRaw: vi.fn().mockResolvedValue(1),
-    }
-    const tx = {
-      $queryRaw: spies.queryRaw,
-      $executeRaw: spies.executeRaw,
-      salesReturn: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({
-          id: 7,
-          salesInvoiceId: 4,
-          date: new Date("2026-10-01"),
-          status: "draft",
-          items: [{ itemId: 60, qty: 2, cost: 750000 }],
-        }),
-        update: vi.fn().mockResolvedValue({}),
-      },
-      salesInvoice: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 4, items: [{ itemId: 60, qty: 2 }] }),
-      },
-      item: { findMany: vi.fn().mockResolvedValue([{ id: 60, isScrapSaleItem: true }]) },
-      stockMove: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
-      warehouse: { findFirst: vi.fn().mockResolvedValue({ id: 5 }) },
-      salesInvoiceItem: { findMany: vi.fn().mockResolvedValue([]) },
-      systemSetting: { findFirst: vi.fn().mockResolvedValue({ periodLockDate: null }) },
-    }
-    mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
+    const { spies, tx } = wireTx({
+      items: [{ itemId: 60, qty: 2, cost: 750000 }],
+      itemRows: [{ id: 60, defaultWarehouseId: 5, isScrapSaleItem: true } as never],
+      invoiceItemRows: [],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
 
     await onSalesReturnCompleted(7, 9)
     expect(tx.stockMove.create).not.toHaveBeenCalled()
@@ -272,46 +251,78 @@ describe("sales return scrap E136 tahap 2", () => {
   })
 
   it("E136-campuran stok: retur campuran scrap+dagang ditolak nol StockMove", async () => {
-    const spies = {
-      queryRaw: vi.fn().mockResolvedValue([]),
-      executeRaw: vi.fn().mockResolvedValue(1),
-    }
-    const tx = {
-      $queryRaw: spies.queryRaw,
-      $executeRaw: spies.executeRaw,
-      salesReturn: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({
-          id: 7,
-          salesInvoiceId: 4,
-          date: new Date("2026-10-01"),
-          status: "draft",
-          items: [
-            { itemId: 60, qty: 1, cost: 10 },
-            { itemId: 50, qty: 1, cost: 10 },
-          ],
-        }),
-        update: vi.fn().mockResolvedValue({}),
-      },
-      salesInvoice: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 4, items: [{ itemId: 60, qty: 1 }, { itemId: 50, qty: 1 }] }),
-      },
-      item: {
-        findMany: vi.fn().mockResolvedValue([
-          { id: 60, isScrapSaleItem: true },
-          { id: 50, isScrapSaleItem: false },
-        ]),
-      },
-      stockMove: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
-      warehouse: { findFirst: vi.fn().mockResolvedValue({ id: 5 }) },
-      salesInvoiceItem: { findMany: vi.fn().mockResolvedValue([]) },
-      systemSetting: { findFirst: vi.fn().mockResolvedValue({ periodLockDate: null }) },
-    }
-    mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
+    const { spies, tx } = wireTx({
+      items: [
+        { itemId: 60, qty: 1, cost: 10 },
+        { itemId: 50, qty: 1, cost: 10 },
+      ],
+      itemRows: [
+        { id: 60, defaultWarehouseId: 5, isScrapSaleItem: true },
+        { id: 50, defaultWarehouseId: 5, isScrapSaleItem: false },
+      ] as never,
+      invoiceItemRows: [],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
 
     await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/campuran besi tua/)
     expect(tx.stockMove.create).not.toHaveBeenCalled()
     expect(mocks.createInLayer).not.toHaveBeenCalled()
     expect(spies.executeRaw).not.toHaveBeenCalled()
     expect(tx.salesReturn.update).not.toHaveBeenCalled()
+  })
+})
+
+// F-2026-10-28-137-V SAL-BR-013 G2 (opsi a, E141-4): retur baris jasa
+// (isProduct=false) = koreksi nilai tanpa stok — nol StockMove IN, nol
+// lapisan FIFO, nol qtyOnHand; status tetap completed.
+describe("sales return jasa non-stok G2", () => {
+  it("E141-4 stok: retur baris jasa completed nol StockMove/FIFO/qtyOnHand", async () => {
+    const { spies, tx } = wireTx({
+      items: [{ itemId: 61, qty: 2, cost: 100 }],
+      itemRows: [{ id: 61, defaultWarehouseId: 5, isProduct: false }],
+      invoiceItemRows: [{ itemId: 61, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await onSalesReturnCompleted(7, 9)
+
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+    expect(spies.executeRaw).not.toHaveBeenCalled()
+    expect(spies.returnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { status: "completed" } })
+    )
+    expect(tx).toBeDefined()
+  })
+
+  it("E141-4 campuran: baris stok tetap masuk, baris jasa dilewati", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    mocks.generateDocumentNumberBatch.mockResolvedValue(["SM-1"])
+    const { spies } = wireTx({
+      items: [
+        { itemId: 50, qty: 1, cost: 100 },
+        { itemId: 61, qty: 1, cost: 200 },
+      ],
+      itemRows: [
+        { id: 50, defaultWarehouseId: 5, isProduct: true },
+        { id: 61, defaultWarehouseId: 5, isProduct: false },
+      ],
+      invoiceItemRows: [
+        { itemId: 50, uom: "PCS" },
+        { itemId: 61, uom: "PCS" },
+      ],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await onSalesReturnCompleted(7, 9)
+
+    expect(spies.moveCreate).toHaveBeenCalledTimes(1)
+    expect(spies.moveCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ itemId: 50 }) })
+    )
+    expect(spies.moveCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ itemId: 61 }) })
+    )
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(1)
   })
 })

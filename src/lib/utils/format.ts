@@ -93,7 +93,170 @@ export function formatNumber(
 /**
  * Format a date to Indonesian locale string.
  * Example: "2024-01-15" → "15 Januari 2024"
+ *
+ * Varian tanggal yang dipakai renderer bersama laporan (AC-REP-003): tanpa
+ * opsi baru di signature lama — semua memaku `timeZone: "Asia/Jakarta"`:
+ * - formatDayMonthYear: "1 Okt 2026" (day numeric, month short)
+ * - formatMonthYear: "Oktober 2026" (month long, year numeric)
+ * - formatDate(..., { format: "short" }): "05 Okt 2026" (day 2-digit, month short)
  */
+export function formatDayMonthYear(date: Date | string | null | undefined): string {
+  if (!date) return "-";
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(dateObj.getTime())) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(dateObj);
+}
+
+/** "Oktober 2026" — label grup bulan + judul kolom, zona WIB dipaku. */
+export function formatMonthYear(date: Date | string | null | undefined): string {
+  if (!date) return "-";
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(dateObj.getTime())) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(dateObj);
+}
+
+/**
+ * Rentang dua tanggal seperiode label kolom: "1 Okt - 31 Okt 2026".
+ * Bentuk ringkas (tanpa tahun ganda) warisan label kolom laba-rugi —
+ * dipaku di satu helper supaya builder tak merakit manual (AC-REP-003).
+ */
+export function formatShortRange(start: Date | string | null | undefined, end: Date | string | null | undefined): string {
+  const a = typeof start === "string" ? new Date(start) : start;
+  const b = typeof end === "string" ? new Date(end) : end;
+  if (!a || !b || Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return "-";
+  const dayMonth = (d: Date) =>
+    new Intl.DateTimeFormat("id-ID", {
+      day: "numeric",
+      month: "short",
+      timeZone: "Asia/Jakarta",
+    }).format(d);
+  const endDayMonthYear = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(b);
+  return `${dayMonth(a)} - ${endDayMonthYear}`;
+}
+
+/**
+ * Kuantitas / hitungan: ribuan titik, desimal koma, tanpa simbol.
+ * Example: 1500 → "1.500"; 2.5 → "2,5".
+ */
+export function formatQuantity(value: number | string | null | undefined): string {
+  const numericValue = Number(value ?? 0);
+  if (Number.isNaN(numericValue)) return "0";
+  const text = new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+  return text === "-0" ? "0" : text;
+}
+
+/**
+ * Uang dalam kalimat temuan/nota (bukan sel tabel): "Rp1.500.000".
+ * Sel tabel tetap lewat formatAccounting/formatCurrency.
+ *
+ * ponytail: tanpa pemakai, kandidat hapus; plafon: pakai di temuan builder
+ * bila butuh varian tanpa spasi "Rp ".
+ */
+export function formatRpCompact(value: number | string | null | undefined): string {
+  return `Rp${formatNumber(value)}`;
+}
+
+/**
+ * Label sumbu grafik yang ringkas (mis. "1,2 jt").
+ * Pengecualian sah ratchet AC-REP-003: `notation: "compact"` tidak punya
+ * padanan di helper lain; helper ini memaku locale id-ID di satu tempat.
+ */
+export function formatCompactNumber(value: number | string | null | undefined): string {
+  const numericValue = Number(value ?? 0);
+  if (Number.isNaN(numericValue)) return "0";
+  return new Intl.NumberFormat("id-ID", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(numericValue);
+}
+
+/**
+ * Kunci tanggal kalender WIB "YYYY-MM-DD" dari sebuah instan.
+ * Dipaku ke zona Asia/Jakarta lewat Intl agar bebas zona runtime proses/CI.
+ * Dipakai mesin SLA (samakan dengan tanggal Holiday) — BUKAN label tampilan,
+ * jadi diizinkan eksis di samping helper label (pengecualian sah ratchet).
+ */
+export function wibDateKeyParts(date: Date): { year: string; month: string; day: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return { year: get("year"), month: get("month"), day: get("day") };
+}
+
+/**
+ * Komponen jam dinding WIB (tahun..menit + weekday en-US pendek) dari instan.
+ * Sama seperti di atas: mesin hitung, bukan label — pengecualian sah.
+ */
+export function wibPartsKey(date: Date): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  weekday: string;
+} {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+    weekday: get("weekday"),
+  };
+}
+
+/**
+ * Cap waktu cetak dokumen: "28 Oktober 2026 07.30 WIB" — tanggal panjang +
+ * jam dinding WIB. Dipaku di satu helper supaya kop CSV, footer PDF klien,
+ * dan kop server tidak membuat tiga format jam sendiri-sendiri (AC-REP-003).
+ */
+export function formatPrintedAtWib(now: Date | string | null | undefined): string {
+  if (!now) return "-"
+  const dateObj = typeof now === "string" ? new Date(now) : now
+  if (Number.isNaN(dateObj.getTime())) return "-"
+  const parts = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).formatToParts(dateObj)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ""
+  return `${get("day")} ${get("month")} ${get("year")} ${get("hour")}.${get("minute")} WIB`
+}
+
 export function formatDate(
   date: Date | string | null | undefined,
   options?: {

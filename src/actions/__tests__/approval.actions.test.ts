@@ -597,14 +597,41 @@ describe("TASK-018 (2) gerbang statutori jalur approval generik", () => {
     expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
   });
 
+  it("B4: approveStep Payroll menolak slip paid tanpa resurrect (§5.2 133-S)", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
+    });
+    mocks.prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("sudah dibayar");
+    expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
+  });
+
+  it("B4: approveStep Payroll paid-cabut-guard tetap approve (falsifikasi jalur)", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
+    });
+    mocks.prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 1 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 9, status: expect.objectContaining({ not: "paid" }) }),
+      }),
+    );
+  });
+
   it("approveStep langkah akhir Payroll bersih tetap mengubah status dokumen", async () => {
     seedApproval({ referenceType: "Payroll", referenceId: 9 });
     mocks.prismaMock.payroll.findUnique.mockResolvedValue({
       statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
     });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expect(mocks.prismaMock.payroll.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 9 }, data: expect.objectContaining({ status: "approved" }) }),
+    expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 9, status: expect.objectContaining({ not: "paid" }) }),
+        data: expect.objectContaining({ status: "approved" }),
+      }),
     );
   });
 });

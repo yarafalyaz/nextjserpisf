@@ -24,6 +24,7 @@ import {
   buildIncomeStatementTable,
   type StatementTable,
 } from "@/lib/reports/statement-table"
+import { formatDate, formatDayMonthYear, formatShortRange } from "@/lib/utils/format"
 
 /** Label periode yang dipakai kop laporan dan kolom angka. */
 export interface StatementLabels {
@@ -47,7 +48,7 @@ export interface IncomeStatementStatement extends StatementLabels {
 
 /** Nama bulan panjang Indonesia, mis. 2026-10-31 → "31 Oktober 2026". */
 export function asOfLabelOf(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+  return formatDate(date)
 }
 
 /**
@@ -251,10 +252,10 @@ export async function loadIncomeStatementByStatus(
 
   const { start, end } = period
   const shortDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    formatDayMonthYear(date)
   const fullDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
-  const columnLabel = `${start.getDate()} ${start.toLocaleDateString("id-ID", { month: "short" })} - ${end.getDate()} ${end.toLocaleDateString("id-ID", { month: "short" })} ${end.getFullYear()}`
+    formatDate(date, { format: "short" })
+  const columnLabel = formatShortRange(start, end)
 
   return {
     table: buildIncomeStatementTable({
@@ -326,10 +327,10 @@ export async function loadIncomeStatementByCostCenter(input: {
 }): Promise<IncomeStatementByCostCenterReport> {
   const { start, end } = input
   const shortDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    formatDayMonthYear(date)
   const fullDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
-  const columnLabel = `${start.getDate()} ${start.toLocaleDateString("id-ID", { month: "short" })} - ${end.getDate()} ${end.toLocaleDateString("id-ID", { month: "short" })} ${end.getFullYear()}`
+    formatDate(date, { format: "short" })
+  const columnLabel = formatShortRange(start, end)
   const labels = {
     columnLabel,
     periodLabel: `Periode ${shortDate(start)} – ${shortDate(end)}`,

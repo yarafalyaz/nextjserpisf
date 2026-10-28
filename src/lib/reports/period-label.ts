@@ -6,11 +6,12 @@
  * satu huruf saja antar salinan membuat judul laporan berbeda antar halaman,
  * jadi sekarang satu tempat.
  */
+import { formatDayMonthYear } from "@/lib/utils/format"
 
 /** Label periode pendek: hari-bulan-tahun, bulan disingkat bahasa Indonesia. */
+
 export function rangePeriodLabel(start: Date, end: Date): string {
-  const short = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+  const short = (date: Date) => formatDayMonthYear(date)
   return `Periode ${short(start)} – ${short(end)}`
 }
 

@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { InvoiceExchangeForm, type ExchangeableInvoice } from "../_components/invoice-exchange-form"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
+import { isSettled } from "@/lib/finance/settlement-status"
 
 import type { Metadata } from "next"
 
@@ -47,9 +48,9 @@ export default async function CreateInvoiceExchangePage({
 
     const exchanged = new Set(alreadyExchanged.map((item) => item.salesInvoiceId))
     invoices = candidates
-      // Belum lunas (perbandingan dua kolom tidak bisa dilakukan di SQL biasa) dan
+      // Belum lunas FIN-BR-006 (sisa <= Rp1 = lunas, tidak masuk kandidat) dan
       // belum pernah diserahkan.
-      .filter((invoice) => Number(invoice.grandTotal) - Number(invoice.paidAmount) > 0.005)
+      .filter((invoice) => !isSettled(invoice.grandTotal, invoice.paidAmount))
       .filter((invoice) => !exchanged.has(invoice.id))
       .map((invoice) => ({
         id: invoice.id,

@@ -14,7 +14,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatMonthYear, formatNumber, formatQuantity } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -58,11 +58,11 @@ function amount(value: number): string {
 }
 
 function quantity(value: number): string {
-  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+  return formatQuantity(value)
 }
 
 function monthLabel(date: Date): string {
-  return date.toLocaleDateString("id-ID", { month: "long", year: "numeric" })
+  return formatMonthYear(date)
 }
 
 /**
@@ -144,7 +144,7 @@ export function buildJobOrderCompletion(input: {
 export function jobOrderCompletionSummary(result: JobOrderCompletionResult): string {
   const unitCost = result.totals.qty > 0 ? result.totals.totalCost / result.totals.qty : 0
   return (
-    `${result.documentCount} dokumen penyelesaian · ${result.totals.qty.toLocaleString("id-ID")} unit · ` +
+    `${result.documentCount} dokumen penyelesaian · ${formatNumber(result.totals.qty)} unit · ` +
     `nilai ${formatCurrency(result.totals.totalCost)} (rata-rata ${formatCurrency(unitCost)} per unit)`
   )
 }

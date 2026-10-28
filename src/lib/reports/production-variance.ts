@@ -24,7 +24,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatQuantity } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -146,7 +146,7 @@ function amount(value: number): string {
 
 function percent(value: number | null): string {
   if (value === null) return "–"
-  return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)}%`
+  return `${formatQuantity(value)}%`
 }
 
 /** Pecah satu baris bahan menjadi selisih harga + selisih pemakaian. */

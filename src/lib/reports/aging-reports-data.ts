@@ -27,7 +27,7 @@ import {
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd } from "@/lib/utils/math"
-import { formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatDate } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 const COLUMNS: TableColumn[] = [
@@ -40,7 +40,7 @@ const COLUMNS: TableColumn[] = [
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
 const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 
 export interface AgingReportView {
   table: { columns: TableColumn[]; rows: TableRow[] }

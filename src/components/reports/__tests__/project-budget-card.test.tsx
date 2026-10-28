@@ -48,7 +48,7 @@ function budgetFixture(overrides: Partial<Parameters<typeof buildProjectBudget>[
 function renderBudgetText(budget: ProjectBudgetForProject) {
   return renderCardText(<ProjectBudgetCard budget={budget} />, {
     card: "RAB vs Realisasi Proyek",
-    stages: "Anggaran vs realisasi per tahap",
+    stages: "Estimasi vs aktual per tahap",
     history: "Riwayat RAB",
   })
 }
@@ -110,7 +110,9 @@ describe("ProjectBudgetCard F-2026-10-21-030", () => {
   it("kolom F1: realisasi angka hanya di baris belum-teralokasi + total; per tahap 'Belum terukur'", () => {
     const { text, found } = renderBudgetText(budgetFixture())
     expect(found.stages).toBe(true)
-    expect(text).toContain("Anggaran vs Realisasi per Tahap")
+    expect(text).toContain("Estimasi vs Aktual per Tahap")
+    expect(text).toContain("Estimasi (RAB)")
+    expect(text).toContain("Aktual (Terealisasi)")
     expect(text).toContain("% Terpakai")
     // total: 6.000.000 / 14.500.000 = 41.4%; belum-teralokasi: -4.500.000, 400.0%
     expect(text).toContain("41.4%")
@@ -134,6 +136,17 @@ describe("ProjectBudgetCard F-2026-10-21-030", () => {
     )
     expect(text).toContain("Belum ditetapkan")
     expect(text).toContain("Belum terkunci")
+  })
+
+  it("AC-PROJ-003: ringkasan + kolom berlabel estimasi vs aktual eksplisit", () => {
+    const { text } = renderBudgetText(budgetFixture())
+    expect(text).toContain("Estimasi vs Aktual Proyek")
+    expect(text).toContain("Total Estimasi (RAB)")
+    expect(text).toContain("Total Aktual (terealisasi L/R proyek)")
+    expect(text).toContain("Selisih Estimasi − Aktual")
+    expect(text).toContain("Margin Rencana (kontrak − estimasi RAB)")
+    expect(text).toContain("Total Estimasi vs Aktual")
+    expect(text).toContain("kolom tahap belum ada di sumber biaya")
   })
 
   it("tanpa RAB tampil keadaan kosong", () => {

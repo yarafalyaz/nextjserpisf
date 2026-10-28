@@ -25,7 +25,7 @@
  * Pure (tanpa Prisma/DOM).
  */
 
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatQuantity, formatDate } from "@/lib/utils/format"
 import { safeAdd } from "@/lib/utils/math"
 import { layerValue, resolveCostingMethod } from "@/lib/reports/stock-valuation"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -86,11 +86,11 @@ export function daysSinceLastOut(lastOutDate: Date | null, asOf: Date): number |
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  return formatDate(date, { format: "short" })
 }
 
 function quantity(value: number): string {
-  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+  return formatQuantity(value)
 }
 
 function amount(value: number): string {

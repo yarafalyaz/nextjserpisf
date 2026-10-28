@@ -252,13 +252,32 @@ export async function approveStep(approvalId: number, formData: FormData) {
         if (docModel?.update && !GATE_ONLY_REFERENCE_TYPES.has(approval.referenceType)) {
           const docStatus = approval.referenceType === "EmployeeLoan" ? "active" : "approved";
           const approvedBy = session?.user?.id ? Number(session.user.id) : null;
-          await docModel.update({
-            where: { id: approval.referenceId },
-            data: {
-              status: docStatus,
-              ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
-            },
-          });
+          // HR-BR-005 B4 (§5.2 spec F-2026-10-28-133-S): gerbang status
+          // terminal — slip gaji `paid` tidak boleh di-resurrect jadi
+          // `approved` lewat jalur approval generik (approvePayroll/
+          // markPayrollPaid sendiri sudah draft->approved->paid searah).
+          // where bersyarat = klaim atomik: slip paid kalah klaim -> tolak.
+          const terminalGuarded = new Set(["Payroll"]);
+          if (terminalGuarded.has(approval.referenceType)) {
+            const claimed = await docModel.updateMany({
+              where: { id: approval.referenceId, status: { not: "paid" } },
+              data: {
+                status: docStatus,
+                ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
+              },
+            });
+            if (claimed.count === 0) {
+              throw new Error("Dokumen sudah dibayar (paid) — tidak bisa disetujui ulang.");
+            }
+          } else {
+            await docModel.update({
+              where: { id: approval.referenceId },
+              data: {
+                status: docStatus,
+                ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
+              },
+            });
+          }
           if (approval.referenceType === "EmployeeLoan") {
             await onEmployeeLoanDisbursed(approval.referenceId, approvedBy ?? undefined, tx);
           }
