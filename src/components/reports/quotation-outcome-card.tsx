@@ -38,7 +38,7 @@ export function QuotationOutcomeCard({
       <DetailTable>
         <DetailTableHead>
           <DetailTableTh>Ukuran</DetailTableTh>
-          <DetailTableTh align="right">Jumlah</DetailTableTh>
+          <DetailTableTh align="right">Penawaran</DetailTableTh>
         </DetailTableHead>
         <DetailTableBody>
           <DetailTableRow>
@@ -81,7 +81,7 @@ export function QuotationOutcomeCard({
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Kategori Kalah</DetailTableTh>
-              <DetailTableTh align="right">Jumlah</DetailTableTh>
+              <DetailTableTh align="right">Penawaran</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {summary.lostByCategory.map((row) => (
