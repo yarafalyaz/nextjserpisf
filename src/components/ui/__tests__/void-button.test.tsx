@@ -71,7 +71,7 @@ describe("VoidButton requireReason (BR-F139-01 presentasi)", () => {
     unmountTestUi(root, container)
   })
 
-  it("mutasi: tanpa alasan wajib, confirm langsung memanggil aksi", async () => {
+  it("tanpa requireReason, alasan dikirim undefined", async () => {
     const action = vi.fn(async (_id: number, _reason?: string) => ({ success: true }))
     const { container, root } = newTestContainer()
     renderTestUi(container, root, <VoidButton id={7} action={action} />)
@@ -80,7 +80,7 @@ describe("VoidButton requireReason (BR-F139-01 presentasi)", () => {
     const confirm = findButtonByText(document, "Batalkan Dokumen")
     clickTestEl(confirm)
     await act(async () => { await Promise.resolve() })
-    expect(action).toHaveBeenCalledWith(7, "")
+    expect(action).toHaveBeenCalledWith(7, undefined)
     unmountTestUi(root, container)
   })
 })

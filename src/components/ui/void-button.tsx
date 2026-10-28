@@ -41,7 +41,7 @@ export function VoidButton({
 }: VoidButtonProps) {
   const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
     useConfirmReasonAction({
-      run: (trimmedReason: string) => action(id, trimmedReason),
+      run: (trimmedReason: string) => action(id, requireReason ? trimmedReason : undefined),
       successMessage: "Dokumen berhasil dibatalkan",
       errorFallback: "Gagal membatalkan dokumen",
       onSuccess,
