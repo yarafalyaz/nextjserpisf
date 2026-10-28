@@ -28,8 +28,9 @@
  *
  * Nilai (per SO): `nilaiTerkirim = Σ qty terkirim × unitPrice baris SO`;
  * `nilaiTerfaktur = Σ grandTotal faktur sah`; `sisa = terkirim − terfaktur`.
- * Tampil hanya bila `nilaiTerkirim > 0` DAN `sisa > COLLECTION_SETTLED_EPSILON`
- * (epsilon uang existing, aging-amounts.ts). Terfaktur >= terkirim -> tidak
+ * Tampil hanya bila `nilaiTerkirim > 0` DAN `sisa` di luar toleransi lunas
+ * FIN-BR-006 (Rp1, `isOutstandingSettled`) — SATU ambang dengan layar faktur,
+ * bukan epsilon lokal. Terfaktur >= terkirim -> tidak
  * tampil, tanpa sisa negatif (AC-DU-6; kelebihan tagih = domain rekonsiliasi).
  * Retur penjualan tidak mengurangi sisa (spec §3: antrean menilai tautan
  * faktur, bukan retur).
@@ -47,7 +48,7 @@
  * Pure (tanpa Prisma/DOM). Loader: `delivered-unbilled-data.ts`.
  */
 
-import { COLLECTION_SETTLED_EPSILON } from "@/lib/reports/aging-amounts"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { getWibTodayUtcDate, WIB_OFFSET_HOURS } from "@/lib/utils/attendance-time"
 import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
@@ -204,7 +205,7 @@ export function buildDeliveredUnbilledQueue(
 
     const unbilledValue = safeSubtract(deliveredValue, billedValue, 2)
     // Terfaktur penuh/berlebih tidak tampil; tanpa sisa negatif (AC-DU-6).
-    if (unbilledValue <= COLLECTION_SETTLED_EPSILON) continue
+    if (isOutstandingSettled(unbilledValue)) continue
 
     const ageDays = Math.max(
       0,
