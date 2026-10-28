@@ -228,6 +228,31 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-REP-003 | Sebagian | Audit Frontend t_af1af475: PDF server registry (70 kunci) lengkap kop+periode+Dicetak-oleh di src/lib/pdf/documents/statement.ts dan layar ReportLetterhead; jalur klien diseragamkan di src/components/reports/export-buttons.tsx (formatPrintedAtWib Asia/Jakarta berlabel WIB di footer PDF + blok kop CSV buildCsvHeaderLines: perusahaan/periode/dicetak) dites export-buttons.test.ts; kolom hitung ambigu dilabeli entitas (Penawaran di quotation-outcome-card.tsx + quotation-outcome-export.ts, Layer Stok di laporan/umur-stok). Sisa: preparedBy belum ada di PDF klien (endpoint setelan tak memuat pengguna), halaman tanpa ReportLetterhead tak menyumbang periode ke ekspor klien |
 | AC-REP-004 | Sebagian | src/lib/auth/permissions.ts:21 — permission backend tersedia; permission khusus export per laporan belum ditelusur |
 
+## 13. Peta kolom mapping akun `SystemSetting` → ID aturan
+
+Bagian ini melengkapi tabel di atas, bukan menggantikannya: tabel di atas
+memetakan ID aturan → bukti, bagian ini memetakan **kolom penyimpanan** →
+ID aturan/spec yang menuntut kolom itu terisi. Kelima kolom dibaca jalur uang
+secara fail-closed — kosong berarti posting/jurnal ditolak, bukan angka
+default — sehingga isinya bukan preferensi tampilan.
+
+Sampai audit 28 Oktober 2026 kelima kolom hanya terisi sekali saat instalasi
+(`src/lib/setup/install.ts:135-140` `resolveAllAccountMappings`) dan tidak ada
+jalur tulis sesudahnya. Sejak `src/actions/settings.actions.ts` mendaftarkan
+kelimanya sebagai `intNull(...)` dan `src/lib/validations/settings.schemas.ts`
+mendaftarkannya di skema, kolom dapat diisi/diubah dari form Pengaturan →
+Akuntansi tanpa instalasi ulang; dikunci
+`src/actions/__tests__/settings.actions.test.ts` (payload + baca-balik
+penyimpanan). Kolom yang tidak dikirim form tidak ikut ditulis.
+
+| Kolom `SystemSetting` | ID aturan / spec | Bukti paling relevan |
+| --- | --- | --- |
+| `customerDownPaymentAccountId` | SAL-BR-004 (+ ADR-007) | `docs/product/BUSINESS-RULES.md:88-104` — kredit Uang Muka Penjualan 210102; fail-closed `src/lib/hooks/accounting.hook.ts:2382-2387,2491-2496`; alokasi reklas `src/lib/hooks/down-payment.hook.ts:219-240,756-775` |
+| `warrantyExpenseAccountId` | vonis F-2026-10-21-021 (tahap 3: provisi + jurnal garansi) | `src/lib/services/warranty-journal.service.ts:341` — posting biaya garansi ditolak bila kosong |
+| `warrantyProvisionAccountId` | vonis F-2026-10-21-021, dilanjutkan F-2026-10-22-041 (kode 210205 milik provisi garansi, bukan liabilitas PPh 4(2) sewa) | `src/lib/reports/deferred-tax-nonaset-data.ts:46-48` |
+| `supplierClaimReceivableAccountId` | vonis F-2026-10-21-021, dilanjutkan F-2026-10-24-130-V (klaim vendor part cacat garansi) | `src/lib/services/warranty-journal.service.ts:418` — jurnal klaim supplier ditolak bila kosong |
+| `reimbursementLiabilityAccountId` | vonis F-2026-10-25-018-V (wajib COA 210209) + F-2026-10-27-083-V | `src/lib/hooks/accounting.hook.ts:1275-1307` — resolver fail-closed (kosong/akun hilang/terhapus/nonaktif/kode ≠ 210209 = throw) |
+
 ## Penutup
 
 Indeks ini sengaja berhenti pada satu bukti per ID. Pendalaman
