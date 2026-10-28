@@ -234,8 +234,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang kedua entri ini begitu UI itu mendarat di main.
   "src/actions/purchase.actions.ts::reverseVendorPayment":
     "FIN-BR-008 inti backend; tombol Balikkan pembayaran vendor menyusul (frontend PR #1246)",
-  "src/actions/sales.actions.ts::reverseSalesPayment":
-    "FIN-BR-008 inti backend; tombol Balikkan pembayaran penjualan menyusul (frontend PR #1246)",
+  // GL-BR-003 UI: reverseSalesPayment kini dirujuk tombol Balikkan
+  // di detail pembayaran penjualan; entri beku sales dibuang, vendor tetap.
 }
 
 describe("keterhubungan aksi server", () => {
