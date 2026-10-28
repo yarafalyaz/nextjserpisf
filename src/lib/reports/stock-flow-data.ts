@@ -141,13 +141,14 @@ export async function loadStockValuation(warehouseId: number | null): Promise<St
 }
 
 const CARD_COLUMNS: TableColumn[] = [
-  { header: "Tanggal", align: "left", width: 26 },
-  { header: "Dokumen", align: "left", width: 34 },
-  { header: "Jenis", align: "left", width: 30 },
-  { header: "Masuk", align: "right", width: 26 },
-  { header: "Keluar", align: "right", width: 26 },
-  { header: "Saldo", align: "right", width: 26 },
-  { header: "Keterangan", align: "left", width: 60 },
+  { header: "Tanggal", align: "left", width: 22 },
+  { header: "Dokumen", align: "left", width: 30 },
+  { header: "Jenis", align: "left", width: 26 },
+  { header: "Gudang", align: "left", width: 20 },
+  { header: "Masuk", align: "right", width: 22 },
+  { header: "Keluar", align: "right", width: 22 },
+  { header: "Saldo", align: "right", width: 22 },
+  { header: "Keterangan", align: "left", width: 54 },
 ]
 
 export async function loadStockCard(
@@ -172,6 +173,7 @@ export async function loadStockCard(
     }),
     prisma.stockMove.findMany({
       where: { ...baseWhere, date: { gte: period.start, lte: period.end } },
+      include: { warehouse: { select: { code: true } } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
   ])
@@ -181,18 +183,18 @@ export async function loadStockCard(
       date: m.date ?? m.createdAt,
       documentNo: m.documentNo,
       moveType: m.moveType ?? "-",
-      impact: m.impact === "IN" || m.impact === "OUT" ? m.impact : "IN",
+      impact: m.impact,
       qty: Number(m.qty),
       cost: Number(m.cost),
       referenceType: m.referenceType,
       referenceId: m.referenceId,
       description: m.description,
-      warehouseCode: null,
+      warehouseCode: m.warehouse?.code ?? null,
     })),
     openingBalance(priorMoves.map((m) => ({ qty: Number(m.qty), cost: Number(m.cost), impact: m.impact }))),
   )
   const rows: TableRow[] = [
-    { kind: "data", cells: ["", "Saldo Awal", "", qty(card.openingQty), "", qty(card.closingQty - card.totalInQty + card.totalOutQty), ""] },
+    { kind: "data", cells: ["", "Saldo Awal", "", "", qty(card.openingQty), "", qty(card.closingQty - card.totalInQty + card.totalOutQty), ""] },
   ]
   for (const move of card.rows) {
     rows.push({
@@ -201,6 +203,7 @@ export async function loadStockCard(
         shortDate(move.date),
         move.documentNo,
         move.moveType ?? "-",
+        move.warehouseCode ?? "-",
         move.impact === "IN" ? qty(move.qty) : "",
         move.impact === "OUT" ? qty(move.qty) : "",
         qty(move.balanceQty),
@@ -212,7 +215,7 @@ export async function loadStockCard(
     kind: "total",
     grand: true,
     label: "Saldo Akhir",
-    cells: ["", "", "", qty(card.totalInQty), qty(card.totalOutQty), qty(card.closingQty), ""],
+    cells: ["", "", "", "", qty(card.totalInQty), qty(card.totalOutQty), qty(card.closingQty), ""],
   })
   return { table: { columns: CARD_COLUMNS, rows }, ...periodOf(period) }
 }
