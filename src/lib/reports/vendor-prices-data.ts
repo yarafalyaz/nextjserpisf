@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { formatDate } from "@/lib/utils/format"
 import {
   buildVendorPriceListing,
   type VendorPriceInput,
@@ -35,6 +36,6 @@ export async function loadVendorPrices(): Promise<VendorPricesReport> {
 
   return {
     result: buildVendorPriceListing(rows),
-    asOfLabel: new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }),
+    asOfLabel: formatDate(new Date()),
   }
 }

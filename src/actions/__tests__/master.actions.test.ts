@@ -287,6 +287,22 @@ describe("Item Actions", () => {
     expect(String(res?.error)).toMatch(/tidak boleh isProduct=true/)
     expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
   })
+  // F-2026-10-28-137-V SAL-BR-013 G1: isService+isProduct ditolak server
+  // (create + update) sebelum tulis; pesan menyebut kedua flag.
+  it("createItem menolak kombinasi isService+isProduct", async () => {
+    const res = await actions.createItem(fdMap({ name: "Paket Jasa", cost: "100", price: "200", isService: "true", isProduct: "true" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/isService=true/)
+    expect(String(res?.error)).toMatch(/isProduct=true/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("updateItem menolak kombinasi isService+isProduct", async () => {
+    const res = await actions.updateItem(1, fdMap({ name: "Paket Jasa", cost: "100", price: "200", isService: "true", isProduct: "true" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/isService=true/)
+    expect(String(res?.error)).toMatch(/isProduct=true/)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
   it("deleteItem succeeds", async () => {
     const res = await actions.deleteItem(1)
     expect(res?.success).toBe(true)

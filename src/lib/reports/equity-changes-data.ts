@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
 import { computeIncomeStatement } from "@/lib/finance/income-statement"
+import { formatDate, formatDayMonthYear } from "@/lib/utils/format"
 import { safeSubtract } from "@/lib/utils/math"
 import type { EquityAccountRow } from "@/lib/reports/equity-changes"
 
@@ -68,9 +69,9 @@ export async function loadEquityChanges(period: {
   )
 
   const shortDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    formatDayMonthYear(date)
   const fullDate = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+    formatDate(date, { format: "short" })
 
   return {
     accounts: rows,

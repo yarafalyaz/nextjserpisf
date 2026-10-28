@@ -8,7 +8,7 @@
  */
 import { getWipAging } from "@/lib/reports/wip-aging-data"
 import type { WipAging } from "@/lib/reports/wip-aging"
-import { formatAccounting, formatNumber } from "@/lib/utils/format"
+import { formatAccounting, formatDate, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 
@@ -25,11 +25,7 @@ export async function loadWipAgingReport(period: {
   const asOf = period.end
   return {
     report: await getWipAging(asOf),
-    periodCaption: `Per ${asOf.toLocaleDateString("id-ID", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })}`,
+    periodCaption: `Per ${formatDate(asOf)}`,
     asOf,
   }
 }

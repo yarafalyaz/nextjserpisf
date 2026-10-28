@@ -17,8 +17,10 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // Laravel parity: skip observer update for cancelled/draft invoice
   if (invoice.status === SalesInvoiceStatus.cancelled || invoice.status === SalesInvoiceStatus.draft) return;
 
+  // FIN-BR-008: pembayaran reversed TIDAK melunasi piutang lagi — dikeluarkan
+  // dari total; recalc sesudah reversal menurunkan status faktur dari paid.
   const payments = await db.salesPayment.findMany({
-    where: { salesInvoiceId: invoiceId },
+    where: { salesInvoiceId: invoiceId, status: { not: "reversed" } },
     select: { amount: true, withholdingAmount: true },
   });
 

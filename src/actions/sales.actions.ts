@@ -2,13 +2,19 @@
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
 import { prisma } from "@/lib/db/prisma"
 import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
-import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
+import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReferenceTx, reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
+import {
+  bindIdempotencyKey,
+  claimIdempotencyKey,
+  payloadFingerprint,
+} from "@/lib/services/financial-idempotency.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { onDownPaymentConfirmed } from "@/lib/hooks/down-payment.hook"
 import { onSalesPaymentCreated as onSalesPaymentRecalculate, onSalesPaymentUpdated, onSalesPaymentDeleted } from "@/lib/hooks/sales-payment.hook"
@@ -2110,6 +2116,13 @@ export async function completeSalesReturn(returnId: number) {
     throw new Error("Retur penjualan hanya bisa diselesaikan dari status draft")
   }
 
+  // P4 vonis F-2026-10-26-121-V (syarat pengimbang, tanpa model baru):
+  // retur complete tanpa reason trim non-kosong = koreksi tak teraudit.
+  // Tolak SEBELUM mutasi apa pun (stok/jurnal nol).
+  if (String(salesReturn.reason ?? "").trim().length === 0) {
+    throw new Error("Retur penjualan tidak bisa diselesaikan tanpa alasan tertulis (reason wajib diisi).")
+  }
+
   if (salesReturn.createdBy != null && Number(salesReturn.createdBy) === Number(user.id)) {
     throw new Error("Retur penjualan tidak boleh diselesaikan oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_sales_returns.")
   }
@@ -2710,22 +2723,129 @@ export async function deleteQuotation(id: number) {
   }
 }
 
+/**
+ * FIN-BR-008 (vonis t_9a1c4453): reversal pembayaran penjualan terposting.
+ * Dokumen asal TIDAK dihapus: jurnal asal di-reverse lewat
+ * reverseJournalsByReferenceTx (bukan deleteJournalByReferenceTx), payment
+ * menjadi status reversed + reversedAt/reversedBy/reversalReason, lalu
+ * recalc faktur (mengecualikan payment reversed) mengembalikan piutang.
+ * Alasan kosong ditolak SEBELUM mutasi apa pun. Bupot aktif = tolak
+ * (revoke bupot dulu). Periode jurnal asal terkunci = helper menolak.
+ */
+export async function reverseSalesPayment(
+  id: number,
+  reason: string,
+  idempotencyKey?: string,
+) {
+  try {
+  const user = await requirePermission("delete_sales_payments")
+  const cleanReason = (reason ?? "").trim()
+  if (!cleanReason) {
+    return { success: false, error: "Alasan pembalikan pembayaran wajib diisi." }
+  }
+  const key = (idempotencyKey ?? "").trim()
+  const userId = Number(user.id)
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_payments WHERE id = ${id} FOR UPDATE`
+    }
+    const fresh = await tx.salesPayment.findUniqueOrThrow({ where: { id } })
+    if (fresh.status === "reversed") {
+      throw new Error("Pembayaran penjualan ini sudah dibalik.")
+    }
+
+    if (key) {
+      const claim = await claimIdempotencyKey(
+        tx as never,
+        "sales_payment_reverse",
+        key,
+        userId,
+        payloadFingerprint({ paymentId: id, reason: cleanReason }),
+      )
+      if (claim.replayed) return { id, replayed: true as const, amount: Number(fresh.amount), salesInvoiceId: fresh.salesInvoiceId }
+    }
+
+    // Syarat 9 vonis: bupot aktif wajib di-revoke dulu (revoke me-reverse
+    // jurnal SalesPayment per bupot; reversal sesudahnya akan ganda).
+    const activeBupot = await tx.withholdingCertificate.findFirst({
+      where: { salesPaymentId: id, status: { not: "revoked" } },
+      select: { id: true, certificateNumber: true },
+    })
+    if (activeBupot) {
+      throw new Error(
+        `Pembayaran ini memiliki bukti potong aktif (${activeBupot.certificateNumber}). Batalkan bukti potong terlebih dahulu sebelum membalik pembayaran.`,
+      )
+    }
+
+    await reverseJournalsByReferenceTx(tx, "SalesPayment", id, cleanReason, userId)
+
+    await tx.salesPayment.update({
+      where: { id },
+      data: {
+        status: "reversed",
+        reversedAt: new Date(),
+        reversedBy: userId,
+        reversalReason: cleanReason,
+      },
+    })
+
+    if (fresh.salesInvoiceId) {
+      await onSalesPaymentDeleted(fresh.salesInvoiceId, tx)
+    }
+    if (key) {
+      await bindIdempotencyKey(tx as never, key, "SalesPayment", id)
+    }
+    return { id, replayed: false as const, amount: Number(fresh.amount), salesInvoiceId: fresh.salesInvoiceId }
+  })
+
+  await logActivity(
+    "reverse",
+    "SalesPayment",
+    id,
+    `Pembalikan pembayaran penjualan #${id} sebesar ${result.amount}: ${cleanReason}`,
+  )
+  revalidatePath("/penjualan/pembayaran")
+  revalidatePath("/penjualan/faktur")
+  return { success: true, id: result.id, replayed: result.replayed }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[reverseSalesPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
 export async function deleteSalesPayment(id: number) {
   try {
   await requirePermission("delete_sales_payments")
 
-  const payment = await prisma.salesPayment.findUniqueOrThrow({ where: { id } })
-
-  // Atomicity: reversing the journal, deleting the payment row, and recalculating
-  // the invoice's paid-amount must commit together. Without the wrapper, a failing
-  // onSalesPaymentDeleted (transient DB error, FK) leaves a deleted payment but
-  // the invoice's status / paidAmount still reflects the old total — a partially-
-  // settled AR row that disagrees with the payment ledger. The downstream recalc
-  // also opens its own tx (sales-payment.hook), so we pass the existing tx to
-  // avoid nested transactions. Mirrors deleteDownPayment and deleteVendorPayment.
-  // Lampiran "sales_payment" ikut disapu dalam tx yang sama (R-10).
+  // FIN-BR-008 syarat 8: hapus fisik HANYA pembayaran yang jurnalnya belum
+  // POSTED. Terposting = wajib reversal berhistori, lihat aksi di bawah.
+  // Baca + kunci baris di dalam tx (pola vendor; sebelumnya baca luar tx).
   let removedFiles: { fileUrl: string; referenceType: string }[] = []
+  let salesInvoiceId: number | null = null
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_payments WHERE id = ${id} FOR UPDATE`
+    }
+    const fresh = await tx.salesPayment.findUniqueOrThrow({ where: { id } })
+    if (fresh.status === "reversed") {
+      throw new Error(
+        "Pembayaran yang sudah dibalik tidak dapat dihapus; histori reversal wajib dipertahankan.",
+      )
+    }
+    const postedJournal = await tx.journal.findFirst({
+      where: { referenceType: "SalesPayment", referenceId: id, status: "POSTED" },
+      select: { id: true },
+    })
+    if (postedJournal) {
+      throw new Error(
+        "Pembayaran terposting tidak dapat dihapus. Gunakan pembalikan (reversal) agar histori dan alasan tersimpan.",
+      )
+    }
+    salesInvoiceId = fresh.salesInvoiceId
+
     // Reverse the cash-receipt journal (Dr Cash / Cr Piutang) before removing the
     // record, otherwise the GL keeps cash/receivable overstated. Mirrors the
     // vendor-payment delete path.
@@ -2737,8 +2857,8 @@ export async function deleteSalesPayment(id: number) {
     await tx.salesPayment.delete({ where: { id } })
 
     // Recalculate invoice after payment deletion
-    if (payment.salesInvoiceId) {
-      await onSalesPaymentDeleted(payment.salesInvoiceId, tx)
+    if (salesInvoiceId) {
+      await onSalesPaymentDeleted(salesInvoiceId, tx)
     }
   })
   await removeAttachmentFiles(removedFiles)
@@ -3228,8 +3348,14 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     // pesaing bisa hapus/pindah payment ini atau ubah faktur lama di antaranya.
     const lockedPayment = await tx.salesPayment.findUniqueOrThrow({
       where: { id },
-      select: { salesInvoiceId: true, documentNo: true },
+      select: { salesInvoiceId: true, documentNo: true, status: true },
     })
+    // FIN-BR-008: pembayaran reversed = histori read-only, tidak boleh diedit.
+    if (lockedPayment.status === "reversed") {
+      throw new Error(
+        "Pembayaran yang sudah dibalik tidak dapat diubah; histori reversal wajib dipertahankan.",
+      )
+    }
     const oldInvoiceId = lockedPayment.salesInvoiceId
     const invoiceIds = oldInvoiceId === newInvoiceId
       ? [newInvoiceId]
@@ -3262,7 +3388,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     // hitungan — kalau hanya `amount`, faktur yang dipotong PPh bisa terlihat
     // masih punya sisa padahal sudah lunas (dan sebaliknya, edit bisa melebihi).
     const others = await tx.salesPayment.aggregate({
-      where: { salesInvoiceId: newInvoiceId, id: { not: id } },
+      // FIN-BR-008: baris `reversed` tetap ada di tabel. Tanpa saringan ini
+      // nilai pembayaran yang sudah dibatalkan ikut dihitung sebagai pelunasan,
+      // sehingga pembayaran pengganti ditolak "melebihi sisa tagihan".
+      where: activeSalesPaymentWhere({ salesInvoiceId: newInvoiceId, id: { not: id } }),
       _sum: { amount: true, withholdingAmount: true },
     })
     const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))

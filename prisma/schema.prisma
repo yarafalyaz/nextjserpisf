@@ -1999,6 +1999,12 @@ model SalesPayment {
   withholdingDate          DateTime?           @map("withholding_date")
   paymentDate              DateTime            @map("payment_date")
   paymentMethod            String              @map("payment_method")
+  // FIN-BR-008: reversal berhistori — baris asal TIDAK dihapus. posted |
+  // reversed; reversal lewat reverseSalesPayment (jurnal lawan, bukan hapus).
+  status                   String              @default("posted")
+  reversedAt               DateTime?           @map("reversed_at")
+  reversedBy               Int?                @map("reversed_by")
+  reversalReason           String?             @map("reversal_reason") @db.Text
   accountId                Int?                @map("account_id")
   referenceNo              String?             @map("reference_no")
   notes                    String?             @db.Text
@@ -2010,6 +2016,7 @@ model SalesPayment {
   withholdingCertificates  WithholdingCertificate[]
 
   @@index([salesInvoiceId], map: "sales_payments_sales_invoice_id_fkey")
+  @@index([status])
   @@index([customerId])
   @@index([accountId])
   @@index([withholdingTypeId])
@@ -2403,6 +2410,11 @@ model VendorPayment {
   status            String                    @default("draft")
   confirmedBy       Int?                      @map("confirmed_by")
   confirmedAt       DateTime?                 @map("confirmed_at")
+  // FIN-BR-008: reversal berhistori — baris asal TIDAK dihapus. Status
+  // reversed lewat reverseVendorPayment (jurnal lawan, bukan hapus).
+  reversedAt        DateTime?                 @map("reversed_at")
+  reversedBy        Int?                      @map("reversed_by")
+  reversalReason    String?                   @map("reversal_reason") @db.Text
   deletedAt         DateTime?                 @map("deleted_at")
   documentNo        String                    @unique @map("document_no")
   vendorId          Int                       @map("vendor_id")

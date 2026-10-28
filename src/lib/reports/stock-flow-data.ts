@@ -20,7 +20,7 @@ import {
   type SalesLine,
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
-import { formatAccounting, formatReferenceType } from "@/lib/utils/format"
+import { formatAccounting, formatReferenceType, formatQuantity, formatDate } from "@/lib/utils/format"
 import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -31,9 +31,9 @@ export interface StockFlowReport {
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
-const qty = (value: number) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+const qty = (value: number) => formatQuantity(value)
 const shortDate = (date: Date) =>
-  date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })
+  formatDate(date, { format: "short" })
 const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(period)
 
 type Period = { start: Date; end: Date }

@@ -28,6 +28,7 @@
  * Loader server-only: `workshop-closeout-queue-data.ts`.
  */
 
+import { formatDate } from "@/lib/utils/format"
 import { safeRound } from "@/lib/utils/math"
 
 export const WORKSHOP_CLOSEOUT_QUEUE_TITLE = "Job Selesai Belum Ditutup"
@@ -241,7 +242,7 @@ function buildJob(input: CloseoutQueueJobInput, asOf: Date): CloseoutQueueJob {
   const c6: CloseoutCheckState = input.periodClosed
     ? {
         passed: false,
-        detail: `Periode akuntansi sudah ditutup sampai ${input.periodLockDate?.toLocaleDateString("id-ID") ?? "-"}.`,
+        detail: `Periode akuntansi sudah ditutup sampai ${input.periodLockDate ? formatDate(input.periodLockDate) : "-"}.`,
       }
     : { passed: true, detail: "Periode tanggal tutup terbuka." }
 

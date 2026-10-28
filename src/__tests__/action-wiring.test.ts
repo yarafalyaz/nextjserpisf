@@ -223,6 +223,14 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
   // (komponen customer-commission-rates di master kategori + loader histori
   // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
+  // FIN-BR-008 inti backend (PR #1233): 2 aksi reversal pembayaran berhistori
+  // belum dirujuk UI di branch ini; tombol Balikkan + dialog alasan dibangun
+  // Frontend di branch stacked hermes/frontend-fin-br-008-ui (PR #1246).
+  // Buang kedua entri ini begitu UI itu mendarat di main.
+  "src/actions/purchase.actions.ts::reverseVendorPayment":
+    "FIN-BR-008 inti backend; tombol Balikkan pembayaran vendor menyusul (frontend PR #1246)",
+  "src/actions/sales.actions.ts::reverseSalesPayment":
+    "FIN-BR-008 inti backend; tombol Balikkan pembayaran penjualan menyusul (frontend PR #1246)",
 }
 
 describe("keterhubungan aksi server", () => {
