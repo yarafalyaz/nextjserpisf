@@ -572,6 +572,12 @@ export async function createItem(formData: FormData) {
 
     // F-2026-10-24-135-V syarat 1: item besi tua TIDAK boleh isProduct=true.
     // Kombinasi itu masuk jalur stok/COGS dan melanggar nilai buku scrap Rp0.
+    // F-2026-10-28-137-V (SAL-BR-013 G1): isService + isProduct dilarang
+    // bersamaan — master satu item wajib pilih SATU peran: barang (stok) atau
+    // jasa (non-stok).
+    if ((v.isService ?? false) && (v.isProduct ?? false)) {
+      return { success: false, error: "Item tidak boleh isService=true sekaligus isProduct=true — pilih satu: barang (produk, masuk stok) atau jasa (non-stok)." };
+    }
     if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
       return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
     }
@@ -743,6 +749,12 @@ export async function updateItem(itemId: number, formData: FormData) {
 
     // F-2026-10-24-135-V syarat 1: item besi tua TIDAK boleh isProduct=true.
     // Kombinasi itu masuk jalur stok/COGS dan melanggar nilai buku scrap Rp0.
+    // F-2026-10-28-137-V (SAL-BR-013 G1): isService + isProduct dilarang
+    // bersamaan — master satu item wajib pilih SATU peran: barang (stok) atau
+    // jasa (non-stok).
+    if ((v.isService ?? false) && (v.isProduct ?? false)) {
+      return { success: false, error: "Item tidak boleh isService=true sekaligus isProduct=true — pilih satu: barang (produk, masuk stok) atau jasa (non-stok)." };
+    }
     if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
       return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
     }

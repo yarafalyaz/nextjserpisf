@@ -26,7 +26,7 @@ beforeEach(() => {
 /** Build a fully-stubbed tx and wire it into the prisma.$transaction mock. */
 function wireTx(overrides: {
   items: { itemId: number; qty: number; cost: number; serialNumbers?: string[]; batchNumbers?: string[] }[]
-  itemRows: Array<{ id: number; defaultWarehouseId: number | null; trackSerial?: boolean; trackBatch?: boolean }>
+  itemRows: Array<{ id: number; defaultWarehouseId: number | null; trackSerial?: boolean; trackBatch?: boolean; isProduct?: boolean }>
   invoiceItemRows: Array<{ itemId: number; uom: string | null }>
   serialFindMany: ReturnType<typeof vi.fn>
   serialUpdateMany?: ReturnType<typeof vi.fn>
@@ -313,5 +313,60 @@ describe("sales return scrap E136 tahap 2", () => {
     expect(mocks.createInLayer).not.toHaveBeenCalled()
     expect(spies.executeRaw).not.toHaveBeenCalled()
     expect(tx.salesReturn.update).not.toHaveBeenCalled()
+  })
+})
+
+// F-2026-10-28-137-V SAL-BR-013 G2 (opsi a, E141-4): retur baris jasa
+// (isProduct=false) = koreksi nilai tanpa stok — nol StockMove IN, nol
+// lapisan FIFO, nol qtyOnHand; status tetap completed.
+describe("sales return jasa non-stok G2", () => {
+  it("E141-4 stok: retur baris jasa completed nol StockMove/FIFO/qtyOnHand", async () => {
+    const { spies, tx } = wireTx({
+      items: [{ itemId: 61, qty: 2, cost: 100 }],
+      itemRows: [{ id: 61, defaultWarehouseId: 5, isProduct: false }],
+      invoiceItemRows: [{ itemId: 61, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await onSalesReturnCompleted(7, 9)
+
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+    expect(spies.executeRaw).not.toHaveBeenCalled()
+    expect(spies.returnUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 7 }, data: { status: "completed" } })
+    )
+    expect(tx).toBeDefined()
+  })
+
+  it("E141-4 campuran: baris stok tetap masuk, baris jasa dilewati", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    mocks.generateDocumentNumberBatch.mockResolvedValue(["SM-1"])
+    const { spies } = wireTx({
+      items: [
+        { itemId: 50, qty: 1, cost: 100 },
+        { itemId: 61, qty: 1, cost: 200 },
+      ],
+      itemRows: [
+        { id: 50, defaultWarehouseId: 5, isProduct: true },
+        { id: 61, defaultWarehouseId: 5, isProduct: false },
+      ],
+      invoiceItemRows: [
+        { itemId: 50, uom: "PCS" },
+        { itemId: 61, uom: "PCS" },
+      ],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await onSalesReturnCompleted(7, 9)
+
+    expect(spies.moveCreate).toHaveBeenCalledTimes(1)
+    expect(spies.moveCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ itemId: 50 }) })
+    )
+    expect(spies.moveCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ itemId: 61 }) })
+    )
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(1)
   })
 })

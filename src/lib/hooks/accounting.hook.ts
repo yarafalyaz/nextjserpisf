@@ -1737,6 +1737,21 @@ export async function onSalesReturnCompleted(
   // (the stock hook only moves stock now).
   // Retur scrap: cost dipaksa 0 oleh konstruksi (nilai buku Rp0) — angka
   // Item.cost master tidak pernah masuk jurnal scrap (E136-2).
+  // F-2026-10-28-137-V V2 (SAL-BR-013 G2): cost baris jasa/non-stok
+  // (isProduct=false) = 0 — nol kaki persediaan/COGS; koreksi nilai saja.
+  const serviceItemIds =
+    salesReturn.items.length > 0
+      ? new Set(
+          (
+            await db.item.findMany({
+              where: { id: { in: salesReturn.items.map((it) => it.itemId) } },
+              select: { id: true, isProduct: true },
+            })
+          )
+            .filter((r: { id: number; isProduct: boolean }) => r.isProduct === false)
+            .map((r: { id: number }) => r.id),
+        )
+      : new Set<number>();
   const priceTotal = linkedToInvoice
     ? salesReturn.items.reduce(
         (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
@@ -1746,7 +1761,8 @@ export async function onSalesReturnCompleted(
   const costTotal = isScrapReturn
     ? 0
     : salesReturn.items.reduce(
-        (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
+        (sum, item) =>
+          sum + (serviceItemIds.has(item.itemId) ? 0 : Number(item.qty) * Number(item.cost ?? 0)),
         0,
       );
   if (priceTotal <= 0 && costTotal <= 0) return;

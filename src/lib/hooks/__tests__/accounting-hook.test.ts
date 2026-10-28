@@ -1653,6 +1653,59 @@ describe("onSalesReturnCompleted", () => {
     );
   });
 
+  // F-2026-10-28-137-V SAL-BR-013 G2 (E141-4 GL): cost baris jasa
+  // (isProduct=false) = 0 — nol kaki persediaan/COGS; kaki nilai (Dr Retur /
+  // Cr Piutang) tetap penuh.
+  it("G2: retur campuran barang+jasa -> kaki persediaan hanya porsi barang", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-MIX-JASA",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [
+        { id: 900, itemId: 50, qty: 2, price: 100, cost: 60 },
+        { id: 901, itemId: 61, qty: 2, price: 100, cost: 60 },
+      ],
+    });
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, isScrapSaleItem: false, isProduct: true },
+      { id: 61, isScrapSaleItem: false, isProduct: false },
+    ]);
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    await onSalesReturnCompleted(1, 999);
+
+    // priceTotal = 400 (nilai penuh) + costTotal = 120 (hanya barang) = 520.
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ totalDebit: 520, totalCredit: 520 }),
+      }),
+    );
+    // Kaki nilai penuh: Dr Retur 400 / Cr Piutang 400.
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 420, debit: 400, credit: 0 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110, debit: 0, credit: 400 }),
+      }),
+    );
+    // Kaki persediaan hanya 120 (bukan 240).
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 130, debit: 120, credit: 0 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 130, debit: 240 }),
+      }),
+    );
+  });
+
   it("skips the price/AR legs for a return NOT tied to an invoice (no receivable to relieve)", async () => {
     mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
       id: 1,
