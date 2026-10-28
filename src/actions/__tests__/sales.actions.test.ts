@@ -952,7 +952,7 @@ describe("Sales Return Actions", () => {
 
   it("AC-SR-B2: penyetuju lain menyelesaikan draft tepat satu transaksi", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1)
@@ -962,7 +962,7 @@ describe("Sales Return Actions", () => {
 
   it("AC-SR-B3: SoD — pembuat tidak boleh menyelesaikan returnya sendiri", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 7, items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 7, reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("pembuatnya sendiri")
@@ -972,9 +972,21 @@ describe("Sales Return Actions", () => {
 
   it("EC-2: createdBy null (baris legacy) boleh diselesaikan penyetuju berizin", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: null, items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: null, reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(true)
+  })
+
+  // P4 vonis F-2026-10-26-121-V syarat pengimbang (tanpa model SalesCreditNote):
+  // complete tanpa reason trim non-kosong ditolak SEBELUM transaksi.
+  it("E121-7: completeSalesReturn tanpa reason ditolak, nol mutasi", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", createdBy: 3, reason: "   ", items: [] })
+    const res = await actions.completeSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tanpa alasan tertulis")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.onSalesReturnCompletedMock).not.toHaveBeenCalled()
   })
 
   it("BR-SR-03: status selain draft ditolak berpesan sebelum transaksi", async () => {
@@ -1510,7 +1522,7 @@ describe("Sales Return Actions (legacy happy paths)", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_returns")
   })
   it("completeSalesReturn succeeds", async () => {
-    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", reason: "Barang cacat", items: [] })
     const res = await actions.completeSalesReturn(1)
     expect(res?.success).toBe(true)
   })
