@@ -2292,11 +2292,13 @@ export async function generateBulkPayroll(
     // Peran ber-cakupan hanya menerbitkan slip karyawan yang boleh dilihatnya;
     // tanpa saringan ini slip seluruh organisasi lahir dari satu klik.
     const bulkScope = await getHrScope(user);
+    const bulkScopeActiveWhere =
+      bulkScope.kind === "all" ? {} : { AND: [hrEmployeeScopeWhere(bulkScope)] };
     const employees = await prisma.employee.findMany({
       where: {
         isActive: true,
         deletedAt: null,
-        ...(bulkScope.kind === "all" ? {} : { AND: [hrEmployeeScopeWhere(bulkScope)] }),
+        ...bulkScopeActiveWhere,
       },
       select: {
         id: true,
@@ -2308,6 +2310,23 @@ export async function generateBulkPayroll(
         },
       },
     });
+    // BR-HRS-04 (AC-HRS-3): karyawan aktif di luar cakupan dilaporkan sebagai
+    // hitungan "terlewati karena cakupan", bukan disaring diam-diam. Hanya
+    // hitung ID (tanpa nama/nominal, BR-HRS-07); kind all tidak menambah
+    // query (count cakupan = 0).
+    const outOfScopeIds: number[] =
+      bulkScope.kind === "all"
+        ? []
+        : (
+            await prisma.employee.findMany({
+              where: {
+                isActive: true,
+                deletedAt: null,
+                NOT: bulkScopeActiveWhere,
+              },
+              select: { id: true },
+            })
+          ).map((e) => e.id);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): karyawan berhenti tidak boleh
     // menerima slip reguler massal. Periode seluruhnya sesudah berhenti
@@ -2357,6 +2376,11 @@ export async function generateBulkPayroll(
       paymentFrequency,
     );
     const runSkips: PayrollRunSkip[] = [
+      ...outOfScopeIds.map((employeeId) => ({
+        employeeId,
+        reason: "cakupan" as const,
+        conflictDocumentNo: null,
+      })),
       ...gatedOut.map((employeeId) => ({
         employeeId,
         reason: "berhenti" as const,
@@ -2634,11 +2658,14 @@ export async function generateBulkPayroll(
 
     const skippedByReason = countPayrollRunSkips(runSkips);
     const skippedTotal = runSkips.length;
+    const scopeSkipped = skippedByReason.cakupan;
     await logActivity(
       "generate",
       "Payroll",
       0,
-      `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal})`,
+      scopeSkipped > 0
+        ? `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal} termasuk ${scopeSkipped} di luar cakupan)`
+        : `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal})`,
     );
     revalidatePath("/sdm/penggajian");
     // AC-PF-5: hasil memuat count terbit + count terlewati per alasan,
