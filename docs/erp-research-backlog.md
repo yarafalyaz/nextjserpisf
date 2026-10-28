@@ -43874,3 +43874,46 @@ Belum ada / parsial (bukti grep run ini):
 - Mengubah ambang aging D1 (milik vonis Accountant atas 140-S).
 
 ID spec ini **F-2026-10-28-155-S** (FIN-BR-005 sisi Business: rumus outstanding per modul + E155). Pemilik berikutnya: Accountant (konfirmasi NETO + D1 aging + ambang PKWT BR-FIN05-05) → Lead (putus BR-FIN05 + merge) → Backend (derivasi bersama) → Frontend (label) → QA (E155 atas implementasi).
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-159-V: D1 ambang aging Rp1 + D2 total rujukan (140-S) + NETO final + PKWT BR-FIN05-05 (155-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax, lane vonis tertulis). Dokumen vonis saja; tanpa kode/schema/migrasi/merge. Basis `origin/main` `6a5ed1df1` (28 Okt 2026 20:48 WIB). Kartu asal `t_31ec505d`.
+**Verifikasi ID:** grep `159-V` di backlog + INDEKS-ATURAN + board `origin/main` = 0/0/0 sebelum tulis (run ini). Slot 157-V/158-V terpakai run sejawat; **159-V bebas.**
+**Sumber:** spec F-2026-10-28-140-S §3 D1–D2 + E140 (backlog baris 42125), spec F-2026-10-28-155-S M1/M2/M4 + BR-FIN05 (baris 43779), vonis 123-V (NETO simetris), FIN-BR-006 `settlement-status.ts`, HANDOFF Backend→Frontend D1 ringkasan (board, commit `1fc8babbe`).
+
+### 0. Putusan ringkas (mengikat Backend/Frontend/QA sesudah vonis ini merged)
+
+1. **D1 DIPUTUS: ambang tampil aging = FIN-BR-006 Rp1 (`isOutstandingSettled`).** Tiga titik SUDAH patuh run ini — `aging-report-view.tsx:65`, `aging-reports-data.ts:115` (AR), `:144` (AP). Spek 140-S D1 ("masih `<= 0`") BASI untuk ketiga titik ini; Backend/Frontend DILARANG "memperbaiki" yang sudah Rp1. Mengubah nilai Rp1 = vonis Accountant baru.
+2. **D1b DIPUTUS: halaman `ringkasan-ar-ap/page.tsx` DILARANG hitung lokal — wajib pakai loader kanonis `loadArApSummary` (`ar-ap-summary-data.ts`).** Halaman hari ini hitung float mentah `Number(grandTotal) − Number(paidAmount)`, filter `> 0` (`page.tsx:33-42,53-62`): tanpa `returnCredit` (F-104-V), tanpa `withholding` (NETO P0-2), tanpa presisi sen, tanpa Rp1. Loader kanonis utuh: sen (`buildArByCustomer`/`buildApByVendor` via `safeSub/safeAdd ,2`) + `returnCredit` per faktur + NETO AP (`grandTotal − withholding − paid`) + dipakai PDF via registry (`report-registry.ts:105,843`). Layar-vs-PDF hari ini DUA kebenaran untuk satu pelanggan/vendor. Perbaikan milik Frontend (konsumsi loader, tanpa hitung ulang), Backend bila loader perlu D1c.
+3. **D1c DIPUTUS: filter populasi ringkasan (layar + PDF) ikut Rp1.** Loader kanonis hari ini filter `r.outstanding > 0` (`ar-ap-summary-data.ts:59,65`) — sisa Rp0,50 berstatus `paid` (FIN-BR-006) tetap tampil sebagai piutang/hutang. Ganti kedua filter ke `!isOutstandingSettled(r.outstanding)` (impor dari `settlement-status.ts`, pola sama aging). Batas: hanya ambang tampil, bukan rumus — angka outstanding mentah tetap sen apa adanya untuk rekonsiliasi.
+4. **D2 DIPUTUS: dua angka sah menjawab dua pertanyaan — DILARANG menyamakan.** Rujukan uang resmi (neraca, SPT, eksposur kredit) = TOTAL semua dokumen diakui bersisa **termasuk tanpa-`dueDate`** (definisi `loadPayablesTotal`, `loadReceivablesTotal` bila ada). Aging jatuh-tempo = hanya ber-`dueDate` (risiko umur). Syarat: kedua permukaan wajib label eksplisit ("termasuk N dokumen tanpa jatuh tempo" / "hanya ber-jatuh-tempo") + tautan silang; selisih layar-vs-PDF tampil sebagai baris penjelas, bukan disembunyikan. Total rujukan TIDAK BOLEH diambil dari KPI aging layar.
+5. **NETO final DIPUTUS (155-S BR-FIN05-01/02/04, cermin 123-V — tanpa angka baru):** AR per faktur = `grandTotalAsal − returnCreditValid − totalPaidValid` (sen; `returnCredit` = kaki Cr Piutang jurnal SalesReturn POSTED, `totalPaidValid` = Σ `amount + withholdingAmount` non-`reversed`); AP per tagihan = `(grandTotal − withholdingAmount) − Σ alokasi-dari-VendorPayment-completed` (sen); urutan alokasi target-dulu lalu oldest-first; overpay > Rp1 ditolak. Satu payment jual = satu faktur (YAGNI alokasi jual tetap). DP confirmed BUKAN pengurang outstanding (kewajiban serah; pengurang hanya jalur konversi tervonis).
+6. **BR-FIN05-05 DIPUTUS: dagang lunas bila sisa ≤ Rp1 dan basis > 0 (FIN-BR-006); PKWT `outstandingAmount = frozenAmount − paidAmount` filter `> 0` TANPA toleransi Rp1 DISAHKAN (`pkwt-compensation.ts:223-232`).** Beda ambang ini sadar dan dicatat, bukan inkonsistensi: kompensasi statutory dihitung presisi sen dari awal (bukan pembulatan kas rupiah-penuh), sehingga sisa Rp0,50 PKWT = utang nyata yang wajib tampil/bayar. DILARANG menyamakan PKWT ke Rp1 tanpa vonis baru; DILARANG memakai `> 0` PKWT sebagai preseden melonggarkan ambang dagang.
+
+### 1. Bukti live (TERVERIFIKASI-KODE, basis `6a5ed1df1`, dibaca run ini)
+
+- Aging Rp1 tiga titik: `src/components/reports/aging-report-view.tsx:11,62-65` (impor + `if (isOutstandingSettled(outstanding)) return null` + komentar larang `!isSettled()` mentah); `src/lib/reports/aging-reports-data.ts:31,114-115,143-144` (AR/AP sama). Klaim 140-S D1 "tiga titik masih `<= 0`" TIDAK terbukti di basis ini.
+- Ringkasan halaman lokal: `src/app/(dashboard)/laporan/ringkasan-ar-ap/page.tsx:30-42` (AR: `Number(inv.grandTotal)`, `Number(inv.paidAmount)`, `invoiced − paid`, filter `> 0`) + `:50-62` (AP: `Number(bill.grandTotal)` TANPA kurang `withholdingAmount`, filter `> 0`); nol impor loader/data (`grep loadArApSummary page.tsx` = 0).
+- Loader kanonis: `src/lib/reports/ar-ap-summary-data.ts:52-69` (`returnCreditByInvoiceId` kurangi AR `:54-58`, NETO AP `:61-64`, `safeSubtract(totalAR, totalAP, 2)` `:97`) + builder `src/lib/reports/ar-ap-summary.ts:17-35` (sen; `settled = paid + returnCredit`); dipakai PDF `report-registry.ts:105,843`. Filter populasi `:59,65` masih `> 0` (objek D1c).
+- NETO: `src/lib/reports/aging-amounts.ts:27-34` (`payableOutstanding` NETO sen); `src/lib/finance/settlement-status.ts:22-43` (Rp1 + `grandTotal <= 0` tak pernah lunas); `src/lib/reports/return-credit.ts` (F-104-V); `src/lib/hooks/sales-payment.hook.ts:20-51` (recalc `amount + withholdingAmount`, FIN-BR-007).
+- PKWT: `src/lib/reports/pkwt-compensation.ts:223-232` (`safeRound(frozen − paid, 2)`, filter `> 0`); nol rujukan `settlement-status` di berkas PKWT (`grep` = 0) — tanpa-toleransi by construction, bukan lupa.
+
+### 2. Penjaga + falsifikasi QA (E159, atas head implementasi Backend/Frontend persis — BUKAN head vonis ini)
+
+- E159-1 (D1/D1c): fixture sisa Rp0,50 dan Rp1,00 berstatus `paid` → tampil di aging (layar/PDF) ATAU ringkasan (layar/PDF) = MERAH; sisa Rp1,01 tampil belum-lunas di semua permukaan = HIJAU (kontrol arah dua sisi).
+- E159-2 (D1b): halaman ringkasan menghitung `Number(grandTotal)`/`Number(paidAmount)` lokal ATAU tidak memanggil `loadArApSummary`/builder bersama = MERAH; PDF-vs-layar beda sen atas fixture sama (retur + withholding) = MERAH.
+- E159-3 (D2): fixture tagihan posted bersisa tanpa `dueDate` → aging (layar/PDF) mencakupnya ATAU total-hutang PDF tidak mencakupnya = MERAH; label beda-pertanyaan + tautan silang tidak ada di kedua permukaan = MERAH (dokumentasi).
+- E159-4 (NETO): tagihan ber-withholding lunas dihitung dari grandTotal bruto = MERAH; retur completed mengurangi outstanding dua kali (`grandTotal`-turun + `returnCredit`) = MERAH; DP belum-terkonversi mengurangi outstanding = MERAH (cermin E123-4/E155-3).
+- E159-5 (PKWT): sisa PKWT Rp0,50 tampil di daftar belum-dibayar = HIJAU (wajib tampil, bukan MERAH); mutasi filter `> 0` → `isOutstandingSettled` wajib MERAH; pulih hijau.
+- E159-6 (gerbang PR vonis ini): diff menyentuh `src/`/`prisma/`/migrasi = MERAH; diff menyentuh `docs/autonomous-board.md` = MERAH; penanda konflik 4 pola di blob head = MERAH dua arah.
+
+### 3. Batas yang tetap OPEN (vonis ini TIDAK menutup)
+
+| Batas | Pemilik berikutnya | Gerbang |
+|---|---|---|
+| D1c filter ringkasan `> 0` → `isOutstandingSettled` + D1b halaman pakai loader | Backend (filter) + Frontend (konsumsi loader, label D2) | vonis ini merged; tanpa schema/migrasi |
+| BR-FIN05-01/02/04/11 + BR-FIN05-05 + BR-FIN05-07 putusan Lead; merge spec 155-S | Lead | vonis ini + E155/E140 |
+| INDEKS FIN-BR-005 `Sebagian` → `Terpasang` | Lead | sesudah implementasi 155-S + E155 lulus (bukan oleh vonis ini) |
+| Overpay > Rp1, idempotency reversal, urutan void (123-V §4/§6) | Backend per 123-V + FIN-BR-008 | head merged #1233-serapan; bukan cakupan vonis ini |
+
+ID vonis ini **F-2026-10-28-159-V** (D1/D1b/D1c/D2 atas 140-S + NETO final + PKWT BR-FIN05-05 atas 155-S; basis `origin/main` `6a5ed1df1`). Pemilik berikutnya: Lead (merge PR docs ini; putus BR-FIN05 + merge 155-S) → Backend (D1c + D1b) → Frontend (loader + label D2) → QA (E159 + E140 + E155 atas head implementasi persis). Tanpa kartu baru run ini.
