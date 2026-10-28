@@ -100,6 +100,10 @@ const DEFAULT_SYSTEM_SETTINGS = {
   pkwtCompensationPayableAccountId: null,
   // F-2026-10-24-135-V: pendapatan besi tua default kosong (fail-closed).
   scrapSaleIncomeAccountId: null,
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun pendapatan jasa default kosong
+  // (fail-closed — posting faktur berjasa ditolak bila kosong/nonaktif/salah
+  // grup; automap instalasi menebak 400002 Pendapatan Jasa).
+  salesServiceRevenueAccountId: null,
   reimbursementLiabilityAccountId: null,
   // F-2026-10-25-020-V Putusan 5: mapping statutori/denda default kosong.
   pph21PayableAccountId: null,

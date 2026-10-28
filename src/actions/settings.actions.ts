@@ -245,6 +245,9 @@ export async function updateSystemSettings(formData: FormData) {
       // Accounting - Sales
       salesReceivableAccountId: intNull("salesReceivableAccountId"),
       salesRevenueAccountId: intNull("salesRevenueAccountId"),
+      // F-2026-10-28-137-V V1 (SAL-BR-013): akun pendapatan jasa — tanpa baris
+      // ini form membuang field diam-diam (pola t_de3aba0b di bawah).
+      salesServiceRevenueAccountId: intNull("salesServiceRevenueAccountId"),
       salesTaxAccountId: intNull("salesTaxAccountId"),
       salesReturnAccountId: intNull("salesReturnAccountId"),
       salesAccountId: intNull("salesAccountId"),
