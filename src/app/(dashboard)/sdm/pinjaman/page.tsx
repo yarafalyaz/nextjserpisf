@@ -70,7 +70,10 @@ export default async function EmployeeLoansPage({
     userPerms.includes("delete_loans");
   const showEmployeeColumn = scope.kind !== "self";
 
-  const statusChips = ["", "active", "paid"].map((dbStatus) => {
+  // BR-LOAN 162-V: nilai DB valid = active (berjalan) | paid_off (lunas
+  // via dokumen) | written_off (final hapus-buku, bukan populasi aktif).
+  // pending/rejected wilayah persetujuan, bukan filter daftar berjalan.
+  const statusChips = ["", "active", "paid_off", "written_off"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
       <Link
