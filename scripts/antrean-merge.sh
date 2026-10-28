@@ -40,6 +40,19 @@ cabut_label() {
 # Hitungan per nama persis via jq — dilarang menghitung karakter string
 # gabungan (bug B1 versi lama: states="pass" = 4 karakter lolos padahal
 # baru 1 dari 4 check yang lapor).
+gerbang_ok() {
+  # $1 = json check, $2 = docs_only, $3 = docker_req -> cetak true/false
+  printf '%s' "$1" | jq -r \
+    --argjson docs "$2" --argjson dreq "$3" '
+    def bucket_of($n): ([.[] | select(.name == $n) | .bucket] | first // "absent");
+    def wajib_ok($n): (bucket_of($n) == "pass" or ($docs and bucket_of($n) == "skipping"));
+    (wajib_ok("Lint") and wajib_ok("Unit Tests")
+     and wajib_ok("Build Next.js") and wajib_ok("DB Integration Tests")
+     and bucket_of("SonarCloud Code Analysis") == "pass"
+     and ((($dreq | not) and (bucket_of("Docker Image Build") == "pass" or bucket_of("Docker Image Build") == "skipping" or bucket_of("Docker Image Build") == "absent"))
+          or ($dreq and bucket_of("Docker Image Build") == "pass")))' 2>/dev/null || echo false
+}
+
 wait_checks() {
   pr=$1; target=$2; docs_only=$3; docker_req=$4
   tries=0
@@ -96,11 +109,63 @@ for pr in $prs; do
 
   # Klasifikasi diff dari merge-base PR: skipping docs-only yang sah dan
   # kewajiban Docker. Pola Docker sama persis output `docker` ci.yml.
-  git fetch origin "pull/$pr/head:refs/antrean/pr-$pr" "main:refs/antrean/main" --quiet
+  # Gagal-fetch WAJIB menggagalkan putaran ini: refs yang tidak ter-refresh
+  # membuat diff kosong -> salah terbaca "docs-only" (bug nyata: fetch dua
+  # refspec bisa gagal utuh sementara `files` kosong).
+  if ! git fetch origin "pull/$pr/head:refs/antrean/pr-$pr" --quiet \
+     || ! git fetch origin main:refs/antrean/main --quiet; then
+    echo "  fetch refs gagal; label dicabut (tidak ada klasifikasi tanpa data segar)."
+    cabut_label "$pr" "Antrean merge lokal: fetch refs PR/main gagal, klasifikasi docs-only tidak bisa dipercaya. Label dicabut; beri label \`antrean-merge\` lagi sesudah jaringan stabil."
+    continue
+  fi
+  if ! git rev-parse --verify -q refs/antrean/main >/dev/null || ! git rev-parse --verify -q "refs/antrean/pr-$pr" >/dev/null; then
+    echo "  refs tidak lengkap sesudah fetch; label dicabut."
+    cabut_label "$pr" "Antrean merge lokal: refs pr/main tidak lengkap sesudah fetch. Label dicabut; beri label \`antrean-merge\` lagi."
+    continue
+  fi
   files=$(git diff --name-only "refs/antrean/main...refs/antrean/pr-$pr")
   if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '\.md$'; then docs_only=true; else docs_only=false; fi
   if printf '%s\n' "$files" | grep -qE '^(Dockerfile|docker/|\.dockerignore|docker-compose|package(-lock)?\.json|prisma/|next\.config\.)'; then docker_req=true; else docker_req=false; fi
   echo "  docs_only=$docs_only docker_wajib=$docker_req"
+
+  # --- Atestasi blob (docs/antrean-merge.md §"Atestasi blob") -------------
+  # Bila main hanya bergerak di dokumentasi dan merger bersih, merge pada head
+  # yang SUDAH hijau tanpa update-branch: head yang divonis QA tidak berputar.
+  # Syarat gugur begitu satu berkas non-dokumentasi ikut berubah di main.
+  base=$(git merge-base refs/antrean/main "refs/antrean/pr-$pr" 2>/dev/null)
+  delta=""
+  delta_docs=false          # gagal-aman: tanpa dasar yang terverifikasi, JANGAN atestasi
+  if [ -n "$base" ]; then
+    delta=$(git diff --name-only "$base" refs/antrean/main 2>/dev/null)
+    if [ -n "$delta" ] && printf '%s\n' "$delta" | grep -qvE '^\.hermes/|^docs/|(^|/)[^/]*\.md$'; then
+      delta_docs=false
+    else
+      delta_docs=true
+    fi
+  fi
+  mtree=1
+  git merge-tree --write-tree refs/antrean/main "refs/antrean/pr-$pr" >/dev/null 2>&1 && mtree=0
+  if [ "$delta_docs" = true ] && [ "$mtree" = 0 ]; then
+    json=$(gh pr checks "$pr" --json name,bucket 2>/dev/null || echo "[]")
+    if [ "$(gerbang_ok "$json" "$docs_only" "$docker_req")" = "true" ]; then
+      final=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+      if [ "$final" != "$before" ]; then
+        echo "  head bergerak $before -> $final sebelum atestasi; lewati putaran ini."
+      else
+        echo "  atestasi blob lolos (delta main dokumentasi-only, merge-tree bersih, gate hijau di head $before); tanpa update-branch."
+        if gh pr merge "$pr" --squash --delete-branch --admin --match-head-commit "$before"; then
+          echo "  merged lewat antrean (atestasi) di head $before."
+          continue
+        fi
+        echo "  merge atestasi gagal; jatuh ke jalur update-branch."
+      fi
+    else
+      echo "  atestasi: gate belum hijau di head $before; lanjut jalur update-branch."
+    fi
+  else
+    echo "  atestasi tidak berlaku (delta main ada kode: $delta_docs / merge-tree rc=$mtree); sync wajib."
+  fi
+  # -----------------------------------------------------------------------
 
   if ! gh pr update-branch "$pr"; then
     echo "  update-branch gagal; label dicabut."

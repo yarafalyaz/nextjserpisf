@@ -49,6 +49,53 @@ Bila check gagal/timeout atau merge ditolak protection, label dicabut dan
 antrean meninggalkan komentar berisi alasannya. Perbaiki, lalu beri label lagi
 untuk masuk antrean ulang.
 
+## Atestasi blob — merge pada SHA yang divonis (anti-churn)
+
+Masalah yang dijawab bagian ini: `main` di repo ini bergerak tiap 1–3 menit
+(commit board/backlog), sehingga `update-branch` berulang membuat head PR
+berputar lebih cepat daripada siklus konfirmasi QA. Temuan audit rilis
+2026-10-28 08:59 WIB mencatat 4 head dalam 9 menit pada satu PR; atestasi QA
+jadi mustahil valid tepat saat merge. Aturan di bawah menggantikan pola
+"selalu update-branch lalu tunggu hijau" untuk kasus delta main non-kode.
+
+**Merge dilakukan pada SHA yang divonis QA** (`gh pr merge --squash --admin
+--match-head-commit <sha tervonis>`), bukan pada head hasil sync, hanya bila
+KEEMPAT syarat ini terbukti:
+
+1. **Delta main non-kode.** `git diff --name-only $(git merge-base origin/main <sha>) origin/main`
+   hanya memuat berkas dokumentasi yang tidak dikonsumsi build: `docs/**`,
+   `*.md`, `.hermes/**`. Satu saja berkas kode/konfigurasi (`src/**`,
+   `prisma/**`, `package*.json`, `Dockerfile`, `docker*/**`, `.github/**`,
+   `next.config.*`, `tsconfig*`, `postcss*`, `tailwind*`) → syarat gugur,
+   wajib sync + verdict QA ulang. Tidak ada pengecualian "kelihatannya aman".
+2. **Merger bersih.** `git merge-tree --write-tree origin/main <sha>` keluar
+   exit 0 (nol konflik) — bukan sekadar "mergeable: UNKNOWN" dari API.
+3. **Blob fitur identik.** Berkas fitur PR (`git diff --name-only` merge-base..sha,
+   di luar dokumentasi) tidak berubah antara SHA tervonis dan SHA yang
+   dimerge — di skema ini keduanya SHA yang sama, jadi bukti tambahan yang
+   dicari adalah: delta main hanya dokumentasi (syarat 1) sehingga isi kode
+   yang masuk `main` persis isi yang diuji CI.
+4. **Gate hijau pada SHA itu.** Check wajib protection (Lint, Unit Tests,
+   Build Next.js, DB Integration Tests) + SonarCloud PASS dengan `head_sha`
+   sama persis dengan SHA yang dimerge; Docker Image Build hanya boleh
+   `skipping` bila diff merge-base..sha tidak menyentuh jalur Docker
+   (pola regex Detect Changes `ci.yml`).
+
+Atestasi keempat butir ditulis di komentar PR **sebelum** merge (SHA tervonis,
+daftar berkas delta main, hasil merge-tree, check pada head_sha). Merge tanpa
+komentar atestasi = merge tanpa gerbang.
+
+**Freeze selama konfirmasi.** Selama QA mengonfirmasi head tertentu (kartu
+aktif, ≤ 15 menit), Lead dilarang menjalankan `update-branch` pada PR itu.
+Konfirmasi yang menyebut SHA yang sudah bukan head lagi dinyatakan batal,
+bukan dipakai sebagai verdict.
+
+**Konflik board.** Bila delta main hanya `docs/autonomous-board.md` tetapi PR
+juga menyentuh board, resolusi wajib union: board = versi `main` + baris unik
+branch di ekor; nol baris `main` hilang, nol penanda konflik tersisa
+(`grep -c '^<<<<<<<\|^>>>>>>>\|^=======$'` = 0). Aturan yang sama dipakai
+`scripts/antrean-merge.sh` bila kelak sync dijalankan manual.
+
 ## Pemicu
 
 - Lead menjalankan `scripts/antrean-merge.sh` (tanpa argumen = semua PR
