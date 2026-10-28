@@ -18,6 +18,10 @@ import { ProjectPlDetailCard } from "@/components/reports/project-pl-detail-card
 import { ProjectBudgetCard } from "@/components/reports/project-budget-card"
 import { ProjectEarnedValueCard } from "@/components/reports/project-earned-value-card"
 import { ProjectBudgetEditor } from "./_components/project-budget-editor"
+import {
+  ProjectRabItemsTab,
+  PROJECT_RAB_ITEMS_TAB_LABEL,
+} from "./_components/project-rab-items-tab"
 import { loadProjectPlForProject } from "@/lib/reports/project-pl-data"
 import { loadProjectBudgetForProject } from "@/lib/reports/project-budget-data"
 import { loadProjectEarnedValueForProject } from "@/lib/reports/project-earned-value-data"
@@ -327,47 +331,11 @@ export default async function ProjectDetailPage({
             ),
           },
           {
-            // PROJ-BR-004 G4: baris ini `project.items` = baris RAB (estimasi
-            // ProjectItem qty × cost rencana), BUKAN material fisik terpakai.
-            // Label wajib rencana/RAB — "terpakai" menyiratkan aktual dan
-            // melanggar pemisahan estimasi vs aktual. Biaya aktual material
-            // hanya dari MaterialIssue completed di builder L/R proyek.
+            // PROJ-BR-004 G4: baris RAB (estimasi) — label & tabel hidup di
+            // ProjectRabItemsTab supaya dikunci tes regresi (temuan QA F-1 #1249).
             id: "items",
-            label: "Rencana Bahan & Komponen (RAB)",
-            content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Rencana Bahan &amp; Komponen (RAB)</h2>
-                </div>
-                <div className="p-4 px-5">
-                  <p className="mb-3 text-xs text-muted-foreground">
-                    Baris rencana (estimasi RAB) — bukan bahan fisik terpakai. Biaya material aktual hanya diakui dari pengeluaran material selesai di Laba Rugi Proyek.
-                  </p>
-                  {project.items.length === 0 ? (
-                    <EmptyState title="Tidak ada item" />
-                  ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Deskripsi / Material</DetailTableTh>
-                        <DetailTableTh align="right">Jml Rencana</DetailTableTh>
-                        <DetailTableTh align="right">Biaya Satuan Rencana</DetailTableTh>
-                        <DetailTableTh align="right">Total Rencana</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {project.items.map((item) => (
-                          <DetailTableRow key={item.id}>
-                            <DetailTableTd>{item.description || `Item #${item.itemId}`}</DetailTableTd>
-                            <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
-                            <DetailTableTd align="right">{formatCurrency(Number(item.qty) * Number(item.cost))}</DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
-                  )}
-                </div>
-              </div>
-            ),
+            label: PROJECT_RAB_ITEMS_TAB_LABEL,
+            content: <ProjectRabItemsTab items={project.items} />,
           },
           {
             id: "budget",
