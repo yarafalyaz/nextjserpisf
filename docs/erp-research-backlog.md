@@ -41000,6 +41000,64 @@ ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main
 
 ---
 
+## PENUTUPAN STATUS BUSINESS 2026-10-28 — HR-BR-003: formula lembur/tarif/pembulatan tertutup, sisa OPEN parameter statutori
+
+> **Slot/ruang**: bukan F-ID baru dan bukan keputusan angka baru — ini penutupan status ID aturan
+> yang sudah ada (HR-BR-003). Diperiksa 2026-10-28 WIB terhadap `origin/main` `46e0e41be`:
+> `grep -c "HR-BR-003" docs/erp-research-backlog.md` = 0 (belum pernah ada catatan formula di
+> backlog) dan `grep -c "PENUTUPAN STATUS BUSINESS"` = 0. Tidak ada angka uang yang diputus di sini:
+> seluruh angka mengutip vonis Accountant F-2026-10-25-014-V (A1) dan F-2026-10-25-022-V (Putusan 3)
+> sebagaimana tertanam di kode.
+
+### 1. Temuan
+
+Baris `HR-BR-003` di `docs/product/INDEKS-ATURAN.md:155` masih berstatus `OPEN-keputusan`
+("keputusan formula lembur/tarif/pembulatan terbuka di sumber"), sedangkan
+`docs/product/KEPUTUSAN-TERVERIFIKASI.md:44` (keputusan 10) sudah menyatakan **TERTUTUP-sebagian —
+formula tertutup, parameter tahun berjalan OPEN**, dan `:65` sudah mendaftarkan HR-BR-003 sebagai
+"tertutup-sebagian dengan sisa OPEN eksplisit". Peta kerja fleet (INDEKS) karena itu basi: pembaca
+menganggap formula lembur belum diputus padahal penegaknya hidup, teruji, dan sudah dipakai payroll.
+Doktrin `INDEKS-ATURAN.md:39` ("status `OPEN-keputusan` tidak otomatis berubah") dihormati dengan
+memperbarui **dokumen sumber** (`BUSINESS-RULES.md`) pada commit yang sama, bukan hanya indeksnya.
+
+### 2. Bukti (diverifikasi run ini di pohon PR, bukan kutipan laporan lain)
+
+| Butir | Bukti `path:baris` | Status |
+|---|---|---|
+| Pengali + pembagi 173 | `src/lib/services/overtime-pay.service.ts:17` (`HOURLY_DIVISOR = 173`), `:23-38` (hari kerja 1,5x lalu 2x; libur pola 5 hari 2x/3x/4x; pola 6 hari 2x/3x/4x), `:41-60` | TERTUTUP (014-V A1) |
+| Pembulatan | `src/lib/services/overtime-pay.service.ts:59` (`Math.round(total)` — rupiah penuh hanya di ujung; tak ada pembulatan menengah); basis 2-desimal `src/actions/hrm.actions.ts:1169-1172` | TERTUTUP (022-V Putusan 3) |
+| Dasar upah lembur | `src/actions/hrm.actions.ts:1152-1172` — pokok + Σ `kind=earning`/`recurrence=fixed` aktif pada TANGGAL LEMBUR (`ot.date`), cabang 75% sengaja tidak dipicu | TERTUTUP (022-V Putusan 1-2) |
+| Klasifikasi hari (5/6 hari) | `src/lib/services/leave-quota.service.ts:149-168`; fallback Senin-Jumat `:88-89`; dipakai `src/actions/hrm.actions.ts:1174-1179` | TERTUTUP (deterministik dari jadwal kerja) |
+| Batas 4 jam/hari & 18 jam/minggu | `src/lib/services/overtime-pay.service.ts:18-19,96-138`; dipanggil create `src/actions/hrm.actions.ts:1049` dan update `:4686` (hari kerja saja) | TERTUTUP |
+| Beku + idempoten saat approve | `src/actions/hrm.actions.ts:1122-1124` (early-return bila sudah terhitung), `:1193-1201` (snapshot dasar), `:1203-1219` (klaim atomik `updateMany` + `approvedAt`) | TERTUTUP |
+| Masuk bruto slip gaji | `src/actions/hrm.actions.ts:1349,1385` (pratinjau) dan `:1874,2013` (tulis massal) — Σ `calculatedValue` status `approved` dalam periode | TERTUTUP |
+| Regresi | `src/lib/services/__tests__/overtime-pay.service.test.ts:11-57` (tiga pola tarif, penolakan flat 1,1x, nol) | HIJAU (dijalankan run ini) |
+
+### 3. Perubahan run ini (dokumen saja, nol ubah kode)
+
+1. `docs/product/BUSINESS-RULES.md:180-186` — HR-BR-003 dari `[OPEN]` menjadi tertutup-untuk-formula
+   dengan catatan parameter, mengikuti "Kandidat ubah BUSINESS-RULES" di
+   `docs/product/KEPUTUSAN-TERVERIFIKASI.md:44`.
+2. `docs/product/INDEKS-ATURAN.md:155` — status `OPEN-keputusan` → `Sebagian` dengan bukti penegak
+   ditunjuk (sebelumnya: "baris penegak formula tidak ditunjuk di indeks ini").
+
+### 4. Yang TETAP OPEN (tidak diputus di sini)
+
+- **Parameter statutori tahun berjalan** (tarif/plafon BPJS & tabel TER) — `docs/product/KEPUTUSAN-TERVERIFIKASI.md:44,55`
+  (keputusan 6 & 10). Pemilik: Accountant.
+- **Lantai upah minimum** (Pasal 32 ayat penutup) — dinyatakan di luar cakupan vonis 022-V dan spec
+  F-2026-10-25-024-S; belum menjadi aturan yang diputus.
+
+### 5. Temuan lintas-domain (bukan lane Business; TIDAK diperbaiki di sini)
+
+Baris `PUR-BR-008` (`INDEKS-ATURAN.md:91`), `FIN-BR-010` (`:130`), dan `PROJ-BR-008` (`:143`) juga
+masih `OPEN-keputusan` padahal `docs/product/KEPUTUSAN-TERVERIFIKASI.md:37,40,45` sudah menutupnya
+(landed cost dikapitalisasi ke HPP; double-entry GL lengkap; costing proyek tertutup-sebagian).
+Pemilik: Accountant (keputusan uang/HPP) dengan bukti kode dari Backend.
+
+Tanpa PR kode. Status ID: **HR-BR-003 = tertutup-untuk-formula**, sisa OPEN parameter statutori.
+Pemilik berikutnya: Lead (merge PR dokumen ini) → Accountant (konfirmasi parameter statutori 2026).
+
 ## 2026-10-28 08:50 WIB — Business (127) Matriks approval per dokumen: inventaris jalur aktual + usulan (GL-BR-009, keputusan 9)
 
 **Spec:** `F-2026-10-28-127-S` — *catatan penomoran (wajib dibaca):* run HR sempat memakai

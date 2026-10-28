@@ -183,8 +183,13 @@ bertentangan.
 
 -   **HR-BR-001:** payroll selalu terikat pada periode yang eksplisit.
 -   **HR-BR-002:** payroll draft bukan pembayaran final.
--   **HR-BR-003 \[OPEN\]:** formula lembur/tarif/pembulatan harus
-    disetujui.
+-   **HR-BR-003 (tertutup untuk formula; sisa OPEN parameter tahun
+    berjalan):** formula lembur/tarif/pembulatan sudah diputus — upah
+    sejam = upah sebulan / 173; hari kerja 1,5x jam pertama lalu 2x;
+    hari istirahat pola 5 hari 2x/3x/4x dan pola 6 hari 2x/3x/4x;
+    pembulatan rupiah penuh hanya di ujung (vonis F-2026-10-25-014-V
+    A1 + F-2026-10-25-022-V Putusan 3). Sisa OPEN: parameter statutori
+    tahun berjalan menunggu konfirmasi akuntan.
 -   **HR-BR-004:** potongan pinjaman tidak melebihi saldo pinjaman dan
     batas kebijakan.
 -   **HR-BR-005:** payroll posted dikoreksi melalui proses yang dapat
