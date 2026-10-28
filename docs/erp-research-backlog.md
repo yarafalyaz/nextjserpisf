@@ -43103,3 +43103,40 @@ Kriteria TERIMA: tiap baris WAJIB punya ≥1 workflow aktif + ≥1 langkah beris
 - INDEKS `WO-BR-003` TETAP `Sebagian` + GL-BR-009 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E152). Perubahan status = milik Lead/QA sesudah implementasi + E152 hijau.
 
 ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003 + Q owner; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: OWNER (jawab Q-AVM-1..7 via Lead) → BOT Lead (vonis Q-AVM-2/3/4 + Q-AVM-6/7 masuk-mesin + merge PR docs ini; WO-BR-003/GL-BR-009 tetap `Sebagian`) → BOT Accountant (Q150-1/2/3 SAJA; isi matriks BUKAN vonis) → BOT Backend (kerja mesin sesudah putusan) → BOT Frontend (UI matriks sesudah kontrak) → BOT QA (E152 atas head persis). Butuh putusan accountant: TIDAK untuk isi matriks; YA TERBATAS hanya Q150-1/2/3 (akun/selisih/periode rantai jam kerja).
+---
+
+---
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-148-V: metode costing bawaan = FIFO menang, average jadi pilihan eksplisit (jawaban BR-CST-08 spec 144-S, tutup OPEN #8)
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis origin/main b8d4f7c24 (28 Okt 2026, 17:04 WIB).
+Verifikasi ID: grep F-2026-10-28-148 di backlog + board + 30 head PR terbuka origin = 0/0/0 sebelum tulis (run ini). Slot 132-P = putusan Lead (bukan blok vonis). 148-V bebas.
+### 0. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Resolver tunggal src/lib/services/costing-method.service.ts:37-48 urutan kategori -> barang -> perusahaan -> hard default fifo (:42-47); global korup non-kosong = throw Indonesia (:76-99); gagal baca DB = fifo (:85-88). Komentar menyebut fifo "the method the business chose" (:18).
+- Konsumsi src/lib/services/inventory-fifo.ts:168 resolve via resolver sama; cabang average drain proporsional + consumedCost = consumedQtyActual x averageCost (:219,263,284-285).
+- Penerimaan src/lib/hooks/goods-receipt.hook.ts:129-137 resolve via resolver sama; average = hitung-ulang item.cost rata-rata bergerak (:480-503), fifo = item.cost tidak disentuh.
+- Laporan valuasi src/lib/reports/stock-valuation.ts:60-95,146 resolver selaras; baris average = remaining x item.cost, baris fifo = remaining x layer.unitCost.
+- Konflik K1: barang baru tanpa pilihan = warisi kategori lalu fallback "average" (src/actions/master.actions.ts:616-632, final :629); kategori baru bawaan "average" (:1647); update kategori tanpa field = tidak diubah (:1716-1718).
+- Konflik K2: default kolom perusahaan FIFO (prisma/schema.prisma:138), kategori average (:731), barang average (:793); seed perusahaan FIFO (prisma/seed.ts:210-212); tulis pengaturan kosong = FIFO (src/actions/settings.actions.ts:155); tampilan form barang kosong = average (src/components/forms/item-form.tsx:455), pengaturan kosong = FIFO (settings-edit-form.tsx:751).
+### 1. Vonis final — FIFO menang (satu menang, satu diubah)
+- Metode costing bawaan bisnis = FIFO. Yang diubah = sisi average: default kolom ItemCategory.costingMethod + Item.costingMethod, fallback create barang/kategori, dan tampilan form kosong average — semuanya wajib menjadi fifo (fisik = Backend). Yang dipertahankan: hard default resolver fifo, default perusahaan FIFO, seed FIFO.
+- Alasan: empat permukaan sudah FIFO (kolom perusahaan, seed, tulis pengaturan, hard default resolver + komentar "method the business chose"), sedangkan average hanya menang di default kolom/create/form yang lahir belakangan tanpa vonis; HPP FIFO = biaya lapisan aktual per lot (audit trail lot ke jurnal utuh), average = item.cost yang ditulis-ulang tiap terima sehingga nilai historis hilang.
+### 2. Dampak HPP per pilihan (angka ilustratif, sen presisi)
+- Terima 10x100 lalu 10x120. FIFO jual 10 -> HPP 1.000, sisa 10x120 = 1.200. Average jual 10 -> HPP 1.100, sisa 10 x 110 = 1.100. Selisih HPP 100 per 10 unit; di margin tipis ini menentukan laba-vs-rugi per job.
+- Average menulis item.cost setiap terima (goods-receipt.hook.ts:500-504); FIFO tidak. Migrasi diam-diam average ke fifo (atau sebaliknya) mengubah HPP seluruh barang tanpa pilihan eksplisit — DILARANG tanpa migrasi data diputus terpisah.
+### 3. Turunan INV-BR-004/INV-BR-006 (konsisten dengan putusan 1)
+- INV-BR-006 (consumeFifoLayers): nama fungsi TETAP (biaya FIFO-lapisan + fisik FEFO), perilaku cabang average TETAP untuk barang eksplisit-average. Tidak ada perubahan logika konsumsi dari vonis ini — hanya default yang berubah sehingga baris tanpa pilihan masuk cabang fifo.
+- INV-BR-004 (scrap-classification): unitCost = biaya aktual baris issue dari consumeFifoLayers (fifo-lapisan atau average, ikut metode efektif barang) — rumus qty x unitCost (scrap-classification.ts:55-77) TIDAK berubah; label "cost FIFO terbawa baris" di INDEKS baris INV-BR-004 wajib dibaca "cost aktual baris (fifo-lapisan atau average)".
+- Posting scrap abnormal: tetap OPEN sempit keputusan 8 (gerbang abnormalScrapPostingEnabled OFF, scrap-classification.ts:8-12); vonis ini tidak mengaktifkannya.
+### 4. Perintah fisik ke Backend (dilarang sebelum vonis ini; sah sesudahnya)
+1. prisma/schema.prisma:731,793 default average -> fifo (alter default kolom, via migrasi — bukan edit diam-diam).
+2. src/actions/master.actions.ts:629,1647 fallback "average" -> "fifo" (termasuk warisan kategori tak-dikenal).
+3. src/components/forms/item-form.tsx:455 tampilan kosong average -> fifo.
+4. Nilai eksplisit per kategori/barang + hierarki kategori-menang-atas-barang TETAP. Tanpa backfill historis: barang existing average tetap average sampai migrasi data diputus terpisah; jurnal posted beku.
+### 5. Tutup OPEN KEPUTUSAN 8
+- OPEN butir 8 ("Metode costing bawaan yang diinginkan bisnis") = TERTUTUP-oleh-vonis ini: bawaan = FIFO (pasal 1). Sisa kerja = fisik Backend pasal 4 + QA falsifikasi pasal 6; bukan OPEN keputusan lagi.
+ID vonis ini F-2026-10-28-148-V (bawaan costing = FIFO; tutup OPEN 8). Pemilik berikutnya: Backend (fisik pasal 4, kartu baru/lane Backend — tanpa kartu baru dari vonis ini) -> QA (falsifikasi E148 pasal 6 atas head implementasi) -> INDEKS INV-BR-004/006 naik ke Sebagian + catatan pasal 3 via PR ini -> Lead merge.
+### 6. Falsifikasi QA (E148, atas head implementasi Backend persis — BUKAN head vonis ini)
+- E148-1: create barang tanpa pilihan + kategori kosong = tersimpan fifo (bukan average); kembalikan fallback lama -> MERAH.
+- E148-2: resolver kosong = fifo; global sampah non-kosong = throw Indonesia.
+- E148-3: barang eksplisit average tetap cabang average (HPP = qty x rata-rata, item.cost ditulis); ubah default lalu paksa fifo untuk eksplisit-average -> MERAH.
+- E148-4: valuasi baris tanpa pilihan = remaining x layer.unitCost (fifo), bukan x item.cost.
