@@ -2114,6 +2114,15 @@ export async function deletePurchaseOrder(id: number) {
       );
     }
 
+    // INV-BR-013: PO dengan GR non-draft tidak boleh dihapus — transaksi di
+    // bawah menghapus fisik StockMove `posted` + InventoryLayer milik GR.
+    // GR draft belum memposting movement, jadi tidak menghalangi penghapusan.
+    if (po.goodsReceipts.some((gr) => gr.status !== "draft")) {
+      throw new Error(
+        "PO tidak dapat dihapus karena memiliki penerimaan barang yang sudah terverifikasi. Penerimaan terverifikasi tidak dapat dihapus; selesaikan lewat retur pembelian.",
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       // 1. Delete all related GoodsReceipts and reverse their stock moves
       const allGrIds = po.goodsReceipts.map((gr) => gr.id);
@@ -2287,6 +2296,15 @@ export async function deleteGoodsReceipt(id: number) {
       gr.warehouseId,
       ...gr.items.map((i) => i.warehouseId).filter((w): w is number => w != null),
     ]);
+
+    // INV-BR-013: ledger posted tidak boleh dihapus fisik oleh pengguna
+    // operasional. GR terverifikasi sudah memposting StockMove `posted`
+    // (goods-receipt.hook) — menghapusnya menghanguskan jejak ledger.
+    // Hanya GR draft (belum ada movement) yang boleh dihapus; pola sama
+    // dengan deleteStockAdjustment/deleteInventoryTransfer/deleteMaterialIssue.
+    if (gr.status !== "draft") {
+      throw new Error("Hanya penerimaan barang draft yang dapat dihapus");
+    }
 
     // Guard: refuse deletion when a non-cancelled Vendor Bill references this GR's
     // PO. A goods-based Vendor Bill posts Dr Clearing / Cr AP against the receipt;
