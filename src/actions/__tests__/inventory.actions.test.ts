@@ -774,6 +774,31 @@ describe("Stock Adjustment Error & Edge Paths", () => {
 });
 
 describe("Material Issue Error & Edge Paths", () => {
+  // WO-BR-004: form Inventaris menolak MI kedua untuk WO yang sama.
+  it("createMaterialIssue menolak bila WO sudah punya MI aktif", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValueOnce({
+      id: 9, documentNo: "MI-009",
+    });
+    const res = await actions.createMaterialIssue(
+      miFd({ workOrderId: 7 }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("MI-009");
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalled();
+    expect(mocks.prismaMock.materialIssue.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ workOrderId: 7 }),
+      }),
+    );
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
+  });
+  it("createMaterialIssue tanpa WO tidak memegang kunci baris WO", async () => {
+    mocks.prismaMock.materialIssue.create.mockResolvedValueOnce({ id: 1, slug: "mi-1" });
+    const res = await actions.createMaterialIssue(miFd());
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.$executeRaw).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
+  });
   it("createMaterialIssue fails if no valid items", async () => {
     const res = await (actions as any).createMaterialIssue(
       miFd({ items: itemsJson([]) }),
