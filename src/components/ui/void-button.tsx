@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Ban } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
@@ -14,24 +15,47 @@ interface VoidButtonProps {
   title?: string
   body?: string
   onSuccess?: () => void
+  /** BR-F139-01: wajibkan alasan trim non-kosong di sisi klien sebelum
+      memanggil aksi. Aksi server tetap pemilik validasi (nol mutasi bila
+      kosong); UI hanya cermin agar operator tidak menunggu round-trip. */
+  requireReason?: boolean
+  reasonLabel?: string
+  reasonPlaceholder?: string
 }
 
 /**
- * Confirm + cancel (void) a posted document. Unlike delete, the record is kept
- * and marked cancelled; the action reverses its GL/stock side effects. Errors
- * (e.g. "remove payments first") are surfaced as toasts.
+ * Confirm + cancel (void) a posted document while keeping the record for audit.
+ * Unlike delete, the record is kept and marked cancelled; the action reverses
+ * its GL/stock side effects. Errors (e.g. "remove payments first") are
+ * surfaced as toasts.
  */
-export function VoidButton({ id, action, label = "Batalkan", title, body, onSuccess }: VoidButtonProps) {
+export function VoidButton({
+  id,
+  action,
+  label = "Batalkan",
+  title,
+  body,
+  onSuccess,
+  requireReason = false,
+  reasonLabel = "Alasan pembatalan",
+  reasonPlaceholder = "Tulis alasan pembatalan (wajib diisi)",
+}: VoidButtonProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isOpen, setIsOpen] = useState(false)
+  const [reason, setReason] = useState("")
 
   function handleVoid() {
+    if (requireReason && !reason.trim()) {
+      showError(`${reasonLabel} wajib diisi`)
+      return
+    }
     startTransition(async () => {
       const result = await action(id)
       if (result.success) {
         showSuccess("Dokumen berhasil dibatalkan")
         setIsOpen(false)
+        setReason("")
         onSuccess?.()
         router.refresh()
       } else {
@@ -39,6 +63,11 @@ export function VoidButton({ id, action, label = "Batalkan", title, body, onSucc
         setIsOpen(false)
       }
     })
+  }
+
+  function handleOpenChange(open: boolean) {
+    if (!open) setReason("")
+    setIsOpen(open)
   }
 
   return (
@@ -57,7 +86,7 @@ export function VoidButton({ id, action, label = "Batalkan", title, body, onSucc
 
       <ConfirmDialog
         isOpen={isOpen}
-        onOpenChange={setIsOpen}
+        onOpenChange={handleOpenChange}
         title={title || "Batalkan dokumen ini?"}
         body={body || "Dokumen akan ditandai dibatalkan dan seluruh dampak jurnal serta stoknya dibalik. Tindakan ini tidak menghapus catatan."}
         confirmLabel="Batalkan Dokumen"
@@ -65,7 +94,27 @@ export function VoidButton({ id, action, label = "Batalkan", title, body, onSucc
         variant="danger"
         isPending={isPending}
         onConfirm={handleVoid}
-      />
+      >
+        {requireReason ? (
+          <div className="mt-3 flex flex-col gap-1.5">
+            <label htmlFor={`void-reason-${id}`} className="text-sm font-medium">
+              {reasonLabel} <span aria-hidden="true" className="text-danger">*</span>
+            </label>
+            <Textarea
+              id={`void-reason-${id}`}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={reasonPlaceholder}
+              aria-label={reasonLabel}
+              rows={3}
+              disabled={isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Alasan wajib diisi dan tersimpan sebagai jejak audit pembatalan.
+            </p>
+          </div>
+        ) : undefined}
+      </ConfirmDialog>
     </>
   )
 }

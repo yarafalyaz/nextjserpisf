@@ -420,8 +420,10 @@ export function buildCollectionQueue(
       lastFollowUpAt,
       promiseDate,
       lateFeeOutstanding: lateFeeByInvoice.get(invoice.invoiceId) ?? 0,
+      // V4 vonis F-2026-10-28-130-V: uji KEBERADAAN denda memakai nol tegas.
+      // Toleransi Rp1 menjawab "lunas?", bukan "ada denda?".
       hasOutstandingLateFee:
-        (lateFeeByInvoice.get(invoice.invoiceId) ?? 0) > 0.005,
+        (lateFeeByInvoice.get(invoice.invoiceId) ?? 0) > 0,
     })
   }
 
