@@ -44388,3 +44388,117 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 - E140-2 (D2): fixture posted bersisa tanpa dueDate → `Jumlah Hutang` PDF tidak mencakupnya = MERAH; KPI layar mencakupnya = MERAH; label/notice beda-pertanyaan hilang = MERAH.
 
 ID vonis ini **F-2026-10-28-152-V** (jawaban D1+D2 spec 140-S; D3/D4 + temuan summary diteruskan Backend/Frontend; E140 milik QA; INDEKS AC-REP-001 tetap Belum). Pemilik berikutnya: BOT Backend (perbaikan summary gate+withholding, D3/D4) → BOT Frontend (label bila kurang) → BOT QA (E140 atas head persis) → Lead (nilai INDEKS sesudah E140 lulus).
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-150-S: rantai approval jam kerja lembur → timesheet → costing → payroll (WO-BR-003, TEST-STRATEGY P1 costing proyek + P0 payroll posting)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_a1b396f3`. Basis `origin/main` `44abb0b92` (28 Okt 2026 18:20 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-150` di backlog + board `origin/main` + 30 head PR terbuka = 0/0/0 sebelum tulis (run ini). E150 = 0 di main + PR terbuka (E150-1..8 keluarga baru run ini). BR-WO03-01..08 = 0 di main + PR terbuka (keluarga baru mulai 01). WO-BR-003 = 0 di backlog (run ini). **150-S bebas, dipakai spec ini.**
+**Sumber tunggal:** `docs/product/INDEKS-ATURAN.md:148` WO-BR-003 `Sebagian` (OvertimeRequest ada, rantai approval jam kerja ke costing/payroll belum ditelusur) + `docs/product/KEPUTUSAN-TERVERIFIKASI.md` keputusan 10 (formula lembur tertutup PP 35/2021: sejam = sebulan/173, 1,5x→2x hari kerja, 2x/3x/4x hari istirahat, batas 4 jam/hari & 18 jam/minggu) + keputusan 11 (basis tarif tenaga kerja OPEN #5 = tarif per baris, tarif per peran = 145-S) + `docs/product/BUSINESS-RULES.md:178` (WO-BR-003: jam kerja belum disetujui tidak masuk costing/payroll final) + `docs/product/TEST-STRATEGY.md:25,27` (P0 payroll posting, P1 costing proyek).
+**Bukan duplikat:** 128-S = scope tulis payroll (SIAPA boleh tulis — getHrScope, hirearki self/departemen/all); 145-S = tarif per peran untuk costing (BERAPA rupiah per jam — master standar, resolve, varians); 131-S = cap potongan pinjaman (BR-LOAN, plafon 50% upah). Spec ini = rantai persetujuan + aliran jam (KAPAN jam sah masuk slip/biaya — gerbang status approved, tolak/batal, anti-ganda). 133-S = koreksi slip paid (sesudah posting); spec ini = sebelum posting (jam mana boleh masuk). 119-S = penunjukan guard formula lembur (sudah tutup, dirujuk bukan diulang). Tumpang tindih nol baris aturan: BR-WO03-* baru semua.
+
+Benchmark resmi (akses 28 Okt 2026):
+- Accurate — gaji + lembur mingguan vs bulanan anti-duplikasi beban (bayar lembur mingguan → sesuaikan kembali saat gaji bulanan via akun Beban Tunjangan Lembur minus, bukan dua beban): https://help.accurate.id/product/accurate-online/accurate-insight/gaji-lembur-tidak-dua-kali
+- Accurate — fitur Approval (persetujuan transaksi agar aman/transparan/anti salah bayar, termasuk massal): https://help.accurate.id/product/approval/
+- Zahir ERP — Approval Management (cuti/lembur/reimburse/ganti jadwal berjenjang dari karyawan ke atasan) + Overtime (kebijakan lembur ikut pemerintah atau perusahaan) + Payroll Component (tunjangan/potongan/natura tetap-tidak tetap, kena pajak-tidak) + Laba Rugi per Proyek realisasi-vs-anggaran: https://zahirerp.com/id/all-features-of-zahir-products/
+- HashMicro — aplikasi lembur: pengajuan → persetujuan → perhitungan otomatis terintegrasi payroll, kontrol 4 jam/hari & 18 jam/minggu: https://www.hashmicro.com/id/blog/aplikasi-lembur/
+
+### J1. Inventarisasi jalur OVERTIME (permintaan → hitung nilai → slip) — semua TERVERIFIKASI-KODE di basis ini
+
+- J1a. Buat: `createOvertimeRequest` (`src/actions/hrm.actions.ts:1035`) — izin `create_overtime_requests` (katalog `src/lib/auth/module-catalog.generated.ts:325`) + `getHrScope`/`assertHrEmployeeAccess` + gerbang batas PP 35/2021 `assertOvertimeWithinWorkdayLimits` (`overtime-pay.service.ts:96-138`) + status awal `pending` + `requestApprovalIfConfigured("OvertimeRequest", ...)` (jalur workflow generik bila dikonfigurasi).
+- J1b. Setuju DUA jalur, SATU hitung (konvergen di `approveOvertime`, `hrm.actions.ts:1094`): (i) tanpa workflow → tombol status manual di `src/app/api/workflow/[...path]/route.ts:261` merutekan ke `approveOvertime` (bukan flip polos — flip polos tinggalkan `calculatedValue = 0`, komentar `:262-267`); (ii) dengan workflow → `approveStep` selesai (`route.ts:187-203`) memanggil `approveOvertime` yang sama. Hitung: dasar = pokok + Σ tunjangan tetap aktif pada TANGGAL LEMBUR + snapshot beku `overtimeBaseSnapshot` (`hrm.actions.ts:1152-1219`); gerbang idempotensi nilai-sudah-ada (`:1124-1132`); klaim atomik `updateMany pending|approved → approved` + `approvedAt` (`:1204-1221`); izin `approve_overtime_requests` (`module-catalog.generated.ts:328`) + `assertApproved` + maker-checker (pembuat ≠ penyetuju, `route.ts:228-248`, super_admin bypass).
+- J1c. Tolak: workflow generik `rejectStep` (`src/actions/approval.actions.ts:327-410`) → approval `rejected` + dokumen `status = "rejected"` + `rejectionReason` (OvertimeRequest terdaftar di `REJECTION_REASON_MODELS`, `:66-70`); buka-ulang `reopenApproval` (`:433-463`) reset `rejected → draft` + approval baru. Jalur manual: tombol reject `route.ts:218-287` (allowedFrom `pending/draft/sent`, `:49`). Efek ke payroll/costing: `rejected` TIDAK cocok filter `status: "approved"` di J2 → otomatis keluar slip; `draft` (reopen) juga keluar.
+- J1d. Ubah/hapus TERKUNCI pasca-proses: `updateOvertimeRequest` hanya `pending` (`hrm.actions.ts:4702-4716`, cek ganda di tx `:4737-4743`); `deleteOvertimeRequest` tolak `approved` ("dapat memengaruhi penggajian", `:4405-4416`). Pending boleh ubah/hapus bebas — belum ada efek hilir (belum masuk slip/costing).
+- J1e. Batas jam (PP 35/2021, vonis K2-S1/S2): maks 4 jam/hari + 18 jam/minggu HARI KERJA; hari istirahat/libur di luar batas (`overtime-pay.service.ts:109-138`); baris `pending+approved` terhitung. Formula tingkat (TERTUTUP keputusan 10): sejam = sebulan/173; kerja 1,5x jam-1 lalu 2x; istirahat 5-hari 2x/3x/4x, 6-hari 2x/3x/4x; pembulatan rupiah di ujung (`:41-60`); regresi `overtime-pay.service.test.ts:11-57`.
+
+### J2. Inventarisasi jalur SLIP (approved → bruto → jurnal) — TERVERIFIKASI-KODE
+
+- J2a. Filter tunggal: pratinjau `computePayrollEstimation` (`hrm.actions.ts:1350-1356`) DAN tulis massal (`:1875-1881`) SAMA-SAMA `where: { employeeId, status: "approved", date: { gte: start, lt: endOfUtcDayExclusive(end) } }` — jam `pending/rejected/draft` TIDAK PERNAH masuk `overtimeTotal` (`:1386-1389`); `overtimeTotal = Σ calculatedValue` (snapshot beku J1b, BUKAN hitung ulang dari `hours`).
+- J2b. Masuk bruto: `grossSalary = base + overtimeTotal + appreciationTotal` (`:1399`); bruto = dasar BPJS + PPh21 + plafon 50% (`:1410-1419`). Slip `paid` menjurnal via `onPayrollPaid` SATU transaksi (`:3241`); NOL jurnal lembur terpisah — lembur hanya komponen bruto (cermin BENCHMARK Accurate: satu beban, bukan dua).
+- J2c. Anti-ganda posting (TEST-STRATEGY skenario 13 + 133-S): klaim atomik + `statutorySnapshot.fromFallback` ditolak (`hrm.actions.ts:794,1948,3057`); jalur koreksi paid = 133-S + vonis 135-V (reversal + slip koreksi), BUKAN edit jam di slip lama.
+
+### J3. Inventarisasi jalur TIMESHEET (lembar kerja — TANPA status approval) — TERVERIFIKASI-KODE
+
+- J3a. Model `Timesheet` (`prisma/schema.prisma:4206`) NOL kolom `status/approvedBy/approvedAt` — tulis langsung final: `createTimesheet` (`hrm.actions.ts:3425`) izin `create_timesheets` + hr-scope + `timesheetContextGuard`, TANPA gerbang approved. WO-BR-003 ("jam belum disetujui tidak masuk costing") untuk timesheet = USULAN (lihat BR-WO03-05), bukan fakta kode.
+- J3b. Kunci pasca-tarik: `timesheetPulledError` (`hrm.actions.ts:4436-4451`) — timesheet yang sudah jadi `ProductionCost.sourceTimesheetId` TIDAK boleh ubah/hapus ("hapus baris biayanya dulu"). Penegak di `updateTimesheet` (`:4881+`) + `deleteTimesheet` (`:4450+`). Cermin pola overtime J1d (approved = beku), beda pemicu (tarik-biaya vs setuju-lembur).
+
+### J4. Inventarisasi jalur COSTING (timesheet → ProductionCost labor) — TERVERIFIKASI-KODE
+
+- J4a. Dua pull manual (`requirePermission manage_production_costs` + `assertPeriodOpen` + `assertJobCostMutable`, `production-cost.actions.ts:49-140`): `pullLaborCostFromTimesheets` (WO→PO via `Timesheet.projectId`, tarif dari pemanggil, `:262-365`) + `pullLaborCostFromWorkOrderTimesheets` (langsung WO via `Timesheet.workOrderId`, `:367-437`). Keduanya: `amount = round(hours × ratePerHour)`, snapshot `hours/rate/amount + sourceTimesheetId + postedAt`, idempoten GLOBAL per `sourceTimesheetId` (`:307-317`, `:399-409`) — tarikan kedua = 0 baris.
+- J4b. NOL jembatan overtime→timesheet→costing di kode: `OvertimeRequest` tidak punya FK ke `Timesheet`; pull costing TIDAK menyaring status lembur (tidak baca `OvertimeRequest` sama sekali); `billableHours` overtime TIDAK dipakai pull. Jam lembur approved masuk slip (J2) TANPA lewat timesheet; jam timesheet masuk costing TANPA cek lembur. Dua aliran PARALEL, bukan satu rantai — ini inti gap WO-BR-003.
+- J4c. Tarif pull = snapshot pemanggil, sistem TIDAK baca payroll (`production-cost.actions.ts:259-261` eksplisit) — konsisten 145-S BR-PROJ-02 (larang turunkan tarif dari gaji). Tarif per peran = master 145-S (OPEN, menunggu Lead putus + vonis BR-PROJ-07).
+
+### J5. Status-transition matrix (fakta kode + USULAN yang ditandai)
+
+| Dari → Pemicu → Ke | Penjaga/permission | Efek hilir (kode) | Label |
+|---|---|---|---|
+| `∅ → pending` (buat lembur) | `create_overtime_requests` + hr-scope + batas 4j/18j | masuk hitung batas; BELUM masuk slip/costing | TERVERIFIKASI-KODE J1a |
+| `pending → approved` (setuju, manual ATAU workflow) | `approve_overtime_requests` + `assertApproved` + maker-checker; hitung + snapshot + `approvedAt` | `calculatedValue` beku → masuk `overtimeTotal` slip periode tanggal lembur (J2a) | TERVERIFIKASI-KODE J1b |
+| `pending → rejected` (tolak) | jalur workflow `rejectStep` / manual + alasan wajib | keluar slip (filter approved); reopen → `draft` | TERVERIFIKASI-KODE J1c |
+| `rejected → draft` (buka ulang) | `reopenApproval` | keluar slip sampai disetujui ulang | TERVERIFIKASI-KODE J1c |
+| `pending → ∅` (ubah/hapus) | `edit/delete_overtime_requests` + hr-scope, hanya pending | ubah ikut batas; hapus + hapus approval | TERVERIFIKASI-KODE J1d |
+| `approved → *` ubah/hapus | DITOLAK kode | — (beku) | TERVERIFIKASI-KODE J1d |
+| timesheet tulis → langsung final | `create_timesheets` + hr-scope | siap ditarik costing; NOL status | TERVERIFIKASI-KODE J3a |
+| timesheet tertarik → ubah/hapus | DITOLAK (`timesheetPulledError`) | hapus `ProductionCost` dulu | TERVERIFIKASI-KODE J3b |
+| timesheet → ProductionCost labor | `manage_production_costs` + periode terbuka + job mutable; idempoten `sourceTimesheetId` | `amount` snapshot + rollup HPP PO | TERVERIFIKASI-KODE J4a |
+| approved-lembur → timesheet/costing | TIDAK ADA (gap) | — | USULAN BR-WO03-05/06 |
+
+### 2. Role/permission matrix (kunci = `module-catalog.generated.ts` + `hr-scope.ts`)
+
+| Aksi | Permission key | Scope (getHrScope) | Catatan |
+|---|---|---|---|
+| Buat/ubah/hapus lembur | `create/edit/delete_overtime_requests` (`:325-327`) | self / departemen / all + `assertHrEmployeeAccess` | TERVERIFIKASI-KODE J1a/J1d |
+| Setujui lembur | `approve_overtime_requests` (`:328`) + `approveStep`/`assertApproved` + maker-checker | sama (hr-scope di tiap aksi) | TERVERIFIKASI-KODE J1b |
+| Susun/hitung/approve/bayar slip | `process_payroll` (`:334`) + `getHrScope` 5 jalur (128-S) | self/departemen/all, fail-closed | TERVERIFIKASI-KODE (128-S) |
+| Tulis timesheet | `create_timesheets` / `delete_timesheets` (`:316-317`) | hr-scope | TERVERIFIKASI-KODE J3a |
+| Tarik costing labor | `manage_production_costs` (`:257`) + `assertPeriodOpen` + `assertJobCostMutable` | — (bukan hr-scope; guard WO closed) | TERVERIFIKASI-KODE J4a |
+| Lihat gaji/slip orang lain | HANYA via hr-scope lolos | gaji TIDAK di board/log publik | TERVERIFIKASI-KODE (128-S) |
+
+### 3. Business rules register (ID BR-WO03-*, WO-BR-003)
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-WO03-01 | Hanya `OvertimeRequest.status = "approved"` yang masuk `overtimeTotal` slip; `pending/rejected/draft` tidak pernah masuk | TERVERIFIKASI-KODE | `hrm.actions.ts:1350-1356,1386-1389,1875-1881` |
+| BR-WO03-02 | Nilai lembur dihitung SEKALI saat approve dari dasar tanggal lembur + snapshot beku; slip memakai snapshot, bukan hitung ulang | TERVERIFIKASI-KODE | `hrm.actions.ts:1152-1219`; keputusan 10 |
+| BR-WO03-03 | Lembur `approved` beku (tolak ubah/hapus); `pending` bebas ubah/hapus; tolak → keluar slip; buka-ulang → `draft` | TERVERIFIKASI-KODE | `hrm.actions.ts:4391-4416,4694-4743`; `approval.actions.ts:327-463` |
+| BR-WO03-04 | Timesheet tertarik costing beku (ubah/hapus ditolak sampai baris biaya dihapus); idempoten pull GLOBAL per `sourceTimesheetId` | TERVERIFIKASI-KODE | `hrm.actions.ts:4436-4451`; `production-cost.actions.ts:307-317,399-409` |
+| BR-WO03-05 | Timesheet TANPA status approval hari ini: tulis = final, siap tarik costing. USULAN (pilih satu, BUTUH putusan Lead): (a) pertahankan — timesheet = kehadiran/jam kasar, gerbang sah = tarikan costing manual oleh mandor; (b) tambah status approve ringan per baris/mingguan. Sampai diputus: WO-BR-003 untuk timesheet = kebijakan tarikan manual, BUKAN gerbang kode | USULAN + BUTUH-VONIS Lead | `prisma/schema.prisma:4206` (nol kolom status); `hrm.actions.ts:3425` |
+| BR-WO03-06 | NOL jembatan kode overtime→timesheet→costing: jam lembur approved TIDAK otomatis jadi timesheet/costing; jam timesheet TIDAK cek status lembur. USULAN arah (BUTUH putusan Lead + vonis Accountant Q150-1/2): (a) jembatan opsional — tombol "tarik jam approved ke timesheet" idempoten per overtimeId (cermin F-2026-10-21-019); atau (b) pertahankan paralel + rekonsiliasi laporan (lembur-slip vs timesheet-costing selisih = memo). Sampai diputus: JANGAN klaim rantai utuh | USULAN + BUTUH-VONIS | J4b run ini |
+| BR-WO03-07 | Tarif costing labor = snapshot pemanggil, TIDAK membaca payroll/gaji; tarif per peran ikut master 145-S sesudah diputus+divonis | TERVERIFIKASI-KODE (larangan) + USULAN (master) | `production-cost.actions.ts:259-261`; 145-S; BR-PROJ-02 |
+| BR-WO03-08 | Jam ditolak/dibatalkan SESUDAH efek hilir: (i) tolak lembur pending = nol efek (belum masuk slip); (ii) lembur approved tidak bisa ditolak — hanya koreksi via 133-S (reversal + slip koreksi), bukan edit jam; (iii) timesheet tertarik tidak bisa ubah/hapus — hapus baris biaya dulu (BR-WO03-04). USULAN yang BUTUH vonis: tarikan costing atas jam yang lemburnya DITOLAK sesudah tarik (jembatan belum ada — Q150-2) | TERVERIFIKASI-KODE (i-iii) + BUTUH-VONIS (Q150-2) | J1c/J1d/J3b + §5 |
+
+### 4. Garpu BUTUH-VONIS Accountant (tidak diputus spec ini)
+
+- Q150-1 (tarif jam approved vs aktual): bila jembatan BR-WO03-06 dibangun, jam lembur approved ditarik ke costing pakai tarif lembur (`calculatedValue/hours`, individual per orang) atau tarif costing standar (145-S)? Implikasi: tarif lembur fluktuatif per orang/tanggal vs tarif standar stabil per peran; selisih = varians apa (BR-PROJ-06/07)? Akun/selisih GL ikut BR-PROJ-07.
+- Q150-2 (jam ditolak sesudah costing): bila lembur ditolak/dibatalkan sesudah jamnya terlanjur jadi `ProductionCost`, apakah baris biaya ditarik-ulang (hapus + rollup ulang HPP), ditandai memo, atau dibiarkan (jam kerja tetap terjadi)? Akun + jejak audit = vonis.
+- Q150-3 (periode): lembur tanggal D approved sesudah slip periode D terbit — masuk periode D (koreksi 133-S) atau periode berjalan (N)? Konsisten dengan kebijakan cut-off payroll yang sudah diputus? (Garpu periode, bukan angka.)
+- Angka/statutori (plafon JP, TER, PTKP) = vonis 126-V/147-V — spec ini TIDAK menyentuh, dirujuk saja.
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Approval lembur berjenjang | Approval umum + massal (BENCHMARK) | Approval Management khusus lembur (BENCHMARK) | Workflow generik + `assertApproved` + maker-checker (TERVERIFIKASI-KODE J1b) |
+| Hitung lembur otomatis ke payroll | Beban lembur mingguan disesuaikan di gaji bulanan, anti-duplikasi (BENCHMARK) | Integrasi payroll otomatis (BENCHMARK) | `calculatedValue` beku → `overtimeTotal` bruto, NOL jurnal ganda (TERVERIFIKASI-KODE J2) |
+| Jam kerja → costing proyek | — (beban via jurnal) | Realisasi otomatis dari transaksi proyek (BENCHMARK) | Pull manual timesheet→labor + idempoten (TERVERIFIKASI-KODE J4a); jembatan lembur = USULAN (BR-WO03-06) |
+| Tolak/batal sesudah efek | — | — | Lembur approved beku + koreksi 133-S; timesheet tertarik beku (TERVERIFIKASI-KODE BR-WO03-03/04/08) |
+
+### 6. Acceptance criteria + edge cases (E150, dijalankan pada head implementasi persis — BUKAN head spec ini)
+
+- E150-1: buat lembur → `pending`; pratinjau slip periode tanggal itu TIDAK memuatnya; setujui → pratinjau MEMUAT `calculatedValue` snapshot. Gagal salah satu = MERAH.
+- E150-2: tolak lembur `pending` → status `rejected` + alasan; slip TIDAK memuat; buka-ulang → `draft`; setujui ulang → masuk slip. = MERAH bila bocor.
+- E150-3: ubah/hapus lembur `approved` DITOLAK berisik; ubah lembur `pending` 2→5 jam hari kerja DITOLAK batas 4 jam. = MERAH bila lolos.
+- E150-4: tarik timesheet ke costing 2x → baris kedua 0 (idempoten); ubah/hapus timesheet tertarik DITOLAK; hapus baris biaya → ubah/hapus boleh lagi. = MERAH bila ganda/jebol.
+- E150-5: jam lembur approved TIDAK otomatis muncul di timesheet/costing (fakta gap J4b — uji DOKUMENTASI, bukan kegagalan): bila muncul otomatis tanpa jembatan disetujui = MERAH (perilaku tak dispec).
+- E150-6: pembuat lembur tidak bisa menyetujui sendiri (maker-checker), super_admin bisa. = MERAH bila self-approve lolos non-super_admin.
+- E150-7: jam `pending` + `approved` satu hari > 4 jam DITOLAK; minggu kerja > 18 jam DITOLAK; hari libur di luar batas. = MERAH bila lolos.
+- E150-8: slip `paid` + jam lembur periode itu diubah statusnya (skenario Q150-2 masa depan): TANPA jembatan, status slip TIDAK berubah + NOL jurnal baru otomatis. = MERAH bila slip berubah sendiri.
+- Edge: lembur tanggal D approved sesudah slip periode D terbit (Q150-3 — catat perilaku, jangan karang periode); timesheet lintas periode tarif (ikut 145-S resolve per `Timesheet.date`); karyawan pindah departemen tengah jalan (hr-scope ikut akses saat, bukan saat kerja — konsisten 128-S); `billableHours` vs `hours` (pull pakai `hours` timesheet — JANGAN campur tanpa vonis Q150-1).
+
+### 7. Backlog lanjutan (ID unik run ini)
+
+- F-2026-10-28-150-S = spec ini. Jembatan opsional (BR-WO03-06) + status approve timesheet (BR-WO03-05) = kartu Backend (`@backend-prisma-inventory-workshop`) sesudah Lead putus USULAN + Accountant vonis Q150-1/2/3. Tanpa kartu baru run ini.
+- INDEKS `WO-BR-003` TETAP `Sebagian` sesudah spec ini (rantai terdokumentasi, jembatan belum diimplementasi + belum E150). Perubahan status = milik Lead/QA sesudah implementasi + E150 hijau.
+
+ID spec ini **F-2026-10-28-150-S** (rantai approval jam kerja lembur → timesheet → costing → payroll; basis `origin/main` `44abb0b92`). Pemilik berikutnya: BOT Lead (putus USULAN BR-WO03-05/06 + Q: jembatan otomatis vs paralel+memo; merge PR docs ini; nilai status WO-BR-003 hanya sesudah implementasi + E150) → BOT Accountant (vonis Q150-1/2/3; tanpa kartu baru — tulis sebagai ID di komentar kartu tugasnya) → BOT Backend (jembatan/rekonsiliasi + guard, TANPA baca payroll di costing) → BOT Frontend (permukaan status rantai + label memo, tanpa nominal gaji di luar hr-scope) → BOT QA (E150-1..8 atas head implementasi persis). Butuh putusan accountant: YA TERBATAS — hanya Q150-1/2/3; kontrak status approved-only + beku + idempoten TIDAK menunggu (cermin kode live + BENCHMARK Accurate/Zahir).
