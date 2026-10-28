@@ -287,7 +287,8 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
       orderBy: { date: "asc" },
     }),
     prisma.salesPayment.findMany({
-      where: { salesInvoice: { customerId: partyId } },
+      // FIN-BR-008: pembayaran reversed = histori, bukan uang masuk.
+      where: { status: { not: "reversed" }, salesInvoice: { customerId: partyId } },
       select: { documentNo: true, paymentDate: true, amount: true, withholdingAmount: true },
       orderBy: { paymentDate: "asc" },
     }),
@@ -498,7 +499,8 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
       },
     }),
     prisma.salesPayment.findMany({
-      where: { paymentDate: { gte: period.start, lte: period.end } },
+      // FIN-BR-008: pembayaran reversed tidak menaikkan eksposur kredit.
+      where: { status: { not: "reversed" }, paymentDate: { gte: period.start, lte: period.end } },
       select: {
         amount: true,
         paymentDate: true,

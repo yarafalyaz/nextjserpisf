@@ -201,7 +201,11 @@ export async function loadCustomerStatement(
       },
     }),
     prisma.salesPayment.findMany({
-      where: { salesInvoice: { customerId, deletedAt: null } },
+      where: {
+        // FIN-BR-008: pembayaran reversed = histori, bukan uang masuk.
+        status: { not: "reversed" },
+        salesInvoice: { customerId, deletedAt: null },
+      },
       select: {
         id: true,
         documentNo: true,

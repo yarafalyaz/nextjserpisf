@@ -119,3 +119,15 @@ describe("loadCustomerReceivables ekspor (F5-4)", () => {
     expect(total?.kind === "total" ? total.cells[5] : null).toBe("50")
   })
 })
+
+describe("FIN-BR-008 paparan kredit (loader)", () => {
+  it("query pembayaran memakai status bukan-reversed", async () => {
+    const { loadCustomerCreditExposure } = await import("../ledger-cash-data")
+    await loadCustomerCreditExposure({ start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })
+    expect(mocks.prismaMock.salesPayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { not: "reversed" } }),
+      }),
+    )
+  })
+})

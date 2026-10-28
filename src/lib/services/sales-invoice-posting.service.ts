@@ -219,10 +219,12 @@ export async function reverseSalesInvoicePostingTx(
   // 2. Reverse the revenue + COGS journals (entry lawan, bukan hapus).
   await reverseJournalsByReferenceTx(tx, ["SalesInvoice", "SalesInvoiceCOGS"], invoiceId, reason, userId)
 
-  // 3. Reverse the cash-receipt journal of every linked payment (optional).
+  // 3. Reverse the cash-receipt journal of every linked LIVE payment (optional).
+  // FIN-BR-008: pembayaran reversed sudah punya jurnal lawan dari
+  // reverseSalesPayment — membalik ulang = jurnal ganda.
   if (reversePaymentJournals) {
     const payments = await tx.salesPayment.findMany({
-      where: { salesInvoiceId: invoiceId },
+      where: { salesInvoiceId: invoiceId, status: { not: "reversed" } },
       select: { id: true },
     })
     if (payments.length > 0) {

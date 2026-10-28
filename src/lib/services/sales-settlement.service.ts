@@ -18,12 +18,15 @@ import { prisma, TxClient } from "@/lib/db/prisma"
 export const DOWN_PAYMENT_METHOD = "down_payment"
 
 /** True when the invoice has at least one real (non-DP) payment row. */
+// FIN-BR-008: baris reversed = histori, bukan pelunasan — selalu dikecualikan.
+const LIVE_PAYMENT_WHERE = { status: { not: "reversed" } } as const
 export async function hasRealSettlement(
   salesInvoiceId: number,
   client: TxClient | typeof prisma = prisma,
 ): Promise<boolean> {
   const count = await client.salesPayment.count({
     where: {
+      ...LIVE_PAYMENT_WHERE,
       salesInvoiceId,
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
     },
@@ -42,6 +45,7 @@ export async function salesOrderHasRealSettlement(
 ): Promise<boolean> {
   const count = await client.salesPayment.count({
     where: {
+      ...LIVE_PAYMENT_WHERE,
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
       salesInvoice: { salesOrderId },
     },
@@ -59,6 +63,7 @@ export async function quotationHasRealSettlement(
 ): Promise<boolean> {
   const count = await client.salesPayment.count({
     where: {
+      ...LIVE_PAYMENT_WHERE,
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
       salesInvoice: { quotationId },
     },

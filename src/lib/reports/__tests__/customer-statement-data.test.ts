@@ -290,6 +290,15 @@ describe("loadCustomerStatement", () => {
     expect(report.emailTrail).toEqual([])
     expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
   })
+
+  it("FIN-BR-008: query pembayaran mengecualikan status reversed (histori bukan uang masuk)", async () => {
+    await loadCustomerStatement(7, { start: D("2026-02-01"), end: D("2026-02-28") })
+    expect(mocks.prismaMock.salesPayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { not: "reversed" } }),
+      }),
+    )
+  })
 })
 
 /**
