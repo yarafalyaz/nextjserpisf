@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 
 const toast = vi.hoisted(() => ({ ok: [] as string[], err: [] as string[] }))
