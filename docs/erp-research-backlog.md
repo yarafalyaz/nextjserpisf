@@ -43614,3 +43614,120 @@ ID vonis ini **F-2026-10-28-139-V** (duplikat-ditolak AC-FIN-002; jawaban kartu 
 - DILARANG duplikat P3 #1283: `deleteSalesInvoice` draft-only (`sales.actions.ts:3902` — "Hanya faktur draf yang bisa dihapus") SUDAH di main; Backend hanya tambah 01/02/04/06, JANGAN tulis ulang guard draft-only.
 - INDEKS-ATURAN TIDAK naik di PR ini: AC-FIN-002 naik ke Terpasang HANYA sesudah #1233-diserap-#1277 + #1283 merged + BR-01/02/04/06 terpasang + E139 hijau (139-S §7 butir i-iv utuh) — syarat eksplisit ini mengikat Lead/QA, bukan klaim lulus.
 - DM Lead: merge PR vonis ini sesudah QA (E139-10 atas head persis); serial dengan #1298 (141-V) + #1303 (142-V) milik Lead. DM Backend: urutan DP final = 141-V R1-R3 (faktur-konversi-dulu) BOLEH dipakai; sisi faktur 01/02/04/06 BOLEH implementasi; JANGAN duplikat P3 #1283; model nota = 142-V.
+
+## 2026-10-28 19:20 WIB — FIN (a) rumus outstanding hutang/piutang per modul (P0 TEST-STRATEGY hutang/piutang)
+
+Benchmark resmi (akses 2026-10-28):
+- Accurate: pembayaran pembelian memilih faktur belum lunas lalu hitung (termasuk bayar sebagian/cicilan; kelebihan transfer = fitur terpisah, bukan outstanding negatif) — https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/pembayaran-pembelian/cara-membuat-pembayaran-pembelian/ dan https://help.accurate.id/product/pembayaran-pembelian/ ; kasbon/retur pembelian mengurangi utang lewat jalur pengurang eksplisit — https://help.accurate.id/product/accurate-online/accurate-insight/mencatat-kasbon-pemasok/
+- Zahir: pembayaran hutang usaha memilih nomor faktur yang dilunasi, nilai bayar boleh sebagian dari nilai hutang nota itu — https://help.zahironline.com/portal/id/kb/articles/cara-input-pembayaran-hutang-usaha-zahir-online-v2 dan https://help.zahironline.com/portal/id/kb/articles/mencatat-transaksi-pembayaran-hutang-usaha ; daftar hutang menampilkan nota + perincian transaksi pelunasannya, saldo 0 disembunyikan default — https://help.zahironline.com/portal/id/kb/articles/melihat-daftar-hutang-usaha
+
+### Inventarisasi terverifikasi (2026-10-28, basis `origin/main` `b8d4f7c24`, `prisma/schema.prisma` 6521 baris)
+Sudah ada:
+- Piutang — faktur `SalesInvoice` (`:1721`, `grandTotal` `:1746`, `paidAmount` `:1747`, enum status `:1750`, `paymentStatus` `:1751`), tautan langsung per pembayaran `SalesPayment.salesInvoiceId` (`:1986`, wajib isi Int bukan nullable) + `amount` (`:1990`, kas riil) + `withholdingAmount` (`:1997`, PPh dipotong pelanggan, pelunasan = `amount + withholdingAmount`) + status `posted|reversed` (`:2004`, FIN-BR-008) + `customerId` nullable (`:1985`).
+- Hutang — tagihan `VendorBill` (`:2316`, `grandTotal` `:2341`, `paidAmount` `:2342`, `balanceDue` `:2325`, `withholdingAmount` `:2329`, status string `:2343`), pembayaran `VendorPayment` (`:2404`, status draft `:2410`, `reversedAt` FIN-BR-008 `:2415`, `vendorBillId` nullable target `:2433`), jembatan alokasi eksplisit `VendorPaymentAllocation` (`:2460`, `vendorPaymentId`+`vendorBillId`+`amount`).
+- Fungsi bersama presisi sen: `receivableOutstanding = grandTotal − paid` + `payableOutstanding = grandTotal − withholding − paid` (`src/lib/reports/aging-amounts.ts:31-40`); ambang lunas tunggal Rp1 `isOutstandingSettled`/`isSettled` (`src/lib/finance/settlement-status.ts:22-43`, FIN-BR-006); status diakui laporan `RECOGNISED_AR/AP_STATUSES = ["posted","partial","paid"]` (`src/lib/reports/document-status.ts:10-11`); pengurang retur jual `returnCredit` dari kaki Cr Piutang jurnal SalesReturn POSTED (`src/lib/reports/return-credit.ts`), dipakai aging AR (`src/lib/reports/aging-reports-data.ts:102-124`).
+- Alokasi beli oldest-first + target-pertama (`src/lib/finance/payment-allocation.ts`, `src/actions/purchase.actions.ts:1920-2050` confirm: lock set, target dulu lalu oldest-first, tolak overpay di atas toleransi Rp1, tulis baris alokasi + `paidAmount`/`balanceDue`/status neto); recalc jual `totalPaid = Σ(amount + withholdingAmount)` non-reversed + `derivePaymentStatus` (`src/lib/hooks/sales-payment.hook.ts:20-51`); guard overpay jual toleransi Rp1 (`src/actions/sales.actions.ts:2031-2042`); reversal dua sisi kembalikan saldo via baris alokasi (beli `:1813-1856`, jual recalc exclude `reversed`).
+- Modul terkait: `CustomerCredit` (`:464`, `receivedAmount`/`allocatedAmount`/`refundedAmount`, sisa = received − allocated − refunded, antrean `customer-credit-queue-data.ts`); `EmployeeLoan.remainingAmount` (`:4189`) diamortisasi dari `payroll.loanDeduction`; `Payroll.netSalary` per slip + PKWT belum-dibayar `outstandingAmount = frozenAmount − paidAmount` (`src/lib/reports/pkwt-compensation.ts:223-233`).
+Belum ada / parsial (bukti grep run ini):
+- Rumus kanonis per modul belum ditulis di satu tempat (INDEKS FIN-BR-005 = `Sebagian` "dasar ada, rumus belum ditelusur"). Vonis Accountant F-2026-10-28-123-V sudah memutus definisi NETO simetris AR/AP — spec ini merumuskan sisi Business-nya per modul + matriks status + E155, tanpa mengubah vonis/angka itu.
+- Tiga titik aging masih buang baris `outstanding <= 0` bukan `isOutstandingSettled` Rp1 (temuan D1 spec F-2026-10-28-140-S; menunggu vonis Accountant D1) — spec ini memakai ambang FIN-BR-006 sebagai syarat tampilan, bukan rumus baru.
+- `remaining` guard jual (`sales.actions.ts:2031`) memakai presisi `, 0` (rupiah penuh) sementara bayar boleh sen — inkonsistensi presisi tercatat, bukan rumus baru (diserahkan Backend).
+
+#### F-2026-10-28-155-S (FIN) P0 — Spec rumus outstanding hutang/piutang per modul (penutup FIN-BR-005 sisi Business)
+- Kompetitor: Accurate — satu pembayaran pembelian bisa menutup banyak faktur (Ambil → pilih faktur → Hitung), bayar sebagian/cicilan didukung, kelebihan transfer = alur terpisah bukan sisa negatif; kasbon/retur = pengurang eksplisit. Zahir — pembayaran hutang memilih nomor faktur + nominal (boleh sebagian), kartu hutang = nota + perincian pelunasan, saldo 0 disembunyikan. BENCHMARK: kedua kompetitor: (a) sisa dihitung per dokumen asal (nota/faktur), bukan per pelanggan agregat; (b) pembayaran menunjuk dokumen yang dilunasi; (c) pengurang non-kas (retur/diskon/kasbon) tercatat eksplisit, bukan angka bebas; (d) lunas = sisa 0 (ISF: sisa ≤ Rp1 per FIN-BR-006 — toleransi pembulatan rupiah-penuh, BUKAN standar kompetitor).
+- Status Silengkap: SEBAGIAN. Bukti: dasar kolom + fungsi + alur sudah ada (inventarisasi di atas); yang belum = rumusan kanonis per modul + penjaga populasi + matriks status + falsifikasi. Tanpa kode di kartu ini.
+- Relevansi: P0 TEST-STRATEGY §3 (hutang/piutang) + skenario §4 butir 9 (pembayaran parsial hitung outstanding benar) + §6 (alokasi pembayaran bersamaan). Tanpa rumus kanonis, tiap laporan menurunkan sisa sendiri dan dua kebenaran untuk satu dokumen lahir lagi (preseden FIN-BR-006/FIN-BR-009-S2).
+- Adaptasi: rumuskan 4 rumus modul + 1 prinsip lintas-modul; implementasi fisik (penyeragaman derivasi) milik Backend di atas PR #1233 merged; label/angka milik vonis Accountant 123-V + FIN-BR-006; tanpa model alokasi jual baru (YAGNI — satu payment jual = satu faktur, `salesInvoiceId` wajib isi; kebutuhan multi-faktur belum terbukti).
+
+#### 1. Workflow specification (4 modul)
+
+**M1 — Piutang dagang (SalesInvoice).** Aktor: admin penjualan (buat/bayar), finance (konfirmasi implisit saat bayar — SalesPayment lahir langsung `posted`, tanpa status draft), manager (baca aging/statement). Dokumen masuk: SalesInvoice `posted` (+`partial` sesudah bayar sebagian), SalesPayment (`amount` + `withholdingAmount` + `withholdingTypeId` bila potong PPh), jurnal SalesReturn POSTED (returnCredit). Dokumen keluar: status faktur turun (`posted|partial|paid`, dua kolom `status`+`paymentStatus`), aging AR, statement pelanggan, antrean penagihan, eksposur gerbang kredit. Alur: (1) faktur post → piutang lahir sebesar grandTotal; (2) tiap bayar valid menutup sisi: `totalPaidValid = Σ(amount + withholdingAmount)` atas SalesPayment non-`reversed` bertautan `salesInvoiceId` itu; (3) retur POSTED mengurangi via returnCredit (TIDAK menulis ulang `paidAmount` — kolom itu murni kas); (4) `outstanding = grandTotal − returnCreditValid − totalPaidValid`, presisi sen; (5) lunas bila `grandTotal > 0` dan `outstanding ≤ Rp1` (FIN-BR-006). Keluar populasi: `cancelled`/`draft`/reversed, tanpa dueDate (aging saja), sisa ≤ Rp1.
+
+**M2 — Hutang dagang (VendorBill).** Aktor: admin pembelian (buat tagihan/bayar), approver (`approve_vendor_payments`, confirm draft→completed + alokasi), finance (transfer operasional — TANPA jurnal baru). Dokumen masuk: VendorBill `posted`/`partial`, VendorPayment `completed` (draft tidak pernah alokasi), VendorPaymentAllocation, withholding potongan kita (`withholdingAmount` tagihan). Alur: (1) tagihan post → hutang NETO lahir `grandTotal − withholdingAmount`; (2) confirm lock set tagihan terbuka vendor itu (`posted`/`partial`, `balanceDue > 0`), urut target-`vendorBillId`-dulu lalu oldest-first (`date,id`); (3) tulis baris alokasi per tagihan (cap sisa NETO), `paidAmount += alokasi`, `balanceDue = NETO − paidAmount`, status `paid|partial|posted`; (4) overpay di atas Rp1 DITOLAK (guard drift GL/subledger — kelebihan bukan uang muka tanpa akun prepayment); (5) reversal hapus baris alokasi + kembalikan `paidAmount`/`balanceDue`/status dari baris yang sama (bukan hitung ulang buta). Rumus per tagihan: `outstanding = (grandTotal − withholdingAmount) − Σ alokasi-dari-payment-completed`, presisi sen; lunas bila `NETO > 0` dan `outstanding ≤ Rp1`. Keluar populasi: `draft`/`reversed` payment, alokasi dari payment non-completed, tagihan `cancelled`/terhapus, tanpa dueDate (aging saja), sisa ≤ Rp1.
+
+**M3 — Uang muka pelanggan (DownPayment/konversi).** Aktor: sales (terima DP), finance (confirm), sistem (konversi ke faktur). Prinsip: DP confirmed BUKAN piutang (kas diterima di muka — kewajiban serah, bukan tagihan) dan BUKAN pengurang outstanding faktur lewat kolom `paidAmount`. DP mengurangi penagihan hanya lewat jalur konversi tervonis (snapshot persen kategori → faktur progres/selisih, keluarga SAL-BR-004/121-V/141-V) — bukan angka bebas di form. Reversal DP pasca-konversi = urutan tervonis (faktur ditangani DULU, spec 139-S) — rumus outstanding modul ini TIDAK menutup urutan itu (milik vonis final BR-F139-05b/05c).
+
+**M4 — Pinjaman karyawan + kompensasi PKWT (sisi kewajiban non-dagang).** Aktor: HR/finance (kasbon/pinjaman), karyawan (self via hr-scope). Rumus: `EmployeeLoan` sisa = `remainingAmount` berjalan (kolom, diamortisasi dari `payroll.loanDeduction` aktual tertua-dulu, bukan `totalAmount − Σ angsuran dihitung-ulang di laporan`); PKWT belum-dibayar `outstandingAmount = frozenAmount − paidAmount` (`pkwt-compensation.ts:223-233`, filter `> 0` — TANPA toleransi Rp1: kompensasi statutory bukan pembulatan kas; perbedaan ambang vs dagang ini sadar dan dicatat, bukan inkonsistensi). Gaji slip (`Payroll.netSalary`) BUKAN outstanding — slip `approved` belum `paid` = antrean bayar, bukan piutang karyawan; otorisasi gaji tetap `getHrScope` + permission payroll (data gaji tidak tampil di laporan hutang/piutang umum).
+
+**Prinsip lintas-modul (P0):** (P1) sisa dihitung PER DOKUMEN ASAL, agregat pelanggan/vendor = Σ sisa dokumen valid (tertimbang, bukan persen rata-rata); (P2) hanya uang final terkonfirmasi mengurangi (jual: payment non-reversed; beli: alokasi dari payment `completed`; draft/gagal/reversed = 0); (P3) potongan non-kas tercatat eksplisit di jalurnya (retur jurnal POSTED sisi jual; withholding sisi beli; kasbon/alokasi sisi terkait) — tidak ada pengurang angka bebas; (P4) presisi sen (`safeSub/safeAdd ,2`, larang `Number()` float mentah di permukaan resmi); (P5) satu dokumen dua jembatan (langsung + via SO/proyek/quotation — `collectQuotationInvoices` dedup per id, `sales.actions.ts:1272` + `job-payment-schedule.actions.ts:69`) dihitung SATU kali; (P6) `grandTotal ≤ 0`/batal tidak pernah lunas dan tidak masuk populasi.
+
+#### 2. Role/permission matrix (aksi × permission key nyata)
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Buat/bayar piutang (SalesPayment) | `create_sales_payments` | Bayar lahir langsung posted; guard overpay Rp1 |
+| Reversal pembayaran jual | (FIN-BR-008, kunci existing reversal) | Exclude `reversed` dari totalPaid; UI read-only reversed |
+| Buat tagihan beli | `create_vendor_bills` | Hutang lahir saat post |
+| Buat/confirm bayar beli + alokasi | `create_vendor_payments` / `approve_vendor_payments` | Confirm tulis alokasi; draft = 0 |
+| Reversal pembayaran beli | (FIN-BR-008) | Kembalikan via baris alokasi |
+| Baca aging/statement AR/AP | `view_*_reports` existing | Scope hr TIDAK berlaku di sini; scope gaji (`getHrScope`) hanya M4 |
+| Baca/antre pinjaman & PKWT | permission payroll/HR existing + `getHrScope` | Nominal gaji/pinjaman tidak keluar scope |
+| Override kredit / ubah ambang Rp1 / ubah rumus | BUTUH-VONIS Accountant + putus Lead | Bukan aksi operator |
+
+#### 3. Status-transition matrix
+
+| Dokumen | Awal → pemicu → akhir | Penjaga |
+|---|---|---|
+| SalesInvoice | `posted` → bayar valid sebagian → `partial` | `create_sales_payments`; recalc `derivePaymentStatus` |
+| SalesInvoice | `partial` → totalPaid menutup sisa (≤Rp1) → `paid` | Sama; `isSettled(grandTotal, totalPaid)`; `grandTotal ≤ 0` tidak pernah paid |
+| SalesInvoice | `paid` → reversal payment → `partial`/`posted` | Recalc exclude `reversed` (FIN-BR-008) |
+| SalesInvoice | `posted/partial` → retur POSTED → sisa turun, status hitung ulang | returnCredit jurnal, `paidAmount` tetap |
+| VendorBill | `posted` → confirm alokasi sebagian → `partial` | `approve_vendor_payments`; cap sisa NETO |
+| VendorBill | `partial` → alokasi menutup sisa (≤Rp1) → `paid` | Sama; overpay >Rp1 ditolak |
+| VendorBill | `paid/partial` → reversal payment → naik kembali | Hapus baris alokasi + kembalikan saldo |
+| VendorBill | sembarang → batal/hapus logis → keluar populasi | `cancelled`/`deletedAt` tidak dihitung |
+| EmployeeLoan | `active` → amortisasi slip → `remainingAmount` turun → lunas keluar | `payroll.loanDeduction` aktual; jadwal mingguan dari perjanjian tertulis |
+| DP | `pending` → confirm → kewajiban serah (bukan piutang) → konversi → tutup jalur faktur | Snapshot persen kategori; urutan reversal milik vonis final |
+
+#### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-FIN05-01 | Outstanding piutang per faktur = `grandTotal − returnCreditValid − totalPaidValid` (sen); bayar valid = SalesPayment non-`reversed` bertautan; retur valid = jurnal SalesReturn POSTED | USULAN (cermin vonis Accountant 123-V Putusan 2; fisik milik Backend) |
+| BR-FIN05-02 | Outstanding hutang per tagihan = `(grandTotal − withholdingAmount) − Σ alokasi-dari-VendorPayment-completed` (sen); draft payment = 0 | TERVERIFIKASI-KODE sebagian (`purchase.actions.ts:1920-2050`, `payment-allocation.ts`); kanonisasi USULAN |
+| BR-FIN05-03 | Satu payment jual = satu faktur (`salesInvoiceId` wajib isi); tidak ada alokasi multi-faktur sisi jual | TERVERIFIKASI-KODE (`schema.prisma:1986`); larangan model baru = USULAN (YAGNI) |
+| BR-FIN05-04 | Urutan alokasi beli = tagihan target dulu (parsial boleh) lalu oldest-first (`date,id`); overpay >Rp1 ditolak | TERVERIFIKASI-KODE (`purchase.actions.ts:1924-1970`) |
+| BR-FIN05-05 | Lunas dagang bila sisa ≤ Rp1 dan basis > 0 (FIN-BR-006); PKWT tanpa toleransi (`> 0`) | BUTUH-VONIS bila ubah nilai (Accountant); beda ambang PKWT = USULAN tercatat |
+| BR-FIN05-06 | Populasi laporan = status diakui (`posted/partial/paid`) + belum dihapus/batal + punya dueDate (aging) + sisa > Rp1 | TERVERIFIKASI-KODE (`document-status.ts:10-11`); ambang tampilan aging = D1 spec 140-S menunggu vonis |
+| BR-FIN05-07 | DP confirmed bukan piutang dan bukan pengurang `paidAmount`; pengurang hanya jalur konversi tervonis | USULAN (cermin 121-V/141-V/139-S; urutan reversal = BUTUH-VONIS final 05b/05c) |
+| BR-FIN05-08 | `CustomerCredit` sisa = `received − allocated − refunded`; kelebihan retur → kredit, bukan outstanding negatif | TERVERIFIKASI-KODE (`schema.prisma:464-483`); arah kelebihan = cermin vonis 123-V |
+| BR-FIN05-09 | Sisa pinjaman = `remainingAmount` berjalan (amortisasi aktual), bukan hitung-ulang laporan | TERVERIFIKASI-KODE (`schema.prisma:4189`, `hrm.actions.ts:3213-3223`) |
+| BR-FIN05-10 | Slip gaji `approved`-belum-`paid` = antrean bayar, bukan piutang; nominal gaji di luar scope HR dilarang tampil | USULAN (otorisasi: `hr-scope` + permission payroll) |
+| BR-FIN05-11 | Agregat per pelanggan/vendor = Σ sisa dokumen valid; dedup satu dokumen satu kali; presisi sen; `grandTotal ≤ 0` tak pernah lunas | USULAN (P1/P4/P5/P6 prinsip lintas-modul) |
+
+#### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (basis b8d4f7c24) |
+|---|---|---|---|
+| Sisa per dokumen asal | Ya — faktur belum lunas dipilih per nomor, Hitung Nilai Pembayaran | Ya — pembayaran hutang pilih no. faktur + nominal (boleh sebagian), kartu hutang = nota + rincian | Ya — AR per faktur (recalc taut langsung), AP per tagihan (alokasi) |
+| Satu bayar banyak dokumen | Ya — Ambil lalu pilih banyak faktur | Ya — daftar hutang + perincian multi-transaksi | Beli YA (alokasi multi-bill); jual TIDAK (satu payment satu faktur — YAGNI) |
+| Bayar sebagian/cicilan | Ya — pembayaran sebagian/cicilan | Ya — jumlah dibayar boleh < nilai hutang | Ya — `partial` dua sisi |
+| Pengurang non-kas eksplisit | Ya — kasbon/retur/diskon jalur sendiri | Ya — diskon/denda kolom sendiri di form bayar | Ya — returnCredit jurnal / withholding / kasbon; angka bebas DILARANG |
+| Kelebihan bayar | Alur terpisah (kelebihan transfer), bukan sisa negatif | — (belum terverifikasi) | Ditolak >Rp1 (guard drift GL; uang muka vendor = fitur terpisah) |
+| Lunas = sisa 0 | Ya (implisit) | Ya — saldo 0 disembunyikan default | Sisa ≤ Rp1 (FIN-BR-006, toleransi rupiah-penuh khas ISF) |
+| Tampil tanpa jatuh tempo | — | — | Total Hutang tampilkan semua bersisa; aging hanya ber-dueDate |
+
+#### 6. Acceptance criteria + edge cases
+
+- AC1: tiap rumus §1 dapat ditelusur ke kolom/fungsi `file:line` yang dikutip — tanpa klaim tanpa bukti.
+- AC2: tidak ada angka statutori/pajak baru; ambang Rp1 dan definisi NETO merujuk vonis 123-V + FIN-BR-006 apa adanya.
+- AC3: otorisasi gaji/pinjaman (M4) hanya via `getHrScope` + permission payroll; nominal gaji tidak muncul di permukaan AR/AP.
+- Edge: faktur `grandTotal` turun di bawah `paidAmount` lama (DP penuh/edit) → `paid` sah, bukan negatif (pola `sales.actions.ts:3234`); tagihan ber-PPh lunas sekali bayar (NETO, bukan grandTotal); payment menarget tagihan yang sudah lunas → tolak ("sudah lunas/perbarui"); reversal ganda ditolak di sumber; alokasi dua user bersamaan → lock set + idempotensi; sisa Rp0,50 tampil-vs-lunas mengikuti vonis D1 140-S (bukan spec ini).
+- Falsifikasi QA (E155, atas implementasi Backend kelak — BUKAN atas spec ini): E155-1 bayar jual `reversed` tetap mengurangi outstanding = MERAH; E155-2 alokasi dari VendorPayment `draft` mengurangi `balanceDue` = MERAH; E155-3 tagihan ber-withholding lunas dihitung dari grandTotal bruto = MERAH; E155-4 payment tanpa tautan faktur (jual) mengurangi outstanding faktur mana pun = MERAH; E155-5 overpay >Rp1 lolos confirm beli = MERAH; E155-6 sisa Rp0,50 berstatus `paid` tampil di aging = ikut vonis D1 140-S (bukan MERAH otomatis); E155-7 dua confirm bersamaan menggandakan alokasi = MERAH.
+
+#### 7. Backlog implementasi (rekomendasi kartu, BUKAN kode di kartu ini)
+
+- Backend: penyeragaman derivasi outstanding ke fungsi bersama (§1+P1-P6) di atas PR #1233 merged + vonis D1 140-S; presisi guard jual `,0`→`,2`; tanpa model alokasi jual baru. Butuh putusan Accountant: YA (D1 ambang aging + konfirmasi NETO final).
+- Frontend: label sisa + status lunas dari derivasi bersama (tanpa hitung ulang di layar); permukaan M4 tetap dalam scope HR.
+- QA: E155-1..7 atas head implementasi persis (bukan atas spec ini).
+- Lead: putus BR-FIN05-01/05/07/11 + merge spec ini; INDEKS FIN-BR-005 `Sebagian`→`Terpasang` sesudah implementasi + E155 lulus (bukan oleh spec ini).
+
+### Yang TIDAK diusulkan run ini
+- Kode/migrasi/skema apa pun (read-only sesuai tugas; fisik milik Backend).
+- Model `SalesPaymentAllocation` (YAGNI — kebutuhan multi-faktur jual belum terbukti; satu payment = satu faktur sudah dijamin `salesInvoiceId` wajib isi).
+- Akun uang-muka vendor / prepayment (fitur terpisah; overpay tetap ditolak).
+- Angka pajak/statutori/DPP apa pun (milik vonis Accountant).
+- Menutup FIN-BR-005 di INDEKS (loop tertutup: status naik lewat implementasi + E155).
+- Mengubah ambang aging D1 (milik vonis Accountant atas 140-S).
+
+ID spec ini **F-2026-10-28-155-S** (FIN-BR-005 sisi Business: rumus outstanding per modul + E155). Pemilik berikutnya: Accountant (konfirmasi NETO + D1 aging + ambang PKWT BR-FIN05-05) → Lead (putus BR-FIN05 + merge) → Backend (derivasi bersama) → Frontend (label) → QA (E155 atas implementasi).
