@@ -57,6 +57,19 @@ describe("buildSalesProcessHistory", () => {
     expect(notices(result).join(" ")).toContain("belum dibayar penuh")
   })
 
+  it("FIN-BR-006: sisa Rp0,50 TIDAK dihitung belum dibayar; Rp1,01 dihitung", () => {
+    const lunas = buildSalesProcessHistory([
+      line({ orderNo: "SO-001", invoiced: 1_000_000, paid: 999_999.5 }),
+    ])
+    expect(lunas.totals.invoicedUnpaid).toBe(0)
+
+    const terbuka = buildSalesProcessHistory([
+      line({ orderNo: "SO-001", invoiced: 1_000_000, paid: 999_999.5 }),
+      line({ orderNo: "SO-002", invoiced: 1_000_000, paid: 999_998.99 }),
+    ])
+    expect(terbuka.totals.invoicedUnpaid).toBe(1)
+  })
+
   it("membedakan 'tidak ada pesanan' dari daftar kosong biasa", () => {
     const result = buildSalesProcessHistory([])
 
