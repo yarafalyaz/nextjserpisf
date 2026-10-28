@@ -2,6 +2,23 @@ import type { ProjectPlResult } from "@/lib/reports/project-pl"
 import { formatCurrency, formatNumber } from "@/lib/utils/format"
 import { ReportCardShell } from "./report-card-shell"
 
+/**
+ * Jejak ketertelusuran angka aktual ke transaksi sumbernya (PROJ-BR-004 G3 /
+ * BR-PROJ004-12): builder hanya membawa daftar id dokumen yang terhitung,
+ * TANPA nomor dokumen/tanggal/nilai per dokumen — UI menampilkan jumlah +
+ * id verbatim apa adanya, TIDAK mengarang nomor dokumen dan TIDAK
+ * menghitung nilai per dokumen. Null bila sumber tidak membawa daftar id
+ * (mis. ProductionCost/Expense/PettyCash di builder tidak ber-id).
+ */
+function SourceTrace({ label, ids }: Readonly<{ label: string; ids: number[] | null }>) {
+  if (ids === null || ids.length === 0) return null
+  return (
+    <p className="text-xs text-muted-foreground">
+      {label}: {ids.length} dokumen (#{ids.join(", #")})
+    </p>
+  )
+}
+
 function CostLine({ label, amount }: Readonly<{ label: string; amount: number }>) {
   return (
     <div>
@@ -56,14 +73,21 @@ export function ProjectPlDetailCard({ pl }: Readonly<{ pl: ProjectPlResult }>) {
         <div>
           <span className="text-muted-foreground block">Pendapatan (invoice diakui):</span>
           <span className="font-semibold text-foreground">{formatCurrency(pl.revenue)}</span>
+          <SourceTrace label="Invoice sumber" ids={pl.revenueInvoiceIds} />
         </div>
         <div>
           <span className="text-muted-foreground block">Total Biaya:</span>
           <span className="font-semibold text-danger">{formatCurrency(pl.totalCost)}</span>
         </div>
-        <CostLine label="Material" amount={pl.materialCost} />
+        <div>
+          <CostLine label="Material" amount={pl.materialCost} />
+          <SourceTrace label="Pengeluaran material sumber" ids={pl.materialIssueIds} />
+        </div>
         <CostLine label="Biaya Produksi" amount={pl.productionCost} />
-        <CostLine label="Beban Lain (biaya, kas kecil, tagihan vendor)" amount={otherCost} />
+        <div>
+          <CostLine label="Beban Lain (biaya, kas kecil, tagihan vendor)" amount={otherCost} />
+          <SourceTrace label="Tagihan vendor sumber" ids={pl.vendorBillIds} />
+        </div>
       </div>
 
       {pl.unpulledTimesheetCount > 0 && (
