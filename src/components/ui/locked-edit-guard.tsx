@@ -7,102 +7,12 @@ import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
  * Cermin guard server fail-closed — tampilkan notice + tautan kembali,
  * bukan form yang pasti ditolak server.
  *
- * Preset per tipe dokumen (crumbs/koreksi/back) di sini supaya 4 halaman
- * ubah + 4 halaman detail tidak menyalin blok props identik (dedup Sonar).
+ * Varian `preset` menampung pola guard berulang antar halaman ubah sales
+ * (faktur/penawaran/pesanan/pembayaran): crumb "Dasbor > Penjualan >
+ * {section} > Ubah", label dokumen + koreksi + tautan kembali baku —
+ * pemanggil cukup isi `slug`/`documentNo`. Bebas `preset` = mode lama
+ * (crumbs/dokumen/koreksi/back eksplisit per halaman).
  */
-type LockedDocKind = "faktur" | "penawaran" | "pesanan" | "pembayaran"
-
-const LOCKED_PRESET: Record<
-  LockedDocKind,
-  {
-    crumbs: Array<{ label: string; href?: string }>
-    correctionLabel: string
-    backHref: (ref: string) => string
-    backLabel: string
-  }
-> = {
-  faktur: {
-    crumbs: [
-      { label: "Dasbor", href: "/" },
-      { label: "Penjualan", href: "/penjualan" },
-      { label: "Faktur", href: "/penjualan/faktur" },
-      { label: "Ubah" },
-    ],
-    correctionLabel: "retur penjualan",
-    backHref: (ref) => `/penjualan/faktur/${ref}`,
-    backLabel: "Kembali ke detail faktur",
-  },
-  penawaran: {
-    crumbs: [
-      { label: "Dasbor", href: "/" },
-      { label: "Penjualan", href: "/penjualan" },
-      { label: "Penawaran", href: "/penjualan/penawaran" },
-      { label: "Ubah" },
-    ],
-    correctionLabel: "revisi/penawaran baru",
-    backHref: (ref) => `/penjualan/penawaran/${ref}`,
-    backLabel: "Kembali ke detail penawaran",
-  },
-  pesanan: {
-    crumbs: [
-      { label: "Dasbor", href: "/" },
-      { label: "Penjualan", href: "/penjualan" },
-      { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
-      { label: "Ubah" },
-    ],
-    correctionLabel: "retur/void faktur turunan",
-    backHref: (ref) => `/penjualan/pesanan/${ref}`,
-    backLabel: "Kembali ke detail pesanan",
-  },
-  pembayaran: {
-    crumbs: [
-      { label: "Dasbor", href: "/" },
-      { label: "Penjualan", href: "/penjualan" },
-      { label: "Pembayaran", href: "/penjualan/pembayaran" },
-      { label: "Ubah" },
-    ],
-    correctionLabel: "pembayaran pengganti baru",
-    backHref: () => "/penjualan/pembayaran",
-    backLabel: "Kembali ke daftar pembayaran",
-  },
-}
-
-/** Breadcrumb + label koreksi + tautan kembali untuk satu tipe dokumen. */
-export function lockedDocPreset(kind: LockedDocKind, ref: string) {
-  const p = LOCKED_PRESET[kind]
-  return {
-    crumbs: p.crumbs,
-    correctionLabel: p.correctionLabel,
-    backHref: p.backHref(ref),
-    backLabel: p.backLabel,
-  }
-}
-
-/** Notice kunci posted untuk halaman detail (K2): 1 baris per tipe. */
-export function LockedDocNotice({
-  kind,
-  documentNo,
-  correctionHref,
-}: {
-  kind: LockedDocKind
-  documentNo: string | null
-  correctionHref?: string
-}) {
-  const docNames: Record<LockedDocKind, string> = {
-    faktur: "Faktur",
-    penawaran: "Penawaran",
-    pesanan: "Pesanan Penjualan",
-    pembayaran: "Pembayaran",
-  }
-  return (
-    <PostedLockNotice
-      documentLabel={`${docNames[kind]} ${documentNo ?? "-"}`}
-      correctionHref={correctionHref}
-      correctionLabel={LOCKED_PRESET[kind].correctionLabel}
-    />
-  )
-}
-
 export function LockedEditGuard({
   crumbs,
   documentLabel,
@@ -110,27 +20,61 @@ export function LockedEditGuard({
   correctionLabel,
   backHref,
   backLabel,
+  preset,
 }: {
-  crumbs: Array<{ label: string; href?: string }>
-  documentLabel: string
+  crumbs?: Array<{ label: string; href?: string }>
+  documentLabel?: string
   correctionHref?: string
   correctionLabel?: string
-  backHref: string
-  backLabel: string
+  backHref?: string
+  backLabel?: string
+  preset?: {
+    section: string
+    sectionHref: string
+    documentKind: string
+    documentNo: string | null
+    slug: string | number
+    correctionHref?: string
+    correctionLabel?: string
+    backHref?: string
+    backLabel?: string
+  }
 }) {
+  const resolved = preset
+    ? {
+        crumbs: [
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: preset.section, href: preset.sectionHref },
+          { label: "Ubah" },
+        ],
+        documentLabel: `${preset.documentKind} ${preset.documentNo ?? "tanpa nomor"}`,
+        correctionHref: preset.correctionHref,
+        correctionLabel: preset.correctionLabel,
+        backHref: preset.backHref ?? `${preset.sectionHref}/${preset.slug}`,
+        backLabel: preset.backLabel ?? `Kembali ke detail ${preset.documentKind.toLowerCase()}`,
+      }
+    : {
+        crumbs: crumbs ?? [],
+        documentLabel: documentLabel ?? "",
+        correctionHref,
+        correctionLabel,
+        backHref: backHref ?? "",
+        backLabel: backLabel ?? "",
+      }
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={crumbs} />
+      <AppBreadcrumbs items={resolved.crumbs} />
       <PostedLockNotice
-        documentLabel={documentLabel}
-        correctionHref={correctionHref}
-        correctionLabel={correctionLabel}
+        documentLabel={resolved.documentLabel}
+        correctionHref={resolved.correctionHref}
+        correctionLabel={resolved.correctionLabel}
       />
       <Link
-        href={backHref}
+        href={resolved.backHref}
         className="text-sm font-medium underline underline-offset-4"
       >
-        {backLabel}
+        {resolved.backLabel}
       </Link>
     </div>
   )

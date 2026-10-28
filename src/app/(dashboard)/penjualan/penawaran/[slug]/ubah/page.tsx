@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { QuotationForm } from "@/components/forms/quotation-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { LockedEditGuard, lockedDocPreset } from "@/components/ui/locked-edit-guard"
+import { LockedEditGuard } from "@/components/ui/locked-edit-guard"
 
 import type { Metadata } from "next"
 
@@ -25,7 +25,7 @@ export default async function EditQuotationPage({
   const canEditQuotations = await hasPermission("edit_quotations")
 
   const data = await resolveEntity(
-    { segment: slug, fallbackWhere: {} as Record<string, never> },
+    { segment: slug, fallbackWhere: {} },
     {
       bySlug: (s, where) =>
         prisma.quotation.findFirst({ where: { slug: s, ...where }, include: { sections: { include: { items: true } } } }),
@@ -39,21 +39,24 @@ export default async function EditQuotationPage({
   // GL-BR-003 K1: cermin guard server updateQuotation fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). Final tanpa
   // pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
-  const _d = data;
-  if (!_d) notFound();
-  const quotLocked = lockedDocPreset("penawaran", String(_d.slug ?? _d.id))
+  // `data` non-null sesudah notFound (TS tak menyempit via throw).
+  const lockedQuotation = data as NonNullable<typeof data>
   function quotLockedGuard() {
     return (
       <LockedEditGuard
-        crumbs={quotLocked.crumbs}
-        documentLabel={`Penawaran ${_d.documentNo}`}
-        correctionLabel={quotLocked.correctionLabel}
-        backHref={quotLocked.backHref}
-        backLabel={quotLocked.backLabel}
+        preset={{
+          section: "Penawaran",
+          sectionHref: "/penjualan/penawaran",
+          documentKind: "Penawaran",
+          documentNo: lockedQuotation.documentNo ?? lockedQuotation.id.toString(),
+          slug: lockedQuotation.slug ?? lockedQuotation.id,
+          correctionLabel: "revisi/penawaran baru",
+          backLabel: "Kembali ke detail penawaran",
+        }}
       />
     )
   }
-  if (_d.status === "cancelled") {
+  if (lockedQuotation.status === "cancelled") {
     return quotLockedGuard()
   }
   const quotationRealSettlementCount = await prisma.salesPayment.count({
@@ -61,8 +64,8 @@ export default async function EditQuotationPage({
       NOT: { paymentMethod: "down_payment" },
       salesInvoice: {
         OR: [
-          { quotationId: _d.id },
-          { salesOrder: { quotationId: _d.id } },
+          { quotationId: lockedQuotation.id },
+          { salesOrder: { quotationId: lockedQuotation.id } },
         ],
       },
     },

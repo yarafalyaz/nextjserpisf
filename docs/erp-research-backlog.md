@@ -43874,6 +43874,36 @@ Belum ada / parsial (bukti grep run ini):
 - Mengubah ambang aging D1 (milik vonis Accountant atas 140-S).
 
 ID spec ini **F-2026-10-28-155-S** (FIN-BR-005 sisi Business: rumus outstanding per modul + E155). Pemilik berikutnya: Accountant (konfirmasi NETO + D1 aging + ambang PKWT BR-FIN05-05) → Lead (putus BR-FIN05 + merge) → Backend (derivasi bersama) → Frontend (label) → QA (E155 atas implementasi).
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-129-V: margin proyek = pendapatan terbit − biaya terdokumentasi; overhead dan jam timesheet tak boleh dinilai tebakan (jawaban PROJ-BR-008)
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `ec5cbd7ba` (28 Okt 2026 09:30 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-129` di backlog + board `origin/main` = 0 sebelum tulis; ID 127-S/128-S terpakai Business, 121-V/123-V/125-V/126-V terpakai vonis Accountant. **129-V bebas.**
+### 1. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Builder sumber tunggal laba/rugi proyek: `src/lib/reports/project-pl.ts:1-57` (dokumen kontrak F-2026-10-21-029), loader `project-pl-data.ts`, ekspor `project-pl-export.ts`; UI `src/components/reports/project-pl-detail-card.tsx` 104 baris (konsumen, bukan penentu angka).
+- **Pendapatan**: hanya invoice `deletedAt = null` dengan status `posted | partial | paid` — `project-pl.ts:60,186-192`; nilai = Σ (`subtotal − discount`) tanpa pajak (`:151-153`). Jembatan: `projectId` langsung + quotation→WO proyek, dedup per id invoice.
+- **Biaya**: lima keranjang berlabel — `materialCost` (MaterialIssue completed, snapshot qty × cost), `productionCost` (ProductionCost pada WO proyek, termasuk labor hasil tarik timesheet `sourceTimesheetId` dan subkontrak yang dicerminkan dari VendorBill PO jasa), `expenseCost` (Expense approved), `pettyCashCost` (PettyCash OUT), `vendorBillCost` (VendorBill confirmed/posted/partial/paid setelah VendorBill yang sudah tercermin sebagai ProductionCost dikeluarkan — anti-dobel). Definisi field: `:150-180`; anti-dobel dijelaskan `:28-37`.
+- **Tenaga kerja**: timesheet yang belum ditarik ke ProductionCost dilaporkan sebagai `unpulledTimesheetHours` — JAM saja, bukan uang, tidak mengurangi laba (`:42-47`, `:296-306`). Ini konsisten dengan vonis F-2026-10-27-109-V (jam Timesheet bukan tarif).
+- **Overhead**: grep `overhead` di `project-pl.ts` = 0 — tidak ada alokasi overhead otomatis ke margin proyek. Overhead hanya bisa masuk lewat dokumen ProductionCost (absorpsi eksplisit di modul produksi).
+- **Margin**: `profit = revenue − totalCost`; `marginPercent = profit / revenue × 100` (0 bila revenue 0) — `:281-284`.
+### 2. Vonis (menutup garpu PROJ-BR-008)
+- **P1 — pengakuan pendapatan proyek**: pendapatan diakui saat **faktur penjualan terbit** (status `posted`, atau sudah berjalan `partial`/`paid`), sebesar subtotal − diskon, TANPA PPN. Termin, uang muka, dan pembayaran BUKAN pengakuan pendapatan; draft/void/cancelled/deleted tidak diakui. Quotation dan surat jalan bukan pendapatan.
+- **P2 — biaya proyek**: hanya lima keranjang §1 yang sah. Material dinilai pada **snapshot biaya saat issue** (FIFO/average yang berlaku ketika keluar), bukan harga beli terakhir. VendorBill yang sudah tercermin sebagai ProductionCost TIDAK boleh dihitung dua kali; dedup invoice dan MI wajib.
+- **P3 — tenaga kerja**: biaya tenaga kerja proyek hanya lahir dari ProductionCost yang sudah ditarik dari timesheet; jam yang belum ditarik tetap MEMO, tidak dinilai rupiah dan tidak mengurangi margin. Vonis ini TIDAK membatalkan vonis tarif tenaga kerja **Q-PROJ8-2/Q-PROJ8-6** (kartu t_5836cae1, 28 Okt 02:38 WIB): tarif standar terencana per periode/peran SAH sebagai dasar biaya TERAPAN selama bersnapshot dan variansnya ditutup lewat jurnal varians; yang dilarang adalah menilai jam dengan tarif yang tidak ditetapkan/di-snapshot (tebakan) — selaras 109-V.
+- **P4 — overhead**: tidak ada alokasi overhead otomatis (persentase atas pendapatan/biaya) ke margin proyek. Overhead masuk hanya bila ada dokumen absorpsi (ProductionCost) atau beban ber-`projectId`; selisih absorpsi vs aktual tetap milik modul produksi, bukan ditambal di laporan proyek.
+- **P5 — definisi margin**: `laba = pendapatan − Σ biaya` lima keranjang; `margin % = laba / pendapatan`. Proyek dengan pendapatan 0 dan biaya > 0 WAJIB menampilkan laba negatif; `margin % = 0` adalah konvensi tampilan, bukan penilaian. Margin tidak boleh dihitung dari quotation atau dari nilai kontrak.
+- **P6 — batas laporan**: laporan laba/rugi proyek adalah **laporan manajemen** berbasis dokumen (Expense `approved` dan MaterialIssue `completed` diakui lebih awal daripada GL). Sumber otoritatif tetap GL; bila angka laporan ≠ GL, selisih harus bisa dijelaskan per dokumen — bukan dipilih salah satu diam-diam.
+- **P7 — pembulatan**: setiap agregat 2dp lewat helper `src/lib/utils/math`; persentase 2dp; tidak menjumlah persen lintas proyek.
+### 3. Batas vonis
+- Pengakuan pendapatan formal untuk laporan eksternal (PSAK 72 — pengakuan berdasarkan pemenuhan kewajiban prestasi, bukan sekadar penerbitan faktur) TIDAK diputus di sini; bila ISF butuh laporan keuangan ber-PSAK 72, itu proyek akuntansi terpisah dengan kontrak pelanggan sebagai basis. Vonis ini mengikat **laporan manajemen** yang ada hari ini.
+- Perubahan bentuk laporan/UI = lane Frontend; perubahan sumber data = lane Backend; vonis ini menetapkan angka mana yang sah.
+- Vonis **Q-PROJ8-2/3/6** (kartu t_5836cae1) tetap berlaku penuh untuk mekanika costing produksi (tarif standar vs aktual, varians tarif, absorpsi overhead + under/over-absorption). Vonis 129-V ini hanya menetapkan komposisi dan pengakuan pada laporan margin proyek; bila keduanya bersinggungan, Q-PROJ8 menang untuk mekanika costing dan 129-V menang untuk apa yang boleh masuk margin proyek.
+- Status INDEKS-ATURAN yang diubah PR ini: `PROJ-BR-008 OPEN-keputusan → Sebagian` (margin/komponen biaya/overhead/tenaga kerja tertutup; sisa = pengakuan pendapatan PSAK 72 bila dibutuhkan).
+ID vonis ini **F-2026-10-28-129-V** (jawaban PROJ-BR-008). Pemilik berikutnya: Lead (merge) → QA (E129-1..3 atas head persis) → Frontend/Backend hanya bila ada penyimpangan dari P1-P7.
+### Falsifikasi QA (E129, atas head persis)
+- E129-1: quotation/termin/pembayaran dihitung sebagai pendapatan proyek, atau invoice draft/cancelled ikut diakui = **MERAH**.
+- E129-2: jam timesheet yang belum ditarik dinilai rupiah dan mengurangi margin, ATAU overhead dialokasikan dengan persentase tebakan = **MERAH**.
+- E129-3: VendorBill yang sudah tercermin sebagai ProductionCost dihitung dua kali, atau invoice dihitung dua kali lewat dua jembatan = **MERAH**.
+
+---
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-153-S: koreksi terkontrol faktur posted (SAL-BR-009)
 

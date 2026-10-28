@@ -232,6 +232,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // tagihan vendor) — daftar-beku dilepas saat tombol vendor mendarat.
   "src/actions/purchase.actions.ts::reverseVendorPayment":
     "FIN-BR-008: reversal vendor menyusul tombol UI pembelian",
+  // GL-BR-003 UI: reverseSalesPayment kini dirujuk tombol Balikkan
+  // di detail pembayaran penjualan; entri beku sales dibuang, vendor tetap.
 }
 
 describe("keterhubungan aksi server", () => {

@@ -39,15 +39,16 @@ export default async function EditPage({
   if (data.status === "reversed") {
     return (
       <LockedEditGuard
-        crumbs={[
-          { label: "Dasbor", href: "/" },
-          { label: "Pembayaran", href: "/penjualan/pembayaran" },
-          { label: "Ubah" },
-        ]}
-        documentLabel={`Pembayaran ${data.documentNo}`}
-        correctionLabel="pembayaran pengganti baru"
-        backHref="/penjualan/pembayaran"
-        backLabel="Kembali ke daftar pembayaran"
+        preset={{
+          section: "Pembayaran",
+          sectionHref: "/penjualan/pembayaran",
+          documentKind: "Pembayaran",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionLabel: "pembayaran pengganti baru",
+          backHref: "/penjualan/pembayaran",
+          backLabel: "Kembali ke daftar pembayaran",
+        }}
       />
     );
   }
