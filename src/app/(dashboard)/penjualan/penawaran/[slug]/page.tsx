@@ -44,6 +44,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
 
 import type { Metadata } from "next";
 
@@ -109,6 +110,23 @@ export default async function QuotationDetailPage({
     : [];
 
   const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+
+  // GL-BR-003 K1: cermin guard server updateQuotation fail-closed
+  // (cancelled/setelah-pelunasan-nyata pasti ditolak). Fakta pelunasan dari
+  // loader server (bukan hitungan UI): count pembayaran nyata turunan.
+  const quotationRealSettlementCount = await prisma.salesPayment.count({
+    where: {
+      NOT: { paymentMethod: "down_payment" },
+      salesInvoice: {
+        OR: [
+          { quotationId: quotation.id },
+          { salesOrder: { quotationId: quotation.id } },
+        ],
+      },
+    },
+  });
+  const quotationEditable =
+    quotation.status !== "cancelled" && quotationRealSettlementCount === 0;
 
   const totalDP = quotation.downPayments
     .filter((dp) => dp.status === "confirmed")
@@ -197,12 +215,16 @@ export default async function QuotationDetailPage({
         badge={<StatusChip status={quotation.status} />}
         actions={
           <>
-            <Button
-              href={entityEditHref("/penjualan/penawaran", quotation)}
-              variant="secondary"
-            >
-              <Pencil size={14} /> Ubah
-            </Button>
+            {/* GL-BR-003 K1: cermin guard server updateQuotation
+                (cancelled/setelah-pelunasan-nyata pasti ditolak). */}
+            {quotationEditable && (
+              <Button
+                href={entityEditHref("/penjualan/penawaran", quotation)}
+                variant="secondary"
+              >
+                <Pencil size={14} /> Ubah
+              </Button>
+            )}
             <PrintButton documentType="quotation" documentId={quotation.id} />
             <WhatsappButton
               phone={quotation.customer.phone}
@@ -251,6 +273,15 @@ export default async function QuotationDetailPage({
       />
 
       <WhatsappTrailNote trail={whatsappTrail} />
+
+      {/* GL-BR-003 K2: penawaran terkunci (cancelled/pelunasan nyata) —
+          koreksi via revisi/penawaran baru, bukan edit dokumen terkunci. */}
+      {!quotationEditable && (
+        <PostedLockNotice
+          documentLabel={`Penawaran ${quotation.documentNo}`}
+          correctionLabel="revisi/penawaran baru"
+        />
+      )}
 
       <DetailTabs
         ariaLabel="Tab detail penawaran"
