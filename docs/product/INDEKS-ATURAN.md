@@ -111,7 +111,7 @@ perilaku, bukan hanya keberadaan file/model.
 | SAL-BR-011 | Sebagian | prisma/schema.prisma:1981 — `SalesPayment` ada; perhitungan outstanding/status lunas belum ditelusur |
 | SAL-BR-012 | Sebagian | prisma/schema.prisma:2021 — `SalesReturn` ada; pelestarian histori faktur asal belum ditelusur |
 | SAL-BR-013 | Belum | belum ditelusur — pengecualian stok untuk jasa/non-stock per baris faktur tidak ditunjuk di sini |
-| SAL-BR-014 | Belum | belum ditelusur — guard anti pengurangan stok ganda penjualan vs material proyek tidak ditunjuk di sini |
+| SAL-BR-014 | Terpasang | Guard tepat-satu-kali terpusat `src/lib/services/stock-out-once.service.ts` (`assertSalesInvoiceStockOutOnce`/`assertMaterialIssueStockOutOnce`/`findStockOutConflicts`): pohon quotation sama (faktur via quotationId/SO/project-contract; MI via WO/project-contract) + item sama + StockMove OUT posted jalur lawan > 0 = throw fail-closed sebelum stok bergerak. Dipanggil `onSalesInvoicePosted` (`src/lib/hooks/accounting.hook.ts`) dan `onMaterialIssueCompleted` (`src/lib/hooks/material-issue.hook.ts`) di dalam tx masing-masing; move `reversed` tidak dihitung (pengeluaran pengganti sah). SERIALISASI BERSAMA (syarat lepas QA DITAHAN): kedua jalur mengunci baris `quotations` pohon (`FOR UPDATE`, `ORDER BY id`, `lockStockOutQuotationsTx`) SEBELUM guard, lalu guard membaca move lawan sebagai locking read `FOR UPDATE` (`postedOutByItem`) — current read, bukan snapshot REPEATABLE READ. Skenario asal: quotation sama melahirkan WO+MI dan faktur konversi DP atas item fisik sama. Tes: `src/lib/services/__tests__/stock-out-once.service.test.ts` (urutan kunci→guard) + `src/lib/hooks/__tests__/material-issue-stock-out-once.test.ts` + regresi konkuren DB nyata `src/lib/services/__tests__/inventory-integration.test.ts` (dua posting beda dokumen pohon sama stok cukup → tepat satu pengeluaran; dua konsumen rebut unit terakhir → satu ditolak "Stok tidak mencukupi") |
 | SAL-BR-015 | Sebagian | Basis tertutup-terverifikasi: ambang dari `grandTotal` quotation, faktur penuh lahir DRAFT (src/lib/hooks/down-payment.hook.ts:639-669; src/lib/sales/invoice-threshold.ts:51-54). Sisa OPEN bukan basis: reversal DP sesudah konversi (ADR-003) |
 
 ## 5. Finance — `FIN-BR-*`
@@ -144,7 +144,7 @@ perilaku, bukan hanya keberadaan file/model.
 | WO-BR-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem` ada sebagai baris work order; ketiadaan efek stok material rencana belum dibuktikan negatif di sini |
 | WO-BR-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` adalah jalur issue aktual; posting pengurangan stoknya belum ditelusur |
 | WO-BR-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest` ada; rantai approval jam kerja ke costing/payroll belum ditelusur |
-| WO-BR-004 | Belum | belum ditelusur — guard anti issue ganda tidak ditunjuk di sini |
+| WO-BR-004 | Sebagian | src/actions/manufacturing.actions.ts:1897-1905 — `createMaterialIssueFromWorkOrder` menolak MI kedua per WO (cek di dalam transaksi + kunci baris WO); UI detail WO menyembunyikan kedua tombol buat baru selama MI aktif (draf/diproses) ada dan menampilkan status aktifnya — `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx`, `_components/work-order-actions.tsx`. Sisa: `createMaterialIssue` (form Inventaris) belum punya guard anti-ganda server setara (backend) |
 
 ## 7. HR & Payroll — `HR-BR-*`
 
@@ -215,7 +215,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-PROJ-003 | Belum | belum ditelusur — tampilan terpisah estimasi vs aktual tidak ditunjuk di sini |
 | AC-PROJ-004 | Sebagian | prisma/schema.prisma:5174 — `Project` ada; ketertelusuran biaya ke sumber belum ditelusur |
 | AC-WO-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem`; ketiadaan efek stok rencana belum dibuktikan negatif di sini |
-| AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; pencatatan ganda inventory+project belum ditelusur |
+| AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; UI detail WO mencegah arah ke issue ganda (tombol buat baru disembunyikan selama MI aktif ada, status aktif tertampil) — `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx`. Sisa: pencatatan ganda inventory+project dan guard jalur form Inventaris belum ditelusur (backend) |
 | AC-WO-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest`; approval policy jam kerja belum ditelusur |
 | AC-FIN-001 | Sebagian | prisma/schema.prisma:2448 — ketertelusuran hutang lewat alokasi; sisi piutang tertaut lewat `prisma/schema.prisma:1986` |
 | AC-FIN-002 | Belum | belum ditelusur — reversal beralasan dengan histori asal tidak ditunjuk di sini |
