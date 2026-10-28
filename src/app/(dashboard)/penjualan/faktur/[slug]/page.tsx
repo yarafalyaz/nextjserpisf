@@ -38,6 +38,7 @@ import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas"
 import { CanCreate } from "@/components/auth/can-create"
 import { SalesLateFeePanel } from "@/components/reports/sales-late-fee-panel"
 import { getSalesLateFeePanelForInvoice } from "@/lib/reports/sales-late-fee-data"
+import { getSalesInvoiceServicePortion } from "@/lib/reports/sales-invoice-service-portion-data"
 
 export default async function InvoiceDetailPage({
   params,
@@ -131,6 +132,8 @@ export default async function InvoiceDetailPage({
     },
     orderBy: { name: "asc" },
   })
+
+  const servicePortion = await getSalesInvoiceServicePortion(invoice.id).catch(() => null)
 
   const pmMap = await getPaymentMethodMap()
 
@@ -325,6 +328,9 @@ export default async function InvoiceDetailPage({
                 }))}
                 paidAmount={Number(invoice.paidAmount ?? 0)}
                 editable={itemsEditable}
+                serviceSubtotal={servicePortion?.serviceSubtotal ?? null}
+                goodsSubtotal={servicePortion?.goodsSubtotal ?? null}
+                serviceRevenueConfigured={servicePortion ? servicePortion.serviceRevenueAccountConfigured : null}
               />
             ),
           },

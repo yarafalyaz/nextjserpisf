@@ -52,6 +52,11 @@ interface InvoiceItemsEditorProps {
   availableItems: AvailableItem[];
   paidAmount: number;
   editable: boolean;
+  // F-2026-10-28-137-V V1 (SAL-BR-013): porsi read-only verbatim dari loader
+  // server getSalesInvoiceServicePortion — UI dilarang hitung ulang.
+  serviceSubtotal?: number | null;
+  goodsSubtotal?: number | null;
+  serviceRevenueConfigured?: boolean | null;
   /**
    * Which document this editor drives. "invoice" (default) saves via
    * updateSalesInvoice and shows the paid/remaining summary; "order" saves via
@@ -75,6 +80,9 @@ export function InvoiceItemsEditor({
   paidAmount,
   editable,
   variant = "invoice",
+  serviceSubtotal = null,
+  goodsSubtotal = null,
+  serviceRevenueConfigured = null,
 }: InvoiceItemsEditorProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -92,6 +100,16 @@ export function InvoiceItemsEditor({
   const taxAmount = Math.round(((subtotal - discount) * tax) / 100);
   const grandTotal = subtotal - discount + taxAmount;
   const sisa = grandTotal - paidAmount;
+
+  // F-2026-10-28-137-V V1 (SAL-BR-013): strip porsi read-only HANYA dari
+  // prop loader server. Null = loader belum tersedia → strip sembunyi
+  // (bukan nol menyesatkan). Tanpa akun jasa + ada porsi jasa = banner
+  // arahkan operator ke Pengaturan → Akun (E141-3 sisi UI, fail-closed
+  // posting tetap di server).
+  const hasServerPortion = serviceSubtotal !== null || goodsSubtotal !== null
+  const showServicePortion = hasServerPortion && (serviceSubtotal ?? 0) > 0
+  const showServiceMappingWarning =
+    showServicePortion && serviceRevenueConfigured === false
 
   function addItem() {
     setItems([
@@ -235,6 +253,23 @@ export function InvoiceItemsEditor({
           )}
         </div>
         <div className="p-4 px-5 space-y-3">
+          {/* F-2026-10-28-137-V V1 (SAL-BR-013): strip porsi jasa-vs-barang
+              read-only verbatim loader server. Muncul hanya bila faktur
+              memuat baris jasa; tanpa loader = sembunyi, bukan nol. */}
+          {showServicePortion && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-default bg-surface-secondary p-3 text-sm">
+              <span className="text-muted-foreground">Porsi Jasa</span>
+              <span className="font-medium">{formatCurrency(serviceSubtotal ?? 0)}</span>
+              <span className="text-muted-foreground">Porsi Barang</span>
+              <span className="font-medium">{formatCurrency(goodsSubtotal ?? 0)}</span>
+            </div>
+          )}
+          {showServiceMappingWarning && (
+            <div className="rounded-lg border border-default bg-danger/5 p-3 text-sm text-danger">
+              Faktur memuat baris jasa tetapi akun Pendapatan Jasa belum dipetakan — atur di{" "}
+              <a className="underline" href="/pengaturan/mapping-akun/ubah">Pengaturan → Akun</a>.
+            </div>
+          )}
           {/* Mobile cards */}
           <ul role="list" className="md:hidden flex flex-col gap-3">
             {items.map((item, i) => (

@@ -199,4 +199,105 @@ describe("InvoiceItemsEditor", () => {
     unmount(root)
     container.remove()
   })
+
+  it("menyembunyikan strip porsi bila loader belum tersedia (null)", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <InvoiceItemsEditor
+          invoiceId={1}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={500000}
+          editable={false}
+          availableItems={availableItems}
+          items={[
+            { itemId: null, description: "Jasa servis", qty: 1, unitPrice: 200000, discount: 0, total: 200000 },
+          ]}
+        />
+      )
+    })
+
+    expect(container.textContent).not.toContain("Porsi Jasa")
+    expect(container.textContent).not.toContain("Pengaturan \u2192 Akun")
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("menampilkan strip porsi jasa-vs-barang verbatim loader + banner pengarahan saat akun belum dipetakan", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <InvoiceItemsEditor
+          invoiceId={1}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={500000}
+          editable={false}
+          availableItems={availableItems}
+          items={[
+            { itemId: null, description: "Jasa servis", qty: 1, unitPrice: 200000, discount: 0, total: 200000 },
+            { itemId: 1, description: "Keyboard", qty: 1, unitPrice: 500000, discount: 0, total: 500000 },
+          ]}
+          serviceSubtotal={200000}
+          goodsSubtotal={500000}
+          serviceRevenueConfigured={false}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain("Porsi Jasa")
+    expect(container.textContent).toContain("Porsi Barang")
+    expect(container.textContent).toContain("Rp 200.000")
+    expect(container.textContent).toContain("Rp 500.000")
+    const warnLink = container.querySelector('a[href="/pengaturan/mapping-akun/ubah"]')
+    expect(warnLink).not.toBeNull()
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("tanpa porsi jasa, strip dan banner sembunyi walau loader tersedia", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <InvoiceItemsEditor
+          invoiceId={1}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={500000}
+          editable={false}
+          availableItems={availableItems}
+          items={[
+            { itemId: 1, description: "Keyboard", qty: 2, unitPrice: 500000, discount: 0, total: 1000000 },
+          ]}
+          serviceSubtotal={0}
+          goodsSubtotal={1000000}
+          serviceRevenueConfigured={false}
+        />
+      )
+    })
+
+    expect(container.textContent).not.toContain("Porsi Jasa")
+    expect(container.textContent).not.toContain("Pengaturan \u2192 Akun")
+
+    unmount(root)
+    container.remove()
+  })
 })

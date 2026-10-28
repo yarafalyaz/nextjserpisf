@@ -59,6 +59,7 @@ export default async function AccountMappingPage() {
         { label: "Piutang Usaha", value: accountName(settings?.salesReceivableAccountId) },
         { label: "Uang Muka Penjualan / DP (210102)", value: accountName(settings?.customerDownPaymentAccountId) },
         { label: "Pendapatan Penjualan", value: accountName(settings?.salesRevenueAccountId) },
+        { label: "Pendapatan Jasa", value: accountName(settings?.salesServiceRevenueAccountId) },
         { label: "PPN Keluaran", value: accountName(settings?.salesTaxAccountId) },
         { label: "Retur Penjualan", value: accountName(settings?.salesReturnAccountId) },
         { label: "Akun Penjualan", value: accountName(settings?.salesAccountId) },

@@ -149,6 +149,9 @@ interface SettingsFormValues {
   salesReturnAccountId?: number | null
   salesReturnPrefix?: string | null
   salesRevenueAccountId?: number | null
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun pendapatan jasa — baris jasa
+  // (itemId null atau item isProduct=false) dibukukan ke akun ini.
+  salesServiceRevenueAccountId?: number | null
   salesTaxAccountId?: number | null
   showIsActiveField?: boolean | null
   showTaxId?: boolean | null
@@ -271,6 +274,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [supplierClaimReceivable, setSupplierClaimReceivable] = useState(settings.supplierClaimReceivableAccountId ? String(settings.supplierClaimReceivableAccountId) : "")
   const [reimbursementLiability, setReimbursementLiability] = useState(settings.reimbursementLiabilityAccountId ? String(settings.reimbursementLiabilityAccountId) : "")
   const [salesRevenue, setSalesRevenue] = useState(settings.salesRevenueAccountId ? String(settings.salesRevenueAccountId) : "")
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun Pendapatan Jasa (default COA 400002).
+  const [serviceRevenue, setServiceRevenue] = useState(settings.salesServiceRevenueAccountId ? String(settings.salesServiceRevenueAccountId) : "")
   const [scrapSaleIncome, setScrapSaleIncome] = useState(settings.scrapSaleIncomeAccountId ? String(settings.scrapSaleIncomeAccountId) : "")
   const [salesTax, setSalesTax] = useState(settings.salesTaxAccountId ? String(settings.salesTaxAccountId) : "")
   const [salesReturn, setSalesReturn] = useState(settings.salesReturnAccountId ? String(settings.salesReturnAccountId) : "")
@@ -342,6 +347,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "salesReceivableAccountId", label: "Piutang Usaha", value: salesReceivable, onChange: setSalesReceivable },
         { name: "customerDownPaymentAccountId", label: "Uang Muka Penjualan / DP (210102)", value: customerDownPayment, onChange: setCustomerDownPayment },
         { name: "salesRevenueAccountId", label: "Pendapatan Penjualan", value: salesRevenue, onChange: setSalesRevenue },
+        { name: "salesServiceRevenueAccountId", label: "Pendapatan Jasa", value: serviceRevenue, onChange: setServiceRevenue },
         { name: "scrapSaleIncomeAccountId", label: "Pendapatan Besi Tua Scrap (kandidat 710003)", value: scrapSaleIncome, onChange: setScrapSaleIncome },
         { name: "salesTaxAccountId", label: "PPN Keluaran", value: salesTax, onChange: setSalesTax },
         { name: "salesReturnAccountId", label: "Retur Penjualan", value: salesReturn, onChange: setSalesReturn },
@@ -454,6 +460,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       supplierClaimReceivableAccountId: setSupplierClaimReceivable,
       reimbursementLiabilityAccountId: setReimbursementLiability,
       salesRevenueAccountId: setSalesRevenue,
+      salesServiceRevenueAccountId: setServiceRevenue,
       scrapSaleIncomeAccountId: setScrapSaleIncome,
       salesTaxAccountId: setSalesTax,
       salesReturnAccountId: setSalesReturn,
@@ -1114,6 +1121,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             {/* Hidden inputs to pass account mapping data */}
             <input type="hidden" name="salesReceivableAccountId" value={salesReceivable} />
             <input type="hidden" name="salesRevenueAccountId" value={salesRevenue} />
+            <input type="hidden" name="salesServiceRevenueAccountId" value={serviceRevenue} />
             <input type="hidden" name="scrapSaleIncomeAccountId" value={scrapSaleIncome} />
             <input type="hidden" name="salesTaxAccountId" value={salesTax} />
             <input type="hidden" name="salesReturnAccountId" value={salesReturn} />

@@ -73,11 +73,19 @@ describe("SettingsEditForm — 5 akun yatim (SAL-BR-004 / GL-BR-009)", () => {
     const { container, root } = mount({})
     const missing = ACCOUNT_MAPPING_FIELDS.filter((key) => hiddenValue(container, key) === undefined)
     expect(missing).toEqual([])
-    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(39)
+    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(40)
     for (const key of ORPHAN_FIELDS) {
       expect(container.querySelector(`input[name="${key}"]`)).not.toBeNull()
       expect(container.querySelector(`label[for="${key}"]`)).not.toBeNull()
     }
+    unmount(root, container)
+  })
+
+  it("kunci akun jasa SAL-BR-013 tersimpan via hidden input (E141-3 sisi UI)", () => {
+    const { container, root } = mount({ salesServiceRevenueAccountId: 77, salesRevenueAccountId: 78 })
+    expect(hiddenValue(container, "salesServiceRevenueAccountId")).toBe("77")
+    expect(hiddenValue(container, "salesRevenueAccountId")).toBe("78")
+    expect(container.textContent).toContain("Pendapatan Jasa")
     unmount(root, container)
   })
 
