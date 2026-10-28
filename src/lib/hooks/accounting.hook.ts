@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { assertSalesInvoiceStockOutOnce } from "@/lib/services/stock-out-once.service";
 import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
@@ -448,6 +449,21 @@ export async function onSalesInvoicePosted(
       );
       return;
     }
+
+    // SAL-BR-014: guard tepat-satu-kali lintas jalur. Item fisik faktur
+    // ini tidak boleh sudah dikeluarkan sebagai material proyek pada
+    // pohon quotation yang sama (StockMove OUT MaterialIssue posted).
+    // Gerbang ini menempuh serialisasi bersama lebih dulu: kunci baris
+    // `quotations` pohon (FOR UPDATE) SEBELUM membaca move lawan, lalu
+    // membaca move lawan sebagai locking read (F-2026-10-28-122-S).
+    // Fail-closed di service terpusat; konflik = rollback seluruh tx.
+    await assertSalesInvoiceStockOutOnce(
+      tx,
+      invoiceId,
+      invoice.items
+        .filter((it) => typeof it.itemId === "number" && Number(it.qty) > 0)
+        .map((it) => ({ itemId: it.itemId as number, qty: Number(it.qty) })),
+    );
 
     // F-2026-10-24-135-V (vonis BOT Accountant PR #742, syarat 1–4) +
     // F-2026-10-24-136-V Putusan 1: definisi faktur besi tua FINAL —

@@ -2306,6 +2306,10 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
   beforeEach(() => {
     vi.clearAllMocks()
     restoreTerBracketMock()
+    // BR-HRS-08: jalur TULIS payroll kini membaca getHrScope. Describe di atas
+    // meninggalkan override scope "self" yang akan menolak slip karyawan 1/2;
+    // reset supaya scope dihitung dari roles pengguna (admin = all).
+    mocks.hrScopeOverride.current = null
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.payroll.findMany.mockResolvedValue([])

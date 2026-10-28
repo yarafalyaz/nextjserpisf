@@ -7,6 +7,7 @@ import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { consumeReservationsForMaterialIssueTx } from "@/lib/services/stock-reservation.service";
+import { assertMaterialIssueStockOutOnce } from "@/lib/services/stock-out-once.service";
 import { classifyScrapLine, validateScrapInput } from "@/lib/services/scrap-classification";
 import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { safeAdd } from "@/lib/utils/math";
@@ -99,6 +100,21 @@ export async function onMaterialIssueCompleted(
     // accounting.hook, so enforce the closed-period guard here too — otherwise
     // material issues can back-date GL into a closed period.
     await assertPeriodOpen(issue.date, tx);
+
+    // SAL-BR-014: guard tepat-satu-kali lintas jalur. Item issue ini
+    // tidak boleh sudah dikeluarkan sebagai penjualan pada pohon
+    // quotation yang sama (StockMove OUT SalesInvoice posted).
+    // Gerbang ini menempuh serialisasi bersama lebih dulu: kunci baris
+    // `quotations` pohon (FOR UPDATE) SEBELUM membaca move lawan, lalu
+    // membaca move lawan sebagai locking read (F-2026-10-28-122-S).
+    // Fail-closed di service terpusat; konflik = rollback seluruh tx.
+    await assertMaterialIssueStockOutOnce(
+      tx,
+      issueId,
+      issue.items
+        .filter((item) => Number(item.qty) > 0)
+        .map((item) => ({ itemId: item.itemId, qty: Number(item.qty) })),
+    );
 
     // F-008 (vonis BOT 4 F-066-V): validasi scrap baris SEBELUM stok
     // bergerak, direncanakan dari BARIS WO asal (planned = qty baris WO
