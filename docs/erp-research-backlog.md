@@ -40625,6 +40625,32 @@ Penjaga: (a) permohonan Pasal 36 dapat karena jabatan DJP — register menandai 
 - E114-7: jurnal sengketa POSTED diedit/dihapus fisik (bukan reversal) = MERAH (selaras 112-V Putusan 1).
 ID vonis ini **F-2026-10-27-114-V** (jawaban Q-TXD-1..5 spec F-2026-10-27-113-S PR #1210; basis origin/main f62056bd8). Pemilik berikutnya: BOT Lead (merge vonis + putus Q-TXD-6..8) -> BOT Backend (113-B register dulu, lapis jurnal sub-tahap terpisah) -> BOT Frontend (113-F) -> BOT QA (113-Q + E114-1..7 atas head persis). FREEZE CEO 27 Okt 14:34 WIB dipatuhi: nol kartu baru dibuat run ini; handoff tertulis di komentar kartu t_40d5e2c1 + board.
 
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-116-V: over-receipt ditolak keras tanpa toleransi/approval (jawaban PUR-BR-004)
+Pemilik vonis: Accountant (accounting-finance-tax, lane FIN + vonis jurnal). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `437a2baa2` (28 Okt 2026 01:46 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-116` di backlog+board = 0/0 sebelum tulis. Bebas. Slot 115-V terisi PR #1226 (Business, INV-BR-007) — tidak bentrok.
+### 1. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Guard over-receipt keras di verifikasi: `src/lib/hooks/goods-receipt.hook.ts:206-236` — kumulatif diterima (satuan dasar via `toBaseQty`) per item vs total dipesan item itu; `received > ordered` → throw `Penerimaan melebihi pesanan ... Sesuaikan qty penerimaan atau ubah PO.` Komentar baris 210 menegaskan `Hard cap with no tolerance`. Kunci baris PO `FOR UPDATE` sebelum hitung (serialisasi verifikasi konkuren).
+- Draft boleh melebihi PO, penegakan hanya di verifikasi: `src/actions/purchase.actions.ts:1101` (`cumulative over-receive guard lives in the verification hook`); create/update GR hanya cek keanggotaan item di PO (`Item #N tidak ada dalam PO`), bukan plafon qty.
+- PO dikunci sesudah penerimaan berjalan: edit hanya status draft (`purchase.actions.ts:2690,2708`); cancel menolak `partial_received`/`received` (`:1005`); GR verified tidak bisa dihapus bila PO punya tagihan aktif (`:2290`); GR draft bebas diedit/dihapus (sebelum efek stok/jurnal lahir).
+- GR vs tagihan terpisah jurnal: GR verified → StockMove IN posted + jurnal `GoodsReceipt` (Dr Persediaan / Cr clearing) `stock-journal.service.ts:77,144-235`; tagihan vendor → jurnal `VendorBill` terpisah (`accounting.hook.ts:2548,2631,2731`) + 3-way match plafon nilai diterima (`purchase.actions.ts:223-325`, toleransi nilai max(Rp1000, 1%) hanya untuk pembulatan nilai tagihan, bukan qty).
+- Stok hanya lahir di verifikasi: `goods-receipt.hook.ts:423-424` (`impact: IN`, `status: posted`); `receivedQty` PO ditulis absolut dari peta kumulatif yang sama dengan guard (`:246-254`), self-healing dari drift.
+- Izin terpisah: `verify_goods_receipts` beda dari `create/edit/delete_goods_receipts` (`base-data.ts:147-151,759-762`); verifikasi = titik otorisasi penerimaan.
+- Nol saklar toleransi/approval over-receipt: grep `tolerance/TOLERANCE/allowExcess` di settings/seed/skema = 0 (di luar toleransi nilai 3-way); grep `OverReceipt/overreceipt` di skema/seed = 0 — tidak ada model, setting, workflow approval, atau matriks untuk pengecualian over-receipt.
+- Regresi hidup: `src/lib/hooks/__tests__/goods-receipt-over-receipt.test.ts` 24/24 hijau run ini (termasuk multi-UoM 13× false-positive + 6× lolos nyata); `goods-receipt-received-qty.test.ts` (absolut + anti over-receipt palsu 5+5/terima-6).
+### 2. Vonis (menutup garpu keputusan PUR-BR-004, bukan menambah perilaku)
+- V1: penerimaan melebihi PO DITOLAK KERAS di verifikasi, tanpa toleransi qty dan tanpa jalur approval pengecualian — garpu "kecuali kebijakan dan approval mengizinkan" di PUR-BR-004 sumber DINYATAKAN TERTUTUP DENGAN NILAI TOLAK (nol kebijakan toleransi dibangun; nol matriks approval untuk over-receipt; satu-satunya jalan sah = ubah PO-nya dulu — PO draft diedit, PO approved di-... — atau sesuaikan qty GR).
+- V2: draft GR boleh melebihi PO (kertas kerja), tetapi verify, stok IN, jurnal GR, dan `receivedQty` TIDAK PERNAH lahir dari kelebihan — guard berjalan sebelum mutasi apa pun dalam tx yang sama (gagal = seluruh verifikasi rollback).
+- V3: kelebihan yang sah secara bisnis (vendor kirim lebih, disepakati) dicatat sebagai PERUBAHAN PO (edit qty PO draft / revisi PO), bukan sebagai penerimaan-lebih — supaya kontrak (PO), fisik (GR), dan plafon tagih (3-way) tetap satu angka.
+- V4: toleransi nilai 3-way match (max Rp1000 / 1% receivedValue, `purchase.actions.ts:254,310`) SAH apa adanya untuk pembulatan nilai tagihan vs nilai diterima — itu toleransi NILAI, bukan toleransi QTY, dan tidak membuka celah qty (guard qty tetap 0).
+### 3. Batas vonis (jujur)
+- Alur revisi PO approved (siapa boleh menaikkan qty PO sesudah approved, approval apa) TIDAK divonis di sini — itu workflow dokumen (lane Business/Lead), bukan akuntansi; vonis ini hanya menetapkan kelebihan fisik tidak bisa masuk tanpa lewat PO.
+- Status INDEKS-ATURAN yang diubah PR ini: PUR-BR-004 OPEN-keputusan → Sebagian (penegakan qty tertutup-terverifikasi + regresi; sisa = alur revisi PO approved bila owner menghendaki, bukan keputusan toleransi).
+ID vonis ini **F-2026-10-28-116-V** (jawaban PUR-BR-004). Pemilik berikutnya: Lead (merge vonis ini) → QA (falsifikasi E116-1..3 atas head persis) → INDEKS-ATURAN terbit status baru sesudah merge.
+### Falsifikasi QA (E116, atas head persis)
+- E116-1: terima kumulatif > dipesan lalu verify lolos (stok IN / jurnal GR lahir) = MERAH.
+- E116-2: tambah toleransi qty / setting / permission / workflow approval over-receipt tanpa vonis baru = MERAH (keputusan V1 dilanggar).
+- E116-3: samakan toleransi nilai 3-way dengan toleransi qty (pakai toleransi nilai untuk meloloskan qty lebih) = MERAH (keputusan V4 dilanggar).
+
 ## VONIS BUSINESS 2026-10-28 — F-2026-10-28-115-V: stok negatif ditolak tanpa override (jawaban garpu INV-BR-007/AC-INV-007)
 Pemilik vonis: Business (sales-crm-hr-payroll-business-workflow, lane workflow non-akuntansi). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `34ad27324` (28 Okt 2026 01:23 WIB).
 **Verifikasi ID:** grep `F-2026-10-28-115` di backlog+board = 0/0 sebelum tulis. Bebas.
@@ -40759,3 +40785,70 @@ Catatan QA: E117-1..4 dan E117-9 (gerbang) sudah punya regresi hidup yang ditunj
 | 3 | Lead | Terbitkan status AC-HR-002 di `INDEKS-ATURAN.md` menunjuk spec ini + hasil E117 | S | spec merged + QA jalan |
 
 ID spec ini **F-2026-10-28-117-S** (AC-HR-002). Pemilik berikutnya: BOT QA (E117-1..9) → BOT Accountant (vonis §6.1) → BOT Backend (hanya bila vonis menuntut guard baru) → BOT Lead (status INDEKS-ATURAN). Implementasi BUKAN bagian spec ini.
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-118-S: reversal beralasan piutang sisi penjualan (AC-FIN-002, cermin FIN-BR-008 sisi beli)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec). Dokumen spec saja; tanpa kode/schema/migrasi. Basis `origin/main` `8a677bf1f` (2026-10-28 02:16 WIB). Kartu asal `t_4fbb1d15`.
+**Verifikasi ID:** grep `F-2026-10-28-118` di backlog+board `origin/main` = 0/0 sebelum tulis; slot 116-V = PR #1231 OPEN (beda topik), 117-S = PR #1237 OPEN (beda topik). Bebas.
+**ANTI-DUPLIKAT (wajib dibaca Backend/Lead):** PR #1233 OPEN (`hermes/backend-fin-br-008-reversal`, head `28f62b3b6`, "feat(finance): reversal pembayaran berhistori FIN-BR-008") SUDAH mengimplementasikan reversal SalesPayment+VendorPayment (aksi `reverseSalesPayment`/`reverseVendorPayment`, field `reversedAt/reversedBy/reversalReason`, migrasi `20261028020000_payment_reversal_history_fin_br_008`, idempotency `sales_payment_reverse`, tes 13/13 per body PR). Spec ini TIDAK meminta kode itu lagi. Sisa spec ini = (a) penilaian status AC-FIN-002 sesudah #1233 merged, (b) jalur penjualan yang TIDAK dicakup #1233: void faktur tanpa alasan wajib, hapus fisik faktur+payment-nya, hapus retur non-completed, reversal DP pasca-konversi (OPEN #1), nota kredit formal (OPEN #2). Vonis jurnal/pajak tetap milik Accountant; spec ini tidak menetapkan akun/jurnal baru.
+
+### 1. Sumber tunggal + label
+- `TERVERIFIKASI-KODE`: INDEKS-ATURAN:221 AC-FIN-002 `Belum`; INDEKS-ATURAN:128 FIN-BR-008 `Belum` di main (status Terpasang ditulis PR #1233 di branch-nya, belum merged ke main per basis ini); KEPUTUSAN-TERVERIFIKASI OPEN #1 reversal DP pasca-konversi + #2 nota kredit formal berdiri sendiri (`src/lib/reports/vat-invoices-data.ts:181-182` "belum ada model SalesCreditNote di repo" per kutip indeks); BUSINESS-RULES retur/credit note pertahankan histori.
+- Aturan spec di bawah berlabel `USULAN` (Business) kecuali dirujuk `TERVERIFIKASI-KODE`; perlakuan jurnal/PPN spesifik = `BUTUH-VONIS` Accountant.
+
+### 2. Inventarisasi jalur reversal/void/cancel penjualan di main (TERVERIFIKASI-KODE, basis 8a677bf1f)
+| # | Jalur | Lokasi | Histori vs hapus fisik |
+|---|---|---|---|
+| P1 | `deleteSalesPayment` (main) | `src/actions/sales.actions.ts:2698` | HAPUS FISIK: `deleteJournalByReferenceTx(tx,"SalesPayment",id)` (`src/lib/hooks/accounting.hook.ts:119`, hapus jurnal+rantai lawan) lalu `tx.salesPayment.delete`, lampiran disapu, recalc faktur. Hanya `logActivity("delete",...)` tanpa alasan wajib & tanpa field reversal. INILAH yang diganti PR #1233 (belum merged). |
+| P2 | `reverseSalesPayment` (PR #1233, OPEN) | branch `hermes/backend-fin-br-008-reversal` head `28f62b3b6` | Histori dipertahankan: jurnal lawan `reverseJournalsByReferenceTx`, `reversedAt/reversedBy/reversalReason`, recalc exclude reversed, idempotency `sales_payment_reverse`, tolak bupot aktif, permission `delete_sales_payments`. DILARANG duplikat. |
+| P3 | `voidSalesInvoice` | `src/actions/sales.actions.ts:3743` | SEBAGIAN histori: faktur tetap ada status `cancelled`, posting dibalik `reverseSalesInvoicePostingTx`, `paidAmount=0`. GAP: tanpa alasan wajib, tanpa `cancelledBy/At/reason`; wajib payment sudah kosong dulu (pesan "Hapus pembayaran faktur ini terlebih dahulu") — urutan itu hari ini memaksa jalur hapus fisik P1 untuk faktur berpayment. |
+| P4 | `deleteSalesInvoice` | `src/actions/sales.actions.ts:3710` | HAPUS FISIK penuh: reverse posting lalu `deleteMany` payment, item, faktur, lampiran. Tanpa gerbang status/alasan di aksi (baca run ini: hanya `requirePermission("delete_sales_invoices")`). Bertentangan "dokumen posted tidak dihapus" — USULAN batasi draft saja (lihat BR-ACFIN2-04). |
+| P5 | `createSalesReturn` / retur penjualan | `src/actions/sales.actions.ts:2215`; model `prisma/schema.prisma:2021` | Histori baik: dokumen retur tersendiri tertaut `salesInvoiceId`, gerbang `RETURNABLE_INVOICE_STATUSES`, over-return guard dalam tx, nomor nota retur Coretax apa adanya. `reason` model ada tapi nullable (`prisma/schema.prisma:2028`). |
+| P6 | `deleteSalesReturn` | `src/actions/sales.actions.ts:3785` | HAPUS FISIK bila status bukan `completed`; `completed` ditolak. Tanpa alasan. Retur draft hapus = dapat diterima (belum efek GL), completed terlindungi — sudah selaras arah spec. |
+| P7 | `deleteDownPayment` | `src/actions/sales.actions.ts:2778` | Hanya `draft` boleh hapus (guard eksplisit); non-draft (posted/CONFIRMED/terkonversi) TIDAK ada jalur reversal — inilah OPEN #1. Tidak ada `reverseDownPayment`/cancel beralasan di main. |
+| P8 | Reversal jurnal generik | `src/lib/services/journal.service.ts:147` `reverseJournal`; `src/lib/hooks/accounting.hook.ts:192` `reverseJournalsByReferenceTx(tx,type,id,reason,userId)` | Fondasi KUAT & sudah beralasan: jurnal lawan POSTED, asal `REVERSED`, tolak reversal ganda/jurnal-lawan, `assertPeriodOpen` tanggal asal, deskripsi `Pembalikan <no>: <reason>`. Kebutuhan backend = memakai primitif ini, bukan primitif baru. |
+| P9 | Skema SalesPayment di main | `prisma/schema.prisma:1981` | Belum ada `reversedAt/reversedBy/reversalReason`/status reversal di main (grep 0); field itu lahir di PR #1233. Spec dilarang mengarang nama field kedua. |
+
+### 3. Syarat reversal posted sisi penjualan (USULAN, cermin pola FIN-BR-008 sisi beli)
+- **BR-ACFIN2-01 Alasan wajib:** reversal/void dokumen penjualan POSTED (SalesPayment, SalesInvoice, DP terkonversi) wajib `reason` trim non-kosong; kosong = tolak sebelum mutasi apa pun (nol jurnal, nol saldo berubah). Cermin syarat 1 FIN-BR-008 di PR #1233.
+- **BR-ACFIN2-02 Tautan asal wajib:** dokumen asal tidak dihapus; reversal mencatat penunjuk asal (jurnal lawan `referenceType="Journal", referenceId=<jurnal asal>` pola P8; dokumen reversal/void menyimpan id+nomor dokumen asal yang bisa dibuka dari UI/laporan). Membuka asal dari reversal dan sebaliknya wajib dua arah.
+- **BR-ACFIN2-03 Larangan hapus fisik posted:** dokumen penjualan yang pernah POSTED dilarang `delete` fisik dari aksi mana pun; koreksi hanya reversal/void berstatus. Hapus fisik hanya dokumen belum posted (draft) — pola guard P6/P7 yang diperluas.
+- **BR-ACFIN2-04 Faktur:** `voidSalesInvoice` ditambah alasan wajib + aktor/waktu pembatalan tersimpan (nama field final = Backend selaraskan pola `reversedAt/reversedBy/reversalReason` PR #1233, bukan nama baru karangan spec); `deleteSalesInvoice` dibatasi status draft saja (posted → arahkan void). Urutan kanonis faktur berpayment: reversal tiap SalesPayment dulu (jalur P2 sesudah merged), baru void faktur — pesan error wajib menunjuk urutan itu, bukan menyuruh "hapus pembayaran".
+- **BR-ACFIN2-05 Audit trail:** tiap reversal/void menulis `logActivity` memuat alasan + nomor dokumen asal + nominal terdampak; baris asal tampil read-only berstatus reversed/cancelled di daftar & detail; ekspor/statement pelanggan mengecualikan nominal reversed dari outstanding tetapi tetap menampilkan baris asal+reversal saat ditelusur (definisi agregasi final mengikuti pola recalc exclude-reversed PR #1233).
+- **BR-ACFIN2-06 Periode terkunci & idempotensi:** reversal bertanggal jurnal asal; `assertPeriodOpen` gagal = tolak nol mutasi. Reversal kedua atas dokumen sama ditolak. Replay kunci idempotensi sama = hasil awal tanpa jurnal/saldo baru (scope meniru `sales_payment_reverse`; nama scope faktur/DP = Backend, satu pola).
+- **BR-ACFIN2-07 Permission:** pakai permission existing jalur yang diganti (`delete_sales_payments` untuk reversal payment per PR #1233; `delete_sales_invoices` untuk void faktur) — spec tidak mengusulkan permission key baru; perubahan key = putusan Lead.
+- **BR-ACFIN2-08 Relasi OPEN #1 (reversal DP pasca-konversi):** SESUDAH faktur konversi lahir, DP tidak lagi bisa diperlakukan sebagai DP bebas: reversal DP posted wajib menempuh urutan (1) tangani faktur konversi (void per BR-ACFIN2-04 atau biarkan bila koreksi hanya DP), (2) reversal alokasi DP→faktur, (3) reversal jurnal terima DP, (4) status/jejak DP beralasan. Urutan & perlakuan PPN FP UM pada tiap langkah = `BUTUH-VONIS` Accountant (menyambung spec SAL-BR-004 kartu `t_e2f98d06`); spec ini hanya membekukan syarat alasan/tautan/anti-hapus/idempotensi yang sama.
+- **BR-ACFIN2-09 Relasi OPEN #2 (nota kredit formal):** selama model `SalesCreditNote` belum diputuskan (OPEN #2), koreksi nilai piutang berjalan lewat retur (P5) + `CustomerCredit` existing — spec ini TIDAK menciptakan dokumen nota kredit dan tidak melarangnya; reversal beralasan di sini menutup kebutuhan "koreksi tercatat", bukan mengganti keputusan nota kredit formal. Keputusan perlu/tidak nota kredit berdiri sendiri tetap terbuka untuk Lead+Accountant.
+- **BR-ACFIN2-10 Estimasi≠aktual / non-tujuan:** reversal tidak mengubah histori Qty/stok selain lewat jalur retur/posting-reversal existing (P3/P5); dilarang edit nominal dokumen asal sebagai pengganti reversal.
+
+### 4. Status-transisi ringkas (USULAN)
+| Dokumen | Dari → Ke | Pemicu | Penjaga |
+|---|---|---|---|
+| SalesPayment | posted → reversed | `reverseSalesPayment` (PR #1233) | alasan wajib, periode asal terbuka, belum reversed, bupot aktif ditolak |
+| SalesInvoice | posted/partial/paid → cancelled | `voidSalesInvoice` + alasan | semua payment sudah reversed (bukan dihapus), alasan wajib |
+| SalesInvoice | draft → (hapus fisik) | `deleteSalesInvoice` dibatasi | hanya draft; posted ditolak arahkan void |
+| DownPayment | confirmed/terkonversi → reversed | jalur baru (OPEN #1) | urutan BR-ACFIN2-08 + vonis Accountant PPN |
+| SalesReturn | draft → (hapus) / completed → terkunci | existing P6 | completed tidak dapat dihapus — dipertahankan |
+
+### 5. Penerimaan AC-FIN-002 (untuk QA, atas head implementasi persis BUKAN head spec ini)
+AC-FIN-002 dinyatakan terpenuhi sisi penjualan bila: (i) PR #1233 merged (payment), (ii) void faktur beralasan + batas hapus draft terpasang, (iii) E118 lulus atas head merged itu. Sampai itu INDEKS-ATURAN AC-FIN-002 tetap `Belum` — spec ini TIDAK mengubah status indeks (loop tertutup: status berubah lewat PR implementasi, pola PR #1233 untuk FIN-BR-008).
+
+### 6. Falsifikasi QA (E118, atas head implementasi persis)
+- E118-1: reversal SalesPayment/SalesInvoice-void dengan alasan kosong/spasi = lolos atau ada mutasi jurnal/saldo = MERAH.
+- E118-2: sesudah reversal, baris asal hilang fisik / jurnal asal terhapus (bukan `REVERSED` + jurnal lawan POSTED tertaut) = MERAH.
+- E118-3: reversal kedua atas dokumen sama membuat jurnal lawan kedua / mengubah outstanding dua kali = MERAH; replay idempotensi membuat jurnal baru = MERAH.
+- E118-4: reversal pada periode terkunci lolos atau termutasi sebagian = MERAH.
+- E118-5: `deleteSalesInvoice` atas faktur posted menghapus faktur/payment/item = MERAH (harus tolak, arahkan void); void faktur yang masih punya payment aktif (belum reversed) lolos = MERAH.
+- E118-6: outstanding/statement masih menghitung payment reversed, atau baris asal+reversal tidak dapat ditelusur dua arah dari UI/read-model = MERAH.
+- E118-7: mutasi guard — ganti reversal payment menjadi `deleteJournalByReferenceTx`+delete (gaya main lama) → tes reversal wajib MERAH; pulihkan → hijau (pola falsifikasi PR #1233).
+- E118-8: reversal DP terkonversi yang melompati faktur konversi (DP reversed sementara faktur konversi masih posted tanpa perlakuan tercatat) = MERAH (sesudah jalur OPEN #1 dibangun; sebelum itu jalur apa pun selain draft-delete untuk DP non-draft = MERAH).
+
+### 7. Backlog turunan (BUKAN kartu baru run ini — tindak lanjut ditulis di komentar kartu t_4fbb1d15)
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-118-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) nilai status AC-FIN-002 sesudah PR #1233 merged | Lead/QA | head merged #1233 |
+| (tanpa ID baru) void faktur beralasan + batasi delete faktur draft | Backend, konsumen Frontend | spec ini merged; nama field ikut pola #1233 |
+| (tanpa ID baru) reversal DP pasca-konversi | Accountant (urutan jurnal/PPN) → Backend → Frontend → QA E118-8 | OPEN #1 + vonis |
+
+ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main 8a677bf1f). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status AC-FIN-002 hanya sesudah #1233 merged) → BOT Backend (void-faktur beralasan mengikuti pola #1233, tanpa duplikat payment) → BOT Frontend (dialog alasan wajib) → BOT QA (E118-1..8 atas head persis). Butuh putusan accountant: YA bersyarat — hanya urutan jurnal/PPN reversal DP terkonversi (BR-ACFIN2-08) dan keputusan nota kredit formal (BR-ACFIN2-09); syarat alasan/tautan/anti-hapus payment+faktur TIDAK menunggu vonis baru karena cermin FIN-BR-008 yang sudah divonis.
