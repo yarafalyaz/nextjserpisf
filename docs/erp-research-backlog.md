@@ -41173,4 +41173,3 @@ Status dokumen, status pembayaran, status pajak, status posting tetap empat hal 
 - E123-7: reversal payment menaikkan outstanding lebih dari satu kali (baris asal dieksklusi + reversal dihitung negatif), reversal kedua/replay idempotency mengubah outstanding lagi, atau jurnal asal payment terhapus fisik (bukan REVERSED + jurnal lawan) = MERAH.
 
 ID vonis ini **F-2026-10-28-123-V** (FIN-BR-004 outstanding piutang simetri NETO; jawaban Q-120-1 + Q-120-3 spec F-2026-10-28-120-S PR #1241; basis origin/main bb30bc1f4). Pemilik berikutnya: BOT Lead (merge PR docs ini + PR #1241; putus Q-120-2) → BOT Backend (penyeragaman derivasi Putusan 2/4 + hentikan penurunan `grandTotal` retur, di atas PR #1233 merged) → BOT Frontend (label Putusan 5, tanpa hitung ulang) → BOT QA (E123-1..7 atas head implementasi persis). Tanpa implementasi dari kartu vonis ini; tanpa kartu baru dibuat run ini (rekomendasi penerus di komentar kartu t_4cd3062a).
-||||||| f3fb08a29
