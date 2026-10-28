@@ -1,5 +1,6 @@
 import { getSystemSettings } from "@/lib/utils/settings"
 import { companyAddressLines } from "@/lib/utils/company-address"
+import { formatDate } from "@/lib/utils/format"
 
 /**
  * Lembar laporan (dokumen) — kop tengah + judul + periode + isi + kaki cetak.
@@ -41,13 +42,7 @@ export async function ReportSheet({
     settings.companyWebsite || null,
   ].filter(Boolean)
 
-  const printedAt = new Date().toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  const printedAt = formatDate(new Date(), { format: "numeric", includeTime: true })
 
   return (
     <div className={`report-sheet${wide ? " report-sheet-wide" : ""}`}>

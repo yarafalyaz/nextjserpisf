@@ -24,6 +24,7 @@ import {
   type AssetJournalResult,
 } from "@/lib/reports/asset-journal"
 import { asOfLabelOf } from "@/lib/reports/statement-data"
+import { formatDayMonthYear } from "@/lib/utils/format"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import type { AssetLedgerAsset, AssetLedgerEntry } from "@/lib/reports/asset-ledger"
 
@@ -114,7 +115,7 @@ export async function loadAssetMovement(period: {
 }): Promise<AssetMovementReport> {
   const ledger = await loadAssetLedger(period.end)
   const short = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    formatDayMonthYear(date)
 
   return {
     movement: buildAssetMovement({ ...ledger, start: period.start, end: period.end }),
@@ -322,7 +323,7 @@ export async function loadAssetDisposals(period: {
 }): Promise<AssetDisposalReport> {
   const ledger = await loadAssetLedger(period.end)
   const short = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    formatDayMonthYear(date)
 
   return {
     disposal: buildAssetDisposals({ ...ledger, start: period.start, end: period.end }),

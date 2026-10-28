@@ -8,6 +8,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/shadcn/chart"
+import { formatCompactNumber } from "@/lib/utils/format"
 import { formatTrendValue, type TrendUnit } from "@/lib/reports/financial-charts"
 
 export interface FinancialTrendChartProps {
@@ -22,7 +23,7 @@ export interface FinancialTrendChartProps {
 function axisFormatter(value: number, unit: TrendUnit): string {
   if (unit === "percent") return `${value.toFixed(0)}%`
   if (unit === "ratio") return `${value.toFixed(1)}×`
-  return new Intl.NumberFormat("id-ID", { notation: "compact", maximumFractionDigits: 1 }).format(value)
+  return formatCompactNumber(value)
 }
 
 /**

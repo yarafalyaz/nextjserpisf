@@ -5,6 +5,7 @@
  */
 
 import { companyAddressLines } from "@/lib/utils/company-address"
+import { formatDate } from "@/lib/utils/format"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { resolveDocumentLogo } from "@/lib/pdf/engine/logo"
 import type { DocumentLetterhead, StatementDocument, TableDocument } from "@/lib/pdf/engine/types"
@@ -30,13 +31,7 @@ export function companyLetterhead(
 
 /** Kaki halaman: waktu cetak + pengguna yang mencetak. */
 export function printFooterText(printedBy?: string | null, now = new Date()): string {
-  const stamped = now.toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  const stamped = formatDate(now, { format: "numeric", includeTime: true })
   return printedBy ? `Dicetak: ${stamped} oleh ${printedBy}` : `Dicetak: ${stamped}`
 }
 

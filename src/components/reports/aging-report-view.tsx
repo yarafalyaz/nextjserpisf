@@ -88,7 +88,7 @@ export function AgingReportView({ rows, texts }: { rows: ReturnType<typeof build
     count: agingSummary.get(key)?.count || 0,
     total: agingSummary.get(key)?.total || 0,
   }))
-  const period = `Per ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const period = `Per ${formatDate(new Date())}`
 
   const exportButtons = (
     <ExportButtons title={texts.exportTitle} pdfHref={buildReportPdfHref(texts.pdfSlug, buildReportPeriodSlug(new Date(), new Date()))} />
