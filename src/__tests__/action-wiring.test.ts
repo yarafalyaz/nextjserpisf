@@ -135,6 +135,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-28-133-S/135-V backend dulu (t_640dcde5): aksi dokumen koreksi
+  // slip paid; tombol/dialog UI menyusul kartu Frontend (buang entri ini saat
+  // halaman penggajian memanggilnya).
+  "src/actions/hrm.actions.ts::correctPaidPayroll":
+    "F-2026-10-28-133-S/135-V backend; UI koreksi slip paid menyusul (frontend)",
   // F-2026-10-25-048-S: 2 aksi lead time kini dirujuk ItemWarehouseMinStockPanel
   // (kolom + kontrol lead time, PR konsumen Frontend 048-F1) — entri beku dibuang.
   // F-2026-10-25-043-B1: aksi jejak email statement kini dirujuk

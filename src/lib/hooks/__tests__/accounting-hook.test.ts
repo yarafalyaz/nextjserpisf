@@ -2272,13 +2272,15 @@ describe("onPayrollPaid", () => {
     expect(mocks.payrollFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
-  it("returns early if journal already exists (idempotency)", async () => {
+  it("menolak posting ganda saat jurnal aktif sudah ada (fail-closed, bukan senyap)", async () => {
+    // HR-BR-005 E-HRCR-6 + 135-V E135-5: jurnal AKTIF = tolak berisik;
+    // console.info konteks dicatat sebelum throw (guard idempotency-logging).
     mocks.payrollFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       netSalary: 1000,
     });
-    mocks.journalFindFirst.mockResolvedValue({ id: 7 });
-    await onPayrollPaid(1);
+    mocks.journalFindFirst.mockResolvedValue({ id: 7, status: "POSTED" });
+    await expect(onPayrollPaid(1)).rejects.toThrow("posting ganda ditolak");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
@@ -2334,6 +2336,24 @@ describe("onPayrollPaid", () => {
         }),
       }),
     );
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("E-HRCR-6: slip koreksi baru (referenceId BARU) tetap bisa posting sesudah reversal asal", async () => {
+    // Jalur sah correctPaidPayroll: referenceId BARU (id slip koreksi) —
+    // jurnal asal REVERSED = histori, bukan pemblokir.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 2,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-2",
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(2);
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
   });
 

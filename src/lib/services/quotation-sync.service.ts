@@ -6,9 +6,6 @@ import {
   assertCreditGatePassed,
   consumeApprovedCreditOverrideInTx,
 } from '@/lib/services/credit-gate.service'
-import { onSalesPaymentUpdated } from '@/lib/hooks/sales-payment.hook'
-import { onSalesInvoicePosted } from '@/lib/hooks/accounting.hook'
-import { reverseSalesInvoicePostingTx } from '@/lib/services/sales-invoice-posting.service'
 import { quotationHasRealSettlement, hasRealSettlement } from '@/lib/services/sales-settlement.service'
 
 interface QuotationItem {
@@ -36,30 +33,37 @@ function flattenQuotationItems(sections: { items: any[] }[]): QuotationItem[] {
 /**
  * Re-sync linked SO/Invoice items when a quotation is edited.
  *
- * Custom fabrication rule: a quotation's items may change until the customer
- * actually pays, so this now runs whenever the quotation has no real (non-DP)
- * settlement — regardless of its `draft`/`converted` status. A down payment
- * alone does not stop the sync. Downstream SO (draft/confirmed/processing) and
- * invoices (draft/sent/partial) are rewritten in place. A posted-but-unpaid
- * invoice is additionally reversed + re-posted so its stock-out and AR/revenue
- * + COGS journals match the new lines.
+ * GL-BR-003 K1 (AC-GL-005): dokumen posted/final immutable. Resync hanya
+ * menyentuh SO DRAFT dan faktur DRAFT dalam satu tx terkunci. SO/faktur
+ * posted/final (sent/confirmed/processing/partial/posted/paid) atau
+ * berpelunasan nyata DILEWATI — koreksi sah lewat retur/void, bukan
+ * tulis-ulang resync. Pemanggil updateQuotation/reviseQuotation sudah
+ * mengunci edit di hulu (settlement guard); guard di sini lapis fail-closed.
  */
-export async function resyncOnEdit(quotationId: number, userId: number | null = null): Promise<void> {  const quotation = await prisma.quotation.findUnique({
-    where: { id: quotationId },
-    include: { sections: { include: { items: true } } },
-  })
-  if (!quotation) return
-  if (quotation.status === 'cancelled') return
-  // Never propagate changes once the customer has really paid.
-  if (await quotationHasRealSettlement(quotationId)) return
-
-  const items = flattenQuotationItems(quotation.sections)
-
+export async function resyncOnEdit(quotationId: number, userId: number | null = null): Promise<void> {
+  // K4: kunci + baca-ulang quotation DALAM tx (TOCTOU). Baca luar dihapus:
+  // pemanggil bisa diam-diam dibalik status quotation pesaing di antara baca
+  // dan resync.
   await prisma.$transaction(async (tx) => {
+    // K4: kunci baris quotation (TOCTOU) — baca status diputus dari baris
+    // terkunci dalam tx yang sama.
+    await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    const quotation = await tx.quotation.findUnique({
+      where: { id: quotationId },
+      include: { sections: { include: { items: true } } },
+    })
+    if (!quotation) return
+    if (quotation.status === 'cancelled') return
+    // Never propagate changes once the customer has really paid.
+    if (await quotationHasRealSettlement(quotationId, tx)) return
+
+    const items = flattenQuotationItems(quotation.sections)
     const salesOrders = await tx.salesOrder.findMany({
       where: {
         quotationId,
-        status: { in: ['draft', 'confirmed', 'processing'] },
+        // K1: hanya SO DRAFT yang di-resync. Posted/final (approved/
+        // confirmed/processing/dsb) dilewati — koreksi sah lewat retur/void.
+        status: 'draft',
       },
     })
 
@@ -76,16 +80,10 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
         : await tx.salesInvoice.findMany({
             where: {
               salesOrderId: { in: salesOrderIds },
-              // Include `posted`: a posted-but-unpaid invoice must still follow
-              // the quotation's item edits (it is reversed + re-posted below).
-              status: {
-                in: [
-                  SalesInvoiceStatus.draft,
-                  SalesInvoiceStatus.sent,
-                  SalesInvoiceStatus.partial,
-                  SalesInvoiceStatus.posted,
-                ],
-              },
+              // K1: hanya faktur DRAFT yang ikut resync. Posted/final
+              // (sent/posted/partial/paid) dilewati — koreksi sah lewat
+              // retur/void, bukan tulis-ulang + reverse+repost diam-diam.
+              status: SalesInvoiceStatus.draft,
             },
           })
     const invoicesBySO = new Map<number, typeof allInvoices>()
@@ -160,10 +158,9 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
       const invoices = invoicesBySO.get(so.id) ?? []
 
       for (const inv of invoices) {
-        // Never rewrite the lines of an invoice the customer has really paid.
+        // K1: guard ganda — lewati faktur non-draft maupun berpelunasan nyata.
         if (await hasRealSettlement(inv.id, tx)) continue
-        const invWasPosted =
-          inv.status !== SalesInvoiceStatus.draft && inv.status !== SalesInvoiceStatus.approved
+        if (inv.status !== SalesInvoiceStatus.draft) continue
 
         await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: inv.id } })
         if (items.length > 0) {
@@ -216,19 +213,8 @@ export async function resyncOnEdit(quotationId: number, userId: number | null = 
           },
         })
 
-        // grandTotal just changed — the existing paidAmount may now exceed it
-        // (or fall further below it), so status / paymentStatus must be
-        // re-derived. Without this, a partially-paid invoice whose grandTotal
-        // is edited down below paidAmount stays stuck at "partial" forever.
-        await onSalesPaymentUpdated(inv.id, tx)
-
-        // A posted invoice already moved stock and booked AR/revenue + COGS;
-        // the new lines invalidated all of it. Reverse the old postings (keeping
-        // the DP/payment journals) and re-post from the fresh rows.
-        if (invWasPosted) {
-          await reverseSalesInvoicePostingTx(tx, inv.id, { reversePaymentJournals: false })
-          await onSalesInvoicePosted(inv.id, userId ?? undefined, tx)
-        }
+        // K1: guard di atas memastikan faktur di sini selalu draft — tidak ada
+        // re-derive status payment maupun reverse+repost di jalur resync.
       }
     }
   })

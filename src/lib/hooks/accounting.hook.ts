@@ -2951,14 +2951,32 @@ export async function onPayrollPaid(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting ganda dilewati`,
     );
-    return;
+    throw new Error(
+      `Penggajian #${payrollId} sudah punya jurnal aktif — posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
+    );
   }
 
   const payroll = await db.payroll.findUniqueOrThrow({
     where: { id: payrollId },
   });
+  // E-HRCR-6b (135-V, selaras main): re-post payrollId asal sesudah reversal
+  // SELALU ditolak berisik — slip koreksi sah selalu memakai referenceId BARU
+  // (id slip koreksi), sehingga penjaga ini tak pernah menghalangi jalur sah.
+  // Pesan menyebut nomor dokumen tanpa nominal gaji.
+  const reversedOnly = await db.journal.findFirst({
+    where: { referenceType: "Payroll", referenceId: payrollId, status: "REVERSED" },
+    select: { id: true },
+  });
+  if (reversedOnly) {
+    const docNo = (payroll as { documentNo?: unknown }).documentNo;
+    throw new Error(
+      typeof docNo === "string" && docNo.length > 0
+        ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.`
+        : "Slip ini sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.",
+    );
+  }
 
   // Defensive floor: legacy rows may carry a negative net_salary (before the
   // write-path clamp). A negative value would credit the bank account a negative
@@ -3108,9 +3126,11 @@ export async function onPayrollPaid(
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting ganda di dalam transaksi dilewati`,
       );
-      return;
+      throw new Error(
+        `Penggajian #${payrollId} sudah punya jurnal aktif — posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
+      );
     }
 
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
