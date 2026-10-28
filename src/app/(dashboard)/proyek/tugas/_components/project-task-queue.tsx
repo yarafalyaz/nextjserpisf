@@ -200,6 +200,9 @@ export function ProjectTaskMengendapSection({
               <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS.project}</DetailTableTh>
               <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS.assignee}</DetailTableTh>
               <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS.status}</DetailTableTh>
+              <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS.dueDate}</DetailTableTh>
+              <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS.bucket}</DetailTableTh>
+              <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS.keterlambatan}</DetailTableTh>
               <DetailTableTh>{PROJECT_TASK_COLUMN_LABELS_TSQ.mengendap}</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
