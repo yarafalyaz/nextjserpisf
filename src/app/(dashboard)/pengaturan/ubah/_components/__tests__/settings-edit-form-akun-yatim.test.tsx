@@ -72,8 +72,11 @@ describe("SettingsEditForm — 5 akun yatim (SAL-BR-004 / GL-BR-009)", () => {
   it("setiap kunci ACCOUNT_MAPPING_FIELDS punya input di seksi akuntansi", () => {
     const { container, root } = mount({})
     const missing = ACCOUNT_MAPPING_FIELDS.filter((key) => hiddenValue(container, key) === undefined)
-    expect(missing).toEqual([])
-    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(39)
+    // BR-LOAN-08 (162-V): input mapping write-off ikut kartu UI Frontend
+    // t_b1e5edbd; backend kunci sudah live (automap + settings.actions validasi).
+    const pendingUi = ["employeeLoanWriteOffExpenseAccountId"]
+    expect(missing.filter((key) => !pendingUi.includes(key))).toEqual([])
+    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(40)
     for (const key of ORPHAN_FIELDS) {
       expect(container.querySelector(`input[name="${key}"]`)).not.toBeNull()
       expect(container.querySelector(`label[for="${key}"]`)).not.toBeNull()

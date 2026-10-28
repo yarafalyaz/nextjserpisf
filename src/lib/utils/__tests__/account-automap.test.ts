@@ -195,3 +195,16 @@ describe("scrapSaleIncomeAccountId automap F-135-V", () => {
   })
 
 })
+
+describe("employeeLoanWriteOffExpenseAccountId automap F-162-V", () => {
+  // E162 (c): default 720007 OEXP non-operasional, bukan 6000/EXPS.
+  it("E162: automap ke 720007 persis; nonaktif tanpa itu = kosong fail-closed", async () => {
+    const { resolveAllAccountMappings } = await import("../account-automap")
+    const coa = [
+      { id: 901, code: "720007", name: "Beban Diluar Usaha Lainnya" },
+      { id: 902, code: "600020", name: "Beban Operasional Lainnya" },
+    ]
+    expect(resolveAllAccountMappings(coa).employeeLoanWriteOffExpenseAccountId).toBe("901")
+    expect(resolveAllAccountMappings([{ id: 902, code: "600020", name: "Beban Operasional Lainnya" }]).employeeLoanWriteOffExpenseAccountId).toBe("")
+  })
+})
