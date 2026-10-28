@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     count: vi.fn().mockResolvedValue(0),
     // Dipakai seedModules untuk mem-prune baris katalog yang permissionnya sudah tidak ada.
     deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   })
   const prismaMock: any = {
     permission: model(), role: model(), account: model(), systemSetting: model(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => {
     shippingMethod: model(), unitOfMeasure: model(), expenseCategory: model(),
     documentSequence: model(), module: model(), moduleAction: model(), user: model(), employee: model(),
     withholdingTaxType: model(),
+    payrollStatutoryRule: model(),
   }
   prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock))
   // Slug backfill reads the tables that have a `slug` column and then UPDATEs them.
