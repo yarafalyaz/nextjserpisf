@@ -44605,3 +44605,47 @@ ID vonis ini **F-2026-10-29-160-V** (Q-notakredit TERTULIS: matriks N/R/V/C + ak
 - E144-8: void dipakai sebagai koreksi sebagian (faktur tetap hidup + nota/retur tak ada) = MERAH; void atas faktur ber-payment-aktif tanpa reversal-dulu lolos = MERAH.
 - E144-9: rekonsiliasi — Σ outstanding (faktur − retur − nota kredit − payment valid) ≠ subledger Piutang POSTED sen-presisi = MERAH (selisih tampil sebagai temuan, bukan dipilih diam-diam).
 - E144-10: mutasi putusan — kembalikan 121-V P4 ("nota-tak-perlu") sebagai final, atau izinkan N1-N4 lewat retur, atau izinkan R1 lewat nota = MERAH; pulihkan → hijau.
+## VONIS ACCOUNTANT 2026-10-29 — F-2026-10-29-161-V: tarif jembatan lembur-approved→costing + jam ditolak sesudah costing + periode lembur lintas-slip (jawaban Q150-1/2/3 spec 150-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja; tanpa kode/schema/migrasi. Basis `origin/main` `f91028ba4` (29 Okt 2026 02:19 WIB, fetch run ini). Kartu `t_3f487120`.
+**Verifikasi ID:** grep `161-V` di backlog + `docs/product/INDEKS-ATURAN.md` `origin/main` = 0/0 sebelum tulis (run ini). `E161-` = 0 di backlog + board (keluarga baru run ini). **161-V / E161 bebas, dipakai vonis ini.**
+
+### 1. Fakta kode terverifikasi run ini (anchor, bukan warisan)
+
+- Pull costing labor = snapshot pemanggil, sistem TAK baca payroll: `src/actions/production-cost.actions.ts:259-261` ("system does not read payroll data here"), `amount = round(hours × ratePerHour)` (`:322`, `:408` safeRound), idempoten GLOBAL per `sourceTimesheetId` (`:307-317`, `:399-409`). Tarif per peran = master 145-S (OPEN).
+- Slip: pratinjau + tulis massal filter SAMA `status: "approved"` + rentang tanggal lembur (`src/actions/hrm.actions.ts:1350-1356`, `:1875-1881`); `overtimeTotal = Σ calculatedValue` beku (`:1387-1389`); masuk bruto (`:1399`); slip `paid` menjurnal via `onPayrollPaid` SATU transaksi, NOL jurnal lembur terpisah.
+- Jurnal payroll: idempoten jurnal aktif per slip; koreksi paid = reversal + slip koreksi tanggal berjalan WIB + `assertPeriodOpen(correctionDate)` (`hrm.actions.ts:3352-3358`); periode asal beku sebagai histori (pola 135-V §2b).
+- Beku: lembur `approved` tolak ubah/hapus (`hrm.actions.ts:4391-4416`); timesheet tertarik tolak ubah/hapus (`:4436-4451`, `timesheetPulledError`); hapus baris biaya = `deleteProductionCost` (`production-cost.actions.ts:206-247`).
+- Gap J4b (150-S): NOL jembatan overtime→timesheet→costing; `Timesheet` NOL kolom status (`prisma/schema.prisma`, model Timesheet tanpa approvedBy/status).
+- Akun: 146-V V4 mengikat — varians labor HANYA WIP ↔ akun selisih produksi; DILARANG sentuh `salaryExpenseAccountId`/`salariesPayableAccountId`; tarif standar DILARANG turun dari `baseSalary` (BR-PROJ-02).
+
+### 2. Vonis
+
+- **V1 — Q150-1 tarif jembatan = tarif STANDAR snapshot (145-S), BUKAN tarif lembur.** Bila jembatan BR-WO03-06 dibangun: `ProductionCost.rate` = rate standar peran hasil resolve 145-S (sebelum master ada: rate manual pemanggil, fail-closed >0 existing). DILARANG: `rate = calculatedValue/hours`, DILARANG baca `baseSalary`/payroll/slip di jalur pull (BR-PROJ-02 + 146-V V4 ditegaskan ulang). Selisih (standar vs aktual lembur per orang/tanggal) = rate variance MEMO analitis laporan, NOL jurnal selama `standardCostingEnabled` MATI (warisi 146-V V1/V2: pintu jurnal = gerbang F-006 + `productionVarianceAccountId`, aksi disposisi eksplisit).
+- **V2 — Q150-2 jam ditolak sesudah costing = TARIK-ULANG, bukan memo/biar.** Jalur lembur murni tak bisa terjadi (approved beku — hanya koreksi 133-S/135-V). Bila jembatan ada dan jam sumber batal sesudah pull: hapus baris `ProductionCost` hasil jembatan + rollup ulang HPP + reversal jurnal serapan bila sudah terserap (`onProductionCostAbsorbed`), dalam SATU tx + `assertPeriodOpen` + `assertJobCostMutable`, alasan wajib di log. Jam tak sah DILARANG tinggal di HPP; memo saja = HPP salah = MERAH. Pola = BR-WO03-04 diperluas ke baris jembatan.
+- **V3 — Q150-3 periode = ikut PERIODE BERJALAN saat sah, tak pernah reopen.** Lembur tanggal D yang baru `approved` sesudah slip periode D terbit/paid MASUK slip periode berjalan (konsisten 135-V §2b: periode asal beku, koreksi di berjalan). Kontrak filter untuk Backend: satu lembur = tepat SATU slip — sertakan lembur approved-lewat-cutoff (tanggal lembur < start tapi `approvedAt` dalam rentang berjalan dan belum termuat di slip mana pun) dengan label eksplisit; guard dobel-muat per overtimeId. DILARANG: reopen slip `paid`, DILARANG posting ke periode terkunci.
+- **V4 — matriks posting (tak berubah, ditegaskan):** slip = Dr Beban Gaji / Cr Hutang Gaji (+bank saat bayar) via `onPayrollPaid` existing, lembur hanya komponen bruto; costing = Dr WIP / Cr akun serapan pola 146-V, `amount` snapshot pull; PPh21/BPJS atas lembur ikut mesin bruto existing (bukan objek vonis ini).
+- **V5 — batas vonis.** Vonis ini MEMBUKA kontrak jembatan (tarif/akun/selisih/periode/idempoten). Fisik tombol tarik + kolom penanda + filter slip + UI + label = Backend/Frontend sesudah Lead putus BR-WO03-05/06. Tanpa jembatan terbangun: E150-5/E161-7 berlaku (paralel didokumentasikan, bukan kegagalan). INDEKS WO-BR-003 TETAP `Sebagian` sesudah vonis ini.
+
+### 3. Kontrak Backend (syarat bangun jembatan, bila Lead putus YA)
+
+1. Tombol tarik jam approved → Timesheet, idempoten per overtimeId (tarikan kedua = 0 baris); pull Timesheet→costing existing tanpa ubah.
+2. Rate = standar snapshot; larangan V1 dijaga kode + tes pengunci.
+3. Reject-after-pull = hapus + rollup + reversal-serapan satu tx (V2).
+4. Tepat-satu-slip + label lewat-cutoff (V3); `assertPeriodOpen` tiap mutasi.
+5. Tanpa nominal gaji di luar hr-scope (Frontend); NOL hitung pajak di UI.
+
+### Falsifikasi QA (E161, atas head implementasi persis)
+
+- E161-1: rate pull = `calculatedValue/hours` atau membaca `baseSalary`/payroll/slip = **MERAH**.
+- E161-2: `standardCostingEnabled` MATI tapi jurnal varians jembatan terbit = **MERAH**.
+- E161-3: jurnal jembatan/varians menyentuh akun payroll mana pun (Dr/Cr salaryExpense/salariesPayable/payrollBank/employeeReceivable) = **MERAH**.
+- E161-4: tarik jembatan 2x atas overtimeId sama → baris kedua >0 = **MERAH**.
+- E161-5: hapus baris biaya jembatan tanpa rollup ulang HPP, tanpa reversal serapan terserap, atau tanpa `assertPeriodOpen`/`assertJobCostMutable` = **MERAH**.
+- E161-6: lembur approved-lewat-cutoff masuk 2 slip (dobel) ATAU membuka ulang slip `paid`/periode terkunci = **MERAH**.
+- E161-7: jam approved muncul otomatis di timesheet/costing tanpa tombol tarik eksplisit = **MERAH** (gap J4b dipertahankan sampai jembatan diputus).
+- E161-8: selisih standar-vs-lembur mengubah `paidAmount`/`balanceDue` slip atau melahirkan jurnal penyesuaian = **MERAH**.
+
+ID vonis ini **F-2026-10-29-161-V** (jawaban Q150-1/2/3; kontrak jembatan + akun + periode + E161). Pemilik berikutnya: Lead (putus BR-WO03-05/06 + merge PR vonis ini, tanpa merge sendiri dari lane Accountant) → Backend (jembatan + guard kontrak §3) → Frontend (permukaan status rantai, tanpa nominal gaji di luar hr-scope) → QA (E150-1..8 + E161-1..8 atas head implementasi persis).
+
+---
