@@ -10,7 +10,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 
 interface VoidButtonProps {
   id: number
-  action: (id: number) => Promise<{ success: boolean; error?: string }>
+  action: (id: number, reason?: string) => Promise<{ success: boolean; error?: string }>
   label?: string
   title?: string
   body?: string
@@ -51,7 +51,7 @@ export function VoidButton({
       return
     }
     startTransition(async () => {
-      const result = await action(id)
+      const result = await action(id, reason.trim())
       if (result.success) {
         showSuccess("Dokumen berhasil dibatalkan")
         setIsOpen(false)

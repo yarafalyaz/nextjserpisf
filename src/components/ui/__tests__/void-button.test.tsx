@@ -96,7 +96,35 @@ describe("VoidButton requireReason (BR-F139-01 presentasi)", () => {
     )
     click(confirm ?? null)
     await act(async () => { await Promise.resolve() })
-    expect(action).toHaveBeenCalledWith(7)
+    expect(action).toHaveBeenCalledWith(7, "")
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("meneruskan alasan terisi (trimmed) ke aksi", async () => {
+    const action = vi.fn(async (_id: number, _reason?: string) => ({ success: true }))
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = render(container, <VoidButton id={7} action={action} requireReason />)
+    click(container.querySelector("button"))
+    await act(async () => {})
+    const textarea = document.querySelector("textarea[aria-label='Alasan pembatalan']") as HTMLTextAreaElement | null
+    expect(textarea).not.toBeNull()
+    // pola repo (reverse-payment-button.test.tsx): setter prototipe + event input
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
+      setter.call(textarea, "  salah input pelanggan  ")
+      textarea!.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await act(async () => {})
+    const confirm = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent === "Batalkan Dokumen",
+    )
+    click(confirm ?? null)
+    await act(async () => { await Promise.resolve() })
+    // react state update dari input event bisa async; flush sekali lagi
+    await act(async () => { await Promise.resolve() })
+    expect(action).toHaveBeenCalledWith(7, "salah input pelanggan")
     act(() => root.unmount())
     container.remove()
   })
