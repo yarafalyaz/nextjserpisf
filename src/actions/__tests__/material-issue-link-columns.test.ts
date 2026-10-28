@@ -101,6 +101,7 @@ beforeEach(() => {
     workOrderId: 7,
   })
   mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ status: "draft" })
+  mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
 })
 
 describe("createMaterialIssue — menyimpan kolom penaut", () => {
