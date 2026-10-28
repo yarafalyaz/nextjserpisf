@@ -119,3 +119,71 @@ describe("updateSystemSettings gerbang PKP tanpa tanggal (F-2026-10-25-015-V)", 
     expect(mocks.updateMock).toHaveBeenCalledTimes(1)
   })
 })
+
+// t_de3aba0b (temuan QA 28 Okt 2026): lima mapping akun yang dibaca jalur uang
+// fail-closed sebelumnya TIDAK ada di whitelist aksi, sehingga setelah
+// instalasi tidak bisa diisi/diubah sama sekali. Blok ini mengunci dua sisi:
+// whitelist aksi (nilai benar-benar masuk payload update) dan registrasi Zod
+// (nilai non-bilangan ditolak, bukan dibuang diam-diam).
+describe("updateSystemSettings lima mapping akun fail-closed (t_de3aba0b)", () => {
+  const LIMA_MAPPING = {
+    customerDownPaymentAccountId: "210102",
+    warrantyExpenseAccountId: "510104",
+    warrantyProvisionAccountId: "210205",
+    supplierClaimReceivableAccountId: "110508",
+    reimbursementLiabilityAccountId: "210209",
+  } as const
+
+  it("menerima kelima mapping sebagai integer dan menyimpannya ke payload update", async () => {
+    await expect(updateSystemSettings(fd({ ...LIMA_MAPPING }))).rejects.toThrow("NEXT_REDIRECT")
+    const data = mocks.updateMock.mock.calls.at(-1)![0].data
+    for (const [key, value] of Object.entries(LIMA_MAPPING)) {
+      expect(data[key], `${key} harus tersimpan sebagai angka`).toBe(Number(value))
+    }
+  })
+
+  it("mapping yang tidak dikirim form tidak ikut ditulis (kolom hasil instalasi utuh)", async () => {
+    // Form lama / seksi lain hanya mengirim satu field: empat kolom lain tidak
+    // boleh muncul di payload sebagai undefined-eksplisit, karena `undefined`
+    // berarti "jangan sentuh" bagi Prisma — sedangkan `null` akan menghapus.
+    await expect(
+      updateSystemSettings(fd({ warrantyExpenseAccountId: "510104" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    const data = mocks.updateMock.mock.calls.at(-1)![0].data
+    expect(data.warrantyExpenseAccountId).toBe(510104)
+    for (const key of [
+      "customerDownPaymentAccountId",
+      "warrantyProvisionAccountId",
+      "supplierClaimReceivableAccountId",
+      "reimbursementLiabilityAccountId",
+    ]) {
+      expect(data[key], `${key} tidak boleh ditulis saat field absen`).toBeUndefined()
+      expect(key in data, `${key} harus tetap ada sebagai kunci undefined`).toBe(true)
+    }
+  })
+
+  it("string kosong = null (mapping bisa dikosongkan dengan sengaja)", async () => {
+    await expect(
+      updateSystemSettings(
+        fd({
+          customerDownPaymentAccountId: "",
+          warrantyExpenseAccountId: "",
+          warrantyProvisionAccountId: "",
+          supplierClaimReceivableAccountId: "",
+          reimbursementLiabilityAccountId: "",
+        }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    const data = mocks.updateMock.mock.calls.at(-1)![0].data
+    for (const key of Object.keys(LIMA_MAPPING)) {
+      expect(data[key], `${key} harus null saat dikosongkan`).toBeNull()
+    }
+  })
+
+  it("nilai non-bilangan ditolak validasi Zod tanpa menyentuh DB", async () => {
+    await expect(
+      updateSystemSettings(fd({ supplierClaimReceivableAccountId: "piutang" })),
+    ).rejects.toThrow(/Validasi gagal: supplierClaimReceivableAccountId/)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+  })
+})
