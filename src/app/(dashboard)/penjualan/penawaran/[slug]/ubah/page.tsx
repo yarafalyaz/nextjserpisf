@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { QuotationForm } from "@/components/forms/quotation-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { LockedEditGuard } from "@/components/ui/locked-edit-guard"
+import { LockedEditGuard, lockedDocPreset } from "@/components/ui/locked-edit-guard"
 
 import type { Metadata } from "next"
 
@@ -25,7 +25,7 @@ export default async function EditQuotationPage({
   const canEditQuotations = await hasPermission("edit_quotations")
 
   const data = await resolveEntity(
-    { segment: slug, fallbackWhere: {} },
+    { segment: slug, fallbackWhere: {} as Record<string, never> },
     {
       bySlug: (s, where) =>
         prisma.quotation.findFirst({ where: { slug: s, ...where }, include: { sections: { include: { items: true } } } }),
@@ -39,22 +39,17 @@ export default async function EditQuotationPage({
   // GL-BR-003 K1: cermin guard server updateQuotation fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). Final tanpa
   // pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
-  const quotLockedCrumbs = [
-    { label: "Dasbor", href: "/" },
-    { label: "Penawaran", href: "/penjualan/penawaran" },
-    { label: "Ubah" },
-  ]
   const _d = data;
   if (!_d) notFound();
-  const quotLockedBackHref = `/penjualan/penawaran/${_d.slug ?? _d.id}`
+  const quotLocked = lockedDocPreset("penawaran", String(_d.slug ?? _d.id))
   function quotLockedGuard() {
     return (
       <LockedEditGuard
-        crumbs={quotLockedCrumbs}
+        crumbs={quotLocked.crumbs}
         documentLabel={`Penawaran ${_d.documentNo}`}
-        correctionLabel="revisi/penawaran baru"
-        backHref={quotLockedBackHref}
-        backLabel="Kembali ke detail penawaran"
+        correctionLabel={quotLocked.correctionLabel}
+        backHref={quotLocked.backHref}
+        backLabel={quotLocked.backLabel}
       />
     )
   }

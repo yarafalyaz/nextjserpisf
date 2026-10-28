@@ -6,7 +6,78 @@ import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
  * GL-BR-003 K1 (AC-GL-005): halaman ubah dokumen terkunci.
  * Cermin guard server fail-closed — tampilkan notice + tautan kembali,
  * bukan form yang pasti ditolak server.
+ *
+ * Preset per tipe dokumen (crumbs/koreksi/back) di sini supaya 4 halaman
+ * ubah + 4 halaman detail tidak menyalin blok props identik (dedup Sonar).
  */
+type LockedDocKind = "faktur" | "penawaran" | "pesanan" | "pembayaran"
+
+const LOCKED_PRESET: Record<
+  LockedDocKind,
+  {
+    crumbs: Array<{ label: string; href?: string }>
+    correctionLabel: string
+    backHref: (ref: string) => string
+    backLabel: string
+  }
+> = {
+  faktur: {
+    crumbs: [
+      { label: "Dasbor", href: "/" },
+      { label: "Penjualan", href: "/penjualan" },
+      { label: "Faktur", href: "/penjualan/faktur" },
+      { label: "Ubah" },
+    ],
+    correctionLabel: "retur penjualan",
+    backHref: (ref) => `/penjualan/faktur/${ref}`,
+    backLabel: "Kembali ke detail faktur",
+  },
+  penawaran: {
+    crumbs: [
+      { label: "Dasbor", href: "/" },
+      { label: "Penjualan", href: "/penjualan" },
+      { label: "Penawaran", href: "/penjualan/penawaran" },
+      { label: "Ubah" },
+    ],
+    correctionLabel: "revisi/penawaran baru",
+    backHref: (ref) => `/penjualan/penawaran/${ref}`,
+    backLabel: "Kembali ke detail penawaran",
+  },
+  pesanan: {
+    crumbs: [
+      { label: "Dasbor", href: "/" },
+      { label: "Penjualan", href: "/penjualan" },
+      { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
+      { label: "Ubah" },
+    ],
+    correctionLabel: "retur/void faktur turunan",
+    backHref: (ref) => `/penjualan/pesanan/${ref}`,
+    backLabel: "Kembali ke detail pesanan",
+  },
+  pembayaran: {
+    crumbs: [
+      { label: "Dasbor", href: "/" },
+      { label: "Penjualan", href: "/penjualan" },
+      { label: "Pembayaran", href: "/penjualan/pembayaran" },
+      { label: "Ubah" },
+    ],
+    correctionLabel: "pembayaran pengganti baru",
+    backHref: () => "/penjualan/pembayaran",
+    backLabel: "Kembali ke daftar pembayaran",
+  },
+}
+
+/** Breadcrumb + label koreksi + tautan kembali untuk satu tipe dokumen. */
+export function lockedDocPreset(kind: LockedDocKind, ref: string) {
+  const p = LOCKED_PRESET[kind]
+  return {
+    crumbs: p.crumbs,
+    correctionLabel: p.correctionLabel,
+    backHref: p.backHref(ref),
+    backLabel: p.backLabel,
+  }
+}
+
 export function LockedEditGuard({
   crumbs,
   documentLabel,

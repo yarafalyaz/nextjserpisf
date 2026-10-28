@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import { SalesInvoiceForm } from "@/components/forms/sales-invoice-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
-import { LockedEditGuard } from "@/components/ui/locked-edit-guard";
+import { LockedEditGuard, lockedDocPreset } from "@/components/ui/locked-edit-guard";
 
 import type { Metadata } from "next";
 
@@ -30,46 +30,42 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+  const doc = data;
+  if (!doc) notFound();
   // GL-BR-003 K1: cermin guard server updateSalesInvoice fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). posted/partial/paid
   // tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
-  const lockedCrumbs = [
-    { label: "Dasbor", href: "/" },
-    { label: "Penjualan", href: "/penjualan" },
-    { label: "Faktur", href: "/penjualan/faktur" },
-    { label: "Ubah" },
-  ];
-  const lockedBackHref = `/penjualan/faktur/${data.slug ?? data.id}`;
+  const locked = lockedDocPreset("faktur", String(doc.slug ?? doc.id));
   const realSettlementCount =
-    data.status === "cancelled"
+    doc.status === "cancelled"
       ? 1
       : await prisma.salesPayment.count({
           where: {
-            salesInvoiceId: data.id,
+            salesInvoiceId: doc.id,
             NOT: { paymentMethod: "down_payment" },
           },
         });
   if (realSettlementCount > 0) {
     return (
       <LockedEditGuard
-        crumbs={lockedCrumbs}
-        documentLabel={`Faktur ${data.documentNo}`}
-        correctionHref={`/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`}
-        correctionLabel="retur penjualan"
-        backHref={lockedBackHref}
-        backLabel="Kembali ke detail faktur"
+        crumbs={locked.crumbs}
+        documentLabel={`Faktur ${doc.documentNo}`}
+        correctionHref={`/penjualan/retur/tambah/faktur/${doc.slug ?? doc.id}`}
+        correctionLabel={locked.correctionLabel}
+        backHref={locked.backHref}
+        backLabel={locked.backLabel}
       />
     );
   }
 
   const invoice = {
-    id: data.id,
-    customerId: data.customerId,
-    salesOrderId: data.salesOrderId ?? null,
-    date: data.date.toISOString().split("T")[0],
-    dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
+    id: doc.id,
+    customerId: doc.customerId,
+    salesOrderId: doc.salesOrderId ?? null,
+    date: doc.date.toISOString().split("T")[0],
+    dueDate: doc.dueDate?.toISOString().split("T")[0] ?? null,
     taxInvoiceNumber: data.taxInvoiceNumber ?? null,
-    notes: data.notes ?? null,
+    notes: doc.notes ?? null,
   };
 
   const [customers, salesOrders] = await Promise.all([
