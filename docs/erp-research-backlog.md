@@ -42428,6 +42428,126 @@ ID putusan ini **F-2026-10-28-132-P**. Pemilik berikutnya: Accountant (vonis ang
 baru — tulis sebagai ID di komentar kartu tugasnya) → Backend (penjaga + helper + `written_off` fisik) → QA
 (E-LOAN-1..8 atas head implementasi).
 
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-141-S: penutupan proyek + pelestarian histori (PROJ-BR-007, TEST-STRATEGY P1 costing proyek)
+
+Sumber tunggal: `docs/product/PETA-FLEET.md` (PUTUSAN CEO feeder); `docs/product/INDEKS-ATURAN.md:144` PROJ-BR-007 `Belum` ("penutupan proyek dan pelestarian histori tidak ditunjuk di sini"); `docs/product/BUSINESS-RULES.md` PROJ-BR-007 ("penutupan proyek tidak menghilangkan histori"); `docs/product/TEST-STRATEGY.md:27` P1 costing proyek. Basis verifikasi run ini: `origin/main` `e3bc47213`.
+
+Slot ID: F-2026-10-28-141-S bebas terverifikasi run ini — grep `F-2026-10-28-141` di backlog+board main = 0 (hanya 2026-10-24/25-141-S beda tanggal); tertinggi -S tanggal 28 = 140-S (grep `F-2026-10-28-1[0-9][0-9]-S` = 117/118/119/120/127/128/134/139); 16 head PR terbuka = 0 berisi 141-S tanggal 28 (topik beda).
+
+Benchmark resmi (akses 2026-10-28):
+- Zahir: proyek selesai → NONAKTIFKAN ("Tidak Aktif"), bukan hapus — daftar transaksi menyusut, histori utuh, bisa diaktifkan kembali: https://help.zahironline.com/portal/id/kb/articles/bagaimana-memperlakukan-proyek-proyek-yang-telah-selesai-4-11-2019
+- Zahir: proyek yang sudah dipakai transaksi TIDAK bisa dihapus; yang sudah dipakai hanya boleh edit kode — edit nama merusak histori: https://help.zahironline.com/portal/id/kb/articles/cara-membuat-data-proyek-zahir-online-v2
+- Accurate: penyelesaian pekerjaan pesanan ke akun/barang — nilai pekerjaan dibukukan ke akun tanpa menambah stok: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pekerjaan-pesanan/penyelesaian-pesanan/penyelesaian-pesanan-ke-akun/
+
+### 0. Inventarisasi live (status Project/WorkOrder, guard close, histori biaya pasca-tutup)
+
+Sudah ada (TERVERIFIKASI-KODE, head persis worktree ini):
+- `Project.status` string bebas default `active` (`prisma/schema.prisma:5181`); sinkronisasi otomatis stage→header hanya mengenal `active/in_progress/completed` + `endDate` (`src/lib/services/project-status.ts`, `syncProjectStatusTx` di `src/actions/project.actions.ts:358`). TIDAK ADA status `closed`/`cancelled` header proyek, TIDAK ADA `closeProject/reopenProject/cancelProject` di `src/actions/project.actions.ts` (grep = 0), halaman `proyek/page.tsx:90` chip filter hanya `active/completed/cancelled` (cancelled = saringan tampilan, bukan transisi server).
+- `WorkOrder`/`ProductionOrder` close-out SUDAH live penuh: `completed → closed` + `closed → completed` (reopen), kolom `closedAt/closedBy/closedReason/reopenedAt/reopenedBy/reopenReason` (`prisma/schema.prisma:3264-3276`; vonis F-2026-10-21-009-V; `closeWorkOrder`/`reopenWorkOrder` `src/actions/manufacturing.actions.ts:2601-2700`, izin `complete_work_orders`, guard C1-C6 server: PO anak terbuka, MI draft/processing, ProductionCost `postedAt` kosong, `assertWorkOrderQcCleared`, `assertPeriodOpen`; klaim atomik `updateMany WHERE status='completed'`; antrean baca-saja `src/lib/reports/workshop-closeout-queue.ts` + C7/C8 manual).
+- Kunci biaya pasca-tutup live: `assertJobCostMutable` (`src/lib/services/job-closeout.service.ts:37-61`) dipakai MI create/complete, MI-from-WO, ProductionCost create/update/delete + pull timesheet + overhead, sync rework; `closedWorkOrderError` menolak `completed/cancelled/closed` (`src/lib/services/timesheet-context.ts:32-38`, CLOSED sudah termasuk — celah BR-CLOSE-04 dari 097-S SUDAH TERTUTUP di main, bukan gap).
+- Jejak audit live: `ProjectLog` (`prisma/schema.prisma:5289`, `projectId` Cascade, `details` Json old→new rab_*) untuk revisi RAB/kontrak; `ActivityLog` umum (`prisma/schema.prisma:5473`, indeks `[modelType, modelId]`) dipakai create/update/delete Project + close/reopen WO + close/reopen PO.
+- Anti-hapus live: `deleteProject` menolak bila workOrders/timesheets/tasks/overtimeRequests > 0 (`src/actions/project.actions.ts:125-171`); `deleteWorkOrder` hanya `pending/draft` (`src/actions/manufacturing.actions.ts:2086-2111`).
+
+Belum ada / parsial (celah PROJ-BR-007):
+- (a) Header `Project` TIDAK punya status terminal: proyek yang semua stage `completed/skipped` berhenti di `completed` (`computeProjectStatus`), tanpa kunci setara WO-closed. Proyek `completed` masih bisa: edit header bebas (`updateProject`, guard hanya `assertApproved` bila workflow dikonfigurasi), stage reopen kapan saja (`syncProjectStatusTx` membalikkan `completed → in_progress` + clear `endDate`), tambah stage/progress/task baru, WO baru tertaut `projectId`.
+- (b) Relasi biaya lintas modul ke `Project` TIDAK mengenal tutup karena penutupnya tidak ada: `MaterialIssue.projectId` (`schema:2768`, `assertJobCostMutable` hanya cek `workOrderId`/`productionOrderId` — MI langsung-ke-proyek tanpa WO lolos guard tutup WO), `ProductionCost` TANPA kolom `projectId` (hanya `workOrderId/productionOrderId` — biaya proyek non-WO tidak tertaut), `Timesheet.projectId` langsung (XOR project/WO ditegakkan; guard `closedWorkOrderError` hanya untuk konteks WO), referensi `projectId` di Quotation/SalesInvoice/VendorBill/OvertimeRequest/Expense/PettyCash (`schema:1507/1725/2341/3813/4298/4355`) tanpa guard status proyek.
+- (c) Hapus proyek dengan histori UANG masih mungkin: guard `deleteProject` hanya hitung 4 relasi (workOrders/timesheets/tasks/overtimeRequests); `ProjectItem`/`ProjectStage`(+Progress)/`ProjectLog` Cascade ikut terhapus by-design, dan `MaterialIssue.projectId`/`Expense.projectId`/`PettyCash.projectId`/`VendorBill.projectId`/`Quotation.projectId`/`SalesInvoice.projectId` TIDAK dihitung — proyek ber-MI/biaya/faktur terhapus barisnya sementara dokumen uang yatim (atau diblokir FK bila Restrict). Hapus proyek `completed` (bukan draft) TIDAK dilarang eksplisit.
+
+### 1. Workflow specification (aktor + dokumen masuk/keluar)
+
+Alur TUTUP-PROYEK (USULAN, meniru pola WO-closed 009-V — tanpa status/ruang baru di antara completed dan tutup):
+
+1. Operator (kepala_bengkel/admin) memastikan prasyarat: semua `ProjectStage` = `completed/skipped` (header sudah `completed` via sinkronisasi existing); semua WO ber-`projectId` ini = `closed`/`cancelled`; tidak ada `MaterialIssue` `draft/processing` ber-`projectId` ini; tidak ada `Timesheet.projectId` ini yang belum ditarik ke ProductionCost; `JobChangeOrder` (via WO) tidak ada yang `draft/pending-approval`.
+2. Penutup (`edit_projects` — izin EXISTING, tanpa permission baru, cermin 009-V Keputusan 4a yang memakai izin existing) menutup dengan alasan wajib → server tulis `status='closed'` + `closedAt/closedBy/closedReason` (kolom baru, aditif, pola WO `closedAt/closedBy/closedReason`) dalam klaim atomik `updateMany WHERE status='completed'` + baris `ProjectLog(action='close', details={alasan, ditutupOleh})` + `ActivityLog("close","Project",id)`.
+3. Pasca-tutup: header `closed` = beku — `updateProject`, tambah/ubah stage/progress/task/budget-item, WO baru ke proyek ini, MI baru ber-`projectId` ini, timesheet baru ber-`projectId` ini, pull timesheet proyek ini → SEMUA ditolak server ("proyek sudah ditutup, reopen dengan alasan"). Dokumen baca (laporan L/R, budget-card, statement) tetap jalan penuh — tutup BUKAN event posting (nol jurnal saat close, cermin 009-V Keputusan 2).
+4. Biaya telat susulan (tagihan subkontrak datang sesudah tutup, pola BR-CLOSE-06 sisi WO): DUA jalur sah — (a) reopen ber-alasan lalu mutasi normal periode berjalan; atau (b) jurnal koreksi/dokumen biaya periode berjalan TANPA membuka proyek (akun beban = BUTUH-VONIS Accountant, spec ini tidak menetapkan akun).
+5. Reopen (`edit_projects`, alasan wajib, pola `reopenWorkOrder`): `closed → completed`, tulis `reopenedAt/reopenedBy/reopenReason` (kolom baru, jejak tutup→reopen→tutup utuh, tidak menimpa `closedAt` pertama) + `ProjectLog(action='reopen')` + `ActivityLog("reopen",...)`.
+
+Larangan hapus histori (USULAN, cermin Zahir + guard existing):
+- `deleteProject` DITOLAK bila proyek punya SALAH SATU: stage/progress/log/budget-item (intrinsik, hari ini Cascade), WO/timesheet/task/lembur (sudah ditolak), ATAU referensi uang: MaterialIssue/Expense/PettyCash/VendorBill/Quotation/SalesInvoice ber-`projectId` ini. Pesan tolak mengarahkan ke tutup-proyek, bukan hapus (pola pesan 139-S E139-4: tolak mengarahkan void).
+- Proyek `completed/closed` TIDAK boleh dihapus fisik apa pun isinya (cermin `deleteWorkOrder` hanya draft/pending). Status terminal = arsip baca-selamanya, bukan kandidat hapus.
+
+Nonaktif-tampil (USULAN, cermin Zahir "Tidak Aktif"): daftar + picker transaksi default menyembunyikan `closed` (filter eksplisit menampilkannya kembali); reopen mengembalikannya ke daftar. BUKAN soft-delete, BUKAN kolom baru bila saringan status cukup — pemilik Backend memilih fisiknya.
+
+### 2. Role/permission matrix (permission key nyata `module-catalog.generated.ts`)
+
+| Aksi | view_projects (:427) | create_projects (:428) | edit_projects (:429) | delete_projects (:430) | manage_projects (:431) | complete_work_orders (:270) | Catatan |
+|---|---|---|---|---|---|---|---|
+| Lihat proyek closed + histori biaya | YA | — | — | — | — | — | read-only, termasuk lintas periode |
+| Tutup proyek (alasan wajib) | — | — | YA | — | — | — | izin EXISTING; tanpa permission baru |
+| Reopen proyek (alasan wajib) | — | — | YA | — | — | — | izin EXISTING; jejak utuh |
+| Edit header/stage/budget proyek active/completed | — | — | YA | — | — | — | closed ditolak server |
+| Hapus proyek (draft kosong sah) | — | — | — | YA | — | — | completed/closed + ber-referensi DITOLAK |
+| Tutup/reopen WO anak | — | — | — | — | — | YA | prasyarat tutup proyek; live |
+| Sembunyikan closed dari picker (tampil) | — | — | — | — | — | — | Frontend filter default; tanpa izin baru |
+
+Peran existing (`base-data.ts:382-390`: super_admin/admin/staff/ga/kepala_bengkel/karyawan/purchasing/warehouse/finance — TIDAK ada "manajer proyek"; jangan karang role): kepala_bengkel/admin menutup; finance baca histori; staff/karyawan baca sesuai akses modul.
+
+### 3. Status-transition matrix
+
+| Status awal | Pemicu | Status akhir | Penjaga / permission |
+|---|---|---|---|
+| `active/in_progress` (header; stage berjalan) | stage semua `completed/skipped` | `completed` | sinkronisasi existing `syncProjectStatusTx`; endDate dicap sekali, reopen stage membalikkan (live) |
+| `completed` | tutup + alasan wajib | `closed` (BARU, USULAN) | `edit_projects`; SEMUA WO anak closed/cancelled; nol MI draft/processing; nol timesheet-belum-tarik; nol CO draft; klaim atomik `WHERE status='completed'`; periode berjalan terbuka (`assertPeriodOpen`) |
+| `closed` | reopen + alasan wajib | `completed` | `edit_projects`; tulis reopen-trace tanpa menimpa close-trace |
+| `completed/closed` | hapus fisik | DITOLAK | guard referensi penuh + status terminal (USULAN Backend) |
+| `draft`-setara (proyek baru tanpa stage/referensi) | hapus fisik | hilang | `delete_projects`; satu-satunya hapus sah |
+
+Status `cancelled` header proyek TIDAK diusulkan run ini — chip filter `proyek/page.tsx:90` menampilkannya sebagai saringan tampilan tanpa transisi server; batal proyek = tutup administratif (`closed` + alasan "dibatalkan") atau hapus draft kosong. BUTUH-VONIS Lead bila pemilik proses menuntut status batal tersendiri.
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-P141-01 | `completed` proyek ≠ `closed`: selesai fisik vs kunci pembukuan; hanya `completed → closed` dan `closed → completed` (reopen) | USULAN (cermin 009-V K1) | pola `closeWorkOrder/reopenWorkOrder` live |
+| BR-P141-02 | Syarat tutup: WO anak semua terminal + nol MI terbuka + nol timesheet-belum-tarik + nol CO draft + periode terbuka + alasan wajib | USULAN | guard C1-C6 `closeWorkOrder` live + antrean `workshop-closeout-queue.ts` |
+| BR-P141-03 | Tutup BUKAN event posting: nol jurnal saat close; biaya telat susulan = reopen ATAU jurnal periode berjalan tanpa buka proyek | USULAN (akun jalur-b BUTUH-VONIS) | vonis 009-V K2+K4; BR-CLOSE-06 |
+| BR-P141-04 | Closed = beku: tolak edit header/stage/budget/task/MI/timesheet/pull baru ber-`projectId` ini; baca laporan tetap penuh | USULAN | `assertJobCostMutable` + `closedWorkOrderError` live (sisi WO) |
+| BR-P141-05 | Jejak tutup utuh: `closedAt/By/Reason` + `reopenedAt/By/Reason` + `ProjectLog(close/reopen)` + `ActivityLog`; tutup ulang tidak menimpa jejak pertama | USULAN | kolom WO `schema:3264-3276` + `ProjectLog details` Json |
+| BR-P141-06 | Larangan hapus histori: tolak hapus bila ada referensi intrinsik/uang + status completed/closed; pesan mengarahkan tutup | USULAN | Zahir BENCHMARK; guard `deleteProject` parsial live |
+| BR-P141-07 | Nonaktif-tampil: `closed` sembunyi default dari daftar/picker, tampil via filter; reopen mengembalikan | USULAN | Zahir BENCHMARK "Tidak Aktif" |
+| BR-P141-08 | `ProductionCost` tanpa `projectId`: biaya proyek non-WO hari ini tidak tertaut per proyek; realisasi per tahap/kategori "Belum terukur" tetap berlaku sampai kolom/turunan diputus | TERVERIFIKASI-KODE + BUTUH-VONIS | `schema:3211-3250` (nol projectId); PROJ-BR-004/005 `Sebagian` |
+| Q-P141-1 | Izin tutup = `edit_projects` existing cukup, atau perlu pemisahan pemeriksa vs penutup (dua-orang)? | BUTUH-VONIS (Lead) | cermin BR-CLOSE-07 sisi WO |
+| Q-P141-2 | Akun beban periode berjalan untuk biaya telat tanpa reopen? | BUTUH-VONIS (Accountant) | cermin BR-CLOSE-06 |
+| Q-P141-3 | Fisik nonaktif-tampil: saringan status cukup vs kolom `isActive` baru (migrasi)? | BUTUH-VONIS (Backend/Lead) | Zahir memakai flag; hindari migrasi bila saringan cukup |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (run ini) |
+|---|---|---|---|
+| Status tutup job | Penyelesaian pesanan (ke barang/akun) membukukan nilai ke akun tujuan | Proyek selesai → flag "Tidak Aktif", hilang dari daftar+picker, re-aktif kapan saja | WO/PO `closed` live (009-V); header `Project` BELUM ada |
+| Kunci biaya pasca-tutup | Selisih pasca-selesai ditampung akun selisih khusus (otomatis) | N/A (nonaktif = administratif, bukan kunci) | Sisi WO: `assertJobCostMutable` + timesheet-closed live; sisi Project: BELUM (penutupnya tidak ada) |
+| Hapus ber-histori | N/A | DITOLAK bila sudah dipakai transaksi; edit nama ber-transaksi merusak histori | `deleteProject` tolak parsial (4 relasi); referensi uang BELUM dihitung |
+| Biaya susulan | Akun selisih biaya kerjaan | Transaksi baru ke proyek nonaktif = aktifkan dulu | USULAN Q-P141-2: reopen ATAU jurnal periode berjalan |
+| L/R per proyek pasca-tutup | Laporan terupdate otomatis | L/R + anggaran-vs-realisasi per proyek tetap tersedia | Builder L/R + budget-card baca status-agnostik (tetap jalan pasca-tutup tanpa ubahan) |
+
+### 6. Acceptance criteria + edge cases (untuk QA, atas head implementasi persis BUKAN head spec ini)
+
+- E142-1: tutup tanpa alasan/kosong/spasi lolos = MERAH; tutup dari status selain `completed` lolos = MERAH.
+- E142-2: tutup lolos padahal WO anak belum terminal / MI draft / timesheet-belum-tarik / CO draft = MERAH (satu per syarat).
+- E142-3: pasca-`closed`, mutasi apa pun (edit header, stage/progress/task/budget baru, MI/timesheet/pull baru) lolos = MERAH; laporan L/R + budget-card tetap terbaca = HIJAU.
+- E142-4: tutup membuat jurnal (cek Journal/workspace-period) ATAU mengubah angka histori (estimasi/aktual sebelum tutup) = MERAH.
+- E142-5: `deleteProject` atas completed/closed lolos, ATAU atas proyek ber-MI/expense/bill/invoice/quotation tertaut lolos = MERAH; pesan tolak tidak mengarahkan tutup = MERAH-ketat.
+- E142-6: reopen tanpa alasan lolos = MERAH; reopen menimpa/menghapus `closedAt/By/Reason` pertama = MERAH; tutup kedua sesudah reopen tidak tercatat terpisah = MERAH.
+- E142-7: mutasi guard — cabut satu penolakan closed (mis. edit header) → tes tutup wajib MERAH; pulihkan → hijau.
+- E142-8: race — dua tutup paralel: tepat satu menang (klaim `WHERE status='completed'`), pecundang error bersih tanpa baris ganda = HIJAU; dua baris close-log = MERAH.
+- Edge: proyek tanpa stage (header `active` selamanya — `computeProjectStatus` total=0) tidak bisa tutup (bukan `completed`) — penolakan dengan pesan jelas, bukan hang; periode tutup terkunci — tolak nol mutasi; biaya telat jalur jurnal-tanpa-reopen TIDAK menyentuh angka proyek closed (proyek tetap beku) — bila menyentuh = MERAH.
+
+### 7. Backlog turunan (BUKAN kartu baru run ini)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-141-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) kolom `closedAt/By/Reason + reopenedAt/By/Reason` + transisi `completed→closed→completed` + guard BR-P141-02/04/05 | Backend | spec ini merged; vonis Q-P141-1/3 |
+| (tanpa ID baru) `deleteProject` tolak-penuh + pesan-arah-tutup (BR-P141-06) | Backend | spec ini merged |
+| (tanpa ID baru) nonaktif-tampil closed di daftar/picker + filter (BR-P141-07) | Frontend | kontrak Backend merged |
+| (tanpa ID baru) akun biaya-telat-tanpa-reopen (Q-P141-2) | Accountant | satu vonis akun |
+| (tanpa ID baru) E142 head persis | QA | implementasi merged |
+| (tanpa ID baru) nilai status PROJ-BR-007 `Belum` sesudah implementasi merged | Lead/QA | head merged + E142 |
+
+ID spec ini **F-2026-10-28-141-S** (penutupan proyek + pelestarian histori, jawab INDEKS PROJ-BR-007 `Belum` + TEST-STRATEGY P1 costing proyek; basis `origin/main` `e3bc47213`). Pemilik berikutnya: BOT Lead (vonis Q-P141-1 status `cancelled`/pemisahan dua-orang + Q-P141-3 fisik flag; merge PR docs ini; nilai status PROJ-BR-007 hanya sesudah implementasi + E142) → BOT Accountant (vonis Q-P141-2 akun biaya telat) → BOT Backend (kolom tutup + guard + tolak-hapus-penuh) → BOT Frontend (sembunyikan closed default + filter) → BOT QA (E142-1..8 atas head persis). Butuh putusan accountant: YA TERBATAS — hanya Q-P141-2 (akun jalur jurnal-tanpa-reopen); syarat tutup/kunci/jejak/anti-hapus TIDAK menunggu (cermin WO-closed yang sudah live + Zahir BENCHMARK).
 ## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-126-V: parameter statutori payroll — plafon JP Rp11.086.300 sejak 1 Mar 2026, tabel isi siap-seed, fallback 2024 tetap dilarang (jawaban B1 spec F-2026-10-28-119-S)
 Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `46e0e41be` (28 Okt 2026 08:58 WIB).
 **Verifikasi ID:** grep `F-2026-10-28-126` di backlog + board `origin/main` = 0/0, judul PR terbuka = 0 sebelum tulis. 125-V terpakai PR #1250 (vonis landed cost). **126-V bebas.**
@@ -42478,3 +42598,4 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-2: tabel berisi tarif `1`/`2` (persen) alih-alih `0.01`/`0.02` → hitungan BPJS membengkak 100× = **MERAH**.
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
+
