@@ -26,24 +26,14 @@ import { reverseVendorPayment } from "@/actions/purchase.actions"
 import { reverseSalesPayment } from "@/actions/sales.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import {
+  openDialogByLabel,
   renderCard,
-  unmountCard,
-  clearRenderedCards,
+  resetCardHarness,
   setFieldValue,
+  unmountCard,
 } from "@/components/reports/__tests__/card-test-utils"
 
-afterEach(() => {
-  clearRenderedCards()
-  vi.clearAllMocks()
-})
-
-function openDialog(container: HTMLElement, label: string) {
-  const btn = container.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null
-  expect(btn).not.toBeNull()
-  act(() => {
-    btn!.click()
-  })
-}
+afterEach(resetCardHarness)
 
 async function confirmWithReason(kind: "vendor" | "sales", id: number, rawReason: string) {
   await vi.waitFor(() => {
@@ -119,7 +109,7 @@ describe("PaymentReversalButton FIN-BR-008 (UI reversal pembayaran)", () => {
           canReverse
         />,
       )
-      openDialog(container, `Balikkan pembayaran ${c.documentNo}`)
+      openDialogByLabel(container, `Balikkan pembayaran ${c.documentNo}`)
       await confirmWithReason(c.kind, c.id, c.rawReason)
       const own = c.kind === "vendor" ? reverseVendorPayment : reverseSalesPayment
       const other = c.kind === "vendor" ? reverseSalesPayment : reverseVendorPayment
@@ -141,7 +131,7 @@ describe("PaymentReversalButton FIN-BR-008 (UI reversal pembayaran)", () => {
     const { container, root } = renderCard(
       <PaymentReversalButton kind="vendor" id={7} documentNo="VP-0007" status="completed" canReverse />,
     )
-    openDialog(container, "Balikkan pembayaran VP-0007")
+    openDialogByLabel(container, "Balikkan pembayaran VP-0007")
     await confirmWithReason("vendor", 7, "   ")
     expect(reverseVendorPayment).not.toHaveBeenCalled()
     expect(reverseSalesPayment).not.toHaveBeenCalled()
@@ -157,7 +147,7 @@ describe("PaymentReversalButton FIN-BR-008 (UI reversal pembayaran)", () => {
     const { container, root } = renderCard(
       <PaymentReversalButton kind="sales" id={9} documentNo="SP-0009" status="posted" canReverse />,
     )
-    openDialog(container, "Balikkan pembayaran SP-0009")
+    openDialogByLabel(container, "Balikkan pembayaran SP-0009")
     await confirmWithReason("sales", 9, "Koreksi penerimaan")
     await vi.waitFor(() => {
       expect(showError).toHaveBeenCalledWith(

@@ -2,6 +2,7 @@
 import type { ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
+import { vi } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -34,6 +35,31 @@ export function unmountCard(root: Root) {
 
 export function clearRenderedCards() {
   document.body.replaceChildren()
+}
+
+/**
+ * Reset rangka tes kartu: bersihkan DOM hasil render + seluruh mock.
+ * Dipakai langsung sebagai `afterEach(resetCardHarness)` supaya blok
+ * `afterEach(() => { clearRenderedCards(); vi.clearAllMocks() })` tidak
+ * disalin ke tiap berkas tes.
+ */
+export function resetCardHarness() {
+  clearRenderedCards()
+  vi.clearAllMocks()
+}
+
+/**
+ * Klik tombol kartu berdasarkan `aria-label` persis, lalu kembalikan elemennya.
+ * Menggantikan helper `openDialog` salin-tempel di tiap berkas tes; gagal keras
+ * dengan pesan jelas bila tombolnya tidak ada.
+ */
+export function openDialogByLabel(container: HTMLElement, label: string) {
+  const btn = container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
+  if (!btn) throw new Error(`Tombol ber-aria-label tidak ditemukan: ${label}`)
+  act(() => {
+    btn.click()
+  })
+  return btn
 }
 
 /**

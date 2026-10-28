@@ -16,20 +16,15 @@ vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }
 import { JobReopenButton } from "../job-reopen-button"
 import { reopenProductionOrder, reopenWorkOrder } from "@/actions/manufacturing.actions"
 import { showError, showSuccess } from "@/lib/utils/toast"
-import { renderCard, unmountCard, clearRenderedCards, setFieldValue } from "./card-test-utils"
+import {
+  openDialogByLabel,
+  renderCard,
+  resetCardHarness,
+  setFieldValue,
+  unmountCard,
+} from "./card-test-utils"
 
-afterEach(() => {
-  clearRenderedCards()
-  vi.clearAllMocks()
-})
-
-function openDialog(container: HTMLElement, label: string) {
-  const btn = container.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null
-  expect(btn).not.toBeNull()
-  act(() => {
-    btn!.click()
-  })
-}
+afterEach(resetCardHarness)
 
 describe("JobReopenButton F-2026-10-21-009-V (UI reopen job closed)", () => {
   it("tombol hanya tampil untuk job closed dengan izin; selain itu kosong", () => {
@@ -69,7 +64,7 @@ describe("JobReopenButton F-2026-10-21-009-V (UI reopen job closed)", () => {
     const { container, root } = renderCard(
       <JobReopenButton kind={c.kind} id={c.id} code={c.code} status="closed" canReopen />,
     )
-    openDialog(container, `Buka Kembali Job ${c.code}`)
+    openDialogByLabel(container, `Buka Kembali Job ${c.code}`)
     await vi.waitFor(() => {
       expect(document.body.querySelector(`#reopen-reason-${c.kind}-${c.id}`)).not.toBeNull()
     })
@@ -98,7 +93,7 @@ describe("JobReopenButton F-2026-10-21-009-V (UI reopen job closed)", () => {
     const { container, root } = renderCard(
       <JobReopenButton kind="work_order" id={7} code="WO-0007" status="closed" canReopen />,
     )
-    openDialog(container, "Buka Kembali Job WO-0007")
+    openDialogByLabel(container, "Buka Kembali Job WO-0007")
     await vi.waitFor(() => {
       expect(document.body.querySelector("#reopen-reason-work_order-7")).not.toBeNull()
     })
@@ -127,7 +122,7 @@ describe("JobReopenButton F-2026-10-21-009-V (UI reopen job closed)", () => {
     const { container, root } = renderCard(
       <JobReopenButton kind="work_order" id={7} code="WO-0007" status="closed" canReopen />,
     )
-    openDialog(container, "Buka Kembali Job WO-0007")
+    openDialogByLabel(container, "Buka Kembali Job WO-0007")
     await vi.waitFor(() => {
       expect(document.body.querySelector("#reopen-reason-work_order-7")).not.toBeNull()
     })
