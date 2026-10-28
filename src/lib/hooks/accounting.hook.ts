@@ -537,6 +537,51 @@ export async function onSalesInvoicePosted(
         );
       }
     }
+    // F-2026-10-28-137-V V1/V1a (SAL-BR-013): pemisah porsi jasa-vs-barang.
+    // Baris jasa = itemId null (teks bebas) ATAU item ter-resolve
+    // isProduct=false (isService TIDAK dipakai sebagai penentu, konsisten
+    // dengan penjaga stok = isProduct). Porsi = Σ total baris jasa vs
+    // Σ total baris barang; PPN satu kaki ikut V3 (tidak dipecah per kategori).
+    // Campuran jasa+scrap tetap ditolak (waris aturan campuran F-135-V);
+    // campuran jasa+barang SAH (dua kaki Cr pendapatan).
+    const serviceLineTotals: number[] = [];
+    if (!isScrapSaleInvoice) {
+      for (const line of invoice.items.filter((it) => Number(it.qty) > 0)) {
+        const lineTotal = Number((line as { total?: unknown }).total ?? 0);
+        if (typeof line.itemId !== "number") {
+          serviceLineTotals.push(lineTotal);
+        } else {
+          const resolved = resolvedItemById.get(line.itemId);
+          // Jasa = item ter-resolve isProduct=false. Orphan/produk = barang
+          // (jalur barang existing; orphan tak picu gate akun jasa).
+          if (resolved && !resolved.isProduct) serviceLineTotals.push(lineTotal);
+        }
+      }
+      // Campuran jasa+scrap SUDAH ditolak aturan campuran F-135-V di atas
+      // (baris jasa = baris non-besi-tua) — tanpa cabang khusus di sini.
+      if (serviceLineTotals.length > 0) {
+        const serviceAccountId = (settings as { salesServiceRevenueAccountId?: number | null }).salesServiceRevenueAccountId ?? null;
+        if (!serviceAccountId) {
+          throw new Error(
+            "Akun pendapatan jasa belum dipetakan. " +
+              "Atur salesServiceRevenueAccountId di Pengaturan → Akun sebelum memposting faktur yang memuat baris jasa — " +
+              "pendapatan jasa dilarang masuk akun Pendapatan Penjualan barang.",
+          );
+        }
+        const serviceAccount = await tx.account.findFirst({
+          where: { id: serviceAccountId },
+          select: { id: true, isActive: true, reportGroup: true },
+        });
+        if (!serviceAccount || !serviceAccount.isActive || serviceAccount.reportGroup !== "REVE") {
+          throw new Error(
+            "Akun pendapatan jasa tidak valid: wajib akun aktif grup pendapatan (REVE). " +
+              "Atur salesServiceRevenueAccountId di Pengaturan → Akun sebelum memposting faktur yang memuat baris jasa.",
+          );
+        }
+      }
+    }
+    const serviceSubtotal = serviceLineTotals.reduce((s, v) => safeAdd(s, v, 2), 0);
+    const hasServiceLines = !isScrapSaleInvoice && serviceLineTotals.length > 0;
     const revenueAccountId = isScrapSaleInvoice
       ? settings.scrapSaleIncomeAccountId!
       : settings.salesRevenueAccountId!;
@@ -572,7 +617,8 @@ export async function onSalesInvoicePosted(
     // Build the balanced journal lines and insert them in one batch instead of
     // 2-3 sequential journalEntry.create round-trips:
     //   Dr. Piutang Usaha (full invoice total)
-    //   Cr. Pendapatan Penjualan (revenue net of tax)
+    //   Cr. Pendapatan Jasa (service portion, F-137-V — bila ada baris jasa)
+    //   Cr. Pendapatan Penjualan (goods portion / full when no service lines)
     //   Cr. PPN Keluaran (only when a tax account is configured)
     const invoiceEntries: Prisma.JournalEntryCreateManyInput[] = [
       {
@@ -582,14 +628,50 @@ export async function onSalesInvoicePosted(
         credit: 0,
         memo: "Piutang Usaha",
       },
-      {
+    ];
+    if (hasServiceLines) {
+      // Porsi per kategori = Σ total baris (nilai baris sudah termasuk
+      // proporsi diskon/PPN-inklusif level baris; PPN satu kaki di bawah ikut
+      // V3 — tidak dipecah per kategori). Balanced: Dr totalAmount =
+      // Cr jasa + Cr barang + Cr PPN (bila ada akun pajak).
+      const serviceAccountId = (settings as { salesServiceRevenueAccountId?: number | null }).salesServiceRevenueAccountId!;
+      invoiceEntries.push({
+        journalId: journal.id,
+        accountId: serviceAccountId,
+        debit: 0,
+        credit: serviceSubtotal,
+        memo: "Pendapatan Jasa",
+      });
+      const goodsCredit = hasTaxAccount
+        ? safeSubtract(safeSubtract(Number(inv.totalAmount), taxAmount, 2), serviceSubtotal, 2)
+        : safeSubtract(Number(inv.totalAmount), serviceSubtotal, 2);
+      if (goodsCredit < 0) {
+        throw new Error(
+          "Posting faktur ditolak: porsi jasa (Σ total baris jasa) melebihi DPP faktur — " +
+            "periksa diskon level faktur/baris sebelum memposting.",
+        );
+      }
+      if (goodsCredit !== 0) {
+        invoiceEntries.push({
+          journalId: journal.id,
+          accountId: revenueAccountId,
+          debit: 0,
+          credit: goodsCredit,
+          memo: revenueMemo,
+        });
+      }
+      // goodsCredit == 0 = faktur jasa murni: tanpa kaki barang (kaki nol
+      // mengotori GL). Tanpa akun pajak + tanpa PPN: goodsCredit =
+      // totalAmount − serviceSubtotal tetap ditulis bila ≠ 0 di atas.
+    } else {
+      invoiceEntries.push({
         journalId: journal.id,
         accountId: revenueAccountId,
         debit: 0,
         credit: revenueCredit,
         memo: revenueMemo,
-      },
-    ];
+      });
+    }
     if (hasTaxAccount) {
       invoiceEntries.push({
         journalId: journal.id,

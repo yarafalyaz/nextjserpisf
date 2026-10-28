@@ -207,6 +207,12 @@ model SystemSetting {
   quotationSignatureImage          String? @map("quotation_signature_image")
   salesReceivableAccountId         Int?    @map("sales_receivable_account_id")
   salesRevenueAccountId            Int?    @map("sales_revenue_account_id")
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun pendapatan jasa — baris jasa
+  // (itemId null atau item isProduct=false) dibukukan ke akun ini, bukan ke
+  // akun pendapatan barang. Nullable tanpa default tebak (kosong = posting
+  // faktur berjasa ditolak fail-closed); automap instalasi menebak
+  // 400002 Pendapatan Jasa.
+  salesServiceRevenueAccountId     Int?    @map("sales_service_revenue_account_id")
   salesTaxAccountId                Int?    @map("sales_tax_account_id")
   salesReturnAccountId             Int?    @map("sales_return_account_id")
   salesAccountId                   Int?    @map("sales_account_id")

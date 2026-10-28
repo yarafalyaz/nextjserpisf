@@ -810,6 +810,144 @@ describe("onSalesInvoicePosted", () => {
     expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
   });
 
+  // F-2026-10-28-137-V V1/V1a (SAL-BR-013) E141-1..3: pemisah porsi jasa.
+  // Baris jasa = itemId null ATAU item isProduct=false (isService TIDAK
+  // dipakai). Porsi = Σ total baris; PPN satu kaki (V3).
+  // E141-1: faktur jasa murni -> Cr jasa (411) + Cr PPN, NOL kaki barang.
+  it("E141-1: faktur jasa murni kredit pendapatan jasa + PPN, tanpa kaki barang", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = 411;
+    mocks.accountFindFirst.mockResolvedValue({ id: 411, isActive: true, reportGroup: "REVE" });
+    const inner = innerInvoice({ totalAmount: 1100000, taxAmount: 100000 });
+    seedInvoice(inner, [
+      { itemId: null, qty: 1, total: 600000 },
+      { itemId: 61, qty: 2, total: 400000 },
+    ]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 61, isProduct: false, isScrapSaleItem: false },
+    ]);
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await onSalesInvoicePosted(1, 999);
+
+    // Dr Piutang 1100000 / Cr Jasa 1000000 / Cr PPN 100000 — 3 kaki.
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3);
+    expectEntry({ accountId: 110, debit: 1100000, credit: 0 });
+    expectEntry({ accountId: 411, debit: 0, credit: 1000000 });
+    expectEntry({ accountId: 160, debit: 0, credit: 100000 });
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 410 }),
+      }),
+    );
+  });
+
+  // E141-2: faktur campuran jasa+barang -> dua kaki Cr (jasa + barang),
+  // Σ Cr jasa + Cr barang = DPP; PPN tetap satu kaki.
+  it("E141-2: faktur campuran jasa+barang SAH dua kaki, PPN satu kaki", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = 411;
+    mocks.accountFindFirst.mockResolvedValue({ id: 411, isActive: true, reportGroup: "REVE" });
+    const inner = innerInvoice({ totalAmount: 2200000, taxAmount: 200000 });
+    seedInvoice(inner, [
+      { itemId: null, qty: 1, total: 500000 },
+      { itemId: 50, qty: 2, total: 1500000 },
+    ]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, isScrapSaleItem: false, defaultWarehouseId: null },
+    ]);
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await onSalesInvoicePosted(1);
+
+    // Dr Piutang 2200000 / Cr Jasa 500000 / Cr Barang 1500000 / Cr PPN 200000.
+    // Baris barang = produk (isProduct) → fifoConsume terpanggil untuknya
+    // (consumedCost mock 0 → tanpa jurnal COGS tambahan).
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(4);
+    expectEntry({ accountId: 411, debit: 0, credit: 500000 });
+    expectEntry({ accountId: 410, debit: 0, credit: 1500000 });
+    expectEntry({ accountId: 160, debit: 0, credit: 200000 });
+    expect(mocks.fifoConsume).toHaveBeenCalled();
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
+  // E141-3a: faktur berjasa tetapi akun jasa kosong -> ditolak berisik nol jurnal.
+  it("E141-3a: faktur berjasa tanpa mapping akun jasa ditolak fail-closed", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = null;
+    const inner = innerInvoice({ totalAmount: 600000 });
+    seedInvoice(inner, [{ itemId: null, qty: 1, total: 600000 }]);
+    mocks.itemFindMany.mockResolvedValue([]);
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/pendapatan jasa belum dipetakan/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
+  // E141-3b: akun jasa nonaktif -> ditolak berisik.
+  it("E141-3b: akun jasa nonaktif ditolak fail-closed", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = 411;
+    mocks.accountFindFirst.mockResolvedValue({ id: 411, isActive: false, reportGroup: "REVE" });
+    const inner = innerInvoice({ totalAmount: 600000 });
+    seedInvoice(inner, [{ itemId: null, qty: 1, total: 600000 }]);
+    mocks.itemFindMany.mockResolvedValue([]);
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/wajib akun aktif grup pendapatan \(REVE\)/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  // E141-3c: akun jasa salah grup (OINC) -> ditolak berisik.
+  it("E141-3c: akun jasa salah grup ditolak fail-closed", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = 411;
+    mocks.accountFindFirst.mockResolvedValue({ id: 411, isActive: true, reportGroup: "OINC" });
+    const inner = innerInvoice({ totalAmount: 600000 });
+    seedInvoice(inner, [{ itemId: null, qty: 1, total: 600000 }]);
+    mocks.itemFindMany.mockResolvedValue([]);
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/wajib akun aktif grup pendapatan \(REVE\)/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  // Campuran jasa+scrap tetap ditolak (waris aturan campuran F-135-V).
+  it("E141-3d: faktur campuran jasa+scrap ditolak berisik nol jurnal", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = 411;
+    mocks.accountFindFirst.mockResolvedValue({ id: 411, isActive: true, reportGroup: "REVE" });
+    const inner = innerInvoice({ totalAmount: 1000000 });
+    seedInvoice(inner, [
+      { itemId: null, qty: 1, total: 500000 },
+      { itemId: 60, qty: 1, total: 500000 },
+    ]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 0, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+
+    // Campuran jasa+scrap tetap ditolak — lewat aturan campuran F-135-V yang
+    // lebih dulu (scrap full-invoice; baris jasa = baris non-besi-tua).
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/campuran item besi tua \(scrap\) dan baris non-besi-tua/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
+  // isService=true + isProduct=true TIDAK menentukan jasa (V1a): baris produk
+  // tetap porsi barang walau isService menyala — G1 sudah larang kombinasi itu
+  // di master, tetapi hook tidak boleh mengklasifikasikan berdasar isService.
+  it("E141-V1a: isService diabaikan — baris isProduct=true tetap barang", async () => {
+    (mocks.systemSettings as any).salesServiceRevenueAccountId = null;
+    const inner = innerInvoice({ totalAmount: 1000000 });
+    seedInvoice(inner, [{ itemId: 50, qty: 2, total: 1000000 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, isService: true, isScrapSaleItem: false, defaultWarehouseId: null },
+    ]);
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    // Akun jasa kosong tetapi LOLOS: tanpa baris jasa, gate jasa tak aktif.
+    await onSalesInvoicePosted(1);
+
+    expectEntry({ accountId: 410, debit: 0, credit: 1000000 });
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ memo: "Pendapatan Jasa" }),
+      }),
+    );
+  });
+
   it("creates Dr. COGS / Cr. Inventory for product items with non-zero COGS", async () => {
     const inner = innerInvoice({ totalAmount: 1000 });
     seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);

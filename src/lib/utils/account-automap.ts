@@ -165,7 +165,16 @@ export function resolveAssetAccounts(accounts: AutomapAccount[]): {
  */
 export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   { key: "salesReceivableAccountId", groups: [["piutang", "usaha"], ["1103"], ["piutang", "dagang"], ["receivable"]] },
-  { key: "salesRevenueAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["pendapatan", "jasa"], ["revenue"], ["penjualan"]] },
+  // F-2026-10-28-137-V V1 (SAL-BR-013): grup "pendapatan+jasa" dipindah ke
+  // rule jasa di bawah supaya 400002 hanya dipetakan ke akun jasa dan
+  // 400001/tetangga ke akun barang — tak dua-duanya klaim akun sama.
+  // Fallback generik "penjualan"/"revenue" tetap ada (instalasi lama tanpa 400002).
+  { key: "salesRevenueAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["revenue"], ["penjualan"]] },
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun pendapatan jasa, default
+  // 400002 Pendapatan Jasa. Grup kode persis didahulukan; nama generik
+  // "pendapatan jasa" menyusul; fallback revenue generik terakhir supaya
+  // instalasi tanpa akun jasa tetap terisi (posting tetap fail-closed bila kosong).
+  { key: "salesServiceRevenueAccountId", groups: [["400002"], ["pendapatan", "jasa"], ["jasa"], ["service", "revenue"]] },
   { key: "salesTaxAccountId", groups: [["ppn", "keluaran"], ["210201"], ["ppn", "keluar"], ["tax", "out"]] },
   { key: "salesReturnAccountId", groups: [["retur", "penjualan"], ["400003"], ["sales", "return"]] },
   // AUD-FIN-01: kewajiban Uang Muka Penjualan (CoA 210102). Grup "uang","muka"
@@ -234,6 +243,17 @@ export function resolveAllAccountMappings(accounts: AutomapAccount[]): Record<st
   const mapping: Record<string, string> = {};
   for (const rule of ACCOUNT_MAPPING_RULES) {
     mapping[rule.key] = findAccountId(accounts, rule.groups);
+  }
+
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun jasa & akun barang tak boleh
+  // klaim akun sama (tabrakan pola persediaan-vs-GRNI di atas). Bila keduanya
+  // jatuh ke satu akun, akun jasa menang (grupnya lebih spesifik) dan akun
+  // barang dikosongkan — operator mengisi manual di Pengaturan → Akun.
+  if (
+    mapping.salesServiceRevenueAccountId &&
+    mapping.salesServiceRevenueAccountId === mapping.salesRevenueAccountId
+  ) {
+    mapping.salesRevenueAccountId = "";
   }
 
   const inventory = resolveInventoryAccounts(accounts);

@@ -156,6 +156,10 @@ export const updateSystemSettingsSchema = z.object({
   // Accounting - Sales
   salesReceivableAccountId: optionalInt(),
   salesRevenueAccountId: optionalInt(),
+  // F-2026-10-28-137-V V1 (SAL-BR-013): akun pendapatan jasa — baris jasa
+  // (itemId null atau item isProduct=false) dibukukan ke akun ini, bukan ke
+  // akun pendapatan barang. Kosong = posting faktur berjasa ditolak berisik.
+  salesServiceRevenueAccountId: optionalInt(),
   salesTaxAccountId: optionalInt(),
   salesReturnAccountId: optionalInt(),
   salesAccountId: optionalInt(),

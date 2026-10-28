@@ -195,3 +195,32 @@ describe("scrapSaleIncomeAccountId automap F-135-V", () => {
   })
 
 })
+
+describe("salesServiceRevenueAccountId automap F-137-V", () => {
+  const SERVICE_COA = [
+    { id: 410, code: "400001", name: "Penjualan" },
+    { id: 411, code: "400002", name: "Pendapatan Jasa" },
+  ]
+
+  it("E137-V1: jasa -> 400002, barang -> 400001, tak klaim akun sama", () => {
+    const m = resolveAllAccountMappings(SERVICE_COA)
+    expect(m.salesServiceRevenueAccountId).toBe("411")
+    expect(m.salesRevenueAccountId).toBe("410")
+  })
+
+  it("tanpa 400002: barang tetap 400001, jasa kosong fail-closed", () => {
+    const m = resolveAllAccountMappings([
+      { id: 410, code: "400001", name: "Penjualan" },
+    ])
+    expect(m.salesRevenueAccountId).toBe("410")
+    expect(m.salesServiceRevenueAccountId).toBe("")
+  })
+
+  it("nama 'Pendapatan Jasa' tanpa kode menarik akun jasa", () => {
+    const m = resolveAllAccountMappings([
+      { id: 410, code: "400001", name: "Penjualan" },
+      { id: 411, code: "499999", name: "Pendapatan Jasa Konsultan" },
+    ])
+    expect(m.salesServiceRevenueAccountId).toBe("411")
+  })
+})
