@@ -8,7 +8,13 @@ import Link from "next/link"
 import { ListTodo } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TaskTable } from "./_components/task-table"
-import { ProjectTaskQueueSection } from "./_components/project-task-queue"
+import {
+  PROJECT_TASK_OPEN_QUEUE_TITLE,
+} from "@/lib/reports/project-task-queue"
+import {
+  ProjectTaskMengendapSection,
+  ProjectTaskQueueSection,
+} from "./_components/project-task-queue"
 import { getProjectTaskQueue } from "@/lib/reports/project-task-queue-data"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -52,9 +58,12 @@ export default async function TasksPage({
 
   const total = await prisma.task.count({ where })
 
-  // Seksi turunan baca-saja (F-2026-10-27-091-S, Q-PTQ-4): gerbang
-  // view_projects ditegakkan ulang fail-closed di loader sebelum query.
-  // Daftar existing di bawah tidak diubah urutan/batasnya.
+  // Seksi turunan baca-saja (F-2026-10-27-091-S, Q-PTQ-4 +
+  // F-2026-10-27-102-S, Q-TSQ-3): satu permukaan gabungan
+  // PROJECT_TASK_OPEN_QUEUE_TITLE berisi dua seksi — Lewat Tenggat
+  // (091-S) lalu Mengendap (102-S). Gerbang view_projects ditegakkan
+  // ulang fail-closed di loader sebelum query. Daftar existing di
+  // bawah tidak diubah urutan/batasnya.
   const projectTaskQueue = await getProjectTaskQueue()
 
   const tableData = toPlain(tasks)
@@ -84,7 +93,11 @@ export default async function TasksPage({
         </CanCreate>
       </div>
 
-      <ProjectTaskQueueSection queue={projectTaskQueue} />
+      <section aria-label={PROJECT_TASK_OPEN_QUEUE_TITLE} className="flex flex-col gap-6">
+        <ProjectTaskQueueSection queue={projectTaskQueue} />
+
+        <ProjectTaskMengendapSection queue={projectTaskQueue} />
+      </section>
 
       <TaskTable
         data={tableData}
