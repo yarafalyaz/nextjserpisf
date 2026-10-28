@@ -77,6 +77,7 @@ import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
+import type { HrScope } from "@/lib/auth/hr-scope";
 import { evaluatePayrollEmploymentGate } from "@/lib/reports/employee-lifecycle";
 import {
   assertPayrollPeriodMatchesEndDate,
@@ -2243,6 +2244,29 @@ async function findActivePayrollRangeConflict(
   return findPayrollRangeConflict(slips, startDate, endDate);
 }
 
+/**
+ * BR-HRS-08 / F-2026-10-28-128-S (AC-HRS-4..6): jalur TULIS penggajian wajib
+ * memakai cakupan HR yang SAMA dengan jalur BACA. Sebelum perubahan ini
+ * processPayroll/updatePayroll/approvePayroll/markPayrollPaid hanya memeriksa
+ * izin `*_payroll`, sehingga peran ber-cakupan (self/department/team) bisa
+ * menulis, menyetujui, dan membayar slip karyawan di luar cakupannya —
+ * asimetri yang sama kelasnya dengan kebocoran baca.
+ *
+ * Slip tanpa karyawan (`employeeId` null) tidak bisa dibuktikan milik siapa
+ * pun, jadi untuk scope non-`all` ia DITOLAK fail-closed. Peran kind `all`
+ * (super_admin/admin/finance/ga) nol perubahan perilaku.
+ */
+async function assertPayrollInHrScope(
+  scope: HrScope,
+  employeeId: number | null,
+): Promise<void> {
+  if (scope.kind === "all") return
+  if (employeeId == null) {
+    throw new Error("Anda tidak memiliki akses ke slip penggajian tanpa karyawan ini")
+  }
+  await assertHrEmployeeAccess(scope, employeeId)
+}
+
 export async function generateBulkPayroll(
   period: string,
   startDateStr: string,
@@ -2263,8 +2287,16 @@ export async function generateBulkPayroll(
     }
     assertPayrollPeriodMatchesEndDate(period, new Date(endDateStr));
 
+    // BR-HRS-08 (AC-HRS-2): populasi run massal mengikuti cakupan HR pemanggil.
+    // Peran ber-cakupan hanya menerbitkan slip karyawan yang boleh dilihatnya;
+    // tanpa saringan ini slip seluruh organisasi lahir dari satu klik.
+    const bulkScope = await getHrScope(user);
     const employees = await prisma.employee.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: {
+        isActive: true,
+        deletedAt: null,
+        ...(bulkScope.kind === "all" ? {} : { AND: [hrEmployeeScopeWhere(bulkScope)] }),
+      },
       select: {
         id: true,
         employmentEndedAt: true,
@@ -2633,7 +2665,6 @@ export async function processPayroll(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    const documentNo = await generateDocumentNumber("PAYROLL");
     const employeeId = v.employeeId ?? null;
     const period = v.period;
     const startDate = wibDateToUtcMidnight(v.startDate);
@@ -2643,6 +2674,13 @@ export async function processPayroll(formData: FormData) {
     if (!employeeId) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
+
+    // BR-HRS-08 (AC-HRS-4): tulis slip untuk karyawan di luar cakupan HR = tolak.
+    // Ditegakkan SEBELUM nomor dokumen dibangkitkan supaya penolakan tidak
+    // membakar nomor urut PAYROLL (lubang penomoran yang tak bisa dijelaskan).
+    await assertPayrollInHrScope(await getHrScope(user), employeeId);
+
+    const documentNo = await generateDocumentNumber("PAYROLL");
 
     // Kenaikan gaji terjadwal yang sudah jatuh tempo diterapkan ke master
     // lebih dulu, supaya slip periode ini membaca gaji yang benar.
@@ -2848,13 +2886,17 @@ export async function processPayroll(formData: FormData) {
 
 export async function updatePayroll(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_payroll");
+    const user = await requirePermission("edit_payroll");
 
     // Only draft payroll can be edited
     const existing = await prisma.payroll.findUniqueOrThrow({ where: { id } });
     if (existing.status !== "draft") {
       throw new Error("Hanya penggajian status draft yang dapat diubah");
     }
+
+    // BR-HRS-08 (AC-HRS-3): baris LAMA wajib di dalam cakupan sebelum diubah.
+    const scope = await getHrScope(user);
+    await assertPayrollInHrScope(scope, existing.employeeId ?? null);
 
     // Migrated to parseFormData(payrollSchema) — the previous hand-parsed path
     // (safeId/period as string/new Date(raw)/safeNumber) bypassed schema
@@ -2872,6 +2914,12 @@ export async function updatePayroll(id: number, formData: FormData) {
     // berhenti (gerbang sama seperti create; slip final lewat processPayroll).
     const wantsFinalUpdate = formData.get("resignationFinal") === "true";
     const updateEmployeeId = v.employeeId ?? existing.employeeId ?? null;
+    // BR-HRS-08 (AC-HRS-3): pemindahan slip ke karyawan LAIN juga wajib
+    // berada di cakupan — kalau tidak, ubah slip = jalan memindahkan data
+    // karyawan luar cakupan ke dalam jangkauan baca.
+    if (updateEmployeeId !== existing.employeeId) {
+      await assertPayrollInHrScope(scope, updateEmployeeId);
+    }
     const updateLifecycle = updateEmployeeId
       ? await prisma.employee.findUnique({
           where: { id: updateEmployeeId },
@@ -3046,6 +3094,10 @@ export async function approvePayroll(payrollId: number) {
       where: { id: payrollId },
     });
 
+    // BR-HRS-08 (AC-HRS-5): menyetujui slip = tindakan atas data karyawan;
+    // cakupan HR ditegakkan sebelum klaim status.
+    await assertPayrollInHrScope(await getHrScope(user), payroll.employeeId ?? null);
+
     if (payroll.status !== "draft") {
       throw new Error("Payroll hanya bisa di-approve dari status draft");
     }
@@ -3080,11 +3132,15 @@ export async function approvePayroll(payrollId: number) {
 
 export async function markPayrollPaid(payrollId: number) {
   try {
-    await requirePermission("process_payroll");
+    const user = await requirePermission("process_payroll");
 
     const payroll = await prisma.payroll.findUniqueOrThrow({
       where: { id: payrollId },
     });
+
+    // BR-HRS-08 (AC-HRS-5): membayar slip di luar cakupan HR = tolak sebelum
+    // gerbang workflow/status, supaya nol jurnal & nol amortisasi pinjaman.
+    await assertPayrollInHrScope(await getHrScope(user), payroll.employeeId ?? null);
 
     // Approval workflow gate: if a Payroll workflow is configured, it must
     // be fully approved before marking as paid.

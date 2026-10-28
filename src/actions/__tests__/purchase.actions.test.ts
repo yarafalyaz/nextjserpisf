@@ -1247,13 +1247,13 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("deletePurchaseOrder succeeds", async () => {
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, goodsReceipts: [] })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft", goodsReceipts: [] })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
     const res = await actions.deletePurchaseOrder(1)
     expect(res?.success).toBe(true)
   })
   it("deletePurchaseOrder fails if active bills exist", async () => {
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, goodsReceipts: [] })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft", goodsReceipts: [] })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(1)
     const res = await actions.deletePurchaseOrder(1)
     expect(res?.success).toBe(false)
@@ -1935,7 +1935,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
 
   it("deletePurchaseOrder deletes PO and reverses GRs with stock moves", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
-      id: 1, purchaseRequestId: 10, goodsReceipts: [{ id: 101, status: "draft" }]
+      id: 1, status: "draft", purchaseRequestId: 10, goodsReceipts: [{ id: 101, status: "draft" }]
     })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
     mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([
@@ -2184,7 +2184,7 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
 
   it("deletePurchaseOrder continues if stockMove has no referenceId", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
-      id: 1, purchaseRequestId: 10, goodsReceipts: [{ id: 101, status: "draft" }]
+      id: 1, status: "draft", purchaseRequestId: 10, goodsReceipts: [{ id: 101, status: "draft" }]
     })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
     mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([
@@ -2349,6 +2349,64 @@ describe("Vendor Bill header recompute (anti manipulasi klien)", () => {
   })
 })
 
+// PUR-BR-010: dokumen pembelian posted tidak boleh dihapus fisik.
+// Jalur koreksi dokumen posted: batalkan/void (PO), retur pembelian,
+// reversal (FIN-BR-008). Test ini mengunci semua jalur delete —
+// termasuk jalur PO/GR yang guard-nya lebih dulu hidup di PR INV-BR-013
+// (#1223, belum merged saat kartu ini dibuat), supaya penegakan
+// PUR-BR-010 tetap utuh di main terlepas urutan merge kedua PR.
+// Helper lokal (bukan pola berulang) menekan duplikasi blok antar-test.
+// Empat kasus GR/PO yang juga dikunci blok "INV-BR-013 larangan hapus ledger
+// posted" tidak diulang di sini supaya tidak menambah duplikasi Sonar.
+describe("PUR-BR-010 larangan hapus fisik dokumen pembelian posted", () => {
+  const mockPo = (po: Record<string, unknown>) =>
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce(po)
+  const noBill = () => mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
+  const expectRefused = (
+    res: { success?: boolean; error?: string } | undefined,
+    pesan: string,
+    ...deleteMocks: Array<{ mock: { calls: unknown[] } }>
+  ) => {
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain(pesan)
+    for (const m of deleteMocks) expect(m).not.toHaveBeenCalled()
+  }
+
+  it("deletePurchaseOrder menolak PO posted (approved) tanpa GR, tanpa hapus apa pun", async () => {
+    mockPo({ id: 1, status: "approved", purchaseRequestId: 10, goodsReceipts: [] })
+    noBill()
+    expectRefused(await actions.deletePurchaseOrder(1), "Hanya PO draft yang dapat dihapus",
+      mocks.prismaMock.purchaseOrder.delete, mocks.prismaMock.goodsReceipt.delete)
+  })
+
+  it("deletePurchaseOrder menolak PO cancelled tanpa hapus apa pun (bukti audit tetap utuh)", async () => {
+    mockPo({ id: 1, status: "cancelled", purchaseRequestId: null, goodsReceipts: [] })
+    noBill()
+    expectRefused(await actions.deletePurchaseOrder(1), "Hanya PO draft yang dapat dihapus",
+      mocks.prismaMock.purchaseOrder.delete)
+  })
+
+  it("deleteVendorBill menolak bill posted tanpa hapus (guard existing terkunci)", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "draft", purchaseOrderId: 42 })
+      .mockResolvedValueOnce({ id: 1, status: "posted", purchaseOrderId: 42 })
+    expectRefused(await actions.deleteVendorBill(1), "Hanya tagihan draft yang dapat dihapus",
+      mocks.prismaMock.vendorBill.delete)
+  })
+
+  it("deleteVendorPayment menolak payment completed tanpa hapus (guard existing terkunci)", async () => {
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "completed" })
+    expectRefused(await actions.deleteVendorPayment(1), "Hanya pembayaran draft yang dapat dihapus",
+      mocks.prismaMock.vendorPayment.delete)
+  })
+
+  it("deletePurchaseReturn menolak retur non-draft tanpa hapus (guard existing terkunci)", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "returned" })
+    expectRefused(await actions.deletePurchaseReturn(1), "Hanya retur draft yang dapat dihapus",
+      mocks.prismaMock.purchaseReturn.delete)
+  })
+})
+
 // INV-BR-013: ledger posted tidak boleh dihapus fisik oleh pengguna
 // operasional. GR terverifikasi sudah memposting StockMove `posted`;
 // sebelum guard ini deleteGoodsReceipt/deletePurchaseOrder menghapus
@@ -2382,7 +2440,7 @@ describe("INV-BR-013 larangan hapus ledger posted", () => {
 
   it("deletePurchaseOrder menolak PO dengan GR terverifikasi tanpa masuk transaksi hapus", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
-      id: 1, goodsReceipts: [{ id: 101, status: "verified" }],
+      id: 1, status: "draft", goodsReceipts: [{ id: 101, status: "verified" }],
     })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
 
@@ -2397,7 +2455,7 @@ describe("INV-BR-013 larangan hapus ledger posted", () => {
 
   it("deletePurchaseOrder tetap mengizinkan PO yang GR-nya semua draft", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
-      id: 1, purchaseRequestId: null, goodsReceipts: [{ id: 101, status: "draft" }],
+      id: 1, status: "draft", purchaseRequestId: null, goodsReceipts: [{ id: 101, status: "draft" }],
     })
     mocks.prismaMock.vendorBill.count.mockResolvedValueOnce(0)
     mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([])
