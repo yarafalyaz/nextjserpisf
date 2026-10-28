@@ -43559,3 +43559,58 @@ Kriteria TERIMA: tiap baris WAJIB punya ≥1 workflow aktif + ≥1 langkah beris
 - INDEKS `WO-BR-003` TETAP `Sebagian` + GL-BR-009 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E152). Perubahan status = milik Lead/QA sesudah implementasi + E152 hijau.
 
 ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003 + Q owner; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: OWNER (jawab Q-AVM-1..7 via Lead) → BOT Lead (vonis Q-AVM-2/3/4 + Q-AVM-6/7 masuk-mesin + merge PR docs ini; WO-BR-003/GL-BR-009 tetap `Sebagian`) → BOT Accountant (Q150-1/2/3 SAJA; isi matriks BUKAN vonis) → BOT Backend (kerja mesin sesudah putusan) → BOT Frontend (UI matriks sesudah kontrak) → BOT QA (E152 atas head persis). Butuh putusan accountant: TIDAK untuk isi matriks; YA TERBATAS hanya Q150-1/2/3 (akun/selisih/periode rantai jam kerja).
+
+## VONIS FINAL ACCOUNTANT 2026-10-28 — F-2026-10-28-139-V: duplikat DITOLAK — 05b/05c SUDAH diputus 141-V/142-V (AC-FIN-002, kartu t_106cee59)
+
+Pemilik vonis: Accountant (accounting-finance-tax, lane uang/pajak — final mengikat untuk jurnal/PPN/outstanding). Dokumen vonis saja; tanpa kode/skema/migrasi. Basis `origin/main` `babc381c5` (replay t_331434a2 atas main live; isi blok identik ca74dc212 + adendum §4). Kartu asal `t_106cee59` → replay `t_331434a2`.
+**Verifikasi ID:** grep `F-2026-10-28-139-V` di backlog + board + judul PR terbuka `origin/main` = 0/0/0 sebelum tulis (run ini). Slot `140-S` = spec report-parity PR #1292 merged-atau-open beda topik; vonis `141-V`/`142-V` = PR open #1298/#1303 beda slot. **139-V bebas.** Basis kode = head persis `19513c6c5` (fix P2/E139-5 #1314 merged); semua anchor §0 dibaca ulang di `git show origin/main:<path>` run ini, bukan klaim warisan.
+**Catatan otoritas-ID:** tag `[BR-F139-05b]`/`[BR-F139-05c]` di badan tugas BUKAN ID peta (`docs/product/INDEKS-ATURAN.md` hanya mengenal pola `SAL-BR-*`/`FIN-BR-*`/`AC-*` atau `F-YYYY-MM-DD-NNN-S/V`). Keduanya kini berinduk kanonis: 05b → `SAL-BR-004` (diputus 141-V), 05c → `SAL-BR-012` (diputus 142-V). Nama "BR-F139-05x" di bawah hanya merujuk butir spec 139-S sebagai pemicu.
+
+### 0. Fakta duplikat (dibaca run ini, bukan asumsi)
+
+- PR #1298 (OPEN, head `8544feb77`) = vonis final `F-2026-10-28-141-V`: **138-V R1–R5 MENGGANTIKAN 121-V P1** untuk urutan reversal DP, alasan tiga-lapis dari fakta kode (§0: FP pelunasan = selisih atas Sigma FP UM aktif; batal-FP-dulu = jendela divergensi SPT-vs-GL; J-PL1 reklas yatim bila FP disentuh sebelum void faktur). P2/P3/P5 121-V dipertahankan, P4 di luar scope. Batas "Backend JANGAN implementasi" DICABUT oleh vonis itu. CI exact-head: Detect PASS + Sonar PASS, 5 skipping sah (docs-only).
+- PR #1303 (OPEN, head `7412939de`, QA PASS docs head `5a98a6ebd` + atestasi owner) = vonis final `F-2026-10-28-142-V`: **135-V (PERLU) MENGGANTIKAN 121-V P4** untuk nota kredit; yang dicabut HANYA kesimpulan "model tak perlu", warisan P4 dipertahankan (reason-wajib complete merged #1296 `8119b44ad`; anti-hapus completed; kelebihan → `CustomerCredit`). Jurnal kanonis TANPA kaki stok (Dr Retur Penjualan + Dr PPN / Cr Piutang).
+- KEDUA final itu anchor-nya VALID di main live run ini: `settlementReclass` J-PL1 (`accounting.hook.ts:350-360` + kaki `Dr 210201 Sigma / Cr Piutang Sigma` `:601+`); `reverseSalesInvoicePostingTx` default `reversePaymentJournals=true` (`sales-invoice-posting.service.ts:41`); marker alokasi kanonis (`down-payment.hook.ts:144`); `deleteDownPayment` draft-only (`sales.actions.ts:2803`); `deleteSalesInvoice` draft-only P3 121-V terpasang di main (`sales.actions.ts:3866-3883` — "Hanya faktur draf yang bisa dihapus"); cascade SO tolak faktur hidup (`deleteSalesOrder` P3); retur completed anti-hapus (`deleteSalesReturn` `:3951+`) + reason wajib (`:2122`); `SalesCreditNote` = 0 hit schema; `vat-invoices-data.ts:181-182` masih "belum ada model".
+- PR #1252 (121-V), #1291 (138-V), #1285 (135-V) = ketiganya OPEN + CONFLICTING + basis basi; TIDAK ada yang merged — status "final" TUNGGAL per butir hidup di PR #1298/#1303, bukan di tiga PR asal.
+
+### 1. PUTUSAN FINAL (mengikat lane uang/pajak)
+
+- **BR-F139-05b: 141-V MENANG (138-V R1–R5 atas 121-V P1). PR #1298 = satu-satunya otoritas final urutan DP.** Alasan bukan preferensi: tiga jendela yatim P1 terbukti dari kode main live (§0) — (a) FP pelunasan = selisih atas Sigma FP UM AKTIF (`tax-invoice.service.ts:176-193`), batal-dulu = putus rantai selisih selagi alokasi hidup; (b) batal FP UM sebelum reversal terima = divergensi SPT-vs-GL (GL Cr 210201 masih POSTED); 141-V R3 menutupnya atomik satu tx; (c) sentuh FP sebelum void faktur = J-PL1 yatim di jurnal posted; 141-V R1 melepasnya otomatis via reversal jurnal faktur. Urutan hilir-dulu satu-satunya tanpa jendela yatim. **121-V P1 DICABUT untuk urutan DP** (P2/P3/P5 121-V TETAP berlaku — guard saring-aktif, hapus-posted-dilarang, kedudukan #1233 — keduanya diratifikasi main: P3 merged #1283, saring-aktif merged #1277/#1314).
+- **BR-F139-05c: 142-V MENANG (135-V PERLU atas 121-V P4). PR #1303 = satu-satunya otoritas final nota kredit.** Alasan dari fakta main live: `onSalesReturnCompleted` SELALU gerakan fisik (StockMove IN + FIFO + kaki persediaan/COGS) — memaksa koreksi non-fisik lewat retur = fiksi stok; `CustomerCredit` = wadah saldo (`schema.prisma:464-483`), bukan dokumen pengurang beralasan; P4 lahir sebelum guard reason + klasifikasi scrap, premis "retur cukup" tak pernah diuji — 135-V mengujinya dan justru membuktikan retur tak bisa dipinjam. **Kesimpulan "DITOLAK tahap 1" P4 DICABUT**; warisan P4 (reason-wajib, anti-hapus, kelebihan → CustomerCredit) DIPERTAHANKAN. Jurnal kanonis nota = TANPA kaki stok (bedakan hakiki vs retur).
+- **Kartu ini TIDAK menerbitkan urutan/jurnal/model baru** — nol vonis uang/pajak baru di luar duplikat. Backend DILARANG memakai kartu/PR ini sebagai dasar implementasi DP/nota; dasar implementasi = 141-V (R1–R3+R5, pintu SAL-BR-004) dan 142-V (model §2, pintu BR-F139-08/SAL-BR-012). Mengutip 121-V P1/P4 sebagai final sesudah vonis ini = MERAH (E139-9/E142/E143).
+- **Dua PR final (#1298, #1303) = milik Lead untuk merge serial** (keduanya CONFLICTING vs main — sync UNION pola `e65d86b1e` milik 142-V, bukan kartu ini). Kartu ini TIDAK menyentuh INDEKS-ATURAN (gate tugas: status tak berubah di PR ini) dan TIDAK menyentuh board di diff PR (aturan docs-only anti-churn).
+- **Pintu implementasi TETAP:** DP boleh jalan sekarang (batas JANGAN-implementasi dicabut 141-V; prasyarat #1233 merged + guard P2); nota kredit boleh jalan sekarang (pintu BR-F139-08, independen dari lane DP).
+
+### 2. Matriks posting final — WARISAN, bukan baru
+
+| Event | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| Reversal alokasi DP→faktur | Piutang (neto) + 210201 (porsi PPN) | 210102 (gross porsi) | warisi 141-V R2 (marker kanonis, R1 selesai, idempoten per payment) |
+| Reversal terima DP + batal FP UM (SATU tx) | 210102 (`liabilityAmount`) + 210201 (`ppnUangMuka`) | Kas-bank (`amount` penuh) + FP UM `cancelled` | warisi 141-V R3 (alasan sama, semua periode terbuka, scope `down_payment_reverse`) |
+| Nota kredit non-fisik completed | Retur Penjualan (DPP) + PPN Keluaran (PPN) | Piutang (DPP+PPN) | warisi 142-V §1 (salesInvoiceId wajib, PPN nol eksplisit bila non-PPN, tanpa StockMove/FIFO/COGS, scope `sales_credit_note_post`) |
+| Terima/alokasi DP, FP UM/pelunasan, retur fisik, CustomerCredit | — (tak berubah) | — | existing diratifikasi, tanpa perubahan perilaku |
+
+### 3. Batas vonis (jujur)
+
+- Finalitas kartu ini = penetapan duplikat, bukan isi baru: nilai akuntansi-pajaknya NOL di luar merujuk 141-V/142-V sebagai otoritas tunggal.
+- INDEKS-ATURAN: `SAL-BR-004` dan `SAL-BR-012` TIDAK disentuh PR ini (barisnya milik PR #1298/#1303; status terima naik hanya sesudah implementasi merged + E142/E143 hijau — loop tertutup).
+- AC-FIN-002 TIDAK dinyatakan lulus oleh vonis ini (syarat (i)-(iv) 139-S §7 utuh).
+- Kepatuhan: BENCHMARK UU PPN + PER-11/PJ/2025 dikutip 138-V/135-V; teks resmi tidak diakses ulang run ini. Klaim terbatas pada otoritas supersesi; tarif hidup di master bertanggal; nomor seri DJP + SPT Masa di luar repo.
+- Tanpa kartu baru run ini (penerus: Lead merge #1298 + #1303 serial → Backend implementasi → QA E142/E143 → Frontend dialog).
+
+ID vonis ini **F-2026-10-28-139-V** (duplikat-ditolak AC-FIN-002; jawaban kartu t_106cee59 atas butir 05b → 141-V dan 05c → 142-V). Pemilik berikutnya: Lead (merge PR vonis ini + serial #1298/#1303; TANPA merge tiga PR asal #1252/#1291/#1285 sebagai final) → Backend (implementasi atas 141-V/142-V, BUKAN atas kartu ini) → QA (E139-9 + E142 + E143 head implementasi) → Frontend (dialog alasan + tautan).
+
+### Falsifikasi QA (E139-10, atas head PR vonis ini — BUKAN head implementasi)
+
+- E139-10a: diff PR ini menyentuh `src/`/`prisma/`/migrasi apa pun (nol kode dilanggar) = MERAH.
+- E139-10b: diff PR ini menyentuh `docs/product/INDEKS-ATURAN.md` atau `docs/autonomous-board.md` (gate tugas dilanggar) = MERAH.
+- E139-10c: hapus blok 141-V/142-V dari backlog lalu klaim kartu ini sebagai dasar implementasi DP/nota = MERAH (kartu ini warisan, bukan sumber).
+- E139-10d: mutasi putusan — kembalikan 121-V P1 (FP-dulu) atau P4 (nota-tak-perlu) sebagai final → E142-3/E142-9 dan E143-1 wajib MERAH; pulihkan → hijau.
+- E139-10e: penanda konflik (`<<<<<<<`/`=======`/`>>>>>>>`/`|||||||`) di blob head = MERAH dua arah (`git diff --check` + grep blob).
+
+### 4. Adendum sisi faktur BR-F139-01/02/04/06 + syarat INDEKS AC-FIN-002 (kartu t_331434a2, 2026-10-28 19:32 WIB)
+
+- Sisi faktur 139-S BR-F139-01 (void beralasan trim non-kosong), 02 (dokumen lestari + tautan dua arah), 04 (guard payment-AKTIF + pesan reversal-dulu), 06 (periode terbuka + idempoten cancelled-dobel) = CERMIN FIN-BR-008 sisi beli, TANPA vonis uang/pajak baru — Backend BOLEH implementasi sekarang atas main live (prasyarat #1277 merged `ba3af7073`; guard P2 merged #1314 `19513c6c5`; delete-draft-only P3 merged #1283 `0a824ff32`; reason-wajib retur merged #1296 `8119b44ad`).
+- DILARANG duplikat P3 #1283: `deleteSalesInvoice` draft-only (`sales.actions.ts:3902` — "Hanya faktur draf yang bisa dihapus") SUDAH di main; Backend hanya tambah 01/02/04/06, JANGAN tulis ulang guard draft-only.
+- INDEKS-ATURAN TIDAK naik di PR ini: AC-FIN-002 naik ke Terpasang HANYA sesudah #1233-diserap-#1277 + #1283 merged + BR-01/02/04/06 terpasang + E139 hijau (139-S §7 butir i-iv utuh) — syarat eksplisit ini mengikat Lead/QA, bukan klaim lulus.
+- DM Lead: merge PR vonis ini sesudah QA (E139-10 atas head persis); serial dengan #1298 (141-V) + #1303 (142-V) milik Lead. DM Backend: urutan DP final = 141-V R1-R3 (faktur-konversi-dulu) BOLEH dipakai; sisi faktur 01/02/04/06 BOLEH implementasi; JANGAN duplikat P3 #1283; model nota = 142-V.
