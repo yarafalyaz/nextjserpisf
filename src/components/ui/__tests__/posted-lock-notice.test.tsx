@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
+
 import { PostedLockNotice } from "../posted-lock-notice"
 
 function render(container: HTMLElement, ui: React.ReactNode) {
@@ -13,12 +14,9 @@ function render(container: HTMLElement, ui: React.ReactNode) {
   return root
 }
 
-beforeEach(() => {
-  document.body.innerHTML = ""
-})
-
 describe("PostedLockNotice (GL-BR-003 K1/K2)", () => {
   it("tampil judul terkunci + alasan + tautan jalur koreksi", () => {
+    document.body.innerHTML = ""
     const container = document.createElement("div")
     document.body.appendChild(container)
     const root = render(
@@ -40,6 +38,7 @@ describe("PostedLockNotice (GL-BR-003 K1/K2)", () => {
   })
 
   it("tanpa href: label koreksi tampil sebagai teks (bukan tautan)", () => {
+    document.body.innerHTML = ""
     const container = document.createElement("div")
     document.body.appendChild(container)
     const root = render(

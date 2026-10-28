@@ -2,10 +2,9 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
-import Link from "next/link"
 import { QuotationForm } from "@/components/forms/quotation-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
+import { LockedEditGuard } from "@/components/ui/locked-edit-guard"
 
 import type { Metadata } from "next"
 
@@ -40,58 +39,41 @@ export default async function EditQuotationPage({
   // GL-BR-003 K1: cermin guard server updateQuotation fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). Final tanpa
   // pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
-  if (data.status === "cancelled") {
+  const quotLockedCrumbs = [
+    { label: "Dasbor", href: "/" },
+    { label: "Penawaran", href: "/penjualan/penawaran" },
+    { label: "Ubah" },
+  ]
+  const _d = data;
+  if (!_d) notFound();
+  const quotLockedBackHref = `/penjualan/penawaran/${_d.slug ?? _d.id}`
+  function quotLockedGuard() {
     return (
-      <div className="flex flex-col gap-6">
-        <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Penawaran", href: "/penjualan/penawaran" },
-  { label: "Ubah" },
-]} />
-        <PostedLockNotice
-          documentLabel={`Penawaran ${data.documentNo}`}
-          correctionLabel="revisi/penawaran baru"
-        />
-        <Link
-          href={`/penjualan/penawaran/${data.slug ?? data.id}`}
-          className="text-sm font-medium underline underline-offset-4"
-        >
-          Kembali ke detail penawaran
-        </Link>
-      </div>
+      <LockedEditGuard
+        crumbs={quotLockedCrumbs}
+        documentLabel={`Penawaran ${_d.documentNo}`}
+        correctionLabel="revisi/penawaran baru"
+        backHref={quotLockedBackHref}
+        backLabel="Kembali ke detail penawaran"
+      />
     )
+  }
+  if (_d.status === "cancelled") {
+    return quotLockedGuard()
   }
   const quotationRealSettlementCount = await prisma.salesPayment.count({
     where: {
       NOT: { paymentMethod: "down_payment" },
       salesInvoice: {
         OR: [
-          { quotationId: data.id },
-          { salesOrder: { quotationId: data.id } },
+          { quotationId: _d.id },
+          { salesOrder: { quotationId: _d.id } },
         ],
       },
     },
   })
   if (quotationRealSettlementCount > 0) {
-    return (
-      <div className="flex flex-col gap-6">
-        <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Penawaran", href: "/penjualan/penawaran" },
-  { label: "Ubah" },
-]} />
-        <PostedLockNotice
-          documentLabel={`Penawaran ${data.documentNo}`}
-          correctionLabel="revisi/penawaran baru"
-        />
-        <Link
-          href={`/penjualan/penawaran/${data.slug ?? data.id}`}
-          className="text-sm font-medium underline underline-offset-4"
-        >
-          Kembali ke detail penawaran
-        </Link>
-      </div>
-    )
+    return quotLockedGuard()
   }
 
   const { customers, vehicles: customerVehicleOptions, itemsList, paymentMethods, shippingMethods, products, unitOptions } =

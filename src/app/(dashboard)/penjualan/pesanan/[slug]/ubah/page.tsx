@@ -2,10 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { SalesOrderForm } from "@/components/forms/sales-order-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
-import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
+import { LockedEditGuard } from "@/components/ui/locked-edit-guard";
 
 import type { Metadata } from "next";
 
@@ -35,59 +34,37 @@ export default async function EditPage({
   // GL-BR-003 K1: cermin guard server updateSalesOrder fail-closed
   // (cancelled/completed/setelah-pelunasan-nyata pasti ditolak). Status
   // lain tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
-  if (data.status === "cancelled" || data.status === "completed") {
+  const orderLockedCrumbs = [
+    { label: "Dasbor", href: "/" },
+    { label: "Penjualan", href: "/penjualan" },
+    { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
+    { label: "Ubah" },
+  ];
+  const _d = data;
+  if (!_d) notFound();
+  const orderLockedBackHref = `/penjualan/pesanan/${_d.slug ?? _d.id}`;
+  function orderLockedGuard() {
     return (
-      <div className="flex flex-col gap-6">
-        <AppBreadcrumbs
-          items={[
-            { label: "Dasbor", href: "/" },
-            { label: "Penjualan", href: "/penjualan" },
-            { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
-            { label: "Ubah" },
-          ]}
-        />
-        <PostedLockNotice
-          documentLabel={`Pesanan Penjualan ${data.documentNo}`}
-          correctionLabel="retur/void faktur turunan"
-        />
-        <Link
-          href={`/penjualan/pesanan/${data.slug ?? data.id}`}
-          className="text-sm font-medium underline underline-offset-4"
-        >
-          Kembali ke detail pesanan
-        </Link>
-      </div>
+      <LockedEditGuard
+        crumbs={orderLockedCrumbs}
+        documentLabel={`Pesanan Penjualan ${_d.documentNo}`}
+        correctionLabel="retur/void faktur turunan"
+        backHref={orderLockedBackHref}
+        backLabel="Kembali ke detail pesanan"
+      />
     );
+  }
+  if (_d.status === "cancelled" || _d.status === "completed") {
+    return orderLockedGuard();
   }
   const orderRealSettlementCount = await prisma.salesPayment.count({
     where: {
       NOT: { paymentMethod: "down_payment" },
-      salesInvoice: { salesOrderId: data.id },
+      salesInvoice: { salesOrderId: _d.id },
     },
   });
   if (orderRealSettlementCount > 0) {
-    return (
-      <div className="flex flex-col gap-6">
-        <AppBreadcrumbs
-          items={[
-            { label: "Dasbor", href: "/" },
-            { label: "Penjualan", href: "/penjualan" },
-            { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
-            { label: "Ubah" },
-          ]}
-        />
-        <PostedLockNotice
-          documentLabel={`Pesanan Penjualan ${data.documentNo}`}
-          correctionLabel="retur/void faktur turunan"
-        />
-        <Link
-          href={`/penjualan/pesanan/${data.slug ?? data.id}`}
-          className="text-sm font-medium underline underline-offset-4"
-        >
-          Kembali ke detail pesanan
-        </Link>
-      </div>
-    );
+    return orderLockedGuard();
   }
 
   const [customers] = await Promise.all([
