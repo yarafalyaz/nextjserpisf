@@ -25,7 +25,13 @@ export function formFormData(entries: Record<string, string>): FormData {
   return fd
 }
 
-/** Model mock generik tes aksi: finder kosong, create ter-resolve `createResult`. */
+/**
+ * Model mock generik tes aksi: finder kosong, create ter-resolve `createResult`.
+ * Metode tulis massal ikut disediakan (createMany/updateMany/delete/deleteMany/
+ * upsert/aggregate) supaya berkas uji tidak menulis ulang daftar metode yang
+ * sama — duplikasi blok itulah yang dulu memerahkan SonarCloud pada kode baru.
+ * Nilai bawaan identik dengan yang dipakai tes aksi sebelumnya.
+ */
 export function buildModelMock(createResult: unknown = { id: 99 }) {
   return {
     findFirst: vi.fn().mockResolvedValue(null),
@@ -33,8 +39,14 @@ export function buildModelMock(createResult: unknown = { id: 99 }) {
     findUniqueOrThrow: vi.fn().mockResolvedValue(null),
     findMany: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue(createResult),
+    createMany: vi.fn().mockResolvedValue({ count: 1 }),
     update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    delete: vi.fn().mockResolvedValue({}),
+    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     count: vi.fn().mockResolvedValue(0),
+    upsert: vi.fn().mockResolvedValue({}),
+    aggregate: vi.fn().mockResolvedValue({ _sum: {} }),
   }
 }
 

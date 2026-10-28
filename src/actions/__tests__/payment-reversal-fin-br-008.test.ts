@@ -8,61 +8,45 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * recalc ikut reversed) wajib memerahkan tes ini.
  */
 
-const mocks = vi.hoisted(() => {
-  // Prisma model tiruan dipadatkan: nilai-bawaan dipisah ke tabel supaya 13
-  // metode tidak ditulis sebagai 13 baris berulang (duplikasi Sonar pada
-  // berkas uji aksi). Semantik sama dengan buildModelMock lama.
-  const DEFAULTS: Record<string, () => unknown> = {
-    findMany: () => [],
-    create: () => ({ id: 1 }),
-    createMany: () => ({ count: 1 }),
-    update: () => ({}),
-    updateMany: () => ({ count: 1 }),
-    delete: () => ({}),
-    deleteMany: () => ({ count: 1 }),
-    count: () => 0,
-    upsert: () => ({}),
-    aggregate: () => ({ _sum: {} }),
-  }
-  const buildModelMock = () =>
-    Object.fromEntries(
-      ["findFirst", "findUnique", "findUniqueOrThrow", "findMany", "create", "createMany", "update", "updateMany", "delete", "deleteMany", "count", "upsert", "aggregate"].map((m) => [
-        m,
-        vi.fn().mockResolvedValue(DEFAULTS[m] ? DEFAULTS[m]() : null),
-      ]),
-    )
+const mocks = vi.hoisted(() => ({
+  requirePermissionMock: vi.fn(),
+  // Diisi oleh factory vi.mock("@/lib/db/prisma") di bawah memakai
+  // buildModelMock bersama (validation-mock-helpers) supaya daftar metode
+  // model tidak ditulis ulang — duplikasi itulah yang memerahkan SonarCloud.
+  prismaMock: {} as Record<string, any>,
+  revalidateMock: vi.fn(),
+  logActivityMock: vi.fn(),
+  assertPeriodOpenMock: vi.fn().mockResolvedValue(undefined),
+  generateJournalNumberMock: vi.fn().mockResolvedValue("JRN-RV-TEST"),
+  // Daftar model ikut di-hoist: factory vi.mock berjalan sebelum const
+  // tingkat-modul terinisialisasi (import ESM di-hoist), jadi hanya nilai
+  // vi.hoisted yang aman dirujuk dari factory.
+  prismaModels: [
+    "vendorPayment",
+    "vendorPaymentAllocation",
+    "vendorBill",
+    "salesPayment",
+    "salesInvoice",
+    "journal",
+    "journalEntry",
+    "withholdingCertificate",
+    "financialIdempotencyKey",
+    "transactionAttachment",
+    "systemSetting",
+  ],
+}))
 
-  const prismaMock: any = {
-    vendorPayment: buildModelMock(),
-    vendorPaymentAllocation: buildModelMock(),
-    vendorBill: buildModelMock(),
-    salesPayment: buildModelMock(),
-    salesInvoice: buildModelMock(),
-    journal: buildModelMock(),
-    journalEntry: buildModelMock(),
-    withholdingCertificate: buildModelMock(),
-    financialIdempotencyKey: buildModelMock(),
-    transactionAttachment: buildModelMock(),
-    systemSetting: buildModelMock(),
-    $transaction: vi.fn(async (ops: any) => {
-      if (typeof ops === "function") return ops(prismaMock)
-      return Promise.all(ops)
-    }),
-    $queryRaw: vi.fn().mockResolvedValue([]),
-    $executeRaw: vi.fn().mockResolvedValue(0),
-  }
-
-  return {
-    requirePermissionMock: vi.fn(),
-    prismaMock,
-    revalidateMock: vi.fn(),
-    logActivityMock: vi.fn(),
-    assertPeriodOpenMock: vi.fn().mockResolvedValue(undefined),
-    generateJournalNumberMock: vi.fn().mockResolvedValue("JRN-RV-TEST"),
-  }
+vi.mock("@/lib/db/prisma", async () => {
+  const { buildModelMock } = await import("./validation-mock-helpers")
+  const prismaMock = mocks.prismaMock
+  for (const model of mocks.prismaModels) prismaMock[model] = buildModelMock({ id: 1 })
+  prismaMock.$transaction = vi.fn(async (ops: any) =>
+    typeof ops === "function" ? ops(prismaMock) : Promise.all(ops),
+  )
+  prismaMock.$queryRaw = vi.fn().mockResolvedValue([])
+  prismaMock.$executeRaw = vi.fn().mockResolvedValue(0)
+  return { prisma: prismaMock }
 })
-
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: any) => mocks.requirePermissionMock(...a),
 }))
