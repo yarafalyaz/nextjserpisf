@@ -39,10 +39,8 @@
  */
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
-import {
-  COLLECTION_SETTLED_EPSILON,
-  receivableOutstanding,
-} from "@/lib/reports/aging-amounts"
+import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 /** Judul kolom verbatim BR-ST-01 — UI/PDF menempel apa adanya. */
@@ -254,7 +252,7 @@ export function buildCustomerStatement(input: {
           // ponytail: penanda ikut deskripsi existing; label mandiri (mis. overdueLabel) tambah bila Frontend butuh badge terpisah.
           dueAcuan != null &&
           wibDayKey(dueAcuan) < periodEndDay &&
-          (sisaByInvoice.get(inv.id) ?? 0) > COLLECTION_SETTLED_EPSILON,
+          !isOutstandingSettled(sisaByInvoice.get(inv.id) ?? 0),
         description: `Faktur penjualan ${inv.documentNo}`,
         debit: safeAdd(0, inv.grandTotal, 2),
         credit: 0,
