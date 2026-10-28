@@ -41046,7 +41046,7 @@ ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
 
-## SPEC BUSINESS 2026-10-28 — F-2026-10-28-131-S: koreksi slip gaji posted yang dapat diaudit (HR-BR-005)
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-133-S: koreksi slip gaji posted yang dapat diaudit (HR-BR-005)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec; TANPA kode/schema/migrasi). Basis `origin/main` `2eed70391` (28 Okt 2026 10:10 WIB).
 Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:157` (HR-BR-005 `Belum`) + `docs/product/BUSINESS-RULES.md:184-185` ("payroll posted dikoreksi melalui proses yang dapat diaudit") + `docs/product/TEST-STRATEGY.md:25` (payroll posting = P0) + `docs/product/TEST-STRATEGY.md:50-51` (skenario 13: formula payroll dari komponen disetujui dan "tidak dapat diposting dua kali") + `docs/product/KEPUTUSAN-TERVERIFIKASI.md` keputusan 6 (double-entry + reversal jurnal) dan keputusan 10 (formula payroll, pinjaman).
@@ -41145,4 +41145,4 @@ Yang BELUM ada (bukti grep run ini, semuanya nol di `src/`+`e2e/` non-tes):
 | 4 | Frontend | Permukaan koreksi (dialog alasan wajib, tampilan slip asal read-only + tautan koreksi dua arah) | M | aksi Backend merged |
 | 5 | QA | E-HRCR-1..8 atas head implementasi persis | S–M | implementasi merged |
 
-ID spec ini **F-2026-10-28-131-S** (HR-BR-005; basis `origin/main` `2eed70391`). Pemilik berikutnya: Lead (putus + merge PR docs ini) → Accountant (vonis §5.1) → Backend (§5.2 + aksi koreksi) → Frontend (permukaan) → QA (E-HRCR-1..8). Implementasi BUKAN bagian spec ini.
+ID spec ini **F-2026-10-28-133-S** (HR-BR-005; basis `origin/main` `2eed70391`). Pemilik berikutnya: Lead (putus + merge PR docs ini) → Accountant (vonis §5.1) → Backend (§5.2 + aksi koreksi) → Frontend (permukaan) → QA (E-HRCR-1..8). Implementasi BUKAN bagian spec ini.
