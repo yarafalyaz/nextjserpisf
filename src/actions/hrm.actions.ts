@@ -3358,7 +3358,7 @@ export async function correctPaidPayroll(
       // (2) Amortisasi pinjaman DIBALIKKAN lewat dokumen (135-V §2a pola T7,
       // bukan update manual): kembalikan remainingAmount sebesar porsi yang
       // dulu diamortisasi slip ini. Distribusi tertua-dulu, dicap sisa utang
-      // per pinjaman — cermin alokasi markPayrollPaid.
+      // per pinjaman — cermin alokasi markPayrollPaid (min(sisa,budget)).
       const amortized = Number(fresh.loanDeduction) || 0;
       let restored = 0;
       if (fresh.employeeId != null && amortized > 0) {
@@ -3369,7 +3369,9 @@ export async function correctPaidPayroll(
         let budget = amortized;
         for (const loan of loans) {
           if (budget <= 0) break;
-          const applied = Math.min(budget, Number(fresh.loanDeduction) || 0);
+          const remaining = Number(loan.remainingAmount) || 0;
+          if (remaining <= 0) continue;
+          const applied = Math.min(remaining, budget);
           if (applied <= 0) continue;
           const nextRemaining = safeAdd(Number(loan.remainingAmount), applied, 0);
           await tx.employeeLoan.update({
@@ -3384,20 +3386,27 @@ export async function correctPaidPayroll(
         }
       }
 
-      // (3) Slip koreksi: salinan angka penuh slip asal + penanda tautan.
-      // Rentang sama dengan asal (bukan periode berjalan) supaya konflik
-      // rentang tetap terdeteksi bila slip pengganti sudah terbit; status
-      // langsung paid karena koreksi atas pembayaran yang sudah terjadi.
+      // (3) Slip koreksi: angka penuh slip asal, tetapi rentang + periode =
+      // periode TERBUKA (135-V §2b), bukan salinan rentang asal — salinan
+      // persis selalu P2002 pada uq_payroll_employee_range karena slip asal
+      // tetap ada sebagai `paid` (status pemblokir irisan). Acuan periode
+      // asal yang eksplisit = tautan `correctsPayrollId` (dua arah) +
+      // `correctionReason`; status langsung paid karena koreksi atas
+      // pembayaran yang sudah terjadi.
+      const correctionPeriod = `${correctionDate.getUTCFullYear()}-${String(correctionDate.getUTCMonth() + 1).padStart(2, "0")}`;
+      const correctionStart = new Date(
+        Date.UTC(correctionDate.getUTCFullYear(), correctionDate.getUTCMonth(), 1, 0, 0, 0),
+      );
       const documentNo = await generateDocumentNumber("PAYROLL");
       const correction = await tx.payroll.create({
         data: {
           slug: await nextSlug("payroll", documentNo),
           documentNo,
           employeeId: fresh.employeeId,
-          period: fresh.period,
+          period: correctionPeriod,
           type: fresh.type,
-          startDate: fresh.startDate,
-          endDate: fresh.endDate,
+          startDate: correctionStart,
+          endDate: correctionDate,
           baseSalary: fresh.baseSalary,
           allowances: fresh.allowances,
           deductions: fresh.deductions,
@@ -3475,6 +3484,20 @@ export async function correctPaidPayroll(
     return { success: true, id: result.correctionId };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    // P2002 berisik tanpa nominal gaji: koreksi memakai rentang periode
+    // terbuka; bila slip koreksi lain sudah terbit di rentang itu (balap/
+    // rentang bentrok nyata), tolak tanpa menyebut nominal dokumen lawan.
+    if (
+      e &&
+      typeof e === "object" &&
+      "code" in e &&
+      (e as { code?: string }).code === "P2002"
+    ) {
+      return {
+        success: false,
+        error: `Slip nomor ${payrollId} tidak dapat dikoreksi: sudah ada slip pada rentang periode koreksi. Koreksi hanya lewat satu dokumen koreksi.`,
+      };
+    }
     console.error("[correctPaidPayroll]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
