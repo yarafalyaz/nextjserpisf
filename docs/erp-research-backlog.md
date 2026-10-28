@@ -42072,6 +42072,178 @@ Aturan status diakui bersama (TERVERIFIKASI-KODE): `src/lib/reports/document-sta
 - E140-6 (ambang status): fixture dokumen sisa tepat Rp1,00 dan Rp1,01 → perlakuan aging konsisten dengan status `paid`/`partial` dokumen (arah dua sisi); sisa Rp1,01 tampil sebagai belum-lunas di kedua permukaan = HIJAU (kontrol arah).
 
 ID spec ini **F-2026-10-28-140-S** (AC-REP-001 inventarisasi + matriks + E140). Pemilik berikutnya: Accountant vonis D1 (ambang aging vs FIN-BR-006) + D2 (total mana untuk rujukan uang) → Frontend/Backend per D1–D4 → QA E140 atas head implementasi → INDEKS `AC-REP-001` `Belum` → `Sebagian` sesudah D1/D2 divonis + D3/D4 lulus E140.
+
+---
+
+SPEC BUSINESS 2026-10-28 — F-2026-10-28-134-S: baris jasa / non-stok tidak mengurangi stok (SAL-BR-013)
+
+**Penulis:** BOT Business. **Basis baca:** `origin/main` `a67245d4e` (2026-10-28 11:14 WIB). **Sifat:** baca-saja, nol perubahan kode/`src`/`prisma`. **Sumber aturan:** `docs/product/BUSINESS-RULES.md:128` (SAL-BR-013) + `docs/product/INDEKS-ATURAN.md:113` (status `Belum`).
+
+**Catatan nomor (deviasi dari kartu `t_db3d7f22`):** kartu meminta `F-2026-10-28-130-S`. Verifikasi tiga permukaan (backlog main, board main, 24 head PR terbuka) pada 2026-10-28 11:00 WIB menunjukkan slot itu bukan milik spec baru: teks spec HR-BR-004 di PR #1265 memuat dua rujukan historis "ditulis sebagai `F-2026-10-28-130-S`" (branch `hermes/business-hr-br-004-loan-cap`, `docs/erp-research-backlog.md` baris 41004 dan 41260), sehingga rujukan `130` di main akan ambigu. Peta slot sesudah renumber board commit `909d5318a` (11:02 WIB): `130-S` #1265, `131-S` #1265, `132-S` #1274, `133-S` #1269 — semuanya masih OPEN. `F-2026-10-28-134-S` terverifikasi kosong di `origin/main` (`docs/**`) **dan** di seluruh head PR terbuka (grep = 0, run 2026-10-28 11:00 WIB), jadi spec ini memakai **`F-2026-10-28-134-S`**. Nomor falsifikasi memakai `E141-SAL13-*` (E137–E139 dipakai PR #1256; E136 sudah terpakai di main).
+
+## 1. Bunyi aturan yang ditutup
+
+> **SAL-BR-013:** jasa/non-stock tidak mengurangi stok kecuali memiliki baris material. (`docs/product/BUSINESS-RULES.md:128`)
+
+Aturan ini menyentuh tiga hal berbeda yang di repo dijalankan oleh tiga mekanisme berbeda, dan spec ini memisahkannya secara tegas:
+
+1. **baris faktur penjualan** — apakah memotong `items.qty_on_hand` + lapisan FIFO + melahirkan `StockMove OUT` + jurnal HPP;
+2. **pemenuhan material pekerjaan jasa** — kalau pekerjaan jasa memang memakai material, material keluar lewat `MaterialIssue`, **bukan** lewat baris faktur (ini arti "kecuali memiliki baris material");
+3. **retur penjualan** — apakah mengembalikan stok untuk baris jasa/non-stok (sisi cermin yang belum dijaga).
+
+## 2. Jalur posting faktur — siapa memutuskan pengurangan stok (TERVERIFIKASI-KODE)
+
+| Titik | Lokasi | Peran |
+|---|---|---|
+| Pemicu posting | `src/actions/sales.actions.ts:1161` `postInvoice()`; permission `post_sales_invoices` (`src/lib/auth/module-catalog.generated.ts:154`) | klaim atomik `draft\|approved → posted` (`src/actions/sales.actions.ts:1226-1231`) |
+| Pemanggilan hook | `src/actions/sales.actions.ts:1249` `await onSalesInvoicePosted(invoiceId, user, tx)` | satu-satunya jalur jurnal + stok saat posting |
+| Implementasi hook | `src/lib/hooks/accounting.hook.ts:282` `onSalesInvoicePosted` | jurnal AR/pendapatan/PPN, guard stok, StockMove OUT, HPP |
+| **Keputusan "baris mana yang menyentuh stok"** | `src/lib/hooks/accounting.hook.ts:624-628` (`productItems` = baris dengan `typeof itemId === "number"` **dan** `qty > 0`) lalu `src/lib/hooks/accounting.hook.ts:790` (`if (!info \|\| !info.isProduct) continue; // services / non-stock items: no stock-out, no COGS`) | **satu-satunya** penjaga: `Item.isProduct` |
+| Guard stok pra-mutasi | `src/lib/hooks/accounting.hook.ts:665-773` — komentar penjaga di `:672` menyatakan "Services / non-product items are exempt (they never carry stock)"; agregasi kebutuhan hanya untuk `info.isProduct` (`:677`, `:729`, `:780`) | barang kurang → posting **ditolak utuh**, nol jurnal |
+| Mutasi stok | `src/lib/hooks/accounting.hook.ts:816` (`qty_on_hand - qty`), `:824-833` (`consumeFifoLayers`), `:837-852` (`StockMove` `impact:"OUT"`, `referenceType:"SalesInvoice"`) | hanya untuk `isProduct` |
+| Jurnal HPP | `src/lib/hooks/accounting.hook.ts:855-860` — hanya bila `cogsAmount > 0` | jasa/non-stok tidak melahirkan HPP |
+| Pembalik posting (edit faktur posted / void) | `src/lib/services/sales-invoice-posting.service.ts:46` (iterasi `StockMove` `referenceType:"SalesInvoice"`, `impact:"OUT"`), `:75` (`qty_on_hand + qty`), `:83-85` (`StockMove IN` `referenceType:"SalesInvoiceReversal"`) | pembalikan **mengikuti StockMove yang pernah lahir**, bukan membaca `isProduct` — jadi simetris menurut konstruksi: baris yang tidak pernah memotong stok juga tidak pernah "dikembalikan" |
+
+**Penanda master yang relevan (TERVERIFIKASI-KODE):**
+
+- `prisma/schema.prisma:795` `Item.isProduct` default `false`, `:796` `Item.isService` default `false`, `:806` `Item.isScrapSaleItem`.
+- `prisma/schema.prisma:1867` `SalesInvoiceItem.itemId` **nullable** → baris teks bebas (jasa tanpa item) sah secara skema.
+- `Item.isService` **tidak dibaca** oleh `onSalesInvoicePosted` maupun guard stok (grep `isService` di `src/lib/hooks/` = 0 hasil). `isService` hanya dipakai UI master/penanda PO jasa (`src/app/(dashboard)/master/barang/[slug]/page.tsx:119`, `src/components/forms/item-form.tsx:572`).
+
+**Pemenuhan material pekerjaan jasa (TERVERIFIKASI-KODE):** material keluar lewat `MaterialIssue` — dibuat di `src/actions/inventory.actions.ts:1047` (`createMaterialIssue`, permission `create_material_issues`, wajib tertaut `projectId`/`workOrderId` bila ada) dan `src/actions/manufacturing.actions.ts:1918`; pengurangan stok ada di `src/lib/hooks/material-issue.hook.ts:230-250` (`StockMove OUT` + `qty_on_hand - qty`). Baris faktur penjualan **tidak punya** konsep "baris material": tidak ada field/relasi material pada `SalesInvoiceItem` (`prisma/schema.prisma:1864-1886`).
+
+## 3. Matriks baris faktur × efek stok (inti spec)
+
+| # | Jenis baris | Penanda penentu | Potong stok? | HPP/COGS? | Bukti |
+|---|---|---|---|---|---|
+| 1 | **Jasa murni tanpa item** (baris teks bebas, `itemId = null`) | `itemId` null | **TIDAK** — baris gugur di filter `productItems` sebelum ada pembacaan item | tidak | `src/lib/hooks/accounting.hook.ts:624-628`; skema `prisma/schema.prisma:1867`. Catatan UI: form faktur membuang baris tanpa item saat submit (`src/components/forms/sales-invoice-form.tsx:176-178`), jadi jalur ini praktis hanya lahir dari konversi/programatik |
+| 2 | **Item jasa** (`isService = true`, `isProduct = false`) | `isProduct` | **TIDAK** | tidak | `src/lib/hooks/accounting.hook.ts:790`; guard stok melewati baris ini (`:677/:729/:780`) |
+| 3 | **Item non-stok dagang** (`isProduct = false`, `isService = false`, bukan scrap) | `isProduct` | **TIDAK** | tidak (pendapatan tetap diakui) | `src/lib/hooks/accounting.hook.ts:790` |
+| 4 | **Item persediaan** (`isProduct = true`) | `isProduct` | **YA** — `qty_on_hand -= qty`, FIFO dikonsumsi, `StockMove OUT` ref `SalesInvoice` | **YA**, `Dr HPP / Cr Persediaan` bila `cogsAmount > 0` | `src/lib/hooks/accounting.hook.ts:816`, `:824-833`, `:837-852`, `:855-860` |
+| 5 | **Item besi tua** (`isScrapSaleItem = true`) | wajib `isProduct = false` (server menolak `isProduct=true`) | **TIDAK** | tidak (nilai buku Rp0 → COGS 0), pendapatan ke akun lain-lain | `src/lib/hooks/accounting.hook.ts:470-495`; `src/actions/master.actions.ts:575` |
+| 6 | **Baris material proyek/pekerjaan jasa** | bukan baris faktur — `MaterialIssue` tertaut `workOrderId`/`projectId` | **YA**, di titik pengeluaran material, bukan di faktur | biaya pekerjaan (`ProductionCost`/HPP proyek) | `src/actions/inventory.actions.ts:1047`; `src/lib/hooks/material-issue.hook.ts:230-250` |
+| 7 | **Baris jasa + material pada satu pekerjaan** | baris jasa (2/3) di faktur + `MaterialIssue` di WO | stok turun **hanya** sebesar material yang di-issue | HPP material diakui di jalur material, bukan di baris jasa | kombinasi 2/3 + 6. Batas pengurangan ganda penjualan-vs-material = **SAL-BR-014**, sudah dipasang lewat PR #1235 (MERGED 2026-10-28 10:24 WIB, guard `src/lib/services/stock-out-once.service.ts`) — bukan cakupan spec ini |
+
+**Kesimpulan matriks (TERVERIFIKASI-KODE):** aturan SAL-BR-013 **sudah berlaku untuk baris 1–3 dan 5**, tetapi penjaganya adalah **`Item.isProduct`**, bukan penanda "jasa". `Item.isService` tidak menahan apa pun. Karena itu bunyi aturan yang benar-benar ditegakkan kode sekarang adalah: *"baris yang itemnya bukan produk tidak menyentuh stok"* — bukan *"baris jasa tidak menyentuh stok"*.
+
+## 4. Register aturan (label status persetujuan)
+
+| ID | Aturan | Label | Bukti / catatan |
+|---|---|---|---|
+| BR-SAL13-01 | Baris faktur dengan `itemId = null` tidak menyentuh stok dan tidak melahirkan HPP | `TERVERIFIKASI-KODE` | `src/lib/hooks/accounting.hook.ts:624-628` |
+| BR-SAL13-02 | Baris faktur ber-item dengan `Item.isProduct = false` tidak menyentuh stok dan tidak melahirkan HPP | `TERVERIFIKASI-KODE` | `src/lib/hooks/accounting.hook.ts:790` |
+| BR-SAL13-03 | Baris ber-item `isProduct = true` memotong stok + FIFO + HPP, dan posting **ditolak utuh** bila stok kurang | `TERVERIFIKASI-KODE` | `src/lib/hooks/accounting.hook.ts:665-773`, `:816-860` |
+| BR-SAL13-04 | Item besi tua dilarang `isProduct = true` dan tidak menyentuh stok/HPP | `TERVERIFIKASI-KODE` (vonis 135-V) | `src/actions/master.actions.ts:575`; `src/lib/hooks/accounting.hook.ts:470-495` |
+| BR-SAL13-05 | `Item.isService` **bukan** penjaga: kombinasi `isService = true` + `isProduct = true` diterima server dan akan memotong stok | `TERVERIFIKASI-KODE` (fakta kode) + `USULAN` (menutupnya) | guard master hanya menolak scrap+produk (`src/actions/master.actions.ts:575`, `:746`); tidak ada guard untuk jasa+produk |
+| BR-SAL13-06 | Baris material pekerjaan jasa dipenuhi lewat `MaterialIssue` tertaut WO/proyek, bukan lewat baris faktur; estimasi ≠ aktual | `TERVERIFIKASI-KODE` | `src/actions/inventory.actions.ts:1047`; `src/lib/hooks/material-issue.hook.ts:230-250` |
+| BR-SAL13-07 | Retur penjualan atas baris jasa/non-stok **tidak boleh** melahirkan `StockMove IN` | `USULAN` (kode sekarang melanggarnya) | lihat G2 |
+| BR-SAL13-08 | Retur jasa/non-stok, bila diizinkan, adalah koreksi **nilai** (pengurang piutang/pendapatan) tanpa gerak stok | `USULAN` + `BUTUH-VONIS` Accountant (akun pengurang & perlakuan PPN) | benchmark Accurate: retur jasa hanya lewat Barang Non Persediaan / tanpa faktur |
+| BR-SAL13-09 | Pemisahan akun pendapatan jasa vs barang dan perlakuan PPN/potongan PPh atas jasa | `BUTUH-VONIS` Accountant | kode hanya punya satu akun pendapatan + akun scrap khusus: `src/lib/hooks/accounting.hook.ts:282-300` (sumber `settings.salesRevenueAccountId`), pemilihan akun scrap di `:470-495`. Tidak ada `serviceRevenueAccountId` (grep = 0) |
+
+## 5. Gap yang ditemukan run ini
+
+**G1 — `isService` tidak menahan apa pun; kombinasi `isService + isProduct` diterima (P1).**
+Master item punya dua switch independen (`src/components/forms/item-form.tsx:559-566` untuk produk, `:572-578` untuk jasa) tanpa saling kunci; validasi server hanya menolak `isScrapSaleItem && isProduct` (`src/actions/master.actions.ts:575`, `:746`). Item jasa yang salah ditandai produk akan **memotong stok** dan, bila stok kosong, **memblokir posting faktur jasa** dengan pesan "Stok tidak mencukupi untuk <id> di gudang <id>" (`src/lib/hooks/accounting.hook.ts:758-760`) — pesan yang tidak menyebut bahwa akar masalahnya penanda item, bukan stok.
+*Usulan (Backend):* tolak simpan master bila `isService = true && isProduct = true` (pesan bernama), atau turunkan `isProduct = false` otomatis saat `isService` dinyalakan dengan peringatan eksplisit. Migrasi data: daftar item `isService && isProduct` perlu dilaporkan (bukan diubah diam-diam).
+
+**G2 — Retur penjualan baris jasa/non-stok melahirkan stok hantu (P1, cermin aturan ini).**
+`onSalesReturnCompleted` membuat `StockMove IN` + `qty_on_hand +` untuk **setiap** baris retur ber-`itemId`, tanpa membaca `isProduct` — satu-satunya pengecualian adalah besi tua (`src/lib/hooks/sales-return.hook.ts:45-67`, mutasi di `:151-169`). Pemilih item pada form retur juga tidak menyaring `isProduct`/`isService` (`src/app/(dashboard)/penjualan/retur/tambah/[[...segments]]/page.tsx:57-61`), dan `parseSalesReturnItems` menerima `itemId` apa pun yang > 0 (`src/actions/sales.actions.ts:2197-2216`). Akibatnya retur jasa/non-stok menaikkan stok barang yang memang tidak pernah menyentuh stok — pelanggaran langsung SAL-BR-013 dari arah sebaliknya, dan mengotori FIFO/`qty_on_hand` sebagai dasar HPP penjualan berikutnya.
+*Usulan (Backend, USULAN):* (a) filter retur ke item `isProduct` saat membuat `StockMove IN`, atau (b) tolak retur baris non-produk dengan pesan bernama dan arahkan ke koreksi nilai (BR-SAL13-08, menunggu vonis Accountant). Pilih (a) bila koreksi nilai jasa belum diputus; (b) sesudah vonis terbit.
+
+**G3 — Bukti test belum menyentuh baris ber-item non-produk (P2, cakupan falsifikasi).**
+Test yang ada hanya "tanpa baris item" — `src/lib/hooks/__tests__/accounting-hook.test.ts:847` ("skips COGS journal when cogsAmount is 0 (no product items)") memakai `seedInvoice(inner, [])`, sehingga tidak membuktikan baris `itemId` dengan `isProduct=false` tidak melahirkan `StockMove`/HPP. Tidak ada test retur untuk item non-produk.
+*Usulan (QA):* E141-SAL13-1..E141-SAL13-6 di §10 (dinomori-ulang dari E140: E140 dipakai spec 140-S di main).
+
+**G4 — Tidak ada akun pendapatan jasa terpisah (P2).** `grep serviceRevenue` = 0. Semua pendapatan (kecuali besi tua) jatuh ke satu akun `settings.salesRevenueAccountId`. Dampak: laporan penjualan jasa vs barang hanya bisa dipisah lewat join item, bukan lewat jurnal; dasar pemisahan PPN/PPh jasa tidak tersedia di lapisan jurnal. **`BUTUH-VONIS` Accountant** (bukan keputusan spec ini).
+
+**G5 — PPN atas jasa mengikuti tarif level faktur, tidak per baris.** Tarif diambil dari dokumen (`taxRate` faktur; lihat `src/components/forms/sales-invoice-form.tsx:132` dan `:158`), bukan dari klasifikasi jasa per baris. Bila ada jasa dengan DPP nilai lain/kode transaksi khusus, tidak ada penanda per baris. **`BUTUH-VONIS` Accountant**.
+
+**G6 — Potongan PPh pihak lawan dicatat saat pembayaran, tanpa validasi jenis.** `SalesPayment.withholdingAmount` + `withholdingType.receivableAccountId` (`src/lib/hooks/accounting.hook.ts:944-1013`) menerima potongan apa pun; tidak ada pemeriksaan bahwa faktur yang dipotong memang memuat jasa. **`BUTUH-VONIS` Accountant** (perlu/tidak penjagaan berbasis komposisi baris).
+
+## 6. Role / permission matrix (kunci nyata dari katalog)
+
+| Aksi | Permission | Bukti |
+|---|---|---|
+| Lihat faktur penjualan | `view_sales_invoices` | `src/lib/auth/module-catalog.generated.ts:149` |
+| Posting faktur (memicu stok + jurnal) | `post_sales_invoices` | `src/lib/auth/module-catalog.generated.ts:154`; `src/actions/sales.actions.ts:1164` |
+| Buat/ubah retur penjualan (memicu `StockMove IN`) | `create_sales_returns` | `src/lib/auth/module-catalog.generated.ts:172`; `src/actions/sales.actions.ts:2220` |
+| Buat pengeluaran material (jalur material jasa) | `create_material_issues` | `src/lib/auth/module-catalog.generated.ts:233`; `src/actions/inventory.actions.ts:1049` |
+| Ubah master item (`isProduct`/`isService`) | `create_items` (create) / jalur ubah master | `src/actions/master.actions.ts:567` |
+
+Catatan: spec ini **tidak** mengusulkan permission key baru. Bila guard G1/G2 dibangun, ia menempel pada aksi yang sudah ada (tanpa key baru) — konsisten pola BR-ACFIN2-07 (F-2026-10-28-118-S).
+
+## 7. Status / transisi yang menyentuh aturan
+
+| Dokumen | Dari → Ke | Pemicu | Penjaga | Efek stok |
+|---|---|---|---|---|
+| SalesInvoice | `draft`/`approved` → `posted` | `postInvoice` (`src/actions/sales.actions.ts:1161`) | permission `post_sales_invoices`, `assertApproved` (approval workflow), klaim atomik `:1226`, ketersediaan stok untuk baris `isProduct` | hanya baris `isProduct` |
+| SalesInvoice | `posted` → `posted` (repost isi baru) | `updateSalesInvoice` saat `wasPosted` (`src/actions/sales.actions.ts:3156-3161`) | `reverseSalesInvoicePostingTx` lalu hook ulang, satu transaksi | balik + potong ulang menurut StockMove |
+| SalesInvoice | `posted` → `cancelled` (void) | `voidSalesInvoice` (`src/actions/sales.actions.ts:3749`) | guard pembayaran aktif + alasan (F-2026-10-28-118-S) | pembalikan via StockMove |
+| SalesInvoice | `draft` → (hapus fisik) | `deleteSalesInvoice` (`src/actions/sales.actions.ts:3716`) | hanya draft | nol |
+| SalesReturn | `draft` → `completed` | `onSalesReturnCompleted` (`src/lib/hooks/sales-return.hook.ts:28`) | `RETURNABLE_INVOICE_STATUSES` saat create (`src/actions/sales.actions.ts:2250`); **tidak ada guard isProduct** (G2) | **semua** baris ber-item (cacat G2) |
+| MaterialIssue | `draft` → `completed` | hook `src/lib/hooks/material-issue.hook.ts:230-250` | periode terbuka, WO closed ditolak | baris material |
+
+## 8. Benchmark resmi (akses 2026-10-28 WIB)
+
+- **Accurate Online — tipe barang menentukan gerak stok.** Accurate memisahkan tipe **Persediaan / Non Persediaan / Jasa**; hanya tipe persediaan yang menyajikan laporan persediaan, nilai persediaan, dan jumlah stok: <https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-dan-jasa/mengenal-fitur-barang-dan-jasa/> (`BENCHMARK`). HPP otomatis hanya dihitung untuk penjualan **barang Persediaan** (nilai HPP dari FIFO/rata-rata; nol bila stok tak tercatat): <https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/solusi-hpp-nol/> (`BENCHMARK`).
+- **Accurate Online — retur jasa tidak bisa diretur seperti barang persediaan.** Retur untuk tipe "Jasa" tidak diproses langsung; jalur resmi = buat **Barang Non Persediaan** dengan akun yang sama lalu **Retur Penjualan "Tanpa Faktur"**, sehingga nilainya mengurangi penjualan tanpa gerak stok: <https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/retur-penjualan/retur-penjualan-jasa/> (`BENCHMARK`). Ini tepat mencerminkan BR-SAL13-07/08: retur jasa = koreksi nilai, bukan gerak stok.
+- **Zahir —** faktur penjualan Zahir memperbarui stok untuk baris barang yang berasal dari Data Produk (data produk = persediaan barang dagang): <https://help.zahironline.com/portal/id/kb/articles/order-penjualan> dan <https://help.zahironline.com/portal/id/kb/articles/memasukkan-data> (`BENCHMARK` terbatas). **Belum terverifikasi:** artikel resmi Zahir yang menyatakan eksplisit perilaku tipe "Jasa" tanpa gerak stok tidak ditemukan dalam penelusuran run ini — jangan dikutip sebagai bukti setara Accurate sampai ditemukan.
+- **ISF (kode hari ini):** penjaga = `Item.isProduct`; jasa/non-stok tidak menyentuh stok (`TERVERIFIKASI-KODE`, §2-§3), tetapi `isService` tidak menahan kombinasi salah tanda (G1) dan retur belum simetris (G2).
+
+## 9. Acceptance criteria (untuk QA — diuji pada head implementasi, bukan head spec ini)
+
+- **AC-SAL13-1:** faktur yang seluruhnya baris `isProduct=false` (jasa/non-stok) dapat **diposting tanpa cek ketersediaan stok**, dan setelah posting: nol `StockMove` baru, `items.qty_on_hand` seluruh item tidak berubah, nol jurnal `referenceType="SalesInvoiceCOGS"`.
+- **AC-SAL13-2:** faktur campuran (1 baris jasa + 1 baris produk) hanya memotong stok sebesar baris produk; HPP = nilai FIFO baris produk saja; jurnal pendapatan tetap satu.
+- **AC-SAL13-3:** item dengan `isService=true` tidak bisa disimpan dengan `isProduct=true` (pesan bernama, bukan error generik) — sesudah perbaikan G1.
+- **AC-SAL13-4:** retur atas baris jasa/non-stok **tidak** menaikkan `qty_on_hand` dan **tidak** membuat `StockMove IN` — sesudah perbaikan G2, dengan pengurang nilai tetap tercatat sesuai vonis Accountant.
+- **AC-SAL13-5:** posting faktur berisi baris `isProduct=true` dengan stok kurang tetap **ditolak utuh** (nol jurnal, nol StockMove) dan pesan menyebut item + gudang + kebutuhan + ketersediaan.
+- **AC-SAL13-6:** pembalikan (edit faktur posted / void) mengembalikan stok **tepat** sebesar StockMove `SalesInvoice` yang pernah lahir; tidak ada pengembalian untuk baris yang tidak pernah memotong.
+
+**Edge cases wajib:** (a) baris `qty = 0` atau negatif → tidak dihitung sebagai baris stok; (b) `itemId` menunjuk item yang sudah `deletedAt` → tetap dibaca apa adanya (tidak ada filter `deletedAt` di `src/lib/hooks/accounting.hook.ts:630-641`) — stok ikut terpotong bila `isProduct`; (c) item dengan `defaultWarehouseId = null` → ketersediaan diagregasi lintas gudang (`:703-722`); (d) konversi UoM tak terdaftar → faktor 1 + `console.warn`, **bukan** galat (`:734-744`, `:797-807`); (e) faktur campuran besi tua + dagang ditolak berisik (`:470-495`); (f) retur jasa pada faktur yang statusnya tidak returnable → ditolak sebelum mutasi.
+
+## 10. Falsifikasi QA (E141-SAL13, dijalankan pada head implementasi persis)
+
+- **E141-SAL13-1:** mutasi: ubah `src/lib/hooks/accounting.hook.ts:790` agar baris non-`isProduct` **tidak** di-`continue` → test/perilaku AC-SAL13-1 wajib **MERAH**; pulihkan → hijau.
+- **E141-SAL13-2:** faktur satu baris item `isProduct=false` dengan stok gudang 0 → posting **harus lolos**; bila ditolak "Stok tidak mencukupi" atau melahirkan `StockMove`, **MERAH**.
+- **E141-SAL13-3:** retur baris item `isProduct=false` → bila `qty_on_hand` naik atau `StockMove IN` lahir, **MERAH** (sesudah G2 diperbaiki; sebelum itu uji ini memang merah dan itulah bukti gap).
+- **E141-SAL13-4:** campuran jasa+produk → HPP harus sama dengan hasil perhitungan FIFO baris produk saja; selisih **MERAH**.
+- **E141-SAL13-5:** mutasi guard master: hapus penjagaan `isScrapSaleItem && isProduct` → test E135-7 wajib MERAH (memastikan guard master memang yang diuji, bukan guard lain).
+- **E141-SAL13-6:** pembalikan posting tidak boleh mengembalikan stok untuk item yang tidak pernah masuk StockMove `SalesInvoice` (**MERAH** bila `qty_on_hand` naik).
+
+## 11. BUTUH-VONIS ke BOT Accountant (HANDOFF)
+
+| # | Pertanyaan vonis | Mengapa harus Accountant | Dampak bila tidak diputus |
+|---|---|---|---|
+| V1 | Apakah pendapatan jasa wajib dipisah ke akun sendiri (`salesServiceRevenueAccountId`), dan bagaimana pemetaan akun per kategori jasa? | pemetaan akun = keputusan akuntansi, bukan workflow | laporan PPN/PPh jasa tidak bisa dipisah dari jurnal (G4) |
+| V2 | Perlakuan **retur/koreksi nilai jasa** (BR-SAL13-08): akun pengurang (retur penjualan vs diskon), efek PPN/nota retur, apakah boleh tanpa faktur seperti benchmark Accurate? | menyangkut PPN/nota & akun | G2 tidak bisa ditutup dengan opsi (b) yang benar |
+| V3 | Apakah PPN atas jasa boleh mengikuti tarif level faktur bila faktur memuat campuran barang+jasa (termasuk jasa dengan DPP nilai lain / kode transaksi khusus)? | tarif & kode transaksi = vonis pajak | G5 tetap terbuka; risiko salah kode e-Faktur |
+| V4 | Apakah potongan PPh (`SalesPayment.withholdingType`) perlu divalidasi terhadap komposisi baris (hanya faktur berjasa) atau tetap bebas? | kewajiban potong/pajak = vonis pajak | G6 tetap terbuka |
+| V5 | Untuk `MaterialIssue` pada pekerjaan jasa: apakah biaya material boleh menambah HPP jasa pada faktur yang sama, atau tetap di jalur biaya proyek? | penilaian biaya/HPP = vonis akuntansi | batas SAL-BR-013 vs SAL-BR-014 kabur untuk kasus jasa+material |
+
+**Tidak menunggu vonis:** G1 (guard master jasa+produk), G2 opsi (a) (retur non-produk tidak menyentuh stok), G3 (test/falsifikasi), serta seluruh AC-SAL13-1/2/5/6 — semuanya perilaku stok, bukan perlakuan uang/pajak.
+
+## 12. Yang TIDAK diusulkan run ini
+
+- **Tidak** membuat model/relasi "baris material" pada `SalesInvoiceItem` — material tetap satu-satunya jalur `MaterialIssue`; menambah jalur kedua akan melanggar pemisahan estimasi≠aktual dan menduplikasi guard tepat-satu-kali yang sudah merged (SAL-BR-014, PR #1235).
+- **Tidak** mengubah perilaku posting faktur produk (guard stok, FIFO, HPP) — sudah benar dan dipakai jalur lain.
+- **Tidak** menetapkan akun/angka pajak apa pun (V1–V4 = vonis Accountant).
+- **Tidak** menyentuh `Item.isService` sebagai penanda PO jasa/subkontrak pembelian — itu domain pembelian; guard G1 hanya meminta konsistensi tanda di master.
+- **Tidak** membuat dokumen nota kredit jasa — keputusan nota kredit formal tetap terbuka di F-2026-10-28-118-S (BR-ACFIN2-09).
+
+## 13. Penerus (rekomendasi tertulis — kartu tidak dibuat run ini)
+
+| Urutan | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| 1 | Merge PR docs spec ini + baris `INDEKS-ATURAN.md:113` → `Sebagian` | BOT Lead | PR ini hijau, docs-only |
+| 2 | Guard master: tolak `isService && isProduct` + laporan item lama yang melanggar (G1) | BOT Backend | spec ini merged; tanpa vonis baru |
+| 3 | Retur non-produk tidak menyentuh stok (G2 opsi a) + test | BOT Backend | spec ini merged; opsi b menunggu V2 |
+| 4 | Test/falsifikasi E141-SAL13-1..6 atas head implementasi | BOT QA | #2/#3 merged |
+| 5 | Vonis V1–V5 | BOT Accountant | berdiri sendiri, bisa paralel |
+| 6 | Pemisahan akun pendapatan jasa (bila V1 = wajib) | BOT Backend + UI BOT Frontend | vonis V1 |
+
+**Status INDEKS sesudah PR ini:** `SAL-BR-013` = `Sebagian` (penegakan stok untuk baris non-produk terpasang & terbukti, tetapi `isService` bukan penjaga, retur belum simetris, dan perlakuan jasa (akun/PPN/PPh) menunggu vonis). **Tidak** `Terpasang` sampai G1+G2 ditutup dan E141-SAL13 lulus di head implementasi.
+
+**Butuh putusan accountant: YA** — V1..V5 (§11).
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-133-S: koreksi slip gaji posted yang dapat diaudit (HR-BR-005)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec; TANPA kode/schema/migrasi). Basis `origin/main` `2eed70391` (28 Okt 2026 10:10 WIB).
