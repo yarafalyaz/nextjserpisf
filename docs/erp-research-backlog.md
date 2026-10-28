@@ -41000,6 +41000,257 @@ ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main
 
 ---
 
+## 2026-10-28 08:50 WIB — Business (127) Matriks approval per dokumen: inventaris jalur aktual + usulan (GL-BR-009, keputusan 9)
+
+**Spec:** `F-2026-10-28-127-S` — *catatan penomoran (wajib dibaca):* run HR sempat memakai
+`127-S`, lalu **memindahkan** spec-nya ke `128-S` dan membebaskan `127-S` khusus untuk kartu
+ini — bukti `docs/autonomous-board.md:2491` (`origin/main`, 09:08 WIB), PR #1251 kini berjudul
+`F-2026-10-28-128-S` (head `ff398937e`, OPEN). Verifikasi run ini: `F-2026-10-28-127-S` = 0
+hit di `docs/erp-research-backlog.md` main (hanya sisa baris board 2471–2472 yang basi dan
+sudah dikoreksi baris 2491); `128-S` = 0 hit di backlog main dan dipakai PR #1251. Karena itu
+ID spec ini tetap **127-S** sesuai kartu. Nomor falsifikasi = **E137** karena `E127-*` sudah
+dipakai dua entri lain (jurnal penutup tahun `docs/erp-research-backlog.md:12391`, HR scope
+`docs/autonomous-board.md:2474`).
+
+**Basis:** `origin/main` `46e0e41be` (28 Okt 2026 08:40 WIB; `origin/main` bergerak ke
+`80a6a248d` 08:50 WIB — backlog tidak berubah di rentang itu), worktree
+`/tmp/business-f2026-10-28-127-approval-matrix`, branch
+`hermes/business-f2026-10-28-127-approval-matrix`.
+**Sifat:** spec read-only. Tanpa kode implementasi, tanpa migrasi, tanpa perubahan
+`prisma/schema.prisma`, tanpa kartu baru.
+
+### 1. Sumber tunggal dan label
+
+- Sumber aturan: `docs/product/INDEKS-ATURAN.md` baris GL-BR-009 (`Sebagian`),
+  `docs/product/KEPUTUSAN-TERVERIFIKASI.md` keputusan 9 + daftar OPEN butir 4,
+  `docs/product/BUSINESS-RULES.md` §8 butir 9 (Approval matrix).
+- Setiap klaim di bawah berlabel `TERVERIFIKASI-KODE` (bukti `path:baris`) atau `USULAN`.
+- **Matriks final bukan wewenang spec ini.** Isi matriks = data konfigurasi tabel
+  `approval_workflows`/`approval_workflow_steps` di database, ditetapkan owner dan
+  diverifikasi dari data produksi (keputusan 9). Spec ini hanya (a) memetakan jalur yang
+  benar-benar ada di kode, (b) mengusulkan bentuk matriks yang bisa dibangun dengan mesin
+  yang ada, (c) mendaftar butir yang tetap OPEN. Tidak ada klaim "matriks sudah ditetapkan".
+
+### 2. Fakta mesin approval (TERVERIFIKASI-KODE) — pembatas bentuk matriks
+
+| # | Fakta | Bukti |
+|---|---|---|
+| M1 | Mesin generik: `ApprovalWorkflow` (per `modelType`, ada `priority`/`isActive`), `ApprovalWorkflowStep` (`stepOrder`, `roleId`/`userId`, `conditions` Json), `Approval`, `ApprovalHistory` | `prisma/schema.prisma:5308-5388` |
+| M2 | Permintaan approval hanya dibuat bila ada workflow **aktif** untuk `modelType`; tanpa workflow = no-op senyap (`return false`) | `src/lib/services/approval-workflow.service.ts:25-49` (khusus `:39`) |
+| M3 | **`assertApproved` fail-OPEN**: bila dokumen belum punya baris `Approval` sama sekali, gerbang lolos tanpa error | `src/lib/services/approval-workflow.service.ts:58-70` (`:64`) |
+| M4 | Hanya dua `modelType` yang memperlakukan approval sebagai gerbang murni (status dokumen **tidak** ditimpa mesin): `Journal`, `VendorPayment` (`GATE_ONLY_REFERENCE_TYPES`) | `src/actions/approval.actions.ts:37,252` |
+| M5 | Untuk `modelType` lain, penyelesaian langkah terakhir **menulis `status: "approved"`** ke dokumen sumber (plus `approvedBy` hanya untuk 6 tipe di `APPROVED_BY_MODELS`) | `src/actions/approval.actions.ts:58-65,252-261` |
+| M6 | Maker-checker: pemohon tidak boleh menyetujui/menolak permintaannya sendiri, **kecuali `super_admin`** — hanya pada jalur `approveStep`/`rejectStep` | `src/actions/approval.actions.ts:213-216,352-355` |
+| M7 | Approver langkah dibatasi `userId`/`roleId` langkah itu; langkah tanpa keduanya jatuh ke gerbang izin saja | `src/actions/approval.actions.ts:127-160` |
+| M8 | Izin approve per tipe dokumen dipetakan di satu tempat (12 tipe) | `src/lib/auth/approval-permissions.ts:16-29` |
+| M9 | `modelType` di luar peta M8 hanya bisa disetujui pemegang `approve_workflows` (praktis `admin`; `super_admin` ALL) — jadi persetujuannya **tidak** terikat izin domain | `src/actions/approval.actions.ts:72-86`; `src/lib/setup/base-data.ts:10-470` (katalog + `ADMIN_WHITELIST`), `prisma/seed.ts:141` |
+| M10 | `ApprovalWorkflowStep.conditions` **disimpan tetapi tidak pernah dibaca** jalur penegakan; satu-satunya pembaca bersifat informatif (kartu laporan penawaran) dan tidak menahan dokumen | `src/lib/reports/quotation-approval-gate.ts:4,22-28`; `src/lib/reports/discount-exposure-data.ts:205` |
+| M11 | Seed bawaan hanya membuat **2** workflow: `Journal` (APR-JRN) dan `VendorPayment` (APR-VPAY), masing-masing 1 langkah ber-role `finance`; idempoten dan tidak menimpa konfigurasi tenant | `prisma/seed.ts:153-193` (daftar `:160-161`, langkah `:183-186`) |
+| M12 | Tombol Setujui/Tolak per modul tersedia lewat route generik untuk 9 modul (termasuk `SalesOrder` dan `VendorBill` yang **tidak pernah** meminta approval saat dibuat) | `src/app/api/workflow/[...path]/route.ts:22-39` (`:24,:28`) |
+
+Konsekuensi yang harus dipakai saat membaca §5: **kondisi nominal per tingkat belum bisa
+ditegakkan mesin hari ini** (M10). Setiap sel "kondisi nominal" di §5 berlabel `USULAN` dan
+butuh pekerjaan Backend lebih dulu (evaluasi `conditions` di jalur permintaan/penyetujuan).
+
+### 3. Inventaris jalur approval aktual per dokumen (TERVERIFIKASI-KODE)
+
+Kolom "gerbang" = tempat penegakan yang benar-benar berjalan hari ini.
+`minta` = `requestApprovalIfConfigured` dipanggil; `tegak` = `assertApproved` dipanggil.
+
+| # | Dokumen | Aksi peminta | `modelType` | Gerbang penegak | Efek penyelesaian workflow | Izin approve (kode) |
+|---|---|---|---|---|---|---|
+| 1 | Penawaran (`Quotation`) | `sendQuotation` `src/actions/sales.actions.ts:352` | `Quotation` | `acceptQuotation` `:379`; `convertQuotationToOrder` `:528`; `createSalesOrder` `:1067` | status dokumen ditimpa `approved` (M5) | `approve_quotations` `src/lib/auth/approval-permissions.ts:17` |
+| 2 | Faktur penjualan (`SalesInvoice`) | `createSalesInvoice` `src/actions/sales.actions.ts:1973`; `createDifferenceInvoice` `:1596`; `createProgressInvoice` `:1690` | `SalesInvoice` | `postInvoice` `:1173` | status `approved`; `postInvoice` menerima `draft`/`approved` `:1176-1178` | `approve_sales_invoices` `:19` |
+| 3 | Permintaan pembelian (`PurchaseRequest`) | `createPurchaseRequest` `src/actions/purchase.actions.ts:730` | `PurchaseRequest` | tidak ada `assertApproved` di jalur proses; status hanya berubah lewat penyelesaian workflow | `approved` + `approvedBy` (M5) | `approve_purchase_requests` `:20` |
+| 4 | Pesanan pembelian (`PurchaseOrder`) | `createPurchaseOrder` `:810`; `createServicePurchaseOrderFromWorkOrder` `:960` | `PurchaseOrder` | idem #3 | `approved` + `approvedBy` | `approve_purchase_orders` `:21` |
+| 5 | Tagihan vendor (`VendorBill`) | **tidak ada** permintaan saat pembuatan | `VendorBill` | `confirmVendorBill` `src/actions/purchase.actions.ts:1645-1655` (`approve_vendor_bills`, status `draft`) | `approved` + `approvedBy` | `approve_vendor_bills` `:22` |
+| 6 | Pembayaran vendor (`VendorPayment`) | `createVendorPayment` `:1628`; `updateVendorPayment` `:3268` | `VendorPayment` | `confirmVendorPayment` `:1757` | **tidak** menimpa status (gate-only, M4) | `approve_vendor_payments` `:27` |
+| 7 | Jurnal manual (`Journal`) | `createJournal` `src/actions/finance.actions.ts:604`; `updateJournal` `:2138` | `Journal` | `postJournal` `:629` | tidak menimpa status (gate-only) | `approve_journals` `:28` |
+| 8 | Beban/klaim (`Expense`) | `createExpense` `src/actions/finance.actions.ts:798`; `createReimbursementClaim` `src/actions/reimbursement.actions.ts:230` | `Expense` | `approveExpense` `:829` | `approved` | `approve_expenses` `:26` |
+| 9 | Penyesuaian stok (`StockAdjustment`) | `createStockAdjustment` `src/actions/inventory.actions.ts:339`; `closeInventoryTransferShortage` `:972`; `postStocktakeSession` `:2643` | `StockAdjustment` | `processStockAdjustment` `:372` | `approved` (menimpa status adjustment) | **tidak terpetakan** → hanya `approve_workflows` (M9) |
+| 10 | Proyek (`Project`) | `createProject` `src/actions/project.actions.ts:65` | `Project` | `updateProject` `:86` | `approved` — padahal `Project.status` default `active` `prisma/schema.prisma:5182` | tidak terpetakan (M9) |
+| 11 | Aset (`Asset`) | `createAsset` `src/actions/asset.actions.ts:860` | `Asset` | `disposeAsset` `:1009` | `approved` | tidak terpetakan (M9) |
+| 12 | Cuti (`LeaveRequest`) | `createLeaveRequest` `src/actions/hrm.actions.ts:1010` | `LeaveRequest` | tidak ada `assertApproved`; status hanya berubah lewat penyelesaian workflow | `approved` + `approvedBy` | `approve_leave_requests` `:23` |
+| 13 | Lembur (`OvertimeRequest`) | `createOvertimeRequest` `:1069` | `OvertimeRequest` | `approveOvertime` `:1096` | `approved` + `approvedBy` | `approve_overtime_requests` `:24` |
+| 14 | Pinjaman karyawan (`EmployeeLoan`) | `createEmployeeLoan` `:3306` | `EmployeeLoan` | tidak ada `assertApproved`; penyelesaian workflow menulis status `active` `src/actions/approval.actions.ts:253` lalu `onEmployeeLoanDisbursed` `:262-264` | `active` + `approvedBy` + pencairan | `approve_loans` `:25` |
+| 15 | Penggajian (`Payroll`) | `processPayroll` `src/actions/hrm.actions.ts:2816` | `Payroll` | `approvePayroll` `:3043`; `markPayrollPaid` `:3091` | `approved` | **tidak terpetakan** → `approve_workflows` (M9) **atau** `process_payroll` lewat aksi langsung `:3042` |
+| 16 | Tutup buku tahun (`YearEndClosing`) | `requestYearEndClosingApproval` `src/lib/services/year-end-closing.service.ts:60` | `YearEndClosing` `src/lib/reports/year-end-closing.ts:32` | `postYearEndClosing` `:110` | `approved` (upaya update dokumen; referensi berupa `fiscalYear`, bukan id tabel) | tidak terpetakan (M9) |
+
+Kelas kedua — **penyetujuan berbasis izin + pemisahan tugas, tanpa mesin workflow**
+(TERVERIFIKASI-KODE):
+
+| Dokumen | Aksi | Izin | Pemisahan tugas |
+|---|---|---|---|
+| Retur penjualan (`SalesReturn`) | `completeSalesReturn` `src/actions/sales.actions.ts:2102` | `approve_sales_returns` | ya — penyelesai ≠ pembuat `:2113-2115` |
+| Retur pembelian (`PurchaseReturn`) | `processPurchaseReturn` `src/actions/purchase.actions.ts:2011` | `approve_purchase_returns` | **tidak ada** pemeriksaan pembuat (grep `createdBy` di badan fungsi: 0) |
+| Penerimaan barang (`GoodsReceipt`) | `verifyGoodsReceipt` `:1169` | `verify_goods_receipts` | tidak ada; satu tingkat |
+| Permintaan material (`MaterialRequest`) | `src/actions/material-request.actions.ts:251` | `approve_material_requests` | ya — penyetuju ≠ pembuat `:251` |
+| Potongan/penyesuaian gaji (`SalaryAdjustment`), revisi BOM, klaim garansi, credit override, koreksi absensi, sanksi disiplin, kontrak probation | aksi masing-masing | `approve_salary_adjustments`, `approve_bom_revisions`, `approve_warranty_claims`, `approve_credit_overrides`, `approve_attendance_corrections`, `approve_disciplinary_records`, `approve_contracts` | bervariasi; bukan cakupan tabel mesin workflow |
+
+Kelas ketiga — **tanpa gerbang penyetujuan internal** (TERVERIFIKASI-KODE, lihat §6).
+
+### 4. Peta role → izin approve yang benar-benar di-seed (TERVERIFIKASI-KODE)
+
+Dari `src/lib/setup/base-data.ts` (whitelist per role) + `prisma/seed.ts:141-149`:
+
+| Role | Izin approve/verify yang dipegang |
+|---|---|
+| `super_admin` | ALL (termasuk `approve_workflows`) `prisma/seed.ts:141` |
+| `admin` | seluruh katalog kecuali `manage_users`/`manage_roles`/`manage_settings` — jadi memegang **semua** `approve_*` + `approve_workflows` `src/lib/setup/base-data.ts:455-472` |
+| `finance` | `approve_journals`, `approve_salary_adjustments`, `approve_expenses`, `approve_vendor_bills`, `approve_vendor_payments`, `approve_sales_invoices`, `process_payroll` |
+| `kepala_bengkel` | `approve_leave_requests`, `approve_overtime_requests`, `approve_attendance_corrections`, `approve_bom_revisions`, `approve_warranty_claims` |
+| `ga` | `approve_leave_requests`, `approve_attendance_corrections`, `approve_disciplinary_records` |
+| `warehouse` | `verify_goods_receipts`, `process_stock_adjustments` (bukan approve) |
+| `staff`, `purchasing`, `karyawan` | tidak memegang izin approve apa pun |
+
+Catatan penting yang lahir dari tabel ini: **`approve_quotations`, `approve_sales_orders`,
+`approve_purchase_requests`, `approve_purchase_orders`, `approve_purchase_returns`,
+`approve_sales_returns`, `approve_loans`, `process_payroll`+approve payroll** secara efektif
+hanya dipegang `admin`/`super_admin` (dan `finance` untuk yang disebut di atas). Artinya
+matriks produksi hari ini bukan hasil desain peran operasional, melainkan konsekuensi
+whitelist. Ini fakta kode, bukan usulan.
+
+### 5. Matriks usulan (USULAN — belum disetujui owner, belum bisa ditegakkan penuh)
+
+Aturan baca: tingkat `L1` = penyetuju pertama, `L2` = penyetuju kedua sesudah L1.
+Kolom "kondisi nominal" **belum dapat dieksekusi mesin** (M10) — baris dengan kondisi
+nominal wajib menunggu evaluasi `conditions` di Backend; sampai itu, bentuk yang bisa
+berjalan hanyalah "semua dokumen tipe itu wajib approval" atau "tanpa kondisi".
+
+| Dokumen | Aksi yang digerbang | Tingkat | Approver usulan | Kondisi nominal usulan | Catatan kelayakan |
+|---|---|---|---|---|---|
+| `Quotation` | `sendQuotation`/`acceptQuotation`/konversi | L1 | izin `approve_quotations` (admin) | diskon efektif > 10% **atau** `grandTotal` > Rp50 jt | **Bahaya hari ini (M5):** penyelesaian workflow menulis `status="approved"`, sedangkan `acceptQuotation` hanya menerima `sent` (`src/actions/sales.actions.ts:373-376`) → penawaran bisa macet. Wajib perbaikan Backend atau masukkan `Quotation` ke gate-only lebih dulu |
+| `SalesInvoice` | `postInvoice` | L1 | `approve_sales_invoices` (finance) | `grandTotal` > Rp100 jt | aman: `postInvoice` menerima `draft`/`approved` `:1176-1178` |
+| `PurchaseRequest` | pembuatan → persetujuan | L1 | `approve_purchase_requests` (usul: diberikan ke `kepala_bengkel`) | tanpa kondisi (semua PR) | izin saat ini hanya admin; perubahan pemegang izin = putusan Lead |
+| `PurchaseOrder` | pembuatan → persetujuan | L1 + L2 | L1 `approve_purchase_orders` (admin), L2 `finance` | L2 wajib bila > Rp50 jt | dua tingkat butuh 2 baris `ApprovalWorkflowStep` (didukung M1) |
+| `VendorBill` | `confirmVendorBill` | L1 | `approve_vendor_bills` (finance) | tanpa kondisi | saat ini tanpa permintaan approval saat dibuat (M12) — usul: minta saat posting |
+| `VendorPayment` | `confirmVendorPayment` | L1 + L2 | L1 finance, L2 `admin` | L2 wajib bila > Rp25 jt | gate-only (M4): status dokumen tidak ditimpa |
+| `Journal` (manual) | `postJournal` | L1 + L2 | L1 finance, L2 admin | L2 wajib bila nominal > Rp10 jt | gate-only; sudah punya seed default 1 langkah `finance` (M11) → usul dinaikkan jadi 2 langkah |
+| `Expense`/klaim | `approveExpense` | L1 | `approve_expenses` (finance) | tanpa kondisi | klaim reimbursement sudah punya gerbang bukti + nominal (`finance.actions.ts:838-846`) |
+| `StockAdjustment` | `processStockAdjustment` | L1 | usul `kepala_bengkel` (izin baru `approve_stock_adjustments`) | nilai selisih > Rp5 jt → L2 finance | izin belum ada (M9); penambahan key = putusan Lead |
+| `Project` | `updateProject` | L1 | izin baru `approve_projects` (usul admin) | tanpa kondisi | `Project.status` default `active` ditimpa `approved` (M5) — perlu keputusan arti status |
+| `Asset` | `disposeAsset` | L1 | `approve_assets`/`edit_assets` (usul finance) | nilai buku > Rp10 jt → L2 admin | idem M5: status aset ditimpa |
+| `LeaveRequest` | pembuatan → persetujuan | L1 | `approve_leave_requests` (`kepala_bengkel`/`ga`) | tanpa kondisi | sesuai izin yang sudah ada |
+| `OvertimeRequest` | `approveOvertime` | L1 | `approve_overtime_requests` (`kepala_bengkel`) | tanpa kondisi | sesuai izin yang sudah ada |
+| `EmployeeLoan` | pembuatan → pencairan | L1 + L2 | L1 admin (`approve_loans`), L2 finance | L2 wajib bila > Rp10 jt | penyelesaian menulis `active` + pencairan jurnal (M5) |
+| `Payroll` | `approvePayroll` → `markPayrollPaid` | L1 + L2 | L1 finance, L2 admin | tanpa kondisi | **SoD hari ini bocor:** `approvePayroll` cukup `process_payroll` (`hrm.actions.ts:3042`) yang juga dipakai pembuat slip, tanpa cek pembuat; jalur workflow menutupnya hanya lewat M6 |
+| `YearEndClosing` | `postYearEndClosing` | L1 + L2 | L1 finance, L2 admin | tanpa kondisi | referensi berupa tahun fiskal, bukan id dokumen — pastikan update dokumen tidak salah sasaran |
+| `SalesReturn` | penyelesaian retur | L1 | `approve_sales_returns` | tanpa kondisi | sudah ber-SoD `sales.actions.ts:2113` |
+| `PurchaseReturn` | `processPurchaseReturn` | L1 | `approve_purchase_returns` | tanpa kondisi | **gap SoD:** tambahkan larangan penyetuju = pembuat (meniru `SalesReturn`) |
+
+Butir lintas-tabel usulan (semua `USULAN`):
+- **BR-APR-01** Dokumen uang (Journal, VendorPayment, VendorBill, Expense, Payroll) wajib
+  fail-CLOSED: bila `modelType` bertipe gerbang uang tidak punya workflow aktif, transaksi
+  ditolak dengan pesan yang menyebut nama workflow yang harus dibuat (menutup M2/M3).
+- **BR-APR-02** Kondisi nominal hanya menggerakkan **kewajiban jenjang**, bukan kewajiban
+  approval itu sendiri: dokumen di bawah ambang tetap wajib L1, di atas ambang menambah L2.
+  Ini menjaga mesin tetap deterministik saat `conditions` belum dievaluasi.
+- **BR-APR-03** `modelType` baru wajib punya entri `APPROVAL_REFERENCE_PERMISSIONS` +
+  permission ter-seed, supaya persetujuan tidak jatuh ke `approve_workflows` (M9).
+  `StockAdjustment`, `Project`, `Asset`, `Payroll`, `YearEndClosing` masuk daftar ini.
+- **BR-APR-04** Penyelesaian workflow tidak boleh menulis status dokumen pada tipe yang
+  punya siklus status sendiri kecuali dipetakan eksplisit (Quotation, Project, Asset) —
+  memperluas pola `GATE_ONLY_REFERENCE_TYPES` (M4/M5).
+- **BR-APR-05** Setiap jalur "setujui dokumen" berbasis izin wajib membandingkan
+  pembuat vs penyetuju, atau menyatakan eksplisit bahwa pemisahan tugas tidak berlaku
+  (pola `SalesReturn`/`MaterialRequest`, bukan pola `PurchaseReturn`/`VendorBill`).
+- **BR-APR-06** Perubahan konfigurasi workflow gerbang uang wajib tercatat (sudah ada untuk
+  `Journal`/`VendorPayment` via `logMoneyGateChange` `src/actions/approval.actions.ts:44-56`);
+  usul: perluas ke seluruh tipe di BR-APR-01.
+
+### 6. Dokumen yang saat ini TIDAK ber-approval dan risikonya (TERVERIFIKASI-KODE)
+
+| Dokumen | Aksi berisiko | Fakta | Risiko |
+|---|---|---|---|
+| `SalesOrder` | pembuatan/penerbitan pesanan | tidak ada permintaan approval; masuk `MODULE_MAP` hanya sebagai tombol manual `src/app/api/workflow/[...path]/route.ts:24` | pesanan pelanggan berjalan tanpa jejak persetujuan; satu-satunya gerbang adalah `assertApproved("Quotation")` saat SO dibuat `sales.actions.ts:1067` — SO manual tanpa quotation tidak tergerbang |
+| `DeliveryOrder` | `shipDeliveryOrder` `sales.actions.ts:2514`, `deliverDeliveryOrder` `:2590` | tidak ada approval/izin approve khusus (hanya izin edit/ship) | barang keluar gudang atas dasar SO tanpa persetujuan kedua; berpasangan dengan risiko piutang |
+| `InventoryTransfer` | `processInventoryTransfer` `inventory.actions.ts:586`, `receiveInventoryTransfer` `:725` | tanpa gerbang approval; hanya scope gudang | perpindahan stok antar gudang sepihak; kekurangan transfer diselesaikan lewat `StockAdjustment` (yang ber-approval) `:972` |
+| `JobChangeOrder` | `recordJobChangeOrderApproval` `src/actions/job-change-order.actions.ts:423` | persetujuan **pelanggan** dicatat sebagai teks bebas (`approvalReference`) oleh pemegang `edit_work_orders` `:431` — bukan approval internal | perubahan scope bernilai uang dicatat oleh orang yang sama yang mengedit WO; tidak ada tingkat internal, tidak ada ambang nilai |
+| `StocktakeSession` | hitung fisik | tidak ber-approval sendiri; hasilnya menghasilkan `StockAdjustment` yang ber-approval | aman **asal** adjustment-nya benar-benar lewat `processStockAdjustment` |
+| `GoodsReceipt` | `verifyGoodsReceipt` `purchase.actions.ts:1169` | satu izin `verify_goods_receipts`, satu tingkat, tanpa cek pembuat | penerima barang memverifikasi pekerjaannya sendiri; nilai penerimaan langsung masuk FIFO + jurnal |
+| `PurchaseReturn` / `VendorBill` | proses/posting | izin approve ada, tapi **tanpa** pemisahan tugas (§3 kelas 2) | pembuat dokumen dapat menyetujui sendiri; ini gap yang paling murah ditutup |
+| `Payroll` | `approvePayroll` | `process_payroll` yang sama dipakai membuat dan menyetujui slip `hrm.actions.ts:2621,3042` | pembuat slip bisa menyetujui slipnya sendiri bila workflow Payroll tidak dikonfigurasi (M2/M3) — risiko tertinggi di domain ini |
+
+### 7. Butir yang TETAP OPEN (wewenang owner — tidak diputus spec ini)
+
+| ID | Butir OPEN | Mengapa tidak bisa diputus di sini |
+|---|---|---|
+| O-1 | Daftar final dokumen yang **wajib** approval | kebijakan bisnis owner; kode hanya menyediakan mesin |
+| O-2 | Jumlah tingkat final per dokumen | idem; mesin mendukung N langkah (`ApprovalWorkflowStep.stepOrder`) tetapi isinya data |
+| O-3 | Approver final per tingkat (role vs user) | bergantung struktur organisasi nyata; role seed hanyalah bawaan (`prisma/seed.ts:141-149`) |
+| O-4 | Ambang nominal per tingkat | keputusan owner + angka uang; penegakannya butuh pekerjaan Backend (M10) |
+| O-5 | Cakupan tenant/perusahaan: satu matriks global atau per perusahaan | tidak ada kolom perusahaan pada `ApprovalWorkflow` `prisma/schema.prisma:5308-5325` — bila per perusahaan, itu perubahan skema (bukan wewenang spec) |
+| O-6 | Perilaku bila workflow tidak dikonfigurasi: fail-open (kode hari ini) atau fail-closed untuk dokumen uang | mengubah perilaku inti = putusan Lead + owner (BR-APR-01) |
+| O-7 | Apakah `super_admin` tetap boleh menyetujui permintaannya sendiri | kebijakan tata kelola owner (M6) |
+| O-8 | Payroll: perlu izin `approve_payroll` terpisah dari `process_payroll`, dan apakah persetujuan wajib ber-`getHrScope` | menyentuh data gaji + izin = putusan Lead/owner, `BUTUH-VONIS` untuk perlakuan gaji |
+| O-9 | Verifikasi isi matriks dari **data produksi** (`SELECT * FROM approval_workflows …`) | di luar repo; hanya owner/DBA yang bisa memberi salinan; spec ini tidak mengarang isinya |
+
+**Status `docs/product/INDEKS-ATURAN.md` baris GL-BR-009 tetap `Sebagian` dan TIDAK diubah
+oleh PR ini.** Alasan: mekanisme memang sudah terbukti (M1–M12), tetapi isi matriks tetap
+OPEN owner (O-1..O-9); mengubah status menjadi `Terpasang` akan mengklaim sesuatu yang belum
+diputus. Ini dinyatakan ulang di body PR.
+
+### 8. Status-transisi ringkas (TERVERIFIKASI-KODE untuk jalur yang ada; USULAN untuk tambahan)
+
+| Dokumen | Dari → Ke | Pemicu | Penjaga |
+|---|---|---|---|
+| `Approval` | `pending → approved` | langkah terakhir disetujui | langkah valid, approver langkah, maker-checker kecuali super_admin, gerbang statutori Payroll `src/actions/approval.actions.ts:180-241 (gate statutori `:234-241`)` |
+| `Approval` | `pending → rejected` | `rejectStep` | idem + alasan penolakan untuk 3 tipe `src/actions/approval.actions.ts:66-70` |
+| `Approval` | `rejected → pending` (baru) | permintaan ulang | `requestApprovalIfConfigured` membuat baris baru `approval-workflow.service.ts:47`; route membuka dokumen ke `draft` `route.ts:144-156` |
+| `Quotation` | `sent → accepted` | `acceptQuotation` | status `sent`, belum kedaluwarsa, `assertApproved` |
+| `SalesInvoice` | `draft/approved → posted` | `postInvoice` | `assertApproved`, minimal 1 baris, klaim kumulatif SO |
+| `VendorPayment` | draft → posted | `confirmVendorPayment` | `assertApproved` (gate-only) |
+| `Journal` | draft → POSTED | `postJournal` | `assertApproved`, balance, period lock |
+| `Payroll` | `draft → approved → paid` | `approvePayroll`, `markPayrollPaid` | `assertApproved` + gerbang statutori `hrm.actions.ts:3060,3102` |
+| `JobChangeOrder` | `draft → menunggu_pelanggan → disetujui/ditolak` | kirim + catat persetujuan pelanggan | `assertChangeOrderTransition`, referensi persetujuan wajib (persetujuan **pelanggan**, bukan internal) |
+
+### 9. Falsifikasi QA (E137, diuji pada head implementasi kelak — BUKAN head spec ini)
+
+- **E137-1** Workflow matriks dikonfigurasi untuk satu tipe dokumen, lalu penyelesaian
+  langkah terakhir dijalankan: bila dokumen bisa lanjut tanpa `Approval.status="approved"`
+  → MERAH. Cabut `assertApproved` pada tipe itu → tes wajib MERAH; pulihkan → hijau.
+- **E137-2** Dokumen uang tanpa workflow aktif (bila BR-APR-01 diterima): transaksi lolos
+  → MERAH. Hari ini justru lolos (M2/M3) — tesnya harus menandai selisih ini eksplisit.
+- **E137-3** Pemohon menyetujui permintaannya sendiri (non `super_admin`) → MERAH; dan
+  `super_admin` boleh (perilaku hari ini) harus tetap tercatat di tes sebagai keputusan O-7.
+- **E137-4** Approver di luar `roleId`/`userId` langkah bisa menyetujui → MERAH.
+- **E137-5** Langkah dengan `conditions` (mis. `minAmount`) tetapi nominal dokumen di bawah
+  ambang tetap diwajibkan L2, atau sebaliknya nominal besar lolos L1 → MERAH **sesudah**
+  evaluasi `conditions` dibangun; sebelum itu jalankan sebagai bukti bahwa kondisi tidak
+  berpengaruh (harus MERAH saat diklaim berpengaruh).
+- **E137-6** Mengaktifkan workflow `Quotation`: `acceptQuotation` harus tetap bisa menerima
+  penawaran. Hari ini status ditimpa `approved` (M5) → tes MERAH; perbaikan wajib membuat
+  `Quotation` tidak ditimpa status (BR-APR-04).
+- **E137-7** `approvePayroll`/`confirmVendorBill`/`processPurchaseReturn` oleh orang yang
+  sama dengan pembuat dokumen → harus MERAH sesudah BR-APR-05; saat ini lolos sehingga
+  tes menandai gap, bukan pura-pura hijau.
+- **E137-8** Menghapus/menonaktifkan workflow `Journal`/`VendorPayment` wajib meninggalkan
+  jejak activity log (existing `approval.actions.ts:44-56`); hilangnya jejak = MERAH.
+
+### 10. Yang TIDAK diusulkan run ini
+
+- Tidak mengusulkan skema/tabel baru (`ApprovalWorkflow` per perusahaan = O-5, perubahan skema).
+- Tidak mengusulkan nomor urut approval per dokumen (mis. `ApprovalStep.tierName`) — mesin
+  sudah punya `name`/`stepOrder`; penamaan tampilan milik Frontend.
+- Tidak menetapkan ambang nominal sebagai angka final — semua angka di §5 berlabel `USULAN`
+  dan menunggu owner (O-4) + vonis Accountant bila menyentuh nilai uang/pajak.
+- Tidak menyentuh `docs/product/BUSINESS-RULES.md`, `KEPUTUSAN-TERVERIFIKASI.md`, atau
+  `INDEKS-ATURAN.md` (status GL-BR-009 tetap `Sebagian`, lihat §7).
+
+### 11. Antrean penerus (rekomendasi, bukan kartu baru)
+
+| Urutan | Pekerjaan | Pemilik | Gerbang |
+|---|---|---|---|
+| 1 | Putus O-1..O-7 (isi matriks final) + sediakan salinan `approval_workflows` produksi (O-9) | Owner, dibingkai Lead | spec ini merged |
+| 2 | BR-APR-01..06: fail-closed dokumen uang, peta izin tipe baru, larangan timpa status, SoD jalur langsung | Backend | sebelum matriks dinyalakan |
+| 3 | Evaluasi `conditions` (minAmount/minDiscountPercent) di jalur permintaan/penyetujuan | Backend | setelah #2 |
+| 4 | Layar konfigurasi matriks per dokumen (sudah ada `pengaturan/workflow`) + tampilan jenjang | Frontend | setelah #2 |
+| 5 | E137-1..8 atas head implementasi persis | QA | setelah #2/#3 |
+| 6 | Isi matriks dimasukkan ke DB tenant oleh admin; verifikasi ulang dari data | Owner/admin | setelah #1 |
+
+Spec ini **tidak** mengubah status GL-BR-009 dan tidak mengklaim matriks final. Butuh
+putusan owner: YA (isi matriks, O-1..O-9). Butuh vonis Accountant: hanya bila ambang
+nominal/pajak payroll dijadikan angka operasional (O-4, O-8).
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-119-S: tutup HR-BR-003 formula lembur/tarif/pembulatan (penunjukan guard live, tanpa angka baru)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane spec tertulis, TANPA kode). Basis `origin/main` `205de512e` (28 Okt 2026). Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:155` (HR-BR-003 `OPEN-keputusan` — "Keputusan formula lembur/tarif/pembulatan terbuka di sumber") + `docs/product/KEPUTUSAN-TERVERIFIKASI.md:44` (keputusan 10: "formula tertutup, parameter tahun berjalan OPEN").
