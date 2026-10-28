@@ -41400,6 +41400,190 @@ diputus. Ini dinyatakan ulang di body PR.
 Spec ini **tidak** mengubah status GL-BR-009 dan tidak mengklaim matriks final. Butuh
 putusan owner: YA (isi matriks, O-1..O-9). Butuh vonis Accountant: hanya bila ambang
 nominal/pajak payroll dijadikan angka operasional (O-4, O-8).
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-131-S: batas potongan pinjaman karyawan terhadap sisa utang dan upah (HR-BR-004 / AC-HR-003)
+
+> **Slot**: `F-2026-10-28-131-S`. Riwayat slot (jujur, jangan dihapus): spec ini
+> ditulis 2026-10-28 09:59 WIB sebagai `F-2026-10-28-130-S` setelah grep
+> `F-2026-10-28-130` di `origin/main` `5d88b1e38` = 0 baris (backlog maupun board) dan
+> 22 judul PR terbuka = 0. Pukul 10:04 WIB run Accountant menulis
+> `F-2026-10-28-130-V` di PR #1266 (commit `686cca862`, vonis toleransi lunas
+> FIN-BR-006) — nomor slot 130 bentrok walau sufiks beda, dan spec Business yang
+> bergerak (vonis Accountant sudah dirujuk baris INDEKS FIN-BR-006 di PR itu).
+> **Renumber ke `131-S` diverifikasi ulang pukul 10:28 dan 10:45 WIB** terhadap
+> `origin/main` `c51f17f3e` + seluruh head PR terbuka: grep `F-2026-10-28-131` = 0 di
+> backlog, board, maupun head PR. Seluruh `path:baris` di bawah menunjuk basis
+> `c51f17f3e` (bukan lagi `5d88b1e38`; `accounting.hook.ts` bergeser +16 karena PR #1235
+> dan `hrm.actions.ts` bergeser +55 karena guard HR-scope payroll — keduanya sudah
+> dihitung ulang). Lane: BUSINESS (dokumen saja — nol perubahan `src/`, `prisma/`).
+
+**Koreksi premis kartu di muka.** Kartu sumber menyimpulkan "tidak ada batas potongan
+(grep `maxDeduction`/`deductionCap`/`sisaPinjaman` = 0)". Penelusuran run ini
+**membantah** kesimpulan itu: penegak batas potongan sudah ada dan berlapis sejak
+F-2026-10-23-105-V dan F-2026-10-25-023-V, dengan nama fungsi yang tidak cocok kata
+kunci grep kartu (`capLoanDeductionForFrequency`, `loanDeductionForLoan`,
+`evaluateDeductionCeiling`). Yang belum ada bukan "batas"-nya, melainkan empat hal:
+(1) anggaran cicilan yang memperhitungkan upah bersih slip itu — sekarang `net` diklem
+0 tanpa aturan, (2) penyelesaian sisa pinjaman saat hubungan kerja berakhir,
+(3) jalur pelunasan tunai/langsung di luar payroll, (4) aturan urutan antar-pinjaman bila
+anggaran lebih kecil dari Σ cicilan. Empat hal itu isi spec ini; sisanya inventaris.
+
+### 1. Aktor
+
+| Aktor | Peran pada alur ini |
+|---|---|
+| HR/Admin SDM | mengajukan pinjaman (`create_loans`), mengubah pinjaman selama `pending`, menghapus pinjaman `pending/rejected` |
+| Karyawan (self-service) | mengajukan pinjaman sendiri (`request_loans` — jalur F-2026-10-25-018-S, sudah ada) |
+| Approver (workflow `EmployeeLoan`) | menyetujui → status `active` + jurnal pencairan |
+| Staf payroll | menyusun/mengubah slip (`create_payroll`), menyetujui (`approve_payroll`), membayar (`process_payroll`) |
+| BOT Accountant | vonis angka: urutan prioritas pemotongan, perlakuan sisa pinjaman PHK, akun & pajak pelunasan/write-off |
+| Sistem (hook akuntansi) | jurnal pencairan (Dr Piutang Karyawan) dan jurnal bayar gaji (Cr Piutang Karyawan sebesar potongan slip) |
+
+### 2. Inventaris TERVERIFIKASI-KODE (yang SUDAH berjalan)
+
+| # | Klaim | Bukti (`path:baris`) |
+|---|---|---|
+| T1 | Cicilan satu pinjaman dicap `min(nominal frekuensi, sisa utang)`; sisa tidak boleh negatif | `src/lib/reports/payroll-weekly.ts:173-178` |
+| T2 | Total potongan = Σ seluruh pinjaman berstatus `active`; satu pinjaman tanpa nominal frekuensi → `null` → potongan 0 (fail-closed), bukan mengarang | `src/lib/reports/payroll-weekly.ts:180-196`, `:198-205` |
+| T3 | Permintaan potongan dari klien dicap ke Σ cap pinjaman aktif (tidak bisa memotong lebih dari jadwal) | `src/lib/reports/payroll-weekly.ts:207-215`; dipakai `src/actions/hrm.actions.ts:1299-1319`, `:790` |
+| T4 | Plafon Pasal 63 ≤ 50% upah pembayaran slip (PP 36/2021 Pasal 65): pelanggaran **ditolak keras**, tidak dipangkas diam-diam | fungsi `src/lib/reports/payroll-weekly.ts:223-247`; gerbang `src/actions/hrm.actions.ts:735-754` dipanggil di susun/ubah slip `:790`, preview `:1419` (tidak menolak, hanya menandai), bulk `:2477-2487` (karyawan dilewati beralasan `plafonPotongan`), dan saat bayar `:3166-3181` |
+| T5 | Hanya pinjaman `active` yang dipotong; `pending`/`rejected` = 0 potongan | `src/actions/hrm.actions.ts:1306-1309`, `:1872`, `:2305`, `:3198-3201`; `pending → active` hanya lewat approval `src/actions/approval.actions.ts:253` |
+| T6 | Sisa utang **tidak** dapat diubah lewat form untuk pinjaman non-`pending`; bila pokok pinjaman `pending` diubah, sisa dihitung server dari delta pokok | `src/actions/hrm.actions.ts:4804-4805`, `:4838-4839`, `:4846`, `:4856` |
+| T7 | Pencairan menulis sisa = pokok, status `pending` | `src/actions/hrm.actions.ts:3353-3357` |
+| T8 | Amortisasi saat bayar: anggaran = potongan slip tersimpan (snapshot, bukan master yang bisa berubah), alokasi pinjaman tertua-dulu (`loanDate asc`), cap per sisa, sisa 0 → `paid_off` | `src/actions/hrm.actions.ts:3198-3231` |
+| T9 | Hapus pinjaman hanya `pending`/`rejected`; jurnal pencairan dibalik dalam transaksi yang sama | `src/actions/hrm.actions.ts:4475-4511` |
+| T10 | Jurnal bayar gaji mendebit bruto penuh dan mengkredit Piutang Karyawan sebesar `loanDeduction`; akun piutang wajib terkonfigurasi (gagal terang-terangan bila kosong) | `src/lib/hooks/accounting.hook.ts:2956-2988` |
+| T11 | Potongan absen (`absentDeduction`) sengaja di luar basis plafon Pasal 63 (no-work-no-pay); cicilan + denda + komponen potongan yang masuk basis | `src/lib/reports/payroll-weekly.ts:236-247` |
+| T12 | Amortisasi hanya sekali per slip: klaim status `approved → paid` atomik sebelum amortisasi/jurnal | `src/actions/hrm.actions.ts:3184-3196` |
+
+### 3. Bukti negatif (yang memang belum ada — objek spec ini)
+
+- **N1 — tidak ada anggaran cicilan berbasis upah bersih.** `net` diklem
+  `Math.max(0, gross − withheld)` (`src/actions/hrm.actions.ts:846`) sesudah `withheld`
+  dihitung penuh termasuk statutory, sementara `loanDeduction` tetap tercatat penuh.
+  Bila `statutory + potongan > bruto`, kas yang benar-benar ditahan lebih kecil daripada
+  potongan yang tercatat; jurnal bayar gaji mendebit bruto (`accounting.hook.ts:2970`)
+  dan mengkredit `net(0) + statutory + potongan` sehingga kredit melebihi debit — jurnal
+  tak seimbang di dalam transaksi yang sama dengan klaim `paid`, jadi gejalanya
+  "pembayaran gagal/rollback", bukan saldo salah. **Belum ada tes** yang membuktikan atau
+  menyanggah jalur ini; dinyatakan sebagai temuan terbuka, bukan fakta teruji.
+- **N2 — tidak ada perlakuan sisa pinjaman saat hubungan kerja berakhir.** Jalur
+  `processPayroll` (`src/actions/hrm.actions.ts:2690-2810`) dan ubah slip (`:2915-3028`)
+  hanya mengubah perhitungan PPh21 (flag `resignationFinal` / `final-resignation`) untuk
+  `employmentEndedAt` terisi. Pinjaman muncul di jalur itu **hanya** sebagai gerbang WEEKLY
+  (`hasActiveLoanWithoutWeeklyInstallment` `:2712-2717`, `:2943-2948`) dan nominal
+  potongan; grep `paid_off|writeoff|write_off|settle|pelunasan` di rentang `:2690-3028` =
+  0 baris, dan tidak ada satu pun penulisan `remainingAmount` di jalur PHK (penulis sisa
+  hanya tiga, lihat N3). Jadi sisa pinjaman karyawan berhenti tetap `active` tanpa
+  penyelesaian — bukan diklaim "tidak ada kata `employeeLoan` di jalur itu".
+- **N3 — tidak ada aksi pelunasan/angsuran tunai di luar payroll.** Penulis
+  `remainingAmount` hanya tiga: amortisasi bayar gaji (`:3223`), pencairan (`:3356`),
+  ubah pinjaman `pending` (`:4800`). Karyawan menyetor tunai → tidak ada dokumen/jejak.
+- **N4 — tidak ada aturan urutan antar-pinjaman saat anggaran < Σ cicilan.** Generasi
+  hanya menjumlah total (tanpa urutan); urutan baru muncul saat amortisasi
+  (tertua-dulu, `:3200`). Bila kelak potongan dipangkas, urutan generasi wajib sama
+  dengan urutan amortisasi — sekarang tidak dinyatakan sebagai aturan.
+- **N5 — tidak ada ledger potongan per pinjaman.** **Bukan** objek spec ini: sudah
+  dimiliki F-2026-10-25-019-S (read-model tahap 1 + kontrak ledger tahap 2). Spec ini
+  tidak menduplikasi dan tidak mengubahnya.
+
+### 4. Register aturan BR-LOAN-01..08
+
+| ID | Bunyi aturan | Label | Bukti / gerbang |
+|---|---|---|---|
+| BR-LOAN-01 | Cicilan per pinjaman ≤ sisa utang, diperiksa **saat susun slip dan saat bayar**; sisa tidak boleh negatif | TERVERIFIKASI-KODE | `payroll-weekly.ts:173-178`; `hrm.actions.ts:3213-3224` |
+| BR-LOAN-02 | Σ potongan pinjaman satu slip = Σ cicilan pinjaman berstatus `active`; pinjaman `pending`/`rejected` tidak boleh dipotong | TERVERIFIKASI-KODE | `hrm.actions.ts:1306-1309`, `:1872`, `:2305` |
+| BR-LOAN-03 | Anggaran cicilan satu slip tidak boleh membuat upah bersih negatif. Bila `Σ cicilan + statutory + potongan lain > bruto`, perilaku wajib dipilih eksplisit: (a) tolak slip berisik (status quo diperluas ke seluruh komponen), (b) pangkas cicilan sampai `net = 0` dengan sisa utang **tidak** bertambah, atau (c) sisakan selisih sebagai utang karyawan (butuh status/akun baru). Dilarang `net = 0` tanpa jejak sambil `loanDeduction` tetap penuh | USULAN + BUTUH-VONIS Accountant | N1; `hrm.actions.ts:846` |
+| BR-LOAN-04 | Plafon Pasal 63 (cicilan + denda + komponen potongan) ≤ 50% upah pembayaran slip, ditegakkan di empat titik (susun, ubah, bulk, bayar), pelanggaran ditolak keras | TERVERIFIKASI-KODE + vonis F-2026-10-23-105-V butir 6 & F-2026-10-25-023-V §5 | T4 |
+| BR-LOAN-05 | Satu slip hanya boleh mengamortisasi pinjaman sekali; dua permintaan bayar serentak tidak boleh mengurangi sisa dua kali | TERVERIFIKASI-KODE | T12 |
+| BR-LOAN-06 | Sisa utang hanya berubah lewat dokumen (bayar gaji, pencairan, ubah pokok pinjaman `pending`); dilarang mengedit sisa langsung | TERVERIFIKASI-KODE (jalur aplikasi; tidak mencegah SQL manual — itu di luar wewenang aplikasi) | T6, T9 |
+| BR-LOAN-07 | Pelunasan di luar payroll (setor tunai/potong tunjangan lain) wajib lewat dokumen beralasan: tanggal, aktor, akun kas/piutang, tautan pinjaman, jejak audit; dilarang mengurangi sisa tanpa dokumen | USULAN + BUTUH-VONIS Accountant (akun, pajak, pembulatan) | N3 |
+| BR-LOAN-08 | Saat hubungan kerja berakhir, sisa pinjaman wajib diselesaikan lewat satu jalan yang diputus Accountant: potong penuh dari upah final (perlu/tidak pengecualian plafon 50% — BUTUH-VONIS), pelunasan tunai (BR-LOAN-07), atau write-off piutang tak tertagih. Status pinjaman wajib berakhir jelas, bukan tetap `active` | USULAN + BUTUH-VONIS | N2 |
+
+### 5. Titik BUTUH-VONIS (spec ini TIDAK memutus angka/akun)
+
+**BOT Accountant**: (a) BR-LOAN-03 — pilihan (a)/(b)/(c) dan urutan prioritas pemotongan
+(statutory dulu atau cicilan dulu); (b) apakah plafon 50% Pasal 65 tetap berlaku pada
+pembayaran final PHK; (c) perlakuan akun + PPh21 atas write-off sisa pinjaman PHK;
+(d) pembulatan sen pada alokasi multi-pinjaman; (e) acc BR-LOAN-07 (akun kas yang dipakai,
+bukti setor, perlakuan bila setoran melebihi sisa).
+
+**BOT Backend**: wujud penjaga BR-LOAN-03 fail-closed **di dalam** transaksi payroll
+(bukan setelah commit), dan satu helper urutan alokasi yang dipakai bersama oleh generasi
+slip dan amortisasi (agar BR-LOAN-04/N4 tidak bercabang dua implementasi).
+
+**BOT Lead**: apakah BR-LOAN-03 diaktifkan sebagai penolakan (memperluas status quo) atau
+pemangkasan terkendali, dan apakah status `written_off` perlu ada (konstanta baru =
+keputusan Lead, fisik = Backend).
+
+### 6. Matriks transisi & penjaga
+
+| Dokumen | Dari → Ke | Pemicu | Penjaga |
+|---|---|---|---|
+| EmployeeLoan | `pending` → `active` | approve akhir workflow `EmployeeLoan` (`approval.actions.ts:244-265`) | izin approval; akun Piutang Karyawan wajib ada (`accounting.hook.ts:2984`) |
+| EmployeeLoan | `pending`/`rejected` → (hapus) | `deleteEmployeeLoan` (`hrm.actions.ts:4475`) | `delete_loans` + scope HR; jurnal pencairan dibalik dalam tx |
+| EmployeeLoan | `active` → `paid_off` | `markPayrollPaid` saat sisa ≤ 0 (`hrm.actions.ts:3224`) | klaim `approved → paid` atomik; potongan ≤ sisa |
+| EmployeeLoan | `active` → ? (PHK) | **belum ada jalur** | BR-LOAN-08 OPEN, menunggu vonis Accountant |
+| Payroll | `draft` → `approved` → `paid` | `approvePayroll` / `markPayrollPaid` | plafon Pasal 63 di kedua titik; gerbang statutori; jurnal dalam tx |
+| Payroll | `draft` → (tolak) | susun/ubah slip | `cappedLoan` (T3) + plafon (T4) + gerbang ruleset statutori |
+
+### 7. Falsifikasi QA (E-LOAN-1..8) — dijalankan atas **head implementasi persis**, bukan head spec ini
+
+- **E-LOAN-1**: slip meminta cicilan > sisa utang → nilai tersimpan > sisa, atau sisa pinjaman menjadi negatif = MERAH.
+- **E-LOAN-2**: pinjaman `pending`/`rejected` ikut terpotong pada slip mana pun = MERAH.
+- **E-LOAN-3**: dua pinjaman aktif dengan Σ cicilan > sisa salah satu → total terpotong melebihi sisa pinjaman itu = MERAH; amortisasi mengurangi pinjaman melebihi anggaran slip = MERAH.
+- **E-LOAN-4**: potongan Pasal 63 > 50% upah lolos di salah satu dari empat titik (susun, ubah, bulk, bayar) = MERAH.
+- **E-LOAN-5**: slip dengan `statutory + cicilan > bruto` → `net` 0 tetapi `loanDeduction` tetap penuh **tanpa penolakan/jejak** = MERAH; sesudah vonis BR-LOAN-03, perilaku wajib persis pilihan Accountant (menolak atau memangkas dengan sisa utang tidak bertambah).
+- **E-LOAN-6**: dua permintaan bayar untuk slip sama → sisa pinjaman turun dua kali, atau jurnal ganda = MERAH.
+- **E-LOAN-7**: sisa utang berubah tanpa dokumen (mis. lewat ubah pinjaman `active`) = MERAH.
+- **E-LOAN-8**: karyawan berhenti dengan sisa pinjaman > 0 dan pinjaman tetap `active` tanpa jejak penyelesaian = MERAH **sesudah** BR-LOAN-08 diputus; sebelum diputus uji ini dicatat OPEN, bukan lulus.
+
+### 8. Benchmark (BENCHMARK, dengan URL resmi)
+
+| Kapabilitas | Accurate Online | Zahir | ISF (kode hari ini) |
+|---|---|---|---|
+| Cicilan dipotong lewat penggajian | Ya — opsi "Pembayaran Angsuran dengan Pencatatan Gaji", kolom **Potongan Piutang Karyawan** terisi otomatis dari jadwal: https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pinjaman-karyawan/pinjaman-gaji/ | Ya — Loan payroll terintegrasi kas keluar: https://zahirerp.com/id/all-features-of-zahir-products/ | Ya — `hrm.actions.ts:3198-3231` |
+| Nominal potongan dapat diisi manual oleh operator | Ya — kolom potongan diisi manual per karyawan: https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-beban/mencatat-potongan-gaji-untuk-piutang-karyawan/ | Tidak diverifikasi run ini | **Tidak** — dicap server ke Σ cicilan aktif (`payroll-weekly.ts:207-215`); selisih ini disengaja, bukan kekurangan |
+| Batas potongan terhadap upah bersih / plafon statutori | Tidak ditemukan di halaman bantuan yang diakses run ini — **tidak terverifikasi**, jangan dikutip sebagai "Accurate tidak punya" | Tidak diverifikasi run ini | Plafon 50% Pasal 63 ada (T4); batas terhadap upah bersih **belum** (N1/BR-LOAN-03) |
+| Histori cicilan per pinjaman | Ya — tab **Histori Piutang** per karyawan: https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-beban/mencatat-potongan-gaji-untuk-piutang-karyawan/ | Tidak diverifikasi run ini | Belum — kontraknya di F-2026-10-25-019-S (jangan diduplikasi di sini) |
+
+### 9. Acceptance criteria (untuk QA, atas head implementasi)
+
+AC-LOAN-B1: Membuat slip untuk karyawan dengan satu pinjaman aktif, sisa < cicilan → `loanDeduction` tersimpan = sisa (bukan cicilan penuh), sisa setelah bayar = 0, status `paid_off`.
+AC-LOAN-B2: Dua pinjaman aktif → total potongan = Σ cicilan masing-masing (dicap sisa), amortisasi memakai anggaran slip dan urutan tertua-dulu; tidak ada pinjaman bersaldo negatif.
+AC-LOAN-B3: Meminta potongan melebihi Σ cicilan → tersimpan = Σ cicilan (cap), bukan nilai kiriman klien.
+AC-LOAN-B4: Pinjaman `pending` tidak menghasilkan potongan pada slip mana pun, termasuk slip mingguan.
+AC-LOAN-B5: Pelanggaran plafon 50% ditolak pada susun/ubah/bulk/bayar dengan pesan eksplisit; nol mutasi (tidak ada status `paid`, tidak ada amortisasi, tidak ada jurnal).
+AC-LOAN-F1: Bila `statutory + cicilan > bruto` — perilaku sesuai BR-LOAN-03 yang diputus; dilarang net 0 tanpa jejak.
+AC-LOAN-F2: PHK dengan sisa pinjaman — perilaku sesuai BR-LOAN-08; sebelum diputus, tidak boleh ada klaim "selesai".
+
+### 10. Backlog turunan (tanpa kartu baru — tindak lanjut di komentar kartu `t_1849ba04`)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-131-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) | Vonis BR-LOAN-03/07/08 | Accountant | spec ini merged |
+| (tanpa ID baru) | Penjaga anggaran cicilan vs upah bersih + helper urutan alokasi tunggal | Backend | vonis BR-LOAN-03 |
+| (tanpa ID baru) | Penyelesaian pinjaman saat PHK (dokumen + status) | Backend + Frontend | vonis BR-LOAN-08 |
+| (tanpa ID baru) | E-LOAN-1..8 | QA | head implementasi, bukan head spec |
+
+ID spec ini **F-2026-10-28-131-S** (basis `origin/main` `5e4746216`). Pemilik berikutnya:
+BOT Lead (merge PR docs ini; putus BR-LOAN-03 aktif-penolakan vs pemangkasan + konstanta
+`written_off`) → BOT Accountant (vonis BR-LOAN-03(a-e), plafon pada PHK, akun write-off,
+pembulatan sen) → BOT Backend (penjaga fail-closed dalam transaksi payroll, satu helper
+urutan) → BOT Frontend (dokumen pelunasan + status) → BOT QA (E-LOAN-1..8 atas head
+implementasi). Business tidak merge. Dokumen ini **tidak** mengubah kode, skema, atau
+migrasi apa pun; koreksi status indeks ada di §11.
+
+### 11. Koreksi status indeks (anti-underclaim)
+
+Dua baris `docs/product/INDEKS-ATURAN.md` menyebut "belum ditelusur" padahal penegaknya
+tertunjuk di repo — pola temuan yang sama dengan koreksi PUR-BR-010 (temuan CEO-riset
+2026-10-28). PR docs ini mengoreksi keduanya menjadi bukti konkret; status tetap
+**Sebagian** karena BR-LOAN-03/07/08 masih OPEN, bukan karena penegaknya tidak ada:
+`HR-BR-004` (baris 156) dan `AC-HR-003` (baris 224).
+
+---
+
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-119-S: tutup HR-BR-003 formula lembur/tarif/pembulatan (penunjukan guard live, tanpa angka baru)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane spec tertulis, TANPA kode). Basis `origin/main` `205de512e` (28 Okt 2026). Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:155` (HR-BR-003 `OPEN-keputusan` — "Keputusan formula lembur/tarif/pembulatan terbuka di sumber") + `docs/product/KEPUTUSAN-TERVERIFIKASI.md:44` (keputusan 10: "formula tertutup, parameter tahun berjalan OPEN").
