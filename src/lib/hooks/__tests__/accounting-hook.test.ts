@@ -2272,13 +2272,39 @@ describe("onPayrollPaid", () => {
     expect(mocks.payrollFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
-  it("returns early if journal already exists (idempotency)", async () => {
+  it("menolak posting ganda saat jurnal aktif sudah ada (fail-closed, bukan senyap)", async () => {
+    // HR-BR-005 E-HRCR-6 + 135-V E135-5: jurnal AKTIF = tolak berisik;
+    // console.info konteks dicatat sebelum throw (guard idempotency-logging).
     mocks.payrollFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       netSalary: 1000,
     });
-    mocks.journalFindFirst.mockResolvedValue({ id: 7 });
-    await onPayrollPaid(1);
+    mocks.journalFindFirst.mockResolvedValue({ id: 7, status: "POSTED" });
+    await expect(onPayrollPaid(1)).rejects.toThrow("posting ganda ditolak");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("E-HRCR-6b: re-post slip asal sesudah reversal DITOLAK berisik (vonis 135-V §5.2b)", async () => {
+    // Vonis 135-V §5.2b: slip koreksi sah selalu memakai referenceId BARU
+    // (dokumen baru), bukan payrollId asal. Histori REVERSED atas payrollId
+    // asal = bukti reversal sudah terjadi -> re-post asal ditolak berisik
+    // (bukan console.info senyap = MERAH), menyebut nomor dokumen tanpa
+    // nominal gaji (P8 spec). Slip koreksi baru tidak tersentuh penjaga ini
+    // karena referenceId-nya berbeda.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-REV-1",
+    });
+    mocks.journalFindFirst.mockImplementation(async (args: any) =>
+      args?.where?.status === "REVERSED" ? { id: 7 } : null,
+    );
+    await expect(onPayrollPaid(1)).rejects.toThrow(/PAY-REV-1/);
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
@@ -2287,7 +2313,9 @@ describe("onPayrollPaid", () => {
     // REVERSED memblokir re-post secara SENYAP. Saringan aktif
     // (`status: { not: "REVERSED" }`) membuka jalan re-post yang benar bila
     // reversal Payroll lahir kelak (pola SalesInvoice E127-8). Simulasi DB
-    // jujur: baris lama REVERSED hanya lolos bila filter TIDAK mengecualikannya.
+    // jujur TANPA histori REVERSED: kedua query (idempotensi aktif + cek
+    // histori E-HRCR-6b) mengembalikan null -> create jalan. Kasus DENGAN
+    // histori REVERSED dibuktikan di E-HRCR-6b (ditolak berisik, vonis 135-V).
     mocks.payrollFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       netSalary: 1000,
@@ -2298,10 +2326,7 @@ describe("onPayrollPaid", () => {
       paymentDate: new Date(),
       documentNo: "PAY-1",
     });
-    mocks.journalFindFirst.mockImplementation(async (args: any) => {
-      if (args?.where?.status?.not === "REVERSED") return null;
-      return { id: 7, status: "REVERSED" };
-    });
+    mocks.journalFindFirst.mockResolvedValue(null);
     await onPayrollPaid(1);
     expect(mocks.journalFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2311,6 +2336,24 @@ describe("onPayrollPaid", () => {
         }),
       }),
     );
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("E-HRCR-6: slip koreksi baru (referenceId BARU) tetap bisa posting sesudah reversal asal", async () => {
+    // Jalur sah correctPaidPayroll: referenceId BARU (id slip koreksi) —
+    // jurnal asal REVERSED = histori, bukan pemblokir.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 2,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-2",
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(2);
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
   });
 

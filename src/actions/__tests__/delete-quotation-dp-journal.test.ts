@@ -15,6 +15,8 @@ const deleteJournalByReferenceTxMock = vi.fn()
 
 const quotationFindUniqueOrThrowMock = vi.fn()
 
+const txQuotationFindUniqueOrThrowMock = vi.fn()
+
 const txSalesOrderFindManyMock = vi.fn()
 const txSalesInvoiceFindManyMock = vi.fn()
 const txSalesPaymentDeleteManyMock = vi.fn()
@@ -83,7 +85,7 @@ function wireTransaction() {
     downPayment: { findMany: txDownPaymentFindManyMock, deleteMany: txDownPaymentDeleteManyMock },
     quotationSection: { findMany: txQuotationSectionFindManyMock, deleteMany: txQuotationSectionDeleteManyMock },
     quotationItem: { deleteMany: txQuotationItemDeleteManyMock },
-    quotation: { delete: txQuotationDeleteMock },
+    quotation: { delete: txQuotationDeleteMock, findUniqueOrThrow: txQuotationFindUniqueOrThrowMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -91,7 +93,7 @@ function wireTransaction() {
 beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, transactionMock,
-    deleteJournalByReferenceTxMock, quotationFindUniqueOrThrowMock,
+    deleteJournalByReferenceTxMock, quotationFindUniqueOrThrowMock, txQuotationFindUniqueOrThrowMock,
     txSalesOrderFindManyMock, txSalesInvoiceFindManyMock, txSalesPaymentDeleteManyMock,
     txSalesInvoiceItemDeleteManyMock, txSalesInvoiceDeleteManyMock, txDeliveryOrderDeleteManyMock,
     txSalesOrderItemDeleteManyMock, txSalesOrderDeleteManyMock, txWorkOrderFindManyMock,
@@ -102,6 +104,7 @@ beforeEach(() => {
 
   requirePermissionMock.mockResolvedValue({ id: 1 })
   quotationFindUniqueOrThrowMock.mockResolvedValue({ id: 5 })
+  txQuotationFindUniqueOrThrowMock.mockResolvedValue({ id: 5, status: "draft" })
   txSalesOrderFindManyMock.mockResolvedValue([])
   txSalesInvoiceFindManyMock.mockResolvedValue([])
   txWorkOrderFindManyMock.mockResolvedValue([])

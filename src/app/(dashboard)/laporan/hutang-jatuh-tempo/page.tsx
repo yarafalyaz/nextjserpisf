@@ -4,10 +4,14 @@ import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import { AgingReportView, buildAgingRows } from "@/components/reports/aging-report-view"
+import { HutangJatuhTempoNotice } from "./_components/hutang-jatuh-tempo-notice"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Hutang Jatuh Tempo" }
+
+const NARASI_JATUH_TEMPO =
+  "Laporan Hutang Jatuh Tempo mengelompokkan hutang usaha yang sudah memiliki tanggal jatuh tempo berdasarkan umurnya. Tagihan tanpa tanggal jatuh tempo tidak termasuk di sini — lihat Total Hutang untuk seluruh kewajiban."
 
 export default async function AgingPayablesPage() {
   await requirePermission('view_reports')
@@ -32,14 +36,16 @@ export default async function AgingPayablesPage() {
   )
 
   return (
-    <AgingReportView
+    <>
+      <HutangJatuhTempoNotice />
+      <AgingReportView
       rows={rows}
       texts={{
         pageTitle: "Hutang Jatuh Tempo",
         exportTitle: "Hutang_Jatuh_Tempo",
         pdfSlug: "hutang-jatuh-tempo",
         letterheadSubtitle: "Umur Utang",
-        narration: "Laporan Utang Jatuh Tempo mengelompokkan utang usaha berdasarkan umur jatuh temponya. Informasi ini penting untuk mengelola jadwal pembayaran, menjaga hubungan baik dengan pemasok, dan mengoptimalkan arus kas perusahaan.",
+        narration: NARASI_JATUH_TEMPO,
         kpiLabel: "Total Hutang",
         summaryTitle: "Ringkasan Umur Hutang",
         chartTitle: "Grafik Umur Hutang",
@@ -51,6 +57,7 @@ export default async function AgingPayablesPage() {
         emptyText: "Tidak ada hutang jatuh tempo",
         outstandingClassName: "font-semibold text-danger",
       }}
-    />
+      />
+    </>
   )
 }
