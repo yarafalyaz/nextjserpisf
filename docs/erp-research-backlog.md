@@ -43559,3 +43559,147 @@ Kriteria TERIMA: tiap baris WAJIB punya ≥1 workflow aktif + ≥1 langkah beris
 - INDEKS `WO-BR-003` TETAP `Sebagian` + GL-BR-009 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E152). Perubahan status = milik Lead/QA sesudah implementasi + E152 hijau.
 
 ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003 + Q owner; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: OWNER (jawab Q-AVM-1..7 via Lead) → BOT Lead (vonis Q-AVM-2/3/4 + Q-AVM-6/7 masuk-mesin + merge PR docs ini; WO-BR-003/GL-BR-009 tetap `Sebagian`) → BOT Accountant (Q150-1/2/3 SAJA; isi matriks BUKAN vonis) → BOT Backend (kerja mesin sesudah putusan) → BOT Frontend (UI matriks sesudah kontrak) → BOT QA (E152 atas head persis). Butuh putusan accountant: TIDAK untuk isi matriks; YA TERBATAS hanya Q150-1/2/3 (akun/selisih/periode rantai jam kerja).
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-146-S: matriks kanonik approval per dokumen + verifikasi produksi (OPEN-keputusan #4, keputusan 9)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_b94d9bbf`. Basis `origin/main` `30ec1de63` (28 Okt 2026 15:13 WIB). Worktree `/private/tmp/business-146s-apprmatrix`, branch `hermes/business-146s-apprmatrix`.
+**Verifikasi ID:** grep `F-2026-10-28-146` di backlog + board `origin/main` = 0/0; 0 hit di 24 head PR terbuka (run ini). E146 = 0 di main + PR terbuka. BR-AMX- = 0 di main + PR terbuka (keluarga baru, mulai 01). BR-APR-07 bebas (127-S berhenti di 06). **146-S/E146/BR-AMX bebas.**
+**Bukan duplikat:** spec 127-S (PR #1256, matriks + usulan BR-APR-01..06 + O-1..O-9 + E137) = inventaris jalur aktual + usulan bentuk matriks. Spec 146-S ini = PAKET PUTUSAN: matriks kanonik per baris (WAJIB/OPSIONAL + tingkat + approver + ambang) untuk diputus owner YA/TIDAK, + kueri verifikasi dari data produksi, + register BR-AMX-01..06 + Q-AMX-1..4 + E146. Tidak mengulang M1-M12/E137 (dirujuk, bukan disalin). GL-BR-009 tetap `Sebagian` — spec ini tidak mengubah status INDEKS (isi matriks = data, bukan kode).
+
+Benchmark resmi (akses 28 Okt 2026):
+- Accurate — aktifkan persetujuan per transaksi (Preferensi → Persetujuan): https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/
+- Accurate — syarat nilai minimal + minimal diskon, logika DAN: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/persetujuan-diskon-penjualan/
+- Accurate — atur penyetuju transaksi (pembuat + cabang + syarat lolos): https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/penyetuju-transaksi/atur-penyetuju-transaksi/
+- Accurate — persetujuan massal: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/approval/cara-melakukan-persetujuan-secara-massal/
+- Zahir — template + tier approval matrix keuangan (0,5%/2%/5%, pengaju≠penyetuju≠pembayar, delegasi, tinjau tahunan): https://www.zahironline.com/approval-matrix-keuangan/
+
+## Kanonik matriks approval per dokumen + verifikasi produksi — draf Business
+
+Usulan matriks per `modelType` (WAJIB/OPSIONAL, tingkat, approver) + kueri verifikasi dari data produksi.
+Sumber kartu: KEPUTUSAN-TERVERIFIKASI.md OPEN #4 (keputusan 9). Spec 127-S = inventaris jalur + usulan.
+Spec 146-S ini = **paket putusan owner**: YA/TIDAK per baris + ambang per tingkat + blokir-vs-observasi + cara baca dari produksi.
+Fakta mesin di bawah TERVERIFIKASI-KODE (basis origin/main 30ec1de63, WIB 28 Okt 2026).
+
+### Mekanisme (TERVERIFIKASI-KODE, ringkas — detail di 127-S M1-M12)
+
+- Mesin generik: `ApprovalWorkflow` per `modelType` + `ApprovalWorkflowStep` (`roleId`/`userId`/`conditions`) + `Approval` + `ApprovalHistory` (`prisma/schema.prisma:5320-5399`).
+- Tanpa workflow aktif = no-op (`requestApprovalIfConfigured` return false bila tidak ada baris aktif: `src/lib/services/approval-workflow.service.ts:33-39`).
+- Tanpa baris `Approval` = gerbang lolos (fail-OPEN hari ini: `assertApproved` return bila `!approval`, `:58-64`).
+- Gate-only (status dokumen TIDAK ditimpa): hanya `Journal` + `VendorPayment` (`src/actions/approval.actions.ts:37`).
+- Seed bawaan hanya 2 workflow: `APR-JRN` (Journal) + `APR-VPAY` (VendorPayment), 1 langkah role finance, idempoten tidak menimpa tenant (`prisma/seed.ts:160-193`).
+- `conditions` langkah disimpan tapi TAK PERNAH dibaca jalur penegakan (satu-satunya pembaca informatif, tidak menahan dokumen).
+- Izin approve per tipe terpusat 12 tipe (`src/lib/auth/approval-permissions.ts:16-29`); di luar peta = hanya `approve_workflows` (praktis admin).
+- UI kelola: `pengaturan/workflow` (daftar + tambah + detail `[slug]`); perubahan gerbang uang tercatat (`logMoneyGateChange`, `approval.actions.ts:44-56,610-620,667`).
+
+### Matriks kanonik usulan (USULAN — tiap sel butuh vonis owner)
+
+Aturan baca: WAJIB = owner setuju dokumen ini tidak boleh lanjut tanpa approval (butuh fail-closed bila Backend menutup M2/M3, BR-AMX-01).
+OPSIONAL = boleh jalan tanpa workflow; bila workflow dikonfigurasi, gerbang berlaku.
+Kondisi nominal hari ini BELUM dieksekusi mesin — kolom ambang = komitmen putusan, penegakan sesudah Backend evaluasi `conditions`.
+
+| # | Dokumen (`modelType`) | Sifat usulan | Tingkat + approver usulan | Ambang usulan | Gerbang hari ini | Catatan kelayakan |
+|---|---|---|---|---|---|---|
+| AM-01 | `Journal` (manual) | WAJIB | L1 finance; L2 admin bila nominal > Rp10 jt | Rp10 jt | gate-only, seed 1 langkah finance | naikkan seed jadi 2 langkah butuh migrasi seed; sampai itu, L2 = workflow tenant manual |
+| AM-02 | `VendorPayment` | WAJIB | L1 finance; L2 admin bila > Rp25 jt | Rp25 jt | gate-only, seed 1 langkah finance | idem AM-01 |
+| AM-03 | `VendorBill` | WAJIB | L1 `approve_vendor_bills` (finance) | tanpa ambang | `confirmVendorBill` menolak draft-tanpa-approve; TANPA SoD pembuat-vs-penyetuju | SoD termurah: tiru pola `SalesReturn` sebelum wajib |
+| AM-04 | `Expense`/klaim | WAJIB | L1 `approve_expenses` (finance) | tanpa ambang | `approveExpense` + gerbang bukti/nominal reimbursement | klaim reimbursement sudah bergerbang bukti — pertahankan |
+| AM-05 | `Payroll` | WAJIB | L1 finance; L2 admin | tanpa ambang | `approvePayroll` cukup `process_payroll` (pembuat = penyetuju bila workflow mati) | risiko TERTINGGI: butuh izin `approve_payroll` terpisah + `getHrScope`; gaji di bawah proteksi hr-scope |
+| AM-06 | `SalesInvoice` | WAJIB | L1 `approve_sales_invoices` (finance); L2 admin bila > Rp100 jt | Rp100 jt | `postInvoice` terima `draft`/`approved` — aman dari macet status | faktur di atas ambang tanpa L2 = disinilah piutang besar lolos |
+| AM-07 | `PurchaseOrder` | WAJIB | L1 `approve_purchase_orders`; L2 finance bila > Rp50 jt | Rp50 jt | tanpa `assertApproved` di jalur proses — status hanya via penyelesaian workflow | tanpa gerbang proses = wajib hari ini observasi; fail-closed butuh kerja Backend |
+| AM-08 | `PurchaseRequest` | WAJIB | L1 `approve_purchase_requests` (usul: kepala_bengkel) | tanpa ambang | idem AM-07 | pemegang izin hari ini hanya admin — pindahkan ke kepala_bengkel = putusan Lead |
+| AM-09 | `StockAdjustment` | WAJIB | L1 usul kepala_bengkel; L2 finance bila selisih > Rp5 jt | Rp5 jt | `processStockAdjustment` gerbang; izin approve BELUM ADA (jatuh ke `approve_workflows`) | butuh key izin baru = putusan Lead (BR-APR-03 di 127-S) |
+| AM-10 | `EmployeeLoan` | WAJIB | L1 admin, L2 finance bila > Rp10 jt | Rp10 jt | penyelesaian menulis `active` + pencairan jurnal | pencairan tanpa L2 = kas keluar tanpa cek kedua |
+| AM-11 | `Quotation` | OPSIONAL | L1 `approve_quotations` bila diskon > 10% ATAU > Rp50 jt | 10% / Rp50 jt | BERBAHAYA: penyelesaian timpa `approved`, `acceptQuotation` hanya terima `sent` → macet | JANGAN wajibkan sebelum Backend masukkan Quotation ke gate-only (BR-APR-04 di 127-S) |
+| AM-12 | `LeaveRequest` | WAJIB | L1 kepala_bengkel/ga | tanpa ambang | penyelesaian workflow; izin sudah tepat | pertahankan apa adanya |
+| AM-13 | `OvertimeRequest` | WAJIB | L1 kepala_bengkel (2 tahap: supervisor → approve) | tanpa ambang | `approveOvertime` | pertahankan; lembur mengikat payroll |
+| AM-14 | `Project` | OPSIONAL | L1 izin baru usul admin | tanpa ambang | `updateProject` gerbang; status default `active` DITIMPA `approved` | putuskan arti status dulu; jangan wajibkan sebelum itu |
+| AM-15 | `Asset` (disposal) | WAJIB | L1 finance; L2 admin bila nilai buku > Rp10 jt | Rp10 jt | `disposeAsset` gerbang; izin approve BELUM ADA | butuh key izin baru = putusan Lead |
+| AM-16 | `YearEndClosing` | WAJIB | L1 finance; L2 admin | tanpa ambang | `postYearEndClosing`; referensi tahun fiskal bukan id dokumen | audit tahunan tanpa dua pasang mata = temuan pasti |
+| AM-17 | `SalesReturn` | WAJIB | L1 `approve_sales_returns` + SoD pembuat≠penyetuju | tanpa ambang | SoD live | pola acuan SoD untuk AM-03/AM-05 |
+| AM-18 | `PurchaseReturn` | WAJIB | L1 `approve_purchase_returns` + SoD (gap hari ini) | tanpa ambang | TANPA cek pembuat | tutup SoD dulu, lalu wajibkan |
+| AM-19 | `GoodsReceipt` (verify) | OPSIONAL | L1 `verify_goods_receipts` | tanpa ambang | satu tingkat, tanpa cek pembuat | penerima verifikasi sendiri — observasi; wajibkan bila nilai penerimaan dimasukkan ambang |
+| AM-20 | `MaterialRequest` | OPSIONAL | L1 `approve_material_requests` + SoD live | tanpa ambang | SoD live | pertahankan |
+| AM-21 | `SalesOrder` manual | OPSIONAL | — (tanpa workflow) | — | TANPA approval; satu-satunya gerbang = `assertApproved(Quotation)` bila dari konversi | SO manual tanpa quotation = loop tertutup tanpa cek; owner putuskan wajib/tidak |
+| AM-22 | `DeliveryOrder` | OPSIONAL | — (tanpa workflow) | — | TANPA approval | barang keluar tanpa cek kedua; owner putuskan |
+| AM-23 | `InventoryTransfer` | OPSIONAL | — (tanpa workflow) | — | TANPA gerbang; kekurangan diselesaikan via adjustment ber-approval | pertahankan observasi kecuali pola selisih gudang berulang |
+| AM-24 | `JobChangeOrder` | OPSIONAL | persetujuan PELANGGAN tercatat (bukan internal) | — | teks bebas oleh pemegang `edit_work_orders` | tambah tingkat internal = ubah kontrak kerja; owner putuskan |
+
+### Cara verifikasi dari data produksi (untuk owner/DBA — BUKAN dari repo)
+
+Repo tidak memuat isi matriks (keputusan 9 eksplisit). Salin bacaan produksi:
+
+```sql
+-- 1. Workflow aktif per dokumen (inilah MATRIKS BERLAKU, bukan usulan di atas)
+SELECT model_type, name, code, priority, is_active
+FROM approval_workflows WHERE deleted_at IS NULL ORDER BY model_type, priority DESC;
+-- 2. Tingkat + approver per workflow (role_id → roles.name; user_id → users.email; NULL keduanya = gerbang izin saja)
+SELECT w.model_type, w.name, s.step_order, r.name AS role, u.email AS user, s.conditions
+FROM approval_workflow_steps s JOIN approval_workflows w ON w.id = s.workflow_id
+LEFT JOIN roles r ON r.id = s.role_id LEFT JOIN users u ON u.id = s.user_id
+WHERE w.deleted_at IS NULL AND w.is_active = 1 ORDER BY w.model_type, s.step_order;
+-- 3. Jejak perubahan gerbang uang (audit siapa mematikan gerbang Journal/VendorPayment)
+SELECT * FROM activity_logs WHERE model = 'ApprovalWorkflow'
+AND description LIKE '%gerbang uang%' ORDER BY id DESC LIMIT 50;
+-- 4. Dokumen lolos tanpa approval (indikasi fail-open M2/M3 — jalankan per modelType via reference_type)
+SELECT reference_type, COUNT(*) FROM approvals GROUP BY reference_type;
+```
+
+Kriteria TERIMA matriks produksi: tiap baris WAJIB di atas punya ≥1 workflow aktif + ≥1 langkah dengan role/user terisi + pemegang role bukan pembuat dokumen yang sama (cek silang `requested_by` vs approver di `approval_histories`).
+Kriteria TOLAK: workflow aktif tanpa langkah; langkah tanpa role DAN user (jatuh ke `approve_workflows` = admin saja); approver = requester berulang (SoD mati).
+
+### Business rules register (keluarga baru BR-AMX — BR-APR-01..06 milik 127-S, tidak diulang)
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-AMX-01 | Baris WAJIB tanpa workflow aktif = transaksi DITOLAK (fail-closed); pesan menyebut nama workflow yang harus dibuat | USULAN (perlu kerja Backend + putusan Lead) | M2/M3 fail-open live; Accurate BENCHMARK (centang Preferensi→Persetujuan per transaksi) |
+| BR-AMX-02 | Ambang nominal hanya menggerakkan kewajiban JENJANG (L2), bukan kewajiban approval itu sendiri | USULAN | Zahir BENCHMARK tier 0,5%/2%/5% biaya bulanan; Accurate logika DAN nilai+diskon |
+| BR-AMX-03 | Matriks produksi dibaca dari `approval_workflows` + steps (kueri § di atas), bukan dari repo/seed | USULAN (cermin keputusan 9) | seed idempoten tidak menimpa tenant |
+| BR-AMX-04 | Perubahan tier/ambang ditinjau berkala (tahunan/bareng anggaran) + ada aturan delegasi saat penyetuju cuti | USULAN | Zahir BENCHMARK (tinjau tahunan + delegasi) |
+| BR-AMX-05 | Pengaju ≠ penyetuju ≠ pembayar untuk baris WAJIB uang; tim kecil pakai kontrol pengganti tercatat (review owner mingguan + dual-otorisasi bank) | USULAN | Zahir BENCHMARK (3 peran beda; kompensasi tim kecil) |
+| BR-AMX-06 | Diskon khusus, retur, penghapusan piutang = pengurang nilai terima → otorisasi setara uang keluar | USULAN | Zahir BENCHMARK template (diskon/retur/write-off) |
+| Q-AMX-1 | Daftar final WAJIB vs OPSIONAL + ambang per tingkat (angka owner)? | BUTUH-VONIS (owner) | — |
+| Q-AMX-2 | `super_admin` boleh setujui permintaannya sendiri (perilaku M6 hari ini) dipertahankan/diubah? | BUTUH-VONIS (Lead + owner) | O-7 di 127-S |
+| Q-AMX-3 | Izin `approve_payroll` terpisah + `getHrScope` pada jalur workflow Payroll? | BUTUH-VONIS (Lead; gaji = data dilindungi) | O-8 di 127-S |
+| Q-AMX-4 | Fail-closed (BR-AMX-01) berlaku untuk semua WAJIB sekaligus atau bertahap per dokumen? | BUTUH-VONIS (Lead; ubah perilaku inti) | O-6 di 127-S |
+
+### Feature matrix Accurate / Zahir / ISF
+
+| Fitur | Accurate | Zahir | ISF (run ini) |
+|---|---|---|---|
+| Aktifkan approval per jenis transaksi | Preferensi → Persetujuan, centang per transaksi (penjualan/pembelian/persediaan/kas-bank-buku-besar-aset): https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ | Hak akses pengguna per peran; matriks dijalankan di sistem + maker-checker bank | Mesin generik + UI `pengaturan/workflow`; seed hanya Journal/VendorPayment |
+| Syarat nominal + diskon | Syarat Nilai Minimal (wajib) + Minimal Diskon (opsional), logika DAN: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/persetujuan-diskon-penjualan/ | Tier dari % biaya bulanan (0,5%/2%/5%), ≤4 tier | `conditions` disimpan tapi tidak dieksekusi (gap) |
+| Penyetuju + syarat lolos | Penyetuju Transaksi: pembuat + cabang + disetujui-oleh + syarat (satu/dua/semua setuju): https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/penyetuju-transaksi/atur-penyetuju-transaksi/ | Template pengaju/penyetuju/pelaksana + dokumen wajib per jenis; pengaju≠penyetuju≠pembayar | langkah `roleId`/`userId`; maker-checker kecuali super_admin; tanpa syarat lolos N-dari-M |
+| Approval massal | Perusahaan → Persetujuan, centang banyak + Proses: https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/approval/cara-melakukan-persetujuan-secara-massal/ | N/A (prosedur tinjau berkala + delegasi cuti): https://www.zahironline.com/approval-matrix-keuangan/ | N/A — tidak ditemukan jalur massal di kode (belum diverifikasi negatif penuh) |
+| Matriks sebagai dokumen kebijakan | N/A di help (konfigurasi per transaksi) | Template + cara turunkan tier + 6 langkah penerapan: https://www.zahironline.com/approval-matrix-keuangan/ | Spec ini (146-S) = paket putusan; matriks berlaku = data produksi |
+
+### Status-transition matrix (TERVERIFIKASI-KODE — sama mesin dengan 127-S §8, tidak diulang)
+
+Tambahan untuk paket putusan ini: `Approval` `pending → approved` (langkah terakhir, guard langkah+approver+maker-checker+gerbang statutori Payroll: `approval.actions.ts:180-241`) / `pending → rejected` (`rejectStep` + alasan wajib 3 tipe: `:66-70`) / `rejected → pending` (permintaan baru: `approval-workflow.service.ts:47` + route buka dokumen ke `draft`).
+Q-AMX paket ini TIDAK mengubah transisi — hanya menetapkan isi (siapa/berapa tingkat) yang mengalir di atasnya.
+
+### Acceptance criteria + edge cases (untuk QA, atas head implementasi/konfigurasi persis BUKAN head spec ini)
+
+- E146-1: tiap baris WAJIB punya workflow aktif + langkah berisi (kueri § verifikasi). Baris WAJIB tanpa workflow = MERAH bila BR-AMX-01 diterima; sebelum itu = catat OBSERVASI, bukan MERAH.
+- E146-2: langkah tanpa `roleId` DAN `userId` pada baris WAJIB = MERAH (persetujuan jatuh ke admin saja).
+- E146-3: `requested_by` = approver langkah yang sama pada dokumen uang (non super_admin) = MERAH (SoD mati).
+- E146-4: kondisi nominal (`conditions.minAmount`) diisi tetapi dokumen di bawah ambang tetap menuntut L2, atau di atas ambang lolos L1 = MERAH (sesudah evaluasi conditions dibangun; sebelum itu jalankan sebagai bukti kondisi tak berpengaruh).
+- E146-5: nonaktifkan/hapus workflow Journal/VendorPayment tanpa jejak activity log gerbang uang = MERAH (`logMoneyGateChange` live).
+- E146-6: mengaktifkan workflow `Quotation` lalu `acceptQuotation` macet (status tertimpa) = MERAH (pagar BR-APR-04 di 127-S).
+- Edge: `super_admin` self-approve tercatat sebagai keputusan Q-AMX-2, bukan lolos diam-diam; delegasi cuti tercatat siapa pengganti + batas waktu; perubahan tier/ambang tanpa tinjau tahunan = temuan observasi, bukan blokir rilis.
+
+### Backlog turunan (BUKAN kartu baru run ini)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-146-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) evaluasi `conditions` di jalur minta/setuju (penegakan ambang L2) | Backend | spec ini merged + vonis Q-AMX-1 (ambang final owner) |
+| (tanpa ID baru) `Quotation` masuk gate-only + key izin baru (StockAdjustment/Project/Asset/Payroll/YearEndClosing) + SoD PurchaseReturn/VendorBill | Backend | spec ini merged + putusan Lead (BR-APR-03/04/05 di 127-S) |
+| (tanpa ID baru) izin `approve_payroll` terpisah + `getHrScope` jalur workflow | Backend | vonis Q-AMX-3 (Lead) |
+| (tanpa ID baru) fail-closed baris WAJIB (BR-AMX-01) bertahap/serentak | Backend | vonis Q-AMX-4 (Lead) + Q-AMX-1 (ambang owner) |
+| (tanpa ID baru) input matriks dari produksi + flag WAJIB/ambang per baris (UI `pengaturan/workflow`) | Frontend | kontrak Backend merged |
+| (tanpa ID baru) E146 head persis | QA | konfigurasi produksi dibaca + implementasi merged |
+| (tanpa ID baru) nilai status GL-BR-009 `Sebagian` → `Terpasang` sesudah matriks produksi live + E146 | Lead/QA | matriks produksi + E146 |
+
+ID spec ini **F-2026-10-28-146-S** (matriks kanonik AM-01..AM-24 + kueri verifikasi produksi + BR-AMX-01..06 + Q-AMX-1..4 + E146; basis `origin/main` `30ec1de63`). Pemilik berikutnya: OWNER (putus YA/TIDAK per baris AM + angka ambang + Q-AMX-1..4 via Lead) → BOT Lead (vonis Q-AMX-2/3/4 + urutan fail-closed; merge PR docs ini; GL-BR-009 tetap `Sebagian`) → BOT Backend (conditions + gate-only Quotation + key izin + SoD + fail-closed) → BOT Frontend (UI matriks + flag WAJIB) → BOT QA (E146-1..6 atas head persis). Butuh putusan accountant: TIDAK — tidak ada akun/jurnal/pajak di spec ini (Payroll hanya sisi izin/scope, angka gaji tidak dibahas).
