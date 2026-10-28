@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
 import { getActivePaymentMethods } from "@/lib/services/method.service";
 
 import type { Metadata } from "next";
@@ -31,6 +33,33 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // GL-BR-003 K1: pembayaran reversed = histori read-only (server tolak
+  // edit reversed fail-closed). Jangan render form — tampilkan notice +
+  // tautan kembali, bukan aksi yang pasti ditolak.
+  if (data.status === "reversed") {
+    return (
+      <div className="flex flex-col gap-6">
+        <AppBreadcrumbs
+          items={[
+            { label: "Dasbor", href: "/" },
+            { label: "Pembayaran", href: "/penjualan/pembayaran" },
+            { label: "Ubah" },
+          ]}
+        />
+        <PostedLockNotice
+          documentLabel={`Pembayaran ${data.documentNo}`}
+          correctionLabel="pembayaran pengganti baru"
+        />
+        <Link
+          href="/penjualan/pembayaran"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Kembali ke daftar pembayaran
+        </Link>
+      </div>
+    );
+  }
 
   const payment = {
     id: data.id,
