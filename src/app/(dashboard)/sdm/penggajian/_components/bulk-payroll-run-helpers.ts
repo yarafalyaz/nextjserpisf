@@ -24,6 +24,7 @@ export const PAYROLL_RUN_SKIP_REASON_ORDER: readonly PayrollRunSkipReason[] = [
   "plafonPotongan",
   "irisan",
   "berhenti",
+  "cakupan",
 ]
 
 export interface PayrollRunSkipLine {

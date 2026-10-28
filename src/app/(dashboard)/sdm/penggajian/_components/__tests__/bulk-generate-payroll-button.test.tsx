@@ -105,7 +105,7 @@ beforeEach(() => {
     success: true,
     count: 3,
     skippedTotal: 0,
-    skippedByReason: { frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0 },
+    skippedByReason: { frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0 },
   })
 })
 
@@ -145,6 +145,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
       plafonPotongan: 6,
       irisan: 0,
       berhenti: 3,
+      cakupan: 0,
     })
     expect(lines).toEqual([
       { reason: "frekuensiLain", label: "Frekuensi bayar berbeda", count: 2 },
@@ -162,7 +163,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
       { reason: "berhenti", label: "Karyawan berhenti — di luar populasi massal", count: 3 },
     ])
     expect(
-      payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0 }),
+      payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0 }),
     ).toEqual([])
   })
 })
@@ -215,7 +216,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
       success: true,
       count: 0,
       skippedTotal: 6,
-      skippedByReason: { frekuensiLain: 1, pinjaman: 1, bpjsBelumDidukung: 3, plafonPotongan: 1, irisan: 0, berhenti: 0 },
+      skippedByReason: { frekuensiLain: 1, pinjaman: 1, bpjsBelumDidukung: 3, plafonPotongan: 1, irisan: 0, berhenti: 0, cakupan: 0 },
     })
     const container = renderButton()
     openDialog(container)

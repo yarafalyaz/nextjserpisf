@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import { SalesInvoiceForm } from "@/components/forms/sales-invoice-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { LockedEditGuard } from "@/components/ui/locked-edit-guard";
 
 import type { Metadata } from "next";
 
@@ -29,6 +30,48 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // GL-BR-003 K1: cermin guard server updateSalesInvoice fail-closed
+  // (cancelled/setelah-pelunasan-nyata pasti ditolak). posted/partial/paid
+  // tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
+  if (data.status === "cancelled") {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Faktur",
+          sectionHref: "/penjualan/faktur",
+          documentKind: "Faktur",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionHref: `/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`,
+          correctionLabel: "retur penjualan",
+          backLabel: "Kembali ke detail faktur",
+        }}
+      />
+    );
+  }
+  const realSettlementCount = await prisma.salesPayment.count({
+    where: {
+      salesInvoiceId: data.id,
+      NOT: { paymentMethod: "down_payment" },
+    },
+  });
+  if (realSettlementCount > 0) {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Faktur",
+          sectionHref: "/penjualan/faktur",
+          documentKind: "Faktur",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionHref: `/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`,
+          correctionLabel: "retur penjualan",
+          backLabel: "Kembali ke detail faktur",
+        }}
+      />
+    );
+  }
 
   const invoice = {
     id: data.id,
