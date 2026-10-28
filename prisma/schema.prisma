@@ -253,6 +253,10 @@ model SystemSetting {
   salariesPayableAccountId         Int?    @map("salaries_payable_account_id")
   payrollBankAccountId             Int?    @map("payroll_bank_account_id")
   employeeReceivableAccountId      Int?    @map("employee_receivable_account_id")
+  // F-2026-10-29-162-V (c): akun beban write-off piutang karyawan
+  // (default 720007 dari katalog aktif). Kosong = posting write-off
+  // ditolak berisik; DILARANG fallback beban lain.
+  employeeLoanWriteOffExpenseAccountId Int? @map("employee_loan_write_off_expense_account_id")
   payrollJournalTypeId             Int?    @map("payroll_journal_type_id")
   depreciationExpenseAccountId     Int?    @map("depreciation_expense_account_id")
   accumulatedDepreciationAccountId Int?    @map("accumulated_depreciation_account_id")
@@ -1139,6 +1143,7 @@ model Account {
   journalEntries JournalEntry[]
   payrollComponents PayrollComponent[]
   disciplinaryCompensationDecisions DisciplinaryDeductionDecision[]
+  loanRepaymentsReceived EmployeeLoanRepayment[] @relation("EmployeeLoanRepaymentCash")
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -4205,6 +4210,8 @@ model EmployeeLoan {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   employee           Employee @relation(fields: [employeeId], references: [id])
+  repayments         EmployeeLoanRepayment[]
+  writeOffs          EmployeeLoanWriteOff[]
 
   @@index([employeeId], map: "employee_loans_employee_id_fkey")
   @@index([status])
@@ -4212,6 +4219,53 @@ model EmployeeLoan {
   @@index([createdBy])
   @@index([createdAt])
   @@map("employee_loans")
+}
+
+// F-2026-10-29-162-V (e)(f) BR-LOAN-07: dokumen setoran tunai pelunasan
+// pinjaman karyawan. Satu baris = satu dokumen beralasan (tanggal, aktor,
+// akun kas, tautan pinjaman, nominal, jejak audit); sisa pinjaman HANYA
+// berubah lewat dokumen ini / bayar gaji / pencairan (BR-LOAN-06).
+// Kelebihan di atas sisa DILARANG menambah sisa — default dikembalikan.
+model EmployeeLoanRepayment {
+  slug          String?  @unique
+  id            Int      @id @default(autoincrement())
+  loanId        Int      @map("loan_id")
+  // Nominal setoran diakui (jurnal Dr Kas / Cr Piutang).
+  amount        Decimal  @map("amount") @db.Decimal(15, 2)
+  // Kelebihan di atas sisa saat dokumen dibuat (default dikembalikan).
+  excessAmount  Decimal  @default(0) @map("excess_amount") @db.Decimal(15, 2)
+  cashAccountId Int      @map("cash_account_id")
+  repaymentDate DateTime @map("repayment_date")
+  receivedBy    Int?     @map("received_by")
+  notes         String?  @db.Text
+  createdBy     Int?     @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  loan          EmployeeLoan @relation(fields: [loanId], references: [id])
+  cashAccount   Account      @relation("EmployeeLoanRepaymentCash", fields: [cashAccountId], references: [id])
+
+  @@index([loanId], map: "employee_loan_repayments_loan_id_idx")
+  @@index([repaymentDate], map: "employee_loan_repayments_date_idx")
+  @@map("employee_loan_repayments")
+}
+
+// F-2026-10-29-162-V (c) BR-LOAN-08: dokumen penghapusan piutang pinjaman
+// karyawan tak tertagih. Dr 720007 (setting) / Cr 110506. Status pinjaman
+// menjadi `written_off` HANYA oleh dokumen ini. Bukan objek PPh21.
+model EmployeeLoanWriteOff {
+  slug         String?  @unique
+  id           Int      @id @default(autoincrement())
+  loanId       Int      @map("loan_id")
+  amount       Decimal  @map("amount") @db.Decimal(15, 2)
+  writeOffDate DateTime @map("write_off_date")
+  approvedBy   Int?     @map("approved_by")
+  reason       String   @db.Text
+  createdBy    Int?     @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  loan         EmployeeLoan @relation(fields: [loanId], references: [id])
+
+  @@index([loanId], map: "employee_loan_write_offs_loan_id_idx")
+  @@index([writeOffDate], map: "employee_loan_write_offs_date_idx")
+  @@map("employee_loan_write_offs")
 }
 
 model Timesheet {
