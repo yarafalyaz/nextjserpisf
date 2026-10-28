@@ -43159,6 +43159,139 @@ ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003
 
 ---
 
+## 2026-10-28 17:50 WIB — FIN (b) validasi sumber VendorBill + rantai hutang PO/receipt/bill/payment (P0 hutang/piutang)
+
+Benchmark resmi (akses 2026-10-28):
+- Accurate — faktur pembelian: PO diproses menjadi tagihan supplier; invoice supplier boleh dicatat sebelum barang datang (utang tetap akurat); pembayaran pembelian sebagian/cicilan; faktur bisa dipotong uang muka pembelian — https://help.accurate.id/product/faktur-pembelian/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/pembayaran-pembelian/membuat-pembayaran-pembelian-sebagian/ dan https://help.accurate.id/product/accurate-online/fitur-aol/pembelian/pembelian-dilunasi-pihak-ketiga/
+- Zahir — pembayaran hutang usaha memilih nomor faktur yang dilunasi, nilai bayar boleh sebagian dari nilai hutang nota itu; daftar hutang menampilkan nota + perincian transaksi pelunasannya — https://help.zahironline.com/portal/id/kb/articles/cara-input-pembayaran-hutang-usaha-zahir-online-v2 dan https://help.zahironline.com/portal/id/kb/articles/mencatat-transaksi-pembayaran-hutang-usaha dan https://help.zahironline.com/portal/id/kb/articles/melihat-daftar-hutang-usaha
+
+### Inventarisasi terverifikasi (2026-10-28, basis `origin/main` `6261e69c45`, `prisma/schema.prisma` 6532 baris)
+Sudah ada:
+- `VendorBill` (`schema.prisma:2316`, `purchaseOrderId?` `:2336`, `goodsReceiptId?` `:2319`, `status` string default draft `:2343`, `balanceDue` `:2325`, `withholdingAmount` `:2329`, `taxInvoiceNumber?` pisah dari `vendorInvoiceNumber`) + `VendorBillItem` (`:2377`, `goodsReceiptItemId?`, `discountPercent/Amount`, `taxPercent/Amount`, `subtotal/total`).
+- `VendorPayment` (`:2404`, status default draft, `vendorBillId?` target `:2433`, `reversedAt` FIN-BR-008) + `VendorPaymentAllocation` eksplisit (`:2460`, payment→bill→amount).
+- 3-way match guard `assertThreeWayMatch` (`src/actions/purchase.actions.ts:235-332`): jasa = plafon total PO (toleransi max(Rp1000, 1%)); barang = GR `verified|completed` wajib ada + Σ tagihan non-cancelled (draft ikut dihitung sebagai RESERVASI plafon) ≤ Σ(qty×unitCost) + toleransi max(Rp1000, 1%).
+- Penjaga tagih-ganda PER-GR `assertGrBillingWithinReceived` (`purchase.actions.ts:347-410`): Σ `VendorBillItem.subtotal` menunjuk baris GR itu + nilai baru ≤ Σ(qty×unitCost) GR itu (toleransi 1 sen).
+- Lifecycle: create draft (`createVendorBill` `:1352`, `status: draft`, jurnal NOL — satu titik pengakuan = `confirmVendorBill`); confirm draft→posted + `balanceDue = grandTotal − withholding` + lock PO FOR UPDATE + re-check + 3-way + jurnal (`:1651-1745`); edit = draft-only + re-match (`updateVendorBill` `:2954`, `:2965`); void = non-draft tanpa `paidAmount>0` → `cancelled` + reverse jurnal (`voidVendorBill` `:3460`); payment confirm draft→completed + alokasi target-dulu lalu oldest-first + tolak overpay >Rp1 (`:1880-2050`).
+- Matematika baris SATU sumber `computeBillLineAmounts`/`summarizeBillItems` (`src/lib/finance/vendor-bill.ts:47-101`): kop `subtotal` = BRUTO Σ(qty×harga) sebelum diskon baris; DPP laporan = `subtotal − discountAmount`.
+- Poison-pill makna status GR: GR `completed` dipakai dua arah — terverifikasi-lengkap (3-way `:272`) sekaligus dihapus-logis? — cek `deleteGoodsReceipt` hanya hard-delete + revert PO ke `ordered` (`:2655-2664`); status `completed` GR ditulis di verifikasi (`:1173-1211`), BUKAN marker hapus. Klaim "completed = sampah hapus" di backlog lama TIDAK didukung kode — status GR = `draft → verified → (completed)`, penentu 3-way = `verified|completed`.
+Belum ada / parsial (bukti grep run ini):
+- Validasi HARGA per baris vs PO tidak ada: 3-way membandingkan NILAI agregat (subtotal vs Σ qty×unitCost/unitPrice PO-GR), bukan qty×harga per baris. Bill qty besar + unitPrice murah lolos selama total ≤ plafon. BUTUH-VONIS accountant: toleransi selisih harga per baris (over-bill harga vs over-bill qty beda perlakuan).
+- Pajak: `taxInvoiceNumber` disimpan (`:1485`), TIDAK ada validasi format/keberadaan e-Faktur/Coretax vs `tax>0`; bill ber-PPN tanpa nomor faktur pajak LULUS confirm. Status: USULAN penjagaan (fail-closed bila `tax>0` tanpa `taxInvoiceNumber` vs warning — BUTUH-VONIS accountant + Lead).
+- Termin: `paymentTerm` (PO) dan `terms` (bill, teks bebas `:1486`) tidak terhubung — tidak ada jadwal termin bertahap PO→bill (termin % vs tanggal). Bill parsial termin = bill manual tanpa tautan termin. Status: USULAN (skema termin bertahap milik vonis accountant; bukan kode run ini).
+- Bill TANPA PO/GR (non-PO: jasa/manual/L3) lolos 3-way by-design (`if (!purchaseOrderId) return` `:239`); satu-satunya pagar = L3 guard (tanpa tautan bila L3) + vendor-match. Tidak ada plafon/approval nominal untuk bill non-PO. Status: USULAN (ambang approval nominal bill non-PO — BUTUH-VONIS Lead; vonis pajak L3 = accountant 133-V existing).
+- Bill tanpa baris (jasa/manual: kop manual form) — `summarizeBillItems` null → kop form dipakai mentah; tidak ada verifikasi ulang kop-vs-barang. Status: TERVERIFIKASI-KODE perilaku; penjagaan = USULAN.
+
+#### F-2026-10-28-156-S (FIN) P0 — Spec validasi sumber bill + rantai PO→GR→bill→alokasi→payment multi-bill (penutup FIN-BR-001 sisi Business)
+- Kompetitor: Accurate — PO→tagihan satu alur; invoice-sebelum-barang-datang DICATAT (utang lahir, bukan ditolak — beda dari ISF yang menolak bill tanpa GR verified); cicilan + potong-uang-muka di pembayaran. Zahir — bayar pilih no. faktur + nominal sebagian; kartu hutang = nota + rincian. BENCHMARK: (a) rantai dokumen asal→tagihan→bayar eksplisit; (b) sisa per dokumen; (c) bayar sebagian/cicilan; (d) pengurang non-kas eksplisit. ISF lebih ketat dari Accurate di satu titik (GR verified wajib — ditolak vonis 116-V follow-over-receipt; tagihan-tanpa-barang-datang = DITOLAK, bukan dicatat).
+- Status Silengkap: SEBAGIAN. Bukti: rantai + 3-way + alokasi + lifecycle sudah ada (inventarisasi di atas); yang belum = validasi harga-per-baris, pajak e-Faktur, termin, ambang bill non-PO. Tanpa kode di kartu ini.
+- Relevansi: P0 TEST-STRATEGY §3 (hutang/piutang) + INDEKS FIN-BR-001 `Sebagian` ("validasi sumber bill belum ditelusur") — spec ini hasil penelusurannya: 5 lapis sumber divalidasi, 4 gap dinamai.
+- Adaptasi: rumuskan rantai 6 simpul + matriks validasi per lapis + 4 gap USULAN/BUTUH-VONIS; fisik milik Backend sesudah putusan; INDEKS tidak disentuh run ini (loop tertutup — status naik lewat implementasi + E156).
+
+#### 1. Workflow specification (rantai 6 simpul)
+
+**S1 — PO (asal nilai).** Aktor: gudang/pembelian (buat), approver (`approve_purchase_orders`, mesin generik). Status: `draft → approved → ordered → partial_received → received`; GR hanya dari PO `approved|ordered|partial_received` (`purchase.actions.ts:1088`, `:3199`); batal `cancelled` (`:1017`). Nilai acuan 3-way sisi jasa = `grandTotal` PO. Keluar rantai: PO `cancelled`/rejected.
+
+**S2 — GR (bukti fisik).** Aktor: gudang (buat draft), verifier (`verify_goods_receipts`). Status: `draft → verified (→ completed)`; 3-way hanya hitung GR `verified|completed` (`:272`); GR draft = 0 bukti. Verifikasi mengunci stok IN + jurnal persediaan. Edge: GR dihapus = hard-delete + PO revert `ordered` (`:2655-2664`) — tagihan yang menunjuk GR terhapus bertahan via `onDelete: SetNull` (`schema.prisma:2352`); bill yatim-GR tetap di plafon PO-level, lolos guard per-GR (gap USULAN: tolak hapus GR bertagihan / fail-closed).
+
+**S3 — VendorBill (pengakuan hutang).** Aktor: admin pembelian (`create_vendor_bills`), approver (`approve_vendor_bills` = posting). Lahir `draft` (jurnal NOL); post → `posted` + `balanceDue = grandTotal − withholding` + jurnal AP. Validasi sumber saat create+edit+confirm (tiga titik, bukan satu — edit re-match `:2974-2980`): (V1) vendor bill = vendor PO (`:1406-1418`); (V2) 3-way agregat jasa-vs-barang (`:235-332`); (V3) anti-ganda per-GR (`:347-410`); (V4) reservasi plafon draft (`:289-300`); (V5) lock baris PO FOR UPDATE + re-check draft dalam tx (`:1668-1683`); (V6) L3: bertanda L3 dilarang bertautan PO/GR (`:1691-1711`). Keluar populasi: `cancelled`, `deletedAt`.
+
+**S4 — Alokasi (jembatan bayar→tagihan).** Aktor: sistem saat confirm (bukan input manual). Urut: tagihan target `vendorBillId` dulu (parsial boleh; target lunas/hilang = tolak `:1940`) lalu oldest-first (`date,id`); cap sisa NETO; tulis baris `VendorPaymentAllocation`; `paidAmount/balanceDue/status` per tagihan (`paid|partial|posted`, ambang Rp1 FIN-BR-006). Overpay >Rp1 DITOLAK (guard drift GL/subledger `:1972-1990`).
+
+**S5 — Payment (kas keluar).** Aktor: admin (`create_vendor_payments`, lahir `draft` + target opsional `:1554-1630`), approver (`approve_vendor_payments`, `draft→completed` `:1880-2050`). Draft = 0 alokasi. `transfer` operasional (`transferredAt`, tanpa jurnal baru). Reversal FIN-BR-008: asal TIDAK dihapus → `reversed` + jurnal lawan + kembalikan saldo per baris alokasi (`reverseVendorPayment` `:1759-1856`).
+
+**S6 — Termin & pajak (lapis silang).** Termin: `paymentTerm` PO vs `terms` teks bill — SAAT INI tidak terhubung (gap). Pajak: PPh potong-kita (`withholdingAmount`) mengurangi NETO hutang saat posting (`:1718-1725`) dan aging NETO (FIN-BR-009-S2); PPN masukan (`tax`) + `taxInvoiceNumber` tersimpan tanpa validasi (gap). Vonis pajak milik Accountant (133-V L3, 123-V NETO existing dirujuk, bukan diubah).
+
+#### 2. Role/permission matrix (aksi × permission key nyata)
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Buat PO / GR / bill / payment | `create_purchase_orders` / `create_goods_receipts` / `create_vendor_bills` / `create_vendor_payments` | Lahir draft semua |
+| Approve PO (mesin generik) | `approve_purchase_orders` | Via `requestApprovalIfConfigured`/`assertApproved` |
+| Verifikasi GR | `verify_goods_receipts` | draft→verified; kunci stok+jurnal |
+| Posting bill (confirm) | `approve_vendor_bills` | draft→posted; 3-way final; jurnal AP |
+| Edit bill | `edit_vendor_bills` | Draft-only + re-match |
+| Void bill (posted/partial) | `delete_vendor_bills` | Tanpa `paidAmount>0`; reverse jurnal; →cancelled |
+| Confirm payment + alokasi | `approve_vendor_payments` | draft→completed; lock set; tulis alokasi |
+| Reversal payment | (FIN-BR-008 existing) | Via baris alokasi; alasan wajib |
+| Retur beli | `create/approve_purchase_returns` | Pengurang eksplisit (lihat 155-S M2) |
+| Ubah ambang/toleransi/termin/pajak | BUTUH-VONIS Accountant + putus Lead | Bukan aksi operator |
+
+#### 3. Status-transition matrix
+
+| Dokumen | Awal → pemicu → akhir | Penjaga |
+|---|---|---|
+| PurchaseOrder | `draft` → approve → `approved` | `approve_purchase_orders` (mesin generik) |
+| PurchaseOrder | `approved` → pesan/org → `ordered` | Aksi order; GR mensyaratkan ini |
+| PurchaseOrder | `ordered` → GR verified sebagian → `partial_received` | `:1152` |
+| PurchaseOrder | `*` → GR lengkap → `received` | Final; GR hapus revert `ordered` |
+| PurchaseOrder | `draft-valid` → batal → `cancelled` | Bukan received/partial (`:1008-1017`) |
+| GoodsReceipt | `draft` → verifikasi → `verified` | `verify_goods_receipts`; stok IN + jurnal |
+| VendorBill | `draft` → confirm → `posted` | `approve_vendor_bills`; V1-V6 + jurnal; `balanceDue=NETO` |
+| VendorBill | `posted` → alokasi sebagian → `partial` | Cap NETO; Rp1 (FIN-BR-006) |
+| VendorBill | `partial` → alokasi menutup → `paid` | `isSettled(NETO, paid)` |
+| VendorBill | `posted/partial` → void → `cancelled` | `delete_vendor_bills`; `paidAmount=0`; reverse jurnal |
+| VendorBill | `paid/partial` → reversal payment → naik kembali | Hapus baris alokasi + kembalikan saldo |
+| VendorPayment | `draft` → confirm → `completed` | `approve_vendor_payments`; lock+alokasi+tolak overpay |
+| VendorPayment | `completed` → reversal → `reversed` | FIN-BR-008; alasan wajib; jurnal lawan |
+| GR hapus | ada tagihan menunjuk → bill yatim (gap) | USULAN: tolak/fail-closed (BR-FIN01-11) |
+
+#### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-FIN01-01 | Bill ber-PO wajib vendor sama dengan PO; jasa ikut guard yang sama | TERVERIFIKASI-KODE (`purchase.actions.ts:1406-1418`, `:242-270`) |
+| BR-FIN01-02 | Barang: GR `verified|completed` wajib ada; Σ bill non-cancelled (draft = reservasi) ≤ Σ(qty×unitCost) + max(Rp1000,1%) | TERVERIFIKASI-KODE (`:272-332`) |
+| BR-FIN01-03 | Per-GR: Σ `VendorBillItem.subtotal` menunjuk baris GR itu + baru ≤ nilai GR itu (tol. 1 sen) | TERVERIFIKASI-KODE (`:347-410`) |
+| BR-FIN01-04 | Jasa: Σ bill non-cancelled ≤ `grandTotal` PO + max(Rp1000,1%) | TERVERIFIKASI-KODE (`:243-270`); ambang tol = USULAN tercatat |
+| BR-FIN01-05 | Validasi di TIGA titik (create+edit+confirm), lock PO FOR UPDATE + re-check draft dalam tx | TERVERIFIKASI-KODE (`:1363-1367`, `:1668-1683`, `:2974-2980`) |
+| BR-FIN01-06 | Draft bill jurnal NOL; satu titik pengakuan = confirm | TERVERIFIKASI-KODE (`:1373-1377`) |
+| BR-FIN01-07 | Posting: `balanceDue = grandTotal − withholding`; lunas = `isSettled` Rp1; overpay >Rp1 ditolak | TERVERIFIKASI-KODE (`:1718-1725`, `:1972-1990`, FIN-BR-006) |
+| BR-FIN01-08 | Alokasi = target-dulu lalu oldest-first; reversal kembalikan via baris alokasi | TERVERIFIKASI-KODE (`:1922-2050`, `:1759-1856`) |
+| BR-FIN01-09 | Edit draft-only; void non-draft tanpa bayar; bill L3 tanpa tautan PO/GR | TERVERIFIKASI-KODE (`:2965`, `:3460-3480`, 133-V) |
+| BR-FIN01-10 | Harga per baris vs PO: BELUM divalidasi (agregat saja) | USULAN penjagaan; toleransi = BUTUH-VONIS Accountant |
+| BR-FIN01-11 | Hapus GR bertagihan → bill yatim (SetNull): BELUM dijaga | USULAN tolak/fail-closed; putus Lead |
+| BR-FIN01-12 | `tax>0` tanpa `taxInvoiceNumber` LULUS: BELUM divalidasi | USULAN; fail-vs-warning = BUTUH-VONIS Accountant |
+| BR-FIN01-13 | Termin bertahap PO→bill: BELUM ada (terms teks bebas) | USULAN skema; BUTUH-VONIS Accountant |
+| BR-FIN01-14 | Bill non-PO tanpa plafon/approval nominal: BELUM ada | USULAN ambang; putus Lead |
+| BR-FIN01-15 | Kop manual bill tanpa baris dipakai mentah: perilaku existing | TERVERIFIKASI-KODE (`:1385-1388`); penjagaan = USULAN |
+
+#### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (basis 6261e69c4) |
+|---|---|---|---|
+| PO→tagihan | Ya — proses PO jadi tagihan | Ya — faktur dari pembelian | Ya — `purchaseOrderId` + vendor-match |
+| Tagihan tanpa barang datang | DICATAT (utang lahir) | — | DITOLAK (GR verified wajib; 116-V) — ISF lebih ketat |
+| Cocok qty+harga (3-way) | Implisit (Ambil PO) | Pilih no. faktur + nominal | Agregat YA (V2+V3); per-baris BELUM (BR-FIN01-10) |
+| Satu bayar banyak tagihan | Ya — Ambil + pilih banyak | Ya — rincian multi-transaksi | Ya — alokasi target+oldest-first |
+| Cicilan/sebagian | Ya — pembayaran sebagian | Ya — boleh < nilai hutang | Ya — `partial`, cap NETO |
+| Potong uang muka di bayar | Ya — fitur potong UM | — | TIDAK (overpay ditolak; UM vendor = fitur terpisah) |
+| Pengurang non-kas | Ya — kasbon/retur jalur sendiri | Diskon/denda kolom sendiri | Ya — retur + withholding + kasbon eksplisit |
+| Pajak masukan di tagihan | e-Faktur terintegrasi | — | Tersimpan TANPA validasi (BR-FIN01-12) |
+| Termin bertahap | Termin pembayaran | — | BELUM (BR-FIN01-13) |
+
+#### 6. Acceptance criteria + edge cases
+
+- AC1: tiap klaim TERVERIFIKASI-KODE tertelusur ke `file:line` §inventarisasi — tanpa klaim tanpa bukti.
+- AC2: tidak ada angka pajak/statutori baru; toleransi existing (max(Rp1000,1%), Rp1, 1 sen) dirujuk apa adanya, bukan diputus ulang.
+- AC3: 4 gap (BR-FIN01-10..14) tetap USULAN/BUTUH-VONIS — implementasi menunggu vonis + putus; spec ini tidak menutup FIN-BR-001.
+- Edge: PO jasa tanpa GR (by-design plafon PO); GR multi-PO? — GR menunjuk SATU PO (`purchaseOrderId` wajib `:2204`); bill menunjuk PO dan GR beda PO = lolos guard (vendor+plafon per-PO-nya sendiri — USULAN silang); bill yatim-GR pasca-hapus (BR-FIN01-11); target-bill lunas saat confirm (tolak `:1940`); dua confirm bersamaan (lock set + idempotensi); bill `grandTotal ≤ 0` tidak pernah lunas (FIN-BR-006).
+- Falsifikasi QA (E156, atas implementasi Backend kelak — BUKAN atas spec ini): E156-1 bill barang tanpa GR verified lolos confirm = MERAH; E156-2 Σ bill > plafon + toleransi lolos = MERAH; E156-3 satu GR ditagih dua bill melebihi nilainya = MERAH; E156-4 bill vendor ≠ vendor PO lolos = MERAH; E156-5 edit draft menaikkan total di atas plafon lalu confirm lolos = MERAH; E156-6 alokasi dari payment `draft` mengurangi `balanceDue` = MERAH; E156-7 overpay >Rp1 lolos confirm = MERAH; E156-8 hapus GR bertagihan lalu bill yatim ikut 3-way penuh = ikut BR-FIN01-11 (bukan MERAH otomatis).
+
+#### 7. Backlog implementasi (rekomendasi kartu, BUKAN kode di kartu ini)
+
+- Backend: BR-FIN01-10 (match harga per baris + toleransi vonis), BR-FIN01-11 (guard hapus-GR), BR-FIN01-12 (guard faktur pajak), BR-FIN01-13 (skema termin), BR-FIN01-14 (ambang non-PO). Butuh vonis Accountant: YA (10-toleransi, 12-fail-vs-warning, 13-skema). Butuh putus Lead: YA (11, 14).
+- Frontend: permukaan termin + peringatan pajak (sesudah kontrak Backend); label sisa dari derivasi bersama (155-S).
+- QA: E156-1..8 atas head implementasi persis (bukan atas spec ini).
+- Lead: putus BR-FIN01 + merge spec ini; INDEKS FIN-BR-001 tetap `Sebagian` sesudah spec ini (validasi sumber TERtelusur, 4 gap TERbuka — status naik sesudah implementasi + E156 lulus).
+
+### Yang TIDAK diusulkan run ini
+- Kode/migrasi/skema apa pun (read-only; fisik milik Backend).
+- Perubahan toleransi existing (max(Rp1000,1%), Rp1, 1 sen — dirujuk, bukan diputus ulang).
+- Angka pajak/DPP/PPN apa pun (milik vonis Accountant).
+- Menutup FIN-BR-001 di INDEKS (loop tertutup: status naik lewat implementasi + E156).
+- Model alokasi piutang / uang-muka vendor (YAGNI — milik 155-S).
+
+ID spec ini **F-2026-10-28-156-S** (FIN-BR-001 sisi Business: validasi sumber bill + rantai hutang + E156). Basis `origin/main` `6261e69c45` (28 Okt 2026). Pemilik berikutnya: Accountant (vonis BR-FIN01-10/12/13) → Lead (putus BR-FIN01-11/14 + merge) → Backend (4 gap) → Frontend (termin/pajak sesudah kontrak) → QA (E156 atas implementasi). Butuh putusan accountant: YA (pajak + toleransi harga + termin).
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-154-S: spec ambang DP terkonfirmasi vs pending per baris (SAL-BR-002, P0 faktur/pembayaran)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_1a1e004c`. Basis `origin/main` `e16e79d81` (28 Okt 2026, fetch run ini).
