@@ -41445,14 +41445,14 @@ anggaran lebih kecil dari Σ cicilan. Empat hal itu isi spec ini; sisanya invent
 | T1 | Cicilan satu pinjaman dicap `min(nominal frekuensi, sisa utang)`; sisa tidak boleh negatif | `src/lib/reports/payroll-weekly.ts:173-178` |
 | T2 | Total potongan = Σ seluruh pinjaman berstatus `active`; satu pinjaman tanpa nominal frekuensi → `null` → potongan 0 (fail-closed), bukan mengarang | `src/lib/reports/payroll-weekly.ts:180-196`, `:198-205` |
 | T3 | Permintaan potongan dari klien dicap ke Σ cap pinjaman aktif (tidak bisa memotong lebih dari jadwal) | `src/lib/reports/payroll-weekly.ts:207-215`; dipakai `src/actions/hrm.actions.ts:1299-1319`, `:790` |
-| T4 | Plafon Pasal 63 ≤ 50% upah pembayaran slip (PP 36/2021 Pasal 65): pelanggaran **ditolak keras**, tidak dipangkas diam-diam | fungsi `src/lib/reports/payroll-weekly.ts:223-247`; gerbang `src/actions/hrm.actions.ts:735-754` dipanggil di susun/ubah slip `:790`, preview `:1419` (tidak menolak, hanya menandai), bulk `:2477-2487` (karyawan dilewati beralasan `plafonPotongan`), dan saat bayar `:3166-3181` |
+| T4 | Plafon Pasal 63 ≤ 50% upah pembayaran slip (PP 36/2021 Pasal 65): pelanggaran **ditolak keras**, tidak dipangkas diam-diam | fungsi `src/lib/reports/payroll-weekly.ts:223-241`; gerbang `src/actions/hrm.actions.ts:735-754` dipanggil di susun/ubah slip `:790`, preview `:1419` (tidak menolak, hanya menandai), bulk `:2477-2487` (karyawan dilewati beralasan `plafonPotongan`), dan saat bayar `:3166-3181` |
 | T5 | Hanya pinjaman `active` yang dipotong; `pending`/`rejected` = 0 potongan | `src/actions/hrm.actions.ts:1306-1309`, `:1872`, `:2305`, `:3198-3201`; `pending → active` hanya lewat approval `src/actions/approval.actions.ts:253` |
 | T6 | Sisa utang **tidak** dapat diubah lewat form untuk pinjaman non-`pending`; bila pokok pinjaman `pending` diubah, sisa dihitung server dari delta pokok | `src/actions/hrm.actions.ts:4804-4805`, `:4838-4839`, `:4846`, `:4856` |
 | T7 | Pencairan menulis sisa = pokok, status `pending` | `src/actions/hrm.actions.ts:3353-3357` |
 | T8 | Amortisasi saat bayar: anggaran = potongan slip tersimpan (snapshot, bukan master yang bisa berubah), alokasi pinjaman tertua-dulu (`loanDate asc`), cap per sisa, sisa 0 → `paid_off` | `src/actions/hrm.actions.ts:3198-3231` |
 | T9 | Hapus pinjaman hanya `pending`/`rejected`; jurnal pencairan dibalik dalam transaksi yang sama | `src/actions/hrm.actions.ts:4475-4511` |
 | T10 | Jurnal bayar gaji mendebit bruto penuh dan mengkredit Piutang Karyawan sebesar `loanDeduction`; akun piutang wajib terkonfigurasi (gagal terang-terangan bila kosong) | `src/lib/hooks/accounting.hook.ts:2956-2988` |
-| T11 | Potongan absen (`absentDeduction`) sengaja di luar basis plafon Pasal 63 (no-work-no-pay); cicilan + denda + komponen potongan yang masuk basis | `src/lib/reports/payroll-weekly.ts:236-247` |
+| T11 | Potongan absen (`absentDeduction`) sengaja di luar basis plafon Pasal 63 (no-work-no-pay); cicilan + denda + komponen potongan yang masuk basis | `src/lib/reports/payroll-weekly.ts:236-237` |
 | T12 | Amortisasi hanya sekali per slip: klaim status `approved → paid` atomik sebelum amortisasi/jurnal | `src/actions/hrm.actions.ts:3184-3196` |
 
 ### 3. Bukti negatif (yang memang belum ada — objek spec ini)
