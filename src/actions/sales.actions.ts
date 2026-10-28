@@ -3357,13 +3357,62 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     // pesaing bisa hapus/pindah payment ini atau ubah faktur lama di antaranya.
     const lockedPayment = await tx.salesPayment.findUniqueOrThrow({
       where: { id },
-      select: { salesInvoiceId: true, documentNo: true, status: true },
+      select: { salesInvoiceId: true, documentNo: true, status: true, paymentDate: true, accountId: true, amount: true, withholdingAmount: true, withholdingTypeId: true, paymentMethod: true },
     })
     // FIN-BR-008: pembayaran reversed = histori read-only, tidak boleh diedit.
     if (lockedPayment.status === "reversed") {
       throw new Error(
         "Pembayaran yang sudah dibalik tidak dapat diubah; histori reversal wajib dipertahankan.",
       )
+    }
+    // GL-BR-003 P3 (vonis t_542a4f09 Putusan 4): pembayaran posted yang
+    // menyentuh jurnal/GL/periode hanya dikoreksi lewat void-bayar +
+    // bayar ulang. Edit finansial di sini DITOLAK sebelum mutasi apa pun;
+    // field non-finansial (notes/referenceNo/nomor bupot/lampiran) tetap
+    // boleh lewat jalur ini.
+    const journalTouched = await tx.journal.findFirst({
+      where: { referenceType: "SalesPayment", referenceId: id, status: { in: ["POSTED", "REVERSED"] } },
+      select: { id: true },
+    })
+    if (journalTouched) {
+      const financialDrift =
+        newInvoiceId !== lockedPayment.salesInvoiceId ||
+        newAmount !== Number(lockedPayment.amount) ||
+        newWithholdingAmount !== Number(lockedPayment.withholdingAmount ?? 0) ||
+        (v.withholdingTypeId ?? null) !== (lockedPayment.withholdingTypeId ?? null)
+      const paymentDateChanged =
+        wibDateToUtcMidnight(v.paymentDate).getTime() !== new Date(lockedPayment.paymentDate).getTime()
+      // paymentMethod bersama accountId menentukan jalur kas/bank.
+      const methodChanged =
+        v.paymentMethod !== (lockedPayment.paymentMethod ?? v.paymentMethod) &&
+        (lockedPayment.accountId != null || v.accountId != null)
+      const accountChanged = (v.accountId ?? null) !== (lockedPayment.accountId ?? null)
+      if (financialDrift || paymentDateChanged || methodChanged || accountChanged) {
+        throw new Error(
+          "Pembayaran terposting tidak dapat diubah nominal/akun/faktur/tanggal/metode. Batalkan lewat pembalikan beralasan lalu buat pembayaran baru.",
+        )
+      }
+      // Hanya field non-finansial: tulis langsung TANPA delete/repost jurnal
+      // (pola lama "delete jurnal lama + repost dari baris teredit" dinyatakan
+      // bukan revisi terkendali oleh vonis P3).
+      const slug = await nextSlug("salesPayment", lockedPayment.documentNo, { excludeId: id })
+      const updated = await tx.salesPayment.update({
+        where: { id },
+        data: {
+          slug,
+          withholdingCertificateNo: v.withholdingCertificateNo ?? null,
+          withholdingDate: v.withholdingDate ? wibDateToUtcMidnight(v.withholdingDate) : null,
+          referenceNo: v.referenceNo ?? null,
+          notes: v.notes ?? null,
+        },
+      })
+      const attachmentIds = v.attachmentIds
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "sales_payment", referenceId: updated.id, uploadedBy: Number(user.id),
+        })
+      }
+      return updated
     }
     const oldInvoiceId = lockedPayment.salesInvoiceId
     const invoiceIds = oldInvoiceId === newInvoiceId
