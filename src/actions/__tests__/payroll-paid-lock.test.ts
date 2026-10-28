@@ -44,7 +44,9 @@ import { markPayrollPaid } from "../hrm.actions"
 
 beforeEach(() => {
   vi.clearAllMocks()
-  requirePermissionMock.mockResolvedValue({ id: 1 })
+  // BR-HRS-08: sesi nyata yang boleh membayar gaji ber-role privileged
+  // (finance/admin). Tanpa roles, getHrScope fail-closed dan aksi menolak.
+  requirePermissionMock.mockResolvedValue({ id: 1, roles: ["finance"] })
   payrollFindUniqueOrThrowMock.mockResolvedValue({
     id: 1, status: "approved", employeeId: 2, loanDeduction: 1000,
     grossSalary: 5000000, lateDeduction: 0, deductions: 0,
