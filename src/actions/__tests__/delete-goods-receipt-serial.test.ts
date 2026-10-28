@@ -49,7 +49,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     goodsReceipt: {
-      findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1, purchaseOrderId: 10, warehouseId: 5, items: [] }),
+      findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1, purchaseOrderId: 10, warehouseId: 5, status: "draft", items: [] }),
     },
     vendorBill: {
       count: vi.fn().mockResolvedValue(0),
