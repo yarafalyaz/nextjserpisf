@@ -16,9 +16,10 @@ vi.mock("@/actions/settings.actions", () => ({ updateSystemSettings: vi.fn() }))
 
 const updateMock = vi.mocked(updateSystemSettings)
 
-// Lima akun yang diaudit QA 28 Okt 2026: dibaca hook uang + aturan auto-map,
+// Enam akun yang diaudit QA 28 Okt 2026 (+ jasa SAL-BR-013 137-V): dibaca hook uang + aturan auto-map,
 // tetapi sebelumnya tidak punya input sama sekali di form pengaturan akuntansi.
 const ORPHAN_FIELDS = [
+  "salesServiceRevenueAccountId",
   "customerDownPaymentAccountId",
   "warrantyExpenseAccountId",
   "warrantyProvisionAccountId",
@@ -64,7 +65,7 @@ function clickAutoMap(container: HTMLElement) {
   })
 }
 
-describe("SettingsEditForm — 5 akun yatim (SAL-BR-004 / GL-BR-009)", () => {
+describe("SettingsEditForm — 6 akun yatim (SAL-BR-004 / GL-BR-009 / SAL-BR-013)", () => {
   beforeEach(() => {
     updateMock.mockReset()
   })
@@ -73,7 +74,7 @@ describe("SettingsEditForm — 5 akun yatim (SAL-BR-004 / GL-BR-009)", () => {
     const { container, root } = mount({})
     const missing = ACCOUNT_MAPPING_FIELDS.filter((key) => hiddenValue(container, key) === undefined)
     expect(missing).toEqual([])
-    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(39)
+    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(40)
     for (const key of ORPHAN_FIELDS) {
       expect(container.querySelector(`input[name="${key}"]`)).not.toBeNull()
       expect(container.querySelector(`label[for="${key}"]`)).not.toBeNull()
