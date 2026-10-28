@@ -9,7 +9,7 @@ import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
 interface VoidButtonProps {
   id: number
-  action: (id: number) => Promise<{ success: boolean; error?: string }>
+  action: (id: number, reason?: string) => Promise<{ success: boolean; error?: string }>
   label?: string
   title?: string
   body?: string
@@ -41,7 +41,7 @@ export function VoidButton({
 }: VoidButtonProps) {
   const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
     useConfirmReasonAction({
-      run: () => action(id),
+      run: (trimmedReason: string) => action(id, requireReason ? trimmedReason : undefined),
       successMessage: "Dokumen berhasil dibatalkan",
       errorFallback: "Gagal membatalkan dokumen",
       onSuccess,
