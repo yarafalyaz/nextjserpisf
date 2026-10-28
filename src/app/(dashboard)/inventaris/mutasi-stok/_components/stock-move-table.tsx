@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
-import { formatDate, formatReferenceType } from "@/lib/utils/format"
+import { formatDate, formatReferenceType, referenceHref } from "@/lib/utils/format"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface Item {
@@ -26,6 +26,8 @@ interface StockMove {
   qty: number | string
   impact: string
   referenceType: string | null
+  referenceId: number | null
+  referenceSlug?: string | null
   status: string | null
 }
 
@@ -61,7 +63,19 @@ const columns = [
   }),
   columnHelper.accessor("referenceType", {
     header: "Referensi",
-    cell: (info) => formatReferenceType(info.getValue()),
+    // AC-INV-009: tautan ke dokumen sumber bila rute dikenal; label polos bila
+    // tidak (referenceHref daftar putih rute terbukti ada).
+    cell: (info) => {
+      const move = info.row.original
+      const href = referenceHref(move.referenceType, move.referenceId, move.referenceSlug)
+      const label = formatReferenceType(info.getValue())
+      if (!href) return label
+      return (
+        <Link href={href} className="text-primary hover:underline">
+          {label}
+        </Link>
+      )
+    },
   }),
   columnHelper.accessor("warehouse.name", {
     header: "Gudang",
