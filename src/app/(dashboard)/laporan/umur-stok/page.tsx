@@ -63,7 +63,7 @@ export default async function StockAgingPage() {
       <ReportSection title="Ringkasan Umur Stok">
         <DetailTable data-report-table="Ringkasan Umur Stok">
           <DetailTableHead>
-            <DetailTableTh>Kategori Umur</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh><DetailTableTh align="right">Total Qty</DetailTableTh>
+            <DetailTableTh>Kategori Umur</DetailTableTh><DetailTableTh align="right">Layer Stok</DetailTableTh><DetailTableTh align="right">Total Qty</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
             {Array.from(agingSummary.entries()).map(([key, val]) => (
