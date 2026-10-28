@@ -186,6 +186,10 @@ export async function loadPayablesTotal(): Promise<AgingReportView> {
     now,
   )
   const rows: TableRow[] = [{ kind: "group", label: "Ringkasan Umur Hutang" }]
+  rows.push({
+    kind: "notice",
+    text: "Total Hutang mencakup tagihan tanpa tanggal jatuh tempo (kelompok Tanpa Jatuh Tempo) — beda dengan laporan Hutang Jatuh Tempo yang hanya memuat tagihan ber-jatuh-tempo.",
+  })
   for (const group of summary.aging) {
     rows.push({ kind: "data", cells: [group.key, String(group.count), "", "", money(group.total)] })
   }
@@ -218,7 +222,7 @@ export async function loadPayablesTotal(): Promise<AgingReportView> {
   rows.push({
     kind: "total",
     grand: true,
-    label: "Jumlah Hutang",
+    label: "Jumlah Hutang (termasuk Tanpa Jatuh Tempo)",
     cells: ["", "", "", "", money(summary.totalOutstanding)],
   })
   return { table: { columns: TOTAL_COLUMNS, rows }, ...rangePeriodLabels({ start: now, end: now }) }

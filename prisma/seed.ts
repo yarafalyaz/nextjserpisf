@@ -244,6 +244,42 @@ async function main() {
     }
     console.log(`✅ ${WITHHOLDING_TAX_TYPES.length} withholding tax types seeded/checked`);
 
+    // Parameter statutori payroll 12 baris vonis F-2026-10-28-126-V §3
+    // (pecahan tarif + plafon JP berperiode + PTKP + biaya jabatan).
+    // Idempoten per (key, effective_from): edit/tutup tenant tidak ditimpa.
+    // Baris lama migrasi P1-6 (effective_from 2024-01-01) ikut ditutup agar
+    // getStatutoryParams tak jatuh ke fallback — hanya bila masih NULL.
+    // Tanpa ini hitung/approve payroll tertahan gate fromFallback.
+    const statutoryRows: [string, number, string, string | null, string][] = [
+      ["bpjs_health_employee_rate", 0.01, "2020-07-01", null, "Perpres 64/2020"],
+      ["bpjs_health_ceiling", 12000000, "2020-07-01", null, "Perpres 64/2020"],
+      ["bpjs_jht_employee_rate", 0.02, "2015-07-01", null, "PP 46/2015"],
+      ["bpjs_jp_employee_rate", 0.01, "2015-07-01", null, "PP 45/2015"],
+      ["bpjs_jp_ceiling", 10042300, "2024-03-01", "2025-02-28", "surat BPJS (plafon 2024)"],
+      ["bpjs_jp_ceiling", 10547400, "2025-03-01", "2026-02-28", "surat BPJS B/91/022025"],
+      ["bpjs_jp_ceiling", 11086300, "2026-03-01", null, "surat BPJS B/962/022026"],
+      ["ptkp_single", 54000000, "2016-01-01", null, "PMK 101/PMK.010/2016"],
+      ["ptkp_married_extra", 4500000, "2016-01-01", null, "PMK 101/PMK.010/2016"],
+      ["ptkp_dependent_extra", 4500000, "2016-01-01", null, "PMK 101/PMK.010/2016"],
+      ["occupational_cost_rate", 0.05, "2009-01-01", null, "PMK 250/PMK.03/2008"],
+      ["occupational_cost_ceiling_year", 6000000, "2009-01-01", null, "PMK 250/PMK.03/2008"],
+    ];
+    for (const [key, value, from, to, source] of statutoryRows) {
+      await conn.query(
+        `INSERT INTO payroll_statutory_rules (\`key\`, value, effective_from, effective_to, source)
+         SELECT ?, ?, ?, ?, ?
+         WHERE NOT EXISTS (
+           SELECT 1 FROM payroll_statutory_rules WHERE \`key\` = ? AND effective_from = ?
+         )`,
+        [key, value, from, to, source, key, from],
+      );
+    }
+    await conn.query(
+      `UPDATE payroll_statutory_rules SET effective_to = '2024-02-29', source = 'surat BPJS (plafon 2024)'
+       WHERE \`key\` = 'bpjs_jp_ceiling' AND effective_from = '2024-01-01' AND effective_to IS NULL`,
+    );
+    console.log(`✅ ${statutoryRows.length} payroll statutory rules seeded/checked`);
+
     // Create default warehouse
     await conn.query(
       `INSERT IGNORE INTO warehouses (code, name, address, is_active, created_at, updated_at)
