@@ -26,6 +26,7 @@ export default async function AgingPayablesPage() {
       dueDate: bill.dueDate,
       grandTotal: bill.grandTotal,
       paidAmount: bill.paidAmount,
+      withholdingAmount: bill.withholdingAmount,
     })),
     new Date(),
   )

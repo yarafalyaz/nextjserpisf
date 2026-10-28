@@ -31,6 +31,7 @@ import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
 import { computeBillLineAmounts, summarizeBillItems } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
+import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
   GOODS_RECEIPT_JOURNAL_REF_TYPE,
@@ -1823,7 +1824,13 @@ export async function confirmVendorPayment(paymentId: number) {
         (s, a) => s + Number(a.amount),
         0,
       );
-      if (allocatedTotal + 0.01 < Number(freshPayment.amount)) {
+      // FIN-BR-006: kelebihan bayar dalam toleransi lunas Rp1 adalah
+      // pembulatan rupiah-penuh, bukan uang muka vendor — jangan tolak.
+      // Di atas toleransi tetap tolak (guard drift GL/subledger di atas).
+      if (
+        allocatedTotal + SETTLEMENT_TOLERANCE_IDR <
+        Number(freshPayment.amount)
+      ) {
         throw new Error(
           `Nominal pembayaran (${Number(freshPayment.amount)}) melebihi total tagihan terutang vendor (${allocatedTotal}). ` +
             `Kurangi nominal pembayaran agar sesuai sisa tagihan.`,
@@ -1844,8 +1851,10 @@ export async function confirmVendorPayment(paymentId: number) {
           );
         }
         // P0-2: batas alokasi = NETO (bukan grandTotal) — konsisten dengan sisa.
-        const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 0);
-        const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0);
+        // Presisi sen (`, 2`): varian `, 0` di sini lama membulatkan sen ke
+        // rupiah penuh dan menghancurkan sisa 0,50 sebelum status dinilai.
+        const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2);
+        const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 2);
         if (nextPaid > netPayable) {
           throw new Error(
             `Alokasi melebihi sisa tagihan vendor bill #${bill.id}`,
@@ -1876,17 +1885,24 @@ export async function confirmVendorPayment(paymentId: number) {
       await Promise.all(
         allocations.map((alloc) => {
           const bill = openBillMap.get(alloc.vendorBillId)!;
-          const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 0);
-          const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0);
-          const nextBalance = safeSubtract(netPayable, nextPaid, 0);
+          // Presisi sen (`, 2`) — sama dengan validasi di atas; `, 0` lama
+          // membulatkan paidAmount/balanceDue ke rupiah penuh di DB.
+          const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2);
+          const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 2);
+          const nextBalance = safeSubtract(netPayable, nextPaid, 2);
 
           return tx.vendorBill.update({
             where: { id: bill.id },
             data: {
               paidAmount: nextPaid,
               balanceDue: nextBalance,
-              status:
-                nextBalance <= 0 ? "paid" : nextPaid > 0 ? "partial" : "posted",
+              // FIN-BR-006/007: status dari alokasi pembayaran completed
+              // saja (draft tidak pernah sampai sini) + toleransi Rp1.
+              status: isSettled(netPayable, nextPaid)
+                ? "paid"
+                : nextPaid > 0
+                  ? "partial"
+                  : "posted",
             },
           });
         }),
@@ -2098,6 +2114,15 @@ export async function deletePurchaseOrder(id: number) {
       );
     }
 
+    // INV-BR-013: PO dengan GR non-draft tidak boleh dihapus — transaksi di
+    // bawah menghapus fisik StockMove `posted` + InventoryLayer milik GR.
+    // GR draft belum memposting movement, jadi tidak menghalangi penghapusan.
+    if (po.goodsReceipts.some((gr) => gr.status !== "draft")) {
+      throw new Error(
+        "PO tidak dapat dihapus karena memiliki penerimaan barang yang sudah terverifikasi. Penerimaan terverifikasi tidak dapat dihapus; selesaikan lewat retur pembelian.",
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       // 1. Delete all related GoodsReceipts and reverse their stock moves
       const allGrIds = po.goodsReceipts.map((gr) => gr.id);
@@ -2271,6 +2296,15 @@ export async function deleteGoodsReceipt(id: number) {
       gr.warehouseId,
       ...gr.items.map((i) => i.warehouseId).filter((w): w is number => w != null),
     ]);
+
+    // INV-BR-013: ledger posted tidak boleh dihapus fisik oleh pengguna
+    // operasional. GR terverifikasi sudah memposting StockMove `posted`
+    // (goods-receipt.hook) — menghapusnya menghanguskan jejak ledger.
+    // Hanya GR draft (belum ada movement) yang boleh dihapus; pola sama
+    // dengan deleteStockAdjustment/deleteInventoryTransfer/deleteMaterialIssue.
+    if (gr.status !== "draft") {
+      throw new Error("Hanya penerimaan barang draft yang dapat dihapus");
+    }
 
     // Guard: refuse deletion when a non-cancelled Vendor Bill references this GR's
     // PO. A goods-based Vendor Bill posts Dr Clearing / Cr AP against the receipt;
