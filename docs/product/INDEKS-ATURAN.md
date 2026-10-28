@@ -144,7 +144,7 @@ perilaku, bukan hanya keberadaan file/model.
 | WO-BR-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem` ada sebagai baris work order; ketiadaan efek stok material rencana belum dibuktikan negatif di sini |
 | WO-BR-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` adalah jalur issue aktual; posting pengurangan stoknya belum ditelusur |
 | WO-BR-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest` ada; rantai approval jam kerja ke costing/payroll belum ditelusur |
-| WO-BR-004 | Belum | belum ditelusur — guard anti issue ganda tidak ditunjuk di sini |
+| WO-BR-004 | Sebagian | src/actions/manufacturing.actions.ts:1897-1905 — `createMaterialIssueFromWorkOrder` menolak MI kedua per WO (cek di dalam transaksi + kunci baris WO); UI detail WO menyembunyikan kedua tombol buat baru selama MI aktif (draf/diproses) ada dan menampilkan status aktifnya — `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx`, `_components/work-order-actions.tsx`. Sisa: `createMaterialIssue` (form Inventaris) belum punya guard anti-ganda server setara (backend) |
 
 ## 7. HR & Payroll — `HR-BR-*`
 
@@ -215,7 +215,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-PROJ-003 | Belum | belum ditelusur — tampilan terpisah estimasi vs aktual tidak ditunjuk di sini |
 | AC-PROJ-004 | Sebagian | prisma/schema.prisma:5174 — `Project` ada; ketertelusuran biaya ke sumber belum ditelusur |
 | AC-WO-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem`; ketiadaan efek stok rencana belum dibuktikan negatif di sini |
-| AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; pencatatan ganda inventory+project belum ditelusur |
+| AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; UI detail WO mencegah arah ke issue ganda (tombol buat baru disembunyikan selama MI aktif ada, status aktif tertampil) — `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx`. Sisa: pencatatan ganda inventory+project dan guard jalur form Inventaris belum ditelusur (backend) |
 | AC-WO-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest`; approval policy jam kerja belum ditelusur |
 | AC-FIN-001 | Sebagian | prisma/schema.prisma:2448 — ketertelusuran hutang lewat alokasi; sisi piutang tertaut lewat `prisma/schema.prisma:1986` |
 | AC-FIN-002 | Belum | belum ditelusur — reversal beralasan dengan histori asal tidak ditunjuk di sini. Vonis F-2026-10-28-121-V (backlog): urutan reversal DP pasca-konversi P1 + nota kredit DITOLAK tahap 1 (P4) + guard void P2 + delete draft-only P3; PR #1233 LOLOS-SUBSTANSI BERSYARAT (P5); lulus penuh hanya sesudah #1233 merged + follow-up + E118/E121 (P6) |

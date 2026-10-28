@@ -1,36 +1,16 @@
 import { describe, it, expect, vi } from "vitest"
-import { renderToStaticMarkup } from "react-dom/server"
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
-}))
-
-// Aksi server menyeret rantai auth yang tak bisa dimuat di vitest; yang diuji
-// pemetaan gate intake -> tombol, bukan aksinya.
-vi.mock("@/actions/manufacturing.actions", () => ({
-  startWorkOrder: vi.fn(async () => ({ success: true })),
-  completeWorkOrder: vi.fn(async () => ({ success: true })),
-  createMaterialIssueFromWorkOrder: vi.fn(async () => ({ success: true })),
-}))
-vi.mock("@/actions/inventory.actions", () => ({
-  reviseWorkOrderItems: vi.fn(async () => ({ success: true })),
-}))
+vi.mock("next/navigation", async () => (await import("./work-order-actions-test-utils")).workOrderActionsRouterModule)
+vi.mock("@/actions/manufacturing.actions", async () => (await import("./work-order-actions-test-utils")).workOrderActionsManufacturingModule)
+vi.mock("@/actions/inventory.actions", async () => (await import("./work-order-actions-test-utils")).workOrderActionsInventoryModule)
 
 import { WorkOrderActions } from "../work-order-actions"
+import { renderWorkOrderActions } from "./work-order-actions-test-utils"
+
+const render = (props: Parameters<typeof renderWorkOrderActions>[1] = {}) =>
+  renderWorkOrderActions(WorkOrderActions, props)
 
 const INTAKE_HREF = "/produksi/qc/inspeksi/tambah/perintah-kerja/wo-7/tipe/vehicle_intake"
-
-function render(props: Partial<React.ComponentProps<typeof WorkOrderActions>> = {}) {
-  return renderToStaticMarkup(
-    <WorkOrderActions
-      workOrderId={7}
-      status="draft"
-      hasCompletedMaterialIssue={false}
-      defaultWarehouseId={1}
-      {...props}
-    />,
-  )
-}
 
 describe("WorkOrderActions gate intake F-50(b)", () => {
   it("tanpa intake: Mulai nonaktif + tautan buat inspeksi masuk + petunjuk", () => {

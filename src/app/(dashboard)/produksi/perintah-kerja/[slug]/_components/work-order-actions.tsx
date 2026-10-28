@@ -11,6 +11,9 @@ interface Props {
   workOrderId: number
   status: string
   hasCompletedMaterialIssue: boolean
+  /** Pengeluaran material aktif (draf/diproses) sudah ada untuk WO ini:
+   *  pembuatan baru pasti ditolak server, jadi tombol disembunyikan (WO-BR-004). */
+  hasActiveMaterialIssue?: boolean
   defaultWarehouseId: number | null
   /** Item WO yang bisa ditandai diganti (belum replaced). */
   revisableItems?: { id: number; label: string }[]
@@ -26,7 +29,7 @@ interface Props {
  * Work Order lifecycle controls. Surfaces the manufacturing flow that previously
  * existed only in server actions but had no UI: start → issue materials → complete.
  */
-export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount }: Props) {
+export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, hasActiveMaterialIssue = false, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [reviseOpen, setReviseOpen] = useState(false)
@@ -81,7 +84,10 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
   if (status === "in_progress") {
     return (
       <>
-        {!hasCompletedMaterialIssue && (
+        {/* WO-BR-004: server menolak pembuatan MI kedua untuk WO yang sama
+            (createMaterialIssueFromWorkOrder); sembunyikan tombol bila MI
+            aktif sudah ada supaya pengguna tidak diarahkan ke kegagalan. */}
+        {!hasCompletedMaterialIssue && !hasActiveMaterialIssue && (
           <Button
             variant="secondary"
             isDisabled={isPending || !defaultWarehouseId}
