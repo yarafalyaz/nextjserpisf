@@ -304,6 +304,28 @@ describe("buildCustomerStatement due + penanda (F-2026-10-25-025-S)", () => {
     expect(returPenuh.entries.find((e) => e.kind === "invoice")?.isOverdue).toBe(false)
   })
 
+  it("FIN-BR-006: sisa Rp0,50 (toleransi Rp1) -> tidak tertanda lewat jatuh tempo", () => {
+    const pay = (id: number, amount: number) => ({
+      id,
+      documentNo: `PAY-${id}`,
+      salesInvoiceId: 9,
+      salesInvoiceDocumentNo: "INV-009",
+      paymentDate: D("2026-02-10"),
+      amount,
+      withholdingAmount: 0,
+      paymentMethod: "transfer",
+    })
+    const lunas = buildCustomerStatement({
+      customerId: 7, ...PERIOD, invoices: [inv()], payments: [pay(31, 499_999.5)],
+    })
+    expect(lunas.entries.find((e) => e.kind === "invoice")?.isOverdue).toBe(false)
+
+    const terbuka = buildCustomerStatement({
+      customerId: 7, ...PERIOD, invoices: [inv()], payments: [pay(32, 499_998.99)],
+    })
+    expect(terbuka.entries.find((e) => e.kind === "invoice")?.isOverdue).toBe(true)
+  })
+
   it("AC-ST-B4: periodEnd sebelum due → tidak tertanda walau due lampau vs hari tes (acuan periodEnd, bukan jam sistem)", () => {
     // due 2026-02-20 sudah lampau dari tanggal tes berjalan; periode berakhir 2026-02-10.
     const s = buildCustomerStatement({

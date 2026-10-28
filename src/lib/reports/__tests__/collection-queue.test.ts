@@ -108,6 +108,20 @@ function followUp(
 }
 
 describe("collection-queue (F-2026-10-22-089-S)", () => {
+  it("FIN-BR-006: sisa Rp0,50 = Lunas (toleransi Rp1) -> keluar antrean penagihan", () => {
+    const queue = buildCollectionQueue(
+      [
+        invoice({ invoiceId: 1, grandTotal: 1_000_000, paidAmount: 999_999.5 }),
+        invoice({ invoiceId: 2, documentNo: "INV-2", grandTotal: 1_000_000, paidAmount: 999_998.99 }),
+      ],
+      [],
+      [],
+      { now: NOW },
+    )
+    expect(queue.rows.map((r) => r.invoiceId)).toEqual([2])
+    expect(queue.rows[0].sisa).toBe(1.01)
+  })
+
   it("kata tampil verbatim spec §6", () => {
     expect(COLLECTION_QUEUE_TITLE).toBe("Antrean Penagihan Piutang")
     expect(COLLECTION_STAGE_LABELS).toEqual({
