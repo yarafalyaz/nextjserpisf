@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatReferenceType, referenceHref } from '@/lib/utils/format'
+import { formatCurrency, formatDate, formatNumber, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
 import Link from 'next/link'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -88,7 +88,7 @@ export default async function StockMovementPage({
   const totalOut = rows.filter(r => r.impact === 'OUT').reduce((s, r) => s + r.qty, 0)
   const totalValueIn = rows.filter(r => r.impact === 'IN').reduce((s, r) => s + r.value, 0)
   const totalValueOut = rows.filter(r => r.impact === 'OUT').reduce((s, r) => s + r.value, 0)
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Mutasi Stok" sheet={false} wide filter={<>
@@ -116,8 +116,8 @@ export default async function StockMovementPage({
       <ReportLetterhead title="Mutasi Stok" subtitle="Pergerakan Stok" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Mutasi Stok mencatat seluruh pergerakan persediaan barang selama periode tertentu, termasuk penerimaan, pengeluaran, dan penyesuaian. Laporan ini berguna untuk memantau perputaran stok dan mengidentifikasi potensi kelebihan atau kekurangan persediaan." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Masuk (Qty)" value={totalIn.toLocaleString('id-ID')} valueClassName="text-success" />
-        <ReportKpiCard label="Total Keluar (Qty)" value={totalOut.toLocaleString('id-ID')} valueClassName="text-danger" />
+        <ReportKpiCard label="Total Masuk (Qty)" value={formatNumber(totalIn)} valueClassName="text-success" />
+        <ReportKpiCard label="Total Keluar (Qty)" value={formatNumber(totalOut)} valueClassName="text-danger" />
         <ReportKpiCard label="Nilai Masuk" value={formatCurrency(totalValueIn)} valueClassName="text-success" />
         <ReportKpiCard label="Nilai Keluar" value={formatCurrency(totalValueOut)} valueClassName="text-danger" />
       </div>
@@ -131,14 +131,14 @@ export default async function StockMovementPage({
           <DetailTableBody>
             {rows.map((r, i) => (
               <DetailTableRow key={i}>
-                <DetailTableTd>{r.date.toLocaleDateString('id-ID')}</DetailTableTd>
+                <DetailTableTd>{formatDate(r.date, { format: "numeric" })}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{r.documentNo}</DetailTableTd>
                 <DetailTableTd className="font-mono text-xs">{r.sku}</DetailTableTd>
                 <DetailTableTd className="font-medium">{r.itemName}</DetailTableTd>
                 <DetailTableTd>{r.warehouse}</DetailTableTd>
                 <DetailTableTd>{{ production_issue: "Pengeluaran Produksi", production_receipt: "Penerimaan Produksi" }[r.type] ?? r.type}</DetailTableTd>
                 <DetailTableTd align="right" className={r.impact === 'IN' ? 'text-success font-semibold' : 'text-danger font-semibold'}>
-                  {r.impact === 'IN' ? '+' : '-'}{r.qty.toLocaleString('id-ID')}
+                  {r.impact === 'IN' ? '+' : '-'}{formatNumber(r.qty)}
                 </DetailTableTd>
                 <DetailTableTd className="text-xs">{r.referenceHref ? <Link href={r.referenceHref} className="text-primary hover:underline">{r.reference}</Link> : r.reference}</DetailTableTd>
                 <DetailTableTd className="text-xs max-w-[200px] truncate">{r.description}</DetailTableTd>

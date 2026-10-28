@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getSystemSettings } from '@/lib/utils/settings'
 import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
 import { projectCash, buildPayableProjectionItems, summarizeOpenCommitments } from '@/lib/reports/cash-projection'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
@@ -102,7 +102,7 @@ export default async function CashProjectionPage({
   const totalInflow = rows.reduce((sum, row) => safeAdd(sum, row.inflow, 2), 0)
   const totalOutflow = rows.reduce((sum, row) => safeAdd(sum, row.outflow, 2), 0)
   const closing = rows.length > 0 ? rows[rows.length - 1].closing : opening
-  const periodLabel = `${months} bulan ke depan — per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `${months} bulan ke depan — per ${formatDate(now)}`
 
   return (
     <ReportPageShell title="Proyeksi Kas" sheet={false} wide filter={<>

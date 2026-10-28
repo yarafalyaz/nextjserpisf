@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { formatDate } from "@/lib/utils/format"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
@@ -18,11 +19,7 @@ export default async function DepreciationDifferencePage() {
 
   const { report } = await loadDepreciationDifference()
   const now = new Date()
-  const periodLabel = `Per ${now.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })}`
+  const periodLabel = `Per ${formatDate(now)}`
 
   return (
     <ReportPageShell

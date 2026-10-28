@@ -42,7 +42,7 @@ export default async function TotalPayablesPage() {
     now,
   )
 
-  const period = `Per ${now.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' })}`
+  const period = `Per ${formatDate(now)}`
 
   return (
     <ReportPageShell title="Total Hutang" sheet={false} wide actions={<>

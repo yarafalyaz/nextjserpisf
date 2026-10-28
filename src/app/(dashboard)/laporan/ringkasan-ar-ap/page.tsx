@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -61,7 +61,7 @@ export default async function ArApSummaryPage() {
   const apRows = Array.from(apByVendor.values()).filter(r => r.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
   const totalAP = apRows.reduce((s, r) => s + r.outstanding, 0)
 
-  const period = `Per ${new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' })}`
+  const period = `Per ${formatDate(new Date())}`
 
   return (
     <ReportPageShell title="Ringkasan AR/AP" sheet={false} wide actions={<>

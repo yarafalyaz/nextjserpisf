@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency, formatAccounting } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -140,7 +140,7 @@ export default async function ProfitCenterIncomePage({
   const totalExpense = rows.reduce((s, r) => s + r.totalExpense, 0)
   const netIncome = totalRevenue - totalExpense
 
-  const periodLabel = `Periode ${startDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Pusat Laba" sheet={false} wide filter={<>
