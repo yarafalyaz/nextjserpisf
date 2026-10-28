@@ -74,7 +74,8 @@ import {
   type OvertimeDayKind,
 } from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
-import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { onPayrollPaid, deleteJournalByReferenceTx, reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import type { HrScope } from "@/lib/auth/hr-scope";
@@ -3266,6 +3267,215 @@ export async function markPayrollPaid(payrollId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[markPayrollPaid]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * HR-BR-005 (F-2026-10-28-133-S P2-P6/BR-HRCR-01..09 + vonis F-2026-10-28-135-V
+ * §2a-d): koreksi slip gaji `paid` = dokumen koreksi tertaut, bukan
+ * edit/hapus. Slip asal tetap `paid` nilainya tak ditimpa; slip koreksi baru
+ * (angka PENUH yang benar, bukan delta) tertaut `correctsPayrollId` dua arah.
+ * Urutan atomik SATU transaksi: reversal jurnal asal → kembalikan amortisasi
+ * pinjaman → buat slip koreksi dari tanggal terbuka → jurnal koreksi.
+ * Periode asal terkunci = tolak (P6); periode koreksi wajib terbuka.
+ * Pesan galat menyebut nomor dokumen saja, tanpa nominal gaji (P8/pola 117-S).
+ */
+export async function correctPaidPayroll(
+  payrollId: number,
+  formData: FormData,
+) {
+  try {
+    const user = await requirePermission("process_payroll");
+
+    const cleanReason = String(formData.get("reason") ?? "").trim();
+    if (!cleanReason) {
+      return { success: false, error: "Alasan koreksi wajib diisi." };
+    }
+
+    const userId = Number((user as { id: unknown }).id);
+
+    const source = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+    if (source.status !== "paid") {
+      return {
+        success: false,
+        error: `Slip ${source.documentNo} berstatus '${source.status}' — hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
+      };
+    }
+
+    await assertPayrollInHrScope(await getHrScope(user), source.employeeId ?? null);
+
+    // BR-HRCR-10: slip sumber kompensasi PKWT yang sudah dibayar/diubah status
+    // menahan koreksi; pesan menyebut nomor dokumen penahan.
+    const blockingEvent = await prisma.pkwtCompensationEvent.findFirst({
+      where: {
+        paidPayrollId: payrollId,
+        status: { notIn: ["draft"] },
+      },
+      select: { id: true, status: true },
+    });
+    if (blockingEvent) {
+      return {
+        success: false,
+        error: `Slip ${source.documentNo} menahan peristiwa kompensasi PKWT #${blockingEvent.id} berstatus '${blockingEvent.status}' — batalkan/ubah peristiwa itu dulu sebelum mengoreksi slip.`,
+      };
+    }
+
+    // Tanggal koreksi: hari ini WIB (periode berjalan/terbuka, vonis 135-V §2b).
+    // Periode asal beku sebagai histori; jurnal lawan memakai assertPeriodOpen
+    // tanggal asli pola reversal existing (135-V §2b).
+    const nowWib = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const correctionDate = new Date(
+      Date.UTC(nowWib.getUTCFullYear(), nowWib.getUTCMonth(), nowWib.getUTCDate(), 0, 0, 0),
+    );
+    await assertPeriodOpen(correctionDate);
+
+    // Nilai koreksi dibaca dari dokumen sumber SERVER (nonzero = angka penuh
+    // yang benar), BUKAN dari field client — client hanya kirim alasan.
+    // Baris komponen diklon dari slip asal supaya rekap periode koreksi
+    // berdiri sendiri; netto dihitung ulang mesin yang sama.
+    const result = await prisma.$transaction(async (tx) => {
+      const fresh = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+      if (fresh.status !== "paid") {
+        throw new Error(
+          `Slip ${fresh.documentNo} berstatus '${fresh.status}' — hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
+        );
+      }
+      const dup = await tx.payroll.findFirst({
+        where: { correctsPayrollId: payrollId },
+        select: { id: true, documentNo: true },
+      });
+      if (dup) {
+        throw new Error(
+          `Slip ${fresh.documentNo} sudah memiliki dokumen koreksi ${dup.documentNo} — koreksi kedua ditolak.`,
+        );
+      }
+
+      // (1) Jurnal lawan atas jurnal asal (assertPeriodOpen tanggal asli di
+      // dalam helper; periode terkunci = throw = rollback nol mutasi).
+      await reverseJournalsByReferenceTx(tx, "Payroll", payrollId, cleanReason, userId);
+
+      // (2) Amortisasi pinjaman DIBALIKKAN lewat dokumen (135-V §2a pola T7,
+      // bukan update manual): kembalikan remainingAmount sebesar porsi yang
+      // dulu diamortisasi slip ini. Distribusi tertua-dulu, dicap sisa utang
+      // per pinjaman — cermin alokasi markPayrollPaid.
+      const amortized = Number(fresh.loanDeduction) || 0;
+      let restored = 0;
+      if (fresh.employeeId != null && amortized > 0) {
+        const loans = await tx.employeeLoan.findMany({
+          where: { employeeId: fresh.employeeId },
+          orderBy: { loanDate: "asc" },
+        });
+        let budget = amortized;
+        for (const loan of loans) {
+          if (budget <= 0) break;
+          const applied = Math.min(budget, Number(fresh.loanDeduction) || 0);
+          if (applied <= 0) continue;
+          const nextRemaining = safeAdd(Number(loan.remainingAmount), applied, 0);
+          await tx.employeeLoan.update({
+            where: { id: loan.id },
+            data: {
+              remainingAmount: nextRemaining,
+              status: nextRemaining <= 0 ? "paid_off" : "active",
+            },
+          });
+          budget = safeSubtract(budget, applied, 0);
+          restored = safeAdd(restored, applied, 0);
+        }
+      }
+
+      // (3) Slip koreksi: salinan angka penuh slip asal + penanda tautan.
+      // Rentang sama dengan asal (bukan periode berjalan) supaya konflik
+      // rentang tetap terdeteksi bila slip pengganti sudah terbit; status
+      // langsung paid karena koreksi atas pembayaran yang sudah terjadi.
+      const documentNo = await generateDocumentNumber("PAYROLL");
+      const correction = await tx.payroll.create({
+        data: {
+          slug: await nextSlug("payroll", documentNo),
+          documentNo,
+          employeeId: fresh.employeeId,
+          period: fresh.period,
+          type: fresh.type,
+          startDate: fresh.startDate,
+          endDate: fresh.endDate,
+          baseSalary: fresh.baseSalary,
+          allowances: fresh.allowances,
+          deductions: fresh.deductions,
+          overtimeTotal: fresh.overtimeTotal,
+          appreciationTotal: fresh.appreciationTotal,
+          loanDeduction: fresh.loanDeduction,
+          lateDeduction: fresh.lateDeduction,
+          grossSalary: fresh.grossSalary,
+          bpjsHealthEmployee: fresh.bpjsHealthEmployee,
+          bpjsEmploymentEmployee: fresh.bpjsEmploymentEmployee,
+          pph21: fresh.pph21,
+          statutorySnapshot: fresh.statutorySnapshot as never,
+          lateMinutes: fresh.lateMinutes,
+          workingDays: fresh.workingDays,
+          presentDays: fresh.presentDays,
+          absentDays: fresh.absentDays,
+          absentDeduction: fresh.absentDeduction,
+          netSalary: fresh.netSalary,
+          totalAmount: fresh.totalAmount,
+          paymentDate: correctionDate,
+          costCenterId: fresh.costCenterId,
+          status: "paid",
+          approvedBy: userId,
+          createdBy: userId,
+          correctsPayrollId: payrollId,
+          correctionReason: cleanReason,
+        },
+      });
+
+      const sourceLines = await tx.payrollComponentLine.findMany({
+        where: { payrollId },
+      });
+      if (sourceLines.length > 0) {
+        await tx.payrollComponentLine.createMany({
+          data: sourceLines.map((l) => ({
+            payrollId: correction.id,
+            componentId: l.componentId,
+            componentNameSnapshot: l.componentNameSnapshot,
+            kindSnapshot: l.kindSnapshot,
+            recurrenceSnapshot: l.recurrenceSnapshot,
+            isTaxableSnapshot: l.isTaxableSnapshot,
+            source: l.source,
+            assignmentId: l.assignmentId,
+            accountIdSnapshot: l.accountIdSnapshot,
+            amount: l.amount,
+            pkwtEventId: l.pkwtEventId,
+            pkwtSettledViaAccrual: l.pkwtSettledViaAccrual,
+          })),
+        });
+      }
+
+      // (4) Jurnal koreksi atas dokumen BARU (referenceId baru, bukan re-post
+      // payrollId asal — 135-V §Interaksi T5/B3). Filter REVERSED di
+      // onPayrollPaid membuka jalan re-post yang benar; jurnal asal yang kini
+      // REVERSED = histori, bukan pemblokir.
+      await onPayrollPaid(correction.id, userId, tx as never);
+
+      return { correctionId: correction.id, restored };
+    });
+
+    await logActivity(
+      "correct",
+      "Payroll",
+      payrollId,
+      `Koreksi slip ${source.documentNo}: ${cleanReason}`,
+      {
+        correctsPayrollId: payrollId,
+        correctionId: result.correctionId,
+        reason: cleanReason,
+        correctedBy: userId,
+      },
+    );
+    revalidatePath("/sdm/penggajian");
+    revalidatePath(`/sdm/penggajian/${payrollId}`);
+    return { success: true, id: result.correctionId };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[correctPaidPayroll]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
