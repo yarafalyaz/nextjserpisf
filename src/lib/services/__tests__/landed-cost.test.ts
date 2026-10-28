@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { allocateLandedCost } from "@/lib/services/landed-cost.service"
+import { allocateLandedCost, resolveLandedCostResidual } from "@/lib/services/landed-cost.service"
 
 // Regression suite for the HPP / landed-cost PRD (docs/prd-hpp-landed-cost.md §6).
 //
@@ -261,7 +261,8 @@ describe("allocateLandedCost — per-unit sen precision (GL vs FIFO layer)", () 
     })
     expect(r.adminAdditions).toEqual([100])
     expect(r.adminPerUnitAdditions[0]).toBe(33.33)
-    expect(r.perUnitAdditions[0]).toBe(33.33)
+    // V3: admin tidak dikapitalisasi, jadi per-unit penambah nilai stok = 0.
+    expect(r.perUnitAdditions[0]).toBe(0)
   })
 })
 
@@ -308,8 +309,13 @@ describe("allocateLandedCost — degenerate inputs", () => {
   })
 })
 
-describe("allocateLandedCost — bank/admin fee component", () => {
-  it("capitalises the admin fee into HPP and exposes it as its own pool", () => {
+// Vonis Accountant F-2026-10-28-125-V (PUR-BR-008) V3: biaya admin bank BUKAN
+// biaya perolehan — wajib keluar dari kapitalisasi (lineAdditions / unit cost /
+// InventoryLayer) dan tetap dijurnal sebagai beban periode. Blok ini dulu
+// mengunci perilaku menyimpang ("capitalises the admin fee into HPP"); sekarang
+// mengunci yang tervonis.
+describe("allocateLandedCost — biaya admin bank = beban periode (V3 vonis 125-V)", () => {
+  it("E125-2: admin fee TIDAK masuk lineAdditions/per-unit, hanya dilaporkan sebagai pool", () => {
     // Tokopedia-style receipt: 1 unit, goods 130000, ongkir 20000, admin 1000.
     const r = allocateLandedCost({
       lines: [{ baseQty: 1, poNetUnitPrice: 130000 }],
@@ -318,17 +324,18 @@ describe("allocateLandedCost — bank/admin fee component", () => {
       shippingCost: 20000,
       adminFee: 1000,
     })
-    // lineAdditions = charge(20000) + admin(1000) − discount(0)
-    expect(r.lineAdditions).toEqual([21000])
-    expect(r.perUnitAdditions).toEqual([21000])
+    // Kapitalisasi hanya ongkir: charge(20000) − discount(0).
+    expect(r.lineAdditions).toEqual([20000])
+    expect(r.perUnitAdditions).toEqual([20000])
+    // Admin tetap dilaporkan supaya bisa dijurnal sebagai beban periode.
     expect(r.adminAdditions).toEqual([1000])
     expect(r.adminPerUnitAdditions).toEqual([1000])
     expect(r.adminFee).toBe(1000)
-    // 130000 goods + 21000 landed = 151000 total HPP
-    expect(r.absorbed).toBe(21000)
+    // 130000 barang + 20000 ongkir = 150000 nilai stok; admin 1000 di luar itu.
+    expect(r.absorbed).toBe(20000)
   })
 
-  it("splits the admin fee by goods value across multiple lines", () => {
+  it("membagi porsi admin per baris (bobot nilai barang) tanpa mengapitalisasinya", () => {
     // Line A value 150000 (75%), line B value 50000 (25%); admin 1000.
     const r = allocateLandedCost({
       lines: [
@@ -340,20 +347,24 @@ describe("allocateLandedCost — bank/admin fee component", () => {
       adminFee: 1000,
     })
     expect(r.adminAdditions).toEqual([750, 250])
-    expect(r.lineAdditions).toEqual([750, 250]) // no other charges/discount
-    // admin shares sum exactly back to the pool
+    // admin shares sum exactly back to the pool...
     expect(r.adminAdditions.reduce((s, v) => s + v, 0)).toBe(1000)
+    // ...but NONE of it is capitalised (no freight, no discount).
+    expect(r.lineAdditions).toEqual([0, 0])
+    expect(r.absorbed).toBe(0)
   })
 
-  it("still allocates the admin fee when there are no other charges", () => {
+  it("GR yang hanya berisi admin fee tidak menambah nilai stok sepeser pun", () => {
     const r = allocateLandedCost({
       lines: [{ baseQty: 2, poNetUnitPrice: 50000 }],
       poCostPool: 0,
       poNetValue: 100000,
       adminFee: 3000,
     })
-    expect(r.lineAdditions).toEqual([3000])
-    expect(r.perUnitAdditions[0]).toBe(1500)
+    expect(r.lineAdditions).toEqual([0])
+    expect(r.perUnitAdditions[0]).toBe(0)
+    expect(r.adminFee).toBe(3000)
+    expect(r.absorbed).toBe(0)
   })
 
   it("defaults the admin fee to zero when omitted (backward compatible)", () => {
@@ -366,5 +377,150 @@ describe("allocateLandedCost — bank/admin fee component", () => {
     expect(r.adminFee).toBe(0)
     expect(r.adminAdditions).toEqual([0])
     expect(r.lineAdditions).toEqual([100])
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// Vonis Accountant F-2026-10-28-125-V (PUR-BR-008): V7 (alokasi hanya baris
+// barang) dan V8 (residu pool diselesaikan oleh penerimaan terakhir).
+// ════════════════════════════════════════════════════════════════════════════
+describe("allocateLandedCost — alokasi hanya baris barang (V7 vonis 125-V)", () => {
+  it("E125-3: GR campuran barang + jasa — porsi jasa TIDAK menyerap pool, Σ absorbed == pool", () => {
+    // Barang 1 unit @100000 (bobot sah), jasa 1 unit @100000 (tidak berbobot).
+    const r = allocateLandedCost({
+      lines: [
+        { baseQty: 1, poNetUnitPrice: 100000 },
+        { baseQty: 1, poNetUnitPrice: 100000, weighted: false },
+      ],
+      poCostPool: 0,
+      poNetValue: 200000,
+      shippingCost: 30000,
+    })
+    // Seluruh 30000 jatuh ke baris barang; baris jasa 0.
+    expect(r.chargeAdditions).toEqual([30000, 0])
+    expect(r.lineAdditions).toEqual([30000, 0])
+    expect(r.perUnitAdditions).toEqual([30000, 0])
+    // Tidak ada porsi pool yang hilang.
+    expect(r.absorbed).toBe(30000)
+    expect(r.unallocatedPool).toBe(0)
+  })
+
+  it("GR jasa murni — ongkir TIDAK dikapitalisasi, dilaporkan sebagai pool tak teralokasi", () => {
+    const r = allocateLandedCost({
+      lines: [{ baseQty: 1, poNetUnitPrice: 500000, weighted: false }],
+      poCostPool: 0,
+      poNetValue: 500000,
+      shippingCost: 25000,
+      adminFee: 1000,
+    })
+    expect(r.lineAdditions).toEqual([0])
+    expect(r.perUnitAdditions).toEqual([0])
+    expect(r.absorbed).toBe(0)
+    // Pemanggil WAJIB membebankan nilai ini (beban periode), bukan menghilangkannya.
+    expect(r.unallocatedPool).toBe(25000)
+    expect(r.adminFee).toBe(1000)
+  })
+
+  it("V5: dasar bobot fallback dilaporkan, bukan diam-diam (qty lalu rata)", () => {
+    const byQty = allocateLandedCost({
+      lines: [
+        { baseQty: 1, poNetUnitPrice: 0 },
+        { baseQty: 3, poNetUnitPrice: 0 },
+      ],
+      poCostPool: 400,
+      poNetValue: 0,
+    })
+    expect(byQty.weightFallback).toBe("qty")
+    expect(byQty.lineAdditions).toEqual([100, 300])
+
+    const even = allocateLandedCost({
+      lines: [
+        { baseQty: 0, poNetUnitPrice: 0 },
+        { baseQty: 0, poNetUnitPrice: 0 },
+      ],
+      poCostPool: 100,
+      poNetValue: 0,
+    })
+    expect(even.weightFallback).toBe("even")
+    expect(even.lineAdditions).toEqual([50, 50])
+
+    // Jalur normal: nilai beli neto — tidak ada fallback.
+    const normal = allocateLandedCost({
+      lines: [{ baseQty: 1, poNetUnitPrice: 1000 }],
+      poCostPool: 100,
+      poNetValue: 1000,
+    })
+    expect(normal.weightFallback).toBeNull()
+  })
+})
+
+describe("allocateLandedCost — residu pool diselesaikan penerimaan terakhir (V8 vonis 125-V)", () => {
+  it("penerimaan terakhir menyerap sisa pool estimasi, bukan porsi proporsional saja", () => {
+    // PO 100 unit @1000 = 100000 nilai, pool ongkir 1000 (estimasi).
+    // GR ini menerima 40 unit (sisa 60000 sudah diterima lebih dulu).
+    const finalReceipt = allocateLandedCost({
+      lines: [{ baseQty: 40, poNetUnitPrice: 1000 }],
+      poCostPool: 1000,
+      poNetValue: 100000,
+      receivedValueBefore: 60000,
+      isFinalReceipt: true,
+    })
+    // Sisa pool = 1000 − 600 = 400 → seluruhnya diserap GR penutup.
+    expect(finalReceipt.chargeAdditions).toEqual([400])
+    expect(finalReceipt.absorbed).toBe(400)
+  })
+
+  it("penerimaan parsial biasa tetap proporsional (tidak menyerap residu)", () => {
+    const partial = allocateLandedCost({
+      lines: [{ baseQty: 40, poNetUnitPrice: 1000 }],
+      poCostPool: 1000,
+      poNetValue: 100000,
+      receivedValueBefore: 60000,
+      isFinalReceipt: false,
+    })
+    expect(partial.absorbed).toBe(400) // 1000 × 40000/100000
+  })
+
+  it("ongkir AKTUAL GR menang atas true-up estimasi (residu estimasi tidak dipaksa masuk)", () => {
+    const actual = allocateLandedCost({
+      lines: [{ baseQty: 40, poNetUnitPrice: 1000 }],
+      poCostPool: 1000,
+      poNetValue: 100000,
+      shippingCost: 350,
+      receivedValueBefore: 60000,
+      isFinalReceipt: true,
+    })
+    // Aktual 350 dipakai apa adanya — bukan sisa estimasi 400.
+    expect(actual.absorbed).toBe(350)
+  })
+})
+
+// V8 vonis 125-V: residu pool wajib diselesaikan eksplisit (bukan menggantung).
+describe("resolveLandedCostResidual — residu pool landed cost (V8 vonis 125-V)", () => {
+  it("PO diterima penuh dengan sisa pembulatan → true-up ke penerimaan terakhir", () => {
+    const r = resolveLandedCostResidual({ poCostPool: 100, absorbedToDate: 99.99, poFullyReceived: true })
+    expect(r).toEqual({ kind: "true_up", amount: 0.01, label: "Selisih Ongkos Kirim" })
+  })
+
+  it("PO ditutup sebelum diterima penuh → beban bernama, bukan menggantung", () => {
+    const r = resolveLandedCostResidual({ poCostPool: 1000, absorbedToDate: 400, poFullyReceived: false })
+    expect(r.kind).toBe("expense")
+    expect(r.amount).toBe(600)
+    expect(r.label).toBe("Selisih Ongkos Kirim")
+  })
+
+  it("ongkir AKTUAL GR menang: selisih estimasi bukan biaya yang pernah terjadi", () => {
+    const r = resolveLandedCostResidual({
+      poCostPool: 1000,
+      absorbedToDate: 350,
+      poFullyReceived: true,
+      usedActualCost: true,
+    })
+    expect(r).toEqual({ kind: "none", amount: 0, label: "" })
+  })
+
+  it("pool sudah terserap seluruhnya / pool nol → tidak ada yang perlu dijurnal", () => {
+    expect(resolveLandedCostResidual({ poCostPool: 500, absorbedToDate: 500, poFullyReceived: true }).kind).toBe("none")
+    expect(resolveLandedCostResidual({ poCostPool: 0, absorbedToDate: 0, poFullyReceived: false }).kind).toBe("none")
   })
 })
