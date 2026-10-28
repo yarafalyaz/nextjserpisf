@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertSalesInvoiceStockOutOnce } from "@/lib/services/stock-out-once.service";
@@ -378,7 +379,7 @@ export async function onSalesInvoicePosted(
     const conversionClosingLines: { account: "downPaymentLiability" | "receivable"; debit: number; credit: number; memo: string }[] = [];
     {
       const dpPayments = await tx.salesPayment.findMany({
-        where: { salesInvoiceId: invoiceId, paymentMethod: "down_payment" },
+        where: activeSalesPaymentWhere({ salesInvoiceId: invoiceId, paymentMethod: "down_payment" }),
         select: { id: true, amount: true, notes: true },
       });
       const dpDocNos = new Set<string>();
