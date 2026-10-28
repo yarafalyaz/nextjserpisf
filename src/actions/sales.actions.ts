@@ -2110,6 +2110,13 @@ export async function completeSalesReturn(returnId: number) {
     throw new Error("Retur penjualan hanya bisa diselesaikan dari status draft")
   }
 
+  // P4 vonis F-2026-10-26-121-V (syarat pengimbang, tanpa model baru):
+  // retur complete tanpa reason trim non-kosong = koreksi tak teraudit.
+  // Tolak SEBELUM mutasi apa pun (stok/jurnal nol).
+  if (String(salesReturn.reason ?? "").trim().length === 0) {
+    throw new Error("Retur penjualan tidak bisa diselesaikan tanpa alasan tertulis (reason wajib diisi).")
+  }
+
   if (salesReturn.createdBy != null && Number(salesReturn.createdBy) === Number(user.id)) {
     throw new Error("Retur penjualan tidak boleh diselesaikan oleh pembuatnya sendiri (pemisahan tugas) — minta penyetuju lain yang berizin approve_sales_returns.")
   }
