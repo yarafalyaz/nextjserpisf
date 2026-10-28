@@ -5,16 +5,17 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
+
+const toast = vi.hoisted(() => ({ ok: [] as string[], err: [] as string[] }))
 import { ReversePaymentButton } from "../reverse-payment-button"
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }))
 
-const toastCalls: { ok: string[]; err: string[] } = { ok: [], err: [] }
 vi.mock("@/lib/utils/toast", () => ({
-  showSuccess: (m: string) => { toastCalls.ok.push(m) },
-  showError: (m: string) => { toastCalls.err.push(m) },
+  showSuccess: (m: string) => { toast.ok.push(m) },
+  showError: (m: string) => { toast.err.push(m) },
 }))
 
 function render(container: HTMLElement, ui: React.ReactNode) {
@@ -30,8 +31,8 @@ function click(el: Element | null) {
 }
 
 beforeEach(() => {
-  toastCalls.ok = []
-  toastCalls.err = []
+  toast.ok = []
+  toast.err = []
 })
 
 describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
@@ -48,7 +49,7 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
     click(confirm ?? null)
     await act(async () => {})
     expect(action).not.toHaveBeenCalled()
-    expect(toastCalls.err.some((m) => m.includes("wajib diisi"))).toBe(true)
+    expect(toast.err.some((m) => m.includes("wajib diisi"))).toBe(true)
     act(() => root.unmount())
     container.remove()
   })
@@ -76,7 +77,7 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
     expect(action).toHaveBeenCalledTimes(1)
     expect(action.mock.calls[0][0]).toBe(7)
     expect(action.mock.calls[0][1]).toBe("salah input nominal")
-    expect(toastCalls.ok.some((m) => m.includes("berhasil dibalik"))).toBe(true)
+    expect(toast.ok.some((m) => m.includes("berhasil dibalik"))).toBe(true)
     act(() => root.unmount())
     container.remove()
   })
