@@ -43874,3 +43874,123 @@ Belum ada / parsial (bukti grep run ini):
 - Mengubah ambang aging D1 (milik vonis Accountant atas 140-S).
 
 ID spec ini **F-2026-10-28-155-S** (FIN-BR-005 sisi Business: rumus outstanding per modul + E155). Pemilik berikutnya: Accountant (konfirmasi NETO + D1 aging + ambang PKWT BR-FIN05-05) → Lead (putus BR-FIN05 + merge) → Backend (derivasi bersama) → Frontend (label) → QA (E155 atas implementasi).
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-153-S: koreksi terkontrol faktur posted (SAL-BR-009)
+
+Pemilik: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec). Dokumen spec saja; tanpa kode/schema/migrasi/UI. Basis `origin/main` `b8d4f7c24` (28 Okt 2026, WIB). Kartu `t_8b876bae`.
+VERIFIKASI-ID: `F-2026-10-28-153-S` = 0 di backlog main, 0 di board main, 0 di 30+ head PR open (cek 28 Okt 2026 WIB); `E153-` = 0 di backlog main dan 0 di semua head PR open. Bebas.
+SUMBER-TUNGGAL: INDEKS-ATURAN:109 SAL-BR-009 Belum (koreksi terkontrol khusus faktur posted tidak ditunjuk); KEPUTUSAN-TERVERIFIKASI (fakta stack §14 konversi DP, vonis 135-V nota kredit PERLU, vonis 123-V outstanding NETO, vonis 150-V reversal berhistori, vonis 142-V nota kredit final); spec -S/-V terkait di backlog main.
+HUBUNGAN DENGAN 136-S: PR #1288 (`hermes/business-136s-koreksi-faktur`, OPEN saat spec ini ditulis) membawa spec F-2026-10-28-136-S atas basis `3f18fe48a` (28 Okt 2026 12:15 WIB) — basisnya tertinggal ±5 jam dari main tip run ini dan J3-celahnya SUDAH basi (PR #1283 merged 28 Okt 2026 13:18 WIB: `deleteSalesInvoice` kini draft-only, `sales.actions.ts:3866-3883`). Spec ini BUKAN duplikat: (a) re-verifikasi SEMUA jalur di main tip `b8d4f7c24` dengan nomor baris baru; (b) menambah K3 dok-koreksi dua arah + reason/aktor/waktu + status `corrected` yang belum ada di 136-S; (c) register BR-SAL153 + falsifikasi E153 baru. Bila Lead menghendaki satu naskah, gabungkan: fakta J1/J2/J4 136-S tetap sah, ganti seksi J3 dengan fakta §1-J3 spec ini.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (basis b8d4f7c24, `git show origin/main:<path>`)
+
+Jalur koreksi yang ADA di main tip — lima jalur, nol jalur menghapus nilai asal secara diam-diam:
+
+#### J1. Edit item faktur posted tapi belum lunas — TERKONTROL (reverse+repost atomik)
+
+- `src/actions/sales.actions.ts:3073` `updateSalesInvoice`; izin `edit_sales_invoices` (`:3077`).
+- Periode terbuka dicek SEBELUM mutasi (`assertPeriodOpen`, `:3086`).
+- `cancelled` ditolak (`:3106-3108`); ada pelunasan non-DP ditolak (`hasRealSettlement`, `:3110-3112`; definisi lunas = payment non-`down_payment` apa pun, `src/lib/services/sales-settlement.service.ts:21-34` — DP saja TIDAK mengunci).
+- `wasPosted` = status bukan `draft`/`approved` (`:3115`); bila posted: `reverseSalesInvoicePostingTx(tx, id, { reversePaymentJournals: false })` lalu `onSalesInvoicePosted` dalam tx sama (`:3291-3293`). Jurnal kas payment TIDAK dibalik — hanya AR/revenue/COGS + stok yang lahir-ulang.
+- Nilai asal: baris item lama `deleteMany` + tulis ulang (`:3140-3144`) TETAPI histori perubahan tercatat via `logActivity("update", "SalesInvoice", ...)` (`:3300`); dokumen bernomor sama (slug dari `documentNo` existing, `:3095-3099`); nomor tidak dibakar ulang (klaim nomor sekali di `postInvoice`, `:1162-1176`).
+- Kondisi gagal fail-closed: credit-gate delta naik (`:3216-3232`), cap SO (`:3267-3278`), snapshot komisi ke paid (`:3239-3253`).
+
+#### J2. Void faktur posted — TERKONTROL (dokumen lestari, reverse penuh)
+
+- `src/actions/sales.actions.ts:3908` `voidSalesInvoice`; izin `delete_sales_invoices` (`:3914`); lock `FOR UPDATE` (`:3918`).
+- Guard tiga lapis: `draft` ditolak (`:3922-3924`), `cancelled` ganda ditolak (`:3925-3927`), ada payment aktif (non-`reversed`) ditolak (`:3928-3931`, saring via `isReversedPayment`, `src/lib/finance/payment-status.ts:24`).
+- `reverseSalesInvoicePostingTx(tx, id)` default `reversePaymentJournals: true` (`:3933`), lalu status → `cancelled`, `paymentStatus` → `cancelled`, `paidAmount` → 0 (`:3934-3937`). Nilai asal: dokumen TETAP ada (bukan hapus fisik); jurnal asal REVERSED bukan dihapus (posting.service `:36-80`); jejak `logActivity("void", "SalesInvoice", ...)` (`:3939`).
+- CELAH ALASAN (temuan spec ini, USULAN K2): `voidSalesInvoice` TIDAK meminta `reason` — pesan log statis `Membatalkan faktur penjualan #id` tanpa aktor-alasan. Banding: `reverseSalesPayment` wajib `reason` non-kosong (`:2744-2746`), `completeSalesReturn` wajib `reason` (`:2123`). Void tanpa alasan = koreksi tak teraudit.
+
+#### J3. Hapus fisik faktur — TERKONTROL di main tip (celah 136-S SUDAH TERTUTUP)
+
+- `src/actions/sales.actions.ts:3866` `deleteSalesInvoice`; izin `delete_sales_invoices` (`:3872`).
+- Guard P3 vonis 121-V (PR #1283, MERGED 28 Okt 2026): status bukan `draft` → tolak + arahkan ke void (`:3873-3883`). Posted/partial/paid/sent TIDAK bisa hilang fisik lagi.
+- Fakta baru vs 136-S: J3 bukan lagi "jalur hapus tak terkontrol"; statusnya TERKONTROL-draft-only. Sisa: di dalam cabang draft, `salesPayment.deleteMany` + `salesInvoiceItem.deleteMany` + `salesInvoice.delete` masih cascade dalam tx (`:3888-3892`) — sah karena draft belum punya jurnal/stok.
+
+#### J4. Retur atas faktur posted — TERKONTROL SEBAGIAN (stok+jurnal atomik, status faktur asal tak tersentuh otomatis)
+
+- Gerbang status: `RETURNABLE_INVOICE_STATUSES = ["posted","partial","paid"]` (`src/lib/validations/sales.schemas.ts:191`); ditolak di `createSalesReturn` (`sales.actions.ts:2250-2267`) dan `updateSalesReturn` (`:3519`).
+- Selesai: `completeSalesReturn` (`:2100`); izin `approve_sales_returns` (`:2111`); hanya dari `draft` (`:2117`); SoD penyelesai ≠ pembuat (`:2125-2128`); `reason` wajib trim non-kosong (`:2123`); stok (`onSalesReturnStock`) + jurnal (`onSalesReturnCompleted`) atomik satu tx (`:2149-2155`).
+- Taut dua arah parsial: `SalesReturn.salesInvoiceId?` + `SalesReturnItem.sourceTaxInvoiceId?` menunjuk asal (`prisma/schema.prisma:2032,2047,2085`); arah balik `SalesInvoice.salesReturns[]` (`:1784`). Yang BELUM: `paidAmount`/`paymentStatus`/`status` faktur asal TIDAK ditulis hook retur — outstanding pasca-retur = derivasi baca NETO simetris vonis 123-V (backlog main `:41780-41869`, implementasi menunggu Backend di atas PR #1233). Tanpa dokumen koreksi K3, retur lunas-hanya-sebagian tak terlihat di kartu faktur.
+- Hapus retur `completed` DILARANG (`:3799`); edit retur hanya `draft`. Pajak: snapshot per baris `returnDpp/returnVat/sourceTaxRate` (F-004).
+
+#### J5. Nota kredit formal — ABSEN (bukan guard, melainkan model belum ada)
+
+- `grep -i creditnote|credit_note|NotaKredit` di `prisma/schema.prisma` + `src/actions/sales.actions.ts` = 0 model/aksi. Satu-satunya penyebut di repo: komentar `src/lib/reports/vat-invoices-data.ts:182` ("SalesCreditNote [belum ada] di repo").
+- Pengganti yang ada: `CustomerCredit` (`prisma/schema.prisma:464-483`: `sourceType/sourceId/receivedAmount/allocatedAmount/refundedAmount/status open`); `createRevisionDownCredit` (kredit revisi-turun quotation); `allocateCustomerCredit/refundCustomerCredit`.
+- Vonis: 135-V (PR #1285 OPEN) DIPUTUS PERLU nota kredit formal vs retur+CustomerCredit; 142-V (PR #1303/#1336 OPEN, rebuild) vonis final PERLU gantikan 121-V P4, pintu BR-F139-08. Sampai vonis merged + model lahir, koreksi non-retur atas faktur posted lunas HANYA lewat J2-void (kasar: seluruh faktur batal) atau J4-retur (perlu barang kembali) — selisih harga/diskon susulan tanpa arus barang tak punya dokumen.
+
+### 2. Spec S: dokumen koreksi dua arah + alasan + aktor/waktu + nilai asal utuh
+
+USULAN baru (belum ada di kode — perlu vonis Accountant bentuk jurnal + putusan Lead, lalu kartu Backend/Frontend):
+
+- K1 — Satu dokumen koreksi per peristiwa koreksi. Koreksi faktur posted yang SUDAH lunas (hasRealSettlement true) atau yang alasannya bukan barang-kembali DILARANG lewat J1-edit (J1 sudah menolak lunas) dan DILARANG lewat hapus (J3 menolak non-draft): wajib dokumen koreksi baru bertipe `correction` (nama final ikut vonis 142-V: nota kredit vs memo koreksi) yang menunjuk `salesInvoiceId` asal + `reason` wajib + `createdBy/createdAt` otomatis. Nilai asal faktur (item, grandTotal, paidAmount) TIDAK ditimpa — koreksi memuat delta bertanda + tautan, faktur asal dapat status turunan `corrected` (status baru di luar enum `SalesInvoiceStatus` kini: `draft/sent/posted/partial/paid/cancelled/approved`, `prisma/schema.prisma:5869-5877`) atau flag setara tanpa mengubah enum bila Lead menolak enum baru.
+- K2 — Alasan + aktor + waktu wajib di SEMUA jalur koreksi, termasuk J2-void yang kini tanpa alasan: tambah parameter `reason` wajib trim non-kosong pada `voidSalesInvoice` (cermin `:2744-2746` reversal payment, `:2123` retur) + catat `reversedBy/reversedAt/reversalReason` setara `SalesPayment` (`prisma/schema.prisma:2002-2008`) atau via `logActivity` ber-reason. Tanpa reason = tolak SEBELUM mutasi (pola J4).
+- K3 — Tautan dua arah terbaca: faktur asal → daftar dokumen koreksi (retur completed + reversal payment + void + nota kredit kelak); dokumen koreksi → faktur asal (sudah ada `salesInvoiceId`, `SalesReturn.salesInvoiceId?` `:2032`). K3 = menambah arah balik yang hilang: relasi/indeks `corrections[]` di sisi faktur + API baca; retur atas faktur lunas tanpa ini tak terlihat di kartu faktur.
+- K4 — Periode + idempotensi: koreksi dicek `assertPeriodOpen` SEBELUM mutasi (pola `:3086`); dokumen koreksi idempoten per peristiwa (sidik `salesInvoiceId + reason + amount`, cermin `claimIdempotencyKey` di `reverseSalesPayment` `:2765-2774`).
+- K5 — Uang: outstanding pasca-koreksi mengikuti derivasi NETO 123-V (Backend, di atas PR #1233); bentuk jurnal koreksi + PPN (termasuk DP terkonversi) = BUTUH-VONIS Accountant (cermin BR-ACFIN2-08 spec 118-S); nominal pajak/statutori TIDAK diputus spec ini.
+
+### 3. Role/permission matrix (aksi × role; key nyata `module-catalog.generated.ts:149-175`)
+
+| Aksi | Kasir/Admin penjualan | Supervisor | Finance | Admin/GA | Key izin |
+|---|---|---|---|---|---|
+| Buat retur (draft) | YA | YA | YA | YA | `create_sales_returns` |
+| Selesaikan retur (koreksi sah) | TIDAK | YA (≠ pembuat) | YA (≠ pembuat) | TIDAK | `approve_sales_returns` + SoD `:2127` |
+| Edit faktur posted blm lunas | YA | YA | YA | TIDAK | `edit_sales_invoices` |
+| Void faktur posted (K2: +reason) | TIDAK | YA | YA | TIDAK | `delete_sales_invoices` |
+| Reversal payment (dengan alasan) | TIDAK | YA | YA | TIDAK | `delete_sales_payments` (`reverseSalesPayment` `:2739`) |
+| Buat dokumen koreksi K1 | TIDAK | YA | YA | TIDAK | BUTUH-VONIS + kartu Backend (izin baru/usul pakai `create_sales_returns`) |
+| Lihat kartu koreksi dua arah K3 | YA (baca) | YA | YA | YA (baca) | `view_sales_invoices` + `view_sales_returns` |
+
+### 4. Status-transition matrix (faktur + koreksi)
+
+| Awal | Pemicu | Akhir | Penjaga |
+|---|---|---|---|
+| draft | `deleteSalesInvoice` | HILANG FISIK (sah, draft-only) | `delete_sales_invoices`; bukan-draft ditolak `:3873-3883` |
+| posted/sent/partial (+paid selama hasRealSettlement false, mis. DP penuh) | `updateSalesInvoice` | posted (reverse+repost) | tolak cancelled `:3107`; tolak lunas non-DP `:3110`; `reversePaymentJournals:false` `:3292`; periode terbuka `:3086` |
+| posted/sent/partial/paid tanpa payment aktif | `voidSalesInvoice` | cancelled (lestari) + jurnal/stok reverse | tolak draft/cancelled/ada-payment `:3922-3931`; USULAN K2: +reason wajib |
+| posted/partial/paid | `create/completeSalesReturn` | faktur TETAP; retur draft→completed (dokumen terpisah) | allowlist `RETURNABLE_INVOICE_STATUSES:191`; `approve_sales_returns` + SoD + reason `:2111-2128` |
+| paid (lunas non-DP) + alasan non-barang | dokumen koreksi K1 (USULAN) | faktur asal → `corrected`; koreksi tertaut dua arah K3 | BUTUH-VONIS jurnal (Accountant) + putusan enum/flag (Lead) |
+| payment posted | `reverseSalesPayment` | payment → `reversed` lestari + jurnal lawan + recalc piutang | reason wajib `:2744`; bupot aktif tolak; periode asal terkunci tolak; idempoten `:2765-2796` |
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti / pemilik |
+|---|---|---|---|
+| BR-SAL153-01 | Edit posted blm lunas = reverse+repost atomik, jurnal kas tak tersentuh | TERVERIFIKASI-KODE | `sales.actions.ts:3115,3291-3293` |
+| BR-SAL153-02 | Edit posted lunas non-DP DILARANG (DP saja boleh) | TERVERIFIKASI-KODE | `sales.actions.ts:3110-3112` + `sales-settlement.service.ts:21-34` |
+| BR-SAL153-03 | Void = reverse penuh + dokumen lestari; payment aktif wajib reversal dulu | TERVERIFIKASI-KODE | `sales.actions.ts:3908-3939` |
+| BR-SAL153-04 | Hapus fisik = draft-only; posted lewat void | TERVERIFIKASI-KODE (dulu celah 136-S J3, kini tertutup PR #1283) | `sales.actions.ts:3866-3883` |
+| BR-SAL153-05 | Retur completed atas posted/partial/paid: stok+jurnal atomik; status faktur asal tak berubah otomatis | TERVERIFIKASI-KODE (sebagian) | `sales.actions.ts:2100-2155`; `sales.schemas.ts:191` |
+| BR-SAL153-06 | Void wajib beralasan + catat aktor/waktu (K2) | USULAN | celah `:3939` log tanpa reason; cermin `:2744`,`:2123` |
+| BR-SAL153-07 | Koreksi lunas non-barang = dokumen baru dua arah K1+K3; nilai asal tak ditimpa | USULAN | gap J5; enum kini `:5869-5877` tanpa `corrected` |
+| BR-SAL153-08 | Outstanding pasca-koreksi = derivasi NETO simetris | BUTUH-VONIS (sudah divonis 123-V, implementasi menunggu) | backlog `:41780-41869` |
+| BR-SAL153-09 | Bentuk jurnal koreksi + PPN/DP-terkonversi | BUTUH-VONIS Accountant | cermin BR-ACFIN2-08 spec 118-S; vonis 142-V OPEN |
+| BR-SAL153-10 | Nota kredit formal PERLU vs retur+CustomerCredit | BUTUH-VONIS (diputus 135-V/142-V, PR OPEN) | PR #1285/#1303/#1336 OPEN |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+- Accurate Online: retur penjualan tertaut nomor faktur asal; opsi tanpa faktur tetap menerbitkan faktur penyeimbang bernomor sama; pelunasan via Penerimaan Penjualan; retur atas faktur lunas = refund/pemotongan piutang, bukan hapus faktur. https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/retur-penjualan/retur-penjualan-jasa/ , https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/retur-penjualan/retur-penjualan-tanpa-faktur/ (akses 28 Okt 2026)
+- Zahir Online: retur = pengurang piutang/pengeluaran kas + penambah kuantitas; wajib memo kredit menunjuk nomor penjualan yang diretur; status lunas pada retur = otomatis ada pengeluaran dana. https://help.zahironline.com/portal/id/kb/articles/retur-penjualan , https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-retur-penjualan-zahir-online-v2 (akses 28 Okt 2026)
+- ISF: J4 searah benchmark (retur dokumen terpisah menunjuk faktur asal); J3-draft-only kini searah (keduanya tak menyediakan hapus faktur terposting); J2-void + J1-edit tak punya padanan langsung di benchmark (keduanya memakai retur/memo, bukan edit/void) — selisih sah pola custom-fabrication ISF selama K2 alasan wajib dipasang; J5 nota kredit = gap vs keduanya (keduanya punya memo kredit; ISF belum).
+
+### 7. Acceptance criteria + edge cases (falsifikasi E153-1..7 untuk QA atas head implementasi persis)
+
+- E153-1: edit posted ber-payment non-DP ditolak "sudah ada pelunasan" — mutasi E153-2: cabut guard `:3110` → tes wajib MERAH (lunas bisa diedit).
+- E153-2: void tanpa reason ditolak SEBELUM mutasi (K2) — stok/jurnal nol bergerak.
+- E153-3: `deleteSalesInvoice` atas posted/partial/paid/sent ditolak "Hanya faktur draf" (regresi PR #1283 tetap hijau).
+- E153-4: retur atas faktur `draft/sent/cancelled` ditolak allowlist `:191`.
+- E153-5: `reverseSalesPayment` tanpa reason ditolak; baris `reversed` tetap ada + tersaring dari agregat (`activeSalesPaymentWhere`, `payment-status.ts:32-36`).
+- E153-6: dua `completeSalesReturn` konkuren atas sisa terakhir → tepat satu lolos (lock `FOR UPDATE` + over-return guard).
+- E153-7: kartu faktur lunas-korek menampilkan rantai dua arah K3 (faktur→koreksi→faktur) + reason/aktor/waktu tiap simpul.
+
+### Yang TIDAK diusulkan run ini
+
+- Kode/migrasi/UI apa pun (read-only; fisik = kartu Backend/Frontend di komentar kartu, bukan kartu baru).
+- Angka/jurnal/PPN koreksi (BUTUH-VONIS Accountant; vonis 142-V masih OPEN).
+- Putusan enum `corrected` vs flag (milik Lead) dan klaim status INDEKS SAL-BR-009 (wewenang Lead/Accountant pasca-vonis).
+- Duplikat PR #1288/136-S (tetap OPEN milik run lain; spec ini suplemen main-tip, bukan pengganti).
+
+ID spec ini **F-2026-10-28-153-S** (SAL-BR-009; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: Accountant (vonis BR-SAL153-09 + bentuk nota K1/K5 di atas 142-V) → Lead (putus BR-SAL153-06/07 + merge PR docs ini) → Backend (K1/K2/K3 fisik + E153-1..7 hijau) → Frontend (kartu dua arah + dialog reason) → QA (E153-1..7 atas head implementasi persis).
+
