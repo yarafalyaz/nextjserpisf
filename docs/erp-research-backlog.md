@@ -43874,3 +43874,52 @@ Belum ada / parsial (bukti grep run ini):
 - Mengubah ambang aging D1 (milik vonis Accountant atas 140-S).
 
 ID spec ini **F-2026-10-28-155-S** (FIN-BR-005 sisi Business: rumus outstanding per modul + E155). Pemilik berikutnya: Accountant (konfirmasi NETO + D1 aging + ambang PKWT BR-FIN05-05) → Lead (putus BR-FIN05 + merge) → Backend (derivasi bersama) → Frontend (label) → QA (E155 atas implementasi).
+---
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-159-V: ambang tampil aging Rp1 (D1 140-S menang), rujukan uang = NETO total-hutang (D2), konfirmasi NETO final 155-S (kartu t_31ec505d)
+
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja; tanpa kode/schema/migrasi. Basis `origin/main` `5eb622391` (28 Okt 2026 20:52 WIB). Kartu asal `t_31ec505d`.
+
+**Verifikasi ID:** grep `F-2026-10-28-159` di backlog + board worktree basis ini = 0/0 sebelum tulis. Slot tetangga -V: 157-V PR #1368 (FIN-BR-001), 158-V PR #1363 (BR-OPEN7). Slot -S: 155-S merged (FIN-BR-005), 140-S main (AC-REP-001). **159-V bebas.**
+
+### 0. Fakta kode live diverifikasi run ini (bukan klaim warisan)
+
+- `src/components/reports/aging-report-view.tsx:51-69` — `buildAgingRows` SUDAH memakai `isOutstandingSettled(outstanding)` (FIN-BR-006 Rp1) + komentar V3 130-V yang melarang `!isSettled()` mentah. D1 spec 140-S ("tiga titik masih `<= 0`") SUDAH basi di basis ini: layar aging + PDF aging sama-sama Rp1.
+- `src/app/(dashboard)/laporan/piutang-jatuh-tempo/page.tsx:26-38` + `hutang-jatuh-tempo/page.tsx:26-35` — kedua halaman SUDAH memanggil `buildAgingRows` (NETO via `payableOutstanding` + `returnCredit` layar piutang). D3/D4 140-S (fallback impact, float mutasi) di luar lane vonis ini — tetap milik Frontend/Backend.
+- `src/app/(dashboard)/laporan/ringkasan-ar-ap/page.tsx:31-66` (TEMUAN D1 run ini, di luar matriks 140-S): hitung lokal float mentah `invoiced - paid` + filter `> 0`, TANPA `returnCredit`, TANPA `withholdingAmount`, TANPA `isOutstandingSettled`. Loader kanonis PDF `src/lib/reports/ar-ap-summary-data.ts:59,65` SUDAH NETO sen (`buildArByCustomer`/`buildApByVendor` di `ar-ap-summary.ts:13-36`) tapi gerbangnya masih `> 0` — BUKAN Rp1. Akibat: layar ringkasan vs PDF ringkasan vs aging = tiga angka untuk fakta sama (preseden E123-6).
+- `src/app/(dashboard)/laporan/total-hutang/page.tsx:35-44` — halaman total-hutang TIDAK mengoper `withholdingAmount` ke `buildPayablesSummary` (field opsional, default 0) sementara loader PDF `loadPayablesTotal` (`aging-reports-data.ts:178-188`) mengopernya. Sisa layar = bruto, PDF = NETO. Satu-satunya titik bruto-vs-NETO yang tersisa di permukaan resmi.
+- `src/lib/reports/payables-summary.ts:78` — gerbang `if (outstanding <= 0) continue` masih NOL, bukan `isOutstandingSettled`. Sama untuk `ar-ap-summary-data.ts:59,65` (`> 0`). Empat gerbang non-Rp1 tersisa: ringkasan layar (float `> 0`), `ar-ap-summary-data` AR/AP (`> 0`), `payables-summary` (`<= 0`).
+- PR #1370 branch `origin/hermes/backend-155-outstanding-derivasi` (OPEN, head `e40c7d6cc`, MERGEABLE): derivasi M1/M2 155-S — guard jual `,0`→`,2` (`sales.actions.ts:2031,3409`), reversal beli NETO + `,2` + status `isSettled` (`purchase.actions.ts:1827-1845`), retur jual beku `grandTotalAsal` + status dari outstanding valid (`accounting.hook.ts:2091-2140`), retur beli turunkan `balanceDue` bukan `grandTotal` (`:2354-2390`). Nol sentuh gerbang tampil laporan. Vonis ini TIDAK menilai isi PR itu (milik QA t_19987b23/Backend), hanya memakai rumusnya sebagai acuan NETO final.
+
+### 1. Putusan (mengikat Backend/Frontend/QA sesudah merged)
+
+- **D1 (140-S) DIPUTUS: ambang tampil aging = `isOutstandingSettled` Rp1, SUDAH terpasang — DITERIMA TANPA KERJA BARU.** Fakta live di atas membuktikan vonis V3 130-V sudah dieksekusi di `buildAgingRows` + kedua loader aging. E140-1/E140-6 jalan apa adanya atas implementasi existing; E140-1 varian "tampil = MERAH" berlaku (sisa ≤ Rp1 tampil di aging layar/PDF = MERAH, dua arah).
+- **D2 (140-S) DIPUTUS: total rujukan uang = Total Hutang (NETO, termasuk tanpa-`dueDate`), BUKAN KPI aging.** Alasan: aging menjawab "kapan ditagih" (populasi ber-`dueDate`), total-hutang menjawab "berapa kewajiban" (populasi penuh). KPI layar `hutang-jatuh-tempo` DILARANG dipakai sebagai rujukan SPT/neraca/rujukan uang. Label + notice pembeda SUDAH terpasang (`HutangJatuhTempoNotice` + `NARASI_JATUH_TEMPO` + notice PDF `loadPayablesTotal`). DITERIMA; E140-2 jalan apa adanya.
+- **NETO final 155-S DIKONFIRMASI (mengikat, prospektif sejak PR #1370):** AR `outstanding = grandTotalAsal − returnCreditValid − totalPaidValid`; AP `outstanding = (grandTotal − withholdingAmount) − Σ alokasi-dari-payment-completed`; `grandTotalAsal` BEKU terhadap retur (123-V Putusan 0.2, dieksekusi #1370); presisi sen; lunas ⇔ `isSettled` Rp1 dengan basis > 0; PKWT tanpa toleransi (`> 0`, BR-FIN05-05) DITERIMA sebagai pengecualian sadar — kompensasi statutori bukan pembulatan kas.
+- **Empat gerbang tampil non-Rp1 = TEMUAN WAJIB PERBAIKAN (pemilik Backend, satu PR, tanpa ubah rumus):** (a) `ringkasan-ar-ap/page.tsx` WAJIB memanggil loader kanonis `loadArApSummary` (atau `buildArByCustomer`/`buildApByVendor` + `isOutstandingSettled`), hapus hitung float lokal — ini D1 Frontend t_7f39e2c0 yang sudah HANDOFF; (b) `ar-ap-summary-data.ts:59,65` `> 0` → `!isOutstandingSettled(...)`; (c) `payables-summary.ts:78` `<= 0` → `isOutstandingSettled(...)`; (d) `total-hutang/page.tsx` WAJIB oper `withholdingAmount` (NETO, sama dengan PDF). Sampai (a)-(d) merged, E123-6/E155 atas fixture sama yang menyentuh empat titik ini = MERAH sah.
+- **BR-FIN05-05 (ambang PKWT) DIPUTUS: `> 0` TANPA toleransi — DITERIMA.** Alasan: PKWT = kewajiban statutori per pekerja, bukan sisa pembulatan kas; toleransi Rp1 di sana menyembunyikan kewajiban hukum. Beda ambang vs dagang dicatat sadar, bukan inkonsistensi.
+
+### 2. Matriks posting — warisan, bukan baru
+
+| Event | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| Faktur lunas-dalam-toleransi (sisa ≤ Rp1) | — (tanpa jurnal penyesuaian) | — | status `paid`; sisa mentah tampil apa adanya di lapisan hitung; label `Lunas (sisa pembulatan RpX dalam toleransi)` di permukaan baris (warisi 123-V Putusan 5) |
+| Retur jual completed (NETO final) | Retur Penjualan + PPN snapshot | Piutang | `grandTotalAsal` BEKU; pengurang = `returnCredit` jurnal POSTED; status dari outstanding valid (warisi 123-V + #1370) |
+| Retur beli (NETO final) | Hutang Usaha | — (turunkan `balanceDue`, bukan `grandTotal`) | status dari outstanding NETO `isSettled` (warisi #1370 M2) |
+
+### 3. Batas vonis (jujur)
+
+- INDEKS-ATURAN TIDAK disentuh PR ini: `AC-REP-001` naik `Belum`→`Sebagian` sesudah (a)-(d) merged + E140 lulus; `FIN-BR-005` naik `Sebagian`→`Terpasang` sesudah #1370 merged + (a)-(d) + E155 lulus. Penilaian milik Lead/QA.
+- D3/D4 140-S (kartu stok PDF, mutasi float) TIDAK diputus di sini — milik Frontend/Backend.
+- Kepatuhan: tarif/pajak tidak diputus di sini (rujuk 123-V/137-V); ambang Rp1 = toleransi pembulatan rupiah-penuh internal (FIN-BR-006), bukan standar kompetitor (150-S §5 mencatat beda ini).
+- Tanpa kartu baru run ini. Penerus: Backend (a)-(d) → Frontend D1 120-S (konsumen, t_7f39e2c0) → QA E140 + E123-6/E155 atas head implementasi → Lead merge.
+
+### Falsifikasi QA (E159, atas head implementasi Backend persis — BUKAN head vonis ini)
+
+- E159-1: fixture sisa Rp0,50/Rp1,00 berstatus `paid` tampil di ringkasan AR/AP (layar ATAU PDF) = MERAH dua arah.
+- E159-2: fixture tagihan ber-`withholdingAmount` → total-hutang layar ≠ PDF (bruto vs NETO), ATAU KPI aging dipakai sebagai total kewajiban di permukaan rujukan = MERAH.
+- E159-3: fixture retur completed → `grandTotalAsal` faktur/tagihan berubah, ATAU outstanding dihitung `grandTotal-turun + returnCredit` (hitung-ganda) = MERAH.
+- E159-4: mutasi penjaga — kembalikan satu dari empat gerbang ke `> 0`/`<= 0` → tes pengunci wajib MERAH; pulihkan → hijau.
+- E159-5: diff PR ini menyentuh `src/`/`prisma/`/migrasi/INDEKS/board apa pun = MERAH (docs-backlog saja).
+
+ID vonis ini **F-2026-10-28-159-V** (D1/D2 140-S + NETO final 155-S; jawaban kartu t_31ec505d). Pemilik berikutnya: Backend (gerbang tampil (a)-(d)) → Frontend (D1 120-S t_7f39e2c0) → QA (E140 + E159 head implementasi) → Lead (merge + INDEKS sesudah loop tertutup).
