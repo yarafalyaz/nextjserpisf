@@ -44664,3 +44664,40 @@ Basis: spec F-2026-10-28-131-S §1-§5 (main) + putusan Lead F-2026-10-28-132-P 
 - E162-5: setoran tunai tanpa satu unsur bukti (tanggal/aktor/akun/tautan/nominal) mengurangi sisa = MERAH; kelebihan hangus / jadi pendapatan = MERAH.
 - E162-6: dua implementasi urutan alokasi bercabang (generasi ≠ amortisasi) = MERAH.
 ID vonis ini **F-2026-10-29-162-V** (jawaban §2 132-P: prioritas/patokan ratifikasi + plafon-PHK/account-write-off/pembulatan/kas-bukti/kelebihan). Pemilik berikutnya: Lead (merge PR vonis ini) → Backend (penjaga + helper + `written_off` + dokumen 07 + setting) → Frontend (permukaan) → QA (E-LOAN + E162 head implementasi).
+
+---
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-157-V: toleransi harga per baris vs PO + PPN masukan tanpa nomor + skema termin (jawaban BR-FIN01-10/12/13 spec F-2026-10-28-156-S)
+
+Rujukan: spec F-2026-10-28-156-S (PR #1354 MERGED 6660a446f) §6/§7 + BR-FIN01-10/12/13 + E156; basis `origin/main` 984d0a471; fakta kode diverifikasi run ini di worktree cabang itu. Dokumen vonis saja, tanpa kode/schema/migrasi.
+
+### 1. Status (USULAN → diputus run ini)
+
+| BR | Status pra-vonis | Status pasca-vonis |
+|---|---|---|
+| BR-FIN01-10 (harga per baris vs PO) | USULAN | TERVERIFIKASI-KODE + VONIS TOLERANSI (Putusan 1) |
+| BR-FIN01-12 (tax>0 tanpa taxInvoiceNumber) | USULAN | VONIS WARNING-KERAS (Putusan 2; fail-closed ditolak) |
+| BR-FIN01-13 (termin bertahap) | USULAN | VONIS SKEMA TERMIN-REF (Putusan 3; bukan jadwal di PO) |
+| BR-FIN01-11/14 | USULAN | TETAP USULAN — putus Lead, bukan vonis ini |
+
+### 2. Vonis
+
+**Putusan 1 — BR-FIN01-10: match harga per baris, toleransi = 1% per baris, cap agregat tetap.** Backend membangun guard per baris di create+edit+confirm (tiga titik, sama dengan V1-V6 existing): tiap baris bill ber-PO dibandingkan ke harga acuan baris PO/GR yang ditautkan (`VendorBillItem.goodsReceiptItemId → GoodsReceiptItem.unitCost`, fallback `PurchaseOrderItem.unitPrice` untuk jasa). Syarat lolos per baris: `|unitPrice_bill − unitPrice_acuan| × qty ≤ max(Rp1000, 1% × qty × unitPrice_acuan)`. Guard agregat existing (max(Rp1000,1%) atas total, `assertThreeWayMatch` + `assertGrBillingWithinReceived`) TETAP dan tidak berubah — guard per baris menambah, bukan mengganti. Over-bill HARGA (unitPrice naik, qty sama) dan over-bill QTY (qty naik) diperlakukan SAMA di angka, dibedakan hanya di pesan error (operator tahu sisi mana yang salah). Alasan: resep(existing max(Rp1000,1%) agregat) × skala baris = konsisten, bukan ambang baru; cap Rp1000 melindungi baris kecil dari 1% yang tak bermakna (Rp50 atas Rp5000). Diskon baris (`discountPercent/Amount`) ikut dihitung via `computeBillLineAmounts` (net `subtotal` baris vs net acuan), bukan harga bruto — diskon sah bukan over-bill. Jasa tanpa GR: acuan = `PurchaseOrderItem.unitPrice` baris PO yang sama `itemId`. Bill TANPA baris (kop manual): guard per baris diskip by-design (`summarizeBillItems` null), pagar tetap agregat jasa. Toleransi ini GUARD KUANTITAS, bukan toleransi uang lunas (FIN-BR-006 Rp1 tidak ikut — status lunas tetap `isSettled` Rp1).
+
+**Putusan 2 — BR-FIN01-12: `tax>0` tanpa `taxInvoiceNumber` = WARNING KERAS, bukan fail-closed.** Confirm TETAP LULUS (jurnal tidak berubah: Dr clearing/beban + Dr PPN Masukan / Cr AP — hook `onVendorBillPosted` tidak disentuh run ini), tetapi confirm wajib mengembalikan `warning` (pola `completedOrderNotice` existing: `confirmVendorBill` sudah punya jalur `{ success: true, warning }`) berbunyi nomor faktur pajak belum diisi, dan read-model SPT memperlakukan PPN bill tanpa nomor SEBAGAI `not_creditable` sementara (alasan `INVALID_INVOICE`) sampai nomor diisi via edit draft — JANGAN hapus PPN dari jurnal, hanya tandai tidak-dikreditkan di SPT. Alasan menolak fail-closed: (a) praktik ritel membuktikan faktur pajak pemasok acap menyusul sesudah bill posted; tolak confirm = AP tidak tercatat padahal hutang nyata, melanggar kelengkapan; (b) vonis F-001/F-002 sudah memutus VendorBill tanpa nomor valid = PPN gabung harga perolehan/HPP di SPT — warning + tandai SPT konsisten dengan itu tanpa memblokir operasional; (c) edit = draft-only (`updateVendorBill` `:2965`), jadi bill posted telanjur tanpa nomor tidak bisa diperbaiki via edit — Backend WAJIB menyediakan aksi isi-nomor-faktur-pajak pasca-posting (tanpa ubah angka/jurnal; hanya `taxInvoiceNumber` + flip SPT `not_creditable → creditable` dalam jendela 3 masa UU PPN 9(2)/(9)). Tanpa aksi itu vonis ini pincang — dicatat sebagai syarat Backend di §4.
+
+**Putusan 3 — BR-FIN01-13: termin = REFERENSI TEKS, bukan jadwal tereksekusi.** `terms` bill tetap teks bebas; `paymentTerm` PO tetap teks bebas; TIDAK ada tabel jadwal termin, TIDAK ada validasi % termin, TIDAK ada linkage mesin PO→bill per termin. Satu-satunya penjagaan baru: bill ber-PO WAJIB mengisi `terms` dengan format referensi `TERMIN n/m — <acuan>` (contoh: `TERMIN 1/3 — DP 30% PO-2026-001`) — format bebas selain itu DITOLAK di create+edit (validasi string ringan, bukan mesin jadwal). Alasan: kebutuhan nyata = keterlacakan audit (bill parsial mana dari termin mana), bukan enforcement % — enforcement % termin milik kontrak komersial, bukan guard sistem; YAGNI: tabel jadwal + validasi % = over-engineering untuk masalah label. Bill TANPA `terms` (kosong/null) = dianggap termin tunggal/lunas-sekali, LULUS tanpa warning. Termin bertahap yang butuh kontrol % = revisi PO bertahap (PO termin terpisah per tahap), bukan satu PO dipecah sistem.
+
+### 3. Posting matrix (TIDAK ada jurnal baru run ini)
+
+| Event | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| Confirm bill (existing) | Clearing/beban + PPN Masukan | AP | V1-V6 + Putusan 1 (per-baris) — Putusan 2/3 tidak mengubah jurnal |
+| Confirm bill tax>0 tanpa nomor | SAMA (jurnal utuh) + warning | SAMA | Putusan 2: lulus + warning + SPT tandai `not_creditable` sementara |
+| Isi nomor faktur pasca-posting (aksi baru Backend) | NOL jurnal (hanya flip SPT) | NOL | Nomor valid + dalam jendela 3 masa; periode asal terbuka untuk koreksi SPT bila sudah dilaporkan |
+
+### 4. Pemilik berikutnya
+
+BOT Lead (putus BR-FIN01-11/14 + merge PR docs ini; pilih format referensi termin §3 vs usulan Business) → BOT Backend (guard per-baris Putusan 1 di 3 titik + warning Putusan 2 di confirm + aksi isi-nomor-faktur pasca-posting; syarat: tanpa ubah jurnal/hook existing, tanpa ubah toleransi agregat) → BOT Frontend (permukaan warning nomor-faktur + format referensi termin sesudah kontrak; tanpa hitung ulang) → BOT QA (E156-1..8 existing + E157 baru: E157-1 over-bill harga per baris > toleransi lolos confirm = MERAH; E157-2 diskon sah ditolak guard per-baris = MERAH; E157-3 bill tax>0 tanpa nomor DITOLAK confirm = MERAH (harus lulus + warning); E157-4 PPN bill tanpa nomor masuk PPN Masukan SPT tanpa tanda = MERAH; E157-5 aksi isi-nomor flip SPT tanpa jurnal baru = wajib HIJAU; E157-6 bill `terms` format non-referensi lolos = MERAH; E157-7 termin tunggal tanpa `terms` ditolak = MERAH).
+
+ID vonis ini **F-2026-10-28-157-V** (toleransi harga per-baris + PPN-tanpa-nomor warning + termin-referensi; jawaban BR-FIN01-10/12/13 spec F-2026-10-28-156-S; basis `origin/main` 984d0a471). Butuh putusan accountant: TIDAK lagi untuk BR-FIN01-10/12/13 (ditutup vonis ini); YA bila Backend menemukan baris tanpa acuan PO/GR yang tak terjangkau guard per-baris.
