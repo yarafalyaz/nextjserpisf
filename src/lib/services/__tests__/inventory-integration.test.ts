@@ -118,282 +118,176 @@ describe("Inventory engine (DB integration)", () => {
 describe("SAL-BR-014 serialisasi bersama (DB integration)", () => {
   const enabled = () => process.env.RUN_DB_INTEGRATION === "1" && dbUp
 
+  async function setupSalBr014Tree(stamp: string) {
+    const customer = await prisma.customer.create({ data: { name: `Cust ${stamp}` } })
+    const warehouse = await prisma.warehouse.create({
+      data: { code: `W${stamp}`, name: `WH ${stamp}` },
+    })
+    const item = await prisma.item.create({
+      data: { sku: `SKU-${stamp}`, name: `Item ${stamp}`, unitOfMeasure: "PCS", isProduct: true, qtyOnHand: 0 },
+    })
+    const quotation = await prisma.quotation.create({
+      data: { documentNo: `Q-${stamp}`, customerId: customer.id, date: new Date() },
+    })
+    const workOrder = await prisma.workOrder.create({
+      data: {
+        documentNo: `WO-${stamp}`,
+        customerId: customer.id,
+        quotationId: quotation.id,
+        date: new Date(),
+      },
+    })
+    const invoice = await prisma.salesInvoice.create({
+      data: {
+        documentNo: `INV-${stamp}`,
+        customerId: customer.id,
+        quotationId: quotation.id,
+        date: new Date(),
+      },
+    })
+    const issue = await prisma.materialIssue.create({
+      data: {
+        documentNo: `MI-${stamp}`,
+        warehouseId: warehouse.id,
+        workOrderId: workOrder.id,
+        date: new Date(),
+      },
+    })
+    return { customer, warehouse, item, quotation, workOrder, invoice, issue }
+  }
+
+  async function teardownSalBr014Tree(t: Awaited<ReturnType<typeof setupSalBr014Tree>>) {
+    await prisma.stockMove.deleteMany({ where: { itemId: t.item.id } })
+    await prisma.materialIssue.delete({ where: { id: t.issue.id } }).catch(() => undefined)
+    await prisma.workOrder.delete({ where: { id: t.workOrder.id } }).catch(() => undefined)
+    await prisma.salesInvoice.delete({ where: { id: t.invoice.id } }).catch(() => undefined)
+    await prisma.quotation.delete({ where: { id: t.quotation.id } }).catch(() => undefined)
+    await prisma.item.delete({ where: { id: t.item.id } }).catch(() => undefined)
+    await prisma.warehouse.delete({ where: { id: t.warehouse.id } }).catch(() => undefined)
+    await prisma.customer.delete({ where: { id: t.customer.id } }).catch(() => undefined)
+  }
+
+  // Balapan dua posting dokumen berbeda pada pohon quotation sama.
+  // `winnerInsertDelayMs` = jeda pemenang antara `signalLocked()` dan
+  // `stockMove.create`: 0 = fixture lama; 300 = varian isolasi LOW-1
+  // t_25a66a5d (penantang masuk guard sebelum baris move pemenang ada —
+  // hanya kunci bersama `quotations` yang menahannya, cabut kunci = MERAH).
+  async function runSalBr014SharedQuotationRace(winnerInsertDelayMs: number) {
+    const stamp = `SAL014-${winnerInsertDelayMs}-${Date.now()}`
+    const t = await setupSalBr014Tree(stamp)
+
+    const HOLD_MS = 900
+    let signalLocked!: () => void
+    const lockHeld = new Promise<void>((resolve) => {
+      signalLocked = resolve
+    })
+    let salesError: unknown = null
+    let issueError: unknown = null
+
+    try {
+      const salesTx = prisma
+        .$transaction(
+          async (tx) => {
+            await assertSalesInvoiceStockOutOnce(tx, t.invoice.id, [{ itemId: t.item.id, qty: 3 }])
+            // Kunci quotation sudah dipegang di titik ini (assert = lock dulu).
+            signalLocked()
+            if (winnerInsertDelayMs > 0) {
+              // Jeda kunci: penantang WAJIB sudah masuk guard sebelum baris
+              // move pemenang disisipkan. Tanpa kunci bersama, guard
+              // penantang membaca snapshot kosong dan ikut lolos.
+              await new Promise((r) => setTimeout(r, winnerInsertDelayMs))
+            }
+            await tx.stockMove.create({
+              data: {
+                documentNo: `SM-S-${stamp}`,
+                itemId: t.item.id,
+                warehouseId: t.warehouse.id,
+                qty: 3,
+                impact: "OUT",
+                status: "posted",
+                referenceType: "SalesInvoice",
+                referenceId: t.invoice.id,
+              },
+            })
+            // Tahan transaksi tetap terbuka: penantang WAJIB berbaris di
+            // kunci bersama, bukan membaca snapshot sebelum commit.
+            await new Promise((r) => setTimeout(r, HOLD_MS))
+            return "sales"
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+        .catch((e: unknown) => {
+          salesError = e
+          return null
+        })
+
+      await lockHeld
+
+      const issueTx = prisma
+        .$transaction(
+          async (tx) => {
+            await assertMaterialIssueStockOutOnce(tx, t.issue.id, [{ itemId: t.item.id, qty: 3 }])
+            await tx.stockMove.create({
+              data: {
+                documentNo: `SM-M-${stamp}`,
+                itemId: t.item.id,
+                warehouseId: t.warehouse.id,
+                qty: 3,
+                impact: "OUT",
+                status: "posted",
+                referenceType: "MaterialIssue",
+                referenceId: t.issue.id,
+              },
+            })
+            return "material"
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+        .catch((e: unknown) => {
+          issueError = e
+          return null
+        })
+
+      const [salesResult, issueResult] = await Promise.all([salesTx, issueTx])
+
+      // Pemenang: faktur penjualan (memegang kunci lebih dulu).
+      expect(salesError).toBeNull()
+      expect(salesResult).toBe("sales")
+      // Penantang: ditolak guard SETELAH melihat move lawan yang commit.
+      expect(issueResult).toBeNull()
+      expect(String((issueError as Error | null)?.message ?? "")).toMatch(/SAL-BR-014/)
+
+      const outMoves = await prisma.stockMove.count({
+        where: { itemId: t.item.id, impact: "OUT", status: "posted" },
+      })
+      expect(outMoves).toBe(1)
+    } finally {
+      await teardownSalBr014Tree(t)
+    }
+  }
+
   it("dua posting konkuren dokumen berbeda pada pohon quotation sama: tepat satu pengeluaran (stok cukup)", async () => {
     if (!enabled()) {
       console.warn("RUN_DB_INTEGRATION/db tidak siap — skipping konkurensi SAL-BR-014")
       return
     }
-    const stamp = `SAL014-${Date.now()}`
-    const customer = await prisma.customer.create({ data: { name: `Cust ${stamp}` } })
-    const warehouse = await prisma.warehouse.create({
-      data: { code: `W${stamp}`, name: `WH ${stamp}` },
-    })
-    const item = await prisma.item.create({
-      data: { sku: `SKU-${stamp}`, name: `Item ${stamp}`, unitOfMeasure: "PCS", isProduct: true, qtyOnHand: 0 },
-    })
-    const quotation = await prisma.quotation.create({
-      data: { documentNo: `Q-${stamp}`, customerId: customer.id, date: new Date() },
-    })
-    const workOrder = await prisma.workOrder.create({
-      data: {
-        documentNo: `WO-${stamp}`,
-        customerId: customer.id,
-        quotationId: quotation.id,
-        date: new Date(),
-      },
-    })
-    const invoice = await prisma.salesInvoice.create({
-      data: {
-        documentNo: `INV-${stamp}`,
-        customerId: customer.id,
-        quotationId: quotation.id,
-        date: new Date(),
-      },
-    })
-    const issue = await prisma.materialIssue.create({
-      data: {
-        documentNo: `MI-${stamp}`,
-        warehouseId: warehouse.id,
-        workOrderId: workOrder.id,
-        date: new Date(),
-      },
-    })
-
-    const HOLD_MS = 900
-    let signalLocked!: () => void
-    const lockHeld = new Promise<void>((resolve) => {
-      signalLocked = resolve
-    })
-    let salesError: unknown = null
-    let issueError: unknown = null
-
-    try {
-      const salesTx = prisma
-        .$transaction(
-          async (tx) => {
-            await assertSalesInvoiceStockOutOnce(tx, invoice.id, [{ itemId: item.id, qty: 3 }])
-            // Kunci quotation sudah dipegang di titik ini (assert = lock dulu).
-            signalLocked()
-            await tx.stockMove.create({
-              data: {
-                documentNo: `SM-S-${stamp}`,
-                itemId: item.id,
-                warehouseId: warehouse.id,
-                qty: 3,
-                impact: "OUT",
-                status: "posted",
-                referenceType: "SalesInvoice",
-                referenceId: invoice.id,
-              },
-            })
-            // Tahan transaksi tetap terbuka: penantang WAJIB berbaris di
-            // kunci bersama, bukan membaca snapshot sebelum commit.
-            await new Promise((r) => setTimeout(r, HOLD_MS))
-            return "sales"
-          },
-          { timeout: 30_000, maxWait: 10_000 },
-        )
-        .catch((e: unknown) => {
-          salesError = e
-          return null
-        })
-
-      await lockHeld
-
-      const issueTx = prisma
-        .$transaction(
-          async (tx) => {
-            await assertMaterialIssueStockOutOnce(tx, issue.id, [{ itemId: item.id, qty: 3 }])
-            await tx.stockMove.create({
-              data: {
-                documentNo: `SM-M-${stamp}`,
-                itemId: item.id,
-                warehouseId: warehouse.id,
-                qty: 3,
-                impact: "OUT",
-                status: "posted",
-                referenceType: "MaterialIssue",
-                referenceId: issue.id,
-              },
-            })
-            return "material"
-          },
-          { timeout: 30_000, maxWait: 10_000 },
-        )
-        .catch((e: unknown) => {
-          issueError = e
-          return null
-        })
-
-      const [salesResult, issueResult] = await Promise.all([salesTx, issueTx])
-
-      // Pemenang: faktur penjualan (memegang kunci lebih dulu).
-      expect(salesError).toBeNull()
-      expect(salesResult).toBe("sales")
-      // Penantang: ditolak guard SETELAH melihat move lawan yang commit.
-      expect(issueResult).toBeNull()
-      expect(String((issueError as Error | null)?.message ?? "")).toMatch(/SAL-BR-014/)
-
-      const outMoves = await prisma.stockMove.count({
-        where: { itemId: item.id, impact: "OUT", status: "posted" },
-      })
-      expect(outMoves).toBe(1)
-    } finally {
-      await prisma.stockMove.deleteMany({ where: { itemId: item.id } })
-      await prisma.materialIssue.delete({ where: { id: issue.id } }).catch(() => undefined)
-      await prisma.workOrder.delete({ where: { id: workOrder.id } }).catch(() => undefined)
-      await prisma.salesInvoice.delete({ where: { id: invoice.id } }).catch(() => undefined)
-      await prisma.quotation.delete({ where: { id: quotation.id } }).catch(() => undefined)
-      await prisma.item.delete({ where: { id: item.id } }).catch(() => undefined)
-      await prisma.warehouse.delete({ where: { id: warehouse.id } }).catch(() => undefined)
-      await prisma.customer.delete({ where: { id: customer.id } }).catch(() => undefined)
-    }
+    await runSalBr014SharedQuotationRace(0)
   })
 
   it("varian isolasi kunci bersama: penantang masuk guard SEBELUM move pemenang disisipkan (cabut kunci = MERAH)", async () => {
-    // LOW-1 t_25a66a5d: varian ini mengisolasi kunci bersama `quotations`.
-    // Beda dengan tes di atas: pemenang menunda `stockMove.create` 300 ms
-    // SESUDAH `signalLocked()`, sehingga penantang dijamin sudah masuk
-    // guard (berbaris di kunci quotations) sebelum baris `stock_moves`
-    // pemenang ada. Tanpa `lockStockOutQuotationsTx` (locking read
-    // dibiarkan) kedua guard sama-sama lolos snapshot -> 2 OUT atau
-    // deadlock P2034; dengan kunci, penantang menunggu commit lalu
-    // ditolak bersih SAL-BR-014.
+    // LOW-1 t_25a66a5d: `runSalBr014SharedQuotationRace(300)` menunda
+    // `stockMove.create` pemenang 300 ms sesudah `signalLocked()`, sehingga
+    // penantang masuk guard sebelum baris move pemenang ada. Tanpa
+    // `lockStockOutQuotationsTx` (locking read dibiarkan) kedua guard
+    // sama-sama lolos snapshot -> MERAH P2034; dengan kunci, penantang
+    // menunggu commit lalu ditolak bersih SAL-BR-014.
     if (!enabled()) {
       console.warn("RUN_DB_INTEGRATION/db tidak siap — skipping varian isolasi kunci SAL-BR-014")
       return
     }
-    const stamp = `SAL014K-${Date.now()}`
-    const customer = await prisma.customer.create({ data: { name: `Cust ${stamp}` } })
-    const warehouse = await prisma.warehouse.create({
-      data: { code: `W${stamp}`, name: `WH ${stamp}` },
-    })
-    const item = await prisma.item.create({
-      data: { sku: `SKU-${stamp}`, name: `Item ${stamp}`, unitOfMeasure: "PCS", isProduct: true, qtyOnHand: 0 },
-    })
-    const quotation = await prisma.quotation.create({
-      data: { documentNo: `Q-${stamp}`, customerId: customer.id, date: new Date() },
-    })
-    const workOrder = await prisma.workOrder.create({
-      data: {
-        documentNo: `WO-${stamp}`,
-        customerId: customer.id,
-        quotationId: quotation.id,
-        date: new Date(),
-      },
-    })
-    const invoice = await prisma.salesInvoice.create({
-      data: {
-        documentNo: `INV-${stamp}`,
-        customerId: customer.id,
-        quotationId: quotation.id,
-        date: new Date(),
-      },
-    })
-    const issue = await prisma.materialIssue.create({
-      data: {
-        documentNo: `MI-${stamp}`,
-        warehouseId: warehouse.id,
-        workOrderId: workOrder.id,
-        date: new Date(),
-      },
-    })
-
-    const HOLD_MS = 900
-    const WINNER_INSERT_DELAY_MS = 300
-    let signalLocked!: () => void
-    const lockHeld = new Promise<void>((resolve) => {
-      signalLocked = resolve
-    })
-    let salesError: unknown = null
-    let issueError: unknown = null
-
-    try {
-      const salesTx = prisma
-        .$transaction(
-          async (tx) => {
-            await assertSalesInvoiceStockOutOnce(tx, invoice.id, [{ itemId: item.id, qty: 3 }])
-            // Kunci quotation sudah dipegang di titik ini (assert = lock dulu).
-            signalLocked()
-            // Jeda kunci: penantang WAJIB sudah masuk guard sebelum baris
-            // move pemenang disisipkan. Tanpa kunci bersama, guard
-            // penantang membaca snapshot kosong dan ikut lolos.
-            await new Promise((r) => setTimeout(r, WINNER_INSERT_DELAY_MS))
-            await tx.stockMove.create({
-              data: {
-                documentNo: `SM-S-${stamp}`,
-                itemId: item.id,
-                warehouseId: warehouse.id,
-                qty: 3,
-                impact: "OUT",
-                status: "posted",
-                referenceType: "SalesInvoice",
-                referenceId: invoice.id,
-              },
-            })
-            // Tahan transaksi tetap terbuka: penantang WAJIB berbaris di
-            // kunci bersama, bukan membaca snapshot sebelum commit.
-            await new Promise((r) => setTimeout(r, HOLD_MS))
-            return "sales"
-          },
-          { timeout: 30_000, maxWait: 10_000 },
-        )
-        .catch((e: unknown) => {
-          salesError = e
-          return null
-        })
-
-      await lockHeld
-
-      const issueTx = prisma
-        .$transaction(
-          async (tx) => {
-            await assertMaterialIssueStockOutOnce(tx, issue.id, [{ itemId: item.id, qty: 3 }])
-            await tx.stockMove.create({
-              data: {
-                documentNo: `SM-M-${stamp}`,
-                itemId: item.id,
-                warehouseId: warehouse.id,
-                qty: 3,
-                impact: "OUT",
-                status: "posted",
-                referenceType: "MaterialIssue",
-                referenceId: issue.id,
-              },
-            })
-            return "material"
-          },
-          { timeout: 30_000, maxWait: 10_000 },
-        )
-        .catch((e: unknown) => {
-          issueError = e
-          return null
-        })
-
-      const [salesResult, issueResult] = await Promise.all([salesTx, issueTx])
-
-      // Pemenang: faktur penjualan (memegang kunci lebih dulu).
-      expect(salesError).toBeNull()
-      expect(salesResult).toBe("sales")
-      // Penantang: ditolak guard SETELAH melihat move lawan yang commit.
-      expect(issueResult).toBeNull()
-      expect(String((issueError as Error | null)?.message ?? "")).toMatch(/SAL-BR-014/)
-
-      const outMoves = await prisma.stockMove.count({
-        where: { itemId: item.id, impact: "OUT", status: "posted" },
-      })
-      expect(outMoves).toBe(1)
-    } finally {
-      await prisma.stockMove.deleteMany({ where: { itemId: item.id } })
-      await prisma.materialIssue.delete({ where: { id: issue.id } }).catch(() => undefined)
-      await prisma.workOrder.delete({ where: { id: workOrder.id } }).catch(() => undefined)
-      await prisma.salesInvoice.delete({ where: { id: invoice.id } }).catch(() => undefined)
-      await prisma.quotation.delete({ where: { id: quotation.id } }).catch(() => undefined)
-      await prisma.item.delete({ where: { id: item.id } }).catch(() => undefined)
-      await prisma.warehouse.delete({ where: { id: warehouse.id } }).catch(() => undefined)
-      await prisma.customer.delete({ where: { id: customer.id } }).catch(() => undefined)
-    }
+    await runSalBr014SharedQuotationRace(300)
   })
+
 
   it("dua konsumen konkuren berebut unit terakhir: satu menang, satu 'Stok tidak mencukupi', lapisan tidak negatif", async () => {
     if (!enabled()) {
