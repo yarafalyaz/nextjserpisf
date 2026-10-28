@@ -42599,3 +42599,31 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
 
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-147-V: status parameter statutori 2026 TETAP-vs-BARU + fail-closed + E126-lanjutan (penutup OPEN #6 KEPUTUSAN-TERVERIFIKASI.md)
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `1e3f5c3fa` (28 Okt 2026).
+**Verifikasi ID:** grep `F-2026-10-28-147` di backlog + INDEKS-ATURAN `origin/main` = 0/0; judul PR terbuka memakai `147` = 0 (146-S di PR #1319). E126-1..4 dipakai vonis payroll F-2026-10-28-126-V, E126-1..10 dipakai vonis pajak tangguhan F-2026-10-23-126-V — lanjutan mulai **E126-11**. **147-V bebas.**
+### 1. Status tiap parameter 2026 (TETAP-2024-sementara vs angka-baru-dikonfirmasi)
+| Parameter | Status 2026 | Rujukan (akses 28 Okt 2026) |
+|---|---|---|
+| BPJS Kesehatan karyawan 1% (dari 5%: 4% pemberi kerja + 1% pekerja) | TETAP | Perpres 59/2024; berita 24 Okt 2026 (CNBC) + 11 Sep 2026 + 31 Agu 2026: iuran masih mengacu Perpres 59/2024, belum ada perubahan |
+| Plafon Kesehatan Rp12.000.000 | TETAP | Perpres 59/2024 Pasal 32 (naskah peraturan.go.id) |
+| JHT karyawan 2% (total 5,7%: 3,7% pemberi kerja) | TETAP | PP 46/2015 Pasal 16, status Berlaku (jdih.kemnaker.go.id); artikel DJP Juli 2026 menegaskan porsi 2%/3,7% |
+| JP karyawan 1% (total 3%: 2% pemberi kerja) | TETAP | PP 45/2015; laman resmi bpjsketenagakerjaan.go.id (bagian d Jaminan Pensiun) |
+| Plafon JP | ANGKA-BARU-DIKONFIRMASI (ratifikasi 126-V): Rp10.042.300 (Mar 2024–Feb 2025) → Rp10.547.400 (Mar 2025–Feb 2026, surat B/91/022025) → **Rp11.086.300 (mulai 1 Mar 2026, surat B/962/022026: 10.547.400 × 1,0511 = 11.086.372 dibulatkan; PDB 2025 = 5,11%)**. Tarif JP-nya sendiri TETAP 1%. Laman resmi masih menampilkan angka lama 10.547.400 — surat penyesuaian tahunan (PP 45/2015 Pasal 29) yang mengikat, bukan laman statis | PP 45/2015 Pasal 29 ayat (3)-(4); surat B/962/022026 (BENCHMARK-SEKUNDER — salinan + pemberitaan detik/kaltimpost; arsip resmi wajib saat seed) |
+| TER PPh21 bulanan (Jan–Nov; Desember = hitung ulang Pasal 17) | TETAP | PP 58/2023 (berlaku 1 Jan 2024) + PMK 168/2023; artikel DJP (mengulik PP 58/2023, era baru PPh 21, TER PPh tidak berubah). JDIH Kemenkeu: produk terkait PMK 168/2023 hanya PMK DTP/magang tematik (PMK 10/2025, 105/2025, 6/2026) — bukan pengganti TER |
+| PTKP TK/0 Rp54.000.000, +K Rp4.500.000, +T Rp4.500.000/maks 3; bracket UU HPP 5/15/25/30/35%; biaya jabatan 5% maks Rp6.000.000/tahun | TETAP | PMK 101/PMK.010/2016; PMK 250/PMK.03/2008; UU 7/2021 (laman DJP PPh 21 + DJPb Tapaktuan + pajakku: PTKP 2026 tidak berubah) |
+### 2. Jalur fail-closed (parameter 2026 dilarang dipakai sampai konfirmasi)
+- **F1**: baris ruleset 2026 TANPA `source` dokumen resmi = belum terkonfirmasi = DILARANG ditanam; payroll periode itu tetap tertahan gate `fromFallback`/TER/legacy yang sudah live (`src/actions/hrm.actions.ts:795,1949`; `approvePayroll` + `markPayrollPaid` via `payrollStatutoryGateError`; `approveStep` generik `src/actions/approval.actions.ts:239`; TER kosong/tidak lengkap `src/actions/hrm.actions.ts:1690,2135`). Nol pelunakan — 126-V P4 berlaku penuh.
+- **F2 (anti-basi)**: tiap baris plafon JP WAJIB `effectiveTo` = 28 Feb tahun berikut (pola 126-V §3). Payroll periode Maret tahun Y+1 tanpa baris plafon baru = DITOLAK Backend (tolak bila tidak ada baris `bpjs_jp_ceiling` dengan `effectiveFrom` ≤ 13 bulan dari periode). Tahun 2027 belum punya angka resmi — DILARANG menebak (126-V P8).
+- **F3**: tarif disimpan sebagai PECAHAN (`0.01`), plafon/PTKP rupiah penuh tanpa desimal; baris `source` = `"kode: ..."` hanya sah untuk seed 2024, DITOLAK untuk angka 2026.
+- **F4 (penanda kedaluwarsa di slip)**: snapshot slip sudah menyimpan `asOf` + `fromFallback` + `params` (`buildStatutorySnapshot`). Frontend WAJIB menampilkan badge "parameter YYYY" dari `snapshot.asOf` + peringatan bila `asOf` > 12 bulan dari periode slip (USULAN tampil — UI tidak menghitung ulang).
+### 3. Syarat masuk ruleset (mengikat Backend)
+- Satu baris `PayrollStatutoryRule` = satu key snake_case (`RULE_KEYS` `payroll-statutory.service.ts:94-104`), `value` Decimal, `effectiveFrom` DATE, `effectiveTo` DATE/null (JP wajib terisi per F2), `source` verbatim (nomor + tanggal + URL/arsip). Contoh: `('bpjs_jp_ceiling', 11086300, '2026-03-01', NULL, 'surat BPJS B/962/022026 (PDB 2025 5,11%)')`.
+- Baris TER = `PayrollTerBracket` kategori A/B/C, `source` verbatim `PP 58/2023 Lampiran A/B/C`; rantai bracket wajib utuh 0 → terbuka (`bracketsComplete`), tabel 2024 = 125 baris (A 44 / B 40 / C 41) sebagai acuan kelengkapan.
+### Falsifikasi QA (E126-lanjutan, atas head implementasi persis)
+- E126-11: payroll Mar 2027 (atau Mar tahun berjalan tanpa baris baru) memakai plafon JP tahun lama = **MERAH**.
+- E126-12: baris 2026 berisi tarif persen (`1`/`2`) bukan pecahan (`0.01`/`0.02`) → BPJS membengkak 100× = **MERAH**.
+- E126-13: baris angka 2026 ber-`source` `"kode: ..."` atau kosong = **MERAH** (sumber kode hanya sah seed 2024).
+- E126-14: slip approve lolos dengan `snapshot.asOf` > 13 bulan dari periode tanpa penanda kedaluwarsa = **MERAH**.
+ID vonis ini **F-2026-10-28-147-V** (penutup OPEN #6: status TETAP-vs-BARU tiap parameter 2026 + fail-closed + E126-lanjutan; meratifikasi plafon JP 126-V). Pemilik berikutnya: Lead (merge PR docs ini) → Backend (aturan tolak-stale F2 + badge F4; tanpa vonis baru untuk angka di atas) → QA (E126-11..14 atas head implementasi persis) → HR Ops (arsip dokumen resmi B/962/022026).
