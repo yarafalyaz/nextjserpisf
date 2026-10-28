@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -94,7 +94,7 @@ export default async function SalesAnalyticsPage({
   const totalQty = groups.reduce((sum, row) => sum + row.qty, 0)
   const maxMonthly = Math.max(1, ...monthly.map((m) => m.revenue))
   const dimensionLabel = SALES_DIMENSIONS.find((d) => d.value === dimension)?.label ?? 'Per Barang'
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Analisis Penjualan" sheet={false} wide actions={<><ExportButtons title="Analisis_Penjualan" pdfHref={buildReportPdfHref("analisis-penjualan", period.slug, { dimensi: dimension })} /></>}>

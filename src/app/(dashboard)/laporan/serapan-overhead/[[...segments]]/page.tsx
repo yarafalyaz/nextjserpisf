@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { requirePermission } from '@/lib/auth/permissions'
 import { getSystemSettings } from '@/lib/utils/settings'
-import { formatCurrency } from '@/lib/utils/format'
+import { formatCurrency, formatPeriod } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -49,11 +49,7 @@ export default async function OverheadAbsorptionPage({
   const overAbsorbed = result.variance > 0
   const varianceLabel = result.variance === 0 ? "Terserap Pas" : overAbsorbed ? "Over-Absorbed" : "Under-Absorbed"
 
-  const [yearStr, monthStr] = period.split("-")
-  const periodLabel = new Date(Number(yearStr), Number(monthStr) - 1, 1).toLocaleDateString("id-ID", {
-    month: "long",
-    year: "numeric",
-  })
+  const periodLabel = formatPeriod(period)
 
   return (
     <ReportPageShell title="Serapan Overhead (Kurang/Lebih Serap)" sheet={false} wide filter={<>

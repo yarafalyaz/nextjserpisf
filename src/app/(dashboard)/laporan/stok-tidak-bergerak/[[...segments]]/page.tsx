@@ -13,8 +13,7 @@ import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { slowMovingSummary } from "@/lib/reports/slow-moving-stock"
 import { loadSlowMovingStock } from "@/lib/reports/slow-moving-stock-data"
-import { formatCurrency } from "@/lib/utils/format"
-
+import { formatCurrency, formatNumber } from "@/lib/utils/format"
 export const metadata: Metadata = { title: "Stok Tidak Bergerak" }
 
 /**
@@ -81,15 +80,15 @@ export default async function SlowMovingStockPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard
           label="Barang Dinilai"
-          value={report.totals.assessed.toLocaleString("id-ID")}
+          value={formatNumber(report.totals.assessed)}
         />
         <ReportKpiCard
           label="Tidak Bergerak"
-          value={report.totals.slow.toLocaleString("id-ID")}
+          value={formatNumber(report.totals.slow)}
         />
         <ReportKpiCard
           label="Belum Pernah Keluar"
-          value={report.totals.neverMoved.toLocaleString("id-ID")}
+          value={formatNumber(report.totals.neverMoved)}
         />
         <ReportKpiCard
           label="Nilai Stok Tidak Bergerak"

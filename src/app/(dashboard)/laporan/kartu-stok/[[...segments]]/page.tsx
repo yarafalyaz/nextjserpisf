@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatReferenceType, referenceHref } from '@/lib/utils/format'
+import { formatAccounting, formatDate, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { buildStockCard, openingBalance, type StockCardMove } from '@/lib/reports/stock-card'
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
@@ -127,7 +127,7 @@ export default async function StockCardPage({
     ? await resolveReferenceSlugs(card.rows)
     : new Map<string, string>()
 
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
   const eyebrow = selectedItem
     ? `${selectedItem.sku} — ${selectedItem.name} (${selectedItem.unitOfMeasure})`
     : undefined
@@ -217,7 +217,7 @@ export default async function StockCardPage({
                   const href = referenceHref(row.referenceType, row.referenceId, referenceSlugs.get(referenceSlugKey(row)))
                   return (
                     <DetailTableRow key={row.id}>
-                      <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
+                      <DetailTableTd>{formatDate(row.date, { format: "numeric" })}</DetailTableTd>
                       <DetailTableTd className="font-mono text-xs">
                         {href ? <Link href={href} className="text-primary hover:underline">{row.documentNo}</Link> : row.documentNo}
                       </DetailTableTd>

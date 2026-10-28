@@ -134,6 +134,13 @@ interface SettingsFormValues {
   pkwtCompensationExpenseAccountId?: number | null
   pkwtCompensationPayableAccountId?: number | null
   scrapSaleIncomeAccountId?: number | null
+  // QA audit 28 Okt 2026 (SAL-BR-004 / GL-BR-009): lima akun di bawah sudah
+  // dibaca hook uang + aturan auto-map, tetapi belum punya input di form ini.
+  customerDownPaymentAccountId?: number | null
+  warrantyExpenseAccountId?: number | null
+  warrantyProvisionAccountId?: number | null
+  supplierClaimReceivableAccountId?: number | null
+  reimbursementLiabilityAccountId?: number | null
   salesAccountId?: number | null
   salesInvoicePrefix?: string | null
   salesOrderPrefix?: string | null
@@ -258,6 +265,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [signaturePreview, setSignaturePreview] = useState<string | null>(settings.quotationSignatureImage || null)
   // Account Mapping States
   const [salesReceivable, setSalesReceivable] = useState(settings.salesReceivableAccountId ? String(settings.salesReceivableAccountId) : "")
+  const [customerDownPayment, setCustomerDownPayment] = useState(settings.customerDownPaymentAccountId ? String(settings.customerDownPaymentAccountId) : "")
+  const [warrantyExpense, setWarrantyExpense] = useState(settings.warrantyExpenseAccountId ? String(settings.warrantyExpenseAccountId) : "")
+  const [warrantyProvision, setWarrantyProvision] = useState(settings.warrantyProvisionAccountId ? String(settings.warrantyProvisionAccountId) : "")
+  const [supplierClaimReceivable, setSupplierClaimReceivable] = useState(settings.supplierClaimReceivableAccountId ? String(settings.supplierClaimReceivableAccountId) : "")
+  const [reimbursementLiability, setReimbursementLiability] = useState(settings.reimbursementLiabilityAccountId ? String(settings.reimbursementLiabilityAccountId) : "")
   const [salesRevenue, setSalesRevenue] = useState(settings.salesRevenueAccountId ? String(settings.salesRevenueAccountId) : "")
   const [scrapSaleIncome, setScrapSaleIncome] = useState(settings.scrapSaleIncomeAccountId ? String(settings.scrapSaleIncomeAccountId) : "")
   const [salesTax, setSalesTax] = useState(settings.salesTaxAccountId ? String(settings.salesTaxAccountId) : "")
@@ -328,6 +340,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       title: "Penjualan",
       items: [
         { name: "salesReceivableAccountId", label: "Piutang Usaha", value: salesReceivable, onChange: setSalesReceivable },
+        { name: "customerDownPaymentAccountId", label: "Uang Muka Penjualan / DP (210102)", value: customerDownPayment, onChange: setCustomerDownPayment },
         { name: "salesRevenueAccountId", label: "Pendapatan Penjualan", value: salesRevenue, onChange: setSalesRevenue },
         { name: "scrapSaleIncomeAccountId", label: "Pendapatan Besi Tua Scrap (kandidat 710003)", value: scrapSaleIncome, onChange: setScrapSaleIncome },
         { name: "salesTaxAccountId", label: "PPN Keluaran", value: salesTax, onChange: setSalesTax },
@@ -358,6 +371,23 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "wipAccountId", label: "WIP", value: wipAcc, onChange: setWipAcc },
         { name: "materialExpenseAccountId", label: "Beban Material", value: materialExpense, onChange: setMaterialExpense },
         { name: "materialIssueExpenseAccountId", label: "Beban Pengeluaran Material", value: materialIssueExpense, onChange: setMaterialIssueExpense },
+      ],
+    },
+    {
+      // SAL-BR-004 (jurnal DP: kredit kewajiban Uang Muka Penjualan) + kompensasi
+      // garansi/klaim/reimbursement. Tanpa input di sini, hasil auto-map untuk
+      // kunci-kunci ini dibuang tanpa jejak (GL-BR-009: no silent assumptions).
+      title: "Garansi",
+      items: [
+        { name: "warrantyExpenseAccountId", label: "Beban Garansi (510104)", value: warrantyExpense, onChange: setWarrantyExpense },
+        { name: "warrantyProvisionAccountId", label: "Provisi Garansi (210205)", value: warrantyProvision, onChange: setWarrantyProvision },
+      ],
+    },
+    {
+      title: "Klaim Supplier & Reimbursement",
+      items: [
+        { name: "supplierClaimReceivableAccountId", label: "Piutang Klaim Supplier (110508)", value: supplierClaimReceivable, onChange: setSupplierClaimReceivable },
+        { name: "reimbursementLiabilityAccountId", label: "Utang Reimbursement (210209)", value: reimbursementLiability, onChange: setReimbursementLiability },
       ],
     },
     {
@@ -418,6 +448,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     const mapping = resolveAllAccountMappings(accounts)
     const setters: Record<string, (value: string) => void> = {
       salesReceivableAccountId: setSalesReceivable,
+      customerDownPaymentAccountId: setCustomerDownPayment,
+      warrantyExpenseAccountId: setWarrantyExpense,
+      warrantyProvisionAccountId: setWarrantyProvision,
+      supplierClaimReceivableAccountId: setSupplierClaimReceivable,
+      reimbursementLiabilityAccountId: setReimbursementLiability,
       salesRevenueAccountId: setSalesRevenue,
       scrapSaleIncomeAccountId: setScrapSaleIncome,
       salesTaxAccountId: setSalesTax,

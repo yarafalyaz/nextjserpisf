@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -91,7 +91,7 @@ export default async function StockValuationPage({
     warehouseSummary.set(row.warehouseCode, existing)
   }
 
-  const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Per ${formatDate(new Date())}`
 
   return (
     <ReportPageShell title="Valuasi Stok" sheet={false} wide filter={<>
@@ -123,10 +123,10 @@ export default async function StockValuationPage({
       <ReportLetterhead title="Valuasi Stok per Gudang" subtitle="Valuasi Persediaan" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Valuasi Stok menunjukkan nilai persediaan barang berdasarkan metode penilaian yang digunakan perusahaan. Informasi ini membantu dalam pengendalian persediaan, perencanaan pembelian, dan penilaian aset lancar perusahaan." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Item" value={rows.length.toLocaleString('id-ID')} />
-        <ReportKpiCard label="Total Qty" value={totalQty.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Total Item" value={formatNumber(rows.length)} />
+        <ReportKpiCard label="Total Qty" value={formatNumber(totalQty)} />
         <ReportKpiCard label="Total Nilai" value={formatCurrency(totalValue)} valueClassName="text-primary" />
-        <ReportKpiCard label="Gudang Aktif" value={warehouseSummary.size.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Gudang Aktif" value={formatNumber(warehouseSummary.size)} />
       </div>
       {!warehouseId && warehouseSummary.size > 1 && (
         <ReportSection title="Ringkasan per Gudang">
@@ -142,7 +142,7 @@ export default async function StockValuationPage({
                 <DetailTableRow key={code}>
                   <DetailTableTd className="font-medium">{code} - {ws.name}</DetailTableTd>
                   <DetailTableTd align="right">{ws.items}</DetailTableTd>
-                  <DetailTableTd align="right">{ws.qty.toLocaleString('id-ID')}</DetailTableTd>
+                  <DetailTableTd align="right">{formatNumber(ws.qty)}</DetailTableTd>
                   <DetailTableTd align="right" className="font-semibold">{formatAccounting(ws.value)}</DetailTableTd>
                 </DetailTableRow>
               ))}
@@ -167,7 +167,7 @@ export default async function StockValuationPage({
                 <DetailTableTd>{row.warehouseCode}</DetailTableTd>
                 <DetailTableTd>{row.uom}</DetailTableTd>
                 <DetailTableTd className="text-xs font-semibold text-muted-foreground">{{ FIFO: "FIFO (First-In, First-Out)", AVERAGE: "Rata-rata Bergerak" }[row.costingMethod] ?? row.costingMethod}</DetailTableTd>
-                <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(row.qty)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.qty > 0 ? row.value / row.qty : 0)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
               </DetailTableRow>
@@ -178,7 +178,7 @@ export default async function StockValuationPage({
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={6}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{totalQty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(totalQty)}</DetailTableTd>
                 <DetailTableTd align="right">-</DetailTableTd>
                 <DetailTableTd align="right" className="text-primary">{formatAccounting(totalValue)}</DetailTableTd>
               </DetailTableRow>

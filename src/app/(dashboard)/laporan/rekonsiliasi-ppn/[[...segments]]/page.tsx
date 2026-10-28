@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatDate } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
@@ -84,7 +84,7 @@ export default async function VatReconciliationPage({
   const position = buildVatPosition(bookOutput, bookInput)
   const outputDiff = bookOutput - docOutput
   const inputDiff = bookInput - docInput
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Rekonsiliasi PPN" sheet={false} wide filter={<>

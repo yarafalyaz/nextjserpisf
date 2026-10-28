@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
+import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -72,7 +72,7 @@ export default async function PurchasePriceAnalysisPage({
   // Largest landed-vs-listing uplift (a red flag that listing price is misleading).
   const maxUplift = rows.reduce((m, r) => Math.max(m, r.landedUplift), 0)
   const totalPotentialSaving = bestByItem.reduce((s, b) => s + b.savingVsWorst, 0)
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Analisis Harga Beli Multi-Sumber" sheet={false} wide filter={<>
@@ -100,8 +100,8 @@ export default async function PurchasePriceAnalysisPage({
       <ReportLetterhead title="Analisis Harga Beli Multi-Sumber" subtitle="Perbandingan Harga Beli Antar Pemasok" periodLabel={periodLabel} />
       <ReportNarration text="Analisis ini membandingkan biaya perolehan efektif barang yang sama antar pemasok dan antar waktu, berdasarkan penerimaan barang (GRN) yang sudah diposting. Harga daftar yang murah belum tentu biaya perolehan termurah setelah ongkir, diskon, dan biaya lain — karena itu perbandingan didasarkan pada biaya perolehan per satuan, bukan harga daftar saja (PUR-08)." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Jumlah Penerimaan" value={totalReceipts.toLocaleString('id-ID')} />
-        <ReportKpiCard label="Total Qty Diterima" value={totalQty.toLocaleString('id-ID')} />
+        <ReportKpiCard label="Jumlah Penerimaan" value={formatNumber(totalReceipts)} />
+        <ReportKpiCard label="Total Qty Diterima" value={formatNumber(totalQty)} />
         <ReportKpiCard label="Nilai Perolehan" value={formatCurrency(totalValue)} />
         <ReportKpiCard label="Kenaikan Biaya Perolehan Tertinggi" value={formatCurrency(maxUplift)} valueClassName="text-danger" />
         <ReportKpiCard label="Peluang Hemat (per unit)" value={formatCurrency(totalPotentialSaving)} valueClassName="text-success" />
@@ -158,8 +158,8 @@ export default async function PurchasePriceAnalysisPage({
                 <DetailTableTd className="font-mono text-xs">{r.sku}</DetailTableTd>
                 <DetailTableTd className="font-medium">{r.itemName}</DetailTableTd>
                 <DetailTableTd>{r.vendorName}</DetailTableTd>
-                <DetailTableTd align="right">{r.receipts.toLocaleString('id-ID')}</DetailTableTd>
-                <DetailTableTd align="right">{r.totalQty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(r.receipts)}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(r.totalQty)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold">{formatCurrency(r.avgLandedUnitCost)}</DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(r.avgListingUnitPrice)}</DetailTableTd>
                 <DetailTableTd align="right" className={r.landedUplift > 0 ? 'text-danger' : 'text-success'}>
@@ -167,7 +167,7 @@ export default async function PurchasePriceAnalysisPage({
                 </DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(r.minLandedUnitCost)}</DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(r.maxLandedUnitCost)}</DetailTableTd>
-                <DetailTableTd className="text-xs">{r.lastReceiptDate ? r.lastReceiptDate.toLocaleDateString('id-ID') : '-'}</DetailTableTd>
+                <DetailTableTd className="text-xs">{r.lastReceiptDate ? formatDate(r.lastReceiptDate, { format: "numeric" }) : '-'}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
