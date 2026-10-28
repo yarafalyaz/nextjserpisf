@@ -44228,3 +44228,45 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 2. BOT QA memfalsifikasi tiap AC (bukan membaca diff) dan menulis atestasi blob pada head persis; gerbang merge tetap Q-CHURN-1.
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-152-V: D1 ambang aging Rp1 + D2 total rujukan uang (jawaban spec 140-S AC-REP-001)
+
+**Verifikasi ID:** grep `F-2026-10-28-152-V` di backlog + board + judul PR terbuka = 0/0/0 sebelum tulis (run ini). Tertinggi -V tanggal 28 = 148-V. **152-V bebas.** Basis `origin/main` `a66378833` (28 Okt 2026 23:23 WIB). Semua `file:line` dibaca dari blob main persis run ini, bukan ingatan. Vonis docs-only: tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal. INDEKS AC-REP-001 tidak diubah kartu ini (tetap Belum sampai D3/D4 lulus E140).
+
+**Basis live (TERVERIFIKASI-KODE):**
+- `src/lib/finance/settlement-status.ts:22` `SETTLEMENT_TOLERANCE_IDR = 1` + `:34-37` `isOutstandingSettled` (FIN-BR-006, merged via #1275/#1227).
+- `src/components/reports/aging-report-view.tsx` `buildAgingRows` — gate `isOutstandingSettled(outstanding)` (via #1304 merged); komentar baris melarang `!isSettled()` mentah (faktur Rp0/negatif ikut masuk bila dibalik).
+- `src/lib/reports/aging-reports-data.ts:115` (receivables) + `:144` (payables) — gate `isOutstandingSettled` (via #1304 merged).
+- `src/lib/reports/aging-reports-data.ts:169-191` `loadPayablesTotal` — inklusif tanpa-dueDate + notice pembeda `:191` + label total D2 `Jumlah Hutang (termasuk Tanpa Jatuh Tempo)` (via #1320 merged 2026-10-28 WIB).
+- `src/lib/reports/payables-summary.ts:78` — gate populasi `outstanding <= 0` (BELUM `isOutstandingSettled`); dipakai layar `total-hutang/page.tsx:33` + PDF `loadPayablesTotal` via `aging-reports-data.ts:176`.
+
+### A. Vonis D1 — ambang buang aging = `isOutstandingSettled` Rp1 (DITERIMA-penuh)
+
+**Putusan:** tiga titik aging (layar `buildAgingRows`, PDF `loadReceivablesAging`, PDF `loadPayablesAging`) WAJIB memakai gate `isOutstandingSettled` (sisa > Rp1). Status: **SUDAH TERPASANG di main via #1304** — vonis ini meratifikasi, bukan memerintah kerja baru.
+
+**Alasan satu kalimat:** dokumen sisa ≤ Rp1 berstatus `paid` (FIN-BR-006); aging yang menampilkannya bertengkar dengan status dokumennya sendiri — preseden Q-EPS-1..5 Lead PUTUSAN #1262 sudah terima efek populasi-menyusut untuk antrean, aging ikut logika sama.
+
+**Syarat mengikat:** bentuk gate WAJIB `isOutstandingSettled(outstanding)` (buang bila sisa ≤ Rp1), **DILARANG** `!isSettled(grandTotal, paid)` mentah — `isSettled` false untuk `grandTotal <= 0` sehingga faktur Rp0/negatif ikut masuk bila gate dibalik (sudah dikomentari di kode view).
+
+**Larangan:** mengubah nilai toleransi = vonis Accountant baru; sisa dalam toleransi TIDAK dibukukan (tanpa write-off/pembulatan jurnal).
+
+**E140-1 baca final:** tampil sisa Rp0,50/Rp1,00 di aging layar ATAU PDF = MERAH; sisa Rp1,01 tampil = HIJAU (kontrol arah E140-6).
+
+### B. Vonis D2 — total rujukan uang = Total Hutang inklusif (DITERIMA-bersyarat-label)
+
+**Putusan:** dua angka menjawab pertanyaan beda secara sah — **TIDAK disamakan**:
+- `hutang-jatuh-tempo` (layar + PDF aging) = kewajiban ber-jatuh-tempo SAJA (tanpa-dueDate dibuang). Fungsi: umur/penagihan.
+- `total-hutang` (PDF `loadPayablesTotal` + layar `total-hutang`) = SELURUH kewajiban diakui bersisa termasuk tanpa-dueDate (bucket `Tanpa Jatuh Tempo`). Fungsi: total uang.
+
+**Rujukan uang mengikat:** untuk NERACA, rujukan SPT/biaya, dan setiap total yang menjawab "berapa utang perusahaan" — pakai **Total Hutang inklusif** (`summary.totalOutstanding` dari `buildPayablesSummary`, sisa NETO `grandTotal − withholding − paid`). KPI layar `hutang-jatuh-tempo` DILARANG dipakai sebagai rujukan uang karena diam-diam membuang populasi tanpa-dueDate.
+
+**Label mengikat (SUDAH TERPASANG via #1320):** total PDF `Jumlah Hutang (termasuk Tanpa Jatuh Tempo)` + notice `:191` + notice + tautan silang halaman layar. Bila label/notice dicabut = MERAH (E140-2 dokumentasi).
+
+**Temuan terbuka diteruskan (bukan vonis angka, milik Backend):** `payables-summary.ts:78` masih `outstanding <= 0` (bukan `isOutstandingSettled`), dan layar `total-hutang/page.tsx:33-48` tidak meneruskan `withholdingAmount` ke summary (sisa BRUTO vs PDF NETO). Akibat: tagihan sisa Rp0,50 tampil di Total Hutang padahal `paid`; tagihan ber-PPh tampil lebih besar di layar vs PDF. **D3/D4 + perbaikan ini milik Backend/Frontend, E140 milik QA — bukan vonis angka kartu ini.** INDEKS AC-REP-001 tetap Belum.
+
+### C. Falsifikasi wajib (QA atas head implementasi)
+
+- E140-1 (D1): fixture sisa Rp0,50 → tampil di aging layar ATAU PDF = MERAH; Rp1,01 tampil = HIJAU.
+- E140-2 (D2): fixture posted bersisa tanpa dueDate → `Jumlah Hutang` PDF tidak mencakupnya = MERAH; KPI layar mencakupnya = MERAH; label/notice beda-pertanyaan hilang = MERAH.
+
+ID vonis ini **F-2026-10-28-152-V** (jawaban D1+D2 spec 140-S; D3/D4 + temuan summary diteruskan Backend/Frontend; E140 milik QA; INDEKS AC-REP-001 tetap Belum). Pemilik berikutnya: BOT Backend (perbaikan summary gate+withholding, D3/D4) → BOT Frontend (label bila kurang) → BOT QA (E140 atas head persis) → Lead (nilai INDEKS sesudah E140 lulus).
