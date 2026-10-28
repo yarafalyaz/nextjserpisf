@@ -42599,3 +42599,110 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
 
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-142-S: permukaan tutup-reopen proyek + filter closed daftar + kolom tutup (PROJ-BR-007 sisi non-jurnal, lanjutan 141-S)
+
+Sumber: spec F-2026-10-28-141-S (merged #1299) + vonis Q-P141-2 F-2026-10-28-148-V (PR #1323 OPEN — jalur-tanpa-reopen default, reopen wajib 3 kondisi, akun EXPS/OEXP, DILARANG WIP/COGS/persediaan/serapan, koreksi via reversal). Sisa Belum kartu ini = permukaan + kolom (TANPA ulang backend inti/jurnal/vonis akun). ANTI-DUPLIKAT: transisi `completed→closed→completed`, guard BR-P141-02/04, anti-hapus referensi, biaya-telat-jalur = lane Backend/Accountant/QA E142 — spec ini HANYA: tombol permukaan, dialog alasan, pesan tolak-hapus→tutup, filter closed, kolom aditif; tanpa status baru, tanpa jurnal, tanpa akun.
+
+Slot ID: F-2026-10-28-142-S bebas terverifikasi run ini — grep `F-2026-10-28-142-S` di backlog+board `origin/main` (`19513c6c5`) = 0/0; judul PR terbuka = 0 menyebut 142-S tanggal 28; E-P141S-1..6 bebas (E143 dipakai dua PR terbuka beda topik; E142 milik 141-S sudah terpakai). Nomor falsifikasi memakai `E-P141S-*` agar tidak tabrak.
+
+Benchmark resmi (diwarisi 141-S, tidak diulang): Zahir proyek selesai → NONAKTIFKAN ("Tidak Aktif"), bukan hapus — daftar menyusut, histori utuh, bisa diaktifkan kembali: https://help.zahironline.com/portal/id/kb/articles/bagaimana-memperlakukan-proyek-proyek-yang-telah-selesai-4-11-2019 — Zahir dipakai transaksi TIDAK bisa dihapus: https://help.zahironline.com/portal/id/kb/articles/cara-membuat-data-proyek-zahir-online-v2
+
+### Inventarisasi terverifikasi (2026-10-28 15:56 WIB, basis origin/main `19513c6c5`, worktree /tmp/business-p141s-permukaan)
+Sudah ada (TERVERIFIKASI-KODE):
+- `model Project` (`prisma/schema.prisma:5186`), `status String @default("active")` (relatif :5194, `idx_projects_status`); NOL kolom `closedAt/closedBy/closedReason/reopenedAt/reopenedBy/reopenReason` di blok Project (kolom mirror hanya di `ProductionOrder` :2971-2976, `ProductionCost` :3198-3199 parsial By/At, `WorkOrder` :3279-3284).
+- `closeWorkOrder` (:2601) + klaim atomik `updateMany WHERE status` (:2639) + `reopenWorkOrder` + `validateReopenReason`; permukaan WO: `JobReopenButton` (`src/components/reports/job-reopen-button.tsx`: render hanya `status==="closed" && canReopen`, ConfirmDialog + alasan wajib trim, pesan verbatim server) + antrean tutup `workshop-closeout-queue-card.tsx` (checklist C1-C8, tombol `Tutup Job (Close-out)` `aria-label={"Tutup Job "+code}` :234-240, dialog judul `Tutup Job ${code}?` :264, alasan wajib :268-280).
+- `StatusChip` kenal `closed → "Tutup"` (`status-labels.ts:77`) + map URL `closed → "tutup"` (:196) — chip/detail aman tanpa ubah kamus; picker tambah-form pola existing `where: { status: "active" }` (kas-kecil :20-22, lembar-waktu :23-25).
+- `deleteProject` (`src/actions/project.actions.ts:125-171`): hitung 4 relasi (workOrders/timesheets/tasks/overtimeRequests), tolak bila >0, pesan existing "Hapus atau pindahkan data tersebut terlebih dahulu." (:154) — TIDAK menyebut tutup, TIDAK hitung referensi uang/draft completed.
+- Izin katalog nyata (`module-catalog.generated.ts:427-431`): view/create/edit/delete/manage_projects; `:270 complete_work_orders`; detail proyek `canEdit=hasPermission("edit_projects")` (page :72); chips daftar `page.tsx:90` = `["", "active", "completed", "cancelled"]` — `cancelled` saringan tampilan tanpa transisi server (141-S).
+Belum ada / parsial (celah kartu ini):
+- (a) NOL tombol Tutup/Buka-Kembali di detail proyek (`page.tsx` actions hanya Ubah+Kembali; `grep Tutup/Reopen/Hapus/close page = 0` kecuali query `deletedAt`) + NOL chip `closed` di daftar (daftar hanya 4 chips; picker lain masih `status:"active"` mentah).
+- (b) NOL filter default sembunyikan-closed (konsep `closed` belum ada di Project: daftar tanpa-status = "Semua" termasuk future-closed; bukan bug hari ini, kontrak untuk Backend).
+- (c) Pesan tolak hapus tidak mengarahkan tutup (BR-P141S-03 di bawah); referensi uang/draft-completed belum dihitung (lane Backend, bukan kartu ini).
+
+#### F-2026-10-28-142-S (i) P1 — Permukaan tutup-reopen proyek + filter closed + kolom aditif (tanpa status baru, tanpa jurnal)
+- Kompetensi: Zahir nonaktif-proyek (URL di atas); cermin WO-closed ISF live (009-V pola tombol+dialog+reopen).
+- Status Silengkap: PARSIAL. Bukti: tombol/dialog/filter/kolom tutup Project = 0 (grep run ini); chip `closed` + map URL + izin `edit_projects` + `deleteProject` pesan existing = live.
+- Relevansi: tanpa permukaan ini, inti tutup Backend yatim tanpa pemanggil + daftar tercemar proyek arsip + operator menghapus histori karena pesan tak mengarahkan.
+- Adaptasi: kontrak permukaan per §1-§3; Backend bangun aksi+kolom+guard (§4 handoff); Frontend pasang tombol/filter/dialog (§5 handoff); QA E-P141S (§6).
+- Modul disentuh: `src/app/(dashboard)/proyek/[slug]/page.tsx`, `src/app/(dashboard)/proyek/page.tsx`, `src/app/(dashboard)/proyek/_components/project-table.tsx`, `prisma/schema.prisma` (kolom aditif), `src/lib/utils/status-labels.ts` (cek — closed sudah ada, NOL ubah bila cukup), `src/actions/project.actions.ts` (pesan tolak + aksi tutup/reopen Backend).
+- Effort: S (permukaan) / M (kolom+guard Backend). Risiko: E2E pecah bila aria-label/text tombol diubah — mitigasi: label baku §1 verbatim + grep e2e sebelum commit UI.
+- Urutan: spec ini merged → Backend kolom+aksi+guard → Frontend tombol/filter/dialog → QA E-P141S head persis → Lead nilai PROJ-BR-007 tetap Belum sampai E142+E-P141S lulus.
+- Pemilik usulan: Business. Butuh putusan accountant: TIDAK (akun Q-P141-2 sudah vonis 148-V; kartu ini nol uang).
+
+### 1. Workflow specification (aktor + dokumen masuk/keluar)
+
+S1 — TUTUP DARI DETAIL (USULAN, cermin JobReopenButton + closeout-card): aktor penutup (`edit_projects`, existing, tanpa permission baru — cermin 009-V Keputusan 4a sisi WO). Prasyarat tampil tombol: `project.status === "completed"` DAN `canEdit`. Klik → ConfirmDialog judul verbatim `Tutup Proyek ${documentNo ?? name}?` → textarea `Alasan Penutupan` wajib trim non-kosong (client cegah kosong; server `validateReopenReason`-setara penegak tunggal) → `closeProject(id, reason)` → sukses: status tampil `Tutup` (chip existing, tanpa kamus baru), header beku. Batal/tutup dialog = nol aksi. Pesan server tampil verbatim (pola `useActionRunner`). aria-label baku: `Tutup Proyek ${code}` (cermin `Tutup Job ${code}`).
+
+S2 — REOPEN DARI DETAIL (USULAN, cermin JobReopenButton persis): tampil hanya `status === "closed" && canReopen` (`canReopen = hasPermission("edit_projects")` di page, izin sama dengan server). Dialog judul `Buka Kembali Proyek ${code}?`, textarea `Alasan Buka Kembali` wajib, teks penjelasan verbatim: "Proyek yang dibuka kembali berstatus selesai dan dapat menerima biaya lagi. Alasan wajib diisi dan tercatat di jejak aktivitas beserta jejak penutupan sebelumnya." Sukses → status `completed`, jejak tutup pertama utuh.
+
+S3 — TOLAK-HAPUS MENGARAHKAN TUTUP (USULAN, cermin pesan void 139-S E139-4): `deleteProject` (dan `bulkDelete("project")` — jalur yang sama dirujuk `project-table.tsx:101`) atas `completed/closed` ATAU proyek ber-referensi (intrinsik + uang, fisik milik Backend) DITOLAK dengan pesan verbatim: "Proyek {completed/closed/ber-histori} tidak dapat dihapus. Tutup proyek dengan alasan untuk mengarsipkan — histori (tahap, biaya, dokumen) tetap tersimpan dan laporan tetap jalan." + tombol/dialog tautan ke aksi tutup S1 bila status `completed`. Hapus draft-kosong sah tetap boleh (`delete_projects`).
+
+S4 — FILTER DEFAULT SEMBUNYIKAN-CLOSED (USULAN, cermin Zahir "Tidak Aktif"): daftar `/proyek` tanpa param status = SEMUA kecuali `closed` (default berubah saat nilai `closed` lahir; hari ini nol baris `closed` = perilaku identik — kontrak forward-compatible). Chip bertambah satu: `closed` (label existing `Tutup`, URL existing `tutup`) setelah `completed`; chip `Semua` eksplisit `?status=` menampilkan closed kembali. Picker transaksi (tambah-form yang hari ini `where: { status: "active" }`) kontrak: setelah kolom lahir, opsi = `active/in_progress/completed` (open), closed HANYA via filter eksplisit/reopen — daftar picker closed kecuali operator membuka saringan. BUKAN soft-delete, BUKAN kolom baru bila saringan status cukup (Q-P141-3 milik Backend/Lead).
+
+S5 — KOLOM ADITIF (USULAN, mirror WorkOrder :3279-3284 + ProductionOrder :2971-2976): `Project.closedAt DateTime?`, `closedBy Int?`, `closedReason String? @db.Text`, `reopenedAt`, `reopenedBy`, `reopenReason` — nullable, aditif, tanpa status baru, tanpa ubah default `active`. Indeks existing `idx_projects_status` cukup (saringan status; bukan kolom baru). Jejak: tutup→reopen→tutup utuh (tutup kedua catat terpisah, tidak menimpa tutup pertama) + `ProjectLog(action='close'/'reopen')` + `ActivityLog` (pola WO live :2364-2408).
+
+### 2. Role/permission matrix (key nyata `module-catalog.generated.ts`)
+
+| Aksi | view_projects (:427) | create_projects (:428) | edit_projects (:429) | delete_projects (:430) | manage_projects (:431) | Catatan |
+|---|---|---|---|---|---|---|
+| Lihat proyek closed + histori biaya | YA | — | — | — | — | read-only lintas periode |
+| Klik Tutup Proyek (S1) / Buka Kembali (S2) | — | — | YA (tombol tampil) | — | — | izin EXISTING; tanpa permission baru |
+| Edit header/stage/budget saat closed | — | — | DITOLAK server | — | — | beku; baca tetap penuh |
+| Hapus draft-kosong sah | — | — | — | YA | — | satu-satunya hapus lolos |
+| Hapus completed/closed/ber-referensi | — | — | — | DITOLAK + pesan-arah-tutup | — | S3 |
+| Filter closed di daftar/picker | — | — | — | — | — | tampil; tanpa izin baru |
+
+Peran existing (tanpa "manajer proyek"): kepala_bengkel/admin menutup-membuka; finance baca histori; staff/karyawan sesuai akses modul. Pemisahan pemeriksa-vs-penutup dua-orang = Q-P141-1 milik Lead (bukan kartu ini).
+
+### 3. Status-transition matrix (permukaan; guard fisik milik Backend)
+
+| Status awal | Pemicu | Status akhir | Penjaga / permission |
+|---|---|---|---|
+| `completed` | S1 Tutup + alasan wajib | `closed` (kolom S5; nilai status BARU milik Backend, bukan kartu ini) | `edit_projects`; prasyarat tutup BR-P141-02 (Backend) |
+| `closed` | S2 Reopen + alasan wajib | `completed` | `edit_projects`; jejak utuh |
+| `completed`/`closed`/ber-referensi | Hapus | DITOLAK + pesan-arah-tutup S3 | `delete_projects` diminta tapi ditolak |
+| draft-kosong (tanpa stage/referensi) | Hapus | hilang | `delete_projects` |
+
+`cancelled` header TIDAK diusulkan (141-S: chip saringan tanpa transisi; batal = `closed` + alasan "dibatalkan").
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-P141S-01 | Tombol Tutup tampil hanya `completed` + `edit_projects`; dialog alasan wajib trim; aria-label `Tutup Proyek ${code}`; pesan server verbatim | USULAN | cermin JobReopenButton + closeout-card :234-280 |
+| BR-P141S-02 | Tombol Buka-Kembali tampil hanya `closed` + `edit_projects`; teks penjelasan verbatim S2; jejak tutup pertama tak tertimpa | USULAN | cermin `job-reopen-button.tsx` |
+| BR-P141S-03 | Pesan tolak hapus mengarahkan tutup (verbatim S3); hapus completed/closed/ber-referensi DITOLAK; draft-kosong sah boleh | USULAN | Zahir BENCHMARK; guard `deleteProject` :125-171 parsial |
+| BR-P141S-04 | Default daftar sembunyikan `closed`; chip `closed` eksplisit; picker open-only + saringan eksplisit | USULAN | Zahir "Tidak Aktif"; picker `status:"active"` live |
+| BR-P141S-05 | Kolom tutup aditif-nullable mirror WO/PO; tanpa status baru di kartu ini; indeks status existing cukup | USULAN | `WorkOrder` :3279-3284; `ProductionOrder` :2971-2976 |
+| BR-P141S-06 | Nol jurnal saat close/reopen; nol ubah angka histori; nol akun di kartu ini | TERVERIFIKASI-KODE (live WO) + BUTUH-VONIS-tertutup | 009-V K2; 148-V (Q-P141-2 TERTUTUP) |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (run ini) |
+|---|---|---|---|
+| Status tutup job | Penyelesaian pesanan ke akun/barang | Flag "Tidak Aktif", hilang dari daftar+picker, re-aktif kapan saja | WO/PO `closed` live + permukaan; header `Project` BELUM (tombol/filter/kolom = kartu ini) |
+| Hapus ber-histori | N/A | DITOLAK bila dipakai transaksi | `deleteProject` tolak 4 relasi; pesan-arah-tutup + referensi uang = kartu ini |
+| L/R pasca-tutup | Laporan terupdate otomatis | L/R + anggaran-vs-realisasi per proyek tetap tersedia | Builder status-agnostik tetap jalan (148-V §0 terverifikasi) — kartu ini nol ubah |
+
+### 6. Acceptance criteria + edge cases (untuk QA, atas head implementasi persis BUKAN head spec ini)
+
+- E-P141S-1: tombol Tutup tampil di status selain `completed` (draft/active) ATAU tanpa `edit_projects` = MERAH; klik lolos tanpa alasan/kosong/spasi = MERAH.
+- E-P141S-2: tombol Buka-Kembali tampil di status selain `closed` ATAU tanpa `edit_projects` = MERAH; reopen tanpa alasan lolos = MERAH; jejak tutup pertama tertimpa = MERAH.
+- E-P141S-3: hapus completed/closed/ber-referensi lolos = MERAH; pesan tolak tidak memuat kata "Tutup"/"tutup" + alasan = MERAH-ketat; hapus draft-kosong sah ditolak = MERAH (over-block).
+- E-P141S-4: daftar tanpa-param menampilkan `closed` sesudah nilai lahir = MERAH; chip `closed` tak ada / `?status=tutup` tak memunculkan closed = MERAH; daftar hari ini (nol closed) berubah perilaku = MERAH (forward-compat pecah).
+- E-P141S-5: picker tambah-form menampilkan `closed` default = MERAH; saringan eksplisit tak bisa memunculkan closed = MERAH.
+- E-P141S-6: mutasi permukaan — cabut `status==="completed"` dari tombol Tutup ATAU `status==="closed"` dari tombol Reopen ATAU syarat trim-alasan → uji terkait wajib MERAH; pulihkan → hijau. `bulkDelete("project")` atas completed lolos = MERAH (jalur kedua).
+- Edge: proyek tanpa stage (header `active` selamanya) tombol Tutup tak tampil + pesan jelas bila dipaksa via aksi langsung; periode tutup terkunci → nol mutasi tutup; biaya-telat jalur-tanpa-reopen (148-V) TIDAK menyentuh angka proyek closed — bila E-P141S lulus tapi E142-9..13 gagal, kartu ini tetap Belum.
+
+### 7. Backlog turunan (BUKAN kartu baru run ini)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-142-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) kolom S5 + aksi closeProject/reopenProject + guard BR-P141-02/04 + tolak-hapus-penuh + pesan S3 (termasuk bulk) + penjaga tipe-akun 148-V §2 | Backend | spec ini merged; vonis Q-P141-1/3 |
+| (tanpa ID baru) tombol S1/S2 + dialog + filter S4 + chip closed di daftar/picker (label verbatim, aria baku) | Frontend | kontrak Backend merged |
+| (tanpa ID baru) akun biaya-telat Q-P141-2 | Accountant | SELESAI di 148-V PR #1323 (tunggu merge) |
+| (tanpa ID baru) E-P141S-1..6 head persis + E142-1..8 + E142-9..13 (148-V) | QA | implementasi merged |
+| (tanpa ID baru) nilai status PROJ-BR-007 `Belum` | Lead/QA | E142+E-P141S lulus di head merged |
+
+ID spec ini **F-2026-10-28-142-S** (permukaan tutup-reopen + filter closed + kolom aditif; basis `origin/main` `19513c6c5`). Pemilik berikutnya: BOT Lead (vonis Q-P141-1 dua-orang + Q-P141-3 fisik flag; merge PR docs ini; PROJ-BR-007 tetap `Belum`) → BOT Backend (kolom+aksi+guard+pesan S3) → BOT Frontend (tombol/filter/dialog verbatim) → BOT QA (E-P141S + E142 atas head implementasi). Butuh putusan accountant: TIDAK — nol uang di kartu ini (148-V menutup Q-P141-2; kartu ini tidak menyentuh akun/jurnal).
