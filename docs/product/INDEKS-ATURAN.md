@@ -155,7 +155,7 @@ perilaku, bukan hanya keberadaan file/model.
 | HR-BR-003 | OPEN-keputusan | Keputusan formula lembur/tarif/pembulatan terbuka di sumber. Layanan statutori ada (`src/lib/services/payroll-statutory.service.ts`), tetapi baris penegak formula tidak ditunjuk di indeks ini |
 | HR-BR-004 | Sebagian | prisma/schema.prisma:4166 — `EmployeeLoan` ada; batas potongan terhadap saldo/policy belum ditelusur |
 | HR-BR-005 | Belum | belum ditelusur — koreksi payroll posted yang dapat diaudit tidak ditunjuk di sini |
-| HR-BR-006 | Sebagian | src/app/api/payroll/late-penalty/route.ts:18 — route data payroll dibatasi ke pengguna berwenang; cakupan semua akses payroll belum diaudit |
+| HR-BR-006 | Sebagian | Baca: src/app/api/payroll/late-penalty/route.ts:18. Tulis (F-2026-10-28-128-S, AC-HRS-1..6): lima jalur tulis payroll menegakkan `getHrScope` + `assertHrEmployeeAccess` — processPayroll, populasi generateBulkPayroll, updatePayroll (baris lama DAN baru), approvePayroll, markPayrollPaid (src/actions/hrm.actions.ts); halaman/form payroll lain belum diaudit |
 | HR-BR-007 | Sebagian | prisma/schema.prisma:3546 — `LeaveRequest` ada; kelengkapan pemohon/approver/periode/status belum ditelusur per field |
 | HR-BR-008 | Sebagian | prisma/schema.prisma:4066 — `PayrollComponentLine` merinci komponen payroll; ketertelusuran ke sumber perhitungan belum ditelusur |
 
