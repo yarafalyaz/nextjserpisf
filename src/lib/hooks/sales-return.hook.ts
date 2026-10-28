@@ -111,12 +111,17 @@ export async function onSalesReturnCompleted(
     const itemDefaults = returnItemIds.length
       ? await tx.item.findMany({
           where: { id: { in: returnItemIds } },
-          select: { id: true, defaultWarehouseId: true, trackSerial: true, trackBatch: true },
+          select: { id: true, defaultWarehouseId: true, trackSerial: true, trackBatch: true, isProduct: true },
         })
       : [];
     const warehouseByItem = new Map(itemDefaults.map((it) => [it.id, it.defaultWarehouseId]));
     const trackSerialByItem = new Map(itemDefaults.map((it) => [it.id, it.trackSerial]));
     const trackBatchByItem = new Map(itemDefaults.map((it) => [it.id, it.trackBatch]));
+    // F-2026-10-28-137-V V2 (SAL-BR-013 G2 opsi a): baris jasa/non-stok
+    // (isProduct=false) = koreksi nilai tanpa stok — nol StockMove IN, nol
+    // layer FIFO, nol qtyOnHand. Nilai retur tetap dibukukan accounting.hook.
+    const isProductByItem = new Map(itemDefaults.map((it) => [it.id, it.isProduct]));
+    const isStockLine = (itemId: number) => isProductByItem.get(itemId) !== false;
 
     const invoiceUnits = salesReturn.salesInvoiceId
       ? await tx.salesInvoiceItem.findMany({
@@ -129,8 +134,10 @@ export async function onSalesReturnCompleted(
       if (line.itemId != null && !uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
     }
 
-    // Create Stock Move IN per item (goods returned to warehouse)
-    const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0);
+    // Create Stock Move IN per item (goods returned to warehouse).
+    // G2: hanya baris stok (isProduct=true) — baris jasa/non-stok dilewati
+    // tanpa StockMove (koreksi nilai saja, vonis 137-V V2 opsi a).
+    const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0 && isStockLine(it.itemId));
     if (activeItems.length > 0) {
       // 1. Batch-generate one document number per line (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
