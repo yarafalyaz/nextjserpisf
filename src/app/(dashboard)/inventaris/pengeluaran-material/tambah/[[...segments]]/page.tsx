@@ -9,6 +9,7 @@ import {
   redirectLegacyPrefillQuery,
   resolvePrefillId,
 } from "@/lib/utils/prefill-path"
+import { filterWorkOrdersWithoutActiveMi } from "@/lib/inventory/material-issue-form-data"
 
 import type { Metadata } from "next"
 
@@ -41,7 +42,7 @@ export default async function CreateMaterialIssuePage({
   // sudah ada di skema dan formnya sudah punya pilihannya, tetapi halaman ini
   // dulu tidak meneruskan daftarnya sehingga pengeluaran material dari modul
   // Inventaris tidak bisa ditautkan ke sumber pekerjaannya.
-  const [warehouses, items, costCenters, workOrders, projects] = await Promise.all([
+  const [warehouses, items, costCenters, workOrders, projects, activeMiLinks] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, qtyOnHand: true, cost: true } }),
     prisma.costCenter.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true }, orderBy: { code: "asc" } }),
@@ -55,7 +56,16 @@ export default async function CreateMaterialIssuePage({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    // WO-BR-004: saring tampilan saja — WO ber-MI aktif (draf/diproses/
+    // selesai) disembunyikan dari dropdown. Guard server createMaterialIssue
+    // tetap penolak akhir (MI batal tak dihitung, boleh pengganti).
+    prisma.materialIssue.findMany({
+      where: { workOrderId: { not: null }, status: { in: ["draft", "processing", "completed"] } },
+      select: { workOrderId: true, status: true },
+    }),
   ])
+
+  const availableWorkOrders = filterWorkOrdersWithoutActiveMi(workOrders, activeMiLinks)
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,7 +73,7 @@ export default async function CreateMaterialIssuePage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Pengeluaran Material</h1>
       </div>
-      <MaterialIssueForm warehouses={warehouses} defaultWorkOrderId={defaultWorkOrderId} costCenters={JSON.parse(JSON.stringify(costCenters))} items={JSON.parse(JSON.stringify(items))} workOrders={workOrders} projects={projects} />
+      <MaterialIssueForm warehouses={warehouses} defaultWorkOrderId={defaultWorkOrderId} costCenters={JSON.parse(JSON.stringify(costCenters))} items={JSON.parse(JSON.stringify(items))} workOrders={availableWorkOrders} projects={projects} />
     </div>
   )
 }
