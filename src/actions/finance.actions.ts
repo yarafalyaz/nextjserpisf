@@ -12,6 +12,7 @@ import {
   onReimbursementClaimApproved,
   onReimbursementClaimPaid,
   REIMBURSEMENT_ACCRUAL_REFERENCE_TYPE,
+  reverseJournalsByReferenceTx,
 } from "@/lib/hooks/accounting.hook";
 import {
   evaluateReimbursementApprovalSod,
@@ -1068,9 +1069,11 @@ type PettyCashTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
  */
 async function recalcPettyCashChain(
   tx: PettyCashTx,
-  opts?: { guardNegative?: boolean },
+  opts?: { guardNegative?: boolean; excludeVoid?: boolean },
 ): Promise<void> {
+  const where = opts?.excludeVoid ? { deletedAt: null } : {}
   const all = await tx.pettyCash.findMany({
+    where,
     orderBy: [{ date: "asc" }, { id: "asc" }],
     select: {
       id: true,
@@ -1969,34 +1972,84 @@ export async function deleteExpense(id: number) {
   }
 }
 
-export async function deletePettyCash(id: number) {
+export async function deletePettyCash(id: number, reason?: string) {
   try {
     await requirePermission("delete_petty_cash");
+    const cleanReason = (reason ?? "").trim();
+    if (!cleanReason) {
+      return { success: false, error: "Alasan pembatalan kas kecil wajib diisi." };
+    }
 
-    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
+    let documentNo = "";
     await prisma.$transaction(async (tx) => {
-      // Race guard: gap-lock tabel + kunci baris target SELAMA hapus.
-      // Tanpa ini create/edit bersamaan baca chain pra-hapus lalu tulis
-      // setelah delete commit — saldo rantai dihitung dari data basi.
+      // Race guard: gap-lock tabel + kunci baris target SELAMA void.
+      // Tanpa ini create/edit bersamaan baca rantai pra-void lalu tulis
+      // setelah void commit — saldo rantai dihitung dari data basi.
       await tx.$executeRaw`SELECT id FROM petty_cash WHERE id = ${id} FOR UPDATE`;
       await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
 
-      // Remove the linked journal (avoid orphaned GL entries), delete the record,
-      // then recompute the running balance for all remaining records.
-      await deletePettyCashJournal(tx, id);
-      removedFiles = await deleteTransactionAttachmentsTx(tx, {
-        referenceType: "PettyCash", referenceId: id,
+      const record = await tx.pettyCash.findUniqueOrThrow({ where: { id } });
+      if (record.deletedAt || record.status === "void") {
+        throw new Error("Transaksi kas kecil ini sudah dibatalkan.");
+      }
+      documentNo = record.documentNo;
+
+      // V-P5/P6-3: cek periode atas tanggal asal DI DALAM tx (cek luar-tx
+      // tidak cukup — ada celah balapan tutup-periode; jalur lama bahkan
+      // tidak punya cek sama sekali).
+      const postingDate = record.transactionDate ?? record.date;
+      await assertPeriodOpen(postingDate, tx);
+
+      // Recon guard (rekomendasi 6): entri jurnal kas kecil yang sudah
+      // dipakai item rekonsiliasi final (completed) tidak boleh
+      // di-REVERSED diam-diam.
+      const linkedEntryIds = await tx.journalEntry.findMany({
+        where: { journal: { referenceType: "PettyCash", referenceId: id } },
+        select: { id: true },
       });
-      await tx.pettyCash.delete({ where: { id } });
-      await recalcPettyCashChain(tx, { guardNegative: true });
+      if (linkedEntryIds.length > 0) {
+        const matched = await tx.bankReconciliationItem.findFirst({
+          where: {
+            journalEntryId: { in: linkedEntryIds.map((e) => e.id) },
+            matched: true,
+            bankReconciliation: { status: "completed" },
+          },
+          select: { id: true },
+        });
+        if (matched) {
+          throw new Error(
+            "Transaksi kas kecil ini sudah cocok pada rekonsiliasi bank final. Batalkan rekonsiliasi terlebih dahulu sebelum membatalkan.",
+          );
+        }
+      }
+
+      // Jurnal lawan cermin lewat helper reversal (refType persis "PettyCash");
+      // helper menandai jurnal asal REVERSED + assertPeriodOpen tanggal asal.
+      await reverseJournalsByReferenceTx(tx, "PettyCash", id, cleanReason, undefined);
+
+      // Mark void + keluarkan dari rantai aktif; saldo record void dibekukan
+      // sebagai snapshot historis (tidak ditulis ulang recalc).
+      await tx.pettyCash.update({
+        where: { id },
+        data: {
+          status: "void",
+          voidAt: new Date(),
+          voidReason: cleanReason,
+          deletedAt: new Date(),
+        },
+      });
+
+      // V-P5/P6-6: void dikeluarkan dari rantai aktif — saldo record sesudahnya
+      // dihitung ulang tanpa kontribusi record ini. Void yang membuat rantai
+      // aktif negatif DITOLAK (guardNegative) — koreksi berurutan dari ekor.
+      await recalcPettyCashChain(tx, { guardNegative: true, excludeVoid: true });
     });
-    await removeAttachmentFiles(removedFiles);
 
     await logActivity(
-      "delete",
+      "void",
       "PettyCash",
       id,
-      "Menghapus transaksi kas kecil",
+      `Membatalkan transaksi kas kecil ${documentNo}: ${cleanReason}`,
     );
     revalidatePath("/keuangan/kas-kecil");
     return { success: true };
@@ -2358,6 +2411,31 @@ export async function updatePettyCash(id: number, formData: FormData) {
   "use server";
 
   try {
+    await requirePermission("edit_petty_cash");
+
+    // GL-BR-003 P6 (vonis t_16159d89 V-P5/P6-5): record ber-jurnal POSTED
+    // BEKU total — termasuk metadata. Salah catat ditangani void + buat baru.
+    // Cek jurnal (bukan hanya status baris) supaya baris legacy tanpa penanda
+    // void pun tetap beku bila jurnal POSTED-nya ada.
+    const journalGuard = await prisma.journal.findFirst({
+      where: { referenceType: "PettyCash", referenceId: id, status: "POSTED" },
+      select: { id: true },
+    });
+    if (journalGuard) {
+      return {
+        success: false,
+        error:
+          "Transaksi kas kecil yang sudah terposting tidak dapat diubah. Batalkan lewat pembatalan beralasan lalu buat transaksi baru.",
+      };
+    }
+    const voidGuard = await prisma.pettyCash.findFirst({
+      where: { id, status: "void" },
+      select: { id: true },
+    });
+    if (voidGuard) {
+      return { success: false, error: "Transaksi kas kecil yang sudah dibatalkan tidak dapat diubah." };
+    }
+
     const user = await requirePermission("edit_petty_cash");
 
     // Validate input with the same Zod schema as createPettyCash — the edit path
