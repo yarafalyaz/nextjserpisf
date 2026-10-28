@@ -1074,6 +1074,22 @@ export async function createMaterialIssue(formData: FormData) {
     }
 
     const issue = await prisma.$transaction(async (tx) => {
+      // WO-BR-004: guard anti-ganda setara jalur buat-dari-WO. Form manual
+      // bisa menautkan WO yang sudah punya MI aktif — tanpa cek di sini MI
+      // kedua lahir diam-diam (stok keluar dua kali). Batal/terhapus = boleh
+      // pengganti; pola sama dgn UI detail WO (aktif = bukan batal).
+      if (v.workOrderId) {
+        await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${v.workOrderId} FOR UPDATE`;
+        const existingMi = await tx.materialIssue.findFirst({
+          where: { workOrderId: v.workOrderId, status: { not: "cancelled" } },
+          select: { id: true, documentNo: true },
+        });
+        if (existingMi) {
+          throw new Error(
+            `Perintah Kerja ini sudah memiliki Pengeluaran Material (No: ${existingMi.documentNo}).`,
+          );
+        }
+      }
       // F-008: snapshot allowance beku saat baris lahir (resolver bersama).
       const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
         tx, miItems.map((it) => ({ itemId: Number(it.itemId) })), v.workOrderId ?? null,
