@@ -94,6 +94,7 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] });
+    // PUR-BR-010: hanya GR draft boleh dihapus — fixture wajib draft eksplisit.
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
       id: 1,
       purchaseOrderId: 10,
@@ -164,6 +165,7 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
       id: 2,
       purchaseOrderId: null,
+      warehouseId: 5,
       status: "draft",
       items: [],
     });
