@@ -3405,13 +3405,23 @@ export async function onEmployeeLoanCashRepayment(
   const existing = await db.journal.findFirst({
     where: { referenceType: "EmployeeLoanRepayment", referenceId: repaymentId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
   await assertPeriodOpen(repayment.repaymentDate || new Date(), txClient);
   await executeInTx(txClient, async (tx) => {
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "EmployeeLoanRepayment", referenceId: repaymentId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
     const journalNumber = await generateJournalNumber(tx, "LOAN", repaymentId);
     await tx.journal.create({
       data: {
@@ -3484,13 +3494,23 @@ export async function onEmployeeLoanWrittenOff(
   const existing = await db.journal.findFirst({
     where: { referenceType: "EmployeeLoanWriteOff", referenceId: writeOffId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
   await assertPeriodOpen(writeOff.writeOffDate || new Date(), txClient);
   await executeInTx(txClient, async (tx) => {
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "EmployeeLoanWriteOff", referenceId: writeOffId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
     const journalNumber = await generateJournalNumber(tx, "LOAN", writeOffId);
     await tx.journal.create({
       data: {

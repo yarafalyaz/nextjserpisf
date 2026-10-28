@@ -72,20 +72,10 @@ export function evaluateLoanBudgetGuard(
 }
 
 /**
- * Pesan penolakan PUT-LOAN-1 (satu kalimat, tanpa nominal gaji lawan).
- * `phase`: "susun" (slip belum terbit) vs "bayar" (slip tersimpan).
+ * Pesan penolakan PUT-LOAN-1 — rumah di format.ts (AC-REP-003).
+ * Re-export supaya impor existing tak pecah.
  */
-export function loanBudgetGuardMessage(
-  breach: { totalDeductions: number; gross: number },
-  phase: "susun" | "bayar",
-): string {
-  const verb = phase === "susun" ? "Susun slip" : "Pembayaran slip"
-  return (
-    `${verb} ditolak: Σ potongan termasuk statutori (cicilan pinjaman + BPJS/PPh21 + potongan lain) ` +
-    `Rp${breach.totalDeductions.toLocaleString("id-ID")} melebihi bruto ` +
-    `Rp${breach.gross.toLocaleString("id-ID")} (BR-LOAN-03) — sesuaikan cicilan/potongan, jangan dipangkas diam-diam.`
-  )
-}
+export { loanBudgetGuardMessage } from "@/lib/utils/format"
 
 /**
  * Alokasikan `budget` (loanDeduction tersimpan slip, ≥ 0) ke pinjaman

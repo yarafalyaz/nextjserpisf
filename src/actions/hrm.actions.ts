@@ -5250,7 +5250,7 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
       if (dup) return dup;
       const created = await tx.employeeLoanRepayment.create({
         data: {
-          slug: await nextSlug("employeeLoan", `setor-pinjaman-${repaymentDateRaw}`, {} as never).catch(() => null),
+          slug: await nextSlug("employeeLoanRepayment", `setor-pinjaman-${repaymentDateRaw}`, { fallback: `setor-pinjaman-${repaymentDateRaw}-${loanId}` }),
           loanId,
           amount: roundedAmount,
           excessAmount: 0,
@@ -5324,7 +5324,7 @@ export async function writeOffEmployeeLoan(formData: FormData) {
       if (dup) throw new Error(`Pinjaman #${loanId} sudah punya dokumen write-off #${dup.id} — ganda ditolak.`);
       const created = await tx.employeeLoanWriteOff.create({
         data: {
-          slug: await nextSlug("employeeLoan", `writeoff-pinjaman-${writeOffDateRaw}`, {} as never).catch(() => null),
+          slug: await nextSlug("employeeLoanWriteOff", `writeoff-pinjaman-${writeOffDateRaw}`, { fallback: `writeoff-pinjaman-${writeOffDateRaw}-${loanId}` }),
           loanId,
           amount: safeRound(remaining, 2),
           writeOffDate,
@@ -5351,8 +5351,12 @@ export async function writeOffEmployeeLoan(formData: FormData) {
   }
 }
 
-// (slug berelasi: dokumen 07/08 memakai nextSlug("employeeLoan") pola existing;
-// delegate SLUG tanpa kunci baru — model dokumen tanpa slug wajib terdaftar.)
+// ─────────────────────────────────────────────────────────────────────────────
+// Dokumen setoran tunai + write-off pinjaman karyawan (BR-LOAN-07/08)
+// (slug berelasi: dokumen 07/08 memakai nextSlug("employeeLoan") pola
+// existing + fallback unik per pinjaman; delegate SLUG tanpa kunci baru —
+// model dokumen tanpa slug wajib terdaftar.)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function updateTimesheet(id: number, formData: FormData) {
   "use server";

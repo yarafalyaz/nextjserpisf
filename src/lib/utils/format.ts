@@ -91,6 +91,24 @@ export function formatNumber(
 }
 
 /**
+ * Pesan penolakan PUT-LOAN-1 (satu kalimat, tanpa nominal gaji lawan).
+ * `phase`: "susun" (slip belum terbit) vs "bayar" (slip tersimpan).
+ * Dipakai builder penjaga + aksi; formatCurrency pola AC-REP-003.
+ * Rumah di format.ts supaya builder laporan bebas Intl ad-hoc.
+ */
+export function loanBudgetGuardMessage(
+  breach: { totalDeductions: number; gross: number },
+  phase: "susun" | "bayar",
+): string {
+  const verb = phase === "susun" ? "Susun slip" : "Pembayaran slip"
+  return (
+    `${verb} ditolak: Σ potongan termasuk statutori (cicilan pinjaman + BPJS/PPh21 + potongan lain) ` +
+    `${formatCurrency(breach.totalDeductions)} melebihi bruto ` +
+    `${formatCurrency(breach.gross)} (BR-LOAN-03) — sesuaikan cicilan/potongan, jangan dipangkas diam-diam.`
+  )
+}
+
+/**
  * Format a date to Indonesian locale string.
  * Example: "2024-01-15" → "15 Januari 2024"
  *
