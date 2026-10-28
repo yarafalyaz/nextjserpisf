@@ -104,6 +104,9 @@ export async function onMaterialIssueCompleted(
     // SAL-BR-014: guard tepat-satu-kali lintas jalur. Item issue ini
     // tidak boleh sudah dikeluarkan sebagai penjualan pada pohon
     // quotation yang sama (StockMove OUT SalesInvoice posted).
+    // Gerbang ini menempuh serialisasi bersama lebih dulu: kunci baris
+    // `quotations` pohon (FOR UPDATE) SEBELUM membaca move lawan, lalu
+    // membaca move lawan sebagai locking read (F-2026-10-28-122-S).
     // Fail-closed di service terpusat; konflik = rollback seluruh tx.
     await assertMaterialIssueStockOutOnce(
       tx,

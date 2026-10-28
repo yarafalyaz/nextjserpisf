@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import type { TxClient } from "@/lib/db/prisma"
 
 /**
@@ -24,6 +25,23 @@ import type { TxClient } from "@/lib/db/prisma"
  * "Sudah dikeluarkan" = StockMove OUT berstatus posted. Move reversed
  * tidak dihitung: reversal membatalkan pengeluaran pertama, jadi
  * pengeluaran pengganti sah.
+ *
+ * SERIALISASI BERSAMA (F-2026-10-28-122-S, syarat lepas QA DITAHAN):
+ * guard ini WAJIB memperoleh kunci bersama sebelum membaca move lawan,
+ * lalu membaca move lawan sebagai LOCKING READ. Tanpa itu dua posting
+ * konkuren atas dokumen BERBEDA pada pohon quotation yang sama:
+ *  - keduanya membaca snapshot REPEATABLE READ lama (belum ada move lawan)
+ *    -> dua-duanya lolos guard walau stok cukup, dan
+ *  - masing-masing memposting StockMove OUT untuk kebutuhan fisik yang sama
+ *    -> stok/HPP berkurang dua kali tanpa error.
+ * Kunci bersama = baris `quotations` pohon tersebut (`FOR UPDATE`,
+ * `ORDER BY id` supaya urutan kunci deterministik lintas jalur). Karena
+ * kedua jalur konsumen (faktur penjualan & material issue) mengunci baris
+ * quotation YANG SAMA, posting kedua menunggu commit posting pertama,
+ * lalu locking read `postedOutByItem` melihat move lawan yang sudah
+ * ter-commit (current read, bukan snapshot) dan menolak. Lock dipegang
+ * sampai commit/rollback, jadi seluruh rentang guard + posting stok
+ * terserialisasi.
  */
 export type StockOutSourceKind = "SalesInvoice" | "MaterialIssue"
 
@@ -126,6 +144,123 @@ async function materialIssueIdsForQuotation(
   return [...new Set([...viaWo, ...viaProject].map((m) => m.id))]
 }
 
+/**
+ * Serialisasi bersama SAL-BR-014: kunci baris `quotations` pohon dokumen
+ * ini. Kunci yang SAMA dipakai kedua jalur konsumen (faktur penjualan &
+ * material issue), sehingga posting konkuren atas dokumen berbeda pada
+ * pohon yang sama berbaris, bukan beradu.
+ *
+ * Idempoten: memanggil ulang untuk id yang sudah terkunci di tx yang sama
+ * hanya no-op (InnoDB menyadari baris sudah dipegang transaksi ini).
+ * Urutan `ORDER BY id` membuat urutan akuisisi deterministik lintas jalur
+ * (anti-deadlock bila kelak ada pohon dengan beberapa quotation).
+ */
+export async function lockStockOutQuotationsTx(
+  tx: TxClient,
+  quotationIds: Iterable<number | null | undefined>,
+): Promise<number[]> {
+  const ids = [
+    ...new Set(
+      [...quotationIds].filter(
+        (v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0,
+      ),
+    ),
+  ].sort((a, b) => a - b)
+  if (ids.length === 0) return []
+  // Locking read = current read: menunggu transaksi lain yang memegang
+  // baris ini, lalu melihat versi ter-commit terbaru.
+  await tx.$queryRaw(
+    Prisma.sql`SELECT id FROM quotations WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`,
+  )
+  return ids
+}
+
+/**
+ * Semua quotation yang menaungi faktur penjualan (3 jembatan existing:
+ * quotation langsung, SO, proyek-kontrak).
+ */
+export async function resolveSalesInvoiceQuotationIds(
+  tx: TxClient,
+  invoiceId: number,
+): Promise<number[]> {
+  const invoice = await tx.salesInvoice.findUnique({
+    where: { id: invoiceId },
+    select: { quotationId: true, salesOrderId: true, projectId: true },
+  })
+  if (!invoice) return []
+  const quotationIds = new Set<number>()
+  if (invoice.quotationId != null) quotationIds.add(invoice.quotationId)
+  if (invoice.salesOrderId != null) {
+    const so = await tx.salesOrder.findUnique({
+      where: { id: invoice.salesOrderId },
+      select: { quotationId: true },
+    })
+    if (so?.quotationId != null) quotationIds.add(so.quotationId)
+  }
+  if (invoice.projectId != null) {
+    const project = await tx.project.findUnique({
+      where: { id: invoice.projectId },
+      select: { contractQuotationId: true },
+    })
+    if (project?.contractQuotationId != null) {
+      quotationIds.add(project.contractQuotationId)
+    }
+  }
+  return [...quotationIds]
+}
+
+/**
+ * Semua quotation yang menaungi material issue (WO langsung, proyek WO,
+ * atau proyek langsung untuk MI manual).
+ */
+export async function resolveMaterialIssueQuotationIds(
+  tx: TxClient,
+  issueId: number,
+): Promise<number[]> {
+  const issue = await tx.materialIssue.findUnique({
+    where: { id: issueId },
+    select: { workOrderId: true, projectId: true },
+  })
+  if (!issue) return []
+  const quotationIds = new Set<number>()
+  if (issue.workOrderId != null) {
+    const wo = await tx.workOrder.findUnique({
+      where: { id: issue.workOrderId },
+      select: { quotationId: true, projectId: true },
+    })
+    if (wo?.quotationId != null) quotationIds.add(wo.quotationId)
+    if (wo?.projectId != null) {
+      const project = await tx.project.findUnique({
+        where: { id: wo.projectId },
+        select: { contractQuotationId: true },
+      })
+      if (project?.contractQuotationId != null) {
+        quotationIds.add(project.contractQuotationId)
+      }
+    }
+  }
+  if (issue.projectId != null) {
+    const project = await tx.project.findUnique({
+      where: { id: issue.projectId },
+      select: { contractQuotationId: true },
+    })
+    if (project?.contractQuotationId != null) {
+      quotationIds.add(project.contractQuotationId)
+    }
+  }
+  return [...quotationIds]
+}
+
+/**
+ * Baca move OUT posted jalur lawan sebagai LOCKING READ (`FOR UPDATE`).
+ *
+ * Kenapa raw SQL: `findMany` Prisma adalah konsisten-read yang memakai
+ * snapshot REPEATABLE READ transaksi. Snapshot itu sudah terbentuk oleh
+ * baca-baca awal hook (jurnal/DP/faktur/MI), jadi guard akan tetap
+ * melihat "belum ada move lawan" walau transaksi lawan sudah commit.
+ * Locking read memaksa current read: baris move lawan yang sudah commit
+ * SELALU terlihat, dan baris itu ikut terkunci sampai commit kita.
+ */
 async function postedOutByItem(
   tx: TxClient,
   referenceType: StockOutSourceKind,
@@ -133,18 +268,21 @@ async function postedOutByItem(
 ): Promise<Map<number, { qty: number; documentNo: string | null }>> {
   const out = new Map<number, { qty: number; documentNo: string | null }>()
   if (referenceIds.length === 0) return out
-  const moves = await tx.stockMove.findMany({
-    where: {
-      referenceType,
-      referenceId: { in: referenceIds },
-      impact: "OUT",
-      status: "posted",
-    },
-    select: { itemId: true, qty: true, documentNo: true },
-  })
+  const moves = await tx.$queryRaw<
+    { itemId: number; qty: unknown; documentNo: string | null }[]
+  >(
+    Prisma.sql`SELECT item_id AS itemId, qty, document_no AS documentNo
+               FROM stock_moves
+               WHERE reference_type = ${referenceType}
+                 AND reference_id IN (${Prisma.join(referenceIds)})
+                 AND impact = 'OUT'
+                 AND status = 'posted'
+               FOR UPDATE`,
+  )
   for (const m of moves) {
-    const prev = out.get(m.itemId)
-    out.set(m.itemId, {
+    const itemId = Number(m.itemId)
+    const prev = out.get(itemId)
+    out.set(itemId, {
       qty: (prev?.qty ?? 0) + Number(m.qty),
       documentNo: prev?.documentNo ?? m.documentNo,
     })
@@ -237,37 +375,19 @@ function conflictMessage(
 /**
  * Gerbang fail-closed untuk hook penjualan. Dipanggil
  * onSalesInvoicePosted di dalam tx, sebelum stok bergerak.
+ *
+ * Urutan wajib: (1) resolusi pohon, (2) KUNCI BERSAMA baris quotation,
+ * (3) baca move lawan (locking read), (4) putuskan. Langkah (2) harus
+ * mendahului (3) — lihat catatan serialisasi di atas.
  */
 export async function assertSalesInvoiceStockOutOnce(
   tx: TxClient,
   invoiceId: number,
   candidateLines: Array<{ itemId: number; qty: number }>,
 ): Promise<void> {
-  const invoice = await tx.salesInvoice.findUnique({
-    where: { id: invoiceId },
-    select: { quotationId: true, salesOrderId: true, projectId: true },
-  })
-  if (!invoice) return
-  // Kumpulkan kandidat MI pada pohon yang sama lewat resolusi per-MI tidak
-  // efisien; resolusi pohon dilakukan sekali dari sisi faktur:
-  const quotationIds = new Set<number>()
-  if (invoice.quotationId != null) quotationIds.add(invoice.quotationId)
-  if (invoice.salesOrderId != null) {
-    const so = await tx.salesOrder.findUnique({
-      where: { id: invoice.salesOrderId },
-      select: { quotationId: true },
-    })
-    if (so?.quotationId != null) quotationIds.add(so.quotationId)
-  }
-  if (invoice.projectId != null) {
-    const project = await tx.project.findUnique({
-      where: { id: invoice.projectId },
-      select: { contractQuotationId: true },
-    })
-    if (project?.contractQuotationId != null) {
-      quotationIds.add(project.contractQuotationId)
-    }
-  }
+  const quotationIds = await resolveSalesInvoiceQuotationIds(tx, invoiceId)
+  if (quotationIds.length === 0) return
+  await lockStockOutQuotationsTx(tx, quotationIds)
   for (const quotationId of quotationIds) {
     const conflicts = await findStockOutConflicts(tx, {
       candidateKind: "SalesInvoice",
@@ -284,44 +404,18 @@ export async function assertSalesInvoiceStockOutOnce(
 /**
  * Gerbang fail-closed untuk hook material issue. Dipanggil
  * onMaterialIssueCompleted di dalam tx, sebelum stok bergerak.
+ *
+ * Urutan sama dengan jalur penjualan: resolusi pohon -> kunci bersama
+ * baris quotation -> locking read move lawan -> putuskan.
  */
 export async function assertMaterialIssueStockOutOnce(
   tx: TxClient,
   issueId: number,
   candidateLines: Array<{ itemId: number; qty: number }>,
 ): Promise<void> {
-  const issue = await tx.materialIssue.findUnique({
-    where: { id: issueId },
-    select: { workOrderId: true, projectId: true },
-  })
-  if (!issue) return
-  const quotationIds = new Set<number>()
-  if (issue.workOrderId != null) {
-    const wo = await tx.workOrder.findUnique({
-      where: { id: issue.workOrderId },
-      select: { quotationId: true, projectId: true },
-    })
-    if (wo?.quotationId != null) quotationIds.add(wo.quotationId)
-    if (wo?.projectId != null) {
-      const project = await tx.project.findUnique({
-        where: { id: wo.projectId },
-        select: { contractQuotationId: true },
-      })
-      if (project?.contractQuotationId != null) {
-        quotationIds.add(project.contractQuotationId)
-      }
-    }
-  }
-  if (issue.projectId != null) {
-    const project = await tx.project.findUnique({
-      where: { id: issue.projectId },
-      select: { contractQuotationId: true },
-    })
-    if (project?.contractQuotationId != null) {
-      quotationIds.add(project.contractQuotationId)
-    }
-  }
-  // MI tertaut WO tanpa quotation di WO: jembatan proyek langsung.
+  const quotationIds = await resolveMaterialIssueQuotationIds(tx, issueId)
+  if (quotationIds.length === 0) return
+  await lockStockOutQuotationsTx(tx, quotationIds)
   for (const quotationId of quotationIds) {
     const conflicts = await findStockOutConflicts(tx, {
       candidateKind: "MaterialIssue",

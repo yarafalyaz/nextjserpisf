@@ -453,6 +453,9 @@ export async function onSalesInvoicePosted(
     // SAL-BR-014: guard tepat-satu-kali lintas jalur. Item fisik faktur
     // ini tidak boleh sudah dikeluarkan sebagai material proyek pada
     // pohon quotation yang sama (StockMove OUT MaterialIssue posted).
+    // Gerbang ini menempuh serialisasi bersama lebih dulu: kunci baris
+    // `quotations` pohon (FOR UPDATE) SEBELUM membaca move lawan, lalu
+    // membaca move lawan sebagai locking read (F-2026-10-28-122-S).
     // Fail-closed di service terpusat; konflik = rollback seluruh tx.
     await assertSalesInvoiceStockOutOnce(
       tx,

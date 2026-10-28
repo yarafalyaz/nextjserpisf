@@ -3,6 +3,7 @@ import {
   assertMaterialIssueStockOutOnce,
   assertSalesInvoiceStockOutOnce,
   findStockOutConflicts,
+  lockStockOutQuotationsTx,
 } from "../stock-out-once.service"
 
 /**
@@ -61,14 +62,55 @@ function buildTx(fixture: {
   const materialIssues: Row[] = fixture.issues ?? [
     { id: 40, workOrderId: 20, projectId: 30 },
   ]
-  return {
+  // Semua raw query yang dijalankan guard, berurutan — dipakai tes urutan
+  // serialisasi (kunci quotation WAJIB mendahului baca stock_moves).
+  const calls: string[] = []
+  const queryRaw = vi.fn(
+    async (
+      query: { strings?: readonly string[]; values?: unknown[] } | readonly string[],
+      ...inlineValues: unknown[]
+    ) => {
+      const strings =
+        (query as { strings?: readonly string[] }).strings ??
+        (query as readonly string[])
+      const values =
+        (query as { values?: unknown[] }).values ?? inlineValues
+      const sqlText = Array.from(strings).join("?")
+      calls.push(sqlText)
+      if (/FROM\s+quotations/i.test(sqlText)) {
+        return values[0] ?? []
+      }
+      if (/FROM\s+stock_moves/i.test(sqlText)) {
+        const [referenceType, ...rest] = values
+        const ids = rest.flat().map(Number)
+        return (fixture.moves ?? [])
+          .filter(
+            (m) =>
+              m.referenceType === referenceType &&
+              ids.includes(Number(m.referenceId)) &&
+              m.impact === "OUT" &&
+              m.status === "posted",
+          )
+          .map((m) => ({ itemId: m.itemId, qty: m.qty, documentNo: m.documentNo }))
+      }
+      return []
+    },
+  )
+  const tx = {
+    $queryRaw: queryRaw,
     salesInvoice: delegate(salesInvoices),
     salesOrder: delegate([{ id: 50, quotationId: 10, deletedAt: null }]),
     workOrder: delegate([{ id: 20, quotationId: 10, projectId: 30 }]),
     project: delegate([{ id: 30, contractQuotationId: 10 }]),
     materialIssue: delegate(materialIssues),
     stockMove: delegate(fixture.moves ?? []),
-  } as never
+    __calls: calls,
+  }
+  return tx as never
+}
+
+function rawCalls(tx: unknown): string[] {
+  return (tx as { __calls: string[] }).__calls
 }
 
 const miMovePosted = {
@@ -223,5 +265,61 @@ describe("stock-out-once.service (SAL-BR-014)", () => {
     })
     expect(conflicts).toHaveLength(1)
     expect(conflicts[0].candidateQty).toBe(3)
+  })
+
+  it("serialisasi: kunci baris quotation diperoleh SEBELUM baca move lawan (jalur penjualan)", async () => {
+    const tx = buildTx({ moves: [miMovePosted] })
+    await expect(
+      assertSalesInvoiceStockOutOnce(tx, 60, [{ itemId: 7, qty: 3 }]),
+    ).rejects.toThrow(/SAL-BR-014/)
+
+    const calls = rawCalls(tx)
+    const lockIdx = calls.findIndex((sql) => /FROM\s+quotations/i.test(sql))
+    const readIdx = calls.findIndex((sql) => /FROM\s+stock_moves/i.test(sql))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(readIdx).toBeGreaterThanOrEqual(0)
+    // Kunci bersama WAJIB mendahului guard: bila urutan ini dibalik,
+    // dua posting konkuren membaca snapshot lama dan sama-sama lolos.
+    expect(lockIdx).toBeLessThan(readIdx)
+    expect(calls[lockIdx]).toMatch(/FOR UPDATE/i)
+    expect(calls[readIdx]).toMatch(/FOR UPDATE/i)
+  })
+
+  it("serialisasi: kunci baris quotation yang SAMA dipakai jalur material issue", async () => {
+    const tx = buildTx({ moves: [salesMovePosted] })
+    await expect(
+      assertMaterialIssueStockOutOnce(tx, 40, [{ itemId: 7, qty: 3 }]),
+    ).rejects.toThrow(/SAL-BR-014/)
+
+    const calls = rawCalls(tx)
+    const lockIdx = calls.findIndex((sql) => /FROM\s+quotations/i.test(sql))
+    const readIdx = calls.findIndex((sql) => /FROM\s+stock_moves/i.test(sql))
+    expect(lockIdx).toBeGreaterThanOrEqual(0)
+    expect(lockIdx).toBeLessThan(readIdx)
+    expect(calls[lockIdx]).toMatch(/FOR UPDATE/i)
+  })
+
+  it("kunci bersama: quotation didedupe + diurutkan naik (urutan kunci deterministik)", async () => {
+    const tx = buildTx({ moves: [] })
+    const locked = await lockStockOutQuotationsTx(tx, [30, 10, 30, null, 0, -1, 20])
+    expect(locked).toEqual([10, 20, 30])
+    const calls = rawCalls(tx)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatch(/FROM\s+quotations/i)
+    expect(calls[0]).toMatch(/ORDER BY id/i)
+    expect(calls[0]).toMatch(/FOR UPDATE/i)
+  })
+
+  it("tanpa pohon quotation: tidak ada kunci yang diambil (tanpa lock global)", async () => {
+    const tx = buildTx({
+      moves: [miMovePosted],
+      invoices: [
+        { id: 60, quotationId: null, salesOrderId: null, projectId: null, deletedAt: null },
+      ],
+    })
+    await expect(
+      assertSalesInvoiceStockOutOnce(tx, 60, [{ itemId: 7, qty: 3 }]),
+    ).resolves.toBeUndefined()
+    expect(rawCalls(tx)).toEqual([])
   })
 })
