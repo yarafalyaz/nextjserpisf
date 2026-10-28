@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { formatDate } from "@/lib/utils/format"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
@@ -18,11 +19,7 @@ export default async function PostDatedChequesPage() {
 
   const asOf = new Date()
   const { report } = await loadPostDatedCheques(asOf)
-  const periodLabel = `Per ${asOf.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })}`
+  const periodLabel = `Per ${formatDate(asOf)}`
 
   return (
     <ReportPageShell

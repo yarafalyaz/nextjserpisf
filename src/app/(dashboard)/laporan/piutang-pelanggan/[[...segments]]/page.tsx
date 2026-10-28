@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { formatAccounting, formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
@@ -50,7 +50,7 @@ export default async function CustomerReceivablesPage({
   const totalWoUnrepresented = rows.reduce((sum, row) => sum + (row.woUnrepresented ?? 0), 0)
   const totalConfirmedDp = rows.reduce((sum, row) => sum + (row.confirmedDownPayment ?? 0), 0)
   const totalOpenCredit = rows.reduce((sum, row) => sum + (row.openCustomerCredit ?? 0), 0)
-  const periodLabel = `Pembayaran ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Pembayaran ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Piutang per Pelanggan" sheet={false} wide filter={<>
@@ -98,7 +98,7 @@ export default async function CustomerReceivablesPage({
             {rows.map((row) => (
               <DetailTableRow key={row.customerId}>
                 <DetailTableTd className="font-medium">{row.customerName}</DetailTableTd>
-                <DetailTableTd align="right">{row.invoiceCount.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(row.invoiceCount)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.creditLimit)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold text-primary">{formatAccounting(row.outstanding)}</DetailTableTd>
                 <DetailTableTd align="right" className={row.overdue > 0 ? "text-danger" : undefined}>{formatAccounting(row.overdue)}</DetailTableTd>
@@ -112,7 +112,7 @@ export default async function CustomerReceivablesPage({
                 <DetailTableTd align="right">{formatAccounting(row.openCustomerCredit ?? 0)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.exposure)}</DetailTableTd>
                 <DetailTableTd align="right">{CREDIT_EXPOSURE_STATUS_LABEL[row.status]}</DetailTableTd>
-                <DetailTableTd align="right">{row.avgPaymentDays === null ? "–" : row.avgPaymentDays.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{row.avgPaymentDays === null ? "–" : formatNumber(row.avgPaymentDays)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
@@ -121,7 +121,7 @@ export default async function CustomerReceivablesPage({
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{totalInvoiceCount.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(totalInvoiceCount)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalCreditLimit)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOverdue)}</DetailTableTd>

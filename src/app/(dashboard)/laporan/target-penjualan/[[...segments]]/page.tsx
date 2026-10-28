@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { formatDate } from "@/lib/utils/format"
 import type { Metadata } from "next"
 
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -53,7 +54,7 @@ export default async function SalesTargetPage({
       : Promise.resolve([]),
   ])
 
-  const periodLabel = `Periode ${startDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell

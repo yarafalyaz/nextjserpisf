@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { formatDate } from "@/lib/utils/format"
 import type { Metadata } from "next"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
@@ -49,7 +50,7 @@ export default async function LeadFunnelPage({
     hasPermission("view_leads"),
   ])
 
-  const periodCaption = `Periode ${period.start.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} – ${period.end.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`
+  const periodCaption = `Periode ${formatDate(period.start)} – ${formatDate(period.end)}`
 
   return (
     <ReportPageShell

@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import { formatDate, formatNumber } from "@/lib/utils/format"
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -52,7 +53,7 @@ export default async function StockAgingPage() {
     existing.count++; existing.qty += row.qty
   }
 
-  const periodLabel = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Per ${formatDate(now)}`
 
   return (
     <ReportPageShell title="Umur Stok" sheet={false} wide actions={<><ExportButtons title="Umur_Stok" pdfHref={buildReportPdfHref("umur-stok", buildReportPeriodSlug(new Date(), new Date()))} /></>}>
@@ -70,7 +71,7 @@ export default async function StockAgingPage() {
               <DetailTableRow key={key}>
                 <DetailTableTd>{key}</DetailTableTd>
                 <DetailTableTd align="right">{val.count}</DetailTableTd>
-                <DetailTableTd align="right">{val.qty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(val.qty)}</DetailTableTd>
               </DetailTableRow>
             ))}
           </DetailTableBody>
@@ -89,7 +90,7 @@ export default async function StockAgingPage() {
                 <DetailTableTd className="font-medium">{r.name}</DetailTableTd>
                 <DetailTableTd>{r.category}</DetailTableTd>
                 <DetailTableTd>{r.uom}</DetailTableTd>
-                <DetailTableTd align="right">{r.qty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(r.qty)}</DetailTableTd>
                 <DetailTableTd align="right">{r.ageDays}</DetailTableTd>
                 <DetailTableTd>{r.ageGroup}</DetailTableTd>
               </DetailTableRow>
@@ -100,7 +101,7 @@ export default async function StockAgingPage() {
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={4}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{totalQty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right">{formatNumber(totalQty)}</DetailTableTd>
                 <DetailTableTd colSpan={2}>{""}</DetailTableTd>
               </DetailTableRow>
             )}

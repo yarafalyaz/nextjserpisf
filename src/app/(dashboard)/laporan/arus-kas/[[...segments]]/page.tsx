@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { formatDate } from "@/lib/utils/format"
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -148,7 +149,7 @@ export default async function CashFlowPage({
     { key: "financing", label: "Arus Kas dari Aktivitas Pendanaan", value: activity.financing },
   ];
 
-  const periodLabel = `Periode ${startDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })} – ${endDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
+  const periodLabel = `Periode ${formatDate(startDate, { format: "short" })} – ${formatDate(endDate, { format: "short" })}`;
   const amount = (value: number) => formatAccounting(value, { zeroDash: false });
 
   return (
@@ -173,7 +174,7 @@ export default async function CashFlowPage({
         title="Laporan Arus Kas"
         subtitle="Per Aktivitas"
         periodLabel={periodLabel}
-        periodCaption={`Periode ${startDate.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })} s/d ${endDate.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}`}
+        periodCaption={`Periode ${formatDate(startDate, { format: "short" })} s/d ${formatDate(endDate, { format: "short" })}`}
         printedBy={user.name ?? user.email}
         signatures={["Dibuat oleh", "Diperiksa oleh", "Disetujui oleh"]}
       >
