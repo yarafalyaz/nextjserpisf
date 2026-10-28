@@ -150,14 +150,14 @@ perilaku, bukan hanya keberadaan file/model.
 
 | ID | Status | Bukti paling relevan / catatan |
 | --- | --- | --- |
-| HR-BR-001 | Sebagian | prisma/schema.prisma:3958 — `Payroll` ada; pengikatan periode eksplisit per baris belum ditelusur |
-| HR-BR-002 | Sebagian | prisma/schema.prisma:3958 — `Payroll` ada; pemisahan draft vs pembayaran final belum ditelusur |
+| HR-BR-001 | Terpasang | Kolom `period String` NOT NULL `prisma/schema.prisma:3963`; periode diturunkan server dari `endDate` `src/actions/hrm.actions.ts:779`; dipakai mesin per masa BPJS/PPh21 `:810,822`; unik per (employeeId,startDate,endDate) `prisma/schema.prisma:3998`. Catatan batas: slip lintas bulan memakai bulan `endDate` (tidak ditolak) — spec F-2026-10-28-131-S |
+| HR-BR-002 | Terpasang | Default `status "draft"` `prisma/schema.prisma:3987`; klaim kondisional `draft → approved` `src/actions/hrm.actions.ts:3064`; klaim kondisional `approved → paid` `:3129`; jurnal + amortisasi pinjaman hanya di jalur bayar dalam transaksi yang sama `:3142-3197` — spec F-2026-10-28-131-S |
 | HR-BR-003 | OPEN-keputusan | Keputusan formula lembur/tarif/pembulatan terbuka di sumber. Layanan statutori ada (`src/lib/services/payroll-statutory.service.ts`), tetapi baris penegak formula tidak ditunjuk di indeks ini |
 | HR-BR-004 | Sebagian | prisma/schema.prisma:4166 — `EmployeeLoan` ada; batas potongan terhadap saldo/policy belum ditelusur |
-| HR-BR-005 | Belum | belum ditelusur — koreksi payroll posted yang dapat diaudit tidak ditunjuk di sini |
-| HR-BR-006 | Sebagian | src/app/api/payroll/late-penalty/route.ts:18 — route data payroll dibatasi ke pengguna berwenang; cakupan semua akses payroll belum diaudit |
-| HR-BR-007 | Sebagian | prisma/schema.prisma:3546 — `LeaveRequest` ada; kelengkapan pemohon/approver/periode/status belum ditelusur per field |
-| HR-BR-008 | Sebagian | prisma/schema.prisma:4066 — `PayrollComponentLine` merinci komponen payroll; ketertelusuran ke sumber perhitungan belum ditelusur |
+| HR-BR-005 | Belum | Bukti negatif konkret: tidak ada jalur koreksi/hapus slip `paid` — `deletePayroll` tidak ada (`src/lib/auth/action-perms.ts:93` menyatakannya eksplisit) dan `updatePayroll` menolak non-draft `src/actions/hrm.actions.ts:2856`; spec tertulis di kartu `t_6657e45c` (GL003-P9). Terverifikasi-negatif — spec F-2026-10-28-131-S |
+| HR-BR-006 | Terpasang | Empat gerbang: `view_payroll` di `src/app/(dashboard)/sdm/penggajian/[[...segments]]/page.tsx:53`, `.../[slug]/page.tsx:38`, `.../komponen/page.tsx:13`; `process_payroll` pada setujui/bayar `src/actions/hrm.actions.ts:3042,3083,5122,5137`; scope baris `getHrScope`/`hrScopeWhere` `.../[slug]/page.tsx:39`; API turunan `src/app/api/payroll/late-penalty/route.ts:19`; ekspor PDF laporan gaji memakai izin lebih ketat `view_payroll_reports` `src/app/api/pdf/route.ts:52`. Batas: pemetaan peran→izin di `src/lib/setup/base-data.ts` tidak diaudit ulang — spec F-2026-10-28-131-S |
+| HR-BR-007 | Terpasang | `LeaveRequest` `prisma/schema.prisma:3546-3564`: pemohon `employeeId`, approver `approvedBy`, periode `startDate`/`endDate`, `status`, `rejectionReason`; approver diisi jalur approval generik `src/actions/approval.actions.ts:58-65,253-260`; alasan penolakan `:66-70`; guard bentrok + jatah `src/actions/hrm.actions.ts:895-935`. Batas: tidak ada kolom "dicatat oleh" terpisah (pengaju = `employeeId`) — spec F-2026-10-28-131-S |
+| HR-BR-008 | Terpasang | `PayrollComponentLine` `prisma/schema.prisma:4066-4090`: `componentId`, `assignmentId`, `source`, snapshot nama/jenis/recurrence/pajak/akun; `statutorySnapshot` JSON `:3978`; snapshot dasar lembur `src/actions/hrm.actions.ts:1193-1204`. Batas: angka historis hanya dapat direproduksi lewat snapshot, bukan formula kini — spec F-2026-10-28-131-S |
 
 ## 8. Acceptance — Global `AC-GL-*`
 
@@ -219,10 +219,10 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-WO-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest`; approval policy jam kerja belum ditelusur |
 | AC-FIN-001 | Sebagian | prisma/schema.prisma:2448 — ketertelusuran hutang lewat alokasi; sisi piutang tertaut lewat `prisma/schema.prisma:1986` |
 | AC-FIN-002 | Belum | belum ditelusur — reversal beralasan dengan histori asal tidak ditunjuk di sini |
-| AC-HR-001 | Sebagian | prisma/schema.prisma:4066 — `PayrollComponentLine` merinci komponen payroll |
+| AC-HR-001 | Terpasang | Rincian komponen dirender di detail slip: `componentLines` dimuat `src/app/(dashboard)/sdm/penggajian/[slug]/page.tsx:49,54` lalu dirender `:256` — spec F-2026-10-28-131-S |
 | AC-HR-002 | Sebagian | Spec Business F-2026-10-28-117-S (backlog): inventarisasi 11 guard TERVERIFIKASI-KODE — unik slip `uq_payroll_employee_range` (`prisma/schema.prisma:3998`), guard irisan `payroll-frequency.ts:86-100` di bawah kunci baris `FOR UPDATE` (`hrm.actions.ts:2783-2823,2537-2573`), klaim kondisional approve/bayar (`hrm.actions.ts:3063-3069,3128-3199`), cek jurnal ganda hook (`accounting.hook.ts:2907-2916,3049-3057`), unik jurnal aktif `journals_active_reference_unique` (`schema.prisma:4245`); falsifikasi E117-1..9 di spec; sisa OPEN: vonis Accountant re-post sesudah reversal |
 | AC-HR-003 | Sebagian | prisma/schema.prisma:4166 — `EmployeeLoan`; penegakan batas potongan belum ditelusur |
-| AC-HR-004 | Sebagian | src/app/api/payroll/late-penalty/route.ts:18 — pembatasan akses data turunan payroll; cakupan semua payroll belum diaudit |
+| AC-HR-004 | Terpasang | Bukti sama dengan HR-BR-006: `view_payroll` (tiga halaman), `process_payroll` (`hrm.actions.ts:3042,3083,5122,5137`), scope baris `getHrScope` (`[slug]/page.tsx:39`), API `src/app/api/payroll/late-penalty/route.ts:19`, PDF `view_payroll_reports` `src/app/api/pdf/route.ts:52` — spec F-2026-10-28-131-S |
 | AC-REP-001 | Belum | belum ditelusur — kesesuaian total report dengan definisi query sumber tidak ditunjuk per laporan di sini |
 | AC-REP-002 | Sebagian | .github/workflows/ci.yml:25 — CI berjalan `TZ=Asia/Jakarta`; konsistensi timezone semua filter report belum ditelusur |
 | AC-REP-003 | Sebagian | Audit Frontend t_af1af475: PDF server registry (70 kunci) lengkap kop+periode+Dicetak-oleh di src/lib/pdf/documents/statement.ts dan layar ReportLetterhead; jalur klien diseragamkan di src/components/reports/export-buttons.tsx (formatPrintedAtWib Asia/Jakarta berlabel WIB di footer PDF + blok kop CSV buildCsvHeaderLines: perusahaan/periode/dicetak) dites export-buttons.test.ts; kolom hitung ambigu dilabeli entitas (Penawaran di quotation-outcome-card.tsx + quotation-outcome-export.ts, Layer Stok di laporan/umur-stok). Sisa: preparedBy belum ada di PDF klien (endpoint setelan tak memuat pengguna), halaman tanpa ReportLetterhead tak menyumbang periode ke ekspor klien |
