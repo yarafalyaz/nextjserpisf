@@ -2,7 +2,7 @@
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
+import { activeSalesPaymentWhere, isReversedPayment } from "@/lib/finance/payment-status"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
@@ -3901,8 +3901,9 @@ export async function deleteSalesInvoice(id: number) {
 /**
  * Void (cancel) a posted sales invoice while keeping the record for audit.
  * Reverses the revenue + COGS journals and restores stock (via
- * reverseSalesInvoicePostingTx), then marks the invoice "cancelled". Payments
- * must be removed first so cash/AR stay consistent.
+ * reverseSalesInvoicePostingTx), then marks the invoice "cancelled". Aktif
+ * payment (status != "reversed") blokir void — payment "reversed" tidak
+ * dihitung (P2 121-V / E139-5: reversal tidak menghapus baris).
  */
 export async function voidSalesInvoice(id: number) {
   "use server"
@@ -3915,7 +3916,7 @@ export async function voidSalesInvoice(id: number) {
     }
     const invoice = await tx.salesInvoice.findUniqueOrThrow({
       where: { id },
-      include: { payments: { select: { id: true } } },
+      include: { payments: { select: { id: true, status: true } } },
     })
     if (invoice.status === "draft") {
       throw new Error("Faktur draft tidak perlu dibatalkan. Gunakan hapus.")
@@ -3923,8 +3924,9 @@ export async function voidSalesInvoice(id: number) {
     if (invoice.status === "cancelled") {
       throw new Error("Faktur sudah dibatalkan.")
     }
-    if (invoice.payments.length > 0) {
-      throw new Error("Hapus pembayaran faktur ini terlebih dahulu sebelum membatalkan.")
+    const activePayments = invoice.payments.filter((p) => !isReversedPayment(p))
+    if (activePayments.length > 0) {
+      throw new Error("Reversal pembayaran aktif faktur ini terlebih dahulu sebelum membatalkan.")
     }
 
     await reverseSalesInvoicePostingTx(tx, id)
