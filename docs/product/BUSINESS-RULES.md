@@ -149,8 +149,14 @@ bertentangan.
 -   **FIN-BR-007:** pembayaran draft/gagal tidak mengurangi saldo.
 -   **FIN-BR-008:** reversal pembayaran mempertahankan histori asli.
 -   **FIN-BR-009:** aging memakai tanggal acuan dan due date konsisten.
--   **FIN-BR-010 \[OPEN\]:** double-entry general ledger dan laporan
-    formal harus diputuskan sebagai scope.
+-   **FIN-BR-010 [TERTUTUP-terverifikasi]:** double-entry general
+    ledger dan laporan formal adalah scope — tertutup oleh ADR-006 +
+    vonis Accountant kartu t_9e202412 (28 Okt 2026, butir 1). Bukti:
+    `JournalService.createJournal` menolak jurnal tak balance, status
+    lahir `POSTED` (`src/lib/services/journal.service.ts:57-71,73-84,100-140`);
+    `Journal`/`JournalEntry` (`prisma/schema.prisma:4221-4272`); period
+    lock `assertPeriodOpen` (`src/lib/services/period-lock.service.ts:20-47`).
+    Sejalan KEPUTUSAN-TERVERIFIKASI.md butir 6.
 
 ## 6. Projects & work orders
 

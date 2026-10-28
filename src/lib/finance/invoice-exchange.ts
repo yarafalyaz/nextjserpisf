@@ -15,6 +15,7 @@
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { isSettled } from "@/lib/finance/settlement-status"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export type SettlementStatus = "settled" | "partial" | "outstanding"
@@ -25,12 +26,18 @@ export const SETTLEMENT_LABEL: Record<SettlementStatus, string> = {
   outstanding: "Belum Dibayar",
 }
 
-/** Selisih di bawah setengah sen dianggap lunas (pembulatan pembayaran). */
-const EPSILON = 0.005
-
+/**
+ * Status pelunasan WAJIB memakai satu sumber kebenaran: FIN-BR-006
+ * (`@/lib/finance/settlement-status`, toleransi `SETTLEMENT_TOLERANCE_IDR` = Rp1).
+ *
+ * Sebelum paritas ini berkas menyimpan ambangnya sendiri (setengah sen, 0,005),
+ * sehingga satu faktur yang sudah "Lunas" di layar faktur/aging tampil
+ * "Sebagian" di daftar & laporan tukar faktur — dua status untuk dokumen yang
+ * sama, dan hitungan "lunas" laporan tidak bisa dicocokkan dengan AR.
+ */
 export function settlementStatus(amount: number, paid: number): SettlementStatus {
-  if (paid >= amount - EPSILON) return "settled"
-  if (paid > EPSILON) return "partial"
+  if (isSettled(amount, paid)) return "settled"
+  if (Number(paid ?? 0) > 0) return "partial"
   return "outstanding"
 }
 
