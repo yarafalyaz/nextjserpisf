@@ -43499,7 +43499,6 @@ Alur otomatis: (a) penutupan selisih transfer — draft `reason="selisih transfe
 | (QA) | E157-1..6 atas head implementasi persis | QA | head persis + tes adjustment existing |
 
 ID spec ini **F-2026-10-28-157-S** (inventarisasi field StockAdjustment vs syarat audit + matriks E-falsifikasi; jawab INDEKS INV-BR-011 `Sebagian`; basis `origin/main` `e48c3eb7d`). INDEKS INV-BR-011 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E157). Pemilik berikutnya: BOT Lead (putus opsi G157-1 + merge PR docs ini; nilai status INV-BR-011 hanya sesudah implementasi + E157 hijau) → BOT Backend (G157-1..5 sesudah putusan) → BOT Frontend (permukaan sesudah kontrak) → BOT QA (E157-1..6 atas head persis). Butuh putusan accountant: TIDAK — akun penyesuaian/jurnal existing tak diubah; Business tidak membuka vonis baru.
-||||||| e48c3eb7d
 
 ---
 ## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-148-V: metode costing bawaan = FIFO menang, average jadi pilihan eksplisit (jawaban BR-CST-08 spec 144-S, tutup OPEN #8)
