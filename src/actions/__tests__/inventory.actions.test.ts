@@ -412,7 +412,7 @@ describe("Material Issue Actions", () => {
     });
     const res = await actions.createMaterialIssue(miFd({ workOrderId: 42 }));
     expect(res?.success).toBe(false);
-    expect(res?.error).toContain("sudah memiliki Pengeluaran Material");
+    expect(res?.error).toContain("sudah pernah dibuat untuk Work Order ini");
     expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
   });
   it("createMaterialIssue mengizinkan MI pengganti sesudah MI lama batal", async () => {
@@ -420,7 +420,7 @@ describe("Material Issue Actions", () => {
     const res = await actions.createMaterialIssue(miFd({ workOrderId: 42 }));
     expectSuccess(res);
     expect(mocks.prismaMock.materialIssue.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { workOrderId: 42, status: { not: "cancelled" } } }),
+      expect.objectContaining({ where: { workOrderId: 42, status: { in: ["draft", "processing", "completed"] } } }),
     );
     expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
   });
