@@ -98,6 +98,7 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
       id: 1,
       purchaseOrderId: 10,
       warehouseId: 5,
+      status: "draft",
       items: [],
     });
     mocks.prismaMock.vendorBill.count.mockResolvedValue(0);
@@ -163,6 +164,7 @@ describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
       id: 2,
       purchaseOrderId: null,
+      status: "draft",
       items: [],
     });
 
