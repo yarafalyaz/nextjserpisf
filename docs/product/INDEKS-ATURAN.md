@@ -218,7 +218,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; pencatatan ganda inventory+project belum ditelusur |
 | AC-WO-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest`; approval policy jam kerja belum ditelusur |
 | AC-FIN-001 | Sebagian | prisma/schema.prisma:2448 — ketertelusuran hutang lewat alokasi; sisi piutang tertaut lewat `prisma/schema.prisma:1986` |
-| AC-FIN-002 | Belum | belum ditelusur — reversal beralasan dengan histori asal tidak ditunjuk di sini |
+| AC-FIN-002 | Belum | belum ditelusur — reversal beralasan dengan histori asal tidak ditunjuk di sini. Vonis F-2026-10-28-121-V (backlog): urutan reversal DP pasca-konversi P1 + nota kredit DITOLAK tahap 1 (P4) + guard void P2 + delete draft-only P3; PR #1233 LOLOS-SUBSTANSI BERSYARAT (P5); lulus penuh hanya sesudah #1233 merged + follow-up + E118/E121 (P6) |
 | AC-HR-001 | Sebagian | prisma/schema.prisma:4066 — `PayrollComponentLine` merinci komponen payroll |
 | AC-HR-002 | Sebagian | Spec Business F-2026-10-28-117-S (backlog): inventarisasi 11 guard TERVERIFIKASI-KODE — unik slip `uq_payroll_employee_range` (`prisma/schema.prisma:3998`), guard irisan `payroll-frequency.ts:86-100` di bawah kunci baris `FOR UPDATE` (`hrm.actions.ts:2783-2823,2537-2573`), klaim kondisional approve/bayar (`hrm.actions.ts:3063-3069,3128-3199`), cek jurnal ganda hook (`accounting.hook.ts:2907-2916,3049-3057`), unik jurnal aktif `journals_active_reference_unique` (`schema.prisma:4245`); falsifikasi E117-1..9 di spec; sisa OPEN: vonis Accountant re-post sesudah reversal |
 | AC-HR-003 | Sebagian | prisma/schema.prisma:4166 — `EmployeeLoan`; penegakan batas potongan belum ditelusur |
