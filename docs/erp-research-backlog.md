@@ -42116,3 +42116,63 @@ Pemilik vonis: Accountant (accounting-finance-tax, lane FIN + vonis jurnal/pajak
 - E135-3: kelebihan bayar dipotong slip berikutnya menembus plafon 50% tanpa penolakan → MERAH.
 - E135-4: koreksi menulis ke periode terkunci (cabut `assertPeriodOpen`) → MERAH.
 - E135-5: re-post `payrollId` asal sesudah reversal lolos senyap → MERAH.
+
+## PUTUSAN LEAD 2026-10-28 — F-2026-10-28-132-P: BR-LOAN-03/07/08 + N4 (HR-BR-004/AC-HR-003, lanjutan 131-S)
+
+> ID putusan: **F-2026-10-28-132-P** (P = putusan, bukan spec/vonis; nol kode/schema/migrasi).
+> Basis kode live: `origin/main` `ba3af7073` (28 Okt 2026). Spec induk: `F-2026-10-28-131-S` (PR #1265, OPEN, head `adbc3b82`).
+> Sumber tunggal: INDEKS-ATURAN HR-BR-004 + AC-HR-003 (Sebagian), KEPUTUSAN-TERVERIFIKASI keputusan 10,
+> spec 131-S §4 (BR-LOAN-01..08) + komentar kartu `t_1849ba04` (rekomendasi penerus).
+> Peran: Lead memutus **mode perilaku + konstanta status** (BR-LOAN-03 mode penolakan/pemangkasan, `written_off` baru —
+> mandat kartu induk "keputusan Lead, fisik = Backend"). Angka/akun/pajak = vonis Accountant (tidak diputus di sini).
+
+### 1. Putusan (mengikat implementasi kelak)
+
+- **PUT-LOAN-1 — BR-LOAN-03 = PENOLAKAN (opsi a).** Bila `Σ cicilan + statutory + potongan lain > bruto`
+  pada susun/ubah/bulk/bayar slip, sistem **menolak berisik sebelum klaim status** (nol jurnal, nol amortisasi,
+  sisa pokok tidak berubah). Ditolak: opsi (b) pemangkasan diam-diam (menambah risiko salah catat sisa)
+  dan opsi (c) selisih-jadi-utang (butuh akun/status baru tanpa kebutuhan ISF nyata hari ini).
+  Alasan: status quo kode sudah penolakan di empat titik plafon (`evaluateDeductionCeiling` menolak, tidak
+  memangkas — `payroll-weekly.ts:224-241`); memperluas pola yang sama ke anggaran bersih menjaga
+  **satu semantik penegak** (tolak, bukan pangkas). Konsekuensi yang diterima sadar: slip karyawan bergaji
+  kecil + pinjaman besar tidak bisa dibayar sampai HR menyesuaikan cicilan/dokumen — itu keputusan sadar,
+  bukan bug. E-LOAN-5 tetap berlaku (net 0 + loanDeduction penuh tanpa jejak = MERAH).
+- **PUT-LOAN-2 — status `written_off` ADA (konstanta baru).** `EmployeeLoan.status` (`schema.prisma:4190`,
+  `String @default("active")`, tanpa cek bawaan) boleh bernilai `written_off` sebagai status terminal
+  selain `paid_off`. Syarat pakai: hanya lewat dokumen write-off beralasan (tanggal, aktor, akun beban/piutang,
+  tautan pinjaman, jejak audit) pasca-vonis Accountant atas akun + PPh21-nya; dilarang set manual/otomatis
+  tanpa dokumen. Fisik (cek nilai + dokumen) = Backend pasca-vonis; putusan ini hanya mengesahkan konstantanya.
+- **PUT-LOAN-3 — BR-LOAN-07 = dokumen wajib, tanpa pengecualian.** Setiap pengurang `remainingAmount` di luar
+  payroll (setor tunai/potong tunjangan) wajib lewat dokumen beralasan: tanggal, aktor, akun kas/piutang,
+  tautan pinjaman, jejak audit; setoran melebihi sisa = kelebihan dikembalikan/dicatat, bukan hangus
+  (rincian akun = vonis Accountant). Tanpa dokumen = MERAH (E-LOAN-7).
+- **PUT-LOAN-4 — BR-LOAN-08 = tiga jalan berurutan, satu wajib tuntas.** Sisa pinjaman saat hubungan kerja
+  berakhir wajib selesai lewat tepat satu: (1) potong penuh dari upah final **bila** lolos plafon 50%
+  (pengecualian plafon = vonis Accountant, bukan default); bila tidak lolos → (2) pelunasan tunai BR-LOAN-07;
+  bila tidak tertagih → (3) write-off `written_off` (PUT-LOAN-2). Pinjaman karyawan berhenti **dilarang**
+  tetap `active` tanpa jejak penyelesaian (E-LOAN-8). Urutan (1)→(2)→(3) mengikat; pilihan jalan dicatat
+  di dokumen penyelesaian.
+- **PUT-LOAN-5 — N4 = tertua-dulu, satu helper.** Bila anggaran slip < Σ cicilan (kelak, pasca-penjaga anggaran),
+  alokasi memakai urutan **pinjaman tertua-dulu** (`loanDate` naik) — sama dengan urutan amortisasi yang sudah
+  berjalan (`hrm.actions.ts:3198-3215`). Generasi slip dan amortisasi wajib memakai **satu helper urutan**
+  yang sama (fisik = Backend); dua implementasi bercabang = MERAH.
+
+### 2. Yang TIDAK diputus (tetap BUTUH-VONIS Accountant; Backend/Frontend/QA menunggu itu)
+
+- Pilihan urutan prioritas pemotongan (statutory dulu vs cicilan dulu) bila anggaran mepet — BR-LOAN-03 detail.
+- Pengecualian plafon 50% pada upah final PHK; perlakuan akun + PPh21 write-off; pembulatan sen multi-pinjaman;
+  akun kas + bukti setor BR-LOAN-07; perlakuan setoran melebihi sisa.
+- Wujud penjaga fail-closed di dalam tx payroll + helper tunggal (Backend); dokumen pelunasan + status (Frontend);
+  E-LOAN-1..8 atas head implementasi (QA).
+
+### 3. Urutan merge PR #1265 (131-S)
+
+- PR #1265 (spec 131-S, head `adbc3b82`) saat putusan ini ditulis **CONFLICTING/DIRTY vs main `ba3af7073`**
+  (merge-base bergerak oleh #1277 + #1290 + #1297); CI exact-head docs-only hijau (Detect+Sonar PASS, 5 skipping).
+  Urutan: **pemilik branch sync 1x (UNION backlog, NOL board di diff) → QA atestasi blob exact-SHA →
+  Lead merge `--match-head-commit`**. Putusan ini (132-P) mendarat DULU lewat PR docs-only sendiri supaya
+  PR #1265 tidak dibebani isi baru saat sync; sync #1265 = milik pemilik branch, bukan PR ini.
+
+ID putusan ini **F-2026-10-28-132-P**. Pemilik berikutnya: Accountant (vonis angka/akun/pajak §2 di atas, tanpa kartu
+baru — tulis sebagai ID di komentar kartu tugasnya) → Backend (penjaga + helper + `written_off` fisik) → QA
+(E-LOAN-1..8 atas head implementasi).
