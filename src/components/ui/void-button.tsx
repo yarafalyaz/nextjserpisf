@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Ban } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
-import { Textarea } from "@/components/ui/shadcn/textarea"
+import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
@@ -96,23 +96,14 @@ export function VoidButton({
         onConfirm={handleVoid}
       >
         {requireReason ? (
-          <div className="mt-3 flex flex-col gap-1.5">
-            <label htmlFor={`void-reason-${id}`} className="text-sm font-medium">
-              {reasonLabel} <span aria-hidden="true" className="text-danger">*</span>
-            </label>
-            <Textarea
-              id={`void-reason-${id}`}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={reasonPlaceholder}
-              aria-label={reasonLabel}
-              rows={3}
-              disabled={isPending}
-            />
-            <p className="text-xs text-muted-foreground">
-              Alasan wajib diisi dan tersimpan sebagai jejak audit pembatalan.
-            </p>
-          </div>
+          <ReasonField
+            id={`void-reason-${id}`}
+            value={reason}
+            onChange={setReason}
+            disabled={isPending}
+            label={reasonLabel}
+            placeholder={reasonPlaceholder}
+          />
         ) : undefined}
       </ConfirmDialog>
     </>
