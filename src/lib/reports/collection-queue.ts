@@ -19,20 +19,17 @@
  *   bila exchange aktif ada, else invoice.dueDate (BR-COL-03). Tanpa due
  *   apa pun: umur null jujur, tidak masuk lewat_janji dari due.
  *
- * Sisa presisi sen via receivableOutstanding; lunas sisa <= 0.005
- * (BR-COL-02, pola invoice-exchange.actions). Satu faktur satu baris:
+ * Sisa presisi sen via receivableOutstanding; lunas sisa <= toleransi
+ * FIN-BR-006 (Rp1) lewat `isOutstandingSettled` — SATU ambang dengan layar
+ * faktur/daftar tukar faktur, bukan epsilon lokal. Satu faktur satu baris:
  * exchange aktif TERAKHIR per faktur yang dipakai (BR-COL-04). Janji
  * terakhir = promisedDate maksimum dari tindak lanjut outcome janji
  * yang tidak terhapus (BR-COL-05). Baca-saja: tanpa jurnal, tanpa tulis
  * (BR-COL-07). Loader: `collection-queue-data.ts`.
  */
 
-import {
-  COLLECTION_SETTLED_EPSILON,
-  receivableOutstanding,
-} from "@/lib/reports/aging-amounts"
-
-export { COLLECTION_SETTLED_EPSILON }
+import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { buildLateFeeOutstandingByInvoice } from "@/lib/reports/sales-late-fee"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import { safeAdd } from "@/lib/utils/math"
@@ -344,7 +341,7 @@ export function buildCollectionQueue(
       invoice.grandTotal,
       invoice.paidAmount + (invoice.returnCredit ?? 0),
     )
-    if (sisa <= COLLECTION_SETTLED_EPSILON) continue
+    if (isOutstandingSettled(sisa)) continue
 
     const exchange = latestActiveExchange(
       exchangesByInvoice.get(invoice.invoiceId) ?? [],
