@@ -42706,6 +42706,59 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 
 ---
 
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-132-S: koreksi status indeks domain HR (telusur 7 baris "belum ditelusur")
+
+> **Slot**: `F-2026-10-28-132-S`. Basis `origin/main` `cfce29e94` (branch
+> `hermes/business-indeks-hr-sweep`). grep `F-2026-10-28-131` di backlog + board
+> = 0 baris, judul PR terbuka yang memuat `131` = 0 saat spec ini ditulis.
+> Lane: BUSINESS (dokumen saja — nol `src/`, nol `prisma/`).
+
+**Masalah yang ditutup.** Temuan CEO-riset 2026-10-28 (`docs/autonomous-board.md`,
+butir "(d) TEMUAN NYATA underclaim") membuktikan baris `INDEKS-ATURAN.md` bisa
+menulis "belum ditelusur" padahal penegaknya ADA — akibatnya prioritas kerja
+salah baca. Kartu `t_1849ba04` sudah mengoreksi HR-BR-004/AC-HR-003; spec ini
+menutup tujuh baris HR yang tersisa dengan metode yang sama: cari, tunjuk, baru
+tulis status.
+
+**Metode.** Untuk tiap ID: baca bunyi aturan di `docs/product/BUSINESS-RULES.md`
+(§7 HR & Payroll, baris 184-194) dan `docs/product/ACCEPTANCE-CRITERIA.md`
+(§6, baris 78-83), lalu telusuri penegak di `prisma/schema.prisma`,
+`src/actions/`, `src/lib/`, dan `src/app/**`. Status hanya dinaikkan bila ada
+satu bukti penegak yang bisa ditunjuk orang lain tanpa penjelasan tambahan.
+
+**Hasil penelusuran.**
+
+| ID | Bunyi aturan | Bukti penegak (`path:baris`) | Status akhir | Batas cakupan yang jujur |
+|---|---|---|---|---|
+| HR-BR-001 | Payroll terikat periode eksplisit | kolom `period String` NOT NULL `prisma/schema.prisma:3963`; periode diturunkan server dari `endDate` `src/actions/hrm.actions.ts:779`; dipakai mesin per masa BPJS & PPh21 `:810`, `:822`; unik per (employeeId, startDate, endDate) `prisma/schema.prisma:3998` | Terpasang | Slip dengan rentang lintas bulan tidak ditolak: `period` mengikuti bulan `endDate` (batas cakupan, bukan pelanggaran bunyi aturan) |
+| HR-BR-002 | Payroll draft bukan pembayaran final | default `status "draft"` `prisma/schema.prisma:3987`; klaim kondisional `draft → approved` `src/actions/hrm.actions.ts:3064`; klaim kondisional `approved → paid` `:3129`; jurnal + amortisasi pinjaman hanya di jalur bayar, di dalam transaksi yang sama `:3142-3197` | Terpasang | — |
+| HR-BR-006 | Akses payroll dibatasi | Sisi BACA: `view_payroll` di tiga permukaan `src/app/(dashboard)/sdm/penggajian/[[...segments]]/page.tsx:53`, `.../[slug]/page.tsx:38`, `.../komponen/page.tsx:13`; API turunan `src/app/api/payroll/late-penalty/route.ts:19`; ekspor PDF laporan gaji memakai izin lebih ketat `view_payroll_reports` `src/app/api/pdf/route.ts:52`. Sisi TULIS: lihat baris indeks yang disunting F-2026-10-28-128-S (`getHrScope` + `assertHrEmployeeAccess`) | **Sebagian** — disembunyikan bukan di sini: baris INDEKS status Sebagian mengikuti spec F-2026-10-28-128-S (sisi tulis) yang belum diverifikasi QA; bukti baca run ini lengkap | Dua lane menyentuh baris yang sama; PR ini hanya menambah bukti sisi baca, tidak menurunkan status lane lain |
+| HR-BR-007 | Cuti menyimpan pemohon, approver, periode, status | model `LeaveRequest` `prisma/schema.prisma:3546-3564`: `employeeId` (pemohon), `approvedBy`, `startDate`/`endDate` (periode), `status`, `rejectionReason`; approver diisi jalur approval generik `src/actions/approval.actions.ts:58-65` + `:253-260`; alasan penolakan `:66-70`; guard bentrok & jatah `src/actions/hrm.actions.ts:895-935` | Terpasang | Tidak ada kolom "dicatat oleh" terpisah dari pemohon (pengaju = `employeeId`) |
+| HR-BR-008 | Rincian payroll tertelusur ke sumber perhitungan | `PayrollComponentLine` `prisma/schema.prisma:4066-4090`: `componentId`, `assignmentId`, `source`, snapshot `componentNameSnapshot`/`kindSnapshot`/`recurrenceSnapshot`/`isTaxableSnapshot`/`accountIdSnapshot`; `statutorySnapshot` JSON `:3978`; snapshot dasar lembur `src/actions/hrm.actions.ts:1193-1204` | Terpasang | Kolom `amount` per baris tetap nominal beku; perhitungan ulang angka historis hanya bisa direproduksi lewat snapshot, bukan formula kini |
+| HR-BR-005 | Payroll posted dikoreksi melalui proses yang dapat diaudit | **tidak ada** jalur koreksi: `deletePayroll` absen (`src/lib/auth/action-perms.ts:93` menyatakan eksplisit) dan `updatePayroll` menolak non-draft `src/actions/hrm.actions.ts:2856` | **Belum** (terverifikasi-negatif, bukan "belum ditelusur") | Spec tertulis menunggu implementasi: kartu `t_6657e45c` (GL003-P9) |
+| AC-HR-001 | Payroll memperlihatkan rincian komponen | detail slip memuat `componentLines` `src/app/(dashboard)/sdm/penggajian/[slug]/page.tsx:49`, `:54`, dirender `:256` | Terpasang | — |
+| AC-HR-004 | Payroll hanya dilihat role berwenang | bukti sama dengan HR-BR-006 (empat gerbang: tiga halaman `view_payroll`, API `:19`, PDF `view_payroll_reports`) + scope baris `getHrScope` | Terpasang | Lihat batas HR-BR-006 |
+
+**Tambahan di luar daftar kartu (HR-BR-005).** Baris ini awalnya berbunyi "belum ditelusur"; penelusuran menemukan **bukti negatif** yang bisa ditunjuk (tidak ada `deletePayroll`, `updatePayroll` draft-only), jadi statusnya tetap **Belum** tetapi alasannya kini terverifikasi, bukan asumsi.
+
+**Catatan tabrakan lane:** baris HR-BR-006 di `origin/main` sudah disunting spec `F-2026-10-28-128-S` (sisi tulis). Run ini TIDAK menimpa status lane itu — bukti sisi baca ditambahkan pada baris yang sama dan status tetap `Sebagian` sampai AC-HRS-1..6 diverifikasi QA.
+
+**Kesimpulan penting.** Dari delapan baris, **nol** yang benar-benar "tidak ada
+penegak" — semuanya bisa ditunjuk. Jadi kekhawatiran "belum ditelusur" di
+INDEKS adalah cacat dokumentasi, bukan cacat sistem. Yang tetap perlu diuji
+perilaku (bukan hanya keberadaan gerbang) diserahkan ke QA sebagai bahan
+acceptance: HR-BR-001 (slip lintas bulan), HR-BR-002 (bayar dua kali), HR-BR-007
+(approver tercatat pada jalur workflow, bukan hanya jalur langsung).
+
+**Yang TIDAK dilakukan spec ini.** Tidak mengubah kode/skema/migrasi, tidak
+menaikkan status tanpa bukti, tidak menyentuh baris non-HR di `INDEKS-ATURAN.md`
+(milik lane lain), dan tidak membuat kartu turunan. Bila di kemudian hari
+penegak berubah, bukti di tabel ini yang harus diperbarui — bukan statusnya
+saja.
+
+**Penerus.** BOT QA: uji perilaku tiga butir batas cakupan di atas pada head
+implementasi (bukan head docs ini). BOT Lead: merge PR docs ini bila gate hijau
+head persis. Business tidak merge. ID spec ini **F-2026-10-28-132-S**.
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-145-S: standar tarif tenaga kerja per peran untuk costing proyek (PROJ-BR-008 OPEN-keputusan, OPEN #5)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_807779f7`. Basis `origin/main` `5cf96c37e` (28 Okt 2026 15:03 WIB).
@@ -42931,6 +42984,34 @@ Beban p95 — skenario (lingkungan UAT disepakati, biaya jaringan diukur terpisa
 
 ID spec ini **F-2026-10-28-143-S** (OPEN #7: RPO/RTO + p95 + E143). Pemilik berikutnya: Accountant vonis BR-OPEN7-01..06 (RPO/RTO komitmen-vs-target + statutori 2026, sinkron PR #1254) → Lead putus J1/J3 + sahkan matriks + merge → QA E-OPEN7 (E143-1..6) atas bukti persis → INDEKS baris operasional baru + keputusan 12 OPEN #7 → TERTUTUP-teruji / TETAP-TARGET.
 
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-146-V: akun + perlakuan GL selisih varians labor (jawaban BR-PROJ-07 spec F-2026-10-28-145-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `fdb836e88` (28 Okt 2026 17:45 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-146` di backlog + board `origin/main` = 0 sebelum tulis; ID 144/149 bebas di main. **146-V bebas.**
+Rujukan: spec F-2026-10-28-145-S (PR #1317 MERGED 6693f8fb8) §5/§7 BR-PROJ-06/BR-PROJ-07 + E145-4; vonis 129-V P3/P4 (PR #1257 OPEN); Q-PROJ8 mekanika costing; gerbang varians produksi F-006 (`src/lib/tax/production-variance-gate.ts`); jurnal serapan non-material `stock-journal.service.ts:642-700` (Dr WIP / Cr materialExpense→materialIssueExpense→cogs; reversal-kumulatif per baris).
+### 1. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Jurnal serapan biaya produksi non-material (`onProductionCostAbsorbed`, `src/lib/services/stock-journal.service.ts:642-700`): Dr WIP (`wipAccountId`) / Cr akun serapan (`materialExpenseAccountId` → `materialIssueExpenseAccountId` → `cogsAccountId`), fail-closed bila salah satu kosong. Jurnal kumulatif-reversal per baris (`journals_active_reference_unique`). Nilai = `ProductionCost.amount` snapshot saat pull — bukan tarif master, bukan jam mentah.
+- Varians produksi existing = angka ANALITIS, bukan saldo: `ProductionOrder.variance` diakumulasi saat rilis, dipecah jadi selisih harga/pemakaian bahan + kolom "Tenaga Kerja & Lainnya" = `ProductionCost` aktual apa adanya (`src/lib/reports/production-variance.ts:13-16` — "tidak ada standar per kategori biaya di schema, jadi komponen ini dilaporkan apa adanya sebagai aktual, bukan dikarang standarnya"). Gerbang disposisi F-006 (`src/lib/tax/production-variance-gate.ts:28-38`): disposisi HANYA bila `standardCostingEnabled` ON + `productionVarianceAccountId` terisi; default MATI; uncalibrated dilarang ikut.
+- Tidak ada akun khusus varians labor di settings hari ini (`wipAccountId`, `materialExpenseAccountId`, `materialIssueExpenseAccountId`, `cogsAccountId`, `productionVarianceAccountId`, `salaryExpenseAccountId`, `salariesPayableAccountId` nullable fail-closed; grep seed = 0 untuk WIP/materialExpense). `assertDispositionAllowed` tanpa pemanggil aksi hari ini (gate tanpa pintu — bukan cacat, gerbang menunggu mode).
+- Gaji/upah TIDAK mengalir ke HPP lewat jurnal payroll: payroll memposting Dr Beban Gaji / Cr Hutang Gaji (pola disiplin `disciplinary-deduction.service.ts:173-200` sebagai preseden arah akun gaji), sedangkan HPP labor lahir dari pull timesheet→`ProductionCost` snapshot (`src/actions/production-cost.actions.ts:259-261,322,331`, "system does not read payroll data"). Dua dunia terpisah — anti-bocor gaji BR-PROJ-02 tetap utuh.
+### 2. Vonis (menutup BR-PROJ-07)
+- **V1 — varians labor tetap memo sampai mode standard-costing ON.** Rate variance + efficiency variance spec 145-S §5 = angka analitis laporan (konsisten BR-PROJ-06 + F-006). NOL jurnal lahir dari laporan varians labor selama `standardCostingEnabled` MATI. E145-4 ditegakkan: varians melahirkan jurnal tanpa vonis/gate ini = MERAH.
+- **V2 — pintu jurnal varians labor = gerbang F-006 yang sudah ada, tanpa akun baru.** Bila tenant mengaktifkan `standardCostingEnabled` + memetakan `productionVarianceAccountId`, disposisi varians (termasuk komponen labor) memakai akun itu via `assertDispositionAllowed` — fail-closed bila kosong/MATI, tanpa fallback ke materialExpense/cogs. DILARANG menambah kolom akun khusus "labor variance" di settings: satu akun selisih produksi cukup; pemisahan rate/efficiency vs bahan vs overhead cukup di memo/deskripsi jurnal + laporan, bukan di akun GL baru.
+- **V3 — arah jurnal bila pintu terbuka (disposisi, bukan auto-posting).** Disposisi varians labor mengikuti pola serapan existing: selisih yang menambah HPP = Dr WIP / Cr akun selisih produksi; selisih yang mengurangi HPP (efisiensi menguntungkan / tarif aktual di bawah standar) = Dr akun selisih produksi / Cr WIP. Jurnal disposisi = reversal-kumulatif per order (pola `onProductionCostAbsorbed`), dipicu aksi disposisi eksplisit pasca-`assertDispositionAllowed`, BUKAN auto-post saat pull/laporan. Tanpa aksi disposisi = tanpa jurnal, walau gate ON.
+- **V4 — varians TIDAK PERNAH menyentuh akun gaji/payroll.** Dr/Cr varians labor hanya WIP ↔ akun selisih produksi. DILARANG: Dr/Cr `salaryExpenseAccountId`, `salariesPayableAccountId`, atau akun payroll lain; DILARANG menurunkan tarif standar dari `baseSalary` (BR-PROJ-02 ditegaskan ulang). Gaji tetap beban periode via payroll; HPP labor tetap snapshot pull. Selisih keduanya bukan objek jurnal — itu dua rezim akuntansi berbeda.
+- **V5 — snapshot + riwayat tarif tetap syarat sah.** Tarif standar hasil resolve WAJIB di-snapshot ke `ProductionCost.rate` existing (mekanisme live, tidak diubah); ubah tarif tidak me-restate terposting (AC-3/E145-3). Retensi riwayat: baris tarif ditutup (`effectiveTo`), bukan diedit/dihapus, selama ada `ProductionCost` bersnapshot darinya; riwayat = audit varians. Hapus jabatan ber-snapshot: riwayat tarif tetap (restrict), penentuan FK = Backend saat fisik.
+- **V6 — batas vonis.** Vonis ini MEMBUKA E145-4 (jalan jurnal varians labor sah = aksi disposisi eksplisit + gate F-006 ON + akun terpetakan). E145-1/2/3/5/6 tetap berlaku penuh. BR-PROJ-06 (varians = memo) tetap default operasi normal; V1-V5 hanya membuka pintu untuk tenant standard-costing, bukan mengubah default.
+### 3. Yang TIDAK diputus (tetap milik Lead/Backend)
+- Bentuk fisik master tarif (tabel/kolom baru), resolve fallback, UI master, laporan varians — milik Backend/Frontend sesudah Lead putus USULAN 145-S §2-§5.
+- PSAK 72 / pengakuan pendapatan eksternal (batas 129-V) tidak disentuh.
+ID vonis ini **F-2026-10-28-146-V** (jawaban BR-PROJ-07). Pemilik berikutnya: Lead (putus USULAN 145-S + merge #1317/#1257) → Backend (fisik master + resolve + varians memo) → QA (E145-1..6 + E146-1..3 atas head implementasi persis).
+### Falsifikasi QA (E146, atas head implementasi persis)
+- E146-1: `standardCostingEnabled` MATI tetapi jurnal varians labor terbit (dari laporan/pull/disposisi) = **MERAH**.
+- E146-2: disposisi varians labor lolos saat `productionVarianceAccountId` kosong, atau fallback ke materialExpense/cogs/salaryExpense = **MERAH**.
+- E146-3: jurnal varians labor menyentuh akun payroll mana pun (Dr/Cr salaryExpense/salariesPayable/payrollBank/employeeReceivable) atau tarif resolve membaca `baseSalary` = **MERAH**.
+
+---
+
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-152-S: verifikasi mekanisme approval vs isi matriks + rantai jam kerja WO-BR-003 (OPEN #4, keputusan 9)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_d5d54080`. Basis `origin/main` `b8d4f7c24` (28 Okt 2026, WIB).
@@ -43075,3 +43156,95 @@ Kriteria TERIMA: tiap baris WAJIB punya ≥1 workflow aktif + ≥1 langkah beris
 - INDEKS `WO-BR-003` TETAP `Sebagian` + GL-BR-009 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E152). Perubahan status = milik Lead/QA sesudah implementasi + E152 hijau.
 
 ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003 + Q owner; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: OWNER (jawab Q-AVM-1..7 via Lead) → BOT Lead (vonis Q-AVM-2/3/4 + Q-AVM-6/7 masuk-mesin + merge PR docs ini; WO-BR-003/GL-BR-009 tetap `Sebagian`) → BOT Accountant (Q150-1/2/3 SAJA; isi matriks BUKAN vonis) → BOT Backend (kerja mesin sesudah putusan) → BOT Frontend (UI matriks sesudah kontrak) → BOT QA (E152 atas head persis). Butuh putusan accountant: TIDAK untuk isi matriks; YA TERBATAS hanya Q150-1/2/3 (akun/selisih/periode rantai jam kerja).
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-154-S: spec ambang DP terkonfirmasi vs pending per baris (SAL-BR-002, P0 faktur/pembayaran)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_1a1e004c`. Basis `origin/main` `e16e79d81` (28 Okt 2026, fetch run ini).
+**Verifikasi ID:** grep `F-2026-10-28-154` di backlog + board `origin/main` = 0/0; judul PR terbuka mengandung `154-S` = 0; isi backlog head PR terbuka = 0 hit (scan run ini). E-number `E-SAL2-1..N` = 0 hit di seluruh `origin/main` + head PR terbuka. **154-S/E-SAL2 bebas, dipakai spec ini.**
+**Sumber tunggal:** `docs/product/INDEKS-ATURAN.md` SAL-BR-002 `Sebagian` + SAL-BR-005/006/007/015 (konteks ambang) + TEST-STRATEGY P0 butir 10 (DP draft/gagal tidak dihitung; DP posted mencapai ambang persen snapshot; konversi sekali).
+**Bukan duplikat:** 147-S (PR #1324 OPEN) = jalur tulis → ambang → invoice + snapshot pembatalan (SAL-BR-006, BR-S6-01..07); 065-S (inti 108) = desain ambang persen snapshot + helper; 141-V = reversal DP pasca-konversi. Spec ini = matriks STATUS DP per baris × pengaruh ambang + syarat posted + snapshot pembatalan DP terkonfirmasi (SAL-BR-002: "belum ditelusur per baris" → ditelusur run ini §3).
+
+Benchmark resmi (akses 28 Okt 2026, run ini):
+- Accurate Online — uang muka tercatat lalu dihubungkan saat pelunasan faktur; hanya yang tercatat terpakai: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/uang-muka-penjualan/mencatat-uang-muka-penjualan/
+- Zahir Accounting 6 — input uang muka (kas/bank + pelanggan + nilai); hanya yang `Aktif` tampil sebagai pilihan saat invoice: https://help.zahironline.com/portal/id/kb/articles/uang-muka-penjualan
+
+### 1. Workflow specification (aktor + dokumen masuk/keluar)
+
+Alur kanonis DP → ambang → invoice (semua TERVERIFIKASI-KODE kecuali ditandai):
+
+1. Admin penjualan buat DP (`createDownPayment`, `src/actions/sales.actions.ts:738`): lahir `draft` (`:796`), cap kumulatif non-cancelled (`:777-784`). Dokumen masuk: quotation `accepted/approved/converted`. Dokumen keluar: baris `DownPayment` status `draft`.
+2. Finance/kasir konfirmasi (`confirmDownPayment`, `sales.actions.ts:941`): credit-gate `assessCreditGateInTx` dulu (`:949-986`), lalu `onDownPaymentReceived` + `onDownPaymentConfirmed` dalam SATU `$transaction` (`:987-988`). Dokumen keluar: jurnal terima `POSTED` Dr kas / Cr 210102 (+ Cr 210201 bila terutang PPN) + snapshot PPN dibekukan ke baris DP (`accounting.hook.ts:2407-2562`, fail-closed akun `:2419-2424`, `assertPeriodOpen` `:2441`, idempoten `referenceType/referenceId` `:2431-2433` + `:2450-2452`); DP `draft → confirmed` (tiga titik tulis `down-payment.hook.ts:134-138` pra-invoice, `:321-324` pasca-invoice existing, `:843-848` penutup); WO/SO/Project sekali + evaluasi ambang tiap confirm; kumulatif CONFIRMED ≥ ambang snapshot → invoice konversi lahir **DRAFT** (`:655-676`, `status: "draft"`, `paymentStatus: "partial"`, tanpa `onSalesInvoicePosted` `:813-814`) + alokasi SEMUA verified DP via `SalesPayment` `paymentMethod: "down_payment"` + jurnal reklas Dr 210102 / Cr Piutang (jalur faktur-sudah-ada `:166-246`; jalur konversi-awal `:724-783`).
+3. Finance posting manual (`postInvoice`, `sales.actions.ts:1168`): izin `post_sales_invoices` + gate `assertApproved` + status `draft/approved` + item non-kosong; stok + revenue/COGS + jurnal posted (di luar spec ini).
+4. Koreksi maju (USULAN, selaras vonis final 141-V R1–R3 — PR vonis #1298 OPEN): reversal downstream-first R1 faktur → R2 alokasi → R3 terima + batal FP UM atomik; ambang yang sudah memicu invoice TIDAK ditarik mundur (147-S BR-S6-05, dirujuk bukan disalin).
+
+### 2. Role/permission matrix (key nyata `src/lib/auth/module-catalog.generated.ts:184-188`)
+
+Baris = aksi, isi = permission key (nama role tidak ditelusur run ini — pemegang key):
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Buat DP draft | `create_down_payments` | cap kumulatif non-cancelled |
+| Konfirmasi DP (terima + jurnal + ambang) | `confirm_down_payments` | atomik satu tx; titik tunggal per-baris §3 |
+| Ubah DP | `edit_down_payments` | **draft-only** (`sales.actions.ts:3772`) |
+| Hapus DP | `delete_down_payments` | **draft-only** (`sales.actions.ts:2933`); DP confirmed TIDAK bisa dihapus, termasuk via `deleteQuotation` (DP confirmed ikut terhapus fisik hanya bersama quotation-nya + reverse jurnal terima, `:2704-2715` — bukan pembatalan baris mandiri) |
+| Lihat DP | `view_down_payments` | — |
+| Posting faktur konversi | `post_sales_invoices` | gate `assertApproved` + period-lock; satu-satunya jalur stok/jurnal invoice |
+
+### 3. Status-transition matrix (inti kartu: per-baris × ambang, TERVERIFIKASI-KODE)
+
+Kolom "ambang" = kontribusi baris itu ke kumulatif `totalVerifiedSen` (`down-payment.hook.ts:631-639`: `where: { quotationId, status: CONFIRMED }` → sen integer → banding `>= thresholdSen`, ambang dari `resolveInvoiceThresholdPercent` + `computeInvoiceThresholdSen`, snapshot `Quotation.invoiceThresholdPercent` dari `CustomerCategory.downPaymentPercent` saat quotation dibuat (`sales.actions.ts:216-268`), fallback 50 fail-closed bila snapshot tak sah (`invoice-threshold.ts:17,38-49`)).
+
+| Status baris DP | Arti operasional | Dihitung ambang? | Syarat posted untuk dihitung | Transisi keluar yang ada di kode | Bukti |
+|---|---|---|---|---|---|
+| `pending` (default skema, tak pernah ditulis aksi) | Nilai awal kolom sebelum aksi apa pun | TIDAK — query = persis `CONFIRMED` | — (tidak terjangkau pembaca mana pun) | lahir langsung `draft` saat create | `prisma/schema.prisma:1629` (`@default("pending"`); `sales.actions.ts:796` tulis `draft` |
+| `draft` (lahir W1) | DP tercatat, uang BELUM diterima resmi (tanpa jurnal terima) | TIDAK — menempati cap kumulatif non-cancelled (`:777-784`) tapi NOL kontribusi ambang | belum ada jurnal terima POSTED (hook terima belum jalan) | `draft → confirmed` via confirm; `draft →` hapus fisik (draft-only); `draft →` ubah (draft-only) | `sales.actions.ts:777-784,796`; `down-payment.hook.ts:631-634`; `:2922-2933` (hapus draft-only); `:3772` (ubah draft-only) |
+| `confirmed` (hasil W2) | Uang diterima + jurnal terima POSTED + snapshot PPN beku | YA — satu-satunya sumber `totalVerifiedSen` | WAJIB: jurnal terima `POSTED` dalam tx yang sama (`accounting.hook.ts:2539-2543`, idempoten `referenceType/referenceId`); period-open; akun terkonfigurasi (fail-closed) | terminal di kode live (nol penulis `cancelled`/void untuk DP confirmed: grep `downPayment.update` = hanya `:134,:321,:843` = CONFIRMED); retry = silent-skip (`:100-102`); koreksi hanya reversal maju 141-V R1–R3 (belum ada implementasi) | `down-payment.hook.ts:95-102,134-138,321-324,631-639,843-848`; `accounting.hook.ts:2419-2441,2539-2543` |
+| `cancelled` (DP) | Tak ada penulis di kode live (temuan negatif run ini) | TIDAK — dan sekaligus NOL jalur menuju ke sini untuk baris mandiri | — | tidak ada transisi DP→`cancelled` di aksi/hook mana pun (cap memakai `not: "cancelled"` defensif, tapi penulisnya nol) | grep `downPayment.update/delete` §2 (nol `cancelled`); `sales.actions.ts:777,3797` (`not cancelled` = antisipatif) |
+| DP terkonfirmasi yang quotation-nya dihapus | Hapus fisik, bukan status | TIDAK LAGI — baris hilang; ambang masa depan dihitung tanpa baris itu; invoice yang SUDAH lahir darinya TIDAK ikut terhapus (snapshot BR-S6-05) | jurnal terima di-reverse dulu (`deleteJournalByReferenceTx`) baru baris dihapus | `deleteQuotation` → reverse jurnal DP → `downPayment.deleteMany` implisit cascade | `sales.actions.ts:2704-2715` |
+| `failed` (DP) | Tak ada literal di kode DP (temuan negatif run ini) | TIDAK (bahkan tak terjangkau: bukan nilai yang pernah ditulis/dibaca) | — | tidak ada | grep `"failed"` di `down-payment.hook.ts` = 0; grep DP-status di aksi/hook = hanya `draft/pending/confirmed/cancelled` |
+
+Ringkasan satu kalimat: ambang = Σ `amount` baris `confirmed` per quotation (sen integer) ≥ `ceil(grandTotalSen × persenSnapshot/100)`; baris `draft/pending/cancelled/failed` NOL kontribusi; syarat posted = jurnal terima POSTED + snapshot PPN beku dalam tx confirm yang sama; snapshot pembatalan DP terkonfirmasi = invoice lahir DRAFT tidak ditarik mundur, koreksi = reversal maju R1–R3.
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-SAL2-01 | Ambang dihitung HANYA dari DP `confirmed` per baris per quotation; `draft/pending/cancelled/failed` NOL kontribusi walau `draft` menempati cap kumulatif non-cancelled | TERVERIFIKASI-KODE | `down-payment.hook.ts:631-639`; `sales.actions.ts:777-784` |
+| BR-SAL2-02 | Syarat posted: baris `confirmed` sah dihitung hanya bila jurnal terima `POSTED` + snapshot PPN beku dalam tx confirm atomik; fail-closed akun/periode (`assertPeriodOpen`, akun 210102/210201 wajib) | TERVERIFIKASI-KODE | `accounting.hook.ts:2419-2441,2506-2543`; `sales.actions.ts:987-988` |
+| BR-SAL2-03 | `pending` = default skema yang tak pernah ditulis aksi (lahir langsung `draft`); tidak ada pembaca ambang yang menjangkau `pending` — benar, bukan gap | TERVERIFIKASI-KODE | `prisma/schema.prisma:1629`; `sales.actions.ts:796` |
+| BR-SAL2-04 | `cancelled`/`failed` untuk baris DP mandiri = nol penulis di kode live; cap `not: "cancelled"` bersifat defensif/antisipatif; satu-satunya jalan keluar baris confirmed = hapus fisik bersama quotation + reverse jurnal terima (bukan status) | TERVERIFIKASI-KODE (temuan negatif) | grep §3; `sales.actions.ts:2704-2715,2922-2933` |
+| BR-SAL2-05 | Retry DP `confirmed` = silent-skip tanpa posting ulang; posting invoice hanya via `postInvoice` + gate izin/approval/period-lock | TERVERIFIKASI-KODE | `down-payment.hook.ts:95-102,813-814`; `sales.actions.ts:1168-1240` |
+| BR-SAL2-06 | Snapshot pembatalan: ambang yang sudah memicu invoice DRAFT tidak ditarik mundur kejadian kemudian; koreksi = reversal maju R1→R2→R3; over-grandTotal di `CustomerCredit` tidak disentuh | USULAN (selaras vonis final 141-V R1–R3; implementasi milik Backend, PR #1298 OPEN) | 141-V ekor backlog; `down-payment.hook.ts:791-812` |
+| BR-SAL2-07 | Ambang persen = snapshot `Quotation.invoiceThresholdPercent` (diisi dari `CustomerCategory.downPaymentPercent` saat quotation dibuat); snapshot tak sah → fallback 50 fail-closed + log; komentar kode "ambang 50%" dibaca sebagai label fallback, bukan aturan | TERVERIFIKASI-KODE | `sales.actions.ts:216-268`; `invoice-threshold.ts:1-70`; `down-payment.hook.ts:640-650` |
+
+### 5. Feature matrix Accurate / Zahir / ISF
+
+| Aspek | Accurate | Zahir | ISF (kode live run ini) |
+|---|---|---|---|
+| DP tercatat sebelum invoice | Ya — Uang Muka Penjualan + penerimaan bank terpisah, dihubungkan saat pelunasan (BENCHMARK) | Ya — input uang muka kas/bank + pelanggan + nilai (BENCHMARK) | Ya — DP `draft` terpisah dari invoice (TERVERIFIKASI-KODE) |
+| Hanya pembayaran sah yang menghapus piutang/ambang | Ya — alokasi saat pelunasan; riwayat + status penggunaan (BENCHMARK) | Ya — hanya uang muka `Aktif` tampil sebagai pilihan di invoice (BENCHMARK) | Ya — ambang/recalc hanya `confirmed`/non-`reversed` (TERVERIFIKASI-KODE, BR-SAL2-01/02) |
+| DP menunggu/batal | Terlacak via status penggunaan | Kolom `Aktif` (non-aktif = tak tampil) (BENCHMARK) | `draft` tak dihitung + cap; `cancelled/failed` nol penulis (temuan negatif §3); hapus hanya draft (TERVERIFIKASI-KODE) |
+| Ambang persen konfig per kategori | Termin/persen per pelanggan (BENCHMARK) | Nilai nominal (BENCHMARK) | Snapshot persen kategori per quotation + fallback 50 fail-closed (TERVERIFIKASI-KODE, BR-SAL2-07) |
+| Batal sesudah pakai | Refund/kelebihan jalur terpisah (BENCHMARK) | Jurnal manual, bukan hapus (BENCHMARK) | USULAN BR-SAL2-06: tidak tarik-mundur; reversal R1–R3 141-V |
+
+### 6. Acceptance criteria + edge cases (falsifikasi E-SAL2, atas head implementasi/merge persis — BUKAN head spec ini)
+
+- E-SAL2-1: cabut `status: CONFIRMED` dari query ambang (`down-payment.hook.ts:631-634`, hitung semua DP) → kasus "DP draft/batal tidak dihitung dalam kumulatif" (`down-payment-threshold.test.ts`) wajib **MERAH**; pulihkan → hijau.
+- E-SAL2-2: tulis DP `draft` 60% grandTotal tanpa confirm → invoice konversi TIDAK lahir; confirm 40% kedua → kumulatif confirmed 100% ≥ ambang → invoice DRAFT lahir sekali = **MERAH** bila invoice lahir prematur dari draft.
+- E-SAL2-3: cabut `onDownPaymentReceived` dari `confirmDownPayment` (`sales.actions.ts:987`) ATAU lunakkan fail-closed akun/periode (`accounting.hook.ts:2419-2441`) → DP bisa `confirmed` + picu ambang TANPA jurnal terima POSTED = **MERAH** (tes vat-hook terima + tes threshold atomik wajib menangkap; bila tidak = utang cakupan, kartu Backend).
+- E-SAL2-4: (a) tulis penulis `cancelled`/`failed` untuk DP `confirmed` di luar urutan 141-V R1–R3 → ambang/kuota berubah tanpa jejak = **MERAH** (hari ini nol penulis — grep §3; penjagaan = review + E-SAL2-4); (b) hapus fisik DP confirmed mandiri (di luar `deleteQuotation`) → jurnal terima yatim / ambang berubah diam-diam = **MERAH** (guard draft-only `:2933` wajib menahan).
+- E-SAL2-5: cabut idempoten marker-notes alokasi (`down-payment.hook.ts:145-150,720-722`) + retry confirm → `SalesPayment` ganda per DP / `paidAmount` over-count = **MERAH**; invoice cancelled lalu DP baru → invoice pengganti lahir, bukan menempel ke batal (AUD-SAL-01 `:125,:964`).
+- Edge: `pending` skema tak pernah ditulis = benar; perbandingan cap (`>` tolak, `:777-784`) vs ambang (`>=` picu, `:651`) beda makna, jangan disatukan; invoice lahir DRAFT tanpa posting/stok/jurnal; `postInvoice` menolak tanpa item; void faktur posted menolak bila payment ada (reversal alokasi dulu, R1–R2).
+
+### 7. Backlog turunan (BUKAN kartu baru run ini)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-154-S | Spec ini (dokumen) | Business | PR docs ini |
+| (Backend, via parents gate pada spec ini) | Implementasi BILA gap ditemukan saat E-SAL2 dijalankan (hari ini nol penulis cancelled/failed = perilaku benar; hanya 141-V R1–R3 yang masih OPEN implementasi) | Backend | parents gate: spec ini merged + E-SAL2 atas head persis |
+| (Frontend, via parents gate pada spec ini) | Permukaan status DP per baris + label sumber ambang verbatim server (`buildInvoiceThresholdInfo`, AC-DP65-7 — UI tidak hitung label sendiri) | Frontend | kontrak Backend sesudah E-SAL2 |
+| (QA) | E-SAL2-1..5 atas head implementasi/merge persis | QA | head persis + tes `down-payment-threshold.test.ts` + vat-hook |
+
+ID spec ini **F-2026-10-28-154-S** (matriks status DP per baris × ambang + syarat posted + snapshot pembatalan; jawab INDEKS SAL-BR-002 `Sebagian` + TEST-STRATEGY P0 butir 10; basis `origin/main` `e16e79d81`). INDEKS SAL-BR-002 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E-SAL2). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status SAL-BR-002 hanya sesudah implementasi + E-SAL2 hijau) → BOT Backend (gap BILA E-SAL2 menemukan; 141-V R1–R3 tetap acuan reversal) → BOT Frontend (permukaan sesudah kontrak) → BOT QA (E-SAL2-1..5 atas head persis). Butuh putusan accountant: TIDAK — PPN terima/reversal sudah diputus 141-V R3; Business tidak membuka vonis baru.
