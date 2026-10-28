@@ -53,6 +53,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import {
@@ -201,11 +202,7 @@ export async function loadCustomerStatement(
       },
     }),
     prisma.salesPayment.findMany({
-      where: {
-        // FIN-BR-008: pembayaran reversed = histori, bukan uang masuk.
-        status: { not: "reversed" },
-        salesInvoice: { customerId, deletedAt: null },
-      },
+      where: activeSalesPaymentWhere({ salesInvoice: { customerId, deletedAt: null } }),
       select: {
         id: true,
         documentNo: true,

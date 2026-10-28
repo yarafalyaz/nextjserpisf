@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import {
@@ -287,8 +288,7 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
       orderBy: { date: "asc" },
     }),
     prisma.salesPayment.findMany({
-      // FIN-BR-008: pembayaran reversed = histori, bukan uang masuk.
-      where: { status: { not: "reversed" }, salesInvoice: { customerId: partyId } },
+      where: activeSalesPaymentWhere({ salesInvoice: { customerId: partyId } }),
       select: { documentNo: true, paymentDate: true, amount: true, withholdingAmount: true },
       orderBy: { paymentDate: "asc" },
     }),
@@ -499,8 +499,7 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
       },
     }),
     prisma.salesPayment.findMany({
-      // FIN-BR-008: pembayaran reversed tidak menaikkan eksposur kredit.
-      where: { status: { not: "reversed" }, paymentDate: { gte: period.start, lte: period.end } },
+      where: activeSalesPaymentWhere({ paymentDate: { gte: period.start, lte: period.end } }),
       select: {
         amount: true,
         paymentDate: true,

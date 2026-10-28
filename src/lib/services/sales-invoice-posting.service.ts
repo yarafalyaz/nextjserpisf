@@ -1,4 +1,5 @@
 import type { TxClient } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import { slugify } from "@/lib/utils/slug"
 
@@ -223,8 +224,10 @@ export async function reverseSalesInvoicePostingTx(
   // FIN-BR-008: pembayaran reversed sudah punya jurnal lawan dari
   // reverseSalesPayment — membalik ulang = jurnal ganda.
   if (reversePaymentJournals) {
+    // FIN-BR-008: pembayaran yang sudah dibalik tidak boleh dibalik lagi
+    // (jurnalnya sudah punya pasangan reversal).
     const payments = await tx.salesPayment.findMany({
-      where: { salesInvoiceId: invoiceId, status: { not: "reversed" } },
+      where: activeSalesPaymentWhere({ salesInvoiceId: invoiceId }),
       select: { id: true },
     })
     if (payments.length > 0) {

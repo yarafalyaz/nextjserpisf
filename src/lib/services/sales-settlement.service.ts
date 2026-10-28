@@ -1,4 +1,5 @@
 import { prisma, TxClient } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 
 /**
  * Settlement rules for sales line-item editing (custom fabrication).
@@ -25,11 +26,10 @@ export async function hasRealSettlement(
   client: TxClient | typeof prisma = prisma,
 ): Promise<boolean> {
   const count = await client.salesPayment.count({
-    where: {
-      ...LIVE_PAYMENT_WHERE,
+    where: activeSalesPaymentWhere({
       salesInvoiceId,
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
-    },
+    }),
   })
   return count > 0
 }
@@ -44,11 +44,10 @@ export async function salesOrderHasRealSettlement(
   client: TxClient | typeof prisma = prisma,
 ): Promise<boolean> {
   const count = await client.salesPayment.count({
-    where: {
-      ...LIVE_PAYMENT_WHERE,
+    where: activeSalesPaymentWhere({
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
       salesInvoice: { salesOrderId },
-    },
+    }),
   })
   return count > 0
 }
@@ -62,11 +61,10 @@ export async function quotationHasRealSettlement(
   client: TxClient | typeof prisma = prisma,
 ): Promise<boolean> {
   const count = await client.salesPayment.count({
-    where: {
-      ...LIVE_PAYMENT_WHERE,
+    where: activeSalesPaymentWhere({
       NOT: { paymentMethod: DOWN_PAYMENT_METHOD },
       salesInvoice: { quotationId },
-    },
+    }),
   })
   return count > 0
 }

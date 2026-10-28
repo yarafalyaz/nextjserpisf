@@ -2,6 +2,7 @@
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
@@ -3387,7 +3388,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     // hitungan — kalau hanya `amount`, faktur yang dipotong PPh bisa terlihat
     // masih punya sisa padahal sudah lunas (dan sebaliknya, edit bisa melebihi).
     const others = await tx.salesPayment.aggregate({
-      where: { salesInvoiceId: newInvoiceId, id: { not: id } },
+      // FIN-BR-008: baris `reversed` tetap ada di tabel. Tanpa saringan ini
+      // nilai pembayaran yang sudah dibatalkan ikut dihitung sebagai pelunasan,
+      // sehingga pembayaran pengganti ditolak "melebihi sisa tagihan".
+      where: activeSalesPaymentWhere({ salesInvoiceId: newInvoiceId, id: { not: id } }),
       _sum: { amount: true, withholdingAmount: true },
     })
     const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))

@@ -31,6 +31,7 @@
  */
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { prisma } from "@/lib/db/prisma"
 import {
   buildCustomerCreditQueue,
@@ -187,10 +188,10 @@ async function loadQuotationInputs(
       select: { downPaymentId: true },
     }),
     prisma.salesPayment.findMany({
-      where: {
+      where: activeSalesPaymentWhere({
         paymentMethod: "down_payment",
         notes: { contains: "Uang muka dari DP" },
-      },
+      }),
       select: { amount: true, notes: true },
     }),
     prisma.customerCredit.findMany({

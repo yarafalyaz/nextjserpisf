@@ -9,6 +9,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import {
   purchaseDpp,
   serializeWithholdingCertificatesCsv,
@@ -44,10 +45,10 @@ export async function loadWithholdingCertificateInputs(
       orderBy: [{ date: "asc" }, { documentNo: "asc" }],
     }),
     prisma.salesPayment.findMany({
-      where: {
+      where: activeSalesPaymentWhere({
         paymentDate: { gte: period.start, lte: period.end },
         withholdingAmount: { gt: 0 },
-      },
+      }),
       include: {
         salesInvoice: { select: { documentNo: true, customer: { select: { name: true, taxId: true } } } },
         withholdingType: { select: { code: true, name: true, rate: true } },

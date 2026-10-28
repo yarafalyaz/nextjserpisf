@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import {
   buildBankMovements,
   type BankMovementInput,
@@ -30,7 +31,7 @@ export async function loadBankMovements(period: {
 }): Promise<BankMovementsReport> {
   const [salesPayments, vendorPayments] = await Promise.all([
     prisma.salesPayment.findMany({
-      where: { paymentDate: { gte: period.start, lte: period.end } },
+      where: activeSalesPaymentWhere({ paymentDate: { gte: period.start, lte: period.end } }),
       select: {
         id: true,
         documentNo: true,

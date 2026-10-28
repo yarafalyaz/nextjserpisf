@@ -9,6 +9,7 @@
  * refunded tak boleh > received — guard di sini + di tes.
  */
 import { prisma } from "@/lib/db/prisma";
+import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
@@ -290,7 +291,7 @@ export async function refundCredit(
               select: { downPaymentId: true, taxInvoiceNumber: true },
             }),
             tx.salesPayment.findMany({
-              where: { paymentMethod: "down_payment", notes: { contains: "Uang muka dari DP" } },
+              where: activeSalesPaymentWhere({ paymentMethod: "down_payment", notes: { contains: "Uang muka dari DP" } }),
               select: { amount: true, notes: true },
             }),
             tx.customerCredit.findMany({
