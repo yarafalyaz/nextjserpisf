@@ -3928,13 +3928,25 @@ export async function deleteSalesInvoice(id: number) {
  * reverseSalesInvoicePostingTx), then marks the invoice "cancelled". Aktif
  * payment (status != "reversed") blokir void — payment "reversed" tidak
  * dihitung (P2 121-V / E139-5: reversal tidak menghapus baris).
+ *
+ * BR-F139-01: alasan trim non-kosong WAJIB — kosong = tolak nol mutasi,
+ * tersimpan di ActivityLog sebagai jejak audit pembatalan.
+ * BR-F139-06: periode tanggal faktur wajib terbuka (assertPeriodOpen) +
+ * cancelled-dobel ditolak (replay aman: cek idempotency key bila diberi).
  */
-export async function voidSalesInvoice(id: number) {
+export async function voidSalesInvoice(id: number, reason?: string, idempotencyKey?: string) {
   "use server"
 
   try {
-  await requirePermission("delete_sales_invoices")
-  await prisma.$transaction(async (tx) => {
+  const user = await requirePermission("delete_sales_invoices")
+  const cleanReason = (reason ?? "").trim()
+  if (!cleanReason) {
+    return { success: false, error: "Alasan pembatalan faktur wajib diisi." }
+  }
+  const key = (idempotencyKey ?? "").trim()
+  const userId = Number(user.id)
+
+  const result = await prisma.$transaction(async (tx) => {
     if (typeof tx.$executeRaw === "function") {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${id} FOR UPDATE`
     }
@@ -3952,18 +3964,36 @@ export async function voidSalesInvoice(id: number) {
     if (activePayments.length > 0) {
       throw new Error("Reversal pembayaran aktif faktur ini terlebih dahulu sebelum membatalkan.")
     }
+    // BR-F139-06: tolak periode terkunci atas tanggal faktur (di dalam tx,
+    // baca lock + klaim baris atomik pola reverseSalesPayment).
+    await assertPeriodOpen(new Date(invoice.date), tx)
+
+    if (key) {
+      const claim = await claimIdempotencyKey(
+        tx as never,
+        "sales_invoice_void",
+        key,
+        userId,
+        payloadFingerprint({ invoiceId: id, reason: cleanReason }),
+      )
+      if (claim.replayed) return { id, replayed: true as const }
+    }
 
     await reverseSalesInvoicePostingTx(tx, id)
     await tx.salesInvoice.update({
       where: { id },
       data: { status: "cancelled", paymentStatus: "cancelled", paidAmount: 0 },
     })
+    if (key) {
+      await bindIdempotencyKey(tx as never, key, "SalesInvoice", id)
+    }
+    return { id, replayed: false as const }
   })
 
-  await logActivity("void", "SalesInvoice", id, `Membatalkan faktur penjualan #${id}`)
+  await logActivity("void", "SalesInvoice", id, `Membatalkan faktur penjualan #${id}: ${cleanReason}`)
   revalidatePath("/penjualan/faktur")
   revalidatePath(`/penjualan/faktur/${id}`)
-  return { success: true }
+  return { success: true, id: result.id, replayed: result.replayed }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e

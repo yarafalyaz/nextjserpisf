@@ -824,27 +824,62 @@ describe("Sales Invoice Actions", () => {
   // === voidSalesInvoice ===
   it("voidSalesInvoice fails if draft", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", payments: [] })
-    const res = await actions.voidSalesInvoice(1)
+    const res = await actions.voidSalesInvoice(1, "Alasan batal")
     expect(res?.success).toBe(false)
   })
   it("voidSalesInvoice fails if cancelled", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled", payments: [] })
-    const res = await actions.voidSalesInvoice(1)
+    const res = await actions.voidSalesInvoice(1, "Alasan batal")
     expect(res?.success).toBe(false)
   })
   it("voidSalesInvoice fails if has payments", async () => {
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [{ id: 1, status: "posted" }] })
-    const res = await actions.voidSalesInvoice(1)
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", date: new Date("2026-10-20"), payments: [{ id: 1, status: "posted" }] })
+    const res = await actions.voidSalesInvoice(1, "Alasan batal")
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Reversal")
   })
   it("voidSalesInvoice lolos bila semua payment reversed (P2 121-V / E139-5)", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: [{ id: 1, status: "reversed" }, { id: 2, status: "reversed" }] })
-    mocks.prismaMock.customer.findUnique.mockResolvedValueOnce({ creditLimit: 0, name: "CUST" })
-    const res = await actions.voidSalesInvoice(1)
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", date: new Date("2026-10-20"), customerId: 1, grandTotal: 100, paidAmount: 0, payments: [{ id: 1, status: "reversed" }, { id: 2, status: "reversed" }] })
+    const res = await actions.voidSalesInvoice(1, "Alasan batal sah")
     expect(res?.success).toBe(true)
     expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
+  })
+
+  // === BR-F139-01/06: alasan wajib + periode terbuka ===
+  it("BR-F139-01: voidSalesInvoice tanpa alasan ditolak, nol mutasi", async () => {
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
+    for (const reason of [undefined, "", "   "]) {
+      vi.clearAllMocks()
+      mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+      const res = await actions.voidSalesInvoice(1, reason as string | undefined)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toContain("Alasan pembatalan faktur wajib diisi")
+      expect(mocks.prismaMock.salesInvoice.findUniqueOrThrow).not.toHaveBeenCalled()
+      expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).not.toHaveBeenCalled()
+    }
+  })
+  it("BR-F139-01/06: alasan tercatat di ActivityLog + assertPeriodOpen atas tanggal faktur", async () => {
+    const period = await import("@/lib/services/period-lock.service")
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", date: new Date("2026-10-20"), payments: [] })
+    const res = await actions.voidSalesInvoice(1, "  Batal ganda cetak  ")
+    expect(res?.success).toBe(true)
+    expect(vi.mocked(period.assertPeriodOpen)).toHaveBeenCalled()
+    const lockArg = vi.mocked(period.assertPeriodOpen).mock.calls[0]?.[0]
+    expect(new Date(lockArg as Date).getFullYear()).toBe(2026)
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "void", "SalesInvoice", 1, expect.stringContaining("Batal ganda cetak"),
+    )
+  })
+  it("BR-F139-06: periode terkunci menolak void, nol posting dibalik", async () => {
+    const period = await import("@/lib/services/period-lock.service")
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
+    vi.mocked(period.assertPeriodOpen).mockRejectedValueOnce(new Error("Periode 2026-10 terkunci"))
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", date: new Date("2026-10-20"), payments: [] })
+    const res = await actions.voidSalesInvoice(1, "Alasan sah")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("terkunci")
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).not.toHaveBeenCalled()
   })
 
   // === reverseSalesInvoicePostingTx delegation ===
@@ -1485,9 +1520,8 @@ describe("Sales Invoice Actions (legacy happy paths)", () => {
     expect(mocks.prismaMock.salesInvoice.delete).not.toHaveBeenCalled()
   })
   it("voidSalesInvoice succeeds", async () => {
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: [] })
-    mocks.prismaMock.customer.findUnique.mockResolvedValueOnce({ creditLimit: 0, name: "CUST" })
-    const res = await actions.voidSalesInvoice(1)
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "posted", date: new Date("2026-10-20"), customerId: 1, grandTotal: 100, paidAmount: 0, payments: [] })
+    const res = await actions.voidSalesInvoice(1, "Alasan batal")
     expect(res?.success).toBe(true)
   })
 })
