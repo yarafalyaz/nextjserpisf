@@ -2,7 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatReferenceType } from '@/lib/utils/format'
+import { formatCurrency, formatReferenceType, referenceHref } from '@/lib/utils/format'
+import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
+import Link from 'next/link'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
@@ -64,6 +66,9 @@ export default async function StockMovementPage({
     orderBy: [{ date: 'asc' }, { id: 'asc' }],
   })
 
+  // AC-INV-009: slug kanonis dokumen sumber untuk tautan referensi.
+  const referenceSlugs = await resolveReferenceSlugs(moves)
+
   const rows = moves
     .map(m => {
       if (!m.date) return null
@@ -72,7 +77,9 @@ export default async function StockMovementPage({
         uom: m.item.unitOfMeasure, warehouse: m.warehouse ? `${m.warehouse.code}` : '-',
         type: m.moveType || '-', impact: m.impact, qty: Number(m.qty), cost: Number(m.cost),
         value: Number(m.qty) * Number(m.cost),
-        reference: m.referenceType ? `${formatReferenceType(m.referenceType)}#${m.referenceId}` : '-', description: m.description || '-',
+        reference: m.referenceType ? `${formatReferenceType(m.referenceType)}#${m.referenceId}` : '-',
+        referenceHref: referenceHref(m.referenceType, m.referenceId, referenceSlugs.get(referenceSlugKey(m))),
+        description: m.description || '-',
       }
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -133,7 +140,7 @@ export default async function StockMovementPage({
                 <DetailTableTd align="right" className={r.impact === 'IN' ? 'text-success font-semibold' : 'text-danger font-semibold'}>
                   {r.impact === 'IN' ? '+' : '-'}{r.qty.toLocaleString('id-ID')}
                 </DetailTableTd>
-                <DetailTableTd className="text-xs">{r.reference}</DetailTableTd>
+                <DetailTableTd className="text-xs">{r.referenceHref ? <Link href={r.referenceHref} className="text-primary hover:underline">{r.reference}</Link> : r.reference}</DetailTableTd>
                 <DetailTableTd className="text-xs max-w-[200px] truncate">{r.description}</DetailTableTd>
               </DetailTableRow>
             ))}

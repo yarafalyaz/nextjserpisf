@@ -182,7 +182,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-INV-006 | Sebagian | prisma/schema.prisma:2560 — `StockAdjustment` ada; pencatatan alasan/approver/aktor/ledger belum ditelusur per field |
 | AC-INV-007 | Sebagian | Mengikuti INV-BR-007: garpu override/approval belum diputus (tidak ada saklar di kode). Fakta penegakan: guard terpusat inventory-fifo.ts:109,185-197 + 6 jalur keluar default/false + period-close warn-only. Vonis Business F-2026-10-28-115-V (backlog). Konkurensi: baca-kunci FOR UPDATE inventory-fifo.ts:118-126 |
 | AC-INV-008 | Sebagian | prisma/schema.prisma:3870 — `Remnant`; pembeda scrap: `src/lib/services/scrap-classification.ts:8` |
-| AC-INV-009 | Sebagian | prisma/schema.prisma:2513 — `StockMove.referenceType`/`referenceId` ke dokumen sumber |
+| AC-INV-009 | Sebagian | prisma/schema.prisma:2513 — `StockMove.referenceType`/`referenceId` ke dokumen sumber; UI bertaut: laporan kartu stok + detail mutasi + daftar mutasi (PR kartu t_3bef3072) + laporan mutasi stok; sisa: tipe di luar daftar putih `referenceHref` (mis. WorkOrder, SalesInvoiceCOGS) tampil label polos |
 
 ## 10. Acceptance — Purchasing `AC-PUR-*`
 
