@@ -2,7 +2,7 @@
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
+import { activeSalesPaymentWhere, isReversedPayment } from "@/lib/finance/payment-status"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
@@ -22,7 +22,7 @@ import { onSalesReturnCompleted as onSalesReturnStock } from "@/lib/hooks/sales-
 import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { isLostReasonCategoryKey } from "@/lib/reports/quotation-outcome"
-import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
+import { quotationHasRealSettlement, salesOrderHasRealSettlement } from "@/lib/services/sales-settlement.service"
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
@@ -2028,7 +2028,9 @@ export async function createSalesPayment(formData: FormData) {
     if (!["posted", "partial"].includes(invoice.status)) {
       throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
     }
-    const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 0)
+    const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 2)
+    // F-2026-10-28-155-S P4: presisi sen — varian `, 0` lama membulatkan sisa
+    // ke rupiah penuh sebelum guard toleransi Rp1 dinilai.
     // Faktur lunas bila kas diterima + PPh dipotong pelanggan menutup sisanya.
     const settled = safeAdd(amount, withholdingAmount)
     // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
@@ -2638,9 +2640,20 @@ export async function deleteQuotation(id: number) {
   try {
   await requirePermission("delete_quotations")
 
-  await prisma.quotation.findUniqueOrThrow({ where: { id } })
-
+  // K4: kunci baris penawaran + baca-ulang-dalam-tx (TOCTOU): baca luar dihapus,
+  // status diputus dari baris terkunci di dalam satu tx atomik.
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${id} FOR UPDATE`
+    }
+    const freshQuotation = await tx.quotation.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+    // K1: penawaran posted/final (sent/approved/accepted/converted) immutable —
+    // hanya draft/rejected yang bisa dihapus fisik.
+    if (freshQuotation.status !== "draft" && freshQuotation.status !== "rejected") {
+      throw new Error(
+        `Penawaran berstatus "${freshQuotation.status}" tidak bisa dihapus; hanya draf/ditolak yang bisa dihapus.`
+      )
+    }
     const salesOrders = await tx.salesOrder.findMany({ where: { quotationId: id }, select: { id: true } })
     const salesOrderIds = salesOrders.map((so) => so.id)
     // P3 vonis F-2026-10-28-121-V: cascade menolak bila ada faktur turunan hidup
@@ -2960,13 +2973,25 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     : null
 
   const salesOrder = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_orders WHERE id = ${id} FOR UPDATE`
+    }
     const existing = await tx.salesOrder.findUniqueOrThrow({ where: { id } })
-    // Custom fabrication: the order's items may change until the customer
-    // actually pays. A confirmed/processing order is still editable while only a
-    // down payment has been received; it locks once a real (non-DP) payment
-    // exists on a linked invoice.
-    if (existing.status === "cancelled" || existing.status === "completed") {
-      throw new Error(`Sales Order berstatus '${existing.status}' tidak bisa diubah`)
+    // GL-BR-003 K1 (AC-GL-005): dokumen posted/final immutable — edit SO hanya
+    // draft/approved. SO tidak punya status posted sendiri, jadi tolak semua
+    // final: sent/confirmed/processing/partial/completed/cancelled. Di luar
+    // itu, edit terkunci bila faktur turunan sudah posted atau berpelunasan
+    // nyata (jalur koreksi sah: retur/void, bukan edit SO).
+    const SO_FINAL_STATUSES = ["sent", "confirmed", "processing", "partial", "completed", "cancelled"] as const
+    if ((SO_FINAL_STATUSES as readonly string[]).includes(existing.status)) {
+      throw new Error(`Sales Order berstatus '${existing.status}' tidak bisa diubah; hanya draf/disertai yang bisa diedit.`)
+    }
+    const linkedPostedInvoice = await tx.salesInvoice.findFirst({
+      where: { salesOrderId: id, status: { notIn: ["draft", "approved", "cancelled"] } },
+      select: { id: true },
+    })
+    if (linkedPostedInvoice) {
+      throw new Error("Sales Order tidak bisa diubah: ada faktur turunan yang sudah posted. Koreksi lewat retur atau void beralasan.")
     }
     if (await salesOrderHasRealSettlement(id, tx)) {
       throw new Error("Sales Order sudah ada pelunasan, item tidak bisa diubah lagi")
@@ -3099,20 +3124,16 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${id} FOR UPDATE`
     }
     const existingInvoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id } })
-    // Custom fabrication: items may change until the customer actually pays. The
-    // invoice stays editable after posting (stock/GL already booked) as long as
-    // no real (non-DP) payment exists — the edit reverses and re-posts below.
-    // A down payment alone does NOT lock it; it is only reconciled at the end.
-    if (existingInvoice.status === "cancelled") {
-      throw new Error("Faktur yang sudah dibatalkan tidak bisa diubah")
+    // GL-BR-003 K1 (AC-GL-005): dokumen posted/final immutable — edit faktur
+    // hanya draft/approved. Jalur reverse+repost posted butuh vonis
+    // Business+Accountant tertulis (Belum ada di kartu ini) — fail-closed.
+    if (existingInvoice.status !== "draft" && existingInvoice.status !== "approved") {
+      throw new Error(
+        `Faktur berstatus "${existingInvoice.status}" tidak bisa diubah; hanya draf/disertai yang bisa diedit. Koreksi posted lewat retur atau void beralasan.`
+      )
     }
-    if (await hasRealSettlement(id, tx)) {
-      throw new Error("Faktur sudah ada pelunasan, item tidak bisa diubah lagi")
-    }
-    // Whether the invoice already moved stock / posted GL (needs reverse+repost
-    // when items change). draft/approved never posted; posted/partial/sent/paid
-    // have. (paid can't reach here — the settlement guard above rejects it.)
-    const wasPosted = existingInvoice.status !== "draft" && existingInvoice.status !== "approved"
+    // K1: guard di atas sudah menolak non-draft/non-approved, jadi faktur di
+    // sini tidak pernah posted — tidak ada reverse+repost di jalur edit.
     // Update header
     const invoice = await tx.salesInvoice.update({
       where: { id },
@@ -3280,18 +3301,8 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         })
       }
 
-      // If the invoice already posted (stock-out + AR/revenue + COGS journals),
-      // the item change invalidated every one of those entries. Reverse them and
-      // re-post from the new lines, atomically inside this tx — mirroring the
-      // vendor-bill edit pattern (delete journals by reference, then re-invoke
-      // the posting hook) plus the stock reversal a sales invoice additionally
-      // needs. `reverseSalesInvoicePostingTx` restores qtyOnHand + FIFO layers
-      // and deletes the SalesInvoice/SalesInvoiceCOGS journals; onSalesInvoicePosted
-      // (idempotent) then re-books them from the current invoice rows.
-      if (wasPosted) {
-        await reverseSalesInvoicePostingTx(tx, id, { reversePaymentJournals: false })
-        await onSalesInvoicePosted(id, Number(user.id), tx)
-      }
+      // K1: guard status di atas menolak posted — tidak ada reverse+repost di
+      // jalur edit (butuh vonis Business+Accountant; Belum ada di kartu ini).
     }
 
     return invoice
@@ -3395,7 +3406,8 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       _sum: { amount: true, withholdingAmount: true },
     })
     const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))
-    const remaining = safeSubtract(invoice.grandTotal, otherPaid, 0)
+    // F-2026-10-28-155-S P4: presisi sen (sama dengan guard create di atas).
+    const remaining = safeSubtract(invoice.grandTotal, otherPaid, 2)
     const settled = safeAdd(newAmount, newWithholdingAmount)
     // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
     // rupiah-penuh, bukan overpay — jangan tolak. Di atas itu tetap tolak.
@@ -3830,8 +3842,19 @@ export async function deleteSalesOrder(id: number) {
   try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_orders")
-  await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
+  // K4: baca luar dihapus — status + turunan diputus dari baris terkunci dalam
+  // satu tx atomik (TOCTOU).
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_orders WHERE id = ${id} FOR UPDATE`
+    }
+    const freshOrder = await tx.salesOrder.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+    // K1: pesanan posted/final immutable — hanya draft yang dihapus fisik.
+    if (freshOrder.status !== "draft") {
+      throw new Error(
+        `Pesanan berstatus "${freshOrder.status}" tidak bisa dihapus; hanya draf yang bisa dihapus.`
+      )
+    }
     // P3 vonis F-2026-10-28-121-V: cascade menolak bila ada faktur turunan hidup
     // (non-draft/non-cancelled) — dilarang hapus diam-diam, arahkan void dulu.
     const liveInvoices = await tx.salesInvoice.findMany({
@@ -3871,15 +3894,16 @@ export async function deleteSalesInvoice(id: number) {
   await requirePermission("delete_sales_invoices")
   // P3 vonis F-2026-10-28-121-V: hapus fisik posted DILARANG — draft-only,
   // posted diarahkan ke void beralasan (pola deleteDownPayment draft-only).
-  const existing = await prisma.salesInvoice.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
-  if (existing.status !== "draft") {
-    return {
-      success: false,
-      error: "Hanya faktur draf yang bisa dihapus. Faktur posted dibatalkan lewat void beralasan.",
-    }
-  }
+  // K4: kunci + baca-ulang-dalam-tx (TOCTOU) — baca luar dihapus.
   let removedFiles: { fileUrl: string; referenceType: string }[] = [];
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${id} FOR UPDATE`
+    }
+    const fresh = await tx.salesInvoice.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+    if (fresh.status !== "draft") {
+      throw new Error("Hanya faktur draf yang bisa dihapus. Faktur posted dibatalkan lewat void beralasan.")
+    }
     await reverseSalesInvoicePostingTx(tx, id)
     removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "sales_invoice", referenceId: id })
     await tx.salesPayment.deleteMany({ where: { salesInvoiceId: id } })
@@ -3901,8 +3925,9 @@ export async function deleteSalesInvoice(id: number) {
 /**
  * Void (cancel) a posted sales invoice while keeping the record for audit.
  * Reverses the revenue + COGS journals and restores stock (via
- * reverseSalesInvoicePostingTx), then marks the invoice "cancelled". Payments
- * must be removed first so cash/AR stay consistent.
+ * reverseSalesInvoicePostingTx), then marks the invoice "cancelled". Aktif
+ * payment (status != "reversed") blokir void — payment "reversed" tidak
+ * dihitung (P2 121-V / E139-5: reversal tidak menghapus baris).
  */
 export async function voidSalesInvoice(id: number) {
   "use server"
@@ -3915,7 +3940,7 @@ export async function voidSalesInvoice(id: number) {
     }
     const invoice = await tx.salesInvoice.findUniqueOrThrow({
       where: { id },
-      include: { payments: { select: { id: true } } },
+      include: { payments: { select: { id: true, status: true } } },
     })
     if (invoice.status === "draft") {
       throw new Error("Faktur draft tidak perlu dibatalkan. Gunakan hapus.")
@@ -3923,8 +3948,9 @@ export async function voidSalesInvoice(id: number) {
     if (invoice.status === "cancelled") {
       throw new Error("Faktur sudah dibatalkan.")
     }
-    if (invoice.payments.length > 0) {
-      throw new Error("Hapus pembayaran faktur ini terlebih dahulu sebelum membatalkan.")
+    const activePayments = invoice.payments.filter((p) => !isReversedPayment(p))
+    if (activePayments.length > 0) {
+      throw new Error("Reversal pembayaran aktif faktur ini terlebih dahulu sebelum membatalkan.")
     }
 
     await reverseSalesInvoicePostingTx(tx, id)
@@ -3952,11 +3978,21 @@ export async function deleteSalesReturn(id: number) {
   try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_returns")
-  const sr = await prisma.salesReturn.findUniqueOrThrow({ where: { id } })
-  if (sr.status === "completed") {
-    throw new Error("Tidak bisa menghapus retur yang sudah completed")
-  }
-  await prisma.salesReturn.delete({ where: { id } })
+  // GL-BR-003 P8 (GL003-P8): hapus fisik hanya-draf, selaras deleteSalesInvoice
+  // draft-only + updateSalesReturn draft-only. Non-draft (posted/completed/...)
+  // diarahkan ke jalur koreksi (retur lawan/void beralasan), bukan hapus fisik.
+  await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${id} FOR UPDATE`
+    }
+    const fresh = await tx.salesReturn.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+    if (fresh.status !== "draft") {
+      throw new Error(
+        `Retur berstatus "${fresh.status}" tidak bisa dihapus; hanya draf yang bisa dihapus.`
+      )
+    }
+    await tx.salesReturn.delete({ where: { id } })
+  })
   await logActivity("delete", "SalesReturn", id, `Menghapus retur penjualan #${id}`)
   revalidatePath("/penjualan/retur")
   return { success: true }

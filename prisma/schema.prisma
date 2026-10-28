@@ -4005,9 +4005,19 @@ model Payroll {
   status                 String      @default("draft")
   approvedBy             Int?        @map("approved_by")
   createdBy              Int?        @map("created_by")
+  /// HR-BR-005 (133-S P2/BR-HRCR-02 + 135-V §2a): koreksi slip paid = dokumen
+  /// koreksi tertaut, bukan edit/hapus. Kolom ini menunjuk slip ASAL yang
+  /// dikoreksi; slip asal tetap `paid` nilainya tak ditimpa. Null = slip biasa.
+  correctsPayrollId      Int?        @map("corrects_payroll_id")
+  /// Alasan koreksi wajib (ditolak bila kosong) — jejak audit BR-HRCR-03.
+  correctionReason       String?     @map("correction_reason") @db.Text
   createdAt              DateTime    @default(now()) @map("created_at")
   updatedAt              DateTime    @updatedAt @map("updated_at")
   employee               Employee?   @relation(fields: [employeeId], references: [id])
+  /// Tautan koreksi dua arah: slip ini mengoreksi slip asal; koreksi baliknya
+  /// dibaca lewat relasi `corrections`. Slip asal tetap `paid`.
+  correctsPayroll        Payroll?    @relation("PayrollCorrection", fields: [correctsPayrollId], references: [id], onDelete: SetNull)
+  corrections            Payroll[]   @relation("PayrollCorrection")
   componentLines         PayrollComponentLine[]
   disciplinaryDeductionApplications DisciplinaryDeductionApplication[]
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
@@ -4016,6 +4026,7 @@ model Payroll {
   @@unique([employeeId, startDate, endDate], map: "uq_payroll_employee_range")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
+  @@index([correctsPayrollId], map: "payrolls_corrects_payroll_id_idx")
   @@index([costCenterId])
   @@index([approvedBy])
   @@index([createdBy])

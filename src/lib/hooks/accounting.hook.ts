@@ -2173,13 +2173,13 @@ export async function onSalesReturnCompleted(
     }
     await tx.journalEntry.createMany({ data: entryRows });
 
-    // TASK-011 BUG-04: jurnal di atas mengkredit Piutang (GL), jadi subledger
-    // faktur WAJIB turun dalam transaksi yang sama — pola recalc kanonis
-    // pembayaran (sales-payment.hook): outstanding = grandTotal - paidAmount,
-    // status diturunkan dari paidAmount vs grandTotal. Retur mengurangi
-    // grandTotal sebesar porsi yang masih terutang; kelebihan di atas sisa
-    // (faktur sudah lunas / terbayar lebih) menjadi CustomerCredit terstruktur
-    // (pola DownPayment/RevisionDown), bukan outstanding negatif.
+    // F-2026-10-28-123-V Putusan 0.2 (grandTotalAsal beku) via 155-S:
+    // jurnal di atas mengkredit Piutang (GL), pengurang kanonisnya adalah
+    // returnCredit jurnal itu (dibaca loader via loadReturnCreditByInvoiceId),
+    // BUKAN penurunan grandTotal. Subledger di sini hanya: hitung ulang
+    // status dari outstanding valid (grandTotalAsal − paid − returnCredit
+    // jurnal retur ini) + CustomerCredit untuk kelebihan di atas sisa.
+    // Menulis ulang grandTotal = hitung-ganda (D4 spec 120-S).
     if (
       linkedToInvoice &&
       priceTotal > 0 &&
@@ -2195,21 +2195,32 @@ export async function onSalesReturnCompleted(
           documentNo: true,
         },
       });
-      const grandSen = Math.round(Number(inv.grandTotal) * 100);
+      const returnCreditSen = Math.round(priceTotal * 100);
+      // FIN-BR-006: lunas dari outstanding valid (grandTotalAsal − paid −
+      // returnCredit jurnal ini) dalam toleransi Rp1.
+      const invStatus: "posted" | "partial" | "paid" =
+        isSettled(
+          safeSubtract(
+            safeSubtract(Number(inv.grandTotal), Number(inv.paidAmount), 2),
+            returnCreditSen / 100,
+            2,
+          ),
+          0,
+        )
+          ? "paid"
+          : Number(inv.paidAmount) > 0 ||
+              returnCreditSen > 0
+            ? "partial"
+            : "posted";
       const paidSen = Math.round(Number(inv.paidAmount) * 100);
+      const grandSen = Math.round(Number(inv.grandTotal) * 100);
       if (Number.isFinite(grandSen) && Number.isFinite(paidSen)) {
-        const returnSen = Math.round(priceTotal * 100);
-        const reliefSen = Math.min(returnSen, Math.max(grandSen - paidSen, 0));
-        const excessSen = returnSen - reliefSen;
-        const newGrandSen = grandSen - reliefSen;
-        // FIN-BR-006: lunas dari outstanding valid dalam toleransi Rp1.
-        const invStatus: "posted" | "partial" | "paid" =
-          isSettled(newGrandSen / 100, paidSen / 100) ? "paid" : paidSen > 0 ? "partial" : "posted";
+        const reliefSen = Math.min(returnCreditSen, Math.max(grandSen - paidSen, 0));
+        const excessSen = returnCreditSen - reliefSen;
         await tx.salesInvoice.update({
           where: { id: salesReturn.salesInvoiceId },
           data: {
-            grandTotal: newGrandSen / 100,
-            totalAmount: newGrandSen / 100,
+            // grandTotalAsal BEKU — retur tidak menuliskannya ulang.
             paidAmount: paidSen / 100,
             status: invStatus,
             paymentStatus: invStatus,
@@ -2422,13 +2433,11 @@ export async function onPurchaseReturnProcessed(
       });
     }
 
-    // TASK-011 BUG-04: jurnal di atas mendebit Hutang Usaha (GL), jadi
-    // subledger tagihan WAJIB turun dalam transaksi yang sama — pola recalc
-    // kanonis pembayaran vendor (confirmVendorPayment): sisa neto =
-    // (grandTotal - withholding) - paidAmount, status dari sisa. Tagihan asal
-    // dipilih seperti snapshot pajak retur (terbaru non-batal per PO).
-    // balanceDue yang turun membuat confirmVendorPayment menolak pembayaran
-    // melebihi sisa neto retur (alokasi dibatasi balanceDue + guard total).
+    // F-2026-10-28-155-S M2: jurnal di atas mendebit Hutang Usaha (GL);
+    // pengurang kanonis sisi beli = alokasi + retur via balanceDue — JANGAN
+    // menulis ulang grandTotal (beku seperti sisi jual 123-V). Turunkan
+    // balanceDue + status dari outstanding NETO valid dalam tx yang sama,
+    // supaya guard confirm (alokasi dibatasi balanceDue + guard total) jujur.
     if (
       typeof tx.vendorBill?.findFirst === "function" &&
       typeof tx.vendorBill?.update === "function"
@@ -2448,27 +2457,33 @@ export async function onPurchaseReturnProcessed(
         },
       });
       if (bill) {
-        const grandSen = Math.round(Number(bill.grandTotal) * 100);
         const paidSen = Math.round(Number(bill.paidAmount) * 100);
-        const withholdingSen = Math.round(Number(bill.withholdingAmount ?? 0) * 100);
         const balanceSen = Math.round(Number(bill.balanceDue) * 100);
         if (
-          Number.isFinite(grandSen) &&
           Number.isFinite(paidSen) &&
           Number.isFinite(balanceSen)
         ) {
           const reliefSen = Math.min(Math.round(totalAmount * 100), Math.max(balanceSen, 0));
           if (reliefSen > 0) {
-            const newGrandSen = grandSen - reliefSen;
-            const newBalanceSen = Math.max(newGrandSen - withholdingSen - paidSen, 0);
+            const newBalanceSen = Math.max(balanceSen - reliefSen, 0);
             // FIN-BR-006: lunas dari outstanding NETO valid dalam toleransi
             // Rp1 (100 sen) — konsisten dengan confirmVendorPayment.
             const billStatus: "posted" | "partial" | "paid" =
-              isSettled((newGrandSen - withholdingSen) / 100, paidSen / 100) ? "paid" : paidSen > 0 ? "partial" : "posted";
+              isSettled(
+                safeSubtract(
+                  safeSubtract(Number(bill.grandTotal), Number(bill.withholdingAmount ?? 0), 2),
+                  (Number(bill.paidAmount) * 100 + (balanceSen - newBalanceSen)) / 100,
+                  2,
+                ),
+                0,
+              )
+                ? "paid"
+                : paidSen > 0 || reliefSen > 0
+                  ? "partial"
+                  : "posted";
             await tx.vendorBill.update({
               where: { id: bill.id },
               data: {
-                grandTotal: newGrandSen / 100,
                 balanceDue: newBalanceSen / 100,
                 status: billStatus,
               },
@@ -3033,14 +3048,32 @@ export async function onPayrollPaid(
   });
   if (existing) {
     console.info(
-      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting ganda dilewati`,
     );
-    return;
+    throw new Error(
+      `Penggajian #${payrollId} sudah punya jurnal aktif — posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
+    );
   }
 
   const payroll = await db.payroll.findUniqueOrThrow({
     where: { id: payrollId },
   });
+  // E-HRCR-6b (135-V, selaras main): re-post payrollId asal sesudah reversal
+  // SELALU ditolak berisik — slip koreksi sah selalu memakai referenceId BARU
+  // (id slip koreksi), sehingga penjaga ini tak pernah menghalangi jalur sah.
+  // Pesan menyebut nomor dokumen tanpa nominal gaji.
+  const reversedOnly = await db.journal.findFirst({
+    where: { referenceType: "Payroll", referenceId: payrollId, status: "REVERSED" },
+    select: { id: true },
+  });
+  if (reversedOnly) {
+    const docNo = (payroll as { documentNo?: unknown }).documentNo;
+    throw new Error(
+      typeof docNo === "string" && docNo.length > 0
+        ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.`
+        : "Slip ini sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.",
+    );
+  }
 
   // Defensive floor: legacy rows may carry a negative net_salary (before the
   // write-path clamp). A negative value would credit the bank account a negative
@@ -3169,14 +3202,32 @@ export async function onPayrollPaid(
     // the @@unique([referenceType, referenceId]) constraint and surfaces as
     // a confusing Prisma P2002 error to the user even though the operation
     // logically succeeded once.
+    // E-HRCR-6b (HR-BR-005, vonis 135-V): re-post payrollId ASAL sesudah
+    // reversal DITOLAK BERISIK. Slip koreksi sah selalu memakai referenceId
+    // BARU (dokumen baru), bukan payrollId asal — jadi histori REVERSED atas
+    // payrollId asal = bukti reversal sudah terjadi, bukan undangan re-post.
+    const reversedHistory = await tx.journal.findFirst({
+      where: { referenceType: "Payroll", referenceId: payrollId, status: "REVERSED" },
+      select: { id: true },
+    });
+    if (reversedHistory) {
+      const docNo = (payroll as { documentNo?: unknown }).documentNo;
+      throw new Error(
+        typeof docNo === "string" && docNo.length > 0
+          ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.`
+          : "Slip ini sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.",
+      );
+    }
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "Payroll", referenceId: payrollId, status: { not: "REVERSED" } },
     });
     if (existingInTx) {
       console.info(
-        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting ganda di dalam transaksi dilewati`,
       );
-      return;
+      throw new Error(
+        `Penggajian #${payrollId} sudah punya jurnal aktif — posting ganda ditolak. Koreksi slip paid hanya lewat dokumen koreksi.`,
+      );
     }
 
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
