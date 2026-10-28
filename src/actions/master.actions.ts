@@ -570,17 +570,9 @@ export async function createItem(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
-    // F-2026-10-24-135-V syarat 1: item besi tua TIDAK boleh isProduct=true.
-    // Kombinasi itu masuk jalur stok/COGS dan melanggar nilai buku scrap Rp0.
-    // F-2026-10-28-137-V (SAL-BR-013 G1): isService + isProduct dilarang
-    // bersamaan — master satu item wajib pilih SATU peran: barang (stok) atau
-    // jasa (non-stok).
-    if ((v.isService ?? false) && (v.isProduct ?? false)) {
-      return { success: false, error: "Item tidak boleh isService=true sekaligus isProduct=true — pilih satu: barang (produk, masuk stok) atau jasa (non-stok)." };
-    }
-    if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
-      return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
-    }
+    // F-2026-10-24-135-V syarat 1 + F-2026-10-28-137-V G1 (SAL-BR-013).
+    const roleError = checkItemStockRole({ isService: v.isService, isProduct: v.isProduct, isScrapSaleItem: v.isScrapSaleItem });
+    if (roleError) return { success: false, error: roleError };
 
     // F-2026-10-25-042-V (vonis Q-ITX-1): penjaga default pajak per item —
     // scrap menang (Putusan 5), persen 0–100, rujukan Tax wajib ada +
@@ -709,6 +701,19 @@ export async function createItem(formData: FormData) {
  * tersimpan (form lama/UI belum mengirim tidak mengosongkan diam-diam);
  * kunci ada tapi kosong = operator mengosongkan.
  */
+// F-2026-10-24-135-V syarat 1 + F-2026-10-28-137-V G1 (SAL-BR-013):
+// satu item wajib pilih SATU peran stok — jasa (isService) dan produk
+// (isProduct) dilarang bersamaan; besi tua tanpa jalur stok/COGS.
+function checkItemStockRole(flags: { isService?: boolean | null; isProduct?: boolean | null; isScrapSaleItem?: boolean | null }): string | null {
+  if ((flags.isService ?? false) && (flags.isProduct ?? false)) {
+    return "Item tidak boleh isService=true sekaligus isProduct=true — pilih satu: barang (produk, masuk stok) atau jasa (non-stok).";
+  }
+  if ((flags.isScrapSaleItem ?? false) && (flags.isProduct ?? false)) {
+    return "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS.";
+  }
+  return null;
+}
+
 function decimalToNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   if (typeof value === "number") return value
@@ -747,17 +752,9 @@ export async function updateItem(itemId: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
-    // F-2026-10-24-135-V syarat 1: item besi tua TIDAK boleh isProduct=true.
-    // Kombinasi itu masuk jalur stok/COGS dan melanggar nilai buku scrap Rp0.
-    // F-2026-10-28-137-V (SAL-BR-013 G1): isService + isProduct dilarang
-    // bersamaan — master satu item wajib pilih SATU peran: barang (stok) atau
-    // jasa (non-stok).
-    if ((v.isService ?? false) && (v.isProduct ?? false)) {
-      return { success: false, error: "Item tidak boleh isService=true sekaligus isProduct=true — pilih satu: barang (produk, masuk stok) atau jasa (non-stok)." };
-    }
-    if ((v.isScrapSaleItem ?? false) && (v.isProduct ?? false)) {
-      return { success: false, error: "Item besi tua tidak boleh isProduct=true — scrap tanpa jalur stok/COGS." };
-    }
+    // F-2026-10-24-135-V syarat 1 + F-2026-10-28-137-V G1 (SAL-BR-013).
+    const roleError = checkItemStockRole({ isService: v.isService, isProduct: v.isProduct, isScrapSaleItem: v.isScrapSaleItem });
+    if (roleError) return { success: false, error: roleError };
 
     // F-2026-10-25-042-V (vonis Q-ITX-1): penjaga default pajak per item —
     // sama persis createItem. Nilai efektif = gabungan form + tersimpan
