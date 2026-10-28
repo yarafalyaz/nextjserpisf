@@ -7,7 +7,7 @@
  */
 import { getQuotationOutcome } from "@/lib/reports/quotation-outcome-data"
 import type { QuotationOutcomeSummary } from "@/lib/reports/quotation-outcome"
-import { formatNumber, formatPercentage } from "@/lib/utils/format"
+import { formatDate, formatNumber, formatPercentage } from "@/lib/utils/format"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 
 export interface QuotationOutcomeLoadResult {
@@ -16,8 +16,7 @@ export interface QuotationOutcomeLoadResult {
 }
 
 function periodCaption(period: { start: Date; end: Date }): string {
-  const format = (date: Date) =>
-    date.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+  const format = (date: Date) => formatDate(date)
   return `${format(period.start)} – ${format(period.end)}`
 }
 

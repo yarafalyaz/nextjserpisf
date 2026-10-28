@@ -6,6 +6,7 @@
  * arithmetic can be unit tested.
  */
 
+import { formatNumber } from "@/lib/utils/format"
 import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/math"
 
 export interface CustomerReceivableInput {
@@ -42,7 +43,7 @@ export function creditOverLimitLabel(row: CustomerReceivableInput): string | nul
   const overBy = safeSubtract(row.outstanding, row.creditLimit, 2)
   if (overBy <= 0) return null
   const fmt = (value: number) =>
-    `Rp${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value)}`
+    `Rp${formatNumber(value, 2)}`
   return `Lewat batas kredit ${fmt(overBy)} (batas ${fmt(row.creditLimit)}, terutang ${fmt(row.outstanding)})`
 }
 

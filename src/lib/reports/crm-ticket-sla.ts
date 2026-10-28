@@ -36,6 +36,8 @@
  * Loader: `crm-ticket-sla-data.ts`.
  */
 
+import { wibDateKeyParts, wibPartsKey } from "@/lib/utils/format"
+
 export const CRM_TICKET_SLA_EMPTY_TEXT = "Tidak ada tiket lewat SLA — semua tiket aktif masih dalam target"
 
 export const CRM_TICKET_SLA_NOTICE_TEXT =
@@ -91,25 +93,9 @@ const PRIMARY_RANK: Record<CrmTicketSlaPrimaryState, number> = {
 // Jam kerja WIB — murni, tanpa Prisma.
 // Semua konversi lewat Intl Asia/Jakarta supaya bebas zona waktu
 // proses/CI. Ketelitian menit (target dan tenggat kelipatan menit).
+// Pemformat mentah dihapus (AC-REP-003): delegasi ke wibDateKeyParts/
+// wibPartsKey di src/lib/utils/format.ts.
 // ---------------------------------------------------------------------
-
-const WIB_DATE_FMT = new Intl.DateTimeFormat("en-US", {
-  timeZone: "Asia/Jakarta",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-})
-
-const WIB_PARTS_FMT = new Intl.DateTimeFormat("en-US", {
-  timeZone: "Asia/Jakarta",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  weekday: "short",
-})
 
 const WEEKDAY_INDEX: Record<string, number> = {
   Sun: 0,
@@ -124,11 +110,14 @@ const WEEKDAY_INDEX: Record<string, number> = {
 const MINUTE_MS = 60_000
 const DAY_MS = 86_400_000
 
-/** Kunci tanggal kalender WIB "YYYY-MM-DD" — samakan dengan tanggal Holiday. */
+/**
+ * Kunci tanggal kalender WIB "YYYY-MM-DD" — samakan dengan tanggal Holiday.
+ * Mesin SLA (bukan label tampilan): delegasi ke wibDateKeyParts di
+ * src/lib/utils/format.ts, satu-satunya rumah Intl mentah (ALLOWLIST ratchet).
+ */
 export function wibDateKey(date: Date): string {
-  const parts = WIB_DATE_FMT.formatToParts(date)
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ""
-  return `${get("year")}-${get("month")}-${get("day")}`
+  const { year, month, day } = wibDateKeyParts(date)
+  return `${year}-${month}-${day}`
 }
 
 interface WibParts {
@@ -142,15 +131,14 @@ interface WibParts {
 }
 
 function wibParts(date: Date): WibParts {
-  const parts = WIB_PARTS_FMT.formatToParts(date)
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ""
+  const p = wibPartsKey(date)
   return {
-    year: Number(get("year")),
-    month: Number(get("month")),
-    day: Number(get("day")),
-    hour: Number(get("hour")) % 24,
-    minute: Number(get("minute")),
-    weekday: WEEKDAY_INDEX[get("weekday")] ?? 0,
+    year: p.year,
+    month: p.month,
+    day: p.day,
+    hour: p.hour % 24,
+    minute: p.minute,
+    weekday: WEEKDAY_INDEX[p.weekday] ?? 0,
   }
 }
 

@@ -11,6 +11,7 @@
  * off-by-one here silently drops the first or last day of the period.
  */
 
+import { formatDayMonthYear } from "@/lib/utils/format"
 import { parseLocalDateOnly, toLocalDateOnly } from "@/lib/utils/date-only"
 import { parseReportFilters } from "@/lib/reports/report-href"
 
@@ -143,7 +144,7 @@ export function parseReportPeriod(raw: string | undefined, fallback: { start: Da
 
 /** Label Indonesia, mis. "Periode 1 Okt 2026 – 31 Okt 2026". */
 export function formatPeriodLabel(period: Pick<ReportPeriod, "start" | "end">): string {
-  const format = (date: Date) => date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+  const format = (date: Date) => formatDayMonthYear(date)
   return period.start.getTime() === period.end.getTime() ? `Per ${format(period.start)}` : `Periode ${format(period.start)} – ${format(period.end)}`
 }
 
