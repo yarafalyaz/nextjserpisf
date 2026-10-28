@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppSearchField } from "@/components/ui/search-field"
 import Link from "next/link"
 import { StockMoveTable } from "./_components/stock-move-table"
+import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
@@ -49,7 +50,14 @@ export default async function StockMovesPage({
 
   const total = await prisma.stockMove.count({ where })
 
-  const tableData = toPlain(rawMoves)
+  // AC-INV-009: slug kanonis dokumen sumber untuk tautan referensi di tabel.
+  const referenceSlugs = await resolveReferenceSlugs(rawMoves)
+  const tableData = toPlain(rawMoves).map((move) => ({
+    ...move,
+    referenceSlug: move.referenceId != null
+      ? referenceSlugs.get(referenceSlugKey(move)) ?? null
+      : null,
+  }))
 
   const dampakFilter = (() => {
     const items: { label: string; url: string; check: string }[] = [
