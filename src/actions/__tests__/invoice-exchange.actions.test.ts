@@ -162,7 +162,52 @@ describe("createInvoiceExchange eligibility (Salsa run ini)", () => {
     const res = await actions.createInvoiceExchange(fd(base))
     expect(res.success).toBe(true)
   })
+})
 
+describe("createInvoiceExchange ambang lunas FIN-BR-006 (Rp1 kanonis)", () => {
+  it("menolak sisa Rp0,50 sebagai sudah lunas walau status posted", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 999999.5, status: "posted" },
+    ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("tetap menerima sisa Rp1,01", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 999998.99, status: "partial" },
+    ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(true)
+  })
+
+  it("menolak faktur batal grandTotal 0 lewat jalur status", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 0, paidAmount: 0, status: "cancelled" },
+    ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("belum diposting")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak sisa Rp0,50 yang muncul sesudah lock di dalam tx", async () => {
+    mocks.prismaMock.salesInvoice.findMany
+      .mockResolvedValueOnce([
+        { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 999998.99, status: "partial" },
+      ])
+      .mockResolvedValueOnce([
+        { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000000, paidAmount: 999999.5, status: "partial" },
+      ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+})
+describe("createInvoiceExchange ID non-desimal murni", () => {
   it("menolak ID non-desimal murni (0x10/1e3/0b101/spasi) — bukan ID faktur 10/16/1000", async () => {
     for (const weird of ["0x10", "1e3", "0b101", " 10", "+10", "10.0"]) {
       mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
