@@ -40,6 +40,7 @@ import WorkshopDashboard from "@/components/dashboard/workshop-dashboard"
 import PurchaseDashboard from "@/components/dashboard/purchase-dashboard"
 import WarehouseDashboard from "@/components/dashboard/warehouse-dashboard"
 import FinanceDashboard from "@/components/dashboard/finance-dashboard"
+import { StatusChip } from "@/components/ui/status-chip"
 
 import type { Metadata } from "next"
 
@@ -600,9 +601,17 @@ export default async function DashboardPage() {
                           className="flex min-w-0 flex-col gap-1.5 px-4 py-3"
                         >
                           <div className="flex min-w-0 items-start justify-between gap-2">
-                            <span className="min-w-0 truncate break-all font-mono text-xs font-medium">
-                              {payment.documentNo}
-                            </span>
+                            <div className="min-w-0">
+                              <span className="block truncate break-all font-mono text-xs font-medium">
+                                {payment.documentNo}
+                              </span>
+                              {/* FIN-BR-008: baris reversed tetap tampil, berlabel. */}
+                              {payment.status === "reversed" ? (
+                                <span className="mt-1 inline-block">
+                                  <StatusChip status="reversed" />
+                                </span>
+                              ) : null}
+                            </div>
                             <span className="shrink-0 text-xs text-muted-foreground">
                               {formatDate(payment.paymentDate, {
                                 format: "short",
@@ -653,7 +662,13 @@ export default async function DashboardPage() {
                         data.recentPayments.map((payment) => (
                           <TableRow key={payment.id}>
                             <TableCell className="px-4 font-mono text-xs lg:px-6">
-                              {payment.documentNo}
+                              <span className="block">{payment.documentNo}</span>
+                              {/* FIN-BR-008: baris reversed tetap tampil, berlabel. */}
+                              {payment.status === "reversed" ? (
+                                <span className="mt-1 inline-block">
+                                  <StatusChip status="reversed" />
+                                </span>
+                              ) : null}
                             </TableCell>
                             <TableCell className="max-w-[180px] truncate px-4 lg:px-6">
                               {payment.salesInvoice?.customer?.name || "-"}

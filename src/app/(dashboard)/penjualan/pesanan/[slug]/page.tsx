@@ -87,8 +87,10 @@ export default async function SalesOrderDetailPage({
   // Custom fabrication: the order's items stay editable until the customer
   // actually pays. A down payment on a linked invoice is only an advance and
   // does NOT lock the list — only a real (non-DP) payment does.
+  // FIN-BR-008: baris reversed = histori, bukan pelunasan — dikecualikan.
   const realPaymentCount = await prisma.salesPayment.count({
     where: {
+      status: { not: "reversed" },
       NOT: { paymentMethod: "down_payment" },
       salesInvoice: { salesOrderId: order.id },
     },

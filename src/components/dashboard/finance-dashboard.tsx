@@ -164,6 +164,12 @@ export default async function FinanceDashboard() {
                       <div key={payment.id} className="flex items-center justify-between gap-3 px-5 py-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-mono">{payment.documentNo}</p>
+                          {/* FIN-BR-008: baris reversed tetap tampil, berlabel. */}
+                          {payment.status === "reversed" ? (
+                            <div className="mt-1">
+                              <StatusChip status="reversed" />
+                            </div>
+                          ) : null}
                           <p className="text-xs text-muted-foreground">
                             {payment.salesInvoice?.customer?.name || "-"}
                           </p>
