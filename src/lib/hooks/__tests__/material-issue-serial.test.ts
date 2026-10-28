@@ -25,6 +25,9 @@ vi.mock("@/lib/services/stock-journal.service", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock("@/lib/services/stock-out-once.service", () => ({
+  assertMaterialIssueStockOutOnce: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => mocks.transaction(fn) },
   TxClient: class {},
