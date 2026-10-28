@@ -221,8 +221,8 @@ export async function reverseSalesInvoicePostingTx(
   await reverseJournalsByReferenceTx(tx, ["SalesInvoice", "SalesInvoiceCOGS"], invoiceId, reason, userId)
 
   // 3. Reverse the cash-receipt journal of every linked LIVE payment (optional).
-  // FIN-BR-008: pembayaran reversed sudah punya jurnal lawan dari
-  // reverseSalesPayment — membalik ulang = jurnal ganda.
+  // FIN-BR-008: pembayaran reversed sudah punya jurnal lawan dari aksi
+  // reversal di bawah — membalik ulang = jurnal ganda.
   if (reversePaymentJournals) {
     // FIN-BR-008: pembayaran yang sudah dibalik tidak boleh dibalik lagi
     // (jurnalnya sudah punya pasangan reversal).
