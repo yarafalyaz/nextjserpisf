@@ -38,6 +38,7 @@ export type PayrollRunSkipReason =
   | "plafonPotongan"
   | "irisan"
   | "berhenti"
+  | "cakupan"
 
 export const PAYROLL_RUN_SKIP_LABELS: Record<PayrollRunSkipReason, string> = {
   frekuensiLain: "Frekuensi bayar berbeda",
@@ -46,6 +47,7 @@ export const PAYROLL_RUN_SKIP_LABELS: Record<PayrollRunSkipReason, string> = {
   plafonPotongan: "Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)",
   irisan: "Rentang beririsan slip existing",
   berhenti: "Karyawan berhenti — di luar populasi massal",
+  cakupan: "Di luar cakupan akses HR — tidak dibuatkan slip",
 }
 
 export interface PayrollRunSkip {
@@ -157,6 +159,7 @@ export function countPayrollRunSkips(
     plafonPotongan: 0,
     irisan: 0,
     berhenti: 0,
+    cakupan: 0,
   }
   for (const skip of skips) counts[skip.reason] += 1
   return counts

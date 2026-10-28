@@ -1827,17 +1827,22 @@ export async function reverseVendorPayment(
         const netPayable = safeSubtract(
           bill.grandTotal,
           bill.withholdingAmount ?? 0,
-          0,
+          2,
         );
-        const nextPaid = safeSubtract(bill.paidAmount, alloc.amount, 0);
-        const nextBalance = safeSubtract(netPayable, nextPaid, 0);
+        // F-2026-10-28-155-S P4: presisi sen (sama dengan confirm di bawah).
+        const nextPaid = safeSubtract(bill.paidAmount, alloc.amount, 2);
+        const nextBalance = safeSubtract(netPayable, nextPaid, 2);
         await tx.vendorBill.update({
           where: { id: bill.id },
           data: {
             paidAmount: nextPaid,
             balanceDue: nextBalance,
-            status:
-              nextBalance <= 0 ? "paid" : nextPaid > 0 ? "partial" : "posted",
+            // FIN-BR-006/007: status dari outstanding valid + toleransi Rp1.
+            status: isSettled(netPayable, nextPaid)
+              ? "paid"
+              : nextPaid > 0
+                ? "partial"
+                : "posted",
           },
         });
       }

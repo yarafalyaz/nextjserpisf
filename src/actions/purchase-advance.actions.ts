@@ -15,7 +15,7 @@ import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { purchaseAdvanceSchema } from "@/lib/validations/finance.schemas"
-import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
+import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 
 const REVALIDATE = "/pembelian/uang-muka"
 
@@ -134,33 +134,47 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
 }
 
 /**
- * Menghapus uang muka beserta jurnalnya — jalur koreksi, bukan pembatalan resmi.
- * Dijaga kunci periode supaya periode tertutup tidak berubah diam-diam.
+ * GL-BR-003 P5 (vonis t_16159d89 V-P5/P6-1, V-P5/P6-3): void berstatus uang muka
+ * posted. Hard-delete jurnal POSTED + hapus fisik DILARANG — koreksi sah:
+ * jurnal lawan cermin lewat reverseJournalsByReferenceTx (refType persis
+ * "PurchaseAdvance") + baris dipertahankan status "void" + deletedAt.
+ * Lampiran TIDAK dihapus (bukti audit). Alasan void wajib.
+ * Penjaga kondisional masa depan (rekomendasi 3): bila penerapan uang muka ke
+ * tagihan vendor dibangun, void wajib menolak uang muka yang sudah diterapkan
+ * sebagian/seluruhnya — cantum di sini sampai penerapannya lahir.
  */
-export async function deletePurchaseAdvance(id: number): Promise<PurchaseAdvanceActionResult> {
+export async function deletePurchaseAdvance(id: number, reason?: string): Promise<PurchaseAdvanceActionResult> {
   try {
-    await requirePermission("delete_purchase_advances")
+    const user = await requirePermission("delete_purchase_advances")
+    const cleanReason = (reason ?? "").trim()
+    if (!cleanReason) {
+      return { success: false, error: "Alasan pembatalan uang muka wajib diisi." }
+    }
 
-    const advance = await prisma.purchaseAdvance.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true, documentNo: true, date: true, journalId: true },
-    })
-    if (!advance) return { success: false, error: "Uang muka tidak ditemukan." }
-
-    await assertPeriodOpen(advance.date)
-
-    let removedFiles: { fileUrl: string; referenceType: string }[] = []
+    let documentNo = ""
     await prisma.$transaction(async (tx) => {
-      if (advance.journalId) {
-        await tx.journalEntry.deleteMany({ where: { journalId: advance.journalId } })
-        removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "Journal", referenceId: advance.journalId })
-        await tx.journal.delete({ where: { id: advance.journalId } })
+      // Kunci baris + baca ulang di dalam tx (pola deleteSalesPayment).
+      await tx.$executeRaw`SELECT id FROM purchase_advances WHERE id = ${id} FOR UPDATE`
+      const advance = await tx.purchaseAdvance.findUniqueOrThrow({ where: { id } })
+      if (advance.deletedAt || advance.status === "void") {
+        throw new Error("Uang muka ini sudah dibatalkan.")
       }
-      await tx.purchaseAdvance.delete({ where: { id } })
-    })
-    await removeAttachmentFiles(removedFiles)
+      documentNo = advance.documentNo
 
-    await logActivity("delete", "PurchaseAdvance", id, `Menghapus uang muka pembelian ${advance.documentNo}`)
+      await assertPeriodOpen(advance.date, tx)
+
+      await reverseJournalsByReferenceTx(tx, "PurchaseAdvance", id, cleanReason, Number(user.id))
+
+      await tx.purchaseAdvance.update({
+        where: { id },
+        data: {
+          status: "void",
+          deletedAt: new Date(),
+        },
+      })
+    })
+
+    await logActivity("void", "PurchaseAdvance", id, `Membatalkan uang muka pembelian ${documentNo}: ${cleanReason}`)
     revalidatePath(REVALIDATE)
 
     return { success: true, id }

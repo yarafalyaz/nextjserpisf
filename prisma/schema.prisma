@@ -4371,6 +4371,13 @@ model PettyCash {
   expenseAccountId Int?             @map("expense_account_id")
   referenceNo      String?          @map("reference_no")
   description      String?          @db.Text
+  // GL-BR-003 P6: void berstatus — "posted" | "void". Vonis V-P5/P6-6:
+  // record void dikeluarkan dari rantai aktif (tidak berkontribusi saldo),
+  // balanceBefore/After miliknya dibekukan sebagai snapshot historis.
+  status           String           @default("posted")
+  voidAt           DateTime?        @map("void_at")
+  voidReason       String?          @map("void_reason") @db.Text
+  deletedAt        DateTime?        @map("deleted_at")
   // Pola Jurnal Operasional: Deskripsi · Nama Project · Vendor · Kategori.
   // Project = untuk siapa/pekerjaan apa, Vendor = dari/dibayar ke siapa.
   projectId        Int?             @map("project_id")
@@ -4386,11 +4393,13 @@ model PettyCash {
   @@index([accountId], map: "petty_cash_account_id_idx")
   @@index([sourceAccountId])
   @@index([expenseAccountId])
+  @@index([status])
   @@index([createdBy])
   @@index([createdAt])
   @@index([projectId])
   @@index([vendorId])
   @@index([categoryId])
+  @@index([deletedAt])
   @@map("petty_cash")
 }
 
@@ -4448,6 +4457,12 @@ model BankTransfer {
   feeAccountId  Int?      @map("fee_account_id")
   description   String?   @db.Text
   journalId     Int?      @map("journal_id")
+  // GL-BR-003 P5: void berstatus — "posted" | "void". Baris void dipertahankan
+  // sebagai audit trail + deletedAt terisi; baca operasional menyaring void
+  // lewat deletedAt. Kolom voidAt/voidReason = syarat keterbacaan vonis.
+  status        String    @default("posted")
+  voidAt        DateTime? @map("void_at")
+  voidReason    String?   @map("void_reason") @db.Text
   createdBy     Int?      @map("created_by")
   deletedAt     DateTime? @map("deleted_at")
   createdAt     DateTime  @default(now()) @map("created_at")
@@ -4456,6 +4471,7 @@ model BankTransfer {
   @@index([fromAccountId])
   @@index([toAccountId])
   @@index([date])
+  @@index([status])
   @@index([createdBy])
   @@index([createdAt])
   @@index([deletedAt])

@@ -66,9 +66,10 @@ function fd(entries: Record<string, string>): FormData {
   return f
 }
 
-function wireTransaction() {
+function wireTransaction(journalValue: unknown = null) {
   const tx = {
     $executeRaw: (...a: unknown[]) => execRawMock(...a),
+    journal: { findFirst: vi.fn().mockResolvedValue(journalValue) },
     salesPayment: {
       findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
       aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
@@ -89,7 +90,13 @@ beforeEach(() => {
     invoiceFindUniqueOrThrowMock, execRawMock, attachmentUpdateManyMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
-  paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 50, documentNo: "PAY-0001" })
+  // GL-BR-003 P3: lockedPayment select diperluas (tanggal/akun/nominal/
+  // withholding/metode) — baris tanpa jurnal = jalur posted lama.
+  paymentFindUniqueOrThrowMock.mockResolvedValue({
+    salesInvoiceId: 50, documentNo: "PAY-0001", status: "posted",
+    paymentDate: new Date("2026-06-09"), accountId: null, amount: 100,
+    withholdingAmount: 0, withholdingTypeId: null, paymentMethod: "cash",
+  })
   invoiceFindUniqueOrThrowMock.mockResolvedValue({ id: 50, grandTotal: 1000, customerId: 3, status: "posted" })
   paymentAggregateMock.mockResolvedValue({ _sum: { amount: 200 } }) // 200 already paid by others
   paymentUpdateMock.mockResolvedValue({ id: 9, salesInvoiceId: 50 })
