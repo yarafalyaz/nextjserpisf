@@ -41797,3 +41797,126 @@ Aturan status diakui bersama (TERVERIFIKASI-KODE): `src/lib/reports/document-sta
 - E140-6 (ambang status): fixture dokumen sisa tepat Rp1,00 dan Rp1,01 → perlakuan aging konsisten dengan status `paid`/`partial` dokumen (arah dua sisi); sisa Rp1,01 tampil sebagai belum-lunas di kedua permukaan = HIJAU (kontrol arah).
 
 ID spec ini **F-2026-10-28-140-S** (AC-REP-001 inventarisasi + matriks + E140). Pemilik berikutnya: Accountant vonis D1 (ambang aging vs FIN-BR-006) + D2 (total mana untuk rujukan uang) → Frontend/Backend per D1–D4 → QA E140 atas head implementasi → INDEKS `AC-REP-001` `Belum` → `Sebagian` sesudah D1/D2 divonis + D3/D4 lulus E140.
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-133-S: koreksi slip gaji posted yang dapat diaudit (HR-BR-005)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow, lane dokumen/spec; TANPA kode/schema/migrasi). Basis `origin/main` `2eed70391` (28 Okt 2026 10:10 WIB).
+Sumber tunggal pemicu: `docs/product/INDEKS-ATURAN.md:157` (HR-BR-005 `Belum`) + `docs/product/BUSINESS-RULES.md:184-185` ("payroll posted dikoreksi melalui proses yang dapat diaudit") + `docs/product/TEST-STRATEGY.md:25` (payroll posting = P0) + `docs/product/TEST-STRATEGY.md:50-51` (skenario 13: formula payroll dari komponen disetujui dan "tidak dapat diposting dua kali") + `docs/product/KEPUTUSAN-TERVERIFIKASI.md` keputusan 6 (double-entry + reversal jurnal) dan keputusan 10 (formula payroll, pinjaman).
+
+**Verifikasi ID:** grep `F-2026-10-28-131` di `docs/erp-research-backlog.md` + `docs/autonomous-board.md` basis ini = 0/0; judul PR terbuka yang memakai `131-` = 0. Slot sekitar: 130-S PR #1265, 129-V PR #1257, 128-S PR #1251, 127-S PR #1256, 126-V PR #1254, 125-V PR #1250, 124-S PR #1247, 123-V PR #1248. **Bebas.**
+
+**Anti-duplikat (wajib dibaca Backend/Lead):** spec F-2026-10-28-117-S (AC-HR-002, anti posting ganda) sudah menutup lapis anti-ganda (G1–G10) dan **secara eksplisit menaruh "reversal/pembatalan slip `paid` sebagai fitur" DI LUAR cakupannya** (§6.3) serta mencatat re-post jurnal sesudah reversal sebagai BUTUH-VONIS Accountant (§2 B3, BR-HRPG-09). Spec ini mengisi sisa itu untuk HR-BR-005 dan **tidak mengulang** guard anti-ganda: nol usulan kunci unik baru, nol idempotency-key client, nol perubahan G1–G10. Juga bukan duplikat 018-S (kunci self Pinjaman Saya), 046-S/052-S (rekap sisa pinjaman), 053-S (histori cicilan), atau vonis F-2026-10-23-105-V (cicilan mingguan wajib dari perjanjian).
+
+### 1. Definisi "koreksi" yang dituntut HR-BR-005 (empat lapis, jangan dicampur)
+
+| Lapis | Dokumen/efek | "Koreksi" berarti | Akibat bila tidak ada |
+|---|---|---|---|
+| K1 Slip | `Payroll` (`status`) | slip posted tetap ada sebagai histori; koreksi = dokumen koreksi tertaut, bukan edit/hapus | angka gaji salah tidak bisa dibetulkan sama sekali |
+| K2 Pembayaran + amortisasi | transisi `approved → paid` + `EmployeeLoan.remainingAmount` | koreksi wajib mengembalikan/menyesuaikan amortisasi pinjaman lewat dokumen, bukan update manual | sisa pinjaman karyawan salah permanen; potongan berikutnya salah |
+| K3 Jurnal | `Journal` `referenceType="Payroll"` | jurnal lawan + jurnal slip koreksi; jurnal asal tidak dihapus | GL beban gaji/bank/utang pajak tidak seimbang dengan slip |
+| K4 Pelaporan | rekap PPh21/BPJS, histori cicilan, P&L beban gaji | koreksi punya perilaku eksplisit di pembaca (masuk periode koreksi, bukan menimpa periode lama) | angka yang sudah dilaporkan berubah diam-diam atau selisih tak terlacak |
+
+### 2. Inventarisasi terverifikasi kode (basis `2eed70391`, 28 Okt 2026)
+
+Yang SUDAH ada (semua `TERVERIFIKASI-KODE`):
+
+| # | Lapis | Fakta | Bukti file:baris |
+|---|---|---|---|
+| T1 | K1 | Siklus status slip hanya tiga: `draft` → `approved` → `paid`; `status` default `draft`, TIDAK ada status keluar dari `paid` | `prisma/schema.prisma:3987`; `src/actions/hrm.actions.ts:3063,3128-3131` |
+| T2 | K1 | Ubah slip hanya dari `draft`; slip `approved`/`paid` tidak dapat diedit | `src/actions/hrm.actions.ts:2853-2857` |
+| T3 | K1 | Approve: klaim kondisional atomik `updateMany where {id, status:"draft"}`; count 0 = tolak; gerbang statutori dijalankan sebelum klaim | `src/actions/hrm.actions.ts:3040-3070` |
+| T4 | K2+K3 | Bayar: klaim kondisional `updateMany where {id, status:"approved"}` + amortisasi pinjaman + `onPayrollPaid(tx)` dalam SATU transaksi; gagal = rollback penuh | `src/actions/hrm.actions.ts:3081-3099,3128-3190` |
+| T5 | K3 | Jurnal payroll dibuat di hook dengan idempotensi berbasis `(referenceType, referenceId)` — **tanpa filter status jurnal** | `src/lib/hooks/accounting.hook.ts:2897,2912-2919,3053-3060,3184` |
+| T6 | K3 | Reversal jurnal generik hanya menyentuh `Journal` (jurnal lawan + asal `REVERSED`); `journal.service.ts` nol rujukan payroll | `src/lib/hooks/accounting.hook.ts:193`; `src/lib/services/journal.service.ts:147`; grep `payroll` di `journal.service.ts` = 0 |
+| T7 | K2 | Amortisasi pinjaman menulis `remainingAmount` HANYA saat bayar slip; jalur lain menyentuh `remainingAmount` hanya untuk pinjaman `pending` (edit) atau aktivasi workflow | `src/actions/hrm.actions.ts:3164`, `:4786-4805` (butuh `status:"pending"`), `src/app/api/workflow/[...path]/route.ts:249-256` |
+| T8 | K4 | Laporan payroll menyaring status: `RECOGNISED_PAYROLL_STATUSES = ["approved","paid"]`; rekap PPh21 mengagregasi hanya slip `approved/paid` (saring di builder, bukan di query); histori cicilan membaca slip `status:"paid"` | `src/lib/reports/payroll-reports-data.ts:13,47-51`; `src/lib/reports/pph21-recap.ts:9`; `src/lib/reports/pph21-recap-data.ts:105-108`; `src/lib/reports/loan-installment-history-data.ts:66-69` |
+| T9 | K4 | Tutup periode menahan slip `draft` pada rentang bulan | `src/lib/settings/period-close-data.ts:85` |
+| T10 | K3 | Slip `paid` menjadi sumber dokumen lain: kompensasi PKWT menyimpan `paidPayrollId` | `src/lib/services/pkwt-compensation.service.ts:420` |
+| T11 | K1 | Izin: `process_payroll` (approve/bayar), `edit_payroll` (ubah draft), `create_payroll`; katalog memuat lima kunci payroll tanpa kunci koreksi/reversal | `src/actions/hrm.actions.ts:3042,3083,2851`; `src/lib/auth/module-catalog.generated.ts:330-334` |
+
+Yang BELUM ada (bukti grep run ini, semuanya nol di `src/`+`e2e/` non-tes):
+
+- **B1. Nol jalur koreksi/pembatalan slip.** `grep -rn "reversePayroll|voidPayroll|cancelPayroll|reverseSlip|payrollReversal" src e2e` = **0**. Tidak ada aksi server, tombol, maupun route yang mengoreksi slip `paid`.
+- **B2. Nol penanda audit koreksi pada model.** Grep `revers|correct|cancel` di blok `model Payroll` (`prisma/schema.prisma:3958-4000`) = **0**: tidak ada `reversedAt/reversedBy/reversalReason/correctsPayrollId` — bandingkan pola dokumen lain pada skema yang sama (`prisma/schema.prisma:1919,4103-4135,4902`).
+- **B3. Reversal jurnal BUKAN koreksi slip — dan justru mengunci lebih keras.** Sesudah operator me-reverse jurnal payroll (`reverseJournal`, `src/actions/finance.actions.ts:2146`), slip tetap `paid` dan hook T5 tetap menemukan jurnal lama (status apa pun) sehingga posting ulang **dilewati senyap** (`console.info`, bukan galat). Jadi hari ini: GL bisa dibalik, slip tidak; dan sesudah dibalik, slip resmi tidak bisa dijurnal ulang. Inilah kontrak yang harus diputus (lihat §5).
+- **B4. Jalur approval generik menulis status dokumen TANPA syarat status.** `approval.actions.ts:252-262` memanggil `docModel.update({ where: { id }, data: { status: docStatus } })` — untuk `Payroll`, `docStatus = "approved"`, tanpa `where` status dan tanpa pemeriksaan apakah slip sudah `paid`. Bila ada catatan approval yang mencapai langkah terakhir untuk slip yang sudah dibayar, status slip dapat kembali ke `approved` tanpa jejak audit koreksi. Laten (bukan bocor hidup: approval Payroll normal selesai sebelum bayar), tetapi ini persis kelas "koreksi tak teraudit" yang dilarang HR-BR-005 — wajib diputus Backend (§5.2).
+
+### 3. Putusan spec (yang dituntut, tanpa mengarang akun/nominal)
+
+- **P1. Larangan edit/hapus tetap mutlak.** Slip `paid` tidak boleh diedit atau dihapus fisik (T2 dipertahankan dan diperluas ke hapus: hari ini nol `payroll.delete` di `src/`, jadi larangan itu tinggal dinyatakan). Koreksi WAJIB dokumen koreksi.
+- **P2. Koreksi = dokumen tertaut, satu arah.** Slip asal tetap `paid` dan nilainya tidak pernah ditimpa; dokumen koreksi menyimpan acuan ke slip asal sehingga dapat ditelusuri dua arah (dari slip asal ke koreksi, dan sebaliknya). Nama field/tipe final milik Backend; spec ini hanya membekukan syaratnya.
+- **P3. Alasan wajib + jejak audit.** Koreksi menolak jalan bila alasan kosong/spasi (nol mutasi apa pun), dan menulis `logActivity` memuat nomor slip asal, alasan, aktor, waktu, dan nominal delta. Pola yang sudah dipakai repo: `reverseJournalsByReferenceTx(tx, type, id, reason, userId)` (`accounting.hook.ts:193-199`).
+- **P4. Empat lapis harus konsisten (K1–K4).** Koreksi dinyatakan SAH hanya bila keempatnya terjaga: slip asal utuh (K1), amortisasi pinjaman disesuaikan lewat dokumen bukan update manual (K2), jurnal lawan + jurnal koreksi lahir atomik tanpa menghapus jurnal asal (K3), dan pembaca laporan punya perilaku eksplisit (K4).
+- **P5. Idempotensi tanpa kunci baru.** Satu slip asal maksimum satu dokumen koreksi aktif; koreksi kedua ditolak berisik; klaim dilakukan atomik di dalam transaksi (pola klaim kondisional T3/T4). Spec ini **tidak** menambah scope `FinancialIdempotencyKey` (selaras BR-HRPG-08 pada 117-S).
+- **P6. Periode.** Koreksi tidak boleh menulis ke periode terkunci (`assertPeriodOpen`); bila periode asal sudah tertutup, koreksi masuk periode terbuka dengan acuan periode asal yang eksplisit (tanggal & akun = vonis Accountant, §5.1).
+- **P7. Larangan resurrect status.** Jalur non-koreksi (approval generik T/B4, endpoint status, bulk) dilarang mengubah status slip `paid`; penjaga diletakkan di titik tulis, bukan di UI.
+- **P8. Pesan galat tidak membocorkan nominal gaji** karyawan lain; menyebut nomor dokumen saja (pola 117-S P4).
+
+### 4. Aturan register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-HRCR-01 | Slip `paid` tidak dapat diedit/dihapus fisik; koreksi hanya lewat dokumen koreksi tertaut | TERVERIFIKASI-KODE (T2, nol `payroll.delete`) + USULAN (perluasan larangan hapus) | T2, B1 |
+| BR-HRCR-02 | Slip asal tidak pernah ditimpa; dokumen koreksi menyimpan acuan asal yang dapat ditelusuri dua arah | USULAN | §3 P2 |
+| BR-HRCR-03 | Koreksi wajib alasan non-kosong + aktor + waktu + nomor slip asal + nominal delta di jejak audit | USULAN (pola `reverseJournalsByReferenceTx`) | `accounting.hook.ts:193-199` |
+| BR-HRCR-04 | Koreksi konsisten di empat lapis: slip, amortisasi pinjaman, jurnal (lawan + koreksi), pembaca laporan | USULAN — wujud K2/K3 BUTUH-VONIS Accountant | T5–T8, B3 |
+| BR-HRCR-05 | Satu slip asal maksimum satu koreksi aktif; koreksi kedua ditolak; klaim atomik dalam transaksi; gagal = rollback penuh | USULAN | T3, T4 |
+| BR-HRCR-06 | Koreksi ditolak pada periode terkunci; koreksi lintas periode memakai tanggal periode terbuka + acuan periode asal | USULAN — tanggal/akun BUTUH-VONIS Accountant | `assertPeriodOpen` (pola repo) |
+| BR-HRCR-07 | Jalur non-koreksi dilarang mengubah status slip `paid`; penjaga di titik tulis | USULAN — wujud BUTUH putusan Backend | B4 |
+| BR-HRCR-08 | Angka pajak yang sudah dilaporkan tidak diubah di periode lama; slip koreksi ditandai pada rekap PPh21/BPJS | USULAN — BUTUH-VONIS Accountant | T8, `pph21-recap.ts:9` |
+| BR-HRCR-09 | Koreksi memakai izin existing (`process_payroll`); nol kunci izin baru | USULAN (perubahan key = putusan Lead) | T11 |
+| BR-HRCR-10 | Slip `paid` yang menjadi sumber dokumen lain (mis. `paidPayrollId` kompensasi PKWT) wajib menolak koreksi yang membuat tautan itu menunjuk angka tak lagi sah, atau menyebut tautan itu di pesan penolakan | BUTUH-VONIS Accountant + Backend | T10 |
+
+### 5. Batas eksplisit — yang TIDAK diputus spec ini
+
+1. **BUTUH-VONIS Accountant** (`@accounting-finance-tax`): (a) bentuk jurnal koreksi gaji (reversal penuh + slip koreksi, atau jurnal koreksi selisih saja) dan akun yang dipakai; (b) perlakuan PPh21/BPJS yang sudah dilaporkan pada periode asal (koreksi di periode berjalan vs pembetulan); (c) perlakuan pemulihan kas bila slip sudah dibayar melebihi hak (potong slip berikutnya vs tagih); (d) pembulatan sen dan batas waktu koreksi. Spec ini TIDAK menetapkan akun, tarif, nominal, atau jurnal apa pun.
+2. **Butuh putusan Backend** (`@backend-prisma-inventory-workshop`): (a) wujud penjaga B4 (menambah `where` status pada `docModel.update` approval generik vs penjaga tipe khusus Payroll) dan dampaknya ke `EmployeeLoan`/`Expense`; (b) apakah hook T5 harus mengecualikan jurnal `REVERSED` dari idempotensi (agar re-post sah) atau tetap fail-closed dengan galat berisik alih-alih `console.info`; (c) nama field/tipe dokumen koreksi.
+3. **Di luar cakupan:** guard anti-ganda 117-S (sudah ditutup), otorisasi objek per karyawan pada approve/bayar (117-S B4), inti formula lembur/tarif (HR-BR-003, PR #1253/#1245), koreksi absensi (sudah punya alur sendiri), pembayaran gaji via kanal eksternal.
+4. Status HR-BR-005 di `docs/product/INDEKS-ATURAN.md` diperbarui di PR ini **hanya sebagai bukti-telusur** (dari "belum ditelusur" menjadi catatan fakta nol jalur koreksi + rujukan spec); status `Belum` TIDAK dinaikkan menjadi `Terpasang` sebelum implementasi merged dan QA memvonis.
+
+### 6. Matriks falsifikasi untuk QA (E-HRCR, atas head IMPLEMENTASI kelak — bukan head spec ini)
+
+| ID | Kasus | Hasil wajib | Falsifikasi (satu mutasi → MERAH) |
+|---|---|---|---|
+| E-HRCR-1 | Koreksi slip `paid` dengan alasan kosong/spasi | ditolak sebelum mutasi; nol jurnal, nol perubahan pinjaman, status slip asal tetap `paid` | hapus cek alasan → tes penolakan MERAH |
+| E-HRCR-2 | Koreksi sah satu slip `paid` berpinjaman aktif | slip asal utuh (`paid`, nilai sama), 1 dokumen koreksi, amortisasi pinjaman disesuaikan tepat sekali, 1 jurnal lawan + 1 jurnal koreksi, jurnal asal `REVERSED` (tidak dihapus) | ganti jalur jadi hapus jurnal + `payroll.delete` gaya lama → tes histori MERAH |
+| E-HRCR-3 | Koreksi kedua atas slip asal sama | ditolak berisik; nol dokumen/jurnal baru | cabut klaim atomik → dokumen kedua terbentuk MERAH |
+| E-HRCR-4 | Koreksi saat periode asal terkunci | ditolak atau (bila lintas periode) masuk periode terbuka dengan acuan; nol tulisan ke periode terkunci | hapus `assertPeriodOpen` → lolos MERAH |
+| E-HRCR-5 | Approval generik mencapai langkah akhir untuk slip yang sudah `paid` | status slip TIDAK berubah dari `paid` (ditolak berisik atau diabaikan dengan jejak), nol amortisasi/jurnal kedua | cabut penjaga status di `approval.actions.ts:253-262` → status kembali `approved` MERAH |
+| E-HRCR-6 | Pemanggilan langsung `onPayrollPaid` untuk slip yang jurnalnya sudah `REVERSED` | tidak boleh lewati-senyap: entah jurnal baru sah (bila §5.2b memutus boleh) atau galat berisik; `console.info` tanpa jejak = MERAH | kembalikan perilaku `findFirst` tanpa filter status + `return` senyap → MERAH |
+| E-HRCR-7 | Rekap PPh21 + histori cicilan sesudah koreksi | slip asal tetap terbaca sebagai histori; angka periode berjalan memuat koreksi; nol angka periode lama berubah tanpa penanda | sisipkan koreksi ke rekap periode asal tanpa penanda → MERAH |
+| E-HRCR-8 | Pesan galat koreksi | menyebut nomor dokumen, tanpa nominal gaji karyawan lain | suntik nominal gaji ke pesan → MERAH |
+
+### 7. Backlog turunan (rekomendasi tertulis — kartu TIDAK dibuat run ini)
+
+| Urutan | Pemilik usulan | Isi | Effort | Prasyarat |
+|---|---|---|---|---|
+| 1 | Lead | Putus BR-HRCR-01..03/05/07/09 (bagian yang tidak menunggu vonis) lalu merge PR spec ini | S | spec ini merged |
+| 2 | Accountant | Vonis §5.1 (bentuk jurnal koreksi, PPh21/BPJS, pemulihan kas, pembulatan) | S–M | spec ini merged |
+| 3 | Backend | Wujud penjaga B4 (status terminal tidak diresurrect) + keputusan §5.2b + aksi dokumen koreksi sesuai vonis | M | vonis §5.1 |
+| 4 | Frontend | Permukaan koreksi (dialog alasan wajib, tampilan slip asal read-only + tautan koreksi dua arah) | M | aksi Backend merged |
+| 5 | QA | E-HRCR-1..8 atas head implementasi persis | S–M | implementasi merged |
+
+ID spec ini **F-2026-10-28-133-S** (HR-BR-005; basis `origin/main` `2eed70391`). Pemilik berikutnya: Lead (putus + merge PR docs ini) → Accountant (vonis §5.1) → Backend (§5.2 + aksi koreksi) → Frontend (permukaan) → QA (E-HRCR-1..8). Implementasi BUKAN bagian spec ini.
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-135-V: koreksi slip gaji posted = reversal penuh + slip koreksi (jawaban §5.1 spec 133-S)
+Pemilik vonis: Accountant (accounting-finance-tax, lane FIN + vonis jurnal/pajak). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis branch PR #1279 `e19d281ab` (spec 133-S, 28 Okt 2026 11:14 WIB); fakta kode diverifikasi ulang run ini di worktree cabang itu.
+**Verifikasi ID:** grep `F-2026-10-28-135` di backlog cabang ini = 0 sebelum tulis (run ini); judul PR terbuka `135-` = 0 (`gh pr list` run ini: hanya 1279/1274/1278 relevan). **135-V bebas.**
+### 1. Fakta kode terverifikasi run ini
+- **Jurnal payroll asal**: `onPayrollPaid` (`accounting.hook.ts:2905-3210`): Dr Beban Gaji (gross, self-heal dari kredit bila gross tersimpan menyimpang, `:3183-3194`), Cr Bank (net, `:3100`), Cr Salaries Payable statutori BPJS+PPh21 (`:3145-3153`) + potongan lain (`:3169`), Cr Piutang Karyawan angsuran (`:3158`), Dr kaki PKWT per snapshot (`:3106-3141`). Idempotensi `findFirst(referenceType,referenceId)` TANPA filter status — di pra-tx (`:2925`) maupun dalam-tx (`:3058-3077`): jurnal REVERSED tetap memblokir re-post senyap (`console.info`). Klaim `@@unique([referenceType, referenceId])` di komentar `:3049-3057`.
+- **Reversal generik**: `reverseJournalsByReferenceTx` (`accounting.hook.ts:193-199` pola, definisi `:207`) POST-MERGE 12:42 `363826a5`: `approveStep` generik (`approval.actions.ts:252-262`) kini gerbang status terminal untuk Payroll (`updateMany where status != paid`, kalah klaim = tolak berisik; pola E-HRCR-5). Jalur lain tidak berubah: jurnal lawan (debit↔kredit, tanggal = tanggal asli, referenceType "Journal" → id asli) + asal `REVERSED`; idempoten; jurnal non-POSTED dihapus. Period lock: `assertPeriodOpen(tanggal asli)`.
+- **Amortisasi pinjaman**: `hrm.actions.ts:3164` (dalam tx bayar `approved→paid` klaim kondisional `:3128-3140`, T4 spec) — menulis `remainingAmount` hanya saat bayar; jalur lain hanya untuk pinjaman `pending`/aktivasi workflow (T7 spec).
+- **Pembaca laporan**: `RECOGNISED_PAYROLL_STATUSES = ["approved","paid"]` (`payroll-reports-data.ts:13,47-51`); rekap PPh21 query `startDate` dalam periode TANPA saring status di query (`pph21-recap-data.ts:105-108`, saring di builder `pph21-recap.ts:9`); histori cicilan baca slip `status:"paid"` (`loan-installment-history-data.ts:66-69`). Tutup periode menahan slip `draft` (`period-close-data.ts:85`).
+- **Tarif/statutori**: gerbang `payrollStatutoryGateError` + plafon 50% Pasal 65 ditegakkan saat approve DAN saat bayar atas angka tersimpan (`hrm.actions.ts:3150-3180`); snapshot statutori tersimpan per slip. Vonis TER 026-V + PPh21 F-2026-10-21-026-V tetap acuan tarif — vonis ini tidak membuka ulang tarif.
+### 2. Vonis §5.1 (menjawab a–d spec)
+- **(a) Bentuk jurnal: reversal penuh + slip koreksi.** DILARANG jurnal selisih saja. Urutan atomik dalam SATU transaksi: (1) `reverseJournalsByReferenceTx(tx, "Payroll", payrollId, reason, userId)` — jurnal lawan + asal REVERSED; (2) amortisasi pinjaman DIBALIKKAN lewat dokumen (kembalikan `remainingAmount` sebesar porsi yang dulu diamortisasi slip ini — pola T7, bukan update manual); (3) buat slip koreksi (dokumen baru tertaut `correctsPayrollId` → slip asal, slip asal tetap `paid` nilainya tidak ditimpa, P2 spec); (4) `onPayrollPaid`-setara untuk slip koreksi pada periode terbuka. Slip koreksi memuat ANGKA PENUH yang benar (bukan delta saja) supaya rekap periode koreksi berdiri sendiri; delta = turunan tampil, bukan dokumen.
+- **(b) PPh21/BPJS yang sudah dilaporkan: TIDAK MENYENTUH periode asal.** Angka periode asal (rekap PPh21 per `startDate`, SPT yang sudah lapor) beku sebagai histori. Koreksi masuk periode berjalan/terbuka: slip koreksi `startDate` di periode terbuka, rekap periode koreksi memuat angka benar + penanda koreksi (BR-HRCR-08). Pembetulan SPT masa lalu = proses DJP di luar ERP; ERP hanya menyediakan angka asal utuh + angka koreksi tertaut sebagai bahan pembetulan. Jurnal lawan memakai `assertPeriodOpen(tanggal asli)` pola reversal existing — bila periode asal terkunci, reversal jurnal MENUNGGU periode dibuka prosedural / koreksi mengikuti tanggal periode terbuka dengan acuan eksplisit (P6 spec); DILARANG menulis ke periode terkunci.
+- **(c) Kelebihan bayar: pulihkan lewat potongan slip BERIKUTNYA sebagai default.** Kelebihan kas (net dibayar > hak) dicatat sebagai piutang/kelebihan yang dipotong dari slip berikutnya karyawan sama (kaki Cr Piutang Karyawan pola jurnal asal, dibalik arahnya). Penagihan tunai langsung hanya bila tidak ada slip berikutnya (resign/PHK/akhir kontrak) — putusan kasus-per-kasus Business/HR, bukan default sistem. Plafon 50% Pasal 65 tetap berlaku atas potongan pemulihan ini (evaluasi `evaluateDeductionCeiling` atas angka slip koreksi/berikutnya).
+- **(d) Pembulatan + batas waktu.** Pembulatan `safeRound(...,2)` sen pola repo; sisa sub-sen ≤ Rp0,01/baris ditoleransi selama jurnal seimbang (toleransi JournalService 0,001 — preseden V6 vonis 125-V). Koreksi DITOLAK pada periode terkunci (P6). Batas waktu substantif (kedaluwarsa penagihan kelebihan / koreksi SPT) = domain HR/Legal + ketentuan DJP — BUKAN vonis ini; sistem hanya menegakkan gerbang periode + jejak audit.
+- **BR-HRCR-10 (tautan PKWT `paidPayrollId`):** koreksi slip yang menjadi sumber `pkwtCompensationEvent` DITOLAK bila kompensasi turunan sudah dibayar/diubah status; pesan penolakan WAJIB menyebut nomor dokumen kompensasi penahan. Bila turunan masih draft → boleh ikut dibatalkan atomik dalam transaksi sama.
+- **Interaksi T5/B3 (re-post sesudah REVERSED):** untuk jalur KOREKSI SAH (§5.2b Backend), idempotensi `onPayrollPaid` WAJIB mengecualikan jurnal `REVERSED` dari pemblokir (jurnal REVERSED = histori, bukan posting aktif) — TETAPI hanya bila slip koreksi membawa `referenceId` BARU (dokumen baru, bukan re-post `payrollId` asal). Re-post `payrollId` asal sesudah reversal tetap DITOLAK berisik (bukan `console.info` senyap — E-HRCR-6). Klaim `@@unique` tetap menahan balap. POST-MERGE 12:49 WIB `d6cf442ba`: E-HRCR-6 main TERISI — `onPayrollPaid` kini memakai `status: { not: "REVERSED" }` di pra-tx dan dalam-tx (pola SalesInvoice E127-8); REVERSED = histori, tidak lagi memblokir. Ketentuan `referenceId` BARU + tolak-berisik re-post `payrollId` asal TETAP BERLAKU untuk Backend — filter status membuka pintu, bukan izin masuk ulang.
+### 3. Falsifikasi QA (atas head implementasi kelak)
+- E135-1: koreksi memakai jurnal selisih saja (tanpa reversal penuh) → MERAH (jurnal asal tetap POSTED berdampingan dengan jurnal selisih).
+- E135-2: koreksi mengubah angka rekap PPh21 periode asal / slip asal tidak lagi `paid` → MERAH.
+- E135-3: kelebihan bayar dipotong slip berikutnya menembus plafon 50% tanpa penolakan → MERAH.
+- E135-4: koreksi menulis ke periode terkunci (cabut `assertPeriodOpen`) → MERAH.
+- E135-5: re-post `payrollId` asal sesudah reversal lolos senyap → MERAH.
