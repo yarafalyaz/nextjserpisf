@@ -41046,9 +41046,9 @@ ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
 
-## SPEC BUSINESS 2026-10-28 — F-2026-10-28-131-S: koreksi status indeks domain HR (telusur 7 baris "belum ditelusur")
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-132-S: koreksi status indeks domain HR (telusur 7 baris "belum ditelusur")
 
-> **Slot**: `F-2026-10-28-131-S`. Basis `origin/main` `cfce29e94` (branch
+> **Slot**: `F-2026-10-28-132-S`. Basis `origin/main` `cfce29e94` (branch
 > `hermes/business-indeks-hr-sweep`). grep `F-2026-10-28-131` di backlog + board
 > = 0 baris, judul PR terbuka yang memuat `131` = 0 saat spec ini ditulis.
 > Lane: BUSINESS (dokumen saja — nol `src/`, nol `prisma/`).
@@ -41098,4 +41098,4 @@ saja.
 
 **Penerus.** BOT QA: uji perilaku tiga butir batas cakupan di atas pada head
 implementasi (bukan head docs ini). BOT Lead: merge PR docs ini bila gate hijau
-head persis. Business tidak merge. ID spec ini **F-2026-10-28-131-S**.
+head persis. Business tidak merge. ID spec ini **F-2026-10-28-132-S**.
