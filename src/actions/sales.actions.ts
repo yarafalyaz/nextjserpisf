@@ -3975,11 +3975,21 @@ export async function deleteSalesReturn(id: number) {
   try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_returns")
-  const sr = await prisma.salesReturn.findUniqueOrThrow({ where: { id } })
-  if (sr.status === "completed") {
-    throw new Error("Tidak bisa menghapus retur yang sudah completed")
-  }
-  await prisma.salesReturn.delete({ where: { id } })
+  // GL-BR-003 P8 (GL003-P8): hapus fisik hanya-draf, selaras deleteSalesInvoice
+  // draft-only + updateSalesReturn draft-only. Non-draft (posted/completed/...)
+  // diarahkan ke jalur koreksi (retur lawan/void beralasan), bukan hapus fisik.
+  await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${id} FOR UPDATE`
+    }
+    const fresh = await tx.salesReturn.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+    if (fresh.status !== "draft") {
+      throw new Error(
+        `Retur berstatus "${fresh.status}" tidak bisa dihapus; hanya draf yang bisa dihapus.`
+      )
+    }
+    await tx.salesReturn.delete({ where: { id } })
+  })
   await logActivity("delete", "SalesReturn", id, `Menghapus retur penjualan #${id}`)
   revalidatePath("/penjualan/retur")
   return { success: true }
