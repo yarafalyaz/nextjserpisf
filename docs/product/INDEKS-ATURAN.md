@@ -142,7 +142,7 @@ perilaku, bukan hanya keberadaan file/model.
 | PROJ-BR-005 | Sebagian | prisma/schema.prisma:5174 — `Project` ada; ketertelusuran biaya aktual ke transaksi sumber belum ditelusur |
 | PROJ-BR-006 | Sebagian | prisma/schema.prisma:5927 — `JobChangeOrder` ada untuk perubahan scope; approval/historinya belum ditelusur |
 | PROJ-BR-007 | Belum | belum ditelusur — penutupan proyek dan pelestarian histori tidak ditunjuk di sini |
-| PROJ-BR-008 | OPEN-keputusan | Keputusan margin/overhead/tenaga kerja/pengakuan biaya terbuka di sumber |
+| PROJ-BR-008 | Sebagian | Margin/komponen biaya/overhead/tenaga kerja TERTUTUP oleh vonis Accountant F-2026-10-28-129-V: pendapatan diakui saat faktur terbit (posted/partial/paid, subtotal-diskon, tanpa PPN), biaya lima keranjang (material snapshot issue, ProductionCost termasuk labor ter-tarik, Expense approved, PettyCash OUT, VendorBill pasca anti-dobel), jam timesheet belum ditarik = memo bukan uang, nol alokasi overhead otomatis, margin = laba/pendapatan. Fakta kode: `src/lib/reports/project-pl.ts:60,150-192,281-306` (grep `overhead` = 0). Sisa = pengakuan pendapatan PSAK 72 untuk laporan eksternal |
 | WO-BR-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem` ada sebagai baris work order; ketiadaan efek stok material rencana belum dibuktikan negatif di sini |
 | WO-BR-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` adalah jalur issue aktual; posting pengurangan stoknya belum ditelusur |
 | WO-BR-003 | Sebagian | prisma/schema.prisma:3809 — `OvertimeRequest` ada; rantai approval jam kerja ke costing/payroll belum ditelusur |
