@@ -42427,3 +42427,166 @@ Pemilik vonis: Accountant (accounting-finance-tax, lane FIN + vonis jurnal/pajak
 ID putusan ini **F-2026-10-28-132-P**. Pemilik berikutnya: Accountant (vonis angka/akun/pajak §2 di atas, tanpa kartu
 baru — tulis sebagai ID di komentar kartu tugasnya) → Backend (penjaga + helper + `written_off` fisik) → QA
 (E-LOAN-1..8 atas head implementasi).
+
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-144-S: metode costing bawaan (fifo vs average) + titik konflik kolom/create vs resolver (INV-BR-007 konteks, OPEN #8, ADR-005)
+
+> ID spec: **F-2026-10-28-144-S**. Kartu: `t_a101fd95` (assignee `sales-crm-hr-payroll-business-workflow`).
+> Basis kode live: `origin/main` `ee5c38847` (28 Okt 2026, 14:33 WIB).
+> Sifat: spec tertulis saja — tanpa kode/schema/migrasi. Guard: link PR hanya di metadata/handoff kartu, bukan komentar kartu.
+> Sumber keputusan: `docs/product/KEPUTUSAN-TERVERIFIKASI.md` keputusan 1 (TERTUTUP-oleh-implementasi + OPEN #8 sisa)
+> + daftar OPEN butir 8 (metode costing bawaan) + `docs/product/ADRs/ADR-005-valuasi-stok-landed-cost-stok-negatif.md` §1.
+
+Benchmark resmi (akses 28 Okt 2026):
+- Accurate Online menghitung FIFO dan Average per barang, perpetual real-time, HPP ikut metode terpilih:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/menghitung-fifo-average/
+- Accurate Online memakai metode perpetual dan mendukung FIFO atau Average, nilai persediaan + BPP diperbarui
+  tiap transaksi: https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/barang-minus-di-laporan-keuangan/
+- Zahir: metode HPP ditetapkan di awal per jenis barang (FIFO/LIFO/Average), tidak bisa diubah bila barang sudah
+  dipakai saldo awal/transaksi: https://help.zahironline.com/portal/id/kb/articles/memasukkan-data
+- Zahir: fasilitas FIFO/LIFO menghitung HPP otomatis per produk sesuai metode yang ditentukan:
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+
+### Inventarisasi terverifikasi (28 Okt 2026, basis `ee5c38847`)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Resolver tunggal `resolveCostingMethod` urutan kategori → item → perusahaan → hard default `fifo`;
+  hanya `fifo`/`average` sah; global korup fail-closed lempar error:
+  `src/lib/services/costing-method.service.ts:14-22,37-48,76-99,105-115`.
+- Konsumsi (jual/keluar) memakai resolver sama, cabang fifo/average:
+  `src/lib/services/inventory-fifo.ts:128-129,168,171-182,219,263,284-285`.
+- Penerimaan (goods-receipt) memakai resolver bersama yang sama:
+  `src/lib/hooks/goods-receipt.hook.ts:129-137,480-503`.
+- Laporan valuasi stok memakai resolver selaras (kategori → barang → global → fifo), average dinilai dari
+  `item.cost` bukan `layer.unitCost`: `src/lib/reports/stock-valuation.ts:60-86,95,146`.
+- Fisik lot terpisah dari biaya: dekremen fisik FEFO (kedaluwarsa tercepat), biaya dari lapisan FIFO:
+  `src/lib/services/inventory-fifo.ts:80-89,143-144,337-341`.
+- Default kolom: perusahaan `FIFO` (`prisma/schema.prisma:138`), kategori `average` (`prisma/schema.prisma:731`),
+  barang `average` (`prisma/schema.prisma:793`).
+- UI: pengaturan perusahaan opsi FIFO/Average + catatan "Bisa ditimpa per kategori atau per barang"
+  (`src/app/(dashboard)/pengaturan/ubah/_components/settings-edit-form.tsx:747-760`,
+  default tampilan `settings.costingMethod || "FIFO"` `:751`);
+  form barang opsi Rata-rata Bergerak/FIFO, nilai kosong tampil `average`
+  (`src/components/forms/item-form.tsx:449-466`, `field.value || "average"` `:455`);
+  simpan kategori hanya bila field terkirim (`src/actions/master.actions.ts:1716-1718`).
+- Seed awal perusahaan `FIFO` (`prisma/seed.ts`: `INSERT IGNORE ... costing_method ... 'FIFO'`).
+- INV-BR-007 (stok negatif) sudah ditutup vonis `F-2026-10-28-115-V`
+  (INDEKS-ATURAN baris INV-BR-007/AC-INV-007 = Sebagian, sisa = audit konsistensi hitung per jalur).
+
+Titik konflik (TERVERIFIKASI-KODE — inti spec ini):
+- K1 — barang baru tanpa pilihan eksplisit diwarisi kategori lalu fallback `"average"` di jalur create
+  (`src/actions/master.actions.ts:616-632`, final `"average"` `:629`, tulis `:652`); kategori baru bawaan
+  `"average"` (`src/actions/master.actions.ts:1647`, update kategori tanpa kirim field = tidak diubah `:1716-1718`).
+- K2 — hard default resolver = `fifo` (`src/lib/services/costing-method.service.ts:42-47,98`, global gagal baca
+  juga `fifo` `:88`).
+- K3 — akibat K1+K2: data baru pada praktiknya efektif **average** (kolom/create + tampilan form), sedangkan
+  `fifo` hanya menang bila kategori dan barang dua-duanya kosong/tak-dikenal (atau global kosong + keduanya kosong).
+  Nilai eksplisit per kategori/barang selalu mengalahkan keduanya. Ketiganya berjalan tanpa error — bawaan bisnis
+  yang dimaksud tidak tegas (ADR-005 §1 + KEPUTUSAN-TERVERIFIKASI keputusan 1 + OPEN #8 butir 8).
+
+### 1. Workflow specification (aktor + dokumen masuk/keluar)
+
+- Aktor: Admin Gudang/Master (atur default perusahaan, kategori, barang), Operator (buat barang/kategori),
+  Sistem (resolver HPP saat terima/jual/valuasi), Owner (menegaskan bawaan sekali — BUTUH-VONIS/putusan di §6).
+- Alur A — penetapan default perusahaan: Pengaturan Umum → Metode Penetapan Biaya (FIFO/Average)
+  → simpan (`settings.actions.ts:155`, default tulis `"FIFO"` bila kosong) → dipakai resolver tingkat 3 +
+  laporan valuasi. Dokumen keluar: nilai `SystemSetting.costingMethod`.
+- Alur B — penetapan kategori: buat/ubah kategori → `costingMethod` (form edit meneruskan nilai existing;
+  kolom default `average`; update tanpa field = tidak diubah). Dokumen keluar: `ItemCategory.costingMethod`.
+- Alur C — penetapan barang: buat barang → opsional warisi kategori → fallback `average` (K1); ubah barang →
+  nilai terkirim dipakai (`master.actions.ts:817`), tampilan kosong = `average` (form `:455`).
+  Dokumen keluar: `Item.costingMethod`.
+- Alur D — pemakaian HPP: terima/jual/valuasi → resolver kategori → barang → perusahaan → `fifo`
+  (fail-closed global korup; DB gagal baca → `fifo`). Dokumen keluar: HPP per transaksi + nilai valuasi.
+- Aturan baca: bila kategori/barang diset eksplisit (`fifo` atau `average`), bawaan tidak relevan — resolver
+  patuh pada nilai eksplisit. Konflik hanya menyentuh baris yang TIDAK diset eksplisit.
+
+### 2. Role/permission matrix
+
+| Aksi | Permission key nyata (`module-catalog.generated.ts`) | Catatan |
+|---|---|---|
+| Lihat Pengaturan Umum + Metode Penetapan Biaya | `manage_settings` (settings/manage) | Baca + tulis default perusahaan |
+| Ubah default perusahaan (`SystemSetting.costingMethod`) | `manage_settings` | Fail-closed nilai korup sudah di resolver |
+| Buat/ubah kategori + metode | `create_item_categories` / `edit_item_categories` | Buat bawaan `average`; ubah tanpa field = tidak diubah |
+| Buat/ubah barang + metode | `create_items` / `edit_items` | Buat tanpa pilihan = warisi kategori lalu `average` |
+| Lihat laporan valuasi stok | izin baca laporan (existing) | Menampilkan `FIFO`/`Rata-rata Bergerak` per baris |
+| Posting terima/jual (memicu HPP) | izin posting dokumen masing-masing (existing) | Tanpa izin posting = tanpa HPP baru |
+
+### 3. Status-transition matrix
+
+Tidak ada status lifecycle baru — metode costing adalah atribut, bukan dokumen berstatus. Transisi yang ada:
+
+| Awal | Pemicu | Akhir | Penjaga |
+|---|---|---|---|
+| Barang baru, `costingMethod` kosong | create tanpa pilihan + kategori ada | `Item.costingMethod` = metode kategori (bila dikenal) else `average` | `create_items`; warisan hanya nilai `fifo`/`average` (K1) |
+| Barang baru, `costingMethod` kosong, kategori kosong/tak-dikenal | create | `average` | K1 `:629` |
+| Kategori baru | create | `ItemCategory.costingMethod` = `average` (bila tak diisi) | `create_item_categories` |
+| Kategori/barang existing | update kirim field | nilai baru tersimpan | `edit_*`; kategori: hanya bila field terkirim |
+| Kategori existing | update tanpa field | tidak berubah | `:1716-1718` |
+| HPP terima/jual/valuasi | resolver | `fifo` atau `average` | kategori → barang → perusahaan → `fifo`; global korup = error, DB gagal = `fifo` |
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-CST-01 | Hierarki efektif: kategori → barang → perusahaan → `fifo`; hanya `fifo`/`average` sah | TERVERIFIKASI-KODE | `costing-method.service.ts:14-22,37-48` |
+| BR-CST-02 | Global korup (non-kosong tak dikenal) = error berbahasa Indonesia, posting batal | TERVERIFIKASI-KODE | `costing-method.service.ts:76-99` |
+| BR-CST-03 | Gagal baca DB pengaturan = fallback `fifo` (degraded, disengaja) | TERVERIFIKASI-KODE | `costing-method.service.ts:85-88` |
+| BR-CST-04 | Barang baru tanpa pilihan = warisi kategori (bila dikenal) else `average` | TERVERIFIKASI-KODE | `master.actions.ts:616-632` |
+| BR-CST-05 | Kategori baru tanpa pilihan = `average`; update tanpa field = tidak diubah | TERVERIFIKASI-KODE | `master.actions.ts:1647,1716-1718` |
+| BR-CST-06 | Fisik lot FEFO, biaya lapisan FIFO; average dinilai dari `item.cost` di valuasi | TERVERIFIKASI-KODE | `inventory-fifo.ts:80-89,143-144,337-341`; `stock-valuation.ts:95,146` |
+| BR-CST-07 | Seed + default tulis pengaturan = `FIFO`; tampilan form kosong: barang = `average`, pengaturan = `FIFO` | TERVERIFIKASI-KODE | `seed.ts` INSERT; `settings.actions.ts:155`; `item-form.tsx:455`; `settings-edit-form.tsx:751` |
+| BR-CST-08 | **Bawaan bisnis yang diinginkan (fifo atau average) — BELUM DIPUTUS.** Sampai diputus, fakta berjalan = K1+K2+K3 di atas; satu jalur tidak boleh diam-diam mengalahkan yang lain | BUTUH-VONIS (owner menegaskan; dampak HPP = vonis Accountant) | OPEN #8 (KEPUTUSAN-TERVERIFIKASI butir 8); ADR-005 §1 + "Yang tetap OPEN" |
+| BR-CST-09 | Usulan INV-BR-016 (hierarki + peringatan kontradiksi default) dicatat sebagai kandidat perubahan BUSINESS-RULES untuk peran pemilik dokumen; spec ini tidak mengubah dokumen sumber | USULAN (menunggu pemilik BUSINESS-RULES) | KEPUTUSAN-TERVERIFIKASI keputusan 1 kolom "Tindakan dokumen" |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Aspek | Accurate Online | Zahir | ISF (repo ini) |
+|---|---|---|---|
+| Metode didukung | FIFO + Average, perpetual real-time per barang | FIFO/LIFO/Average per jenis barang, dikunci sesudah dipakai transaksi | FIFO + Average, resolver tunggal kategori→barang→perusahaan→`fifo` |
+| Level penetapan | Per barang (opsi metode persediaan) | Per jenis barang di awal (tidak bisa diubah sesudah dipakai) | 3 level override (kategori menang atas barang, barang atas perusahaan) + hard default |
+| Bawaan | Opsi dipilih sesuai kebutuhan bisnis (contoh hitung FIFO vs Average dipublikasi) | Ditetapkan di awal per barang | KONFLIK: kolom/create/form cenderung `average`, resolver/`seed`/pengaturan cenderung `FIFO` — BUTUH penegasan (BR-CST-08) |
+| Stok minus | Dihitung dengan Average lalu disesuaikan saat stok masuk; perpetual tetap jalan | — (tidak diriset run ini) | Ditolak keras semua jalur (vonis 115-V) — di luar scope spec ini |
+| Fisik vs biaya | — | — | Fisik FEFO, biaya FIFO-lapisan; average valuasi dari `item.cost` |
+
+### 6. Acceptance criteria + edge cases
+
+- AC-CST-1: resolver pada barang tanpa kategori/barang/global eksplisit = `fifo` (unit: `resolveCostingMethod({})`).
+- AC-CST-2: global `"LIFO"`/sampah non-kosong = throw pesan Indonesia (unit: `getGlobalCostingMethod` mock client).
+- AC-CST-3: barang baru tanpa pilihan + kategori `fifo` = tersimpan `fifo`; kategori tak-dikenal/kosong = `average`.
+- AC-CST-4: update kategori tanpa `costingMethod` di FormData = nilai lama utuh (regresi anti-wipe `:1680-1682`).
+- AC-CST-5: valuasi: baris `average` = `remaining × item.cost`; baris `fifo` = `remaining × layer.unitCost`.
+- AC-CST-6 (BUTUH putusan BR-CST-08): sesudah owner menegaskan bawaan, tepat SATU dari dua perilaku ini yang
+  berlaku untuk baris tanpa pilihan eksplisit — (a) bawaan = `fifo`: create/kolom/form default berubah ke `fifo`
+  (fisik = Backend, migrasi data existing diputus terpisah); atau (b) bawaan = `average`: hard default resolver
+  berubah ke `average` (fisik = Backend). Sampai putusan terbit, kode berjalan apa adanya (K1+K2+K3).
+- EC-1: kategori `average` + barang `fifo` eksplisit → `fifo` menang (kategori menang atas barang — ya, kategori
+  tingkat 1; ini perilaku existing yang disengaja, bukan bug).
+- EC-2: global `" Average "` (spasi/kapital) → normalisasi `average`, bukan error (normalize lowercases; spasi
+  tidak di-trim — `" average"` mentah = jatuh ke `fifo`; bedakan di tes).
+- EC-3: `SystemSetting` kosong (DB baru pra-seed) → resolver `fifo` tanpa error.
+- EC-4: form barang tidak mengirim field (create jalur lain) → server tetap `average` (K1), bukan null.
+- EC-5: barang jasa/non-stok (`isService`) — metode tersimpan tapi tidak memicu HPP (tidak ada movement);
+  di luar scope perubahan.
+- EC-6: data existing campuran (sebagian `average` kolom, sebagian eksplisit) → laporan valuasi menampilkan
+  metode per baris apa adanya; tidak ada migrasi diam-diam dalam spec ini.
+
+#### F-2026-10-28-144-S — spec metode costing bawaan + titik konflik (OPEN #8, ADR-005)
+
+- Kompetitor: Accurate FIFO vs Average per barang https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/menghitung-fifo-average/ ; Zahir metode per jenis barang dikunci sesudah dipakai https://help.zahironline.com/portal/id/kb/articles/memasukkan-data
+- Status Silengkap: PARSIAL. Bukti: resolver tunggal + cabang fifo/average + fail-closed (`costing-method.service.ts:14-22,37-48,76-99,105-115`); terima/jual/valuasi selaras (`inventory-fifo.ts:128-129,168,171-182,219,263,284-285`, `goods-receipt.hook.ts:129-137`, `stock-valuation.ts:60-86`); konflik bawaan K1 vs K2 (`master.actions.ts:616-632,1647,1716-1718` vs resolver hard default `fifo`).
+- Relevansi: HPP + nilai persediaan + margin salah metode = salah laba; bawaan tak tegas membuat dua barang baru berperilaku beda tanpa disadari operator.
+- Adaptasi: spec saja (nol kode). Fisik + migrasi = Backend pasca-putusan BR-CST-08; UI hanya menampilkan bawaan hasil putusan (Frontend pasca-Backend).
+- Modul disentuh: kelak `src/lib/services/costing-method.service.ts`, `src/actions/master.actions.ts`, `prisma/schema.prisma` (default kolom), `src/components/forms/item-form.tsx`, `settings-edit-form.tsx` — SEMUA fisik milik Backend/Frontend, bukan spec ini.
+- Effort: S (spec). Risiko: menengah — salah pilih bawaan mengubah HPP seluruh barang tanpa pilihan eksplisit; mitigasi: putusan eksplisit + migrasi data diputus terpisah + tanpa diam-diam.
+- Urutan: Owner tegas (BR-CST-08) + vonis Accountant dampak HPP → Backend fisik + migrasi → Frontend label/bawaan form → QA falsifikasi AC-CST-1..6 + EC-1..6.
+- Pemilik usulan: Business. Butuh putusan accountant: YA (dampak HPP atas pilihan bawaan; angka = vonis Accountant).
+
+### Yang TIDAK diusulkan run ini
+
+- Mengubah satu baris kode/schema/UI (fisik = Backend/Frontend pasca-putusan; lane spec tanpa kode).
+- Menutup OPEN #8 sendiri (penegasan bawaan = hak owner; spec ini hanya merumuskan titiknya + opsi (a)/(b)).
+- Menulis INV-BR-016 ke BUSINESS-RULES/INDEKS (kandidat milik pemilik dokumen; hanya dirujuk BR-CST-09).
+- Menyentuh stok negatif (sudah vonis 115-V), landed cost (ADR-005 §2), atau LIFO (tidak didukung kode; tidak diusulkan).
+- Migrasi data existing ke satu metode (dampak HPP massal; diputus terpisah pasca-BR-CST-08).
