@@ -42599,3 +42599,88 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
 
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-147-S: pembayaran posted sah ambang DP + snapshot pembatalan (SAL-BR-006, TEST-STRATEGY P0 faktur/pembayaran)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja; tanpa kode/skema/migrasi. Basis `origin/main` `a2137fc69` (28 Okt 2026, fetch run ini). Tugas asal `t_e1d2c078`.
+**Verifikasi ID:** grep `F-2026-10-28-147` di backlog + board `origin/main` = 0/0; judul PR terbuka mengandung `147-S` = 0; isi backlog+board head PR terbuka (`14[789]`) = 0 hit. **147-S bebas.** KOREKSI board run ini tidak memindahkan ID 147. E-number `E-S6-1..3` = 0 hit di seluruh `origin/main` + head PR terbuka. **E-S6 bebas.**
+**INDEKS-ATURAN tak diubah run ini** (loop tertutup kartu): baris SAL-BR-006 tetap `Sebagian`; naik status hanya sesudah implementasi (bila ada) + E-S6 hijau — milik Lead/QA.
+
+Benchmark resmi (diakses 28 Okt 2026):
+- Accurate Online — Uang muka penjualan dicatat dulu, dipakai saat pelunasan faktur: `https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/uang-muka-penjualan/mencatat-uang-muka-penjualan/` (penerimaan via Bank + Hitung Nilai Pembayaran, lalu alokasi ke faktur).
+- Zahir Accounting 6 — Uang muka berstatus aktif; yang aktif tampil sebagai pilihan saat membuat invoice: `https://help.zahironline.com/portal/id/kb/articles/uang-muka-penjualan` (kolom `Aktif`; pengembalian kelebihan tanpa memo — jalur terpisah — `https://help.zahironline.com/portal/id/kb/articles/peng`).
+
+### 1. Workflow specification (jalur tulis DP → ambang → invoice)
+
+Tiga jalur tulis DP di kode live (basis di atas); hanya SATU yang menyumbang ambang:
+
+| # | Jalur | Pemicu | Status tulis | Dihitung ambang? | Bukti |
+|---|---|---|---|---|---|
+| W1 | Buat DP | `createDownPayment` (`src/actions/sales.actions.ts:738`) | lahir `draft` (`:796`); cap kumulatif hitung SEMUA non-cancelled termasuk draft (`:777-784`, `totalExisting + amount > grandTotal` tolak) | TIDAK — query ambang hanya `CONFIRMED` | `src/lib/hooks/down-payment.hook.ts:631-634` |
+| W2 | Konfirmasi DP (= terima + konfirmasi atomik) | `confirmDownPayment` (`sales.actions.ts:941`) — credit-gate `assessCreditGateInTx` dulu (`:949-986`), lalu `onDownPaymentReceived` + `onDownPaymentConfirmed` **dalam SATU `$transaction`** (`:987-988`) | `draft → confirmed` (`down-payment.hook.ts:134-138` pra-invoice, `:321-324` pasca-invoice existing, `:843-848` penutup) + jurnal terima `POSTED` Dr kas / Cr 210102 (+ Cr 210201 bila terutang PPN) | YA — satu-satunya sumber kumulatif `totalVerifiedSen` | `down-payment.hook.ts:631-639`; `accounting.hook.ts:2407-2562` (`status: "POSTED"` `:2543`, fail-closed akun `:2419-2424`, `assertPeriodOpen` `:2441`, idempoten `referenceType/referenceId` `:2431-2433`+`:2450-2452`) |
+| W3 | Alokasi DP → faktur | lahir BERSAMA invoice konversi (bukan jalur tulis DP mandiri): `SalesPayment` `paymentMethod: "down_payment"` + jurnal reklas Dr 210102 / Cr Piutang dalam tx sama (jalur faktur-sudah-ada `:166-246`; jalur konversi-awal `:724-783`) | `SalesPayment` lahir `posted` (default skema `prisma/schema.prisma:2005`) | TIDAK MENAMBAH ambang — alokasi = reklas, bukan DP baru; cap sisa faktur (`:164`, `:739`), over → `CustomerCredit` (`:262-281`, `:791-812`) | `payment-status.ts:1-36` (baris `reversed` wajib disaring semua pembaca uang) |
+
+Alur kanonis: quotation `accepted/approved/converted` → DP `draft` (W1, cap non-cancelled) → confirm (W2: gate kredit → jurnal terima POSTED → DP `confirmed` → WO/SO/Project sekali + evaluasi ambang tiap confirm) → kumulatif CONFIRMED ≥ ambang snapshot → invoice konversi lahir **DRAFT** (`:655-676`, `status: "draft"`, `paymentStatus: "partial"`, tanpa `onSalesInvoicePosted` `:813-814`) + alokasi SEMUA verified DP (W3, idempoten marker notes `:145-150`, `:720-722`) → posting manual `postInvoice` (stok + revenue/COGS + jurnal, di luar kartu ini).
+Guard terkait yang DISENGAJA tidak diubah: DP `confirmed` = silent-skip retry (`:100-102`, tanpa posting — P0-2); quotation gate `accepted/converted/approved` (`:109-115`); lock baris DP + quotation `FOR UPDATE` (`:67`, `:93`); invoice existing non-cancelled ditemukan → jalur DP-lanjutan, bukan invoice kedua (`:124-126`, `:140-150` + `AUD-SAL-01`).
+
+### 2. Role/permission matrix (key nyata `src/lib/auth/module-catalog.generated.ts:159,185,187,188`)
+
+Baris = aksi, isi = permission key (nama role tidak ditelusur run ini — pemegang key):
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Buat DP draft | `create_down_payments` | cap kumulatif non-cancelled |
+| Konfirmasi DP (terima + jurnal + ambang + WO/SO/invoice-draft) | `confirm_down_payments` | atomik satu tx; juga dipakai `allocateCustomerCredit`/`refundCustomerCredit` |
+| Hapus DP | `delete_down_payments` | **draft-only** (`sales.actions.ts:2922`); confirmed TIDAK bisa dihapus |
+| Balik pembayaran penjualan (posted → reversed) | `delete_sales_payments` | `reverseSalesPayment` beralasan wajib (`sales.actions.ts:2735`); hapus fisik hanya jurnal belum POSTED (FIN-BR-008 syarat 8) |
+| Batalkan faktur posted | `delete_sales_invoices` | `voidSalesInvoice`; **tolak bila payment apa pun ada** (`:3926` `payments.length > 0` — penahan saring-aktif = prasyarat Backend 141-V P2/BR-F139-04) |
+
+### 3. Status-transition matrix
+
+| Dokumen | Awal → pemicu → akhir | Penjaga |
+|---|---|---|
+| DownPayment | `pending` (default skema `:1629`) → buat → `draft` | `create_down_payments`; quotation `accepted/approved/converted`; cap non-cancelled |
+| DownPayment | `draft` → confirm → `confirmed` | `confirm_down_payments`; credit-gate; jurnal terima POSTED (fail-closed akun/periode); `FOR UPDATE` |
+| DownPayment | `confirmed` → (terminal — **nol penulis `cancelled`/void di kode live**: `grep downPayment.update` hanya `:134,:321,:843` = CONFIRMED; `delete` hanya draft `:2922`; cascade `deleteQuotation` hapus fisik + `deleteJournalByReferenceTx` `:2704`) | koreksi hanya reversal berurutan vonis 141-V R1–R3 (implementasi belum ada — PR vonis #1298 open) |
+| SalesPayment (alokasi DP) | (lahir) → `posted` | hanya dari DP confirmed (`amount > 0` + marker idempoten) |
+| SalesPayment | `posted` → reverse beralasan → `reversed` | `delete_sales_payments`; alasan non-kosong; bupot aktif wajib revoke dulu; recalc (`onSalesPaymentDeleted` → `recalcCore` keluarkan `reversed` `:20-23`) |
+| SalesInvoice konversi | (lahir) → `draft` (`paidAmount` = alokasi ter-cap grandTotal, `paymentStatus` `partial`/`paid` via `isSettled` Rp1 `:826`) | ambang snapshot tercapai; tanpa posting/stok/jurnal |
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-S6-01 | Ambang dihitung HANYA dari DP `confirmed` (`where: { quotationId, status: CONFIRMED }`); draft/pending/cancelled NOL kontribusi walau menempati cap kumulatif non-cancelled | TERVERIFIKASI-KODE | `down-payment.hook.ts:631-634` + `sales.actions.ts:777` |
+| BR-S6-02 | Pembayaran posted sah = DUA lapis lolos: (a) DP `confirmed` dalam tx yang jurnal terimanya `POSTED`; (b) `SalesPayment` alokasi berstatus bukan-`reversed` (semua pembaca uang WAJIB `activeSalesPaymentWhere`) | TERVERIFIKASI-KODE | `accounting.hook.ts:2539-2543`; `payment-status.ts:32-36`; `sales-payment.hook.ts:20-23` |
+| BR-S6-03 | Retry DP `confirmed` = silent-skip; tidak boleh memposting invoice (`onSalesInvoicePosted` tak terpanggil dari hook — posting hanya `postInvoice` + gate izin/approval/period-lock) | TERVERIFIKASI-KODE | `down-payment.hook.ts:95-102`, `:813-814`; tes `down-payment-review.test.ts` |
+| BR-S6-04 | DP `confirmed` tidak punya jalur batal/void/hapus di kode live; penghapusan quotation menghapus fisik DP + reverse jurnal terima (bukan status) | TERVERIFIKASI-KODE | grep `downPayment.update/delete` §3; `sales.actions.ts:2704`, `:2922` |
+| BR-S6-05 | Snapshot pembatalan pasca-hitung: ambang yang SUDAH memicu invoice **tidak ditarik mundur** oleh kejadian kemudian; koreksi = reversal maju downstream-first R1 (faktur) → R2 (alokasi) → R3 (terima + batal FP UM atomik), over-grandTotal di `CustomerCredit` tidak disentuh | USULAN (selaras vonis final 141-V R1–R3; implementasi milik Backend, PR vonis #1298 open) | `141-V §1` di ekor backlog (basis `e3bc47213`); `down-payment.hook.ts:791-812` |
+| BR-S6-06 | Komentar kode bertuliskan "ambang 50%" (`down-payment.hook.ts:128,341,872`) dibaca sebagai label fallback fail-closed, BUKAN aturan; selaraskan redaksi ke "ambang persen snapshot" saat Backend menyentuh berkas (kosmetik, nol perilaku) | USULAN | `invoice-threshold.ts:1-70` (default 50 fail-closed sah) |
+| BR-S6-07 | Perlakuan PPN FP Uang Muka saat reversal DP (batal atomik + tarif snapshot) | BUTUH-VONIS — SUDAH DIPUTUS, tinggal pakai: vonis final 141-V R3 | ekor backlog 141-V (milik Accountant; Business tidak meminta vonis baru) |
+
+### 5. Feature matrix Accurate / Zahir / ISF
+
+| Aspek | Accurate | Zahir | ISF (kode live) |
+|---|---|---|---|
+| DP dicatat sebelum invoice | Ya — Uang Muka Penjualan + penerimaan bank terpisah | Ya — input uang muka (kas/bank + pelanggan + nilai + `Aktif`) | Ya — DP `draft` terpisah dari invoice |
+| Hanya pembayaran sah yang menghapus piutang | Ya — alokasi saat pelunasan; Hitung Nilai Pembayaran | Ya — hanya uang muka `Aktif` tampil di invoice | Ya — ambang/recalc hanya `confirmed`/non-`reversed` (BR-S6-01/02) |
+| Batal sesudah pakai | Refund/kelebihan = jalur terpisah | Tanpa memo — jurnal manual, bukan hapus | USULAN BR-S6-05: tidak tarik-mundur; reversal R1–R3 141-V; over → `CustomerCredit` |
+| Ambang persen konfig per kategori | Termin/persen per pelanggan | — (nilai nominal) | Ya — snapshot `invoiceThresholdPercent`, fallback 50 fail-closed |
+
+### 6. Acceptance criteria + edge cases (falsifikasi E-S6, atas head implementasi/merge persis — BUKAN head spec ini)
+
+- E-S6-1: cabut `status: CONFIRMED` dari query ambang (`down-payment.hook.ts:631-634`, hitung semua DP) → kasus "DP draft/batal tidak dihitung dalam kumulatif" (`down-payment-threshold.test.ts`) wajib **MERAH**; pulihkan → hijau.
+- E-S6-2: cabut `onDownPaymentReceived` dari `confirmDownPayment` (`sales.actions.ts:987`) ATAU lunakkan fail-closed akun/periode (`accounting.hook.ts:2419-2441`) → DP bisa `confirmed` + picu ambang TANPA jurnal terima POSTED = **MERAH** (tes vat-hook terima + tes threshold atomik wajib menangkap; bila tidak menangkap = utang cakupan, kartu Backend).
+- E-S6-3: (a) cabut filter `not: "reversed"` di `recalcCore` (`sales-payment.hook.ts:20-23`) → pembayaran yang sudah dibalik tetap melunasi = **MERAH**; (b) tulis penulis status `cancelled`/hapus-fisik untuk DP `confirmed` di luar urutan 141-V R1–R3 → ambang/kuota berubah tanpa jejak = **MERAH** (hari ini nol penulis semacam itu — grep §3; penjagaan = review + E-S6-3b).
+- Edge: DP `pending` skema (default `:1629`) tak pernah ditulis aksi (lahir langsung `draft`) — pembaca ambang tidak menjangkaunya, benar; kumulatif cap `> grandTotal` tolak (W1) vs ambang `>= thresholdSen` picu (W2) — dua perbandingan beda makna, jangan disatukan; invoice cancelled dikecualikan (`:125`, `:964`) sehingga DP baru pasca-void memicu invoice pengganti, bukan menempel ke batal (AUD-SAL-01); void faktur posted menolak bila payment ada (`:3926`) — reversal alokasi DP dulu (R1–R2) baru void.
+
+### 7. Backlog turunan (BUKAN kartu baru run ini)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-147-S | Spec ini (dokumen) | Business | PR docs ini |
+| (tanpa ID baru) redaksi komentar "50%" → "ambang snapshot" (BR-S6-06) | Backend | sentuh berkas hook; E-S6-1 hijau |
+| (tanpa ID baru) `reverseDownPayment` R1–R3 + guard void saring-aktif | Backend | vonis 141-V merged (#1298); E142 + E-S6-3 |
+| (tanpa ID baru) E-S6-1..3 atas head implementasi persis | QA | implementasi merged |
+| (tanpa ID baru) nilai status SAL-BR-006 `Sebagian` sesudah implementasi + E-S6 | Lead/QA | head merged + E-S6 |
+
+ID spec ini **F-2026-10-28-147-S** (pembayaran posted sah ambang DP + snapshot pembatalan; jawab INDEKS SAL-BR-006 `Sebagian` + TEST-STRATEGY P0 butir 10; basis `origin/main` `a2137fc69`). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status SAL-BR-006 hanya sesudah implementasi + E-S6) → BOT Backend (BR-S6-06 + reversal R1–R3 di atas 141-V merged) → BOT QA (E-S6-1..3 + E142 atas head persis). Butuh putusan accountant: TIDAK — PPN reversal sudah diputus final 141-V R3; Business tidak membuka vonis baru.
