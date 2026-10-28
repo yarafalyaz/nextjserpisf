@@ -405,6 +405,25 @@ describe("Material Issue Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.materialIssue.delete).toHaveBeenCalled();
   });
+  // WO-BR-004: form Inventaris menolak MI kedua untuk WO yang sama.
+  it("createMaterialIssue menolak WO yang sudah punya MI aktif", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValueOnce({
+      id: 7, documentNo: "MI-0007",
+    });
+    const res = await actions.createMaterialIssue(miFd({ workOrderId: 42 }));
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("sudah memiliki Pengeluaran Material");
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
+  });
+  it("createMaterialIssue mengizinkan MI pengganti sesudah MI lama batal", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValueOnce(null);
+    const res = await actions.createMaterialIssue(miFd({ workOrderId: 42 }));
+    expectSuccess(res);
+    expect(mocks.prismaMock.materialIssue.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workOrderId: 42, status: { not: "cancelled" } } }),
+    );
+    expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Rack & WorkOrder & Others", () => {

@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
       }),
       update: vi.fn().mockResolvedValue({ id: 10, slug: "mi-0010" }),
       findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
+      // WO-BR-004: guard anti-ganda baca MI aktif via findFirst + kunci WO via $executeRaw.
+      findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     materialIssueItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -29,7 +31,11 @@ const mocks = vi.hoisted(() => {
     workOrder: { findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }) },
   }
   prismaMock.$transaction = vi.fn(async (ops: unknown) =>
-    typeof ops === "function" ? (ops as (tx: unknown) => unknown)(prismaMock) : Promise.all(ops as unknown[]),
+    typeof ops === "function"
+      // tx sadar-$executeRaw: aksi pakai tx.$executeRaw`...` (template tag) —
+      // tanpa ini WO-BR-004 melempar TypeError di dalam tx dan create gagal palsu.
+      ? (ops as (tx: unknown) => unknown)({ ...prismaMock, $executeRaw: vi.fn().mockResolvedValue(0) })
+      : Promise.all(ops as unknown[]),
   )
   return {
     prismaMock: prismaMock as any,
