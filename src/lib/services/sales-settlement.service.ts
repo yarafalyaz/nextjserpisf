@@ -19,8 +19,6 @@ import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 export const DOWN_PAYMENT_METHOD = "down_payment"
 
 /** True when the invoice has at least one real (non-DP) payment row. */
-// FIN-BR-008: baris reversed = histori, bukan pelunasan — selalu dikecualikan.
-const LIVE_PAYMENT_WHERE = { status: { not: "reversed" } } as const
 export async function hasRealSettlement(
   salesInvoiceId: number,
   client: TxClient | typeof prisma = prisma,
