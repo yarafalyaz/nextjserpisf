@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { SalesInvoiceStatus, Prisma } from "@prisma/client";
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
+import { derivePaymentStatus } from "@/lib/finance/settlement-status";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -41,16 +42,15 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   );
   const grandTotal = Number(invoice.grandTotal ?? 0);
 
-  let status: SalesInvoiceStatus = "posted";
-  let paymentStatus = "posted";
-
-  if (totalPaid >= grandTotal) {
-    status = "paid";
-    paymentStatus = "paid";
-  } else if (totalPaid > 0) {
-    status = "partial";
-    paymentStatus = "partial";
-  }
+  // FIN-BR-007: SalesPayment tidak punya status draft/gagal — baris hanya
+  // dibuat di dalam transaksi pembayaran terkonfirmasi (createSalesPayment),
+  // jadi semua baris di sini pembayaran valid. Bila status pembayaran
+  // ditambah kelak, filter hanya baris terposting di query ini.
+  // FIN-BR-006: lunas diturunkan dari outstanding valid dalam toleransi
+  // SETTLEMENT_TOLERANCE_IDR (Rp1), bukan flag manual.
+  const derived = derivePaymentStatus(grandTotal, totalPaid);
+  const status: SalesInvoiceStatus = derived;
+  const paymentStatus: string = derived;
 
   // F-2026-10-25-036-S (BR-KT36-04): transisi ke paid membekukan snapshot
   // tarif komisi dalam transaksi yang sama. Nilai = resolusi histori tarif

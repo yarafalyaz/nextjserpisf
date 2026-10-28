@@ -1864,6 +1864,53 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.error).toContain("tidak lagi terbuka")
   })
 
+  // FIN-BR-006: satu helper bersama dua sisa batas (dalam vs luar toleransi).
+  async function confirmBillWithAlloc(amount: number) {
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount, vendorBillId: 10,
+    })
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
+      { id: 10, balanceDue: amount, paidAmount: 0, grandTotal: 1000 },
+    ])
+    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
+    vi.mocked(allocatePaymentToBills).mockReset()
+    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([
+      { vendorBillId: 10, amount },
+    ])
+    return actions.confirmVendorPayment(1)
+  }
+
+  it("FIN-BR-006: sisa 0,50 dalam toleransi Rp1 sesudah alokasi -> bill 'paid'", async () => {
+    const res = await confirmBillWithAlloc(999.5)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10 },
+        data: expect.objectContaining({ status: "paid", balanceDue: 0.5 }),
+      }),
+    )
+  })
+
+  it("FIN-BR-006: sisa 1,01 di luar toleransi -> bill tetap 'partial'", async () => {
+    const res = await confirmBillWithAlloc(998.99)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10 },
+        data: expect.objectContaining({ status: "partial", balanceDue: 1.01 }),
+      }),
+    )
+  })
+
+  it("FIN-BR-007: alokasi hanya dari pembayaran completed; draft tidak mengalokasi apa pun", async () => {
+    // confirmVendorPayment menolak non-draft SEBELUM transaksi alokasi.
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "completed" })
+    const res = await actions.confirmVendorPayment(1)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vendorPaymentAllocation.createMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
   it("createPurchaseReturn fails if item not on invoice", async () => {
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, cost: 100 }])
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
