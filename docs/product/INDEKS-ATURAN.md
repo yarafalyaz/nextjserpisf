@@ -49,7 +49,7 @@ perilaku, bukan hanya keberadaan file/model.
 | --- | --- | --- |
 | GL-BR-001 | Sebagian | prisma/schema.prisma:2511 — `StockMove.status` default `draft`; isolasi draft per modul belum diaudit |
 | GL-BR-002 | Sebagian | src/app/api/cron/asset-depreciation/route.ts:287 — contoh `prisma.$transaction`; atomisitas semua posting belum terbukti |
-| GL-BR-003 | Belum | belum ditelusur — penegak larangan edit/hapus bebas transaksi posted tidak ditunjuk di sini |
+| GL-BR-003 | Sebagian | src/actions/sales.actions.ts:3972 — `deleteSalesReturn` hapus fisik hanya-draf + `FOR UPDATE` dalam tx (GL003-P8, #1353); update draft-only; void/counter jalur posted milik P3/P5/P6 (t_4fdc4709 running) |
 | GL-BR-004 | Sebagian | src/lib/services/financial-idempotency.service.ts:1 — kontrak idempotency finansial persisten; cakupan scope-nya terbatas pada daftar di file yang sama |
 | GL-BR-005 | Sebagian | src/lib/services/activity-log.service.ts:10 — `logActivity`; model audit `prisma/schema.prisma:5473` (`ActivityLog`) |
 | GL-BR-006 | Terpasang | src/lib/auth/permissions.ts:21 — `requirePermission()` memeriksa permission di backend |
@@ -169,7 +169,7 @@ perilaku, bukan hanya keberadaan file/model.
 | AC-GL-002 | Sebagian | src/app/api/cron/asset-depreciation/route.ts:287 — contoh transaksi atomik; bukti rollback semua posting belum ditelusur |
 | AC-GL-003 | Sebagian | src/lib/services/financial-idempotency.service.ts:1 — kontrak retry finansial; cakupan di luar scope finansial terdaftar belum terbukti |
 | AC-GL-004 | Terpasang | src/lib/auth/permissions.ts:21 — `requirePermission()` di backend |
-| AC-GL-005 | Belum | belum ditelusur — koreksi terkontrol transaksi posted beserta auditnya tidak ditunjuk di sini |
+| AC-GL-005 | Sebagian | src/actions/sales.actions.ts:3972 — `deleteSalesReturn` tolak hapus non-draf + `FOR UPDATE` dalam tx + `logActivity delete` (GL003-P8, #1353); koreksi penuh posted (void/counter) milik P3/P5/P6 (t_4fdc4709 running) |
 | AC-GL-006 | Terpasang | prisma/schema.prisma:1990 — field uang `Decimal @db.Decimal(15, 2)` |
 
 ## 9. Acceptance — Inventory `AC-INV-*`
