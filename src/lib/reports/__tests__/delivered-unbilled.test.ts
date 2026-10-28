@@ -94,6 +94,17 @@ function input(overrides: Partial<DeliveredUnbilledInput> = {}): DeliveredUnbill
 const build = (inputs: DeliveredUnbilledInput[], now: Date = NOW) =>
   buildDeliveredUnbilledQueue(inputs, now, FULFILLABLE_ORDER_STATUSES)
 
+describe("FIN-BR-006 toleransi lunas Rp1 (satu sumber)", () => {
+  it("sisa belum ditagih Rp0,50 = lunas -> keluar; Rp1,01 tetap tampil", () => {
+    const lunas = build([input({ invoices: [invoice({ grandTotal: 999_999.5 })] })])
+    expect(lunas.rows).toEqual([])
+
+    const terbuka = build([input({ invoices: [invoice({ grandTotal: 999_998.99 })] })])
+    expect(terbuka.rows.map((r) => r.salesOrderId)).toEqual([1])
+    expect(terbuka.rows[0].unbilledValue).toBe(1.01)
+  })
+})
+
 describe("buildDeliveredUnbilledQueue (builder murni)", () => {
   it("AC-DU-1: SO confirmed, DO delivered 10xRp100rb, tanpa faktur -> tampil sisa penuh", () => {
     const queue = build([input()])
