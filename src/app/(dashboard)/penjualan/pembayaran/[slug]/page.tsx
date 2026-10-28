@@ -12,7 +12,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
-import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
+import { LockedDocNotice } from "@/components/ui/locked-edit-guard";
 import { StatusChip } from "@/components/ui/status-chip";
 import {
   getPaymentMethodMap,
@@ -109,10 +109,7 @@ export default async function SalesPaymentDetailPage({
           pembalikan beralasan (tombol Balikkan di header), bukan hapus.
           Status jelas via chip di header. */}
       {payment.status === "reversed" && (
-        <PostedLockNotice
-          documentLabel={`Pembayaran ${payment.documentNo}`}
-          correctionLabel="pembayaran pengganti baru"
-        />
+        <LockedDocNotice kind="pembayaran" documentNo={payment.documentNo} />
       )}
 
       <DetailCard>

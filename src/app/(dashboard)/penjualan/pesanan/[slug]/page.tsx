@@ -13,7 +13,7 @@ import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor";
-import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
+import { LockedDocNotice } from "@/components/ui/locked-edit-guard";
 import {
   DetailTable,
   DetailTableHead,
@@ -156,10 +156,7 @@ export default async function SalesOrderDetailPage({
           nyata) — koreksi via retur/void faktur turunan, bukan edit
           pesanan. */}
       {!orderItemsEditable && (
-        <PostedLockNotice
-          documentLabel={`Pesanan Penjualan ${order.documentNo}`}
-          correctionLabel="retur/void faktur turunan"
-        />
+        <LockedDocNotice kind="pesanan" documentNo={order.documentNo} />
       )}
 
       {/* Order Info */}

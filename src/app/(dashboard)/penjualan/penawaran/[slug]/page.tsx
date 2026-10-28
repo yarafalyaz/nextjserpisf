@@ -44,7 +44,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
-import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
+import { LockedDocNotice } from "@/components/ui/locked-edit-guard";
 
 import type { Metadata } from "next";
 
@@ -277,10 +277,7 @@ export default async function QuotationDetailPage({
       {/* GL-BR-003 K2: penawaran terkunci (cancelled/pelunasan nyata) —
           koreksi via revisi/penawaran baru, bukan edit dokumen terkunci. */}
       {!quotationEditable && (
-        <PostedLockNotice
-          documentLabel={`Penawaran ${quotation.documentNo}`}
-          correctionLabel="revisi/penawaran baru"
-        />
+        <LockedDocNotice kind="penawaran" documentNo={quotation.documentNo} />
       )}
 
       <DetailTabs

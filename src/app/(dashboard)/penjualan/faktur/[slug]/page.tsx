@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
-import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
+import { LockedDocNotice } from "@/components/ui/locked-edit-guard"
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
@@ -233,10 +233,10 @@ export default async function InvoiceDetailPage({
       {/* GL-BR-003 K2: faktur terkunci (cancelled/setelah-pelunasan-nyata)
           — arahkan ke jalur koreksi sah (Retur, Batalkan di header). */}
       {!itemsEditable && (
-        <PostedLockNotice
-          documentLabel={`Faktur ${invoice.documentNo}`}
+        <LockedDocNotice
+          kind="faktur"
+          documentNo={invoice.documentNo}
           correctionHref={`/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}`}
-          correctionLabel="retur penjualan"
         />
       )}
 

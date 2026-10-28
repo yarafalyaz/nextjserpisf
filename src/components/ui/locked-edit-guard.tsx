@@ -78,6 +78,31 @@ export function lockedDocPreset(kind: LockedDocKind, ref: string) {
   }
 }
 
+/** Notice kunci posted untuk halaman detail (K2): 1 baris per tipe. */
+export function LockedDocNotice({
+  kind,
+  documentNo,
+  correctionHref,
+}: {
+  kind: LockedDocKind
+  documentNo: string | null
+  correctionHref?: string
+}) {
+  const docNames: Record<LockedDocKind, string> = {
+    faktur: "Faktur",
+    penawaran: "Penawaran",
+    pesanan: "Pesanan Penjualan",
+    pembayaran: "Pembayaran",
+  }
+  return (
+    <PostedLockNotice
+      documentLabel={`${docNames[kind]} ${documentNo ?? "-"}`}
+      correctionHref={correctionHref}
+      correctionLabel={LOCKED_PRESET[kind].correctionLabel}
+    />
+  )
+}
+
 export function LockedEditGuard({
   crumbs,
   documentLabel,
