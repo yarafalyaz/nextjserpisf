@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
+import Link from "next/link"
 import { QuotationForm } from "@/components/forms/quotation-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
 
 import type { Metadata } from "next"
 
@@ -34,6 +36,63 @@ export default async function EditQuotationPage({
   )
 
   if (!data) notFound()
+
+  // GL-BR-003 K1: cermin guard server updateQuotation fail-closed
+  // (cancelled/setelah-pelunasan-nyata pasti ditolak). Final tanpa
+  // pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
+  if (data.status === "cancelled") {
+    return (
+      <div className="flex flex-col gap-6">
+        <AppBreadcrumbs items={[
+  { label: "Dasbor", href: "/" },
+  { label: "Penawaran", href: "/penjualan/penawaran" },
+  { label: "Ubah" },
+]} />
+        <PostedLockNotice
+          documentLabel={`Penawaran ${data.documentNo}`}
+          correctionLabel="revisi/penawaran baru"
+        />
+        <Link
+          href={`/penjualan/penawaran/${data.slug ?? data.id}`}
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Kembali ke detail penawaran
+        </Link>
+      </div>
+    )
+  }
+  const quotationRealSettlementCount = await prisma.salesPayment.count({
+    where: {
+      NOT: { paymentMethod: "down_payment" },
+      salesInvoice: {
+        OR: [
+          { quotationId: data.id },
+          { salesOrder: { quotationId: data.id } },
+        ],
+      },
+    },
+  })
+  if (quotationRealSettlementCount > 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        <AppBreadcrumbs items={[
+  { label: "Dasbor", href: "/" },
+  { label: "Penawaran", href: "/penjualan/penawaran" },
+  { label: "Ubah" },
+]} />
+        <PostedLockNotice
+          documentLabel={`Penawaran ${data.documentNo}`}
+          correctionLabel="revisi/penawaran baru"
+        />
+        <Link
+          href={`/penjualan/penawaran/${data.slug ?? data.id}`}
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Kembali ke detail penawaran
+        </Link>
+      </div>
+    )
+  }
 
   const { customers, vehicles: customerVehicleOptions, itemsList, paymentMethods, shippingMethods, products, unitOptions } =
     await loadQuotationFormOptions()

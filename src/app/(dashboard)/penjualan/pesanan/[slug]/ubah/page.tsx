@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { SalesOrderForm } from "@/components/forms/sales-order-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
 
 import type { Metadata } from "next";
 
@@ -29,6 +31,64 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // GL-BR-003 K1: cermin guard server updateSalesOrder fail-closed
+  // (cancelled/completed/setelah-pelunasan-nyata pasti ditolak). Status
+  // lain tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
+  if (data.status === "cancelled" || data.status === "completed") {
+    return (
+      <div className="flex flex-col gap-6">
+        <AppBreadcrumbs
+          items={[
+            { label: "Dasbor", href: "/" },
+            { label: "Penjualan", href: "/penjualan" },
+            { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
+            { label: "Ubah" },
+          ]}
+        />
+        <PostedLockNotice
+          documentLabel={`Pesanan Penjualan ${data.documentNo}`}
+          correctionLabel="retur/void faktur turunan"
+        />
+        <Link
+          href={`/penjualan/pesanan/${data.slug ?? data.id}`}
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Kembali ke detail pesanan
+        </Link>
+      </div>
+    );
+  }
+  const orderRealSettlementCount = await prisma.salesPayment.count({
+    where: {
+      NOT: { paymentMethod: "down_payment" },
+      salesInvoice: { salesOrderId: data.id },
+    },
+  });
+  if (orderRealSettlementCount > 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        <AppBreadcrumbs
+          items={[
+            { label: "Dasbor", href: "/" },
+            { label: "Penjualan", href: "/penjualan" },
+            { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
+            { label: "Ubah" },
+          ]}
+        />
+        <PostedLockNotice
+          documentLabel={`Pesanan Penjualan ${data.documentNo}`}
+          correctionLabel="retur/void faktur turunan"
+        />
+        <Link
+          href={`/penjualan/pesanan/${data.slug ?? data.id}`}
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Kembali ke detail pesanan
+        </Link>
+      </div>
+    );
+  }
 
   const [customers] = await Promise.all([
     prisma.customer.findMany({
