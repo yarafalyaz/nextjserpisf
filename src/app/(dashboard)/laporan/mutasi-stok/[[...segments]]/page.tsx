@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, formatNumber, formatReferenceType, referenc
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
 import Link from 'next/link'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { aggregateStockMovementTotals } from "@/lib/reports/stock-flow-data"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -76,7 +77,6 @@ export default async function StockMovementPage({
         date: m.date, documentNo: m.documentNo, sku: m.item.sku, itemName: m.item.name,
         uom: m.item.unitOfMeasure, warehouse: m.warehouse ? `${m.warehouse.code}` : '-',
         type: m.moveType || '-', impact: m.impact, qty: Number(m.qty), cost: Number(m.cost),
-        value: Number(m.qty) * Number(m.cost),
         reference: m.referenceType ? `${formatReferenceType(m.referenceType)}#${m.referenceId}` : '-',
         referenceHref: referenceHref(m.referenceType, m.referenceId, referenceSlugs.get(referenceSlugKey(m))),
         description: m.description || '-',
@@ -84,10 +84,11 @@ export default async function StockMovementPage({
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
 
-  const totalIn = rows.filter(r => r.impact === 'IN').reduce((s, r) => s + r.qty, 0)
-  const totalOut = rows.filter(r => r.impact === 'OUT').reduce((s, r) => s + r.qty, 0)
-  const totalValueIn = rows.filter(r => r.impact === 'IN').reduce((s, r) => s + r.value, 0)
-  const totalValueOut = rows.filter(r => r.impact === 'OUT').reduce((s, r) => s + r.value, 0)
+  const totals = aggregateStockMovementTotals(rows.map((r) => ({ impact: r.impact, qty: r.qty, cost: r.cost })))
+  const totalIn = totals.totalInQty
+  const totalOut = totals.totalOutQty
+  const totalValueIn = totals.totalInValue
+  const totalValueOut = totals.totalOutValue
   const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
@@ -137,8 +138,8 @@ export default async function StockMovementPage({
                 <DetailTableTd className="font-medium">{r.itemName}</DetailTableTd>
                 <DetailTableTd>{r.warehouse}</DetailTableTd>
                 <DetailTableTd>{{ production_issue: "Pengeluaran Produksi", production_receipt: "Penerimaan Produksi" }[r.type] ?? r.type}</DetailTableTd>
-                <DetailTableTd align="right" className={r.impact === 'IN' ? 'text-success font-semibold' : 'text-danger font-semibold'}>
-                  {r.impact === 'IN' ? '+' : '-'}{formatNumber(r.qty)}
+                <DetailTableTd align="right" className={r.impact === 'OUT' ? 'text-danger font-semibold' : 'text-success font-semibold'}>
+                  {r.impact === 'OUT' ? '-' : '+'}{formatNumber(r.qty)}
                 </DetailTableTd>
                 <DetailTableTd className="text-xs">{r.referenceHref ? <Link href={r.referenceHref} className="text-primary hover:underline">{r.reference}</Link> : r.reference}</DetailTableTd>
                 <DetailTableTd className="text-xs max-w-[200px] truncate">{r.description}</DetailTableTd>

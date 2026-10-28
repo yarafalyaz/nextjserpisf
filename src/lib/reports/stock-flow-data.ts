@@ -20,6 +20,7 @@ import {
   type SalesLine,
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import { formatAccounting, formatReferenceType, formatQuantity, formatDate } from "@/lib/utils/format"
 import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -49,6 +50,39 @@ const MOVEMENT_COLUMNS: TableColumn[] = [
   { header: "Referensi", align: "left", width: 34 },
 ]
 
+export interface StockMovementTotals {
+  totalInQty: number
+  totalOutQty: number
+  totalInValue: number
+  totalOutValue: number
+}
+
+/**
+ * Agregat mutasi posted satu periode, sen-kanonis: qty x cost via
+ * safeMultiply(2) lalu safeAdd(2) — sama untuk layar & baris Jumlah PDF (D4).
+ */
+export function aggregateStockMovementTotals(
+  moves: { impact: string | null; qty: unknown; cost: unknown }[],
+): StockMovementTotals {
+  let totalInQty = 0
+  let totalOutQty = 0
+  let totalInValue = 0
+  let totalOutValue = 0
+  for (const m of moves) {
+    const q = Number(m.qty)
+    const c = Number(m.cost)
+    const value = safeMultiply(Number.isNaN(q) ? 0 : q, Number.isNaN(c) ? 0 : c, 2)
+    if (m.impact === "OUT") {
+      totalOutQty = safeAdd(totalOutQty, Number.isNaN(q) ? 0 : q, 2)
+      totalOutValue = safeAdd(totalOutValue, value, 2)
+    } else {
+      totalInQty = safeAdd(totalInQty, Number.isNaN(q) ? 0 : q, 2)
+      totalInValue = safeAdd(totalInValue, value, 2)
+    }
+  }
+  return { totalInQty, totalOutQty, totalInValue, totalOutValue }
+}
+
 export async function loadStockMovements(
   period: Period,
   warehouseId: number | null,
@@ -76,11 +110,22 @@ export async function loadStockMovements(
         m.item.name,
         m.warehouse?.code ?? "-",
         m.moveType ?? "-",
-        `${m.impact === "IN" ? "+" : "-"}${qty(Number(m.qty))}`,
+        `${m.impact === "OUT" ? "-" : "+"}${qty(Number(m.qty))}`,
         m.referenceType ? `${formatReferenceType(m.referenceType)}#${m.referenceId}` : "-",
       ],
     }))
-  if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada mutasi stok pada periode ini." })
+  if (rows.length === 0) {
+    rows.push({ kind: "notice", text: "Tidak ada mutasi stok pada periode ini." })
+  } else {
+    const datedMoves = moves.filter((m) => m.date)
+    const totals = aggregateStockMovementTotals(datedMoves.map((m) => ({ impact: m.impact, qty: m.qty, cost: m.cost })))
+    rows.push({
+      kind: "total",
+      grand: true,
+      label: "Jumlah",
+      cells: [`+${qty(totals.totalInQty)} / -${qty(totals.totalOutQty)}`, `${money(totals.totalInValue)} / ${money(totals.totalOutValue)}`],
+    })
+  }
   return { table: { columns: MOVEMENT_COLUMNS, rows }, ...periodOf(period) }
 }
 
