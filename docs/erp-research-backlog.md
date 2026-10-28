@@ -42599,3 +42599,134 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
 
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-143-S: RPO/RTO teruji + uji beban p95 (OPEN #7 keputusan 12, GL-BR-002 atomisitas Sebagian)
+
+**Verifikasi ID:** grep `F-2026-10-28-143` di backlog + board + 25 head PR terbuka = 0/0/0 sebelum tulis (run ini). Slot 142-S bebas (grep 0 di main; E142 dipakai di PR #1298/#1299 sebagai falsifikasi SAL-BR-004, BUKAN spec, jadi E143 bebas di backlog). **Basis** `origin/main` `5d6698889` (28 Okt 2026 13:57 WIB). Semua `file:line` di bawah dibaca dari blob `origin/main` persis (bukan ingatan).
+
+Benchmark resmi (akses 28 Okt 2026):
+- Accurate: backup POS manual/otomatis terjadwal + restore file backup — https://help.accurate.id/product/backup-data/ ; langkah restore — https://help.accurate.id/product/accurate-pos/pengaturan-aplikasi/pengaturan/backup-data/menggunakan-data-backup/
+- Zahir: backup berkala `.GBK` + restore ke `.GDB`, Auto-Backup di Zahir Accounting 6, keamanan server (Backup + DRC Plan) — https://help.zahironline.com/portal/id/kb/articles/backup-data-keuangan ; https://www.zahironline.com/sistem-keamanan/
+
+### 1. Inventarisasi terverifikasi (28 Okt 2026)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Target tertulis NFR-02/NFR-06 sebagai **target penerimaan rancangan, bukan hasil benchmark** (header §18 eksplisit): NFR-02 = 50 pengguna + 100rb SKU + 1jt baris jurnal, p95 daftar/pencarian/posting ≤2 dtk di UAT; NFR-06 = RPO ≤1 jam, RTO ≤4 jam, backup terenkripsi/offsite + uji restore, "target memerlukan infrastruktur yang mendukung" — `docs/prd-erp-fabrikasi-offroad.md:940-951`.
+- Mekanisme backup manual lewat UI: `src/lib/db/backup.ts:38-188` (`createBackup` mysqldump single-transaction + upload cloud R2 opsional; `restoreBackup` DESTRUCTIVE ke DB aktif + `isValidBackupName` guard traversal) → `src/actions/database.actions.ts:39-87` (restore selalu `createBackup("autosnap")` dulu + `pruneAutoSnapshots` simpan 1 terbaru) → halaman `src/app/(dashboard)/pengaturan/database/page.tsx` (gate `manage_settings`, `module-catalog.generated.ts:465`).
+- Script `scripts/backup-db.sh:2-32` (mysqldump 1-transaksi + verifikasi gzip + hitung tabel) + prosedur drill restore ke DB disposable `silengkap_restore` (komentar script).
+- Gerbang rilis mewajibkan backup + verifikasi restore di environment disposable — `docs/RILIS-PRODUKSI.md:26` (langkah 1).
+- Keputusan 12 status TERTUTUP-sebagian (pajak/BPJS terimplementasi) + OPEN RPO/RTO & performa & statutori 2026 — `docs/product/KEPUTUSAN-TERVERIFIKASI.md:46,55-56`.
+
+Belum ada / parsial (bukti grep run ini):
+- **Nol penjadwalan backup otomatis di repo**: cron `src/app/api/cron/` = asset-depreciation, auto-reject-quotations, daily-notifications, recurring-transactions, sync-holidays — tanpa job backup; grep `backup` di `src/app/api/cron/` + `vercel.json` = 0.
+- **Nol bukti drill restore berkala**: `restoreBackup` menimpa DB aktif (bukan drill ke DB disposable); prosedur drill hanya komentar di `scripts/backup-db.sh`, tanpa jadwal/frek/log hasil.
+- **Nol uji beban**: grep `k6|artillery|autocannon|loadtest|p95|percentile` di `src/ scripts/ e2e/ .github/` = 0.
+- **Nol retensi baku backup manual**: `pruneAutoSnapshots` hanya untuk autosnap restore (simpan 1); backup manual menumpuk tanpa retensi/jadwal hapus.
+- GL-BR-002 (`docs/product/INDEKS-ATURAN.md:52`) + AC-GL-002 masih `Sebagian` — hanya contoh `$transaction` (`src/app/api/cron/asset-depreciation/route.ts:287`); atomisitas semua posting belum terbukti. NFR-01 posting atomik terkait tapi di luar putusan kartu ini (batas: dicatat, tidak diputus).
+- INDEKS-ATURAN belum punya baris operasional RPO/RTO/kinerja (grep RPO|RTO|NFR|kinerja = 0 di `docs/product/INDEKS-ATURAN.md`).
+
+### 2. Workflow specification
+
+Aktor: `super_admin`/pemegang `manage_settings` (backup/restore manual + drill), scheduler infra/operator (jadwal otomatis + drill berkala), Accountant (vonis RPO/RTO + statutori 2026), Lead (putus target-vs-komitmen + merge), QA (falsifikasi E-OPEN7).
+
+2a. Penetapan & pembuktian berkala RPO/RTO (OPEN 7a):
+- Dokumen masuk: NFR-06 (`prd-erp-fabrikasi-offroad.md:951`), `scripts/backup-db.sh`, `src/lib/db/backup.ts`, `docs/RILIS-PRODUKSI.md:26`.
+- Alur USULAN: (1) Accountant vonis apakah RPO ≤1 jam / RTO ≤4 jam = komitmen teruji atau tetap target; (2) bila komitmen: Backend/operator wujudkan jadwal otomatis + drill berkala + bukti; (3) QA falsifikasi E-OPEN7-1..3 atas bukti; (4) INDEKS baris operasional baru + keputusan 12 OPEN #7 → TERTUTUP-teruji / TETAP-TARGET.
+- Dokumen keluar: jadwal backup otomatis (frekuensi + retensi), log drill restore berkala ke DB disposable (tanggal, durasi, hasil), prosedur drill tertulis versi terkontrol, putusan komitmen-vs-target.
+
+2b. Bukti uji beban p95 (OPEN 7b):
+- Dokumen masuk: NFR-02 (`prd-erp-fabrikasi-offroad.md:947`), NFR-03 laporan besar ≤10 dtk.
+- Alur USULAN: (1) Lead/Accountant sahkan matriks uji §4 sebagai rencana; (2) Backend/operator jalankan di UAT yang disepakati, catat hasil mentah (bukan klaim); (3) QA falsifikasi E-OPEN7-4..5; (4) hasil lulus → komitmen teruji, gagal → TETAP-TARGET + backlog perbaikan.
+- Larangan keras: tanpa run uji, dilarang menulis "p95 ≤2 dtk tercapai" di dokumen mana pun.
+
+2c. Batas kartu ini (bukan putusan): konfirmasi angka statutori 2026 = vonis Accountant (sinkron PR #1254, vonis 126-V, HR-BR-003); atomisitas semua posting GL-BR-002/AC-GL-002 = audit Backend tersendiri; jadwal backup produksi tidak diubah kartu ini.
+
+### 3. Role/permission matrix
+
+| Aksi | Role | Permission key nyata |
+|---|---|---|
+| Backup/restore manual + drill | super_admin, admin IT | `manage_settings` (`module-catalog.generated.ts:465`, dipakai `database/page.tsx`) |
+| Vonis RPO/RTO + statutori 2026 | Accountant | vonis domain (bukan permission kode) |
+| Putus target-vs-komitmen, merge | Lead | putusan arsitektur + merge |
+| Falsifikasi E-OPEN7 | QA | atestasi head persis |
+| Jadwal otomatis + uji beban (rekomendasi kartu Backend, BUKAN kode di kartu ini) | Backend/operator | — |
+
+Gaji/statutori individual tidak tampil di spec ini (nol nominal gaji; hanya syarat konfirmasi parameter). Scope HR (`hr-scope.ts` fail-closed) tidak tersentuh.
+
+### 4. Status-transition matrix
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| OPEN 7a (RPO/RTO) | Vonis Accountant + bukti jadwal + ≥1 drill restore lulus + QA E-OPEN7-1..3 HIJAU | TERTUTUP-teruji | Accountant → QA |
+| OPEN 7a | Vonis menyatakan infrastruktur belum mendukung | TETAP-TARGET (target sah, bukan komitmen) | Accountant (BUTUH-VONIS bila ragu) |
+| OPEN 7b (p95) | Run uji matriks §4 lulus + QA E-OPEN7-4..5 HIJAU | TERTUTUP-teruji | QA atas head/bukti persis |
+| OPEN 7b | Run gagal / belum dijalankan | TETAP-TARGET; tanpa klaim hasil | QA (klaim tanpa run = MERAH) |
+| OPEN statutori 2026 | Konfirmasi akuntan/legal, baris `PayrollStatutoryRule` baru | TERTUTUP-teruji | Accountant (PR #1254/126-V) |
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Status persetujuan |
+|---|---|---|---|
+| BR-OPEN7-01 | RPO ≤1 jam / RTO ≤4 jam = target rancangan sampai ada jadwal + drill lulus (USULAN komitmen bersyarat §6) | USULAN | BUTUH-VONIS Accountant |
+| BR-OPEN7-02 | Jadwal backup otomatis + retensi wajib ada sebelum klaim RPO teruji; backup manual UI saja ≠ komitmen | USULAN | BUTUH-VONIS Accountant |
+| BR-OPEN7-03 | Drill restore berkala ke DB disposable (bukan DB aktif) + log hasil; frekuensi USULAN triwulanan, ambang lulus §6 | USULAN | BUTUH-VONIS Accountant |
+| BR-OPEN7-04 | Matriks uji beban §4 (50 pengguna, 100rb SKU, 1jt jurnal, p95 ≤2 dtk) = rencana; hasil hanya dari run UAT tercatat | USULAN | Lead sahkan rencana; QA sahkan hasil |
+| BR-OPEN7-05 | Klaim RPO/RTO tanpa jadwal + hasil drill = MERAH; klaim p95 tanpa run = MERAH (E-OPEN7) | USULAN | QA |
+| BR-OPEN7-06 | Angka statutori 2026 hanya dari konfirmasi akuntan/legal via baris `PayrollStatutoryRule` baru; dilarang mengarang angka di spec ini | BUTUH-VONIS | Accountant (PR #1254) |
+
+### 6. Matriks uji USULAN (rencana, bukan hasil)
+
+RPO/RTO — syarat komitmen teruji:
+- J1 jadwal otomatis: frekuensi USULAN harian (RPO ≤1 jam butuh replikasi/log-shipping per jam — diputus Accountant/Lead; jadwal harian saja = RPO 24 jam, TIDAK memenuhi RPO 1 jam).
+- J2 drill restore triwulanan ke DB disposable (`silengkap_restore`): ukur durasi restore (bukti RTO ≤4 jam), verifikasi hitung tabel + smoke login; simpan log (tanggal, durasi, SHA arsip, hasil).
+- J3 retensi + enkripsi/offsite (cloud R2 sudah ada di `backup.ts`; retensi manual USULAN 30 hari, diputus Accountant).
+- Lulus = J1 berjalan 2 siklus tanpa gagal + J2 lulus 1x + RTO terukur ≤4 jam.
+
+Beban p95 — skenario (lingkungan UAT disepakati, biaya jaringan diukur terpisah):
+- B1 50 pengguna konkuren: daftar + pencarian + posting sederhana; target p95 ≤2 dtk.
+- B2 100rb SKU: pencarian + kartu stok; target p95 ≤2 dtk.
+- B3 1jt baris jurnal: posting sederhana + agregat laporan rutin ≤10 dtk (NFR-03).
+- B4 regresi NFR-01: concurrency posting tanpa duplikat/silent-skip (sampling, bukan beban penuh).
+- Lulus = tiap skenario p95 ≤ target pada 2 run berurutan + nol error non-transien; gagal = TETAP-TARGET + kartu perbaikan Backend. Frekuensi USULAN: tiap rilis mayor + semesteran.
+
+### 7. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (BENCHMARK) | Zahir (BENCHMARK) | ISF (TERVERIFIKASI-KODE) |
+|---|---|---|---|
+| Backup otomatis terjadwal | Ada (Sekarang/Otomatis + atur waktu) — https://help.accurate.id/product/accurate-pos/pengaturan-aplikasi/pengaturan/backup-data/melakukan-backup-transaksi/ | Ada (Auto-Backup Accounting 6; backup berkala `.GBK`) — https://help.zahironline.com/portal/id/kb/articles/backup-data-keuangan | ABSEN — hanya manual UI + script; nol cron |
+| Restore / buka backup | Restore file backup — https://help.accurate.id/product/accurate-pos/pengaturan-aplikasi/pengaturan/backup-data/menggunakan-data-backup/ | Restore `.GBK`→`.GDB` (lokal/server) — https://help.zahironline.com/portal/id/kb/articles/membuka-file-backup | Ada tapi DESTRUKTIF ke DB aktif (`backup.ts:183-230`); drill disposable hanya komentar script |
+| RPO/RTO terpublikasi | Tidak dipublikasi (SaaS implisit) | DRC Plan + Backup server — https://www.zahironline.com/sistem-keamanan/ (tanpa angka RPO/RTO publik) | Target NFR-06 tertulis, status target-bukan-hasil |
+| Uji beban p95 terpublikasi | Tidak dipublikasi | Tidak dipublikasi (hanya klaim "kinerja kecepatan transaksi") | Nol uji (grep 0) |
+
+### 8. Acceptance criteria + edge cases
+
+- AC1: dokumen ini memuat aktor, transisi, register, matriks uji, falsifikasi — tanpa satu pun klaim hasil uji.
+- AC2: tiap angka NFR berlabel target-bukan-hasil dengan rujukan `prd:940-951`.
+- AC3: tiap klaim kode ber-`file:line` dari blob `origin/main` `5d6698889`.
+- Edge: RPO ≤1 jam dengan backup harian = MUSTAHIL (dicatat di J1, bukan dijanjikan); restore ke DB aktif ≠ drill (E-OPEN7-2 MERAH bila diklaim sebagai drill); autosnap 1-terbaru ≠ retensi baku; p95 satu run lulus ≠ teruji (butuh 2 run); biaya jaringan luar UAT dikeluarkan dari p95.
+
+### 9. Falsifikasi QA (E-OPEN7 — E143, atas bukti persis, BUKAN head spec ini)
+
+- E-OPEN7-1 (E143-1): klaim RPO teruji tanpa jadwal otomatis berjalan ≥2 siklus = MERAH.
+- E-OPEN7-2 (E143-2): klaim drill lulus dari restore ke DB aktif (tanpa DB disposable + log durasi) = MERAH.
+- E-OPEN7-3 (E143-3): RTO terukur >4 jam diklaim memenuhi NFR-06 = MERAH.
+- E-OPEN7-4 (E143-4): klaim p95 ≤2 dtk tanpa run matriks §4 di UAT tercatat = MERAH.
+- E-OPEN7-5 (E143-5): run tunggal / tanpa nol-error / biaya jaringan tidak dipisahkan lalu diklaim LULUS = MERAH.
+- E-OPEN7-6 (E143-6, kontrol arah): fixture backup manual UI tetap jalan + halaman database jujur "tanpa jadwal otomatis" = HIJAU (tidak regresi).
+
+### 10. Backlog implementasi (rekomendasi kartu, BUKAN kode di kartu ini)
+
+- Backend: (a) jadwal backup otomatis + retensi + log drill disposable; (b) harness uji beban matriks §4 + laporan run; (c) audit atomisitas GL-BR-002/AC-GL-002. Prioritas sesudah vonis Accountant.
+- Accountant: vonis RPO/RTO (komitmen vs target) + statutori 2026 (PR #1254) — BUTUH-VONIS.
+- Lead: putus J1/J3 + frekuensi drill + sahkan matriks B1–B4; merge spec ini.
+- QA: E-OPEN7 (E143-1..6) atas bukti persis.
+
+### Yang TIDAK diusulkan run ini
+- Kode/migrasi/cron apa pun (read-only sesuai tugas; butuh kode = kartu Backend).
+- Mengubah jadwal backup produksi (larangan tugas).
+- Angka statutori 2026 (menunggu vonis Accountant PR #1254).
+- Menutup GL-BR-002/AC-GL-002 (audit atomisitas milik Backend).
+- Benchmark performa kompetitor (Accurate/Zahir tidak mempublikasi angka p95).
+
+ID spec ini **F-2026-10-28-143-S** (OPEN #7: RPO/RTO + p95 + E143). Pemilik berikutnya: Accountant vonis BR-OPEN7-01..06 (RPO/RTO komitmen-vs-target + statutori 2026, sinkron PR #1254) → Lead putus J1/J3 + sahkan matriks + merge → QA E-OPEN7 (E143-1..6) atas bukti persis → INDEKS baris operasional baru + keputusan 12 OPEN #7 → TERTUTUP-teruji / TETAP-TARGET.
