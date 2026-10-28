@@ -214,7 +214,7 @@ perilaku, bukan hanya keberadaan file/model.
 | --- | --- | --- |
 | AC-PROJ-001 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` ada; kewajiban referensi project/work order belum ditelusur |
 | AC-PROJ-002 | Sebagian | prisma/schema.prisma:2763 — issue lewat model inventory tersendiri; larangan direct update belum ditelusur |
-| AC-PROJ-003 | Belum | belum ditelusur — tampilan terpisah estimasi vs aktual tidak ditunjuk di sini |
+| AC-PROJ-003 | Sebagian | Frontend t_9b516ac7: `ProjectBudgetCard` (judul Estimasi vs Aktual Proyek, ringkasan Total Estimasi/Total Aktual/Selisih Estimasi−Aktual, tabel per tahap kolom Estimasi (RAB)/Aktual (Terealisasi), aktual per tahap Belum terukur + alasan kolom tahap absen) + `ProjectPlDetailCard` sisi aktual (judul Aktual Proyek, baris Pendapatan/Biaya Aktual, catatan margin job bukan laba akuntansi); sisa: kolom tahap sumber biaya belum ada di schema (Backend) |
 | AC-PROJ-004 | Sebagian | prisma/schema.prisma:5174 — `Project` ada; ketertelusuran biaya ke sumber belum ditelusur |
 | AC-WO-001 | Sebagian | prisma/schema.prisma:3309 — `WorkOrderItem`; ketiadaan efek stok rencana belum dibuktikan negatif di sini |
 | AC-WO-002 | Sebagian | prisma/schema.prisma:2763 — `MaterialIssue` mencatat issue aktual; UI detail WO mencegah arah ke issue ganda (tombol buat baru disembunyikan selama MI aktif ada, status aktif tertampil) — `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx`. Sisa: pencatatan ganda inventory+project dan guard jalur form Inventaris belum ditelusur (backend) |

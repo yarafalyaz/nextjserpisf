@@ -10,7 +10,22 @@ afterEach(() => {
   clearRenderedCards()
 })
 
-describe("ProjectPlDetailCard F-2026-10-21-029", () => {
+describe("ProjectPlDetailCard F-2026-10-21-029 + AC-PROJ-003", () => {
+  it("AC-PROJ-003: kartu aktual berlabel aktual eksplisit + margin job bukan laba akuntansi", () => {
+    const { container, root } = renderCard(<ProjectPlDetailCard pl={projectPlWithCost()} />)
+    const text = container.textContent ?? ""
+    expect(container.querySelector('[aria-label="Laba Rugi Proyek"]')).not.toBeNull()
+    expect(text).toContain("Aktual Proyek (Laba Rugi)")
+    expect(text).toContain("Pendapatan Aktual (invoice diakui)")
+    expect(text).toContain("Total Biaya Aktual")
+    expect(text).toContain("Material Aktual")
+    expect(text).toContain("Biaya Produksi Aktual")
+    expect(text).toContain("Beban Aktual Lain")
+    expect(text).toContain("margin job kendaraan")
+    expect(text).toContain("bukan laba akuntansi")
+    unmountCard(root)
+  })
+
   it("laba/margin/pendapatan tampil persis output builder, tanpa agregasi UI", () => {
     const { container, root } = renderCard(<ProjectPlDetailCard pl={projectPlWithCost()} />)
     const text = container.textContent ?? ""
