@@ -198,11 +198,22 @@ export default async function InvoiceDetailPage({
               />
             )}
             {invoice.status !== "draft" && invoice.status !== "cancelled" && (
-              <VoidButton id={invoice.id} action={voidSalesInvoice} />
+              <VoidButton
+                id={invoice.id}
+                action={voidSalesInvoice}
+                requireReason
+                title={`Batalkan faktur ${salesInvoiceLabel(invoice)}?`}
+                body="Faktur ditandai dibatalkan dan seluruh dampak jurnal serta stoknya dibalik. Bila faktur masih punya pembayaran aktif, batalkan dulu tiap pembayaran lewat jalur reversal beralasan, baru batalkan faktur ini."
+              />
             )}
-            <CanCreate permission="delete_sales_invoices">
-              <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
-            </CanCreate>
+            {/* BR-F139-03: hapus fisik hanya untuk draf. Tombol hapus
+                disembunyikan untuk non-draf agar operator tidak mencoba
+                aksi yang pasti ditolak server (penolakan tetap di server). */}
+            {invoice.status === "draft" && (
+              <CanCreate permission="delete_sales_invoices">
+                <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
+              </CanCreate>
+            )}
             <BackButton href="/penjualan/faktur" />
           </>
         }
