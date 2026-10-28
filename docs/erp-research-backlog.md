@@ -40885,3 +40885,51 @@ AC-FIN-002 dinyatakan terpenuhi sisi penjualan bila: (i) PR #1233 merged (paymen
 | (tanpa ID baru) reversal DP pasca-konversi | Accountant (urutan jurnal/PPN) → Backend → Frontend → QA E118-8 | OPEN #1 + vonis |
 
 ID spec ini **F-2026-10-28-118-S** (AC-FIN-002 sisi penjualan; basis origin/main 8a677bf1f). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status AC-FIN-002 hanya sesudah #1233 merged) → BOT Backend (void-faktur beralasan mengikuti pola #1233, tanpa duplikat payment) → BOT Frontend (dialog alasan wajib) → BOT QA (E118-1..8 atas head persis). Butuh putusan accountant: YA bersyarat — hanya urutan jurnal/PPN reversal DP terkonversi (BR-ACFIN2-08) dan keputusan nota kredit formal (BR-ACFIN2-09); syarat alasan/tautan/anti-hapus payment+faktur TIDAK menunggu vonis baru karena cermin FIN-BR-008 yang sudah divonis.
+
+### PUTUSAN LEAD 2026-10-28 WIB — Q-EPS-1..5: satu ambang lunas rupiah (Rp1) untuk seluruh permukaan piutang
+
+> **Slot**: tanpa nomor F baru — ini putusan atas pertanyaan yang sudah diajukan Accountant (board 2026-10-28 09:15 WIB, "PUTUSAN diminta: ambang laporan piutang `COLLECTION_SETTLED_EPSILON`", bukti PR #1260) dan ratifikasi arah perbaikan FIN-BR-006. Dokumen saja: tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal. Basis verifikasi `origin/main` `5d88b1e38` (2026-10-28 WIB). Mengikat BOT Backend (fisik), BOT QA (falsifikasi), BOT Accountant (batas cakupan angka).
+
+**A. Fakta terverifikasi di `origin/main` `5d88b1e38` (bukan klaim dokumen)**
+
+| Permukaan | Berkas:baris | Ambang sekarang |
+|---|---|---|
+| Kanonik FIN-BR-006 `SETTLEMENT_TOLERANCE_IDR` / `isSettled` | `src/lib/finance/settlement-status.ts:22`, `:36-43` | **Rp1,00** |
+| Konstanta laporan piutang `COLLECTION_SETTLED_EPSILON` | `src/lib/reports/aging-amounts.ts:4` | **0,005** |
+| Antrean penagihan | `src/lib/reports/collection-queue.ts:347` | `sisa <= 0,005` dilewati |
+| Statement pelanggan (`isOverdue`) | `src/lib/reports/customer-statement.ts:257` | `sisa > 0,005` |
+| Delivered-unbilled | `src/lib/reports/delivered-unbilled.ts:207` | `nilai <= 0,005` dilewati |
+| Aging piutang | `src/lib/reports/aging-reports-data.ts:110` | `outstanding <= 0` (tanpa toleransi) |
+| Status tukar faktur | `src/lib/finance/invoice-exchange.ts:29-33` | `EPSILON = 0,005` lokal |
+| Pemilihan faktur tukar faktur | `src/actions/invoice-exchange.actions.ts:90`, `:140`; `src/app/(dashboard)/penjualan/tukar-faktur/tambah/page.tsx:52` | `0,005` |
+
+**Akibat terukur (faktur `grandTotal` 1.000.000 dibayar 999.999,50):** tiga jawaban berbeda untuk satu fakta yang sama — layar faktur **Lunas** (`isSettled`: 0,50 ≤ Rp1), daftar/detail tukar faktur **Sebagian** (`settlementStatus` 0,005), antrean penagihan + aging + statement **masih piutang terbuka Rp0,50** (0,50 > 0,005). Satu dokumen, tiga status. Ini cacat konsistensi lintas permukaan, bukan sekadar kosmetik: antrean penagihan mengejar pelanggan untuk Rp0,50 sementara sistem sudah menyatakan faktur itu lunas.
+
+**B. Putusan (mengikat, berlaku tanpa persetujuan tambahan)**
+
+| Pertanyaan | Putusan final |
+|---|---|
+| Q-EPS-1 | **SATU ambang lunas rupiah = Rp1,00** (`SETTLEMENT_TOLERANCE_IDR`, FIN-BR-006) untuk seluruh keputusan "dokumen ini masih piutang atau sudah lunas". Setiap permukaan wajib memakai `isSettled()` atau `SETTLEMENT_TOLERANCE_IDR`. Ambang lokal `0,005` di domain piutang/hutang **DILARANG**. |
+| Q-EPS-2 | Nama `COLLECTION_SETTLED_EPSILON` **dipertahankan** (dipakai 4 berkas + ekspor ulang `collection-queue.ts:35`) tetapi nilainya **diturunkan**, bukan ditulis ulang: `export const COLLECTION_SETTLED_EPSILON = SETTLEMENT_TOLERANCE_IDR`. Alasan: mengganti nama menyentuh 4 modul tanpa menambah mutu, sedangkan menulis angka `0,005` di berkas piutang adalah cara cacat ini lahir kembali. Komentar konstanta wajib menyebut FIN-BR-006 dan sifat nama warisan. |
+| Q-EPS-3 | **Aging piutang ikut kanonis**: baris dengan sisa ≤ Rp1 tidak masuk aging (`isSettled(grandTotal, settled)` atau `outstanding > SETTLEMENT_TOLERANCE_IDR`). Efek populasi disadari dan diterima: dokumen sisa ≤ Rp1 keluar dari aging karena statusnya sudah **Lunas** di dokumen — bukan data hilang dan bukan penghapusan piutang (dokumen, pembayaran, dan jurnal tidak berubah sedikit pun). Aging yang memuat Rp0,50 adalah aging yang bertengkar dengan status dokumennya sendiri. |
+| Q-EPS-4 | **Tukar faktur ikut kanonis**: `EPSILON` lokal di `invoice-exchange.ts` dihapus, `settlementStatus()` mendelegasikan `isSettled()` — ini arah perbaikan yang sudah dikerjakan Accountant di PR #1260 (head `4f7e73c21`), putusan ini **meratifikasinya**; PR itu tetap harus lolos CI + falsifikasi QA. Filter pemilihan faktur (`invoice-exchange.actions.ts:90`, `:140`, `tukar-faktur/tambah/page.tsx:52`) memakai `isSettled`, bukan `0,005`. |
+| Q-EPS-5 | **Batas cakupan (eksplisit)**: `0,005` di luar keputusan status lunas piutang/hutang **TIDAK disentuh** — tampilan pembulatan (`src/lib/utils/format.ts:63`), rekonsiliasi PPN (`laporan/rekonsiliasi-ppn`), `multi-periode`, variance stok (`stock-journal.service.ts:759`), `recurring.service.ts:68`, `late-cost-l3.service.ts:186`, `coretax-xml-export.ts:301`, `sales-late-fee.actions.ts:314`. Alasan: itu ambang numerik/format, bukan vonis status piutang; menyeragamkan semua angka `0,005` menjadi Rp1 akan mengubah laporan pajak tanpa dasar dan melanggar kepemilikan vonis BOT Accountant. |
+
+**C. Acceptance criteria fisik (mengikat BOT Backend, difalsifikasi BOT QA)**
+
+| AC | Isi | Falsifikasi wajib |
+|---|---|---|
+| AC-EPS-1 | `COLLECTION_SETTLED_EPSILON === SETTLEMENT_TOLERANCE_IDR === 1`; tidak ada literal `0,005` di `src/lib/reports/**` maupun `src/lib/finance/invoice-exchange.ts` | tulis ulang konstanta jadi `0.005` → tes MERAH |
+| AC-EPS-2 | Antrean penagihan: faktur sisa **0,50** TIDAK muncul; sisa **1,01** muncul dengan `sisa` = angka sebenarnya | kembalikan ambang → AC-2 MERAH |
+| AC-EPS-3 | Statement pelanggan: baris sisa 0,50 → `isOverdue: false` dan tidak menambah total terbuka; sisa 1,01 → `isOverdue: true` | idem |
+| AC-EPS-4 | Aging piutang: faktur sisa 0,50 tidak menghasilkan baris; sisa 1,01 masuk bucket jatuh tempo yang benar; total aging = jumlah baris yang tampil | idem |
+| AC-EPS-5 | Tukar faktur: satu dokumen yang sama melaporkan **satu** status di layar faktur, daftar tukar faktur, dan laporan (sisa 0,50 → `settled` di ketiganya; sisa 1,01 → `partial`) | `settlementStatus` dikembalikan ke perbandingan eksak → MERAH |
+| AC-EPS-6 | Delivered-unbilled: selisih terkirim−terfaktur 0,50 tidak tampil; 1,01 tampil | idem |
+| AC-EPS-7 | Tidak ada perubahan angka pada dokumen dengan sisa **> Rp1**: seluruh tes piutang/hutang existing tetap hijau tanpa diubah nilainya | cabut satu baris putusan → tes existing MERAH pada kasus sisa > Rp1 |
+
+**D. Batas kewenangan dan urutan kerja**
+
+1. BOT Backend mengeksekusi AC-EPS-1..7 (tanpa migrasi, tanpa perubahan schema, tanpa jurnal). Bila ada tes lama yang **mengunci** angka 0,005 di domain piutang, tes itu mengikuti putusan dan diubah pada PR yang sama dengan catatan sebab.
+2. BOT QA memfalsifikasi tiap AC (bukan membaca diff) dan menulis atestasi blob pada head persis; gerbang merge tetap Q-CHURN-1.
+3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
+4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
