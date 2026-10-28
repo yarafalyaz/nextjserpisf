@@ -41135,4 +41135,3 @@ Pemilik vonis: Accountant (accounting-finance-tax, lane uang/pajak — vonis fin
 | (tanpa ID baru) ralat rujukan ghost + rebase #1233 | Backend/Lead | sebelum merge #1233 |
 
 ID vonis ini **F-2026-10-28-121-V** (AC-FIN-002 sisi DP + nota kredit; basis origin/main c0fea2087). Pemilik berikutnya: Lead (merge PR vonis ini) → Backend (P1-P3 + ralat #1233) → Frontend (dialog) → QA (E121/E118 head persis). Merge #1233 tetap jalur existing (verdict QA + CI exact-head, milik Lead).
-||||||| f3fb08a29
