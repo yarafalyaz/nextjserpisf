@@ -101,6 +101,7 @@ export const STATUS_LABELS: Record<string, string> = {
   // gaji), hapus-buku via dokumen write-off beralasan — final, bukan
   // populasi aktif rekap.
   paid_off: "Lunas",
+  written_off: "Dihapusbukukan",
   absent: "Tidak Hadir",
   late: "Terlambat",
   half_day: "Setengah Hari",
@@ -193,6 +194,7 @@ export const statusToIndo: Record<string, string> = {
   confirmed: "konfirmasi",
   posted: "posting",
   paid_off: "lunas",
+  written_off: "dihapusbukukan",
   reversed: "dibalik",
   reversing: "sedang-dibalik",
   new: "baru",

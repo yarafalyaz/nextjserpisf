@@ -13,6 +13,7 @@ const statusColors: Record<string, Tone> = {
   approved: 'success',
   completed: 'success',
   partial: 'warning',
+  paid: 'success',
   paid_off: 'success',
   new: 'accent',
   contacted: 'warning',
