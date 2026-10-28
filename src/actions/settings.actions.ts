@@ -248,6 +248,11 @@ export async function updateSystemSettings(formData: FormData) {
       salesTaxAccountId: intNull("salesTaxAccountId"),
       salesReturnAccountId: intNull("salesReturnAccountId"),
       salesAccountId: intNull("salesAccountId"),
+      // F-2026-10-28 QA (t_de3aba0b): akun uang muka penjualan dibaca
+      // fail-closed oleh down-payment.hook / accounting.hook /
+      // customer-credit.service. Tanpa baris ini mapping hanya terisi saat
+      // instalasi, sedangkan posting menolak dengan instruksi ke form ini.
+      customerDownPaymentAccountId: intNull("customerDownPaymentAccountId"),
 
       // Accounting - Purchase
       purchasePayableAccountId: intNull("purchasePayableAccountId"),
@@ -272,11 +277,22 @@ export async function updateSystemSettings(formData: FormData) {
       abnormalScrapPostingEnabled: bool("abnormalScrapPostingEnabled"),
       abnormalScrapExpenseAccountId: intNull("abnormalScrapExpenseAccountId"),
 
+      // Accounting - Garansi (F-2026-10-28 QA t_de3aba0b): beban garansi
+      // (510104), provisi garansi (210205), piutang klaim supplier (110508).
+      // Ketiganya dibaca fail-closed oleh warranty-journal.service dan
+      // deferred-tax-nonaset-data, jadi wajib bisa ditulis ulang dari form.
+      warrantyExpenseAccountId: intNull("warrantyExpenseAccountId"),
+      warrantyProvisionAccountId: intNull("warrantyProvisionAccountId"),
+      supplierClaimReceivableAccountId: intNull("supplierClaimReceivableAccountId"),
+
       // Accounting - General
       pettyCashAccountId: intNull("pettyCashAccountId"),
       cashBankAccountId: intNull("cashBankAccountId"),
       generalExpenseAccountId: intNull("generalExpenseAccountId"),
       defaultCashAccountId: intNull("defaultCashAccountId"),
+      // F-2026-10-28 QA (t_de3aba0b): utang reimbursement (210209) —
+      // resolveReimbursementLiabilityAccountId melempar bila kosong.
+      reimbursementLiabilityAccountId: intNull("reimbursementLiabilityAccountId"),
 
       // Accounting - Payroll
       salaryExpenseAccountId: intNull("salaryExpenseAccountId"),
