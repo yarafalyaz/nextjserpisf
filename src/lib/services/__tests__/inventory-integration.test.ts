@@ -250,6 +250,151 @@ describe("SAL-BR-014 serialisasi bersama (DB integration)", () => {
     }
   })
 
+  it("varian isolasi kunci bersama: penantang masuk guard SEBELUM move pemenang disisipkan (cabut kunci = MERAH)", async () => {
+    // LOW-1 t_25a66a5d: varian ini mengisolasi kunci bersama `quotations`.
+    // Beda dengan tes di atas: pemenang menunda `stockMove.create` 300 ms
+    // SESUDAH `signalLocked()`, sehingga penantang dijamin sudah masuk
+    // guard (berbaris di kunci quotations) sebelum baris `stock_moves`
+    // pemenang ada. Tanpa `lockStockOutQuotationsTx` (locking read
+    // dibiarkan) kedua guard sama-sama lolos snapshot -> 2 OUT atau
+    // deadlock P2034; dengan kunci, penantang menunggu commit lalu
+    // ditolak bersih SAL-BR-014.
+    if (!enabled()) {
+      console.warn("RUN_DB_INTEGRATION/db tidak siap — skipping varian isolasi kunci SAL-BR-014")
+      return
+    }
+    const stamp = `SAL014K-${Date.now()}`
+    const customer = await prisma.customer.create({ data: { name: `Cust ${stamp}` } })
+    const warehouse = await prisma.warehouse.create({
+      data: { code: `W${stamp}`, name: `WH ${stamp}` },
+    })
+    const item = await prisma.item.create({
+      data: { sku: `SKU-${stamp}`, name: `Item ${stamp}`, unitOfMeasure: "PCS", isProduct: true, qtyOnHand: 0 },
+    })
+    const quotation = await prisma.quotation.create({
+      data: { documentNo: `Q-${stamp}`, customerId: customer.id, date: new Date() },
+    })
+    const workOrder = await prisma.workOrder.create({
+      data: {
+        documentNo: `WO-${stamp}`,
+        customerId: customer.id,
+        quotationId: quotation.id,
+        date: new Date(),
+      },
+    })
+    const invoice = await prisma.salesInvoice.create({
+      data: {
+        documentNo: `INV-${stamp}`,
+        customerId: customer.id,
+        quotationId: quotation.id,
+        date: new Date(),
+      },
+    })
+    const issue = await prisma.materialIssue.create({
+      data: {
+        documentNo: `MI-${stamp}`,
+        warehouseId: warehouse.id,
+        workOrderId: workOrder.id,
+        date: new Date(),
+      },
+    })
+
+    const HOLD_MS = 900
+    const WINNER_INSERT_DELAY_MS = 300
+    let signalLocked!: () => void
+    const lockHeld = new Promise<void>((resolve) => {
+      signalLocked = resolve
+    })
+    let salesError: unknown = null
+    let issueError: unknown = null
+
+    try {
+      const salesTx = prisma
+        .$transaction(
+          async (tx) => {
+            await assertSalesInvoiceStockOutOnce(tx, invoice.id, [{ itemId: item.id, qty: 3 }])
+            // Kunci quotation sudah dipegang di titik ini (assert = lock dulu).
+            signalLocked()
+            // Jeda kunci: penantang WAJIB sudah masuk guard sebelum baris
+            // move pemenang disisipkan. Tanpa kunci bersama, guard
+            // penantang membaca snapshot kosong dan ikut lolos.
+            await new Promise((r) => setTimeout(r, WINNER_INSERT_DELAY_MS))
+            await tx.stockMove.create({
+              data: {
+                documentNo: `SM-S-${stamp}`,
+                itemId: item.id,
+                warehouseId: warehouse.id,
+                qty: 3,
+                impact: "OUT",
+                status: "posted",
+                referenceType: "SalesInvoice",
+                referenceId: invoice.id,
+              },
+            })
+            // Tahan transaksi tetap terbuka: penantang WAJIB berbaris di
+            // kunci bersama, bukan membaca snapshot sebelum commit.
+            await new Promise((r) => setTimeout(r, HOLD_MS))
+            return "sales"
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+        .catch((e: unknown) => {
+          salesError = e
+          return null
+        })
+
+      await lockHeld
+
+      const issueTx = prisma
+        .$transaction(
+          async (tx) => {
+            await assertMaterialIssueStockOutOnce(tx, issue.id, [{ itemId: item.id, qty: 3 }])
+            await tx.stockMove.create({
+              data: {
+                documentNo: `SM-M-${stamp}`,
+                itemId: item.id,
+                warehouseId: warehouse.id,
+                qty: 3,
+                impact: "OUT",
+                status: "posted",
+                referenceType: "MaterialIssue",
+                referenceId: issue.id,
+              },
+            })
+            return "material"
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+        .catch((e: unknown) => {
+          issueError = e
+          return null
+        })
+
+      const [salesResult, issueResult] = await Promise.all([salesTx, issueTx])
+
+      // Pemenang: faktur penjualan (memegang kunci lebih dulu).
+      expect(salesError).toBeNull()
+      expect(salesResult).toBe("sales")
+      // Penantang: ditolak guard SETELAH melihat move lawan yang commit.
+      expect(issueResult).toBeNull()
+      expect(String((issueError as Error | null)?.message ?? "")).toMatch(/SAL-BR-014/)
+
+      const outMoves = await prisma.stockMove.count({
+        where: { itemId: item.id, impact: "OUT", status: "posted" },
+      })
+      expect(outMoves).toBe(1)
+    } finally {
+      await prisma.stockMove.deleteMany({ where: { itemId: item.id } })
+      await prisma.materialIssue.delete({ where: { id: issue.id } }).catch(() => undefined)
+      await prisma.workOrder.delete({ where: { id: workOrder.id } }).catch(() => undefined)
+      await prisma.salesInvoice.delete({ where: { id: invoice.id } }).catch(() => undefined)
+      await prisma.quotation.delete({ where: { id: quotation.id } }).catch(() => undefined)
+      await prisma.item.delete({ where: { id: item.id } }).catch(() => undefined)
+      await prisma.warehouse.delete({ where: { id: warehouse.id } }).catch(() => undefined)
+      await prisma.customer.delete({ where: { id: customer.id } }).catch(() => undefined)
+    }
+  })
+
   it("dua konsumen konkuren berebut unit terakhir: satu menang, satu 'Stok tidak mencukupi', lapisan tidak negatif", async () => {
     if (!enabled()) {
       console.warn("RUN_DB_INTEGRATION/db tidak siap — skipping konkurensi stok terakhir")
