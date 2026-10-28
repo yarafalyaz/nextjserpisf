@@ -3087,6 +3087,22 @@ export async function onPayrollPaid(
     // the @@unique([referenceType, referenceId]) constraint and surfaces as
     // a confusing Prisma P2002 error to the user even though the operation
     // logically succeeded once.
+    // E-HRCR-6b (HR-BR-005, vonis 135-V): re-post payrollId ASAL sesudah
+    // reversal DITOLAK BERISIK. Slip koreksi sah selalu memakai referenceId
+    // BARU (dokumen baru), bukan payrollId asal — jadi histori REVERSED atas
+    // payrollId asal = bukti reversal sudah terjadi, bukan undangan re-post.
+    const reversedHistory = await tx.journal.findFirst({
+      where: { referenceType: "Payroll", referenceId: payrollId, status: "REVERSED" },
+      select: { id: true },
+    });
+    if (reversedHistory) {
+      const docNo = (payroll as { documentNo?: unknown }).documentNo;
+      throw new Error(
+        typeof docNo === "string" && docNo.length > 0
+          ? `Slip ${docNo} sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.`
+          : "Slip ini sudah pernah dijurnal lalu di-reverse — posting ulang slip asal ditolak; buat slip koreksi baru.",
+      );
+    }
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "Payroll", referenceId: payrollId, status: { not: "REVERSED" } },
     });
