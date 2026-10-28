@@ -57,6 +57,35 @@ describe("buildSalesProcessHistory", () => {
     expect(notices(result).join(" ")).toContain("belum dibayar penuh")
   })
 
+  // FIN-BR-006: satu toleransi lunas Rp1. Sisa 0,01–1,00 adalah pembulatan
+  // pembayaran rupiah penuh, bukan kekurangan bayar — jadi TIDAK boleh
+  // dihitung sebagai "belum dibayar" di laporan proses.
+  it("menghitung sisa dalam toleransi Rp1 sebagai lunas, bukan belum dibayar", () => {
+    const result = buildSalesProcessHistory([
+      line({ orderNo: "SO-001", invoiced: 1_000_000, paid: 999_999.5 }),
+      line({ orderNo: "SO-002", invoiced: 1_000_000, paid: 999_999 }),
+    ])
+
+    expect(result.totals.invoicedUnpaid).toBe(0)
+    expect(result.totals.outstanding).toBe(1.5)
+  })
+
+  it("tetap menandai sisa di atas toleransi Rp1 sebagai belum dibayar", () => {
+    const result = buildSalesProcessHistory([
+      line({ orderNo: "SO-001", invoiced: 1_000_000, paid: 999_998.99 }),
+    ])
+
+    expect(result.totals.invoicedUnpaid).toBe(1)
+  })
+
+  it("tidak menandai pesanan tanpa sisa sebagai belum dibayar", () => {
+    const result = buildSalesProcessHistory([
+      line({ orderNo: "SO-001", invoiced: 500_000, paid: 500_000 }),
+    ])
+
+    expect(result.totals.invoicedUnpaid).toBe(0)
+  })
+
   it("membedakan 'tidak ada pesanan' dari daftar kosong biasa", () => {
     const result = buildSalesProcessHistory([])
 

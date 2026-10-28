@@ -58,6 +58,34 @@ describe("buildPurchaseProcessHistory", () => {
     expect(notices(result).join(" ")).toContain("belum dibayar penuh")
   })
 
+  // FIN-BR-006: satu toleransi lunas Rp1 (sisi hutang, paritas dengan vonis
+  // F-2026-10-28-130-V). Sisa ≤ Rp1 = pembulatan, bukan kekurangan bayar.
+  it("menghitung sisa dalam toleransi Rp1 sebagai lunas, bukan belum dibayar", () => {
+    const result = buildPurchaseProcessHistory([
+      line({ orderNo: "PO-001", billed: 2_000_000, paid: 1_999_999.5 }),
+      line({ orderNo: "PO-002", billed: 2_000_000, paid: 1_999_999 }),
+    ])
+
+    expect(result.totals.billedUnpaid).toBe(0)
+    expect(result.totals.outstanding).toBe(1.5)
+  })
+
+  it("tetap menandai sisa di atas toleransi Rp1 sebagai belum dibayar", () => {
+    const result = buildPurchaseProcessHistory([
+      line({ orderNo: "PO-001", billed: 2_000_000, paid: 1_999_998.99 }),
+    ])
+
+    expect(result.totals.billedUnpaid).toBe(1)
+  })
+
+  it("tidak menandai tagihan tanpa sisa sebagai belum dibayar", () => {
+    const result = buildPurchaseProcessHistory([
+      line({ orderNo: "PO-001", billed: 1_000_000, paid: 1_000_000 }),
+    ])
+
+    expect(result.totals.billedUnpaid).toBe(0)
+  })
+
   it("membedakan 'tidak ada pesanan' dari daftar kosong biasa", () => {
     const result = buildPurchaseProcessHistory([])
 
