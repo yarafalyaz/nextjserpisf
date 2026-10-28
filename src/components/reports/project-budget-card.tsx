@@ -81,6 +81,12 @@ function StageRealizedCells({
  * tampil apa adanya. UI tidak mengagregasi baris mentah. Realisasi per
  * tahap dari `perStageRealized`: null/belum teralokasi tampil
  * "Belum terukur" (BUKAN 0); seluruh realisasi tampil belum teralokasi.
+ *
+ * AC-PROJ-003 (t_9b516ac7): seksi estimasi vs aktual WAJIB berlabel
+ * eksplisit — "Estimasi (RAB)" untuk rencana, "Aktual (terealisasi)"
+ * untuk biaya dari builder L/R. "Belum terukur" = kolom tahap sumber
+ * biaya belum ada di schema (MaterialIssue/Expense hanya projectId,
+ * ProductionCost tanpa project/stage) — BUKAN nol, BUKAN alokasi UI.
  */
 export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetForProject }>) {
   const isEmpty = budget.totalBudget === 0 && budget.contractAmount === null && budget.history.length === 0
@@ -111,11 +117,11 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
   return (
     <ReportCardShell
       label="RAB vs Realisasi Proyek"
-      title="RAB vs Realisasi"
+      title="Estimasi vs Aktual Proyek"
       summary={
         <>
           {budget.isLocked ? `Terkunci · Revisi #${budget.budgetRevisionNo}` : "Belum terkunci"}
-          {" · "}Total RAB {formatCurrency(budget.totalBudget)}
+          {" · "}Total Estimasi (RAB) {formatCurrency(budget.totalBudget)}
         </>
       }
       isEmpty={isEmpty}
@@ -132,7 +138,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
           )}
         </div>
         <div>
-          <span className="text-muted-foreground block">Margin Rencana (kontrak − RAB):</span>
+          <span className="text-muted-foreground block">Margin Rencana (kontrak − estimasi RAB):</span>
           <span className="font-semibold text-foreground">
             {budget.marginRencana === null ? "-" : formatCurrency(budget.marginRencana)}
           </span>
@@ -142,11 +148,11 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
           <span className="font-semibold text-foreground">{formatCurrency(budget.totalBudget)}</span>
         </div>
         <div>
-          <span className="text-muted-foreground block">Realisasi (L/R proyek):</span>
+          <span className="text-muted-foreground block">Total Aktual (terealisasi L/R proyek):</span>
           <span className="font-semibold text-danger">{formatCurrency(budget.realizedTotal)}</span>
         </div>
         <div>
-          <span className="text-muted-foreground block">Selisih RAB − Realisasi:</span>
+          <span className="text-muted-foreground block">Selisih Estimasi − Aktual:</span>
           <span className={`font-semibold ${budget.varianceTotal < 0 ? "text-danger" : "text-foreground"}`}>
             {formatCurrency(budget.varianceTotal)}
           </span>
@@ -154,14 +160,14 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
       </div>
 
       {budget.totalBudget > 0 && (
-        <section aria-label="Anggaran vs realisasi per tahap" className="mt-4 border-t border-default/50 pt-3">
-          <h3 className="text-sm font-semibold text-foreground">Anggaran vs Realisasi per Tahap</h3>
+        <section aria-label="Estimasi vs aktual per tahap" className="mt-4 border-t border-default/50 pt-3">
+          <h3 className="text-sm font-semibold text-foreground">Estimasi vs Aktual per Tahap</h3>
           <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Tahap / Kategori</DetailTableTh>
-              <DetailTableTh align="right">Anggaran</DetailTableTh>
-              <DetailTableTh align="right">Realisasi</DetailTableTh>
+              <DetailTableTh align="right">Estimasi (RAB)</DetailTableTh>
+              <DetailTableTh align="right">Aktual (Terealisasi)</DetailTableTh>
               <DetailTableTh align="right">Selisih</DetailTableTh>
               <DetailTableTh align="right">% Terpakai</DetailTableTh>
             </DetailTableHead>
@@ -215,7 +221,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
             </DetailTableBody>
             <DetailTableFoot>
               <DetailTableFootRow>
-                <DetailTableTd>Total RAB vs Realisasi</DetailTableTd>
+                <DetailTableTd>Total Estimasi vs Aktual</DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(budget.totalBudget)}</DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(budget.realizedTotal)}</DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(budget.varianceTotal)}</DetailTableTd>
@@ -227,7 +233,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
           </DetailTable>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Realisasi per tahap belum terukur — seluruh realisasi {formatCurrency(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
+            Aktual per tahap belum terukur — kolom tahap belum ada di sumber biaya (pengeluaran material/beban hanya berkolom proyek, biaya produksi tanpa kolom proyek/tahap), sehingga seluruh aktual {formatCurrency(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
           </p>
         </section>
       )}

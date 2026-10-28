@@ -2630,6 +2630,18 @@ export async function deleteQuotation(id: number) {
   await prisma.$transaction(async (tx) => {
     const salesOrders = await tx.salesOrder.findMany({ where: { quotationId: id }, select: { id: true } })
     const salesOrderIds = salesOrders.map((so) => so.id)
+    // P3 vonis F-2026-10-28-121-V: cascade menolak bila ada faktur turunan hidup
+    // (non-draft/non-cancelled) — dilarang hapus diam-diam, arahkan void dulu.
+    const liveInvoices = await tx.salesInvoice.findMany({
+      where: {
+        OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }],
+        status: { notIn: ["draft", "cancelled"] },
+      },
+      select: { id: true },
+    })
+    if (liveInvoices.length > 0) {
+      throw new Error("Penawaran tidak bisa dihapus: masih ada faktur turunan yang hidup. Batalkan (void) faktur dulu.")
+    }
     const invoices = await tx.salesInvoice.findMany({
       where: { OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }] },
       select: { id: true },
@@ -3691,6 +3703,15 @@ export async function deleteSalesOrder(id: number) {
   await requirePermission("delete_sales_orders")
   await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   await prisma.$transaction(async (tx) => {
+    // P3 vonis F-2026-10-28-121-V: cascade menolak bila ada faktur turunan hidup
+    // (non-draft/non-cancelled) — dilarang hapus diam-diam, arahkan void dulu.
+    const liveInvoices = await tx.salesInvoice.findMany({
+      where: { salesOrderId: id, status: { notIn: ["draft", "cancelled"] } },
+      select: { id: true },
+    })
+    if (liveInvoices.length > 0) {
+      throw new Error("Pesanan tidak bisa dihapus: masih ada faktur turunan yang hidup. Batalkan (void) faktur dulu.")
+    }
     const invoices = await tx.salesInvoice.findMany({ where: { salesOrderId: id }, select: { id: true } })
     const invoiceIds = invoices.map((inv) => inv.id)
     // Reverse GL + stock for each linked invoice before cascading the delete.
@@ -3719,7 +3740,15 @@ export async function deleteSalesInvoice(id: number) {
   try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_invoices")
-  await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
+  // P3 vonis F-2026-10-28-121-V: hapus fisik posted DILARANG — draft-only,
+  // posted diarahkan ke void beralasan (pola deleteDownPayment draft-only).
+  const existing = await prisma.salesInvoice.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+  if (existing.status !== "draft") {
+    return {
+      success: false,
+      error: "Hanya faktur draf yang bisa dihapus. Faktur posted dibatalkan lewat void beralasan.",
+    }
+  }
   let removedFiles: { fileUrl: string; referenceType: string }[] = [];
   await prisma.$transaction(async (tx) => {
     await reverseSalesInvoicePostingTx(tx, id)

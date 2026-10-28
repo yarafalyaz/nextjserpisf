@@ -305,3 +305,110 @@ describe("onGoodsReceiptVerified landed cost → FIFO layer + journal", () => {
     expect(stockUpdates).toHaveLength(0)
   })
 })
+
+// ════════════════════════════════════════════════════════════════════════════
+// Vonis Accountant F-2026-10-28-125-V (PUR-BR-008) — lapisan hook:
+// V3 (admin bank keluar dari kapitalisasi) dan V7 (baris jasa tidak menyerap
+// landed cost). Sebelum koreksi, admin ikut masuk StockMove.cost +
+// InventoryLayer.unitCost sambil tetap dibebankan di pembayaran → HPP dobel
+// saat barang dijual, dan porsi landed baris jasa menguap tanpa jejak.
+// ════════════════════════════════════════════════════════════════════════════
+function allLayerArgs() {
+  // createInLayer(tx, { itemId, warehouseId, qty, unitCost, ... }) — ambil dua
+  // field yang menentukan nilai stok supaya asersi fokus pada nominal.
+  return mocks.createInLayer.mock.calls.map((c) => {
+    const arg = (c as unknown[])[1] as { unitCost: number; qty: number }
+    return { unitCost: arg.unitCost, qty: arg.qty }
+  })
+}
+
+describe("onGoodsReceiptVerified — vonis 125-V (PUR-BR-008)", () => {
+  it("E125-2: admin bank TIDAK masuk unit cost layer/StockMove, tetap satu baris beban periode", async () => {
+    const { spies } = wireTx({
+      grItems: [{ itemId: 7, qty: 1, unitCost: 130000 }],
+      poItems: [{ itemId: 7, qty: 1, total: 130000 }],
+      poHeader: { shippingCost: 20000 },
+      grCosts: { shippingCost: 20000 },
+    })
+    // Biaya admin bank 1000 dilaporkan di header GR (bukan di item PO).
+    ;(spies.grFindUniqueOrThrow as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({
+      id: 100,
+      documentNo: "GR-001",
+      status: "draft",
+      purchaseOrderId: 50,
+      warehouseId: 1,
+      date: new Date("2024-06-15"),
+      shippingCost: 20000,
+      otherCost: 0,
+      adminFee: 1000,
+      items: [{ itemId: 7, qty: 1, unitCost: 130000 }],
+      purchaseOrder: {
+        id: 50,
+        shippingCost: 20000,
+        serviceFee: 0,
+        discount: 0,
+        items: [{ itemId: 7, qty: 1, total: 130000 }],
+      },
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    // Nilai stok = barang 130000 + ongkir 20000 = 150000 (admin TIDAK ikut).
+    expect(allLayerArgs()).toEqual([{ unitCost: 150000, qty: 1 }])
+    const moveCost = (spies.moveCreate.mock.calls[0][0] as { data: { cost: number } }).data.cost
+    expect(moveCost).toBe(150000)
+    // Jurnal: nilai kapitalisasi 150000, dan admin 1000 dikirim SEKALI sebagai
+    // potongan beban (argumen ke-9 onGoodsReceipt), bukan per baris.
+    expect(lastJournalLines()).toEqual([{ qty: 1, cost: 150000 }])
+    const adminArg = mocks.onGoodsReceipt.mock.calls[0][8] as Array<{ qty: number; cost: number }> | undefined
+    expect(adminArg).toEqual([{ qty: 1, cost: 1000 }])
+  })
+
+  it("E125-3: GR campuran barang + jasa — seluruh pool jatuh ke baris barang", async () => {
+    const { spies } = wireTx({
+      grItems: [
+        { itemId: 7, qty: 1, unitCost: 100000 },
+        { itemId: 8, qty: 1, unitCost: 100000 },
+      ],
+      poItems: [
+        { itemId: 7, qty: 1, total: 100000 },
+        { itemId: 8, qty: 1, total: 100000 },
+      ],
+      poHeader: { shippingCost: 30000 },
+      grCosts: { shippingCost: 30000 },
+      serviceItemIds: [8],
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    // Hanya baris barang (item 7) yang menerima landed: 100000 + 30000.
+    expect(allLayerArgs()).toEqual([{ unitCost: 130000, qty: 1 }])
+    // Tidak ada porsi yang menguap: nilai kapitalisasi = barang + seluruh pool.
+    expect(lastJournalLines()).toEqual([{ qty: 1, cost: 130000 }])
+    // Jurnal jasa hanya nilai jasanya sendiri (tanpa landed).
+    const svcLines = mocks.onServiceGoodsReceipt.mock.calls[0][1] as Array<{ qty: number; cost: number }>
+    expect(svcLines).toEqual([{ qty: 1, cost: 100000 }])
+    expect(spies.moveCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("V7: GR jasa murni — ongkir dibebankan lewat jurnal beban, bukan hilang", async () => {
+    wireTx({
+      grItems: [{ itemId: 9, qty: 1, unitCost: 500000 }],
+      poItems: [{ itemId: 9, qty: 1, total: 500000 }],
+      poHeader: { shippingCost: 25000 },
+      grCosts: { shippingCost: 25000 },
+      serviceItemIds: [9],
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    // Tidak ada layer untuk baris jasa.
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+    const svcLines = mocks.onServiceGoodsReceipt.mock.calls[0][1] as Array<{ qty: number; cost: number }>
+    // Jasa 500000 + ongkir 25000 yang tak bisa dikapitalisasi (beban periode).
+    expect(svcLines).toEqual([
+      { qty: 1, cost: 500000 },
+      { qty: 1, cost: 25000 },
+    ])
+  })
+})

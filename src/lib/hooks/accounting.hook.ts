@@ -2924,9 +2924,13 @@ export async function onPayrollPaid(
     );
   }
 
-  // Idempotency
+  // Idempotency: skip when an ACTIVE journal already exists. A REVERSED
+  // journal is history, not a block (HR-BR-005 B4 §5.2 F-2026-10-28-133-S,
+  // E-HRCR-6). NOTE: tidak ada jalur reversal Payroll yang hidup — satu-satunya
+  // penulis jurnal Payroll adalah onPayrollPaid. Jadi saringan ini no-op hari
+  // ini dan membuka jalan re-post yang benar bila reversal lahir (SalesInvoice).
   const existing = await db.journal.findFirst({
-    where: { referenceType: "Payroll", referenceId: payrollId },
+    where: { referenceType: "Payroll", referenceId: payrollId, status: { not: "REVERSED" } },
   });
   if (existing) {
     console.info(
@@ -3067,7 +3071,7 @@ export async function onPayrollPaid(
     // a confusing Prisma P2002 error to the user even though the operation
     // logically succeeded once.
     const existingInTx = await tx.journal.findFirst({
-      where: { referenceType: "Payroll", referenceId: payrollId },
+      where: { referenceType: "Payroll", referenceId: payrollId, status: { not: "REVERSED" } },
     });
     if (existingInTx) {
       console.info(
