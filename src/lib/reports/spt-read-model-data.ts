@@ -22,6 +22,7 @@ import {
   type OutputChain,
 } from "@/lib/tax/spt-read-model"
 import { buildTaxLiability } from "@/lib/tax/tax-liability"
+import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
 import { returnDeductionPeriod } from "@/lib/tax/return-snapshot"
 import { safeSubtract } from "@/lib/utils/math"
 
@@ -96,7 +97,7 @@ export async function loadSptPeriodRowsForRange(range?: {
       }),
       prisma.vendorBill.findMany({
         where: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null, tax: { gt: 0 } },
-        select: { id: true, date: true, subtotal: true, discountAmount: true, tax: true },
+        select: { id: true, date: true, subtotal: true, discountAmount: true, tax: true, taxInvoiceNumber: true },
       }),
       prisma.salesReturn.findMany({
         where: { status: "completed" },
@@ -191,6 +192,10 @@ export async function loadSptPeriodRowsForRange(range?: {
   const legacyIn = new Map<string, { dpp: number; vat: number; count: number }>()
   for (const bill of vendorBills) {
     if (coveredBillIds.has(bill.id)) continue
+    // F-2026-10-28-157-V Putusan 2: bill tax>0 tanpa nomor valid TIDAK ADA
+    // kaki PPN di jurnal (gabung HPP) — read-model SPT memperlakukannya
+    // TANPA PPN Masukan yang bisa dikreditkan, konsisten dengan jurnal.
+    if (Number(bill.tax) > 0 && !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)) continue
     const p = periodOf(bill.date)
     const row = legacyIn.get(p) ?? { dpp: 0, vat: 0, count: 0 }
     row.dpp += Number(bill.subtotal) - Number(bill.discountAmount)

@@ -20,7 +20,13 @@ import {
   onVendorPaymentCreated,
   deleteJournalByReferenceTx,
   reverseJournalsByReferenceTx,
+  VENDOR_BILL_TAX_INVOICE_WARNING,
 } from "@/lib/hooks/accounting.hook";
+import {
+  isValidVendorTaxInvoiceNumber,
+  taxPeriodFromDate,
+  checkCreditEligibility,
+} from "@/lib/tax/tax-invoice";
 import {
   bindIdempotencyKey,
   claimIdempotencyKey,
@@ -35,7 +41,7 @@ import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
-import { computeBillLineAmounts, summarizeBillItems } from "@/lib/finance/vendor-bill";
+import { computeBillLineAmounts, isValidTermsReference, summarizeBillItems, VENDOR_BILL_TERMS_REF_ERROR } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { isSettled, SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
@@ -1224,6 +1230,116 @@ type VendorBillItemInput = {
   taxPercent?: number | string;
 };
 
+/** Alias: baris form bill = `VendorBillLineInput` builder finance (satu bentuk). */
+type VendorBillLineInput = VendorBillItemInput;
+
+/**
+ * F-2026-10-28-157-V Putusan 1 — guard per-baris harga vs acuan PO/GR.
+ *
+ * Tiap baris bill ber-PO dibandingkan ke harga acuan baris PO/GR yang
+ * ditautkan (`VendorBillItem.goodsReceiptItemId → GoodsReceiptItem.unitCost`,
+ * fallback `PurchaseOrderItem.unitPrice` untuk jasa). Acuan dibaca per LINE
+ * melintasi SEMUA GR milik PO (bukan first-GR saja): tiap baris GR (unitCost)
+ * dikelompokkan per itemId berurut id menaik, lalu dikonsumsi berurutan
+ * mengikuti urutan baris bill — cermin `loadGrLineQueues`/`mapVendorBillItems`
+ * supaya dua baris bill item sama tertaut ke DUA baris GR berbeda. Syarat
+ * lolos per baris: `|net_bill − net_acuan| ≤ max(Rp1000, 1% × qty × unitCost_acuan)`.
+ * Guard agregat existing (`assertThreeWayMatch` +
+ * `assertGrBillingWithinReceived`) TETAP — guard ini menambah, bukan mengganti.
+ *
+ * Diskon baris ikut via `computeBillLineAmounts` (net `subtotal` baris vs net
+ * acuan), bukan harga bruto — diskon sah bukan over-bill. Over-bill HARGA
+ * (unitPrice naik, qty sama) dan over-bill QTY (qty naik) diperlakukan SAMA di
+ * angka, dibedakan hanya di pesan error. Bill TANPA baris (kop manual) diskip
+ * by-design — pagar tetap guard agregat jasa. Toleransi ini GUARD KUANTITAS,
+ * bukan toleransi uang lunas (status lunas tetap `isSettled` Rp1).
+ */
+async function assertBillLinePricesWithinReference(
+  tx: Prisma.TransactionClient,
+  purchaseOrderId: number,
+  itemsJson: string | null | undefined,
+): Promise<void> {
+  const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? [];
+  const lines = rows.filter(
+    (r) => safeRound(parseLocaleNumber(r.qty) ?? 0, 2) > 0,
+  );
+  if (lines.length === 0) return; // kop manual: pagar tetap agregat jasa
+  const itemIds = Array.from(
+    new Set(
+      lines
+        .map((r) =>
+          r.itemId != null && r.itemId !== ""
+            ? Number(r.itemId)
+            : NaN,
+        )
+        .filter((n) => Number.isFinite(n) && n > 0),
+    ),
+  );
+  if (itemIds.length === 0) return;
+  // Acuan per LINE melintasi SEMUA GR milik PO: mock tx lama tanpa
+  // purchaseOrderItem/goodsReceiptItem = kop manual pola lama, pagar agregat.
+  const poModel = (tx as unknown as { purchaseOrderItem?: { findMany: (a: unknown) => Promise<never[]> } }).purchaseOrderItem;
+  const grModel = (tx as unknown as { goodsReceiptItem?: { findMany: (a: unknown) => Promise<never[]> } }).goodsReceiptItem;
+  if (!poModel || !grModel) return;
+  const poLines = (await poModel.findMany({
+    where: { purchaseOrderId, itemId: { in: itemIds } },
+    select: { itemId: true, unitPrice: true, qty: true },
+  })) as { itemId: number; unitPrice: unknown; qty: unknown }[];
+  const poByItem = new Map(poLines.map((p) => [p.itemId, p]));
+  // Acuan per LINE melintasi SEMUA GR milik PO: baris GR dikelompokkan per
+  // itemId berurut id menaik, lalu dikonsumsi berurutan mengikuti urutan baris
+  // bill (cermin loadGrLineQueues/mapVendorBillItems) — bukan first-GR saja.
+  const grRows = (await grModel.findMany({
+    where: {
+      goodsReceipt: { purchaseOrderId },
+      itemId: { in: itemIds },
+    },
+    select: { id: true, itemId: true, unitCost: true },
+    orderBy: { id: "asc" },
+  })) as { id: number; itemId: number; unitCost: unknown }[];
+  const grQueuesByItem = new Map<number, number[]>();
+  for (const g of grRows) {
+    const unitCost = Number(g.unitCost ?? 0);
+    const bucket = grQueuesByItem.get(g.itemId);
+    if (bucket) bucket.push(unitCost);
+    else grQueuesByItem.set(g.itemId, [unitCost]);
+  }
+  for (const row of lines) {
+    const itemId = row.itemId != null && row.itemId !== "" ? Number(row.itemId) : NaN;
+    if (!Number.isFinite(itemId) || itemId <= 0) continue;
+    const poLine = poByItem.get(itemId);
+    const refPrice = poLine != null ? Number(poLine.unitPrice ?? 0) : NaN;
+    const refQty = poLine != null ? Number(poLine.qty ?? 0) : 0;
+    if (!poLine || !(refPrice > 0)) continue; // baris tanpa acuan PO tak terjangkau guard
+    const amounts = computeBillLineAmounts(row);
+    // Konsumsi acuan GR berurutan per baris bill; antrean habis = fallback
+    // harga PO (jasa/tanpa GR). Acuan GR hanya dipakai bila unitCost > 0.
+    const grCost = grQueuesByItem.get(itemId)?.shift();
+    const refNetPerUnit =
+      grCost != null && grCost > 0 ? grCost : refPrice;
+    const tolerance = Math.max(1000, safeMultiply(amounts.qty * refNetPerUnit, 0.01, 2));
+    const diff = Math.abs(safeSubtract(amounts.subtotal, safeMultiply(amounts.qty, refNetPerUnit, 2), 2));
+    if (diff > tolerance) {
+      const overQty = refQty > 0 && amounts.qty > refQty;
+      throw new Error(
+        overQty
+          ? `Harga per baris item #${itemId} melebihi acuan: qty ${amounts.qty} melebihi qty PO ${refQty} (selisih Rp${diff.toLocaleString("id-ID")} > toleransi Rp${tolerance.toLocaleString("id-ID")}).`
+          : `Harga per baris item #${itemId} melebihi acuan: Rp${amounts.unitPrice.toLocaleString("id-ID")} vs acuan Rp${Number(refNetPerUnit).toLocaleString("id-ID")} (selisih Rp${diff.toLocaleString("id-ID")} > toleransi Rp${tolerance.toLocaleString("id-ID")}).`,
+      );
+    }
+  }
+}
+
+/**
+ * F-2026-10-28-157-V Putusan 3 — bill ber-PO WAJIB `terms` format referensi
+ * `TERMIN n/m — <acuan>`; kosong = termin tunggal, LULUS.
+ */
+function assertTermsReference(terms: string | null | undefined): void {
+  if (!isValidTermsReference(terms)) {
+    throw new Error(VENDOR_BILL_TERMS_REF_ERROR);
+  }
+}
+
 type ItemMeta = { sku: string; name: string; unitOfMeasure: string | null };
 
 /**
@@ -1416,6 +1532,10 @@ export async function createVendorBill(formData: FormData) {
             `Vendor tagihan tidak sesuai dengan vendor PO ${po.documentNo}.`,
           );
         }
+
+        // F-2026-10-28-157-V Putusan 1+3: guard per-baris + referensi termin.
+        assertTermsReference(v.terms);
+        await assertBillLinePricesWithinReference(tx, v.purchaseOrderId, v.items);
       }
 
       await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, billHeader.subtotal);
@@ -1666,6 +1786,7 @@ export async function confirmVendorBill(billId: number) {
     // pass the match and over-bill. Mirrors confirmVendorPayment. GL posting runs
     // after commit (onVendorBillPosted opens its own tx and is idempotent).
     let completedOrderNotice: string | undefined;
+    let taxInvoiceWarning: string | undefined;
     await prisma.$transaction(async (tx) => {
       if (bill.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${bill.purchaseOrderId} FOR UPDATE`;
@@ -1712,6 +1833,37 @@ export async function confirmVendorBill(billId: number) {
         fresh.id,
       );
 
+      // F-2026-10-28-157-V Putusan 1+3 di confirm (titik ketiga): guard
+      // per-baris + referensi termin atas baris/invoc tersimpan, BUKAN input
+      // form — edit draft yang menaikkan harga sesudah create tetap tertahan
+      // di sini walau create lolos.
+      if (fresh.purchaseOrderId) {
+        assertTermsReference(fresh.terms);
+        const savedLines = await tx.vendorBillItem.findMany({
+          where: { vendorBillId: billId },
+          select: {
+            itemId: true,
+            qty: true,
+            unitPrice: true,
+            discountPercent: true,
+            taxPercent: true,
+          },
+        });
+        await assertBillLinePricesWithinReference(
+          tx,
+          fresh.purchaseOrderId,
+          JSON.stringify(
+            savedLines.map((l) => ({
+              itemId: l.itemId,
+              qty: Number(l.qty),
+              unitPrice: Number(l.unitPrice),
+              discountPercent: Number(l.discountPercent ?? 0),
+              taxPercent: Number(l.taxPercent ?? 0),
+            })),
+          ),
+        );
+      }
+
       await tx.vendorBill.update({
         where: { id: billId },
         data: {
@@ -1727,6 +1879,13 @@ export async function confirmVendorBill(billId: number) {
       // Trigger GL hook inside transaction
       await onVendorBillPosted(billId, Number(user.id), tx);
 
+      // F-2026-10-28-157-V Putusan 2: tax>0 tanpa nomor valid = confirm TETAP
+      // LULUS + warning pola completedOrderNotice (bukan tolak, bukan fail
+      // diam-diam). Jurnal hook sudah gabung HPP tanpa kaki PPN Masukan.
+      if (Number(fresh.tax ?? 0) > 0 && !isValidVendorTaxInvoiceNumber(fresh.taxInvoiceNumber ?? null)) {
+        taxInvoiceWarning = VENDOR_BILL_TAX_INVOICE_WARNING;
+      }
+
       // Reflect the posted (now recognised) value in the work order's HPP.
       const notice = await syncServicePoCostFromBills(tx, fresh.purchaseOrderId, Number(user.id));
       if (notice) completedOrderNotice = notice.text;
@@ -1739,7 +1898,10 @@ export async function confirmVendorBill(billId: number) {
       `Posting tagihan vendor #${billId}`,
     );
     revalidatePath("/pembelian/tagihan");
-    return completedOrderNotice ? { success: true, warning: completedOrderNotice } : { success: true };
+    const warnings = [taxInvoiceWarning, completedOrderNotice].filter(
+      (w): w is string => !!w,
+    );
+    return warnings.length > 0 ? { success: true, warning: warnings.join(" ") } : { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[confirmVendorBill]", getErrorMessage(e) || e);
@@ -3020,6 +3182,10 @@ export async function updateVendorBill(id: number, formData: FormData) {
 
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+        // F-2026-10-28-157-V Putusan 1+3 di edit (titik kedua): sama seperti
+        // create — guard per-baris + referensi termin atas input baru.
+        assertTermsReference(v.terms);
+        await assertBillLinePricesWithinReference(tx, v.purchaseOrderId, v.items);
       }
 
       await assertThreeWayMatch(
@@ -3456,6 +3622,122 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
+/**
+ * F-2026-10-28-157-V Putusan 2 — isi nomor faktur pajak pasca-posting.
+ *
+ * Syarat jurnal ulang WAJIB (flip SPT saja DILARANG): reversal jurnal posted
+ * asal (periode asal terbuka) + posting ulang jurnal BARU di periode berjalan
+ * terbuka yang memecah PPN keluar dari HPP menjadi Dr PPN Masukan. Hanya bila
+ * nomor valid + dalam jendela 3 masa UU PPN 9(2)/(9) + periode asal terbuka
+ * untuk koreksi SPT bila sudah dilaporkan. Bill draft ditolak (pakai edit),
+ * bill tanpa tax>0 ditolak (tak ada PPN dipecah), bill bernomor valid ditolak
+ * (tak ada yang diperbaiki), bill tanpa jurnal posted ditolak (jurnal belum
+ * lahir — confirm dulu).
+ */
+export async function setVendorBillTaxInvoiceNumber(
+  id: number,
+  formData: FormData,
+) {
+  "use server";
+  try {
+    await requirePermission("approve_vendor_bills");
+    const clean = String(formData.get("taxInvoiceNumber") ?? "").trim();
+    if (!isValidVendorTaxInvoiceNumber(clean)) {
+      return {
+        success: false,
+        error:
+          "Nomor faktur pajak tidak valid — hanya huruf, angka, spasi, titik, dan strip (maks 50 karakter).",
+      };
+    }
+
+    const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } });
+    if (bill.status === "draft") {
+      return {
+        success: false,
+        error: "Tagihan masih konsep — ubah nomor lewat edit, bukan aksi ini.",
+      };
+    }
+    if (bill.status === "cancelled") {
+      return { success: false, error: "Tagihan sudah dibatalkan." };
+    }
+    if (Number(bill.tax ?? 0) <= 0) {
+      return {
+        success: false,
+        error: "Tagihan ini tidak memuat PPN — tidak ada yang dipecah ke PPN Masukan.",
+      };
+    }
+    if (isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)) {
+      return {
+        success: false,
+        error: "Tagihan ini sudah bernomor faktur valid.",
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorBill.findUniqueOrThrow({ where: { id } });
+      if (fresh.status === "draft" || fresh.status === "cancelled") {
+        throw new Error("Tagihan tidak dalam status terposting.");
+      }
+      if (Number(fresh.tax ?? 0) <= 0) {
+        throw new Error("Tagihan ini tidak memuat PPN.");
+      }
+
+      // Jendela 3 masa UU PPN 9(2)/(9): kredit dibuka maks 3 masa sesudah
+      // masa faktur. Masa faktur = tanggal bill (DPP lahir saat bill posting).
+      const invoicePeriod = taxPeriodFromDate(fresh.date);
+      const creditPeriod = taxPeriodFromDate(new Date());
+      const elig = checkCreditEligibility(invoicePeriod, creditPeriod);
+      if (!elig.eligible) {
+        throw new Error(
+          elig.reason === "expired"
+            ? `Jendela kredit PPN sudah lewat (masa faktur ${invoicePeriod}, maks 3 masa sesudahnya) — nomor tidak bisa dikreditkan lagi.`
+            : `Masa kredit ${creditPeriod} mendahului masa faktur ${invoicePeriod} — nomor tidak bisa dikreditkan.`,
+        );
+      }
+
+      // Jurnal ulang WAJIB dalam periode terbuka: reversal posted asal
+      // (assertPeriodOpen atas tanggal jurnal asal di dalam tx) lalu posting
+      // ulang jurnal BARU yang memecah PPN keluar dari HPP.
+      const origins = await tx.journal.findMany({
+        where: { referenceType: "VendorBill", referenceId: id, status: "POSTED" },
+        select: { id: true },
+      });
+      if (origins.length === 0) {
+        throw new Error("Jurnal tagihan terposting tidak ditemukan — konfirmasi dulu.");
+      }
+      await reverseJournalsByReferenceTx(
+        tx,
+        "VendorBill",
+        id,
+        `Nomor faktur pajak ${clean} diisi pasca-posting — pecah PPN dari HPP`,
+        undefined,
+      );
+      await tx.vendorBill.update({
+        where: { id },
+        data: { taxInvoiceNumber: clean },
+      });
+      await onVendorBillPosted(id, undefined, tx);
+    });
+
+    await logActivity(
+      "update",
+      "VendorBill",
+      id,
+      `Mengisi nomor faktur pajak tagihan vendor #${id} pasca-posting (jurnal ulang)`,
+    );
+    revalidatePath("/pembelian/tagihan");
+    revalidatePath(`/pembelian/tagihan/${bill.slug ?? id}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[setVendorBillTaxInvoiceNumber]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
 /**
  * Void (cancel) a posted vendor bill while keeping the record for audit.
  * Reverses the bill journal (re-opening the GR/IR clearing balance) and marks the

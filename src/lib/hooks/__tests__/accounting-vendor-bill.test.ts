@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { onVendorBillPosted } from "@/lib/hooks/accounting.hook"
 import type { Prisma } from "@prisma/client"
 
 type TxClient = Prisma.TransactionClient
@@ -26,13 +27,22 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: mocks.assertPeriodOpen,
 }))
+const PAYABLE = 210
+const EXPENSE = 620
+// 135 = clearing persediaan, 150 = PPN Masukan (satu sumber per berkas).
+const CLEARING = 135
+const TAX = 150
+const PPH_LIABILITY = 411
 
-import { onVendorBillPosted } from "@/lib/hooks/accounting.hook"
-
-// Settings with the payable account configured (so the early-return guard
-// passes) but no inventory/tax accounts, to exercise the service/expense branch.
-const PAYABLE = 900
-const EXPENSE = 910
+// Penyalur tx uji: satu definisi, dipakai semua describe (hindari 3 blok identik).
+function wireVendorBillTx() {
+  mocks.transaction.mockImplementation(async (cb: (tx: TxClient) => unknown) =>
+    cb({
+      journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
+      vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
+    } as unknown as TxClient)
+  )
+}
 
 const SERVICE_BILL = {
   id: 1,
@@ -50,16 +60,7 @@ describe("onVendorBillPosted - service/expense branch", () => {
     mocks.journalFindFirst.mockResolvedValue(null) // not yet posted
     mocks.goodsReceiptCount.mockResolvedValue(0)
     mocks.assertPeriodOpen.mockResolvedValue(undefined)
-    // $transaction invokes its callback with a tx exposing model delegates
-    mocks.transaction.mockImplementation(async (cb: (tx: TxClient) => unknown) =>
-      cb({
-        journal: {
-          create: mocks.journalCreate,
-          findFirst: mocks.journalFindFirst,
-        },
-        vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
-      } as unknown as TxClient)
-    )
+    wireVendorBillTx()
     mocks.journalCreate.mockResolvedValue({ id: 1 })
   })
 
@@ -124,8 +125,6 @@ describe("onVendorBillPosted - service/expense branch", () => {
 })
 
 describe("onVendorBillPosted - PPh withholding", () => {
-  const PPH_LIABILITY = 920
-
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.journalFindFirst.mockResolvedValue(null)
@@ -138,12 +137,7 @@ describe("onVendorBillPosted - PPh withholding", () => {
       purchaseInventoryAccountId: null,
       purchaseTaxAccountId: null,
     })
-    mocks.transaction.mockImplementation(async (cb: (tx: TxClient) => unknown) =>
-      cb({
-        journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
-        vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
-      } as unknown as TxClient)
-    )
+    wireVendorBillTx()
   })
 
   it("credits the PPh liability and only the net amount to AP", async () => {
@@ -225,5 +219,59 @@ describe("onVendorBillPosted - PPh withholding", () => {
     const entries = arg.data.entries.create as { accountId: number; memo: string }[]
     expect(entries[0].memo).toContain("WO-0007")
     expect(entries[0].accountId).toBe(EXPENSE)
+  })
+})
+
+describe("F-2026-10-28-157-V E157B-4 hook gabung-HPP", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.goodsReceiptCount.mockResolvedValue(1) // goods-based via PO
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
+    mocks.journalCreate.mockResolvedValue({ id: 1 })
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      purchasePayableAccountId: PAYABLE,
+      purchaseExpenseAccountId: EXPENSE,
+      purchaseInventoryAccountId: CLEARING,
+      purchaseTaxAccountId: TAX,
+    })
+    wireVendorBillTx()
+  })
+
+  const entriesOf = () =>
+    mocks.journalCreate.mock.calls[0][0].data.entries.create as {
+      accountId: number
+      debit: number
+      credit: number
+    }[]
+
+  it("tanpa nomor = clearing grandTotal penuh, TANPA kaki PPN Masukan", async () => {
+    const bill = {
+      id: 1, grandTotal: 1_100_000, tax: 100_000, taxInvoiceNumber: null,
+      date: new Date("2026-06-01"), documentNo: "BILL-1", purchaseOrderId: 5,
+    }
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
+
+    await onVendorBillPosted(1, 42)
+
+    const entries = entriesOf()
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: CLEARING, debit: 1_100_000, credit: 0 }))
+    expect(entries).not.toContainEqual(expect.objectContaining({ accountId: TAX }))
+    const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
+    expect(totalDebit).toBe(entries.reduce((s, e) => s + e.credit, 0))
+  })
+
+  it("kontrol arah: bernomor valid = kaki PPN Masukan tetap ada", async () => {
+    const bill = {
+      id: 1, grandTotal: 1_100_000, tax: 100_000, taxInvoiceNumber: "010.000-26.00000001",
+      date: new Date("2026-06-01"), documentNo: "BILL-1", purchaseOrderId: 5,
+    }
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
+
+    await onVendorBillPosted(1, 42)
+
+    const entries = entriesOf()
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: CLEARING, debit: 1_000_000, credit: 0 }))
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: TAX, debit: 100_000, credit: 0 }))
   })
 })

@@ -108,3 +108,25 @@ export function sumBillItemDiscount(itemsJson: string | null | undefined): numbe
     return safeAdd(sum, computeBillLineAmounts(row).discountAmount, 2)
   }, 0)
 }
+
+/**
+ * F-2026-10-28-157-V Putusan 3 — format referensi termin.
+ *
+ * Bill ber-PO WAJIB `terms` = `TERMIN n/m — <acuan>` (n ≤ m, n,m ≥ 1);
+ * bill TANPA `terms` = termin tunggal, LULUS tanpa warning; bill tanpa PO =
+ * teks bebas (Putusan 3 hanya mengikat bill ber-PO).
+ */
+export const VENDOR_BILL_TERMS_REF_PATTERN = /^TERMIN\s+(\d+)\s*\/\s*(\d+)\s+[—–-]\s*\S/
+
+export function isValidTermsReference(terms: string | null | undefined): boolean {
+  const t = (terms ?? "").trim()
+  if (t === "") return true
+  const m = VENDOR_BILL_TERMS_REF_PATTERN.exec(t)
+  if (!m) return false
+  const n = Number(m[1])
+  const total = Number(m[2])
+  return n >= 1 && total >= 1 && n <= total
+}
+
+export const VENDOR_BILL_TERMS_REF_ERROR =
+  "Termin bill ber-PO wajib format referensi TERMIN n/m — <acuan> (contoh: TERMIN 1/3 — DP 30% PO-2026-001). Kosongkan bila termin tunggal."
