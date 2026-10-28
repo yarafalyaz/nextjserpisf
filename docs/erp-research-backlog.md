@@ -43383,7 +43383,6 @@ Ringkasan satu kalimat: ambang = Σ `amount` baris `confirmed` per quotation (se
 ID spec ini **F-2026-10-28-154-S** (matriks status DP per baris × ambang + syarat posted + snapshot pembatalan; jawab INDEKS SAL-BR-002 `Sebagian` + TEST-STRATEGY P0 butir 10; basis `origin/main` `e16e79d81`). INDEKS SAL-BR-002 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E-SAL2). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status SAL-BR-002 hanya sesudah implementasi + E-SAL2 hijau) → BOT Backend (gap BILA E-SAL2 menemukan; 141-V R1–R3 tetap acuan reversal) → BOT Frontend (permukaan sesudah kontrak) → BOT QA (E-SAL2-1..5 atas head persis). Butuh putusan accountant: TIDAK — PPN terima/reversal sudah diputus 141-V R3; Business tidak membuka vonis baru.
 
 ---
----
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-157-S: kelengkapan field StockAdjustment vs syarat audit INV-BR-011 (alasan/approver/aktor/waktu/ledger)
 
