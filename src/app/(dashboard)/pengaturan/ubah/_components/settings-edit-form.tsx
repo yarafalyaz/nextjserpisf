@@ -48,6 +48,7 @@ interface SettingsFormValues {
   companyLogo?: string | null
   companyLogoDark?: string | null
   companyLongitude?: number | null
+  customerDownPaymentAccountId?: number | null
   companyName?: string | null
   companyPhone?: string | null
   companyPkpEffectiveFrom?: string | null
@@ -161,6 +162,10 @@ interface SettingsFormValues {
   workOrderPrefix?: string | null
   retainedEarningsAccountId?: number | null
   lateFeeIncomeAccountId?: number | null
+  warrantyExpenseAccountId?: number | null
+  warrantyProvisionAccountId?: number | null
+  supplierClaimReceivableAccountId?: number | null
+  reimbursementLiabilityAccountId?: number | null
 }
 
 interface AccountMappingField {
@@ -298,6 +303,15 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [retainedEarnings, setRetainedEarnings] = useState(settings.retainedEarningsAccountId ? String(settings.retainedEarningsAccountId) : "")
   const [lateFeeIncome, setLateFeeIncome] = useState(settings.lateFeeIncomeAccountId ? String(settings.lateFeeIncomeAccountId) : "")
   const [fiscalRevalTaxPayable, setFiscalRevalTaxPayable] = useState(settings.assetFiscalRevaluationTaxPayableAccountId ? String(settings.assetFiscalRevaluationTaxPayableAccountId) : "")
+  // Lima akun yang dibaca fail-closed hook uang (DP penjualan, garansi, klaim
+  // supplier, reimbursement) — dulu tidak punya input sehingga hasil auto-map
+  // untuk kunci ini dibuang tanpa jejak dan checklist mapping menuntut field
+  // yang tak ada di form.
+  const [customerDownPayment, setCustomerDownPayment] = useState(settings.customerDownPaymentAccountId ? String(settings.customerDownPaymentAccountId) : "")
+  const [warrantyExpense, setWarrantyExpense] = useState(settings.warrantyExpenseAccountId ? String(settings.warrantyExpenseAccountId) : "")
+  const [warrantyProvision, setWarrantyProvision] = useState(settings.warrantyProvisionAccountId ? String(settings.warrantyProvisionAccountId) : "")
+  const [supplierClaimReceivable, setSupplierClaimReceivable] = useState(settings.supplierClaimReceivableAccountId ? String(settings.supplierClaimReceivableAccountId) : "")
+  const [reimbursementLiability, setReimbursementLiability] = useState(settings.reimbursementLiabilityAccountId ? String(settings.reimbursementLiabilityAccountId) : "")
   const [accountOptions, setAccountOptions] = useState(accounts)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
@@ -333,6 +347,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "salesTaxAccountId", label: "PPN Keluaran", value: salesTax, onChange: setSalesTax },
         { name: "salesReturnAccountId", label: "Retur Penjualan", value: salesReturn, onChange: setSalesReturn },
         { name: "salesAccountId", label: "Akun Penjualan", value: salesAcc, onChange: setSalesAcc },
+        { name: "customerDownPaymentAccountId", label: "Uang Muka Penjualan (Liabilitas)", value: customerDownPayment, onChange: setCustomerDownPayment },
       ],
     },
     {
@@ -387,6 +402,18 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "depreciationExpenseAccountId", label: "Beban Penyusutan", value: depreciationExpense, onChange: setDepreciationExpense },
         { name: "accumulatedDepreciationAccountId", label: "Akumulasi Penyusutan", value: accumulatedDepreciation, onChange: setAccumulatedDepreciation },
         { name: "assetFiscalRevaluationTaxPayableAccountId", label: "Utang PPh Final Revaluasi Fiskal", value: fiscalRevalTaxPayable, onChange: setFiscalRevalTaxPayable },
+      ],
+    },
+    {
+      // Akun yang dibaca fail-closed hook uang: garansi (beban + provisi), klaim
+      // supplier (piutang), reimbursement (liabilitas). Tanpa input di sini
+      // auto-map membuang hasilnya dan checklist mapping menunjuk field hantu.
+      title: "Garansi, Klaim Supplier & Reimbursement",
+      items: [
+        { name: "warrantyExpenseAccountId", label: "Beban Garansi (510104)", value: warrantyExpense, onChange: setWarrantyExpense },
+        { name: "warrantyProvisionAccountId", label: "Provisi Garansi (210205)", value: warrantyProvision, onChange: setWarrantyProvision },
+        { name: "supplierClaimReceivableAccountId", label: "Piutang Klaim Supplier (110508)", value: supplierClaimReceivable, onChange: setSupplierClaimReceivable },
+        { name: "reimbursementLiabilityAccountId", label: "Utang Reimbursement (210209)", value: reimbursementLiability, onChange: setReimbursementLiability },
       ],
     },
     {
@@ -451,6 +478,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       pkwtCompensationPayableAccountId: setPkwtPayable,
       depreciationExpenseAccountId: setDepreciationExpense,
       accumulatedDepreciationAccountId: setAccumulatedDepreciation,
+      customerDownPaymentAccountId: setCustomerDownPayment,
+      warrantyExpenseAccountId: setWarrantyExpense,
+      warrantyProvisionAccountId: setWarrantyProvision,
+      supplierClaimReceivableAccountId: setSupplierClaimReceivable,
+      reimbursementLiabilityAccountId: setReimbursementLiability,
     }
     for (const [key, value] of Object.entries(mapping)) {
       setters[key]?.(value)
