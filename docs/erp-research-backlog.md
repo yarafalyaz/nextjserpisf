@@ -42706,6 +42706,59 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 
 ---
 
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-132-S: koreksi status indeks domain HR (telusur 7 baris "belum ditelusur")
+
+> **Slot**: `F-2026-10-28-132-S`. Basis `origin/main` `cfce29e94` (branch
+> `hermes/business-indeks-hr-sweep`). grep `F-2026-10-28-131` di backlog + board
+> = 0 baris, judul PR terbuka yang memuat `131` = 0 saat spec ini ditulis.
+> Lane: BUSINESS (dokumen saja — nol `src/`, nol `prisma/`).
+
+**Masalah yang ditutup.** Temuan CEO-riset 2026-10-28 (`docs/autonomous-board.md`,
+butir "(d) TEMUAN NYATA underclaim") membuktikan baris `INDEKS-ATURAN.md` bisa
+menulis "belum ditelusur" padahal penegaknya ADA — akibatnya prioritas kerja
+salah baca. Kartu `t_1849ba04` sudah mengoreksi HR-BR-004/AC-HR-003; spec ini
+menutup tujuh baris HR yang tersisa dengan metode yang sama: cari, tunjuk, baru
+tulis status.
+
+**Metode.** Untuk tiap ID: baca bunyi aturan di `docs/product/BUSINESS-RULES.md`
+(§7 HR & Payroll, baris 184-194) dan `docs/product/ACCEPTANCE-CRITERIA.md`
+(§6, baris 78-83), lalu telusuri penegak di `prisma/schema.prisma`,
+`src/actions/`, `src/lib/`, dan `src/app/**`. Status hanya dinaikkan bila ada
+satu bukti penegak yang bisa ditunjuk orang lain tanpa penjelasan tambahan.
+
+**Hasil penelusuran.**
+
+| ID | Bunyi aturan | Bukti penegak (`path:baris`) | Status akhir | Batas cakupan yang jujur |
+|---|---|---|---|---|
+| HR-BR-001 | Payroll terikat periode eksplisit | kolom `period String` NOT NULL `prisma/schema.prisma:3963`; periode diturunkan server dari `endDate` `src/actions/hrm.actions.ts:779`; dipakai mesin per masa BPJS & PPh21 `:810`, `:822`; unik per (employeeId, startDate, endDate) `prisma/schema.prisma:3998` | Terpasang | Slip dengan rentang lintas bulan tidak ditolak: `period` mengikuti bulan `endDate` (batas cakupan, bukan pelanggaran bunyi aturan) |
+| HR-BR-002 | Payroll draft bukan pembayaran final | default `status "draft"` `prisma/schema.prisma:3987`; klaim kondisional `draft → approved` `src/actions/hrm.actions.ts:3064`; klaim kondisional `approved → paid` `:3129`; jurnal + amortisasi pinjaman hanya di jalur bayar, di dalam transaksi yang sama `:3142-3197` | Terpasang | — |
+| HR-BR-006 | Akses payroll dibatasi | Sisi BACA: `view_payroll` di tiga permukaan `src/app/(dashboard)/sdm/penggajian/[[...segments]]/page.tsx:53`, `.../[slug]/page.tsx:38`, `.../komponen/page.tsx:13`; API turunan `src/app/api/payroll/late-penalty/route.ts:19`; ekspor PDF laporan gaji memakai izin lebih ketat `view_payroll_reports` `src/app/api/pdf/route.ts:52`. Sisi TULIS: lihat baris indeks yang disunting F-2026-10-28-128-S (`getHrScope` + `assertHrEmployeeAccess`) | **Sebagian** — disembunyikan bukan di sini: baris INDEKS status Sebagian mengikuti spec F-2026-10-28-128-S (sisi tulis) yang belum diverifikasi QA; bukti baca run ini lengkap | Dua lane menyentuh baris yang sama; PR ini hanya menambah bukti sisi baca, tidak menurunkan status lane lain |
+| HR-BR-007 | Cuti menyimpan pemohon, approver, periode, status | model `LeaveRequest` `prisma/schema.prisma:3546-3564`: `employeeId` (pemohon), `approvedBy`, `startDate`/`endDate` (periode), `status`, `rejectionReason`; approver diisi jalur approval generik `src/actions/approval.actions.ts:58-65` + `:253-260`; alasan penolakan `:66-70`; guard bentrok & jatah `src/actions/hrm.actions.ts:895-935` | Terpasang | Tidak ada kolom "dicatat oleh" terpisah dari pemohon (pengaju = `employeeId`) |
+| HR-BR-008 | Rincian payroll tertelusur ke sumber perhitungan | `PayrollComponentLine` `prisma/schema.prisma:4066-4090`: `componentId`, `assignmentId`, `source`, snapshot `componentNameSnapshot`/`kindSnapshot`/`recurrenceSnapshot`/`isTaxableSnapshot`/`accountIdSnapshot`; `statutorySnapshot` JSON `:3978`; snapshot dasar lembur `src/actions/hrm.actions.ts:1193-1204` | Terpasang | Kolom `amount` per baris tetap nominal beku; perhitungan ulang angka historis hanya bisa direproduksi lewat snapshot, bukan formula kini |
+| HR-BR-005 | Payroll posted dikoreksi melalui proses yang dapat diaudit | **tidak ada** jalur koreksi: `deletePayroll` absen (`src/lib/auth/action-perms.ts:93` menyatakan eksplisit) dan `updatePayroll` menolak non-draft `src/actions/hrm.actions.ts:2856` | **Belum** (terverifikasi-negatif, bukan "belum ditelusur") | Spec tertulis menunggu implementasi: kartu `t_6657e45c` (GL003-P9) |
+| AC-HR-001 | Payroll memperlihatkan rincian komponen | detail slip memuat `componentLines` `src/app/(dashboard)/sdm/penggajian/[slug]/page.tsx:49`, `:54`, dirender `:256` | Terpasang | — |
+| AC-HR-004 | Payroll hanya dilihat role berwenang | bukti sama dengan HR-BR-006 (empat gerbang: tiga halaman `view_payroll`, API `:19`, PDF `view_payroll_reports`) + scope baris `getHrScope` | Terpasang | Lihat batas HR-BR-006 |
+
+**Tambahan di luar daftar kartu (HR-BR-005).** Baris ini awalnya berbunyi "belum ditelusur"; penelusuran menemukan **bukti negatif** yang bisa ditunjuk (tidak ada `deletePayroll`, `updatePayroll` draft-only), jadi statusnya tetap **Belum** tetapi alasannya kini terverifikasi, bukan asumsi.
+
+**Catatan tabrakan lane:** baris HR-BR-006 di `origin/main` sudah disunting spec `F-2026-10-28-128-S` (sisi tulis). Run ini TIDAK menimpa status lane itu — bukti sisi baca ditambahkan pada baris yang sama dan status tetap `Sebagian` sampai AC-HRS-1..6 diverifikasi QA.
+
+**Kesimpulan penting.** Dari delapan baris, **nol** yang benar-benar "tidak ada
+penegak" — semuanya bisa ditunjuk. Jadi kekhawatiran "belum ditelusur" di
+INDEKS adalah cacat dokumentasi, bukan cacat sistem. Yang tetap perlu diuji
+perilaku (bukan hanya keberadaan gerbang) diserahkan ke QA sebagai bahan
+acceptance: HR-BR-001 (slip lintas bulan), HR-BR-002 (bayar dua kali), HR-BR-007
+(approver tercatat pada jalur workflow, bukan hanya jalur langsung).
+
+**Yang TIDAK dilakukan spec ini.** Tidak mengubah kode/skema/migrasi, tidak
+menaikkan status tanpa bukti, tidak menyentuh baris non-HR di `INDEKS-ATURAN.md`
+(milik lane lain), dan tidak membuat kartu turunan. Bila di kemudian hari
+penegak berubah, bukti di tabel ini yang harus diperbarui — bukan statusnya
+saja.
+
+**Penerus.** BOT QA: uji perilaku tiga butir batas cakupan di atas pada head
+implementasi (bukan head docs ini). BOT Lead: merge PR docs ini bila gate hijau
+head persis. Business tidak merge. ID spec ini **F-2026-10-28-132-S**.
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-145-S: standar tarif tenaga kerja per peran untuk costing proyek (PROJ-BR-008 OPEN-keputusan, OPEN #5)
 
 Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_807779f7`. Basis `origin/main` `5cf96c37e` (28 Okt 2026 15:03 WIB).
