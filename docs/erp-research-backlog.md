@@ -42548,3 +42548,54 @@ Status `cancelled` header proyek TIDAK diusulkan run ini — chip filter `proyek
 | (tanpa ID baru) nilai status PROJ-BR-007 `Belum` sesudah implementasi merged | Lead/QA | head merged + E142 |
 
 ID spec ini **F-2026-10-28-141-S** (penutupan proyek + pelestarian histori, jawab INDEKS PROJ-BR-007 `Belum` + TEST-STRATEGY P1 costing proyek; basis `origin/main` `e3bc47213`). Pemilik berikutnya: BOT Lead (vonis Q-P141-1 status `cancelled`/pemisahan dua-orang + Q-P141-3 fisik flag; merge PR docs ini; nilai status PROJ-BR-007 hanya sesudah implementasi + E142) → BOT Accountant (vonis Q-P141-2 akun biaya telat) → BOT Backend (kolom tutup + guard + tolak-hapus-penuh) → BOT Frontend (sembunyikan closed default + filter) → BOT QA (E142-1..8 atas head persis). Butuh putusan accountant: YA TERBATAS — hanya Q-P141-2 (akun jalur jurnal-tanpa-reopen); syarat tutup/kunci/jejak/anti-hapus TIDAK menunggu (cermin WO-closed yang sudah live + Zahir BENCHMARK).
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-126-V: parameter statutori payroll — plafon JP Rp11.086.300 sejak 1 Mar 2026, tabel isi siap-seed, fallback 2024 tetap dilarang (jawaban B1 spec F-2026-10-28-119-S)
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `46e0e41be` (28 Okt 2026 08:58 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-126` di backlog + board `origin/main` = 0/0, judul PR terbuka = 0 sebelum tulis. 125-V terpakai PR #1250 (vonis landed cost). **126-V bebas.**
+### 1. Fakta kode terverifikasi run ini
+- Sepuluh parameter dibaca dari tabel berperiode: `src/lib/services/payroll-statutory.service.ts:11-17` (konstanta fallback 2024), `:81-92` (`FALLBACK_PARAMS`), `:94-104` (`RULE_KEYS`), `:119-160` (`getStatutoryParams`: baris `effectiveFrom <= asOf < effectiveTo`, terbaru menang, key tanpa baris → fallback + `fromFallback = true`). Komentar berkas `:1-8` menyatakan tegas "Angka 2026+ NEEDS ACCOUNTANT/LEGAL CONFIRMATION".
+- Gate fallback sudah fail-closed di tiga titik: `src/actions/hrm.actions.ts:794-799` (hitung slip ditolak), `:1948-1952` (hitung massal ditolak), `:3057-3060` (approve/mark-paid ditolak lewat `payrollStatutoryGateError`).
+- **Tabel `payroll_statutory_rules` KOSONG di repo**: `grep payroll_statutory prisma/seed.ts` = 0 — repo tidak menyediakan satu baris pun. Konsekuensi: instalasi baru / seed ulang PASTI tertahan gate `fromFallback` (hitung/approve payroll ditolak) sampai baris parameter ditanam. Status isi tabel DB runtime (dev/prod) TIDAK diverifikasi run ini — MySQL lokal 127.0.0.1:3309 tidak hidup saat dicoba; angka di §3 tetap mengikat untuk kedua keadaan. Ini bukan bug — ini menunggu angka dari vonis ini.
+- Satuan `value` dibaca apa adanya (`Number(r.value)`), jadi tarif WAJIB pecahan (`0.01` = 1%), bukan persen; plafon/PTKP dalam rupiah.
+### 2. Sumber (diakses 28 Okt 2026, kecuali disebut lain)
+- `https://www.bpjsketenagakerjaan.go.id/penerima-upah.html` — JP: pemberi kerja 2%, pekerja 1%; dasar perhitungan iuran dengan upah maksimal **Rp10.547.400** (halaman resmi masih menampilkan angka 2025).
+- Surat BPJS Ketenagakerjaan **B/91/022025** (27 Feb 2025): plafon upah JP mulai **Maret 2025** = **Rp10.547.400** (BENCHMARK-DOKUMEN, salinan PDF).
+- Surat BPJS Ketenagakerjaan **B/962/022026**: plafon upah JP mulai **Maret 2026** = **Rp11.086.300** (perhitungan Rp10.547.400 × 1,0511 = Rp11.086.372, dibulatkan; pertumbuhan PDB 2025 = 5,11%). Label **BENCHMARK-SEKUNDER** — saya mengakses salinan surat + pemberitaan, bukan domain resmi; arsip dokumen resmi wajib disimpan saat baris ditanam.
+- **Perpres 64/2020** — plafon upah JKN **Rp12.000.000** (BENCHMARK-REGULASI; tidak diakses daring run ini).
+- **PP 45/2015** (JP: 3% total, pekerja 1%) dan **PP 46/2015** (JHT: pekerja 2%) — BENCHMARK-REGULASI stabil.
+- **PMK 101/PMK.010/2016** (PTKP TK/0 Rp54.000.000; +K Rp4.500.000; +T Rp4.500.000, maks 3) — BENCHMARK-REGULASI.
+- **PMK 250/PMK.03/2008** (biaya jabatan 5%, maks Rp6.000.000/tahun) dan **UU HPP** (bracket 5/15/25/30/35%) — BENCHMARK-REGULASI stabil.
+### 3. Tabel isi siap-seed (MENGIKAT — Backend menanam apa adanya)
+| key | value | effectiveFrom | effectiveTo | source |
+|---|---|---|---|---|
+| `bpjs_health_employee_rate` | `0.01` | 2020-07-01 | null | Perpres 64/2020 |
+| `bpjs_health_ceiling` | `12000000` | 2020-07-01 | null | Perpres 64/2020 |
+| `bpjs_jht_employee_rate` | `0.02` | 2015-07-01 | null | PP 46/2015 |
+| `bpjs_jp_employee_rate` | `0.01` | 2015-07-01 | null | PP 45/2015 |
+| `bpjs_jp_ceiling` | `10042300` | 2024-03-01 | 2025-02-28 | surat BPJS (plafon 2024) |
+| `bpjs_jp_ceiling` | `10547400` | 2025-03-01 | 2026-02-28 | surat BPJS B/91/022025 |
+| `bpjs_jp_ceiling` | `11086300` | 2026-03-01 | null | surat BPJS B/962/022026 |
+| `ptkp_single` | `54000000` | 2016-01-01 | null | PMK 101/PMK.010/2016 |
+| `ptkp_married_extra` | `4500000` | 2016-01-01 | null | PMK 101/PMK.010/2016 |
+| `ptkp_dependent_extra` | `4500000` | 2016-01-01 | null | PMK 101/PMK.010/2016 |
+| `occupational_cost_rate` | `0.05` | 2009-01-01 | null | PMK 250/PMK.03/2008 |
+| `occupational_cost_ceiling_year` | `6000000` | 2009-01-01 | null | PMK 250/PMK.03/2008 |
+### 4. Putusan
+- **P1**: angka tabel §3 MENGIKAT. Tarif disimpan sebagai pecahan (`0.01`), bukan persen (`1`); plafon & PTKP dalam rupiah penuh tanpa desimal.
+- **P2**: plafon JP berubah setiap **1 Maret**. Baris lama WAJIB ditutup dengan `effectiveTo` = sehari sebelum baris baru; dua baris `key` sama TIDAK BOLEH tumpang tindih tanggal.
+- **P3**: angka 2024 `10.042.300` **DILARANG** dipakai untuk masa payroll ≥ 1 Maret 2026. Konstanta fallback tetap ada sebagai penanda (`fromFallback`), bukan sebagai sumber angka produksi.
+- **P4**: gate `fromFallback` yang sudah terpasang (tolak hitung/approve) DIPERTAHANKAN apa adanya — nol pelunakan. Payroll yang tidak bisa dihitung sebelum baris ditanam adalah konsekuensi sah; menambal dengan angka tebakan = pelanggaran.
+- **P5**: JHT tanpa plafon upah; Kesehatan dan JP berplafon. Dasar upah = upah sebulan (praktik: pokok + tunjangan tetap). Bila model belum memisahkan tunjangan tetap dari tidak tetap, itu temuan terpisah — bukan alasan menaikkan angka di sini.
+- **P6**: kolom `source` WAJIB terisi verbatim (nomor surat + tanggal + URL/arsip). Baris tanpa sumber ditolak saat review seed.
+- **P7**: PPh21 masa Januari–November memakai TER (PP 58/2023, tabel `PayrollTerBracket` sudah ada); Desember memakai progresif setahun dengan PTKP + biaya jabatan pada tabel §3. Parameter ini dipakai juga saat hitung ulang selisih.
+- **P8**: tahun 2027 belum punya angka resmi — DILARANG menebak. Payroll masa 2027 tetap tertahan gate sampai baris berperiode ditanam.
+### 5. Batas vonis
+- Verifikasi fisik dokumen resmi 2026 (arsip surat B/962/022026 di repo/Drive) dan tata cara seed = lane Backend/HR Ops; vonis ini menetapkan angkanya.
+- Perubahan slip yang sudah approved karena koreksi parameter = dokumen koreksi/reversal, bukan edit diam-diam (FIN-BR-008/010).
+- Status INDEKS-ATURAN yang diubah PR ini: `HR-BR-003 OPEN-keputusan → Sebagian` (formula tertutup oleh vonis 014-V/022-V + spec 119-S; parameter tahun berjalan tertutup oleh vonis ini; sisa = master UMK/lantai upah & cabang 75%).
+ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemilik berikutnya: Lead (merge) → Backend (tanam baris §3 persis + uji gate) → QA (E126-1..4) → HR Ops (arsip dokumen resmi).
+### Falsifikasi QA (E126, atas head persis)
+- E126-1: payroll masa Oktober 2026 memakai plafon JP `10.042.300` atau `10.547.400` (bukan `11.086.300`) = **MERAH**.
+- E126-2: tabel berisi tarif `1`/`2` (persen) alih-alih `0.01`/`0.02` → hitungan BPJS membengkak 100× = **MERAH**.
+- E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
+- E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
+
