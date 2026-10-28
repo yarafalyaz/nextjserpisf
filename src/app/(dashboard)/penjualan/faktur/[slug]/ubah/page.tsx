@@ -30,7 +30,7 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
-
+  const inv = data as NonNullable<typeof data>;
   // GL-BR-003 K1: cermin guard server updateSalesInvoice fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). posted/partial/paid
   // tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
@@ -40,46 +40,40 @@ export default async function EditPage({
     { label: "Faktur", href: "/penjualan/faktur" },
     { label: "Ubah" },
   ];
-  const lockedBackHref = `/penjualan/faktur/${data.slug ?? data.id}`;
-  if (data.status === "cancelled") {
+  const lockedBackHref = `/penjualan/faktur/${inv.slug ?? inv.id}`;
+  function lockedGuard(doc: typeof inv) {
     return (
       <LockedEditGuard
         crumbs={lockedCrumbs}
-        documentLabel={`Faktur ${data.documentNo}`}
-        correctionHref={`/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`}
+        documentLabel={`Faktur ${doc.documentNo}`}
+        correctionHref={`/penjualan/retur/tambah/faktur/${doc.slug ?? doc.id}`}
         correctionLabel="retur penjualan"
         backHref={lockedBackHref}
         backLabel="Kembali ke detail faktur"
       />
     );
   }
+  if (inv.status === "cancelled") {
+    return lockedGuard(inv);
+  }
   const realSettlementCount = await prisma.salesPayment.count({
     where: {
-      salesInvoiceId: data.id,
+      salesInvoiceId: inv.id,
       NOT: { paymentMethod: "down_payment" },
     },
   });
   if (realSettlementCount > 0) {
-    return (
-      <LockedEditGuard
-        crumbs={lockedCrumbs}
-        documentLabel={`Faktur ${data.documentNo}`}
-        correctionHref={`/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`}
-        correctionLabel="retur penjualan"
-        backHref={lockedBackHref}
-        backLabel="Kembali ke detail faktur"
-      />
-    );
+    return lockedGuard(inv);
   }
 
   const invoice = {
-    id: data.id,
-    customerId: data.customerId,
-    salesOrderId: data.salesOrderId ?? null,
-    date: data.date.toISOString().split("T")[0],
-    dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
-    taxInvoiceNumber: data.taxInvoiceNumber ?? null,
-    notes: data.notes ?? null,
+    id: inv.id,
+    customerId: inv.customerId,
+    salesOrderId: inv.salesOrderId ?? null,
+    date: inv.date.toISOString().split("T")[0],
+    dueDate: inv.dueDate?.toISOString().split("T")[0] ?? null,
+    taxInvoiceNumber: inv.taxInvoiceNumber ?? null,
+    notes: inv.notes ?? null,
   };
 
   const [customers, salesOrders] = await Promise.all([
