@@ -2821,7 +2821,7 @@ export async function deleteSalesPayment(id: number) {
   await requirePermission("delete_sales_payments")
 
   // FIN-BR-008 syarat 8: hapus fisik HANYA pembayaran yang jurnalnya belum
-  // POSTED. Terposting = wajib reversal berhistori (reverseSalesPayment).
+  // POSTED. Terposting = wajib reversal berhistori, lihat aksi di bawah.
   // Baca + kunci baris di dalam tx (pola vendor; sebelumnya baca luar tx).
   let removedFiles: { fileUrl: string; referenceType: string }[] = []
   let salesInvoiceId: number | null = null
