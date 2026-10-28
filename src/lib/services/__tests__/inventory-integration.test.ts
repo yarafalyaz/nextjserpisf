@@ -3,6 +3,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import { prisma } from "../../db/prisma"
 import { toBaseFactor, toBaseQty } from "../uom.service"
 import { consumeFifoLayers, createInLayer, availableQty } from "../inventory-fifo"
+import {
+  assertMaterialIssueStockOutOnce,
+  assertSalesInvoiceStockOutOnce,
+} from "../stock-out-once.service"
 
 /**
  * DB integration tests for the per-warehouse FIFO + Multi-UoM + Batch/Serial
@@ -90,6 +94,267 @@ describe("Inventory engine (DB integration)", () => {
       await prisma.uomConversion.deleteMany({ where: { itemId: item.id } })
       await prisma.item.delete({ where: { id: item.id } })
       await prisma.warehouse.deleteMany({ where: { id: { in: [whA.id, whB.id] } } })
+    }
+  })
+})
+
+/**
+ * SAL-BR-014 (F-2026-10-28-122-S): bukti konkurensi pada DB NYATA.
+ *
+ * Temuan HIGH QA: guard tepat-satu-kali membaca StockMove lawan lewat
+ * konsisten-read (snapshot REPEATABLE READ) dan berjalan SEBELUM kunci
+ * baris items FOR UPDATE, sehingga dua posting konkuren atas dokumen
+ * BERBEDA pada pohon quotation yang SAMA dengan stok yang CUKUP untuk
+ * keduanya sama-sama lolos dan mengurangi stok dua kali.
+ *
+ * Perbaikan yang diuji di sini: kedua jalur mengunci baris `quotations`
+ * pohon (FOR UPDATE) sebelum guard, lalu guard membaca move lawan sebagai
+ * locking read. Posting kedua menunggu commit posting pertama dan ditolak.
+ *
+ * Uji ini juga mengunci perilaku konkurensi stok terakhir (INV-BR-007)
+ * pada DB nyata: dua konsumen berbeda berebut unit terakhir — satu menang,
+ * satu ditolak "Stok tidak mencukupi", lapisan tidak pernah negatif.
+ */
+describe("SAL-BR-014 serialisasi bersama (DB integration)", () => {
+  const enabled = () => process.env.RUN_DB_INTEGRATION === "1" && dbUp
+
+  it("dua posting konkuren dokumen berbeda pada pohon quotation sama: tepat satu pengeluaran (stok cukup)", async () => {
+    if (!enabled()) {
+      console.warn("RUN_DB_INTEGRATION/db tidak siap — skipping konkurensi SAL-BR-014")
+      return
+    }
+    const stamp = `SAL014-${Date.now()}`
+    const customer = await prisma.customer.create({ data: { name: `Cust ${stamp}` } })
+    const warehouse = await prisma.warehouse.create({
+      data: { code: `W${stamp}`, name: `WH ${stamp}` },
+    })
+    const item = await prisma.item.create({
+      data: { sku: `SKU-${stamp}`, name: `Item ${stamp}`, unitOfMeasure: "PCS", isProduct: true, qtyOnHand: 0 },
+    })
+    const quotation = await prisma.quotation.create({
+      data: { documentNo: `Q-${stamp}`, customerId: customer.id, date: new Date() },
+    })
+    const workOrder = await prisma.workOrder.create({
+      data: {
+        documentNo: `WO-${stamp}`,
+        customerId: customer.id,
+        quotationId: quotation.id,
+        date: new Date(),
+      },
+    })
+    const invoice = await prisma.salesInvoice.create({
+      data: {
+        documentNo: `INV-${stamp}`,
+        customerId: customer.id,
+        quotationId: quotation.id,
+        date: new Date(),
+      },
+    })
+    const issue = await prisma.materialIssue.create({
+      data: {
+        documentNo: `MI-${stamp}`,
+        warehouseId: warehouse.id,
+        workOrderId: workOrder.id,
+        date: new Date(),
+      },
+    })
+
+    const HOLD_MS = 900
+    let signalLocked!: () => void
+    const lockHeld = new Promise<void>((resolve) => {
+      signalLocked = resolve
+    })
+    let salesError: unknown = null
+    let issueError: unknown = null
+
+    try {
+      const salesTx = prisma
+        .$transaction(
+          async (tx) => {
+            await assertSalesInvoiceStockOutOnce(tx, invoice.id, [{ itemId: item.id, qty: 3 }])
+            // Kunci quotation sudah dipegang di titik ini (assert = lock dulu).
+            signalLocked()
+            await tx.stockMove.create({
+              data: {
+                documentNo: `SM-S-${stamp}`,
+                itemId: item.id,
+                warehouseId: warehouse.id,
+                qty: 3,
+                impact: "OUT",
+                status: "posted",
+                referenceType: "SalesInvoice",
+                referenceId: invoice.id,
+              },
+            })
+            // Tahan transaksi tetap terbuka: penantang WAJIB berbaris di
+            // kunci bersama, bukan membaca snapshot sebelum commit.
+            await new Promise((r) => setTimeout(r, HOLD_MS))
+            return "sales"
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+        .catch((e: unknown) => {
+          salesError = e
+          return null
+        })
+
+      await lockHeld
+
+      const issueTx = prisma
+        .$transaction(
+          async (tx) => {
+            await assertMaterialIssueStockOutOnce(tx, issue.id, [{ itemId: item.id, qty: 3 }])
+            await tx.stockMove.create({
+              data: {
+                documentNo: `SM-M-${stamp}`,
+                itemId: item.id,
+                warehouseId: warehouse.id,
+                qty: 3,
+                impact: "OUT",
+                status: "posted",
+                referenceType: "MaterialIssue",
+                referenceId: issue.id,
+              },
+            })
+            return "material"
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+        .catch((e: unknown) => {
+          issueError = e
+          return null
+        })
+
+      const [salesResult, issueResult] = await Promise.all([salesTx, issueTx])
+
+      // Pemenang: faktur penjualan (memegang kunci lebih dulu).
+      expect(salesError).toBeNull()
+      expect(salesResult).toBe("sales")
+      // Penantang: ditolak guard SETELAH melihat move lawan yang commit.
+      expect(issueResult).toBeNull()
+      expect(String((issueError as Error | null)?.message ?? "")).toMatch(/SAL-BR-014/)
+
+      const outMoves = await prisma.stockMove.count({
+        where: { itemId: item.id, impact: "OUT", status: "posted" },
+      })
+      expect(outMoves).toBe(1)
+    } finally {
+      await prisma.stockMove.deleteMany({ where: { itemId: item.id } })
+      await prisma.materialIssue.delete({ where: { id: issue.id } }).catch(() => undefined)
+      await prisma.workOrder.delete({ where: { id: workOrder.id } }).catch(() => undefined)
+      await prisma.salesInvoice.delete({ where: { id: invoice.id } }).catch(() => undefined)
+      await prisma.quotation.delete({ where: { id: quotation.id } }).catch(() => undefined)
+      await prisma.item.delete({ where: { id: item.id } }).catch(() => undefined)
+      await prisma.warehouse.delete({ where: { id: warehouse.id } }).catch(() => undefined)
+      await prisma.customer.delete({ where: { id: customer.id } }).catch(() => undefined)
+    }
+  })
+
+  it("dua konsumen konkuren berebut unit terakhir: satu menang, satu 'Stok tidak mencukupi', lapisan tidak negatif", async () => {
+    if (!enabled()) {
+      console.warn("RUN_DB_INTEGRATION/db tidak siap — skipping konkurensi stok terakhir")
+      return
+    }
+    const stamp = `LAST-${Date.now()}`
+    const warehouse = await prisma.warehouse.create({
+      data: { code: `LW${stamp}`, name: `WH ${stamp}` },
+    })
+    const item = await prisma.item.create({
+      data: { sku: `LSKU-${stamp}`, name: `Item ${stamp}`, unitOfMeasure: "PCS", isProduct: true, qtyOnHand: 0 },
+    })
+    const inbound = await prisma.stockMove.create({
+      data: {
+        documentNo: `SM-IN-${stamp}`,
+        itemId: item.id,
+        warehouseId: warehouse.id,
+        qty: 5,
+        cost: 100,
+        impact: "IN",
+        status: "posted",
+      },
+    })
+    await prisma.$transaction(async (tx) => {
+      await createInLayer(tx, {
+        itemId: item.id,
+        warehouseId: warehouse.id,
+        stockMoveId: inbound.id,
+        qty: 5,
+        unitCost: 100,
+      })
+    })
+
+    const HOLD_MS = 700
+    let signalLocked!: () => void
+    const lockHeld = new Promise<void>((resolve) => {
+      signalLocked = resolve
+    })
+    let firstError: unknown = null
+    let secondError: unknown = null
+
+    const postLikeProduction = (documentNo: string, onLocked?: () => void) =>
+      prisma.$transaction(
+        async (tx) => {
+          // Urutan produksi: kunci baris item dulu (serialisasi global),
+          // lalu konsumsi FIFO dari baris lapisan terkunci.
+          await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.id} FOR UPDATE`
+          const consumed = await consumeFifoLayers(tx, {
+            itemId: item.id,
+            warehouseId: warehouse.id,
+            qty: 5,
+            label: `uji konkuren ${documentNo}`,
+            allowShortfall: false,
+          })
+          await tx.stockMove.create({
+            data: {
+              documentNo,
+              itemId: item.id,
+              warehouseId: warehouse.id,
+              qty: 5,
+              cost: consumed.consumedCost,
+              impact: "OUT",
+              status: "posted",
+            },
+          })
+          // Sinyal: lawan boleh mulai sekarang; transaksi ini SENGAJA
+          // ditahan terbuka supaya keduanya benar-benar bertumpuk.
+          onLocked?.()
+          await new Promise((r) => setTimeout(r, HOLD_MS))
+          return consumed.consumedCost
+        },
+        { timeout: 30_000, maxWait: 10_000 },
+      )
+
+    try {
+      const first = postLikeProduction(`SM-OUT-A-${stamp}`, signalLocked).catch(
+        (e: unknown) => {
+          firstError = e
+          signalLocked()
+          return null
+        },
+      )
+      await lockHeld
+      const second = postLikeProduction(`SM-OUT-B-${stamp}`).catch((e: unknown) => {
+        secondError = e
+        return null
+      })
+
+      const [, secondResult] = await Promise.all([first, second])
+      // Pemenang mengonsumsi 5@100; penantang ditolak setelah commit.
+      expect(firstError).toBeNull()
+      expect(secondResult).toBeNull()
+      expect(String((secondError as Error | null)?.message ?? "")).toMatch(/Stok tidak mencukupi/)
+
+      const layer = await prisma.inventoryLayer.findFirst({ where: { itemId: item.id } })
+      expect(Number(layer?.remaining)).toBe(0)
+      const outMoves = await prisma.stockMove.count({
+        where: { itemId: item.id, impact: "OUT", status: "posted" },
+      })
+      expect(outMoves).toBe(1)
+    } finally {
+      await prisma.inventoryLayer.deleteMany({ where: { itemId: item.id } })
+      await prisma.stockMove.deleteMany({ where: { itemId: item.id } })
+      await prisma.item.delete({ where: { id: item.id } }).catch(() => undefined)
+      await prisma.warehouse.delete({ where: { id: warehouse.id } }).catch(() => undefined)
     }
   })
 })
