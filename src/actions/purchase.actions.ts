@@ -2099,6 +2099,30 @@ export async function deletePurchaseOrder(id: number) {
       include: { goodsReceipts: true },
     });
 
+    // PUR-BR-010: dokumen pembelian posted tidak boleh dihapus fisik —
+    // hanya PO draft yang boleh. PO non-draft (approved/ordered/received/
+    // partial_received/cancelled) adalah bukti transaksi berjalan atau
+    // selesai; menghapusnya menghanguskan jejak audit. Jalur koreksi PO
+    // posted: cancelPurchaseOrder (status cancelled, baris tetap ada).
+    // Pola sama deleteVendorBill/deleteVendorPayment/deletePurchaseReturn.
+    if (po.status !== "draft") {
+      throw new Error(
+        "Hanya PO draft yang dapat dihapus. PO yang sudah diproses dibatalkan lewat tombol batal, bukan dihapus.",
+      );
+    }
+
+    // PUR-BR-010: PO dengan GR non-draft tidak boleh dihapus — transaksi
+    // di bawah menghapus fisik StockMove `posted` + InventoryLayer milik
+    // GR (diposting goods-receipt.hook saat GR terverifikasi). GR draft
+    // belum memposting movement, jadi tidak menghalangi penghapusan.
+    // Jalur koreksi GR terverifikasi: retur pembelian. (Guard ini juga
+    // menutup jalur INV-BR-013 dari sisi PO.)
+    if (po.goodsReceipts.some((gr) => gr.status !== "draft")) {
+      throw new Error(
+        "PO tidak dapat dihapus karena memiliki penerimaan barang yang sudah terverifikasi. Penerimaan terverifikasi tidak dapat dihapus; selesaikan lewat retur pembelian.",
+      );
+    }
+
     // Guard: refuse deletion when a non-cancelled Vendor Bill still references this
     // PO. createVendorBill posts the AP journal (Dr Clearing/Expense / Cr AP) on a
     // bill — deleting the PO here only reverses the GR's inventory/clearing leg and
@@ -2111,15 +2135,6 @@ export async function deletePurchaseOrder(id: number) {
     if (activeBills > 0) {
       throw new Error(
         "PO tidak dapat dihapus karena masih memiliki tagihan vendor aktif. Batalkan/void tagihan terlebih dahulu.",
-      );
-    }
-
-    // INV-BR-013: PO dengan GR non-draft tidak boleh dihapus — transaksi di
-    // bawah menghapus fisik StockMove `posted` + InventoryLayer milik GR.
-    // GR draft belum memposting movement, jadi tidak menghalangi penghapusan.
-    if (po.goodsReceipts.some((gr) => gr.status !== "draft")) {
-      throw new Error(
-        "PO tidak dapat dihapus karena memiliki penerimaan barang yang sudah terverifikasi. Penerimaan terverifikasi tidak dapat dihapus; selesaikan lewat retur pembelian.",
       );
     }
 
@@ -2297,11 +2312,12 @@ export async function deleteGoodsReceipt(id: number) {
       ...gr.items.map((i) => i.warehouseId).filter((w): w is number => w != null),
     ]);
 
-    // INV-BR-013: ledger posted tidak boleh dihapus fisik oleh pengguna
-    // operasional. GR terverifikasi sudah memposting StockMove `posted`
-    // (goods-receipt.hook) — menghapusnya menghanguskan jejak ledger.
-    // Hanya GR draft (belum ada movement) yang boleh dihapus; pola sama
-    // dengan deleteStockAdjustment/deleteInventoryTransfer/deleteMaterialIssue.
+    // PUR-BR-010: ledger posted tidak boleh dihapus fisik. GR terverifikasi
+    // sudah memposting StockMove `posted` (goods-receipt.hook) — menghapusnya
+    // menghanguskan jejak ledger (juga larangan INV-BR-013). Hanya GR draft
+    // (belum ada movement) yang boleh dihapus; jalur koreksi GR terverifikasi
+    // adalah retur pembelian. Pola sama deleteStockAdjustment/
+    // deleteInventoryTransfer/deleteMaterialIssue.
     if (gr.status !== "draft") {
       throw new Error("Hanya penerimaan barang draft yang dapat dihapus");
     }
