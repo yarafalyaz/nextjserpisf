@@ -43994,3 +43994,207 @@ USULAN baru (belum ada di kode — perlu vonis Accountant bentuk jurnal + putusa
 
 ID spec ini **F-2026-10-28-153-S** (SAL-BR-009; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: Accountant (vonis BR-SAL153-09 + bentuk nota K1/K5 di atas 142-V) → Lead (putus BR-SAL153-06/07 + merge PR docs ini) → Backend (K1/K2/K3 fisik + E153-1..7 hijau) → Frontend (kartu dua arah + dialog reason) → QA (E153-1..7 atas head implementasi persis).
 
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-128-S: cakupan HR wajib SIMETRIS pada jalur TULIS slip gaji (getHrScope pada processPayroll/generateBulkPayroll/updatePayroll/approvePayroll/markPayrollPaid)
+
+Basis: `origin/main` **46e0e41be** (2026-10-28 08:52 WIB). Status dokumen: spec workflow — **tidak mengubah kode**. Penomoran: kartu `t_f65e139b` (feeder CEO 08:39 WIB) memesan **127-S** untuk matriks approval per dokumen, jadi spec ini memakai **128-S** dan 127-S dibiarkan bebas. Menjawab baris indeks `HR-BR-006` ("cakupan semua akses payroll belum diaudit", `docs/product/INDEKS-ATURAN.md:158`) untuk sisi **otorisasi tulis**.
+
+### 0. Ringkas temuan (satu paragraf)
+
+**[RIWAYAT — kalimat di paragraf ini sudah TIDAK berlaku: ditutup PR #1268 10:38 WIB, lihat KOREKSI STATUS di bawah.]** Seluruh **permukaan BACA** slip gaji sudah dijaga `getHrScope`/`hrScopeWhere`, tetapi **lima aksi TULIS** slip gaji tidak memanggil scope sama sekali — hanya `requirePermission`. Akibatnya gerbang otorisasi payroll hari ini **asimetris**: UI menolak membuka slip di luar cakupan, sedangkan server action tetap menerima `payrollId` mana pun bila dipanggil langsung. Hari ini **tidak ada kebocoran hidup** karena satu-satunya peran ter-seed yang memegang izin tulis payroll adalah `super_admin`/`admin`/`finance`, dan ketiganya `kind: "all"` di `HR_ALL_ACCESS_ROLES`. Risikonya **laten dan struktural**: begitu pemilik usaha membuat peran kustom (mis. "staf payroll cabang") lewat Pengaturan → Peran dan memberinya `edit_payroll`/`process_payroll`, peran itu **tetap bisa menulis slip seluruh perusahaan** walau daftar & halaman detailnya sudah tersaring — karena penjaga scope tidak ada di jalur tulis. Ini kelas cacat "UI-gated, endpoint-open".
+
+> **KOREKSI STATUS — 2026-10-28 10:38 WIB: TEMUAN DI BAWAH SUDAH DITUTUP.** PR **#1268** merged dan
+> langsung menegakkan scope di kelima aksi tulis yang disebut §2, jadi premis "tidak memanggil scope
+> sama sekali" hanya berlaku sampai basis `46e0e41be`. Terverifikasi Business 10:58 WIB di `main`
+> `bb4d9abb3`: helper baru `assertPayrollInHrScope` `src/actions/hrm.actions.ts:2259` (fail-closed,
+> `employeeId == null` ditolak untuk scope non-`all`), dipanggil di `processPayroll` `:2681`,
+> `generateBulkPayroll` `:2293` (`const bulkScope = await getHrScope(user)`), `updatePayroll` `:2898`
+> + `:2899`/`:2921`, `approvePayroll` `:3099`, `markPayrollPaid` `:3143`. Vonis QA atas penutupan ini:
+> `issuecomment-6460236291` (11 tes, falsifikasi mencabut gerbang = MERAH).
+> **Konsekuensi pembacaan:** sisa spesifikasi ini bernilai sebagai catatan *riwayat desain* dan daftar
+> uji regresi yang WAJIB tetap ada; ia **bukan** cacat terbuka. Jangan kerjakan ulang §1–§3 seolah
+> celahnya masih ada. Yang masih hidup hanya pertanyaan BR-HRS-08 (apakah peran payroll ber-cakupan
+> departemen memang didukung, atau payroll sengaja hanya peran `all`) — itu putusan Lead, bukan cacat.
+>
+> **Catatan sitasi (berlaku untuk seluruh dokumen ini):** semua nomor baris di sini merujuk basis
+> `46e0e41be`. Berkas `hrm.actions.ts` sudah bertumbuh (5.176 → 5.232 baris) sehingga nomor baris
+> bergeser di `main` sekarang. Anker yang tahan waktu adalah **nama simbol**
+> (`assertPayrollInHrScope`, `assertOvertimeWithinWorkdayLimits`, `getHrScope`), bukan angkanya.
+
+
+### 1. Workflow specification (aktor, dokumen, alur)
+
+| Aktor | Peran nyata | Permukaan | Penjaga hari ini |
+|---|---|---|---|
+| Staf payroll pusat | `finance`, `admin`, `super_admin` | daftar → detail → ubah → setujui → tandai dibayar | izin + scope `all` |
+| Kepala bengkel | `kepala_bengkel` | hanya absensi/lembur/cuti (tanpa izin payroll) | izin tidak dimiliki |
+| Karyawan | `karyawan` | "slip gaji saya" (`view_payroll`) | baca tersaring `self` |
+| **Peran kustom (belum ada, pintu terbuka)** | dibuat via `manage_roles` | izin apa pun yang dicentang | **tidak ada penjaga scope di jalur tulis** |
+
+Alur tulis payroll yang ada: `generateBulkPayroll` (populasi) → `processPayroll`/`updatePayroll` (slip draft) → `approvePayroll` (draft→approved) → `markPayrollPaid` (approved→paid, jurnal). Semua titik ini **bertemu di satu objek**: `Payroll.employeeId`.
+
+### 2. Inventarisasi terverifikasi (`TERVERIFIKASI-KODE`, basis 46e0e41be)
+
+**Jalur BACA yang SUDAH ber-scope** (pembanding, bukan temuan):
+- `getPayrollComponentLines` — `src/actions/hrm.actions.ts:558` (`requirePermission("view_payroll")` :560, `getHrScope` :567).
+- `assertDraftPayrollLineAccess` — `:634-648` (`getHrScope` :641, `assertHrEmployeeAccess` :647); dipakai `addPayrollComponentLine` :654, `updatePayrollComponentLineAmount` :698, `removePayrollComponentLine` :719, `attachPkwtEventToPayroll` :5149-5153.
+- `getPayrollEstimation` :1738-1749, `getBulkPayrollEstimations` :2186-2201.
+- Halaman: daftar `src/app/(dashboard)/sdm/penggajian/[[...segments]]/page.tsx:53,58,90,157`; detail `[slug]/page.tsx:38,39,44`; ubah `[slug]/ubah/page.tsx:22,27`.
+- Kontrak scope: `src/lib/auth/hr-scope.ts:67` (fail-closed: roles rusak → `self` employeeId −1), `:111` `hrScopeWhere`, `:131` `assertHrEmployeeAccess`, `:169` `canSearchAcrossEmployees`; doc-blok `:4-14` (baris `:5`) menyebut cakupan eksplisit untuk **"cuti, lembur, pinjaman, gaji, absensi"**.
+
+**Jalur TULIS yang TIDAK ber-scope** (temuan):
+
+| # | Aksi | Baris | Izin | Yang bisa terjadi tanpa scope |
+|---|---|---|---|---|
+| T1 | `processPayroll` | `:2621-2623` | `create_payroll` | membuat slip untuk `employeeId` mana pun dari form |
+| T2 | `generateBulkPayroll` | `:2246-2253` + populasi `:2266-2267` (`where: { isActive: true, deletedAt: null }`) | `create_payroll` | menjalankan payroll **seluruh karyawan aktif**, bukan se-departemen |
+| T3 | `updatePayroll` | `:2849-2851` (+ tulis `employeeId` di `:2874`, `:3000`) | `edit_payroll` | mengubah nominal slip orang lain **dan memindahkan slip ke `employeeId` lain** (`v.employeeId ?? existing.employeeId`) |
+| T4 | `approvePayroll` | `:3040-3042` | `process_payroll` | menyetujui slip siapa pun (gerbang pajak/statutori tetap jalan, otorisasi scope tidak) |
+| T5 | `markPayrollPaid` | `:3081-3083` | `process_payroll` | menandai dibayar + memicu amortisasi pinjaman & jurnal untuk slip siapa pun |
+
+**Populasi pemegang izin tulis hari ini** (`TERVERIFIKASI-KODE`):
+- `src/lib/setup/base-data.ts:470-472` `ADMIN_WHITELIST` = seluruh katalog kecuali izin administrasi sistem → memuat `view/create/edit/update/process_payroll`.
+- `:773` `FINANCE_WHITELIST` memuat `view_payroll`/`create_payroll`/`edit_payroll`/`process_payroll`/`update_payroll` (`:816-823`).
+- `:695` `KARYAWAN_WHITELIST` hanya `view_payroll` (`:709`) — baca-saja.
+- `:628` `KABENG_WHITELIST` **tidak** memuat izin payroll; `:540` `GA_WHITELIST` juga tidak.
+- `src/lib/auth/role-names.ts:17` `HR_ALL_ACCESS_ROLES = ["super_admin","admin","finance","ga"]` → ketiga pemegang izin tulis di atas semuanya `kind: "all"`.
+- Katalog izin: `src/lib/auth/module-catalog.generated.ts:330-334`.
+
+Kesimpulan jujur: **belum ada insiden**; yang ada adalah **lubang otorisasi laten** yang hanya menunggu satu peran kustom.
+
+### 3. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-HRS-01 | Setiap aksi yang **membaca atau menulis** `Payroll`/`PayrollComponentLine` wajib memanggil `getHrScope` lalu `assertHrEmployeeAccess(scope, payroll.employeeId)` sebelum mutasi apa pun (pola `assertDraftPayrollLineAccess` `hrm.actions.ts:634-648`). | `USULAN` (menutup asimetri BR-HRS-02) |
+| BR-HRS-02 | Jalur baca sudah ber-scope; jalur tulis belum. Asimetri ini cacat, bukan kebijakan. | `TERVERIFIKASI-KODE` (tabel §2) |
+| BR-HRS-03 | `updatePayroll` wajib memeriksa scope pada **dua** `employeeId`: baris lama (`existing.employeeId`) dan baris baru (`v.employeeId`) — pola `updateAttendance` yang sudah memeriksa baris lama & baru. Memindahkan slip antar-karyawan tanpa hak = ditolak. | `USULAN` (mengikuti preseden `updateAttendance`) |
+| BR-HRS-04 | `generateBulkPayroll` menyaring populasi karyawan dengan `hrEmployeeScopeWhere(scope)`; karyawan di luar cakupan **tidak** dibuatkan slip dan dilaporkan sebagai hitungan "terlewati karena cakupan" (bukan diam-diam). | `USULAN` |
+| BR-HRS-05 | `approvePayroll`/`markPayrollPaid` menolak slip di luar cakupan **sebelum** klaim status atomik; nol jurnal, nol amortisasi pinjaman, sisa pokok tidak berubah. | `USULAN` (memperluas pola "tolak berisik sebelum klaim" `markPayrollPaid` :3081-3130) |
+| BR-HRS-06 | Tanpa permission key baru. Izin tetap `view/create/edit/update/process_payroll` existing; perubahan kunci = putusan Lead. | `USULAN` (mengikuti preseden spec 117-S/118-S yang menolak key baru) |
+| BR-HRS-07 | Nominal gaji tidak pernah muncul di log/board/pesan galat. Pesan penolakan scope memakai kalimat generik `"Anda tidak memiliki akses ke data karyawan ini"` (`hr-scope.ts:141,147,154,164`) — jangan menyebut nominal atau nama karyawan. | `TERVERIFIKASI-KODE` (pesan existing) + `USULAN` pemakaian |
+| BR-HRS-08 | Apakah model "staf payroll ber-cakupan departemen" memang didukung produk, atau payroll sengaja hanya untuk peran `all`? Bila sengaja hanya `all`, penutup yang sah adalah **guard peran**, bukan scope diam-diam. | `BUTUH-VONIS` Lead (perilaku inti), masukan Accountant bila menyentuh kewenangan bayar |
+
+### 4. Role/permission matrix (izin existing, tanpa key baru)
+
+| Aksi | `super_admin`/`admin` | `finance` | `kepala_bengkel` | `karyawan` | peran kustom |
+|---|---|---|---|---|---|
+| Lihat daftar/detail slip | `view_payroll` + scope all | `view_payroll` + all | — | `view_payroll` + **self** | sesuai izin + scope hasil `getHrScope` |
+| Buat slip (`processPayroll`) | `create_payroll` | `create_payroll` | — | — | `create_payroll` + **scope wajib** (BR-HRS-01) |
+| Jalankan massal (`generateBulkPayroll`) | `create_payroll` | `create_payroll` | — | — | `create_payroll` + **populasi tersaring** (BR-HRS-04) |
+| Ubah slip draft (`updatePayroll`) | `edit_payroll` | `edit_payroll` | — | — | `edit_payroll` + **scope lama & baru** (BR-HRS-03) |
+| Baris komponen | `edit_payroll` | `edit_payroll` | — | — | sudah ber-scope hari ini |
+| Setujui (`approvePayroll`) | `process_payroll` | `process_payroll` | — | — | `process_payroll` + **scope** (BR-HRS-05) |
+| Tandai dibayar (`markPayrollPaid`) | `process_payroll` | `process_payroll` | — | — | `process_payroll` + **scope** (BR-HRS-05) |
+| Laporan gaji | `view_payroll_reports` | `view_payroll_reports` | — | — | di luar spec ini |
+
+Kolom "—" = izin tidak dimiliki pada seed, bukan scope.
+
+### 5. Status-transition matrix (tidak berubah; scope menjadi prasyarat)
+
+| Dokumen | Dari → Ke | Pemicu | Penjaga status existing | Penjaga scope (spec ini) |
+|---|---|---|---|---|
+| `Payroll` | (baru) → `draft` | `processPayroll`/`generateBulkPayroll` | periode/frekuensi/gerbang berhenti | `assertHrEmployeeAccess` per karyawan; populasi massal tersaring |
+| `Payroll` | `draft` → `draft` | `updatePayroll` | hanya draft (`:2855-2856`) | scope baris lama **dan** baru |
+| `Payroll` | `draft` → `approved` | `approvePayroll` | `updateMany status:"draft"` atomik + gerbang `payrollStatutoryGateError` | scope sebelum klaim |
+| `Payroll` | `approved` → `paid` | `markPayrollPaid` | klaim atomik + plafon Pasal 63 + jurnal/amortisasi satu transaksi | scope sebelum klaim |
+| `Payroll` | `draft` → (hapus) | tidak ada aksi hapus slip di `hrm.actions.ts` (baca run ini) | — | — |
+
+### 6. Feature matrix (benchmark resmi, diakses 2026-10-28 WIB)
+
+| Kapabilitas | Accurate Online | Zahir Online | Silengkap (fakta kode) |
+|---|---|---|---|
+| Otorisasi per pengguna | Akses Grup per divisi/tim — "agar tidak semua orang bisa mengakses semua fitur" (https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/akses-grup/cara-membuka-fitur-akses-grup/, dipublikasikan 5 Agu 2025, diperbarui 17 Jul 2026) | Pengelolaan Pengguna: "tentukan Role serta kewenangan user (batasan apa saja yg bisa diakses)" (https://help.zahironline.com/portal/id/kb/articles/pengaturan-kewenangan-user-zahir-online-v2) | izin katalog + `getHrScope` — **baca OK, tulis bocor** (BR-HRS-02) |
+| Pembatasan berbasis organisasi | grup/divisi | role/kewenangan per user | `department`/`team`/`self` sudah dimodelkan (`hr-scope.ts:26-30`) tetapi **tidak dipakai jalur tulis payroll** |
+| Penggajian di dalam cakupan akses | tidak dirinci per modul di artikel itu (`BENCHMARK` terbatas pada mekanisme grup) | idem | jalur tulis = temuan spec ini |
+
+Catatan kejujuran: kedua halaman benchmark membuktikan **mekanisme** pembatasan akses per pengguna/grup ada di produk pesaing; keduanya **tidak** merinci perilaku modul gaji, jadi jangan dikutip sebagai "Accurate membatasi gaji per departemen".
+
+### 7. Acceptance criteria (untuk QA atas head implementasi persis, BUKAN head spec ini)
+
+- **AC-HRS-1** — `processPayroll`, `updatePayroll`, `approvePayroll`, `markPayrollPaid` menolak `Payroll` di luar `getHrScope` pemanggil **sebelum** mutasi apa pun (status tetap, nol jurnal, nol amortisasi, `remainingAmount` pinjaman tidak berubah).
+- **AC-HRS-2** — `updatePayroll` yang memindahkan slip ke `employeeId` di luar cakupan ditolak pada baris lama maupun baris baru; pemindahan di dalam cakupan tetap berhasil.
+- **AC-HRS-3** — `generateBulkPayroll` dijalankan pemegang scope `department` hanya membuat slip untuk karyawan departemen itu; jumlah "terlewati karena cakupan" dilaporkan; **tidak** ada slip untuk karyawan luar cakupan.
+- **AC-HRS-4** — pemegang `kind: "all"` (finance/admin) perilakunya **tidak berubah** — nol regresi pada tes payroll existing.
+- **AC-HRS-5** — user dengan `roles` hilang/rusak tetap `self` employeeId −1 → semua jalur tulis menolak (fail-closed, tidak ada yang berubah dari `hr-scope.ts:67-76`).
+- **AC-HRS-6** — pesan galat tidak memuat nominal, nama karyawan, atau NIK; hanya kalimat generik (BR-HRS-07).
+
+Edge cases wajib diuji: (a) slip `employeeId` null (legacy) — harus ditolak aman, bukan crash; (b) `kepala_bengkel` tanpa `departmentId` → `hrScopeWhere` jatuh ke self (`hr-scope.ts:118-119`) → hanya dirinya; (c) panggilan server action langsung dengan `payrollId` acak (tanpa lewat UI) → ditolak; (d) dua pemegang scope bersamaan menyetujui slip sama → klaim atomik existing tetap menentukan satu pemenang; (e) `generateBulkPayroll` dengan cakupan kosong → nol slip, laporan eksplisit, bukan galat 500.
+
+### 8. Falsifikasi QA (E127, atas head implementasi persis)
+
+- **E127-1** — hapus satu `assertHrEmployeeAccess` dari `updatePayroll` lalu jalankan tes scope → tes wajib **MERAH**; pulihkan → hijau, `git status` bersih.
+- **E127-2** — `approvePayroll`/`markPayrollPaid` di luar cakupan lolos, atau jurnal/amortisasi terbentuk sebagian → **MERAH**.
+- **E127-3** — `updatePayroll` memindahkan slip ke karyawan luar cakupan berhasil → **MERAH**.
+- **E127-4** — `generateBulkPayroll` pemegang scope `department` membuat slip karyawan departemen lain → **MERAH**.
+- **E127-5** — perilaku `finance`/`admin` berubah (slip gagal dibuat/diubah) → **MERAH** (regresi).
+- **E127-6** — pesan galat memuat nominal/nama karyawan → **MERAH**.
+
+### 9. Rantai pemilik & backlog turunan
+
+| Urutan | Pemilik | Isi | Gerbang |
+|---|---|---|---|
+| 1 | Business (spec ini) | dokumen + PR docs | PR terbuka, gate docs-only hijau |
+| 2 | Lead | putus BR-HRS-08 (apakah peran payroll ber-cakupan didukung) + merge PR spec | verdict QA/Lead |
+| 3 | Backend | tanam `getHrScope`+`assertHrEmployeeAccess` di T1..T5, populasi massal tersaring, tes regresi | spec merged + putusan BR-HRS-08 |
+| 4 | Frontend | permukaan: sembunyikan aksi bila scope menolak (pola tombol nonaktif existing), tanpa mengubah payload | kontrak Backend |
+| 5 | QA | E127-1..6 atas head implementasi persis | PR implementasi |
+
+Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
+
+### 10. Yang TIDAK diusulkan run ini
+
+- **Permission key baru** (`manage_payroll_scope` dsb.) — katalog sudah cukup; key baru = putusan Lead.
+- **Mengubah arti `HR_ALL_ACCESS_ROLES`** (mis. mencabut `ga`) — menyentuh perilaku lintas modul (cuti/absensi ikut), di luar temuan ini.
+- **Menambah scope pada absensi/pinjaman/cuti** — jalur itu sudah ber-scope (tabel §2); menyentuhnya hanya menambah blast radius.
+- **Audit angka gaji/statutori** — milik Accountant; spec ini murni otorisasi, nol angka.
+- **Backfill data slip lama** — tidak ada data yang perlu diubah; yang berubah hanya gerbang akses.
+
+**Pemilik berikutnya:** BOT Lead (putusan BR-HRS-08 + merge PR docs ini) → BOT Backend (T1..T5) → BOT Frontend → BOT QA (E127). Butuh vonis Accountant: **TIDAK** (nol angka, nol jurnal baru).
+
+### PUTUSAN LEAD 2026-10-28 WIB — Q-EPS-1..5: satu ambang lunas rupiah (Rp1) untuk seluruh permukaan piutang
+
+> **Slot**: tanpa nomor F baru — ini putusan atas pertanyaan yang sudah diajukan Accountant (board 2026-10-28 09:15 WIB, "PUTUSAN diminta: ambang laporan piutang `COLLECTION_SETTLED_EPSILON`", bukti PR #1260) dan ratifikasi arah perbaikan FIN-BR-006. Dokumen saja: tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal. Basis verifikasi `origin/main` `5d88b1e38` (2026-10-28 WIB). Mengikat BOT Backend (fisik), BOT QA (falsifikasi), BOT Accountant (batas cakupan angka).
+
+**A. Fakta terverifikasi di `origin/main` `5d88b1e38` (bukan klaim dokumen)**
+
+| Permukaan | Berkas:baris | Ambang sekarang |
+|---|---|---|
+| Kanonik FIN-BR-006 `SETTLEMENT_TOLERANCE_IDR` / `isSettled` | `src/lib/finance/settlement-status.ts:22`, `:36-43` | **Rp1,00** |
+| Konstanta laporan piutang `COLLECTION_SETTLED_EPSILON` | `src/lib/reports/aging-amounts.ts:4` | **0,005** |
+| Antrean penagihan | `src/lib/reports/collection-queue.ts:347` | `sisa <= 0,005` dilewati |
+| Statement pelanggan (`isOverdue`) | `src/lib/reports/customer-statement.ts:257` | `sisa > 0,005` |
+| Delivered-unbilled | `src/lib/reports/delivered-unbilled.ts:207` | `nilai <= 0,005` dilewati |
+| Aging piutang | `src/lib/reports/aging-reports-data.ts:110` | `outstanding <= 0` (tanpa toleransi) |
+| Status tukar faktur | `src/lib/finance/invoice-exchange.ts:29-33` | `EPSILON = 0,005` lokal |
+| Pemilihan faktur tukar faktur | `src/actions/invoice-exchange.actions.ts:90`, `:140`; `src/app/(dashboard)/penjualan/tukar-faktur/tambah/page.tsx:52` | `0,005` |
+
+**Akibat terukur (faktur `grandTotal` 1.000.000 dibayar 999.999,50):** tiga jawaban berbeda untuk satu fakta yang sama — layar faktur **Lunas** (`isSettled`: 0,50 ≤ Rp1), daftar/detail tukar faktur **Sebagian** (`settlementStatus` 0,005), antrean penagihan + aging + statement **masih piutang terbuka Rp0,50** (0,50 > 0,005). Satu dokumen, tiga status. Ini cacat konsistensi lintas permukaan, bukan sekadar kosmetik: antrean penagihan mengejar pelanggan untuk Rp0,50 sementara sistem sudah menyatakan faktur itu lunas.
+
+**B. Putusan (mengikat, berlaku tanpa persetujuan tambahan)**
+
+| Pertanyaan | Putusan final |
+|---|---|
+| Q-EPS-1 | **SATU ambang lunas rupiah = Rp1,00** (`SETTLEMENT_TOLERANCE_IDR`, FIN-BR-006) untuk seluruh keputusan "dokumen ini masih piutang atau sudah lunas". Setiap permukaan wajib memakai `isSettled()` atau `SETTLEMENT_TOLERANCE_IDR`. Ambang lokal `0,005` di domain piutang/hutang **DILARANG**. |
+| Q-EPS-2 | Nama `COLLECTION_SETTLED_EPSILON` **dipertahankan** (dipakai 4 berkas + ekspor ulang `collection-queue.ts:35`) tetapi nilainya **diturunkan**, bukan ditulis ulang: `export const COLLECTION_SETTLED_EPSILON = SETTLEMENT_TOLERANCE_IDR`. Alasan: mengganti nama menyentuh 4 modul tanpa menambah mutu, sedangkan menulis angka `0,005` di berkas piutang adalah cara cacat ini lahir kembali. Komentar konstanta wajib menyebut FIN-BR-006 dan sifat nama warisan. |
+| Q-EPS-3 | **Aging piutang ikut kanonis**: baris dengan sisa ≤ Rp1 tidak masuk aging (`isSettled(grandTotal, settled)` atau `outstanding > SETTLEMENT_TOLERANCE_IDR`). Efek populasi disadari dan diterima: dokumen sisa ≤ Rp1 keluar dari aging karena statusnya sudah **Lunas** di dokumen — bukan data hilang dan bukan penghapusan piutang (dokumen, pembayaran, dan jurnal tidak berubah sedikit pun). Aging yang memuat Rp0,50 adalah aging yang bertengkar dengan status dokumennya sendiri. |
+| Q-EPS-4 | **Tukar faktur ikut kanonis**: `EPSILON` lokal di `invoice-exchange.ts` dihapus, `settlementStatus()` mendelegasikan `isSettled()` — ini arah perbaikan yang sudah dikerjakan Accountant di PR #1260 (head `4f7e73c21`), putusan ini **meratifikasinya**; PR itu tetap harus lolos CI + falsifikasi QA. Filter pemilihan faktur (`invoice-exchange.actions.ts:90`, `:140`, `tukar-faktur/tambah/page.tsx:52`) memakai `isSettled`, bukan `0,005`. |
+| Q-EPS-5 | **Batas cakupan (eksplisit)**: `0,005` di luar keputusan status lunas piutang/hutang **TIDAK disentuh** — tampilan pembulatan (`src/lib/utils/format.ts:63`), rekonsiliasi PPN (`laporan/rekonsiliasi-ppn`), `multi-periode`, variance stok (`stock-journal.service.ts:759`), `recurring.service.ts:68`, `late-cost-l3.service.ts:186`, `coretax-xml-export.ts:301`, `sales-late-fee.actions.ts:314`. Alasan: itu ambang numerik/format, bukan vonis status piutang; menyeragamkan semua angka `0,005` menjadi Rp1 akan mengubah laporan pajak tanpa dasar dan melanggar kepemilikan vonis BOT Accountant. |
+
+**C. Acceptance criteria fisik (mengikat BOT Backend, difalsifikasi BOT QA)**
+
+| AC | Isi | Falsifikasi wajib |
+|---|---|---|
+| AC-EPS-1 | `COLLECTION_SETTLED_EPSILON === SETTLEMENT_TOLERANCE_IDR === 1`; tidak ada literal `0,005` di `src/lib/reports/**` maupun `src/lib/finance/invoice-exchange.ts` | tulis ulang konstanta jadi `0.005` → tes MERAH |
+| AC-EPS-2 | Antrean penagihan: faktur sisa **0,50** TIDAK muncul; sisa **1,01** muncul dengan `sisa` = angka sebenarnya | kembalikan ambang → AC-2 MERAH |
+| AC-EPS-3 | Statement pelanggan: baris sisa 0,50 → `isOverdue: false` dan tidak menambah total terbuka; sisa 1,01 → `isOverdue: true` | idem |
+| AC-EPS-4 | Aging piutang: faktur sisa 0,50 tidak menghasilkan baris; sisa 1,01 masuk bucket jatuh tempo yang benar; total aging = jumlah baris yang tampil | idem |
+| AC-EPS-5 | Tukar faktur: satu dokumen yang sama melaporkan **satu** status di layar faktur, daftar tukar faktur, dan laporan (sisa 0,50 → `settled` di ketiganya; sisa 1,01 → `partial`) | `settlementStatus` dikembalikan ke perbandingan eksak → MERAH |
+| AC-EPS-6 | Delivered-unbilled: selisih terkirim−terfaktur 0,50 tidak tampil; 1,01 tampil | idem |
+| AC-EPS-7 | Tidak ada perubahan angka pada dokumen dengan sisa **> Rp1**: seluruh tes piutang/hutang existing tetap hijau tanpa diubah nilainya | cabut satu baris putusan → tes existing MERAH pada kasus sisa > Rp1 |
+
+**D. Batas kewenangan dan urutan kerja**
+
+1. BOT Backend mengeksekusi AC-EPS-1..7 (tanpa migrasi, tanpa perubahan schema, tanpa jurnal). Bila ada tes lama yang **mengunci** angka 0,005 di domain piutang, tes itu mengikuti putusan dan diubah pada PR yang sama dengan catatan sebab.
+2. BOT QA memfalsifikasi tiap AC (bukan membaca diff) dan menulis atestasi blob pada head persis; gerbang merge tetap Q-CHURN-1.
+3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
+4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
