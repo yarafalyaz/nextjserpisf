@@ -85,11 +85,17 @@ describe("F-076-S builder payroll-frequency", () => {
       { employeeId: 4, reason: "irisan", conflictDocumentNo: "PAY-1" },
       { employeeId: 5, reason: "berhenti", conflictDocumentNo: null },
       { employeeId: 6, reason: "frekuensiLain", conflictDocumentNo: null },
+      { employeeId: 7, reason: "cakupan", conflictDocumentNo: null },
     ])
-    expect(counts).toEqual({ frekuensiLain: 2, pinjaman: 1, bpjsBelumDidukung: 1, plafonPotongan: 0, irisan: 1, berhenti: 1 })
+    expect(counts).toEqual({ frekuensiLain: 2, pinjaman: 1, bpjsBelumDidukung: 1, plafonPotongan: 0, irisan: 1, berhenti: 1, cakupan: 1 })
     for (const reason of Object.keys(counts) as (keyof typeof counts)[]) {
       expect(PAYROLL_RUN_SKIP_LABELS[reason].length).toBeGreaterThan(0)
     }
+  })
+
+  it("BR-HRS-04: label + urutan tampil alasan cakupan di ujung (tanpa nominal)", () => {
+    expect(PAYROLL_RUN_SKIP_LABELS.cakupan).toBe("Di luar cakupan akses HR — tidak dibuatkan slip")
+    expect(countPayrollRunSkips([])).toEqual({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0, cakupan: 0 })
   })
 
   it("AC-PF-2: slip minggu ke-2 bulan sama (rentang beda) TIDAK konflik — kunci period lama akan menolak", () => {

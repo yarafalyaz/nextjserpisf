@@ -68,6 +68,20 @@ const columns = [
         viewHref={entityHref("/keuangan/jurnal", info.row.original)}
         deleteAction={deleteJournal}
         deleteId={info.row.original.id}
+        // GL-BR-003 K2: jurnal terposting hanya lewat reversal beralasan —
+        // Hapus + Bulk harus ditolak dengan pesan yang mengarahkan, bukan
+        // dibiarkan dicoba lalu pasti gagal. Penolakan tetap fail-closed
+        // di deleteJournal/bulkDelete server.
+        deleteConfirmTitle={
+          info.row.original.status?.toUpperCase() !== "DRAFT"
+            ? `Jurnal ${info.row.original.journalNumber} sudah terposting`
+            : undefined
+        }
+        deleteConfirmBody={
+          info.row.original.status?.toUpperCase() !== "DRAFT"
+            ? "Jurnal terposting tidak bisa dihapus. Koreksi hanya lewat jurnal pembalik (reversal) beralasan agar jejak audit utuh."
+            : undefined
+        }
         editPermission="edit_journals"
         deletePermission="delete_journals"
         // Jurnal manual dibuat DRAFT dan hanya `postJournal` yang mempostingnya; tanpa

@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
- * TASK-011 BUG-04: retur selesai harus menyelaraskan subledger dengan GL
- * dalam transaksi yang sama. Jurnal retur jual mengkredit Piutang dan jurnal
- * retur beli mendebit Hutang — tanpa penyesuaian ini outstanding faktur /
- * balanceDue tagihan tetap penuh (vendor bisa dibayar atas barang retur).
+ * TASK-011 BUG-04 (diperbarui F-2026-10-28-155-S via vonis 123-V Putusan 0.2):
+ * retur selesai menyelaraskan subledger dengan GL dalam transaksi yang sama.
+ * Jurnal retur jual mengkredit Piutang (pengurang kanonis = returnCredit
+ * jurnal itu, dibaca loader) — grandTotalAsal faktur BEKU, hook hanya hitung
+ * ulang status dari outstanding valid + tulis CustomerCredit bila lebih.
+ * Jurnal retur beli mendebit Hutang — pengurang kanonis via balanceDue
+ * (grandTotal tagihan ikut beku).
  */
 
 const mocks = vi.hoisted(() => ({
@@ -102,7 +105,7 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     mocks.stockMoveFindMany.mockResolvedValue([])
   })
 
-  it("retur jual atas faktur partial: grandTotal turun sebesar retur, tanpa kredit", async () => {
+  it("retur jual atas faktur partial: grandTotalAsal BEKU, status dari outstanding valid, tanpa kredit", async () => {
     mocks.salesReturnFind.mockResolvedValue({
       id: 1,
       documentNo: "SR-1",
@@ -119,13 +122,18 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
 
     await onSalesReturnCompleted(1, 7)
 
-    // Retur 200 dari sisa 400 → grandTotal 800, terbayar 600, tetap partial.
+    // Retur 200 dari sisa valid (1000 − 600 − 200 = 200) → partial;
+    // grandTotalAsal BEKU 1000 (123-V Putusan 0.2), loader kurangi returnCredit.
     expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 55 },
-        data: expect.objectContaining({ grandTotal: 800, totalAmount: 800, paidAmount: 600, paymentStatus: "partial" }),
+        data: expect.objectContaining({ paidAmount: 600, status: "partial", paymentStatus: "partial" }),
       }),
     )
+    // grandTotal/totalAmount TIDAK ditulis ulang oleh hook retur.
+    const written = mocks.invoiceUpdate.mock.calls[0][0].data as Record<string, unknown>
+    expect(written).not.toHaveProperty("grandTotal")
+    expect(written).not.toHaveProperty("totalAmount")
     expect(mocks.creditCreate).not.toHaveBeenCalled()
   })
 
@@ -155,7 +163,7 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     )
   })
 
-  it("retur beli: balanceDue + grandTotal tagihan turun sebesar retur (sisa neto)", async () => {
+  it("retur beli: hanya balanceDue tagihan turun sebesar retur (grandTotal beku, sisa neto)", async () => {
     mocks.purchaseReturnFind.mockResolvedValue({
       id: 3,
       documentNo: "PR-1",
@@ -170,12 +178,14 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
 
     await onPurchaseReturnProcessed(3, 7)
 
-    // Retur 200 → grandTotal 800, sisa neto 800-200=600.
+    // Retur 200 → balanceDue 800−200=600; grandTotal tagihan BEKU 1000.
     expect(mocks.billUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 5 },
-        data: expect.objectContaining({ grandTotal: 800, balanceDue: 600, status: "partial" }),
+        data: expect.objectContaining({ balanceDue: 600, status: "partial" }),
       }),
     )
+    const writtenBill = mocks.billUpdate.mock.calls[0][0].data as Record<string, unknown>
+    expect(writtenBill).not.toHaveProperty("grandTotal")
   })
 })

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
   const prismaMock: Record<string, unknown> = {
     materialIssue: {
       create: vi.fn().mockResolvedValue({ id: 10, slug: "mi-0010" }),
+      findFirst: vi.fn().mockResolvedValue(null),
       findUniqueOrThrow: vi.fn().mockResolvedValue({
         id: 10,
         status: "draft",
@@ -22,22 +23,16 @@ const mocks = vi.hoisted(() => {
       }),
       update: vi.fn().mockResolvedValue({ id: 10, slug: "mi-0010" }),
       findUnique: vi.fn().mockResolvedValue({ status: "draft" }),
-      findFirst: vi.fn().mockResolvedValue(null),
-      $executeRaw: vi.fn().mockResolvedValue(0),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    },
-    productionOrder: {
-      findUnique: vi.fn().mockResolvedValue(null),
     },
     materialIssueItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     // F-2026-10-21-009-V: guard tutup-job membaca status WO pada create MI.
     workOrder: { findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }) },
   }
-  const txExecuteRaw = vi.fn().mockResolvedValue(0)
-  prismaMock.$transaction = vi.fn(async (ops: unknown) => {
-    const tx = { ...prismaMock, $executeRaw: txExecuteRaw }
-    return typeof ops === "function" ? (ops as (tx: unknown) => unknown)(tx) : Promise.all(ops as unknown[])
-  })
+  prismaMock.$transaction = vi.fn(async (ops: unknown) =>
+    typeof ops === "function" ? (ops as (tx: unknown) => unknown)(prismaMock) : Promise.all(ops as unknown[]),
+  )
+  prismaMock.$executeRaw = vi.fn(async () => [])
   return {
     prismaMock: prismaMock as any,
     requirePermissionMock: vi.fn(),
@@ -97,6 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.prismaMock.materialIssue.create.mockResolvedValue({ id: 10, slug: "mi-0010" })
+  mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
   mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
     id: 10,
     status: "draft",
@@ -129,6 +125,52 @@ describe("createMaterialIssue — menyimpan kolom penaut", () => {
     expect(data.costCenterId).toBeNull()
     expect(data.workOrderId).toBeNull()
     expect(data.projectId).toBeNull()
+  })
+
+  it("tanpa workOrderId tidak menyentuh guard ganda", async () => {
+    const res = await createMaterialIssue(fd(base))
+
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.materialIssue.findFirst).not.toHaveBeenCalled()
+  })
+})
+
+describe("createMaterialIssue — WO-BR-004 guard anti-ganda form", () => {
+  it("menolak MI kedua saat MI draf untuk WO sama masih ada", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({
+      id: 5,
+      documentNo: "MI-0005",
+    })
+
+    const res = await createMaterialIssue(fd({ ...base, workOrderId: "7" }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("MI-0005")
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak MI kedua saat MI selesai untuk WO sama sudah ada", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({
+      id: 6,
+      documentNo: "MI-0006",
+    })
+
+    const res = await createMaterialIssue(fd({ ...base, workOrderId: "7" }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("MI-0006")
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled()
+  })
+
+  it("mengizinkan MI pengganti saat MI lama sudah batal", async () => {
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+
+    const res = await createMaterialIssue(fd({ ...base, workOrderId: "7" }))
+
+    expect(res.success).toBe(true)
+    const where = mocks.prismaMock.materialIssue.findFirst.mock.calls[0][0].where
+    expect(where.workOrderId).toBe(7)
+    expect(where.status).toEqual({ in: ["draft", "processing", "completed"] })
   })
 })
 
