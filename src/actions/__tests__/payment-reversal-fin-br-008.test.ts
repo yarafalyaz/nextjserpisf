@@ -9,21 +9,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  */
 
 const mocks = vi.hoisted(() => {
-  const buildModelMock = () => ({
-    findFirst: vi.fn().mockResolvedValue(null),
-    findUnique: vi.fn().mockResolvedValue(null),
-    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
-    findMany: vi.fn().mockResolvedValue([]),
-    create: vi.fn().mockResolvedValue({ id: 1 }),
-    createMany: vi.fn().mockResolvedValue({ count: 1 }),
-    update: vi.fn().mockResolvedValue({}),
-    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    delete: vi.fn().mockResolvedValue({}),
-    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
-    count: vi.fn().mockResolvedValue(0),
-    upsert: vi.fn().mockResolvedValue({}),
-    aggregate: vi.fn().mockResolvedValue({ _sum: {} }),
-  })
+  // Prisma model tiruan dipadatkan: nilai-bawaan dipisah ke tabel supaya 13
+  // metode tidak ditulis sebagai 13 baris berulang (duplikasi Sonar pada
+  // berkas uji aksi). Semantik sama dengan buildModelMock lama.
+  const DEFAULTS: Record<string, () => unknown> = {
+    findMany: () => [],
+    create: () => ({ id: 1 }),
+    createMany: () => ({ count: 1 }),
+    update: () => ({}),
+    updateMany: () => ({ count: 1 }),
+    delete: () => ({}),
+    deleteMany: () => ({ count: 1 }),
+    count: () => 0,
+    upsert: () => ({}),
+    aggregate: () => ({ _sum: {} }),
+  }
+  const buildModelMock = () =>
+    Object.fromEntries(
+      ["findFirst", "findUnique", "findUniqueOrThrow", "findMany", "create", "createMany", "update", "updateMany", "delete", "deleteMany", "count", "upsert", "aggregate"].map((m) => [
+        m,
+        vi.fn().mockResolvedValue(DEFAULTS[m] ? DEFAULTS[m]() : null),
+      ]),
+    )
 
   const prismaMock: any = {
     vendorPayment: buildModelMock(),
