@@ -34,7 +34,39 @@ vi.mock("@/lib/auth/permissions", () => ({
   requireAnyPermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
+/**
+ * Ruleset statutori LENGKAP untuk jalur hitung massal (AUD-R3-02):
+ * tulis-final fail-closed bila fallback — mock kosmopolitan di bawah
+ * membuat semua tes bulk gagal. Tiru isi hrm.actions.test.ts (10 kunci).
+ */
+function statutoryRules() {
+  const d = new Date("2024-01-01")
+  return [
+    { key: "bpjs_health_employee_rate", value: 0.01, effectiveFrom: d, effectiveTo: null },
+    { key: "bpjs_health_ceiling", value: 12000000, effectiveFrom: d, effectiveTo: null },
+    { key: "bpjs_jht_employee_rate", value: 0.02, effectiveFrom: d, effectiveTo: null },
+    { key: "bpjs_jp_employee_rate", value: 0.01, effectiveFrom: d, effectiveTo: null },
+    { key: "bpjs_jp_ceiling", value: 10500000, effectiveFrom: d, effectiveTo: null },
+    { key: "ptkp_single", value: 54000000, effectiveFrom: d, effectiveTo: null },
+    { key: "ptkp_married_extra", value: 4500000, effectiveFrom: d, effectiveTo: null },
+    { key: "ptkp_dependent_extra", value: 4500000, effectiveFrom: d, effectiveTo: null },
+    { key: "occupational_cost_rate", value: 0.05, effectiveFrom: d, effectiveTo: null },
+    { key: "occupational_cost_ceiling_year", value: 6000000, effectiveFrom: d, effectiveTo: null },
+  ]
+}
+
+function terBracket(args: { where?: { category?: string } }) {
+  return [
+    { category: args?.where?.category ?? "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+  ]
+}
+
+const statRuleFindManyMock = vi.fn()
+const terFindManyMock = vi.fn()
+
+vi.mock("@/lib/db/prisma", () => {
+  const stub = () => ({ findFirst: vi.fn().mockResolvedValue(null), findUnique: vi.fn().mockResolvedValue(null), findUniqueOrThrow: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}), updateMany: vi.fn().mockResolvedValue({ count: 1 }), upsert: vi.fn().mockResolvedValue({}), createMany: vi.fn().mockResolvedValue({ count: 1 }), deleteMany: vi.fn().mockResolvedValue({ count: 1 }), count: vi.fn().mockResolvedValue(0) })
+  return {
   prisma: {
     employee: {
       findFirst: (...a: unknown[]) => employeeFindFirstMock(...a),
@@ -50,11 +82,43 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({}),
     },
-    $transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}),
-    $queryRaw: vi.fn().mockResolvedValue([]),
+    payrollStatutoryRule: { ...stub(), findMany: (...a: unknown[]) => statRuleFindManyMock(...a) },
+    payrollTerBracket: { ...stub(), findMany: (...a: unknown[]) => terFindManyMock(...a) },
+    payrollComponent: stub(),
+    payrollComponentLine: stub(),
+    employeePayrollComponent: stub(),
+    salaryAdjustment: stub(),
+    overtimeRequest: stub(),
+    appreciation: stub(),
+    attendance: stub(),
+    leaveRequest: stub(),
+    workSchedule: stub(),
+    holiday: stub(),
+    departmentHoliday: stub(),
+    employeeLoan: stub(),
+    setting: stub(),
+    systemSetting: stub(),
+    account: stub(),
+    attendanceCorrection: stub(),
+    task: stub(),
+    workOrder: stub(),
+    timesheet: stub(),
+    productionCost: stub(),
+    pkwtCompensationEvent: stub(),
+    $transaction: async (cb: (tx: unknown) => Promise<unknown>) =>
+      cb({
+        payroll: {
+          findUniqueOrThrow: (...a: unknown[]) => payrollFindUniqueOrThrowMock(...a),
+          findMany: (...a: unknown[]) => payrollFindManyMock(...a),
+          createMany: (...a: unknown[]) => payrollCreateManyMock(...a),
+        },
+        payrollComponentLine: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        $queryRaw: async () => [{ id: 1 }],
+      }),
+    $queryRaw: async () => [{ id: 1 }],
     $executeRaw: vi.fn().mockResolvedValue(1),
   },
-}))
+}})
 
 vi.mock("@/lib/services/approval-workflow.service", () => ({
   assertApproved: (...a: unknown[]) => assertApprovedMock(...a),
@@ -75,6 +139,17 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumberBatch: (...a: unknown[]) => generateDocNumBatchMock(...a),
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
+
+const nextSlugMock = vi.fn()
+const getSystemSettingsMock = vi.fn()
+
+vi.mock("@/lib/utils/slug-db", () => ({
+  nextSlug: (...a: unknown[]) => nextSlugMock(...a),
+}))
+
+vi.mock("@/lib/utils/settings", () => ({
+  getSystemSettings: (...a: unknown[]) => getSystemSettingsMock(...a),
+}))
 
 import { approvePayroll, generateBulkPayroll, processPayroll, updatePayroll } from "../hrm.actions"
 
@@ -118,6 +193,10 @@ beforeEach(() => {
   payrollUpdateManyMock.mockResolvedValue({ count: 1 })
   payrollFindManyMock.mockResolvedValue([])
   assertApprovedMock.mockResolvedValue(undefined)
+  nextSlugMock.mockResolvedValue("payroll-test-slug")
+  getSystemSettingsMock.mockResolvedValue({})
+  statRuleFindManyMock.mockResolvedValue(statutoryRules())
+  terFindManyMock.mockImplementation(async (args: { where?: { category?: string } }) => terBracket(args))
 })
 
 describe("AC-HRS-1/4: processPayroll menegakkan cakupan HR sebelum menulis", () => {
@@ -150,19 +229,19 @@ describe("AC-HRS-1/4: processPayroll menegakkan cakupan HR sebelum menulis", () 
 })
 
 describe("AC-HRS-2: populasi generateBulkPayroll disaring cakupan HR", () => {
-  it("self: query populasi membawa saringan id milik sendiri", async () => {
+  it("self: query populasi (panggilan pertama) membawa saringan id milik sendiri", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().staff)
     await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
-    const populationWhere = employeeFindManyMock.mock.calls.at(-1)?.[0]?.where as {
+    const populationWhere = employeeFindManyMock.mock.calls.at(0)?.[0]?.where as {
       AND?: unknown[]
     }
     expect(populationWhere.AND).toEqual([{ id: ME.self.id }])
   })
 
-  it("kepala_bengkel: query populasi membawa saringan departemen", async () => {
+  it("kepala_bengkel: query populasi (panggilan pertama) membawa saringan departemen", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().head)
     await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
-    const populationWhere = employeeFindManyMock.mock.calls.at(-1)?.[0]?.where as {
+    const populationWhere = employeeFindManyMock.mock.calls.at(0)?.[0]?.where as {
       AND?: unknown[]
     }
     expect(populationWhere.AND).toEqual([{ departmentId: ME.head.departmentId }])
@@ -171,7 +250,7 @@ describe("AC-HRS-2: populasi generateBulkPayroll disaring cakupan HR", () => {
   it("peran all tidak mendapat saringan tambahan (nol perubahan perilaku)", async () => {
     requirePermissionMock.mockResolvedValue(userSessions().finance)
     await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
-    const populationWhere = employeeFindManyMock.mock.calls.at(-1)?.[0]?.where as {
+    const populationWhere = employeeFindManyMock.mock.calls.at(0)?.[0]?.where as {
       AND?: unknown
     }
     expect(populationWhere.AND).toBeUndefined()
@@ -199,6 +278,72 @@ describe("AC-HRS-3: updatePayroll menegakkan cakupan pada baris LAMA dan BARU", 
     )
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak memiliki akses")
+  })
+})
+
+describe("BR-HRS-04/AC-HRS-3 ke-2: department hanya membuat slip se-departemen + cakupan terhitung", () => {
+  it("slip hanya se-departemen, skippedByReason.cakupan = 2, log tanpa nominal", async () => {
+    // kepala_bengkel dept 3: findMany pertama populasi tersaring (id 10),
+    // kedua pelengkap luar-cakupan (id 11, 12) untuk alasan "cakupan".
+    // Baris DB lengkap (baseSalary dsb.) supaya mesin estimasi lolos.
+    requirePermissionMock.mockResolvedValue(userSessions().head)
+    const scoped = [
+      {
+        id: 10,
+        baseSalary: 5000000,
+        maritalStatus: "single",
+        dependents: 0,
+        departmentId: 3,
+        employmentEndedAt: null,
+        paymentFrequency: "MONTHLY",
+        employeeLoans: [],
+      },
+    ]
+    const outOfScope = [{ id: 11 }, { id: 12 }]
+    employeeFindManyMock.mockImplementation(async (args: { where?: { NOT?: unknown } }) =>
+      args?.where && "NOT" in args.where ? outOfScope : scoped,
+    )
+    generateDocNumBatchMock.mockResolvedValue(["PAYROLL-0001"])
+    payrollCreateManyMock.mockResolvedValue({ count: 1 })
+    const res = await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(res?.success).toBe(true)
+    if (res?.success) {
+      expect(res.count).toBe(1)
+      expect(res.skippedByReason?.cakupan).toBe(2)
+      expect(res.skippedTotal).toBe(2)
+    }
+    const complementWhere = employeeFindManyMock.mock.calls.find((c) => "NOT" in (c[0]?.where ?? {}))?.[0]?.where
+    expect(complementWhere?.NOT).toBeDefined()
+    const rows = payrollCreateManyMock.mock.calls.at(-1)?.[0]?.data as Array<{ employeeId: number }>
+    expect(rows.map((x) => x.employeeId)).toEqual([10])
+    const logged = String(logActivityMock.mock.calls.at(-1)?.[3] ?? "")
+    expect(logged).toContain("2 di luar cakupan")
+    expect(logged).not.toMatch(/[1-9]\d{5,}/)
+  })
+
+  it("kind all nol perubahan: tanpa query NOT, cakupan = 0", async () => {
+    requirePermissionMock.mockResolvedValue(userSessions().finance)
+    const scoped = [
+      {
+        id: 10,
+        baseSalary: 5000000,
+        maritalStatus: "single",
+        dependents: 0,
+        departmentId: 3,
+        employmentEndedAt: null,
+        paymentFrequency: "MONTHLY",
+        employeeLoans: [],
+      },
+    ]
+    employeeFindManyMock.mockResolvedValue(scoped)
+    generateDocNumBatchMock.mockResolvedValue(["PAYROLL-0001"])
+    payrollCreateManyMock.mockResolvedValue({ count: 1 })
+    const res = await generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(res?.success).toBe(true)
+    if (res?.success) expect(res.skippedByReason?.cakupan).toBe(0)
+    expect(
+      employeeFindManyMock.mock.calls.some((c) => "NOT" in (c[0]?.where ?? {})),
+    ).toBe(false)
   })
 })
 

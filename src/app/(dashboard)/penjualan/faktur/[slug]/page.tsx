@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice"
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
@@ -115,6 +116,10 @@ export default async function InvoiceDetailPage({
   // cancelled).
   const hasRealPayment = invoice.payments.some((p) => p.paymentMethod !== "down_payment")
   const itemsEditable = invoice.status !== "cancelled" && !hasRealPayment
+  // GL-BR-003 K1 (cermin guard server updateSalesInvoice fail-closed):
+  // header Ubah disembunyikan bila server pasti menolak (cancelled atau
+  // sudah ada pelunasan nyata). posted/partial/paid tanpa pelunasan nyata
+  // tetap boleh Ubah (server izinkan), dengan Void + Retur sebagai jalur K2.
 
   // Fetch available items for the editor (termasuk metadata UoM & serial)
   const availableItems = await prisma.item.findMany({
@@ -157,9 +162,13 @@ export default async function InvoiceDetailPage({
         badge={<StatusChip status={invoice.status} />}
         actions={
           <>
-            <CanCreate permission="edit_sales_invoices">
-              <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary">Ubah</Button>
-            </CanCreate>
+            {/* GL-BR-003 K1: cermin guard server updateSalesInvoice
+                (cancelled/setelah-pelunasan-nyata pasti ditolak). */}
+            {itemsEditable && (
+              <CanCreate permission="edit_sales_invoices">
+                <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary">Ubah</Button>
+              </CanCreate>
+            )}
             {(invoice.status === "posted" || invoice.status === "partial") && (
               <CanCreate permission="create_sales_payments">
                 <Button href={`/penjualan/pembayaran/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary" className="bg-success text-success-foreground">
@@ -220,6 +229,16 @@ export default async function InvoiceDetailPage({
       />
 
       <WhatsappTrailNote trail={whatsappTrail} />
+
+      {/* GL-BR-003 K2: faktur terkunci (cancelled/setelah-pelunasan-nyata)
+          — arahkan ke jalur koreksi sah (Retur, Batalkan di header). */}
+      {!itemsEditable && (
+        <PostedLockNotice
+          documentLabel={`Faktur ${invoice.documentNo}`}
+          correctionHref={`/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}`}
+          correctionLabel="retur penjualan"
+        />
+      )}
 
       <DetailTabs
         ariaLabel="Tab detail faktur"

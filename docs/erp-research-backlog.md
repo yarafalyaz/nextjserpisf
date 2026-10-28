@@ -43382,6 +43382,124 @@ Ringkasan satu kalimat: ambang = Σ `amount` baris `confirmed` per quotation (se
 
 ID spec ini **F-2026-10-28-154-S** (matriks status DP per baris × ambang + syarat posted + snapshot pembatalan; jawab INDEKS SAL-BR-002 `Sebagian` + TEST-STRATEGY P0 butir 10; basis `origin/main` `e16e79d81`). INDEKS SAL-BR-002 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E-SAL2). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status SAL-BR-002 hanya sesudah implementasi + E-SAL2 hijau) → BOT Backend (gap BILA E-SAL2 menemukan; 141-V R1–R3 tetap acuan reversal) → BOT Frontend (permukaan sesudah kontrak) → BOT QA (E-SAL2-1..5 atas head persis). Butuh putusan accountant: TIDAK — PPN terima/reversal sudah diputus 141-V R3; Business tidak membuka vonis baru.
 
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-157-S: kelengkapan field StockAdjustment vs syarat audit INV-BR-011 (alasan/approver/aktor/waktu/ledger)
+
+**Verifikasi ID:** grep `F-2026-10-28-157` di backlog + board main + 25 head PR terbuka = 0/0/0 sebelum tulis (run ini). E157 bebas di backlog (grep `E157` = 0; E152 dipakai spec WO-BR-003). **Basis** `origin/main` `e48c3eb7d` (28 Okt 2026, WIB). Semua `file:line` di bawah dibaca dari blob `origin/main` persis (bukan ingatan).
+
+Benchmark resmi (akses 28 Okt 2026):
+- Accurate: Penyesuaian Persediaan — tipe Penambahan/Pengurangan + tanggal + barang + kuantitas; akun penyesuaian dipetakan di Preferensi → Akun Perkiraan → Persediaan (contoh beban sampel) — https://help.accurate.id/product/penyesuaian-persediaan/ ; https://help.accurate.id/product/membuat-penyesuaian-persediaan/ ; persetujuan transaksi mencakup Penyesuaian Persediaan (tab Persetujuan, centang per transaksi) — https://help.accurate.id/product/cara-mengaktifkan-pengaturan-persetujuan/
+- Zahir: Penyesuaian Barang — Gudang + Tanggal + No. Referensi + Deskripsi + Departemen + Proyek + Produk + Akun + Jumlah + Satuan + HPP + Nomor/Tanggal Dokumen; kewenangan user diatur lewat otorisasi — https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-penyesuaian-barang-zahir-online-v2 ; https://www.zahironline.com/adjustment-stock/
+
+### 1. Inventarisasi field-per-field (TERVERIFIKASI-KODE, `prisma/schema.prisma:2572-2610`)
+
+| # | Field skema | Status audit | Bukti |
+|---|---|---|---|
+| 1 | `documentNo` unique + `slug` | ADA | `generateDocumentNumber("ADJ")` + `nextSlug` di create (`inventory.actions.ts:270`), penutupan transfer (`:941`), opname (`postStocktakeSession`) |
+| 2 | `warehouseId` | ADA + scope-guard | `assertWarehouseAccess` di create/update/process/delete (`:267,2003,361,1860`); form wajib gudang (`stock-adjustment-form.tsx`) |
+| 3 | `date` (tanggal dokumen) | ADA + period-lock | zod `dateString` + `assertPeriodOpen` di create/update/process (`:264,1984,362`); hook tegakkan lagi sebelum jurnal (`stock-adjustment.hook.ts:54`) |
+| 4 | `reason` header (alasan) | PARSIAL — kolom ada, form manual TAK PERNAH mengisi | create tulis `v.reason ?? null` (`:297`); TAPI `onSubmit` form hanya append `warehouseId/date/items/type/notes` (`stock-adjustment-form.tsx:117-131`) — `reason` tak pernah dikirim → selalu NULL jalur manual. Hanya terisi otomatis: penutupan transfer (`reason: TRANSFER_SHORTAGE_REASON` = `"selisih transfer"`, `:948`); zod `optionalString(500)` (`inventory.schemas.ts:41`) = boleh kosong. Alasan per baris ADA (input "Alasan baris N" → `notes` item, `:315-321`, dinormalisasi `normalizeAdjustmentItem`) |
+| 5 | `type` (increase/decrease/recount/correction) | ADA tersimpan, TIDAK memengaruhi mesin | form kirim 4 opsi (`:200-206`); create/update simpan (`:298`); hook ABAIKAN `type` — efek dihitung dari `actualQty − liveQty` (`stock-adjustment.hook.ts:105-130`). Label bisa menyesatkan isi (mis. `type=increase` tapi semua baris minus) |
+| 6 | `notes` | ADA | form textarea `notes` (`:214-222`); create/update simpan (`:299`) |
+| 7 | `status` | ADA, kosakata hidup = `draft/processing/processed` (+ `approved/rejected` HANYA bila workflow dikonfigurasi — lihat gap G157-1) | default `draft`; klaim `draft→processing` (`:380-393`); hook `processed` (`stock-adjustment.hook.ts:297`); restore `processing→draft` saat tx gagal (`:505-513`) |
+| 8 | `approvedBy` / `approvedAt` | ADA kolom + index, TIDAK PERNAH ditulis untuk StockAdjustment (kolom mati) | `APPROVED_BY_MODELS` (`approval.actions.ts:58-65`) TIDAK memuat `StockAdjustment` → `approveStep` generik tak menulisnya; satu-satunya penulis `approvedBy` stok = `approveStocktakeSession` (`inventory.actions.ts:2539`, model lain). Komentar hook (`stock-adjustment.hook.ts:292-296`, "hanya diisi mesin workflow") SALAH untuk tipe ini — mesin tak pernah mengisinya |
+| 9 | `journalId` | ADA, terisi sejak perbaikan link | hook tak kembalikan id → create baca balik `journal` `referenceType/referenceId` dalam tx yang sama (`:487-505`); sengaja dibiarkan apa adanya bila hook tak buat jurnal (net 0 / akun belum dipetakan). Jurnal net-0 = `onStockAdjustment` return null (`stock-journal.service.ts:398`) |
+| 10 | `createdBy` (pengusul/aktor buat) | ADA | create + penutupan transfer + opname tulis `Number(user.id)` (`:305`, `:955`, post stocktake) |
+| 11 | `createdAt/updatedAt` (waktu) | ADA sebagian — TIDAK ada `processedAt` eksplisit | `updatedAt` ≈ waktu proses (dokumen processed tak bisa diupdate: guard draft-only `:1852-1875,1969-1995`); `Journal.transactionDate` = `adjustment.date` (tanggal dokumen, BUKAN waktu proses — `stock-adjustment.hook.ts:284-290`); waktu proses presisi = `logActivity("process",...)` (`:515-520`) + `Journal.createdAt` |
+| 12 | `inventoryTransferId` | ADA (kasus khusus penutupan) | cabang jurnal-saja nol-StockMove (`:396-475`); guard alasan wajib persis `"selisih transfer"` (`:404`) |
+| 13 | Aktor proses (siapa posting) | ADA via jejak, bukan kolom dokumen | hook terima `userId` → `StockMove.createdBy` (`stock-adjustment.hook.ts:163-168`) + jurnal (`:284-290`) + `logActivity process` |
+| 14 | `StockAdjustmentItem`: `systemQty/actualQty/difference/unitCost/totalCost` | ADA, TAPI `difference` tersimpan bisa basi (gap G157-3) | create hitung dari snapshot (`:311-328`); hook tulis-balik `unitCost/totalCost` efektif (`:171-177`) TAPI TIDAK tulis-balik `systemQty`/`difference` — jurnal + move pakai `qtyDiff` live, `difference` kolom tetap snapshot-create |
+| 15 | Ledger StockMove + Jurnal | ADA + idempoten | guard movement existing (`stock-adjustment.hook.ts:39-45`) + guard status processed/cancelled no-op (`:48-50`) + kunci `FOR UPDATE` (`:33`); INV-BR-012 Terpasang; regresi `stock-move-double-posting.test.ts`, `stock-adjustment-baseline.test.ts`, `stock-posted-correction-gate.test.ts` |
+
+### 2. Workflow specification (kode live)
+
+Aktor: gudang/admin (izin `create/process/edit/delete_stock_adjustments`), approver (bila workflow dikonfigurasi), sistem (opname/penutupan transfer). Dokumen masuk: hitung fisik / selisih transfer / variance opname. Dokumen keluar: StockMove `posted` per baris beda + 1 Journal (kecuali net-0) + `status=processed`.
+
+Alur normal: `draft` (create, period-open + scope + systemQty snapshot + duplikat-guard `assertUniqueAdjustmentItems :174`) → `processing` (klaim atomik, anti double-proses) → hook (re-lock baris, guard idempoten, hitung live per gudang dari `inventoryLayer`, tolak duplikat item, batch/serial-guard, FIFO OUT / layer IN, tulis-balik cost efektif, jurnal, `processed`) → `processed` terminal (edit/hapus ditolak draft-only; koreksi = adjustment baru / INV-BR-010 Terpasang).
+
+Alur otomatis: (a) penutupan selisih transfer — draft `reason="selisih transfer"` + `inventoryTransferId`, proses = jurnal-saja + transfer→`received` satu tx; (b) opname — `postStocktakeSession` buat adjustment dari `finalCount` vs live, lalu `requestApprovalIfConfigured`.
+
+### 3. Role/permission matrix (key nyata, TERVERIFIKASI-KODE)
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Buat draft | `create_stock_adjustments` | + scope gudang + period-open + zod |
+| Proses (stok + jurnal) | `process_stock_adjustments` | + `assertApproved` + klaim `draft→processing` |
+| Ubah | `edit_stock_adjustments` | **draft-only** + TOCTOU re-check dalam tx (`:2027-2035`); opname-approve pakai key ini juga (`approveStocktakeSession :2530`) |
+| Hapus | `delete_stock_adjustments` | **draft-only** (`:1864`); INV-BR-013 Terpasang |
+| Setujui (workflow generik) | `approve_workflows` ATAU per-referensi (`approval-permissions.ts:19-29`) — **StockAdjustment TAK TERDAFTAR** → jatuh ke `approve_workflows` saja | gap G157-1 |
+| Lihat | `view_stock_adjustments` ( + scope gudang di list) | — |
+
+### 4. Status-transition matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | create manual | `draft` | izin create + scope + period-open + zod; `reason` NULL (form), `approvedBy` NULL |
+| — | penutupan transfer / opname | `draft` | reason otomatis / finalCount vs live |
+| `draft` | process | `processing` | izin process + scope + period-open + `assertApproved` + klaim atomik |
+| `processing` | hook sukses | `processed` | guard idempoten + FOR UPDATE + FIFO/batch/serial + jurnal |
+| `processing` | tx gagal | `draft` | restore klaim (`:505-513`); bisa retry |
+| `draft` | approve workflow (BILA dikonfigurasi) | `approved` | **JALAN BUNTU — process menolak non-draft** (gap G157-1) |
+| `draft` | reject workflow (BILA dikonfigurasi) | `rejected` | terminal manual (gap G157-1); StockAdjustment BUKAN `REJECTION_REASON_MODELS` → alasan tolak tak tersimpan di dokumen |
+| `draft` | update/delete | `draft` (tetap) / hilang fisik | draft-only + TOCTOU (update) |
+| `processed` | — | terminal | edit/hapus ditolak; koreksi = dokumen baru |
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-ADJ-01 | Alasan header WAJIB non-kosong untuk adjustment manual; pengecualian sah hanya dua alur otomatis (`"selisih transfer"`, `"Opname <doc>"` di notes baris) | USULAN (selaras Accurate "jumlah + alasan", Zahir Deskripsi wajib-isi) | spec ini §1 baris 4; `inventory.schemas.ts:41`; BENCHMARK §atas |
+| BR-ADJ-02 | `approvedBy/approvedAt` StockAdjustment = kolom mati; JANGAN baca sebagai bukti persetujuan sampai G157-1 diputus | TERVERIFIKASI-KODE | `approval.actions.ts:58-65` (tak terdaftar); hook `:292-296` (komentar kedaluwarsa) |
+| BR-ADJ-03 | `difference` tersimpan = snapshot create; nilai ledger sah = `qtyDiff` live (jurnal + move). Audit selisih baca jurnal/move, bukan kolom `difference`, sampai G157-3 diperbaiki | TERVERIFIKASI-KODE | hook `:105-177` (tulis-balik cost saja) |
+| BR-ADJ-04 | `type` = label tampilan; efek stok/jurnal HANYA dari tanda `actualQty − liveQty`. Validasi silang label-vs-efek = USULAN display-only | TERVERIFIKASI-KODE + USULAN | hook `:105-130`; form `:200-206` |
+| BR-ADJ-05 | Waktu proses audit = `logActivity process` + `Journal.createdAt`; `Journal.transactionDate` = tanggal dokumen; `updatedAt` ≈ waktu proses (processed immutable) | TERVERIFIKASI-KODE | `:515-520`; hook `:284-290`; guard draft-only |
+| BR-ADJ-06 | Net-0 (IN=OUT senilai) = sah tanpa jurnal; `journalId` NULL sah dalam kasus ini, BUKAN bukti ledger hilang | TERVERIFIKASI-KODE | `stock-journal.service.ts:393-398`; `:487-494` |
+| BR-ADJ-07 | Aktor posting terlacak di `StockMove.createdBy` + jurnal + activity log; pengusul = `createdBy` | TERVERIFIKASI-KODE | hook `:26-31,163-168,284-290`; `:305` |
+
+### 6. Gap register (temuan run ini — BUKAN vonis implementasi)
+
+| ID | Gap | Bukti | Rekomendasi (USULAN, milik Lead + Backend) |
+|---|---|---|---|
+| G157-1 (P0-fungsional) | Workflow approval + process SALING MENGUNCI: bila workflow StockAdjustment dikonfigurasi, `approveStep` tulis status `approved` → `processStockAdjustment` tolak ("hanya dari draft"); `rejectStep` tulis `rejected` → terminal tanpa resubmit dokumen. Mengaktifkan approval = mematikan pemrosesan | `approval.actions.ts:252-280` (tulis `approved`, StockAdjustment bukan GATE_ONLY) vs `inventory.actions.ts:364-366` (wajib `draft`); `APPROVED_BY_MODELS` tak memuatnya; `REJECTION_REASON_MODELS:66-70` tak memuatnya | Opsi A (disarankan, cermin Journal/VendorPayment): daftarkan `StockAdjustment` ke `GATE_ONLY_REFERENCE_TYPES` — status dokumen tetap `draft`, approval murni gerbang `assertApproved`. Opsi B: process terima `approved` (ubah guard + uji regresi idempoten). BUTUH-VONIS Lead (opsi) |
+| G157-2 (P1-audit) | Alasan header selalu NULL jalur manual (form tak kirim `reason`); jejak audit alasan hanya di notes per baris | form `:117-131` vs create `:297` | BR-ADJ-01: wajibkan header `reason` non-kosong di form + zod (kecuali dua alur otomatis); Frontend + Backend |
+| G157-3 (P1-ledger) | `systemQty`/`difference` tersimpan tak ditulis-balik ke live (cost sudah, qty belum) — kolom `difference` bisa ≠ jurnal/move | hook `:105-177` | tulis-balik `systemQty=liveQty`, `difference=qtyDiff` seperti pola cost (`:171-177`); Backend + QA E157-3 |
+| G157-4 (P2) | Komentar hook `:292-296` klaim `approvedBy` diisi mesin workflow — faktual salah untuk tipe ini | `APPROVAL_REFERENCE_PERMISSIONS:19-29`, `APPROVED_BY_MODELS:58-65` | betulkan komentar saat G157-1 diputus (jangan edit terpisah) |
+| G157-5 (P2) | `type` tanpa validasi silang (label `increase` + efek minus lolos diam-diam) | hook abaikan `type` | BR-ADJ-04: peringatan/penolakan display-only; Frontend |
+
+### 7. Feature matrix Accurate / Zahir / ISF
+
+| Aspek | Accurate | Zahir | ISF (kode live run ini) |
+|---|---|---|---|
+| Alasan/deskripsi penyesuaian | Ya — alasan pengurangan (sampel) | Ya — Deskripsi + No. Referensi + Akun per baris | Per baris YA (notes); header manual TIDAK (G157-2) |
+| Approval penyesuaian | Ya — tab Persetujuan, centang per transaksi | Otorisasi kewenangan user | Parsial rusak: mesin ada tapi mengunci proses (G157-1) |
+| Penanggung jawab tercatat | Ya (user + jejak) | Ya | Ya — createdBy + StockMove.createdBy + log |
+| Waktu dokumen vs waktu proses | Tanggal transaksi | Tanggal transaksi + Tanggal Dokumen | Tanggal dokumen + jejak waktu proses (BR-ADJ-05) |
+| Taut ledger | Akun penyesuaian terpetakan | Akun per baris | Jurnal + `journalId` + StockMove ref (BR-ADJ-06 net-0) |
+| Selisih tersimpan | — | Jumlah + HPP | Ya tapi snapshot-create (G157-3) |
+
+### 8. Acceptance criteria + edge cases (falsifikasi E157, atas head implementasi persis — BUKAN head spec ini)
+
+- E157-1: konfigurasi workflow StockAdjustment aktif → approve penuh → `processStockAdjustment` HARUS gagal hari ini ("hanya dari draft") = MERAH bila lolos proses (bukti G157-1 hidup); sesudah perbaikan Opsi A/B: approve → process sukses sekali, retry no-op = hijau.
+- E157-2: cabut `assertApproved` dari process (`inventory.actions.ts:372`) + workflow aktif → proses tanpa approval lolos = MERAH.
+- E157-3: buat adjustment dengan stok live berubah antara create dan process (concurrent IN) → `difference` kolom ≠ `qtyDiff` jurnal = MERAH bila implementasi klaim kolom = ledger (bukti G157-3); sesudah tulis-balik: sama persis.
+- E157-4: form manual tanpa alasan header lolos create dengan `reason` NULL = MERAH sesudah BR-ADJ-01 (hari ini LICIN-hijau = perilaku lama, catat basis).
+- E157-5: `type=increase` + semua baris `actualQty < liveQty` lolos tanpa peringatan = MERAH sesudah BR-ADJ-04.
+- E157-6: cabut guard movement-existing (`stock-adjustment.hook.ts:39-45`) + double-process → StockMove ganda = MERAH; pulihkan → hijau (regresi INV-BR-012).
+- Edge: net-0 (`journalId` NULL sah); penutupan transfer alasan salah → tolak; batch-tracked tanpa lot → tolak; serial tak genap qty → tolak; periode tutup → tolak di 3 lapis.
+
+### 9. Backlog turunan (BUKAN kartu baru run ini)
+
+| ID | Isi | Pemilik | Gerbang |
+|---|---|---|---|
+| F-2026-10-28-157-S | Spec ini (dokumen) | Business | PR docs ini |
+| (Backend, via parents gate pada spec ini) | G157-1..G157-5 sesudah Lead putus opsi (G157-1 Opsi A/B) | Backend | parents gate: spec ini merged + vonis Lead |
+| (Frontend, via parents gate pada spec ini) | Header reason wajib + peringatan type-vs-efek (display-only, verbatim server) | Frontend | kontrak Backend sesudah implementasi |
+| (QA) | E157-1..6 atas head implementasi persis | QA | head persis + tes adjustment existing |
+
+ID spec ini **F-2026-10-28-157-S** (inventarisasi field StockAdjustment vs syarat audit + matriks E-falsifikasi; jawab INDEKS INV-BR-011 `Sebagian`; basis `origin/main` `e48c3eb7d`). INDEKS INV-BR-011 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E157). Pemilik berikutnya: BOT Lead (putus opsi G157-1 + merge PR docs ini; nilai status INV-BR-011 hanya sesudah implementasi + E157 hijau) → BOT Backend (G157-1..5 sesudah putusan) → BOT Frontend (permukaan sesudah kontrak) → BOT QA (E157-1..6 atas head persis). Butuh putusan accountant: TIDAK — akun penyesuaian/jurnal existing tak diubah; Business tidak membuka vonis baru.
+
+---
 ## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-148-V: metode costing bawaan = FIFO menang, average jadi pilihan eksplisit (jawaban BR-CST-08 spec 144-S, tutup OPEN #8)
 Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis origin/main b8d4f7c24 (28 Okt 2026, 17:04 WIB).
 Verifikasi ID: grep F-2026-10-28-148 di backlog + board + 30 head PR terbuka origin = 0/0/0 sebelum tulis (run ini). Slot 132-P = putusan Lead (bukan blok vonis). 148-V bebas.
@@ -43874,6 +43992,36 @@ Belum ada / parsial (bukti grep run ini):
 - Mengubah ambang aging D1 (milik vonis Accountant atas 140-S).
 
 ID spec ini **F-2026-10-28-155-S** (FIN-BR-005 sisi Business: rumus outstanding per modul + E155). Pemilik berikutnya: Accountant (konfirmasi NETO + D1 aging + ambang PKWT BR-FIN05-05) → Lead (putus BR-FIN05 + merge) → Backend (derivasi bersama) → Frontend (label) → QA (E155 atas implementasi).
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-129-V: margin proyek = pendapatan terbit − biaya terdokumentasi; overhead dan jam timesheet tak boleh dinilai tebakan (jawaban PROJ-BR-008)
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `ec5cbd7ba` (28 Okt 2026 09:30 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-129` di backlog + board `origin/main` = 0 sebelum tulis; ID 127-S/128-S terpakai Business, 121-V/123-V/125-V/126-V terpakai vonis Accountant. **129-V bebas.**
+### 1. Fakta kode terverifikasi run ini (bukan klaim warisan)
+- Builder sumber tunggal laba/rugi proyek: `src/lib/reports/project-pl.ts:1-57` (dokumen kontrak F-2026-10-21-029), loader `project-pl-data.ts`, ekspor `project-pl-export.ts`; UI `src/components/reports/project-pl-detail-card.tsx` 104 baris (konsumen, bukan penentu angka).
+- **Pendapatan**: hanya invoice `deletedAt = null` dengan status `posted | partial | paid` — `project-pl.ts:60,186-192`; nilai = Σ (`subtotal − discount`) tanpa pajak (`:151-153`). Jembatan: `projectId` langsung + quotation→WO proyek, dedup per id invoice.
+- **Biaya**: lima keranjang berlabel — `materialCost` (MaterialIssue completed, snapshot qty × cost), `productionCost` (ProductionCost pada WO proyek, termasuk labor hasil tarik timesheet `sourceTimesheetId` dan subkontrak yang dicerminkan dari VendorBill PO jasa), `expenseCost` (Expense approved), `pettyCashCost` (PettyCash OUT), `vendorBillCost` (VendorBill confirmed/posted/partial/paid setelah VendorBill yang sudah tercermin sebagai ProductionCost dikeluarkan — anti-dobel). Definisi field: `:150-180`; anti-dobel dijelaskan `:28-37`.
+- **Tenaga kerja**: timesheet yang belum ditarik ke ProductionCost dilaporkan sebagai `unpulledTimesheetHours` — JAM saja, bukan uang, tidak mengurangi laba (`:42-47`, `:296-306`). Ini konsisten dengan vonis F-2026-10-27-109-V (jam Timesheet bukan tarif).
+- **Overhead**: grep `overhead` di `project-pl.ts` = 0 — tidak ada alokasi overhead otomatis ke margin proyek. Overhead hanya bisa masuk lewat dokumen ProductionCost (absorpsi eksplisit di modul produksi).
+- **Margin**: `profit = revenue − totalCost`; `marginPercent = profit / revenue × 100` (0 bila revenue 0) — `:281-284`.
+### 2. Vonis (menutup garpu PROJ-BR-008)
+- **P1 — pengakuan pendapatan proyek**: pendapatan diakui saat **faktur penjualan terbit** (status `posted`, atau sudah berjalan `partial`/`paid`), sebesar subtotal − diskon, TANPA PPN. Termin, uang muka, dan pembayaran BUKAN pengakuan pendapatan; draft/void/cancelled/deleted tidak diakui. Quotation dan surat jalan bukan pendapatan.
+- **P2 — biaya proyek**: hanya lima keranjang §1 yang sah. Material dinilai pada **snapshot biaya saat issue** (FIFO/average yang berlaku ketika keluar), bukan harga beli terakhir. VendorBill yang sudah tercermin sebagai ProductionCost TIDAK boleh dihitung dua kali; dedup invoice dan MI wajib.
+- **P3 — tenaga kerja**: biaya tenaga kerja proyek hanya lahir dari ProductionCost yang sudah ditarik dari timesheet; jam yang belum ditarik tetap MEMO, tidak dinilai rupiah dan tidak mengurangi margin. Vonis ini TIDAK membatalkan vonis tarif tenaga kerja **Q-PROJ8-2/Q-PROJ8-6** (kartu t_5836cae1, 28 Okt 02:38 WIB): tarif standar terencana per periode/peran SAH sebagai dasar biaya TERAPAN selama bersnapshot dan variansnya ditutup lewat jurnal varians; yang dilarang adalah menilai jam dengan tarif yang tidak ditetapkan/di-snapshot (tebakan) — selaras 109-V.
+- **P4 — overhead**: tidak ada alokasi overhead otomatis (persentase atas pendapatan/biaya) ke margin proyek. Overhead masuk hanya bila ada dokumen absorpsi (ProductionCost) atau beban ber-`projectId`; selisih absorpsi vs aktual tetap milik modul produksi, bukan ditambal di laporan proyek.
+- **P5 — definisi margin**: `laba = pendapatan − Σ biaya` lima keranjang; `margin % = laba / pendapatan`. Proyek dengan pendapatan 0 dan biaya > 0 WAJIB menampilkan laba negatif; `margin % = 0` adalah konvensi tampilan, bukan penilaian. Margin tidak boleh dihitung dari quotation atau dari nilai kontrak.
+- **P6 — batas laporan**: laporan laba/rugi proyek adalah **laporan manajemen** berbasis dokumen (Expense `approved` dan MaterialIssue `completed` diakui lebih awal daripada GL). Sumber otoritatif tetap GL; bila angka laporan ≠ GL, selisih harus bisa dijelaskan per dokumen — bukan dipilih salah satu diam-diam.
+- **P7 — pembulatan**: setiap agregat 2dp lewat helper `src/lib/utils/math`; persentase 2dp; tidak menjumlah persen lintas proyek.
+### 3. Batas vonis
+- Pengakuan pendapatan formal untuk laporan eksternal (PSAK 72 — pengakuan berdasarkan pemenuhan kewajiban prestasi, bukan sekadar penerbitan faktur) TIDAK diputus di sini; bila ISF butuh laporan keuangan ber-PSAK 72, itu proyek akuntansi terpisah dengan kontrak pelanggan sebagai basis. Vonis ini mengikat **laporan manajemen** yang ada hari ini.
+- Perubahan bentuk laporan/UI = lane Frontend; perubahan sumber data = lane Backend; vonis ini menetapkan angka mana yang sah.
+- Vonis **Q-PROJ8-2/3/6** (kartu t_5836cae1) tetap berlaku penuh untuk mekanika costing produksi (tarif standar vs aktual, varians tarif, absorpsi overhead + under/over-absorption). Vonis 129-V ini hanya menetapkan komposisi dan pengakuan pada laporan margin proyek; bila keduanya bersinggungan, Q-PROJ8 menang untuk mekanika costing dan 129-V menang untuk apa yang boleh masuk margin proyek.
+- Status INDEKS-ATURAN yang diubah PR ini: `PROJ-BR-008 OPEN-keputusan → Sebagian` (margin/komponen biaya/overhead/tenaga kerja tertutup; sisa = pengakuan pendapatan PSAK 72 bila dibutuhkan).
+ID vonis ini **F-2026-10-28-129-V** (jawaban PROJ-BR-008). Pemilik berikutnya: Lead (merge) → QA (E129-1..3 atas head persis) → Frontend/Backend hanya bila ada penyimpangan dari P1-P7.
+### Falsifikasi QA (E129, atas head persis)
+- E129-1: quotation/termin/pembayaran dihitung sebagai pendapatan proyek, atau invoice draft/cancelled ikut diakui = **MERAH**.
+- E129-2: jam timesheet yang belum ditarik dinilai rupiah dan mengurangi margin, ATAU overhead dialokasikan dengan persentase tebakan = **MERAH**.
+- E129-3: VendorBill yang sudah tercermin sebagai ProductionCost dihitung dua kali, atau invoice dihitung dua kali lewat dua jembatan = **MERAH**.
+
+---
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-153-S: koreksi terkontrol faktur posted (SAL-BR-009)
 
@@ -44198,3 +44346,95 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 2. BOT QA memfalsifikasi tiap AC (bukan membaca diff) dan menulis atestasi blob pada head persis; gerbang merge tetap Q-CHURN-1.
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-152-V: D1 ambang aging Rp1 + D2 total rujukan uang (jawaban spec 140-S AC-REP-001)
+
+**Verifikasi ID:** grep `F-2026-10-28-152-V` di backlog + board + judul PR terbuka = 0/0/0 sebelum tulis (run ini). Tertinggi -V tanggal 28 = 148-V. **152-V bebas.** Basis `origin/main` `a66378833` (28 Okt 2026 23:23 WIB). Semua `file:line` dibaca dari blob main persis run ini, bukan ingatan. Vonis docs-only: tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal. INDEKS AC-REP-001 tidak diubah kartu ini (tetap Belum sampai D3/D4 lulus E140).
+
+**Basis live (TERVERIFIKASI-KODE):**
+- `src/lib/finance/settlement-status.ts:22` `SETTLEMENT_TOLERANCE_IDR = 1` + `:34-37` `isOutstandingSettled` (FIN-BR-006, merged via #1275/#1227).
+- `src/components/reports/aging-report-view.tsx` `buildAgingRows` — gate `isOutstandingSettled(outstanding)` (via #1304 merged); komentar baris melarang `!isSettled()` mentah (faktur Rp0/negatif ikut masuk bila dibalik).
+- `src/lib/reports/aging-reports-data.ts:115` (receivables) + `:144` (payables) — gate `isOutstandingSettled` (via #1304 merged).
+- `src/lib/reports/aging-reports-data.ts:169-191` `loadPayablesTotal` — inklusif tanpa-dueDate + notice pembeda `:191` + label total D2 `Jumlah Hutang (termasuk Tanpa Jatuh Tempo)` (via #1320 merged 2026-10-28 WIB).
+- `src/lib/reports/payables-summary.ts:78` — gate populasi `outstanding <= 0` (BELUM `isOutstandingSettled`); dipakai layar `total-hutang/page.tsx:33` + PDF `loadPayablesTotal` via `aging-reports-data.ts:176`.
+
+### A. Vonis D1 — ambang buang aging = `isOutstandingSettled` Rp1 (DITERIMA-penuh)
+
+**Putusan:** tiga titik aging (layar `buildAgingRows`, PDF `loadReceivablesAging`, PDF `loadPayablesAging`) WAJIB memakai gate `isOutstandingSettled` (sisa > Rp1). Status: **SUDAH TERPASANG di main via #1304** — vonis ini meratifikasi, bukan memerintah kerja baru.
+
+**Alasan satu kalimat:** dokumen sisa ≤ Rp1 berstatus `paid` (FIN-BR-006); aging yang menampilkannya bertengkar dengan status dokumennya sendiri — preseden Q-EPS-1..5 Lead PUTUSAN #1262 sudah terima efek populasi-menyusut untuk antrean, aging ikut logika sama.
+
+**Syarat mengikat:** bentuk gate WAJIB `isOutstandingSettled(outstanding)` (buang bila sisa ≤ Rp1), **DILARANG** `!isSettled(grandTotal, paid)` mentah — `isSettled` false untuk `grandTotal <= 0` sehingga faktur Rp0/negatif ikut masuk bila gate dibalik (sudah dikomentari di kode view).
+
+**Larangan:** mengubah nilai toleransi = vonis Accountant baru; sisa dalam toleransi TIDAK dibukukan (tanpa write-off/pembulatan jurnal).
+
+**E140-1 baca final:** tampil sisa Rp0,50/Rp1,00 di aging layar ATAU PDF = MERAH; sisa Rp1,01 tampil = HIJAU (kontrol arah E140-6).
+
+### B. Vonis D2 — total rujukan uang = Total Hutang inklusif (DITERIMA-bersyarat-label)
+
+**Putusan:** dua angka menjawab pertanyaan beda secara sah — **TIDAK disamakan**:
+- `hutang-jatuh-tempo` (layar + PDF aging) = kewajiban ber-jatuh-tempo SAJA (tanpa-dueDate dibuang). Fungsi: umur/penagihan.
+- `total-hutang` (PDF `loadPayablesTotal` + layar `total-hutang`) = SELURUH kewajiban diakui bersisa termasuk tanpa-dueDate (bucket `Tanpa Jatuh Tempo`). Fungsi: total uang.
+
+**Rujukan uang mengikat:** untuk NERACA, rujukan SPT/biaya, dan setiap total yang menjawab "berapa utang perusahaan" — pakai **Total Hutang inklusif** (`summary.totalOutstanding` dari `buildPayablesSummary`, sisa NETO `grandTotal − withholding − paid`). KPI layar `hutang-jatuh-tempo` DILARANG dipakai sebagai rujukan uang karena diam-diam membuang populasi tanpa-dueDate.
+
+**Label mengikat (SUDAH TERPASANG via #1320):** total PDF `Jumlah Hutang (termasuk Tanpa Jatuh Tempo)` + notice `:191` + notice + tautan silang halaman layar. Bila label/notice dicabut = MERAH (E140-2 dokumentasi).
+
+**Temuan terbuka diteruskan (bukan vonis angka, milik Backend):** `payables-summary.ts:78` masih `outstanding <= 0` (bukan `isOutstandingSettled`), dan layar `total-hutang/page.tsx:33-48` tidak meneruskan `withholdingAmount` ke summary (sisa BRUTO vs PDF NETO). Akibat: tagihan sisa Rp0,50 tampil di Total Hutang padahal `paid`; tagihan ber-PPh tampil lebih besar di layar vs PDF. **D3/D4 + perbaikan ini milik Backend/Frontend, E140 milik QA — bukan vonis angka kartu ini.** INDEKS AC-REP-001 tetap Belum.
+
+### C. Falsifikasi wajib (QA atas head implementasi)
+
+- E140-1 (D1): fixture sisa Rp0,50 → tampil di aging layar ATAU PDF = MERAH; Rp1,01 tampil = HIJAU.
+- E140-2 (D2): fixture posted bersisa tanpa dueDate → `Jumlah Hutang` PDF tidak mencakupnya = MERAH; KPI layar mencakupnya = MERAH; label/notice beda-pertanyaan hilang = MERAH.
+
+ID vonis ini **F-2026-10-28-152-V** (jawaban D1+D2 spec 140-S; D3/D4 + temuan summary diteruskan Backend/Frontend; E140 milik QA; INDEKS AC-REP-001 tetap Belum). Pemilik berikutnya: BOT Backend (perbaikan summary gate+withholding, D3/D4) → BOT Frontend (label bila kurang) → BOT QA (E140 atas head persis) → Lead (nilai INDEKS sesudah E140 lulus).
+
+## VONIS FINAL ACCOUNTANT 2026-10-28 — F-2026-10-28-142-V: nota kredit formal DIPUTUS PERLU — 135-V MENGGANTIKAN 121-V P4 (aturan induk SAL-BR-012, kartu t_2c6b807d)
+
+Pemilik vonis: Accountant (accounting-finance-tax, lane uang/pajak — final mengikat untuk jurnal/PPN/outstanding). Dokumen vonis saja; tanpa kode/skema/migrasi. Basis `origin/main` `5d6698889` (28 Okt 2026 13:53 WIB, fetch run ini). Kartu asal `t_2c6b807d` (putusan CEO feeder PETA-FLEET atas spec Business F-2026-10-28-139-S item 05c — SATU-SATUNYA vonis final yang belum ada; 05b sudah diputus 141-V).
+**Verifikasi ID:** grep `F-2026-10-28-142` di backlog + `docs/product/INDEKS-ATURAN.md` `origin/main` = 0/0 sebelum tulis (run ini). Judul 30 PR terbuka = 0 hit `142-V`. E143 = 0 hit di `docs/` (E142 milik 141-V PR #1298). **142-V / E143 bebas.**
+**Catatan otoritas-ID (pengawas PETA-FLEET, kartu ini):** tag `[BR-F139-05c]` di badan tugas BUKAN ID peta (`docs/product/INDEKS-ATURAN.md` hanya mengenal `GL-BR/INV-BR/PUR-BR/SAL-BR/FIN-BR/PROJ-BR/WO-BR/HR-BR/AC-*` atau `F-YYYY-MM-DD-NNN-S/V`). Vonis ini diterbitkan dengan ID kanonis **`F-2026-10-28-142-V`** di bawah aturan induk **`SAL-BR-012`**; frasa "05c" di bawah hanya merujuk butir spec 139-S sebagai pemicu, bukan sebagai ID aturan.
+**Yang diputus (sempit):** DUA vonis OPEN menjawab perlu-tidaknya model nota kredit formal yang SAMA dan BERTENTANGAN — 121-V P4 (PR #1252, DITOLAK tahap 1: retur+`CustomerCredit`+reversal cukup) vs 135-V (PR #1285, PERLU model terpisah untuk koreksi non-fisik). Satu putusan final, tanpa vonis uang/pajak baru di luar nota kredit. Urutan DP (butir 05b) = DI LUAR kartu ini (sudah diputus 141-V).
+
+### 0. Fakta kode penentu (basis di atas, dibaca run ini — bukan klaim warisan)
+
+- `SalesReturn` SELALU gerakan fisik: `onSalesReturnStock` (`src/lib/hooks/sales-return.hook.ts:28+`) ciptakan StockMove IN per baris + `assertPeriodOpen` + tolak campuran scrap+dagang; hook jurnal (`src/lib/hooks/accounting.hook.ts:1627+`) bukukan kaki persediaan/COGS (Dr Persediaan / Cr Retur Penjualan `costTotal`) tiap retur dagang, plus kaki harga (Dr Retur Penjualan / Cr Piutang bila tertaut faktur). Retur = dokumen barang-kembali, bukan dokumen koreksi-nilai.
+- Retur completed anti-hapus existing: `deleteSalesReturn` (`src/actions/sales.actions.ts:3827-3844`) tolak `completed`; `completeSalesReturn` (`:2095+`) wajib `reason` trim non-kosong (syarat pengimbang P4 121-V, SUDAH merged PR #1296 commit `8119b44ad`) + SoD penyetuju-bukan-pembuat + idempotensi stok/jurnal. P4 meninggalkan warisan kode nyata ini.
+- Tanpa model nota kredit di repo: `SalesCreditNote` = 0 hit model/schema (`prisma/schema.prisma`); satu-satunya rujukan = `src/lib/reports/vat-invoices-data.ts:181-182` ("belum ada model SalesCreditNote di repo, jadi belum ada yang diabaikan di sini") + tes `sales.actions.test.ts:980` yang mengasumsikan P4.
+- `CustomerCredit` = wadah saldo pasif (`prisma/schema.prisma:464-483`, `sourceType`/`sourceId`, status `open`); kelebihan retur di atas outstanding mengalir ke sini (bukan outstanding negatif — diratifikasi 123-V). Ia menampung NILAI, bukan alasan/jejak koreksi.
+- Pajak: FP pengganti/pembatalan hidup (`tax-invoice.service.ts:420/529+`); retur PPN dari snapshot tarif efektif faktur asal (`returnDpp`/`returnVat`/`sourceTaxRate`, `schema.prisma:2067-2077`); retur tanpa `salesInvoiceId` = 0 efek PPN (query vat-invoices-data mewajibkannya).
+- Basis usia: 121-V P4 berbasis `93fc65bf6`; 135-V berbasis `a7cacc0ad` (lebih baru, SUDAH membaca guard reason + kerja scrap 136/137-V). Fakta stok-fiktif di §1 dapat diverifikasi langsung di basis run ini, bukan warisan kutipan.
+
+### 1. PUTUSAN FINAL (mengikat lane uang/pajak)
+
+- **135-V (PERLU) MENGGANTIKAN 121-V P4. Kesimpulan "DITOLAK tahap 1" P4 DICABUT.** Alasan (tiga, dari fakta §0): (a) memaksa koreksi non-fisik (diskon susulan, salah ketik harga/tarif, kompensasi kontraktual pengurang tagihan, koreksi PPN-only) lewat `SalesReturn` MENCIPTAKAN StockMove IN + lapisan FIFO + kaki persediaan/COGS atas barang yang tidak pernah kembali — fiksi stok, pelanggaran integritas persediaan; (b) `CustomerCredit` hanya menampung kelebihan NILAI (saldo), bukan dokumen pengurang beralasan tertaut faktur asal + FP — jejak audit koreksi (alasan, nominal DPP/PPN beku, tautan dua arah) tidak terwakili; (c) P4 lahir SEBELUM guard reason + klasifikasi scrap, sehingga premisnya ("retur cukup") tidak pernah diuji terhadap retur dagang murni yang kini berpenjaga — 135-V yang mengujinya, dan temuannya (kaki stok wajib bergerak) justru membuktikan retur TIDAK bisa dipinjam untuk non-fisik.
+- **Warisan 121-V P4 yang DIPERTAHANKAN (bukan dicabut):** guard `reason` wajib saat complete (SUDAH merged #1296 — diratifikasi, berlaku juga untuk nota kredit §2); pola kelebihan-di-atas-outstanding → `CustomerCredit` (bukan outstanding negatif); reversal beralasan sebagai koreksi umum. Yang dicabut HANYA kesimpulan "model terpisah tidak perlu".
+- **Jurnal kanonis nota koreksi non-fisik (warisi 135-V §3, penegasan final — TANPA kaki stok):** Dr Retur Penjualan (`salesReturnAccountId`, akun kontra-pendapatan yang sama — bukan akun baru) sebesar DPP + Dr PPN Keluaran (`salesTaxAccountId`, bila PPN > 0; kosong = fail-closed tolak sebelum jurnal lahir) / Cr Piutang Usaha (`salesReceivableAccountId`) sebesar DPP+PPN. Uang `Decimal(15,2)`, tarif `Decimal(5,2)`, `safeRound` sen; seimbang debit = kredit. Kelebihan nota di atas outstanding → `CustomerCredit` jalur existing (cermin Putusan 2 F-123-V). Tanpa StockMove, tanpa lapisan FIFO, tanpa kaki persediaan/COGS — inilah beda hakiki vs retur.
+- **Syarat FP/PPN:** `salesInvoiceId` WAJIB (nota tanpa faktur asal = tolak; beda dari retur yang membolehkan null); `sourceTaxInvoiceId` opsional — null = non-PPN dengan PPN nol eksplisit; faktur ber-PPN tanpa tautan FP namun PPN ≠ 0 = tolak. Masa pengurang PPN = tanggal nota kredit (dokumen pengurang sendiri, bukan tanggal retur — tidak ada retur yang terlibat); koreksi PPN sesudah FP pengganti/pembatalan wajib tertaut ke status FP terkini via `sourceTaxInvoiceId`. Read-model (`vat-invoices-data.ts`) wajib memasukkan pengurang nota per masa + mengabaikan baris yang FP-nya belum terbit (cermin perlakuan retur existing, diperluas saat model lahir).
+- **Relasi ke SalesReturn completed anti-hapus (pintu BR-F139-08):** retur `completed` TETAP anti-hapus fisik (`deleteSalesReturn` existing dipertahankan); nota kredit `completed` anti-hapus fisik dengan aturan yang sama (draft boleh hapus, `completed` hanya reversal). Nota kredit TIDAK pernah menghapus/membatalkan retur, dan koreksi non-fisik DILARANG lewat void faktur (void = batal seluruh faktur, semantik beda) maupun lewat retur (fiksi stok). Satu koreksi = satu dokumen pengurang; dokumen asal (faktur/retur) lestari sebagai jejak.
+
+### 2. Syarat Backend implementasi model/jurnal nota (pintu BR-F139-08 + sisi DP 05b)
+
+- Model `SalesCreditNote` + migrasi + hook + jurnal §1 = kartu Backend TERPISAH (bukan kartu ini): field minimal cermin `SalesReturn` + 135-V §3 (`documentNo` unik; `customerId`; `salesInvoiceId` WAJIB; `sourceTaxInvoiceId` opsional; baris qty × price + snapshot `returnDpp`/`returnVat`/`sourceTaxRate` pola `SalesReturnItem`; `reason` WAJIB trim; `status` draft → completed; `taxCreditNoteNumber`/`taxCreditNoteDate` dicatat apa adanya — sistem tidak menerbitkan nomor pajak sendiri; `createdBy/At`).
+- Penjaga wajib: alasan; tautan dua arah asal (faktur + FP bila ada); `assertPeriodOpen` tanggal nota dalam tx yang sama dengan mutasi; idempotensi scope BARU `sales_credit_note_post` (satu scope per aksi; replay = hasil awal tanpa jurnal baru); `logActivity` alasan + nomor asal + nominal; empat status terpisah (dokumen/pembayaran/pajak/posting); permission reuse existing, NOL key izin baru (perubahan key = putusan Lead).
+- DILARANG dari kartu ini: menyentuh urutan DP 141-V (lane 05b milik Backend atas vonis itu); backfill nota atas koreksi lama (koreksi hanya reversal/dokumen maju di periode terbuka); alokasi nota-ke-banyak-faktur tahap 1 (YAGNI — satu nota = satu faktur, cermin FIN-BR-004 sisi jual); hitung pajak di UI (Frontend tampilkan snapshot backend apa adanya).
+- Pintu BR-F139-08: implementasi nota BOLEH jalan sekarang (tidak menunggu DP 05b — dua lane independen; satu-satunya bersinggungan = pesan urutan void, milik spec 139-S sisi faktur).
+
+### 3. Batas vonis (jujur)
+
+- OPEN #2 daftar KEPUTUSAN-TERVERIFIKASI ("nota kredit formal berdiri sendiri") dinyatakan TERTUTUP-oleh-vonis ini — keputusan PERLU final; status "terpasang di kode" HANYA sah sesudah model + jurnal + E143 lulus (loop tertutup, pola PR #1233/FIN-BR-008).
+- AC-FIN-002 TIDAK dinyatakan lulus oleh vonis ini (syarat (i)-(iv) 139-S §7 utuh: #1233 + #1283 merged + BR-F139-01/02/04/06 + E139).
+- Kepatuhan: perlakuan dokumen + jurnal + masa pengurang = BENCHMARK PER-11/PJ/2025 (FP pengganti memperhitungkan nota retur/pembatalan; dikutip 135-V §4, teks resmi tidak diakses ulang run ini) + pola snapshot/period-lock repo. Klaim terbatas pada perlakuan; tarif hidup di master bertanggal; nomor seri DJP + status credited/uncredited + SPT Masa tetap di luar repo (keputusan 12).
+- Tanpa implementasi model/jurnal/nota dari kartu ini; tanpa ubah urutan DP 05b/141-V; tanpa kartu baru dibuat run ini (penerus di handoff kartu `t_2c6b807d`).
+
+ID vonis ini **F-2026-10-28-142-V** (nota kredit formal PERLU; jawaban butir 05c spec 139-S). Pemilik berikutnya: Lead (merge PR vonis ini) → Backend (model + jurnal §2 di kartu terpisah) → Frontend (dialog alasan + tautan, tanpa hitung pajak di UI) → QA (E143 head implementasi).
+
+### Falsifikasi QA (E143, atas head implementasi Backend persis — BUKAN head vonis ini)
+
+- E143-1: fixture koreksi harga/diskon tanpa barang kembali dibukukan lewat `SalesReturn` (ada StockMove IN / lapisan FIFO baru / kaki persediaan atas barang tak kembali) = MERAH. Jalur sah = nota kredit, nol gerakan stok.
+- E143-2: nota kredit tanpa `salesInvoiceId` / tanpa `reason` trim / tanpa idempotency key valid lolos posting = MERAH tiga arah.
+- E143-3: nota kredit `completed` terhapus fisik, atau jurnal asalnya terhapus (bukan REVERSED + jurnal lawan) = MERAH.
+- E143-4: replay kunci `sales_credit_note_post` sama mengubah outstanding/jurnal kedua kali; reversal kedua atas nota sama lolos = MERAH.
+- E143-5: mutasi cabut fail-closed akun (`salesReturnAccountId`/`salesReceivableAccountId`/PPN-bila-terutang) — posting tetap lolos = MERAH.
+- E143-6: nota atas faktur ber-PPN tanpa `sourceTaxInvoiceId` namun PPN ≠ 0 lolos; pengurang masa dihitung dari baris yang FP-nya belum terbit = MERAH.
+- E143-7: rekonsiliasi — Σ outstanding (faktur − retur − nota kredit − payment valid) ≠ subledger Piutang POSTED sen-presisi = MERAH (selisih tampil sebagai temuan, bukan dipilih diam-diam).
