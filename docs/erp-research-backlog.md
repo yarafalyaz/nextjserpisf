@@ -44388,3 +44388,49 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 - E140-2 (D2): fixture posted bersisa tanpa dueDate → `Jumlah Hutang` PDF tidak mencakupnya = MERAH; KPI layar mencakupnya = MERAH; label/notice beda-pertanyaan hilang = MERAH.
 
 ID vonis ini **F-2026-10-28-152-V** (jawaban D1+D2 spec 140-S; D3/D4 + temuan summary diteruskan Backend/Frontend; E140 milik QA; INDEKS AC-REP-001 tetap Belum). Pemilik berikutnya: BOT Backend (perbaikan summary gate+withholding, D3/D4) → BOT Frontend (label bila kurang) → BOT QA (E140 atas head persis) → Lead (nilai INDEKS sesudah E140 lulus).
+
+---
+
+## VONIS ACCOUNTANT 2026-10-29 — F-2026-10-28-153-V: akun biaya telat tanpa reopen proyek closed = beban periode berjalan cermin 133-V (jawaban Q-P141-2 spec 141-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/skema/migrasi. Basis `origin/main` `1dfb68ac6` (29 Okt 2026 00:57 WIB, fetch run ini). Kartu `t_1d812191`.
+
+**Verifikasi ID:** grep `F-2026-10-28-153` di backlog + board `origin/main` = 0/0 sebelum tulis (run ini). E144 = 0 hit `E144` di `docs/` (E143 milik 142-V PR #1303). **153-V / E144 bebas.**
+
+**Yang diputus (sempit):** HANYA Q-P141-2 — akun beban periode berjalan untuk biaya telat tanpa reopen proyek `closed`. Q-P141-1 (dua-orang) + Q-P141-3 (fisik flag) = milik Lead, TIDAK diputus di sini. Tanpa akun/setting/permisi baru.
+
+### 0. Fakta kode penentu (basis di atas, dibaca run ini)
+
+- Proyek closed sarana belum ada: `Project.status` string bebas default `active` (`prisma/schema.prisma`); grep `closeProject|reopenProject` di `src/actions/project.actions.ts` = 0 — jalur tutup 141-S = USULAN Backend. Vonis ini hanya menetapkan akun jalur-tanpa-reopen, berlaku untuk proyek closed sesudah sarana itu merged.
+- Tagihan jasa tanpa GR posting existing: `onVendorBillPosted` (`src/lib/hooks/accounting.hook.ts:2581+`) Dr `purchaseExpenseAccountId` / Cr utang (`:2673`), fail-closed setting kosong (`:2667-2670`), `assertPeriodOpen(bill.date)` (`:2609`, diteruskan tx caller `purchase.actions.ts:1728`), idempoten `referenceType VendorBill` (`assertJournalClaimRef :2587` + cek existing).
+- Expense tunai posting existing: `onExpenseApproved` (`src/lib/hooks/accounting.hook.ts:1175+`) Dr `Expense.accountId` / Cr `paidFromAccountId`, fail-closed akun kosong (`:1191-1198`), `assertPeriodOpen(expense.date)` (`:1210`) dalam tx, idempoten `referenceType Expense`.
+- Automap akun: `purchaseExpenseAccountId` → `600020 Beban Operasional Lainnya` (`src/lib/utils/account-automap.ts:183-184`, komentar kode: COA Accurate tidak punya akun khusus beban pembelian).
+- `Expense` punya `projectId` + indeks (`prisma/schema.prisma:4346`, `expenses_project_id_idx`); `VendorBill`/`MaterialIssue`/`ProductionCost` tanpa kolom projectId langsung (cek schema run ini). Jejak audit: `ProjectLog` (`schema:5312`) + `ActivityLog` (`schema:5496`, indeks `[modelType, modelId]`).
+- Cermin WO-closed: vonis 133-V (Q-CLOSE-2, F-2026-10-24-133-V) sudah memutus L3 sisi WO — beban periode berjalan, dokumen VendorBill/Expense, jurnal umum polos DILARANG, tautan ActivityLog. Vonis ini menerapkan pola SAMA ke sisi proyek.
+
+### 1. PUTUSAN FINAL (mengikat lane uang)
+
+- **Biaya telat tanpa reopen proyek closed = beban periode berjalan, BUKAN biaya proyek.** Jurnal DILARANG menyentuh akun biaya job/proyek (WIP, COGS job, persediaan, akun serapan material) dan DILARANG mengubah angka histori proyek closed (estimasi/aktual sebelum tutup). Alasan: proyek closed = arsip baca-selamanya (141-S BR-P141-04); debit ke akun job terbaca sistem sebagai biaya proyek dan merusak margin final.
+- **Akun debit sah SATU per jalur dokumen (cermin 133-V Putusan 1):** (a) jalur VendorBill: `purchaseExpenseAccountId` (setting existing, automap `600020 Beban Operasional Lainnya`); kosong = fail-closed tolak sebelum jurnal lahir. (b) jalur Expense: `Expense.accountId` pilihan operator WAJIB akun COA aktif tipe EXPS/OEXP; Backend menolak tipe COGS/INTR/OCAS-WIP untuk dokumen bertanda biaya-telat-proyek. NOL akun/setting L3 baru.
+- **Dokumen sumber sah: VendorBill tanpa PO/GR (utama) atau Expense approved (tunai). Jurnal umum manual tanpa dokumen sumber DILARANG sebagai jalur biaya-telat-proyek** (tanpa bukti vendor, tanpa utang, tanpa gerbang periode/idempotency). Satu biaya telat = SATU dokumen; DILARANG ganda (VendorBill + Expense, atau jalur-reopen + jalur-tanpa-reopen atas biaya sama) kecuali dokumen pertama batal/ter-reversal.
+- **Klasifikasi L2-vs-tanpa-reopen:** WAJIB reopen bila biaya adalah biaya proyek nyata yang harus masuk margin proyek, pelanggan masih akan ditagih atasnya, atau berbentuk part/material/stok apa pun. Jalur tanpa-reopen HANYA untuk jasa/biaya non-material yang diputus BUKAN biaya proyek, beralasan tertulis di dokumen sumber + ActivityLog.
+- **Tautan referensi ke proyek closed (non-posting, tanpa kolom FK baru):** (1) notes/description dokumen memuat nomor proyek + frasa penanda biaya-telat-non-proyek (satu frasa tunggal, Backend bakukan); (2) `ActivityLog` pada Project itu (modelType Project, modelId proyek) mencatat nomor dokumen sumber + vendor + nominal sen persis + alasan + pembuat, dalam tx yang sama; (3) memo baris jurnal debit meneruskan penanda. `Journal.referenceType/referenceId` TETAP menunjuk dokumen sumbernya — DILARANG menunjuk Project.
+- **Periode + pajak + koreksi:** tanggal dokumen = periode berjalan pertama yang terbuka (`assertPeriodOpen` existing); backdate ke periode pengerjaan/tutup DILARANG. Pajak mengikuti dokumennya (PPN masukan/PPh potong lewat field/withholdingType existing); tarif dari master bertanggal efektif; DILARANG hardcode tarif. Koreksi salah klasifikasi/nominal = reversal dokumen/jurnal existing di periode terbuka lalu dokumen benar; jurnal terposting TIDAK diedit diam-diam.
+
+### 2. Batas vonis
+
+- Sarana tutup proyek (kolom closed*/transisi/guard BR-P141-02/04/05, tolak-hapus-penuh, nonaktif-tampil) = milik Backend/Frontend/Lead — TIDAK diputus di sini; vonis ini hanya akun jalur-tanpa-reopen yang menunggu sarana itu.
+- Bila perusahaan kelak menuntut pisah-laporan beban biaya-telat-proyek dari beban operasional lain: akun EXPS anak baru lewat prosedur COA existing (usulan Backend → vonis susulan), BUKAN syarat implementasi jalur ini. Default = `600020` lewat setting existing.
+- Klaim terbatas pada perlakuan + akun; tarif hidup di master bertanggal; status INDEKS PROJ-BR-007 dinilai Lead sesudah implementasi + E144 lulus.
+
+ID vonis ini **F-2026-10-28-153-V** (jawaban Q-P141-2 spec 141-S). Pemilik berikutnya: Lead (merge PR vonis ini; vonis Q-P141-1/Q-P141-3) → Backend (sarana tutup + guard + penanda biaya-telat) → Frontend (sembunyi closed default + filter) → QA (E144 atas head implementasi persis).
+
+### Falsifikasi QA (E144, atas head implementasi Backend persis — BUKAN head vonis ini)
+
+- E144-1: VendorBill jasa tanpa PO/GR bertanda biaya-telat atas proyek closed → terposting Dr `purchaseExpenseAccountId` / Cr utang; angka histori proyek byte-sama; ActivityLog Project memuat dokumen+nominal+alasan. Cabut penanda → perlakuan biaya-telat tidak lahir.
+- E144-2: VendorBill biaya-telat ditautkan PO jasa proyek closed → ditolak jalur tanpa-reopen; Expense biaya-telat berakun COGS/WIP → ditolak menyebut tipe akun.
+- E144-3: jurnal umum manual bertanda biaya-telat tanpa VendorBill/Expense → tidak ada jalur UI/aksi yang menerimanya; dokumen biaya-telat tanpa alasan atau tanpa ActivityLog → ditolak.
+- E144-4: satu biaya telat dicatat dua kali (reopen + tanpa-reopen, atau VendorBill + Expense) → dokumen kedua ditolak kecuali pertama batal/ter-reversal.
+- E144-5: mutasi cabut fail-closed akun (`purchaseExpenseAccountId` kosong / `Expense.accountId` COGS) → posting tetap lolos = MERAH.
+- E144-6: backdate ke periode pengerjaan/tutup lolos; angka histori proyek berubah oleh jurnal tanpa-reopen = MERAH.
+- E144-7: rekonsiliasi — margin proyek closed sebelum vs sesudah jurnal tanpa-reopen byte-sama (selisih = temuan, bukan pilihan diam-diam).
