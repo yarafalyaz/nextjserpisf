@@ -187,3 +187,91 @@ describe("updateSystemSettings lima mapping akun fail-closed (t_de3aba0b)", () =
     expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 })
+
+// t_358490e9: kartu menuntut bukti nilai BENAR-BENAR TERSIMPAN, bukan hanya
+// payload terbentuk. Mock update di bawah meniru semantik Prisma pada satu baris
+// penyimpanan: kunci `undefined` tidak menyentuh kolom, `null` mengosongkan,
+// angka menimpa. Baris awal = hasil `resolveAllAccountMappings` saat instalasi
+// (`src/lib/setup/install.ts:135-140`), sehingga tes sekaligus membuktikan
+// kolom hasil instalasi tidak tertimpa saat form tidak mengirimnya.
+describe("updateSystemSettings lima mapping akun — baca-balik penyimpanan (t_358490e9)", () => {
+  const KOLOM_MAPPING = [
+    "customerDownPaymentAccountId",
+    "warrantyExpenseAccountId",
+    "warrantyProvisionAccountId",
+    "supplierClaimReceivableAccountId",
+    "reimbursementLiabilityAccountId",
+  ] as const
+
+  type BarisSetting = Record<string, unknown>
+  let baris: BarisSetting
+
+  beforeEach(() => {
+    baris = {
+      id: 9,
+      customerDownPaymentAccountId: 21,
+      warrantyExpenseAccountId: 51,
+      warrantyProvisionAccountId: 22,
+      supplierClaimReceivableAccountId: 11,
+      reimbursementLiabilityAccountId: 23,
+    }
+    mocks.updateMock.mockImplementation(
+      async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+        expect(where).toEqual({ id: 9 })
+        for (const [kunci, nilai] of Object.entries(data)) {
+          if (nilai === undefined) continue
+          baris[kunci] = nilai
+        }
+        return baris
+      },
+    )
+  })
+
+  it("kelima nilai yang dikirim form terbaca kembali dari baris tersimpan sebagai angka", async () => {
+    // id akun = id numerik COA; sengaja berbeda dari nilai instalasi supaya
+    // penimpaan benar-benar terlihat.
+    const idCoa = {
+      customerDownPaymentAccountId: "101",
+      warrantyExpenseAccountId: "102",
+      warrantyProvisionAccountId: "103",
+      supplierClaimReceivableAccountId: "104",
+      reimbursementLiabilityAccountId: "105",
+    }
+    await expect(updateSystemSettings(fd(idCoa))).rejects.toThrow("NEXT_REDIRECT")
+
+    for (const [kunci, nilai] of Object.entries(idCoa)) {
+      expect(baris[kunci], `${kunci} harus terbaca kembali dari penyimpanan`).toBe(Number(nilai))
+      expect(typeof baris[kunci], `${kunci} harus tersimpan sebagai angka`).toBe("number")
+    }
+  })
+
+  it("form yang hanya mengirim satu kunci tidak merusak empat kunci hasil instalasi", async () => {
+    await expect(
+      updateSystemSettings(fd({ warrantyProvisionAccountId: "207" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    expect(baris.warrantyProvisionAccountId, "kunci yang dikirim harus berubah").toBe(207)
+    expect(baris.customerDownPaymentAccountId, "nilai instalasi DP harus utuh").toBe(21)
+    expect(baris.warrantyExpenseAccountId, "nilai instalasi beban garansi harus utuh").toBe(51)
+    expect(baris.supplierClaimReceivableAccountId, "nilai instalasi piutang klaim harus utuh").toBe(11)
+    expect(baris.reimbursementLiabilityAccountId, "nilai instalasi utang reimbursement harus utuh").toBe(23)
+  })
+
+  it("pengosongan sengaja (string kosong) terbaca sebagai null di penyimpanan", async () => {
+    await expect(
+      updateSystemSettings(
+        fd({
+          customerDownPaymentAccountId: "",
+          warrantyExpenseAccountId: "",
+          warrantyProvisionAccountId: "",
+          supplierClaimReceivableAccountId: "",
+          reimbursementLiabilityAccountId: "",
+        }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    for (const kunci of KOLOM_MAPPING) {
+      expect(baris[kunci], `${kunci} harus terbaca null setelah dikosongkan`).toBeNull()
+    }
+  })
+})
