@@ -5,12 +5,15 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/ui/delete-button";
-import { deleteSalesPayment } from "@/actions/sales.actions";
+import { deleteSalesPayment, reverseSalesPayment } from "@/actions/sales.actions";
+import { ReversePaymentButton } from "@/components/ui/reverse-payment-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
+import { StatusChip } from "@/components/ui/status-chip";
 import {
   getPaymentMethodMap,
   resolvePaymentMethodName,
@@ -67,24 +70,50 @@ export default async function SalesPaymentDetailPage({
           { label: "Pembayaran", href: "/penjualan/pembayaran" },
           { label: "Detail" },
         ]}
+        badge={<StatusChip status={payment.status === "reversed" ? "reversed" : "posted"} />}
         actions={
           <>
-            <CanCreate permission="edit_sales_payments">
-              <Button
-                href={entityEditHref("/penjualan/pembayaran", payment)}
-                variant="primary"
-              >
-                Ubah
-              </Button>
-            </CanCreate>
+            {/* GL-BR-003 K1: pembayaran reversed = histori read-only (server
+                tolak edit/hapus reversed). posted aktif: Ubah boleh (server
+                izinkan updateSalesPayment non-reversed), Hapus tampil tapi
+                server fail-closed bila jurnal POSTED, ganti jalur K2 =
+                Balikkan beralasan. */}
+            {payment.status !== "reversed" && (
+              <CanCreate permission="edit_sales_payments">
+                <Button
+                  href={entityEditHref("/penjualan/pembayaran", payment)}
+                  variant="primary"
+                >
+                  Ubah
+                </Button>
+              </CanCreate>
+            )}
             <PrintButton documentType="sales-payment" documentId={payment.id} />
-            <CanCreate permission="delete_sales_payments">
-              <DeleteButton id={payment.id} action={deleteSalesPayment} />
-            </CanCreate>
+            {payment.status !== "reversed" && (
+              <CanCreate permission="delete_sales_payments">
+                <ReversePaymentButton
+                  id={payment.id}
+                  action={reverseSalesPayment}
+                  title={`Balikkan pembayaran ${payment.documentNo}?`}
+                  body="Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Bila faktur ikut lunas karenanya, status faktur dihitung ulang. Baris asal tetap tersimpan — bukan dihapus."
+                />
+                <DeleteButton id={payment.id} action={deleteSalesPayment} />
+              </CanCreate>
+            )}
             <BackButton href="/penjualan/pembayaran" />
           </>
         }
       />
+
+      {/* GL-BR-003 K2: pembayaran lahir langsung posted — koreksi via
+          pembalikan beralasan (tombol Balikkan di header), bukan hapus.
+          Status jelas via chip di header. */}
+      {payment.status === "reversed" && (
+        <PostedLockNotice
+          documentLabel={`Pembayaran ${payment.documentNo}`}
+          correctionLabel="pembayaran pengganti baru"
+        />
+      )}
 
       <DetailCard>
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />

@@ -2,7 +2,10 @@
  * Pemuatan data laporan umur piutang/utang & total utang — satu sumber layar & PDF.
  *
  * Aturan yang dijaga sama dengan halaman: hanya status yang diakui
- * (`RECOGNISED_AR/AP_STATUSES`) yang dihitung; baris lunas (sisa ≤ 0) dibuang.
+ * (`RECOGNISED_AR/AP_STATUSES`) yang dihitung; baris lunas FIN-BR-006
+ * (sisa ≤ Rp1, `isOutstandingSettled`) dibuang — V3 vonis
+ * F-2026-10-28-130-V: gerbang `sisa > SETTLEMENT_TOLERANCE_IDR`, bukan
+ * `!isSettled()` mentah (faktur Rp0/negatif tetap keluar).
  * Tagihan tanpa jatuh tempo ikut di Total Hutang (kelompok "Tanpa Jatuh Tempo"),
  * tetapi tidak masuk laporan umur (yang memang mengelompokkan per umur).
  */
@@ -25,6 +28,7 @@ import {
   receivableOutstanding,
 } from "@/lib/reports/aging-amounts"
 import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label"
 import { safeAdd } from "@/lib/utils/math"
 import { formatAccounting, formatDate } from "@/lib/utils/format"
@@ -87,7 +91,7 @@ function bucketRows(
   return rows
 }
 
-/** Piutang Jatuh Tempo: faktur berstatus diakui, punya jatuh tempo, sisa > 0. */
+/** Piutang Jatuh Tempo: faktur berstatus diakui, punya jatuh tempo, sisa > Rp1 (FIN-BR-006). */
 export async function loadReceivablesAging(): Promise<AgingReportView> {
   const invoices = await prisma.salesInvoice.findMany({
     where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
@@ -107,7 +111,8 @@ export async function loadReceivablesAging(): Promise<AgingReportView> {
         2,
       )
       const outstanding = receivableOutstanding(inv.grandTotal, settled)
-      if (outstanding <= 0) return null
+      // FIN-BR-006 + V3 130-V: `sisa > SETTLEMENT_TOLERANCE_IDR` (Rp1).
+      if (isOutstandingSettled(outstanding)) return null
       return {
         party: inv.customer.name,
         documentNo: salesInvoiceLabel(inv),
@@ -120,7 +125,7 @@ export async function loadReceivablesAging(): Promise<AgingReportView> {
   return { table: { columns: COLUMNS, rows: bucketRows(items, now) }, ...rangePeriodLabels({ start: now, end: now }) }
 }
 
-/** Hutang Jatuh Tempo: tagihan berstatus diakui, punya jatuh tempo, sisa > 0. */
+/** Hutang Jatuh Tempo: tagihan berstatus diakui, punya jatuh tempo, sisa > Rp1 (FIN-BR-006). */
 export async function loadPayablesAging(): Promise<AgingReportView> {
   const bills = await prisma.vendorBill.findMany({
     where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
@@ -135,7 +140,8 @@ export async function loadPayablesAging(): Promise<AgingReportView> {
       // sebelumnya memakai grandTotal sehingga tagihan ber-PPh tampil sisa
       // lebih besar dari utang supplier sebenarnya.
       const outstanding = payableOutstanding(bill.grandTotal, bill.withholdingAmount ?? 0, bill.paidAmount)
-      if (outstanding <= 0) return null
+      // FIN-BR-006 + V3 130-V: `sisa > SETTLEMENT_TOLERANCE_IDR` (Rp1).
+      if (isOutstandingSettled(outstanding)) return null
       return {
         party: bill.vendor.name,
         documentNo: bill.documentNo,
@@ -180,6 +186,10 @@ export async function loadPayablesTotal(): Promise<AgingReportView> {
     now,
   )
   const rows: TableRow[] = [{ kind: "group", label: "Ringkasan Umur Hutang" }]
+  rows.push({
+    kind: "notice",
+    text: "Total Hutang mencakup tagihan tanpa tanggal jatuh tempo (kelompok Tanpa Jatuh Tempo) — beda dengan laporan Hutang Jatuh Tempo yang hanya memuat tagihan ber-jatuh-tempo.",
+  })
   for (const group of summary.aging) {
     rows.push({ kind: "data", cells: [group.key, String(group.count), "", "", money(group.total)] })
   }
@@ -212,7 +222,7 @@ export async function loadPayablesTotal(): Promise<AgingReportView> {
   rows.push({
     kind: "total",
     grand: true,
-    label: "Jumlah Hutang",
+    label: "Jumlah Hutang (termasuk Tanpa Jatuh Tempo)",
     cells: ["", "", "", "", money(summary.totalOutstanding)],
   })
   return { table: { columns: TOTAL_COLUMNS, rows }, ...rangePeriodLabels({ start: now, end: now }) }
