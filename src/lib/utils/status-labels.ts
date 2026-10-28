@@ -97,6 +97,10 @@ export const STATUS_LABELS: Record<string, string> = {
   reward: "Penghargaan",
   incentive: "Insentif",
   present: "Hadir",
+  // Pinjaman karyawan (BR-LOAN, 162-V): lunas via dokumen (setoran/potongan
+  // gaji), hapus-buku via dokumen write-off beralasan — final, bukan
+  // populasi aktif rekap.
+  paid_off: "Lunas",
   absent: "Tidak Hadir",
   late: "Terlambat",
   half_day: "Setengah Hari",
@@ -188,6 +192,7 @@ export const statusToIndo: Record<string, string> = {
   issued: "keluar",
   confirmed: "konfirmasi",
   posted: "posting",
+  paid_off: "lunas",
   reversed: "dibalik",
   reversing: "sedang-dibalik",
   new: "baru",
