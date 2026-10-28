@@ -2229,6 +2229,38 @@ describe("onPayrollPaid", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
+  it("E-HRCR-6: jurnal REVERSED tidak memblokir re-post Payroll (B4 §5.2 133-S)", async () => {
+    // HR-BR-005 E-HRCR-6: hook idempotensi tanpa filter status membuat jurnal
+    // REVERSED memblokir re-post secara SENYAP. Saringan aktif
+    // (`status: { not: "REVERSED" }`) membuka jalan re-post yang benar bila
+    // reversal Payroll lahir kelak (pola SalesInvoice E127-8). Simulasi DB
+    // jujur: baris lama REVERSED hanya lolos bila filter TIDAK mengecualikannya.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-1",
+    });
+    mocks.journalFindFirst.mockImplementation(async (args: any) => {
+      if (args?.where?.status?.not === "REVERSED") return null;
+      return { id: 7, status: "REVERSED" };
+    });
+    await onPayrollPaid(1);
+    expect(mocks.journalFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          referenceType: "Payroll",
+          status: { not: "REVERSED" },
+        }),
+      }),
+    );
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
   it("returns early if totalExpense is zero", async () => {
     mocks.payrollFindUniqueOrThrow.mockResolvedValue({
       id: 1,
