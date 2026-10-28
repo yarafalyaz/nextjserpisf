@@ -133,7 +133,14 @@ export default async function InvoiceDetailPage({
     orderBy: { name: "asc" },
   })
 
-  const servicePortion = await getSalesInvoiceServicePortion(invoice.id).catch(() => null)
+  // SAL-BR-013: porsi best-effort — loader sudah fail-closed izin di
+  // dalam; gagal = strip sembunyi (bukan nol), jadi tangani eksplisit.
+  let servicePortion: Awaited<ReturnType<typeof getSalesInvoiceServicePortion>> | null = null
+  try {
+    servicePortion = await getSalesInvoiceServicePortion(invoice.id)
+  } catch {
+    servicePortion = null
+  }
 
   const pmMap = await getPaymentMethodMap()
 
