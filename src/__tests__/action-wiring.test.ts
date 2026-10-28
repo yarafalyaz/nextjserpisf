@@ -217,6 +217,13 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
   // F-2026-10-26-054-S: 4 aksi penyesuaian gaji kini dirujuk panel
   // salary-adjustment-panel.tsx + page karyawan (PR #1079) — entri beku dibuang.
+  // F-2026-10-29-162-V backend inti (t_e3a36a0c, PR #1404): 2 aksi dokumen
+  // pelunasan pinjaman (setor tunai 07 + write-off 08); tombol/dialog UI
+  // menyusul kartu Frontend t_b1e5edbd (buang 2 entri ini saat UI memanggilnya).
+  "src/actions/hrm.actions.ts::recordEmployeeLoanCashRepayment":
+    "F-2026-10-29-162-V backend; UI dokumen setor-tunai pinjaman menyusul (frontend t_b1e5edbd)",
+  "src/actions/hrm.actions.ts::writeOffEmployeeLoan":
+    "F-2026-10-29-162-V backend; UI dokumen write-off pinjaman menyusul (frontend t_b1e5edbd)",
   // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
   // kini dirujuk UI (panel tertahan + antrean persetujuan PR #1085,
   // frontend t_52903522/t_7582c185) — entri beku dibuang.
