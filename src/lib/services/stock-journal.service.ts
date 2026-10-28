@@ -63,6 +63,42 @@ function sumValue(items: JournalItemInput[]): number {
   )
 }
 
+/** Pembulatan sen untuk setiap nilai jurnal (Decimal(15,2)). */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
+/**
+ * Peringatan bernama untuk jalur landed cost GR (vonis F-2026-10-28-125-V).
+ *
+ * V2/V3 mewajibkan blended maupun pemetaan akun yang salah TIDAK senyap:
+ * nilainya tetap benar (tidak ada uang hilang), tetapi perpecahan komponennya
+ * hilang atau salah tipe, sehingga operator harus tahu dari log.
+ */
+export const GR_LANDED_COST_WARNING_SHIPPING_BLENDED =
+  "PUR-BR-008 V1/V2: akun ongkir (purchaseShippingAccountId) kosong atau bukan akun persediaan/aset — ongkir digabung ke satu debit Persediaan sehingga rinciannya tidak tampil di jurnal. Petakan akun ongkir bertipe aset (mis. 110405 Persediaan — Ongkos Angkut Masuk) bila rincian ongkir diinginkan."
+
+export const GR_LANDED_COST_WARNING_ADMIN_ASSET_ACCOUNT =
+  "PUR-BR-008 V3: akun beban admin bank (purchaseAdminFeeAccountId) dipetakan ke akun bertipe ASSET/persediaan. Biaya admin bank adalah beban periode; memetakannya ke akun aset akan mengapitalisasinya lewat neraca. Petakan ke akun beban (mis. 720002 Beban Adm. Bank)."
+
+/**
+ * Tipe akun untuk sekumpulan id, dibaca di dalam transaksi pemanggil supaya
+ * keputusan split (V2) tidak memakai snapshot di luar transaksi. Id kosong
+ * diabaikan — pemanggil yang memutuskan apa artinya "akun belum dipetakan".
+ */
+async function accountTypeByIdTx(
+  tx: Prisma.TransactionClient,
+  ids: Array<number | null | undefined>,
+): Promise<Map<number, string>> {
+  const wanted = ids.filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+  if (wanted.length === 0) return new Map()
+  const rows = await tx.account.findMany({
+    where: { id: { in: wanted } },
+    select: { id: true, type: true },
+  })
+  return new Map(rows.map((r) => [r.id, String(r.type)]))
+}
+
 /**
  * `Journal.referenceType` untuk jurnal yang lahir dari satu penerimaan barang.
  *
@@ -128,15 +164,31 @@ export const stockJournalService = {
   /**
    * Goods Receipt (verified) — Stock IN from vendor.
    *
-   *   Dr Inventory Account          (inventoryAccountId)          — goods value
-   *   Dr Ongkos Kirim Account       (purchaseShippingAccountId)   — freight/other
-   *   Dr Beban Admin Bank Account   (purchaseAdminFeeAccountId)   — bank/admin fee
-   *   Cr Purchase Inventory Account  (purchaseInventoryAccountId — clearing)
+   * Vonis Accountant F-2026-10-28-125-V (PUR-BR-008) menentukan perlakuan ini:
    *
-   * The three debits always sum to the credit. When the split arrays are not
-   * supplied, or the freight/admin accounts are not configured, the whole value
-   * is posted as a single blended Inventory debit (legacy behaviour) so the
-   * journal still balances.
+   *   Dr Persediaan                  (inventoryAccountId)         — barang + ongkir
+   *   Dr Beban Admin Bank            (purchaseAdminFeeAccountId)  — BEBAN PERIODE
+   *   Cr Clearing Pembelian          (purchaseInventoryAccountId)
+   *
+   * Aturan vonis yang ditegakkan di sini:
+   * - V1/V2: komponen ongkir hanya SAH dipecah ke akun tujuannya bila akun itu
+   *   bertipe persediaan/aset (ASSET). Akun beban (6xxx/7xxx) DILARANG dipakai
+   *   untuk nilai yang sudah masuk InventoryLayer — kalau akun kosong atau
+   *   bertipe beban, jurnal memakai SATU debit Persediaan gabungan DAN
+   *   mengeluarkan peringatan bernama (bukan blended senyap).
+   * - V3: biaya admin bank BUKAN biaya perolehan, jadi TIDAK pernah masuk
+   *   kapitalisasi (`items` hanya berisi barang + ongkir) dan tetap didebit ke
+   *   akun beban sebagai beban periode. Bila fee > 0 tetapi akunnya belum
+   *   dipetakan, jalur ini fail-closed (tidak menebak akun, tidak
+   *   mengapitalisasi diam-diam) — selaras accounting.hook.ts:2798-2856.
+   * - V6/V10: kredit clearing = Σ debit, dan debit Persediaan tepat sama dengan
+   *   Σ (qty × unitCost) yang ditulis ke StockMove + InventoryLayer.
+   *
+   * `goodsOnlyLines` dipertahankan demi kompatibilitas pemanggil (hook masih
+   * mengirimnya untuk rincian cetak), tetapi TIDAK lagi dipakai sebagai
+   * penentu split: nilai barang dihitung sebagai sisa nilai kapitalisasi
+   * setelah ongkir yang sah, sehingga Σ debit persediaan selalu = `items`
+   * (V10: GL == Σ layer).
    *
    * Purchase Inventory account acts as clearing/suspense and gets reversed
    * when vendor bill is entered.
@@ -159,8 +211,12 @@ export const stockJournalService = {
       )
     }
 
-    const totalValue = sumValue(items)
-    if (totalValue <= 0) return null
+    // `items` = nilai yang BENAR-BENAR dikapitalisasi (barang + ongkir yang sah).
+    const inventoryValue = round2(sumValue(items))
+    // V3: admin fee adalah beban periode — di luar `items`, selalu.
+    const adminValue = round2(adminLines ? sumValue(adminLines) : 0)
+    if (inventoryValue <= 0 && adminValue <= 0) return null
+    const totalRounded = round2(inventoryValue + adminValue)
 
     const entries: {
       accountId: number
@@ -169,56 +225,60 @@ export const stockJournalService = {
       memo: string
     }[] = []
 
-    // Split the debit into goods / freight / admin when both the line slices and
-    // the target accounts are available; otherwise post one blended Inventory
-    // debit. All components are rounded to 2dp and the goods leg is the exact
-    // residual of the ROUNDED total, so Σdebits === totalValue exactly (JournalService
-    // rejects any imbalance > 0.001 — sub-cent landed-cost splits used to break it).
-    const round2 = (n: number) => Math.round(n * 100) / 100
-    const totalRounded = round2(totalValue)
+    // V1/V2: split ongkir hanya sah bila akun tujuan bertipe persediaan/aset.
     const shippingValue = round2(shippingLines ? sumValue(shippingLines) : 0)
-    const adminValue = round2(adminLines ? sumValue(adminLines) : 0)
-    const canSplit =
-      !!goodsOnlyLines &&
-      accounts.purchaseAdminFee != null &&
-      adminValue > 0
+    const accountTypes = await accountTypeByIdTx(tx, [
+      accounts.purchaseShipping,
+      accounts.purchaseAdminFee,
+    ])
+    const shippingAccountIsInventory =
+      shippingValue !== 0 &&
+      shippingValue > 0 &&
+      accounts.purchaseShipping != null &&
+      accountTypes.get(accounts.purchaseShipping) === "ASSET"
 
-    if (canSplit) {
-      // Persediaan absorbs whatever is left after the rounded freight/admin, so
-      // the debits always sum back to totalRounded.
-      const residualGoods = round2(
-        totalRounded -
-          (shippingValue !== 0 && accounts.purchaseShipping != null ? shippingValue : 0) -
-          adminValue,
-      )
+    if (shippingValue !== 0 && !shippingAccountIsInventory) {
+      // Nilai tidak hilang: ongkir tetap didebit ke Persediaan (satu baris),
+      // tetapi perpecahannya hilang — jadi wajib berisik.
+      console.warn(GR_LANDED_COST_WARNING_SHIPPING_BLENDED)
+    }
+
+    const goodsValue = round2(inventoryValue - (shippingAccountIsInventory ? shippingValue : 0))
+    if (goodsValue > 0) {
       entries.push({
         accountId: accounts.inventory,
-        debit: residualGoods,
+        debit: goodsValue,
         credit: 0,
-        memo: `Debit Persediaan (barang) - GR ${grDocumentNo}`,
+        memo: shippingAccountIsInventory
+          ? `Debit Persediaan (barang) - GR ${grDocumentNo}`
+          : `Debit Persediaan (barang + ongkir digabung) - GR ${grDocumentNo}`,
       })
-      if (shippingValue !== 0 && accounts.purchaseShipping != null) {
-        entries.push({
-          accountId: accounts.purchaseShipping,
-          debit: shippingValue,
-          credit: 0,
-          memo: `Debit Ongkir - GR ${grDocumentNo}`,
-        })
-      }
-      if (adminValue !== 0) {
-        entries.push({
-          accountId: accounts.purchaseAdminFee!,
-          debit: adminValue,
-          credit: 0,
-          memo: `Debit Beban Admin Bank - GR ${grDocumentNo}`,
-        })
-      }
-    } else {
+    }
+    if (shippingAccountIsInventory) {
       entries.push({
-        accountId: accounts.inventory,
-        debit: totalRounded,
+        accountId: accounts.purchaseShipping!,
+        debit: shippingValue,
         credit: 0,
-        memo: `Debit Persediaan - GR ${grDocumentNo}`,
+        memo: `Debit Ongkir (persediaan) - GR ${grDocumentNo}`,
+      })
+    }
+
+    if (adminValue !== 0) {
+      if (accounts.purchaseAdminFee == null) {
+        // V3 melarang kapitalisasi admin; tanpa akun beban tidak ada perlakuan
+        // sah yang tersisa, jadi tolak dengan pesan bernama (fail-closed).
+        throw new Error(
+          "Akun beban admin bank (purchaseAdminFeeAccountId) belum dipetakan di Pengaturan → Mapping Akun. Biaya admin bank adalah beban periode — tidak boleh dikapitalisasi ke persediaan — sehingga penerimaan ini tidak bisa dijurnal.",
+        )
+      }
+      if (accountTypes.get(accounts.purchaseAdminFee) === "ASSET") {
+        console.warn(GR_LANDED_COST_WARNING_ADMIN_ASSET_ACCOUNT)
+      }
+      entries.push({
+        accountId: accounts.purchaseAdminFee,
+        debit: adminValue,
+        credit: 0,
+        memo: `Debit Beban Admin Bank (beban periode) - GR ${grDocumentNo}`,
       })
     }
 

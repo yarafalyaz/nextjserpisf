@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -112,7 +112,7 @@ export default async function BankBookPage({
   // No in-period movement → closing = opening balance (not 0).
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
 
-  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Periode ${formatDate(startDate)} – ${formatDate(endDate)}`
 
   return (
     <ReportPageShell title="Buku Bank" sheet={false} wide filter={<>
@@ -175,7 +175,7 @@ export default async function BankBookPage({
                 )}
                 {rows.map((row, i) => (
                   <DetailTableRow key={i}>
-                    <DetailTableTd>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</DetailTableTd>
+                    <DetailTableTd>{formatDate(row.date, { format: "numeric" })}</DetailTableTd>
                     <DetailTableTd>{row.journalNumber}</DetailTableTd>
                     <DetailTableTd>{row.description}</DetailTableTd>
                     <DetailTableTd align="right">{formatAccounting(row.debit)}</DetailTableTd>
