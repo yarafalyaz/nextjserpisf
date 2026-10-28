@@ -833,9 +833,18 @@ describe("Sales Invoice Actions", () => {
     expect(res?.success).toBe(false)
   })
   it("voidSalesInvoice fails if has payments", async () => {
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [{ id: 1 }] })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", payments: [{ id: 1, status: "posted" }] })
     const res = await actions.voidSalesInvoice(1)
     expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Reversal")
+  })
+  it("voidSalesInvoice lolos bila semua payment reversed (P2 121-V / E139-5)", async () => {
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: [{ id: 1, status: "reversed" }, { id: 2, status: "reversed" }] })
+    mocks.prismaMock.customer.findUnique.mockResolvedValueOnce({ creditLimit: 0, name: "CUST" })
+    const res = await actions.voidSalesInvoice(1)
+    expect(res?.success).toBe(true)
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
   })
 
   // === reverseSalesInvoicePostingTx delegation ===
