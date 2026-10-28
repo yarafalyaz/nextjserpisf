@@ -23,13 +23,29 @@ import {
   stockJournalService,
   productionOrderCompletionJournalRef,
   productionOrderCostVarianceJournalRef,
+  GR_LANDED_COST_WARNING_SHIPPING_BLENDED,
+  GR_LANDED_COST_WARNING_ADMIN_ASSET_ACCOUNT,
 } from "@/lib/services/stock-journal.service";
 import {
   STOCK_JOURNAL_FULL_ACCOUNTS as FULL_ACCOUNTS,
   seedStockJournalMocks,
 } from "./stock-journal-test-utils";
 
-const tx = {} as never;
+// `tx` palsu minimal: onGoodsReceipt membaca tipe akun di dalam transaksi
+// (vonis Accountant F-2026-10-28-125-V V1/V2) untuk memutuskan sah/tidaknya
+// memecah ongkir ke akun tersendiri. Default fixture: akun ongkir 620 bertipe
+// aset persediaan, akun admin 630 bertipe beban.
+const ACCOUNT_TYPE_BY_ID: Record<number, string> = {
+  100: "ASSET",
+  600: "ASSET",
+  620: "ASSET",
+  630: "EXPENSE",
+};
+const accountFindMany = vi.fn(
+  async ({ where }: { where: { id: { in: number[] } } }) =>
+    where.id.in.map((id) => ({ id, type: ACCOUNT_TYPE_BY_ID[id] ?? "EXPENSE" })),
+);
+const tx = { account: { findMany: accountFindMany } } as never;
 
 describe("stockJournalService", () => {
   beforeEach(() => {
@@ -262,17 +278,19 @@ describe("stockJournalService", () => {
     });
 
     it("splits the debit into Persediaan + Ongkir + Beban Admin when components are supplied", async () => {
-      // Blended line: 1 unit @ 151000 (goods 130000 + ongkir 20000 + admin 1000).
+      // V3 vonis 125-V: `items` hanya nilai yang DIKAPITALISASI (barang +
+      // ongkir = 150000); admin bank 1000 dijurnal terpisah sebagai beban
+      // periode, sehingga kredit clearing = 151000.
       await stockJournalService.onGoodsReceipt(
         tx,
-        [{ qty: 1, cost: 151000 }],
+        [{ qty: 1, cost: 150000 }],
         "GR-1",
         1,
         42,
         undefined,
         [{ qty: 1, cost: 130000 }], // goods only
         [{ qty: 1, cost: 20000 }],  // ongkir
-        [{ qty: 1, cost: 1000 }],   // admin bank
+        [{ qty: 1, cost: 1000 }],   // admin bank (beban periode)
       );
 
       const call = mocks.createJournal.mock.calls[0][0];
@@ -297,7 +315,7 @@ describe("stockJournalService", () => {
 
       await stockJournalService.onGoodsReceipt(
         tx,
-        [{ qty: 1, cost: 151000 }],
+        [{ qty: 1, cost: 150000 }],
         "GR-1",
         1,
         42,
@@ -317,12 +335,12 @@ describe("stockJournalService", () => {
     });
 
     it("keeps the split balanced to the cent when freight/admin carry sub-cent amounts", async () => {
-      // goods 100.00 + ongkir 3.333 + admin 6.667 = 110.00 exactly, but each
-      // component is 3dp so naive float maths leaves a 0.001+ imbalance that
-      // JournalService rejects. The rounded residual must absorb the difference.
+      // V3: items = barang 100 + ongkir 3.333 = 103.333 (dibulatkan 103.33);
+      // admin 6.667 dijurnal terpisah (6.67). Kredit clearing = 110.00 dan
+      // Σdebit = 103.33 + 6.67 = 110.00 tepat — tidak ada selisih > 0.001.
       await stockJournalService.onGoodsReceipt(
         tx,
-        [{ qty: 1, cost: 110 }],
+        [{ qty: 1, cost: 103.333 }],
         "GR-1",
         1,
         42,
@@ -365,6 +383,180 @@ describe("stockJournalService", () => {
         expect.objectContaining({ accountId: 100, debit: 151000, credit: 0 }),
         expect.objectContaining({ accountId: 600, debit: 0, credit: 151000 }),
       ]);
+    });
+  });
+
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // E125 — falsifikasi vonis Accountant F-2026-10-28-125-V (PUR-BR-008).
+  // Sebelum koreksi ini seluruh poin di blok ini MERAH: akun ongkir bertipe beban
+  // (600014 EXPS) dipakai sebagai akun split padahal nilainya sudah masuk
+  // InventoryLayer, dan biaya admin bank dikapitalisasi sambil tetap dibebankan
+  // di pembayaran (dobel saat barang dijual).
+  // ════════════════════════════════════════════════════════════════════════════
+  describe("onGoodsReceipt — vonis 125-V (PUR-BR-008) V1/V2/V3/V10", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      seedStockJournalMocks(mocks);
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    it("E125-1: akun ongkir bertipe BEBAN tidak dipakai split — ongkir masuk Persediaan + peringatan bernama", async () => {
+      // 600014 Beban Ekspedisi = EXPS. Nilai ongkir sudah ada di InventoryLayer,
+      // jadi mendebit akun beban membuat GL < subledger dan HPP dobel saat jual.
+      ACCOUNT_TYPE_BY_ID[620] = "EXPENSE";
+      try {
+        mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS });
+
+        await stockJournalService.onGoodsReceipt(
+          tx,
+          [{ qty: 1, cost: 150000 }],
+          "GR-1",
+          1,
+          42,
+          undefined,
+          [{ qty: 1, cost: 130000 }],
+          [{ qty: 1, cost: 20000 }],
+          undefined,
+        );
+
+        const call = mocks.createJournal.mock.calls[0][0];
+        // Tidak ada debit ke akun beban 620 sama sekali.
+        expect(
+          call.entries.some(
+            (e: { accountId: number; debit: number }) => e.accountId === 620 && e.debit > 0,
+          ),
+        ).toBe(false);
+        // Persediaan menyerap barang + ongkir (150000) dan kredit tetap seimbang.
+        expect(call.entries).toEqual([
+          expect.objectContaining({ accountId: 100, debit: 150000, credit: 0 }),
+          expect.objectContaining({ accountId: 600, debit: 0, credit: 150000 }),
+        ]);
+        expect(console.warn).toHaveBeenCalledWith(GR_LANDED_COST_WARNING_SHIPPING_BLENDED);
+      } finally {
+        ACCOUNT_TYPE_BY_ID[620] = "ASSET";
+      }
+    });
+
+    it("E125-4: akun ongkir kosong → blended WAJIB berisik (peringatan bernama)", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        purchaseShippingAccountId: null,
+      });
+
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        [{ qty: 1, cost: 150000 }],
+        "GR-1",
+        1,
+        42,
+        undefined,
+        [{ qty: 1, cost: 130000 }],
+        [{ qty: 1, cost: 20000 }],
+        undefined,
+      );
+
+      const call = mocks.createJournal.mock.calls[0][0];
+      expect(call.entries).toEqual([
+        expect.objectContaining({ accountId: 100, debit: 150000, credit: 0 }),
+        expect.objectContaining({ accountId: 600, debit: 0, credit: 150000 }),
+      ]);
+      // Blended tanpa peringatan = temuan vonis V2. Peringatan WAJIB muncul.
+      expect(console.warn).toHaveBeenCalledWith(GR_LANDED_COST_WARNING_SHIPPING_BLENDED);
+    });
+
+    it("V3 fail-closed: admin fee > 0 tanpa akun beban admin = ditolak, bukan dikapitalisasi diam-diam", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        purchaseAdminFeeAccountId: null,
+      });
+
+      await expect(
+        stockJournalService.onGoodsReceipt(
+          tx,
+          [{ qty: 1, cost: 130000 }],
+          "GR-1",
+          1,
+          42,
+          undefined,
+          [{ qty: 1, cost: 130000 }],
+          undefined,
+          [{ qty: 1, cost: 1000 }],
+        ),
+      ).rejects.toThrow(/beban admin bank/i);
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
+
+    it("V3 peringatan: akun admin dipetakan ke ASSET → tetap beban, tetapi berisik", async () => {
+      ACCOUNT_TYPE_BY_ID[630] = "ASSET";
+      try {
+        mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS });
+
+        await stockJournalService.onGoodsReceipt(
+          tx,
+          [{ qty: 1, cost: 130000 }],
+          "GR-1",
+          1,
+          42,
+          undefined,
+          [{ qty: 1, cost: 130000 }],
+          undefined,
+          [{ qty: 1, cost: 1000 }],
+        );
+
+        const call = mocks.createJournal.mock.calls[0][0];
+        // Tetap didebit ke akun admin (bukan digabung ke Persediaan)...
+        expect(call.entries).toEqual([
+          expect.objectContaining({ accountId: 100, debit: 130000, credit: 0 }),
+          expect.objectContaining({ accountId: 630, debit: 1000, credit: 0 }),
+          expect.objectContaining({ accountId: 600, debit: 0, credit: 131000 }),
+        ]);
+        // ...dan pemetaan yang salah tipe wajib berisik.
+        expect(console.warn).toHaveBeenCalledWith(GR_LANDED_COST_WARNING_ADMIN_ASSET_ACCOUNT);
+      } finally {
+        ACCOUNT_TYPE_BY_ID[630] = "EXPENSE";
+      }
+    });
+
+    it("E125-5/V10: debit Persediaan = Σ(qty×cost) nilai stok yang ditulis ke layer, admin di luar", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS });
+      // Dua baris barang; nilai stok = 2×1033.33 + 1×250.00 (ongkir sudah termasuk).
+      const capitalised = [
+        { qty: 2, cost: 1033.33 },
+        { qty: 1, cost: 250 },
+      ];
+      const goodsOnly = [
+        { qty: 2, cost: 1000 },
+        { qty: 1, cost: 250 },
+      ];
+      const freight = [{ qty: 2, cost: 33.33 }];
+
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        capitalised,
+        "GR-1",
+        1,
+        42,
+        undefined,
+        goodsOnly,
+        freight,
+        [{ qty: 1, cost: 1500 }],
+      );
+
+      const call = mocks.createJournal.mock.calls[0][0];
+      const layerValue = capitalised.reduce((s, l) => s + l.qty * l.cost, 0);
+      // V10: saldo GL persediaan = akun persediaan induk (100) + sub-akun
+      // ongkir bertipe aset (620) — keduanya bertipe ASSET, jadi totalnya
+      // wajib sama dengan Σ nilai layer.
+      const inventoryDebit = call.entries
+        .filter((e: { accountId: number }) => e.accountId === 100 || e.accountId === 620)
+        .reduce((s: number, e: { debit: number }) => s + e.debit, 0);
+      // GL persediaan == Σ nilai layer (selisih 0), admin 1500 TIDAK di dalamnya.
+      expect(inventoryDebit).toBe(layerValue);
+      const debits = call.entries.reduce((s: number, e: { debit: number }) => s + e.debit, 0);
+      const credits = call.entries.reduce((s: number, e: { credit: number }) => s + e.credit, 0);
+      expect(Math.abs(debits - credits)).toBeLessThan(0.001);
+      expect(credits).toBe(layerValue + 1500);
     });
   });
 

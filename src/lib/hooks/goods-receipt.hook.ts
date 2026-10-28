@@ -175,6 +175,9 @@ export async function onGoodsReceiptVerified(
     };
 
     // ─── 2. Update PO status ─────────────────────────────────────────────
+    // Dipertahankan ke luar blok: dipakai landed cost untuk true-up residu
+    // pool estimasi saat GR ini melunasi PO (V8 vonis F-2026-10-28-125-V).
+    let allReceivedForLanded = false
     if (goodsReceipt.purchaseOrderId) {
       // Lock the PO row so two GR verifications on the SAME PO serialize.
       // Each GR locks only its own row above, so without this two concurrent
@@ -257,7 +260,8 @@ export async function onGoodsReceiptVerified(
       // Determine if fully received
       const allReceived = lineAllocations.every(
         ({ poItem, allocated }) => allocated >= Number(poItem.qty),
-      );
+      )
+      allReceivedForLanded = allReceived;
 
       await tx.purchaseOrder.update({
         where: { id: goodsReceipt.purchaseOrderId },
@@ -297,6 +301,10 @@ export async function onGoodsReceiptVerified(
 
     // Per-line base qty + allocation weight, in the same order as
     // goodsReceipt.items so the result maps back by index.
+    //
+    // V7 vonis F-2026-10-28-125-V: baris jasa TIDAK ikut berbobot. Dulu bobot
+    // dibangun dari semua baris sementara alokasi hanya dipakai baris stok,
+    // sehingga porsi pool untuk baris jasa menguap tanpa jejak.
     const landedLines = goodsReceipt.items.map((item) => {
       const meta = metaByItem.get(item.itemId);
       const isBase = !meta || !item.uom || item.uom === meta.unitOfMeasure;
@@ -313,12 +321,24 @@ export async function onGoodsReceiptVerified(
           f = raw;
         }
       }
-      return { baseQty: Number(item.qty) * f, poNetUnitPrice: poNetUnitPriceOf(item.itemId) };
+      return {
+        baseQty: Number(item.qty) * f,
+        poNetUnitPrice: poNetUnitPriceOf(item.itemId),
+        weighted: !(metaByItem.get(item.itemId)?.isService ?? false),
+      };
     });
 
     const poNetValue = (landedPo?.items ?? []).reduce((s, pi) => s + Number(pi.total), 0);
     const poCostPool =
       Number(landedPo?.shippingCost ?? 0) + Number(landedPo?.serviceFee ?? 0);
+
+    // V8: nilai barang yang sudah diterima SEBELUM GR ini, dasar true-up residu
+    // pool estimasi oleh penerimaan terakhir.
+    const receivedValueNow = landedLines.reduce(
+      (s, l) => s + (l.weighted ? l.baseQty * l.poNetUnitPrice : 0),
+      0,
+    );
+    const receivedValueBefore = Math.max(0, poNetValue - receivedValueNow);
 
     const landed = allocateLandedCost({
       lines: landedLines,
@@ -328,17 +348,32 @@ export async function onGoodsReceiptVerified(
       shippingCost: Number(goodsReceipt.shippingCost ?? 0),
       otherCost: Number(goodsReceipt.otherCost ?? 0),
       adminFee: Number(goodsReceipt.adminFee ?? 0),
+      isFinalReceipt: allReceivedForLanded,
+      receivedValueBefore,
     });
 
+    // V5: fallback bobot wajib berisik, bukan diam-diam.
+    if (landed.weightFallback) {
+      console.warn(
+        `[goods-receipt.hook] PUR-BR-008 V5: nilai beli neto PO nol/tidak terbaca — bobot alokasi landed cost jatuh ke ${landed.weightFallback === "qty" ? "QTY" : "RATA"} untuk GR ${goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`}. Perbaiki harga satuan neto baris PO agar alokasi berbasis nilai.`,
+      );
+    }
+    // V7: pool tanpa baris barang tujuan tidak boleh hilang. Nilainya dijurnal
+    // sebagai beban jasa/penerimaan (named expense) di bawah, bukan disenyapkan.
+    if (landed.unallocatedPool > 0) {
+      console.warn(
+        `[goods-receipt.hook] PUR-BR-008 V7: GR ${goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`} tidak punya baris barang — ongkir Rp${landed.unallocatedPool.toFixed(2)} tidak dikapitalisasi dan dibebankan sebagai beban periode (bukan nilai stok).`,
+      );
+    }
+
     const journalLines: { qty: number; cost: number }[] = [];
-    // Bank/admin fee + freight are ALSO capitalised into the line cost (HPP), but
-    // captured per line here so the GR journal can post them to their own
-    // accounts (Debit Beban Admin Bank / Debit Ongkir) and show the breakdown the
-    // store receipt prints (goods · ongkir · admin).
+    // V1/V3 vonis F-2026-10-28-125-V: hanya barang + ongkir yang masuk nilai
+    // stok. Ongkir dipisah PER BARIS supaya jurnal bisa menampilkan rincian
+    // (barang · ongkir); biaya admin bank TIDAK ikut dikapitalisasi dan
+    // dijurnal sekali sebagai beban periode.
     const goodsOnlyLines: { qty: number; cost: number }[] = [];
     const shippingLines: { qty: number; cost: number }[] = [];
-    const adminLines: { qty: number; cost: number }[] = [];
-    // Service lines (vendor labour/subcontract) do NOT move stock; their cost is
+    // Baris jasa (vendor labour/subcontract) do NOT move stock; their cost is
     // expensed instead (PRD FAB-08). Collected separately for the service journal.
     const serviceJournalLines: { qty: number; cost: number }[] = [];
 
@@ -357,7 +392,6 @@ export async function onGoodsReceiptVerified(
       const smDocNo = smDocNos[docIdx++];
       const landedIdx = lineIdx++;
       const landedPerUnit = landed.perUnitAdditions[landedIdx] ?? 0;
-      const landedAdminPerUnit = landed.adminPerUnitAdditions[landedIdx] ?? 0;
 
       // Per-line destination warehouse (the GR form lets each line target a
       // different warehouse). Fall back to the header warehouse when a line
@@ -432,17 +466,12 @@ export async function onGoodsReceiptVerified(
       // Capture the BASE-converted values for the GL journal so it matches
       // the stock subledger (qty*cost invariant under UoM conversion).
       journalLines.push({ qty: baseQty, cost: baseUnitCostWithLanded });
-      // Component split (same total): goods-only, the admin-fee portion, and the
-      // residual freight/other portion. goods + shipping + admin == the
-      // capitalised line value, so the split journal balances to the cent.
-      const lineAdminUnit = landedAdminPerUnit;
-      const lineFreightUnit = landedPerUnit - landedAdminPerUnit;
+      // Component split (same total): goods-only + the freight/other portion.
+      // goods + shipping == the capitalised line value, so the inventory debit
+      // in the journal is exactly Σ(qty × unitCost) of the FIFO layers (V10).
       goodsOnlyLines.push({ qty: baseQty, cost: baseUnitCost });
-      if (lineFreightUnit !== 0) {
-        shippingLines.push({ qty: baseQty, cost: lineFreightUnit });
-      }
-      if (lineAdminUnit !== 0) {
-        adminLines.push({ qty: baseQty, cost: lineAdminUnit });
+      if (landedPerUnit !== 0) {
+        shippingLines.push({ qty: baseQty, cost: landedPerUnit });
       }
 
       // Update item qtyOnHand (global total, in base units)
@@ -559,6 +588,12 @@ export async function onGoodsReceiptVerified(
     // general ledger from the stock subledger.
     // Only post an inventory journal when stock actually moved; an all-service
     // GR has no inventory debit (PRD FAB-08).
+    // V7: pool landed yang tak punya baris barang tujuan dibebankan, bukan
+    // hilang. Dijurnal lewat jalur beban (jasa/penerimaan) yang sama.
+    if (landed.unallocatedPool > 0) {
+      serviceJournalLines.push({ qty: 1, cost: landed.unallocatedPool });
+    }
+
     if (journalLines.length > 0) {
       await stockJournalService.onGoodsReceipt(
         tx,
@@ -567,11 +602,12 @@ export async function onGoodsReceiptVerified(
         goodsReceiptId,
         userId,
         goodsReceipt.date,
-        // Component split for the journal breakdown (goods + ongkir + admin).
+        // Component split for the journal breakdown (goods + ongkir).
         // `undefined` slices fall back to a single blended inventory debit.
         goodsOnlyLines.length > 0 ? goodsOnlyLines : undefined,
         shippingLines.length > 0 ? shippingLines : undefined,
-        adminLines.length > 0 ? adminLines : undefined,
+        // V3: admin fee = beban periode, dijurnal SEKALI di luar nilai stok.
+        landed.adminFee > 0 ? [{ qty: 1, cost: landed.adminFee }] : undefined,
       );
     }
 
