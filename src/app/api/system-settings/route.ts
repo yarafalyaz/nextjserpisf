@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { auth } from "@/lib/auth/auth"
 import { hasPermission } from "@/lib/auth/permissions"
 import { apiError } from "@/lib/api-response"
 
@@ -14,6 +15,14 @@ export async function GET() {
       return apiError("FORBIDDEN", "Tidak memiliki izin")
     }
 
+    // Nama pencetak untuk footer PDF klien (sejajar `printedBy` PDF server di
+    // /api/pdf + ReportLetterhead): nama sesi, jatuh ke email, null bila tanpa
+    // keduanya. Gerbang view_dashboard di atas sudah memastikan pemanggil
+    // berizin, jadi ini nama milik pemanggil sendiri — bukan data orang lain.
+    // Pola sama dipakai /api/pdf (auth() lalu hasPermission()).
+    const session = await auth()
+    const printedBy = session?.user?.name ?? session?.user?.email ?? null
+
     const settings = await getSystemSettings()
     return NextResponse.json({
       companyName: settings.companyName,
@@ -27,6 +36,7 @@ export async function GET() {
       companyWebsite: settings.companyWebsite,
       companyLogo: settings.companyLogo,
       companyPostalCode: settings.companyPostalCode,
+      printedBy,
     })
   } catch (error) {
     // Jangan balas 200 berisi identitas palsu: konsumennya memakainya sebagai

@@ -117,7 +117,8 @@ const baseForm = {
 
 beforeEach(() => {
   for (const m of [requirePermissionMock, revalidateMock, logActivityMock, payrollFindManyMock, payrollCreateMock, employeeFindUniqueMock]) m.mockReset()
-  requirePermissionMock.mockResolvedValue({ id: 1 })
+  // BR-HRS-08: sesi pembuat slip ber-role privileged (finance/admin).
+  requirePermissionMock.mockResolvedValue({ id: 1, roles: ["finance"] })
   employeeFindUniqueMock.mockResolvedValue({ maritalStatus: "single", paymentFrequency: "MONTHLY", employeeLoans: [] })
   payrollFindManyMock.mockResolvedValue([])
   payrollCreateMock.mockResolvedValue({ id: 99 })

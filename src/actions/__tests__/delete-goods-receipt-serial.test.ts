@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     goodsReceipt: {
+      // PUR-BR-010: hanya GR draft boleh dihapus — fixture wajib draft eksplisit.
       findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1, purchaseOrderId: 10, warehouseId: 5, status: "draft", items: [] }),
     },
     vendorBill: {
@@ -134,9 +135,15 @@ describe("deleteGoodsReceipt with Serial Numbers", () => {
   })
 
   it("refuses to delete when received stock has already been consumed (avoids qty_on_hand drift)", async () => {
-    // A GR whose FIFO layer was partly consumed downstream. Deleting would
-    // subtract the FULL move.qty from Item.qtyOnHand while removing only the
-    // residual layer — permanently diverging the master counter from Σ layers.
+    // A verified GR whose FIFO layer was partly consumed downstream.
+    // Deleting would subtract the FULL move.qty from Item.qtyOnHand while
+    // removing only the residual layer — permanently diverging the master
+    // counter from Σ layers. PUR-BR-010 menutup jalur ini lebih dulu di
+    // guard status (hanya draft boleh hapus); test ini sekarang membuktikan
+    // penolakan untuk GR terverifikasi lewat jalur guard status itu.
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, purchaseOrderId: 10, warehouseId: 5, status: "verified", items: [],
+    })
     mocks.txMock.stockMove.findMany.mockResolvedValueOnce([
       { id: 77, itemId: 101, qty: 10, referenceId: 1 },
     ])
@@ -145,7 +152,7 @@ describe("deleteGoodsReceipt with Serial Numbers", () => {
     const res = await deleteGoodsReceipt(1)
 
     expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/sudah terpakai|terjual/i)
+    expect(res?.error).toContain("Hanya penerimaan barang draft yang dapat dihapus")
     // The reversal must not have run.
     expect(mocks.txMock.inventoryLayer.deleteMany).not.toHaveBeenCalled()
     expect(mocks.txMock.stockMove.deleteMany).not.toHaveBeenCalled()

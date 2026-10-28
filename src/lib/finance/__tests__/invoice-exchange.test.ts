@@ -79,6 +79,39 @@ describe("buildInvoiceExchangeListing", () => {
   })
 })
 
+describe("paritas FIN-BR-006 — satu sumber kebenaran status lunas", () => {
+  it("sisa 0,50 di dalam toleransi Rp1 dinyatakan lunas, sama seperti layar faktur", () => {
+    // FIN-BR-006: toleransi pembulatan pembayaran = Rp1 (SETTLEMENT_TOLERANCE_IDR).
+    // Sebelum paritas ini, laporan tukar faktur memakai ambang setengah sen
+    // (0,005) sehingga faktur yang sudah "Lunas" di layar faktur tampil
+    // "Sebagian" di sini — dua status untuk satu dokumen yang sama.
+    expect(settlementStatus(1_000_000, 999_999.5)).toBe("settled")
+    expect(settlementStatus(999_999.5, 999_999)).toBe("settled")
+  })
+
+  it("sisa 1,01 di luar toleransi tetap sebagian", () => {
+    expect(settlementStatus(1_000_000, 999_998.99)).toBe("partial")
+  })
+
+  it("dokumen bernilai nol tidak pernah dinyatakan lunas", () => {
+    expect(settlementStatus(0, 0)).toBe("outstanding")
+  })
+
+  it("hitungan lunas/sebagian laporan memakai toleransi kanonis", () => {
+    const result = buildInvoiceExchangeListing([
+      line({ documentNo: "A", amount: 1_000_000, paid: 999_999.5 }),
+      line({ documentNo: "B", amount: 1_000_000, paid: 500_000 }),
+      line({ documentNo: "C", amount: 1_000_000, paid: 0 }),
+    ])
+
+    expect(result.totals.settled).toBe(1)
+    expect(result.totals.partial).toBe(1)
+    expect(result.totals.outstandingDocs).toBe(1)
+    const rowA = result.table.rows.find((row) => row.kind === "data" && row.cells[1] === "A")
+    expect(rowA && rowA.kind === "data" ? rowA.cells[9] : null).toBe("Lunas")
+  })
+})
+
 describe("buildInvoiceExchangeListing presisi sen", () => {
   it("total 7 baris bersen eksak, sisa = ditagih - dibayar", () => {
     const lines = Array.from({ length: 7 }, (_, i) =>
