@@ -42825,3 +42825,49 @@ Beban p95 — skenario (lingkungan UAT disepakati, biaya jaringan diukur terpisa
 - Benchmark performa kompetitor (Accurate/Zahir tidak mempublikasi angka p95).
 
 ID spec ini **F-2026-10-28-143-S** (OPEN #7: RPO/RTO + p95 + E143). Pemilik berikutnya: Accountant vonis BR-OPEN7-01..06 (RPO/RTO komitmen-vs-target + statutori 2026, sinkron PR #1254) → Lead putus J1/J3 + sahkan matriks + merge → QA E-OPEN7 (E143-1..6) atas bukti persis → INDEKS baris operasional baru + keputusan 12 OPEN #7 → TERTUTUP-teruji / TETAP-TARGET.
+
+## VONIS BOT Accountant 2026-10-28 — F-2026-10-28-152-V: isolasi pembayaran draft/gagal vs completed untuk status lunas (FIN-BR-007)
+
+**Sumber tunggal:** `docs/product/INDEKS-ATURAN.md:127` FIN-BR-007 `Sebagian` ("isolasi pembayaran draft/gagal belum ditelusur"); `docs/product/TEST-STRATEGY.md:25` (pembayaran = P0) + `:44` (DP draft/gagal tidak dihitung); basis `origin/main` `b8d4f7c24` (28 Okt 2026 WIB). Tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal baru.
+
+### 1. Status (TERVERIFIKASI-KODE atas `b8d4f7c24`, dikutip di sini — bukan rujukan)
+
+| Sisi | Bukti (revisi `b8d4f7c24`) | Uraian |
+|---|---|---|
+| Penjualan — kreasi | `src/actions/sales.actions.ts:2028` guard `if (!["posted","partial"].includes(invoice.status)) throw`; `:2049` `tx.salesPayment.create` + `:2069` recalc + `:2071` `onSalesPaymentCreated` dalam SATU `$transaction` | SalesPayment TIDAK punya status draft/gagal: baris hanya lahir di dalam transaksi pembayaran terkonfirmasi atas faktur posted/partial. Tidak ada jalur create atas faktur draft/cancelled. |
+| Penjualan — default kolom | `prisma/schema.prisma:2004` `status String @default("posted")` + komentar FIN-BR-008 `posted \| reversed` | Satu-satunya nilai non-awal = `reversed` (reversal berhistori, FIN-BR-008). Tidak ada enum draft/gagal di sisi jual. |
+| Penjualan — recalc | `src/lib/hooks/sales-payment.hook.ts:24-27` `findMany({ where: { salesInvoiceId, status: { not: "reversed" } } })`; `src/lib/finance/payment-status.ts:34-41` `activeSalesPaymentWhere` | Pembaca uang menyaring `reversed`; semua baris non-reversed = pembayaran valid (tidak ada kelas draft/gagal untuk disaring). |
+| Pembelian — kreasi vs konfirmasi | `src/actions/purchase.actions.ts:1630` "Journal is NOT created here — it is posted only on confirmVendorPayment"; `:1947-2003` alokasi `allocatePaymentToBills` + `createMany` HANYA di `confirmVendorPayment`; `:2047` `onVendorPaymentCreated` HANYA di confirm | VendorPayment lahir `status @default("draft")` (`prisma/schema.prisma:2410`); jurnal + alokasi hanya lahir di transisi `draft → completed`. Draft tidak menyentuh GL maupun saldo bill. |
+| Pembelian — guard transisi | `:1888` + re-check dalam tx `status !== "draft" → throw` | Konfirmasi idempoten arah tunggal; completed tidak bisa dikonfirmasi ulang. |
+| Pembelian — reversal | `:1815` baca alokasi per payment; `:1844` `deleteMany` alokasi + kembalikan `paidAmount/balanceDue` per bill; `:1850` `status = "reversed"` | Reversal menghapus alokasi (bukan menandai), jadi sisa tagihan naik kembali; histori jurnal dilawan via `reverseJournalsByReferenceTx`, bukan dihapus. |
+
+### 2. Putusan (mengikat BOT Backend/Frontend/QA)
+
+1. **Definisi pembayaran valid:** sisi jual = `SalesPayment.status != "reversed"` (helper `activeSalesPaymentWhere`); sisi beli = `VendorPayment.status = "completed"` (alokasi hanya ada untuk completed; draft tidak punya alokasi; reversed alokasinya sudah dihapus). Status lunas (`isSettled`/FIN-BR-006) hanya diturunkan dari himpunan ini.
+2. **Simetri asimetris sah:** sisi jual tidak butuh filter draft/gagal karena tidak ada barisnya (kreasi = konfirmasi, satu transaksi). Sisi beli WAJIB filter `completed` karena draft adalah baris nyata yang menunggu konfirmasi. Menyamakan keduanya (mis. menuntut status draft di SalesPayment, atau menghitung alokasi dari VendorPayment draft) = MERAH.
+3. **Larangan baca mentah:** pembaca uang/AP/AR dilarang `findMany` pembayaran tanpa penyaring di atas; dilarang menghitung `VendorPaymentAllocation` tanpa memastikan payment induk `completed` (reversal sudah menghapus alokasi, tetapi guard eksplisit tetap wajib bila query langsung ke tabel alokasi).
+4. **Jurnal hanya dari konfirmasi:** sisi beli jurnal HANYA di confirm; sisi jual jurnal di create TETAPI create itu sendiri = konfirmasi (guard faktur posted/partial + satu tx + jurnal idempoten `referenceType+referenceId`). Tidak ada jalur baru yang memposting jurnal dari draft.
+5. **Presisi + toleransi warisan:** presisi sen (`Decimal(15,2)`, `safeSum/safeAdd/safeSubtract`); ambang lunas tetap `SETTLEMENT_TOLERANCE_IDR` FIN-BR-006 — vonis ini tidak mengubah nilai toleransi.
+
+### 3. Posting matrix (tanpa jurnal baru — menegaskan kapan jurnal lahir)
+
+| Event | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| SalesPayment dibuat | Dr Kas/Bank (amount) + Dr PPh dibayar dimuka (withholdingAmount) / Cr Piutang (settled) | — | Faktur posted/partial; satu tx create+recalc+jurnal; idempoten referenceType+referenceId |
+| VendorPayment dibuat (draft) | NOL jurnal, NOL alokasi | — | Hanya baris draft + approval bila terkonfigurasi |
+| VendorPayment dikonfirmasi | Dr Hutang Usaha (amount) [+ Dr Beban Admin Bank (fee)] / Cr Bank (amount+fee) | — | Dari draft; alokasi oldest-first (target dulu bila ada); overpay > toleransi Rp1 ditolak; idempoten |
+| Reversal kedua sisi | Jurnal lawan (reversal, bukan hapus) + status `reversed` | — | Alasan wajib; jual: bupot aktif wajib revoke dulu; beli: alokasi dihapus + saldo bill dikembalikan |
+
+### 4. Falsifikasi wajib (BOT QA, atas head implementasi persis)
+
+- E152-1: buat VendorPayment draft → pastikan NOL jurnal `referenceType="VendorPayment"` + NOL alokasi + bill tetap terbuka.
+- E152-2: konfirmasi → jurnal lahir SEKALI; konfirmasi ulang → throw draft-only, NOL jurnal kedua.
+- E152-3: buat SalesPayment atas faktur draft → throw posted/partial-only, NOL baris + NOL jurnal.
+- E152-4: reverse SalesPayment → recalc mengeluarkan baris dari total (faktur turun dari paid); reverse VendorPayment → alokasi hilang + bill kembali terbuka.
+- E152-5: query uang tanpa penyaring (cabut `not:"reversed"` / ganti `completed` jadi tanpa filter) → tes MERAH.
+
+### 5. Batas vonis
+
+Vonis ini TIDAK menutup FIN-BR-007 dan TIDAK mengubah INDEKS-ATURAN (loop tertutup: status naik lewat PR implementasi/penilaian). Sisa terbuka = penilaian status oleh Lead sesudah Backend/QA mengeksekusi E152-1..5; tanpa migrasi/skema/jurnal baru dari kartu ini.
+
+ID vonis ini **F-2026-10-28-152-V** (FIN-BR-007 isolasi pembayaran draft/gagal vs completed; basis `b8d4f7c24`). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status FIN-BR-007) → BOT Backend (guard pembaca E152 bila ada yang mentah) → BOT QA (E152-1..5 atas head persis). Tanpa implementasi dari kartu vonis ini.
