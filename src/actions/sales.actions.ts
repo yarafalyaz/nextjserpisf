@@ -2028,7 +2028,9 @@ export async function createSalesPayment(formData: FormData) {
     if (!["posted", "partial"].includes(invoice.status)) {
       throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
     }
-    const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 0)
+    const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 2)
+    // F-2026-10-28-155-S P4: presisi sen — varian `, 0` lama membulatkan sisa
+    // ke rupiah penuh sebelum guard toleransi Rp1 dinilai.
     // Faktur lunas bila kas diterima + PPh dipotong pelanggan menutup sisanya.
     const settled = safeAdd(amount, withholdingAmount)
     // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
@@ -3404,7 +3406,8 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       _sum: { amount: true, withholdingAmount: true },
     })
     const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))
-    const remaining = safeSubtract(invoice.grandTotal, otherPaid, 0)
+    // F-2026-10-28-155-S P4: presisi sen (sama dengan guard create di atas).
+    const remaining = safeSubtract(invoice.grandTotal, otherPaid, 2)
     const settled = safeAdd(newAmount, newWithholdingAmount)
     // FIN-BR-006: kelebihan dalam toleransi lunas Rp1 adalah pembulatan
     // rupiah-penuh, bukan overpay — jangan tolak. Di atas itu tetap tolak.
@@ -3975,11 +3978,21 @@ export async function deleteSalesReturn(id: number) {
   try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_returns")
-  const sr = await prisma.salesReturn.findUniqueOrThrow({ where: { id } })
-  if (sr.status === "completed") {
-    throw new Error("Tidak bisa menghapus retur yang sudah completed")
-  }
-  await prisma.salesReturn.delete({ where: { id } })
+  // GL-BR-003 P8 (GL003-P8): hapus fisik hanya-draf, selaras deleteSalesInvoice
+  // draft-only + updateSalesReturn draft-only. Non-draft (posted/completed/...)
+  // diarahkan ke jalur koreksi (retur lawan/void beralasan), bukan hapus fisik.
+  await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_returns WHERE id = ${id} FOR UPDATE`
+    }
+    const fresh = await tx.salesReturn.findUniqueOrThrow({ where: { id }, select: { id: true, status: true } })
+    if (fresh.status !== "draft") {
+      throw new Error(
+        `Retur berstatus "${fresh.status}" tidak bisa dihapus; hanya draf yang bisa dihapus.`
+      )
+    }
+    await tx.salesReturn.delete({ where: { id } })
+  })
   await logActivity("delete", "SalesReturn", id, `Menghapus retur penjualan #${id}`)
   revalidatePath("/penjualan/retur")
   return { success: true }

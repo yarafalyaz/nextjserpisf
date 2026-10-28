@@ -13,6 +13,7 @@ import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor";
+import { PostedLockNotice } from "@/components/ui/posted-lock-notice";
 import {
   DetailTable,
   DetailTableHead,
@@ -126,12 +127,17 @@ export default async function SalesOrderDetailPage({
         badge={<StatusChip status={order.status} />}
         actions={
           <>
-            <Button
-              href={entityEditHref("/penjualan/pesanan", order)}
-              variant="primary"
-            >
-              Ubah
-            </Button>
+            {/* GL-BR-003 K1: cermin guard server updateSalesOrder
+                (cancelled/completed/setelah-pelunasan-nyata pasti ditolak).
+                posted tanpa pelunasan nyata tetap boleh Ubah. */}
+            {orderItemsEditable && (
+              <Button
+                href={entityEditHref("/penjualan/pesanan", order)}
+                variant="primary"
+              >
+                Ubah
+              </Button>
+            )}
             {order.quotationId && order.status !== "cancelled" && (
               <Button
                 href={`/penjualan/uang-muka/tambah/pesanan/${order.slug ?? order.id}`}
@@ -145,6 +151,16 @@ export default async function SalesOrderDetailPage({
           </>
         }
       />
+
+      {/* GL-BR-003 K2: pesanan terkunci (cancelled/completed/pelunasan
+          nyata) — koreksi via retur/void faktur turunan, bukan edit
+          pesanan. */}
+      {!orderItemsEditable && (
+        <PostedLockNotice
+          documentLabel={`Pesanan Penjualan ${order.documentNo}`}
+          correctionLabel="retur/void faktur turunan"
+        />
+      )}
 
       {/* Order Info */}
       <StatusActions
