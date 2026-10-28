@@ -42599,3 +42599,96 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
 
+---
+
+## SPEC BUSINESS 2026-10-28 — F-2026-10-28-145-S: standar tarif tenaga kerja per peran untuk costing proyek (PROJ-BR-008 OPEN-keputusan, OPEN #5)
+
+Pemilik spec: Business (sales-crm-hr-payroll-business-workflow). Dokumen spec saja, tanpa kode/schema/migrasi. Kartu: `t_807779f7`. Basis `origin/main` `5cf96c37e` (28 Okt 2026 15:03 WIB).
+**Verifikasi ID:** grep `F-2026-10-28-145` di backlog + board `origin/main` + 24 head PR terbuka = 0/0/0 sebelum tulis (run ini). E145 = 0 di main + PR terbuka. BR-PROJ- = 0 di main + PR terbuka (keluarga baru, mulai 01). **145-S bebas.**
+**Bukan duplikat:** vonis 129-V (PR #1257 `hermes/accountant-proj-br008-margin`, OPEN) memutus komposisi margin + mengesahkan tarif standar terencana (P3) — spec ini menspec bentuk master + fallback + varians yang dirujuk P3, bukan mengulang vonis. Vonis 109-V tahap 1 (larang jam×tarif di antrean 102/100) dipatuhi sebagai pagar, bukan diubah. Labor-recap informatif F-2026-10-20-97a tidak disentuh.
+
+Benchmark resmi (akses 28 Okt 2026):
+- Accurate — Standar Biaya Produksi (manufaktur, hitung HPP sebelum produksi): https://help.accurate.id/product/std-biaya-prod/
+- HashMicro — standard costing & variance (labor rate variance = (tarif aktual − tarif standar) × jam aktual; labor efficiency variance = (jam standar − jam aktual) × tarif standar; spending/volume variance overhead; terapkan → catat aktual → hitung selisih → laporkan bulanan): https://www.hashmicro.com/id/blog/memahami-biaya-standar/
+- Zahir — Data Proyek job costing (estimasi biaya/pendapatan per fase + realisasi otomatis dari transaksi yang dialokasikan ke proyek): https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye
+
+### 1. Inventarisasi terverifikasi (basis `5cf96c37e`, semua TERVERIFIKASI-KODE)
+- `ProductionCost` (`prisma/schema.prisma:3223`): `category` default `"labor"` (`:3225`), `hours Decimal?` + `rate Decimal?` + `amount` (`:3228-3231`), `sourceTimesheetId` (`:3237`), driver overhead terapan vs manual (`:3232-3236`). Kategori labor dikenal builder (`src/lib/reports/project-pl.ts:30`) + labor-recap (`src/lib/reports/labor-recap.ts:19-21`).
+- `Timesheet` (`prisma/schema.prisma:4206`): `hours Decimal(8,2)` + tautan `employeeId/projectId/workOrderId/taskId` (`:4208-4218`) — TANPA kolom tarif/upah (grep `standardRate|ratePerHour|tarifStandar|laborRate` di schema = 0; satu-satunya `ratePerHour` di repo adalah parameter caller di aksi, bukan kolom).
+- Pull timesheet→biaya (`src/actions/production-cost.actions.ts:262-367` proyek, `:369-440` WO): `ratePerHour` dipasok pemanggil (snapshot costing), divalidasi `>0` (`:270`,`:374`), komentar eksplisit "system does not read payroll data" (`:259-261`). Idempoten global per `sourceTimesheetId`. Rate berubah kemudian tidak me-restate HPP terposting (snapshot).
+- Jam belum ditarik BUKAN biaya (`src/lib/reports/project-pl.ts:42-47`,`:296-306`): memo `unpulledTimesheetHours` — JAM saja, tanpa rupiah, tidak mengurangi laba.
+- Labor-recap informatif (`src/lib/reports/labor-recap.ts:1-22`): atribusi teknisi HANYA via `sourceTimesheetId → Timesheet.employeeId`; baris manual tampil tanpa nama (tebak = bayar orang salah). Bukan dasar bayar/jurnal.
+- Jangkar peran existing: `Position` (`prisma/schema.prisma:984`, ada `departmentId`), `Employee.positionId/departmentId` (`:1034-1035`). TIDAK ada kolom tarif di Position/Department/Employee selain `baseSalary` (gaji — di bawah proteksi hr-scope, bukan sumber tarif).
+- Pagar vonis: 109-V tahap 1 (antren 102/100 DILARANG jam×tarif karangan, biaya per tugas, denda tanpa dokumen); 129-V P3 (tarif standar terencana per periode/peran SAH sebagai dasar biaya TERAPAN selama bersnapshot + varians ditutup jurnal varians; tebakan dilarang); 129-V P4 (tanpa alokasi overhead otomatis ke margin); labor-recap F-97a (informatif saja).
+
+### 2. Workflow specification (USULAN, belum disetujui pemilik proses)
+Aktor + permission key nyata (`src/lib/auth/module-catalog.generated.ts:257,315-317`): penyusun standar `manage_production_costs`; pembaca timesheet `view/create/delete_timesheets`; payroll/hr-scope TIDAK terlibat (sengaja).
+Alur:
+1. Admin costing (`manage_production_costs`) menetapkan tarif standar per peran + periode berlaku (kontrak §3). Tanpa peran/tanpa periode = tidak ada tarif.
+2. Saat pull timesheet→ProductionCost, sistem resolve tarif dari master per (§4 fallback). Tarif hasil resolve di-snapshot ke `ProductionCost.rate` existing (mekanisme snapshot sudah live, tidak diubah).
+3. Jam tanpa tarif hasil resolve = TETAP memo jam (`unpulledTimesheetHours`), bukan biaya, bukan tebakan. Penolakan berisik, bukan default diam.
+4. Laporan varians (§5) membandingkan standar vs aktual — read-only, tanpa jurnal (jurnal varians = BUTUH-VONIS Accountant).
+5. Perubahan tarif standar tidak pernah me-restate `ProductionCost` terposting (snapshot beku — perilaku live dipertahankan).
+
+### 3. Kontrak master tarif standar (USULAN — bentuk konseptual, fisik = Backend)
+Kunci: (`positionId` [jabatan, `Position.id`] + `effectiveFrom` + `effectiveTo?`). Satu baris aktif per jabatan per tanggal (overlap = tulis ditolak). Kolom: `ratePerHour` (>0, IDR), `createdBy/At`, alasan perubahan (audit). `departmentId` BOLEH sebagai kunci alternatif bila tenant membedakan tarif per departemen — default: jabatan saja (YAGNI: satu dimensi dulu).
+Periode berlaku: `effectiveFrom` wajib; `effectiveTo` null = berlaku sampai diganti (baris baru = tutup baris lama, bukan edit). Riwayat utuh untuk audit varians.
+Yang DILARANG (fail-closed, E145): (a) turunkan tarif dari `Employee.baseSalary`/payroll — gaji di bawah `getHrScope`, master costing tidak membaca payroll; (b) tarif default global karangan bila jabatan tak terdaftar — kekosongan = tidak ada tarif, bukan nol; (c) edit baris aktif yang sudah dipakai snapshot (hanya tutup + baris baru).
+
+### 4. Status-transition + fallback resolve (mengikat)
+`draft → active → closed` (tutup = `effectiveTo` terisi; `closed` tidak bisa aktif lagi — baris baru bila perlu). Resolve saat pull, urutan: (1) tarif jabatan aktif pada `Timesheet.date`; (2) bila kosong → TOLAK pull baris itu berisik ("tarif standar jabatan X belum ditetapkan periode Y") + jam tetap memo; (3) DILARANG fallback ke gaji karyawan, ke tarif jabatan lain, ke konstanta, atau ke input manual tanpa master di antrean 102/100 (patuh 109-V tahap 1). Input `ratePerHour` manual eksplisit di aksi existing TETAP SAH di luar antrean (perilaku live), tercatat sebagai override ber-snapshot, bukan standar.
+
+### 5. Varians standar vs aktual (laporan saja, USULAN + BUTUH-VONIS untuk jurnal)
+- Labor rate variance = (`rate` snapshot baris − tarif standar berlaku saat pull) × `hours` — menangkap override/deviasi tarif.
+- Labor efficiency variance = (jam standar − jam aktual) × tarif standar; jam standar dari estimasi (`WorkOrderOperation.estimatedHours`, `ProjectItem`) — estimasi ≠ aktual tetap dijaga (estimasi hanya pembanding, bukan biaya).
+- Under/over-absorption overhead existing (`overhead-absorption.service.ts`) tidak disentuh; varians labor tampil terpisah, tidak dicampur overhead.
+- Selisih TIDAK menjurnal sendiri; akun/selisih GL = BUTUH-VONIS Accountant (BR-PROJ-07). Sampai vonis: varians = memo laporan.
+
+### 6. Role/permission matrix (key nyata, TERVERIFIKASI-KODE)
+| Aksi | `manage_production_costs` | `view_timesheets` | hr-scope/payroll |
+|---|---|---|---|
+| Tetapkan/ubah tarif standar | YA (tulis master) | — | TIDAK TERLIBAT (sengaja, anti-bocor gaji) |
+| Pull timesheet→ProductionCost | YA (existing) | baca jam | — |
+| Lihat laporan varians | YA | YA (jam) | nominal gaji tidak tampil |
+| Baca/turunkan dari `baseSalary` | DILARANG (E145) | DILARANG | `getHrScope` fail-closed existing dipertahankan |
+
+### 7. Business rules register
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-PROJ-01 | Tarif standar = per jabatan (`Position.id`) + periode (`effectiveFrom/To`); satu aktif per jabatan-tanggal | USULAN | spec ini §3 |
+| BR-PROJ-02 | Larang turunkan tarif dari gaji/payroll (`baseSalary`, slip) | USULAN (penegak: hr-scope existing) | `hr-scope.ts` + 109-V |
+| BR-PROJ-03 | Rate snapshot ke `ProductionCost.rate` saat pull; perubahan standar tidak restate terposting | TERVERIFIKASI-KODE (perilaku) + USULAN (kontrak master) | `production-cost.actions.ts:259-261,322,331` |
+| BR-PROJ-04 | Jam tanpa tarif = memo jam, bukan biaya (tolak berisik, bukan default) | USULAN (konsisten TERVERIFIKASI-KODE) | `project-pl.ts:42-47` + 109-V |
+| BR-PROJ-05 | Larang jam×tarif karangan di antrean 102/100 | TERVERIFIKASI-KODE (vonis mengikat) | 109-V tahap 1 |
+| BR-PROJ-06 | Varians labor (rate + efficiency) = memo laporan, tanpa jurnal | USULAN | HashMicro BENCHMARK (rumus); jurnal = BR-PROJ-07 |
+| BR-PROJ-07 | Akun + perlakuan GL selisih varians | BUTUH-VONIS Accountant | 129-V P3/P4 (Q-PROJ8 mekanika) |
+| BR-PROJ-08 | Tarif standar terencana SAH sbg dasar biaya terapan bersnapshot | TERVERIFIKASI-KODE (vonis) | 129-V P3 (PR #1257 OPEN) |
+
+### 8. Feature matrix Accurate/Zahir/ISF
+| Fitur | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Tarif standar pra-produksi | Standar Biaya Produksi (HPP pra-proses) | Estimasi biaya/pendapatan per fase proyek | Master tarif/jabatan + periode (BR-PROJ-01) |
+| Realisasi biaya | Transaksi produksi | Realisasi otomatis dari transaksi proyek | Pull snapshot existing + resolve master |
+| Varians standar vs aktual | (modul manufaktur) | Realisasi vs estimasi per fase | Rate + efficiency variance memo (BR-PROJ-06) |
+| Jam tanpa tarif | — | — | Memo jam, bukan biaya (BR-PROJ-04, cermin existing) |
+
+### 9. Acceptance criteria + edge cases
+- AC-1: pull dengan jabatan bertarif → `ProductionCost.rate` = tarif master periode `Timesheet.date` (snapshot).
+- AC-2: pull jabatan tanpa tarif → baris DITOLAK berisik, jam tetap `unpulledTimesheetHours` (nol rupiah tebakan).
+- AC-3: ubah tarif standar → `ProductionCost` lama byte-sama (tidak restate).
+- AC-4: laporan varians = rate variance + efficiency variance terpisah dari overhead; nol jurnal lahir darinya.
+- Edge: timesheet lintas periode tarif (resolve per `Timesheet.date`, bukan tanggal pull); jabatan karyawan pindah tengah jalan (tarif ikut jabatan saat kerja, bukan jabatan kini); `effectiveTo` null + baris baru (tutup otomatis, overlap ditolak); hapus jabatan ber-snapsot (riwayat tarif tetap, FK restrict/set-null = Backend + BUTUH-VONIS retensi).
+
+### 10. Falsifikasi QA (E145, dijalankan pada head implementasi persis — BUKAN head spec ini)
+- E145-1: pull jabatan tanpa tarif lolos dengan amount >0, atau jam hilang dari memo = MERAH.
+- E145-2: mutasi resolve membaca `baseSalary`/payroll (mock gaji berubah → amount ikut berubah) = MERAH (kebocoran gaji).
+- E145-3: ubah tarif master → `ProductionCost` terposting berubah nilai = MERAH (snapshot jebol).
+- E145-4: varians melahirkan jurnal/GL entry tanpa vonis BR-PROJ-07 = MERAH.
+- E145-5: antrean 102/100 menampilkan Rp dari jam (format rupiah/label biaya) = MERAH (109-V tahap 1).
+- E145-6: overlap dua baris aktif satu jabatan-tanggal lolos tulis = MERAH.
+
+### 11. Backlog lanjutan (ID unik run ini)
+- F-2026-10-28-145-S = spec ini. Fisik master + resolve + varians = kartu Backend (pemilik: `@backend-prisma-inventory-workshop`) sesudah Lead putus USULAN §2-§5 + Accountant vonis BR-PROJ-07.
+- INDEKS `PROJ-BR-008` TETAP `OPEN-keputusan` sesudah spec ini (vonis 129-V masih PR OPEN #1257; perubahan status = milik Lead/QA sesudah merge + E129).
+
+ID spec ini **F-2026-10-28-145-S** (standar tarif tenaga kerja per peran + fallback fail-closed + varians memo; basis `origin/main` `5cf96c37e`). Pemilik berikutnya: BOT Lead (putus USULAN §2-§5 + Q: kunci departemen ikut/tidak; merge PR docs ini) → BOT Accountant (vonis BR-PROJ-07 akun/selisih GL + batas retensi riwayat tarif; tanpa kartu baru — tulis sebagai ID di komentar kartu tugasnya) → BOT Backend (fisik master + resolve + guard + varians read-only) → BOT Frontend (master UI + label memo, tanpa format Rp dari jam di antrean) → BOT QA (E145-1..6 atas head implementasi persis). Butuh putusan accountant: YA TERBATAS — hanya BR-PROJ-07 (akun/selisih GL) + retensi riwayat; kontrak master/fallback/varians-memo TIDAK menunggu (cermin snapshot live + 109-V/129-V + HashMicro BENCHMARK).
