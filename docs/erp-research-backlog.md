@@ -43678,7 +43678,34 @@ Kriteria TERIMA: tiap baris WAJIB punya ≥1 workflow aktif + ≥1 langkah beris
 
 ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003 + Q owner; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: OWNER (jawab Q-AVM-1..7 via Lead) → BOT Lead (vonis Q-AVM-2/3/4 + Q-AVM-6/7 masuk-mesin + merge PR docs ini; WO-BR-003/GL-BR-009 tetap `Sebagian`) → BOT Accountant (Q150-1/2/3 SAJA; isi matriks BUKAN vonis) → BOT Backend (kerja mesin sesudah putusan) → BOT Frontend (UI matriks sesudah kontrak) → BOT QA (E152 atas head persis). Butuh putusan accountant: TIDAK untuk isi matriks; YA TERBATAS hanya Q150-1/2/3 (akun/selisih/periode rantai jam kerja).
 
----
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-158-V: RPO/RTO TETAP-TARGET + prasyarat klaim + matriks p95 rencana + statutori 2026 = 126-V mengikat (jawaban BR-OPEN7-01..06 spec F-2026-10-28-143-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, TANPA kode/schema/migrasi. Basis origin/main 17ca196dd (28 Okt 2026 19:15 WIB).
+Verifikasi ID: grep F-2026-10-28-158 di backlog + board origin/main = 0/0; judul PR terbuka memuat 158 = 0 sebelum tulis. Slot sekitar: 150-V PR #1334, 151-V PR #1339, 153-V PR #1341, 155-S/156-S/157-S PR terbuka; 152-S/154-S di main. 158-V bebas.
+Rujukan: spec F-2026-10-28-143-S (register BR-OPEN7-01..06) + keputusan 12 KEPUTUSAN-TERVERIFIKASI (OPEN RPO/RTO + statutori 2026) + vonis 126-V (plafon JP 2026, PR #1254 MERGED 08:32 WIB) + INDEKS-ATURAN GL-BR-002 Sebagian.
+### 1. Fakta terverifikasi run ini (bukan klaim warisan)
+- NFR-02/NFR-06 = target rancangan, bukan hasil: docs/prd-erp-fabrikasi-offroad.md:940-951 (spec 143-S seksi 1).
+- Nol penjadwalan backup otomatis di repo: cron src/app/api/cron/ tanpa job backup; grep backup di src/app/api/cron/ + vercel.json = 0 (diverifikasi ulang run ini, hasil sama).
+- Nol bukti drill restore berkala; nol uji beban (grep k6|artillery|p95|percentile di src/ scripts/ e2e/ = 0); nol retensi baku backup manual (diverifikasi ulang run ini, hasil sama).
+- 126-V MERGED: PR #1254 MERGED 28 Okt 2026 08:32 WIB (merge 1e3f5c3fa), tabel 12 baris seksi 3 vonis 126-V MENGIKAT. PR #1360 OPEN (head c4cb58da0) = Backend tanam 12 baris persis + tes E126 — lane Backend, bukan vonis ulang angka.
+### 2. Vonis BR-OPEN7-01..05 (RPO/RTO + beban — menutup BUTUH-VONIS Accountant)
+- V1 (BR-OPEN7-01 DIPUTUS): RPO <=1 jam / RTO <=4 jam = TETAP-TARGET. Status sah hari ini = target rancangan NFR-06, BUKAN komitmen operasional. Naik jadi komitmen teruji HANYA sesudah: (a) jadwal otomatis seksi V2 berjalan >=2 siklus tanpa gagal, (b) >=1 drill restore lulus seksi V3 dengan RTO terukur <=4 jam, (c) QA E-OPEN7-1..3 HIJAU atas bukti persis. Sampai tiga syarat terpenuhi, setiap dokumen yang menulis RPO/RTO sebagai capaian = MERAH (BR-OPEN7-05).
+- V2 (BR-OPEN7-02 DIPUTUS): jadwal otomatis + retensi = prasyarat klaim, bukan pelengkap. Backup manual UI saja BUKAN komitmen — vonis tegas. Syarat frekuensi: klaim RPO <=1 jam mensyaratkan interval backup/replikasi/log-shipping <=1 jam; jadwal harian saja = RPO 24 jam dan TIDAK memenuhi RPO 1 jam (dicatat, bukan dijanjikan). Retensi: USULAN minimum 30 hari arsip manual/otomatis (angka final diputus Lead; vonis ini menetapkan lantai, bukan plafon). Tanpa jadwal berjalan + retensi tertulis = RPO TIDAK-TERBUKTI.
+- V3 (BR-OPEN7-03 DIPUTUS): drill triwulanan ke DB disposable + log, ambang lulus mengikat. Frekuensi minimum = triwulanan (USULAN spec; Lead boleh merapatkan, dilarang merenggangkan tanpa vonis baru). Ambang lulus SATU drill: (1) restore selesai ke DB disposable silengkap_restore (restore ke DB aktif BUKAN drill — diklaim sebagai drill = MERAH); (2) durasi restore terukur <=4 jam (bukti RTO); (3) verifikasi hitung tabel + smoke login; (4) log tersimpan (tanggal, durasi, SHA arsip, hasil lulus/gagal). Gagal satu unsur = drill GAGAL, bukan lulus bersyarat.
+- V4 (BR-OPEN7-04 DISAHKAN-SEBAGAI-RENCANA): matriks B1-B4 spec 143-S seksi 6 = rencana sah, bukan hasil. Vonis Accountant mengesahkan isi matriks sebagai rencana uji (skenario, target p95 <=2 dtk, agregat <=10 dtk, 2 run berurutan, nol error non-transien, biaya jaringan dipisahkan). Hasil LULUS hanya dari run UAT tercatat; tanpa run = TETAP-TARGET. Sahkan-final matriks + frekuensi run (USULAN tiap rilis mayor + semesteran) = putusan Lead.
+- V5 (BR-OPEN7-05 DIPUTUS): klaim tanpa bukti = MERAH, tanpa pengecualian. E-OPEN7-1..5 (E143-1..5) spec 143-S seksi 9 tetap acuan falsifikasi QA atas bukti persis; E-OPEN7-6 (E143-6) = kontrol arah HIJAU (backup manual tetap jalan + halaman jujur tanpa jadwal otomatis = tidak regresi).
+### 3. Vonis BR-OPEN7-06 (statutori 2026 — sinkron 126-V, TANPA angka baru)
+- V6 (BR-OPEN7-06 DIPUTUS-SELESAI-DI-126-V): angka statutori 2026 SUDAH diputus vonis 126-V (PR #1254 MERGED) — tabel 12 baris seksi 3 126-V (plafon JP 11086300 sejak 1 Mar 2026 dkk) MENGIKAT dan TIDAK diubah satu digit pun oleh vonis ini. Jalur penutupan: Backend tanam baris persis (PR #1360 OPEN, lane Backend) → QA E126-1..4 atas head persis → HR Ops arsip dokumen resmi B/962/022026. Dilarang mengarang/menebak angka 2027 — gate fromFallback tetap fail-closed.
+### 4. Batas vonis + INDEKS
+- GL-BR-002/AC-GL-002 atomisitas semua posting = TETAP Sebagian, audit milik Backend — vonis ini tidak menyentuhnya (batas spec 143-S seksi 2c dipertahankan).
+- Rekomendasi INDEKS-ATURAN (untuk Lead, TIDAK diterapkan PR ini): baris operasional baru RPO/RTO/drill/p95 (Belum, bukti = jadwal + log drill + run UAT) + HR-BR-003 naik Sebagian ke Terpasang-parameter-2026 sesudah PR #1360 merged + E126 hijau. Keputusan 12 OPEN #7 TETAP-OPEN (7a/7b) sampai bukti seksi V1; OPEN statutori TETAP-OPEN sampai tanam + arsip.
+### Falsifikasi QA (atas bukti persis, BUKAN head vonis ini)
+- F1: dokumen/rilis menulis RPO/RTO sebagai capaian tanpa jadwal >=2 siklus + drill lulus + RTO terukur = MERAH.
+- F2: jadwal harian diklaim memenuhi RPO <=1 jam = MERAH (interval 24 jam berakibat RPO 24 jam).
+- F3: restore ke DB aktif diklaim sebagai drill = MERAH (tanpa DB disposable + log durasi).
+- F4: klaim p95 <=2 dtk tanpa 2 run UAT tercatat matriks B1-B4 = MERAH.
+- F5: baris PayrollStatutoryRule 2026 menyimpang satu digit dari tabel seksi 3 126-V = MERAH (kembali ke 126-V, bukan vonis baru).
+ID vonis ini F-2026-10-28-158-V (jawaban BR-OPEN7-01..06 spec F-2026-10-28-143-S). Pemilik berikutnya: Lead (putus J1-frekuensi-final/J3-retensi-final + frekuensi run + sahkan matriks B1-B4 + merge PR docs ini) → Backend (jadwal otomatis + retensi + harness uji seksi V2-V4; tanam statutori PR #1360) → QA (E-OPEN7/E143-1..6 + E126 atas bukti/head persis) → INDEKS baris operasional baru + keputusan 12 OPEN #7 → TERTUTUP-teruji / TETAP-TARGET.
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-146-S: matriks kanonik approval per dokumen + verifikasi produksi (OPEN-keputusan #4, keputusan 9)
 
