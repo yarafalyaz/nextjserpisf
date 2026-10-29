@@ -270,6 +270,56 @@ describe("createJobChangeOrder — penjaga inti", () => {
     expect(String(r.error)).toMatch(/terkunci/)
     expect(coCreateMock).not.toHaveBeenCalled()
   })
+
+  // Regresi: validateLines dulu hanya menolak qtyAfter <= 0; unitPriceAfter/
+  // costAfter/discountAfter negatif lolos normalizeLines (num membiarkan
+  // negatif) lalu tersimpan dan mengalir ke quotation/WO saat terapkan.
+  it("unitPriceAfter negatif ditolak sebelum CO dibuat", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const r = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Ubah",
+      lines: [{ action: "ubah", workOrderItemId: 11, itemId: 101, qtyAfter: 2, unitPriceAfter: -1 }],
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tidak boleh negatif/)
+    expect(coCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("costAfter/discountAfter negatif ditolak sebelum CO dibuat", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const byCost = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Ubah",
+      lines: [{ action: "tambah", workOrderItemId: null, itemId: 101, qtyAfter: 1, unitPriceAfter: 100, costAfter: -5 }],
+    })
+    expect(byCost.success).toBe(false)
+    expect(String(byCost.error)).toMatch(/tidak boleh negatif/)
+    const byDiscount = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Ubah",
+      lines: [{ action: "tambah", workOrderItemId: null, itemId: 101, qtyAfter: 1, unitPriceAfter: 100, discountAfter: -5 }],
+    })
+    expect(byDiscount.success).toBe(false)
+    expect(String(byDiscount.error)).toMatch(/tidak boleh negatif/)
+    expect(coCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("nilai after nol tetap lolos (baris gratis) dan null hapus tidak ditolak", async () => {
+    const gratis = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Bonus",
+      lines: [{ action: "tambah", workOrderItemId: null, itemId: 101, qtyAfter: 1, unitPriceAfter: 0, costAfter: 0, discountAfter: 0 }],
+    })
+    expect(gratis.success).toBe(true)
+    const hapus = await createJobChangeOrder({
+      workOrderId: 10,
+      reason: "Hapus baris",
+      lines: [{ action: "hapus", workOrderItemId: 11, itemId: 101, qtyAfter: null, unitPriceAfter: null, costAfter: null, discountAfter: null }],
+    })
+    expect(hapus.success).toBe(true)
+    expect(coCreateMock).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe("recordJobChangeOrderApproval — transisi §3", () => {

@@ -149,6 +149,18 @@ function validateLines(lines: ChangeOrderLineInput[]): void {
         throw new Error("Qty baris ubah wajib lebih dari 0 — gunakan aksi hapus untuk menghilangkan baris")
       }
     }
+    // Nilai after terisi (bukan null) tidak boleh negatif: 0 sah (baris
+    // gratis), null sah (aksi hapus tak membawa nilai after). Negatif yang
+    // lolos tersimpan lalu mengalir ke quotation/WO saat terapkan.
+    if (line.unitPriceAfter != null && line.unitPriceAfter < 0) {
+      throw new Error("Harga satuan baris change order tidak boleh negatif")
+    }
+    if (line.costAfter != null && line.costAfter < 0) {
+      throw new Error("Biaya baris change order tidak boleh negatif")
+    }
+    if (line.discountAfter != null && line.discountAfter < 0) {
+      throw new Error("Diskon baris change order tidak boleh negatif")
+    }
   }
 }
 
