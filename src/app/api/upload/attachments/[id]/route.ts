@@ -69,10 +69,14 @@ export async function DELETE(
       // File might already be deleted or on R2, continue
     }
 
-    // Delete from database
-    await prisma.transactionAttachment.delete({
-      where: { id: attachmentId },
+    // Delete atomik terikat pemilik: dua DELETE konkuren tak lagi membuat
+    // satu sukses + satu P2025->500; count 0 = sudah terhapus pihak lain.
+    const deleted = await prisma.transactionAttachment.deleteMany({
+      where: { id: attachmentId, uploadedBy: userId },
     })
+    if (deleted.count === 0) {
+      return apiError("NOT_FOUND", "Lampiran tidak ditemukan")
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

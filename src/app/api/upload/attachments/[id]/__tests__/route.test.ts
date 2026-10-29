@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canModifyAttachment: vi.fn(),
   findUnique: vi.fn(),
   delete: vi.fn(),
+  deleteMany: vi.fn(),
   unlink: vi.fn(),
 }))
 
@@ -23,6 +24,7 @@ vi.mock("@/lib/db/prisma", () => ({
     transactionAttachment: {
       findUnique: (...a: unknown[]) => mocks.findUnique(...a),
       delete: (...a: unknown[]) => mocks.delete(...a),
+      deleteMany: (...a: unknown[]) => mocks.deleteMany(...a),
     },
   },
 }))
@@ -55,6 +57,7 @@ describe("DELETE /api/upload/attachments/[id]", () => {
     })
     mocks.unlink.mockResolvedValue(undefined)
     mocks.delete.mockResolvedValue({})
+    mocks.deleteMany.mockResolvedValue({ count: 1 })
   })
 
   it("returns 401 when no session", async () => {
@@ -106,13 +109,20 @@ describe("DELETE /api/upload/attachments/[id]", () => {
     expect(res.status).toBe(403)
   })
 
-  it("deletes file and db record on success", async () => {
+  it("deletes file and db record on success (deleteMany atomik terikat pemilik)", async () => {
     const res = await DELETE(makeReq(), makeParams("1"))
     const json = await res.json()
     expect(res.status).toBe(200)
     expect(json.success).toBe(true)
     expect(mocks.unlink).toHaveBeenCalled()
-    expect(mocks.delete).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(mocks.deleteMany).toHaveBeenCalledWith({ where: { id: 1, uploadedBy: 5 } })
+    expect(mocks.delete).not.toHaveBeenCalled()
+  })
+
+  it("returns 404 when concurrent delete already removed the row (count 0, bukan 500)", async () => {
+    mocks.deleteMany.mockResolvedValue({ count: 0 })
+    const res = await DELETE(makeReq(), makeParams("1"))
+    expect(res.status).toBe(404)
   })
 
   it("falls back to 'general' refType when null", async () => {
@@ -130,11 +140,11 @@ describe("DELETE /api/upload/attachments/[id]", () => {
     mocks.unlink.mockRejectedValue(new Error("ENOENT"))
     const res = await DELETE(makeReq(), makeParams("1"))
     expect(res.status).toBe(200)
-    expect(mocks.delete).toHaveBeenCalled()
+    expect(mocks.deleteMany).toHaveBeenCalled()
   })
 
   it("returns 500 when db delete throws", async () => {
-    mocks.delete.mockRejectedValue(new Error("db down"))
+    mocks.deleteMany.mockRejectedValue(new Error("db down"))
     const res = await DELETE(makeReq(), makeParams("1"))
     expect(res.status).toBe(500)
   })

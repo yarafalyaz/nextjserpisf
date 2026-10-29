@@ -48,6 +48,7 @@ async function handleCron(request: Request) {
       : [...TASKS]
 
   const results: Record<string, { status: string; message?: string; duration: number }> = {}
+  let anyError = false
 
   for (const task of tasksToRun) {
     const start = Date.now()
@@ -59,15 +60,19 @@ async function handleCron(request: Request) {
       await logCronResult(task, "success", result, duration)
     } catch (e) {
       const duration = Date.now() - start
-      const message = e instanceof Error ? e.message : "Terjadi kesalahan"
-      results[task] = { status: "error", message, duration }
+      // Detail error (pesan Prisma/internal) hanya ke log server + cronLog;
+      // respons ke pemanggil generik supaya tak bocor skema/internal.
+      const detail = e instanceof Error ? e.message : "Terjadi kesalahan"
+      results[task] = { status: "error", message: "Task gagal", duration }
+      anyError = true
       console.error(`Cron task "${task}" failed:`, e)
 
-      await logCronResult(task, "error", message, duration)
+      await logCronResult(task, "error", detail, duration)
     }
   }
 
-  return NextResponse.json({ results })
+  // Kegagalan task harus terlihat monitor HTTP: jangan selalu 200.
+  return NextResponse.json({ results }, { status: anyError ? 500 : 200 })
 }
 
 async function logCronResult(

@@ -46,10 +46,18 @@ export async function GET(request: NextRequest) {
       return apiError("FORBIDDEN", "Akses ditolak")
     }
 
-    const startDate = new Date(startDateStr)
-    const endDate = new Date(endDateStr)
+    // Tanggal kalender ketat: `new Date("2026-02-31")` digulung JS ke 3 Mar,
+    // jadi regex + cek komponen wajib (pola collection-followup-validation).
+    const parseStrict = (s: string): Date | null => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null
+      const [y, m, d] = s.split("-").map(Number)
+      const dt = new Date(y, m - 1, d)
+      return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null
+    }
+    const startDate = parseStrict(startDateStr)
+    const endDate = parseStrict(endDateStr)
 
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    if (!startDate || !endDate) {
       return apiError("BAD_REQUEST", "Format tanggal tidak valid")
     }
 

@@ -412,13 +412,18 @@ describe("GET /api/cron", () => {
   })
 
   describe("error handling", () => {
-    it("captures thrown errors per task", async () => {
+    it("captures thrown errors per task: respons generik + status 500, detail hanya di cronLog", async () => {
       // Force low-stock to throw via invalid $queryRaw return that breaks .map
       mocks.queryRaw.mockRejectedValue(new Error("DB down"))
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
+      expect(res.status).toBe(500)
       expect(json.results["low-stock"].status).toBe("error")
-      expect(json.results["low-stock"].message).toBe("DB down")
+      // Pesan internal tak bocor ke pemanggil; detail tetap tercatat di cronLog.
+      expect(json.results["low-stock"].message).toBe("Task gagal")
+      expect(mocks.cronLogCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: "error", message: "DB down" }) }),
+      )
     })
 
     it("non-Error throw is stringified", async () => {
@@ -427,8 +432,9 @@ describe("GET /api/cron", () => {
       })
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=low-stock"))
       const json = await res.json()
+      expect(res.status).toBe(500)
       expect(json.results["low-stock"].status).toBe("error")
-      expect(json.results["low-stock"].message).toBe("Terjadi kesalahan")
+      expect(json.results["low-stock"].message).toBe("Task gagal")
     })
   })
 

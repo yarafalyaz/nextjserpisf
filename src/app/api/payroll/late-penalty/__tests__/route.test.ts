@@ -139,6 +139,21 @@ describe("GET /api/payroll/late-penalty", () => {
     expect(mocks.calculateLatePenalty).not.toHaveBeenCalled()
   })
 
+  it("returns 400 for rolled-over dates inside a short range (start maupun end)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.hasPermission.mockResolvedValue(true)
+    // Rentang pendek: tanpa cek komponen, `2026-02-31` digulung ke 3 Mar dan lolos cap 90 hari.
+    for (const url of [
+      "karyawanId=1&tanggalMulai=2026-02-31&tanggalSelesai=2026-03-10",
+      "karyawanId=1&tanggalMulai=2026-02-01&tanggalSelesai=2026-02-31",
+      "karyawanId=1&tanggalMulai=2026-04-31&tanggalSelesai=2026-05-10",
+    ]) {
+      const res = await GET(new NextRequest(`http://localhost/api/payroll/late-penalty?${url}`))
+      expect(res.status, url).toBe(400)
+    }
+    expect(mocks.calculateLatePenalty).not.toHaveBeenCalled()
+  })
+
   it("returns 500 on internal error", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
     mocks.hasPermission.mockResolvedValue(true)
