@@ -62,7 +62,10 @@ import {
   type CustomerNpwpConflict,
 } from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
-import { canViewSensitiveIdentity } from "@/lib/auth/field-visibility";
+import {
+  canViewSalaryAmounts,
+  canViewSensitiveIdentity,
+} from "@/lib/auth/field-visibility";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
@@ -1167,6 +1170,17 @@ function stripSensitiveIdentity<T extends Record<string, unknown>>(data: T): T {
   return out;
 }
 
+// Gaji pokok: tanpa izin view_salary_amounts nilai form tidak boleh menimpa
+// kolom ini (server-side, sama seperti SENSITIVE_IDENTITY_FIELDS).
+// readEmployeeFormFields membaca ?? 0, jadi field wajib DIHAPUS dari data
+// tulis — menuliskannya (0 maupun angka kiriman) akan menghanguskan/
+// mengubah gaji tersimpan.
+function stripBaseSalary<T extends Record<string, unknown>>(data: T): T {
+  const out = { ...data };
+  delete out.baseSalary;
+  return out;
+}
+
 // Rantai atasan tidak boleh siklik: telusuri ke atas dari atasan yang dipilih;
 // bertemu karyawan itu sendiri (atau putaran yang sudah ada) = tolak.
 async function assertManagerChainAcyclic(
@@ -1272,9 +1286,12 @@ export async function createEmployee(formData: FormData) {
     };
     const managerErr = await assertManagerChainAcyclic(null, employeeDataRaw.managerId);
     if (managerErr) return { success: false, error: managerErr };
-    const employeeData = (await canViewSensitiveIdentity())
+    const employeeDataSensitive = (await canViewSensitiveIdentity())
       ? employeeDataRaw
       : stripSensitiveIdentity(employeeDataRaw);
+    const employeeData = (await canViewSalaryAmounts())
+      ? employeeDataSensitive
+      : stripBaseSalary(employeeDataSensitive);
     await assertEmployeeRefsExist(employeeData);
 
     // Create employee + (optionally) a linked login account atomically.
@@ -1475,9 +1492,12 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
       slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
-    const updateData = (await canViewSensitiveIdentity())
+    const updateDataSensitive = (await canViewSensitiveIdentity())
       ? updateDataRaw
       : stripSensitiveIdentity(updateDataRaw);
+    const updateData = (await canViewSalaryAmounts())
+      ? updateDataSensitive
+      : stripBaseSalary(updateDataSensitive);
 
     await prisma.$transaction(async (tx) => {
       if (wantsLogin && email && loginPass) {

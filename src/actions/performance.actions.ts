@@ -103,6 +103,19 @@ export async function upsertPerformanceGoal(formData: FormData, goalId?: number)
     const scope = await getHrScope(actor);
     await assertHrEmployeeAccess(scope, v.employeeId);
 
+    if (goalId) {
+      // Update wajib membuktikan akses ke PEMILIK existing dulu (pola
+      // deletePerformanceGoal): tanpa ini sasaran milik karyawan luar
+      // scope bisa ditimpa/dipindah hanya dengan menebak goalId.
+      const existing = await prisma.performanceGoal.findUnique({
+        where: { id: goalId },
+        select: { employeeId: true },
+      });
+      if (!existing) return { success: false as const, error: "Sasaran tidak ditemukan" };
+      await assertHrEmployeeAccess(scope, existing.employeeId);
+      // Pemilik baru (bila berubah) sudah dicek di atas via v.employeeId.
+    }
+
     const data = {
       cycleId: v.cycleId,
       employeeId: v.employeeId,
