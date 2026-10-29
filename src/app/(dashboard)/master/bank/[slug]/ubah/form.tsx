@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateBank } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
@@ -26,7 +27,12 @@ export function EditBankForm({ bank }: EditBankFormProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await updateBank(bank.id, formData)
+      const result = await updateBank(bank.id, formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Bank berhasil diperbarui")
       router.push("/master/bank")
       router.refresh()
     })

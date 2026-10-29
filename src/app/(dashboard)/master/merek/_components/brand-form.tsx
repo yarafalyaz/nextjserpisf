@@ -48,13 +48,14 @@ export function BrandForm({ categories, brand, initialCategories = [] }: BrandFo
     formData.set("categoryIds", selectedCategories.map((c) => c.id).join(","))
     startTransition(async () => {
       try {
-        if (brand) {
-          await updateBrand(brand.id, formData)
-          showSuccess("Merek berhasil diperbarui")
-        } else {
-          await createBrand(formData)
-          showSuccess("Merek berhasil ditambahkan")
+        const result = brand
+          ? await updateBrand(brand.id, formData)
+          : await createBrand(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
         }
+        showSuccess(brand ? "Merek berhasil diperbarui" : "Merek berhasil ditambahkan")
         router.push("/master/merek")
         router.refresh()
       } catch (error) {

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTax } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/shadcn/label"
@@ -21,7 +22,12 @@ export default function CreateTaxPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await createTax(formData)
+      const result = await createTax(formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Pajak berhasil ditambahkan")
       router.push("/master/pajak")
       router.refresh()
     })

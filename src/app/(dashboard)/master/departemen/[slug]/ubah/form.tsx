@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateDepartment } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
@@ -25,7 +26,12 @@ export function EditDepartmentForm({ department }: EditDepartmentFormProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await updateDepartment(department.id, formData)
+      const result = await updateDepartment(department.id, formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Departemen berhasil diperbarui")
       router.push("/master/departemen")
       router.refresh()
     })

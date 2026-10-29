@@ -48,11 +48,11 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (task?.id) {
-          formData.set("id", String(task.id))
-          await updateTask(formData)
-        } else {
-          await createTask(formData)
+        if (task?.id) formData.set("id", String(task.id))
+        const result = task?.id ? await updateTask(formData) : await createTask(formData)
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
         }
         showSuccess(task?.id ? "Tugas berhasil diperbarui" : "Tugas berhasil ditambahkan")
         router.push("/proyek/tugas")

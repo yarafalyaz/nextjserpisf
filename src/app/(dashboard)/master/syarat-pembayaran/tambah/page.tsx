@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createPaymentTerm } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -17,7 +18,12 @@ export default function CreatePaymentTermPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await createPaymentTerm(formData)
+      const result = await createPaymentTerm(formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Termin pembayaran berhasil ditambahkan")
       router.push("/master/syarat-pembayaran")
       router.refresh()
     })

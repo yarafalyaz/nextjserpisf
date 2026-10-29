@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updatePaymentTerm } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,12 @@ export function EditPaymentTermForm({ paymentTerm }: EditPaymentTermFormProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await updatePaymentTerm(paymentTerm.id, formData)
+      const result = await updatePaymentTerm(paymentTerm.id, formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Termin pembayaran berhasil diperbarui")
       router.push("/master/syarat-pembayaran")
       router.refresh()
     })

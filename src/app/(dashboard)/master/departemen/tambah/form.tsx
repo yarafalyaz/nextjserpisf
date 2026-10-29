@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createDepartment } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
@@ -20,7 +21,12 @@ export function DepartmentCreateForm({ generatedCode }: DepartmentCreateFormProp
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await createDepartment(formData)
+      const result = await createDepartment(formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Departemen berhasil ditambahkan")
       router.push("/master/departemen")
       router.refresh()
     })

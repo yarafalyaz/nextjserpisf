@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createPosition, updatePosition } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -25,11 +26,14 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
     const formData = new FormData(e.currentTarget)
     if (!isEdit) formData.delete("code")
     startTransition(async () => {
-      if (isEdit) {
-        await updatePosition(position!.id, formData)
-      } else {
-        await createPosition(formData)
+      const result = isEdit
+        ? await updatePosition(position!.id, formData)
+        : await createPosition(formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
       }
+      showSuccess(isEdit ? "Jabatan berhasil diperbarui" : "Jabatan berhasil ditambahkan")
       router.push("/master/jabatan")
       router.refresh()
     })

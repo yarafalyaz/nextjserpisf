@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateTax } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,12 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await updateTax(tax.id, formData)
+      const result = await updateTax(tax.id, formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Pajak berhasil diperbarui")
       router.push("/master/pajak")
       router.refresh()
     })

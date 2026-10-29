@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createBank } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -18,7 +19,12 @@ export default function CreateBankPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await createBank(formData)
+      const result = await createBank(formData)
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan data")
+        return
+      }
+      showSuccess("Bank berhasil ditambahkan")
       router.push("/master/bank")
       router.refresh()
     })

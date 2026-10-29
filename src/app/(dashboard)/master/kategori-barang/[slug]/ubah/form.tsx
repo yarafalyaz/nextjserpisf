@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateItemCategory } from "@/actions/master.actions"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
@@ -19,9 +20,18 @@ export function ItemCategoryEditForm({ category }: ItemCategoryEditFormProps) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await updateItemCategory(category.id, formData)
-      router.push("/master/kategori-barang")
-      router.refresh()
+      try {
+        const result = await updateItemCategory(category.id, formData)
+        if (result && !result.success) {
+          showError(result.error || "Gagal menyimpan data")
+          return
+        }
+        showSuccess("Kategori berhasil diperbarui")
+        router.push("/master/kategori-barang")
+        router.refresh()
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "Gagal menyimpan data")
+      }
     })
   }
 
