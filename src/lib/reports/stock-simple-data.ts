@@ -110,7 +110,9 @@ export async function loadStockAging(): Promise<StockSimpleReport> {
   if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
   else {
     const total = sumRemainingQty(layers)
-    rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", qty(total), "", ""] })
+    // Kuantitas bukan kolom trailing (Umur/Kelompok setelahnya) — baris data
+    // bold supaya angka tetap di kolom Kuantitas, bukan geser ke Kelompok.
+    rows.push({ kind: "data", bold: true, cells: ["", "Jumlah", "", "", qty(total), "", ""] })
   }
   return { table: { columns: AGING_COLUMNS, rows }, ...nowLabels() }
 }
@@ -145,7 +147,7 @@ export async function loadStockSummary(): Promise<StockSimpleReport> {
     })
   }
   if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
-  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", qty(totalQty), money(totalValue)] })
+  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: [qty(totalQty), money(totalValue)] })
   return { table: { columns: SUMMARY_COLUMNS, rows }, ...nowLabels() }
 }
 

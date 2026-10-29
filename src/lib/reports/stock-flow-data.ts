@@ -204,7 +204,7 @@ export async function loadStockValuation(warehouseId: number | null): Promise<St
     ],
   }))
   if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
-  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", "", "", qty(totals.qty), money(totals.value)] })
+  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: [qty(totals.qty), money(totals.value)] })
   const now = new Date()
   return { table: { columns: VALUATION_COLUMNS, rows }, ...rangePeriodLabels({ start: now, end: now }) }
 }
@@ -280,11 +280,12 @@ export async function loadStockCard(
       ],
     })
   }
+  // Masuk/Keluar bukan trailing (Keterangan setelah Saldo) — total engine hanya
+  // bisa sejajarkan sel trailing, jadi 3 angka ini baris data bold, bukan total.
   rows.push({
-    kind: "total",
-    grand: true,
-    label: "Saldo Akhir",
-    cells: ["", "", "", "", qty(card.totalInQty), qty(card.totalOutQty), qty(card.closingQty), ""],
+    kind: "data",
+    bold: true,
+    cells: ["", "Saldo Akhir", "", "", qty(card.totalInQty), qty(card.totalOutQty), qty(card.closingQty), ""],
   })
   return { table: { columns: CARD_COLUMNS, rows }, ...periodOf(period) }
 }
@@ -338,6 +339,6 @@ export async function loadSalesAnalytics(period: Period, dimension: SalesDimensi
     ],
   }))
   if (rows.length === 0) rows.push({ kind: "notice", text: "Belum ada data penjualan pada periode ini." })
-  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", money(totalRevenue), "100%"] })
+  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: [money(totalRevenue), "100%"] })
   return { table: { columns: SALES_COLUMNS, rows }, ...periodOf(period) }
 }

@@ -63,7 +63,12 @@ export type TableRow =
   | { kind: "group"; label: string }
   /** Satu baris data; `cells` sejajar dengan kolom. */
   | { kind: "data"; cells: string[]; bold?: boolean }
-  /** Subtotal/total: label di kolom kiri, sel angka di kolom terakhir. */
+  /**
+   * Subtotal/total: label di kolom kiri, `cells` hanya sel TRAILING (kolom
+   * terakhir) — renderer menggambar mulai `columns.length - cells.length`.
+   * Builder TIDAK boleh mengisi sel kosong di depan/tengah untuk melewati
+   * kolom; angka yang bukan trailing harus jadi data/bold, bukan total.
+   */
   | { kind: "total"; label: string; cells: string[]; grand?: boolean }
   /** Catatan/peringatan di bawah tabel. */
   | { kind: "notice"; text: string }

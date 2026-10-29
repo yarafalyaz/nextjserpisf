@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
     account: { findMany: vi.fn() },
-    journalEntry: { findMany: vi.fn() },
+    journalEntry: { findMany: vi.fn(), groupBy: vi.fn() },
     item: { findMany: vi.fn() },
     warehouse: { findMany: vi.fn() },
     stockMove: { findMany: vi.fn() },
@@ -35,8 +35,9 @@ vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn(async () => ({
 
 import { loadArApSummary } from "../ar-ap-summary-data"
 import { loadPayablesTotal, loadReceivablesAging } from "../aging-reports-data"
-import { loadReceivableSubledger } from "../ledger-cash-data"
-import { resolveItemIdBySlugOrId, resolveWarehouseIdBySlugOrId } from "../stock-flow-data"
+import { loadGeneralLedger, loadReceivableSubledger } from "../ledger-cash-data"
+import { loadSalesAnalytics, loadStockCard, loadStockValuation, resolveItemIdBySlugOrId, resolveWarehouseIdBySlugOrId } from "../stock-flow-data"
+import { loadStockAging, loadStockSummary } from "../stock-simple-data"
 import { REPORTS } from "../report-registry"
 import { parseReportPeriod } from "../report-period"
 
@@ -124,6 +125,125 @@ describe("total trailing: buku pembantu", () => {
     expect(totals).toHaveLength(1)
     expect(totals[0].cells).toHaveLength(3)
     expect(totals[0].cells[0]).toContain("1.000")
+  })
+})
+
+describe("total trailing: buku besar & stok (lanjutan #8)", () => {
+  it("buku besar: Total & Saldo Akhir 3 sel trailing (Debit/Kredit/Saldo)", async () => {
+    mocks.prismaMock.account.findMany.mockResolvedValue([{ id: 1, slug: "kas" }])
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([
+      {
+        debit: 1000,
+        credit: 0,
+        memo: null,
+        journal: { journalNumber: "JU-1", transactionDate: new Date("2026-10-05"), description: "Setoran" },
+      },
+    ])
+    const report = await loadGeneralLedger(
+      { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) },
+      "kas",
+    )
+    const totals = totalsOf(report.table.rows)
+    expect(totals).toHaveLength(1)
+    expect(totals[0].cells).toHaveLength(3)
+    expect(report.table.columns).toHaveLength(6)
+  })
+
+  it("valuasi stok PDF: Jumlah 2 sel trailing (Jml/Total Nilai), bukan 8 berawalan kosong", async () => {
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 1, code: "GDG", name: "Utama" }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([
+      {
+        itemId: 1,
+        warehouseId: 1,
+        remaining: 2,
+        unitCost: 500,
+        item: { sku: "BSI", name: "Busi", unitOfMeasure: "pcs", cost: 500, costingMethod: "fifo", category: null },
+      },
+    ])
+    const report = await loadStockValuation(null)
+    const totals = totalsOf(report.table.rows)
+    expect(totals).toHaveLength(1)
+    expect(totals[0].cells).toHaveLength(2)
+    // Sel pertama harus qty kolom Jml, bukan kosong yang menggeser ke kanan.
+    expect(totals[0].cells[0]).not.toBe("")
+    expect(totals[0].cells[1]).toContain("1.000")
+  })
+
+  it("analisis penjualan PDF: Jumlah 2 sel trailing (Nilai/Porsi)", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      {
+        customer: { id: 1, name: "PT A" },
+        items: [{ itemId: 1, description: "Busi", qty: 2, total: 1000 }],
+      },
+    ])
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1, sku: "BSI", name: "Busi", brand: null }])
+    const report = await loadSalesAnalytics(
+      { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) },
+      "barang",
+    )
+    const totals = totalsOf(report.table.rows)
+    expect(totals).toHaveLength(1)
+    expect(totals[0].cells).toEqual([expect.stringContaining("1.000"), "100%"])
+  })
+
+  it("kartu stok: Saldo Akhir data bold sejajar Masuk/Keluar/Saldo (bukan total geser)", async () => {
+    mocks.prismaMock.stockMove.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          date: new Date("2026-10-05"),
+          createdAt: new Date("2026-10-05"),
+          documentNo: "SM-1",
+          moveType: "receipt",
+          impact: "IN",
+          qty: 10,
+          cost: 100,
+          referenceType: null,
+          referenceId: null,
+          description: null,
+          warehouse: { code: "GDG" },
+        },
+      ])
+    const report = await loadStockCard({ start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) }, 7, null)
+    expect(totalsOf(report.table.rows)).toHaveLength(0)
+    const closing = report.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Saldo Akhir")
+    expect(closing?.kind === "data" ? closing.cells : []).toHaveLength(8)
+    expect(closing?.kind === "data" ? closing.cells[6] : "").toContain("10")
+  })
+
+  it("umur stok: Jumlah data bold di kolom Kuantitas (bukan total trailing geser)", async () => {
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([
+      {
+        remaining: 5,
+        createdAt: new Date(),
+        item: { sku: "BSI", name: "Busi", unitOfMeasure: "pcs", category: null },
+      },
+    ])
+    const report = await loadStockAging()
+    expect(totalsOf(report.table.rows)).toHaveLength(0)
+    const closing = report.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Jumlah")
+    expect(closing?.kind === "data" ? closing.cells[4] : "").toContain("5")
+  })
+
+  it("ringkasan stok: Jumlah 2 sel trailing (Total Qty/Total Nilai)", async () => {
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 1, code: "GDG", name: "Utama" }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([
+      { itemId: 1, warehouseId: 1, remaining: 2, unitCost: 500 },
+    ])
+    const report = await loadStockSummary()
+    const totals = totalsOf(report.table.rows)
+    expect(totals).toHaveLength(1)
+    expect(totals[0].cells).toHaveLength(2)
+  })
+
+  it("valuasi-stok PDF: slug gudang menyaring where gudang (registry #9)", async () => {
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 3, slug: "gudang-utama", code: "GDG", name: "Utama" }])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([])
+    await REPORTS["valuasi-stok"].load({ period: parseReportPeriod("2026-10", { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) }), search: { gudang: "gudang-utama" } })
+    expect(mocks.prismaMock.inventoryLayer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ warehouseId: 3 }) }),
+    )
   })
 })
 

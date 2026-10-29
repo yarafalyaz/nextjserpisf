@@ -82,16 +82,18 @@ describe("E140-3 paritas layar-vs-PDF kartu stok (D3)", () => {
     expect(headers).toContain("Gudang")
 
     const gudangIdx = headers.indexOf("Gudang")
-    const dataRows = pdf.table.rows.filter((r) => r.kind === "data" && r.cells[1] !== "Saldo Awal")
+    const dataRows = pdf.table.rows.filter((r) => r.kind === "data" && r.cells[1] !== "Saldo Awal" && r.cells[1] !== "Saldo Akhir")
     expect(dataRows).toHaveLength(2)
     // Move tanpa gudang tampil "-" (eksplisit, bukan sel kosong); berkode tampil verbatim.
     const gudangCells = dataRows.map((r) => (r.kind === "data" ? r.cells[gudangIdx] : null))
     expect(gudangCells).toEqual(["-", "GDG-02"])
 
-    const total = pdf.table.rows.find((r) => r.kind === "total")
-    expect(total?.kind).toBe("total")
-    if (total?.kind !== "total") throw new Error("baris total PDF hilang")
-    // Sel total: [..., Masuk, Keluar, Saldo, ...] — parse numerik, bukan string format.
+    // Saldo Akhir bukan baris total: Masuk/Keluar/Saldo bukan trailing
+    // (Keterangan di ujung), jadi data bold sejajar kolomnya — regression #8.
+    const total = pdf.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Saldo Akhir")
+    expect(total?.kind).toBe("data")
+    if (total?.kind !== "data") throw new Error("baris Saldo Akhir PDF hilang")
+    // Sel: [..., Masuk, Keluar, Saldo, ...] — parse numerik, bukan string format.
     const nums = total.cells.map(cellNum).filter((n) => !Number.isNaN(n))
     expect(nums).toContain(screen.totalInQty)
     expect(nums).toContain(screen.totalOutQty)
