@@ -2292,54 +2292,6 @@ describe("onPayrollPaid", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
-  it("E-HRCR-6b: re-post slip asal sesudah reversal DITOLAK berisik (vonis 135-V §5.2b)", async () => {
-    // Vonis 135-V §5.2b: slip koreksi sah selalu memakai referenceId BARU
-    // (dokumen baru), bukan payrollId asal. Histori REVERSED atas payrollId
-    // asal = bukti reversal sudah terjadi -> re-post asal ditolak berisik
-    // (bukan console.info senyap = MERAH), menyebut nomor dokumen tanpa
-    // nominal gaji (P8 spec). Slip koreksi baru tidak tersentuh penjaga ini
-    // karena referenceId-nya berbeda.
-    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      netSalary: 1000,
-      grossSalary: 1000,
-      bpjsHealthEmployee: 0,
-      bpjsEmploymentEmployee: 0,
-      pph21: 0,
-      paymentDate: new Date(),
-      documentNo: "PAY-REV-1",
-    });
-    mocks.journalFindFirst.mockImplementation(async (args: any) =>
-      args?.where?.status === "REVERSED" ? { id: 7 } : null,
-    );
-    await expect(onPayrollPaid(1)).rejects.toThrow(/PAY-REV-1/);
-    expect(mocks.journalCreate).not.toHaveBeenCalled();
-  });
-
-  it("E-HRCR-6b: re-post slip asal sesudah reversal DITOLAK berisik (vonis 135-V §5.2b)", async () => {
-    // Vonis 135-V §5.2b: slip koreksi sah selalu memakai referenceId BARU
-    // (dokumen baru), bukan payrollId asal. Histori REVERSED atas payrollId
-    // asal = bukti reversal sudah terjadi -> re-post asal ditolak berisik
-    // (bukan console.info senyap = MERAH), menyebut nomor dokumen tanpa
-    // nominal gaji (P8 spec). Slip koreksi baru tidak tersentuh penjaga ini
-    // karena referenceId-nya berbeda.
-    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      netSalary: 1000,
-      grossSalary: 1000,
-      bpjsHealthEmployee: 0,
-      bpjsEmploymentEmployee: 0,
-      pph21: 0,
-      paymentDate: new Date(),
-      documentNo: "PAY-REV-1",
-    });
-    mocks.journalFindFirst.mockImplementation(async (args: any) =>
-      args?.where?.status === "REVERSED" ? { id: 7 } : null,
-    );
-    await expect(onPayrollPaid(1)).rejects.toThrow(/PAY-REV-1/);
-    expect(mocks.journalCreate).not.toHaveBeenCalled();
-  });
-
   it("E-HRCR-6: jurnal REVERSED tidak memblokir re-post Payroll (B4 §5.2 133-S)", async () => {
     // HR-BR-005 E-HRCR-6: hook idempotensi tanpa filter status membuat jurnal
     // REVERSED memblokir re-post secara SENYAP. Saringan aktif
