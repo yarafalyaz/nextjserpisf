@@ -1,5 +1,6 @@
 "use server"
 
+import { Prisma } from "@prisma/client"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
@@ -301,22 +302,36 @@ export async function pullLaborCostFromTimesheets(
       return { success: false, error: "Tidak ada timesheet pada proyek ini." }
     }
 
-    // Anti-dobel GLOBAL (F-2026-10-21-019): satu timesheet tidak pernah
-    // menjadi dua ProductionCost, lintas jalur proyek/PO maupun jalur WO.
-    const alreadyPulled = await prisma.productionCost.findMany({
+    // BUGHUNT round3 MEDIUM: dedupe di luar tx HANYA fast-path penolakan —
+    // keputusan final dibaca ulang DI DALAM tx di bawah (kunci baris
+    // timesheet), supaya dua klik paralel tidak sama-sama lolos dan
+    // menggandakan labor HPP. ponytail: tanpa unique DB pada
+    // sourceTimesheetId (di luar ruang lingkup), kunci baris timesheet
+    // kandidat adalah penjaga serialisasi; tambahkan unique + migrasi bila
+    // jalur penulisan ProductionCost bertambah.
+    const alreadyPulledOutside = await prisma.productionCost.findMany({
       where: { sourceTimesheetId: { in: timesheets.map((t) => t.id) } },
       select: { sourceTimesheetId: true },
     })
-    const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
-
-    const toCreate = timesheets.filter((t) => !pulledSet.has(t.id))
-    if (toCreate.length === 0) {
+    if (alreadyPulledOutside.length >= timesheets.length) {
       return { success: false, error: "Semua timesheet proyek ini sudah ditarik ke biaya produksi." }
     }
 
     let totalAdded = 0
+    let createdCount = 0
     await prisma.$transaction(async (tx) => {
       await assertJobCostMutable({ productionOrderId, workOrderId }, "ditambahkan", tx)
+      // Kunci baris timesheet kandidat (urutan id global = bebas deadlock
+      // antar penarik), lalu dedupe dibaca ulang di dalam tx — pola jalur WO
+      // (pullLaborCostFromWorkOrderTimesheets) + kunci baris.
+      const timesheetIds = timesheets.map((t) => t.id)
+      await tx.$queryRaw`SELECT id FROM timesheets WHERE id IN (${Prisma.join(timesheetIds)}) ORDER BY id FOR UPDATE`
+      const alreadyPulled = await tx.productionCost.findMany({
+        where: { sourceTimesheetId: { in: timesheetIds } },
+        select: { sourceTimesheetId: true },
+      })
+      const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
+      const toCreate = timesheets.filter((t) => !pulledSet.has(t.id))
       for (const t of toCreate) {
         const hours = Number(t.hours)
         const amount = Math.round(hours * ratePerHour * 100) / 100
@@ -335,6 +350,7 @@ export async function pullLaborCostFromTimesheets(
             createdBy: Number(user.id),
           },
         })
+        createdCount += 1
         totalAdded = Math.round((totalAdded + amount) * 100) / 100
       }
       if (totalAdded > 0) {
@@ -342,11 +358,13 @@ export async function pullLaborCostFromTimesheets(
       }
     })
 
-    await logActivity("create", "ProductionCost", productionOrderId,
-      `Menarik ${toCreate.length} timesheet → biaya tenaga kerja Rp${totalAdded} ke perintah produksi #${productionOrderId}`,
-    )
+    if (createdCount > 0) {
+      await logActivity("create", "ProductionCost", productionOrderId,
+        `Menarik ${createdCount} timesheet → biaya tenaga kerja Rp${totalAdded} ke perintah produksi #${productionOrderId}`,
+      )
+    }
     revalidatePath(`/produksi/production-orders/${productionOrderId}`)
-    return { success: true, added: totalAdded, count: toCreate.length }
+    return { success: true, added: totalAdded, count: createdCount }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[pullLaborCostFromTimesheets]", getErrorMessage(e) || e)

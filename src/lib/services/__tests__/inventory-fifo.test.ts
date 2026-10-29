@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { availableQty, consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { availableQty, availableQtyBatch, consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import type { Prisma } from "@prisma/client";
 
 // Build a mock transaction client. `$queryRaw` returns the locked layer rows.
@@ -137,6 +137,91 @@ describe("inventory-fifo", () => {
       const tx = mockTx({});
       (tx.inventoryLayer.aggregate as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ _sum: { remaining: null } });
       expect(await availableQty(tx, 1)).toBe(0);
+    });
+  });
+
+  describe("availableQtyBatch (BUGHUNT r3: batch pengganti N+1 per pasangan)", () => {
+    // Lapisan fixture: per-pair availableQty = sum remaining>0 per (item, gudang).
+    const layers = [
+      { itemId: 1, warehouseId: 5, remaining: 10 },
+      { itemId: 1, warehouseId: 5, remaining: 2.5 },
+      { itemId: 1, warehouseId: 5, remaining: 0 }, // habis: tak terhitung
+      { itemId: 1, warehouseId: 6, remaining: 7 },
+      { itemId: 2, warehouseId: 5, remaining: 3 },
+      { itemId: 2, warehouseId: 6, remaining: -4 }, // negatif: tak terhitung
+      { itemId: 2, warehouseId: null, remaining: 99 }, // tanpa gudang: tak pernah per-pasangan
+      { itemId: 3, warehouseId: 5, remaining: 8 },
+    ];
+    function batchTx() {
+      const aggregate = vi.fn(
+        async ({ where }: { where: { itemId: number; warehouseId?: number } }) => ({
+          _sum: {
+            remaining:
+              layers
+                .filter(
+                  (l) =>
+                    l.itemId === where.itemId &&
+                    l.remaining > 0 &&
+                    (where.warehouseId == null || l.warehouseId === where.warehouseId),
+                )
+                .reduce((s, l) => s + l.remaining, 0) || null,
+          },
+        }),
+      );
+      const groupBy = vi.fn(async () => {
+        const sums = new Map<string, number>();
+        for (const l of layers.filter((x) => x.remaining > 0)) {
+          const key = `${l.itemId}:${l.warehouseId}`;
+          sums.set(key, (sums.get(key) ?? 0) + l.remaining);
+        }
+        return [...sums.entries()].map(([key, sum]) => {
+          const [itemId, warehouseId] = key.split(":");
+          return {
+            itemId: Number(itemId),
+            warehouseId: warehouseId === "null" ? null : Number(warehouseId),
+            _sum: { remaining: sum },
+          };
+        });
+      });
+      return { tx: { inventoryLayer: { aggregate, groupBy } }, aggregate, groupBy };
+    }
+    const pairs = [
+      { itemId: 1, warehouseId: 5 },
+      { itemId: 1, warehouseId: 6 },
+      { itemId: 2, warehouseId: 5 },
+      { itemId: 2, warehouseId: 6 },
+      { itemId: 3, warehouseId: 6 }, // tak ada lapisan → 0
+      { itemId: 1, warehouseId: 5 }, // duplikat → didedupe
+    ];
+
+    it("ekuivalen dengan availableQty per pasangan pada fixture yang sama", async () => {
+      const { tx, aggregate, groupBy } = batchTx();
+      const batch = await availableQtyBatch(tx as never, pairs);
+      for (const p of [...new Map(pairs.map((x) => [`${x.itemId}:${x.warehouseId}`, x])).values()]) {
+        const perPair = await availableQty(tx as never, p.itemId, p.warehouseId);
+        expect(batch.get(`${p.itemId}:${p.warehouseId}`) ?? 0).toBe(perPair);
+      }
+      // Nilai fixture eksplisit: 1:5=12.5 (0 terabaikan), 1:6=7, 2:5=3, 2:6=0 (negatif), 3:6=0.
+      expect(batch.get("1:5")).toBe(12.5);
+      expect(batch.get("1:6")).toBe(7);
+      expect(batch.get("2:5")).toBe(3);
+      expect(batch.get("2:6") ?? 0).toBe(0);
+      expect(batch.get("3:6") ?? 0).toBe(0);
+      // Satu groupBy total; aggregate hanya dari loop pembanding per-pasangan.
+      expect(groupBy).toHaveBeenCalledTimes(1);
+      expect(groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ["itemId", "warehouseId"],
+          where: { itemId: { in: [1, 2, 3] }, warehouseId: { in: [5, 6] }, remaining: { gt: 0 } },
+        }),
+      );
+      expect(aggregate).toHaveBeenCalledTimes(5);
+    });
+
+    it("pasangan kosong → map kosong tanpa query", async () => {
+      const { tx, groupBy } = batchTx();
+      expect((await availableQtyBatch(tx as never, [])).size).toBe(0);
+      expect(groupBy).not.toHaveBeenCalled();
     });
   });
 

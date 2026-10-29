@@ -23,6 +23,7 @@ const orderFindUniqueMock = vi.fn()
 const woFindUniqueMock = vi.fn()
 const vendorFindUniqueMock = vi.fn()
 const timesheetFindManyMock = vi.fn()
+const queryRawMock = vi.fn()
 const jobGuardMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -55,6 +56,7 @@ vi.mock("@/lib/db/prisma", () => {
     workOrder: { findUnique: (...a: unknown[]) => woFindUniqueMock(...a) },
     vendor: { findUnique: (...a: unknown[]) => vendorFindUniqueMock(...a) },
     timesheet: { findMany: (...a: unknown[]) => timesheetFindManyMock(...a) },
+    $queryRaw: (...a: unknown[]) => queryRawMock(...a),
   }
   prisma.$transaction = vi.fn((cb: unknown) =>
     typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
@@ -81,8 +83,9 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, periodOpenMock, revalidateMock, logActivityMock, applyDeltaMock,
     costCreateMock, costFindUniqueMock, costUpdateMock, costDeleteMock, costFindManyMock,
-    orderFindUniqueMock, woFindUniqueMock, vendorFindUniqueMock, timesheetFindManyMock,
+    orderFindUniqueMock, woFindUniqueMock, vendorFindUniqueMock, timesheetFindManyMock, queryRawMock,
   ]) m.mockReset()
+  queryRawMock.mockResolvedValue([])
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   periodOpenMock.mockResolvedValue(undefined)
@@ -395,6 +398,60 @@ describe("pullLaborCostFromTimesheets", () => {
     expect(res.count).toBe(1)
     expect(costCreateMock).toHaveBeenCalledTimes(1)
     expect(applyDeltaMock).toHaveBeenCalledWith(1, 150000, expect.anything(), expect.anything())
+  })
+
+  it("BUGHUNT r3: dedupe dibaca ulang DI DALAM tx sesudah kunci baris timesheet — temuan in-tx menang atas snapshot luar", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1 })
+    timesheetFindManyMock.mockResolvedValue([
+      { id: 11, hours: 4, date: new Date(), description: null },
+      { id: 12, hours: 6, date: new Date(), description: null },
+    ])
+    // Snapshot luar tx: belum ada yang tertarik. Baca ulang dalam tx: 11 sudah
+    // tertarik oleh klik paralel yang commit lebih dulu → hanya 12 dibuat.
+    costFindManyMock.mockResolvedValueOnce([]).mockResolvedValueOnce([{ sourceTimesheetId: 11 }])
+    costCreateMock.mockResolvedValue({ id: 1 })
+
+    const res = await pullLaborCostFromTimesheets(7, 1, 25000)
+
+    expect(res.success).toBe(true)
+    expect(res.count).toBe(1)
+    expect(res.added).toBe(150000)
+    expect(costCreateMock).toHaveBeenCalledTimes(1)
+    expect(costCreateMock.mock.calls[0][0].data.sourceTimesheetId).toBe(12)
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 150000, expect.anything(), expect.anything())
+    // Kunci baris timesheet kandidat FOR UPDATE mendahului baca ulang dedupe:
+    // urutan invocation lock < findMany dalam tx < create.
+    const lockOrder = queryRawMock.mock.invocationCallOrder[0]
+    const sql = (queryRawMock.mock.calls[0][0] as TemplateStringsArray).join("?")
+    expect(sql).toContain("FROM timesheets")
+    expect(sql).toContain("FOR UPDATE")
+    expect(lockOrder).toBeLessThan(costFindManyMock.mock.invocationCallOrder[1])
+    expect(costFindManyMock.mock.invocationCallOrder[1]).toBeLessThan(costCreateMock.mock.invocationCallOrder[0])
+    // Query dedupe in-tx menanyakan kandidat global per sourceTimesheetId.
+    expect(costFindManyMock.mock.calls[1][0].where).toEqual({ sourceTimesheetId: { in: [11, 12] } })
+  })
+
+  it("BUGHUNT r3: semua sudah tertarik menurut baca ulang in-tx → 0 baris, tanpa rollup/log dobel", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1 })
+    timesheetFindManyMock.mockResolvedValue([
+      { id: 11, hours: 4, date: new Date(), description: null },
+    ])
+    // Luar tx belum terlihat (pesaing belum commit); dalam tx sudah ada.
+    costFindManyMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ sourceTimesheetId: 11 }])
+    costCreateMock.mockResolvedValue({ id: 1 })
+
+    const res = await pullLaborCostFromTimesheets(7, 1, 25000)
+
+    expect(res.success).toBe(true)
+    expect(res.count).toBe(0)
+    expect(res.added).toBe(0)
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+    expect(logActivityMock).not.toHaveBeenCalled()
   })
 
   it("fails when the work order has no linked project", async () => {

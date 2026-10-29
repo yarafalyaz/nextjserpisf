@@ -59,6 +59,46 @@ export async function availableQty(
 }
 
 /**
+ * Batch `availableQty`: satu groupBy untuk semua pasangan (itemId, warehouseId)
+ * yang diminta — pengganti N panggilan aggregate serial per pasangan.
+ * Semantik persis sama: sum remaining>0 per pasangan, pasangan tanpa lapisan
+ * positif terbaca 0 (absen dari map). Layer ber-warehouseId null tidak pernah
+ * terhitung — sama seperti availableQty(tx, item, wh) yang memfilter warehouse.
+ * Key map `${itemId}:${warehouseId}` (konvensi stock-reservation.service).
+ */
+export async function availableQtyBatch(
+  tx: Tx,
+  pairs: Iterable<{ itemId: number; warehouseId: number }>
+): Promise<Map<string, number>> {
+  const unique = new Map<string, { itemId: number; warehouseId: number }>()
+  for (const p of pairs) {
+    if (p.itemId > 0 && p.warehouseId != null) {
+      unique.set(`${p.itemId}:${p.warehouseId}`, p)
+    }
+  }
+  const result = new Map<string, number>()
+  if (unique.size === 0) return result
+  const itemIds = [...new Set([...unique.values()].map((p) => p.itemId))]
+  const warehouseIds = [...new Set([...unique.values()].map((p) => p.warehouseId))]
+  const rows = await tx.inventoryLayer.groupBy({
+    by: ["itemId", "warehouseId"],
+    where: {
+      itemId: { in: itemIds },
+      warehouseId: { in: warehouseIds },
+      remaining: { gt: 0 },
+    },
+    _sum: { remaining: true },
+  })
+  for (const row of rows) {
+    if (row.warehouseId == null) continue
+    const key = `${row.itemId}:${row.warehouseId}`
+    if (!unique.has(key)) continue
+    result.set(key, Number(row._sum.remaining ?? 0))
+  }
+  return result
+}
+
+/**
  * Consume `qty` from the oldest FIFO layers for an item in a given warehouse.
  * Returns the total cost consumed (for COGS / cost-basis carry-over).
  *
