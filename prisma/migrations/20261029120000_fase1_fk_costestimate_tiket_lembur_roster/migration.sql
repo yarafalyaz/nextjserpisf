@@ -4,15 +4,13 @@
 
 -- B6: FK GoodsReceiptItem (index *_idx dibuat db push; constraint *_fkey).
 ALTER TABLE `goods_receipt_items`
-  ADD KEY `goods_receipt_items_rack_id_idx` (`rack_id`),
-  ADD KEY `goods_receipt_items_rack_row_id_idx` (`rack_row_id`),
   ADD CONSTRAINT `goods_receipt_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `goods_receipt_items_warehouse_id_fkey` FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `goods_receipt_items_rack_id_fkey` FOREIGN KEY (`rack_id`) REFERENCES `racks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `goods_receipt_items_rack_row_id_fkey` FOREIGN KEY (`rack_row_id`) REFERENCES `rack_rows`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `goods_receipt_items_stock_move_id_fkey` FOREIGN KEY (`stock_move_id`) REFERENCES `stock_moves`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- B6: FK TaxGroupTax.taxId.
+-- B6: FK TaxGroupTax.taxId (KEY eksplisit agar nama index = DDL push).
 ALTER TABLE `tax_group_taxes`
   ADD KEY `tax_group_taxes_tax_id_fkey` (`tax_id`),
   ADD CONSTRAINT `tax_group_taxes_tax_id_fkey` FOREIGN KEY (`tax_id`) REFERENCES `taxes`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
