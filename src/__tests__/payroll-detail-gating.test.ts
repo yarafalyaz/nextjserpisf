@@ -25,4 +25,10 @@ describe("detail slip — gerbang process_payroll", () => {
   it("tombol Bayar hanya tampil bila canProcessPayroll", () => {
     expect(source).toMatch(/canProcessPayroll && \(\s*<MarkPaidPayrollButton/)
   })
+
+  it("tombol Koreksi hanya tampil untuk slip paid bila canProcessPayroll", () => {
+    expect(source).toMatch(
+      /payroll\.status === "paid" && canProcessPayroll && \(\s*<CorrectPaidPayrollButton/,
+    )
+  })
 })

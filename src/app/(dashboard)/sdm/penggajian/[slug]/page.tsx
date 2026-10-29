@@ -13,6 +13,7 @@ import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope";
 import { Pencil } from "lucide-react";
 import { ApprovePayrollButton } from "./_components/approve-button";
 import { MarkPaidPayrollButton } from "./_components/mark-paid-button";
+import { CorrectPaidPayrollButton } from "./_components/correct-paid-button";
 import {
   DetailTable,
   DetailTableBody,
@@ -113,6 +114,9 @@ export default async function PayrollDetailPage({
             )}
             {payroll.status === "approved" && canProcessPayroll && (
               <MarkPaidPayrollButton payrollId={payroll.id} />
+            )}
+            {payroll.status === "paid" && canProcessPayroll && (
+              <CorrectPaidPayrollButton payrollId={payroll.id} />
             )}
             <BackButton href="/sdm/penggajian" />
           </div>
