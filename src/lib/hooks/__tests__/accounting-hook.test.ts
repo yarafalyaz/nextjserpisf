@@ -86,6 +86,7 @@ const mocks = vi.hoisted(() => ({
   vendorBillFindUniqueOrThrow: vi.fn(),
   vendorBillFindUnique: vi.fn(),
   goodsReceiptCount: vi.fn(),
+  taxInvoiceFindFirst: vi.fn(),
   vendorPaymentFindUniqueOrThrow: vi.fn(),
   payrollFindUniqueOrThrow: vi.fn(),
   pkwtEventFindUnique: vi.fn().mockResolvedValue(null),
@@ -156,6 +157,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: (...a: unknown[]) => mocks.vendorBillFindUnique(...a),
     },
     goodsReceipt: { count: (...a: unknown[]) => mocks.goodsReceiptCount(...a) },
+    taxInvoice: { findFirst: (...a: unknown[]) => mocks.taxInvoiceFindFirst(...a) },
     vendorPayment: {
       findUniqueOrThrow: (...a: unknown[]) =>
         mocks.vendorPaymentFindUniqueOrThrow(...a),
@@ -1962,6 +1964,7 @@ describe("onVendorBillPosted", () => {
           findUnique: mocks.vendorBillFindUnique,
         },
         goodsReceipt: { count: mocks.goodsReceiptCount },
+        taxInvoice: { findFirst: mocks.taxInvoiceFindFirst },
         account: {
           findMany: mocks.accountFindMany,
           findFirst: mocks.accountFindFirst,
@@ -2002,6 +2005,7 @@ describe("onVendorBillPosted", () => {
       tax: 100,
     });
     mocks.goodsReceiptCount.mockResolvedValue(1);
+    mocks.taxInvoiceFindFirst.mockResolvedValue({ id: 7, djpStatus: "approved", creditStatus: "uncredited" });
     mocks.journalFindFirst.mockResolvedValue(null);
     mocks.vendorBillFindUnique.mockResolvedValue(innerBill);
     await onVendorBillPosted(1, 999);
@@ -2081,9 +2085,56 @@ describe("onVendorBillPosted", () => {
       purchaseOrderId: 5,
     });
     mocks.goodsReceiptCount.mockResolvedValue(1);
+    mocks.taxInvoiceFindFirst.mockResolvedValue({ id: 7, djpStatus: "approved", creditStatus: "uncredited" });
     mocks.journalFindFirst.mockResolvedValue(null);
     await expect(onVendorBillPosted(1)).rejects.toThrow("melebihi total keseluruhan");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("F-002: tanpa TaxInvoice goods-based PPN gabung clearing penuh tanpa baris PPN", async () => {
+    const innerBill = {
+      id: 1,
+      grandTotal: 1100,
+      tax: 100,
+      taxInvoiceNumber: "010.002-26.00000001",
+      date: new Date(),
+      documentNo: "BILL-1",
+    };
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...innerBill,
+      purchaseOrderId: 5,
+      tax: 100,
+    });
+    mocks.goodsReceiptCount.mockResolvedValue(1);
+    mocks.taxInvoiceFindFirst.mockResolvedValue(null);
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.vendorBillFindUnique.mockResolvedValue(innerBill);
+    mocks.journalCreate.mockImplementation((args: any) => Promise.resolve({ id: 9, ...args?.data }));
+    await onVendorBillPosted(1, 999);
+
+    expect(mocks.taxInvoiceFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { vendorBillId: 1, direction: "in" } }),
+    );
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceType: "VendorBill",
+          entries: {
+            create: expect.arrayContaining([
+              expect.objectContaining({ accountId: 135, debit: 1100, credit: 0 }),
+              expect.objectContaining({ accountId: 210, debit: 0, credit: 1100 }),
+            ]),
+          },
+        }),
+      }),
+    );
+    expect(mocks.journalCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          entries: { create: expect.arrayContaining([expect.objectContaining({ accountId: 150 })]) },
+        }),
+      }),
+    );
   });
 });
 

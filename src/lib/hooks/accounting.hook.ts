@@ -2628,12 +2628,16 @@ export async function onVendorBillPosted(
   // and the clearing account is never relieved. Service/expense bills (no GR) keep
   // debiting the expense account.
   const grandTotal = Number(bill.grandTotal);
-  const taxInvoiceValid = isValidVendorTaxInvoiceNumber(
-    (bill as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null,
-  );
   const billTax = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
-  // Putusan 2: tax>0 tanpa nomor valid = PPN gabung HPP, bukan Dr PPN Masukan.
-  const creditInputVat = billTax > 0 && taxInvoiceValid;
+  // R2: gerbang pra-tx samakan dengan tulis dalam-tx — TaxInvoice "in"
+  // approved/credited, bukan validitas nomor tempel.
+  const preTxInvoice = await db.taxInvoice.findFirst({
+    where: { vendorBillId: bill.id, direction: "in" },
+  });
+  const creditInputVat =
+    billTax > 0 &&
+    !!preTxInvoice &&
+    (preTxInvoice.djpStatus === "approved" || preTxInvoice.creditStatus === "credited");
   const hasGoodsReceipt =
     bill.purchaseOrderId != null &&
     (await db.goodsReceipt.count({
@@ -2730,14 +2734,17 @@ export async function onVendorBillPosted(
     if (!b) throw new Error("Bill tidak ditemukan");
 
     const latestGrandTotal = Number(b.grandTotal);
-    // F-2026-10-28-157-V Putusan 2: jalur tulis memakai `b` (re-fetch dalam
-    // tx), bukan `bill` pra-tx — `creditInputVat` dihitung ulang dari nomor
-    // tersimpan agar isi-nomor + posting ulang memecah PPN keluar dari HPP.
+    // R2: PPN masukan hanya Dr PPN bila ada TaxInvoice arah "in"
+    // approved/credited untuk bill ini; tanpa itu PPN gabung clearing
+    // (clearing = grandTotal penuh). Cek via re-fetch `b` dalam tx.
+    const billTaxInvoice = await tx.taxInvoice.findFirst({
+      where: { vendorBillId: b.id, direction: "in" },
+    });
     const latestCreditInputVat =
       (settings.purchaseTaxAccountId ? Number(b.tax ?? 0) : 0) > 0 &&
-      isValidVendorTaxInvoiceNumber(
-        (b as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null,
-      );
+      !!billTaxInvoice &&
+      (billTaxInvoice.djpStatus === "approved" ||
+        billTaxInvoice.creditStatus === "credited");
     const latestTaxAmount = latestCreditInputVat ? Number(b.tax ?? 0) : 0;
 
     // PPh potong-putut: only the net amount is owed to the vendor; the withheld
