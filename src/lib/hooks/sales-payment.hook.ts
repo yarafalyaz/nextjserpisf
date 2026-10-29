@@ -82,19 +82,25 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // Fail-closed TIDAK boleh menggagalkan pembayaran: mapping belum lengkap =
   // catat alasan, lanjut (vonis §5).
   if (status !== "paid") {
-    // Un-accrue: faktur TURUN dari paid (pembayaran dihapus/direversal).
+    // Un-accrue HANYA saat faktur benar-benar TURUN dari paid: recalc atas
+    // faktur yang tak pernah paid (posted/partial sejak awal) juga masuk
+    // cabang ini, dan cancelAccrualTx atas baris yatim warisan akan melempar
+    // "sudah dibayar" berisik padahal tak ada transisi — bedakan dari status
+    // SEBELUM update di atas.
     // Akrual yang lahir saat paid wajib dibalik penuh (vonis §6), bukan
     // dibiarkan sebagai utang yatim atas faktur yang tak lagi lunas.
     // Baris sudah dibayar (paidAmount>0) melempar di cancelAccrualTx —
     // tangkap di sini berkonteks: recalc pembayaran tak boleh gagal hanya
     // karena komisi perlu resolusi manual; saldo historis tetap tercatat.
-    try {
-      await cancelAccrualTx(db, invoiceId, null);
-    } catch (e) {
-      console.error(
-        `[commission] un-accrue faktur #${invoiceId} perlu resolusi manual:`,
-        e instanceof Error ? e.message : e,
-      );
+    if (invoice.status === "paid") {
+      try {
+        await cancelAccrualTx(db, invoiceId, null);
+      } catch (e) {
+        console.error(
+          `[commission] un-accrue faktur #${invoiceId} perlu resolusi manual:`,
+          e instanceof Error ? e.message : e,
+        );
+      }
     }
   }
 
@@ -118,11 +124,11 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
     } catch (e) {
       // Vonis §5: faktur TETAP paid walau akrual gagal (empat status
       // terpisah) — catch ini SENGAJA tidak re-throw agar pembayaran tak
-      // gagal. Jurnal yatim dicegah di sumber: accrueTx menjalankan
+      // gagal. Jurnal tanpa entri dicegah di sumber: accrueTx memvalidasi
       // preflight penuh (mapping/tipe akun, klaim jurnal existing,
-      // assertPeriodOpen) SEBELUM create pertama dalam tx yang sama,
-      // jadi gagal sesudah tulis pertama hampir mustahil; bila tetap
-      // terjadi, tx pemanggil rollback total (par parsial tak commit).
+      // assertPeriodOpen) SEBELUM tulis, dan jurnal+entri lahir sebagai
+      // SATU create bersarang atomik — gagal = nol jurnal, bukan jurnal
+      // kosong yang ikut commit bersama catch ini.
       console.error("[commission] akrual dilewati:", e instanceof Error ? e.message : e);
     }
   }

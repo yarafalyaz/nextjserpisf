@@ -228,6 +228,28 @@ describe("sales-payment recalc — un-accrue komisi", () => {
     expect(mocks.cancelCommission).not.toHaveBeenCalled()
   })
 
+  it("tak pernah paid (posted→posted): cancel TIDAK dipanggil — bukan transisi turun", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 73, grandTotal: 1000, status: "posted" })
+    mocks.paymentFindMany.mockResolvedValueOnce([])
+    await onSalesPaymentUpdated(73)
+    expect(mocks.cancelCommission).not.toHaveBeenCalled()
+    expect(mocks.accrueCommission).not.toHaveBeenCalled()
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "posted" }) }),
+    )
+  })
+
+  it("turun paid→posted (semua pembayaran hilang): cancel dipanggil", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 74, grandTotal: 1000, status: "paid" })
+    mocks.paymentFindMany.mockResolvedValueOnce([])
+    await onSalesPaymentUpdated(74)
+    expect(mocks.cancelCommission).toHaveBeenCalledTimes(1)
+    expect(mocks.cancelCommission.mock.calls[0][1]).toBe(74)
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "posted" }) }),
+    )
+  })
+
   it("cancelAccrualTx throw (sudah dibayar): recalc tetap selesai, status tetap turun", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.cancelCommission.mockRejectedValueOnce(new Error("Un-accrue komisi ditolak: sudah dibayar"))

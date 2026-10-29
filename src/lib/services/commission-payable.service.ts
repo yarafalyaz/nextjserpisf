@@ -58,27 +58,30 @@ async function resolveCommissionAccounts(tx: TxClient): Promise<{ expenseId: num
   }
   const accounts = await tx.account.findMany({
     where: { id: { in: [expenseId, payableId] } },
-    select: { id: true, code: true, reportGroup: true, isActive: true },
+    select: { id: true, code: true, type: true, reportGroup: true, isActive: true, deletedAt: true },
   })
   const expense = accounts.find((a) => a.id === expenseId)
   const payable = accounts.find((a) => a.id === payableId)
   if (!expense || !payable) {
     throw new Error("Akrual komisi ditolak: akun komisi tidak ditemukan. Pilih ulang akun sebelum posting.")
   }
+  if (expense.deletedAt || payable.deletedAt) {
+    throw new Error("Akrual komisi ditolak: akun komisi sudah terhapus. Pilih ulang akun sebelum posting.")
+  }
   if (!expense.isActive || !payable.isActive) {
     throw new Error("Akrual komisi ditolak: akun komisi nonaktif. Aktifkan dulu di COA.")
   }
-  // Beban komisi wajib grup beban (EXPS; instalasi lama berlabel BEBAN).
-  // Mapping tertukar ke akun neraca/pendapatan = jurnal akrual membukukan
-  // beban ke kaki salah.
-  if (expense.reportGroup !== "EXPS" && expense.reportGroup !== "BEBAN") {
+  // Beban komisi wajib grup beban (EXPS; instalasi lama berlabel BEBAN) DAN
+  // tipe EXPENSE. `type` terpisah dari reportGroup: reportGroup benar dengan
+  // type neraca/pendapatan tetap membukukan beban ke kaki salah.
+  if ((expense.reportGroup !== "EXPS" && expense.reportGroup !== "BEBAN") || (expense as { type?: unknown }).type !== "EXPENSE") {
     throw new Error(
-      `Akrual komisi ditolak: akun beban komisi harus grup beban EXPS (dapat ${expense.reportGroup ?? "?"}).`,
+      `Akrual komisi ditolak: akun beban komisi harus grup beban EXPS dan tipe EXPENSE (dapat grup ${expense.reportGroup ?? "?"}, tipe ${(expense as { type?: unknown }).type ?? "?"}).`,
     )
   }
-  if (payable.reportGroup !== "OCLY") {
+  if (payable.reportGroup !== "OCLY" || (payable as { type?: unknown }).type !== "LIABILITY") {
     throw new Error(
-      `Akrual komisi ditolak: akun utang komisi harus tipe OCLY (dapat ${payable.reportGroup ?? "?"}).`,
+      `Akrual komisi ditolak: akun utang komisi harus tipe OCLY dan LIABILITY (dapat grup ${payable.reportGroup ?? "?"}, tipe ${(payable as { type?: unknown }).type ?? "?"}).`,
     )
   }
   return { expenseId, payableId }
@@ -93,6 +96,13 @@ async function resolveCommissionAccounts(tx: TxClient): Promise<{ expenseId: num
 async function lockPayableRow(tx: TxClient, salesInvoiceId: number): Promise<void> {
   if (typeof tx.$executeRaw === "function") {
     await tx.$executeRaw`SELECT id FROM commission_payables WHERE sales_invoice_id = ${salesInvoiceId} FOR UPDATE`
+  }
+}
+
+/** Kunci payable SPESIFIK by-id (jalur slip): kunci baris id itu sendiri. */
+async function lockPayableById(tx: TxClient, payableId: number): Promise<void> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM commission_payables WHERE id = ${payableId} FOR UPDATE`
   }
 }
 
@@ -156,6 +166,10 @@ export async function accrueTx(
   const txDate = new Date()
   await assertPeriodOpen(txDate, tx)
 
+  // Jurnal + entri SATU create bersarang: hook menelan galat akrual (vonis
+  // §5 faktur tetap paid, tx pemanggil commit), jadi create jurnal lalu
+  // createMany entri terpisah bisa commit jurnal TANPA entri bila langkah
+  // kedua gagal. Bersarang = satu pernyataan atomik.
   const journal = await tx.journal.create({
     data: {
       journalNumber: await journalNumber(tx, "KMS", salesInvoiceId),
@@ -168,13 +182,13 @@ export async function accrueTx(
       totalDebit: amount,
       totalCredit: amount,
       createdBy: userId ?? null,
+      entries: {
+        create: [
+          { accountId: expenseId, debit: amount, credit: 0, memo: "Beban komisi penjualan" },
+          { accountId: payableId, debit: 0, credit: amount, memo: "Utang komisi penjualan" },
+        ],
+      },
     },
-  })
-  await tx.journalEntry.createMany({
-    data: [
-      { journalId: journal.id, accountId: expenseId, debit: amount, credit: 0, memo: "Beban komisi penjualan" },
-      { journalId: journal.id, accountId: payableId, debit: 0, credit: amount, memo: "Utang komisi penjualan" },
-    ],
   })
   await tx.commissionPayable.create({
     data: {
@@ -244,7 +258,7 @@ export async function cancelAccrualTx(
   const cancelDate = origin?.transactionDate ?? new Date()
   await assertPeriodOpen(cancelDate, tx)
 
-  const journal = await tx.journal.create({
+  await tx.journal.create({
     data: {
       journalNumber: await journalNumber(tx, "KMC", salesInvoiceId),
       transactionDate: cancelDate,
@@ -256,13 +270,13 @@ export async function cancelAccrualTx(
       totalDebit: outstanding,
       totalCredit: outstanding,
       createdBy: userId ?? null,
+      entries: {
+        create: [
+          { accountId: payableId, debit: outstanding, credit: 0, memo: "Batal utang komisi (un-accrue)" },
+          { accountId: expenseId, debit: 0, credit: outstanding, memo: "Batal beban komisi (un-accrue)" },
+        ],
+      },
     },
-  })
-  await tx.journalEntry.createMany({
-    data: [
-      { journalId: journal.id, accountId: payableId, debit: outstanding, credit: 0, memo: "Batal utang komisi (un-accrue)" },
-      { journalId: journal.id, accountId: expenseId, debit: 0, credit: outstanding, memo: "Batal beban komisi (un-accrue)" },
-    ],
   })
   if (origin && origin.status === "POSTED") {
     await tx.journal.update({ where: { id: origin.id }, data: { status: "REVERSED" } })
@@ -287,6 +301,7 @@ export async function reverseTx(
 ): Promise<{ reversed: number; reason: string | null }> {
   assertJournalClaimRef(COMMISSION_REVERSAL_JOURNAL_REF, returnId)
   await lockPayableRow(tx, salesInvoiceId)
+  await lockInvoiceRow(tx, salesInvoiceId)
 
   const row = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
   // Tak tertaut = tak mengurangi siapa pun (vonis §6): tanpa baris = no-op.
@@ -319,7 +334,7 @@ export async function reverseTx(
   const { expenseId, payableId } = await resolveCommissionAccounts(tx)
   await assertPeriodOpen(salesReturn.date, tx)
 
-  const journal = await tx.journal.create({
+  await tx.journal.create({
     data: {
       journalNumber: await journalNumber(tx, "KMR", returnId),
       transactionDate: salesReturn.date,
@@ -331,13 +346,13 @@ export async function reverseTx(
       totalDebit: lawan,
       totalCredit: lawan,
       createdBy: userId ?? null,
+      entries: {
+        create: [
+          { accountId: payableId, debit: lawan, credit: 0, memo: "Lawan utang komisi retur" },
+          { accountId: expenseId, debit: 0, credit: lawan, memo: "Koreksi beban komisi retur" },
+        ],
+      },
     },
-  })
-  await tx.journalEntry.createMany({
-    data: [
-      { journalId: journal.id, accountId: payableId, debit: lawan, credit: 0, memo: "Lawan utang komisi retur" },
-      { journalId: journal.id, accountId: expenseId, debit: 0, credit: lawan, memo: "Koreksi beban komisi retur" },
-    ],
   })
   await tx.commissionPayable.update({
     where: { id: row.id },
@@ -356,6 +371,9 @@ export async function paidTx(
   amount: number,
   userId?: number | null,
 ): Promise<{ paid: number }> {
+  // Kunci dulu, baru baca (sama seperti paidByIdTx): findFirst tanpa kunci
+  // membaca saldo basi di bawah slip konkuren.
+  await lockPayableRow(tx, salesInvoiceId)
   const row = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
   if (!row) throw new Error(`Tautan bayar komisi ditolak: tanpa baris subledger (faktur #${salesInvoiceId}).`)
   return paidByIdTx(tx, row.id, amount, salesInvoiceId, userId)
@@ -369,6 +387,10 @@ export async function paidByIdTx(
   salesInvoiceId: number,
   userId?: number | null,
 ): Promise<{ paid: number }> {
+  // Kunci baris payable INI (by-id) SEBELUM baca: baca-tanpa-kunci lalu kunci
+  // sesudahnya = jendela TOCTOU — dua slip konkuren sama-sama membaca
+  // paidAmount lama dan sama-sama lolos penjaga sisa.
+  await lockPayableById(tx, payableId)
   const row = await tx.commissionPayable.findUniqueOrThrow({ where: { id: payableId } })
   // Baris slip menaut payableId spesifik; invoice argumen harus MILIK baris
   // itu. Mismatch = tautan silang antar-faktur (lock + penjaga saldo akan
@@ -378,8 +400,6 @@ export async function paidByIdTx(
       `Tautan bayar komisi ditolak: payable #${payableId} milik faktur #${row.salesInvoiceId}, bukan faktur #${salesInvoiceId}.`,
     )
   }
-  // Lock baris yang BENAR (faktur pemilik payable ini), bukan argumen caller.
-  await lockPayableRow(tx, row.salesInvoiceId)
   if (!(amount > 0)) throw new Error("Tautan bayar komisi ditolak: nominal harus lebih dari nol.")
 
   const accrued = Number(row.accruedAmount)
@@ -402,4 +422,40 @@ export async function paidByIdTx(
   })
   void userId
   return { paid: after }
+}
+
+/**
+ * Lawan paidByIdTx untuk koreksi slip paid (correctPaidPayroll): jurnal asal
+ * sudah di-reverse, jadi porsi bayar slip asal wajib keluar dari paidAmount
+ * SEBELUM slip koreksi memposting ulang lewat paidByIdTx — tanpa ini koreksi
+ * selalu tertolak "melebihi sisa" (atau, bila baris tak menaut, utang tak
+ * pernah terbayar ulang). paidAmount tak boleh negatif: nominal lebih besar
+ * dari tercatat = data tak konsisten, tolak berisik (nol tulis).
+ */
+export async function unpaidByIdTx(
+  tx: TxClient,
+  payableId: number,
+  amount: number,
+  salesInvoiceId: number,
+): Promise<{ paid: number }> {
+  await lockPayableById(tx, payableId)
+  const row = await tx.commissionPayable.findUniqueOrThrow({ where: { id: payableId } })
+  if (row.salesInvoiceId !== salesInvoiceId) {
+    throw new Error(
+      `Pelepasan bayar komisi ditolak: payable #${payableId} milik faktur #${row.salesInvoiceId}, bukan faktur #${salesInvoiceId}.`,
+    )
+  }
+  if (!(amount > 0)) throw new Error("Pelepasan bayar komisi ditolak: nominal harus lebih dari nol.")
+  const after = safeRound(Number(row.paidAmount) - amount, 2)
+  if (after < -0.005) {
+    throw new Error(
+      `Pelepasan bayar komisi ditolak: tercatat terbayar ${Number(row.paidAmount)} lebih kecil dari porsi slip asal ${amount} (faktur #${salesInvoiceId}).`,
+    )
+  }
+  const next = Math.max(0, after)
+  await tx.commissionPayable.update({
+    where: { id: row.id },
+    data: { paidAmount: new Prisma.Decimal(next.toFixed(2)) },
+  })
+  return { paid: next }
 }

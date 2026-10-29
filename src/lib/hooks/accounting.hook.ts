@@ -148,16 +148,19 @@ export async function deleteJournalByReferenceTx(
   // the same period lock must gate it. Without this, a user blocked from
   // reversing a closed-period journal could still erase it (and its reversal)
   // by deleting the source document — a silent, unaudited GL rewrite of a
-  // closed period. Draft journals never hit the GL and are skipped.
-  // REVERSED juga wajib lolos: jurnal asal-nya sudah direversal, tetapi
-  // menghapusnya (atau lawan POSTED-nya) di periode tertutup tetap menulis
-  // ulang GL periode itu — gerbang berlaku untuk SEMUA jurnal hasil kaskade,
-  // bukan hanya jangkar POSTED awal (dulu lawan rantai tak pernah dicek).
+  // closed period. REVERSED juga wajib lolos: jurnal asal-nya sudah direversal,
+  // tetapi menghapusnya (atau lawan POSTED-nya) di periode tertutup tetap
+  // menulis ulang GL periode itu — gerbang berlaku untuk SEMUA jurnal hasil
+  // kaskade, bukan hanya jangkar POSTED awal (dulu lawan rantai tak pernah
+  // dicek).
+  // Status TAK dikenal (bukan POSTED/REVERSED persis, mis. warisan huruf kecil
+  // "draft"/"posted") TIDAK diasumsikan aman: gerbang memeriksa SETIAP baris
+  // tanpa cabang status, supaya varian status tak pernah lolos senyap. Biaya:
+  // draf murni di periode tertutup kini ikut tertahan — aman (fail-closed);
+  // draf tak pernah perlu dihapus dari periode yang sudah ditutup.
   const assertCascadePeriodOpen = async (rows: Array<{ status: string; transactionDate: Date }>) => {
     for (const j of rows) {
-      if (j.status === "POSTED" || j.status === "REVERSED") {
-        await assertPeriodOpen(j.transactionDate, tx);
-      }
+      await assertPeriodOpen(j.transactionDate, tx);
     }
   };
   await assertCascadePeriodOpen(journals);

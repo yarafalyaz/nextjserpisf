@@ -28,7 +28,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   },
 }))
 
-import { accrueTx, cancelAccrualTx, paidByIdTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
+import { accrueTx, cancelAccrualTx, paidByIdTx, paidTx, reverseTx, unpaidByIdTx } from "@/lib/services/commission-payable.service"
 
 const D = (n: number) => new Prisma.Decimal(n.toFixed(2))
 
@@ -42,11 +42,11 @@ interface Row {
   accrualJournalId: number | null
 }
 
-/** TxClient palsu: cukup untuk accrue/reverse/paid. */
+/** TxClient palsu: cukup untuk accrue/reverse/paid. Lock calls dicatat berurutan. */
 function makeTx(opts?: {
   invoice?: Record<string, unknown>
   settings?: Record<string, unknown> | null
-  accounts?: Array<{ id: number; reportGroup: string | null; isActive: boolean }>
+  accounts?: Array<{ id: number; type?: string; reportGroup: string | null; isActive: boolean; deletedAt?: Date | null }>
   payable?: Row | null
   journalExists?: boolean
   originJournal?: { id: number; status: string; transactionDate: Date } | null
@@ -73,6 +73,7 @@ function makeTx(opts?: {
     ...(opts?.invoice ?? {}),
   }
   const tx = {
+    $executeRaw: async () => 1,
     commissionPayable: {
       findFirst: async () => state.payable,
       findUnique: async ({ where }: { where: { id: number } }) =>
@@ -120,7 +121,10 @@ function makeTx(opts?: {
         return { id: where.id }
       },
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        const j = { id: state.nextJournal++, referenceType: data.referenceType as string, referenceId: data.referenceId as number, entries: [] as Array<{ accountId: number; debit: unknown; credit: unknown }> }
+        // Entri bersarang (data.entries.create) tercatat bersama jurnalnya —
+        // mencerminkan create atomik produksi.
+        const nested = (data.entries as { create?: Array<{ accountId: number; debit: unknown; credit: unknown }> } | undefined)?.create ?? []
+        const j = { id: state.nextJournal++, referenceType: data.referenceType as string, referenceId: data.referenceId as number, entries: [...nested] as Array<{ accountId: number; debit: unknown; credit: unknown }> }
         state.journals.push(j)
         return j
       },
@@ -137,8 +141,8 @@ function makeTx(opts?: {
 
 const SETTINGS = { commissionExpenseAccountId: 600, commissionPayableAccountId: 210 }
 const ACCOUNTS = [
-  { id: 600, reportGroup: "EXPS", isActive: true },
-  { id: 210, reportGroup: "OCLY", isActive: true },
+  { id: 600, type: "EXPENSE", reportGroup: "EXPS", isActive: true, deletedAt: null },
+  { id: 210, type: "LIABILITY", reportGroup: "OCLY", isActive: true, deletedAt: null },
 ]
 
 describe("commission-payable accrue", () => {
@@ -223,10 +227,27 @@ describe("commission-payable reverse", () => {
         id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
         accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(0), accrualJournalId: 7,
       },
-      journalExists: true,
+      // Jurnal lawan retur #5 SUDAH ada dari panggilan pertama.
+      seedJournals: [{ id: 99, referenceType: "CommissionPayableReversal", referenceId: 5 }],
     })
     await expect(reverseTx(tx, 1, 5, 1_000_000)).resolves.toEqual({ reversed: 0, reason: null })
-    expect(state.journals).toHaveLength(0)
+    expect(state.journals).toHaveLength(1)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(220000)
+  })
+
+  it("jurnal yatim ref LAIN dengan referenceId sama ≠ replay: lawan baru tetap dinilai kumulatif", async () => {
+    // referenceId=5 dipakai jurnal akrual (bukan CommissionPayableReversal):
+    // tidak boleh dibaca sebagai replay retur #5.
+    const { tx } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(0), accrualJournalId: 7,
+      },
+      seedJournals: [{ id: 99, referenceType: "CommissionPayableAccrual", referenceId: 5 }],
+    })
+    await expect(reverseTx(tx, 1, 5, 1_000_000)).rejects.toThrow(/melebihi akrual/)
   })
 
   it("tanpa baris subledger = tak mengurangi siapa pun", async () => {
@@ -300,6 +321,35 @@ describe("commission-payable paidById dua payable (faktor beda)", () => {
     await expect(paidByIdTx(tx, 7, 220000, 3)).resolves.toEqual({ paid: 220000 })
     expect(rows[1].paidAmount.toNumber()).toBe(200000)
   })
+
+  it("kunci by-id SEBELUM baca: urutan lock→findUniqueOrThrow (bukan baca→kunci)", async () => {
+    const order: string[] = []
+    const rows: Row[] = [
+      { id: 7, salesInvoiceId: 3, salesEmployeeId: 9, accruedAmount: D(220000), reversalAmount: D(0), paidAmount: D(0), accrualJournalId: 7 },
+      { id: 8, salesInvoiceId: 4, salesEmployeeId: 10, accruedAmount: D(500000), reversalAmount: D(0), paidAmount: D(0), accrualJournalId: 8 },
+    ]
+    const tx = {
+      $executeRaw: async () => { order.push("lock"); return 1 },
+      commissionPayable: {
+        findUniqueOrThrow: async ({ where }: { where: { id: number } }) => {
+          order.push("read")
+          const row = rows.find((r) => r.id === where.id)
+          if (!row) throw new Error("No CommissionPayable found")
+          return row
+        },
+        update: async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+          const row = rows.find((r) => r.id === where.id)!
+          if (data.paidAmount) row.paidAmount = data.paidAmount as Prisma.Decimal
+          return row
+        },
+      },
+    }
+    await paidByIdTx(tx as never, 8, 100000, 4)
+    expect(order[0]).toBe("lock")
+    expect(order.indexOf("read")).toBeGreaterThan(order.indexOf("lock"))
+    expect(rows[1].paidAmount.toNumber()).toBe(100000)
+    expect(rows[0].paidAmount.toNumber()).toBe(0)
+  })
 })
 
 describe("commission-payable paidById", () => {
@@ -308,8 +358,8 @@ describe("commission-payable paidById", () => {
       makeTx({
         settings: { commissionExpenseAccountId: 600002, commissionPayableAccountId: 210212 },
         accounts: [
-          { id: 600002, reportGroup: "BEBAN", isActive: true },
-          { id: 210212, reportGroup: "OCLY", isActive: true },
+          { id: 600002, type: "EXPENSE", reportGroup: "BEBAN", isActive: true, deletedAt: null },
+          { id: 210212, type: "LIABILITY", reportGroup: "OCLY", isActive: true, deletedAt: null },
         ],
         payable: {
           id: 7, salesInvoiceId: 3, salesEmployeeId: 9,
@@ -325,6 +375,35 @@ describe("commission-payable paidById", () => {
     const t = mk()
     const out = await paidByIdTx(t.tx as never, 7, 100000, 3)
     expect(out.paid).toBe(100000)
+  })
+})
+
+describe("commission-payable unpaidById (koreksi slip paid)", () => {
+  const PAYABLE: Row = {
+    id: 7, salesInvoiceId: 3, salesEmployeeId: 9,
+    accruedAmount: D(220000), reversalAmount: D(0), paidAmount: D(220000), accrualJournalId: 7,
+  }
+
+  it("lepas porsi slip asal: paidAmount turun, lalu paidByIdTx bayar ulang lolos plafon", async () => {
+    const { tx, state } = makeTx({ payable: { ...PAYABLE } })
+    await expect(unpaidByIdTx(tx as never, 7, 220000, 3)).resolves.toEqual({ paid: 0 })
+    expect(state.payable?.paidAmount.toNumber()).toBe(0)
+    // Bayar ulang senilai sama (jalur onPayrollPaid slip koreksi) tak lagi
+    // tertolak kumulatif — inilah yang membuat koreksi slip berkomisi bisa.
+    await expect(paidByIdTx(tx as never, 7, 220000, 3)).resolves.toEqual({ paid: 220000 })
+    expect(state.payable?.paidAmount.toNumber()).toBe(220000)
+  })
+
+  it("faktur argumen bukan pemilik payable ditolak, paidAmount utuh", async () => {
+    const { tx, state } = makeTx({ payable: { ...PAYABLE } })
+    await expect(unpaidByIdTx(tx as never, 7, 100000, 999)).rejects.toThrow(/milik faktur #3, bukan faktur #999/)
+    expect(state.payable?.paidAmount.toNumber()).toBe(220000)
+  })
+
+  it("pelepasan melebihi tercatat ditolak (paidAmount tak boleh negatif)", async () => {
+    const { tx, state } = makeTx({ payable: { ...PAYABLE, paidAmount: D(100000) } })
+    await expect(unpaidByIdTx(tx as never, 7, 220000, 3)).rejects.toThrow(/lebih kecil dari porsi slip asal/)
+    expect(state.payable?.paidAmount.toNumber()).toBe(100000)
   })
 })
 
@@ -406,8 +485,8 @@ describe("commission-payable preflight & validasi akun", () => {
     const bad = makeTx({
       settings: SETTINGS,
       accounts: [
-        { id: 600, reportGroup: "OCLY", isActive: true },
-        { id: 210, reportGroup: "OCLY", isActive: true },
+        { id: 600, type: "EXPENSE", reportGroup: "OCLY", isActive: true, deletedAt: null },
+        { id: 210, type: "LIABILITY", reportGroup: "OCLY", isActive: true, deletedAt: null },
       ],
     })
     await expect(accrueTx(bad.tx, 1)).rejects.toThrow(/grup beban EXPS/)
@@ -416,10 +495,45 @@ describe("commission-payable preflight & validasi akun", () => {
     const ok = makeTx({
       settings: SETTINGS,
       accounts: [
-        { id: 600, reportGroup: "BEBAN", isActive: true },
-        { id: 210, reportGroup: "OCLY", isActive: true },
+        { id: 600, type: "EXPENSE", reportGroup: "BEBAN", isActive: true, deletedAt: null },
+        { id: 210, type: "LIABILITY", reportGroup: "OCLY", isActive: true, deletedAt: null },
       ],
     })
     await expect(accrueTx(ok.tx, 1)).resolves.toMatchObject({ accrued: true, amount: 220000 })
+  })
+
+  it("grup benar tapi TIPE salah ditolak: beban wajib EXPENSE, utang wajib LIABILITY", async () => {
+    const badExpense = makeTx({
+      settings: SETTINGS,
+      accounts: [
+        { id: 600, type: "ASSET", reportGroup: "EXPS", isActive: true, deletedAt: null },
+        { id: 210, type: "LIABILITY", reportGroup: "OCLY", isActive: true, deletedAt: null },
+      ],
+    })
+    await expect(accrueTx(badExpense.tx, 1)).rejects.toThrow(/tipe EXPENSE/)
+    expect(badExpense.state.journals).toHaveLength(0)
+    expect(badExpense.state.payable).toBeNull()
+
+    const badPayable = makeTx({
+      settings: SETTINGS,
+      accounts: [
+        { id: 600, type: "EXPENSE", reportGroup: "EXPS", isActive: true, deletedAt: null },
+        { id: 210, type: "REVENUE", reportGroup: "OCLY", isActive: true, deletedAt: null },
+      ],
+    })
+    await expect(accrueTx(badPayable.tx, 1)).rejects.toThrow(/tipe OCLY dan LIABILITY/)
+    expect(badPayable.state.journals).toHaveLength(0)
+  })
+
+  it("akun terhapus (deletedAt) ditolak walau grup/tipe benar", async () => {
+    const gone = makeTx({
+      settings: SETTINGS,
+      accounts: [
+        { id: 600, type: "EXPENSE", reportGroup: "EXPS", isActive: true, deletedAt: new Date() },
+        { id: 210, type: "LIABILITY", reportGroup: "OCLY", isActive: true, deletedAt: null },
+      ],
+    })
+    await expect(accrueTx(gone.tx, 1)).rejects.toThrow(/sudah terhapus/)
+    expect(gone.state.journals).toHaveLength(0)
   })
 })

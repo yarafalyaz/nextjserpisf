@@ -420,17 +420,33 @@ describe("deleteJournalByReference", () => {
     expect(mocks.deleteManyJournals).not.toHaveBeenCalled();
   });
 
-  it("does not period-lock DRAFT journals (never hit the GL)", async () => {
+  it("period-gates every cascaded row, even non-POSTED spellings (fail-closed)", async () => {
+    // BUGHUNT round2 item 7 follow-up: status check used strict
+    // POSTED/REVERSED equality, so legacy/lowercase spellings slipped the
+    // period gate. Now every cascaded row is gated; open period still deletes.
+    const d = new Date("2026-05-20");
     mocks.findMany
-      .mockResolvedValueOnce([
-        { id: 1, status: "draft", transactionDate: new Date("2026-05-20") },
-      ])
+      .mockResolvedValueOnce([{ id: 1, status: "draft", transactionDate: d }])
       .mockResolvedValueOnce([]);
     await deleteJournalByReference("VendorBill", 100);
-    expect(mocks.assertPeriodOpen).not.toHaveBeenCalled();
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(d, expect.anything());
     expect(mocks.deleteManyJournals).toHaveBeenCalledWith({
       where: { id: { in: [1] } },
     });
+  });
+
+  it("blocks cascade when a non-canonical status journal sits in a closed period", async () => {
+    mocks.findMany.mockResolvedValueOnce([
+      { id: 1, status: "posted", transactionDate: new Date("2026-05-20") },
+    ]);
+    mocks.assertPeriodOpen.mockRejectedValueOnce(
+      new Error("Periode akuntansi sudah ditutup"),
+    );
+    await expect(deleteJournalByReference("VendorBill", 100)).rejects.toThrow(
+      "Periode akuntansi sudah ditutup",
+    );
+    expect(mocks.deleteManyEntries).not.toHaveBeenCalled();
+    expect(mocks.deleteManyJournals).not.toHaveBeenCalled();
   });
 
   it("uses provided txClient if passed", async () => {
@@ -2740,6 +2756,36 @@ describe("onPayrollPaid — baris komisi nyata (tahap 3, round2)", () => {
     await expect(onPayrollPaid(1, 999, tx as never)).rejects.toThrow(/melebihi sisa/)
     expect(commissionUpdates).toHaveLength(0)
     expect(Number(payables.get(101)!.paidAmount)).toBe(550_000)
+  })
+
+  it("multi-baris slip: tiap paidTx menyasar payable by-id sendiri, baris lain tak tersentuh (round2 19/20)", async () => {
+    payables.set(101, { id: 101, salesInvoiceId: 5001, accruedAmount: 700_000, reversalAmount: 0, paidAmount: 0 })
+    payables.set(202, { id: 202, salesInvoiceId: 5002, accruedAmount: 300_000, reversalAmount: 0, paidAmount: 0 })
+    commissionLines = [
+      { commissionPayableId: 202, commissionInvoiceId: 5002, amount: 120_000 },
+      { commissionPayableId: 101, commissionInvoiceId: 5001, amount: 250_000 },
+    ]
+    const tx = commissionTx()
+    await onPayrollPaid(1, 999, tx as never)
+    expect(Number(payables.get(101)!.paidAmount)).toBe(250_000)
+    expect(Number(payables.get(202)!.paidAmount)).toBe(120_000)
+    expect(commissionUpdates.map((u) => u.id).sort()).toEqual([101, 202])
+  })
+
+  it("multi-baris slip overpay di baris kedua melempar (tx pemanggil rollback), baris pertama tak tertulis permanen dari sudut pandang hook", async () => {
+    payables.set(101, { id: 101, salesInvoiceId: 5001, accruedAmount: 700_000, reversalAmount: 0, paidAmount: 0 })
+    payables.set(202, { id: 202, salesInvoiceId: 5002, accruedAmount: 300_000, reversalAmount: 250_000, paidAmount: 0 })
+    // Baris kedua: sisa 50rb, minta 100rb -> tolak.
+    commissionLines = [
+      { commissionPayableId: 101, commissionInvoiceId: 5001, amount: 250_000 },
+      { commissionPayableId: 202, commissionInvoiceId: 5002, amount: 100_000 },
+    ]
+    const tx = commissionTx()
+    await expect(onPayrollPaid(1, 999, tx as never)).rejects.toThrow(/melebihi sisa/)
+    // Hook melempar di tengah loop -> tx pemanggil (markPayrollPaid) rollback;
+    // mock di sini bukan tx asli jadi update pertama terlihat, tapi error
+    // menjamin pemanggil tidak commit.
+    expect(Number(payables.get(202)!.paidAmount)).toBe(0)
   })
 })
 

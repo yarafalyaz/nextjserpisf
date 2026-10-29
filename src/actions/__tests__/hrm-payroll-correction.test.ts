@@ -28,6 +28,8 @@ let payrollSeq: number
 let componentLinesByPayroll: Map<number, any[]>
 let pkwtBlocking: { id: number; status: string } | null
 let forceCreateP2002 = false
+let commissionPayableById: Map<number, any>
+let commissionPayableUpdates: Array<{ id: number; paidAmount: number }>
 
 const BASE_SOURCE = () => ({
   id: 1,
@@ -115,7 +117,32 @@ function txClient() {
         }
         return { count: data.length }
       },
+      update: async ({ where, data }: any) => {
+        for (const arr of componentLinesByPayroll.values()) {
+          const ix = arr.findIndex((l: any) => l.id === where.id)
+          if (ix >= 0) {
+            arr[ix] = { ...arr[ix], ...data }
+            return { ...arr[ix] }
+          }
+        }
+        throw new Error("line not found")
+      },
     },
+    commissionPayable: {
+      findUniqueOrThrow: async ({ where }: any) => {
+        const row = commissionPayableById.get(where.id)
+        if (!row) throw new Error("No CommissionPayable found")
+        return row
+      },
+      update: async ({ where, data }: any) => {
+        const row = commissionPayableById.get(where.id)
+        if (!row) throw new Error("payable not found")
+        row.paidAmount = data.paidAmount
+        commissionPayableUpdates.push({ id: where.id, paidAmount: Number(data.paidAmount) })
+        return row
+      },
+    },
+    $executeRaw: async () => 1,
   }
 }
 
@@ -177,6 +204,8 @@ beforeEach(() => {
     [9, [{ id: 11, remainingAmount: 1000000, status: "active", loanDate: new Date("2026-09-01T00:00:00Z") }]],
   ])
   componentLinesByPayroll = new Map()
+  commissionPayableById = new Map()
+  commissionPayableUpdates = []
   payrollSeq = 1
   pkwtBlocking = null
   requirePermissionMock.mockResolvedValue({ id: 7, roles: ["finance"] })
@@ -298,6 +327,66 @@ describe("correctPaidPayroll E-HRCR (HR-BR-005 133-S/135-V)", () => {
     expect(res.error).not.toMatch(/[0-9]{7,}/)
     expect(logActivityMock).not.toHaveBeenCalled()
     expect(payrollById.size).toBe(1)
+  })
+
+  it("komisi: tautan payable pindah ke slip koreksi + paidAmount dilepas sebelum bayar ulang", async () => {
+    // Regresi BUGHUNT round2 residual: klon baris dulu membuang
+    // commissionPayableId/commissionInvoiceId — slip koreksi tak menaut
+    // bayar, utang komisi yatim. Salinan verbatim pun mustahil:
+    // commissionPayableId @unique (satu payable satu baris slip).
+    componentLinesByPayroll = new Map([
+      [1, [{
+        id: 41, payrollId: 1, componentId: 9,
+        componentNameSnapshot: "Komisi Penjualan", kindSnapshot: "earning",
+        recurrenceSnapshot: "variable", isTaxableSnapshot: true,
+        source: "commission", assignmentId: null, accountIdSnapshot: 210212,
+        amount: 250000, pkwtEventId: null, pkwtSettledViaAccrual: null,
+        commissionPayableId: 101, commissionInvoiceId: 5001,
+      }]],
+    ])
+    commissionPayableById = new Map([
+      [101, { id: 101, salesInvoiceId: 5001, salesEmployeeId: 9, accruedAmount: 700000, reversalAmount: 0, paidAmount: 250000 }],
+    ])
+
+    const res = await correctPaidPayroll(1, fd("Koreksi slip berkomisi"))
+    expect(res.success).toBe(true)
+
+    // Baris koreksi (slip 2) membawa kedua tautan; baris asal dilepas.
+    const correctionLines = componentLinesByPayroll.get(2) ?? []
+    expect(correctionLines).toHaveLength(1)
+    expect(correctionLines[0].commissionPayableId).toBe(101)
+    expect(correctionLines[0].commissionInvoiceId).toBe(5001)
+    expect(componentLinesByPayroll.get(1)![0].commissionPayableId).toBeNull()
+    // Snapshot faktur baris asal utuh sebagai jejak historis.
+    expect(componentLinesByPayroll.get(1)![0].commissionInvoiceId).toBe(5001)
+
+    // paidAmount dilepas sebesar porsi slip asal SEBELUM onPayrollPaid
+    // koreksi (yang membayar ulang lewat paidByIdTx di hook nyata):
+    // tanpa pelepasan, bayar ulang selalu "melebihi sisa".
+    expect(commissionPayableUpdates).toEqual([{ id: 101, paidAmount: 0 }])
+    expect(onPayrollPaidMock).toHaveBeenCalledTimes(1)
+    expect(onPayrollPaidMock.mock.calls[0][0]).toBe(2)
+  })
+
+  it("komisi: pelepasan melebihi paidAmount tercatat ditolak, nol slip koreksi", async () => {
+    componentLinesByPayroll = new Map([
+      [1, [{
+        id: 41, payrollId: 1, componentId: 9,
+        componentNameSnapshot: "Komisi Penjualan", kindSnapshot: "earning",
+        recurrenceSnapshot: "variable", isTaxableSnapshot: true,
+        source: "commission", assignmentId: null, accountIdSnapshot: 210212,
+        amount: 250000, pkwtEventId: null, pkwtSettledViaAccrual: null,
+        commissionPayableId: 101, commissionInvoiceId: 5001,
+      }]],
+    ])
+    commissionPayableById = new Map([
+      [101, { id: 101, salesInvoiceId: 5001, salesEmployeeId: 9, accruedAmount: 700000, reversalAmount: 0, paidAmount: 100000 }],
+    ])
+    const res = await correctPaidPayroll(1, fd("Koreksi slip berkomisi rusak"))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Pelepasan bayar komisi ditolak")
+    expect(commissionPayableUpdates).toEqual([])
+    expect(onPayrollPaidMock).not.toHaveBeenCalled()
   })
 
   it("BR-HRCR-10: slip sumber PKWT paid menahan koreksi dengan menyebut penahan", async () => {

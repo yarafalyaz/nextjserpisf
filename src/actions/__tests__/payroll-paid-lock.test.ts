@@ -40,7 +40,8 @@ vi.mock("@/lib/db/prisma", () => ({
 }))
 
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
-vi.mock("@/lib/hooks/accounting.hook", () => ({ onPayrollPaid: vi.fn() }))
+const onPayrollPaidMock = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/hooks/accounting.hook", () => ({ onPayrollPaid: onPayrollPaidMock }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 
 import { markPayrollPaid } from "../hrm.actions"
@@ -74,6 +75,27 @@ describe("markPayrollPaid concurrency guard", () => {
     const result = await markPayrollPaid(1)
     expect(result.success).toBe(false)
     expect(loanFindManyMock).not.toHaveBeenCalled()
+    expect(onPayrollPaidMock).not.toHaveBeenCalled()
+  })
+
+  it("onPayrollPaid dipanggil DALAM tx yang sama (tautan komisi paidByIdTx ikut rollback bila gagal) — round2 19", async () => {
+    // Cakupan nyata delegasi paidByIdTx hidup di accounting-hook.test.ts
+    // (baris komisi nyata); di sini kontrak wiring: hook menerima tx aksi,
+    // bukan client global — kegagalan hook = aksi gagal, klaim tak commit.
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(true)
+    expect(onPayrollPaidMock).toHaveBeenCalledTimes(1)
+    const [pid, , txArg] = onPayrollPaidMock.mock.calls[0]
+    expect(pid).toBe(1)
+    expect(txArg).toBeDefined()
+    expect(typeof txArg.$executeRaw).toBe("function")
+    expect(typeof txArg.payrollComponentLine?.findMany).toBe("function")
+  })
+
+  it("kegagalan hook komisi menggagalkan aksi (success=false, bukan commit senyap)", async () => {
+    onPayrollPaidMock.mockRejectedValueOnce(new Error("Tautan bayar komisi ditolak: melebihi sisa"))
+    const result = await markPayrollPaid(1)
+    expect(result.success).toBe(false)
   })
 
   it("AC-LSV-2: menolak bayar bila potongan Pasal 63 slip tersimpan menembus 50% upah", async () => {
