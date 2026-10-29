@@ -53,6 +53,12 @@ export const PERMISSIONS = [
       "view_tax_payments",
       "create_tax_payments",
       "delete_tax_payments",
+      // F-2026-10-27-113-S Q-TXD-8 (putusan Lead PR #1407): key BARU
+      // register sengketa pajak (tolak reuse view_tax_payments — register
+      // memuat strategi hukum). Fail-closed; empat mata di server action.
+      "view_tax_disputes",
+      "create_tax_disputes",
+      "edit_tax_disputes",
       "create_tax_invoices",
       "manage_withholding_certificates",
       "view_invoice_exchanges",

@@ -109,6 +109,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   vendor_prices: "Harga Pemasok",
   tax_payments: "Penyetoran Pajak",
   tax_invoices: "Faktur Pajak",
+  tax_disputes: "Sengketa Pajak",
   purchase_requests: "Permintaan Pembelian",
   purchase_returns: "Retur Pembelian",
   racks: "Rak",
