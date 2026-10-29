@@ -21,6 +21,7 @@ import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
 import { payrollStatutoryGateError } from "@/lib/services/payroll-statutory.service";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 
 type WorkflowStepInput = {
   name?: string;
@@ -53,6 +54,32 @@ async function logMoneyGateChange(
     `Workflow gerbang uang ${workflow.modelType} (${workflow.name}) ${action === "delete" ? "dihapus" : "dinonaktifkan"} — gerbang persetujuan dokumen uang mati sampai workflow aktif pengganti dibuat`,
     { modelType: workflow.modelType },
   );
+}
+
+const HR_REFERENCE_TYPES = new Set(["Payroll", "EmployeeLoan", "LeaveRequest", "OvertimeRequest"]);
+const HR_REFERENCE_MODELS: Record<string, string> = {
+  Payroll: "payroll",
+  EmployeeLoan: "employeeLoan",
+  LeaveRequest: "leaveRequest",
+  OvertimeRequest: "overtimeRequest",
+};
+
+async function assertHrScopeForApproval(
+  tx: any,
+  referenceType: string,
+  referenceId: number,
+  user: { id: string; roles: string[]; permissions?: string[] },
+): Promise<void> {
+  if (!HR_REFERENCE_TYPES.has(referenceType)) return;
+  const modelKey = HR_REFERENCE_MODELS[referenceType];
+  const doc = await tx[modelKey]?.findUnique({
+    where: { id: referenceId },
+    select: { employeeId: true },
+  });
+  if (!doc) throw new Error("Dokumen tidak ditemukan");
+  if (doc.employeeId == null) return;
+  const scope = await getHrScope(user);
+  await assertHrEmployeeAccess(scope, doc.employeeId);
 }
 
 const APPROVED_BY_MODELS = new Set([
@@ -215,6 +242,8 @@ export async function approveStep(approvalId: number, formData: FormData) {
         throw new Error("Maker-Checker Constraint: Anda tidak diperbolehkan menyetujui transaksi yang Anda buat sendiri.");
       }
 
+      await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
+
       // Create history entry
       await tx.approvalHistory.create({
         data: {
@@ -256,18 +285,19 @@ export async function approveStep(approvalId: number, formData: FormData) {
           // terminal — slip gaji `paid` tidak boleh di-resurrect jadi
           // `approved` lewat jalur approval generik (approvePayroll/
           // markPayrollPaid sendiri sudah draft->approved->paid searah).
-          // where bersyarat = klaim atomik: slip paid kalah klaim -> tolak.
+          // where bersyarat = klaim atomik: hanya draft -> approved;
+          // rejected/paid kalah klaim -> tolak (jangan resurrect).
           const terminalGuarded = new Set(["Payroll"]);
           if (terminalGuarded.has(approval.referenceType)) {
             const claimed = await docModel.updateMany({
-              where: { id: approval.referenceId, status: { not: "paid" } },
+              where: { id: approval.referenceId, status: "draft" },
               data: {
                 status: docStatus,
                 ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
               },
             });
             if (claimed.count === 0) {
-              throw new Error("Dokumen sudah dibayar (paid) — tidak bisa disetujui ulang.");
+              throw new Error("Slip gaji hanya dapat disetujui dari status draft.");
             }
           } else {
             await docModel.update({
@@ -372,6 +402,8 @@ export async function rejectStep(approvalId: number, formData: FormData) {
       if (!user.roles.includes("super_admin") && approval.requestedBy !== null && approval.requestedBy === Number(user.id)) {
         throw new Error("Maker-Checker Constraint: Anda tidak diperbolehkan menolak transaksi yang Anda buat sendiri.");
       }
+
+      await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
 
       // Create history entry
       await tx.approvalHistory.create({
