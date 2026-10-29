@@ -433,10 +433,23 @@ export async function rejectStep(approvalId: number, formData: FormData) {
         if (REJECTION_REASON_MODELS.has(approval.referenceType)) {
           data.rejectionReason = notes || null;
         }
-        await docModel.update({
-          where: { id: approval.referenceId },
-          data,
-        });
+        // Sama seperti approveStep: slip gaji terminal (paid) tidak boleh
+        // ditulis ulang lewat jalur generik — klaim atomik dari draft/approved
+        // saja, count 0 = sudah final/ditolak -> tolak tanpa resurrect.
+        if (approval.referenceType === "Payroll") {
+          const claimed = await docModel.updateMany({
+            where: { id: approval.referenceId, status: { in: ["draft", "approved"] } },
+            data,
+          });
+          if (claimed.count === 0) {
+            throw new Error("Slip gaji hanya dapat ditolak dari status draft atau approved.");
+          }
+        } else {
+          await docModel.update({
+            where: { id: approval.referenceId },
+            data,
+          });
+        }
       }
     });
 

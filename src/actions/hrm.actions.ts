@@ -1189,6 +1189,13 @@ export async function approveOvertime(overtimeId: number) {
       where: { id: overtimeId },
       include: { employee: { select: { baseSalary: true } } },
     });
+    // Jalur manual (route workflow tanpa workflow aktif + server action
+    // langsung) wajib scope sama dengan approveStep generik: tanpa ini
+    // pemegang approve_overtime_requests bisa menghitung/menyetujui lembur
+    // karyawan di luar team/department/self-nya. Workflow-approved lolos
+    // karena approveStep sudah cek scope sebelum flip; cek ulang di sini
+    // idempoten untuk aktor sama.
+    await assertHrEmployeeAccess(await getHrScope(user), ot.employeeId);
     // A document reachable here is either:
     //   • "pending"  — no multi-level workflow configured; this manual approval
     //     is the only gate, so it must compute the value AND flip the status, or
@@ -3583,6 +3590,25 @@ export async function correctPaidPayroll(
       const sourceLines = await tx.payrollComponentLine.findMany({
         where: { payrollId },
       });
+      // Baris komisi: tautan payable DIPINDAH ke slip koreksi, bukan disalin.
+      // commissionPayableId @unique — salinan verbatim tabrak P2002; tanpa
+      // tautan, onPayrollPaid koreksi tak pernah menaut bayar. Jurnal asal
+      // sudah di-reverse di (1), jadi porsi bayar asal dilepas dulu
+      // (unpaidByIdTx), lalu jurnal koreksi di (4) membayar ulang senilai
+      // baris lewat paidByIdTx: paidAmount berakhir sama, tertaut slip
+      // koreksi. Urutan dalam tx sama = atomik; gagal di tengah = rollback.
+      const { unpaidByIdTx } = await import(
+        "@/lib/services/commission-payable.service"
+      );
+      for (const l of sourceLines) {
+        if (l.commissionPayableId == null) continue;
+        await unpaidByIdTx(
+          tx as never,
+          l.commissionPayableId,
+          Number(l.amount),
+          Number(l.commissionInvoiceId ?? 0),
+        );
+      }
       if (sourceLines.length > 0) {
         await tx.payrollComponentLine.createMany({
           data: sourceLines.map((l) => ({
@@ -3598,7 +3624,18 @@ export async function correctPaidPayroll(
             amount: l.amount,
             pkwtEventId: l.pkwtEventId,
             pkwtSettledViaAccrual: l.pkwtSettledViaAccrual,
+            commissionPayableId: l.commissionPayableId,
+            commissionInvoiceId: l.commissionInvoiceId,
           })),
+        });
+      }
+      // Tautan asal dilepas sesudah klon tertaut (satu baris payable paling
+      // banyak satu baris slip kapan pun di luar tx pun terbaca konsisten).
+      for (const l of sourceLines) {
+        if (l.commissionPayableId == null) continue;
+        await tx.payrollComponentLine.update({
+          where: { id: l.id },
+          data: { commissionPayableId: null },
         });
       }
 
@@ -4420,8 +4457,14 @@ export async function updateAttendance(id: number, formData: FormData) {
 
 export async function deleteAttendance(id: number) {
   try {
-    await requirePermission("manage_attendance");
-    await prisma.attendance.delete({ where: { id: requirePositiveId(id, "absensi") } });
+    const user = await requirePermission("manage_attendance");
+    const attendanceId = requirePositiveId(id, "absensi");
+    const existing = await prisma.attendance.findUniqueOrThrow({
+      where: { id: attendanceId },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(await getHrScope(user), existing.employeeId);
+    await prisma.attendance.delete({ where: { id: attendanceId } });
     await logActivity("delete", "Attendance", id, `Menghapus absensi #${id}`);
     revalidatePath("/sdm/absensi");
     return { success: true as const };
@@ -5639,6 +5682,7 @@ export async function createPkwtEvent(formData: FormData) {
     const user = await requirePermission("edit_payroll");
     const employeeId = Number(formData.get("employeeId"));
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
+    await assertHrEmployeeAccess(await getHrScope(user), employeeId);
     const segmentStart = parsePkwtDate(formData.get("segmentStart"), "mulai segmen");
     const segmentEnd = parsePkwtDate(formData.get("segmentEnd"), "akhir segmen");
     const agreementRaw = formData.get("agreementAmount");
@@ -5676,6 +5720,12 @@ export async function approvePkwtEvent(eventId: number) {
   try {
     const user = await requirePermission("process_payroll");
     if (!Number.isSafeInteger(eventId) || eventId <= 0) throw new Error("Peristiwa PKWT tidak valid");
+    const event = await prisma.pkwtCompensationEvent.findUnique({
+      where: { id: eventId },
+      select: { employeeId: true },
+    });
+    if (!event) throw new Error("Peristiwa kompensasi PKWT tidak ditemukan.");
+    await assertHrEmployeeAccess(await getHrScope(user), event.employeeId);
     await approvePkwtCompensationEvent(prisma, eventId, Number((user as { id: unknown }).id));
     await logActivity("approve", "PkwtCompensationEvent", eventId, "Menyetujui peristiwa kompensasi PKWT");
     revalidatePath("/sdm/penggajian");

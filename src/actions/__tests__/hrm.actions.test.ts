@@ -688,6 +688,18 @@ describe("Overtime Request Actions", () => {
     })
   })
 
+  it("round2 residual: approveOvertime team scope menolak lembur di luar tim, nol hitung/flip", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, employeeId: 99, status: "pending", hours: 2, date: new Date("2026-06-12T00:00:00Z"), calculatedValue: null, employee: { baseSalary: 5_000_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
   it("updateOvertimeRequest rejects an edit beyond the 4h workday limit (K2-S1)", async () => {
     // Syarat vonis K2-S1: gerbang PP 35/2021 yang sama dengan create wajib
     // berlaku di update. Edit pengajuan pending ke 5 jam pada hari kerja
@@ -2267,6 +2279,36 @@ describe("Absensi Actions", () => {
     const bad = await actions.deleteAttendance(0)
     expect(bad.success).toBe(false)
     expect(prismaMock.attendance.delete).toHaveBeenCalledTimes(1)
+  })
+
+  it("round2 residual: deleteAttendance team scope menolak absensi di luar tim, nol hapus", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    prismaMock.attendance.findUniqueOrThrow.mockResolvedValue({ employeeId: 99 })
+    const res = await actions.deleteAttendance(7)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("tidak memiliki akses")
+    expect(prismaMock.attendance.delete).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("round2 residual: createPkwtEvent team scope menolak karyawan di luar tim", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    const res = await actions.createPkwtEvent(fd({
+      employeeId: "99", segmentStart: "2026-01-01", segmentEnd: "2026-06-30",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("round2 residual: approvePkwtEvent team scope menolak peristiwa karyawan di luar tim", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    ;(prismaMock as any).pkwtCompensationEvent = (prismaMock as any).pkwtCompensationEvent ?? { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) }
+    ;(prismaMock as any).pkwtCompensationEvent.findUnique = vi.fn().mockResolvedValue({ employeeId: 99 })
+    const res = await actions.approvePkwtEvent(5)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    mocks.hrScopeOverride.current = null
   })
 })
 

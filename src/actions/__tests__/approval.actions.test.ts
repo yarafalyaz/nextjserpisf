@@ -702,4 +702,28 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
       expect.objectContaining({ where: { id: 9, status: "draft" } }),
     );
   });
+
+  it("rejectStep Payroll paid tidak ditulis ulang (klaim draft/approved count 0)", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({ employeeId: 7 });
+    mocks.prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow("hanya dapat ditolak dari status draft atau approved");
+    expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 9, status: { in: ["draft", "approved"] } } }),
+    );
+  });
+
+  it("rejectStep Payroll draft tetap rejected lewat klaim atomik", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({ employeeId: 7 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 9, status: { in: ["draft", "approved"] } },
+        data: expect.objectContaining({ status: "rejected" }),
+      }),
+    );
+    expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
+  });
 });
