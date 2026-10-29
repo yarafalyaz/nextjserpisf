@@ -5,19 +5,6 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 import { act } from "react"
 
-const toast = vi.hoisted(() => ({ ok: [] as string[], err: [] as string[] }))
-
-// Blok mock bersama confirm-button-test-utils: renderer daun diuji lewat
-// helper itu, bukan jsdom ulang di tiap berkas (pola repo).
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
-}))
-
-vi.mock("@/lib/utils/toast", () => ({
-  showSuccess: (m: string) => { toast.ok.push(m) },
-  showError: (m: string) => { toast.err.push(m) },
-}))
-
 import { TaxInvoiceNumberButton } from "../tax-invoice-number-button"
 import {
   newTestContainer,
@@ -25,11 +12,23 @@ import {
   clickTestEl,
   unmountTestUi,
 } from "./confirm-button-test-utils"
+import { testToastCalls as toast, resetTestToastCalls } from "./test-toast-store"
 
-beforeEach(() => {
-  toast.ok = []
-  toast.err = []
+// Blok mock bersama confirm-button-test-utils: renderer daun diuji lewat
+// helper itu, bukan jsdom ulang di tiap berkas (pola repo).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}))
+
+vi.mock("@/lib/utils/toast", async (importOriginal) => {
+  const store = await import("./test-toast-store")
+  return {
+    showSuccess: (m: string) => { store.testToastCalls.ok.push(m) },
+    showError: (m: string) => { store.testToastCalls.err.push(m) },
+  }
 })
+
+beforeEach(resetTestToastCalls)
 
 function setInput(v: string) {
   const input = document.querySelector("input[name='taxInvoiceNumber']") as HTMLInputElement | null
