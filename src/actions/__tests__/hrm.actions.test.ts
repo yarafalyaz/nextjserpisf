@@ -2428,3 +2428,67 @@ describe("TASK-018 regresi payroll (bulk TER, gerbang, final, plafon, pinjaman)"
     expect(upd.data.remainingAmount).toBe(500000)
   })
 })
+
+/**
+ * F-2026-10-29-162-V — penjaga anggaran bayar + dokumen 07/08 (E162-1/3/5).
+ */
+describe("BR-LOAN E162-1/3/5 — guard bayar + dokumen setor/write-off", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    restoreTerBracketMock()
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    mocks.hrScopeOverride.current = { kind: "all" }
+  })
+
+  it("E162-1 bayar: Σ potongan termasuk statutori > bruto = tolak sebelum klaim, nol status/nol jurnal", async () => {
+    // Cicilan 0,5jt + komponen 0,2jt = 0,7jt <= 50% x 10jt (plafon 65 lolos)
+    // agar sampai ke gerbang BR-LOAN-03: + statutori 9,6jt = 10,3jt > 10jt.
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({
+      id: 7, status: "approved", employeeId: 1, loanDeduction: 500000,
+      grossSalary: 10000000, lateDeduction: 0, deductions: 200000, absentDeduction: 0,
+      bpjsHealthEmployee: 1600000, bpjsEmploymentEmployee: 3200000, pph21: 4800000,
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
+      netSalary: 0, totalAmount: 0, paymentDate: null, payrollBankAccountId: 602,
+      salaryExpenseAccountId: 601, salariesPayableAccountId: 603, employeeReceivableAccountId: 604,
+    })
+    const r = await actions.markPayrollPaid(7)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("BR-LOAN-03")
+    expect(prismaMock.payroll.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("E162-5 setor: bukti/alasan wajib; kelebihan di atas sisa ditolak berisik", async () => {
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({
+      id: 3, employeeId: 1, status: "active", remainingAmount: 400000,
+    })
+    const tanpaBukti = await actions.recordEmployeeLoanCashRepayment(
+      (() => { const f = new FormData(); f.set("loanId", "3"); f.set("amount", "100000"); f.set("cashAccountId", "100"); f.set("repaymentDate", "2026-10-29"); return f })(),
+    )
+    expect(tanpaBukti?.success).toBe(false)
+    expect(tanpaBukti?.error).toMatch(/Bukti/)
+    const lebih = await actions.recordEmployeeLoanCashRepayment(
+      (() => { const f = new FormData(); f.set("loanId", "3"); f.set("amount", "500000"); f.set("cashAccountId", "100"); f.set("repaymentDate", "2026-10-29"); f.set("notes", "kelebihan"); return f })(),
+    )
+    expect(lebih?.success).toBe(false)
+    expect(lebih?.error).toMatch(/kelebihan/i)
+  })
+
+  it("E162-3 write-off: alasan wajib; pinjaman lunas ditolak", async () => {
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({
+      id: 4, employeeId: 1, status: "active", remainingAmount: 250000,
+    })
+    const tanpaAlasan = await actions.writeOffEmployeeLoan(
+      (() => { const f = new FormData(); f.set("loanId", "4"); f.set("writeOffDate", "2026-10-29"); return f })(),
+    )
+    expect(tanpaAlasan?.success).toBe(false)
+    expect(tanpaAlasan?.error).toMatch(/Alasan/)
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({
+      id: 5, employeeId: 1, status: "paid_off", remainingAmount: 0,
+    })
+    const lunas = await actions.writeOffEmployeeLoan(
+      (() => { const f = new FormData(); f.set("loanId", "5"); f.set("writeOffDate", "2026-10-29"); f.set("reason", "tak tertagih"); return f })(),
+    )
+    expect(lunas?.success).toBe(false)
+    expect(lunas?.error).toMatch(/lunas/)
+  })
+})

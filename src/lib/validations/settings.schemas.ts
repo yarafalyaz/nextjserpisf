@@ -213,6 +213,9 @@ export const updateSystemSettingsSchema = z.object({
   salariesPayableAccountId: optionalInt(),
   payrollBankAccountId: optionalInt(),
   employeeReceivableAccountId: optionalInt(),
+  // F-2026-10-29-162-V (c): beban write-off piutang karyawan, default 720007
+  // OEXP. Kosong = posting write-off fail-closed berisik.
+  employeeLoanWriteOffExpenseAccountId: optionalInt(),
   payrollJournalTypeId: optionalInt(),
 
   // Accounting - Fixed Assets

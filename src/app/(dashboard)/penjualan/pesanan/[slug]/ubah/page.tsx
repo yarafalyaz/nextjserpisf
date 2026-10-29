@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import { SalesOrderForm } from "@/components/forms/sales-order-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { LockedEditGuard } from "@/components/ui/locked-edit-guard";
 
 import type { Metadata } from "next";
 
@@ -29,6 +30,39 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // GL-BR-003 K1: cermin guard server updateSalesOrder fail-closed
+  // (cancelled/completed/setelah-pelunasan-nyata pasti ditolak). Status
+  // lain tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
+  // `data` non-null sesudah notFound (TS tak menyempit via throw).
+  const lockedOrder = data as NonNullable<typeof data>;
+  function orderLockedGuard() {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Pesanan Penjualan",
+          sectionHref: "/penjualan/pesanan",
+          documentKind: "Pesanan Penjualan",
+          documentNo: lockedOrder.documentNo,
+          slug: lockedOrder.slug ?? lockedOrder.id,
+          correctionLabel: "retur/void faktur turunan",
+          backLabel: "Kembali ke detail pesanan",
+        }}
+      />
+    );
+  }
+  if (lockedOrder.status === "cancelled" || lockedOrder.status === "completed") {
+    return orderLockedGuard();
+  }
+  const orderRealSettlementCount = await prisma.salesPayment.count({
+    where: {
+      NOT: { paymentMethod: "down_payment" },
+      salesInvoice: { salesOrderId: lockedOrder.id },
+    },
+  });
+  if (orderRealSettlementCount > 0) {
+    return orderLockedGuard();
+  }
 
   const [customers] = await Promise.all([
     prisma.customer.findMany({

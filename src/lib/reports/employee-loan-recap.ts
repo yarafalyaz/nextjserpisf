@@ -169,9 +169,11 @@ export function buildEmployeeLoanRecap(
   const perEmployee = new Map<number, EmployeeAcc>()
 
   for (const row of rows) {
-    // BR-LR46-02: rejected/paid_off tidak pernah membentuk baris rekap —
-    // riwayat lunas/ditolak wilayah daftar transaksional, bukan sisa berjalan.
-    if (row.status === "rejected" || row.status === "paid_off") continue
+    // BR-LR46-02: rejected/paid_off/written_off tidak pernah membentuk baris
+    // rekap — riwayat lunas/ditolak/dihapus wilayah daftar transaksional,
+    // bukan sisa berjalan. written_off ikut final (162-V PUT-LOAN-2): sisa
+    // dinolkan dokumen write-off, bukan populasi aktif.
+    if (row.status === "rejected" || row.status === "paid_off" || row.status === "written_off") continue
 
     const acc = perEmployee.get(row.employeeId) ?? emptyEmployeeAcc(row)
     if (acc.employeeName === null && row.employeeName !== null) {

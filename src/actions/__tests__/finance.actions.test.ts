@@ -72,6 +72,7 @@ vi.mock("@/lib/finance/pettycash-posting", () => ({
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   onExpenseApproved: vi.fn().mockResolvedValue({}),
   onPettyCashCreated: vi.fn().mockResolvedValue({}),
+  reverseJournalsByReferenceTx: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/hooks/expense.hook", () => ({
   onExpenseApprovedSyncPettyCash: vi.fn().mockResolvedValue({}),
@@ -864,9 +865,12 @@ describe("Petty Cash Actions", () => {
     expect(res?.error).toMatch(/Validasi gagal/)
     expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
   })
-  it("deletePettyCash succeeds", async () => {
+  it("deletePettyCash tanpa alasan ditolak sebelum mutasi (GL-BR-003 P6 void beralasan)", async () => {
+    // Kontrak void: alasan wajib; tanpa alasan = tolak sebelum mutasi apa pun.
     const res = await (actions as any).deletePettyCash(1)
-    expect(res?.success).toBe(true)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/alasan/i)
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
   })
 })
 
@@ -1362,13 +1366,23 @@ describe("Additional Branches", () => {
     expect(mocks.prismaMock.pettyCash.update).toHaveBeenCalled()
   })
 
-  it("deletePettyCash deletes existing journals", async () => {
+  it("deletePettyCash beralasan = void: jurnal asal dipertahankan, fisik tidak dihapus", async () => {
+    // GL-BR-003 P6: hard-delete dilarang; void = status void + deletedAt,
+    // jurnal lawan via helper (di-mock di berkas ini), lampiran tidak dihapus.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.journal.findMany.mockResolvedValue([{ id: 100 }])
-    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", documentNo: "PC-01" })
-    const res = await actions.deletePettyCash(1)
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "posted", documentNo: "PC-01",
+      date: new Date("2026-09-15"), transactionDate: null,
+    })
+    const res = await actions.deletePettyCash(1, "Salah input, koreksi via void")
     expect(res.success).toBe(true)
-    expect(mocks.prismaMock.journalEntry.deleteMany).toHaveBeenCalled()
+    expect(mocks.prismaMock.pettyCash.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 } }),
+    )
+    expect(mocks.prismaMock.pettyCash.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journal.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.journalEntry.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.logActivityMock).toHaveBeenCalledWith("void", "PettyCash", 1, expect.stringContaining("PC-01"))
   })
 })
 
