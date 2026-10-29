@@ -148,7 +148,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+    <form onSubmit={handleSubmit} aria-label="Formulir inspeksi QC" className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="checklist">Checklist *</Label>
@@ -201,10 +201,12 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="referenceId">ID Dokumen *</Label>
+          <Label htmlFor="referenceId">ID Dokumen Referensi *</Label>
           <Input
             id="referenceId"
             type="number"
+            required
+            min={1}
             value={referenceId}
             onChange={(e) => setReferenceId(e.target.value)}
             placeholder="mis. 123"
@@ -257,6 +259,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
                       <DetailTableTd>
                         <Input
                           value={r?.measured ?? ""}
+                          aria-label={`Nilai ukur ${it.itemName}`}
                           onChange={(e) => setResult(it.id, { measured: e.target.value })}
                           placeholder="Nilai"
                         />
@@ -264,6 +267,7 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
                       <DetailTableTd>
                         <Input
                           value={r?.note ?? ""}
+                          aria-label={`Catatan ${it.itemName}`}
                           onChange={(e) => setResult(it.id, { note: e.target.value })}
                           placeholder="Catatan"
                         />

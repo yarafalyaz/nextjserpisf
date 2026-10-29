@@ -150,10 +150,14 @@ export default async function CalendarPage({
         ))}
       </div>
 
-      <div className="rounded-xl border border-default overflow-hidden">
+      <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0 sm:overflow-visible">
+        <div className="min-w-[560px] sm:min-w-0 rounded-xl border border-default overflow-hidden">
         <div className="grid grid-cols-7 bg-surface-muted border-b border-default">
-          {WEEKDAY_LABELS.map((day) => (
-            <div key={day} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">{day}</div>
+          {WEEKDAY_LABELS.map((day, index) => (
+            <div key={day} className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="hidden sm:inline">{day}</span>
+              <span className="sm:hidden">{["M", "S", "S", "R", "K", "J", "S"][index]}</span>
+            </div>
           ))}
         </div>
         {weeks.map((week, weekIndex) => (
@@ -163,7 +167,7 @@ export default async function CalendarPage({
               return (
                 <div
                   key={day.key}
-                  className={`min-h-[110px] border-r border-default last:border-r-0 p-1.5 flex flex-col gap-1 ${day.inMonth ? "bg-surface" : "bg-surface-muted/40"}`}
+                  className={`min-h-[72px] p-1 sm:min-h-[110px] sm:p-1.5 border-r border-default last:border-r-0 flex flex-col gap-1 ${day.inMonth ? "bg-surface" : "bg-surface-muted/40"}`}
                 >
                   <span className={`text-xs font-semibold ${day.isToday ? "inline-flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground" : day.inMonth ? "text-foreground" : "text-muted-foreground"}`}>
                     {day.date.getDate()}
@@ -173,19 +177,25 @@ export default async function CalendarPage({
                       key={`${event.kind}-${event.label}-${index}`}
                       href={event.href}
                       title={`${KIND_STYLES[event.kind].label}: ${event.label}${event.amount !== null ? ` — ${formatCurrency(event.amount)}` : ""}`}
-                      className={`truncate rounded border px-1.5 py-0.5 text-[11px] leading-tight ${KIND_STYLES[event.kind].chip}`}
+                      className={`truncate rounded border px-1.5 py-0.5 text-[11px] leading-tight max-sm:hidden ${KIND_STYLES[event.kind].chip}`}
                     >
                       {event.label}
                     </Link>
                   ))}
+                  {dayEvents.length > 0 && (
+                    <span className="text-[10px] font-medium text-primary sm:hidden">
+                      {dayEvents.length} acr
+                    </span>
+                  )}
                   {dayEvents.length > 3 && (
-                    <span className="text-[11px] text-muted-foreground">+{dayEvents.length - 3} lagi</span>
+                    <span className="text-[11px] text-muted-foreground max-sm:hidden">+{dayEvents.length - 3} lagi</span>
                   )}
                 </div>
               )
             })}
           </div>
         ))}
+        </div>
       </div>
     </div>
   )
