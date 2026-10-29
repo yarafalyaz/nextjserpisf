@@ -48,18 +48,24 @@ export default async function DownPaymentsPage({
     }),
   };
 
-  const rawDps = await prisma.downPayment.findMany({
-    where,
-    include: { quotation: { include: { customer: true } } },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  });
+  const [rawDps, total] = await Promise.all([
+    prisma.downPayment.findMany({
+      where,
+      include: { quotation: { include: { customer: true } } },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.downPayment.count({ where }),
+  ]);
 
   // Snapshot PPN verbatim server per DP (read-model PR #785) untuk kolom
-  // ringkas daftar — halaman tidak menghitung ulang PPN.
+  // ringkas daftar — halaman tidak menghitung ulang PPN. Hanya DP halaman ini.
   const vatByDpId = new Map(
-    (await loadDownPaymentTaxStatusRows()).map((row) => [row.downPaymentId, row]),
+    (await loadDownPaymentTaxStatusRows({ downPaymentIds: rawDps.map((d) => d.id) })).map((row) => [
+      row.downPaymentId,
+      row,
+    ]),
   );
 
   const dps = rawDps.map((dp) => ({
@@ -71,8 +77,6 @@ export default async function DownPaymentsPage({
     createdAt: dp.createdAt,
     vatSnapshot: vatByDpId.get(dp.id) ?? null,
   }));
-
-  const total = await prisma.downPayment.count({ where })
 
   const tableData = toPlain(dps);
 

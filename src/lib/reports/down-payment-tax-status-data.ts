@@ -42,11 +42,14 @@ export async function loadDownPaymentTaxStatusRows(input?: {
   confirmedOnly?: boolean
   /** Batasi ke satu DP by id (detail) — didorong ke `where`, bukan saring di memori. */
   downPaymentId?: number
+  /** Batasi ke sekumpulan DP by id (daftar terpaginasi) — didorong ke `where`. */
+  downPaymentIds?: number[]
 }): Promise<DownPaymentTaxStatusRow[]> {
   const rows = await prisma.downPayment.findMany({
     where: {
       ...(input?.confirmedOnly ? { status: "confirmed" } : {}),
       ...(input?.downPaymentId != null ? { id: input.downPaymentId } : {}),
+      ...(input?.downPaymentIds ? { id: { in: input.downPaymentIds } } : {}),
     },
     orderBy: { paymentDate: "desc" },
     include: {

@@ -80,6 +80,17 @@ describe("loadDownPaymentTaxStatusRows", () => {
     expect(rows.map((r: { downPaymentId: number }) => r.downPaymentId)).toEqual([1, 2])
   })
 
+  it("downPaymentIds didorong ke where id-in (kontrak daftar terpaginasi)", async () => {
+    mocks.findDownPayments.mockResolvedValue([dpRow(2), dpRow(5)])
+
+    const rows = await loadDownPaymentTaxStatusRows({ downPaymentIds: [2, 5] })
+
+    expect(mocks.findDownPayments.mock.calls[0]?.[0]?.where).toEqual({
+      id: { in: [2, 5] },
+    })
+    expect(rows.map((r: { downPaymentId: number }) => r.downPaymentId)).toEqual([2, 5])
+  })
+
   it("confirmedOnly saja: where status confirmed (kontrak laporan pajak)", async () => {
     mocks.findDownPayments.mockResolvedValue([dpRow(1)])
 
