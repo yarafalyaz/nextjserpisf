@@ -34,9 +34,11 @@ const IDEMPOTENT_HOOKS: Record<string, { refs: string[]; reason: string }> = {
       "pembayaran vendor",
       "penggajian",
       "pinjaman karyawan",
+      "setoran tunai pinjaman karyawan",
+      "write-off pinjaman karyawan",
     ],
     reason:
-      "11 hook posting jurnal; tiap cek idempotensi (luar + dalam-tx) mencatat console.info",
+      "13 hook posting jurnal; tiap cek idempotensi (luar + dalam-tx) mencatat console.info",
   },
   "src/lib/hooks/expense.hook.ts": {
     refs: ["sudah punya kas kecil"],

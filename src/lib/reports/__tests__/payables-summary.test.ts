@@ -99,10 +99,10 @@ describe("buildPayablesSummary", () => {
 
   it("keeps currency arithmetic free of float drift", () => {
     const summary = buildPayablesSummary(
-      [bill({ documentNo: "VB-X", grandTotal: 0.3, paidAmount: 0.1 })],
+      [bill({ documentNo: "VB-X", grandTotal: 10.3, paidAmount: 0.1 })],
       asOf,
     )
-    expect(summary.rows[0].outstanding).toBe(0.2)
+    expect(summary.rows[0].outstanding).toBe(10.2)
   })
 
   it("returns an empty summary for no bills", () => {
