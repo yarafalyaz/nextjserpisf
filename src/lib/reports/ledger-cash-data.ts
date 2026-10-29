@@ -534,120 +534,136 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
     paymentsByCustomer.set(customerId, list)
   }
 
-  const openOrders = await prisma.salesOrder.findMany({
-    where: { status: { in: ["confirmed", "processing", "completed"] }, deletedAt: null },
-    select: { id: true, customerId: true, grandTotal: true },
-  })
-  const invoicedByOrder = new Map<number, number>()
-  if (openOrders.length > 0) {
-    const orderInvoices = await prisma.salesInvoice.findMany({
-      where: {
-        salesOrderId: { in: openOrders.map((o) => o.id) },
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-      },
-      select: { salesOrderId: true, grandTotal: true },
-    })
-    for (const inv of orderInvoices) {
-      if (inv.salesOrderId == null) continue
-      invoicedByOrder.set(inv.salesOrderId, safeAdd(invoicedByOrder.get(inv.salesOrderId) ?? 0, inv.grandTotal, 2))
-    }
-  }
-  const openOrderByCustomer = new Map<number, number>()
-  for (const order of openOrders) {
-    const open = Math.max(0, receivableOutstanding(order.grandTotal, invoicedByOrder.get(order.id) ?? 0))
-    if (open <= 0) continue
-    openOrderByCustomer.set(order.customerId, safeAdd(openOrderByCustomer.get(order.customerId) ?? 0, open, 2))
-  }
-
-  // K3 efektif pilihan (b) vonis V3: DP confirmed yang quotation-nya sudah
-  // punya invoice recognised gugur (sudah mengurangi K1 lewat paidAmount).
-  let confirmedDpByCustomer = new Map<number, number>()
-  const confirmedDps = await prisma.downPayment.findMany({
-    where: { status: "confirmed" },
-    select: { customerId: true, quotationId: true, amount: true },
-  })
-  if (confirmedDps.length > 0) {
-    const dpQuotationIds = [...new Set(confirmedDps.map((d) => d.quotationId))]
-    const recognisedDpInvoices = await prisma.salesInvoice.findMany({
-      where: {
-        quotationId: { in: dpQuotationIds },
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-      },
-      select: { quotationId: true },
-    })
-    confirmedDpByCustomer = effectiveConfirmedDownPaymentByCustomer(
-      confirmedDps.map((d) => ({ customerId: d.customerId, quotationId: d.quotationId, amount: Number(d.amount) })),
-      new Set(recognisedDpInvoices.map((i) => i.quotationId).filter((id): id is number => id != null)),
-    )
-  }
-
-  // K4: CustomerCredit terbuka, saldo per baris max(0, received-allocated-refunded).
-  const openCredits = await prisma.customerCredit.findMany({
-    where: { status: "open" },
-    select: { customerId: true, receivedAmount: true, allocatedAmount: true, refundedAmount: true },
-  })
-  const openCreditByCustomer = openCustomerCreditByCustomer(
-    openCredits.map((c) => ({
-      customerId: c.customerId,
-      receivedAmount: Number(c.receivedAmount),
-      allocatedAmount: Number(c.allocatedAmount),
-      refundedAmount: Number(c.refundedAmount),
-    })),
-  )
-
-  // K5: WO berjalan belum terwakili, nilai per QUOTATION (bukan per WO).
-  const activeWorkOrders = await prisma.workOrder.findMany({
-    where: { status: { in: ["draft", "pending", "in_progress"] } },
-    select: { customerId: true, quotationId: true },
-  })
-  const woQuotationIds = [...new Set(activeWorkOrders.map((w) => w.quotationId).filter((id): id is number => id != null))]
-  let woByCustomer = new Map<number, number>()
-  let woNoQuotationByCustomer = new Map<number, number>()
-  const extraCustomers = new Map<number, { name: string; creditLimit: number }>()
-  if (woQuotationIds.length > 0) {
-    const [woQuotations, woOrders, woInvoices] = await Promise.all([
-      prisma.quotation.findMany({
-        where: { id: { in: woQuotationIds }, deletedAt: null },
-        select: { id: true, customerId: true, grandTotal: true, customer: { select: { name: true, creditLimit: true } } },
-      }),
-      prisma.salesOrder.findMany({
-        where: { quotationId: { in: woQuotationIds }, status: { not: "cancelled" }, deletedAt: null },
-        select: { quotationId: true, grandTotal: true },
-      }),
-      prisma.salesInvoice.findMany({
+  // K2/K3/K4/K5 snapshot status saat ini (SO terbuka, DP confirmed, kredit
+  // terbuka, WO berjalan): secara definisi all-time — tak ada saringan
+  // periode yang ekuivalen. Empat blok independen -> paralel.
+  const [openOrderByCustomer, confirmedDpByCustomer, openCreditByCustomer, woBlock] = await Promise.all([
+    (async () => {
+      const openOrders = await prisma.salesOrder.findMany({
+        where: { status: { in: ["confirmed", "processing", "completed"] }, deletedAt: null },
+        select: { id: true, customerId: true, grandTotal: true },
+      })
+      const invoicedByOrder = new Map<number, number>()
+      if (openOrders.length > 0) {
+        const orderInvoices = await prisma.salesInvoice.findMany({
+          where: {
+            salesOrderId: { in: openOrders.map((o) => o.id) },
+            status: { in: [...RECOGNISED_AR_STATUSES] },
+            deletedAt: null,
+          },
+          select: { salesOrderId: true, grandTotal: true },
+        })
+        for (const inv of orderInvoices) {
+          if (inv.salesOrderId == null) continue
+          invoicedByOrder.set(inv.salesOrderId, safeAdd(invoicedByOrder.get(inv.salesOrderId) ?? 0, inv.grandTotal, 2))
+        }
+      }
+      const byCustomer = new Map<number, number>()
+      for (const order of openOrders) {
+        const open = Math.max(0, receivableOutstanding(order.grandTotal, invoicedByOrder.get(order.id) ?? 0))
+        if (open <= 0) continue
+        byCustomer.set(order.customerId, safeAdd(byCustomer.get(order.customerId) ?? 0, open, 2))
+      }
+      return byCustomer
+    })(),
+    (async () => {
+      // K3 efektif pilihan (b) vonis V3: DP confirmed yang quotation-nya
+      // sudah punya invoice recognised gugur (sudah mengurangi K1).
+      const confirmedDps = await prisma.downPayment.findMany({
+        where: { status: "confirmed" },
+        select: { customerId: true, quotationId: true, amount: true },
+      })
+      if (confirmedDps.length === 0) return new Map<number, number>()
+      const dpQuotationIds = [...new Set(confirmedDps.map((d) => d.quotationId))]
+      const recognisedDpInvoices = await prisma.salesInvoice.findMany({
         where: {
-          quotationId: { in: woQuotationIds },
+          quotationId: { in: dpQuotationIds },
           status: { in: [...RECOGNISED_AR_STATUSES] },
           deletedAt: null,
         },
-        select: { quotationId: true, grandTotal: true },
-      }),
-    ])
-    const woResult = woUnrepresentedByCustomer({
-      workOrders: activeWorkOrders,
-      quotations: woQuotations.map((q) => ({ id: q.id, customerId: q.customerId, grandTotal: Number(q.grandTotal) })),
-      salesOrders: woOrders.map((o) => ({ quotationId: o.quotationId, grandTotal: Number(o.grandTotal) })),
-      invoices: woInvoices.map((i) => ({ quotationId: i.quotationId, grandTotal: Number(i.grandTotal) })),
-    })
-    woByCustomer = woResult.byCustomer
-    woNoQuotationByCustomer = woResult.withoutQuotationByCustomer
-    for (const quotation of woQuotations) {
-      if ((woByCustomer.get(quotation.customerId) ?? 0) <= 0) continue
-      extraCustomers.set(quotation.customerId, {
-        name: quotation.customer.name,
-        creditLimit: Number(quotation.customer.creditLimit ?? 0),
+        select: { quotationId: true },
       })
-    }
-  } else if (activeWorkOrders.length > 0) {
-    woNoQuotationByCustomer = woUnrepresentedByCustomer({
-      workOrders: activeWorkOrders,
-      quotations: [],
-      salesOrders: [],
-      invoices: [],
-    }).withoutQuotationByCustomer
-  }
+      return effectiveConfirmedDownPaymentByCustomer(
+        confirmedDps.map((d) => ({ customerId: d.customerId, quotationId: d.quotationId, amount: Number(d.amount) })),
+        new Set(recognisedDpInvoices.map((i) => i.quotationId).filter((id): id is number => id != null)),
+      )
+    })(),
+    (async () => {
+      // K4: CustomerCredit terbuka, saldo per baris
+      // max(0, received-allocated-refunded).
+      const openCredits = await prisma.customerCredit.findMany({
+        where: { status: "open" },
+        select: { customerId: true, receivedAmount: true, allocatedAmount: true, refundedAmount: true },
+      })
+      return openCustomerCreditByCustomer(
+        openCredits.map((c) => ({
+          customerId: c.customerId,
+          receivedAmount: Number(c.receivedAmount),
+          allocatedAmount: Number(c.allocatedAmount),
+          refundedAmount: Number(c.refundedAmount),
+        })),
+      )
+    })(),
+    (async () => {
+      // K5: WO berjalan belum terwakili, nilai per QUOTATION.
+      const activeWorkOrders = await prisma.workOrder.findMany({
+        where: { status: { in: ["draft", "pending", "in_progress"] } },
+        select: { customerId: true, quotationId: true },
+      })
+      const woQuotationIds = [...new Set(activeWorkOrders.map((w) => w.quotationId).filter((id): id is number => id != null))]
+      const result = {
+        byCustomer: new Map<number, number>(),
+        withoutQuotationByCustomer: new Map<number, number>(),
+        extraCustomers: new Map<number, { name: string; creditLimit: number }>(),
+      }
+      if (woQuotationIds.length > 0) {
+        const [woQuotations, woOrders, woInvoices] = await Promise.all([
+          prisma.quotation.findMany({
+            where: { id: { in: woQuotationIds }, deletedAt: null },
+            select: { id: true, customerId: true, grandTotal: true, customer: { select: { name: true, creditLimit: true } } },
+          }),
+          prisma.salesOrder.findMany({
+            where: { quotationId: { in: woQuotationIds }, status: { not: "cancelled" }, deletedAt: null },
+            select: { quotationId: true, grandTotal: true },
+          }),
+          prisma.salesInvoice.findMany({
+            where: {
+              quotationId: { in: woQuotationIds },
+              status: { in: [...RECOGNISED_AR_STATUSES] },
+              deletedAt: null,
+            },
+            select: { quotationId: true, grandTotal: true },
+          }),
+        ])
+        const woResult = woUnrepresentedByCustomer({
+          workOrders: activeWorkOrders,
+          quotations: woQuotations.map((q) => ({ id: q.id, customerId: q.customerId, grandTotal: Number(q.grandTotal) })),
+          salesOrders: woOrders.map((o) => ({ quotationId: o.quotationId, grandTotal: Number(o.grandTotal) })),
+          invoices: woInvoices.map((i) => ({ quotationId: i.quotationId, grandTotal: Number(i.grandTotal) })),
+        })
+        result.byCustomer = woResult.byCustomer
+        result.withoutQuotationByCustomer = woResult.withoutQuotationByCustomer
+        for (const quotation of woQuotations) {
+          if ((result.byCustomer.get(quotation.customerId) ?? 0) <= 0) continue
+          result.extraCustomers.set(quotation.customerId, {
+            name: quotation.customer.name,
+            creditLimit: Number(quotation.customer.creditLimit ?? 0),
+          })
+        }
+      } else if (activeWorkOrders.length > 0) {
+        result.withoutQuotationByCustomer = woUnrepresentedByCustomer({
+          workOrders: activeWorkOrders,
+          quotations: [],
+          salesOrders: [],
+          invoices: [],
+        }).withoutQuotationByCustomer
+      }
+      return result
+    })(),
+  ])
+  const woByCustomer = woBlock.byCustomer
+  const woNoQuotationByCustomer = woBlock.withoutQuotationByCustomer
+  const extraCustomers = woBlock.extraCustomers
 
   // F5-2: baris juga lahir dari K3-efektif>0 / K4>0 walau K1=K2=K5=0.
   const extraIds = [
