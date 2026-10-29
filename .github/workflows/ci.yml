@@ -16,6 +16,11 @@ on:
   # untuk commit head terbaru.
   workflow_dispatch:
 
+# Token hanya baca: tak ada job di sini yang menulis (checkout/cache/buildx
+# lokal + tes). antrean-merge.yml punya permissions write-nya sendiri.
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # Mirror the deployment timezone (docker-compose sets TZ=Asia/Jakarta for the app

@@ -284,6 +284,127 @@ function foreignKeyScalars(schema: string): Set<string> {
   return fks
 }
 
+/** Entri `Model.field` untuk satu field dalam satu badan model. */
+interface SchemaField {
+  entry: string
+  model: string
+  name: string
+  type: string
+  column?: string
+}
+
+function parseModelFields(schema: string): SchemaField[] {
+  const out: SchemaField[] = []
+  for (const [, model, body] of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    for (const line of body.split("\n")) {
+      const field = /^\s{2}([a-z]\w*)\s+([A-Z]\w*)(\[\])?\??\s*(.*)$/.exec(line)
+      if (!field) continue
+      const [, name, type, array, rest] = field
+      if (array || rest.includes("@relation")) continue
+      const column = /@map\("([^"]+)"\)/.exec(rest)?.[1]
+      out.push({ entry: `${model}.${name}`, model, name, type, column })
+    }
+  }
+  return out
+}
+
+/** Nama enum -> daftar nilainya, dari blok `enum X { ... }` di skema. */
+function parseEnums(schema: string): Map<string, string[]> {
+  const enums = new Map<string, string[]>()
+  for (const m of schema.matchAll(/^enum (\w+) \{([\s\S]*?)^\}/gm)) {
+    enums.set(
+      m[1],
+      m[2]
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !l.startsWith("//")),
+    )
+  }
+  return enums
+}
+
+/**
+ * Field FK skalar: kolom yang menjadi `fields: [...]` suatu `@relation`
+ * (per-model, BUKAN global per-nama — `id` generik tak boleh menghidupkan
+ * semua), DITAMBAH field skalar `*Id` tanpa relasi (penamaan FK polos).
+ */
+function foreignKeyFields(schema: string): SchemaField[] {
+  const fields = parseModelFields(schema)
+  const relationFieldsByModel = new Map<string, Set<string>>()
+  for (const [, model, body] of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    const set = new Set<string>()
+    for (const m of body.matchAll(/@relation\([^)]*fields:\s*\[([^\]]*)\]/g)) {
+      for (const raw of m[1].split(",")) {
+        const name = raw.trim()
+        if (name) set.add(name)
+      }
+    }
+    relationFieldsByModel.set(model, set)
+  }
+  return fields.filter(
+    (f) =>
+      SCALAR_TYPES.has(f.type) &&
+      (relationFieldsByModel.get(f.model)?.has(f.name) || f.name.endsWith("Id")),
+  )
+}
+
+/** Field bertipe enum: tipe field-nya nama enum yang terdeklarasi di skema. */
+function enumFields(schema: string): Array<SchemaField & { enumName: string }> {
+  const enums = parseEnums(schema)
+  return parseModelFields(schema)
+    .filter((f) => enums.has(f.type))
+    .map((f) => ({ ...f, enumName: f.type }))
+}
+
+/**
+ * Apakah field enum terujuk kode produk? Salah satu cukup:
+ * (a) nama tipe enum-nya muncul (impor `StockMoveImpact` dari @prisma/client,
+ *     akses anggota `SalesInvoiceStatus.posted`, anotasi tipe); atau
+ * (b) delegate model-nya (`stockMove`, `salesInvoice`, `account`) DAN nama
+ *     field-nya sama-sama muncul dalam SATU berkas yang sama (kueri Prisma
+ *     `prisma.stockMove.findMany({ where: { status: "posted" } })` tak pernah
+ *     menyebut nama tipe enum-nya).
+ */
+function enumFieldUsed(
+  field: SchemaField & { enumName: string },
+  fileTokens: Array<Set<string>>,
+  allTokens: Set<string>,
+): boolean {
+  if (allTokens.has(field.enumName)) return true
+  const delegate = field.model[0].toLowerCase() + field.model.slice(1)
+  return fileTokens.some((tokens) => tokens.has(delegate) && tokens.has(field.name))
+}
+
+/**
+ * Kolom FK yatim yang TERBUKTI 0 rujukan kode produk (BUGHUNT round3 MEDIUM).
+ * Berarah dua persis seperti KNOWN_UNUSED: menyambungkan salah satunya (atau
+ * membuang field-nya) memerahkan tes sampai entri ini dibuang; FK mati BARU
+ * juga memerahkan tes. Field TIDAK dibuang dari skema — keputusan produk,
+ * bukan penjaga. Bukti per entri (grep kata-utuh di `src` produksi,
+ * bebas-komentar, di luar `__tests__`, 2026-10-30):
+ */
+const KNOWN_UNUSED_FK: string[] = [
+  // `grep -rn warrantyClaimId src` produksi: 0 hit. Relasi `warrantyClaim`
+  // di CrmTicket tak pernah di-include/connect; tiket CRM tak menaut klaim.
+  "CrmTicket.warrantyClaimId",
+  // `grep -rn receiptId src` untuk model ini: 0 hit. Baris penerimaan selalu
+  // diakses lewat relasi induknya (`where: { receipt: { ... } }`,
+  // inventory.actions.ts/inventory-transfer.hook.ts), tak pernah lewat
+  // kolom FK skalarnya; tulisnya nested `items: { create }` di hook.
+  "InventoryTransferReceiptItem.receiptId",
+  // `grep -rn genealogyId src` produksi: 0 hit. Material ditulis nested
+  // `materials: { create }` (production-genealogy.service.ts:55) dan dibaca
+  // lewat `genealogy.materials` (halaman detail PO), tak pernah lewat kolom.
+  "ProductionGenealogyMaterial.genealogyId",
+].sort()
+
+/** Field enum yatim terverifikasi — kini KOSONG: keempat field enum hidup
+ *  (Account.type, SalesInvoice.status, StockMove.impact, StockMove.status
+ *  terujuk lewat tipe enum dan/atau delegate+field sekonteks). Berarah dua:
+ *  field enum mati baru wajib masuk sini dengan bukti, entri yang hidup
+ *  kembali wajib dibuang. */
+const KNOWN_UNUSED_ENUM_FIELDS: string[] = [].sort()
+
 describe("skema: setiap kolom skalar dipakai kode", () => {
   it(
     "tidak ada kolom mati di luar daftar-beku",
@@ -326,6 +447,81 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
     // dua tes seed-only di bawah, supaya kegagalannya berarti isi repo, bukan beban mesin.
     20_000,
   )
+
+  it(
+    "tidak ada kolom FK mati di luar daftar-beku FK",
+    () => {
+      const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
+      const tokens = tokenSet(productCode(["src"]))
+      const unused = foreignKeyFields(schema)
+        .filter((f) => ![f.name, f.column].filter(Boolean).some((v) => tokens.has(v as string)))
+        .map((f) => f.entry)
+        .sort()
+      expect(unused).toEqual(KNOWN_UNUSED_FK)
+    },
+    20_000,
+  )
+
+  it(
+    "tidak ada field enum mati di luar daftar-beku enum",
+    () => {
+      const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
+      const files: string[] = []
+      readCode("src", files, { excludeTests: true, stripComments: true })
+      const fileTokens = files.map((f) => tokenSet(f))
+      const allTokens = new Set<string>()
+      for (const set of fileTokens) for (const t of set) allTokens.add(t)
+      const unused = enumFields(schema)
+        .filter((f) => !enumFieldUsed(f, fileTokens, allTokens))
+        .map((f) => f.entry)
+        .sort()
+      expect(unused).toEqual(KNOWN_UNUSED_ENUM_FIELDS)
+    },
+    20_000,
+  )
+
+  it("detektor FK: relasi per-model + penamaan *Id tertangkap, skalar biasa tidak", () => {
+    const skema = [
+      "model A {",
+      "  id String @id",
+      "  bId String",
+      "  b B @relation(fields: [bId], references: [id])",
+      "  plainRefId Int?",
+      "  name String",
+      "}",
+      "model B {",
+      "  id String @id",
+      "}",
+    ].join("\n")
+    expect(foreignKeyFields(skema).map((f) => f.entry).sort()).toEqual([
+      "A.bId",
+      "A.plainRefId",
+    ])
+  })
+
+  it("detektor enum: tipe enum tertangkap; aturan pakai = tipe ATAU delegate+field seberkas", () => {
+    const skema = [
+      "enum StatusX {",
+      "  draft",
+      "  posted",
+      "}",
+      "model M {",
+      "  id String @id",
+      "  status StatusX @default(draft)",
+      "  label String",
+      "}",
+    ].join("\n")
+    const fields = enumFields(skema)
+    expect(fields.map((f) => f.entry)).toEqual(["M.status"])
+    const f = fields[0]
+    // (a) nama tipe muncul di mana pun.
+    expect(enumFieldUsed(f, [new Set(["lain"])], new Set(["StatusX"]))).toBe(true)
+    // (b) delegate + nama field dalam satu berkas.
+    expect(enumFieldUsed(f, [tokenSet("prisma.m.findMany({ where: { status: 1 } })")], new Set())).toBe(true)
+    // Delegate saja / field saja tidak cukup.
+    expect(enumFieldUsed(f, [tokenSet("prisma.m.findMany()")], new Set())).toBe(false)
+    expect(enumFieldUsed(f, [tokenSet("const status = 1")], new Set())).toBe(false)
+  })
 })
 
 /** Model yang sama sekali tak dipakai kode. Diperiksa di tingkat MODEL karena
