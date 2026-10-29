@@ -258,11 +258,10 @@ describe("F-2026-10-28-157-V E157B-4 hook gabung-HPP", () => {
     ["tanpa nomor gabung HPP", null, 1_100_000, 0],
     ["nomor valid pecah PPN", "010.000-26.00000001", 1_000_000, 100_000],
   ])("%s", async (_label, taxNo, clearingDebit, taxDebit) => {
-    const bill = {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
       id: 1, grandTotal: 1_100_000, tax: 100_000, taxInvoiceNumber: taxNo,
       date: new Date("2026-06-01"), documentNo: "BILL-1", purchaseOrderId: 5,
-    }
-    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
+    })
 
     await onVendorBillPosted(1, 42)
 
