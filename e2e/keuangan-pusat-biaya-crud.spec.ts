@@ -46,7 +46,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     // Filter dulu agar item baru pasti muncul
     await page.locator("input[placeholder*='Cari kode atau nama']").fill(name)
-    await page.waitForTimeout(400)
+    // Debounce search ditunggu assertion web-first di bawah, bukan sleep.
     await expect(page.locator("body")).toContainText(name)
 
     const row = page.locator("tr").filter({ hasText: new RegExp(name) }).first()
@@ -63,7 +63,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await page.locator("input[placeholder*='Cari kode atau nama']").fill(code)
-    await page.waitForTimeout(400)
+    await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     await page.goto(`/keuangan/pusat-biaya?cari=${encodeURIComponent(code)}`, {
@@ -85,10 +85,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     const confirmDialog = page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: "Hapus data ini?" }).first()
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })
     await confirmDialog.getByRole("button", { name: /^hapus$/i }).click()
-    // 5. Wait for row/search state to settle; refetch via fresh query page after redirect/action completes
-    await page.waitForTimeout(800)
-
-    // 6. Verify gone via unique code text on direct search page (avoid stale table rows)
+    // 5. Verify gone via unique code text on direct search page (avoid stale table rows)
     await page.goto(`/keuangan/pusat-biaya?cari=${encodeURIComponent(code)}`, {
       waitUntil: "domcontentloaded",
     })

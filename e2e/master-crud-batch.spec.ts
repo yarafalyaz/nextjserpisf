@@ -122,8 +122,8 @@ async function waitForHydration(page: Page) {
     // Check React fiber is attached (hydrated)
     return Object.keys(btn).some(k => k.startsWith("__reactFiber") || k.startsWith("__reactProps"))
   }, { timeout: 15000 }).catch(() => {})
-  // Extra safety margin for slower CI runners
-  await page.waitForTimeout(500)
+  // Tanpa sleep tambahan: pemanggil menegaskan field visible/toHaveValue
+  // (web-first) sesudah ini, itu penunggu hidrasi sesungguhnya.
 }
 
 

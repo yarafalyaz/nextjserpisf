@@ -36,11 +36,14 @@ test.describe("Mobile overflow guard 390px", () => {
       // Tunggu konten utama muncul
       await expect(page.locator("#konten-utama, [data-dashboard-page], main").first()).toBeVisible({ timeout: 20000 })
 
-      // Sedikit delay agar layout settle (sidebar drawer anim, chart render)
-      await page.waitForTimeout(500)
-
+      // Layout settle ditunggu via poll overflow itu sendiri, bukan sleep.
+      await expect
+        .poll(
+          async () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+          { timeout: 10_000, message: `Overflow di ${route.path} melebihi viewport 390` },
+        )
+        .toBeLessThanOrEqual(1)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-      expect(overflow, `Overflow di ${route.path}: ${overflow}px melebihi viewport 390`).toBeLessThanOrEqual(1)
 
       // Tambahan: body juga tidak boleh overflow signifikan
       const bodyOverflow = await page.evaluate(() => document.body.scrollWidth - document.body.clientWidth)
@@ -55,11 +58,20 @@ test.describe("Detail pages mobile no overflow", () => {
   test("Proyek detail tidak overflow (jika ada data)", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto("/proyek", { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(800)
+    await expect(page.locator("#konten-utama, main").first()).toBeVisible({ timeout: 20000 })
 
-    // Cari link proyek pertama
+    // Cari link proyek pertama — tunggu baris/empty-state eksplisit, jangan
+    // putuskan dari count() instan sesudah sleep.
     const firstProjectLink = page.locator('a[href^="/proyek/"]').first()
-    const hasProjects = await firstProjectLink.count() > 0 ? await firstProjectLink.isVisible().catch(() => false) : false
+    await expect
+      .poll(
+        async () =>
+          (await firstProjectLink.count()) > 0 ||
+          (await page.getByText("Tidak ada data").count()) > 0,
+        { timeout: 20_000 },
+      )
+      .toBe(true)
+    const hasProjects = (await firstProjectLink.count()) > 0 ? await firstProjectLink.isVisible().catch(() => false) : false
 
     if (!hasProjects) {
       test.skip(true, "DB ini tidak punya data proyek — detail proyek dilewati, bukan lulus semu")
@@ -69,9 +81,13 @@ test.describe("Detail pages mobile no overflow", () => {
     await firstProjectLink.click()
     await page.waitForLoadState("domcontentloaded")
     await expect(page.locator("#konten-utama, main").first()).toBeVisible({ timeout: 15000 })
-    await page.waitForTimeout(500)
 
+    await expect
+      .poll(
+        async () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+        { timeout: 10_000, message: "Overflow di detail proyek" },
+      )
+      .toBeLessThanOrEqual(1)
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-    expect(overflow, `Overflow di detail proyek: ${overflow}px`).toBeLessThanOrEqual(1)
   })
 })

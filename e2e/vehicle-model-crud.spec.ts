@@ -29,7 +29,8 @@ test.describe("Kendaraan Model CRUD", () => {
     // Choose brand via the ComboBox input — type brandName, wait for filtered option, then pick
     const brandInput = await openCombobox(page, { placeholder: "Cari merek..." })
     await brandInput.fill(brandName)
-    await page.waitForTimeout(1000)
+    // Web-first: tunggu opsi hasil filter tampil, bukan sleep 1000ms.
+    await expect(page.getByRole("listbox").getByRole("option").first()).toBeVisible({ timeout: 10_000 })
     await brandInput.press("ArrowDown")
     await brandInput.press("Enter")
 
@@ -77,7 +78,7 @@ test.describe("Kendaraan Model CRUD", () => {
     // name instead of the placeholder: identify it by the bound Label instead.
     const editBrandInput = await openCombobox(page, { name: /merek kendaraan/i })
     await editBrandInput.fill(brandName)
-    await page.waitForTimeout(1000)
+    await expect(page.getByRole("listbox").getByRole("option").first()).toBeVisible({ timeout: 10_000 })
     await editBrandInput.press("ArrowDown")
     await editBrandInput.press("Enter")
     await page.getByRole("button", { name: /^Update$|^Perbarui$/ }).first().click()
