@@ -321,6 +321,149 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (petty-cash source concurrency, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP seluruhnya
+        # (describe.skip) bila INTEGRATION_DB_URL kosong, jadi hijau CI bisa
+        # berarti 0 tes jalan. Log di-tee lalu digrep: output mengandung
+        # 'skipped' (atau tanpa 'passed') = GAGAL. BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/petty-cash-source-concurrency.integration.test.ts 2>&1 | tee petty-cash-source-concurrency.log
+          if grep -qi 'skipped' petty-cash-source-concurrency.log; then
+            echo "::error::petty-cash-source-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' petty-cash-source-concurrency.log; then
+            echo "::error::petty-cash-source-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (stocktake posting concurrency, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP seluruhnya
+        # (describe.skip) bila INTEGRATION_DB_URL kosong, jadi hijau CI bisa
+        # berarti 0 tes jalan. Log di-tee lalu digrep: output mengandung
+        # 'skipped' (atau tanpa 'passed') = GAGAL. BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/stocktake-posting-concurrency.integration.test.ts 2>&1 | tee stocktake-posting-concurrency.log
+          if grep -qi 'skipped' stocktake-posting-concurrency.log; then
+            echo "::error::stocktake-posting-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' stocktake-posting-concurrency.log; then
+            echo "::error::stocktake-posting-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (credit-gate pending persistence, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP seluruhnya
+        # (describe.skip) bila INTEGRATION_DB_URL kosong, jadi hijau CI bisa
+        # berarti 0 tes jalan. Log di-tee lalu digrep: output mengandung
+        # 'skipped' (atau tanpa 'passed') = GAGAL. Service fase-3 memakai
+        # prisma global, jadi DATABASE_URL diarahkan ke DB yang sama.
+        # BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/services/__tests__/credit-gate-pending-persistence.integration.test.ts 2>&1 | tee credit-gate-pending-persistence.log
+          if grep -qi 'skipped' credit-gate-pending-persistence.log; then
+            echo "::error::credit-gate-pending-persistence.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' credit-gate-pending-persistence.log; then
+            echo "::error::credit-gate-pending-persistence.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (warranty unique, MySQL nyata)
+        # Anti-skip adaptasi RUN_DB_INTEGRATION: suite ini lulus hampa
+        # (warn + return, tetap "passed") bila flag/DB tak siap, jadi 'passed'
+        # saja tak cukup — jumlah tes di-assert persis. Log di-tee lalu
+        # digrep: output mengandung 'skipped' (atau tanpa jumlah tes lulus
+        # yang diharapkan) = GAGAL. BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/services/__tests__/warranty-unique.integration.test.ts 2>&1 | tee warranty-unique.log
+          if grep -qi 'skipped' warranty-unique.log; then
+            echo "::error::warranty-unique.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq 'Tests[[:space:]]+1 passed \(1\)' warranty-unique.log; then
+            echo "::error::warranty-unique.integration.test.ts tidak melaporkan 1 tes lulus (skip hampa?) — jumlah tes berubah? sesuaikan angka ini."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          RUN_DB_INTEGRATION: "1"
+      - name: Run DB integration tests (asset journal, MySQL nyata)
+        # Anti-skip adaptasi RUN_DB_INTEGRATION: suite ini lulus hampa
+        # (warn + return, tetap "passed") bila flag/DB tak siap, jadi 'passed'
+        # saja tak cukup — jumlah tes di-assert persis. Log di-tee lalu
+        # digrep: output mengandung 'skipped' (atau tanpa jumlah tes lulus
+        # yang diharapkan) = GAGAL. BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/reports/__tests__/asset-journal-integration.test.ts 2>&1 | tee asset-journal-integration.log
+          if grep -qi 'skipped' asset-journal-integration.log; then
+            echo "::error::asset-journal-integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq 'Tests[[:space:]]+1 passed \(1\)' asset-journal-integration.log; then
+            echo "::error::asset-journal-integration.test.ts tidak melaporkan 1 tes lulus (skip hampa?) — jumlah tes berubah? sesuaikan angka ini."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          RUN_DB_INTEGRATION: "1"
+      - name: Run DB integration tests (sales-payment withholding, MySQL nyata)
+        # Anti-skip adaptasi RUN_DB_INTEGRATION: suite ini lulus hampa
+        # (warn + return, tetap "passed") bila flag/DB/data seed tak siap,
+        # jadi 'passed' saja tak cukup — jumlah tes di-assert persis. Log
+        # di-tee lalu digrep: output mengandung 'skipped' (atau tanpa jumlah
+        # tes lulus yang diharapkan) = GAGAL. BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/hooks/__tests__/sales-payment-withholding-integration.test.ts 2>&1 | tee sales-payment-withholding-integration.log
+          if grep -qi 'skipped' sales-payment-withholding-integration.log; then
+            echo "::error::sales-payment-withholding-integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq 'Tests[[:space:]]+1 passed \(1\)' sales-payment-withholding-integration.log; then
+            echo "::error::sales-payment-withholding-integration.test.ts tidak melaporkan 1 tes lulus (skip hampa?) — jumlah tes berubah? sesuaikan angka ini."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          RUN_DB_INTEGRATION: "1"
+      - name: Run DB integration tests (db concurrency, MySQL nyata)
+        # Anti-skip adaptasi RUN_DB_INTEGRATION: suite ini lulus hampa
+        # (warn + return, tetap "passed") bila flag/DB tak siap, jadi 'passed'
+        # saja tak cukup — jumlah tes di-assert persis. Prasyarat bentuk CI:
+        # tes wizard butuh DB scratch kosong bernama memuat
+        # test/scratch/conc/ci (guard isScratchDb), sedangkan job ini memakai
+        # DB terseed yara_erp — di CI tes itu warn+return dan suite tetap
+        # lapor passed tanpa bukti wizard. Karena itu untuk suite ini grep
+        # 'passed' generik diterima apa adanya; keterbatasan prasyarat wizard
+        # dicatat di sini, bukan disembunyikan. BUGHUNT round3 #14.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/lib/__tests__/db-concurrency.integration.test.ts 2>&1 | tee db-concurrency.log
+          if grep -qi 'skipped' db-concurrency.log; then
+            echo "::error::db-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq 'Tests[[:space:]]+[0-9]+ passed' db-concurrency.log; then
+            echo "::error::db-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          RUN_DB_INTEGRATION: "1"
 
   docker:
     name: Docker Image Build

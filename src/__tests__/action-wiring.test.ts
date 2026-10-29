@@ -18,6 +18,14 @@ import { join, relative } from "node:path"
 // entri yang sudah tidak perlu (aksinya kini dirujuk) memerahkan tes.
 // Sebutan nama aksi di dalam komentar TIDAK dihitung sebagai rujukan
 // (pemindaian berjalan di atas sumber bebas-komentar, lihat `blankComments`).
+//
+// Rujukan yang dihitung adalah IMPOR dari modul pendefinisi (impor bernama,
+// namespace, atau dinamis) yang namanya lalu dipakai, ATAU — untuk jalur
+// ekspor-ulang barel (mis. actions.ts yang me-re-export *.actions) — ekspor
+// bernama dari modul pendefinisi. Penyebutan nama polos sebagai token
+// TIDAK lagi cukup: `reverseJournal` pernah lolos hanya karena method
+// servis bernama sama di journal.service.ts menyebut dirinya sendiri
+// (BUGHUNT round3 #13), padahal UI tak pernah mengimpor aksi itu.
 
 const ROOT = process.cwd()
 const ACTIONS_DIR = join(ROOT, "src", "actions")
@@ -105,20 +113,142 @@ const fileContents = srcFiles.map((f) => ({
   file: f,
   text: blankComments(readFileSync(f, "utf8")),
 }))
-const combined = new RegExp(`\\b(${actions.map((a) => a.name).join("|")})\\b`, "g")
-const references = new Map<string, Set<string>>()
-for (const { file, text } of fileContents) {
-  for (const m of text.matchAll(combined)) {
-    const name = m[1]
-    if (!references.has(name)) references.set(name, new Set())
-    references.get(name)!.add(file)
-  }
+
+const definingNamesByFile = new Map<string, string[]>()
+for (const a of actions) {
+  if (!definingNamesByFile.has(a.file)) definingNamesByFile.set(a.file, [])
+  definingNamesByFile.get(a.file)!.push(a.name)
+}
+/** Apakah specifier menunjuk persis berkas pendefinisi? Alias @/ + relatif. */
+function specPointsTo(fromFile: string, spec: string, defFile: string): boolean {
+  const normalized = spec.replace(/\\/g, "/").replace(/\.(?:ts|tsx|mts|cts)$/, "")
+  let candidate: string
+  if (normalized.startsWith("@/")) {
+    candidate = join(ROOT, "src", normalized.slice(2))
+  } else if (normalized.startsWith("./") || normalized.startsWith("../")) {
+    const dir = fromFile.slice(0, fromFile.lastIndexOf("/"))
+    const parts = dir.split("/")
+    for (const seg of normalized.split("/")) {
+      if (seg === "." || seg === "") continue
+      else if (seg === "..") parts.pop()
+      else parts.push(seg)
+    }
+    candidate = parts.join("/")
+  } else return false
+  const defNoExt = defFile.replace(/\.(?:ts|tsx)$/, "")
+  return candidate === defNoExt || candidate === `${defNoExt}/index`
 }
 
+/** Nama terikat (lokal, imported) dari klausa impor; type-only dibuang. */
+function parseImportClause(clause: string): { local: string; imported: string }[] {
+  const out: { local: string; imported: string }[] = []
+  const rest = clause.trim()
+  const ns = rest.match(/^\*\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/)
+  if (ns) return [{ local: ns[1], imported: "*" }]
+  const braceStart = rest.indexOf("{")
+  if (braceStart === -1) return out
+  const braceEnd = rest.lastIndexOf("}")
+  if (braceEnd === -1) return out
+  for (const part of rest.slice(braceStart + 1, braceEnd).split(",")) {
+    const p = part.trim()
+    if (!p || p.startsWith("type ")) continue
+    const m = p.match(/^([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*))?$/)
+    if (m) out.push({ local: m[2] ?? m[1], imported: m[1] })
+  }
+  return out
+}
+
+interface FileReferenceFacts {
+  // nama aksi -> berkas pendefinisi yang dirujuk berkas ini
+  referenced: Map<string, Set<string>>
+}
+
+function collectFileFacts(holderFile: string, text: string): FileReferenceFacts {
+  const referenced = new Map<string, Set<string>>()
+  const mark = (name: string, defFile: string) => {
+    if (!definingNamesByFile.get(defFile)?.includes(name)) return
+    if (!referenced.has(name)) referenced.set(name, new Set())
+    referenced.get(name)!.add(defFile)
+  }
+  const markAllFrom = (defFile: string) => {
+    for (const n of definingNamesByFile.get(defFile) ?? []) mark(n, defFile)
+  }
+
+  // Klausa ekspor-ulang barel (bukan rujukan UI, tetapi aksi jadi terjangkau
+  // lewat barel; dipertahankan dari penjaga lama).
+  for (const m of text.matchAll(/export\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
+    for (const defFile of actionFiles) {
+      if (!specPointsTo(holderFile, m[2], defFile)) continue
+      for (const part of m[1].split(",")) {
+        const p = part.trim()
+        if (!p || p.startsWith("type ")) continue
+        const mm = p.match(/^([A-Za-z_$][A-Za-z0-9_$]*)/)
+        if (mm) mark(mm[1], defFile)
+      }
+    }
+  }
+  for (const m of text.matchAll(/export\s+\*\s+from\s*["']([^"']+)["']/g)) {
+    for (const defFile of actionFiles) {
+      if (specPointsTo(holderFile, m[1], defFile)) markAllFrom(defFile)
+    }
+  }
+
+  // Impor statis: binding dari modul aksi, lalu pemakaian di luar impor.
+  interface Binding { local: string; imported: string; defFile: string }
+  const bindings: Binding[] = []
+  const importStmts: { start: number; end: number; defFile: string | null }[] = []
+  for (const m of text.matchAll(/import\s+(?!type\b)([\s\S]*?)\s+from\s*["']([^"']+)["']/g)) {
+    const defFile = actionFiles.find((f) => specPointsTo(holderFile, m[2], f)) ?? null
+    importStmts.push({ start: m.index, end: m.index + m[0].length, defFile })
+    if (!defFile) continue
+    for (const b of parseImportClause(m[1])) bindings.push({ ...b, defFile })
+  }
+  // Tubuh berkas tanpa pernyataan impor dari modul aksi mana pun.
+  let body = text
+  for (const s of [...importStmts].sort((a, b) => b.start - a.start)) {
+    if (!s.defFile) continue
+    body = body.slice(0, s.start) + " ".repeat(s.end - s.start) + body.slice(s.end)
+  }
+  for (const b of bindings) {
+    if (b.imported === "*") {
+      for (const n of definingNamesByFile.get(b.defFile) ?? []) {
+        if (new RegExp(`\\b${b.local}\\s*\\.\\s*${n}\\b`).test(body)) mark(n, b.defFile)
+      }
+      continue
+    }
+    if (new RegExp(`\\b${b.local}\\b`).test(body)) mark(b.imported, b.defFile)
+  }
+
+  // Impor dinamis dari modul aksi: destructure/akses properti nama modul itu.
+  for (const defFile of actionFiles) {
+    let hasDynamic = false
+    for (const m of text.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g)) {
+      if (specPointsTo(holderFile, m[1], defFile)) { hasDynamic = true; break }
+    }
+    if (!hasDynamic) continue
+    for (const n of definingNamesByFile.get(defFile) ?? []) {
+      if (
+        new RegExp(`\\.\\s*${n}\\b`).test(text) ||
+        new RegExp(`\\{[^}]*\\b${n}\\b[^}]*\\}\\s*=`).test(text)
+      ) {
+        mark(n, defFile)
+      }
+    }
+  }
+
+  return { referenced }
+}
+
+const fileFacts = fileContents.map(({ file, text }) => ({
+  file,
+  facts: collectFileFacts(file, text),
+}))
+
 function isReferencedElsewhere(action: ExportedAction): boolean {
-  const holders = references.get(action.name)
-  if (!holders) return false
-  for (const holder of holders) if (holder !== action.file) return true
+  for (const { file, facts } of fileFacts) {
+    if (file === action.file) continue
+    if (facts.referenced.get(action.name)?.has(action.file)) return true
+  }
   return false
 }
 
@@ -286,11 +416,18 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // tagihan vendor) — daftar-beku dilepas saat tombol vendor mendarat.
   "src/actions/purchase.actions.ts::reverseVendorPayment":
     "FIN-BR-008: reversal vendor menyusul tombol UI pembelian",
+  // Aksi ekspor sinkron status proyek: pemanggilnya hanya tes unit;
+  // UI memakai helper internal syncProjectStatusTx dalam transaksi modul
+  // proyek/manufaktur — kandidat dihapus, bukan celah UI.
+  "src/actions/project.actions.ts::syncProjectStatus":
+    "tanpa pemanggil UI/kode produksi (hanya tes unit); status proyek disinkronkan helper internal syncProjectStatusTx dalam transaksi pemanggilnya — kandidat dihapus",
   // F-2026-10-28-157-V Putusan 2: aksi isi-nomor-faktur pasca-posting
   // dirujuk TaxInvoiceNumberButton di detail tagihan (frontend t_28ef6aa5)
   // — entri beku dibuang.
   // GL-BR-003 UI: reverseSalesPayment kini dirujuk tombol Balikkan
   // di detail pembayaran penjualan; entri beku sales dibuang, vendor tetap.
+  // BUGHUNT round3 #13: reverseJournal kini dirujuk journal-table.tsx
+  // (tombol Balikkan jurnal POSTED) — entri beku TIDAK ditambahkan.
 }
 
 describe("keterhubungan aksi server", () => {
@@ -332,5 +469,84 @@ describe("blankComments (pemindai rujukan)", () => {
     expect(bersih).toContain("https://x.test/a")
     expect(bersih).not.toContain("// correctPaidPayroll")
     expect([...bersih.matchAll(/\bcorrectPaidPayroll\b/g)]).toHaveLength(1)
+  })
+})
+
+describe("impor dari modul pendefinisi (pemindai rujukan)", () => {
+  const defFinance = join(ROOT, "src", "actions", "finance.actions.ts")
+  const holder = join(ROOT, "src", "components", "pemindai-rujukan-sintetis.tsx")
+  const dirujuk = (teks: string, nama: string) =>
+    collectFileFacts(holder, blankComments(teks)).referenced
+      .get(nama)
+      ?.has(defFinance) ?? false
+
+  it("token nama polos tanpa impor dari modul pendefinisi tidak terhitung (kasus reverseJournal)", () => {
+    // Pola lubang lama: method servis bernama sama menyebut dirinya;
+    // nama muncul sebagai kode, tetapi aksi tak pernah diimpor.
+    expect(dirujuk("class S { async reverseJournal() { return 1 } }", "reverseJournal")).toBe(false)
+    expect(dirujuk("const m = { reverseJournal: 1 }; m.reverseJournal", "reverseJournal")).toBe(false)
+  })
+
+  it("impor bernama yang dipakai terhitung; impor tak dipakai tidak", () => {
+    expect(
+      dirujuk(
+        'import { reverseJournal } from "@/actions/finance.actions"\nawait reverseJournal(1)',
+        "reverseJournal",
+      ),
+    ).toBe(true)
+    expect(
+      dirujuk(
+        'import { reverseJournal } from "@/actions/finance.actions"\nconst x = 1',
+        "reverseJournal",
+      ),
+    ).toBe(false)
+  })
+
+  it("alias impor yang dipakai terhitung", () => {
+    expect(
+      dirujuk(
+        'import { reverseJournal as balik } from "@/actions/finance.actions"\nawait balik(1)',
+        "reverseJournal",
+      ),
+    ).toBe(true)
+  })
+
+  it("impor dari modul lain bernama sama tidak terhitung", () => {
+    expect(
+      dirujuk(
+        'import { reverseJournal } from "@/lib/services/journal.service"\nawait reverseJournal(1)',
+        "reverseJournal",
+      ),
+    ).toBe(false)
+  })
+
+  it("impor dinamis + destructure/akses properti terhitung, sebutan di komentar tidak", () => {
+    expect(
+      dirujuk(
+        'const { reverseJournal } = await import("@/actions/finance.actions")\nawait reverseJournal(1)',
+        "reverseJournal",
+      ),
+    ).toBe(true)
+    expect(
+      dirujuk(
+        '(await import("@/actions/finance.actions")).reverseJournal(1)',
+        "reverseJournal",
+      ),
+    ).toBe(true)
+    expect(
+      dirujuk(
+        '// import { reverseJournal } from "@/actions/finance.actions"\nawait reverseJournal(1)',
+        "reverseJournal",
+      ),
+    ).toBe(false)
+  })
+
+  it("ekspor-ulang barel dari modul pendefinisi terhitung", () => {
+    expect(
+      dirujuk('export { reverseJournal } from "@/actions/finance.actions"', "reverseJournal"),
+    ).toBe(true)
+    expect(
+      dirujuk('export { reverseJournal } from "@/actions/sales.actions"', "reverseJournal"),
+    ).toBe(false)
   })
 })

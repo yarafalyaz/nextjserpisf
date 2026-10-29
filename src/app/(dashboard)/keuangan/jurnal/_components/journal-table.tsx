@@ -4,7 +4,7 @@ import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { deleteJournal, postJournal } from "@/actions/finance.actions"
+import { deleteJournal, postJournal, reverseJournal } from "@/actions/finance.actions"
 import { formatDate, formatReferenceType } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { bulkDelete } from "@/actions/bulk.actions"
@@ -86,14 +86,40 @@ const columns = [
         deletePermission="delete_journals"
         // Jurnal manual dibuat DRAFT dan hanya `postJournal` yang mempostingnya; tanpa
         // tombol ini jurnal tak pernah masuk pembukuan (laporan membaca POSTED/REVERSED).
+        // Jurnal POSTED sebaliknya hanya bisa dikoreksi lewat `reverseJournal`
+        // (BUGHUNT round3 #13): tombol yang sama dipakai bergantian karena
+        // ActionDropdown hanya punya satu slot proses dan kedua statusnya
+        // saling eksklusif (REVERSING/REVERSED/lainnya: tanpa tombol). Aksi
+        // tak menerima alasan — dialog konfirmasi di sini adalah gerbangnya;
+        // server tetap menolak non-POSTED, jurnal lawan (referenceType
+        // Journal), dan jurnal penutup tahun, dan hasilnya dicek lewat
+        // `success` oleh ActionDropdown.
         // Status di DB huruf besar ("DRAFT"), jadi perbandingannya tidak case-sensitive.
         processAction={
-          info.row.original.status?.toUpperCase() === "DRAFT" ? postJournal : undefined
+          info.row.original.status?.toUpperCase() === "DRAFT"
+            ? postJournal
+            : info.row.original.status?.toUpperCase() === "POSTED"
+              ? reverseJournal
+              : undefined
         }
-        processLabel="Posting"
-        processConfirmTitle="Posting jurnal ini?"
-        processConfirmBody="Jurnal akan berstatus terposting sehingga masuk ke laporan keuangan (buku besar, neraca, laba rugi). Pastikan akun dan nominalnya sudah benar."
-        processSuccessMessage="Jurnal berhasil diposting"
+        processLabel={
+          info.row.original.status?.toUpperCase() === "POSTED" ? "Balikkan" : "Posting"
+        }
+        processConfirmTitle={
+          info.row.original.status?.toUpperCase() === "POSTED"
+            ? "Balikkan jurnal ini?"
+            : "Posting jurnal ini?"
+        }
+        processConfirmBody={
+          info.row.original.status?.toUpperCase() === "POSTED"
+            ? "Jurnal lawan (reversal) akan diterbitkan pada tanggal jurnal asal dan jurnal ini ditandai sudah dibalik. Jejak audit utuh — jurnal asal tidak dihapus."
+            : "Jurnal akan berstatus terposting sehingga masuk ke laporan keuangan (buku besar, neraca, laba rugi). Pastikan akun dan nominalnya sudah benar."
+        }
+        processSuccessMessage={
+          info.row.original.status?.toUpperCase() === "POSTED"
+            ? "Jurnal berhasil dibalik"
+            : "Jurnal berhasil diposting"
+        }
         processPermission="post_journals"
       />
     ),
