@@ -1,13 +1,10 @@
 "use client"
 
-import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { showSuccess, showError } from "@/lib/utils/toast"
-import { showError } from "@/lib/utils/toast"
 import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
 /**
@@ -32,41 +29,23 @@ export function ReversePaymentButton({
   onSuccess?: () => void
 }) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [isOpen, setIsOpen] = useState(false)
-  const [reason, setReason] = useState("")
   const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
     useConfirmReasonAction({
       run: (trimmed) => action(id, trimmed),
       successMessage: "Pembayaran berhasil dibalik",
       errorFallback: "Gagal membalik pembayaran",
-      onSuccess,
+      onSuccess: () => {
+        onSuccess?.()
+        router.refresh()
+      },
     })
 
   function handleReverse() {
-    if (!reason.trim()) {
-      showError("Alasan pembalikan wajib diisi")
-      return
-    }
-    startTransition(async () => {
-      const result = await action(id, reason.trim())
-      if (result.success) {
-        showSuccess("Pembayaran berhasil dibalik")
-        setIsOpen(false)
-        setReason("")
-        onSuccess?.()
-        router.refresh()
-      } else {
-        showError(result.error || "Gagal membalik pembayaran")
-        setIsOpen(false)
-      }
-    })
+    submit()
   }
 
-  function handleOpenChange(open: boolean) {
-    if (!open) setReason("")
-    setIsOpen(open)
-    submit()
+  function handleOpen(open: boolean) {
+    handleOpenChange(open)
   }
 
   return (
@@ -86,7 +65,7 @@ export function ReversePaymentButton({
 
       <ConfirmDialog
         isOpen={isOpen}
-        onOpenChange={handleOpenChange}
+        onOpenChange={handleOpen}
         title={title || "Balikkan pembayaran ini?"}
         body={body || "Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Baris asal tetap tersimpan sebagai histori — bukan dihapus."}
         confirmLabel="Balikkan Pembayaran"

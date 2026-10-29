@@ -27,6 +27,10 @@ export function useConfirmReasonAction({
   const [reason, setReason] = useState("")
 
   function submit() {
+    if (!reason.trim()) {
+      showError("Alasan wajib diisi")
+      return
+    }
     startTransition(async () => {
       const result = await run(reason.trim())
       if (result.success) {
