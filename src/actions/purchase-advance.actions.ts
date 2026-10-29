@@ -80,6 +80,10 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
     })
 
     const created = await prisma.$transaction(async (tx) => {
+      // Penjaga periode otoritatif di DALAM tx (pola void): cek luar hanya
+      // fast-fail; tutup-periode tidak bisa menyelip di antara cek dan tulis.
+      await assertPeriodOpen(date, tx)
+
       const advance = await tx.purchaseAdvance.create({
         data: {
           slug: await nextSlug("purchaseAdvance", documentNo),

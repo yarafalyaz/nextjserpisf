@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
     advanceCreate,
     journalCreate,
     prismaMock,
+    tx,
   }
 })
 
@@ -121,5 +122,32 @@ describe("createPurchaseAdvance zod validation", () => {
     expect(res.success).toBe(true)
     const data = mocks.advanceCreate.mock.calls[0][0].data
     expect(data.date).toEqual(new Date(Date.UTC(2026, 8, 15)))
+  })
+
+  it("periode menutup sesudah cek luar -> cek dalam tx (dengan tx) menolak sebelum jurnal", async () => {
+    mocks.assertPeriodOpen
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode sudah ditutup"))
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(false)
+    expect(String((res as { error: string }).error)).toContain("Periode sudah ditutup")
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+    expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBe(mocks.tx)
+    expect(mocks.assertPeriodOpen.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    )
+    expect(mocks.advanceCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("happy path: cek periode dalam tx mendahului pembuatan jurnal", async () => {
+    const res = await createPurchaseAdvance(form(base))
+    expect(res.success).toBe(true)
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+    expect(mocks.assertPeriodOpen.mock.calls[1][0]).toEqual(new Date(Date.UTC(2026, 8, 15)))
+    expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBe(mocks.tx)
+    expect(mocks.assertPeriodOpen.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0],
+    )
   })
 })

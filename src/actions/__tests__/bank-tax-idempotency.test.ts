@@ -131,4 +131,62 @@ describe("idempotensi uang langsung-posting", () => {
     expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
+
+  it("bank transfer: periode menutup sesudah cek luar -> cek dalam tx (dengan tx) menolak sebelum jurnal", async () => {
+    // Cek luar (fast-fail) lolos; cek dalam tx menolak — simulasi tutup-periode
+    // menyelip di antara keduanya.
+    mocks.assertPeriodOpen
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode sudah ditutup"))
+    const res = await createBankTransfer(form({ ...baseTransfer, idempotencyKey: "key-bank-period" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Periode sudah ditutup")
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+    expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBe(mocks.txBank)
+    expect(mocks.assertPeriodOpen.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    )
+    expect(mocks.transferCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("tax payment: periode menutup sesudah cek luar -> cek dalam tx (dengan tx) menolak sebelum jurnal", async () => {
+    mocks.prisma = mocks.prismaTax
+    mocks.assertPeriodOpen
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode sudah ditutup"))
+    const res = await createTaxPayment(form({ ...baseTax, idempotencyKey: "key-tax-period" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Periode sudah ditutup")
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+    expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBe(mocks.txTax)
+    expect(mocks.assertPeriodOpen.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    )
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("bank transfer: happy path cek periode dalam tx mendahului pembuatan jurnal", async () => {
+    const res = await createBankTransfer(form(baseTransfer))
+    expect(res.success).toBe(true)
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+    expect(mocks.assertPeriodOpen.mock.calls[1][0]).toEqual(new Date(Date.UTC(2026, 8, 15)))
+    expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBe(mocks.txBank)
+    expect(mocks.assertPeriodOpen.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("tax payment: happy path cek periode dalam tx mendahului pembuatan jurnal", async () => {
+    mocks.prisma = mocks.prismaTax
+    const res = await createTaxPayment(form(baseTax))
+    expect(res.success).toBe(true)
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledTimes(2)
+    expect(mocks.assertPeriodOpen.mock.calls[1][0]).toEqual(new Date(Date.UTC(2026, 8, 15)))
+    expect(mocks.assertPeriodOpen.mock.calls[1][1]).toBe(mocks.txTax)
+    expect(mocks.assertPeriodOpen.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.journalCreate.mock.invocationCallOrder[0],
+    )
+  })
 })

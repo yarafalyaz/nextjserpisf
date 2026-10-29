@@ -78,6 +78,9 @@ export async function createBankTransfer(formData: FormData) {
 
     const transfer = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id)
+      // Penjaga periode otoritatif di DALAM tx (pola void): cek luar hanya
+      // fast-fail; tutup-periode tidak bisa menyelip di antara cek dan tulis.
+      await assertPeriodOpen(date, tx)
 
       const created = await tx.bankTransfer.create({
         data: {
