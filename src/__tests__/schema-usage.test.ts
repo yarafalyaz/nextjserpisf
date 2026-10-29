@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest"
  * menyesatkan pembaca berikutnya (dua nama mirip, satu diam-diam kosong) dan tak
  * ketahuan oleh tsc, tes, maupun build. Lihat `docs/AUDIT-SCHEMA.md`.
  *
- * Dua keputusan penting soal cara memeriksa:
+ * Tiga keputusan penting soal cara memeriksa:
  *
  * 1. **SQL migrasi TIDAK dihitung sebagai pemakaian.** Kalau `.sql` ikut dipindai, setiap
  *    kolom akan "terpakai" hanya karena pernah muncul di `migration.sql` — persis yang
@@ -18,6 +18,14 @@ import { describe, expect, it } from "vitest"
  * 2. **Kolom FK dilewati.** Prisma memakai FK lewat `connect: { rel: ... }` tanpa pernah
  *    menyebut nama kolomnya (`requesterId`, `ticketId`, …), jadi menandainya sebagai
  *    "tak terpakai" adalah positif-palsu.
+ * 3. **Korpus = kode PRODUKSI saja, komentar dibuang** (round2 #16). Versi lama
+ *    memindai `src`+`scripts`+`e2e`+`prisma` mentah (termasuk `__tests__` semula,
+ *    lalu fixture tes dikeluarkan) — kolom/model mati lolos karena namanya disebut
+ *    di fixture tes, skrip seed, atau sekadar komentar. Kini: hanya `src` tanpa
+ *    `__tests__`/`*.test.*`, dan isi komentar dikosongkan sebelum dipindai
+ *    (string tetap — SQL mentah di string adalah pemakaian sah). Yang hanya
+ *    dipakai seed tetap ditangkap tes SEED_ONLY_* terpisah di bawah, yang
+ *    korpusnya juga bebas-komentar.
  *
  * `KNOWN_UNUSED` adalah daftar-beku: menambah kolom mati BARU akan memerahkan tes ini,
  * dan menambal kolom yang sudah ada di daftar juga memerahkan tes (dulu `updatedBy` —
@@ -55,6 +63,13 @@ const KNOWN_UNUSED: string[] = [
   // di sini. Buang entri saat konsumen mendarat, bukan sebelumnya.)
   "OvertimeRequest.actualEndTime",
   "OvertimeRequest.actualStartTime",
+  // Kolom GENERATED di DB (migrasi 20261023170000_journal_active_reference_unique_f127v:
+  // `GENERATED ALWAYS AS (...)` + unique `journals_active_reference_unique`) —
+  // MySQL yang menghitungnya dari status/deletedAt/reference; client Prisma
+  // sengaja TIDAK menulis/membacanya (schema.prisma:4520-4523). Satu-satunya
+  // sebutan namanya di kode produk adalah komentar itu. Menghapus kolom =
+  // menghapus penegak unik jurnal-aktif-per-referensi, jadi beku ini disengaja.
+  "Journal.activeReferenceKey",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
@@ -173,7 +188,56 @@ const SCALAR_TYPES = new Set([
  *  itu sendiri terbaca sebagai "pemakaian" dan tesnya jadi tidak bermakna. */
 const SELF = "schema-usage.test.ts"
 
-function readCode(relativeDir: string, out: string[], opts: { excludeTests?: boolean } = {}) {
+/**
+ * Kosongkan isi komentar (`//…` dan `/*…*\/`) sambil mempertahankan string,
+ * template, panjang, dan posisi baris. Tanpa ini, nama kolom/model yang hanya
+ * disebut di komentar (mis. `Journal.activeReferenceKey` di komentar skema
+ * layanan) terbaca sebagai "pemakaian" dan kolom mati lolos (round2 #16).
+ * Bukan parser penuh: komentar di dalam `${…}` template tidak dibedakan —
+ * arah kesalahannya mempertahankan token, bukan membuang kode asli.
+ */
+function blankComments(src: string): string {
+  const out = src.split("")
+  const n = src.length
+  let i = 0
+  while (i < n) {
+    const c = src[i]
+    const c2 = src[i + 1]
+    if (c === "/" && c2 === "/") {
+      while (i < n && src[i] !== "\n") { out[i] = " "; i++ }
+      continue
+    }
+    if (c === "/" && c2 === "*") {
+      out[i] = " "; if (i + 1 < n) out[i + 1] = " "
+      i += 2
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        if (src[i] !== "\n") out[i] = " "
+        i++
+      }
+      if (i < n) { out[i] = " "; if (i + 1 < n) out[i + 1] = " "; i += 2 }
+      continue
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c
+      i++
+      while (i < n) {
+        if (src[i] === "\\") { i += 2; continue }
+        if (src[i] === quote) { i++; break }
+        if (quote !== "`" && src[i] === "\n") break
+        i++
+      }
+      continue
+    }
+    i++
+  }
+  return out.join("")
+}
+
+function readCode(
+  relativeDir: string,
+  out: string[],
+  opts: { excludeTests?: boolean; stripComments?: boolean } = {},
+) {
   const dir = path.join(ROOT, relativeDir)
   if (!fs.existsSync(dir)) return
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -182,20 +246,30 @@ function readCode(relativeDir: string, out: string[], opts: { excludeTests?: boo
     if (opts.excludeTests && (entry.name === "__tests__" || /\.test\.tsx?$/.test(entry.name))) continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) readCode(path.relative(ROOT, full), out, opts)
-    else if (/\.(ts|tsx|mjs|js)$/.test(entry.name)) out.push(fs.readFileSync(full, "utf8"))
+    else if (/\.(ts|tsx|mjs|js)$/.test(entry.name)) {
+      const teks = fs.readFileSync(full, "utf8")
+      out.push(opts.stripComments ? blankComments(teks) : teks)
+    }
   }
 }
 
-/** Korpus produk: `src` TANPA `__tests__`/`*.test.*` — tes menyebut nama kolom/model
- *  di fixture/mock, jadi korpus bertes membuat kolom/model mati terlihat hidup.
- *  `scripts`/`prisma` tetap ikut untuk tes kolom (seed memang menulis kolom),
- *  `e2e` tetap ikut apa adanya (spec E2E bukan fixture unit). Terukur 2026-10-29:
- *  mengeluarkan tes TIDAK menimbulkan merah berantai — kolom mati tetap 2 entri
- *  KNOWN_UNUSED yang sama, model mati tetap hanya EmployeeRoster. */
+/** Korpus PRODUKSI: hanya `src` TANPA `__tests__`/`*.test.*`, komentar dibuang.
+ *  Tes menyebut nama kolom/model di fixture/mock, seed (`scripts`/`prisma`)
+ *  menulis kolom yang tak pernah dihasilkan UI, dan komentar menyebut nama
+ *  tanpa memakai — ketiganya membuat kolom/model mati terlihat hidup.
+ *  Pemakaian seed-only tetap diawasi tes SEED_ONLY_* (korpus terpisah di bawah).
+ *  Terukur round2 2026-10-30: korpus ini menghasilkan tepat KNOWN_UNUSED +
+ *  SEED_ONLY_COLUMNS untuk kolom dan 0 model mati. */
 function productCode(dirs: string[]): string {
   const parts: string[] = []
-  for (const dir of dirs) readCode(dir, parts, { excludeTests: true })
+  for (const dir of dirs) readCode(dir, parts, { excludeTests: true, stripComments: true })
   return parts.join("\n")
+}
+
+/** Himpunan token identifier satu korpus — setara regex `\b<token>\b` untuk
+ *  nama kolom/kolom-DB, tanpa mengompilasi regex per kolom atas korpus besar. */
+function tokenSet(code: string): Set<string> {
+  return new Set(code.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [])
 }
 
 /** Field skalar yang dilewati karena dipakai Prisma sebagai kolom FK. */
@@ -215,7 +289,7 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
     "tidak ada kolom mati di luar daftar-beku",
     () => {
     const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
-    const code = productCode(["src", "scripts", "e2e", "prisma"])
+    const tokens = tokenSet(productCode(["src"]))
     const fkScalars = foreignKeyScalars(schema)
 
     const unused: string[] = []
@@ -229,12 +303,16 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
         const column = /@map\("([^"]+)"\)/.exec(rest)?.[1]
         const used = [name, column]
           .filter((value): value is string => Boolean(value))
-          .some((value) => new RegExp(`\\b${value}\\b`).test(code))
+          .some((value) => tokens.has(value))
         if (!used) unused.push(`${model}.${name}`)
       }
     }
 
-    const baru = unused.sort().filter((entry) => !KNOWN_UNUSED.includes(entry))
+    // Kolom seed-only diawasi daftarnya sendiri (SEED_ONLY_COLUMNS, tes di
+    // bawah) — di sini ia dikecualikan agar satu kolom tak menuntut dua beku.
+    const baru = unused
+      .sort()
+      .filter((entry) => !KNOWN_UNUSED.includes(entry) && !SEED_ONLY_COLUMNS.includes(entry))
     const basi = KNOWN_UNUSED.filter((entry) => !unused.includes(entry))
 
     expect({ kolomMatiBaru: baru, daftarBekuUsang: basi }).toEqual({
@@ -271,7 +349,8 @@ const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string; expires: strin
 
 describe("skema: setiap model dipakai kode", () => {
   const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
-  const code = productCode(["src", "scripts", "e2e", "prisma"])
+  const code = productCode(["src"])
+  const tokens = tokenSet(code)
   const namaModel = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1])
   // Nama relasi yang menunjuk ke model ini, mis. `results QcInspectionResult[]`.
   const namaRelasi = (model: string) =>
@@ -287,8 +366,8 @@ describe("skema: setiap model dipakai kode", () => {
 
   const dipakai = (model: string) => {
     const delegate = model[0].toLowerCase() + model.slice(1)
-    if (new RegExp(`\\b${model}\\b`).test(code)) return true
-    if (new RegExp(`\\b${delegate}\\b`).test(code)) return true
+    if (tokens.has(model)) return true
+    if (tokens.has(delegate)) return true
     // Nested write/read memakai NAMA RELASI, bukan nama model — inilah yang dulu
     // membuat `QcInspectionResult` & `ProductionGenealogyMaterial` keliru disebut mati.
     // Dibatasi ke posisi khas Prisma (`nama: {`, `nama: true`, `nama: [`) agar kata
@@ -350,10 +429,11 @@ describe("skema: kolom yang hanya dipakai skrip seed", () => {
     "kolom seed-only terdaftar, dan daftarnya tidak membusuk",
     () => {
     const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
+    // Bebas-komentar di dua sisi: sebutan di komentar tak membuktikan penulisan.
     const produk: string[] = []
-    for (const dir of ["src", "e2e"]) readCode(dir, produk, { excludeTests: true })
+    for (const dir of ["src", "e2e"]) readCode(dir, produk, { excludeTests: true, stripComments: true })
     const seed: string[] = []
-    for (const dir of ["scripts", "prisma"]) readCode(dir, seed)
+    for (const dir of ["scripts", "prisma"]) readCode(dir, seed, { stripComments: true })
 
     const teksProduk = produk.join("\n")
     const teksSeed = seed.join("\n")
@@ -435,7 +515,7 @@ describe("skema: model yang dibaca tetapi tidak punya jalur tulis di produk", ()
     () => {
       const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
       const produk: string[] = []
-      for (const dir of ["src", "e2e"]) readCode(dir, produk, { excludeTests: true })
+      for (const dir of ["src", "e2e"]) readCode(dir, produk, { excludeTests: true, stripComments: true })
       const idx = productIndex(produk.join("\n"))
 
       const seedOnly: string[] = []
@@ -471,6 +551,25 @@ describe("skema: model yang dibaca tetapi tidak punya jalur tulis di produk", ()
     },
     20_000,
   )
+})
+
+describe("korpus penjaga skema (round2 #16)", () => {
+  it("sebutan di komentar TIDAK dihitung sebagai pemakaian; di string/kode dihitung", () => {
+    const sampel = [
+      "// deadField disebut di komentar baris",
+      "/* deadField di komentar blok */",
+      'const sql = "SELECT liveField FROM t"',
+      "prisma.x.findMany({ select: { liveField: true } }) // deadField lagi",
+    ].join("\n")
+    const tokens = tokenSet(blankComments(sampel))
+    expect(tokens.has("deadField")).toBe(false)
+    expect(tokens.has("liveField")).toBe(true)
+  })
+
+  it("blankComments mempertahankan baris (nomor baris tak bergeser)", () => {
+    const sampel = "a\n/* satu\ndua */\nb"
+    expect(blankComments(sampel).split("\n")).toHaveLength(4)
+  })
 })
 
 /**

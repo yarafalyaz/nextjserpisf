@@ -24,9 +24,20 @@ const EMPTY_CATCH = /catch\s*(?:\([^)]*\))?\s*\{\s*\}/g
  * Satu-satunya pengecualian: skrip bootstrap tema yang disuntik inline di `<head>`.
  * Ia harus tidak pernah melempar (localStorage bisa tidak tersedia), dan di sana tidak
  * ada yang bisa dilakukan — jadi blok kosongnya memang keputusan, bukan kelalaian.
+ *
+ * Round2 #17: pengecualian TIDAK lagi berbentuk skip per-berkas. Semua daftar
+ * beku di berkas ini kini berpasangan dengan peta JUMLAH persis per berkas:
+ * pelanggaran di berkas tak terdaftar merah, jumlah naik di berkas terdaftar
+ * merah (pelanggaran baru tak bisa bersembunyi di berkas terdaftar), dan
+ * jumlah turun/hilang juga merah (beku membusuk wajib dipangkas). Alasan
+ * per berkas tetap wajib ada dan kuncinya harus sama dengan peta jumlah.
  */
 const ALLOWED: Record<string, string> = {
   "src/app/layout.tsx": "skrip bootstrap tema inline di <head>",
+}
+
+const ALLOWED_EMPTY_CATCH_COUNTS: Record<string, number> = {
+  "src/app/layout.tsx": 1,
 }
 
 /**
@@ -37,22 +48,25 @@ const ALLOWED: Record<string, string> = {
  * vendor-payment-form: kini menampilkan pesan + mengembalikan barisnya);
  * yang tersisa di daftar ini memang pembersihan best-effort atau setelan opsional.
  *
- * Catatan jujur soal kelebaran: daftar ini mengecualikan per BERKAS, jadi penyisipan
- * `.catch(() => {})` baru di dalam berkas-berkas itu tidak akan tertangkap. Cukup untuk
- * berkas ini karena semua penelannya sejenis, tapi bukan penjagaan yang ketat.
+ * Round2 #17: pola sempit lama (`() => {}`/`undefined`/`null` saja, dengan
+ * skip per-berkas) DIHAPUS karena pola luas di bawah adalah superhimpunannya
+ * dan kini ditegakkan sebagai jumlah persis per berkas di SEMUA berkas —
+ * tak ada lagi berkas yang dilewati penjaga ini.
  */
-const SILENT_PROMISE_CATCH = /\.catch\(\s*\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)\s*\)/g
 
 /**
- * Perluasan pola (round2): handler bernama parameter pun bisa menelan —
+ * Perluasan pola (round2): handler berparameter pun bisa menelan —
  * `.catch((e) => null)`, `.catch(() => false)`, `.catch(() => [])`,
  * `.catch((e) => { return null })`. Parameter `(e)`/`(err)` yang tak dipakai
  * untuk melempar/melapor = senyap sama seperti `() => null`.
+ * Diluaskan lagi: handler `async`, `return` telanjang di blok (`{ return; }`
+ * = undefined senyap), `void 0`, dan komentar di dalam blok handler
+ * (pemindaian berjalan di atas sumber bebas-komentar, lihat `blankComments`).
  * Blok handler yang melempar ulang / memberi tahu pengguna / menandai gagal
  * TIDAK dihitung (pemeriksaan isi blok di tes perluasan).
  */
 const SILENT_PROMISE_CATCH_WIDE =
-  /\.catch\(\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:\{\s*return\s+(?:null|undefined|false|0|\[\s*\]|\{\})\s*;?\s*\}|null|undefined|false|0|\[\s*\]|\{\s*\}|""|''|``)\s*\)/g
+  /\.catch\(\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:\{\s*(?:return\s+(?:null|undefined|false|0|\[\s*\]|\{\}|void\s+0)\s*;?|return\s*;?)?\s*\}|null|undefined|false|0|\[\s*\]|\{\s*\}|""|''|``|void\s+0)\s*\)/g
 
 const ALLOWED_PROMISE_CATCH: Record<string, string> = {
   "src/app/api/cron/route.ts": "sapu berkas lampiran yatim best-effort (R-9); unlink gagal = berkas memang sudah hilang, deleteMany tetap jalan",
@@ -69,6 +83,48 @@ const ALLOWED_PROMISE_CATCH_WIDE_COUNTS: Record<string, number> = {
   "src/app/api/upload/attachments/route.ts": 1,
   "src/components/reports/report-letterhead.tsx": 1,
   "src/lib/db/backup.ts": 2,
+}
+
+/**
+ * Kosongkan isi komentar sambil mempertahankan string/template, panjang, dan
+ * posisi baris — supaya `.catch(() => { /* abaikan *\/ })` tak lolos hanya
+ * karena ada komentar di bloknya, dan nomor baris laporan tetap benar.
+ */
+function blankComments(src: string): string {
+  const out = src.split("")
+  const n = src.length
+  let i = 0
+  while (i < n) {
+    const c = src[i]
+    const c2 = src[i + 1]
+    if (c === "/" && c2 === "/") {
+      while (i < n && src[i] !== "\n") { out[i] = " "; i++ }
+      continue
+    }
+    if (c === "/" && c2 === "*") {
+      out[i] = " "; if (i + 1 < n) out[i + 1] = " "
+      i += 2
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        if (src[i] !== "\n") out[i] = " "
+        i++
+      }
+      if (i < n) { out[i] = " "; if (i + 1 < n) out[i + 1] = " "; i += 2 }
+      continue
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c
+      i++
+      while (i < n) {
+        if (src[i] === "\\") { i += 2; continue }
+        if (src[i] === quote) { i++; break }
+        if (quote !== "`" && src[i] === "\n") break
+        i++
+      }
+      continue
+    }
+    i++
+  }
+  return out.join("")
 }
 
 function productionFiles(dir: string, out: string[] = []): string[] {
@@ -294,9 +350,10 @@ function isDefaultReturn(block: CatchBlock): boolean {
  *   • mundur — bila pelanggarannya diperbaiki (atau berkasnya hilang), entri
  *     dianggap membusuk dan tes MERAH, memaksa penghapusan entri.
  *
- * Kelebaran per-berkas sama seperti daftar promise di atas: penyisipan
- * pelanggaran BARU di dalam berkas yang sudah terdaftar tidak akan tertangkap.
- * Sadar akan kekurangan itu; daftarnya sengaja dijaga sekecil mungkin.
+ * Round2 #17 menutup kelebaran per-berkas itu: tiap daftar alasan kini
+ * berpasangan dengan peta JUMLAH persis (`*_COUNTS` di bawah), ditegakkan
+ * lewat `collectClassified` tanpa melewati berkas mana pun — pelanggaran
+ * BARU di berkas terdaftar menaikkan jumlahnya dan memerahkan tes.
  *
  * Entri ber-label "UTANG kegagalan senyap" adalah temuan yang MEMANG senyap dan
  * bukan degradasi yang disengaja — ia dibekukan (bukan dilonggarkan aturannya)
@@ -310,6 +367,60 @@ const ALLOWED_COMMENT_ONLY: Record<string, string> = {
   "src/lib/auth/auth.ts": "menelan error di jalur auth agar alur login tak putus (niatnya tertulis di blok)",
   "src/lib/db/backup.ts": "pembersihan / daftar berkas best-effort; R2 boleh tak terkonfigurasi, hasil lokal tetap dikembalikan",
   "src/lib/pdf/engine/render.ts": "logo tak terbaca cukup dilewati — kop tetap tercetak (niatnya tertulis di blok)",
+}
+
+/** Jumlah persis pelanggaran per berkas untuk tiap daftar alasan di bawah
+ *  (round2 #17 — menggantikan skip per-berkas + uji "daftar membusuk"). */
+const ALLOWED_COMMENT_ONLY_COUNTS: Record<string, number> = {
+  "src/actions/auth.actions.ts": 1,
+  "src/actions/project.actions.ts": 1,
+  "src/app/api/upload/attachments/[id]/route.ts": 1,
+  "src/components/reports/export-buttons.tsx": 1,
+  "src/lib/auth/auth.ts": 1,
+  "src/lib/db/backup.ts": 4,
+  "src/lib/pdf/engine/render.ts": 1,
+}
+const ALLOWED_CONSOLE_ONLY_COUNTS: Record<string, number> = {
+  "scripts/clear-all-data.ts": 1,
+  "scripts/verify-migrations.mjs": 1,
+  "src/actions/purchase.actions.ts": 2,
+  "src/actions/sales.actions.ts": 1,
+  "src/app/(dashboard)/crm/tickets/[slug]/page.tsx": 1,
+  "src/app/(dashboard)/crm/tickets/page.tsx": 3,
+  "src/app/(dashboard)/inventaris/rak/_components/rack-create-form.tsx": 1,
+  "src/app/api/cron/route.ts": 2,
+  "src/app/api/workflow/[...path]/route.ts": 1,
+  "src/components/forms/rack-row-form.tsx": 1,
+  "src/components/reports/export-buttons.tsx": 1,
+  "src/components/ui/quick-add-select.tsx": 1,
+  "src/lib/db/backup.ts": 1,
+  "src/lib/hooks/sales-payment.hook.ts": 2,
+  "src/lib/reports/work-order-material-needs-data.ts": 1,
+  "src/lib/reports/work-order-reservations-data.ts": 1,
+  "src/lib/services/activity-log.service.ts": 1,
+  "src/lib/services/activity-reference.service.ts": 2,
+  "src/lib/services/transaction-attachment.service.ts": 1,
+  "src/lib/services/vehicle-fitment.service.ts": 2,
+}
+const ALLOWED_DEFAULT_RETURN_COUNTS: Record<string, number> = {
+  "src/app/(dashboard)/pengaturan/ubah/_components/settings-edit-form.tsx": 1,
+  "src/components/layout/notification-dropdown.tsx": 1,
+  "src/components/ui/quick-add-select.tsx": 1,
+  "src/lib/auth/document-scope.ts": 1,
+  "src/lib/pdf/engine/logo.ts": 2,
+  "src/lib/pdf/generator.ts": 1,
+  "src/lib/reports/return-credit.ts": 1,
+  "src/lib/security/same-origin.ts": 1,
+  "src/lib/security/secure-request.ts": 1,
+  "src/lib/services/costing-method.service.ts": 1,
+  "src/lib/services/recurring.service.ts": 1,
+  "src/lib/setup/install-state.ts": 1,
+  "src/lib/utils/idempotency.ts": 1,
+  "src/lib/utils/safe-parse.ts": 1,
+}
+// Terukur sama dengan pola return-terakhir di atas (15 blok yang sama).
+const ALLOWED_DEFAULT_RETURN_ANYWHERE_COUNTS: Record<string, number> = {
+  ...ALLOWED_DEFAULT_RETURN_COUNTS,
 }
 
 const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
@@ -352,96 +463,74 @@ const ALLOWED_DEFAULT_RETURN: Record<string, string> = {
   "src/lib/reports/return-credit.ts": "resolusi akun Piutang global gagal → null = akun belum terkonfigurasi; returnCredit dianggap 0 dan laporan tetap jalan (pola existing sales-target-achievement-data)",
 }
 
-function collectViolations(
+/**
+ * Klasifikasikan pelanggaran satu predikat TANPA melewati berkas apa pun:
+ * `counts` = jumlah per berkas (dibandingkan persis dengan peta beku, jadi
+ * naik/turun sama-sama merah), `diLuarBeku` = lokasi di berkas tak terdaftar.
+ * Inilah pengganti skip per-berkas lama (round2 #17).
+ */
+function collectClassified(
   predicate: (block: CatchBlock) => boolean,
-  beku: Record<string, string>,
-): string[] {
-  const pelanggar: string[] = []
+  bekuCounts: Record<string, number>,
+): { counts: Record<string, number>; diLuarBeku: string[] } {
+  const counts: Record<string, number> = {}
+  const diLuarBeku: string[] = []
   for (const dir of DIRS) {
     for (const file of productionFiles(dir)) {
       const relative = path.relative(ROOT, file)
-      if (beku[relative]) continue
       const source = fs.readFileSync(file, "utf8")
       for (const block of catchBlocks(source)) {
-        if (predicate(block)) pelanggar.push(`${relative}:${block.line}`)
+        if (!predicate(block)) continue
+        counts[relative] = (counts[relative] ?? 0) + 1
+        if (!(relative in bekuCounts)) diLuarBeku.push(`${relative}:${block.line}`)
       }
     }
   }
-  return pelanggar.sort()
+  return { counts, diLuarBeku: diLuarBeku.sort() }
 }
 
-function daftarMembusuk(
-  predicate: (block: CatchBlock) => boolean,
-  beku: Record<string, string>,
-): string[] {
-  return Object.keys(beku).filter((relative) => {
-    const full = path.join(ROOT, relative)
-    if (!fs.existsSync(full)) return true
-    // Tidak ada regex stateful di sini — `catchBlocks` selalu mulai bersih.
-    return !catchBlocks(fs.readFileSync(full, "utf8")).some(predicate)
-  })
+/** Berkas yang masuk peta jumlah WAJIB punya alasan tertulis, dan sebaliknya. */
+function kunciSama(a: Record<string, unknown>, b: Record<string, unknown>): string[] {
+  const ka = Object.keys(a).sort()
+  const kb = Object.keys(b).sort()
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i]) ? [] : [...ka, ...kb]
 }
 
 describe("kegagalan senyap: tidak ada catch kosong di kode produksi", () => {
-  it("setiap catch punya isi, atau berkasnya terdaftar sebagai pengecualian beralasan", () => {
+  it("setiap catch punya isi, atau terdaftar sebagai pengecualian beralasan dengan jumlah persis", () => {
+    // TANPA skip per-berkas: semua berkas dipindai; berkas terdaftar pun
+    // hanya boleh berisi tepat sejumlah beku (round2 #17).
+    const counts: Record<string, number> = {}
     const pelanggar: string[] = []
 
     for (const dir of DIRS) {
       for (const file of productionFiles(dir)) {
         const relative = path.relative(ROOT, file)
-        if (ALLOWED[relative]) continue
         const source = fs.readFileSync(file, "utf8")
         for (const match of source.matchAll(EMPTY_CATCH)) {
-          pelanggar.push(`${relative}:${source.slice(0, match.index).split("\n").length}`)
+          counts[relative] = (counts[relative] ?? 0) + 1
+          if (!(relative in ALLOWED_EMPTY_CATCH_COUNTS)) {
+            pelanggar.push(`${relative}:${source.slice(0, match.index).split("\n").length}`)
+          }
         }
       }
     }
 
-    expect({ catchKosong: pelanggar.sort() }).toEqual({ catchKosong: [] })
+    expect({ catchKosongBaru: pelanggar.sort() }).toEqual({ catchKosongBaru: [] })
+    // Dua arah sekaligus: naik = pelanggaran baru bersembunyi, turun/hilang =
+    // beku membusuk dan wajib dipangkas.
+    expect(counts).toEqual(ALLOWED_EMPTY_CATCH_COUNTS)
+    expect(kunciSama(ALLOWED, ALLOWED_EMPTY_CATCH_COUNTS)).toEqual([])
   })
 
-  it("pengecualian catch-kosong tidak membusuk (berkas ada DAN pelanggarannya masih ada)", () => {
-    const takTerpakai = Object.keys(ALLOWED).filter((relative) => {
-      const full = path.join(ROOT, relative)
-      if (!fs.existsSync(full)) return true
-      // Salinan tanpa flag `g`: regex ber-`g` stateful pada `.test()` (lastIndex
-      // berpindah), yang membuat pemeriksaan ini berbohong — pelajaran yang sama
-      // seperti daftar promise di bawah.
-      //
-      // Mengapa juga menuntut pelanggarannya masih ada: pengecualian di sini bersifat
-      // PER-BERKAS. Bila pelanggaran aslinya diperbaiki, entri yang dibiarkan akan terus
-      // mengizinkan pelanggaran BARU di berkas yang sama — jadi perbaikan harus memaksa
-      // penghapusan entri ini.
-      const pola = new RegExp(EMPTY_CATCH.source)
-      return !pola.test(fs.readFileSync(full, "utf8"))
-    })
-    expect({ pengecualianTakTerpakai: takTerpakai }).toEqual({ pengecualianTakTerpakai: [] })
-  })
-
-  it("tidak ada `.catch()` senyap di luar daftar pengecualian", () => {
-    const pelanggar: string[] = []
-
-    for (const dir of DIRS) {
-      for (const file of productionFiles(dir)) {
-        const relative = path.relative(ROOT, file)
-        if (ALLOWED_PROMISE_CATCH[relative]) continue
-        const source = fs.readFileSync(file, "utf8")
-        for (const match of source.matchAll(SILENT_PROMISE_CATCH)) {
-          pelanggar.push(`${relative}:${source.slice(0, match.index).split("\n").length}`)
-        }
-      }
-    }
-
-    expect({ catchPromiseSenyap: pelanggar.sort() }).toEqual({ catchPromiseSenyap: [] })
-  })
-
-  it("tidak ada `.catch((e)=>…)` / `()=>false/[]` senyap di luar beku jumlah per berkas", () => {
+  it("tidak ada `.catch(…)` senyap (sempit/luas/async/return-telanjang) di luar beku jumlah per berkas", () => {
     const counts: Record<string, number> = {}
     const pelanggar: string[] = []
     for (const dir of DIRS) {
       for (const file of productionFiles(dir)) {
         const relative = path.relative(ROOT, file)
-        const source = fs.readFileSync(file, "utf8")
+        // Bebas-komentar: komentar di blok handler tak lagi menyelundupkan pola.
+        const source = blankComments(fs.readFileSync(file, "utf8"))
         for (const match of source.matchAll(SILENT_PROMISE_CATCH_WIDE)) {
           counts[relative] = (counts[relative] ?? 0) + 1
           if (!(relative in ALLOWED_PROMISE_CATCH_WIDE_COUNTS)) {
@@ -454,59 +543,71 @@ describe("kegagalan senyap: tidak ada catch kosong di kode produksi", () => {
     // Arah kedua: jumlah di berkas terdaftar harus PERSIS beku — catch baru
     // di berkas lama pun merah, dan perbaikan wajib menurunkan beku.
     expect(counts).toEqual(ALLOWED_PROMISE_CATCH_WIDE_COUNTS)
-  })
-
-  it("daftar pengecualian promise tidak membusuk", () => {
-    const tidakTerpakai = Object.keys(ALLOWED_PROMISE_CATCH).filter((relative) => {
-      const full = path.join(ROOT, relative)
-      if (!fs.existsSync(full)) return true
-      // Salinan tanpa flag `g`: regex ber-`g` bersifat stateful pada `.test()`
-      // (lastIndex berpindah antar-panggilan), yang membuat pemeriksaan ini bohong.
-      const pola = new RegExp(SILENT_PROMISE_CATCH.source)
-      return !pola.test(fs.readFileSync(full, "utf8"))
-    })
-    expect({ pengecualianTakTerpakai: tidakTerpakai }).toEqual({ pengecualianTakTerpakai: [] })
+    expect(kunciSama(ALLOWED_PROMISE_CATCH, ALLOWED_PROMISE_CATCH_WIDE_COUNTS)).toEqual([])
   })
 })
 
 describe("kegagalan senyap lanjutan: console-only, comment-only, default-return", () => {
-  it("(1) catch yang isinya hanya console.* (tanpa throw/return) tidak lolos di luar daftar", () => {
-    expect({ consoleOnly: collectViolations(isConsoleOnly, ALLOWED_CONSOLE_ONLY) })
-      .toEqual({ consoleOnly: [] })
+  it("(1) catch console-only: tak ada di luar daftar, dan jumlah per berkas persis beku", () => {
+    const { counts, diLuarBeku } = collectClassified(isConsoleOnly, ALLOWED_CONSOLE_ONLY_COUNTS)
+    expect({ consoleOnlyBaru: diLuarBeku }).toEqual({ consoleOnlyBaru: [] })
+    expect(counts).toEqual(ALLOWED_CONSOLE_ONLY_COUNTS)
+    expect(kunciSama(ALLOWED_CONSOLE_ONLY, ALLOWED_CONSOLE_ONLY_COUNTS)).toEqual([])
   })
 
-  it("(1b) daftar console-only tidak membusuk", () => {
-    expect({ pengecualianTakTerpakai: daftarMembusuk(isConsoleOnly, ALLOWED_CONSOLE_ONLY) })
-      .toEqual({ pengecualianTakTerpakai: [] })
+  it("(2) catch comment-only: tak ada di luar daftar, dan jumlah per berkas persis beku", () => {
+    const { counts, diLuarBeku } = collectClassified(isCommentOnly, ALLOWED_COMMENT_ONLY_COUNTS)
+    expect({ commentOnlyBaru: diLuarBeku }).toEqual({ commentOnlyBaru: [] })
+    expect(counts).toEqual(ALLOWED_COMMENT_ONLY_COUNTS)
+    expect(kunciSama(ALLOWED_COMMENT_ONLY, ALLOWED_COMMENT_ONLY_COUNTS)).toEqual([])
   })
 
-  it("(2) catch yang isinya hanya komentar tidak lolos di luar daftar", () => {
-    expect({ commentOnly: collectViolations(isCommentOnly, ALLOWED_COMMENT_ONLY) })
-      .toEqual({ commentOnly: [] })
+  it("(3) catch default-return (return terakhir): tak ada di luar daftar, jumlah persis beku", () => {
+    const { counts, diLuarBeku } = collectClassified(isDefaultReturn, ALLOWED_DEFAULT_RETURN_COUNTS)
+    expect({ defaultReturnBaru: diLuarBeku }).toEqual({ defaultReturnBaru: [] })
+    expect(counts).toEqual(ALLOWED_DEFAULT_RETURN_COUNTS)
   })
 
-  it("(2b) daftar comment-only tidak membusuk", () => {
-    expect({ pengecualianTakTerpakai: daftarMembusuk(isCommentOnly, ALLOWED_COMMENT_ONLY) })
-      .toEqual({ pengecualianTakTerpakai: [] })
+  it("(3c) catch { return <default> } di posisi mana pun: daftar sama, jumlah persis beku", () => {
+    const { counts, diLuarBeku } = collectClassified(
+      isDefaultReturnAnywhere,
+      ALLOWED_DEFAULT_RETURN_ANYWHERE_COUNTS,
+    )
+    expect({ defaultReturnAnywhereBaru: diLuarBeku }).toEqual({ defaultReturnAnywhereBaru: [] })
+    expect(counts).toEqual(ALLOWED_DEFAULT_RETURN_ANYWHERE_COUNTS)
+    expect(kunciSama(ALLOWED_DEFAULT_RETURN, ALLOWED_DEFAULT_RETURN_ANYWHERE_COUNTS)).toEqual([])
+    expect(kunciSama(ALLOWED_DEFAULT_RETURN, ALLOWED_DEFAULT_RETURN_COUNTS)).toEqual([])
+  })
+})
+
+describe("detektor kegagalan senyap (round2 #17)", () => {
+  it("pola promise luas menangkap varian yang lolos dari regex lama", () => {
+    const pola = new RegExp(SILENT_PROMISE_CATCH_WIDE.source)
+    const senyap = [
+      "p.catch(() => { /* abaikan */ })",
+      "p.catch(async (e) => null)",
+      "p.catch((e) => { return; })",
+      "p.catch(() => void 0)",
+      "p.catch((e) => { return [] })",
+    ]
+    for (const s of senyap) {
+      expect(pola.test(blankComments(s)), s).toBe(true)
+    }
+    const tidakSenyap = [
+      "p.catch((e) => { console.error(e); throw e })",
+      "p.catch(handleError)",
+      "p.catch(() => showError('gagal'))",
+    ]
+    for (const s of tidakSenyap) {
+      expect(pola.test(blankComments(s)), s).toBe(false)
+    }
   })
 
-  it("(3) catch yang mengembalikan nilai default tanpa penanda gagal tidak lolos di luar daftar", () => {
-    expect({ defaultReturn: collectViolations(isDefaultReturn, ALLOWED_DEFAULT_RETURN) })
-      .toEqual({ defaultReturn: [] })
-  })
-
-  it("(3b) daftar default-return tidak membusuk", () => {
-    expect({ pengecualianTakTerpakai: daftarMembusuk(isDefaultReturn, ALLOWED_DEFAULT_RETURN) })
-      .toEqual({ pengecualianTakTerpakai: [] })
-  })
-
-  it("(3c) catch { return <default> } di posisi mana pun tidak lolos di luar daftar yang sama", () => {
-    expect({ defaultReturnAnywhere: collectViolations(isDefaultReturnAnywhere, ALLOWED_DEFAULT_RETURN) })
-      .toEqual({ defaultReturnAnywhere: [] })
-  })
-
-  it("(3d) daftar default-return tetap hidup untuk varian posisi-mana-pun", () => {
-    expect({ pengecualianTakTerpakai: daftarMembusuk(isDefaultReturnAnywhere, ALLOWED_DEFAULT_RETURN) })
-      .toEqual({ pengecualianTakTerpakai: [] })
+  it("blankComments tak mengubah nomor baris dan tak memakan string berisi //", () => {
+    const s = 'const u = "https://x.test/a" // komentar deadToken\n/* blok\nblok */ const b = 1'
+    const bersih = blankComments(s)
+    expect(bersih.split("\n")).toHaveLength(3)
+    expect(bersih).toContain("https://x.test/a")
+    expect(bersih).not.toContain("deadToken")
   })
 })

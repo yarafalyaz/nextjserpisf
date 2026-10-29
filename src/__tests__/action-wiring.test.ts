@@ -16,6 +16,8 @@ import { join, relative } from "node:path"
 // harus dirujuk minimal satu berkas lain di src (di luar berkas tes), KECUALI
 // terdaftar di daftar-beku dengan alasan tertulis. Penjaga ini berarah dua:
 // entri yang sudah tidak perlu (aksinya kini dirujuk) memerahkan tes.
+// Sebutan nama aksi di dalam komentar TIDAK dihitung sebagai rujukan
+// (pemindaian berjalan di atas sumber bebas-komentar, lihat `blankComments`).
 
 const ROOT = process.cwd()
 const ACTIONS_DIR = join(ROOT, "src", "actions")
@@ -27,6 +29,52 @@ function walk(dir: string, out: string[] = []): string[] {
     else out.push(p)
   }
   return out
+}
+
+/**
+ * Kosongkan isi komentar sambil mempertahankan string/template, panjang, dan
+ * posisi baris — pola yang sama dengan `blankComments` di
+ * silent-failure.test.ts. Menjaga string apa adanya itu wajib: `//`/`/*` di
+ * dalam string (URL, SQL) bukan komentar, dan memakannya bisa mengosongkan
+ * kode sesudahnya sampai akhir baris (rujukan asli hilang = negatif palsu).
+ * ponytail: bukan parser penuh — literal regex berisi `//`/`/*`/kutip bisa
+ * mengacaukannya; naikkan ke parser TS bila itu mulai menggigit.
+ */
+function blankComments(src: string): string {
+  const out = src.split("")
+  const n = src.length
+  let i = 0
+  while (i < n) {
+    const c = src[i]
+    const c2 = src[i + 1]
+    if (c === "/" && c2 === "/") {
+      while (i < n && src[i] !== "\n") { out[i] = " "; i++ }
+      continue
+    }
+    if (c === "/" && c2 === "*") {
+      out[i] = " "; if (i + 1 < n) out[i + 1] = " "
+      i += 2
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        if (src[i] !== "\n") out[i] = " "
+        i++
+      }
+      if (i < n) { out[i] = " "; if (i + 1 < n) out[i + 1] = " "; i += 2 }
+      continue
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c
+      i++
+      while (i < n) {
+        if (src[i] === "\\") { i += 2; continue }
+        if (src[i] === quote) { i++; break }
+        if (quote !== "`" && src[i] === "\n") break
+        i++
+      }
+      continue
+    }
+    i++
+  }
+  return out.join("")
 }
 
 const srcFiles = walk(join(ROOT, "src")).filter(
@@ -45,7 +93,7 @@ interface ExportedAction {
 
 const actions: ExportedAction[] = []
 for (const file of actionFiles) {
-  const body = readFileSync(file, "utf8")
+  const body = blankComments(readFileSync(file, "utf8"))
   for (const m of body.matchAll(/export\s+async\s+function\s+([A-Za-z_][A-Za-z0-9_]*)/g)) {
     actions.push({ file, key: `${relative(ROOT, file)}::${m[1]}`, name: m[1] })
   }
@@ -53,7 +101,10 @@ for (const file of actionFiles) {
 
 // Satu lintasan baca untuk semua berkas: membaca ulang tiap berkas per aksi
 // (326 aksi x ~2000 berkas) melewati batas waktu tes.
-const fileContents = srcFiles.map((f) => ({ file: f, text: readFileSync(f, "utf8") }))
+const fileContents = srcFiles.map((f) => ({
+  file: f,
+  text: blankComments(readFileSync(f, "utf8")),
+}))
 const combined = new RegExp(`\\b(${actions.map((a) => a.name).join("|")})\\b`, "g")
 const references = new Map<string, Set<string>>()
 for (const { file, text } of fileContents) {
@@ -138,11 +189,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-28-133-S/135-V backend dulu (t_640dcde5): aksi dokumen koreksi
-  // slip paid; tombol/dialog UI menyusul kartu Frontend (buang entri ini saat
-  // halaman penggajian memanggilnya).
-  "src/actions/hrm.actions.ts::correctPaidPayroll":
-    "F-2026-10-28-133-S/135-V backend; UI koreksi slip paid menyusul (frontend)",
+  // F-2026-10-28-133-S/135-V: correctPaidPayroll kini dirujuk tombol Koreksi
+  // di detail slip paid (correct-paid-button.tsx) — entri beku dibuang.
   // F-2026-10-25-048-S: 2 aksi lead time kini dirujuk ItemWarehouseMinStockPanel
   // (kolom + kontrol lead time, PR konsumen Frontend 048-F1) — entri beku dibuang.
   // F-2026-10-25-043-B1: aksi jejak email statement kini dirujuk
@@ -266,5 +314,23 @@ describe("keterhubungan aksi server", () => {
   it("kontrol positif: pemindai benar-benar melihat aksi (bukan daftar kosong)", () => {
     expect(actions.length).toBeGreaterThan(250)
     expect(actionFiles.length).toBeGreaterThan(10)
+  })
+})
+
+describe("blankComments (pemindai rujukan)", () => {
+  it("sebutan nama aksi di komentar tidak dihitung, rujukan kode tetap terhitung", () => {
+    const berpola = (teks: string) =>
+      [...blankComments(teks).matchAll(/\bcorrectPaidPayroll\b/g)]
+    expect(berpola("// correctPaidPayroll menyusul\n/* correctPaidPayroll */")).toHaveLength(0)
+    expect(berpola("await correctPaidPayroll(id, fd)")).toHaveLength(1)
+  })
+
+  it("tak memakan string berisi // dan tak mengubah nomor baris", () => {
+    const s = 'const u = "https://x.test/a" // correctPaidPayroll\n/* blok\nblok */ correctPaidPayroll()'
+    const bersih = blankComments(s)
+    expect(bersih.split("\n")).toHaveLength(3)
+    expect(bersih).toContain("https://x.test/a")
+    expect(bersih).not.toContain("// correctPaidPayroll")
+    expect([...bersih.matchAll(/\bcorrectPaidPayroll\b/g)]).toHaveLength(1)
   })
 })

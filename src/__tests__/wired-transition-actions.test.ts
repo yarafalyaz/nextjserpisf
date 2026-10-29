@@ -156,20 +156,130 @@ const GENERIC_INVOKERS: Record<string, RegExp> = {
   "src/components/ui/draft-release-actions.tsx": /\bawait\s+deleteAction\s*\(/,
 }
 
-/** Tersambung nyata: (a) pemanggilan langsung `namaAksi(`, atau (b) diteruskan
- *  sebagai nilai prop/handler `={namaAksi}` / `prop={… ? namaAksi : …}` KE
- *  komponen generik yang terbukti memanggil prop-nya. Sekadar import/mention/
- *  komentar TIDAK dihitung — pola lama menghitung ketiganya. */
-function isWired(action: string, source: string): boolean {
-  // Komentar dibuang dulu: `// postInvoice (` di berkas lain bukan panggilan.
-  const tanpaKomentar = source
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/\/\/[^\n]*/g, " ")
-  if (new RegExp(`\\b${action}\\s*\\(`).test(tanpaKomentar)) return true
-  const forwarded = new RegExp(
-    `(?:action|processAction|deleteAction)\\s*=\\s*\\{[^}]*\\b${action}\\b[^}]*\\}`,
-  ).test(tanpaKomentar)
-  return forwarded
+/**
+ * Kosongkan isi komentar sambil mempertahankan string/template, panjang, dan
+ * posisi baris — supaya sebutan aksi di komentar tak terbaca sebagai panggilan.
+ */
+function blankComments(src: string): string {
+  const out = src.split("")
+  const n = src.length
+  let i = 0
+  while (i < n) {
+    const c = src[i]
+    const c2 = src[i + 1]
+    if (c === "/" && c2 === "/") {
+      while (i < n && src[i] !== "\n") { out[i] = " "; i++ }
+      continue
+    }
+    if (c === "/" && c2 === "*") {
+      out[i] = " "; if (i + 1 < n) out[i + 1] = " "
+      i += 2
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) {
+        if (src[i] !== "\n") out[i] = " "
+        i++
+      }
+      if (i < n) { out[i] = " "; if (i + 1 < n) out[i + 1] = " "; i += 2 }
+      continue
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const quote = c
+      i++
+      while (i < n) {
+        if (src[i] === "\\") { i += 2; continue }
+        if (src[i] === quote) { i++; break }
+        if (quote !== "`" && src[i] === "\n") break
+        i++
+      }
+      continue
+    }
+    i++
+  }
+  return out.join("")
+}
+
+/** Specifier modul yang menunjuk berkas pendefinisi aksi, mis.
+ *  `src/actions/sales.actions.ts` ← `@/actions/sales.actions` / `./sales.actions`. */
+function moduleMatches(spec: string, definedIn: string): boolean {
+  const base = definedIn.split("/").pop()!.replace(/\.tsx?$/, "")
+  return spec === `@/actions/${base}` || spec === base || spec.endsWith(`/${base}`)
+}
+
+/** Nama lokal untuk `action` dari import bernama di modul pendefinisinya
+ *  (mendukung alias `postInvoice as postInv`); null bila tak diimpor dari sana. */
+function importedLocalName(action: string, source: string, definedIn: string): string | null {
+  for (const m of source.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']([^"']+)["']/g)) {
+    if (!moduleMatches(m[2], definedIn)) continue
+    for (const part of m[1].split(",")) {
+      const binding = /^\s*(?:type\s+)?(\w+)(?:\s+as\s+(\w+))?\s*$/.exec(part)
+      if (binding && binding[1] === action) return binding[2] ?? binding[1]
+    }
+  }
+  return null
+}
+
+/** Nama lokal komponen generik (GENERIC_INVOKERS) yang diimpor berkas ini. */
+function genericComponentNames(source: string): Set<string> {
+  const names = new Set<string>()
+  for (const m of source.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']([^"']+)["']/g)) {
+    const base = m[2].split("/").pop()!
+    if (!Object.keys(GENERIC_INVOKERS).some((rel) => rel.endsWith(`/${base}.tsx`))) continue
+    for (const part of m[1].split(",")) {
+      const binding = /^\s*(?:type\s+)?(\w+)(?:\s+as\s+(\w+))?\s*$/.exec(part)
+      if (binding) names.add(binding[2] ?? binding[1])
+    }
+  }
+  return names
+}
+
+/** Tersambung NYATA (round2 #18 — versi lama hanya menuntut regex nama muncul):
+ *  1. Aksinya WAJIB diimpor (nama/alias) dari modul pendefinisinya. Import
+ *     dari modul lain, fungsi lokal bernama sama, dan sebutan di komentar
+ *     TIDAK dihitung.
+ *  2. Lalu salah satu: (a) pemanggilan langsung `namaLokal(` — bukan metode
+ *     (`obj.aksi(`), bukan deklarasi (`function aksi(`); atau (b) diteruskan
+ *     sebagai prop `action/processAction/deleteAction` ke komponen generik
+ *     yang diimpor dari GENERIC_INVOKERS (yang terbukti memanggil prop-nya).
+ *     Meneruskan ke komponen lain TIDAK dihitung — rantainya putus di sana. */
+function isWired(action: string, source: string, definedIn: string): boolean {
+  const bersih = blankComments(source)
+  const lokal = importedLocalName(action, bersih, definedIn)
+  if (!lokal) return false
+
+  // (a) Pemanggilan langsung.
+  const callRe = new RegExp(`\\b${lokal}\\s*\\(`, "g")
+  let m: RegExpExecArray | null
+  while ((m = callRe.exec(bersih)) !== null) {
+    const before = bersih.slice(Math.max(0, m.index - 12), m.index)
+    if (/[.\w$]$/.test(before) || /\bfunction\s*$/.test(before)) continue
+    return true
+  }
+
+  // (b) Diteruskan ke komponen generik yang terbukti memanggil prop aksinya.
+  const generik = genericComponentNames(bersih)
+  if (generik.size === 0) return false
+  for (const nama of generik) {
+    const tagRe = new RegExp(`<${nama}\\b`, "g")
+    let t: RegExpExecArray | null
+    while ((t = tagRe.exec(bersih)) !== null) {
+      // Teks tag sampai `>` di luar kurung kurawal (prop bisa berisi `=>`/`===`).
+      let depth = 0
+      let end = t.index
+      for (; end < bersih.length; end++) {
+        if (bersih[end] === "{") depth++
+        else if (bersih[end] === "}") depth--
+        else if (bersih[end] === ">" && depth === 0) break
+      }
+      const tag = bersih.slice(t.index, end)
+      if (
+        new RegExp(
+          `(?:action|processAction|deleteAction)\\s*=\\s*\\{[^}]*\\b${lokal}\\b[^}]*\\}`,
+        ).test(tag)
+      ) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 describe("aksi transisi wajib tersambung ke UI", () => {
@@ -183,13 +293,56 @@ describe("aksi transisi wajib tersambung ke UI", () => {
     }
   })
 
+  it("detektor pemanggilan (round2 #18): import/sebutan/fungsi-lokal tidak dihitung", () => {
+    const def = "src/actions/sales.actions.ts"
+    const imp = `import { postInvoice } from "@/actions/sales.actions"\n`
+    // Hanya diimpor, tak pernah dipanggil/diteruskan → tak tersambung.
+    expect(isWired("postInvoice", imp + "export const x = 1", def)).toBe(false)
+    // Disebut di komentar sebagai panggilan → tak tersambung.
+    expect(isWired("postInvoice", imp + "// await postInvoice(id)", def)).toBe(false)
+    // Fungsi lokal bernama sama tanpa import → tak tersambung.
+    expect(isWired("postInvoice", "async function postInvoice(id: number) { return id }", def)).toBe(false)
+    // Diimpor dari modul LAIN lalu dipanggil → tak tersambung.
+    expect(
+      isWired("postInvoice", `import { postInvoice } from "@/actions/other.actions"\nawait postInvoice(id)`, def),
+    ).toBe(false)
+    // Metode objek bernama sama → tak tersambung.
+    expect(isWired("postInvoice", imp + "await api.postInvoice(id)", def)).toBe(false)
+    // Panggilan langsung (termasuk lewat arrow pembungkus) → tersambung.
+    expect(isWired("postInvoice", imp + "onPress={() => run(() => postInvoice(id))}", def)).toBe(true)
+    // Alias import yang dipanggil → tersambung.
+    expect(
+      isWired("postInvoice", `import { postInvoice as postInv } from "@/actions/sales.actions"\nawait postInv(id)`, def),
+    ).toBe(true)
+    // Diteruskan ke komponen generik yang terbukti memanggil prop-nya → tersambung.
+    expect(
+      isWired(
+        "postInvoice",
+        imp +
+          `import { ProcessButton } from "@/components/ui/process-button"\n` +
+          `<ProcessButton id={id} action={status === "draft" ? postInvoice : undefined} />`,
+        def,
+      ),
+    ).toBe(true)
+    // Diteruskan ke komponen BUKAN generik → rantai putus, tak tersambung.
+    expect(
+      isWired(
+        "postInvoice",
+        imp +
+          `import { FancyButton } from "@/components/ui/fancy-button"\n` +
+          `<FancyButton action={postInvoice} />`,
+        def,
+      ),
+    ).toBe(false)
+  })
+
   for (const { action, definedIn, callersIn } of REQUIRED_CALLERS) {
     it(`${action} dipanggil dari ${callersIn.join(" atau ")}`, () => {
       const callers = files.filter((file) => {
         const rel = path.relative(repoRoot, file).split(path.sep).join("/")
         if (rel === definedIn) return false
         if (rel.includes("__tests__")) return false
-        return isWired(action, fs.readFileSync(file, "utf8"))
+        return isWired(action, fs.readFileSync(file, "utf8"), definedIn)
       })
 
       expect(callers.length, `${action} tidak dipanggil dari mana pun`).toBeGreaterThan(0)
@@ -231,7 +384,7 @@ describe("aksi transisi tanpa pemanggil UI terdaftar & tetap tak tersambung", ()
         // `__tests__` (termasuk berkas ini) dikecualikan: daftar di atas menyebut nama
         // aksinya, jadi tanpa pengecualian ini test menilai dirinya sendiri sebagai pemakai.
         if (rel.includes("__tests__")) return false
-        return isWired(action, fs.readFileSync(file, "utf8"))
+        return isWired(action, fs.readFileSync(file, "utf8"), definedIn)
       })
       expect(
         refs.map((f) => path.relative(repoRoot, f)),
