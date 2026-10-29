@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   prismaMock: {
-    customer: { findMany: vi.fn() },
+    customer: { findMany: vi.fn(), findFirst: vi.fn() },
     salesInvoice: { findMany: vi.fn() },
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
@@ -19,7 +19,7 @@ import { loadReceivableSubledger } from "../ledger-cash-data"
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.prismaMock.customer.findMany.mockResolvedValue([{ id: 7, slug: "c-7" }])
+  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 7 })
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.salesPayment.findMany.mockResolvedValue([])
   mocks.prismaMock.salesReturn.findMany.mockResolvedValue([])
