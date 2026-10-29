@@ -1,49 +1,12 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-import { openCombobox } from "./utils/combobox"
+import { selectComboboxOptionBySearch, selectFirstComboboxOption } from "./utils/combobox"
+import { awaitReady } from "./utils/await-ready"
 
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  // Tanpa sleep: locator/assertion web-first sesudah ini yang menunggu
-  // hydration selesai.
-}
-
-async function selectFirstComboBoxOption(page: Page, placeholder: string) {
-  // The Combobox renders as a role="combobox" trigger labelled with the
-  // placeholder; the searchable input only exists inside the popup it opens.
-  const input = await openCombobox(page, { placeholder })
-  await page.waitForTimeout(300)
-
-  // Type to trigger filtering
-  await input.fill("E2E")
-  await page.waitForTimeout(1000)
-
-  const option = page.locator("[role='option']").first()
-  if (await option.isVisible().catch(() => false)) {
-    await option.click()
-    return true
-  }
-
-  // Clear and try without filter
-  await input.clear()
-  await page.waitForTimeout(500)
-  await input.click()
-  await page.waitForTimeout(1000)
-
-  const anyOption = page.locator("[role='option']").first()
-  if (await anyOption.isVisible().catch(() => false)) {
-    await anyOption.click()
-    return true
-  }
-
-  return false
-}
 
 
 test.describe("Proyek CRUD", () => {
@@ -56,9 +19,13 @@ test.describe("Proyek CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/proyek/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await awaitReady(page)
 
-    const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
+    // Filter "E2E" dulu (seed CI), fallback opsi pertama tanpa filter —
+    // helper bersama combobox.ts, bukan duplikat lokal + sleep.
+    const selected =
+      (await selectComboboxOptionBySearch(page, { placeholder: "Cari pelanggan..." }, "E2E")) ||
+      (await selectFirstComboboxOption(page, { placeholder: "Cari pelanggan..." }))
     if (!selected) {
       // CI seeds an "E2E Customer" via scripts/seed-remaining-e2e.ts, so an empty
       // picker means the fixture/seed regressed. Failing here keeps the project
@@ -98,8 +65,7 @@ test.describe("Proyek CRUD", () => {
 
     await expect(updatedRow).toHaveCount(0, { timeout: 10000 })
     await page.goto("/proyek", { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
+    await awaitReady(page, "body")
     await expect(page.locator("body")).not.toContainText(updated)
   })
 })

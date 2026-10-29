@@ -37,7 +37,6 @@ test.describe("Master Kelompok Pajak CRUD", () => {
 
     // Search dulu supaya item baru pasti muncul
     await page.locator("input[placeholder*='Cari nama grup pajak']").fill(name)
-    await page.waitForTimeout(400)
     await expect(page.locator("body")).toContainText(name)
 
     // Verify row exists in table (use tr only, avoid div matching)
@@ -58,10 +57,8 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     const confirmDialog = page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: 'Hapus data ini?' }).first()
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })
     await confirmDialog.getByRole("button", { name: /^hapus$/i }).first().click()
-    // 6. Wait for network to settle
-    await page.waitForTimeout(800)
 
-    // 7. Verify gone — reload the search page directly
+    // 6. Verify gone — reload the search page directly (assertion web-first di bawah)
     await page.goto(`/master/kelompok-pajak?cari=${encodeURIComponent(name)}`, {
       waitUntil: "domcontentloaded",
     })

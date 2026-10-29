@@ -26,6 +26,16 @@ test.describe("Pindai Barang + Barcode wiring", () => {
 
     const firstRow = page.getByRole("row").nth(1)
     // DB seed kosong wajar: tanpa baris, wiring tidak bisa dibuktikan dari UI.
+    // Jangan putuskan skip dari count() instan — tunggu eksplisit baris data
+    // ATAU empty-state ("Tidak ada data" dari DataTable) sebelum skip.
+    await expect
+      .poll(
+        async () =>
+          (await page.getByRole("row").count()) >= 2 ||
+          (await page.getByText("Tidak ada data").count()) > 0,
+        { timeout: 30_000 },
+      )
+      .toBe(true)
     if ((await page.getByRole("row").count()) < 2) {
       test.skip(true, "Tidak ada baris barcode di DB uji")
     }
