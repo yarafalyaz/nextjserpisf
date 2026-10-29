@@ -10,6 +10,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { CanCreate } from "@/components/auth/can-create"
+import { hasPermission } from "@/lib/auth/permissions"
 
 import type { Metadata } from "next"
 
@@ -19,6 +20,8 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { loadLoanInstallmentHistory } from "@/lib/reports/loan-installment-history-data"
 import { LoanInstallmentHistorySection } from "../_components/loan-installment-history-section"
+import { LoanCashRepaymentForm } from "@/components/sdm/loan-cash-repayment-form"
+import { LoanWriteOffButton } from "@/components/sdm/loan-write-off-button"
 export const metadata: Metadata = { title: "Pinjaman" }
 
 export default async function EmployeeLoanDetailPage({
@@ -44,6 +47,18 @@ export default async function EmployeeLoanDetailPage({
   if (!loan) notFound()
 
   const { history: installmentHistory } = await loadLoanInstallmentHistory(loan.id)
+
+  // BR-LOAN-07/08: dokumen setor-tunai + write-off hanya untuk pinjaman
+  // active dan operator berizin process_payroll. Pinjaman final
+  // (paid_off/written_off) tidak menawarkan aksi dokumen lagi.
+  const canSettle = loan.status === "active" && await hasPermission("process_payroll")
+  const accounts = canSettle
+    ? await prisma.account.findMany({
+        where: { isActive: true, type: "ASSET", code: { startsWith: "1" } },
+        select: { id: true, code: true, name: true },
+        orderBy: { code: "asc" },
+      })
+    : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,6 +100,20 @@ export default async function EmployeeLoanDetailPage({
 
       {installmentHistory ? (
         <LoanInstallmentHistorySection history={installmentHistory} />
+      ) : null}
+
+      {canSettle ? (
+        <section aria-label="Dokumen pelunasan pinjaman" className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <h2 className="text-base font-semibold text-foreground">Pelunasan Pinjaman</h2>
+            <LoanWriteOffButton loanId={loan.id} remainingAmount={Number(loan.remainingAmount)} />
+          </div>
+          <LoanCashRepaymentForm
+            loanId={loan.id}
+            remainingAmount={Number(loan.remainingAmount)}
+            accounts={accounts}
+          />
+        </section>
       ) : null}
     </div>
   )

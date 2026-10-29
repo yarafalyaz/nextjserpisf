@@ -71,6 +71,8 @@ const TABLE_SOURCES = {
   // sdm
   appreciations: "id", leave_requests: "id", timesheets: "id",
   overtime_requests: "id", payrolls: "document_no", employee_loans: "id",
+  // BR-LOAN-07/08 (162-V): dokumen ber-slug penomoran berelasi.
+  employee_loan_repayments: "id", employee_loan_write_offs: "id",
   probation_reviews: "id", contract_decision_requests: "id",
   job_vacancies: "code", job_applicants: "name", performance_cycles: "name",
   performance_reviews: "id", competencies: "name", trainings: "title",
