@@ -107,15 +107,19 @@ export async function GET(request: Request) {
     console.error("[daily-notifications] gagal menilai stok per gudang", loadError)
     results.lowStockWarehouseError = 1
   }
-  for (const line of warehouseLow.slice(0, 20)) {
-    await notificationService.notifyUsersIfNew(
-      adminIds,
-      `Stok ${line.itemName} Menipis di ${line.warehouseName}`,
-      `Stok di ${line.warehouseName}: ${line.qtyAtWarehouse} (Minimum: ${line.minStock}). Segera lakukan pembelian atau transfer antar gudang.`,
-      "warning",
-      dayStart
-    )
-  }
+  // PERF: batch (1 dedupe findMany + 1 createMany) menggantikan loop
+  // notifyUsersIfNew serial ≤20×2 round-trip. Semantik sama: dedupe
+  // per judul per hari, tiap judul independen. notifyUsers (line 85)
+  // tidak dipakai — tanpa dedupe, re-run cron menggandakan notifikasi.
+  await notificationService.notifyUsersIfNewBatch(
+    adminIds,
+    warehouseLow.slice(0, 20).map((line) => ({
+      title: `Stok ${line.itemName} Menipis di ${line.warehouseName}`,
+      body: `Stok di ${line.warehouseName}: ${line.qtyAtWarehouse} (Minimum: ${line.minStock}). Segera lakukan pembelian atau transfer antar gudang.`,
+      type: "warning",
+    })),
+    dayStart
+  )
   if (warehouseLow.length > 0) results.lowStockWarehouse = warehouseLow.length
 
   // 2. Overdue invoices

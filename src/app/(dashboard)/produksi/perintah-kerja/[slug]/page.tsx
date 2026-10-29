@@ -109,12 +109,20 @@ export default async function WorkOrderDetailPage({
 
   if (!wo) notFound();
 
-  // Fetch item names dynamically
+  // Fetch item names dynamically. Vendor jasa independen dari baris WO —
+  // jalan paralel; `items` (butuh itemIds dari wo) tetap serial sesudah wo.
   const itemIds = wo.items.map((i) => i.itemId);
-  const items = await prisma.item.findMany({
-    where: { id: { in: itemIds } },
-    select: { id: true, name: true, isService: true, vendorId: true },
-  });
+  const [items, serviceVendors] = await Promise.all([
+    prisma.item.findMany({
+      where: { id: { in: itemIds } },
+      select: { id: true, name: true, isService: true, vendorId: true },
+    }),
+    prisma.vendor.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
   const itemNameMap = new Map(items.map((i) => [i.id, i.name]));
 
   // Service items eligible for a service PO (PRD FAB-08 / PUR-17).
@@ -131,12 +139,6 @@ export default async function WorkOrderDetailPage({
       };
     })
     .filter((x): x is { itemId: number; name: string; qty: number; cost: number; vendorId: number | null } => x !== null);
-
-  const serviceVendors = await prisma.vendor.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
 
   const [completedMi, defaultWarehouse, linkedProducts, materialIssues, vehicleIntake, vehicleHandover] = await Promise.all([
     prisma.materialIssue.findFirst({
@@ -199,36 +201,48 @@ export default async function WorkOrderDetailPage({
 
   const suggestedProduct = linkedProducts.length === 1 ? linkedProducts[0] : null;
 
-  const materialNeeds = await getWorkOrderMaterialNeeds(wo.id);
-
+  // PERF: loader read-only independen (butuh wo.id saja) jalan paralel.
+  // materialNeeds SENGAJA tetap serial sebelum reservations: keduanya
+  // lazy-expire reservasi WO yang sama (expireOverdueReservationsTx) —
+  // digabung Promise.all mengubah urutan expire; efek idempoten tapi
+  // konkurensi tx-nya tidak terbukti aman, jadi urutan lama dipertahankan.
   // F-105: status part turunan read-only per baris WO (builder Bara PR #275).
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
-  const partStatus = await getWorkOrderPartStatus(wo.id);
-
   // F-2026-10-22-069-S: saran substitusi read-only dari loader BOT 3 —
   // tampil verbatim; terapkan digerbang edit_work_orders (server menegakkan).
-  const [substituteSuggestions, canApplySubstitute] = await Promise.all([
+  // F-020-B: progres tahap WO dari builder Bara (PR #377) — tampil apa adanya.
+  // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
+  // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenWorkOrder.
+  // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
+  const materialNeeds = await getWorkOrderMaterialNeeds(wo.id);
+  const [
+    partStatus,
+    substituteSuggestions,
+    canApplySubstitute,
+    stageProgress,
+    canEditStages,
+    canReopenWorkOrder,
+    whatsappTrail,
+  ] = await Promise.all([
+    getWorkOrderPartStatus(wo.id),
     getWorkOrderSubstituteSuggestions(wo.id),
     hasPermission("edit_work_orders"),
+    getWorkOrderProgress(wo.id),
+    hasPermission("edit_work_orders"),
+    hasPermission("complete_work_orders"),
+    getWhatsappTrail("WorkOrder", wo.id),
   ]);
 
   // F-057-S §2/§3: tabel reservasi stok — baris StockReservation passthrough
   // loader (status/sisa builder, jejak rilis apa adanya). Izin view_work_orders
   // sudah digerbang di atas. Q-RIL-1 saring per gudang belum diputus — loader
   // tidak menyaring, kartu menampilkan semua baris apa adanya.
+  // Serial sesudah materialNeeds: lazy-expire yang sama (lihat catatan di atas).
   const reservations = await getWorkOrderReservations(wo.id);
 
-  // F-020-B: progres tahap WO dari builder Bara (PR #377) — tampil apa adanya.
-  // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
-  const stageProgress = await getWorkOrderProgress(wo.id);
-  const canEditStages = await hasPermission("edit_work_orders");
-  // F-2026-10-21-009-V: izin tombol reopen job closed = izin server reopenWorkOrder.
-  const canReopenWorkOrder = await hasPermission("complete_work_orders");
   // F-090-S: pilihan stasiun tahap dari master WorkCenter (BOT 3 PR #569).
+  // Dependen: hanya dimuat bila canEditStages.
   const workCenters = canEditStages ? await getWorkCenters() : [];
-
-  // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
-  const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
 
   // F-2026-10-24-096-S: foto per tahap dari loader backend (grup/kategori/
   // before-after apa adanya). Tombol aksi hanya pemegang izin; server penegak.
@@ -267,6 +281,7 @@ export default async function WorkOrderDetailPage({
     auth(),
   ]);
   const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : [];
+  // Dependen serial: productId dari revisi pin wajib diketahui sebelum query opsi.
   const bomRevisionOptions = wo.bomRevision
     ? await prisma.bomRevision.findMany({
         where: {
@@ -301,13 +316,17 @@ export default async function WorkOrderDetailPage({
       bomChangeRequests.flatMap((r) => [r.requestedBy, r.decidedBy]).filter((x): x is number => x != null),
     ),
   ];
-  const bomUserRows = bomUserIds.length
-    ? await prisma.user.findMany({ where: { id: { in: bomUserIds } }, select: { id: true, name: true } })
-    : [];
   const bomItemIds = [...new Set(bomRevRows.flatMap((r) => r.materials.map((m) => m.itemId)))];
-  const bomItemRows = bomItemIds.length
-    ? await prisma.item.findMany({ where: { id: { in: bomItemIds } }, select: { id: true, name: true } })
-    : [];
+  // PERF: user rows (butuh bomChangeRequests) + item rows (butuh bomRevRows)
+  // independen satu sama lain — paralel. Keduanya tetap sesudah sumber id-nya.
+  const [bomUserRows, bomItemRows] = await Promise.all([
+    bomUserIds.length
+      ? prisma.user.findMany({ where: { id: { in: bomUserIds } }, select: { id: true, name: true } })
+      : Promise.resolve([] as { id: number; name: string }[]),
+    bomItemIds.length
+      ? prisma.item.findMany({ where: { id: { in: bomItemIds } }, select: { id: true, name: true } })
+      : Promise.resolve([] as { id: number; name: string }[]),
+  ]);
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -612,6 +631,9 @@ export default async function WorkOrderDetailPage({
       ) : null}
 
       {wo.bomRevision ? (
+        // PERF skip: await inline di JSX dipertahankan — mengangkatnya ke
+        // Promise.all data di atas mengubah timing render kartu ini relatif
+        // terhadap loader lain; query-nya sendiri independen (bomRevision.id).
         <BomRevisionImpactCard
           impact={await loadBomRevisionImpact(wo.bomRevision.id)}
           currentRevisionNo={wo.bomRevision.revisionNo}

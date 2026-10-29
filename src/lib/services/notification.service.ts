@@ -136,6 +136,46 @@ export const notificationService = {
   },
 
   /**
+   * Batched variant of notifyUsersIfNew: dedupe per title in ONE findMany
+   * (titles already sent to any recipient since `since` are skipped), then
+   * ONE createMany for the rest. Semantics identical to looping
+   * notifyUsersIfNew per entry — each title independent — without N×2
+   * round-trips. Returns rows written.
+   */
+  async notifyUsersIfNewBatch(
+    userIds: number[],
+    entries: { title: string; body: string; type?: string }[],
+    since: Date
+  ): Promise<number> {
+    if (userIds.length === 0 || entries.length === 0) return 0
+
+    const existing = await prisma.notification.findMany({
+      where: {
+        userId: { in: userIds },
+        title: { in: entries.map((e) => e.title) },
+        createdAt: { gte: since },
+      },
+      select: { title: true },
+    })
+    const existingTitles = new Set(existing.map((n) => n.title))
+    const fresh = entries.filter((e) => !existingTitles.has(e.title))
+    if (fresh.length === 0) return 0
+
+    await prisma.notification.createMany({
+      data: userIds.flatMap((userId) =>
+        fresh.map((e) => ({
+          userId,
+          title: e.title,
+          body: e.body,
+          type: e.type ?? 'info',
+          readAt: null,
+        })),
+      ),
+    })
+    return userIds.length * fresh.length
+  },
+
+  /**
    * Check if an item's stock is below minimum threshold and notify admins.
    * NOTE: not idempotent — each call creates fresh notifications. Callers that
    * may run repeatedly for the same item/period must dedupe themselves (see the

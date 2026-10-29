@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   holidayFindMany: vi.fn(),
   departmentHolidayFindMany: vi.fn(),
   notifyUsersIfNew: vi.fn(),
+  notifyUsersIfNewBatch: vi.fn(),
   notificationFindFirst: vi.fn(),
   itemFindMany: vi.fn(),
   itemWarehouseSettingFindMany: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@/lib/security/cron", () => ({
 vi.mock("@/lib/services/notification.service", () => ({
   notificationService: {
     notifyUsersIfNew: (...a: unknown[]) => mocks.notifyUsersIfNew(...a),
+    notifyUsersIfNewBatch: (...a: unknown[]) => mocks.notifyUsersIfNewBatch(...a),
   },
 }))
 
@@ -349,10 +351,18 @@ describe("GET /api/cron/daily-notifications", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.lowStockWarehouse).toBe(1)
-    const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Gudang Bengkel"))
-    expect(call).toBeDefined()
-    expect(String(call![1])).toBe("Stok Busi Menipis di Gudang Bengkel")
-    expect(String(call![2])).toContain("Stok di Gudang Bengkel: 3 (Minimum: 5)")
+    // Batch: satu panggilan berisi semua judul per gudang (bukan loop per baris).
+    expect(mocks.notifyUsersIfNewBatch).toHaveBeenCalledTimes(1)
+    const [userIds, entries, since] = mocks.notifyUsersIfNewBatch.mock.calls[0]
+    expect(userIds).toEqual([1])
+    expect(entries).toEqual([
+      {
+        title: "Stok Busi Menipis di Gudang Bengkel",
+        body: expect.stringContaining("Stok di Gudang Bengkel: 3 (Minimum: 5)"),
+        type: "warning",
+      },
+    ])
+    expect(since).toBeInstanceOf(Date)
   })
 
   it("re-run same day skips duplicate notifications (idempotent cron)", async () => {

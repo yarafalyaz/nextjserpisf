@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   findManyUsers: vi.fn(),
   findFirstNotif: vi.fn(),
+  findManyNotif: vi.fn(),
   createManyNotif: vi.fn(),
   createNotif: vi.fn(),
   updateNotif: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock("@/lib/db/prisma", () => ({
     user: { findMany: mocks.findManyUsers },
     notification: {
       findFirst: mocks.findFirstNotif,
+      findMany: mocks.findManyNotif,
       createMany: mocks.createManyNotif,
       create: mocks.createNotif,
       update: mocks.updateNotif,
@@ -130,6 +132,61 @@ describe("notification.service", () => {
       const sent = await notificationService.notifyUsersIfNew([], "Baru", "body", "info", since);
       expect(sent).toBe(0);
       expect(mocks.findFirstNotif).not.toHaveBeenCalled();
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("notifyUsersIfNewBatch", () => {
+    const since = new Date("2026-06-12T00:00:00");
+
+    it("dedupes per title in one findMany + writes fresh titles in one createMany", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ title: "Sudah Ada" }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 4 });
+
+      const sent = await notificationService.notifyUsersIfNewBatch(
+        [1, 2],
+        [
+          { title: "Sudah Ada", body: "lama", type: "warning" },
+          { title: "Baru A", body: "a", type: "warning" },
+          { title: "Baru B", body: "b" },
+        ],
+        since,
+      );
+
+      expect(sent).toBe(4); // 2 user × 2 judul baru
+      expect(mocks.findManyNotif).toHaveBeenCalledTimes(1);
+      expect(mocks.findManyNotif).toHaveBeenCalledWith({
+        where: {
+          userId: { in: [1, 2] },
+          title: { in: ["Sudah Ada", "Baru A", "Baru B"] },
+          createdAt: { gte: since },
+        },
+        select: { title: true },
+      });
+      expect(mocks.createManyNotif).toHaveBeenCalledTimes(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: [
+          { userId: 1, title: "Baru A", body: "a", type: "warning", readAt: null },
+          { userId: 1, title: "Baru B", body: "b", type: "info", readAt: null },
+          { userId: 2, title: "Baru A", body: "a", type: "warning", readAt: null },
+          { userId: 2, title: "Baru B", body: "b", type: "info", readAt: null },
+        ],
+      });
+    });
+
+    it("writes nothing when all titles already exist", async () => {
+      mocks.findManyNotif.mockResolvedValue([{ title: "A" }]);
+
+      const sent = await notificationService.notifyUsersIfNewBatch([1], [{ title: "A", body: "x" }], since);
+
+      expect(sent).toBe(0);
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("does nothing for empty recipients/entries without DB calls", async () => {
+      expect(await notificationService.notifyUsersIfNewBatch([], [{ title: "A", body: "x" }], since)).toBe(0);
+      expect(await notificationService.notifyUsersIfNewBatch([1], [], since)).toBe(0);
+      expect(mocks.findManyNotif).not.toHaveBeenCalled();
       expect(mocks.createManyNotif).not.toHaveBeenCalled();
     });
   });
