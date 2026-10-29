@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency } from '@/lib/utils/format'
-import { buildPeriodColumns, MULTI_PERIOD_MODE_LABELS, type MultiPeriodMode } from '@/lib/reports/multi-period'
+import { buildPeriodColumns, MULTI_PERIOD_MODE_LABELS, parseMultiPeriodCount, type MultiPeriodMode } from '@/lib/reports/multi-period'
 import { reportPeriodFromRoute, splitReportSegments } from '@/lib/reports/report-period'
 import type { AccountType } from '@prisma/client'
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
@@ -44,7 +44,7 @@ export default async function MultiPeriodReportPage({
   const modeParam = filters.mode ?? search.mode
   const statement: StatementType = jenis === 'neraca' ? 'neraca' : 'laba-rugi'
   const mode: MultiPeriodMode = modeParam === 'kuartal' ? 'kuartal' : modeParam === 'tahun' ? 'tahun' : 'bulan'
-  const count = Number(filters.jumlah ?? search.jumlah ?? 12)
+  const count = parseMultiPeriodCount(filters.jumlah ?? search.jumlah)
 
   const typeFilter: AccountType[] =
     statement === 'neraca' ? ['ASSET', 'LIABILITY', 'EQUITY'] : ['REVENUE', 'EXPENSE']
@@ -171,7 +171,7 @@ export default async function MultiPeriodReportPage({
           periodSlug={anchorPeriod.slug}
           statement={statement}
           mode={mode}
-          count={Number.isFinite(count) ? count : 12}
+          count={count}
         />
       </div>
 </>} actions={<>

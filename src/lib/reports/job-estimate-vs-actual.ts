@@ -218,8 +218,6 @@ export function buildJobEstimateVsActual(input: {
       grand: true,
       label: "Jumlah",
       cells: [
-        "",
-        "",
         amount(totals.estimate),
         amount(totals.billed),
         amount(totals.billingVariance),

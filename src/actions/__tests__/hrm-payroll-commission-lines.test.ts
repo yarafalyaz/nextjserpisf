@@ -196,6 +196,29 @@ describe("addPayrollCommissionLine", () => {
   })
 })
 
+describe("addPayrollCommissionLine TOCTOU draft (round2)", () => {
+  it("slip berubah non-draft sesudah lock ditolak, nol baris dibuat", async () => {
+    // Urutan baca: assertDraftPayrollLineAccess, lockedPayroll dalam tx.
+    prismaMock.payroll.findUniqueOrThrow
+      .mockResolvedValueOnce({ ...draftPayroll })
+      .mockResolvedValueOnce({ ...draftPayroll, status: "approved" })
+    const res = await actions.addPayrollCommissionLine(55, fd({ commissionPayableId: "101", amount: "100000" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("slip draft")
+    expect(prismaMock.payrollComponentLine.create).not.toHaveBeenCalled()
+  })
+
+  it("slip berganti karyawan sesudah lock: payable karyawan lama ditolak", async () => {
+    prismaMock.payroll.findUniqueOrThrow
+      .mockResolvedValueOnce({ ...draftPayroll })
+      .mockResolvedValueOnce({ ...draftPayroll, employeeId: 8 })
+    const res = await actions.addPayrollCommissionLine(55, fd({ commissionPayableId: "101", amount: "100000" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("bukan milik karyawan")
+    expect(prismaMock.payrollComponentLine.create).not.toHaveBeenCalled()
+  })
+})
+
 describe("batas baris komisi", () => {
   it("update nominal baris komisi ditolak (hapus + tambah ulang)", async () => {
     prismaMock.payrollComponentLine.findUnique.mockResolvedValue({ id: 31, payrollId: 55, commissionPayableId: 101 })

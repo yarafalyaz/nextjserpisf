@@ -263,13 +263,17 @@ export async function cancelTaxAssessment(formData: FormData): Promise<TaxDisput
 
     const assessment = await prisma.taxAssessment.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, status: true },
+      select: { id: true, status: true, notes: true },
     })
     if (!assessment) return { success: false, error: "Ketetapan tidak ditemukan." }
 
+    // Notes asli register tidak ditimpa: alasan batal ditambahkan terpisah
+    // di belakang penanda, supaya riwayat keterangan tetap terbaca.
+    const cancelNote = `[Batal: ${reason}]`
+    const notes = assessment.notes ? `${assessment.notes}\n${cancelNote}` : cancelNote
     await prisma.taxAssessment.update({
       where: { id },
-      data: { status: "BATAL", deletedAt: new Date(), notes: reason },
+      data: { status: "BATAL", deletedAt: new Date(), notes },
     })
     await logActivity("update", "TaxAssessment", id, `Batal ketetapan #${id}: ${reason}`)
     revalidatePath(REVALIDATE)

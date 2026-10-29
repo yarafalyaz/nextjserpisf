@@ -116,7 +116,10 @@ describe("loadCustomerReceivables ekspor (F5-4)", () => {
     const data = report.table.rows.find((r) => r.kind === "data")
     expect(data?.kind === "data" ? data.cells : []).toContain("50")
     const total = report.table.rows.find((r) => r.kind === "total")
-    expect(total?.kind === "total" ? total.cells[5] : null).toBe("50")
+    // Konvensi trailing: label membentang 1 kolom (Pelanggan), 13 sel sisanya.
+    // Dulu 14 sel (sel kosong depan) menggeser semua total 1 kolom.
+    expect(total?.kind === "total" ? total.cells : []).toHaveLength(13)
+    expect(total?.kind === "total" ? total.cells[4] : null).toBe("50")
   })
 })
 

@@ -56,6 +56,11 @@ export function TaxDisputeStepForm({ assessmentId }: { assessmentId: number }) {
           return
         }
         idempotencyKeyRef.current = crypto.randomUUID()
+        setKind("")
+        setArticle36Subkind("")
+        setFiledAt(toLocalDateOnly(new Date()))
+        setLateReason("")
+        setEvidenceRef("")
         showSuccess("Upaya sengketa tersimpan")
         router.refresh()
       } catch (error) {

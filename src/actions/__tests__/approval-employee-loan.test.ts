@@ -25,7 +25,12 @@ const mocks = vi.hoisted(() => {
   const prismaMock: Record<string, unknown> = {
     approval: buildModelMock(),
     approvalHistory: buildModelMock(),
-    employeeLoan: buildModelMock(),
+    employeeLoan: { ...buildModelMock(), findUnique: vi.fn().mockResolvedValue({ employeeId: 7 }) },
+    employee: {
+      findFirst: vi.fn().mockResolvedValue({ id: 7, departmentId: 3 }),
+      findUnique: vi.fn().mockResolvedValue({ departmentId: 3 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     role: buildModelMock(),
     $transaction: vi.fn(async (ops: unknown) => {
       if (typeof ops === "function") {
@@ -136,6 +141,17 @@ describe("approveStep EmployeeLoan (AC-LS-B3/B4)", () => {
     asApprover(42, ["approve_loans"])
 
     await expect(approveStep(9, fd())).rejects.toThrow("Maker-Checker")
+
+    expect(mocks.disbursedMock).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled()
+  })
+
+  it("round2: approver di luar HR scope karyawan pinjaman ditolak, nol disbursement", async () => {
+    // Approver user 5 linked ke employee 7; pinjaman milik employee 99.
+    mocks.prismaMock.employeeLoan.findUnique.mockResolvedValue({ employeeId: 99 })
+    asApprover(5, ["approve_loans"])
+
+    await expect(approveStep(9, fd())).rejects.toThrow("tidak memiliki akses")
 
     expect(mocks.disbursedMock).not.toHaveBeenCalled()
     expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled()

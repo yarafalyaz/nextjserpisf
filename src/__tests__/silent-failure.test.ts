@@ -43,11 +43,32 @@ const ALLOWED: Record<string, string> = {
  */
 const SILENT_PROMISE_CATCH = /\.catch\(\s*\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)\s*\)/g
 
+/**
+ * Perluasan pola (round2): handler bernama parameter pun bisa menelan —
+ * `.catch((e) => null)`, `.catch(() => false)`, `.catch(() => [])`,
+ * `.catch((e) => { return null })`. Parameter `(e)`/`(err)` yang tak dipakai
+ * untuk melempar/melapor = senyap sama seperti `() => null`.
+ * Blok handler yang melempar ulang / memberi tahu pengguna / menandai gagal
+ * TIDAK dihitung (pemeriksaan isi blok di tes perluasan).
+ */
+const SILENT_PROMISE_CATCH_WIDE =
+  /\.catch\(\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:\{\s*return\s+(?:null|undefined|false|0|\[\s*\]|\{\})\s*;?\s*\}|null|undefined|false|0|\[\s*\]|\{\s*\}|""|''|``)\s*\)/g
+
 const ALLOWED_PROMISE_CATCH: Record<string, string> = {
   "src/app/api/cron/route.ts": "sapu berkas lampiran yatim best-effort (R-9); unlink gagal = berkas memang sudah hilang, deleteMany tetap jalan",
   "src/app/api/upload/attachments/route.ts": "hapus berkas sementara — gagal pun tak berdampak",
   "src/components/reports/report-letterhead.tsx": "setelan opsional; null berarti pakai default",
   "src/lib/db/backup.ts": "pembersihan berkas / cloud best-effort",
+}
+
+/** Beku JUMLAH per berkas untuk pola luas: pengecualian per-berkas saja tak
+ *  menangkap catch BARU di berkas terdaftar (diff-aware tak mungkin statis).
+ *  Jumlah naik = merah; jumlah turun = merah juga (beku membusuk, wajib turunkan). */
+const ALLOWED_PROMISE_CATCH_WIDE_COUNTS: Record<string, number> = {
+  "src/app/api/cron/route.ts": 1,
+  "src/app/api/upload/attachments/route.ts": 1,
+  "src/components/reports/report-letterhead.tsx": 1,
+  "src/lib/db/backup.ts": 2,
 }
 
 function productionFiles(dir: string, out: string[] = []): string[] {
@@ -225,6 +246,27 @@ function isConsoleOnly(block: CatchBlock): boolean {
   return sisa === ""
 }
 
+/**
+ * `catch { return <default> }` di mana return BUKAN pernyataan terakhir:
+ * isDefaultReturn hanya membaca return terakhir (`return …$`), jadi
+ * `catch { log(); return null }` atau `return []` di tengah blok lolos.
+ * Varian ini menangkap return literal/default DI MANA PUN dalam blok,
+ * dengan pengaman yang sama (throw / notifikasi / penanda gagal = lolos).
+ */
+function isDefaultReturnAnywhere(block: CatchBlock): boolean {
+  if (/\bthrow\b/.test(block.bodyBlank)) return false
+  const bodyText = stripComments(block.bodyRaw)
+  if (NOTIFIES_USER.test(bodyText)) return false
+  if (SIGNALS_FAILURE.test(bodyText)) return false
+  for (const m of block.bodyBlank.matchAll(/\breturn\b\s*([^;]*)/g)) {
+    const v = m[1].trim()
+    if (v === "" || LITERAL_DEFAULT.test(v) || DEFAULT_NAME.test(v) || /\[\s*\]/.test(v)) return true
+  }
+  return [...bodyText.matchAll(/\breturn\b\s*([^;]*)/g)].some((m) =>
+    BARE_STRING.test(m[1].trim()),
+  )
+}
+
 function isDefaultReturn(block: CatchBlock): boolean {
   if (/\bthrow\b/.test(block.bodyBlank)) return false
   if (!/\breturn\b/.test(block.bodyBlank)) return false
@@ -393,6 +435,27 @@ describe("kegagalan senyap: tidak ada catch kosong di kode produksi", () => {
     expect({ catchPromiseSenyap: pelanggar.sort() }).toEqual({ catchPromiseSenyap: [] })
   })
 
+  it("tidak ada `.catch((e)=>…)` / `()=>false/[]` senyap di luar beku jumlah per berkas", () => {
+    const counts: Record<string, number> = {}
+    const pelanggar: string[] = []
+    for (const dir of DIRS) {
+      for (const file of productionFiles(dir)) {
+        const relative = path.relative(ROOT, file)
+        const source = fs.readFileSync(file, "utf8")
+        for (const match of source.matchAll(SILENT_PROMISE_CATCH_WIDE)) {
+          counts[relative] = (counts[relative] ?? 0) + 1
+          if (!(relative in ALLOWED_PROMISE_CATCH_WIDE_COUNTS)) {
+            pelanggar.push(`${relative}:${source.slice(0, match.index).split("\n").length}`)
+          }
+        }
+      }
+    }
+    expect({ catchPromiseLuasBaru: pelanggar.sort() }).toEqual({ catchPromiseLuasBaru: [] })
+    // Arah kedua: jumlah di berkas terdaftar harus PERSIS beku — catch baru
+    // di berkas lama pun merah, dan perbaikan wajib menurunkan beku.
+    expect(counts).toEqual(ALLOWED_PROMISE_CATCH_WIDE_COUNTS)
+  })
+
   it("daftar pengecualian promise tidak membusuk", () => {
     const tidakTerpakai = Object.keys(ALLOWED_PROMISE_CATCH).filter((relative) => {
       const full = path.join(ROOT, relative)
@@ -434,6 +497,16 @@ describe("kegagalan senyap lanjutan: console-only, comment-only, default-return"
 
   it("(3b) daftar default-return tidak membusuk", () => {
     expect({ pengecualianTakTerpakai: daftarMembusuk(isDefaultReturn, ALLOWED_DEFAULT_RETURN) })
+      .toEqual({ pengecualianTakTerpakai: [] })
+  })
+
+  it("(3c) catch { return <default> } di posisi mana pun tidak lolos di luar daftar yang sama", () => {
+    expect({ defaultReturnAnywhere: collectViolations(isDefaultReturnAnywhere, ALLOWED_DEFAULT_RETURN) })
+      .toEqual({ defaultReturnAnywhere: [] })
+  })
+
+  it("(3d) daftar default-return tetap hidup untuk varian posisi-mana-pun", () => {
+    expect({ pengecualianTakTerpakai: daftarMembusuk(isDefaultReturnAnywhere, ALLOWED_DEFAULT_RETURN) })
       .toEqual({ pengecualianTakTerpakai: [] })
   })
 })

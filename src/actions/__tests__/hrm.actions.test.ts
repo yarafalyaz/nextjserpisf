@@ -213,11 +213,15 @@ vi.mock("@/lib/auth/hr-scope", () => ({
     return { employee: { departmentId: scope.departmentId } }
   },
   assertHrEmployeeAccess: async (
-    scope: { kind: string; departmentId?: number | null; employeeId?: number },
+    scope: { kind: string; departmentId?: number | null; employeeId?: number; memberIds?: number[] },
     employeeId: number,
   ) => {
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid")
     if (scope.kind === "all") return
+    if (scope.kind === "team") {
+      if (!(scope.memberIds ?? []).includes(employeeId)) throw new Error("Anda tidak memiliki akses ke data karyawan ini")
+      return
+    }
     if (scope.kind === "self" || scope.departmentId == null) {
       if (scope.employeeId !== employeeId) throw new Error("Anda tidak memiliki akses ke data karyawan ini")
       return
@@ -415,6 +419,51 @@ describe("Leave Request Actions", () => {
   it("deleteLeaveRequest removes record", async () => {
     const res = await actions.deleteLeaveRequest(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("round2: team scope tidak bisa create cuti untuk karyawan di luar tim", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    const res = await actions.createLeaveRequest(fd({
+      employeeId: "99",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    expect(prismaMock.leaveRequest.create).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("round2: team scope bisa create cuti untuk anggota tim", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    const res = await actions.createLeaveRequest(fd({
+      employeeId: "2",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(true)
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("round2: team scope tidak bisa update cuti karyawan di luar tim (existing maupun target)", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    prismaMock.leaveRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 1, employeeId: 99, status: "pending", startDate: new Date(), endDate: new Date(),
+    })
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "99",
+      type: "annual",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    expect(prismaMock.leaveRequest.update).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
   })
 })
 
@@ -745,6 +794,37 @@ describe("Employee Loan Actions", () => {
   it("deleteEmployeeLoan removes record", async () => {
     const res = await actions.deleteEmployeeLoan(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("round2: team scope tidak bisa create pinjaman non-self untuk karyawan di luar tim", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["staff"], permissions: ["create_loans"] })
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    const res = await actions.createEmployeeLoan(fd({
+      employeeId: "99",
+      loanDate: "2026-06-12",
+      totalAmount: "1000000",
+      monthlyInstallment: "100000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    expect(prismaMock.employeeLoan.create).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("round2: team scope tidak bisa update pinjaman karyawan di luar tim", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["staff"], permissions: ["create_loans"] })
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 99, totalAmount: 1000000, remainingAmount: 1000000, status: "pending" })
+    const res = await actions.updateEmployeeLoan(1, fd({
+      employeeId: "99",
+      loanDate: "2026-06-12",
+      totalAmount: "2000000",
+      monthlyInstallment: "400000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses")
+    expect(prismaMock.employeeLoan.updateMany).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
   })
 })
 

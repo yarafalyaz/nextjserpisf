@@ -890,6 +890,7 @@ model Item {
   substitutedFor       ItemSubstitute[]     @relation("ItemSubstitutedFor")
   warehouseSettings    ItemWarehouseSetting[]
   goodsReceiptItems    GoodsReceiptItem[]
+  vendorBillItems      VendorBillItem[]
   inventoryTransferItems InventoryTransferItem[]
   salesInvoiceItems    SalesInvoiceItem[]
   materialIssueItems   MaterialIssueItem[]
@@ -1378,7 +1379,7 @@ model TaxInvoice {
   purchaseReturnNotes  PurchaseReturn[]
   disputeAssessments   TaxAssessment[]
 
-  @@index([direction, taxInvoiceNumber], map: "idx_tax_invoices_direction_number")
+  @@unique([direction, taxInvoiceNumber], map: "uq_tax_invoices_direction_number")
   @@index([taxPeriod], map: "idx_tax_invoices_period")
   @@index([djpStatus], map: "idx_tax_invoices_status")
   @@index([creditPeriod], map: "idx_tax_invoices_credit_period")
@@ -2388,6 +2389,7 @@ model GoodsReceiptItem {
   rack           Rack?        @relation(fields: [rackId], references: [id], onDelete: Restrict)
   rackRow        RackRow?     @relation(fields: [rackRowId], references: [id], onDelete: Restrict)
   stockMove      StockMove?   @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
+  vendorBillItems VendorBillItem[]
 
   @@index([goodsReceiptId], map: "goods_receipt_items_goods_receipt_id_fkey")
   @@index([itemId])
@@ -2529,9 +2531,13 @@ model VendorBillItem {
   taxAmount          Decimal    @default(0.00) @map("tax_amount") @db.Decimal(15, 2)
   subtotal           Decimal    @default(0.00) @db.Decimal(15, 2)
   total              Decimal    @default(0.00) @db.Decimal(15, 2)
+  // accountId/costCenterId sengaja bare-int: pola master generik existing
+  // (SalesPayment/VendorPayment/JournalEntry/Expense accountId tanpa relasi).
   accountId          Int?       @map("account_id")
   costCenterId       Int?       @map("cost_center_id")
   vendorBill         VendorBill @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
+  item               Item?      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  goodsReceiptItem   GoodsReceiptItem? @relation(fields: [goodsReceiptItemId], references: [id], onDelete: SetNull)
 
   @@index([vendorBillId], map: "vendor_bill_items_vendor_bill_id_fkey")
   @@index([itemId])

@@ -603,11 +603,11 @@ describe("TASK-018 (2) gerbang statutori jalur approval generik", () => {
       statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
     });
     mocks.prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("sudah dibayar");
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("hanya dapat disetujui dari status draft");
     expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
   });
 
-  it("B4: approveStep Payroll paid-cabut-guard tetap approve (falsifikasi jalur)", async () => {
+  it("B4: approveStep Payroll draft-cabut-guard tetap approve (falsifikasi jalur)", async () => {
     seedApproval({ referenceType: "Payroll", referenceId: 9 });
     mocks.prismaMock.payroll.findUnique.mockResolvedValue({
       statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
@@ -616,7 +616,7 @@ describe("TASK-018 (2) gerbang statutori jalur approval generik", () => {
     await actions.approveStep(1, fdMap({ notes: "OK" }));
     expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 9, status: expect.objectContaining({ not: "paid" }) }),
+        where: expect.objectContaining({ id: 9, status: "draft" }),
       }),
     );
   });
@@ -629,9 +629,56 @@ describe("TASK-018 (2) gerbang statutori jalur approval generik", () => {
     await actions.approveStep(1, fdMap({ notes: "OK" }));
     expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 9, status: expect.objectContaining({ not: "paid" }) }),
+        where: expect.objectContaining({ id: 9, status: "draft" }),
         data: expect.objectContaining({ status: "approved" }),
       }),
+    );
+  });
+});
+
+describe("HR scope jalur approval generik (round2 temuan 2)", () => {
+  beforeEach(() => {
+    mocks.prismaMock.employee = {
+      findFirst: vi.fn().mockResolvedValue({ id: 7, departmentId: 3 }),
+      findUnique: vi.fn().mockResolvedValue({ id: 7, departmentId: 3 }),
+      findMany: vi.fn().mockResolvedValue([]),
+    };
+    mocks.prismaMock.leaveRequest = {
+      findUnique: vi.fn().mockResolvedValue({ employeeId: 99 }),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    };
+  });
+
+  it("approveStep LeaveRequest di luar team scope ditolak, nol flip", async () => {
+    mocks.authMock.mockResolvedValue({
+      user: { id: "11", roles: ["staff"], permissions: ["approve_workflows", "view_subordinate_data"] },
+    });
+    seedApproval({ referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("tidak memiliki akses");
+    expect(mocks.prismaMock.leaveRequest.update).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.approval.update).not.toHaveBeenCalled();
+  });
+
+  it("rejectStep LeaveRequest di luar team scope ditolak, nol flip", async () => {
+    mocks.authMock.mockResolvedValue({
+      user: { id: "11", roles: ["staff"], permissions: ["approve_workflows", "view_subordinate_data"] },
+    });
+    seedApproval({ referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow("tidak memiliki akses");
+    expect(mocks.prismaMock.leaveRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStep Payroll rejected tidak resurrect (klaim draft count 0)", async () => {
+    seedApproval({ referenceType: "Payroll", referenceId: 9 });
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
+      employeeId: 7,
+    });
+    mocks.prismaMock.payroll.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("hanya dapat disetujui dari status draft");
+    expect(mocks.prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 9, status: "draft" } }),
     );
   });
 });

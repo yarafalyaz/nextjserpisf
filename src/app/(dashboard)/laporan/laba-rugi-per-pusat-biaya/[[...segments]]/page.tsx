@@ -9,8 +9,7 @@ import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { StatementTableView } from "@/components/reports/statement-table-view"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { loadIncomeStatementByCostCenter } from "@/lib/reports/statement-data"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
 import type { Metadata } from "next"
@@ -34,7 +33,7 @@ export default async function PnLByCostCenterPage({
   const { start: startDate, end: endDate } = period
   // Pusat biaya dari path (slug lebih dulu, id sebagai cadangan); `?costCenterId=`
   // lama tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const costCenterKey = parseReportFilters(segments.slice(1))["pusat-biaya"] ?? search.costCenterId ?? null
+  const costCenterKey = splitReportSegments(segments).filters["pusat-biaya"] ?? search.costCenterId ?? null
 
   const costCenters = await prisma.costCenter.findMany({
     where: { isActive: true },

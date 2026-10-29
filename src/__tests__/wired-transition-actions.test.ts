@@ -140,9 +140,48 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+/** Komponen generik yang BENAR-BENAR memanggil prop aksinya — rantai dua hop
+ *  sah: halaman meneruskan `action={namaAksi}`/`processAction={namaAksi}` ke
+ *  komponen ini, dan komponen ini memanggil prop-nya. Tanpa rantai ini, aksi
+ *  yang tersambung lewat tombol generik terlihat "tak terpanggil". */
+const GENERIC_INVOKERS: Record<string, RegExp> = {
+  // ProcessButton/DeleteButton: `const result = await action(id)`
+  "src/components/ui/process-button.tsx": /\bawait\s+action\s*\(/,
+  "src/components/ui/delete-button.tsx": /\bawait\s+action\s*\(/,
+  // VoidButton: `run: … => action(id, …)`
+  "src/components/ui/void-button.tsx": /\baction\s*\(\s*id\b/,
+  // ActionDropdown: `await processAction(deleteId)` / `await deleteAction(deleteId)`
+  "src/components/ui/action-dropdown.tsx": /\bawait\s+(?:processAction|deleteAction)\s*\(/,
+  // DraftReleaseActions: `await deleteAction(entity.id)`
+  "src/components/ui/draft-release-actions.tsx": /\bawait\s+deleteAction\s*\(/,
+}
+
+/** Tersambung nyata: (a) pemanggilan langsung `namaAksi(`, atau (b) diteruskan
+ *  sebagai nilai prop/handler `={namaAksi}` / `prop={… ? namaAksi : …}` KE
+ *  komponen generik yang terbukti memanggil prop-nya. Sekadar import/mention/
+ *  komentar TIDAK dihitung — pola lama menghitung ketiganya. */
+function isWired(action: string, source: string): boolean {
+  // Komentar dibuang dulu: `// postInvoice (` di berkas lain bukan panggilan.
+  const tanpaKomentar = source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\/\/[^\n]*/g, " ")
+  if (new RegExp(`\\b${action}\\s*\\(`).test(tanpaKomentar)) return true
+  const forwarded = new RegExp(
+    `(?:action|processAction|deleteAction)\\s*=\\s*\\{[^}]*\\b${action}\\b[^}]*\\}`,
+  ).test(tanpaKomentar)
+  return forwarded
+}
+
 describe("aksi transisi wajib tersambung ke UI", () => {
   const repoRoot = process.cwd()
   const files = walk(path.join(repoRoot, "src"))
+
+  it("komponen generik yang dirujuk rantai dua-hop benar-benar memanggil prop aksinya", () => {
+    for (const [rel, pola] of Object.entries(GENERIC_INVOKERS)) {
+      const src = fs.readFileSync(path.join(repoRoot, rel), "utf8")
+      expect(pola.test(src), `${rel} tidak lagi memanggil prop aksinya — rantai dua-hop putus`).toBe(true)
+    }
+  })
 
   for (const { action, definedIn, callersIn } of REQUIRED_CALLERS) {
     it(`${action} dipanggil dari ${callersIn.join(" atau ")}`, () => {
@@ -150,9 +189,7 @@ describe("aksi transisi wajib tersambung ke UI", () => {
         const rel = path.relative(repoRoot, file).split(path.sep).join("/")
         if (rel === definedIn) return false
         if (rel.includes("__tests__")) return false
-        const source = fs.readFileSync(file, "utf8")
-        // Rujukan impor/pemakaian, bukan sekadar kemunculan nama di komentar.
-        return new RegExp(`\\b${action}\\b\\s*[,}]|\\b${action}\\b\\s*\\)|=\\s*${action}\\b|\\b${action}\\b[,)\\s]*$`, "m").test(source)
+        return isWired(action, fs.readFileSync(file, "utf8"))
       })
 
       expect(callers.length, `${action} tidak dipanggil dari mana pun`).toBeGreaterThan(0)
@@ -194,10 +231,7 @@ describe("aksi transisi tanpa pemanggil UI terdaftar & tetap tak tersambung", ()
         // `__tests__` (termasuk berkas ini) dikecualikan: daftar di atas menyebut nama
         // aksinya, jadi tanpa pengecualian ini test menilai dirinya sendiri sebagai pemakai.
         if (rel.includes("__tests__")) return false
-        return new RegExp(
-          `\\b${action}\\b\\s*[,}]|\\b${action}\\b\\s*\\)|=\\s*${action}\\b|\\b${action}\\b[,)\\s]*$`,
-          "m",
-        ).test(fs.readFileSync(file, "utf8"))
+        return isWired(action, fs.readFileSync(file, "utf8"))
       })
       expect(
         refs.map((f) => path.relative(repoRoot, f)),

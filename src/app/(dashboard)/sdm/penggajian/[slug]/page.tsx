@@ -59,13 +59,14 @@ export default async function PayrollDetailPage({
 
   if (!payroll) notFound();
 
-  const [activeComponents, canEditPayroll, commissionDebts] = await Promise.all([
+  const [activeComponents, canEditPayroll, canProcessPayroll, commissionDebts] = await Promise.all([
     prisma.payrollComponent.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, kind: true, recurrence: true },
     }),
     hasPermission("edit_payroll"),
+    hasPermission("process_payroll"),
     payroll.employeeId != null
       ? prisma.commissionPayable.findMany({
           where: { salesEmployeeId: payroll.employeeId },
@@ -99,7 +100,7 @@ export default async function PayrollDetailPage({
           <div className="flex gap-2">
             {payroll.status === "draft" && (
               <>
-                <ApprovePayrollButton payrollId={payroll.id} />
+                {canProcessPayroll && <ApprovePayrollButton payrollId={payroll.id} />}
                 <CanCreate permission="edit_payroll">
                   <Button
                     href={entityEditHref("/sdm/penggajian", payroll)}
@@ -110,7 +111,7 @@ export default async function PayrollDetailPage({
                 </CanCreate>
               </>
             )}
-            {payroll.status === "approved" && (
+            {payroll.status === "approved" && canProcessPayroll && (
               <MarkPaidPayrollButton payrollId={payroll.id} />
             )}
             <BackButton href="/sdm/penggajian" />

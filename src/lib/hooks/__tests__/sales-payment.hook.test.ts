@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   customerFindUnique: vi.fn(),
   customerCommissionRateFindMany: vi.fn(),
+  accrueCommission: vi.fn(),
+  cancelCommission: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -28,6 +30,11 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: (...a: unknown[]) => mocks.customerCommissionRateFindMany(...a),
     },
   },
+}))
+
+vi.mock("@/lib/services/commission-payable.service", () => ({
+  accrueTx: (...a: unknown[]) => mocks.accrueCommission(...a),
+  cancelAccrualTx: (...a: unknown[]) => mocks.cancelCommission(...a),
 }))
 
 import { onSalesPaymentCreated, onSalesPaymentUpdated, onSalesPaymentDeleted } from "../sales-payment.hook"
@@ -54,6 +61,8 @@ function makeTx() {
 
 beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset()
+  mocks.accrueCommission.mockResolvedValue({ accrued: false, amount: 0, reason: "penjual-null" })
+  mocks.cancelCommission.mockResolvedValue({ cancelled: false, amount: 0, reason: "tanpa-baris" })
   mocks.transaction.mockImplementation(async (fn: any) => fn(makeTx()))
   mocks.invoiceUpdate.mockResolvedValue({})
   mocks.customerFindUnique.mockResolvedValue({ customerCategoryId: null })
@@ -195,5 +204,40 @@ describe("sales-payment recalc — float drift precision", () => {
         data: expect.objectContaining({ status: "partial", paymentStatus: "partial" }),
       }),
     )
+  })
+})
+
+describe("sales-payment recalc — un-accrue komisi", () => {
+  it("status turun dari paid (partial): cancelAccrualTx dipanggil, accrue tidak", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 70, grandTotal: 1000, status: "paid" })
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 200 }])
+    await onSalesPaymentUpdated(70)
+    expect(mocks.cancelCommission).toHaveBeenCalledTimes(1)
+    expect(mocks.cancelCommission.mock.calls[0][1]).toBe(70)
+    expect(mocks.accrueCommission).not.toHaveBeenCalled()
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "partial" }) }),
+    )
+  })
+
+  it("status tetap paid: accrue dipanggil, cancel tidak", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 71, grandTotal: 1000, status: "posted" })
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 1000 }])
+    await onSalesPaymentUpdated(71)
+    expect(mocks.accrueCommission).toHaveBeenCalledTimes(1)
+    expect(mocks.cancelCommission).not.toHaveBeenCalled()
+  })
+
+  it("cancelAccrualTx throw (sudah dibayar): recalc tetap selesai, status tetap turun", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.cancelCommission.mockRejectedValueOnce(new Error("Un-accrue komisi ditolak: sudah dibayar"))
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 72, grandTotal: 1000, status: "paid" })
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 200 }])
+    await expect(onSalesPaymentUpdated(72)).resolves.toBeUndefined()
+    expect(mocks.invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "partial" }) }),
+    )
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 })

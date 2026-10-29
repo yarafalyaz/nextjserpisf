@@ -16,7 +16,11 @@ export function MarkPaidPayrollButton({ payrollId }: { payrollId: number }) {
   const handleMarkPaid = () => {
     startTransition(async () => {
       try {
-        await markPayrollPaid(payrollId)
+        const result = await markPayrollPaid(payrollId)
+        if (!result.success) {
+          showError(result.error || "Gagal menandai penggajian sebagai dibayar")
+          return
+        }
         showSuccess("Penggajian berhasil ditandai sebagai dibayar!")
         setIsOpen(false)
         router.refresh()

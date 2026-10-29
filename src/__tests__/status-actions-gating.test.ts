@@ -42,7 +42,7 @@ describe("StatusActions digerbangi izin approve", () => {
     const source = read("src/components/ui/status-actions.tsx")
 
     expect(source).toMatch(/canAct = true/)
-    expect(source).toMatch(/canAct && \["draft", "pending"\]\.includes\(status\)/)
+    expect(source).toMatch(/canAct && \["draft", "pending", "sent"\]\.includes\(status\)/)
   })
 
   it.each([
