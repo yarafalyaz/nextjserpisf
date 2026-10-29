@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { showSuccess, showError } from "@/lib/utils/toast"
+import { showError, showProcessResult } from "@/lib/utils/toast"
 
 interface ProcessButtonProps {
   id: number
@@ -37,13 +37,8 @@ export function ProcessButton({
           setIsOpen(false)
           return
         }
-        // F-2026-10-28-157-V: warning server (nomor faktur belum diisi +
-        // completedOrderNotice) tampil apa adanya, tanpa hitung ulang di UI.
-        if (result && "warning" in result && typeof result.warning === "string" && result.warning) {
-          showError(result.warning)
-        } else {
-          showSuccess(successMessage)
-        }
+        // F-2026-10-28-157-V: warning server tampil apa adanya.
+        showProcessResult(result, successMessage)
         setIsOpen(false)
         router.refresh()
       } catch (e) {
