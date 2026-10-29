@@ -63,10 +63,9 @@ export function AppSearchField({
           size="icon"
           onClick={handleClear}
           aria-label="Bersihkan pencarian"
-          // D14: tombol ikon di dalam input dibuat 32px (size-8) — size-7 (28px)
-          // di bawah target sentuh. Full 44px membuat tombol lebih tinggi dari
-          // inputnya; 32px kompromi yang dipakai tombol ikon sejenis.
-          className="absolute right-1 top-1/2 size-8 -translate-y-1/2 text-muted-foreground"
+          // Tombol clear 44px min-touch (WCAG 2.5.8): area sentuh di luar
+          // visual ikon via pseudo-expand agar input tidak ikut membesar.
+          className="absolute right-1 top-1/2 size-8 -translate-y-1/2 text-muted-foreground before:absolute before:-inset-3 before:content-['']"
         >
           <X className="size-4" />
         </Button>
