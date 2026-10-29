@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { showError } from "@/lib/utils/toast"
+import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
 /**
  * GL-BR-003 K2 (FIN-BR-008): pembalikan pembayaran posted beralasan.
@@ -33,6 +35,13 @@ export function ReversePaymentButton({
   const [isPending, startTransition] = useTransition()
   const [isOpen, setIsOpen] = useState(false)
   const [reason, setReason] = useState("")
+  const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
+    useConfirmReasonAction({
+      run: (trimmed) => action(id, trimmed),
+      successMessage: "Pembayaran berhasil dibalik",
+      errorFallback: "Gagal membalik pembayaran",
+      onSuccess,
+    })
 
   function handleReverse() {
     if (!reason.trim()) {
@@ -57,6 +66,7 @@ export function ReversePaymentButton({
   function handleOpenChange(open: boolean) {
     if (!open) setReason("")
     setIsOpen(open)
+    submit()
   }
 
   return (

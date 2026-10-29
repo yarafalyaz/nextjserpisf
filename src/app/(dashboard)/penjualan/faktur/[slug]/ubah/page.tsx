@@ -50,6 +50,19 @@ export default async function EditPage({
         correctionLabel="retur penjualan"
         backHref={lockedBackHref}
         backLabel="Kembali ke detail faktur"
+  if (data.status === "cancelled") {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Faktur",
+          sectionHref: "/penjualan/faktur",
+          documentKind: "Faktur",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionHref: `/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`,
+          correctionLabel: "retur penjualan",
+          backLabel: "Kembali ke detail faktur",
+        }}
       />
     );
   }
@@ -68,6 +81,16 @@ export default async function EditPage({
         correctionLabel="retur penjualan"
         backHref={lockedBackHref}
         backLabel="Kembali ke detail faktur"
+        preset={{
+          section: "Faktur",
+          sectionHref: "/penjualan/faktur",
+          documentKind: "Faktur",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionHref: `/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`,
+          correctionLabel: "retur penjualan",
+          backLabel: "Kembali ke detail faktur",
+        }}
       />
     );
   }

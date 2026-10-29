@@ -171,6 +171,13 @@ export async function onStockAdjustmentProcessed(
         await tx.stockAdjustmentItem.update({
           where: { id: item.id },
           data: {
+            // G157-3: nilai ledger sah = qtyDiff live. Tulis-balik systemQty
+            // (= liveQty saat proses) dan difference (= qtyDiff) supaya kolom
+            // tersimpan sama persis dengan jurnal + StockMove, bukan snapshot
+            // create yang basi bila stok bergerak di antara create dan process.
+            // Pola sama seperti tulis-balik cost efektif di atas.
+            systemQty: liveQty,
+            difference: qtyDiff,
             unitCost: effectiveUnitCost,
             totalCost: safeMultiply(qtyDiff, effectiveUnitCost, 2),
           },

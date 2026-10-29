@@ -55,12 +55,31 @@ export default async function EditPage({
     );
   }
   if (_d.status === "cancelled" || _d.status === "completed") {
+  // `data` non-null sesudah notFound (TS tak menyempit via throw).
+  const lockedOrder = data as NonNullable<typeof data>;
+  function orderLockedGuard() {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Pesanan Penjualan",
+          sectionHref: "/penjualan/pesanan",
+          documentKind: "Pesanan Penjualan",
+          documentNo: lockedOrder.documentNo,
+          slug: lockedOrder.slug ?? lockedOrder.id,
+          correctionLabel: "retur/void faktur turunan",
+          backLabel: "Kembali ke detail pesanan",
+        }}
+      />
+    );
+  }
+  if (lockedOrder.status === "cancelled" || lockedOrder.status === "completed") {
     return orderLockedGuard();
   }
   const orderRealSettlementCount = await prisma.salesPayment.count({
     where: {
       NOT: { paymentMethod: "down_payment" },
       salesInvoice: { salesOrderId: _d.id },
+      salesInvoice: { salesOrderId: lockedOrder.id },
     },
   });
   if (orderRealSettlementCount > 0) {

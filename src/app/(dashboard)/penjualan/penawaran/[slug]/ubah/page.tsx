@@ -59,6 +59,24 @@ export default async function EditQuotationPage({
     )
   }
   if (_d.status === "cancelled") {
+  // `data` non-null sesudah notFound (TS tak menyempit via throw).
+  const lockedQuotation = data as NonNullable<typeof data>
+  function quotLockedGuard() {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Penawaran",
+          sectionHref: "/penjualan/penawaran",
+          documentKind: "Penawaran",
+          documentNo: lockedQuotation.documentNo ?? lockedQuotation.id.toString(),
+          slug: lockedQuotation.slug ?? lockedQuotation.id,
+          correctionLabel: "revisi/penawaran baru",
+          backLabel: "Kembali ke detail penawaran",
+        }}
+      />
+    )
+  }
+  if (lockedQuotation.status === "cancelled") {
     return quotLockedGuard()
   }
   const quotationRealSettlementCount = await prisma.salesPayment.count({
@@ -68,6 +86,8 @@ export default async function EditQuotationPage({
         OR: [
           { quotationId: _d.id },
           { salesOrder: { quotationId: _d.id } },
+          { quotationId: lockedQuotation.id },
+          { salesOrder: { quotationId: lockedQuotation.id } },
         ],
       },
     },

@@ -48,6 +48,16 @@ export default async function EditPage({
         correctionLabel="pembayaran pengganti baru"
         backHref="/penjualan/pembayaran"
         backLabel="Kembali ke daftar pembayaran"
+        preset={{
+          section: "Pembayaran",
+          sectionHref: "/penjualan/pembayaran",
+          documentKind: "Pembayaran",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionLabel: "pembayaran pengganti baru",
+          backHref: "/penjualan/pembayaran",
+          backLabel: "Kembali ke daftar pembayaran",
+        }}
       />
     );
   }

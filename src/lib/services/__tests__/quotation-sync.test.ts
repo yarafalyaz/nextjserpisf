@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-// Mock prisma so the service runs against in-memory fixtures. The
-// sales-payment.hook recalc runs for real against the same mock so we can
-// observe whether resyncOnEdit re-derives the invoice payment status after
-// changing grandTotal.
+// Mock prisma so the service runs against in-memory fixtures. GL-BR-003 K1:
+// resync hanya menyentuh SO/faktur DRAFT — tidak ada re-derive status payment
+// maupun reverse+repost di jalur resync.
 const mocks = vi.hoisted(() => {
   const prismaMock: any = {
     quotation: { findUnique: vi.fn() },
@@ -12,50 +11,13 @@ const mocks = vi.hoisted(() => {
     salesInvoice: { findMany: vi.fn(), update: vi.fn(), findUniqueOrThrow: vi.fn() },
     salesInvoiceItem: { deleteMany: vi.fn(), createMany: vi.fn() },
     salesPayment: { findMany: vi.fn(), count: vi.fn() },
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn(async (fn: any) => fn(prismaMock)),
   }
-  // Re-derive payment status using the same logic as recalcCore. This is what
-  // the sales-payment.hook does; we simulate it so the test exercises the
-  // resyncOnEdit -> onSalesPaymentUpdated plumbing.
-  const onSalesPaymentUpdatedMock = vi.fn(async (invoiceId: number, db: any) => {
-    const inv = await db.salesInvoice.findUniqueOrThrow({ where: { id: invoiceId } })
-    const payments = await db.salesPayment.findMany({
-      where: { salesInvoiceId: invoiceId },
-      select: { amount: true },
-    })
-    const totalPaid = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
-    const grandTotal = Number(inv.grandTotal ?? 0)
-    let status = "posted"
-    let paymentStatus = "posted"
-    if (totalPaid >= grandTotal && grandTotal > 0) {
-      status = "paid"
-      paymentStatus = "paid"
-    } else if (totalPaid > 0) {
-      status = "partial"
-      paymentStatus = "partial"
-    }
-    await db.salesInvoice.update({
-      where: { id: invoiceId },
-      data: { paidAmount: totalPaid, status, paymentStatus },
-    })
-  })
-  const onSalesInvoicePostedMock = vi.fn().mockResolvedValue(undefined)
-  const reverseSalesInvoicePostingTxMock = vi.fn().mockResolvedValue(undefined)
-  return { prismaMock, onSalesPaymentUpdatedMock, onSalesInvoicePostedMock, reverseSalesInvoicePostingTxMock }
+  return { prismaMock }
 })
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
-vi.mock("@/lib/hooks/sales-payment.hook", () => ({
-  onSalesPaymentUpdated: mocks.onSalesPaymentUpdatedMock,
-}))
-// Real settlement checks run against the same prisma mock (salesPayment.count).
-// Default count 0 → no real (non-DP) payment, so editing/resync is allowed.
-vi.mock("@/lib/services/sales-invoice-posting.service", () => ({
-  reverseSalesInvoicePostingTx: mocks.reverseSalesInvoicePostingTxMock,
-}))
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onSalesInvoicePosted: mocks.onSalesInvoicePostedMock,
-}))
 
 import { resyncOnEdit } from "../quotation-sync.service"
 
@@ -64,165 +26,86 @@ describe("quotation-sync.service / resyncOnEdit", () => {
     vi.clearAllMocks()
     // No real (non-DP) settlement by default → documents remain editable.
     mocks.prismaMock.salesPayment.count.mockResolvedValue(0)
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   })
 
-  it("recomputes payment status of a partially-paid invoice when the edited quotation lowers grandTotal below paidAmount", async () => {
+  it("hanya menyentuh SO draft (G1 GL-BR-003: SO confirmed/processing dilewati)", async () => {
     const p = mocks.prismaMock
-
-    // Quotation edited down to a 500 total (was 1000).
     p.quotation.findUnique.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      subtotal: 500,
-      discount: 0,
-      tax: 0,
-      grandTotal: 500,
+      id: 1, status: "draft", subtotal: 500, discount: 0, tax: 0, grandTotal: 500,
       sections: [{ items: [] }],
     })
-
     p.salesOrder.findMany.mockResolvedValue([{ id: 10 }])
     p.salesOrder.update.mockResolvedValue({})
-    p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
-
-    // Linked invoice: already partially paid (600 of 1000) → status "partial".
-    p.salesInvoice.findMany.mockResolvedValue([
-      { id: 100, salesOrderId: 10, status: "partial", paidAmount: 600, grandTotal: 1000 },
-    ])
-    p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
-    p.salesInvoice.update.mockResolvedValue({})
-
-    // recalcCore re-reads the invoice (now with the new 500 total) + payments.
-    p.salesInvoice.findUniqueOrThrow.mockResolvedValue({
-      id: 100,
-      status: "partial",
-      grandTotal: 500,
-    })
-    p.salesPayment.findMany.mockResolvedValue([{ amount: 600 }])
 
     await resyncOnEdit(1)
 
-    // After lowering grandTotal to 500 with 600 already paid, the invoice must
-    // be reclassified as fully paid. Before the fix, resyncOnEdit only rewrote
-    // the totals and left status/paymentStatus stuck at "partial".
-    expect(p.salesInvoice.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: "paid", paymentStatus: "paid" }),
-      }),
+    expect(p.salesOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ quotationId: 1, status: "draft" }) }),
     )
+    // SO draft tetap di-resync.
+    expect(p.salesOrder.update).toHaveBeenCalledTimes(1)
   })
 
-  it("batches the linked-invoice lookup into a single findMany (N+1 fix) when multiple SOs are being re-synced", async () => {
+  it("hanya mengambil faktur draft (G1 GL-BR-003: tanpa reverse+repost diam-diam)", async () => {
     const p = mocks.prismaMock
-
-    // Quotation with 2 SOs and 2 items per SO. Re-edited → 2 unfinished SOs need
-    // to be re-synced, each with its own linked unpaid invoice. The pre-fix code
-    // would call tx.salesInvoice.findMany once per SO (2 calls). The post-fix
-    // code calls it exactly once with salesOrderId: { in: [10, 20] }.
     p.quotation.findUnique.mockResolvedValue({
-      id: 2,
-      status: "draft",
-      subtotal: 800,
-      discount: 0,
-      tax: 0,
-      grandTotal: 800,
-      sections: [
-        {
-          items: [
-            { itemId: 1, qty: 2, unitPrice: 100, discount: 0, total: 200 },
-            { itemId: 2, qty: 1, unitPrice: 200, discount: 0, total: 200 },
-          ],
-        },
-      ],
+      id: 2, status: "draft", subtotal: 800, discount: 0, tax: 0, grandTotal: 800,
+      sections: [{ items: [{ itemId: 1, qty: 2, unitPrice: 100, discount: 0, total: 200 }] }],
     })
-
     p.salesOrder.findMany.mockResolvedValue([{ id: 10 }, { id: 20 }])
     p.salesOrder.update.mockResolvedValue({})
     p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
-    p.salesOrderItem.createMany.mockResolvedValue({ count: 2 })
-
-    // Both invoices are returned in a single findMany (the batched shape).
-    p.salesInvoice.findMany.mockResolvedValue([
-      { id: 100, salesOrderId: 10, status: "posted", paidAmount: 0, grandTotal: 800 },
-      { id: 200, salesOrderId: 20, status: "posted", paidAmount: 0, grandTotal: 800 },
-    ])
+    p.salesOrderItem.createMany.mockResolvedValue({ count: 1 })
     p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
-    p.salesInvoiceItem.createMany.mockResolvedValue({ count: 2 })
+    p.salesInvoiceItem.createMany.mockResolvedValue({ count: 1 })
     p.salesInvoice.update.mockResolvedValue({})
 
-    // recalcCore re-reads each invoice (still 800 grandTotal, 0 paid → status "posted").
-    p.salesInvoice.findUniqueOrThrow.mockImplementation(async ({ where }: any) => ({
-      id: where.id,
-      status: "posted",
-      grandTotal: 800,
-    }))
-    p.salesPayment.findMany.mockResolvedValue([])
+    // DB jujur menghormati filter status service: hanya draft dikembalikan.
+    const allInvoices = [
+      { id: 100, salesOrderId: 10, status: "posted", paidAmount: 0, grandTotal: 800 },
+      { id: 101, salesOrderId: 10, status: "draft", paidAmount: 0, grandTotal: 800 },
+      { id: 300, salesOrderId: 10, status: "cancelled", paidAmount: 0, grandTotal: 800 },
+    ]
+    p.salesInvoice.findMany.mockImplementation(async (args: any) => {
+      const want = args?.where?.status
+      return allInvoices.filter((inv) => inv.status === want)
+    })
 
     await resyncOnEdit(2)
 
-    // The single batched invoice lookup must use salesOrderId: { in: [10, 20] }
-    // — exactly once — not once-per-SO.
+    // Satu lookup batch dengan status draft persis.
     const invoiceFindManyCalls = p.salesInvoice.findMany.mock.calls.filter(
       (call: any[]) => call[0]?.where?.salesOrderId?.in,
     )
     expect(invoiceFindManyCalls).toHaveLength(1)
     expect(invoiceFindManyCalls[0][0].where.salesOrderId.in).toEqual([10, 20])
-    // Both invoices must still be processed (deleteMany / createMany fire once
-    // each per invoice). salesInvoice.update fires TWICE per invoice (once in
-    // resyncOnEdit to overwrite totals, once again in onSalesPaymentUpdated
-    // via recalcCore to re-derive status), so we expect 4 calls here.
-    expect(p.salesInvoiceItem.deleteMany).toHaveBeenCalledTimes(2)
-    expect(p.salesInvoiceItem.createMany).toHaveBeenCalledTimes(2)
-    expect(p.salesInvoice.update).toHaveBeenCalledTimes(4)
-    // The two SOs themselves are updated exactly once each.
-    expect(p.salesOrder.update).toHaveBeenCalledTimes(2)
+    expect(invoiceFindManyCalls[0][0].where.status).toBe("draft")
+    // Hanya faktur draft 101 yang ditulis ulang; posted/cancelled tak tersentuh.
+    expect(p.salesInvoiceItem.deleteMany).toHaveBeenCalledTimes(1)
+    expect(p.salesInvoiceItem.deleteMany).toHaveBeenCalledWith({ where: { salesInvoiceId: 101 } })
+    expect(p.salesInvoice.update).toHaveBeenCalledTimes(1)
   })
 
-  it("E127-8b/L-1: faktur cancelled tidak pernah ter-repost oleh resyncOnEdit", async () => {
+  it("E127-8b/L-1: faktur cancelled tidak pernah tersentuh resyncOnEdit", async () => {
     const p = mocks.prismaMock
-
     p.quotation.findUnique.mockResolvedValue({
-      id: 3,
-      status: "draft",
-      subtotal: 800,
-      discount: 0,
-      tax: 0,
-      grandTotal: 800,
+      id: 3, status: "draft", subtotal: 800, discount: 0, tax: 0, grandTotal: 800,
       sections: [{ items: [{ itemId: 1, qty: 1, unitPrice: 800, discount: 0, total: 800 }] }],
     })
     p.salesOrder.findMany.mockResolvedValue([{ id: 10 }])
     p.salesOrder.update.mockResolvedValue({})
     p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
     p.salesOrderItem.createMany.mockResolvedValue({ count: 1 })
-
-    // DB jujur menghormati filter status service: faktur cancelled (id 300)
-    // TIDAK dikembalikan. Mock menerapkan filter yang sama persis supaya
-    // tes ini merah bila filter produksi dicabut/dilonggarkan — bukan
-    // sekadar memercayai fixture.
-    const allInvoices = [
-      { id: 100, salesOrderId: 10, status: "posted", paidAmount: 0, grandTotal: 800 },
-      { id: 300, salesOrderId: 10, status: "cancelled", paidAmount: 0, grandTotal: 800 },
-    ]
-    p.salesInvoice.findMany.mockImplementation(async (args: any) => {
-      const allowed: string[] = args?.where?.status?.in ?? []
-      return allInvoices.filter((inv) => allowed.includes(inv.status))
-    })
+    p.salesInvoice.findMany.mockResolvedValue([])
     p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
-    p.salesInvoiceItem.createMany.mockResolvedValue({ count: 1 })
     p.salesInvoice.update.mockResolvedValue({})
-    p.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 100, status: "posted", grandTotal: 800 })
-    p.salesPayment.findMany.mockResolvedValue([])
 
     await resyncOnEdit(3)
 
-    // Kontrak filter: cancelled (dan paid) tidak termasuk status tersinkron.
     const invoiceQuery = p.salesInvoice.findMany.mock.calls[0][0]
-    expect(invoiceQuery.where.status.in).not.toContain("cancelled")
-    expect(invoiceQuery.where.status.in).not.toContain("paid")
-    // Hanya faktur posted 100 yang ditulis ulang + di-repost; 300 tak tersentuh.
-    expect(p.salesInvoiceItem.deleteMany).toHaveBeenCalledTimes(1)
-    expect(p.salesInvoiceItem.deleteMany).toHaveBeenCalledWith({ where: { salesInvoiceId: 100 } })
-    expect(mocks.reverseSalesInvoicePostingTxMock).toHaveBeenCalledTimes(1)
-    expect(mocks.onSalesInvoicePostedMock).toHaveBeenCalledTimes(1)
-    expect(mocks.onSalesInvoicePostedMock).toHaveBeenCalledWith(100, undefined, p)
+    expect(invoiceQuery.where.status).toBe("draft")
+    expect(p.salesInvoiceItem.deleteMany).not.toHaveBeenCalled()
+    expect(p.salesInvoice.update).not.toHaveBeenCalled()
   })
 })

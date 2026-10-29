@@ -8,6 +8,13 @@ import { act } from "react"
 
 const toast = vi.hoisted(() => ({ ok: [] as string[], err: [] as string[] }))
 import { ReversePaymentButton } from "../reverse-payment-button"
+import {
+  newTestContainer,
+  renderTestUi,
+  clickTestEl,
+  unmountTestUi,
+  findButtonByText,
+} from "./confirm-button-test-utils"
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -52,6 +59,16 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
     expect(toast.err.some((m) => m.includes("wajib diisi"))).toBe(true)
     act(() => root.unmount())
     container.remove()
+    const { container, root } = newTestContainer()
+    renderTestUi(container, root, <ReversePaymentButton id={7} action={action} />)
+    clickTestEl(container.querySelector("button"))
+    await act(async () => {})
+    const confirm = findButtonByText(document, "Balikkan Pembayaran")
+    clickTestEl(confirm)
+    await act(async () => {})
+    expect(action).not.toHaveBeenCalled()
+    expect(toast.err.some((m) => m.includes("wajib diisi"))).toBe(true)
+    unmountTestUi(root, container)
   })
 
   it("alasan terisi: aksi dipanggil dengan (id, alasan trim)", async () => {
@@ -60,6 +77,9 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
     document.body.appendChild(container)
     const root = render(container, <ReversePaymentButton id={7} action={action} />)
     click(container.querySelector("button"))
+    const { container, root } = newTestContainer()
+    renderTestUi(container, root, <ReversePaymentButton id={7} action={action} />)
+    clickTestEl(container.querySelector("button"))
     await act(async () => {})
     const textarea = document.querySelector("textarea[aria-label='Alasan pembalikan']") as HTMLTextAreaElement | null
     expect(textarea).not.toBeNull()
@@ -73,6 +93,8 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
       (b) => b.textContent === "Balikkan Pembayaran",
     )
     click(confirm ?? null)
+    const confirm = findButtonByText(document, "Balikkan Pembayaran")
+    clickTestEl(confirm)
     await act(async () => {})
     expect(action).toHaveBeenCalledTimes(1)
     expect(action.mock.calls[0][0]).toBe(7)
@@ -80,5 +102,6 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
     expect(toast.ok.some((m) => m.includes("berhasil dibalik"))).toBe(true)
     act(() => root.unmount())
     container.remove()
+    unmountTestUi(root, container)
   })
 })
