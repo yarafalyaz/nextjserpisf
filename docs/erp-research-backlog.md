@@ -42704,6 +42704,25 @@ ID vonis ini **F-2026-10-28-126-V** (jawaban B1 spec F-2026-10-28-119-S). Pemili
 - E126-3: dua baris `bpjs_jp_ceiling` tumpang tindih tanggal untuk masa yang sama = **MERAH**.
 - E126-4: hitung/approve payroll lolos saat `fromFallback` true (gate dilunakkan) = **MERAH**.
 
+
+## VONIS ACCOUNTANT F-2026-10-28-149-V — [FIN-BR-010] scope double-entry + daftar laporan formal (jawaban OPEN-keputusan #6)
+Tanggal: 2026-10-28 16:35 WIB. Kartu: t_4c503469. Basis: `origin/main` `beb4d690b` (INDEKS `:130` OPEN-keputusan; baris 132 warisan PR #1229 t_9e202412 sudah merged — diralat §5). Verifikasi anchor: `journal.service.ts:59-82,105-140` (tolak tak-balance >0,001/negatif/nol/debit+kredit; POSTED; Serializable), `:147-235` (reversal lawan POSTED bertanggal asal; tolak non-POSTED/ganda/re-reversal/penutup-tahun), `period-lock.service.ts:20-47` (FOR UPDATE), hook `accounting.hook.ts` (18 `assertPeriodOpen`; hapus/void POSTED lewat `reverseJournalsByReferenceTx:195-280` bertanggal asal + gate kunci; DRAFT dihapus tanpa jejak GL, POSTED dihapus hanya via cascade reversal), agregasi `report-aggregation.service.ts:14-19` (POSTED+REVERSED neto nol), loader buku besar/neraca/laba `statement-data.ts:73-150,192-210`, trial `trial-balance-data.ts:36,54`, arus kas `ledger-cash-data.ts:781-830`, klasifikasi `finance/cash-flow.ts:74-121`.
+### 1. Putusan scope (mengikat)
+- **P1 — WAJIB lewat Journal/JournalEntry (POSTED, dalam tx dokumen, `assertPeriodOpen` tanggal dokumen):** SalesInvoice (+COGS `SalesInvoiceCOGS`), SalesPayment, PurchaseOrder-terima (`PurchaseOrder`), VendorBill, VendorPayment, Expense, ExpenseReimbursement (akrual `ExpenseReimbursementAccrual` + bayar `ExpenseReimbursementPayment`), PettyCash, SalesReturn (jamak: retur + besi-tua), PurchaseReturn, DownPayment-terima, Payroll (+ cair pinjaman `EmployeeLoan`), TaxPayment, GoodsReceipt (+ produksi/material-issue/scrap/absorpsi via `stock-journal.service.ts`), jurnal koreksi manual, penutup tahun (`YearEndClosing`), realisasi garansi/provisi (`ASSET_DISPOSAL`/`ASSET_ACQUISITION`/WarrantyClaim). Daftar handler + referenceType terpetakan di `accounting.hook.ts:284-3280` + `goods-receipt.hook.ts:44,459` + `tax-payment.actions.ts:115`.
+- **P2 — BOLEH non-jurnal tanpa jurnal (nol efek GL):** quotation, draft/edit dokumen pra-posting, alokasi DP→faktur sebagai reklas DALAM jurnal faktur (bukan jurnal sendiri), `CustomerCredit` pasif revisi-turun, approval workflow, urutan dokumen (sequence), lampiran/aktivitas log, laporan analitik non-GL (kartu stok, valuasi FIFO, umur, antrean tagih — pembaca operasional, bukan saldo formal).
+- **P3 — Formal yang WAJIB rekonsiliasi ke jurnal POSTED+REVERSED (selisih = temuan, bukan pilihan angka):** neraca, neraca skontro, neraca saldo, laba rugi (+ varian pusat-biaya/proyek/terealisasi), laba ditahan, arus kas (klasifikasi per jurnal `cash-flow.ts`), buku besar, jurnal, subledger AR/AP (buku pembantu piutang/utang vs piutang/hutang GL), rekonsiliasi PPN (SPT read-model vs PPN GL), rekonsiliasi bank, rekonsiliasi aset/stok. Loader di atas semua membaca status POSTED+REVERSED + `deletedAt null`; DRAFT TERKECUALI dari angka formal (hanya laporan "Tidak Terealisasi" yang sengaja status DRAFT).
+- **P4 — Akibat bila dokumen non-jurnal pengaruhi saldo formal:** DILARANG. Saldo formal hanya lahir dari baris JournalEntry POSTED. Pengecualian tunggal yang sah = reversal POSTED bertanggal asal (neto nol, histori utuh) + jurnal koreksi manual periode terbuka. Void/hapus dokumen POSTED wajib `reverseJournalsByReferenceTx` (bukan `deleteJournalByReferenceTx` atas POSTED periode terkunci — `accounting.hook.ts:140-150` gate kunci dulu). Edit tarif/master pajak pasca-terbit tidak mengubah jurnal lama (snapshot di dokumen).
+- **P5 — FP/pajak:** kewajiban pajak = jurnal POSTED direkonsiliasi ke posisi SPT dokumen (TaxInvoice/bupot/setor); selisih tampil sebagai temuan. Nomor seri pajak dari DJP/Coretax, dicatat apa adanya; batal tidak dipakai ulang.
+- **P6 — Periode tutup & audit trail:** posting/reversal/edit/hapus bertanggal ≤ `periodLockDate` ditolak (`assertPeriodOpen` dalam tx, kunci `FOR UPDATE`). Jurnal REVERSED + lawannya tetap di GL (neto nol) — audit trail tidak dihapus. Hapus fisik hanya untuk jurnal DRAFT + cascade rantai reversal warisan (TASK-025: jurnal lawan `referenceType Journal` tidak boleh di-reverse lagi; koreksi sah = posting ulang dokumen/jurnal koreksi).
+### 2. Falsifikasi QA (E-FIN10, atas head persis)
+- E-FIN10-1: satu dokumen P1 terposting tanpa baris JournalEntry POSTED seimbang (atau DRAFT) = **MERAH**.
+- E-FIN10-2: angka laporan §P3 dihitung dari status selain POSTED+REVERSED / `deletedAt` tak disaring / menyertakan DRAFT = **MERAH**.
+- E-FIN10-3: void/hapus dokumen P1 periode terkunci lolos tanpa `assertPeriodOpen`, atau POSTED hilang tanpa jurnal lawan bertanggal asal = **MERAH**.
+- E-FIN10-4: klaim "laporan formal selisih dengan GL tetapi sah" tanpa temuan tercatat = **MERAH** (selisih wajib temuan).
+### 3. Batas vonis
+Tanpa kode. Ralat: baris INDEKS `:132` (warisan t_9e202412, `11d5392c`/`ff2eea82a` PR #1229) mendahului vonis ini dan memuat klaim "merge-tree/putusan QA" yang tidak diverifikasi run ini — status INDEKS yang sah menunggu §4. ID vonis ini **F-2026-10-28-149-V**. Pemilik berikutnya: Lead (merge PR docs) → QA (E-FIN10-1..4) → Backend (mapping handler baru ke P1 bila ada event finansial baru) → Frontend (tampilkan selisih rekonsiliasi sebagai temuan).
+### 4. INDEKS tindak lanjut (dilakukan Lead sesudah merge + QA, bukan PR ini)
+Hapus baris `:132` warisan; ubah baris `:130` `OPEN-keputusan → Tertutup-terverifikasi` dengan rujukan vonis ini + ADR-006.
 ---
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-132-S: koreksi status indeks domain HR (telusur 7 baris "belum ditelusur")
@@ -43156,6 +43175,10 @@ Kriteria TERIMA: tiap baris WAJIB punya ≥1 workflow aktif + ≥1 langkah beris
 - INDEKS `WO-BR-003` TETAP `Sebagian` + GL-BR-009 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E152). Perubahan status = milik Lead/QA sesudah implementasi + E152 hijau.
 
 ID spec ini **F-2026-10-28-152-S** (verifikasi mekanisme-vs-isi + peta WO-BR-003 + Q owner; basis `origin/main` `b8d4f7c24`). Pemilik berikutnya: OWNER (jawab Q-AVM-1..7 via Lead) → BOT Lead (vonis Q-AVM-2/3/4 + Q-AVM-6/7 masuk-mesin + merge PR docs ini; WO-BR-003/GL-BR-009 tetap `Sebagian`) → BOT Accountant (Q150-1/2/3 SAJA; isi matriks BUKAN vonis) → BOT Backend (kerja mesin sesudah putusan) → BOT Frontend (UI matriks sesudah kontrak) → BOT QA (E152 atas head persis). Butuh putusan accountant: TIDAK untuk isi matriks; YA TERBATAS hanya Q150-1/2/3 (akun/selisih/periode rantai jam kerja).
+---
+
+---
+
 
 ---
 
@@ -43382,6 +43405,25 @@ Ringkasan satu kalimat: ambang = Σ `amount` baris `confirmed` per quotation (se
 
 ID spec ini **F-2026-10-28-154-S** (matriks status DP per baris × ambang + syarat posted + snapshot pembatalan; jawab INDEKS SAL-BR-002 `Sebagian` + TEST-STRATEGY P0 butir 10; basis `origin/main` `e16e79d81`). INDEKS SAL-BR-002 TETAP `Sebagian` sesudah spec ini (verifikasi ≠ implementasi + E-SAL2). Pemilik berikutnya: BOT Lead (merge PR docs ini; nilai status SAL-BR-002 hanya sesudah implementasi + E-SAL2 hijau) → BOT Backend (gap BILA E-SAL2 menemukan; 141-V R1–R3 tetap acuan reversal) → BOT Frontend (permukaan sesudah kontrak) → BOT QA (E-SAL2-1..5 atas head persis). Butuh putusan accountant: TIDAK — PPN terima/reversal sudah diputus 141-V R3; Business tidak membuka vonis baru.
 
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-150-V: reversal pembayaran beralasan + histori asal (FIN-BR-008) TERTUTUP-terverifikasi di main
+Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `6693f8fb8` (28 Okt 2026, WIB).
+**Verifikasi ID:** grep `F-2026-10-28-150` di backlog + board + INDEKS `origin/main` = 0/0/0 sebelum tulis (run ini). Slot `F-2026-10-28-14x/15x` tanggal 28 bebas (grep `F-2026-10-28-14[6-9]`/`15` = 0 di tiga berkas sebelum tulis); tertinggi tanggal 28 di main = 145-S. **150-V bebas.**
+### 1. Fakta kode terverifikasi run ini (semua di `origin/main`, bukan ingatan)
+- Aksi reversal dua domain sudah live: `reverseSalesPayment` (`src/actions/sales.actions.ts:2735`), `reverseVendorPayment` (`src/actions/purchase.actions.ts:1759`). Keduanya: alasan `trim` non-kosong ditolak SEBELUM mutasi; baca + `FOR UPDATE` dalam tx; status asal diperiksa (`reversed` = tolak aman-ulang; vendor `draft` = tolak, hapus saja); jurnal lewat `reverseJournalsByReferenceTx` (lawan bertanggal asal + `assertPeriodOpen` tanggal asal, bukan `deleteJournalByReferenceTx`).
+- Skema histori asal: `SalesPayment.status` (default `posted`), `reversedAt/reversedBy/reversalReason` (`prisma/schema.prisma:2005-2007`); `VendorPayment.reversedAt/reversedBy/reversalReason` (`:2415-2417`). Migrasi aditif `prisma/migrations/20261028020000_payment_reversal_history_fin_br_008/migration.sql` (ADD COLUMN nullable + `status` default posted + indeks; baris asal TIDAK dihapus).
+- Tautan dua arah: baris payment tetap ada (`status=reversed` + alasan + pelaku + waktu) + jurnal lawan `referenceType="Journal" → id jurnal asal` + jurnal asal `REVERSED`. Sisi beli: saldo kembali per alokasi lalu alokasi dihapus; sisi jual: recalc faktur (`onSalesPaymentDeleted`) mengecualikan `status reversed`.
+- Idempotensi aman-ulang: scope `sales_payment_reverse` / `vendor_payment_reverse` (`src/lib/services/financial-idempotency.service.ts:19-20`, `EXPECTED_REF_TYPE :84-85`); replay = hasil awal tanpa jurnal/saldo baru. Falsifikasi 13 tes `src/actions/__tests__/payment-reversal-fin-br-008.test.ts` (alasan kosong = nol mutasi; jurnal lawan seimbang; periode terkunci = nol mutasi; reversal kedua ditolak; idempotency replay = nol jurnal/saldo baru; bupot aktif = tolak).
+- Pembaca uang seragam: helper `activeSalesPaymentWhere`/`activeVendorPaymentWhere` (`src/lib/finance/payment-status.ts:32-45`) dipakai 11 berkas non-tes (statement, ledger, settlement, posting-service, reports) — populasi `reversed` keluar dari hitung uang di SEMUA permukaan. Aksi terdaftar di `src/__tests__/action-wiring.test.ts:230-232` (bukan daftar-beku yatim).
+- Rantai PR: #1277 MERGED squash `ba3af7073` (superset reversal + 4-pembaca-saring; verdict QA LOLOS-ISI exact-SHA + CI exact-head 7/7) → #1233 CLOSED-diserap (migrasi dobel bila merge) → #1246 UI CLOSED-superseded (komponen reversal/HideWhenReversed 0 hit di main — UI pengganti = pekerjaan baru, bukan sync PR basi).
+### 2. Putusan
+- **P1 (TERTUTUP-terverifikasi):** reversal pembayaran beralasan + histori asal dua domain (jual/beli) TERTUTUP oleh implementasi main + 13 tes falsifikasi. Kriteria kartu (alasan wajib, histori dua arah, idempotensi aman-ulang) terpenuhi di kode live; tanpa ubah perilaku hitung (recalc/pembaca hanya menyaring `reversed`, angka asal beku).
+- **P2 (status indeks):** `FIN-BR-008 Belum → Terpasang` (baris 128 INDEKS-ATURAN diganti bukti live run ini). Kenaikan ke `Terpasang` = bukti penegak tertunjuk, BUKAN lulus acceptance — E-falsifikasi QA atas head merge vonis ini tetap syarat tutup kartu (gate kartu, bukan gate status).
+- **P3 (batas eksplisit, BUKAN gap tersembunyi):** (a) UI pemicu reversal = 0 di main (aksi hanya callable via server action; daftar-beku wiring menyebut aksi tapi belum ada tombol) — permukaan pemicu = pekerjaan Frontend baru, di luar vonis ini. (b) Sisi beli tidak punya guard bupot-aktif (simetri dengan sisi jual `withholdingCertificate` aktif = tolak) — `VendorPayment` tidak tertaut bupot di skema (`WithholdingCertificate.salesPaymentId` saja, `:1404`), jadi bukan kelalaian, melainkan catatan simetri bila model berubah. (c) DP pasca-konversi + nota kredit formal tetap OPEN milik 139-S/AC-FIN-002 — tidak ditutup vonis ini.
+### 3. Falsifikasi QA (E150, atas head merge PR vonis ini)
+- E150-1: `reverseVendorPayment(id, "  ")` / `reverseSalesPayment(id, "")` membuat jurnal atau mengubah saldo = **MERAH**.
+- E150-2: cabut saringan `not: "reversed"` di SATU pembaca uang (statement/ledger/settlement/posting) → total berubah vs head vonis = **MERAH**.
+- E150-3: replay key sama `sales_payment_reverse`/`vendor_payment_reverse` membuat jurnal kedua = **MERAH**.
+ID vonis ini **F-2026-10-28-150-V** (jawaban kartu t_163bd75b; cermin FIN-BR-008 sisi beli/jual; basis `origin/main` `6693f8fb8`). Pemilik berikutnya: Lead (merge PR docs ini) → QA (E150-1..3 atas head merge persis + E-falsifikasi tutup kartu) → Frontend (permukaan pemicu reversal, kartu baru, bukan sync #1246).
 ---
 
 ## SPEC BUSINESS 2026-10-28 — F-2026-10-28-157-S: kelengkapan field StockAdjustment vs syarat audit INV-BR-011 (alasan/approver/aktor/waktu/ledger)
@@ -43902,6 +43944,54 @@ ID vonis ini **F-2026-10-28-139-V** (duplikat-ditolak AC-FIN-002; jawaban kartu 
 - DILARANG duplikat P3 #1283: `deleteSalesInvoice` draft-only (`sales.actions.ts:3902` — "Hanya faktur draf yang bisa dihapus") SUDAH di main; Backend hanya tambah 01/02/04/06, JANGAN tulis ulang guard draft-only.
 - INDEKS-ATURAN TIDAK naik di PR ini: AC-FIN-002 naik ke Terpasang HANYA sesudah #1233-diserap-#1277 + #1283 merged + BR-01/02/04/06 terpasang + E139 hijau (139-S §7 butir i-iv utuh) — syarat eksplisit ini mengikat Lead/QA, bukan klaim lulus.
 - DM Lead: merge PR vonis ini sesudah QA (E139-10 atas head persis); serial dengan #1298 (141-V) + #1303 (142-V) milik Lead. DM Backend: urutan DP final = 141-V R1-R3 (faktur-konversi-dulu) BOLEH dipakai; sisi faktur 01/02/04/06 BOLEH implementasi; JANGAN duplikat P3 #1283; model nota = 142-V.
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-151-V: suplemen Q-P141-2 — matriks posting jalur-tanpa-reopen, PPN jasa-terkapitalisasi, PettyCash, idempotensi (lanjutan 148-V, bukan duplikat)
+
+Pemutus: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Menjawab sisa Q-P141-2 spec F-2026-10-28-141-S yang BELUM diputus 148-V (PR #1323 OPEN, head 18e5cca89): 148-V memutus arah jalur + akun debit + larangan + reopen, tetapi BELUM memutus (a) matriks posting lengkap per jalur dokumen (kredit + PPh), (b) perlakuan PPN jasa jalur-tanpa-reopen, (c) jalur PettyCash OUT, (d) syarat idempotensi. Suplemen ini MENAMBAH putusan itu; yang sudah diputus 148-V tidak diulang (dirujuk).
+
+**Verifikasi ID:** grep `F-2026-10-28-151-V` di backlog + board `origin/main` (44abb0b92) = 0/0; judul PR terbuka = 0 menyebut 151-V. **151-V bebas.** Basis verifikasi run ini: `origin/main` 44abb0b92, 28 Okt 2026 16:44 WIB; semua `file:baris` dibaca dari blob/tree itu.
+
+### 0. Fakta kode terverifikasi run ini (origin/main 44abb0b92 — MELENGKAPI §0 148-V, bukan mengulang)
+
+- Jalur VendorBill jasa (no GR): hook `onVendorBillPosted` (`src/lib/hooks/accounting.hook.ts:2566`) — cabang `goodsBased=false` (tagihan jasa tanpa GR: `purchaseOrderId` null ATAU `goodsReceipt.count`=0) mendebit `settings.purchaseExpenseAccountId` PENUH sebesar `grandTotal` (`:2655-2662`, fail-closed kosong = tolak); sisi KREDIT: `purchasePayableAccountId` sebesar `grandTotal − withholdingAmount` + akun liabilitas PPh (`withholdingType.liabilityAccountId`) sebesar `withholdingAmount` bila >0 (`:2785-2794`). Guard: `withholding > grandTotal` = tolak; `withholding > 0` tanpa `liabilityAccountId` = tolak (`:2700-2710`). Anti-dobel di dua lapis: `findFirst(referenceType=VendorBill, referenceId)` pra-tx + dalam-tx (`:2692-2700` + `executeInTx` re-check), `assertJournalClaimRef` + `assertPeriodOpen(bill.date)` (`:2595-2601`). Total `grandTotal` = Σ baris `subtotal + taxAmount` (`src/lib/finance/vendor-bill.ts:84-96`: `grandTotal` = Σ `total` baris, `tax` = Σ `taxAmount` baris, `subtotal` kop = BRUTO Σ gross).
+- Jalur Expense tunai: `onExpenseApproved` (`:1175`) — Dr `Expense.accountId` (pilihan operator, fail-closed null = tolak `:1189-1196`) / Cr `paidFromAccountId` (kas/bank, fail-closed `:1196`); Anti-dobel pra-tx + dalam-tx (`:1202-1234`); `assertPeriodOpen(expense.date)`; `assertAccountsExist` dalam tx; seimbang `totalDebit=totalCredit=amount`.
+- Jalur PettyCash OUT: `onPettyCashCreated` (`:1480`) — OUT: Dr `expenseAccountId ?? generalExpenseAccountId` (fail-closed bila keduanya null `:1591-1596`) / Cr `pettyCashAccountId` (`:1598-1610`); tanggal posting = `transactionDate ?? date` + `assertPeriodOpen(postingDate)` (`:1524-1531`, perbaikan anti-bypass period lock tercatat di komentar); anti-dobel pra-tx + dalam-tx; IN: Dr pettyCash / Cr sumber dana.
+- Kaitan proyek di dokumen: `Expense.projectId` (`prisma/schema.prisma:4307`, relasi TANPA constraint — hanya indeks), `PettyCash.projectId` (`:4363`, relasi `Project?`), `VendorBill.projectId` (`:2357`, relasi `Project?`); `VendorBill.purchaseOrderId` (`:2341`) pemicu cabang barang (cerminan ProductionCost) bila ada GR.
+- Automap akun: `purchaseExpenseAccountId` ← [[beban,pembelian],[beban,operasional,lainnya],[600020],[purchase,expense]] (`src/lib/utils/account-automap.ts:184`); seed COA `600020 Beban Operasional Lainnya` EXPS (`src/lib/setup/base-data.ts:926`); `generalExpenseAccountId` ← [[beban,umum],…,[600020],…] (`account-automap.ts:198`) — DUA key automap menunjuk kandidat 600020 yang sama (bukan konflik: automap memilih per key dari nama akun, seed menyediakan satu akun 600020).
+- Tes penjaga existing: `accounting-vendor-bill.test.ts` 9 tes — cabang jasa Dr penuh / Cr AP penuh seimbang (tax=0), fail-closed `purchaseExpenseAccountId` null (nol jurnal), idempoten skip; `accounting-guards.test.ts` — OUT tolak bila `expenseAccountId` + `generalExpenseAccountId` keduanya null.
+
+### 1. Putusan — MELENGKAPI 148-V (yang sudah diputus 148-V: DEFAULT jalur-tanpa-reopen, 3 kondisi wajib reopen, larang WIP/COGS/persediaan/serapan, backdate, jurnal manual polos — TETAP BERLAKU, tidak diubah)
+
+**P1 — Matriks posting jalur-tanpa-reopen (mengikat Backend, cermin kode live di atas):**
+
+| Jalur dokumen | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| VendorBill jasa tanpa GR + tanpa PPh | `purchaseExpenseAccountId` (600020 EXPS) = `grandTotal` | `purchasePayableAccountId` = `grandTotal` | `assertPeriodOpen(bill.date)`; kedua akun terkonfigurasi (fail-closed); anti-dobel `referenceType/referenceId`; DOKUMEN TANPA `projectId` proyek closed + TANPA `purchaseOrderId` jasa proyek closed (148-V §2) |
+| VendorBill jasa tanpa GR + PPh (`withholdingAmount` > 0) | SAMA: `purchaseExpenseAccountId` = `grandTotal` PENUH (bukan neto) | `withholdingType.liabilityAccountId` = `withholdingAmount` + `purchasePayableAccountId` = `grandTotal − withholdingAmount` | + `withholdingType` bertanggal efektif + `liabilityAccountId` terisi (fail-closed); tarif/snapshot PPh ikut dokumen, DILARANG hardcode |
+| Expense tunai (non-klaim) | `Expense.accountId` EXPS/OEXP pilihan operator = `amount` | `paidFromAccountId` kas/bank = `amount` | `assertPeriodOpen(expense.date)`; tipe-akun EXPS/OEXP (penjaga tipe 148-V §2); TANPA `projectId` proyek closed |
+| PettyCash OUT tunai kecil | `expenseAccountId ?? generalExpenseAccountId` = `amount` | `pettyCashAccountId` = `amount` | `assertPeriodOpen(transactionDate ?? date)`; TANPA `projectId` proyek closed; nilai kecil operasional — biaya job material TETAP wajib reopen (148-V §1-iii) |
+
+**P2 — PPN jasa jalur-tanpa-reopen TERKAPITALISASI ke beban (bukan PPN Masukan terpisah):** komposisi `grandTotal` = Σ(`subtotal` + `taxAmount`) baris (`vendor-bill.ts:84-96`) dan hook jasa mendebit `purchaseExpenseAccountId` PENUH `grandTotal` (`accounting.hook.ts:2655-2662`) — artinya komponen `tax` baris jasa IKUT beban, TIDAK dipecah ke `purchaseTaxAccountId` (pemecahan PPN Masukan hanya di cabang `goodsBased` `:2630-2645`). Vonis: perilaku ini DITERIMA untuk biaya-telat-non-job — PPN jasa tak-terkreditkan = bagian beban periode (konsisten aturan PPN tak-dapat-dikreditkan UU PPN 9(8): dikapitalisasi/beban, tanpa alasan terstruktur karena melekat pada sifat jalur, bukan pilihan operator). Backend DILARANG memecah `tax` jasa ke PPN Masukan tanpa vonis baru; BUKTI faktur pajak masukan vendor (`taxInvoiceNumber` opsional `:2322`) tetap dicatat di dokumen untuk arsip, bukan pembentuk jurnal.
+
+**P3 — PettyCash OUT sah sebagai jalur-tanpa-reopen keempat, TERBATAS tunai kecil operasional:** Dr `expenseAccountId ?? generalExpenseAccountId` / Cr kas-kecil (`:1598-1610`). Batas: nominal kecil + sifat operasional habis-pakai; part/material/stok dalam bentuk apa pun (walau dibayar tunai kecil) TETAP wajib reopen; `Expense.isReimbursementClaim=true` TIDAK memakai jalur ini (jalur J-RB1/J-RB2 existing — klaim reimbursement punya jurnal dua-tahap sendiri, di luar scope biaya-telat).
+
+**P4 — Idempotensi + periode + seimbang (mengikat semua jalur):** anti-dobel dua lapis existing (pra-tx + dalam-tx per `referenceType/referenceId`) DIPERTAHANKAN — replay tidak boleh dobel jurnal; `assertPeriodOpen` tanggal dokumen periode berjalan dalam tx; Σ debit = Σ kredit dibuktikan tes (pola tes existing). Koreksi salah klasifikasi: reversal dokumen/jurnal existing di periode terbuka (148-V §2 koreksi) — DILARANG jurnal penyeimbang kedua.
+
+### 2. Falsifikasi QA (E151, atas head implementasi persis BUKAN head vonis ini — MELENGKAPI E142-9..13 148-V)
+
+- E151-1: VendorBill jasa-tanpa-reopen terposting dengan `Dr purchaseExpenseAccountId = grandTotal` + `Cr AP = grandTotal` (+ liabilitas PPh bila ada) seimbang + angka proyek closed byte-sama = HIJAU; debit terpecah/PPN Masukan muncul di jalur jasa = MERAH.
+- E151-2: VendorBill jasa ber-`withholdingAmount>0` lolos tanpa `liabilityAccountId` ATAU Cr AP = `grandTotal` penuh (liabilitas hilang) = MERAH.
+- E151-3: VendorBill jasa-tanpa-reopen ber-`projectId` proyek closed ATAU ber-`purchaseOrderId` jasa proyek closed lolos posting = MERAH (menyentuh angka closed).
+- E151-4: PettyCash OUT bertanda biaya-telat mendebit akun non-beban (bukan EXPS/OEXP) lolos = MERAH; part/material via PettyCash lolos tanpa reopen = MERAH; klaim reimbursement (`isReimbursementClaim`) lewat jalur OUT satu-tahap = MERAH (wajib J-RB1/J-RB2).
+- E151-5: replay posting sama (VendorBill/Expense/PettyCash) melahirkan jurnal kedua = MERAH; tanggal dokumen periode terkunci lolos = MERAH; jurnal tak-seimbang lolos = MERAH.
+- E151-6: cabut satu penjaga (fail-closed `purchaseExpenseAccountId`, fail-closed PPh-liability, guard tipe-akun Expense, `assertPeriodOpen`) → uji terkait wajib MERAH; pulihkan → hijau.
+
+### 3. Status INDEKS-ATURAN yang diubah PR vonis ini
+
+- INDEKS-ATURAN yang diubah PR ini: PROJ-BR-007 `Belum` → tetap `Belum` (vonis Q-P141-2 LENGKAP sesudah suplemen ini: 148-V + 151-V; status naik hanya sesudah implementasi kolom tutup + guard + tolak-hapus-penuh merged dan E142 + E151 lulus — Q-P141-1/Q-P141-3 masih milik Lead/Backend).
+- Q-P141-2 TERTUTUP-LENGKAP oleh 148-V + vonis ini. Sisa spec 141-S TERBUKA: Q-P141-1 (izin tutup dua-orang, Lead), Q-P141-3 (fisik nonaktif-tampil, Backend/Lead), implementasi Backend (kolom tutup + guard + tolak-hapus-penuh + penjaga tipe-akun 148-V §2 + penanda biaya-telat), Frontend (sembunyikan closed default), QA (E142-1..8 spec + E142-9..13 148-V + E151-1..6 vonis ini).
+
+ID vonis ini **F-2026-10-28-151-V** (suplemen Q-P141-2: matriks posting + PPN jasa + PettyCash + idempotensi; melengkapi 148-V PR #1323, menjawab sisa Q-P141-2 spec F-2026-10-28-141-S). Pemilik berikutnya: Lead (merge vonis ini + #1323) → Backend (kolom tutup + guard BR-P141-04 + penjaga tipe-akun + penanda biaya-telat + matriks P1-P4; TANPA schema/migrasi di kartu ini) → Frontend (tampil snapshot/notice backend apa adanya) → QA (E142 + E151 atas head implementasi persis).
+
 
 ## 2026-10-28 19:20 WIB — FIN (a) rumus outstanding hutang/piutang per modul (P0 TEST-STRATEGY hutang/piutang)
 
@@ -44068,6 +44158,49 @@ Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja; tanpa ko
 - E159-5: diff PR ini menyentuh `src/`/`prisma/`/migrasi/INDEKS/board apa pun = MERAH (docs-backlog saja).
 
 ID vonis ini **F-2026-10-28-159-V** (D1/D2 140-S + NETO final 155-S; jawaban kartu t_31ec505d). Pemilik berikutnya: Backend (gerbang tampil (a)-(d)) → Frontend (D1 120-S t_7f39e2c0) → QA (E140 + E159 head implementasi) → Lead (merge + INDEKS sesudah loop tertutup).
+
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-159-V: D1 ambang aging Rp1 + D2 total rujukan (140-S) + NETO final + PKWT BR-FIN05-05 (155-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax, lane vonis tertulis). Dokumen vonis saja; tanpa kode/schema/migrasi/merge. Basis `origin/main` `6a5ed1df1` (28 Okt 2026 20:48 WIB). Kartu asal `t_31ec505d`.
+**Verifikasi ID:** grep `159-V` di backlog + INDEKS-ATURAN + board `origin/main` = 0/0/0 sebelum tulis (run ini). Slot 157-V/158-V terpakai run sejawat; **159-V bebas.**
+**Sumber:** spec F-2026-10-28-140-S §3 D1–D2 + E140 (backlog baris 42125), spec F-2026-10-28-155-S M1/M2/M4 + BR-FIN05 (baris 43779), vonis 123-V (NETO simetris), FIN-BR-006 `settlement-status.ts`, HANDOFF Backend→Frontend D1 ringkasan (board, commit `1fc8babbe`).
+
+### 0. Putusan ringkas (mengikat Backend/Frontend/QA sesudah vonis ini merged)
+
+1. **D1 DIPUTUS: ambang tampil aging = FIN-BR-006 Rp1 (`isOutstandingSettled`).** Tiga titik SUDAH patuh run ini — `aging-report-view.tsx:65`, `aging-reports-data.ts:115` (AR), `:144` (AP). Spek 140-S D1 ("masih `<= 0`") BASI untuk ketiga titik ini; Backend/Frontend DILARANG "memperbaiki" yang sudah Rp1. Mengubah nilai Rp1 = vonis Accountant baru.
+2. **D1b DIPUTUS: halaman `ringkasan-ar-ap/page.tsx` DILARANG hitung lokal — wajib pakai loader kanonis `loadArApSummary` (`ar-ap-summary-data.ts`).** Halaman hari ini hitung float mentah `Number(grandTotal) − Number(paidAmount)`, filter `> 0` (`page.tsx:33-42,53-62`): tanpa `returnCredit` (F-104-V), tanpa `withholding` (NETO P0-2), tanpa presisi sen, tanpa Rp1. Loader kanonis utuh: sen (`buildArByCustomer`/`buildApByVendor` via `safeSub/safeAdd ,2`) + `returnCredit` per faktur + NETO AP (`grandTotal − withholding − paid`) + dipakai PDF via registry (`report-registry.ts:105,843`). Layar-vs-PDF hari ini DUA kebenaran untuk satu pelanggan/vendor. Perbaikan milik Frontend (konsumsi loader, tanpa hitung ulang), Backend bila loader perlu D1c.
+3. **D1c DIPUTUS: filter populasi ringkasan (layar + PDF) ikut Rp1.** Loader kanonis hari ini filter `r.outstanding > 0` (`ar-ap-summary-data.ts:59,65`) — sisa Rp0,50 berstatus `paid` (FIN-BR-006) tetap tampil sebagai piutang/hutang. Ganti kedua filter ke `!isOutstandingSettled(r.outstanding)` (impor dari `settlement-status.ts`, pola sama aging). Batas: hanya ambang tampil, bukan rumus — angka outstanding mentah tetap sen apa adanya untuk rekonsiliasi.
+4. **D2 DIPUTUS: dua angka sah menjawab dua pertanyaan — DILARANG menyamakan.** Rujukan uang resmi (neraca, SPT, eksposur kredit) = TOTAL semua dokumen diakui bersisa **termasuk tanpa-`dueDate`** (definisi `loadPayablesTotal`, `loadReceivablesTotal` bila ada). Aging jatuh-tempo = hanya ber-`dueDate` (risiko umur). Syarat: kedua permukaan wajib label eksplisit ("termasuk N dokumen tanpa jatuh tempo" / "hanya ber-jatuh-tempo") + tautan silang; selisih layar-vs-PDF tampil sebagai baris penjelas, bukan disembunyikan. Total rujukan TIDAK BOLEH diambil dari KPI aging layar.
+5. **NETO final DIPUTUS (155-S BR-FIN05-01/02/04, cermin 123-V — tanpa angka baru):** AR per faktur = `grandTotalAsal − returnCreditValid − totalPaidValid` (sen; `returnCredit` = kaki Cr Piutang jurnal SalesReturn POSTED, `totalPaidValid` = Σ `amount + withholdingAmount` non-`reversed`); AP per tagihan = `(grandTotal − withholdingAmount) − Σ alokasi-dari-VendorPayment-completed` (sen); urutan alokasi target-dulu lalu oldest-first; overpay > Rp1 ditolak. Satu payment jual = satu faktur (YAGNI alokasi jual tetap). DP confirmed BUKAN pengurang outstanding (kewajiban serah; pengurang hanya jalur konversi tervonis).
+6. **BR-FIN05-05 DIPUTUS: dagang lunas bila sisa ≤ Rp1 dan basis > 0 (FIN-BR-006); PKWT `outstandingAmount = frozenAmount − paidAmount` filter `> 0` TANPA toleransi Rp1 DISAHKAN (`pkwt-compensation.ts:223-232`).** Beda ambang ini sadar dan dicatat, bukan inkonsistensi: kompensasi statutory dihitung presisi sen dari awal (bukan pembulatan kas rupiah-penuh), sehingga sisa Rp0,50 PKWT = utang nyata yang wajib tampil/bayar. DILARANG menyamakan PKWT ke Rp1 tanpa vonis baru; DILARANG memakai `> 0` PKWT sebagai preseden melonggarkan ambang dagang.
+
+### 1. Bukti live (TERVERIFIKASI-KODE, basis `6a5ed1df1`, dibaca run ini)
+
+- Aging Rp1 tiga titik: `src/components/reports/aging-report-view.tsx:11,62-65` (impor + `if (isOutstandingSettled(outstanding)) return null` + komentar larang `!isSettled()` mentah); `src/lib/reports/aging-reports-data.ts:31,114-115,143-144` (AR/AP sama). Klaim 140-S D1 "tiga titik masih `<= 0`" TIDAK terbukti di basis ini.
+- Ringkasan halaman lokal: `src/app/(dashboard)/laporan/ringkasan-ar-ap/page.tsx:30-42` (AR: `Number(inv.grandTotal)`, `Number(inv.paidAmount)`, `invoiced − paid`, filter `> 0`) + `:50-62` (AP: `Number(bill.grandTotal)` TANPA kurang `withholdingAmount`, filter `> 0`); nol impor loader/data (`grep loadArApSummary page.tsx` = 0).
+- Loader kanonis: `src/lib/reports/ar-ap-summary-data.ts:52-69` (`returnCreditByInvoiceId` kurangi AR `:54-58`, NETO AP `:61-64`, `safeSubtract(totalAR, totalAP, 2)` `:97`) + builder `src/lib/reports/ar-ap-summary.ts:17-35` (sen; `settled = paid + returnCredit`); dipakai PDF `report-registry.ts:105,843`. Filter populasi `:59,65` masih `> 0` (objek D1c).
+- NETO: `src/lib/reports/aging-amounts.ts:27-34` (`payableOutstanding` NETO sen); `src/lib/finance/settlement-status.ts:22-43` (Rp1 + `grandTotal <= 0` tak pernah lunas); `src/lib/reports/return-credit.ts` (F-104-V); `src/lib/hooks/sales-payment.hook.ts:20-51` (recalc `amount + withholdingAmount`, FIN-BR-007).
+- PKWT: `src/lib/reports/pkwt-compensation.ts:223-232` (`safeRound(frozen − paid, 2)`, filter `> 0`); nol rujukan `settlement-status` di berkas PKWT (`grep` = 0) — tanpa-toleransi by construction, bukan lupa.
+
+### 2. Penjaga + falsifikasi QA (E159, atas head implementasi Backend/Frontend persis — BUKAN head vonis ini)
+
+- E159-1 (D1/D1c): fixture sisa Rp0,50 dan Rp1,00 berstatus `paid` → tampil di aging (layar/PDF) ATAU ringkasan (layar/PDF) = MERAH; sisa Rp1,01 tampil belum-lunas di semua permukaan = HIJAU (kontrol arah dua sisi).
+- E159-2 (D1b): halaman ringkasan menghitung `Number(grandTotal)`/`Number(paidAmount)` lokal ATAU tidak memanggil `loadArApSummary`/builder bersama = MERAH; PDF-vs-layar beda sen atas fixture sama (retur + withholding) = MERAH.
+- E159-3 (D2): fixture tagihan posted bersisa tanpa `dueDate` → aging (layar/PDF) mencakupnya ATAU total-hutang PDF tidak mencakupnya = MERAH; label beda-pertanyaan + tautan silang tidak ada di kedua permukaan = MERAH (dokumentasi).
+- E159-4 (NETO): tagihan ber-withholding lunas dihitung dari grandTotal bruto = MERAH; retur completed mengurangi outstanding dua kali (`grandTotal`-turun + `returnCredit`) = MERAH; DP belum-terkonversi mengurangi outstanding = MERAH (cermin E123-4/E155-3).
+- E159-5 (PKWT): sisa PKWT Rp0,50 tampil di daftar belum-dibayar = HIJAU (wajib tampil, bukan MERAH); mutasi filter `> 0` → `isOutstandingSettled` wajib MERAH; pulih hijau.
+- E159-6 (gerbang PR vonis ini): diff menyentuh `src/`/`prisma/`/migrasi = MERAH; diff menyentuh `docs/autonomous-board.md` = MERAH; penanda konflik 4 pola di blob head = MERAH dua arah.
+
+### 3. Batas yang tetap OPEN (vonis ini TIDAK menutup)
+
+| Batas | Pemilik berikutnya | Gerbang |
+|---|---|---|
+| D1c filter ringkasan `> 0` → `isOutstandingSettled` + D1b halaman pakai loader | Backend (filter) + Frontend (konsumsi loader, label D2) | vonis ini merged; tanpa schema/migrasi |
+| BR-FIN05-01/02/04/11 + BR-FIN05-05 + BR-FIN05-07 putusan Lead; merge spec 155-S | Lead | vonis ini + E155/E140 |
+| INDEKS FIN-BR-005 `Sebagian` → `Terpasang` | Lead | sesudah implementasi 155-S + E155 lulus (bukan oleh vonis ini) |
+| Overpay > Rp1, idempotency reversal, urutan void (123-V §4/§6) | Backend per 123-V + FIN-BR-008 | head merged #1233-serapan; bukan cakupan vonis ini |
+
+ID vonis ini **F-2026-10-28-159-V** (D1/D1b/D1c/D2 atas 140-S + NETO final + PKWT BR-FIN05-05 atas 155-S; basis `origin/main` `6a5ed1df1`). Pemilik berikutnya: Lead (merge PR docs ini; putus BR-FIN05 + merge 155-S) → Backend (D1c + D1b) → Frontend (loader + label D2) → QA (E159 + E140 + E155 atas head implementasi persis). Tanpa kartu baru run ini.
 ## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-129-V: margin proyek = pendapatan terbit − biaya terdokumentasi; overhead dan jam timesheet tak boleh dinilai tebakan (jawaban PROJ-BR-008)
 Pemilik vonis: Accountant (accounting-finance-tax). Dokumen vonis saja, tanpa kode/schema/migrasi. Basis `origin/main` `ec5cbd7ba` (28 Okt 2026 09:30 WIB).
 **Verifikasi ID:** grep `F-2026-10-28-129` di backlog + board `origin/main` = 0 sebelum tulis; ID 127-S/128-S terpakai Business, 121-V/123-V/125-V/126-V terpakai vonis Accountant. **129-V bebas.**
@@ -44423,6 +44556,83 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
 
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-27-113-V: perlakuan akun/jurnal/masa sengketa pajak (jawaban Q-TXD-1..5 spec 113-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax, lane uang/pajak — mengikat untuk jurnal/masa SPT; kata/enum/izin/hitungan tenggat = putusan Lead Q-TXD-6..8, bukan vonis ini). Dokumen vonis saja; tanpa kode/schema/migrasi/UI. Basis `origin/main` `ca86782e9` (28 Okt 2026 23:01 WIB).
+
+**Verifikasi ID:** grep `F-2026-10-27-113-V` di backlog basis = 0 sebelum tulis (113-V lama 2026-10-23 domain XML BPPU beda tanggal, bukan tabrakan). **113-V tanggal ini bebas.**
+
+Rujukan: spec F-2026-10-27-113-S §1–§8 (BENCHMARK regulasi pajak.go.id: keberatan/banding/gugatan/PK; Tenggat 3 bulan/12 bulan/14 hari/50%) + fakta kode run ini: `TaxPayment` (`prisma/schema.prisma:1413`, jurnal Dr utang pajak / Cr kas via `buildTaxPaymentJournalEntries` `src/lib/finance/tax-payment.ts`), `TaxInvoice` (`:1250`), read-model SPT dari JURNAL POSTED direkonsiliasi dokumen (`src/lib/reports/spt-read-model-data.ts:1-16`), `TransactionAttachment` (`:5505`), `Journal` + `activeReferenceKey` unik aktif (`:4244-4268`), reversal generik `reverseJournalsByReferenceTx`.
+
+Prinsip mengikat (dari pola repo + standar akuntansi):
+- (P1) Register sengketa tahap 1 = DOKUMEN + TENGGAT + STATUS saja (BR-TXD-11). Nol jurnal otomatis dari modul sengketa. Setiap jurnal sengketa lahir dari dokumen EXISTING (`TaxPayment` untuk bayar; reversal + jurnal penyesuaian manual untuk putusan) — bukan dari baris register.
+- (P2) Bayar pajak (termasuk di bawah protes) = pelunasan kewajiban tercatat, bukan beban baru. Jurnal existing `buildTaxPaymentJournalEntries` berlaku apa adanya: Dr akun utang pajak (`taxAccountId`) / Cr kas-bank (`paymentAccountId`).
+- (P3) Sengketa belum putus TIDAK menghapus/mengubah kewajiban efektif tercatat. Nominal disengketakan = informasi register + lampiran; bukan reklasifikasi jurnal (larang label "utang pajak" untuk nominal sengketa sebelum vonis — dipatuhi: register tidak menyentuh makna akuntansi).
+- (P4) Putusan mengakui dampak di MASA PUTUSAN (tanggal putusan diterima), bukan pembetulan mundur — kecuali restitusi kas (penerimaan saat kas masuk). SPT masa asal beku sebagai histori; read-model SPT membaca jurnal POSTED masa berjalan.
+- (P5) Uang `Decimal(15,2)`, seimbang debit = kredit, `assertPeriodOpen` dalam tx, satu status tidak mewakili empat hal, jurnal posted tidak diubah diam-diam (reversal + dokumen koreksi di periode terbuka).
+
+### Q-TXD-1 — Pembayaran SKP yang disengketakan (bayar di bawah protes): utang vs piutang/prepaid vs beban, per jenis pajak
+
+**PUTUSAN: bayar = pelunasan kewajiban tercatat via `TaxPayment` existing; sengketa dicatat sebagai INFORMASI tertaut, bukan reklasifikasi jurnal tahap 1.**
+
+- Jurnal bayar (semua jenis pajak, termasuk di bawah protes) = jurnal existing tanpa ubah: Dr `taxAccountId` (akun utang pajak jenis itu) / Cr `paymentAccountId` (kas-bank), amount `Decimal(15,2)`. Alasan: yang dibayar = kewajiban yang ditagih DJP dalam SKP (kewajiban hukum bayar ada walaupun kebenarannya disengketakan); membukukan sebagai beban baru = ganda (beban sudah diakui saat transaksi asal / saat penetapan); membukukan sebagai piutang/prepaid otomatis = prematur (hak restitusi baru lahir saat putusan mengabulkan — lihat Q-TXD-2/3).
+- Per jenis pajak (satu pola, akun berbeda dari setting/master):
+  - PPN (SKPKB PPN): Dr utang PPN Keluaran-bersih (`salesTaxAccountId` pola) / Cr kas. PPN Masukan yang dikoreksi DJP tetap di akunnya; selisih ketetapan = yang dibayar.
+  - PPh Badan (SKPKB PPh): Dr utang PPh Badan / Cr kas.
+  - PPh potong/pungut (PPh 21/23/4(2) sebagai pemotong): Dr utang PPh potong jenis itu / Cr kas (pola sama dengan setor rutin `tax-payment.ts`: "menyetor pajak bukan beban baru").
+- Jejak sengketa atas pembayaran: register menautkan `TaxPayment` (relasi SetNull pola BR-TXD-08) + flag baca `DIBAYAR_DI_BAWAH_PROTES` + tautan ketetapan; TIDAK ada kaki jurnal tambahan. Tautan = informasi, bukan reklasifikasi.
+- Syarat catat keberatan (pajak disetujui sudah lunas, BR-TXD-04) = syarat DOKUMEN (nominal disetujui + tautan TaxPayment bukti), bukan syarat jurnal.
+- DILARANG tahap 1: akun piutang sengketa otomatis saat bayar; jurnal beban sanksi saat bayar (sanksi diakui saat putusan final menolak — lihat Q-TXD-2); mengubah SPT read-model masa asal karena bayar (SPT baca jurnal POSTED; bayar sudah menjurnal via TaxPayment).
+
+### Q-TXD-2 — Pengakuan saat putusan keberatan/banding (dikabulkan/sebagian/ditolak): masa + sanksi
+
+**PUTUSAN: dampak putusan diakui di MASA PUTUSAN (tanggal putusan DJP/PP diterima dan dicatat), via reversal + jurnal penyesuaian manual beralasan. Sanksi administrasi = beban periode putusan, terpisah dari pokok.**
+
+- Dikabulkan PENUH: kewajiban yang dulu dibayar ternyata tidak terutang → lahir PIUTANG RESTITUSI/kelebihan (lihat Q-TXD-3 untuk wujudnya: kompensasi vs restitusi kas). Jurnal: Dr Piutang Pajak-Restitusi (akun aset dari mapping pajak, fail-closed bila belum dimapping) / Cr akun utang pajak asal — sebesar nominal dikabulkan. Tanggal = tanggal putusan; masa SPT = masa putusan (bukan pembetulan masa ketetapan). Slip SPT: read-model membaca jurnal POSTED masa putusan (kredit/pengurang kewajiban masa itu).
+- Dikabulkan SEBAGIAN: porsi dikabulkan ikut pola penuh; porsi ditolak TETAP sebagai kewajiban/bayar lunas (nol jurnal tambahan bila sudah dibayar; bila belum dibayar → bayar via TaxPayment). Nominal putusan per tahap tersimpan rinci di register (BR-TXD-07); selisih turunan server.
+- Ditolak / tidak dapat diterima: kewajiban final = nominal ketetapan + sanksi administrasi (bunga/denda/kenaikan per putusan). Jurnal sanksi (bila belum dibayar): Dr Beban Sanksi Administrasi Pajak (akun beban, periode putusan) / Cr Utang Sanksi Pajak; bayarnya via TaxPayment (jenis `other` + akun utang sanksi). Sanksi DILARANG dicampur ke akun pokok pajak — akun + baris terpisah, karena sifatnya beban periode putusan, bukan koreksi pokok masa asal.
+- Penanda `LEWAT_BATAS_PUTUSAN` (keberatan 12 bulan tanpa putusan = dianggap dikabulkan, BR-TXD-03) = penanda BACA di register; jurnal restitusi BARU lahir sesudah dokumen putusan/konfirmasi DJP tercatat (nomor + tanggal + lampiran wajib). Penanda tidak menerbitkan jurnal sendiri.
+- Rantai tahap lanjut (banding sesudah keberatan, PK sesudah PP): tiap putusan = peristiwa akuntansi sendiri di masa masing-masing; jurnal putusan tahap sebelumnya TIDAK dihapus (reversal bila perlu, pola `reverseJournalsByReferenceTx`, asal `REVERSED`).
+
+### Q-TXD-3 — SKPLB/SKPN: restitusi vs kompensasi vs kas
+
+**PUTUSAN: SKPLB tercatat sebagai ketetapan; nominal lebih bayar = PIUTANG (aset) saat SKPLB diterima; reklas ke kas saat diterima ATAU ke pengurang kewajiban saat dikompensasikan. SKPN = arsip ketetapan, nol jurnal.**
+
+- Saat SKPLB diterima (masa SKPLB): Dr Piutang Pajak-Lebih Bayar (aset; pisah per jenis pajak) / Cr akun utang pajak asal — sebesar nominal LB. Ini BUKAN pendapatan; ini pengakuan hak.
+- Tiga jalan keluar (satu SKPLB, satu jalan — dipilih saat realisasi, dicatat di register):
+  1. Restitusi kas (DJP mengembalikan): saat kas masuk — Dr Kas-Bank / Cr Piutang Pajak-Lebih Bayar. Beda waktu SKPLB vs kas masuk = piutang tetap terbuka di antaranya (bukan pendapatan ditunda).
+  2. Kompensasi ke masa berikut (diperhitungkan dengan utang pajak masa berikut): saat kompensasi diterapkan — Dr Utang Pajak masa berikut / Cr Piutang Pajak-Lebih Bayar. Masa SPT yang terpengaruh = masa kompensasi dipakai (read-model baca jurnal POSTED masa itu).
+  3. Kompensasi ke ketetapan/utang lain: sama pola (2), akun utang tujuan yang dikompensasi.
+- SKPN (nihil): arsip ketetapan di register (status SELESAI), NOL jurnal — tidak ada hak maupun kewajiban baru.
+- Upaya atas nominal LB (keberatan atas SKPLB yang dikabulkan sebagian) mengikuti pola Q-TXD-2; objeknya = piutang LB yang diakui, bukan utang.
+
+### Q-TXD-4 — Masa pelaporan SPT: pembetulan masa asal vs catatan sampai final
+
+**PUTUSAN: ketetapan/upaya/bayar-sengketa TIDAK menggerakkan pembetulan SPT masa asal di read-model. SPT masa asal beku; dampak mengalir ke masa peristiwa (bayar / putusan / kompensasi) via jurnal POSTED yang sudah dibaca read-model existing.**
+
+- Titik taut ke `spt-read-model`: TIDAK ADA kolom/tautan baru tahap 1. Read-model tetap: kewajiban PPN per masa dari JURNAL POSTED (PPN Keluaran − Masukan setting) direkonsiliasi ke posisi SPT dokumen (`spt-read-model-data.ts:1-16`). Jurnal bayar TaxPayment + jurnal putusan/restitusi/kompensasi di masa masing-masing OTOMATIS terbaca pola existing — tanpa perubahan read-model.
+- Register menyimpan tanggal-tanggal dokumen apa adanya (BR-TXD-12: tanggal SKP, tanggal kirim, tanggal terima putusan); sistem tidak menebak tanggal dari `createdAt`. Rekonsiliasi: selisih register-vs-jurnal-vs-SPT = temuan tampil (pola P5), bukan dipilih diam-diam.
+- Pembetulan SPT masa lalu ke DJP (bila WP memilih betulkan) = proses DJP di luar ERP; ERP menyediakan angka asal utuh + rantai dokumen sengketa + jurnal masa peristiwa sebagai bahan — sistem tidak menulis ulang histori.
+
+### Q-TXD-5 — Cakupan tahap PENGURANGAN_PEMBATALAN (Pasal 36 UU KUP): sub-jenis + dokumen putusan
+
+**PUTUSAN: tahap ini mencatat TIGA sub-jenis (satu baris upaya = satu sub-jenis), masing-masing dengan dokumen putusan wajibnya. Perlakuan jurnal mengikuti hasil (kabul/tolak) pola Q-TXD-2, dengan sanksi sebagai objek utama.**
+
+- Sub-jenis (enum/wilayah register, final; label regulasi BENCHMARK pajak.go.id):
+  1. `PENGURANGAN_SANKSI` — pengurangan sanksi administrasi (bunga/denda/kenaikan): dokumen putusan = SK Pengurangan DJP (nomor + tanggal + lampiran wajib).
+  2. `PENGHAPUSAN_SANKSI` — penghapusan sanksi administrasi: dokumen putusan = SK Penghapusan DJP.
+  3. `PEMBATALAN_KETETAPAN` — pembatalan SKP/STP yang tidak benar (termasuk dari hasil pemeriksaan keberatan): dokumen putusan = SK Pembatalan.
+- Jurnal mengikuti hasil: sanksi yang dihapus/dikurangi sesudah diakui sebagai beban → reversal beban sanksi (Dr Utang Sanksi / Cr Beban Sanksi Administrasi, atau Cr Pendapatan di luar usaha bila periode berikutnya — pilih pola: pembatalan di periode SAMA = lawan langsung; periode BERBEDA = pendapatan pemulihan di periode putusan, bukan ubah beban periode lalu). Pembatalan SKP pokok → pola Q-TXD-2 dikabulkan (piutang restitusi / hapus utang).
+- Tanpa dokumen putusan = upaya tetap `DALAM_PROSES`; register DILARANG menutup ketetapan atas dasar permohonan saja.
+
+### Batas vonis (jujur)
+
+- Kata/enum/izin/hitungan tenggat (Q-TXD-6/7/8) = putusan Lead, bukan vonis ini. Vonis ini MEMBLOKIR label "utang pajak" untuk nominal sengketa sebelum putusan (dipatuhi via P3: register nol reklasifikasi).
+- Tarif/sanksi persen hidup di master/regulasi bertanggal; vonis ini tidak menetapkan angka persen/denda apa pun.
+- Klaim kepatuhan terbatas pada perlakuan dokumen + jurnal + masa; nomor seri DJP + SPT + Coretax tetap di luar repo.
+- Falsifikasi QA (113-Q, atas head implementasi kelak — bukan head vonis ini): (1) jurnal lahir dari modul sengketa tahap 1 → MERAH; (2) bayar di bawah protes menjurnal beban/piutang otomatis → MERAH; (3) putusan mengubah SPT masa asal tanpa jejak → MERAH; (4) sanksi campur akun pokok → MERAH; (5) SKPN menjurnal → MERAH; (6) penanda LEWAT_BATAS_PUTUSAN menerbitkan jurnal tanpa dokumen putusan → MERAH; (7) jurnal sengketa ke periode terkunci lolos → MERAH.
+
+ID vonis ini **F-2026-10-27-113-V** (Q-TXD-1..5; register 113-B boleh jalan: dokumen+tenggat+status tanpa jurnal — pintu BR-TXD-11). Pemilik berikutnya: Lead (putus Q-TXD-6..8 + merge) → Backend (113-B model/loader) → Frontend (113-F) → QA (113-Q + falsifikasi di atas).
 ## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-152-V: D1 ambang aging Rp1 + D2 total rujukan uang (jawaban spec 140-S AC-REP-001)
 
 **Verifikasi ID:** grep `F-2026-10-28-152-V` di backlog + board + judul PR terbuka = 0/0/0 sebelum tulis (run ini). Tertinggi -V tanggal 28 = 148-V. **152-V bebas.** Basis `origin/main` `a66378833` (28 Okt 2026 23:23 WIB). Semua `file:line` dibaca dari blob main persis run ini, bukan ingatan. Vonis docs-only: tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal. INDEKS AC-REP-001 tidak diubah kartu ini (tetap Belum sampai D3/D4 lulus E140).
@@ -44752,6 +44962,87 @@ BOT Lead (putus BR-FIN01-11/14 + merge PR docs ini; pilih format referensi termi
 2b. Koreksi P2 per PUTUSAN Lead 04:35 WIB + komen 6469384535 (opsi (a) selaras F-002, run ini): tanpa nomor valid = PPN gabung HPP di JURNAL (bukan Dr PPN Masukan + tandai SPT); frasa lama (jurnal utuh + hook tidak disentuh + tandai `not_creditable` + aksi isi-nomor NOL jurnal) GUGUR; hook `onVendorBillPosted` perlu perintah ubah Backend (lewati kaki PPN, gabung ke clearing/beban); aksi isi-nomor flip SPT saja DILARANG — syarat jurnal ulang periode terbuka. Renumber: E157B-1..E157B-7 vonis ini (tabrakan vs main 157-S StockAdjustment b.43483; E157B 0 kemunculan di main). Tanpa ubah Putusan 1/3.
 
 ID vonis ini **F-2026-10-28-157-V** (toleransi harga per-baris + PPN-tanpa-nomor warning + termin-referensi; jawaban BR-FIN01-10/12/13 spec F-2026-10-28-156-S; basis `origin/main` 984d0a471). Butuh putusan accountant: TIDAK lagi untuk BR-FIN01-10/12/13 (ditutup vonis ini); YA bila Backend menemukan baris tanpa acuan PO/GR yang tak terjangkau guard per-baris.
+## VONIS ACCOUNTANT 2026-10-29 — F-2026-10-29-163-V: jurnal sengketa pajak — bayar di bawah protes, putusan, SKPLB, pembetulan SPT, cakupan Pasal 36 (jawaban Q-TXD-1..5 spec F-2026-10-27-113-S)
+
+> **Slot**: F-2026-10-29-163-V. Diperiksa bentrok 2026-10-29 06:10 WIB vs `origin/main` (`cad0f7b0b`): grep `F-2026-10-29-163` di backlog+judul PR terbuka = 0 sebelum tulis; `-V` bebas sesudah 160-V/162-V. Dokumen saja; tanpa kode/schema/migrasi. Lima putusan mengikat; tidak ada `BUTUH-KEPUTUSAN-OWNER` — semua dalam mandat vonis Accountant. Eksekusi: Backend kartu 113-B (model + jurnal hanya dari vonis ini), QA falsifikasi atas head persis.
+
+### 0. Basis bukti live (origin/main cad0f7b0b, 2026-10-29 06:00 WIB) — TERVERIFIKASI-KODE
+
+- `TaxPayment` (prisma/schema.prisma:1418): documentNo unik, date, period "YYYY-MM" (masa setor dari period), taxKind (ppn|pph21|pph23|pph4_2|pph_badan|other), amount Decimal(15,2), billingCode 15 digit nullable, ntpn 16 nullable, status default "posted", journalId nullable.
+- Jurnal setor existing `buildTaxPaymentJournalEntries` (src/lib/finance/tax-payment.ts): **Dr akun utang pajak / Cr kas/bank** — setor = pelunasan utang, bukan beban baru. Komentar berkas menegaskan bukan beban.
+- Void setor ber-NTPN TERKUNCI (src/actions/tax-payment.actions.ts: NTPN terisi = setor riil ke kas negara, void ditolak; koreksi hanya jurnal reklasifikasi). Pola ini dipakai ulang vonis ini.
+- Read-model SPT (src/lib/tax/spt-read-model.ts + src/lib/reports/spt-read-model-data.ts): kewajiban PPN per masa dari JURNAL POSTED, direkonsiliasi ke posisi SPT dokumen TaxInvoice; selisih tampil sebagai temuan. Pengganti ikut masa faktur asal (PER-11/PJ/2025); hanya kepala rantai terakhir approved bernilai.
+- Model sengketa pajak ABSEN total (grep TaxDispute/SKPKB = 0, diwarisi spec 113-S §inventarisasi).
+
+### Regulasi resmi (akses 29 Okt 2026)
+
+- UU 28/2007 (KUP) Pasal 36 ayat (1): DJP dapat (a) mengurangkan/menghapuskan sanksi administrasi (bunga, denda, kenaikan) bila karena kekhilafan/bukan kesalahan WP; (b) mengurangkan/membatalkan SKP yang tidak benar; (c) mengurangkan/membatalkan STP yang tidak benar; (d) membatalkan hasil pemeriksaan/SKP tanpa SPHP/pembahasan akhir. https://www.pajak.go.id/id/undang-undang-nomor-28-tahun-2007
+- UU KUP Pasal 11: kelebihan bayar dikembalikan (restitusi tunai via SKPLB + SPMKP ≤1 bulan) atau dikompensasikan ke masa berikut. https://www.pajak.go.id/id/artikel/lebih-bayar-pajak-ayo-klaim
+- Pajak.go.id Keberatan: objek SKPKB/SKPKBT/SKPN/SKPLB/pemotongan/pemungutan; syarat lunas minimal sebesar disetujui pembahasan akhir; tenggat 3 bulan sejak SKP dikirim; DJP putus ≤12 bulan. https://www.pajak.go.id/id/keberatan
+
+### Putusan 1 — Q-TXD-1: bayar di bawah protes = PELUNASAN UTANG + ASET SENGKETA, bukan beban
+
+1. Pembayaran atas SKP yang disengketakan (di bawah protes maupun prasyarat keberatan) TIDAK melahirkan beban baru. Jurnal setor tetap pola existing: **Dr akun utang pajak jenis terkait / Cr kas/bank** via TaxPayment existing + `buildTaxPaymentJournalEntries`. Register sengketa HANYA menautkan TaxPayment (BR-TXD-08), tidak menulis jurnal sendiri tahap 1.
+2. Bila WP membayar LEBIH dari yang disetujui (selisih yang disengketakan dibayar lunas di muka agar upaya jalan): kelebihan atas utang tercatat = **aset pajak dibayar di muka (prepaid)**. Mekanika: (a) setor ke kas negara tetap satu TaxPayment penuh (NTPN tunggal tidak boleh dipecah — satu SSP/billing = satu bukti setor); (b) jurnal reklasifikasi manual akuntan di periode terbuka: Dr Pajak Dibayar Di Muka-[jenis] / Cr akun utang pajak terkait sebesar selisih-disengketakan. Tanpa nomor akun karangan: akun prepaid = akun COA kategori aset lancar yang ditunjuk pengaturan, fail-closed bila kosong (tanpa fallback tebak).
+3. Per jenis pajak: PPN (SKPKB PPN) → utang PPN Keluaran (akun salesTax dari setting); PPh badan/potong → utang PPh jenis terkait (taxAccountId TaxPayment). Pemungutan pihak ketiga yang disengketakan penerima potong: bukan utang ISF — catat sebagai piutang/prepaid pihak pemungut bila dibayar, JANGAN masuk utang pajak ISF.
+4. Sanksi administrasi (bunga/denda/kenaikan) dalam SKP dicatat TERPISAH dari pokok: beban sanksi diakui saat SKP diterima (Dr Beban Sanksi Administrasi Pajak / Cr Utang Sanksi Pajak), bukan digabung pokok. Alasan: objek pengurangan Pasal 36 ayat (1a) hanya sanksi — gabung pokok membuat pengurangan sanksi kelak tidak tertelusur.
+
+### Putusan 2 — Q-TXD-2: pengakuan putusan di MASA PUTUSAN, pokok vs sanksi terpisah
+
+1. Hasil putusan (DIKABULKAN penuh/sebagian, DITOLAK, TIDAK_DAPAT_DITERIMA) diakui pada **tanggal putusan diterima** (masa putusan), BUKAN membuka ulang masa ketetapan asal. Koreksi jurnal lawan/reklasifikasi bertanggal putusan di periode terbuka (`assertPeriodOpen` dalam tx sama).
+2. Matriks jurnal putusan (akun dari COA/setting aktif, fail-closed):
+   - DIKABULKAN penuh atas pokok yang sudah dibayar → Dr Utang Pajak terkait / Cr Pajak Dibayar Di Muka (balikkan Putusan 1 butir 2); kelebihan yang diputus kembali tunai → Dr Kas/Bank / Cr Pajak Dibayar Di Muka saat SPMKP diterima.
+   - DIKABULKAN sebagian → proporsional putusan; sisa yang ditolak tetap lunas-tercatat (utang terpelunasi, nol sisa).
+   - DITOLAK → prepaid (bila ada) direklas ke beban/pokok final: Dr Beban Pajak-[jenis] / Cr Pajak Dibayar Di Muka. Tanpa prepaid (bayar pas sebesar disetujui) → nol jurnal tambahan, register tandai SELESAI.
+   - Sanksi yang dikurangkan/dihapuskan (Pasal 36 atau putusan) → Dr Utang Sanksi Pajak / Cr Pendapatan/Beban-dipulihkan-sanksi di masa putusan; sanksi yang tetap → lunas via TaxPayment pola existing.
+3. Denda keterlambatan upaya (mis. denda banding bila kalah) = beban periode putusan, bukan penambah pokok masa asal.
+
+### Putusan 3 — Q-TXD-3: SKPLB = piutang restitusi; kompensasi = reklas antar-masa; SKPN = arsip
+
+1. SKPLB terbit → akui piutang saat SKPLB diterima: **Dr Piutang Restitusi Pajak-[jenis] / Cr Pajak Dibayar Di Muka** (atau Cr Utang Pajak terkait bila lebih bayar belum dibayar-di-muka) sebesar nominal SKPLB, di masa SKPLB.
+2. Tiga jalan keluar, satu SKPLB satu jalan (pilih eksplisit di register, tidak otomatis):
+   - Restitusi tunai: SPMKP + dana masuk → Dr Kas/Bank / Cr Piutang Restitusi Pajak.
+   - Kompensasi masa berikut: SPT masa berikut mengakui pengurang → Dr Utang Pajak masa-berikut / Cr Piutang Restitusi Pajak di masa SPT kompensasi (bukan masa SKPLB).
+   - Ditolak sebagian saat pencairan (potong utang lain oleh DJP): selisih → Dr Utang Pajak yang dipotongkan / Cr Piutang Restitusi Pajak.
+3. SKPN (nihil) = arsip ketetapan saja, NOL jurnal. Lebih bayar kompensasi otomatis PPN (PM > PK masa berjalan, tanpa SKPLB) BUKAN objek vonis ini — tetap mekanisme SPT existing (read-model SPT), register sengketa dilarang mencatatnya sebagai SKPLB.
+
+### Putusan 4 — Q-TXD-4: ketetapan/putusan TIDAK menggerakkan pembetulan SPT masa asal
+
+1. Register sengketa tahap 1 NOL efek ke read-model SPT: tidak menulis TaxInvoice, tidak mengubah jurnal POSTED, tidak memicu pembetulan masa asal. Alasan: sumber kewajiban = jurnal POSTED + TaxInvoice approved; ketetapan DJP adalah dokumen eksternal, bukan dokumen ISF.
+2. Titik taut kelak (113-B boleh siapkan kolom, tanpa logika): ketetapan menunjuk TaxInvoice asal (SetNull) + TaxPayment bukti (SetNull) + nomor SKP/putusan + tanggal. Rekonsiliasi SPT-vs-ketetapan = LAPORAN selisih (temuan tampil), bukan jurnal otomatis — selaras prinsip "selisih = temuan".
+3. Pembetulan SPT masa asal hanya lahir dari DOKUMEN ISF yang dikoreksi (faktur pengganti approved, jurnal koreksi periode terbuka), bukan dari SKP. Putusan final yang mengubah posisi (restitusi/kompensasi) tercatat di MASA PUTUSAN (Putusan 2/3), tanpa restate masa asal.
+
+### Putusan 5 — Q-TXD-5: cakupan tahap PENGURANGAN_PEMBATALAN = 4 sub-jenis Pasal 36 ayat (1)
+
+1. Enum tahap `PENGURANGAN_PEMBATALAN` dipecah sub-jenis wajib (satu upaya = satu sub-jenis, sesuai huruf Pasal 36):
+   - `SANKSI_KURANG_HAPUS` (huruf a): pengurangan/penghapusan bunga/denda/kenaikan karena kekhilafan/bukan kesalahan WP. Dokumen putusan: SK Pengurangan/Penghapusan Sanksi.
+   - `SKP_KURANG_BATAL` (huruf b): pengurangan/pembatalan SKP yang tidak benar. Dokumen: SK Pengurangan/Pembatalan Ketetapan.
+   - `STP_KURANG_BATAL` (huruf c): pengurangan/pembatalan STP Pasal 14 yang tidak benar. Dokumen: SK Pengurangan/Pembatalan STP.
+   - `BATAL_DEMI_HUKUM` (huruf d): pembatalan hasil pemeriksaan/SKP tanpa SPHP/pembahasan akhir. Dokumen: SK Pembatalan.
+2. Akuntansi tiap sub-jenis mengikuti Putusan 2 (sanksi → utang-sanksi; SKP/STP → pokok); BATAL_DEMI_HUKUM yang membatalkan seluruh ketetapan → balikkan pengakuan SKP (Putusan 2 DIKABULKAN-penuh) + tandai upaya lain atas SKP sama GUGUR-otomatis-tertanda (bukan terhapus).
+3. Di luar Pasal 36 (mis. pembetulan Pasal 16, keberatan biasa) DILARANG masuk tahap ini — salah kamar = tolak dengan arahan jenis upaya benar.
+
+### Falsifikasi wajib (QA 113-Q, atas head implementasi persis)
+
+- E163-1: catat bayar-protes penuh → grep jalur tulis jurnal dari modul sengketa = 0 (hanya tautan TaxPayment).
+- E163-2: bayar melebihi utang tanpa akun prepaid terkonfigurasi → fail-closed berisik (tanpa tebak akun).
+- E163-3: putusan DIKABULKAN_SEBAGIAN bertanggal masa berjalan → jurnal di masa putusan; grep restate/mutasi jurnal masa asal = 0.
+- E163-4: SKPLB kompensasi → jurnal di masa SPT kompensasi, bukan masa SKPLB; SKPN → grep jurnal = 0.
+- E163-5: mutasi tahap PENGURANGAN_PEMBATALAN ke keberatan biasa → MERAH (kamar salah ditolak).
+- E163-6: cabut NTPN-lock (void TaxPayment ber-NTPN lolos) → MERAH.
+
+### Batas vonis
+
+- Vonis ini memutus JURNAL/AKUN/MASA saja. Kata/enum/hitungan tenggat/izin = putusan Lead Q-TXD-6..8. Model/skema = Backend 113-B. Nol tarif baru (semua nominal dari dokumen DJP apa adanya). Klaim kepatuhan: regulasi + URL + tanggal akses + cakupan di §Regulasi di atas; selebihnya USULAN berlabel.
+- Akun prepaid/restitusi/sanksi = COA pilihan pemilik + setting bertanggal; vonis ini tidak menciptakan nomor akun.
+
+ID vonis ini **F-2026-10-29-163-V** (jawaban Q-TXD-1..5: bayar-protes pelunasan+prepaid, putusan masa-putusan, SKPLB piutang/kompensasi, SPT tanpa restate, Pasal 36 empat sub-jenis). Pemilik berikutnya: Lead (putus Q-TXD-6..8 + merge PR vonis ini) → Backend (113-B model + jurnal hanya dari vonis ini) → Frontend (113-F register, nol jurnal dari UI) → QA (E163-1..6 head implementasi).
+### PUTUSAN LEAD Q-TXD-6..8 (2026-10-29 07:25 WIB, atas PR #1407 — final, tanpa BUTUH-OWNER)
+
+- Q-TXD-6 (kata/enum/hasil): SAHKAN §1 spec 113-S verbatim — register **Ketetapan Pajak**, anak **Upaya Sengketa**, kolom **Nominal Ketetapan / Nominal Disengketakan / Dibayar di Bawah Protes / Tenggat Upaya**; larangan label "utang pajak" pra-vonis + kata "menang/kalah" TETAP. Enum jenis ketetapan `SKPKB, SKPKBT, SKPLB, SKPN, PEMUNGUTAN_PIHAK_KETIGA`, jenis upaya `KEBERATAN, PENGURANGAN_PEMBATALAN, BANDING, GUGATAN, PENINJAUAN_KEMBALI`, hasil `DIKABULKAN, DIKABULKAN_SEBAGIAN, DITOLAK, TIDAK_DAPAT_DITERIMA` SAH verbatim; sub-jenis Pasal 36 mengikuti Putusan 5 vonis 163-V. Backend 113-B memakai string ini persis; ubah kata = putusan baru.
+- Q-TXD-7 (hitungan tenggat, server-side WIB): "3 bulan kalender" = tanggal acuan + 3 bulan kalender (tanggal sama; bulan pendek = hari terakhir bulan itu), batas 23:59:59 WIB. "14 hari" gugatan = +14 hari kalender, 23:59:59 WIB. "12 bulan" putusan keberatan analog. TANPA geser hari kerja/libur. Satu fungsi bernama milik Backend 113-B untuk semua tenggat sengketa; angka tenggat di luar fungsi itu = MERAH.
+- Q-TXD-8 (izin + empat mata): PUTUS key BARU `view_tax_disputes` / `create_tax_disputes` / `edit_tax_disputes` (tolak reuse `view_tax_payments` — register memuat strategi hukum). Fail-closed sebelum query. Empat mata: pencatat putusan ≠ pengaju upaya, tegak di server action 113-B (bandingkan createdBy upaya vs perekam putusan, tolak + pesan). Seed + permission-seed-parity diperbarui di 113-B, bukan PR ini.
+- Konsekuensi kartu: 113-B Backend boleh mulai dari origin/main sesudah PR ini merged (model + jurnal HANYA dari vonis 163-V + putusan ini); 113-F Frontend sesudah kontrak 113-B; QA 113-Q/E163 falsifikasi atas head implementasi persis.
 
 ## VONIS ACCOUNTANT 2026-10-29 — F-2026-10-29-163-V: tarif/selisih/periode jembatan jam lembur approved → costing (jawaban Q150-1/2/3 spec F-2026-10-28-150-S)
 
@@ -44787,3 +45078,15 @@ Rujukan: spec F-2026-10-28-150-S §4 Q150-1/2/3 + J1-J4 fakta kode; vonis 146-V 
 BOT Lead (putus BR-WO03-05/06 jembatan vs paralel+memo + merge PR docs ini) → BOT Backend (jembatan + guard tarif-standar + hapus-tarik-ulang Q150-2 + filter periode Q150-3; syarat: tanpa baca payroll di costing, tanpa ubah toleransi/idempoten existing) → BOT Frontend (permukaan status rantai + label memo, tanpa nominal gaji di luar hr-scope, tanpa hitung tarif di UI) → BOT QA (E150-1..8 spec + EQ150 baru: EQ150-1 jembatan pakai `calculatedValue/hours` sebagai `rate` = MERAH; EQ150-2 selisih lembur-vs-standar melahirkan jurnal penyeimbang otomatis = MERAH; EQ150-3 tolak-sesudah-tarik hanya memo/biarkan tanpa hapus baris = MERAH (HPP fiktif tetap); EQ150-4 hapus-tarik-ulang tanpa alasan/jejak audit = MERAH; EQ150-5 hapus-tarik-ulang di periode terkunci/WO closed lolos = MERAH; EQ150-6 restate slip D paid demi lembur telat-approve = MERAH; EQ150-7 backdate `date` lembur agar masuk slip D = MERAH; EQ150-8 slip D berubah sendiri saat approve telat tanpa koreksi 133-S = MERAH).
 
 ID vonis ini **F-2026-10-29-163-V** (tarif/selisih/periode jembatan jam lembur approved → costing; jawaban Q150-1/2/3 spec F-2026-10-28-150-S; basis `origin/main` `fb01296e5`). Butuh putusan accountant: TIDAK lagi untuk Q150-1/2/3 (ditutup vonis ini); YA bila Backend menemukan jam tanpa acuan tarif standar 145-S yang tak terjangkau guard.
+
+## PUTUSAN LEAD 2026-10-29 — BR-WO03-05/06: jembatan opsional + timesheet pertahankan (atas vonis 163-V)
+
+Pemilik putusan: Lead (lead-architect-erp-research-git-pr), atas vonis Accountant F-2026-10-29-163-V (Q150-1/2/3) + fakta kode run ini.
+
+**BR-WO03-06 — bentuk jembatan = opsi (a): tombol tarik jam approved ke timesheet, idempoten per `overtimeId`.** Syarat: (a) hanya jam `status approved` yang bisa ditarik, satu `overtimeId` = satu baris timesheet (cermin F-2026-10-21-019); (b) tarif baris timesheet hasil tarikan = tarif costing standar 145-S per vonis Q150-1 (BUKAN `calculatedValue/hours`); (c) tarikan memakai gerbang existing (`manage_production_costs` + `assertPeriodOpen` + `assertJobCostMutable`); (d) tolak-sesudah-tarik ikut vonis Q150-2 (hapus baris + rollup + reversal); (e) tanpa kolom FK wajib baru yang memblokir timesheet manual existing (kolom `overtimeId` opsional/nullable bila perlu); (f) WO-BR-003 untuk jam lembur ditolak = kebijakan tarikan (jam non-approved tidak bisa ditarik), BUKAN gerbang kode baru. Opsi (b) paralel+memo DITOLAK: duplikasi jam nyata di dua rezim tanpa tautan idempoten = HPP ganda/bocor, audit selisih tanpa sumber tunggal.
+
+**BR-WO03-05 — timesheet = opsi (a): pertahankan tanpa status approval.** Timesheet tetap kehadiran/jam kasar tulis-langsung-final; gerbang sah = tarikan costing manual oleh mandor (`manage_production_costs`). Status approve ringan DITOLAK tahap ini (YAGNI: satu gerbang tarikan cukup; dua lapis approve = birokrasi tanpa kebutuhan nyata). WO-BR-003 untuk timesheet = kebijakan tarikan manual, bukan gerbang kode.
+
+**WO-BR-003 tetap `Sebagian`** (bukan `Terpasang`): jembatan + guard Q150-1/2/3 + filter Q150-3 belum diimplementasi — nilai ulang sesudah Backend fisik + QA E150/EQ150 hijau.
+
+Pemilik berikutnya: BOT Backend (fisik jembatan + guard + filter periode, syarat vonis §4) → BOT Frontend (permukaan status rantai + label memo, syarat vonis §4) → BOT QA (E150-1..8 + EQ150-1..8 atas head implementasi persis).
