@@ -263,14 +263,6 @@ export async function updateProjectStageProgress(
     }
   }
 
-  const stage = await prisma.projectStage.findUniqueOrThrow({
-    where: { id: stageId },
-  })
-
-  if (stage.projectId !== projectId) {
-    throw new Error("Stage tidak ditemukan pada project ini.")
-  }
-
   let targetStatus = status
   if (percentage === 100 && targetStatus !== "skipped") {
     targetStatus = "completed"
@@ -279,51 +271,6 @@ export async function updateProjectStageProgress(
   const validStatuses = ["pending", "in_progress", "completed", "skipped"]
   if (!validStatuses.includes(targetStatus)) {
     throw new Error(`Status '${targetStatus}' tidak valid. Gunakan: ${validStatuses.join(", ")}`)
-  }
-
-  // Guard: cannot start/complete if previous stage is not completed
-  const previousStage = await prisma.projectStage.findFirst({
-    where: {
-      projectId,
-      sortOrder: { lt: stage.sortOrder },
-      status: { notIn: ["completed", "skipped"] },
-    },
-    orderBy: { sortOrder: "desc" },
-  })
-
-  if (previousStage && targetStatus !== "pending") {
-    throw new Error(
-      `Tahap '${previousStage.name}' belum selesai. Selesaikan tahap sebelumnya terlebih dahulu.`
-    )
-  }
-
-  // Set timestamps based on status transition
-  const updateData: Record<string, unknown> = { status: targetStatus }
-  let calculatedPercentage = 0
-
-  if (targetStatus === "in_progress") {
-    if (!stage.startedAt) {
-      updateData.startedAt = new Date()
-    }
-    updateData.completedAt = null
-    calculatedPercentage = percentage !== undefined ? percentage : 50
-  } else if (targetStatus === "completed") {
-    if (!stage.startedAt) {
-      updateData.startedAt = new Date()
-    }
-    updateData.completedAt = new Date()
-    calculatedPercentage = 100
-  } else if (targetStatus === "pending") {
-    updateData.startedAt = null
-    updateData.completedAt = null
-    calculatedPercentage = 0
-  } else if (targetStatus === "skipped") {
-    updateData.completedAt = new Date()
-    calculatedPercentage = 100
-  }
-
-  if (notes !== undefined) {
-    updateData.notes = notes
   }
 
   // ATOMICITY: the stage status flip + the cascading project/WO sync must
@@ -339,6 +286,73 @@ export async function updateProjectStageProgress(
   // syncProjectStatus inside this tx would open a separate transaction
   // that commits independently, breaking the atomicity we are after.
   await prisma.$transaction(async (tx) => {
+    // Serialize stage transitions per project: lock project row, then target
+    // stage row, then re-read stage + previous-stage guard inside tx. Prior
+    // code read both outside tx, so two concurrent transitions could both
+    // pass guard against stale state and last update won unconditionally.
+    const projectRows = await tx.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+    `
+    if (projectRows.length === 0) throw new Error("Proyek tidak ditemukan")
+
+    const stageRows = await tx.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM project_stages WHERE id = ${stageId} FOR UPDATE
+    `
+    if (stageRows.length === 0) throw new Error("Stage tidak ditemukan pada project ini.")
+
+    const stage = await tx.projectStage.findUniqueOrThrow({
+      where: { id: stageId },
+    })
+
+    if (stage.projectId !== projectId) {
+      throw new Error("Stage tidak ditemukan pada project ini.")
+    }
+
+    // Guard: cannot start/complete if previous stage is not completed
+    const previousStage = await tx.projectStage.findFirst({
+      where: {
+        projectId,
+        sortOrder: { lt: stage.sortOrder },
+        status: { notIn: ["completed", "skipped"] },
+      },
+      orderBy: { sortOrder: "desc" },
+    })
+
+    if (previousStage && targetStatus !== "pending") {
+      throw new Error(
+        `Tahap '${previousStage.name}' belum selesai. Selesaikan tahap sebelumnya terlebih dahulu.`
+      )
+    }
+
+    // Set timestamps based on status transition
+    const updateData: Record<string, unknown> = { status: targetStatus }
+    let calculatedPercentage = 0
+
+    if (targetStatus === "in_progress") {
+      if (!stage.startedAt) {
+        updateData.startedAt = new Date()
+      }
+      updateData.completedAt = null
+      calculatedPercentage = percentage !== undefined ? percentage : 50
+    } else if (targetStatus === "completed") {
+      if (!stage.startedAt) {
+        updateData.startedAt = new Date()
+      }
+      updateData.completedAt = new Date()
+      calculatedPercentage = 100
+    } else if (targetStatus === "pending") {
+      updateData.startedAt = null
+      updateData.completedAt = null
+      calculatedPercentage = 0
+    } else if (targetStatus === "skipped") {
+      updateData.completedAt = new Date()
+      calculatedPercentage = 100
+    }
+
+    if (notes !== undefined) {
+      updateData.notes = notes
+    }
+
     await tx.projectStage.update({
       where: { id: stageId },
       data: updateData,
@@ -1380,6 +1394,10 @@ export async function rejectProjectBudgetRevision(
     if (!reason) return { success: false, error: "Alasan penolakan wajib diisi" }
     const user = await requirePermission("manage_projects")
     await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+      `
+      if (rows.length === 0) throw new Error("Proyek tidak ditemukan")
       const project = await loadBudgetProject(tx, projectId)
       if (project.budgetLockedAt === null) {
         throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk ditolak.")

@@ -574,6 +574,60 @@ describe("updateProjectStageProgress status-transition branches", () => {
   })
 })
 
+describe("updateProjectStageProgress locking (round4 #4)", () => {
+  beforeEach(() => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 1, sortOrder: 1 })
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([])
+  })
+
+  it("kunci proyek+tahap mendahului baca ulang tahap dan guard di dalam tx", async () => {
+    const res = await actions.updateProjectStageProgress(1, 1, "in_progress")
+    expect(res?.success).toBe(true)
+    // 2 kunci: projects lalu project_stages, keduanya sebelum findUniqueOrThrow tahap.
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalledTimes(2)
+    const [projectLock, stageLock] = mocks.prismaMock.$queryRaw.mock.calls
+    expect(String(projectLock[0].join("?"))).toContain("FROM projects")
+    expect(String(stageLock[0].join("?"))).toContain("FROM project_stages")
+    const stageLockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[1]
+    expect(stageLockOrder).toBeLessThan(
+      mocks.prismaMock.projectStage.findUniqueOrThrow.mock.invocationCallOrder[0],
+    )
+    expect(stageLockOrder).toBeLessThan(
+      mocks.prismaMock.projectStage.update.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("guard tahap sebelumnya dievaluasi dari baca ulang dalam tx: tahap sebelumnya belum selesai -> nol update", async () => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 2, projectId: 1, sortOrder: 2 })
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue({ id: 1, name: "Persiapan" })
+    const res = await actions.updateProjectStageProgress(1, 2, "in_progress")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("belum selesai")
+    expect(mocks.prismaMock.projectStage.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.projectStageProgress.create).not.toHaveBeenCalled()
+  })
+
+  it("tahap milik proyek lain (baca ulang dalam tx) ditolak, nol update", async () => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 99, sortOrder: 1 })
+    const res = await actions.updateProjectStageProgress(1, 1, "in_progress")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Stage tidak ditemukan")
+    expect(mocks.prismaMock.projectStage.update).not.toHaveBeenCalled()
+  })
+
+  it("baris tahap hilang saat kunci -> gagal, nol update", async () => {
+    mocks.prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ id: 1 }])
+      .mockResolvedValueOnce([])
+    const res = await actions.updateProjectStageProgress(1, 1, "in_progress")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Stage tidak ditemukan")
+    expect(mocks.prismaMock.projectStage.update).not.toHaveBeenCalled()
+  })
+})
+
 describe("syncProjectStatus extended branches", () => {
   it("all completed but workOrder has no issued material issue -> WO not updated", async () => {
     mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: 99 })
@@ -1192,6 +1246,48 @@ describe("RAB proyek F-2026-10-21-030", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("sudah diputuskan")
     expect(mocks.prismaMock.projectItem.delete).not.toHaveBeenCalled()
+  })
+
+  it("tolak revisi: kunci proyek FOR UPDATE sebelum cek usulan terbuka (round4 #3)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "x",
+      userId: 2,
+      details: { reason: "x", changes: [{ type: "delete", projectItemId: 5 }] },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    const res = await actions.rejectProjectBudgetRevision(
+      10,
+      31,
+      fdMap({ reason: "Belum perlu" }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalled()
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(
+      mocks.prismaMock.projectLog.findFirst.mock.invocationCallOrder[0],
+    )
+    expect(lockOrder).toBeLessThan(
+      mocks.prismaMock.projectLog.findMany.mock.invocationCallOrder[0],
+    )
+    const lockSql = String(mocks.prismaMock.$queryRaw.mock.calls.at(-1)?.[0]?.join("?"))
+    expect(lockSql).toContain("FROM projects")
+    expect(lockSql).toContain("FOR UPDATE")
+  })
+
+  it("tolak revisi: proyek hilang di kunci -> gagal, nol log penolakan (round4 #3)", async () => {
+    mocks.prismaMock.$queryRaw.mockResolvedValueOnce([])
+    const res = await actions.rejectProjectBudgetRevision(
+      10,
+      31,
+      fdMap({ reason: "Belum perlu" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Proyek tidak ditemukan")
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
   })
 
   it("tolak revisi: hanya log rab_revision_rejected, nol perubahan angka", async () => {
