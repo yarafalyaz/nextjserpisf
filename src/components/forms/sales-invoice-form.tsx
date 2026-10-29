@@ -180,10 +180,9 @@ export function SalesInvoiceForm({
             unitPrice: Number(row.unitPrice) || 0,
             discount: Number(row.discount) || 0,
           }))
-        if (payload.length > 0) {
-          formData.append("items", JSON.stringify(payload))
-          formData.append("taxRate", String(Number(taxRate) || 0))
-        }
+        if (payload.length === 0) throw new Error("Tambahkan minimal satu baris barang")
+        formData.append("items", JSON.stringify(payload))
+        formData.append("taxRate", String(Number(taxRate) || 0))
         // P2 idempotency UI: key stabil per intent create; retry/error pakai
         // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
         if (!invoice?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
