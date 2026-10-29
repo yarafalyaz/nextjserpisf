@@ -414,7 +414,7 @@ export function ExportButtons({
         aria-label="Unduh sebagai PDF"
         variant="secondary"
         size="sm"
-        className="gap-1.5"
+        className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:content-['']"
         isPending={isExporting}
       >
         <FileText size={16} aria-hidden="true" />
@@ -426,7 +426,7 @@ export function ExportButtons({
         aria-label="Unduh sebagai CSV"
         variant="secondary"
         size="sm"
-        className="gap-1.5"
+        className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:content-['']"
         isPending={isExporting}
       >
         <FileDown size={16} aria-hidden="true" />
@@ -438,7 +438,7 @@ export function ExportButtons({
         aria-label="Cetak halaman"
         variant="secondary"
         size="sm"
-        className="gap-1.5"
+        className="relative gap-1.5 before:absolute before:-inset-y-1.5 before:content-['']"
       >
         <Printer size={16} aria-hidden="true" />
         Cetak

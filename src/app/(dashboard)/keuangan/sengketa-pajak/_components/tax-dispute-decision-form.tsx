@@ -101,8 +101,8 @@ export function TaxDisputeDecisionForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="decidedAmount">Nominal Putusan</Label>
-          <CurrencyInput id="decidedAmount" value={decidedAmount} onChange={setDecidedAmount} placeholder="0" />
-          <span className="text-xs text-muted-foreground">
+          <CurrencyInput id="decidedAmount" value={decidedAmount} onChange={setDecidedAmount} placeholder="0" aria-describedby="decidedAmount-hint" />
+          <span id="decidedAmount-hint" className="text-xs text-muted-foreground">
             Tidak boleh melebihi nominal disengketakan.
           </span>
         </div>

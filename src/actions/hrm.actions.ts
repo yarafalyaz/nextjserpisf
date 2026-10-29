@@ -769,8 +769,14 @@ export async function addPayrollCommissionLine(payrollId: number, formData: Form
       if (payroll.employeeId == null || payable.salesEmployeeId !== payroll.employeeId) {
         throw new Error("Utang komisi bukan milik karyawan slip ini");
       }
-      const balance = safeRound(safeSubtract(safeSubtract(Number(payable.accruedAmount), Number(payable.reversalAmount), 2), Number(payable.paidAmount), 2), 2);
-      if (amount - balance > 0.005) {
+      // Saldo sen-persis: kolom Decimal dibaca sebagai string (bukan
+      // Number(Decimal) float) lalu safeSubtract presisi 2 desimal pola repo.
+      const balance = safeSubtract(
+        safeSubtract(payable.accruedAmount.toString(), payable.reversalAmount.toString(), 2),
+        payable.paidAmount.toString(),
+        2,
+      );
+      if (safeSubtract(amount, balance, 2) > 0) {
         throw new Error(`Nominal bayar komisi Rp${amount.toLocaleString("id-ID")} melebihi saldo utang Rp${balance.toLocaleString("id-ID")}`);
       }
       const dup = await tx.payrollComponentLine.findUnique({ where: { commissionPayableId } });

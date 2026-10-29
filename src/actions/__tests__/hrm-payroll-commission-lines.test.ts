@@ -146,6 +146,20 @@ describe("addPayrollCommissionLine", () => {
     expect(prismaMock.payrollComponentLine.create).not.toHaveBeenCalled()
   })
 
+  it("saldo Decimal sen-persis: amount persis saldo diterima, +1 sen ditolak", async () => {
+    // Decimal(15,2) nyata dari Prisma = objek Decimal (toString string eksak),
+    // bukan number: 0.30 − 0.10 − 0.10 float = 0.0999… akan menolak bayar pas.
+    const dec = (s: string) => ({ toString: () => s })
+    prismaMock.commissionPayable.findUnique.mockResolvedValue(
+      payable({ accruedAmount: dec("0.30"), reversalAmount: dec("0.10"), paidAmount: dec("0.10") }),
+    )
+    const ok = await actions.addPayrollCommissionLine(55, fd({ commissionPayableId: "101", amount: "0.10" }))
+    expect(ok.success).toBe(true)
+    const over = await actions.addPayrollCommissionLine(55, fd({ commissionPayableId: "101", amount: "0.11" }))
+    expect(over.success).toBe(false)
+    expect(over.error).toContain("melebihi saldo")
+  })
+
   it("master Komisi Penjualan tak-aktif/tak-ada ditolak fail-closed", async () => {
     prismaMock.payrollComponent.findFirst.mockResolvedValue(null)
     const res = await actions.addPayrollCommissionLine(55, fd({ commissionPayableId: "101", amount: "100000" }))

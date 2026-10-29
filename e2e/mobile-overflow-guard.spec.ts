@@ -62,7 +62,7 @@ test.describe("Detail pages mobile no overflow", () => {
     const hasProjects = await firstProjectLink.count() > 0 ? await firstProjectLink.isVisible().catch(() => false) : false
 
     if (!hasProjects) {
-      test.skip()
+      test.skip(true, "DB ini tidak punya data proyek — detail proyek dilewati, bukan lulus semu")
       return
     }
 

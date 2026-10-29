@@ -45,7 +45,7 @@ export function CancelTaxAssessmentButton({ id }: { id: number }) {
         isDisabled={isPending}
         onClick={() => setIsOpen(true)}
         aria-label="Batalkan ketetapan pajak"
-        className="text-danger border-danger/40 hover:bg-danger/10"
+        className="relative text-danger border-danger/40 hover:bg-danger/10 before:absolute before:-inset-y-1.5 before:content-['']"
       >
         Batalkan
       </Button>

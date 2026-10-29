@@ -139,7 +139,7 @@ export function PayrollCommissionLines({
             />
           </div>
           <div className="flex items-end justify-end">
-            <Button type="submit" variant="primary" isDisabled={isPending || available.length === 0}>
+            <Button type="submit" variant="primary" className="min-h-11" isDisabled={isPending || available.length === 0}>
               {isPending ? "Menyimpan..." : "Tambah"}
             </Button>
           </div>

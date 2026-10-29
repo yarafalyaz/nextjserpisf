@@ -26,7 +26,7 @@ export function ReportTableView({
   tableLabel: string
 }) {
   return (
-    <DetailTable data-report-table={tableLabel}>
+    <DetailTable data-report-table={tableLabel} aria-label={tableLabel}>
       <DetailTableHead>
         {columns.map((column, index) => (
           <DetailTableTh key={`${column.header}-${index}`} align={column.align}>

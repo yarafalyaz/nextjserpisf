@@ -28,17 +28,17 @@ import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
-/** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
+/** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar (297 − 2×15 margin). */
 const COLUMNS: TableColumn[] = [
-  { header: "Pekerjaan", align: "left", width: 52 },
-  { header: "Kendaraan", align: "left", width: 38 },
-  { header: "Estimasi Disetujui", align: "right", width: 38 },
-  { header: "Penagihan Aktual", align: "right", width: 38 },
-  { header: "Selisih Tagih−Estimasi", align: "right", width: 38 },
-  { header: "Biaya Aktual", align: "right", width: 33 },
-  { header: "Margin Aktual", align: "right", width: 30 },
-  { header: "Estimasi Biaya", align: "right", width: 33 },
-  { header: "Selisih Biaya", align: "right", width: 30 },
+  { header: "Pekerjaan", align: "left", width: 40 },
+  { header: "Kendaraan", align: "left", width: 30 },
+  { header: "Estimasi Disetujui", align: "right", width: 30 },
+  { header: "Penagihan Aktual", align: "right", width: 30 },
+  { header: "Selisih Tagih−Estimasi", align: "right", width: 30 },
+  { header: "Biaya Aktual", align: "right", width: 27 },
+  { header: "Margin Aktual", align: "right", width: 27 },
+  { header: "Estimasi Biaya", align: "right", width: 27 },
+  { header: "Selisih Biaya", align: "right", width: 26 },
 ]
 
 export interface JobEstimateVsActualInput {

@@ -112,11 +112,10 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     const toast = page.locator("[data-sonner-toast], [role='status'], .toaster, [data-testid='toast']").first()
     await page.getByRole("button", { name: "Terima Barang" }).click()
     // Sukses = URL pindah dari /tambah — tunggu navigasi, bukan sleep buta.
-    // catch: bila gagal, asersi diagnostik di bawah yang membeberkan URL+toast.
-    await page.waitForURL((url) => !url.pathname.endsWith("/pembelian/penerimaan/tambah"), { timeout: 30_000 }).catch(() => {})
+    // Tanpa catch: timeout waitForURL = gagal tegas (dulu ditelan, tes lanjut semu).
+    await page.waitForURL((url) => !url.pathname.endsWith("/pembelian/penerimaan/tambah"), { timeout: 30_000 })
     const afterUrl = page.url()
     const toastText = (await toast.count()) > 0 ? ((await toast.textContent()) ?? "") : ""
-    // Bukti diagnostik bila masih di tambah: toast + URL.
     expect(
       `${afterUrl} :: ${toastText.slice(0, 200)}`,
     ).not.toContain("/pembelian/penerimaan/tambah")
@@ -229,9 +228,9 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     const amountBox = page.getByLabel(/jumlah \(rp\)/i)
     await expect(amountBox).toHaveValue(/500[\.\s]?000/)
     await page.getByRole("button", { name: "Simpan", exact: true }).click()
-    // Sukses = redirect ke daftar; gagal = tetap di tambah + toast galat.
-    // Poll URL (bukan sleep buta — sleep flaky di CI lambat).
-    await page.waitForURL(/\/pembelian\/pembayaran-vendor(\?|$)/, { timeout: 30_000 }).catch(() => {})
+    // Sukses = redirect ke daftar; gagal = tetap di tambah.
+    // Tanpa catch: timeout waitForURL = gagal tegas (dulu ditelan, tes lanjut semu).
+    await page.waitForURL(/\/pembelian\/pembayaran-vendor(\?|$)/, { timeout: 30_000 })
     const payToast = page.locator("li", { hasText: /gagal|wajib|tidak|kurang/i }).first()
     if (page.url().includes("/pembayaran-vendor/tambah")) {
       const msg = (await payToast.count()) > 0 ? await payToast.textContent() : "(tanpa toast)"

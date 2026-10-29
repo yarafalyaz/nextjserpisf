@@ -101,7 +101,9 @@ export function Combobox({
             isDisabled={disabled}
             variant="outline"
             className={cn(
-              "w-full justify-between font-normal",
+              // Trigger md h-9 (36px): area sentuh diperluas ke 44px via
+              // pseudo vertikal, visual tetap (pola search-field).
+              "relative w-full justify-between font-normal before:absolute before:-inset-y-1 before:content-['']",
               !selected && "text-muted-foreground",
             )}
           >
