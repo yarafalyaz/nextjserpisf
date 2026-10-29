@@ -47,11 +47,6 @@ function periodOf(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 }
 
-function monthRange(period: string): { start: Date; end: Date } {
-  const [y, m] = period.split("-").map(Number)
-  return { start: new Date(y, m - 1, 1), end: new Date(y, m, 0, 23, 59, 59, 999) }
-}
-
 export async function loadSptPeriodRows(): Promise<SptPeriodRow[]> {
   return loadSptPeriodRowsForRange()
 }
@@ -72,9 +67,48 @@ export async function loadSptPeriodRowsForRange(range?: {
   const outputAccountId = settings?.salesTaxAccountId ?? null
   const inputAccountId = settings?.purchaseTaxAccountId ?? null
 
+  // Filter periode didorong ke DB sedekat mungkin; harus EKIVALEN dengan
+  // filter masa in-memory di ujung (r.period dalam [startPeriod, endPeriod]).
+  // Masa efektif tiap sumber: keluaran TaxInvoice = taxPeriod rantai ASAL
+  // (pengganti mewarisi masa asal, jadi rantai harus utuh — tak bisa
+  // disaring per baris), masukan = creditPeriod, legacy = masa tanggal
+  // dokumen, retur = masa coalesce(nota, retur), jurnal = masa tanggal
+  // jurnal, setor = period. Bila `range` absen: query persis seperti dulu.
+  const startPeriod = range ? periodOf(range.start) : null
+  const endPeriod = range ? periodOf(range.end) : null
+  const inRange = startPeriod != null && endPeriod != null
+  // Periode tersaring: awal masa awal s/d akhir masa akhir (inklusif).
+  const rangeStart = inRange ? new Date(range!.start.getFullYear(), range!.start.getMonth(), 1) : null
+  const rangeEnd = inRange
+    ? new Date(range!.end.getFullYear(), range!.end.getMonth() + 1, 0, 23, 59, 59, 999)
+    : null
+  const dateInRange = rangeStart && rangeEnd ? { gte: rangeStart, lte: rangeEnd } : undefined
+  const periodInRange =
+    startPeriod && endPeriod ? { gte: startPeriod, lte: endPeriod } : undefined
+
   const [taxInvoices, salesInvoices, vendorBills, salesReturns, journalEntries, taxPayments] =
     await Promise.all([
       prisma.taxInvoice.findMany({
+        // Rantai pengganti utuh (masa dari asal) + cakupan legacy per
+        // dokumen dari SEMUA faktur: faktur luar rentang tetap menaungi
+        // dokumen legacy-nya. Hanya faktur masukan credited yang masa
+        // kreditnya di luar rentang boleh dibuang di DB (builder membuang
+        // non-credited/tanpa creditPeriod juga); sisanya tetap dimuat.
+        where: inRange
+          ? {
+              OR: [
+                { direction: "out" },
+                {
+                  direction: "in",
+                  OR: [
+                    { creditStatus: { not: "credited" } },
+                    { creditPeriod: null },
+                    { creditPeriod: periodInRange },
+                  ],
+                },
+              ],
+            }
+          : undefined,
         select: {
           id: true,
           direction: true,
@@ -92,15 +126,33 @@ export async function loadSptPeriodRowsForRange(range?: {
         orderBy: { id: "asc" },
       }),
       prisma.salesInvoice.findMany({
-        where: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null, taxAmount: { gt: 0 } },
+        where: {
+          status: { in: ["posted", "partial", "paid"] },
+          deletedAt: null,
+          taxAmount: { gt: 0 },
+          ...(dateInRange ? { date: dateInRange } : {}),
+        },
         select: { id: true, date: true, subtotal: true, discount: true, taxAmount: true },
       }),
       prisma.vendorBill.findMany({
-        where: { status: { in: ["posted", "partial", "paid"] }, deletedAt: null, tax: { gt: 0 } },
+        where: {
+          status: { in: ["posted", "partial", "paid"] },
+          deletedAt: null,
+          tax: { gt: 0 },
+          ...(dateInRange ? { date: dateInRange } : {}),
+        },
         select: { id: true, date: true, subtotal: true, discountAmount: true, tax: true, taxInvoiceNumber: true },
       }),
       prisma.salesReturn.findMany({
-        where: { status: "completed" },
+        // Masa efektif = coalesce(taxReturnNoteDate, date): di luar
+        // rentang pada KEDUA tanggal pasti di luar masa; salah satu di
+        // dalam => bisa jadi masa dalam rentang, tetap dimuat.
+        where: inRange
+          ? {
+              status: "completed",
+              OR: [{ date: dateInRange }, { taxReturnNoteDate: dateInRange }],
+            }
+          : { status: "completed" },
         select: {
           date: true,
           taxReturnNoteDate: true,
@@ -114,6 +166,7 @@ export async function loadSptPeriodRowsForRange(range?: {
               journal: {
                 status: { in: [...REPORT_JOURNAL_STATUSES] },
                 deletedAt: null,
+                ...(dateInRange ? { transactionDate: dateInRange } : {}),
               },
             },
             select: {
@@ -125,25 +178,38 @@ export async function loadSptPeriodRowsForRange(range?: {
           })
         : Promise.resolve([]),
       prisma.taxPayment.findMany({
-        where: { deletedAt: null },
+        // period null = "tanpa tanggal terbukti": builder tetap memuatnya
+        // (periods diabaikan karena tak ber-bucket ppn:<masa>), jadi jangan
+        // dibuang di DB — hanya period terisi di luar rentang yang dibuang.
+        where: inRange
+          ? {
+              deletedAt: null,
+              OR: [{ period: null }, { period: periodInRange }],
+            }
+          : { deletedAt: null },
         select: { period: true, amount: true, taxKind: true },
       }),
     ])
 
   // Rantai keluaran: kelompokkan per akar (faktur tanpa replacesId).
-  const byId = new Map(taxInvoices.map((t) => [t.id, t]))
+  // Map pengganti dibangun sekali — `find` di loop = O(n²).
+  const replacementByReplacedId = new Map<number, (typeof taxInvoices)[number]>()
+  for (const t of taxInvoices) {
+    if (t.replacesId != null && !replacementByReplacedId.has(t.replacesId)) {
+      replacementByReplacedId.set(t.replacesId, t)
+    }
+  }
   const chains: OutputChain[] = []
   for (const inv of taxInvoices) {
     if (inv.direction !== "out" || inv.replacesId != null) continue
     const chain = [inv]
     let cursor = inv
     for (;;) {
-      const next = taxInvoices.find((t) => t.replacesId === cursor.id)
+      const next = replacementByReplacedId.get(cursor.id)
       if (!next) break
       chain.push(next)
       cursor = next
     }
-    void byId
     chains.push({
       originPeriod: inv.taxPeriod,
       chain: chain.map((c) => ({
@@ -234,6 +300,12 @@ export async function loadSptPeriodRowsForRange(range?: {
       credit: Number(e.credit),
     })
   }
+  const journalByBucket = new Map<string, typeof journalLegs>()
+  for (const leg of journalLegs) {
+    const arr = journalByBucket.get(leg.bucket) ?? []
+    arr.push(leg)
+    journalByBucket.set(leg.bucket, arr)
+  }
   const liability = buildTaxLiability({
     journalLegs,
     payments: taxPayments
@@ -261,15 +333,12 @@ export async function loadSptPeriodRowsForRange(range?: {
     const out = outBy.get(period)
     const inp = inBy.get(period)
     const ded = dedBy.get(period)
-    const { start, end } = monthRange(period)
-    void start
-    void end
     const outputVat = out?.vat ?? 0
     const inputVat = inp?.vat ?? 0
     const returnVat = ded?.vat ?? 0
     const position = netVatForPeriod({ outputVat, returnVat, inputVat })
-    const outLegs = journalLegs.filter((l) => l.bucket === `ppn_out:${period}`)
-    const inLegs = journalLegs.filter((l) => l.bucket === `ppn_in:${period}`)
+    const outLegs = journalByBucket.get(`ppn_out:${period}`) ?? []
+    const inLegs = journalByBucket.get(`ppn_in:${period}`) ?? []
     const journalLiability =
       outputAccountId == null && inputAccountId == null
         ? null
@@ -302,7 +371,5 @@ export async function loadSptPeriodRowsForRange(range?: {
   })
 
   if (!range) return rows
-  const startPeriod = periodOf(range.start)
-  const endPeriod = periodOf(range.end)
-  return rows.filter((r) => r.period >= startPeriod && r.period <= endPeriod)
+  return rows.filter((r) => r.period >= startPeriod! && r.period <= endPeriod!)
 }
