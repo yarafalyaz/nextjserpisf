@@ -54,7 +54,8 @@ describe("ItemForm — a11y wiring", () => {
       for (const id of ["name", "cost", "price"]) {
         expect(container.querySelector(`#${id}`)!.hasAttribute("required"), id).toBe(true)
       }
-      expect(container.querySelector("#item-image")!.getAttribute("aria-required")).toBe("true")
+      expect(container.querySelector("#item-image")!.getAttribute("aria-required")).not.toBe("true")
+      expect(container.querySelector("#item-image")!.getAttribute("aria-label")).toBe("Unggah gambar barang")
       for (const id of ["groupId", "defaultRackRowId"]) {
         expect(container.querySelector(`#${id}`)!.getAttribute("aria-required"), id).not.toBe("true")
       }

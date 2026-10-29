@@ -20,7 +20,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }))
 
-vi.mock("@/lib/utils/toast", async (importOriginal) => {
+vi.mock("@/lib/utils/toast", async (_importOriginal) => {
   const store = await import("./test-toast-store")
   return {
     showSuccess: (m: string) => { store.testToastCalls.ok.push(m) },

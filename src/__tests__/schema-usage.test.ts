@@ -266,9 +266,6 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
  * harus ikut melihat nama relasi (lihat `dipakai()` di bawah).
  */
 const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string; expires: string }> = [
-  // Fase1 lead 2026-10-29: konsumen menyusul batch berikut.
-  { model: "EmployeeRoster", reason: "R7 roster — load papan beban menyusul", expires: "2026-11-29" },
-const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = [
   // (EmployeeRoster PERNAH di sini — ditutup round2 2026-10-29: loader
   // baca `src/lib/reports/employee-roster-data.ts` jadi konsumen produk
   // pertama. Model kini dibaca-tanpa-tulis, pindah ke SEED_ONLY_MODELS.)

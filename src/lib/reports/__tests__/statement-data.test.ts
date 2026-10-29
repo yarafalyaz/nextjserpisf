@@ -65,9 +65,7 @@ describe("loadBalanceSheetStatement", () => {
   })
 
   it("menjumlahkan saldo aset dari jurnal dan melaporkan neraca yang tidak seimbang", async () => {
-    mocks.journalEntryFindMany.mockResolvedValue([
-      { accountId: 1, debit: 1_500_000, credit: 0, account: ASSET_ACCOUNT },
-    ])
+    mocks.sumEntriesByAccount.mockResolvedValue(new Map([[1, { debit: 1_500_000, credit: 0 }]]))
 
     const statement = await loadBalanceSheetStatement(
       new Date(2026, 9, 31),
@@ -86,9 +84,7 @@ describe("loadBalanceSheetStatement", () => {
   })
 
   it("menyusun baris akun sesuai opsi tampilan yang aktif", async () => {
-    mocks.journalEntryFindMany.mockResolvedValue([
-      { accountId: 1, debit: 1_000_000, credit: 0, account: ASSET_ACCOUNT },
-    ])
+    mocks.sumEntriesByAccount.mockResolvedValue(new Map([[1, { debit: 1_000_000, credit: 0 }]]))
 
     const hidden = await loadBalanceSheetStatement(new Date(2026, 9, 31), {
       ...DEFAULT_STATEMENT_OPTIONS,
@@ -231,9 +227,7 @@ describe("loadIncomeStatementByCostCenter", () => {
 describe("drill-down Buku Besar F-2026-10-20-30 (data)", () => {
   it("slug akun dari loader menjadi href baris neraca; tanpa lineLink polos", async () => {
     mocks.accountFindMany.mockResolvedValue([{ ...ASSET_ACCOUNT, slug: "kas" }])
-    mocks.journalEntryFindMany.mockResolvedValue([
-      { accountId: 1, debit: 1_000_000, credit: 0, account: ASSET_ACCOUNT },
-    ])
+    mocks.sumEntriesByAccount.mockResolvedValue(new Map([[1, { debit: 1_000_000, credit: 0 }]]))
 
     const linked = await loadBalanceSheetStatement(new Date(2026, 9, 31), DEFAULT_STATEMENT_OPTIONS, {
       basePath: "/laporan/buku-besar",

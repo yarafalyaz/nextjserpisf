@@ -2670,7 +2670,7 @@ describe("assertAccountsExist (akun bare-int fail-closed)", () => {
 describe("onPayrollPaid — baris komisi nyata (tahap 3, round2)", () => {
   // State payable palsu: paidByIdTx asli (di-import dinamis oleh hook) berjalan
   // atas tx ini — findUniqueOrThrow/update benar-benar mengubah paidAmount.
-  const payables = new Map<number, { id: number; accruedAmount: number; reversalAmount: number; paidAmount: unknown }>()
+  const payables = new Map<number, { id: number; salesInvoiceId: number; accruedAmount: number; reversalAmount: number; paidAmount: unknown }>()
   const commissionUpdates: Array<{ id: number; paidAmount: unknown }> = []
   let commissionLines: Array<{ commissionPayableId: number; commissionInvoiceId: number; amount: number }> = []
 
@@ -2722,7 +2722,7 @@ describe("onPayrollPaid — baris komisi nyata (tahap 3, round2)", () => {
   })
 
   it("baris komisi menaikkan paidAmount payable tertaut (paidAmount naik, bukan sekadar jurnal)", async () => {
-    payables.set(101, { id: 101, accruedAmount: 700_000, reversalAmount: 0, paidAmount: 0 })
+    payables.set(101, { id: 101, salesInvoiceId: 5001, accruedAmount: 700_000, reversalAmount: 0, paidAmount: 0 })
     commissionLines = [{ commissionPayableId: 101, commissionInvoiceId: 5001, amount: 250_000 }]
     const tx = commissionTx()
     await onPayrollPaid(1, 999, tx as never)
@@ -2733,7 +2733,7 @@ describe("onPayrollPaid — baris komisi nyata (tahap 3, round2)", () => {
   })
 
   it("overpay via slip ditolak: kumulatif bayar melebihi sisa A−R, paidAmount tak berubah", async () => {
-    payables.set(101, { id: 101, accruedAmount: 700_000, reversalAmount: 100_000, paidAmount: 550_000 })
+    payables.set(101, { id: 101, salesInvoiceId: 5001, accruedAmount: 700_000, reversalAmount: 100_000, paidAmount: 550_000 })
     // sisa = 600rb; sudah bayar 550rb; baris 100rb -> kumulatif 650rb > sisa.
     commissionLines = [{ commissionPayableId: 101, commissionInvoiceId: 5001, amount: 100_000 }]
     const tx = commissionTx()

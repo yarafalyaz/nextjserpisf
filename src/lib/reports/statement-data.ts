@@ -74,27 +74,10 @@ export async function loadBalanceSheetParts(
   asOfDate: Date,
   options: StatementDisplayOptions,
 ): Promise<BalanceSheetParts> {
-  const [entries, accounts] = await Promise.all([
-    prisma.journalEntry.findMany({
-      where: {
-        journal: {
-          status: { in: [...REPORT_JOURNAL_STATUSES] },
-          deletedAt: null,
-          transactionDate: { lte: asOfDate },
-        },
-      },
-      // Hanya kolom yang benar-benar dipakai di bawah ini. Tanpa `select`, neraca
-      // menarik seluruh kolom journalEntry (termasuk memo/createdAt/dll) untuk
-      // setiap baris jurnal sejak awal buku — pemborosan I/O tanpa manfaat.
-      // `include` tidak bisa dipakai bersama `select`, jadi relasi akun ikut
-      // dipilih sebagai `select` bersarang (name/code/type saja).
-      select: {
-        accountId: true,
-        debit: true,
-        credit: true,
-        account: { select: { name: true, code: true, type: true } },
-      },
-    }),
+  // Agregasi DB-side per akun (groupBy) — jangan tarik semua baris jurnal
+  // seumur buku ke memori cuma untuk menjumlahkan debit/kredit per akun.
+  const [sums, accounts] = await Promise.all([
+    sumEntriesByAccount({ date: { lte: asOfDate } }),
     prisma.account.findMany({
       where: { isActive: true },
       select: { id: true, slug: true, code: true, name: true, type: true, parentId: true },
@@ -102,24 +85,24 @@ export async function loadBalanceSheetParts(
     }),
   ])
 
+  const accountById = new Map(accounts.map((a) => [a.id, a]))
   const { totalAssets, totalLiabilities, totalEquity, isBalanced } = computeBalanceSheet(
-    entries.map((entry) => ({
-      accountId: entry.accountId,
-      accountName: entry.account.name,
-      accountCode: entry.account.code,
-      accountType: entry.account.type,
-      debit: Number(entry.debit),
-      credit: Number(entry.credit),
+    [...sums.entries()].map(([accountId, v]) => ({
+      accountId,
+      accountName: accountById.get(accountId)?.name ?? "",
+      accountCode: accountById.get(accountId)?.code ?? "",
+      accountType: accountById.get(accountId)?.type ?? "",
+      debit: v.debit,
+      credit: v.credit,
     })),
   )
 
   const ownBalance = new Map<number, number>()
-  for (const entry of entries) {
-    const creditNormal = entry.account.type === "LIABILITY" || entry.account.type === "EQUITY"
-    const signed = creditNormal
-      ? Number(entry.credit) - Number(entry.debit)
-      : Number(entry.debit) - Number(entry.credit)
-    ownBalance.set(entry.accountId, (ownBalance.get(entry.accountId) ?? 0) + signed)
+  for (const [accountId, v] of sums.entries()) {
+    const type = accountById.get(accountId)?.type
+    const creditNormal = type === "LIABILITY" || type === "EQUITY"
+    const signed = creditNormal ? v.credit - v.debit : v.debit - v.credit
+    ownBalance.set(accountId, signed)
   }
 
   const rowsOf = (type: string): StatementRow[] =>

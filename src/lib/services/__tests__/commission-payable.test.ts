@@ -28,8 +28,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   },
 }))
 
-import { accrueTx, paidByIdTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
-import { accrueTx, cancelAccrualTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
+import { accrueTx, cancelAccrualTx, paidByIdTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
 
 const D = (n: number) => new Prisma.Decimal(n.toFixed(2))
 

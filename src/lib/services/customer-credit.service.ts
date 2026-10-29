@@ -27,7 +27,6 @@ import {
   buildDownPaymentRefundLines,
   snapshotFromDownPaymentRow,
 } from "@/lib/tax/down-payment-vat";
-import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
