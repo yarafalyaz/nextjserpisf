@@ -14,13 +14,17 @@ export function useSlipActionRunner(failMessage: string) {
 
   function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || failMessage)
-        return
+      try {
+        const result = await fn()
+        if (!result.success) {
+          showError(result.error || failMessage)
+          return
+        }
+        showSuccess(ok)
+        router.refresh()
+      } catch {
+        showError(failMessage)
       }
-      showSuccess(ok)
-      router.refresh()
     })
   }
 

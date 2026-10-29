@@ -72,6 +72,24 @@ async function resolveCommissionAccounts(tx: TxClient): Promise<{ expenseId: num
 }
 
 /**
+ * Kunci baris subledger (atau sales_invoice sebagai gerbang lahir) agar
+ * accrue/reverse/paid konkuren serial: dua tx membaca saldo yang sama lalu
+ * sama-sama menulis = tulis ganda/last-write-wins. Pola sama inventory-fifo:
+ * guard `$executeRaw` supaya mock tx ringan tetap jalan.
+ */
+async function lockPayableRow(tx: TxClient, salesInvoiceId: number): Promise<void> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM commission_payables WHERE sales_invoice_id = ${salesInvoiceId} FOR UPDATE`
+  }
+}
+
+async function lockInvoiceRow(tx: TxClient, salesInvoiceId: number): Promise<void> {
+  if (typeof tx.$executeRaw === "function") {
+    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`
+  }
+}
+
+/**
  * Akrual utang komisi saat faktur lunas. Idempoten: baris existing =
  * no-op. Wajib dipanggil DALAM tx transisi paid pemanggil.
  */
@@ -79,9 +97,11 @@ export async function accrueTx(
   tx: TxClient,
   salesInvoiceId: number,
   userId?: number | null,
-  known?: { status?: unknown; salesEmployeeId?: unknown; commissionRatePercent?: unknown; grandTotal?: unknown; taxAmount?: unknown; updatedAt?: unknown; documentNo?: unknown } | null,
+  known?: { status?: unknown; salesEmployeeId?: unknown; commissionRatePercent?: unknown; grandTotal?: unknown; taxAmount?: unknown; updatedAt?: unknown; documentNo?: unknown; date?: unknown } | null,
 ): Promise<CommissionAccrueOutcome> {
   assertJournalClaimRef(COMMISSION_ACCRUAL_JOURNAL_REF, salesInvoiceId)
+  await lockPayableRow(tx, salesInvoiceId)
+  await lockInvoiceRow(tx, salesInvoiceId)
 
   const existing = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
   if (existing) return { accrued: true, amount: Number(existing.accruedAmount), reason: null }
@@ -90,7 +110,7 @@ export async function accrueTx(
   // ada supaya tanpa query ganda (mock `mockResolvedValueOnce` + hemat 1 round-trip).
   const invoice =
     known != null
-      ? (known as { status: unknown; salesEmployeeId: unknown; commissionRatePercent: unknown; grandTotal: unknown; taxAmount: unknown; updatedAt: unknown; documentNo: unknown })
+      ? (known as { status: unknown; salesEmployeeId: unknown; commissionRatePercent: unknown; grandTotal: unknown; taxAmount: unknown; updatedAt: unknown; documentNo: unknown; date: unknown })
       : await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
   if (invoice.status !== "paid") return { accrued: false, amount: 0, reason: "faktur-belum-paid" }
   if (invoice.salesEmployeeId == null) return { accrued: false, amount: 0, reason: "penjual-null" }
@@ -104,7 +124,9 @@ export async function accrueTx(
   if (!(amount > 0)) return { accrued: false, amount: 0, reason: "hasil-nol" }
 
   const { expenseId, payableId } = await resolveCommissionAccounts(tx)
-  const txDate = invoice.updatedAt instanceof Date ? invoice.updatedAt : new Date(invoice.updatedAt as string | number | undefined ?? Date.now())
+  // Tanggal jurnal = tanggal transisi paid (vonis §5), bukan updatedAt faktur
+  // (berubah tiap edit) dan bukan tanggal terbit faktur.
+  const txDate = new Date()
   await assertPeriodOpen(txDate, tx)
 
   const journal = await tx.journal.create({
@@ -151,6 +173,7 @@ export async function reverseTx(
   userId?: number | null,
 ): Promise<{ reversed: number; reason: string | null }> {
   assertJournalClaimRef(COMMISSION_REVERSAL_JOURNAL_REF, returnId)
+  await lockPayableRow(tx, salesInvoiceId)
 
   const row = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
   // Tak tertaut = tak mengurangi siapa pun (vonis §6): tanpa baris = no-op.
@@ -230,6 +253,7 @@ export async function paidByIdTx(
   salesInvoiceId: number,
   userId?: number | null,
 ): Promise<{ paid: number }> {
+  await lockPayableRow(tx, salesInvoiceId)
   const row = await tx.commissionPayable.findUniqueOrThrow({ where: { id: payableId } })
   if (!(amount > 0)) throw new Error("Tautan bayar komisi ditolak: nominal harus lebih dari nol.")
 
@@ -237,12 +261,12 @@ export async function paidByIdTx(
   const reversal = Number(row.reversalAmount)
   const paid = Number(row.paidAmount)
   const after = safeRound(paid + amount, 2)
-  // ponytail: slip ciptakan overpaid sendiri dilarang; overpaid hanya lahir
-  // dari urutan retur-sesudah-bayar. Ceiling: tolak bila after > A − R DAN
-  // saldo kini belum negatif.
+  // Slip tidak boleh menciptakan overpaid sendiri: bayar sesudah tulis wajib
+  // ≤ A − R. Saldo negatif hanya boleh LAHIR dari urutan retur-sesudah-bayar
+  // (lawan tercatat, bukan izin bayar tambahan) — bayar berikutnya selalu
+  // melebihi sisa dan ditolak.
   const ceiling = safeRound(safeSubtract(accrued, reversal, 2), 2)
-  const balance = safeRound(safeSubtract(ceiling, paid, 2), 2)
-  if (after - ceiling > 0.005 && balance >= 0) {
+  if (after - ceiling > 0.005) {
     throw new Error(
       `Tautan bayar komisi ditolak: kumulatif bayar ${after} melebihi sisa ${ceiling} (faktur #${salesInvoiceId}).`,
     )

@@ -91,6 +91,8 @@ export interface JobEstimateVsActualTotals {
   billingVariance: number
   actualCost: number
   actualMargin: number
+  costEstimate: number
+  costVariance: number
 }
 
 export interface JobEstimateVsActualResult {
@@ -138,6 +140,8 @@ export function buildJobEstimateVsActual(input: {
     billingVariance: 0,
     actualCost: 0,
     actualMargin: 0,
+    costEstimate: 0,
+    costVariance: 0,
   }
   let withoutEstimate = 0
   let unbilledCount = 0
@@ -170,6 +174,8 @@ export function buildJobEstimateVsActual(input: {
     totals.billingVariance += row.billingVariance ?? 0
     totals.actualCost += actualCost
     totals.actualMargin += row.actualMargin
+    totals.costEstimate += costEstimate ?? 0
+    totals.costVariance += row.costVariance ?? 0
     if (row.noApprovedEstimate) withoutEstimate += 1
     if (row.unbilled) unbilledCount += 1
     if (row.costOverBilling) costOverBillingCount += 1
@@ -219,6 +225,8 @@ export function buildJobEstimateVsActual(input: {
         amount(totals.billingVariance),
         amount(totals.actualCost),
         amount(totals.actualMargin),
+        amount(totals.costEstimate),
+        amount(totals.costVariance),
       ],
     })
     if (withoutEstimate > 0) {

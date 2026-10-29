@@ -593,6 +593,7 @@ model CommissionPayable {
 
   @@unique([salesInvoiceId, salesEmployeeId], map: "uq_commission_payable_invoice_employee")
   @@index([salesEmployeeId], map: "idx_commission_payable_employee")
+  @@index([accrualJournalId], map: "commission_payables_accrual_journal_id_fkey")
   @@map("commission_payables")
 }
 
@@ -605,7 +606,7 @@ model CustomerCommissionRate {
   createdBy          Int?             @map("created_by")
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
-  customerCategory   CustomerCategory @relation(fields: [customerCategoryId], references: [id])
+  customerCategory   CustomerCategory @relation(fields: [customerCategoryId], references: [id], onDelete: Restrict)
   snapshotInvoices   SalesInvoice[]   @relation("SalesInvoiceCommissionRate")
 
   @@index([customerCategoryId, effectiveFrom], map: "idx_commission_rate_category_from")
@@ -1889,8 +1890,8 @@ model SalesInvoice {
   quotation            Quotation?            @relation(fields: [quotationId], references: [id])
   salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id])
   salesEmployee        Employee?             @relation("SalesInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
-  commissionCustomerCategory CustomerCategory? @relation("SalesInvoiceCommissionCategory", fields: [commissionCustomerCategoryId], references: [id])
-  commissionRate       CustomerCommissionRate? @relation("SalesInvoiceCommissionRate", fields: [commissionRateId], references: [id])
+  commissionCustomerCategory CustomerCategory? @relation("SalesInvoiceCommissionCategory", fields: [commissionCustomerCategoryId], references: [id], onDelete: SetNull)
+  commissionRate       CustomerCommissionRate? @relation("SalesInvoiceCommissionRate", fields: [commissionRateId], references: [id], onDelete: SetNull)
   commissionPayables  CommissionPayable[] @relation("SalesInvoiceCommissionPayables")
   salesReturns         SalesReturn[]
   payments             SalesPayment[]

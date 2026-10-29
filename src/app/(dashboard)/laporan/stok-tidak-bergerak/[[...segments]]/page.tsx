@@ -10,7 +10,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportKpiCard } from "@/components/reports/report-section"
 import { ReportTableView } from "@/components/reports/report-table-view"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
-import { buildReportPeriodSlug } from "@/lib/reports/report-period"
+import { buildReportPeriodSlug, splitReportSegments } from "@/lib/reports/report-period"
 import { slowMovingSummary } from "@/lib/reports/slow-moving-stock"
 import { loadSlowMovingStock } from "@/lib/reports/slow-moving-stock-data"
 import { formatCurrency, formatNumber } from "@/lib/utils/format"
@@ -24,14 +24,19 @@ export const metadata: Metadata = { title: "Stok Tidak Bergerak" }
  * per barang (semua gudang), jadi tidak ada kolom gudang per baris.
  */
 export default async function SlowMovingStockPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ ambang?: string }>
 }) {
   const user = await requirePermission("view_reports")
-  const search = await searchParams
+  const [{ segments = [] }, search] = await Promise.all([params, searchParams])
+  // Ambang tinggal di path (`/ambang/30`) — filter menitip lewat buildReportHref;
+  // `?ambang=` lama tetap dibaca sebagai fallback.
+  const rawThreshold = splitReportSegments(segments).filters.ambang ?? search.ambang
   const parsedThreshold =
-    search.ambang && /^\d+$/.test(search.ambang) ? Number(search.ambang) : null
+    rawThreshold && /^\d+$/.test(rawThreshold) ? Number(rawThreshold) : null
   const thresholdDays =
     parsedThreshold !== null && parsedThreshold >= 1 && parsedThreshold <= 3650
       ? parsedThreshold

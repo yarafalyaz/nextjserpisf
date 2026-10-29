@@ -11,6 +11,8 @@ export const ATTACHMENT_REFERENCE_TYPES = [
   "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
   // F-2026-10-24-096-S: induk foto tahap/inspeksi (BR-PHOTO-01).
   "customer_vehicle", "project_stage", "work_order_operation", "qc_inspection",
+  // Sengketa pajak 113-B: lampiran ketetapan + upaya (maps izin create/view ada).
+  "tax_assessment", "tax_dispute_step",
 ] as const
 
 /** Field kontrak POST/GET: tanpa select, kolom internal ikut bocor. */

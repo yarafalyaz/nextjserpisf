@@ -197,11 +197,32 @@ export default async function EmployeeDetailPage({
   // (assertHrEmployeeAccess + hrScopeWhere/hrEmployeeScopeWhere). Di luar
   // scope: ulasan + opsi penilai dikosongkan, bukan bocor semua karyawan.
   const hrScope = await getHrScope(sessionUser)
-  const probationInScope = await assertHrEmployeeAccess(hrScope, employee.id)
-    .then(() => true)
-    .catch(() => false)
-  const [overviewRows, reviewRows, decisionRows, reviewerRows] = await Promise.all([
-    getProbationOverview().catch(() => []),
+  // Kegagalan scope TIDAK boleh dibaca sebagai "di luar scope": tandai gagal
+  // dan jangan muat data probation sama sekali.
+  let probationInScope = false
+  let probationScopeFailed = false
+  try {
+    await assertHrEmployeeAccess(hrScope, employee.id)
+    probationInScope = true
+  } catch {
+    probationInScope = false
+    probationScopeFailed = true
+  }
+  if (probationScopeFailed) {
+    return (
+      <div className="mx-auto max-w-3xl p-6 text-sm text-muted-foreground">
+        Gagal memeriksa cakupan HR untuk karyawan ini. Muat ulang halaman.
+      </div>
+    )
+  }
+  let overviewRows: Awaited<ReturnType<typeof getProbationOverview>>
+  try {
+    overviewRows = await getProbationOverview()
+  } catch (error) {
+    console.error("[master/karyawan] probation overview:", error)
+    overviewRows = []
+  }
+  const [reviewRows, decisionRows, reviewerRows] = await Promise.all([
     probationInScope
       ? prisma.probationReview.findMany({
           where: { employeeId: employee.id },

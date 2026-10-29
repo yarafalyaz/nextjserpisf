@@ -78,12 +78,13 @@ export default async function CrmTicketDetailPage({
   // ini dari loader read-only (tiket nonaktif tidak terdaftar = tanpa
   // lencana/tenggat). Tenggat dueAt server apa adanya; UI tidak
   // menghitung jam kerja. Kegagalan loader = tanpa seksi SLA.
-  const slaRow = await getCrmTicketSla()
-    .then((sla) => sla.rows.find((row) => row.ticketId === ticket.id) ?? null)
-    .catch((error) => {
-      console.error("[crm/tickets/detail] SLA tiket:", error)
-      return null
-    })
+  let slaRow = null
+  try {
+    const sla = await getCrmTicketSla()
+    slaRow = sla.rows.find((row) => row.ticketId === ticket.id) ?? null
+  } catch (error) {
+    console.error("[crm/tickets/detail] SLA tiket:", error)
+  }
 
   // Resolve comment author names in one query
   const commentUserIds = Array.from(
