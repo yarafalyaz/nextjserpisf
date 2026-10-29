@@ -1,10 +1,5 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
 
 test.describe("Pindai Barang + Barcode wiring", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -13,7 +8,6 @@ test.describe("Pindai Barang + Barcode wiring", () => {
 
   test("halaman scan tampil + kode tak dikenal ditolak berisik", async ({ page }) => {
     await page.goto("/inventaris/scan", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
 
     await expect(page.getByRole("heading", { name: "Pindai Barang" })).toBeVisible({ timeout: 30000 })
     await expect(page.locator("#scan-code")).toBeVisible()
@@ -27,7 +21,6 @@ test.describe("Pindai Barang + Barcode wiring", () => {
 
   test("daftar barcode punya aksi Lihat Detail + Ubah ke rute slug/id", async ({ page }) => {
     await page.goto("/master/barcode", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
 
     await expect(page.getByRole("heading", { name: "Barcode" })).toBeVisible({ timeout: 30000 })
 

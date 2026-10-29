@@ -1,11 +1,6 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 import { pickDate } from "./utils/pickers"
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
 
 /**
  * Modul Kalender Kerja.
@@ -37,7 +32,6 @@ test.describe("SDM — Kalender Kerja", () => {
     await expect(page.getByRole("heading", { name: "Hari Libur", exact: true })).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Hari Libur Departemen" })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByRole("heading", { name: "Jadwal Kerja", exact: true })).toBeVisible({ timeout: 10_000 })
-    await waitForHydration(page)
 
     // ─── TULIS: tambah hari libur lewat halaman buatnya ─────────────────────
     await page.locator("a[href='/sdm/kalender-kerja/libur/tambah']").click()

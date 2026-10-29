@@ -1,11 +1,6 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
+import { awaitListContains } from "./utils/await-ready"
 
 
 test.describe("Master Merek CRUD", () => {
@@ -20,15 +15,13 @@ test.describe("Master Merek CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/merek/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Tambah Merek" })).toBeVisible({ timeout: 30000 })
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     await page.locator("#name").fill(name)
-    await waitForHydration(page)
+    await expect(page.locator("#name")).toHaveValue(name)
     await page.locator("#submit-brand").click()
-    await page.waitForURL("**/master/merek", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/master/merek", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page
@@ -40,7 +33,6 @@ test.describe("Master Merek CRUD", () => {
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
 
-    await waitForHydration(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
@@ -54,13 +46,12 @@ test.describe("Master Merek CRUD", () => {
 
     await page.waitForURL(/\/master\/merek\/[^/]+\/ubah$/, { timeout: 30000 })
 
+    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").fill(updated)
-    await waitForHydration(page)
+    await expect(page.locator("#name")).toHaveValue(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
-    await page.waitForURL("**/master/merek", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/master/merek", updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
