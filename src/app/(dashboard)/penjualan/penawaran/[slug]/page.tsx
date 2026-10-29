@@ -13,6 +13,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DetailTabs } from "@/components/ui/detail-tabs";
 import { StatusActions } from "@/components/ui/status-actions";
 import { QuotationFlowActions } from "./_components/quotation-flow-actions";
+import { ConvertQuotationButton } from "./_components/convert-quotation-button";
 import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ export default async function QuotationDetailPage({
   await requirePermission("view_quotations");
   const canApprove = await hasPermission("approve_quotations");
   const canManagePaymentSchedule = await hasPermission("edit_quotations");
+  const canCreateSalesOrder = await hasPermission("create_sales_orders");
   const { slug } = await params;
 
   const quotationInclude = {
@@ -248,12 +250,22 @@ export default async function QuotationDetailPage({
                   + Uang Muka
                 </Button>
                 {quotation.salesOrders.length === 0 ? (
-                  <Button
-                    href={`/penjualan/pesanan/tambah/penawaran/${quotation.slug ?? quotation.id}`}
-                    variant="primary"
-                  >
-                    + Pesanan Penjualan
-                  </Button>
+                  <>
+                    <Button
+                      href={`/penjualan/pesanan/tambah/penawaran/${quotation.slug ?? quotation.id}`}
+                      variant="primary"
+                    >
+                      + Pesanan Penjualan
+                    </Button>
+                    {/* Cermin guard convertQuotationToOrder: blok ini hanya
+                        untuk accepted/approved; konversi langsung hanya bila
+                        berizin create_sales_orders dan belum lewat validUntil
+                        (status converted tak sampai sini, SO tertaut ditangani
+                        cabang else). Server tetap penjaga otoritatif. */}
+                    {canCreateSalesOrder && !isQuotationExpired(quotation.validUntil) && (
+                      <ConvertQuotationButton quotationId={quotation.id} />
+                    )}
+                  </>
                 ) : (
                   /* Penawaran ini sudah dikonversi: tampilkan tautan ke pesanan
                      yang sudah ada, bukan tombol yang bisa membuat pesanan kedua
