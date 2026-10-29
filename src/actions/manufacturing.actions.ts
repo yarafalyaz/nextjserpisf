@@ -53,6 +53,7 @@ import {
   releaseStockReservationTx,
 } from "@/lib/services/stock-reservation.service";
 import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope";
+import { snapshotWorkOrderCostEstimateTx } from "@/lib/services/work-order-cost-estimate.service";
 import {
   evaluateWorkOrderOperationTransition,
   parseWorkOrderStageNames,
@@ -1597,6 +1598,10 @@ export async function startWorkOrder(workOrderId: number) {
         workOrderId,
         createdBy: Number(user.id),
       });
+
+      // F-2026-10-22-084-S (BR-EST-04): snapshot estimasi biaya lahir di tx
+      // klaim yang sama, hanya oleh pemenang klaim (idempoten, immutable).
+      await snapshotWorkOrderCostEstimateTx(tx, workOrderId, Number(user.id));
     });
 
     await logActivity(

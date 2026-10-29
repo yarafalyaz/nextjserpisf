@@ -55,12 +55,6 @@ const KNOWN_UNUSED: string[] = [
   // di sini. Buang entri saat konsumen mendarat, bukan sebelumnya.)
   "OvertimeRequest.actualEndTime",
   "OvertimeRequest.actualStartTime",
-  "WorkOrderCostEstimate.laborCost",
-  "WorkOrderCostEstimate.lockedAt",
-  "WorkOrderCostEstimate.overheadCost",
-  "WorkOrderCostEstimate.serviceCost",
-  "WorkOrderCostEstimate.subcontractCost",
-  "WorkOrderCostEstimate.totalEstimate",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
@@ -260,7 +254,6 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
 const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = [
   // Fase1 lead 2026-10-29: konsumen menyusul batch berikut.
   { model: "EmployeeRoster", reason: "R7 roster — load papan beban menyusul" },
-  { model: "WorkOrderCostEstimate", reason: "R3 snapshot estimasi saat start menyusul" },
 ]
 
 describe("skema: setiap model dipakai kode", () => {
