@@ -79,13 +79,19 @@ export async function accrueTx(
   tx: TxClient,
   salesInvoiceId: number,
   userId?: number | null,
+  known?: { status?: unknown; salesEmployeeId?: unknown; commissionRatePercent?: unknown; grandTotal?: unknown; taxAmount?: unknown; updatedAt?: unknown } | null,
 ): Promise<CommissionAccrueOutcome> {
   assertJournalClaimRef(COMMISSION_ACCRUAL_JOURNAL_REF, salesInvoiceId)
 
   const existing = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
   if (existing) return { accrued: true, amount: Number(existing.accruedAmount), reason: null }
 
-  const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
+  // Pemanggil (recalcCore) sudah membaca invoice — pakai yang diketahui bila
+  // ada supaya tanpa query ganda (mock `mockResolvedValueOnce` + hemat 1 round-trip).
+  const invoice =
+    known != null
+      ? (known as { status: unknown; salesEmployeeId: unknown; commissionRatePercent: unknown; grandTotal: unknown; taxAmount: unknown; updatedAt: unknown })
+      : await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
   if (invoice.status !== "paid") return { accrued: false, amount: 0, reason: "faktur-belum-paid" }
   if (invoice.salesEmployeeId == null) return { accrued: false, amount: 0, reason: "penjual-null" }
   const percent = invoice.commissionRatePercent == null ? null : Number(invoice.commissionRatePercent)
@@ -98,12 +104,13 @@ export async function accrueTx(
   if (!(amount > 0)) return { accrued: false, amount: 0, reason: "hasil-nol" }
 
   const { expenseId, payableId } = await resolveCommissionAccounts(tx)
-  await assertPeriodOpen(invoice.updatedAt ?? new Date(), tx)
+  const txDate = invoice.updatedAt instanceof Date ? invoice.updatedAt : new Date(invoice.updatedAt as string | number | undefined ?? Date.now())
+  await assertPeriodOpen(txDate, tx)
 
   const journal = await tx.journal.create({
     data: {
       journalNumber: await journalNumber(tx, "KMS", salesInvoiceId),
-      transactionDate: invoice.updatedAt ?? new Date(),
+      transactionDate: txDate,
       referenceType: COMMISSION_ACCRUAL_JOURNAL_REF,
       referenceId: salesInvoiceId,
       description: `Akrual komisi faktur ${invoice.documentNo ?? salesInvoiceId}`,

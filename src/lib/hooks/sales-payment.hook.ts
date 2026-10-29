@@ -80,7 +80,14 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // + snapshot + baris subledger + jurnal. Gagal syarat lahir = nol baris +
   // nol jurnal berlabel alasan; faktur tetap paid (empat status terpisah).
   if (status === "paid") {
-    await accrueCommissionPayableTx(db, invoiceId);
+    await accrueCommissionPayableTx(db, invoiceId, null, {
+      status: invoice.status,
+      salesEmployeeId: (invoice as { salesEmployeeId?: unknown }).salesEmployeeId,
+      commissionRatePercent: (invoice as { commissionRatePercent?: unknown }).commissionRatePercent,
+      grandTotal: invoice.grandTotal,
+      taxAmount: (invoice as { taxAmount?: unknown }).taxAmount,
+      updatedAt: (invoice as { updatedAt?: unknown }).updatedAt,
+    });
   }
 }
 
