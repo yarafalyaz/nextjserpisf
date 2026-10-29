@@ -171,6 +171,17 @@ describe("splitReportSegments", () => {
   it("aman untuk rute kosong", () => {
     expect(splitReportSegments([])).toEqual({ filters: {} })
   })
+
+  // Regresi BUGHUNT round2 (13 halaman): `segments.slice(1)` mengasumsikan
+  // segmen pertama selalu periode. Tanpa periode, filter pertama terbuang
+  // (mis. /laporan/kartu-stok/barang/busi-iridium membuka tanpa barang).
+  it("tanpa periode: filter pertama tidak terbuang (pengganti slice(1))", () => {
+    expect(splitReportSegments(["barang", "busi-iridium"]).filters).toEqual({ barang: "busi-iridium" })
+    expect(splitReportSegments(["akun", "kas-utama"]).filters).toEqual({ akun: "kas-utama" })
+    expect(splitReportSegments(["gudang", "gudang-utama"]).filters).toEqual({ gudang: "gudang-utama" })
+    // Dengan periode, hasil sama seperti slice(1) dulu.
+    expect(splitReportSegments(["2026-10", "barang", "busi-iridium"]).filters).toEqual({ barang: "busi-iridium" })
+  })
 })
 
 describe("buildReportPeriodSlug", () => {

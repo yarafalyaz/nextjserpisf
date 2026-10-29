@@ -7,8 +7,7 @@ import { formatAccounting, formatDate, formatReferenceType, referenceHref } from
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { buildStockCard, openingBalance, type StockCardMove } from '@/lib/reports/stock-card'
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
-import { reportPeriodFromRoute } from '@/lib/reports/report-period'
-import { parseReportFilters } from '@/lib/reports/report-href'
+import { reportPeriodFromRoute, splitReportSegments } from '@/lib/reports/report-period'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ExportButtons } from '@/components/reports/export-buttons'
@@ -61,7 +60,8 @@ export default async function StockCardPage({
   const startDate = period.start
   const endDate = period.end
 
-  const filters = parseReportFilters(segments.slice(1))
+  // splitReportSegments: tanpa periode, segmen pertama adalah filter — slice(1) membuangnya.
+  const filters = splitReportSegments(segments).filters
 
   const [items, warehouses] = await Promise.all([
     prisma.item.findMany({

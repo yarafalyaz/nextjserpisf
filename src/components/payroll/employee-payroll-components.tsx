@@ -51,13 +51,17 @@ export function EmployeePayrollComponents({
 
   function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan penugasan komponen gaji")
-        return
+      try {
+        const result = await fn()
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan penugasan komponen gaji")
+          return
+        }
+        showSuccess(ok)
+        router.refresh()
+      } catch {
+        showError("Gagal menyimpan penugasan komponen gaji")
       }
-      showSuccess(ok)
-      router.refresh()
     })
   }
 

@@ -7,8 +7,7 @@ import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/referenc
 import Link from 'next/link'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { aggregateStockMovementTotals } from "@/lib/reports/stock-flow-data"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -41,7 +40,7 @@ export default async function StockMovementPage({
 
   // Gudang dari path (slug lebih dulu, id sebagai cadangan); `?warehouseId=` lama
   // tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const warehouseKey = parseReportFilters(segments.slice(1)).gudang ?? search.warehouseId ?? null
+  const warehouseKey = splitReportSegments(segments).filters.gudang ?? search.warehouseId ?? null
 
   const warehouses = await prisma.warehouse.findMany({
     where: { isActive: true, deletedAt: null },

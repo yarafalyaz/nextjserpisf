@@ -53,6 +53,11 @@ export function TaxDisputeDecisionForm({
           return
         }
         idempotencyKeyRef.current = crypto.randomUUID()
+        setStepId("")
+        setResult("")
+        setDecidedAtInput(toLocalDateOnly(new Date()))
+        setDecidedAmount(null)
+        setDecisionNotes("")
         showSuccess("Putusan sengketa tercatat")
         router.refresh()
       } catch (error) {

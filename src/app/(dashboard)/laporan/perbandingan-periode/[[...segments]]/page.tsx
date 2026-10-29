@@ -6,8 +6,8 @@ import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { buildReportHref, parseReportFilters } from '@/lib/reports/report-href'
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
+import { buildReportHref } from '@/lib/reports/report-href'
 import { buildComparison, previousWindow, toAccountBalances } from '@/lib/reports/period-comparison'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -39,7 +39,7 @@ export default async function PeriodComparisonPage({
   const [{ segments = [] }, search] = await Promise.all([routeParams, searchParams])
   // Mode laporan (neraca / laba-rugi) ikut di path; param lama tetap dibaca
   // supaya tautan sebelum perpindahan membuka laporan yang sama.
-  const mode = parseReportFilters(segments.slice(1)).laporan ?? search.laporan
+  const mode = splitReportSegments(segments).filters.laporan ?? search.laporan
   const isBalance = mode === 'neraca'
 
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({

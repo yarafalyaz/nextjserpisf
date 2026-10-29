@@ -11,8 +11,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportSheet } from "@/components/reports/report-sheet"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import Link from "next/link"
 import { referenceHref, formatReferenceType } from "@/lib/utils/format"
 
@@ -38,7 +37,7 @@ export default async function GeneralLedgerPage({
   const { start: startDate, end: endDate } = period
   // Akun dari path (slug lebih dulu, id sebagai cadangan); `?accountId=` lama
   // tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const accountKey = parseReportFilters(segments.slice(1)).akun ?? search.accountId ?? null
+  const accountKey = splitReportSegments(segments).filters.akun ?? search.accountId ?? null
 
   const allAccounts = await prisma.account.findMany({
     where: { isActive: true },

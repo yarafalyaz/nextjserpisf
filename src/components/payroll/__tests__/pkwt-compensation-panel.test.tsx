@@ -271,6 +271,20 @@ describe("PkwtCompensationPanel F-2026-10-24-132-V", () => {
     root.unmount()
   })
 
+  it("aksi melempar (network/server) → toast error fallback, bukan unhandled rejection", async () => {
+    approveMock.mockRejectedValueOnce(new Error("network down"))
+    const { container, root } = renderPanel()
+    const approveBtn = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "Setujui",
+    )!
+    await act(async () => {
+      approveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+    expect(showErrorMock).toHaveBeenCalledWith("Gagal menjalankan aksi kompensasi PKWT")
+    expect(showSuccessMock).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
   it("error tarik verbatim: parsial/dobel ditolak server tampil apa adanya", async () => {
     attachMock.mockResolvedValue({
       success: false,

@@ -142,13 +142,17 @@ export function PkwtCompensationPanel({
 
   function run(fn: () => Promise<ActionResult>, ok: string) {
     startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || "Gagal menjalankan aksi kompensasi PKWT")
-        return
+      try {
+        const result = await fn()
+        if (!result.success) {
+          showError(result.error || "Gagal menjalankan aksi kompensasi PKWT")
+          return
+        }
+        showSuccess(ok)
+        router.refresh()
+      } catch {
+        showError("Gagal menjalankan aksi kompensasi PKWT")
       }
-      showSuccess(ok)
-      router.refresh()
     })
   }
 
