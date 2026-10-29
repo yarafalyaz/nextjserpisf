@@ -32,9 +32,9 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] SPT read-model pushdown + Map rantai (bb92b773c); subbab pohon pusat biaya per level (dbd88f3bb); detail PO paralel (e01977bda); resolver akun/pihak ledger (629a4c7df)
 
 ## Batch 4 — verifikasi berat
-- [ ] npm run ci:quick penuh pada tree stabil (run lama snapshot tengah-edit: 4 fail sudah diperbaiki; tsc kini bersih, build lama lulus)
-- [ ] build produksi ulang; E2E subset bila DB seed memungkinkan
-- [ ] db:check-migrations bila MIGRATION_CHECK_URL tersedia
+- [x] ci:quick run snapshot bd7264d8a: Lint ✔, TypeScript ✔, Unit ✔ (build menyusul) — 4 fail snapshot tengah-edit sebelumnya (silent-failure, 2 trailing ledger, receivable FIN-BR-008 mock) sudah diperbaiki & commit
+- [ ] konfirmasi build CI selesai + E2E subset bila DB seed memungkinkan
+- [x] db:check-migrations — MIGRATION_CHECK_URL tidak tersedia di env sesi; tak dijalankan (jangan karang kredensial root)
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
