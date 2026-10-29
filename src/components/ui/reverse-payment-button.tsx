@@ -5,6 +5,7 @@ import { Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { showError } from "@/lib/utils/toast"
 import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
 /**
@@ -41,6 +42,10 @@ export function ReversePaymentButton({
     })
 
   function handleReverse() {
+    if (!reason.trim()) {
+      showError("Alasan pembalikan wajib diisi")
+      return
+    }
     submit()
   }
 
