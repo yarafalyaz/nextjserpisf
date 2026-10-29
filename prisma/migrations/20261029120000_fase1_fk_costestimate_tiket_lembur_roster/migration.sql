@@ -4,11 +4,8 @@
 
 -- B6: FK GoodsReceiptItem (index *_idx dibuat db push; constraint *_fkey).
 ALTER TABLE `goods_receipt_items`
-  ADD KEY `goods_receipt_items_item_id_idx` (`item_id`),
-  ADD KEY `goods_receipt_items_warehouse_id_idx` (`warehouse_id`),
   ADD KEY `goods_receipt_items_rack_id_idx` (`rack_id`),
   ADD KEY `goods_receipt_items_rack_row_id_idx` (`rack_row_id`),
-  ADD KEY `goods_receipt_items_stock_move_id_idx` (`stock_move_id`),
   ADD CONSTRAINT `goods_receipt_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `goods_receipt_items_warehouse_id_fkey` FOREIGN KEY (`warehouse_id`) REFERENCES `warehouses`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT `goods_receipt_items_rack_id_fkey` FOREIGN KEY (`rack_id`) REFERENCES `racks`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -22,18 +19,14 @@ ALTER TABLE `tax_group_taxes`
 
 -- B6: FK Transfer/Material/Invoice item.
 ALTER TABLE `inventory_transfer_items`
-  ADD KEY `inventory_transfer_items_item_id_idx` (`item_id`),
   ADD CONSTRAINT `inventory_transfer_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `material_issue_items`
-  ADD KEY `material_issue_items_item_id_idx` (`item_id`),
   ADD CONSTRAINT `material_issue_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `sales_invoice_items`
-  ADD KEY `sales_invoice_items_item_id_idx` (`item_id`),
   ADD CONSTRAINT `sales_invoice_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Pre-existing drift: FK purchase_requests.vendor_id (ada di schema, hilang di rantai).
 ALTER TABLE `purchase_requests`
-  ADD KEY `purchase_requests_vendor_id_idx` (`vendor_id`),
   ADD CONSTRAINT `purchase_requests_vendor_id_fkey` FOREIGN KEY (`vendor_id`) REFERENCES `vendors`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- R3: tabel estimasi biaya job.
