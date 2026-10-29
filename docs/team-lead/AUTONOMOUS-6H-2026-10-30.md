@@ -37,6 +37,10 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] db:check-migrations — MIGRATION_CHECK_URL tidak tersedia di env sesi; tak dijalankan (jangan karang kredensial root)
 - [x] audit halaman serial selesai: DP by ids (787001493), aset by id (db622bbba), 8 halaman paralel (8037216dc, a24a7cdd5); runtime browser 5 halaman bersih, console 0 error
 - [x] audit master/pengaturan selesai (3 HIGH, 5 MED, LOW dipilih): scope/mask karyawan (263e2632a), klaim recurring + lock auth (2c30e5610), quick-add scope + lock lead (f8576586a). Ditinggal sadar: bulk-delete UI tanpa canDelete (server menolak, kosmetik), kode gudang manual tabrakan unik generik, distinct log tanpa batas (N+1-nya sudah diperbaiki di 2c30e5610)
+- [x] audit API/hooks/form diproses: API (92d7cf73f), PKWT (224fcc386), 5 lock hooks (868af9a2e..ca8f573e9)
+- [x] validasi angka server: clamp PO (469721738), CO after negatif (7d50c7f15); klaim faktur qty 0 terbukti tidak berlaku
+- [x] scope gudang laporan stok layar+PDF ditegakkan (a2f8eda51) — putusan user: tutup celah
+- [x] gerbang izin UI Pola 2 batch 1: keuangan (b00fbd0eb), uang-muka (941f2fa5f), opname/remnant (06754d77b)
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
@@ -62,3 +66,10 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - Verifikasi berat penutup sesi malam: ci:quick penuh LULUS pada
   9b2fd7f59 (Lint ✔ TypeScript ✔ Unit ✔ Build ✔, 228s). 49 commit lokal
   di atas origin/main, belum push.
+- Lanjutan: audit API/hooks/form selesai diproses — 92d7cf73f API,
+  224fcc386 PKWT, 5 commit lock hooks (868af9a2e..ca8f573e9),
+  469721738 clamp PO, 7d50c7f15 CO negatif. Verifikasi mandiri:
+  388/388 test validasi; hooks 67/67. Scope gudang laporan stok
+  ditutup atas putusan user (a2f8eda51, 12 test baru). Pola 2 batch 1
+  committed (b00fbd0eb, 941f2fa5f, 06754d77b; 20/20 test, 10 gagal
+  pra-fix). Semua lokal, belum push.
