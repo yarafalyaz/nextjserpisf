@@ -280,8 +280,12 @@ export async function decideProbation(
     if (employee.probationEndDate == null) throw new Error("Karyawan ini tidak dalam masa percobaan")
 
     const finalReview = await loadFinalReview(employeeId, employee)
-    if (!finalReview || (finalReview.status !== "submitted" && finalReview.status !== "decided")) {
-      throw new Error("Keputusan akhir masa percobaan wajib merujuk evaluasi final yang sudah dikirim")
+    if (!finalReview || finalReview.status !== "submitted") {
+      throw new Error(
+        finalReview?.status === "decided"
+          ? "Evaluasi final sudah diputus"
+          : "Keputusan akhir masa percobaan wajib merujuk evaluasi final yang sudah dikirim",
+      )
     }
     const me = await callerEmployeeId(user.id)
     if (me != null && me === finalReview.reviewerEmployeeId) {
@@ -300,10 +304,13 @@ export async function decideProbation(
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.probationReview.update({
-        where: { id: finalReview.id },
+      // Klaim atomik: hanya review submitted yang bisa diklaim; keputusan
+      // konkuren yang menang duluan membuat count 0 -> rollback.
+      const claimed = await tx.probationReview.updateMany({
+        where: { id: finalReview.id, status: "submitted" },
         data: { status: "decided", finalDecision: decision, decidedBy: Number(user.id), decidedAt: new Date() },
       })
+      if (claimed.count === 0) throw new Error("Evaluasi final sudah diputus")
       await tx.employee.update({ where: { id: employeeId }, data: { probationEndDate: endUpdate } })
     })
     await logActivity("update", "ProbationReview", finalReview.id, `Memutus akhir masa percobaan: ${decision}`)

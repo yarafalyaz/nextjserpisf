@@ -98,7 +98,7 @@ beforeEach(() => {
   mocks.employeeFindFirst.mockResolvedValue({ id: 99 }) // pemanggil = Employee 99
   mocks.transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
-      probationReview: { update: mocks.reviewUpdate },
+      probationReview: { update: mocks.reviewUpdate, updateMany: mocks.reviewUpdateMany },
       employee: { update: mocks.employeeUpdate, findUnique: mocks.employeeFindUnique },
       contractDecisionRequest: {
         updateMany: mocks.requestUpdateMany,
@@ -152,6 +152,7 @@ describe("decideProbation", () => {
     mocks.employeeFindUnique.mockResolvedValue(employeeRow({ probationEndDate: d("2026-04-05") }))
     mocks.reviewFindFirst.mockResolvedValue({ id: 5, status: "submitted", reviewerEmployeeId: 7 })
     mocks.reviewUpdate.mockResolvedValue({})
+    mocks.reviewUpdateMany.mockResolvedValue({ count: 1 })
     mocks.employeeUpdate.mockResolvedValue({})
   }
 
@@ -182,9 +183,9 @@ describe("decideProbation", () => {
   it("passed: review decided + probationEndDate ditutup", async () => {
     setupDecide()
     expect(await decideProbation(1, "passed")).toEqual({ success: true })
-    expect(mocks.reviewUpdate).toHaveBeenCalledWith(
+    expect(mocks.reviewUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 5 },
+        where: { id: 5, status: "submitted" },
         data: expect.objectContaining({ status: "decided", finalDecision: "passed" }),
       }),
     )
@@ -192,6 +193,25 @@ describe("decideProbation", () => {
       where: { id: 1 },
       data: { probationEndDate: null },
     })
+  })
+
+  it("klaim atomik: review sudah decided ditolak, mutasi karyawan tidak jalan", async () => {
+    setupDecide()
+    mocks.reviewFindFirst.mockResolvedValue({ id: 5, status: "decided", reviewerEmployeeId: 7 })
+    const r = await decideProbation(1, "passed")
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/sudah diputus/)
+    expect(mocks.reviewUpdateMany).not.toHaveBeenCalled()
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
+  })
+
+  it("klaim atomik: keputusan konkuren menang duluan (count 0) -> rollback", async () => {
+    setupDecide()
+    mocks.reviewUpdateMany.mockResolvedValue({ count: 0 })
+    const r = await decideProbation(1, "passed")
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error).toMatch(/sudah diputus/)
+    expect(mocks.employeeUpdate).not.toHaveBeenCalled()
   })
 
   it("extended: tanggal baru <= joinDate+3 bulan; lewat ditolak", async () => {
