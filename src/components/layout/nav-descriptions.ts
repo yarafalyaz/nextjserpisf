@@ -84,6 +84,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/pembelian/harga-pemasok": "Daftar harga kesepakatan per pemasok dan barang",
   "/pembelian/transfer-pemasok": "Daftar instruksi transfer bank ke pemasok dan penandanya",
   "/keuangan/penyetoran-pajak": "Setoran pajak yang sudah dipotong ke kas negara",
+  "/keuangan/sengketa-pajak": "Register ketetapan pajak beserta antrean tenggat upaya sengketanya",
   "/keuangan/dokumen-pajak/faktur/tambah": "Terbitkan, ganti, batalkan, atau kreditkan faktur pajak keluaran dan masukan",
   "/keuangan/dokumen-pajak/bupot/tambah": "Terbitkan dan setor bukti potong PPh lewat kode billing dan NTPN",
   "/laporan/penyetoran-pajak": "Menampilkan penyetoran pajak pada periode terpilih",
