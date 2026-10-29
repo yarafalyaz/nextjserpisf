@@ -2391,11 +2391,9 @@ export async function generateBulkPayroll(
       classified.targetIds.includes(e.id),
     );
 
-    // Kenaikan gaji terjadwal yang jatuh tempo sampai akhir periode
-    // diterapkan ke master sebelum nominal slip dibaca/dibangun.
-    for (const e of eligibleEmployees) {
-      await applyDueSalaryAdjustments(e.id, periodEnd);
-    }
+    // (Kenaikan terjadwal sudah diterapkan di loop employmentEligible di
+    // atas — eligibleEmployees subset-nya, dan helper idempoten: panggilan
+    // kedua per karyawan hanya membuang 1 transaksi+lock tanpa efek.)
 
     // Batch: slip aktif populasi pada jendela rentang run (semua periode —
     // penjaga irisan BR-PF-03 menggantikan kunci period lama; slip minggu

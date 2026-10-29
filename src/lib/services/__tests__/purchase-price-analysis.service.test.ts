@@ -70,6 +70,30 @@ describe("buildPurchasePriceAnalysis", () => {
     expect(row.maxLandedUnitCost).toBe(120)
   })
 
+  it("query listing PO dibatasi pasangan (item, vendor) grup receipt", async () => {
+    grFindManyMock.mockResolvedValue([
+      receipt(1, new Date(2026, 0, 5), 100, "Toko A", [{ itemId: 20, qty: 10, unitCost: 100 }]),
+      receipt(2, new Date(2026, 0, 6), 200, "Toko B", [{ itemId: 21, qty: 5, unitCost: 200 }]),
+    ])
+    itemFindManyMock.mockResolvedValue([
+      { id: 20, sku: "SKU-20", name: "Barang", unitOfMeasure: "PCS" },
+      { id: 21, sku: "SKU-21", name: "Barang 2", unitOfMeasure: "PCS" },
+    ])
+
+    await buildPurchasePriceAnalysis({ startDate: new Date(2026, 0, 1), endDate: new Date() })
+
+    expect(poItemFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { itemId: 20, purchaseOrder: { vendorId: 100 } },
+            { itemId: 21, purchaseOrder: { vendorId: 200 } },
+          ],
+        },
+      }),
+    )
+  })
+
   it("separates vendors and picks the cheapest by landed cost, not listing price", async () => {
     grFindManyMock.mockResolvedValue([
       // Vendor 100: listing was cheap (90) but landed is high (115).

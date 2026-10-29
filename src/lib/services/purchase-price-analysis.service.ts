@@ -136,10 +136,17 @@ export async function buildPurchasePriceAnalysis(opts: {
     }
   }
 
-  // Resolve listing prices: the PO listing unit price for the same (item, vendor).
-  // Since a receipt maps to a PO, gather the PO item unitPrice keyed by item.
+  // Resolve listing prices: PO listing price hanya untuk pasangan
+  // (item, vendor) yang benar-benar punya receipt grup ini — PO item dari
+  // vendor lain tidak pernah terbaca (grouping di bawah menyaringnya juga).
+  const groupKeys = [...groups.values()] as Array<{ itemId: number; vendorId: number | null }>
   const poListPrices = await prisma.purchaseOrderItem.findMany({
-    where: { itemId: { in: [...new Set([...groups.values()].map((g) => g.itemId))] } },
+    where: {
+      OR: groupKeys.map((g) => ({
+        itemId: g.itemId,
+        ...(g.vendorId ? { purchaseOrder: { vendorId: g.vendorId } } : {}),
+      })),
+    },
     select: { itemId: true, unitPrice: true, purchaseOrder: { select: { vendorId: true } } },
   })
   const listingByItemVendor = new Map<string, { qty: number; value: number }>()
