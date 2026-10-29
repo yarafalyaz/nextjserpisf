@@ -1,16 +1,11 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { awaitListContains } from "./utils/await-ready"
 
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
 
 
 test.describe("Kendaraan Merek CRUD", () => {
@@ -20,12 +15,12 @@ test.describe("Kendaraan Merek CRUD", () => {
     const updated = `Vehicle Brand E2E Updated ${ts}`
 
     await page.goto("/kendaraan/merek/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("input[name='name']").first()).toBeVisible({ timeout: 30000 })
     await page.locator("input[name='name']").first().fill(name)
     await expect(page.locator("input[name='name']").first()).toHaveValue(name)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
-    await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
+    await awaitListContains(page, "**/kendaraan/merek", name)
     await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
@@ -36,12 +31,12 @@ test.describe("Kendaraan Merek CRUD", () => {
     if (!href) throw new Error("Could not resolve brand detail href")
 
     await page.goto(`${href}/ubah`, { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("input[name='name']").first()).toBeVisible({ timeout: 30000 })
     await page.locator("input[name='name']").first().fill(updated)
     await expect(page.locator("input[name='name']").first()).toHaveValue(updated)
     await page.getByRole("button", { name: /^Update$|^Perbarui$/ }).first().click()
 
-    await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
+    await awaitListContains(page, "**/kendaraan/merek", updated)
     await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)

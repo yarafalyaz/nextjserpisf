@@ -2,11 +2,6 @@ import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 import { openCombobox } from "./utils/combobox"
 
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 async function selectOptionBySearch(page: Page, placeholder: string, query: string, optionPattern: RegExp) {
   const search = await openCombobox(page, { placeholder })
   await search.fill(query)
@@ -40,7 +35,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/inventaris/baris-rak/tambah", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible({ timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     await selectOptionBySearch(page, "Cari gudang...", "Gudang", /Gudang/i)
 
