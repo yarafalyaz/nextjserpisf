@@ -78,40 +78,51 @@ export default async function ProductionOrderDetailPage({
 
   if (!order) notFound()
 
-  // Resolve item names for genealogy materials.
+  // Resolve nama barang genealogy, user completedBy, WO tertaut, dan nama
+  // material: empatnya hanya bergantung ke `order` -> paralel.
   const geneItemIds = order.genealogy?.materials.map((m) => m.itemId) ?? []
-  const geneItemRows = geneItemIds.length
-    ? await prisma.item.findMany({
-        where: { id: { in: geneItemIds } },
-        select: { id: true, name: true, sku: true },
-      })
-    : []
-  const geneItemMap = new Map(geneItemRows.map((i) => [i.id, i]))
-
-  // `completedBy` hanya kolom Int tanpa relasi User — resolve namanya di sini.
-  const completedByUser =
+  const materialItemIds = order.materials.map((m) => m.itemId)
+  const [geneItemRows, completedByUser, linkedWorkOrder, materialItemRows] = await Promise.all([
+    geneItemIds.length
+      ? prisma.item.findMany({
+          where: { id: { in: geneItemIds } },
+          select: { id: true, name: true, sku: true },
+        })
+      : Promise.resolve([]),
+    // `completedBy` hanya kolom Int tanpa relasi User — resolve namanya di sini.
     order.genealogy?.completedBy != null
-      ? await prisma.user.findUnique({
+      ? prisma.user.findUnique({
           where: { id: order.genealogy.completedBy },
           select: { id: true, name: true },
         })
-      : null
+      : Promise.resolve(null),
+    // The production order now carries a real workOrderId FK (see migration
+    // 20261008130000_integration_relations); fall back to the legacy best-effort
+    // item match only for older orders created before the link existed.
+    Promise.resolve(order.workOrder).then(
+      (wo) =>
+        wo ??
+        (order.product.inventoryItemId
+          ? prisma.workOrder.findFirst({
+              where: { items: { some: { itemId: order.product.inventoryItemId } } },
+              select: workOrderPinSelect,
+              orderBy: { createdAt: "desc" },
+            })
+          : null),
+    ),
+    materialItemIds.length
+      ? prisma.item.findMany({
+          where: { id: { in: materialItemIds } },
+          select: { id: true, name: true, sku: true },
+        })
+      : Promise.resolve([]),
+  ])
+  const geneItemMap = new Map(geneItemRows.map((i) => [i.id, i]))
   const completedByName = completedByLabel(
     order.genealogy?.completedBy,
     new Map(completedByUser ? [[completedByUser.id, completedByUser.name]] : []),
   )
-
-  // The production order now carries a real workOrderId FK (see migration
-  // 20261008130000_integration_relations); fall back to the legacy best-effort
-  // item match only for older orders created before the link existed.
-  const linkedWorkOrder = order.workOrder
-    ?? (order.product.inventoryItemId
-      ? await prisma.workOrder.findFirst({
-          where: { items: { some: { itemId: order.product.inventoryItemId } } },
-          select: workOrderPinSelect,
-          orderBy: { createdAt: "desc" },
-        })
-      : null)
+  const itemRows = materialItemRows
 
   const costRows = order.costs.map((c) => ({
     id: c.id,
@@ -132,14 +143,7 @@ export default async function ProductionOrderDetailPage({
     nonconformanceSlug: c.nonconformance?.slug ?? null,
   }))
 
-  // Resolve material item names (ProductionOrderMaterial holds itemId only).
-  const itemIds = order.materials.map((m) => m.itemId)
-  const itemRows = itemIds.length
-    ? await prisma.item.findMany({
-        where: { id: { in: itemIds } },
-        select: { id: true, name: true, sku: true },
-      })
-    : []
+  // Nama material sudah diambil paralel di blok sesudah muat order.
   const itemNameMap = new Map(itemRows.map((i) => [i.id, i.name]))
   // Items selectable for material issue = the BOM materials of this order.
   const issuableItems = order.materials.map((m) => ({
