@@ -3,6 +3,7 @@ import { safeAdd, safeMultiply } from '@/lib/utils/math'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
 import { getSystemSettings } from '@/lib/utils/settings'
 import { decideAbnormalScrapPosting } from '@/lib/services/scrap-classification'
+import { assertPeriodOpen } from '@/lib/services/period-lock.service'
 import type { Prisma } from '@prisma/client'
 
 /**
@@ -685,6 +686,11 @@ export const stockJournalService = {
       })
       if (existing) {
         if (existing.status === "POSTED") {
+          // Jurnal lawan bertanggal jurnal ASAL (existing.transactionDate):
+          // tanpa cek ini, edit/hapus baris biaya di bulan berjalan menulis
+          // ulang GL periode asal yang sudah ditutup (cek luar aksi hanya
+          // menjaga tanggal hari ini). Pola kanonik reverseJournalsByReferenceTx.
+          await assertPeriodOpen(existing.transactionDate, tx)
           currentAmount =
             Math.round(
               existing.entries.reduce(
