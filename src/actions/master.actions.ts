@@ -1215,16 +1215,18 @@ async function assertManagerChainAcyclic(
 export async function createEmployee(formData: FormData) {
   try {
     const actor = await requirePermission("create_employees");
+    const scope = await getHrScope(actor);
 
-    // quick-add upsert: name match active (HR-scope checked below). Only applied when __quickAdd flag
+    // quick-add upsert: name match active. Match WAJIB lolos HR scope juga —
+    // return cepat sebelum cek scope membocorkan id/slug karyawan luar scope.
     const rawNameEmp = (formData.get("name") as string | null)?.trim()
     if (rawNameEmp && formData.get("__quickAdd") === "1") {
       const existingEmp = await prisma.employee.findFirst({ where: { name: rawNameEmp, deletedAt: null }, select: { id: true, slug: true } })
-      if (existingEmp) return { success: true as const, id: existingEmp.id, slug: existingEmp.slug ?? undefined }
+      if (existingEmp) {
+        await assertHrEmployeeAccess(scope, existingEmp.id)
+        return { success: true as const, id: existingEmp.id, slug: existingEmp.slug ?? undefined }
+      }
     }
-
-
-    const scope = await getHrScope(actor);
     if (scope.kind === "self") {
       throw new Error("Anda tidak memiliki akses untuk membuat data karyawan.");
     } else if (scope.kind === "department") {
@@ -2127,12 +2129,25 @@ export async function updateLead(id: number, formData: FormData) {
       }
     }
 
-    // Log a status_change activity when status actually changes (mirrors
-    // YaraERP LeadController::update). Status + activity write atomically.
-    const statusChanged =
-      v.status != null && v.status !== existing.status;
-
+    // Log status_change di dalam tx memakai status segar (freshStatusChanged).
     const updated = await prisma.$transaction(async (tx) => {
+      // Kunci baris lead (FOR UPDATE, pola crm.actions convertLead) lalu baca
+      // ulang status segar: validasi transisi wajib menilai status di dalam
+      // tx, bukan snapshot luar — status terminal (won/lost) yang ditulis
+      // eksekusi konkuren di antara keduanya tidak boleh tertimpa.
+      await tx.$queryRaw`SELECT id FROM leads WHERE id = ${id} FOR UPDATE`;
+      const fresh = await tx.lead.findUniqueOrThrow({ where: { id } });
+      const freshLostCheck = validateLeadLostTransition({
+        fromStatus: fresh.status,
+        toStatus: v.status ?? null,
+        category: v.lostReasonCategory ?? null,
+        freeText: v.lostReasonText ?? null,
+      });
+      if (!freshLostCheck.ok) {
+        throw new Error(freshLostCheck.error);
+      }
+      const freshStatusChanged = v.status != null && v.status !== fresh.status;
+
       // Re-check di dalam transaksi (§1.6); bila kandidat muncul tanpa
       // alasan sah -> batalkan seluruh edit (return null, tanpa mutasi).
       let txWarning: LeadDuplicateWarning | null = null;
@@ -2185,7 +2200,7 @@ export async function updateLead(id: number, formData: FormData) {
           },
         });
       }
-      if (statusChanged) {
+      if (freshStatusChanged) {
         await tx.leadActivity.create({
           data: {
             leadId: id,
@@ -2194,8 +2209,8 @@ export async function updateLead(id: number, formData: FormData) {
             subject: "Status diubah",
             // Awalan [kalah:key] hanya pada transisi ke lost (Q-LR-1);
             // status lain description tetap null seperti existing.
-            description: lostCheck.ok ? lostCheck.description : null,
-            oldStatus: existing.status,
+            description: freshLostCheck.ok ? freshLostCheck.description : null,
+            oldStatus: fresh.status,
             newStatus: v.status,
           },
         });

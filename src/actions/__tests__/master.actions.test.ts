@@ -2116,6 +2116,39 @@ describe("F-2026-10-25-030-S alasan kalah lead lost (Q-LR-1..4)", () => {
     expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
   })
 
+  it("race regresi: status berubah ke won di dalam tx -> transisi keluar terminal ditolak, nol update", async () => {
+    // Baca luar tx melihat "new" (transisi ke contacted sah); di dalam tx
+    // eksekusi konkuren sudah membuat lead won (terminal). Validasi segar
+    // dalam tx wajib menolak — kode lama menimpa won -> contacted.
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ ...baseLead, status: "new" })
+      .mockResolvedValueOnce({ ...baseLead, status: "won" })
+    const res: any = await actions.updateLead(1, fdMap({ name: "Saya", status: "contacted" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("terminal")
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalled()
+    const sql = (mocks.prismaMock.$queryRaw.mock.calls[0][0] as string[]).join("?")
+    expect(sql).toContain("FROM leads")
+    expect(sql).toContain("FOR UPDATE")
+    expect(mocks.prismaMock.lead.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+
+  it("race regresi: oldStatus log status_change memakai status segar dalam tx", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow
+      .mockResolvedValueOnce({ ...baseLead, status: "new" })
+      .mockResolvedValueOnce({ ...baseLead, status: "contacted" })
+    try {
+      await actions.updateLead(1, fdMap({ name: "Saya", status: "qualified" }))
+    } catch { /* redirect */ }
+    expect(mocks.prismaMock.lead.update).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ oldStatus: "contacted", newStatus: "qualified" }),
+      }),
+    )
+  })
+
   it("AC-LR-F1 (server): kamus payload server LEAD_LOST_REASON_CATEGORIES = 8 key Q-LR-1", () => {
     expect(LEAD_LOST_REASON_CATEGORIES.map((c) => c.key)).toEqual([
       "budget",

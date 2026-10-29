@@ -278,6 +278,30 @@ describe("updateEmployee — create login account for existing employee", () => 
   })
 })
 
+describe("createEmployee — quick-add scope gate", () => {
+  it("scope department menolak quick-add karyawan luar departemen (id/slug tidak bocor)", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    employeeFindFirstMock.mockResolvedValue({ id: 77, slug: "luar-dept" })
+    employeeFindUniqueMock.mockResolvedValue({ departmentId: 99 })
+
+    const res = await createEmployee(fd({ ...baseFields, __quickAdd: "1" }))
+
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("tidak memiliki akses")
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("scope all tetap menerima quick-add match yang ada", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "all" })
+    employeeFindFirstMock.mockResolvedValue({ id: 77, slug: "luar-dept" })
+
+    const res = await createEmployee(fd({ ...baseFields, __quickAdd: "1" }))
+
+    expect(res).toEqual({ success: true, id: 77, slug: "luar-dept" })
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("deleteEmployee — revoke linked login account", () => {
   it("deactivates the linked login BEFORE deleting the employee", async () => {
     employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
