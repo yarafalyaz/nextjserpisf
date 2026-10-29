@@ -28,7 +28,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   },
 }))
 
-import { accrueTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
+import { accrueTx, paidByIdTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
 
 const D = (n: number) => new Prisma.Decimal(n.toFixed(2))
 
@@ -225,6 +225,49 @@ describe("commission-payable paid", () => {
     // Bayar pas sisa sah: A 220000 − R 100000 = sisa 120000; bayar 70000 pas.
     const t3 = mk(50000, 100000)
     await expect(paidTx(t3.tx, 1, 70000)).resolves.toEqual({ paid: 120000 })
+  })
+})
+
+/** Tx dua payable: state array, update by-id hanya menyentuh baris sasarannya. */
+function makeTwoPayableTx() {
+  const rows: Row[] = [
+    { id: 7, salesInvoiceId: 3, salesEmployeeId: 9, accruedAmount: D(220000), reversalAmount: D(0), paidAmount: D(0), accrualJournalId: 7 },
+    { id: 8, salesInvoiceId: 4, salesEmployeeId: 10, accruedAmount: D(500000), reversalAmount: D(100000), paidAmount: D(50000), accrualJournalId: 8 },
+  ]
+  const tx = {
+    $executeRaw: async () => 1,
+    commissionPayable: {
+      findFirst: async ({ where }: { where: { salesInvoiceId: number } }) =>
+        rows.find((r) => r.salesInvoiceId === where.salesInvoiceId) ?? null,
+      findUniqueOrThrow: async ({ where }: { where: { id: number } }) => {
+        const row = rows.find((r) => r.id === where.id)
+        if (!row) throw new Error("No CommissionPayable found")
+        return row
+      },
+      update: async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+        const row = rows.find((r) => r.id === where.id)!
+        if (data.paidAmount) row.paidAmount = data.paidAmount as Prisma.Decimal
+        return row
+      },
+    },
+  }
+  return { tx: tx as never, rows }
+}
+
+describe("commission-payable paidById dua payable (faktor beda)", () => {
+  it("bayar by-id menaikkan HANYA payable sasarannya; payable lain utuh (by-id terbukti)", async () => {
+    const { tx, rows } = makeTwoPayableTx()
+    // Faktor beda: payable 7 sisa 220rb, payable 8 sisa 400rb (A 500 − R 100).
+    const out = await paidByIdTx(tx, 8, 150000, 4)
+    expect(out.paid).toBe(200000) // 50rb lama + 150rb
+    expect(rows[1].paidAmount.toNumber()).toBe(200000)
+    expect(rows[0].paidAmount.toNumber()).toBe(0)
+    // Overpay pada payable 7 (sisa 220rb) ditolak walau payable 8 masih longgar.
+    await expect(paidByIdTx(tx, 7, 220001, 3)).rejects.toThrow(/melebihi sisa/)
+    expect(rows[0].paidAmount.toNumber()).toBe(0)
+    // Bayar pas sisa payable 7 sah dan tidak menyentuh payable 8.
+    await expect(paidByIdTx(tx, 7, 220000, 3)).resolves.toEqual({ paid: 220000 })
+    expect(rows[1].paidAmount.toNumber()).toBe(200000)
   })
 })
 

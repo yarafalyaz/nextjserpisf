@@ -116,6 +116,38 @@ describe("loadJobEstimateVsActual — rantai loader F-2026-10-20-04", () => {
     expect(r.estimate.totals.estimate).toBe(0)
   })
 
+  it("dedup lintas TIGA jembatan: invoice sama via quotation+SO+project terhitung sekali, ke WO pertama", async () => {
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([
+      wo({ id: 1, documentNo: "WO-0001", projectId: 5 }),
+      wo({ id: 2, documentNo: "WO-0002", date: new Date("2026-10-06T00:00:00"), projectId: 5, quotationId: 10, quotation: { status: "accepted", grandTotal: 50_000_000 } }),
+    ])
+    mocks.prismaMock.salesOrder.findMany.mockResolvedValue([{ id: 3, quotationId: 9 }])
+    const shared = inv({ id: 7, quotationId: 9, salesOrderId: 3, projectId: 5, grandTotal: 40_000_000 })
+    // Urutan panggilan loader: direct(quotation), project, lalu viaSalesOrder.
+    mocks.prismaMock.salesInvoice.findMany
+      .mockResolvedValueOnce([shared])
+      .mockResolvedValueOnce([shared])
+      .mockResolvedValueOnce([shared])
+
+    const r = await loadJobEstimateVsActual(PERIOD)
+
+    // Sekali saja (bukan 3×40jt), dan ke WO pertama menurut urutan tanggal.
+    expect(r.estimate.rows[0].billedAmount).toBe(40_000_000)
+    expect(r.estimate.rows[1].billedAmount).toBe(0)
+  })
+
+  it("costEstimate WO terbaca; WO tanpa costEstimate = null (bukan nol karangan)", async () => {
+    mocks.prismaMock.workOrder.findMany.mockResolvedValue([
+      wo({ id: 1, costEstimate: { totalEstimate: 75_000_000 } }),
+      wo({ id: 2, documentNo: "WO-0002", date: new Date("2026-10-06T00:00:00"), quotationId: null, quotation: null, costEstimate: null }),
+    ])
+
+    const r = await loadJobEstimateVsActual(PERIOD)
+
+    expect(r.estimate.rows[0].costEstimate).toBe(75_000_000)
+    expect(r.estimate.rows[1].costEstimate).toBeNull()
+  })
+
   it("penawaran disetujui tanpa invoice: unbilled, selisih = -estimasi", async () => {
     const r = await loadJobEstimateVsActual(PERIOD)
 
