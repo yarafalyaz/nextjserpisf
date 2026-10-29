@@ -64,10 +64,9 @@ export default async function DownPaymentDetailPage({
   if (!dp) notFound();
 
   // Snapshot PPN per DP verbatim dari read-model server (PR #785) —
-  // halaman menampilkan apa adanya, tidak menghitung ulang PPN.
-  const [vatRow] = (await loadDownPaymentTaxStatusRows()).filter(
-    (row) => row.downPaymentId === dp.id,
-  );
+  // halaman menampilkan apa adanya, tidak menghitung ulang PPN. Query
+  // by id langsung (bukan muat semua DP lalu saring).
+  const [vatRow] = await loadDownPaymentTaxStatusRows({ downPaymentId: dp.id });
 
   const pmMap = await getPaymentMethodMap();
 

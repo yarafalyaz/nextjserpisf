@@ -190,7 +190,10 @@ async function loadQuotationInputs(
     prisma.salesPayment.findMany({
       where: activeSalesPaymentWhere({
         paymentMethod: "down_payment",
-        notes: { contains: "Uang muka dari DP" },
+        // Baris terpakai di bawah wajib cocok marker regex lalu nomor
+        // dokumennya persis ada di notes, jadi OR per dokumen taxed
+        // ekuivalen dengan saring di memori sesudahnya.
+        OR: taxedDps.map((d) => ({ notes: { contains: d.documentNo } })),
       }),
       select: { amount: true, notes: true },
     }),

@@ -29,8 +29,18 @@ export interface SalesCommissionSubledgerRecap {
 export async function getSalesCommissionSubledgerRecap(): Promise<SalesCommissionSubledgerRecap> {
   await requirePermission("view_reports")
 
+  // Tanpa filter where yang ekuivalen: saldo kumulatif semua baris
+  // (baris 0 pun lahirkan row + status ACCRUED di builder). Persempit
+  // payload saja ke kolom yang dipakai pemetaan di bawah.
   const rows = await prisma.commissionPayable.findMany({
-    include: { salesEmployee: { select: { name: true } } },
+    select: {
+      salesInvoiceId: true,
+      salesEmployeeId: true,
+      accruedAmount: true,
+      reversalAmount: true,
+      paidAmount: true,
+      salesEmployee: { select: { name: true } },
+    },
     orderBy: { id: "asc" },
   })
   const entries = rows.map((r) => ({

@@ -14,8 +14,18 @@ import {
 } from "@/lib/reports/sales-commission-payable"
 
 export async function getSalesCommissionPayable(): Promise<SalesCommissionPayable> {
+  // Tanpa filter where yang ekuivalen: halaman saldo-utang-komisi
+  // menampilkan saldo kumulatif tanpa periode; baris 0 pun lahirkan row
+  // di builder. Persempit payload saja ke kolom yang dipakai pemetaan.
   const rows = await prisma.commissionPayable.findMany({
-    include: { salesEmployee: { select: { name: true } } },
+    select: {
+      salesInvoiceId: true,
+      salesEmployeeId: true,
+      accruedAmount: true,
+      reversalAmount: true,
+      paidAmount: true,
+      salesEmployee: { select: { name: true } },
+    },
     orderBy: { id: "asc" },
   })
   return buildSalesCommissionPayable(

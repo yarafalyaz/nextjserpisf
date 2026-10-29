@@ -397,20 +397,38 @@ describe("customer-credit-queue loader (anti-N+1 + gerbang)", () => {
       quotationId: { in: [55] },
       status: "confirmed",
     })
-    // SalesPayment bermarker DP dibaca satu kali massal.
+    // SalesPayment bermarker DP dibaca satu kali massal, didorong per
+    // nomor dokumen DP taxed: baris terpakai wajib cocok marker regex
+    // lalu nomornya persis ada di notes, jadi OR contains ekuivalen.
     // FIN-BR-008: alokasi DP yang sudah dibalik tidak boleh menandai sisa
     // kredit sebagai "sudah dialokasikan" — saringan ikut diharapkan di sini.
     expect(mocks.findSalesPayments.mock.calls[0]?.[0]?.where).toEqual({
       paymentMethod: "down_payment",
-      notes: { contains: "Uang muka dari DP" },
+      OR: [{ notes: { contains: "DP-2026-021" } }],
       status: { not: "reversed" },
     })
+    // Query kredit populasi utama tanpa where: builder menghitung ember
+    // anomali atas SEMUA status/saldo, tak ada saringan DB ekuivalen.
+    expect(mocks.findCredits.mock.calls[0]?.[0]?.where).toBeUndefined()
 
     // FP UM DP 21 dibatalkan (hanya DP 100 tersisa aktif) -> penanda hilang.
     mocks.findTaxInvoices.mockResolvedValue([{ downPaymentId: 100 }])
     const queue2 = await getCustomerCreditQueue({ now: NOW })
     const byId2 = new Map(queue2.rows.map((r) => [r.creditId, r]))
     expect(byId2.get(3)?.penandaFpUangMuka).toBe(false)
+  })
+
+  it("086-V loader: SalesPayment tak relevan dibuang (fixture campuran), residu tetap dari marker cocok", async () => {
+    mocks.findSalesPayments.mockResolvedValue([
+      { amount: 4000000, notes: "Uang muka dari DP DP-2026-021 untuk faktur INV-1" },
+      { amount: 999000000, notes: "Uang muka dari DP DP-LAIN untuk faktur INV-9" },
+      { amount: 888000000, notes: null },
+    ])
+    const queue = await getCustomerCreditQueue({ now: NOW })
+    const byId = new Map(queue.rows.map((r) => [r.creditId, r]))
+    // Residu = 11.200.000 - 4.000.000 > 0 -> tetap berpenanda; dua baris
+    // lain tidak cocok quotationByDocNo dan diabaikan seperti sebelumnya.
+    expect(byId.get(3)?.penandaFpUangMuka).toBe(true)
   })
 
   it("086-V loader: DP quotation teralokasi penuh (residu 0) -> tanpa penanda", async () => {
