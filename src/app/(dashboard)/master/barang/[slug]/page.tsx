@@ -288,7 +288,7 @@ export default async function ItemDetailPage({
               <Button href={entityEditHref("/master/barang", item)} variant="secondary"><Pencil size={14} /> Ubah</Button>
             </CanCreate>
             <CanCreate permission="delete_items">
-              <DeleteButton id={item.id} action={deleteItem} />
+              <DeleteButton id={item.id} action={deleteItem} label={`Hapus barang ${item.name}`} />
             </CanCreate>
             <BackButton href="/master/barang" />
           </>

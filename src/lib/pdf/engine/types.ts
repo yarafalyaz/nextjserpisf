@@ -49,7 +49,7 @@ export interface StatementDocument extends DocumentHeader {
 export interface TableColumn {
   header: string
   align: DocumentAlign
-  /** Lebar kolom (mm). Jumlah seluruh kolom harus ≤ lebar area isi. */
+  /** Lebar kolom (mm). Σwidth > area isi diskalakan proporsional oleh renderer (fit-to-width). */
   width: number
 }
 

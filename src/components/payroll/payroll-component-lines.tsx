@@ -131,7 +131,7 @@ export function PayrollComponentLines({
                             Simpan
                           </Button>
                         </form>
-                        <DeleteButton id={l.id} action={removePayrollComponentLine} />
+                        <DeleteButton id={l.id} action={removePayrollComponentLine} label={`Hapus baris ${l.componentNameSnapshot}`} />
                       </div>
                     </td>
                   )}

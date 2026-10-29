@@ -21,7 +21,7 @@ import {
   ChevronsRight,
   Search,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import {
   Table,
   TableBody,
@@ -143,6 +143,8 @@ export function DataTable<TData extends { id: number | string }>({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>(initialColumnVisibility || {})
+  // id unik per instance: banyak DataTable bisa hidup di satu halaman.
+  const pageSizeId = useId()
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([])
@@ -452,7 +454,7 @@ export function DataTable<TData extends { id: number | string }>({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="-ml-3 h-8 data-[state=open]:bg-accent"
+                            className="relative -ml-3 h-8 data-[state=open]:bg-accent before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
@@ -551,7 +553,7 @@ export function DataTable<TData extends { id: number | string }>({
           </div>
           <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-3 sm:w-auto sm:justify-end lg:gap-8">
             <div className="flex items-center gap-2">
-              <label htmlFor="pageSize" className="text-sm font-medium whitespace-nowrap">
+              <label htmlFor={pageSizeId} className="text-sm font-medium whitespace-nowrap">
                 Baris per halaman
               </label>
               <Select
@@ -560,7 +562,7 @@ export function DataTable<TData extends { id: number | string }>({
                   isServer ? goToPageSize(Number(v) || 50) : table.setPageSize(Number(v) || 50)
                 }
               >
-                <SelectTrigger id="pageSize" className="h-11 w-[70px]" aria-label="Baris per halaman">
+                <SelectTrigger id={pageSizeId} className="h-11 w-[70px]" aria-label="Baris per halaman">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent side="top">

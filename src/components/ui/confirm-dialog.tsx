@@ -121,7 +121,7 @@ export function ConfirmDialog({
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>
+          <AlertDialogCancel disabled={isPending} className="min-h-11">
             {cancelLabel}
           </AlertDialogCancel>
           <AlertDialogAction
@@ -130,7 +130,7 @@ export function ConfirmDialog({
               e.preventDefault();
               onConfirm();
             }}
-            className={cn(confirmClass)}
+            className={cn("min-h-11", confirmClass)}
           >
             {confirmLabel}
           </AlertDialogAction>

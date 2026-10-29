@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { renderStatementPdf, renderStatementPdfBytes, renderTablePdf, renderTablePdfBytes } from "../render"
+import { fitColumnWidths, renderStatementPdf, renderStatementPdfBytes, renderTablePdf, renderTablePdfBytes } from "../render"
 import type { StatementDocument, TableDocument, TableRow } from "../types"
 import type { StatementTable, StatementTableRow } from "@/lib/reports/statement-table"
 
@@ -308,6 +308,60 @@ describe("renderTablePdf", () => {
     expect(accumulated && accumulated.x).toBeLessThan(240)
     expect(bookValue && bookValue.x).toBeGreaterThan(240)
     expect(bookValue && bookValue.x).toBeLessThan(282)
+  })
+
+  it("fit-to-width: Σwidth 422mm diskalakan proporsional ke area isi 267mm", () => {
+    const wide = [
+      { header: "Tanggal", align: "left" as const, width: 28 },
+      { header: "No. Jurnal", align: "left" as const, width: 36 },
+      { header: "Keterangan", align: "left" as const, width: 80 },
+      { header: "Debit", align: "right" as const, width: 36 },
+      { header: "Kredit", align: "right" as const, width: 36 },
+      { header: "Saldo", align: "right" as const, width: 36 },
+      { header: "Debit 2", align: "right" as const, width: 57 },
+      { header: "Kredit 2", align: "right" as const, width: 57 },
+      { header: "Saldo 2", align: "right" as const, width: 56 },
+    ]
+    const scaled = fitColumnWidths(wide, 267)
+    const sum = scaled.reduce((a, b) => a + b, 0)
+    expect(sum).toBeCloseTo(267, 5)
+    // Proporsi dipertahankan: Keterangan tetap 80/28 × kolom pertama.
+    expect(scaled[2] / scaled[0]).toBeCloseTo(80 / 28, 5)
+    // Di bawah area isi: tidak diskalakan.
+    expect(fitColumnWidths(wide.slice(0, 3), 267)).toEqual([28, 36, 80])
+  })
+
+  it("tabel lebar: tepi kanan kolom terakhir tidak lampaui area isi landscape", () => {
+    const doc = renderTablePdf(
+      tableDocument(
+        [{ kind: "data", cells: ["10/01/2026", "JU-001", "Kas masuk penjualan tunai", "1.000", "0", "1.000", "2.000", "0", "3.000"] }],
+        {
+          table: {
+            columns: [
+              { header: "Tanggal", align: "left", width: 28 },
+              { header: "No. Jurnal", align: "left", width: 36 },
+              { header: "Keterangan", align: "left", width: 80 },
+              { header: "Debit", align: "right", width: 36 },
+              { header: "Kredit", align: "right", width: 36 },
+              { header: "Saldo", align: "right", width: 36 },
+              { header: "Debit 2", align: "right", width: 57 },
+              { header: "Kredit 2", align: "right", width: 57 },
+              { header: "Saldo 2", align: "right", width: 56 },
+            ],
+            rows: [{ kind: "data", cells: ["10/01/2026", "JU-001", "Kas masuk", "1.000", "0", "1.000", "2.000", "0", "3.000"] }],
+          },
+        },
+      ),
+    )
+    const items = pdfTextItems(doc.output("arraybuffer") as ArrayBuffer)
+    // Area isi landscape: margin 15mm kiri, tepi kanan 297-15=282mm.
+    for (const item of items) {
+      expect(item.x).toBeLessThanOrEqual(282.5)
+    }
+    const last = items.find((item) => item.text === "3.000")
+    expect(last).toBeDefined()
+    expect(last && last.x).toBeGreaterThan(240)
+    expect(last && last.x).toBeLessThanOrEqual(282.5)
   })
 
   it("menaruh label baris data di kolomnya masing-masing", () => {

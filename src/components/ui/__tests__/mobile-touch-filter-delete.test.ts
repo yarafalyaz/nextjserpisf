@@ -16,10 +16,16 @@ describe("FilterDrawer + DeleteButton target sentuh 44px (360-430px)", () => {
 
   it("tombol Hapus icon-only DeleteButton 44px (min-h-11 min-w-11)", () => {
     const src = source("src/components/ui/delete-button.tsx")
-    const idx = src.indexOf('aria-label="Hapus"')
+    const idx = src.indexOf("aria-label={label}")
     expect(idx, "tombol Hapus tidak ditemukan").toBeGreaterThan(0)
     const window = src.slice(Math.max(0, idx - 200), idx)
     expect(window).toContain("min-h-11")
     expect(window).toContain("min-w-11")
+  })
+
+  it("DeleteButton terima label kontekstual opsional, default Hapus", () => {
+    const src = source("src/components/ui/delete-button.tsx")
+    expect(src).toContain('label = "Hapus"')
+    expect(src).toContain("aria-label={label}")
   })
 })

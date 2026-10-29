@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { statusLabel } from "@/lib/utils/status-labels"
-import { CheckCircle, XCircle, Clock } from "lucide-react"
+import { StatusChip } from "@/components/ui/status-chip"
+import { CheckCircle, XCircle } from "lucide-react"
 
 interface StatusActionsProps {
   status: string
@@ -18,19 +18,6 @@ interface StatusActionsProps {
    * dan hanya menerima FORBIDDEN dari API.
    */
   canAct?: boolean
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-default/20 text-default-600",
-  pending: "bg-warning/20 text-warning-600",
-  approved: "bg-success/20 text-success-600",
-  rejected: "bg-danger/20 text-danger-600",
-  sent: "bg-primary/20 text-primary-600",
-  paid: "bg-success/20 text-success-600",
-  completed: "bg-success/20 text-success-600",
-  cancelled: "bg-danger/20 text-danger-600",
-  posted: "bg-primary/20 text-primary-600",
-  partial: "bg-warning/20 text-warning-600",
 }
 
 export function StatusActions({ status, id, module, canAct = true }: StatusActionsProps) {
@@ -57,19 +44,12 @@ export function StatusActions({ status, id, module, canAct = true }: StatusActio
     })
   }
 
-  const colorClass = STATUS_COLORS[status] || "bg-default/20 text-default-600"
-
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-surface rounded-xl border border-default shadow-sm">
       <div className="flex items-center gap-3 min-w-0">
         <span className="text-sm font-medium text-muted-foreground shrink-0">Status:</span>
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${colorClass}`}>
-          {status === "draft" && <Clock size={12} aria-hidden="true" />}
-          {status === "pending" && <Clock size={12} aria-hidden="true" />}
-          {status === "approved" && <CheckCircle size={12} aria-hidden="true" />}
-          {status === "rejected" && <XCircle size={12} aria-hidden="true" />}
-          {statusLabel(status)}
-        </span>
+        {/* Token StatusChip (kontras AA terverifikasi), bukan warna legacy -600 di tint 20%. */}
+        <StatusChip status={status} />
       </div>
       {(canApprove || canReject) && (
         <div className="flex flex-wrap gap-2">
@@ -77,6 +57,7 @@ export function StatusActions({ status, id, module, canAct = true }: StatusActio
             <Button
               variant="success"
               size="sm"
+              className="min-h-11"
               onPress={() => handleAction("approve")}
               isDisabled={isPending}
             >
@@ -88,6 +69,7 @@ export function StatusActions({ status, id, module, canAct = true }: StatusActio
             <Button
               variant="danger"
               size="sm"
+              className="min-h-11"
               onPress={() => handleAction("reject")}
               isDisabled={isPending}
             >
