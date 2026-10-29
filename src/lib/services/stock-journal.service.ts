@@ -493,7 +493,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     srDocumentNo: string,
     srId: number,
-    userId?: number
+    userId?: number,
+    documentDate?: Date
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.salesReturn) return null
@@ -505,7 +506,9 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      // Tanggal dokumen retur — jurnal WAJIB satu periode dengan dokumennya,
+      // bukan tanggal posting (backdate ke periode terkunci ditolak createJournal).
+      transactionDate: documentDate ?? new Date(),
       referenceType: 'SalesReturn',
       referenceId: srId,
       type: 'SR',
@@ -539,7 +542,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     prDocumentNo: string,
     prId: number,
-    userId?: number
+    userId?: number,
+    documentDate?: Date
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.purchaseReturn) return null
@@ -551,7 +555,7 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: documentDate ?? new Date(),
       referenceType: 'PurchaseReturn',
       referenceId: prId,
       type: 'PR',

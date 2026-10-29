@@ -22,6 +22,9 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: (...a: unknown[]) => loanFindManyMock(...a),
     },
     $transaction: async (cb: any) => cb({
+      // assertPeriodOpen dalam tx baca kunci via $queryRaw (periode terbuka).
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 1, period_lock_date: null }]),
+      $executeRaw: vi.fn().mockResolvedValue(1),
       payroll: { updateMany: (...a: unknown[]) => payrollUpdateManyMock(...a) },
       employeeLoan: {
         findMany: (...a: unknown[]) => loanFindManyMock(...a),

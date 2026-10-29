@@ -28,13 +28,12 @@ export async function GET(req: NextRequest) {
   try {
     const { path: filepath, size } = await readBackupFile(filename)
 
-    // Audit log: who downloaded which backup, when (compliance)
+    // Audit log: who downloaded which backup, when (compliance).
+    // WAJIB tercatat sebelum berkas dikirim — kegagalan audit menghentikan
+    // unduhan, bukan diteruskan diam-diam.
     await logActivity("download", "Backup", 0, `Downloaded backup: ${filename}`, {
       filename,
       size,
-    }).catch((err) => {
-      // Logging must never break the download flow
-      console.error("Backup audit log failed:", err)
     })
 
     const nodeStream = createReadStream(filepath)

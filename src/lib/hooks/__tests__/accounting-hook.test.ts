@@ -414,7 +414,7 @@ describe("deleteJournalByReference", () => {
     await expect(deleteJournalByReference("VendorBill", 100)).rejects.toThrow(
       "Periode akuntansi sudah ditutup",
     );
-    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closed);
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closed, expect.anything());
     // The GL must be untouched when the lock holds.
     expect(mocks.deleteManyEntries).not.toHaveBeenCalled();
     expect(mocks.deleteManyJournals).not.toHaveBeenCalled();

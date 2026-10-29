@@ -83,10 +83,17 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // catat alasan, lanjut (vonis §5).
   if (status === "paid") {
     try {
+      // Kirim keadaan SESUDAH update: status baru "paid" + persen snapshot
+      // yang baru dibekukan (commissionSnapshot) — BUKAN invoice pre-update
+      // (status lama tak pernah paid, snapshot lama null → accrue no-op).
+      const freshPercent =
+        commissionSnapshot?.commissionRatePercent !== undefined
+          ? Number(commissionSnapshot.commissionRatePercent)
+          : ((invoice as { commissionRatePercent?: unknown }).commissionRatePercent ?? null)
       await accrueCommissionPayableTx(db, invoiceId, null, {
-        status: invoice.status,
+        status,
         salesEmployeeId: (invoice as { salesEmployeeId?: unknown }).salesEmployeeId,
-        commissionRatePercent: (invoice as { commissionRatePercent?: unknown }).commissionRatePercent,
+        commissionRatePercent: freshPercent,
         grandTotal: invoice.grandTotal,
         taxAmount: (invoice as { taxAmount?: unknown }).taxAmount,
         updatedAt: (invoice as { updatedAt?: unknown }).updatedAt,

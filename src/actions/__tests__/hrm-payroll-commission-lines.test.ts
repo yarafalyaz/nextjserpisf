@@ -49,6 +49,8 @@ const mocks = vi.hoisted(() => {
       ]),
     },
     $transaction: vi.fn(async (fn: any) => (typeof fn === "function" ? fn(prismaMock) : Promise.all(fn))),
+    // Kunci baris dalam tx komisi (FOR UPDATE): mock terima raw lock.
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
   return { prismaMock, requirePermissionMock: vi.fn(), rules }
 })

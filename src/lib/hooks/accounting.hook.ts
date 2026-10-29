@@ -151,7 +151,7 @@ export async function deleteJournalByReferenceTx(
   // closed period. Draft journals never hit the GL and are skipped.
   for (const j of journals) {
     if (j.status === "POSTED") {
-      await assertPeriodOpen(j.transactionDate);
+      await assertPeriodOpen(j.transactionDate, tx);
     }
   }
 
@@ -342,6 +342,9 @@ export async function onSalesInvoicePosted(
       },
     });
     if (!inv) throw new Error("Invoice tidak ditemukan");
+    // Re-check periode di dalam tx yang mengunci baris kunci; cek pra-tx saja
+    // membuka jendela tutup-periode di antara cek dan commit.
+    await assertPeriodOpen(inv.date, tx);
 
     // F-2026-10-25-004-V J-PL1: reklas PPN uang muka anti-dobel. Sigma
     // snapshot DP confirmed tertaut quotation faktur ini; PPN dokumen
@@ -979,6 +982,7 @@ export async function onSalesPaymentCreated(
   await assertPeriodOpen(payment.paymentDate ?? new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
+    await assertPeriodOpen(payment.paymentDate ?? new Date(), tx);
     // double-check inside tx
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesPayment", referenceId: paymentId },

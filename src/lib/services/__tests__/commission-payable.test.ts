@@ -207,7 +207,7 @@ describe("commission-payable reverse", () => {
 })
 
 describe("commission-payable paid", () => {
-  it("bayar melebihi sisa ditolak; retur-sesudah-bayar boleh negatif", async () => {
+  it("bayar melebihi sisa ditolak; saldo negatif retur bukan izin bayar lagi", async () => {
     const mk = (paid: number, reversal: number) =>
       makeTx({
         settings: SETTINGS,
@@ -218,10 +218,13 @@ describe("commission-payable paid", () => {
         },
       })
     await expect(paidTx(mk(200000, 0).tx, 1, 30000)).rejects.toThrow(/melebihi sisa/)
-    // Retur lahir sesudah lunas: saldo negatif tercatat (tanpa clamp).
+    // Saldo sudah negatif karena retur sesudah bayar penuh: bayar tambahan
+    // tetap ditolak (slip tak boleh menciptakan overpaid sendiri).
     const t2 = mk(220000, 100000)
-    const out = await paidTx(t2.tx, 1, 100000)
-    expect(out.paid).toBe(320000)
+    await expect(paidTx(t2.tx, 1, 100000)).rejects.toThrow(/melebihi sisa/)
+    // Bayar pas sisa sah: A 220000 − R 100000 = sisa 120000; bayar 70000 pas.
+    const t3 = mk(50000, 100000)
+    await expect(paidTx(t3.tx, 1, 70000)).resolves.toEqual({ paid: 120000 })
   })
 })
 

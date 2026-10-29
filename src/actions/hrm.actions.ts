@@ -639,8 +639,8 @@ async function recalcDraftPayrollFromLines(payrollId: number): Promise<void> {
   await prisma.payroll.update({ where: { id: payrollId }, data: { ...w } });
 }
 
-async function assertDraftPayrollLineAccess(payrollId: number): Promise<void> {
-  const user = await requirePermission("edit_payroll");
+async function assertDraftPayrollLineAccess(payrollId: number, authenticatedUser?: { id: unknown; roles?: unknown }): Promise<void> {
+  const user = authenticatedUser ?? (await requirePermission("edit_payroll"));
   const payroll = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
   if (payroll.status !== "draft") {
     throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
@@ -693,7 +693,7 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
     return { success: true, id: created.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    console.error("[addPayrollComponentLine]", getErrorMessage(e) || e);
+    console.error("[addPayrollComponentLine] gagal (detail disembunyikan: berisi data gaji)");
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -701,12 +701,13 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
 export async function updatePayrollComponentLineAmount(lineId: number, formData: FormData) {
   try {
     if (!Number.isSafeInteger(lineId) || lineId <= 0) throw new Error("Baris komponen gaji tidak valid");
+    const user = await requirePermission("edit_payroll");
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
     if (line.commissionPayableId != null) {
       throw new Error("Nominal baris komisi dikunci dari pilihan utang — hapus baris lalu tambah ulang");
     }
-    await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
+    await assertDraftPayrollLineAccess(line.payrollId, user);
     const amount = parseMoneyAmount(formData.get("amount")) ?? Number.NaN;
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
@@ -717,7 +718,7 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     return { success: true, id: lineId };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    console.error("[updatePayrollComponentLineAmount]", getErrorMessage(e) || e);
+    console.error("[updatePayrollComponentLineAmount] gagal (detail disembunyikan: berisi data gaji)");
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -725,16 +726,17 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
 export async function removePayrollComponentLine(lineId: number) {
   try {
     if (!Number.isSafeInteger(lineId) || lineId <= 0) throw new Error("Baris komponen gaji tidak valid");
+    const user = await requirePermission("edit_payroll");
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
-    await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
+    await assertDraftPayrollLineAccess(line.payrollId, user);
     await prisma.payrollComponentLine.delete({ where: { id: lineId } });
     await recalcDraftPayrollFromLines(line.payrollId);
     revalidatePath("/sdm/penggajian");
     return { success: true, id: lineId };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    console.error("[removePayrollComponentLine]", getErrorMessage(e) || e);
+    console.error("[removePayrollComponentLine] gagal (detail disembunyikan: berisi data gaji)");
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -742,53 +744,60 @@ export async function removePayrollComponentLine(lineId: number) {
 export async function addPayrollCommissionLine(payrollId: number, formData: FormData) {
   try {
     if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
+    const user = await requirePermission("edit_payroll");
+    await assertDraftPayrollLineAccess(payrollId, user);
     const payroll = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
-    await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(payrollId);
     const commissionPayableId = Number(formData.get("commissionPayableId"));
     const amount = parseMoneyAmount(formData.get("amount")) ?? Number.NaN;
     if (!Number.isSafeInteger(commissionPayableId) || commissionPayableId <= 0) throw new Error("Utang komisi tidak valid");
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal bayar komisi harus lebih dari nol");
     }
-    const payable = await prisma.commissionPayable.findUnique({ where: { id: commissionPayableId } });
-    if (!payable) throw new Error("Utang komisi tidak ditemukan");
-    if (payroll.employeeId == null || payable.salesEmployeeId !== payroll.employeeId) {
-      throw new Error("Utang komisi bukan milik karyawan slip ini");
-    }
-    const balance = safeRound(safeSubtract(safeSubtract(Number(payable.accruedAmount), Number(payable.reversalAmount), 2), Number(payable.paidAmount), 2), 2);
-    if (amount - balance > 0.005) {
-      throw new Error(`Nominal bayar komisi Rp${amount.toLocaleString("id-ID")} melebihi saldo utang Rp${balance.toLocaleString("id-ID")}`);
-    }
-    const dup = await prisma.payrollComponentLine.findUnique({ where: { commissionPayableId } });
-    if (dup) throw new Error("Utang komisi ini sudah dibayar lewat slip lain");
     const component = await prisma.payrollComponent.findFirst({
       where: { normalizedName: "komisi penjualan", isActive: true },
     });
     if (!component || component.kind !== "earning" || !component.isTaxable) {
       throw new Error('Komponen master "Komisi Penjualan" (earning, kena pajak, aktif) belum ada — buat dulu di master Komponen');
     }
-    const created = await prisma.payrollComponentLine.create({
-      data: {
-        payrollId,
-        componentId: component.id,
-        componentNameSnapshot: "Komisi Penjualan",
-        kindSnapshot: "earning",
-        recurrenceSnapshot: "variable",
-        isTaxableSnapshot: true,
-        source: "commission",
-        assignmentId: null,
-        accountIdSnapshot: component.accountId ?? null,
-        commissionPayableId,
-        commissionInvoiceId: payable.salesInvoiceId,
-        amount,
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      // Kunci baris slip + utang: cek pemilik, saldo, dan duplikat WAJIB dalam
+      // satu tx. Cek luar-tx saja bisa dobel-bayar antar dua request.
+      await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${payrollId} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM commission_payables WHERE id = ${commissionPayableId} FOR UPDATE`;
+      const payable = await tx.commissionPayable.findUnique({ where: { id: commissionPayableId } });
+      if (!payable) throw new Error("Utang komisi tidak ditemukan");
+      if (payroll.employeeId == null || payable.salesEmployeeId !== payroll.employeeId) {
+        throw new Error("Utang komisi bukan milik karyawan slip ini");
+      }
+      const balance = safeRound(safeSubtract(safeSubtract(Number(payable.accruedAmount), Number(payable.reversalAmount), 2), Number(payable.paidAmount), 2), 2);
+      if (amount - balance > 0.005) {
+        throw new Error(`Nominal bayar komisi Rp${amount.toLocaleString("id-ID")} melebihi saldo utang Rp${balance.toLocaleString("id-ID")}`);
+      }
+      const dup = await tx.payrollComponentLine.findUnique({ where: { commissionPayableId } });
+      if (dup) throw new Error("Utang komisi ini sudah dibayar lewat slip lain");
+      return tx.payrollComponentLine.create({
+        data: {
+          payrollId,
+          componentId: component.id,
+          componentNameSnapshot: "Komisi Penjualan",
+          kindSnapshot: "earning",
+          recurrenceSnapshot: "variable",
+          isTaxableSnapshot: true,
+          source: "commission",
+          assignmentId: null,
+          accountIdSnapshot: component.accountId ?? null,
+          commissionPayableId,
+          commissionInvoiceId: payable.salesInvoiceId,
+          amount,
+        },
+      });
     });
     await recalcDraftPayrollFromLines(payrollId);
     revalidatePath("/sdm/penggajian");
     return { success: true, id: created.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    console.error("[addPayrollCommissionLine]", getErrorMessage(e) || e);
+    console.error("[addPayrollCommissionLine] gagal (detail disembunyikan: berisi data gaji)");
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -3302,6 +3311,9 @@ export async function markPayrollPaid(payrollId: number) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Jurnal gaji bertanggal hari ini (paymentDate = now): periode terkunci
+      // sampai hari ini = tolak sebelum klaim status (nol jurnal, nol amortisasi).
+      await assertPeriodOpen(new Date(), tx as never);
       // Atomic conditional claim: only the request that flips status away from
       // "approved" wins. Without this, two concurrent "bayar gaji" clicks could
       // both pass the status guard above and each run loan amortization, double

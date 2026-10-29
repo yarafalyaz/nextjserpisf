@@ -41,6 +41,8 @@ describe("buildJobEstimateVsActual", () => {
       billingVariance: -10_000_000,
       actualCost: 70_000_000,
       actualMargin: 20_000_000,
+      costEstimate: 75_000_000,
+      costVariance: 5_000_000,
     })
   })
 
