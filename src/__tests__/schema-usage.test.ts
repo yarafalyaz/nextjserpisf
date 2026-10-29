@@ -124,6 +124,11 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
+  // Round2 2026-10-29 (putusan lead): EmployeeRoster konsumen read-only
+  // minimal `loadEmployeeRoster` (employee-roster-data.ts) — halaman
+  // roster/papan beban + jalur tulis BELUM dibuat ronde ini, jadi model
+  // hanya bisa diisi seed/migrasi. Buang entri saat aksi tulis mendarat.
+  "EmployeeRoster",
   // F-2026-10-21-026: tabel tarif TER PP 58/2023 (Lampiran A/B/C) hanya diisi
   // migrasi seed dari regulasi; tidak ada jalur tulis produk karena tarif
   // bukan data operasional — perubahan tarif wajib migrasi baru dari regulasi.
@@ -252,8 +257,9 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
  * harus ikut melihat nama relasi (lihat `dipakai()` di bawah).
  */
 const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = [
-  // Fase1 lead 2026-10-29: konsumen menyusul batch berikut.
-  { model: "EmployeeRoster", reason: "R7 roster — load papan beban menyusul" },
+  // (EmployeeRoster PERNAH di sini — ditutup round2 2026-10-29: loader
+  // baca `src/lib/reports/employee-roster-data.ts` jadi konsumen produk
+  // pertama. Model kini dibaca-tanpa-tulis, pindah ke SEED_ONLY_MODELS.)
 ]
 
 describe("skema: setiap model dipakai kode", () => {
