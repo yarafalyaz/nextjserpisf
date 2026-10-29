@@ -438,7 +438,7 @@ export async function resolveNonconformance(id: number, formData: FormData) {
       ? (v.resolution ?? null)
       : (existing.resolution ?? null)
 
-    await prisma.$transaction(async (tx) => {
+    const synced = await prisma.$transaction(async (tx) => {
       await tx.nonconformance.update({
         where: { id },
         data: {
@@ -452,7 +452,7 @@ export async function resolveNonconformance(id: number, formData: FormData) {
 
       // Mirror the NCR rework cost into the referenced production order's HPP
       // (FAB-11 → FAB-09). Non-production references are ignored by the service.
-      await syncReworkCostToOrder(
+      return syncReworkCostToOrder(
         {
           nonconformance: {
             id: existing.id,
@@ -468,11 +468,25 @@ export async function resolveNonconformance(id: number, formData: FormData) {
       )
     })
 
+    // BUGHUNT round3 #12: PO completed dilewati sync (HPP final) — resolusi
+    // NCR tetap tersimpan, tapi user wajib tahu biaya rework-nya TIDAK masuk
+    // HPP, bukan sukses diam. Closed tetap melempar dari service (rollback).
+    if (synced.skipped) {
+      console.warn(
+        `[resolveNonconformance] biaya rework NCR ${existing.documentNo} tidak diterapkan ke HPP: perintah produksi #${existing.referenceId} sudah selesai (completed); resolusi NCR tetap tersimpan`,
+      )
+    }
+
     await logActivity("update", "Nonconformance", id, `NCR #${id} → ${v.status}`)
     revalidatePath("/produksi/qc/ncr")
     revalidatePath("/produksi/qc")
     revalidatePath("/produksi/production-orders")
-    return { success: true }
+    return synced.skipped
+      ? {
+          success: true as const,
+          warning: `Biaya rework tidak diterapkan ke HPP karena perintah produksi #${existing.referenceId} sudah selesai (completed). Resolusi NCR tetap tersimpan.`,
+        }
+      : { success: true as const }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[resolveNonconformance]", getErrorMessage(e) || e)

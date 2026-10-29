@@ -8,7 +8,7 @@
  * - kelola = edit_manufacture_orders (WO) / edit_production_orders (PO),
  *   lihat = view_manufacture_orders / view_production_orders;
  * - material sudah ter-issue (MaterialIssueItem completed>0 WO, atau
- *   ProductionOrderMaterial issuedQty>0 PO) → SELALU jalur persetujuan,
+ *   ProductionOrderMaterial actualQty>0 PO) → SELALU jalur persetujuan,
  *   dilarang pin berubah diam-diam (BR-BOM68-01/02);
  * - belum ter-issue → langsung diterapkan, pin diganti di transaksi sama
  *   (status diterapkan_langsung);
@@ -26,6 +26,7 @@
  */
 
 import { revalidatePath } from "next/cache"
+import type { Prisma } from "@prisma/client"
 import { prisma, type TxClient } from "@/lib/db/prisma"
 import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
@@ -57,6 +58,16 @@ function isUniqueViolation(e: unknown): boolean {
   )
 }
 
+/**
+ * Prisma args dikunci tipe generated `Prisma.*` (bukannya objek literal polos
+ * yang melebar ke Record tak bertipe): field salah nama seperti `issuedQty`
+ * di `ProductionOrderMaterial` gagal di tsc, bukan validation error runtime.
+ * Tidak diekspor: file "use server" hanya boleh ekspor fungsi async.
+ */
+const PO_MATERIAL_ISSUED_WHERE: Prisma.ProductionOrderMaterialWhereInput = {
+  actualQty: { gt: 0 },
+}
+
 /** Sudah ada material keluar untuk dokumen pemilik? (BR-BOM68-01) */
 async function ownerHasIssuedMaterial(
   tx: TxClient,
@@ -72,8 +83,12 @@ async function ownerHasIssuedMaterial(
     })
     return count > 0
   }
+  // ProductionOrderMaterial punya actualQty (akumulasi issueMaterial di
+  // manufacturing.actions), BUKAN issuedQty — issuedQty itu vocabulary builder
+  // delta (bom-revision-impact), bukan kolom. Query issuedQty lolos mock unit
+  // tapi Prisma validation error di runtime (BUGHUNT round3 #11).
   const count = await tx.productionOrderMaterial.count({
-    where: { productionOrderId: ownerId, issuedQty: { gt: 0 } },
+    where: { productionOrderId: ownerId, ...PO_MATERIAL_ISSUED_WHERE },
   })
   return count > 0
 }

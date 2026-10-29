@@ -240,7 +240,7 @@ export async function syncReworkCostToOrder(
     createdBy: number | null
   },
   client: TxClient | typeof prisma = prisma,
-): Promise<{ posted: number; productionOrderId: number | null }> {
+): Promise<{ posted: number; productionOrderId: number | null; skipped?: boolean }> {
   const { nonconformance } = input
   if (nonconformance.referenceType !== "ProductionOrder") {
     return { posted: 0, productionOrderId: null }
@@ -251,6 +251,25 @@ export async function syncReworkCostToOrder(
   // F-009-V: PO closed / WO induk closed membekukan sync rework — lempar
   // agar tx pemanggil (resolveNonconformance) rollback, bukan diam.
   await assertJobCostMutable({ productionOrderId }, "diubah rework-nya", client)
+
+  // BUGHUNT round3 #12 / pola F-71 (syncServicePurchaseOrderCost): PO
+  // `completed` HPP-nya final — totalActualCost dinolkan + releasedCost
+  // dibekukan saat complete, jadi sync rework ke sini menaikkan total dari 0
+  // dan memposting Dr WIP tanpa release pengkredit (WIP menggantung,
+  // closeProductionOrder tertahan sisa WIP≠0 selamanya). Beda dengan
+  // `closed` di atas yang melempar: completed DILEWATI tanpa tulis apa pun
+  // (baris rework existing pun dibiarkan sebagai riwayat) dan dilaporkan
+  // `skipped` supaya pemanggil bisa memberi tahu user — resolusi NCR sendiri
+  // tetap sah, hanya cermin biaya ke HPP yang ditolak. Cancelled tetap lewat:
+  // totalnya tidak pernah dinolkan completion, jadi penghapusan baris saat
+  // biaya dibersihkan tetap konsisten.
+  const orderStatus = await client.productionOrder.findUnique({
+    where: { id: productionOrderId },
+    select: { status: true },
+  })
+  if (orderStatus?.status === "completed") {
+    return { posted: 0, productionOrderId, skipped: true }
+  }
 
   const existing = await client.productionCost.findUnique({
     where: { nonconformanceId: nonconformance.id },

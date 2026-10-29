@@ -437,6 +437,64 @@ describe("resolveNonconformance", () => {
     )
   })
 
+  it("BUGHUNT round3 #12: PO closed — sync melempar, resolve gagal (tx rollback)", async () => {
+    nonconformanceFindUniqueMock.mockResolvedValue({
+      id: 1,
+      status: "rework",
+      documentNo: "NCR-0007",
+      referenceType: "ProductionOrder",
+      referenceId: 55,
+    })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockRejectedValue(
+      new Error("Biaya tidak dapat diubah rework-nya: perintah produksi sudah ditutup (closed)."),
+    )
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const res = await resolveNonconformance(1, fd({ status: "rework_done", reworkCost: 150000 }))
+
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toContain("sudah ditutup (closed)")
+    expect((res as { warning?: string }).warning).toBeUndefined()
+  })
+
+  it("BUGHUNT round3 #12: PO normal — sukses tanpa warning", async () => {
+    nonconformanceFindUniqueMock.mockResolvedValue({
+      id: 1,
+      status: "rework",
+      documentNo: "NCR-0007",
+      referenceType: "ProductionOrder",
+      referenceId: 55,
+    })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockResolvedValue({ posted: 150000, productionOrderId: 55 })
+
+    const res = await resolveNonconformance(1, fd({ status: "rework_done", reworkCost: 150000 }))
+
+    expect(res.success).toBe(true)
+    expect((res as { warning?: string }).warning).toBeUndefined()
+  })
+
+  it("BUGHUNT round3 #12: PO completed — resolusi tersimpan, warning biaya tak masuk HPP", async () => {
+    nonconformanceFindUniqueMock.mockResolvedValue({
+      id: 1,
+      status: "rework",
+      documentNo: "NCR-0007",
+      referenceType: "ProductionOrder",
+      referenceId: 55,
+    })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockResolvedValue({ posted: 0, productionOrderId: 55, skipped: true })
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const res = await resolveNonconformance(1, fd({ status: "rework_done", reworkCost: 150000, reworkHours: 3 }))
+
+    expect(res.success).toBe(true)
+    expect(nonconformanceUpdateMock).toHaveBeenCalledTimes(1)
+    expect((res as { warning?: string }).warning).toContain("sudah selesai (completed)")
+    expect((res as { warning?: string }).warning).toContain("tetap tersimpan")
+  })
+
   it("parses an id-ID rework cost instead of truncating it", async () => {
     nonconformanceFindUniqueMock.mockResolvedValue({
       id: 1,

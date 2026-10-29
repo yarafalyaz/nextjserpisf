@@ -237,6 +237,54 @@ describe("syncReworkCostToOrder", () => {
     await expect(syncReworkCostToOrder(base, client as never)).rejects.toThrow(/perintah kerja sudah ditutup/)
     expect(costCreateMock).not.toHaveBeenCalled()
   })
+
+  it("BUGHUNT round3 #12: PO completed dilewati (skipped) — tanpa baris, HPP, jurnal", async () => {
+    // assertJobCostMutable membaca PO lebih dulu ({status, workOrderId}),
+    // lalu cek completed membaca ulang ({status}).
+    orderFindUniqueMock
+      .mockResolvedValueOnce({ status: "completed", workOrderId: null, totalActualCost: 0 })
+      .mockResolvedValue({ status: "completed" })
+
+    const res = await syncReworkCostToOrder(base, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderId: 55, skipped: true })
+    expect(costFindUniqueMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
+  it("BUGHUNT round3 #12: baris rework existing di PO completed dibiarkan (riwayat)", async () => {
+    orderFindUniqueMock
+      .mockResolvedValueOnce({ status: "completed", workOrderId: null, totalActualCost: 0 })
+      .mockResolvedValue({ status: "completed" })
+    costFindUniqueMock.mockResolvedValue({ id: 1, amount: 100000 })
+
+    const res = await syncReworkCostToOrder({ ...base, reworkCost: 0 }, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderId: 55, skipped: true })
+    // Skip terjadi sebelum baris dibaca sama sekali — existing tak disentuh.
+    expect(costFindUniqueMock).not.toHaveBeenCalled()
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
+  it("BUGHUNT round3 #12: PO cancelled tidak dilewati — sync tetap jalan", async () => {
+    orderFindUniqueMock
+      .mockResolvedValueOnce({ status: "cancelled", workOrderId: null })
+      .mockResolvedValue({ status: "cancelled", totalActualCost: 1000 })
+    costFindUniqueMock.mockResolvedValue(null)
+    costCreateMock.mockResolvedValue({ id: 1 })
+    orderUpdateMock.mockResolvedValue({})
+
+    const res = await syncReworkCostToOrder(base, client as never)
+
+    expect(res).toEqual({ posted: 150000, productionOrderId: 55 })
+    expect(costCreateMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("syncServicePurchaseOrderCost", () => {

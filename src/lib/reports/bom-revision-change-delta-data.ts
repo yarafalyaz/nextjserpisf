@@ -4,17 +4,29 @@
  *
  * Menggabungkan: material revisi pin saat ini vs revisi tujuan, material
  * sudah keluar untuk dokumen ini saja (WO: MaterialIssueItem completed;
- * PO: ProductionOrderMaterial.issuedQty), dan stok tersedia global
+ * PO: ProductionOrderMaterial.actualQty dipetakan ke builder `issuedQty`), dan stok tersedia global
  * Item.qtyOnHand untuk status cakupan tampil. Logika di builder murni
  * `buildBomRevisionDelta` (bom-revision-impact.ts) — file ini hanya IO.
  * Tanpa mutasi, tanpa StockReservation, tanpa jurnal.
  */
 
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import {
   buildBomRevisionDelta,
   type BomRevisionDeltaLine,
 } from "@/lib/reports/bom-revision-impact"
+
+/**
+ * Select material PO dikunci tipe generated: `issuedQty` (vocabulary builder)
+ * bukan kolom — field sebenarnya `actualQty`. Literal polos di argumen
+ * `prisma.*` tidak dikunci excess-property check dari mock/tidak langsung,
+ * jadi konstanta bertipe ini yang membuat salah-nama gagal di tsc.
+ */
+export const PO_MATERIAL_ACTUAL_SELECT: Prisma.ProductionOrderMaterialSelect = {
+  itemId: true,
+  actualQty: true,
+}
 
 export interface BomRevisionChangeDelta {
   documentNo: string
@@ -46,7 +58,7 @@ export async function loadBomRevisionChangeDelta(input: {
           documentNo: true,
           bomRevisionId: true,
           qty: true,
-          materials: { select: { itemId: true, issuedQty: true } },
+          materials: { select: PO_MATERIAL_ACTUAL_SELECT },
         },
       })
   if (!doc || doc.bomRevisionId == null) return null
@@ -69,8 +81,8 @@ export async function loadBomRevisionChangeDelta(input: {
           select: { itemId: true, qty: true },
         })
       : Promise.resolve(
-          (doc as { materials: { itemId: number; issuedQty: unknown }[] }).materials.map(
-            (m) => ({ itemId: m.itemId, qty: m.issuedQty }),
+          (doc as { materials: { itemId: number; actualQty: unknown }[] }).materials.map(
+            (m) => ({ itemId: m.itemId, qty: m.actualQty ?? 0 }),
           ),
         ),
   ])

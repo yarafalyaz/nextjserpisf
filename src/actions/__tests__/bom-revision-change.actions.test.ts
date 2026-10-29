@@ -98,6 +98,15 @@ beforeEach(() => {
     reason: "Spec berubah",
   })
   mocks.txMock.materialIssueItem.count.mockResolvedValue(0)
+  mocks.txMock.productionOrderMaterial.count.mockResolvedValue(0)
+  mocks.txMock.productionOrder.findFirst.mockResolvedValue({
+    id: 11,
+    documentNo: "PO-0011",
+    status: "in_progress",
+    bomRevisionId: 100,
+    productId: 5,
+  })
+  mocks.txMock.productionOrder.update.mockResolvedValue({ id: 11 })
   mocks.prismaMock.bomRevisionChangeRequest.findFirst.mockResolvedValue({
     workOrderId: 9,
     productionOrderId: null,
@@ -167,6 +176,45 @@ describe("requestBomRevisionChange", () => {
     expect(res.success).toBe(false)
     expect((res as { error?: string }).error).toContain("menunggu keputusan")
     expect(mocks.txMock.bomRevisionChangeRequest.create).not.toHaveBeenCalled()
+  })
+
+  // BUGHUNT round3 #11: query PO dulu memakai `issuedQty` — bukan field
+  // ProductionOrderMaterial (field-nya `actualQty`, schema.prisma:3151) —
+  // sehingga Prisma validation error tiap request PO dan fitur mati, tapi
+  // mock `count: vi.fn()` menerima argumen apa pun sehingga tes tetap hijau.
+  // Kini bentuk where diasertasi persis; konstanta sumber bertipe Prisma
+  // (salah-nama gagal di tsc — file "use server" tak boleh ekspor konstanta).
+  it("PO: where hitung material ter-issue memakai actualQty, bukan issuedQty", async () => {
+    const res = await requestBomRevisionChange({
+      productionOrderId: 11,
+      toRevisionId: 101,
+      reason: "Revisi engineering",
+    })
+
+    expect(res).toEqual({ success: true, id: 55, status: "diterapkan_langsung" })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_production_orders")
+    expect(mocks.txMock.productionOrderMaterial.count).toHaveBeenCalledTimes(1)
+    expect(mocks.txMock.productionOrderMaterial.count).toHaveBeenCalledWith({
+      where: { productionOrderId: 11, actualQty: { gt: 0 } },
+    })
+    const whereArg = mocks.txMock.productionOrderMaterial.count.mock.calls[0][0].where
+    expect(whereArg).not.toHaveProperty("issuedQty")
+  })
+
+  it("PO sudah ter-issue (actualQty>0): status menunggu, pin TIDAK berubah", async () => {
+    mocks.txMock.productionOrderMaterial.count.mockResolvedValue(1)
+
+    const res = await requestBomRevisionChange({
+      productionOrderId: 11,
+      toRevisionId: 101,
+      reason: "Revisi engineering",
+    })
+
+    expect(res).toEqual({ success: true, id: 55, status: "menunggu" })
+    expect(mocks.txMock.productionOrderMaterial.count).toHaveBeenCalledWith({
+      where: { productionOrderId: 11, actualQty: { gt: 0 } },
+    })
+    expect(mocks.txMock.productionOrder.update).not.toHaveBeenCalled()
   })
 })
 

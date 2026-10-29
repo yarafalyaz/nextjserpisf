@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { resolveNonconformance } from "@/actions/qc.actions"
-import { showSuccess, showError } from "@/lib/utils/toast"
+import { showError, showProcessResult } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -59,7 +59,9 @@ export function NonconformanceResolveForm({
         showError(result.error || "Gagal memperbarui NCR")
         return
       }
-      showSuccess("NCR diperbarui")
+      // PO completed: resolusi tersimpan tapi biaya rework tidak masuk HPP —
+      // warning server tampil apa adanya, bukan sukses polos.
+      showProcessResult(result, "NCR diperbarui")
       router.refresh()
     })
   }
