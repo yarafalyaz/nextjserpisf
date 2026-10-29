@@ -29,8 +29,7 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] perf: kartu stok agregat + labor (890003b74), exposure paralel (d695bf3dd),
   PO listing + loop gaji (32847720b), DP/komisi/kredit (7d55213d9),
   CRM tickets paralel (0f0fc86b3), resolver slug terindeks (fee615996)
-- [ ] SPT read-model pushdown + O(n²) rantai (agen jalan)
-- [ ] statement-data subtree cost center serial; detail production order serial (belum dinilai)
+- [x] SPT read-model pushdown + Map rantai (bb92b773c); subbab pohon pusat biaya per level (dbd88f3bb); detail PO paralel (e01977bda); resolver akun/pihak ledger (629a4c7df)
 
 ## Batch 4 — verifikasi berat
 - [ ] npm run ci:quick penuh pada tree stabil (run lama snapshot tengah-edit: 4 fail sudah diperbaiki; tsc kini bersih, build lama lulus)
@@ -47,3 +46,6 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - Lanjutan: 10 commit otonom baru (6af720eed..fee615996) — PKWT, UI race,
   guard, probation, HR scope, ProductionCost period, form gate, izin UI,
   mock WO, perf reports/purchase/hr/crm. Semua lokal, belum push.
+- Batch 3 perf lanjutan: d695bf3dd, 32847720b, 7d55213d9, 0f0fc86b3,
+  fee615996, bb92b773c, dbd88f3bb, e01977bda, 629a4c7df. Verifikasi berat:
+  tsc bersih; ci:quick penuh jalan pada tree stabil.
