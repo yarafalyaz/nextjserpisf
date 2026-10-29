@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
   const nextSlug = vi.fn()
   const scheduleFindUnique = vi.fn()
   const scheduleUpdate = vi.fn()
+  const scheduleUpdateMany = vi.fn()
   const journalFindFirst = vi.fn()
   const journalCreate = vi.fn()
   const expenseCreate = vi.fn()
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => {
     recurringTransaction: {
       findUniqueOrThrow: scheduleFindUnique,
       update: scheduleUpdate,
+      updateMany: scheduleUpdateMany,
     },
     journal: { findFirst: journalFindFirst, create: journalCreate },
     expense: { create: expenseCreate },
@@ -44,6 +46,7 @@ const mocks = vi.hoisted(() => {
     nextSlug,
     scheduleFindUnique,
     scheduleUpdate,
+    scheduleUpdateMany,
     journalFindFirst,
     journalCreate,
     expenseCreate,
@@ -89,6 +92,7 @@ beforeEach(() => {
   mocks.settingsFindFirst.mockResolvedValue({ periodLockDate: null })
   mocks.scheduleFindUnique.mockResolvedValue(schedule)
   mocks.scheduleUpdate.mockResolvedValue({})
+  mocks.scheduleUpdateMany.mockResolvedValue({ count: 1 })
   mocks.journalFindFirst.mockResolvedValue(null)
   mocks.journalCreate.mockResolvedValue({ id: 9, journalNumber: "JRN-202001-00001" })
   mocks.generateDocumentNumber.mockResolvedValue("JRN-202001-00001")
@@ -148,6 +152,54 @@ describe("runRecurringNow — expense period gate", () => {
 
     expect(res.success).toBe(false)
     expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("runRecurringNow — klaim atomik nextRunDate (race regresi)", () => {
+  it("klaim menang (count 1) membuat expense tepat satu dan klaim terjadwal pada nextRunDate lama", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({
+      ...schedule,
+      type: "expense",
+      template: JSON.stringify({ accountId: 620, paidFromAccountId: 110, amount: 500000 }),
+    })
+    mocks.expenseCreate.mockResolvedValue({ id: 7 })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(true)
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 42, nextRunDate: schedule.nextRunDate },
+        data: expect.objectContaining({ runCount: { increment: 1 } }),
+      }),
+    )
+    expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("klaim kalah (count 0, eksekusi lain sudah memajukan jadwal) TIDAK membuat expense kedua", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({
+      ...schedule,
+      type: "expense",
+      template: JSON.stringify({ accountId: 620, paidFromAccountId: 110, amount: 500000 }),
+    })
+    mocks.scheduleUpdateMany.mockResolvedValue({ count: 0 })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(true)
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+  })
+
+  it("klaim kalah (count 0) juga menghentikan cabang journal sebelum create", async () => {
+    mocks.scheduleUpdateMany.mockResolvedValue({ count: 0 })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(true)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
   })
 })

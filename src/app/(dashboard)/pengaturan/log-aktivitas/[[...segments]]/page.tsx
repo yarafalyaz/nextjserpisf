@@ -106,20 +106,16 @@ export default async function ActivityLogPage({
         select: { userId: true },
         distinct: ["userId"],
         orderBy: { createdAt: "desc" },
-      }).then((rows) =>
-        Promise.all(
-          rows
-            .filter((r) => r.userId != null)
-            .map((r) =>
-              prisma.user.findUnique({
-                where: { id: r.userId! },
-                select: { id: true, name: true },
-              }),
-            ),
-        ).then((users) =>
-          users.filter((u): u is { id: number; name: string } => u != null),
-        ),
-      ),
+      }).then((rows) => {
+        const ids = rows.map((r) => r.userId).filter((id): id is number => id != null)
+        // Satu query id-in, bukan findUnique per pengguna (N+1).
+        return ids.length
+          ? prisma.user.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, name: true },
+            })
+          : Promise.resolve([] as { id: number; name: string }[])
+      }),
       prisma.activityLog.findMany({
         select: { modelType: true },
         distinct: ["modelType"],

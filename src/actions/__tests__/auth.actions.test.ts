@@ -16,6 +16,17 @@ const userCountMock = vi.fn()
 
 const bcryptCompareMock = vi.fn()
 const bcryptHashMock = vi.fn()
+const queryRawMock = vi.fn()
+
+// Tx mock: $transaction menjalankan callback dengan prisma mock yang sama
+// (pola recurring-run-now test), $queryRaw meniru kunci baris FOR UPDATE.
+const { txMock, transactionMock } = vi.hoisted(() => {
+  const tx: Record<string, unknown> = {}
+  return {
+    txMock: tx,
+    transactionMock: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
+  }
+})
 
 vi.mock("@/lib/auth/auth", () => ({
   signIn: (...a: unknown[]) => signInMock(...a),
@@ -25,24 +36,36 @@ vi.mock("@/lib/auth/permissions", () => ({
   requireAuth: (...a: unknown[]) => requireAuthMock(...a),
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    user: {
-      findUniqueOrThrow: (...a: unknown[]) => userFindMock(...a),
-      findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
-      create: (...a: unknown[]) => userCreateMock(...a),
-      update: (...a: unknown[]) => userUpdateMock(...a),
-      count: (...a: unknown[]) => userCountMock(...a),
+vi.mock("@/lib/db/prisma", () => {
+  const user = {
+    findUniqueOrThrow: (...a: unknown[]) => userFindMock(...a),
+    findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
+    create: (...a: unknown[]) => userCreateMock(...a),
+    update: (...a: unknown[]) => userUpdateMock(...a),
+    count: (...a: unknown[]) => userCountMock(...a),
+  }
+  const role = {
+    findMany: (...a: unknown[]) => roleFindManyMock(...a),
+  }
+  const warehouse = {
+    count: (...a: unknown[]) => warehouseCountMock(...a),
+  }
+  Object.assign(txMock, {
+    user,
+    role,
+    warehouse,
+    $queryRaw: (...a: unknown[]) => queryRawMock(...a),
+  })
+  return {
+    prisma: {
+      user,
+      role,
+      warehouse,
+      $transaction: (...a: unknown[]) => transactionMock(...(a as [never])),
+      $queryRaw: (...a: unknown[]) => queryRawMock(...a),
     },
-    role: {
-      findMany: (...a: unknown[]) => roleFindManyMock(...a),
-    },
-
-    warehouse: {
-      count: (...a: unknown[]) => warehouseCountMock(...a),
-    },
-  },
-}))
+  }
+})
 
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 
@@ -88,7 +111,10 @@ beforeEach(() => {
     signInMock, signOutMock, requireAuthMock, requirePermissionMock,
     revalidateMock, userFindMock, userFindUniqueMock, userCreateMock, userUpdateMock,
     roleFindManyMock, warehouseCountMock, userCountMock, bcryptCompareMock, bcryptHashMock,
+    queryRawMock, transactionMock,
   ]) m.mockReset()
+  queryRawMock.mockResolvedValue([])
+  transactionMock.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(txMock))
   bcryptHashMock.mockResolvedValue("hashed-value")
   // requirePermission resolves to the acting user (default: a plain admin
   // holding manage_users but NOT super_admin). The privesc guard reads .roles.
@@ -407,6 +433,24 @@ describe("updateUserRoles", () => {
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
+  it("race regresi: hitung super admin lain + kunci baris terjadi DI DALAM tx, sisa 0 menolak tanpa update", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userFindUniqueMock.mockResolvedValue({ id: 1, roles: [{ name: "super_admin" }] })
+    roleFindManyMock.mockResolvedValue([{ id: 1, name: "super_admin" }])
+    userCountMock.mockResolvedValue(0)
+    const res = await updateUserRoles(1, [5])
+    expect(res).toEqual({ error: "Tidak dapat mencabut role super admin terakhir" })
+    // Serialisasi: transaksi dibuka, baris super_admin dikunci FOR UPDATE,
+    // count dijalankan sesudah kunci — bukan count lepas di luar tx.
+    expect(transactionMock).toHaveBeenCalledTimes(1)
+    expect(queryRawMock).toHaveBeenCalledTimes(1)
+    const sql = (queryRawMock.mock.calls[0][0] as string[]).join("?")
+    expect(sql).toContain("_UserRoles")
+    expect(sql).toContain("FOR UPDATE")
+    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(userCountMock.mock.invocationCallOrder[0])
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("allows demoting yourself when another super_admin remains", async () => {
     requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
     userFindUniqueMock.mockResolvedValue({ id: 1, roles: [{ name: "super_admin" }] })
@@ -504,6 +548,31 @@ describe("toggleUserActive", () => {
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ data: { isActive: false } }),
+    )
+  })
+
+  it("race regresi: baca isActive segar SETELAH kunci FOR UPDATE di dalam tx, bukan snapshot luar tx", async () => {
+    // Toggle wajib membaca di dalam tx setelah kunci, lalu membalik nilai
+    // segar itu. Mock: baca pertama (dalam tx) = true -> tulis false.
+    // Kode lama membaca di luar tx tanpa kunci sama sekali.
+    userFindMock.mockResolvedValue({ id: 4, isActive: true })
+    userUpdateMock.mockResolvedValue({ id: 4 })
+    userFindUniqueMock.mockResolvedValue({ id: 4, roles: [] })
+    const res = await toggleUserActive(4)
+    expect(res).toEqual({ success: true })
+    expect(transactionMock).toHaveBeenCalledTimes(1)
+    const sql = (queryRawMock.mock.calls[0][0] as string[]).join("?")
+    expect(sql).toContain("FROM users")
+    expect(sql).toContain("FOR UPDATE")
+    expect(queryRawMock.mock.invocationCallOrder[0]).toBeLessThan(userFindMock.mock.invocationCallOrder[0])
+    expect(userUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { isActive: false } }),
+    )
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "update",
+      "User",
+      4,
+      expect.stringContaining("Menonaktifkan"),
     )
   })
 

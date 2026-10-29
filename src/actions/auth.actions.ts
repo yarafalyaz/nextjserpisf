@@ -222,26 +222,6 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     }
     const cleanRoleIds = parsed.data
 
-    // Self-guard: super-admin terakhir tidak boleh mencabut role super_admin
-    // dari dirinya sendiri (lockout total). Non-super-admin tidak bisa sampai
-    // sini untuk target super_admin (assertCanModifyTarget di bawah menolak).
-    if (Number(actor.id) === userId) {
-      const selfRoles = await prisma.role.findMany({
-        where: { users: { some: { id: userId } } },
-        select: { id: true, name: true },
-      })
-      const wasSuperAdmin = selfRoles.some((r) => r.name === "super_admin")
-      const stillSuperAdmin = selfRoles.some((r) => r.name === "super_admin" && cleanRoleIds.includes(r.id))
-      if (wasSuperAdmin && !stillSuperAdmin) {
-        const others = await prisma.user.count({
-          where: { id: { not: userId }, roles: { some: { name: "super_admin" } } },
-        })
-        if (others === 0) {
-          return { error: "Tidak dapat mencabut role super admin terakhir" }
-        }
-      }
-    }
-
     // Target-escalation guard: a non-super-admin must not be able to alter the
     // roles of an existing super_admin (e.g. demote/strip the super_admin role).
     const targetErr = await assertCanModifyTarget(actor.roles, userId)
@@ -256,14 +236,42 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
       return { error: grantErr }
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        roles: {
-          set: cleanRoleIds.map((id) => ({ id })),
+    // Self-guard (super-admin terakhir) + set role dalam SATU tx terkunci:
+    // kunci semua baris user ber-role super_admin (FOR UPDATE, pola repo),
+    // lalu hitung ulang di dalam tx. Dua penurunan konkuren terserialisasi
+    // pada kunci yang sama — yang kalah melihat sisa 0 dan ditolak.
+    const roleError = await prisma.$transaction(async (tx) => {
+      if (Number(actor.id) === userId) {
+        const selfRoles = await tx.role.findMany({
+          where: { users: { some: { id: userId } } },
+          select: { id: true, name: true },
+        })
+        const wasSuperAdmin = selfRoles.some((r) => r.name === "super_admin")
+        const stillSuperAdmin = selfRoles.some((r) => r.name === "super_admin" && cleanRoleIds.includes(r.id))
+        if (wasSuperAdmin && !stillSuperAdmin) {
+          await tx.$queryRaw`SELECT u.id FROM users u INNER JOIN _UserRoles ur ON ur.B = u.id INNER JOIN roles r ON r.id = ur.A WHERE r.name = 'super_admin' ORDER BY u.id FOR UPDATE`
+          const others = await tx.user.count({
+            where: { id: { not: userId }, roles: { some: { name: "super_admin" } } },
+          })
+          if (others === 0) {
+            return "Tidak dapat mencabut role super admin terakhir"
+          }
+        }
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          roles: {
+            set: cleanRoleIds.map((id) => ({ id })),
+          },
         },
-      },
+      })
+      return null
     })
+    if (roleError) {
+      return { error: roleError }
+    }
 
     // Security-relevant: role changes are privilege grants/revocations. Log the
     // before/after so a later privilege escalation is traceable.
@@ -359,13 +367,20 @@ export async function toggleUserActive(userId: number) {
       return { error: targetErr }
     }
 
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-    })
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { isActive: !user.isActive },
+    // Toggle atomik: kunci baris user (FOR UPDATE, pola repo), baca isActive
+    // segar di dalam tx, tulis kebalikannya. Tanpa ini dua toggle konkuren
+    // membaca nilai sama dan menulis nilai sama (perubahan hilang).
+    const wasActive = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`
+      const fresh = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { isActive: true },
+      })
+      await tx.user.update({
+        where: { id: userId },
+        data: { isActive: !fresh.isActive },
+      })
+      return fresh.isActive
     })
 
     // Security-relevant: enabling/disabling an account. Log who toggled whom and
@@ -374,7 +389,7 @@ export async function toggleUserActive(userId: number) {
       "update",
       "User",
       userId,
-      `${user.isActive ? "Menonaktifkan" : "Mengaktifkan"} pengguna #${userId}`,
+      `${wasActive ? "Menonaktifkan" : "Mengaktifkan"} pengguna #${userId}`,
     )
 
     revalidatePath("/pengaturan/pengguna")

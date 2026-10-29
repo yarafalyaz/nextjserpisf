@@ -164,6 +164,22 @@ export async function runRecurringNow(id: number) {
     const runDate = schedule.nextRunDate.getTime() > now.getTime() ? now : schedule.nextRunDate
 
     const label = await prisma.$transaction(async (tx) => {
+      // Klaim atomik (pola updateMany bersyarat repo): jadwal hanya boleh
+      // dimajukan oleh eksekusi yang masih melihat nextRunDate lama. Klaim di
+      // dalam tx yang sama dengan pembuatan dokumen — dokumen gagal = klaim
+      // ikut rollback; klaim kalah (count 0) = tidak ada dokumen kedua.
+      const claimed = await tx.recurringTransaction.updateMany({
+        where: { id, nextRunDate: schedule.nextRunDate },
+        data: {
+          lastRunAt: now,
+          runCount: { increment: 1 },
+          nextRunDate: nextRunAfter(schedule.nextRunDate, frequency, schedule.interval, now),
+        },
+      })
+      if (claimed.count === 0) {
+        return "Jadwal sudah dijalankan eksekusi lain (dilewati)"
+      }
+
       let summary: string
       if (schedule.type === "journal") {
         const { lines, totalDebit, totalCredit } = recurringJournalLines(template)
@@ -234,12 +250,7 @@ export async function runRecurringNow(id: number) {
 
       await tx.recurringTransaction.update({
         where: { id },
-        data: {
-          lastRunAt: now,
-          runCount: { increment: 1 },
-          nextRunDate: nextRunAfter(schedule.nextRunDate, frequency, schedule.interval, now),
-          lastResult: summary,
-        },
+        data: { lastResult: summary },
       })
 
       return summary

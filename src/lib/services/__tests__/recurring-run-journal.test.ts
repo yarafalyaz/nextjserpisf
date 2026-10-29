@@ -9,28 +9,48 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * reference key, the closed-period refusal, and the one-journal-per-date idempotency.
  */
 
-const mocks = vi.hoisted(() => ({
-  journalFindFirst: vi.fn(),
-  journalCreate: vi.fn(),
-  expenseCreate: vi.fn(),
-  scheduleFindMany: vi.fn(),
-  scheduleUpdate: vi.fn(),
-  settingsFindFirst: vi.fn(),
-  generateDocumentNumber: vi.fn(),
-  nextSlug: vi.fn(),
-}))
+const mocks = vi.hoisted(() => {
+  const journalFindFirst = vi.fn()
+  const journalCreate = vi.fn()
+  const expenseCreate = vi.fn()
+  const scheduleFindMany = vi.fn()
+  const scheduleUpdate = vi.fn()
+  const scheduleUpdateMany = vi.fn()
+  const settingsFindFirst = vi.fn()
+  const generateDocumentNumber = vi.fn()
+  const nextSlug = vi.fn()
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-    expense: { create: mocks.expenseCreate },
+  const prisma: Record<string, unknown> = {
+    journal: { findFirst: journalFindFirst, create: journalCreate },
+    expense: { create: expenseCreate },
     recurringTransaction: {
-      findMany: mocks.scheduleFindMany,
-      update: mocks.scheduleUpdate,
+      findMany: scheduleFindMany,
+      update: scheduleUpdate,
+      updateMany: scheduleUpdateMany,
     },
-    systemSetting: { findFirst: mocks.settingsFindFirst },
-  },
-}))
+    systemSetting: { findFirst: settingsFindFirst },
+  }
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma))
+  prisma.$queryRaw = vi.fn(async () => {
+    const s = await settingsFindFirst()
+    return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
+  })
+
+  return {
+    journalFindFirst,
+    journalCreate,
+    expenseCreate,
+    scheduleFindMany,
+    scheduleUpdate,
+    scheduleUpdateMany,
+    settingsFindFirst,
+    generateDocumentNumber,
+    nextSlug,
+    prisma,
+  }
+})
+
+vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
@@ -79,6 +99,7 @@ beforeEach(() => {
   mocks.journalFindFirst.mockResolvedValue(null)
   mocks.journalCreate.mockResolvedValue({ id: 9, journalNumber: "JRN-202610-00001" })
   mocks.scheduleUpdate.mockResolvedValue({})
+  mocks.scheduleUpdateMany.mockResolvedValue({ count: 1 })
 })
 
 describe("recurringJournalReference", () => {
@@ -143,6 +164,36 @@ describe("runDueRecurring — expense output", () => {
 
     expect(result.errors).toEqual([])
     expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("runDueRecurring — klaim atomik nextRunDate (race regresi)", () => {
+  it("klaim kalah (count 0) TIDAK membuat expense kedua dan tidak dicatat sebagai generated/error", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+    mocks.scheduleUpdateMany.mockResolvedValue({ count: 0 })
+    mocks.expenseCreate.mockResolvedValue({ id: 7 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 5, nextRunDate: new Date(2026, 9, 17) },
+      }),
+    )
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(result.generated).toEqual([])
+    expect(result.errors).toEqual([])
+  })
+
+  it("klaim menang (count 1) membuat expense tepat satu", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+    mocks.expenseCreate.mockResolvedValue({ id: 7 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors).toEqual([])
+    expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
+    expect(result.generated).toHaveLength(1)
   })
 })
 

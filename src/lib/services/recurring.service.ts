@@ -80,12 +80,15 @@ export function validateRecurringTemplate(type: string, template: RecurringTempl
   return `Jenis transaksi berulang "${type}" tidak dikenal`
 }
 
+type RecurringDb = Pick<typeof prisma, "journal" | "expense">
+
 /** Creates the scheduled document as a DRAFT and returns a human summary. */
 async function generateDocument(
   schedule: { id: number; name: string; type: string },
   template: RecurringTemplate,
   date: Date,
   userId: number | null,
+  db: RecurringDb = prisma,
 ): Promise<string> {
   if (schedule.type === "journal") {
     const { lines, totalDebit, totalCredit } = recurringJournalLines(template)
@@ -103,7 +106,7 @@ async function generateDocument(
     // advance) do NOT add a second one — skip creation and let the schedule advance,
     // otherwise the unique (referenceType, referenceId) pair would throw a cryptic
     // P2002 on every subsequent cron tick.
-    const existing = await prisma.journal.findFirst({
+    const existing = await db.journal.findFirst({
       where: { referenceType, referenceId },
       select: { journalNumber: true },
     })
@@ -111,7 +114,7 @@ async function generateDocument(
 
     const journalNumber = await generateDocumentNumber("JRN")
 
-    const journal = await prisma.journal.create({
+    const journal = await db.journal.create({
       data: {
         journalNumber,
         slug: await nextSlug("journal", journalNumber),
@@ -144,7 +147,7 @@ async function generateDocument(
     await assertPeriodOpen(date)
 
     const documentNo = await generateDocumentNumber("EXP")
-    await prisma.expense.create({
+    await db.expense.create({
       data: {
         documentNo,
         slug: await nextSlug("expense", documentNo),
@@ -205,27 +208,39 @@ export async function runDueRecurring(
 
     try {
       const runDate = schedule.nextRunDate
-      const label = await generateDocument(
-        { id: schedule.id, name: schedule.name, type: schedule.type },
-        template,
-        runDate,
-        userId ?? schedule.createdBy,
-      )
-
       const frequency = schedule.frequency
       if (!isRecurrenceFrequency(frequency)) throw new Error(`Frekuensi "${frequency}" tidak dikenal`)
 
-      await prisma.recurringTransaction.update({
-        where: { id: schedule.id },
-        data: {
-          lastRunAt: asOf,
-          runCount: { increment: 1 },
-          // Advance past every missed occurrence, so a scheduler that was down
-          // for months does not try to fire the whole backlog next run.
-          nextRunDate: nextRunAfter(runDate, frequency as RecurrenceFrequency, schedule.interval, asOf),
-          lastResult: label,
-        },
+      // Klaim atomik + dokumen dalam SATU tx (pola sama runRecurringNow):
+      // klaim nextRunDate lama dulu; count 0 = eksekusi lain sudah menang,
+      // lewati tanpa dokumen. Dokumen gagal = klaim ikut rollback.
+      const label = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.recurringTransaction.updateMany({
+          where: { id: schedule.id, nextRunDate: runDate },
+          data: {
+            lastRunAt: asOf,
+            runCount: { increment: 1 },
+            // Advance past every missed occurrence, so a scheduler that was down
+            // for months does not try to fire the whole backlog next run.
+            nextRunDate: nextRunAfter(runDate, frequency as RecurrenceFrequency, schedule.interval, asOf),
+          },
+        })
+        if (claimed.count === 0) return null
+
+        const summary = await generateDocument(
+          { id: schedule.id, name: schedule.name, type: schedule.type },
+          template,
+          runDate,
+          userId ?? schedule.createdBy,
+          tx,
+        )
+        await tx.recurringTransaction.update({
+          where: { id: schedule.id },
+          data: { lastResult: summary },
+        })
+        return summary
       })
+      if (label === null) continue
       generated.push(`${schedule.name} → ${label}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal membuat dokumen"
