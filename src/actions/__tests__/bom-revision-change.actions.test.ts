@@ -46,12 +46,14 @@ const mocks = vi.hoisted(() => {
     $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(txMock)),
   }
   const requirePermissionMock = vi.fn().mockResolvedValue({ id: "7" })
-  return { prismaMock, txMock, requirePermissionMock }
+  const requireAuthMock = vi.fn().mockResolvedValue({ id: "7" })
+  return { prismaMock, txMock, requirePermissionMock, requireAuthMock }
 })
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: mocks.requirePermissionMock,
+  requireAuth: mocks.requireAuthMock,
 }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({
@@ -76,6 +78,7 @@ function woDoc(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: "7" })
+  mocks.requireAuthMock.mockResolvedValue({ id: "7" })
   mocks.txMock.$queryRaw.mockResolvedValue([{ id: 9 }])
   mocks.txMock.workOrder.findFirst.mockResolvedValue(woDoc())
   mocks.txMock.workOrder.update.mockResolvedValue({ id: 9 })
