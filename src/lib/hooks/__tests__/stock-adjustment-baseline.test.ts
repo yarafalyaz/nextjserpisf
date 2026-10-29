@@ -211,6 +211,23 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     expect(inMove.data.impact).toBe("IN")
   })
 
+  it("writes back LIVE systemQty/difference onto the adjustment line (G157-3)", async () => {
+    // Create-time snapshot says systemQty=0/difference=+10 (actualQty=10),
+    // but live stock moved to 8 before process. Stored columns must equal
+    // the ledger values (8 / +2), not the stale snapshot (0 / +10).
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 10, difference: 10, unitCost: 100 }],
+      liveQty: { 7: 8 },
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    expect(spies.adjItemUpdate).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { systemQty: 8, difference: 2, unitCost: 100, totalCost: 200 },
+    })
+  })
+
   it("skips the item when live qty already equals actualQty (zero real delta)", async () => {
     // Stored difference says +5, but live qty already matches actualQty -> no-op.
     const spies = wireTx({
@@ -272,7 +289,8 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
 
     expect(spies.adjItemUpdate).toHaveBeenCalledWith({
       where: { id: 1 },
-      data: { unitCost: 150, totalCost: -750 },
+      // G157-3: tulis-balik qty live + cost efektif (bukan hanya cost).
+      data: { systemQty: 8, difference: -5, unitCost: 150, totalCost: -750 },
     })
   })
 
