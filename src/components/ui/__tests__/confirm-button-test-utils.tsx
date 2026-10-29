@@ -1,7 +1,8 @@
 // Rangka uji jsdom bersama tombol konfirmasi klien (VoidButton,
-// ReversePaymentButton, PostedLockNotice): mount/unmount + klik + reset
-// document.body. Disimpan sekali di sini — menyalin blok render/click per
-// berkas tes dihitung Sonar sebagai duplikasi kode baru.
+// ReversePaymentButton, PostedLockNotice, TaxInvoiceNumberButton):
+// mount/unmount + klik + reset document.body + mock toast/router.
+// Disimpan sekali di sini — menyalin blok mock/render per berkas tes
+// dihitung Sonar sebagai duplikasi kode baru.
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 
