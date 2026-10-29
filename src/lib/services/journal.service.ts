@@ -2,6 +2,7 @@
 import { PrismaClient, Prisma } from '@prisma/client'
 
 import { YEAR_END_CLOSING_REFERENCE_TYPE } from '@/lib/reports/year-end-closing'
+import { assertPeriodOpen } from '@/lib/services/period-lock.service'
 
 interface JournalEntryInput {
   accountId: number
@@ -84,6 +85,7 @@ export class JournalService {
     }
 
     const persist = async (tx: Prisma.TransactionClient) => {
+        await assertPeriodOpen(input.transactionDate, tx)
         // Validate all account IDs exist
         const accountIds = [...new Set(input.entries.map((e) => e.accountId))]
         const accounts = await tx.account.findMany({
@@ -178,6 +180,8 @@ export class JournalService {
         if (original.referenceType === YEAR_END_CLOSING_REFERENCE_TYPE) {
           throw new Error(YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR)
         }
+
+        await assertPeriodOpen(original.transactionDate, tx)
 
         // Pemeriksaan existing-reversal (selaras reverseJournalsByReferenceTx):
         // POSTED yang sudah punya jurnal lawan tidak boleh dibuatkan kedua.
