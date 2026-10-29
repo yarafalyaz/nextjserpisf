@@ -213,6 +213,10 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   // F-2026-10-29-162-V (c): beban write-off piutang karyawan — default
   // 720007 (OEXP non-operasional), bukan 6000/EXPS.
   { key: "employeeLoanWriteOffExpenseAccountId", groups: [["720007"], ["beban", "diluar", "usaha"], ["write", "off"]] },
+  // Tahap 3 komisi (vonis R-komisi-vonispayable §4): kode persis
+  // didahulukan; 210204–210211 DILARANG untuk jalur ini.
+  { key: "commissionExpenseAccountId", groups: [["600002"], ["beban", "komisi"], ["commission", "expense"]] },
+  { key: "commissionPayableAccountId", groups: [["210212"], ["utang", "komisi"], ["commission", "payable"]] },
   { key: "payrollJournalTypeId", groups: [["beban", "gaji"], ["hutang", "gaji"], ["jurnal", "payroll"], ["payroll", "journal"]] },
 ];
 

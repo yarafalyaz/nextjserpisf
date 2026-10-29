@@ -6,6 +6,7 @@ import { slugify } from "@/lib/utils/slug";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { Status } from "@/lib/constants";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { reverseTx as reverseCommissionPayableTx } from "@/lib/services/commission-payable.service";
 import { toBaseFactor } from "@/lib/services/uom.service";
 
 /** P1-1: normalisasi kolom identitas Json (array / koma-pisah / null). */
@@ -295,5 +296,23 @@ export async function onSalesReturnCompleted(
         status: Status.COMPLETED,
       },
     });
+
+    // Tahap 3 komisi (vonis R-komisi-vonispayable §5): lawan retur completed
+    // di masa retur. Tanpa salesInvoiceId / faktur asal di luar scope =
+    // tak tertaut (reverseTx no-op). Jurnal asal + baris akrual tak diubah.
+    if (salesReturn.salesInvoiceId != null) {
+      const items = await tx.salesReturnItem.findMany({
+        where: { salesReturnId: returnId },
+        select: { returnDpp: true, qty: true, price: true },
+      });
+      const returnDpp = items.reduce(
+        (sum, it) =>
+          sum + (it.returnDpp != null ? Number(it.returnDpp) : Number(it.qty ?? 0) * Number(it.price ?? 0)),
+        0,
+      );
+      if (returnDpp > 0) {
+        await reverseCommissionPayableTx(tx, salesReturn.salesInvoiceId, returnId, returnDpp, userId);
+      }
+    }
   });
 }

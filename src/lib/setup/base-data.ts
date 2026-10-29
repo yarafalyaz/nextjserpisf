@@ -1037,6 +1037,9 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // 36/2021 Pasal 60 — uang denda hanya untuk kepentingan pekerja);
   // kredit mengurangi beban gaji DILARANG.
   ["710006", "Pendapatan Denda Karyawan", "OINC", "7100"],
+  // Tahap 3 komisi (vonis R-komisi-vonispayable §4): utang komisi gajian.
+  // 210207/208/209/210/211 DILARANG reuse untuk jalur ini.
+  ["210212", "Utang Komisi Penjualan", "OCLY", "2102"],
 ]
 
 /**
