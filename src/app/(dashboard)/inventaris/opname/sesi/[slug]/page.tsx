@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { StocktakeLineForm, StocktakeActions } from "../_components/stocktake-forms"
@@ -22,6 +22,10 @@ export default async function StocktakeSessionDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_stock_opname")
+  const [canCreate, canEdit] = await Promise.all([
+    hasPermission("create_stock_adjustments"),
+    hasPermission("edit_stock_adjustments"),
+  ])
   const { slug } = await params
 
   const session = await resolveEntity(
@@ -68,7 +72,7 @@ export default async function StocktakeSessionDetailPage({
         ]}
         actions={
           <>
-            <StocktakeActions id={session.id} status={session.status} />
+            <StocktakeActions id={session.id} status={session.status} canCreate={canCreate} canEdit={canEdit} />
             <BackButton href="/inventaris/opname/sesi" />
           </>
         }
@@ -86,7 +90,7 @@ export default async function StocktakeSessionDetailPage({
           </div>
         </div>
         <div className="p-4 px-5">
-          <StocktakeLineForm sessionId={session.id} lines={session.lines.map((l) => ({
+          <StocktakeLineForm sessionId={session.id} canCreate={canCreate} lines={session.lines.map((l) => ({
             id: l.id,
             sku: l.item.sku,
             name: l.item.name,

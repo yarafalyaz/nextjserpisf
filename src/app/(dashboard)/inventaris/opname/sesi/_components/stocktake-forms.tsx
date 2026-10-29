@@ -18,7 +18,7 @@ import {
 } from "@/actions/inventory.actions"
 
 /** Form sesi baru (gudang + tanggal + catatan). */
-export function StocktakeSessionForm() {
+export function StocktakeSessionForm({ canCreate }: { canCreate: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -36,6 +36,8 @@ export function StocktakeSessionForm() {
       router.refresh()
     })
   }
+
+  if (!canCreate) return null
 
   return (
     <form
@@ -60,7 +62,7 @@ export function StocktakeSessionForm() {
 }
 
 /** Tombol alur per sesi: snapshot / setujui / posting. */
-export function StocktakeActions({ id, status }: { id: number; status: string }) {
+export function StocktakeActions({ id, status, canCreate, canEdit }: { id: number; status: string; canCreate: boolean; canEdit: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -78,7 +80,7 @@ export function StocktakeActions({ id, status }: { id: number; status: string })
 
   return (
     <>
-      {status === "draft" && (
+      {status === "draft" && canCreate && (
         <Button
           type="button"
           size="sm"
@@ -89,7 +91,7 @@ export function StocktakeActions({ id, status }: { id: number; status: string })
           Snapshot
         </Button>
       )}
-      {status === "review" && (
+      {status === "review" && canEdit && (
         <Button
           type="button"
           size="sm"
@@ -100,7 +102,7 @@ export function StocktakeActions({ id, status }: { id: number; status: string })
           Setujui
         </Button>
       )}
-      {status === "approved" && (
+      {status === "approved" && canCreate && (
         <Button
           type="button"
           size="sm"
@@ -124,7 +126,7 @@ export interface CountRow {
 }
 
 /** Tabel hitung 1/2 per baris. */
-export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lines: CountRow[] }) {
+export function StocktakeLineForm({ sessionId, lines, canCreate }: { sessionId: number; lines: CountRow[]; canCreate: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [counts, setCounts] = useState<Record<number, { count1: string; count2: string }>>({})
@@ -185,6 +187,7 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
                   step="any"
                   aria-label={`Hitung 1 baris ${l.id}`}
                   defaultValue={l.count1 ?? ""}
+                  disabled={!canCreate}
                   onChange={(e) => set(l.id, "count1", e.target.value)}
                   className="form-input"
                 />
@@ -196,6 +199,7 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
                   step="any"
                   aria-label={`Hitung 2 baris ${l.id}`}
                   defaultValue={l.count2 ?? ""}
+                  disabled={!canCreate}
                   onChange={(e) => set(l.id, "count2", e.target.value)}
                   className="form-input"
                 />
@@ -204,11 +208,13 @@ export function StocktakeLineForm({ sessionId, lines }: { sessionId: number; lin
           ))}
         </tbody>
       </table>
+      {canCreate && (
       <div className="flex justify-end gap-3 mt-4">
         <Button type="submit" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : "Simpan Hitungan"}
         </Button>
       </div>
+      )}
     </form>
   )
 }

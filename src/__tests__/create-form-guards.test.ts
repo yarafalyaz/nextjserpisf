@@ -21,6 +21,7 @@ import ExpenseCategoryLayout from "../app/(dashboard)/master/kategori-pengeluara
 import TaxLayout from "../app/(dashboard)/master/pajak/tambah/layout"
 import UomLayout from "../app/(dashboard)/master/satuan/tambah/layout"
 import PaymentTermLayout from "../app/(dashboard)/master/syarat-pembayaran/tambah/layout"
+import ItemGroupLayout from "../app/(dashboard)/master/grup-barang/tambah/layout"
 
 type Layout = (props: { children: React.ReactNode }) => Promise<unknown>
 
@@ -36,6 +37,7 @@ const CASES: Array<[string, string, Layout]> = [
   ["master/pajak/tambah", "create_taxes", TaxLayout as unknown as Layout],
   ["master/satuan/tambah", "edit_units", UomLayout as unknown as Layout],
   ["master/syarat-pembayaran/tambah", "create_payment_terms", PaymentTermLayout as unknown as Layout],
+  ["master/grup-barang/tambah", "create_item_groups", ItemGroupLayout as unknown as Layout],
 ]
 
 describe("layout guard pada form tambah", () => {

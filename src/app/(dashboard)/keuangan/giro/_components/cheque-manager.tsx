@@ -52,9 +52,15 @@ const STATUS_LABEL: Record<string, string> = {
 export function ChequeManager({
   cheques,
   accounts,
+  canCreate,
+  canEdit,
+  canDelete,
 }: {
   cheques: ChequeRow[]
   accounts: AccountOption[]
+  canCreate: boolean
+  canEdit: boolean
+  canDelete: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -138,6 +144,7 @@ export function ChequeManager({
 
   return (
     <div className="flex flex-col gap-6">
+      {canCreate && (
       <form
         onSubmit={handleCreate}
         className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5 flex flex-col gap-4"
@@ -205,6 +212,7 @@ export function ChequeManager({
           </Button>
         </div>
       </form>
+      )}
 
       <DetailTable data-report-table="Daftar Giro & Cek">
         <DetailTableHead>
@@ -235,7 +243,7 @@ export function ChequeManager({
               <DetailTableTd>{STATUS_LABEL[cheque.status] ?? cheque.status}</DetailTableTd>
               <DetailTableTd align="right">
                 <div className="flex items-center justify-end gap-1.5">
-                  {cheque.status === "pending" && (
+                  {cheque.status === "pending" && canEdit && (
                     <>
                       <Button type="button" size="sm" variant="ghost" isDisabled={isPending} onPress={() => handleStatus(cheque.id, "cleared")} className="gap-1 text-success" aria-label={`Tandai cair ${cheque.documentNo}`}>
                         <BadgeCheck size={15} aria-hidden="true" /> Cair
@@ -245,16 +253,18 @@ export function ChequeManager({
                       </Button>
                     </>
                   )}
+                  {canDelete && (
                   <Button type="button" size="sm" variant="ghost" isDisabled={isPending} onPress={() => handleDelete(cheque.id)} className="gap-1 text-danger" aria-label={`Hapus ${cheque.documentNo}`}>
                     <Trash2 size={15} aria-hidden="true" />
                   </Button>
+                  )}
                 </div>
               </DetailTableTd>
             </DetailTableRow>
           ))}
           {cheques.length === 0 && (
             <DetailTableRow>
-              <DetailTableTd colSpan={9}><EmptyState title="Belum ada giro/cek tercatat." description="Catat giro mundur di atas agar laporan Giro Mundur terisi." className="py-6" /></DetailTableTd>
+              <DetailTableTd colSpan={9}><EmptyState title="Belum ada giro/cek tercatat." description="Catat giro mundur agar laporan Giro Mundur terisi." className="py-6" /></DetailTableTd>
             </DetailTableRow>
           )}
         </DetailTableBody>

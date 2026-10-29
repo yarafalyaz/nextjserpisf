@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ChequeManager, type ChequeRow } from "./_components/cheque-manager"
 import { ChequeOverdueQueueSection } from "./_components/cheque-overdue-queue"
@@ -13,6 +13,12 @@ export const metadata: Metadata = { title: "Giro & Cek" }
 
 export default async function ChequesPage() {
   await requirePermission("view_cheques")
+
+  const [canCreate, canEdit, canDelete] = await Promise.all([
+    hasPermission("create_cheques"),
+    hasPermission("edit_cheques"),
+    hasPermission("delete_cheques"),
+  ])
 
   const [cheques, accounts] = await Promise.all([
     prisma.cheque.findMany({
@@ -70,7 +76,7 @@ export default async function ChequesPage() {
 
       <ChequeOverdueQueueSection queue={overdueQueue} />
 
-      <ChequeManager cheques={rows} accounts={accounts} />
+      <ChequeManager cheques={rows} accounts={accounts} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} />
     </div>
   )
 }

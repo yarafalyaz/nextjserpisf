@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { PageHeader } from "@/components/ui/page-header"
 import { entityHref } from "@/lib/utils/entity-url"
 import {
@@ -34,6 +34,10 @@ export default async function StocktakePage({
   searchParams: Promise<{ sessionId?: string }>
 }) {
   await requirePermission("view_stock_opname")
+  const [canCreate, canEdit] = await Promise.all([
+    hasPermission("create_stock_adjustments"),
+    hasPermission("edit_stock_adjustments"),
+  ])
   const params = await searchParams
 
   // Tautan lama `?sessionId=<id>` → halaman sesi `/sesi/<slug>`.
@@ -86,7 +90,7 @@ export default async function StocktakePage({
             </p>
           </div>
         </div>
-        <StocktakeSessionForm />
+        <StocktakeSessionForm canCreate={canCreate} />
         <div className="p-4 px-5">
           {sessions.length === 0 ? (
             <EmptyState title="Belum ada sesi opname" className="py-10" />
@@ -111,7 +115,7 @@ export default async function StocktakePage({
                     <DetailTableTd align="right">
                       <div className="flex justify-end gap-2">
                         <a href={entityHref("/inventaris/opname/sesi", s)}>Buka</a>
-                        <StocktakeActions id={s.id} status={s.status} />
+                        <StocktakeActions id={s.id} status={s.status} canCreate={canCreate} canEdit={canEdit} />
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>

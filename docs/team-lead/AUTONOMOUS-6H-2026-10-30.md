@@ -12,14 +12,13 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] #8-10 SDM + approval MEDIUM (dd30433e5) · #11-12 produksi (a5a46f2ef)
 - [ ] #13-14 guard/CI: reverseJournal UI (journal-table berubah, commit menunggu agen), 7 suite CI (ci.yml +143 baris berubah, verifikasi menunggu agen guard)
 
-## Batch 2 — MEDIUM round3
+## Batch 2 — MEDIUM round3 (hampir selesai)
 - [x] cek periode di dalam tx (656b7300e)
-- [x] klaim terminal approval semua model HR + calculatedValue lembur generik (dd30433e5)
-- [ ] updateEmployee gerbang view_salary_amounts; upsertPerformanceGoal pemilik
-- [ ] updateBomRevision klaim; change-order reservasi; guard complete WO dlm tx
-- [ ] dedupe timesheet proyek; N+1 start WO; aging batas; PDF NaN; formatAccounting cache
-- [ ] audit 5 builder pola total sama: payment-expenses, stock-count, min-stock, sales/purchase-process-history, payroll-reports:262
-- [ ] wired-transition detektor; schema-usage FK/enum; ci.yml permissions; E2E tautologi sisa
+- [x] klaim terminal approval + calculatedValue (dd30433e5)
+- [x] salary gate + performanceGoal (5cd21b639), BOM/CO/guard WO (2627fba3a)
+- [x] dedupe timesheet + N+1 (ade1825b0), aging/NaN/Intl/16 builder total (c12162d93)
+- [x] E2E tautologi sisa (95179a62e)
+- [ ] wired-transition detektor; schema-usage FK/enum; ci.yml permissions (agen jalan)
 
 ## Batch 3 — riset lanjutan
 - [ ] audit domain belum tersentuh: CRM, proyek, aset, kendaraan, master, pengaturan
