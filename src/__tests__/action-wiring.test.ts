@@ -217,6 +217,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "Muse K1 HCMS backend; UI pelatihan menyusul (frontend t_daed387f)",
   // F-2026-10-26-054-S: 4 aksi penyesuaian gaji kini dirujuk panel
   // salary-adjustment-panel.tsx + page karyawan (PR #1079) — entri beku dibuang.
+  // F-2026-10-29-162-V (t_e3a36a0c backend PR #1404): 2 aksi dokumen
+  // pelunasan pinjaman kini dirujuk UI (loan-cash-repayment-form.tsx +
+  // loan-write-off-button.tsx, frontend t_b1e5edbd PR #1405) — entri beku dibuang.
   // F-2026-10-25-035-B backend (PR #1072): 4 aksi override gerbang kredit
   // kini dirujuk UI (panel tertahan + antrean persetujuan PR #1085,
   // frontend t_52903522/t_7582c185) — entri beku dibuang.
@@ -228,12 +231,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-25-036-S: 4 aksi histori tarif komisi kategori kini dirujuk UI
   // (komponen customer-commission-rates di master kategori + loader histori
   // di page ubah kategori, frontend t_87eb6220) — entri beku dibuang.
-  // FIN-BR-008 inti backend (PR #1233): 2 aksi reversal pembayaran berhistori
-  // belum dirujuk UI di branch ini; tombol Balikkan + dialog alasan dibangun
-  // Frontend di branch stacked hermes/frontend-fin-br-008-ui (PR #1246).
-  // Buang kedua entri ini begitu UI itu mendarat di main.
+  // FIN-BR-008: reversal vendor lewat UI pembelian (jalur koreksi posted
+  // tagihan vendor) — daftar-beku dilepas saat tombol vendor mendarat.
   "src/actions/purchase.actions.ts::reverseVendorPayment":
-    "FIN-BR-008 inti backend; tombol Balikkan pembayaran vendor menyusul (frontend PR #1246)",
+    "FIN-BR-008: reversal vendor menyusul tombol UI pembelian",
   // GL-BR-003 UI: reverseSalesPayment kini dirujuk tombol Balikkan
   // di detail pembayaran penjualan; entri beku sales dibuang, vendor tetap.
 }

@@ -658,6 +658,7 @@ const SETTINGS_MAP = {
   "payrollBankAccountId": "110102",
   "salesReceivableAccountId": "1103",
   "employeeReceivableAccountId": "110506",
+  "employeeLoanWriteOffExpenseAccountId": "720007",
   "inventoryAccountId": "110401",
   "purchaseInventoryAccountId": "210203",
   "inventoryAdjustmentAccountId": "510103",

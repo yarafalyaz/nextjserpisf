@@ -345,6 +345,9 @@ describe("F-027 tarikan generate", () => {
     const res = await actions.processPayroll(fd({
       employeeId: "7", period: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31",
       baseSalary: "5000000", allowances: "123000",
+      // Tanpa penjaga BR-LOAN-03 (vonis 162-V), ringkasan absen kosong tanpa
+      // hari eksplisit memberi potongan bolos 5jt lalu gagal palsu.
+      workingDays: "22", presentDays: "22", absentDays: "0", absentDeduction: "0",
     }))
     expect(res.success).toBe(true)
     expect(prismaMock.payrollComponentLine.createMany).not.toHaveBeenCalled()

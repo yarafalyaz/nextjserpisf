@@ -26,6 +26,10 @@ export const EMPLOYEE_LOAN_STATUSES = [
   "active",
   "rejected",
   "paid_off",
+  // F-2026-10-29-162-V (c) PUT-LOAN-2 (BR-LOAN-08): penghapusan piutang tak
+  // tertagih HANYA via dokumen write-off beralasan (Dr 720007/Cr 110506);
+  // bukan objek PPh21. Status existing lain tak berubah.
+  "written_off",
 ] as const
 export type EmployeeLoanStatus = (typeof EMPLOYEE_LOAN_STATUSES)[number]
 

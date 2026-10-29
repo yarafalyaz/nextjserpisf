@@ -3367,3 +3367,180 @@ export async function onEmployeeLoanDisbursed(
     });
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// onEmployeeLoanCashRepayment (BR-LOAN-07) + onEmployeeLoanWrittenOff (BR-LOAN-08)
+// F-2026-10-29-162-V (e)(f)(c): pelunasan tunai + write-off piutang karyawan
+// sebagai DOKUMEN beralasan — bukan efek payroll, bukan objek PPh21.
+//   Setor: Dr Kas/Bank penerima / Cr Piutang Karyawan (110506) sebesar setoran
+//     diakui. Kelebihan DILARANG hangus/menambah sisa; default dikembalikan
+//     (di luar jurnal ini — kas keluar tercatat terpisah oleh aksi).
+//   Write-off: Dr Beban Diluar Usaha (720007/setting) / Cr Piutang Karyawan.
+// Kedua fungsi idempoten per dokumen (referenceType, referenceId) pola
+// pencairan; assertPeriodOpen tanggal dokumen dalam tx; akun divalidasi
+// existensinya (anti akun hantu); nominal aman Decimal(15,2).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function onEmployeeLoanCashRepayment(
+  repaymentId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  assertJournalClaimRef("EmployeeLoanRepayment", repaymentId);
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
+  if (!settings.employeeReceivableAccountId) {
+    throw new Error(
+      "Akun piutang karyawan belum dikonfigurasi sebelum setoran pinjaman dicatat",
+    );
+  }
+  const repayment = await db.employeeLoanRepayment.findUniqueOrThrow({
+    where: { id: repaymentId },
+  });
+  const amount = Number(repayment.amount);
+  if (amount <= 0) return;
+  if (!repayment.cashAccountId) {
+    throw new Error("Akun kas/bank penerima setoran wajib diisi (BR-LOAN-07)");
+  }
+  await assertAccountsExist(db, [repayment.cashAccountId, settings.employeeReceivableAccountId], "Setoran pinjaman karyawan");
+  const existing = await db.journal.findFirst({
+    where: { referenceType: "EmployeeLoanRepayment", referenceId: repaymentId },
+  });
+  if (existing) {
+    console.info(
+      `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
+  await assertPeriodOpen(repayment.repaymentDate || new Date(), txClient);
+  await executeInTx(txClient, async (tx) => {
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "EmployeeLoanRepayment", referenceId: repaymentId },
+    });
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] setoran tunai pinjaman karyawan #${repaymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
+    const journalNumber = await generateJournalNumber(tx, "LOAN", repaymentId);
+    await tx.journal.create({
+      data: {
+        journalNumber,
+        transactionDate: repayment.repaymentDate || new Date(),
+        referenceType: "EmployeeLoanRepayment",
+        referenceId: repayment.id,
+        description: `Setoran tunai pinjaman karyawan #${repayment.loanId}`,
+        type: "AUTO",
+        status: "POSTED",
+        totalDebit: amount,
+        totalCredit: amount,
+        createdBy: userId,
+        entries: {
+          create: [
+            {
+              accountId: repayment.cashAccountId!,
+              debit: amount,
+              credit: 0,
+              memo: "Setoran tunai pinjaman karyawan",
+            },
+            {
+              accountId: settings.employeeReceivableAccountId!,
+              debit: 0,
+              credit: amount,
+              memo: "Piutang Karyawan (pelunasan tunai)",
+            },
+          ],
+        },
+      },
+    });
+  });
+}
+
+export async function onEmployeeLoanWrittenOff(
+  writeOffId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  assertJournalClaimRef("EmployeeLoanWriteOff", writeOffId);
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
+  if (!settings.employeeReceivableAccountId) {
+    throw new Error(
+      "Akun piutang karyawan belum dikonfigurasi sebelum write-off dicatat",
+    );
+  }
+  // F-2026-10-29-162-V (c): default 720007 dari katalog aktif; kosong =
+  // fail-closed berisik, DILARANG fallback beban lain.
+  let expenseAccountId = (settings as { employeeLoanWriteOffExpenseAccountId?: number | null })
+    .employeeLoanWriteOffExpenseAccountId;
+  if (!expenseAccountId) {
+    const fallback = await db.account.findFirst({
+      where: { code: "720007" },
+      select: { id: true },
+    });
+    expenseAccountId = fallback?.id ?? null;
+  }
+  if (!expenseAccountId) {
+    throw new Error(
+      "Akun beban write-off pinjaman karyawan belum dikonfigurasi (isi pemetaan akun 720007) sebelum penghapusan dicatat",
+    );
+  }
+  const writeOff = await db.employeeLoanWriteOff.findUniqueOrThrow({
+    where: { id: writeOffId },
+  });
+  const amount = Number(writeOff.amount);
+  if (amount <= 0) return;
+  await assertAccountsExist(db, [expenseAccountId, settings.employeeReceivableAccountId], "Write-off pinjaman karyawan");
+  const existing = await db.journal.findFirst({
+    where: { referenceType: "EmployeeLoanWriteOff", referenceId: writeOffId },
+  });
+  if (existing) {
+    console.info(
+      `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
+  await assertPeriodOpen(writeOff.writeOffDate || new Date(), txClient);
+  await executeInTx(txClient, async (tx) => {
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "EmployeeLoanWriteOff", referenceId: writeOffId },
+    });
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] write-off pinjaman karyawan #${writeOffId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
+    const journalNumber = await generateJournalNumber(tx, "LOAN", writeOffId);
+    await tx.journal.create({
+      data: {
+        journalNumber,
+        transactionDate: writeOff.writeOffDate || new Date(),
+        referenceType: "EmployeeLoanWriteOff",
+        referenceId: writeOff.id,
+        description: `Penghapusan piutang pinjaman karyawan #${writeOff.loanId}`,
+        type: "AUTO",
+        status: "POSTED",
+        totalDebit: amount,
+        totalCredit: amount,
+        createdBy: userId,
+        entries: {
+          create: [
+            {
+              accountId: expenseAccountId!,
+              debit: amount,
+              credit: 0,
+              memo: "Beban penghapusan piutang karyawan (bukan objek PPh21)",
+            },
+            {
+              accountId: settings.employeeReceivableAccountId!,
+              debit: 0,
+              credit: amount,
+              memo: "Piutang Karyawan (write-off)",
+            },
+          ],
+        },
+      },
+    });
+  });
+}
