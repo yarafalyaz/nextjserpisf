@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+vi.mock("@/lib/services/work-order-cost-estimate.service", () => ({
+  snapshotWorkOrderCostEstimateTx: () => Promise.resolve(null),
+}));
 const mocks = vi.hoisted(() => {
   const buildModelMock = () => ({
     findFirst: vi.fn().mockResolvedValue(null),

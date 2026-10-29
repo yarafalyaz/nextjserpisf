@@ -73,6 +73,9 @@ vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderVehicleIntakeRecorded: (...a: unknown[]) => intakeGateMock(...a),
 }))
 
+vi.mock("@/lib/services/work-order-cost-estimate.service", () => ({
+  snapshotWorkOrderCostEstimateTx: () => Promise.resolve(null),
+}));
 import { startWorkOrder } from "../manufacturing.actions"
 
 beforeEach(() => {
