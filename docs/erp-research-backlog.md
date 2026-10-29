@@ -44913,6 +44913,87 @@ BOT Lead (putus BR-FIN01-11/14 + merge PR docs ini; pilih format referensi termi
 2b. Koreksi P2 per PUTUSAN Lead 04:35 WIB + komen 6469384535 (opsi (a) selaras F-002, run ini): tanpa nomor valid = PPN gabung HPP di JURNAL (bukan Dr PPN Masukan + tandai SPT); frasa lama (jurnal utuh + hook tidak disentuh + tandai `not_creditable` + aksi isi-nomor NOL jurnal) GUGUR; hook `onVendorBillPosted` perlu perintah ubah Backend (lewati kaki PPN, gabung ke clearing/beban); aksi isi-nomor flip SPT saja DILARANG — syarat jurnal ulang periode terbuka. Renumber: E157B-1..E157B-7 vonis ini (tabrakan vs main 157-S StockAdjustment b.43483; E157B 0 kemunculan di main). Tanpa ubah Putusan 1/3.
 
 ID vonis ini **F-2026-10-28-157-V** (toleransi harga per-baris + PPN-tanpa-nomor warning + termin-referensi; jawaban BR-FIN01-10/12/13 spec F-2026-10-28-156-S; basis `origin/main` 984d0a471). Butuh putusan accountant: TIDAK lagi untuk BR-FIN01-10/12/13 (ditutup vonis ini); YA bila Backend menemukan baris tanpa acuan PO/GR yang tak terjangkau guard per-baris.
+## VONIS ACCOUNTANT 2026-10-29 — F-2026-10-29-163-V: jurnal sengketa pajak — bayar di bawah protes, putusan, SKPLB, pembetulan SPT, cakupan Pasal 36 (jawaban Q-TXD-1..5 spec F-2026-10-27-113-S)
+
+> **Slot**: F-2026-10-29-163-V. Diperiksa bentrok 2026-10-29 06:10 WIB vs `origin/main` (`cad0f7b0b`): grep `F-2026-10-29-163` di backlog+judul PR terbuka = 0 sebelum tulis; `-V` bebas sesudah 160-V/162-V. Dokumen saja; tanpa kode/schema/migrasi. Lima putusan mengikat; tidak ada `BUTUH-KEPUTUSAN-OWNER` — semua dalam mandat vonis Accountant. Eksekusi: Backend kartu 113-B (model + jurnal hanya dari vonis ini), QA falsifikasi atas head persis.
+
+### 0. Basis bukti live (origin/main cad0f7b0b, 2026-10-29 06:00 WIB) — TERVERIFIKASI-KODE
+
+- `TaxPayment` (prisma/schema.prisma:1418): documentNo unik, date, period "YYYY-MM" (masa setor dari period), taxKind (ppn|pph21|pph23|pph4_2|pph_badan|other), amount Decimal(15,2), billingCode 15 digit nullable, ntpn 16 nullable, status default "posted", journalId nullable.
+- Jurnal setor existing `buildTaxPaymentJournalEntries` (src/lib/finance/tax-payment.ts): **Dr akun utang pajak / Cr kas/bank** — setor = pelunasan utang, bukan beban baru. Komentar berkas menegaskan bukan beban.
+- Void setor ber-NTPN TERKUNCI (src/actions/tax-payment.actions.ts: NTPN terisi = setor riil ke kas negara, void ditolak; koreksi hanya jurnal reklasifikasi). Pola ini dipakai ulang vonis ini.
+- Read-model SPT (src/lib/tax/spt-read-model.ts + src/lib/reports/spt-read-model-data.ts): kewajiban PPN per masa dari JURNAL POSTED, direkonsiliasi ke posisi SPT dokumen TaxInvoice; selisih tampil sebagai temuan. Pengganti ikut masa faktur asal (PER-11/PJ/2025); hanya kepala rantai terakhir approved bernilai.
+- Model sengketa pajak ABSEN total (grep TaxDispute/SKPKB = 0, diwarisi spec 113-S §inventarisasi).
+
+### Regulasi resmi (akses 29 Okt 2026)
+
+- UU 28/2007 (KUP) Pasal 36 ayat (1): DJP dapat (a) mengurangkan/menghapuskan sanksi administrasi (bunga, denda, kenaikan) bila karena kekhilafan/bukan kesalahan WP; (b) mengurangkan/membatalkan SKP yang tidak benar; (c) mengurangkan/membatalkan STP yang tidak benar; (d) membatalkan hasil pemeriksaan/SKP tanpa SPHP/pembahasan akhir. https://www.pajak.go.id/id/undang-undang-nomor-28-tahun-2007
+- UU KUP Pasal 11: kelebihan bayar dikembalikan (restitusi tunai via SKPLB + SPMKP ≤1 bulan) atau dikompensasikan ke masa berikut. https://www.pajak.go.id/id/artikel/lebih-bayar-pajak-ayo-klaim
+- Pajak.go.id Keberatan: objek SKPKB/SKPKBT/SKPN/SKPLB/pemotongan/pemungutan; syarat lunas minimal sebesar disetujui pembahasan akhir; tenggat 3 bulan sejak SKP dikirim; DJP putus ≤12 bulan. https://www.pajak.go.id/id/keberatan
+
+### Putusan 1 — Q-TXD-1: bayar di bawah protes = PELUNASAN UTANG + ASET SENGKETA, bukan beban
+
+1. Pembayaran atas SKP yang disengketakan (di bawah protes maupun prasyarat keberatan) TIDAK melahirkan beban baru. Jurnal setor tetap pola existing: **Dr akun utang pajak jenis terkait / Cr kas/bank** via TaxPayment existing + `buildTaxPaymentJournalEntries`. Register sengketa HANYA menautkan TaxPayment (BR-TXD-08), tidak menulis jurnal sendiri tahap 1.
+2. Bila WP membayar LEBIH dari yang disetujui (selisih yang disengketakan dibayar lunas di muka agar upaya jalan): kelebihan atas utang tercatat = **aset pajak dibayar di muka (prepaid)**. Mekanika: (a) setor ke kas negara tetap satu TaxPayment penuh (NTPN tunggal tidak boleh dipecah — satu SSP/billing = satu bukti setor); (b) jurnal reklasifikasi manual akuntan di periode terbuka: Dr Pajak Dibayar Di Muka-[jenis] / Cr akun utang pajak terkait sebesar selisih-disengketakan. Tanpa nomor akun karangan: akun prepaid = akun COA kategori aset lancar yang ditunjuk pengaturan, fail-closed bila kosong (tanpa fallback tebak).
+3. Per jenis pajak: PPN (SKPKB PPN) → utang PPN Keluaran (akun salesTax dari setting); PPh badan/potong → utang PPh jenis terkait (taxAccountId TaxPayment). Pemungutan pihak ketiga yang disengketakan penerima potong: bukan utang ISF — catat sebagai piutang/prepaid pihak pemungut bila dibayar, JANGAN masuk utang pajak ISF.
+4. Sanksi administrasi (bunga/denda/kenaikan) dalam SKP dicatat TERPISAH dari pokok: beban sanksi diakui saat SKP diterima (Dr Beban Sanksi Administrasi Pajak / Cr Utang Sanksi Pajak), bukan digabung pokok. Alasan: objek pengurangan Pasal 36 ayat (1a) hanya sanksi — gabung pokok membuat pengurangan sanksi kelak tidak tertelusur.
+
+### Putusan 2 — Q-TXD-2: pengakuan putusan di MASA PUTUSAN, pokok vs sanksi terpisah
+
+1. Hasil putusan (DIKABULKAN penuh/sebagian, DITOLAK, TIDAK_DAPAT_DITERIMA) diakui pada **tanggal putusan diterima** (masa putusan), BUKAN membuka ulang masa ketetapan asal. Koreksi jurnal lawan/reklasifikasi bertanggal putusan di periode terbuka (`assertPeriodOpen` dalam tx sama).
+2. Matriks jurnal putusan (akun dari COA/setting aktif, fail-closed):
+   - DIKABULKAN penuh atas pokok yang sudah dibayar → Dr Utang Pajak terkait / Cr Pajak Dibayar Di Muka (balikkan Putusan 1 butir 2); kelebihan yang diputus kembali tunai → Dr Kas/Bank / Cr Pajak Dibayar Di Muka saat SPMKP diterima.
+   - DIKABULKAN sebagian → proporsional putusan; sisa yang ditolak tetap lunas-tercatat (utang terpelunasi, nol sisa).
+   - DITOLAK → prepaid (bila ada) direklas ke beban/pokok final: Dr Beban Pajak-[jenis] / Cr Pajak Dibayar Di Muka. Tanpa prepaid (bayar pas sebesar disetujui) → nol jurnal tambahan, register tandai SELESAI.
+   - Sanksi yang dikurangkan/dihapuskan (Pasal 36 atau putusan) → Dr Utang Sanksi Pajak / Cr Pendapatan/Beban-dipulihkan-sanksi di masa putusan; sanksi yang tetap → lunas via TaxPayment pola existing.
+3. Denda keterlambatan upaya (mis. denda banding bila kalah) = beban periode putusan, bukan penambah pokok masa asal.
+
+### Putusan 3 — Q-TXD-3: SKPLB = piutang restitusi; kompensasi = reklas antar-masa; SKPN = arsip
+
+1. SKPLB terbit → akui piutang saat SKPLB diterima: **Dr Piutang Restitusi Pajak-[jenis] / Cr Pajak Dibayar Di Muka** (atau Cr Utang Pajak terkait bila lebih bayar belum dibayar-di-muka) sebesar nominal SKPLB, di masa SKPLB.
+2. Tiga jalan keluar, satu SKPLB satu jalan (pilih eksplisit di register, tidak otomatis):
+   - Restitusi tunai: SPMKP + dana masuk → Dr Kas/Bank / Cr Piutang Restitusi Pajak.
+   - Kompensasi masa berikut: SPT masa berikut mengakui pengurang → Dr Utang Pajak masa-berikut / Cr Piutang Restitusi Pajak di masa SPT kompensasi (bukan masa SKPLB).
+   - Ditolak sebagian saat pencairan (potong utang lain oleh DJP): selisih → Dr Utang Pajak yang dipotongkan / Cr Piutang Restitusi Pajak.
+3. SKPN (nihil) = arsip ketetapan saja, NOL jurnal. Lebih bayar kompensasi otomatis PPN (PM > PK masa berjalan, tanpa SKPLB) BUKAN objek vonis ini — tetap mekanisme SPT existing (read-model SPT), register sengketa dilarang mencatatnya sebagai SKPLB.
+
+### Putusan 4 — Q-TXD-4: ketetapan/putusan TIDAK menggerakkan pembetulan SPT masa asal
+
+1. Register sengketa tahap 1 NOL efek ke read-model SPT: tidak menulis TaxInvoice, tidak mengubah jurnal POSTED, tidak memicu pembetulan masa asal. Alasan: sumber kewajiban = jurnal POSTED + TaxInvoice approved; ketetapan DJP adalah dokumen eksternal, bukan dokumen ISF.
+2. Titik taut kelak (113-B boleh siapkan kolom, tanpa logika): ketetapan menunjuk TaxInvoice asal (SetNull) + TaxPayment bukti (SetNull) + nomor SKP/putusan + tanggal. Rekonsiliasi SPT-vs-ketetapan = LAPORAN selisih (temuan tampil), bukan jurnal otomatis — selaras prinsip "selisih = temuan".
+3. Pembetulan SPT masa asal hanya lahir dari DOKUMEN ISF yang dikoreksi (faktur pengganti approved, jurnal koreksi periode terbuka), bukan dari SKP. Putusan final yang mengubah posisi (restitusi/kompensasi) tercatat di MASA PUTUSAN (Putusan 2/3), tanpa restate masa asal.
+
+### Putusan 5 — Q-TXD-5: cakupan tahap PENGURANGAN_PEMBATALAN = 4 sub-jenis Pasal 36 ayat (1)
+
+1. Enum tahap `PENGURANGAN_PEMBATALAN` dipecah sub-jenis wajib (satu upaya = satu sub-jenis, sesuai huruf Pasal 36):
+   - `SANKSI_KURANG_HAPUS` (huruf a): pengurangan/penghapusan bunga/denda/kenaikan karena kekhilafan/bukan kesalahan WP. Dokumen putusan: SK Pengurangan/Penghapusan Sanksi.
+   - `SKP_KURANG_BATAL` (huruf b): pengurangan/pembatalan SKP yang tidak benar. Dokumen: SK Pengurangan/Pembatalan Ketetapan.
+   - `STP_KURANG_BATAL` (huruf c): pengurangan/pembatalan STP Pasal 14 yang tidak benar. Dokumen: SK Pengurangan/Pembatalan STP.
+   - `BATAL_DEMI_HUKUM` (huruf d): pembatalan hasil pemeriksaan/SKP tanpa SPHP/pembahasan akhir. Dokumen: SK Pembatalan.
+2. Akuntansi tiap sub-jenis mengikuti Putusan 2 (sanksi → utang-sanksi; SKP/STP → pokok); BATAL_DEMI_HUKUM yang membatalkan seluruh ketetapan → balikkan pengakuan SKP (Putusan 2 DIKABULKAN-penuh) + tandai upaya lain atas SKP sama GUGUR-otomatis-tertanda (bukan terhapus).
+3. Di luar Pasal 36 (mis. pembetulan Pasal 16, keberatan biasa) DILARANG masuk tahap ini — salah kamar = tolak dengan arahan jenis upaya benar.
+
+### Falsifikasi wajib (QA 113-Q, atas head implementasi persis)
+
+- E163-1: catat bayar-protes penuh → grep jalur tulis jurnal dari modul sengketa = 0 (hanya tautan TaxPayment).
+- E163-2: bayar melebihi utang tanpa akun prepaid terkonfigurasi → fail-closed berisik (tanpa tebak akun).
+- E163-3: putusan DIKABULKAN_SEBAGIAN bertanggal masa berjalan → jurnal di masa putusan; grep restate/mutasi jurnal masa asal = 0.
+- E163-4: SKPLB kompensasi → jurnal di masa SPT kompensasi, bukan masa SKPLB; SKPN → grep jurnal = 0.
+- E163-5: mutasi tahap PENGURANGAN_PEMBATALAN ke keberatan biasa → MERAH (kamar salah ditolak).
+- E163-6: cabut NTPN-lock (void TaxPayment ber-NTPN lolos) → MERAH.
+
+### Batas vonis
+
+- Vonis ini memutus JURNAL/AKUN/MASA saja. Kata/enum/hitungan tenggat/izin = putusan Lead Q-TXD-6..8. Model/skema = Backend 113-B. Nol tarif baru (semua nominal dari dokumen DJP apa adanya). Klaim kepatuhan: regulasi + URL + tanggal akses + cakupan di §Regulasi di atas; selebihnya USULAN berlabel.
+- Akun prepaid/restitusi/sanksi = COA pilihan pemilik + setting bertanggal; vonis ini tidak menciptakan nomor akun.
+
+ID vonis ini **F-2026-10-29-163-V** (jawaban Q-TXD-1..5: bayar-protes pelunasan+prepaid, putusan masa-putusan, SKPLB piutang/kompensasi, SPT tanpa restate, Pasal 36 empat sub-jenis). Pemilik berikutnya: Lead (putus Q-TXD-6..8 + merge PR vonis ini) → Backend (113-B model + jurnal hanya dari vonis ini) → Frontend (113-F register, nol jurnal dari UI) → QA (E163-1..6 head implementasi).
+### PUTUSAN LEAD Q-TXD-6..8 (2026-10-29 07:25 WIB, atas PR #1407 — final, tanpa BUTUH-OWNER)
+
+- Q-TXD-6 (kata/enum/hasil): SAHKAN §1 spec 113-S verbatim — register **Ketetapan Pajak**, anak **Upaya Sengketa**, kolom **Nominal Ketetapan / Nominal Disengketakan / Dibayar di Bawah Protes / Tenggat Upaya**; larangan label "utang pajak" pra-vonis + kata "menang/kalah" TETAP. Enum jenis ketetapan `SKPKB, SKPKBT, SKPLB, SKPN, PEMUNGUTAN_PIHAK_KETIGA`, jenis upaya `KEBERATAN, PENGURANGAN_PEMBATALAN, BANDING, GUGATAN, PENINJAUAN_KEMBALI`, hasil `DIKABULKAN, DIKABULKAN_SEBAGIAN, DITOLAK, TIDAK_DAPAT_DITERIMA` SAH verbatim; sub-jenis Pasal 36 mengikuti Putusan 5 vonis 163-V. Backend 113-B memakai string ini persis; ubah kata = putusan baru.
+- Q-TXD-7 (hitungan tenggat, server-side WIB): "3 bulan kalender" = tanggal acuan + 3 bulan kalender (tanggal sama; bulan pendek = hari terakhir bulan itu), batas 23:59:59 WIB. "14 hari" gugatan = +14 hari kalender, 23:59:59 WIB. "12 bulan" putusan keberatan analog. TANPA geser hari kerja/libur. Satu fungsi bernama milik Backend 113-B untuk semua tenggat sengketa; angka tenggat di luar fungsi itu = MERAH.
+- Q-TXD-8 (izin + empat mata): PUTUS key BARU `view_tax_disputes` / `create_tax_disputes` / `edit_tax_disputes` (tolak reuse `view_tax_payments` — register memuat strategi hukum). Fail-closed sebelum query. Empat mata: pencatat putusan ≠ pengaju upaya, tegak di server action 113-B (bandingkan createdBy upaya vs perekam putusan, tolak + pesan). Seed + permission-seed-parity diperbarui di 113-B, bukan PR ini.
+- Konsekuensi kartu: 113-B Backend boleh mulai dari origin/main sesudah PR ini merged (model + jurnal HANYA dari vonis 163-V + putusan ini); 113-F Frontend sesudah kontrak 113-B; QA 113-Q/E163 falsifikasi atas head implementasi persis.
 
 ## VONIS ACCOUNTANT 2026-10-29 — F-2026-10-29-163-V: tarif/selisih/periode jembatan jam lembur approved → costing (jawaban Q150-1/2/3 spec F-2026-10-28-150-S)
 

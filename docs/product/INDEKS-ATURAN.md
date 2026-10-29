@@ -119,6 +119,7 @@ perilaku, bukan hanya keberadaan file/model.
 
 | ID | Status | Bukti paling relevan / catatan |
 | --- | --- | --- |
+| TXD-113 | Vonis | Vonis F-2026-10-29-163-V (jawaban Q-TXD-1..5 spec F-2026-10-27-113-S): bayar-protes = pelunasan utang + prepaid selisih (reklas manual, NTPN tunggal tak dipecah), sanksi terpisah dari pokok; putusan diakui masa putusan (matriks dikabulkan/ditolak); SKPLB = piutang restitusi (tunai/kompensasi/potong-utang, SKPN arsip nol jurnal); ketetapan/putusan nol efek SPT masa asal; Pasal 36 empat sub-jenis. Register tahap 1 nol jurnal (hanya tautan TaxPayment/TaxInvoice). Backend 113-B + QA E163-1..6 sesudah PUTUSAN LEAD Q-TXD-6..8 07:25 WIB (kata §1/enum sah verbatim; tenggat kalender WIB 23:59:59 satu fungsi; key *_tax_disputes baru + empat mata) |
 | FIN-BR-001 | Sebagian | prisma/schema.prisma:2309 — hutang bertumpu pada `VendorBill`; validasi sumber bill belum ditelusur |
 | FIN-BR-002 | Sebagian | prisma/schema.prisma:1721 — piutang bertumpu pada `SalesInvoice`; syarat posted belum ditelusur |
 | FIN-BR-003 | Terpasang | prisma/schema.prisma:2309 — `VendorBill` berbeda entitas dari `prisma/schema.prisma:2397` — `VendorPayment` |
