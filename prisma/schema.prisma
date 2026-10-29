@@ -1330,6 +1330,7 @@ model TaxInvoice {
   replacedBy           TaxInvoice?  @relation("TaxInvoiceReplacement")
   salesReturnNotes     SalesReturn[]
   purchaseReturnNotes  PurchaseReturn[]
+  disputeAssessments   TaxAssessment[]
 
   @@index([direction, taxInvoiceNumber], map: "idx_tax_invoices_direction_number")
   @@index([taxPeriod], map: "idx_tax_invoices_period")
@@ -1456,6 +1457,7 @@ model TaxPayment {
   updatedAt        DateTime            @updatedAt @map("updated_at")
   deletedAt        DateTime?           @map("deleted_at")
   taxType          WithholdingTaxType? @relation(fields: [taxTypeId], references: [id], onDelete: SetNull)
+  disputeAssessments TaxAssessment[]
 
   @@index([taxTypeId])
   @@index([taxAccountId])
@@ -1466,6 +1468,84 @@ model TaxPayment {
   @@index([createdAt])
   @@index([deletedAt])
   @@map("tax_payments")
+}
+
+// F-2026-10-27-113-S tahap 113-B (register-only, NOL jurnal — lapis jurnal
+// sub-tahap terpisah per vonis 114-V/163-V). Kata/enum/hasil putusan Lead
+// Q-TXD-6..8 atas PR #1407 final: model Ketetapan Pajak + anak Upaya Sengketa.
+// Lampiran memakai TransactionAttachment polimorfik existing.
+model TaxAssessment {
+  slug            String?   @unique
+  id              Int       @id @default(autoincrement())
+  assessmentNumber String   @map("assessment_number")
+  /// SKPKB|SKPKBT|SKPLB|SKPN|PEMUNGUTAN_PIHAK_KETIGA (Q-TXD-6 verbatim).
+  kind            String
+  /// ppn|pph21|pph23|pph4_2|pph_badan|other (pola TaxPayment.taxKind).
+  taxKind         String?   @map("tax_kind")
+  taxPeriod       String?   @map("tax_period")
+  assessedAmount  Decimal   @map("assessed_amount") @db.Decimal(15, 2)
+  disputedAmount  Decimal   @map("disputed_amount") @db.Decimal(15, 2)
+  /// Dibayar di bawah protes — snapshot tautan TaxPayment (BR-TXD-08); tahap
+  /// register hanya tautan, NOL tulis TaxPayment (BR-TXD-11).
+  paidUnderProtest Decimal @default(0.00) @map("paid_under_protest") @db.Decimal(15, 2)
+  /// Tanggal SKP dikirim DJP — basis tenggat 3 bulan kalender (AC-TXD-B1);
+  /// tanggal terima internal terpisah, bukan basis tenggat.
+  sentAt          DateTime? @map("sent_at")
+  receivedAt      DateTime? @map("received_at")
+  /// TERDAFTAR|DIPROSES|DIPUTUS_SEBAGIAN|SELESAI|BATAL.
+  status          String    @default("TERDAFTAR")
+  taxPaymentId    Int?      @map("tax_payment_id")
+  taxInvoiceId    Int?      @map("tax_invoice_id")
+  notes           String?   @db.Text
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  steps           TaxDisputeStep[]
+  taxPayment      TaxPayment? @relation(fields: [taxPaymentId], references: [id], onDelete: SetNull)
+  taxInvoice      TaxInvoice? @relation(fields: [taxInvoiceId], references: [id], onDelete: SetNull)
+
+  @@index([kind])
+  @@index([taxKind])
+  @@index([status])
+  @@index([sentAt])
+  @@index([taxPaymentId])
+  @@index([deletedAt])
+  @@map("tax_assessments")
+}
+
+model TaxDisputeStep {
+  id              Int       @id @default(autoincrement())
+  assessmentId    Int       @map("assessment_id")
+  /// KEBERATAN|PENGURANGAN_PEMBATALAN|BANDING|GUGATAN|PENINJAUAN_KEMBALI.
+  kind            String
+  /// Wajib bila kind=PENGURANGAN_PEMBATALAN: SANKSI_KURANG_HAPUS|
+  /// SKP_KURANG_BATAL|STP_KURANG_BATAL|BATAL_DEMI_HUKUM (vonis 163-V Putusan 5).
+  article36Subkind String?  @map("article36_subkind")
+  /// DIAJUKAN|DALAM_PROSES|DIPUTUS|DICABUT|BATAL.
+  status          String    @default("DIAJUKAN")
+  filedAt         DateTime? @map("filed_at")
+  /// AC-TXD-B4: lewat tenggat = flag + alasan, bukan auto-ditolak.
+  lateReason      String?   @map("late_reason") @db.Text
+  decidedAt       DateTime? @map("decided_at")
+  decidedAmount   Decimal?  @map("decided_amount") @db.Decimal(15, 2)
+  /// DIKABULKAN|DIKABULKAN_SEBAGIAN|DITOLAK|TIDAK_DAPAT_DITERIMA.
+  result          String?
+  filedBy         Int?      @map("filed_by")
+  /// Q-TXD-8 empat mata: perekam putusan != pengaju upaya.
+  decisionBy      Int?      @map("decision_by")
+  decisionNotes   String?   @map("decision_notes") @db.Text
+  evidenceRef     String?   @map("evidence_ref")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  assessment      TaxAssessment @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+
+  @@index([assessmentId])
+  @@index([kind])
+  @@index([status])
+  @@index([filedAt])
+  @@map("tax_dispute_steps")
 }
 
 /// Template dokumen berulang (faktur/tagihan/beban/jurnal) yang dijalankan berkala.

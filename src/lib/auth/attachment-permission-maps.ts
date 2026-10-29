@@ -37,6 +37,10 @@ export const ATTACHMENT_PERMISSION: Record<string, PermissionName> = {
   petty_cash: "view_petty_cash",
   WarrantyClaim: "view_warranty_claims",
   EmployeeDisciplinaryRecord: "view_disciplinary_records",
+  // F-2026-10-27-113-S BR-TXD-09 (putusan Lead Q-TXD-8 PR #1407): lampiran
+  // dokumen sengketa pajak memakai referenceType polimorfik existing.
+  tax_assessment: "view_tax_disputes",
+  tax_dispute_step: "view_tax_disputes",
 }
 
 export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
@@ -67,6 +71,10 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
   WarrantyClaim: "edit_warranty_claims",
   // F-2026-10-25-005-S DISC-B1: bukti pelanggaran rekod disiplin (spec §3).
   EmployeeDisciplinaryRecord: "create_disciplinary_records",
+  // F-2026-10-27-113-S BR-TXD-09 (putusan Lead Q-TXD-8 PR #1407): unggah
+  // bukti ketetapan/upaya memakai izin tulis sengketa.
+  tax_assessment: "create_tax_disputes",
+  tax_dispute_step: "create_tax_disputes",
 }
 
 export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {

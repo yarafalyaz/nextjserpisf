@@ -109,6 +109,9 @@ const RESOURCES = [
   ["vendor_bills", "purchase", "Tagihan Vendor"],
   ["vendor_payments", "purchase", "Pembayaran Vendor"],
   ["tax_payments", "finance", "Penyetoran Pajak"],
+  // F-2026-10-27-113-S Q-TXD-8 (putusan Lead PR #1407): resource register
+  // sengketa pajak (tolak reuse view_tax_payments).
+  ["tax_disputes", "finance", "Sengketa Pajak"],
   ["tax_invoices", "finance", "Faktur Pajak"],
   ["withholding_certificates", "finance", "Bukti Potong (Bupot)"],
   ["purchase_returns", "purchase", "Retur Pembelian"],

@@ -51,6 +51,7 @@ const TABLE_SOURCES = {
   cost_centers: "name", bank_reconciliations: "reconciliation_number",
   bank_transfers: "document_no",
   purchase_advances: "document_no",
+  tax_assessments: "assessment_number",
   tax_payments: "document_no",
   tax_invoices: "tax_invoice_number",
   withholding_certificates: "certificate_number",

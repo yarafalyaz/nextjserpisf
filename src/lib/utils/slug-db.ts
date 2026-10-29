@@ -70,6 +70,7 @@ const SLUGGED_MODELS = {
   bankReconciliation: "bankReconciliation",
   bankTransfer: "bankTransfer",
   purchaseAdvance: "purchaseAdvance",
+  taxAssessment: "taxAssessment",
   taxPayment: "taxPayment",
   taxInvoice: "taxInvoice",
   withholdingCertificate: "withholdingCertificate",
