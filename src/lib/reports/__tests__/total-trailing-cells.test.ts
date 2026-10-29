@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
     vendor: { findMany: vi.fn() },
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
-    account: { findMany: vi.fn() },
+    account: { findMany: vi.fn(), findFirst: vi.fn() },
     journalEntry: { findMany: vi.fn(), groupBy: vi.fn() },
     item: { findMany: vi.fn(), findFirst: vi.fn() },
     warehouse: { findMany: vi.fn(), findFirst: vi.fn() },
@@ -230,7 +230,7 @@ describe("aging loader: saringan DB + asOf periode (BUGHUNT round3 A)", () => {
 
 describe("total trailing: buku pembantu", () => {
   it("Total & Saldo Akhir 3 sel trailing (Debit/Kredit/Saldo), bukan 6", async () => {
-    mocks.prismaMock.customer.findMany.mockResolvedValue([{ id: 1, slug: "pt-a" }])
+    mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1 })
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
       { id: 1, documentNo: "INV-1", customDocumentNo: null, date: new Date("2026-10-05"), grandTotal: 1000 },
     ])
@@ -249,7 +249,7 @@ describe("total trailing: buku pembantu", () => {
 
 describe("total trailing: buku besar & stok (lanjutan #8)", () => {
   it("buku besar: Total & Saldo Akhir 3 sel trailing (Debit/Kredit/Saldo)", async () => {
-    mocks.prismaMock.account.findMany.mockResolvedValue([{ id: 1, slug: "kas" }])
+    mocks.prismaMock.account.findFirst.mockResolvedValue({ id: 1 })
     mocks.prismaMock.journalEntry.findMany.mockResolvedValue([
       {
         debit: 1000,

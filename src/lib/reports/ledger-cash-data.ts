@@ -175,13 +175,18 @@ async function ledgerRows(
 async function resolveAccountId(kind: "slug-or-id", key: string | null): Promise<number | null> {
   void kind
   if (!key) return null
-  const accounts = await prisma.account.findMany({
-    where: { isActive: true },
-    select: { id: true, slug: true },
+  // Query terindeks findFirst (slug -> id), tanpa full scan populasi akun.
+  const bySlug = await prisma.account.findFirst({
+    where: { slug: key, isActive: true },
+    select: { id: true },
   })
-  return (
-    accounts.find((a) => a.slug === key) ?? accounts.find((a) => String(a.id) === key) ?? null
-  )?.id ?? null
+  if (bySlug) return bySlug.id
+  if (!/^\d+$/.test(key)) return null
+  const byId = await prisma.account.findFirst({
+    where: { id: Number(key), isActive: true },
+    select: { id: true },
+  })
+  return byId?.id ?? null
 }
 
 /** Buku Besar: akun dari slug/id path (`akun=<slug>`). */
@@ -218,12 +223,31 @@ const SUBLEDGER_COLUMNS: TableColumn[] = [
 
 async function resolvePartyId(side: "AR" | "AP", key: string | null): Promise<number | null> {
   if (!key) return null
+  // Sama seperti resolver akun: findFirst terindeks slug -> id.
   if (side === "AR") {
-    const rows = await prisma.customer.findMany({ where: { isActive: true, deletedAt: null }, select: { id: true, slug: true } })
-    return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
+    const bySlug = await prisma.customer.findFirst({
+      where: { slug: key, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    if (bySlug) return bySlug.id
+    if (!/^\d+$/.test(key)) return null
+    const byId = await prisma.customer.findFirst({
+      where: { id: Number(key), isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    return byId?.id ?? null
   }
-  const rows = await prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, select: { id: true, slug: true } })
-  return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
+  const bySlug = await prisma.vendor.findFirst({
+    where: { slug: key, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (bySlug) return bySlug.id
+  if (!/^\d+$/.test(key)) return null
+  const byId = await prisma.vendor.findFirst({
+    where: { id: Number(key), isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  return byId?.id ?? null
 }
 
 export interface ReceivableSubledgerSource {
