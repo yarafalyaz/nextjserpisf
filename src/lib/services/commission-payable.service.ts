@@ -79,7 +79,7 @@ export async function accrueTx(
   tx: TxClient,
   salesInvoiceId: number,
   userId?: number | null,
-  known?: { status?: unknown; salesEmployeeId?: unknown; commissionRatePercent?: unknown; grandTotal?: unknown; taxAmount?: unknown; updatedAt?: unknown } | null,
+  known?: { status?: unknown; salesEmployeeId?: unknown; commissionRatePercent?: unknown; grandTotal?: unknown; taxAmount?: unknown; updatedAt?: unknown; documentNo?: unknown } | null,
 ): Promise<CommissionAccrueOutcome> {
   assertJournalClaimRef(COMMISSION_ACCRUAL_JOURNAL_REF, salesInvoiceId)
 
@@ -90,7 +90,7 @@ export async function accrueTx(
   // ada supaya tanpa query ganda (mock `mockResolvedValueOnce` + hemat 1 round-trip).
   const invoice =
     known != null
-      ? (known as { status: unknown; salesEmployeeId: unknown; commissionRatePercent: unknown; grandTotal: unknown; taxAmount: unknown; updatedAt: unknown })
+      ? (known as { status: unknown; salesEmployeeId: unknown; commissionRatePercent: unknown; grandTotal: unknown; taxAmount: unknown; updatedAt: unknown; documentNo: unknown })
       : await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
   if (invoice.status !== "paid") return { accrued: false, amount: 0, reason: "faktur-belum-paid" }
   if (invoice.salesEmployeeId == null) return { accrued: false, amount: 0, reason: "penjual-null" }
