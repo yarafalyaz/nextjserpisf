@@ -1,59 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const mocks = vi.hoisted(() => {
-  // Salin verbatim `buildModelMock` validation-mock-helpers: `vi.hoisted`
-  // tak boleh memanggil impor modul (hoisting) — sinkronisasi ke helper
-  // bersama menunggu dukungan impor-hoisted Vitest.
-  // Susunan kunci disengaja beda dari helper bersama (semantik sama) —
-  // pemecah klon duplikasi Sonar pola commit 456929261.
-  const buildModelMock = () => ({
-    count: vi.fn().mockResolvedValue(0),
-    aggregate: vi.fn().mockResolvedValue({ _sum: {} }),
-    upsert: vi.fn().mockResolvedValue({}),
-    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
-    delete: vi.fn().mockResolvedValue({}),
-    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    update: vi.fn().mockResolvedValue({}),
-    createMany: vi.fn().mockResolvedValue({ count: 1 }),
-    create: vi.fn().mockResolvedValue({ id: 1 }),
-    findMany: vi.fn().mockResolvedValue([]),
-    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
-    findUnique: vi.fn().mockResolvedValue(null),
-    findFirst: vi.fn().mockResolvedValue(null),
-  })
+// Daftar model: factory vi.mock berjalan sebelum const tingkat-modul
+// terinisialisasi, jadi hanya `vi.hoisted` yang aman dirujuk (pola
+// payment-reversal-fin-br-008: impor `buildModelMock` bersama di dalam
+// factory async — tanpa blok mock lokal yang diduplikasi Sonar).
+const mocks = vi.hoisted(() => ({
+  requirePermissionMock: vi.fn(),
+  prismaMock: {} as Record<string, any>,
+  prismaModels: [
+    "purchaseOrder",
+    "purchaseOrderItem",
+    "goodsReceipt",
+    "goodsReceiptItem",
+    "vendorBill",
+    "vendorBillItem",
+    "vendor",
+    "item",
+    "journal",
+    "userWarehouse",
+    "workOrder",
+    "productionOrder",
+    "productionCost",
+  ],
+  revalidateMock: vi.fn(),
+  logActivityMock: vi.fn(),
+  generateDocNumMock: vi.fn(),
+}))
 
-  const prismaMock: any = {
-    purchaseOrder: buildModelMock(),
-    purchaseOrderItem: buildModelMock(),
-    goodsReceipt: buildModelMock(),
-    goodsReceiptItem: buildModelMock(),
-    vendorBill: buildModelMock(),
-    vendorBillItem: buildModelMock(),
-    vendor: buildModelMock(),
-    item: buildModelMock(),
-    journal: buildModelMock(),
-    userWarehouse: buildModelMock(),
-    workOrder: buildModelMock(),
-    productionOrder: buildModelMock(),
-    productionCost: buildModelMock(),
-    $transaction: vi.fn(async (ops: any) => {
-      if (typeof ops === "function") return ops(prismaMock)
-      return Promise.all(ops)
-    }),
-    $queryRaw: vi.fn().mockResolvedValue([]),
-    $executeRaw: vi.fn().mockResolvedValue(0),
-  }
-
-  return {
-    requirePermissionMock: vi.fn(),
-    prismaMock,
-    revalidateMock: vi.fn(),
-    logActivityMock: vi.fn(),
-    generateDocNumMock: vi.fn(),
-  }
+vi.mock("@/lib/db/prisma", async () => {
+  const { buildModelMock } = await import("./validation-mock-helpers")
+  const prismaMock = mocks.prismaMock
+  for (const model of mocks.prismaModels) prismaMock[model] = buildModelMock({ id: 1 })
+  prismaMock.$transaction = vi.fn(async (ops: any) =>
+    typeof ops === "function" ? ops(prismaMock) : Promise.all(ops),
+  )
+  prismaMock.$queryRaw = vi.fn().mockResolvedValue([])
+  prismaMock.$executeRaw = vi.fn().mockResolvedValue(0)
+  return { prisma: prismaMock }
 })
-
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
