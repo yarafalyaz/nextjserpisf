@@ -104,6 +104,9 @@ const SLUGGED_MODELS = {
   attendanceCorrection: "attendanceCorrection",
   payroll: "payroll",
   employeeLoan: "employeeLoan",
+  // BR-LOAN-07/08 (162-V): dokumen ber-slug penomoran berelasi.
+  employeeLoanRepayment: "employeeLoanRepayment",
+  employeeLoanWriteOff: "employeeLoanWriteOff",
   probationReview: "probationReview",
   employeeDisciplinaryRecord: "employeeDisciplinaryRecord",
   disciplinaryDeductionDecision: "disciplinaryDeductionDecision",

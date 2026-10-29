@@ -74,7 +74,9 @@ import {
   type OvertimeDayKind,
 } from "@/lib/services/overtime-pay.service";
 import { logActivity } from "@/lib/services/activity-log.service";
-import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { onPayrollPaid, deleteJournalByReferenceTx, reverseJournalsByReferenceTx, onEmployeeLoanCashRepayment, onEmployeeLoanWrittenOff } from "@/lib/hooks/accounting.hook";
+import { SETTLEMENT_TOLERANCE_IDR } from "@/lib/finance/settlement-status";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import type { HrScope } from "@/lib/auth/hr-scope";
@@ -100,6 +102,11 @@ import {
   type BpjsPeriodSlip,
 } from "@/lib/reports/payroll-weekly";
 import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
+import {
+  allocateLoanRepayment,
+  evaluateLoanBudgetGuard,
+  loanBudgetGuardMessage,
+} from "@/lib/reports/employee-loan-repayment";
 import { loadLeaveBalanceReport } from "@/lib/reports/leave-balance-data";
 import { buildLeaveBalanceCsv } from "@/lib/reports/leave-balance";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
@@ -842,6 +849,21 @@ async function buildPayrollWrite(o: {
       : {}),
   };
   const statutoryTotal = safeAdd(bpjsParts.total, pph, 0);
+  // F-2026-10-29-162-V PUT-LOAN-1 (E162-1): penjaga anggaran BR-LOAN-03 saat
+  // SUSUN — Σ potongan termasuk statutori > bruto = tolak berisik, nol pangkas.
+  const budgetBreach = evaluateLoanBudgetGuard({
+    gross,
+    loanDeduction: cappedLoan,
+    statutory: statutoryTotal,
+    otherDeductions: safeAdd(
+      v.deductions ?? 0,
+      safeAdd(v.lateDeduction, v.absentDeduction, 0),
+      0,
+    ),
+  });
+  if (budgetBreach) {
+    throw new Error(loanBudgetGuardMessage(budgetBreach, "susun"));
+  }
   const withheld = safeSum([v.deductions ?? 0, cappedLoan, v.lateDeduction, v.absentDeduction, statutoryTotal], 0);
   const net = Math.max(0, safeSubtract(gross, withheld, 0));
   return {
@@ -2291,11 +2313,13 @@ export async function generateBulkPayroll(
     // Peran ber-cakupan hanya menerbitkan slip karyawan yang boleh dilihatnya;
     // tanpa saringan ini slip seluruh organisasi lahir dari satu klik.
     const bulkScope = await getHrScope(user);
+    const bulkScopeActiveWhere =
+      bulkScope.kind === "all" ? {} : { AND: [hrEmployeeScopeWhere(bulkScope)] };
     const employees = await prisma.employee.findMany({
       where: {
         isActive: true,
         deletedAt: null,
-        ...(bulkScope.kind === "all" ? {} : { AND: [hrEmployeeScopeWhere(bulkScope)] }),
+        ...bulkScopeActiveWhere,
       },
       select: {
         id: true,
@@ -2307,6 +2331,23 @@ export async function generateBulkPayroll(
         },
       },
     });
+    // BR-HRS-04 (AC-HRS-3): karyawan aktif di luar cakupan dilaporkan sebagai
+    // hitungan "terlewati karena cakupan", bukan disaring diam-diam. Hanya
+    // hitung ID (tanpa nama/nominal, BR-HRS-07); kind all tidak menambah
+    // query (count cakupan = 0).
+    const outOfScopeIds: number[] =
+      bulkScope.kind === "all"
+        ? []
+        : (
+            await prisma.employee.findMany({
+              where: {
+                isActive: true,
+                deletedAt: null,
+                NOT: bulkScopeActiveWhere,
+              },
+              select: { id: true },
+            })
+          ).map((e) => e.id);
 
     // F-085-S gerbang BR-EMP-06 (Q-EMP-3): karyawan berhenti tidak boleh
     // menerima slip reguler massal. Periode seluruhnya sesudah berhenti
@@ -2356,6 +2397,11 @@ export async function generateBulkPayroll(
       paymentFrequency,
     );
     const runSkips: PayrollRunSkip[] = [
+      ...outOfScopeIds.map((employeeId) => ({
+        employeeId,
+        reason: "cakupan" as const,
+        conflictDocumentNo: null,
+      })),
       ...gatedOut.map((employeeId) => ({
         employeeId,
         reason: "berhenti" as const,
@@ -2633,11 +2679,14 @@ export async function generateBulkPayroll(
 
     const skippedByReason = countPayrollRunSkips(runSkips);
     const skippedTotal = runSkips.length;
+    const scopeSkipped = skippedByReason.cakupan;
     await logActivity(
       "generate",
       "Payroll",
       0,
-      `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal})`,
+      scopeSkipped > 0
+        ? `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal} termasuk ${scopeSkipped} di luar cakupan)`
+        : `Generate massal penggajian periode ${period} (${count} karyawan, frekuensi ${paymentFrequency}, terlewati ${skippedTotal})`,
     );
     revalidatePath("/sdm/penggajian");
     // AC-PF-5: hasil memuat count terbit + count terlewati per alasan,
@@ -3174,6 +3223,26 @@ export async function markPayrollPaid(payrollId: number) {
         `Total potongan Pasal 63 (cicilan pinjaman + denda + komponen potongan) Rp${paidCeilingBreach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${paidCeilingBreach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — pembayaran ditolak. Hitung ulang slip, jangan dibayar menembus plafon.`,
       );
     }
+    // F-2026-10-29-162-V PUT-LOAN-1 (E162-1): penjaga anggaran BR-LOAN-03 saat
+    // BAYAR — atas angka slip tersimpan (bukan hitung ulang): Σ potongan
+    // termasuk statutori > bruto = tolak berisik sebelum klaim status,
+    // nol jurnal, nol amortisasi. Cermin susun (buildPayrollWrite).
+    const paidBudgetBreach = evaluateLoanBudgetGuard({
+      gross: Number(payroll.grossSalary),
+      loanDeduction: Number(payroll.loanDeduction),
+      statutory:
+        Number(payroll.bpjsHealthEmployee ?? 0) +
+        Number(payroll.bpjsEmploymentEmployee ?? 0) +
+        Number(payroll.pph21 ?? 0),
+      otherDeductions: safeAdd(
+        Number(payroll.deductions ?? 0),
+        safeAdd(Number(payroll.lateDeduction ?? 0), Number(payroll.absentDeduction ?? 0), 0),
+        0,
+      ),
+    });
+    if (paidBudgetBreach) {
+      throw new Error(loanBudgetGuardMessage(paidBudgetBreach, "bayar"));
+    }
 
     await prisma.$transaction(async (tx) => {
       // Atomic conditional claim: only the request that flips status away from
@@ -3189,39 +3258,37 @@ export async function markPayrollPaid(payrollId: number) {
         throw new Error("Penggajian sudah dibayar atau status tidak valid");
       }
 
-      // Amortize active employee loans using the amount actually withheld this
-      // payroll (payroll.loanDeduction). Distribute oldest-first, capping each loan
-      // by its installment and remaining balance, and stop once the withheld budget
-      // is exhausted — previously every active loan was reduced by its full
-      // installment regardless of how much was actually deducted (over-amortization).
+      // Amortisasi via SATU helper urutan (PUT-LOAN-5, E162-6,
+      // F-2026-10-29-162-V): budget = snapshot slip, tertua-dulu, cap sisa,
+      // Rp1 lunas. Dilarang duplikasi logika alokasi di sini.
       if (payroll.employeeId && Number(payroll.loanDeduction) > 0) {
         const activeLoans = await tx.employeeLoan.findMany({
           where: { employeeId: payroll.employeeId, status: "active" },
-          orderBy: { loanDate: "asc" },
+          orderBy: [{ loanDate: "asc" }, { id: "asc" }],
+          select: { id: true, loanDate: true, remainingAmount: true },
         });
         // TASK-018 (6): amortisasi membaca snapshot slip (budget =
         // payroll.loanDeduction), BUKAN nominal cicilan master yang bisa
         // berubah sesudah slip terbit — jurnal onPayrollPaid mengkredit
         // Piutang sebesar snapshot yang sama, jadi plafon cicilan master
         // berjalan membuat subledger menyimpang dari jurnal (slip Rp500rb
-        // vs master Rp300rb menyisakan selisih Rp200rb). Alokasi tertua
-        // dulu, tercap sisa utang per pinjaman saja.
-        let budget = Number(payroll.loanDeduction);
+        // vs master Rp300rb menyisakan selisih Rp200rb).
+        const allocations = allocateLoanRepayment(
+          activeLoans.map((loan) => ({
+            id: loan.id,
+            loanDate: loan.loanDate,
+            remainingAmount: Number(loan.remainingAmount),
+          })),
+          Number(payroll.loanDeduction),
+        );
         const updates: Promise<unknown>[] = [];
-        for (const loan of activeLoans) {
-          if (budget <= 0) break;
-          const remaining = Number(loan.remainingAmount);
-          if (remaining <= 0) continue;
-          const applied = Math.min(remaining, budget);
-          if (applied <= 0) continue;
-          const newRemaining = safeSubtract(remaining, applied, 0);
-          budget = safeSubtract(budget, applied, 0);
+        for (const alloc of allocations) {
           updates.push(
             tx.employeeLoan.update({
-              where: { id: loan.id },
+              where: { id: alloc.loanId },
               data: {
-                remainingAmount: newRemaining,
-                status: newRemaining <= 0 ? "paid_off" : "active",
+                remainingAmount: alloc.nextRemaining,
+                status: alloc.nextStatus,
               },
             }),
           );
@@ -3266,6 +3333,246 @@ export async function markPayrollPaid(payrollId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[markPayrollPaid]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * HR-BR-005 (F-2026-10-28-133-S P2-P6/BR-HRCR-01..09 + vonis F-2026-10-28-135-V
+ * §2a-d): koreksi slip gaji `paid` = dokumen koreksi tertaut, bukan
+ * edit/hapus. Slip asal tetap `paid` nilainya tak ditimpa; slip koreksi baru
+ * (angka PENUH yang benar, bukan delta) tertaut `correctsPayrollId` dua arah.
+ * Urutan atomik SATU transaksi: reversal jurnal asal → kembalikan amortisasi
+ * pinjaman → buat slip koreksi dari tanggal terbuka → jurnal koreksi.
+ * Periode asal terkunci = tolak (P6); periode koreksi wajib terbuka.
+ * Pesan galat menyebut nomor dokumen saja, tanpa nominal gaji (P8/pola 117-S).
+ */
+export async function correctPaidPayroll(
+  payrollId: number,
+  formData: FormData,
+) {
+  try {
+    const user = await requirePermission("process_payroll");
+
+    const cleanReason = String(formData.get("reason") ?? "").trim();
+    if (!cleanReason) {
+      return { success: false, error: "Alasan koreksi wajib diisi." };
+    }
+
+    const userId = Number((user as { id: unknown }).id);
+
+    const source = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+    if (source.status !== "paid") {
+      return {
+        success: false,
+        error: `Slip ${source.documentNo} berstatus '${source.status}' — hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
+      };
+    }
+
+    await assertPayrollInHrScope(await getHrScope(user), source.employeeId ?? null);
+
+    // BR-HRCR-10: slip sumber kompensasi PKWT yang sudah dibayar/diubah status
+    // menahan koreksi; pesan menyebut nomor dokumen penahan.
+    const blockingEvent = await prisma.pkwtCompensationEvent.findFirst({
+      where: {
+        paidPayrollId: payrollId,
+        status: { notIn: ["draft"] },
+      },
+      select: { id: true, status: true },
+    });
+    if (blockingEvent) {
+      return {
+        success: false,
+        error: `Slip ${source.documentNo} menahan peristiwa kompensasi PKWT #${blockingEvent.id} berstatus '${blockingEvent.status}' — batalkan/ubah peristiwa itu dulu sebelum mengoreksi slip.`,
+      };
+    }
+
+    // Tanggal koreksi: hari ini WIB (periode berjalan/terbuka, vonis 135-V §2b).
+    // Periode asal beku sebagai histori; jurnal lawan memakai assertPeriodOpen
+    // tanggal asli pola reversal existing (135-V §2b).
+    const nowWib = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const correctionDate = new Date(
+      Date.UTC(nowWib.getUTCFullYear(), nowWib.getUTCMonth(), nowWib.getUTCDate(), 0, 0, 0),
+    );
+    await assertPeriodOpen(correctionDate);
+
+    // Nilai koreksi dibaca dari dokumen sumber SERVER (nonzero = angka penuh
+    // yang benar), BUKAN dari field client — client hanya kirim alasan.
+    // Baris komponen diklon dari slip asal supaya rekap periode koreksi
+    // berdiri sendiri; netto dihitung ulang mesin yang sama.
+    const result = await prisma.$transaction(async (tx) => {
+      const fresh = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+      if (fresh.status !== "paid") {
+        throw new Error(
+          `Slip ${fresh.documentNo} berstatus '${fresh.status}' — hanya slip paid yang dapat dikoreksi lewat dokumen koreksi.`,
+        );
+      }
+      const dup = await tx.payroll.findFirst({
+        where: { correctsPayrollId: payrollId },
+        select: { id: true, documentNo: true },
+      });
+      if (dup) {
+        throw new Error(
+          `Slip ${fresh.documentNo} sudah memiliki dokumen koreksi ${dup.documentNo} — koreksi kedua ditolak.`,
+        );
+      }
+
+      // (1) Jurnal lawan atas jurnal asal (assertPeriodOpen tanggal asli di
+      // dalam helper; periode terkunci = throw = rollback nol mutasi).
+      await reverseJournalsByReferenceTx(tx, "Payroll", payrollId, cleanReason, userId);
+
+      // (2) Amortisasi pinjaman DIBALIKKAN lewat dokumen (135-V §2a pola T7,
+      // bukan update manual): kembalikan remainingAmount sebesar porsi yang
+      // dulu diamortisasi slip ini. SATU helper urutan F-2026-10-29-162-V
+      // (E162-6, PUT-LOAN-5): SATU helper urutan dengan markPayrollPaid —
+      // allocateLoanRepayment atas sisa tercatat kini + budget slip, tertua-dulu,
+      // cap sisa, Rp1 lunas. Pinjaman yang jadi paid_off oleh amortisasi ini
+      // kembali active bila pulihan > Rp1 (toleransi FIN-BR-006).
+      const amortized = Number(fresh.loanDeduction) || 0;
+      let restored = 0;
+      if (fresh.employeeId != null && amortized > 0) {
+        const loans = await tx.employeeLoan.findMany({
+          where: { employeeId: fresh.employeeId },
+          orderBy: [{ loanDate: "asc" }, { id: "asc" }],
+          select: { id: true, loanDate: true, remainingAmount: true, status: true },
+        });
+        const forward = allocateLoanRepayment(
+          loans.map((loan) => ({
+            id: loan.id,
+            loanDate: loan.loanDate,
+            remainingAmount: Number(loan.remainingAmount),
+          })),
+          amortized,
+        );
+        for (const alloc of forward) {
+          const current = loans.find((l) => l.id === alloc.loanId);
+          if (!current) continue;
+          const priorRemaining = safeAdd(Number(current.remainingAmount), alloc.applied, 2);
+          const paidOffByThisPayroll = current.status === "paid_off" && alloc.nextStatus === "paid_off";
+          await tx.employeeLoan.update({
+            where: { id: alloc.loanId },
+            data: {
+              remainingAmount: priorRemaining,
+              status: paidOffByThisPayroll && priorRemaining > SETTLEMENT_TOLERANCE_IDR ? "active" : current.status,
+            },
+          });
+          restored = safeAdd(restored, alloc.applied, 2);
+        }
+      }
+
+      // (3) Slip koreksi: angka penuh slip asal, tetapi rentang + periode =
+      // periode TERBUKA (135-V §2b), bukan salinan rentang asal — salinan
+      // persis selalu P2002 pada uq_payroll_employee_range karena slip asal
+      // tetap ada sebagai `paid` (status pemblokir irisan). Acuan periode
+      // asal yang eksplisit = tautan `correctsPayrollId` (dua arah) +
+      // `correctionReason`; status langsung paid karena koreksi atas
+      // pembayaran yang sudah terjadi.
+      const correctionPeriod = `${correctionDate.getUTCFullYear()}-${String(correctionDate.getUTCMonth() + 1).padStart(2, "0")}`;
+      const correctionStart = new Date(
+        Date.UTC(correctionDate.getUTCFullYear(), correctionDate.getUTCMonth(), 1, 0, 0, 0),
+      );
+      const documentNo = await generateDocumentNumber("PAYROLL");
+      const correction = await tx.payroll.create({
+        data: {
+          slug: await nextSlug("payroll", documentNo),
+          documentNo,
+          employeeId: fresh.employeeId,
+          period: correctionPeriod,
+          type: fresh.type,
+          startDate: correctionStart,
+          endDate: correctionDate,
+          baseSalary: fresh.baseSalary,
+          allowances: fresh.allowances,
+          deductions: fresh.deductions,
+          overtimeTotal: fresh.overtimeTotal,
+          appreciationTotal: fresh.appreciationTotal,
+          loanDeduction: fresh.loanDeduction,
+          lateDeduction: fresh.lateDeduction,
+          grossSalary: fresh.grossSalary,
+          bpjsHealthEmployee: fresh.bpjsHealthEmployee,
+          bpjsEmploymentEmployee: fresh.bpjsEmploymentEmployee,
+          pph21: fresh.pph21,
+          statutorySnapshot: fresh.statutorySnapshot as never,
+          lateMinutes: fresh.lateMinutes,
+          workingDays: fresh.workingDays,
+          presentDays: fresh.presentDays,
+          absentDays: fresh.absentDays,
+          absentDeduction: fresh.absentDeduction,
+          netSalary: fresh.netSalary,
+          totalAmount: fresh.totalAmount,
+          paymentDate: correctionDate,
+          costCenterId: fresh.costCenterId,
+          status: "paid",
+          approvedBy: userId,
+          createdBy: userId,
+          correctsPayrollId: payrollId,
+          correctionReason: cleanReason,
+        },
+      });
+
+      const sourceLines = await tx.payrollComponentLine.findMany({
+        where: { payrollId },
+      });
+      if (sourceLines.length > 0) {
+        await tx.payrollComponentLine.createMany({
+          data: sourceLines.map((l) => ({
+            payrollId: correction.id,
+            componentId: l.componentId,
+            componentNameSnapshot: l.componentNameSnapshot,
+            kindSnapshot: l.kindSnapshot,
+            recurrenceSnapshot: l.recurrenceSnapshot,
+            isTaxableSnapshot: l.isTaxableSnapshot,
+            source: l.source,
+            assignmentId: l.assignmentId,
+            accountIdSnapshot: l.accountIdSnapshot,
+            amount: l.amount,
+            pkwtEventId: l.pkwtEventId,
+            pkwtSettledViaAccrual: l.pkwtSettledViaAccrual,
+          })),
+        });
+      }
+
+      // (4) Jurnal koreksi atas dokumen BARU (referenceId baru, bukan re-post
+      // payrollId asal — 135-V §Interaksi T5/B3). Filter REVERSED di
+      // onPayrollPaid membuka jalan re-post yang benar; jurnal asal yang kini
+      // REVERSED = histori, bukan pemblokir.
+      await onPayrollPaid(correction.id, userId, tx as never);
+
+      return { correctionId: correction.id, restored };
+    });
+
+    await logActivity(
+      "correct",
+      "Payroll",
+      payrollId,
+      `Koreksi slip ${source.documentNo}: ${cleanReason}`,
+      {
+        correctsPayrollId: payrollId,
+        correctionId: result.correctionId,
+        reason: cleanReason,
+        correctedBy: userId,
+      },
+    );
+    revalidatePath("/sdm/penggajian");
+    revalidatePath(`/sdm/penggajian/${payrollId}`);
+    return { success: true, id: result.correctionId };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    // P2002 berisik tanpa nominal gaji: koreksi memakai rentang periode
+    // terbuka; bila slip koreksi lain sudah terbit di rentang itu (balap/
+    // rentang bentrok nyata), tolak tanpa menyebut nominal dokumen lawan.
+    if (
+      e &&
+      typeof e === "object" &&
+      "code" in e &&
+      (e as { code?: string }).code === "P2002"
+    ) {
+      return {
+        success: false,
+        error: `Slip nomor ${payrollId} tidak dapat dikoreksi: sudah ada slip pada rentang periode koreksi. Koreksi hanya lewat satu dokumen koreksi.`,
+      };
+    }
+    console.error("[correctPaidPayroll]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -4877,6 +5184,179 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dokumen setoran tunai + write-off pinjaman karyawan (BR-LOAN-07/08)
+// F-2026-10-29-162-V (e)(f)(c): pelunasan di luar payroll WAJIB dokumen
+// beralasan — tanggal, aktor penerima, akun kas/bank, tautan pinjaman,
+// nominal, jejak audit; sisa HANYA berubah lewat dokumen ini / bayar gaji /
+// pencairan. Bukan efek payroll, bukan objek PPh21.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * BR-LOAN-07 (E162-5): dokumen setoran tunai pelunasan pinjaman karyawan.
+ *
+ * Idempoten per (loanId, tanggal setor, nominal, akun kas): dobel-klik /
+ * retry tidak boleh menggandakan pengurang sisa. Kelebihan di atas sisa
+ * DITOLAK berisik (default dikembalikan ke karyawan, vonis 162-V (f)) —
+ * DILARANG hangus / menambah sisa / jadi pendapatan.
+ * Izin: process_payroll (kasir payroll), scope HR karyawan pinjaman.
+ */
+export async function recordEmployeeLoanCashRepayment(formData: FormData) {
+  "use server";
+  try {
+    const user = await requirePermission("process_payroll");
+    const userId = Number((user as { id: unknown }).id);
+
+    const loanId = Number(formData.get("loanId"));
+    const rawAmount = parseMoneyAmount(formData.get("amount"));
+    if (rawAmount == null || !Number.isFinite(rawAmount) || rawAmount <= 0) throw new Error("Nominal setoran harus lebih dari 0");
+    const amount = rawAmount;
+    const cashAccountId = Number(formData.get("cashAccountId"));
+    const repaymentDateRaw = String(formData.get("repaymentDate") ?? "").trim();
+    const notes = String(formData.get("notes") ?? "").trim();
+    if (!Number.isSafeInteger(loanId) || loanId <= 0) throw new Error("Pinjaman tidak valid");
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Nominal setoran harus lebih dari 0");
+    if (!Number.isSafeInteger(cashAccountId) || cashAccountId <= 0) {
+      throw new Error("Akun kas/bank penerima setoran wajib diisi (BR-LOAN-07)");
+    }
+    if (!repaymentDateRaw) throw new Error("Tanggal setoran wajib diisi (BR-LOAN-07)");
+    if (!notes) throw new Error("Bukti/alasan setoran wajib diisi (BR-LOAN-07)");
+
+    const repaymentDate = wibDateToUtcMidnight(repaymentDateRaw);
+    const roundedAmount = safeRound(amount, 2);
+
+    const loan = await prisma.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
+    await assertHrEmployeeAccess(await getHrScope(user), loan.employeeId);
+    if (loan.status === "written_off") {
+      throw new Error(`Pinjaman #${loanId} sudah dihapus (written_off) — setoran ditolak.`);
+    }
+    if (loan.status !== "active") {
+      throw new Error(`Setoran hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
+    }
+
+    const doc = await prisma.$transaction(async (tx) => {
+      const remaining = Number(loan.remainingAmount);
+      if (roundedAmount - remaining > SETTLEMENT_TOLERANCE_IDR) {
+        throw new Error(
+          `Setoran Rp${roundedAmount.toLocaleString("id-ID")} melebihi sisa Rp${remaining.toLocaleString("id-ID")} — kelebihan dikembalikan ke karyawan, bukan menambah sisa (BR-LOAN-07). Sesuaikan nominal.`,
+        );
+      }
+      // Idempoten dokumen: kunci unik logis per (pinjaman, tanggal, nominal, kas).
+      const dup = await tx.employeeLoanRepayment.findFirst({
+        where: { loanId, repaymentDate, amount: roundedAmount, cashAccountId },
+        select: { id: true },
+      });
+      if (dup) return dup;
+      const created = await tx.employeeLoanRepayment.create({
+        data: {
+          slug: await nextSlug("employeeLoanRepayment", `setor-pinjaman-${repaymentDateRaw}`, { fallback: `setor-pinjaman-${repaymentDateRaw}-${loanId}` }),
+          loanId,
+          amount: roundedAmount,
+          excessAmount: 0,
+          cashAccountId,
+          repaymentDate,
+          receivedBy: userId,
+          notes,
+          createdBy: userId,
+        },
+      });
+      const nextRemaining = safeSubtract(remaining, roundedAmount, 2);
+      await tx.employeeLoan.update({
+        where: { id: loanId },
+        data: {
+          remainingAmount: nextRemaining,
+          status: nextRemaining <= SETTLEMENT_TOLERANCE_IDR ? "paid_off" : "active",
+        },
+      });
+      await onEmployeeLoanCashRepayment(created.id, userId, tx as never);
+      return created;
+    });
+
+    await logActivity("create", "EmployeeLoanRepayment", doc.id, `Setoran tunai pinjaman #${loanId}`);
+    revalidatePath("/sdm/pinjaman");
+    return { success: true, id: doc.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[recordEmployeeLoanCashRepayment]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * BR-LOAN-08 (E162-3/E162-4): dokumen write-off piutang pinjaman tak tertagih.
+ *
+ * Dr 720007 (setting, fail-closed) / Cr 110506. Status → `written_off` HANYA
+ * oleh dokumen ini. Bukan objek PPh21 — tidak masuk bruto/bupot/TER.
+ * Izin: process_payroll + cakupan HR; alasan + tanggal wajib (bukti).
+ */
+export async function writeOffEmployeeLoan(formData: FormData) {
+  "use server";
+  try {
+    const user = await requirePermission("process_payroll");
+    const userId = Number((user as { id: unknown }).id);
+
+    const loanId = Number(formData.get("loanId"));
+    const writeOffDateRaw = String(formData.get("writeOffDate") ?? "").trim();
+    const reason = String(formData.get("reason") ?? "").trim();
+    if (!Number.isSafeInteger(loanId) || loanId <= 0) throw new Error("Pinjaman tidak valid");
+    if (!writeOffDateRaw) throw new Error("Tanggal write-off wajib diisi (BR-LOAN-08)");
+    if (!reason) throw new Error("Alasan write-off wajib diisi (BR-LOAN-08)");
+
+    const writeOffDate = wibDateToUtcMidnight(writeOffDateRaw);
+    const loan = await prisma.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
+    await assertHrEmployeeAccess(await getHrScope(user), loan.employeeId);
+    if (loan.status === "written_off") {
+      throw new Error(`Pinjaman #${loanId} sudah dihapus — dokumen ganda ditolak.`);
+    }
+    if (loan.status === "paid_off") {
+      throw new Error(`Pinjaman #${loanId} sudah lunas — write-off ditolak.`);
+    }
+    if (loan.status !== "active") {
+      throw new Error(`Write-off hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
+    }
+    const remaining = Number(loan.remainingAmount);
+    if (!(remaining > 0)) throw new Error("Sisa pinjaman nol — write-off ditolak.");
+
+    const doc = await prisma.$transaction(async (tx) => {
+      // Idempoten dokumen: satu pinjaman aktif = satu dokumen write-off final.
+      const dup = await tx.employeeLoanWriteOff.findFirst({ where: { loanId }, select: { id: true } });
+      if (dup) throw new Error(`Pinjaman #${loanId} sudah punya dokumen write-off #${dup.id} — ganda ditolak.`);
+      const created = await tx.employeeLoanWriteOff.create({
+        data: {
+          slug: await nextSlug("employeeLoanWriteOff", `writeoff-pinjaman-${writeOffDateRaw}`, { fallback: `writeoff-pinjaman-${writeOffDateRaw}-${loanId}` }),
+          loanId,
+          amount: safeRound(remaining, 2),
+          writeOffDate,
+          approvedBy: userId,
+          reason,
+          createdBy: userId,
+        },
+      });
+      await tx.employeeLoan.update({
+        where: { id: loanId },
+        data: { remainingAmount: 0, status: "written_off" },
+      });
+      await onEmployeeLoanWrittenOff(created.id, userId, tx as never);
+      return created;
+    });
+
+    await logActivity("create", "EmployeeLoanWriteOff", doc.id, `Write-off pinjaman #${loanId} (bukan objek PPh21)`);
+    revalidatePath("/sdm/pinjaman");
+    return { success: true, id: doc.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[writeOffEmployeeLoan]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dokumen setoran tunai + write-off pinjaman karyawan (BR-LOAN-07/08)
+// (slug berelasi: dokumen 07/08 memakai nextSlug("employeeLoan") pola
+// existing + fallback unik per pinjaman; delegate SLUG tanpa kunci baru —
+// model dokumen tanpa slug wajib terdaftar.)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function updateTimesheet(id: number, formData: FormData) {
   "use server";

@@ -64,6 +64,8 @@ const mocks = vi.hoisted(() => ({
   journalEntryCreateMany: vi.fn(),
   itemFindUnique: vi.fn(),
   paymentFindUniqueOrThrow: vi.fn(),
+  repaymentFindUniqueOrThrow: vi.fn(),
+  writeOffFindUniqueOrThrow: vi.fn(),
   orderFindUniqueOrThrow: vi.fn(),
   adjustmentFindUniqueOrThrow: vi.fn(),
   workOrderFindUniqueOrThrow: vi.fn(),
@@ -166,6 +168,12 @@ vi.mock("@/lib/db/prisma", () => ({
     pkwtCompensationEvent: { findUnique: (...a: unknown[]) => mocks.pkwtEventFindUnique(...a) },
     pkwtCompensationAccrual: { aggregate: (...a: unknown[]) => mocks.pkwtAccrualAggregate(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
+    employeeLoanRepayment: {
+      findUniqueOrThrow: (...a: unknown[]) => mocks.repaymentFindUniqueOrThrow(...a),
+    },
+    employeeLoanWriteOff: {
+      findUniqueOrThrow: (...a: unknown[]) => mocks.writeOffFindUniqueOrThrow(...a),
+    },
   },
 }));
 
@@ -2272,13 +2280,39 @@ describe("onPayrollPaid", () => {
     expect(mocks.payrollFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
-  it("returns early if journal already exists (idempotency)", async () => {
+  it("menolak posting ganda saat jurnal aktif sudah ada (fail-closed, bukan senyap)", async () => {
+    // HR-BR-005 E-HRCR-6 + 135-V E135-5: jurnal AKTIF = tolak berisik;
+    // console.info konteks dicatat sebelum throw (guard idempotency-logging).
     mocks.payrollFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       netSalary: 1000,
     });
-    mocks.journalFindFirst.mockResolvedValue({ id: 7 });
-    await onPayrollPaid(1);
+    mocks.journalFindFirst.mockResolvedValue({ id: 7, status: "POSTED" });
+    await expect(onPayrollPaid(1)).rejects.toThrow("posting ganda ditolak");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("E-HRCR-6b: re-post slip asal sesudah reversal DITOLAK berisik (vonis 135-V §5.2b)", async () => {
+    // Vonis 135-V §5.2b: slip koreksi sah selalu memakai referenceId BARU
+    // (dokumen baru), bukan payrollId asal. Histori REVERSED atas payrollId
+    // asal = bukti reversal sudah terjadi -> re-post asal ditolak berisik
+    // (bukan console.info senyap = MERAH), menyebut nomor dokumen tanpa
+    // nominal gaji (P8 spec). Slip koreksi baru tidak tersentuh penjaga ini
+    // karena referenceId-nya berbeda.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-REV-1",
+    });
+    mocks.journalFindFirst.mockImplementation(async (args: any) =>
+      args?.where?.status === "REVERSED" ? { id: 7 } : null,
+    );
+    await expect(onPayrollPaid(1)).rejects.toThrow(/PAY-REV-1/);
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
@@ -2334,6 +2368,24 @@ describe("onPayrollPaid", () => {
         }),
       }),
     );
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("E-HRCR-6: slip koreksi baru (referenceId BARU) tetap bisa posting sesudah reversal asal", async () => {
+    // Jalur sah correctPaidPayroll: referenceId BARU (id slip koreksi) —
+    // jurnal asal REVERSED = histori, bukan pemblokir.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 2,
+      netSalary: 1000,
+      grossSalary: 1000,
+      bpjsHealthEmployee: 0,
+      bpjsEmploymentEmployee: 0,
+      pph21: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-2",
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(2);
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -2693,5 +2745,74 @@ describe("gerbang akun 210209 klaim reimbursement (t_5c6d55f3)", () => {
     const where = mocks.journalFindFirst.mock.calls[0]?.[0]?.where;
     expect(where.status).toEqual({ not: "REVERSED" });
     expect(where.deletedAt).toBeNull();
+  });
+});
+
+/**
+ * F-2026-10-29-162-V — hook jurnal dokumen BR-LOAN-07/08 (E162 head implementasi).
+ */
+describe("BR-LOAN-07/08 hook jurnal setoran tunai + write-off (E162-3/4/5)", () => {
+  function buildLoanTx(extra: Record<string, unknown>) {
+    return {
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+      ...extra,
+      account: { findMany: mocks.accountFindMany, findFirst: mocks.accountFindFirst },
+      journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+      journalEntry: journalEntryBranch(),
+    };
+  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAllAccountsExist();
+    mocks.systemSettings.employeeReceivableAccountId = 140;
+    (mocks.systemSettings as Record<string, unknown>).employeeLoanWriteOffExpenseAccountId = 720;
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    mocks.assertPeriodOpen.mockResolvedValue(undefined);
+  });
+
+  it("E162-3: write-off tanpa setting 720007 + tanpa akun 720007 di COA = tolak berisik, nol jurnal", async () => {
+    const { onEmployeeLoanWrittenOff } = await import("../accounting.hook");
+    (mocks.systemSettings as Record<string, unknown>).employeeLoanWriteOffExpenseAccountId = null;
+    mocks.accountFindFirst.mockResolvedValue(null);
+    mocks.writeOffFindUniqueOrThrow.mockResolvedValue({ id: 9, loanId: 3, amount: 500000, writeOffDate: new Date("2026-10-29") });
+    wireTransaction(() =>
+      buildLoanTx({
+        employeeLoanWriteOff: { findUniqueOrThrow: mocks.writeOffFindUniqueOrThrow },
+      }),
+    );
+    await expect(onEmployeeLoanWrittenOff(9, 7)).rejects.toThrow(/720007/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("E162 kontrol positif: setor Dr kas / Cr 110506; write-off Dr 720007 / Cr 110506; tanpa kaki PPh", async () => {
+    const { onEmployeeLoanCashRepayment, onEmployeeLoanWrittenOff } = await import("../accounting.hook");
+    mocks.repaymentFindUniqueOrThrow.mockResolvedValue({ id: 5, loanId: 2, amount: 300000, cashAccountId: 100, repaymentDate: new Date("2026-10-29") });
+    wireTransaction(() =>
+      buildLoanTx({
+        employeeLoanRepayment: { findUniqueOrThrow: mocks.repaymentFindUniqueOrThrow },
+      }),
+    );
+    await onEmployeeLoanCashRepayment(5, 7);
+    const setorJournal = mocks.journalCreate.mock.calls[0]?.[0]?.data;
+    const setor = (setorJournal?.entries?.create ?? []) as Record<string, number>[];
+    expect(setor).toContainEqual(expect.objectContaining({ accountId: 100, debit: 300000, credit: 0 }));
+    expect(setor).toContainEqual(expect.objectContaining({ accountId: 140, debit: 0, credit: 300000 }));
+    expect(setor.every((e) => [100, 140].includes(e.accountId))).toBe(true);
+
+    mocks.journalCreate.mockClear();
+    mocks.accountFindFirst.mockResolvedValue({ id: 720, code: "720007" });
+    mocks.writeOffFindUniqueOrThrow.mockResolvedValue({ id: 9, loanId: 3, amount: 500000, writeOffDate: new Date("2026-10-29") });
+    wireTransaction(() =>
+      buildLoanTx({
+        employeeLoanWriteOff: { findUniqueOrThrow: mocks.writeOffFindUniqueOrThrow },
+      }),
+    );
+    await onEmployeeLoanWrittenOff(9, 7);
+    const woJournal = mocks.journalCreate.mock.calls[0]?.[0]?.data;
+    const wo = (woJournal?.entries?.create ?? []) as Record<string, number>[];
+    expect(wo).toContainEqual(expect.objectContaining({ accountId: 720, debit: 500000, credit: 0 }));
+    expect(wo).toContainEqual(expect.objectContaining({ accountId: 140, debit: 0, credit: 500000 }));
+    expect(wo.every((e) => [720, 140].includes(e.accountId))).toBe(true);
   });
 });
