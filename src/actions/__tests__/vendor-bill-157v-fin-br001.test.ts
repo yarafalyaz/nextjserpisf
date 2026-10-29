@@ -28,15 +28,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/db/prisma", async () => {
-  const { buildModelMock } = await import("./validation-mock-helpers")
-  const prismaMock = mocks.prismaMock
-  for (const model of mocks.prismaModels) prismaMock[model] = buildModelMock({ id: 1 })
-  prismaMock.$transaction = vi.fn(async (ops: any) =>
-    typeof ops === "function" ? ops(prismaMock) : Promise.all(ops),
-  )
-  prismaMock.$queryRaw = vi.fn().mockResolvedValue([])
-  prismaMock.$executeRaw = vi.fn().mockResolvedValue(0)
-  return { prisma: prismaMock }
+  const { buildModelMock, fillPrismaMock } = await import("./validation-mock-helpers")
+  return { prisma: fillPrismaMock(mocks, buildModelMock) }
 })
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
@@ -44,36 +37,33 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: mocks.generateDocNumMock }))
 vi.mock("@/lib/services/journal-builder.service", () => ({ createGlJournal: vi.fn() }))
-vi.mock("@/lib/services/inventory.service", () => ({
-  inventoryService: { receivePurchase: vi.fn().mockResolvedValue({}), processPurchaseReturn: vi.fn().mockResolvedValue({}) },
-}))
-vi.mock("@/lib/services/notification.service", () => ({
-  notificationService: { notifyAdmins: vi.fn().mockResolvedValue({}) },
-}))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn().mockResolvedValue({}),
-  assertApproved: vi.fn().mockResolvedValue({}),
-}))
-vi.mock("@/lib/hooks/goods-receipt.hook", () => ({
-  onGoodsReceiptVerified: vi.fn().mockResolvedValue({}),
-}))
-vi.mock("@/lib/hooks/purchase-order.hook", () => ({
-  onPurchaseOrderCreated: vi.fn().mockResolvedValue({}),
-}))
-vi.mock("@/lib/hooks/purchase-return.hook", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/hooks/purchase-return.hook")>();
-  return { ...actual, onPurchaseReturnProcessed: vi.fn().mockResolvedValue({}) };
+vi.mock("@/lib/services/inventory.service", async () => {
+  const { purchaseChainMockFactories } = await import("./validation-mock-helpers")
+  return purchaseChainMockFactories.inventory()
+})
+vi.mock("@/lib/services/notification.service", async () => {
+  const { purchaseChainMockFactories } = await import("./validation-mock-helpers")
+  return purchaseChainMockFactories.notification()
+})
+vi.mock("@/lib/services/approval-workflow.service", async () => {
+  const { purchaseChainMockFactories } = await import("./validation-mock-helpers")
+  return purchaseChainMockFactories.approval()
+})
+vi.mock("@/lib/hooks/goods-receipt.hook", async () => {
+  const { purchaseChainMockFactories } = await import("./validation-mock-helpers")
+  return purchaseChainMockFactories.goodsReceiptHook()
+})
+vi.mock("@/lib/hooks/purchase-order.hook", async () => {
+  const { purchaseChainMockFactories } = await import("./validation-mock-helpers")
+  return purchaseChainMockFactories.purchaseOrderHook()
+})
+vi.mock("@/lib/hooks/purchase-return.hook", async () => {
+  const { purchaseReturnHookFactory } = await import("./validation-mock-helpers")
+  return purchaseReturnHookFactory()
 })
 
 import * as actions from "../purchase.actions"
-
-function fdMap(payload: Record<string, string | number | null | undefined>): FormData {
-  const f = new FormData()
-  for (const [k, v] of Object.entries(payload)) {
-    if (v !== null && v !== undefined) f.append(k, String(v))
-  }
-  return f
-}
+import { buildFormData as fdMap } from "./validation-mock-helpers"
 
 beforeEach(() => {
   vi.clearAllMocks()

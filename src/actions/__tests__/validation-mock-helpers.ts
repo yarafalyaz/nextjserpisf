@@ -140,6 +140,70 @@ export function expectRevisionDownRejection(mocks: AnyMocks, res: { success: boo
   expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
 }
 
+/**
+ * FormData dari pasangan kunci-nilai (angka dinormalisasi via String;
+ * null/undefined dilewati). Satu definisi bersama supaya berkas tes aksi
+ * tidak mengulang helper identik yang memerahkan duplikasi SonarCloud.
+ */
+export function buildFormData(payload: Record<string, string | number | null | undefined>): FormData {
+  const f = new FormData()
+  for (const [k, v] of Object.entries(payload)) {
+    if (v !== null && v !== undefined) f.append(k, String(v))
+  }
+  return f
+}
+
+/**
+ * Factory vi.mock bersama rantai purchase (inventory/notification/approval/
+ * GR-hook/PO-hook/purchase-return-hook). Dipanggil dari DALAM tiap
+ * `vi.mock("...", ...)` di berkas tes supaya blok mock identik tidak ditulis
+ * ulang per berkas (sumber duplikasi SonarCloud).
+ */
+export const purchaseChainMockFactories = {
+  inventory: () => ({
+    inventoryService: { receivePurchase: vi.fn().mockResolvedValue({}), processPurchaseReturn: vi.fn().mockResolvedValue({}) },
+  }),
+  notification: () => ({
+    notificationService: { notifyAdmins: vi.fn().mockResolvedValue({}) },
+  }),
+  approval: () => ({
+    requestApprovalIfConfigured: vi.fn().mockResolvedValue({}),
+    assertApproved: vi.fn().mockResolvedValue({}),
+  }),
+  goodsReceiptHook: () => ({
+    onGoodsReceiptVerified: vi.fn().mockResolvedValue({}),
+  }),
+  purchaseOrderHook: () => ({
+    onPurchaseOrderCreated: vi.fn().mockResolvedValue({}),
+  }),
+} as const
+
+export async function purchaseReturnHookFactory() {
+  const actual = await import("@/lib/hooks/purchase-return.hook")
+  return { ...actual, onPurchaseReturnProcessed: vi.fn().mockResolvedValue({}) }
+}
+
+/**
+ * Isi prismaMock hoisted dari daftar model + pasang $transaction/$queryRaw/
+ * $executeRaw standar. Dipanggil dari DALAM factory `vi.mock("@/lib/db/prisma")`
+ * (async, impor helper ini di dalam factory) supaya blok pengisi mock yang
+ * identik antar berkas tes tidak ditulis ulang per berkas.
+ */
+export function fillPrismaMock(
+  mocks: { prismaMock: Record<string, unknown>; prismaModels: string[] },
+  buildModelMock: (createResult?: unknown) => unknown,
+): Record<string, unknown> {
+  const prismaMock = mocks.prismaMock
+  for (const model of mocks.prismaModels) prismaMock[model] = buildModelMock({ id: 1 })
+  const tx = prismaMock as Record<string, unknown>
+  tx.$transaction = vi.fn(async (ops: unknown) =>
+    typeof ops === "function" ? (ops as (t: unknown) => unknown)(prismaMock) : Promise.all(ops as unknown[]),
+  )
+  tx.$queryRaw = vi.fn().mockResolvedValue([])
+  tx.$executeRaw = vi.fn().mockResolvedValue(0)
+  return prismaMock
+}
+
 
 /** Aserti entri jurnal seimbang (debit = kredit); kembalikan entri. */
 export function expectJournalEntriesBalanced<T extends { debit: number; credit: number }>(
