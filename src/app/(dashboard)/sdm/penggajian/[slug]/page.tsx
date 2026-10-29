@@ -26,6 +26,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
 import { hasPermission } from "@/lib/auth/permissions";
 import { PayrollComponentLines } from "@/components/payroll/payroll-component-lines";
+import { PayrollCommissionLines } from "@/components/payroll/payroll-commission-lines";
 import { PayrollBpjsAggregateSnapshot } from "@/components/payroll/payroll-bpjs-aggregate-snapshot";
 
 export const metadata: Metadata = { title: "Penggajian" };
@@ -58,13 +59,27 @@ export default async function PayrollDetailPage({
 
   if (!payroll) notFound();
 
-  const [activeComponents, canEditPayroll] = await Promise.all([
+  const [activeComponents, canEditPayroll, commissionDebts] = await Promise.all([
     prisma.payrollComponent.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, kind: true, recurrence: true },
     }),
     hasPermission("edit_payroll"),
+    payroll.employeeId != null
+      ? prisma.commissionPayable.findMany({
+          where: { salesEmployeeId: payroll.employeeId },
+          select: {
+            id: true,
+            salesInvoiceId: true,
+            accruedAmount: true,
+            reversalAmount: true,
+            paidAmount: true,
+            salesInvoice: { select: { documentNo: true } },
+          },
+          orderBy: { id: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   const fmt = (val: unknown) => Number(val ?? 0).toLocaleString("id-ID");
@@ -262,11 +277,36 @@ export default async function PayrollDetailPage({
           recurrenceSnapshot: l.recurrenceSnapshot,
           isTaxableSnapshot: l.isTaxableSnapshot,
           source: l.source,
+          commissionPayableId: l.commissionPayableId,
+          commissionInvoiceId: l.commissionInvoiceId,
           amount: Number(l.amount),
         }))}
         components={activeComponents}
         allowances={Number(payroll.allowances)}
         deductions={Number(payroll.deductions)}
+        canEdit={canEditPayroll}
+      />
+
+      <PayrollCommissionLines
+        payrollId={payroll.id}
+        status={payroll.status}
+        debts={commissionDebts
+          .map((d) => ({
+            id: d.id,
+            salesInvoiceId: d.salesInvoiceId,
+            invoiceNo: d.salesInvoice?.documentNo ?? null,
+            balance:
+              Number(d.accruedAmount) - Number(d.reversalAmount) - Number(d.paidAmount),
+          }))
+          .filter((d) => d.balance > 0)}
+        lines={payroll.componentLines
+          .filter((l) => l.commissionPayableId != null)
+          .map((l) => ({
+            id: l.id,
+            commissionPayableId: l.commissionPayableId as number,
+            commissionInvoiceId: l.commissionInvoiceId,
+            amount: Number(l.amount),
+          }))}
         canEdit={canEditPayroll}
       />
     </div>
