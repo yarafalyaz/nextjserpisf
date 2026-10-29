@@ -1,12 +1,6 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -22,8 +16,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/keuangan/pusat-biaya/tambah", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Buat Pusat Biaya" })).toBeVisible({ timeout: 30000 })
-
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     const nameInput = page.locator("#name")
     await expect(nameInput).toBeVisible({ timeout: 30000 })
@@ -32,9 +25,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: "Simpan" }).click()
 
-    await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/keuangan/pusat-biaya", name)
     await expect(page.locator("body")).toContainText(code)
 
     // ─── DETAIL ───────────────────────────────────────────────
@@ -61,7 +52,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     const row = page.locator("tr").filter({ hasText: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
     await row.getByRole("button", { name: "Buka menu aksi" }).first().click()
-    await page.waitForTimeout(2000)
+    await expect(page.getByRole("menuitem", { name: /Edit|Ubah/ }).first()).toBeVisible({ timeout: 10_000 })
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/keuangan\/pusat-biaya\/[^/]+\/ubah$/, { timeout: 30000 })
@@ -85,7 +76,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     // 1. Open dropdown
     await updatedRow.getByRole("button", { name: "Buka menu aksi" }).first().click()
-    await page.waitForTimeout(2000)
+    await expect(page.getByRole("menuitem", { name: "Hapus" }).first()).toBeVisible({ timeout: 10_000 })
     // 2. Click Hapus menu item
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
     // 3. Wait for confirm dialog

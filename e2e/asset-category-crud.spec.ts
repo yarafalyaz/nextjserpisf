@@ -1,12 +1,5 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("Aset Kategori CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -21,7 +14,7 @@ test.describe("Aset Kategori CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/kategori/tambah", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible({ timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     // The per-category GL mapping section must render (it is what makes the
     // depreciation/acquisition cron honour a category-specific account).
@@ -58,7 +51,7 @@ test.describe("Aset Kategori CRUD", () => {
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto(`/aset/kategori?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
@@ -67,7 +60,7 @@ test.describe("Aset Kategori CRUD", () => {
 
     await page.waitForURL(/\/aset\/kategori\/[^/]+\/ubah$/, { timeout: 30000 })
     await page.locator("#name").fill(updated)
-    await waitForHydration(page)
+    await expect(page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })
     await page.waitForLoadState("networkidle")

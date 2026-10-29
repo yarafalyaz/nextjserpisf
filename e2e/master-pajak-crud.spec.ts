@@ -1,12 +1,6 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Master Pajak CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -21,16 +15,14 @@ test.describe("Master Pajak CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/pajak/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#tax-name").fill(name)
     await page.locator("#tax-rate").fill(rate)
-    await waitForHydration(page)
+    await expect(page.locator("#submit-tax")).toBeEnabled({ timeout: 15_000 })
     await page.locator("#submit-tax").click()
-    await page.waitForURL("**/master/pajak", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/master/pajak", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page
@@ -41,9 +33,7 @@ test.describe("Master Pajak CRUD", () => {
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
-
-    await waitForHydration(page)
-    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("body")).toContainText(name, { timeout: 30_000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto("/master/pajak", { waitUntil: "domcontentloaded" })
@@ -60,9 +50,7 @@ test.describe("Master Pajak CRUD", () => {
     await page.locator('input[name="name"]').fill(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
-    await page.waitForURL("**/master/pajak", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/master/pajak", updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()

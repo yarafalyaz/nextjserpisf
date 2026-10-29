@@ -1,12 +1,6 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Aset Brand (Merek) CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -21,16 +15,14 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/merek/tambah", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Tambah Merek Aset" })).toBeVisible({ timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     const nameInput = page.locator("#name")
     await expect(nameInput).toBeVisible({ timeout: 10000 })
     await nameInput.fill(name)
     await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
-    await page.waitForURL("**/aset/merek", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/aset/merek", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name }).first()
@@ -45,7 +37,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto("/aset/merek", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
 
     const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
     await expect(rowForEdit).toBeVisible({ timeout: 30000 })
@@ -56,11 +48,9 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     await page.waitForURL(/\/aset\/merek\/[^/]+\/ubah$/, { timeout: 30000 })
     await page.locator("#name").fill(updated)
-    await waitForHydration(page)
+    await expect(page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
-    await page.waitForURL("**/aset/merek", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/aset/merek", updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()

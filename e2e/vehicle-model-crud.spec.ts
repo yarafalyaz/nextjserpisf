@@ -1,18 +1,10 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 import { openCombobox } from "./utils/combobox"
-
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("Kendaraan Model CRUD", () => {
   test("create → update → delete", async ({ page }, testInfo) => {
@@ -24,7 +16,7 @@ test.describe("Kendaraan Model CRUD", () => {
 
     // ─── CREATE BRAND ──────────────────────────────────────────
     await page.goto("/kendaraan/merek/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("input[name='name']").first()).toBeVisible({ timeout: 30_000 })
     await page.locator("input[name='name']").first().fill(brandName)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
@@ -32,7 +24,7 @@ test.describe("Kendaraan Model CRUD", () => {
 
     // ─── CREATE MODEL ──────────────────────────────────────────
     await page.goto("/kendaraan/model/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     // Choose brand via the ComboBox input — type brandName, wait for filtered option, then pick
     const brandInput = await openCombobox(page, { placeholder: "Cari merek..." })
@@ -75,7 +67,7 @@ test.describe("Kendaraan Model CRUD", () => {
     if (!href) throw new Error("Could not resolve model detail href")
 
     await page.goto(`${href}/ubah`, { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     const nameInput = page.getByPlaceholder('Contoh: Avanza').first()
     await expect(nameInput).toBeVisible({ timeout: 30000 })
 
@@ -106,7 +98,7 @@ test.describe("Kendaraan Model CRUD", () => {
     const dialog = page.getByRole("alertdialog")
     await expect(dialog).toBeVisible({ timeout: 10000 })
     await dialog.getByRole("button", { name: "Hapus" }).click()
-    await page.waitForTimeout(2000)
+    await expect(dialog).toBeHidden({ timeout: 15_000 })
 
     await page.goto(brandHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")

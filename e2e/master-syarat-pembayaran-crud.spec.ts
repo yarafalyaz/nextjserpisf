@@ -1,12 +1,6 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
+import { awaitReady } from "./utils/await-ready"
 
 test.describe("Master Syarat Pembayaran CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -22,8 +16,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await page.goto("/master/syarat-pembayaran/tambah", {
       waitUntil: "domcontentloaded",
     })
-    await waitForHydration(page)
-    await page.waitForLoadState("networkidle")
+    await awaitReady(page, "form")
 
     await expect(
       page.getByRole("heading", { name: "Tambah Termin Pembayaran" })
@@ -32,8 +25,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await page.locator("#name").fill(name)
     await page.locator("#code").fill(code)
     await page.locator("#days").fill("14")
-
-    await waitForHydration(page)
+    await expect(page.getByRole("button", { name: "Simpan" }).first()).toBeEnabled({ timeout: 15_000 })
     // `.first()`: nama "Simpan" dicocokkan sebagai substring oleh getByRole,
     // jadi locator dipersempit ke tombol submit pertama agar tahan terhadap
     // tombol lain ber-label serupa.
@@ -68,7 +60,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
       await page.goto("/master/syarat-pembayaran", {
         waitUntil: "domcontentloaded",
       })
-      await waitForHydration(page)
+      await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
       await page.waitForLoadState("networkidle")
       gone = !(await page.locator("body").innerText()).includes(name)
       if (gone) break

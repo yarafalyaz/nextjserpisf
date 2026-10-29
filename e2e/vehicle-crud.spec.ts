@@ -1,18 +1,10 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 import { selectComboboxOptionBySearch } from "./utils/combobox"
-
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("Kendaraan CRUD", () => {
   test("create → update → delete", async ({ page }, testInfo) => {
@@ -25,7 +17,7 @@ test.describe("Kendaraan CRUD", () => {
     const updatedTypeName = `Tipe E2E U${run}`
 
     await page.goto("/kendaraan/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
 
     // Cascading comboboxes: brand enables model, model enables variant.
     // Sengaja memilih merek/model/varian SEED milik E2E lewat pencarian, bukan opsi pertama:
@@ -70,7 +62,7 @@ test.describe("Kendaraan CRUD", () => {
     if (!href) throw new Error("Could not resolve vehicle detail href")
 
     await page.goto(`${href}/ubah`, { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
     // On edit the cascades are pre-filled; only the label changes.
     await page.locator("#name").first().fill(updatedTypeName)
     await page.locator("#year").first().fill("2025")
@@ -103,8 +95,8 @@ test.describe("Kendaraan CRUD", () => {
     await expect(confirmDialog).toBeVisible({ timeout: 10000 })
     await confirmDialog.getByRole("button", { name: "Hapus" }).click()
 
-    // deleteVehicle action hanya revalidatePath tanpa redirect; tunggu transition lalu cek list terfilter
-    await page.waitForTimeout(2000)
+    // deleteVehicle action hanya revalidatePath tanpa redirect; tunggu dialog tertutup (= action selesai) lalu cek list terfilter
+    await expect(confirmDialog).toBeHidden({ timeout: 15_000 })
     await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedTypeName)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updatedTypeName)

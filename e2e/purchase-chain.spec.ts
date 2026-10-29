@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { awaitReady } from "./utils/await-ready"
 import { prisma } from "@/lib/db/prisma"
 import { Prisma } from "@prisma/client"
 
@@ -94,8 +95,7 @@ test.describe.serial("Pembelian — rantai penuh", () => {
 
     // 1. Buat penerimaan dari PO (prefill poId).
     await page.goto(`/pembelian/penerimaan/tambah?poId=${po.id}`, { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
+    await awaitReady(page, "form")
 
     // Header "Gudang Tujuan" wajib dipilih manual (combobox kosong walau baris
     // prefill) — tanpa ini tombol Terima Barang disabled.
@@ -111,8 +111,9 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // Tunggu toast hasil (sukses ATAU galat) — bukan navigasi buta.
     const toast = page.locator("[data-sonner-toast], [role='status'], .toaster, [data-testid='toast']").first()
     await page.getByRole("button", { name: "Terima Barang" }).click()
-    // Beri server 10 detik; sukses = URL pindah dari /tambah.
-    await page.waitForTimeout(10_000)
+    // Sukses = URL pindah dari /tambah — tunggu navigasi, bukan sleep buta.
+    // catch: bila gagal, asersi diagnostik di bawah yang membeberkan URL+toast.
+    await page.waitForURL((url) => !url.pathname.endsWith("/pembelian/penerimaan/tambah"), { timeout: 30_000 }).catch(() => {})
     const afterUrl = page.url()
     const toastText = (await toast.count()) > 0 ? ((await toast.textContent()) ?? "") : ""
     // Bukti diagnostik bila masih di tambah: toast + URL.
