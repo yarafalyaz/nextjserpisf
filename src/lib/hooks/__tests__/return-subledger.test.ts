@@ -84,7 +84,7 @@ function salesTx(invoice: Record<string, unknown>) {
   }
 }
 
-function purchaseTx(bill: Record<string, unknown> | null) {
+function purchaseTx(_bill: Record<string, unknown> | null) {
   return {
     systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
     stockMove: { findMany: mocks.stockMoveFindMany },
