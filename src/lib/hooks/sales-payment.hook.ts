@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { SalesInvoiceStatus, Prisma } from "@prisma/client";
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
+import { accrueTx as accrueCommissionPayableTx } from "@/lib/services/commission-payable.service";
 import { derivePaymentStatus } from "@/lib/finance/settlement-status";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -74,6 +75,13 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
       ...(commissionSnapshot ?? {}),
     },
   });
+
+  // Tahap 3 komisi (vonis R-komisi-vonispayable §5): SATU tx = transisi paid
+  // + snapshot + baris subledger + jurnal. Gagal syarat lahir = nol baris +
+  // nol jurnal berlabel alasan; faktur tetap paid (empat status terpisah).
+  if (status === "paid") {
+    await accrueCommissionPayableTx(db, invoiceId);
+  }
 }
 
 /**

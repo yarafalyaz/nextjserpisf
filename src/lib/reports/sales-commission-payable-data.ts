@@ -1,22 +1,32 @@
 /**
  * Loader read-model saldo utang komisi (F-2026-10-25-037-S §5, konsumen
- * builder `buildSalesCommissionPayable` PR #911).
+ * builder `buildSalesCommissionPayable`).
  *
- * Inti tahap 3 (subledger per faktur-penerima + jurnal akrual/lawan/terbayar
- * akun 210212) BELUM live di main: tidak ada baris subledger yang bisa
- * dibaca, jadi pemanggil wajib meneruskan `ledgerAvailable: false` dan
- * saldo terbaca 0 berlabel jujur (BR-KOM37-12: rekap informatif BUKAN
- * utang — dilarang membangun baris saldo dari rekap). Sesudah inti live,
- * loader ini yang memuat baris subledger+jurnal menjadi entri builder.
- *
- * Read-only murni: tanpa Prisma (tidak ada model subledger), tanpa tulis.
+ * Tahap 3 live: memuat baris subledger `commissionPayable` + nama penjual
+ * menjadi entri builder. Tanpa baris = `ledgerAvailable: true`, saldo 0
+ * tercatat (bukan "belum live"). Read-only: tanpa tulis.
  */
 
+import { prisma } from "@/lib/db/prisma"
 import {
   buildSalesCommissionPayable,
   type SalesCommissionPayable,
 } from "@/lib/reports/sales-commission-payable"
 
 export async function getSalesCommissionPayable(): Promise<SalesCommissionPayable> {
-  return buildSalesCommissionPayable([], { ledgerAvailable: false })
+  const rows = await prisma.commissionPayable.findMany({
+    include: { salesEmployee: { select: { name: true } } },
+    orderBy: { id: "asc" },
+  })
+  return buildSalesCommissionPayable(
+    rows.map((r) => ({
+      salesInvoiceId: r.salesInvoiceId,
+      salesEmployeeId: r.salesEmployeeId,
+      salesEmployeeName: r.salesEmployee?.name ?? null,
+      accruedAmount: Number(r.accruedAmount),
+      reversalAmount: Number(r.reversalAmount),
+      paidAmount: Number(r.paidAmount),
+    })),
+    { ledgerAvailable: true },
+  )
 }
