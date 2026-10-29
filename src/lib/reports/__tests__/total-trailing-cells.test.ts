@@ -22,8 +22,8 @@ const mocks = vi.hoisted(() => ({
     salesReturn: { findMany: vi.fn() },
     account: { findMany: vi.fn() },
     journalEntry: { findMany: vi.fn(), groupBy: vi.fn() },
-    item: { findMany: vi.fn() },
-    warehouse: { findMany: vi.fn() },
+    item: { findMany: vi.fn(), findFirst: vi.fn() },
+    warehouse: { findMany: vi.fn(), findFirst: vi.fn() },
     stockMove: { findMany: vi.fn() },
     inventoryLayer: { findMany: vi.fn() },
     $queryRaw: vi.fn(async () => []),
@@ -355,7 +355,11 @@ describe("total trailing: buku besar & stok (lanjutan #8)", () => {
   })
 
   it("valuasi-stok PDF: slug gudang menyaring where gudang (registry #9)", async () => {
-    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 3, slug: "gudang-utama", code: "GDG", name: "Utama" }])
+    const warehouses = [{ id: 3, slug: "gudang-utama" }]
+    mocks.prismaMock.warehouse.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) => {
+      const w = args.where
+      return warehouses.find((r) => (typeof w.slug === "string" ? r.slug === w.slug : true) && (typeof w.id === "number" ? r.id === w.id : true)) ?? null
+    })
     mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([])
     await REPORTS["valuasi-stok"].load({ period: parseReportPeriod("2026-10", { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) }), search: { gudang: "gudang-utama" } })
     expect(mocks.prismaMock.inventoryLayer.findMany).toHaveBeenCalledWith(
@@ -891,20 +895,48 @@ describe("total trailing: BUGHUNT round3 lanjutan (5 builder diminta + temuan au
 })
 
 describe("registry stok: slug ATAU id (BUGHUNT round2 #9)", () => {
+  // Resolver kini query terindeks findFirst (slug -> id), bukan full scan
+  // findMany + find di memori; mock meniru semantik where dari fixture.
+  function wireResolverFixtures() {
+    const items = [{ id: 7, slug: "busi-iridium" }]
+    const warehouses = [{ id: 3, slug: "gudang-utama" }]
+    mocks.prismaMock.item.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) => {
+      const w = args.where
+      return (
+        items.find(
+          (r) =>
+            (typeof w.slug === "string" ? r.slug === w.slug : true) &&
+            (typeof w.id === "number" ? r.id === w.id : true),
+        ) ?? null
+      )
+    })
+    mocks.prismaMock.warehouse.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) => {
+      const w = args.where
+      return (
+        warehouses.find(
+          (r) =>
+            (typeof w.slug === "string" ? r.slug === w.slug : true) &&
+            (typeof w.id === "number" ? r.id === w.id : true),
+        ) ?? null
+      )
+    })
+  }
+
   it("resolver barang/gudang menerima slug dan id, menolak tak dikenal", async () => {
-    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 7, slug: "busi-iridium" }])
-    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 3, slug: "gudang-utama" }])
+    wireResolverFixtures()
     expect(await resolveItemIdBySlugOrId("busi-iridium")).toBe(7)
     expect(await resolveItemIdBySlugOrId("7")).toBe(7)
     expect(await resolveItemIdBySlugOrId("tidak-ada")).toBeNull()
     expect(await resolveItemIdBySlugOrId(null)).toBeNull()
     expect(await resolveWarehouseIdBySlugOrId("gudang-utama")).toBe(3)
     expect(await resolveWarehouseIdBySlugOrId("3")).toBe(3)
+    // Full scan tak boleh kembali: resolver tak menyentuh findMany.
+    expect(mocks.prismaMock.item.findMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.warehouse.findMany).not.toHaveBeenCalled()
   })
 
   it("kartu-stok PDF: slug barang diteruskan ke loader (dulu dibuang regex digit)", async () => {
-    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 7, slug: "busi-iridium" }])
-    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 3, slug: "gudang-utama" }])
+    wireResolverFixtures()
     mocks.prismaMock.stockMove.findMany.mockResolvedValue([])
     const period = parseReportPeriod("2026-10", { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })
     const payload = await REPORTS["kartu-stok"].load({
@@ -922,7 +954,7 @@ describe("registry stok: slug ATAU id (BUGHUNT round2 #9)", () => {
   })
 
   it("mutasi-stok PDF: slug gudang menyaring where.warehouseId", async () => {
-    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 3, slug: "gudang-utama" }])
+    wireResolverFixtures()
     mocks.prismaMock.stockMove.findMany.mockResolvedValue([])
     const period = parseReportPeriod("2026-10", { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })
     await REPORTS["mutasi-stok"].load({ period, search: { gudang: "gudang-utama" } })
@@ -932,8 +964,7 @@ describe("registry stok: slug ATAU id (BUGHUNT round2 #9)", () => {
   })
 
   it("kartu-stok PDF: id numerik tetap jalan (kompat lama)", async () => {
-    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 7, slug: "busi-iridium" }])
-    mocks.prismaMock.warehouse.findMany.mockResolvedValue([])
+    wireResolverFixtures()
     mocks.prismaMock.stockMove.findMany.mockResolvedValue([])
     const period = parseReportPeriod("2026-10", { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })
     await REPORTS["kartu-stok"].load({ period, search: { barang: "7" } })

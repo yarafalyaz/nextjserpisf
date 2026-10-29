@@ -48,20 +48,34 @@ type Period = { start: Date; end: Date }
  */
 export async function resolveItemIdBySlugOrId(key: string | null | undefined): Promise<number | null> {
   if (!key) return null
-  const rows = await prisma.item.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: { id: true, slug: true },
+  // Slug unique terindeks; id numerik dicek langsung. Semantik sama
+  // seperti find() atas populasi aktif sebelumnya, tanpa full scan.
+  const bySlug = await prisma.item.findFirst({
+    where: { slug: key, isActive: true, deletedAt: null },
+    select: { id: true },
   })
-  return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
+  if (bySlug) return bySlug.id
+  if (!/^\d+$/.test(key)) return null
+  const byId = await prisma.item.findFirst({
+    where: { id: Number(key), isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  return byId?.id ?? null
 }
 
 export async function resolveWarehouseIdBySlugOrId(key: string | null | undefined): Promise<number | null> {
   if (!key) return null
-  const rows = await prisma.warehouse.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: { id: true, slug: true },
+  const bySlug = await prisma.warehouse.findFirst({
+    where: { slug: key, isActive: true, deletedAt: null },
+    select: { id: true },
   })
-  return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
+  if (bySlug) return bySlug.id
+  if (!/^\d+$/.test(key)) return null
+  const byId = await prisma.warehouse.findFirst({
+    where: { id: Number(key), isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  return byId?.id ?? null
 }
 
 const MOVEMENT_COLUMNS: TableColumn[] = [
