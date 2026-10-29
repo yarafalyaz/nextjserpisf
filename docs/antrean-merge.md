@@ -33,7 +33,9 @@ PR berlabel diproses satu per satu menurut urutan pembuatan (FIFO):
    4 check wajib protection (Lint, Unit Tests, Build Next.js, DB
    Integration Tests) masing-masing lulus — atau ter-skip hanya bila diff
    PR terbukti docs-only (semua berkas `.md` dari merge-base) — ditambah
-   SonarCloud lulus, dan Docker Image Build lulus bila diff menyentuh
+   SonarCloud non-blokir (lulus/ter-skip/absen boleh lanjut; gagal/batal
+   tetap menggagalkan — check dari GitHub App eksternal, jadi absen tidak
+   boleh mengunci antrean, BUGHUNT-2026-10-29-round2 #11), dan Docker Image Build lulus bila diff menyentuh
    jalur Docker yang sama dengan gating Detect Changes di `ci.yml`
    (batas tunggu 40 menit per PR). Penilaian per nama check; head yang
    bergerak di tengah penantian membatalkan putaran itu.
@@ -76,8 +78,9 @@ KEEMPAT syarat ini terbukti:
    dicari adalah: delta main hanya dokumentasi (syarat 1) sehingga isi kode
    yang masuk `main` persis isi yang diuji CI.
 4. **Gate hijau pada SHA itu.** Check wajib protection (Lint, Unit Tests,
-   Build Next.js, DB Integration Tests) + SonarCloud PASS dengan `head_sha`
-   sama persis dengan SHA yang dimerge; Docker Image Build hanya boleh
+   Build Next.js, DB Integration Tests) hijau dengan `head_sha`
+   sama persis dengan SHA yang dimerge; SonarCloud non-blokir (pass/skip/absen
+   boleh, fail/batal tidak); Docker Image Build hanya boleh
    `skipping` bila diff merge-base..sha tidak menyentuh jalur Docker
    (pola regex Detect Changes `ci.yml`).
 

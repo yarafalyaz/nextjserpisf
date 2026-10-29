@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { formatCurrency } from "@/lib/utils/format"
 
 interface ServiceItem {
   itemId: number
@@ -116,7 +117,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
                   <td className="py-0.5">{it.name}</td>
                   <td className="py-0.5 text-right">{it.qty}</td>
                   <td className="py-0.5 text-right">
-                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(it.cost)}
+                    {formatCurrency(it.cost)}
                   </td>
                 </tr>
               ))}
@@ -131,7 +132,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
 
         <div className="flex flex-wrap items-center justify-between gap-4">
           <span className="text-sm text-muted-foreground">
-            Total: {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(total)}
+            Total: {formatCurrency(total)}
           </span>
           <div className="flex gap-2">
             <Button variant="secondary" isDisabled={isPending} onPress={() => setOpen(false)}>

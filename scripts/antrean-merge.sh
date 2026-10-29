@@ -15,7 +15,9 @@
 #      terbaru yang sudah berisi main mutakhir (syarat strict terpenuhi).
 #   2. Tunggu gerbang di head yang TERIKAT sesudah update (maks 40 menit):
 #      4 check wajib protection masing-masing bucket pass (skipping hanya
-#      bila diff merge-base terbukti docs-only), SonarCloud pass, dan
+#      bila diff merge-base terbukti docs-only), SonarCloud non-blokir
+#      (pass/skipping/absent boleh; fail/cancel tetap gagal — check App
+#      eksternal, BUGHUNT-2026-10-29-round2 #11), dan
 #      Docker Image Build pass bila diff menyentuh jalur Docker persis
 #      pola Detect Changes ci.yml.
 #   3. Verifikasi ulang headRefOid == SHA yang lolos, lalu squash merge
@@ -48,7 +50,7 @@ gerbang_ok() {
     def wajib_ok($n): (bucket_of($n) == "pass" or ($docs and bucket_of($n) == "skipping"));
     (wajib_ok("Lint") and wajib_ok("Unit Tests")
      and wajib_ok("Build Next.js") and wajib_ok("DB Integration Tests")
-     and bucket_of("SonarCloud Code Analysis") == "pass"
+     and (bucket_of("SonarCloud Code Analysis") == "pass" or bucket_of("SonarCloud Code Analysis") == "skipping" or bucket_of("SonarCloud Code Analysis") == "absent")
      and ((($dreq | not) and (bucket_of("Docker Image Build") == "pass" or bucket_of("Docker Image Build") == "skipping" or bucket_of("Docker Image Build") == "absent"))
           or ($dreq and bucket_of("Docker Image Build") == "pass")))' 2>/dev/null || echo false
 }
@@ -74,7 +76,7 @@ wait_checks() {
       def wajib_ok($n): (bucket_of($n) == "pass" or ($docs and bucket_of($n) == "skipping"));
       (wajib_ok("Lint") and wajib_ok("Unit Tests")
        and wajib_ok("Build Next.js") and wajib_ok("DB Integration Tests")
-       and bucket_of("SonarCloud Code Analysis") == "pass"
+       and (bucket_of("SonarCloud Code Analysis") == "pass" or bucket_of("SonarCloud Code Analysis") == "skipping" or bucket_of("SonarCloud Code Analysis") == "absent")
        and ((($dreq | not) and (bucket_of("Docker Image Build") == "pass" or bucket_of("Docker Image Build") == "skipping" or bucket_of("Docker Image Build") == "absent"))
             or ($dreq and bucket_of("Docker Image Build") == "pass")))')
     if [ "$ok" = "true" ]; then

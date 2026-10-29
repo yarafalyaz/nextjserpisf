@@ -461,6 +461,15 @@ sengaja **tidak** dibuat sekarang karena secret-nya belum ada dan job yang
 tak pernah hijau hanya melatih orang mengabaikan merah. Proteksi branch
 tidak diubah oleh catatan ini.
 
+**Putusan BUGHUNT-2026-10-29-round2 #11 (opsi b, parsial):** tuntutan
+`bucket == "pass"` dilepas dari `antrean-merge.yml`, `scripts/antrean-merge.sh`,
+dan `docs/antrean-merge.md` — SonarCloud kini non-blokir: `pass`/`skipping`/
+`absent` boleh lanjut, `fail`/`cancel` tetap menggagalkan lewat cek bucket
+gagal global di kedua antrean. Alasan: App eksternal mati tidak boleh
+mengunci seluruh antrean 40 menit/PR; 4 check internal (Lint, Unit Tests,
+Build Next.js, DB Integration Tests) tetap gerbang wajib. Job Sonar internal
+tetap **tidak** ditambah (alasan keputusan di atas tidak berubah).
+
 ### Status falsifikasi penjaga (kapan terakhir diuji benar-benar menangkap)
 
 | Penjaga / asersi | Difalsifikasi | Catatan |

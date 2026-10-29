@@ -93,8 +93,13 @@ jobs:
           # - 4 check wajib protection (Lint, Unit Tests, Build Next.js,
           #   DB Integration Tests): bucket pass, atau skipping HANYA bila
           #   diff PR terbukti docs-only (semua berkas .md dari merge-base).
-          # - SonarCloud Code Analysis: bucket pass (tidak pernah skipping
-          #   untuk head yang punya run CI; absen = belum selesai).
+          # - SonarCloud Code Analysis: NON-BLOKIR (BUGHUNT-2026-10-29-round2
+          #   #11). Check ini dari SonarCloud GitHub App eksternal, bukan job
+          #   ci.yml — menuntut pass membuat antrean timeout total bila App
+          #   mati/dinonaktifkan. fail/cancel tetap ditangkap cek `bad` global
+          #   di bawah; pass/skipping/absent semua boleh lanjut. Jangan tambah
+          #   job Sonar internal (butuh SONAR_TOKEN admin, dua sumber kebenaran
+          #   — lihat docs/AUDIT-SCHEMA.md §SonarCloud).
           # - Docker Image Build: wajib pass bila diff menyentuh jalur
           #   Docker/CI/dependensi; di luar itu skipping/absen sah.
           # Hitungan memakai length array jq per nama persis — dilarang
@@ -121,7 +126,7 @@ jobs:
                 def wajib_ok($n): (bucket_of($n) == "pass" or ($docs and bucket_of($n) == "skipping"));
                 (wajib_ok("Lint") and wajib_ok("Unit Tests")
                  and wajib_ok("Build Next.js") and wajib_ok("DB Integration Tests")
-                 and bucket_of("SonarCloud Code Analysis") == "pass"
+                 and (bucket_of("SonarCloud Code Analysis") == "pass" or bucket_of("SonarCloud Code Analysis") == "skipping" or bucket_of("SonarCloud Code Analysis") == "absent")
                  and ((($dreq | not) and (bucket_of("Docker Image Build") == "pass" or bucket_of("Docker Image Build") == "skipping" or bucket_of("Docker Image Build") == "absent"))
                       or ($dreq and bucket_of("Docker Image Build") == "pass")))')
               if [ "$ok" = "true" ]; then

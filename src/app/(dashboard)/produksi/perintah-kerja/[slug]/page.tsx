@@ -80,7 +80,7 @@ export default async function WorkOrderDetailPage({
     quotation: true,
     customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
     project: { select: { id: true, name: true, slug: true } },
-    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true, productId: true } },
     items: true,
     purchaseOrders: {
       where: { status: { notIn: ["cancelled"] } },
@@ -275,22 +275,23 @@ export default async function WorkOrderDetailPage({
   // F-068-S UI (t_b60d664d): panel ganti revisi BOM — konsumen aksi BOT 3
   // PR #589. Opsi = revisi released produk pin saat ini (beda dari pin);
   // daftar pengajuan dari aksi list existing. Nama pengaju/item dari sini.
-  const [bomChangeList, canManageBomChange, bomSession] = await Promise.all([
-    listBomRevisionChangeRequests({ workOrderId: wo.id }),
-    hasPermission("edit_work_orders"),
-    auth(),
-  ]);
+  // PERF: dampak revisi BOM independen (bomRevision.id dari wo) — jalan
+  // paralel dengan panel change order, bukan await inline di JSX.
+  const [bomChangeList, canManageBomChange, bomSession, bomRevisionImpact] =
+    await Promise.all([
+      listBomRevisionChangeRequests({ workOrderId: wo.id }),
+      hasPermission("edit_work_orders"),
+      auth(),
+      wo.bomRevision
+        ? loadBomRevisionImpact(wo.bomRevision.id)
+        : Promise.resolve(null),
+    ]);
   const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : [];
-  // Dependen serial: productId dari revisi pin wajib diketahui sebelum query opsi.
+  // productId ikut di-select include wo di atas — tanpa query findFirst ekstra.
   const bomRevisionOptions = wo.bomRevision
     ? await prisma.bomRevision.findMany({
         where: {
-          productId: (
-            await prisma.bomRevision.findFirst({
-              where: { id: wo.bomRevision.id },
-              select: { productId: true },
-            })
-          )?.productId,
+          productId: wo.bomRevision.productId,
           status: "released",
           id: { not: wo.bomRevision.id },
         },
@@ -630,12 +631,9 @@ export default async function WorkOrderDetailPage({
         />
       ) : null}
 
-      {wo.bomRevision ? (
-        // PERF skip: await inline di JSX dipertahankan — mengangkatnya ke
-        // Promise.all data di atas mengubah timing render kartu ini relatif
-        // terhadap loader lain; query-nya sendiri independen (bomRevision.id).
+      {wo.bomRevision && bomRevisionImpact ? (
         <BomRevisionImpactCard
-          impact={await loadBomRevisionImpact(wo.bomRevision.id)}
+          impact={bomRevisionImpact}
           currentRevisionNo={wo.bomRevision.revisionNo}
         />
       ) : null}

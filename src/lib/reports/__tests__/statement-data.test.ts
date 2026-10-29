@@ -49,6 +49,18 @@ beforeEach(() => {
 })
 
 describe("loadBalanceSheetStatement", () => {
+  it("agregasi DB-side: sumEntriesByAccount (groupBy), bukan journalEntry.findMany ke memori", async () => {
+    // Regresi BUGHUNT-2026-10-29-round2 #12: neraca tak boleh tarik semua
+    // baris jurnal seumur buku ke memori.
+    await loadBalanceSheetStatement(new Date(2026, 9, 31), DEFAULT_STATEMENT_OPTIONS)
+
+    expect(mocks.sumEntriesByAccount).toHaveBeenCalledTimes(1)
+    expect(mocks.sumEntriesByAccount).toHaveBeenCalledWith({
+      date: { lte: new Date(2026, 9, 31) },
+    })
+    expect(mocks.journalEntryFindMany).not.toHaveBeenCalled()
+  })
+
   it("memformat tanggal posisi dan kolom angka dengan benar", async () => {
     const statement = await loadBalanceSheetStatement(
       new Date(2026, 9, 31),
