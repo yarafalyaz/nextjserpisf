@@ -102,6 +102,21 @@ export const STATUS_LABELS: Record<string, string> = {
   // populasi aktif rekap.
   paid_off: "Lunas",
   written_off: "Dihapusbukukan",
+  // F-2026-10-27-113-S: register ketetapan + upaya sengketa pajak
+  // (Q-TXD-6 verbatim; status ketetapan + status upaya + hasil putusan).
+  TERDAFTAR: "Terdaftar",
+  DIPROSES: "Diproses",
+  DIPUTUS_SEBAGIAN: "Diputus Sebagian",
+  DIPUTUS: "Diputus",
+  DIAJUKAN: "Diajukan",
+  DALAM_PROSES: "Dalam Proses",
+  DICABUT: "Dicabut",
+  BATAL: "Batal",
+  SELESAI: "Selesai",
+  DIKABULKAN: "Dikabulkan",
+  DIKABULKAN_SEBAGIAN: "Dikabulkan Sebagian",
+  DITOLAK: "Ditolak",
+  TIDAK_DAPAT_DITERIMA: "Tidak Dapat Diterima",
   absent: "Tidak Hadir",
   late: "Terlambat",
   half_day: "Setengah Hari",

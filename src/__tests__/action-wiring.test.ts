@@ -107,17 +107,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
   // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
   // produksi/perintah kerja memanggilnya).
-  // F-2026-10-27-113-S tahap 113-B backend dulu (register ketetapan + upaya
-  // sengketa + putusan; NOL jurnal): 4 aksi ini dirujuk UI register di kartu
-  // Frontend 113-F menyusul (buang 4 entri ini saat halaman register memanggilnya).
-  "src/actions/tax-dispute.actions.ts::createTaxAssessment":
-    "F-2026-10-27-113-S 113-B backend; UI register ketetapan menyusul (frontend 113-F)",
-  "src/actions/tax-dispute.actions.ts::createTaxDisputeStep":
-    "F-2026-10-27-113-S 113-B backend; UI upaya sengketa menyusul (frontend 113-F)",
-  "src/actions/tax-dispute.actions.ts::recordTaxDisputeDecision":
-    "F-2026-10-27-113-S 113-B backend; UI catat putusan menyusul (frontend 113-F)",
-  "src/actions/tax-dispute.actions.ts::cancelTaxAssessment":
-    "F-2026-10-27-113-S 113-B backend; UI batal ketetapan menyusul (frontend 113-F)",
+  // F-2026-10-27-113-S tahap 113-B kini dirujuk UI register sengketa pajak
+  // (tax-assessment-form, tax-dispute-step-form, tax-dispute-decision-form,
+  // cancel-tax-assessment-button — PR frontend 113-F) — entri beku dibuang.
   // F-2026-10-24-097-S S3: tombol tutup kini dirujuk kartu antrean
   // workshop-closeout-queue-card (closeWorkOrder + closeProductionOrder).
   // TASK-026: reopen kini dirujuk JobReopenButton di halaman detail perintah
