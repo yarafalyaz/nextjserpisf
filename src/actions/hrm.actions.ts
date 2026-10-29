@@ -69,11 +69,8 @@ import {
   SPECIAL_LEAVE_DAY_CAPS,
   resolveDayKind,
 } from "@/lib/services/leave-quota.service";
-import {
-  assertOvertimeWithinWorkdayLimits,
-  computeOvertimePay,
-  type OvertimeDayKind,
-} from "@/lib/services/overtime-pay.service";
+import { assertOvertimeWithinWorkdayLimits } from "@/lib/services/overtime-pay.service";
+import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { onPayrollPaid, deleteJournalByReferenceTx, reverseJournalsByReferenceTx, onEmployeeLoanCashRepayment, onEmployeeLoanWrittenOff } from "@/lib/hooks/accounting.hook";
@@ -1220,100 +1217,7 @@ export async function approveOvertime(overtimeId: number) {
       return { success: true };
     }
 
-    // Nilai lembur bertingkat menurut PP 35/2021 jo. Kepmenakertrans
-    // 102/2004: upah sejam = gaji/173; hari kerja 1,5x lalu 2x; hari
-    // istirahat/libur 2x/3x/4x sesuai pola 5/6 hari kerja. Formula lama
-    // (flat 1,1x untuk semua jam, dapat diatur di bawah lantai legal
-    // lewat Pengaturan) membayar di bawah minimum undang-undang.
-    // Syarat vonis K2-S2 (F-2026-10-25-014-V) sebagaimana dimutakhirkan vonis
-    // F-2026-10-25-022-V: dasar upah lembur Pasal 32 PP 35/2021 = Upah pokok
-    // (Employee.baseSalary) + seluruh tunjangan tetap terdaftar, yaitu Σ
-    // defaultAmount EmployeePayrollComponent aktif (isActive, komponen aktif,
-    // kind "earning", recurrence "fixed") yang berjendela efektif pada TANGGAL
-    // LEMBUR (ot.date) — bukan tanggal approve. Komponen gaji terpisah memang
-    // ada di skema (PayrollComponent + EmployeePayrollComponent); penugasan
-    // hanya boleh memuat komponen "fixed", jadi seluruh penugasan aktif adalah
-    // tunjangan tetap. Cabang 75% Pasal 32 ayat (4) SENGAJA tidak diterapkan:
-    // ia berlaku hanya bila ada tunjangan tidak tetap dan (pokok + tetap)
-    // < 75% keseluruhan Upah, dengan dasar 75% x keseluruhan Upah — dan repo
-    // tidak menyimpan penugasan tunjangan tidak tetap berjalan, jadi
-    // keseluruhan Upah tidak terdefinisi deterministik dari data yang ada.
-    // Default yang disahkan vonis: dasar 100% (pokok + tunjangan tetap).
-    // Menambah pemicu 75% dari data lain (master variable, baris slip manual)
-    // DITOLAK vonis. Bila master tunjangan tidak tetap berjalan kelak ada,
-    // dasar ini WAJIB ditinjau ulang oleh vonis Accountant baru.
-    // Pola where disalin dari preseden PKWT (pkwt-compensation.service.ts)
-    // tanpa mengimpor service itu; filter kind "earning" wajib eksplisit —
-    // loadEffectivePayrollAssignments tidak menyaring kind sehingga komponen
-    // deduction/fixed akan ikut terhitung bila pemuat itu dipakai apa adanya.
-    const fixedAssignments = await prisma.employeePayrollComponent.findMany({
-      where: {
-        employeeId: ot.employeeId,
-        isActive: true,
-        effectiveFrom: { lte: ot.date },
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: ot.date } }],
-        component: { isActive: true, recurrence: "fixed", kind: "earning" },
-      },
-      select: {
-        defaultAmount: true,
-        component: { select: { name: true } },
-      },
-    });
-    const fixedAllowance = fixedAssignments.reduce(
-      (sum, a) => safeRound(sum + Number(a.defaultAmount), 2),
-      0,
-    );
-    const baseSalary = safeRound(
-      Number(ot.employee?.baseSalary ?? 0) + fixedAllowance,
-      2,
-    );
-    const hours = Number(ot.hours);
-    const dayProfile = await resolveDayKind(ot.employeeId, ot.date);
-    const dayKind: OvertimeDayKind = dayProfile.isWorkingDay
-      ? "workday"
-      : dayProfile.workdaysPerWeek >= 6
-        ? "rest_6day"
-        : "rest_5day";
-    const calculatedValue = computeOvertimePay({
-      monthlySalary: baseSalary,
-      hours,
-      dayKind,
-    });
-
-    // Snapshot rincian dasar (F-2026-10-25-024-S, BR-OT-09/BR-OT-11):
-    // pokok + HANYA komponen yang benar-benar ikut Σ di atas + total dasar
-    // final, dibekukan pada klaim atomik yang sama dengan calculatedValue.
-    // Tanpa snapshot ini rincian tidak bisa ditampilkan verbatim — membaca
-    // master komponen saat tampil akan menampilkan dasar master kini, bukan
-    // dasar saat approve. Baris yang sudah terhitung berhenti di gerbang
-    // idempotensi di atas, jadi snapshot ikut beku dan tidak ditulis ulang.
-    const overtimeBaseSnapshot = {
-      baseSalary: safeRound(Number(ot.employee?.baseSalary ?? 0), 2),
-      components: fixedAssignments.map((a) => ({
-        name: a.component.name,
-        amount: Number(a.defaultAmount),
-      })),
-      baseTotal: baseSalary,
-      overtimeDate: new Date(ot.date).toISOString(),
-    };
-
-    const claim = await prisma.overtimeRequest.updateMany({
-      where: { id: overtimeId, status: { in: ["pending", "approved"] } },
-      data: {
-        status: "approved",
-        approvedBy: Number(user.id),
-        // Cap waktu persetujuan WAJIB distempel di sini. Sebelumnya hanya
-        // approvedBy yang ditulis, sehingga kolom approvedAt selalu kosong:
-        // halaman detail lembur hanya merender baris "Disetujui Pada" bila kolom
-        // itu terisi, jadi pengajuan yang sudah disetujui tampil TANPA tanggal
-        // persetujuan dan jejak audit tidak bisa dibuktikan. Pengesahan ulang
-        // tidak menimpa cap ini karena perhitungan yang sudah ada berhenti lebih
-        // awal (idempotensi di atas).
-        approvedAt: new Date(),
-        calculatedValue,
-        overtimeBaseSnapshot,
-      },
-    });
+    const claim = await computeOvertimeApprovalValue(prisma, ot, Number(user.id));
     if (claim.count === 0) {
       throw new Error("Pengajuan lembur sudah diproses atau status tidak valid");
     }
@@ -5288,16 +5192,26 @@ export async function recordEmployeeLoanCashRepayment(formData: FormData) {
     const repaymentDate = wibDateToUtcMidnight(repaymentDateRaw);
     const roundedAmount = safeRound(amount, 2);
 
-    const loan = await prisma.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
-    await assertHrEmployeeAccess(await getHrScope(user), loan.employeeId);
-    if (loan.status === "written_off") {
-      throw new Error(`Pinjaman #${loanId} sudah dihapus (written_off) — setoran ditolak.`);
-    }
-    if (loan.status !== "active") {
-      throw new Error(`Setoran hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
-    }
+    // Cek scope pra-tx (pesan cepat); status+sisa WAJIB dibaca ulang di
+    // dalam tx sesudah kunci baris — baca di luar tx = sisa basi, dua
+    // setoran konkuren sama-sama lolos penjaga sisa (BUGHUNT #10).
+    const preLoan = await prisma.employeeLoan.findUniqueOrThrow({
+      where: { id: loanId },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(await getHrScope(user), preLoan.employeeId);
 
     const doc = await prisma.$transaction(async (tx) => {
+      // Kunci baris pinjaman by-id SEBELUM baca (pola paidByIdTx):
+      // serialkan setoran/write-off konkuren atas pinjaman sama.
+      await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${loanId} FOR UPDATE`;
+      const loan = await tx.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
+      if (loan.status === "written_off") {
+        throw new Error(`Pinjaman #${loanId} sudah dihapus (written_off) — setoran ditolak.`);
+      }
+      if (loan.status !== "active") {
+        throw new Error(`Setoran hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
+      }
       const remaining = Number(loan.remainingAmount);
       if (roundedAmount - remaining > SETTLEMENT_TOLERANCE_IDR) {
         throw new Error(
@@ -5366,21 +5280,28 @@ export async function writeOffEmployeeLoan(formData: FormData) {
     if (!reason) throw new Error("Alasan write-off wajib diisi (BR-LOAN-08)");
 
     const writeOffDate = wibDateToUtcMidnight(writeOffDateRaw);
-    const loan = await prisma.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
-    await assertHrEmployeeAccess(await getHrScope(user), loan.employeeId);
-    if (loan.status === "written_off") {
-      throw new Error(`Pinjaman #${loanId} sudah dihapus — dokumen ganda ditolak.`);
-    }
-    if (loan.status === "paid_off") {
-      throw new Error(`Pinjaman #${loanId} sudah lunas — write-off ditolak.`);
-    }
-    if (loan.status !== "active") {
-      throw new Error(`Write-off hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
-    }
-    const remaining = Number(loan.remainingAmount);
-    if (!(remaining > 0)) throw new Error("Sisa pinjaman nol — write-off ditolak.");
+    // Scope pra-tx; status+sisa dibaca ulang di dalam tx sesudah kunci
+    // baris (BUGHUNT #10 — sama seperti setoran tunai di atas).
+    const preLoan = await prisma.employeeLoan.findUniqueOrThrow({
+      where: { id: loanId },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(await getHrScope(user), preLoan.employeeId);
 
     const doc = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${loanId} FOR UPDATE`;
+      const loan = await tx.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
+      if (loan.status === "written_off") {
+        throw new Error(`Pinjaman #${loanId} sudah dihapus — dokumen ganda ditolak.`);
+      }
+      if (loan.status === "paid_off") {
+        throw new Error(`Pinjaman #${loanId} sudah lunas — write-off ditolak.`);
+      }
+      if (loan.status !== "active") {
+        throw new Error(`Write-off hanya untuk pinjaman berstatus active (status kini '${loan.status}').`);
+      }
+      const remaining = Number(loan.remainingAmount);
+      if (!(remaining > 0)) throw new Error("Sisa pinjaman nol — write-off ditolak.");
       // Idempoten dokumen: satu pinjaman aktif = satu dokumen write-off final.
       const dup = await tx.employeeLoanWriteOff.findFirst({ where: { loanId }, select: { id: true } });
       if (dup) throw new Error(`Pinjaman #${loanId} sudah punya dokumen write-off #${dup.id} — ganda ditolak.`);
@@ -5477,12 +5398,16 @@ export async function updateTimesheet(id: number, formData: FormData) {
 
 export async function createAppreciation(formData: FormData) {
   try {
-    await requirePermission("create_appreciations");
+    const user = await requirePermission("create_appreciations");
 
     const parsed = parseFormData(appreciationSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
+
+    // HR scope: apresiasi = bonus yang dibayar payroll; karyawan luar
+    // scope tidak boleh dibuatkan (BUGHUNT #9).
+    await assertHrEmployeeAccess(await getHrScope(user), v.employeeId);
 
     const appreciation = await prisma.appreciation.create({
       data: {
@@ -5508,7 +5433,7 @@ export async function createAppreciation(formData: FormData) {
 
 export async function updateAppreciation(formData: FormData) {
   try {
-    await requirePermission("create_appreciations");
+    const user = await requirePermission("create_appreciations");
 
     // Validation parity with createAppreciation: route through Zod schema so
     // the edit path enforces required employee/date, non-negative amount, and
@@ -5519,6 +5444,19 @@ export async function updateAppreciation(formData: FormData) {
     const v = parsed.data;
 
     const id = v.id ?? requireId(formData.get("id"), "id");
+
+    // HR scope atas baris EXISTING dulu (pemilik saat ini), lalu atas
+    // employeeId baru bila dipindah — tanpa muat existing, update bisa
+    // memindahkan/mengedit bonus karyawan luar scope (BUGHUNT #9).
+    const scope = await getHrScope(user);
+    const existing = await prisma.appreciation.findUniqueOrThrow({
+      where: { id },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(scope, existing.employeeId);
+    if (v.employeeId !== existing.employeeId) {
+      await assertHrEmployeeAccess(scope, v.employeeId);
+    }
 
     const appreciation = await prisma.appreciation.update({
       where: { id },
@@ -5545,7 +5483,14 @@ export async function updateAppreciation(formData: FormData) {
 
 export async function deleteAppreciation(id: number) {
   try {
-    await requirePermission("delete_appreciations");
+    const user = await requirePermission("delete_appreciations");
+
+    // HR scope atas baris existing: hapus bonus luar scope ditolak (#9).
+    const existing = await prisma.appreciation.findUniqueOrThrow({
+      where: { id },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(await getHrScope(user), existing.employeeId);
 
     await prisma.appreciation.delete({ where: { id } });
 

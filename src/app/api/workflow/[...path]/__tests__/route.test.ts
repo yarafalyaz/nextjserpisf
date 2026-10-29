@@ -343,6 +343,61 @@ describe("POST /api/workflow/[...path]", () => {
     })
   })
 
+  describe("HR scope cabang workflow-aktif (BUGHUNT round3 #8)", () => {
+    beforeEach(() => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 1 })
+      // Aktor staff user 2 tertaut employee 7 -> scope self.
+      mocks.employeeFindFirst.mockResolvedValue({ id: 7, departmentId: 3 })
+    })
+
+    it("rejected cuti luar scope: 403 SEBELUM reset draft / approval baru", async () => {
+      mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_leave_requests"] } })
+      mocks.findUnique.mockResolvedValue({ employeeId: 99 })
+      mocks.findFirstApproval.mockResolvedValue({ id: 10, status: "rejected" })
+
+      const res = await POST(makeReq(), makeParams(["sdm", "cuti", "5", "approve"]))
+      expect(res.status).toBe(403)
+      // Nol mutasi: tidak reset rejected→draft, tidak buat approval baru, tidak approveStep.
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.approveStepMock).not.toHaveBeenCalled()
+      expect(mocks.findFirstApproval).not.toHaveBeenCalled()
+    })
+
+    it("pinjaman luar scope dengan workflow aktif: 403, nol mutasi", async () => {
+      mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_loans"] } })
+      mocks.findUnique.mockResolvedValue({ employeeId: 99 })
+
+      const res = await POST(makeReq(), makeParams(["sdm", "pinjaman", "5", "approve"]))
+      expect(res.status).toBe(403)
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.findFirstApproval).not.toHaveBeenCalled()
+    })
+
+    it("cuti dalam scope self: workflow lanjut ke approveStep", async () => {
+      mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_leave_requests"] } })
+      mocks.findUnique.mockResolvedValue({ employeeId: 7 })
+      mocks.findFirstApproval.mockResolvedValue({ id: 10, status: "pending" })
+      mocks.approveStepMock.mockResolvedValue(undefined)
+      mocks.findUniqueApproval.mockResolvedValue({ id: 10, status: "approved" })
+
+      const res = await POST(makeReq(), makeParams(["sdm", "cuti", "5", "approve"]))
+      expect(res.status).toBe(200)
+      expect(mocks.approveStepMock).toHaveBeenCalledWith(10, expect.any(FormData))
+    })
+
+    it("dokumen HR tidak ditemukan di cabang workflow: 404, nol mutasi", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findUnique.mockResolvedValue(null)
+
+      const res = await POST(makeReq(), makeParams(["sdm", "lembur", "5", "approve"]))
+      expect(res.status).toBe(404)
+      expect(mocks.requestApprovalMock).not.toHaveBeenCalled()
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+    })
+  })
+
   describe("With Active Approval Workflow", () => {
     beforeEach(() => {
       mocks.findFirstWorkflow.mockResolvedValue({ id: 1 })

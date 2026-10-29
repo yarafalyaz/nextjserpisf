@@ -893,6 +893,8 @@ describe("Appreciation Actions", () => {
     vi.clearAllMocks()
     restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    // BUGHUNT #9: update/delete muat baris existing untuk cek HR scope.
+    prismaMock.appreciation.findUniqueOrThrow.mockResolvedValue({ employeeId: 1 })
   })
 
   it("createAppreciation succeeds", async () => {

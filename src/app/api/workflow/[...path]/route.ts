@@ -102,6 +102,10 @@ export async function POST(
 
   const modelType = config.modelType
 
+  // HR model types (cuti/lembur/pinjaman) punya employeeId pemilik dokumen.
+  // Dipakai cabang workflow-aktif DAN manual untuk cek scope SEBELUM mutasi apa pun.
+  const HR_MODELS = new Set(["leaveRequest", "overtimeRequest", "employeeLoan"])
+
   try {
     await assertCSRF()
     if (modelType) {
@@ -110,6 +114,32 @@ export async function POST(
       })
 
       if (activeWorkflow) {
+        // HR scope SEBELUM mutasi: cabang workflow-aktif dulu reset
+        // rejected→draft + buat approval baru, baru cek scope di cabang
+        // manual — pemegang izin approve luar scope bisa membangkitkan
+        // dokumen HR lalu menerima 409 sesudah mutasi commit (BUGHUNT #8).
+        // Cek di sini menolak sebelum requestApprovalIfConfigured/reset.
+        if (HR_MODELS.has(config.model)) {
+          const delegateScope = prisma[config.model as keyof typeof prisma] as any
+          const hrDoc = await delegateScope.findUnique({
+            where: { id },
+            select: { employeeId: true },
+          })
+          if (!hrDoc) {
+            return apiError("NOT_FOUND", "Data tidak ditemukan")
+          }
+          try {
+            const scope = await getHrScope({
+              id: String(session.user.id),
+              roles: userRoles ?? [],
+              permissions: userPermissions ?? [],
+            })
+            await assertHrEmployeeAccess(scope, hrDoc.employeeId)
+          } catch {
+            return apiError("FORBIDDEN", "Anda tidak memiliki akses ke data karyawan ini")
+          }
+        }
+
         let approval = await prisma.approval.findFirst({
           where: { referenceType: modelType, referenceId: id },
           orderBy: { id: "desc" },
@@ -266,11 +296,7 @@ export async function POST(
       }
       // HR scope jalur manual: LeaveRequest/OvertimeRequest/EmployeeLoan
       // hanya boleh di-approve/reject bila karyawan dokumen dalam scope HR aktor.
-      if (
-        config.model === "leaveRequest" ||
-        config.model === "overtimeRequest" ||
-        config.model === "employeeLoan"
-      ) {
+      if (HR_MODELS.has(config.model)) {
         const doc = await delegate.findUnique({
           where: { id },
           select: { employeeId: true },

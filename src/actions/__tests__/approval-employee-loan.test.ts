@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
   const buildModelMock = () => ({
     findUnique: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     create: vi.fn().mockResolvedValue({ id: 1 }),
   })
 
@@ -72,7 +73,7 @@ vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: mocks.logActivityMock,
 }))
 
-import { approveStep } from "../approval.actions"
+import { approveStep, rejectStep } from "../approval.actions"
 
 const fd = () => {
   const f = new FormData()
@@ -113,9 +114,12 @@ describe("approveStep EmployeeLoan (AC-LS-B3/B4)", () => {
 
     await approveStep(9, fd())
 
-    expect(mocks.prismaMock.employeeLoan.update).toHaveBeenCalledTimes(1)
-    expect(mocks.prismaMock.employeeLoan.update).toHaveBeenCalledWith({
-      where: { id: 77 },
+    // BUGHUNT round3: flip pending->active kini klaim atomik updateMany —
+    // count 0 (sudah active/terminal) melempar sebelum hook pencairan jalan.
+    expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.employeeLoan.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.employeeLoan.updateMany).toHaveBeenCalledWith({
+      where: { id: 77, status: "pending" },
       data: { status: "active", approvedBy: 5 },
     })
     expect(mocks.disbursedMock).toHaveBeenCalledTimes(1)
@@ -152,6 +156,36 @@ describe("approveStep EmployeeLoan (AC-LS-B3/B4)", () => {
     asApprover(5, ["approve_loans"])
 
     await expect(approveStep(9, fd())).rejects.toThrow("tidak memiliki akses")
+
+    expect(mocks.disbursedMock).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled()
+  })
+
+  it("BUGHUNT round3: loan active tidak bisa ditolak lewat jalur generik (klaim pending kalah)", async () => {
+    asApprover(5, ["approve_loans"])
+    mocks.prismaMock.employeeLoan.findUnique.mockResolvedValue({ employeeId: 7 })
+    mocks.prismaMock.employeeLoan.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    await expect(rejectStep(9, fd())).rejects.toThrow(
+      "Pinjaman hanya dapat ditolak dari status menunggu",
+    )
+
+    expect(mocks.prismaMock.employeeLoan.updateMany).toHaveBeenCalledWith({
+      where: { id: 77, status: "pending" },
+      data: { status: "rejected" },
+    })
+    expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled()
+    expect(mocks.disbursedMock).not.toHaveBeenCalled()
+  })
+
+  it("BUGHUNT round3: loan non-pending tidak dicairkan ulang (klaim approve kalah, nol jurnal)", async () => {
+    asApprover(5, ["approve_loans"])
+    mocks.prismaMock.employeeLoan.findUnique.mockResolvedValue({ employeeId: 7 })
+    mocks.prismaMock.employeeLoan.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    await expect(approveStep(9, fd())).rejects.toThrow(
+      "Pinjaman hanya dapat disetujui dari status menunggu",
+    )
 
     expect(mocks.disbursedMock).not.toHaveBeenCalled()
     expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled()

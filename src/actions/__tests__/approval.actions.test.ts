@@ -24,6 +24,13 @@ const mocks = vi.hoisted(() => {
     purchaseRequest: buildModelMock(),
     expense: buildModelMock(),
     payroll: buildModelMock(),
+    employeeLoan: buildModelMock(),
+    overtimeRequest: buildModelMock(),
+    employeePayrollComponent: buildModelMock(),
+    workSchedule: buildModelMock(),
+    holiday: buildModelMock(),
+    departmentHoliday: buildModelMock(),
+    employee: buildModelMock(),
     role: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
@@ -725,5 +732,104 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
       }),
     );
     expect(mocks.prismaMock.payroll.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("BUGHUNT round3: klaim terminal Leave/Overtime/Loan + nilai lembur", () => {
+  const seedHrDoc = (model: string, doc: Record<string, unknown>) => {
+    mocks.prismaMock[model] = {
+      findUnique: vi.fn().mockResolvedValue(doc),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    };
+  };
+
+  it("rejectStep EmployeeLoan active (sudah cair) ditolak flip, count 0", async () => {
+    seedApproval({ referenceType: "EmployeeLoan", referenceId: 77 });
+    seedHrDoc("employeeLoan", { employeeId: 7 });
+    mocks.prismaMock.employeeLoan.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow(
+      "Pinjaman hanya dapat ditolak dari status menunggu",
+    );
+    expect(mocks.prismaMock.employeeLoan.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 77, status: "pending" },
+        data: expect.objectContaining({ status: "rejected" }),
+      }),
+    );
+    expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStep EmployeeLoan non-pending ditolak, nol pencairan ulang", async () => {
+    seedApproval({ referenceType: "EmployeeLoan", referenceId: 77 });
+    seedHrDoc("employeeLoan", { employeeId: 7 });
+    mocks.prismaMock.employeeLoan.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow(
+      "Pinjaman hanya dapat disetujui dari status menunggu",
+    );
+    expect(mocks.prismaMock.employeeLoan.update).not.toHaveBeenCalled();
+  });
+
+  it("rejectStep LeaveRequest terminal ditolak flip, count 0", async () => {
+    seedApproval({ referenceType: "LeaveRequest", referenceId: 5 });
+    seedHrDoc("leaveRequest", { employeeId: 7 });
+    mocks.prismaMock.employeeLoan.updateMany.mockResolvedValue({ count: 1 });
+    mocks.prismaMock.leaveRequest.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow(
+      "Pengajuan cuti hanya dapat ditolak dari status menunggu",
+    );
+    expect(mocks.prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 5, status: "pending" },
+        data: expect.objectContaining({ status: "rejected", rejectionReason: "NO" }),
+      }),
+    );
+    expect(mocks.prismaMock.leaveRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStep OvertimeRequest menghitung calculatedValue lewat klaim yang sama", async () => {
+    // 2026-06-12 Jumat (hari kerja fallback): 2 jam @ gaji 5.000.000 =
+    // 3,5 x 5.000.000/173 = 101.156 — angka sama dengan approveOvertime.
+    seedApproval({ referenceType: "OvertimeRequest", referenceId: 21 });
+    seedHrDoc("overtimeRequest", {
+      employeeId: 7,
+      date: new Date("2026-06-12T00:00:00Z"),
+      hours: 2,
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    });
+    mocks.prismaMock.employee.findUnique.mockResolvedValue({ id: 7, departmentId: null });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.overtimeRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 21, status: { in: ["pending", "approved"] } },
+        data: expect.objectContaining({
+          status: "approved",
+          calculatedValue: 101156,
+          approvedBy: 1,
+        }),
+      }),
+    );
+    const arg = mocks.prismaMock.overtimeRequest.updateMany.mock.calls[0][0];
+    expect(arg.data.approvedAt).toBeInstanceOf(Date);
+    expect(arg.data.overtimeBaseSnapshot).toMatchObject({ baseSalary: 5_000_000, baseTotal: 5_000_000 });
+    expect(mocks.prismaMock.overtimeRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStep OvertimeRequest terminal (klaim kalah) ditolak, nol tulis polos", async () => {
+    seedApproval({ referenceType: "OvertimeRequest", referenceId: 21 });
+    seedHrDoc("overtimeRequest", {
+      employeeId: 7,
+      date: new Date("2026-06-12T00:00:00Z"),
+      hours: 2,
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    });
+    mocks.prismaMock.employee.findUnique.mockResolvedValue({ id: 7, departmentId: null });
+    mocks.prismaMock.overtimeRequest.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow(
+      "Pengajuan lembur hanya dapat disetujui dari status menunggu",
+    );
+    expect(mocks.prismaMock.overtimeRequest.update).not.toHaveBeenCalled();
   });
 });

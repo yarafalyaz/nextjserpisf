@@ -22,6 +22,7 @@ import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import { payrollStatutoryGateError } from "@/lib/services/payroll-statutory.service";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
+import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.service";
 
 type WorkflowStepInput = {
   name?: string;
@@ -81,6 +82,26 @@ async function assertHrScopeForApproval(
   const scope = await getHrScope(user);
   await assertHrEmployeeAccess(scope, doc.employeeId);
 }
+
+// Klaim atomik status dokumen: hanya pre-state sah boleh flip ke status
+// terminal lewat jalur approval generik; count 0 = dokumen sudah terminal
+// (paid/active/rejected/paid_off/...) -> tolak, jangan resurrect/flip ulang.
+// Payroll: draft->approved | draft/approved->rejected (approvedBy ikut).
+// Leave/Overtime: pending->approved|rejected. EmployeeLoan: pending->active
+// (pencairan) | pending->rejected — loan active/paid_off/written_off TIDAK
+// boleh ditolak/dicairkan ulang dari sini.
+const APPROVE_CLAIMS: Record<string, { from: string[]; error: string }> = {
+  Payroll: { from: ["draft"], error: "Slip gaji hanya dapat disetujui dari status draft." },
+  LeaveRequest: { from: ["pending"], error: "Pengajuan cuti hanya dapat disetujui dari status menunggu." },
+  OvertimeRequest: { from: ["pending"], error: "Pengajuan lembur hanya dapat disetujui dari status menunggu." },
+  EmployeeLoan: { from: ["pending"], error: "Pinjaman hanya dapat disetujui dari status menunggu." },
+};
+const REJECT_CLAIMS: Record<string, { from: string[]; error: string }> = {
+  Payroll: { from: ["draft", "approved"], error: "Slip gaji hanya dapat ditolak dari status draft atau approved." },
+  LeaveRequest: { from: ["pending"], error: "Pengajuan cuti hanya dapat ditolak dari status menunggu." },
+  OvertimeRequest: { from: ["pending"], error: "Pengajuan lembur hanya dapat ditolak dari status menunggu." },
+  EmployeeLoan: { from: ["pending"], error: "Pinjaman hanya dapat ditolak dari status menunggu." },
+};
 
 const APPROVED_BY_MODELS = new Set([
   "PurchaseRequest",
@@ -285,19 +306,53 @@ export async function approveStep(approvalId: number, formData: FormData) {
           // terminal — slip gaji `paid` tidak boleh di-resurrect jadi
           // `approved` lewat jalur approval generik (approvePayroll/
           // markPayrollPaid sendiri sudah draft->approved->paid searah).
-          // where bersyarat = klaim atomik: hanya draft -> approved;
-          // rejected/paid kalah klaim -> tolak (jangan resurrect).
-          const terminalGuarded = new Set(["Payroll"]);
-          if (terminalGuarded.has(approval.referenceType)) {
-            const claimed = await docModel.updateMany({
-              where: { id: approval.referenceId, status: "draft" },
-              data: {
-                status: docStatus,
-                ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
-              },
-            });
-            if (claimed.count === 0) {
-              throw new Error("Slip gaji hanya dapat disetujui dari status draft.");
+          // BUGHUNT round3: klaim sama diperluas ke Leave/Overtime/Loan —
+          // pinjaman `active` (sudah cair) tidak boleh dicairkan ulang,
+          // cuti/lembur terminal tidak boleh di-flip ulang.
+          const claim = APPROVE_CLAIMS[approval.referenceType];
+          if (claim) {
+            if (approval.referenceType === "OvertimeRequest") {
+              // Lembur: klaim atomik + hitung calculatedValue dalam satu
+              // updateMany (helper bersama approveOvertime) — flip polos
+              // meninggalkan calculatedValue null, payroll membayar 0.
+              const ot = await docModel.findUnique({
+                where: { id: approval.referenceId },
+                select: {
+                  employeeId: true,
+                  date: true,
+                  hours: true,
+                  calculatedValue: true,
+                  employee: { select: { baseSalary: true } },
+                },
+              });
+              if (!ot) throw new Error("Dokumen tidak ditemukan");
+              if (ot.calculatedValue != null && Number(ot.calculatedValue) > 0) {
+                // Sudah terhitung (idempoten): cukup klaim status.
+                const claimed = await docModel.updateMany({
+                  where: { id: approval.referenceId, status: { in: claim.from } },
+                  data: { status: docStatus, approvedBy },
+                });
+                if (claimed.count === 0) throw new Error(claim.error);
+              } else {
+                const claimed = await computeOvertimeApprovalValue(
+                  tx,
+                  { id: approval.referenceId, ...ot },
+                  approvedBy ?? 0,
+                );
+                if (claimed.count === 0) throw new Error(claim.error);
+              }
+            } else {
+              const claimed = await docModel.updateMany({
+                where: {
+                  id: approval.referenceId,
+                  status: claim.from.length === 1 ? claim.from[0] : { in: claim.from },
+                },
+                data: {
+                  status: docStatus,
+                  ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
+                },
+              });
+              if (claimed.count === 0) throw new Error(claim.error);
             }
           } else {
             await docModel.update({
@@ -309,6 +364,9 @@ export async function approveStep(approvalId: number, formData: FormData) {
             });
           }
           if (approval.referenceType === "EmployeeLoan") {
+            // Hanya jalan sesudah klaim pending->active menang: loan yang
+            // sudah active/terminal kalah klaim di atas, jadi jurnal
+            // pencairan tidak pernah terbit dua kali dari jalur ini.
             await onEmployeeLoanDisbursed(approval.referenceId, approvedBy ?? undefined, tx);
           }
           if (approval.referenceType === "Expense") {
@@ -433,17 +491,21 @@ export async function rejectStep(approvalId: number, formData: FormData) {
         if (REJECTION_REASON_MODELS.has(approval.referenceType)) {
           data.rejectionReason = notes || null;
         }
-        // Sama seperti approveStep: slip gaji terminal (paid) tidak boleh
-        // ditulis ulang lewat jalur generik — klaim atomik dari draft/approved
-        // saja, count 0 = sudah final/ditolak -> tolak tanpa resurrect.
-        if (approval.referenceType === "Payroll") {
+        // Sama seperti approveStep: dokumen terminal tidak boleh ditulis
+        // ulang lewat jalur generik — klaim atomik dari pre-state sah saja,
+        // count 0 = sudah final -> tolak tanpa resurrect. BUGHUNT round3:
+        // pinjaman `active` yang ditolak di sini dulu tetap berstatus
+        // rejected walau jurnal pencairan sudah terposting.
+        const rejectClaim = REJECT_CLAIMS[approval.referenceType];
+        if (rejectClaim) {
           const claimed = await docModel.updateMany({
-            where: { id: approval.referenceId, status: { in: ["draft", "approved"] } },
+            where: {
+              id: approval.referenceId,
+              status: rejectClaim.from.length === 1 ? rejectClaim.from[0] : { in: rejectClaim.from },
+            },
             data,
           });
-          if (claimed.count === 0) {
-            throw new Error("Slip gaji hanya dapat ditolak dari status draft atau approved.");
-          }
+          if (claimed.count === 0) throw new Error(rejectClaim.error);
         } else {
           await docModel.update({
             where: { id: approval.referenceId },
