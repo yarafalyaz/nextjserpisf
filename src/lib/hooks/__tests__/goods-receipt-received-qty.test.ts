@@ -100,16 +100,49 @@ function wireTx(opts: {
   return { spies };
 }
 
-/** Ambil penulisan `received_qty` (UPDATE purchase_order_items) dari mock. */
+/**
+ * Ambil penulisan `received_qty` dari mock. Penulisan kini SATU statement
+ * multi-row: mock menerima args tagged-template mentah — strings luar +
+ * objek Prisma.Sql tersarang (join CASE, join id). Flatten semua strings
+ * untuk teks + jumlah WHEN, flatten semua `values` primitif berurutan:
+ * [id, val]×WHEN lalu id… klausa IN (diabaikan).
+ */
 function receivedQtyWrites(spies: { executeRaw: { mock: { calls: unknown[][] } } }) {
-  return spies.executeRaw.mock.calls
-    .filter(
-      (call) =>
-        Array.isArray(call[0]) &&
-        (call[0] as string[]).join("").includes("purchase_order_items") &&
-        (call[0] as string[]).join("").includes("received_qty"),
-    )
-    .map((call) => ({ value: call[1], id: call[2] }));
+  const writes: { value: unknown; id: unknown }[] = [];
+  for (const call of spies.executeRaw.mock.calls) {
+    let text = "";
+    let whenCount = 0;
+    const prims: unknown[] = [];
+    const walk = (x: unknown): void => {
+      if (Array.isArray(x)) return x.forEach(walk);
+      if (x && typeof x === "object") {
+        const o = x as { strings?: unknown; values?: unknown };
+        if (Array.isArray(o.strings)) {
+          const s = o.strings.join(" ");
+          whenCount += s.split("WHEN").length - 1;
+        }
+        if (Array.isArray(o.values)) o.values.forEach(walk);
+        return;
+      }
+      prims.push(x);
+    };
+    // Teks luar: arg pertama = array strings template (tanpa `.values`).
+    if (Array.isArray(call[0])) text = call[0].join(" ");
+    call.forEach(walk);
+    if (!text.includes("purchase_order_items") || !text.includes("received_qty")) continue;
+    const flat = prims.filter((v) => typeof v === "number");
+    for (let i = 0; i < whenCount; i++) {
+      writes.push({ id: flat[i * 2], value: flat[i * 2 + 1] });
+    }
+  }
+  return writes;
+}
+
+/** Hitung statement UPDATE purchase_order_items dari mock (target: 1 batch). */
+function receivedQtyStatementCount(spies: { executeRaw: { mock: { calls: unknown[][] } } }) {
+  return spies.executeRaw.mock.calls.filter(
+    (call) => Array.isArray(call[0]) && call[0].join(" ").includes("purchase_order_items"),
+  ).length;
 }
 
 beforeEach(() => {
@@ -202,6 +235,8 @@ describe("onGoodsReceiptVerified menulis PurchaseOrderItem.receivedQty", () => {
       { value: 5, id: 11 },
       { value: 1, id: 12 },
     ]);
+    // Batch: seluruh baris PO ditulis dalam SATU statement, bukan per baris.
+    expect(receivedQtyStatementCount(spies)).toBe(1);
     expect(spies.poUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "partial_received" } }),
     );

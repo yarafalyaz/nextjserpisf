@@ -252,9 +252,19 @@ export async function onGoodsReceiptVerified(
       // receipt guard. It is written as an ABSOLUTE value (not an increment):
       // receivedMap is recomputed from the verified GR lines on every verify, so
       // the column also self-heals from any drift. Raw SQL mirrors the qty_on_hand
-      // write below and keeps the write to one statement per PO line.
-      for (const { poItem, allocated } of lineAllocations) {
-        await tx.$executeRaw`UPDATE purchase_order_items SET received_qty = ${allocated} WHERE id = ${poItem.id}`;
+      // write below. PERF: satu statement multi-row (CASE per id) menggantikan
+      // satu UPDATE per baris PO — nilai absolut + himpunan baris sama persis,
+      // jadi semantik identik; tetap di dalam tx + sesudah guard over-receipt.
+      if (lineAllocations.length > 0) {
+        const cases = lineAllocations.map(
+          ({ poItem, allocated }) => Prisma.sql`WHEN ${poItem.id} THEN ${allocated}`,
+        );
+        const ids = lineAllocations.map(({ poItem }) => poItem.id);
+        await tx.$executeRaw`
+          UPDATE purchase_order_items
+          SET received_qty = CASE id ${Prisma.join(cases, " ")} END
+          WHERE id IN (${Prisma.join(ids)})
+        `;
       }
 
       // Determine if fully received
