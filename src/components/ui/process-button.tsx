@@ -9,7 +9,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 
 interface ProcessButtonProps {
   id: number
-  action: (id: number) => Promise<{ success: boolean; error?: string } | void>
+  action: (id: number) => Promise<{ success: boolean; error?: string; warning?: string } | void>
   confirmTitle?: string
   confirmBody?: string
   successMessage?: string
@@ -37,7 +37,13 @@ export function ProcessButton({
           setIsOpen(false)
           return
         }
-        showSuccess(successMessage)
+        // F-2026-10-28-157-V: warning server (nomor faktur belum diisi +
+        // completedOrderNotice) tampil apa adanya, tanpa hitung ulang di UI.
+        if (result && "warning" in result && typeof result.warning === "string" && result.warning) {
+          showError(result.warning)
+        } else {
+          showSuccess(successMessage)
+        }
         setIsOpen(false)
         router.refresh()
       } catch (e) {

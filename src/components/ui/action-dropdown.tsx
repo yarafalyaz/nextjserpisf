@@ -32,7 +32,7 @@ interface ActionDropdownProps {
   /** Explicit permission required to show the delete action. If omitted, derived from ROUTE_PERMS. */
   deletePermission?: string
   /** Optional extra server action rendered as a menu item (e.g. verify/post). */
-  processAction?: (id: number) => Promise<{ success: boolean; error?: string } | void>
+  processAction?: (id: number) => Promise<{ success: boolean; error?: string; warning?: string } | void>
   processLabel?: string
   processConfirmTitle?: string
   processConfirmBody?: string
@@ -77,7 +77,12 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
         if (result && result.success === false) {
           throw new Error(result.error || "Gagal memproses data")
         }
-        showSuccess(processSuccessMessage || "Data berhasil diproses")
+        // F-2026-10-28-157-V: warning server tampil apa adanya.
+        if (result && "warning" in result && typeof result.warning === "string" && result.warning) {
+          showError(result.warning)
+        } else {
+          showSuccess(processSuccessMessage || "Data berhasil diproses")
+        }
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal memproses data")
