@@ -280,6 +280,37 @@ async function main() {
     );
     console.log(`✅ ${statutoryRows.length} payroll statutory rules seeded/checked`);
 
+    // Komisi penjualan: akun sistem diselesaikan dari COA ter-seed
+    // (600002 Beban Komisi / 210212 Utang Komisi Penjualan, pola
+    // account-automap) HANYA bila masih NULL — setting tenant yang sudah
+    // diisi lewat UI tidak ditimpa. Tanpa akun ini jurnal komisi
+    // fail-closed (commission-payable.service).
+    await conn.query(
+      `UPDATE system_settings SET
+         commission_expense_account_id = COALESCE(commission_expense_account_id, (SELECT id FROM accounts WHERE code = '600002')),
+         commission_payable_account_id = COALESCE(commission_payable_account_id, (SELECT id FROM accounts WHERE code = '210212')),
+         updated_at = NOW()
+       WHERE id = 1`,
+    );
+    console.log("✅ Commission system accounts ensured (600002/210212, NULL-only)");
+
+    // Master komponen gaji "Komisi Penjualan": dicari fail-closed oleh
+    // addPayrollCommissionLine (normalized_name 'komisi penjualan',
+    // earning, kena pajak, aktif). recurrence 'variable' (bayar per slip,
+    // bukan komponen tetap). Idempoten per normalized_name aktif —
+    // pola assertActiveComponentNameAvailable; akun komponen diarahkan
+    // ke Beban Komisi bila akunnya ada.
+    await conn.query(
+      `INSERT INTO payroll_components (name, normalized_name, kind, recurrence, is_taxable, account_id, is_active, created_at, updated_at)
+       SELECT 'Komisi Penjualan', 'komisi penjualan', 'earning', 'variable', 1,
+              (SELECT id FROM accounts WHERE code = '600002'), 1, NOW(), NOW()
+       WHERE NOT EXISTS (
+         SELECT 1 FROM payroll_components
+         WHERE normalized_name = 'komisi penjualan' AND is_active = 1
+       )`,
+    );
+    console.log("✅ Payroll component 'Komisi Penjualan' ensured");
+
     // Create default warehouse
     await conn.query(
       `INSERT IGNORE INTO warehouses (code, name, address, is_active, created_at, updated_at)
