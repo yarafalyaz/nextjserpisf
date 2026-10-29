@@ -69,6 +69,9 @@ function wireTx(overrides: {
     itemBatch: { findFirst: spies.batchFindFirst, create: spies.batchCreate, update: spies.batchUpdate },
     salesInvoiceItem: { findMany: spies.invoiceItemFindMany },
     systemSetting: { findFirst: spies.systemSettingFindFirst },
+    // Lawan komisi retur (tahap 3): no-op default (tanpa baris akrual).
+    salesReturnItem: { findMany: vi.fn().mockResolvedValue([]) },
+    commissionPayable: { findFirst: vi.fn().mockResolvedValue(null) },
   }
   mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
   return { spies, tx }

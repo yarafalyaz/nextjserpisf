@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { SalesInvoiceStatus, Prisma } from "@prisma/client";
 import { commissionSnapshotForPaid } from "@/lib/services/commission-snapshot";
+import { accrueTx as accrueCommissionPayableTx } from "@/lib/services/commission-payable.service";
 import { derivePaymentStatus } from "@/lib/finance/settlement-status";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -74,6 +75,26 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
       ...(commissionSnapshot ?? {}),
     },
   });
+
+  // Tahap 3 komisi (vonis R-komisi-vonispayable §5): SATU tx = transisi paid
+  // + snapshot + baris subledger + jurnal. Gagal syarat lahir = nol baris +
+  // nol jurnal berlabel alasan; faktur tetap paid (empat status terpisah).
+  // Fail-closed TIDAK boleh menggagalkan pembayaran: mapping belum lengkap =
+  // catat alasan, lanjut (vonis §5).
+  if (status === "paid") {
+    try {
+      await accrueCommissionPayableTx(db, invoiceId, null, {
+        status: invoice.status,
+        salesEmployeeId: (invoice as { salesEmployeeId?: unknown }).salesEmployeeId,
+        commissionRatePercent: (invoice as { commissionRatePercent?: unknown }).commissionRatePercent,
+        grandTotal: invoice.grandTotal,
+        taxAmount: (invoice as { taxAmount?: unknown }).taxAmount,
+        updatedAt: (invoice as { updatedAt?: unknown }).updatedAt,
+      });
+    } catch (e) {
+      console.error("[commission] akrual dilewati:", e instanceof Error ? e.message : e);
+    }
+  }
 }
 
 /**

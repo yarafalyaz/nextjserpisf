@@ -2,15 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
  * Loader subledger komisi (F-2026-10-25-049-S): view_reports fail-closed;
- * inti G1 belum live → ledgerAvailable:false jujur (BR-KOM37-12,
- * QA-KOM49-7 baca tidak menulis).
+ * tahap 3 live → ledgerAvailable:true dari baris fisik (QA-KOM49-7 baca
+ * tidak menulis).
  */
 
 const mocks = vi.hoisted(() => ({ requirePermission: vi.fn() }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermission }))
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: { commissionPayable: { findMany: vi.fn().mockResolvedValue([]) } },
+}))
 
 import { getSalesCommissionSubledgerRecap } from "../sales-commission-subledger-data"
-import { SALES_COMMISSION_PAYABLE_UNAVAILABLE_NOTICE } from "../sales-commission-payable"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -25,10 +27,9 @@ describe("getSalesCommissionSubledgerRecap", () => {
     await expect(getSalesCommissionSubledgerRecap()).rejects.toThrow("Tidak memiliki izin")
   })
 
-  it("label belum-tersedia verbatim, saldo 0, status kosong", async () => {
+  it("tahap 3 live: ledgerAvailable true, saldo 0 tercatat, status kosong", async () => {
     const r = await getSalesCommissionSubledgerRecap()
-    expect(r.payable).toMatchObject({ ledgerAvailable: false, totalBalance: 0, rows: [] })
-    expect(r.payable.notice).toBe(SALES_COMMISSION_PAYABLE_UNAVAILABLE_NOTICE)
+    expect(r.payable).toMatchObject({ ledgerAvailable: true, totalBalance: 0, rows: [] })
     expect(r.lineStatuses).toEqual([])
   })
 })

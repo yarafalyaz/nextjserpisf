@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
     salesPayment: { findMany: vi.fn() },
     customer: { findUnique: vi.fn() },
     customerCommissionRate: { findMany: vi.fn() },
+    // accrueTx komisi (tahap 3): no-op default — snapshot tetap milik hook lama.
+    commissionPayable: { findFirst: vi.fn(async () => null), create: vi.fn(), update: vi.fn() },
+    systemSetting: { findFirst: vi.fn(async () => null) },
   },
 }))
 

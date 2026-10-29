@@ -199,6 +199,10 @@ export const updateSystemSettingsSchema = z.object({
   warrantyExpenseAccountId: optionalInt(),
   warrantyProvisionAccountId: optionalInt(),
   supplierClaimReceivableAccountId: optionalInt(),
+  // Tahap 3 komisi: Beban Komisi 600002 + Utang Komisi 210212 (fail-closed
+  // tanpa mapping; input form di Pengaturan > Ubah).
+  commissionExpenseAccountId: optionalInt(),
+  commissionPayableAccountId: optionalInt(),
 
   // Accounting - General
   pettyCashAccountId: optionalInt(),

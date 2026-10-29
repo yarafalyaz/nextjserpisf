@@ -337,6 +337,15 @@ model SystemSetting {
   pph21PayableAccountId Int? @map("pph21_payable_account_id")
   bpjsEmployeePayableAccountId Int? @map("bpjs_employee_payable_account_id")
   disciplinaryFineIncomeAccountId Int? @map("disciplinary_fine_income_account_id")
+  /**
+   * Tahap 3 komisi (vonis R-komisi-vonispayable §4): mapping jurnal
+   * akrual Dr beban / Cr utang komisi. Nullable TANPA default tebak;
+   * kosong/nonaktif/salah tipe/debit==kredit = posting DITOLAK berisik
+   * (fail-closed, tanpa fallback 210204–210211). Standar seed:
+   * 600002 Beban Komisi / 210212 Utang Komisi Penjualan.
+   */
+  commissionExpenseAccountId  Int? @map("commission_expense_account_id")
+  commissionPayableAccountId  Int? @map("commission_payable_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -561,6 +570,31 @@ model CustomerCategory {
 /// bertanggal efektif. Masa semi-terbuka: effectiveFrom <= tanggal < effectiveTo;
 /// effectiveTo null = masa terbuka. Baris yang sudah menjadi sumber snapshot
 /// faktur (SalesInvoice.commissionRateId) dilarang edit/hapus (BR-KT36-08).
+/**
+ * Subledger utang komisi tahap 3 (vonis R-komisi-vonispayable §7).
+ * Satu baris per pasangan (faktur, penerima). Saldo turunan server
+ * A − R − P (boleh negatif retur-sesudah-bayar, tanpa clamp).
+ */
+model CommissionPayable {
+  id               Int      @id @default(autoincrement())
+  salesInvoiceId   Int      @map("sales_invoice_id")
+  salesEmployeeId  Int      @map("sales_employee_id")
+  accruedAmount    Decimal  @map("accrued_amount") @db.Decimal(15, 2)
+  reversalAmount   Decimal  @default(0.00) @map("reversal_amount") @db.Decimal(15, 2)
+  paidAmount       Decimal  @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
+  accrualJournalId Int?     @map("accrual_journal_id")
+  createdBy        Int?     @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  salesInvoice     SalesInvoice @relation("SalesInvoiceCommissionPayables", fields: [salesInvoiceId], references: [id], onDelete: Restrict)
+  salesEmployee    Employee     @relation("EmployeeCommissionPayables", fields: [salesEmployeeId], references: [id], onDelete: Restrict)
+  accrualJournal   Journal?     @relation("CommissionPayableAccrualJournal", fields: [accrualJournalId], references: [id], onDelete: SetNull)
+
+  @@unique([salesInvoiceId, salesEmployeeId], map: "uq_commission_payable_invoice_employee")
+  @@index([salesEmployeeId], map: "idx_commission_payable_employee")
+  @@map("commission_payables")
+}
+
 model CustomerCommissionRate {
   id                 Int              @id @default(autoincrement())
   customerCategoryId Int              @map("customer_category_id")
@@ -1116,6 +1150,7 @@ model Employee {
   salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
   salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
   salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
+  commissionPayables  CommissionPayable[] @relation("EmployeeCommissionPayables")
   salesTargets         SalesTarget[]
   workOrderOperations WorkOrderOperation[]
   rosters             EmployeeRoster[]
@@ -1855,6 +1890,7 @@ model SalesInvoice {
   salesEmployee        Employee?             @relation("SalesInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
   commissionCustomerCategory CustomerCategory? @relation("SalesInvoiceCommissionCategory", fields: [commissionCustomerCategoryId], references: [id])
   commissionRate       CustomerCommissionRate? @relation("SalesInvoiceCommissionRate", fields: [commissionRateId], references: [id])
+  commissionPayables  CommissionPayable[] @relation("SalesInvoiceCommissionPayables")
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
@@ -4469,6 +4505,7 @@ model Journal {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
   entries         JournalEntry[]
+  commissionPayableAccruals CommissionPayable[] @relation("CommissionPayableAccrualJournal")
   disciplinaryDeductionApplication DisciplinaryDeductionApplication?
   creator         User?          @relation(fields: [createdBy], references: [id])
 

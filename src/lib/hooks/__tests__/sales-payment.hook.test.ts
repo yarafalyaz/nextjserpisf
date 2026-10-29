@@ -46,6 +46,9 @@ function makeTx() {
     // karena panel tarif kosong).
     customer: { findUnique: mocks.customerFindUnique },
     customerCommissionRate: { findMany: mocks.customerCommissionRateFindMany },
+    // accrueTx komisi: invoice fixture tanpa snapshot/penjual -> no-op jujur.
+    commissionPayable: { findFirst: async () => null, create: async () => ({}), update: async () => ({}) },
+    systemSetting: { findFirst: async () => null },
   }
 }
 
