@@ -429,13 +429,45 @@ disengaja — menghapus asersi itu dan menulis alasannya.
 
 **Verifikasi**: `tsc` bersih · suite 3771 lulus · E2E dijalankan setelah rebuild.
 
+### SonarCloud: check eksternal (GitHub App), BUKAN job di repo ini
+
+`SonarCloud Code Analysis` yang muncul di PR **bukan** job dari
+`.github/workflows/ci.yml` — ia check dari SonarCloud GitHub App yang terpasang
+di level organisasi/repo (di luar repo; tak ada akses admin SonarCloud dari
+sesi kerja repo, jadi keberadaannya hanya bisa dibuktikan dari sisi GitHub).
+Buktinya di dalam repo: antrean merge memperlakukannya sebagai gerbang wajib —
+`.github/workflows/antrean-merge.yml` menuntut bucket persis `pass`
+(absen = "belum selesai", **bukan** lolos), dan `docs/antrean-merge.md`
+mencatat "SonarCloud PASS dengan `head_sha`" sebagai syarat merge.
+
+**Keputusan: jangan tambah job Sonar internal ke `ci.yml`.** Alasannya:
+(1) job scanner butuh `SONAR_TOKEN` + org/project key yang hanya bisa dibuat
+pemilik admin SonarCloud — tanpa itu job hanya akan merah palsu di setiap PR;
+(2) dua pemindai untuk proyek yang sama memberi dua sumber kebenaran yang bisa
+tidak sepakat; (3) check App sudah terikat ke antrean merge sebagai gerbang,
+jadi nilai unik job internal ≈ nol.
+
+**Risiko yang diterima & opsi bila App mati/dinonaktifkan:** check
+`SonarCloud Code Analysis` hilang dari PR → `antrean-merge.yml` menunggu
+bucket `pass` yang tak pernah datang → antrean timeout (gagal keras, bukan
+merge senyap tanpa Sonar) — kegagalannya **terlihat**, bukan senyap. Opsi
+pemulihan, urut termurah: (a) aktifkan ulang App di Settings repo →
+Integrations; (b) bila App memang dimatikan permanen, lepas tuntutan
+`SonarCloud Code Analysis` dari `antrean-merge.yml` + `docs/antrean-merge.md`
+dalam satu commit yang menyebut alasannya; (c) baru bila organisasi memilih
+self-hosted: tambah job `workflow_dispatch`-only (manual, bukan gerbang PR)
+memakai `SonarSource/sonarqube-scan-action` dengan secret `SONAR_TOKEN` —
+sengaja **tidak** dibuat sekarang karena secret-nya belum ada dan job yang
+tak pernah hijau hanya melatih orang mengabaikan merah. Proteksi branch
+tidak diubah oleh catatan ini.
+
 ### Status falsifikasi penjaga (kapan terakhir diuji benar-benar menangkap)
 
 | Penjaga / asersi | Difalsifikasi | Catatan |
 | --- | --- | --- |
 | `schema-usage` — kolom | ✓ | kolom disuntikkan tanpa rujukan → memerah |
 | `schema-usage` — model | ✓ | **dulu MATI**: regex nama-relasi ikut menangkap kata kunci `model` (dan `model:` ada di objek lain di kode) sehingga **selalu hijau**; ketahuan justru saat difalsifikasi, kini diperbaiki |
-| `navigation-targets` | ✓ | entri nav tanpa halaman → memerah |
+| `navigation-targets` | ✓ | entri nav tanpa halaman → memerah; page tujuan disuntik `export { default } from …` dan `notFound()` tanpa kondisi → memerah (detektor AST, pola sah terukur bersih di 530 page) |
 | `silent-failure` — catch kosong | ✓ | disuntikkan → memerah; daftar pengecualian kini **self-pruning** |
 | `silent-failure` — promise senyap | ✓ | menangkap pelanggaran **nyata** di `verify-migrations.mjs` |
 | `wired-transition-actions` | ✓ | wiring `postJournal` dilepas → memerah ("tidak dipanggil dari mana pun") |
