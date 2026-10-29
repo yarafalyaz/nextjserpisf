@@ -94,6 +94,21 @@ function purchaseTx(_bill: Record<string, unknown> | null) {
   }
 }
 
+function purchaseTxWithLock() {
+  const queryRaw = vi.fn().mockResolvedValue([])
+  const billFindMany = vi.fn().mockResolvedValue([{ id: 5 }])
+  return {
+    $queryRaw: queryRaw,
+    systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.settings) },
+    stockMove: { findMany: mocks.stockMoveFindMany },
+    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+    journalEntry: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
+    vendorBill: { findFirst: mocks.billFindFirst, findMany: billFindMany, update: mocks.billUpdate },
+    __queryRaw: queryRaw,
+    __billFindMany: billFindMany,
+  }
+}
+
 describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -190,5 +205,34 @@ describe("TASK-011 BUG-04 — subledger retur selaras GL", () => {
     )
     const writtenBill = mocks.billUpdate.mock.calls[0][0].data as Record<string, unknown>
     expect(writtenBill).not.toHaveProperty("grandTotal")
+  })
+
+  it("retur beli: lock baris vendor_bills FOR UPDATE sebelum relief findFirst (race balanceDue)", async () => {
+    mocks.purchaseReturnFind.mockResolvedValue({
+      id: 3,
+      documentNo: "PR-1",
+      purchaseOrderId: 7,
+      date: new Date("2026-10-02T00:00:00Z"),
+      items: [{ qty: 2, cost: 100 }],
+    })
+    mocks.billFindFirst.mockResolvedValue({
+      id: 5, grandTotal: 1000, paidAmount: 200, withholdingAmount: 0, balanceDue: 800,
+    })
+    const tx = purchaseTxWithLock()
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onPurchaseReturnProcessed(3, 7)
+
+    expect(tx.__billFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { purchaseOrderId: 7 }, orderBy: { id: "asc" } }),
+    )
+    expect(tx.__queryRaw).toHaveBeenCalled()
+    const sql = tx.__queryRaw.mock.calls.map((c: unknown[]) => Array.from(c[0] as TemplateStringsArray).join("?")).join(" ")
+    expect(sql).toContain("vendor_bills")
+    expect(sql).toContain("FOR UPDATE")
+    expect(tx.__queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.billFindFirst.mock.invocationCallOrder[0])
+    expect(mocks.billUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 5 }, data: expect.objectContaining({ balanceDue: 600 }) }),
+    )
   })
 })

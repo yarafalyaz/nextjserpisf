@@ -2430,6 +2430,22 @@ export async function onPurchaseReturnProcessed(
       typeof tx.vendorBill?.findFirst === "function" &&
       typeof tx.vendorBill?.update === "function"
     ) {
+      // Kunci baris bill terkait PO sebelum relief read-modify-write balanceDue:
+      // dua retur konkuren atas PO sama membaca saldo sama dan menulis relief
+      // dua kali. PO sudah dikunci stock hook lebih dulu dalam tx proses yang
+      // sama; lock bill by id (FOR UPDATE atas baris hasil findMany berurutan)
+      // men-serialize relief per bill. Guard typeof: tx stub lama tanpa
+      // $queryRaw/vendorBill.findMany tidak pecah.
+      if (typeof tx.$queryRaw === "function" && typeof tx.vendorBill?.findMany === "function") {
+        const billIds = await tx.vendorBill.findMany({
+          where: { purchaseOrderId: purchaseReturn.purchaseOrderId },
+          select: { id: true },
+          orderBy: { id: "asc" },
+        });
+        if (billIds.length > 0) {
+          await tx.$queryRaw`SELECT id FROM vendor_bills WHERE id IN (${Prisma.join(billIds.map((b: { id: number }) => b.id))}) FOR UPDATE`;
+        }
+      }
       const bill = await tx.vendorBill.findFirst({
         where: {
           purchaseOrderId: purchaseReturn.purchaseOrderId,
