@@ -59,7 +59,19 @@ export const taxAssessmentSchema = z.object({
     (v) => (v === "" || v == null ? undefined : v),
     z.enum(["ppn", "pph21", "pph23", "pph4_2", "pph_badan", "other"]).optional(),
   ),
-  taxPeriod: optionalText(7),
+  // Masa pajak `YYYY-MM` (pola finance.schemas taxPeriod): regex saja
+  // meloloskan "2026-13"/"2026-00" sebagai masa fiktif.
+  taxPeriod: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}$/, "Masa pajak harus dalam format YYYY-MM, mis. 2026-09")
+      .refine((v) => {
+        const month = Number(v.slice(5, 7))
+        return month >= 1 && month <= 12
+      }, "Masa pajak harus dalam format YYYY-MM, mis. 2026-09")
+      .optional(),
+  ),
   assessedAmount: z.coerce.number().nonnegative("Nominal ketetapan tidak boleh negatif"),
   disputedAmount: z.coerce.number().nonnegative("Nominal disengketakan tidak boleh negatif"),
   sentAt: optionalDate,

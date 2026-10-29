@@ -32,14 +32,18 @@ export function RosterForm({ employees }: { employees: EmployeeOption[] }) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
-      const res = await createEmployeeRoster(new FormData(form))
-      if (!res.success) {
-        showError(res.error || "Gagal menyimpan roster")
-        return
+      try {
+        const res = await createEmployeeRoster(new FormData(form))
+        if (!res.success) {
+          showError(res.error || "Gagal menyimpan roster")
+          return
+        }
+        showSuccess("Roster ditambahkan (draft)")
+        form.reset()
+        router.refresh()
+      } catch {
+        showError("Gagal menyimpan roster")
       }
-      showSuccess("Roster ditambahkan (draft)")
-      form.reset()
-      router.refresh()
     })
   }
 
@@ -101,13 +105,17 @@ export function RosterDecisionButtons({ id }: { id: number }) {
 
   function run(action: (id: number) => Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
-      const res = await action(id)
-      if (!res.success) {
-        showError(res.error || "Gagal memproses roster")
-        return
+      try {
+        const res = await action(id)
+        if (!res.success) {
+          showError(res.error || "Gagal memproses roster")
+          return
+        }
+        showSuccess(ok)
+        router.refresh()
+      } catch {
+        showError("Gagal memproses roster")
       }
-      showSuccess(ok)
-      router.refresh()
     })
   }
 

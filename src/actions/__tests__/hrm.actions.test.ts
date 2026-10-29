@@ -2360,12 +2360,23 @@ describe("Employee Roster Actions", () => {
   it("deleteEmployeeRoster hanya draft + izin manage_attendance", async () => {
     expect(await actions.deleteEmployeeRoster(5)).toEqual({ success: true })
     expect(requirePermissionMock).toHaveBeenCalledWith("manage_attendance")
-    expect(prismaMock.employeeRoster.delete).toHaveBeenCalledWith({ where: { id: 5 } })
+    // Klaim atomik: deleteMany bersyarat status draft, bukan delete polos.
+    expect(prismaMock.employeeRoster.deleteMany).toHaveBeenCalledWith({
+      where: { id: 5, status: "draft" },
+    })
+    expect(prismaMock.employeeRoster.delete).not.toHaveBeenCalled()
 
     prismaMock.employeeRoster.findUnique.mockResolvedValue({ employeeId: 7, status: "approved" })
     const res = await actions.deleteEmployeeRoster(5)
     expect(res.success).toBe(false)
-    expect(prismaMock.employeeRoster.delete).toHaveBeenCalledTimes(1)
+    expect(prismaMock.employeeRoster.deleteMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("deleteEmployeeRoster kalah klaim (status berubah sesudah baca) → gagal, count 0", async () => {
+    prismaMock.employeeRoster.deleteMany.mockResolvedValueOnce({ count: 0 })
+    const res = await actions.deleteEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("draft")
   })
 })
 

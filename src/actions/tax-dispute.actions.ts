@@ -103,49 +103,50 @@ export async function createTaxDisputeStep(formData: FormData): Promise<TaxDispu
 
     assertStepKind(v.kind, v.article36Subkind ?? null)
 
-    const assessment = await prisma.taxAssessment.findFirst({
-      where: { id: v.assessmentId, deletedAt: null },
-      select: {
-        id: true,
-        sentAt: true,
-        status: true,
-        steps: {
-          select: { kind: true, status: true, article36Subkind: true, filedAt: true, lateReason: true },
-        },
-      },
-    })
-    if (!assessment) return { success: false, error: "Ketetapan tidak ditemukan." }
-    if (assessment.status === "BATAL" || assessment.status === "SELESAI") {
-      return { success: false, error: "Ketetapan sudah selesai/batal, upaya baru ditolak." }
-    }
-
-    const stepLikes = assessment.steps.map((s) => ({
-      kind: s.kind,
-      article36Subkind: s.article36Subkind,
-      status: s.status,
-      filedAt: s.filedAt,
-      lateReason: s.lateReason,
-    }))
-    // AC-TXD-B2: tiga penjaga rantai upaya.
-    assertNoDuplicateActiveObjection(stepLikes, v.kind)
-    assertBandinPrerequisite(stepLikes, v.kind)
-    assertNoSecondPk(stepLikes, v.kind)
-
     const filedAt = v.filedAt ? wibDateToUtcMidnight(v.filedAt) : null
     if (filedAt) await assertPeriodOpen(filedAt)
 
-    // AC-TXD-B4: lewat tenggat butuh alasan, bukan auto-ditolak.
-    const late = isStepLate(assessment.sentAt, filedAt, v.kind)
-    if (late && !v.lateReason) {
-      return {
-        success: false,
-        error: "Upaya melewati tenggat: alasan keadaan di luar kekuasaan wajib diisi.",
-      }
-    }
-
     const idempotencyKey = formData.get("idempotencyKey") as string | null
 
+    // Atomik: baris ketetapan dikunci FOR UPDATE, lalu status + rantai upaya
+    // dicek ULANG di dalam tx — tanpa ini dua pengajuan konkuren sama-sama
+    // lolos penjaga rantai dari baca luar yang basi.
     const created = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tax_assessments WHERE id = ${v.assessmentId} FOR UPDATE`
+      const assessment = await tx.taxAssessment.findFirst({
+        where: { id: v.assessmentId, deletedAt: null },
+        select: {
+          id: true,
+          sentAt: true,
+          status: true,
+          steps: {
+            select: { kind: true, status: true, article36Subkind: true, filedAt: true, lateReason: true },
+          },
+        },
+      })
+      if (!assessment) throw new Error("Ketetapan tidak ditemukan.")
+      if (assessment.status === "BATAL" || assessment.status === "SELESAI") {
+        throw new Error("Ketetapan sudah selesai/batal, upaya baru ditolak.")
+      }
+
+      const stepLikes = assessment.steps.map((s) => ({
+        kind: s.kind,
+        article36Subkind: s.article36Subkind,
+        status: s.status,
+        filedAt: s.filedAt,
+        lateReason: s.lateReason,
+      }))
+      // AC-TXD-B2: tiga penjaga rantai upaya.
+      assertNoDuplicateActiveObjection(stepLikes, v.kind)
+      assertBandinPrerequisite(stepLikes, v.kind)
+      assertNoSecondPk(stepLikes, v.kind)
+
+      // AC-TXD-B4: lewat tenggat butuh alasan, bukan auto-ditolak.
+      const late = isStepLate(assessment.sentAt, filedAt, v.kind)
+      if (late && !v.lateReason) {
+        throw new Error("Upaya melewati tenggat: alasan keadaan di luar kekuasaan wajib diisi.")
+      }
+
       await checkIdempotency(idempotencyKey, tx, user.id)
       const step = await tx.taxDisputeStep.create({
         data: {
@@ -167,7 +168,7 @@ export async function createTaxDisputeStep(formData: FormData): Promise<TaxDispu
       return step
     })
 
-    await logActivity("create", "TaxDisputeStep", created.id, `Upaya ${v.kind} atas ketetapan #${assessment.id}`)
+    await logActivity("create", "TaxDisputeStep", created.id, `Upaya ${v.kind} atas ketetapan #${v.assessmentId}`)
     revalidatePath(REVALIDATE)
     return { success: true, id: created.id }
   } catch (error) {
@@ -185,40 +186,50 @@ export async function recordTaxDisputeDecision(formData: FormData): Promise<TaxD
 
     assertStepResult(v.result)
 
-    const step = await prisma.taxDisputeStep.findUnique({
-      where: { id: v.stepId },
-      select: {
-        id: true,
-        assessmentId: true,
-        status: true,
-        filedBy: true,
-        assessment: { select: { disputedAmount: true, status: true } },
-      },
-    })
-    if (!step) return { success: false, error: "Upaya tidak ditemukan." }
-    if ((TAX_DISPUTE_CLOSED_STATUSES as readonly string[]).includes(step.status)) {
-      return { success: false, error: "Upaya sudah ditutup, putusan ganda ditolak." }
-    }
-
-    // Q-TXD-8 empat mata: perekam putusan != pengaju upaya.
-    if (step.filedBy != null && Number(step.filedBy) === Number(user.id)) {
-      return { success: false, error: "Empat mata: perekam putusan harus berbeda dari pengaju upaya." }
-    }
-
     const decidedAt = wibDateToUtcMidnight(v.decidedAtInput)
     await assertPeriodOpen(decidedAt)
 
     const decidedAmount = v.decidedAmount ?? 0
-    if (decidedAmount > Number(step.assessment.disputedAmount)) {
-      return { success: false, error: "Nominal putusan tidak boleh melebihi nominal disengketakan." }
-    }
-
     const idempotencyKey = formData.get("idempotencyKey") as string | null
 
+    // Atomik: baris ketetapan dikunci FOR UPDATE, upaya + nominal dibaca
+    // ULANG di dalam tx, lalu upaya diklaim lewat updateMany bersyarat —
+    // tanpa ini dua perekam konkuren sama-sama lolos cek "belum ditutup"
+    // dari baca luar dan putusan ganda tertulis.
     const updated = await prisma.$transaction(async (tx) => {
+      const probe = await tx.taxDisputeStep.findUnique({
+        where: { id: v.stepId },
+        select: { assessmentId: true },
+      })
+      if (!probe) throw new Error("Upaya tidak ditemukan.")
+      await tx.$queryRaw`SELECT id FROM tax_assessments WHERE id = ${probe.assessmentId} FOR UPDATE`
+
+      const step = await tx.taxDisputeStep.findUnique({
+        where: { id: v.stepId },
+        select: {
+          id: true,
+          assessmentId: true,
+          status: true,
+          filedBy: true,
+          assessment: { select: { disputedAmount: true, status: true } },
+        },
+      })
+      if (!step) throw new Error("Upaya tidak ditemukan.")
+      if ((TAX_DISPUTE_CLOSED_STATUSES as readonly string[]).includes(step.status)) {
+        throw new Error("Upaya sudah ditutup, putusan ganda ditolak.")
+      }
+
+      // Q-TXD-8 empat mata: perekam putusan != pengaju upaya.
+      if (step.filedBy != null && Number(step.filedBy) === Number(user.id)) {
+        throw new Error("Empat mata: perekam putusan harus berbeda dari pengaju upaya.")
+      }
+      if (decidedAmount > Number(step.assessment.disputedAmount)) {
+        throw new Error("Nominal putusan tidak boleh melebihi nominal disengketakan.")
+      }
+
       await checkIdempotency(idempotencyKey, tx, user.id)
-      const done = await tx.taxDisputeStep.update({
-        where: { id: step.id },
+      const claimed = await tx.taxDisputeStep.updateMany({
+        where: { id: step.id, status: { notIn: [...TAX_DISPUTE_CLOSED_STATUSES] } },
         data: {
           status: "DIPUTUS",
           decidedAt,
@@ -228,10 +239,17 @@ export async function recordTaxDisputeDecision(formData: FormData): Promise<TaxD
           decisionNotes: v.decisionNotes ?? null,
         },
       })
+      if (claimed.count === 0) throw new Error("Upaya sudah ditutup, putusan ganda ditolak.")
       // AC-TXD-B6: sisa disengketakan turunan server (baca, bukan kolom);
-      // status ketetapan mengikuti putusan-sebagian/penuh.
+      // status ketetapan mengikuti putusan-sebagian/penuh. Hanya putusan
+      // yang MENGABULKAN yang mengurangi sisa — DITOLAK/TIDAK_DAPAT_DITERIMA
+      // tidak memakan kuota disengketakan.
       const siblings = await tx.taxDisputeStep.findMany({
-        where: { assessmentId: step.assessmentId, status: "DIPUTUS" },
+        where: {
+          assessmentId: step.assessmentId,
+          status: "DIPUTUS",
+          result: { in: ["DIKABULKAN", "DIKABULKAN_SEBAGIAN"] },
+        },
         select: { decidedAmount: true, result: true },
       })
       const decidedSum = siblings.reduce((acc, s) => acc + Number(s.decidedAmount ?? 0), 0)
@@ -240,10 +258,10 @@ export async function recordTaxDisputeDecision(formData: FormData): Promise<TaxD
         where: { id: step.assessmentId },
         data: { status: full ? "SELESAI" : "DIPUTUS_SEBAGIAN" },
       })
-      return done
+      return { id: step.id }
     })
 
-    await logActivity("update", "TaxDisputeStep", updated.id, `Putusan ${v.result} upaya #${step.id}`)
+    await logActivity("update", "TaxDisputeStep", updated.id, `Putusan ${v.result} upaya #${v.stepId}`)
     revalidatePath(REVALIDATE)
     return { success: true, id: updated.id }
   } catch (error) {
@@ -266,6 +284,9 @@ export async function cancelTaxAssessment(formData: FormData): Promise<TaxDisput
       select: { id: true, status: true, notes: true },
     })
     if (!assessment) return { success: false, error: "Ketetapan tidak ditemukan." }
+    if (assessment.status === "BATAL" || assessment.status === "SELESAI") {
+      return { success: false, error: "Ketetapan sudah selesai/batal, tidak dapat dibatalkan." }
+    }
 
     // Notes asli register tidak ditimpa: alasan batal ditambahkan terpisah
     // di belakang penanda, supaya riwayat keterangan tetap terbaca.

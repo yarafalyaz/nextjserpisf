@@ -485,6 +485,8 @@ export async function reopenApproval(approvalId: number) {
 
       assertApprovalPermission(user, refType);
 
+      await assertHrScopeForApproval(tx, approval.referenceType, approval.referenceId, user);
+
       // Reset source document status to draft/prior
       const modelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
       const docModel = (tx as any)[modelKey];

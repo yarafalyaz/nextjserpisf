@@ -5838,7 +5838,14 @@ export async function deleteEmployeeRoster(id: number) {
       throw new Error("Hanya roster berstatus draft yang dapat dihapus");
     }
 
-    await prisma.employeeRoster.delete({ where: { id: rosterId } });
+    // Klaim atomik: hapus hanya bila MASIH draft saat tulis — roster yang
+    // disetujui/ditolak sesudah baca di atas tidak ikut terhapus.
+    const claim = await prisma.employeeRoster.deleteMany({
+      where: { id: rosterId, status: "draft" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Hanya roster berstatus draft yang dapat dihapus");
+    }
     await logActivity("delete", "EmployeeRoster", rosterId, `Menghapus roster #${rosterId}`);
     revalidatePath(ROSTER_PATH);
     return { success: true as const };
