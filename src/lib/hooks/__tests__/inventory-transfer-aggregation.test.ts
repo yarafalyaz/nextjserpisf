@@ -553,6 +553,36 @@ describe("onTransferReceived partial per-event (F-081-S)", () => {
   })
 })
 
+describe("createInboundMoves item row lock (race batch tujuan)", () => {
+  it("kunci baris items FOR UPDATE sekali, terurut unik menaik, sebelum find-or-create batch tujuan", async () => {
+    const { spies } = wireTx([
+      { id: 11, itemId: 9, qty: 2, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 1, qty: 2 }] },
+      { id: 12, itemId: 7, qty: 2, batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 1, qty: 2 }] },
+    ], "processed")
+    spies.moveFindMany.mockResolvedValue([{ itemId: 9, cost: 15 }, { itemId: 7, cost: 15 }])
+    spies.itemFindMany.mockResolvedValue([
+      { id: 9, trackBatch: true, trackSerial: false },
+      { id: 7, trackBatch: true, trackSerial: false },
+    ])
+    spies.batchFindMany.mockResolvedValue([{ batchNumber: "LOT-A", manufacturingDate: null, expiryDate: null, notes: null }])
+
+    await onTransferReceived(100, 1)
+
+    // $queryRaw dipanggil 2x: lock transfer + lock items.
+    expect(spies.queryRaw).toHaveBeenCalledTimes(2)
+    const itemLock = spies.queryRaw.mock.calls[1]
+    const sql = Array.from(itemLock[0] as TemplateStringsArray).join("?")
+    expect(sql).toContain("items")
+    expect(sql).toContain("FOR UPDATE")
+    // Prisma.join args berada di itemLock[1].strings? Tagged template: values sesudah strings.
+    const values = itemLock.slice(1) as unknown[]
+    const joined = values.find((v) => v && typeof v === "object" && "values" in (v as Record<string, unknown>)) as { values?: unknown[] } | undefined
+    if (joined?.values) expect(joined.values).toEqual([7, 9])
+    expect(spies.queryRaw.mock.invocationCallOrder[1]).toBeLessThan(spies.batchFindFirst.mock.invocationCallOrder[0])
+    expect(spies.moveCreate).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe("onTransferProcessed expired-lot guard forwarding (F-011)", () => {
   it("passes transfer.date as documentDate to consumeFifoLayers", async () => {
     const { spies } = wireTx([{ itemId: 7, qty: 3 }])

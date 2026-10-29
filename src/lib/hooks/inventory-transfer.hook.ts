@@ -254,6 +254,18 @@ async function createInboundMoves(
     }
   }
 
+  // Kunci baris item (unik, menaik) sebelum find-or-create batch tujuan:
+  // dua receive transfer berbeda untuk item+lot tujuan sama sama-sama membaca
+  // "batch belum ada" lalu create ganda / increment dari qty basi. Lock per
+  // item men-serialize keduanya; urutan menaik mencegah deadlock antar-receive.
+  // Guard typeof: tx stub lama tanpa $queryRaw tidak pecah.
+  if (typeof tx.$queryRaw === "function") {
+    const lockItemIds = Array.from(new Set(entries.map((e) => e.itemId))).sort((a, b) => a - b);
+    if (lockItemIds.length > 0) {
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(lockItemIds)}) FOR UPDATE`;
+    }
+  }
+
   const smDocNos = await generateDocumentNumberBatch("SM", entries.length);
   let docIdx = 0;
   for (const entry of entries) {
