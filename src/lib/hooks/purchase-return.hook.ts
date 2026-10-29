@@ -86,6 +86,17 @@ export async function onPurchaseReturnProcessed(
       include: { items: true, purchaseOrder: true },
     });
 
+    // Serialize pantauan PO yang sama: cap kumulatif di bawah (completedOthers)
+    // membaca retur lain status returned, dan relief VendorBill di accounting
+    // hook read-modify-write balanceDue. Dua retur konkuren atas PO sama tanpa
+    // lock baris PO bisa lolos cap bersamaan dan melegakan bill dua kali dari
+    // saldo basi. Lock PO di sini (sesudah lock retur, sebelum cap) — urutan
+    // konsisten retur → PO supaya tak deadlock antar-retur; guard typeof supaya
+    // tx stub lama tanpa $queryRaw tidak pecah.
+    if (typeof tx.$queryRaw === "function") {
+      await tx.$queryRaw`SELECT id FROM purchase_orders WHERE id = ${purchaseReturn.purchaseOrderId} FOR UPDATE`;
+    }
+
     // Idempotency: skip when stock moves already exist
     const existingMoves = await tx.stockMove.findFirst({
       where: {

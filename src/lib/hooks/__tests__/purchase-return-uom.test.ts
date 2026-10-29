@@ -13,6 +13,9 @@ vi.mock("@/lib/services/uom.service", () => ({ toBaseFactor: mocks.toBaseFactor 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => mocks.transaction(fn) },
 }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { onPurchaseReturnProcessed, resolvePurchaseReturnWarehouse } from "@/lib/hooks/purchase-return.hook"
 
@@ -83,6 +86,36 @@ function makeTx(overrides: {
   mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
   return { spies, tx }
 }
+
+describe("purchase return PO row lock (race cap kumulatif)", () => {
+  it("kunci baris purchase_orders FOR UPDATE sesudah lock retur, sebelum cap/findUnique selesai", async () => {
+    const { spies } = makeTx()
+    await onPurchaseReturnProcessed(7, 9)
+    // executeRaw pertama = lock purchase_returns; queryRaw wajib memuat lock PO.
+    const sqls = spies.queryRaw.mock.calls.map((c) => Array.from(c[0] as TemplateStringsArray).join("?"))
+    expect(sqls.some((s) => s.includes("purchase_orders") && s.includes("FOR UPDATE"))).toBe(true)
+    expect(spies.executeRaw.mock.invocationCallOrder[0]).toBeLessThan(spies.queryRaw.mock.invocationCallOrder[0])
+    // findUniqueOrThrow return dipanggil sebelum lock PO (return memuat PO id) — kunci:
+    // lock PO sesudah baca return dan sebelum update status/cap selesai.
+    expect(spies.returnFindUniqueOrThrow.mock.invocationCallOrder[0]).toBeLessThan(spies.queryRaw.mock.invocationCallOrder[0])
+  })
+
+  it("tx stub tanpa $queryRaw tidak pecah (guard typeof, tanpa item aktif)", async () => {
+    const { spies, tx } = makeTx()
+    // Tanpa item aktif, jalur lama (lock items) pun tak menyentuh $queryRaw,
+    // jadi satu-satunya pemakai $queryRaw adalah lock PO baru.
+    spies.returnFindUniqueOrThrow.mockResolvedValue({
+      id: 7,
+      documentNo: "PR-7",
+      purchaseOrderId: 4,
+      date: new Date("2026-10-01"),
+      status: "processing",
+      items: [],
+    })
+    delete (tx as Record<string, unknown>).$queryRaw
+    await expect(onPurchaseReturnProcessed(7, 9, tx as never)).resolves.toBeUndefined()
+  })
+})
 
 describe("purchase return UoM and receipt warehouse", () => {
   it("returns 2 BOX as 24 base units to the item's receipt warehouse", async () => {
