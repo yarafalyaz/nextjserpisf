@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   approveOvertimeMock: vi.fn(),
   requestApprovalMock: vi.fn(),
   assertCSRFMock: vi.fn().mockResolvedValue(undefined),
+  employeeFindFirst: vi.fn(),
+  employeeFindUnique: vi.fn(),
+  employeeFindMany: vi.fn(),
 }))
 
 vi.mock("@/actions/approval.actions", () => ({
@@ -64,6 +67,21 @@ vi.mock("@/lib/db/prisma", () => ({
       updateMany: (...a: unknown[]) => mocks.updateMany(...a),
       findUnique: (...a: unknown[]) => mocks.findUnique(...a),
       update: (...a: unknown[]) => mocks.update(...a),
+    },
+    leaveRequest: {
+      updateMany: (...a: unknown[]) => mocks.updateMany(...a),
+      findUnique: (...a: unknown[]) => mocks.findUnique(...a),
+      update: (...a: unknown[]) => mocks.update(...a),
+    },
+    employeeLoan: {
+      updateMany: (...a: unknown[]) => mocks.updateMany(...a),
+      findUnique: (...a: unknown[]) => mocks.findUnique(...a),
+      update: (...a: unknown[]) => mocks.update(...a),
+    },
+    employee: {
+      findFirst: (...a: unknown[]) => (mocks as any).employeeFindFirst(...a),
+      findUnique: (...a: unknown[]) => (mocks as any).employeeFindUnique(...a),
+      findMany: (...a: unknown[]) => (mocks as any).employeeFindMany(...a),
     },
     approvalWorkflow: {
       findFirst: (...a: unknown[]) => mocks.findFirstWorkflow(...a),
@@ -204,6 +222,7 @@ describe("POST /api/workflow/[...path]", () => {
     // action instead of doing a generic updateMany.
     mocks.authFn.mockResolvedValue(adminSession)
     mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.findUnique.mockResolvedValue({ employeeId: 7, employee: { userId: 99 } })
 
     const res = await POST(makeReq(), makeParams(["sdm", "lembur", "7", "approve"]))
     const json = await res.json()
@@ -217,6 +236,7 @@ describe("POST /api/workflow/[...path]", () => {
   it("surfaces approveOvertime failure as a conflict", async () => {
     mocks.authFn.mockResolvedValue(adminSession)
     mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.findUnique.mockResolvedValue({ employeeId: 7, employee: { userId: 99 } })
     mocks.approveOvertimeMock.mockResolvedValue({ success: false, error: "sudah diproses" })
 
     const res = await POST(makeReq(), makeParams(["sdm", "lembur", "7", "approve"]))
@@ -226,6 +246,7 @@ describe("POST /api/workflow/[...path]", () => {
   it("still flips overtime to rejected via the generic path", async () => {
     mocks.authFn.mockResolvedValue(adminSession)
     mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.findUnique.mockResolvedValue({ employeeId: 7, employee: { userId: 99 } })
     mocks.updateMany.mockResolvedValue({ count: 1 })
 
     const res = await POST(makeReq(), makeParams(["sdm", "lembur", "7", "reject"]))
@@ -276,6 +297,50 @@ describe("POST /api/workflow/[...path]", () => {
 
     const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "5", "approve"]))
     expect(res.status).toBe(500)
+  })
+
+  describe("HR scope jalur manual (round2 temuan 3)", () => {
+    beforeEach(() => {
+      mocks.findFirstWorkflow.mockResolvedValue(null)
+      // Aktor staff user 2 tertaut employee 7, tanpa subordinate permission -> self.
+      mocks.employeeFindFirst.mockResolvedValue({ id: 7, departmentId: 3 })
+    })
+
+    it("approve cuti karyawan lain oleh self-scope ditolak 403, nol flip", async () => {
+      mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_leave_requests"] } })
+      // findUnique pertama: maker-check (employee.userId beda), kedua: HR scope.
+      mocks.findUnique
+        .mockResolvedValueOnce({ employee: { userId: 99 } })
+        .mockResolvedValueOnce({ employeeId: 99 })
+      const res = await POST(makeReq(), makeParams(["sdm", "cuti", "5", "approve"]))
+      expect(res.status).toBe(403)
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+    })
+
+    it("reject lembur karyawan lain oleh self-scope ditolak 403, nol flip", async () => {
+      mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_overtime_requests"] } })
+      mocks.findUnique
+        .mockResolvedValueOnce({ employee: { userId: 99 } })
+        .mockResolvedValueOnce({ employeeId: 99 })
+      const res = await POST(makeReq(), makeParams(["sdm", "lembur", "5", "reject"]))
+      expect(res.status).toBe(403)
+      expect(mocks.updateMany).not.toHaveBeenCalled()
+      expect(mocks.approveOvertimeMock).not.toHaveBeenCalled()
+    })
+
+    it("approve cuti karyawan dalam team scope lolos", async () => {
+      mocks.authFn.mockResolvedValue({
+        user: { id: 2, roles: ["staff"], permissions: ["approve_leave_requests", "view_subordinate_data"] },
+      })
+      mocks.employeeFindMany.mockResolvedValueOnce([{ id: 8 }]).mockResolvedValueOnce([])
+      mocks.findUnique
+        .mockResolvedValueOnce({ employee: { userId: 99 } })
+        .mockResolvedValueOnce({ employeeId: 8 })
+      mocks.updateMany.mockResolvedValue({ count: 1 })
+      const res = await POST(makeReq(), makeParams(["sdm", "cuti", "5", "approve"]))
+      expect(res.status).toBe(200)
+      expect(mocks.updateMany).toHaveBeenCalled()
+    })
   })
 
   describe("With Active Approval Workflow", () => {

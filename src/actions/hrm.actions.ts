@@ -746,7 +746,6 @@ export async function addPayrollCommissionLine(payrollId: number, formData: Form
     if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
     const user = await requirePermission("edit_payroll");
     await assertDraftPayrollLineAccess(payrollId, user);
-    const payroll = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
     const commissionPayableId = Number(formData.get("commissionPayableId"));
     const amount = parseMoneyAmount(formData.get("amount")) ?? Number.NaN;
     if (!Number.isSafeInteger(commissionPayableId) || commissionPayableId <= 0) throw new Error("Utang komisi tidak valid");
@@ -764,9 +763,14 @@ export async function addPayrollCommissionLine(payrollId: number, formData: Form
       // satu tx. Cek luar-tx saja bisa dobel-bayar antar dua request.
       await tx.$executeRaw`SELECT id FROM payrolls WHERE id = ${payrollId} FOR UPDATE`;
       await tx.$executeRaw`SELECT id FROM commission_payables WHERE id = ${commissionPayableId} FOR UPDATE`;
+      // Re-read sesudah lock: status/employeeId luar-tx bisa basi (TOCTOU draft).
+      const lockedPayroll = await tx.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+      if (lockedPayroll.status !== "draft") {
+        throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+      }
       const payable = await tx.commissionPayable.findUnique({ where: { id: commissionPayableId } });
       if (!payable) throw new Error("Utang komisi tidak ditemukan");
-      if (payroll.employeeId == null || payable.salesEmployeeId !== payroll.employeeId) {
+      if (lockedPayroll.employeeId == null || payable.salesEmployeeId !== lockedPayroll.employeeId) {
         throw new Error("Utang komisi bukan milik karyawan slip ini");
       }
       // Saldo sen-persis: kolom Decimal dibaca sebagai string (bukan
@@ -976,17 +980,7 @@ export async function createLeaveRequest(formData: FormData) {
     const employeeId = v.employeeId;
 
     const scope = await getHrScope(user);
-    if (scope.kind === "self" && scope.employeeId !== employeeId) {
-      throw new Error("Anda hanya diperbolehkan membuat pengajuan cuti untuk diri sendiri");
-    } else if (scope.kind === "department") {
-      const targetEmployee = await prisma.employee.findUnique({
-        where: { id: employeeId },
-        select: { departmentId: true }
-      });
-      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
-        throw new Error("Anda hanya diperbolehkan membuat pengajuan cuti untuk karyawan se-departemen");
-      }
-    }
+    await assertHrEmployeeAccess(scope, employeeId);
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);
 
@@ -3709,17 +3703,7 @@ export async function createEmployeeLoan(formData: FormData) {
         throw new Error("Pengajuan mandiri hanya untuk diri sendiri");
       }
     }
-    if (scope.kind === "self" && scope.employeeId !== employeeId) {
-      throw new Error("Anda hanya diperbolehkan membuat pinjaman untuk diri sendiri");
-    } else if (scope.kind === "department") {
-      const targetEmployee = await prisma.employee.findUnique({
-        where: { id: employeeId },
-        select: { departmentId: true }
-      });
-      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
-        throw new Error("Anda hanya diperbolehkan membuat pinjaman untuk karyawan se-departemen");
-      }
-    }
+    await assertHrEmployeeAccess(scope, employeeId);
 
     const totalAmount = v.totalAmount;
 
@@ -4921,17 +4905,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       );
     }
 
-    if (scope.kind === "self" && scope.employeeId !== existing.employeeId) {
-      throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk diri sendiri");
-    } else if (scope.kind === "department") {
-      const existingEmployee = await prisma.employee.findUnique({
-        where: { id: existing.employeeId },
-        select: { departmentId: true }
-      });
-      if (!existingEmployee || existingEmployee.departmentId !== scope.departmentId) {
-        throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk karyawan se-departemen");
-      }
-    }
+    await assertHrEmployeeAccess(scope, existing.employeeId);
 
     // Migrated to parseFormData(leaveRequestSchema) — the previous hand-parsed
     // path (requireId/new Date(raw)/raw `as string` cast) bypassed schema
@@ -4945,17 +4919,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
 
     const employeeId = v.employeeId;
 
-    if (scope.kind === "self" && scope.employeeId !== employeeId) {
-      throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk diri sendiri");
-    } else if (scope.kind === "department") {
-      const targetEmployee = await prisma.employee.findUnique({
-        where: { id: employeeId },
-        select: { departmentId: true }
-      });
-      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
-        throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk karyawan se-departemen");
-      }
-    }
+    await assertHrEmployeeAccess(scope, employeeId);
 
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);
@@ -5187,29 +5151,8 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       throw new Error("Hanya pinjaman berstatus menunggu yang dapat diedit");
     }
 
-    if (scope.kind === "self" && scope.employeeId !== existing.employeeId) {
-      throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk diri sendiri");
-    } else if (scope.kind === "department") {
-      const existingEmployee = await prisma.employee.findUnique({
-        where: { id: existing.employeeId },
-        select: { departmentId: true }
-      });
-      if (!existingEmployee || existingEmployee.departmentId !== scope.departmentId) {
-        throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk karyawan se-departemen");
-      }
-    }
-
-    if (scope.kind === "self" && scope.employeeId !== employeeId) {
-      throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk diri sendiri");
-    } else if (scope.kind === "department") {
-      const targetEmployee = await prisma.employee.findUnique({
-        where: { id: employeeId },
-        select: { departmentId: true }
-      });
-      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
-        throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk karyawan se-departemen");
-      }
-    }
+    await assertHrEmployeeAccess(scope, existing.employeeId);
+    await assertHrEmployeeAccess(scope, employeeId);
 
     const loan = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${id} FOR UPDATE`;

@@ -11,6 +11,7 @@ import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook"
 import { approveOvertime } from "@/actions/hrm.actions"
 import { assertCSRF } from "@/lib/security/csrf"
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
 
 
 /**
@@ -242,6 +243,31 @@ export async function POST(
         }
         if (makerId !== null && makerId === actorId) {
           return apiError("FORBIDDEN", "Maker-Checker: pembuat dokumen tidak boleh menyetujui/menolaknya sendiri")
+        }
+      }
+      // HR scope jalur manual: LeaveRequest/OvertimeRequest/EmployeeLoan
+      // hanya boleh di-approve/reject bila karyawan dokumen dalam scope HR aktor.
+      if (
+        config.model === "leaveRequest" ||
+        config.model === "overtimeRequest" ||
+        config.model === "employeeLoan"
+      ) {
+        const doc = await delegate.findUnique({
+          where: { id },
+          select: { employeeId: true },
+        })
+        if (!doc) {
+          return apiError("NOT_FOUND", "Data tidak ditemukan")
+        }
+        try {
+          const scope = await getHrScope({
+            id: String(session.user.id),
+            roles: userRoles ?? [],
+            permissions: userPermissions ?? [],
+          })
+          await assertHrEmployeeAccess(scope, doc.employeeId)
+        } catch {
+          return apiError("FORBIDDEN", "Anda tidak memiliki akses ke data karyawan ini")
         }
       }
     }
