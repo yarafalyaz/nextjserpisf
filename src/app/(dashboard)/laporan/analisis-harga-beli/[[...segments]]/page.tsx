@@ -5,8 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -37,7 +36,7 @@ export default async function PurchasePriceAnalysisPage({
   const { start: startDate, end: endDate } = period
   // Barang dari path (slug lebih dulu, id sebagai cadangan); `?itemId=` lama
   // tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const itemKey = parseReportFilters(segments.slice(1)).barang ?? search.itemId ?? null
+  const itemKey = splitReportSegments(segments).filters.barang ?? search.itemId ?? null
 
   const itemRow = itemKey
     ? await prisma.item.findFirst({

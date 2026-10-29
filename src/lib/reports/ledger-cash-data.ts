@@ -166,7 +166,7 @@ async function ledgerRows(
       kind: "total",
       grand: true,
       label: "Total & Saldo Akhir",
-      cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
+      cells: [money(built.totalDebit), money(built.totalCredit), money(built.balance)],
     })
   }
   return { table: { columns: LEDGER_COLUMNS, rows }, ...periodOf(period) }
@@ -316,7 +316,7 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
     kind: "total",
     grand: true,
     label: "Total & Saldo Akhir",
-    cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
+    cells: [money(built.totalDebit), money(built.totalCredit), money(built.balance)],
   })
   return { table: { columns: SUBLEDGER_COLUMNS, rows }, ...periodOf(period) }
 }
@@ -385,7 +385,7 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
     kind: "total",
     grand: true,
     label: "Total & Saldo Akhir",
-    cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
+    cells: [money(built.totalDebit), money(built.totalCredit), money(built.balance)],
   })
   return { table: { columns: SUBLEDGER_COLUMNS, rows }, ...periodOf(period) }
 }
@@ -754,7 +754,6 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
       grand: true,
       label: "TOTAL",
       cells: [
-        "",
         String(result.rows.reduce((s, row) => s + row.invoiceCount, 0)),
         money(result.totalCreditLimit),
         money(result.totalOutstanding),

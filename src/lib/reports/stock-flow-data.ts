@@ -39,6 +39,30 @@ const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(perio
 
 type Period = { start: Date; end: Date }
 
+/**
+ * Kunci filter stok dari PDF route: slug lebih dulu, id numerik cadangan —
+ * sama seperti halaman (`findByFilterKey`). Registry dulu hanya menerima
+ * digit, jadi `?gudang=gudang-utama` / `?barang=busi-iridium` dibuang diam-diam
+ * dan PDF mencetak SEMUA gudang/barang.
+ */
+export async function resolveItemIdBySlugOrId(key: string | null | undefined): Promise<number | null> {
+  if (!key) return null
+  const rows = await prisma.item.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: { id: true, slug: true },
+  })
+  return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
+}
+
+export async function resolveWarehouseIdBySlugOrId(key: string | null | undefined): Promise<number | null> {
+  if (!key) return null
+  const rows = await prisma.warehouse.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: { id: true, slug: true },
+  })
+  return (rows.find((r) => r.slug === key) ?? rows.find((r) => String(r.id) === key) ?? null)?.id ?? null
+}
+
 const MOVEMENT_COLUMNS: TableColumn[] = [
   { header: "Tanggal", align: "left", width: 26 },
   { header: "Dokumen", align: "left", width: 34 },

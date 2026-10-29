@@ -75,7 +75,7 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
         cells: [name, String(r.count), money(r.billed), money(r.paid), money(r.outstanding)],
       })
     }
-    rows.push({ kind: "total", label: "Jumlah Piutang", cells: ["", "", "", "", money(totalAR)] })
+    rows.push({ kind: "total", label: "Jumlah Piutang", cells: [money(totalAR)] })
   }
   if (apRows.length > 0) {
     rows.push({ kind: "group", label: "Hutang Usaha" })
@@ -85,7 +85,7 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
         cells: [name, String(r.count), money(r.billed), money(r.paid), money(r.outstanding)],
       })
     }
-    rows.push({ kind: "total", label: "Jumlah Hutang", cells: ["", "", "", "", money(totalAP)] })
+    rows.push({ kind: "total", label: "Jumlah Hutang", cells: [money(totalAP)] })
   }
   if (rows.length === 0) {
     rows.push({ kind: "notice", text: "Tidak ada piutang maupun hutang yang belum lunas." })
@@ -94,7 +94,7 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
       kind: "total",
       grand: true,
       label: "Posisi Bersih (AR − AP)",
-      cells: ["", "", "", "", money(safeSubtract(totalAR, totalAP, 2))],
+      cells: [money(safeSubtract(totalAR, totalAP, 2))],
     })
   }
 

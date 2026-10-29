@@ -5,8 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { SALES_DIMENSIONS, aggregateSales, monthlySales, type SalesDimension, type SalesLine } from '@/lib/reports/sales-analytics'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
@@ -39,7 +38,7 @@ export default async function SalesAnalyticsPage({
   const { start: startDate, end: endDate } = period
 
   // Dimensi pengelompokan dari path; `?dimensi=` lama tetap dibaca.
-  const dimensionKey = parseReportFilters(segments.slice(1)).dimensi ?? search.dimensi
+  const dimensionKey = splitReportSegments(segments).filters.dimensi ?? search.dimensi
   const dimension: SalesDimension = (SALES_DIMENSIONS.find((d) => d.value === dimensionKey)?.value ?? 'barang')
 
   const invoices = await prisma.salesInvoice.findMany({

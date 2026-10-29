@@ -13,8 +13,7 @@ import {
   parseStatementOptions,
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { loadTrialBalanceReport } from "@/lib/reports/trial-balance-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
@@ -48,7 +47,7 @@ export default async function TrialBalancePage({
 
   // Tanggal pembanding kini bagian dari path (`/pembanding/2026-09-30`); param
   // query lama tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const compareValue = parseReportFilters(params.segments?.slice(1) ?? []).pembanding ?? search.pembanding
+  const compareValue = splitReportSegments(params.segments ?? []).filters.pembanding ?? search.pembanding
   // Akhir hari penuh (.999) sama dengan layar & registry PDF — jurnal pukul
   // 23:59:59.500 tidak boleh hilang dari salah satu sisi (B9).
   const compareRaw = compareValue ? new Date(`${compareValue}T23:59:59.999`) : null

@@ -1,8 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { SubledgerReport } from "../../_components/subledger-report"
 
 import type { Metadata } from "next"
@@ -22,7 +21,7 @@ export default async function ReceivableSubledgerPage({
   const [{ segments = [] }, search] = await Promise.all([routeParams, searchParams])
   // Periode + pihak kini di path; param lama (`partyId`) tetap dibaca supaya
   // tautan sebelum perpindahan tidak jadi tautan mati.
-  const partyKey = parseReportFilters(segments.slice(1)).pihak ?? search.partyId ?? null
+  const partyKey = splitReportSegments(segments).filters.pihak ?? search.partyId ?? null
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), now.getMonth(), 1),
     end: now,

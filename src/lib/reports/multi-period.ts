@@ -75,6 +75,18 @@ export function buildPeriodColumns(mode: MultiPeriodMode, count: number, anchor:
   return columns
 }
 
+/**
+ * Validasi `jumlah` multi-periode: integer 1..36, selain itu default 12.
+ * `Number("abc")` = NaN dulu lolos ke `buildPeriodColumns` (Math.trunc(NaN)
+ * tetap NaN → nol kolom → 500 saat halaman membaca `columns[0]`).
+ */
+export function parseMultiPeriodCount(raw: string | null | undefined): number {
+  if (raw == null || String(raw).trim() === "") return 12
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 1 || value > 36) return 12
+  return value
+}
+
 export const MULTI_PERIOD_MODE_LABELS: Record<MultiPeriodMode, string> = {
   bulan: "Bulanan",
   kuartal: "Kuartalan",

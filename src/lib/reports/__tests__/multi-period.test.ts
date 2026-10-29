@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildPeriodColumns } from "../multi-period"
+import { buildPeriodColumns, parseMultiPeriodCount } from "../multi-period"
 
 const october2026 = new Date(2026, 9, 12)
 
@@ -51,5 +51,21 @@ describe("buildPeriodColumns", () => {
   it("clamps the count to a sane range", () => {
     expect(buildPeriodColumns("bulan", 0, october2026)).toHaveLength(1)
     expect(buildPeriodColumns("bulan", 999, october2026)).toHaveLength(60)
+  })
+})
+
+describe("parseMultiPeriodCount", () => {
+  it("menerima integer 1..36 apa adanya", () => {
+    expect(parseMultiPeriodCount("1")).toBe(1)
+    expect(parseMultiPeriodCount("12")).toBe(12)
+    expect(parseMultiPeriodCount("36")).toBe(36)
+  })
+
+  // Regresi BUGHUNT round2 #10: jumlah=abc → NaN → nol kolom → 500.
+  it("input invalid kembali ke default 12, bukan NaN", () => {
+    for (const raw of ["abc", "", undefined, null, "0", "37", "-1", "2.5", "NaN"]) {
+      expect(parseMultiPeriodCount(raw as string), String(raw)).toBe(12)
+    }
+    expect(buildPeriodColumns("bulan", parseMultiPeriodCount("abc"), october2026)).toHaveLength(12)
   })
 })

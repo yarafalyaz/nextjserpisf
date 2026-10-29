@@ -7,8 +7,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { loadAssetRegister } from "@/lib/reports/asset-reports-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
@@ -40,7 +39,7 @@ export default async function AssetRegisterPage({
   // Sakelar kini berada di path (`/termasukDilepas/1`); param query lama tetap
   // dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
   const includeDisposed =
-    parseReportFilters(params.segments?.slice(1) ?? [])[INCLUDE_DISPOSED_PARAM] === "1" ||
+    splitReportSegments(params.segments ?? []).filters[INCLUDE_DISPOSED_PARAM] === "1" ||
     search[INCLUDE_DISPOSED_PARAM] === "1"
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
