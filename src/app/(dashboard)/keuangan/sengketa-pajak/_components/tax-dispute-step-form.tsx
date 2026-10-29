@@ -118,10 +118,11 @@ export function TaxDisputeStepForm({ assessmentId }: { assessmentId: number }) {
             value={lateReason}
             onChange={(e) => setLateReason(e.target.value)}
             placeholder="Wajib diisi bila upaya melewati tenggat (keadaan di luar kekuasaan)"
+            aria-describedby="lateReason-hint"
             rows={3}
             maxLength={2000}
           />
-          <span className="text-xs text-muted-foreground">
+          <span id="lateReason-hint" className="text-xs text-muted-foreground">
             Lewat tenggat bukan auto-ditolak: wajib sertakan alasan keadaan di luar kekuasaan.
           </span>
         </div>

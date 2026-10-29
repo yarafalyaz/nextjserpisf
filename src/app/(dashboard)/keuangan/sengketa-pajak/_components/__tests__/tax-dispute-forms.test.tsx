@@ -123,6 +123,25 @@ describe("tax-dispute-step-form — sub-jenis Pasal 36 kondisional", () => {
   })
 })
 
+describe("hint terikat aria-describedby", () => {
+  it("setiap hint punya id dan dirujuk input terkait", () => {
+    const a = mount(<TaxAssessmentForm />)
+    expect(a.container.querySelector("#disputedAmount")?.getAttribute("aria-describedby")).toBe("disputedAmount-hint")
+    expect(a.container.querySelector("#disputedAmount-hint")?.textContent).toContain("melebihi nominal ketetapan")
+    teardown(a.container, a.root)
+
+    const d = mount(<TaxDisputeDecisionForm steps={[]} />)
+    expect(d.container.querySelector("#decidedAmount")?.getAttribute("aria-describedby")).toBe("decidedAmount-hint")
+    expect(d.container.querySelector("#decidedAmount-hint")?.textContent).toContain("melebihi nominal disengketakan")
+    teardown(d.container, d.root)
+
+    const s = mount(<TaxDisputeStepForm assessmentId={7} />)
+    expect(s.container.querySelector("#lateReason")?.getAttribute("aria-describedby")).toBe("lateReason-hint")
+    expect(s.container.querySelector("#lateReason-hint")?.textContent).toContain("di luar kekuasaan")
+    teardown(s.container, s.root)
+  })
+})
+
 describe("tax-dispute-decision-form — kunci decidedAtInput + empat mata", () => {
   it("submit memakai kunci decidedAtInput; error empat mata verbatim", async () => {
     mockedDecision.mockResolvedValueOnce({

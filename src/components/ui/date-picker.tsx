@@ -102,7 +102,9 @@ export function AppDatePicker({
             disabled={disabled}
             aria-required={required}
             className={cn(
-              "h-10 w-full justify-start gap-2 px-3 font-normal",
+              // Trigger h-10 (40px): area sentuh diperluas ke 44px via
+              // pseudo vertikal, visual tetap (pola search-field).
+              "relative h-10 w-full justify-start gap-2 px-3 font-normal before:absolute before:-inset-y-0.5 before:content-['']",
               !current && "text-muted-foreground"
             )}
           >

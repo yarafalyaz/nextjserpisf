@@ -189,7 +189,8 @@ export function ReportPeriodFilter({
         </label>
       ) : null}
 
-      <Button variant="primary" size="sm" onPress={handleGenerate}>
+      {/* Tombol sm h-8 (32px): area sentuh 44px via pseudo vertikal, visual tetap. */}
+      <Button variant="primary" size="sm" onPress={handleGenerate} className="relative before:absolute before:-inset-y-1.5 before:content-['']">
         Tampilkan
       </Button>
     </div>

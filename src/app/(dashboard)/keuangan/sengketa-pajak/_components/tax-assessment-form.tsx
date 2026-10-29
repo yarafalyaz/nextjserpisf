@@ -133,8 +133,8 @@ export function TaxAssessmentForm() {
           <Label htmlFor="disputedAmount">
             Nominal Disengketakan <span className="text-destructive" aria-hidden="true">*</span>
           </Label>
-          <CurrencyInput id="disputedAmount" value={disputedAmount} onChange={setDisputedAmount} placeholder="0" required />
-          <span className="text-xs text-muted-foreground">
+          <CurrencyInput id="disputedAmount" value={disputedAmount} onChange={setDisputedAmount} placeholder="0" required aria-describedby="disputedAmount-hint" />
+          <span id="disputedAmount-hint" className="text-xs text-muted-foreground">
             Tidak boleh melebihi nominal ketetapan.
           </span>
         </div>

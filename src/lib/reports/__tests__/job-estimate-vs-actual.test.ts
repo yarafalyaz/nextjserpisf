@@ -124,6 +124,14 @@ describe("buildJobEstimateVsActual", () => {
     expect(data?.kind === "data" && data.cells[1]).toBe("Tanpa kendaraan")
   })
 
+  it("total lebar 9 kolom muat area isi A4 mendatar (267mm)", () => {
+    const r = buildJobEstimateVsActual({ jobs: [job()], ...period })
+    expect(r.table.columns).toHaveLength(9)
+    const totalWidth = r.table.columns.reduce((sum, c) => sum + c.width, 0)
+    // Area isi A4 mendatar = 297 − 2×15 = 267mm.
+    expect(totalWidth).toBeLessThanOrEqual(267)
+  })
+
   it("ringkasan menyebut total estimasi, penagihan, selisih, biaya, margin", () => {
     const s = jobEstimateVsActualSummary(buildJobEstimateVsActual({ jobs: [job()], ...period }))
     expect(s).toContain("1 pekerjaan")
