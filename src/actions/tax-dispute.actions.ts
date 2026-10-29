@@ -205,7 +205,7 @@ export async function recordTaxDisputeDecision(formData: FormData): Promise<TaxD
       return { success: false, error: "Empat mata: perekam putusan harus berbeda dari pengaju upaya." }
     }
 
-    const decidedAt = wibDateToUtcMidnight(v.decidedAt)
+    const decidedAt = wibDateToUtcMidnight(v.decidedAtInput)
     await assertPeriodOpen(decidedAt)
 
     const decidedAmount = v.decidedAmount ?? 0

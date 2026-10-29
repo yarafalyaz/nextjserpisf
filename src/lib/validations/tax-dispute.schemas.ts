@@ -81,7 +81,7 @@ export const taxDisputeStepSchema = z.object({
 export const taxDisputeDecisionSchema = z.object({
   stepId: z.coerce.number().int().positive("Upaya wajib dipilih"),
   result: z.enum(taxDisputeStepResults),
-  decidedAt: dateOnly,
+  decidedAtInput: dateOnly,
   decidedAmount: optionalMoney,
   decisionNotes: optionalText(2000),
 })
