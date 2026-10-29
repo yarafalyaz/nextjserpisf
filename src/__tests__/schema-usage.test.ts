@@ -175,16 +175,29 @@ const SCALAR_TYPES = new Set([
  *  itu sendiri terbaca sebagai "pemakaian" dan tesnya jadi tidak bermakna. */
 const SELF = "schema-usage.test.ts"
 
-function readCode(relativeDir: string, out: string[]) {
+function readCode(relativeDir: string, out: string[], opts: { excludeTests?: boolean } = {}) {
   const dir = path.join(ROOT, relativeDir)
   if (!fs.existsSync(dir)) return
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name.startsWith(".")) continue
     if (entry.name === SELF) continue
+    if (opts.excludeTests && (entry.name === "__tests__" || /\.test\.tsx?$/.test(entry.name))) continue
     const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) readCode(path.relative(ROOT, full), out)
+    if (entry.isDirectory()) readCode(path.relative(ROOT, full), out, opts)
     else if (/\.(ts|tsx|mjs|js)$/.test(entry.name)) out.push(fs.readFileSync(full, "utf8"))
   }
+}
+
+/** Korpus produk: `src` TANPA `__tests__`/`*.test.*` — tes menyebut nama kolom/model
+ *  di fixture/mock, jadi korpus bertes membuat kolom/model mati terlihat hidup.
+ *  `scripts`/`prisma` tetap ikut untuk tes kolom (seed memang menulis kolom),
+ *  `e2e` tetap ikut apa adanya (spec E2E bukan fixture unit). Terukur 2026-10-29:
+ *  mengeluarkan tes TIDAK menimbulkan merah berantai — kolom mati tetap 2 entri
+ *  KNOWN_UNUSED yang sama, model mati tetap hanya EmployeeRoster. */
+function productCode(dirs: string[]): string {
+  const parts: string[] = []
+  for (const dir of dirs) readCode(dir, parts, { excludeTests: true })
+  return parts.join("\n")
 }
 
 /** Field skalar yang dilewati karena dipakai Prisma sebagai kolom FK. */
@@ -204,11 +217,7 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
     "tidak ada kolom mati di luar daftar-beku",
     () => {
     const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
-    const code = (() => {
-      const parts: string[] = []
-      for (const dir of ["src", "scripts", "e2e", "prisma"]) readCode(dir, parts)
-      return parts.join("\n")
-    })()
+    const code = productCode(["src", "scripts", "e2e", "prisma"])
     const fkScalars = foreignKeyScalars(schema)
 
     const unused: string[] = []
@@ -256,6 +265,9 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
  * modelnya. Pelajaran: "tak ada rujukan ke nama model" != "model mati" — pemeriksaan
  * harus ikut melihat nama relasi (lihat `dipakai()` di bawah).
  */
+const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string; expires: string }> = [
+  // Fase1 lead 2026-10-29: konsumen menyusul batch berikut.
+  { model: "EmployeeRoster", reason: "R7 roster — load papan beban menyusul", expires: "2026-11-29" },
 const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = [
   // (EmployeeRoster PERNAH di sini — ditutup round2 2026-10-29: loader
   // baca `src/lib/reports/employee-roster-data.ts` jadi konsumen produk
@@ -264,11 +276,7 @@ const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = [
 
 describe("skema: setiap model dipakai kode", () => {
   const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
-  const code = (() => {
-    const parts: string[] = []
-    for (const dir of ["src", "scripts", "e2e", "prisma"]) readCode(dir, parts)
-    return parts.join("\n")
-  })()
+  const code = productCode(["src", "scripts", "e2e", "prisma"])
   const namaModel = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1])
   // Nama relasi yang menunjuk ke model ini, mis. `results QcInspectionResult[]`.
   const namaRelasi = (model: string) =>
@@ -304,6 +312,24 @@ describe("skema: setiap model dipakai kode", () => {
     const basi = KNOWN_UNUSED_MODELS.map((x) => x.model).filter((model) => dipakai(model))
     expect(basi, `model ini sudah dipakai — keluarkan dari daftar: ${basi.join(", ")}`).toEqual([])
   })
+
+  it("entri beku model yatim wajib beralasan + ber-expiry, dan belum kedaluwarsa", () => {
+    const today = new Date().toISOString().slice(0, 10)
+    for (const e of KNOWN_UNUSED_MODELS) {
+      expect(e.reason.trim().length, `${e.model}: alasan beku kosong`).toBeGreaterThan(0)
+      expect(e.expires, `${e.model}: expiry wajib format YYYY-MM-DD`).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(e.expires >= today, `${e.model}: entri beku kedaluwarsa ${e.expires} — sambungkan konsumennya atau perpanjang dengan alasan baru`).toBe(true)
+    }
+  })
+
+  it("model baru harus punya konsumen produk ATAU entri beku beralasan+expiry", () => {
+    // Bentuk lain asersi modelMati di atas, dibaca dari sisi kewajiban:
+    // model tanpa konsumen produk hanya sah lewat KNOWN_UNUSED_MODELS.
+    const yatimTanpaBeku = modelMati.filter(
+      (m) => !KNOWN_UNUSED_MODELS.some((e) => e.model === m),
+    )
+    expect(yatimTanpaBeku).toEqual([])
+  })
 })
 
 /** Kolom skalar: entri `Model.field` + semua nama yang mungkin muncul di kode. */
@@ -330,7 +356,7 @@ describe("skema: kolom yang hanya dipakai skrip seed", () => {
     () => {
     const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
     const produk: string[] = []
-    for (const dir of ["src", "e2e"]) readCode(dir, produk)
+    for (const dir of ["src", "e2e"]) readCode(dir, produk, { excludeTests: true })
     const seed: string[] = []
     for (const dir of ["scripts", "prisma"]) readCode(dir, seed)
 
@@ -414,7 +440,7 @@ describe("skema: model yang dibaca tetapi tidak punya jalur tulis di produk", ()
     () => {
       const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
       const produk: string[] = []
-      for (const dir of ["src", "e2e"]) readCode(dir, produk)
+      for (const dir of ["src", "e2e"]) readCode(dir, produk, { excludeTests: true })
       const idx = productIndex(produk.join("\n"))
 
       const seedOnly: string[] = []
