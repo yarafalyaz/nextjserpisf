@@ -76,8 +76,7 @@ describe("buildJobOrderJournal", () => {
     expect(data[0].cells?.[1]).toContain("1301")
 
     const total = result.table.rows.find((row) => row.kind === "total")
-    expect(total?.cells?.[2]).toBe("3.000.000")
-    expect(total?.cells?.[3]).toBe("3.000.000")
+    expect(total?.cells).toEqual(["3.000.000", "3.000.000"])
     expect(result.isBalanced).toBe(true)
   })
 

@@ -82,7 +82,7 @@ describe("buildJobOrderCost", () => {
       "Jumlah",
     ])
     expect(totals[2].grand).toBe(true)
-    expect(totals[2].cells?.[3]).toBe("28.000.000")
+    expect(totals[2].cells?.[2]).toBe("28.000.000")
   })
 
   it("menandai pekerjaan yang sudah berbaya tetapi belum menghasilkan unit", () => {

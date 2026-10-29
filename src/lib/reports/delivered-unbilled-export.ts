@@ -49,11 +49,6 @@ export function buildDeliveredUnbilledTable(queue: DeliveredUnbilledQueue): {
       grand: true,
       label: `Jumlah (${queue.totalDocuments} pesanan penjualan)`,
       cells: [
-        "",
-        "",
-        "",
-        "",
-        "",
         formatCurrency(queue.totalDeliveredValue),
         formatCurrency(queue.totalBilledValue),
         formatCurrency(queue.totalUnbilledValue),

@@ -118,7 +118,7 @@ export function buildJournalListing(input: {
       kind: "total",
       grand: true,
       label: totalLabel,
-      cells: ["", "", amount(totalDebit), amount(totalCredit)],
+      cells: [amount(totalDebit), amount(totalCredit)],
     })
   }
 

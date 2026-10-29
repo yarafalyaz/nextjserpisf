@@ -81,13 +81,8 @@ export function buildDiscountExposureTable(
     rows.push({
       kind: "total",
       grand: true,
-      label: "Jumlah",
+      label: `Jumlah (${exposure.totalDokumen} dokumen)`,
       cells: [
-        "",
-        `${exposure.totalDokumen} dokumen`,
-        "",
-        "",
-        "",
         money(exposure.totalBruto),
         "",
         "",

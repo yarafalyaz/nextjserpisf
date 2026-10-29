@@ -175,7 +175,6 @@ export function buildBankMovements(input: {
       grand: true,
       label: "Jumlah",
       cells: [
-        "",
         amount(totals.inflow),
         amount(totals.outflow),
         amount(totals.net),

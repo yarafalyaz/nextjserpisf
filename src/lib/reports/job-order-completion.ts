@@ -116,7 +116,7 @@ export function buildJobOrderCompletion(input: {
     rows.push({
       kind: "total",
       label: `Jumlah ${month}`,
-      cells: ["", "", "", quantity(monthTotals.qty), "", amount(monthTotals.totalCost)],
+      cells: [quantity(monthTotals.qty), "", amount(monthTotals.totalCost)],
     })
 
     totals.qty += monthTotals.qty
@@ -133,7 +133,7 @@ export function buildJobOrderCompletion(input: {
       kind: "total",
       grand: true,
       label: "Jumlah",
-      cells: ["", "", "", quantity(totals.qty), "", amount(totals.totalCost)],
+      cells: [quantity(totals.qty), "", amount(totals.totalCost)],
     })
   }
 

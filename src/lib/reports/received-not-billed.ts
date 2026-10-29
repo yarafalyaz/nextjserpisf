@@ -192,7 +192,7 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
     detailRows.push({
       kind: "total",
       label: `Sisa ${first.receiptNo}`,
-      cells: ["", amount(receiptReceived), amount(receiptBilled), amount(receiptOutstanding)],
+      cells: [amount(receiptReceived), amount(receiptBilled), amount(receiptOutstanding)],
     })
 
     totals.receipts += 1
@@ -211,7 +211,6 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
       grand: true,
       label: "Jumlah Sisa Belum Ditagih",
       cells: [
-        "",
         amount(totals.receivedValue),
         amount(totals.billedValue),
         amount(totals.outstandingValue),

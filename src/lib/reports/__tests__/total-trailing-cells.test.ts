@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
   prismaMock: {
     salesInvoice: { findMany: vi.fn() },
     vendorBill: { findMany: vi.fn() },
-    customer: { findMany: vi.fn() },
+    customer: { findMany: vi.fn(), findFirst: vi.fn() },
+    invoiceExchangeItem: { findMany: vi.fn() },
+    journal: { findMany: vi.fn() },
+    activityLog: { findMany: vi.fn() },
+    user: { findMany: vi.fn() },
     vendor: { findMany: vi.fn() },
     salesPayment: { findMany: vi.fn() },
     salesReturn: { findMany: vi.fn() },
@@ -40,6 +44,17 @@ import { loadSalesAnalytics, loadStockCard, loadStockValuation, resolveItemIdByS
 import { loadStockAging, loadStockSummary } from "../stock-simple-data"
 import { REPORTS } from "../report-registry"
 import { parseReportPeriod } from "../report-period"
+import { loadCustomerStatement } from "../customer-statement-data"
+import { buildBankMovements } from "../bank-movements"
+import { buildJournalListing } from "../journal-listing"
+import { buildJobOrderCost } from "../job-order-cost"
+import { buildJobOrderCompletion } from "../job-order-completion"
+import { buildReceivedNotBilled } from "../received-not-billed"
+import { buildSptTableRows, loadVatReconciliation, SPT_COLUMNS } from "../tax-summary-data"
+import { buildDeliveredUnbilledTable } from "../delivered-unbilled-export"
+import { buildDiscountExposureTable } from "../discount-exposure-export"
+import { buildOutstandingLines } from "../outstanding-lines"
+import type { DiscountExposure } from "../discount-exposure"
 
 import type { TableRow } from "@/lib/pdf/engine/types"
 
@@ -244,6 +259,289 @@ describe("total trailing: buku besar & stok (lanjutan #8)", () => {
     expect(mocks.prismaMock.inventoryLayer.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ warehouseId: 3 }) }),
     )
+  })
+})
+
+describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => {
+  const period = { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) }
+
+  /** Simulasi renderer: sel total i mendarat di kolom columns.length - cells.length + i. */
+  function assertTrailing(table: { columns: { header: string }[]; rows: TableRow[] }) {
+    const totals = totalsOf(table.rows)
+    expect(totals.length).toBeGreaterThan(0)
+    for (const t of totals) {
+      expect(t.cells.length).toBeLessThanOrEqual(table.columns.length)
+      expect(t.cells[0]).not.toBe("")
+    }
+    return totals
+  }
+  function landed(table: { columns: { header: string }[] }, total: TotalRow): Record<string, string> {
+    const start = table.columns.length - total.cells.length
+    const out: Record<string, string> = {}
+    total.cells.forEach((cell, i) => {
+      out[table.columns[start + i].header] = cell
+    })
+    return out
+  }
+
+  it("statement pelanggan: Debit/Kredit/Saldo di 3 kolom terakhir, saldo akhir tidak terpotong", async () => {
+    mocks.prismaMock.customer.findFirst
+      .mockResolvedValueOnce({ id: 1, name: "PT A" })
+      .mockResolvedValueOnce({ phone: null, email: null })
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 1, documentNo: "INV-1", date: new Date("2026-10-05"), grandTotal: 1000, dueDate: null },
+    ])
+    const report = await loadCustomerStatement(1, period)
+    expect(report.table.columns).toHaveLength(7)
+    const totals = assertTrailing(report.table)
+    expect(totals).toHaveLength(1)
+    expect(totals[0].cells).toHaveLength(3)
+    const cols = landed(report.table, totals[0])
+    expect(cols["Debit"]).toContain("1.000")
+    expect(cols["Saldo"]).toContain("1.000")
+  })
+
+  it("mutasi bank: Penerimaan/Pengeluaran/Arus Bersih/Transaksi trailing", () => {
+    const result = buildBankMovements({
+      movements: [
+        {
+          accountId: 1,
+          accountCode: "1101",
+          accountName: "BCA",
+          date: new Date("2026-10-05"),
+          kind: "Penerimaan",
+          documentNo: "PAY-1",
+          counterparty: "PT A",
+          amount: 1000,
+        },
+      ],
+      ...period,
+    })
+    const totals = assertTrailing(result.summaryTable)
+    expect(totals[0].cells).toHaveLength(4)
+    const cols = landed(result.summaryTable, totals[0])
+    expect(cols["Penerimaan"]).toContain("1.000")
+    expect(cols["Transaksi"]).toBe("1")
+  })
+
+  it("daftar jurnal: Debit/Kredit trailing", () => {
+    const result = buildJournalListing({
+      journals: [
+        {
+          id: 1,
+          journalNumber: "JU-1",
+          date: new Date("2026-10-05"),
+          title: "JU-1",
+          description: null,
+          lines: [{ accountCode: "1101", accountName: "Kas", debit: 1000, credit: 1000 }],
+        },
+      ],
+      emptyNotice: "kosong",
+    })
+    const totals = assertTrailing(result.table)
+    expect(totals[0].cells).toHaveLength(2)
+    const cols = landed(result.table, totals[0])
+    expect(cols["Debit"]).toContain("1.000")
+    expect(cols["Kredit"]).toContain("1.000")
+  })
+
+  it("biaya pekerjaan: Bahan..Biaya/Unit trailing (5 sel, tanpa leading blank)", () => {
+    const result = buildJobOrderCost({
+      jobs: [
+        {
+          id: 1,
+          documentNo: "WO-1",
+          date: new Date("2026-10-05"),
+          customerName: null,
+          status: "in_progress",
+          materialCost: 600,
+          productionCost: 400,
+          completedQty: 2,
+        },
+      ],
+      ...period,
+    })
+    const totals = assertTrailing(result.table)
+    for (const t of totals) expect(t.cells).toHaveLength(5)
+    const cols = landed(result.table, totals[totals.length - 1])
+    expect(cols["Bahan"]).toContain("600")
+    expect(cols["Total Biaya"]).toContain("1.000")
+    expect(cols["Biaya / Unit"]).toContain("500")
+  })
+
+  it("penyelesaian pekerjaan: Qty/(Harga/Unit kosong)/Total Biaya trailing", () => {
+    const result = buildJobOrderCompletion({
+      completions: [
+        {
+          documentNo: "PG-1",
+          date: new Date("2026-10-05"),
+          jobLabel: "WO-1",
+          itemCode: "FG-1",
+          itemName: "Pagar",
+          qty: 2,
+          unitCost: 500,
+          totalCost: 1000,
+        },
+      ],
+      ...period,
+    })
+    const totals = assertTrailing(result.table)
+    for (const t of totals) expect(t.cells).toEqual(["2", "", "1.000"])
+    const cols = landed(result.table, totals[totals.length - 1])
+    expect(cols["Qty"]).toBe("2")
+    expect(cols["Total Biaya"]).toContain("1.000")
+  })
+
+  it("diterima belum ditagih: Diterima/Ditagih/Selisih trailing", () => {
+    const result = buildReceivedNotBilled({
+      lines: [
+        {
+          goodsReceiptId: 1,
+          receiptNo: "GR-1",
+          receiptDate: new Date("2026-10-10"),
+          vendorName: "CV V",
+          sku: "B-1",
+          name: "Busi",
+          receivedQty: 10,
+          unitCost: 100,
+          billedValue: 400,
+        },
+      ],
+      ledger: null,
+      asOf: new Date("2026-10-31"),
+      periodEndIsToday: true,
+    })
+    const totals = assertTrailing(result.detail)
+    for (const t of totals) expect(t.cells).toHaveLength(3)
+    const cols = landed(result.detail, totals[totals.length - 1])
+    expect(cols["Diterima"]).toContain("1.000")
+    expect(cols["Selisih"]).toContain("600")
+  })
+
+  it("rekonsiliasi PPN: Selisih 1 sel trailing; SPT: Neto SPT mendarat di kolom Neto SPT", async () => {
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([{ debit: 0, credit: 1000 }])
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ taxAmount: 1000 }])
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
+    const recon = await loadVatReconciliation(period)
+    const reconTotals = assertTrailing(recon.table)
+    expect(reconTotals[0].cells).toHaveLength(1)
+    expect(landed(recon.table, reconTotals[0])["Selisih"]).toBeDefined()
+
+    const sptRows = buildSptTableRows([
+      {
+        period: "2026-10",
+        outputVat: 1100,
+        returnVat: 100,
+        inputVat: 400,
+        net: 600,
+        kurangBayar: true,
+        source: "tax_invoice",
+        journalLiability: 600,
+        journalVsSptDiff: 0,
+        paid: 600,
+        balance: 0,
+        overpaid: false,
+      },
+    ])
+    const sptTable = { columns: SPT_COLUMNS, rows: sptRows }
+    const sptTotals = assertTrailing(sptTable)
+    expect(sptTotals[0].cells).toHaveLength(5)
+    expect(landed(sptTable, sptTotals[0])["Neto SPT"]).toContain("600")
+  })
+
+  it("terkirim belum terfaktur: 3 nilai trailing", () => {
+    const table = buildDeliveredUnbilledTable({
+      rows: [
+        {
+          documentNo: "SO-1",
+          customerName: "PT A",
+          date: new Date("2026-10-01"),
+          lastDeliveryAt: new Date("2026-10-05"),
+          ageDays: 26,
+          deliveredValue: 1000,
+          billedValue: 400,
+          unbilledValue: 600,
+        } as never,
+      ],
+      totalDocuments: 1,
+      totalDeliveredValue: 1000,
+      totalBilledValue: 400,
+      totalUnbilledValue: 600,
+    })
+    const totals = assertTrailing(table)
+    expect(totals[0].cells).toHaveLength(3)
+    const cols = landed(table, totals[0])
+    expect(cols["Nilai Terkirim"]).toContain("1.000")
+    expect(cols["Belum Terfaktur"]).toContain("600")
+  })
+
+  it("paparan diskon: Bruto/Diskon Efektif/% Efektif/Label Ambang trailing, jumlah dokumen di label", () => {
+    const exposure: DiscountExposure = {
+      dokumen: [
+        {
+          docType: "SALES_INVOICE",
+          docId: 1,
+          slug: "inv-1",
+          documentNo: "INV-1",
+          date: new Date("2026-10-10"),
+          status: "posted",
+          customerId: 1,
+          customerName: "PT A",
+          salesEmployeeId: null,
+          salesEmployeeName: null,
+          subtotal: 900,
+          headerDiscount: 0,
+          grandTotal: 900,
+          lines: [],
+          bruto: 1000,
+          diskonBaris: 100,
+          diskonHeader: 0,
+          diskonEfektif: 100,
+          persenEfektif: 10,
+          labelAmbang: "MELEBIHI_AMBANG",
+          labelAmbangText: "Melebihi Ambang",
+          penjualLabel: "–",
+        } as DiscountExposure["dokumen"][number],
+      ],
+      ringkasan: [],
+      totalDokumen: 1,
+      totalBruto: 1000,
+      totalDiskonEfektif: 100,
+      persenTertimbang: 10,
+      jumlahMelebihiAmbang: 1,
+    }
+    const table = buildDiscountExposureTable({ exposure, periodCaption: "Oktober 2026" })
+    const totals = assertTrailing(table)
+    expect(totals[0].label).toContain("1 dokumen")
+    expect(totals[0].cells).toHaveLength(6)
+    const cols = landed(table, totals[0])
+    expect(cols["Bruto"]).toContain("1.000")
+    expect(cols["Diskon Efektif"]).toContain("100")
+    expect(cols["Label Ambang"]).toContain("melebihi ambang")
+  })
+
+  it("baris pesanan bersisa: Nilai Sisa 1 sel trailing", () => {
+    const result = buildOutstandingLines({
+      documents: [
+        {
+          documentNo: "PO-1",
+          date: new Date("2026-10-05"),
+          partyName: "CV V",
+          status: "ordered",
+          items: [{ sku: "B-1", name: "Busi", unit: "pcs", orderedQty: 10, fulfilledQty: 4, unitPrice: 100 }],
+        },
+      ],
+      ...period,
+      wording: {
+        fulfilledColumn: "Diterima",
+        fulfilledPast: "diterima",
+        fulfilledActive: "menerima",
+        emptyNotice: "Tidak ada sisa.",
+      },
+    })
+    const totals = assertTrailing(result.table)
+    for (const t of totals) expect(t.cells).toHaveLength(1)
+    expect(landed(result.table, totals[totals.length - 1])["Nilai Sisa"]).toContain("600")
   })
 })
 

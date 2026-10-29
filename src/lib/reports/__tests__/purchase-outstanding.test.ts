@@ -90,7 +90,8 @@ describe("buildPurchaseOutstanding", () => {
     expect(result.hasMixedUnits).toBe(true)
     const totals = result.table.rows.filter((row) => row.kind === "total")
     for (const row of totals) {
-      expect(row.cells?.slice(0, 5)).toEqual(["", "", "", "", ""])
+      expect(row.cells).toHaveLength(1)
+      expect(row.cells?.[0]).not.toBe("")
     }
     const notices = result.table.rows.filter((row) => row.kind === "notice").map((row) => String(row.text))
     expect(notices.some((text) => text.includes("lebih dari satu satuan"))).toBe(true)
@@ -112,10 +113,10 @@ describe("buildPurchaseOutstanding", () => {
       "Nilai sisa PO-0002",
       "Jumlah Nilai Sisa",
     ])
-    expect(totals[0].cells?.[5]).toBe("300.000")
-    expect(totals[1].cells?.[5]).toBe("50.000")
+    expect(totals[0].cells).toEqual(["300.000"])
+    expect(totals[1].cells).toEqual(["50.000"])
     expect(totals[2].grand).toBe(true)
-    expect(totals[2].cells?.[5]).toBe("350.000")
+    expect(totals[2].cells).toEqual(["350.000"])
   })
 
   it("mengabaikan pesanan di luar periode dan menjelaskan bila tidak ada sisa", () => {

@@ -28,8 +28,8 @@ describe("buildOutstandingLines presisi sen", () => {
     // 17 x 0.24 mentah = 4.080000000000002
     expect(result.totals.outstandingValue).toBe(8.16)
     const totals = result.table.rows.filter((r) => r.kind === "total")
-    expect(totals[0].cells?.[5]).toBe("4")
-    expect(totals[2].cells?.[5]).toBe("8")
+    expect(totals[0].cells).toEqual(["4"])
+    expect(totals[2].cells).toEqual(["8"])
     const data = result.table.rows.filter((r) => r.kind === "data")
     expect(data[0].cells?.[5]).toBe("0")
   })

@@ -115,7 +115,7 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
       kind: "total",
       grand: true,
       label: "Selisih Bersih",
-      cells: ["", "", "", money(bookOutput - docOutput - (bookInput - docInput))],
+      cells: [money(bookOutput - docOutput - (bookInput - docInput))],
     },
   ]
   if (outputAccountId === null || inputAccountId === null) {
@@ -188,7 +188,7 @@ export function buildSptTableRows(rows: SptPeriodRow[]): TableRow[] {
     kind: "total",
     grand: true,
     label: totalNet >= 0 ? "PPN Kurang Bayar (Neto SPT)" : "PPN Lebih Bayar (Neto SPT)",
-    cells: ["", "", "", "", "", money(Math.abs(totalNet)), "", "", "", ""],
+    cells: [money(Math.abs(totalNet)), "", "", "", ""],
   })
   if (hasLegacy) {
     out.push({

@@ -51,8 +51,7 @@ describe("buildJobOrderCompletion", () => {
 
     const totals = result.table.rows.filter((row) => row.kind === "total")
     expect(String(totals[0].label)).toBe("Jumlah Oktober 2026")
-    expect(totals[0].cells?.[3]).toBe("5")
-    expect(totals[0].cells?.[5]).toBe("10.000.000")
+    expect(totals[0].cells).toEqual(["5", "", "10.000.000"])
     expect(totals[1].grand).toBe(true)
     expect(result.totals).toEqual({ qty: 5, totalCost: 10_000_000 })
   })

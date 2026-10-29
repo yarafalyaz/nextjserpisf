@@ -24,8 +24,9 @@ describe("buildDiscountExposureTable (F-2026-10-25-006-S AC-DX-F1)", () => {
     expect(text).toContain("12,50%")
     expect(text).toContain(DISCOUNT_EXPOSURE_NOTICE_TEXT)
     const total = table.rows.find((row) => row.kind === "total")
-    expect(total?.kind === "total" && total.cells.join(" ")).toContain("2 dokumen")
+    expect(total?.kind === "total" && total.label).toContain("2 dokumen")
     expect(total?.kind === "total" && total.cells.join(" ")).toContain("1 melebihi ambang")
+    expect(total?.kind === "total" && total.cells[0]).not.toBe("")
   })
 
   it("kosong: notice jujur, tanpa baris data/total", () => {

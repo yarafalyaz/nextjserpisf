@@ -167,7 +167,7 @@ export function buildOutstandingLines(input: {
     rows.push({
       kind: "total",
       label: `Nilai sisa ${document.documentNo}`,
-      cells: ["", "", "", "", "", amount(documentValue)],
+      cells: [amount(documentValue)],
     })
     totals.outstandingValue = safeAdd(totals.outstandingValue, documentValue, 2)
   }
@@ -179,7 +179,7 @@ export function buildOutstandingLines(input: {
       kind: "total",
       grand: true,
       label: "Jumlah Nilai Sisa",
-      cells: ["", "", "", "", "", amount(totals.outstandingValue)],
+      cells: [amount(totals.outstandingValue)],
     })
   }
 

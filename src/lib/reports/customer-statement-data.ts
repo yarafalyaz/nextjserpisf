@@ -323,7 +323,7 @@ export async function loadCustomerStatement(
     kind: "total",
     grand: true,
     label: "Saldo akhir",
-    cells: ["", "", "", "", money(statement.totalDebit), money(statement.totalCredit), money(statement.closingBalance)],
+    cells: [money(statement.totalDebit), money(statement.totalCredit), money(statement.closingBalance)],
   })
 
   return {

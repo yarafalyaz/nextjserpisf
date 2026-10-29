@@ -144,7 +144,6 @@ export function buildJobOrderCost(input: {
       kind: "total",
       label: `Jumlah ${month}`,
       cells: [
-        "",
         amount(monthTotals.materialCost),
         amount(monthTotals.productionCost),
         amount(monthTotal),
@@ -172,7 +171,6 @@ export function buildJobOrderCost(input: {
       grand: true,
       label: "Jumlah",
       cells: [
-        "",
         amount(totals.materialCost),
         amount(totals.productionCost),
         amount(totals.totalCost),

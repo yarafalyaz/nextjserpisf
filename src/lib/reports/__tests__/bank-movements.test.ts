@@ -60,7 +60,7 @@ describe("buildBankMovements", () => {
     expect(result.totals).toEqual({ inflow: 1_500_000, outflow: 300_000, net: 1_200_000, count: 3 })
 
     const total = result.summaryTable.rows.find((row) => row.kind === "total")
-    expect(total?.cells).toEqual(["", "1.500.000", "300.000", "1.200.000", "3"])
+    expect(total?.cells).toEqual(["1.500.000", "300.000", "1.200.000", "3"])
     expect(total?.grand).toBe(true)
   })
 
