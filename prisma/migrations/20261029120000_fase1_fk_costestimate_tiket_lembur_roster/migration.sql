@@ -12,7 +12,8 @@ ALTER TABLE `goods_receipt_items`
 
 -- B6: FK TaxGroupTax.taxId (KEY eksplisit agar nama index = DDL push).
 ALTER TABLE `tax_group_taxes`
-  ADD KEY `tax_group_taxes_tax_id_fkey` (`tax_id`),
+  ADD KEY `tax_group_taxes_tax_id_fkey` (`tax_id`);
+ALTER TABLE `tax_group_taxes`
   ADD CONSTRAINT `tax_group_taxes_tax_id_fkey` FOREIGN KEY (`tax_id`) REFERENCES `taxes`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- B6: FK Transfer/Material/Invoice item.
@@ -22,10 +23,6 @@ ALTER TABLE `material_issue_items`
   ADD CONSTRAINT `material_issue_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `sales_invoice_items`
   ADD CONSTRAINT `sales_invoice_items_item_id_fkey` FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- Pre-existing drift: FK purchase_requests.vendor_id (ada di schema, hilang di rantai).
-ALTER TABLE `purchase_requests`
-  ADD CONSTRAINT `purchase_requests_vendor_id_fkey` FOREIGN KEY (`vendor_id`) REFERENCES `vendors`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- R3: tabel estimasi biaya job.
 CREATE TABLE `work_order_cost_estimates` (
