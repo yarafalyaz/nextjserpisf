@@ -23,6 +23,7 @@ test.describe("Pindai Barang + Barcode wiring", () => {
     await page.goto("/master/barcode", { waitUntil: "domcontentloaded" })
 
     await expect(page.getByRole("heading", { name: "Barcode" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByPlaceholder("Cari barcode...")).toBeVisible({ timeout: 30000 })
 
     const firstRow = page.getByRole("row").nth(1)
     // DB seed kosong wajar: tanpa baris, wiring tidak bisa dibuktikan dari UI.
@@ -36,9 +37,10 @@ test.describe("Pindai Barang + Barcode wiring", () => {
         { timeout: 30_000 },
       )
       .toBe(true)
-    if ((await page.getByRole("row").count()) < 2) {
-      test.skip(true, "Tidak ada baris barcode di DB uji")
-    }
+    test.skip(
+      (await page.getByRole("row").count()) < 2,
+      "Tidak ada baris barcode di DB uji — wiring aksi dilewati, bukan lulus semu",
+    )
     await expect(firstRow).toBeVisible({ timeout: 30000 })
     // Tunggu tombol benar-benar ter-render (hidrasi selesai) sebelum klik —
     // klik langsung balapan dengan hidrasi saat server sibuk oleh worker lain.
