@@ -1,19 +1,17 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useTransition } from "react"
 import {
   addPayrollComponentLine,
   removePayrollComponentLine,
   updatePayrollComponentLineAmount,
 } from "@/actions/hrm.actions"
-import { showError, showSuccess } from "@/lib/utils/toast"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { Label } from "@/components/ui/shadcn/label"
 import { kindLabel, recurrenceLabel, taxableLabel } from "./payroll-component-master"
+import { useSlipActionRunner } from "./use-slip-action-runner"
 
 export interface PayrollComponentLineRow {
   id: number
@@ -24,6 +22,8 @@ export interface PayrollComponentLineRow {
   recurrenceSnapshot: string
   isTaxableSnapshot: boolean
   source: string
+  commissionPayableId?: number | null
+  commissionInvoiceId?: number | null
   amount: number
 }
 
@@ -37,6 +37,7 @@ export interface LineComponentOption {
 const SOURCE_LABEL: Record<string, string> = {
   fixed_assignment: "Penugasan tetap",
   manual: "Manual",
+  commission: "Komisi",
   // F-2026-10-24-132-V: baris kompensasi PKWT dari peristiwa terbekukan;
   // nominal penuh non-parsial dikunci server, UI tidak boleh ubah/hapus.
   pkwt_compensation: "Kompensasi PKWT",
@@ -59,25 +60,13 @@ export function PayrollComponentLines({
   deductions: number
   canEdit: boolean
 }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const { isPending, run } = useSlipActionRunner("Gagal menyimpan baris komponen gaji")
   const editable = status === "draft" && canEdit
-  const usedIds = new Set(lines.map((l) => l.componentId).filter((v) => v != null))
+  const visible = lines.filter((l) => l.commissionPayableId == null)
+  const usedIds = new Set(visible.map((l) => l.componentId).filter((v) => v != null))
   // Kartu F-027 UI: baris manual hanya komponen tidak-tetap; komponen tetap
   // masuk slip lewat penugasan saat generate.
   const available = components.filter((c) => c.recurrence === "variable" && !usedIds.has(c.id))
-
-  function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
-    startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan baris komponen gaji")
-        return
-      }
-      showSuccess(ok)
-      router.refresh()
-    })
-  }
 
   return (
     <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
@@ -87,9 +76,10 @@ export function PayrollComponentLines({
         adalah turunan baris-baris ini, bukan isian bebas.
       </p>
 
-      {lines.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="py-4 text-sm text-muted-foreground">
           Belum ada baris komponen gaji pada slip ini.
+          {lines.length > visible.length && " Baris komisi tampil di panel Bayar Komisi."}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -106,7 +96,7 @@ export function PayrollComponentLines({
               </tr>
             </thead>
             <tbody>
-              {lines.map((l) => (
+              {visible.map((l) => (
                 <tr key={l.id} className="border-b border-default last:border-0">
                   <td className="px-3 py-2 font-medium text-foreground">{l.componentNameSnapshot}</td>
                   <td className="px-3 py-2">{kindLabel(l.kindSnapshot)}</td>
@@ -169,7 +159,12 @@ export function PayrollComponentLines({
           penuh (non-parsial) — nominal tidak dapat diubah atau dihapus dari slip.
         </p>
       )}
-
+      {lines.some((l) => l.source === "commission") && (
+        <p className="mt-4 rounded-lg border border-default bg-surface-secondary/40 p-3 text-sm text-muted-foreground">
+          Baris komisi dikelola di panel Bayar Komisi — ubah nominal dengan hapus
+          lalu tambah ulang; tanpa baris komisi slip tak membayar komisi.
+        </p>
+      )}
       {editable ? (
         <form
           onSubmit={(e) => {
