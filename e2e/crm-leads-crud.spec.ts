@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-import { awaitReady, gotoReady, awaitListContains } from "./utils/await-ready"
+import { gotoReady, awaitListContains } from "./utils/await-ready"
 
 test.describe("CRM Leads CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
