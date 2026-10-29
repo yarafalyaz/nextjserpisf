@@ -100,7 +100,7 @@ const report = (over: Partial<PkwtReportView> = {}): PkwtReportView => ({
   ...over,
 })
 
-const employees = [{ id: 5, name: "Budi PKWT", employeeNumber: "PKWT-001" }]
+const employees = [{ id: 5, name: "Budi PKWT", employeeNo: "PKWT-001" }]
 const draftSlips = [
   { id: 77, documentNo: "PAY-2026-077", employeeId: 6, employeeName: "Sari PKWT", period: "2026-10" },
 ]

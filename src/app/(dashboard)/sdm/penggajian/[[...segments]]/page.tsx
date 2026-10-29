@@ -151,7 +151,7 @@ export default async function PayrollPage({
       prisma.employee.findMany({
         where: { employmentStatus: "PKWT", isActive: true },
         orderBy: { name: "asc" },
-        select: { id: true, name: true, employeeNumber: true },
+        select: { id: true, name: true, employeeNo: true },
       }),
       prisma.payroll.findMany({
         where: { status: "draft", ...hrScopeWhere(scope) },

@@ -70,7 +70,7 @@ export async function getPkwtCompensationReport(
     prisma.pkwtCompensationEvent.findMany({
       where: scopeWhere,
       orderBy: [{ employeeId: "asc" }, { segmentStart: "asc" }],
-      include: { employee: { select: { name: true, employeeNumber: true } } },
+      include: { employee: { select: { name: true, employeeNo: true } } },
     }),
     prisma.pkwtCompensationAccrual.groupBy({
       by: ["employeeId", "segmentStart"],

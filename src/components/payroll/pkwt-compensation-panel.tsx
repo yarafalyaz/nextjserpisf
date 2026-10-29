@@ -72,7 +72,7 @@ export interface PkwtReportView {
 export interface PkwtEmployeeOption {
   id: number
   name: string
-  employeeNumber: string | null
+  employeeNo: string | null
 }
 
 export interface PkwtDraftSlipOption {
@@ -202,7 +202,7 @@ export function PkwtCompensationPanel({
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name}
-                    {emp.employeeNumber ? ` (${emp.employeeNumber})` : ""}
+                    {emp.employeeNo ? ` (${emp.employeeNo})` : ""}
                   </option>
                 ))}
               </select>

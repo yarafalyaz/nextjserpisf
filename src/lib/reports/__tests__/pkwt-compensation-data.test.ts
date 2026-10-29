@@ -49,7 +49,7 @@ function eventRow(id: number, employeeId: number, name: string, overrides: Recor
     amount: 2_500_000,
     status: "approved",
     isLegacy: false,
-    employee: { name, employeeNumber: `EMP-${employeeId}` },
+    employee: { name, employeeNo: `EMP-${employeeId}` },
     ...overrides,
   }
 }
@@ -158,6 +158,13 @@ describe("getPkwtCompensationReport — scope HR diterapkan ke semua query karya
     expect(allReport.glIsCompanyWide).toBe(false)
     expect(allReport.glComparableToScope).toBe(true)
     expect(allReport.anomalies.some((a) => a.code === "GL_VS_EVENT_DIFF")).toBe(true)
+  })
+
+  it("query peristiwa memilih field Employee yang ada di schema (employeeNo)", async () => {
+    await getPkwtCompensationReport({ kind: "all" })
+    expect(mocks.eventFindMany.mock.calls[0][0].include).toEqual({
+      employee: { select: { name: true, employeeNo: true } },
+    })
   })
 
   it("mapping kosong: tanpa query GL + anomaly MAPPING_MISSING", async () => {
