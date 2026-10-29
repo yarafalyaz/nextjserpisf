@@ -7,6 +7,7 @@ const refreshMock = vi.fn()
 const createMock = vi.fn(async () => ({ success: true }))
 const updateMock = vi.fn(async () => ({ success: true }))
 const setActiveMock = vi.fn(async () => ({ success: true }))
+const { showSuccessMock, showErrorMock } = vi.hoisted(() => ({ showSuccessMock: vi.fn(), showErrorMock: vi.fn() }))
 
 vi.mock("next/navigation", () => ({
   useRouter() {
@@ -18,8 +19,27 @@ vi.mock("@/actions/hrm.actions", () => ({
   updatePayrollComponent: (...a: unknown[]) => updateMock(...(a as [])),
   setPayrollComponentActive: (...a: unknown[]) => setActiveMock(...(a as [])),
 }))
-vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
-vi.mock("@/components/ui/button", async () => await import("./button-mock"))
+vi.mock("@/lib/utils/toast", () => ({ showSuccess: showSuccessMock, showError: showErrorMock }))
+vi.mock("@/components/ui/button", () => ({
+  Button: (p: {
+    children: React.ReactNode
+    isDisabled?: boolean
+    onPress?: () => void
+    onClick?: () => void
+    [key: string]: unknown
+  }) => {
+    const { onPress, onClick, isDisabled, children, ...rest } = p
+    return (
+      <button
+        {...(rest as Record<string, unknown>)}
+        disabled={isDisabled}
+        onClick={() => (onPress ?? onClick)?.()}
+      >
+        {children}
+      </button>
+    )
+  },
+}))
 
 import { PayrollComponentMaster, taxableLabel } from "../payroll-component-master"
 
@@ -53,6 +73,18 @@ describe("PayrollComponentMaster", () => {
     expect(container.textContent).toContain("klasifikasi belum mengubah hitungan pajak maupun jurnal")
     expect(container.textContent).not.toContain("bebas pajak")
     expect(container.textContent).not.toContain("jurnal otomatis")
+    act(() => root.unmount())
+  })
+
+  it("aksi melempar (network/server) → toast error fallback, bukan unhandled rejection", async () => {
+    setActiveMock.mockRejectedValueOnce(new Error("network down"))
+    const { container, root } = mount(<PayrollComponentMaster components={components} />)
+    const btn = container.querySelector<HTMLButtonElement>('[aria-label="Aktifkan Potongan Kasbon"]')!
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+    expect(showErrorMock).toHaveBeenCalledWith("Gagal menyimpan komponen gaji")
+    expect(showSuccessMock).not.toHaveBeenCalled()
     act(() => root.unmount())
   })
 

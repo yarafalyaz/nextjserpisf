@@ -46,6 +46,14 @@ function teardown(container: HTMLDivElement, root: Root) {
   container.remove()
 }
 
+function setValue(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set
+  setter?.call(el, value)
+  el.dispatchEvent(new Event("input", { bubbles: true }))
+  el.dispatchEvent(new Event("change", { bubbles: true }))
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedCreate.mockResolvedValue({ success: true })
@@ -76,6 +84,21 @@ describe("tax-assessment-form — a11y + submit", () => {
     teardown(container, root)
   })
 
+  it("masa pajak taxPeriod terkirim (format YYYY-MM dari input month)", async () => {
+    const { container, root } = mount(<TaxAssessmentForm />)
+    const form = container.querySelector("form")!
+    const period = container.querySelector<HTMLInputElement>("#taxPeriod")!
+    await act(async () => {
+      setValue(period, "2026-10")
+    })
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    const fd = mockedCreate.mock.calls[0]![0] as FormData
+    expect(fd.get("taxPeriod")).toBe("2026-10")
+    teardown(container, root)
+  })
+
   it("error service tampil verbatim (bukan fallback)", async () => {
     mockedCreate.mockResolvedValueOnce({ success: false, error: "Nominal disengketakan tidak boleh melebihi nominal ketetapan." })
     const { container, root } = mount(<TaxAssessmentForm />)
@@ -103,6 +126,24 @@ describe("tax-dispute-step-form — sub-jenis Pasal 36 kondisional", () => {
     expect(fd.get("assessmentId")).toBe("7")
     expect(fd.get("idempotencyKey")).toBeTruthy()
     expect(mockedShowSuccess).toHaveBeenCalledWith("Upaya sengketa tersimpan")
+    teardown(container, root)
+  })
+
+  it("sukses → form reset (alasan + referensi bukti kosong lagi)", async () => {
+    const { container, root } = mount(<TaxDisputeStepForm assessmentId={7} />)
+    const form = container.querySelector("form")!
+    const late = container.querySelector<HTMLTextAreaElement>("#lateReason")!
+    const evidence = container.querySelector<HTMLInputElement>("#evidenceRef")!
+    await act(async () => {
+      setValue(late, "force majeure banjir")
+      setValue(evidence, "BKT-001")
+    })
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    expect(mockedShowSuccess).toHaveBeenCalledWith("Upaya sengketa tersimpan")
+    expect(late.value).toBe("")
+    expect(evidence.value).toBe("")
     teardown(container, root)
   })
 
@@ -139,6 +180,25 @@ describe("hint terikat aria-describedby", () => {
     expect(s.container.querySelector("#lateReason")?.getAttribute("aria-describedby")).toBe("lateReason-hint")
     expect(s.container.querySelector("#lateReason-hint")?.textContent).toContain("di luar kekuasaan")
     teardown(s.container, s.root)
+  })
+})
+
+describe("tax-dispute-decision-form — reset sesudah sukses", () => {
+  it("sukses → catatan putusan kosong lagi", async () => {
+    const { container, root } = mount(
+      <TaxDisputeDecisionForm steps={[{ value: "3", label: "Keberatan" }]} />,
+    )
+    const form = container.querySelector("form")!
+    const notes = container.querySelector<HTMLTextAreaElement>("#decisionNotes")!
+    await act(async () => {
+      setValue(notes, "catatan putusan awal")
+    })
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    expect(mockedShowSuccess).toHaveBeenCalledWith("Putusan sengketa tercatat")
+    expect(notes.value).toBe("")
+    teardown(container, root)
   })
 })
 

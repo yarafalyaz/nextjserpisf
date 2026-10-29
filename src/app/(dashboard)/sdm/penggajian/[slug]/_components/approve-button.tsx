@@ -16,7 +16,11 @@ export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {
   const handleApprove = () => {
     startTransition(async () => {
       try {
-        await approvePayroll(payrollId)
+        const result = await approvePayroll(payrollId)
+        if (!result.success) {
+          showError(result.error || "Gagal menyetujui penggajian")
+          return
+        }
         showSuccess("Penggajian berhasil disetujui (Finalisasi)!")
         setIsOpen(false)
         router.refresh()

@@ -37,8 +37,10 @@ export function StatusActions({ status, id, module, canAct = true }: StatusActio
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const canApprove = canAct && ["draft", "pending"].includes(status)
-  const canReject = canAct && ["draft", "pending"].includes(status)
+  // Selaras STATUS_ALLOWED_FROM di /api/workflow: pending/draft/sent boleh
+  // disetujui/ditolak; status lain API menolak CONFLICT.
+  const canApprove = canAct && ["draft", "pending", "sent"].includes(status)
+  const canReject = canAct && ["draft", "pending", "sent"].includes(status)
 
   async function handleAction(action: "approve" | "reject") {
     startTransition(async () => {
