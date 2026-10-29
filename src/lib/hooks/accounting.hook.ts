@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { prisma, TxClient } from "@/lib/db/prisma";
+import { DocumentSequenceService } from "@/lib/services/document-sequence.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertSalesInvoiceStockOutOnce } from "@/lib/services/stock-out-once.service";
 import { slugify } from "@/lib/utils/slug";
@@ -9,7 +10,7 @@ import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils
 import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
-import { DEFAULT_TRANSACTION_CODE, isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice";
+import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
 import { isSettled } from "@/lib/finance/settlement-status";
 import { REVERSAL_JOURNAL_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
@@ -90,11 +91,22 @@ async function generateJournalNumber(
   prefix: string,
   referenceId: number,
 ): Promise<string> {
-  const timestamp = new Date()
+  // Counter atomik via document_sequences: kunci JRN-<prefix>-YYYY-MM, nomor
+  // urut never-reuse di bawah konkuren. Suffix timestamp jaga unik bila
+  // sequence table belum ada (tes mock tanpa tabel). Counter dulu, fallback
+  // timestamp murni bila next() lempar.
+  const d = new Date();
+  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const timestamp = d
     .toISOString()
     .replace(/[-:T.Z]/g, "")
     .slice(0, 14);
-  return `${prefix}/${referenceId}/${timestamp}`;
+  try {
+    const seq = await DocumentSequenceService.next(`JRN-${prefix}-${month}`);
+    return `${prefix}/${referenceId}/${timestamp}-${String(seq).padStart(4, "0")}`;
+  } catch {
+    return `${prefix}/${referenceId}/${timestamp}`;
+  }
 }
 
 /**
