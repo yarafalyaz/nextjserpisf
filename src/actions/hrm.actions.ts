@@ -51,6 +51,7 @@ import {
   attendanceSchema,
   attendanceCorrectionSchema,
   statutoryRuleSchema,
+  employeeRosterSchema,
 } from "@/lib/validations/hrm.schemas";
 import {
   computeLateMinutes,
@@ -5697,6 +5698,154 @@ export async function runPkwtAccrual(period: string) {
     if (isNextRedirectError(e)) throw e;
     console.error("[runPkwtAccrual]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== EMPLOYEE ROSTER ====================
+// Jalur tulis pertama EmployeeRoster (sebelumnya hanya loader baca
+// `loadEmployeeRoster` + seed). Izin memakai keluarga absensi existing
+// (view/create/edit/manage_attendance di seed) — tanpa key baru.
+// Status: draft -> approved | rejected (klaim atomik updateMany pola
+// koreksi absensi). `approvedBy` adalah FK Employee, jadi diselesaikan
+// dari user login, BUKAN id user mentah.
+
+const ROSTER_PATH = "/sdm/roster";
+
+/** Employee id penyetuju dari user login; fail-closed bila tak tertaut. */
+async function rosterApproverEmployeeId(userId: unknown): Promise<number> {
+  const me = await prisma.employee.findFirst({
+    where: { userId: Number(userId) },
+    select: { id: true },
+  });
+  if (!me) throw new Error("Akun Anda tidak terhubung ke data karyawan");
+  return me.id;
+}
+
+export async function createEmployeeRoster(formData: FormData) {
+  try {
+    const user = await requirePermission("create_attendance");
+    const parsed = parseFormData(employeeRosterSchema, formData);
+    if (!parsed.success)
+      return { success: false as const, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, v.employeeId);
+
+    const roster = await prisma.employeeRoster.create({
+      data: {
+        employeeId: v.employeeId,
+        date: wibDateToUtcMidnight(v.date),
+        type: v.type,
+        status: "draft",
+        notes: v.notes ?? null,
+        createdBy: Number(user.id) || null,
+      },
+    });
+
+    await logActivity("create", "EmployeeRoster", roster.id, `Membuat roster ${v.type} karyawan #${v.employeeId} tanggal ${v.date}`);
+    revalidatePath(ROSTER_PATH);
+    return { success: true as const, id: roster.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    if ((e as { code?: string })?.code === "P2002") {
+      return {
+        success: false as const,
+        error: "Roster karyawan untuk tanggal dan jenis itu sudah ada.",
+      };
+    }
+    console.error("[createEmployeeRoster]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function approveEmployeeRoster(id: number) {
+  try {
+    const user = await requirePermission("edit_attendance");
+    const rosterId = requirePositiveId(id, "roster");
+    const loaded = await prisma.employeeRoster.findUnique({
+      where: { id: rosterId },
+      select: { employeeId: true, status: true },
+    });
+    if (!loaded) throw new Error("Roster tidak ditemukan");
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, loaded.employeeId);
+    const approverId = await rosterApproverEmployeeId(user.id);
+    if (approverId === loaded.employeeId) {
+      throw new Error("Penyetuju tidak boleh menyetujui rosternya sendiri");
+    }
+
+    const claim = await prisma.employeeRoster.updateMany({
+      where: { id: rosterId, status: "draft" },
+      data: { status: "approved", approvedBy: approverId, approvedAt: new Date() },
+    });
+    if (claim.count === 0) {
+      throw new Error("Hanya roster berstatus draft yang dapat disetujui");
+    }
+
+    await logActivity("approve", "EmployeeRoster", rosterId, "Menyetujui roster karyawan");
+    revalidatePath(ROSTER_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[approveEmployeeRoster]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function rejectEmployeeRoster(id: number) {
+  try {
+    const user = await requirePermission("edit_attendance");
+    const rosterId = requirePositiveId(id, "roster");
+    const loaded = await prisma.employeeRoster.findUnique({
+      where: { id: rosterId },
+      select: { employeeId: true, status: true },
+    });
+    if (!loaded) throw new Error("Roster tidak ditemukan");
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, loaded.employeeId);
+
+    const claim = await prisma.employeeRoster.updateMany({
+      where: { id: rosterId, status: "draft" },
+      data: { status: "rejected", approvedBy: null, approvedAt: null },
+    });
+    if (claim.count === 0) {
+      throw new Error("Hanya roster berstatus draft yang dapat ditolak");
+    }
+
+    await logActivity("reject", "EmployeeRoster", rosterId, "Menolak roster karyawan");
+    revalidatePath(ROSTER_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[rejectEmployeeRoster]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteEmployeeRoster(id: number) {
+  try {
+    const user = await requirePermission("manage_attendance");
+    const rosterId = requirePositiveId(id, "roster");
+    const loaded = await prisma.employeeRoster.findUnique({
+      where: { id: rosterId },
+      select: { employeeId: true, status: true },
+    });
+    if (!loaded) throw new Error("Roster tidak ditemukan");
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, loaded.employeeId);
+    if (loaded.status !== "draft") {
+      throw new Error("Hanya roster berstatus draft yang dapat dihapus");
+    }
+
+    await prisma.employeeRoster.delete({ where: { id: rosterId } });
+    await logActivity("delete", "EmployeeRoster", rosterId, `Menghapus roster #${rosterId}`);
+    revalidatePath(ROSTER_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteEmployeeRoster]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
 

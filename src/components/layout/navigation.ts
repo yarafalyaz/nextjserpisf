@@ -185,6 +185,7 @@ export const navigation: NavItem[] = [
       { label: "Surat Peringatan", href: "/sdm/disiplin", icon: ShieldAlert, permission: "view_disciplinary_records" },
       { label: "Klaim Reimbursement", href: "/sdm/klaim-reimbursement", icon: ReceiptText, permission: "create_employee_reimbursements" },
       { label: "Kalender Kerja", href: "/sdm/kalender-kerja", icon: CalendarDays, permission: "view_work_schedules" },
+      { label: "Roster Karyawan", href: "/sdm/roster", icon: CalendarDays, permission: "view_attendance" },
     ],
   },
   {

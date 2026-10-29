@@ -270,5 +270,25 @@ export const attendanceCorrectionSchema = z
     path: ["checkOut"],
   })
 
+// ==================== Employee Roster ====================
+
+/** Jenis roster karyawan (kolom `type` EmployeeRoster, VarChar bebas di skema). */
+export const ROSTER_TYPES = [
+  "cuti",
+  "sakit",
+  "izin",
+  "tugas_luar",
+  "libur_ganti",
+] as const
+
+export type RosterType = (typeof ROSTER_TYPES)[number]
+
+export const employeeRosterSchema = z.object({
+  employeeId: requiredId("Karyawan"),
+  date: requiredDate("Tanggal"),
+  type: z.enum(ROSTER_TYPES, { error: "Jenis roster tidak dikenal" }),
+  notes: optionalStr(1000),
+})
+
 // ==================== Inferred Types ====================
 
