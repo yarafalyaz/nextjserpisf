@@ -2670,7 +2670,7 @@ describe("assertAccountsExist (akun bare-int fail-closed)", () => {
 describe("onPayrollPaid — baris komisi nyata (tahap 3, round2)", () => {
   // State payable palsu: paidByIdTx asli (di-import dinamis oleh hook) berjalan
   // atas tx ini — findUniqueOrThrow/update benar-benar mengubah paidAmount.
-  const payables = new Map<number, { id: number; accruedAmount: number; reversalAmount: number; paidAmount: unknown }>()
+  const payables = new Map<number, { id: number; salesInvoiceId: number; accruedAmount: number; reversalAmount: number; paidAmount: unknown }>()
   const commissionUpdates: Array<{ id: number; paidAmount: unknown }> = []
   let commissionLines: Array<{ commissionPayableId: number; commissionInvoiceId: number; amount: number }> = []
 
