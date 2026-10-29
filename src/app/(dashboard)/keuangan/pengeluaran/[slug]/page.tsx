@@ -79,8 +79,9 @@ export default async function ExpenseDetailPage({
     accountRows.map((a) => [a.id, `${a.code} - ${a.name}`]),
   );
 
+  const canApproveExpenses = await hasPermission("approve_expenses");
   const canVerifyReimbursement =
-    expense.isReimbursementClaim && (await hasPermission("approve_expenses"));
+    expense.isReimbursementClaim && canApproveExpenses;
   const verifyAccounts = canVerifyReimbursement
     ? await prisma.account.findMany({
         where: { isActive: true },
@@ -158,7 +159,7 @@ export default async function ExpenseDetailPage({
           akun wajib sebelum approve) — ExpenseApprovalActions disembunyikan
           agar tidak ada jalur approve dengan akun placeholder. */}
       {!expense.isReimbursementClaim && (
-        <ExpenseApprovalActions status={expense.status} id={expense.id} />
+        <ExpenseApprovalActions status={expense.status} id={expense.id} canApprove={canApproveExpenses} />
       )}
 
       {canVerifyReimbursement && (

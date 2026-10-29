@@ -20,15 +20,24 @@ import { approveExpense, rejectExpense, markExpensePaid } from "@/actions/financ
  * cash OUT — understating petty cash with no retry path. So this component calls
  * the domain actions directly.
  */
-export function ExpenseApprovalActions({ status, id }: { status: string; id: number }) {
+export function ExpenseApprovalActions({
+  status,
+  id,
+  canApprove: canApprovePerm,
+}: {
+  status: string
+  id: number
+  /** Izin approve_expenses dari server — gerbang UI; server tetap otoritatif. */
+  canApprove: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const canApprove = status === "draft" || status === "pending"
-  const canReject = status === "draft" || status === "pending"
+  const canApprove = canApprovePerm && (status === "draft" || status === "pending")
+  const canReject = canApprovePerm && (status === "draft" || status === "pending")
   // markExpensePaid hanya menerima status approved (draft -> approved -> paid) dan
   // memposting jurnal kas/bank; `paid` juga menggerbangi penghapusan pengeluaran.
-  const canMarkPaid = status === "approved"
+  const canMarkPaid = canApprovePerm && status === "approved"
 
   function handleAction(action: "approve" | "reject") {
     startTransition(async () => {

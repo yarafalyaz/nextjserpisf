@@ -150,7 +150,7 @@ export default async function BankReconciliationDetailPage({
         ]}
         badge={<StatusChip status={recon.status} />}
         actions={<>
-          {recon.status === "draft" && <CompleteReconciliationButton reconciliationId={recon.id} />}
+          {canWrite && <CompleteReconciliationButton reconciliationId={recon.id} />}
           <BackButton href="/keuangan/rekonsiliasi-bank" />
         </>}
       />
