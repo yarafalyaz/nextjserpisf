@@ -11,9 +11,11 @@ interface DeleteButtonProps {
   id: number
   action: (id: number) => Promise<{ success: boolean; error?: string } | void>
   onSuccess?: () => void
+  /** Label kontekstual, mis. "Hapus barang Busi Iridium". Default generik "Hapus". */
+  label?: string
 }
 
-export function DeleteButton({ id, action, onSuccess }: DeleteButtonProps) {
+export function DeleteButton({ id, action, onSuccess, label = "Hapus" }: DeleteButtonProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isOpen, setIsOpen] = useState(false)
@@ -53,7 +55,7 @@ export function DeleteButton({ id, action, onSuccess }: DeleteButtonProps) {
         variant="destructive"
         size="sm"
         className="min-h-11 min-w-11"
-        aria-label="Hapus"
+        aria-label={label}
       >
         <Trash2 size={15} aria-hidden="true" />
       </Button>

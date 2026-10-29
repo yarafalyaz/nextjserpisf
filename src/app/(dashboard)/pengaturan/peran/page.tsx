@@ -77,7 +77,7 @@ export default async function RolesPage() {
                         <Link href={entityEditHref("/pengaturan/peran", role)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Ubah
                         </Link>
-                        <DeleteButton id={role.id} action={deleteRole} />
+                        <DeleteButton id={role.id} action={deleteRole} label={`Hapus peran ${role.name}`} />
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>

@@ -324,12 +324,25 @@ export function renderStatementPdfBytes(model: StatementDocument): Uint8Array<Ar
 
 // ─── Tabel generik (laporan berbentuk daftar) ────────────────────────────────
 
+/**
+ * Lebar kolom efektif (mm). Bila Σwidth lampaui area isi, semua kolom
+ * diskalakan proporsional (fit-to-width) — laporan lebar (buku besar kas
+ * 422mm, scrap 406mm) muat di kertas tanpa ubah builder satu-satu.
+ * Kolom sempit tidak diskalakan naik: tabel di bawah area isi tetap apa adanya.
+ */
+export function fitColumnWidths(columns: TableColumn[], contentWidth: number): number[] {
+  const total = columns.reduce((sum, column) => sum + column.width, 0)
+  if (total <= contentWidth || total <= 0) return columns.map((column) => column.width)
+  const scale = contentWidth / total
+  return columns.map((column) => column.width * scale)
+}
+
 /** Posisi x tepi kiri tiap kolom, dari lebar kolom (mm). */
-function columnEdges(columns: TableColumn[]): { start: number; end: number }[] {
+function columnEdges(columns: TableColumn[], widths: number[]): { start: number; end: number }[] {
   let x = MARGIN
-  return columns.map((column) => {
+  return columns.map((column, index) => {
     const start = x
-    x += column.width
+    x += widths[index] ?? column.width
     return { start, end: x }
   })
 }
@@ -360,7 +373,13 @@ function drawTableColumnHeaders(
  * Tinggi baris tabel generik. Sel angka tidak dibungkus (satu baris); kolom teks
  * boleh membungkus sehingga barisnya tumbuh.
  */
-function measureTableRow(doc: jsPDF, row: TableRow, columns: TableColumn[], rightEdge: number): number {
+function measureTableRow(
+  doc: jsPDF,
+  row: TableRow,
+  columns: TableColumn[],
+  widths: number[],
+  rightEdge: number,
+): number {
   if (row.kind === "group") return ROW_HEIGHT + 2.6
 
   if (row.kind === "notice") {
@@ -370,7 +389,9 @@ function measureTableRow(doc: jsPDF, row: TableRow, columns: TableColumn[], righ
 
   if (row.kind === "total") {
     setStyle(doc, 10, "bold", INK)
-    const labelWidth = columns.slice(0, Math.max(columns.length - row.cells.length, 1)).reduce((sum, c) => sum + c.width, 0)
+    const labelWidth = widths
+      .slice(0, Math.max(columns.length - row.cells.length, 1))
+      .reduce((sum, width) => sum + width, 0)
     return Math.max(1, doc.splitTextToSize(row.label, labelWidth).length) * ROW_HEIGHT
   }
 
@@ -378,7 +399,7 @@ function measureTableRow(doc: jsPDF, row: TableRow, columns: TableColumn[], righ
   const wrapped = row.cells.reduce((max, cell, index) => {
     const column = columns[index]
     if (!column || column.align !== "left") return max
-    return Math.max(max, doc.splitTextToSize(cell, column.width - 2).length)
+    return Math.max(max, doc.splitTextToSize(cell, (widths[index] ?? column.width) - 2).length)
   }, 1)
   return Math.max(1, wrapped) * ROW_HEIGHT
 }
@@ -387,6 +408,7 @@ function drawTableRow(
   doc: jsPDF,
   row: TableRow,
   columns: TableColumn[],
+  widths: number[],
   edges: { start: number; end: number }[],
   rightEdge: number,
   y: number,
@@ -418,17 +440,17 @@ function drawTableRow(
 
     setStyle(doc, 10, "bold", INK)
     const leadingCount = Math.max(columns.length - row.cells.length, 1)
-    const labelWidth = columns.slice(0, leadingCount).reduce((sum, c) => sum + c.width, 0)
+    const labelWidth = widths.slice(0, leadingCount).reduce((sum, width) => sum + width, 0)
     const lines = doc.splitTextToSize(row.label, Math.max(labelWidth, 20))
     doc.text(lines, MARGIN, y)
     // Sel angka baris total sejajar dengan kolom TERAKHIR, bukan kolom pertama:
     // label sudah membentang kolom-kolom di depannya.
-    drawTableCells(doc, row.cells, columns.slice(leadingCount), edges.slice(leadingCount), y, true)
+    drawTableCells(doc, row.cells, columns.slice(leadingCount), widths.slice(leadingCount), edges.slice(leadingCount), y, true)
     return y + Math.max(1, lines.length) * ROW_HEIGHT
   }
 
   setStyle(doc, 9, row.bold ? "bold" : "normal", INK)
-  const height = drawTableCells(doc, row.cells, columns, edges, y, false)
+  const height = drawTableCells(doc, row.cells, columns, widths, edges, y, false)
   return y + Math.max(1, height) * ROW_HEIGHT
 }
 
@@ -437,6 +459,7 @@ function drawTableCells(
   doc: jsPDF,
   cells: string[],
   columns: TableColumn[],
+  widths: number[],
   edges: { start: number; end: number }[],
   y: number,
   singleLine: boolean,
@@ -457,7 +480,7 @@ function drawTableCells(
       return
     }
 
-    const lines = singleLine ? [cell] : doc.splitTextToSize(cell, column.width - 2)
+    const lines = singleLine ? [cell] : doc.splitTextToSize(cell, (widths[index] ?? column.width) - 2)
     doc.text(lines, at.start, y)
     rows = Math.max(rows, lines.length)
   })
@@ -471,15 +494,16 @@ function drawGenericTable(
   startY: number,
   rightEdge: number,
 ): number {
-  const edges = columnEdges(table.columns)
+  const widths = fitColumnWidths(table.columns, rightEdge - MARGIN)
+  const edges = columnEdges(table.columns, widths)
   let y = drawTableColumnHeaders(doc, table.columns, edges, startY, rightEdge)
 
   for (const row of table.rows) {
-    if (y + measureTableRow(doc, row, table.columns, rightEdge) > BOTTOM_LIMIT) {
+    if (y + measureTableRow(doc, row, table.columns, widths, rightEdge) > BOTTOM_LIMIT) {
       doc.addPage()
       y = drawTableColumnHeaders(doc, table.columns, edges, TOP, rightEdge)
     }
-    y = drawTableRow(doc, row, table.columns, edges, rightEdge, y)
+    y = drawTableRow(doc, row, table.columns, widths, edges, rightEdge, y)
   }
 
   return y
