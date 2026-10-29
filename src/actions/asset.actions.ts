@@ -537,19 +537,53 @@ export async function updateAssetBrand(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
 
-    await prisma.assetBrand.update({
-      where: { id },
-      data: {
-        slug: await nextSlug("assetBrand", data.name, { excludeId: id }),
-        name: data.name,
-        // Ganti-himpunan seperti daftar baris dokumen lain: yang dikirim form
-        // menjadi daftar tipe yang berlaku. Mengosongkan kolom di form berarti
-        // merek itu memang tidak punya tipe.
-        models: {
-          deleteMany: {},
-          create: data.models.map((name) => ({ name })),
-        },
-      },
+    // Diff by name: only changed models are written and only unreferenced
+    // stale models are deleted. A blanket delete+recreate churns every model
+    // id, orphaning `Asset.assetBrandModelId` (bare Int? with no FK).
+    const slug = await nextSlug("assetBrand", data.name, { excludeId: id });
+    const desiredNames = [...new Map(data.models.map((name) => [name.trim().toLowerCase(), name])).values()];
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.assetBrandModel.findMany({
+        where: { assetBrandId: id },
+        select: { id: true, name: true },
+      });
+      const existingByKey = new Map<string, (typeof existing)[number]>();
+      for (const model of existing) {
+        const key = model.name.trim().toLowerCase();
+        if (!existingByKey.has(key)) existingByKey.set(key, model);
+      }
+      const desiredKeys = new Set(desiredNames.map((name) => name.toLowerCase()));
+      // Keep first row per name (stable id); stale + later duplicates deleted.
+      const deleteIds = existing
+        .filter(
+          (model) =>
+            !desiredKeys.has(model.name.trim().toLowerCase()) ||
+            existingByKey.get(model.name.trim().toLowerCase()) !== model,
+        )
+        .map((model) => model.id);
+      if (deleteIds.length > 0) {
+        const usedCount = await tx.asset.count({
+          where: { assetBrandModelId: { in: deleteIds } },
+        });
+        if (usedCount > 0) {
+          throw new Error(
+            `Tipe/model merek ini masih dipakai ${usedCount} aset. Pindahkan asetnya dulu.`,
+          );
+        }
+      }
+      const toCreate = desiredNames.filter((name) => !existingByKey.has(name.toLowerCase()));
+      await tx.assetBrand.update({
+        where: { id },
+        data: { slug, name: data.name },
+      });
+      if (deleteIds.length > 0) {
+        await tx.assetBrandModel.deleteMany({ where: { id: { in: deleteIds } } });
+      }
+      if (toCreate.length > 0) {
+        await tx.assetBrandModel.createMany({
+          data: toCreate.map((name) => ({ assetBrandId: id, name })),
+        });
+      }
     });
 
     await logActivity("update", "AssetBrand", id, "Memperbarui merek aset");

@@ -19,7 +19,13 @@ vi.mock("@/lib/db/prisma", () => ({
     materialIssue: { findMany: vi.fn() },
     item: { findMany: vi.fn() },
     warrantyCoverage: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
-    warrantyClaim: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    warrantyClaim: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
     customerVehicle: { update: vi.fn() },
     vendor: { findUnique: vi.fn() },
     purchaseReturn: { findUnique: vi.fn() },
@@ -29,11 +35,32 @@ vi.mock("@/lib/db/prisma", () => ({
 
 const p = prisma as unknown as Record<string, Record<string, ReturnType<typeof vi.fn>>>
 
+/**
+ * Mock atomic claim: updateMany applies data onto the row findUnique returns
+ * (guard passes), findUnique then reflects merged row. Tests re-seed findUnique
+ * after each call for sequences, so keep last-applied data for assertions.
+ */
+function mockClaimWrite(state?: Record<string, unknown>) {
+  p.warrantyClaim.updateMany.mockImplementation(
+    async ({ data }: { data: Record<string, unknown> }) => {
+      if (state) Object.assign(state, data)
+      return { count: 1 }
+    },
+  )
+  p.warrantyClaim.update.mockImplementation(
+    async ({ data, where }: { data: Record<string, unknown>; where?: { id: number } }) => {
+      if (state) Object.assign(state, data)
+      return { id: where?.id ?? 1, ...(state ?? {}), ...data }
+    },
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   p.warrantyCoverage.findMany.mockResolvedValue([])
   p.warrantyCoverage.create.mockResolvedValue({})
   p.customerVehicle.update.mockResolvedValue({})
+  mockClaimWrite()
 })
 
 describe("addCalendarMonths", () => {
@@ -181,8 +208,9 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
   })
 
   it("rejected hanya lewat decideWarrantyClaim manual dengan pejabat tercatat", async () => {
-    p.warrantyClaim.findUnique.mockResolvedValue({ id: 1, status: "eligibility" })
-    p.warrantyClaim.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 1, ...data }))
+    const state: Record<string, unknown> = { id: 1, status: "eligibility" }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...state }))
+    mockClaimWrite(state)
 
     const decided = (await decideWarrantyClaim(
       { claimId: 1, decision: "rejected", resolutionType: "reject", decisionBy: 9, decisionNotes: "Di luar masa garansi" },
@@ -228,10 +256,7 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
   it("rejected→closed sah; closed terminal tidak boleh transisi apa pun", async () => {
     const claim: { id: number; status: string } = { id: 1, status: "eligibility" }
     p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
-    p.warrantyClaim.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
-      Object.assign(claim, data)
-      return { ...claim }
-    })
+    mockClaimWrite(claim)
 
     await decideWarrantyClaim(
       { claimId: 1, decision: "rejected", resolutionType: "reject", decisionBy: 9 },
@@ -250,10 +275,7 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
   it("alur sah penuh: intake→eligibility→approved→in_repair→closed", async () => {
     const claim: { id: number; status: string } = { id: 1, status: "intake" }
     p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
-    p.warrantyClaim.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
-      Object.assign(claim, data)
-      return { ...claim }
-    })
+    mockClaimWrite(claim)
 
     await transitionWarrantyClaim({ claimId: 1, to: "eligibility" }, prisma as never)
     await decideWarrantyClaim(
@@ -317,14 +339,14 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
   }
 
   function seedLink(claim = baseClaim, ret: unknown = draftReturn) {
-    p.warrantyClaim.findUnique.mockResolvedValue(claim)
+    // findUnique must reflect post-claim state (service re-reads after updateMany).
+    const state: Record<string, unknown> = { ...claim }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...state }))
     p.vendor.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: null })
     p.purchaseReturn.findUnique.mockResolvedValue(ret)
     p.warrantyClaim.findFirst.mockResolvedValue(null)
     p.transactionAttachment.count.mockResolvedValue(1)
-    p.warrantyClaim.update.mockImplementation(
-      async ({ data }: { data: Record<string, unknown> }) => ({ id: 1, ...data }),
-    )
+    mockClaimWrite(state)
   }
 
   it("tautan sah: vendor+item+serial cocok → drafted, ID tautan terisi", async () => {
@@ -346,7 +368,7 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
         prisma as never,
       ),
     ).rejects.toThrow("bukan milik vendor")
-    expect(p.warrantyClaim.update).not.toHaveBeenCalled()
+    expect(p.warrantyClaim.updateMany).not.toHaveBeenCalled()
   })
 
   it("FALSIFIKASI item mismatch: retur tidak memuat coverage.itemId → ditolak", async () => {
@@ -476,7 +498,7 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     seedLink({ ...baseClaim, supplierClaimStatus: "drafted", supplierClaimRefNo: "RESI-77", supplierClaimNotes: "Kirim via ekspedisi", supplierClaimBy: 7 })
     p.transactionAttachment.count.mockResolvedValue(1)
     await transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 8 }, prisma as never)
-    const data = p.warrantyClaim.update.mock.calls.at(-1)?.[0]?.data as { supplierClaimNotes?: string }
+    const data = p.warrantyClaim.updateMany.mock.calls.at(-1)?.[0]?.data as { supplierClaimNotes?: string }
     expect(data.supplierClaimNotes).toContain("Kirim via ekspedisi")
     expect(data.supplierClaimNotes).toContain("[Resi pengiriman klaim supplier: RESI-77]")
   })
@@ -492,12 +514,7 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...state }))
     p.purchaseReturn.findUnique.mockResolvedValue({ status: "returned" })
     p.transactionAttachment.count.mockResolvedValue(2)
-    p.warrantyClaim.update.mockImplementation(
-      async ({ data }: { data: Record<string, unknown> }) => {
-        Object.assign(state, data)
-        return { ...state }
-      },
-    )
+    mockClaimWrite(state)
     await transitionSupplierClaim(
       { claimId: 1, to: "sent", actorUserId: 8, supplierClaimRefNo: "RMA-9" },
       prisma as never,
@@ -509,7 +526,7 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     await transitionSupplierClaim({ claimId: 1, to: "returned", actorUserId: 7 }, prisma as never)
     await transitionSupplierClaim({ claimId: 1, to: "closed_recovered", actorUserId: 7 }, prisma as never)
     expect(state.supplierClaimStatus).toBe("closed_recovered")
-    for (const call of p.warrantyClaim.update.mock.calls) {
+    for (const call of p.warrantyClaim.updateMany.mock.calls) {
       expect(call[0].data).not.toHaveProperty("status")
     }
     await expect(
@@ -543,6 +560,64 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     )) as unknown as { supplierClaimStatus: string; purchaseReturnId: null }
     expect(unlinked.supplierClaimStatus).toBe("none")
     expect(unlinked.purchaseReturnId).toBeNull()
+  })
+
+  it("round4: klaim atomik count 0 (kalah balapan) → error di 4 jalur tulis", async () => {
+    // decide
+    p.warrantyClaim.findUnique.mockResolvedValue({ id: 1, status: "eligibility" })
+    p.warrantyClaim.updateMany.mockResolvedValue({ count: 0 })
+    await expect(
+      decideWarrantyClaim(
+        { claimId: 1, decision: "approved", resolutionType: "repair", decisionBy: 9 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("sudah berubah status")
+    expect(p.warrantyClaim.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "eligibility" } }),
+    )
+    // transition
+    p.warrantyClaim.findUnique.mockResolvedValue({ id: 1, status: "intake" })
+    await expect(
+      transitionWarrantyClaim({ claimId: 1, to: "eligibility" }, prisma as never),
+    ).rejects.toThrow("sudah berubah status")
+    expect(p.warrantyClaim.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "intake" } }),
+    )
+    // link supplier
+    seedLink()
+    p.warrantyClaim.updateMany.mockResolvedValue({ count: 0 })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("sudah berubah status")
+    expect(p.warrantyClaim.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { id: 1, supplierClaimStatus: "none" } }),
+    )
+    // link vendor-only
+    seedLink()
+    p.warrantyClaim.updateMany.mockResolvedValue({ count: 0 })
+    await expect(
+      linkSupplierClaimVendorOnly(
+        {
+          claimId: 1,
+          supplierClaimVendorId: 5,
+          actorUserId: 7,
+          supplierClaimNotes: "Part stok lama, tanpa PO asal",
+        },
+        prisma as never,
+      ),
+    ).rejects.toThrow("sudah berubah status")
+    // transition supplier
+    seedLink({ ...baseClaim, supplierClaimStatus: "drafted", supplierClaimRefNo: "RESI-1", supplierClaimBy: 7 })
+    p.warrantyClaim.updateMany.mockResolvedValue({ count: 0 })
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 8 }, prisma as never),
+    ).rejects.toThrow("sudah berubah status")
+    expect(p.warrantyClaim.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { id: 1, supplierClaimStatus: "drafted" } }),
+    )
   })
 })
 

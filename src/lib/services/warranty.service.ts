@@ -294,6 +294,35 @@ export function assertWarrantyClaimTransition(from: string, to: string): void {
   }
 }
 
+/** Re-read after atomic claim; row just claimed so missing = deleted mid-flight. */
+async function reloadClaimOrThrow<T>(
+  load: () => Promise<T | null>,
+): Promise<T> {
+  const fresh = await load()
+  if (!fresh) throw new Error("Klaim garansi tidak ditemukan.")
+  return fresh
+}
+
+/**
+ * Atomic claim: updateMany guarded by expected current status. Count 0 means
+ * a concurrent transition already won; plain read-check-update loses that race.
+ */
+async function claimWarrantyClaimUpdate(
+  client: TxClient | typeof prisma,
+  claimId: number,
+  guard: { status: string } | { supplierClaimStatus: string },
+  data: Record<string, unknown>,
+): Promise<void> {
+  const claimed = await client.warrantyClaim.updateMany({
+    where: { id: claimId, ...guard },
+    // ponytail: service callers build plain data objects; Prisma type checked at DB layer.
+    data: data as never,
+  })
+  if (claimed.count === 0) {
+    throw new Error("Klaim garansi sudah berubah status oleh proses lain. Muat ulang lalu coba lagi.")
+  }
+}
+
 /** Intake klaim baru. Selalu lahir `intake`, apa pun masa cakupannya. */
 export async function createWarrantyClaim(
   input: {
@@ -364,16 +393,14 @@ export async function decideWarrantyClaim(
   })
   if (!claim) throw new Error("Klaim garansi tidak ditemukan.")
   assertWarrantyClaimTransition(claim.status, input.decision)
-  return client.warrantyClaim.update({
-    where: { id: claim.id },
-    data: {
-      status: input.decision,
-      resolutionType: input.resolutionType,
-      decisionBy: input.decisionBy,
-      decisionAt: input.decidedAt ?? new Date(),
-      decisionNotes: input.decisionNotes?.trim() ? input.decisionNotes.trim() : null,
-    },
+  await claimWarrantyClaimUpdate(client, claim.id, { status: claim.status }, {
+    status: input.decision,
+    resolutionType: input.resolutionType,
+    decisionBy: input.decisionBy,
+    decisionAt: input.decidedAt ?? new Date(),
+    decisionNotes: input.decisionNotes?.trim() ? input.decisionNotes.trim() : null,
   })
+  return reloadClaimOrThrow(() => client.warrantyClaim.findUnique({ where: { id: claim.id } }))
 }
 
 /** Transisi non-keputusan (intake→eligibility, approved→in_repair→closed, dst). */
@@ -390,15 +417,13 @@ export async function transitionWarrantyClaim(
   })
   if (!claim) throw new Error("Klaim garansi tidak ditemukan.")
   assertWarrantyClaimTransition(claim.status, input.to)
-  return client.warrantyClaim.update({
-    where: { id: claim.id },
-    data: {
-      status: input.to,
-      ...(input.to === "in_repair" && input.repairWorkOrderId != null
-        ? { repairWorkOrderId: input.repairWorkOrderId }
-        : {}),
-    },
+  await claimWarrantyClaimUpdate(client, claim.id, { status: claim.status }, {
+    status: input.to,
+    ...(input.to === "in_repair" && input.repairWorkOrderId != null
+      ? { repairWorkOrderId: input.repairWorkOrderId }
+      : {}),
   })
+  return reloadClaimOrThrow(() => client.warrantyClaim.findUnique({ where: { id: claim.id } }))
 }
 
 // ==================== F-2026-10-21-022: tautan klaim supplier ====================
@@ -539,22 +564,22 @@ export async function linkSupplierClaim(
     throw new Error("Retur pembelian ini sudah tertaut ke klaim garansi lain yang masih aktif.")
   }
 
-  return client.warrantyClaim.update({
-    where: { id: claim.id },
-    data: {
-      supplierClaimVendorId: input.supplierClaimVendorId,
-      purchaseReturnId: input.purchaseReturnId,
-      supplierClaimStatus: "drafted",
-      ...(input.supplierClaimRefNo?.trim()
-        ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
-        : {}),
-      ...(input.supplierClaimNotes?.trim()
-        ? { supplierClaimNotes: input.supplierClaimNotes.trim() }
-        : {}),
-      supplierClaimBy: input.actorUserId,
-      supplierClaimAt: input.at ?? new Date(),
-    },
+  await claimWarrantyClaimUpdate(client, claim.id, { supplierClaimStatus: claim.supplierClaimStatus }, {
+    supplierClaimVendorId: input.supplierClaimVendorId,
+    purchaseReturnId: input.purchaseReturnId,
+    supplierClaimStatus: "drafted",
+    ...(input.supplierClaimRefNo?.trim()
+      ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+      : {}),
+    ...(input.supplierClaimNotes?.trim()
+      ? { supplierClaimNotes: input.supplierClaimNotes.trim() }
+      : {}),
+    supplierClaimBy: input.actorUserId,
+    supplierClaimAt: input.at ?? new Date(),
   })
+  return reloadClaimOrThrow(() =>
+    client.warrantyClaim.findUnique({ where: { id: claim.id }, select: CLAIM_LINK_SELECT }),
+  )
 }
 
 /**
@@ -581,20 +606,20 @@ export async function linkSupplierClaimVendorOnly(
   assertClaimEligibleForSupplierLink(claim)
   assertSupplierClaimTransition(claim.supplierClaimStatus, "drafted")
   await assertActiveVendor(input.supplierClaimVendorId, client)
-  return client.warrantyClaim.update({
-    where: { id: claim.id },
-    data: {
-      supplierClaimVendorId: input.supplierClaimVendorId,
-      purchaseReturnId: null,
-      supplierClaimStatus: "drafted",
-      ...(input.supplierClaimRefNo?.trim()
-        ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
-        : {}),
-      supplierClaimNotes: input.supplierClaimNotes.trim(),
-      supplierClaimBy: input.actorUserId,
-      supplierClaimAt: input.at ?? new Date(),
-    },
+  await claimWarrantyClaimUpdate(client, claim.id, { supplierClaimStatus: claim.supplierClaimStatus }, {
+    supplierClaimVendorId: input.supplierClaimVendorId,
+    purchaseReturnId: null,
+    supplierClaimStatus: "drafted",
+    ...(input.supplierClaimRefNo?.trim()
+      ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+      : {}),
+    supplierClaimNotes: input.supplierClaimNotes.trim(),
+    supplierClaimBy: input.actorUserId,
+    supplierClaimAt: input.at ?? new Date(),
   })
+  return reloadClaimOrThrow(() =>
+    client.warrantyClaim.findUnique({ where: { id: claim.id }, select: CLAIM_LINK_SELECT }),
+  )
 }
 
 /**
@@ -680,23 +705,23 @@ export async function transitionSupplierClaim(
     throw new Error("Alasan melepas tautan klaim supplier wajib diisi.")
   }
 
-  return client.warrantyClaim.update({
-    where: { id: claim.id },
-    data: {
-      supplierClaimStatus: input.to,
-      ...(input.supplierClaimRefNo?.trim()
-        ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+  await claimWarrantyClaimUpdate(client, claim.id, { supplierClaimStatus: claim.supplierClaimStatus }, {
+    supplierClaimStatus: input.to,
+    ...(input.supplierClaimRefNo?.trim()
+      ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+      : {}),
+    // E130-1: transisi sent membekukan nomor resi di notes existing
+    // sebagai pembanding refNo persetujuan di gerbang E3 (tanpa kolom).
+    ...(input.to === "sent" && refNo
+      ? { supplierClaimNotes: withSentResiNote(notes ?? claim.supplierClaimNotes, refNo) }
+      : notes
+        ? { supplierClaimNotes: notes }
         : {}),
-      // E130-1: transisi sent membekukan nomor resi di notes existing
-      // sebagai pembanding refNo persetujuan di gerbang E3 (tanpa kolom).
-      ...(input.to === "sent" && refNo
-        ? { supplierClaimNotes: withSentResiNote(notes ?? claim.supplierClaimNotes, refNo) }
-        : notes
-          ? { supplierClaimNotes: notes }
-          : {}),
-      ...(input.to === "none" ? { purchaseReturnId: null } : {}),
-      supplierClaimBy: input.actorUserId,
-      supplierClaimAt: input.at ?? new Date(),
-    },
+    ...(input.to === "none" ? { purchaseReturnId: null } : {}),
+    supplierClaimBy: input.actorUserId,
+    supplierClaimAt: input.at ?? new Date(),
   })
+  return reloadClaimOrThrow(() =>
+    client.warrantyClaim.findUnique({ where: { id: claim.id }, select: CLAIM_LINK_SELECT }),
+  )
 }

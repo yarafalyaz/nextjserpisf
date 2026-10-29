@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => {
     assetBrandModel: {
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     asset: {
       update: vi.fn(),
@@ -296,14 +298,41 @@ describe("Asset Brand Actions", () => {
     expect(arg.data.models.create).toEqual([])
   })
 
-  it("mengganti himpunan tipe saat mengubah merek", async () => {
+  it("round4: update merek diff by name — id tipe tak berubah tetap, baru dibuat, stale tak terpakai dihapus", async () => {
+    prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([
+      { id: 7, name: "ProBook 450" },
+      { id: 8, name: "EliteBook 840" },
+    ])
+    prismaMock.asset.count.mockResolvedValue(0)
     await expect(
-      updateAssetBrand(20, fd({ name: "HP", models: "ProBook 450" })),
+      updateAssetBrand(20, fd({ name: "HP", models: "ProBook 450\nZBook 15" })),
     ).rejects.toThrow("NEXT_REDIRECT")
 
-    const arg = prismaMock.assetBrand.update.mock.calls[0][0]
-    expect(arg.data.models.deleteMany).toEqual({})
-    expect(arg.data.models.create).toEqual([{ name: "ProBook 450" }])
+    // Brand row updated without nested model churn.
+    const brandArg = prismaMock.assetBrand.update.mock.calls[0][0]
+    expect(brandArg.where).toEqual({ id: 20 })
+    expect(brandArg.data.name).toBe("HP")
+    expect(brandArg.data.models).toBeUndefined()
+    // Unchanged name: no delete/create for id 7.
+    expect(prismaMock.assetBrandModel.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [8] } },
+    })
+    expect(prismaMock.assetBrandModel.createMany).toHaveBeenCalledWith({
+      data: [{ assetBrandId: 20, name: "ZBook 15" }],
+    })
+  })
+
+  it("round4: update merek MENOLAK hapus tipe yang masih dipakai aset (bare id yatim dicegah)", async () => {
+    prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([
+      { id: 7, name: "ProBook 450" },
+      { id: 8, name: "EliteBook 840" },
+    ])
+    prismaMock.asset.count.mockResolvedValueOnce(2)
+    const res = await updateAssetBrand(20, fd({ name: "HP", models: "ProBook 450" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/masih dipakai 2 aset/)
+    expect(prismaMock.assetBrandModel.deleteMany).not.toHaveBeenCalled()
+    expect(prismaMock.assetBrand.update).not.toHaveBeenCalled()
   })
 
   it("memangkas, membuang baris kosong, dan membuang duplikat tipe", async () => {
