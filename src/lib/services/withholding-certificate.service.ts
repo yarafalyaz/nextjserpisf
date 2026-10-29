@@ -11,7 +11,9 @@
  * Snapshot final: bupot lahir menyalin pasal+kode+tarif+DPP; edit master
  * sesudah itu tak mengubah bupot terbit maupun jurnalnya. Rekap membaca
  * snapshot; baris legacy tanpa dokumen fallback master label `legacy`.
- * Batal = `revoked` + reversal jurnal dokumen sumber, bukan hapus baris.
+ * Batal = `revoked` + reversal jurnal efek potongan saja
+ * (referenceType `WithholdingCertificate`), bukan jurnal dokumen sumber,
+ * bukan hapus baris. Jurnal sumber (VendorBill/SalesPayment) tetap POSTED.
  */
 import { Prisma } from "@prisma/client"
 import { prisma, type TxClient } from "@/lib/db/prisma"
@@ -28,7 +30,6 @@ import {
   type IdemScope,
 } from "@/lib/services/financial-idempotency.service"
 import { getErrorMessage } from "@/lib/utils/error"
-import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import {
   computeWithheld,
   resolvePph42RentRateEntry,
@@ -240,7 +241,18 @@ export interface RevokeWithholdingInput {
   userId?: number
 }
 
-/** Batal = `revoked` + reversal jurnal dokumen sumber, bukan hapus baris. */
+/**
+ * Batal = `revoked` + reversal jurnal efek potongan saja, bukan hapus baris.
+ * Jurnal VendorBill/SalesPayment sumber memuat efek potongan sebagai satu
+ * kaki di dalam jurnal gabungan (Cr Hutang PPh / Dr PPh dibayar dimuka);
+ * me-reverse seluruh jurnal sumber menghapus beban/piutang dokumen yang
+ * tetap sah. Karena itu revoke membuat jurnal lawan khusus bupot:
+ * referenceType `WithholdingCertificate`, referenceId = id bupot, sebesar
+ * `withheldAmount` snapshot — Dr Hutang PPh / Cr Hutang Usaha (we_withhold)
+ * atau Dr Piutang / Cr PPh dibayar dimuka (withheld_from_us). Unik aktif
+ * per (referenceType, referenceId) + status `revoked` + idempotency key
+ * membuat revoke ganda mustahil dobel-jurnal.
+ */
 export async function revokeWithholdingCertificate(input: RevokeWithholdingInput): Promise<WithholdingResult> {
   try {
     if (!isValidIdempotencyKey(input.idempotencyKey)) {
@@ -258,13 +270,67 @@ export async function revokeWithholdingCertificate(input: RevokeWithholdingInput
       const cert = await tx.withholdingCertificate.findUniqueOrThrow({ where: { id: input.id } })
       if (cert.status === "revoked") throw definitive("Bupot ini sudah revoked")
       await assertPeriodOpen(cert.withholdingDate, tx as never)
+      const amount = Number(cert.withheldAmount)
+      if (!(amount > 0)) throw definitive("Nominal potongan bupot tidak valid untuk revoke")
+      // Akun efek potongan dari master jenis (fail-closed, pola terbit):
+      // we_withhold memakai liabilityAccountId; withheld_from_us memakai
+      // receivableAccountId. Akun lawan: Hutang Usaha (tagihan vendor) atau
+      // Piutang Usaha (pembayaran penjualan) dari system setting.
+      const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: cert.withholdingTypeId } })
+      const isWeWithhold = cert.direction === "we_withhold"
+      if (!isWeWithhold && cert.direction !== "withheld_from_us") {
+        throw definitive(`Arah bupot "${cert.direction}" tidak dikenal untuk revoke`)
+      }
+      const withholdingAccountId = isWeWithhold ? type.liabilityAccountId : type.receivableAccountId
+      if (withholdingAccountId == null) {
+        throw definitive(
+          isWeWithhold
+            ? `Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`
+            : `Jenis PPh "${type.code}" belum punya akun PPh dibayar dimuka — lengkapi di Pengaturan → Pajak Potong`,
+        )
+      }
+      const settings = await tx.systemSetting.findFirst()
+      if (!settings) throw definitive("Pengaturan sistem belum dikonfigurasi")
+      const counterAccountId = isWeWithhold
+        ? (settings as { purchasePayableAccountId?: number | null }).purchasePayableAccountId
+        : (settings as { salesReceivableAccountId?: number | null }).salesReceivableAccountId
+      if (counterAccountId == null) {
+        throw definitive(
+          isWeWithhold
+            ? "Akun Hutang Usaha belum dikonfigurasi untuk revoke bupot"
+            : "Akun Piutang Usaha belum dikonfigurasi untuk revoke bupot",
+        )
+      }
       await tx.withholdingCertificate.update({ where: { id: cert.id }, data: { status: "revoked" } })
-      if (cert.vendorBillId != null) {
-        await reverseJournalsByReferenceTx(tx as never, "VendorBill", cert.vendorBillId, `revoke bupot ${cert.certificateNumber}`, input.userId ?? null)
-      }
-      if (cert.salesPaymentId != null) {
-        await reverseJournalsByReferenceTx(tx as never, "SalesPayment", cert.salesPaymentId, `revoke bupot ${cert.certificateNumber}`, input.userId ?? null)
-      }
+      // Hanya efek potongan yang dibalik; jurnal dokumen sumber utuh.
+      const journalNo = await generateDocumentNumber("JRN")
+      const journalSlug = await nextSlugGlobal("journal", journalNo)
+      await tx.journal.create({
+        data: {
+          journalNumber: journalNo,
+          slug: journalSlug,
+          transactionDate: cert.withholdingDate,
+          description: `Revoke bupot ${cert.certificateNumber}: balik efek potongan saja`,
+          type: "AUTO",
+          status: "POSTED",
+          totalDebit: toMoney(amount),
+          totalCredit: toMoney(amount),
+          referenceType: "WithholdingCertificate",
+          referenceId: cert.id,
+          createdBy: input.userId ?? null,
+          entries: {
+            create: isWeWithhold
+              ? [
+                  { accountId: withholdingAccountId, debit: toMoney(amount), credit: toMoney(0), memo: `Balik potongan bupot ${cert.certificateNumber} (Dr Hutang PPh)` },
+                  { accountId: counterAccountId, debit: toMoney(0), credit: toMoney(amount), memo: `Balik potongan bupot ${cert.certificateNumber} (Cr Hutang Usaha)` },
+                ]
+              : [
+                  { accountId: counterAccountId, debit: toMoney(amount), credit: toMoney(0), memo: `Balik potongan bupot ${cert.certificateNumber} (Dr Piutang)` },
+                  { accountId: withholdingAccountId, debit: toMoney(0), credit: toMoney(amount), memo: `Balik potongan bupot ${cert.certificateNumber} (Cr PPh dibayar dimuka)` },
+                ],
+          },
+        },
+      })
       await bindIdempotencyKey(tx as never, input.idempotencyKey, "WithholdingCertificate", cert.id)
     })
     return { success: true, replayed: isReplay, id: input.id }

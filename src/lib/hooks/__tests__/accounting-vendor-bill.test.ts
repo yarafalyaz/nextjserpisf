@@ -132,6 +132,82 @@ describe("onVendorBillPosted - service/expense branch", () => {
   })
 })
 
+describe("onVendorBillPosted - service/expense PPN Masukan split (round3 #3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      grandTotal: 1_100_000,
+      tax: 100_000,
+      taxInvoiceNumber: "010.000-26.00000001",
+      withholdingAmount: 0,
+      withholdingType: null,
+    })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.goodsReceiptCount.mockResolvedValue(0) // no GR -> service/expense branch
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
+    mocks.journalCreate.mockResolvedValue({ id: 1 })
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      purchasePayableAccountId: PAYABLE,
+      purchaseExpenseAccountId: EXPENSE,
+      purchaseInventoryAccountId: null,
+      purchaseTaxAccountId: TAX,
+    })
+    wireVendorBillTx()
+  })
+
+  it("splits creditable VAT: Dr Expense net + Dr PPN Masukan / Cr Payable gross", async () => {
+    await onVendorBillPosted(1, 42)
+
+    const entries = mocks.journalCreate.mock.calls[0][0].data.entries.create as {
+      accountId: number
+      debit: number
+      credit: number
+    }[]
+    // Beban hanya 1.000.000 (bukan grandTotal 1.100.000); PPN jadi aset.
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: EXPENSE, debit: 1_000_000, credit: 0 }))
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: TAX, debit: 100_000, credit: 0 }))
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: PAYABLE, debit: 0, credit: 1_100_000 }))
+    expectJournalEntriesBalanced(entries)
+  })
+
+  it("non-creditable VAT (no valid tax invoice number) stays inside expense", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      grandTotal: 1_100_000,
+      tax: 100_000,
+      taxInvoiceNumber: null,
+      withholdingAmount: 0,
+      withholdingType: null,
+    })
+
+    await onVendorBillPosted(1, 42)
+
+    const entries = mocks.journalCreate.mock.calls[0][0].data.entries.create as {
+      accountId: number
+      debit: number
+      credit: number
+    }[]
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: EXPENSE, debit: 1_100_000, credit: 0 }))
+    expect(entries).not.toContainEqual(expect.objectContaining({ accountId: TAX }))
+    expectJournalEntriesBalanced(entries)
+  })
+
+  it("rejects when tax exceeds grand total", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      grandTotal: 100_000,
+      tax: 200_000,
+      taxInvoiceNumber: "010.000-26.00000001",
+      withholdingAmount: 0,
+      withholdingType: null,
+    })
+
+    await expect(onVendorBillPosted(1, 42)).rejects.toThrow(/melebihi total keseluruhan/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+})
+
 describe("onVendorBillPosted - PPh withholding", () => {
   beforeEach(() => {
     vi.clearAllMocks()

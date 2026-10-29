@@ -92,6 +92,8 @@ const mocks = vi.hoisted(() => ({
   pkwtEventFindUnique: vi.fn().mockResolvedValue(null),
   pkwtAccrualAggregate: vi.fn().mockResolvedValue({ _sum: { amount: null } }),
   itemUpdate: vi.fn(),
+  customerCreditCreate: vi.fn().mockResolvedValue({ id: 31 }),
+  customerCreditFindFirst: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -192,6 +194,7 @@ vi.mock("@/lib/services/document-sequence.service", () => ({
 }));
 
 vi.mock("@/lib/utils/document-number", () => ({
+  generateDocumentNumber: vi.fn(async (prefix: string) => `${prefix}-0001`),
   generateDocumentNumberBatch: (...a: unknown[]) =>
     mocks.generateDocumentNumberBatch(...a),
 }));
@@ -293,6 +296,10 @@ function buildSalesReturnTx(opts: {
       create: mocks.journalCreate,
     },
     journalEntry: journalEntryBranch(),
+    customerCredit: {
+      findFirst: mocks.customerCreditFindFirst,
+      create: mocks.customerCreditCreate,
+    },
   };
 }
 
@@ -905,6 +912,32 @@ describe("onSalesInvoicePosted", () => {
           impact: "OUT",
           referenceType: "SalesInvoice",
         }),
+      }),
+    );
+  });
+
+  // Round3 #5: COGS > 0 tanpa akun HPP/Persediaan = posting setengah senyap
+  // (stok keluar + pendapatan tercatat, HPP hilang). Wajib lempar keras di
+  // dalam tx; jurnal COGS kedua tidak boleh lahir.
+  it.each([
+    ["cogsAccountId", /Akun HPP\/Persediaan belum dipetakan/],
+    ["inventoryAccountId", /Akun HPP\/Persediaan belum dipetakan/],
+  ])("COGS>0 tanpa %s -> throw keras, nol jurnal COGS", async (field, pattern) => {
+    (mocks.systemSettings as any)[field] = null;
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
+    ]);
+    mocks.fifoConsume.mockResolvedValue({ consumedCost: 200, shortfall: 0 });
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await expect(onSalesInvoicePosted(1, 999)).rejects.toThrow(pattern);
+    // Hanya jurnal pendapatan (yang ikut rollback di tx produksi); COGS absen.
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.journalCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ referenceType: "SalesInvoiceCOGS" }),
       }),
     );
   });
@@ -1564,9 +1597,16 @@ describe("onSalesReturnCompleted", () => {
     );
   });
 
-  // E136-3b: faktur besi tua sudah dibayar penuh (paidAmount = grandTotal)
-  // -> kredit beralih ke Kas (cashBankAccountId 100), bukan Piutang.
-  it("E136-3b: retur besi tua sudah dibayar -> Cr Kas sen-persis", async () => {
+  // E136-3b (BUGHUNT round3 #4): faktur besi tua sudah dibayar penuh
+  // (paidAmount = grandTotal, outstanding 0) -> kredit retur TIDAK BOLEH ke
+  // Kas: tak ada kas keluar saat retur dicatat, kas hanya keluar lewat
+  // refundCredit (Dr 210102 / Cr Kas, customer-credit.service.ts). Bukti
+  // semantik: jalur non-scrap di hook yang sama membatasi relief piutang
+  // pada sisa (reliefSen = min(kredit, grand - paid)) dan kelebihan menjadi
+  // CustomerCredit. Jadi seluruh 4.440.000 -> Cr 210102 + CustomerCredit;
+  // kaki Kas (100) / Piutang (110) = MERAH.
+  it("E136-3b: retur besi tua sudah dibayar -> Cr 210102 + CustomerCredit sen-persis, bukan Kas", async () => {
+    (mocks.systemSettings as any).customerDownPaymentAccountId = 210102;
     mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       documentNo: "SR-SCRAP-PAID",
@@ -1580,14 +1620,19 @@ describe("onSalesReturnCompleted", () => {
     wireSalesReturnTx({
       invoiceFindUniqueOrThrow: vi.fn(async (args: any) =>
         args?.select?.grandTotal
-          ? { grandTotal: 11100000, paidAmount: 11100000 }
+          ? { grandTotal: 11100000, paidAmount: 11100000, customerId: 77, documentNo: "INV-SCRAP-1" }
           : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
       ),
     });
     await onSalesReturnCompleted(1, 999);
     expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ accountId: 100, debit: 0, credit: 4440000 }),
+        data: expect.objectContaining({ accountId: 210102, debit: 0, credit: 4440000 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 100 }),
       }),
     );
     expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
@@ -1595,6 +1640,83 @@ describe("onSalesReturnCompleted", () => {
         data: expect.objectContaining({ accountId: 110 }),
       }),
     );
+    expect(mocks.customerCreditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 77,
+          sourceType: "SalesReturn",
+          sourceId: 1,
+          receivedAmount: 4440000,
+        }),
+      }),
+    );
+  });
+
+  // Round3 #4 skenario dokumen bug: faktur 11.100.000 dibayar 10.500.000
+  // (sisa 600.000), retur 4.440.000. Kode lama mengkredit Piutang penuh ->
+  // piutang negatif. Fix: Cr Piutang dibatasi 600.000, kelebihan 3.840.000
+  // -> Cr 210102 + CustomerCredit.
+  it("E136-3c: retur besi tua melebihi sisa -> Cr Piutang sebatas sisa + kelebihan ke 210102", async () => {
+    (mocks.systemSettings as any).customerDownPaymentAccountId = 210102;
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-SCRAP-PART",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn(async (args: any) =>
+        args?.select?.grandTotal
+          ? { grandTotal: 11100000, paidAmount: 10500000, customerId: 77, documentNo: "INV-SCRAP-1" }
+          : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
+      ),
+    });
+    await onSalesReturnCompleted(1, 999);
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110, debit: 0, credit: 600000 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 210102, debit: 0, credit: 3840000 }),
+      }),
+    );
+    expect(mocks.customerCreditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ receivedAmount: 3840000 }),
+      }),
+    );
+  });
+
+  // Round3 #4 fail-closed: ada kelebihan di atas sisa tetapi akun 210102
+  // belum dipetakan -> tolak berisik, nol jurnal, nol CustomerCredit.
+  it("E136-3d: kelebihan retur besi tua tanpa akun 210102 -> ditolak, nol jurnal", async () => {
+    (mocks.systemSettings as any).customerDownPaymentAccountId = null;
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-SCRAP-PAID",
+      salesInvoiceId: 55,
+      status: "draft",
+      date: new Date("2026-10-02"),
+      items: [{ id: 900, itemId: 60, qty: 2, price: 2000000, cost: 750000 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    wireSalesReturnTx({
+      invoiceFindUniqueOrThrow: vi.fn(async (args: any) =>
+        args?.select?.grandTotal
+          ? { grandTotal: 11100000, paidAmount: 11100000, customerId: 77, documentNo: "INV-SCRAP-1" }
+          : { subtotal: 10000000, discount: 0, taxAmount: 1100000 },
+      ),
+    });
+    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/210102/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.customerCreditCreate).not.toHaveBeenCalled();
   });
 
   // E136 campuran: baris retur scrap + dagang dalam satu retur ditolak.

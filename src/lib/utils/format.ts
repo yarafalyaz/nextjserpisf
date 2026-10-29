@@ -505,6 +505,7 @@ const REFERENCE_TYPE_LABELS: Record<string, string> = {
   TaxPayment: "Penyetoran Pajak",
   PurchaseAdvance: "Uang Muka Pembelian",
   CustomerCredit: "Kredit Pelanggan",
+  WithholdingCertificate: "Bukti Potong PPh",
   Journal: "Jurnal",
   SalesOrder: "Pesanan Penjualan",
   Quotation: "Penawaran",

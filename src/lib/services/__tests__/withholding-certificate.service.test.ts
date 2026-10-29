@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
   const reverseJournals = vi.fn()
   const queryRaw = vi.fn()
 
+  const systemSettingFindFirst = vi.fn()
   const tx: Record<string, unknown> = {
     withholdingCertificate: {
       findFirst: certFindFirst,
@@ -34,6 +35,7 @@ const mocks = vi.hoisted(() => {
     account: { findMany: accountFindMany },
     taxPayment: { create: taxPaymentCreate, update: taxPaymentUpdate },
     journal: { create: journalCreate },
+    systemSetting: { findFirst: systemSettingFindFirst },
     $queryRaw: queryRaw,
   }
   const prisma = {
@@ -43,7 +45,7 @@ const mocks = vi.hoisted(() => {
     certFindFirst, certCreate, certFindUniqueOrThrow, certUpdate,
     typeFindUniqueOrThrow, typeFindMany, accountFindMany, taxPaymentCreate, taxPaymentUpdate,
     journalCreate, claimIdempotencyKey, bindIdempotencyKey, assertPeriodOpen,
-    reverseJournals, queryRaw, prisma,
+    reverseJournals, queryRaw, prisma, systemSettingFindFirst,
   }
 })
 
@@ -72,6 +74,7 @@ vi.mock("@/lib/utils/slug-db", () => ({
 
 import {
   issueWithholdingCertificate,
+  revokeWithholdingCertificate,
   settleWithholdingTax,
 } from "@/lib/services/withholding-certificate.service"
 
@@ -97,6 +100,11 @@ beforeEach(() => {
   mocks.taxPaymentCreate.mockResolvedValue({ id: 9 })
   mocks.taxPaymentUpdate.mockResolvedValue({})
   mocks.journalCreate.mockResolvedValue({ id: 11 })
+  mocks.systemSettingFindFirst.mockResolvedValue({
+    purchasePayableAccountId: 210,
+    salesReceivableAccountId: 110,
+  })
+  mocks.certUpdate.mockResolvedValue({})
 })
 
 function key() {
@@ -278,6 +286,88 @@ describe("issueWithholdingCertificate PPH42-SEWA fail-closed (F47-1)", () => {
     expect(data.objectName).toContain("Proyek Pemerintah")
     expect(data.rentObjectEvidence).toBe(bukti)
     expect(Number(data.withheldAmount)).toBe(10_000_000)
+  })
+})
+
+describe("revokeWithholdingCertificate (round3 #2)", () => {
+  const baseCert = {
+    id: 16,
+    status: "issued",
+    direction: "we_withhold",
+    certificateNumber: "BP-001",
+    withholdingDate: new Date(2026, 0, 10),
+    withholdingTypeId: 3,
+    withheldAmount: 200_000,
+    vendorBillId: 42,
+    salesPaymentId: null,
+  }
+
+  it("we_withhold: hanya balik efek potongan (Dr Hutang PPh / Cr Hutang Usaha), jurnal VendorBill utuh", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue(baseCert)
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(true)
+    // Regresi bug lama: TIDAK ada reversal jurnal dokumen sumber sama sekali.
+    expect(mocks.reverseJournals).not.toHaveBeenCalled()
+    expect(mocks.certUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "revoked" }) }),
+    )
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
+    const journal = mocks.journalCreate.mock.calls[0][0].data
+    expect(journal.referenceType).toBe("WithholdingCertificate")
+    expect(journal.referenceId).toBe(16)
+    expect(journal.status).toBe("POSTED")
+    expect(Number(journal.totalDebit)).toBe(200_000)
+    expect(Number(journal.totalCredit)).toBe(200_000)
+    const entries = journal.entries.create as { accountId: number; debit: unknown; credit: unknown }[]
+    expect(entries).toHaveLength(2)
+    // liabilityAccountId jenis = 501 di fixture master.
+    expect(entries[0].accountId).toBe(501)
+    expect(Number(entries[0].debit)).toBe(200_000)
+    expect(entries[1].accountId).toBe(210)
+    expect(Number(entries[1].credit)).toBe(200_000)
+  })
+
+  it("withheld_from_us: Dr Piutang / Cr PPh dibayar dimuka, jurnal SalesPayment utuh", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({
+      ...baseCert,
+      direction: "withheld_from_us",
+      vendorBillId: null,
+      salesPaymentId: 88,
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key(), userId: 5 })
+    expect(r.success).toBe(true)
+    expect(mocks.reverseJournals).not.toHaveBeenCalled()
+    const journal = mocks.journalCreate.mock.calls[0][0].data
+    expect(journal.referenceType).toBe("WithholdingCertificate")
+    const entries = journal.entries.create as { accountId: number; debit: unknown; credit: unknown }[]
+    // receivableAccountId jenis = 502; lawan Piutang Usaha setting = 110.
+    expect(entries[0].accountId).toBe(110)
+    expect(Number(entries[0].debit)).toBe(200_000)
+    expect(entries[1].accountId).toBe(502)
+    expect(Number(entries[1].credit)).toBe(200_000)
+  })
+
+  it("bupot sudah revoked ditolak definitif, nol jurnal baru", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue({ ...baseCert, status: "revoked" })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(false)
+    expect(String(r.error)).toMatch(/sudah revoked/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.certUpdate).not.toHaveBeenCalled()
+  })
+
+  it("fail-closed: jenis we_withhold tanpa akun Hutang PPh -> tolak sebelum mutasi", async () => {
+    mocks.certFindUniqueOrThrow.mockResolvedValue(baseCert)
+    mocks.typeFindUniqueOrThrow.mockResolvedValue({
+      id: 3, code: "PPh23-JASA", article: "PPh23", objectCode: "24-104-01",
+      rate: 2, liabilityAccountId: null, receivableAccountId: 502,
+    })
+    const r = await revokeWithholdingCertificate({ id: 16, idempotencyKey: key() })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/Hutang PPh/)
+    expect(mocks.certUpdate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })
 

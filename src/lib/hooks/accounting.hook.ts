@@ -890,11 +890,17 @@ export async function onSalesInvoicePosted(
       });
     }
 
-    if (
-      cogsAmount > 0 &&
-      settings.cogsAccountId &&
-      settings.inventoryAccountId
-    ) {
+    // COGS > 0 tanpa akun HPP/Persediaan terpetakan = posting setengah:
+    // stok fisik sudah keluar + pendapatan tercatat tetapi HPP hilang
+    // senyap. Lempar keras DI DALAM tx (stok ikut rollback), sama seperti
+    // jalur pendapatan melempar sebelum jurnal apa pun lahir.
+    if (cogsAmount > 0 && (!settings.cogsAccountId || !settings.inventoryAccountId)) {
+      throw new Error(
+        "Akun HPP/Persediaan belum dipetakan (cogsAccountId/inventoryAccountId). " +
+          "Atur di Pengaturan → Akun sebelum memposting faktur — tanpa itu stok keluar dan pendapatan tercatat tanpa HPP.",
+      );
+    }
+    if (cogsAmount > 0 && settings.cogsAccountId && settings.inventoryAccountId) {
       const cogsJournalNumber = await generateJournalNumber(
         tx,
         "INV-COGS",
@@ -1871,10 +1877,14 @@ export async function onSalesReturnCompleted(
 
     // F-137-V tahap 2: jurnal retur besi tua dari snapshot F-004 di atas.
     // Dr scrapSaleIncomeAccountId (DPP retur) + Dr PPN Keluaran (PPN retur,
-    // hanya bila > 0) / Cr Piutang bila faktur asal masih punya outstanding
-    // (grandTotal − returnCredit POSTED existing − paidAmount), selain itu
-    // Cr Kas (sudah dibayar → pengembalian kas). Nol kaki 400003, nol
-    // persediaan/COGS. Idempoten per (SalesReturn, jurnal) dipertahankan.
+    // hanya bila > 0) / Cr Piutang SEBATAS outstanding (grandTotal −
+    // returnCredit POSTED existing − paidAmount); kelebihan di atas sisa
+    // menjadi CustomerCredit (subledger) dengan kaki kredit GL ke akun
+    // kewajiban UMP 210102 — BUKAN kas, karena tak ada kas keluar saat
+    // retur dicatat (kas hanya keluar lewat refundCredit). Faktur sudah
+    // lunas penuh (outstanding 0) → seluruh kredit ke 210102 + CustomerCredit.
+    // Nol kaki 400003, nol persediaan/COGS. Idempoten per (SalesReturn,
+    // jurnal) dipertahankan.
     if (isScrapReturn) {
       const existingInTx = await tx.journal.findFirst({
         where: { referenceType: "SalesReturn", referenceId: returnId },
@@ -1923,7 +1933,7 @@ export async function onSalesReturnCompleted(
       }
       const invoiceFull = await tx.salesInvoice.findUniqueOrThrow({
         where: { id: salesReturn.salesInvoiceId! },
-        select: { grandTotal: true, paidAmount: true },
+        select: { grandTotal: true, paidAmount: true, customerId: true, documentNo: true },
       });
       const priorReturns = await tx.salesReturn.findMany({
         where: {
@@ -1965,22 +1975,23 @@ export async function onSalesReturnCompleted(
         2,
       );
       const creditTotal = safeAdd(dppTotal, vatTotal, 2);
-      const useReceivable = outstanding > 0;
-      let creditAccountId: number;
-      if (useReceivable) {
-        if (!settings.salesReceivableAccountId) {
-          throw new Error(
-            "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
-          );
-        }
-        creditAccountId = settings.salesReceivableAccountId;
-      } else {
-        if (!settings.cashBankAccountId) {
-          throw new Error(
-            "Akun kas/bank belum dikonfigurasi untuk pengembalian kas retur besi tua (faktur asal sudah dibayar).",
-          );
-        }
-        creditAccountId = settings.cashBankAccountId;
+      // Cap kredit Piutang pada outstanding; kelebihan = liabilitas ke
+      // pelanggan (CustomerCredit subledger + Cr 210102), sama seperti
+      // jalur non-scrap membatasi relief pada sisa faktur.
+      const receivableCredit = Math.max(0, Math.min(creditTotal, outstanding));
+      const excessCredit = safeSubtract(creditTotal, receivableCredit, 2);
+      if (receivableCredit > 0 && !settings.salesReceivableAccountId) {
+        throw new Error(
+          "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
+        );
+      }
+      const dpLiabilityAccountId =
+        (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+      if (excessCredit > 0 && !dpLiabilityAccountId) {
+        throw new Error(
+          "Akun kewajiban UMP (210102) belum dikonfigurasi untuk kelebihan retur besi tua di atas sisa faktur — " +
+            "kelebihan tidak boleh mengkredit Piutang melebihi outstanding maupun Kas tanpa pengeluaran kas.",
+        );
       }
       const journalNumber = await generateJournalNumber(tx, "SR", returnId);
       const journal = await tx.journal.create({
@@ -2021,16 +2032,53 @@ export async function onSalesReturnCompleted(
           memo: "PPN Keluaran (Retur Besi Tua)",
         });
       }
-      scrapEntryRows.push({
-        journalId: journal.id,
-        accountId: creditAccountId,
-        debit: 0,
-        credit: creditTotal,
-        memo: useReceivable
-          ? "Pengurangan Piutang (Retur Besi Tua)"
-          : "Pengembalian Kas (Retur Besi Tua)",
-      });
+      if (receivableCredit > 0) {
+        scrapEntryRows.push({
+          journalId: journal.id,
+          accountId: settings.salesReceivableAccountId!,
+          debit: 0,
+          credit: receivableCredit,
+          memo: "Pengurangan Piutang (Retur Besi Tua)",
+        });
+      }
+      if (excessCredit > 0) {
+        scrapEntryRows.push({
+          journalId: journal.id,
+          accountId: dpLiabilityAccountId!,
+          debit: 0,
+          credit: excessCredit,
+          memo: "Kelebihan Retur Besi Tua ke Kredit Pelanggan",
+        });
+      }
       await tx.journalEntry.createMany({ data: scrapEntryRows });
+      // Subledger CustomerCredit untuk kelebihan (idempoten per retur,
+      // pola jalur non-scrap): bisa dialokasi ke faktur lain / di-refund.
+      if (
+        excessCredit > 0 &&
+        typeof tx.customerCredit?.findFirst === "function" &&
+        typeof tx.customerCredit?.create === "function"
+      ) {
+        const existingCredit = await tx.customerCredit.findFirst({
+          where: { sourceType: "SalesReturn", sourceId: returnId },
+        });
+        if (!existingCredit) {
+          const creditDocNo =
+            typeof generateDocumentNumber === "function"
+              ? await generateDocumentNumber("CC")
+              : `CC-RET-${returnId}`;
+          await tx.customerCredit.create({
+            data: {
+              documentNo: creditDocNo,
+              customerId: invoiceFull.customerId,
+              sourceType: "SalesReturn",
+              sourceId: returnId,
+              receivedAmount: excessCredit,
+              notes: `Kelebihan retur besi tua ${salesReturn.documentNo} atas faktur ${invoiceFull.documentNo ?? salesReturn.salesInvoiceId} melebihi sisa piutang. Bisa dipakai ulang / di-refund.`,
+              createdBy: userId ?? null,
+            },
+          });
+        }
+      }
       return;
     }
 
@@ -2715,12 +2763,29 @@ export async function onVendorBillPosted(
         "Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya",
       );
     }
+    // Tagihan jasa/biaya ber-PPN kreditabel WAJIB pecah PPN Masukan seperti
+    // cabang barang: beban hanya sebesar grandTotal − PPN, sisanya aset
+    // PPN Masukan. Tanpa pecah, beban overstate dan PPN tak bisa dikreditkan.
+    const taxAmount = creditInputVat ? Number(bill.tax ?? 0) : 0;
+    if (taxAmount > grandTotal) {
+      throw new Error(
+        `Pajak tagihan (${taxAmount}) melebihi total keseluruhan (${grandTotal}) — periksa data tagihan vendor`,
+      );
+    }
     debitEntries.push({
       accountId: settings.purchaseExpenseAccountId,
-      debit: grandTotal,
+      debit: grandTotal - taxAmount,
       credit: 0,
       memo: "Purchase expense",
     });
+    if (taxAmount > 0) {
+      debitEntries.push({
+        accountId: settings.purchaseTaxAccountId!,
+        debit: taxAmount,
+        credit: 0,
+        memo: "PPN Masukan",
+      });
+    }
   }
 
   await executeInTx(txClient, async (tx) => {
@@ -2819,16 +2884,30 @@ export async function onVendorBillPosted(
         );
       }
       // F-2026-10-24-133-V Putusan 4(3): memo debit jurnal L3 menyebut
-      // nomor WO; referenceType tetap VendorBill (F-127-V).
+      // nomor WO; referenceType tetap VendorBill (F-127-V). PPN kreditabel
+      // dipecah ke PPN Masukan seperti cabang barang + jalur pra-tx.
+      if (latestTaxAmount > latestGrandTotal) {
+        throw new Error(
+          `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}) — periksa data tagihan vendor`,
+        );
+      }
       const l3BillTag = parseL3Tag(b.notes);
       latestDebitEntries.push({
         accountId: settings.purchaseExpenseAccountId,
-        debit: latestGrandTotal,
+        debit: latestGrandTotal - latestTaxAmount,
         credit: 0,
         memo: l3BillTag
           ? `Purchase expense — biaya telat non-job L3 ${l3BillTag.workOrderNo}`
           : "Purchase expense",
       });
+      if (latestTaxAmount > 0) {
+        latestDebitEntries.push({
+          accountId: settings.purchaseTaxAccountId!,
+          debit: latestTaxAmount,
+          credit: 0,
+          memo: "PPN Masukan",
+        });
+      }
     }
 
     await tx.journal.create({
