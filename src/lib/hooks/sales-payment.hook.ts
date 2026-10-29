@@ -13,6 +13,15 @@ type Db = Prisma.TransactionClient | typeof prisma;
  * Does NOT open its own transaction so it can be composed inside a larger one.
  */
 async function recalcCore(db: Db, invoiceId: number): Promise<void> {
+  // Kunci baris faktur sebelum baca/tulis paidAmount+status: dua recalc
+  // konkuren (payment create/delete/reversal) membaca payment set basi yang
+  // sama dan menulis status dari total basi. Dalam praktik db selalu tx
+  // (recalculate membuka tx sendiri bila tanpa txClient, atau caller memberi
+  // tx), jadi lock men-serialize recalc per faktur. Guard typeof: mock lama
+  // tanpa $queryRaw tidak pecah.
+  if (typeof (db as { $queryRaw?: unknown }).$queryRaw === "function") {
+    await (db as { $queryRaw: (q: TemplateStringsArray, ...v: unknown[]) => Promise<unknown> }).$queryRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`;
+  }
   const invoice = await db.salesInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
 
   // Laravel parity: skip observer update for cancelled/draft invoice

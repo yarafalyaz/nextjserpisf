@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   customerCommissionRateFindMany: vi.fn(),
   accrueCommission: vi.fn(),
   cancelCommission: vi.fn(),
+  queryRaw: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -41,6 +42,7 @@ import { onSalesPaymentCreated, onSalesPaymentUpdated, onSalesPaymentDeleted } f
 
 function makeTx() {
   return {
+    $queryRaw: mocks.queryRaw,
     salesInvoice: {
       findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
       update: mocks.invoiceUpdate,
@@ -63,6 +65,7 @@ beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset()
   mocks.accrueCommission.mockResolvedValue({ accrued: false, amount: 0, reason: "penjual-null" })
   mocks.cancelCommission.mockResolvedValue({ cancelled: false, amount: 0, reason: "tanpa-baris" })
+  mocks.queryRaw.mockResolvedValue([])
   mocks.transaction.mockImplementation(async (fn: any) => fn(makeTx()))
   mocks.invoiceUpdate.mockResolvedValue({})
   mocks.customerFindUnique.mockResolvedValue({ customerCategoryId: null })
@@ -204,6 +207,29 @@ describe("sales-payment recalc — float drift precision", () => {
         data: expect.objectContaining({ status: "partial", paymentStatus: "partial" }),
       }),
     )
+  })
+})
+
+describe("sales-payment recalc — kunci baris faktur", () => {
+  it("SELECT sales_invoices FOR UPDATE sebelum findUniqueOrThrow/update (recalc konkuren serialize)", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 50, grandTotal: 100, status: "posted" })
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 100 }])
+    await onSalesPaymentUpdated(50)
+    expect(mocks.queryRaw).toHaveBeenCalled()
+    const sql = mocks.queryRaw.mock.calls.map((c) => Array.from(c[0] as TemplateStringsArray).join("?")).join(" ")
+    expect(sql).toContain("sales_invoices")
+    expect(sql).toContain("FOR UPDATE")
+    expect(mocks.queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.invoiceFindUniqueOrThrow.mock.invocationCallOrder[0])
+    expect(mocks.queryRaw.mock.invocationCallOrder[0]).toBeLessThan(mocks.invoiceUpdate.mock.invocationCallOrder[0])
+  })
+
+  it("tx tanpa $queryRaw tidak pecah (guard typeof)", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValueOnce({ id: 51, grandTotal: 100, status: "posted" })
+    mocks.paymentFindMany.mockResolvedValueOnce([{ amount: 100 }])
+    const bareTx = makeTx() as Record<string, unknown>
+    delete bareTx.$queryRaw
+    await expect(onSalesPaymentUpdated(51, bareTx as never)).resolves.toBeUndefined()
+    expect(mocks.invoiceUpdate).toHaveBeenCalled()
   })
 })
 
