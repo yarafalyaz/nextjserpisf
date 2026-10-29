@@ -87,7 +87,7 @@ function bucketRows(
       ],
     })
   }
-  rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", money(totals.grandTotal)] })
+  rows.push({ kind: "total", grand: true, label: "Jumlah", cells: [money(totals.grandTotal)] })
   return rows
 }
 
@@ -223,7 +223,7 @@ export async function loadPayablesTotal(): Promise<AgingReportView> {
     kind: "total",
     grand: true,
     label: "Jumlah Hutang (termasuk Tanpa Jatuh Tempo)",
-    cells: ["", "", "", "", money(summary.totalOutstanding)],
+    cells: [money(summary.totalOutstanding)],
   })
   return { table: { columns: TOTAL_COLUMNS, rows }, ...rangePeriodLabels({ start: now, end: now }) }
 }

@@ -124,6 +124,15 @@ describe("buildJobEstimateVsActual", () => {
     expect(data?.kind === "data" && data.cells[1]).toBe("Tanpa kendaraan")
   })
 
+  it("baris total hanya 7 sel trailing (konvensi render: label membentang kolom kiri)", () => {
+    // Regresi BUGHUNT round2 #8: total dulu 9 sel (2 kosong + 7 angka) sehingga
+    // render menggambar angka mulai kolom ke-3 dari kanan — geser 2 kolom.
+    const r = buildJobEstimateVsActual({ jobs: [job()], ...period })
+    const total = r.table.rows.find((row) => row.kind === "total")
+    expect(total?.kind === "total" ? total.cells : []).toHaveLength(7)
+    expect(total?.kind === "total" ? total.cells[0] : "").toContain("100.000.000")
+  })
+
   it("total lebar 9 kolom muat area isi A4 mendatar (267mm)", () => {
     const r = buildJobEstimateVsActual({ jobs: [job()], ...period })
     expect(r.table.columns).toHaveLength(9)

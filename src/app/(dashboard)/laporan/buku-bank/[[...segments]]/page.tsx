@@ -5,8 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { parseReportFilters } from "@/lib/reports/report-href"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -37,7 +36,7 @@ export default async function BankBookPage({
   const { start: startDate, end: endDate } = period
   // Akun dari path (slug lebih dulu, id sebagai cadangan); `?accountId=` lama
   // tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
-  const accountKey = parseReportFilters(segments.slice(1)).akun ?? search.accountId ?? null
+  const accountKey = splitReportSegments(segments).filters.akun ?? search.accountId ?? null
 
   const accountRow = accountKey
     ? await prisma.account.findFirst({

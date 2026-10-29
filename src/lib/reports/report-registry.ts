@@ -123,6 +123,8 @@ import {
   loadStockCard,
   loadStockMovements,
   loadStockValuation,
+  resolveItemIdBySlugOrId,
+  resolveWarehouseIdBySlugOrId,
 } from "@/lib/reports/stock-flow-data"
 import {
   loadBankLedger,
@@ -918,7 +920,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     subtitle: "Pergerakan Stok",
     defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
     async load({ period, search }) {
-      const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
+      const warehouseId = await resolveWarehouseIdBySlugOrId(search.gudang ?? null)
       const report = await loadStockMovements(period, warehouseId)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
@@ -927,7 +929,7 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Valuasi Stok per Gudang",
     subtitle: "Valuasi Persediaan",
     async load({ search }) {
-      const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
+      const warehouseId = await resolveWarehouseIdBySlugOrId(search.gudang ?? null)
       const report = await loadStockValuation(warehouseId)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
@@ -937,8 +939,8 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     subtitle: "Riwayat Pergerakan per Barang",
     defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
     async load({ period, search }) {
-      const itemId = search.barang && /^\d+$/.test(search.barang) ? Number(search.barang) : null
-      const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
+      const itemId = await resolveItemIdBySlugOrId(search.barang ?? null)
+      const warehouseId = await resolveWarehouseIdBySlugOrId(search.gudang ?? null)
       const report = await loadStockCard(period, itemId, warehouseId)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },

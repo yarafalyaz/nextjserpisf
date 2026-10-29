@@ -11,8 +11,7 @@ import { SalesCommissionSubledgerCard } from "@/components/reports/sales-commiss
 import { requirePermission } from "@/lib/auth/permissions"
 import { getSalesCommissionRecap } from "@/lib/reports/sales-commission-data"
 import { getSalesCommissionSubledgerRecap } from "@/lib/reports/sales-commission-subledger-data"
-import { parseReportFilters } from "@/lib/reports/report-href"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
+import { reportPeriodFromRoute, splitReportSegments } from "@/lib/reports/report-period"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 export const metadata: Metadata = { title: "Rekap Komisi Penjualan" }
@@ -44,7 +43,7 @@ export default async function SalesCommissionPage({
 
   // Filter penjual = tampil-saja dari rows loader (BR-KOM-04): bukan
   // parameter loader, bukan hitung ulang. Id tak dikenal -> semua.
-  const penjualParam = parseReportFilters(segments.slice(1)).penjual ?? search.penjual
+  const penjualParam = splitReportSegments(segments).filters.penjual ?? search.penjual
   const selectedId = penjualParam ? Number(penjualParam) : null
   const selectedSalesEmployeeId =
     selectedId !== null && report.rows.some((row) => row.salesEmployeeId === selectedId)
