@@ -669,6 +669,27 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
     expect(mocks.prismaMock.leaveRequest.update).not.toHaveBeenCalled();
   });
 
+  it("reopenApproval LeaveRequest di luar team scope ditolak, nol reset dokumen", async () => {
+    silenceConsole();
+    mocks.authMock.mockResolvedValue({
+      user: { id: "11", roles: ["staff"], permissions: ["approve_workflows", "view_subordinate_data"] },
+    });
+    seedApproval({ status: "rejected", referenceType: "LeaveRequest", referenceId: 5, requestedBy: 2 });
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(false);
+    expect(String(res.error)).toContain("tidak memiliki akses");
+    expect(mocks.prismaMock.leaveRequest.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("reopenApproval non-HR tetap jalan (falsifikasi gerbang HR)", async () => {
+    seedApproval({ status: "rejected", referenceType: "PurchaseRequest", referenceId: 5, requestedBy: 2 });
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(true);
+    expect(mocks.prismaMock.purchaseRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 5, status: "rejected" }, data: { status: "draft" } }),
+    );
+  });
+
   it("approveStep Payroll rejected tidak resurrect (klaim draft count 0)", async () => {
     seedApproval({ referenceType: "Payroll", referenceId: 9 });
     mocks.prismaMock.payroll.findUnique.mockResolvedValue({

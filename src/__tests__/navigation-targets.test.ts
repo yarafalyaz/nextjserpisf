@@ -154,6 +154,21 @@ function layoutHrefs(): string[] {
 }
 
 /**
+ * Quick-action command palette: literal `href: "/…/tambah"` di
+ * `command-palette.tsx` — aksi cepat di luar pohon navigasi, jadi guard
+ * navigation.ts tidak pernah memeriksanya.
+ */
+function commandPaletteHrefs(): string[] {
+  const source = fs.readFileSync(
+    path.join(ROOT, "src", "components", "layout", "command-palette.tsx"),
+    "utf8",
+  )
+  const hrefs = new Set<string>()
+  for (const match of source.matchAll(/href:\s*"(\/[^"]*)"/g)) hrefs.add(match[1])
+  return [...hrefs].sort()
+}
+
+/**
  * Basis laporan dari tautan dinamis: literal `basePath="/laporan/…"`,
  * `buildReportHref("/laporan/…", …)`, dan `href="/laporan/…"` di seluruh src.
  * Dinormalkan ke `/laporan/<slug>` — segmen periode/filter sesudahnya ditangani
@@ -221,6 +236,27 @@ describe("tautan di luar navigation.ts: file tujuan ada", () => {
 
     const tanpaHalaman = hrefs.filter((href) => !resolvePage(href))
     expect({ hrefTanpaHalaman: tanpaHalaman }).toEqual({ hrefTanpaHalaman: [] })
+  })
+
+  it("quick-action command-palette (14 href /…/tambah) punya page.tsx bukan stub", () => {
+    const hrefs = commandPaletteHrefs()
+
+    // Penjaga tidak vakum: korpus quick-action saat ini tepat 14, semua /tambah.
+    expect(hrefs.length).toBe(14)
+    expect(hrefs.every((href) => href.endsWith("/tambah"))).toBe(true)
+
+    const tanpaHalaman = hrefs.filter((href) => !resolvePage(href))
+    expect({ hrefTanpaHalaman: tanpaHalaman }).toEqual({ hrefTanpaHalaman: [] })
+
+    const stub: string[] = []
+    for (const href of hrefs) {
+      const page = resolvePage(href)
+      if (!page) continue
+      for (const issue of pageStubIssues(fs.readFileSync(page, "utf8"), page)) {
+        stub.push(`${href} (${path.relative(ROOT, page)}): ${issue}`)
+      }
+    }
+    expect({ pageStub: stub }).toEqual({ pageStub: [] })
   })
 
   it("basis tautan laporan dinamis (basePath/buildReportHref/href /laporan/…) punya page.tsx", () => {

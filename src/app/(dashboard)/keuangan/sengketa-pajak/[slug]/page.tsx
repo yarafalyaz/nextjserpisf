@@ -94,7 +94,7 @@ export default async function TaxAssessmentDetailPage({
             {TAX_DISPUTE_REGISTER_TITLE} — {assessment.assessmentNumber ?? `#${assessment.id}`}
           </h1>
         </div>
-        {canEdit && assessment.status !== "BATAL" ? (
+        {canEdit && canAct ? (
           <CancelTaxAssessmentButton id={assessment.id} />
         ) : null}
       </div>

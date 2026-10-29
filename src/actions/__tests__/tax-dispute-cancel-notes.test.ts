@@ -53,6 +53,21 @@ describe("cancelTaxAssessment — notes asli tidak ditimpa", () => {
     })
   })
 
+  it("status SELESAI ditolak di server, update tak dipanggil", async () => {
+    mocks.findFirst.mockResolvedValue({ id: 3, status: "SELESAI", notes: null })
+    const result = await cancelTaxAssessment(fd({ id: "3", reason: "Salah catat" }))
+    expect(result.success).toBe(false)
+    expect(String(result.error)).toContain("selesai/batal")
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it("status BATAL ditolak di server, update tak dipanggil", async () => {
+    mocks.findFirst.mockResolvedValue({ id: 3, status: "BATAL", notes: null })
+    const result = await cancelTaxAssessment(fd({ id: "3", reason: "Salah catat" }))
+    expect(result.success).toBe(false)
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
   it("notes kosong → hanya penanda batal", async () => {
     mocks.findFirst.mockResolvedValue({ id: 3, status: "TERDAFTAR", notes: null })
     const result = await cancelTaxAssessment(fd({ id: "3", reason: "Salah catat" }))

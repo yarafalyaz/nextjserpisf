@@ -40,6 +40,15 @@ describe("roster: halaman, formulir, dan navigasi tersambung", () => {
     expect(read("src/components/layout/nav-descriptions.ts")).toContain('"/sdm/roster"')
   })
 
+  it("kedua handler formulir membungkus await aksi dengan try/catch + showError", () => {
+    const src = read(FORMS)
+    // Server action yang melempar (redirect/error) tidak boleh jadi unhandled
+    // rejection senyap di client: tiap handler wajib tangkap + tampilkan.
+    expect(src).toContain('try {\n        const res = await createEmployeeRoster(new FormData(form))')
+    expect(src).toContain('try {\n        const res = await action(id)')
+    expect(src.match(/catch \{\s*\n\s*showError\(/g)).toHaveLength(2)
+  })
+
   it("aksi roster menegakkan izin keluarga absensi existing", () => {
     const actions = read("src/actions/hrm.actions.ts")
     expect(actions).toMatch(/export async function createEmployeeRoster[\s\S]{0,200}requirePermission\("create_attendance"\)/)
