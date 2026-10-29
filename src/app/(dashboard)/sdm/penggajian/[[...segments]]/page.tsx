@@ -104,15 +104,18 @@ export default async function PayrollPage({
       }),
   };
 
-  const payrolls = await prisma.payroll.findMany({
-    where,
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-    include: { employee: true },
-  });
-
-  const total = await prisma.payroll.count({ where })
+  const [payrolls, total, settings, canProcessPayroll] = await Promise.all([
+    prisma.payroll.findMany({
+      where,
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+      include: { employee: true },
+    }),
+    prisma.payroll.count({ where }),
+    prisma.systemSetting.findFirst(),
+    hasPermission("process_payroll"),
+  ]);
 
   const data = payrolls.map((p) => ({
     id: p.id,
@@ -135,13 +138,11 @@ export default async function PayrollPage({
     userPerms.includes("edit_payroll");
   const showEmployeeColumn = scope.kind !== "self";
 
-  const settings = await prisma.systemSetting.findFirst();
   const cutoffDay = settings?.payrollCutoffDay ?? 25;
 
   // 070-F: antrean slip gaji draft mengendap (Backend PR #1107). Halaman
   // menegakkan process_payroll sebelum loader; loader menegakkan ulang
   // fail-closed (view_payroll saja tidak cukup tahap 1).
-  const canProcessPayroll = await hasPermission("process_payroll");
   const payrollDraftQueue = canProcessPayroll ? await getPayrollDraftQueue() : null;
 
   // F-2026-10-24-132-V: panel kompensasi PKWT (read-model server murni).

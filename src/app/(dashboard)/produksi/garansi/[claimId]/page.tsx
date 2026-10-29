@@ -91,12 +91,17 @@ export default async function WarrantyClaimDetailPage({
     repairWorkOrderId: claim.repairWorkOrderId,
   }
 
-  const supplierActor = claim.supplierClaimBy
-    ? await prisma.user.findUnique({
-        where: { id: claim.supplierClaimBy },
-        select: { name: true },
-      })
-    : null
+  const [supplierActor, attachmentCount] = await Promise.all([
+    claim.supplierClaimBy
+      ? prisma.user.findUnique({
+          where: { id: claim.supplierClaimBy },
+          select: { name: true },
+        })
+      : null,
+    prisma.transactionAttachment.count({
+      where: { referenceType: "WarrantyClaim", referenceId: claim.id },
+    }),
+  ])
   const supplierClaim: SupplierClaimFacts = {
     claimId: claim.id,
     claimStatus: claim.status,
@@ -114,11 +119,8 @@ export default async function WarrantyClaimDetailPage({
     supplierClaimAt: claim.supplierClaimAt
       ? formatDate(claim.supplierClaimAt, { includeTime: true })
       : null,
-    attachmentCount: 0,
+    attachmentCount,
   }
-  supplierClaim.attachmentCount = await prisma.transactionAttachment.count({
-    where: { referenceType: "WarrantyClaim", referenceId: claim.id },
-  })
 
   // Status rute E2/E3 dibaca dari Journal nyata (POSTED non-REVERSED),
   // BUKAN flag klaim. Jurnal lawan (reversal) referenceType "Journal"
@@ -194,31 +196,33 @@ export default async function WarrantyClaimDetailPage({
     claimCost: routes.claimCost,
     supplierRecovery: routes.supplierRecovery,
   }
-  const vendorOptions =
+  const [vendorOptions, purchaseReturnOptions] = await Promise.all([
     claim.supplierClaimStatus === "none" && canTransition
-      ? (
-          await prisma.vendor.findMany({
+      ? prisma.vendor
+          .findMany({
             where: { isActive: true, deletedAt: null },
             orderBy: { name: "asc" },
             take: 200,
             select: { id: true, name: true },
           })
-        ).map((v) => ({ value: String(v.id), label: v.name }))
-      : []
-  const purchaseReturnOptions =
+          .then((rows) => rows.map((v) => ({ value: String(v.id), label: v.name })))
+      : Promise.resolve([]),
     claim.supplierClaimStatus === "none" && canTransition
-      ? (
-          await prisma.purchaseReturn.findMany({
+      ? prisma.purchaseReturn
+          .findMany({
             where: { status: "draft" },
             orderBy: { date: "desc" },
             take: 200,
             select: { id: true, documentNo: true, purchaseOrder: { select: { vendor: { select: { name: true } } } } },
           })
-        ).map((r) => ({
-          value: String(r.id),
-          label: `${r.documentNo} — ${r.purchaseOrder.vendor.name}`,
-        }))
-      : []
+          .then((rows) =>
+            rows.map((r) => ({
+              value: String(r.id),
+              label: `${r.documentNo} — ${r.purchaseOrder.vendor.name}`,
+            })),
+          )
+      : Promise.resolve([]),
+  ])
 
   return (
     <div className="flex flex-col gap-6">

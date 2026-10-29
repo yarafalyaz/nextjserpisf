@@ -40,17 +40,17 @@ export default async function InventoryTransfersPage({
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
-  const transfers = await prisma.inventoryTransfer.findMany({
-    where,
-    include: { sourceWarehouse: true, destinationWarehouse: true },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  })
-
-  const total = await prisma.inventoryTransfer.count({ where })
-
-  const unreceivedQueue = await getInventoryTransferUnreceivedQueue()
+  const [transfers, total, unreceivedQueue] = await Promise.all([
+    prisma.inventoryTransfer.findMany({
+      where,
+      include: { sourceWarehouse: true, destinationWarehouse: true },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.inventoryTransfer.count({ where }),
+    getInventoryTransferUnreceivedQueue(),
+  ])
 
   const tableData = toPlain(transfers)
 

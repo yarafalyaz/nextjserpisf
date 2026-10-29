@@ -54,38 +54,39 @@ export default async function WarrantyClaimsPage({
   )
     ? Number(params.jendelaLampau)
     : undefined
-  const expiryQueue = await getWarrantyExpiryQueue("claims_page", {
-    windowAheadDays,
-    windowPastDays,
-  })
-  const intakeQueue = await getWarrantyIntakeQueue()
-
-  const claims = await prisma.warrantyClaim.findMany({
-    where: {
-      ...(status ? { status } : {}),
-      ...(cari
-        ? {
-            OR: [
-              { complaint: { contains: cari } },
-              { customerVehicle: { plateNumber: { contains: cari } } },
-              { coverage: { item: { name: { contains: cari } } } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { reportedAt: "desc" },
-    take: 200,
-    include: {
-      customerVehicle: { select: { plateNumber: true } },
-      coverage: {
-        select: {
-          status: true,
-          expiresAt: true,
-          item: { select: { name: true } },
+  const [expiryQueue, intakeQueue, claims] = await Promise.all([
+    getWarrantyExpiryQueue("claims_page", {
+      windowAheadDays,
+      windowPastDays,
+    }),
+    getWarrantyIntakeQueue(),
+    prisma.warrantyClaim.findMany({
+      where: {
+        ...(status ? { status } : {}),
+        ...(cari
+          ? {
+              OR: [
+                { complaint: { contains: cari } },
+                { customerVehicle: { plateNumber: { contains: cari } } },
+                { coverage: { item: { name: { contains: cari } } } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { reportedAt: "desc" },
+      take: 200,
+      include: {
+        customerVehicle: { select: { plateNumber: true } },
+        coverage: {
+          select: {
+            status: true,
+            expiresAt: true,
+            item: { select: { name: true } },
+          },
         },
       },
-    },
-  })
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
