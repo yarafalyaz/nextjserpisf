@@ -9,6 +9,10 @@ import { showSuccess, showError } from "@/lib/utils/toast"
  * ReversePaymentButton): state dialog + alasan + submit.
  * Dipisah agar Sonar tidak menghitung rangka submit identik sebagai
  * duplikasi; teks sukses/gagal + validasi alasan tetap milik pemanggil.
+ *
+ * Guard alasan kosong milik pemanggil (mis. VoidButton requireReason):
+ * pemanggil TANPA alasan (run tanpa argumen) tidak boleh ditolak hook —
+ * hook hanya menjalankan run apa adanya.
  */
 export function useConfirmReasonAction({
   run,
@@ -27,10 +31,6 @@ export function useConfirmReasonAction({
   const [reason, setReason] = useState("")
 
   function submit() {
-    if (!reason.trim()) {
-      showError("Alasan wajib diisi")
-      return
-    }
     startTransition(async () => {
       const result = await run(reason.trim())
       if (result.success) {

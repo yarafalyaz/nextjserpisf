@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation"
 import { Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { showSuccess, showError } from "@/lib/utils/toast"
+import { showError, showProcessResult } from "@/lib/utils/toast"
 
 interface ProcessButtonProps {
   id: number
-  action: (id: number) => Promise<{ success: boolean; error?: string } | void>
+  action: (id: number) => Promise<{ success: boolean; error?: string; warning?: string } | void>
   confirmTitle?: string
   confirmBody?: string
   successMessage?: string
@@ -37,7 +37,8 @@ export function ProcessButton({
           setIsOpen(false)
           return
         }
-        showSuccess(successMessage)
+        // F-2026-10-28-157-V: warning server tampil apa adanya.
+        showProcessResult(result, successMessage)
         setIsOpen(false)
         router.refresh()
       } catch (e) {
