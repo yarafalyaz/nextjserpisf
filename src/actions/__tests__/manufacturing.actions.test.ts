@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     count: vi.fn().mockResolvedValue(0),
     upsert: vi.fn().mockResolvedValue({}),
     aggregate: vi.fn().mockResolvedValue({ _sum: {} }),
+    groupBy: vi.fn().mockResolvedValue([]),
   })
 
   const prismaMock: any = {
@@ -87,6 +88,7 @@ vi.mock("@/lib/utils/document-number", () => ({
 vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: (...args: any[]) => mocks.consumeFifoLayersMock(...args),
   createInLayer: (...args: any[]) => mocks.createInLayerMock(...args),
+  availableQtyBatch: vi.fn(async () => new Map<string, number>()),
 }))
 vi.mock("@/lib/services/stock-journal.service", () => ({
   stockJournalService: {
@@ -1334,6 +1336,7 @@ describe("Work Order Operation auto-close (F-2026-10-21-020 lanjutan)", () => {
 describe("Work Order Actions", () => {
   it("startWorkOrder succeeds", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [{ id: 1 }] })
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
     const res = await actions.startWorkOrder(1)
     expect(res?.success).toBe(true)
   })
