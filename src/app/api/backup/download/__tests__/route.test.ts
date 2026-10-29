@@ -88,13 +88,13 @@ describe("GET /api/backup/download", () => {
     expect(mocks.logActivity).toHaveBeenCalledWith("download", "Backup", 0, expect.stringContaining("backup-2026-06-12.sql"), expect.objectContaining({ size: 1024 }))
   })
 
-  it("does not break flow when audit log fails", async () => {
+  it("blocks flow when audit log fails (compliance, not best-effort)", async () => {
     mocks.hasPermission.mockResolvedValue(true)
     mocks.readBackupFile.mockResolvedValue({ path: "/tmp/backup-2026-06-12.sql", size: 100 })
     mocks.logActivity.mockRejectedValue(new Error("log fail"))
 
     const res = await GET(new NextRequest("http://localhost/api/backup/download?file=backup-2026-06-12.sql"))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(500)
   })
 
   it("returns 404 when allowlisted backup file is missing", async () => {
