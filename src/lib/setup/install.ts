@@ -23,6 +23,7 @@ import {
   POSITIONS,
 } from "./base-data"
 import { createChartOfAccounts } from "./coa"
+import { seedPayrollStatutoryRules } from "./statutory-rules"
 import { seedWithholdingTaxTypes } from "./withholding-tax-types"
 import {
   INSTALL_SLUG_SOURCES,
@@ -142,6 +143,12 @@ export async function installBaseData(input: InstallInput): Promise<{ adminEmail
     // marketplace 0,5% dst.) — tanpa ini hook akuntansi fail-closed menolak
     // jurnal pembayaran berpotongan PPh pada instalasi baru.
     await seedWithholdingTaxTypes(tx)
+
+    // 2c. Parameter statutori payroll 12 baris vonis 126-V (pecahan + plafon
+    // JP berperiode + PTKP + biaya jabatan). Idempoten per (key,
+    // effectiveFrom); edit/tutup tenant tidak pernah ditimpa. Tanpa ini
+    // hitung/approve payroll tertahan gate fromFallback pada instalasi baru.
+    await seedPayrollStatutoryRules(tx)
 
     // 3. System settings. `getSystemSettings()` auto-creates a default row on the
     // first page render, so update it when present; otherwise create the

@@ -15,7 +15,7 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { bankTransferSchema } from "@/lib/validations/finance.schemas"
-import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
+import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 
 const REVALIDATE = "/keuangan/transfer-bank"
 
@@ -155,39 +155,73 @@ export async function createBankTransfer(formData: FormData) {
 }
 
 /**
- * Hapus transfer beserta jurnalnya.
- *
- * Ini **jalur koreksi** (transfer salah rekening/nominal): jurnal tidak
- * dibiarkan menggantung, jadi keduanya dihapus bersama dalam satu transaksi.
- * Periode yang sudah ditutup menolak penghapusan; setelah periode terkunci,
- * koreksinya harus lewat jurnal pembalik manual.
+ * GL-BR-003 P5 (vonis t_16159d89 V-P5/P6-1, V-P5/P6-3): void berstatus transfer
+ * posted. Hard-delete jurnal POSTED + hapus fisik DILARANG — koreksi sah:
+ * jurnal lawan cermin lewat reverseJournalsByReferenceTx (refType persis
+ * "BANK_TRANSFER") + baris dipertahankan status "void" + deletedAt.
+ * Lampiran TIDAK dihapus (bukti audit). Alasan void wajib.
+ * Recon guard (rekomendasi 6): entri jurnal asal yang sudah matched pada
+ * rekonsiliasi final (completed) tidak boleh di-REVERSED diam-diam — tolak
+ * dan arahkan ke pembatalan rekonsiliasi dulu.
  */
-export async function deleteBankTransfer(id: number) {
+export async function deleteBankTransfer(id: number, reason?: string) {
   try {
-    await requirePermission("delete_bank_transfers")
+    const user = await requirePermission("delete_bank_transfers")
+    const cleanReason = (reason ?? "").trim()
+    if (!cleanReason) {
+      return { success: false, error: "Alasan pembatalan transfer wajib diisi." }
+    }
 
-    const transfer = await prisma.bankTransfer.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true, documentNo: true, date: true, journalId: true },
-    })
-    if (!transfer) return { success: false, error: "Transfer tidak ditemukan." }
-
-    await assertPeriodOpen(transfer.date)
-
-    let removedFiles: { fileUrl: string; referenceType: string }[] = []
+    let documentNo = ""
     await prisma.$transaction(async (tx) => {
-      if (transfer.journalId) {
-        removedFiles = await deleteTransactionAttachmentsTx(tx, {
-          referenceType: "Journal", referenceId: transfer.journalId,
-        })
-        await tx.journalEntry.deleteMany({ where: { journalId: transfer.journalId } })
-        await tx.journal.delete({ where: { id: transfer.journalId } })
+      // Kunci baris + baca ulang di dalam tx (pola deleteSalesPayment).
+      await tx.$executeRaw`SELECT id FROM bank_transfers WHERE id = ${id} FOR UPDATE`
+      const transfer = await tx.bankTransfer.findUniqueOrThrow({ where: { id } })
+      if (transfer.deletedAt || transfer.status === "void") {
+        throw new Error("Transfer ini sudah dibatalkan.")
       }
-      await tx.bankTransfer.delete({ where: { id: transfer.id } })
-    })
-    await removeAttachmentFiles(removedFiles)
+      documentNo = transfer.documentNo
 
-    await logActivity("delete", "BankTransfer", id, `Menghapus transfer antar rekening ${transfer.documentNo}`)
+      await assertPeriodOpen(transfer.date, tx)
+
+      if (transfer.journalId) {
+        // Recon guard: entri jurnal transfer yang sudah dipakai item
+        // rekonsiliasi final (completed) tidak boleh di-REVERSED diam-diam.
+        const linkedEntryIds = await tx.journalEntry.findMany({
+          where: { journalId: transfer.journalId },
+          select: { id: true },
+        })
+        if (linkedEntryIds.length > 0) {
+          const matched = await tx.bankReconciliationItem.findFirst({
+            where: {
+              journalEntryId: { in: linkedEntryIds.map((e) => e.id) },
+              matched: true,
+              bankReconciliation: { status: "completed" },
+            },
+            select: { id: true },
+          })
+          if (matched) {
+            throw new Error(
+              "Transfer ini sudah cocok pada rekonsiliasi bank final. Batalkan rekonsiliasi terlebih dahulu sebelum membatalkan transfer.",
+            )
+          }
+        }
+      }
+
+      await reverseJournalsByReferenceTx(tx, "BANK_TRANSFER", id, cleanReason, Number(user.id))
+
+      await tx.bankTransfer.update({
+        where: { id },
+        data: {
+          status: "void",
+          voidAt: new Date(),
+          voidReason: cleanReason,
+          deletedAt: new Date(),
+        },
+      })
+    })
+
+    await logActivity("void", "BankTransfer", id, `Membatalkan transfer antar rekening ${documentNo}: ${cleanReason}`)
     revalidatePath(REVALIDATE)
     return { success: true }
   } catch (e: unknown) {

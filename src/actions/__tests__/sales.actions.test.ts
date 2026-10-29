@@ -605,19 +605,27 @@ describe("Sales Order Actions", () => {
     mocks.generateDocNumMock.mockResolvedValue("SO-001")
   })
 
-  // === guards ===
-  it("updateSalesOrder allows editing a confirmed order when unpaid (custom fabrication)", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
-    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
-    expect(res?.success).toBe(true)
+  // === guards (G5 GL-BR-003: edit SO hanya draft/approved; posted/final dikunci) ===
+  it("updateSalesOrder menolak confirmed/processing/partial (G5 GL-BR-003: draft/approved-only)", async () => {
+    // Baca-luar (slug, 1x) + baca-dalam-tx (guard, 1x) per iterasi → 2 baca
+    // per status.
+    const statuses = ["sent", "confirmed", "processing", "partial", "completed", "cancelled"]
+    let i = 0
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockImplementation(async () => ({ id: 1, status: statuses[Math.floor(i++ / 2)], documentNo: "SO-1" }))
+    for (const wantRejected of statuses) {
+      const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+      expect(res?.success, wantRejected).toBe(false)
+      expect(res?.error).toContain("tidak bisa diubah")
+    }
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
   })
-  it("updateSalesOrder blocks editing once a real (non-DP) payment exists", async () => {
-    const settlement = await import("@/lib/services/sales-settlement.service")
-    vi.mocked(settlement.salesOrderHasRealSettlement).mockResolvedValueOnce(true)
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
+  it("updateSalesOrder menolak bila faktur turunan sudah posted (G5 GL-BR-003)", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({ id: 9 })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("pelunasan")
+    expect(res?.error).toContain("sudah posted")
+    expect(mocks.prismaMock.salesOrder.update).not.toHaveBeenCalled()
   })
   it("updateSalesOrder blocks a cancelled order", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
@@ -679,17 +687,19 @@ describe("Sales Invoice Actions", () => {
     expect(res?.error).toContain("sudah di-post")
   })
 
-  // === updateSalesInvoice ===
-  it("updateSalesInvoice allows editing a posted-but-unpaid invoice (custom fabrication)", async () => {
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
-    const payload = {
-      customerId: 1, date: "2026-06-12",
-      items: JSON.stringify([{ itemId: 1, qty: 2, unitPrice: 100, discount: 0 }]),
-      taxRate: 0,
-      discount: 0,
+  // === updateSalesInvoice (G1 GL-BR-003: draft/approved-only; posted immutable) ===
+  it("updateSalesInvoice menolak posted/partial/paid/sent (G1 GL-BR-003, tanpa reverse+repost)", async () => {
+    // Baca bervariasi: guard sendiri 1-2x (documentNo ada/tidak) + baca-luar
+    // slug 1x per iterasi. Sederhanakan: status diputus dari baca berurutan.
+    const statuses = ["posted", "partial", "paid", "sent"]
+    let i = 0
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockImplementation(async () => ({ id: 1, status: statuses[Math.min(i++, statuses.length - 1)], documentNo: "INV-1" }))
+    for (const status of statuses) {
+      const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+      expect(res?.success, status).toBe(false)
+      expect(res?.error).toContain("tidak bisa diubah")
     }
-    const res = await actions.updateSalesInvoice(1, fdMap(payload))
-    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
   })
   // Regresi kehilangan tautan: form faktur tidak punya input quotationId, jadi
   // payload tidak pernah memuatnya — `?? null` dulu menghapus tautan penawaran
@@ -713,9 +723,9 @@ describe("Sales Invoice Actions", () => {
       .find((arg) => arg?.data && "quotationId" in arg.data)
     expect(headerUpdate?.data?.quotationId).toBe(77)
   })
-  it("updateSalesInvoice reverse+reposts a posted invoice on edit", async () => {
+  it("updateSalesInvoice menolak edit posted: arahkan retur/void (G1 GL-BR-003, tanpa reverse+repost)", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", documentNo: "INV-1" })
     const payload = {
       customerId: 1, date: "2026-06-12",
       items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
@@ -723,18 +733,17 @@ describe("Sales Invoice Actions", () => {
       discount: 0,
     }
     const res = await actions.updateSalesInvoice(1, fdMap(payload))
-    expect(res?.success).toBe(true)
-    // A posted invoice's old stock/GL must be reversed then re-posted.
-    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
-    expect(mocks.onSalesInvoicePostedMock).toHaveBeenCalled()
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa diubah")
+    // Guard K1 menolak SEBELUM mutasi apa pun: tidak ada reverse+repost.
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).not.toHaveBeenCalled()
+    expect(mocks.onSalesInvoicePostedMock).not.toHaveBeenCalled()
   })
-  it("updateSalesInvoice blocks editing once a real (non-DP) payment exists", async () => {
-    const settlement = await import("@/lib/services/sales-settlement.service")
-    vi.mocked(settlement.hasRealSettlement).mockResolvedValueOnce(true)
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "partial" })
+  it("updateSalesInvoice menolak partial berpelunasan (G1 GL-BR-003: guard status dulu)", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "partial", documentNo: "INV-1" })
     const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("pelunasan")
+    expect(res?.error).toContain("tidak bisa diubah")
   })
   it("updateSalesInvoice blocks a cancelled invoice", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
@@ -773,17 +782,17 @@ describe("Sales Invoice Actions", () => {
     expect(updateCall.paymentStatus).toBe("paid")
   })
 
-  // F-2026-10-25-036-S lanjutan: edit item menurunkan grandTotal ke bawah
-  // paidAmount lama (mis. DP penuh) menaikkan status ke paid TANPA jalur
-  // pembayaran — snapshot tarif komisi wajib dibekukan lewat helper bersama.
+  // F-2026-10-25-036-S lanjutan (arsip perilaku pra-GL-BR-003): transisi paid
+  // via edit item DULU membekukan snapshot komisi. Sesudah G1 GL-BR-003, edit
+  // posted DITOLAK di guard status — snapshot komisi posted hanya lewat jalur
+  // pembayaran/void+terbit ulang. Tiga tes di bawah mengunci penolakan itu.
   const seedPaidEdit = (paidAmount: number, commissionRatePercent: number | null) => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "posted", paidAmount, commissionRatePercent,
+      id: 1, status: "posted", documentNo: "INV-1", paidAmount, commissionRatePercent,
     })
     return { customerId: 1, date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }
   }
-  const totalsUpdate = () => mocks.prismaMock.salesInvoice.update.mock.calls[1][0].data
-  it("updateSalesInvoice transisi ke paid via edit membekukan snapshot tarif per tanggal faktur", async () => {
+  it("updateSalesInvoice transisi ke paid via edit DITOLAK sesudah G1 (arsip 036-S)", async () => {
     const payload = seedPaidEdit(150, null)
     mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 1 })
     // Tarif master berubah sesudah tanggal faktur: 2% s/d 1 Jul, 3% sesudahnya.
@@ -793,27 +802,22 @@ describe("Sales Invoice Actions", () => {
       { id: 2, customerCategoryId: 1, commissionPercent: 3, effectiveFrom: new Date(Date.UTC(2026, 6, 1)), effectiveTo: null },
     ])
     const res = await actions.updateSalesInvoice(1, fdMap(payload))
-    expect(res?.success).toBe(true)
-    const updateCall = totalsUpdate()
-    expect(updateCall.paymentStatus).toBe("paid")
-    expect(Number(updateCall.commissionRatePercent)).toBe(2)
-    expect(updateCall.commissionCustomerCategoryId).toBe(1)
-    expect(updateCall.commissionRateId).toBe(1)
+    // G1: guard status menolak posted SEBELUM helper komisi berjalan.
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa diubah")
+    expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.salesInvoice.update).not.toHaveBeenCalled()
   })
-  it("updateSalesInvoice tidak menimpa snapshot komisi yang sudah beku", async () => {
+  it("updateSalesInvoice snapshot komisi posted tak tersentuh sesudah G1 (arsip 036-S)", async () => {
     const res = await actions.updateSalesInvoice(1, fdMap(seedPaidEdit(150, 7)))
-    expect(res?.success).toBe(true)
-    const updateCall = totalsUpdate()
-    expect(updateCall.paymentStatus).toBe("paid")
-    expect(updateCall.commissionRatePercent).toBeUndefined()
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa diubah")
     expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
   })
-  it("updateSalesInvoice turun ke partial tidak menulis snapshot komisi", async () => {
+  it("updateSalesInvoice partial posted tak tersentuh sesudah G1 (arsip 036-S)", async () => {
     const res = await actions.updateSalesInvoice(1, fdMap(seedPaidEdit(50, null)))
-    expect(res?.success).toBe(true)
-    const updateCall = totalsUpdate()
-    expect(updateCall.paymentStatus).toBe("partial")
-    expect(updateCall.commissionRatePercent).toBeUndefined()
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa diubah")
     expect(mocks.prismaMock.customerCommissionRate.findMany).not.toHaveBeenCalled()
   })
 
@@ -1164,6 +1168,18 @@ describe("Sales Return Actions", () => {
     mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
     const res = await actions.deleteSalesReturn(1)
     expect(res?.success).toBe(false)
+  })
+  it("deleteSalesReturn GL003-P8 hanya-draf: approved ditolak, kunci+hapus-dalam-tx", async () => {
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.deleteSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/hanya draf yang bisa dihapus/i)
+    expect(mocks.prismaMock.salesReturn.delete).not.toHaveBeenCalled()
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const ok = await actions.deleteSalesReturn(1)
+    expect(ok?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    expect(mocks.prismaMock.salesReturn.delete).toHaveBeenCalledWith({ where: { id: 1 } })
   })
 })
 

@@ -105,6 +105,7 @@ interface SettingsFormValues {
   restBreakEnd?: string | null
   overtimeMultiplier?: number | null
   payrollBankAccountId?: number | null
+  employeeLoanWriteOffExpenseAccountId?: number | null
   payrollJournalTypeId?: number | null
   payrollPrefix?: string | null
   periodLockDate?: string | null
@@ -302,6 +303,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [salariesPayable, setSalariesPayable] = useState(settings.salariesPayableAccountId ? String(settings.salariesPayableAccountId) : "")
   const [payrollBank, setPayrollBank] = useState(settings.payrollBankAccountId ? String(settings.payrollBankAccountId) : "")
   const [employeeReceivable, setEmployeeReceivable] = useState(settings.employeeReceivableAccountId ? String(settings.employeeReceivableAccountId) : "")
+  // BR-LOAN-08 (162-V): beban write-off piutang karyawan, default 720007.
+  const [loanWriteOffExpense, setLoanWriteOffExpense] = useState(settings.employeeLoanWriteOffExpenseAccountId ? String(settings.employeeLoanWriteOffExpenseAccountId) : "")
   const [payrollJournalType, setPayrollJournalType] = useState(settings.payrollJournalTypeId ? String(settings.payrollJournalTypeId) : "")
   const [pkwtExpense, setPkwtExpense] = useState(settings.pkwtCompensationExpenseAccountId ? String(settings.pkwtCompensationExpenseAccountId) : "")
   const [pkwtPayable, setPkwtPayable] = useState(settings.pkwtCompensationPayableAccountId ? String(settings.pkwtCompensationPayableAccountId) : "")
@@ -406,6 +409,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "salariesPayableAccountId", label: "Hutang Gaji", value: salariesPayable, onChange: setSalariesPayable },
         { name: "payrollBankAccountId", label: "Bank Penggajian", value: payrollBank, onChange: setPayrollBank },
         { name: "employeeReceivableAccountId", label: "Piutang Karyawan", value: employeeReceivable, onChange: setEmployeeReceivable },
+        { name: "employeeLoanWriteOffExpenseAccountId", label: "Beban Write-off Pinjaman (720007)", value: loanWriteOffExpense, onChange: setLoanWriteOffExpense },
         { name: "payrollJournalTypeId", label: "Tipe Jurnal Penggajian", value: payrollJournalType, onChange: setPayrollJournalType },
         { name: "pkwtCompensationExpenseAccountId", label: "Beban Kompensasi PKWT (600028)", value: pkwtExpense, onChange: setPkwtExpense },
         { name: "pkwtCompensationPayableAccountId", label: "Utang Kompensasi PKWT (210207)", value: pkwtPayable, onChange: setPkwtPayable },
@@ -481,6 +485,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       salariesPayableAccountId: setSalariesPayable,
       payrollBankAccountId: setPayrollBank,
       employeeReceivableAccountId: setEmployeeReceivable,
+      employeeLoanWriteOffExpenseAccountId: setLoanWriteOffExpense,
       payrollJournalTypeId: setPayrollJournalType,
       pkwtCompensationExpenseAccountId: setPkwtExpense,
       pkwtCompensationPayableAccountId: setPkwtPayable,
@@ -1141,6 +1146,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <input type="hidden" name="salariesPayableAccountId" value={salariesPayable} />
             <input type="hidden" name="payrollBankAccountId" value={payrollBank} />
             <input type="hidden" name="employeeReceivableAccountId" value={employeeReceivable} />
+            <input type="hidden" name="employeeLoanWriteOffExpenseAccountId" value={loanWriteOffExpense} />
             <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
             <input type="hidden" name="pkwtCompensationExpenseAccountId" value={pkwtExpense} />
             <input type="hidden" name="pkwtCompensationPayableAccountId" value={pkwtPayable} />
