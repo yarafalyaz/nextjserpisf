@@ -31,10 +31,11 @@ Checkpoint file ini diperbarui tiap batch selesai.
   CRM tickets paralel (0f0fc86b3), resolver slug terindeks (fee615996)
 - [x] SPT read-model pushdown + Map rantai (bb92b773c); subbab pohon pusat biaya per level (dbd88f3bb); detail PO paralel (e01977bda); resolver akun/pihak ledger (629a4c7df)
 
-## Batch 4 — verifikasi berat
-- [x] ci:quick run snapshot bd7264d8a: Lint ✔, TypeScript ✔, Unit ✔ (build menyusul) — 4 fail snapshot tengah-edit sebelumnya (silent-failure, 2 trailing ledger, receivable FIN-BR-008 mock) sudah diperbaiki & commit
-- [ ] konfirmasi build CI selesai + E2E subset bila DB seed memungkinkan
+## Batch 4 — verifikasi berat (SELESAI)
+- [x] ci:quick penuh LULUS pada bd7264d8a: Lint ✔ TypeScript ✔ Unit ✔ Build ✔ (228s)
+- [x] E2E subset chromium finance+inventory 11/11 passed (8f35d3eb3 fix heading exact)
 - [x] db:check-migrations — MIGRATION_CHECK_URL tidak tersedia di env sesi; tak dijalankan (jangan karang kredensial root)
+- [ ] dua agen audit read-only (master/pengaturan, halaman serial) masih jalan — temuan diproses bila kembali
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
