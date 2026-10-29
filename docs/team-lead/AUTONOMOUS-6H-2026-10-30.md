@@ -35,7 +35,8 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] ci:quick penuh LULUS pada bd7264d8a: Lint ✔ TypeScript ✔ Unit ✔ Build ✔ (228s)
 - [x] E2E subset chromium finance+inventory 11/11 passed (8f35d3eb3 fix heading exact)
 - [x] db:check-migrations — MIGRATION_CHECK_URL tidak tersedia di env sesi; tak dijalankan (jangan karang kredensial root)
-- [ ] dua agen audit read-only (master/pengaturan, halaman serial) masih jalan — temuan diproses bila kembali
+- [x] audit halaman serial selesai: DP by ids (787001493), aset by id (db622bbba), 8 halaman paralel (8037216dc, a24a7cdd5); runtime browser 5 halaman bersih, console 0 error
+- [x] audit master/pengaturan selesai (3 HIGH, 5 MED, LOW dipilih): scope/mask karyawan (263e2632a), klaim recurring + lock auth (2c30e5610), quick-add scope + lock lead (f8576586a). Ditinggal sadar: bulk-delete UI tanpa canDelete (server menolak, kosmetik), kode gudang manual tabrakan unik generik, distinct log tanpa batas (N+1-nya sudah diperbaiki di 2c30e5610)
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
@@ -50,3 +51,11 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - Batch 3 perf lanjutan: d695bf3dd, 32847720b, 7d55213d9, 0f0fc86b3,
   fee615996, bb92b773c, dbd88f3bb, e01977bda, 629a4c7df. Verifikasi berat:
   tsc bersih; ci:quick penuh jalan pada tree stabil.
+- Lanjutan 2026-10-30 (sesi malam): 787001493 DP by ids, db622bbba aset
+  by id, 8037216dc/a24a7cdd5 paralel 8 halaman, 263e2632a scope karyawan,
+  2c30e5610 recurring/auth, f8576586a lead/quick-add. Test terdampak
+  371+312 lulus, tsc+eslint bersih. Quick-add fix sempat hilang dari
+  tree (edit tertimpa agen paralel) lalu dipulihkan + test regresi
+  membuktikan gagal pra-fix. Stash prefix-check tidak di-drop (izin
+  classifier menolak; isi = duplikat fix yang sudah di HEAD).
+  Semua lokal, belum push.
