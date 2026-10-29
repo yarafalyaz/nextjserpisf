@@ -5,16 +5,20 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteVendorBill, voidVendorBill } from "@/actions/purchase.actions"
+import { deleteVendorBill, voidVendorBill, setVendorBillTaxInvoiceNumber } from "@/actions/purchase.actions"
 import { VoidButton } from "@/components/ui/void-button"
 import { PrintButton } from "@/components/ui/print-button"
+import { TaxInvoiceNumberButton } from "@/components/ui/tax-invoice-number-button"
+import { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
+import { ReceiptText } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { statusLabel } from "@/lib/utils/status-labels"
@@ -60,6 +64,15 @@ export default async function VendorBillDetailPage({
 
   if (!bill) notFound()
 
+  // F-2026-10-28-157-V Putusan 2: banner + tombol isi-nomor hanya bila
+  // posted-ish, ber-PPN, dan belum bernomor valid. Server tetap fail-closed.
+  const needsTaxInvoiceNumber =
+    bill.status !== "draft" &&
+    bill.status !== "cancelled" &&
+    Number(bill.tax ?? 0) > 0 &&
+    !isValidVendorTaxInvoiceNumber(bill.taxInvoiceNumber ?? null)
+  const canSetTaxInvoiceNumber = await hasPermission("approve_vendor_bills")
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{ label: "Tagihan Pemasok", href: "/pembelian/tagihan" },{label:"Detail"}]} />
@@ -86,6 +99,9 @@ export default async function VendorBillDetailPage({
           <CanCreate permission="edit_vendor_bills">
             <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
           </CanCreate>
+          {needsTaxInvoiceNumber && canSetTaxInvoiceNumber && (
+            <TaxInvoiceNumberButton id={bill.id} action={setVendorBillTaxInvoiceNumber} />
+          )}
           <PrintButton documentType="vendor-bill" documentId={bill.id} />
           {bill.status !== "draft" && bill.status !== "cancelled" && (
             <VoidButton id={bill.id} action={voidVendorBill} />
@@ -97,6 +113,18 @@ export default async function VendorBillDetailPage({
         </div>
         </div>
       </div>
+
+      {/* F-2026-10-28-157-V: PPN gabung HPP bila belum bernomor — notice
+          server verbatim, tanpa hitung ulang di UI. */}
+      {needsTaxInvoiceNumber && (
+        <Alert variant="warning" role="alert">
+          <ReceiptText aria-hidden="true" />
+          <AlertTitle>PPN digabung ke HPP</AlertTitle>
+          <AlertDescription>
+            Nomor faktur pajak belum diisi — PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Sengaja tanpa <StatusActions> generik (Setujui/Tolak): pada tagihan,
           tombol itu hanya membalik status ke approved tanpa jurnal dan
@@ -146,6 +174,14 @@ export default async function VendorBillDetailPage({
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jatuh Tempo</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{bill.dueDate ? formatDate(bill.dueDate) : "-"}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Faktur Pajak</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{bill.taxInvoiceNumber?.trim() ? bill.taxInvoiceNumber : <span className="text-muted-foreground">Belum ada nomor faktur tercatat</span>}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Syarat Pembayaran</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{bill.terms?.trim() ? bill.terms : <span className="text-muted-foreground">Termin tunggal</span>}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Keseluruhan</span>
