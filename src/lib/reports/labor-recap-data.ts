@@ -16,8 +16,30 @@ export async function getLaborRecap(period?: {
   start: Date
   end: Date
 }): Promise<LaborRecap> {
+  // Periode aktif: saring di DB lewat tanggal Timesheet yang dirujuk —
+  // ProductionCost tak bertanggal kerja, jadi muat dulu timesheet dalam
+  // rentang, lalu batasi baris labor ke sumber itu + baris manual
+  // (undated tetap dilaporkan builder, bukan dibuang di sini).
+  const periodTimesheets = period
+    ? await prisma.timesheet.findMany({
+        where: { date: { gte: period.start, lte: period.end } },
+        select: {
+          id: true,
+          employeeId: true,
+          date: true,
+          employee: { select: { name: true } },
+        },
+      })
+    : null
+  const periodTimesheetIds = periodTimesheets?.map((t) => t.id) ?? []
+
   const costs = await prisma.productionCost.findMany({
-    where: { category: "labor" },
+    where: period
+      ? {
+          category: "labor",
+          OR: [{ sourceTimesheetId: null }, { sourceTimesheetId: { in: periodTimesheetIds } }],
+        }
+      : { category: "labor" },
     select: { sourceTimesheetId: true, hours: true, amount: true },
     orderBy: [{ id: "asc" }],
   })
@@ -31,7 +53,8 @@ export async function getLaborRecap(period?: {
   ]
 
   const timesheets =
-    timesheetIds.length === 0
+    periodTimesheets ??
+    (timesheetIds.length === 0
       ? []
       : await prisma.timesheet.findMany({
           where: { id: { in: timesheetIds } },
@@ -41,7 +64,7 @@ export async function getLaborRecap(period?: {
             date: true,
             employee: { select: { name: true } },
           },
-        })
+        }))
   const employeeByTimesheet = new Map(
     timesheets.map((t) => [
       t.id,

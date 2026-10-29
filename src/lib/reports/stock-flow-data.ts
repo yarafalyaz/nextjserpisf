@@ -10,17 +10,18 @@
  * - Analisis penjualan: agregasi `aggregateSales` per dimensi.
  */
 
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { buildStockValuation, toValuationLayers } from "@/lib/reports/stock-valuation"
-import { buildStockCard, openingBalance } from "@/lib/reports/stock-card"
+import { buildStockCard } from "@/lib/reports/stock-card"
 import {
   aggregateSales,
   type SalesDimension,
   type SalesLine,
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
-import { safeAdd, safeMultiply } from "@/lib/utils/math"
+import { safeAdd, safeMultiply, safeRound } from "@/lib/utils/math"
 import { formatAccounting, formatReferenceType, formatQuantity, formatDate } from "@/lib/utils/format"
 import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -235,17 +236,36 @@ export async function loadStockCard(
     }
   }
   const baseWhere = { itemId, status: "posted" as const, ...(warehouseId ? { warehouseId } : {}) }
-  const [priorMoves, periodMoves] = await Promise.all([
-    prisma.stockMove.findMany({
-      where: { ...baseWhere, date: { lt: period.start } },
-      select: { qty: true, cost: true, impact: true },
-    }),
+  // Saldo awal diagregasi di DB — sebelumnya seluruh move pra-periode
+  // dimuat ke memori hanya untuk dijumlahkan. Nilai per move = qty*cost
+  // dibulatkan 2 desimal per baris (safeMultiply builder), jadi SUM mentah
+  // qty*cost bisa meleset seperseribu dari penjumlahan per-baris lama;
+  // ponytail: terima selisih sub-sen ini demi satu query agregat.
+  const warehouseSql = warehouseId ? Prisma.sql`AND warehouse_id = ${warehouseId}` : Prisma.empty
+  const [priorAgg, periodMoves] = await Promise.all([
+    prisma.$queryRaw<Array<{ impact: string; qty: unknown; value: unknown }>>`
+      SELECT impact, SUM(qty) AS qty, SUM(qty * cost) AS value
+      FROM stock_moves
+      WHERE item_id = ${itemId} AND status = 'posted' AND transaction_date < ${period.start}
+      ${warehouseSql}
+      GROUP BY impact
+    `,
     prisma.stockMove.findMany({
       where: { ...baseWhere, date: { gte: period.start, lte: period.end } },
       include: { warehouse: { select: { code: true } } },
       orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
   ])
+  const opening = priorAgg.reduce(
+    (acc, row) => {
+      const qty = Number(row.qty ?? 0)
+      const value = Number(row.value ?? 0)
+      return row.impact === "IN"
+        ? { qty: acc.qty + qty, value: acc.value + value }
+        : { qty: acc.qty - qty, value: acc.value - value }
+    },
+    { qty: 0, value: 0 },
+  )
   const card = buildStockCard(
     periodMoves.map((m) => ({
       id: m.id,
@@ -260,7 +280,7 @@ export async function loadStockCard(
       description: m.description,
       warehouseCode: m.warehouse?.code ?? null,
     })),
-    openingBalance(priorMoves.map((m) => ({ qty: Number(m.qty), cost: Number(m.cost), impact: m.impact }))),
+    { qty: safeRound(opening.qty, 2), value: safeRound(opening.value, 2) },
   )
   const rows: TableRow[] = [
     { kind: "data", cells: ["", "Saldo Awal", "", "", qty(card.openingQty), "", qty(card.closingQty - card.totalInQty + card.totalOutQty), ""] },

@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   stockMove: { findMany: vi.fn() },
+  $queryRaw: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks }))
@@ -49,6 +50,7 @@ function cellNum(cell: string): number {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.$queryRaw.mockResolvedValue([])
 })
 
 describe("E140-3 paritas layar-vs-PDF kartu stok (D3)", () => {
@@ -57,9 +59,7 @@ describe("E140-3 paritas layar-vs-PDF kartu stok (D3)", () => {
       prismaMove({ id: 1, documentNo: "SM-0001", impact: "ADJUST", warehouse: null }),
       prismaMove({ id: 2, documentNo: "SM-0002", impact: "OUT", qty: dec(4), warehouse: { code: "GDG-02" } }),
     ]
-    mocks.stockMove.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce(periodMoves)
+    mocks.stockMove.findMany.mockResolvedValueOnce(periodMoves)
 
     // Sisi layar: mapping page.tsx (impact apa adanya + kode gudang).
     const screenMoves = periodMoves.map((m) => ({
@@ -105,10 +105,29 @@ describe("E140-3 paritas layar-vs-PDF kartu stok (D3)", () => {
     expect(screen.closingQty).toBe(-14)
   })
 
+  it("saldo awal dari agregat DB per impact (IN+, OUT-), bukan muat semua move", async () => {
+    mocks.$queryRaw.mockResolvedValue([
+      { impact: "IN", qty: 25, value: 25000 },
+      { impact: "OUT", qty: 5, value: 5000 },
+    ])
+    mocks.stockMove.findMany.mockResolvedValueOnce([
+      prismaMove({ id: 3, documentNo: "SM-0010", impact: "IN", qty: dec(2), cost: dec(1000) }),
+    ])
+    const pdf = await loadStockCard(period, 7, null)
+    expect(mocks.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(mocks.stockMove.findMany).toHaveBeenCalledTimes(1)
+    const total = pdf.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Saldo Akhir")
+    if (total?.kind !== "data") throw new Error("baris Saldo Akhir PDF hilang")
+    const nums = total.cells.map(cellNum).filter((n) => !Number.isNaN(n))
+    // Saldo awal qty 20 (25-5) + masuk 2 = saldo akhir 22.
+    expect(nums).toContain(22)
+    const opening = pdf.table.rows.find((r) => r.kind === "data" && r.cells[1] === "Saldo Awal")
+    if (opening?.kind !== "data") throw new Error("baris Saldo Awal PDF hilang")
+    expect(opening.cells.map(cellNum)).toContain(20)
+  })
+
   it("kolom gudang PDF memuat kode gudang move normal", async () => {
-    mocks.stockMove.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([prismaMove({ documentNo: "SM-0009" })])
+    mocks.stockMove.findMany.mockResolvedValueOnce([prismaMove({ documentNo: "SM-0009" })])
     const pdf = await loadStockCard(period, 7, null)
     const gudangIdx = pdf.table.columns.map((c) => c.header).indexOf("Gudang")
     expect(gudangIdx).toBeGreaterThan(-1)

@@ -47,7 +47,10 @@ vi.mock("@/lib/db/prisma", () => {
     materialIssue: { findFirst: (...a: unknown[]) => miFindFirstMock(...a) },
     materialIssueItem: { findMany: (...a: unknown[]) => miItemFindManyMock(...a) },
     item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
-    inventoryLayer: { aggregate: vi.fn().mockResolvedValue({ _sum: { remaining: 0 } }) },
+    inventoryLayer: {
+      aggregate: vi.fn().mockResolvedValue({ _sum: { remaining: 0 } }),
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
     stockReservation: {
       findMany: (...a: unknown[]) => srFindManyMock(...a),
       create: (...a: unknown[]) => srCreateMock(...a),

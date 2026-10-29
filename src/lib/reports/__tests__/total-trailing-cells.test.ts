@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     warehouse: { findMany: vi.fn() },
     stockMove: { findMany: vi.fn() },
     inventoryLayer: { findMany: vi.fn() },
+    $queryRaw: vi.fn(async () => []),
   },
   groupBy: vi.fn(),
 }))
@@ -79,6 +80,10 @@ function totalsOf(rows: TableRow[]): TotalRow[] {
 beforeEach(() => {
   vi.clearAllMocks()
   for (const model of Object.values(mocks.prismaMock)) {
+    if (typeof model === "function") {
+      ;(model as ReturnType<typeof vi.fn>).mockResolvedValue([])
+      continue
+    }
     for (const fn of Object.values(model as Record<string, ReturnType<typeof vi.fn>>)) fn.mockResolvedValue([])
   }
 })
@@ -168,6 +173,10 @@ describe("aging loader: saringan DB + asOf periode (BUGHUNT round3 A)", () => {
     )
     vi.clearAllMocks()
     for (const model of Object.values(mocks.prismaMock)) {
+      if (typeof model === "function") {
+        ;(model as ReturnType<typeof vi.fn>).mockResolvedValue([])
+        continue
+      }
       for (const fn of Object.values(model as Record<string, ReturnType<typeof vi.fn>>)) fn.mockResolvedValue([])
     }
     await loadPayablesTotal(new Date(2026, 9, 31))
@@ -297,9 +306,7 @@ describe("total trailing: buku besar & stok (lanjutan #8)", () => {
   })
 
   it("kartu stok: Saldo Akhir data bold sejajar Masuk/Keluar/Saldo (bukan total geser)", async () => {
-    mocks.prismaMock.stockMove.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
+    mocks.prismaMock.stockMove.findMany.mockResolvedValueOnce([
         {
           id: 1,
           date: new Date("2026-10-05"),

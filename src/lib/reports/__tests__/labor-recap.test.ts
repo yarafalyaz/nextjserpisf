@@ -138,11 +138,38 @@ describe("getLaborRecap", () => {
   })
 
   it("F-038 loader periode Januari: baris Feb dibuang, manual jadi undated", async () => {
-    const r = await getLaborRecap({
+    // Query DB kini tersaring periode: timesheet dalam rentang dimuat dulu,
+    // baris labor dibatasi ke sumber itu + manual.
+    mocks.prismaMock.timesheet.findMany.mockResolvedValue([
+      { id: 10, employeeId: 1, date: new Date(2026, 0, 15), employee: { name: "Budi" } },
+      { id: 11, employeeId: 2, date: new Date(2026, 0, 20), employee: { name: "Andi" } },
+    ])
+    mocks.prismaMock.productionCost.findMany.mockResolvedValue([
+      { sourceTimesheetId: 10, hours: { toString: () => "2.50" }, amount: 150_000 },
+      { sourceTimesheetId: 10, hours: 1, amount: 60_000 },
+      { sourceTimesheetId: 11, hours: 3, amount: 200_000 },
+      { sourceTimesheetId: null, hours: 4, amount: 250_000 },
+      { sourceTimesheetId: 99, hours: 5, amount: 300_000 },
+    ])
+    const period = {
       start: new Date(2026, 0, 1),
       end: new Date(2026, 0, 31, 23, 59, 59, 999),
-    })
-    // Fixture beforeEach: Budi 210rb (15 Jan), Andi 200rb (20 Jan) dalam periode;
+    }
+    const r = await getLaborRecap(period)
+    expect(mocks.prismaMock.timesheet.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { date: { gte: period.start, lte: period.end } },
+      }),
+    )
+    expect(mocks.prismaMock.productionCost.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          category: "labor",
+          OR: [{ sourceTimesheetId: null }, { sourceTimesheetId: { in: [10, 11] } }],
+        },
+      }),
+    )
+    // Fixture: Budi 210rb (15 Jan), Andi 200rb (20 Jan) dalam periode;
     // manual 250rb + timesheet hilang 300rb tanpa tanggal terbukti.
     expect(r.totalAmount).toBe(410_000)
     expect(r.undated).toEqual({ laborHours: 9, totalAmount: 550_000, lineCount: 2 })
