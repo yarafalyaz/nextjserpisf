@@ -24,6 +24,8 @@ interface CreditRow {
 interface CustomerCreditPanelProps {
   credits: CreditRow[]
   invoices: { id: number; documentNo: string; grandTotal: unknown; paidAmount: unknown }[]
+  /** Izin confirm_down_payments dari server — gerbang elemen aksi; riwayat tetap terbaca. */
+  canConfirm: boolean
 }
 
 /**
@@ -38,7 +40,7 @@ function newOperationKey(): string {
   return crypto.randomUUID()
 }
 
-export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelProps) {
+export function CustomerCreditPanel({ credits, invoices, canConfirm }: CustomerCreditPanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [invoiceId, setInvoiceId] = useState<string>(invoices[0] ? String(invoices[0].id) : "")
@@ -179,6 +181,7 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
             <div className="text-sm font-medium">
               {c.documentNo} — sisa {saldo.toLocaleString("id-ID")} ({statusLabel(c.status)})
             </div>
+            {canConfirm && (
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col gap-1 text-xs">
                 Mode
@@ -231,6 +234,7 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
                 {isPending ? "Memproses..." : mode === "allocate" ? "Alokasikan" : "Refund"}
               </Button>
             </div>
+            )}
           </div>
         )
       })}

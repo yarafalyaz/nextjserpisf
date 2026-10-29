@@ -23,7 +23,7 @@ import {
 
 import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, hasPermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { salesInvoiceLabel } from "@/lib/utils/invoice-label";
@@ -68,6 +68,8 @@ export default async function DownPaymentDetailPage({
   // by id langsung (bukan muat semua DP lalu saring).
   const [vatRow] = await loadDownPaymentTaxStatusRows({ downPaymentId: dp.id });
 
+  const canConfirm = await hasPermission("confirm_down_payments");
+
   const pmMap = await getPaymentMethodMap();
 
   // AUD-R4-01: kredit dari DP ini + faktur terbuka pelanggan yang sama
@@ -102,7 +104,9 @@ export default async function DownPaymentDetailPage({
           <>
             {dp.status === "draft" && (
               <>
-                <ConfirmDownPaymentButton dpId={dp.id} />
+                <CanCreate permission="confirm_down_payments">
+                  <ConfirmDownPaymentButton dpId={dp.id} />
+                </CanCreate>
                 <CanCreate permission="edit_down_payments">
                   <Button
                     href={entityEditHref("/penjualan/uang-muka", dp)}
@@ -192,7 +196,7 @@ export default async function DownPaymentDetailPage({
       {/* AUD-R4-01: panel operasional kredit (alokasi/refund). */}
       {dpCredits.length > 0 && (
         <DetailCard title="Kredit Pelanggan dari DP ini">
-          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) }))} />
+          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices.map((inv) => ({ ...inv, documentNo: salesInvoiceLabel(inv) }))} canConfirm={canConfirm} />
         </DetailCard>
       )}
 
