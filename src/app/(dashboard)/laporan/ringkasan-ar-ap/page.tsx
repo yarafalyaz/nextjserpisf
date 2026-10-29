@@ -1,8 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting, formatCurrency, formatDate } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -11,57 +9,53 @@ import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
-import { RECOGNISED_AR_STATUSES, RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
+import { loadArApSummary } from "@/lib/reports/ar-ap-summary-data"
+import type { TableRow } from "@/lib/pdf/engine/types"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 
 export const metadata: Metadata = { title: "Ringkasan AR/AP" }
 
+/**
+ * 120-S: layar murni render keluaran loader kanonis `loadArApSummary`
+ * (satu sumber dengan PDF: presisi sen + returnCredit + AP NETO).
+ * Tanpa query prisma, tanpa hitung manual sendiri, tanpa saring
+ * ambang sendiri — partisi baris per seksi + ambang tampil
+ * ikut loader apa adanya. Sel angka ditampilkan verbatim dari loader.
+ */
 export default async function ArApSummaryPage() {
   await requirePermission('view_reports')
 
-  const invoices = await prisma.salesInvoice.findMany({
-    where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
-    include: { customer: { select: { name: true } } },
-    orderBy: { dueDate: 'asc' },
-  })
+  const report = await loadArApSummary()
 
-  const arByCustomer = new Map<number, { name: string; totalInvoiced: number; totalPaid: number; outstanding: number; count: number }>()
-  for (const inv of invoices) {
-    const existing = arByCustomer.get(inv.customerId) || { name: inv.customer.name, totalInvoiced: 0, totalPaid: 0, outstanding: 0, count: 0 }
-    const invoiced = Number(inv.grandTotal)
-    const paid = Number(inv.paidAmount)
-    existing.totalInvoiced += invoiced
-    existing.totalPaid += paid
-    existing.outstanding += invoiced - paid
-    existing.count++
-    arByCustomer.set(inv.customerId, existing)
+  // Partisi baris tabel kanonis per kelompok — urutan + isi ikut loader.
+  const arCells: string[][] = []
+  const apCells: string[][] = []
+  let arTotal = "0"
+  let apTotal = "0"
+  let netTotal = "0"
+  let notice: string | null = null
+  let group: "ar" | "ap" | null = null
+  for (const row of report.table.rows) {
+    if (row.kind === "group") {
+      group = row.label === "Piutang Usaha" ? "ar" : row.label === "Hutang Usaha" ? "ap" : null
+    } else if (row.kind === "data") {
+      if (group === "ar") arCells.push(row.cells)
+      else if (group === "ap") apCells.push(row.cells)
+    } else if (row.kind === "total" && !row.grand) {
+      if (row.label === "Jumlah Piutang") arTotal = lastCell(row)
+      else if (row.label === "Jumlah Hutang") apTotal = lastCell(row)
+    } else if (row.kind === "total" && row.grand) {
+      netTotal = lastCell(row)
+    } else if (row.kind === "notice") {
+      notice = row.text
+    }
   }
-  const arRows = Array.from(arByCustomer.values()).filter(r => r.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
-  const totalAR = arRows.reduce((s, r) => s + r.outstanding, 0)
 
-  const bills = await prisma.vendorBill.findMany({
-    where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
-    include: { vendor: { select: { name: true } } },
-    orderBy: { dueDate: 'asc' },
-  })
-
-  const apByVendor = new Map<number, { name: string; totalBilled: number; totalPaid: number; outstanding: number; count: number }>()
-  for (const bill of bills) {
-    const existing = apByVendor.get(bill.vendorId) || { name: bill.vendor.name, totalBilled: 0, totalPaid: 0, outstanding: 0, count: 0 }
-    const billed = Number(bill.grandTotal)
-    const paid = Number(bill.paidAmount)
-    existing.totalBilled += billed
-    existing.totalPaid += paid
-    existing.outstanding += billed - paid
-    existing.count++
-    apByVendor.set(bill.vendorId, existing)
-  }
-  const apRows = Array.from(apByVendor.values()).filter(r => r.outstanding > 0).sort((a, b) => b.outstanding - a.outstanding)
-  const totalAP = apRows.reduce((s, r) => s + r.outstanding, 0)
-
-  const period = `Per ${formatDate(new Date())}`
+  // formatAccounting: negatif dalam kurung — satu-satunya penanda arah
+  // untuk warna kartu Posisi Bersih; bukan hitung ulang, hanya baca format.
+  const netNegative = netTotal.startsWith("(")
 
   return (
     <ReportPageShell title="Ringkasan AR/AP" sheet={false} wide actions={<>
@@ -72,17 +66,16 @@ export default async function ArApSummaryPage() {
 
 
 
-
-      <ReportLetterhead title="Ringkasan Piutang & Hutang" periodLabel={period} />
+      <ReportLetterhead title="Ringkasan Piutang & Hutang" periodLabel={report.periodLabel} />
       <ReportNarration text="Laporan Ringkasan Piutang dan Utang menyajikan ikhtisar saldo piutang usaha dan utang usaha perusahaan. Informasi ini penting untuk mengelola arus kas dan memastikan kewajiban pembayaran kepada pemasok serta tagihan kepada pelanggan terpantau dengan baik." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Piutang (AR)" value={formatCurrency(totalAR)} valueClassName="text-primary" />
-        <ReportKpiCard label="Total Hutang (AP)" value={formatCurrency(totalAP)} valueClassName="text-danger" />
+        <ReportKpiCard label="Total Piutang (AR)" value={arTotal} valueClassName="text-primary" />
+        <ReportKpiCard label="Total Hutang (AP)" value={apTotal} valueClassName="text-danger" />
         <ReportKpiCard
           label="Posisi Bersih"
-          value={formatCurrency(totalAR - totalAP)}
-          valueClassName={totalAR - totalAP >= 0 ? 'text-success' : 'text-danger'}
+          value={netTotal}
+          valueClassName={netNegative ? 'text-danger' : 'text-success'}
         />
       </div>
 
@@ -96,25 +89,24 @@ export default async function ArApSummaryPage() {
             <DetailTableTh align="right">Belum Lunas</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
-            {arRows.map((row, i) => (
+            {arCells.map((cells, i) => (
               <DetailTableRow key={i}>
-                <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
-                <DetailTableTd align="right">{row.count}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.totalInvoiced)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.totalPaid)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold text-primary">{formatAccounting(row.outstanding)}</DetailTableTd>
+                <DetailTableTd className="font-medium">{cells[0]}</DetailTableTd>
+                <DetailTableTd align="right">{cells[1]}</DetailTableTd>
+                <DetailTableTd align="right">{cells[2]}</DetailTableTd>
+                <DetailTableTd align="right">{cells[3]}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold text-primary">{cells[4]}</DetailTableTd>
               </DetailTableRow>
             ))}
-            {arRows.length === 0 && (
+            {arCells.length === 0 && (
               <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada piutang belum lunas" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
-            {arRows.length > 0 && (
+            {arCells.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{arRows.reduce((s, r) => s + r.count, 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(arRows.reduce((s, r) => s + r.totalInvoiced, 0))}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(arRows.reduce((s, r) => s + r.totalPaid, 0))}</DetailTableTd>
-                <DetailTableTd align="right" className="text-primary">{formatAccounting(totalAR)}</DetailTableTd>
+                <DetailTableTd align="right">{arCells.length}</DetailTableTd>
+                <DetailTableTd align="right" colSpan={2}>{""}</DetailTableTd>
+                <DetailTableTd align="right" className="text-primary">{arTotal}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
@@ -131,30 +123,35 @@ export default async function ArApSummaryPage() {
             <DetailTableTh align="right">Belum Lunas</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
-            {apRows.map((row, i) => (
+            {apCells.map((cells, i) => (
               <DetailTableRow key={i}>
-                <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
-                <DetailTableTd align="right">{row.count}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.totalBilled)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(row.totalPaid)}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold text-danger">{formatAccounting(row.outstanding)}</DetailTableTd>
+                <DetailTableTd className="font-medium">{cells[0]}</DetailTableTd>
+                <DetailTableTd align="right">{cells[1]}</DetailTableTd>
+                <DetailTableTd align="right">{cells[2]}</DetailTableTd>
+                <DetailTableTd align="right">{cells[3]}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold text-danger">{cells[4]}</DetailTableTd>
               </DetailTableRow>
             ))}
-            {apRows.length === 0 && (
+            {apCells.length === 0 && (
               <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6"><EmptyState title="Tidak ada hutang belum lunas" className="py-0" /></DetailTableTd></DetailTableRow>
             )}
-            {apRows.length > 0 && (
+            {apCells.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{apRows.reduce((s, r) => s + r.count, 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(apRows.reduce((s, r) => s + r.totalBilled, 0))}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(apRows.reduce((s, r) => s + r.totalPaid, 0))}</DetailTableTd>
-                <DetailTableTd align="right" className="text-danger">{formatAccounting(totalAP)}</DetailTableTd>
+                <DetailTableTd align="right">{apCells.length}</DetailTableTd>
+                <DetailTableTd align="right" colSpan={2}>{""}</DetailTableTd>
+                <DetailTableTd align="right" className="text-danger">{apTotal}</DetailTableTd>
               </DetailTableRow>
             )}
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
+      {notice && <p className="doc-lines" style={{ marginTop: 8 }}>{notice}</p>}
     </ReportPageShell>
   )
+}
+
+/** Sel angka terakhir baris total kanonis — tampil verbatim di layar. */
+function lastCell(row: Extract<TableRow, { kind: "total" }>): string {
+  return row.cells[row.cells.length - 1] ?? "0"
 }

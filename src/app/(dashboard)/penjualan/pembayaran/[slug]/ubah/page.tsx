@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import { PaymentForm } from "@/components/forms/payment-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { LockedEditGuard } from "@/components/ui/locked-edit-guard";
 import { getActivePaymentMethods } from "@/lib/services/method.service";
 
 import type { Metadata } from "next";
@@ -31,6 +32,26 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // GL-BR-003 K1: pembayaran reversed = histori read-only (server tolak
+  // edit reversed fail-closed). Jangan render form — tampilkan notice +
+  // tautan kembali, bukan aksi yang pasti ditolak.
+  if (data.status === "reversed") {
+    return (
+      <LockedEditGuard
+        preset={{
+          section: "Pembayaran",
+          sectionHref: "/penjualan/pembayaran",
+          documentKind: "Pembayaran",
+          documentNo: data.documentNo,
+          slug: data.slug ?? data.id,
+          correctionLabel: "pembayaran pengganti baru",
+          backHref: "/penjualan/pembayaran",
+          backLabel: "Kembali ke daftar pembayaran",
+        }}
+      />
+    );
+  }
 
   const payment = {
     id: data.id,

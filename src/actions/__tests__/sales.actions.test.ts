@@ -1169,6 +1169,18 @@ describe("Sales Return Actions", () => {
     const res = await actions.deleteSalesReturn(1)
     expect(res?.success).toBe(false)
   })
+  it("deleteSalesReturn GL003-P8 hanya-draf: approved ditolak, kunci+hapus-dalam-tx", async () => {
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.deleteSalesReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/hanya draf yang bisa dihapus/i)
+    expect(mocks.prismaMock.salesReturn.delete).not.toHaveBeenCalled()
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const ok = await actions.deleteSalesReturn(1)
+    expect(ok?.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
+    expect(mocks.prismaMock.salesReturn.delete).toHaveBeenCalledWith({ where: { id: 1 } })
+  })
 })
 
 describe("Quotation Actions (legacy happy paths)", () => {
