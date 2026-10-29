@@ -1,19 +1,17 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useTransition } from "react"
 import {
   addPayrollComponentLine,
   removePayrollComponentLine,
   updatePayrollComponentLineAmount,
 } from "@/actions/hrm.actions"
-import { showError, showSuccess } from "@/lib/utils/toast"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { Label } from "@/components/ui/shadcn/label"
 import { kindLabel, recurrenceLabel, taxableLabel } from "./payroll-component-master"
+import { useSlipActionRunner } from "./use-slip-action-runner"
 
 export interface PayrollComponentLineRow {
   id: number
@@ -62,26 +60,13 @@ export function PayrollComponentLines({
   deductions: number
   canEdit: boolean
 }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const { isPending, run } = useSlipActionRunner("Gagal menyimpan baris komponen gaji")
   const editable = status === "draft" && canEdit
   const visible = lines.filter((l) => l.commissionPayableId == null)
   const usedIds = new Set(visible.map((l) => l.componentId).filter((v) => v != null))
   // Kartu F-027 UI: baris manual hanya komponen tidak-tetap; komponen tetap
   // masuk slip lewat penugasan saat generate.
   const available = components.filter((c) => c.recurrence === "variable" && !usedIds.has(c.id))
-
-  function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
-    startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan baris komponen gaji")
-        return
-      }
-      showSuccess(ok)
-      router.refresh()
-    })
-  }
 
   return (
     <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">

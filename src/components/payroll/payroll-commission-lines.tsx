@@ -1,17 +1,15 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useTransition } from "react"
 import {
   addPayrollCommissionLine,
   removePayrollComponentLine,
 } from "@/actions/hrm.actions"
-import { showError, showSuccess } from "@/lib/utils/toast"
 import { formatCurrency } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { Label } from "@/components/ui/shadcn/label"
+import { useSlipActionRunner } from "./use-slip-action-runner"
 
 export interface PayrollCommissionDebtOption {
   id: number
@@ -40,26 +38,13 @@ export function PayrollCommissionLines({
   lines: PayrollCommissionRow[]
   canEdit: boolean
 }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const { isPending, run } = useSlipActionRunner("Gagal menyimpan baris komisi")
   const editable = status === "draft" && canEdit
   // ponytail: opsi utang ≤ puluhan baris per karyawan; tanpa cari/filter.
   // Tambah pencarian server saat karyawan komisi volume tinggi protes.
   const used = new Set(lines.map((l) => l.commissionPayableId))
   const available = debts.filter((d) => !used.has(d.id))
   const defaultDebt = available[0]
-
-  function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
-    startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan baris komisi")
-        return
-      }
-      showSuccess(ok)
-      router.refresh()
-    })
-  }
 
   return (
     <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
