@@ -39,6 +39,26 @@ export default async function EditQuotationPage({
   // GL-BR-003 K1: cermin guard server updateQuotation fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). Final tanpa
   // pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
+  const quotLockedCrumbs = [
+    { label: "Dasbor", href: "/" },
+    { label: "Penawaran", href: "/penjualan/penawaran" },
+    { label: "Ubah" },
+  ]
+  const _d = data;
+  if (!_d) notFound();
+  const quotLockedBackHref = `/penjualan/penawaran/${_d.slug ?? _d.id}`
+  function quotLockedGuard() {
+    return (
+      <LockedEditGuard
+        crumbs={quotLockedCrumbs}
+        documentLabel={`Penawaran ${_d.documentNo}`}
+        correctionLabel="revisi/penawaran baru"
+        backHref={quotLockedBackHref}
+        backLabel="Kembali ke detail penawaran"
+      />
+    )
+  }
+  if (_d.status === "cancelled") {
   // `data` non-null sesudah notFound (TS tak menyempit via throw).
   const lockedQuotation = data as NonNullable<typeof data>
   function quotLockedGuard() {
@@ -64,6 +84,8 @@ export default async function EditQuotationPage({
       NOT: { paymentMethod: "down_payment" },
       salesInvoice: {
         OR: [
+          { quotationId: _d.id },
+          { salesOrder: { quotationId: _d.id } },
           { quotationId: lockedQuotation.id },
           { salesOrder: { quotationId: lockedQuotation.id } },
         ],

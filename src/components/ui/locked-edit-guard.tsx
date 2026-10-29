@@ -20,6 +20,27 @@ export function LockedEditGuard({
   correctionLabel,
   backHref,
   backLabel,
+}: {
+  crumbs: Array<{ label: string; href?: string }>
+  documentLabel: string
+  correctionHref?: string
+  correctionLabel?: string
+  backHref: string
+  backLabel: string
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={crumbs} />
+      <PostedLockNotice
+        documentLabel={documentLabel}
+        correctionHref={correctionHref}
+        correctionLabel={correctionLabel}
+      />
+      <Link
+        href={backHref}
+        className="text-sm font-medium underline underline-offset-4"
+      >
+        {backLabel}
   preset,
 }: {
   crumbs?: Array<{ label: string; href?: string }>

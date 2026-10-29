@@ -1,9 +1,12 @@
 "use client"
 
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { showSuccess, showError } from "@/lib/utils/toast"
 import { showError } from "@/lib/utils/toast"
 import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
@@ -28,6 +31,10 @@ export function ReversePaymentButton({
   body?: string
   onSuccess?: () => void
 }) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [isOpen, setIsOpen] = useState(false)
+  const [reason, setReason] = useState("")
   const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
     useConfirmReasonAction({
       run: (trimmed) => action(id, trimmed),
@@ -41,6 +48,24 @@ export function ReversePaymentButton({
       showError("Alasan pembalikan wajib diisi")
       return
     }
+    startTransition(async () => {
+      const result = await action(id, reason.trim())
+      if (result.success) {
+        showSuccess("Pembayaran berhasil dibalik")
+        setIsOpen(false)
+        setReason("")
+        onSuccess?.()
+        router.refresh()
+      } else {
+        showError(result.error || "Gagal membalik pembayaran")
+        setIsOpen(false)
+      }
+    })
+  }
+
+  function handleOpenChange(open: boolean) {
+    if (!open) setReason("")
+    setIsOpen(open)
     submit()
   }
 

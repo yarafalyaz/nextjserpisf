@@ -34,6 +34,27 @@ export default async function EditPage({
   // GL-BR-003 K1: cermin guard server updateSalesOrder fail-closed
   // (cancelled/completed/setelah-pelunasan-nyata pasti ditolak). Status
   // lain tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
+  const orderLockedCrumbs = [
+    { label: "Dasbor", href: "/" },
+    { label: "Penjualan", href: "/penjualan" },
+    { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
+    { label: "Ubah" },
+  ];
+  const _d = data;
+  if (!_d) notFound();
+  const orderLockedBackHref = `/penjualan/pesanan/${_d.slug ?? _d.id}`;
+  function orderLockedGuard() {
+    return (
+      <LockedEditGuard
+        crumbs={orderLockedCrumbs}
+        documentLabel={`Pesanan Penjualan ${_d.documentNo}`}
+        correctionLabel="retur/void faktur turunan"
+        backHref={orderLockedBackHref}
+        backLabel="Kembali ke detail pesanan"
+      />
+    );
+  }
+  if (_d.status === "cancelled" || _d.status === "completed") {
   // `data` non-null sesudah notFound (TS tak menyempit via throw).
   const lockedOrder = data as NonNullable<typeof data>;
   function orderLockedGuard() {
@@ -57,6 +78,7 @@ export default async function EditPage({
   const orderRealSettlementCount = await prisma.salesPayment.count({
     where: {
       NOT: { paymentMethod: "down_payment" },
+      salesInvoice: { salesOrderId: _d.id },
       salesInvoice: { salesOrderId: lockedOrder.id },
     },
   });
