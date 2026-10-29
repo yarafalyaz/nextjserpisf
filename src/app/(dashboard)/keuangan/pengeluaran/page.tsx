@@ -57,9 +57,11 @@ export default async function ExpensesPage({
     redirectError?: unknown
   }> = getExpenseDraftQueue()
     .then((queue) => ({ queue }))
-    .catch((error: unknown) =>
-      isNextRedirect(error) ? { queue: null, redirectError: error } : { queue: null },
-    )
+    .catch((error: unknown) => {
+      if (isNextRedirect(error)) return { queue: null, redirectError: error }
+      console.error("[pengeluaran] antrean pengeluaran menunggu persetujuan gagal dimuat:", error)
+      return { queue: null }
+    })
 
   const [expenses, total] = await Promise.all([
     prisma.expense.findMany({

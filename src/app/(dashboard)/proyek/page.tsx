@@ -63,9 +63,11 @@ export default async function ProjectsPage({
     redirectError?: unknown
   }> = getProjectStageQueue()
     .then((queue) => ({ queue }))
-    .catch((error: unknown) =>
-      isNextRedirect(error) ? { queue: null, redirectError: error } : { queue: null },
-    )
+    .catch((error: unknown) => {
+      if (isNextRedirect(error)) return { queue: null, redirectError: error }
+      console.error("[proyek] antrean tahap proyek gagal dimuat:", error)
+      return { queue: null }
+    })
 
   const [projects, total] = await Promise.all([
     prisma.project.findMany({
