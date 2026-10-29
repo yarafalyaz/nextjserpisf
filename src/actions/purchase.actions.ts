@@ -624,13 +624,23 @@ async function assertPurchaseReturnWithinReceived(
   return documentCostByItem;
 }
 
+// Total baris di-clamp >= 0 (pola sisi jual sales.actions): diskon baris
+// melebihi bruto baris tidak boleh menyimpan total baris/grandTotal negatif.
+// `subtotal` header tetap bruto; `discount` header = diskon efektif
+// (bruto - total baris ter-clamp) supaya subtotal - discount + ongkir/jasa
+// selalu sama dengan jumlah item.total tersimpan + ongkir/jasa.
+function purchaseOrderLineTotal(it: PurchaseOrderLine) {
+  return Math.max(0, safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0));
+}
+
 function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: number, serviceFee: number) {
   const subtotal = lines.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0);
-  const discount = lines.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0);
+  const netTotal = lines.reduce((s, it) => safeAdd(s, purchaseOrderLineTotal(it), 0), 0);
+  const discount = safeSubtract(subtotal, netTotal, 0);
   return {
     subtotal,
     discount,
-    grandTotal: safeAdd(safeSubtract(subtotal, discount, 0), safeAdd(shippingCost, serviceFee, 0), 0),
+    grandTotal: safeAdd(netTotal, safeAdd(shippingCost, serviceFee, 0), 0),
   };
 }
 
@@ -642,7 +652,7 @@ function purchaseOrderItemData(it: PurchaseOrderLine) {
     qty: it.qty,
     unitPrice: it.unitPrice,
     discount: it.discount || 0,
-    total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
+    total: purchaseOrderLineTotal(it),
   };
 }
 

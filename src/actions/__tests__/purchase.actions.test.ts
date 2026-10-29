@@ -477,6 +477,58 @@ describe("Purchase Order Actions", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_orders")
   })
 
+  // Regresi: diskon baris > bruto baris dulu tersimpan sebagai total baris
+  // dan grandTotal negatif (safeSubtract tanpa clamp). Pola sisi jual:
+  // total baris di-clamp >= 0, diskon header = diskon efektif.
+  it("createPurchaseOrder clamp diskon baris melebihi bruto: total tidak negatif", async () => {
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      shippingCost: "10000",
+      serviceFee: "5000",
+      items: JSON.stringify([
+        { itemId: 1, qty: 2, unitPrice: 1000, discount: 5000 },
+        { itemId: 2, qty: 1, unitPrice: 3000, discount: 1000 },
+      ])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ total: 0 }))
+    expect(arg.data.items.create[1]).toEqual(expect.objectContaining({ total: 2000 }))
+    // subtotal bruto 5000; diskon efektif 5000-2000=3000; grand = 2000+15000.
+    expect(arg.data.subtotal).toBe(5000)
+    expect(arg.data.discount).toBe(3000)
+    expect(arg.data.grandTotal).toBe(17000)
+  })
+
+  it("updatePurchaseOrder clamp diskon baris melebihi bruto: total tidak negatif", async () => {
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 1000, discount: 9999 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.update.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ total: 0 }))
+    expect(arg.data.subtotal).toBe(1000)
+    expect(arg.data.discount).toBe(1000)
+    expect(arg.data.grandTotal).toBe(0)
+  })
+
+  it("createPurchaseOrder diskon wajar tidak berubah oleh clamp", async () => {
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2, unitPrice: 1000, discount: 500 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ total: 1500 }))
+    expect(arg.data.subtotal).toBe(2000)
+    expect(arg.data.discount).toBe(500)
+    expect(arg.data.grandTotal).toBe(1500)
+  })
+
 
 
   it("cancelPurchaseOrder succeeds", async () => {
