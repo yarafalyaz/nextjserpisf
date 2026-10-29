@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
 import { formatAccounting, formatCurrency, formatDate, formatNumber } from '@/lib/utils/format'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -28,7 +29,11 @@ export default async function StockValuationPage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ warehouseId?: string }>
 }) {
-  await requirePermission('view_reports')
+  const user = await requirePermission('view_reports')
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // undefined = all-access (tanpa penegakan); array (termasuk kosong) = ditegakkan.
+  const scopeIds: number[] | undefined =
+    scope.kind === 'all' ? undefined : scope.kind === 'assigned' ? scope.warehouseIds : []
 
   const [{ segments = [] }, search] = await Promise.all([routeParams, searchParams])
   // Laporan tanpa periode: segmennya langsung pasangan filter. Gudang dari path
@@ -36,18 +41,33 @@ export default async function StockValuationPage({
   const { filters } = splitReportSegments(segments)
   const warehouseKey = filters.gudang ?? search.warehouseId ?? null
 
-  const warehouses = await prisma.warehouse.findMany({
+  const allWarehouses = await prisma.warehouse.findMany({
     where: { isActive: true, deletedAt: null },
     orderBy: { code: 'asc' },
   })
 
+  // Map nama gudang dari daftar penuh; opsi dropdown dibatasi ke scope.
+  const warehouses = scopeIds ? allWarehouses.filter((w) => scopeIds.includes(w.id)) : allWarehouses
+
   const warehouseRow = warehouseKey
-    ? warehouses.find((w) => w.slug === warehouseKey) ?? warehouses.find((w) => String(w.id) === warehouseKey) ?? null
+    ? allWarehouses.find((w) => w.slug === warehouseKey) ?? allWarehouses.find((w) => String(w.id) === warehouseKey) ?? null
     : null
   const warehouseId = warehouseRow?.id ?? null
 
+  // Gudang terpilih di luar scope -> { in: [] } (kosong); tanpa filter +
+  // assigned -> hanya gudang scope; all -> perilaku lama.
+  const warehouseWhere: { warehouseId?: number | { in: number[] } } = !scopeIds
+    ? warehouseId
+      ? { warehouseId }
+      : {}
+    : warehouseId
+      ? scopeIds.includes(warehouseId)
+        ? { warehouseId }
+        : { warehouseId: { in: [] } }
+      : { warehouseId: { in: scopeIds } }
+
   const layers = await prisma.inventoryLayer.findMany({
-    where: { remaining: { gt: 0 }, ...(warehouseId ? { warehouseId } : {}) },
+    where: { remaining: { gt: 0 }, ...warehouseWhere },
     include: {
       item: {
         select: {

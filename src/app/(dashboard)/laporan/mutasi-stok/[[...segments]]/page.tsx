@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
 import { formatCurrency, formatDate, formatNumber, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
 import Link from 'next/link'
@@ -29,7 +30,11 @@ export default async function StockMovementPage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ warehouseId?: string; tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
-  await requirePermission('view_reports')
+  const user = await requirePermission('view_reports')
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // undefined = all-access (tanpa penegakan); array (termasuk kosong) = ditegakkan.
+  const scopeIds: number[] | undefined =
+    scope.kind === 'all' ? undefined : scope.kind === 'assigned' ? scope.warehouseIds : []
 
   const [{ segments = [] }, search] = await Promise.all([routeParams, searchParams])
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
@@ -42,22 +47,38 @@ export default async function StockMovementPage({
   // tetap dibaca supaya tautan sebelum perpindahan tidak jadi tautan mati.
   const warehouseKey = splitReportSegments(segments).filters.gudang ?? search.warehouseId ?? null
 
-  const warehouses = await prisma.warehouse.findMany({
+  const allWarehouses = await prisma.warehouse.findMany({
     where: { isActive: true, deletedAt: null },
     orderBy: { code: 'asc' },
     select: { id: true, code: true, name: true, slug: true },
   })
 
+  // Resolver memakai daftar penuh (tautan lama tetap terbaca); opsi dropdown
+  // dibatasi ke gudang dalam scope agar UI jujur.
+  const warehouses = scopeIds ? allWarehouses.filter((w) => scopeIds.includes(w.id)) : allWarehouses
+
   const warehouseRow = warehouseKey
-    ? warehouses.find((w) => w.slug === warehouseKey) ?? warehouses.find((w) => String(w.id) === warehouseKey) ?? null
+    ? allWarehouses.find((w) => w.slug === warehouseKey) ?? allWarehouses.find((w) => String(w.id) === warehouseKey) ?? null
     : null
   const warehouseId = warehouseRow?.id ?? null
+
+  // Gudang terpilih di luar scope -> daftar efektif kosong (hasil kosong).
+  // Tanpa filter + assigned -> hanya gudang scope. all -> perilaku lama.
+  const warehouseWhere: { warehouseId?: number | { in: number[] } } = !scopeIds
+    ? warehouseId
+      ? { warehouseId }
+      : {}
+    : warehouseId
+      ? scopeIds.includes(warehouseId)
+        ? { warehouseId }
+        : { warehouseId: { in: [] } }
+      : { warehouseId: { in: scopeIds } }
 
   const moves = await prisma.stockMove.findMany({
     where: {
       status: 'posted',
       date: { gte: startDate, lte: endDate },
-      ...(warehouseId ? { warehouseId } : {}),
+      ...warehouseWhere,
     },
     include: {
       item: { select: { sku: true, name: true, unitOfMeasure: true } },

@@ -122,15 +122,48 @@ export function aggregateStockMovementTotals(
   return { totalInQty, totalOutQty, totalInValue, totalOutValue }
 }
 
+/**
+ * Scope gudang penegakan laporan stok: `undefined` = tak ada penegakan
+ * (perilaku lama, pemanggil non-user/test lama); array (termasuk kosong) =
+ * ditegakkan. Bila gudang terpilih di luar scope -> laporan kosong berisi
+ * notice. Bila tanpa filter -> hanya gudang dalam scope yang dibaca
+ * (array kosong menghasilkan kosong alami lewat `in: []`).
+ */
+type ScopeWarehouseIds = number[] | null | undefined
+
+function warehouseScopeWhere(
+  warehouseId: number | null,
+  scope: ScopeWarehouseIds,
+): { warehouseId?: number | { in: number[] } } | "out-of-scope" {
+  if (scope === undefined || scope === null) {
+    return warehouseId ? { warehouseId } : {}
+  }
+  if (warehouseId) {
+    return scope.includes(warehouseId) ? { warehouseId } : "out-of-scope"
+  }
+  return { warehouseId: { in: scope } }
+}
+
 export async function loadStockMovements(
   period: Period,
   warehouseId: number | null,
+  scopeWarehouseIds?: number[] | null,
 ): Promise<StockFlowReport> {
+  const scopeWhere = warehouseScopeWhere(warehouseId, scopeWarehouseIds)
+  if (scopeWhere === "out-of-scope") {
+    return {
+      table: {
+        columns: MOVEMENT_COLUMNS,
+        rows: [{ kind: "notice", text: "Gudang yang dipilih di luar cakupan akses Anda." }],
+      },
+      ...periodOf(period),
+    }
+  }
   const moves = await prisma.stockMove.findMany({
     where: {
       status: "posted",
       date: { gte: period.start, lte: period.end },
-      ...(warehouseId ? { warehouseId } : {}),
+      ...scopeWhere,
     },
     include: {
       item: { select: { sku: true, name: true } },
@@ -179,12 +212,20 @@ const VALUATION_COLUMNS: TableColumn[] = [
   { header: "Total Nilai", align: "right", width: 40 },
 ]
 
-export async function loadStockValuation(warehouseId: number | null): Promise<StockFlowReport> {
+export async function loadStockValuation(
+  warehouseId: number | null,
+  scopeWarehouseIds?: number[] | null,
+): Promise<StockFlowReport> {
+  const scopeWhere = warehouseScopeWhere(warehouseId, scopeWarehouseIds)
   const settings = await getSystemSettings()
   const [warehouses, layers] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { code: "asc" } }),
     prisma.inventoryLayer.findMany({
-      where: { remaining: { gt: 0 }, ...(warehouseId ? { warehouseId } : {}) },
+      // Gudang terpilih di luar scope: `in: []` memberi nol lapisan -> notice "Tidak ada stok."
+      where: {
+        remaining: { gt: 0 },
+        ...(scopeWhere === "out-of-scope" ? { warehouseId: { in: [] } } : scopeWhere),
+      },
       include: {
         item: {
           select: {
@@ -239,6 +280,7 @@ export async function loadStockCard(
   period: Period,
   itemId: number | null,
   warehouseId: number | null,
+  scopeWarehouseIds?: number[] | null,
 ): Promise<StockFlowReport> {
   if (!itemId) {
     return {
@@ -249,21 +291,45 @@ export async function loadStockCard(
       ...periodOf(period),
     }
   }
-  const baseWhere = { itemId, status: "posted" as const, ...(warehouseId ? { warehouseId } : {}) }
+  const scopeWhere = warehouseScopeWhere(warehouseId, scopeWarehouseIds)
+  if (scopeWhere === "out-of-scope") {
+    return {
+      table: {
+        columns: CARD_COLUMNS,
+        rows: [{ kind: "notice", text: "Gudang yang dipilih di luar cakupan akses Anda." }],
+      },
+      ...periodOf(period),
+    }
+  }
+  const baseWhere = { itemId, status: "posted" as const, ...scopeWhere }
   // Saldo awal diagregasi di DB — sebelumnya seluruh move pra-periode
   // dimuat ke memori hanya untuk dijumlahkan. Nilai per move = qty*cost
   // dibulatkan 2 desimal per baris (safeMultiply builder), jadi SUM mentah
   // qty*cost bisa meleset seperseribu dari penjumlahan per-baris lama;
   // ponytail: terima selisih sub-sen ini demi satu query agregat.
-  const warehouseSql = warehouseId ? Prisma.sql`AND warehouse_id = ${warehouseId}` : Prisma.empty
+  // Gudang terpilih sudah dijamin dalam scope oleh cek awal; tanpa filter +
+  // scope -> batasi agregat ke gudang scope. Scope kosong: jangan hasilkan
+  // `IN ()` invalid — agregat dikosongkan, periodMoves sudah kosong via
+  // `warehouseId: { in: [] }` di baseWhere.
+  const scopeIds =
+    !warehouseId && "warehouseId" in scopeWhere && scopeWhere.warehouseId && typeof scopeWhere.warehouseId === "object"
+      ? scopeWhere.warehouseId.in
+      : null
+  const warehouseSql = warehouseId
+    ? Prisma.sql`AND warehouse_id = ${warehouseId}`
+    : scopeIds && scopeIds.length > 0
+      ? Prisma.sql`AND warehouse_id IN (${Prisma.join(scopeIds)})`
+      : Prisma.empty
   const [priorAgg, periodMoves] = await Promise.all([
-    prisma.$queryRaw<Array<{ impact: string; qty: unknown; value: unknown }>>`
-      SELECT impact, SUM(qty) AS qty, SUM(qty * cost) AS value
-      FROM stock_moves
-      WHERE item_id = ${itemId} AND status = 'posted' AND transaction_date < ${period.start}
-      ${warehouseSql}
-      GROUP BY impact
-    `,
+    scopeIds && scopeIds.length === 0
+      ? Promise.resolve([] as Array<{ impact: string; qty: unknown; value: unknown }>)
+      : prisma.$queryRaw<Array<{ impact: string; qty: unknown; value: unknown }>>`
+          SELECT impact, SUM(qty) AS qty, SUM(qty * cost) AS value
+          FROM stock_moves
+          WHERE item_id = ${itemId} AND status = 'posted' AND transaction_date < ${period.start}
+          ${warehouseSql}
+          GROUP BY impact
+        `,
     prisma.stockMove.findMany({
       where: { ...baseWhere, date: { gte: period.start, lte: period.end } },
       include: { warehouse: { select: { code: true } } },

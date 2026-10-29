@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from '@/lib/auth/warehouse-scope'
 import { formatAccounting, formatDate, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { buildStockCard, openingBalance, type StockCardMove } from '@/lib/reports/stock-card'
@@ -47,7 +48,11 @@ export default async function StockCardPage({
     tanggalSelesai?: string
   }>
 }) {
-  await requirePermission('view_reports')
+  const user = await requirePermission('view_reports')
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // undefined = all-access (tanpa penegakan); array (termasuk kosong) = ditegakkan.
+  const scopeIds: number[] | undefined =
+    scope.kind === 'all' ? undefined : scope.kind === 'assigned' ? scope.warehouseIds : []
 
   const [{ segments = [] }, search] = await Promise.all([params, searchParams])
 
@@ -81,12 +86,28 @@ export default async function StockCardPage({
   const itemId = selectedItem?.id ?? null
   const warehouseId = selectedWarehouse?.id ?? null
 
+  // Opsi dropdown gudang dibatasi ke scope; resolver di atas tetap daftar penuh
+  // (tautan lama tetap terbaca, lalu ditegakkan di baseWhere).
+  const scopedWarehouses = scopeIds ? warehouses.filter((w) => scopeIds.includes(w.id)) : warehouses
+
+  // Gudang terpilih di luar scope -> { in: [] } (kosong); tanpa filter +
+  // assigned -> hanya gudang scope; all -> perilaku lama.
+  const warehouseWhere: { warehouseId?: number | { in: number[] } } = !scopeIds
+    ? warehouseId
+      ? { warehouseId }
+      : {}
+    : warehouseId
+      ? scopeIds.includes(warehouseId)
+        ? { warehouseId }
+        : { warehouseId: { in: [] } }
+      : { warehouseId: { in: scopeIds } }
+
   let card = null as ReturnType<typeof buildStockCard> | null
   if (itemId && selectedItem) {
     const baseWhere = {
       itemId,
       status: 'posted' as const,
-      ...(warehouseId ? { warehouseId } : {}),
+      ...warehouseWhere,
     }
 
     const [priorMoves, periodMoves] = await Promise.all([
@@ -153,7 +174,7 @@ export default async function StockCardPage({
             label: "Gudang",
             placeholder: "Semua Gudang",
             value: selectedWarehouse ? (selectedWarehouse.slug ?? String(selectedWarehouse.id)) : "",
-            options: warehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} — ${w.name}` })),
+            options: scopedWarehouses.map((w) => ({ value: w.slug ?? String(w.id), label: `${w.code} — ${w.name}` })),
           },
         ]}
       />

@@ -4,6 +4,7 @@ import { apiError } from "@/lib/api-response"
 import { parseReportPeriod } from "@/lib/reports/report-period"
 import { reportPdfFilename } from "@/lib/reports/report-export"
 import { REPORTS, isReportPdfKey } from "@/lib/reports/report-registry"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { buildStatementDocument, buildTableDocument } from "@/lib/pdf/documents/statement"
 import { renderStatementPdfBytes, renderTablePdfBytes } from "@/lib/pdf/engine/render"
 
@@ -68,7 +69,20 @@ export async function GET(request: Request) {
       definition.defaultPeriod?.(now) ?? { start: now, end: now },
     )
 
-    const payload = await definition.load({ period, search })
+    // Scope gudang hanya untuk tiga laporan stok; laporan lain tidak memicu
+    // query scope ekstra. all -> undefined (tak ditegakkan), none -> [].
+    const STOCK_PDF_KEYS = new Set(["mutasi-stok", "valuasi-stok", "kartu-stok"])
+    let warehouseScope: number[] | undefined
+    if (STOCK_PDF_KEYS.has(report)) {
+      const scope = await getWarehouseScope({
+        id: session.user.id,
+        roles: session.user.roles ?? [],
+      })
+      warehouseScope =
+        scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
+    }
+
+    const payload = await definition.load({ period, search, warehouseScope })
 
     const bytes =
       payload.kind === "statement"

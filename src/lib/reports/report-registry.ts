@@ -159,6 +159,12 @@ export interface ReportDefinition {
     /** Tanggal posisi untuk laporan posisi = `period.end`. */
     period: ReportPeriod
     search: Record<string, string | undefined>
+    /**
+     * Scope gudang pemanggil (hanya laporan stok): `undefined` = tak
+     * ditegakkan (all-access / pemanggil non-user); array termasuk kosong =
+     * ditegakkan, kosong = tanpa akses gudang.
+     */
+    warehouseScope?: number[] | null
   }) => Promise<ReportPayload>
 }
 
@@ -928,18 +934,18 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Mutasi Stok",
     subtitle: "Pergerakan Stok",
     defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
-    async load({ period, search }) {
+    async load({ period, search, warehouseScope }) {
       const warehouseId = await resolveWarehouseIdBySlugOrId(search.gudang ?? null)
-      const report = await loadStockMovements(period, warehouseId)
+      const report = await loadStockMovements(period, warehouseId, warehouseScope)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
   "valuasi-stok": {
     title: "Valuasi Stok per Gudang",
     subtitle: "Valuasi Persediaan",
-    async load({ search }) {
+    async load({ search, warehouseScope }) {
       const warehouseId = await resolveWarehouseIdBySlugOrId(search.gudang ?? null)
-      const report = await loadStockValuation(warehouseId)
+      const report = await loadStockValuation(warehouseId, warehouseScope)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
@@ -947,10 +953,10 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Kartu Stok",
     subtitle: "Riwayat Pergerakan per Barang",
     defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
-    async load({ period, search }) {
+    async load({ period, search, warehouseScope }) {
       const itemId = await resolveItemIdBySlugOrId(search.barang ?? null)
       const warehouseId = await resolveWarehouseIdBySlugOrId(search.gudang ?? null)
-      const report = await loadStockCard(period, itemId, warehouseId)
+      const report = await loadStockCard(period, itemId, warehouseId, warehouseScope)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
