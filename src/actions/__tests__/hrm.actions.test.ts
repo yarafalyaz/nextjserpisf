@@ -80,6 +80,7 @@ const mocks = vi.hoisted(() => {
     // HCMS K1: applyDueSalaryAdjustments berjalan di jalur payroll;
     // mock kosong = tidak ada kenaikan jatuh tempo.
     attendance: buildModelMock(),
+    employeeRoster: buildModelMock(),
     workSchedule: buildModelMock(),
     holiday: buildModelMock(),
     departmentHoliday: buildModelMock(),
@@ -2266,6 +2267,105 @@ describe("Absensi Actions", () => {
     const bad = await actions.deleteAttendance(0)
     expect(bad.success).toBe(false)
     expect(prismaMock.attendance.delete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("Employee Roster Actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    restoreTerBracketMock()
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    prismaMock.employeeRoster.create.mockResolvedValue({ id: 5 })
+    prismaMock.employeeRoster.findUnique.mockResolvedValue({ employeeId: 7, status: "draft" })
+    prismaMock.employeeRoster.updateMany.mockResolvedValue({ count: 1 })
+    prismaMock.employeeRoster.delete.mockResolvedValue({})
+    // Penyetuju: user 1 tertaut employee 99 (bukan pemilik roster 7).
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 99 })
+  })
+
+  it("createEmployeeRoster memakai create_attendance, status draft, tanggal WIB", async () => {
+    const res = await actions.createEmployeeRoster(fd({
+      employeeId: "7", date: "2026-10-05", type: "cuti", notes: "acara keluarga",
+    }))
+    expect(res).toEqual({ success: true, id: 5 })
+    expect(requirePermissionMock).toHaveBeenCalledWith("create_attendance")
+    const data = prismaMock.employeeRoster.create.mock.calls[0][0].data
+    expect(data.status).toBe("draft")
+    expect(data.type).toBe("cuti")
+    expect(data.date.toISOString()).toBe("2026-10-05T00:00:00.000Z")
+    expect(data.createdBy).toBe(1)
+  })
+
+  it("createEmployeeRoster menolak type di luar daftar tanpa menyentuh DB", async () => {
+    const res = await actions.createEmployeeRoster(fd({
+      employeeId: "7", date: "2026-10-05", type: "shift_pagi",
+    }))
+    expect(res.success).toBe(false)
+    expect(prismaMock.employeeRoster.create).not.toHaveBeenCalled()
+  })
+
+  it("createEmployeeRoster menolak tanggal kalender fiktif", async () => {
+    const res = await actions.createEmployeeRoster(fd({
+      employeeId: "7", date: "2026-02-30", type: "sakit",
+    }))
+    expect(res.success).toBe(false)
+    expect(prismaMock.employeeRoster.create).not.toHaveBeenCalled()
+  })
+
+  it("createEmployeeRoster dibatasi scope HR (team di luar anggota ditolak)", async () => {
+    mocks.hrScopeOverride.current = { kind: "team", employeeId: 1, memberIds: [1, 2] }
+    const res = await actions.createEmployeeRoster(fd({
+      employeeId: "7", date: "2026-10-05", type: "izin",
+    }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("tidak memiliki akses")
+    expect(prismaMock.employeeRoster.create).not.toHaveBeenCalled()
+    mocks.hrScopeOverride.current = null
+  })
+
+  it("approveEmployeeRoster set approved + approvedBy employee penyetuju + approvedAt", async () => {
+    const res = await actions.approveEmployeeRoster(5)
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_attendance")
+    const args = prismaMock.employeeRoster.updateMany.mock.calls[0][0]
+    expect(args.where).toEqual({ id: 5, status: "draft" })
+    expect(args.data.status).toBe("approved")
+    expect(args.data.approvedBy).toBe(99)
+    expect(args.data.approvedAt).toBeInstanceOf(Date)
+  })
+
+  it("approveEmployeeRoster menolak self-approve", async () => {
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 7 })
+    const res = await actions.approveEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("sendiri")
+    expect(prismaMock.employeeRoster.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("approveEmployeeRoster menolak roster non-draft (klaim count 0)", async () => {
+    prismaMock.employeeRoster.updateMany.mockResolvedValue({ count: 0 })
+    const res = await actions.approveEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("draft")
+  })
+
+  it("rejectEmployeeRoster hanya dari draft, membersihkan approvedBy/At", async () => {
+    const res = await actions.rejectEmployeeRoster(5)
+    expect(res).toEqual({ success: true })
+    const args = prismaMock.employeeRoster.updateMany.mock.calls[0][0]
+    expect(args.where).toEqual({ id: 5, status: "draft" })
+    expect(args.data).toEqual({ status: "rejected", approvedBy: null, approvedAt: null })
+  })
+
+  it("deleteEmployeeRoster hanya draft + izin manage_attendance", async () => {
+    expect(await actions.deleteEmployeeRoster(5)).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("manage_attendance")
+    expect(prismaMock.employeeRoster.delete).toHaveBeenCalledWith({ where: { id: 5 } })
+
+    prismaMock.employeeRoster.findUnique.mockResolvedValue({ employeeId: 7, status: "approved" })
+    const res = await actions.deleteEmployeeRoster(5)
+    expect(res.success).toBe(false)
+    expect(prismaMock.employeeRoster.delete).toHaveBeenCalledTimes(1)
   })
 })
 

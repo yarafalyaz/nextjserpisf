@@ -1,10 +1,9 @@
 /**
  * Loader read-only roster karyawan (EmployeeRoster) per rentang tanggal.
  *
- * Konsumen produk PERTAMA model roster (FK baru migrasi
- * 20261029173955_roster_fk): halaman roster / papan beban BELUM dibuat
- * ronde ini, jadi loader ini satu-satunya jalur baca nyata — cukup
- * findMany by employee/date range, tanpa tulis, tanpa UI.
+ * Konsumen baca halaman `/sdm/roster`; jalur tulis ada di
+ * `createEmployeeRoster`/`approveEmployeeRoster`/`rejectEmployeeRoster`/
+ * `deleteEmployeeRoster` (hrm.actions, izin keluarga absensi).
  *
  * Izin ditegakkan pemanggil (pola attendance-recap-data: loader
  * menerima filter yang sudah diputus server, tidak menebak scope).

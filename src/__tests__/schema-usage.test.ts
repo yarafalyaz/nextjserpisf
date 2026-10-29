@@ -124,11 +124,9 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
-  // Round2 2026-10-29 (putusan lead): EmployeeRoster konsumen read-only
-  // minimal `loadEmployeeRoster` (employee-roster-data.ts) — halaman
-  // roster/papan beban + jalur tulis BELUM dibuat ronde ini, jadi model
-  // hanya bisa diisi seed/migrasi. Buang entri saat aksi tulis mendarat.
-  "EmployeeRoster",
+  // (EmployeeRoster PERNAH di sini — ditutup: halaman `/sdm/roster` +
+  // aksi create/approve/reject/deleteEmployeeRoster menulisnya; guard
+  // berarah dua memerah saat entri basi ini dibiarkan.)
   // F-2026-10-21-026: tabel tarif TER PP 58/2023 (Lampiran A/B/C) hanya diisi
   // migrasi seed dari regulasi; tidak ada jalur tulis produk karena tarif
   // bukan data operasional — perubahan tarif wajib migrasi baru dari regulasi.
