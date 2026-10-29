@@ -288,6 +288,7 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "scripts/clear-all-data.ts": "skrip sekali-jalan; error dilaporkan ke console sebelum proses keluar",
   "scripts/verify-migrations.mjs": "pembersihan DB scratch best-effort; kegagalan dilaporkan plus instruksi hapus manual",
   "src/actions/sales.actions.ts": "F-2026-10-25-035-B fase 3: persist pending CreditOverride gagal dicatat console.error berkonteks; hasil tertahan tetap dikembalikan (dokumen memang tidak lahir) — bukan sukses semu",
+  "src/lib/hooks/sales-payment.hook.ts": "akrual komisi tahap 3 best-effort dalam recalc paid: mapping belum lengkap = catat alasan + faktur tetap paid (vonis R-komisi-vonispayable §5) — bukan angka yang ditelan, bukan sukses semu",
 }
 
 const ALLOWED_DEFAULT_RETURN: Record<string, string> = {

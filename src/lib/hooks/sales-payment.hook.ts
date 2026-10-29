@@ -79,15 +79,21 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // Tahap 3 komisi (vonis R-komisi-vonispayable §5): SATU tx = transisi paid
   // + snapshot + baris subledger + jurnal. Gagal syarat lahir = nol baris +
   // nol jurnal berlabel alasan; faktur tetap paid (empat status terpisah).
+  // Fail-closed TIDAK boleh menggagalkan pembayaran: mapping belum lengkap =
+  // catat alasan, lanjut (vonis §5).
   if (status === "paid") {
-    await accrueCommissionPayableTx(db, invoiceId, null, {
-      status: invoice.status,
-      salesEmployeeId: (invoice as { salesEmployeeId?: unknown }).salesEmployeeId,
-      commissionRatePercent: (invoice as { commissionRatePercent?: unknown }).commissionRatePercent,
-      grandTotal: invoice.grandTotal,
-      taxAmount: (invoice as { taxAmount?: unknown }).taxAmount,
-      updatedAt: (invoice as { updatedAt?: unknown }).updatedAt,
-    });
+    try {
+      await accrueCommissionPayableTx(db, invoiceId, null, {
+        status: invoice.status,
+        salesEmployeeId: (invoice as { salesEmployeeId?: unknown }).salesEmployeeId,
+        commissionRatePercent: (invoice as { commissionRatePercent?: unknown }).commissionRatePercent,
+        grandTotal: invoice.grandTotal,
+        taxAmount: (invoice as { taxAmount?: unknown }).taxAmount,
+        updatedAt: (invoice as { updatedAt?: unknown }).updatedAt,
+      });
+    } catch (e) {
+      console.error("[commission] akrual dilewati:", e instanceof Error ? e.message : e);
+    }
   }
 }
 

@@ -123,6 +123,8 @@ function buildTx() {
       findMany: mocks.paymentFindMany,
     },
     journal: { create: mocks.journalCreate, findFirst: vi.fn().mockResolvedValue(null) },
+    // accrueTx komisi tahap 3: invoice fixture tanpa penjual/snapshot → no-op.
+    commissionPayable: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn(), update: vi.fn() },
     downPayment: { findUnique: mocks.dpFindUnique, findMany: mocks.dpFindMany },
     taxInvoice: { findFirst: mocks.taxInvoiceFindFirst, findMany: mocks.taxInvoiceFindMany },
     systemSetting: { findFirst: mocks.settingFindFirst },
