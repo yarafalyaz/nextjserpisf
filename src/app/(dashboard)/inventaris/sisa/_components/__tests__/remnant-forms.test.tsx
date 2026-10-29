@@ -20,7 +20,9 @@ vi.mock("@/actions/inventory.actions", () => ({
 
 vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }))
 
-import { RemnantForm, ScrapRemnantForm, REMNANT_SOURCE_OPTIONS } from "../remnant-forms"
+import { RemnantForm, ConsumeRemnantForm, ScrapRemnantForm, REMNANT_SOURCE_OPTIONS } from "../remnant-forms"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 
 function mount(node: React.ReactElement) {
   const container = document.createElement("div")
@@ -51,7 +53,7 @@ afterEach(() => {
 
 describe("RemnantForm F-2026-10-24-098-S", () => {
   it("field wajib baru ter-render: dimensi, ukuran terukur, sumber + ID baris issue", () => {
-    const html = renderToStaticMarkup(<RemnantForm />)
+    const html = renderToStaticMarkup(<RemnantForm canCreate />)
     expect(html).toContain('name="dimensions"')
     expect(html).toContain('name="measuredSize"')
     expect(html).toContain('name="sourceType"')
@@ -66,7 +68,7 @@ describe("RemnantForm F-2026-10-24-098-S", () => {
   })
 
   it("submit meneruskan FormData lengkap ke createRemnant", async () => {
-    const { container, root } = mount(<RemnantForm />)
+    const { container, root } = mount(<RemnantForm canCreate />)
     setVal(container, '[name="itemId"]', "1")
     setVal(container, '[name="warehouseId"]', "1")
     setVal(container, '[name="qty"]', "2")
@@ -93,16 +95,41 @@ describe("RemnantForm F-2026-10-24-098-S", () => {
   })
 })
 
+describe("gerbang izin UI sisa (create_material_issues)", () => {
+  it("view-only: form catat/pakai/scrap tidak dirender", () => {
+    expect(renderToStaticMarkup(<RemnantForm canCreate={false} />)).toBe("")
+    expect(renderToStaticMarkup(<ConsumeRemnantForm id={4} canCreate={false} />)).toBe("")
+    expect(renderToStaticMarkup(<ScrapRemnantForm id={4} canCreate={false} />)).toBe("")
+  })
+
+  it("berizin: form catat/pakai/scrap dirender", () => {
+    expect(renderToStaticMarkup(<RemnantForm canCreate />)).toContain('aria-label="Catat sisa material"')
+    expect(renderToStaticMarkup(<ConsumeRemnantForm id={4} canCreate />)).toContain('aria-label="Pakai sisa 4"')
+    expect(renderToStaticMarkup(<ScrapRemnantForm id={4} canCreate />)).toContain('aria-label="Scrap sisa 4"')
+  })
+
+  it("halaman meneruskan create_material_issues sebagai canCreate ke ketiga form", () => {
+    const page = readFileSync(
+      resolve(process.cwd(), "src/app/(dashboard)/inventaris/sisa/page.tsx"),
+      "utf8",
+    )
+    expect(page).toContain('hasPermission("create_material_issues")')
+    expect(page).toContain("<RemnantForm canCreate={canCreate} />")
+    expect(page).toContain("<ConsumeRemnantForm id={r.id} canCreate={canCreate} />")
+    expect(page).toContain("<ScrapRemnantForm id={r.id} canCreate={canCreate} />")
+  })
+})
+
 describe("ScrapRemnantForm F-2026-10-24-098-S", () => {
   it("field berat besi tua kg wajib ter-render", () => {
-    const html = renderToStaticMarkup(<ScrapRemnantForm id={4} />)
+    const html = renderToStaticMarkup(<ScrapRemnantForm id={4} canCreate />)
     expect(html).toContain('name="scrapWeightKg"')
     expect(html).toContain('aria-label="Berat besi tua (kg)"')
     expect(html).toContain('name="scrapReason"')
   })
 
   it("submit meneruskan scrapWeightKg ke scrapRemnant", async () => {
-    const { container, root } = mount(<ScrapRemnantForm id={4} />)
+    const { container, root } = mount(<ScrapRemnantForm id={4} canCreate />)
     setVal(container, '[name="scrapReason"]', "tak terpakai")
     setVal(container, '[name="scrapWeightKg"]', "12.5")
     const form = container.querySelector("form")!

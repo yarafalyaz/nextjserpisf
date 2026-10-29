@@ -26,6 +26,8 @@ interface OpnameFormProps {
   warehouseId: number
   date: string
   rows: OpnameRow[]
+  /** Izin create_stock_adjustments dari server — gerbang input + tombol simpan. */
+  canCreate: boolean
 }
 
 /**
@@ -33,7 +35,7 @@ interface OpnameFormProps {
  * only edits the lines that differ. Only lines whose count differs from the
  * system quantity are submitted (the rest would be no-op adjustments).
  */
-export function OpnameForm({ warehouseId, date, rows }: OpnameFormProps) {
+export function OpnameForm({ warehouseId, date, rows, canCreate }: OpnameFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [counted, setCounted] = useState<Record<number, string>>(
@@ -113,6 +115,7 @@ export function OpnameForm({ warehouseId, date, rows }: OpnameFormProps) {
                       step="0.01"
                       min="0"
                       value={raw ?? ""}
+                      disabled={!canCreate}
                       onChange={(e) => setCounted((prev) => ({ ...prev, [row.id]: e.target.value }))}
                       className="w-[110px] text-right"
                       aria-label={`Hasil hitung ${row.name}`}
@@ -136,6 +139,7 @@ export function OpnameForm({ warehouseId, date, rows }: OpnameFormProps) {
               id="notes"
               rows={2}
               value={notes}
+              disabled={!canCreate}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="mis. opname akhir bulan, dihitung oleh ..."
             />
@@ -143,9 +147,11 @@ export function OpnameForm({ warehouseId, date, rows }: OpnameFormProps) {
         </FormSection>
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" isDisabled={isPending || differing.length === 0}>
-            {isPending ? "Menyimpan..." : `Buat Penyesuaian (${differing.length} selisih)`}
-          </Button>
+          {canCreate && (
+            <Button type="submit" variant="primary" isDisabled={isPending || differing.length === 0}>
+              {isPending ? "Menyimpan..." : `Buat Penyesuaian (${differing.length} selisih)`}
+            </Button>
+          )}
         </FormActions>
       </FormCard>
     </form>

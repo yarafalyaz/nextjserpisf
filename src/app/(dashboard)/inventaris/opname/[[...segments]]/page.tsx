@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
-import { requirePermission } from '@/lib/auth/permissions'
+import { requirePermission, hasPermission } from '@/lib/auth/permissions'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { AppBreadcrumbs } from '@/components/ui/breadcrumbs'
 import { ReportSection } from '@/components/reports/report-section'
@@ -31,6 +31,7 @@ export default async function StockOpnamePage({
   searchParams: Promise<{ warehouseId?: string; date?: string }>
 }) {
   await requirePermission("view_stock_opname")
+  const canCreate = await hasPermission("create_stock_adjustments")
 
   const warehouses = await prisma.warehouse.findMany({
     where: { isActive: true, deletedAt: null },
@@ -126,7 +127,7 @@ export default async function StockOpnamePage({
           <EmptyState title="Tidak ada barang bersaldo di gudang ini." className="py-8" />
         </ReportSection>
       ) : (
-        <OpnameForm warehouseId={warehouseId} date={date} rows={rows} />
+        <OpnameForm warehouseId={warehouseId} date={date} rows={rows} canCreate={canCreate} />
       )}
     </div>
   )

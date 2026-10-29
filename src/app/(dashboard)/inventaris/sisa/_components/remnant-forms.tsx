@@ -16,7 +16,7 @@ export const REMNANT_SOURCE_OPTIONS = [
 ] as const
 
 /** Form catat sisa baru. Usable wajib dimensi + ukuran terukur + tautan baris issue asal (server menegakkan ambang kategori). */
-export function RemnantForm() {
+export function RemnantForm({ canCreate }: { canCreate: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -34,6 +34,8 @@ export function RemnantForm() {
       router.refresh()
     })
   }
+
+  if (!canCreate) return null
 
   return (
     <form
@@ -96,7 +98,7 @@ export function RemnantForm() {
 }
 
 /** Pakai remnant untuk kebutuhan berikut. */
-export function ConsumeRemnantForm({ id }: { id: number }) {
+export function ConsumeRemnantForm({ id, canCreate }: { id: number; canCreate: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -114,6 +116,8 @@ export function ConsumeRemnantForm({ id }: { id: number }) {
     })
   }
 
+  if (!canCreate) return null
+
   return (
     <form onSubmit={onSubmit} className="flex items-end gap-2" aria-label={`Pakai sisa ${id}`}>
       <Input name="consumedBy" placeholder="Dipakai untuk…" required maxLength={128} className="w-36" aria-label="Tujuan pemakaian" />
@@ -125,7 +129,7 @@ export function ConsumeRemnantForm({ id }: { id: number }) {
 }
 
 /** Tandai scrap (wajib alasan + berat besi tua kg). */
-export function ScrapRemnantForm({ id }: { id: number }) {
+export function ScrapRemnantForm({ id, canCreate }: { id: number; canCreate: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -142,6 +146,8 @@ export function ScrapRemnantForm({ id }: { id: number }) {
       router.refresh()
     })
   }
+
+  if (!canCreate) return null
 
   return (
     <form onSubmit={onSubmit} className="flex items-end gap-2" aria-label={`Scrap sisa ${id}`}>

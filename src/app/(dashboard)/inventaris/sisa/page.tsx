@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { PageHeader } from "@/components/ui/page-header"
 import {
   DetailTable,
@@ -25,6 +25,7 @@ export const metadata: Metadata = { title: "Sisa Material" }
  */
 export default async function RemnantPage() {
   await requirePermission("view_material_issues")
+  const canCreate = await hasPermission("create_material_issues")
 
   const remnants = await prisma.remnant.findMany({
     orderBy: { createdAt: "desc" },
@@ -52,7 +53,7 @@ export default async function RemnantPage() {
             </p>
           </div>
         </div>
-        <RemnantForm />
+        <RemnantForm canCreate={canCreate} />
         <div className="p-4 px-5">
           {remnants.length === 0 ? (
             <EmptyState title="Belum ada sisa tercatat" className="py-10" />
@@ -67,7 +68,7 @@ export default async function RemnantPage() {
                 <DetailTableTh>Sumber Baris Issue</DetailTableTh>
                 <DetailTableTh>Besi Tua (kg)</DetailTableTh>
                 <DetailTableTh>Status</DetailTableTh>
-                <DetailTableTh align="right">Aksi</DetailTableTh>
+                {canCreate && <DetailTableTh align="right">Aksi</DetailTableTh>}
               </DetailTableHead>
               <DetailTableBody>
                 {remnants.map((r) => (
@@ -84,14 +85,16 @@ export default async function RemnantPage() {
                     </DetailTableTd>
                     <DetailTableTd>{r.scrapWeightKg != null ? String(r.scrapWeightKg) : "—"}</DetailTableTd>
                     <DetailTableTd>{r.status}</DetailTableTd>
-                    <DetailTableTd align="right">
-                      {r.status === "usable" && (
-                        <div className="flex justify-end gap-2">
-                          <ConsumeRemnantForm id={r.id} />
-                          <ScrapRemnantForm id={r.id} />
-                        </div>
-                      )}
-                    </DetailTableTd>
+                    {canCreate && (
+                      <DetailTableTd align="right">
+                        {r.status === "usable" && (
+                          <div className="flex justify-end gap-2">
+                            <ConsumeRemnantForm id={r.id} canCreate={canCreate} />
+                            <ScrapRemnantForm id={r.id} canCreate={canCreate} />
+                          </div>
+                        )}
+                      </DetailTableTd>
+                    )}
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
