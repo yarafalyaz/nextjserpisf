@@ -1270,7 +1270,7 @@ async function assertBillLinePricesWithinReference(
         .map((r) =>
           r.itemId != null && r.itemId !== ""
             ? Number(r.itemId)
-            : NaN,
+            : Number.NaN,
         )
         .filter((n) => Number.isFinite(n) && n > 0),
     ),
@@ -1305,10 +1305,10 @@ async function assertBillLinePricesWithinReference(
     else grQueuesByItem.set(g.itemId, [unitCost]);
   }
   for (const row of lines) {
-    const itemId = row.itemId != null && row.itemId !== "" ? Number(row.itemId) : NaN;
+    const itemId = row.itemId != null && row.itemId !== "" ? Number(row.itemId) : Number.NaN;
     if (!Number.isFinite(itemId) || itemId <= 0) continue;
     const poLine = poByItem.get(itemId);
-    const refPrice = poLine != null ? Number(poLine.unitPrice ?? 0) : NaN;
+    const refPrice = poLine != null ? Number(poLine.unitPrice ?? 0) : Number.NaN;
     const refQty = poLine != null ? Number(poLine.qty ?? 0) : 0;
     if (!poLine || !(refPrice > 0)) continue; // baris tanpa acuan PO tak terjangkau guard
     const amounts = computeBillLineAmounts(row);
