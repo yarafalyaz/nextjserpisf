@@ -18,6 +18,9 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: (...a: unknown[]) => periodOpen(...a),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
 
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 

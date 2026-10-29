@@ -59,6 +59,9 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
   generateDocumentNumberBatch: vi.fn().mockResolvedValue([]),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
 
 import { onSalesReturnCompleted, onPurchaseReturnProcessed } from "../accounting.hook"
 

@@ -143,7 +143,7 @@ vi.mock("@/lib/utils/document-number", () => ({
 }))
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: (...a: unknown[]) => mocks.nextSlug(...a) }))
 vi.mock("@/lib/services/document-sequence.service", () => ({
-  DocumentSequenceService: { nextBatch: vi.fn(async () => [1]) },
+  DocumentSequenceService: { next: () => Promise.resolve(42), nextBatch: vi.fn(async () => [1]) },
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
