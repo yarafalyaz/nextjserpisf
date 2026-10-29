@@ -63,6 +63,9 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: vi.fn(async (prefix: string) => `${prefix}-0001`),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}));
 vi.mock("@/lib/utils/slug-db", () => ({
   nextSlug: vi.fn(async (_m: string, base: string) => base.toLowerCase()),
 }))

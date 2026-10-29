@@ -164,6 +164,10 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumberBatch: (...a: any[]) => mocks.generateDocNumBatchMock(...a),
 }))
 
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
+
 vi.mock("@/lib/utils/error", () => ({
   getErrorMessage: (e: unknown, fallback?: string) =>
     e instanceof Error ? e.message : fallback ?? "error",

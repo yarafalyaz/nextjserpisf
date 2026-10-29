@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   journalCreate: vi.fn(),
   transaction: vi.fn(),
   assertPeriodOpen: vi.fn(),
+  taxInvoiceFindFirst: vi.fn(async () => null),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -21,12 +22,17 @@ vi.mock("@/lib/db/prisma", () => ({
     vendorBill: { findUniqueOrThrow: mocks.vendorBillFindUniqueOrThrow },
     journal: { findFirst: mocks.journalFindFirst },
     goodsReceipt: { count: mocks.goodsReceiptCount },
+    taxInvoice: { findFirst: mocks.taxInvoiceFindFirst ?? (() => Promise.resolve(null)) },
     $transaction: mocks.transaction,
   },
 }))
 
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: mocks.assertPeriodOpen,
+}))
+
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: async () => 42 },
 }))
 const PAYABLE = 210
 const EXPENSE = 620
@@ -41,6 +47,7 @@ function wireVendorBillTx() {
     cb({
       journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
       vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
+      taxInvoice: { findFirst: mocks.taxInvoiceFindFirst },
     } as unknown as TxClient)
   )
 }

@@ -311,6 +311,17 @@ export async function consumeFifoLayers(
         for (const batch of batchesData) {
           await tx.$executeRaw`SELECT id FROM item_batches WHERE id = ${batch.id} FOR UPDATE`
         }
+        // Baca-ulang qty fresh sesudah lock: findMany pra-lock bisa basi
+        // bila lot sama didekremen transaksi konkuren di antaranya.
+        const fresh = await tx.itemBatch.findMany({
+          where: { id: { in: batchesData.map((b) => b.id) } },
+          select: { id: true, qty: true },
+        })
+        const freshQty = new Map(fresh.map((f) => [f.id, f.qty]))
+        for (const b of batchesData) {
+          const q = freshQty.get(b.id)
+          if (q !== undefined) b.qty = q
+        }
       }
       
       const batchUpdates: Promise<any>[] = []
@@ -403,7 +414,11 @@ export async function consumeFifoLayers(
         if (found.length !== picked.length) {
           throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
         }
-        await tx.itemSerial.updateMany({ where: { id: { in: found.map((s) => s.id) } }, data: { status: "used" } })
+        await tx.itemSerial.updateMany({ where: { id: { in: found.map((s) => s.id) }, status: "available" }, data: { status: "used" } })
+        const claimed = await tx.itemSerial.count({ where: { id: { in: found.map((s) => s.id) }, status: "used" } })
+        if (claimed !== found.length) {
+          throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
+        }
         consumedSerials.push(...found.map((s) => s.serialNumber))
       } else {
         // Auto FIFO: mark the oldest available serials.
@@ -424,6 +439,10 @@ export async function consumeFifoLayers(
             where: { id: { in: serials.map((s) => s.id) }, status: "available" },
             data: { status: "used" },
           })
+          const claimed = await tx.itemSerial.count({ where: { id: { in: serials.map((s) => s.id) }, status: "used" } })
+          if (claimed !== serials.length) {
+            throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
+          }
           consumedSerials.push(...serials.map((s) => s.serialNumber))
         }
       }

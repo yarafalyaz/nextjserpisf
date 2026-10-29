@@ -31,6 +31,10 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
 }))
 
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
+
 import { onExpenseApprovedSyncPettyCash } from "../expense.hook"
 
 beforeEach(() => {

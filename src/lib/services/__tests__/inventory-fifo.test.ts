@@ -16,8 +16,9 @@ function mockTx(opts: {
 }) {
   const layerUpdate = vi.fn().mockResolvedValue({});
   const batchUpdate = vi.fn().mockResolvedValue({});
-  const serialUpdateMany = vi.fn().mockResolvedValue({});
+  const serialUpdateMany = vi.fn().mockImplementation(({ where }: { where: { id?: { in?: number[] } } }) => Promise.resolve({ count: where?.id?.in?.length ?? 0 }));
   const layerCreate = vi.fn().mockResolvedValue({});
+  const serialCount = vi.fn().mockImplementation(({ where }: { where: { id?: { in?: number[] } } }) => Promise.resolve(where?.id?.in?.length ?? 0));
 
   const tx = {
     inventoryLayer: {
@@ -46,6 +47,7 @@ function mockTx(opts: {
     itemSerial: {
       findMany: vi.fn().mockResolvedValue(opts.availableSerials ?? []),
       updateMany: serialUpdateMany,
+      count: serialCount,
     },
     _spies: { layerUpdate, batchUpdate, serialUpdateMany, layerCreate },
   };
@@ -212,7 +214,7 @@ describe("inventory-fifo", () => {
           }),
         },
         systemSetting: { findFirst: vi.fn().mockResolvedValue({ costingMethod: "FIFO" }) },
-        itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({}) },
+        itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn().mockResolvedValue({ count: 0 }), count: vi.fn().mockResolvedValue(0) },
       } as unknown as Prisma.TransactionClient;
 
       const first = await consumeFifoLayers(tx, { itemId: 1, qty: 20 });
@@ -351,7 +353,7 @@ describe("inventory-fifo", () => {
           update: batchUpdate,
         },
         item: { findUnique: vi.fn().mockResolvedValue({ trackSerial: false }) },
-        itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn() },
+        itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn(), count: vi.fn().mockResolvedValue(0) },
       } as unknown as Prisma.TransactionClient;
 
       await consumeFifoLayers(tx, { itemId: 1, qty: 10 }); // warehouseId omitted (null)
@@ -512,7 +514,7 @@ describe("inventory-fifo", () => {
         })
       );
       expect(tx._spies.serialUpdateMany).toHaveBeenCalledWith({
-        where: { id: { in: [21, 22] } },
+        where: { id: { in: [21, 22] }, status: "available" },
         data: { status: "used" },
       });
     });
@@ -543,6 +545,20 @@ describe("inventory-fifo", () => {
       await expect(
         consumeFifoLayers(tx, { itemId: 1, qty: 2, serialNumbers: ["SN-1", "SN-2"] })
       ).rejects.toThrow("Sebagian nomor seri tidak tersedia");
+    });
+
+    it("konkuren: updateMany hanya klaim 1 dari 2 -> throw (TOCTOU serial)", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+        trackSerial: true,
+        availableSerials: [{ id: 21, serialNumber: "SN-1" }, { id: 22, serialNumber: "SN-2" }],
+      });
+      (tx._spies.serialUpdateMany as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+      (tx.itemSerial.count as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(1);
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, qty: 2, serialNumbers: ["SN-1", "SN-2"] })
+      ).rejects.toThrow("tidak tersedia/sudah terpakai");
     });
   });
 

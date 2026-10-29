@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
 import { prisma, TxClient } from "@/lib/db/prisma";
+import { DocumentSequenceService } from "@/lib/services/document-sequence.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertSalesInvoiceStockOutOnce } from "@/lib/services/stock-out-once.service";
 import { slugify } from "@/lib/utils/slug";
@@ -90,11 +91,17 @@ async function generateJournalNumber(
   prefix: string,
   referenceId: number,
 ): Promise<string> {
-  const timestamp = new Date()
+  // Counter atomik via document_sequences: kunci JRN-<prefix>-YYYY-MM, nomor
+  // urut never-reuse di bawah konkuren. Fail-closed: tanpa sequence tak ada
+  // nomor (tanpa fallback senyap — guard silent-failure).
+  const d = new Date();
+  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const timestamp = d
     .toISOString()
     .replace(/[-:T.Z]/g, "")
     .slice(0, 14);
-  return `${prefix}/${referenceId}/${timestamp}`;
+  const seq = await DocumentSequenceService.next(`JRN-${prefix}-${month}`);
+  return `${prefix}/${referenceId}/${timestamp}-${String(seq).padStart(4, "0")}`;
 }
 
 /**
@@ -2588,9 +2595,6 @@ export async function onDownPaymentReceived(
 export const VENDOR_BILL_TAX_INVOICE_WARNING =
   "Nomor faktur pajak belum diisi — PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.";
 
-/** Re-ekspor validator tunggal `src/lib/tax/tax-invoice.ts` (kompat impor lama). */
-export { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice";
-
 export async function onVendorBillPosted(
   billId: number,
   userId?: number,
@@ -2628,12 +2632,17 @@ export async function onVendorBillPosted(
   // and the clearing account is never relieved. Service/expense bills (no GR) keep
   // debiting the expense account.
   const grandTotal = Number(bill.grandTotal);
-  const taxInvoiceValid = isValidVendorTaxInvoiceNumber(
-    (bill as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null,
-  );
   const billTax = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
-  // Putusan 2: tax>0 tanpa nomor valid = PPN gabung HPP, bukan Dr PPN Masukan.
-  const creditInputVat = billTax > 0 && taxInvoiceValid;
+  // R2 + 157-V gabung: tanpa baris TaxInvoice (bill lama pra-register) →
+  // fallback validitas nomor tempel; ada baris → wajib approved/credited.
+  const preTxInvoice = await db.taxInvoice.findFirst({
+    where: { vendorBillId: bill.id, direction: "in" },
+  });
+  const creditInputVat =
+    billTax > 0 &&
+    (preTxInvoice
+      ? preTxInvoice.djpStatus === "approved" || preTxInvoice.creditStatus === "credited"
+      : isValidVendorTaxInvoiceNumber((bill as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null));
   const hasGoodsReceipt =
     bill.purchaseOrderId != null &&
     (await db.goodsReceipt.count({
@@ -2730,14 +2739,16 @@ export async function onVendorBillPosted(
     if (!b) throw new Error("Bill tidak ditemukan");
 
     const latestGrandTotal = Number(b.grandTotal);
-    // F-2026-10-28-157-V Putusan 2: jalur tulis memakai `b` (re-fetch dalam
-    // tx), bukan `bill` pra-tx — `creditInputVat` dihitung ulang dari nomor
-    // tersimpan agar isi-nomor + posting ulang memecah PPN keluar dari HPP.
+    // R2 + 157-V: tanpa baris TaxInvoice → fallback nomor valid.
+    const billTaxInvoice = await tx.taxInvoice.findFirst({
+      where: { vendorBillId: b.id, direction: "in" },
+    });
     const latestCreditInputVat =
       (settings.purchaseTaxAccountId ? Number(b.tax ?? 0) : 0) > 0 &&
-      isValidVendorTaxInvoiceNumber(
-        (b as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null,
-      );
+      (billTaxInvoice
+        ? billTaxInvoice.djpStatus === "approved" ||
+          billTaxInvoice.creditStatus === "credited"
+        : isValidVendorTaxInvoiceNumber((b as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null));
     const latestTaxAmount = latestCreditInputVat ? Number(b.tax ?? 0) : 0;
 
     // PPh potong-putut: only the net amount is owed to the vendor; the withheld

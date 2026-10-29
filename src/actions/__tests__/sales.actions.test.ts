@@ -157,6 +157,9 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocNumMock(...a),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}));
 
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 

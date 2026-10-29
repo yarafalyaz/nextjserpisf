@@ -51,6 +51,9 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({ assertPeriodOpen: vi.fn() }))
 vi.mock("@/lib/services/inventory-fifo", () => ({ consumeFifoLayers: vi.fn() }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumberBatch: vi.fn() }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
 
 function dpTx() {
   return {

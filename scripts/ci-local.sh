@@ -198,15 +198,9 @@ if node_modules/.bin/eslint src/ --max-warnings=0 > "$LINT_LOG" 2>&1; then
   pass "Lint passed ($(elapsed $STAGE_START))"
   RESULTS+=("${GREEN}✔ Lint${NC}")
 else
-  # Retry with warnings allowed (non-blocking)
-  if node_modules/.bin/eslint src/ > "$LINT_LOG" 2>&1; then
-    echo -e "  ${YELLOW}⚠ Lint passed with warnings ($(elapsed $STAGE_START))${NC}"
-    RESULTS+=("${YELLOW}⚠ Lint (warnings)${NC}")
-  else
-    fail "Lint failed ($(elapsed $STAGE_START))" "$LINT_LOG"
-    RESULTS+=("${RED}✖ Lint${NC}")
-    echo -e "  ${YELLOW}Lanjut ke step berikutnya...${NC}"
-  fi
+  fail "Lint failed ($(elapsed $STAGE_START))" "$LINT_LOG"
+  RESULTS+=("${RED}✖ Lint${NC}")
+  echo -e "  ${YELLOW}Lanjut ke step berikutnya...${NC}"
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════

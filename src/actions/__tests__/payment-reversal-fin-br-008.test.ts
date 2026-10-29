@@ -64,6 +64,9 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateJournalNumber: mocks.generateJournalNumberMock,
   generateDocumentNumberBatch: vi.fn().mockResolvedValue([]),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}));
 vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: vi.fn().mockResolvedValue({}),
 }))

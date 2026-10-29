@@ -27,7 +27,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma, type TxClient } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { logActivity } from "@/lib/services/activity-log.service"
 
@@ -250,7 +250,9 @@ export async function decideBomRevisionChange(input: {
       return { success: false, error: "Penolakan wajib mengisi alasan." }
     }
 
-    // Izin mengikuti dokumen pemilik pengajuan.
+    // Izin mengikuti dokumen pemilik pengajuan. requireAuth dulu supaya sesi
+    // anonim ditolak sebelum probe ada/tidaknya pengajuan membocorkan info.
+    await requireAuth()
     const probe = await prisma.bomRevisionChangeRequest.findFirst({
       where: { id: input.changeRequestId },
       select: { workOrderId: true, productionOrderId: true },

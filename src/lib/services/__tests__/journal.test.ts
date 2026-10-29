@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { JournalService } from "@/lib/services/journal.service";
 
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Build a mock prisma-like client whose $transaction runs the callback with a mock tx.
 function buildService(txOverrides: Record<string, unknown> = {}) {
   const spies = {
@@ -10,10 +14,14 @@ function buildService(txOverrides: Record<string, unknown> = {}) {
     journalFindUniqueOrThrow: vi.fn(),
     journalFindFirst: vi.fn(),
     journalUpdate: vi.fn(),
+    queryRaw: vi.fn().mockResolvedValue([{ id: 1, period_lock_date: null }]),
+    executeRaw: vi.fn().mockResolvedValue(1),
   };
   spies.journalFindFirst.mockResolvedValue(null);
 
   const tx = {
+    $queryRaw: spies.queryRaw,
+    $executeRaw: spies.executeRaw,
     account: { findMany: spies.accountFindMany },
     journal: {
       create: spies.journalCreate,
@@ -227,6 +235,26 @@ describe("JournalService", () => {
         })
       ).resolves.toEqual({ id: 1, journalNumber: "JRN-1" });
     });
+
+    it("R1: create ditolak saat periode terkunci (assertPeriodOpen melempar)", async () => {
+      const { assertPeriodOpen } = await import("@/lib/services/period-lock.service");
+      vi.mocked(assertPeriodOpen).mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"));
+      const { service, spies } = buildService();
+      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+      await expect(
+        service.createJournal({
+          journalNumber: "JRN-LOCK",
+          transactionDate: new Date("2025-01-05"),
+          type: "manual",
+          entries: [
+            { accountId: 1, debit: 100, credit: 0 },
+            { accountId: 2, debit: 0, credit: 100 },
+          ],
+        })
+      ).rejects.toThrow("sudah ditutup");
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+    });
   });
 
   describe("reverseJournal", () => {
@@ -357,6 +385,29 @@ describe("JournalService", () => {
         where: { id: 1 },
         data: { status: "REVERSED" },
       });
+    });
+
+    it("R1: reverse ditolak saat periode asli terkunci (assertPeriodOpen melempar)", async () => {
+      const { assertPeriodOpen } = await import("@/lib/services/period-lock.service");
+      vi.mocked(assertPeriodOpen).mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"));
+      const { service, spies } = buildService();
+      spies.journalFindUniqueOrThrow.mockResolvedValue({
+        id: 1,
+        journalNumber: "JRN-1",
+        status: "POSTED",
+        transactionDate: new Date("2025-01-05"),
+        type: "sales",
+        totalDebit: 100,
+        totalCredit: 100,
+        entries: [
+          { accountId: 1, debit: 100, credit: 0, memo: "AR" },
+          { accountId: 2, debit: 0, credit: 100, memo: "Revenue" },
+        ],
+      });
+
+      await expect(service.reverseJournal(1, "REV-1")).rejects.toThrow("sudah ditutup");
+      expect(spies.journalCreate).not.toHaveBeenCalled();
+      expect(spies.journalUpdate).not.toHaveBeenCalled();
     });
   });
 });

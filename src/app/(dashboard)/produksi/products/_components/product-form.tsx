@@ -76,6 +76,7 @@ export function ProductForm({
     async function loadBrands() {
       try {
         const r = await fetch("/api/vehicle-brands")
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
         const d = await r.json()
         setVehicleBrands(d.data ?? [])
       } catch {
@@ -86,6 +87,7 @@ export function ProductForm({
     async function loadModels() {
       try {
         const r = await fetch("/api/vehicle-models")
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
         const d = await r.json()
         setVehicleModels(d.data ?? [])
       } catch {

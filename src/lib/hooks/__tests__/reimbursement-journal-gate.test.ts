@@ -7,6 +7,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn(async () => undefined),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
 vi.mock("@/lib/db/prisma", () => ({ prisma: {} }))
 
 import {

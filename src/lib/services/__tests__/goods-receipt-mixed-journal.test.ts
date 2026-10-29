@@ -30,6 +30,9 @@ vi.mock("@/lib/utils/settings", () => ({
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: mocks.generateDocumentNumber,
 }));
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}));
 
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 
@@ -59,6 +62,9 @@ function makeTx() {
   const journals: FakeJournal[] = [];
   let seq = 0;
   const tx = {
+    // R1: assertPeriodOpen baca kunci via $queryRaw — periode terbuka.
+    $queryRaw: async () => [{ id: 1, period_lock_date: null }],
+    $executeRaw: async () => 1,
     account: {
       findMany: async ({ where }: { where: { id: { in: number[] } } }) =>
         where.id.in.map((id: number) => ({ id })),

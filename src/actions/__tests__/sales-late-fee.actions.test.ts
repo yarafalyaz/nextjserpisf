@@ -69,6 +69,9 @@ vi.mock("@/lib/services/financial-idempotency.service", async (orig) => {
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.docNumberMock(...(a as [])),
 }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}));
 
 import * as actions from "../sales-late-fee.actions"
 
