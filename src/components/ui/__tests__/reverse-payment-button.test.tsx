@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 
 const toast = vi.hoisted(() => ({ ok: [] as string[], err: [] as string[] }))
@@ -25,18 +24,6 @@ vi.mock("@/lib/utils/toast", () => ({
   showError: (m: string) => { toast.err.push(m) },
 }))
 
-function render(container: HTMLElement, ui: React.ReactNode) {
-  const root: Root = createRoot(container)
-  act(() => { root.render(ui) })
-  return root
-}
-
-function click(el: Element | null) {
-  act(() => {
-    el?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
-  })
-}
-
 beforeEach(() => {
   toast.ok = []
   toast.err = []
@@ -45,20 +32,6 @@ beforeEach(() => {
 describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
   it("menolak client-side bila alasan kosong — aksi nol dipanggil", async () => {
     const action = vi.fn(async (_id: number, _reason: string) => ({ success: true }))
-    const container = document.createElement("div")
-    document.body.appendChild(container)
-    const root = render(container, <ReversePaymentButton id={7} action={action} />)
-    click(container.querySelector("button"))
-    await act(async () => {})
-    const confirm = Array.from(document.querySelectorAll("button")).find(
-      (b) => b.textContent === "Balikkan Pembayaran",
-    )
-    click(confirm ?? null)
-    await act(async () => {})
-    expect(action).not.toHaveBeenCalled()
-    expect(toast.err.some((m) => m.includes("wajib diisi"))).toBe(true)
-    act(() => root.unmount())
-    container.remove()
     const { container, root } = newTestContainer()
     renderTestUi(container, root, <ReversePaymentButton id={7} action={action} />)
     clickTestEl(container.querySelector("button"))
@@ -73,10 +46,6 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
 
   it("alasan terisi: aksi dipanggil dengan (id, alasan trim)", async () => {
     const action = vi.fn(async (_id: number, _reason: string) => ({ success: true }))
-    const container = document.createElement("div")
-    document.body.appendChild(container)
-    const root = render(container, <ReversePaymentButton id={7} action={action} />)
-    click(container.querySelector("button"))
     const { container, root } = newTestContainer()
     renderTestUi(container, root, <ReversePaymentButton id={7} action={action} />)
     clickTestEl(container.querySelector("button"))
@@ -89,10 +58,6 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
       textarea!.dispatchEvent(new Event("input", { bubbles: true }))
     })
     await act(async () => {})
-    const confirm = Array.from(document.querySelectorAll("button")).find(
-      (b) => b.textContent === "Balikkan Pembayaran",
-    )
-    click(confirm ?? null)
     const confirm = findButtonByText(document, "Balikkan Pembayaran")
     clickTestEl(confirm)
     await act(async () => {})
@@ -100,8 +65,6 @@ describe("ReversePaymentButton (GL-BR-003 K2 / FIN-BR-008)", () => {
     expect(action.mock.calls[0][0]).toBe(7)
     expect(action.mock.calls[0][1]).toBe("salah input nominal")
     expect(toast.ok.some((m) => m.includes("berhasil dibalik"))).toBe(true)
-    act(() => root.unmount())
-    container.remove()
     unmountTestUi(root, container)
   })
 })

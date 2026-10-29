@@ -34,22 +34,6 @@ export default async function EditPage({
   // GL-BR-003 K1: cermin guard server updateSalesInvoice fail-closed
   // (cancelled/setelah-pelunasan-nyata pasti ditolak). posted/partial/paid
   // tanpa pelunasan nyata tetap boleh Ubah (fabrication pre-settlement).
-  const lockedCrumbs = [
-    { label: "Dasbor", href: "/" },
-    { label: "Penjualan", href: "/penjualan" },
-    { label: "Faktur", href: "/penjualan/faktur" },
-    { label: "Ubah" },
-  ];
-  const lockedBackHref = `/penjualan/faktur/${data.slug ?? data.id}`;
-  if (data.status === "cancelled") {
-    return (
-      <LockedEditGuard
-        crumbs={lockedCrumbs}
-        documentLabel={`Faktur ${data.documentNo}`}
-        correctionHref={`/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`}
-        correctionLabel="retur penjualan"
-        backHref={lockedBackHref}
-        backLabel="Kembali ke detail faktur"
   if (data.status === "cancelled") {
     return (
       <LockedEditGuard
@@ -75,12 +59,6 @@ export default async function EditPage({
   if (realSettlementCount > 0) {
     return (
       <LockedEditGuard
-        crumbs={lockedCrumbs}
-        documentLabel={`Faktur ${data.documentNo}`}
-        correctionHref={`/penjualan/retur/tambah/faktur/${data.slug ?? data.id}`}
-        correctionLabel="retur penjualan"
-        backHref={lockedBackHref}
-        backLabel="Kembali ke detail faktur"
         preset={{
           section: "Faktur",
           sectionHref: "/penjualan/faktur",
