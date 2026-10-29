@@ -4,16 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 import { act } from "react"
-import { TaxInvoiceNumberButton } from "../tax-invoice-number-button"
-import {
-  newTestContainer,
-  renderTestUi,
-  clickTestEl,
-  unmountTestUi,
-} from "./confirm-button-test-utils"
 
 const toast = vi.hoisted(() => ({ ok: [] as string[], err: [] as string[] }))
 
+// Blok mock bersama confirm-button-test-utils: renderer daun diuji lewat
+// helper itu, bukan jsdom ulang di tiap berkas (pola repo).
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }))
@@ -22,6 +17,14 @@ vi.mock("@/lib/utils/toast", () => ({
   showSuccess: (m: string) => { toast.ok.push(m) },
   showError: (m: string) => { toast.err.push(m) },
 }))
+
+import { TaxInvoiceNumberButton } from "../tax-invoice-number-button"
+import {
+  newTestContainer,
+  renderTestUi,
+  clickTestEl,
+  unmountTestUi,
+} from "./confirm-button-test-utils"
 
 beforeEach(() => {
   toast.ok = []
