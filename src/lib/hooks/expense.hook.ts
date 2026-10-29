@@ -2,63 +2,89 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { computePettyCashChain, findFirstNegativeBalance } from "@/lib/finance/petty-cash-chain";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { getSystemSettings } from "@/lib/utils/settings";
 
 /**
  * Expense Hook - Observer pattern replacement.
  * When expense is approved AND paid from petty cash account, auto-create PettyCash OUT record.
  */
 
+function isPettyCashAccountName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("petty cash") || n.includes("kas kecil");
+}
+
 export async function onExpenseApprovedSyncPettyCash(
   expenseId: number,
   approvedByUserId?: number
 ): Promise<void> {
-  const expense = await prisma.expense.findUniqueOrThrow({
-    where: { id: expenseId },
-  });
-
-  // Only sync if paid from a petty cash type account
-  if (!expense.paidFromAccountId) {
-    console.warn(
-      `[expense.hook] expense ${expense.documentNo ?? expenseId} tanpa paidFromAccountId — sinkron kas kecil dilewati`
-    );
-    return;
-  }
-
-  const paidFromAccount = await prisma.account.findUnique({
-    where: { id: expense.paidFromAccountId },
-  });
-
-  // AccountType enum: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
-  // Petty cash accounts are typically ASSET type with specific naming
-  if (!paidFromAccount || (!paidFromAccount.name.toLowerCase().includes("petty cash") && !paidFromAccount.name.toLowerCase().includes("kas kecil"))) {
-    console.warn(
-      `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${paidFromAccount?.name ?? expense.paidFromAccountId}) — sinkron dilewati`
-    );
-    return;
-  }
-
-  // Idempotency: check if PettyCash record already exists for this expense
-  const existing = await prisma.pettyCash.findFirst({
-    where: { referenceNo: expense.documentNo },
-  });
-  if (existing) {
-    console.info(
-      `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil ${existing.documentNo} — sinkron dilewati`,
-    );
-    return;
-  }
-
-  const documentNo = await generateDocumentNumber("PC");
-
   await prisma.$transaction(async (tx) => {
-    // Re-check inside the transaction to avoid a duplicate under concurrency.
-    const dup = await tx.pettyCash.findFirst({ where: { referenceNo: expense.documentNo }, select: { id: true } });
-    if (dup) {
-      console.info(
-        `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil di dalam transaksi — sinkron dilewati`,
+    // Kunci baris expense lebih dulu: dua approval konkuren untuk expense yang
+    // sama men-serialize di sini, sehingga cek duplikat + create di bawah tak
+    // bisa sama-sama lolos. Baris dibaca ulang di dalam tx (keadaan terkunci).
+    if (typeof tx.$queryRaw === "function") {
+      await tx.$queryRaw`SELECT id FROM expenses WHERE id = ${expenseId} FOR UPDATE`;
+    }
+    const expense = await tx.expense.findUniqueOrThrow({
+      where: { id: expenseId },
+    });
+
+    // Only sync if paid from a petty cash type account
+    if (!expense.paidFromAccountId) {
+      console.warn(
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} tanpa paidFromAccountId — sinkron kas kecil dilewati`
       );
       return;
     }
+
+    const paidFromAccount = await tx.account.findUnique({
+      where: { id: expense.paidFromAccountId },
+    });
+    if (!paidFromAccount) {
+      console.warn(
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${expense.paidFromAccountId}) — sinkron dilewati`
+      );
+      return;
+    }
+
+    // Deteksi akun kas kecil: setting kanonis pettyCashAccountId didahulukan
+    // (akun terkonfigurasi tak bergantung ejaan nama). Bila setting kosong,
+    // fallback pola nama lama — perilaku saat setting cocok nama tak berubah.
+    // getSystemSettings sendiri fallback memori saat DB tak terjangkau dan
+    // hanya throw pada schema drift — biar throw itu keras terlihat, jangan
+    // ditelan di sini.
+    const settings = await getSystemSettings();
+    const canonicalId = (settings as { pettyCashAccountId?: number | null })?.pettyCashAccountId ?? null;
+    const isPettyCash = canonicalId != null
+      ? expense.paidFromAccountId === canonicalId
+      : isPettyCashAccountName(paidFromAccount.name);
+    if (!isPettyCash) {
+      console.warn(
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${paidFromAccount.name}) — sinkron dilewati`
+      );
+      return;
+    }
+
+    // Period gate sebelum create: expense bertanggal periode tertutup ditolak
+    // di dalam tx yang sama (lock expense sudah dipegang).
+    await assertPeriodOpen(expense.date, tx);
+
+    // Idempotency: check if PettyCash record already exists for this expense
+    const existing = await tx.pettyCash.findFirst({
+      where: { referenceNo: expense.documentNo },
+    });
+    if (existing) {
+      console.info(
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil ${existing.documentNo} — sinkron dilewati`,
+      );
+      return;
+    }
+
+    // Nomor dokumen baru diambil hanya sesudah lolos cek akun/periode/duplikat:
+    // DocumentSequenceService.next menaikkan counter atomik, jadi mengambilnya
+    // sebelum cek akan membuang nomor urut tiap expense non-kas-kecil/duplikat.
+    const documentNo = await generateDocumentNumber("PC");
 
     await tx.pettyCash.create({
       data: {
@@ -93,9 +119,13 @@ export async function onExpenseApprovedSyncPettyCash(
     // Previously this loop hand-rolled raw `+`/`-` arithmetic, which could
     // round differently from the canonical path and silently desync the
     // balanceAfter values that other code paths depend on.
+    //
+    // Hanya record posted & belum terhapus yang ikut rantai: void/deleted
+    // dibekukan sebagai snapshot historis (GL-BR-003) dan tidak ditulis ulang.
     const all = await tx.pettyCash.findMany({
+      where: { status: "posted", deletedAt: null },
       orderBy: [{ date: "asc" }, { id: "asc" }],
-      select: { id: true, documentNo: true, type: true, amount: true, balanceBefore: true, balanceAfter: true },
+      select: { id: true, documentNo: true, type: true, amount: true, balanceBefore: true, balanceAfter: true, status: true },
     });
 
     const records = all.map((r) => ({
