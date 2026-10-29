@@ -364,6 +364,32 @@ describe("POST /api/workflow/[...path]", () => {
       expect(mocks.update).not.toHaveBeenCalled()
     })
 
+    it("approveStep gagal → CONFLICT berisi pesan domain, bukan 200 sukses", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "pending" })
+      mocks.approveStepMock.mockRejectedValue(new Error("Approval sudah diproses"))
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "approve"]))
+      expect(res.status).toBe(409)
+      const json = await res.json()
+      expect(json.success).not.toBe(true)
+      expect(JSON.stringify(json)).toContain("Approval sudah diproses")
+      expect(mocks.findUniqueApproval).not.toHaveBeenCalled()
+    })
+
+    it("rejectStep gagal → CONFLICT berisi pesan domain, bukan 200 sukses", async () => {
+      mocks.authFn.mockResolvedValue(adminSession)
+      mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "pending" })
+      mocks.rejectStepMock.mockRejectedValue(new Error("Maker-Checker Constraint: tidak boleh menolak sendiri"))
+
+      const res = await POST(makeReq(), makeParams(["penjualan", "pesanan", "5", "reject"]))
+      expect(res.status).toBe(409)
+      const json = await res.json()
+      expect(json.success).not.toBe(true)
+      expect(JSON.stringify(json)).toContain("Maker-Checker")
+      expect(mocks.findUniqueApproval).not.toHaveBeenCalled()
+    })
+
     it("rejects workflow step and status becomes rejected", async () => {
       mocks.authFn.mockResolvedValue(adminSession)
       mocks.findFirstApproval.mockResolvedValueOnce({ id: 10, status: "pending" })

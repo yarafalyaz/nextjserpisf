@@ -56,6 +56,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     async function loadProvinces() {
       try {
         const res = await fetch("/api/address?tipe=provinces")
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setProvinces(Array.isArray(data) ? data : [])
       } catch {
@@ -70,6 +71,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     async function loadCities() {
       try {
         const res = await fetch(`/api/address?tipe=regencies&kodeInduk=${provinceCode}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setCities(Array.isArray(data) ? data : [])
       } catch {
@@ -84,6 +86,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     async function loadDistricts() {
       try {
         const res = await fetch(`/api/address?tipe=districts&kodeInduk=${cityCode}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setDistricts(Array.isArray(data) ? data : [])
       } catch {
@@ -98,6 +101,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     async function loadVillages() {
       try {
         const res = await fetch(`/api/address?tipe=villages&kodeInduk=${districtCode}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         setVillages(Array.isArray(data) ? data : [])
       } catch {

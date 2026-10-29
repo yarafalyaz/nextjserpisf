@@ -39,6 +39,7 @@ export function TaxAssessmentForm() {
   const [assessmentNumber, setAssessmentNumber] = useState("")
   const [kind, setKind] = useState("")
   const [taxKind, setTaxKind] = useState("")
+  const [taxPeriod, setTaxPeriod] = useState("")
   const [assessedAmount, setAssessedAmount] = useState<number | null>(null)
   const [disputedAmount, setDisputedAmount] = useState<number | null>(null)
   const [sentAt, setSentAt] = useState(toLocalDateOnly(new Date()))
@@ -54,6 +55,7 @@ export function TaxAssessmentForm() {
         formData.set("assessmentNumber", assessmentNumber)
         formData.set("kind", kind)
         formData.set("taxKind", taxKind)
+        formData.set("taxPeriod", taxPeriod)
         formData.set("assessedAmount", assessedAmount === null ? "" : String(assessedAmount))
         formData.set("disputedAmount", disputedAmount === null ? "" : String(disputedAmount))
         formData.set("sentAt", sentAt)
@@ -118,6 +120,20 @@ export function TaxAssessmentForm() {
             onChange={(value) => setTaxKind(value ?? "")}
             placeholder="Opsional"
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="taxPeriod">Masa Pajak</Label>
+          <Input
+            id="taxPeriod"
+            type="month"
+            value={taxPeriod}
+            onChange={(e) => setTaxPeriod(e.target.value)}
+            aria-describedby="taxPeriod-hint"
+          />
+          <span id="taxPeriod-hint" className="text-xs text-muted-foreground">
+            Format YYYY-MM (opsional, sesuai skema server).
+          </span>
         </div>
 
         <AppDatePicker label="Tanggal Kirim SKP *" name="sentAt" value={sentAt} onChange={setSentAt} required />

@@ -62,14 +62,18 @@ export function PayrollComponentMaster({
 
   function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
-      const result = await fn()
-      if (!result.success) {
-        showError(result.error || "Gagal menyimpan komponen gaji")
-        return
+      try {
+        const result = await fn()
+        if (!result.success) {
+          showError(result.error || "Gagal menyimpan komponen gaji")
+          return
+        }
+        showSuccess(ok)
+        setEditing(null)
+        router.refresh()
+      } catch {
+        showError("Gagal menyimpan komponen gaji")
       }
-      showSuccess(ok)
-      setEditing(null)
-      router.refresh()
     })
   }
 
