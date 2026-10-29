@@ -355,6 +355,22 @@ describe("updateBomRevision", () => {
     expect(bomRevisionUpdateMock).not.toHaveBeenCalled()
   })
 
+  it("refuses when status flips to released between outer read and tx write (round3 race)", async () => {
+    bomRevisionFindUniqueMock
+      .mockResolvedValueOnce({ id: 1, status: "draft", productId: 9 })
+      .mockResolvedValueOnce({ id: 1, status: "released", productId: 9 })
+    itemFindManyMock.mockResolvedValue([{ id: 1 }])
+    const form = fd({ effectiveDate: "2026-10-09" })
+    form.append("revisionItemId", "1")
+    form.append("revisionQty", "2")
+
+    const res = await updateBomRevision(1, form)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak dapat diubah")
+    expect(bomRevisionUpdateMock).not.toHaveBeenCalled()
+  })
+
   it("replaces the lines of a draft revision", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "draft", productId: 9 })
     itemFindManyMock.mockResolvedValue([{ id: 1 }, { id: 3 }])

@@ -12,7 +12,7 @@
  * jalur kedua yang bisa melahirkan duplikat untuk WO yang sama.
  */
 import { Prisma } from "@prisma/client"
-import { availableQty } from "@/lib/services/inventory-fifo"
+import { availableQtyBatch } from "@/lib/services/inventory-fifo"
 import {
   planReservationsAtStart,
   planReservationConsumption,
@@ -102,12 +102,14 @@ export async function createReservationsForWorkOrderStartTx(
     const wh = mi?.warehouseId ?? defaultWarehouseByItem.get(line.itemId) ?? null
     if (wh != null) warehouses.add(wh)
   }
-  const onHand = new Map<string, number>()
-  for (const warehouseId of warehouses) {
-    for (const itemId of itemIds) {
-      onHand.set(`${itemId}:${warehouseId}`, await availableQty(tx, itemId, warehouseId))
-    }
-  }
+  // BUGHUNT round3 MEDIUM: satu groupBy batch untuk semua pasangan
+  // gudang×item (sebelumnya aggregate serial N+1 per pasangan dalam tx klaim).
+  // Pasangan tanpa lapisan positif absen dari map → onHandAt membaca 0, persis
+  // perilaku availableQty per pasangan.
+  const onHand = await availableQtyBatch(
+    tx,
+    [...warehouses].flatMap((warehouseId) => itemIds.map((itemId) => ({ itemId, warehouseId }))),
+  )
 
   const lines: ReservationNeedLine[] = wo.items.map((i) => ({
     workOrderItemId: i.id,
@@ -269,6 +271,67 @@ export async function releaseReservationsForReplacedItemsTx(
     },
   })
   return result.count
+}
+
+/**
+ * Perkecil sisa aktif satu baris WO ke kebutuhan baru (change order `ubah`
+ * turun): qtyReserved turun sampai qtyConsumed + sisa kebutuhan; yang sudah
+ * consumed tak disentuh. Baris habis terpakai → consumed; belum terpakai
+ * sama sekali dan kebutuhan 0 → released. Kenaikan qty no-op (reservasi
+ * baru hanya lahir di start). Return jumlah baris diubah.
+ */
+export async function reduceReservationsForWorkOrderItemTx(
+  tx: Tx,
+  input: {
+    workOrderId: number
+    workOrderItemId: number
+    newQty: number | Prisma.Decimal
+    releasedBy?: number | null
+  },
+): Promise<number> {
+  const rows = await tx.stockReservation.findMany({
+    where: {
+      workOrderId: input.workOrderId,
+      workOrderItemId: input.workOrderItemId,
+      status: "active",
+    },
+    select: { id: true, qtyReserved: true, qtyConsumed: true },
+    orderBy: { id: "asc" },
+  })
+  if (rows.length === 0) return 0
+  const totalConsumed = rows.reduce((sum, r) => sum + Number(r.qtyConsumed), 0)
+  let allowance = Math.max(0, Number(input.newQty) - totalConsumed)
+  let changed = 0
+  for (const row of rows) {
+    const consumed = Number(row.qtyConsumed)
+    const remaining = Number(row.qtyReserved) - consumed
+    const keep = Math.min(remaining, allowance)
+    allowance -= keep
+    if (keep >= remaining) continue
+    if (keep <= 0 && consumed <= 0) {
+      await tx.stockReservation.update({
+        where: { id: row.id },
+        data: {
+          status: "released",
+          releasedAt: new Date(),
+          releasedBy: input.releasedBy ?? null,
+          releaseReason: "Baris perintah kerja diperkecil lewat change order",
+        },
+      })
+    } else if (keep <= 0) {
+      await tx.stockReservation.update({
+        where: { id: row.id },
+        data: { qtyReserved: dec(row.qtyConsumed), status: "consumed" },
+      })
+    } else {
+      await tx.stockReservation.update({
+        where: { id: row.id },
+        data: { qtyReserved: dec(consumed).plus(keep) },
+      })
+    }
+    changed++
+  }
+  return changed
 }
 
 /**

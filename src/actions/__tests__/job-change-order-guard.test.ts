@@ -31,6 +31,9 @@ const qItemDeleteMock = vi.fn()
 const qUpdateMock = vi.fn()
 const queryRawMock = vi.fn()
 const txExecuteMock = vi.fn()
+const srFindManyMock = vi.fn()
+const srUpdateMock = vi.fn()
+const srUpdateManyMock = vi.fn()
 
 function makeTx() {
   return {
@@ -54,6 +57,11 @@ function makeTx() {
       update: (...a: unknown[]) => woItemUpdateMock(...a),
     },
     materialIssueItem: { findMany: (...a: unknown[]) => miItemFindManyMock(...a) },
+    stockReservation: {
+      findMany: (...a: unknown[]) => srFindManyMock(...a),
+      update: (...a: unknown[]) => srUpdateMock(...a),
+      updateMany: (...a: unknown[]) => srUpdateManyMock(...a),
+    },
     quotationSection: { findMany: (...a: unknown[]) => qSectionFindManyMock(...a) },
     quotation: {
       findFirst: (...a: unknown[]) => qFindFirstMock(...a),
@@ -199,7 +207,7 @@ beforeEach(() => {
     coItemCreateManyMock, coItemDeleteManyMock, woFindUniqueMock, woItemCreateMock,
     woItemUpdateMock, miItemFindManyMock, qSectionFindManyMock, qFindFirstMock,
     qHistoryCreateMock, qItemCreateMock, qItemUpdateMock, qItemDeleteMock, qUpdateMock,
-    queryRawMock, txExecuteMock,
+    queryRawMock, txExecuteMock, srFindManyMock, srUpdateMock, srUpdateManyMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 5 })
   nextSlugMock.mockResolvedValue("co-slug")
@@ -221,6 +229,9 @@ beforeEach(() => {
   coUpdateMock.mockResolvedValue({})
   woItemCreateMock.mockResolvedValue({ id: 99 })
   woItemUpdateMock.mockResolvedValue({})
+  srFindManyMock.mockResolvedValue([])
+  srUpdateMock.mockResolvedValue({})
+  srUpdateManyMock.mockResolvedValue({ count: 0 })
   createDifferenceInvoiceMock.mockResolvedValue({ success: true, id: 900 })
   createRevisionDownCreditMock.mockResolvedValue({ success: false, error: "Tidak ada kredit" })
 })
@@ -356,6 +367,44 @@ describe("applyJobChangeOrder — klaim + uang existing", () => {
     expect(qUpdateMock).not.toHaveBeenCalled()
     expect(qItemUpdateMock).not.toHaveBeenCalled()
     expect(createDifferenceInvoiceMock).not.toHaveBeenCalled()
+  })
+
+  // Round3 MEDIUM: hapus/ubah turun wajib rekonsiliasi reservasi aktif
+  // baris terdampak di tx terapkan yang sama — reservasi hantu mengikat
+  // stok sampai kedaluwarsa 14 hari. Cabut rekonsiliasi di apply -> merah.
+  it("hapus terapkan: reservasi aktif baris released lewat helper existing", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [{ ...CO_APPROVED.items[0], action: "hapus", qtyAfter: null }],
+    })
+    srUpdateManyMock.mockResolvedValue({ count: 1 })
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(true)
+    expect(srUpdateManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workOrderId: 10, workOrderItemId: { in: [11] }, status: "active" },
+        data: expect.objectContaining({ status: "released", releasedBy: 5 }),
+      }),
+    )
+  })
+
+  it("ubah turun terapkan: reservasi aktif baris dipangkas ke qty baru", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [{ ...CO_APPROVED.items[0], action: "ubah", qtyBefore: 5, qtyAfter: 1 }],
+    })
+    srFindManyMock.mockResolvedValue([{ id: 88, qtyReserved: 5, qtyConsumed: 0 }])
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(true)
+    expect(srFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workOrderId: 10, workOrderItemId: 11, status: "active" },
+      }),
+    )
+    const arg = srUpdateMock.mock.calls[0][0]
+    expect(arg.where).toEqual({ id: 88 })
+    expect(Number(arg.data.qtyReserved)).toBe(1)
+    expect(srUpdateManyMock).not.toHaveBeenCalled()
   })
 
   it("baris ter-issue sesudah disetujui: hapus juga ditolak di terapkan (bukan hanya ubah)", async () => {

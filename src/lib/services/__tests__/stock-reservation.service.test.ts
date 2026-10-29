@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client"
  */
 
 const findFirstMock = vi.fn()
+const findManyMock = vi.fn()
 const updateMock = vi.fn()
 const updateManyMock = vi.fn()
 
@@ -16,6 +17,7 @@ function txMock() {
   return {
     stockReservation: {
       findFirst: findFirstMock,
+      findMany: findManyMock,
       update: updateMock,
       updateMany: updateManyMock,
     },
@@ -25,6 +27,7 @@ function txMock() {
 import {
   consumeReservationsForMaterialIssueTx,
   expireOverdueReservationsTx,
+  reduceReservationsForWorkOrderItemTx,
   releaseActiveReservationsForWorkOrderTx,
   releaseReservationsForReplacedItemsTx,
 } from "../stock-reservation.service"
@@ -112,6 +115,76 @@ describe("releaseReservationsForReplacedItemsTx (AC-RES-8)", () => {
     expect(
       await releaseReservationsForReplacedItemsTx(txMock(), { workOrderId: 9, workOrderItemIds: [] }),
     ).toBe(0)
+  })
+})
+
+describe("reduceReservationsForWorkOrderItemTx (round3 change-order ubah turun)", () => {
+  it("turun qty: qtyReserved dipangkas ke consumed + sisa kebutuhan, consumed tak disentuh", async () => {
+    findManyMock.mockResolvedValue([
+      { id: 3, qtyReserved: new Prisma.Decimal(10), qtyConsumed: new Prisma.Decimal(2) },
+    ])
+    const n = await reduceReservationsForWorkOrderItemTx(txMock(), {
+      workOrderId: 9,
+      workOrderItemId: 41,
+      newQty: 5,
+      releasedBy: 7,
+    })
+    expect(n).toBe(1)
+    expect(findManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workOrderId: 9, workOrderItemId: 41, status: "active" },
+      }),
+    )
+    const arg = updateMock.mock.calls[0][0]
+    expect(arg.where).toEqual({ id: 3 })
+    expect(Number(arg.data.qtyReserved)).toBe(5)
+    expect(arg.data.status).toBeUndefined()
+  })
+
+  it("kebutuhan 0 tanpa konsumsi → released dengan jejak", async () => {
+    findManyMock.mockResolvedValue([
+      { id: 4, qtyReserved: new Prisma.Decimal(4), qtyConsumed: new Prisma.Decimal(0) },
+    ])
+    const n = await reduceReservationsForWorkOrderItemTx(txMock(), {
+      workOrderId: 9,
+      workOrderItemId: 41,
+      newQty: 0,
+      releasedBy: 7,
+    })
+    expect(n).toBe(1)
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 4 },
+        data: expect.objectContaining({ status: "released", releasedBy: 7 }),
+      }),
+    )
+  })
+
+  it("qty baru di bawah consumed → consumed penuh di angka consumed", async () => {
+    findManyMock.mockResolvedValue([
+      { id: 5, qtyReserved: new Prisma.Decimal(6), qtyConsumed: new Prisma.Decimal(2) },
+    ])
+    await reduceReservationsForWorkOrderItemTx(txMock(), {
+      workOrderId: 9,
+      workOrderItemId: 41,
+      newQty: 1,
+    })
+    const arg = updateMock.mock.calls[0][0]
+    expect(Number(arg.data.qtyReserved)).toBe(2)
+    expect(arg.data.status).toBe("consumed")
+  })
+
+  it("naik qty → no-op (reservasi baru hanya lahir di start)", async () => {
+    findManyMock.mockResolvedValue([
+      { id: 6, qtyReserved: new Prisma.Decimal(5), qtyConsumed: new Prisma.Decimal(0) },
+    ])
+    const n = await reduceReservationsForWorkOrderItemTx(txMock(), {
+      workOrderId: 9,
+      workOrderItemId: 41,
+      newQty: 20,
+    })
+    expect(n).toBe(0)
+    expect(updateMock).not.toHaveBeenCalled()
   })
 })
 

@@ -21,6 +21,7 @@ const soFindFirstMock = vi.fn()
 const doCreateMock = vi.fn()
 const doItemCreateManyMock = vi.fn()
 const generateDocNumberMock = vi.fn()
+const queryRawMock = vi.fn().mockResolvedValue([{ id: 10 }])
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -46,6 +47,7 @@ vi.mock("@/lib/db/prisma", () => {
       typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
     ),
     $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: (...a: unknown[]) => queryRawMock(...a),
   }
   return { prisma }
 })
@@ -56,10 +58,11 @@ vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => logActivityMock(...a),
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
-// QC gate is out of scope for this lock test; stub it so the real service does
-// not query unmocked prisma models.
+// QC gate is stubbed here; round3 asserts it is invoked with the tx client
+// (guards read inside the completion transaction, not outside).
+const assertQcClearedMock = vi.fn().mockResolvedValue(undefined)
 vi.mock("@/lib/services/qc.service", () => ({
-  assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertWorkOrderQcCleared: (...a: unknown[]) => assertQcClearedMock(...a),
 }))
 // F-2026-10-21-021: hook auto-create coverage wajib terpanggil di dalam
 // transaksi completion. Cabut panggilan di completeWorkOrder = tes ini merah.
@@ -82,6 +85,10 @@ beforeEach(() => {
     woUpdateManyMock, woItemUpdateManyMock, miFindFirstMock, soFindFirstMock,
     doCreateMock, doItemCreateManyMock, generateDocNumberMock,
   ]) m.mockReset()
+  queryRawMock.mockReset()
+  queryRawMock.mockResolvedValue([{ id: 10 }])
+  assertQcClearedMock.mockReset()
+  assertQcClearedMock.mockResolvedValue(undefined)
   requirePermissionMock.mockResolvedValue({ id: 5 })
   woFindUniqueOrThrowMock.mockResolvedValue({
     id: 10, status: "in_progress", documentNo: "WO-0001", customerId: 3,
@@ -132,5 +139,30 @@ describe("completeWorkOrder concurrency guard", () => {
 
     expect(result.success).toBe(false)
     expect(woUpdateManyMock).not.toHaveBeenCalled()   // never claims completion
+  })
+
+  // Round3 MEDIUM: MI + QC guards must be read INSIDE the completion tx
+  // (under WO row lock), mirroring auto-close path. Reverting guards to
+  // outside-tx reads drops $queryRaw/QC-tx assertions -> merah.
+  it("round3: guards run inside tx — WO row locked, QC receives tx client", async () => {
+    const result = await completeWorkOrder(10)
+
+    expect(result.success).toBe(true)
+    expect(queryRawMock).toHaveBeenCalledTimes(1)
+    expect(String(queryRawMock.mock.calls[0][0])).toContain("work_orders")
+    expect(assertQcClearedMock).toHaveBeenCalledWith(10, expect.anything())
+    expect(miFindFirstMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workOrderId: 10, status: "completed" } }),
+    )
+  })
+
+  it("round3: QC block inside tx aborts before claim", async () => {
+    assertQcClearedMock.mockRejectedValueOnce(new Error("NCR terbuka"))
+
+    const result = await completeWorkOrder(10)
+
+    expect(result.success).toBe(false)
+    expect(woUpdateManyMock).not.toHaveBeenCalled()
+    expect(doCreateMock).not.toHaveBeenCalled()
   })
 })

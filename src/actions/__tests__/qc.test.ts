@@ -79,6 +79,7 @@ vi.mock("@/lib/db/prisma", () => {
     materialIssue: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
     deliveryOrder: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
   }
+  prisma.$queryRaw = vi.fn().mockResolvedValue([{ id: 1 }])
   prisma.$transaction = vi.fn((cb: unknown) =>
     typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
   )

@@ -35,6 +35,10 @@ import { nextSlug } from "@/lib/utils/slug-db"
 import { computeQuotationTotals } from "@/lib/sales/quotation-totals"
 import { createDifferenceInvoice, createRevisionDownCredit } from "./sales.actions"
 import {
+  reduceReservationsForWorkOrderItemTx,
+  releaseReservationsForReplacedItemsTx,
+} from "@/lib/services/stock-reservation.service"
+import {
   assertChangeOrderTransition,
   assertLinesNotLocked,
   assertWorkOrderEligibleForChangeOrder,
@@ -769,11 +773,27 @@ export async function applyJobChangeOrder(changeOrderId: number) {
               ...(line.description ? { description: line.description } : {}),
             },
           })
+          // Reservasi aktif baris diperkecil mengikuti qty baru di tx yang
+          // sama — sisa berlebih tak boleh mengikat stok sampai kedaluwarsa.
+          // Kenaikan qty no-op di helper (reservasi baru hanya lahir di start).
+          await reduceReservationsForWorkOrderItemTx(tx, {
+            workOrderId: co.workOrderId,
+            workOrderItemId: line.workOrderItemId as number,
+            newQty: Number(line.qtyAfter),
+            releasedBy: Number(user.id),
+          })
         } else {
           // hapus lunak: status replaced (BR-CO-04 jejak audit), bukan hard-delete.
           await tx.workOrderItem.update({
             where: { id: line.workOrderItemId as number },
             data: { status: "replaced" },
+          })
+          // Baris replaced → sisa reservasi aktif released (helper existing
+          // jalur revisi item, AC-RES-8), satu tx dengan terapkan CO.
+          await releaseReservationsForReplacedItemsTx(tx, {
+            workOrderId: co.workOrderId,
+            workOrderItemIds: [line.workOrderItemId as number],
+            releasedBy: Number(user.id),
           })
         }
       }

@@ -397,6 +397,18 @@ export async function updateBomRevision(id: number, formData: FormData) {
     }
 
     await prisma.$transaction(async (tx) => {
+      // Re-check editable status under row lock: status read above can go
+      // stale (revision released concurrently) before this tx writes.
+      await tx.$queryRaw`SELECT id FROM bom_revisions WHERE id = ${id} FOR UPDATE`;
+      const locked = await tx.bomRevision.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!locked || (locked.status !== "draft" && locked.status !== "rejected")) {
+        throw new Error(
+          `Revisi berstatus '${locked?.status ?? "tidak ditemukan"}' tidak dapat diubah; buat revisi baru.`,
+        );
+      }
       await tx.bomRevision.update({
         where: { id },
         data: {
@@ -1632,42 +1644,47 @@ export async function completeWorkOrder(workOrderId: number) {
   try {
     const user = await requirePermission("complete_work_orders");
 
-    const wo = await prisma.workOrder.findUniqueOrThrow({
-      where: { id: workOrderId },
-      include: { items: true },
-    });
-
-    // Guard: must be in_progress or pending
-    if (wo.status !== "in_progress" && wo.status !== "pending") {
-      throw new Error(
-        `Work Order tidak bisa diselesaikan dari status '${wo.status}'.`,
-      );
-    }
-    if (wo.items.length === 0) {
-      throw new Error("Perintah Kerja tidak bisa diselesaikan tanpa item.");
-    }
-
-    // Guard: check if MaterialIssue exists and is completed for this WO
-    const mi = await prisma.materialIssue.findFirst({
-      where: { workOrderId: workOrderId, status: "completed" },
-    });
-    if (!mi) {
-      throw new Error(
-        "Material Issue belum diselesaikan untuk Work Order ini. Selesaikan Material Issue terlebih dahulu.",
-      );
-    }
-
-    // Guard QC (PRD FAB-11/FAB-13): a final inspection that failed, or any open
-    // nonconformance, blocks handover. WO with no QC records passes (opt-in QC),
-    // so simple/legacy jobs stay completable.
-    await assertWorkOrderQcCleared(workOrderId);
-
     // NOTE: konsumsi material (stok keluar + jurnal) hanya oleh Material
-    // Issue wajib di atas — penyelesaian WO milestone status/fulfilment
+    // Issue wajib di bawah — penyelesaian WO milestone status/fulfilment
     // saja, tanpa konsumsi stok ganda.
-    const releasedCount = await completeWorkOrderTx(prisma, workOrderId, Number(user.id), {
-      claimStatuses: ["in_progress", "pending"],
-      projectId: wo.projectId,
+    // Semua guard dibaca ulang di dalam tx penyelesaian (kunci baris WO):
+    // MI/QC yang berubah sesudah baca luar tak bisa memboloskan gerbang.
+    const releasedCount = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      const wo = await tx.workOrder.findUniqueOrThrow({
+        where: { id: workOrderId },
+        include: { items: true },
+      });
+
+      // Guard: must be in_progress or pending
+      if (wo.status !== "in_progress" && wo.status !== "pending") {
+        throw new Error(
+          `Work Order tidak bisa diselesaikan dari status '${wo.status}'.`,
+        );
+      }
+      if (wo.items.length === 0) {
+        throw new Error("Perintah Kerja tidak bisa diselesaikan tanpa item.");
+      }
+
+      // Guard: check if MaterialIssue exists and is completed for this WO
+      const mi = await tx.materialIssue.findFirst({
+        where: { workOrderId: workOrderId, status: "completed" },
+      });
+      if (!mi) {
+        throw new Error(
+          "Material Issue belum diselesaikan untuk Work Order ini. Selesaikan Material Issue terlebih dahulu.",
+        );
+      }
+
+      // Guard QC (PRD FAB-11/FAB-13): a final inspection that failed, or any open
+      // nonconformance, blocks handover. WO with no QC records passes (opt-in QC),
+      // so simple/legacy jobs stay completable.
+      await assertWorkOrderQcCleared(workOrderId, tx);
+
+      return completeWorkOrderTx(tx, workOrderId, Number(user.id), {
+        claimStatuses: ["in_progress", "pending"],
+        projectId: wo.projectId,
+      });
     });
 
     await logActivity(
