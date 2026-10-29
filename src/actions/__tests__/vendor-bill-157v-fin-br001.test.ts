@@ -122,6 +122,17 @@ const PO_BILL = (items: unknown[], extra: Record<string, string> = {}) =>
     ...extra,
   })
 
+// Penegak draft: satu sumber mock bill draft ber-PO (E157B-3 + confirm-over).
+function draftBill(over: Record<string, unknown> = {}) {
+  const bill = {
+    id: 1, status: "draft", purchaseOrderId: 1, vendorId: 1,
+    subtotal: 100000, tax: 0, grandTotal: 100000, taxInvoiceNumber: null, terms: "TERMIN 1/1 — lunas",
+    ...over,
+  }
+  mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue(bill)
+  mocks.prismaMock.vendorBill.findUnique.mockResolvedValue(bill)
+}
+
 function expectBillReject(res: unknown, pattern: RegExp) {
   expect((res as { success?: boolean })?.success).toBe(false)
   expect((res as { error?: string })?.error).toMatch(pattern)
@@ -152,14 +163,7 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
 
   // E157B-3: bill tax>0 tanpa nomor valid DITOLAK confirm = MERAH (harus lulus + warning).
   it("E157B-3 confirm lulus + warning saat tax>0 tanpa nomor faktur", async () => {
-    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", purchaseOrderId: 1, vendorId: 1,
-      subtotal: 100000, tax: 11000, grandTotal: 111000, taxInvoiceNumber: null, terms: "TERMIN 1/1 — lunas",
-    })
-    mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
-      id: 1, status: "draft", purchaseOrderId: 1, vendorId: 1,
-      subtotal: 100000, tax: 11000, grandTotal: 111000, taxInvoiceNumber: null, terms: "TERMIN 1/1 — lunas",
-    })
+    draftBill({ subtotal: 100000, tax: 11000, grandTotal: 111000 })
     mocks.prismaMock.vendorBillItem.findMany.mockResolvedValue([
       { itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 11 },
     ])
@@ -215,14 +219,7 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
 
   it("confirm menahan baris tersimpan yang over acuan walau create lolos tanpa baris acuan", async () => {
     // Baris tanpa acuan PO (item 99 tak ada di PO) diskip guard — pagar agregat.
-    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", purchaseOrderId: 1, vendorId: 1,
-      subtotal: 100000, tax: 0, grandTotal: 100000, taxInvoiceNumber: null, terms: "TERMIN 1/1 — lunas",
-    })
-    mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
-      id: 1, status: "draft", purchaseOrderId: 1, vendorId: 1,
-      subtotal: 100000, tax: 0, grandTotal: 100000, taxInvoiceNumber: null, terms: "TERMIN 1/1 — lunas",
-    })
+    draftBill()
     mocks.prismaMock.vendorBillItem.findMany.mockResolvedValue([
       { itemId: 7, qty: 10, unitPrice: 13000, discountPercent: 0, taxPercent: 0 },
     ])
