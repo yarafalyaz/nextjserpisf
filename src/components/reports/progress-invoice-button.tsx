@@ -20,8 +20,14 @@ export function ProgressInvoiceButton({ quotationId }: Readonly<{ quotationId: n
   const [isPending, startTransition] = useTransition()
   const [percent, setPercent] = useState("")
 
+  const targetPercent = Number(percent)
+  const percentValid = Number.isFinite(targetPercent) && targetPercent > 0 && targetPercent <= 100
+
   function handleClick() {
-    const targetPercent = Number(percent)
+    if (!percentValid) {
+      showError("Target progres harus angka 1-100")
+      return
+    }
     startTransition(async () => {
       const result = await createProgressInvoice(quotationId, targetPercent)
       if (!result.success) {
@@ -51,6 +57,7 @@ export function ProgressInvoiceButton({ quotationId }: Readonly<{ quotationId: n
         variant="secondary"
         onPress={handleClick}
         isPending={isPending}
+        isDisabled={!percentValid}
         aria-label="Buat faktur progres"
       >
         <Percent size={14} aria-hidden="true" /> Buat Faktur Progres

@@ -78,6 +78,23 @@ describe("ProgressInvoiceButton F-2026-10-20-58", () => {
     container.remove()
   })
 
+  it("persen kosong/invalid: tombol nonaktif dan aksi tidak dipanggil", async () => {
+    const { container, root } = render(<ProgressInvoiceButton quotationId={7} />)
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Buat faktur progres"]',
+    )!
+    expect(button.disabled).toBe(true)
+
+    await act(async () => {
+      button.click()
+    })
+
+    expect(createProgressInvoice).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+    unmountCard(root)
+    container.remove()
+  })
+
   it("menampilkan error server apa adanya tanpa navigasi", async () => {
     createProgressInvoice.mockResolvedValue({
       success: false,
@@ -89,6 +106,12 @@ describe("ProgressInvoiceButton F-2026-10-20-58", () => {
     const button = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Buat faktur progres"]',
     )!
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Target progres persen"]')!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!
+      setter.call(input, "40")
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
 
     await act(async () => {
       button.click()

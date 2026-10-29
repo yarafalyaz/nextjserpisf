@@ -203,6 +203,65 @@ describe("VehicleFitmentForm — peringatan konflik F-2026-10-21-025", () => {
     act(() => root.unmount())
     container.remove()
   })
+
+  it("respons konflik basi dari scope sebelumnya tidak ditampilkan sesudah scope berubah", async () => {
+    let resolveFirst!: (v: unknown) => void
+    vi.mocked(checkVehicleFitmentConflicts)
+      .mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            resolveFirst = r
+          }) as never,
+      )
+      .mockResolvedValue({ success: true, conflicts: [] })
+    const { container, root } = renderEdit()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 210))
+    })
+    expect(resolveFirst).toBeTypeOf("function")
+
+    // Ubah scope (tahun) -> effect baru jalan, panggilan kedua resolves kosong.
+    const yearFrom = container.querySelector<HTMLInputElement>("#yearFrom")!
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!
+      setter.call(yearFrom, "2020")
+      yearFrom.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 210))
+    })
+
+    // Respons pertama (basi) baru tiba membawa konflik: harus diabaikan.
+    await act(async () => {
+      resolveFirst({
+        success: true,
+        conflicts: [
+          {
+            ruleId: 7,
+            candidateResult: "compatible",
+            conflictResult: "incompatible",
+            specificity: 0,
+            scope: {
+              itemId: 5,
+              bomRevisionId: null,
+              vehicleBrandId: null,
+              vehicleModelId: null,
+              vehicleVariantId: null,
+              yearFrom: null,
+              yearTo: null,
+              drivetrain: null,
+              transmission: null,
+            },
+            source: "katalog pabrikan",
+            notes: null,
+          },
+        ],
+      })
+    })
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    act(() => root.unmount())
+    container.remove()
+  })
 })
 
 describe("VehicleFitmentForm — isActive payload", () => {

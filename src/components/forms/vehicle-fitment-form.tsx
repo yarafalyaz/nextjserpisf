@@ -92,18 +92,22 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
   // (checkVehicleFitmentConflicts) — peringatan saja, simpan tidak diblokir.
   useEffect(() => {
     if (!itemId || !isActive) return
+    let alive = true
     const timer = setTimeout(async () => {
       const formData = buildScopeFormData()
       if (rule?.id) formData.set("excludeRuleId", String(rule.id))
       try {
         const res = await checkVehicleFitmentConflicts(formData)
-        setConflicts(res.success ? (res.conflicts ?? []) : [])
+        if (alive) setConflicts(res.success ? (res.conflicts ?? []) : [])
       } catch {
         // Gagal cek konflik tidak boleh mematikan form: kosongkan peringatan.
-        setConflicts([])
+        if (alive) setConflicts([])
       }
     }, 200)
-    return () => clearTimeout(timer)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
   }, [buildScopeFormData, itemId, isActive, rule?.id])
 
   // Cascade the scope selectors so only consistent combinations are offered.

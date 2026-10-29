@@ -68,47 +68,59 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
 
   useEffect(() => {
     if (!provinceCode) return
+    let alive = true
     async function loadCities() {
       try {
         const res = await fetch(`/api/address?tipe=regencies&kodeInduk=${provinceCode}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        setCities(Array.isArray(data) ? data : [])
+        if (alive) setCities(Array.isArray(data) ? data : [])
       } catch {
-        showError("Gagal memuat data kabupaten/kota", "Periksa koneksi lalu coba lagi.")
+        if (alive) showError("Gagal memuat data kabupaten/kota", "Periksa koneksi lalu coba lagi.")
       }
     }
     void loadCities()
+    return () => {
+      alive = false
+    }
   }, [provinceCode])
 
   useEffect(() => {
     if (!cityCode) return
+    let alive = true
     async function loadDistricts() {
       try {
         const res = await fetch(`/api/address?tipe=districts&kodeInduk=${cityCode}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        setDistricts(Array.isArray(data) ? data : [])
+        if (alive) setDistricts(Array.isArray(data) ? data : [])
       } catch {
-        showError("Gagal memuat data kecamatan", "Periksa koneksi lalu coba lagi.")
+        if (alive) showError("Gagal memuat data kecamatan", "Periksa koneksi lalu coba lagi.")
       }
     }
     void loadDistricts()
+    return () => {
+      alive = false
+    }
   }, [cityCode])
 
   useEffect(() => {
     if (!districtCode) return
+    let alive = true
     async function loadVillages() {
       try {
         const res = await fetch(`/api/address?tipe=villages&kodeInduk=${districtCode}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        setVillages(Array.isArray(data) ? data : [])
+        if (alive) setVillages(Array.isArray(data) ? data : [])
       } catch {
-        showError("Gagal memuat data kelurahan/desa", "Periksa koneksi lalu coba lagi.")
+        if (alive) showError("Gagal memuat data kelurahan/desa", "Periksa koneksi lalu coba lagi.")
       }
     }
     void loadVillages()
+    return () => {
+      alive = false
+    }
   }, [districtCode])
 
   const toOptions = (regions: Region[], withPostal = false) =>
