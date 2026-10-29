@@ -79,6 +79,7 @@ export async function loadJobEstimateVsActual(period: {
       },
       quotation: { select: { status: true, grandTotal: true } },
       productionOrders: { select: { id: true } },
+      costEstimate: { select: { totalEstimate: true } },
     },
     orderBy: [{ date: "asc" }, { documentNo: "asc" }],
   })
@@ -269,6 +270,7 @@ export async function loadJobEstimateVsActual(period: {
       billedAmount: billedByWorkOrder.get(w.id) ?? 0,
       hasBilling: billedWorkOrders.has(w.id),
       actualCost: costByWorkOrder.get(w.id) ?? 0,
+      costEstimate: w.costEstimate?.totalEstimate == null ? null : Number(w.costEstimate.totalEstimate),
     }
   })
 

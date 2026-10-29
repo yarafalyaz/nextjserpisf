@@ -37,6 +37,8 @@ const COLUMNS: TableColumn[] = [
   { header: "Selisih Tagih−Estimasi", align: "right", width: 38 },
   { header: "Biaya Aktual", align: "right", width: 33 },
   { header: "Margin Aktual", align: "right", width: 30 },
+  { header: "Estimasi Biaya", align: "right", width: 33 },
+  { header: "Selisih Biaya", align: "right", width: 30 },
 ]
 
 export interface JobEstimateVsActualInput {
@@ -55,6 +57,8 @@ export interface JobEstimateVsActualInput {
   hasBilling: boolean
   /** Σ ProductionCost terikat pekerjaan/perintah produksinya. */
   actualCost: number
+  /** Snapshot estimasi biaya (R3); null = belum ada snapshot. */
+  costEstimate: number | null
 }
 
 export interface JobEstimateVsActualRow {
@@ -67,6 +71,12 @@ export interface JobEstimateVsActualRow {
   actualCost: number
   /** billed − biaya aktual. */
   actualMargin: number
+  /** Snapshot estimasi biaya (R3); null = belum ada snapshot. */
+  costEstimate: number | null
+  /** estimasi − aktual; null tanpa snapshot. */
+  costVariance: number | null
+  /** Tidak ada snapshot estimasi biaya. */
+  noCostEstimate: boolean
   /** Tidak ada penawaran disetujui — selisih terhadap estimasi tak bermakna. */
   noApprovedEstimate: boolean
   /** Estimasi ada tetapi belum ada invoice yang terhitung ditagih. */
@@ -101,6 +111,7 @@ function noteOf(row: JobEstimateVsActualRow): string | null {
   const notes: string[] = []
   if (row.noApprovedEstimate) notes.push("belum ada penawaran disetujui")
   else if (row.unbilled) notes.push("belum ditagih")
+  if (row.noCostEstimate) notes.push("belum ada snapshot estimasi biaya")
   if (row.costOverBilling) notes.push("biaya melampaui penagihan")
   return notes.length ? notes.join("; ") : null
 }
@@ -137,6 +148,8 @@ export function buildJobEstimateVsActual(input: {
     const billed = safeRound(job.billedAmount, 2)
     const actualCost = safeRound(job.actualCost, 2)
     const noApprovedEstimate = estimate === null
+    // R3: selisih estimasi−aktual; null tanpa snapshot (bukan 0).
+    const costEstimate = job.costEstimate === null ? null : safeRound(job.costEstimate, 2)
     const row: JobEstimateVsActualRow = {
       id: job.id,
       documentNo: job.documentNo,
@@ -145,6 +158,9 @@ export function buildJobEstimateVsActual(input: {
       billingVariance: noApprovedEstimate ? null : safeSubtract(billed, estimate, 2),
       actualCost,
       actualMargin: safeSubtract(billed, actualCost, 2),
+      costEstimate,
+      costVariance: costEstimate === null ? null : safeSubtract(costEstimate, actualCost, 2),
+      noCostEstimate: costEstimate === null,
       noApprovedEstimate,
       unbilled: !noApprovedEstimate && !job.hasBilling,
       costOverBilling: actualCost > billed,
@@ -179,6 +195,8 @@ export function buildJobEstimateVsActual(input: {
         row.billingVariance === null ? "–" : amount(row.billingVariance),
         amount(row.actualCost),
         amount(row.actualMargin),
+        row.costEstimate === null ? "–" : amount(row.costEstimate),
+        row.costVariance === null ? "–" : amount(row.costVariance),
       ],
     }
   })
