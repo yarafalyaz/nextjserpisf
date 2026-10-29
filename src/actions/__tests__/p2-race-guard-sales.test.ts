@@ -164,6 +164,7 @@ describe("P2-3 DP quotation re-read guard", () => {
         },
       },
       downPayment: {
+        findUniqueOrThrow: (...a: unknown[]) => { order.push("reread-dp"); return dpFindUniqueOrThrowMock(...a) },
         aggregate: (...a: unknown[]) => { order.push("aggregate"); return dpAggregateMock(...a) },
         create: (...a: unknown[]) => dpCreateMock(...a),
         update: (...a: unknown[]) => dpUpdateMock(...a),
@@ -200,7 +201,7 @@ describe("P2-3 DP quotation re-read guard", () => {
     expect(dpCreateMock).not.toHaveBeenCalled()
   })
 
-  it("updateDownPayment: re-reads quotation inside the tx and enforces the cap", async () => {
+  it("updateDownPayment: locks + re-reads the DP row itself, then re-reads quotation inside the tx and enforces the cap", async () => {
     const order: string[] = []
     wireDpTx(order, { status: "accepted", grandTotal: 1000 })
 
@@ -208,7 +209,20 @@ describe("P2-3 DP quotation re-read guard", () => {
 
     expect(result.success).toBe(true)
     expect(quotationFindUniqueOrThrowMock).not.toHaveBeenCalled() // no outer read
-    expect(order).toEqual(["lock", "reread", "aggregate"])
+    expect(order).toEqual(["lock", "reread-dp", "lock", "reread", "aggregate"])
+  })
+
+  it("updateDownPayment: rejects when the DP row re-read inside the tx is no longer draft", async () => {
+    wireDpTx([], { status: "accepted", grandTotal: 1000 })
+    dpFindUniqueOrThrowMock
+      .mockResolvedValueOnce({ id: 99, status: "draft", documentNo: "DP-1" })
+      .mockResolvedValueOnce({ id: 99, status: "confirmed", documentNo: "DP-1" })
+
+    const result = await updateDownPayment(99, dpFd())
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Hanya uang muka berstatus draf")
+    expect(dpUpdateMock).not.toHaveBeenCalled()
   })
 
   it("updateDownPayment: rejects when the in-tx re-read is no longer eligible", async () => {

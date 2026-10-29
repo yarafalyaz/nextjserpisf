@@ -61,7 +61,10 @@ function wireTransaction() {
   const tx = {
     $executeRaw: txExecuteRawMock,
     quotation: { findUniqueOrThrow: (...a: unknown[]) => quotationFindUniqueOrThrowMock(...a) },
-    downPayment: { aggregate: dpAggregateMock, update: dpUpdateMock },
+    downPayment: {
+      findUniqueOrThrow: (...a: unknown[]) => dpFindUniqueOrThrowMock(...a),
+      aggregate: dpAggregateMock, update: dpUpdateMock,
+    },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -91,17 +94,38 @@ function buildForm(amount: string) {
 }
 
 describe("updateDownPayment concurrency guard", () => {
-  it("locks the quotation row BEFORE summing sibling down payments", async () => {
+  it("locks the DP row and re-reads its status BEFORE locking the quotation and summing sibling down payments", async () => {
     const order: string[] = []
-    txExecuteRawMock.mockImplementation(() => { order.push("lock"); return Promise.resolve(1) })
+    txExecuteRawMock.mockImplementation((strings: TemplateStringsArray) => {
+      order.push(strings.join(" ").includes("down_payments") ? "lock-dp" : "lock-quotation")
+      return Promise.resolve(1)
+    })
+    dpFindUniqueOrThrowMock.mockImplementation(() => { order.push("reread-dp"); return Promise.resolve({ id: 99, status: "draft" }) })
+    quotationFindUniqueOrThrowMock.mockImplementation(() => {
+      order.push("reread-quotation")
+      return Promise.resolve({ id: 50, status: "accepted", customerId: 3, grandTotal: 1000 })
+    })
     dpAggregateMock.mockImplementation(() => { order.push("aggregate"); return Promise.resolve({ _sum: { amount: 200 } }) })
 
     const result = await updateDownPayment(99, buildForm("500"))
 
     expect(result.success).toBe(true)
     expect(transactionMock).toHaveBeenCalled()       // cap runs inside a tx
-    expect(txExecuteRawMock).toHaveBeenCalled()       // FOR UPDATE lock taken
-    expect(order).toEqual(["lock", "aggregate"])      // lock strictly precedes the check
+    // Entri pertama = baca luar-tx untuk slug/status awal; yang dipercaya
+    // adalah baca ulang SESUDAH kunci baris DP (urutan lock-dp → reread-dp).
+    expect(order).toEqual(["reread-dp", "lock-dp", "reread-dp", "lock-quotation", "reread-quotation", "aggregate"])
+  })
+
+  it("rejects when the DP row re-read inside the tx is no longer draft (lost the race vs confirm)", async () => {
+    dpFindUniqueOrThrowMock
+      .mockResolvedValueOnce({ id: 99, status: "draft", documentNo: "DP-1" })
+      .mockResolvedValueOnce({ id: 99, status: "confirmed", documentNo: "DP-1" })
+
+    const result = await updateDownPayment(99, buildForm("500"))
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Hanya uang muka berstatus draf")
+    expect(dpUpdateMock).not.toHaveBeenCalled()
   })
 
   it("rejects when the cumulative DP total would exceed the quotation grandTotal", async () => {

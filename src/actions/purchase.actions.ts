@@ -3152,6 +3152,14 @@ export async function updateVendorBill(id: number, formData: FormData) {
     };
 
     const bill = await prisma.$transaction(async (tx) => {
+      // Kunci baris bill lebih dulu, lalu nilai status dari baca ulang di
+      // dalam tx (pola deleteVendorBill). Tanpa kunci ini confirmVendorBill
+      // konkuren bisa memposting bill di antara cek draft luar-tx dan update
+      // di bawah, lalu update ini menulis ulang status:"draft" — bill posted
+      // ter-resurrect jadi draft dengan jurnal POSTED menggantung.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${id} FOR UPDATE`;
+      }
       const latestBill = await tx.vendorBill.findUnique({
         where: { id },
         select: { status: true },
@@ -3344,6 +3352,14 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
     }
 
     const gr = await prisma.$transaction(async (tx) => {
+      // Kunci baris GR lebih dulu (urutan sama verifyGoodsReceipt: GR lalu
+      // PO), lalu nilai status dari baca ulang di dalam tx. Tanpa kunci ini
+      // verify konkuren bisa memverifikasi GR di antara cek draft luar-tx
+      // dan penggantian baris di bawah — baris GR terverifikasi tertimpa
+      // edit draft dan stok/jurnal lepas dari baris dokumennya.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM goods_receipts WHERE id = ${id} FOR UPDATE`;
+      }
       const latestStatus = await tx.goodsReceipt.findUnique({
         where: { id },
         select: { status: true },
@@ -3567,6 +3583,20 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     // operator would see a stale/empty attachment list and not know that the
     // new files were never attached. Wrapping both in one tx closes that gap.
     const payment = await prisma.$transaction(async (tx) => {
+      // Kunci baris payment lebih dulu, lalu nilai status dari baca ulang
+      // di dalam tx (pola confirmVendorPayment/deleteVendorPayment). Tanpa
+      // kunci ini confirm konkuren bisa menyelesaikan payment di antara
+      // cek draft luar-tx dan update di bawah — payment completed tertimpa
+      // nilai draft hasil edit dan alokasi/jurnalnya tak lagi cocok.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${id} FOR UPDATE`;
+      }
+      const freshPayment = await tx.vendorPayment.findUniqueOrThrow({
+        where: { id },
+      });
+      if (freshPayment.status !== "draft") {
+        throw new Error("Hanya pembayaran draft yang dapat diedit");
+      }
       const paymentDate = wibDateToUtcMidnight(v.paymentDate);
       const updated = await tx.vendorPayment.update({
         where: { id },
@@ -3751,29 +3781,48 @@ export async function voidVendorBill(id: number) {
     // Voiding a POSTED bill reverses its GL (re-opens GR/IR clearing) — a
     // destructive AP operation, not a create. Guard with delete_vendor_bills so a
     // create-only clerk cannot reverse posted payables. Mirrors deleteVendorBill.
-    await requirePermission("delete_vendor_bills");
-    const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } });
-    if (bill.status === "draft") {
-      throw new Error("Tagihan draft tidak perlu dibatalkan. Gunakan hapus.");
-    }
-    if (bill.status === "cancelled") {
-      throw new Error("Tagihan sudah dibatalkan.");
-    }
-    if (Number(bill.paidAmount ?? 0) > 0) {
-      throw new Error(
-        "Hapus pembayaran tagihan ini terlebih dahulu sebelum membatalkan.",
-      );
-    }
+    const user = await requirePermission("delete_vendor_bills");
 
+    // Status + paidAmount yang dipercaya dibaca ulang SESUDAH baris dikunci
+    // di dalam tx (pola deleteVendorBill). Cek luar-tx lama membaca snapshot
+    // basi: confirmVendorPayment konkuren bisa mengisi paidAmount di antara
+    // cek dan void, menghasilkan bill cancelled ber-paidAmount > 0 (AP drift).
+    // Jurnal POSTED dibalik lewat jurnal lawan (reverseJournalsByReferenceTx,
+    // standar repo — pola deletePurchaseAdvance/setVendorBillTaxInvoiceNumber),
+    // BUKAN hard-delete deleteJournalByReferenceTx yang menghapus histori GL.
+    let billSlug: string | null = null;
     await prisma.$transaction(async (tx) => {
-      await deleteJournalByReferenceTx(tx, "VendorBill", id);
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorBill.findUniqueOrThrow({ where: { id } });
+      if (fresh.status === "draft") {
+        throw new Error("Tagihan draft tidak perlu dibatalkan. Gunakan hapus.");
+      }
+      if (fresh.status === "cancelled") {
+        throw new Error("Tagihan sudah dibatalkan.");
+      }
+      if (Number(fresh.paidAmount ?? 0) > 0) {
+        throw new Error(
+          "Hapus pembayaran tagihan ini terlebih dahulu sebelum membatalkan.",
+        );
+      }
+      billSlug = fresh.slug;
+
+      await reverseJournalsByReferenceTx(
+        tx,
+        "VendorBill",
+        id,
+        `Pembatalan tagihan vendor #${id}`,
+        Number(user.id),
+      );
       await tx.vendorBill.update({
         where: { id },
         data: { status: "cancelled" },
       });
       // The bill no longer counts toward the service PO's billed value — resync
       // the subcontract HPP.
-      await syncServicePoCostFromBills(tx, bill.purchaseOrderId, null);
+      await syncServicePoCostFromBills(tx, fresh.purchaseOrderId, null);
     });
 
     await logActivity(
@@ -3783,7 +3832,7 @@ export async function voidVendorBill(id: number) {
       `Membatalkan tagihan vendor #${id}`,
     );
     revalidatePath("/pembelian/tagihan");
-    revalidatePath(`/pembelian/tagihan/${bill.slug ?? id}`);
+    revalidatePath(`/pembelian/tagihan/${billSlug ?? id}`);
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

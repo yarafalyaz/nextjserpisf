@@ -2469,3 +2469,98 @@ describe("INV-BR-013 larangan hapus ledger posted", () => {
     expect(res?.success).toBe(true)
   })
 })
+
+// BUGHUNT round3 #6-7: void/edit dokumen pembelian harus mengunci barisnya
+// sendiri + menilai status/paidAmount dari baca ulang di dalam tx. Mock tak
+// bisa menegakkan kunci DB betulan, jadi penegaknya: urutan kunci → baca
+// ulang, dan baca ulang non-draft (kalah race vs confirm) menolak SEBELUM
+// tulis apa pun — snapshot luar-tx yang basi tidak boleh menghidupkan lagi
+// dokumen posted/completed/verified menjadi draft.
+describe("BUGHUNT round3 #6-7 kunci baris + klaim status pembelian", () => {
+  it("voidVendorBill mengunci baris, membaca ulang, lalu me-reverse jurnal (bukan hard-delete)", async () => {
+    const order: string[] = []
+    mocks.prismaMock.$executeRaw.mockImplementation(async () => { order.push("lock"); return 1 })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockImplementation(async () => {
+      order.push("reread")
+      return { id: 1, status: "posted", paidAmount: 0, purchaseOrderId: null, slug: "bill-1" }
+    })
+    mocks.reverseJournalsByReferenceTxMock.mockClear()
+    mocks.deleteJournalByReferenceTxMock.mockClear()
+
+    const res = await actions.voidVendorBill(1)
+
+    expect(res?.success).toBe(true)
+    expect(order.slice(0, 2)).toEqual(["lock", "reread"])
+    expect(mocks.reverseJournalsByReferenceTxMock).toHaveBeenCalledWith(
+      mocks.prismaMock, "VendorBill", 1, expect.stringContaining("Pembatalan tagihan vendor"), 1,
+    )
+    expect(mocks.deleteJournalByReferenceTxMock).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalledWith({
+      where: { id: 1 }, data: { status: "cancelled" },
+    })
+  })
+
+  it("voidVendorBill menolak bila baca ulang dalam tx menemukan paidAmount > 0 (kalah race vs pembayaran)", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "posted", paidAmount: 250000, purchaseOrderId: null, slug: "bill-1",
+    })
+    mocks.reverseJournalsByReferenceTxMock.mockClear()
+
+    const res = await actions.voidVendorBill(1)
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hapus pembayaran tagihan ini terlebih dahulu")
+    expect(mocks.reverseJournalsByReferenceTxMock).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+  })
+
+  it("updateVendorBill menolak bila status dalam tx sudah posted (tidak resurrect ke draft)", async () => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", documentNo: "BILL-1", purchaseOrderId: null, goodsReceiptId: null,
+    })
+    mocks.prismaMock.vendorBill.findUnique.mockResolvedValueOnce({ status: "posted" })
+
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1", date: "2026-06-12", subtotal: "1000", tax: "0", grandTotal: "1000",
+    }))
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya tagihan draft yang dapat diedit")
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBill.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorBillItem.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("updateVendorPayment menolak bila status dalam tx sudah completed (kalah race vs confirm)", async () => {
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "draft", documentNo: "VP-1" })
+      .mockResolvedValueOnce({ id: 1, status: "completed", documentNo: "VP-1" })
+
+    const res = await actions.updateVendorPayment(1, fdMap({
+      vendorId: "1", amount: "1200", paymentDate: "2026-06-12", paymentMethod: "cash",
+    }))
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya pembayaran draft yang dapat diedit")
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled()
+  })
+
+  it("updateGoodsReceipt menolak bila status dalam tx sudah verified (baris tidak tertimpa)", async () => {
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", documentNo: "GR-1",
+    })
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValueOnce({ status: "verified" })
+
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 6, unitCost: 1000 }]),
+    }))
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya GR draft yang dapat diedit")
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalled()
+    expect(mocks.prismaMock.goodsReceipt.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.goodsReceiptItem.deleteMany).not.toHaveBeenCalled()
+  })
+})

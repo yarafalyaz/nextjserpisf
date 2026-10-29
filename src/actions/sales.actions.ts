@@ -3838,6 +3838,19 @@ export async function updateDownPayment(id: number, formData: FormData) {
   // lock pattern. The cap-check throw rolls the (otherwise no-op) tx back, and
   // the outer catch surfaces the same message.
   const dp = await prisma.$transaction(async (tx) => {
+    // Kunci baris DP ini sendiri lebih dulu (urutan sama confirmDownPayment:
+    // DP lalu quotation), lalu nilai status dari baca ulang di dalam tx.
+    // Mengunci quotation saja tidak menserialisasi edit-vs-confirm DP yang
+    // sama: confirm bisa menyelesaikan DP di antara cek draft luar-tx dan
+    // update di bawah, lalu edit menimpa DP confirmed dengan nilai draft.
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM down_payments WHERE id = ${id} FOR UPDATE`
+    }
+    const freshDp = await tx.downPayment.findUniqueOrThrow({ where: { id } })
+    if (freshDp.status !== "draft") {
+      throw new Error("Hanya uang muka berstatus draf yang bisa diubah")
+    }
+
     await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
     const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId } })
