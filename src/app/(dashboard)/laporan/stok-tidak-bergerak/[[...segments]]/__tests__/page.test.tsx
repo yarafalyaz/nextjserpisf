@@ -103,8 +103,9 @@ function fixtureReport() {
   return { report, periodLabel: "Periode 22 Okt 2026 – 22 Okt 2026", periodCaption: "Periode 22 Okt 2026 – 22 Okt 2026", thresholdDays: 90 }
 }
 
-async function renderPage(search: { ambang?: string } = {}) {
+async function renderPage(search: { ambang?: string } = {}, segments: string[] = []) {
   const node = await SlowMovingStockPage({
+    params: Promise.resolve({ segments }),
     searchParams: Promise.resolve(search),
   })
   const container = document.createElement("div")
@@ -135,9 +136,22 @@ describe("halaman stok tidak bergerak (pasangan UI PR #462)", () => {
 
     mocks.requirePermission.mockRejectedValue(new Error("redirect:/"))
     await expect(
-      SlowMovingStockPage({ searchParams: Promise.resolve({}) }),
+      SlowMovingStockPage({ params: Promise.resolve({ segments: [] }), searchParams: Promise.resolve({}) }),
     ).rejects.toThrow("redirect:/")
     expect(mocks.loadSlowMovingStock).toHaveBeenCalledTimes(1)
+  })
+
+  it("ambang dari path (/ambang/30) dibaca — bukan reset ke default", async () => {
+    const { root } = await renderPage({}, ["ambang", "30"])
+    expect(mocks.loadSlowMovingStock).toHaveBeenCalledWith(
+      expect.objectContaining({ thresholdDays: 30 }),
+    )
+    act(() => root.unmount())
+    // Query lama tetap fallback bila path kosong.
+    await renderPage({ ambang: "7" }, [])
+    expect(mocks.loadSlowMovingStock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ thresholdDays: 7 }),
+    )
   })
 
   it("tampilkan baris builder apa adanya: barang lambat tampil, bergerak tidak", async () => {

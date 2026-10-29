@@ -289,6 +289,8 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "scripts/verify-migrations.mjs": "pembersihan DB scratch best-effort; kegagalan dilaporkan plus instruksi hapus manual",
   "src/actions/sales.actions.ts": "F-2026-10-25-035-B fase 3: persist pending CreditOverride gagal dicatat console.error berkonteks; hasil tertahan tetap dikembalikan (dokumen memang tidak lahir) — bukan sukses semu",
   "src/lib/hooks/sales-payment.hook.ts": "akrual komisi tahap 3 best-effort dalam recalc paid: mapping belum lengkap = catat alasan + faktur tetap paid (vonis R-komisi-vonispayable §5) — bukan angka yang ditelan, bukan sukses semu",
+  "src/app/(dashboard)/crm/tickets/page.tsx": "BR-CTQ-11/CTB-09/SLA 001-U: kegagalan loader kartu menyembunyikan kartu saja; daftar tiket existing tetap dapat dipakai, bukan angka kosong karangan",
+  "src/app/(dashboard)/crm/tickets/[slug]/page.tsx": "SLA 001-U: kegagalan loader = tanpa seksi SLA di detail; konten tiket existing tetap tampil, bukan angka yang ditelan",
 }
 
 const ALLOWED_DEFAULT_RETURN: Record<string, string> = {

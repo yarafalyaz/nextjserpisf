@@ -18,8 +18,8 @@ export const metadata: Metadata = { title: "Estimasi vs Aktual Pekerjaan" }
 /**
  * Estimasi vs aktual per pekerjaan — nilai penawaran yang disetujui melawan
  * penagihan aktual dan biaya aktual, dikelompokkan per pekerjaan/kendaraan.
- * Read-model dari kolom existing; biaya estimasi tidak punya sumber di
- * skema sehingga tidak ditampilkan (F-2026-10-20-04).
+ * Estimasi biaya dari snapshot WorkOrderCostEstimate (R3); kosong tampil
+ * "–" + penanda jujur (bukan nol).
  */
 export default async function JobEstimateVsActualPage({
   params: routeParams,
