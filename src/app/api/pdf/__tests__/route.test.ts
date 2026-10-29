@@ -433,6 +433,29 @@ describe("GET /api/pdf", () => {
       expect(res.status).toBe(200)
       expect(mocks.loadIncomeStatementByCostCenter.mock.calls[0][0].costCenterId).toBeNull()
     })
+
+    it("tanggal query tak valid jatuh ke periode slug, bukan 500 (BUGHUNT round3)", async () => {
+      mocks.loadIncomeStatementByCostCenter.mockResolvedValue({
+        table: {
+          columns: [{ header: "Kode", align: "left" }],
+          rows: [{ kind: "notice", text: "Pilih pusat biaya." }],
+        },
+        columnLabel: "1 Okt - 31 Okt 2026",
+        costCenterLabel: null,
+        totals: { netProfit: 0 },
+        periodLabel: "Periode 1 Okt 2026 – 31 Okt 2026",
+        periodCaption: "Dari 01 Okt 2026 s/d 31 Okt 2026",
+      })
+
+      const res = await GET(
+        request("laporan=laba-rugi-pusat-biaya&periode=2026-10&tanggalMulai=abc&tanggalSelesai=2026-13-40"),
+      )
+
+      expect(res.status).toBe(200)
+      const [input] = mocks.loadIncomeStatementByCostCenter.mock.calls[0]
+      expect(input.start).toEqual(new Date(2026, 9, 1))
+      expect(input.end).toEqual(new Date(2026, 9, 31, 23, 59, 59, 999))
+    })
   })
 
   it("menolak laporan yang tidak didukung sebelum menyentuh data", async () => {

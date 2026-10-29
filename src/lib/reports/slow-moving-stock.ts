@@ -165,7 +165,7 @@ export function buildSlowMovingStock(input: {
       kind: "total",
       grand: true,
       label: "Jumlah Nilai Stok Tidak Bergerak",
-      cells: ["", "", "", "", "", amount(slowValue)],
+      cells: [amount(slowValue)],
     })
     rows.push({
       kind: "notice",

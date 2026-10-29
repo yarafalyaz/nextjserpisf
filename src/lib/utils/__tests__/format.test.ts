@@ -84,6 +84,17 @@ describe("formatAccounting", () => {
     expect(formatAccounting("250000")).toBe("250.000")
     expect(formatAccounting("abc")).toBe("–")
   })
+
+  it("memakai formatter cache bersama (BUGHUNT round3 C): identik formatNumber per decimals", () => {
+    for (const decimals of [0, 1, 2, 3]) {
+      expect(formatAccounting(1500.5, { decimals, zeroDash: false })).toBe(
+        formatNumber(1500.5, decimals),
+      )
+      expect(formatAccounting(-1500.5, { decimals, zeroDash: false })).toBe(
+        `(${formatNumber(1500.5, decimals)})`,
+      )
+    }
+  })
 })
 
 describe("formatNumber", () => {

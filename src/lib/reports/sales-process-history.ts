@@ -116,7 +116,9 @@ export function buildSalesProcessHistory(lines: SalesProcessLine[]): SalesProces
       kind: "total",
       grand: true,
       label: "Jumlah",
-      cells: ["", "", "", "", "", amount(totals.invoiced), amount(totals.paid), amount(totals.outstanding), ""],
+      // Status kolom teks terakhir tak bertotal: sel kosong trailing sah
+      // (kontrak trailing-only hanya larang blank LEADING).
+      cells: [amount(totals.invoiced), amount(totals.paid), amount(totals.outstanding), ""],
     })
   }
 

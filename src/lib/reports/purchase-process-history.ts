@@ -113,7 +113,7 @@ export function buildPurchaseProcessHistory(lines: PurchaseProcessLine[]): Purch
       kind: "total",
       grand: true,
       label: "Jumlah",
-      cells: ["", "", "", "", "", "", amount(totals.billed), amount(totals.paid), amount(totals.outstanding)],
+      cells: [amount(totals.billed), amount(totals.paid), amount(totals.outstanding)],
     })
   }
 

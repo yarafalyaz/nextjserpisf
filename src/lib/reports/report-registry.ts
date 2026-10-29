@@ -247,10 +247,15 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       // Periode laporan ini datang sebagai parameter query (bukan slug) karena
       // filter-nya juga membawa pusat biaya; keduanya dipakai apa adanya supaya
       // PDF memuat periode yang sama dengan yang dilihat di layar.
-      const start = search.tanggalMulai ? new Date(`${search.tanggalMulai}T00:00:00`) : period.start
+      // Tanggal query tak valid (mis. tanggalMulai=abc atau 2026-02-31) jatuh
+      // ke periode slug, bukan Invalid Date yang meledak jadi 500 di loader
+      // (BUGHUNT round3; pola guard NaN `pembanding` di neraca-saldo).
+      const startRaw = search.tanggalMulai ? new Date(`${search.tanggalMulai}T00:00:00`) : null
+      const start = startRaw && !Number.isNaN(startRaw.getTime()) ? startRaw : period.start
       // Akhir hari penuh (.999) sama dengan layar — jurnal pukul 23:59:59.500
       // tidak boleh tampil di layar tapi hilang di PDF (B9).
-      const end = search.tanggalSelesai ? new Date(`${search.tanggalSelesai}T23:59:59.999`) : period.end
+      const endRaw = search.tanggalSelesai ? new Date(`${search.tanggalSelesai}T23:59:59.999`) : null
+      const end = endRaw && !Number.isNaN(endRaw.getTime()) ? endRaw : period.end
       const costCenterId = search.costCenterId ? Number(search.costCenterId) : null
 
       const report = await loadIncomeStatementByCostCenter({
@@ -849,24 +854,28 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
   "piutang-jatuh-tempo": {
     title: "Piutang Jatuh Tempo",
     subtitle: "Umur Piutang",
-    async load() {
-      const report = await loadReceivablesAging()
+    // Aging posisi per akhir periode (BUGHUNT round3): PDF periode lampau
+    // mengelompokkan umur per period.end. Sisa tetap saldo kini (paidAmount
+    // kolom berjalan, tanpa rekonstruksi pembayaran per tanggal) — sama
+    // dengan batas loader; jangan klaim rekonstruksi historis di sini.
+    async load({ period }) {
+      const report = await loadReceivablesAging(new Date(period.end))
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
   "hutang-jatuh-tempo": {
     title: "Hutang Jatuh Tempo",
     subtitle: "Umur Utang",
-    async load() {
-      const report = await loadPayablesAging()
+    async load({ period }) {
+      const report = await loadPayablesAging(new Date(period.end))
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
   "total-hutang": {
     title: "Total Hutang",
     subtitle: "Utang Usaha",
-    async load() {
-      const report = await loadPayablesTotal()
+    async load({ period }) {
+      const report = await loadPayablesTotal(new Date(period.end))
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },

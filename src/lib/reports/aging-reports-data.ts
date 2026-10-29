@@ -92,14 +92,25 @@ function bucketRows(
 }
 
 /** Piutang Jatuh Tempo: faktur berstatus diakui, punya jatuh tempo, sisa > Rp1 (FIN-BR-006). */
-export async function loadReceivablesAging(): Promise<AgingReportView> {
+export async function loadReceivablesAging(asOf: Date = new Date()): Promise<AgingReportView> {
+  // Batas DB (BUGHUNT round3): faktur tanpa jatuh tempo tak masuk laporan
+  // umur — disaring di query, bukan sesudah findMany memuat semua riwayat.
+  // ponytail: status "paid" tetap dimuat untuk jalur returnCredit (retur atas
+  // faktur lunas bisa membuka sisa lagi); saringan sisa > Rp1 tetap di JS
+  // karena sisa = grandTotal − paidAmount − returnCredit (jurnal) yang tidak
+  // bisa diekspresikan sebagai where Prisma. Naikkan ke $queryRaw HAVING
+  // bila volume retur membuat muatan "paid" dominan.
   const invoices = await prisma.salesInvoice.findMany({
-    where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
+    where: {
+      status: { in: [...RECOGNISED_AR_STATUSES] },
+      deletedAt: null,
+      dueDate: { not: null },
+    },
     include: { customer: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
   })
   const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
-  const now = new Date()
+  const now = asOf
   const items = invoices
     .map((inv) => {
       if (!inv.dueDate) return null
@@ -126,13 +137,20 @@ export async function loadReceivablesAging(): Promise<AgingReportView> {
 }
 
 /** Hutang Jatuh Tempo: tagihan berstatus diakui, punya jatuh tempo, sisa > Rp1 (FIN-BR-006). */
-export async function loadPayablesAging(): Promise<AgingReportView> {
+export async function loadPayablesAging(asOf: Date = new Date()): Promise<AgingReportView> {
+  // Batas DB (BUGHUNT round3): tagihan tanpa jatuh tempo disaring di query.
+  // Saringan persis sisa > Rp1 tetap di JS di bawah (ambang FIN-BR-006 satu
+  // sumber, sisa neto withholding tak bisa jadi where Prisma antar-kolom).
   const bills = await prisma.vendorBill.findMany({
-    where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
+    where: {
+      status: { in: [...RECOGNISED_AP_STATUSES] },
+      deletedAt: null,
+      dueDate: { not: null },
+    },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
   })
-  const now = new Date()
+  const now = asOf
   const items = bills
     .map((bill) => {
       if (!bill.dueDate) return null
@@ -166,13 +184,13 @@ const TOTAL_COLUMNS: TableColumn[] = [
  * Total Hutang: SEMUA tagihan berstatus diakui yang masih bersisa, termasuk yang
  * tanpa jatuh tempo (itu bedanya dengan laporan umur — lihat `payables-summary`).
  */
-export async function loadPayablesTotal(): Promise<AgingReportView> {
+export async function loadPayablesTotal(asOf: Date = new Date()): Promise<AgingReportView> {
   const bills = await prisma.vendorBill.findMany({
     where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
   })
-  const now = new Date()
+  const now = asOf
   const summary = buildPayablesSummary(
     bills.map((b) => ({
       vendorId: b.vendorId,

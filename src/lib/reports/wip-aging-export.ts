@@ -96,7 +96,7 @@ export function buildWipAgingTable(result: WipAgingLoadResult): TableDocument["t
       kind: "total",
       grand: true,
       label: "Jumlah Sisa WIP",
-      cells: ["", "", "", "", formatNumber(report.totalOrders), "", "", amount(report.totalWipAmount)],
+      cells: [formatNumber(report.totalOrders), "", "", amount(report.totalWipAmount)],
     },
     {
       kind: "notice",

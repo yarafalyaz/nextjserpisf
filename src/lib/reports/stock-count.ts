@@ -150,7 +150,7 @@ export function buildStockCount(input: {
     rows.push({
       kind: "total",
       label: `Nilai selisih ${document.documentNo}`,
-      cells: ["", "", "", "", "", amount(documentValue)],
+      cells: [amount(documentValue)],
     })
     totals.differenceValue = safeAdd(totals.differenceValue, documentValue, 2)
   }
@@ -165,7 +165,7 @@ export function buildStockCount(input: {
       kind: "total",
       grand: true,
       label: "Jumlah Nilai Selisih",
-      cells: ["", "", "", "", "", amount(totals.differenceValue)],
+      cells: [amount(totals.differenceValue)],
     })
   }
 

@@ -179,7 +179,7 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
   rows.push({
     kind: "total",
     label: "Jumlah Penyusutan",
-    cells: [EMPTY, amount(depreciation.accumulated), amount(depreciation.bookValue)],
+    cells: [amount(depreciation.accumulated), amount(depreciation.bookValue)],
   })
 
   // ── Pelepasan: per aset yang dilepas dalam periode ─────────────────────────

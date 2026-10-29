@@ -37,11 +37,12 @@ describe("buildPaymentExpenses", () => {
 
     const totals = result.table.rows.filter((row) => row.kind === "total")
     expect(String(totals[0].label)).toBe("Jumlah Pembayaran Vendor")
-    expect(totals[0].cells?.[4]).toBe("3.500")
+    // Trailing-only: 1 sel di kolom "Beban Admin" (kolom terakhir).
+    expect(totals[0].cells).toEqual(["3.500"])
     expect(String(totals[1].label)).toBe("Jumlah Penerimaan Barang")
-    expect(totals[1].cells?.[4]).toBe("4.000")
+    expect(totals[1].cells).toEqual(["4.000"])
     expect(totals[2].grand).toBe(true)
-    expect(totals[2].cells?.[4]).toBe("7.500")
+    expect(totals[2].cells).toEqual(["7.500"])
 
     expect(result.bySource).toEqual([
       { source: "Pembayaran Vendor", count: 2, adminFee: 3_500 },

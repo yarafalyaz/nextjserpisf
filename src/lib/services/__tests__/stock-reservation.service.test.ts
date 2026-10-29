@@ -26,6 +26,7 @@ function txMock() {
 
 import {
   consumeReservationsForMaterialIssueTx,
+  createReservationsForWorkOrderStartTx,
   expireOverdueReservationsTx,
   reduceReservationsForWorkOrderItemTx,
   releaseActiveReservationsForWorkOrderTx,
@@ -82,6 +83,61 @@ describe("consumeReservationsForMaterialIssueTx", () => {
     )
     expect(Number(updateMock.mock.calls[0][0].data.qtyConsumed)).toBe(2)
     expect(out.get(10)).toBe(3)
+  })
+})
+
+describe("createReservationsForWorkOrderStartTx (BUGHUNT r3: ketersediaan batch)", () => {
+  it("satu groupBy untuk semua pasangan gudang×item; nol aggregate serial; hasil rencana sama dengan per pasangan", async () => {
+    const aggregateMock = vi.fn()
+    const groupByMock = vi.fn(async () => [
+      // (1,5)=10 → item 1 kurang 2 dari 12; pasangan absen (2,5) terbaca 0.
+      { itemId: 1, warehouseId: 5, _sum: { remaining: 10 } },
+    ])
+    const createMock = vi.fn(async (a: unknown) => a)
+    const tx = {
+      workOrder: {
+        findUniqueOrThrow: vi.fn(async () => ({
+          id: 9,
+          startDate: new Date(2026, 9, 22),
+          endDate: null,
+          createdAt: new Date(),
+          items: [
+            { id: 41, itemId: 1, qty: 12, status: "pending" },
+            { id: 42, itemId: 2, qty: 4, status: "pending" },
+          ],
+        })),
+      },
+      materialIssue: { findFirst: vi.fn(async () => ({ warehouseId: 5 })) },
+      item: {
+        findMany: vi.fn(async () => [
+          { id: 1, defaultWarehouseId: null },
+          { id: 2, defaultWarehouseId: null },
+        ]),
+      },
+      materialIssueItem: { findMany: vi.fn(async () => []) },
+      stockReservation: { findMany: findManyMock, create: createMock },
+      inventoryLayer: { aggregate: aggregateMock, groupBy: groupByMock },
+    } as never
+    findManyMock.mockResolvedValue([])
+
+    const out = await createReservationsForWorkOrderStartTx(tx, { workOrderId: 9, createdBy: 7 })
+
+    expect(out.created).toBe(2)
+    expect(groupByMock).toHaveBeenCalledTimes(1)
+    expect(groupByMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["itemId", "warehouseId"],
+        where: { itemId: { in: [1, 2] }, warehouseId: { in: [5] }, remaining: { gt: 0 } },
+      }),
+    )
+    expect(aggregateMock).not.toHaveBeenCalled()
+    const rows = createMock.mock.calls.map((c) => (c[0] as { data: Record<string, unknown> }).data)
+    expect(rows.find((r) => r.itemId === 1)).toMatchObject({ warehouseId: 5 })
+    expect(Number(rows.find((r) => r.itemId === 1)?.qtyReserved)).toBe(10)
+    expect(Number(rows.find((r) => r.itemId === 1)?.shortageQty)).toBe(2)
+    // Pasangan tanpa baris groupBy = tersedia 0 → reserved 0, shortage penuh.
+    expect(Number(rows.find((r) => r.itemId === 2)?.qtyReserved)).toBe(0)
+    expect(Number(rows.find((r) => r.itemId === 2)?.shortageQty)).toBe(4)
   })
 })
 

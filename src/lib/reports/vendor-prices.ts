@@ -89,8 +89,10 @@ export function buildVendorPriceListing(rows: VendorPriceInput[]): VendorPriceRe
     tableRows.push({
       kind: "total",
       grand: true,
-      label: "Jumlah",
-      cells: [String(sorted.length), "", "", "", "", ""],
+      // Jumlah baris di label; tak ada kolom angka tunggal tempat hitungan
+      // mendarat — sel trailing kosong semua supaya tak ada angka semu.
+      label: `Jumlah (${sorted.length} baris)`,
+      cells: ["", "", "", ""],
     })
   }
 

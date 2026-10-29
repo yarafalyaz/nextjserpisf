@@ -76,10 +76,7 @@ export function formatAccounting(
   if (zeroDash && Math.abs(numericAmount) < 0.005) return "–";
 
   const magnitude = Math.abs(numericAmount);
-  const formatted = new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(magnitude);
+  const formatted = idNumberFmt(decimals).format(magnitude);
 
   const body = showSymbol ? `${symbol}${formatted}` : formatted;
   return numericAmount < 0 ? `(${body})` : body;

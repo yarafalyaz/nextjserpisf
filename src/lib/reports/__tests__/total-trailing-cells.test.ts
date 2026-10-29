@@ -38,7 +38,7 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn(async () => ({ costingMethod: "fifo" })) }))
 
 import { loadArApSummary } from "../ar-ap-summary-data"
-import { loadPayablesTotal, loadReceivablesAging } from "../aging-reports-data"
+import { loadPayablesAging, loadPayablesTotal, loadReceivablesAging } from "../aging-reports-data"
 import { loadGeneralLedger, loadReceivableSubledger } from "../ledger-cash-data"
 import { loadSalesAnalytics, loadStockCard, loadStockValuation, resolveItemIdBySlugOrId, resolveWarehouseIdBySlugOrId } from "../stock-flow-data"
 import { loadStockAging, loadStockSummary } from "../stock-simple-data"
@@ -55,6 +55,19 @@ import { buildDeliveredUnbilledTable } from "../delivered-unbilled-export"
 import { buildDiscountExposureTable } from "../discount-exposure-export"
 import { buildOutstandingLines } from "../outstanding-lines"
 import type { DiscountExposure } from "../discount-exposure"
+import { buildPaymentExpenses } from "../payment-expenses"
+import { buildStockCount } from "../stock-count"
+import { buildMinStock } from "../min-stock"
+import { buildSalesProcessHistory } from "../sales-process-history"
+import { buildPurchaseProcessHistory } from "../purchase-process-history"
+import { buildPayrollByEmployee, buildPayrollComposition, buildPph21 } from "../payroll-reports"
+import { buildSlowMovingStock } from "../slow-moving-stock"
+import { buildTransferInTransit } from "../transfer-in-transit"
+import { buildWithholdingCertificateTable } from "../withholding-certificates"
+import { buildInventoryReconciliation } from "../inventory-reconciliation"
+import { buildAssetMovement } from "../asset-movement"
+import { buildWipAgingTable } from "../wip-aging-export"
+import { buildVendorPriceListing } from "../vendor-prices"
 
 import type { TableRow } from "@/lib/pdf/engine/types"
 
@@ -121,6 +134,88 @@ describe("total trailing: aging & AR/AP", () => {
     const totals = totalsOf(report.table.rows)
     expect(totals.map((t) => t.label)).toEqual(["Jumlah Piutang", "Jumlah Hutang", "Posisi Bersih (AR − AP)"])
     for (const t of totals) expect(t.cells).toHaveLength(1)
+  })
+})
+
+describe("aging loader: saringan DB + asOf periode (BUGHUNT round3 A)", () => {
+  it("piutang: where dueDate not null diteruskan ke Prisma; baris tanpa jatuh tempo tak dimuat", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      {
+        id: 1,
+        grandTotal: 1000,
+        paidAmount: 0,
+        dueDate: new Date("2026-01-01"),
+        customer: { name: "PT A" },
+        documentNo: "INV-1",
+        customDocumentNo: null,
+      },
+    ])
+    await loadReceivablesAging(new Date(2026, 9, 31))
+    expect(mocks.prismaMock.salesInvoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ dueDate: { not: null }, deletedAt: null }),
+      }),
+    )
+  })
+
+  it("hutang jatuh tempo: where dueDate not null; total hutang tetap muat tanpa jatuh tempo", async () => {
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([])
+    await loadPayablesAging(new Date(2026, 9, 31))
+    expect(mocks.prismaMock.vendorBill.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ dueDate: { not: null } }),
+      }),
+    )
+    vi.clearAllMocks()
+    for (const model of Object.values(mocks.prismaMock)) {
+      for (const fn of Object.values(model as Record<string, ReturnType<typeof vi.fn>>)) fn.mockResolvedValue([])
+    }
+    await loadPayablesTotal(new Date(2026, 9, 31))
+    const where = mocks.prismaMock.vendorBill.findMany.mock.calls[0][0].where
+    expect(where).not.toHaveProperty("dueDate")
+  })
+
+  it("registry aging meneruskan period.end sebagai asOf (bucket per akhir periode)", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      {
+        id: 1,
+        grandTotal: 1000,
+        paidAmount: 0,
+        // Jatuh tempo 15 Okt; per 31 Okt = 16 hari telat → bucket 1–30 Hari.
+        dueDate: new Date(2026, 9, 15),
+        customer: { name: "PT A" },
+        documentNo: "INV-1",
+        customDocumentNo: null,
+      },
+    ])
+    const period = parseReportPeriod("2026-10", { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) })
+    const payload = await REPORTS["piutang-jatuh-tempo"].load({ period, search: {} })
+    expect(payload.kind).toBe("table")
+    if (payload.kind === "table") {
+      const bucketRow = payload.table.rows.find(
+        (r) => r.kind === "data" && r.cells[0] === "1–30 Hari",
+      )
+      expect(bucketRow?.kind === "data" ? bucketRow.cells[4] : "").toContain("1.000")
+      expect(payload.periodCaption).toContain("31 Okt 2026")
+    }
+  })
+
+  it("loader tanpa argumen tetap asOf hari ini (layar tak berubah)", async () => {
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValue([
+      {
+        id: 1,
+        vendorId: 1,
+        grandTotal: 2000,
+        paidAmount: 0,
+        withholdingAmount: 0,
+        dueDate: new Date(),
+        documentNo: "BILL-1",
+        vendor: { name: "PT V" },
+      },
+    ])
+    const report = await loadPayablesAging()
+    const totals = totalsOf(report.table.rows)
+    expect(totals[totals.length - 1].cells[0]).toContain("2.000")
   })
 })
 
@@ -542,6 +637,249 @@ describe("total trailing: BUGHUNT round3 #1 (leading blank geser kolom)", () => 
     const totals = assertTrailing(result.table)
     for (const t of totals) expect(t.cells).toHaveLength(1)
     expect(landed(result.table, totals[totals.length - 1])["Nilai Sisa"]).toContain("600")
+  })
+})
+
+describe("total trailing: BUGHUNT round3 lanjutan (5 builder diminta + temuan audit)", () => {
+  const period = { start: new Date(2026, 9, 1), end: new Date(2026, 9, 31) }
+
+  function assertTrailing(table: { columns: { header: string }[]; rows: TableRow[] }) {
+    const totals = totalsOf(table.rows)
+    expect(totals.length).toBeGreaterThan(0)
+    for (const t of totals) {
+      expect(t.cells.length).toBeLessThanOrEqual(table.columns.length)
+      expect(t.cells[0]).not.toBe("")
+    }
+    return totals
+  }
+  function landed(table: { columns: { header: string }[] }, total: TotalRow): Record<string, string> {
+    const start = table.columns.length - total.cells.length
+    const out: Record<string, string> = {}
+    total.cells.forEach((cell, i) => {
+      out[table.columns[start + i].header] = cell
+    })
+    return out
+  }
+
+  it("beban pembayaran: subtotal + grand 1 sel di kolom Beban Admin", () => {
+    const result = buildPaymentExpenses({
+      expenses: [
+        { date: new Date(2026, 9, 5), documentNo: "PAY-1", source: "Pembayaran Vendor", counterparty: "PT V", adminFee: 1000 },
+      ],
+      ...period,
+    })
+    const totals = assertTrailing(result.table)
+    expect(totals.map((t) => t.cells)).toEqual([["1.000"], ["1.000"]])
+    expect(landed(result.table, totals[0])["Beban Admin"]).toContain("1.000")
+  })
+
+  it("stok opname: subtotal per dokumen + grand 1 sel di kolom Nilai Selisih", () => {
+    const result = buildStockCount({
+      documents: [
+        {
+          documentNo: "SA-1",
+          date: new Date(2026, 9, 5),
+          warehouseName: "Utama",
+          status: "approved",
+          items: [{ sku: "BSI", name: "Busi", systemQty: 10, actualQty: 8, unit: "pcs", unitCost: 500 }],
+        },
+      ],
+      ...period,
+    })
+    const totals = assertTrailing(result.table)
+    expect(totals.map((t) => t.cells)).toEqual([["(1.000)"], ["(1.000)"]])
+    expect(landed(result.table, totals[0])["Nilai Selisih"]).toContain("1.000")
+  })
+
+  it("stok minimum: grand 1 sel di kolom Nilai Kurang", () => {
+    const result = buildMinStock([
+      { sku: "BSI", name: "Busi", unit: "pcs", categoryName: null, warehouseName: "Utama", vendorName: null, qtyOnHand: 2, minStock: 10, cost: 500 },
+    ])
+    const totals = assertTrailing(result.table)
+    expect(totals[0].cells).toEqual(["4.000"])
+    expect(landed(result.table, totals[0])["Nilai Kurang"]).toContain("4.000")
+  })
+
+  it("histori penjualan: Ditagih/Dibayar/Sisa di kolomnya, Status trailing kosong", () => {
+    const result = buildSalesProcessHistory([
+      { orderNo: "SO-1", date: new Date(2026, 9, 5), customerName: "PT A", status: "invoiced", deliveryCount: 1, invoiceCount: 1, invoiced: 1000, paid: 400 },
+    ])
+    const totals = assertTrailing(result.table)
+    // 3 nilai + 1 trailing kosong untuk kolom teks Status (bukan leading blank).
+    expect(totals[0].cells).toHaveLength(4)
+    const cols = landed(result.table, totals[0])
+    expect(cols["Ditagih"]).toContain("1.000")
+    expect(cols["Dibayar"]).toContain("400")
+    expect(cols["Sisa"]).toContain("600")
+    expect(cols["Status"]).toBe("")
+  })
+
+  it("histori pembelian: Ditagih/Dibayar/Sisa trailing (tanpa kolom Permintaan ikut kosong)", () => {
+    const result = buildPurchaseProcessHistory([
+      { orderNo: "PO-1", date: new Date(2026, 9, 5), vendorName: "PT V", status: "billed", requestNo: null, receiptCount: 1, billCount: 1, billed: 1000, paid: 400 },
+    ])
+    const totals = assertTrailing(result.table)
+    expect(totals[0].cells).toHaveLength(3)
+    const cols = landed(result.table, totals[0])
+    expect(cols["Ditagih"]).toContain("1.000")
+    expect(cols["Sisa"]).toContain("600")
+  })
+
+  it("gaji per karyawan: 7 sel trailing Slip..Bersih tetap utuh", () => {
+    const row = {
+      employeeName: "Budi",
+      npwp: null,
+      baseSalary: 1000,
+      allowances: 0,
+      appreciation: 0,
+      overtime: 0,
+      deductions: 0,
+      bpjsHealth: 0,
+      bpjsEmployment: 0,
+      pph21: 100,
+      gross: 1000,
+      net: 900,
+    }
+    const byEmployee = buildPayrollByEmployee({ rows: [row], draftSlips: 0, duplicateEmployees: [] })
+    const empTotals = assertTrailing(byEmployee.table)
+    expect(empTotals[0].cells).toHaveLength(7)
+    expect(landed(byEmployee.table, empTotals[0])["Slip"]).toBe("1")
+    expect(landed(byEmployee.table, empTotals[0])["Bersih"]).toContain("900")
+  })
+
+  it("pph21: Slip mendarat di kolom Slip, bukan NPWP (leading blank dihapus)", () => {
+    const row = {
+      employeeName: "Budi",
+      npwp: "12.345",
+      baseSalary: 1000,
+      allowances: 0,
+      appreciation: 0,
+      overtime: 0,
+      deductions: 0,
+      bpjsHealth: 0,
+      bpjsEmployment: 0,
+      pph21: 100,
+      gross: 1000,
+      net: 900,
+    }
+    const pph = buildPph21({ rows: [row], draftSlips: 0 })
+    const totals = assertTrailing(pph.table)
+    // Dulu: [Slip, "", Bruto, PPh, Bersih] — Slip pendarat di kolom Karyawan.
+    expect(totals[0].cells).toHaveLength(4)
+    const cols = landed(pph.table, totals[0])
+    expect(cols["Slip"]).toBe("1")
+    expect(cols["Bruto"]).toContain("1.000")
+    expect(cols["PPh 21"]).toContain("100")
+    expect(cols["Bersih"]).toContain("900")
+    expect("NPWP" in cols).toBe(false)
+  })
+
+  it("porsi gaji: Bruto/Potongan/Bersih 2 sel (Jumlah/Porsi) tetap utuh", () => {
+    const row = {
+      employeeName: "Budi",
+      npwp: null,
+      baseSalary: 1000,
+      allowances: 0,
+      appreciation: 0,
+      overtime: 0,
+      deductions: 0,
+      bpjsHealth: 0,
+      bpjsEmployment: 0,
+      pph21: 100,
+      gross: 1000,
+      net: 900,
+    }
+    const composition = buildPayrollComposition({ rows: [row], draftSlips: 0 })
+    const totals = assertTrailing(composition.table)
+    for (const t of totals) expect(t.cells).toHaveLength(2)
+    expect(landed(composition.table, totals[totals.length - 1])["Jumlah"]).toContain("900")
+  })
+
+  it("stok lambat: grand 1 sel di kolom Nilai Sisa", () => {
+    const result = buildSlowMovingStock({
+      items: [{ sku: "BSI", name: "Busi", categoryName: null, unit: "pcs", remainingQty: 2, remainingValue: 1000, lastOutDate: null }],
+      asOf: new Date(2026, 9, 31),
+    })
+    const totals = assertTrailing(result.table)
+    expect(totals[0].cells).toEqual(["1.000"])
+  })
+
+  it("transfer berjalan: subtotal + grand 1 sel di kolom Nilai", () => {
+    const result = buildTransferInTransit({
+      transfers: [
+        {
+          documentNo: "TRF-1",
+          date: new Date(2026, 9, 5),
+          sourceName: "A",
+          destinationName: "B",
+          items: [{ sku: "BSI", name: "Busi", unit: "pcs", qty: 2, unitCost: 500 }],
+        },
+      ],
+      asOf: new Date(2026, 9, 31),
+      periodEndIsToday: true,
+    })
+    const totals = assertTrailing(result.table)
+    expect(totals.map((t) => t.cells)).toEqual([["1.000"], ["1.000"]])
+  })
+
+  it("bukti potong: total per sisi 1 sel di kolom PPh Dipotong (bukan DPP)", () => {
+    const result = buildWithholdingCertificateTable([
+      { side: "purchase", date: new Date(2026, 9, 5), certificateNo: "BP-1", documentNo: "BILL-1", counterparty: "PT V", typeCode: "PPh23", typeName: "Jasa", rate: 2, dpp: 50000, withheld: 1000 },
+    ])
+    const table = { columns: result.columns, rows: result.rows }
+    const totals = assertTrailing(table)
+    expect(totals[0].cells).toEqual(["1.000"])
+    expect(landed(table, totals[0])["PPh Dipotong"]).toContain("1.000")
+  })
+
+  it("rekonsiliasi persediaan: Selisih 1 sel di kolom Nilai", () => {
+    const result = buildInventoryReconciliation({
+      valuation: { qty: 2, value: 1000, byWarehouse: [] },
+      ledger: { accountLabel: "Persediaan", balance: 1500 },
+      periodEndIsToday: true,
+    })
+    const totals = assertTrailing(result.table)
+    expect(totals[0].cells).toEqual(["500"])
+  })
+
+  it("pergerakan aset: Jumlah Penyusutan tanpa placeholder harga perolehan", () => {
+    const result = buildAssetMovement({ assets: [], entries: [], start: period.start, end: period.end })
+    const totals = assertTrailing(result.table)
+    const depreciation = totals.find((t) => t.label === "Jumlah Penyusutan")
+    expect(depreciation?.cells).toEqual(["0", "0"])
+    expect(landed(result.table, depreciation!)["Akum. Penyusutan"]).toBe("0")
+    expect(landed(result.table, depreciation!)["Nilai Buku"]).toBe("0")
+  })
+
+  it("umur WIP: total order tetap di kolom Umur (hari), Sisa WIP di kolom terakhir", () => {
+    const table = buildWipAgingTable({
+      report: {
+        orders: [
+          { documentNo: "WO-1", productName: "Pagar", workOrderDocumentNo: null, status: "in_progress", ageDays: 10, bucket: "d0_30", completionPercent: 50, wipAmount: 1000 } as never,
+        ],
+        buckets: [{ id: "d0_30", label: "0–30 hari", orderCount: 1, wipAmount: 1000 } as never],
+        totalOrders: 1,
+        totalWipAmount: 1000,
+        largestOrderId: null,
+      },
+      periodCaption: "Per 31 Okt 2026",
+      asOf: new Date(2026, 9, 31),
+    })
+    const totals = assertTrailing(table)
+    expect(totals[0].cells).toEqual(["1", "", "", "1.000"])
+    const cols = landed(table, totals[0])
+    expect(cols["Umur (hari)"]).toBe("1")
+    expect(cols["Sisa WIP"]).toContain("1.000")
+  })
+
+  it("harga pemasok: jumlah baris di label, tanpa angka semu di kolom Terendah", () => {
+    const result = buildVendorPriceListing([
+      { vendorName: "PT V", itemKey: "bsi", itemLabel: "BSI Busi", sku: "BSI", itemName: "Busi", minQty: 1, price: 500, effectiveDate: new Date(2026, 9, 5) } as never,
+    ])
+    const totals = totalsOf(result.table.rows)
+    expect(totals).toHaveLength(1)
+    expect(totals[0].label).toContain("1 baris")
+    expect(totals[0].cells.every((c) => c === "")).toBe(true)
   })
 })
 

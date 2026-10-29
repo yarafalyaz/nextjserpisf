@@ -106,7 +106,7 @@ export function buildPaymentExpenses(input: {
     rows.push({
       kind: "total",
       label: `Jumlah ${source}`,
-      cells: ["", "", "", "", amount(subtotal)],
+      cells: [amount(subtotal)],
     })
 
     bySource.push({ source, count: group.length, adminFee: subtotal })
@@ -126,7 +126,7 @@ export function buildPaymentExpenses(input: {
       kind: "total",
       grand: true,
       label: "Jumlah Beban",
-      cells: ["", "", "", "", amount(totals.adminFee)],
+      cells: [amount(totals.adminFee)],
     })
   }
 

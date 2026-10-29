@@ -98,7 +98,7 @@ export function buildInventoryReconciliation(
     kind: "total",
     grand: true,
     label: "Selisih (buku besar − nilai barang)",
-    cells: ["", difference === null ? "–" : amount(difference)],
+    cells: [difference === null ? "–" : amount(difference)],
   })
 
   let verdict: string

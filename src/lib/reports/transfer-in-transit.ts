@@ -156,7 +156,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
     rows.push({
       kind: "total",
       label: `Nilai dalam perjalanan ${transfer.documentNo}`,
-      cells: ["", "", "", amount(transferValue)],
+      cells: [amount(transferValue)],
     })
 
     totals.transfers += 1
@@ -177,7 +177,7 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
       kind: "total",
       grand: true,
       label: "Jumlah Nilai Dalam Perjalanan",
-      cells: ["", "", "", amount(totals.value)],
+      cells: [amount(totals.value)],
     })
     rows.push({
       kind: "notice",

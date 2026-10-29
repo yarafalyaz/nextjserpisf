@@ -188,7 +188,7 @@ export function buildWithholdingCertificateTable(
     rows.push({
       kind: "total",
       label: section.totalLabel,
-      cells: ["", "", "", "", "", "", tableMoney(sideTotal)],
+      cells: [tableMoney(sideTotal)],
     })
     if (section.side === "purchase") purchaseWithheld = sideTotal
     else salesWithheld = sideTotal

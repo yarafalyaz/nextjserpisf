@@ -259,7 +259,7 @@ export function buildPph21(input: { rows: PayrollRowInput[]; draftSlips: number 
       kind: "total",
       grand: true,
       label: "Jumlah",
-      cells: [String(totals.slips), "", amount(totals.gross), amount(totals.pph21), amount(totals.net)],
+      cells: [String(totals.slips), amount(totals.gross), amount(totals.pph21), amount(totals.net)],
     })
   }
 

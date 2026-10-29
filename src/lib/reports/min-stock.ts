@@ -204,7 +204,7 @@ export function buildMinStock(items: MinStockItemInput[]): MinStockResult {
       kind: "total",
       grand: true,
       label: "Jumlah Nilai Kekurangan",
-      cells: ["", "", "", "", "", "", amount(totals.shortageValue)],
+      cells: [amount(totals.shortageValue)],
     })
     rows.push({
       kind: "notice",

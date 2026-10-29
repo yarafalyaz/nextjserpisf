@@ -65,12 +65,13 @@ describe("buildStockCount", () => {
 
     const totals = result.table.rows.filter((row) => row.kind === "total")
     expect(String(totals[0].label)).toBe("Nilai selisih SA-0001")
-    expect(totals[0].cells?.[5]).toBe("(100.000)")
+    // Trailing-only: 1 sel di kolom "Nilai Selisih" (kolom terakhir).
+    expect(totals[0].cells).toEqual(["(100.000)"])
     expect(String(totals[1].label)).toBe("Nilai selisih SA-0002")
     // Baris cocok (hasil hitung = sistem) → nilai 0.
-    expect(totals[1].cells?.[5]).toBe("0")
+    expect(totals[1].cells).toEqual(["0"])
     expect(totals[2].grand).toBe(true)
-    expect(totals[2].cells?.[5]).toBe("(100.000)")
+    expect(totals[2].cells).toEqual(["(100.000)"])
   })
 
   it("tidak menjumlahkan kuantitas dan memberi catatan saat satuannya campur", () => {
@@ -84,10 +85,11 @@ describe("buildStockCount", () => {
     const notices = result.table.rows.filter((row) => row.kind === "notice").map((row) => String(row.text))
     expect(notices.some((text) => text.includes("lebih dari satu satuan"))).toBe(true)
 
-    // Tidak ada baris total yang membawa angka kuantitas — hanya kolom nilai.
+    // Tidak ada baris total yang membawa angka kuantitas — hanya kolom nilai
+    // (trailing-only: tepat 1 sel, mendarat di kolom terakhir "Nilai Selisih").
     const totals = result.table.rows.filter((row) => row.kind === "total")
     for (const row of totals) {
-      expect(row.cells?.slice(0, 5)).toEqual(["", "", "", "", ""])
+      expect(row.cells).toHaveLength(1)
     }
   })
 
