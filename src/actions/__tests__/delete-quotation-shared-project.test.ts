@@ -22,7 +22,7 @@ const tx = {
   downPayment: { findMany: vi.fn(), deleteMany: vi.fn() },
   quotationSection: { findMany: vi.fn(), deleteMany: vi.fn() },
   quotationItem: { deleteMany: vi.fn() },
-  quotation: { delete: vi.fn() },
+  quotation: { delete: vi.fn(), findUniqueOrThrow: vi.fn() },
 }
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -49,6 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
+  ;(tx.quotation.findUniqueOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 5, status: "draft" })
   tx.salesOrder.findMany.mockResolvedValue([])
   tx.salesInvoice.findMany.mockResolvedValue([])
   tx.downPayment.findMany.mockResolvedValue([])

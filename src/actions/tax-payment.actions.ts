@@ -16,7 +16,7 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { taxPaymentSchema } from "@/lib/validations/finance.schemas"
-import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
+import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 
 const REVALIDATE = "/keuangan/penyetoran-pajak"
 
@@ -141,30 +141,54 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
   }
 }
 
-export async function deleteTaxPayment(id: number): Promise<TaxPaymentActionResult> {
+/**
+ * GL-BR-003 P5 (vonis t_16159d89 V-P5/P6-1, V-P5/P6-3, V-P5/P6-4): void berstatus
+ * setor pajak posted. Hard-delete jurnal POSTED + hapus fisik DILARANG —
+ * koreksi sah: jurnal lawan cermin lewat reverseJournalsByReferenceTx (refType
+ * persis "TaxPayment") + baris dipertahankan status "void" + deletedAt.
+ * TaxPayment ber-NTPN TERKUNCI dari void (setor riil di DJP; salah klasifikasi
+ * ditangani jurnal reklasifikasi, bukan pembatalan). billingCode tanpa NTPN
+ * tidak mengunci. Lampiran TIDAK dihapus. Alasan void wajib.
+ */
+export async function deleteTaxPayment(id: number, reason?: string): Promise<TaxPaymentActionResult> {
   try {
-    await requirePermission("delete_tax_payments")
+    const user = await requirePermission("delete_tax_payments")
+    const cleanReason = (reason ?? "").trim()
+    if (!cleanReason) {
+      return { success: false, error: "Alasan pembatalan penyetoran pajak wajib diisi." }
+    }
 
-    const payment = await prisma.taxPayment.findFirst({
-      where: { id, deletedAt: null },
-      select: { id: true, documentNo: true, date: true, journalId: true },
-    })
-    if (!payment) return { success: false, error: "Penyetoran pajak tidak ditemukan." }
-
-    await assertPeriodOpen(payment.date)
-
-    let removedFiles: { fileUrl: string; referenceType: string }[] = []
+    let documentNo = ""
     await prisma.$transaction(async (tx) => {
-      if (payment.journalId) {
-        await tx.journalEntry.deleteMany({ where: { journalId: payment.journalId } })
-        removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "Journal", referenceId: payment.journalId })
-        await tx.journal.delete({ where: { id: payment.journalId } })
+      // Kunci baris + baca ulang di dalam tx (pola deleteSalesPayment).
+      await tx.$executeRaw`SELECT id FROM tax_payments WHERE id = ${id} FOR UPDATE`
+      const payment = await tx.taxPayment.findUniqueOrThrow({ where: { id } })
+      if (payment.deletedAt || payment.status === "void") {
+        throw new Error("Penyetoran pajak ini sudah dibatalkan.")
       }
-      await tx.taxPayment.delete({ where: { id } })
-    })
-    await removeAttachmentFiles(removedFiles)
+      // V-P5/P6-4: NTPN terisi = setor riil di luar sistem — void memalsukan
+      // posisi kas dan utang pajak.
+      if (payment.ntpn) {
+        throw new Error(
+          "Setoran ini sudah memiliki NTPN (setor riil ke kas negara) sehingga tidak dapat dibatalkan. Salah klasifikasi akun ditangani lewat jurnal koreksi reklasifikasi oleh akuntan.",
+        )
+      }
+      documentNo = payment.documentNo
 
-    await logActivity("delete", "TaxPayment", id, `Menghapus penyetoran pajak ${payment.documentNo}`)
+      await assertPeriodOpen(payment.date, tx)
+
+      await reverseJournalsByReferenceTx(tx, "TaxPayment", id, cleanReason, Number(user.id))
+
+      await tx.taxPayment.update({
+        where: { id },
+        data: {
+          status: "void",
+          deletedAt: new Date(),
+        },
+      })
+    })
+
+    await logActivity("void", "TaxPayment", id, `Membatalkan penyetoran pajak ${documentNo}: ${cleanReason}`)
     revalidatePath(REVALIDATE)
 
     return { success: true, id }

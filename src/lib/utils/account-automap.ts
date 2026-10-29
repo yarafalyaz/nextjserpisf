@@ -210,6 +210,9 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   // Bank payroll didahulukan ke akun "Bank" (110102), bukan "Kas & Bank".
   { key: "payrollBankAccountId", groups: [["110102"], ["bank", "buku"], ["bank"], ["kas", "bank"], ["kas", "utama"]] },
   { key: "employeeReceivableAccountId", groups: [["piutang", "karyawan"], ["110506"], ["employee", "receivable"]] },
+  // F-2026-10-29-162-V (c): beban write-off piutang karyawan — default
+  // 720007 (OEXP non-operasional), bukan 6000/EXPS.
+  { key: "employeeLoanWriteOffExpenseAccountId", groups: [["720007"], ["beban", "diluar", "usaha"], ["write", "off"]] },
   { key: "payrollJournalTypeId", groups: [["beban", "gaji"], ["hutang", "gaji"], ["jurnal", "payroll"], ["payroll", "journal"]] },
 ];
 

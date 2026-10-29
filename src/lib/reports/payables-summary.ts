@@ -12,6 +12,7 @@
  */
 
 import { AGING_BUCKETS, agingBucket, daysOverdue, type AgingBucket } from "./aging"
+import { isOutstandingSettled } from "@/lib/finance/settlement-status"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 
 /** Age bucket for bills that carry no due date at all. */
@@ -75,7 +76,9 @@ export function buildPayablesSummary(bills: PayableBill[], asOf: Date): Payables
     totalBilled = safeAdd(totalBilled, safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2), 2)
     totalPaid = safeAdd(totalPaid, bill.paidAmount, 2)
 
-    if (outstanding <= 0) continue
+    // FIN-BR-006: sisa dalam toleransi Rp1 = lunas (isOutstandingSettled).
+    // Larangan vonis 152-V: DILARANG write-off/pembulatan jurnal atas sisa toleransi.
+    if (isOutstandingSettled(outstanding)) continue
 
     const overdueDays = bill.dueDate ? daysOverdue(bill.dueDate, asOf) : null
     const ageBucket: PayablesAgeBucket =
