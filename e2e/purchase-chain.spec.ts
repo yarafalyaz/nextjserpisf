@@ -94,8 +94,7 @@ test.describe.serial("Pembelian — rantai penuh", () => {
 
     // 1. Buat penerimaan dari PO (prefill poId).
     await page.goto(`/pembelian/penerimaan/tambah?poId=${po.id}`, { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
+    await awaitReady(page, "form")
 
     // Header "Gudang Tujuan" wajib dipilih manual (combobox kosong walau baris
     // prefill) — tanpa ini tombol Terima Barang disabled.

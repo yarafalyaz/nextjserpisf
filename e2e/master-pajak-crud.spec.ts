@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Master Pajak CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -21,9 +22,7 @@ test.describe("Master Pajak CRUD", () => {
     await page.locator("#tax-rate").fill(rate)
     await expect(page.locator("#submit-tax")).toBeEnabled({ timeout: 15_000 })
     await page.locator("#submit-tax").click()
-    await page.waitForURL("**/master/pajak", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/master/pajak", { timeout: 30000 }, name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page
@@ -51,9 +50,7 @@ test.describe("Master Pajak CRUD", () => {
     await page.locator('input[name="name"]').fill(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
-    await page.waitForURL("**/master/pajak", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/master/pajak", { timeout: 30000 }, updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()

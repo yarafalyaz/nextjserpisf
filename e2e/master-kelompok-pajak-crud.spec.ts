@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { awaitReady } from "./utils/await-ready"
 
 test.describe("Master Kelompok Pajak CRUD", () => {
   test.beforeEach(async ({ }, testInfo) => {
@@ -23,8 +24,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/kelompok-pajak/tambah", { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
+    await awaitReady(page, "form")
     await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)

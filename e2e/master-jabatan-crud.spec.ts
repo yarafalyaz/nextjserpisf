@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Master Jabatan CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -20,9 +21,7 @@ test.describe("Master Jabatan CRUD", () => {
     await expect(page.locator("#submit-position")).toBeEnabled({ timeout: 15_000 })
     await page.locator("#submit-position").click()
 
-    await page.waitForURL("**/master/jabatan", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/master/jabatan", { timeout: 30000 }, name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page
@@ -49,9 +48,7 @@ test.describe("Master Jabatan CRUD", () => {
     await page.locator("#name").fill(updated)
     await page.locator("#submit-position").click()
 
-    await page.waitForURL("**/master/jabatan", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/master/jabatan", { timeout: 30000 }, updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()

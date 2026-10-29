@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -24,9 +25,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: "Simpan" }).click()
 
-    await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/keuangan/pusat-biaya", { timeout: 30000 }, name)
     await expect(page.locator("body")).toContainText(code)
 
     // ─── DETAIL ───────────────────────────────────────────────

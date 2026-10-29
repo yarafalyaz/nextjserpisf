@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { awaitListContains } from "./utils/await-ready"
 
 test.describe("Aset Brand (Merek) CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -21,9 +22,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await nameInput.fill(name)
     await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
-    await page.waitForURL("**/aset/merek", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/aset/merek", { timeout: 30000 }, name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name }).first()
@@ -51,9 +50,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await page.locator("#name").fill(updated)
     await expect(page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
-    await page.waitForURL("**/aset/merek", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/aset/merek", { timeout: 30000 }, updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
