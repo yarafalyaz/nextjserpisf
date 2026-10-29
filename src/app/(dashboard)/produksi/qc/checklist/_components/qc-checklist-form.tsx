@@ -219,7 +219,7 @@ export function QcChecklistForm({
                   <DetailTableTd>
                     <Button
                       onPress={() => removeRow(index)}
-                      aria-label="Hapus butir"
+                      aria-label={`Hapus butir baris ${index + 1}`}
                       type="button"
                       isDisabled={rows.length === 1}
                     >

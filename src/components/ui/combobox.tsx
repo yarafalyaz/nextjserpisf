@@ -49,6 +49,8 @@ interface ComboboxProps {
   /** Label of the create-new row. Default "Tambah baru...". */
   createNewLabel?: string;
   "aria-label"?: string;
+  /** Id label eksternal (`<label htmlFor={id}>` / `id="…-label"`). Diabaikan bila `aria-label` diisi. */
+  "aria-labelledby"?: string;
   "aria-describedby"?: string;
 }
 
@@ -73,6 +75,7 @@ export function Combobox({
   onCreateNew,
   createNewLabel = "Tambah baru...",
   "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
   "aria-describedby": ariaDescribedBy,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
@@ -94,7 +97,15 @@ export function Combobox({
           <Button
             id={id}
             role="combobox"
+            // Nama SR: aria-label eksplisit menang; tanpa itu label eksternal
+            // dialamatkan lewat aria-labelledby (label htmlFor mengarah ke id
+            // ini, tapi <button role=combobox> bukan labelable element,
+            // jadi htmlFor saja tidak memberi nama). Fallback terakhir:
+            // id turunan `${id}-label` bila pemanggil memberi span label.
             aria-label={ariaLabel}
+            aria-labelledby={
+              ariaLabel ? undefined : (ariaLabelledBy ?? (id ? `${id}-label` : undefined))
+            }
             aria-describedby={ariaDescribedBy}
             aria-expanded={open}
             aria-required={required || undefined}

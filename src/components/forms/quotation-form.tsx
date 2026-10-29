@@ -465,7 +465,7 @@ function SectionItemRow({
           <Button
             type="button"
             onPress={onRemove}
-            aria-label="Hapus item"
+            aria-label={`Hapus item baris ${itemIndex + 1}`}
             variant="danger-soft" size="sm"
           >
             ×

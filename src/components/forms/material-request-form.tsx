@@ -168,7 +168,7 @@ export function MaterialRequestForm({ warehouses, items, workOrders, request }: 
                     />
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm" aria-label="Hapus barang" isDisabled={requestItems.length === 1}>
+                    <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm" aria-label={`Hapus barang baris ${i + 1}`} isDisabled={requestItems.length === 1}>
                       <Trash2 size={14} />
                     </Button>
                   </DetailTableTd>

@@ -835,7 +835,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                         onClick={() => handleRemoveStage(idx)}
                         className="text-danger hover:bg-danger/10 p-2 size-8 flex items-center justify-center rounded-lg border border-transparent hover:border-danger/25 shrink-0"
                         isIconOnly
-                        aria-label="Hapus tahapan"
+                        aria-label={`Hapus tahapan ${stage || idx + 1}`}
                       >
                         <Trash2 className="size-4" />
                       </Button>

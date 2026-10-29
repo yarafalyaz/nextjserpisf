@@ -130,7 +130,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
                       )}
                     </DetailTableTd>
                     <DetailTableTd>
-                      <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm" aria-label="Hapus barang" isDisabled={transferItems.length === 1}>
+                      <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm" aria-label={`Hapus barang baris ${i + 1}`} isDisabled={transferItems.length === 1}>
                         <Trash2 size={14} />
                       </Button>
                     </DetailTableTd>

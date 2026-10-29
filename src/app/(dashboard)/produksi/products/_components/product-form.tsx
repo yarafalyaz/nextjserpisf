@@ -258,7 +258,7 @@ export function ProductForm({
                     </div>
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Button onPress={() => removeMaterialRow(index)} aria-label="Hapus bahan" type="button" isDisabled={materials.length === 1}>
+                    <Button onPress={() => removeMaterialRow(index)} aria-label={`Hapus bahan baris ${index + 1}`} type="button" isDisabled={materials.length === 1}>
                       <Trash2 size={14} />
                     </Button>
                   </DetailTableTd>

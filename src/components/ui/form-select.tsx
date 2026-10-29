@@ -20,6 +20,7 @@ interface FormSelectProps {
   required?: boolean
   className?: string
   "aria-label"?: string
+  "aria-labelledby"?: string
 }
 
 /**
@@ -40,6 +41,7 @@ export function FormSelect({
   required,
   className,
   "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
 }: FormSelectProps) {
   const isControlled = value !== undefined
   const [internal, setInternal] = useState<string | null>(defaultValue ?? null)
@@ -60,6 +62,7 @@ export function FormSelect({
       required={required}
       className={className}
       aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
     />
   )
 }

@@ -77,7 +77,7 @@ export function AppDatePicker({
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
-        <Label htmlFor={`${name}-trigger`} className="text-sm font-medium text-foreground">
+        <Label id={`${name}-label`} htmlFor={`${name}-trigger`} className="text-sm font-medium text-foreground">
           {label.endsWith(" *") ? (
             <>
               {label.slice(0, -2)}{" "}
@@ -101,6 +101,7 @@ export function AppDatePicker({
             variant="outline"
             disabled={disabled}
             aria-required={required}
+            aria-labelledby={label ? `${name}-label` : undefined}
             className={cn(
               // Trigger h-10 (40px): area sentuh diperluas ke 44px via
               // pseudo vertikal, visual tetap (pola search-field).

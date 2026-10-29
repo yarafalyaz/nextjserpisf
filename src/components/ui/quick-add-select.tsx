@@ -87,6 +87,7 @@ export interface QuickAddSelectProps {
   name?: string
   required?: boolean
   "aria-label"?: string
+  "aria-labelledby"?: string
   "aria-describedby"?: string
   /** Dialog title, e.g. "Tambah Kategori Barang". */
   title: string
@@ -129,6 +130,7 @@ export function QuickAddSelect({
   name,
   required,
   "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
   "aria-describedby": ariaDescribedBy,
   title,
   description,
@@ -245,6 +247,7 @@ export function QuickAddSelect({
         name={name}
         required={required}
         aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
         aria-describedby={ariaDescribedBy}
         onCreateNew={(term) => {
           setSearch(term)

@@ -215,7 +215,7 @@ export function BomRevisionForm({
                   <DetailTableTd>
                     <Button
                       onPress={() => removeLine(index)}
-                      aria-label="Hapus bahan"
+                      aria-label={`Hapus bahan baris ${index + 1}`}
                       type="button"
                       isDisabled={lines.length === 1}
                     >

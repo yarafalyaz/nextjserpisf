@@ -380,7 +380,7 @@ export function ProductionCostSection({
                       </Button>
                       <Button
                         onPress={() => handleDelete(c.id)}
-                        aria-label="Hapus biaya"
+                        aria-label={`Hapus biaya ${c.description || c.id}`}
                         type="button"
                         isDisabled={isPending}
                       >

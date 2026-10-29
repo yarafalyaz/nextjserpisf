@@ -51,8 +51,11 @@ interface ButtonProps {
   isPending?: boolean
   isIconOnly?: boolean
   "aria-label"?: string
+  "aria-labelledby"?: string
   role?: string
   "aria-expanded"?: boolean
+  "aria-haspopup"?: boolean | "dialog" | "menu" | "listbox" | "tree" | "grid"
+  "aria-controls"?: string
   "aria-required"?: boolean | "true" | "false"
   slot?: string
   formAction?: string | ((formData: FormData) => void | Promise<void>)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { format } from "date-fns"
 import { id as idLocale } from "date-fns/locale"
@@ -76,6 +76,68 @@ export function AppMonthPicker({
   const [viewYear, setViewYear] = useState<number>(
     () => selected?.year ?? new Date().getFullYear(),
   )
+  // Roving tabindex (pola grid ARIA): hanya bulan aktif yang masuk urutan Tab,
+  // panah memindahkan fokus antar bulan.
+  const [activeMonth, setActiveMonth] = useState<number>(selected?.month ?? new Date().getMonth() + 1)
+  const [focusTick, setFocusTick] = useState(0)
+  const monthRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  useEffect(() => {
+    if (!open) return
+    // Radix memindahkan fokus ke konten popover sesudah mount; tunggu itu.
+    const raf = requestAnimationFrame(() => {
+      monthRefs.current[activeMonth - 1]?.focus()
+    })
+    return () => cancelAnimationFrame(raf)
+    // focusTick memicu fokus ulang sesudah panah mengganti activeMonth.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, focusTick])
+
+  function focusMonth(month: number) {
+    setActiveMonth(month)
+    setFocusTick((tick) => tick + 1)
+  }
+
+  function moveMonth(delta: number) {
+    // Tahun berganti lewat tombol chevron (grid 12 sel selalu satu tahun).
+    const next = Math.min(12, Math.max(1, activeMonth + delta))
+    focusMonth(next)
+  }
+
+  function handleGridKeyDown(event: React.KeyboardEvent) {
+    switch (event.key) {
+      case "ArrowRight":
+        event.preventDefault()
+        moveMonth(1)
+        break
+      case "ArrowLeft":
+        event.preventDefault()
+        moveMonth(-1)
+        break
+      case "ArrowDown":
+        event.preventDefault()
+        moveMonth(3)
+        break
+      case "ArrowUp":
+        event.preventDefault()
+        moveMonth(-3)
+        break
+      case "Home":
+        event.preventDefault()
+        focusMonth(1)
+        break
+      case "End":
+        event.preventDefault()
+        focusMonth(12)
+        break
+      case "Escape":
+        event.preventDefault()
+        setOpen(false)
+        break
+      default:
+        break
+    }
+  }
 
   function emit(next: string) {
     if (!isControlled) setInternal(next)
@@ -91,7 +153,7 @@ export function AppMonthPicker({
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
-        <Label htmlFor={`${name}-trigger`} className="text-sm font-medium text-foreground">
+        <Label id={`${name}-label`} htmlFor={`${name}-trigger`} className="text-sm font-medium text-foreground">
           {label.endsWith(" *") ? (
             <>
               {label.slice(0, -2)}{" "}
@@ -109,7 +171,11 @@ export function AppMonthPicker({
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen)
-          if (nextOpen) setViewYear(selected?.year ?? new Date().getFullYear())
+          if (nextOpen) {
+            setViewYear(selected?.year ?? new Date().getFullYear())
+            setActiveMonth(selected?.month ?? new Date().getMonth() + 1)
+            setFocusTick((tick) => tick + 1)
+          }
         }}
       >
         <PopoverTrigger asChild>
@@ -119,8 +185,9 @@ export function AppMonthPicker({
             variant="outline"
             disabled={disabled}
             aria-required={required}
+            aria-labelledby={label ? `${name}-label` : undefined}
             className={cn(
-              "h-10 w-full justify-start gap-2 px-3 font-normal",
+              "relative min-h-11 w-full justify-start gap-2 px-3 font-normal",
               !current && "text-muted-foreground",
             )}
           >
@@ -134,9 +201,10 @@ export function AppMonthPicker({
               type="button"
               variant="outline"
               size="icon"
-              className="size-7"
+              className="size-11"
               aria-label="Tahun sebelumnya"
               onClick={() => setViewYear((y) => y - 1)}
+              onKeyDown={(e) => { if (e.key === "ArrowLeft") { e.preventDefault(); setViewYear((y) => y - 1) } }}
             >
               <ChevronLeft className="size-4" aria-hidden="true" />
             </Button>
@@ -147,32 +215,44 @@ export function AppMonthPicker({
               type="button"
               variant="outline"
               size="icon"
-              className="size-7"
+              className="size-11"
               aria-label="Tahun berikutnya"
               onClick={() => setViewYear((y) => y + 1)}
+              onKeyDown={(e) => { if (e.key === "ArrowRight") { e.preventDefault(); setViewYear((y) => y + 1) } }}
             >
               <ChevronRight className="size-4" aria-hidden="true" />
             </Button>
           </div>
-          <div className="grid grid-cols-3 gap-1.5" role="listbox" aria-label={`Bulan tahun ${viewYear}`}>
+          <div
+            className="grid grid-cols-3 gap-1.5"
+            role="grid"
+            aria-label={`Bulan tahun ${viewYear}`}
+            onKeyDown={handleGridKeyDown}
+          >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
               const isSelected = selected?.year === viewYear && selected?.month === month
               return (
-                <button
-                  key={month}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => handlePick(month)}
-                  className={cn(
-                    "h-9 rounded-md text-sm",
-                    isSelected
-                      ? "bg-primary font-medium text-primary-foreground"
-                      : "hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  {format(new Date(viewYear, month - 1, 1), "MMM", { locale: idLocale })}
-                </button>
+                <div key={month} role="gridcell" aria-selected={isSelected}>
+                  <button
+                    ref={(el) => {
+                      monthRefs.current[month - 1] = el
+                    }}
+                    type="button"
+                    tabIndex={month === activeMonth ? 0 : -1}
+                    aria-label={format(new Date(viewYear, month - 1, 1), "MMMM yyyy", { locale: idLocale })}
+                    aria-current={isSelected ? "date" : undefined}
+                    onFocus={() => setActiveMonth(month)}
+                    onClick={() => handlePick(month)}
+                    className={cn(
+                      "min-h-11 w-full rounded-md text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                      isSelected
+                        ? "bg-primary font-medium text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground",
+                    )}
+                  >
+                    {format(new Date(viewYear, month - 1, 1), "MMM", { locale: idLocale })}
+                  </button>
+                </div>
               )
             })}
           </div>

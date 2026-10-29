@@ -272,7 +272,7 @@ export function WorkflowForm({
                     variant="danger-soft"
                     size="sm"
                     isIconOnly
-                    aria-label="Hapus langkah"
+                    aria-label={`Hapus langkah ${index + 1}`}
                     isDisabled={steps.length <= 1}
                     onPress={() => removeStep(step.key)}
                   >

@@ -15,9 +15,15 @@ describe("residual target sentuh 44px", () => {
     expect(src).toContain("before:-inset-y-1.5")
   })
 
-  it("dialog: tombol Tutup (X) bawa perluasan ::before", () => {
+  it("dialog: tombol Tutup (X) 44px (size-11), footer Tutup min-h-11", () => {
     const src = source("src/components/ui/shadcn/dialog.tsx")
-    expect(src).toContain("before:-inset-3.5")
+    expect(src).toContain("size-11")
+    expect(src).toContain('className="min-h-11"')
+  })
+
+  it("alert-dialog: Aksi/Batal primitif min-h-11 (semua ConfirmDialog warisi)", () => {
+    const src = source("src/components/ui/shadcn/alert-dialog.tsx")
+    expect(src.match(/min-h-11/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
   it("confirm-dialog: Batal/Konfirmasi min-h-11", () => {

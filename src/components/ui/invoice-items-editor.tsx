@@ -498,6 +498,7 @@ export function InvoiceItemsEditor({
                       value={item.itemId ? String(item.itemId) : null}
                       onChange={(key) => updateItem(i, "itemId", key ?? "")}
                       placeholder="Cari item..."
+                      aria-label={`Barang baris ${i + 1}`}
                       className="w-full"
                     />
                     {item.itemId && baseUom && (
@@ -666,6 +667,7 @@ export function InvoiceItemsEditor({
                         value={item.itemId ? String(item.itemId) : null}
                         onChange={(key) => updateItem(i, "itemId", key ?? "")}
                         placeholder="Cari item..."
+                        aria-label={`Barang baris ${i + 1}`}
                         className="w-full"
                       />
                       {item.itemId && baseUom && (

@@ -125,12 +125,17 @@ export function ReportPeriodFilter({
     >
       {selects?.map((select) => (
         <div key={select.param} className="flex flex-col gap-1.5 w-full sm:w-[260px]">
-          <label htmlFor={`filter-${select.param}`} className="text-sm font-medium text-foreground">
+          <label
+            id={`filter-${select.param}-label`}
+            htmlFor={`filter-${select.param}`}
+            className="text-sm font-medium text-foreground"
+          >
             {select.label}
             {select.required ? " *" : ""}
           </label>
           <Combobox
             id={`filter-${select.param}`}
+            aria-labelledby={`filter-${select.param}-label`}
             options={select.options}
             value={selected[select.param] || null}
             onChange={(value) => setSelected((prev) => ({ ...prev, [select.param]: value || "" }))}
