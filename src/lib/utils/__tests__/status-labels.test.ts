@@ -61,6 +61,15 @@ describe("STATUS_LABELS completeness", () => {
       expect(STATUS_LABELS[status]).toBeDefined()
     }
   })
+
+  // PUTUSAN Lead PR #1405 T1+T2: paid tak boleh hilang, written_off berlabel.
+  it("keeps paid tone + written_off label (BR-LOAN)", () => {
+    expect(STATUS_LABELS["paid"]).toBe("Dibayar")
+    expect(statusLabel("written_off")).toBe("Dihapusbukukan")
+    expect(statusLabel("paid_off")).toBe("Lunas")
+    expect(indoToStatus["dihapusbukukan"]).toBe("written_off")
+    expect(indoToStatus["lunas"]).toBe("paid_off")
+  })
 })
 
 describe("labelFrom", () => {
