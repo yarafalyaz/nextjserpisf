@@ -9,7 +9,7 @@ test.describe("Finance module flows", () => {
   test("Expense list loads", async ({ page }) => {
     await page.goto("/keuangan/pengeluaran")
     await page.waitForLoadState("networkidle")
-    await expect(page.getByRole("heading", { name: "Pengeluaran" })).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("heading", { name: "Pengeluaran", exact: true })).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole("link", { name: "+ Buat Pengeluaran" })).toBeVisible({ timeout: 30000 })
     await expect(page.getByPlaceholder("Cari pengeluaran...")).toBeVisible({ timeout: 30000 })
   })
