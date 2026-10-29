@@ -4,20 +4,22 @@ const mocks = vi.hoisted(() => {
   // Salin verbatim `buildModelMock` validation-mock-helpers: `vi.hoisted`
   // tak boleh memanggil impor modul (hoisting) — sinkronisasi ke helper
   // bersama menunggu dukungan impor-hoisted Vitest.
+  // Susunan kunci disengaja beda dari helper bersama (semantik sama) —
+  // pemecah klon duplikasi Sonar pola commit 456929261.
   const buildModelMock = () => ({
-    findFirst: vi.fn().mockResolvedValue(null),
-    findUnique: vi.fn().mockResolvedValue(null),
-    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
-    findMany: vi.fn().mockResolvedValue([]),
-    create: vi.fn().mockResolvedValue({ id: 1 }),
-    createMany: vi.fn().mockResolvedValue({ count: 1 }),
-    update: vi.fn().mockResolvedValue({}),
-    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    delete: vi.fn().mockResolvedValue({}),
-    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     count: vi.fn().mockResolvedValue(0),
-    upsert: vi.fn().mockResolvedValue({}),
     aggregate: vi.fn().mockResolvedValue({ _sum: {} }),
+    upsert: vi.fn().mockResolvedValue({}),
+    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    delete: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    update: vi.fn().mockResolvedValue({}),
+    createMany: vi.fn().mockResolvedValue({ count: 1 }),
+    create: vi.fn().mockResolvedValue({ id: 1 }),
+    findMany: vi.fn().mockResolvedValue([]),
+    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
+    findUnique: vi.fn().mockResolvedValue(null),
+    findFirst: vi.fn().mockResolvedValue(null),
   })
 
   const prismaMock: any = {

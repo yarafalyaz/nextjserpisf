@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { onVendorBillPosted } from "@/lib/hooks/accounting.hook"
+import { expectJournalEntriesBalanced } from "@/actions/__tests__/validation-mock-helpers"
 import type { Prisma } from "@prisma/client"
 
 type TxClient = Prisma.TransactionClient
@@ -246,12 +247,9 @@ describe("F-2026-10-28-157-V E157B-4 hook gabung-HPP", () => {
     }[]
   }
 
-  // Penegak seimbang: debit = kredit di tiap kasus gabung-HPP.
+  // Penegak seimbang bersama (helper validasi) di tiap kasus gabung-HPP.
   function expectBalanced() {
-    const entries = entriesOf()
-    const debit = entries.reduce((s, e) => s + e.debit, 0)
-    expect(debit).toBe(entries.reduce((s, e) => s + e.credit, 0))
-    return entries
+    return expectJournalEntriesBalanced(entriesOf())
   }
 
   // E157B-4 dua arah: tanpa nomor valid PPN gabung HPP; bernomor valid

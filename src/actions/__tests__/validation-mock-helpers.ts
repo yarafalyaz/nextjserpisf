@@ -141,6 +141,15 @@ export function expectRevisionDownRejection(mocks: AnyMocks, res: { success: boo
 }
 
 
+/** Aserti entri jurnal seimbang (debit = kredit); kembalikan entri. */
+export function expectJournalEntriesBalanced<T extends { debit: number; credit: number }>(
+  entries: T[],
+): T[] {
+  const debit = entries.reduce((s, e) => s + e.debit, 0)
+  expect(debit).toBe(entries.reduce((s, e) => s + e.credit, 0))
+  return entries
+}
+
 /** Nama modul yang didaftarkan vi.mock tes penjualan revisi. */
 export const SALES_REVISION_MODULE_NAMES = [
   "@/lib/db/prisma",
