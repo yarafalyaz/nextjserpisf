@@ -36,6 +36,9 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: mocks.generateDocNumMock }))
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: () => Promise.resolve(42) },
+}))
 vi.mock("@/lib/services/journal-builder.service", () => ({ createGlJournal: vi.fn() }))
 vi.mock("@/lib/services/inventory.service", async () => {
   const { purchaseChainMockFactories } = await import("./validation-mock-helpers")

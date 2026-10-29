@@ -187,6 +187,10 @@ vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: (...a: unknown[]) => mocks.fifoConsume(...a),
 }));
 
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: { next: async () => 42 },
+}));
+
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumberBatch: (...a: unknown[]) =>
     mocks.generateDocumentNumberBatch(...a),
@@ -2091,12 +2095,12 @@ describe("onVendorBillPosted", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
-  it("F-002: tanpa TaxInvoice goods-based PPN gabung clearing penuh tanpa baris PPN", async () => {
+  it("F-002: tanpa TaxInvoice + tanpa nomor — PPN gabung clearing penuh", async () => {
     const innerBill = {
       id: 1,
       grandTotal: 1100,
       tax: 100,
-      taxInvoiceNumber: "010.002-26.00000001",
+      taxInvoiceNumber: null,
       date: new Date(),
       documentNo: "BILL-1",
     };

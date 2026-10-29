@@ -10,7 +10,7 @@ import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils
 import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
-import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
+import { DEFAULT_TRANSACTION_CODE, isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice";
 import { isSettled } from "@/lib/finance/settlement-status";
 import { REVERSAL_JOURNAL_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
@@ -92,21 +92,16 @@ async function generateJournalNumber(
   referenceId: number,
 ): Promise<string> {
   // Counter atomik via document_sequences: kunci JRN-<prefix>-YYYY-MM, nomor
-  // urut never-reuse di bawah konkuren. Suffix timestamp jaga unik bila
-  // sequence table belum ada (tes mock tanpa tabel). Counter dulu, fallback
-  // timestamp murni bila next() lempar.
+  // urut never-reuse di bawah konkuren. Fail-closed: tanpa sequence tak ada
+  // nomor (tanpa fallback senyap — guard silent-failure).
   const d = new Date();
   const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const timestamp = d
     .toISOString()
     .replace(/[-:T.Z]/g, "")
     .slice(0, 14);
-  try {
-    const seq = await DocumentSequenceService.next(`JRN-${prefix}-${month}`);
-    return `${prefix}/${referenceId}/${timestamp}-${String(seq).padStart(4, "0")}`;
-  } catch {
-    return `${prefix}/${referenceId}/${timestamp}`;
-  }
+  const seq = await DocumentSequenceService.next(`JRN-${prefix}-${month}`);
+  return `${prefix}/${referenceId}/${timestamp}-${String(seq).padStart(4, "0")}`;
 }
 
 /**
@@ -2600,9 +2595,6 @@ export async function onDownPaymentReceived(
 export const VENDOR_BILL_TAX_INVOICE_WARNING =
   "Nomor faktur pajak belum diisi — PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.";
 
-/** Re-ekspor validator tunggal `src/lib/tax/tax-invoice.ts` (kompat impor lama). */
-export { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice";
-
 export async function onVendorBillPosted(
   billId: number,
   userId?: number,
@@ -2641,15 +2633,16 @@ export async function onVendorBillPosted(
   // debiting the expense account.
   const grandTotal = Number(bill.grandTotal);
   const billTax = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
-  // R2: gerbang pra-tx samakan dengan tulis dalam-tx — TaxInvoice "in"
-  // approved/credited, bukan validitas nomor tempel.
+  // R2 + 157-V gabung: tanpa baris TaxInvoice (bill lama pra-register) →
+  // fallback validitas nomor tempel; ada baris → wajib approved/credited.
   const preTxInvoice = await db.taxInvoice.findFirst({
     where: { vendorBillId: bill.id, direction: "in" },
   });
   const creditInputVat =
     billTax > 0 &&
-    !!preTxInvoice &&
-    (preTxInvoice.djpStatus === "approved" || preTxInvoice.creditStatus === "credited");
+    (preTxInvoice
+      ? preTxInvoice.djpStatus === "approved" || preTxInvoice.creditStatus === "credited"
+      : isValidVendorTaxInvoiceNumber((bill as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null));
   const hasGoodsReceipt =
     bill.purchaseOrderId != null &&
     (await db.goodsReceipt.count({
@@ -2746,17 +2739,16 @@ export async function onVendorBillPosted(
     if (!b) throw new Error("Bill tidak ditemukan");
 
     const latestGrandTotal = Number(b.grandTotal);
-    // R2: PPN masukan hanya Dr PPN bila ada TaxInvoice arah "in"
-    // approved/credited untuk bill ini; tanpa itu PPN gabung clearing
-    // (clearing = grandTotal penuh). Cek via re-fetch `b` dalam tx.
+    // R2 + 157-V: tanpa baris TaxInvoice → fallback nomor valid.
     const billTaxInvoice = await tx.taxInvoice.findFirst({
       where: { vendorBillId: b.id, direction: "in" },
     });
     const latestCreditInputVat =
       (settings.purchaseTaxAccountId ? Number(b.tax ?? 0) : 0) > 0 &&
-      !!billTaxInvoice &&
-      (billTaxInvoice.djpStatus === "approved" ||
-        billTaxInvoice.creditStatus === "credited");
+      (billTaxInvoice
+        ? billTaxInvoice.djpStatus === "approved" ||
+          billTaxInvoice.creditStatus === "credited"
+        : isValidVendorTaxInvoiceNumber((b as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null));
     const latestTaxAmount = latestCreditInputVat ? Number(b.tax ?? 0) : 0;
 
     // PPh potong-putut: only the net amount is owed to the vendor; the withheld
