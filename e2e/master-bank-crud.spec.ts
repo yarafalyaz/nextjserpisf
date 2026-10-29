@@ -23,7 +23,7 @@ test.describe("Master Bank CRUD", () => {
     await expect(page.locator("button[type='submit']")).toBeEnabled({ timeout: 15_000 })
     await page.locator("button[type='submit']").click()
 
-    await awaitListContains(page, "**/master/bank", { timeout: 30000 }, name)
+    await awaitListContains(page, "**/master/bank", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     // Extract href from link and navigate directly (checkbox intercepts clicks)
@@ -51,7 +51,7 @@ test.describe("Master Bank CRUD", () => {
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
 
-    await awaitListContains(page, "**/master/bank", { timeout: 30000 }, updated)
+    await awaitListContains(page, "**/master/bank", updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()

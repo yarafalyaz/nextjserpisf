@@ -25,7 +25,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: "Simpan" }).click()
 
-    await awaitListContains(page, "**/keuangan/pusat-biaya", { timeout: 30000 }, name)
+    await awaitListContains(page, "**/keuangan/pusat-biaya", name)
     await expect(page.locator("body")).toContainText(code)
 
     // ─── DETAIL ───────────────────────────────────────────────

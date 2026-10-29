@@ -26,7 +26,7 @@ test.describe("CRM Leads CRUD", () => {
     await page.locator("#email").fill(email)
     await page.locator("#company").fill(company)
     await page.locator("button[type='submit']").click()
-    await awaitListContains(page, "**/crm/leads", { timeout: 30000 }, name)
+    await awaitListContains(page, "**/crm/leads", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.getByRole("link", { name }).first()
@@ -53,7 +53,7 @@ test.describe("CRM Leads CRUD", () => {
     await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
-    await awaitListContains(page, "**/crm/leads", { timeout: 30000 }, updated)
+    await awaitListContains(page, "**/crm/leads", updated)
 
     // ─── DELETE via detail page ──────────────────────────────
     // Buka detail terbaru yang match nama tepat
@@ -85,7 +85,8 @@ test.describe("CRM Leads CRUD", () => {
     await expect(page.getByText("Hapus data ini?").first()).toBeHidden({ timeout: 10000 })
 
     // Force refresh list + verifikasi data unik (email) sudah hilang
-    await gotoReady(page, "/crm/leads", { waitUntil: "domcontentloaded" }, "    ")
+    await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(email, { timeout: 30000 })
   })
 })

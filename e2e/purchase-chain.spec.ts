@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test"
+import { awaitReady } from "./utils/await-ready"
 import { prisma } from "@/lib/db/prisma"
 import { Prisma } from "@prisma/client"
 

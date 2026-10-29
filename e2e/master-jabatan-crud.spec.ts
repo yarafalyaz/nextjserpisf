@@ -21,7 +21,7 @@ test.describe("Master Jabatan CRUD", () => {
     await expect(page.locator("#submit-position")).toBeEnabled({ timeout: 15_000 })
     await page.locator("#submit-position").click()
 
-    await awaitListContains(page, "**/master/jabatan", { timeout: 30000 }, name)
+    await awaitListContains(page, "**/master/jabatan", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page
@@ -48,7 +48,7 @@ test.describe("Master Jabatan CRUD", () => {
     await page.locator("#name").fill(updated)
     await page.locator("#submit-position").click()
 
-    await awaitListContains(page, "**/master/jabatan", { timeout: 30000 }, updated)
+    await awaitListContains(page, "**/master/jabatan", updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
