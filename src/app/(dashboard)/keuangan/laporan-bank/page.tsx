@@ -52,9 +52,11 @@ export default async function BankStatementsPage({
     redirectError?: unknown
   }> = getBankStatementDraftQueue()
     .then((queue) => ({ queue }))
-    .catch((error: unknown) =>
-      isNextRedirect(error) ? { queue: null, redirectError: error } : { queue: null },
-    )
+    .catch((error: unknown) => {
+      if (isNextRedirect(error)) return { queue: null, redirectError: error }
+      console.error("[laporan-bank] antrean rekening koran draft gagal dimuat:", error)
+      return { queue: null }
+    })
 
   const [statements, total] = await Promise.all([
     prisma.bankStatement.findMany({

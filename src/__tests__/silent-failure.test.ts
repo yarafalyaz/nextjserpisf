@@ -291,6 +291,9 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "src/lib/hooks/sales-payment.hook.ts": "akrual komisi tahap 3 best-effort dalam recalc paid: mapping belum lengkap = catat alasan + faktur tetap paid (vonis R-komisi-vonispayable §5) — bukan angka yang ditelan, bukan sukses semu",
   "src/app/(dashboard)/crm/tickets/page.tsx": "BR-CTQ-11/CTB-09/SLA 001-U: kegagalan loader kartu menyembunyikan kartu saja; daftar tiket existing tetap dapat dipakai, bukan angka kosong karangan",
   "src/app/(dashboard)/crm/tickets/[slug]/page.tsx": "SLA 001-U: kegagalan loader = tanpa seksi SLA di detail; konten tiket existing tetap tampil, bukan angka yang ditelan",
+  "src/app/(dashboard)/proyek/page.tsx": "kegagalan loader antrean tahap dicatat console.error berkonteks; seksi turunan kosong, daftar proyek existing tetap tampil — bukan angka yang ditelan",
+  "src/app/(dashboard)/keuangan/pengeluaran/page.tsx": "kegagalan loader antrean draft dicatat console.error berkonteks; seksi turunan kosong, daftar pengeluaran existing tetap tampil — bukan angka yang ditelan",
+  "src/app/(dashboard)/keuangan/laporan-bank/page.tsx": "kegagalan loader antrean draft dicatat console.error berkonteks; seksi turunan kosong, daftar rekening koran existing tetap tampil — bukan angka yang ditelan",
 }
 
 const ALLOWED_DEFAULT_RETURN: Record<string, string> = {
