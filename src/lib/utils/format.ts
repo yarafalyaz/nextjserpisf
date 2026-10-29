@@ -3,6 +3,22 @@
  * Currency (IDR), dates, numbers, and percentages.
  */
 
+// Intl formatter dibuat sekali per proses — format* dipanggil ribuan kali
+// per render; konstruksi per panggilan adalah biaya murni (locale/opsi tetap).
+const numberFmtCache = new Map<number, Intl.NumberFormat>()
+function idNumberFmt(decimals: number): Intl.NumberFormat {
+  let fmt = numberFmtCache.get(decimals)
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("id-ID", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    numberFmtCache.set(decimals, fmt)
+  }
+  return fmt
+}
+const FMT_DAY_MONTH_YEAR = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" })
+const FMT_MONTH_YEAR = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" })
+const FMT_QUANTITY = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 })
+const FMT_COMPACT = new Intl.NumberFormat("id-ID", { notation: "compact", maximumFractionDigits: 1 })
+
 /**
  * Format a number as Indonesian Rupiah currency.
  * Example: 1500000 → "Rp 1.500.000"
@@ -21,10 +37,7 @@ export function formatCurrency(
 
   if (Number.isNaN(numericAmount)) return showSymbol ? `${symbol}0` : "0";
 
-  const formatted = new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(numericAmount);
+  const formatted = idNumberFmt(decimals).format(numericAmount);
 
   return showSymbol ? `${symbol}${formatted}` : formatted;
 }
@@ -84,10 +97,7 @@ export function formatNumber(
 
   if (Number.isNaN(numericValue)) return "0";
 
-  return new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(numericValue);
+  return idNumberFmt(decimals).format(numericValue);
 }
 
 /**
@@ -122,12 +132,7 @@ export function formatDayMonthYear(date: Date | string | null | undefined): stri
   if (!date) return "-";
   const dateObj = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(dateObj.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Jakarta",
-  }).format(dateObj);
+  return FMT_DAY_MONTH_YEAR.format(dateObj);
 }
 
 /** "Oktober 2026" — label grup bulan + judul kolom, zona WIB dipaku. */
@@ -135,11 +140,7 @@ export function formatMonthYear(date: Date | string | null | undefined): string 
   if (!date) return "-";
   const dateObj = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(dateObj.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    month: "long",
-    year: "numeric",
-    timeZone: "Asia/Jakarta",
-  }).format(dateObj);
+  return FMT_MONTH_YEAR.format(dateObj);
 }
 
 /**
@@ -173,9 +174,7 @@ export function formatShortRange(start: Date | string | null | undefined, end: D
 export function formatQuantity(value: number | string | null | undefined): string {
   const numericValue = Number(value ?? 0);
   if (Number.isNaN(numericValue)) return "0";
-  const text = new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 2,
-  }).format(numericValue);
+  const text = FMT_QUANTITY.format(numericValue);
   return text === "-0" ? "0" : text;
 }
 
@@ -198,10 +197,7 @@ export function formatRpCompact(value: number | string | null | undefined): stri
 export function formatCompactNumber(value: number | string | null | undefined): string {
   const numericValue = Number(value ?? 0);
   if (Number.isNaN(numericValue)) return "0";
-  return new Intl.NumberFormat("id-ID", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(numericValue);
+  return FMT_COMPACT.format(numericValue);
 }
 
 /**
