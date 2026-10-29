@@ -1,12 +1,5 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("Master Jabatan CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -20,11 +13,11 @@ test.describe("Master Jabatan CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/jabatan/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Jabatan" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
-    await waitForHydration(page)
+    await expect(page.locator("#submit-position")).toBeEnabled({ timeout: 15_000 })
     await page.locator("#submit-position").click()
 
     await page.waitForURL("**/master/jabatan", { timeout: 30000 })
@@ -40,9 +33,7 @@ test.describe("Master Jabatan CRUD", () => {
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
-
-    await waitForHydration(page)
-    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("body")).toContainText(name, { timeout: 30_000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto("/master/jabatan", { waitUntil: "domcontentloaded" })
@@ -54,7 +45,7 @@ test.describe("Master Jabatan CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/jabatan\/[^/]+\/ubah$/, { timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").fill(updated)
     await page.locator("#submit-position").click()
 

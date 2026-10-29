@@ -1,11 +1,5 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("CRM Leads CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -22,7 +16,7 @@ test.describe("CRM Leads CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/crm/leads/tambah", { waitUntil: "domcontentloaded" })
     await expect(page.getByRole("heading", { name: "Tambah Prospek" })).toBeVisible({ timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
 
     const nameInput = page.locator("#name")
     await expect(nameInput).toBeVisible({ timeout: 10000 })
@@ -43,8 +37,7 @@ test.describe("CRM Leads CRUD", () => {
 
     await page.goto(href, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
-    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("body")).toContainText(name, { timeout: 30_000 })
     await expect(page.locator("body")).toContainText(email)
 
     // ─── UPDATE ───────────────────────────────────────────────
@@ -58,7 +51,7 @@ test.describe("CRM Leads CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/crm\/leads\/[^/]+\/ubah$/, { timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
     await page.waitForURL("**/crm/leads", { timeout: 30000 })
@@ -74,7 +67,7 @@ test.describe("CRM Leads CRUD", () => {
 
     await page.goto(updatedHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
+    await expect(page.locator("body")).toContainText(updated, { timeout: 30_000 })
 
     // Hapus via tombol dengan aria-label (komponen DeleteButton)
     const triggerHapus = page.locator("button[aria-label='Hapus'], button:has-text('Hapus')").last()
@@ -97,7 +90,7 @@ test.describe("CRM Leads CRUD", () => {
     // Force refresh list + verifikasi data unik (email) sudah hilang
     await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.locator("body")).not.toContainText(email, { timeout: 30000 })
   })
 })

@@ -1,12 +1,5 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("Master Bank CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
@@ -21,12 +14,12 @@ test.describe("Master Bank CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/bank/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Bank" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
     await page.locator("#code").fill(code)
-    await waitForHydration(page)
+    await expect(page.locator("button[type='submit']")).toBeEnabled({ timeout: 15_000 })
     await page.locator("button[type='submit']").click()
 
     await page.waitForURL("**/master/bank", { timeout: 30000 })
@@ -42,8 +35,7 @@ test.describe("Master Bank CRUD", () => {
 
     await page.goto(href, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
-    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("body")).toContainText(name, { timeout: 30_000 })
     await expect(page.locator("body")).toContainText(code)
 
     // ─── UPDATE ───────────────────────────────────────────────
@@ -56,7 +48,7 @@ test.describe("Master Bank CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/bank\/[^/]+\/ubah$/, { timeout: 30000 })
-    await waitForHydration(page)
+    await expect(page.locator("#name")).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
 

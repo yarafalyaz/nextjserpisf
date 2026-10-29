@@ -233,9 +233,9 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     await page.waitForURL(/\/penjualan\/retur\/[^/]+$/, { timeout: 30_000 })
     await page.getByRole("button", { name: "Selesaikan" }).first().click()
     await page.getByRole("button", { name: "Selesaikan" }).last().click()
-    // Sukses = chip "Selesai" ATAU toast galat (tolak diam). Baca toast-nya.
-    await page.waitForTimeout(8000)
+    // Sukses = chip "Selesai" ATAU toast galat (tolak diam) — tunggu salah satunya, bukan sleep buta.
     const retToast = page.locator("li", { hasText: /gagal|tidak|wajib|kurang|ditolak/i }).first()
+    await expect(page.getByText("Selesai").first().or(retToast)).toBeVisible({ timeout: 30_000 })
     if ((await retToast.count()) > 0) {
       throw new Error("retur gagal diselesaikan: " + ((await retToast.textContent()) ?? "").slice(0, 250))
     }

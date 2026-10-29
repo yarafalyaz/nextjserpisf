@@ -1,12 +1,5 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
-
 
 test.describe("Master Kelompok Pajak CRUD", () => {
   test.beforeEach(async ({ }, testInfo) => {
@@ -21,7 +14,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     // Kelompok wajib berisi minimal satu pajak (validasi createTaxGroup) dan
     // DB uji bisa kosong pajaknya — buat satu pajak dulu lewat UI.
     await page.goto("/master/pajak/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 30000 })
     await page.locator("#tax-name").fill(taxName)
     await page.locator("#tax-rate").fill("11")
@@ -31,12 +24,12 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/kelompok-pajak/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
     await page.getByRole("checkbox").first().check()
-    await waitForHydration(page)
+    await expect(page.getByRole("button", { name: "Simpan" })).toBeEnabled({ timeout: 15_000 })
     await page.getByRole("button", { name: "Simpan" }).click()
 
     await page.waitForURL("**/master/kelompok-pajak", { timeout: 30000 })
@@ -54,8 +47,8 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     // ─── DELETE ───────────────────────────────────────────────
     // 1. Open dropdown menu
     await row.getByRole("button", { name: "Buka menu aksi" }).click()
-    // 2. Wait for dropdown popover to be visible
-    await page.waitForTimeout(2000)
+    // 2. Tunggu dropdown popover ter-render (web-first, bukan sleep buta).
+    await expect(page.getByRole("menuitem", { name: "Hapus" }).first()).toBeVisible({ timeout: 10_000 })
     // 3. Click Hapus menu item
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
     // 4. Wait for confirm dialog to appear (`.first()` — teks judul ini juga
@@ -72,13 +65,13 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.goto(`/master/kelompok-pajak?cari=${encodeURIComponent(name)}`, {
       waitUntil: "domcontentloaded",
     })
-    await waitForHydration(page)
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(name, { timeout: 30000 })
 
     // Bersihkan pajak yang dibuat di awal spec ini.
     await page.goto("/master/pajak", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 30_000 })
     const taxRow = page.getByRole("row", { name: new RegExp(taxName) }).first()
     await expect(taxRow).toBeVisible({ timeout: 30000 })
     await taxRow.getByRole("button", { name: "Buka menu aksi" }).click()
