@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
+  // Salin verbatim `buildModelMock` validation-mock-helpers: `vi.hoisted`
+  // tak boleh memanggil impor modul (hoisting) — sinkronisasi ke helper
+  // bersama menunggu dukungan impor-hoisted Vitest.
   const buildModelMock = () => ({
     findFirst: vi.fn().mockResolvedValue(null),
     findUnique: vi.fn().mockResolvedValue(null),
@@ -119,20 +122,24 @@ const PO_BILL = (items: unknown[], extra: Record<string, string> = {}) =>
     ...extra,
   })
 
-// Penegak ringkas: satu definisi, dipakai semua kasus (hindari pola expect berulang).
-function expectReject(res: unknown, pattern: RegExp) {
+function expectBillReject(res: unknown, pattern: RegExp) {
   expect((res as { success?: boolean })?.success).toBe(false)
   expect((res as { error?: string })?.error).toMatch(pattern)
 }
 
 describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/edit/confirm)", () => {
+  // Penegak gabung: guard per-baris + referensi termin untuk SEMUA titik
+  // tulis (create/update/confirm). Satu definisi, dipakai semua kasus.
+  function expectGuardedBillReject(res: unknown, pattern: RegExp) {
+    expectBillReject(res, pattern)
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  }
   // E157B-1: over-bill HARGA per baris > toleransi lolos (create/confirm) = MERAH.
   it("E157B-1 menolak create bill ber-PO yang unitPrice barisnya over acuan PO", async () => {
     const res = await actions.createVendorBill(
       PO_BILL([{ itemId: 7, qty: 10, unitPrice: 12000, discountPercent: 0, taxPercent: 0 }]),
     )
-    expectReject(res, /per baris/i)
-    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+    expectGuardedBillReject(res, /per baris/i)
   })
 
   // E157B-2: diskon sah (net dalam toleransi) ditolak guard per-baris = MERAH.
@@ -164,24 +171,22 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
     postBill.mockRestore()
   })
 
-  // E157B-6: bill ber-PO `terms` format bebas lolos = MERAH.
-  it("E157B-6 menolak create bill ber-PO dengan terms format bebas", async () => {
-    const res = await actions.createVendorBill(
-      PO_BILL(
-        [{ itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 }],
-        { terms: "cicil 3x santai" },
-      ),
+  // E157B-6/7: format referensi termin — bebas = MERAH, kosong = termin tunggal LULUS.
+  it.each([
+    ["E157B-6 bebas ditolak", "cicil 3x santai", false],
+    ["E157B-6 tanpa acuan ditolak", "TERMIN 1/2", false],
+    ["E157B-7 kosong = termin tunggal lolos", null, true],
+    ["E157B-7 format acuan lolos", "TERMIN 1/2 — DP 50% PO-001", true],
+  ])("%s", async (_label, terms, pass) => {
+    mocks.prismaMock.vendorBill.create.mockClear()
+    const f = PO_BILL(
+      [{ itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 }],
+      typeof terms === "string" ? { terms } : {},
     )
-    expectReject(res, /TERMIN/i)
-    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
-  })
-
-  // E157B-7: termin tunggal tanpa `terms` ditolak = MERAH.
-  it("E157B-7 meloloskan bill ber-PO tanpa terms (termin tunggal)", async () => {
-    const f = PO_BILL([{ itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 }])
-    f.delete("terms")
+    if (terms == null) f.delete("terms")
     const res = await actions.createVendorBill(f)
-    expect(res?.success).toBe(true)
+    if (pass) expect(res?.success).toBe(true)
+    else expectGuardedBillReject(res, /TERMIN/i)
   })
 
   it("edit menahan kenaikan harga per baris di atas toleransi", async () => {
@@ -189,18 +194,23 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
     const res = await actions.updateVendorBill(1,
       PO_BILL([{ itemId: 7, qty: 10, unitPrice: 15000, discountPercent: 0, taxPercent: 0 }]),
     )
-    expectReject(res, /per baris/i)
+    expectBillReject(res, /per baris/i)
   })
 
   it("edit menolak terms format bebas pada bill ber-PO", async () => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // Hapus baris po default: edit tanpa terms = lolos (kontrol arah),
+    // dengan terms bebas = MERAH.
+    const noTerms = PO_BILL([{ itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 }])
+    noTerms.delete("terms")
+    expect((await actions.updateVendorBill(1, noTerms))?.success).toBe(true)
     const res = await actions.updateVendorBill(1,
       PO_BILL(
         [{ itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 }],
         { terms: "bayar nanti" },
       ),
     )
-    expectReject(res, /TERMIN/i)
+    expectBillReject(res, /TERMIN/i)
   })
 
   it("confirm menahan baris tersimpan yang over acuan walau create lolos tanpa baris acuan", async () => {
@@ -217,22 +227,22 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
       { itemId: 7, qty: 10, unitPrice: 13000, discountPercent: 0, taxPercent: 0 },
     ])
     const res = await actions.confirmVendorBill(1)
-    expectReject(res, /per baris/i)
+    expectBillReject(res, /per baris/i)
   })
 
   it("E157B-5 aksi isi-nomor menolak nomor tak valid sebelum sentuh jurnal", async () => {
     const fd = new FormData()
     fd.append("taxInvoiceNumber", "!!!")
     const res = await actions.setVendorBillTaxInvoiceNumber(1, fd)
-    expectReject(res, /tidak valid/i)
+    expectBillReject(res, /tidak valid/i)
     expect(mocks.prismaMock.journal.findMany).not.toHaveBeenCalled()
   })
 
   // Falsifikasi arah Putusan 1 — acuan GR per LINE: dua baris GR item sama
   // (unitCost 10000 + 12000) dikonsumsi berurutan oleh dua baris bill.
   // Plafon agregat GR ikut dinaikkan agar guard per-baris yang diuji,
-  // bukan 3-way match.
-  it("acuan GR dibaca per baris GR berurutan, bukan first-GR saja", async () => {
+  // bukan 3-way match. Satu penegak dipakai dua arah (lolos + tahan).
+  function grLineQueues() {
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
       { id: 11, itemId: 7, unitCost: 10000 },
       { id: 12, itemId: 7, unitCost: 12000 },
@@ -240,24 +250,19 @@ describe("F-2026-10-28-157-V E157B guard per-baris + referensi termin (create/ed
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValueOnce([
       { items: [{ qty: 10, unitCost: 10000 }, { qty: 10, unitCost: 12000 }] },
     ])
-    const lines = [
-      { itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 },
-      { itemId: 7, qty: 10, unitPrice: 12000, discountPercent: 0, taxPercent: 0 },
-    ]
-    const res = await actions.createVendorBill(PO_BILL(lines))
-    expect(res?.success).toBe(true)
-  })
+  }
 
-  it("baris kedua tertahan bila menyimpang dari baris GR keduanya", async () => {
-    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
-      { id: 11, itemId: 7, unitCost: 10000 },
-      { id: 12, itemId: 7, unitCost: 12000 },
-    ])
+  it.each([
+    ["lolos", 12000, true],
+    ["tertahan", 20000, false],
+  ])("acuan GR per baris: baris kedua %s pada unitPrice %s", async (_label, price, pass) => {
+    grLineQueues()
     const lines = [
       { itemId: 7, qty: 10, unitPrice: 10000, discountPercent: 0, taxPercent: 0 },
-      { itemId: 7, qty: 10, unitPrice: 20000, discountPercent: 0, taxPercent: 0 },
+      { itemId: 7, qty: 10, unitPrice: price, discountPercent: 0, taxPercent: 0 },
     ]
     const res = await actions.createVendorBill(PO_BILL(lines))
-    expectReject(res, /per baris/i)
+    if (pass) expect(res?.success).toBe(true)
+    else expectBillReject(res, /per baris/i)
   })
 })

@@ -238,40 +238,42 @@ describe("F-2026-10-28-157-V E157B-4 hook gabung-HPP", () => {
     wireVendorBillTx()
   })
 
-  const entriesOf = () =>
-    mocks.journalCreate.mock.calls[0][0].data.entries.create as {
+  function entriesOf() {
+    return mocks.journalCreate.mock.calls[0][0].data.entries.create as {
       accountId: number
       debit: number
       credit: number
     }[]
+  }
 
-  it("tanpa nomor = clearing grandTotal penuh, TANPA kaki PPN Masukan", async () => {
+  // Penegak seimbang: debit = kredit di tiap kasus gabung-HPP.
+  function expectBalanced() {
+    const entries = entriesOf()
+    const debit = entries.reduce((s, e) => s + e.debit, 0)
+    expect(debit).toBe(entries.reduce((s, e) => s + e.credit, 0))
+    return entries
+  }
+
+  // E157B-4 dua arah: tanpa nomor valid PPN gabung HPP; bernomor valid
+  // kaki PPN Masukan tetap ada. Satu penegak balance dipakai keduanya.
+  it.each([
+    ["tanpa nomor gabung HPP", null, 1_100_000, 0],
+    ["nomor valid pecah PPN", "010.000-26.00000001", 1_000_000, 100_000],
+  ])("%s", async (_label, taxNo, clearingDebit, taxDebit) => {
     const bill = {
-      id: 1, grandTotal: 1_100_000, tax: 100_000, taxInvoiceNumber: null,
+      id: 1, grandTotal: 1_100_000, tax: 100_000, taxInvoiceNumber: taxNo,
       date: new Date("2026-06-01"), documentNo: "BILL-1", purchaseOrderId: 5,
     }
     mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
 
     await onVendorBillPosted(1, 42)
 
-    const entries = entriesOf()
-    expect(entries).toContainEqual(expect.objectContaining({ accountId: CLEARING, debit: 1_100_000, credit: 0 }))
-    expect(entries).not.toContainEqual(expect.objectContaining({ accountId: TAX }))
-    const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
-    expect(totalDebit).toBe(entries.reduce((s, e) => s + e.credit, 0))
-  })
-
-  it("kontrol arah: bernomor valid = kaki PPN Masukan tetap ada", async () => {
-    const bill = {
-      id: 1, grandTotal: 1_100_000, tax: 100_000, taxInvoiceNumber: "010.000-26.00000001",
-      date: new Date("2026-06-01"), documentNo: "BILL-1", purchaseOrderId: 5,
+    const entries = expectBalanced()
+    expect(entries).toContainEqual(expect.objectContaining({ accountId: CLEARING, debit: clearingDebit, credit: 0 }))
+    if (taxDebit > 0) {
+      expect(entries).toContainEqual(expect.objectContaining({ accountId: TAX, debit: taxDebit, credit: 0 }))
+    } else {
+      expect(entries).not.toContainEqual(expect.objectContaining({ accountId: TAX }))
     }
-    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
-
-    await onVendorBillPosted(1, 42)
-
-    const entries = entriesOf()
-    expect(entries).toContainEqual(expect.objectContaining({ accountId: CLEARING, debit: 1_000_000, credit: 0 }))
-    expect(entries).toContainEqual(expect.objectContaining({ accountId: TAX, debit: 100_000, credit: 0 }))
   })
 })
