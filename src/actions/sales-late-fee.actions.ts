@@ -302,6 +302,10 @@ export async function paySalesLateFee(formData: FormData): Promise<LateFeeAction
       )
       if (claim.replayed) return { id: claim.resultRefId ?? 0 }
 
+      // Serialize pembayaran konkuren atas dokumen denda sama: tanpa lock
+      // baris, dua pembayaran beda idempotency key membaca paidAmount basi
+      // bersamaan dan sama-sama lolos guard sisa → overpay tercatat.
+      await tx.$queryRaw`SELECT id FROM sales_late_fees WHERE id = ${salesLateFeeId} FOR UPDATE`
       const doc = await tx.salesLateFee.findFirst({
         where: { id: salesLateFeeId, deletedAt: null },
         select: { id: true, documentNo: true, amount: true, paidAmount: true, status: true },

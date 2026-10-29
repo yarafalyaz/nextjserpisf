@@ -275,6 +275,41 @@ describe("paySalesLateFee (E93-7)", () => {
     expect(eArg.data[1]).toMatchObject({ accountId: 110, debit: 0, credit: 25_000 })
   })
 
+  it("kunci baris sales_late_fees (FOR UPDATE) sebelum findFirst doc — pembayaran konkuren serialize", async () => {
+    tx.salesLateFee.findFirst.mockResolvedValue({
+      id: 55,
+      documentNo: "001/LF/YRA/10/2026",
+      amount: 60_000,
+      paidAmount: 0,
+      status: "posted",
+    })
+    tx.salesLateFeePayment.create.mockResolvedValue({ id: 78 })
+    tx.salesLateFeePayment.findUniqueOrThrow.mockResolvedValue({
+      id: 78,
+      amount: 10_000,
+      paymentDate: new Date(2026, 9, 12),
+      accountId: null,
+      salesLateFee: { documentNo: "001/LF/YRA/10/2026" },
+    })
+    const res = await actions.paySalesLateFee(
+      fd({
+        salesLateFeeId: "55",
+        amount: "10000",
+        paymentDate: "2026-10-12",
+        paymentMethod: "transfer",
+        idempotencyKey: "latefee-pay-lock-001",
+      }),
+    )
+    expect(res.success).toBe(true)
+    const queryRaw = mocks.tx.$queryRaw as ReturnType<typeof vi.fn>
+    const findFirst = tx.salesLateFee.findFirst as ReturnType<typeof vi.fn>
+    expect(queryRaw).toHaveBeenCalled()
+    const sql = queryRaw.mock.calls.map((c) => Array.from(c[0] as TemplateStringsArray).join("?")).join(" ")
+    expect(sql).toContain("sales_late_fees")
+    expect(sql).toContain("FOR UPDATE")
+    expect(queryRaw.mock.invocationCallOrder[0]).toBeLessThan(findFirst.mock.invocationCallOrder[0])
+  })
+
   it("pembayaran melebihi sisa denda → ditolak", async () => {
     tx.salesLateFee.findFirst.mockResolvedValue({
       id: 55,
