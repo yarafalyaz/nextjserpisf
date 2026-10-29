@@ -219,6 +219,18 @@ export async function paidTx(
 ): Promise<{ paid: number }> {
   const row = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
   if (!row) throw new Error(`Tautan bayar komisi ditolak: tanpa baris subledger (faktur #${salesInvoiceId}).`)
+  return paidByIdTx(tx, row.id, amount, salesInvoiceId, userId)
+}
+
+/** Varian by-id: baris slip menaut payableId spesifik (unik 1-1). */
+export async function paidByIdTx(
+  tx: TxClient,
+  payableId: number,
+  amount: number,
+  salesInvoiceId: number,
+  userId?: number | null,
+): Promise<{ paid: number }> {
+  const row = await tx.commissionPayable.findUniqueOrThrow({ where: { id: payableId } })
   if (!(amount > 0)) throw new Error("Tautan bayar komisi ditolak: nominal harus lebih dari nol.")
 
   const accrued = Number(row.accruedAmount)
