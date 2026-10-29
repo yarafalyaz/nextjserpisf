@@ -1,16 +1,15 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { Ban } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
-import { Textarea } from "@/components/ui/shadcn/textarea"
+import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { showSuccess, showError } from "@/lib/utils/toast"
+import { showError } from "@/lib/utils/toast"
+import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
 interface VoidButtonProps {
   id: number
-  action: (id: number) => Promise<{ success: boolean; error?: string }>
+  action: (id: number, reason?: string) => Promise<{ success: boolean; error?: string }>
   label?: string
   title?: string
   body?: string
@@ -40,34 +39,20 @@ export function VoidButton({
   reasonLabel = "Alasan pembatalan",
   reasonPlaceholder = "Tulis alasan pembatalan (wajib diisi)",
 }: VoidButtonProps) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [isOpen, setIsOpen] = useState(false)
-  const [reason, setReason] = useState("")
+  const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
+    useConfirmReasonAction({
+      run: (trimmedReason: string) => action(id, requireReason ? trimmedReason : undefined),
+      successMessage: "Dokumen berhasil dibatalkan",
+      errorFallback: "Gagal membatalkan dokumen",
+      onSuccess,
+    })
 
   function handleVoid() {
     if (requireReason && !reason.trim()) {
       showError(`${reasonLabel} wajib diisi`)
       return
     }
-    startTransition(async () => {
-      const result = await action(id)
-      if (result.success) {
-        showSuccess("Dokumen berhasil dibatalkan")
-        setIsOpen(false)
-        setReason("")
-        onSuccess?.()
-        router.refresh()
-      } else {
-        showError(result.error || "Gagal membatalkan dokumen")
-        setIsOpen(false)
-      }
-    })
-  }
-
-  function handleOpenChange(open: boolean) {
-    if (!open) setReason("")
-    setIsOpen(open)
+    submit()
   }
 
   return (
@@ -96,23 +81,14 @@ export function VoidButton({
         onConfirm={handleVoid}
       >
         {requireReason ? (
-          <div className="mt-3 flex flex-col gap-1.5">
-            <label htmlFor={`void-reason-${id}`} className="text-sm font-medium">
-              {reasonLabel} <span aria-hidden="true" className="text-danger">*</span>
-            </label>
-            <Textarea
-              id={`void-reason-${id}`}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={reasonPlaceholder}
-              aria-label={reasonLabel}
-              rows={3}
-              disabled={isPending}
-            />
-            <p className="text-xs text-muted-foreground">
-              Alasan wajib diisi dan tersimpan sebagai jejak audit pembatalan.
-            </p>
-          </div>
+          <ReasonField
+            id={`void-reason-${id}`}
+            value={reason}
+            onChange={setReason}
+            disabled={isPending}
+            label={reasonLabel}
+            placeholder={reasonPlaceholder}
+          />
         ) : undefined}
       </ConfirmDialog>
     </>

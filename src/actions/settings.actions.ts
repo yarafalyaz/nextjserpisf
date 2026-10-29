@@ -299,6 +299,8 @@ export async function updateSystemSettings(formData: FormData) {
       salariesPayableAccountId: intNull("salariesPayableAccountId"),
       payrollBankAccountId: intNull("payrollBankAccountId"),
       employeeReceivableAccountId: intNull("employeeReceivableAccountId"),
+      // F-2026-10-29-162-V (c): beban write-off piutang karyawan (720007).
+      employeeLoanWriteOffExpenseAccountId: intNull("employeeLoanWriteOffExpenseAccountId"),
       payrollJournalTypeId: intNull("payrollJournalTypeId"),
 
       // Accounting - Fixed Assets
