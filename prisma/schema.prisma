@@ -1156,6 +1156,7 @@ model Employee {
   salesTargets         SalesTarget[]
   workOrderOperations WorkOrderOperation[]
   rosters             EmployeeRoster[]
+  rostersApproved     EmployeeRoster[] @relation("EmployeeRosterApprover")
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([managerId], map: "employees_manager_id_fkey")
@@ -3522,11 +3523,13 @@ model EmployeeRoster {
   createdBy  Int?     @map("created_by")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  approver   Employee? @relation("EmployeeRosterApprover", fields: [approvedBy], references: [id])
 
   @@unique([employeeId, date, type])
   @@index([employeeId])
   @@index([date])
+  @@index([approvedBy])
   @@map("employee_rosters")
 }
 
