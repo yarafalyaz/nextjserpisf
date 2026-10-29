@@ -143,6 +143,8 @@ interface SettingsFormValues {
   supplierClaimReceivableAccountId?: number | null
   reimbursementLiabilityAccountId?: number | null
   salesAccountId?: number | null
+  commissionExpenseAccountId?: number | null
+  commissionPayableAccountId?: number | null
   salesInvoicePrefix?: string | null
   salesOrderPrefix?: string | null
   salesPaymentPrefix?: string | null
@@ -271,6 +273,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [warrantyProvision, setWarrantyProvision] = useState(settings.warrantyProvisionAccountId ? String(settings.warrantyProvisionAccountId) : "")
   const [supplierClaimReceivable, setSupplierClaimReceivable] = useState(settings.supplierClaimReceivableAccountId ? String(settings.supplierClaimReceivableAccountId) : "")
   const [reimbursementLiability, setReimbursementLiability] = useState(settings.reimbursementLiabilityAccountId ? String(settings.reimbursementLiabilityAccountId) : "")
+  const [commissionExpense, setCommissionExpense] = useState(settings.commissionExpenseAccountId ? String(settings.commissionExpenseAccountId) : "")
+  const [commissionPayable, setCommissionPayable] = useState(settings.commissionPayableAccountId ? String(settings.commissionPayableAccountId) : "")
   const [salesRevenue, setSalesRevenue] = useState(settings.salesRevenueAccountId ? String(settings.salesRevenueAccountId) : "")
   const [scrapSaleIncome, setScrapSaleIncome] = useState(settings.scrapSaleIncomeAccountId ? String(settings.scrapSaleIncomeAccountId) : "")
   const [salesTax, setSalesTax] = useState(settings.salesTaxAccountId ? String(settings.salesTaxAccountId) : "")
@@ -391,6 +395,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       items: [
         { name: "supplierClaimReceivableAccountId", label: "Piutang Klaim Supplier (110508)", value: supplierClaimReceivable, onChange: setSupplierClaimReceivable },
         { name: "reimbursementLiabilityAccountId", label: "Utang Reimbursement (210209)", value: reimbursementLiability, onChange: setReimbursementLiability },
+        { name: "commissionExpenseAccountId", label: "Beban Komisi (600002)", value: commissionExpense, onChange: setCommissionExpense },
+        { name: "commissionPayableAccountId", label: "Utang Komisi Penjualan (210212)", value: commissionPayable, onChange: setCommissionPayable },
       ],
     },
     {
@@ -457,6 +463,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       warrantyProvisionAccountId: setWarrantyProvision,
       supplierClaimReceivableAccountId: setSupplierClaimReceivable,
       reimbursementLiabilityAccountId: setReimbursementLiability,
+      commissionExpenseAccountId: setCommissionExpense,
+      commissionPayableAccountId: setCommissionPayable,
       salesRevenueAccountId: setSalesRevenue,
       scrapSaleIncomeAccountId: setScrapSaleIncome,
       salesTaxAccountId: setSalesTax,

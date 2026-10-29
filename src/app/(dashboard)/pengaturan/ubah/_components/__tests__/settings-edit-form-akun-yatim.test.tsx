@@ -73,7 +73,7 @@ describe("SettingsEditForm — 5 akun yatim (SAL-BR-004 / GL-BR-009)", () => {
     const { container, root } = mount({})
     const missing = ACCOUNT_MAPPING_FIELDS.filter((key) => hiddenValue(container, key) === undefined)
     expect(missing).toEqual([])
-    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(40)
+    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(42) // +2 komisi tahap 3
     for (const key of ORPHAN_FIELDS) {
       expect(container.querySelector(`input[name="${key}"]`)).not.toBeNull()
       expect(container.querySelector(`label[for="${key}"]`)).not.toBeNull()
