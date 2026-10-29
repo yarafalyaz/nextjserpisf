@@ -130,7 +130,7 @@ export async function accrueTx(
   await tx.commissionPayable.create({
     data: {
       salesInvoiceId,
-      salesEmployeeId: invoice.salesEmployeeId,
+      salesEmployeeId: Number(invoice.salesEmployeeId),
       accruedAmount: new Prisma.Decimal(amount.toFixed(2)),
       accrualJournalId: journal.id,
       createdBy: userId ?? null,
