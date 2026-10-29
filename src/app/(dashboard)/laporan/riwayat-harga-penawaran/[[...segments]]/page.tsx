@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 import {
   formatPeriodLabel,
-  parseReportPeriod,
+  reportPeriodFromRoute,
   splitReportSegments,
 } from "@/lib/reports/report-period"
 import {
@@ -66,13 +66,13 @@ export default async function QuotationPriceHistoryPage({
   const user = await requirePermission("view_reports")
 
   const [{ segments = [] }, search] = await Promise.all([routeParams, searchParams])
-  const { periodSlug, filters } = splitReportSegments(segments)
-
-  const now = new Date()
-  const period = parseReportPeriod(periodSlug, {
+  // Periode dari path; tautan lama `?tanggalMulai=&tanggalSelesai=` tetap
+  // dibaca lewat helper (aturan hidup di satu tempat).
+  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), now.getMonth(), 1),
     end: now,
-  })
+  }))
+  const { filters } = splitReportSegments(segments)
 
   const customerKey = filters.pelanggan ?? search.customerId ?? null
   const itemKey = filters.barang ?? null

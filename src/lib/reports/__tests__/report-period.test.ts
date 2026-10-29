@@ -159,6 +159,15 @@ describe("splitReportSegments", () => {
     })
   })
 
+  it("membaca jendela antrean dari pasangan path tanpa periode", () => {
+    expect(splitReportSegments(["jendelaDepan", "30"])).toEqual({
+      filters: { jendelaDepan: "30" },
+    })
+    expect(splitReportSegments(["jendelaDepan", "30", "jendelaLampau", "90"])).toEqual({
+      filters: { jendelaDepan: "30", jendelaLampau: "90" },
+    })
+  })
+
   it("aman untuk rute kosong", () => {
     expect(splitReportSegments([])).toEqual({ filters: {} })
   })
