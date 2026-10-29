@@ -188,6 +188,22 @@ export function checkCreditEligibility(invoicePeriod: string, creditPeriod: stri
 }
 
 /**
+ * Nomor faktur pajak masukan dianggap valid bila cocok pola Zod form
+ * (huruf/angka/spasi/titik/strip, maks 50 karakter) — SATU sumber untuk
+ * guard confirm bill, hook posting jurnal, dan aksi isi-nomor pasca-posting.
+ * Definisi pola milik Zod form `src/lib/validations/tax-invoice.schemas.ts`;
+ * duplikasi regex di hook dilarang (penjaga report-format Konsistensi pola).
+ */
+export const VENDOR_TAX_INVOICE_NUMBER_PATTERN = /^[0-9A-Za-z][0-9A-Za-z .-]*$/
+
+export function isValidVendorTaxInvoiceNumber(raw: unknown): boolean {
+  if (raw == null) return false
+  const t = String(raw).trim()
+  if (t === "") return false
+  return VENDOR_TAX_INVOICE_NUMBER_PATTERN.test(t) && t.length <= 50
+}
+
+/**
  * Porsi kreditabel utk penyerahan campur: hanya porsi itu Dr PPN Masukan,
  * sisa kapitalisasi/beban. Falsifikasi (e): sedan non-kreditabel →
  * creditablePercent 0 → PPN Masukan nol.
