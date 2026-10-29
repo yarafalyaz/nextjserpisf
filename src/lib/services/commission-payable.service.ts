@@ -7,6 +7,10 @@
  *   gagal = nol baris + nol jurnal berlabel alasan (faktur tetap paid).
  * - reverseTx: lawan retur completed. Penjaga kumulatif R ≤ A dalam tx.
  * - paidTx: tautan bayar via slip payroll (P ≤ A − R, kecuali retur-sesudah-bayar).
+ * - cancelAccrualTx: un-accrue saat faktur turun status dari paid. Batal
+ *   sesudah paid = reversal penuh (vonis §6): jurnal lawan penuh senilai
+ *   akrual yang belum direversal retur, lalu reversalAmount = accrued agar
+ *   saldo A−R−P = 0 dan status turunan REVERSED (§7). Baris TIDAK dihapus.
  *
  * Jurnal memakai claim ref `CommissionPayableAccrual/<invoiceId>` agar
  * replay pembayaran terakhir idempoten (tak ada baris/jurnal kedua).
@@ -21,6 +25,7 @@ import { safeMultiply, safeRound, safeSubtract } from "@/lib/utils/math"
 
 export const COMMISSION_ACCRUAL_JOURNAL_REF = "CommissionPayableAccrual"
 export const COMMISSION_REVERSAL_JOURNAL_REF = "CommissionPayableReversal"
+export const COMMISSION_CANCELLATION_JOURNAL_REF = "CommissionPayableCancellation"
 
 export interface CommissionAccrueOutcome {
   accrued: boolean
@@ -62,6 +67,14 @@ async function resolveCommissionAccounts(tx: TxClient): Promise<{ expenseId: num
   }
   if (!expense.isActive || !payable.isActive) {
     throw new Error("Akrual komisi ditolak: akun komisi nonaktif. Aktifkan dulu di COA.")
+  }
+  // Beban komisi wajib grup beban (EXPS; instalasi lama berlabel BEBAN).
+  // Mapping tertukar ke akun neraca/pendapatan = jurnal akrual membukukan
+  // beban ke kaki salah.
+  if (expense.reportGroup !== "EXPS" && expense.reportGroup !== "BEBAN") {
+    throw new Error(
+      `Akrual komisi ditolak: akun beban komisi harus grup beban EXPS (dapat ${expense.reportGroup ?? "?"}).`,
+    )
   }
   if (payable.reportGroup !== "OCLY") {
     throw new Error(
@@ -123,7 +136,21 @@ export async function accrueTx(
   const amount = safeRound(safeMultiply(dpp, percent, 4) / 100, 2)
   if (!(amount > 0)) return { accrued: false, amount: 0, reason: "hasil-nol" }
 
+  // Preflight WAJIB sebelum tulis apa pun (fix catch-telan hook): hook
+  // menelan galat akrual agar faktur tetap paid (vonis §5), jadi gagal
+  // tengah-tulis = jurnal yatim / baris tanpa jurnal. Semua prasyarat
+  // yang bisa gagal (mapping+tipe akun, klaim+jurnal existing, periode)
+  // divalidasi SEBELUM create pertama; sesudah itu hanya create berurutan.
   const { expenseId, payableId } = await resolveCommissionAccounts(tx)
+  const priorJournal = await tx.journal.findFirst({
+    where: { referenceType: COMMISSION_ACCRUAL_JOURNAL_REF, referenceId: salesInvoiceId },
+    select: { id: true },
+  })
+  if (priorJournal) {
+    throw new Error(
+      `Akrual komisi ditolak: jurnal akrual faktur #${salesInvoiceId} sudah ada (#${priorJournal.id}) tanpa baris subledger — perlu resolusi manual, bukan jurnal kedua.`,
+    )
+  }
   // Tanggal jurnal = tanggal transisi paid (vonis §5), bukan updatedAt faktur
   // (berubah tiap edit) dan bukan tanggal terbit faktur.
   const txDate = new Date()
@@ -161,6 +188,92 @@ export async function accrueTx(
   return { accrued: true, amount, reason: null }
 }
 
+export interface CommissionCancelOutcome {
+  cancelled: boolean
+  amount: number
+  reason: string | null
+}
+
+/**
+ * Un-accrue: faktur turun status dari paid (bayar dihapus/direversal).
+ * Vonis §6 "dibatalkan sesudah paid = reversal penuh": jurnal lawan Dr
+ * utang / Cr beban senilai sisa akrual (accrued − reversal retur), jurnal
+ * asal ditandai REVERSED, reversalAmount dinaikkan ke accrued supaya saldo
+ * 0 / status turunan REVERSED. Idempoten: jurnal lawan existing (atau saldo
+ * sudah 0) = no-op. Baris yang SUDAH dibayar (paidAmount>0) TIDAK dibatalkan
+ * diam-diam — kas sudah keluar via slip; throw berkonteks, saldo historis
+ * tetap, resolusi manual (tarik via payroll berikutnya, vonis §6).
+ */
+export async function cancelAccrualTx(
+  tx: TxClient,
+  salesInvoiceId: number,
+  userId?: number | null,
+): Promise<CommissionCancelOutcome> {
+  await lockPayableRow(tx, salesInvoiceId)
+  await lockInvoiceRow(tx, salesInvoiceId)
+
+  const row = await tx.commissionPayable.findFirst({ where: { salesInvoiceId } })
+  if (!row) return { cancelled: false, amount: 0, reason: "tanpa-baris" }
+
+  const accrued = Number(row.accruedAmount)
+  const reversal = Number(row.reversalAmount)
+  const paid = Number(row.paidAmount)
+  if (paid > 0) {
+    throw new Error(
+      `Un-accrue komisi ditolak: faktur #${salesInvoiceId} sudah dibayar ${paid} via slip (payable #${row.id}); ` +
+        "saldo historis dipertahankan — selesaikan manual lewat potongan payroll berikutnya, bukan pembatalan diam.",
+    )
+  }
+  const outstanding = safeRound(safeSubtract(accrued, reversal, 2), 2)
+  if (!(outstanding > 0)) return { cancelled: false, amount: 0, reason: "sudah-nol" }
+
+  // Idempotensi SEBELUM tulis: lawan batal existing = sudah dibatalkan.
+  const existing = await tx.journal.findFirst({
+    where: { referenceType: COMMISSION_CANCELLATION_JOURNAL_REF, referenceId: salesInvoiceId },
+    select: { id: true },
+  })
+  if (existing) return { cancelled: true, amount: outstanding, reason: null }
+
+  // Preflight: mapping + periode jurnal asal terbuka sebelum tulis.
+  const { expenseId, payableId } = await resolveCommissionAccounts(tx)
+  const origin = row.accrualJournalId
+    ? await tx.journal.findUnique({ where: { id: row.accrualJournalId } })
+    : null
+  // Vonis §6: reversal penuh mekanisme jurnal repo, assertPeriodOpen tanggal
+  // asal. Tanpa jurnal asal tertaut, tanggal lawan = kini (tetap dicek).
+  const cancelDate = origin?.transactionDate ?? new Date()
+  await assertPeriodOpen(cancelDate, tx)
+
+  const journal = await tx.journal.create({
+    data: {
+      journalNumber: await journalNumber(tx, "KMC", salesInvoiceId),
+      transactionDate: cancelDate,
+      referenceType: COMMISSION_CANCELLATION_JOURNAL_REF,
+      referenceId: salesInvoiceId,
+      description: `Pembatalan akrual komisi faktur #${salesInvoiceId} (faktur turun dari paid)`,
+      type: "GENERAL",
+      status: "POSTED",
+      totalDebit: outstanding,
+      totalCredit: outstanding,
+      createdBy: userId ?? null,
+    },
+  })
+  await tx.journalEntry.createMany({
+    data: [
+      { journalId: journal.id, accountId: payableId, debit: outstanding, credit: 0, memo: "Batal utang komisi (un-accrue)" },
+      { journalId: journal.id, accountId: expenseId, debit: 0, credit: outstanding, memo: "Batal beban komisi (un-accrue)" },
+    ],
+  })
+  if (origin && origin.status === "POSTED") {
+    await tx.journal.update({ where: { id: origin.id }, data: { status: "REVERSED" } })
+  }
+  await tx.commissionPayable.update({
+    where: { id: row.id },
+    data: { reversalAmount: new Prisma.Decimal(accrued.toFixed(2)) },
+  })
+  return { cancelled: true, amount: outstanding, reason: null }
+}
+
 /**
  * Lawan retur completed di masa retur. Jurnal asal + baris akrual asal
  * TIDAK diubah. Penjaga: R sesudah tulis ≤ A (vonis §6).
@@ -186,6 +299,14 @@ export async function reverseTx(
   const lawan = safeRound(safeMultiply(returnDpp, percent, 4) / 100, 2)
   if (!(lawan > 0)) return { reversed: 0, reason: "hasil-nol" }
 
+  // Idempotensi SEBELUM penjaga kumulatif: replay retur yang sama (jurnal
+  // lawan sudah ada) wajib no-op, bukan tertolak "melebihi akrual" hanya
+  // karena lawan pertama sudah tercatat di reversalAmount.
+  const existing = await tx.journal.findFirst({
+    where: { referenceType: COMMISSION_REVERSAL_JOURNAL_REF, referenceId: returnId },
+  })
+  if (existing) return { reversed: 0, reason: null }
+
   const accrued = Number(row.accruedAmount)
   const after = safeRound(Number(row.reversalAmount) + lawan, 2)
   if (after - accrued > 0.005) {
@@ -193,11 +314,6 @@ export async function reverseTx(
       `Lawan komisi ditolak: kumulatif lawan ${after} melebihi akrual ${accrued} (faktur #${salesInvoiceId}).`,
     )
   }
-
-  const existing = await tx.journal.findFirst({
-    where: { referenceType: COMMISSION_REVERSAL_JOURNAL_REF, referenceId: returnId },
-  })
-  if (existing) return { reversed: 0, reason: null }
 
   const salesReturn = await tx.salesReturn.findUniqueOrThrow({ where: { id: returnId } })
   const { expenseId, payableId } = await resolveCommissionAccounts(tx)
@@ -253,8 +369,17 @@ export async function paidByIdTx(
   salesInvoiceId: number,
   userId?: number | null,
 ): Promise<{ paid: number }> {
-  await lockPayableRow(tx, salesInvoiceId)
   const row = await tx.commissionPayable.findUniqueOrThrow({ where: { id: payableId } })
+  // Baris slip menaut payableId spesifik; invoice argumen harus MILIK baris
+  // itu. Mismatch = tautan silang antar-faktur (lock + penjaga saldo akan
+  // bekerja atas faktur yang salah) — tolak berisik.
+  if (row.salesInvoiceId !== salesInvoiceId) {
+    throw new Error(
+      `Tautan bayar komisi ditolak: payable #${payableId} milik faktur #${row.salesInvoiceId}, bukan faktur #${salesInvoiceId}.`,
+    )
+  }
+  // Lock baris yang BENAR (faktur pemilik payable ini), bukan argumen caller.
+  await lockPayableRow(tx, row.salesInvoiceId)
   if (!(amount > 0)) throw new Error("Tautan bayar komisi ditolak: nominal harus lebih dari nol.")
 
   const accrued = Number(row.accruedAmount)

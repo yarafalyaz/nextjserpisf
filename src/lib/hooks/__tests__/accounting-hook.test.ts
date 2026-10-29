@@ -383,7 +383,7 @@ describe("deleteJournalByReference", () => {
     await deleteJournalByReference("VendorBill", 100);
     expect(mocks.findMany).toHaveBeenNthCalledWith(2, {
       where: { referenceType: "Journal", referenceId: { in: [1] } },
-      select: { id: true },
+      select: { id: true, status: true, transactionDate: true },
     });
     // Both the original and its reversal are removed together; leaving the
     // reversal behind would strand a POSTED, one-sided GL entry.
@@ -472,6 +472,41 @@ describe("deleteJournalByReference", () => {
     });
   });
 
+  it("blocks deleting a REVERSED journal whose period is closed", async () => {
+    mocks.findMany.mockResolvedValueOnce([
+      { id: 1, status: "REVERSED", transactionDate: new Date("2026-05-20") },
+    ]);
+    mocks.assertPeriodOpen.mockRejectedValueOnce(
+      new Error("Periode akuntansi sudah ditutup"),
+    );
+    await expect(deleteJournalByReference("VendorBill", 100)).rejects.toThrow(
+      "Periode akuntansi sudah ditutup",
+    );
+    expect(mocks.deleteManyEntries).not.toHaveBeenCalled();
+    expect(mocks.deleteManyJournals).not.toHaveBeenCalled();
+  });
+
+  it("blocks cascade when the POSTED reversal companion sits in a closed period", async () => {
+    const closed = new Date("2026-05-20");
+    mocks.findMany
+      .mockResolvedValueOnce([
+        { id: 1, status: "POSTED", transactionDate: new Date("2026-06-09") },
+      ])
+      .mockResolvedValueOnce([
+        { id: 9, status: "POSTED", transactionDate: closed },
+      ]);
+    mocks.assertPeriodOpen
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"));
+
+    await expect(deleteJournalByReference("VendorBill", 100)).rejects.toThrow(
+      "Periode akuntansi sudah ditutup",
+    );
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closed, expect.anything());
+    expect(mocks.deleteManyEntries).not.toHaveBeenCalled();
+    expect(mocks.deleteManyJournals).not.toHaveBeenCalled();
+  });
+
   it("deletes the whole reversal chain, not just one level", async () => {
     // Chain: J1 (original) <- J2 (reversal of J1) <- J3 (reversal of J2). All
     // three are POSTED; deleting J1 must remove J2 and J3 too, otherwise J3 is
@@ -494,7 +529,7 @@ describe("deleteJournalByReference", () => {
 
     expect(tx.journal.findMany).toHaveBeenNthCalledWith(3, {
       where: { referenceType: "Journal", referenceId: { in: [2] } },
-      select: { id: true },
+      select: { id: true, status: true, transactionDate: true },
     });
     expect(tx.journalEntry.deleteMany).toHaveBeenCalledWith({
       where: { journalId: { in: [1, 2, 3] } },

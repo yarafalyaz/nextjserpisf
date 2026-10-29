@@ -149,11 +149,18 @@ export async function deleteJournalByReferenceTx(
   // reversing a closed-period journal could still erase it (and its reversal)
   // by deleting the source document — a silent, unaudited GL rewrite of a
   // closed period. Draft journals never hit the GL and are skipped.
-  for (const j of journals) {
-    if (j.status === "POSTED") {
-      await assertPeriodOpen(j.transactionDate, tx);
+  // REVERSED juga wajib lolos: jurnal asal-nya sudah direversal, tetapi
+  // menghapusnya (atau lawan POSTED-nya) di periode tertutup tetap menulis
+  // ulang GL periode itu — gerbang berlaku untuk SEMUA jurnal hasil kaskade,
+  // bukan hanya jangkar POSTED awal (dulu lawan rantai tak pernah dicek).
+  const assertCascadePeriodOpen = async (rows: Array<{ status: string; transactionDate: Date }>) => {
+    for (const j of rows) {
+      if (j.status === "POSTED" || j.status === "REVERSED") {
+        await assertPeriodOpen(j.transactionDate, tx);
+      }
     }
-  }
+  };
+  await assertCascadePeriodOpen(journals);
 
   let journalIds = journals.map((j) => j.id);
 
@@ -169,8 +176,9 @@ export async function deleteJournalByReferenceTx(
   while (frontier.length > 0) {
     const reversals = await tx.journal.findMany({
       where: { referenceType: "Journal", referenceId: { in: frontier } },
-      select: { id: true },
+      select: { id: true, status: true, transactionDate: true },
     });
+    await assertCascadePeriodOpen(reversals);
     const next: number[] = [];
     for (const r of reversals) {
       if (!seen.has(r.id)) {
