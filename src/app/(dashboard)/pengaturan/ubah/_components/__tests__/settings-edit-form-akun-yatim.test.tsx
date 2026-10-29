@@ -73,9 +73,14 @@ describe("SettingsEditForm — 5 akun yatim (SAL-BR-004 / GL-BR-009)", () => {
     const { container, root } = mount({})
     const missing = ACCOUNT_MAPPING_FIELDS.filter((key) => hiddenValue(container, key) === undefined)
     expect(missing).toEqual([])
-    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(39)
+    expect(ACCOUNT_MAPPING_FIELDS).toHaveLength(40)
     for (const key of ORPHAN_FIELDS) {
       expect(container.querySelector(`input[name="${key}"]`)).not.toBeNull()
+      expect(container.querySelector(`label[for="${key}"]`)).not.toBeNull()
+    }
+    // Label hanya dirender kartu seksi (AccountComboBox), bukan hidden
+    // manual — assert ini mendeteksi item mapping yang hilang dari seksi.
+    for (const key of ACCOUNT_MAPPING_FIELDS) {
       expect(container.querySelector(`label[for="${key}"]`)).not.toBeNull()
     }
     unmount(root, container)

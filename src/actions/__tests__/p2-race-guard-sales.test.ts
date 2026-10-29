@@ -35,6 +35,7 @@ const attachMock = vi.fn()
 // sebelumnya, jadi tidak menyentuh hoisting vi.mock.
 function paymentBranches() {
   return {
+    journal: { findFirst: vi.fn().mockResolvedValue(null) },
     salesPayment: {
       findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
       aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
