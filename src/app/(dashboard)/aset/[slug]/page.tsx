@@ -114,7 +114,7 @@ export default async function AssetDetailPage({
 
   const now = new Date()
   const analytical = isAnalyticalDepreciationMethod(asset.depreciationMethod)
-    ? (await loadAssetAnalyticalStatuses(now.getFullYear(), now.getMonth() + 1)).rows.find((r) => r.assetId === asset.id) ?? null
+    ? (await loadAssetAnalyticalStatuses(now.getFullYear(), now.getMonth() + 1, asset.id)).rows[0] ?? null
     : null
   const periodLabel = `${now.getMonth() + 1}/${now.getFullYear()}`
 

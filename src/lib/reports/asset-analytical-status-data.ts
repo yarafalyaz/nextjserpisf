@@ -52,13 +52,18 @@ export interface AssetAnalyticalStatusReport {
 export async function loadAssetAnalyticalStatuses(
   periodYear: number,
   periodMonth: number,
+  /** Batasi ke satu aset by id (detail aset) — didorong ke `where` aset. */
+  assetId?: number,
 ): Promise<AssetAnalyticalStatusReport> {
   const referenceType = `ASSET_DEPRECIATION_${periodYear}${String(periodMonth).padStart(2, "0")}`
   const methods = [...ANALYTICAL_DEPRECIATION_METHODS]
 
   const [assets, settings] = await Promise.all([
     prisma.asset.findMany({
-      where: { depreciationMethod: { in: methods } },
+      where: {
+        depreciationMethod: { in: methods },
+        ...(assetId != null ? { id: assetId } : {}),
+      },
       select: {
         id: true,
         code: true,

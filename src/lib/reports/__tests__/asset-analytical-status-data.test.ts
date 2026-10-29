@@ -60,6 +60,30 @@ describe("loadAssetAnalyticalStatuses — disposed (M-1)", () => {
     expect(rows[0].status).toEqual({ status: "skip", reason: "disposed" })
   })
 
+  it("assetId didorong ke where aset; journal tetap difilter referenceId aset itu", async () => {
+    mocks.prismaMock.asset.findMany.mockResolvedValue([assetRow({ id: 3, status: "active" })])
+
+    const { rows } = await loadAssetAnalyticalStatuses(2026, 10, 3)
+
+    const assetArg = mocks.prismaMock.asset.findMany.mock.calls[0]?.[0]
+    expect(assetArg.where).toEqual(
+      expect.objectContaining({ id: 3, depreciationMethod: expect.objectContaining({ in: expect.any(Array) }) }),
+    )
+    const journalArg = mocks.prismaMock.journal.findMany.mock.calls[0]?.[0]
+    expect(journalArg.where.referenceId).toEqual({ in: [3] })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].assetId).toBe(3)
+  })
+
+  it("tanpa assetId: where aset tanpa id (daftar tetap utuh)", async () => {
+    mocks.prismaMock.asset.findMany.mockResolvedValue([assetRow({})])
+
+    await loadAssetAnalyticalStatuses(2026, 10)
+
+    const assetArg = mocks.prismaMock.asset.findMany.mock.calls[0]?.[0]
+    expect(assetArg.where).not.toHaveProperty("id")
+  })
+
   it("disposed SYD tampil skip{disposed}; active tetap computed", async () => {
     mocks.prismaMock.asset.findMany.mockResolvedValue([
       assetRow({ id: 1, depreciationMethod: "sum_of_years_digits" }),
