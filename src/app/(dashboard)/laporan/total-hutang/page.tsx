@@ -38,6 +38,8 @@ export default async function TotalPayablesPage() {
       dueDate: b.dueDate,
       grandTotal: Number(b.grandTotal),
       paidAmount: Number(b.paidAmount),
+      // PDF loadPayablesTotal pakai NETO (aging-reports-data.ts:176); layar WAJIB sama.
+      withholdingAmount: Number(b.withholdingAmount ?? 0),
     })),
     now,
   )

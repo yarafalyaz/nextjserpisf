@@ -135,6 +135,7 @@ export function MaterialIssueForm({
   // Tanpa itu, pengeluaran material dari form Inventaris selalu orphan:
   // `workOrderId` tertinggal null walau kolomnya sudah ada di skema.
   const [isPending, startTransition] = useTransition();
+  const [serverError, setServerError] = useState<string | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const [warehouseId, setWarehouseId] = useState(
     issue?.warehouseId ? String(issue.warehouseId) : "",
@@ -198,6 +199,7 @@ export function MaterialIssueForm({
       }
     }
     startTransition(async () => {
+      setServerError(null);
       try {
         const formData = buildMaterialIssueFormData({
           warehouseId,
@@ -211,18 +213,22 @@ export function MaterialIssueForm({
           ? await updateMaterialIssue(issue.id, formData)
           : await createMaterialIssue(formData);
         if (result && !result.success) {
-          showError(result.error || "Gagal menyimpan data");
+          const message = result.error || "Gagal menyimpan data";
+          setServerError(message);
+          showError(message);
           return;
         }
+        setServerError(null);
         showSuccess(
           issue?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );
         router.push("/inventaris/pengeluaran-material");
         router.refresh();
       } catch (error) {
-        showError(
-          error instanceof Error ? error.message : "Gagal menyimpan data",
-        );
+        const message =
+          error instanceof Error ? error.message : "Gagal menyimpan data";
+        setServerError(message);
+        showError(message);
       }
     });
   }
@@ -234,6 +240,15 @@ export function MaterialIssueForm({
       aria-busy={isPending}
       className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6"
     >
+      {serverError && (
+        <p
+          role="alert"
+          aria-label="Galat penyimpanan pengeluaran material"
+          className="mb-4 rounded-lg border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {serverError}
+        </p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="warehouseId">Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
