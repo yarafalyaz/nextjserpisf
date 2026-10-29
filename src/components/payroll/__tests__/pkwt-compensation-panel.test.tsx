@@ -218,6 +218,22 @@ describe("PkwtCompensationPanel F-2026-10-24-132-V", () => {
     root.unmount()
   })
 
+  it("nominal kesepakatan kosong terkirim kosong (emptyAsNull), bukan \"0\" yang ditolak server", async () => {
+    const { container, root } = renderPanel()
+    const form = container.querySelector<HTMLFormElement>(
+      '[aria-label="Formulir peristiwa kompensasi PKWT"]',
+    )!
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const fd = (createMock.mock.calls as unknown as [FormData][])[0]?.[0]
+    // Server: "" -> null (rumus umum); "0" -> ditolak <= 0. Tanpa emptyAsNull
+    // CurrencyInput mengirim "0" dan jalur rumus umum gagal total dari UI.
+    expect(fd.get("agreementAmount")).toBe("")
+    root.unmount()
+  })
+
   it("error server tampil verbatim: gagal buat peristiwa", async () => {
     createMock.mockResolvedValue({
       success: false,

@@ -243,6 +243,7 @@ export function PkwtCompensationPanel({
                 name="agreementAmount"
                 prefix="Rp"
                 placeholder="Kosongkan untuk rumus umum"
+                emptyAsNull
               />
             </div>
             <div className="flex flex-col gap-1.5">
