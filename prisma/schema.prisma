@@ -853,6 +853,10 @@ model Item {
   substitutes          ItemSubstitute[]     @relation("ItemSubstitutes")
   substitutedFor       ItemSubstitute[]     @relation("ItemSubstitutedFor")
   warehouseSettings    ItemWarehouseSetting[]
+  goodsReceiptItems    GoodsReceiptItem[]
+  inventoryTransferItems InventoryTransferItem[]
+  salesInvoiceItems    SalesInvoiceItem[]
+  materialIssueItems   MaterialIssueItem[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -884,6 +888,7 @@ model Warehouse {
   materialRequestsAsSource    MaterialRequest[] @relation("MaterialRequestSource")
   itemBatches       ItemBatch[]
   itemSerials       ItemSerial[]
+  goodsReceiptItems GoodsReceiptItem[]
   defaultItems      Item[]              @relation("ItemDefaultWarehouse")
   materialIssues    MaterialIssue[]
   racks             Rack[]
@@ -940,6 +945,7 @@ model Rack {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   items       Item[]
   rows        RackRow[]
+  goodsReceiptItems GoodsReceiptItem[]
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
   @@unique([warehouseId, code])
@@ -957,6 +963,7 @@ model RackRow {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   items     Item[]
+  goodsReceiptItems GoodsReceiptItem[]
   rack      Rack     @relation(fields: [rackId], references: [id], onDelete: Restrict)
 
   @@unique([rackId, code])
@@ -1111,6 +1118,7 @@ model Employee {
   salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
   salesTargets         SalesTarget[]
   workOrderOperations WorkOrderOperation[]
+  rosters             EmployeeRoster[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([managerId], map: "employees_manager_id_fkey")
@@ -1627,6 +1635,7 @@ model Quotation {
   changeOrders      JobChangeOrder[]
   paymentSchedules  JobPaymentSchedule[]
   contractProjects  Project[]          @relation("ProjectContractQuotation")
+  costEstimates     WorkOrderCostEstimate[]
 
   @@index([customerId], map: "quotations_customer_id_fkey")
   @@index([customerVehicleId], map: "quotations_customer_vehicle_id_fkey")
@@ -1852,6 +1861,7 @@ model SalesInvoice {
   collectionFollowUps  InvoiceCollectionFollowUp[]
   salesLateFees        SalesLateFee[]
   taxInvoices          TaxInvoice[]
+  tickets              CrmTicket[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
   @@index([salesEmployeeId])
@@ -1963,6 +1973,7 @@ model SalesInvoiceItem {
   priceSource    String?      @map("price_source")
   priceListId    Int?         @map("price_list_id")
   priceListMinQty Decimal?    @map("price_list_min_qty") @db.Decimal(15, 2)
+  item           Item?        @relation(fields: [itemId], references: [id], onDelete: SetNull)
   salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
 
   @@index([salesInvoiceId], map: "sales_invoice_items_sales_invoice_id_fkey")
@@ -2333,6 +2344,11 @@ model GoodsReceiptItem {
   unitCost       Decimal      @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
   stockMoveId    Int?         @map("stock_move_id")
   goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  item           Item         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  warehouse      Warehouse?   @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  rack           Rack?        @relation(fields: [rackId], references: [id], onDelete: Restrict)
+  rackRow        RackRow?     @relation(fields: [rackRowId], references: [id], onDelete: Restrict)
+  stockMove      StockMove?   @relation(fields: [stockMoveId], references: [id], onDelete: SetNull)
 
   @@index([goodsReceiptId], map: "goods_receipt_items_goods_receipt_id_fkey")
   @@index([itemId])
@@ -2614,6 +2630,7 @@ model StockMove {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
   inventoryLayers InventoryLayer[]
+  goodsReceiptItems GoodsReceiptItem[]
   item            Item             @relation(fields: [itemId], references: [id])
   warehouse       Warehouse?       @relation(fields: [warehouseId], references: [id])
 
@@ -2814,6 +2831,7 @@ model InventoryTransferItem {
   serialNumbers       Json?             @map("serial_numbers")
   batchAllocations    Json?             @map("batch_allocations")
   inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
+  item                Item              @relation(fields: [itemId], references: [id], onDelete: Restrict)
   receiptItems        InventoryTransferReceiptItem[]
 
   @@index([inventoryTransferId], map: "inventory_transfer_items_inventory_transfer_id_fkey")
@@ -2924,6 +2942,7 @@ model MaterialIssueItem {
   // consumedBatches hook); null sampai baris ter-issue.
   batchNumbers    Json?         @map("batch_numbers")
   materialIssue   MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
+  item            Item          @relation(fields: [itemId], references: [id], onDelete: Restrict)
   workOrderItem   WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
   installedParts  InstalledPart[]
 
@@ -3387,6 +3406,9 @@ model WorkOrder {
   changeOrders      JobChangeOrder[]
   materialRequests  MaterialRequest[]
   bomChangeRequests BomRevisionChangeRequest[]
+  costEstimate      WorkOrderCostEstimate?
+  overtimeRequests  OvertimeRequest[]
+  tickets           CrmTicket[]
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -3424,6 +3446,50 @@ model WorkOrderItem {
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
+}
+
+model WorkOrderCostEstimate {
+  id               Int       @id @default(autoincrement())
+  workOrderId      Int       @unique @map("work_order_id")
+  quotationId      Int?      @map("quotation_id")
+  source           String    @default("derived") @db.VarChar(32)
+  materialCost     Decimal?  @map("material_cost") @db.Decimal(15, 2)
+  laborCost        Decimal?  @map("labor_cost") @db.Decimal(15, 2)
+  overheadCost     Decimal?  @map("overhead_cost") @db.Decimal(15, 2)
+  serviceCost      Decimal?  @map("service_cost") @db.Decimal(15, 2)
+  subcontractCost  Decimal?  @map("subcontract_cost") @db.Decimal(15, 2)
+  otherCost        Decimal?  @map("other_cost") @db.Decimal(15, 2)
+  totalEstimate    Decimal?  @map("total_estimate") @db.Decimal(15, 2)
+  notes            String?   @db.Text
+  lockedAt         DateTime? @map("locked_at")
+  createdBy        Int?      @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  workOrder        WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  quotation        Quotation? @relation(fields: [quotationId], references: [id], onDelete: SetNull)
+
+  @@index([quotationId])
+  @@map("work_order_cost_estimates")
+}
+
+model EmployeeRoster {
+  id         Int      @id @default(autoincrement())
+  employeeId Int      @map("employee_id")
+  date       DateTime @db.Date
+  type       String   @db.VarChar(32)
+  status     String   @default("draft") @db.VarChar(16)
+  notes      String?  @db.Text
+  approvedBy Int?     @map("approved_by")
+  approvedAt DateTime? @map("approved_at")
+  createdBy  Int?     @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date, type])
+  @@index([employeeId])
+  @@index([date])
+  @@map("employee_rosters")
 }
 
 // F-2026-10-21-012 inti (spec F-2026-10-22-045-S, vonis Lead F-045-S):
@@ -3921,13 +3987,20 @@ model OvertimeRequest {
   approvedBy           Int?      @map("approved_by")
   approvedAt           DateTime? @map("approved_at")
   supervisorApprovedAt DateTime? @map("supervisor_approved_at")
+  workOrderId          Int?      @map("work_order_id")
+  startTime            String?   @map("start_time")
+  endTime              String?   @map("end_time")
+  actualStartTime      String?   @map("actual_start_time")
+  actualEndTime        String?   @map("actual_end_time")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   employee             Employee  @relation(fields: [employeeId], references: [id])
   project              Project?  @relation(fields: [projectId], references: [id])
+  workOrder            WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@index([employeeId], map: "overtime_requests_employee_id_fkey")
   @@index([projectId], map: "overtime_requests_project_id_fkey")
+  @@index([workOrderId])
   @@index([status])
   @@index([approvedBy])
   @@index([createdAt])
@@ -4832,6 +4905,10 @@ model CrmTicket {
   priority        String             @default("medium")
   status          String             @default("open")
   assignedTo      Int?               @map("assigned_to")
+  customerVehicleId Int?             @map("customer_vehicle_id")
+  workOrderId     Int?               @map("work_order_id")
+  salesInvoiceId  Int?               @map("sales_invoice_id")
+  warrantyClaimId Int?               @map("warranty_claim_id")
   firstResponseAt DateTime?          @map("first_response_at")
   resolvedAt      DateTime?          @map("resolved_at")
   closedAt        DateTime?          @map("closed_at")
@@ -4841,10 +4918,18 @@ model CrmTicket {
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
   comments        CrmTicketComment[]
+  customerVehicle CustomerVehicle?   @relation(fields: [customerVehicleId], references: [id], onDelete: SetNull)
+  workOrder       WorkOrder?         @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  salesInvoice    SalesInvoice?      @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+  warrantyClaim   WarrantyClaim?     @relation(fields: [warrantyClaimId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([customerId])
   @@index([assignedTo])
+  @@index([customerVehicleId])
+  @@index([workOrderId])
+  @@index([salesInvoiceId])
+  @@index([warrantyClaimId])
   @@index([status, assignedTo])
   @@index([createdBy])
   @@index([createdAt])
@@ -5333,6 +5418,7 @@ model CustomerVehicle {
   projects      Project[]
   quotations    Quotation[]
   workOrders    WorkOrder[]
+  tickets       CrmTicket[]
   warrantyCoverages WarrantyCoverage[]
   warrantyClaims    WarrantyClaim[]
   installedParts    InstalledPart[]
@@ -5600,6 +5686,7 @@ model Tax {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   itemsDefaultSalesTax    Item[] @relation("ItemDefaultSalesTax")
   itemsDefaultPurchaseTax Item[] @relation("ItemDefaultPurchaseTax")
+  groupLinks             TaxGroupTax[]
 
   @@index([accountId])
   @@index([createdAt])
@@ -5638,6 +5725,7 @@ model TaxGroupTax {
   taxGroupId Int      @map("tax_group_id")
   taxId      Int      @map("tax_id")
   taxGroup   TaxGroup @relation(fields: [taxGroupId], references: [id], onDelete: Cascade)
+  tax        Tax      @relation(fields: [taxId], references: [id], onDelete: Restrict)
 
   @@unique([taxGroupId, taxId])
   @@map("tax_group_taxes")
@@ -5841,6 +5929,7 @@ model WarrantyClaim {
   coverage              WarrantyCoverage @relation(fields: [coverageId], references: [id])
   customerVehicle       CustomerVehicle  @relation(fields: [customerVehicleId], references: [id])
   repairWorkOrder       WorkOrder?       @relation("WarrantyClaimRepairWorkOrder", fields: [repairWorkOrderId], references: [id], onDelete: SetNull)
+  tickets               CrmTicket[]
   supplierClaimVendor   Vendor?          @relation("WarrantyClaimSupplierVendor", fields: [supplierClaimVendorId], references: [id], onDelete: SetNull)
   purchaseReturn        PurchaseReturn?  @relation("WarrantyClaimPurchaseReturn", fields: [purchaseReturnId], references: [id], onDelete: SetNull)
 
