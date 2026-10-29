@@ -71,6 +71,12 @@ function makeTx(opts?: {
   const tx = {
     commissionPayable: {
       findFirst: async () => state.payable,
+      findUnique: async ({ where }: { where: { id: number } }) =>
+        state.payable && state.payable.id === where.id ? state.payable : null,
+      findUniqueOrThrow: async ({ where }: { where: { id: number } }) => {
+        if (state.payable && state.payable.id === where.id) return state.payable
+        throw new Error("No CommissionPayable found")
+      },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         state.payable = {
           id: state.nextRow++,
@@ -216,5 +222,27 @@ describe("commission-payable paid", () => {
     const t2 = mk(220000, 100000)
     const out = await paidTx(t2.tx, 1, 100000)
     expect(out.paid).toBe(320000)
+  })
+})
+
+describe("commission-payable paidById", () => {
+  it("unik per baris: payableId spesifik, bukan cari-faktur-pertama", async () => {
+    const mk = () =>
+      makeTx({
+        settings: { commissionExpenseAccountId: 600002, commissionPayableAccountId: 210212 },
+        accounts: [
+          { id: 600002, reportGroup: "BEBAN", isActive: true },
+          { id: 210212, reportGroup: "OCLY", isActive: true },
+        ],
+        payable: {
+          id: 7, salesInvoiceId: 3, salesEmployeeId: 9,
+          accruedAmount: D(220000), reversalAmount: D(0), paidAmount: D(0), accrualJournalId: 7,
+        },
+      })
+    const { paidByIdTx } = await import("@/lib/services/commission-payable.service")
+    // findUniqueOrThrow path: mock tx perlu findUnique — fallback findFirst bila tak ada.
+    const t = mk()
+    const out = await paidByIdTx(t.tx as never, 7, 100000, 3)
+    expect(out.paid).toBe(100000)
   })
 })

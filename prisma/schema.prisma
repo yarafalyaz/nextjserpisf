@@ -589,6 +589,7 @@ model CommissionPayable {
   salesInvoice     SalesInvoice @relation("SalesInvoiceCommissionPayables", fields: [salesInvoiceId], references: [id], onDelete: Restrict)
   salesEmployee    Employee     @relation("EmployeeCommissionPayables", fields: [salesEmployeeId], references: [id], onDelete: Restrict)
   accrualJournal   Journal?     @relation("CommissionPayableAccrualJournal", fields: [accrualJournalId], references: [id], onDelete: SetNull)
+  payrollLines       PayrollComponentLine[]
 
   @@unique([salesInvoiceId, salesEmployeeId], map: "uq_commission_payable_invoice_employee")
   @@index([salesEmployeeId], map: "idx_commission_payable_employee")
@@ -4298,6 +4299,8 @@ model PayrollComponentLine {
   pkwtEventId            Int?     @unique @map("pkwt_event_id")
   pkwtSettledViaAccrual  Boolean? @map("pkwt_settled_via_accrual")
   accountIdSnapshot      Int?     @map("account_id_snapshot")
+  commissionPayableId    Int?     @unique @map("commission_payable_id")
+  commissionInvoiceId    Int?     @map("commission_invoice_id")
   amount                 Decimal  @default(0.00) @db.Decimal(15, 2)
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
@@ -4305,6 +4308,12 @@ model PayrollComponentLine {
   component              PayrollComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
   assignment             EmployeePayrollComponent? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   pkwtEvent              PkwtCompensationEvent? @relation(fields: [pkwtEventId], references: [id], onDelete: SetNull)
+  // Tahap 3 komisi: baris bayar komisi menaut SATU baris subledger payable.
+  // commissionPayableId = idempotency key (unik: satu baris payable paling
+  // banyak satu baris slip). commissionInvoiceId = snapshot jejak faktur
+  // (read-only; kebenaran di payable.salesInvoiceId). Tanpa baris = slip tak
+  // membayar komisi (gaji rutin bukan bayar komisi).
+  commissionPayable      CommissionPayable? @relation(fields: [commissionPayableId], references: [id], onDelete: Restrict)
 
   @@index([payrollId])
   @@index([componentId])

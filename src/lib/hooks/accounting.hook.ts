@@ -3322,6 +3322,28 @@ export async function onPayrollPaid(
         },
       },
     });
+
+    // Tahap 3 komisi: baris slip ber-commissionPayableId menaut bayar.
+    // Tanpa baris = slip tak membayar komisi (gaji rutin ≠ bayar komisi).
+    // paidTx menegakkan P ≤ A − R (kecuali retur-sesudah-bayar); gagal =
+    // slip GAGAL total (fail-closed dalam tx yang sama, bukan jurnal setengah).
+    const { paidByIdTx: linkCommissionPaymentTx } = await import(
+      "@/lib/services/commission-payable.service"
+    );
+    const commissionLines = await tx.payrollComponentLine.findMany({
+      where: { payrollId, commissionPayableId: { not: null } },
+      select: { commissionPayableId: true, commissionInvoiceId: true, amount: true },
+    });
+    for (const line of commissionLines) {
+      if (line.commissionPayableId == null) continue;
+      await linkCommissionPaymentTx(
+        tx,
+        line.commissionPayableId,
+        Number(line.amount),
+        Number(line.commissionInvoiceId ?? 0),
+        userId ?? null,
+      );
+    }
   });
 }
 
