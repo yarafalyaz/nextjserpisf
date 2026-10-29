@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const requirePermissionMock = vi.fn()
+const getHrScopeMock = vi.fn()
 const getSystemSettingsMock = vi.fn()
 const generateDocMock = vi.fn()
 const logActivityMock = vi.fn()
@@ -23,6 +24,10 @@ vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
   hasPermission: async () => true,
 }))
+vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/hr-scope")>()
+  return { ...actual, getHrScope: (...a: unknown[]) => getHrScopeMock(...a) }
+})
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => generateDocMock(...a),
@@ -79,6 +84,7 @@ const baseFields = {
 beforeEach(() => {
   vi.clearAllMocks()
   requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"] })
+  getHrScopeMock.mockResolvedValue({ kind: "all" })
   getSystemSettingsMock.mockResolvedValue({ enableAutoEmployeeCode: true })
   generateDocMock.mockResolvedValue("EMP-0001")
   bcryptHashMock.mockResolvedValue("hashed-pw")
@@ -324,6 +330,46 @@ describe("deleteEmployee — revoke linked login account", () => {
     // employee row (otherwise we would recreate the orphaned-login state).
     expect(employeeDeleteMock).not.toHaveBeenCalled()
     expect(employeeUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("scope department menolak karyawan luar departemen sebelum mutasi apa pun", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    employeeFindUniqueMock.mockImplementation(async (args: { select?: Record<string, boolean> }) =>
+      args?.select?.departmentId ? { departmentId: 99 } : { userId: 7 },
+    )
+
+    const res = await deleteEmployee(50)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak memiliki akses")
+    expect(userUpdateMock).not.toHaveBeenCalled()
+    expect(employeeDeleteMock).not.toHaveBeenCalled()
+    expect(employeeUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("scope self menolak karyawan lain sebelum mutasi apa pun", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "self", employeeId: 31 })
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+
+    const res = await deleteEmployee(50)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak memiliki akses")
+    expect(userUpdateMock).not.toHaveBeenCalled()
+    expect(employeeDeleteMock).not.toHaveBeenCalled()
+    expect(employeeUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("scope all tetap lolos menghapus karyawan", async () => {
+    getHrScopeMock.mockResolvedValue({ kind: "all" })
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+    employeeDeleteMock.mockResolvedValue({ id: 50 })
+    userUpdateMock.mockResolvedValue({ id: 7 })
+
+    const res = await deleteEmployee(50)
+
+    expect(res).toEqual({ success: true })
+    expect(employeeDeleteMock).toHaveBeenCalled()
   })
 
   it("does not touch any user when the employee has no login account", async () => {

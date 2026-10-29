@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { successionCandidateSchema } from "@/lib/validations/development.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -58,6 +59,9 @@ export async function upsertSuccessorCandidate(formData: FormData) {
       return { success: false as const, error: "Kandidat tidak ditemukan atau nonaktif" };
     }
 
+    const scope = await getHrScope(actor);
+    await assertHrEmployeeAccess(scope, v.candidateEmployeeId);
+
     const row = await prisma.successionCandidate.upsert({
       where: {
         positionId_candidateEmployeeId: {
@@ -89,7 +93,15 @@ export async function upsertSuccessorCandidate(formData: FormData) {
 
 export async function removeSuccessorCandidate(id: number) {
   try {
-    await requirePermission("delete_succession");
+    const actor = await requirePermission("delete_succession");
+    const candidate = await prisma.successionCandidate.findUnique({
+      where: { id },
+      select: { candidateEmployeeId: true },
+    });
+    if (candidate) {
+      const scope = await getHrScope(actor);
+      await assertHrEmployeeAccess(scope, candidate.candidateEmployeeId);
+    }
     await prisma.successionCandidate.delete({ where: { id } });
     revalidatePath("/sdm/suksesi");
     return { success: true as const };

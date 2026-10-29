@@ -66,7 +66,7 @@ import {
   canViewSalaryAmounts,
   canViewSensitiveIdentity,
 } from "@/lib/auth/field-visibility";
-import { getHrScope } from "@/lib/auth/hr-scope";
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
 import {
   normalizeNitku,
@@ -2762,13 +2762,18 @@ export async function deleteWarehouse(id: number) {
 
 export async function deleteEmployee(id: number) {
   try {
-    await requirePermission("delete_employees");
+    const actor = await requirePermission("delete_employees");
 
     // Capture the linked login account (if any) before deleting.
     const existing = await prisma.employee.findUnique({
       where: { id },
       select: { userId: true },
     });
+
+    if (existing) {
+      const scope = await getHrScope(actor);
+      await assertHrEmployeeAccess(scope, id);
+    }
 
     // SECURITY-FIRST ORDERING: revoke the linked login BEFORE the employee row
     // is deleted, and commit that on its own.

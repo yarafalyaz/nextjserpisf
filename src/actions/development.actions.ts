@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   competencySchema,
@@ -92,6 +93,9 @@ export async function assessEmployeeCompetency(formData: FormData) {
     const parsed = parseFormData(employeeCompetencySchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+
+    const scope = await getHrScope(actor);
+    await assertHrEmployeeAccess(scope, v.employeeId);
 
     const row = await prisma.employeeCompetency.upsert({
       where: {
@@ -221,10 +225,13 @@ export async function deleteTraining(id: number) {
 
 export async function addTrainingParticipant(formData: FormData) {
   try {
-    await requirePermission("edit_trainings");
+    const actor = await requirePermission("edit_trainings");
     const parsed = parseFormData(trainingParticipantSchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
+
+    const scope = await getHrScope(actor);
+    await assertHrEmployeeAccess(scope, v.employeeId);
 
     const row = await prisma.trainingParticipant.upsert({
       where: {
@@ -245,7 +252,15 @@ export async function setParticipantResult(
   input: { status: "attended" | "absent"; score?: number; certificateRef?: string },
 ) {
   try {
-    await requirePermission("edit_trainings");
+    const actor = await requirePermission("edit_trainings");
+    const participant = await prisma.trainingParticipant.findUnique({
+      where: { id: participantId },
+      select: { employeeId: true },
+    });
+    if (participant) {
+      const scope = await getHrScope(actor);
+      await assertHrEmployeeAccess(scope, participant.employeeId);
+    }
     if (input.score != null && (input.score < 0 || input.score > 100)) {
       return { success: false as const, error: "Skor harus 0-100" };
     }
@@ -266,7 +281,15 @@ export async function setParticipantResult(
 
 export async function removeTrainingParticipant(participantId: number) {
   try {
-    await requirePermission("edit_trainings");
+    const actor = await requirePermission("edit_trainings");
+    const participant = await prisma.trainingParticipant.findUnique({
+      where: { id: participantId },
+      select: { employeeId: true },
+    });
+    if (participant) {
+      const scope = await getHrScope(actor);
+      await assertHrEmployeeAccess(scope, participant.employeeId);
+    }
     await prisma.trainingParticipant.delete({ where: { id: participantId } });
     revalidatePath("/sdm/pelatihan");
     return { success: true as const };

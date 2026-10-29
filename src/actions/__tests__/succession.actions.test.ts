@@ -2,18 +2,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const positionUpdate = vi.fn()
 const candidateUpsert = vi.fn()
+const candidateFindUnique = vi.fn()
+const candidateDelete = vi.fn()
 const employeeFindFirst = vi.fn()
+const employeeFindUnique = vi.fn()
+const getHrScope = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     position: { update: (...a: unknown[]) => positionUpdate(...a) },
     successionCandidate: {
       upsert: (...a: unknown[]) => candidateUpsert(...a),
-      delete: vi.fn(async () => ({})),
+      findUnique: (...a: unknown[]) => candidateFindUnique(...a),
+      delete: (...a: unknown[]) => candidateDelete(...a),
     },
-    employee: { findFirst: (...a: unknown[]) => employeeFindFirst(...a) },
+    employee: {
+      findFirst: (...a: unknown[]) => employeeFindFirst(...a),
+      findUnique: (...a: unknown[]) => employeeFindUnique(...a),
+    },
   },
 }))
+
+vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/hr-scope")>()
+  return { ...actual, getHrScope: (...a: unknown[]) => getHrScope(...a) }
+})
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: async () => ({ id: "9", roles: ["ga"] }),
@@ -24,12 +37,14 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }))
 
 import { computeSuccessionCoverage } from "@/lib/hr/hcms-scoring"
 import {
+  removeSuccessorCandidate,
   setPositionCritical,
   upsertSuccessorCandidate,
 } from "../succession.actions"
 
 beforeEach(() => {
   vi.clearAllMocks()
+  getHrScope.mockResolvedValue({ kind: "all" })
 })
 
 describe("succession coverage", () => {
@@ -65,6 +80,62 @@ describe("successor candidates", () => {
     const res = await upsertSuccessorCandidate(fd)
     expect(res.success).toBe(false)
     expect(candidateUpsert).not.toHaveBeenCalled()
+  })
+
+  it("scope department menolak kandidat luar departemen, upsert tidak dipanggil", async () => {
+    getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    employeeFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 11 })
+    employeeFindUnique.mockResolvedValue({ departmentId: 99 })
+    const fd = new FormData()
+    fd.set("positionId", "3")
+    fd.set("candidateEmployeeId", "11")
+    fd.set("readiness", "ready_now")
+    const res = await upsertSuccessorCandidate(fd)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("tidak memiliki akses")
+    expect(candidateUpsert).not.toHaveBeenCalled()
+  })
+
+  it("scope self menolak kandidat lain, upsert tidak dipanggil", async () => {
+    getHrScope.mockResolvedValue({ kind: "self", employeeId: 30 })
+    employeeFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 11 })
+    const fd = new FormData()
+    fd.set("positionId", "3")
+    fd.set("candidateEmployeeId", "11")
+    fd.set("readiness", "ready_now")
+    const res = await upsertSuccessorCandidate(fd)
+    expect(res.success).toBe(false)
+    expect(candidateUpsert).not.toHaveBeenCalled()
+  })
+
+  it("remove: scope department menolak kandidat luar departemen, delete tidak dipanggil", async () => {
+    getHrScope.mockResolvedValue({ kind: "department", departmentId: 3, employeeId: 30 })
+    candidateFindUnique.mockResolvedValue({ candidateEmployeeId: 11 })
+    employeeFindUnique.mockResolvedValue({ departmentId: 99 })
+    const res = await removeSuccessorCandidate(5)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("tidak memiliki akses")
+    expect(candidateDelete).not.toHaveBeenCalled()
+  })
+
+  it("remove: scope self menolak kandidat lain, delete tidak dipanggil", async () => {
+    getHrScope.mockResolvedValue({ kind: "self", employeeId: 30 })
+    candidateFindUnique.mockResolvedValue({ candidateEmployeeId: 11 })
+    const res = await removeSuccessorCandidate(5)
+    expect(res.success).toBe(false)
+    expect(candidateDelete).not.toHaveBeenCalled()
+  })
+
+  it("remove: scope all tetap lolos menghapus kandidat", async () => {
+    candidateFindUnique.mockResolvedValue({ candidateEmployeeId: 11 })
+    candidateDelete.mockResolvedValue({})
+    const res = await removeSuccessorCandidate(5)
+    expect(res.success).toBe(true)
+    expect(candidateDelete).toHaveBeenCalledWith({ where: { id: 5 } })
   })
 
   it("upserts a valid candidate", async () => {
