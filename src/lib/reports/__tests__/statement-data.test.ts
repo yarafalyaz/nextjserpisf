@@ -189,9 +189,10 @@ describe("loadIncomeStatementByCostCenter", () => {
 
   it("memfilter jurnal pada pusat biaya terpilih beserta sub-pusatnya", async () => {
     // Anak pusat biaya bergantung pada induknya — 7 → {8, 9}, 8 → {}, 9 → {}.
+    // Query kini per LEVEL: parentId { in: [...] }.
     mocks.costCenterFindMany.mockImplementation(async (args: unknown) => {
-      const where = (args as { where: { parentId: number } }).where
-      return where.parentId === 7 ? [{ id: 8 }, { id: 9 }] : []
+      const where = (args as { where: { parentId: { in: number[] } } }).where
+      return where.parentId.in.includes(7) ? [{ id: 8 }, { id: 9 }] : []
     })
     mocks.accountFindMany.mockResolvedValue([
       { id: 1, code: "400001", name: "Penjualan", type: "REVENUE", reportGroup: "REVE" },
@@ -212,10 +213,11 @@ describe("loadIncomeStatementByCostCenter", () => {
     // prosesnya kehabisan memori — bukan gagal secara terlihat, tapi menghukum
     // seluruh worker.
     mocks.costCenterFindMany.mockImplementation(async (args: unknown) => {
-      const where = (args as { where: { parentId: number } }).where
-      if (where.parentId === 7) return [{ id: 8 }]
-      if (where.parentId === 8) return [{ id: 7 }]
-      return []
+      const where = (args as { where: { parentId: { in: number[] } } }).where
+      const ids: { id: number }[] = []
+      if (where.parentId.in.includes(7)) ids.push({ id: 8 })
+      if (where.parentId.in.includes(8)) ids.push({ id: 7 })
+      return ids
     })
 
     const report = await loadIncomeStatementByCostCenter({ costCenterId: 7, ...PERIOD })

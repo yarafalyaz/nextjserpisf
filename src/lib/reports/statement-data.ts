@@ -267,20 +267,21 @@ export async function loadIncomeStatementByStatus(
  */
 async function costCenterTreeIds(costCenterId: number): Promise<number[]> {
   const seen = new Set<number>([costCenterId])
-  const queue = [costCenterId]
+  let level = [costCenterId]
 
-  while (queue.length > 0) {
-    const current = queue.shift() as number
+  // Satu query per LEVEL pohon (bukan per node): semantik seen/queue sama.
+  while (level.length > 0) {
     const children = await prisma.costCenter.findMany({
-      where: { parentId: current },
+      where: { parentId: { in: level } },
       select: { id: true },
     })
-
+    const next: number[] = []
     for (const child of children) {
       if (seen.has(child.id)) continue
       seen.add(child.id)
-      queue.push(child.id)
+      next.push(child.id)
     }
+    level = next
   }
 
   return [...seen]
