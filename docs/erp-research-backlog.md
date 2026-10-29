@@ -44507,6 +44507,83 @@ Tanpa ID baru untuk langkah 3-5 (pekerjaan turunan menempel pada spec ini).
 3. BOT Accountant: putusan ini **tidak** meminta vonis baru. Bila di kemudian hari muncul kebutuhan membukukan selisih ≤ Rp1 ke jurnal (write-off/pembulatan), itu vonis baru Accountant dan **bukan** konsekuensi putusan ini — sekarang sisa dalam toleransi tetap tidak dibukukan ke mana pun.
 4. Hasil yang diharapkan sesudah fisik: nol dokumen yang tampil "Lunas" di satu layar dan "piutang terbuka" di layar lain; selisih yang tidak lagi ditagih hilang dari antrean penagihan **tanpa** mengubah nilai pembayaran, nilai faktur, atau jurnal.
 
+## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-27-113-V: perlakuan akun/jurnal/masa sengketa pajak (jawaban Q-TXD-1..5 spec 113-S)
+
+Pemilik vonis: Accountant (accounting-finance-tax, lane uang/pajak — mengikat untuk jurnal/masa SPT; kata/enum/izin/hitungan tenggat = putusan Lead Q-TXD-6..8, bukan vonis ini). Dokumen vonis saja; tanpa kode/schema/migrasi/UI. Basis `origin/main` `ca86782e9` (28 Okt 2026 23:01 WIB).
+
+**Verifikasi ID:** grep `F-2026-10-27-113-V` di backlog basis = 0 sebelum tulis (113-V lama 2026-10-23 domain XML BPPU beda tanggal, bukan tabrakan). **113-V tanggal ini bebas.**
+
+Rujukan: spec F-2026-10-27-113-S §1–§8 (BENCHMARK regulasi pajak.go.id: keberatan/banding/gugatan/PK; Tenggat 3 bulan/12 bulan/14 hari/50%) + fakta kode run ini: `TaxPayment` (`prisma/schema.prisma:1413`, jurnal Dr utang pajak / Cr kas via `buildTaxPaymentJournalEntries` `src/lib/finance/tax-payment.ts`), `TaxInvoice` (`:1250`), read-model SPT dari JURNAL POSTED direkonsiliasi dokumen (`src/lib/reports/spt-read-model-data.ts:1-16`), `TransactionAttachment` (`:5505`), `Journal` + `activeReferenceKey` unik aktif (`:4244-4268`), reversal generik `reverseJournalsByReferenceTx`.
+
+Prinsip mengikat (dari pola repo + standar akuntansi):
+- (P1) Register sengketa tahap 1 = DOKUMEN + TENGGAT + STATUS saja (BR-TXD-11). Nol jurnal otomatis dari modul sengketa. Setiap jurnal sengketa lahir dari dokumen EXISTING (`TaxPayment` untuk bayar; reversal + jurnal penyesuaian manual untuk putusan) — bukan dari baris register.
+- (P2) Bayar pajak (termasuk di bawah protes) = pelunasan kewajiban tercatat, bukan beban baru. Jurnal existing `buildTaxPaymentJournalEntries` berlaku apa adanya: Dr akun utang pajak (`taxAccountId`) / Cr kas-bank (`paymentAccountId`).
+- (P3) Sengketa belum putus TIDAK menghapus/mengubah kewajiban efektif tercatat. Nominal disengketakan = informasi register + lampiran; bukan reklasifikasi jurnal (larang label "utang pajak" untuk nominal sengketa sebelum vonis — dipatuhi: register tidak menyentuh makna akuntansi).
+- (P4) Putusan mengakui dampak di MASA PUTUSAN (tanggal putusan diterima), bukan pembetulan mundur — kecuali restitusi kas (penerimaan saat kas masuk). SPT masa asal beku sebagai histori; read-model SPT membaca jurnal POSTED masa berjalan.
+- (P5) Uang `Decimal(15,2)`, seimbang debit = kredit, `assertPeriodOpen` dalam tx, satu status tidak mewakili empat hal, jurnal posted tidak diubah diam-diam (reversal + dokumen koreksi di periode terbuka).
+
+### Q-TXD-1 — Pembayaran SKP yang disengketakan (bayar di bawah protes): utang vs piutang/prepaid vs beban, per jenis pajak
+
+**PUTUSAN: bayar = pelunasan kewajiban tercatat via `TaxPayment` existing; sengketa dicatat sebagai INFORMASI tertaut, bukan reklasifikasi jurnal tahap 1.**
+
+- Jurnal bayar (semua jenis pajak, termasuk di bawah protes) = jurnal existing tanpa ubah: Dr `taxAccountId` (akun utang pajak jenis itu) / Cr `paymentAccountId` (kas-bank), amount `Decimal(15,2)`. Alasan: yang dibayar = kewajiban yang ditagih DJP dalam SKP (kewajiban hukum bayar ada walaupun kebenarannya disengketakan); membukukan sebagai beban baru = ganda (beban sudah diakui saat transaksi asal / saat penetapan); membukukan sebagai piutang/prepaid otomatis = prematur (hak restitusi baru lahir saat putusan mengabulkan — lihat Q-TXD-2/3).
+- Per jenis pajak (satu pola, akun berbeda dari setting/master):
+  - PPN (SKPKB PPN): Dr utang PPN Keluaran-bersih (`salesTaxAccountId` pola) / Cr kas. PPN Masukan yang dikoreksi DJP tetap di akunnya; selisih ketetapan = yang dibayar.
+  - PPh Badan (SKPKB PPh): Dr utang PPh Badan / Cr kas.
+  - PPh potong/pungut (PPh 21/23/4(2) sebagai pemotong): Dr utang PPh potong jenis itu / Cr kas (pola sama dengan setor rutin `tax-payment.ts`: "menyetor pajak bukan beban baru").
+- Jejak sengketa atas pembayaran: register menautkan `TaxPayment` (relasi SetNull pola BR-TXD-08) + flag baca `DIBAYAR_DI_BAWAH_PROTES` + tautan ketetapan; TIDAK ada kaki jurnal tambahan. Tautan = informasi, bukan reklasifikasi.
+- Syarat catat keberatan (pajak disetujui sudah lunas, BR-TXD-04) = syarat DOKUMEN (nominal disetujui + tautan TaxPayment bukti), bukan syarat jurnal.
+- DILARANG tahap 1: akun piutang sengketa otomatis saat bayar; jurnal beban sanksi saat bayar (sanksi diakui saat putusan final menolak — lihat Q-TXD-2); mengubah SPT read-model masa asal karena bayar (SPT baca jurnal POSTED; bayar sudah menjurnal via TaxPayment).
+
+### Q-TXD-2 — Pengakuan saat putusan keberatan/banding (dikabulkan/sebagian/ditolak): masa + sanksi
+
+**PUTUSAN: dampak putusan diakui di MASA PUTUSAN (tanggal putusan DJP/PP diterima dan dicatat), via reversal + jurnal penyesuaian manual beralasan. Sanksi administrasi = beban periode putusan, terpisah dari pokok.**
+
+- Dikabulkan PENUH: kewajiban yang dulu dibayar ternyata tidak terutang → lahir PIUTANG RESTITUSI/kelebihan (lihat Q-TXD-3 untuk wujudnya: kompensasi vs restitusi kas). Jurnal: Dr Piutang Pajak-Restitusi (akun aset dari mapping pajak, fail-closed bila belum dimapping) / Cr akun utang pajak asal — sebesar nominal dikabulkan. Tanggal = tanggal putusan; masa SPT = masa putusan (bukan pembetulan masa ketetapan). Slip SPT: read-model membaca jurnal POSTED masa putusan (kredit/pengurang kewajiban masa itu).
+- Dikabulkan SEBAGIAN: porsi dikabulkan ikut pola penuh; porsi ditolak TETAP sebagai kewajiban/bayar lunas (nol jurnal tambahan bila sudah dibayar; bila belum dibayar → bayar via TaxPayment). Nominal putusan per tahap tersimpan rinci di register (BR-TXD-07); selisih turunan server.
+- Ditolak / tidak dapat diterima: kewajiban final = nominal ketetapan + sanksi administrasi (bunga/denda/kenaikan per putusan). Jurnal sanksi (bila belum dibayar): Dr Beban Sanksi Administrasi Pajak (akun beban, periode putusan) / Cr Utang Sanksi Pajak; bayarnya via TaxPayment (jenis `other` + akun utang sanksi). Sanksi DILARANG dicampur ke akun pokok pajak — akun + baris terpisah, karena sifatnya beban periode putusan, bukan koreksi pokok masa asal.
+- Penanda `LEWAT_BATAS_PUTUSAN` (keberatan 12 bulan tanpa putusan = dianggap dikabulkan, BR-TXD-03) = penanda BACA di register; jurnal restitusi BARU lahir sesudah dokumen putusan/konfirmasi DJP tercatat (nomor + tanggal + lampiran wajib). Penanda tidak menerbitkan jurnal sendiri.
+- Rantai tahap lanjut (banding sesudah keberatan, PK sesudah PP): tiap putusan = peristiwa akuntansi sendiri di masa masing-masing; jurnal putusan tahap sebelumnya TIDAK dihapus (reversal bila perlu, pola `reverseJournalsByReferenceTx`, asal `REVERSED`).
+
+### Q-TXD-3 — SKPLB/SKPN: restitusi vs kompensasi vs kas
+
+**PUTUSAN: SKPLB tercatat sebagai ketetapan; nominal lebih bayar = PIUTANG (aset) saat SKPLB diterima; reklas ke kas saat diterima ATAU ke pengurang kewajiban saat dikompensasikan. SKPN = arsip ketetapan, nol jurnal.**
+
+- Saat SKPLB diterima (masa SKPLB): Dr Piutang Pajak-Lebih Bayar (aset; pisah per jenis pajak) / Cr akun utang pajak asal — sebesar nominal LB. Ini BUKAN pendapatan; ini pengakuan hak.
+- Tiga jalan keluar (satu SKPLB, satu jalan — dipilih saat realisasi, dicatat di register):
+  1. Restitusi kas (DJP mengembalikan): saat kas masuk — Dr Kas-Bank / Cr Piutang Pajak-Lebih Bayar. Beda waktu SKPLB vs kas masuk = piutang tetap terbuka di antaranya (bukan pendapatan ditunda).
+  2. Kompensasi ke masa berikut (diperhitungkan dengan utang pajak masa berikut): saat kompensasi diterapkan — Dr Utang Pajak masa berikut / Cr Piutang Pajak-Lebih Bayar. Masa SPT yang terpengaruh = masa kompensasi dipakai (read-model baca jurnal POSTED masa itu).
+  3. Kompensasi ke ketetapan/utang lain: sama pola (2), akun utang tujuan yang dikompensasi.
+- SKPN (nihil): arsip ketetapan di register (status SELESAI), NOL jurnal — tidak ada hak maupun kewajiban baru.
+- Upaya atas nominal LB (keberatan atas SKPLB yang dikabulkan sebagian) mengikuti pola Q-TXD-2; objeknya = piutang LB yang diakui, bukan utang.
+
+### Q-TXD-4 — Masa pelaporan SPT: pembetulan masa asal vs catatan sampai final
+
+**PUTUSAN: ketetapan/upaya/bayar-sengketa TIDAK menggerakkan pembetulan SPT masa asal di read-model. SPT masa asal beku; dampak mengalir ke masa peristiwa (bayar / putusan / kompensasi) via jurnal POSTED yang sudah dibaca read-model existing.**
+
+- Titik taut ke `spt-read-model`: TIDAK ADA kolom/tautan baru tahap 1. Read-model tetap: kewajiban PPN per masa dari JURNAL POSTED (PPN Keluaran − Masukan setting) direkonsiliasi ke posisi SPT dokumen (`spt-read-model-data.ts:1-16`). Jurnal bayar TaxPayment + jurnal putusan/restitusi/kompensasi di masa masing-masing OTOMATIS terbaca pola existing — tanpa perubahan read-model.
+- Register menyimpan tanggal-tanggal dokumen apa adanya (BR-TXD-12: tanggal SKP, tanggal kirim, tanggal terima putusan); sistem tidak menebak tanggal dari `createdAt`. Rekonsiliasi: selisih register-vs-jurnal-vs-SPT = temuan tampil (pola P5), bukan dipilih diam-diam.
+- Pembetulan SPT masa lalu ke DJP (bila WP memilih betulkan) = proses DJP di luar ERP; ERP menyediakan angka asal utuh + rantai dokumen sengketa + jurnal masa peristiwa sebagai bahan — sistem tidak menulis ulang histori.
+
+### Q-TXD-5 — Cakupan tahap PENGURANGAN_PEMBATALAN (Pasal 36 UU KUP): sub-jenis + dokumen putusan
+
+**PUTUSAN: tahap ini mencatat TIGA sub-jenis (satu baris upaya = satu sub-jenis), masing-masing dengan dokumen putusan wajibnya. Perlakuan jurnal mengikuti hasil (kabul/tolak) pola Q-TXD-2, dengan sanksi sebagai objek utama.**
+
+- Sub-jenis (enum/wilayah register, final; label regulasi BENCHMARK pajak.go.id):
+  1. `PENGURANGAN_SANKSI` — pengurangan sanksi administrasi (bunga/denda/kenaikan): dokumen putusan = SK Pengurangan DJP (nomor + tanggal + lampiran wajib).
+  2. `PENGHAPUSAN_SANKSI` — penghapusan sanksi administrasi: dokumen putusan = SK Penghapusan DJP.
+  3. `PEMBATALAN_KETETAPAN` — pembatalan SKP/STP yang tidak benar (termasuk dari hasil pemeriksaan keberatan): dokumen putusan = SK Pembatalan.
+- Jurnal mengikuti hasil: sanksi yang dihapus/dikurangi sesudah diakui sebagai beban → reversal beban sanksi (Dr Utang Sanksi / Cr Beban Sanksi Administrasi, atau Cr Pendapatan di luar usaha bila periode berikutnya — pilih pola: pembatalan di periode SAMA = lawan langsung; periode BERBEDA = pendapatan pemulihan di periode putusan, bukan ubah beban periode lalu). Pembatalan SKP pokok → pola Q-TXD-2 dikabulkan (piutang restitusi / hapus utang).
+- Tanpa dokumen putusan = upaya tetap `DALAM_PROSES`; register DILARANG menutup ketetapan atas dasar permohonan saja.
+
+### Batas vonis (jujur)
+
+- Kata/enum/izin/hitungan tenggat (Q-TXD-6/7/8) = putusan Lead, bukan vonis ini. Vonis ini MEMBLOKIR label "utang pajak" untuk nominal sengketa sebelum putusan (dipatuhi via P3: register nol reklasifikasi).
+- Tarif/sanksi persen hidup di master/regulasi bertanggal; vonis ini tidak menetapkan angka persen/denda apa pun.
+- Klaim kepatuhan terbatas pada perlakuan dokumen + jurnal + masa; nomor seri DJP + SPT + Coretax tetap di luar repo.
+- Falsifikasi QA (113-Q, atas head implementasi kelak — bukan head vonis ini): (1) jurnal lahir dari modul sengketa tahap 1 → MERAH; (2) bayar di bawah protes menjurnal beban/piutang otomatis → MERAH; (3) putusan mengubah SPT masa asal tanpa jejak → MERAH; (4) sanksi campur akun pokok → MERAH; (5) SKPN menjurnal → MERAH; (6) penanda LEWAT_BATAS_PUTUSAN menerbitkan jurnal tanpa dokumen putusan → MERAH; (7) jurnal sengketa ke periode terkunci lolos → MERAH.
+
+ID vonis ini **F-2026-10-27-113-V** (Q-TXD-1..5; register 113-B boleh jalan: dokumen+tenggat+status tanpa jurnal — pintu BR-TXD-11). Pemilik berikutnya: Lead (putus Q-TXD-6..8 + merge) → Backend (113-B model/loader) → Frontend (113-F) → QA (113-Q + falsifikasi di atas).
 ## VONIS ACCOUNTANT 2026-10-28 — F-2026-10-28-152-V: D1 ambang aging Rp1 + D2 total rujukan uang (jawaban spec 140-S AC-REP-001)
 
 **Verifikasi ID:** grep `F-2026-10-28-152-V` di backlog + board + judul PR terbuka = 0/0/0 sebelum tulis (run ini). Tertinggi -V tanggal 28 = 148-V. **152-V bebas.** Basis `origin/main` `a66378833` (28 Okt 2026 23:23 WIB). Semua `file:line` dibaca dari blob main persis run ini, bukan ingatan. Vonis docs-only: tanpa kode, tanpa skema, tanpa migrasi, tanpa jurnal. INDEKS AC-REP-001 tidak diubah kartu ini (tetap Belum sampai D3/D4 lulus E140).
