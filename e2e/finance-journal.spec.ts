@@ -16,7 +16,8 @@ import { skipOnMobile } from "./utils/desktop-only"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(1500)
+  // Tanpa sleep: assertion web-first sesudah ini (heading/form/combobox
+  // toBeVisible timeout 30s) yang menunggu hydration selesai.
 }
 
 test.describe("Finance — Journal & Reports", () => {

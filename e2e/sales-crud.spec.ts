@@ -4,21 +4,23 @@ import { openCombobox } from "./utils/combobox"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(3000)
+  // Tanpa sleep: openCombobox/assertion web-first sesudah ini yang menunggu
+  // hydration selesai.
 }
 
 async function selectFirstComboBoxOption(page: Page, placeholder: string) {
   // The Combobox renders as a role="combobox" trigger labelled with the
   // placeholder; the searchable input only exists inside the popup it opens.
   const input = await openCombobox(page, { placeholder })
-  await page.waitForTimeout(300)
 
-  // Type to filter and wait for options
+  // Type to filter, lalu tunggu opsi pertama tampil (web-first, bukan sleep).
   await input.fill("E2E")
-  await page.waitForTimeout(1000)
 
   const option = page.locator("[role='option']").first()
-  const hasOption = await option.isVisible().catch(() => false)
+  const hasOption = await option
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
   if (hasOption) {
     await option.click()
     return true
@@ -26,12 +28,14 @@ async function selectFirstComboBoxOption(page: Page, placeholder: string) {
 
   // Clear and try without filter
   await input.clear()
-  await page.waitForTimeout(500)
   await input.click()
-  await page.waitForTimeout(1000)
 
   const anyOption = page.locator("[role='option']").first()
-  if (await anyOption.isVisible().catch(() => false)) {
+  const hasAny = await anyOption
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (hasAny) {
     await anyOption.click()
     return true
   }

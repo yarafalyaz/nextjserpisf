@@ -4,7 +4,8 @@ import { selectFirstComboboxOption } from "./utils/combobox"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(3000)
+  // Tanpa sleep: assertion web-first sesudah ini (toContainText/toBeVisible)
+  // yang menunggu hydration selesai.
 }
 
 test.describe("Produksi - Products CRUD", () => {

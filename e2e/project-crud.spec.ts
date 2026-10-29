@@ -10,7 +10,8 @@ test.beforeEach(async ({}, testInfo) => {
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(3000)
+  // Tanpa sleep: locator/assertion web-first sesudah ini yang menunggu
+  // hydration selesai.
 }
 
 async function selectFirstComboBoxOption(page: Page, placeholder: string) {
