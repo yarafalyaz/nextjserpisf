@@ -6,6 +6,8 @@ import { notFound } from "next/navigation";
 import { EmployeeForm } from "@/components/forms/employee-form";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
+import { canViewSalaryAmounts } from "@/lib/auth/field-visibility";
 
 import type { Metadata } from "next";
 
@@ -17,7 +19,7 @@ export default async function EditEmployeePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  await requirePermission("edit_employees");
+  const user = await requirePermission("edit_employees");
 
   const data = await resolveEntity(
     { segment: slug },
@@ -49,6 +51,19 @@ export default async function EditEmployeePage({
 
   if (!data) notFound();
 
+  // Gerbang HR scope: karyawan di luar scope user tidak boleh dibuka untuk
+  // diedit sama sekali (pola sama dengan halaman detail).
+  try {
+    await assertHrEmployeeAccess(await getHrScope(user), data.id);
+  } catch {
+    notFound();
+  }
+
+  // Tanpa izin view_salary_amounts angka gaji asli TIDAK turun ke client:
+  // kirim 0 (form menampilkannya kosong; server membuang kunci baseSalary
+  // untuk user tanpa izin, jadi submit tidak mengubah gaji tersimpan).
+  const canSeeSalary = await canViewSalaryAmounts();
+
   const employee = {
     id: data.id,
     employeeNo: data.employeeNo,
@@ -67,7 +82,7 @@ export default async function EditEmployeePage({
       : null,
     joinDate: data.joinDate.toISOString().split("T")[0],
     paymentFrequency: data.paymentFrequency,
-    baseSalary: Number(data.baseSalary),
+    baseSalary: canSeeSalary ? Number(data.baseSalary) : 0,
     province: data.province,
     employeeCity: data.employeeCity,
     employeeDistrict: data.employeeDistrict,

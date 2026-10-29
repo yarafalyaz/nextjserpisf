@@ -140,6 +140,16 @@ export default async function EmployeeDetailPage({
 
   if (!employee) notFound()
 
+  // Gerbang HR scope PALING DEPAN: karyawan di luar scope user tidak boleh
+  // merender data personal apa pun → notFound() sebelum query panel pertama.
+  // Slug tetap rahasia, jadi 404 ini tidak membocorkan keberadaan record.
+  const hrScope = await getHrScope(sessionUser)
+  try {
+    await assertHrEmployeeAccess(hrScope, employee.id)
+  } catch {
+    notFound()
+  }
+
   // Annual-leave balance for the current calendar year (surface in Info tab).
   const leaveQuota = await getLeaveQuota(employee.id)
 
@@ -193,28 +203,9 @@ export default async function EmployeeDetailPage({
     reason: string
     status: string
   }[] = salaryHistory?.success ? salaryHistory.data : []
-  // Baca RSC probation tunduk pada scope HR yang sama dengan aksi server
-  // (assertHrEmployeeAccess + hrScopeWhere/hrEmployeeScopeWhere). Di luar
-  // scope: ulasan + opsi penilai dikosongkan, bukan bocor semua karyawan.
-  const hrScope = await getHrScope(sessionUser)
-  // Kegagalan scope TIDAK boleh dibaca sebagai "di luar scope": tandai gagal
-  // dan jangan muat data probation sama sekali.
-  let probationInScope = false
-  let probationScopeFailed = false
-  try {
-    await assertHrEmployeeAccess(hrScope, employee.id)
-    probationInScope = true
-  } catch {
-    probationInScope = false
-    probationScopeFailed = true
-  }
-  if (probationScopeFailed) {
-    return (
-      <div className="mx-auto max-w-3xl p-6 text-sm text-muted-foreground">
-        Gagal memeriksa cakupan HR untuk karyawan ini. Muat ulang halaman.
-      </div>
-    )
-  }
+  // Scope HR sudah ditegakkan di gerbang depan (notFound bila di luar
+  // scope), jadi panel probation selalu dalam scope di sini.
+  const probationInScope = true
   let overviewRows: Awaited<ReturnType<typeof getProbationOverview>>
   try {
     overviewRows = await getProbationOverview()
@@ -461,9 +452,9 @@ export default async function EmployeeDetailPage({
                       <DetailTableBody>
                         {employee.employeeLoans.map((loan) => (
                           <DetailTableRow key={loan.id}>
-                            <DetailTableTd>{formatCurrency(Number(loan.totalAmount))}</DetailTableTd>
-                            <DetailTableTd>{formatCurrency(Number(loan.monthlyInstallment))}</DetailTableTd>
-                            <DetailTableTd className="text-danger">{formatCurrency(Number(loan.remainingAmount))}</DetailTableTd>
+                            <DetailTableTd>{canSeeSalary ? formatCurrency(Number(loan.totalAmount)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd>{canSeeSalary ? formatCurrency(Number(loan.monthlyInstallment)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd className="text-danger">{canSeeSalary ? formatCurrency(Number(loan.remainingAmount)) : "••••••"}</DetailTableTd>
                             <DetailTableTd>{formatDate(loan.loanDate)}</DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -594,8 +585,8 @@ export default async function EmployeeDetailPage({
                           <DetailTableRow key={p.id}>
                             <DetailTableTd className="font-mono">{p.documentNo}</DetailTableTd>
                             <DetailTableTd>{p.period}</DetailTableTd>
-                            <DetailTableTd>{formatCurrency(Number(p.baseSalary))}</DetailTableTd>
-                            <DetailTableTd className="font-semibold">{formatCurrency(Number(p.netSalary))}</DetailTableTd>
+                            <DetailTableTd>{canSeeSalary ? formatCurrency(Number(p.baseSalary)) : "••••••"}</DetailTableTd>
+                            <DetailTableTd className="font-semibold">{canSeeSalary ? formatCurrency(Number(p.netSalary)) : "••••••"}</DetailTableTd>
                             <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}

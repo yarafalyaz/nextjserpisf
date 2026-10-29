@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 import Link from "next/link"
 import { EmployeeTable } from "./_components/employee-table"
 import { EmployeeLifecycleAttentionCard } from "./_components/employee-lifecycle-attention-card"
@@ -20,13 +21,15 @@ export default async function EmployeesPage({
 }: {
   searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
-  await requirePermission("view_employees")
+  const user = await requirePermission("view_employees")
+  const scope = await getHrScope(user)
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     deletedAt: null,
+    ...hrEmployeeScopeWhere(scope),
     ...(params.cari && {
       OR: [
         { name: { contains: params.cari } },
@@ -36,14 +39,25 @@ export default async function EmployeesPage({
     }),
   }
 
+  // Select sempit: HANYA field yang dirender EmployeeTable (nama, NIP,
+  // jabatan, departemen, peran, telepon, status) + kunci href (id/slug).
+  // Field skalar sensitif (baseSalary, bankAccountNumber, npwp, nomor BPJS,
+  // idNumber, dst) TIDAK pernah turun ke client.
   const employees = await prisma.employee.findMany({
     where,
-    include: {
-      department: true,
-      position: true,
+    select: {
+      id: true,
+      slug: true,
+      employeeNo: true,
+      name: true,
+      phone: true,
+      employmentStatus: true,
+      isActive: true,
+      department: { select: { name: true } },
+      position: { select: { name: true } },
       user: {
-        include: {
-          roles: true,
+        select: {
+          roles: { select: { name: true } },
         },
       },
     },
