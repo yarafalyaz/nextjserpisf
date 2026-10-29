@@ -261,7 +261,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                 <button
                   id="item-image"
                   type="button"
-                  aria-required="true"
+                  aria-label="Unggah gambar barang"
                   className="image-upload-dropzone"
                   onClick={() => fileInputRef.current?.click()}
                 >
