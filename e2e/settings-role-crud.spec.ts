@@ -1,11 +1,6 @@
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-
-
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
-}
+import { awaitListContains } from "./utils/await-ready"
 
 
 test.describe("Pengaturan Peran CRUD", () => {
@@ -20,15 +15,13 @@ test.describe("Pengaturan Peran CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
     await expect(page.getByRole("heading", { name: "Tambah Peran" })).toBeVisible({ timeout: 30000 })
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").first().fill(name)
-    await waitForHydration(page)
+    await expect(page.locator("#name").first()).toHaveValue(name)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/pengaturan/peran", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await awaitListContains(page, "**/pengaturan/peran", name)
 
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name })
@@ -41,13 +34,12 @@ test.describe("Pengaturan Peran CRUD", () => {
     // ─── UPDATE ───────────────────────────────────────────────
     await page.getByRole("link", { name: "Ubah Peran" }).click({ force: true })
     await page.waitForURL(/\/pengaturan\/peran\/[^/]+\/ubah$/, { timeout: 30000 })
+    await expect(page.locator("#name").first()).toBeVisible({ timeout: 30_000 })
     await page.locator("#name").first().fill(updated)
-    await waitForHydration(page)
+    await expect(page.locator("#name").first()).toHaveValue(updated)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/pengaturan/peran", { timeout: 30000 })
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updated)
+    await awaitListContains(page, "**/pengaturan/peran", updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     // Server action form: deleteRole → revalidatePath → redirect("/pengaturan/peran")
@@ -69,8 +61,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     let gone = false
     for (let i = 0; i < 3; i++) {
       await page.goto("/pengaturan/peran", { waitUntil: "domcontentloaded" })
-      await page.waitForLoadState("networkidle")
-      await waitForHydration(page)
+      await expect(page.getByRole("heading", { name: "Peran & Izin" })).toBeVisible({ timeout: 30000 })
       gone = !(await page.locator("body").innerText()).includes(updated)
       if (gone) break
       // Role still exists — retry the delete

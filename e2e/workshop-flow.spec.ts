@@ -14,20 +14,15 @@ import { test, expect, type Page } from "@playwright/test"
  * hidrasi), bukan networkidle.
  */
 
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle", { timeout: 30000 })
-  await page.waitForTimeout(2000)
-}
-
 /** Buka detail baris pertama di tabel daftar; skip bila tabel kosong. */
 async function openFirstDetail(page: Page, listUrl: string) {
   await page.goto(listUrl, { waitUntil: "domcontentloaded" })
-  await waitForHydration(page)
+  await expect(page.locator("table tbody tr").first()).toBeVisible({ timeout: 30000 })
   const firstLink = page.locator("tbody tr a[href]").first()
   const count = await firstLink.count()
   test.skip(count === 0, `DB ini tidak punya data di ${listUrl} — alur dilewati, bukan lulus semu`)
   await firstLink.click()
-  await waitForHydration(page)
+  await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i, { timeout: 30000 })
 }
 
 test.describe("Alur bengkel — tiap halaman terbuka", () => {
@@ -105,7 +100,7 @@ test.describe("Alur bengkel — tombol rantai antar dokumen", () => {
 
   test("form tambah Surat Jalan terbuka (tanpa menyimpan)", async ({ page }) => {
     await page.goto("/penjualan/surat-jalan/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
+    await expect(page.locator("form").first()).toBeVisible({ timeout: 30000 })
     await expect(page.locator("body")).toContainText("Surat Jalan", { timeout: 30000 })
   })
 })
