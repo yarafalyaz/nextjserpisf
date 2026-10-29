@@ -105,36 +105,37 @@ export default async function GoodsReceiptDetailPage({
   // stock-journal.service; penandanya wajib berbeda karena `journals` unik pada
   // (reference_type, reference_id). Keduanya diambil supaya halaman ini tidak
   // menyembunyikan jurnal jasa. Penerimaan draft belum punya jurnal.
-  const journals = await prisma.journal.findMany({
-    where: {
-      referenceType: {
-        in: [GOODS_RECEIPT_JOURNAL_REF_TYPE, GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE],
-      },
-      referenceId: receipt.id,
-    },
-    select: {
-      id: true,
-      slug: true,
-      journalNumber: true,
-      totalDebit: true,
-      status: true,
-      referenceType: true,
-    },
-    orderBy: { id: "asc" },
-  });
-
   // GoodsReceiptItem.stockMoveId hanya FK skalar (tanpa relasi), jadi slug mutasi
   // stok diambil sekali untuk seluruh baris agar tautannya menuju halaman detail
   // — sebelumnya tautan memakai `?id=`, yang tidak dibaca halaman tujuan.
   const stockMoveIds = receipt.items
     .map((item) => item.stockMoveId)
     .filter((id): id is number => id != null);
-  const stockMoves = stockMoveIds.length
-    ? await prisma.stockMove.findMany({
-        where: { id: { in: stockMoveIds } },
-        select: { id: true, slug: true },
-      })
-    : [];
+  const [journals, stockMoves] = await Promise.all([
+    prisma.journal.findMany({
+      where: {
+        referenceType: {
+          in: [GOODS_RECEIPT_JOURNAL_REF_TYPE, GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE],
+        },
+        referenceId: receipt.id,
+      },
+      select: {
+        id: true,
+        slug: true,
+        journalNumber: true,
+        totalDebit: true,
+        status: true,
+        referenceType: true,
+      },
+      orderBy: { id: "asc" },
+    }),
+    stockMoveIds.length
+      ? prisma.stockMove.findMany({
+          where: { id: { in: stockMoveIds } },
+          select: { id: true, slug: true },
+        })
+      : Promise.resolve([]),
+  ]);
   const stockMoveSlugById = new Map(stockMoves.map((move) => [move.id, move.slug]));
 
   return (

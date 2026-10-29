@@ -71,14 +71,37 @@ export default async function BankReconciliationDetailPage({
     ...(recon.periodStart ? { date: { gte: recon.periodStart } } : {}),
     ...(recon.periodEnd ? { date: { lte: recon.periodEnd } } : {}),
   }
-  const statementLines = await prisma.bankStatementLine.findMany({
-    where: {
-      bankStatement: { accountId: recon.accountId },
-      ...periodFilter,
-    },
-    orderBy: [{ date: "asc" }, { id: "asc" }],
-    select: { id: true, date: true, description: true, amount: true, type: true },
-  })
+  const [statementLines, journalEntries] = await Promise.all([
+    prisma.bankStatementLine.findMany({
+      where: {
+        bankStatement: { accountId: recon.accountId },
+        ...periodFilter,
+      },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+      select: { id: true, date: true, description: true, amount: true, type: true },
+    }),
+    // Entri jurnal POSTED milik akun ini dalam periode rekonsiliasi.
+    prisma.journalEntry.findMany({
+      where: {
+        accountId: recon.accountId,
+        journal: {
+          status: "POSTED",
+          deletedAt: null,
+          ...(recon.periodStart ? { transactionDate: { gte: recon.periodStart } } : {}),
+          ...(recon.periodEnd ? { transactionDate: { lte: recon.periodEnd } } : {}),
+        },
+      },
+      orderBy: { id: "asc" },
+      take: 500,
+      select: {
+        id: true,
+        debit: true,
+        credit: true,
+        memo: true,
+        journal: { select: { journalNumber: true, transactionDate: true } },
+      },
+    }),
+  ])
   const matchedLineIds = new Set(
     recon.items
       .filter((i) => i.bankStatementLineId != null)
@@ -86,41 +109,18 @@ export default async function BankReconciliationDetailPage({
   )
   const unmatchedLines = statementLines.filter((l) => !matchedLineIds.has(l.id))
 
-  // Entri jurnal POSTED milik akun ini dalam periode rekonsiliasi.
-  const journalEntries = await prisma.journalEntry.findMany({
-    where: {
-      accountId: recon.accountId,
-      journal: {
-        status: "POSTED",
-        deletedAt: null,
-        ...(recon.periodStart ? { transactionDate: { gte: recon.periodStart } } : {}),
-        ...(recon.periodEnd ? { transactionDate: { lte: recon.periodEnd } } : {}),
-      },
-    },
-    orderBy: { id: "asc" },
-    take: 500,
-    select: {
-      id: true,
-      debit: true,
-      credit: true,
-      memo: true,
-      journal: { select: { journalNumber: true, transactionDate: true } },
-    },
-  })
-
   // Item kecocokan dengan relasi untuk tampilan; item penyesuaian tidak punya
   // relasi (kedua FK null) dan dibedakan lewat `type`.
   const itemIds = recon.items.map((i) => i.id)
-  const itemLines =
+  const [itemLines, itemJournals] = await Promise.all([
     itemIds.length > 0
-      ? await prisma.bankStatementLine.findMany({
+      ? prisma.bankStatementLine.findMany({
           where: { id: { in: recon.items.map((i) => i.bankStatementLineId).filter((v): v is number => v != null) } },
           select: { id: true, date: true, description: true, amount: true },
         })
-      : []
-  const itemJournals =
+      : Promise.resolve([]),
     itemIds.length > 0
-      ? await prisma.journalEntry.findMany({
+      ? prisma.journalEntry.findMany({
           where: { id: { in: recon.items.map((i) => i.journalEntryId).filter((v): v is number => v != null) } },
           select: {
             id: true,
@@ -130,7 +130,8 @@ export default async function BankReconciliationDetailPage({
             journal: { select: { journalNumber: true, transactionDate: true } },
           },
         })
-      : []
+      : Promise.resolve([]),
+  ])
   const lineById = new Map(itemLines.map((l) => [l.id, l]))
   const journalById = new Map(itemJournals.map((j) => [j.id, j]))
 

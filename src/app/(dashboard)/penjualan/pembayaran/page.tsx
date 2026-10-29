@@ -37,15 +37,17 @@ export default async function SalesPaymentsPage({
     }),
   }
 
-  const rawPayments = await prisma.salesPayment.findMany({
-    where,
-    include: { salesInvoice: { include: { customer: true } } },
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { createdAt: "desc" },
-  })
-
-  const pmMap = await getPaymentMethodMap()
+  const [rawPayments, pmMap, total] = await Promise.all([
+    prisma.salesPayment.findMany({
+      where,
+      include: { salesInvoice: { include: { customer: true } } },
+      take,
+      skip: (page - 1) * pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    getPaymentMethodMap(),
+    prisma.salesPayment.count({ where }),
+  ])
   const payments = rawPayments.map((p) => ({
     id: p.id,
     slug: p.slug,
@@ -55,8 +57,6 @@ export default async function SalesPaymentsPage({
     paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),
     amount: Number(p.amount),
   }))
-
-  const total = await prisma.salesPayment.count({ where })
 
   const tableData = toPlain(payments)
 

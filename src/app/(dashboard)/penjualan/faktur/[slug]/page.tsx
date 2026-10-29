@@ -102,12 +102,29 @@ export default async function InvoiceDetailPage({
       hasPermission("create_sales_late_fees"),
       hasPermission("delete_sales_late_fees"),
     ])
-  const lateFeeBundle = canViewLateFees
-    ? await getSalesLateFeePanelForInvoice(invoice.id)
-    : null
-
-  // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
-  const whatsappTrail = await getWhatsappTrail("SalesInvoice", invoice.id)
+  const [lateFeeBundle, whatsappTrail, availableItems, pmMap] = await Promise.all([
+    canViewLateFees
+      ? getSalesLateFeePanelForInvoice(invoice.id)
+      : Promise.resolve(null),
+    // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
+    getWhatsappTrail("SalesInvoice", invoice.id),
+    // Fetch available items for the editor (termasuk metadata UoM & serial)
+    prisma.item.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        price: true,
+        unitOfMeasure: true,
+        trackSerial: true,
+        isScrapSaleItem: true,
+        uomConversions: { select: { code: true, factorToBase: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+    getPaymentMethodMap(),
+  ])
 
   // Custom fabrication: items stay editable until the customer actually pays.
   // A down payment is only an advance (reconciled at the end) — it does NOT lock
@@ -120,24 +137,6 @@ export default async function InvoiceDetailPage({
   // header Ubah disembunyikan bila server pasti menolak (cancelled atau
   // sudah ada pelunasan nyata). posted/partial/paid tanpa pelunasan nyata
   // tetap boleh Ubah (server izinkan), dengan Void + Retur sebagai jalur K2.
-
-  // Fetch available items for the editor (termasuk metadata UoM & serial)
-  const availableItems = await prisma.item.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      sku: true,
-      price: true,
-      unitOfMeasure: true,
-      trackSerial: true,
-      isScrapSaleItem: true,
-      uomConversions: { select: { code: true, factorToBase: true } },
-    },
-    orderBy: { name: "asc" },
-  })
-
-  const pmMap = await getPaymentMethodMap()
 
   // Derive the effective tax RATE from taxAmount (reliably the PPN amount on
   // every write path) over the taxable base. Reading invoice.tax directly is
