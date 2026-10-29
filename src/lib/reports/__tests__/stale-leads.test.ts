@@ -141,14 +141,30 @@ describe("getStaleLeads loader", () => {
     ])
   })
 
-  it("satu query status new/contacted + aktivitas terpetakan", async () => {
+  it("satu query status new/contacted + pra-saring cutoff DB + aktivitas terpetakan", async () => {
     const r = await getStaleLeads(NOW)
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledTimes(1)
+    const cutoff = new Date(2026, 9, 13) // awal hari NOW-7, ambang builder
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { deletedAt: null, status: { in: ["new", "contacted"] } },
+        where: expect.objectContaining({
+          deletedAt: null,
+          status: { in: ["new", "contacted"] },
+          createdAt: { lt: cutoff },
+          activities: {
+            none: {
+              OR: [
+                { completedAt: { gte: cutoff } },
+                { completedAt: null, scheduledAt: { gte: cutoff } },
+                { completedAt: null, scheduledAt: null, createdAt: { gte: cutoff } },
+              ],
+            },
+          },
+        }),
       }),
     )
+    // Tanpa take: cap akan menyembunyikan lead basi.
+    expect(mocks.prismaMock.lead.findMany.mock.calls[0][0]).not.toHaveProperty("take")
     expect(r.rows).toHaveLength(1)
     expect(r.rows[0]).toMatchObject({ id: 7, name: "Sari", idleDays: 10 })
     expect(r.rows[0].lastActivityAt).toEqual(new Date(2026, 9, 10))

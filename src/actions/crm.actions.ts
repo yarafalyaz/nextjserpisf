@@ -119,17 +119,19 @@ export async function updateTicket(id: number, formData: FormData) {
       assignedTo: data.assignedTo ?? null,
       resolutionNotes: data.resolutionNotes ?? null,
       // Jejak waktu SLA dihitung di server, bukan dari form: respons pertama
-      // saat tiket keluar dari "open", selesai saat masuk resolved/closed.
-      // Komentar internal/tindak lanjut (addTicketComment) tidak menyentuhnya —
-      // hanya perubahan status yang berarti.
+      // saat tiket keluar dari "open", selesai saat masuk resolved/closed,
+      // dikosongkan saat dibuka kembali (open/in_progress). Komentar
+      // internal/tindak lanjut (addTicketComment) tidak menyentuhnya.
       firstResponseAt:
         existing && existing.status === "open" && data.status && data.status !== "open"
           ? (existing.firstResponseAt ?? new Date())
           : undefined,
       resolvedAt:
-        existing && data.status && (data.status === "resolved" || data.status === "closed") && !existing.resolvedAt
-          ? new Date()
-          : undefined,
+        data.status === "open" || data.status === "in_progress"
+          ? null
+          : existing && data.status && (data.status === "resolved" || data.status === "closed") && !existing.resolvedAt
+            ? new Date()
+            : undefined,
     },
   })
 
@@ -343,6 +345,23 @@ export async function addLeadActivity(leadId: number, formData: FormData) {
     const parsed = parseFormData(leadActivitySchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
+
+    // Lead harus hidup + pemanggil pemilik/pemegang manage_leads/super_admin
+    // (pola guard 484-499) — tanpa ini aktivitas bisa ditulis ke lead
+    // terhapus/milik rep lain lalu muncul di antrean follow-up.
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId, deletedAt: null },
+      select: { id: true, assignedTo: true },
+    })
+    if (!lead) return { success: false, error: "Lead tidak ditemukan" }
+    const isAdmin =
+      user.permissions.includes("manage_leads") || user.roles.includes("super_admin")
+    if (!isAdmin && lead.assignedTo !== Number(user.id)) {
+      return {
+        success: false,
+        error: "Anda hanya dapat menambahkan aktivitas lead yang ditugaskan kepada Anda.",
+      }
+    }
 
     const activity = await prisma.leadActivity.create({
       data: {

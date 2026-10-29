@@ -693,28 +693,97 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       let vehicleId: number;
 
       if (d.variantId) {
-        // Update the catalog type's variant/year from the form. `name` is not
-        // edited here — it is a catalog label owned by /kendaraan.
-        const updatedVehicle = await tx.vehicle.update({
-          where: { id: existing.vehicleId },
-          data: {
-            vehicleVariantId: d.variantId,
-            year: d.year ?? null,
-          },
-        });
-        vehicleId = updatedVehicle.id;
+        // Catalog Vehicle bisa dipakai beberapa CustomerVehicle (delete path
+        // 800-807). Mutasi in-place pada baris bersama mengubah tipe semua
+        // pemilik; bila dipakai pemilik lain, find-or-create baris katalog
+        // berbeda (variant+year target) lalu tautkan ulang link ini saja.
+        // Eksklusif: update in-place. `name` milik label katalog /kendaraan.
+        const [otherOwners, shared] = await Promise.all([
+          tx.customerVehicle.count({
+            where: { vehicleId: existing.vehicleId, id: { not: id } },
+          }),
+          tx.vehicle.findUnique({
+            where: { id: existing.vehicleId },
+            select: { vehicleVariantId: true, year: true },
+          }),
+        ]);
+        if (otherOwners === 0) {
+          const updatedVehicle = await tx.vehicle.update({
+            where: { id: existing.vehicleId },
+            data: {
+              vehicleVariantId: d.variantId,
+              year: d.year ?? null,
+            },
+          });
+          vehicleId = updatedVehicle.id;
+        } else if (
+          shared?.vehicleVariantId === d.variantId &&
+          shared.year === (d.year ?? null)
+        ) {
+          vehicleId = existing.vehicleId;
+        } else {
+          const distinct = await tx.vehicle.findFirst({
+            where: {
+              vehicleVariantId: d.variantId,
+              year: d.year ?? null,
+              deletedAt: null,
+              id: { not: existing.vehicleId },
+            },
+            select: { id: true },
+          });
+          vehicleId =
+            distinct?.id ??
+            (
+              await tx.vehicle.create({
+                data: { vehicleVariantId: d.variantId, year: d.year ?? null },
+              })
+            ).id;
+        }
       } else {
         const rawVehicleId = d.vehicleId ?? d.kendaraanId;
         if (!rawVehicleId) {
           throw new Error("vehicleId wajib diisi");
         }
         vehicleId = rawVehicleId;
-        // Year is a catalog-type attribute, so keep it in sync on this path too
-        // — otherwise relinking to an existing type silently dropped the edit.
-        await tx.vehicle.update({
-          where: { id: vehicleId },
-          data: { year: d.year ?? null },
-        });
+        // Year = atribut tipe katalog. Baris tujuan dipakai CustomerVehicle
+        // lain -> jangan mutasi bersama: pakai baris existing yang cocok
+        // (variant sama + year target) atau buat baris katalog baru.
+        // Eksklusif / tak tertaut: update in-place seperti sebelumnya.
+        const [target, otherOwners] = await Promise.all([
+          tx.vehicle.findUnique({
+            where: { id: vehicleId },
+            select: { vehicleVariantId: true, year: true },
+          }),
+          tx.customerVehicle.count({
+            where: { vehicleId, id: { not: id } },
+          }),
+        ]);
+        if (otherOwners === 0) {
+          await tx.vehicle.update({
+            where: { id: vehicleId },
+            data: { year: d.year ?? null },
+          });
+        } else if (target && target.year !== (d.year ?? null)) {
+          const distinct = await tx.vehicle.findFirst({
+            where: {
+              vehicleVariantId: target.vehicleVariantId,
+              year: d.year ?? null,
+              deletedAt: null,
+              id: { not: vehicleId },
+            },
+            select: { id: true },
+          });
+          vehicleId =
+            distinct?.id ??
+            (
+              await tx.vehicle.create({
+                data: {
+                  vehicleVariantId: target.vehicleVariantId,
+                  year: d.year ?? null,
+                },
+              })
+            ).id;
+        }
       }
 
       // Physical-unit attributes (plate/color/chassis/engine) live on the link.

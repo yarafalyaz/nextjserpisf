@@ -95,7 +95,8 @@ describe("CRM Ticket Actions", () => {
     expect(res?.success).toBe(true)
     const data = mocks.prismaMock.crmTicket.update.mock.calls[mocks.prismaMock.crmTicket.update.mock.calls.length - 1][0].data
     expect(data.firstResponseAt).toBeInstanceOf(Date)
-    expect(data.resolvedAt).toBeUndefined()
+    // Round4 #8: status aktif (in_progress) selalu mengosongkan resolvedAt.
+    expect(data.resolvedAt).toBeNull()
   })
   it("updateTicket mengisi resolvedAt saat resolved", async () => {
     mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce(null)
@@ -104,6 +105,15 @@ describe("CRM Ticket Actions", () => {
     expect(res?.success).toBe(true)
     const data = mocks.prismaMock.crmTicket.update.mock.calls[mocks.prismaMock.crmTicket.update.mock.calls.length - 1][0].data
     expect(data.resolvedAt).toBeInstanceOf(Date)
+  })
+  it("updateTicket reopen (open/in_progress) mengosongkan resolvedAt", async () => {
+    for (const status of ["open", "in_progress"]) {
+      mocks.prismaMock.crmTicket.findUnique.mockResolvedValueOnce({ status: "resolved", firstResponseAt: new Date(), resolvedAt: new Date() })
+      const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", status }))
+      expect(res?.success).toBe(true)
+      const data = mocks.prismaMock.crmTicket.update.mock.calls[mocks.prismaMock.crmTicket.update.mock.calls.length - 1][0].data
+      expect(data.resolvedAt).toBeNull()
+    }
   })
   it("updateTicket handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -199,7 +209,38 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
   })
 })
 
-describe("addLeadActivity scheduledAt", () => {
+describe("addLeadActivity guard + scheduledAt (round4 #5)", () => {
+  beforeEach(() => {
+    // Lead hidup milik user sesi (id 1); kasus lain menimpa per tes.
+    mocks.prismaMock.lead.findFirst.mockResolvedValue({ id: 1, assignedTo: 1 })
+  })
+  it("menolak lead tidak ada/terhapus tanpa tulis DB", async () => {
+    mocks.prismaMock.lead.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.addLeadActivity(404, fdMap({ type: "note", subject: "Catatan" }))
+    expect(res).toEqual({ success: false, error: "Lead tidak ditemukan" })
+    expect(mocks.prismaMock.lead.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 404, deletedAt: null } }),
+    )
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+  it("menolak non-pemilik tanpa manage_leads/super_admin", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 9, permissions: ["edit_leads"], roles: ["sales"] })
+    mocks.prismaMock.lead.findFirst.mockResolvedValueOnce({ id: 1, assignedTo: 3 })
+    const res = await actions.addLeadActivity(1, fdMap({ type: "note", subject: "Catatan" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/ditugaskan kepada Anda/i)
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+  it("pemilik boleh; manage_leads boleh atas lead orang lain", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads"], roles: ["sales"] })
+    mocks.prismaMock.lead.findFirst.mockResolvedValueOnce({ id: 1, assignedTo: 3 })
+    const own = await actions.addLeadActivity(1, fdMap({ type: "note", subject: "Catatan" }))
+    expect(own?.success).toBe(true)
+    // default beforeEach user: manage_leads + super_admin atas assignedTo 1
+    const managed = await actions.addLeadActivity(1, fdMap({ type: "note", subject: "Catatan" }))
+    expect(managed?.success).toBe(true)
+    expect(mocks.prismaMock.leadActivity.create).toHaveBeenCalledTimes(2)
+  })
   it("menolak scheduledAt fiktif 2026-02-30 tanpa tulis DB", async () => {
     const res = await actions.addLeadActivity(1, fdMap({ type: "task", subject: "Follow up", scheduledAt: "2026-02-30" }))
     expect(res?.success).toBe(false)

@@ -216,7 +216,7 @@ describe("getLeadFollowups loader", () => {
     ])
   })
 
-  it("satu query massal tanpa filter status + aktivitas terpetakan (Q-LFU-1 disaring builder)", async () => {
+  it("satu query massal pra-saring lost + aktivitas due saja (Q-LFU-1 tetap disaring builder)", async () => {
     const r = await getLeadFollowups(NOW)
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -225,8 +225,20 @@ describe("getLeadFollowups loader", () => {
     )
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledTimes(1)
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { deletedAt: null } }),
+      expect.objectContaining({
+        where: { deletedAt: null, status: { not: "lost" } },
+        select: expect.objectContaining({
+          activities: expect.objectContaining({
+            where: {
+              scheduledAt: { not: null, lte: new Date(2026, 9, 21, 23, 59, 59, 999) },
+              completedAt: null,
+            },
+          }),
+        }),
+      }),
     )
+    // Tanpa take: cap akan menyembunyikan follow-up lewat.
+    expect(mocks.prismaMock.lead.findMany.mock.calls[0][0]).not.toHaveProperty("take")
     expect(r.rows).toHaveLength(1)
     expect(r.rows[0]).toMatchObject({ leadId: 7, name: "Sari", overdueDays: 3 })
     expect(r.rows[0].scheduledAt).toEqual(new Date(2026, 9, 18))

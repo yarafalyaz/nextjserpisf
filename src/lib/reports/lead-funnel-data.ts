@@ -1,9 +1,11 @@
 /**
  * Loader read-only corong prospek (F-2026-10-22-092-S, Q-LF-5 fisik BOT 3).
  *
- * Satu query massal Lead non-deleted + seluruh aktivitas status_change/
- * conversion-nya (relasi Prisma, tanpa N+1), plus satu query massal nama
- * penanggung HANYA bila scope mengizinkan. Hitungan di builder murni
+ * Beban dibatasi tanpa mengorbankan angka (tanpa `take`/cap — cap akan
+ * memalsukan total corong): lead ditarik skalar saja, fakta "punya histori
+ * tahap" dari agregat `groupBy` LeadActivity, deskripsi kalah hanya untuk
+ * lead `lost`, dan aktivitas gerakan penuh hanya bila ada periode (kohort
+ * memang butuh histori s.d. akhir periode). Hitungan di builder murni
  * `lead-funnel.ts`. Tanpa migrasi, tanpa mutasi Lead/LeadActivity/Customer.
  *
  * Izin (Q-LF-1, putusan BOT 1): permukaan pemanggil menegakkan
@@ -29,6 +31,8 @@ export interface LeadFunnelPeriod {
   end: Date
 }
 
+const MOVEMENT_TYPES = ["status_change", "conversion"] as const
+
 export async function getLeadFunnel(
   scope: LeadFunnelScope,
   period: LeadFunnelPeriod | null = null,
@@ -49,14 +53,58 @@ export async function getLeadFunnel(
       customerId: true,
       convertedAt: true,
       deletedAt: true,
-      activities: {
-        where: { type: { in: ["status_change", "conversion"] } },
-        select: { type: true, oldStatus: true, newStatus: true, createdAt: true, description: true },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      },
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   })
+
+  // Satu agregat massal: lead mana yang punya histori tahap (BR-LF-04).
+  const movementGroups = await prisma.leadActivity.groupBy({
+    by: ["leadId"],
+    where: { type: { in: [...MOVEMENT_TYPES] } },
+    _count: { _all: true },
+  })
+  const stageHistoryIds = new Set(movementGroups.map((g) => g.leadId))
+
+  // Aktivitas penuh hanya untuk: (a) periode — histori gerakan s.d. akhir
+  // periode per lead; (b) tanpa periode — cukup aktivitas status_change->lost
+  // milik lead lost untuk rincian alasan kalah (Q-LR-3).
+  const lostIds = leads.filter((l) => l.status === "lost").map((l) => l.id)
+  const activityRows = period
+    ? await prisma.leadActivity.findMany({
+        where: {
+          type: { in: [...MOVEMENT_TYPES] },
+          createdAt: { lte: period.end },
+        },
+        select: {
+          leadId: true,
+          type: true,
+          oldStatus: true,
+          newStatus: true,
+          createdAt: true,
+          description: true,
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      })
+    : lostIds.length > 0
+      ? await prisma.leadActivity.findMany({
+          where: { leadId: { in: lostIds }, type: "status_change", newStatus: "lost" },
+          select: {
+            leadId: true,
+            type: true,
+            oldStatus: true,
+            newStatus: true,
+            createdAt: true,
+            description: true,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        })
+      : []
+  const activitiesByLead = new Map<number, typeof activityRows>()
+  for (const row of activityRows) {
+    const list = activitiesByLead.get(row.leadId) ?? []
+    list.push(row)
+    activitiesByLead.set(row.leadId, list)
+  }
 
   let assigneeNameById = new Map<number, string>()
   if (includeAssigneeBreakdown) {
@@ -84,7 +132,17 @@ export async function getLeadFunnel(
       customerId: lead.customerId,
       convertedAt: lead.convertedAt,
       deletedAt: lead.deletedAt,
-      activities: lead.activities,
+      activities: (activitiesByLead.get(lead.id) ?? []).map((a) => ({
+        type: a.type,
+        oldStatus: a.oldStatus,
+        newStatus: a.newStatus,
+        createdAt: a.createdAt,
+        description: a.description,
+      })),
+      // Tanpa periode, `activities` di atas hanya memuat baris lost —
+      // fakta histori tahap datang dari agregat. Dengan periode, array
+      // gerakan nyata yang bicara (hasStageHistory dibiarkan undefined).
+      hasStageHistory: period ? undefined : stageHistoryIds.has(lead.id),
     })),
     { includeAssigneeBreakdown, period },
   )

@@ -15,8 +15,14 @@ import { prisma } from "@/lib/db/prisma"
 import { buildLeadFollowups, type LeadFollowups } from "@/lib/reports/lead-followups"
 
 export async function getLeadFollowups(now: Date = new Date()): Promise<LeadFollowups> {
+  // Pra-saring DB: `lost` terputus antrean (Q-LFU-1, builder tetap menyaring)
+  // dan hanya aktivitas terjadwal belum selesai yang sudah jatuh tempo s.d.
+  // akhir hari ini yang relevan. Tanpa `take` — cap akan menyembunyikan
+  // follow-up lewat secara diam-diam; builder tetap otoritas final angka.
+  const endOfToday = new Date(now)
+  endOfToday.setHours(23, 59, 59, 999)
   const leads = await prisma.lead.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, status: { not: "lost" } },
     select: {
       id: true,
       slug: true,
@@ -25,6 +31,10 @@ export async function getLeadFollowups(now: Date = new Date()): Promise<LeadFoll
       status: true,
       convertedAt: true,
       activities: {
+        where: {
+          scheduledAt: { not: null, lte: endOfToday },
+          completedAt: null,
+        },
         select: { scheduledAt: true, completedAt: true, createdAt: true },
       },
     },

@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   prismaMock: {
     lead: { findMany: vi.fn() },
+    leadActivity: { findMany: vi.fn(), groupBy: vi.fn() },
     user: { findMany: vi.fn() },
   },
 }))
@@ -288,8 +289,12 @@ describe("buildLeadFunnel corong gerakan periode", () => {
 describe("getLeadFunnel loader", () => {
   beforeEach(() => {
     mocks.prismaMock.lead.findMany.mockReset()
+    mocks.prismaMock.leadActivity.findMany.mockReset()
+    mocks.prismaMock.leadActivity.groupBy.mockReset()
     mocks.prismaMock.user.findMany.mockReset()
     mocks.prismaMock.user.findMany.mockResolvedValue([{ id: 5, name: "Sari" }])
+    mocks.prismaMock.leadActivity.findMany.mockResolvedValue([])
+    mocks.prismaMock.leadActivity.groupBy.mockResolvedValue([])
   })
 
   function prismaLead(over: Record<string, unknown>) {
@@ -307,14 +312,30 @@ describe("getLeadFunnel loader", () => {
     }
   }
 
-  it("satu query massal non-deleted + aktivitas gerakan; scope report memuat nama penanggung", async () => {
+  it("lead skalar + groupBy histori + aktivitas gerakan s.d. akhir periode; scope report memuat nama", async () => {
     mocks.prismaMock.lead.findMany.mockResolvedValue([
       prismaLead({ id: 1, assignedTo: 5, estimatedValue: 2500 }),
+    ])
+    mocks.prismaMock.leadActivity.groupBy.mockResolvedValue([{ leadId: 1, _count: { _all: 2 } }])
+    mocks.prismaMock.leadActivity.findMany.mockResolvedValue([
+      { leadId: 1, type: "status_change", oldStatus: null, newStatus: "contacted", createdAt: new Date(2026, 9, 3), description: null },
     ])
     const r = await getLeadFunnel("report", PERIOD)
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledTimes(1)
     expect(mocks.prismaMock.lead.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { deletedAt: null } }),
+      expect.objectContaining({
+        where: { deletedAt: null },
+        select: expect.not.objectContaining({ activities: expect.anything() }),
+      }),
+    )
+    expect(mocks.prismaMock.lead.findMany.mock.calls[0][0]).not.toHaveProperty("take")
+    expect(mocks.prismaMock.leadActivity.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ by: ["leadId"], where: { type: { in: ["status_change", "conversion"] } } }),
+    )
+    expect(mocks.prismaMock.leadActivity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ createdAt: { lte: PERIOD.end } }),
+      }),
     )
     expect(mocks.prismaMock.user.findMany).toHaveBeenCalledTimes(1)
     expect(r.position.byAssignee?.[0]).toMatchObject({ label: "Sari", count: 1 })
@@ -322,12 +343,33 @@ describe("getLeadFunnel loader", () => {
     expect(r.movement).not.toBeNull()
   })
 
-  it("scope leads_page: tanpa query user, byAssignee null (Q-LF-1 fail-closed nama)", async () => {
-    mocks.prismaMock.lead.findMany.mockResolvedValue([prismaLead({ id: 1, assignedTo: 5 })])
+  it("scope leads_page tanpa periode: aktivitas hanya lost, histori dari groupBy, byAssignee null", async () => {
+    mocks.prismaMock.lead.findMany.mockResolvedValue([
+      prismaLead({ id: 1, assignedTo: 5 }),
+      prismaLead({
+        id: 2, status: "lost",
+      }),
+      prismaLead({ id: 3, status: "contacted" }),
+    ])
+    // Lead 1 & 2 punya histori tahap; lead 3 tidak (groupBy tak memuatnya).
+    mocks.prismaMock.leadActivity.groupBy.mockResolvedValue([
+      { leadId: 1, _count: { _all: 1 } },
+      { leadId: 2, _count: { _all: 1 } },
+    ])
+    mocks.prismaMock.leadActivity.findMany.mockResolvedValue([
+      { leadId: 2, type: "status_change", oldStatus: "proposal", newStatus: "lost", createdAt: new Date(2026, 9, 4), description: "[kalah:harga] mahal" },
+    ])
     const r = await getLeadFunnel("leads_page")
     expect(mocks.prismaMock.user.findMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.leadActivity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { leadId: { in: [2] }, type: "status_change", newStatus: "lost" },
+      }),
+    )
     expect(r.position.byAssignee).toBeNull()
     expect(r.movement).toBeNull()
+    expect(r.position.noStageHistoryCount).toBe(1)
+    expect(r.position.lostByReason.find((row) => row.key === "harga")?.count).toBe(1)
   })
 
   it("scope tidak dikenal ditolak fail-closed tanpa query", async () => {

@@ -47,20 +47,19 @@ export default async function LeadsPage({
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
-  const leads = await prisma.lead.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take,
-    skip: (page - 1) * pageSize,
-  })
-
-  const total = await prisma.lead.count({ where })
-
-  const staleLeads = await getStaleLeads()
-
-  const leadFollowups = await getLeadFollowups()
-
-  const leadFunnel = await getLeadFunnel("leads_page")
+  // Independen semua: paralel, bukan 3 loader full-table serial.
+  const [leads, total, staleLeads, leadFollowups, leadFunnel] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      skip: (page - 1) * pageSize,
+    }),
+    prisma.lead.count({ where }),
+    getStaleLeads(),
+    getLeadFollowups(),
+    getLeadFunnel("leads_page"),
+  ])
 
   const data = toPlain(leads)
 

@@ -330,6 +330,59 @@ describe("Customer Vehicle Actions", () => {
     expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
     expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
   })
+  // Round4 #6: Vehicle katalog dipakai bersama beberapa CustomerVehicle —
+  // edit satu link tidak boleh memutasi varian/tahun pemilik lain.
+  it("updateCustomerVehicle bersama (variant): buat baris katalog berbeda, tanpa mutasi bersama", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 9 })
+    mocks.prismaMock.customerVehicle.count.mockResolvedValue(1) // pemilik lain
+    mocks.prismaMock.vehicle.findUnique.mockResolvedValue({ id: 9, vehicleVariantId: 1, year: 2020 })
+    mocks.prismaMock.vehicle.findFirst.mockResolvedValue(null) // belum ada baris cocok
+    mocks.prismaMock.vehicle.create.mockResolvedValue({ id: 42 })
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 2, year: 2024 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.create).toHaveBeenCalledWith({
+      data: { vehicleVariantId: 2, year: 2024 },
+    })
+    const link = mocks.prismaMock.customerVehicle.update.mock.calls[0][0]
+    expect(link.data.vehicleId).toBe(42)
+  })
+  it("updateCustomerVehicle bersama (variant): pakai baris katalog cocok yang sudah ada", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 9 })
+    mocks.prismaMock.customerVehicle.count.mockResolvedValue(2)
+    mocks.prismaMock.vehicle.findUnique.mockResolvedValue({ id: 9, vehicleVariantId: 1, year: 2020 })
+    mocks.prismaMock.vehicle.findFirst.mockResolvedValue({ id: 33 })
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 2, year: 2024 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerVehicle.update.mock.calls[0][0].data.vehicleId).toBe(33)
+  })
+  it("updateCustomerVehicle eksklusif (variant): mutasi in-place baris katalog sendiri", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 9 })
+    mocks.prismaMock.customerVehicle.count.mockResolvedValue(0)
+    mocks.prismaMock.vehicle.findUnique.mockResolvedValue({ id: 9, vehicleVariantId: 1, year: 2020 })
+    mocks.prismaMock.vehicle.update.mockResolvedValue({ id: 9 })
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 2, year: 2024 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vehicle.update).toHaveBeenCalledWith({
+      where: { id: 9 },
+      data: { vehicleVariantId: 2, year: 2024 },
+    })
+    expect(mocks.prismaMock.vehicle.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerVehicle.update.mock.calls[0][0].data.vehicleId).toBe(9)
+  })
+  it("updateCustomerVehicle bersama (vehicleId): relink year berubah ke baris berbeda, bersama utuh", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 9 })
+    mocks.prismaMock.vehicle.findUnique.mockResolvedValue({ id: 5, vehicleVariantId: 7, year: 2020 })
+    mocks.prismaMock.customerVehicle.count.mockResolvedValue(1) // target dipakai link lain
+    mocks.prismaMock.vehicle.findFirst.mockResolvedValue({ id: 44 })
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, vehicleId: 5, year: 2024 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.customerVehicle.update.mock.calls[0][0].data.vehicleId).toBe(44)
+  })
   it("updateCustomerVehicle menolak vehicleId fiktif", async () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 1 })
     mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 1 })

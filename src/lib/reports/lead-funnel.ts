@@ -101,6 +101,12 @@ export interface LeadFunnelLeadInput {
   convertedAt: Date | null
   deletedAt: Date | null
   activities: readonly LeadFunnelActivityInput[]
+  /**
+   * Loader bisa memasok fakta "punya aktivitas gerakan" dari agregat
+   * groupBy tanpa menarik semua aktivitas (posisi saja). Undefined =
+   * turunkan dari `activities` seperti sebelumnya.
+   */
+  hasStageHistory?: boolean
 }
 
 export interface LeadFunnelStageBucket {
@@ -268,7 +274,9 @@ function buildPosition(
     addToBucket(bucket, lead)
     if (lead.status === "won" && !isConverted(lead)) addToBucket(wonNotConverted, lead)
     if (isConverted(lead)) convertedCount += 1
-    if (!lead.activities.some(isMovementActivity)) noStageHistoryCount += 1
+    if (!(lead.hasStageHistory ?? lead.activities.some(isMovementActivity))) {
+      noStageHistoryCount += 1
+    }
 
     const sourceKey = lead.source?.trim() ? lead.source : null
     addToBreakdown(
