@@ -28,7 +28,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   },
 }))
 
-import { accrueTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
+import { accrueTx, cancelAccrualTx, paidTx, reverseTx } from "@/lib/services/commission-payable.service"
 
 const D = (n: number) => new Prisma.Decimal(n.toFixed(2))
 
@@ -49,14 +49,18 @@ function makeTx(opts?: {
   accounts?: Array<{ id: number; reportGroup: string | null; isActive: boolean }>
   payable?: Row | null
   journalExists?: boolean
+  originJournal?: { id: number; status: string; transactionDate: Date } | null
+  seedJournals?: Array<{ id: number; referenceType: string; referenceId: number }>
 }) {
   const state = {
     payable: (opts?.payable ?? null) as Row | null,
     journals: [] as Array<{ id: number; referenceType: string; referenceId: number; entries: Array<{ accountId: number; debit: unknown; credit: unknown }> }>,
     journalExists: opts?.journalExists ?? false,
-    nextJournal: 1,
+    originJournal: (opts?.originJournal ?? null) as { id: number; status: string; transactionDate: Date } | null,
+    nextJournal: 100,
     nextRow: 1,
   }
+  for (const j of opts?.seedJournals ?? []) state.journals.push({ ...j, entries: [] })
   const invoice = {
     id: 1,
     status: "paid",
@@ -101,7 +105,20 @@ function makeTx(opts?: {
     account: { findMany: async () => opts?.accounts ?? [] },
     salesReturn: { findUniqueOrThrow: async () => ({ id: 5, date: new Date(2026, 9, 20) }) },
     journal: {
-      findFirst: async () => (state.journalExists ? { id: 1 } : null),
+      findFirst: async ({ where }: { where: { referenceType: string; referenceId: number } }) => {
+        const hit = state.journals.find((j) => j.referenceType === where.referenceType && j.referenceId === where.referenceId)
+        if (hit) return hit
+        return state.journalExists ? { id: 1 } : null
+      },
+      findUnique: async ({ where }: { where: { id: number } }) =>
+        state.originJournal && state.originJournal.id === where.id ? state.originJournal : null,
+      update: async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+        if (state.originJournal && state.originJournal.id === where.id) {
+          state.originJournal = { ...state.originJournal, status: data.status as string }
+          return state.originJournal
+        }
+        return { id: where.id }
+      },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const j = { id: state.nextJournal++, referenceType: data.referenceType as string, referenceId: data.referenceId as number, entries: [] as Array<{ accountId: number; debit: unknown; credit: unknown }> }
         state.journals.push(j)
@@ -198,6 +215,20 @@ describe("commission-payable reverse", () => {
     await expect(reverseTx(tx, 1, 5, 20_000_000)).rejects.toThrow(/melebihi akrual/)
   })
 
+  it("replay retur sama: idempotensi SEBELUM penjaga kumulatif (no-op, bukan tolak)", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS,
+      accounts: ACCOUNTS,
+      payable: {
+        id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+        accruedAmount: D(220000), reversalAmount: D(220000), paidAmount: D(0), accrualJournalId: 7,
+      },
+      journalExists: true,
+    })
+    await expect(reverseTx(tx, 1, 5, 1_000_000)).resolves.toEqual({ reversed: 0, reason: null })
+    expect(state.journals).toHaveLength(0)
+  })
+
   it("tanpa baris subledger = tak mengurangi siapa pun", async () => {
     const { tx, state } = makeTx({ settings: SETTINGS, accounts: ACCOUNTS, payable: null })
     const out = await reverseTx(tx, 1, 5, 1_000_000)
@@ -243,9 +274,109 @@ describe("commission-payable paidById", () => {
         },
       })
     const { paidByIdTx } = await import("@/lib/services/commission-payable.service")
+    // payableId milik faktur lain dari argumen: tolak, paidAmount tak berubah.
+    const bad = mk()
+    await expect(paidByIdTx(bad.tx as never, 7, 100000, 999)).rejects.toThrow(/milik faktur #3, bukan faktur #999/)
+    expect(bad.state.payable?.paidAmount.toNumber()).toBe(0)
     // findUniqueOrThrow path: mock tx perlu findUnique — fallback findFirst bila tak ada.
     const t = mk()
     const out = await paidByIdTx(t.tx as never, 7, 100000, 3)
     expect(out.paid).toBe(100000)
+  })
+})
+
+describe("commission-payable cancelAccrual (un-accrue)", () => {
+  const PAYABLE: Row = {
+    id: 1, salesInvoiceId: 1, salesEmployeeId: 9,
+    accruedAmount: D(220000), reversalAmount: D(0), paidAmount: D(0), accrualJournalId: 7,
+  }
+
+  it("reversal penuh: jurnal lawan Dr utang/Cr beban, reversalAmount=accrued, asal REVERSED", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS, payable: { ...PAYABLE },
+      originJournal: { id: 7, status: "POSTED", transactionDate: new Date(2026, 9, 15) },
+    })
+    const out = await cancelAccrualTx(tx, 1)
+    expect(out).toEqual({ cancelled: true, amount: 220000, reason: null })
+    const j = state.journals.find((x) => x.referenceType === "CommissionPayableCancellation")
+    expect(Number(j?.entries.find((e) => e.accountId === 210)?.debit)).toBe(220000)
+    expect(Number(j?.entries.find((e) => e.accountId === 600)?.credit)).toBe(220000)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(220000)
+    expect(state.originJournal?.status).toBe("REVERSED")
+  })
+
+  it("sisa sesudah lawan retur parsial: hanya sisa dibatalkan", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS,
+      payable: { ...PAYABLE, reversalAmount: D(20000) },
+      originJournal: { id: 7, status: "POSTED", transactionDate: new Date(2026, 9, 15) },
+    })
+    const out = await cancelAccrualTx(tx, 1)
+    expect(out.amount).toBe(200000)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(220000)
+  })
+
+  it("sudah dibayar: throw berkonteks, nol jurnal lawan, saldo tetap", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS,
+      payable: { ...PAYABLE, paidAmount: D(50000) },
+    })
+    await expect(cancelAccrualTx(tx, 1)).rejects.toThrow(/sudah dibayar.*resolusi manual|sudah dibayar/)
+    expect(state.journals).toHaveLength(0)
+    expect(state.payable?.reversalAmount.toNumber()).toBe(0)
+  })
+
+  it("tanpa baris / saldo sudah nol = no-op beralasan", async () => {
+    const t1 = makeTx({ settings: SETTINGS, accounts: ACCOUNTS, payable: null })
+    await expect(cancelAccrualTx(t1.tx, 1)).resolves.toEqual({ cancelled: false, amount: 0, reason: "tanpa-baris" })
+    const t2 = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS,
+      payable: { ...PAYABLE, reversalAmount: D(220000) },
+    })
+    await expect(cancelAccrualTx(t2.tx, 1)).resolves.toEqual({ cancelled: false, amount: 0, reason: "sudah-nol" })
+    expect(t2.state.journals).toHaveLength(0)
+  })
+
+  it("idempoten: jurnal lawan existing = no-op tanpa jurnal kedua", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS, payable: { ...PAYABLE },
+      seedJournals: [{ id: 99, referenceType: "CommissionPayableCancellation", referenceId: 1 }],
+    })
+    const out = await cancelAccrualTx(tx, 1)
+    expect(out.cancelled).toBe(true)
+    expect(state.journals).toHaveLength(1)
+  })
+})
+
+describe("commission-payable preflight & validasi akun", () => {
+  it("jurnal akrual yatim existing tanpa baris: tolak sebelum tulis (bukan jurnal kedua)", async () => {
+    const { tx, state } = makeTx({
+      settings: SETTINGS, accounts: ACCOUNTS, payable: null,
+      seedJournals: [{ id: 55, referenceType: "CommissionPayableAccrual", referenceId: 1 }],
+    })
+    await expect(accrueTx(tx, 1)).rejects.toThrow(/resolusi manual/)
+    expect(state.journals).toHaveLength(1)
+    expect(state.payable).toBeNull()
+  })
+
+  it("akun beban bukan grup beban (EXPS/BEBAN) ditolak; label BEBAN diterima", async () => {
+    const bad = makeTx({
+      settings: SETTINGS,
+      accounts: [
+        { id: 600, reportGroup: "OCLY", isActive: true },
+        { id: 210, reportGroup: "OCLY", isActive: true },
+      ],
+    })
+    await expect(accrueTx(bad.tx, 1)).rejects.toThrow(/grup beban EXPS/)
+    expect(bad.state.journals).toHaveLength(0)
+
+    const ok = makeTx({
+      settings: SETTINGS,
+      accounts: [
+        { id: 600, reportGroup: "BEBAN", isActive: true },
+        { id: 210, reportGroup: "OCLY", isActive: true },
+      ],
+    })
+    await expect(accrueTx(ok.tx, 1)).resolves.toMatchObject({ accrued: true, amount: 220000 })
   })
 })
