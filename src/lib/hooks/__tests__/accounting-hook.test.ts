@@ -1992,6 +1992,7 @@ describe("onVendorBillPosted", () => {
       id: 1,
       grandTotal: 1100,
       tax: 100,
+      taxInvoiceNumber: "010.002-26.00000001",
       date: new Date(),
       documentNo: "BILL-1",
     };
@@ -2074,6 +2075,7 @@ describe("onVendorBillPosted", () => {
       id: 1,
       grandTotal: 100,
       tax: 150, // data-entry error: tax > grand total
+      taxInvoiceNumber: "010.002-26.00000001",
       date: new Date(),
       documentNo: "BILL-1",
       purchaseOrderId: 5,

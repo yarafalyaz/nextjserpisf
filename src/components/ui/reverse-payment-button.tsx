@@ -1,10 +1,10 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { ReasonField } from "@/components/ui/reason-field"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { showError } from "@/lib/utils/toast"
 import { useConfirmReasonAction } from "@/components/ui/confirm-reason-action"
 
 /**
@@ -28,20 +28,24 @@ export function ReversePaymentButton({
   body?: string
   onSuccess?: () => void
 }) {
+  const router = useRouter()
   const { isPending, isOpen, setIsOpen, reason, setReason, submit, handleOpenChange } =
     useConfirmReasonAction({
       run: (trimmed) => action(id, trimmed),
       successMessage: "Pembayaran berhasil dibalik",
       errorFallback: "Gagal membalik pembayaran",
-      onSuccess,
+      onSuccess: () => {
+        onSuccess?.()
+        router.refresh()
+      },
     })
 
   function handleReverse() {
-    if (!reason.trim()) {
-      showError("Alasan pembalikan wajib diisi")
-      return
-    }
     submit()
+  }
+
+  function handleOpen(open: boolean) {
+    handleOpenChange(open)
   }
 
   return (
@@ -61,7 +65,7 @@ export function ReversePaymentButton({
 
       <ConfirmDialog
         isOpen={isOpen}
-        onOpenChange={handleOpenChange}
+        onOpenChange={handleOpen}
         title={title || "Balikkan pembayaran ini?"}
         body={body || "Pembayaran ditandai dibalik dan jurnal kasnya dibalik. Baris asal tetap tersimpan sebagai histori — bukan dihapus."}
         confirmLabel="Balikkan Pembayaran"

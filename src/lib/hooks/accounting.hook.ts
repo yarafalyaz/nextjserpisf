@@ -9,7 +9,7 @@ import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils
 import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 import { parseL3Tag } from "@/lib/services/late-cost-l3.service";
-import { DEFAULT_TRANSACTION_CODE } from "@/lib/tax/tax-invoice";
+import { DEFAULT_TRANSACTION_CODE, isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice";
 import { isSettled } from "@/lib/finance/settlement-status";
 import { REVERSAL_JOURNAL_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
@@ -2578,6 +2578,19 @@ export async function onDownPaymentReceived(
 //     Cr. Accounts Payable (amount)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// F-2026-10-28-157-V Putusan 2 — PPN gabung HPP bila nomor tak valid:
+// `tax>0` tanpa `taxInvoiceNumber` valid = kaki Dr PPN Masukan DILEWATI,
+// PPN gabung ke kaki Dr clearing/beban (grandTotal penuh), JANGAN tulis
+// `not_creditable`/`INVALID_INVOICE` dari PPN yang tidak dibukukan.
+// Selaras register F-002 live: tanpa nomor valid PPN gabung HPP di JURNAL.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const VENDOR_BILL_TAX_INVOICE_WARNING =
+  "Nomor faktur pajak belum diisi — PPN digabung ke harga perolehan/HPP dan belum bisa dikreditkan. Lengkapi lewat aksi isi-nomor-faktur.";
+
+/** Re-ekspor validator tunggal `src/lib/tax/tax-invoice.ts` (kompat impor lama). */
+export { isValidVendorTaxInvoiceNumber } from "@/lib/tax/tax-invoice";
+
 export async function onVendorBillPosted(
   billId: number,
   userId?: number,
@@ -2615,6 +2628,12 @@ export async function onVendorBillPosted(
   // and the clearing account is never relieved. Service/expense bills (no GR) keep
   // debiting the expense account.
   const grandTotal = Number(bill.grandTotal);
+  const taxInvoiceValid = isValidVendorTaxInvoiceNumber(
+    (bill as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null,
+  );
+  const billTax = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
+  // Putusan 2: tax>0 tanpa nomor valid = PPN gabung HPP, bukan Dr PPN Masukan.
+  const creditInputVat = billTax > 0 && taxInvoiceValid;
   const hasGoodsReceipt =
     bill.purchaseOrderId != null &&
     (await db.goodsReceipt.count({
@@ -2634,7 +2653,10 @@ export async function onVendorBillPosted(
     memo: string;
   }[] = [];
   if (goodsBased) {
-    const taxAmount = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
+    // F-2026-10-28-157-V Putusan 2: dua jalur (pra-tx idempoten + tulis
+    // dalam-tx) WAJIB satu keputusan — tanpa nomor valid PPN gabung HPP,
+    // clearing = grandTotal penuh, tanpa kaki PPN Masukan di keduanya.
+    const taxAmount = creditInputVat ? Number(bill.tax ?? 0) : 0;
     // A bill's grand total must cover its tax; if not (data-entry error / legacy
     // bad row) the clearing leg would go negative and book a negative asset line
     // while the payable stays at grandTotal. Fail closed instead.
@@ -2697,6 +2719,7 @@ export async function onVendorBillPosted(
         id: true,
         grandTotal: true,
         tax: true,
+        taxInvoiceNumber: true,
         date: true,
         documentNo: true,
         notes: true,
@@ -2707,9 +2730,15 @@ export async function onVendorBillPosted(
     if (!b) throw new Error("Bill tidak ditemukan");
 
     const latestGrandTotal = Number(b.grandTotal);
-    const latestTaxAmount = settings.purchaseTaxAccountId
-      ? Number(b.tax ?? 0)
-      : 0;
+    // F-2026-10-28-157-V Putusan 2: jalur tulis memakai `b` (re-fetch dalam
+    // tx), bukan `bill` pra-tx — `creditInputVat` dihitung ulang dari nomor
+    // tersimpan agar isi-nomor + posting ulang memecah PPN keluar dari HPP.
+    const latestCreditInputVat =
+      (settings.purchaseTaxAccountId ? Number(b.tax ?? 0) : 0) > 0 &&
+      isValidVendorTaxInvoiceNumber(
+        (b as { taxInvoiceNumber?: unknown }).taxInvoiceNumber ?? null,
+      );
+    const latestTaxAmount = latestCreditInputVat ? Number(b.tax ?? 0) : 0;
 
     // PPh potong-putut: only the net amount is owed to the vendor; the withheld
     // part becomes a tax liability. Fail closed when the type carries no
