@@ -20,6 +20,7 @@ function job(over: Partial<JobEstimateVsActualInput> = {}): JobEstimateVsActualI
     billedAmount: 90_000_000,
     hasBilling: true,
     actualCost: 70_000_000,
+    costEstimate: 75_000_000,
     ...over,
   }
 }
@@ -30,6 +31,10 @@ describe("buildJobEstimateVsActual", () => {
     expect(r.rows[0].billingVariance).toBe(-10_000_000)
     expect(r.rows[0].actualMargin).toBe(20_000_000)
     expect(r.rows[0].noApprovedEstimate).toBe(false)
+    // R3: estimasi 75jt − aktual 70jt = +5jt (hemat).
+    expect(r.rows[0].costEstimate).toBe(75_000_000)
+    expect(r.rows[0].costVariance).toBe(5_000_000)
+    expect(r.rows[0].noCostEstimate).toBe(false)
     expect(r.totals).toEqual({
       estimate: 100_000_000,
       billed: 90_000_000,
@@ -37,6 +42,15 @@ describe("buildJobEstimateVsActual", () => {
       actualCost: 70_000_000,
       actualMargin: 20_000_000,
     })
+  })
+
+  it("tanpa snapshot: costVariance null + penanda jujur", () => {
+    const r = buildJobEstimateVsActual({
+      jobs: [job({ costEstimate: null })],
+      ...period,
+    })
+    expect(r.rows[0].costVariance).toBeNull()
+    expect(r.rows[0].noCostEstimate).toBe(true)
   })
 
   it("tanpa penawaran disetujui: selisih null (bukan nol), biaya dan margin tetap tampil", () => {
