@@ -24,12 +24,20 @@ import { getErrorMessage } from "@/lib/utils/error"
  * dipanggil sebelum ada pengguna. Sesudah terpasang, `checks` null dan
  * halaman /setup sendiri sudah me-redirect pergi.
  */
+export type PublicSetupChecks = Omit<SetupChecks, "tableCount">
+
 export async function getSetupStatus(): Promise<{
   installed: boolean
-  checks: SetupChecks | null
+  checks: PublicSetupChecks | null
 }> {
   const installed = await isInstalled()
-  return { installed, checks: installed ? null : await getSetupChecks() }
+  if (installed) return { installed, checks: null }
+  const checks = await getSetupChecks()
+  // R7PB-05: endpoint publik pra-instalasi hanya butuh boolean kesiapan;
+  // jumlah tabel eksak adalah sidik jari kesiapan DB yang tak perlu keluar.
+  const { tableCount: _tableCount, ...publicChecks } = checks
+  void _tableCount
+  return { installed, checks: publicChecks }
 }
 
 /**

@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, useTransition } from "react"
 import { CheckCircle2, Loader2, XCircle } from "lucide-react"
-import { getSetupStatus, provisionSetupSchema, runSetup } from "@/actions/setup.actions"
+import {
+  getSetupStatus,
+  provisionSetupSchema,
+  runSetup,
+  type PublicSetupChecks,
+} from "@/actions/setup.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -11,8 +16,6 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import type { SetupChecks } from "@/lib/setup/provision"
-
 const STEPS = ["Selamat Datang", "Pemeriksaan Sistem", "Data Perusahaan", "Akun Administrator"]
 
 type Status = Awaited<ReturnType<typeof getSetupStatus>>
@@ -87,7 +90,7 @@ export function SetupForm() {
     }
   }, [])
 
-  const checks: SetupChecks | null = status?.checks ?? null
+  const checks: PublicSetupChecks | null = status?.checks ?? null
   const schemaReady = checks?.schemaReady === true
 
   function fieldValue(name: string): string {
@@ -116,7 +119,11 @@ export function SetupForm() {
     startProvision(async () => {
       try {
         const result = await provisionSetupSchema()
-        if (result.checks) setStatus({ installed: false, checks: result.checks })
+        if (result.checks) {
+          const { tableCount: _tableCount, ...publicChecks } = result.checks
+          void _tableCount
+          setStatus({ installed: false, checks: publicChecks })
+        }
         if (!result.success) {
           setProvError(result.error ?? "Gagal menyiapkan skema database")
         }
@@ -271,7 +278,7 @@ export function SetupForm() {
                     statusLoading
                       ? "Memeriksa…"
                       : schemaReady
-                        ? `${checks?.tableCount ?? 0} tabel ditemukan — skema siap dipakai.`
+                        ? "Skema database siap dipakai."
                         : checks?.databaseConnected
                           ? "Tabel aplikasi belum terbentuk. Buat otomatis dari migrasi aplikasi dengan tombol di bawah."
                           : "Belum bisa diperiksa sampai koneksi database hidup."
