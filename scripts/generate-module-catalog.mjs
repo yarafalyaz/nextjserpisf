@@ -158,6 +158,8 @@ const RESOURCES = [
   // F-2026-10-26-054-S Q-SA-2: verba approve atas resource ini.
   ["salary_adjustments", "hrm", "Penyesuaian Gaji"],
   ["journals", "finance", "Jurnal"],
+  // R6WN-06: resource approve_year_end_closings.
+  ["year_end_closings", "finance", "Penutup Tahun"],
   ["expenses", "finance", "Pengeluaran"],
   ["employee_reimbursements", "hrm", "Klaim Reimbursement"],
   ["petty_cash", "finance", "Kas Kecil"],

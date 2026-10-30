@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requireAnyPermission } from "@/lib/auth/permissions";
+import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
 import { formatDate } from "@/lib/utils/format";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import {
@@ -30,7 +31,12 @@ export default async function ApprovalDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   // Approval details and history can contain data from unrelated modules.
-  await requirePermission("approve_workflows");
+  // R6WN-06: gerbang kasar any-permission, lalu permission referensi
+  // approval ini sendiri — approveStep/rejectStep tetap penegak akhir.
+  const user = await requireAnyPermission([
+    "approve_workflows",
+    ...Object.values(APPROVAL_REFERENCE_PERMISSIONS),
+  ] as Parameters<typeof requireAnyPermission>[0]);
   const { slug } = await params;
 
   const approvalInclude = {
@@ -47,6 +53,13 @@ export default async function ApprovalDetailPage({
   );
 
   if (!approval) notFound();
+
+  const referencePermission = APPROVAL_REFERENCE_PERMISSIONS[approval.referenceType];
+  const canViewApproval =
+    user.roles.includes("super_admin") ||
+    (user.permissions ?? []).includes("approve_workflows") ||
+    (!!referencePermission && (user.permissions ?? []).includes(referencePermission));
+  if (!canViewApproval) redirect("/pengaturan/persetujuan");
 
   const approveWithId = approveStep.bind(null, approval.id);
   const rejectWithId = rejectStep.bind(null, approval.id);

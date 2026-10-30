@@ -26,4 +26,11 @@ export const APPROVAL_REFERENCE_PERMISSIONS: Record<string, string> = {
   Expense: "approve_expenses",
   VendorPayment: "approve_vendor_payments",
   Journal: "approve_journals",
+  // R6WN-06: tipe yang bisa dikonfigurasi workflow tetapi dulu tanpa
+  // permission khusus — hanya approve_workflows/super_admin yang lolos.
+  Payroll: "approve_payroll",
+  StockAdjustment: "approve_stock_adjustments",
+  Project: "approve_projects",
+  Asset: "approve_assets",
+  YearEndClosing: "approve_year_end_closings",
 }

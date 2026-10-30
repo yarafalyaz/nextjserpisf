@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { ROUTE_PERMS } from "@/lib/auth/action-perms"
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
+import { APPROVAL_MODEL_TYPES } from "@/lib/constants/approval"
 import { navigation } from "@/components/layout/navigation"
 import {
   ATTACHMENT_PERMISSION,
@@ -208,6 +209,13 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
     // it. Pin the split so it cannot silently regress to create_loans.
     expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).toBe("approve_loans")
     expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).not.toBe("create_loans")
+  })
+
+  it("R6WN-06: setiap tipe yang bisa dikonfigurasi workflow punya permission approve", () => {
+    const withoutPermission = APPROVAL_MODEL_TYPES.filter(
+      (t) => !APPROVAL_REFERENCE_PERMISSIONS[t],
+    )
+    expect(withoutPermission).toEqual([])
   })
 
   it("F-2026-10-25-012-S: approve_sales_returns ter-seed tepat satu kali dan tidak bocor ke whitelist non-admin", () => {

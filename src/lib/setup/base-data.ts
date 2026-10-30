@@ -176,6 +176,7 @@ export const PERMISSIONS = [
       "view_stock_adjustments",
       "create_stock_adjustments",
       "edit_stock_adjustments",
+      "approve_stock_adjustments",
       "process_stock_adjustments",
       "delete_stock_adjustments",
       "view_inventory_transfers",
@@ -225,6 +226,7 @@ export const PERMISSIONS = [
       "view_payroll",
       "create_payroll",
       "edit_payroll",
+      "approve_payroll",
       "process_payroll",
       "update_payroll",
       "view_journals",
@@ -232,6 +234,7 @@ export const PERMISSIONS = [
       "edit_journals",
       "post_journals",
       "approve_journals",
+      "approve_year_end_closings",
       "delete_journals",
       "view_expenses",
       "create_expenses",
@@ -261,6 +264,7 @@ export const PERMISSIONS = [
       "delete_timesheets",
       "view_assets",
       "create_assets",
+      "approve_assets",
       "manage_assets",
       "delete_assets",
       "view_appreciations",
@@ -314,6 +318,7 @@ export const PERMISSIONS = [
       "view_projects",
       "create_projects",
       "edit_projects",
+      "approve_projects",
       "delete_projects",
       "manage_projects",
       "view_cost_centers",
@@ -634,6 +639,8 @@ export const GA_WHITELIST = [
 export const KABENG_WHITELIST = [
       "view_dashboard",
       "view_cost_amounts",
+      // R6WN-06: kepala bengkel penyetuju penyesuaian stok (warehouse tetap maker).
+      "approve_stock_adjustments",
       "view_recruitments",
       "view_performance",
       "edit_performance",
@@ -787,6 +794,9 @@ export const FINANCE_WHITELIST = [
       "edit_journals",
       "post_journals",
       "approve_journals",
+      // R6WN-06: finance penyetuju penutup tahun + penggajian.
+      "approve_year_end_closings",
+      "approve_payroll",
       // F-2026-10-26-054-S Q-SA-2: finance penyetuju penyesuaian gaji tahap 1.
       "approve_salary_adjustments",
       "delete_journals",

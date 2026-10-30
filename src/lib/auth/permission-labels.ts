@@ -154,6 +154,8 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   warranty_claims: "Klaim Garansi",
   work_schedules: "Jadwal Kerja",
   workflows: "Alur Kerja",
+  // R6WN-06: subject baru untuk approve_year_end_closings.
+  year_end_closings: "Penutup Tahun",
 };
 
 /** Split `create_purchase_orders` into its verb and subject parts. */

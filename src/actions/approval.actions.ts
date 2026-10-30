@@ -42,7 +42,9 @@ type WorkflowStepInput = {
 // "approved" mematikan cron depresiasi (hanya memproses active) dan
 // helper status proyek. Keduanya gate-only: assertApproved tetap
 // menggerbang disposal aset / edit proyek, status dokumen tak disentuh.
-const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdjustment", "Asset", "Project"]);
+// R6WN-06: YearEndClosing referenceId-nya tahun fiskal (bukan baris dokumen)
+// — menulis status ke "dokumen" tahun akan menulis ke model yang salah.
+const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdjustment", "Asset", "Project", "YearEndClosing"]);
 
 // Vonis F-2026-10-25-014-V K4-S2(a): mematikan/menghapus workflow untuk
 // tipe gerbang uang WAJIB tercatat eksplisit di activity log — no-op

@@ -76,6 +76,13 @@ describe("validations/approval.schemas", () => {
   it("createWorkflowSchema rejects empty modelType", () => {
     expect(createWorkflowSchema.safeParse({ name: "X", modelType: "" }).success).toBe(false);
   });
+  it("R6WN-06: workflow schema rejects unknown/lowercase modelType, accepts new types", () => {
+    expect(createWorkflowSchema.safeParse({ name: "X", modelType: "journal" }).success).toBe(false);
+    expect(createWorkflowSchema.safeParse({ name: "X", modelType: "BukanTipe" }).success).toBe(false);
+    for (const modelType of ["Quotation", "StockAdjustment", "YearEndClosing"]) {
+      expect(createWorkflowSchema.safeParse({ name: "X", modelType }).success).toBe(true);
+    }
+  });
 
   it("workflowStepSchema accepts roleId step", () => {
     expect(workflowStepSchema.safeParse({ name: "Manager", roleId: 3 }).success).toBe(true);

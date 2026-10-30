@@ -74,6 +74,8 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     "delete_succession",
   ],
   kepala_bengkel: [
+    // R6WN-06: kabeng penyetuju penyesuaian stok (warehouse tetap maker).
+    "approve_stock_adjustments",
     "approve_bom_revisions",
     // F-2026-10-25-010-S putusan Lead Q-AC-3: approve koreksi absensi KABENG
     // sejajar approve cuti/lembur, sadar terdaftar.
@@ -90,6 +92,9 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     // approve_journals sadar ditambahkan bersama gerbang K4 (F-2026-10-25-014-V):
     // role finance = penyetuju jurnal manual 1 langkah (seed APR-JRN).
     "approve_journals",
+    // R6WN-06: finance penyetuju penutup tahun + penggajian.
+    "approve_year_end_closings",
+    "approve_payroll",
     // F-2026-10-26-054-S Q-SA-2: finance penyetuju penyesuaian gaji tahap 1.
     "approve_salary_adjustments",
     "post_journals",

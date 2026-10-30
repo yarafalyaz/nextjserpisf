@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 386 permission dikelompokkan per modul (15 modul). */
+/** 391 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -237,6 +237,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "stock_adjustments", permissionKey: "create_stock_adjustments", label: "Penyesuaian Stok" },
     { key: "edit", resource: "stock_adjustments", permissionKey: "edit_stock_adjustments", label: "Penyesuaian Stok" },
     { key: "delete", resource: "stock_adjustments", permissionKey: "delete_stock_adjustments", label: "Penyesuaian Stok" },
+    { key: "approve", resource: "stock_adjustments", permissionKey: "approve_stock_adjustments", label: "Penyesuaian Stok" },
     { key: "process", resource: "stock_adjustments", permissionKey: "process_stock_adjustments", label: "Penyesuaian Stok" },
     { key: "view", resource: "material_requests", permissionKey: "view_material_requests", label: "Permintaan Antar Gudang" },
     { key: "create", resource: "material_requests", permissionKey: "create_material_requests", label: "Permintaan Antar Gudang" },
@@ -331,6 +332,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "payroll", permissionKey: "create_payroll", label: "Penggajian" },
     { key: "edit", resource: "payroll", permissionKey: "edit_payroll", label: "Penggajian" },
     { key: "update", resource: "payroll", permissionKey: "update_payroll", label: "Penggajian" },
+    { key: "approve", resource: "payroll", permissionKey: "approve_payroll", label: "Penggajian" },
     { key: "process", resource: "payroll", permissionKey: "process_payroll", label: "Penggajian" },
     { key: "view", resource: "performance", permissionKey: "view_performance", label: "Penilaian Kinerja" },
     { key: "create", resource: "performance", permissionKey: "create_performance", label: "Penilaian Kinerja" },
@@ -376,6 +378,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "expenses", permissionKey: "edit_expenses", label: "Pengeluaran" },
     { key: "delete", resource: "expenses", permissionKey: "delete_expenses", label: "Pengeluaran" },
     { key: "approve", resource: "expenses", permissionKey: "approve_expenses", label: "Pengeluaran" },
+    { key: "approve", resource: "year_end_closings", permissionKey: "approve_year_end_closings", label: "Penutup Tahun" },
     { key: "view", resource: "tax_payments", permissionKey: "view_tax_payments", label: "Penyetoran Pajak" },
     { key: "create", resource: "tax_payments", permissionKey: "create_tax_payments", label: "Penyetoran Pajak" },
     { key: "delete", resource: "tax_payments", permissionKey: "delete_tax_payments", label: "Penyetoran Pajak" },
@@ -432,6 +435,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "projects", permissionKey: "edit_projects", label: "Proyek" },
     { key: "delete", resource: "projects", permissionKey: "delete_projects", label: "Proyek" },
     { key: "manage", resource: "projects", permissionKey: "manage_projects", label: "Proyek" },
+    { key: "approve", resource: "projects", permissionKey: "approve_projects", label: "Proyek" },
   ],
   assets: [
     { key: "view", resource: "assets", permissionKey: "view_assets", label: "Aset" },
@@ -439,6 +443,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "assets", permissionKey: "edit_assets", label: "Aset" },
     { key: "delete", resource: "assets", permissionKey: "delete_assets", label: "Aset" },
     { key: "manage", resource: "assets", permissionKey: "manage_assets", label: "Aset" },
+    { key: "approve", resource: "assets", permissionKey: "approve_assets", label: "Aset" },
     { key: "view", resource: "asset_groups", permissionKey: "view_asset_groups", label: "Grup Aset" },
     { key: "create", resource: "asset_groups", permissionKey: "create_asset_groups", label: "Grup Aset" },
     { key: "edit", resource: "asset_groups", permissionKey: "edit_asset_groups", label: "Grup Aset" },

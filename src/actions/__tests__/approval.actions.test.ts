@@ -501,6 +501,39 @@ describe("approveStep / rejectStep branches", () => {
     expect(mocks.prismaMock.approval.update).not.toHaveBeenCalled();
   });
 
+  it("R6WN-06: permission approve per-tipe baru lolos hanya untuk tipe cocok", async () => {
+    mocks.prismaMock.payroll.findUnique.mockResolvedValue({
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "monthly" } },
+      employeeId: null,
+    });
+    const cases: Array<[string, string]> = [
+      ["Payroll", "approve_payroll"],
+      ["StockAdjustment", "approve_stock_adjustments"],
+      ["Project", "approve_projects"],
+      ["Asset", "approve_assets"],
+      ["YearEndClosing", "approve_year_end_closings"],
+    ];
+    for (const [referenceType, permission] of cases) {
+      mocks.authMock.mockResolvedValue({
+        user: { id: "2", roles: ["finance"], permissions: [permission] },
+      });
+      seedApprovalObj({ referenceType, requestedBy: 1 }, { userId: 2 });
+      await actions.approveStep(1, fdMap({ notes: "OK" }));
+      expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({ status: "approved" }),
+        }),
+      );
+      mocks.prismaMock.approval.update.mockClear();
+
+      seedApprovalObj({ referenceType: "SalesOrder", requestedBy: 1 }, { userId: 2 });
+      await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow(
+        "Anda tidak memiliki izin menyetujui dokumen ini.",
+      );
+    }
+  });
+
   it("approveStep fails when approval not found", async () => {
     silenceConsole();
     mocks.prismaMock.approval.findUnique.mockResolvedValue(null);

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import "./zod-locale";
+import { APPROVAL_MODEL_TYPES } from "@/lib/constants/approval"
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -18,7 +19,9 @@ export const rejectStepSchema = z.object({
 
 export const createWorkflowSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").max(255),
-  modelType: z.string().min(1, "Tipe dokumen wajib diisi").max(255),
+  // R6WN-06: enum, bukan string bebas — typo ("journal") dulu lahir workflow
+  // aktif yang tidak pernah cocok dengan tipe dokumen backend.
+  modelType: z.enum(APPROVAL_MODEL_TYPES),
   code: optionalString(100),
   isActive: z.boolean().optional().default(true),
   steps: optionalString(10000), // JSON string, parsed separately
@@ -26,7 +29,7 @@ export const createWorkflowSchema = z.object({
 
 export const updateWorkflowSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").max(255),
-  modelType: z.string().min(1, "Tipe dokumen wajib diisi").max(255),
+  modelType: z.enum(APPROVAL_MODEL_TYPES),
   code: optionalString(100),
   isActive: z.boolean().optional().default(true),
   steps: optionalString(10000), // JSON string, parsed separately

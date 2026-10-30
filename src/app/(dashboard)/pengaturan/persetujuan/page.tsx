@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAnyPermission } from "@/lib/auth/permissions"
+import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -26,7 +27,20 @@ export async function renderApprovalsPage(
   pendingOnly = false,
 ) {
   // This list spans approvals from every module and exposes request metadata.
-  await requirePermission("approve_workflows")
+  // R6WN-06: pemegang permission approve per-tipe (approve_payroll dst.)
+  // boleh membuka antrean, tetapi hanya melihat tipe yang permission-nya
+  // dipegang. approve_workflows/super_admin melihat semua.
+  const approvalPermissions = Object.values(APPROVAL_REFERENCE_PERMISSIONS)
+  const user = await requireAnyPermission([
+    "approve_workflows",
+    ...approvalPermissions,
+  ] as Parameters<typeof requireAnyPermission>[0])
+  const canSeeAll =
+    user.roles.includes("super_admin") ||
+    (user.permissions ?? []).includes("approve_workflows")
+  const visibleReferenceTypes = Object.entries(APPROVAL_REFERENCE_PERMISSIONS)
+    .filter(([, permission]) => (user.permissions ?? []).includes(permission))
+    .map(([referenceType]) => referenceType)
   const params = await searchParams
 
   // Rute lama ?status=menunggu pindah ke /pengaturan/persetujuan/menunggu.
@@ -37,6 +51,7 @@ export async function renderApprovalsPage(
   const cari = params.cari?.trim()
 
   const where = {
+    ...(canSeeAll ? {} : { referenceType: { in: visibleReferenceTypes } }),
     ...(pendingOnly
       ? { status: "pending" }
       : {
