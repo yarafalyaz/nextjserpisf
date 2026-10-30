@@ -32,16 +32,20 @@ type WorkflowStepInput = {
 };
 
 // Tipe yang siklus statusnya dimiliki action dokumennya sendiri
-// (Journal: DRAFT→POSTED huruf besar; VendorPayment: draft→completed).
-// Untuk tipe ini workflow hanya menggerbang transisi posting lewat
-// assertApproved di action dokumen; menulis status "approved"/"rejected"
-// ke dokumen akan merusak kosakata statusnya.
-const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment"]);
+// (Journal: DRAFT→POSTED huruf besar; VendorPayment: draft→completed;
+// StockAdjustment: draft→processed, STOK-06). Untuk tipe ini workflow
+// hanya menggerbang transisi posting lewat assertApproved di action
+// dokumen; menulis status "approved"/"rejected" ke dokumen akan
+// merusak kosakata statusnya (adjustment "approved" tidak bisa diproses —
+// processStockAdjustment hanya menerima draft).
+const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdjustment"]);
 
 // Vonis F-2026-10-25-014-V K4-S2(a): mematikan/menghapus workflow untuk
 // tipe gerbang uang WAJIB tercatat eksplisit di activity log — no-op
 // requestApprovalIfConfigured tanpa workflow sesudah itu tidak senyap.
-const MONEY_GATE_MODEL_TYPES = GATE_ONLY_REFERENCE_TYPES;
+// Tetap [Journal, VendorPayment]: StockAdjustment gate-only statusnya,
+// bukan gerbang uang (stok), jadi tidak ikut set ini.
+const MONEY_GATE_MODEL_TYPES = new Set(["Journal", "VendorPayment"]);
 
 async function logMoneyGateChange(
   action: "deactivate" | "delete",

@@ -308,6 +308,23 @@ describe("Approval Workflow CRUD", () => {
     expectApprovalStatus("approved");
     expect(mocks.prismaMock.vendorPayment.update).not.toHaveBeenCalled();
   });
+  // STOK-06: StockAdjustment gate-only statusnya — bila approval menulis
+  // "approved" ke dokumen, processStockAdjustment (hanya draft) menolak
+  // selamanya dan stok tidak pernah terposting.
+  it("STOK-06: approveStep final StockAdjustment tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.stockAdjustment = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "StockAdjustment", referenceId: 7 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
+  });
+  it("STOK-06: rejectStep StockAdjustment tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.stockAdjustment = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "StockAdjustment", referenceId: 7 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expectApprovalStatus("rejected");
+    expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
+  });
 
   // ── K4-S2(a) (F-2026-10-25-014-V): nonaktif/hapus workflow gerbang
   // uang Journal/VendorPayment tercatat eksplisit di activity log.
