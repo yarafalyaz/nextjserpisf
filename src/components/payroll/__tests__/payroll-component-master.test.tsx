@@ -50,7 +50,7 @@ const components = [
 
 describe("PayrollComponentMaster", () => {
   it("rows show kind, recurrence, taxable classification, active state", () => {
-    const { container, root } = mount(<PayrollComponentMaster components={components} />)
+    const { container, root } = mount(<PayrollComponentMaster components={components} canCreate canEdit />)
     expect(container.textContent).toContain("Tunjangan Makan")
     expect(container.textContent).toContain("Pendapatan")
     expect(container.textContent).toContain("Tetap")
@@ -62,13 +62,13 @@ describe("PayrollComponentMaster", () => {
   })
 
   it("empty state", () => {
-    const { container, root } = mount(<PayrollComponentMaster components={[]} />)
+    const { container, root } = mount(<PayrollComponentMaster components={[]} canCreate canEdit />)
     expect(container.textContent).toContain("Belum ada komponen gaji tercatat.")
     act(() => root.unmount())
   })
 
   it("create form shows honest tax note, no journal/auto-tax claim", () => {
-    const { container, root } = mount(<PayrollComponentMaster components={components} />)
+    const { container, root } = mount(<PayrollComponentMaster components={components} canCreate canEdit />)
     expect(container.querySelector('label[for="pc-name"]')).not.toBeNull()
     expect(container.textContent).toContain("klasifikasi belum mengubah hitungan pajak maupun jurnal")
     expect(container.textContent).not.toContain("bebas pajak")
@@ -78,7 +78,7 @@ describe("PayrollComponentMaster", () => {
 
   it("aksi melempar (network/server) → toast error fallback, bukan unhandled rejection", async () => {
     setActiveMock.mockRejectedValueOnce(new Error("network down"))
-    const { container, root } = mount(<PayrollComponentMaster components={components} />)
+    const { container, root } = mount(<PayrollComponentMaster components={components} canCreate canEdit />)
     const btn = container.querySelector<HTMLButtonElement>('[aria-label="Aktifkan Potongan Kasbon"]')!
     await act(async () => {
       btn.dispatchEvent(new MouseEvent("click", { bubbles: true }))

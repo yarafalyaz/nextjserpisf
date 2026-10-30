@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -28,6 +28,7 @@ export default async function TrainingDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_trainings")
+  const canEdit = await hasPermission("edit_trainings")
   const { slug } = await params
 
   const training = await resolveEntity(
@@ -79,13 +80,13 @@ export default async function TrainingDetailPage({
             {training.endDate ? ` – ${training.endDate.toLocaleDateString("id-ID")}` : ""} · {training.location ?? "-"}
           </p>
         </div>
-        <TrainingStatusButton trainingId={training.id} status={training.status} />
+        <TrainingStatusButton trainingId={training.id} status={training.status} canEdit={canEdit} />
       </div>
 
       <section className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">Peserta ({training.participants.length})</h2>
         {training.status === "scheduled" && (
-          <ParticipantForm trainingId={training.id} employees={employees} />
+          <ParticipantForm trainingId={training.id} employees={employees} canEdit={canEdit} />
         )}
         <div className="overflow-x-auto rounded-lg border border-default">
           <table className="w-full text-sm">
@@ -113,7 +114,7 @@ export default async function TrainingDetailPage({
                   <td className="px-4 py-3">{p.score != null ? Number(p.score) : "-"}</td>
                   <td className="px-4 py-3">{p.certificateRef ?? "-"}</td>
                   <td className="px-4 py-3">
-                    <ParticipantResultButtons participantId={p.id} />
+                    <ParticipantResultButtons participantId={p.id} canEdit={canEdit} />
                   </td>
                 </tr>
               ))}

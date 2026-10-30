@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -32,6 +32,7 @@ export default async function PerformanceCycleDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const sessionUser = await requirePermission("view_performance")
+  const canEdit = await hasPermission("edit_performance")
   const { slug } = await params
 
   const cycle = await resolveEntity(
@@ -118,7 +119,7 @@ export default async function PerformanceCycleDetailPage({
                     ) : isSelf ? (
                       <SelfReviewForm cycleId={cycle.id} employeeId={emp.id} />
                     ) : scope.kind !== "self" ? (
-                      <ManagerReviewForm cycleId={cycle.id} employeeId={emp.id} />
+                      <ManagerReviewForm cycleId={cycle.id} employeeId={emp.id} canEdit={canEdit} />
                     ) : (
                       "-"
                     )}

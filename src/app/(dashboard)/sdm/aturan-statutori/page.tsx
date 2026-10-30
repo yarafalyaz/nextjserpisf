@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requireAnyPermission } from "@/lib/auth/permissions"
+import { hasPermission, requireAnyPermission } from "@/lib/auth/permissions"
 import { EmptyState } from "@/components/ui/empty-state"
 import { PageHeader } from "@/components/ui/page-header"
 import {
@@ -33,6 +33,10 @@ export const metadata: Metadata = { title: "Aturan Statutori" }
  */
 export default async function StatutoryRulesPage() {
   await requireAnyPermission(["view_payroll", "create_payroll", "edit_payroll"])
+  const [canCreate, canEdit] = await Promise.all([
+    hasPermission("create_payroll"),
+    hasPermission("edit_payroll"),
+  ])
 
   const rules = await prisma.payrollStatutoryRule.findMany({
     orderBy: [{ key: "asc" }, { effectiveFrom: "desc" }],
@@ -51,16 +55,20 @@ export default async function StatutoryRulesPage() {
       />
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-          <div className="flex flex-col gap-0.5">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Tambah Aturan</h2>
-            <p className="text-xs text-muted-foreground">
-              Baris baru berlaku sejak tanggal yang diisi. Untuk mengubah tarif: tutup
-              baris lama dengan tanggal akhir, lalu tambah baris baru.
-            </p>
-          </div>
-        </div>
-        <StatutoryRuleForm />
+        {canCreate && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
+              <div className="flex flex-col gap-0.5">
+                <h2 className="text-[0.9375rem] font-semibold text-foreground">Tambah Aturan</h2>
+                <p className="text-xs text-muted-foreground">
+                  Baris baru berlaku sejak tanggal yang diisi. Untuk mengubah tarif: tutup
+                  baris lama dengan tanggal akhir, lalu tambah baris baru.
+                </p>
+              </div>
+            </div>
+            <StatutoryRuleForm canCreate={canCreate} />
+          </>
+        )}
         <div className="p-4 px-5">
           {rules.length === 0 ? (
             <EmptyState title="Belum ada aturan — hitungan memakai bawaan 2024 dari kode" className="py-10" />
@@ -86,7 +94,7 @@ export default async function StatutoryRulesPage() {
                     <DetailTableTd>{rule.source ?? "—"}</DetailTableTd>
                     <DetailTableTd align="right">
                       <div className="flex justify-end gap-2">
-                        {!rule.effectiveTo && <CloseRuleForm id={rule.id} />}
+                        {!rule.effectiveTo && <CloseRuleForm id={rule.id} canEdit={canEdit} />}
                         <CanCreate permission="edit_payroll">
                           <DeleteButton id={rule.id} action={deleteStatutoryRule} />
                         </CanCreate>

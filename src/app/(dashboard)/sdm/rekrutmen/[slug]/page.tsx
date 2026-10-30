@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -41,6 +41,7 @@ export default async function VacancyDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_recruitments")
+  const canEdit = await hasPermission("edit_recruitments")
   const { slug } = await params
 
   const vacancy = await resolveEntity(
@@ -98,7 +99,7 @@ export default async function VacancyDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
-          <VacancyStatusButton vacancyId={vacancy.id} status={vacancy.status} />
+          <VacancyStatusButton vacancyId={vacancy.id} status={vacancy.status} canEdit={canEdit} />
           <CanCreate permission="edit_recruitments">
             <Button href={`/sdm/rekrutmen/${vacancy.slug ?? vacancy.id}/ubah`} variant="secondary">Ubah</Button>
           </CanCreate>
@@ -161,7 +162,7 @@ export default async function VacancyDetailPage({
                       {terminal ? (
                         STAGE_LABELS[a.stage]
                       ) : (
-                        <ApplicantStageSelect applicantId={a.id} stage={a.stage} disabled={false} />
+                        <ApplicantStageSelect applicantId={a.id} stage={a.stage} disabled={false} canEdit={canEdit} />
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -170,7 +171,7 @@ export default async function VacancyDetailPage({
                           {a.hiredEmployee.employeeNo}
                         </Link>
                       ) : a.stage === "offering" || a.stage === "interview" || a.stage === "screening" || a.stage === "applied" ? (
-                        <HireButton applicantId={a.id} disabled={false} />
+                        <HireButton applicantId={a.id} disabled={false} canEdit={canEdit} />
                       ) : (
                         "-"
                       )}

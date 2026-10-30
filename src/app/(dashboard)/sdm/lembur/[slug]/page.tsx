@@ -27,9 +27,11 @@ export default async function OvertimeRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const user = await requirePermission("view_overtime")
-  const [canApprove, canViewPayroll] = await Promise.all([
+  const [canApprove, canViewPayroll, canEdit, canDelete] = await Promise.all([
     hasPermission("approve_overtime_requests"),
     hasPermission("view_payroll"),
+    hasPermission("edit_overtime_requests"),
+    hasPermission("delete_overtime_requests"),
   ])
   const scope = await getHrScope(user)
 
@@ -66,8 +68,10 @@ export default async function OvertimeRequestDetailPage({
         badge={<StatusChip status={overtime.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/sdm/lembur", overtime)} variant="primary">Ubah</Button>
-            <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />
+            {canEdit && (
+              <Button href={entityEditHref("/sdm/lembur", overtime)} variant="primary">Ubah</Button>
+            )}
+            {canDelete && <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />}
             <BackButton href="/sdm/lembur" />
           </>
         }

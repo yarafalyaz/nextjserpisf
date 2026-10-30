@@ -51,9 +51,15 @@ export function taxableLabel(isTaxable: boolean, kind: string): string {
 export function PayrollComponentMaster({
   components,
   accounts = [],
+  canCreate,
+  canEdit,
 }: {
   components: PayrollComponentMasterRow[]
   accounts?: { id: number; code: string; name: string }[]
+  /** Izin create_employees dari server — gerbang form tambah. */
+  canCreate: boolean
+  /** Izin edit_employees dari server — gerbang Ubah + Aktif/Nonaktifkan. */
+  canEdit: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -103,7 +109,7 @@ export function PayrollComponentMaster({
                 <th className="px-4 py-3 font-medium">Sifat</th>
                 <th className="px-4 py-3 font-medium">Klasifikasi Pajak</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Aksi</th>
+                {canEdit && <th className="px-4 py-3 font-medium">Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -114,34 +120,36 @@ export function PayrollComponentMaster({
                   <td className="px-4 py-3">{recurrenceLabel(c.recurrence)}</td>
                   <td className="px-4 py-3">{taxableLabel(c.isTaxable, c.kind)}</td>
                   <td className="px-4 py-3">{c.isActive ? "Aktif" : "Nonaktif"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onPress={() => {
-                          setEditing(c)
-                          setKind(c.kind)
-                        }}
-                      >
-                        Ubah
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        isDisabled={isPending}
-                        aria-label={`${c.isActive ? "Nonaktifkan" : "Aktifkan"} ${c.name}`}
-                        onPress={() =>
-                          run(
-                            () => setPayrollComponentActive(c.id, !c.isActive),
-                            c.isActive ? "Komponen gaji dinonaktifkan" : "Komponen gaji diaktifkan",
-                          )
-                        }
-                      >
-                        {c.isActive ? "Nonaktifkan" : "Aktifkan"}
-                      </Button>
-                    </div>
-                  </td>
+                  {canEdit && (
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onPress={() => {
+                            setEditing(c)
+                            setKind(c.kind)
+                          }}
+                        >
+                          Ubah
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          isDisabled={isPending}
+                          aria-label={`${c.isActive ? "Nonaktifkan" : "Aktifkan"} ${c.name}`}
+                          onPress={() =>
+                            run(
+                              () => setPayrollComponentActive(c.id, !c.isActive),
+                              c.isActive ? "Komponen gaji dinonaktifkan" : "Komponen gaji diaktifkan",
+                            )
+                          }
+                        >
+                          {c.isActive ? "Nonaktifkan" : "Aktifkan"}
+                        </Button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -155,6 +163,7 @@ export function PayrollComponentMaster({
         masih agregat — klasifikasi belum mengubah hitungan pajak maupun jurnal.
       </p>
 
+      {(canCreate || editing) && (
       <form
         onSubmit={onSubmit}
         aria-busy={isPending}
@@ -262,6 +271,7 @@ export function PayrollComponentMaster({
           </Button>
         </div>
       </form>
+      )}
     </div>
   )
 }

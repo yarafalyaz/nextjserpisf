@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
@@ -26,6 +26,7 @@ function formatDate(d: Date) {
 
 export default async function PerformancePage() {
   await requirePermission("view_performance")
+  const canEdit = await hasPermission("edit_performance")
 
   const cycles = await prisma.performanceCycle.findMany({
     where: { deletedAt: null },
@@ -78,7 +79,7 @@ export default async function PerformancePage() {
                 <td className="px-4 py-3">{c._count.goals}</td>
                 <td className="px-4 py-3">{STATUS_LABELS[c.status] ?? c.status}</td>
                 <td className="px-4 py-3">
-                  <CycleStatusButton cycleId={c.id} status={c.status} />
+                  <CycleStatusButton cycleId={c.id} status={c.status} canEdit={canEdit} />
                 </td>
               </tr>
             ))}

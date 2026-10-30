@@ -12,12 +12,17 @@ import { showError, showSuccess } from "@/lib/utils/toast"
 export function CriticalToggle({
   positionId,
   isCritical,
+  canEdit,
 }: {
   positionId: number
   isCritical: boolean
+  /** Izin edit_succession dari server. */
+  canEdit: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return null
 
   return (
     <button
@@ -96,9 +101,18 @@ export function SuccessorForm({
   )
 }
 
-export function RemoveSuccessorButton({ id }: { id: number }) {
+export function RemoveSuccessorButton({
+  id,
+  canDelete,
+}: {
+  id: number
+  /** Izin delete_succession dari server. */
+  canDelete: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canDelete) return null
 
   return (
     <button

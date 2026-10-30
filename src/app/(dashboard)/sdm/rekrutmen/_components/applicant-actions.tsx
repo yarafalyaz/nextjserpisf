@@ -17,17 +17,31 @@ const STAGE_OPTIONS = [
   { value: "rejected", label: "Ditolak" },
 ]
 
+const STAGE_LABELS: Record<string, string> = {
+  applied: "Melamar",
+  screening: "Seleksi Berkas",
+  interview: "Wawancara",
+  offering: "Penawaran",
+  hired: "Diterima",
+  rejected: "Ditolak",
+}
+
 export function ApplicantStageSelect({
   applicantId,
   stage,
   disabled,
+  canEdit,
 }: {
   applicantId: number
   stage: string
   disabled: boolean
+  /** Izin edit_recruitments dari server — tanpa ini tampil label baca saja. */
+  canEdit: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return <>{STAGE_LABELS[stage] ?? stage}</>
 
   return (
     <select
@@ -60,9 +74,20 @@ export function ApplicantStageSelect({
   )
 }
 
-export function HireButton({ applicantId, disabled }: { applicantId: number; disabled: boolean }) {
+export function HireButton({
+  applicantId,
+  disabled,
+  canEdit,
+}: {
+  applicantId: number
+  disabled: boolean
+  /** Izin edit_recruitments dari server. */
+  canEdit: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return null
 
   return (
     <button
@@ -90,15 +115,18 @@ export function HireButton({ applicantId, disabled }: { applicantId: number; dis
 export function VacancyStatusButton({
   vacancyId,
   status,
+  canEdit,
 }: {
   vacancyId: number
   status: string
+  /** Izin edit_recruitments dari server. */
+  canEdit: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   const target = status === "draft" ? "open" : status === "open" ? "closed" : null
-  if (!target) return null
+  if (!canEdit || !target) return null
   const label = target === "open" ? "Buka Lowongan" : "Tutup Lowongan"
 
   return (

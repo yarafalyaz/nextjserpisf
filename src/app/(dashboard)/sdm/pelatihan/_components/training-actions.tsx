@@ -49,12 +49,17 @@ export function TrainingForm() {
 export function ParticipantForm({
   trainingId,
   employees,
+  canEdit,
 }: {
   trainingId: number
   employees: { id: number; name: string }[]
+  /** Izin edit_trainings dari server. */
+  canEdit: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return null
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -89,9 +94,18 @@ export function ParticipantForm({
   )
 }
 
-export function ParticipantResultButtons({ participantId }: { participantId: number }) {
+export function ParticipantResultButtons({
+  participantId,
+  canEdit,
+}: {
+  participantId: number
+  /** Izin edit_trainings dari server. */
+  canEdit: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return null
 
   function mark(status: "attended" | "absent") {
     startTransition(async () => {
@@ -118,10 +132,19 @@ export function ParticipantResultButtons({ participantId }: { participantId: num
   )
 }
 
-export function TrainingStatusButton({ trainingId, status }: { trainingId: number; status: string }) {
+export function TrainingStatusButton({
+  trainingId,
+  status,
+  canEdit,
+}: {
+  trainingId: number
+  status: string
+  /** Izin edit_trainings dari server. */
+  canEdit: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  if (status !== "scheduled") return null
+  if (!canEdit || status !== "scheduled") return null
 
   function setStatus(next: "done" | "cancelled") {
     startTransition(async () => {

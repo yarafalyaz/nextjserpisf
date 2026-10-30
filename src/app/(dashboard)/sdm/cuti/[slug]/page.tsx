@@ -25,7 +25,11 @@ export default async function LeaveRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const user = await requirePermission("view_leave_requests")
-  const canApprove = await hasPermission("approve_leave_requests")
+  const [canApprove, canEdit, canDelete] = await Promise.all([
+    hasPermission("approve_leave_requests"),
+    hasPermission("edit_leave_requests"),
+    hasPermission("delete_leave_requests"),
+  ])
   const scope = await getHrScope(user)
 
   const { slug } = await params
@@ -55,8 +59,10 @@ export default async function LeaveRequestDetailPage({
         badge={<StatusChip status={leave.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/sdm/cuti", leave)} variant="primary">Ubah</Button>
-            <DeleteButton id={leave.id} action={deleteLeaveRequest} />
+            {canEdit && (
+              <Button href={entityEditHref("/sdm/cuti", leave)} variant="primary">Ubah</Button>
+            )}
+            {canDelete && <DeleteButton id={leave.id} action={deleteLeaveRequest} />}
             <BackButton href="/sdm/cuti" />
           </>
         }

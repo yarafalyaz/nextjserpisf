@@ -44,11 +44,20 @@ export function CycleForm() {
   )
 }
 
-export function CycleStatusButton({ cycleId, status }: { cycleId: number; status: string }) {
+export function CycleStatusButton({
+  cycleId,
+  status,
+  canEdit,
+}: {
+  cycleId: number
+  status: string
+  /** Izin edit_performance dari server. */
+  canEdit: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const target = status === "draft" ? "active" : status === "active" ? "closed" : null
-  if (!target) return null
+  if (!canEdit || !target) return null
 
   return (
     <button
@@ -110,9 +119,20 @@ export function SelfReviewForm({ cycleId, employeeId }: { cycleId: number; emplo
   )
 }
 
-export function ManagerReviewForm({ cycleId, employeeId }: { cycleId: number; employeeId: number }) {
+export function ManagerReviewForm({
+  cycleId,
+  employeeId,
+  canEdit,
+}: {
+  cycleId: number
+  employeeId: number
+  /** Izin edit_performance dari server (submit + finalisasi). */
+  canEdit: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return null
 
   function onSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault()

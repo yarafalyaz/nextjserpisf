@@ -10,9 +10,11 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { createStatutoryRule, closeStatutoryRule } from "@/actions/hrm.actions"
 
 /** Form tambah baris aturan baru (perubahan tarif = baris baru). */
-export function StatutoryRuleForm() {
+export function StatutoryRuleForm({ canCreate }: { canCreate: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canCreate) return null
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -57,9 +59,11 @@ export function StatutoryRuleForm() {
 }
 
 /** Tutup baris aktif dengan tanggal akhir (tanpa menghapus histori). */
-export function CloseRuleForm({ id }: { id: number }) {
+export function CloseRuleForm({ id, canEdit }: { id: number; canEdit: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  if (!canEdit) return null
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CanCreate } from "@/components/auth/can-create"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -30,6 +30,10 @@ const COVERAGE_LABELS: Record<string, string> = {
 
 export default async function SuccessionPage() {
   await requirePermission("view_succession")
+  const [canEdit, canDelete] = await Promise.all([
+    hasPermission("edit_succession"),
+    hasPermission("delete_succession"),
+  ])
 
   const [overview, allPositions, employees] = await Promise.all([
     getSuccessionOverview(),
@@ -106,7 +110,7 @@ export default async function SuccessionPage() {
                         {o.candidates.map((c) => (
                           <li key={c.id} className="flex items-center gap-2">
                             <span>{c.rank}. {c.employeeName} ({READINESS_LABELS[c.readiness] ?? c.readiness})</span>
-                            <RemoveSuccessorButton id={c.id} />
+                            <RemoveSuccessorButton id={c.id} canDelete={canDelete} />
                           </li>
                         ))}
                       </ul>
@@ -114,7 +118,7 @@ export default async function SuccessionPage() {
                   </td>
                   <td className="px-4 py-3">{COVERAGE_LABELS[o.coverage] ?? o.coverage}</td>
                   <td className="px-4 py-3">
-                    <CriticalToggle positionId={o.positionId} isCritical={true} />
+                    <CriticalToggle positionId={o.positionId} isCritical={true} canEdit={canEdit} />
                   </td>
                 </tr>
               ))}
@@ -140,7 +144,7 @@ export default async function SuccessionPage() {
                   <td className="px-4 py-3">{p.name}</td>
                   <td className="px-4 py-3">{p.isCritical ? "Ya" : "Tidak"}</td>
                   <td className="px-4 py-3">
-                    <CriticalToggle positionId={p.id} isCritical={p.isCritical} />
+                    <CriticalToggle positionId={p.id} isCritical={p.isCritical} canEdit={canEdit} />
                   </td>
                 </tr>
               ))}
