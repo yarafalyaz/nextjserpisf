@@ -25,11 +25,10 @@ describe("GET /api/health", () => {
     expect(json.status).toBe("healthy")
     expect(json.timestamp).toBeDefined()
     expect(json.uptime).toBeDefined()
-    // AUD-04: sinyal degradasi rate limit harus terlihat untuk alert.
-    expect(json.rateLimit).toEqual({
-      redisConfigured: expect.any(Boolean),
-      degradedDecisions: expect.any(Number),
-    })
+    // R7PB-06: field rate-limit internal tidak lagi dipaparkan publik.
+    expect(json.rateLimit).toBeUndefined()
+    expect(json).not.toHaveProperty("redisConfigured")
+    expect(json).not.toHaveProperty("degradedDecisions")
   })
 
   it("returns 503 and unhealthy status when DB unreachable", async () => {

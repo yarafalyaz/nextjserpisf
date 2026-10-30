@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
-import {
-  isRateLimitRedisConfigured,
-  rateLimitDegradedCount,
-} from "@/lib/security/rate-limit"
 
 /**
  * Health check endpoint for monitoring and CI.
  * Returns 200 if app + DB are reachable, 503 otherwise.
- * `rateLimit` exposes the AUD-04 degradation signal: when Redis is not
- * configured or unreachable, limits fall back to per-process memory and
- * `degradedDecisions` grows — alert on it in multi-replica deployments.
+ * R7PB-06: field rate-limit internal (redisConfigured/degradedDecisions)
+ * tidak lagi dipaparkan ke publik anonim — sinyal itu untuk operator via
+ * metrik/log internal, bukan endpoint publik.
  */
 export async function GET() {
   try {
@@ -21,10 +17,6 @@ export async function GET() {
       status: "healthy",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      rateLimit: {
-        redisConfigured: isRateLimitRedisConfigured(),
-        degradedDecisions: rateLimitDegradedCount(),
-      },
     })
   } catch {
     return NextResponse.json(
