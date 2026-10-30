@@ -7,6 +7,7 @@ import {
   payrollSchema,
   holidaySchema,
   statutoryRuleSchema,
+  attendanceSchema,
 } from "@/lib/validations/hrm.schemas";
 
 describe("validations/hrm.schemas", () => {
@@ -73,6 +74,33 @@ describe("validations/hrm.schemas", () => {
       expect(payrollSchema.safeParse({
         period: "", startDate: "2026-06-01", endDate: "2026-06-30",
       }).success).toBe(false);
+    });
+  });
+
+  describe("attendanceSchema koordinat GPS", () => {
+    const base = { employeeId: 1, date: "2026-06-09", status: "present" as const };
+    it("accepts valid coordinates", () => {
+      const res = attendanceSchema.safeParse({
+        ...base,
+        checkInLatitude: -6.2,
+        checkInLongitude: 106.816666,
+        checkOutLatitude: "-6.200001",
+        checkOutLongitude: "106.816667",
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.checkInLatitude).toBe(-6.2);
+        expect(res.data.checkOutLongitude).toBe(106.816667);
+      }
+    });
+    it("rejects latitude 91", () => {
+      expect(attendanceSchema.safeParse({ ...base, checkInLatitude: 91 }).success).toBe(false);
+    });
+    it("rejects longitude -181", () => {
+      expect(attendanceSchema.safeParse({ ...base, checkOutLongitude: -181 }).success).toBe(false);
+    });
+    it("accepts omitted coordinates", () => {
+      expect(attendanceSchema.safeParse(base).success).toBe(true);
     });
   });
 

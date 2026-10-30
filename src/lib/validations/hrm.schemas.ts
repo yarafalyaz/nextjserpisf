@@ -236,6 +236,26 @@ export const attendanceSchema = z
     date: dateOnly,
     checkIn: timeString("Jam masuk harus format HH:MM").optional(),
     checkOut: timeString("Jam keluar harus format HH:MM").optional(),
+    checkInLatitude: z.coerce
+      .number({ error: "Latitude jam masuk harus berupa angka" })
+      .min(-90, "Latitude jam masuk harus antara -90 dan 90")
+      .max(90, "Latitude jam masuk harus antara -90 dan 90")
+      .optional(),
+    checkInLongitude: z.coerce
+      .number({ error: "Longitude jam masuk harus berupa angka" })
+      .min(-180, "Longitude jam masuk harus antara -180 dan 180")
+      .max(180, "Longitude jam masuk harus antara -180 dan 180")
+      .optional(),
+    checkOutLatitude: z.coerce
+      .number({ error: "Latitude jam keluar harus berupa angka" })
+      .min(-90, "Latitude jam keluar harus antara -90 dan 90")
+      .max(90, "Latitude jam keluar harus antara -90 dan 90")
+      .optional(),
+    checkOutLongitude: z.coerce
+      .number({ error: "Longitude jam keluar harus berupa angka" })
+      .min(-180, "Longitude jam keluar harus antara -180 dan 180")
+      .max(180, "Longitude jam keluar harus antara -180 dan 180")
+      .optional(),
     status: z.enum(ATTENDANCE_STATUSES, { error: "Status absensi tidak dikenal" }),
     notes: z.string().max(500, "Catatan paling panjang 500 karakter").optional(),
   })

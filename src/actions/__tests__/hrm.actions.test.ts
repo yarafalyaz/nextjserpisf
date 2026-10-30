@@ -2096,6 +2096,38 @@ describe("Absensi Actions", () => {
     expect(arg.data.notes).toBe("WFO")
   })
 
+  it("createAttendance menyimpan koordinat GPS dari FormData", async () => {
+    const res = await actions.createAttendance(
+      fd({
+        ...dataAbsensi,
+        checkIn: "08:05",
+        checkOut: "17:10",
+        checkInLatitude: "-6.2000001",
+        checkInLongitude: "106.8166661",
+        checkOutLatitude: "-6.2000002",
+        checkOutLongitude: "106.8166662",
+      }),
+    )
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.checkInLatitude).toBe(-6.2000001)
+    expect(arg.data.checkInLongitude).toBe(106.8166661)
+    expect(arg.data.checkOutLatitude).toBe(-6.2000002)
+    expect(arg.data.checkOutLongitude).toBe(106.8166662)
+  })
+
+  it("createAttendance menyimpan null untuk koordinat bila tidak ditangkap", async () => {
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "08:05" }))
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.checkInLatitude).toBeNull()
+    expect(arg.data.checkInLongitude).toBeNull()
+    expect(arg.data.checkOutLatitude).toBeNull()
+    expect(arg.data.checkOutLongitude).toBeNull()
+  })
+
   it("createAttendance tidak menggeser tanggal absensi untuk jam masuk subuh", async () => {
     // 05:30 WIB tersimpan sebagai instan hari UTC sebelumnya, sedangkan `date`
     // tetap hari WIB-nya. Mencampur keduanya menggeser absensi satu hari.

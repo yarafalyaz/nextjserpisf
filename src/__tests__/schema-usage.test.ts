@@ -83,11 +83,12 @@ const ROOT = path.resolve(__dirname, "../..")
  * BISA dihasilkan alur nyata — dan itu justru lebih menyesatkan daripada kolom
  * kosong, karena angkanya terlihat masuk akal.
  *
- * Contoh nyata: kolom GPS absensi (`Attendance.checkInLatitude`,
- * `checkInLongitude`, `checkOutLatitude`, `checkOutLongitude`) HANYA diisi
- * `scripts/seed-hrm-crm-e2e.ts` — formulir absensi `/sdm/absensi` dan aksinya
- * belum menangkap lokasi, jadi dasbor absensi menampilkan GPS check-in/check-out
- * yang tidak bisa dihasilkan alur nyata mana pun.
+ * Kolom GPS absensi (`Attendance.checkInLatitude`, `checkInLongitude`,
+ * `checkOutLatitude`, `checkOutLongitude`) SUDAH DITUTUP dan TIDAK ada lagi
+ * di daftar: formulir absensi `/sdm/absensi` menangkap lokasi browser lewat
+ * tombol "Gunakan lokasi saat ini" dan `createAttendance`/`updateAttendance`
+ * menulisnya (form hanya menyuntik koordinat untuk jam yang terisi; edit
+ * tanpa tangkapan baru menimpa koordinat lama dengan null).
  *
  * Sebaliknya `Attendance.checkOut`, `Attendance.overtimeMinutes`, dan
  * `Attendance.overtimeApproved` SUDAH TIDAK di daftar ini: `createAttendance` dan
@@ -99,10 +100,10 @@ const ROOT = path.resolve(__dirname, "../..")
  * Keputusan per kolom: implementasikan fiturnya, atau buang kolomnya lewat migrasi.
  */
 const SEED_ONLY_COLUMNS: string[] = [
-  "Attendance.checkInLatitude",
-  "Attendance.checkInLongitude",
-  "Attendance.checkOutLatitude",
-  "Attendance.checkOutLongitude",
+  // (Attendance.checkInLatitude/checkInLongitude/checkOutLatitude/
+  // checkOutLongitude PERNAH di sini — ditutup bersama tangkapan geolocation
+  // di formulir absensi; guard berarah dua memerah saat perbaikan ini
+  // mendarat, lalu entri dibuang.)
   // (CrmTicket.firstResponseAt/resolvedAt PERNAH di sini — ditutup bersama
   // `updateTicket` yang mengisinya otomatis saat status berubah; guard
   // berarah dua memerah saat perbaikan ini mendarat, lalu entri dibuang.)
@@ -124,7 +125,8 @@ const SEED_ONLY_COLUMNS: string[] = [
  *   `/sdm/absensi` memanggil `createAttendance`/`updateAttendance`/
  *   `deleteAttendance` (izin `create_attendance`/`edit_attendance`/
  *   `manage_attendance`), mengonversi jam dinding WIB lewat `attendance-time.ts`.
- *   Yang masih seed-only tinggal kolom GPS-nya (lihat SEED_ONLY_COLUMNS).
+ *   Kolom GPS-nya pun sudah ditutup lewat tangkapan lokasi browser di formulir
+ *   yang sama (lihat SEED_ONLY_COLUMNS).
  * - `ProfitCenter` — SUDAH DITUTUP dan TERHUBUNG: master `/keuangan/pusat-laba` +
  *   aksi create/update/delete, dan form jurnal menulis `profitCenterId` ke setiap
  *   entri (buat & ubah).

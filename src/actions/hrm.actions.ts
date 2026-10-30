@@ -4234,6 +4234,10 @@ type AttendanceInput = {
   date: string
   checkIn?: string
   checkOut?: string
+  checkInLatitude?: number
+  checkInLongitude?: number
+  checkOutLatitude?: number
+  checkOutLongitude?: number
   status: string
   notes?: string
 }
@@ -4265,6 +4269,12 @@ async function buildAttendanceData(
     date: wibDateToUtcMidnight(input.date),
     checkIn,
     checkOut,
+    // Koordinat tak ditangkap = null. Pada update, edit tanpa tangkapan baru
+    // memang menimpa koordinat lama dengan null (keputusan disengaja di form).
+    checkInLatitude: input.checkInLatitude ?? null,
+    checkInLongitude: input.checkInLongitude ?? null,
+    checkOutLatitude: input.checkOutLatitude ?? null,
+    checkOutLongitude: input.checkOutLongitude ?? null,
     lateMinutes: schedule ? computeLateMinutes(schedule.startTime, checkIn) : 0,
     overtimeMinutes: schedule ? computeOvertimeMinutes(schedule.endTime, checkOut) : 0,
     status: input.status,

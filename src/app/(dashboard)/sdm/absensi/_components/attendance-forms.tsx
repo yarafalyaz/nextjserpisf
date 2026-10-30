@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createAttendance, updateAttendance } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
@@ -20,7 +20,12 @@ import { ATTENDANCE_STATUS_LABELS } from "./attendance-labels"
 // Field FormData yang dikirim: employeeId, date (YYYY-MM-DD), checkIn/checkOut
 // (HH:MM, opsional — dibiarkan kosong berarti tidak diisi, dan `parseFormData`
 // mengubah string kosong menjadi `undefined` sehingga skema opsional menerimanya),
-// status, notes (opsional).
+// status, notes (opsional). Koordinat GPS opsional: hanya dikirim bila petugas
+// menekan "Gunakan lokasi saat ini" dan tangkapan berhasil; satu tangkapan
+// dipakai untuk check-in dan check-out, masing-masing hanya bila jamnya terisi.
+// Edit tanpa tangkapan baru menimpa koordinat lama dengan null (disengaja:
+// mempertahankan nilai lama diam-diam akan mengklaim lokasi untuk jam yang
+// mungkin diubah).
 
 export type AttendanceFormItem = {
   id: number
@@ -49,12 +54,43 @@ export function AttendanceForm({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+
+  function captureLocation() {
+    if (!navigator.geolocation) {
+      showError("Browser kamu tidak mendukung geolocation")
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        })
+      },
+      (err) => {
+        showError("Gagal mengambil lokasi: " + err.message)
+      },
+    )
+  }
 
   function onSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     startTransition(async () => {
       const fd = new FormData(form)
+      // Tanpa stempel jam tidak ada klaim lokasi: koordinat pasangan jam yang
+      // kosong tidak dikirim.
+      if (location) {
+        if (fd.get("checkIn")) {
+          fd.set("checkInLatitude", String(location.latitude))
+          fd.set("checkInLongitude", String(location.longitude))
+        }
+        if (fd.get("checkOut")) {
+          fd.set("checkOutLatitude", String(location.latitude))
+          fd.set("checkOutLongitude", String(location.longitude))
+        }
+      }
       const res = item ? await updateAttendance(item.id, fd) : await createAttendance(fd)
       if (!res.success) {
         showError(res.error || "Gagal menyimpan absensi")
@@ -141,6 +177,19 @@ export function AttendanceForm({
             defaultValue={item?.notes ?? ""}
             className="h-10"
           />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Lokasi GPS</Label>
+          <div>
+            <Button type="button" variant="secondary" onPress={captureLocation}>
+              Gunakan lokasi saat ini
+            </Button>
+          </div>
+          {location && (
+            <p className="text-xs text-muted-foreground">
+              Lokasi: {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+            </p>
+          )}
         </div>
       </FormSection>
 
