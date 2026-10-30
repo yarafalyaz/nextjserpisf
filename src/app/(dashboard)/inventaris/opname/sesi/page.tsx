@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { PageHeader } from "@/components/ui/page-header"
 import { entityHref } from "@/lib/utils/entity-url"
 import {
@@ -33,7 +34,15 @@ export default async function StocktakePage({
 }: {
   searchParams: Promise<{ sessionId?: string }>
 }) {
-  await requirePermission("view_stock_opname")
+  const user = await requirePermission("view_stock_opname")
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: daftar sesi hanya gudang dalam cakupan.
+  const scopeWhere =
+    scope.kind === "assigned"
+      ? { warehouseId: { in: scope.warehouseIds } }
+      : scope.kind === "none"
+        ? { warehouseId: { in: [] as number[] } }
+        : {}
   const [canCreate, canEdit] = await Promise.all([
     hasPermission("create_stock_adjustments"),
     hasPermission("edit_stock_adjustments"),
@@ -58,6 +67,7 @@ export default async function StocktakePage({
   }
 
   const sessions = await prisma.stocktakeSession.findMany({
+    where: scopeWhere,
     orderBy: { createdAt: "desc" },
     take: 50,
     include: {

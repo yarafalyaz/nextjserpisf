@@ -4,6 +4,7 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -22,7 +23,14 @@ export default async function StockAdjustmentsPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_stock_adjustments")
+  const user = await requirePermission("view_stock_adjustments")
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: daftar hanya menampilkan dokumen gudang dalam cakupan.
+  const scopeWhere = scope.kind === "assigned"
+    ? { warehouseId: { in: scope.warehouseIds } }
+    : scope.kind === "none"
+      ? { warehouseId: { in: [] as number[] } }
+      : {}
 
   const params = await searchParams
 
@@ -30,6 +38,7 @@ export default async function StockAdjustmentsPage({
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
+    ...scopeWhere,
     ...(params.cari && {
       OR: [
         { documentNo: { contains: params.cari } },

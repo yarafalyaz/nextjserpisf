@@ -4,6 +4,7 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -24,7 +25,15 @@ export default async function InventoryTransfersPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_inventory_transfers")
+  const user = await requirePermission("view_inventory_transfers")
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: transfer terlihat bila gudang asal ATAU tujuan dalam cakupan.
+  const scopeClause =
+    scope.kind === "assigned"
+      ? [{ OR: [{ sourceWarehouseId: { in: scope.warehouseIds } }, { destinationWarehouseId: { in: scope.warehouseIds } }] }]
+      : scope.kind === "none"
+        ? [{ sourceWarehouseId: { in: [] as number[] } }]
+        : []
 
   const params = await searchParams
 
@@ -38,6 +47,7 @@ export default async function InventoryTransfersPage({
       ],
     }),
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(scopeClause.length > 0 && { AND: scopeClause }),
   }
 
   const [transfers, total, unreceivedQueue] = await Promise.all([

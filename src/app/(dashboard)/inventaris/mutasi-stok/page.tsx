@@ -5,6 +5,7 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { AppSearchField } from "@/components/ui/search-field"
 import Link from "next/link"
 import { StockMoveTable } from "./_components/stock-move-table"
@@ -22,13 +23,21 @@ export default async function StockMovesPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_stock_moves")
+  const user = await requirePermission("view_stock_moves")
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: daftar hanya menampilkan dokumen gudang dalam cakupan.
+  const scopeWhere = scope.kind === "assigned"
+    ? { warehouseId: { in: scope.warehouseIds } }
+    : scope.kind === "none"
+      ? { warehouseId: { in: [] as number[] } }
+      : {}
 
   const params = await searchParams
 
   const { page, pageSize, take } = parsePagination(params)
 
   const where = {
+    ...scopeWhere,
     ...(params.cari && {
       OR: [
         { documentNo: { contains: params.cari } },
