@@ -397,11 +397,30 @@ describe("syncServicePurchaseOrderCost", () => {
     await syncServicePurchaseOrderCost({ ...input, amount: 100 }, client as never)
 
     const amounts = costCreateMock.mock.calls.map((c) => Number(c[0].data.amount))
-    // 100 / 2 = 50 each, no remainder.
+    // Tanpa qty (mock lama) -> jatuh ke bagi rata 50/50; total persis.
     expect(amounts).toEqual([50, 50])
     // HPP sum equals the PO value exactly.
     const hpp = orderUpdateMock.mock.calls.reduce((s, c) => s + c[0].data.totalActualCost, 0)
     expect(hpp).toBe(100)
+  })
+
+  it("STOK-15: bobot qty — order qty 100 vs 1 tidak menerima jasa sama rata", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock.mockResolvedValue([
+      { id: 55, status: "in_progress", qty: 100 },
+      { id: 56, status: "in_progress", qty: 1 },
+    ])
+    costFindManyMock.mockResolvedValue([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+    orderFindUniqueMock.mockResolvedValue({ totalActualCost: 0 })
+    orderUpdateMock.mockResolvedValue({})
+
+    await syncServicePurchaseOrderCost({ ...input, amount: 10_100_000 }, client as never)
+
+    const amounts = costCreateMock.mock.calls.map((c) => Number(c[0].data.amount))
+    // round(10.100.000 * 100/101) = 10.000.000; order kecil menyerap sisa.
+    expect(amounts).toEqual([10_000_000, 100_000])
+    expect(amounts[0] + amounts[1]).toBe(10_100_000)
   })
 
   it("creates no line when the desired amount is zero and nothing exists", async () => {

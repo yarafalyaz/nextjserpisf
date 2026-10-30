@@ -88,7 +88,7 @@ export async function syncServicePurchaseOrderCost(
 
   const allProductionOrders = await client.productionOrder.findMany({
     where: { workOrderId: po.workOrderId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, qty: true },
   })
   // F-2026-10-21-009-V: WO closed membekukan semua PO anak — sync jasa
   // dilewati seluruhnya dan dilaporkan skipped (pola F-71 completed).
@@ -147,18 +147,29 @@ export async function syncServicePurchaseOrderCost(
     return { posted: 0, productionOrderIds: productionOrders.map((o) => o.id), skippedProductionOrderIds }
   }
 
-  // Spread the PO value across the work order's production orders equally per
-  // order (the job's output is what the subcontract supports). One line per
-  // production order keeps HPP attribution precise.
-  const perOrder = Math.round((desiredTotal / productionOrders.length) * 100) / 100
-  const remainder = safeAdd(desiredTotal, -safeMultiply(perOrder, productionOrders.length, 2), 2)
+  // STOK-15: nilai PO dibobotkan qty terencana tiap order, bukan dibagi
+  // rata per order — order qty 1 tidak boleh menelan biaya jasa yang
+  // sama dengan order qty 100 (HPP per unit meledak). Bobot memakai
+  // qty yang sama untuk semua sync ulang supaya redistribusi stabil.
+  // Bila semua qty kosong/nol, jatuh ke bagi rata. Satu baris per
+  // production order menjaga atribusi HPP tetap presisi.
+  const totalQty = productionOrders.reduce((s, o) => safeAdd(s, Number(o.qty) || 0, 2), 0)
 
   const byOrder = new Map(existingLines.filter((l) => l.productionOrderId != null).map((l) => [l.productionOrderId!, l]))
 
+  let allocated = 0
   for (let i = 0; i < productionOrders.length; i++) {
     const orderId = productionOrders[i].id
-    // Put any rounding remainder on the first order so the sum is exact.
-    const target = i === 0 ? safeAdd(perOrder, remainder, 2) : perOrder
+    // Order terakhir menyerap sisa pembulatan: total selalu persis.
+    // safeMultiply(a, b, 2) membulatkan hasil kali ke 2 desimal (pola
+    // codebase), jadi porsi = round(total * qtyOrder / totalQty).
+    const target =
+      i === productionOrders.length - 1
+        ? safeSubtract(desiredTotal, allocated, 2)
+        : totalQty > 0
+          ? safeMultiply(desiredTotal, (Number(productionOrders[i].qty) || 0) / totalQty, 2)
+          : Math.round((desiredTotal / productionOrders.length) * 100) / 100
+    allocated = safeAdd(allocated, target, 2)
     const existing = byOrder.get(orderId)
     const currentAmount = existing ? Number(existing.amount) : 0
 
