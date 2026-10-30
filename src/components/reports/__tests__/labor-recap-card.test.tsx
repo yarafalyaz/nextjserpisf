@@ -31,6 +31,19 @@ describe("LaborRecapCard F-2026-10-20-97a", () => {
     unmountCard(root)
   })
 
+  it("R7PR-03: semua tabel membawa data-report-table agar tombol CSV bisa scrape", () => {
+    const recap = buildLaborRecap([
+      { employeeId: 7, employeeName: "Budi", category: "labor", hours: 8, amount: 500_000 },
+      { employeeId: null, employeeName: null, category: "labor", hours: 2, amount: 100_000 },
+    ])
+    const { container, root } = renderCard(<LaborRecapCard recap={recap} />)
+    const marked = container.querySelectorAll("[data-report-table]")
+    expect(marked.length).toBe(2)
+    expect(marked[0].getAttribute("data-report-table")).toBe("Rekap Borongan Teknisi")
+    expect(marked[1].getAttribute("data-report-table")).toBe("Tanpa Teknisi")
+    unmountCard(root)
+  })
+
   it("keadaan kosong tampil pesan, bukan tabel", () => {
     const recap = buildLaborRecap([])
     const { container, root } = renderCard(<LaborRecapCard recap={recap} />)

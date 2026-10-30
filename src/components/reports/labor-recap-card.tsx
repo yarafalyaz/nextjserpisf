@@ -43,7 +43,9 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
       isEmpty={!hasRows}
       emptyText="Belum ada baris biaya labor untuk direkap"
     >
-      <DetailTable>
+      {/* data-report-table: penanda scrape ekspor CSV di export-buttons.tsx;
+          tanpa ini tombol CSV mati ("Tidak ada data untuk di-export"). */}
+      <DetailTable data-report-table="Rekap Borongan Teknisi">
         <DetailTableHead>
           <DetailTableTh>Teknisi</DetailTableTh>
           <DetailTableTh align="right">Baris</DetailTableTh>
@@ -80,7 +82,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
           <h3 className="text-sm font-semibold text-foreground">
             Tanpa Teknisi (baris manual tanpa timesheet)
           </h3>
-          <DetailTable>
+          <DetailTable data-report-table="Tanpa Teknisi">
             <DetailTableHead>
               <DetailTableTh>Kelompok</DetailTableTh>
               <DetailTableTh align="right">Baris</DetailTableTh>
@@ -110,7 +112,7 @@ export function LaborRecapCard({ recap }: Readonly<{ recap: LaborRecap }>) {
           <p className="mt-1 text-sm text-muted-foreground">
             Baris ini di luar total periode — tanggal kerjanya tidak terbukti dari timesheet.
           </p>
-          <DetailTable>
+          <DetailTable data-report-table="Tanggal Kerja Belum Terbukti">
             <DetailTableHead>
               <DetailTableTh>Kelompok</DetailTableTh>
               <DetailTableTh align="right">Baris</DetailTableTh>

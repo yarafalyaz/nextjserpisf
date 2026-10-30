@@ -30,7 +30,11 @@ export default async function LaborRecapPage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<Record<string, string | undefined>>
 }) {
-  const user = await requirePermission("view_reports")
+  // R7PR-03: total upah per teknisi adalah data payroll — halaman wajib
+  // konsisten dengan gerbang PDF (R6PA-03, view_payroll_reports), bukan
+  // view_reports generik. Tiga laporan payroll lain memakai aturan sama
+  // lewat loadPayrollPageContext.
+  const user = await requirePermission("view_payroll_reports")
 
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), 0, 1),
