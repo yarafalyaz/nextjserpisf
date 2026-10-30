@@ -21,35 +21,42 @@ export interface PayrollReportData {
 }
 
 export async function loadPayrollRows(period: { start: Date; end: Date }): Promise<PayrollReportData> {
-  const payrolls = await prisma.payroll.findMany({
-    where: { startDate: { gte: period.start, lte: period.end } },
-    select: {
-      period: true,
-      status: true,
-      baseSalary: true,
-      allowances: true,
-      deductions: true,
-      overtimeTotal: true,
-      appreciationTotal: true,
-      loanDeduction: true,
-      lateDeduction: true,
-      absentDeduction: true,
-      bpjsHealthEmployee: true,
-      bpjsEmploymentEmployee: true,
-      pph21: true,
-      grossSalary: true,
-      netSalary: true,
-      employee: { select: { name: true, npwp: true } },
-    },
-    orderBy: { startDate: "asc" },
-  })
+  // Draft hanya DIHITUNG (draftSlips) — dimuat sebagai count, bukan baris.
+  const [payrolls, draftSlips] = await Promise.all([
+    prisma.payroll.findMany({
+      where: {
+        startDate: { gte: period.start, lte: period.end },
+        status: { in: [...RECOGNISED_PAYROLL_STATUSES] },
+      },
+      select: {
+        period: true,
+        status: true,
+        baseSalary: true,
+        allowances: true,
+        deductions: true,
+        overtimeTotal: true,
+        appreciationTotal: true,
+        loanDeduction: true,
+        lateDeduction: true,
+        absentDeduction: true,
+        bpjsHealthEmployee: true,
+        bpjsEmploymentEmployee: true,
+        pph21: true,
+        grossSalary: true,
+        netSalary: true,
+        employee: { select: { name: true, npwp: true } },
+      },
+      orderBy: { startDate: "asc" },
+    }),
+    prisma.payroll.count({
+      where: {
+        startDate: { gte: period.start, lte: period.end },
+        status: "draft",
+      },
+    }),
+  ])
 
-  const recognised = payrolls.filter((payroll) =>
-    (RECOGNISED_PAYROLL_STATUSES as readonly string[]).includes(payroll.status),
-  )
-  const drafts = payrolls.filter((payroll) => payroll.status === "draft")
-
-  const rows: PayrollRowInput[] = recognised.map((payroll) => ({
+  const rows: PayrollRowInput[] = payrolls.map((payroll) => ({
     employeeName: payroll.employee?.name ?? "Tanpa karyawan",
     npwp: payroll.employee?.npwp ?? null,
     baseSalary: Number(payroll.baseSalary),
@@ -69,7 +76,7 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
   }))
 
   const duplicateEmployees = duplicateEmployeePeriods(
-    recognised.map((payroll) => ({
+    payrolls.map((payroll) => ({
       employeeName: payroll.employee?.name ?? "Tanpa karyawan",
       period: payroll.period,
     })),
@@ -77,7 +84,7 @@ export async function loadPayrollRows(period: { start: Date; end: Date }): Promi
 
   return {
     rows,
-    draftSlips: drafts.length,
+    draftSlips,
     duplicateEmployees,
     ...rangePeriodLabels(period),
   }

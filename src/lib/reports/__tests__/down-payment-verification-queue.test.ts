@@ -191,6 +191,31 @@ describe("buildDownPaymentVerificationQueue", () => {
     )
     expect(queue.rows[0].quotationStatus).toBe("cancelled")
   })
+
+  it("takTerklasifikasi eksternal (loader count) menambah summary — populasi campuran identik sebelum/sesudah pushdown", () => {
+    // Populasi campuran: 3 status liar. Cara lama: builder menghitung
+    // dari input. Cara baru: loader count meneruskannya via opts.
+    const liar = [
+      dp({ downPaymentId: 1, status: "pending" }),
+      dp({ downPaymentId: 2, status: "cancelled" }),
+      dp({ downPaymentId: 4, status: "aneh" }),
+    ]
+    const sisa = [
+      dp({ downPaymentId: 3, status: "confirmed" }),
+      dp({ downPaymentId: 5 }),
+    ]
+    const lama = buildDownPaymentVerificationQueue(
+      [...liar, ...sisa],
+      [quotation()],
+      { now: NOW },
+    )
+    const baru = buildDownPaymentVerificationQueue(sisa, [quotation()], {
+      now: NOW,
+      takTerklasifikasi: 3,
+    })
+    expect(baru.summary.takTerklasifikasi).toBe(3)
+    expect(baru).toEqual(lama)
+  })
 })
 
 /**
@@ -199,6 +224,7 @@ describe("buildDownPaymentVerificationQueue", () => {
 const mocks = vi.hoisted(() => ({
   requirePermission: vi.fn(),
   findDownPayments: vi.fn(),
+  countDownPayments: vi.fn(),
   findQuotations: vi.fn(),
 }))
 
@@ -207,7 +233,10 @@ vi.mock("@/lib/auth/permissions", () => ({
 }))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    downPayment: { findMany: (...a: unknown[]) => mocks.findDownPayments(...a) },
+    downPayment: {
+      findMany: (...a: unknown[]) => mocks.findDownPayments(...a),
+      count: (...a: unknown[]) => mocks.countDownPayments(...a),
+    },
     quotation: { findMany: (...a: unknown[]) => mocks.findQuotations(...a) },
   },
 }))
@@ -219,6 +248,7 @@ describe("getDownPaymentVerificationQueue (loader)", () => {
     vi.clearAllMocks()
     mocks.requirePermission.mockResolvedValue(undefined)
     mocks.findDownPayments.mockResolvedValue([])
+    mocks.countDownPayments.mockResolvedValue(0)
     mocks.findQuotations.mockResolvedValue([])
   })
 
@@ -229,7 +259,23 @@ describe("getDownPaymentVerificationQueue (loader)", () => {
     )
     expect(mocks.requirePermission).toHaveBeenCalledWith("view_down_payments")
     expect(mocks.findDownPayments).not.toHaveBeenCalled()
+    expect(mocks.countDownPayments).not.toHaveBeenCalled()
     expect(mocks.findQuotations).not.toHaveBeenCalled()
+  })
+
+  it("pushdown: findMany hanya draft/confirmed, status lain dihitung count notIn — takTerklasifikasi tetap sama", async () => {
+    mocks.countDownPayments.mockResolvedValue(3)
+    const queue = await getDownPaymentVerificationQueue({ now: NOW })
+    expect(mocks.findDownPayments).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: { in: ["draft", "confirmed"] } },
+      }),
+    )
+    expect(mocks.countDownPayments).toHaveBeenCalledWith({
+      where: { status: { notIn: ["draft", "confirmed"] } },
+    })
+    expect(queue.summary.takTerklasifikasi).toBe(3)
+    expect(queue.rows).toEqual([])
   })
 
   it("payload baris hanya boolean bukti — path proofImage tidak bocor", async () => {

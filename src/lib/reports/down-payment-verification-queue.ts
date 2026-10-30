@@ -154,6 +154,13 @@ export interface DownPaymentQueue {
 export interface DownPaymentQueueOptions {
   /** Waktu acuan umur; diinjeksikan supaya deterministik (tes). */
   now: Date
+  /**
+   * Hitungan baris status non-draft/non-confirmed dari loader (query
+   * count terpisah): ditambahkan ke `summary.takTerklasifikasi`.
+   * Tanpa ini builder menghitungnya sendiri dari input apa adanya,
+   * jadi populasi campuran memberi angka identik.
+   */
+  takTerklasifikasi?: number
 }
 
 function toSen(amount: number): number {
@@ -203,7 +210,7 @@ export function buildDownPaymentVerificationQueue(
   // dari "draft" (BR-DPQ-04/05). Status lain tidak masuk keduanya.
   const confirmedSenByQuotation = new Map<number, number>()
   const menungguSenByQuotation = new Map<number, number>()
-  let takTerklasifikasi = 0
+  let takTerklasifikasi = options.takTerklasifikasi ?? 0
   for (const dp of downPayments) {
     if (dp.status === "confirmed") {
       confirmedSenByQuotation.set(
@@ -215,7 +222,7 @@ export function buildDownPaymentVerificationQueue(
         dp.quotationId,
         (menungguSenByQuotation.get(dp.quotationId) ?? 0) + toSen(dp.amount),
       )
-    } else {
+    } else if (options.takTerklasifikasi == null) {
       takTerklasifikasi += 1
     }
   }

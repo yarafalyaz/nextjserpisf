@@ -66,28 +66,29 @@ export default async function DownPaymentDetailPage({
   // Snapshot PPN per DP verbatim dari read-model server (PR #785) —
   // halaman menampilkan apa adanya, tidak menghitung ulang PPN. Query
   // by id langsung (bukan muat semua DP lalu saring).
-  const [vatRow] = await loadDownPaymentTaxStatusRows({ downPaymentId: dp.id });
-
-  const canConfirm = await hasPermission("confirm_down_payments");
-
-  const pmMap = await getPaymentMethodMap();
-
   // AUD-R4-01: kredit dari DP ini + faktur terbuka pelanggan yang sama
   // (panel memanggil allocate/refund — rujukan nyata aksi→UI).
-  const dpCredits = await prisma.customerCredit.findMany({
-    where: { OR: [{ sourceType: "DownPayment", sourceId: dp.id }] },
-    orderBy: { id: "desc" },
-  });
-  const openInvoices = await prisma.salesInvoice.findMany({
-    where: {
-      customerId: dp.customerId,
-      status: { not: "cancelled" },
-      paymentStatus: { not: "paid" },
-    },
-    select: { id: true, documentNo: true, grandTotal: true, paidAmount: true },
-    orderBy: { id: "desc" },
-    take: 20,
-  });
+  // Kelima muatan sesudah dp independen — satu Promise.all, urutan hasil tetap.
+  const [[vatRow], canConfirm, pmMap, dpCredits, openInvoices] =
+    await Promise.all([
+      loadDownPaymentTaxStatusRows({ downPaymentId: dp.id }),
+      hasPermission("confirm_down_payments"),
+      getPaymentMethodMap(),
+      prisma.customerCredit.findMany({
+        where: { OR: [{ sourceType: "DownPayment", sourceId: dp.id }] },
+        orderBy: { id: "desc" },
+      }),
+      prisma.salesInvoice.findMany({
+        where: {
+          customerId: dp.customerId,
+          status: { not: "cancelled" },
+          paymentStatus: { not: "paid" },
+        },
+        select: { id: true, documentNo: true, grandTotal: true, paidAmount: true },
+        orderBy: { id: "desc" },
+        take: 20,
+      }),
+    ]);
 
   return (
     <div className="flex flex-col gap-6">

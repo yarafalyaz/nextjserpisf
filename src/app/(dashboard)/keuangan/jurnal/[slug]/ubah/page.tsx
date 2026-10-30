@@ -45,16 +45,18 @@ export default async function EditPage({
     })),
   }
 
-  const accounts = await prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } })
-
-  const costCenters = await prisma.costCenter.findMany({
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true },
-  })
-  const profitCenters = await prisma.profitCenter.findMany({
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true },
-  })
+  // Ketiga master independen — satu Promise.all, urutan hasil tetap.
+  const [accounts, costCenters, profitCenters] = await Promise.all([
+    prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } }),
+    prisma.costCenter.findMany({
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true },
+    }),
+    prisma.profitCenter.findMany({
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true },
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">

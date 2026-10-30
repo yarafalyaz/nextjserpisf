@@ -31,22 +31,32 @@ export async function getDownPaymentVerificationQueue(
 ): Promise<DownPaymentQueue> {
   await requirePermission("view_down_payments")
 
-  const downPayments = await prisma.downPayment.findMany({
-    select: {
-      id: true,
-      documentNo: true,
-      quotationId: true,
-      customerId: true,
-      amount: true,
-      paymentDate: true,
-      paymentMethod: true,
-      proofImage: true,
-      status: true,
-      createdAt: true,
-      customer: { select: { name: true } },
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  })
+  // Pushdown ekuivalen (BR-DPQ-10): builder hanya memakai baris
+  // draft (rows + agregat menunggu) dan confirmed (agregat
+  // confirmedSen); status lain hanya DIHITUNG takTerklasifikasi,
+  // jadi dimuat sebagai count — bukan baris penuh.
+  const [downPayments, takTerklasifikasi] = await Promise.all([
+    prisma.downPayment.findMany({
+      where: { status: { in: ["draft", "confirmed"] } },
+      select: {
+        id: true,
+        documentNo: true,
+        quotationId: true,
+        customerId: true,
+        amount: true,
+        paymentDate: true,
+        paymentMethod: true,
+        proofImage: true,
+        status: true,
+        createdAt: true,
+        customer: { select: { name: true } },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    }),
+    prisma.downPayment.count({
+      where: { status: { notIn: ["draft", "confirmed"] } },
+    }),
+  ])
 
   const quotationIds = [...new Set(downPayments.map((dp) => dp.quotationId))]
   const quotations =
@@ -92,5 +102,6 @@ export async function getDownPaymentVerificationQueue(
 
   return buildDownPaymentVerificationQueue(dpInputs, quotationInputs, {
     now: options.now ?? new Date(),
+    takTerklasifikasi,
   })
 }

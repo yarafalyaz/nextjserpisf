@@ -716,6 +716,22 @@ describe("customer-credit.service", () => {
     expect(mocks.taxInvoiceFindMany).not.toHaveBeenCalled()
   })
 
+  it("086-V query-shape: salesPayment DP dimuat OR per dokumen taxed, bukan contains marker umum", async () => {
+    seedTaxedDpQuotation()
+    mocks.taxInvoiceFindMany.mockResolvedValue([])
+    const r = await refundCredit(1, 5_000_000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0868")
+    expect(r.success).toBe(true)
+    const arg = mocks.paymentFindMany.mock.calls[0][0] as {
+      where: Record<string, unknown>
+    }
+    expect(arg.where).toEqual({
+      paymentMethod: "down_payment",
+      OR: [{ notes: { contains: "DP-2026-021" } }],
+      status: { not: "reversed" },
+    })
+    expect(arg.where).not.toHaveProperty("notes")
+  })
+
   it("creditBalance = received - allocated - refunded", async () => {
     mocks.creditFindUnique.mockResolvedValue({
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 500,

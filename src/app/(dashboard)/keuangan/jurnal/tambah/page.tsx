@@ -11,22 +11,24 @@ export const metadata: Metadata = { title: "Tambah Jurnal" }
 export default async function CreateJournalPage() {
   await requirePermission("create_journals")
 
-  const accounts = await prisma.account.findMany({
-    where: { isActive: true },
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true, type: true },
-  })
-
   // Master pusat laba untuk pilihan di form; tanpa daftar ini jurnal tidak bisa
   // ditandai pusat laba, sehingga laporan pusat laba selalu kosong.
-  const costCenters = await prisma.costCenter.findMany({
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true },
-  })
-  const profitCenters = await prisma.profitCenter.findMany({
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true },
-  })
+  // Ketiga master independen — satu Promise.all, urutan hasil tetap.
+  const [accounts, costCenters, profitCenters] = await Promise.all([
+    prisma.account.findMany({
+      where: { isActive: true },
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true, type: true },
+    }),
+    prisma.costCenter.findMany({
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true },
+    }),
+    prisma.profitCenter.findMany({
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true },
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
