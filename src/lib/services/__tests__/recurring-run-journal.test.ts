@@ -152,7 +152,10 @@ describe("runDueRecurring — expense output", () => {
 
     expect(mocks.expenseCreate).not.toHaveBeenCalled()
     expect(result.errors[0]).toMatch(/Periode akuntansi sudah ditutup/)
-    const lastWrite = mocks.scheduleUpdate.mock.calls.at(-1)![0]
+    // Bookkeeping gagal kini updateMany terikat klaim, bukan update polos.
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+    const lastWrite = mocks.scheduleUpdateMany.mock.calls.at(-1)![0]
+    expect(lastWrite.where).toEqual({ id: 5, nextRunDate: new Date(2026, 9, 17) })
     expect(lastWrite.data).not.toHaveProperty("nextRunDate")
   })
 
@@ -236,10 +239,76 @@ describe("runDueRecurring — journal output", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(result.errors[0]).toMatch(/Periode akuntansi sudah ditutup/)
     // The occurrence stays due (no nextRunDate advance) so it retries after reopening.
-    const lastWrite = mocks.scheduleUpdate.mock.calls.at(-1)![0]
+    // Penulisan lastResult gagal terikat klaim {id, nextRunDate: runDate} —
+    // BUKAN update polos (lihat describe klaim bookkeeping di bawah).
+    const lastWrite = mocks.scheduleUpdateMany.mock.calls.at(-1)![0]
+    expect(lastWrite.where).toEqual({ id: 5, nextRunDate: new Date(2026, 9, 17) })
     expect(lastWrite.data).toEqual(
       expect.objectContaining({ lastResult: expect.stringMatching(/Gagal/) }),
     )
     expect(lastWrite.data).not.toHaveProperty("nextRunDate")
+  })
+})
+
+describe("runDueRecurring — bookkeeping terikat klaim (race regresi)", () => {
+  it("lastResult gagal TIDAK menimpa pemenang: penulisan gagal terikat {id, nextRunDate}", async () => {
+    // Pemenang sudah memajukan nextRunDate; run kalah yang gagal membuat
+    // jurnal tak boleh menimpa lastResult sukses pemenang. Dengan syarat
+    // klaim yang sama, updateMany kalah mengembalikan count 0 di DB nyata.
+    mocks.scheduleFindMany.mockResolvedValue([journalSchedule()])
+    mocks.settingsFindFirst.mockResolvedValue({ periodLockDate: new Date(2026, 9, 31) })
+    // Panggilan pertama = klaim utama dalam tx (menang), berikutnya = tulis
+    // lastResult gagal yang kini terikat klaim (kalah -> count 0, diabaikan).
+    mocks.scheduleUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValue({ count: 0 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors[0]).toMatch(/Periode akuntansi sudah ditutup/)
+    // Update polos tidak pernah dipakai untuk bookkeeping.
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+    const failureWrite = mocks.scheduleUpdateMany.mock.calls.at(-1)![0]
+    expect(failureWrite.where).toEqual({ id: 5, nextRunDate: new Date(2026, 9, 17) })
+    expect(failureWrite.data.lastResult).toMatch(/Gagal/)
+  })
+
+  it("template tidak valid: lastResult ditulis lewat updateMany terikat klaim, bukan update polos", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([
+      journalSchedule({
+        template: JSON.stringify({ description: "Rusak", lines: [] }),
+      }),
+    ])
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors[0]).toMatch(/minimal 2 baris/)
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith({
+      where: { id: 5, nextRunDate: new Date(2026, 9, 17) },
+      data: { lastResult: expect.stringMatching(/Gagal: Jurnal berulang butuh minimal 2 baris/) },
+    })
+  })
+
+  it("retire melewati tanggal akhir terikat {id, isActive: true}, bukan update polos", async () => {
+    const start = new Date(2026, 0, 1)
+    mocks.scheduleFindMany.mockResolvedValue([
+      journalSchedule({
+        startDate: start,
+        endDate: new Date(2026, 5, 30),
+        nextRunDate: new Date(2026, 9, 17),
+      }),
+    ])
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.generated).toEqual([])
+    expect(result.errors).toEqual([])
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdateMany).toHaveBeenCalledWith({
+      where: { id: 5, isActive: true },
+      data: { isActive: false, lastResult: "Berakhir (melewati tanggal akhir)" },
+    })
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })

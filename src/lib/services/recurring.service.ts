@@ -188,8 +188,10 @@ export async function runDueRecurring(
   for (const schedule of due) {
     if (!isWithinSchedule(schedule.nextRunDate, schedule.startDate, schedule.endDate)) {
       // Past its end date → retire it instead of generating more documents.
-      await prisma.recurringTransaction.update({
-        where: { id: schedule.id },
+      // Syarat isActive: jadwal yang sudah dinonaktifkan eksekusi lain tak
+      // ditimpa lastResult-nya (count 0 = abaikan).
+      await prisma.recurringTransaction.updateMany({
+        where: { id: schedule.id, isActive: true },
         data: { isActive: false, lastResult: "Berakhir (melewati tanggal akhir)" },
       })
       continue
@@ -199,8 +201,10 @@ export async function runDueRecurring(
     const invalid = validateRecurringTemplate(schedule.type, template)
     if (invalid) {
       errors.push(`${schedule.name}: ${invalid}`)
-      await prisma.recurringTransaction.update({
-        where: { id: schedule.id },
+      // Syarat klaim sama dengan klaim utama: eksekusi lain yang sudah
+      // memajukan nextRunDate tak boleh ditimpa lastResult-nya.
+      await prisma.recurringTransaction.updateMany({
+        where: { id: schedule.id, nextRunDate: schedule.nextRunDate },
         data: { lastResult: `Gagal: ${invalid}` },
       })
       continue
@@ -245,7 +249,13 @@ export async function runDueRecurring(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal membuat dokumen"
       errors.push(`${schedule.name}: ${message}`)
-      await prisma.recurringTransaction.update({ where: { id: schedule.id }, data: { lastResult: `Gagal: ${message}` } })
+      // runDate = nextRunDate yang dibaca due-scan loop ini; tx klaim yang
+      // gagal sudah rollback sehingga nilai DB masih runDate. Bila eksekusi
+      // lain sudah memajukannya (count 0), lastResult pemenang tak ditimpa.
+      await prisma.recurringTransaction.updateMany({
+        where: { id: schedule.id, nextRunDate: schedule.nextRunDate },
+        data: { lastResult: `Gagal: ${message}` },
+      })
     }
   }
 
