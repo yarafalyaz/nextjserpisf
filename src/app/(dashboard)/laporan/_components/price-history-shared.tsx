@@ -82,10 +82,12 @@ export function PriceHistoryTruncatedNote({
   jumlahTotal: number
   maxPerPair: number
 }) {
+  const text =
+    `Menampilkan ${jumlahTampil} dari ${jumlahTotal} kejadian terbaru ` +
+    `(batas ${maxPerPair} kejadian per pasangan).`
   return (
-    <p className="doc-lines">
-      Menampilkan {jumlahTampil} dari {jumlahTotal} kejadian terbaru (batas {maxPerPair} kejadian
-      per pasangan).
+    <p className="doc-lines" data-report-truncation={text}>
+      {text}
     </p>
   )
 }

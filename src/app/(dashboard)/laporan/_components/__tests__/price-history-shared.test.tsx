@@ -54,5 +54,8 @@ describe("price-history-shared", () => {
     expect(node.textContent).toContain(
       "Menampilkan 50 dari 73 kejadian terbaru (batas 50 kejadian per pasangan).",
     )
+    expect(node.querySelector("[data-report-truncation]")?.getAttribute("data-report-truncation")).toBe(
+      "Menampilkan 50 dari 73 kejadian terbaru (batas 50 kejadian per pasangan).",
+    )
   })
 })

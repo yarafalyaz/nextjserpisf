@@ -187,6 +187,11 @@ export function ExportButtons({
     const narrationEl = document.querySelector('[data-report-narration]')
     const narrationText = narrationEl?.getAttribute('data-report-narration') || ''
     if (narrationText) csv += `"${narrationText.replace(/"/g, '""')}"\n\n`
+    document.querySelectorAll('[data-report-truncation]').forEach((note) => {
+      const text = note.getAttribute('data-report-truncation') || ''
+      if (text) csv += `"TERPOTONG: ${text.replace(/"/g, '""')}"\n`
+    })
+    if (document.querySelector('[data-report-truncation]')) csv += '\n'
     tables.forEach((table) => {
       const section = table.getAttribute('data-report-table')
       if (section) csv += `"${section}"\n`
@@ -389,6 +394,29 @@ export function ExportButtons({
         })
         const last = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
         if (last) startY = last.finalY
+      }
+
+      const truncations: string[] = []
+      document.querySelectorAll('[data-report-truncation]').forEach((note) => {
+        const text = note.getAttribute('data-report-truncation') || ''
+        if (text) truncations.push(`TERPOTONG: ${text}`)
+      })
+      if (truncations.length > 0) {
+        autoTable(doc, {
+          body: truncations.map((text) => [text]),
+          startY: startY + 6,
+          margin: { left: lm, right: rm, bottom: 26 },
+          tableWidth: usable,
+          styles: {
+            fontSize: 8,
+            cellPadding: 2.5,
+            overflow: 'linebreak',
+            textColor: [...C.text],
+            lineColor: [...C.line],
+            lineWidth: 0.2,
+          },
+          didDrawPage: drawFooter,
+        })
       }
     }
 
