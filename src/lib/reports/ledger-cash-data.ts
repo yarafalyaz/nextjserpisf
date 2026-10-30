@@ -395,7 +395,10 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
       orderBy: { date: "asc" },
     }),
     prisma.vendorPayment.findMany({
-      where: { vendorId: partyId, deletedAt: null },
+      // Hanya completed: draft belum mengalokasi/memposting, reversed sudah
+      // dilawan jurnalnya. Tanpa filter ini saldo utang terpotong pembayaran
+      // yang belum/tidak lagi berlaku (selaras bank-movements/payment-expenses).
+      where: { vendorId: partyId, status: "completed", deletedAt: null },
       select: { documentNo: true, paymentDate: true, amount: true },
       orderBy: { paymentDate: "asc" },
     }),
@@ -844,7 +847,7 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
         accountId: { in: cashIds },
         journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null, transactionDate: { gte: period.start, lte: period.end } },
       },
-      include: { journal: { select: { description: true } }, account: { select: { code: true, name: true } } },
+      include: { journal: { select: { description: true, transactionDate: true } }, account: { select: { code: true, name: true } } },
     }),
     sumEntriesByAccount({ date: { lt: period.start } }),
   ])
@@ -871,15 +874,19 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
       ),
     ),
   )
-  // Saldo awal + neto aktivitas sen-aman lewat builder arus kas murni;
-  // neto aktivitas menggantikan penjumlahan tiga aktivitas mentah.
+  // Saldo awal + neto kas sen-aman lewat builder arus kas murni. Dua baris
+  // bawah memakai basis LAYAR (neto semua entri akun kas): neto aktivitas
+  // saja meloloskan mutasi tak terklasifikasi (transfer antar-kas/jurnal
+  // kas-murni), membuat Saldo Kas Akhir PDF beda dari layar. Selisihnya
+  // tampil eksplisit sebagai baris mutasi tak terklasifikasi.
   const totals = buildCashFlowTotals({
-    entries: [],
+    entries: entries.map((e) => ({ date: e.journal?.transactionDate ?? period.start, debit: e.debit, credit: e.credit })),
     priorBalances: cashIds.map((id) => ({ debit: priorSums.get(id)?.debit ?? 0, credit: priorSums.get(id)?.credit ?? 0 })),
     activities,
   })
   const opening = totals.openingBalance
-  const net = totals.activityNet
+  const net = totals.netCashFlow
+  const unclassified = safeSubtract(net, totals.activityNet, 2)
   const statement: StatementTable = {
     columns: [{ header: "Periode", align: "right" }],
     rows: [
@@ -899,6 +906,9 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
         hasChildren: false,
         values: [money(entry[1])],
       })),
+      ...(unclassified !== 0
+        ? [{ kind: "line" as const, id: 89, code: "", name: "Mutasi Kas Tak Terklasifikasi", level: 1, hasChildren: false, values: [money(unclassified)] }]
+        : []),
       { kind: "subtotal", label: "Kenaikan/(Penurunan) Kas Bersih", values: [money(net)] },
       { kind: "line", id: 90, code: "", name: "Saldo Kas Awal Periode", level: 1, hasChildren: false, values: [money(opening)] },
       { kind: "grand", label: "Saldo Kas Akhir Periode", values: [money(safeAdd(opening, net, 2))] },
