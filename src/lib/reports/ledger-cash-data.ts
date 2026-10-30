@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { activeSalesPaymentWhere } from "@/lib/finance/payment-status"
-import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
+import { REPORT_JOURNAL_STATUSES, sumEntriesByAccount, sumNetForAccount } from "@/lib/services/report-aggregation.service"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import {
   RECOGNISED_AP_STATUSES,
@@ -133,21 +133,36 @@ async function ledgerRows(
       ...periodOf(period),
     }
   }
-  const opening = await sumEntriesByAccount({ date: { lt: period.start } }).then(
-    (sums) => safeSubtract(sums.get(accountId)?.debit ?? 0, sums.get(accountId)?.credit ?? 0, 2),
-  )
-  const entries = await prisma.journalEntry.findMany({
-    where: {
-      accountId,
-      journal: {
-        status: { in: ["POSTED", "REVERSED"] },
-        deletedAt: null,
-        transactionDate: { gte: period.start, lte: period.end },
+  // Perf buku-bank/buku-besar (S3-A): saldo awal dan mutasi periode beban
+  // query independen — jalankan paralel. Saldo awal memakai `sumNetForAccount`
+  // (groupBy ter-scope SATU akun) menggantikan `sumEntriesByAccount` tanpa
+  // accountIds yang mengagregasi SELURUH akun lalu mengambil satu dari Map —
+  // pemborosan query yang sama persis yang dihindari komentar header
+  // report-aggregation.service. Semantik identik: status POSTED+REVERSED,
+  // deletedAt null, transactionDate < period.start, net = debit - credit.
+  // `select` sempit di entries: kolom penuh baris jurnal tak pernah dibaca
+  // pemanggil (hanya memo/debit/credit + jurnal tertaut).
+  const [openingRaw, entries] = await Promise.all([
+    sumNetForAccount(accountId, { date: { lt: period.start } }),
+    prisma.journalEntry.findMany({
+      where: {
+        accountId,
+        journal: {
+          status: { in: [...REPORT_JOURNAL_STATUSES] },
+          deletedAt: null,
+          transactionDate: { gte: period.start, lte: period.end },
+        },
       },
-    },
-    include: { journal: { select: { journalNumber: true, transactionDate: true, description: true } } },
-    orderBy: [{ journal: { transactionDate: "asc" } }, { id: "asc" }],
-  })
+      select: {
+        memo: true,
+        debit: true,
+        credit: true,
+        journal: { select: { journalNumber: true, transactionDate: true, description: true } },
+      },
+      orderBy: [{ journal: { transactionDate: "asc" } }, { id: "asc" }],
+    }),
+  ])
+  const opening = safeSubtract(openingRaw, 0, 2)
   const built = buildLedgerRows({
     opening,
     entries: entries.map((e) => ({
