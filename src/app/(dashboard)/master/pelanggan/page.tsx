@@ -36,14 +36,18 @@ export default async function CustomersPage({
     }),
   }
 
-  const customers = await prisma.customer.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take,
-    skip: (page - 1) * pageSize,
-  })
-
-  const total = await prisma.customer.count({ where })
+  // findMany + count independen atas where sama: paralel; select hanya
+  // kolom yang dibaca CustomerTable.
+  const [customers, total] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      skip: (page - 1) * pageSize,
+      select: { id: true, name: true, slug: true, code: true, phone: true, isActive: true },
+    }),
+    prisma.customer.count({ where }),
+  ])
 
 
   const tableData = toPlain(customers)

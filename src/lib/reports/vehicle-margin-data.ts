@@ -337,6 +337,27 @@ export async function loadVehicleMarginReport(period: {
       customer: { select: { name: true } },
     },
   })
+  // (c-memo) di-start di sini: saringannya independen, hasilnya baru
+  // dipakai sesudah peta plat (c) terbangun — berjalan paralel dengan
+  // query kendaraan di bawah.
+  const directMemoRowsPromise = prisma.salesInvoice.findMany({
+    where: {
+      customerVehicleId: { not: null },
+      quotationId: null,
+      salesOrderId: null,
+      projectId: null,
+      ...unbilledWhere,
+    },
+    select: {
+      id: true,
+      customerVehicleId: true,
+      status: true,
+      subtotal: true,
+      discount: true,
+      customer: { select: { name: true } },
+    },
+  })
+
   // SalesInvoice hanya punya FK customerVehicleId polos (tanpa relasi di
   // schema) — plat diambil query massal terpisah, bukan select relasi.
   const directVehicleIds = [
@@ -367,23 +388,7 @@ export async function loadVehicleMarginReport(period: {
   unbilled.push(...jobUnbilled)
 
   // (c-memo) Invoice langsung memo: saringan sama persis kelas (c), status memo.
-  const directMemoRows = await prisma.salesInvoice.findMany({
-    where: {
-      customerVehicleId: { not: null },
-      quotationId: null,
-      salesOrderId: null,
-      projectId: null,
-      ...unbilledWhere,
-    },
-    select: {
-      id: true,
-      customerVehicleId: true,
-      status: true,
-      subtotal: true,
-      discount: true,
-      customer: { select: { name: true } },
-    },
-  })
+  const directMemoRows = await directMemoRowsPromise
   const directMemoVehicleIds = [
     ...new Set(
       directMemoRows

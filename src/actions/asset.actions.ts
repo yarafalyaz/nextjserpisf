@@ -117,13 +117,19 @@ async function assetCategoryAccountError(v: {
     [v.impairmentLossAccountId, "Akun Beban Penurunan Nilai tidak ditemukan"],
     [v.accumulatedImpairmentAccountId, "Akun Akumulasi Penurunan Nilai tidak ditemukan"],
   ]
+  // Satu query massal menggantikan s.d. 7 findFirst serial; urutan slots
+  // dipertahankan untuk prioritas pesan error pertama.
+  const ids = [...new Set(slots.map(([id]) => id).filter((id): id is number => id != null))]
+  const found = ids.length
+    ? await prisma.account.findMany({
+        where: { id: { in: ids }, deletedAt: null },
+        select: { id: true },
+      })
+    : []
+  const foundIds = new Set(found.map((a) => a.id))
   for (const [accountId, message] of slots) {
     if (accountId == null) continue
-    const account = await prisma.account.findFirst({
-      where: { id: accountId, deletedAt: null },
-      select: { id: true },
-    })
-    if (!account) return message
+    if (!foundIds.has(accountId)) return message
   }
   return null
 }

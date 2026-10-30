@@ -42,35 +42,11 @@ export async function getLeadFunnel(
   }
   const includeAssigneeBreakdown = scope === "report"
 
-  const leads = await prisma.lead.findMany({
-    where: { deletedAt: null },
-    select: {
-      id: true,
-      status: true,
-      estimatedValue: true,
-      source: true,
-      assignedTo: true,
-      customerId: true,
-      convertedAt: true,
-      deletedAt: true,
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  })
-
-  // Satu agregat massal: lead mana yang punya histori tahap (BR-LF-04).
-  const movementGroups = await prisma.leadActivity.groupBy({
-    by: ["leadId"],
-    where: { type: { in: [...MOVEMENT_TYPES] } },
-    _count: { _all: true },
-  })
-  const stageHistoryIds = new Set(movementGroups.map((g) => g.leadId))
-
-  // Aktivitas penuh hanya untuk: (a) periode — histori gerakan s.d. akhir
-  // periode per lead; (b) tanpa periode — cukup aktivitas status_change->lost
-  // milik lead lost untuk rincian alasan kalah (Q-LR-3).
-  const lostIds = leads.filter((l) => l.status === "lost").map((l) => l.id)
-  const activityRows = period
-    ? await prisma.leadActivity.findMany({
+  // Query massal independen (where hanya dari konstanta/scope/periode):
+  // jalankan paralel. Cabang tanpa periode tetap serial di bawah karena
+  // aktivitas lost memakai lostIds dari leads.
+  const periodActivityPromise = period
+    ? prisma.leadActivity.findMany({
         where: {
           type: { in: [...MOVEMENT_TYPES] },
           createdAt: { lte: period.end },
@@ -85,6 +61,38 @@ export async function getLeadFunnel(
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       })
+    : null
+  const [leads, movementGroups] = await Promise.all([
+    prisma.lead.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        estimatedValue: true,
+        source: true,
+        assignedTo: true,
+        customerId: true,
+        convertedAt: true,
+        deletedAt: true,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    // Satu agregat massal: lead mana yang punya histori tahap (BR-LF-04).
+    prisma.leadActivity.groupBy({
+      by: ["leadId"],
+      where: { type: { in: [...MOVEMENT_TYPES] } },
+      _count: { _all: true },
+    }),
+    ...(periodActivityPromise ? [periodActivityPromise] : []),
+  ])
+  const stageHistoryIds = new Set(movementGroups.map((g) => g.leadId))
+
+  // Aktivitas penuh hanya untuk: (a) periode — histori gerakan s.d. akhir
+  // periode per lead; (b) tanpa periode — cukup aktivitas status_change->lost
+  // milik lead lost untuk rincian alasan kalah (Q-LR-3).
+  const lostIds = leads.filter((l) => l.status === "lost").map((l) => l.id)
+  const activityRows = period
+    ? await periodActivityPromise!
     : lostIds.length > 0
       ? await prisma.leadActivity.findMany({
           where: { leadId: { in: lostIds }, type: "status_change", newStatus: "lost" },

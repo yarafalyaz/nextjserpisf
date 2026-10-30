@@ -21,11 +21,16 @@ import { Button } from "@/components/ui/shadcn/button"
 import { NotificationsWidget } from "./notifications-widget"
 
 async function getEmployeeData(userId: number) {
+  // Hanya field ter-render (+ relasi nama) — model Employee memuat NPWP,
+  // rekening bank, dan BPJS yang tidak perlu ikut ter-load ke dasbor.
   const employee = await prisma.employee.findFirst({
     where: { userId, isActive: true },
-    include: {
-      department: true,
-      position: true,
+    select: {
+      id: true,
+      name: true,
+      employeeNo: true,
+      department: { select: { name: true } },
+      position: { select: { name: true } },
     },
   })
   return employee
@@ -33,26 +38,29 @@ async function getEmployeeData(userId: number) {
 
 async function getLeaveSummary(employeeId: number) {
   const now = new Date()
-  const activeLeave = await prisma.leaveRequest.findFirst({
-    where: {
-      employeeId,
-      status: "approved",
-      startDate: { lte: now },
-      endDate: { gte: now },
-    },
-  })
-  const pendingLeave = await prisma.leaveRequest.count({
-    where: { employeeId, status: "pending" },
-  })
-  const usedThisYear = await prisma.leaveRequest.count({
-    where: {
-      employeeId,
-      status: "approved",
-      startDate: {
-        gte: new Date(now.getFullYear(), 0, 1),
+  // Tiga query hanya memakai employeeId + now beku: paralel.
+  const [activeLeave, pendingLeave, usedThisYear] = await Promise.all([
+    prisma.leaveRequest.findFirst({
+      where: {
+        employeeId,
+        status: "approved",
+        startDate: { lte: now },
+        endDate: { gte: now },
       },
-    },
-  })
+    }),
+    prisma.leaveRequest.count({
+      where: { employeeId, status: "pending" },
+    }),
+    prisma.leaveRequest.count({
+      where: {
+        employeeId,
+        status: "approved",
+        startDate: {
+          gte: new Date(now.getFullYear(), 0, 1),
+        },
+      },
+    }),
+  ])
   return { activeLeave: !!activeLeave, pendingLeave, usedThisYear }
 }
 
