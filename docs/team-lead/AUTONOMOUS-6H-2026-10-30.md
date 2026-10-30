@@ -152,7 +152,18 @@ Checkpoint file ini diperbarui tiap batch selesai.
     punya auth. Nihil route tanpa auth.
 - Triase B selesai tanpa perubahan kode: tak ada temuan terbukti dari
   prioritas tertinggi audit keamanan. Antrean audit keamanan tutup.
+- Sapu runtime browser batch 3 SELESAI (sesi agent-browser `bughunt3`,
+  dev container :3005, login admin): 15 halaman form tambah (jurnal,
+  kas-kecil, pengeluaran, uang-muka, leads, tickets, aset, kendaraan,
+  penyesuaian stok, permintaan gudang, transfer inventaris, transfer
+  aset, kendaraan pelanggan, fitment, laporan bank) — semua render,
+  form+field lengkap, tanpa error overlay. 6 halaman detail/ubah dengan
+  data nyata (pesanan penjualan, jurnal, karyawan master) — semua
+  bersih. Catatan: /sdm/karyawan bukan route (karyawan di
+  /master/karyawan); DB dev memang nyaris kosong untuk modul selain
+  SDM/penjualan, jadi daftar detail lain tak bisa disapu tanpa data —
+  bukan bug. Antrean Batch 3/4 tertutup sepenuhnya.
 - Status: 87 commit lokal di atas origin/main, belum push. Sisa sadar
-  jangka panjang: unique constraint Holiday (migrasi terpisah), sapu
-  runtime browser batch 3 halaman detail/form belum tuntas (perlu sesi
-  agent-browser + dev server aktif).
+  jangka panjang terakhir: unique constraint Holiday (migrasi
+  terpisah). Verifikasi berat penutup (`npm run ci:quick`) pada tree
+  final berjalan sesudah checkpoint ini.
