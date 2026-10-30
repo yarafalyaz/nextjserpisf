@@ -163,7 +163,14 @@ Checkpoint file ini diperbarui tiap batch selesai.
   /master/karyawan); DB dev memang nyaris kosong untuk modul selain
   SDM/penjualan, jadi daftar detail lain tak bisa disapu tanpa data —
   bukan bug. Antrean Batch 3/4 tertutup sepenuhnya.
-- Status: 87 commit lokal di atas origin/main, belum push. Sisa sadar
-  jangka panjang terakhir: unique constraint Holiday (migrasi
-  terpisah). Verifikasi berat penutup (`npm run ci:quick`) pada tree
-  final berjalan sesudah checkpoint ini.
+- `ci:quick` pertama pada tree final (4ac2de02): Lint ✔ TypeScript ✔
+  Build ✔ — Unit 1 gagal. Akar: regresi silang fitur GPS
+  (afcecd456) — `buildAttendanceData` kini selalu memuat 4 kolom
+  koordinat null bila tak ditangkap, dan `approveAttendanceCorrection`
+  menimpa rekod berjalan dengan data itu, menghapus lokasi GPS
+  (melanggar BR-AC-06). Fix committed: f29bfcdc — koordinat
+  disisihkan dari data update jalur koreksi; test koreksi existing
+  (gagal pra-fix) + 4 suite terkait 220/220, tsc bersih.
+- `ci:quick` ulangan V1 pada tree final (f29bfcdc) berjalan sesudah
+  checkpoint ini. Sisa sadar terakhir: unique constraint Holiday
+  (migrasi terpisah). Belum push.
