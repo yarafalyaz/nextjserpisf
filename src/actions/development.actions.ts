@@ -129,7 +129,10 @@ export async function assessEmployeeCompetency(formData: FormData) {
  * karyawan, bandingkan level syarat vs level aktual (0 bila belum dinilai).
  */
 export async function getCompetencyGaps(employeeId: number) {
-  await requirePermission("view_competencies");
+  const user = await requirePermission("view_competencies");
+  // ROUND5-SCOPE: sibling penulis sudah scope-guarded; baca gap karyawan
+  // di luar cakupan HR ditolak sama (action terekspor = permukaan nyata).
+  await assertHrEmployeeAccess(await getHrScope(user), employeeId);
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
     select: { positionId: true },

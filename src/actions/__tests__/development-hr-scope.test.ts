@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   participantUpdate: vi.fn(),
   participantDelete: vi.fn(),
   employeeFindUnique: vi.fn(),
+  positionCompetencyFindMany: vi.fn(),
+  employeeCompetencyFindMany: vi.fn(),
   logActivity: vi.fn(),
 }))
 
@@ -22,7 +24,8 @@ vi.mock("@/lib/auth/hr-scope", async (importOriginal) => {
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     employee: { findUnique: mocks.employeeFindUnique },
-    employeeCompetency: { upsert: mocks.employeeCompetencyUpsert },
+    positionCompetency: { findMany: mocks.positionCompetencyFindMany },
+    employeeCompetency: { upsert: mocks.employeeCompetencyUpsert, findMany: mocks.employeeCompetencyFindMany },
     trainingParticipant: {
       upsert: mocks.participantUpsert,
       findUnique: mocks.participantFindUnique,
@@ -39,6 +42,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 import {
   addTrainingParticipant,
   assessEmployeeCompetency,
+  getCompetencyGaps,
   removeTrainingParticipant,
   setParticipantResult,
 } from "../development.actions"
@@ -93,6 +97,26 @@ describe("assessEmployeeCompetency HR scope", () => {
     const res = await assessEmployeeCompetency(competencyForm())
     expect(res.success).toBe(true)
     expect(mocks.employeeCompetencyUpsert).toHaveBeenCalled()
+  })
+})
+
+describe("getCompetencyGaps HR scope (ROUND5-SCOPE)", () => {
+  it("scope self menolak karyawan lain sebelum data dibaca", async () => {
+    mocks.getHrScope.mockResolvedValue({ kind: "self", employeeId: 30 })
+    await expect(getCompetencyGaps(7)).rejects.toThrow("tidak memiliki akses")
+    expect(mocks.positionCompetencyFindMany).not.toHaveBeenCalled()
+  })
+
+  it("scope all tetap membaca gap", async () => {
+    mocks.employeeFindUnique.mockResolvedValue({ positionId: 3 })
+    mocks.positionCompetencyFindMany.mockResolvedValue([
+      { competencyId: 2, requiredLevel: 4, competency: { name: "Las" }, position: { name: "Teknisi" } },
+    ])
+    mocks.employeeCompetencyFindMany.mockResolvedValue([{ competencyId: 2, level: 1 }])
+    const gaps = await getCompetencyGaps(7)
+    expect(gaps).toEqual([
+      { competencyId: 2, competencyName: "Las", requiredLevel: 4, currentLevel: 1, gap: 3 },
+    ])
   })
 })
 
