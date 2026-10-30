@@ -1,5 +1,75 @@
 import { prisma } from "@/lib/db/prisma"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { notificationService } from "@/lib/services/notification.service"
+import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
+
+interface ApprovalStepApproverTarget {
+  referenceType: string
+  referenceId: number
+  currentStep: number
+  requestedBy?: number | null
+  slug?: string | null
+}
+
+/**
+ * R6WN-03: beri tahu approver langkah berjalan bahwa approval menunggu.
+ * Penerima cermin assertStepApprover: userId terisi -> user aktif itu saja;
+ * kalau tidak, roleId -> semua user aktif ber-role itu. requestedBy
+ * dikeluarkan (maker tidak mengejar approval sendiri). Kegagalan notifikasi
+ * tidak boleh menggagalkan dokumen pemanggil — tercatat di log server saja.
+ * Menulis lewat `db` pemanggil supaya ikut transaksi dokumen.
+ */
+export async function notifyApprovalStepApprovers(
+  db: any,
+  approval: ApprovalStepApproverTarget,
+  steps: Array<{ stepOrder: number; roleId: number | null; userId: number | null; name?: string | null }>,
+): Promise<void> {
+  try {
+    const step = steps.find((s) => s.stepOrder === approval.currentStep)
+    if (!step || (step.userId == null && step.roleId == null)) return
+
+    let recipientIds: number[] = []
+    if (step.userId != null) {
+      const target = await db.user.findFirst({
+        where: { id: step.userId, isActive: true },
+        select: { id: true },
+      })
+      if (target) recipientIds = [target.id]
+    } else if (step.roleId != null) {
+      const roleUsers = await db.user.findMany({
+        where: { isActive: true, roles: { some: { id: step.roleId } } },
+        select: { id: true },
+      })
+      recipientIds = roleUsers.map((u: { id: number }) => u.id)
+    }
+
+    recipientIds = [...new Set(recipientIds)].filter((id) => id !== approval.requestedBy)
+    if (recipientIds.length === 0) return
+
+    const label = APPROVAL_MODEL_LABELS[approval.referenceType] ?? approval.referenceType
+    const targetPath = approval.slug ?? approval.referenceId
+    await notificationService.notifyUsers(
+      recipientIds,
+      `Persetujuan Menunggu: ${label} #${approval.referenceId}`,
+      `${label} #${approval.referenceId} menunggu persetujuan langkah ${approval.currentStep}${step.name ? ` (${step.name})` : ""}. Buka /pengaturan/persetujuan/${targetPath}`,
+      "info",
+      db,
+    )
+  } catch (err) {
+    console.error(
+      `[notifyApprovalStepApprovers] Gagal mengirim notifikasi approver ${approval.referenceType} #${approval.referenceId} langkah ${approval.currentStep}:`,
+      err,
+    )
+  }
+}
+
+async function notifyNewApprovalStep(db: any, workflowId: number, approval: ApprovalStepApproverTarget): Promise<void> {
+  const steps = await db.approvalWorkflowStep.findMany({
+    where: { workflowId },
+    orderBy: { stepOrder: "asc" },
+  })
+  await notifyApprovalStepApprovers(db, approval, steps)
+}
 
 /**
  * Generic approval-workflow integration.
@@ -36,17 +106,26 @@ export async function requestApprovalIfConfigured(
   txClient?: any,
 ): Promise<boolean> {
   const createApproval = async (db: any, workflowId: number): Promise<true> => {
+    const slug = await nextSlug("approval", referenceType)
     await db.approval.create({
       data: {
         workflowId,
         referenceType,
-        slug: await nextSlug("approval", referenceType),
+        slug,
         referenceId,
         currentStep: 1,
         status: "pending",
         requestedBy: requestedBy ?? null,
         requestedAt: new Date(),
       },
+    })
+    // R6WN-03: notifikasi approver langkah 1 (se-transaksi; gagal log saja).
+    await notifyNewApprovalStep(db, workflowId, {
+      referenceType,
+      referenceId,
+      currentStep: 1,
+      requestedBy: requestedBy ?? null,
+      slug,
     })
     return true
   }

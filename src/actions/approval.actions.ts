@@ -23,6 +23,7 @@ import { payrollStatutoryGateError } from "@/lib/services/payroll-statutory.serv
 import { nextSlug } from "@/lib/utils/slug-db";
 import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope";
 import { computeOvertimeApprovalValue } from "@/lib/services/overtime-approval.service";
+import { notifyApprovalStepApprovers } from "@/lib/services/approval-workflow.service";
 
 type WorkflowStepInput = {
   name?: string;
@@ -244,6 +245,15 @@ export async function approveStep(approvalId: number, formData: FormData) {
     // and run it below rather than nesting it inside this transaction.
     let expenseToSync: number | null = null;
     let approvalSlug: string | null = null;
+    // R6WN-03: info langkah berikutnya untuk notifikasi approver (pasca-commit).
+    let nextStepNotify: {
+      referenceType: string
+      referenceId: number
+      currentStep: number
+      requestedBy: number | null
+      slug: string | null
+      steps: Array<{ stepOrder: number; roleId: number | null; userId: number | null; name?: string | null }>
+    } | null = null;
 
     // Serialize concurrent approve/reject on the same approval. Without the row
     // lock, a double-clicked button or two concurrent approvers both pass the
@@ -402,6 +412,14 @@ export async function approveStep(approvalId: number, formData: FormData) {
             currentStep: approval.currentStep + 1,
           },
         });
+        nextStepNotify = {
+          referenceType: approval.referenceType,
+          referenceId: approval.referenceId,
+          currentStep: approval.currentStep + 1,
+          requestedBy: approval.requestedBy ?? null,
+          slug: approval.slug ?? null,
+          steps: approval.workflow.steps,
+        };
       }
     });
 
@@ -415,6 +433,20 @@ export async function approveStep(approvalId: number, formData: FormData) {
         expenseToSync,
         session?.user?.id ? Number(session.user.id) : undefined,
       );
+    }
+
+    // R6WN-03: beri tahu approver langkah berikutnya (sesudah commit;
+    // helper menelan kegagalan ke log server).
+    const notifyTarget = nextStepNotify as {
+      referenceType: string
+      referenceId: number
+      currentStep: number
+      requestedBy: number | null
+      slug: string | null
+      steps: Array<{ stepOrder: number; roleId: number | null; userId: number | null; name?: string | null }>
+    } | null;
+    if (notifyTarget) {
+      await notifyApprovalStepApprovers(prisma, notifyTarget, notifyTarget.steps);
     }
 
     await logActivity(

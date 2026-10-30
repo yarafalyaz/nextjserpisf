@@ -100,6 +100,21 @@ describe("notification.service", () => {
 
       expect(mocks.createManyNotif).not.toHaveBeenCalled();
     });
+
+    it("R6WN-03: menulis lewat client eksplisit bila diberikan (ikut transaksi pemanggil)", async () => {
+      const txCreateMany = vi.fn().mockResolvedValue({ count: 2 });
+      const txClient = { notification: { createMany: txCreateMany } };
+
+      await notificationService.notifyUsers([3, 4], "Judul", "Isi", "info", txClient);
+
+      expect(txCreateMany).toHaveBeenCalledWith({
+        data: [
+          { userId: 3, title: "Judul", body: "Isi", type: "info", readAt: null },
+          { userId: 4, title: "Judul", body: "Isi", type: "info", readAt: null },
+        ],
+      });
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
   });
 
   describe("notifyUsersIfNew", () => {

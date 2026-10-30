@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => ({
   createApproval: vi.fn(),
   queryRaw: vi.fn().mockResolvedValue([]),
   docFindUnique: vi.fn(),
+  // R6WN-03 notify mocks
+  findWorkflowSteps: vi.fn().mockResolvedValue([]),
+  findFirstUser: vi.fn().mockResolvedValue(null),
+  findManyUsers: vi.fn().mockResolvedValue([]),
+  createManyNotifications: vi.fn().mockResolvedValue({ count: 1 }),
 }));
 
 vi.mock("@/lib/db/prisma", () => {
@@ -23,6 +28,9 @@ vi.mock("@/lib/db/prisma", () => {
       vendorPayment: docModelMock,
       stockAdjustment: docModelMock,
       salesInvoice: docModelMock,
+      approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
+      user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
+      notification: { createMany: mocks.createManyNotifications },
       $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
         approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
@@ -34,6 +42,9 @@ vi.mock("@/lib/db/prisma", () => {
         vendorPayment: docModelMock,
         stockAdjustment: docModelMock,
         salesInvoice: docModelMock,
+        approvalWorkflowStep: { findMany: mocks.findWorkflowSteps },
+        user: { findFirst: mocks.findFirstUser, findMany: mocks.findManyUsers },
+        notification: { createMany: mocks.createManyNotifications },
         $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
       })),
     },
@@ -162,6 +173,64 @@ describe("approval-workflow.service", () => {
       expect(result).toBe(false);
       expect(mocks.docFindUnique).not.toHaveBeenCalled();
       expect(mocks.createApproval).not.toHaveBeenCalled();
+    });
+
+    it("R6WN-03: approval baru langkah userId mengirim satu notifikasi ke approver itu", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue(null);
+      mocks.createApproval.mockResolvedValue({ id: 3, status: "pending" });
+      mocks.findWorkflowSteps.mockResolvedValue([
+        { stepOrder: 1, roleId: null, userId: 9, name: "Finance" },
+      ]);
+      mocks.findFirstUser.mockResolvedValue({ id: 9 });
+
+      const result = await requestApprovalIfConfigured("Quotation", 5, 42);
+
+      expect(result).toBe(true);
+      expect(mocks.createManyNotifications).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            userId: 9,
+            title: "Persetujuan Menunggu: Penawaran #5",
+          }),
+        ],
+      });
+    });
+
+    it("R6WN-03: langkah roleId memberi tahu semua user aktif ber-role itu kecuali requester", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue(null);
+      mocks.createApproval.mockResolvedValue({ id: 3, status: "pending" });
+      mocks.findWorkflowSteps.mockResolvedValue([
+        { stepOrder: 1, roleId: 4, userId: null, name: "Finance" },
+      ]);
+      mocks.findManyUsers.mockResolvedValue([{ id: 7 }, { id: 42 }]);
+
+      const result = await requestApprovalIfConfigured("Quotation", 5, 42);
+
+      expect(result).toBe(true);
+      expect(mocks.createManyNotifications).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ userId: 7 })],
+      });
+    });
+
+    it("R6WN-03: existing pending tidak mengirim notifikasi ulang", async () => {
+      mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
+      mocks.findFirstApproval.mockResolvedValue({ id: 1, status: "pending" });
+
+      const result = await requestApprovalIfConfigured("Quotation", 5);
+
+      expect(result).toBe(true);
+      expect(mocks.createManyNotifications).not.toHaveBeenCalled();
+    });
+
+    it("R6WN-03: tanpa workflow aktif tidak ada notifikasi", async () => {
+      mocks.queryRaw.mockResolvedValue([]);
+
+      const result = await requestApprovalIfConfigured("Quotation", 5);
+
+      expect(result).toBe(false);
+      expect(mocks.createManyNotifications).not.toHaveBeenCalled();
     });
 
     it("sets requestedBy to null when not provided", async () => {

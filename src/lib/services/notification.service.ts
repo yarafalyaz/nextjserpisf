@@ -81,16 +81,20 @@ export const notificationService = {
 
   /**
    * Send notifications to multiple users at once.
+   * `client` opsional (R6WN-03): pemanggil dalam transaksi bisa menulis
+   * notifikasi se-transaksi supaya dokumen rollback tidak meninggalkan
+   * notifikasi hantu.
    */
   async notifyUsers(
     userIds: number[],
     title: string,
     body: string,
-    type: string = 'info'
+    type: string = 'info',
+    client: any = prisma
   ): Promise<void> {
     if (userIds.length === 0) return
 
-    await prisma.notification.createMany({
+    await client.notification.createMany({
       data: userIds.map((userId) => ({
         userId,
         title,

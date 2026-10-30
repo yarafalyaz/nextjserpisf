@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
     departmentHoliday: buildModelMock(),
     employee: buildModelMock(),
     role: buildModelMock(),
+    user: buildModelMock(),
+    notification: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock);
@@ -589,6 +591,53 @@ describe("approveStep / rejectStep branches", () => {
     expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "approve" }) }),
     );
+  });
+
+  it("R6WN-03: approve langkah 1 dari 2 memberi tahu approver langkah 2", async () => {
+    mocks.authMock.mockResolvedValue({
+      user: { id: "5", roles: ["finance"], permissions: ["approve_purchase_requests"] },
+    });
+    mocks.prismaMock.role.findUnique.mockResolvedValue({ name: "finance" });
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 1,
+      documentType: "PR",
+      documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 9,
+      slug: "pr-1",
+      workflow: {
+        steps: [
+          { stepOrder: 1, roleId: 1, userId: null, name: "L1" },
+          { stepOrder: 2, roleId: null, userId: 8, name: "L2" },
+        ],
+      },
+    });
+    mocks.prismaMock.user.findFirst.mockResolvedValue({ id: 8 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          userId: 8,
+          title: "Persetujuan Menunggu: Permintaan Pembelian #1",
+        }),
+      ],
+    });
+  });
+
+  it("R6WN-03: approve langkah final dan reject tidak memberi tahu approver", async () => {
+    seedApprovalObj({ requestedBy: 1 }, { userId: 2 });
+    mocks.authMock.mockResolvedValue({
+      user: { id: "2", roles: ["finance"], permissions: ["approve_purchase_requests"] },
+    });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.notification.createMany).not.toHaveBeenCalled();
+
+    seedApprovalObj({ requestedBy: 1 }, { userId: 2 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expect(mocks.prismaMock.notification.createMany).not.toHaveBeenCalled();
   });
   it("approveStep rejects non-approver (roleId path)", async () => {
     silenceConsole();
