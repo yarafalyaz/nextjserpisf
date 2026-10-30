@@ -43,6 +43,7 @@ Checkpoint file ini diperbarui tiap batch selesai.
 - [x] gerbang izin UI Pola 2 batch 1: keuangan (b00fbd0eb), uang-muka (941f2fa5f), opname/remnant (06754d77b)
 - [x] audit race API non-workflow: sweep (969e7372f), libur (25af525b7), depresiasi (1a31cbda0), recurring (e5d1314d2); audit optimistik client nihil terbukti; registry B-1 overdue period.end (3ba5a1578), B-2 gugur (halaman snapshot kini)
 - [x] runtime: compile bersih, 4 halaman laporan stok 200 pasca scope, console/log 0 error (akun admin all-scope; penolakan scoped dibuktikan test unit)
+- [x] verifikasi penutup: ci:quick LULUS di 19fe295ff (250s; 10485 test lulus, 18 skip — 1072 file). E2E subset terdampak (7 spec, chromium): 123/126; 2 gagal = fixture/demo-data DB dev (trial balance tanpa jurnal posted; E2E-PO-CHAIN tak ditanam, dilarang seed ke DB hand-kept); 1 selector spec diperbaiki (0690fec37, combobox Pusat Biaya)
 
 ## Log
 - 2026-10-30 mulai: batch 1 dikerahkan (6 agen).
@@ -81,3 +82,7 @@ Checkpoint file ini diperbarui tiap batch selesai.
   exposure 9/9. Sisa sadar: unique Holiday (migrasi terpisah),
   MED-5 notifikasi DP phantom (perlu outbox/after-commit),
   MED-1 parity flip status workflow (posting berikutnya period-gated).
+- Verifikasi penutup tree stabil: ci:quick LULUS di 19fe295ff (250s);
+  E2E subset 123/126 (2 fixture/demo-data DB dev, 1 selector diperbaiki
+  0690fec37 dan lulus rerun). 72 commit lokal di atas origin/main,
+  belum push.
