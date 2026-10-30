@@ -325,6 +325,36 @@ describe("Approval Workflow CRUD", () => {
     expectApprovalStatus("rejected");
     expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
   });
+  // R6WN-02: Asset/Project lahir "active" — approval final yang menulis
+  // "approved" mematikan cron depresiasi aset dan helper status proyek.
+  it("R6WN-02: approveStep final Asset tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.asset = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "Asset", referenceId: 3 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.asset.update).not.toHaveBeenCalled();
+  });
+  it("R6WN-02: rejectStep Asset tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.asset = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "Asset", referenceId: 3 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expectApprovalStatus("rejected");
+    expect(mocks.prismaMock.asset.update).not.toHaveBeenCalled();
+  });
+  it("R6WN-02: approveStep final Project tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.project = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "Project", referenceId: 5 });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled();
+  });
+  it("R6WN-02: rejectStep Project tidak menulis status dokumen (gate-only)", async () => {
+    mocks.prismaMock.project = { update: vi.fn().mockResolvedValue({}) };
+    seedApproval({ referenceType: "Project", referenceId: 5 });
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expectApprovalStatus("rejected");
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled();
+  });
 
   // ── K4-S2(a) (F-2026-10-25-014-V): nonaktif/hapus workflow gerbang
   // uang Journal/VendorPayment tercatat eksplisit di activity log.

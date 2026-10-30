@@ -38,7 +38,11 @@ type WorkflowStepInput = {
 // dokumen; menulis status "approved"/"rejected" ke dokumen akan
 // merusak kosakata statusnya (adjustment "approved" tidak bisa diproses —
 // processStockAdjustment hanya menerima draft).
-const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdjustment"]);
+// R6WN-02: Asset/Project lahir berstatus operasional "active"; menulis
+// "approved" mematikan cron depresiasi (hanya memproses active) dan
+// helper status proyek. Keduanya gate-only: assertApproved tetap
+// menggerbang disposal aset / edit proyek, status dokumen tak disentuh.
+const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdjustment", "Asset", "Project"]);
 
 // Vonis F-2026-10-25-014-V K4-S2(a): mematikan/menghapus workflow untuk
 // tipe gerbang uang WAJIB tercatat eksplisit di activity log — no-op
