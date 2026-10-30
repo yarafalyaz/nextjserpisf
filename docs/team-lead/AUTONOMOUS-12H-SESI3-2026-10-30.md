@@ -106,6 +106,22 @@ ci:quick penuh; update checkpoint akhir; commit docs lokal.
 - S3-D: sweep DOM terautentikasi masih terblokir sesi browser sah
   (cookie tidak boleh dimaterialisasi). S3-F (`ci:quick` penuh +
   checkpoint akhir) berjalan sesudah log ini ditulis.
+- ROUND 7 (audit tiga agent paralel 2026-10-31: portal/publik, API
+  non-cron, cetak/ekspor) — semua 16 entri unik SELESAI, dok:
+  `ROUND7-PORTAL-API.md` + `ROUND7-CETAK-EKSPOR.md`. Urutan commit:
+  R7PB-02 `eab92aa6e`, R7PB-04 `f7995c67d`, R7PB-05 `9fbf91389`,
+  R7PB-06 `cbc32d49a`, R7PB-03 `4bff76802`, R7PR-01 `454548094`
+  (bukti DP privat), R7PB-01 `75fdd5e66` (avatar+signatures privat,
+  14 berkas keluar dari index git), R7PR-02 `563f9ecbb` (watermark
+  per halaman + WO), R7PR-03 `2d0aeb7d1` (gerbang payroll rekap-
+  borongan + CSV), R7API-01/R7PR-04 `b11595a4d` (lampiran sengketa),
+  R7API-02 `182cadb05` (unggah vendor payment), R7API-03/04
+  `ea6ac0676` (reopen jujur + fault generik), R7API-05/R7PR-05
+  `d32e497a8` (address 404 + guard CSV). Catatan deploy baru:
+  pindahkan berkas `public/uploads/proofs/` + `public/uploads/avatars/`
+  lama ke `private/uploads/` (URL lama yang bocor tidak tercabut kode);
+  user hanya-`view_reports` kehilangan menu Rekap Borongan (maksud fix).
+  `ci:quick` penutup sesi Round 7 berjalan sesudah entri ini.
 - S3-F SELESAI: `TZ=Asia/Jakarta npm run ci:quick` **Pipeline PASSED**
   (ESLint bersih, tsc bersih, unit 1099 file / 10721 test hijau +
   21 skipped, production build sukses). Run pertama gagal 11 test —
