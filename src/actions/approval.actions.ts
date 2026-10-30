@@ -52,16 +52,24 @@ const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment", "StockAdj
 const MONEY_GATE_MODEL_TYPES = new Set(["Journal", "VendorPayment"]);
 
 async function logMoneyGateChange(
-  action: "deactivate" | "delete",
-  workflow: { id: number; modelType: string; name: string },
+  action: "deactivate" | "delete" | "retype",
+  workflow: { id: number; modelType: string; name: string; newModelType?: string },
 ): Promise<void> {
   if (!MONEY_GATE_MODEL_TYPES.has(workflow.modelType)) return;
+  const detail =
+    action === "delete"
+      ? "dihapus"
+      : action === "deactivate"
+        ? "dinonaktifkan"
+        : `tipe dokumen diganti ke ${workflow.newModelType}`
   await logActivity(
     action,
     "ApprovalWorkflow",
     workflow.id,
-    `Workflow gerbang uang ${workflow.modelType} (${workflow.name}) ${action === "delete" ? "dihapus" : "dinonaktifkan"} — gerbang persetujuan dokumen uang mati sampai workflow aktif pengganti dibuat`,
-    { modelType: workflow.modelType },
+    `Workflow gerbang uang ${workflow.modelType} (${workflow.name}) ${detail} — gerbang persetujuan dokumen uang mati sampai workflow aktif pengganti dibuat`,
+    action === "retype"
+      ? { modelType: workflow.modelType, newModelType: workflow.newModelType }
+      : { modelType: workflow.modelType },
   );
 }
 
@@ -582,7 +590,10 @@ export async function reopenApproval(approvalId: number) {
 
       // Import here to avoid circular dep top-level
       const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
-      await requestApprovalIfConfigured(refType, refId, Number(user.id), tx);
+      const reopened = await requestApprovalIfConfigured(refType, refId, Number(user.id), tx);
+      if (!reopened) {
+        throw new Error("Gagal membuka ulang persetujuan — approval pending baru tidak terbentuk. Periksa alur persetujuan aktif untuk dokumen ini.");
+      }
     });
 
     // Log + revalidate outside tx
@@ -733,6 +744,16 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
         id,
         modelType: pendingApprovals.previous.modelType,
         name: pendingApprovals.previous.name,
+      });
+    } else if (
+      pendingApprovals.previous?.isActive &&
+      pendingApprovals.previous.modelType !== modelType
+    ) {
+      await logMoneyGateChange("retype", {
+        id,
+        modelType: pendingApprovals.previous.modelType,
+        name: pendingApprovals.previous.name,
+        newModelType: modelType,
       });
     }
     await logActivity(

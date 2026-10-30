@@ -21,6 +21,8 @@ import {
   moneyGateConfirmBody,
   moneyGateConfirmTitle,
   moneyGateInlineWarning,
+  moneyGateRetypeWarning,
+  type MoneyGateAction,
 } from "./money-gate-warning"
 
 export interface WorkflowFormStep {
@@ -71,7 +73,10 @@ export function WorkflowForm({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   // K4-S2(b): simpan yang mematikan gerbang uang ditahan sampai konfirmasi sadar.
-  const [pendingMoneyGateSave, setPendingMoneyGateSave] = useState<FormData | null>(null)
+  const [pendingMoneyGateSave, setPendingMoneyGateSave] = useState<{
+    formData: FormData
+    action: MoneyGateAction
+  } | null>(null)
 
   const [name, setName] = useState(workflow?.name ?? "")
   const [modelType, setModelType] = useState(workflow?.modelType ?? "")
@@ -160,10 +165,17 @@ export function WorkflowForm({
 
     // K4-S2(b) vonis 014-V: menonaktifkan workflow gerbang uang (Journal/
     // VendorPayment) yang sedang aktif wajib konfirmasi sadar dulu.
-    const killsMoneyGate =
-      !!workflow?.id && workflow.isActive && !isActive && isMoneyGateModelType(workflow.modelType)
-    if (killsMoneyGate) {
-      setPendingMoneyGateSave(formData)
+    // R6WN-05: mengganti tipe aktif juga mematikan gerbang tipe lama.
+    const moneyGateAction: MoneyGateAction | null =
+      !!workflow?.id && workflow.isActive && isMoneyGateModelType(workflow.modelType)
+        ? !isActive
+          ? "deactivate"
+          : modelType !== workflow.modelType
+            ? "retype"
+            : null
+        : null
+    if (moneyGateAction) {
+      setPendingMoneyGateSave({ formData, action: moneyGateAction })
       return
     }
 
@@ -217,6 +229,15 @@ export function WorkflowForm({
                 {moneyGateInlineWarning(workflow.modelType)}
               </p>
             )}
+            {!!workflow?.id &&
+              workflow.isActive &&
+              isActive &&
+              modelType !== workflow.modelType &&
+              isMoneyGateModelType(workflow.modelType) && (
+                <p role="alert" className="text-sm text-warning">
+                  {moneyGateRetypeWarning(workflow.modelType, modelType)}
+                </p>
+              )}
           </div>
         </div>
       </div>
@@ -331,16 +352,26 @@ export function WorkflowForm({
         onOpenChange={(open) => {
           if (!open) setPendingMoneyGateSave(null)
         }}
-        title={moneyGateConfirmTitle("deactivate")}
-        body={workflow ? moneyGateConfirmBody("deactivate", workflow.modelType) : undefined}
-        confirmLabel="Ya, Nonaktifkan"
+        title={moneyGateConfirmTitle(pendingMoneyGateSave?.action ?? "deactivate")}
+        body={
+          workflow
+            ? moneyGateConfirmBody(
+                pendingMoneyGateSave?.action ?? "deactivate",
+                workflow.modelType,
+                pendingMoneyGateSave?.action === "retype" ? modelType : undefined,
+              )
+            : undefined
+        }
+        confirmLabel={
+          pendingMoneyGateSave?.action === "retype" ? "Ya, Ganti Tipe" : "Ya, Nonaktifkan"
+        }
         cancelLabel="Batal"
         variant="warning"
         isPending={isPending}
         onConfirm={() => {
-          const formData = pendingMoneyGateSave
+          const pending = pendingMoneyGateSave
           setPendingMoneyGateSave(null)
-          if (formData) submitFormData(formData)
+          if (pending) submitFormData(pending.formData)
         }}
       />
     </form>

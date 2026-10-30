@@ -4,6 +4,7 @@ import {
   moneyGateConfirmBody,
   moneyGateConfirmTitle,
   moneyGateInlineWarning,
+  moneyGateRetypeWarning,
 } from "../money-gate-warning"
 
 describe("isMoneyGateModelType", () => {
@@ -41,5 +42,32 @@ describe("moneyGateConfirmBody", () => {
   it("peringatan inline menyebut konfirmasi sebelum menyimpan", () => {
     expect(moneyGateInlineWarning("Journal")).toContain("Peringatan gerbang uang")
     expect(moneyGateInlineWarning("Journal")).toContain("konfirmasi sebelum menyimpan")
+  })
+})
+
+describe("R6WN-05 retype money gate", () => {
+  it("judul retype menyebut ganti tipe", () => {
+    expect(moneyGateConfirmTitle("retype")).toBe("Ganti tipe workflow gerbang uang ini?")
+  })
+
+  it("body retype menyebut tipe tujuan dan gerbang uang mati", () => {
+    const body = moneyGateConfirmBody("retype", "Journal", "Expense")
+    expect(body).toContain("tipe dokumennya diganti ke")
+    expect(body).toContain("Pengeluaran")
+    expect(body).toContain("gerbang uang mati")
+    expect(body).toContain("Jurnal manual bisa diposting tanpa persetujuan")
+  })
+
+  it("body retype VendorPayment menyebut pembayaran vendor", () => {
+    const body = moneyGateConfirmBody("retype", "VendorPayment", "Expense")
+    expect(body).toContain("Pembayaran vendor bisa dikonfirmasi dan diposting tanpa persetujuan")
+  })
+
+  it("peringatan retype menyebut tipe asal dan tujuan", () => {
+    const warning = moneyGateRetypeWarning("Journal", "Expense")
+    expect(warning).toContain("Peringatan gerbang uang")
+    expect(warning).toContain("Jurnal")
+    expect(warning).toContain("Pengeluaran")
+    expect(warning).toContain("konfirmasi sebelum menyimpan")
   })
 })

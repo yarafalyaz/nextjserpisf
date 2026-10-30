@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 // Radix Switch/AlertDialog pakai ResizeObserver; jsdom tidak punya (pola repo).
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as typeof ResizeObserver
+Element.prototype.scrollIntoView ??= () => {}
 
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
@@ -65,6 +66,19 @@ async function turnOffActiveSwitch(container: HTMLElement) {
   expect(sw.getAttribute("aria-checked")).toBe("true")
   await act(async () => {
     sw.click()
+  })
+}
+
+function pickOption(container: HTMLElement, triggerId: string, label: string) {
+  act(() => {
+    container.querySelector<HTMLElement>(`#${triggerId}`)!.click()
+  })
+  const option = Array.from(document.querySelectorAll('[role="option"]')).find((el) =>
+    el.textContent?.includes(label),
+  )
+  expect(option, `opsi ${label}`).toBeTruthy()
+  act(() => {
+    ;(option as HTMLElement).click()
   })
 }
 
@@ -134,6 +148,53 @@ describe("WorkflowForm gerbang uang (K4-S2b)", () => {
 
   it("workflow Journal tetap aktif: langsung submit tanpa dialog gerbang", async () => {
     const { root, container } = mount(<WorkflowForm workflow={workflow("Journal")} roles={roles} />)
+    await submitForm(container)
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    expect(dialogText()).not.toContain("gerbang uang mati")
+    unmount(root, container)
+  })
+
+  it("R6WN-05: ganti tipe Journal aktif ke Pengeluaran: simpan ditahan, dialog ganti tipe tampil, konfirmasi baru submit", async () => {
+    const { root, container } = mount(<WorkflowForm workflow={workflow("Journal")} roles={roles} />)
+    pickOption(container, "modelType", "Pengeluaran")
+
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("Peringatan gerbang uang")
+
+    await submitForm(container)
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(dialogText()).toContain("Ganti tipe workflow gerbang uang ini?")
+    expect(dialogText()).toContain("gerbang uang mati")
+
+    const confirm = findButtonByText("Ya, Ganti Tipe")
+    expect(confirm).toBeDefined()
+    await act(async () => {
+      confirm!.click()
+    })
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    unmount(root, container)
+  })
+
+  it("R6WN-05: ganti tipe lalu batal di dialog: simpan tidak terkirim", async () => {
+    const { root, container } = mount(<WorkflowForm workflow={workflow("VendorPayment")} roles={roles} />)
+    pickOption(container, "modelType", "Pengeluaran")
+
+    await submitForm(container)
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(dialogText()).toContain("Ganti tipe workflow gerbang uang ini?")
+
+    const cancel = findButtonByText("Batal")
+    expect(cancel).toBeDefined()
+    await act(async () => {
+      cancel!.click()
+    })
+    expect(updateMock).not.toHaveBeenCalled()
+    unmount(root, container)
+  })
+
+  it("R6WN-05: ganti tipe workflow non-uang aktif: langsung submit tanpa dialog", async () => {
+    const { root, container } = mount(<WorkflowForm workflow={workflow("PurchaseOrder")} roles={roles} />)
+    pickOption(container, "modelType", "Pengeluaran")
+
     await submitForm(container)
     expect(updateMock).toHaveBeenCalledTimes(1)
     expect(dialogText()).not.toContain("gerbang uang mati")

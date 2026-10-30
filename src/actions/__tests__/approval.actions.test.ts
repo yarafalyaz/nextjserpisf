@@ -425,6 +425,39 @@ describe("Approval Workflow CRUD", () => {
     );
     expect(moneyLogs).toHaveLength(0);
   });
+  it("R6WN-05: ganti tipe Journal aktif ke Expense tercatat sebagai retype gerbang uang", async () => {
+    resetWorkflowWriteMocks();
+    mocks.prismaMock.approvalWorkflow.findUnique.mockResolvedValue({
+      modelType: "Journal", name: "Persetujuan Jurnal Manual", isActive: true,
+    });
+    const res = await actions.updateApprovalWorkflow(
+      7,
+      wfFd([{ name: "Step1" }], { modelType: "Expense" }),
+    );
+    expect(res?.success).toBe(true);
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "retype",
+      "ApprovalWorkflow",
+      7,
+      expect.stringContaining("gerbang uang Journal"),
+      { modelType: "Journal", newModelType: "Expense" },
+    );
+  });
+  it("R6WN-05: ganti tipe workflow non-uang aktif TIDAK dicatat sebagai retype", async () => {
+    resetWorkflowWriteMocks();
+    mocks.prismaMock.approvalWorkflow.findUnique.mockResolvedValue({
+      modelType: "PurchaseRequest", name: "WF PR", isActive: true,
+    });
+    const res = await actions.updateApprovalWorkflow(
+      8,
+      wfFd([{ name: "Step1" }], { modelType: "Expense" }),
+    );
+    expect(res?.success).toBe(true);
+    const retypeLogs = mocks.logActivityMock.mock.calls.filter(
+      (c: unknown[]) => c[0] === "retype",
+    );
+    expect(retypeLogs).toHaveLength(0);
+  });
 });
 
 describe("approveStep / rejectStep branches", () => {
@@ -737,10 +770,33 @@ describe("HR scope jalur approval generik (round2 temuan 2)", () => {
 
   it("reopenApproval non-HR tetap jalan (falsifikasi gerbang HR)", async () => {
     seedApproval({ status: "rejected", referenceType: "PurchaseRequest", referenceId: 5, requestedBy: 2 });
+    // R6WN-04: workflow aktif terkunci ditemukan -> approval pending baru lahir.
+    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 10 }]);
     const res: any = await actions.reopenApproval(1);
     expect(res.success).toBe(true);
     expect(mocks.prismaMock.purchaseRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 5, status: "rejected" }, data: { status: "draft" } }),
+    );
+    expect(mocks.prismaMock.approval.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ referenceType: "PurchaseRequest", referenceId: 5, status: "pending" }),
+      }),
+    );
+  });
+
+  it("R6WN-04: reopenApproval tanpa workflow aktif gagal jujur, bukan sukses semu", async () => {
+    silenceConsole();
+    seedApproval({ status: "rejected", referenceType: "PurchaseRequest", referenceId: 5, requestedBy: 2 });
+    // Tanpa workflow aktif terkunci -> approval baru tidak terbentuk.
+    mocks.prismaMock.$queryRaw.mockResolvedValue([]);
+    const res: any = await actions.reopenApproval(1);
+    expect(res.success).toBe(false);
+    expect(String(res.error)).toContain("pending baru tidak terbentuk");
+    expect(mocks.logActivityMock).not.toHaveBeenCalledWith(
+      "reopen",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
     );
   });
 
