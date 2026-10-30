@@ -171,6 +171,8 @@ Checkpoint file ini diperbarui tiap batch selesai.
   (melanggar BR-AC-06). Fix committed: f29bfcdc — koordinat
   disisihkan dari data update jalur koreksi; test koreksi existing
   (gagal pra-fix) + 4 suite terkait 220/220, tsc bersih.
-- `ci:quick` ulangan V1 pada tree final (f29bfcdc) berjalan sesudah
-  checkpoint ini. Sisa sadar terakhir: unique constraint Holiday
-  (migrasi terpisah). Belum push.
+- `ci:quick` ulangan V1 LULUS PENUH pada 60c70ea58 (246s): Lint ✔
+  TypeScript ✔ Unit ✔ Build ✔. Tree final misi otonom hijau.
+- Antrean Batch 1–4 tertutup sepenuhnya. Sisa sadar terakhir: unique
+  constraint Holiday (migrasi terpisah, schema belum unique date/name).
+  Belum push.
