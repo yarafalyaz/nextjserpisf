@@ -9,6 +9,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
 import { transferInTransitSummary } from "@/lib/reports/transfer-in-transit"
 import { loadTransferInTransit } from "@/lib/reports/transfer-in-transit-data"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { formatCurrency } from "@/lib/utils/format"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -29,7 +30,11 @@ export default async function TransferInTransitPage({
     end: now,
   }))
 
-  const { report, periodLabel, periodCaption } = await loadTransferInTransit(period)
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: undefined = all-access; array (termasuk kosong) = ditegakkan.
+  const scopeIds: number[] | undefined =
+    scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
+  const { report, periodLabel, periodCaption } = await loadTransferInTransit(period, scopeIds)
 
   return (
     <ReportPageShell

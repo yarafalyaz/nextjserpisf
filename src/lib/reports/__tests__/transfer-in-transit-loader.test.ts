@@ -66,6 +66,16 @@ describe("loadTransferInTransit — filter status partially_received", () => {
     expect(dataRow?.kind === "data" && dataRow.cells[1]).toBe("6")
   })
 
+  it("ROUND5-SCOPE: scope [2] menapis kueri ke asal ATAU tujuan dalam cakupan", async () => {
+    mocks.prismaMock.inventoryTransfer.findMany.mockResolvedValue([])
+    await loadTransferInTransit(PERIOD, [2])
+    const arg = mocks.prismaMock.inventoryTransfer.findMany.mock.calls[0][0]
+    expect(arg.where.OR).toEqual([
+      { sourceWarehouseId: { in: [2] } },
+      { destinationWarehouseId: { in: [2] } },
+    ])
+  })
+
   it("transfer received (tidak dikembalikan kueri status) -> daftar kosong", async () => {
     mocks.prismaMock.inventoryTransfer.findMany.mockResolvedValue([])
     const { report } = await loadTransferInTransit(PERIOD)

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { buildReportPeriodSlug } from "@/lib/reports/report-period"
@@ -25,10 +26,19 @@ function getAgeGroup(days: number): string {
 }
 
 export default async function StockAgingPage() {
-  await requirePermission('view_reports')
+  const user = await requirePermission('view_reports')
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
 
   const layers = await prisma.inventoryLayer.findMany({
-    where: { remaining: { gt: 0 } },
+    where: {
+      remaining: { gt: 0 },
+      // ROUND5-SCOPE: hanya lapisan gudang dalam cakupan (all = tanpa tapis).
+      ...(scope.kind === 'assigned'
+        ? { warehouseId: { in: scope.warehouseIds } }
+        : scope.kind === 'none'
+          ? { warehouseId: { in: [] as number[] } }
+          : {}),
+    },
     include: {
       item: { select: { sku: true, name: true, unitOfMeasure: true, category: { select: { name: true } } } },
     },

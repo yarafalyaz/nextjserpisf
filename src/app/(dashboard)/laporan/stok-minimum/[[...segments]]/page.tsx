@@ -12,6 +12,7 @@ import { minStockSummary } from "@/lib/reports/min-stock"
 import { MinStockWarehouseCard } from "@/components/reports/min-stock-warehouse-card"
 import { buildMinStockRequestHref } from "@/lib/reports/min-stock-request"
 import { loadMinStock } from "@/lib/reports/min-stock-data"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { loadReorderPoints } from "@/lib/reports/reorder-point-data"
 import { ReorderPointCard } from "@/components/reports/reorder-point-card"
 import { formatDate } from "@/lib/utils/format"
@@ -29,8 +30,12 @@ export default async function MinStockPage() {
   const user = await requirePermission("view_reports")
   const asOf = new Date()
 
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: undefined = all-access; array (termasuk kosong) = ditegakkan.
+  const scopeIds: number[] | undefined =
+    scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
   const { report, warehouseShortages, warehouseNote, periodLabel, periodCaption } =
-    await loadMinStock(asOf)
+    await loadMinStock(asOf, scopeIds)
   const reorderPointReport = await loadReorderPoints()
   const requestHref = buildMinStockRequestHref(report.shortageLines)
   const canCreateRequest =

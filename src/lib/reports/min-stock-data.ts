@@ -48,7 +48,14 @@ export interface MinStockReport {
  * kini (`qtyOnHand`, lapisan tersisa), bukan posisi historis. Caption
  * menyebut tanggal posisi supaya tidak terbaca sebagai rentang periode.
  */
-export async function loadMinStock(asOf: Date = new Date()): Promise<MinStockReport> {
+export async function loadMinStock(
+  asOf: Date = new Date(),
+  // ROUND5-SCOPE: undefined = tanpa penegakan; array ditegakkan. Menapis
+  // penilaian PER GUDANG (settings + lapisan + warehouseShortages). Tabel
+  // utama per barang memakai qtyOnHand agregat barang (bukan per gudang),
+  // jadi tidak ditapis di sini.
+  scopeWarehouseIds?: number[] | null,
+): Promise<MinStockReport> {
   const items = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null, isService: false },
     select: {
@@ -69,7 +76,10 @@ export async function loadMinStock(asOf: Date = new Date()): Promise<MinStockRep
   // Override per (barang, gudang): satu query massal untuk semua barang.
   const settings = items.length
     ? await prisma.itemWarehouseSetting.findMany({
-        where: { itemId: { in: items.map((i) => i.id) } },
+        where: {
+          itemId: { in: items.map((i) => i.id) },
+          ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+        },
         select: { itemId: true, warehouseId: true, minStock: true },
       })
     : []
@@ -84,7 +94,10 @@ export async function loadMinStock(asOf: Date = new Date()): Promise<MinStockRep
   const withMin = items.filter((i) => Number(i.minStock) > 0 || itemIdsWithOverride.has(i.id))
   const layers = withMin.length
     ? await prisma.inventoryLayer.findMany({
-        where: { itemId: { in: withMin.map((i) => i.id) } },
+        where: {
+          itemId: { in: withMin.map((i) => i.id) },
+          ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+        },
         select: { itemId: true, warehouseId: true, remaining: true },
       })
     : []

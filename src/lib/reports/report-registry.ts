@@ -514,8 +514,8 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Lembar Penghitungan Stok",
     subtitle: "Hasil Stok Opname per Dokumen",
     defaultPeriod: startOfYear,
-    async load({ period }) {
-      const report = await loadStockCount(period)
+    async load({ period, warehouseScope }) {
+      const report = await loadStockCount(period, warehouseScope)
       return {
         kind: "table",
         table: report.count.table,
@@ -626,8 +626,8 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Persediaan Terkirim Belum Diterima",
     subtitle: "Pemeriksaan: Barang yang Masih di Jalan Antar Gudang",
     defaultPeriod: startOfYear,
-    async load({ period }) {
-      const report = await loadTransferInTransit(period)
+    async load({ period, warehouseScope }) {
+      const report = await loadTransferInTransit(period, warehouseScope)
       return {
         kind: "table",
         table: report.report.table,
@@ -686,10 +686,10 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Barang Stok Minimum",
     subtitle: "Barang yang Sudah Mencapai Batas Minimum",
     defaultPeriod: startOfYear,
-    async load() {
+    async load({ warehouseScope }) {
       // Posisi kini: periode path tidak dipakai agar caption tidak
       // mengklaim rentang yang tidak pernah menyaring angka.
-      const report = await loadMinStock()
+      const report = await loadMinStock(new Date(), warehouseScope)
       return {
         kind: "table",
         table: report.report.table,
@@ -899,8 +899,8 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
   "umur-stok": {
     title: "Umur Stok",
     subtitle: "Analisis Umur Persediaan",
-    async load() {
-      const report = await loadStockAging()
+    async load({ warehouseScope }) {
+      const report = await loadStockAging(warehouseScope)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },

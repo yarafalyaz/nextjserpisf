@@ -67,14 +67,27 @@ export interface TransferInTransitReport {
   periodCaption: string
 }
 
-export async function loadTransferInTransit(period: {
-  start: Date
-  end: Date
-}): Promise<TransferInTransitReport> {
+export async function loadTransferInTransit(
+  period: {
+    start: Date
+    end: Date
+  },
+  // ROUND5-SCOPE: undefined = tanpa penegakan; array ditegakkan. Transfer
+  // terlihat bila gudang asal ATAU tujuan dalam cakupan.
+  scopeWarehouseIds?: number[] | null,
+): Promise<TransferInTransitReport> {
   const transfers = await prisma.inventoryTransfer.findMany({
     where: {
       status: { in: [...IN_TRANSIT_TRANSFER_STATUSES] },
       date: { gte: period.start, lte: period.end },
+      ...(scopeWarehouseIds != null
+        ? {
+            OR: [
+              { sourceWarehouseId: { in: scopeWarehouseIds } },
+              { destinationWarehouseId: { in: scopeWarehouseIds } },
+            ],
+          }
+        : {}),
     },
     select: {
       id: true,

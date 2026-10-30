@@ -73,6 +73,25 @@ describe("loadMinStock override per gudang", () => {
     expect(res.warehouseShortages.map((r) => r.warehouseId)).not.toContain(99)
   })
 
+  it("ROUND5-SCOPE: scope [1] menapis settings + lapisan, shortage gudang 2 absen", async () => {
+    mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([])
+    // Mock sadar where: hanya lapisan gudang dalam scope yang kembali.
+    mocks.prismaMock.inventoryLayer.findMany.mockImplementation(async (arg: any) => {
+      const ids: number[] | undefined = arg?.where?.warehouseId?.in
+      const all = [
+        { itemId: 1, warehouseId: 1, remaining: 100 },
+        { itemId: 1, warehouseId: 2, remaining: 3 },
+      ]
+      return ids ? all.filter((l) => ids.includes(l.warehouseId)) : all
+    })
+    const res = await loadMinStock(asOf, [1])
+    expect(res.warehouseShortages).toEqual([])
+    const layerArg = mocks.prismaMock.inventoryLayer.findMany.mock.calls[0][0]
+    expect(layerArg.where.warehouseId).toEqual({ in: [1] })
+    const settingArg = mocks.prismaMock.itemWarehouseSetting.findMany.mock.calls[0][0]
+    expect(settingArg.where.warehouseId).toEqual({ in: [1] })
+  })
+
   it("caption posisi tunggal (bukan rentang): periode tidak pernah mengklaim menyaring angka", async () => {
     mocks.prismaMock.itemWarehouseSetting.findMany.mockResolvedValue([])
     const res = await loadMinStock(asOf)

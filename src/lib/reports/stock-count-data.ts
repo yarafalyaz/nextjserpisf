@@ -18,12 +18,20 @@ export interface StockCountReport {
   periodCaption: string
 }
 
-export async function loadStockCount(period: {
-  start: Date
-  end: Date
-}): Promise<StockCountReport> {
+export async function loadStockCount(
+  period: {
+    start: Date
+    end: Date
+  },
+  // ROUND5-SCOPE: undefined = tanpa penegakan; array (termasuk kosong) ditegakkan.
+  scopeWarehouseIds?: number[] | null,
+): Promise<StockCountReport> {
   const adjustments = await prisma.stockAdjustment.findMany({
-    where: { date: { gte: period.start, lte: period.end }, deletedAt: null },
+    where: {
+      date: { gte: period.start, lte: period.end },
+      deletedAt: null,
+      ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+    },
     select: {
       documentNo: true,
       date: true,

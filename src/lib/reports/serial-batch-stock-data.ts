@@ -23,9 +23,21 @@ export interface SerialBatchReport {
 export async function loadSerialBatchStock(options: {
   warehouseId?: number | null
   asOf: Date
+  // ROUND5-SCOPE: undefined = tanpa penegakan; array ditegakkan. Gudang
+  // terpilih di luar cakupan -> hasil kosong; tanpa pilihan -> in cakupan.
+  scopeWarehouseIds?: number[] | null
 }): Promise<SerialBatchReport> {
-  const { warehouseId = null, asOf } = options
-  const warehouseWhere = warehouseId ? { warehouseId } : {}
+  const { warehouseId = null, asOf, scopeWarehouseIds } = options
+  const warehouseWhere =
+    scopeWarehouseIds != null
+      ? warehouseId
+        ? scopeWarehouseIds.includes(warehouseId)
+          ? { warehouseId }
+          : { warehouseId: { in: [] as number[] } }
+        : { warehouseId: { in: scopeWarehouseIds } }
+      : warehouseId
+        ? { warehouseId }
+        : {}
 
   const [serials, batches, trackedItems] = await Promise.all([
     prisma.itemSerial.findMany({

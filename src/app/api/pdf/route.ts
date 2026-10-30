@@ -69,9 +69,17 @@ export async function GET(request: Request) {
       definition.defaultPeriod?.(now) ?? { start: now, end: now },
     )
 
-    // Scope gudang hanya untuk tiga laporan stok; laporan lain tidak memicu
+    // Scope gudang hanya untuk laporan stok; laporan lain tidak memicu
     // query scope ekstra. all -> undefined (tak ditegakkan), none -> [].
-    const STOCK_PDF_KEYS = new Set(["mutasi-stok", "valuasi-stok", "kartu-stok"])
+    const STOCK_PDF_KEYS = new Set([
+      "mutasi-stok",
+      "valuasi-stok",
+      "kartu-stok",
+      "penghitungan-stok",
+      "transfer-terkirim",
+      "stok-minimum",
+      "umur-stok",
+    ])
     let warehouseScope: number[] | undefined
     if (STOCK_PDF_KEYS.has(report)) {
       const scope = await getWarehouseScope({

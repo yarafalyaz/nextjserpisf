@@ -81,9 +81,15 @@ const AGING_COLUMNS: TableColumn[] = [
   { header: "Kelompok", align: "left", width: 26 },
 ]
 
-export async function loadStockAging(): Promise<StockSimpleReport> {
+export async function loadStockAging(
+  // ROUND5-SCOPE: undefined = tanpa penegakan; array (termasuk kosong) ditegakkan.
+  scopeWarehouseIds?: number[] | null,
+): Promise<StockSimpleReport> {
   const layers = await prisma.inventoryLayer.findMany({
-    where: { remaining: { gt: 0 } },
+    where: {
+      remaining: { gt: 0 },
+      ...(scopeWarehouseIds != null ? { warehouseId: { in: scopeWarehouseIds } } : {}),
+    },
     include: {
       item: { select: { sku: true, name: true, unitOfMeasure: true, category: { select: { name: true } } } },
     },

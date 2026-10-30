@@ -8,6 +8,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { loadStockCount } from "@/lib/reports/stock-count-data"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import { stockCountSummary } from "@/lib/reports/stock-count"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
@@ -38,7 +39,11 @@ export default async function StockCountPage({
     end: now,
   }))
 
-  const { count, periodLabel, periodCaption } = await loadStockCount(period)
+  const scope = await getWarehouseScope({ id: user.id, roles: user.roles ?? [] })
+  // ROUND5-SCOPE: undefined = all-access; array (termasuk kosong) = ditegakkan.
+  const scopeIds: number[] | undefined =
+    scope.kind === "all" ? undefined : scope.kind === "assigned" ? scope.warehouseIds : []
+  const { count, periodLabel, periodCaption } = await loadStockCount(period, scopeIds)
 
   return (
     <ReportPageShell
