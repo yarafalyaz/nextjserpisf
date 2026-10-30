@@ -152,5 +152,27 @@ F -> (ulang B/C dengan domain round berikutnya bila masih ada jam).
   butuh demo data — dilarang seed), db:check-migrations (tidak ada
   MIGRATION_CHECK_URL sah — jangan karang kredensial). Runtime migrasi
   Holiday + STOK-08 juga masih menunggu scratch DB sah.
-- Berikutnya: vonis triase opname-tanpa-lot -> Batch E perf ekuivalen
-  terbatas -> checkpoint akhir.
+- Triase opname-tanpa-lot: CONFIRMED (verifikasi main session).
+  StocktakeLine tanpa kolom lot; surplus item trackBatch dari opname
+  selalu gugur di hook penyesuaian SESUDAH sesi posted + draft ADJ
+  lahir. Fix `81ba9fe84`: posting sesi ditolak dini di dalam tx (basis
+  live) dengan pesan tertindak; sesi tetap approved. Lot penuh opname
+  (kolom + form hitung + jalur cepat OpnameForm) = antrean terpisah.
+  Komentar STOK-10 diluruskan `23448f58`.
+- Batch E selesai `9581f7cb`: lead-funnel paralel, vehicle-margin memo
+  sejajar blok plat (urutan panggilan dipertahankan), validasi akun
+  kategori aset 7 findFirst -> 1 findMany, daftar pelanggan paralel +
+  select 6 kolom, dasbor karyawan select sempit + cuti paralel.
+  DITUNDA: buku-bank (page tanpa harness test).
+- Verifikasi berat final: ci:quick ulang sesudah Batch E + opname
+  LULUS PENUH di 9581f7cb5 (lint, tsc, unit, build). E2E/
+  db:check-migrations tetap terblokir prasyarat sah (bukan kegagalan
+  kode).
+- SESI DITUTUP pada checkpoint ini. Sisa antrean eksplisit: STOK-16
+  (keputusan user: antrean terpisah), STOK-14 (keputusan bisnis),
+  succession overview (vonis Lead), lot penuh opname (kolom
+  StocktakeLine + form hitung + jalur cepat), buku-bank perf (butuh
+  harness test page), sweep DOM terautentikasi (butuh sesi browser
+  sah), runtime migrasi Holiday/STOK-08 + E2E subset (butuh scratch
+  DB / MIGRATION_CHECK_URL sah). Semua commit lokal di main, BELUM
+  push.
